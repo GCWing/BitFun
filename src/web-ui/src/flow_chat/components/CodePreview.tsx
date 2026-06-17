@@ -47,6 +47,71 @@ function detectLanguageFromPath(filePath: string): string {
   return getPrismLanguage(filePath);
 }
 
+const CODE_PREVIEW_STREAMING_LINE_HEIGHT_PX = 22;
+const STREAMING_TAIL_MIN_LINES = 4;
+const STREAMING_TAIL_MAX_LINES = 24;
+const STREAMING_TAIL_OVERSCAN_LINES = 2;
+const STREAMING_TAIL_MAX_CHARS = 6000;
+
+function countNewlines(value: string, endExclusive = value.length): number {
+  let count = 0;
+  const end = Math.min(endExclusive, value.length);
+  for (let index = 0; index < end; index += 1) {
+    if (value.charCodeAt(index) === 10) {
+      count += 1;
+    }
+  }
+  return count;
+}
+
+function getStreamingTailLineLimit(maxHeight: number, includeOverscan: boolean): number {
+  const visibleLines = Math.max(1, Math.ceil(maxHeight / CODE_PREVIEW_STREAMING_LINE_HEIGHT_PX));
+  const desiredLines = includeOverscan
+    ? visibleLines + STREAMING_TAIL_OVERSCAN_LINES
+    : visibleLines;
+  const minimumLines = includeOverscan ? STREAMING_TAIL_MIN_LINES : 1;
+
+  return Math.min(
+    STREAMING_TAIL_MAX_LINES,
+    Math.max(minimumLines, desiredLines),
+  );
+}
+
+function getStreamingTailDisplayContent(content: string, maxHeight: number, includeOverscan: boolean): {
+  content: string;
+  startingLineNumber: number;
+} {
+  const tailLineLimit = getStreamingTailLineLimit(maxHeight, includeOverscan);
+  const totalLineCount = countNewlines(content) + 1;
+
+  if (totalLineCount <= tailLineLimit && content.length <= STREAMING_TAIL_MAX_CHARS) {
+    return { content, startingLineNumber: 1 };
+  }
+
+  let sliceStart = 0;
+  let remainingLineBreaks = tailLineLimit;
+  for (let index = content.length - 1; index >= 0; index -= 1) {
+    if (content.charCodeAt(index) !== 10) {
+      continue;
+    }
+
+    remainingLineBreaks -= 1;
+    if (remainingLineBreaks === 0) {
+      sliceStart = index + 1;
+      break;
+    }
+  }
+
+  if (content.length - sliceStart > STREAMING_TAIL_MAX_CHARS) {
+    sliceStart = Math.max(sliceStart, content.length - STREAMING_TAIL_MAX_CHARS);
+  }
+
+  return {
+    content: content.slice(sliceStart),
+    startingLineNumber: countNewlines(content, sliceStart) + 1,
+  };
+}
+
 /**
  * CodePreview component with streaming-friendly syntax highlighting.
  */
@@ -74,28 +139,16 @@ export const CodePreview: React.FC<CodePreviewProps> = memo(({
   // tokenization runs during browser idle time.
   const deferredContent = useDeferredValue(content);
 
-  // Prism tokenizes the *entire* string synchronously. For large streaming files
-  // (e.g. 500-line SCSS) this blocks the main thread for 50-150 ms per 100 ms
-  // batch flush. Since the streaming preview shows at most 4 visible lines
-  // (maxHeight ≈ 88 px), we only need to tokenize the tail of the buffer.
-  // After streaming ends, the full content is restored for the completed view.
-  const STREAMING_TAIL_LINES = 60; // generous tail – more than enough for any maxHeight
+  // Prism and line-number DOM are synchronous work. While params are streaming,
+  // keep this preview near the visible viewport instead of tokenizing a large
+  // hidden tail on every batch. The completed view still receives full content.
   const displayContentInfo = useMemo(() => {
     if (!isStreaming) {
       return { content: deferredContent, startingLineNumber: 1 };
     }
 
-    const lines = deferredContent.split('\n');
-    if (lines.length <= STREAMING_TAIL_LINES) {
-      return { content: deferredContent, startingLineNumber: 1 };
-    }
-
-    const startingLineNumber = lines.length - STREAMING_TAIL_LINES + 1;
-    return {
-      content: lines.slice(-STREAMING_TAIL_LINES).join('\n'),
-      startingLineNumber,
-    };
-  }, [isStreaming, deferredContent]);
+    return getStreamingTailDisplayContent(deferredContent, maxHeight, autoScrollToBottom);
+  }, [isStreaming, deferredContent, maxHeight, autoScrollToBottom]);
 
   const displayContent = displayContentInfo.content;
 
@@ -153,7 +206,7 @@ export const CodePreview: React.FC<CodePreviewProps> = memo(({
       style: {
         display: 'block',
         backgroundColor: isHighlighted ? 'rgba(99, 102, 241, 0.15)' : 'transparent',
-        borderLeft: isHighlighted ? '3px solid var(--color-accent-500, #6366f1)' : '3px solid transparent',
+        borderLeft: isHighlighted ? '3px solid var(--color-accent-500)' : '3px solid transparent',
         marginLeft: '-3px',
         paddingLeft: '3px',
         transition: 'background-color 0.15s ease, border-color 0.15s ease',
@@ -210,7 +263,7 @@ export const CodePreview: React.FC<CodePreviewProps> = memo(({
               paddingRight: '1em',
               textAlign: 'right',
               userSelect: 'none',
-              color: 'var(--color-text-muted, #666)',
+              color: 'var(--color-text-muted)',
               opacity: isLight ? 0.88 : 0.6,
             }}
           >

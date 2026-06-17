@@ -50,14 +50,14 @@
 .bitfun-config-page-section {
   display: flex;
   flex-direction: column;
-  gap: var(--size-gap-4, 16px);
+  gap: var(--size-gap-4);
 }
 
 .bitfun-config-page-section__header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: var(--size-gap-3, 12px);
+  gap: var(--size-gap-3);
 }
 
 .bitfun-config-page-section__heading {
@@ -69,7 +69,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--size-gap-2, 8px);
+  gap: var(--size-gap-2);
   min-width: 0;
 }
 
@@ -82,7 +82,7 @@
 }
 
 .bitfun-config-page-section__description {
-  margin: var(--size-gap-1, 4px) 0 0;
+  margin: var(--size-gap-1) 0 0;
   font-size: var(--font-size-xs);
   color: var(--color-text-secondary);
   line-height: var(--line-height-relaxed);
@@ -92,7 +92,7 @@
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  gap: var(--size-gap-2, 8px);
+  gap: var(--size-gap-2);
 }
 
 .bitfun-config-page-section__body {
@@ -107,8 +107,8 @@
   --row-grid-cols: minmax(0, 7fr) minmax(0, 3fr);
   display: grid;
   grid-template-columns: var(--row-grid-cols);
-  gap: var(--size-gap-4, 16px);
-  padding: var(--size-gap-4, 16px);
+  gap: var(--size-gap-4);
+  padding: var(--size-gap-4);
 }
 
 .bitfun-config-page-row + .bitfun-config-page-row {
@@ -125,7 +125,7 @@
 
 .bitfun-config-page-row--multiline {
   --row-grid-cols: 1fr;
-  gap: var(--size-gap-2, 8px);
+  gap: var(--size-gap-2);
 
   .bitfun-config-page-row__control {
     justify-content: flex-start;
@@ -144,11 +144,11 @@
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
   color: var(--color-text-primary);
-  line-height: var(--line-height-normal);
+  line-height: var(--line-height-base);
 }
 
 .bitfun-config-page-row__description {
-  margin: var(--size-gap-1, 4px) 0 0;
+  margin: var(--size-gap-1) 0 0;
   font-size: var(--font-size-xs);
   color: var(--color-text-secondary);
   line-height: var(--line-height-relaxed);
@@ -176,7 +176,7 @@
 
 @container config-panel (max-width: 900px) {
   .bitfun-config-page-layout {
-    --config-page-content-inline-padding: var(--size-gap-4, 16px);
+    --config-page-content-inline-padding: var(--size-gap-4);
     --config-page-content-bottom-padding: var(--size-gap-10, 40px);
     --config-page-content-max-width: 100%;
     --config-page-section-gap: var(--size-gap-8, 32px);
@@ -185,7 +185,7 @@
 
 @container config-panel (max-width: 520px) {
   .bitfun-config-page-section {
-    gap: var(--size-gap-3, 12px);
+    gap: var(--size-gap-3);
   }
 
   .bitfun-config-page-section__header {
@@ -200,8 +200,8 @@
 
   .bitfun-config-page-row {
     grid-template-columns: minmax(0, 1fr);
-    gap: var(--size-gap-2, 8px);
-    padding: var(--size-gap-3, 12px);
+    gap: var(--size-gap-2);
+    padding: var(--size-gap-3);
   }
 
   .bitfun-config-page-row__control {

@@ -50,9 +50,14 @@ vi.mock('../meditor/utils/tiptapMarkdown', () => ({
   }),
 }));
 
+const messages: Record<string, string> = {
+  'editor.markdownEditor.copiedMarkdown': 'Copied Markdown',
+  'editor.markdownEditor.copyMarkdown': 'Copy Markdown',
+};
+
 vi.mock('@/infrastructure/i18n', () => ({
   useI18n: () => ({
-    t: (_key: string, options?: { defaultValue?: string }) => options?.defaultValue ?? _key,
+    t: (key: string, options?: { defaultValue?: string }) => messages[key] ?? options?.defaultValue ?? key,
   }),
 }));
 

@@ -1,28 +1,30 @@
 [workspace]
 members = [
-    "src/crates/core-types",
-    "src/crates/events",
-    "src/crates/ai-adapters",
-    "src/crates/agent-stream",
-    "src/crates/agent-runtime",
-    "src/crates/runtime-ports",
-    "src/crates/runtime-services",
-    "src/crates/services-core",
-    "src/crates/services-integrations",
-    "src/crates/product-domains",
-    "src/crates/agent-tools",
-    "src/crates/tool-packs",
-    "src/crates/acp",
-    "src/crates/core",
-    "src/crates/terminal",
-    "src/crates/tool-runtime",
-    "src/crates/transport",
-    "src/crates/api-layer",
-    "src/crates/webdriver",
     "src/apps/cli",
     "src/apps/desktop",
     "src/apps/server",
     "src/apps/relay-server",
+    "src/crates/interfaces/acp",
+    "src/crates/assembly/core",
+    "src/crates/adapters/ai-adapters",
+    "src/crates/adapters/webdriver",
+    "src/crates/adapters/api-layer",
+    "src/crates/adapters/transport",
+    "src/crates/services/services-core",
+    "src/crates/services/services-integrations",
+    "src/crates/services/terminal",
+    "src/crates/assembly/product-capabilities",
+    "src/crates/contracts/product-domains",
+    "src/crates/execution/agent-runtime",
+    "src/crates/execution/agent-stream",
+    "src/crates/execution/tool-contracts",
+    "src/crates/execution/harness",
+    "src/crates/execution/runtime-services",
+    "src/crates/execution/tool-provider-groups",
+    "src/crates/execution/tool-execution",
+    "src/crates/contracts/core-types",
+    "src/crates/contracts/events",
+    "src/crates/contracts/runtime-ports",
 ]
 
 exclude = [
@@ -33,7 +35,7 @@ resolver = "2"
 
 # Shared package metadata — single source of truth for version
 [workspace.package]
-version = "0.2.8" # x-release-please-version
+version = "0.2.10" # x-release-please-version
 authors = ["BitFun Team"]
 edition = "2021"
 
@@ -66,6 +68,12 @@ uuid = { version = "1.0", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde", "clock"] }
 chrono-tz = "0.10.4"
 cron = "0.15.0"
+# Tauri 2.9.2 utilities conflict with time 0.3.48 on current stable Rust.
+time = { version = "=0.3.47", default-features = false }
+# brotli-decompressor 5.0.2 / alloc-stdlib 0.2.3 pull alloc-no-stdlib 3.x while brotli still uses 2.x.
+brotli-decompressor = "=5.0.0"
+alloc-no-stdlib = "=2.0.4"
+alloc-stdlib = "=0.2.2"
 regex = "1"
 base64 = "0.22"
 # Keep macOS Tauri's dispatch2/bitflags expansion on the known-good bitflags release.
@@ -77,6 +85,8 @@ indexmap = "2"
 include_dir = "0.7"
 aes = "0.8"
 hex = "0.4"
+chardetng = "0.1.17"
+encoding_rs = "0.8.35"
 
 # HTTP client
 reqwest = { version = "0.12", default-features = false, features = ["native-tls", "rustls-tls-native-roots", "json", "stream", "multipart"] }
@@ -207,7 +217,7 @@ russh-sftp = "2.1"
 russh-keys = "0.45"
 shellexpand = "3"
 ssh_config = "0.1"
-rustls = { version = "0.23", default-features = false }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 
 [profile.dev]
 incremental = true

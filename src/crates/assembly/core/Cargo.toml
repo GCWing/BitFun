@@ -1,0 +1,228 @@
+[package]
+name = "bitfun-core"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description = "BitFun Core Library - Platform-agnostic business logic"
+
+[lib]
+name = "bitfun_core"
+crate-type = ["rlib"]
+
+[dependencies]
+# Inherit shared dependencies from workspace
+tokio = { workspace = true }
+napi-ohos = { workspace = true }
+napi-derive-ohos = { workspace = true }
+tokio-stream = { workspace = true }
+tokio-util = { workspace = true }
+async-trait = { workspace = true }
+futures = { workspace = true }
+
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }
+
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+
+log = { workspace = true }
+
+uuid = { workspace = true }
+chrono = { workspace = true }
+chrono-tz = { workspace = true, optional = true }
+cron = { workspace = true, optional = true }
+regex = { workspace = true }
+base64 = { workspace = true }
+image = { workspace = true, optional = true }
+md5 = { workspace = true, optional = true }
+aes = { workspace = true, optional = true }
+hex = { workspace = true }
+dashmap = { workspace = true, optional = true }
+indexmap = { workspace = true, optional = true }
+htmd = "0.5.4"
+legible = "0.4.2"
+
+reqwest = { workspace = true, optional = true }
+lazy_static = "1.4"
+once_cell = "1.19"
+parking_lot = "0.12"
+
+# Debug Log HTTP Server
+axum = { workspace = true, optional = true }
+tower-http = { workspace = true, optional = true }
+
+glob = { workspace = true, optional = true }
+notify = { workspace = true }
+dirs = { workspace = true }
+dunce = { workspace = true }
+filetime = { workspace = true, optional = true }
+fs2 = { workspace = true, optional = true }
+zip = { workspace = true }
+flate2 = { workspace = true, optional = true }
+include_dir = { workspace = true, optional = true }
+
+git2 = { workspace = true, optional = true }
+
+# Command detection (cross-platform)
+which = { workspace = true }
+similar = { workspace = true, optional = true }
+urlencoding = { workspace = true }
+
+globset = { workspace = true, optional = true }
+
+eventsource-stream = { workspace = true, optional = true }
+
+# MCP Streamable HTTP client (official rust-sdk)
+rmcp = { workspace = true, features = [
+    "transport-streamable-http-client-reqwest",
+], optional = true }
+sse-stream = { workspace = true, optional = true }
+
+# Shared AI protocol adapters
+bitfun-ai-adapters = { path = "../../adapters/ai-adapters", optional = true }
+
+# Lightweight agent stream processing
+bitfun-agent-stream = { path = "../../execution/agent-stream" }
+
+# Agent runtime owner contracts
+bitfun-agent-runtime = { path = "../../execution/agent-runtime" }
+
+# Harness workflow contracts
+bitfun-harness = { path = "../../execution/harness" }
+
+# Product capability pack contracts
+bitfun-product-capabilities = { path = "../product-capabilities", default-features = false, optional = true }
+
+# Agent tool contracts
+bitfun-agent-tools = { path = "../../execution/tool-contracts" }
+
+# Tool pack provider plan
+bitfun-tool-packs = { path = "../../execution/tool-provider-groups", default-features = false, optional = true }
+
+# Core service owner crate
+bitfun-services-core = { path = "../../services/services-core" }
+
+# Integration service owner crate
+bitfun-services-integrations = { path = "../../services/services-integrations", default-features = false, features = ["remote-ssh"] }
+
+# Product domain owner crate
+bitfun-product-domains = { path = "../../contracts/product-domains", default-features = false, optional = true }
+
+# Tool runtime
+tool-runtime = { path = "../../execution/tool-execution", optional = true }
+
+# terminal
+terminal-core = { path = "../../services/terminal" }
+
+# I18n internationalization
+fluent-bundle = { workspace = true }
+unic-langid = { workspace = true }
+
+# Encryption (Remote Connect E2E)
+aes-gcm = { workspace = true, optional = true }
+sha2 = { workspace = true }
+rand = { workspace = true, optional = true }
+
+# Device/Network info (Remote Connect)
+local-ip-address = { workspace = true, optional = true }
+
+# QR code generation
+
+# WebSocket client
+tokio-tungstenite = { workspace = true, optional = true }
+
+# SSH - Remote SSH support (optional feature)
+russh = { workspace = true, optional = true }
+
+# Relay server shared library (embedded relay reuses standalone relay logic)
+bitfun-relay-server = { path = "../../../apps/relay-server", optional = true }
+
+# Event layer dependency (lowest layer)
+bitfun-core-types = { path = "../../contracts/core-types" }
+bitfun-events = { path = "../../contracts/events" }
+bitfun-runtime-ports = { path = "../../contracts/runtime-ports" }
+bitfun-runtime-services = { path = "../../execution/runtime-services" }
+
+# Transport layer dependency
+bitfun-transport = { path = "../../adapters/transport" }
+
+# Tauri dependency (optional, enabled only when needed)
+tauri = { workspace = true }
+
+# Non-Windows: vendored OpenSSL for libgit2 (no system install).
+[target.'cfg(not(windows))'.dependencies]
+git2 = { workspace = true, features = ["vendored-openssl"], optional = true }
+
+[target.'cfg(not(target_env = "ohos"))'.dependencies]
+readability-js = "0.1.5"
+
+[target.'cfg(windows)'.dependencies]
+win32job = { workspace = true }
+rustls = { workspace = true }
+rustls-native-certs = "0.8"
+schannel = "0.1"
+
+[features]
+# Full product runtime feature set. Product crates should depend on this
+# explicitly before `bitfun-core` default features are made lighter.
+default = ["product-full"]
+product-full = [
+    "ai-adapter-runtime",
+    "dep:chrono-tz",
+    "dep:cron",
+    "dep:dashmap",
+    "dep:eventsource-stream",
+    "dep:filetime",
+    "dep:flate2",
+    "dep:fs2",
+    "dep:glob",
+    "dep:globset",
+    "dep:include_dir",
+    "dep:indexmap",
+    "dep:md5",
+    "dep:similar",
+    "dep:tool-runtime",
+    "ssh-remote",
+    "product-capabilities",
+    "product-domains",
+    "runtime-services",
+    "service-integrations",
+    "tool-packs",
+]
+ai-adapter-runtime = ["dep:bitfun-ai-adapters", "dep:reqwest"]
+product-capabilities = ["dep:bitfun-product-capabilities"]
+product-domains = [
+    "ai-adapter-runtime",
+    "dep:bitfun-product-domains",
+    "bitfun-services-integrations/function-agents",
+    "bitfun-services-integrations/miniapp-runtime",
+    "bitfun-product-domains/product-full",
+]
+runtime-services = []
+service-integrations = [
+    "dep:aes",
+    "dep:aes-gcm",
+    "dep:axum",
+    "dep:bitfun-relay-server",
+    "dep:git2",
+    "dep:image",
+    "dep:local-ip-address",
+    "dep:md5",
+    "dep:rand",
+    "dep:reqwest",
+    "dep:rmcp",
+    "dep:sse-stream",
+    "dep:tokio-tungstenite",
+    "dep:tower-http",
+    "bitfun-services-integrations/product-full",
+]
+tool-packs = ["dep:bitfun-tool-packs", "bitfun-tool-packs/product-full"]
+tauri-support = []  # Optional tauri support
+ssh-remote = [
+    "bitfun-services-integrations/remote-ssh-concrete",
+    "russh",
+]
+
+[build-dependencies]
+sha2 = { workspace = true }

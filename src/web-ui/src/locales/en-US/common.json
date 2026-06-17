@@ -150,6 +150,7 @@
         "default": "Default"
       },
       "empty": {
+        "all": "No terminals yet",
         "manual": "No user terminals yet",
         "agent": "No agent terminals yet",
         "quickNew": "Quick new terminal"
@@ -159,14 +160,10 @@
       "newSession": "New session",
       "newCodeSession": "New Code session",
       "newCoworkSession": "New Cowork session",
-      "newCodeSessionShort": "Code Session",
-      "newCoworkSessionShort": "Cowork Session",
       "newExternalAgentSessionShort": "{{agentName}} Session",
       "newClawSession": "New Claw session",
       "modeCode": "Code",
       "modeCowork": "Cowork",
-      "codeSessionMode": "Code Session",
-      "coworkSessionMode": "Cowork Session",
       "noSessions": "No sessions",
       "rename": "Rename",
       "delete": "Delete",
@@ -189,17 +186,35 @@
       "needsToolConfirm": "Needs confirmation",
       "badgeNeedsInput": "Waiting",
       "badgeNeedsConfirm": "Confirm",
+      "badgeBackgroundSubagents": "BG {{count}}",
+      "backgroundSubagentsRunning": "Background subagents running: {{count}}",
       "needProjectWorkspaceForSession": "Open or add a project workspace first. Code and Cowork sessions cannot be created in the assistant area.",
+      "manage": "Manage Sessions",
+      "batchManageDescription": "Select sessions in this workspace, then archive or delete them in bulk.",
+      "batchSelectionSummary": "{{count}} selected · {{total}} sessions",
+      "batchSelectedShort": "Selected",
+      "batchReadyLabel": "Bulk actions ready",
+      "batchLoadFailed": "Failed to load sessions for batch management.",
+      "noSessionsToManage": "No sessions available in this workspace.",
+      "batchChildSession": "Child session",
+      "batchTurnsLabel": "{{count}} turns",
       "archive": "Archive",
       "archiveAll": "Archive All Sessions",
+      "archiveSelected": "Archive Selected",
       "archiveConfirmTitle": "Archive Session",
       "archiveConfirmMessage": "Are you sure you want to archive this session? It will be hidden from the session list and can be restored from Settings.",
       "archiveAllConfirmTitle": "Archive All Sessions",
       "archiveAllConfirmMessage": "Are you sure you want to archive all sessions in this workspace? They will be hidden from the session list and can be restored from Settings.",
+      "bulkArchiveConfirmTitle": "Archive Selected Sessions",
+      "bulkArchiveConfirmMessage": "Are you sure you want to archive {{count}} selected sessions? They will be hidden from the session list and can be restored from Settings.",
       "unarchive": "Restore",
       "unarchiveConfirmTitle": "Restore Session",
       "unarchiveConfirmMessage": "Are you sure you want to restore this session? It will appear back in the session list.",
       "deleteArchived": "Delete",
+      "deleteSelected": "Delete Selected",
+      "deletedSelected": "{{count}} sessions deleted",
+      "bulkDeleteConfirmTitle": "Delete Selected Sessions",
+      "bulkDeleteConfirmMessage": "Are you sure you want to permanently delete {{count}} selected sessions? This action cannot be undone.",
       "deleteArchivedConfirmTitle": "Delete Archived Session",
       "deleteArchivedConfirmMessage": "Are you sure you want to permanently delete this archived session? This action cannot be undone.",
       "deleteAllArchived": "Delete All Archived",
@@ -214,11 +229,13 @@
       "restoreFailed": "Failed to restore session",
       "deleteArchivedFailed": "Failed to delete session",
       "deleteAllArchivedFailed": "Failed to delete all archived sessions",
-      "archiveAllFailed": "Failed to archive sessions"
+      "archiveAllFailed": "Failed to archive sessions",
+      "bulkArchiveFailed": "Failed to archive selected sessions",
+      "bulkDeleteFailed": "Failed to delete selected sessions"
     },
     "scheduledJobs": {
       "title": "Scheduled Jobs",
-      "open": "Open scheduled jobs",
+      "open": "Scheduled jobs",
       "shortLabel": "Schedule",
       "listTitle": "Jobs",
       "assistantFallback": "Current assistant",
@@ -228,6 +245,7 @@
       "fields": {
         "workspacePath": "Workspace path",
         "session": "Session",
+        "agentType": "Agent type",
         "name": "Job name",
         "enabled": "Enabled",
         "enabledHint": "Enable this job",
@@ -242,10 +260,15 @@
       "placeholders": {
         "workspacePath": "Enter workspace path",
         "session": "Select or enter a session ID",
+        "optionalSession": "Leave blank to create a new session",
+        "agentType": "For example: agentic, Cowork, or Claw",
         "name": "For example: Daily global news briefing",
         "anchorMs": "Leave blank to use creation time",
         "timezone": "For example: Asia/Shanghai",
-        "prompt": "Enter the message that should be sent when the schedule fires"
+        "prompt": "Enter the message that should be sent to the agent when the schedule fires"
+      },
+      "hints": {
+        "cronExpr": "Cron format: minute hour day month weekday, for example 0 8 * * * runs every day at 08:00."
       },
       "scheduleKinds": {
         "at": "One-time",
@@ -256,6 +279,10 @@
         "every": "Every {{everyMinutes}} minutes",
         "cron": "Cron: {{expr}}",
         "cronWithTz": "Cron: {{expr}} · {{tz}}"
+      },
+      "targets": {
+        "session": "Session",
+        "newSession": "New session"
       },
       "status": {
         "idle": "Idle",
@@ -276,13 +303,9 @@
         "create": "Create job",
         "cancel": "Cancel"
       },
-      "editor": {
-        "editTitle": "Edit job",
-        "createTitle": "Create job"
-      },
       "empty": {
-        "title": "No scheduled jobs yet",
-        "description": "Click the plus button to create your first scheduled job."
+        "title": "This session has no scheduled jobs yet",
+        "workspaceTitle": "This workspace has no scheduled jobs yet. Runs will create a new session."
       },
       "deleteDialog": {
         "title": "Delete job \"{{name}}\"?"
@@ -439,8 +462,6 @@
     "errorCreateFailed": "Failed to create project"
   },
   "remoteConnect": {
-    "tabLan": "LAN",
-    "tabBitfunServer": "BitFun Server",
     "tabNgrok": "NAT Traversal",
     "tabCustomServer": "Self-Hosted",
     "tabBot": "IM Bot",
@@ -614,6 +635,7 @@
     "select": "Select",
     "selectAll": "Select All",
     "deselectAll": "Deselect All",
+    "invertSelection": "Invert Selection",
     "expand": "Expand",
     "collapse": "Collapse",
     "more": "More",
@@ -691,10 +713,6 @@
     "globalMenu": {
       "name": "Global Menu",
       "description": "Provides global common menu items"
-    },
-    "projectContextDocumentMenu": {
-      "name": "Project Context Document Menu",
-      "description": "Provides deletion for project context documents"
     }
   },
   "status": {
@@ -902,7 +920,6 @@
     "terminal": "Terminal",
     "git": "Git",
     "fileViewer": "File Viewer",
-    "projectContext": "Profile",
     "agents": "Agents",
     "skills": "Skills",
     "miniApps": "Mini App",
@@ -913,6 +930,7 @@
     "panelView": "Panel View"
   },
   "loading": {
+    "app": "Starting BitFun...",
     "scenes": "Loading scene",
     "workspace": "Loading workspace..."
   },
@@ -1108,6 +1126,13 @@
     "message": "Choose what happens when you click the close button: quit exits the app completely, or minimize to tray keeps it running in the background.",
     "quit": "Quit",
     "minimizeToTray": "Minimize to Tray"
+  },
+  "reviewPlatform": {
+    "relativeTime": {
+      "minutesAgo": "{{count}}m ago",
+      "hoursAgo": "{{count}}h ago",
+      "daysAgo": "{{count}}d ago"
+    }
   },
   "bashCommandFailedHint": "Command execution failed. For a complete environment, please download DevBox from the app store and restart BitFun.",
   "collapse": "Collapse",

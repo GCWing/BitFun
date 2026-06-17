@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { getTerminalService } from '@/tools/terminal';
-import type { TerminalService } from '@/tools/terminal';
+import { getTerminalService, type TerminalService } from '@/tools/terminal/services/TerminalService';
 import type { SessionResponse, TerminalEvent } from '@/tools/terminal/types/session';
 import { configManager } from '@/infrastructure/config/services/ConfigManager';
 import type { TerminalConfig } from '@/infrastructure/config/types';

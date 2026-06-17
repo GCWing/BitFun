@@ -9,7 +9,11 @@ export interface GenerativeWidgetStaticRendererProps {
 
 function extractShellCss(html: string): string {
   const match = html.match(/<style>([\s\S]*?)<\/style>/);
-  return match?.[1] ?? '';
+  const css = match?.[1] ?? '';
+  return css.replace(
+    /^(\s*):root\s*\{/m,
+    '$1.bitfun-generative-widget-static-renderer {',
+  );
 }
 
 function runScripts(root: HTMLElement): void {
@@ -73,7 +77,7 @@ export const GenerativeWidgetStaticRenderer: React.FC<GenerativeWidgetStaticRend
   const themeStyle = useMemo(() => {
     const style: React.CSSProperties & Record<string, string> = {
       background: 'transparent',
-      color: 'var(--color-text-primary, #e8e8e8)',
+      color: 'var(--color-text-primary)',
       width: '100%',
     };
 

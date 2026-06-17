@@ -1,22 +1,22 @@
 {
-  "title": "模型配置",
-  "subtitle": "配置和管理 AI 模型提供商",
-  "editProvider": "編輯服務商配置",
-  "newProvider": "新建服務商配置",
-  "editModel": "編輯模型配置",
-  "newModel": "新建模型配置",
-  "editProviderSubtitle": "基礎服務商參數配置",
-  "editSubtitle": "基礎模型參數配置",
-  "confirmDelete": "確定刪除此配置？",
+  "title": "模型設定",
+  "subtitle": "設定和管理 AI 模型提供商",
+  "editProvider": "編輯服務商設定",
+  "newProvider": "新增服務商設定",
+  "editModel": "編輯模型設定",
+  "newModel": "新增模型設定",
+  "editProviderSubtitle": "基礎服務商參數設定",
+  "editSubtitle": "基礎模型參數設定",
+  "confirmDelete": "確定刪除此設定？",
   "cliAuth": {
     "sectionTitle": "本機已登錄賬號",
-    "sectionDescription": "可直接導入本機 Codex CLI / Gemini CLI 已登錄賬號作為模型使用",
+    "sectionDescription": "可直接匯入本機 Codex CLI / Gemini CLI 已登錄賬號作為模型使用",
     "rescan": "重新掃描",
     "empty": "未檢測到本機已登錄的 Codex / Gemini CLI 賬號，請先在終端完成登錄後重新掃描",
-    "import": "導入使用",
-    "refresh": "刷新 Token",
-    "refreshSuccess": "Token 已刷新",
-    "refreshFailed": "刷新失敗：{{error}}",
+    "import": "匯入使用",
+    "refresh": "重新整理 Token",
+    "refreshSuccess": "Token 已重新整理",
+    "refreshFailed": "重新整理失敗：{{error}}",
     "expiresAt": "Token 有效期至 {{time}}",
     "tokenValid": "Token 已就緒",
     "accountLine": "賬號：{{account}}",
@@ -28,33 +28,33 @@
     },
     "detected": "將使用本機 {{label}}（賬號 {{account}}）",
     "notDetected": "本機未檢測到 {{kind}} 已登錄賬號，請先在終端完成登錄",
-    "unknownAccount": "當前登錄賬號"
+    "unknownAccount": "目前登錄賬號"
   },
   "providerSelection": {
     "title": "選擇模型提供商",
-    "subtitle": "選擇一個預設提供商快速配置，或選擇自定義完全手動配置",
+    "subtitle": "選擇一個預設提供商快速設定，或選擇自定義完全手動設定",
     "or": "或者",
     "orSelectProvider": "或選擇預設提供商",
-    "customTitle": "自定義配置",
-    "customDescription": "手動配置所有參數，適用於私有部署或其他未列出的提供商",
+    "customTitle": "自定義設定",
+    "customDescription": "手動設定所有參數，適用於私有部署或其他未列出的提供商",
     "getApiKey": "獲取 API Key",
     "fetchModels": "獲取模型列表",
-    "fetchHint": "可從當前供應商拉取模型列表；拉取失敗時回退到常用預設模型",
+    "fetchHint": "可從目前供應商拉取模型列表；拉取失敗時回退到常用預設模型",
     "fetchingModels": "正在拉取模型列表...",
     "fetchSuccessCount": "已從供應商拉取 {{count}} 個模型",
     "fetchFailedFallback": "拉取模型列表失敗，已回退到常用預設模型",
     "fetchEmptyFallback": "供應商未返回可用模型，已回退到常用預設模型",
     "fillApiKeyBeforeFetch": "請先填寫 API Key 再獲取模型列表",
-    "usingPresetModels": "當前顯示的是常用預設模型",
+    "usingPresetModels": "目前顯示的是常用預設模型",
     "noPresetModels": "暫無可用模型，請獲取模型列表或手動輸入模型名",
     "backToSelection": "返回選擇提供商",
     "selectModel": "選擇模型",
-    "multiSelectHint": "支持多選；選中後可分別設置每個模型的上下文窗口、最大輸出 Tokens 和推理配置",
-    "searchOrInputModel": "搜索或輸入模型名稱...",
+    "multiSelectHint": "支持多選；選中後可分別設置每個模型的上下文視窗、最大輸出 Tokens 和推理設定",
+    "searchOrInputModel": "搜尋或輸入模型名稱...",
     "inputModelName": "輸入自定義模型名稱...",
     "useCustomModel": "按 Enter 使用",
-    "addCustomModel": "添加自定義模型",
-    "addSearchedModel": "添加該模型",
+    "addCustomModel": "新增自定義模型",
+    "addSearchedModel": "新增該模型",
     "modelAlreadyInList": "該模型已在列表中",
     "noModelsSelected": "請先選擇模型",
     "removeModel": "移除模型",
@@ -123,31 +123,31 @@
     }
   },
   "tabs": {
-    "api": "API配置",
-    "proxy": "代理配置"
+    "api": "API設定",
+    "proxy": "代理設定"
   },
   "categories": {
     "all": "全部",
-    "text": "文本",
+    "text": "文字",
     "multimodal": "多模態",
     "other": "輔助"
   },
   "category": {
     "label": "模型分類",
     "placeholder": "選擇模型分類",
-    "general_chat": "文本生成",
+    "general_chat": "文字生成",
     "multimodal": "多模態",
     "image_generation": "圖像生成",
     "speech_recognition": "語音識別"
   },
   "categoryIcons": {
-    "general_chat": "文本",
+    "general_chat": "文字",
     "multimodal": "多模態",
     "image_generation": "繪圖",
     "speech_recognition": "語音"
   },
   "categoryHints": {
-    "general_chat": "文本生成：生成文本回復、代碼等，適用於大多數對話場景",
+    "general_chat": "文字生成：生成文字回復、代碼等，適用於大多數對話場景",
     "multimodal": "多模態：理解圖片內容並進行圖文混合對話",
     "image_generation": "圖像生成：根據文字描述生成圖片",
     "speech_recognition": "語音識別：將語音轉換為文字（如智譜 GLM-ASR）"
@@ -165,12 +165,12 @@
     "apiKeyPlaceholder": "輸入您的 API Key",
     "provider": "請求格式",
     "providerPlaceholder": "選擇請求格式",
-    "contextWindow": "上下文窗口大小",
-    "contextWindowHint": "模型支持的最大上下文窗口大小（用於計算token佔用百分比）",
+    "contextWindow": "上下文視窗大小",
+    "contextWindowHint": "模型支持的最大上下文視窗大小（用於計算token佔用百分比）",
     "maxTokens": "最大輸出Tokens",
     "maxTokensHint": "單次請求時限制模型輸出的最大token數量（影響響應長度）",
     "description": "描述",
-    "descriptionPlaceholder": "配置說明（可選）"
+    "descriptionPlaceholder": "設定說明（可選）"
   },
   "thinking": {
     "enable": "啟用思考",
@@ -180,12 +180,12 @@
     "summaryOff": "思考關",
     "summaryDefault": "API 默認",
     "summaryEnabled": "顯式啟用",
-    "summaryDisabled": "顯式禁用",
+    "summaryDisabled": "顯式停用",
     "summaryAdaptive": "自適應",
     "budgetTokens": "Claude 思考預算",
     "optionDefault": "API 默認",
     "optionEnabled": "啟用",
-    "optionDisabled": "禁用",
+    "optionDisabled": "停用",
     "optionAdaptive": "自適應"
   },
   "reasoningEffort": {
@@ -194,11 +194,11 @@
     "placeholder": "使用 API 默認值"
   },
   "details": {
-    "basicInfo": "基本信息",
+    "basicInfo": "基本資訊",
     "modelName": "模型名稱",
     "provider": "請求格式",
     "apiUrl": "API地址",
-    "contextWindow": "上下文窗口",
+    "contextWindow": "上下文視窗",
     "maxOutput": "最大輸出",
     "description": "描述",
     "capabilities": "能力",
@@ -214,8 +214,8 @@
     "usernamePlaceholder": "代理認證用戶名",
     "password": "密碼（可選）",
     "passwordPlaceholder": "代理認證密碼",
-    "save": "保存代理配置",
-    "saveSuccess": "代理配置已保存，重啟IDE後生效"
+    "save": "儲存代理設定",
+    "saveSuccess": "代理設定已儲存，重啟IDE後生效"
   },
   "streamIdleTimeout": {
     "title": "流式超時",
@@ -223,8 +223,8 @@
     "hint": "流式響應開始後，兩次 chunk 之間的最大等待時間。留空表示無限等待。",
     "placeholder": "留空表示不設超時",
     "invalid": "請輸入正整數秒數，或留空。",
-    "save": "保存流式超時",
-    "saveSuccess": "流式超時已保存"
+    "save": "儲存流式超時",
+    "saveSuccess": "流式超時已儲存"
   },
   "streamTtftTimeout": {
     "title": "首 Token 超時",
@@ -232,8 +232,8 @@
     "hint": "請求發出後，等待模型開始流式輸出的最長時間。留空表示無限等待。",
     "placeholder": "留空表示不設超時",
     "invalid": "請輸入正整數秒數，或留空。",
-    "save": "保存首 Token 超時",
-    "saveSuccess": "首 Token 超時已保存"
+    "save": "儲存首 Token 超時",
+    "saveSuccess": "首 Token 超時已儲存"
   },
   "capabilities": {
     "text_chat": "對話",
@@ -249,30 +249,30 @@
     "geminiApi": "Gemini GenerateContent API"
   },
   "actions": {
-    "save": "保存",
+    "save": "儲存",
     "cancel": "取消",
     "edit": "編輯",
     "delete": "刪除",
     "test": "測試連接",
-    "newConfig": "新建配置",
-    "addModel": "添加模型",
-    "addProvider": "添加服務商",
-    "createFirst": "創建第一個配置"
+    "newConfig": "新增設定",
+    "addModel": "新增模型",
+    "addProvider": "新增服務商",
+    "createFirst": "建立第一個設定"
   },
   "empty": {
-    "noModels": "暫無模型配置",
+    "noModels": "暫無模型設定",
     "noMatchingModels": "沒有找到匹配的模型"
   },
   "search": {
-    "placeholder": "搜索模型名稱、提供商..."
+    "placeholder": "搜尋模型名稱、提供商..."
   },
   "messages": {
     "fillRequired": "請填寫必要字段",
     "fillModelName": "請填寫模型名稱",
     "duplicateModelNameUnderProvider": "該服務商下已有同名模型，請改用其他名稱或編輯已有條目",
-    "saveFailed": "保存失敗",
-    "deleteFailed": "刪除配置失敗",
-    "loadFailed": "加載AI配置失敗",
+    "saveFailed": "儲存失敗",
+    "deleteFailed": "刪除設定失敗",
+    "loadFailed": "載入AI設定失敗",
     "testSuccess": "測試成功",
     "testFailed": "測試失敗",
     "errorDetails": "詳細錯誤",
@@ -281,7 +281,7 @@
       "imageInputCheckFailed": "連接已成功，但圖片輸入測試未通過。"
     },
     "autoSetPrimary": "已自動設為主力模型",
-    "defaultDescription": "{{name}} 模型配置",
+    "defaultDescription": "{{name}} 模型設定",
     "cloneName": "{{name}} - 副本",
     "templateName": "{{provider}} - {{modelName}}",
     "templateDescription": "{{description}} - {{modelName}}"
@@ -289,8 +289,8 @@
   "advancedSettings": {
     "title": "高級設置",
     "inlineThinkInText": {
-      "label": "解析文本中的 <think> 標籤",
-      "hint": "將文本流中的 <think>...</think> 實時拆分為思考內容"
+      "label": "解析文字中的 <think> 標籤",
+      "hint": "將文字流中的 <think>...</think> 實時拆分為思考內容"
     },
     "skipSslVerify": {
       "label": "跳過SSL證書驗證",
@@ -298,13 +298,13 @@
     },
     "customHeaders": {
       "label": "自定義請求頭",
-      "hint": "添加或修改HTTP請求頭",
+      "hint": "新增或修改HTTP請求頭",
       "modeLabel": "應用模式",
       "modeReplace": "替換",
       "modeMerge": "合併",
-      "modeReplaceHint": "自定義請求頭將完全替換默認請求頭（需要自行添加Content-Type、Authorization等）",
-      "modeMergeHint": "先應用默認請求頭，再應用自定義請求頭（可覆蓋已有值，添加新值）",
-      "addHeader": "添加字段",
+      "modeReplaceHint": "自定義請求頭將完全替換默認請求頭（需要自行新增Content-Type、Authorization等）",
+      "modeMergeHint": "先應用默認請求頭，再應用自定義請求頭（可覆蓋已有值，新增新值）",
+      "addHeader": "新增字段",
       "keyPlaceholder": "key",
       "valuePlaceholder": "value"
     },

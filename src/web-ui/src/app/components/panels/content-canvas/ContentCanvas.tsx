@@ -11,6 +11,7 @@ import { EmptyState } from './empty-state';
 import { useCanvasStore } from './stores';
 import { useTabLifecycle, useKeyboardShortcuts, usePanelTabCoordinator } from './hooks';
 import type { AnchorPosition } from './types';
+import { TAB_EVENTS } from './types';
 import { openMainSession, selectActiveBtwSessionTab } from '@/flow_chat/services/openBtwSession';
 import { isSamePath } from '@/shared/utils/pathUtils';
 import './ContentCanvas.scss';
@@ -18,7 +19,7 @@ export interface ContentCanvasProps {
   /** Workspace path */
   workspacePath?: string;
   /** App mode */
-  mode?: 'agent' | 'project' | 'git';
+  mode?: 'agent' | 'project' | 'git' | 'bottom-terminal';
   /** Whether the containing scene is currently visible */
   isSceneActive?: boolean;
   /** Interaction callback */
@@ -27,6 +28,16 @@ export interface ContentCanvasProps {
   onBeforeClose?: (content: any) => Promise<boolean>;
   /** Disable pop-out and panel-close controls (used in panel-view scene) */
   disablePopOut?: boolean;
+  /** Override the event this canvas listens to for creating tabs. */
+  createTabEventName?: string;
+  /** Override the expansion event this canvas dispatches/listens for. */
+  expandPanelEventName?: string;
+  /** Custom collapsed state for canvases hosted outside the right panel. */
+  isPanelCollapsed?: boolean;
+  /** Custom expand behavior for canvases hosted outside the right panel. */
+  onExpandPanel?: () => void;
+  /** Custom collapse behavior for canvases hosted outside the right panel. */
+  onCollapsePanel?: () => void;
 }
 
 export const ContentCanvas: React.FC<ContentCanvasProps> = ({
@@ -35,6 +46,11 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
   isSceneActive = true,
   onInteraction,
   disablePopOut = false,
+  createTabEventName,
+  expandPanelEventName = TAB_EVENTS.EXPAND_RIGHT_PANEL,
+  isPanelCollapsed,
+  onExpandPanel,
+  onCollapsePanel,
 }) => {
   // Store state
   const {
@@ -52,12 +68,20 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
     | undefined;
   const lastSyncedBtwTabIdRef = useRef<string | null>(null);
   // Initialize hooks
-  const { handleCloseWithDirtyCheck, handleCloseAllWithDirtyCheck } = useTabLifecycle({ mode });
+  const { handleCloseWithDirtyCheck, handleCloseAllWithDirtyCheck } = useTabLifecycle({
+    mode,
+    createTabEventName,
+    expandPanelEventName,
+  });
   useKeyboardShortcuts({ enabled: true, handleCloseWithDirtyCheck });
   // Panel/tab state coordinator (auto manage expand/collapse)
   const { collapsePanel } = usePanelTabCoordinator({
     autoCollapseOnEmpty: true,
     autoExpandOnTabOpen: true,
+    isCollapsed: isPanelCollapsed,
+    onExpand: onExpandPanel,
+    onCollapse: onCollapsePanel,
+    expandEventName: expandPanelEventName,
   });
 
   useEffect(() => {

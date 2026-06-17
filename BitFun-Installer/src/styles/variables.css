@@ -1,12 +1,17 @@
 :root {
   --color-bg-primary: #121214;
   --color-bg-secondary: #18181a;
+  --color-bg-tertiary: #121214;
   --color-bg-quaternary: #202024;
+  --color-bg-elevated: #18181a;
+  --color-bg-workbench: #121214;
+  --color-bg-flowchat: #121214;
+  --color-bg-tooltip: rgba(30, 30, 32, 0.92);
 
   --color-text-primary: #e8e8e8;
-  --color-text-secondary: #e5e5e5;
-  --color-text-muted: #a0a0a0;
-  --color-text-disabled: #666666;
+  --color-text-secondary: #b0b0b0;
+  --color-text-muted: #858585;
+  --color-text-disabled: #555555;
 
   --color-accent-50: rgba(96, 165, 250, 0.04);
   --color-accent-100: rgba(96, 165, 250, 0.08);
@@ -15,24 +20,38 @@
   --color-accent-400: rgba(96, 165, 250, 0.4);
   --color-accent-500: #60a5fa;
   --color-accent-600: #3b82f6;
+  --color-accent-700: rgba(59, 130, 246, 0.8);
+  --color-accent-800: rgba(59, 130, 246, 0.9);
 
-  --color-success: #6eb88c;
-  --color-success-bg: rgba(110, 184, 140, 0.1);
-  --color-success-border: rgba(110, 184, 140, 0.3);
-  --color-error: #c77070;
-  --color-error-bg: rgba(199, 112, 112, 0.1);
-  --color-error-border: rgba(199, 112, 112, 0.3);
+  --color-purple-50: rgba(139, 92, 246, 0.04);
+  --color-purple-100: rgba(139, 92, 246, 0.08);
+  --color-purple-200: rgba(139, 92, 246, 0.15);
+  --color-purple-300: rgba(139, 92, 246, 0.25);
+  --color-purple-400: rgba(139, 92, 246, 0.4);
+  --color-purple-500: #8b5cf6;
+  --color-purple-600: #7c3aed;
+  --color-purple-700: rgba(124, 58, 237, 0.8);
+  --color-purple-800: rgba(124, 58, 237, 0.9);
 
-  --element-bg-subtle: rgba(255, 255, 255, 0.05);
-  --element-bg-soft: rgba(255, 255, 255, 0.08);
-  --element-bg-base: rgba(255, 255, 255, 0.11);
-  --element-bg-medium: rgba(255, 255, 255, 0.14);
-  --element-bg-strong: rgba(255, 255, 255, 0.17);
+  --color-success: #34d399;
+  --color-warning: #f59e0b;
+  --color-error: #ef4444;
+  --color-info: #E1AB80;
+  --color-highlight: #d4a574;
+  --color-highlight-bg: rgba(212, 165, 116, 0.15);
 
-  --border-subtle: rgba(255, 255, 255, 0.10);
-  --border-base: rgba(255, 255, 255, 0.14);
-  --border-medium: rgba(255, 255, 255, 0.20);
-  --border-strong: rgba(255, 255, 255, 0.26);
+  --element-bg-subtle: rgba(255, 255, 255, 0.06);
+  --element-bg-soft: rgba(255, 255, 255, 0.10);
+  --element-bg-base: rgba(255, 255, 255, 0.13);
+  --element-bg-medium: rgba(255, 255, 255, 0.17);
+  --element-bg-strong: rgba(255, 255, 255, 0.21);
+  --element-bg-elevated: rgba(255, 255, 255, 0.25);
+
+  --border-subtle: rgba(255, 255, 255, 0.12);
+  --border-base: rgba(255, 255, 255, 0.18);
+  --border-medium: rgba(255, 255, 255, 0.24);
+  --border-strong: rgba(255, 255, 255, 0.32);
+  --border-prominent: rgba(225, 171, 128, 0.50);
 
   --radius-sm: 6px;
   --radius-base: 8px;

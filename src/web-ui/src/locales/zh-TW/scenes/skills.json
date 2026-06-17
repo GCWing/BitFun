@@ -7,7 +7,7 @@
       "market": "技能市場"
     },
     "anchorDescriptions": {
-      "installed": "管理當前環境中已經可用的技能。",
+      "installed": "管理目前環境中已經可用的技能。",
       "market": "從 skills.sh 檢索並下載更多技能。"
     },
     "categories": {
@@ -24,7 +24,7 @@
   "page": {
     "title": "技能",
     "subtitle": "統一管理已安裝技能，並從外部技能市場發現更多可複用能力。",
-    "searchPlaceholder": "搜索已安裝技能和市場技能..."
+    "searchPlaceholder": "搜尋已安裝技能和市場技能..."
   },
   "installed": {
     "titleAll": "已安裝技能",
@@ -32,11 +32,11 @@
     "titleUser": "用戶級技能",
     "subtitleUser": "全局安裝的用戶級技能",
     "titleProject": "項目級技能",
-    "subtitleProject": "當前工作區的項目級技能"
+    "subtitleProject": "目前工作區的項目級技能"
   },
   "toolbar": {
-    "searchPlaceholder": "搜索技能...",
-    "addTooltip": "添加技能",
+    "searchPlaceholder": "搜尋技能...",
+    "addTooltip": "新增技能",
     "hideDuplicates": "重複項"
   },
   "filters": {
@@ -55,20 +55,20 @@
   },
   "section": {
     "user": {
-      "description": "已為當前用戶全局安裝的技能"
+      "description": "已為目前用戶全局安裝的技能"
     },
     "project": {
-      "description": "當前工作區的項目級技能"
+      "description": "目前工作區的項目級技能"
     }
   },
   "market": {
     "title": "技能市場",
-    "subtitle": "搜索並下載可複用技能（默認下載到當前項目）",
+    "subtitle": "搜尋並下載可複用技能（默認下載到目前項目）",
     "subtitlePrefix": "從",
     "subtitleSuffix": "瀏覽和下載可複用技能。",
-    "searchPlaceholder": "搜索市場技能...",
-    "loading": "正在加載市場技能...",
-    "errorPrefix": "市場加載失敗: ",
+    "searchPlaceholder": "搜尋市場技能...",
+    "loading": "正在載入市場技能...",
+    "errorPrefix": "市場載入失敗: ",
     "empty": {
       "noMatch": "沒有找到匹配的市場技能",
       "noSkills": "暫時沒有可展示的市場技能"
@@ -89,10 +89,10 @@
       "next": "下一頁",
       "info": "第 {{current}} / {{total}} 頁",
       "infoMore": "第 {{current}} 頁",
-      "loading": "加載中..."
+      "loading": "載入中..."
     },
     "sourceNote": {
-      "prefix": "數據來源",
+      "prefix": "資料來源",
       "suffix": " · 最多顯示前 {{max}} 條結果"
     },
     "detail": {
@@ -102,12 +102,12 @@
   },
   "suite": {
     "title": "內建技能套件",
-    "subtitle": "選擇一個模式後，可一鍵控制各組內建技能的可見性；也可逐個調整技能後按組保存。",
+    "subtitle": "選擇一個模式後，可一鍵控制各組內建技能的可見性；也可逐個調整技能後按組儲存。",
     "modeLabel": "模式",
-    "refreshTooltip": "刷新當前模式",
-    "refreshAction": "刷新",
+    "refreshTooltip": "重新整理目前模式",
+    "refreshAction": "重新整理",
     "loading": "正在載入內建技能套件...",
-    "empty": "當前沒有可用的內建技能。",
+    "empty": "目前沒有可用的內建技能。",
     "groups": {
       "office": "Office",
       "computerUse": "Computer Use",
@@ -127,19 +127,19 @@
       "team": "團隊模式"
     },
     "modeActions": {
-      "reset": "重置 {{mode}}",
-      "resetShort": "重置"
+      "reset": "重設 {{mode}}",
+      "resetShort": "重設"
     },
     "groupActions": {
-      "save": "保存",
+      "save": "儲存",
       "enableGroup": "啟用分組",
-      "disableGroup": "禁用分組"
+      "disableGroup": "停用分組"
     },
     "resetDialog": {
-      "title": "重置 {{mode}}？",
+      "title": "重設 {{mode}}？",
       "message": "這會將該模式的技能可見性恢復為預設狀態。",
-      "messageWithUnsaved": "這會將該模式的技能可見性恢復為預設狀態，並丟棄當前未保存的改動。",
-      "confirm": "重置",
+      "messageWithUnsaved": "這會將該模式的技能可見性恢復為預設狀態，並丟棄目前未儲存的改動。",
+      "confirm": "重設",
       "cancel": "取消"
     },
     "groupState": {
@@ -152,41 +152,41 @@
       "saveSuccess": "已更新 {{mode}} 套件可見性",
       "saveFailed": "更新套件失敗: {{error}}",
       "resetSuccess": "已恢復 {{mode}} 套件預設設定",
-      "resetFailed": "重置套件失敗: {{error}}",
-      "refreshFailed": "刷新套件失敗: {{error}}",
-      "saveFirst": "請先保存當前技能改動。"
+      "resetFailed": "重設套件失敗: {{error}}",
+      "refreshFailed": "重新整理套件失敗: {{error}}",
+      "saveFirst": "請先儲存目前技能改動。"
     }
   },
   "form": {
-    "title": "添加技能",
+    "title": "新增技能",
     "closeTooltip": "關閉",
     "level": {
       "label": "級別",
       "user": "用戶級（全局）",
-      "project": "項目級（當前工作空間）",
-      "projectDisabled": " - 需要先打開工作區",
-      "currentWorkspace": "當前工作區: {{path}}",
+      "project": "項目級（目前工作空間）",
+      "projectDisabled": " - 需要先開啟工作區",
+      "currentWorkspace": "目前工作區: {{path}}",
       "selectedProjectPath": "所選項目路徑: {{path}}"
     },
     "path": {
-      "label": "技能文件夾路徑",
-      "placeholder": "選擇或輸入技能文件夾路徑",
+      "label": "技能資料夾路徑",
+      "placeholder": "選擇或輸入技能資料夾路徑",
       "browseTooltip": "瀏覽",
-      "hint": "文件夾需包含有效的 SKILL.md 文件"
+      "hint": "資料夾需包含有效的 SKILL.md 檔案"
     },
     "validating": "校驗中...",
     "actions": {
       "cancel": "取消",
-      "add": "添加",
-      "adding": "添加中..."
+      "add": "新增",
+      "adding": "新增中..."
     }
   },
   "list": {
-    "loading": "加載中...",
-    "errorPrefix": "加載失敗: ",
+    "loading": "載入中...",
+    "errorPrefix": "載入失敗: ",
     "empty": {
       "noMatch": "沒有找到匹配的技能",
-      "noSkills": "還沒有配置任何技能"
+      "noSkills": "還沒有設定任何技能"
     },
     "item": {
       "user": "用戶級",
@@ -196,8 +196,8 @@
       "detail": "詳情",
       "deleteTooltip": "刪除",
       "pathLabel": "路徑:",
-      "openPathInExplorer": "在資源管理器中打開此文件夾",
-      "revealPathUnavailableRemote": "遠程工作區無法在本地資源管理器中打開路徑",
+      "openPathInExplorer": "在資源管理器中開啟此資料夾",
+      "revealPathUnavailableRemote": "遠程工作區無法在本地資源管理器中開啟路徑",
       "shadowed": "重複",
       "shadowedTooltip": "該技能被更高優先級的同名技能覆蓋，不會生效。",
       "shadowedLabel": "被覆蓋自:",
@@ -207,15 +207,15 @@
   "deleteModal": {
     "title": "確認刪除",
     "message": "確定要刪除技能 \"{{name}}\" 嗎？",
-    "warning": "此操作將刪除技能文件夾，無法恢復。",
+    "warning": "此操作將刪除技能資料夾，無法恢復。",
     "cancel": "取消",
     "delete": "刪除"
   },
   "messages": {
-    "invalidPath": "請選擇有效的技能文件夾",
-    "noWorkspace": "請先打開一個工作區才能添加項目級技能",
-    "addSuccess": "技能 \"{{name}}\" 添加成功",
-    "addFailed": "添加失敗: {{error}}",
+    "invalidPath": "請選擇有效的技能資料夾",
+    "noWorkspace": "請先開啟一個工作區才能新增項目級技能",
+    "addSuccess": "技能 \"{{name}}\" 新增成功",
+    "addFailed": "新增失敗: {{error}}",
     "deleteSuccess": "技能 \"{{name}}\" 已刪除",
     "deleteFailed": "刪除失敗: {{error}}",
     "toggleSuccess": "技能 \"{{name}}\" 已{{status}}",
@@ -223,7 +223,7 @@
     "marketDownloadSuccess": "技能 \"{{name}}\" 下載成功",
     "marketDownloadFailed": "下載失敗: {{error}}",
     "enabled": "啟用",
-    "disabled": "禁用",
-    "revealPathFailed": "無法在資源管理器中打開: {{error}}"
+    "disabled": "停用",
+    "revealPathFailed": "無法在資源管理器中開啟: {{error}}"
   }
 }

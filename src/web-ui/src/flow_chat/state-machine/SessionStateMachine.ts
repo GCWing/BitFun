@@ -265,13 +265,29 @@ export class SessionStateMachineImpl {
 
       const sessionId = this.context.taskId;
       const dialogTurnId = this.context.currentDialogTurnId;
-      const { agentAPI } = await import('@/infrastructure/api');
+      const { acpClientIdFromAgentType } = await import('@/flow_chat/utils/acpSession');
+      const session = flowChatStore.getState().sessions.get(sessionId);
+      const acpClientId =
+        acpClientIdFromAgentType(session?.config?.agentType) ||
+        acpClientIdFromAgentType(session?.mode);
       
       try {
-        await agentAPI.cancelDialogTurn(sessionId, dialogTurnId);
-        log.debug('Backend cancellation completed', { sessionId, dialogTurnId });
+        if (acpClientId) {
+          const { ACPClientAPI } = await import('@/infrastructure/api/service-api/ACPClientAPI');
+          await ACPClientAPI.cancelDialogTurn({
+            sessionId,
+            clientId: acpClientId,
+            workspacePath: session?.workspacePath || session?.config?.workspacePath,
+            remoteConnectionId: session?.remoteConnectionId,
+            remoteSshHost: session?.remoteSshHost,
+          });
+        } else {
+          const { agentAPI } = await import('@/infrastructure/api');
+          await agentAPI.cancelDialogTurn(sessionId, dialogTurnId);
+        }
+        log.debug('Backend cancellation completed', { sessionId, dialogTurnId, acpClientId });
       } catch (error) {
-        log.error('Backend cancellation failed', { sessionId, dialogTurnId, error });
+        log.error('Backend cancellation failed', { sessionId, dialogTurnId, acpClientId, error });
       }
     }
 

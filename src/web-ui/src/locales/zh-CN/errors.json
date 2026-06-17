@@ -62,7 +62,7 @@
     "networkError": "AI 响应中断",
     "networkErrorSuggestion": "网络连接不稳定或模型服务端提前关闭了连接，请检查网络后重试",
     "rateLimit": "模型请求频率超限",
-    "rateLimitSuggestion": "请稍后重试，或在模型设置中切换到其他模型",
+    "rateLimitSuggestion": "服务商因频率限制拒绝了本次请求。可能是短时间内请求过多，也可能是某些服务商平台存在每分钟 token 数（TPM）限制。请稍候重试，或在设置中切换到其他模型",
     "authError": "API 认证失败",
     "authErrorSuggestion": "API 密钥无效或已过期，请检查模型配置中的密钥设置",
     "contextOverflow": "对话内容超出限制",

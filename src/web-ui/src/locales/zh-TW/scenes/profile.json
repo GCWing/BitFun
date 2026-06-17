@@ -13,7 +13,7 @@
   "slotDefault": {
     "primary":     "主力模型",
     "fast":        "快速模型",
-    "unconfigured": "未配置"
+    "unconfigured": "未設定"
   },
 
   "modelGroups": {
@@ -24,7 +24,7 @@
   "hero": {
     "editNameTitle":  "點擊編輯名稱",
     "editDescTitle":  "點擊編輯描述",
-    "descPlaceholder": "添加描述...",
+    "descPlaceholder": "新增描述...",
     "radarTitle":     "點擊圖形放大 · 點擊維度文字可跳轉"
   },
 
@@ -35,13 +35,13 @@
     "creaturePlaceholderShort": "設置角色類型",
     "vibe": "氣質風格",
     "vibePlaceholderShort": "設置氣質風格",
-    "resetTooltip": "重置助手人設",
-    "resetConfirmTitle": "重置助手人設",
-    "resetConfirmMessage": "這會將 BOOTSTRAP.md、SOUL.md、USER.md 和 IDENTITY.md 恢復為默認模板，並覆蓋當前內容。確定繼續嗎？",
-    "resetConfirmAction": "確認重置",
+    "resetTooltip": "重設助手人設",
+    "resetConfirmTitle": "重設助手人設",
+    "resetConfirmMessage": "這會將 BOOTSTRAP.md、SOUL.md、USER.md 和 IDENTITY.md 恢復為默認模板，並覆蓋目前內容。確定繼續嗎？",
+    "resetConfirmAction": "確認重設",
     "resetCancel": "取消",
-    "resetSuccess": "已重置助手人設",
-    "resetFailed": "重置助手人設失敗"
+    "resetSuccess": "已重設助手人設",
+    "resetFailed": "重設助手人設失敗"
   },
 
   "home": {
@@ -68,7 +68,7 @@
     "manage":       "管理",
     "selectAll":    "全選",
     "clearAll":     "清空",
-    "reset":        "重置",
+    "reset":        "重設",
     "collapse":     "收起"
   },
 
@@ -83,7 +83,7 @@
   "empty": {
     "rules":     "暫無守則",
     "memory":    "暫無記憶",
-    "tools":     "暫無工具信息",
+    "tools":     "暫無工具資訊",
     "skills":    "暫無技能"
   },
 
@@ -91,14 +91,14 @@
     "modelUpdated":  "模型已更新",
     "updateFailed":  "更新失敗",
     "toggleFailed":  "切換失敗",
-    "resetSuccess":  "已重置",
-    "resetFailed":   "重置失敗",
-    "resetConfirm":  "確定要重置工具配置嗎？"
+    "resetSuccess":  "已重設",
+    "resetFailed":   "重設失敗",
+    "resetConfirm":  "確定要重設工具設定嗎？"
   },
 
   "radar": {
     "title":    "性格雷達",
-    "subtitle": "點擊維度標籤可跳轉至對應配置",
+    "subtitle": "點擊維度標籤可跳轉至對應設定",
     "dims": {
       "creativity":   "創造力",
       "rigor":        "嚴謹度",
@@ -122,15 +122,15 @@
     "gallery": {
       "title":              "助理",
       "subtitle":           "管理你的所有助理實例",
-      "newAssistant":       "新建助理",
+      "newAssistant":       "新增助理",
       "assistantsTitle":    "已孵化的助理",
-      "assistantsSubtitle": "點擊助理卡片進行配置"
+      "assistantsSubtitle": "點擊助理卡片進行設定"
     },
 
     "template": {
       "title":        "孵化模板",
-      "subtitle":     "新助理孵化時繼承這裡的配置",
-      "configure":    "配置模板",
+      "subtitle":     "新助理孵化時繼承這裡的設定",
+      "configure":    "設定模板",
       "tokenTitle":   "上下文佔用估算",
       "tokenSystemPrompt": "系統提示詞",
       "tokenToolInjection": "工具描述注入",
@@ -149,10 +149,10 @@
       "colDisabled": "未啟用",
       "colEmpty": "暫無",
       "mcpToolsSection": "MCP 工具",
-      "mcpEmptyTitle": "未連接 MCP 服務器",
-      "mcpEmptyHint": "在設置中添加 MCP 服務器後，其工具將顯示於此",
+      "mcpEmptyTitle": "未連接 MCP 伺服器",
+      "mcpEmptyHint": "在設置中新增 MCP 伺服器後，其工具將顯示於此",
       "sectionModelsSubtitle": "新助理孵化時繼承的主力與快速模型槽位",
-      "mcpServerNoTools": "該服務器暫無可用工具",
+      "mcpServerNoTools": "該伺服器暫無可用工具",
       "closeDetail": "關閉詳情",
       "detailPanel": "詳情面板",
       "openServerDetail": "查看 MCP 服務詳情",
@@ -173,8 +173,8 @@
     "card": {
       "unnamed":             "未命名助理",
       "noVibe":              "一個等待定義的助理",
-      "configure":           "點擊配置",
-      "newSession":          "新建會話",
+      "configure":           "點擊設定",
+      "newSession":          "新增會話",
       "tokenTitle":          "上下文佔用估算",
       "primaryBadge":        "主助理",
       "delete":              "刪除助理",
@@ -197,7 +197,7 @@
         "SOUL":     "核心人設",
         "USER":     "用戶畫像"
       },
-      "personaDocSaveFailed": "保存文檔失敗",
+      "personaDocSaveFailed": "儲存文檔失敗",
       "personaDocLoadFailed": "讀取文檔失敗"
     }
   }

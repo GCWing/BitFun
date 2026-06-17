@@ -13,7 +13,11 @@ import {
 import { configAPI, workspaceAPI } from '@/infrastructure/api';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import type { CloseBehavior } from '@/infrastructure/api/service-api/SystemAPI';
-import { getTerminalService } from '@/tools/terminal';
+import {
+  getTerminalService,
+  refreshTerminalPanelPosition,
+  setTerminalPanelPosition,
+} from '@/tools/terminal/services';
 import type { ShellInfo } from '@/tools/terminal/types/session';
 import {
   ConfigPageContent,
@@ -24,7 +28,12 @@ import {
 } from './common';
 import { configManager } from '../services/ConfigManager';
 import { createLogger } from '@/shared/utils/logger';
-import type { BackendLogLevel, RuntimeLoggingInfo, TerminalConfig as TerminalSettings } from '../types';
+import type {
+  BackendLogLevel,
+  RuntimeLoggingInfo,
+  TerminalConfig as TerminalSettings,
+  TerminalPanelPosition,
+} from '../types';
 import './BasicsConfig.scss';
 
 const log = createLogger('BasicsConfig');
@@ -460,11 +469,11 @@ function BasicsLoggingSection() {
 function BasicsTerminalSection() {
   const { t } = useTranslation('settings/basics');
   const [defaultShell, setDefaultShell] = useState<string>('');
+  const [terminalPanelPosition, setTerminalPanelPositionState] = useState<TerminalPanelPosition>('right');
   const [availableShells, setAvailableShells] = useState<ShellInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
-  const [platform, setPlatform] = useState<string>('');
 
   const showMessage = useCallback((type: 'success' | 'error' | 'info', text: string) => {
     setMessage({ type, text });
@@ -475,18 +484,17 @@ function BasicsTerminalSection() {
     try {
       setLoading(true);
 
-      const [terminalConfig, shells, systemInfo] = await Promise.all([
+      const [terminalConfig, shells] = await Promise.all([
         configManager.getConfig<TerminalSettings>('terminal'),
         getTerminalService().getAvailableShells(),
-        systemAPI.getSystemInfo().catch(() => ({ platform: '' })),
       ]);
 
       setDefaultShell(terminalConfig?.default_shell || '');
+      setTerminalPanelPositionState(terminalConfig?.terminal_panel_position === 'bottom' ? 'bottom' : 'right');
+      void refreshTerminalPanelPosition();
 
       const availableOnly = shells.filter((s) => s.available);
       setAvailableShells(availableOnly);
-
-      setPlatform(systemInfo.platform || '');
     } catch (error) {
       log.error('Failed to load terminal config data', error);
       showMessage('error', t('terminal.messages.loadFailed'));
@@ -520,14 +528,25 @@ function BasicsTerminalSection() {
     [showMessage, t]
   );
 
-  const shouldShowPowerShellCoreRecommendation = useMemo(() => {
-    const isWindows = platform === 'windows';
-    if (!isWindows) return false;
+  const handleTerminalPanelPositionChange = useCallback(
+    async (value: TerminalPanelPosition) => {
+      try {
+        setSaving(true);
+        setTerminalPanelPositionState(value);
 
-    const hasPowerShellCore = availableShells.some((shell) => shell.shellType === 'PowerShellCore');
+        await setTerminalPanelPosition(value);
+        configManager.clearCache();
 
-    return !hasPowerShellCore;
-  }, [availableShells, platform]);
+        showMessage('success', t('terminal.messages.panelPositionUpdated'));
+      } catch (error) {
+        log.error('Failed to save terminal panel position', { value, error });
+        showMessage('error', t('terminal.messages.saveFailed'));
+      } finally {
+        setSaving(false);
+      }
+    },
+    [showMessage, t],
+  );
 
   const shellOptions = useMemo(
     () => [
@@ -540,33 +559,14 @@ function BasicsTerminalSection() {
     [availableShells, t]
   );
 
-  const terminalSectionDescription = useMemo(() => {
-    const hint = t('terminal.sections.terminalHint');
-    if (!shouldShowPowerShellCoreRecommendation) {
-      return hint;
-    }
-    return (
-      <>
-        {hint}
-        <span className="bitfun-terminal-config__section-hint-sep"> · </span>
-        <span className="bitfun-terminal-config__section-hint-extra">
-          {t('terminal.recommendations.pwsh.prefix')}{' '}
-          <span className="bitfun-terminal-config__section-hint-extra-name">
-            {t('terminal.recommendations.pwsh.name')}
-          </span>
-          {t('terminal.recommendations.pwsh.suffix')}{' '}
-          <a
-            href="https://aka.ms/PSWindows"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="bitfun-terminal-config__section-hint-link"
-          >
-            {t('terminal.recommendations.pwsh.link')}
-          </a>
-        </span>
-      </>
-    );
-  }, [shouldShowPowerShellCoreRecommendation, t]);
+  const terminalPanelPositionOptions = useMemo(
+    () => [
+      { value: 'right', label: t('terminal.panelPosition.options.right') },
+      { value: 'bottom', label: t('terminal.panelPosition.options.bottom') },
+    ],
+    [t],
+  );
+  const shouldShowCmdFallbackNotice = defaultShell === 'Cmd';
 
   if (loading) {
     return <ConfigPageLoading text={t('terminal.messages.loading')} />;
@@ -579,8 +579,14 @@ function BasicsTerminalSection() {
 
         <ConfigPageSection
           title={t('terminal.sections.terminal')}
-          description={terminalSectionDescription}
+          description={t('terminal.sections.terminalHint')}
         >
+          {shouldShowCmdFallbackNotice && (
+            <Alert
+              type="info"
+              message={t('terminal.controls.cmdFallbackMessage')}
+            />
+          )}
           <ConfigPageRow
             label={t('terminal.sections.defaultTerminal')}
             description={t('terminal.controls.description')}
@@ -601,16 +607,21 @@ function BasicsTerminalSection() {
             </div>
           </ConfigPageRow>
 
-          {platform === 'windows' && defaultShell === 'Cmd' && (
-            <div className="bitfun-terminal-config__inline-alert">
-              <Alert type="warning" message={t('terminal.warnings.cmd')} />
+          <ConfigPageRow
+            label={t('terminal.panelPosition.label')}
+            description={t('terminal.panelPosition.description')}
+            align="center"
+          >
+            <div className="bitfun-terminal-config__select-wrapper">
+              <Select
+                value={terminalPanelPosition}
+                onChange={(v) => handleTerminalPanelPositionChange(v as TerminalPanelPosition)}
+                options={terminalPanelPositionOptions}
+                placeholder={t('terminal.panelPosition.placeholder')}
+                disabled={saving}
+              />
             </div>
-          )}
-          {platform === 'windows' && defaultShell === 'Bash' && (
-            <div className="bitfun-terminal-config__inline-alert">
-              <Alert type="warning" message={t('terminal.warnings.gitBash')} />
-            </div>
-          )}
+          </ConfigPageRow>
         </ConfigPageSection>
       </div>
     </div>

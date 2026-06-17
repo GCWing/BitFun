@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { agentAPI } from '@/infrastructure/api';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
-import { configManager } from '@/infrastructure/config';
+import { configManager } from '@/infrastructure/config/services/ConfigManager';
 import { flowChatStore } from '@/flow_chat/store/FlowChatStore';
 import { useI18n } from '@/infrastructure/i18n';
 import { createLogger } from '@/shared/utils/logger';

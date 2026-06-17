@@ -126,27 +126,22 @@ export const ToolTimeoutIndicator: React.FC<ToolTimeoutIndicatorProps> = ({
       completedStatus === 'success'
         ? t('toolCards.timeout.completedDurationTooltip', {
           duration: durationLabel,
-          defaultValue: `Completed in ${durationLabel}`,
         })
         : completedStatus === 'error'
           ? completedFailureReason
             ? t('toolCards.timeout.failedDurationTooltipWithReason', {
               duration: durationLabel,
               reason: completedFailureReason,
-              defaultValue: `Failed after ${durationLabel}: ${completedFailureReason}`,
             })
             : t('toolCards.timeout.failedDurationTooltip', {
               duration: durationLabel,
-              defaultValue: `Failed after ${durationLabel}`,
             })
           : completedStatus === 'cancelled'
             ? t('toolCards.timeout.cancelledDurationTooltip', {
               duration: durationLabel,
-              defaultValue: `Cancelled after ${durationLabel}`,
             })
             : t('toolCards.timeout.durationTooltip', {
               duration: durationLabel,
-              defaultValue: `Duration ${durationLabel}`,
             })
     );
 

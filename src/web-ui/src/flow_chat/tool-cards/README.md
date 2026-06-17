@@ -37,8 +37,12 @@ Current examples:
 
 ## Auto-Scroll Behavior For Previews
 
-When the preview uses a scrolling code viewer, only auto-scroll while content is
-actively streaming. Do not keep forcing auto-scroll after streaming has stopped.
+When the preview uses a nested scrolling code viewer, avoid forcing that nested
+viewer to auto-scroll while params are streaming. Streaming code previews already
+render the latest viewport-sized tail without overscan when nested auto-scroll is
+disabled, and the outer conversation list owns the high-level follow behavior.
+Writing `scrollTop` on every preview batch can force layout work inside the
+WebView and make long code output less responsive.
 
 Preferred pattern:
 
@@ -46,7 +50,7 @@ Preferred pattern:
 <CodePreview
   content={previewContent}
   isStreaming={isParamsStreaming}
-  autoScrollToBottom={isParamsStreaming}
+  autoScrollToBottom={false}
 />
 ```
 

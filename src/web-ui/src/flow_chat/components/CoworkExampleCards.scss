@@ -4,16 +4,16 @@
 
 .bitfun-cowork-example-cards {
   border: 1px solid var(--color-border);
-  border-radius: calc(var(--flowchat-card-radius, 8px) + 2px);
-  padding: var(--flowchat-card-expanded-pad-x, 0.625rem) var(--flowchat-card-expanded-pad-x, 0.625rem) var(--flowchat-card-expanded-pad-x, 0.625rem) 0;
-  margin-bottom: var(--flowchat-card-gap, 0.42rem);
+  border-radius: calc(var(--flowchat-card-radius) + 2px);
+  padding: var(--flowchat-card-expanded-pad-x) var(--flowchat-card-expanded-pad-x) var(--flowchat-card-expanded-pad-x) 0;
+  margin-bottom: var(--flowchat-card-gap);
 
   &__header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: var(--flowchat-control-gap, 0.5rem);
-    margin-bottom: var(--flowchat-card-gap, 0.42rem);
+    gap: var(--flowchat-control-gap);
+    margin-bottom: var(--flowchat-card-gap);
   }
 
   &__title {
@@ -25,13 +25,13 @@
   &__header-actions {
     display: flex;
     align-items: center;
-    gap: var(--flowchat-inline-gap, 0.35rem);
+    gap: var(--flowchat-inline-gap);
   }
 
   &__grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: var(--flowchat-control-gap, 0.5rem);
+    gap: var(--flowchat-control-gap);
   }
 
   &__card {
@@ -40,14 +40,14 @@
     min-height: 86px;
     display: flex;
     flex-direction: column;
-    gap: var(--flowchat-inline-gap, 0.35rem);
-    padding: var(--flowchat-card-expanded-pad-x, 0.625rem);
+    gap: var(--flowchat-inline-gap);
+    padding: var(--flowchat-card-expanded-pad-x);
   }
 
   &__card-header {
     display: flex;
     align-items: center;
-    gap: var(--flowchat-control-gap, 0.5rem);
+    gap: var(--flowchat-control-gap);
   }
 
   &__card-icon {
@@ -67,13 +67,13 @@
     font-size: var(--flowchat-font-size-sm);
     font-weight: 600;
     color: var(--color-text-primary);
-    line-height: var(--flowchat-compact-line-height, 1.32);
+    line-height: var(--flowchat-compact-line-height);
   }
 
   &__card-desc {
     font-size: var(--flowchat-font-size-xs);
     color: var(--color-text-secondary);
-    line-height: var(--flowchat-support-line-height, 1.45);
+    line-height: var(--flowchat-support-line-height);
     overflow: hidden;
     display: -webkit-box;
     -webkit-line-clamp: 2;

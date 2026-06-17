@@ -2,7 +2,7 @@
  * Markdown component exports
  */
 export { Markdown } from './Markdown';
-export type { MarkdownProps, LineRange } from './Markdown';
+export type { MarkdownProps, MarkdownTraceContext, LineRange } from './Markdown';
 
 export { Markdown as MarkdownRenderer } from './Markdown';
 export type { MarkdownProps as MarkdownRendererProps } from './Markdown';

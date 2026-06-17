@@ -1,7 +1,7 @@
 {
   "name": "BitFun",
   "private": true,
-  "version": "0.2.8",
+  "version": "0.2.10",
   "type": "module",
   "engines": {
     "node": ">=18.0.0"
@@ -15,11 +15,17 @@
     "postinstall": "pnpm run copy-assets",
     "dev": "node scripts/dev.cjs web",
     "dev:web": "pnpm --dir src/web-ui dev",
+    "dev:mobile-web": "pnpm --dir src/mobile-web dev",
+    "dev:mobile-web:host": "pnpm --dir src/mobile-web dev --host",
+    "preview:mobile-web": "pnpm --dir src/mobile-web preview",
     "lint:web": "pnpm --dir src/web-ui run lint",
     "lint:web:fix": "pnpm --dir src/web-ui run lint:fix",
+    "type-check:mobile-web": "pnpm --dir src/mobile-web run type-check",
     "i18n:generate": "node scripts/generate-i18n-contract.mjs",
     "i18n:contract:test": "node --test scripts/i18n-contract.test.mjs",
+    "i18n:contract:test:ci": "cross-env BITFUN_I18N_CONTRACT_TEST_PROFILE=ci node --test scripts/i18n-contract.test.mjs",
     "i18n:audit": "node scripts/i18n-audit.mjs",
+    "theme:color-audit": "node scripts/audit-theme-colors.mjs",
     "check:repo-hygiene": "node scripts/check-repo-hygiene.mjs",
     "check:github-config": "pnpm --dir src/web-ui exec node ../../scripts/check-github-config.mjs",
     "fmt:rs": "node scripts/format-changed-rust.mjs",
@@ -71,8 +77,8 @@
     "e2e:test:l1": "cross-env BITFUN_E2E_APP_MODE=debug pnpm --dir tests/e2e run test:l1",
     "e2e:test:smoke": "cross-env BITFUN_E2E_APP_MODE=debug pnpm --dir tests/e2e run test:smoke",
     "e2e:test:chat": "cross-env BITFUN_E2E_APP_MODE=debug pnpm --dir tests/e2e run test:chat",
-    "e2e:test:perf:debug": "cross-env BITFUN_E2E_APP_MODE=debug pnpm --dir tests/e2e run test:perf",
-    "e2e:test:perf:release-fast": "cross-env BITFUN_E2E_APP_MODE=release-fast pnpm --dir tests/e2e run test:perf"
+    "e2e:test:perf:debug": "cross-env BITFUN_E2E_APP_MODE=debug E2E_LOG_LEVEL=warn pnpm --dir tests/e2e run test:perf",
+    "e2e:test:perf:release-fast": "cross-env BITFUN_E2E_APP_MODE=release-fast E2E_LOG_LEVEL=warn pnpm --dir tests/e2e run test:perf"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.10.0",

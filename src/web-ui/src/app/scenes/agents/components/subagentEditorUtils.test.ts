@@ -7,13 +7,13 @@ import {
 } from './subagentEditorUtils';
 
 const tools: SubagentEditorToolInfo[] = [
-  { name: 'GetFileDiff', isReadonly: true },
-  { name: 'Read', isReadonly: true },
-  { name: 'Grep', isReadonly: true },
-  { name: 'Glob', isReadonly: true },
-  { name: 'LS', isReadonly: true },
-  { name: 'Write', isReadonly: false },
-  { name: 'Bash', isReadonly: false },
+  { name: 'GetFileDiff', description: 'Show file changes.', isReadonly: true },
+  { name: 'Read', description: 'Read file contents.', isReadonly: true },
+  { name: 'Grep', description: 'Search file contents.', isReadonly: true },
+  { name: 'Glob', description: 'Find files by pattern.', isReadonly: true },
+  { name: 'LS', description: 'List directory contents.', isReadonly: true },
+  { name: 'Write', description: 'Write file contents.', isReadonly: false },
+  { name: 'Bash', description: 'Run shell commands.', isReadonly: false },
 ];
 
 describe('subagentEditorUtils', () => {

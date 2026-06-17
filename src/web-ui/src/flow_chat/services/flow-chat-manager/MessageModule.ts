@@ -66,17 +66,29 @@ async function syncSessionModelSelection(
     throw new Error(`Session does not exist: ${sessionId}`);
   }
 
-  const [agentModelsConfig, allModelsConfig, defaultModelsConfig] = await Promise.all([
-    configManager.getConfig<Record<string, string>>('ai.agent_models'),
-    configManager.getConfig<AIModelConfig[]>('ai.models'),
-    configManager.getConfig<DefaultModelsConfig>('ai.default_models'),
+  const currentModelId = (session.config.modelName || 'auto').trim() || 'auto';
+
+  // When the session already has an explicit model selected, keep it —
+  // do not overwrite with the global per-mode default.  Only resolve
+  // from the global config when the session is still on 'auto'.
+  if (currentModelId !== 'auto') {
+    const desiredMaxContextTokens = await getModelMaxTokens(currentModelId, agentType);
+    if (session.maxContextTokens !== desiredMaxContextTokens) {
+      context.flowChatStore.updateSessionMaxContextTokens(sessionId, desiredMaxContextTokens);
+    }
+    return;
+  }
+
+  const configData = await configManager.getConfigs([
+    'ai.agent_models',
+    'ai.models',
+    'ai.default_models',
   ]);
-  const agentModels = agentModelsConfig || {};
-  const allModels = allModelsConfig || [];
-  const defaultModels = defaultModelsConfig || {};
+  const agentModels = (configData['ai.agent_models'] as Record<string, string> | undefined) || {};
+  const allModels = (configData['ai.models'] as AIModelConfig[] | undefined) || [];
+  const defaultModels = (configData['ai.default_models'] as DefaultModelsConfig | undefined) || {};
 
   const desiredModelId = normalizeModelSelection(agentModels[agentType], allModels, defaultModels);
-  const currentModelId = (session.config.modelName || 'auto').trim() || 'auto';
   const shouldForceAutoSync = desiredModelId === 'auto';
   const desiredMaxContextTokens = await getModelMaxTokens(desiredModelId, agentType);
   const shouldSyncContextWindow = session.maxContextTokens !== desiredMaxContextTokens;

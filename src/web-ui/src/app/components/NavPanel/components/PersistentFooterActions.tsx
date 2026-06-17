@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { lazy, Suspense, useState, useCallback } from 'react';
 import {
   Settings,
   Info,
@@ -25,7 +25,6 @@ import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext'
 import { useNotification } from '@/shared/notification-system';
 import NotificationButton from '../../TitleBar/NotificationButton';
 import { AboutDialog } from '../../AboutDialog';
-import { RemoteConnectDialog } from '../../RemoteConnectDialog';
 import {
   RemoteConnectDisclaimerContent,
 } from '../../RemoteConnectDialog/RemoteConnectDisclaimer';
@@ -33,6 +32,9 @@ import {
   getRemoteConnectDisclaimerAgreed,
   setRemoteConnectDisclaimerAgreed,
 } from '../../RemoteConnectDialog/remoteConnectDisclaimerStorage';
+
+const RemoteConnectDialog = lazy(() => import('../../RemoteConnectDialog'));
+
 const PersistentFooterActions: React.FC = () => {
   const { t } = useI18n('common');
   const { openScene } = useSceneManager();
@@ -298,7 +300,11 @@ const PersistentFooterActions: React.FC = () => {
         </div>
       </div>
       <AboutDialog isOpen={showAbout} onClose={() => setShowAbout(false)} />
-      <RemoteConnectDialog isOpen={showRemoteConnect} onClose={() => setShowRemoteConnect(false)} />
+      {showRemoteConnect && (
+        <Suspense fallback={null}>
+          <RemoteConnectDialog isOpen={showRemoteConnect} onClose={() => setShowRemoteConnect(false)} />
+        </Suspense>
+      )}
       <Modal
         isOpen={showRemoteDisclaimer}
         onClose={() => setShowRemoteDisclaimer(false)}

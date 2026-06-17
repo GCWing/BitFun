@@ -17,7 +17,7 @@
   padding: 20px 32px;
   background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
   border-bottom: 1px solid #2a2a2a;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 2px 8px var(--color-overlay-black-50);
 }
 
 .header-left {
@@ -30,7 +30,7 @@
   margin: 0;
   font-size: 24px;
   font-weight: 600;
-  color: #ffffff;
+  color: var(--color-static-white);
 }
 
 .badge {
@@ -97,8 +97,8 @@
   width: 100%;
   min-height: 500px;
   padding: 20px;
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--color-overlay-white-02);
+  border: 1px solid var(--color-overlay-white-08);
   border-radius: 8px;
   color: #e0e0e0;
   font-family: 'Courier New', Consolas, Monaco, monospace;
@@ -132,5 +132,5 @@
   margin: 0 0 16px 0;
   font-size: 20px;
   font-weight: 600;
-  color: #ffffff;
+  color: var(--color-static-white);
 }

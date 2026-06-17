@@ -9,9 +9,9 @@
   gap: 6px;
 
   &__label {
-    font-size: var(--font-size-sm, 14px);
-    font-weight: var(--font-weight-medium, 500);
-    color: var(--color-text-secondary, #e5e5e5);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    color: var(--color-text-secondary);
     letter-spacing: 0.2px;
   }
 
@@ -20,19 +20,19 @@
     display: flex;
     align-items: center;
     background: transparent;
-    border: 1px solid var(--border-base, rgba(255, 255, 255, 0.14));
-    border-radius: var(--size-radius-sm, 6px);
-    transition: all var(--motion-base, 0.3s) var(--easing-standard, cubic-bezier(0.4, 0, 0.2, 1));
+    border: 1px solid var(--border-base);
+    border-radius: var(--size-radius-sm);
+    transition: all var(--motion-base) var(--easing-standard);
     overflow: hidden;
 
     &:hover:not(.bitfun-number-input--disabled &) {
-      background: var(--element-bg-subtle, rgba(255, 255, 255, 0.05));
-      border-color: var(--border-strong, rgba(255, 255, 255, 0.26));
+      background: var(--element-bg-subtle);
+      border-color: var(--border-strong);
     }
 
     &:focus-within {
       background: transparent;
-      border-color: var(--color-accent-500, #60a5fa);
+      border-color: var(--color-accent-500);
     }
   }
 
@@ -54,15 +54,15 @@
     border: none !important;
     outline: none !important;
     box-shadow: none !important;
-    color: var(--color-text-primary, #e8e8e8);
+    color: var(--color-text-primary);
     font-size: inherit;
-    font-weight: var(--font-weight-medium, 500);
+    font-weight: var(--font-weight-medium);
     font-variant-numeric: tabular-nums;
     text-align: center;
     padding: 0;
 
     &::placeholder {
-      color: var(--color-text-muted, #a0a0a0);
+      color: var(--color-text-muted);
     }
 
     &:focus {
@@ -89,7 +89,7 @@
   &__unit {
     font-size: 0.85em;
     font-weight: var(--font-weight-normal, 400);
-    color: var(--color-text-muted, #a0a0a0);
+    color: var(--color-text-muted);
     flex-shrink: 0;
     opacity: 0.8;
   }
@@ -97,7 +97,7 @@
   &__buttons {
     display: flex;
     flex-direction: column;
-    border-left: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.10));
+    border-left: 1px solid var(--border-subtle);
     position: relative;
     z-index: 1;
   }
@@ -108,15 +108,15 @@
     justify-content: center;
     background: transparent;
     border: none;
-    color: var(--color-text-muted, #a0a0a0);
+    color: var(--color-text-muted);
     cursor: pointer;
-    transition: all var(--motion-fast, 0.15s) var(--easing-standard, cubic-bezier(0.4, 0, 0.2, 1));
+    transition: all var(--motion-fast) var(--easing-standard);
     position: relative;
     overflow: hidden;
 
     &:hover:not(:disabled) {
-      color: var(--color-accent-500, #60a5fa);
-      background: var(--element-bg-subtle, rgba(255, 255, 255, 0.05));
+      color: var(--color-accent-500);
+      background: var(--element-bg-subtle);
     }
 
     &:active:not(:disabled) {
@@ -134,17 +134,17 @@
     }
 
     &--up {
-      border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
-      border-radius: 0 var(--size-radius-sm, 6px) 0 0;
+      border-bottom: 1px solid var(--border-subtle);
+      border-radius: 0 var(--size-radius-sm) 0 0;
     }
 
     &--down {
-      border-radius: 0 0 var(--size-radius-sm, 6px) 0;
+      border-radius: 0 0 var(--size-radius-sm) 0;
     }
 
     &--minus,
     &--plus {
-      border-radius: var(--size-radius-sm, 6px);
+      border-radius: var(--size-radius-sm);
     }
   }
 
@@ -157,7 +157,7 @@
     background: transparent;
     overflow: hidden;
     opacity: 0;
-    transition: opacity var(--motion-base, 0.3s) var(--easing-standard, cubic-bezier(0.4, 0, 0.2, 1));
+    transition: opacity var(--motion-base) var(--easing-standard);
   }
 
   &__container:hover &__progress,
@@ -167,9 +167,9 @@
 
   &__progress-bar {
     height: 100%;
-    background: var(--color-accent-500, #60a5fa);
+    background: var(--color-accent-500);
     border-radius: 0 2px 2px 0;
-    transition: width var(--motion-base, 0.3s) var(--easing-standard, cubic-bezier(0.4, 0, 0.2, 1));
+    transition: width var(--motion-base) var(--easing-standard);
   }
 
   &--small {
@@ -229,7 +229,7 @@
 
   &--compact {
     .bitfun-number-input__container {
-      border-radius: var(--size-radius-sm, 6px);
+      border-radius: var(--size-radius-sm);
     }
 
     .bitfun-number-input__value-area {
@@ -261,13 +261,13 @@
       border: none;
 
       &--minus {
-        border-right: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.10));
-        border-radius: var(--size-radius-sm, 6px) 0 0 var(--size-radius-sm, 6px);
+        border-right: 1px solid var(--border-subtle);
+        border-radius: var(--size-radius-sm) 0 0 var(--size-radius-sm);
       }
 
       &--plus {
-        border-left: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.10));
-        border-radius: 0 var(--size-radius-sm, 6px) var(--size-radius-sm, 6px) 0;
+        border-left: 1px solid var(--border-subtle);
+        border-radius: 0 var(--size-radius-sm) var(--size-radius-sm) 0;
       }
     }
 
@@ -278,7 +278,7 @@
 
 
   &--disabled {
-    opacity: var(--opacity-disabled, 0.6);
+    opacity: var(--opacity-disabled);
     pointer-events: none;
 
     .bitfun-number-input__container {
@@ -288,12 +288,12 @@
 
   &--dragging {
     .bitfun-number-input__container {
-      border-color: var(--color-purple-500, #8b5cf6);
-      background: var(--color-purple-100, rgba(139, 92, 246, 0.08));
+      border-color: var(--color-purple-500);
+      background: var(--color-purple-100);
     }
 
     .bitfun-number-input__progress-bar {
-      background: var(--color-purple-500, #8b5cf6);
+      background: var(--color-purple-500);
     }
   }
 

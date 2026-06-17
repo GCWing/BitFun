@@ -9,9 +9,57 @@ const notificationFns = vi.hoisted(() => ({
   warning: vi.fn(),
   info: vi.fn(),
 }));
-const tMock = vi.hoisted(() =>
-  vi.fn((_key: string, options?: { defaultValue?: string }) => options?.defaultValue ?? _key),
-);
+const tMock = vi.hoisted(() => {
+  const messages: Record<string, string> = {
+    'reviewTeams.default.members': '{{count}} members',
+    'reviewTeams.detail.back': 'Back to Agents',
+    'reviewTeams.detail.extraCount': '{{count}} extra Sub-Agents',
+    'reviewTeams.detail.fileCountValue': '{{count}} files',
+    'reviewTeams.detail.fileSplitThreshold': 'File split threshold',
+    'reviewTeams.detail.instancesValue': '{{count}} max',
+    'reviewTeams.detail.judgeTimeout': 'Judge timeout',
+    'reviewTeams.detail.loading': 'Loading code review team...',
+    'reviewTeams.detail.localOnly': 'Code review',
+    'reviewTeams.detail.localOnlyDescription': 'Runs inside BitFun as read-only Sub-Agents and reports back into this review thread.',
+    'reviewTeams.detail.lockedCount': '{{count}} locked roles',
+    'reviewTeams.detail.maxSameRoleInstances': 'Max same-role instances',
+    'reviewTeams.detail.membersDescription': 'Select a member to review its role, responsibilities, model, and strategy override.',
+    'reviewTeams.detail.membersTitle': 'Team Members',
+    'reviewTeams.detail.memberTypes.core': 'Core role',
+    'reviewTeams.detail.memberTypes.extra': 'Extra Sub-Agent',
+    'reviewTeams.detail.memberTypes.locked': 'Locked',
+    'reviewTeams.detail.openSettings': 'Review settings',
+    'reviewTeams.detail.parallelDescription': 'Logic, performance, security, architecture, and extra reviewers work side by side before the judge validates findings.',
+    'reviewTeams.detail.parallelLabel': 'Parallel reviewers',
+    'reviewTeams.detail.policyMetricsLabel': 'Current policy values',
+    'reviewTeams.detail.policyStrategyLabel': 'Strategy',
+    'reviewTeams.detail.policySummaryAction': 'Open Review settings to edit the current policy',
+    'reviewTeams.detail.policySummaryDescription': '{{strategy}} review uses {{reviewerTimeout}} per reviewer, gives the judge {{judgeTimeout}}, splits each role after {{splitThreshold}}, and caps same-role parallelism at {{maxSameRoleInstances}}.',
+    'reviewTeams.detail.policySummaryEyebrow': 'Configured behavior',
+    'reviewTeams.detail.policySummaryIntro': 'This live snapshot comes from Review settings and updates when the team policy changes.',
+    'reviewTeams.detail.policySummaryTitle': 'Current Policy',
+    'reviewTeams.detail.qualityGate': 'Quality gate',
+    'reviewTeams.detail.responsibilities': 'Responsibilities',
+    'reviewTeams.detail.reviewerTimeout': 'Reviewer timeout',
+    'reviewTeams.detail.secondsValue': '{{seconds}}s',
+    'reviewTeams.detail.splitDisabled': 'No split',
+    'reviewTeams.detail.subtitle': 'Configure the code review team used by Deep Review and /DeepReview.',
+    'reviewTeams.detail.summaryDescription': 'Parallel reviewers cover the requested scope, then the quality gate consolidates the final result.',
+    'reviewTeams.detail.summaryTitle': 'Team Overview',
+    'reviewTeams.detail.title': 'Code Review Team',
+    'reviewTeams.detail.warning': 'Use for higher-risk changes; it can take longer and use more tokens than a standard review.',
+    'reviewTeams.strategy.deep.label': 'Deep',
+    'reviewTeams.strategy.normal.label': 'Normal',
+    'reviewTeams.strategy.quick.label': 'Quick',
+    'selection.fast': 'Fast',
+    'selection.primary': 'Primary',
+  };
+
+  return vi.fn((key: string, options?: Record<string, unknown> & { defaultValue?: string }) => {
+    const template = messages[key] ?? options?.defaultValue ?? key;
+    return template.replace(/{{(\w+)}}/g, (_match, token: string) => String(options?.[token] ?? _match));
+  });
+});
 
 vi.mock('react-i18next', () => ({
   initReactI18next: {

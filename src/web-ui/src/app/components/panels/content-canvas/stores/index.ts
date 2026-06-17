@@ -9,6 +9,7 @@ export {
   useProjectCanvasStore,
   useGitCanvasStore,
   usePanelViewCanvasStore,
+  useBottomTerminalCanvasStore,
   useGroupTabs,
   useActiveTabId,
   useLayout,

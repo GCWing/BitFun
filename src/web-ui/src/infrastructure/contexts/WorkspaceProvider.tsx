@@ -2,6 +2,8 @@ import React, { ReactNode, useCallback, useEffect, useMemo, useRef, useState } f
 import { workspaceManager } from '../services/business/workspaceManager';
 import { WorkspaceInfo, WorkspaceKind } from '../../shared/types';
 import { createLogger } from '@/shared/utils/logger';
+import { startupTrace } from '@/shared/utils/startupTrace';
+import { elapsedMs, nowMs } from '@/shared/utils/timing';
 import {
   WorkspaceContext,
   type WorkspaceContextValue,
@@ -119,6 +121,14 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children }
   const isInitializedRef = useRef(false);
 
   useEffect(() => {
+    startupTrace.markPhase('workspace_context_state_committed', {
+      loading: state.loading,
+      openedCount: state.openedWorkspacesList.length,
+      hasActiveWorkspace: state.activeWorkspace !== null,
+    });
+  }, [state.activeWorkspace, state.loading, state.openedWorkspacesList.length]);
+
+  useEffect(() => {
     const removeListener = workspaceManager.addEventListener(() => {
       setState((prev) => {
         const nextState = workspaceManager.getState();
@@ -154,10 +164,16 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children }
         return;
       }
 
+      const providerStartedAt = nowMs();
+      startupTrace.markPhase('workspace_provider_initialize_start');
+
       try {
         isInitializedRef.current = true;
         setState((prev) => ({ ...prev, loading: true }));
         await workspaceManager.initialize();
+        startupTrace.markPhase('workspace_provider_manager_initialize_end', {
+          durationMs: elapsedMs(providerStartedAt),
+        });
         const nextState = workspaceManager.getState();
         const activeWorkspace = nextState.currentWorkspace;
         const openedWorkspacesList = Array.from(nextState.openedWorkspaces.values());
@@ -177,7 +193,15 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children }
           workspaceName: getWorkspaceDisplayName(activeWorkspace),
           workspacePath: activeWorkspace?.rootPath || '',
         }));
+        startupTrace.markPhase('workspace_provider_initialize_end', {
+          durationMs: elapsedMs(providerStartedAt),
+          openedCount: openedWorkspacesList.length,
+          hasActiveWorkspace: activeWorkspace !== null,
+        });
       } catch (error) {
+        startupTrace.markPhase('workspace_provider_initialize_failed', {
+          durationMs: elapsedMs(providerStartedAt),
+        });
         log.error('Failed to initialize workspace state', error);
         isInitializedRef.current = false;
         setState((prev) => ({ ...prev, loading: false, error: String(error) }));

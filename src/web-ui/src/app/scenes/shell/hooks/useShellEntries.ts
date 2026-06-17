@@ -18,8 +18,7 @@ interface EditingTerminalState {
 }
 
 export interface UseShellEntriesReturn {
-  manualEntries: ShellEntry[];
-  agentEntries: ShellEntry[];
+  entries: ShellEntry[];
   editModalOpen: boolean;
   editingTerminal: EditingTerminalState | null;
   closeEditModal: () => void;
@@ -85,6 +84,11 @@ export function useShellEntries(): UseShellEntriesReturn {
         .map((session) => createSessionEntry(session, 'agent-session'))
         .sort(compareShellEntries),
     [sessions],
+  );
+
+  const entries = useMemo<ShellEntry[]>(
+    () => [...manualEntries, ...agentEntries].sort(compareShellEntries),
+    [agentEntries, manualEntries],
   );
 
   const refresh = useCallback(async () => {
@@ -172,8 +176,7 @@ export function useShellEntries(): UseShellEntriesReturn {
   }, [closeEditModal, editingTerminal, getProfileById, getProfileBySessionId, hasSession, renameSessionLocally, saveProfile, workspacePath]);
 
   return {
-    manualEntries,
-    agentEntries,
+    entries,
     editModalOpen,
     editingTerminal,
     closeEditModal,

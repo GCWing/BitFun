@@ -1,9 +1,9 @@
 {
   "configCenter": {
-    "selectConfig": "選擇配置項",
-    "searchPlaceholder": "搜索配置…",
-    "searchNoResults": "沒有匹配的配置",
-    "searchClear": "清除搜索",
+    "selectConfig": "選擇設定項",
+    "searchPlaceholder": "搜尋設定…",
+    "searchNoResults": "沒有匹配的設定",
+    "searchClear": "清除搜尋",
     "beta": "Beta",
     "searchAliases": {
       "archivedSessions": ["歸檔", "會話"],
@@ -20,7 +20,7 @@
       "sessionPersonalization": "會話標題與 Agent 夥伴。",
       "sessionPermissions": "加速工作區搜尋、工具確認與逾時、Computer use、瀏覽器與偵錯。",
       "review": "深度審核策略、審核員模型與額外審核 Sub-Agent。",
-      "mcpTools": "MCP 服務器與工具集成。",
+      "mcpTools": "MCP 伺服器與工具集成。",
       "acpAgents": "opencode、Claude Code、Codex 等外部 ACP Agent。",
       "editor": "編輯器字體、顯示與格式化。",
       "lsp": "語言服務與代碼智能。",
@@ -30,7 +30,7 @@
     },
     "categories": {
       "general": "通用",
-      "smartCapabilities": "智慧化配置",
+      "smartCapabilities": "智慧化設定",
       "devkit": "開發套件"
     },
     "tabs": {
@@ -89,9 +89,9 @@
     },
     "behavior": {
       "title": "行為",
-      "autoSave": "自動保存",
-      "autoSaveDelay": "自動保存延遲",
-      "formatOnSave": "保存時格式化",
+      "autoSave": "自動儲存",
+      "autoSaveDelay": "自動儲存延遲",
+      "formatOnSave": "儲存時格式化",
       "formatOnPaste": "粘貼時格式化"
     },
     "indentation": {
@@ -110,7 +110,7 @@
       "provider": "服務商",
       "apiKey": "API 密鑰",
       "baseUrl": "基礎 URL",
-      "add": "添加模型",
+      "add": "新增模型",
       "edit": "編輯模型",
       "delete": "刪除模型"
     },
@@ -132,7 +132,7 @@
     "shell": {
       "title": "Shell",
       "default": "默認 Shell",
-      "profiles": "Shell 配置"
+      "profiles": "Shell 設定"
     },
     "display": {
       "title": "顯示",
@@ -144,32 +144,32 @@
   },
   "workspace": {
     "files": {
-      "title": "文件",
-      "exclude": "排除文件",
+      "title": "檔案",
+      "exclude": "排除檔案",
       "watcherExclude": "排除監視",
-      "associations": "文件關聯"
+      "associations": "檔案關聯"
     },
     "search": {
-      "title": "搜索",
-      "exclude": "排除搜索",
-      "useIgnoreFiles": "使用忽略文件"
+      "title": "搜尋工作區",
+      "exclude": "排除搜尋",
+      "useIgnoreFiles": "使用忽略檔案"
     }
   },
   "keyboard": {
     "title": "快捷鍵",
     "description": "在此查看並修改快捷鍵。",
-    "search": "搜索快捷鍵或鍵位…",
+    "search": "搜尋快捷鍵或鍵位…",
     "apply": "應用",
-    "saving": "保存中…",
-    "reset": "重置為默認",
+    "saving": "儲存中…",
+    "reset": "重設為默認",
     "clickToRecord": "點擊錄製新的快捷鍵",
     "recording": "按下新鍵位…",
     "revertChange": "撤銷此更改",
     "fixedBinding": "系統固定快捷鍵，無法自定義",
     "noResults": "未找到匹配的快捷鍵",
     "conflict": "衝突",
-    "saveError": "保存失敗，請重試",
-    "resetError": "重置失敗，請重試",
+    "saveError": "儲存失敗，請重試",
+    "resetError": "重設失敗，請重試",
     "mergedNonUniform": "鍵位不一致，可重新錄製為一組",
     "keyLabels": {
       "space": "空格"
@@ -180,7 +180,7 @@
       "editor": "代碼編輯器（文字焦點）",
       "chat": "Agent 會話",
       "terminal": "終端機",
-      "filetree": "文件樹",
+      "filetree": "檔案樹",
       "git": "Git"
     },
     "shortcuts": {
@@ -189,15 +189,15 @@
         "toggleBoth": "摺疊所有面板"
       },
       "nav": {
-        "toggleSearch": "打開導航搜索"
+        "toggleSearch": "開啟導航搜尋"
       },
       "scene": {
         "focusMerged": "切換場景",
         "focusMergedHint": "錄製一次修飾鍵 + 任意數字 1–3；數字 1–3 對應從左到右的場景。",
-        "openSession": "打開 Agent 會話",
-        "openGit": "打開 Git",
-        "openSettings": "打開設置",
-        "openTerminal": "打開終端"
+        "openSession": "開啟 Agent 會話",
+        "openGit": "開啟 Git",
+        "openSettings": "開啟設置",
+        "openTerminal": "開啟終端"
       },
       "app": {
         "closePreview": "關閉預覽 / 關閉彈窗"
@@ -214,8 +214,8 @@
         "findInFile": "在檔案中尋找（Monaco）"
       },
       "tab": {
-        "close": "關閉當前標籤頁",
-        "reopenClosed": "重新打開已關閉標籤頁",
+        "close": "關閉目前標籤頁",
+        "reopenClosed": "重新開啟已關閉標籤頁",
         "switchMerged": "切換編輯器標籤",
         "switchMergedHint": "錄製一次修飾鍵 + 任意數字 1–9；同一組修飾鍵會應用到各標籤位。"
       },
@@ -223,19 +223,19 @@
         "btwFill": "開啟側問會話",
         "stopGeneration": "停止生成",
         "activateInput": "激活輸入框",
-        "newSession": "新建會話"
+        "newSession": "新增會話"
       },
       "filetree": {
-        "rename": "重命名",
+        "rename": "重新命名",
         "delete": "刪除",
-        "refresh": "刷新",
-        "newFile": "新建文件",
-        "newFolder": "新建文件夾",
+        "refresh": "重新整理",
+        "newFile": "新增檔案",
+        "newFolder": "新增資料夾",
         "collapseAll": "摺疊所有目錄"
       },
       "git": {
         "commit": "提交",
-        "refresh": "刷新狀態",
+        "refresh": "重新整理狀態",
         "stageAll": "暫存所有更改",
         "unstageAll": "取消暫存所有更改",
         "push": "推送",
@@ -255,11 +255,11 @@
       "developerTools": "開發者工具"
     },
     "data": {
-      "title": "數據",
+      "title": "資料",
       "export": "導出設置",
-      "import": "導入設置",
-      "reset": "重置所有設置",
-      "resetConfirm": "確定要重置所有設置嗎？此操作不可撤銷。"
+      "import": "匯入設置",
+      "reset": "重設所有設置",
+      "resetConfirm": "確定要重設所有設置嗎？此操作不可撤銷。"
     }
   },
   "about": {
@@ -274,14 +274,14 @@
     "documentation": "文檔"
   },
   "aiModel": {
-    "title": "模型配置",
-    "subtitle": "配置 AI 模型和 API 密鑰",
-    "addModel": "添加模型",
-    "editModel": "編輯模型配置",
-    "newModel": "新建模型配置",
-    "editSubtitle": "基礎模型參數配置",
+    "title": "模型設定",
+    "subtitle": "設定 AI 模型和 API 密鑰",
+    "addModel": "新增模型",
+    "editModel": "編輯模型設定",
+    "newModel": "新增模型設定",
+    "editSubtitle": "基礎模型參數設定",
     "deleteModel": "刪除模型",
-    "confirmDelete": "確定刪除此配置？",
+    "confirmDelete": "確定刪除此設定？",
     "modelName": "模型名稱",
     "modelId": "模型 ID",
     "provider": "請求規範",
@@ -290,12 +290,12 @@
     "apiKeyPlaceholder": "輸入您的 API Key",
     "baseUrl": "API地址",
     "baseUrlPlaceholder": "請輸入 API 地址（可選）",
-    "configName": "配置名稱",
-    "configNamePlaceholder": "為此配置起個名字",
+    "configName": "設定名稱",
+    "configNamePlaceholder": "為此設定起個名字",
     "maxTokens": "最大輸出Tokens",
     "maxTokensHint": "單次請求時限制模型輸出的最大token數量（影響響應長度）",
-    "contextWindow": "上下文窗口大小",
-    "contextWindowHint": "模型支持的最大上下文窗口大小（用於計算token佔用百分比）",
+    "contextWindow": "上下文視窗大小",
+    "contextWindowHint": "模型支持的最大上下文視窗大小（用於計算token佔用百分比）",
     "temperature": "溫度",
     "streaming": "流式輸出",
     "enabled": "啟用",
@@ -303,38 +303,38 @@
     "testing": "測試中...",
     "testSuccess": "連接成功",
     "testFailed": "連接失敗",
-    "noModels": "暫無模型配置",
-    "noModelsHint": "點擊上方按鈕添加您的第一個 AI 模型",
-    "createFirst": "創建第一個配置",
+    "noModels": "暫無模型設定",
+    "noModelsHint": "點擊上方按鈕新增您的第一個 AI 模型",
+    "createFirst": "建立第一個設定",
     "noMatchingModels": "沒有找到匹配的模型",
-    "searchPlaceholder": "搜索模型名稱、提供商...",
-    "newConfig": "新建配置",
-    "save": "保存",
+    "searchPlaceholder": "搜尋模型名稱、提供商...",
+    "newConfig": "新增設定",
+    "save": "儲存",
     "cancel": "取消",
     "edit": "編輯",
     "delete": "刪除",
     "description": "描述",
-    "descriptionPlaceholder": "配置說明（可選）",
+    "descriptionPlaceholder": "設定說明（可選）",
     "tabs": {
-      "api": "API配置",
-      "proxy": "代理配置"
+      "api": "API設定",
+      "proxy": "代理設定"
     },
     "categories": {
       "all": "全部",
-      "text": "文本",
+      "text": "文字",
       "multimodal": "圖像",
       "other": "輔助"
     },
     "category": {
       "label": "模型分類",
       "placeholder": "選擇模型分類",
-      "general_chat": "文本生成",
+      "general_chat": "文字生成",
       "multimodal": "圖像理解",
       "image_generation": "圖像生成",
       "speech_recognition": "語音識別"
     },
     "categoryHints": {
-      "general_chat": "文本生成：生成文本回復、代碼等，適用於大多數對話場景",
+      "general_chat": "文字生成：生成文字回復、代碼等，適用於大多數對話場景",
       "multimodal": "圖像理解：理解圖片內容並進行圖文混合對話",
       "image_generation": "圖像生成：根據文字描述生成圖片",
       "speech_recognition": "語音識別：將語音轉換為文字（如智譜 GLM-ASR）"
@@ -345,11 +345,11 @@
       "enableHint": "需要模型支持思考模式"
     },
     "details": {
-      "basicInfo": "基本信息",
+      "basicInfo": "基本資訊",
       "modelName": "模型名稱",
       "provider": "請求規範",
       "apiUrl": "API地址",
-      "contextWindow": "上下文窗口",
+      "contextWindow": "上下文視窗",
       "maxOutput": "最大輸出",
       "description": "描述",
       "tokens": "tokens"
@@ -364,30 +364,30 @@
       "usernamePlaceholder": "代理認證用戶名",
       "password": "密碼（可選）",
       "passwordPlaceholder": "代理認證密碼",
-      "save": "保存代理配置",
-      "saveSuccess": "代理配置已保存，重啟IDE後生效"
+      "save": "儲存代理設定",
+      "saveSuccess": "代理設定已儲存，重啟IDE後生效"
     },
     "messages": {
       "fillRequired": "請填寫必要字段",
       "fillModelName": "請填寫模型名稱",
-      "saveFailed": "保存失敗",
-      "deleteFailed": "刪除配置失敗",
-      "loadFailed": "加載AI配置失敗",
+      "saveFailed": "儲存失敗",
+      "deleteFailed": "刪除設定失敗",
+      "loadFailed": "載入AI設定失敗",
       "errorDetails": "詳細錯誤"
     },
     "capabilities": {
       "text_chat": "對話",
       "image_understanding": "多模態",
       "image_generation": "繪圖",
-      "search": "搜索",
+      "search": "搜尋能力",
       "function_calling": "工具",
       "speech_recognition": "語音"
     }
   },
   "superAgent": {
     "title": "Super Agent",
-    "subtitle": "配置主智能體的模型分配",
-    "textChat": "文本對話",
+    "subtitle": "設定主智能體的模型分配",
+    "textChat": "文字對話",
     "textChatDesc": "處理日常對話和問答",
     "codeGeneration": "代碼生成",
     "codeGenerationDesc": "生成和補全代碼",
@@ -396,39 +396,39 @@
     "planning": "任務規劃",
     "planningDesc": "分解和規劃複雜任務",
     "selectModel": "選擇模型",
-    "notConfigured": "未配置",
-    "configured": "已配置",
+    "notConfigured": "未設定",
+    "configured": "已設定",
     "modelUpdated": "{{capability}}已更新為 {{modelName}}",
     "capabilities": {
-      "text_chat": "文本對話模型",
+      "text_chat": "文字對話模型",
       "image_understanding": "圖片理解模型",
       "image_generation": "圖片生成模型",
-      "search": "搜索API模型",
+      "search": "搜尋API模型",
       "speech_recognition": "語音識別模型"
     },
     "capabilityDescs": {
-      "text_chat": "處理所有文本對話、代碼生成、工具調用等任務",
+      "text_chat": "處理所有文字對話、代碼生成、工具調用等任務",
       "image_understanding": "當主模型不支持圖片輸入時，用於分析和理解圖片內容",
       "image_generation": "根據文字描述生成圖片（如 DALL-E、Stable Diffusion）",
-      "search": "實時搜索網絡信息，提供最新數據支持",
+      "search": "實時搜尋網絡資訊，提供最新資料支持",
       "speech_recognition": "將語音轉換為文字，支持語音輸入功能（如智譜 GLM-ASR）"
     }
   },
   "aiFeatures": {
     "title": "智能特性",
-    "subtitle": "配置 AI 增強功能",
+    "subtitle": "設定 AI 增強功能",
     "codeCompletion": "代碼補全",
     "codeCompletionDesc": "智能代碼補全建議",
     "inlineChat": "行內對話",
     "inlineChatDesc": "在編輯器中直接與 AI 對話",
-    "semanticSearch": "語義搜索",
-    "semanticSearchDesc": "基於語義理解的代碼搜索",
+    "semanticSearch": "語義搜尋",
+    "semanticSearchDesc": "基於語義理解的代碼搜尋",
     "autoFix": "自動修復",
     "autoFixDesc": "自動修復代碼錯誤和警告"
   },
   "modes": {
     "title": "模式",
-    "subtitle": "配置不同的工作模式",
+    "subtitle": "設定不同的工作模式",
     "agentMode": "Agent 模式",
     "agentModeDesc": "AI 可以執行代碼和使用工具",
     "chatMode": "對話模式",
@@ -438,44 +438,44 @@
   },
   "agenticTools": {
     "title": "工具設置",
-    "subtitle": "配置 Agentic 工具權限和行為",
-    "fileOperations": "文件操作",
-    "fileOperationsDesc": "允許 AI 讀寫文件",
+    "subtitle": "設定 Agentic 工具權限和行為",
+    "fileOperations": "檔案操作",
+    "fileOperationsDesc": "允許 AI 讀寫檔案",
     "terminalAccess": "終端訪問",
     "terminalAccessDesc": "允許 AI 執行終端命令",
-    "webSearch": "網絡搜索",
-    "webSearchDesc": "允許 AI 搜索網絡信息",
+    "webSearch": "網絡搜尋",
+    "webSearchDesc": "允許 AI 搜尋網絡資訊",
     "browserControl": "瀏覽器控制",
     "browserControlDesc": "允許 AI 控制瀏覽器"
   },
   "skills": {
     "title": "技能",
     "subtitle": "管理 AI 技能擴展",
-    "addSkill": "添加技能",
+    "addSkill": "新增技能",
     "noSkills": "暫無技能",
     "noSkillsHint": "技能可以擴展 AI 的能力"
   },
   "agents": {
     "title": "智能體",
-    "subtitle": "配置智能體",
-    "addAgent": "添加智能體",
+    "subtitle": "設定智能體",
+    "addAgent": "新增智能體",
     "noAgents": "暫無子智能體",
     "noAgentsHint": "子智能體可以處理特定類型的任務"
   },
   "mcp": {
     "title": "MCP",
-    "subtitle": "管理 MCP 服務器連接",
-    "addServer": "添加服務器",
-    "serverName": "服務器名稱",
-    "serverUrl": "服務器地址",
+    "subtitle": "管理 MCP 伺服器連接",
+    "addServer": "新增伺服器",
+    "serverName": "伺服器名稱",
+    "serverUrl": "伺服器地址",
     "connected": "已連接",
     "disconnected": "已斷開",
-    "noServers": "暫無 MCP 服務器",
-    "noServersHint": "添加 MCP 服務器以擴展功能"
+    "noServers": "暫無 MCP 伺服器",
+    "noServersHint": "新增 MCP 伺服器以擴展功能"
   },
   "editorConfig": {
     "title": "編輯器",
-    "subtitle": "配置代碼編輯器",
+    "subtitle": "設定代碼編輯器",
     "fontSize": "字體大小",
     "fontFamily": "字體",
     "lineHeight": "行高",
@@ -486,21 +486,21 @@
   },
   "lspConfig": {
     "title": "語言服務",
-    "subtitle": "配置語言服務器",
-    "installedServers": "已安裝的語言服務器",
-    "noServers": "暫無語言服務器",
-    "noServersHint": "語言服務器提供代碼智能功能"
+    "subtitle": "設定語言伺服器",
+    "installedServers": "已安裝的語言伺服器",
+    "noServers": "暫無語言伺服器",
+    "noServersHint": "語言伺服器提供代碼智能功能"
   },
   "debugConfig": {
     "title": "調試",
-    "subtitle": "配置調試選項",
+    "subtitle": "設定調試選項",
     "enableLogging": "啟用日誌",
     "logLevel": "日誌級別",
     "developerTools": "開發者工具"
   },
   "terminalConfig": {
     "title": "終端",
-    "subtitle": "配置集成終端",
+    "subtitle": "設定集成終端",
     "shell": "默認 Shell",
     "fontSize": "字體大小",
     "fontFamily": "字體",
@@ -509,28 +509,28 @@
   },
   "configPageHeaderExample": {
     "basic": {
-      "title": "基礎配置"
+      "title": "基礎設定"
     },
     "apiNetwork": {
       "title": "API & 網絡",
-      "subtitle": "配置和管理系統中的 AI 模型，包括 API 密鑰、默認模型等設置"
+      "subtitle": "設定和管理系統中的 AI 模型，包括 API 密鑰、默認模型等設置"
     },
     "learning": {
       "title": "學習 & 知識",
-      "subtitle": "管理 AI 記憶、知識庫和技能配置",
-      "import": "導入",
-      "addMemory": "添加記憶"
+      "subtitle": "管理 AI 記憶、知識庫和技能設定",
+      "import": "匯入",
+      "addMemory": "新增記憶"
     },
     "agents": {
-      "title": "智能體配置",
-      "subtitle": "配置和管理系統中的智能體，包括功能代理、超級代理等",
-      "create": "創建智能體"
+      "title": "智能體設定",
+      "subtitle": "設定和管理系統中的智能體，包括功能代理、超級代理等",
+      "create": "建立智能體"
     },
     "theme": {
-      "title": "主題配置",
+      "title": "主題設定",
       "subtitle": "自定義應用的外觀和主題色彩",
-      "import": "導入主題",
-      "export": "導出當前主題"
+      "import": "匯入主題",
+      "export": "導出目前主題"
     }
   }
 }

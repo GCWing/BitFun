@@ -22,7 +22,7 @@
 
   &__description {
     font-size: 14px;
-    color: rgba(255, 255, 255, 0.6);
+    color: var(--color-overlay-white-60);
     margin-bottom: 16px;
     animation: bitfun-empty-fade-in 0.5s ease-out 0.1s both;
   }

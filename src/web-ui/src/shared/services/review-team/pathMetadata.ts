@@ -6,6 +6,15 @@ import type { ReviewTargetClassification } from '../reviewTargetClassifier';
 const SECURITY_SENSITIVE_PATH_PATTERN =
   /(^|[/._-])(auth|oauth|crypto|security|permission|permissions|secret|secrets|token|tokens|credential|credentials)([/._-]|$)/;
 
+const LAYERED_CRATE_ROOTS = new Set([
+  'interfaces',
+  'assembly',
+  'adapters',
+  'services',
+  'execution',
+  'contracts',
+]);
+
 export interface WorkspaceAreaFileBucket {
   key: string;
   index: number;
@@ -16,10 +25,36 @@ export function isSecuritySensitiveReviewPath(normalizedPath: string): boolean {
   return SECURITY_SENSITIVE_PATH_PATTERN.test(normalizedPath.toLowerCase());
 }
 
+export function crateNameForReviewPath(normalizedPath: string): string | undefined {
+  const cratePathMatch = normalizedPath.match(/^src\/crates\/([^/]+)(?:\/([^/]+))?/);
+  if (!cratePathMatch) {
+    return undefined;
+  }
+
+  const [, firstSegment, secondSegment] = cratePathMatch;
+  if (LAYERED_CRATE_ROOTS.has(firstSegment)) {
+    if (secondSegment && !secondSegment.includes('.')) {
+      return secondSegment;
+    }
+    return undefined;
+  }
+
+  return firstSegment && !firstSegment.includes('.') ? firstSegment : undefined;
+}
+
 export function workspaceAreaForReviewPath(normalizedPath: string): string {
-  const crateMatch = normalizedPath.match(/^src\/crates\/([^/]+)/);
-  if (crateMatch) {
-    return `crate:${crateMatch[1]}`;
+  const crateName = crateNameForReviewPath(normalizedPath);
+  if (crateName) {
+    return `crate:${crateName}`;
+  }
+
+  const crateLayerMatch = normalizedPath.match(/^src\/crates\/([^/]+)/);
+  if (crateLayerMatch && LAYERED_CRATE_ROOTS.has(crateLayerMatch[1])) {
+    return `crate-layer:${crateLayerMatch[1]}`;
+  }
+
+  if (normalizedPath.startsWith('src/crates/')) {
+    return 'crates';
   }
 
   const appMatch = normalizedPath.match(/^src\/apps\/([^/]+)/);

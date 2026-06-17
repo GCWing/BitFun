@@ -23,3 +23,10 @@ export {
   unregisterTerminalActions,
   type TerminalActionHandler 
 } from './TerminalActionManager';
+
+export {
+  getCachedTerminalPanelPosition,
+  onTerminalPanelPositionChange,
+  refreshTerminalPanelPosition,
+  setTerminalPanelPosition,
+} from './terminalPanelPreferenceService';

@@ -6,29 +6,29 @@
       "maxTotal": 0
     },
     "sharedTermDuplicates": {
-      "maxTotal": 201,
+      "maxTotal": 185,
       "bySurface": {
         "core": 15,
         "installer": 0,
-        "mobile-web": 6,
+        "mobile-web": 0,
         "relay-static-homepage": 0,
-        "web-ui": 180
+        "web-ui": 170
       },
       "bySharedKey": {
         "agents.claw": 3,
-        "agents.code": 4,
-        "agents.cowork": 2,
-        "agents.default": 3,
-        "connectionMethods.bitfunServer": 1,
-        "connectionMethods.lan": 2,
+        "agents.code": 0,
+        "agents.cowork": 0,
+        "agents.default": 2,
+        "connectionMethods.bitfunServer": 0,
+        "connectionMethods.lan": 0,
         "features.codeAgent": 1,
-        "features.deepReview": 4,
+        "features.deepReview": 2,
         "features.remoteControl": 0,
         "features.settings": 1,
         "features.workspace": 2,
-        "modes.assistant": 2,
-        "modes.expert": 3,
-        "modes.review": 1,
+        "modes.assistant": 1,
+        "modes.expert": 2,
+        "modes.review": 0,
         "product.name": 0,
         "statuses.cancelled": 29,
         "statuses.done": 26,
@@ -38,49 +38,17 @@
         "tools.edit": 33,
         "tools.explore": 2,
         "tools.search": 12,
-        "tools.shell": 8
+        "tools.shell": 7
       }
     },
     "l10nQualityCandidates": {
-      "maxTotal": 1087,
+      "maxTotal": 0,
       "bySurface": {
-        "core": 36,
-        "installer": 24,
-        "mobile-web": 19,
-        "relay-static-homepage": 1,
-        "web-ui": 1007
-      },
-      "byNamespace": {
-        "<none>": 80,
-        "common": 158,
-        "components": 87,
-        "errors": 7,
-        "flow-chat": 210,
-        "flow-chat/processing-hints": 1,
-        "notifications": 13,
-        "panels/files": 25,
-        "panels/git": 54,
-        "panels/terminal": 2,
-        "scenes/agents": 38,
-        "scenes/miniapp": 7,
-        "scenes/profile": 40,
-        "scenes/skills": 28,
-        "settings": 70,
-        "settings/acp-agents": 17,
-        "settings/agentic-tools": 6,
-        "settings/ai-features": 13,
-        "settings/ai-model": 52,
-        "settings/basics": 10,
-        "settings/debug": 7,
-        "settings/default-model": 11,
-        "settings/editor": 13,
-        "settings/lsp": 14,
-        "settings/mcp": 31,
-        "settings/quick-actions": 2,
-        "settings/review": 4,
-        "settings/session-config": 5,
-        "settings/skills": 13,
-        "tools": 69
+        "core": 0,
+        "installer": 0,
+        "mobile-web": 0,
+        "relay-static-homepage": 0,
+        "web-ui": 0
       }
     }
   }

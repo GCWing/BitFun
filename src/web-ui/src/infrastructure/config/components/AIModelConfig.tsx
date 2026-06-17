@@ -19,6 +19,7 @@ import { ConfigPageHeader, ConfigPageLayout, ConfigPageContent, ConfigPageSectio
 import DefaultModelConfig from './DefaultModelConfig';
 import { createLogger } from '@/shared/utils/logger';
 import { translateConnectionTestMessage } from '@/shared/utils/aiConnectionTestMessages';
+import { i18nService } from '@/infrastructure/i18n';
 import './AIModelConfig.scss';
 
 const log = createLogger('AIModelConfig');
@@ -2298,11 +2299,11 @@ const AIModelConfig: React.FC = () => {
             </div>
             <div className="bitfun-ai-model-config__details-item">
               <span className="bitfun-ai-model-config__details-label">{t('details.contextWindow')}</span>
-              <span className="bitfun-ai-model-config__details-value">{config.context_window?.toLocaleString() || '128,000'}</span>
+              <span className="bitfun-ai-model-config__details-value">{config.context_window != null ? i18nService.formatNumber(config.context_window) : '128,000'}</span>
             </div>
             <div className="bitfun-ai-model-config__details-item">
               <span className="bitfun-ai-model-config__details-label">{t('details.maxOutput')}</span>
-              <span className="bitfun-ai-model-config__details-value">{config.max_tokens?.toLocaleString() || '-'}</span>
+              <span className="bitfun-ai-model-config__details-value">{config.max_tokens != null ? i18nService.formatNumber(config.max_tokens) : '-'}</span>
             </div>
             <div className="bitfun-ai-model-config__details-item bitfun-ai-model-config__details-item--wide">
               <span className="bitfun-ai-model-config__details-label">{t('details.apiUrl')}</span>
@@ -2431,7 +2432,10 @@ const AIModelConfig: React.FC = () => {
                 if (cred.expires_at) {
                   descriptionParts.push(
                     t('cliAuth.expiresAt', {
-                      time: new Date(cred.expires_at * 1000).toLocaleString(),
+                      time: i18nService.formatDate(new Date(cred.expires_at * 1000), {
+                        dateStyle: 'medium',
+                        timeStyle: 'short',
+                      }),
                     }),
                   );
                 } else {

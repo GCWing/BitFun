@@ -2,9 +2,11 @@
 //!
 //! Tauri commands for SSH connection management and remote file operations.
 
+use std::time::Instant;
 use tauri::State;
 
 use crate::api::app_state::SSHServiceError;
+use crate::startup_trace::DesktopStartupTrace;
 use crate::AppState;
 use bitfun_core::service::remote_ssh::{
     RemoteTreeNode, SSHAuthMethod, SSHConfigEntry, SSHConfigLookupResult, SSHConnectionConfig,
@@ -473,8 +475,11 @@ pub async fn remote_remove_workspace(
 #[tauri::command]
 pub async fn remote_get_workspace_info(
     state: State<'_, AppState>,
+    startup_trace: State<'_, DesktopStartupTrace>,
 ) -> Result<Option<crate::api::RemoteWorkspace>, String> {
+    let trace_started = Instant::now();
     let workspace = state.get_remote_workspace_async().await;
     log::info!("remote_get_workspace_info: returning {:?}", workspace);
+    startup_trace.record_tauri_command_elapsed("remote_get_workspace_info", None, trace_started);
     Ok(workspace)
 }

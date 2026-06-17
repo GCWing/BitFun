@@ -6,7 +6,7 @@
  * Design principles:
  * - Events with the same key are merged (accumulated or replaced)
  * - Batch processing triggered once per frame
- * - Supports different key generation strategies for normal and subagent events
+ * - Merge keys are scoped by session, round/tool id, and retry attempt
  */
 
 import { areSensitiveDiagnosticsEnabled, createLogger } from '@/shared/utils/logger';
@@ -350,6 +350,8 @@ export interface TextChunkEventData {
   sessionId: string;
   turnId: string;
   roundId: string;
+  attemptId?: string;
+  attemptIndex?: number;
   text: string;
   contentType: 'text' | 'thinking';
   isThinkingEnd?: boolean;
@@ -359,19 +361,30 @@ export interface ToolEventData {
   sessionId: string;
   turnId: string;
   roundId: string;
+  attemptId?: string;
+  attemptIndex?: number;
   toolEvent: FlowToolEvent;
+}
+
+function resolveAttemptMergeToken(data: { attemptId?: string; attemptIndex?: number }): string {
+  if (typeof data.attemptId === 'string' && data.attemptId.length > 0) {
+    return encodeURIComponent(data.attemptId);
+  }
+  if (typeof data.attemptIndex === 'number' && Number.isFinite(data.attemptIndex)) {
+    return `idx-${data.attemptIndex}`;
+  }
+  return 'none';
 }
 
 /**
  * Generate merge key for TextChunk events
  * 
  * Key structure:
- * - Normal text: text:{sessionId}:{roundId}:{contentType}
- * - Subagent text: subagent:text:{sessionId}:{roundId}:{contentType}
+ * - Text chunk: text:{sessionId}:{roundId}:{contentType}:{attemptToken}
  */
 export function generateTextChunkKey(data: TextChunkEventData): string {
   const { sessionId, roundId, contentType } = data;
-  return `text:${sessionId}:${roundId}:${contentType}`;
+  return `text:${sessionId}:${roundId}:${contentType}:${resolveAttemptMergeToken(data)}`;
 }
 
 /**
@@ -380,15 +393,14 @@ export function generateTextChunkKey(data: TextChunkEventData): string {
  * Returns null if the event doesn't need batching (isolated event)
  * 
  * Key structure:
- * - Tool params: tool:params:{sessionId}:{toolUseId}
- * - Subagent tool params: subagent:tool:params:{sessionId}:{subToolUseId}
- * - Tool progress: tool:progress:{sessionId}:{toolUseId}
- * - Subagent tool progress: subagent:tool:progress:{sessionId}:{subToolUseId}
+ * - Tool params: tool:params:{sessionId}:{toolUseId}:{attemptToken}
+ * - Tool progress: tool:progress:{sessionId}:{toolUseId}:{attemptToken}
  */
 export function generateToolEventKey(data: ToolEventData): { key: string; strategy: MergeStrategy } | null {
   const { sessionId, toolEvent } = data;
   const toolUseId = toolEvent.tool_id;
   const eventType = toolEvent.event_type;
+  const attemptToken = resolveAttemptMergeToken(data);
 
   const isolatedEvents: ToolEventType[] = ['EarlyDetected', 'Started', 'Completed', 'Failed', 'Cancelled', 'ConfirmationNeeded'];
   if (isolatedEvents.includes(eventType)) {
@@ -396,16 +408,14 @@ export function generateToolEventKey(data: ToolEventData): { key: string; strate
   }
 
   if (eventType === 'ParamsPartial') {
-    const toolName = (toolEvent as any).tool_name || '';
-    const isWriteLike = ['write', 'write_notebook', 'file_write', 'Write'].includes(toolName);
     return {
-      key: `tool:params:${sessionId}:${toolUseId}`,
-      strategy: isWriteLike ? 'replace' : 'accumulate'
+      key: `tool:params:${sessionId}:${toolUseId}:${attemptToken}`,
+      strategy: 'accumulate'
     };
   }
   if (eventType === 'Progress') {
     return {
-      key: `tool:progress:${sessionId}:${toolUseId}`,
+      key: `tool:progress:${sessionId}:${toolUseId}:${attemptToken}`,
       strategy: 'replace'
     };
   }
@@ -414,55 +424,16 @@ export function generateToolEventKey(data: ToolEventData): { key: string; strate
 }
 
 /**
- * Parse event key to extract event type information
+ * Parse event key to extract event type information.
  */
 export function parseEventKey(key: string): {
-  isSubagent: boolean;
   eventType: 'text' | 'tool:params' | 'tool:progress';
   ids: Record<string, string>;
 } | null {
-  const parts = key.split(':');
-
-  if (parts[0] === 'subagent') {
-    // subagent:text:sessionId:roundId:contentType
-    // subagent:tool:params:sessionId:subToolUseId
-    // subagent:tool:progress:sessionId:subToolUseId
-    if (parts[1] === 'text') {
+  if (key.startsWith('text:')) {
+    const parts = key.split(':');
+    if (parts.length >= 4) {
       return {
-        isSubagent: true,
-        eventType: 'text',
-        ids: {
-          sessionId: parts[2],
-          roundId: parts[3],
-          contentType: parts[4]
-        }
-      };
-    } else if (parts[1] === 'tool' && parts[2] === 'params') {
-      return {
-        isSubagent: true,
-        eventType: 'tool:params',
-        ids: {
-          sessionId: parts[3],
-          subToolUseId: parts[4]
-        }
-      };
-    } else if (parts[1] === 'tool' && parts[2] === 'progress') {
-      return {
-        isSubagent: true,
-        eventType: 'tool:progress',
-        ids: {
-          sessionId: parts[3],
-          subToolUseId: parts[4]
-        }
-      };
-    }
-  } else {
-    // text:sessionId:roundId:contentType
-    // tool:params:sessionId:toolUseId
-    // tool:progress:sessionId:toolUseId
-    if (parts[0] === 'text') {
-      return {
-        isSubagent: false,
         eventType: 'text',
         ids: {
           sessionId: parts[1],
@@ -470,18 +441,22 @@ export function parseEventKey(key: string): {
           contentType: parts[3]
         }
       };
-    } else if (parts[0] === 'tool' && parts[1] === 'params') {
+    }
+  } else if (key.startsWith('tool:params:')) {
+    const parts = key.split(':');
+    if (parts.length >= 4) {
       return {
-        isSubagent: false,
         eventType: 'tool:params',
         ids: {
           sessionId: parts[2],
           toolUseId: parts[3]
         }
       };
-    } else if (parts[0] === 'tool' && parts[1] === 'progress') {
+    }
+  } else if (key.startsWith('tool:progress:')) {
+    const parts = key.split(':');
+    if (parts.length >= 4) {
       return {
-        isSubagent: false,
         eventType: 'tool:progress',
         ids: {
           sessionId: parts[2],

@@ -97,7 +97,7 @@
     padding: 6px;
     border: 1px solid var(--border-subtle);
     border-radius: 10px;
-    background: var(--panel-bg, var(--color-bg-elevated, #111));
+    background: var(--panel-bg, var(--color-bg-elevated));
     box-shadow: 0 10px 28px rgba(0, 0, 0, 0.24);
     z-index: 8;
   }
@@ -209,7 +209,7 @@
     padding: 6px;
     border: 1px solid var(--border-subtle);
     border-radius: 10px;
-    background: var(--panel-bg, var(--color-bg-elevated, #111));
+    background: var(--panel-bg, var(--color-bg-elevated));
     box-shadow: 0 10px 28px rgba(0, 0, 0, 0.24);
     z-index: 8;
   }
@@ -254,39 +254,6 @@
     height: 1px;
     margin: 6px 4px;
     background: color-mix(in srgb, var(--border-subtle) 80%, transparent);
-  }
-
-  &__view-toggle {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 4px;
-    margin: 0 $size-gap-3 $size-gap-2;
-    padding: 3px;
-    border-radius: 10px;
-    background: var(--element-bg-soft);
-    flex-shrink: 0;
-  }
-
-  &__view-toggle-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    height: 28px;
-    border: none;
-    border-radius: 8px;
-    background: transparent;
-    color: var(--color-text-muted);
-    font-size: var(--font-size-xs);
-    font-weight: 500;
-    cursor: pointer;
-    transition:
-      color $motion-fast $easing-standard,
-      background $motion-fast $easing-standard;
-
-    &.is-active {
-      color: var(--color-text-primary);
-      background: color-mix(in srgb, var(--color-primary) 12%, transparent);
-    }
   }
 
   &__sections {
@@ -363,7 +330,7 @@
 
     &:hover {
       color: var(--color-text-primary);
-      background: var(--element-bg-medium, var(--element-bg-soft));
+      background: var(--element-bg-medium);
 
       .bitfun-shell-nav__terminal-dot { display: none; }
       .bitfun-shell-nav__terminal-close { display: inline-flex; }
@@ -390,7 +357,7 @@
         background: color-mix(
           in srgb,
           var(--color-primary) 14%,
-          var(--element-bg-medium, var(--element-bg-soft))
+          var(--element-bg-medium)
         );
       }
     }
@@ -419,8 +386,8 @@
       background $motion-fast $easing-standard;
 
     &:hover {
-      color: var(--color-error, #ef4444);
-      background: color-mix(in srgb, var(--color-error, #ef4444) 12%, transparent);
+      color: var(--color-error);
+      background: color-mix(in srgb, var(--color-error) 12%, transparent);
     }
   }
 
@@ -450,8 +417,8 @@
     border-radius: 999px;
 
     &.is-running {
-      background: var(--color-success, #22c55e);
-      box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-success, #22c55e) 16%, transparent);
+      background: var(--color-success);
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-success) 16%, transparent);
     }
 
     &.is-stopped {
@@ -523,7 +490,6 @@
     &__split-button-main,
     &__split-button-toggle,
     &__dropdown-item,
-    &__view-toggle-btn,
     &__terminal-item,
     &__terminal-close {
       transition: none;

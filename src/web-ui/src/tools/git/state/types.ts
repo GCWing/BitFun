@@ -69,6 +69,7 @@ export interface RefreshOptions {
   layers?: GitStateLayer[];
   silent?: boolean;
   reason?: RefreshReason;
+  source?: string;
 }
 
 export type RefreshReason =
@@ -126,6 +127,15 @@ export interface UseGitStateOptions {
   
   /** Refresh when activated */
   refreshOnActive?: boolean;
+
+  /** Debug/performance source label for automatic refreshes. */
+  debugSource?: string;
+
+  /**
+   * Additional automatic refresh source labels that may be cancelled while this
+   * consumer temporarily suppresses mount refreshes.
+   */
+  cancelPendingRefreshSources?: readonly string[];
   
   /** Layers to subscribe to */
   layers?: GitStateLayer[];

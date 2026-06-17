@@ -16,7 +16,7 @@
 - `src/lib.rs`、`src/main.rs`：应用启动与装配
 - `src/computer_use/`：操作系统相关自动化支持
 
-如果改动影响多个运行时共享的产品行为，真正实现通常应放在 `src/crates/core`。
+如果改动影响多个运行时共享的产品行为，真正实现通常应放在 `src/crates/assembly/core`。
 
 ## 本模块规则
 

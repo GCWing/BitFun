@@ -3,12 +3,23 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import { PartialResultsPanel } from './PartialResultsPanel';
 
+const messages: Record<string, string> = {
+  'deepReviewActionBar.hidePartialResults': 'Hide partial results',
+  'deepReviewActionBar.partialIssues': '{{count}} issues found',
+  'deepReviewActionBar.partialRemediationItems': '{{count}} remediation items',
+  'deepReviewActionBar.partialResultsDescription': '{{completed}}/{{total}} reviewers completed',
+  'deepReviewActionBar.partialReviewerSummaries': '{{count}} reviewer summaries',
+  'deepReviewActionBar.viewPartialResults': 'View partial results',
+};
+
+function t(key: string, options?: Record<string, unknown> & { defaultValue?: string }): string {
+  const template = messages[key] ?? options?.defaultValue ?? key;
+  return template.replace(/{{(\w+)}}/g, (_match, token: string) => String(options?.[token] ?? _match));
+}
+
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (_key: string, options?: Record<string, unknown> & { defaultValue?: string }) => {
-      const template = options?.defaultValue ?? _key;
-      return template.replace(/{{(\w+)}}/g, (_match, token: string) => String(options?.[token] ?? _match));
-    },
+    t,
   }),
 }));
 

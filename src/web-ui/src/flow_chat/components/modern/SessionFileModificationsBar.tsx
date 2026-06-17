@@ -389,8 +389,8 @@ export const SessionFileModificationsBar: React.FC<SessionFileModificationsBarPr
                 {stat.sourceKind !== 'parent' ? (
                   <span className="file-row__source">
                     {stat.sourceKind === 'deep_review'
-                      ? t('sessionFileModificationsBar.deepReviewSource', { defaultValue: 'Deep review' })
-                      : t('sessionFileModificationsBar.reviewSource', { defaultValue: 'Review' })}
+                      ? t('sessionFileModificationsBar.deepReviewSource')
+                      : t('sessionFileModificationsBar.reviewSource')}
                   </span>
                 ) : null}
 

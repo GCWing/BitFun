@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { buildModelRoundItemGroups } from './modelRoundItemGrouping';
+import {
+  buildModelRoundItemGroups,
+  isCompletedToolInTransientWindow,
+} from './modelRoundItemGrouping';
 import type { FlowTextItem, FlowToolItem, FlowUserSteeringItem } from '../../types/flow-chat';
 
 function makeTextItem(id: string): FlowTextItem {
@@ -204,5 +207,33 @@ describe('buildModelRoundItemGroups', () => {
         isLast: true,
       },
     ]);
+  });
+});
+
+describe('isCompletedToolInTransientWindow', () => {
+  it('treats only freshly completed tools as transient', () => {
+    expect(isCompletedToolInTransientWindow(
+      makeReadTool('tool-1', 'completed', 10_000),
+      10_200,
+    )).toBe(true);
+    expect(isCompletedToolInTransientWindow(
+      makeReadTool('tool-2', 'completed', 10_000),
+      11_001,
+    )).toBe(false);
+  });
+
+  it('does not classify historical or invalid completion times as transient', () => {
+    expect(isCompletedToolInTransientWindow(
+      makeReadTool('tool-1', 'completed'),
+      10_200,
+    )).toBe(false);
+    expect(isCompletedToolInTransientWindow(
+      makeReadTool('tool-2', 'completed', 12_000),
+      10_200,
+    )).toBe(false);
+    expect(isCompletedToolInTransientWindow(
+      makeReadTool('tool-3', 'running'),
+      10_200,
+    )).toBe(false);
   });
 });

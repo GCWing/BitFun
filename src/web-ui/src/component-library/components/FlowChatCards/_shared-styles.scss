@@ -6,7 +6,7 @@
 
 @mixin liquid-card-base {
   background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid var(--color-overlay-white-20);
   border-radius: tokens.$size-radius-lg;
   transition: all tokens.$motion-base tokens.$easing-standard;
   position: relative;
@@ -24,7 +24,7 @@
 
 @mixin compact-hover {
   &:hover {
-    background: rgba(255, 255, 255, 0.08);
+    background: var(--color-overlay-white-08);
     border-color: rgba(255, 255, 255, 0.35);
   }
 }
@@ -32,7 +32,7 @@
 
 @mixin standard-hover {
   &:hover {
-    background: rgba(255, 255, 255, 0.08);
+    background: var(--color-overlay-white-08);
     border-color: rgba(255, 255, 255, 0.35);
     transform: translateY(-1px);
   }
@@ -46,7 +46,7 @@
   min-width: 32px;
   min-height: 32px;
   background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid var(--color-overlay-white-20);
   border-radius: tokens.$size-radius-base;
   padding: tokens.$size-gap-2;
   transition: all tokens.$motion-base tokens.$easing-standard;
@@ -57,7 +57,7 @@
   }
 
   &:hover {
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--color-overlay-white-10);
     border-color: rgba(255, 255, 255, 0.35);
 
     svg {
@@ -77,7 +77,7 @@
   transition: all tokens.$motion-base tokens.$easing-standard;
 
   @if $variant == 'success' {
-    background: rgba(52, 211, 153, 0.10);
+    background: var(--color-success-bg);
     color: tokens.$color-success;
     border-color: tokens.$color-success-border;
 
@@ -86,7 +86,7 @@
       border-color: rgba(52, 211, 153, 0.4);
     }
   } @else if $variant == 'error' {
-    background: rgba(239, 68, 68, 0.10);
+    background: var(--color-error-bg);
     color: tokens.$color-error;
     border-color: tokens.$color-error-border;
 
@@ -101,7 +101,7 @@
 
     &:hover:not(:disabled) {
       background: rgba(96, 165, 250, 0.18);
-      border-color: rgba(96, 165, 250, 0.4);
+      border-color: var(--color-accent-400);
     }
   } @else {
     background: tokens.$element-bg-base;

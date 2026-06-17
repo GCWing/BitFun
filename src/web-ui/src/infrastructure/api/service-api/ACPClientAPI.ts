@@ -113,6 +113,36 @@ export interface AcpSessionOptions {
   contextUsage?: AcpContextUsage;
 }
 
+export interface AcpAvailableCommand {
+  name: string;
+  description: string;
+  inputHint?: string;
+}
+
+export interface AcpAvailableCommandsUpdatedEvent {
+  sessionId: string;
+  clientId: string;
+  commands: AcpAvailableCommand[];
+}
+
+export interface AcpPlanEntry {
+  content: string;
+  priority: 'high' | 'medium' | 'low' | string;
+  status: 'pending' | 'in_progress' | 'completed' | string;
+}
+
+export interface AcpPlanUpdatedEvent {
+  sessionId: string;
+  turnId: string;
+  clientId: string;
+  entries: AcpPlanEntry[];
+}
+
+export interface AcpSessionOptionsChangedEvent {
+  sessionId: string;
+  clientId: string;
+}
+
 export interface SubmitAcpPermissionResponseRequest {
   permissionId: string;
   approve: boolean;
@@ -281,10 +311,38 @@ export class ACPClientAPI {
     return api.invoke('get_acp_session_options', { request });
   }
 
+  static async getSessionCommands(
+    request: GetAcpSessionOptionsRequest
+  ): Promise<AcpAvailableCommand[]> {
+    return api.invoke('get_acp_session_commands', { request });
+  }
+
   static async setSessionModel(
     request: SetAcpSessionModelRequest
   ): Promise<AcpSessionOptions> {
     return api.invoke('set_acp_session_model', { request });
+  }
+
+  static onAvailableCommandsUpdated(
+    callback: (event: AcpAvailableCommandsUpdatedEvent) => void
+  ): () => void {
+    return api.listen<AcpAvailableCommandsUpdatedEvent>(
+      'agentic://acp-available-commands-updated',
+      callback
+    );
+  }
+
+  static onPlanUpdated(callback: (event: AcpPlanUpdatedEvent) => void): () => void {
+    return api.listen<AcpPlanUpdatedEvent>('agentic://acp-plan-updated', callback);
+  }
+
+  static onSessionOptionsChanged(
+    callback: (event: AcpSessionOptionsChangedEvent) => void
+  ): () => void {
+    return api.listen<AcpSessionOptionsChangedEvent>(
+      'agentic://acp-session-options-changed',
+      callback
+    );
   }
 }
 

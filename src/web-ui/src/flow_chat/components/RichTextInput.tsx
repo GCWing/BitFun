@@ -37,6 +37,10 @@ export interface RichTextInputProps {
   onMentionStateChange?: (state: MentionState) => void;
 }
 
+function isWhitespaceCharacter(char: string | undefined): boolean {
+  return !char || /\s/.test(char);
+}
+
 function getContextDisplayName(context: ContextItem): string {
   switch (context.type) {
     case 'file': return context.fileName;
@@ -137,6 +141,15 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
   const lastContextIdsRef = useRef<Set<string>>(new Set());
   const mentionStateRef = useRef<MentionState>({ isActive: false, query: '', startOffset: 0 });
   const triggerSyncRef = useRef<(() => void) | null>(null);
+
+  const closeMention = useCallback(() => {
+    if (!mentionStateRef.current.isActive) {
+      return;
+    }
+
+    mentionStateRef.current = { isActive: false, query: '', startOffset: 0 };
+    onMentionStateChange?.({ isActive: false, query: '', startOffset: 0 });
+  }, [onMentionStateChange]);
 
   // Create tag element with pill style
   const createTagElement = useCallback((context: ContextItem): HTMLSpanElement => {
@@ -338,20 +351,14 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0) {
       // No selection, close mention
-      if (mentionStateRef.current.isActive) {
-        mentionStateRef.current = { isActive: false, query: '', startOffset: 0 };
-        onMentionStateChange?.({ isActive: false, query: '', startOffset: 0 });
-      }
+      closeMention();
       return;
     }
     
     const range = selection.getRangeAt(0);
     if (!range.collapsed) {
       // Non-collapsed selection, close mention
-      if (mentionStateRef.current.isActive) {
-        mentionStateRef.current = { isActive: false, query: '', startOffset: 0 };
-        onMentionStateChange?.({ isActive: false, query: '', startOffset: 0 });
-      }
+      closeMention();
       return;
     }
     
@@ -385,6 +392,12 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
     const lastAtIndex = textBeforeCursor.lastIndexOf('@');
     
     if (lastAtIndex !== -1) {
+      const charBeforeAt = textBeforeCursor[lastAtIndex - 1];
+      if (!isWhitespaceCharacter(charBeforeAt)) {
+        closeMention();
+        return;
+      }
+
       // Extract query after @ up to the cursor
       const query = textBeforeCursor.slice(lastAtIndex + 1);
       
@@ -408,11 +421,8 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
     }
     
     // No valid mention, close it
-    if (mentionStateRef.current.isActive) {
-      mentionStateRef.current = { isActive: false, query: '', startOffset: 0 };
-      onMentionStateChange?.({ isActive: false, query: '', startOffset: 0 });
-    }
-  }, [onMentionStateChange, internalRef]);
+    closeMention();
+  }, [closeMention, internalRef, onMentionStateChange]);
 
   /** Compute the cursor's character offset within the editor. */
   const getCursorOffset = useCallback((editor: HTMLElement): number => {
@@ -545,10 +555,7 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
     }
     
     // Plain text paste - close any active mention to prevent @ in pasted content from triggering mention mode
-    if (mentionStateRef.current.isActive) {
-      mentionStateRef.current = { isActive: false, query: '', startOffset: 0 };
-      onMentionStateChange?.({ isActive: false, query: '', startOffset: 0 });
-    }
+    closeMention();
     
     const text = e.clipboardData.getData('text/plain');
     const largePastePlaceholder = onLargePaste?.(text);
@@ -559,7 +566,7 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
     requestAnimationFrame(() => {
       isComposingRef.current = false;
     });
-  }, [internalRef, onLargePaste, onMentionStateChange]);
+  }, [closeMention, internalRef, onLargePaste]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     const nativeEvent = e.nativeEvent as KeyboardEvent;
@@ -657,17 +664,15 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
         selection.addRange(newRange);
       }
       editor.focus();
-      mentionStateRef.current = { isActive: false, query: '', startOffset: 0 };
-      onMentionStateChange?.({ isActive: false, query: '', startOffset: 0 });
+      closeMention();
       handleInput();
       return;
     }
 
     // Fallback to cursor insertion if range cannot be found
     insertTagAtCursor(context);
-    mentionStateRef.current = { isActive: false, query: '', startOffset: 0 };
-    onMentionStateChange?.({ isActive: false, query: '', startOffset: 0 });
-  }, [createTagElement, getRangeByTextOffsets, handleInput, insertTagAtCursor, internalRef, onMentionStateChange]);
+    closeMention();
+  }, [closeMention, createTagElement, getRangeByTextOffsets, handleInput, insertTagAtCursor, internalRef]);
 
   /** Insert @ at caret and open the file/folder mention picker (e.g. from ChatInput + menu). */
   const openMention = useCallback(() => {
@@ -688,11 +693,18 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
       sel?.addRange(range);
     }
 
-    document.execCommand('insertText', false, '@');
+    const cursorOffset = getCursorOffset(editor);
+    const textBeforeCursor = cursorOffset >= 0
+      ? (editor.textContent || '').slice(0, cursorOffset)
+      : (editor.textContent || '');
+    const charBeforeCursor = textBeforeCursor[textBeforeCursor.length - 1];
+    const mentionTriggerText = isWhitespaceCharacter(charBeforeCursor) ? '@' : ' @';
+
+    document.execCommand('insertText', false, mentionTriggerText);
     requestAnimationFrame(() => {
       detectMention();
     });
-  }, [detectMention, internalRef]);
+  }, [detectMention, getCursorOffset, internalRef]);
 
   // Expose methods to parent
   useEffect(() => {
@@ -700,14 +712,9 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
       (internalRef.current as any).insertTag = insertTagAtCursor;
       (internalRef.current as any).insertTagReplacingMention = insertTagReplacingMention;
       (internalRef.current as any).openMention = openMention;
-      (internalRef.current as any).closeMention = () => {
-        if (mentionStateRef.current.isActive) {
-          mentionStateRef.current = { isActive: false, query: '', startOffset: 0 };
-          onMentionStateChange?.({ isActive: false, query: '', startOffset: 0 });
-        }
-      };
+      (internalRef.current as any).closeMention = closeMention;
     }
-  }, [insertTagAtCursor, insertTagReplacingMention, openMention, onMentionStateChange, internalRef]);
+  }, [closeMention, insertTagAtCursor, insertTagReplacingMention, openMention, internalRef]);
 
   // Initialize and sync value changes from external sources.
   // This editor is effectively controlled by comparing the parent's value
@@ -788,13 +795,10 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
     setIsFocused(false);
     // Delay closing to allow picker clicks
     setTimeout(() => {
-      if (mentionStateRef.current.isActive) {
-        mentionStateRef.current = { isActive: false, query: '', startOffset: 0 };
-        onMentionStateChange?.({ isActive: false, query: '', startOffset: 0 });
-      }
+      closeMention();
     }, 200);
     onBlur?.();
-  }, [onBlur, onMentionStateChange]);
+  }, [closeMention, onBlur]);
 
   // Handle IME composition
   const handleCompositionStart = useCallback(() => {

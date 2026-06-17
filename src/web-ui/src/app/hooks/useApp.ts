@@ -46,6 +46,12 @@ export const useApp = (): UseAppReturn => {
     });
   }, [state.layout.rightPanelCollapsed]);
 
+  const toggleBottomTerminalPanel = useCallback(() => {
+    appManager.updateLayout({
+      bottomTerminalPanelCollapsed: !state.layout.bottomTerminalPanelCollapsed
+    });
+  }, [state.layout.bottomTerminalPanelCollapsed]);
+
   const toggleChatPanel = useCallback(() => {
     const nextChatCollapsed = !state.layout.chatCollapsed;
     appManager.updateLayout({
@@ -91,6 +97,16 @@ export const useApp = (): UseAppReturn => {
     
     appManager.updateLayout({
       rightPanelWidth: clampedWidth
+    });
+  }, []);
+
+  const updateBottomTerminalPanelHeight = useCallback((height: number) => {
+    const MIN_HEIGHT = 120;
+    const MAX_HEIGHT = 640;
+    const clampedHeight = Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, height));
+
+    appManager.updateLayout({
+      bottomTerminalPanelHeight: clampedHeight
     });
   }, []);
 
@@ -204,11 +220,13 @@ export const useApp = (): UseAppReturn => {
     toggleLeftPanel,
     toggleCenterPanel,
     toggleRightPanel,
+    toggleBottomTerminalPanel,
     toggleChatPanel,
     switchLeftPanelTab,
     updateLeftPanelWidth,
     updateCenterPanelWidth,
     updateRightPanelWidth,
+    updateBottomTerminalPanelHeight,
 
     updateAgentConfig,
 
@@ -233,12 +251,13 @@ export const useApp = (): UseAppReturn => {
 
 // Layout helper hook
 export const useLayout = () => {
-  const { state, toggleLeftPanel, toggleRightPanel, toggleChatPanel, switchLeftPanelTab, updateLeftPanelWidth } = useApp();
+  const { state, toggleLeftPanel, toggleRightPanel, toggleBottomTerminalPanel, toggleChatPanel, switchLeftPanelTab, updateLeftPanelWidth } = useApp();
   
   return {
     layout: state.layout,
     toggleLeftPanel,
     toggleRightPanel,
+    toggleBottomTerminalPanel,
     toggleChatPanel,
     switchLeftPanelTab,
     updateLeftPanelWidth

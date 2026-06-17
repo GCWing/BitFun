@@ -3,29 +3,29 @@
  * Styles for rendering Mermaid diagrams during streaming output
  */
 .mermaid-block {
-  margin: var(--flowchat-markdown-block-gap, 0.58em) 0;
+  margin: var(--flowchat-markdown-block-gap) 0;
   border-radius: 6px;
   overflow: hidden;
-  background: var(--color-bg-primary, #121214);
-  border: 1px solid var(--element-bg-base, rgba(255, 255, 255, 0.08));
+  background: var(--color-bg-primary);
+  border: 1px solid var(--element-bg-base);
   transition: all 0.3s ease;
 
   &:hover {
     box-shadow:
-      0 8px 24px var(--shadow-color, rgba(0, 0, 0, 0.4)),
-      inset 0 1px 0 var(--element-bg-medium, rgba(255, 255, 255, 0.1)),
-      inset 0 -1px 0 var(--element-bg-subtle, rgba(255, 255, 255, 0.05));
-    border-color: var(--element-bg-strong, rgba(255, 255, 255, 0.15));
+      0 8px 24px var(--shadow-color, var(--color-overlay-black-40)),
+      inset 0 1px 0 var(--element-bg-medium),
+      inset 0 -1px 0 var(--element-bg-subtle);
+    border-color: var(--element-bg-strong);
   }
 
   &--streaming {
     .mermaid-block__streaming {
-      padding: var(--flowchat-code-block-pad-y, 0.55rem) var(--flowchat-code-block-pad-x, 0.75rem);
+      padding: var(--flowchat-code-block-pad-y) var(--flowchat-code-block-pad-x);
     }
 
     .streaming-cursor {
       display: inline-block;
-      color: var(--color-accent-500, #60a5fa);
+      color: var(--color-accent-500);
       animation: blink 1s infinite;
       margin-left: 2px;
     }
@@ -40,11 +40,11 @@
     .mermaid-block__hint {
       display: flex;
       align-items: center;
-      gap: var(--flowchat-inline-gap, 0.35rem);
-      padding: var(--flowchat-card-pad-y, 0.625rem) var(--flowchat-card-pad-x, 0.75rem);
-      background: var(--color-warning-bg, rgba(251, 191, 36, 0.1));
-      border-top: 1px solid var(--color-warning-border, rgba(251, 191, 36, 0.2));
-      color: var(--color-warning, #fbbf24);
+      gap: var(--flowchat-inline-gap);
+      padding: var(--flowchat-card-pad-y) var(--flowchat-card-pad-x);
+      background: var(--color-warning-bg);
+      border-top: 1px solid var(--color-warning-border);
+      color: var(--color-warning);
       font-size: var(--flowchat-font-size-xs);
 
       svg {
@@ -56,7 +56,7 @@
   &--waiting,
   &--rendering {
     .mermaid-block__loading {
-      padding: var(--flowchat-card-pad-y, 0.625rem) var(--flowchat-card-pad-x, 0.75rem);
+      padding: var(--flowchat-card-pad-y) var(--flowchat-card-pad-x);
       text-align: center;
     }
 
@@ -64,10 +64,10 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: var(--flowchat-inline-gap, 0.35rem);
-      color: var(--color-accent-500, #60a5fa);
-      font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
-      margin-bottom: var(--flowchat-card-gap, 0.45rem);
+      gap: var(--flowchat-inline-gap);
+      color: var(--color-accent-500);
+      font-size: var(--tool-card-action-font-size);
+      margin-bottom: var(--flowchat-card-gap);
 
       .spinning {
         animation: spin 1s linear infinite;
@@ -84,7 +84,7 @@
     position: relative;
 
     .mermaid-block__diagram {
-      padding: var(--flowchat-card-pad-y, 0.625rem) var(--flowchat-card-pad-x, 0.75rem);
+      padding: var(--flowchat-card-pad-y) var(--flowchat-card-pad-x);
       background: transparent;
       overflow-x: auto;
       animation: fadeIn 0.4s ease;
@@ -123,8 +123,8 @@
     }
 
     .mermaid-block__source {
-      padding: var(--flowchat-code-block-pad-y, 0.55rem) var(--flowchat-code-block-pad-x, 0.75rem);
-      border-top: 1px solid var(--element-bg-base, rgba(255, 255, 255, 0.08));
+      padding: var(--flowchat-code-block-pad-y) var(--flowchat-code-block-pad-x);
+      border-top: 1px solid var(--element-bg-base);
       background: transparent;
 
       .mermaid-code {
@@ -138,17 +138,17 @@
   }
 
   &--error {
-    border-color: var(--color-error-border, rgba(239, 68, 68, 0.5));
+    border-color: var(--color-error-border);
 
     .mermaid-block__error-message {
       display: flex;
       align-items: center;
-      gap: var(--flowchat-inline-gap, 0.35rem);
-      padding: var(--flowchat-card-pad-y, 0.625rem) var(--flowchat-card-pad-x, 0.75rem);
-      background: var(--color-error-bg, rgba(239, 68, 68, 0.1));
-      border-bottom: 1px solid var(--color-error-border, rgba(239, 68, 68, 0.2));
-      color: var(--color-error, #ef4444);
-      font-size: var(--tool-card-action-font-size, var(--flowchat-font-size-sm));
+      gap: var(--flowchat-inline-gap);
+      padding: var(--flowchat-card-pad-y) var(--flowchat-card-pad-x);
+      background: var(--color-error-bg);
+      border-bottom: 1px solid var(--color-error-border);
+      color: var(--color-error);
+      font-size: var(--tool-card-action-font-size);
 
       svg {
         flex-shrink: 0;
@@ -157,16 +157,16 @@
 
     .mermaid-block__actions {
       display: flex;
-      gap: var(--flowchat-inline-gap, 0.35rem);
-      padding: var(--flowchat-card-pad-y, 0.625rem) var(--flowchat-card-pad-x, 0.75rem);
-      background: var(--color-bg-secondary, rgba(0, 0, 0, 0.4));
-      border-top: 1px solid var(--element-bg-base, rgba(255, 255, 255, 0.08));
+      gap: var(--flowchat-inline-gap);
+      padding: var(--flowchat-card-pad-y) var(--flowchat-card-pad-x);
+      background: var(--color-bg-secondary);
+      border-top: 1px solid var(--element-bg-base);
     }
   }
 
 
   .mermaid-block__code-preview {
-    padding: var(--flowchat-code-block-pad-y, 0.55rem) var(--flowchat-code-block-pad-x, 0.75rem);
+    padding: var(--flowchat-code-block-pad-y) var(--flowchat-code-block-pad-x);
     background: transparent;
 
     .mermaid-code {
@@ -177,8 +177,8 @@
       border-radius: 0;
       font-family: var(--font-family-mono, 'Consolas', 'Monaco', 'Courier New', monospace);
       font-size: var(--flowchat-code-font-size, 0.92em);
-      line-height: var(--flowchat-code-line-height, 1.52);
-      color: var(--color-text-primary, #e8e8e8);
+      line-height: var(--flowchat-code-line-height);
+      color: var(--color-text-primary);
       overflow-x: auto;
       white-space: pre;
 
@@ -211,13 +211,13 @@
     background: transparent;
     border: none;
     border-radius: 4px;
-    color: var(--color-text-muted, rgba(255, 255, 255, 0.4));
+    color: var(--color-text-muted);
     cursor: pointer;
     transition: all 0.15s ease;
 
     &:hover {
-      background: var(--element-bg-medium, rgba(255, 255, 255, 0.1));
-      color: var(--color-text-primary, rgba(255, 255, 255, 0.9));
+      background: var(--element-bg-medium);
+      color: var(--color-text-primary);
     }
 
     &:active {
@@ -229,7 +229,7 @@
     }
 
     &.copied {
-      color: var(--color-success, #22c55e);
+      color: var(--color-success);
     }
   }
 
@@ -239,17 +239,17 @@
     gap: 0.375rem;
     padding: 0.5rem 0.875rem;
     background: transparent;
-    border: 1px solid var(--element-bg-medium, rgba(255, 255, 255, 0.1));
+    border: 1px solid var(--element-bg-medium);
     border-radius: 4px;
-    color: var(--color-text-secondary, rgba(255, 255, 255, 0.6));
+    color: var(--color-text-secondary);
     font-size: 0.8125rem;
     cursor: pointer;
     transition: all 0.2s ease;
 
     &:hover {
-      background: var(--element-bg-subtle, rgba(255, 255, 255, 0.05));
-      border-color: var(--element-bg-strong, rgba(255, 255, 255, 0.2));
-      color: var(--color-text-primary, rgba(255, 255, 255, 0.9));
+      background: var(--element-bg-subtle);
+      border-color: var(--element-bg-strong);
+      color: var(--color-text-primary);
     }
 
     &:active {
@@ -273,7 +273,7 @@
 
 .mermaid-block__diagram {
   svg {
-    font-family: var(--font-family-sans, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif);
+    font-family: var(--font-family-sans);
 
     .node {
       rect, circle, ellipse, polygon {
@@ -292,7 +292,7 @@
     }
 
     .edgeLabel {
-      background-color: var(--color-bg-secondary, #1e1e1e);
+      background-color: var(--color-bg-secondary);
     }
   }
 }

@@ -145,6 +145,16 @@ vi.mock('react-i18next', async (importOriginal) => ({
         'usage.help.errorExampleCount': 'Number of matching errors.',
         'usage.help.slowestSpans': 'Slow spans are derived from recorded turn, model, and tool timestamps. They help identify time sinks, not exact provider latency.',
         'usage.help.slowestModelCall': 'Model call in this turn. Model: {{model}}.',
+        'usage.help.slowestToolCall': 'Tool call details identify whether time was spent waiting, confirming, or executing.',
+        'usage.slowest.details.input': 'Input',
+        'usage.slowest.details.status': 'Status',
+        'usage.slowest.details.exitCode': 'Exit code',
+        'usage.slowest.details.timedOut': 'Timed out',
+        'usage.slowest.details.execution': 'Execution',
+        'usage.slowest.details.error': 'Error',
+        'usage.status.timedOut': 'Timed out',
+        'shared:statuses.failed': 'Failed',
+        'shared:statuses.done': 'Done',
         'usage.meta.generatedAt': 'Generated',
         'usage.meta.sessionId': 'Session ID',
         'usage.meta.workspacePath': 'Project path',
@@ -277,7 +287,15 @@ const USAGE_LOCALE_REQUIRED_KEYS = [
   'usage.help.errorExampleCount',
   'usage.help.slowestSpans',
   'usage.help.slowestModelCall',
+  'usage.help.slowestToolCall',
   'usage.panel.errorScope',
+  'usage.slowest.details.input',
+  'usage.slowest.details.status',
+  'usage.slowest.details.exitCode',
+  'usage.slowest.details.timedOut',
+  'usage.slowest.details.execution',
+  'usage.slowest.details.error',
+  'usage.status.timedOut',
   'usage.tabs.slowest',
   'usage.table.actions',
   'usage.table.kind',
@@ -1456,6 +1474,69 @@ describe('Session usage report UI components', () => {
         turnId: 'turn-2',
         behavior: 'smooth',
         pinMode: 'transient',
+        source: 'usage-report',
+      },
+    ]);
+    unsubscribe();
+  });
+
+  it('shows diagnostic details for slow tool spans and jumps to the exact tool item', () => {
+    const report = usageReport({
+      slowest: [
+        {
+          label: 'Bash',
+          kind: 'tool',
+          durationMs: 95_000,
+          redacted: false,
+          turnId: 'turn-2',
+          turnIndex: 2,
+          itemId: 'tool-slow',
+          inputSummary: 'curl https://api.example.test/slow',
+          status: 'failed',
+          exitCode: 28,
+          timedOut: true,
+          executionMs: 94_970,
+          errorSummary: 'operation timed out',
+        },
+      ],
+    });
+
+    const focusEvents: FlowChatFocusItemRequest[] = [];
+    const unsubscribe = globalEventBus.on<FlowChatFocusItemRequest>(
+      FLOWCHAT_FOCUS_ITEM_EVENT,
+      event => focusEvents.push(event),
+    );
+
+    render(<SessionUsagePanel report={report} markdown="## Session Usage" sessionId="session-1" />);
+
+    const slowestTab = Array.from(container.querySelectorAll('.session-usage-panel__tab'))
+      .find(button => button.textContent === 'Slowest');
+    act(() => {
+      slowestTab?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(container.textContent).toContain('Bash');
+    expect(container.textContent).toContain('Input');
+    expect(container.textContent).toContain('curl https://api.example.test/slow');
+    expect(container.textContent).toContain('Status');
+    expect(container.textContent).toContain('Failed');
+    expect(container.textContent).toContain('Exit code');
+    expect(container.textContent).toContain('28');
+    expect(container.textContent).toContain('Timed out');
+    expect(container.textContent).toContain('Execution');
+    expect(container.textContent).toContain('1m 35s');
+    expect(container.textContent).toContain('operation timed out');
+
+    const toolLink = container.querySelector<HTMLButtonElement>('.session-usage-panel__turn-link');
+    act(() => {
+      toolLink?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(focusEvents).toEqual([
+      {
+        sessionId: 'session-1',
+        turnIndex: 2,
+        itemId: 'tool-slow',
         source: 'usage-report',
       },
     ]);

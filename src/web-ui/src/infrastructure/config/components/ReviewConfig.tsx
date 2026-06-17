@@ -21,7 +21,6 @@ import {
   DEFAULT_REVIEW_TEAM_MODEL,
   loadDefaultReviewTeam,
   removeDefaultReviewTeamMember,
-  REVIEW_STRATEGY_DEFINITIONS,
   REVIEW_STRATEGY_LEVELS,
   saveDefaultReviewTeamConcurrencyPolicy,
   saveDefaultReviewTeamMemberStrategyOverride,
@@ -152,18 +151,17 @@ const ReviewConfig: React.FC = () => {
   }, [t]);
 
   const getStrategyLabel = useCallback((level: ReviewStrategyLevel) => (
-    t(`strategy.${level}.label`, { defaultValue: REVIEW_STRATEGY_DEFINITIONS[level].label })
+    t(`strategy.${level}.label`)
   ), [t]);
 
   const getStrategySummary = useCallback((level: ReviewStrategyLevel) => (
-    t(`strategy.${level}.summary`, { defaultValue: REVIEW_STRATEGY_DEFINITIONS[level].summary })
+    t(`strategy.${level}.summary`)
   ), [t]);
 
   const getMemberStrategyLabel = useCallback((level: ReviewMemberStrategyLevel) => {
     if (level === DEFAULT_REVIEW_MEMBER_STRATEGY_LEVEL) {
       return t('strategy.inherit', {
         level: team ? getStrategyLabel(team.strategyLevel) : '',
-        defaultValue: team ? `Inherit team (${getStrategyLabel(team.strategyLevel)})` : 'Inherit team',
       });
     }
     return getStrategyLabel(level);
@@ -171,10 +169,10 @@ const ReviewConfig: React.FC = () => {
 
   const formatModelLabel = useCallback((modelId: string): string => {
     if (!modelId || modelId === DEFAULT_REVIEW_TEAM_MODEL) {
-      return tModel('selection.fast', { defaultValue: 'Fast' });
+      return tModel('selection.fast');
     }
     if (modelId === 'primary') {
-      return tModel('selection.primary', { defaultValue: 'Primary' });
+      return tModel('selection.primary');
     }
 
     const match = models.find((model) => model.id === modelId);
@@ -192,8 +190,8 @@ const ReviewConfig: React.FC = () => {
   }, [subagents, team]);
 
   const modelOptions = useMemo(() => [
-    { value: DEFAULT_REVIEW_TEAM_MODEL, label: tModel('selection.fast', { defaultValue: 'Fast' }) },
-    { value: 'primary', label: tModel('selection.primary', { defaultValue: 'Primary' }) },
+    { value: DEFAULT_REVIEW_TEAM_MODEL, label: tModel('selection.fast') },
+    { value: 'primary', label: tModel('selection.primary') },
     ...models
       .filter((model) => Boolean(model.id))
       .map((model) => ({
@@ -355,7 +353,7 @@ const ReviewConfig: React.FC = () => {
         <ConfigPageSection
           title={t('overview.title')}
           description={t('overview.description')}
-          titleSuffix={<Badge variant="info">{t('overview.badge')}</Badge>}
+          titleSuffix={<Badge variant="info">{t('shared:features.deepReview')}</Badge>}
         >
           <div className="review-config__overview-grid">
             <div className="review-config__overview-item">

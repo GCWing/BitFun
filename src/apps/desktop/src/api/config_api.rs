@@ -1,11 +1,13 @@
 //! Configuration API
 
 use crate::api::app_state::AppState;
+use crate::startup_trace::DesktopStartupTrace;
 use bitfun_core::util::errors::BitFunError;
 use log::{error, info};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
+use std::time::Instant;
 use tauri::State;
 
 #[derive(Debug, Deserialize)]
@@ -57,11 +59,14 @@ fn is_expected_config_path_not_found(error: &BitFunError, path: Option<&str>) ->
 #[tauri::command]
 pub async fn get_config(
     state: State<'_, AppState>,
+    startup_trace: State<'_, DesktopStartupTrace>,
     request: GetConfigRequest,
 ) -> Result<Value, String> {
     let config_service = &state.config_service;
+    let trace_started = Instant::now();
+    let trace_target = request.path.clone();
 
-    match config_service
+    let result = match config_service
         .get_config::<Value>(request.path.as_deref())
         .await
     {
@@ -70,21 +75,31 @@ pub async fn get_config(
             if request.skip_retry_on_not_found
                 && is_expected_config_path_not_found(&e, request.path.as_deref())
             {
-                return Err(format!("Failed to get config: {}", e));
+                Err(format!("Failed to get config: {}", e))
+            } else {
+                error!("Failed to get config: path={:?}, error={}", request.path, e);
+                Err(format!("Failed to get config: {}", e))
             }
-            error!("Failed to get config: path={:?}, error={}", request.path, e);
-            Err(format!("Failed to get config: {}", e))
         }
-    }
+    };
+    startup_trace.record_tauri_command_elapsed(
+        "get_config",
+        trace_target.as_deref(),
+        trace_started,
+    );
+    result
 }
 
 #[tauri::command]
 pub async fn get_configs(
     state: State<'_, AppState>,
+    startup_trace: State<'_, DesktopStartupTrace>,
     request: GetConfigsRequest,
 ) -> Result<BTreeMap<String, Value>, String> {
     let config_service = &state.config_service;
     let mut configs = BTreeMap::new();
+    let trace_started = Instant::now();
+    let trace_target = request.paths.join(",");
 
     for path in request.paths {
         if configs.contains_key(&path) {
@@ -102,14 +117,25 @@ pub async fn get_configs(
                 if request.skip_retry_on_not_found
                     && is_expected_config_path_not_found(&e, Some(path.as_str()))
                 {
+                    startup_trace.record_tauri_command_elapsed(
+                        "get_configs",
+                        Some(&trace_target),
+                        trace_started,
+                    );
                     return Err(format!("Failed to get config: {}", e));
                 }
                 error!("Failed to get config: path={}, error={}", path, e);
+                startup_trace.record_tauri_command_elapsed(
+                    "get_configs",
+                    Some(&trace_target),
+                    trace_started,
+                );
                 return Err(format!("Failed to get config: {}", e));
             }
         }
     }
 
+    startup_trace.record_tauri_command_elapsed("get_configs", Some(&trace_target), trace_started);
     Ok(configs)
 }
 
@@ -142,11 +168,14 @@ mod tests {
 #[tauri::command]
 pub async fn set_config(
     state: State<'_, AppState>,
+    startup_trace: State<'_, DesktopStartupTrace>,
     request: SetConfigRequest,
 ) -> Result<String, String> {
     let config_service = &state.config_service;
+    let trace_started = Instant::now();
+    let trace_target = request.path.clone();
 
-    match config_service
+    let result = match config_service
         .set_config(&request.path, request.value)
         .await
     {
@@ -171,7 +200,13 @@ pub async fn set_config(
             error!("Failed to set config: path={}, error={}", request.path, e);
             Err(format!("Failed to set config: {}", e))
         }
-    }
+    };
+    startup_trace.record_tauri_command_elapsed(
+        "set_config",
+        Some(trace_target.as_str()),
+        trace_started,
+    );
+    result
 }
 
 #[tauri::command]
@@ -299,11 +334,15 @@ pub async fn get_global_config_health() -> Result<bool, String> {
 
 #[tauri::command]
 pub async fn get_runtime_logging_info(
+    startup_trace: State<'_, DesktopStartupTrace>,
     _state: State<'_, AppState>,
     _request: GetRuntimeLoggingInfoRequest,
 ) -> Result<Value, String> {
+    let trace_started = Instant::now();
     let logging_info = crate::logging::get_runtime_logging_info();
-    to_json_value(logging_info, "runtime logging info")
+    let result = to_json_value(logging_info, "runtime logging info");
+    startup_trace.record_tauri_command_elapsed("get_runtime_logging_info", None, trace_started);
+    result
 }
 
 #[tauri::command]

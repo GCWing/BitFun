@@ -21,26 +21,26 @@
    * sans + `sm` + line-height 1.5 + normal — not monospace (mono reads “thinner” vs “思考了 N 字”).
    */
   --tool-compact-summary-font:
-    var(--font-family-sans, 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', sans-serif);
+    var(--font-family-sans);
 
   .compact-card-action,
   .compact-card-content .tool-command-preview.tool-command-preview--compact {
     font-family: var(--tool-compact-summary-font);
     font-size: var(--flowchat-font-size-sm);
-    line-height: var(--flowchat-support-line-height, 1.45);
+    line-height: var(--flowchat-support-line-height);
     font-weight: normal;
     color: var(--color-text-muted);
   }
 
   .terminal-header-extra {
-    gap: var(--flowchat-inline-gap, 0.35rem);
+    gap: var(--flowchat-inline-gap);
   }
 
   .terminal-header-duration .duration-text {
     gap: 0.18rem;
     font-family: var(--tool-compact-summary-font);
     font-size: var(--flowchat-font-size-sm);
-    line-height: var(--flowchat-support-line-height, 1.45);
+    line-height: var(--flowchat-support-line-height);
     font-weight: normal;
   }
 
@@ -60,7 +60,7 @@
     display: inline-flex;
     align-items: center;
     height: 1.45em;
-    line-height: var(--flowchat-compact-line-height, 1.32);
+    line-height: var(--flowchat-compact-line-height);
     margin-right: 2px;
     transform: translateY(-0.5px);
   }
@@ -72,28 +72,27 @@
 
 /* Footer bar: full width + background to bottom inner edge of expanded content (matches .base-tool-card-expanded padding). */
 .base-tool-card-wrapper.terminal-tool-card .terminal-result-footer {
-  margin-left: calc(-1 * var(--flowchat-card-expanded-pad-x, 0.625rem));
-  margin-right: calc(-1 * var(--flowchat-card-expanded-pad-x, 0.625rem));
-  margin-bottom: calc(-1 * var(--flowchat-card-expanded-pad-y, 0.5rem));
-  padding: var(--flowchat-inline-gap, 0.35rem) var(--flowchat-card-expanded-pad-x, 0.625rem);
+  margin-left: calc(-1 * var(--flowchat-card-expanded-pad-x));
+  margin-right: calc(-1 * var(--flowchat-card-expanded-pad-x));
+  margin-bottom: calc(-1 * var(--flowchat-card-expanded-pad-y));
+  padding: var(--flowchat-inline-gap) var(--flowchat-card-expanded-pad-x);
   border-radius: 0 0 6px 6px;
 }
 
 /* ========== Fix scrollbar visibility on card hover ========== */
 .base-tool-card-wrapper.terminal-tool-card:hover {
   .terminal-execution-output,
-  .terminal-result-output,
-  .xterm-viewport {
+  .terminal-result-output {
     &::-webkit-scrollbar-thumb {
-      background: var(--scrollbar-thumb, rgba(255, 255, 255, 0.12));
+      background: var(--scrollbar-thumb);
     }
 
     &::-webkit-scrollbar-thumb:hover {
-      background: var(--scrollbar-thumb-hover, rgba(255, 255, 255, 0.22));
+      background: var(--scrollbar-thumb-hover);
     }
 
     /* Firefox */
-    scrollbar-color: var(--scrollbar-thumb, rgba(255, 255, 255, 0.12)) transparent;
+    scrollbar-color: var(--scrollbar-thumb) transparent;
   }
 }
 
@@ -115,7 +114,7 @@
    * the monospace font's intrinsic baseline metrics. */
   display: inline-flex;
   align-items: center;
-  line-height: var(--flowchat-support-line-height, 1.45);
+  line-height: var(--flowchat-support-line-height);
   height: 1.45em;
   background: none !important;
   border: none !important;
@@ -165,7 +164,7 @@
   outline: none !important;
   box-shadow: none !important;
   transition: all 0.2s ease;
-  line-height: var(--flowchat-compact-line-height, 1.32);
+  line-height: var(--flowchat-compact-line-height);
   box-sizing: border-box;
 
   &:focus {
@@ -218,7 +217,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;
-  gap: var(--flowchat-inline-gap, 0.35rem);
+  gap: var(--flowchat-inline-gap);
   min-width: 0;
   line-height: 1;
 }
@@ -235,7 +234,7 @@
 
   .duration-text {
     font-size: var(--flowchat-font-size-xs);
-    line-height: var(--flowchat-compact-line-height, 1.32);
+    line-height: var(--flowchat-compact-line-height);
     font-weight: 500;
   }
 
@@ -279,14 +278,14 @@
 .terminal-hover-actions {
   display: inline-flex;
   align-items: center;
-  gap: var(--flowchat-inline-gap, 0.35rem);
+  gap: var(--flowchat-inline-gap);
 }
 
 /* ========== Always-visible critical actions (compact collapsed state) ========== */
 .terminal-critical-actions {
   display: inline-flex;
   align-items: center;
-  gap: var(--flowchat-inline-gap, 0.35rem);
+  gap: var(--flowchat-inline-gap);
   flex-shrink: 0;
 }
 
@@ -333,14 +332,14 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), transparent);
+    background: linear-gradient(135deg, var(--color-overlay-white-10), transparent);
     opacity: 0;
     transition: opacity 0.2s ease;
     z-index: 0;
   }
 
   &:hover:not(:disabled) {
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--color-overlay-white-10);
     transform: scale(1.05);
   }
 
@@ -393,7 +392,7 @@
   color: var(--color-text-muted);
 
   &:hover:not(:disabled) {
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--color-overlay-white-10);
     color: var(--color-text-secondary);
     box-shadow: none;
   }
@@ -414,8 +413,6 @@
   background: transparent;
   border: none;
   overflow: hidden;
-  max-height: 300px;
-  overflow-y: auto;
 
   &.terminal-waiting {
     display: flex;
@@ -440,7 +437,7 @@
   box-shadow: none !important;
   font-family: var(--tool-card-font-mono);
   font-size: var(--flowchat-font-size-sm);
-  line-height: var(--flowchat-code-line-height, 1.52);
+  line-height: var(--flowchat-code-line-height);
   white-space: pre-wrap;
   word-break: break-word;
   color: var(--color-text-secondary);
@@ -457,7 +454,7 @@
       color: var(--color-warning);
       font-size: var(--flowchat-font-size-xs);
       font-weight: 500;
-      line-height: var(--flowchat-compact-line-height, 1.32);
+      line-height: var(--flowchat-compact-line-height);
     }
   }
 }
@@ -466,15 +463,15 @@
   display: flex;
   align-items: center;
   align-content: center;
-  gap: var(--flowchat-inline-gap, 0.35rem);
+  gap: var(--flowchat-inline-gap);
   flex-wrap: wrap;
-  line-height: var(--flowchat-compact-line-height, 1.32);
-  background: var(--element-bg-subtle, rgba(255, 255, 255, 0.05));
+  line-height: var(--flowchat-compact-line-height);
+  background: var(--element-bg-subtle);
   box-sizing: border-box;
 }
 
 .terminal-result-output + .terminal-result-footer {
-  margin-top: var(--flowchat-inline-gap, 0.35rem);
+  margin-top: var(--flowchat-inline-gap);
   border-top: 1px solid var(--border-subtle);
 }
 
@@ -494,7 +491,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  line-height: var(--flowchat-compact-line-height, 1.32);
+  line-height: var(--flowchat-compact-line-height);
 }
 
 .terminal-exit-code {
@@ -504,7 +501,7 @@
   font-size: var(--flowchat-font-size-xxs);
   font-weight: 600;
   font-family: var(--tool-card-font-mono);
-  line-height: var(--flowchat-compact-line-height, 1.32);
+  line-height: var(--flowchat-compact-line-height);
   margin-left: auto;
   background: transparent;
 
@@ -521,7 +518,7 @@
   font-size: var(--flowchat-font-size-xxs);
   color: var(--color-text-muted);
   font-family: var(--tool-card-font-mono);
-  line-height: var(--flowchat-compact-line-height, 1.32);
+  line-height: var(--flowchat-compact-line-height);
 }
 
 /* ========== xterm output renderer styles ========== */
@@ -532,7 +529,7 @@
     padding: 0;
 
     .xterm-viewport {
-      overflow-y: auto !important;
+      overflow: hidden !important;
     }
 
     &:not(.allow-transparency) {
@@ -555,6 +552,13 @@
   .xterm {
     height: 100%;
   }
+
+  &.terminal-output-renderer--no-scroll {
+    .xterm .scrollbar.vertical {
+      display: none !important;
+      pointer-events: none !important;
+    }
+  }
 }
 
 .terminal-command-tooltip {
@@ -576,7 +580,7 @@
 .error-content {
   display: flex;
   flex-direction: column;
-  gap: var(--flowchat-inline-gap, 0.35rem);
+  gap: var(--flowchat-inline-gap);
   background: none !important;
   border: none !important;
   padding: 0 !important;
@@ -584,7 +588,7 @@
 
 .error-message {
   font-size: var(--flowchat-font-size-sm) !important;
-  line-height: var(--flowchat-support-line-height, 1.45) !important;
+  line-height: var(--flowchat-support-line-height) !important;
   color: var(--color-text-muted) !important;
   white-space: pre-wrap !important;
   word-break: break-word !important;
@@ -628,16 +632,16 @@
     .compact-card-action,
     .compact-card-content .tool-command-preview--compact {
       font-size: var(--flowchat-font-size-xs);
-      line-height: var(--flowchat-support-line-height, 1.45);
+      line-height: var(--flowchat-support-line-height);
       font-weight: normal;
-      font-family: var(--font-family-sans, 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', sans-serif);
+      font-family: var(--font-family-sans);
     }
 
     .terminal-header-duration .duration-text {
       font-size: var(--flowchat-font-size-xs);
-      line-height: var(--flowchat-support-line-height, 1.45);
+      line-height: var(--flowchat-support-line-height);
       font-weight: normal;
-      font-family: var(--font-family-sans, 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', sans-serif);
+      font-family: var(--font-family-sans);
     }
   }
 }

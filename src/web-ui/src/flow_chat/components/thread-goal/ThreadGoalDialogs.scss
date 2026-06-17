@@ -1,0 +1,248 @@
+@use '../../../component-library/styles/tokens' as *;
+
+// Modal body: contentInset only sets horizontal padding — add vertical breathing room.
+.modal__content.bitfun-thread-goal-modal__body {
+  padding: $size-gap-5 $size-gap-6 $size-gap-6 !important;
+}
+
+.bitfun-thread-goal-menu,
+.bitfun-thread-goal-edit,
+.bitfun-thread-goal-resume {
+  display: flex;
+  flex-direction: column;
+  gap: $size-gap-5;
+  min-width: 0;
+}
+
+.bitfun-thread-goal-menu__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: $size-gap-3;
+  min-height: 28px;
+}
+
+.bitfun-thread-goal-menu__status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: $size-gap-2;
+  padding: 6px 12px;
+  border-radius: $size-radius-full;
+  font-size: var(--flowchat-font-size-xs);
+  font-weight: 600;
+  line-height: 1.25;
+  border: 1px solid transparent;
+
+  &--active,
+  &--paused,
+  &--blocked {
+    color: var(--color-warning-500);
+    background: color-mix(in srgb, var(--color-warning-500) 12%, transparent);
+    border-color: color-mix(in srgb, var(--color-warning-500) 32%, transparent);
+  }
+
+  &--usageLimited,
+  &--budgetLimited {
+    color: var(--color-text-secondary);
+    background: var(--element-bg-subtle);
+    border-color: var(--border-subtle);
+  }
+
+  &--complete {
+    color: var(--color-success-500);
+    background: color-mix(in srgb, var(--color-success-500) 12%, transparent);
+    border-color: color-mix(in srgb, var(--color-success-500) 32%, transparent);
+  }
+}
+
+.bitfun-thread-goal-menu__usage {
+  margin: 0;
+  font-size: var(--flowchat-font-size-xxs);
+  color: var(--color-text-secondary);
+  line-height: 1.4;
+  text-align: right;
+}
+
+.bitfun-thread-goal-menu__section {
+  display: flex;
+  flex-direction: column;
+  gap: $size-gap-3;
+  padding: $size-gap-4 $size-gap-4 $size-gap-4;
+  border-radius: $size-radius-lg;
+  background: var(--element-bg-subtle);
+  border: 1px solid var(--border-subtle);
+}
+
+.bitfun-thread-goal-menu__section-title {
+  margin: 0;
+  padding: 0;
+  font-size: var(--flowchat-font-size-xxs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted, var(--color-text-secondary));
+  line-height: 1.3;
+}
+
+.bitfun-thread-goal-menu__objective {
+  margin: 0;
+  padding: 0;
+  font-size: var(--flowchat-font-size-sm);
+  line-height: 1.6;
+  color: var(--color-text-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.bitfun-thread-goal-menu__workflow {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: $size-gap-3;
+}
+
+.bitfun-thread-goal-menu__workflow-step {
+  display: flex;
+  align-items: flex-start;
+  gap: $size-gap-3;
+  font-size: var(--flowchat-font-size-xs);
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
+.bitfun-thread-goal-menu__workflow-marker {
+  flex-shrink: 0;
+  width: 10px;
+  height: 10px;
+  margin-top: 5px;
+  border-radius: 50%;
+    background: var(--color-text-muted);
+  box-sizing: border-box;
+
+  &--done {
+    background: var(--color-success-500);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-success-500) 20%, transparent);
+  }
+
+  &--current {
+    background: var(--color-primary-500);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary-500) 22%, transparent);
+  }
+
+  &--pending {
+    background: transparent;
+    border: 2px solid color-mix(in srgb, var(--color-text-muted) 75%, transparent);
+  }
+
+  &--skipped {
+    opacity: 0.45;
+  }
+}
+
+.bitfun-thread-goal-menu__workflow-step--done .bitfun-thread-goal-menu__workflow-text,
+.bitfun-thread-goal-menu__workflow-step--current .bitfun-thread-goal-menu__workflow-text {
+  color: var(--color-text-primary);
+}
+
+.bitfun-thread-goal-menu__workflow-step--current .bitfun-thread-goal-menu__workflow-text {
+  font-weight: 500;
+}
+
+.bitfun-thread-goal-menu__workflow-step--skipped {
+  opacity: 0.55;
+}
+
+.bitfun-thread-goal-menu__workflow-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.bitfun-thread-goal-menu__workflow-note {
+  margin: $size-gap-2 0 0;
+  padding: $size-gap-3 0 0;
+  border-top: 1px solid var(--border-subtle);
+  font-size: var(--flowchat-font-size-xxs);
+  line-height: 1.55;
+  color: var(--color-text-muted, var(--color-text-secondary));
+}
+
+.bitfun-thread-goal-menu__footer {
+  display: flex;
+  flex-direction: column;
+  gap: $size-gap-3;
+  margin-top: $size-gap-1;
+  padding-top: $size-gap-4;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.bitfun-thread-goal-menu__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $size-gap-2;
+  justify-content: stretch;
+
+  .btn {
+    flex: 1 1 0;
+    min-width: 72px;
+    justify-content: center;
+  }
+}
+
+.bitfun-thread-goal-menu__hint {
+  margin: 0;
+  padding: 0;
+  font-size: var(--flowchat-font-size-xxs);
+  color: var(--color-text-muted, var(--color-text-secondary));
+  line-height: 1.5;
+  text-align: center;
+}
+
+.bitfun-thread-goal-menu--empty {
+  align-items: stretch;
+  gap: $size-gap-4;
+  text-align: left;
+}
+
+.bitfun-thread-goal-menu--empty .bitfun-thread-goal-menu__hint {
+  padding: $size-gap-2 0;
+  text-align: left;
+}
+
+.bitfun-thread-goal-menu--empty .bitfun-thread-goal-menu__actions {
+  .btn {
+    width: 100%;
+    flex: none;
+  }
+}
+
+.bitfun-thread-goal-edit__hint,
+.bitfun-thread-goal-resume__hint {
+  margin: 0;
+  font-size: var(--flowchat-font-size-xs);
+  color: var(--color-text-secondary);
+  line-height: 1.55;
+}
+
+.bitfun-thread-goal-resume__subtitle {
+  margin: 0;
+  padding: $size-gap-4;
+  border-radius: $size-radius-lg;
+  font-size: var(--flowchat-font-size-sm);
+  color: var(--color-text-primary);
+  line-height: 1.55;
+  background: var(--element-bg-subtle);
+  border: 1px solid var(--border-subtle);
+  word-break: break-word;
+}
+
+.bitfun-thread-goal-edit__actions,
+.bitfun-thread-goal-resume__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $size-gap-2;
+  justify-content: flex-end;
+  padding-top: $size-gap-2;
+}

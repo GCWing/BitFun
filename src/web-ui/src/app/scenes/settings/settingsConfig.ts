@@ -148,6 +148,8 @@ export const SETTINGS_CATEGORIES: ConfigCategoryDef[] = [
         keywords: [
           'session',
           'tool',
+          'write',
+          'file write',
           'timeout',
           'confirmation',
           'computer use',

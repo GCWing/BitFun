@@ -4,6 +4,7 @@ import './Tooltip.scss';
 
 export type TooltipPlacement = 'top' | 'bottom' | 'left' | 'right';
 const DEFAULT_TOOLTIP_DELAY = 450;
+const INTERACTIVE_TOOLTIP_HIDE_DELAY = 400;
 
 export interface TooltipProps {
   content: React.ReactNode;
@@ -255,7 +256,7 @@ export const Tooltip: React.FC<TooltipProps> = ({
     hideTimeoutRef.current = setTimeout(() => {
       hideTimeoutRef.current = null;
       hideTooltip();
-    }, 150);
+    }, INTERACTIVE_TOOLTIP_HIDE_DELAY);
   }, [hideTooltip, interactive]);
 
   const handleMouseMove = useCallback(

@@ -33,6 +33,7 @@ describe('WorkspaceGitInitializer startup refresh', () => {
       layers: ['basic'],
       reason: 'mount',
       force: true,
+      source: 'workspace_git_initializer',
     });
   });
 });

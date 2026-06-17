@@ -9,11 +9,14 @@ import type { FlowToolItem, ToolCardConfig } from '../types/flow-chat';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string, options?: { defaultValue?: string }) => options?.defaultValue ?? key,
-  }),
-}));
+vi.mock('react-i18next', async () => {
+  const { createTestI18nT } = await import('@/test/i18nTestUtils');
+  return {
+    useTranslation: () => ({
+      t: createTestI18nT('flow-chat'),
+    }),
+  };
+});
 
 vi.mock('../../component-library', () => ({
   CubeLoading: () => <span data-testid="cube-loading" />,

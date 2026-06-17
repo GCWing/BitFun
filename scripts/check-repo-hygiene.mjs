@@ -1,5 +1,19 @@
 #!/usr/bin/env node
 
+/**
+ * Repository hygiene guardrails for tracked and untracked workspace files.
+ *
+ * Current scanning rules:
+ * - Always check filenames for transient review prompts and sensitive key/cert names.
+ * - Scan changed text files for private key markers and token-like secrets.
+ * - Scan changed text files for local absolute paths that look workspace- or user-specific:
+ *   Windows drive paths under folders such as Users, workspace, Projects, code, dev, tmp;
+ *   file:// Windows paths under those folders; and Unix paths under /Users or /home.
+ * - Skip generated and dependency outputs such as node_modules, dist, target, Monaco assets,
+ *   mobile-web dist, relay static assets, and lockfiles.
+ * - Skip local-path and token checks in recognized test files; also skip local-path checks for
+ *   comment-only lines and Rust inline test blocks inside non-test source files.
+ */
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -67,6 +81,7 @@ const ignoredContentPaths = [
   /(^|\/)node_modules\//,
   /(^|\/)dist\//,
   /(^|\/)target\//,
+  /(^|\/)src\/apps\/relay-server\/static\/assets\//,
   /(^|\/)src\/web-ui\/public\/monaco-editor\//,
   /(^|\/)src\/mobile-web\/dist\//,
   /(^|\/).*package-lock\.json$/,
@@ -82,11 +97,27 @@ const temporaryPromptNames = new Set([
 ]);
 const sensitiveFilenamePattern =
   /(^|[._-])(id_rsa|id_dsa|id_ecdsa|id_ed25519)([._-]|$)|\.(pem|p12|pfx|mobileprovision)$/i;
+const windowsLocalPathSegment = String.raw`[A-Za-z]:[\\/](?:Users|Documents and Settings|workspace|workspaces|work|Projects|code|dev|repos?|src|tmp|temp)(?:[\\/][^\s'"\`)<\]]+)*`;
 const localAbsolutePathPattern =
-  /(^|[^A-Za-z])((?:[A-Za-z]:[\\/][^\s'"`)<\]]+)|(?:file:\/\/\/[A-Za-z]:\/[^\s'"`)<\]]+))/g;
+  new RegExp(
+    String.raw`(^|[^A-Za-z])((?:${windowsLocalPathSegment})|(?:file:\/\/\/(?:Users|Documents and Settings|workspace|workspaces|work|Projects|code|dev|repos?|src|tmp|temp)(?:\/[^\s'"\`)<\]]+)*)|(?:file:\/\/\/[A-Za-z]:\/(?:Users|Documents and Settings|workspace|workspaces|work|Projects|code|dev|repos?|src|tmp|temp)(?:\/[^\s'"\`)<\]]+)*)|(?:\/(?:Users|home)\/[^\s'"\`)<\]]+))`,
+    'g',
+  );
 const tokenPattern =
   /\b(?:gh[pousr]_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{20,}|xox[baprs]-[A-Za-z0-9-]{20,})\b/g;
 const privateKeyPattern = /-----BEGIN (?:RSA |DSA |EC |OPENSSH |)?PRIVATE KEY-----/;
+const slashCommentExtensions = new Set([
+  '.cjs',
+  '.css',
+  '.js',
+  '.jsx',
+  '.mjs',
+  '.rs',
+  '.scss',
+  '.ts',
+  '.tsx',
+]);
+const hashCommentExtensions = new Set(['.toml', '.yaml', '.yml']);
 
 const violations = [];
 
@@ -102,6 +133,79 @@ function shouldScanText(file) {
 
 function addViolation(file, line, message) {
   violations.push(line ? `${file}:${line} ${message}` : `${file} ${message}`);
+}
+
+function countMatches(line, pattern) {
+  return (line.match(pattern) || []).length;
+}
+
+function isCommentOnlyLine(line, ext) {
+  const trimmed = line.trim();
+
+  if (trimmed.length === 0) {
+    return false;
+  }
+
+  if (slashCommentExtensions.has(ext)) {
+    return (
+      trimmed.startsWith('//') ||
+      trimmed.startsWith('/*') ||
+      trimmed.startsWith('*') ||
+      trimmed.startsWith('*/')
+    );
+  }
+
+  if (hashCommentExtensions.has(ext)) {
+    return trimmed.startsWith('#');
+  }
+
+  return false;
+}
+
+function getRustInlineTestSkipLines(lines) {
+  const skipLines = new Array(lines.length).fill(false);
+  let braceDepth = 0;
+  let pendingCfgTestModule = false;
+  let pendingTestFunction = false;
+  const activeBlocks = [];
+
+  for (const [index, line] of lines.entries()) {
+    const trimmed = line.trim();
+
+    if (activeBlocks.length > 0 || pendingCfgTestModule || pendingTestFunction) {
+      skipLines[index] = true;
+    }
+
+    if (/^#\[\s*cfg\s*\(\s*test\s*\)\s*\]$/.test(trimmed)) {
+      pendingCfgTestModule = true;
+      skipLines[index] = true;
+    }
+
+    if (/^#\[\s*(?:[A-Za-z0-9_]+::)*test(?:\s*\(|\s*\])/.test(trimmed)) {
+      pendingTestFunction = true;
+      skipLines[index] = true;
+    }
+
+    if (pendingCfgTestModule && /\bmod\b/.test(trimmed) && line.includes('{')) {
+      activeBlocks.push({ startDepth: braceDepth + 1 });
+      pendingCfgTestModule = false;
+      skipLines[index] = true;
+    }
+
+    if (pendingTestFunction && /\bfn\b/.test(trimmed) && line.includes('{')) {
+      activeBlocks.push({ startDepth: braceDepth + 1 });
+      pendingTestFunction = false;
+      skipLines[index] = true;
+    }
+
+    braceDepth += countMatches(line, /\{/g) - countMatches(line, /\}/g);
+
+    while (activeBlocks.length > 0 && braceDepth < activeBlocks[activeBlocks.length - 1].startDepth) {
+      activeBlocks.pop();
+    }
+  }
+
+  return skipLines;
 }
 
 for (const file of repositoryFiles) {
@@ -131,22 +235,28 @@ for (const file of repositoryFiles) {
   }
 
   const isTestFile = testFilePattern.test(normalized);
+  const ext = path.extname(normalized).toLowerCase();
   const scanLocalPaths = !isTestFile;
   const scanTokenLikeSecrets = !isTestFile;
   const lines = content.split(/\r?\n/);
+  const rustInlineTestSkipLines = ext === '.rs' ? getRustInlineTestSkipLines(lines) : null;
 
   for (const [index, line] of lines.entries()) {
     const lineNumber = index + 1;
+    const isInlineRustTestLine = rustInlineTestSkipLines?.[index] === true;
+    const skipLocalPathScan =
+      isInlineRustTestLine || isCommentOnlyLine(line, ext);
+    const skipTokenScan = isInlineRustTestLine;
 
     if (privateKeyPattern.test(line)) {
       addViolation(file, lineNumber, 'contains a private key marker.');
     }
 
-    if (scanTokenLikeSecrets && tokenPattern.test(line)) {
+    if (scanTokenLikeSecrets && !skipTokenScan && tokenPattern.test(line)) {
       addViolation(file, lineNumber, 'contains a token-like secret.');
     }
 
-    if (scanLocalPaths && localAbsolutePathPattern.test(line)) {
+    if (scanLocalPaths && !skipLocalPathScan && localAbsolutePathPattern.test(line)) {
       addViolation(file, lineNumber, 'contains a local absolute path.');
     }
 

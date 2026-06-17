@@ -1,5 +1,6 @@
 export interface SubagentEditorToolInfo {
   name: string;
+  description: string;
   isReadonly: boolean;
 }
 

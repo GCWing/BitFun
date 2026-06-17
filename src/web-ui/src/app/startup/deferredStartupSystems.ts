@@ -26,6 +26,7 @@ export interface DeferredStartupSystemsDependencies {
   initializeMcpServers?: () => Promise<void>;
   initializeAcpClients?: () => Promise<void>;
   probeAcpClientRequirements?: () => Promise<void>;
+  preloadDeferredRenderers?: () => Promise<void>;
 }
 
 async function initializeIdeControlDefault(): Promise<void> {
@@ -48,6 +49,21 @@ async function probeAcpClientRequirementsDefault(): Promise<void> {
   await ACPClientAPI.probeClientRequirements();
 }
 
+async function preloadDeferredRenderersDefault(): Promise<void> {
+  const [
+    { preloadMarkdownMathRenderer },
+    { preloadTerminalOutputRenderer },
+  ] = await Promise.all([
+    import('@/component-library/components/Markdown/Markdown'),
+    import('@/tools/terminal/components/LazyTerminalOutputRenderer'),
+  ]);
+
+  await Promise.all([
+    preloadMarkdownMathRenderer(),
+    preloadTerminalOutputRenderer(),
+  ]);
+}
+
 export function scheduleDeferredStartupSystems(
   dependencies: DeferredStartupSystemsDependencies = {}
 ): BackgroundTaskHandle<void> {
@@ -59,6 +75,7 @@ export function scheduleDeferredStartupSystems(
   const initializeAcpClients = dependencies.initializeAcpClients ?? initializeAcpClientsDefault;
   const probeAcpClientRequirements =
     dependencies.probeAcpClientRequirements ?? probeAcpClientRequirementsDefault;
+  const preloadDeferredRenderers = dependencies.preloadDeferredRenderers ?? preloadDeferredRenderersDefault;
 
   return scheduler.schedule(async signal => {
     if (signal.aborted) {
@@ -83,6 +100,7 @@ export function scheduleDeferredStartupSystems(
     await runStep('mcp_servers', initializeMcpServers);
     await runStep('acp_clients', initializeAcpClients);
     await runStep('acp_client_requirements', probeAcpClientRequirements);
+    await runStep('renderer_preloads', preloadDeferredRenderers);
 
     if (!signal.aborted) {
       trace.markPhase('deferred_startup_systems_end');

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { openBtwSessionInAuxPane } from './openBtwSession';
+import { ensureBtwSessionAvailable, openBtwSessionInAuxPane, openMainSession } from './openBtwSession';
 
 const mocks = vi.hoisted(() => ({
   createTab: vi.fn(),
@@ -10,9 +10,15 @@ const mocks = vi.hoisted(() => ({
   addExternalSession: vi.fn(),
   loadSessionHistory: vi.fn(),
   updateSessionRelationship: vi.fn(),
+  switchChatSession: vi.fn(),
+  syncSessionToModernStore: vi.fn(),
+  updateLayout: vi.fn(),
+  openScene: vi.fn(),
 }));
 
 let animationFrameCallbacks: FrameRequestCallback[] = [];
+let sessions = new Map();
+let activeSessionId: string | null = null;
 
 const stubWindowForPanelExpansion = (rightPanelCollapsed: boolean) => {
   const dispatchEvent = vi.fn();
@@ -43,14 +49,14 @@ vi.mock('@/infrastructure/i18n', () => ({
 
 vi.mock('@/app/services/AppManager', () => ({
   appManager: {
-    updateLayout: vi.fn(),
+    updateLayout: (...args: unknown[]) => mocks.updateLayout(...args),
   },
 }));
 
 vi.mock('@/app/stores/sceneStore', () => ({
   useSceneStore: {
     getState: () => ({
-      openScene: vi.fn(),
+      openScene: (...args: unknown[]) => mocks.openScene(...args),
     }),
   },
 }));
@@ -76,7 +82,8 @@ vi.mock('@/app/components/panels/content-canvas/stores', () => ({
 vi.mock('../store/FlowChatStore', () => ({
   flowChatStore: {
     getState: () => ({
-      sessions: new Map(),
+      sessions,
+      activeSessionId,
     }),
     addExternalSession: (...args: unknown[]) =>
       mocks.addExternalSession(...args),
@@ -91,12 +98,12 @@ vi.mock('../store/FlowChatStore', () => ({
 
 vi.mock('./FlowChatManager', () => ({
   flowChatManager: {
-    switchChatSession: vi.fn(),
+    switchChatSession: (...args: unknown[]) => mocks.switchChatSession(...args),
   },
 }));
 
 vi.mock('./storeSync', () => ({
-  syncSessionToModernStore: vi.fn(),
+  syncSessionToModernStore: (...args: unknown[]) => mocks.syncSessionToModernStore(...args),
 }));
 
 describe('openBtwSessionInAuxPane', () => {
@@ -112,6 +119,12 @@ describe('openBtwSessionInAuxPane', () => {
     mocks.addExternalSession.mockClear();
     mocks.loadSessionHistory.mockClear();
     mocks.updateSessionRelationship.mockClear();
+    mocks.switchChatSession.mockReset();
+    mocks.syncSessionToModernStore.mockClear();
+    mocks.updateLayout.mockClear();
+    mocks.openScene.mockClear();
+    sessions = new Map();
+    activeSessionId = null;
     vi.stubGlobal('requestAnimationFrame', vi.fn((callback: FrameRequestCallback) => {
       animationFrameCallbacks.push(callback);
       return animationFrameCallbacks.length;
@@ -192,5 +205,121 @@ describe('openBtwSessionInAuxPane', () => {
     expect(dispatchEvent).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'expand-right-panel' }),
     );
+  });
+
+  it('creates an on-demand subagent shell and hydrates it when the child session is missing', () => {
+    sessions.set('parent-session', {
+      sessionId: 'parent-session',
+      workspacePath: 'D:\\workspace\\repo',
+      mode: 'agentic',
+      remoteConnectionId: 'remote-1',
+      remoteSshHost: 'host-1',
+    });
+
+    ensureBtwSessionAvailable({
+      childSessionId: 'subagent-child',
+      parentSessionId: 'parent-session',
+      sessionKind: 'subagent',
+      parentToolCallId: 'call-1',
+      includeInternal: true,
+    });
+
+    expect(mocks.addExternalSession).toHaveBeenCalledWith(
+      'subagent-child',
+      expect.any(String),
+      'agentic',
+      'D:\\workspace\\repo',
+      expect.objectContaining({
+        parentSessionId: 'parent-session',
+        sessionKind: 'subagent',
+        parentToolCallId: 'call-1',
+      }),
+      'remote-1',
+      'host-1',
+    );
+    expect(mocks.loadSessionHistory).toHaveBeenCalledWith(
+      'subagent-child',
+      'D:\\workspace\\repo',
+      undefined,
+      'remote-1',
+      'host-1',
+      { includeInternal: true },
+    );
+  });
+
+  it('hydrates an existing metadata-only hidden child session without creating a duplicate shell', () => {
+    sessions.set('parent-session', {
+      sessionId: 'parent-session',
+      workspacePath: 'D:\\workspace\\repo',
+      mode: 'agentic',
+      remoteConnectionId: 'remote-1',
+      remoteSshHost: 'host-1',
+    });
+    sessions.set('subagent-child', {
+      sessionId: 'subagent-child',
+      sessionKind: 'subagent',
+      isHistorical: true,
+      historyState: 'metadata-only',
+      workspacePath: 'D:\\workspace\\repo',
+      remoteConnectionId: 'remote-1',
+      remoteSshHost: 'host-1',
+    });
+
+    ensureBtwSessionAvailable({
+      childSessionId: 'subagent-child',
+      parentSessionId: 'parent-session',
+      sessionKind: 'subagent',
+      parentToolCallId: 'call-1',
+      includeInternal: true,
+    });
+
+    expect(mocks.addExternalSession).not.toHaveBeenCalled();
+    expect(mocks.updateSessionRelationship).toHaveBeenCalledWith(
+      'subagent-child',
+      expect.objectContaining({
+        parentSessionId: 'parent-session',
+        sessionKind: 'subagent',
+        parentToolCallId: 'call-1',
+      }),
+    );
+    expect(mocks.loadSessionHistory).toHaveBeenCalledWith(
+      'subagent-child',
+      'D:\\workspace\\repo',
+      undefined,
+      'remote-1',
+      'host-1',
+      { includeInternal: true },
+    );
+  });
+});
+
+describe('openMainSession', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    mocks.switchChatSession.mockReset();
+    mocks.syncSessionToModernStore.mockClear();
+    mocks.updateLayout.mockClear();
+    mocks.openScene.mockClear();
+    sessions = new Map();
+    activeSessionId = null;
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('does not sync a superseded switch result into the modern store', async () => {
+    sessions.set('session-b', { sessionId: 'session-b' });
+    sessions.set('session-c', { sessionId: 'session-c' });
+    mocks.switchChatSession.mockImplementationOnce(async () => {
+      activeSessionId = 'session-c';
+    });
+
+    await openMainSession('session-b');
+
+    expect(mocks.switchChatSession).toHaveBeenCalledWith('session-b');
+    expect(mocks.syncSessionToModernStore).not.toHaveBeenCalledWith('session-b');
+    expect(mocks.openScene).not.toHaveBeenCalledWith('session');
   });
 });

@@ -112,6 +112,23 @@ export interface WorkspaceInfo {
   sshHost?: string;
 }
 
+function summarizeWorkspacesForLog(workspaces: WorkspaceInfo[]) {
+  return workspaces.reduce(
+    (summary, workspace) => {
+      summary.total += 1;
+      if (workspace.workspaceKind === WorkspaceKind.Assistant) {
+        summary.assistant += 1;
+      } else if (workspace.workspaceKind === WorkspaceKind.Remote) {
+        summary.remote += 1;
+      } else {
+        summary.normal += 1;
+      }
+      return summary;
+    },
+    { total: 0, normal: 0, assistant: 0, remote: 0 }
+  );
+}
+
 export function isRemoteWorkspace(workspace: WorkspaceInfo | null | undefined): boolean {
   return workspace?.workspaceKind === WorkspaceKind.Remote;
 }
@@ -436,7 +453,7 @@ export function createGlobalStateAPI(): GlobalStateAPI {
 
     async getRecentWorkspaces(): Promise<WorkspaceInfo[]> {
       const workspaces = (await globalAPI.getRecentWorkspaces()).map(mapWorkspaceInfo);
-      logger.debug('getRecentWorkspaces returned', workspaces);
+      logger.debug('getRecentWorkspaces returned', summarizeWorkspacesForLog(workspaces));
       return workspaces;
     },
 

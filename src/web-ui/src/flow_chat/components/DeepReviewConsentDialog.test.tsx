@@ -7,14 +7,14 @@ import type { ReviewTeamRunManifest } from '@/shared/services/reviewTeamService'
 
 const mockSaveReviewTeamProjectStrategyOverride = vi.hoisted(() => vi.fn());
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (_key: string, options?: Record<string, unknown>) => {
-      const value = typeof options?.defaultValue === 'string' ? options.defaultValue : _key;
-      return value.replace(/\{\{(\w+)\}\}/g, (_match, key) => String(options?.[key] ?? ''));
-    },
-  }),
-}));
+vi.mock('react-i18next', async () => {
+  const { createTestI18nT } = await import('@/test/i18nTestUtils');
+  return {
+    useTranslation: () => ({
+      t: createTestI18nT('flow-chat'),
+    }),
+  };
+});
 
 vi.mock('@/component-library', () => ({
   Button: ({
@@ -112,7 +112,7 @@ function buildPreview(): ReviewTeamRunManifest {
       source: 'session_files',
       resolution: 'resolved',
       tags: ['backend_core'],
-      files: ['src/crates/core/src/service/config/types.rs'],
+      files: ['src/crates/assembly/core/src/service/config/types.rs'],
       warnings: [],
     },
     strategyLevel: 'normal',

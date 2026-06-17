@@ -13,7 +13,7 @@
  *   instead of relying on `VirtualMessageList` fallback compensation.
  */
 
-import React, { useEffect, useCallback, useMemo, useState, useRef, useLayoutEffect } from 'react';
+import React, { useEffect, useCallback, useMemo, useState, useRef, useLayoutEffect, useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
 import path from 'path-browserify';
 import {
@@ -54,7 +54,13 @@ import {
   displayFileToolGuidanceMessage,
   isFileToolGuidanceMessage,
 } from './fileToolGuidance';
+import { extractFilePathFromJsonBuffer } from '@/shared/utils/partialJsonParser';
 import { i18nService } from '@/infrastructure/i18n';
+import { useFlowChatContext } from '../components/modern/FlowChatContext';
+import {
+  getHistorySessionOpenTransitionSnapshot,
+  subscribeHistorySessionOpenTransition,
+} from '../services/sessionOpenIntent';
 import './FileOperationToolCard.scss';
 
 const log = createLogger('FileOperationToolCard');
@@ -111,6 +117,7 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
   onOpenInEditor,
   onConfirm,
   onReject,
+  displayContext,
 }) => {
   const { t } = useTranslation('flow-chat');
   const {
@@ -147,10 +154,28 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
   } = useSnapshotState(sessionId);
   const eventBus = SnapshotEventBus.getInstance();
   const { workspace: currentWorkspace } = useOptionalCurrentWorkspace();
+  const { activeSessionOverride } = useFlowChatContext();
+  const historySessionOpenTransition = useSyncExternalStore(
+    subscribeHistorySessionOpenTransition,
+    getHistorySessionOpenTransitionSnapshot,
+    getHistorySessionOpenTransitionSnapshot,
+  );
+  const isHistoricalRestorePending =
+    activeSessionOverride?.sessionId === sessionId &&
+    activeSessionOverride?.isHistorical === true &&
+    activeSessionOverride?.contextRestoreState === 'pending';
+  const allowPassiveGitRefresh =
+    historySessionOpenTransition === null &&
+    displayContext !== 'subagent-projection' &&
+    !isHistoricalRestorePending;
   const { isRepository: workspaceIsGitRepo } = useGitState({
     repositoryPath: currentWorkspace?.rootPath ?? '',
+    isActive: allowPassiveGitRefresh,
     layers: ['basic'],
+    refreshOnMount: allowPassiveGitRefresh,
+    refreshOnActive: false,
     participateInWindowFocusRefresh: false,
+    debugSource: 'file_operation_tool_card',
   });
 
   const getFilePath = useCallback((): string => {
@@ -177,8 +202,8 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
       'targetFile',
       'path',
       'filename',
-    ]);
-  }, [toolCall, partialParams, toolResult]);
+    ]) || extractFilePathFromJsonBuffer(toolItem._paramsBuffer || '');
+  }, [toolCall, partialParams, toolResult, toolItem._paramsBuffer]);
 
   const currentFilePath = getFilePath();
   const openFilePath = useMemo(
@@ -239,9 +264,18 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
     status !== 'error'
   );
   
-  const fileName = currentFilePath ? 
-    (currentFilePath.split(/[/\\]/).pop() || t('context.file')) : 
-    (isFailed ? t('toolCards.file.unknownFile') : t('toolCards.file.parsingPath'));
+  const isWriteStreamingWithoutPath =
+    toolItem.toolName === 'Write'
+    && !currentFilePath
+    && Boolean(isParamsStreaming)
+    && (writeContentCharCount > 0 || status === 'receiving');
+
+  const fileName = currentFilePath ?
+    (currentFilePath.split(/[/\\]/).pop() || t('context.file')) :
+    (isFailed ? t('toolCards.file.unknownFile') :
+      (isWriteStreamingWithoutPath
+        ? t('toolCards.file.receivingContent')
+        : t('toolCards.file.parsingPath')));
   
   const currentFile = files.find(f => f.filePath === currentFilePath);
 
@@ -408,6 +442,10 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
   }, [sessionId, toolCall?.id, status, isFailed]);
 
   const isLoading = status === 'preparing' || status === 'streaming' || status === 'running';
+  const shouldUseExpandedDiffPreviewHeight =
+    status === 'completed' &&
+    isContentExpanded &&
+    previousStatusRef.current === status;
   const previewVariant = useMemo(() => {
     if (toolItem.toolName === 'Edit') {
       if (status !== 'completed' && newStringContent) {
@@ -801,7 +839,7 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
   const renderExpandedContent = () => {
     if (isFailed) return null;
 
-    const previewMaxHeight = status === 'completed'
+    const previewMaxHeight = shouldUseExpandedDiffPreviewHeight
       ? FILE_OPERATION_DIFF_MAX_HEIGHT
       : FILE_OPERATION_STREAMING_MAX_HEIGHT;
 
@@ -816,7 +854,7 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
                 isStreaming={isParamsStreaming}
                 showLineNumbers={isContentExpanded}
                 maxHeight={previewMaxHeight}
-                autoScrollToBottom={isParamsStreaming}
+                autoScrollToBottom={false}
                 onLineClick={handleCodeLineClick}
               />
             </div>
@@ -855,7 +893,7 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
                 isStreaming={isParamsStreaming}
                 showLineNumbers={isContentExpanded}
                 maxHeight={previewMaxHeight}
-                autoScrollToBottom={isParamsStreaming}
+                autoScrollToBottom={false}
                 onLineClick={handleCodeLineClick}
               />
             </div>

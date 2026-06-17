@@ -9,12 +9,16 @@ import type { FlowToolItem, ToolCardConfig } from '../types/flow-chat';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
+const messages: Record<string, string> = {
+  'toolCards.readFile.permissionRequest': 'Requesting read permission:',
+};
+
 vi.mock('react-i18next', async () => {
   const actual = await vi.importActual<typeof import('react-i18next')>('react-i18next');
   return {
     ...actual,
     useTranslation: () => ({
-      t: (key: string, options?: { defaultValue?: string }) => options?.defaultValue ?? key,
+      t: (key: string, options?: { defaultValue?: string }) => messages[key] ?? options?.defaultValue ?? key,
     }),
   };
 });

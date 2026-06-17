@@ -1,0 +1,32 @@
+[package]
+name = "bitfun-transport"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+description = "BitFun Transport Layer - Cross-platform communication adapters"
+
+[lib]
+name = "bitfun_transport"
+
+[dependencies]
+# Events layer
+bitfun-events = { path = "../../contracts/events" }
+
+# Inherited from workspace
+tokio = { workspace = true }
+async-trait = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+anyhow = { workspace = true }
+log = { workspace = true }
+dashmap = { workspace = true }
+chrono = { workspace = true }
+
+# Tauri adapter dependency (optional, enable only when needed)
+tauri = { workspace = true, optional = true }
+
+[features]
+default = []
+tauri-adapter = ["tauri"]
+cli-adapter = []
+websocket-adapter = []

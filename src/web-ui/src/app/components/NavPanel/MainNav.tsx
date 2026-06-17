@@ -489,7 +489,7 @@ const MainNav: React.FC<MainNavProps> = ({
             <span className="bitfun-nav-panel__top-action-icon-circle" aria-hidden="true">
               <Plus size={12} />
             </span>
-            <span>{t('nav.sessions.newCodeSessionShort')}</span>
+            <span>{t('shared:agents.code')}</span>
           </button>
         </Tooltip>
 
@@ -503,7 +503,7 @@ const MainNav: React.FC<MainNavProps> = ({
             <span className="bitfun-nav-panel__top-action-icon-circle" aria-hidden="true">
               <Plus size={12} />
             </span>
-            <span>{t('nav.sessions.newCoworkSessionShort')}</span>
+            <span>{t('shared:agents.cowork')}</span>
           </button>
         </Tooltip>
 

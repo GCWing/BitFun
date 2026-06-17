@@ -127,31 +127,17 @@ export const CapacityQueueNotice: React.FC<CapacityQueueNoticeProps> = ({
     && capacityQueueState.maxQueueWaitSeconds !== undefined
     && capacityQueueState.queueElapsedMs > capacityQueueState.maxQueueWaitSeconds * 1000;
   const capacityQueueTitle = capacityQueueState.status === 'paused_by_user'
-    ? t('deepReviewActionBar.capacityQueue.pausedTitle', {
-      defaultValue: 'Queue paused',
-    })
+    ? t('deepReviewActionBar.capacityQueue.pausedTitle')
     : capacityQueueWaitMode === 'active_reviewer'
-      ? t('deepReviewActionBar.capacityQueue.activeReviewerTitle', {
-        defaultValue: 'Waiting for running reviewers',
-      })
+      ? t('deepReviewActionBar.capacityQueue.activeReviewerTitle')
       : capacityQueueWaitMode === 'provider_capacity'
-        ? t('deepReviewActionBar.capacityQueue.providerTitle', {
-          defaultValue: 'Waiting for model capacity',
-        })
-        : t('deepReviewActionBar.capacityQueue.title', {
-          defaultValue: 'Reviewers waiting for capacity',
-        });
+        ? t('deepReviewActionBar.capacityQueue.providerTitle')
+        : t('deepReviewActionBar.capacityQueue.title');
   const capacityQueueDetail = capacityQueueWaitMode === 'active_reviewer'
-    ? t('deepReviewActionBar.capacityQueue.activeReviewerDetail', {
-      defaultValue: 'Queued reviewers start when a running reviewer frees capacity. Queue wait does not count against reviewer runtime.',
-    })
+    ? t('deepReviewActionBar.capacityQueue.activeReviewerDetail')
     : capacityQueueWaitMode === 'provider_capacity'
-      ? t('deepReviewActionBar.capacityQueue.providerDetail', {
-        defaultValue: 'BitFun is waiting for temporary model capacity. This wait does not count against reviewer runtime.',
-      })
-      : t('deepReviewActionBar.capacityQueue.detail', {
-        defaultValue: 'Queue wait does not count against reviewer runtime.',
-      });
+      ? t('deepReviewActionBar.capacityQueue.providerDetail')
+      : t('deepReviewActionBar.capacityQueue.detail');
   const waitingReviewers = capacityQueueState.waitingReviewers ?? [];
   const showCapacityQueueMeta = Boolean(
     capacityQueueReasonLabel
@@ -176,7 +162,6 @@ export const CapacityQueueNotice: React.FC<CapacityQueueNoticeProps> = ({
                 <span className="deep-review-action-bar__capacity-queue-chip">
                   {t('deepReviewActionBar.capacityQueue.reason', {
                     reason: capacityQueueReasonLabel,
-                    defaultValue: `Reason: ${capacityQueueReasonLabel}`,
                   })}
                 </span>
               )}
@@ -186,11 +171,9 @@ export const CapacityQueueNotice: React.FC<CapacityQueueNoticeProps> = ({
                     ? t('deepReviewActionBar.capacityQueue.elapsedWithMax', {
                       elapsed: capacityQueueElapsedLabel,
                       max: capacityQueueMaxWaitLabel,
-                      defaultValue: `Waited ${capacityQueueElapsedLabel} of ${capacityQueueMaxWaitLabel}`,
                     })
                     : t('deepReviewActionBar.capacityQueue.elapsed', {
                       elapsed: capacityQueueElapsedLabel,
-                      defaultValue: `Waited ${capacityQueueElapsedLabel}`,
                     })}
                 </span>
               )}
@@ -198,7 +181,6 @@ export const CapacityQueueNotice: React.FC<CapacityQueueNoticeProps> = ({
                 <span className="deep-review-action-bar__capacity-queue-chip">
                   {t('deepReviewActionBar.capacityQueue.activeReviewerCount', {
                     count: activeReviewerCount,
-                    defaultValue: `Running reviewers: ${activeReviewerCount}`,
                   })}
                 </span>
               )}
@@ -211,24 +193,18 @@ export const CapacityQueueNotice: React.FC<CapacityQueueNoticeProps> = ({
           )}
           {isLongLaunchBatchWait && (
             <span className="deep-review-action-bar__capacity-queue-detail">
-              {t('deepReviewActionBar.capacityQueue.longLaunchBatchWaitDetail', {
-                defaultValue: 'This reviewer has waited longer than the configured queue window because an earlier reviewer batch is still running. You can keep waiting, pause the queue, cancel queued reviewers, or open Review settings.',
-              })}
+              {t('deepReviewActionBar.capacityQueue.longLaunchBatchWaitDetail')}
             </span>
           )}
           {capacityQueueState.sessionConcurrencyHigh && (
             <span className="deep-review-action-bar__capacity-queue-detail">
-              {t('deepReviewActionBar.capacityQueue.sessionBusy', {
-                defaultValue: 'Your active session is busy. Pause Deep Review or continue later.',
-              })}
+              {t('deepReviewActionBar.capacityQueue.sessionBusy')}
             </span>
           )}
           {waitingReviewers.length > 0 && (
             <div className="deep-review-action-bar__capacity-queue-reviewers">
               <span className="deep-review-action-bar__capacity-queue-reviewers-title">
-                {t('deepReviewActionBar.capacityQueue.waitingReviewersTitle', {
-                  defaultValue: 'Waiting reviewers',
-                })}
+                {t('deepReviewActionBar.capacityQueue.waitingReviewersTitle')}
               </span>
               <div className="deep-review-action-bar__capacity-queue-reviewer-list">
                 {waitingReviewers.map((reviewer) => {
@@ -237,12 +213,8 @@ export const CapacityQueueNotice: React.FC<CapacityQueueNoticeProps> = ({
                     ? formatElapsedTime(reviewer.queueElapsedMs)
                     : null;
                   const statusLabel = reviewer.status === 'paused_by_user'
-                    ? t('deepReviewActionBar.capacityQueue.reviewerStatusPaused', {
-                      defaultValue: 'Paused',
-                    })
-                    : t('deepReviewActionBar.capacityQueue.reviewerStatusQueued', {
-                      defaultValue: 'Waiting',
-                    });
+                    ? t('deepReviewActionBar.capacityQueue.reviewerStatusPaused')
+                    : t('deepReviewActionBar.capacityQueue.reviewerStatusQueued');
                   return (
                     <span
                       key={reviewer.toolId || reviewer.subagentType || label}
@@ -256,9 +228,7 @@ export const CapacityQueueNotice: React.FC<CapacityQueueNoticeProps> = ({
                         {reviewer.optional && (
                           <>
                             {' / '}
-                            {t('deepReviewActionBar.capacityQueue.optionalReviewer', {
-                              defaultValue: 'Optional',
-                            })}
+                            {t('deepReviewActionBar.capacityQueue.optionalReviewer')}
                           </>
                         )}
                         {reviewerElapsed && (
@@ -266,7 +236,6 @@ export const CapacityQueueNotice: React.FC<CapacityQueueNoticeProps> = ({
                             {' / '}
                             {t('deepReviewActionBar.capacityQueue.elapsed', {
                               elapsed: reviewerElapsed,
-                              defaultValue: `Waited ${reviewerElapsed}`,
                             })}
                           </>
                         )}
@@ -279,9 +248,7 @@ export const CapacityQueueNotice: React.FC<CapacityQueueNoticeProps> = ({
           )}
           {!supportsInlineQueueControls && (
             <span className="deep-review-action-bar__capacity-queue-detail">
-              {t('deepReviewActionBar.capacityQueue.stopHint', {
-                defaultValue: 'Use Stop to interrupt this review queue.',
-              })}
+              {t('deepReviewActionBar.capacityQueue.stopHint')}
             </span>
           )}
         </div>
@@ -296,9 +263,7 @@ export const CapacityQueueNotice: React.FC<CapacityQueueNoticeProps> = ({
                 onClick={() => void onContinueQueue()}
               >
                 <Play size={13} />
-                {t('deepReviewActionBar.capacityQueue.continueQueue', {
-                  defaultValue: 'Continue queue',
-                })}
+                {t('deepReviewActionBar.capacityQueue.continueQueue')}
               </Button>
             ) : (
               <Button
@@ -307,9 +272,7 @@ export const CapacityQueueNotice: React.FC<CapacityQueueNoticeProps> = ({
                 onClick={() => void onPauseQueue()}
               >
                 <Pause size={13} />
-                {t('deepReviewActionBar.capacityQueue.pauseQueue', {
-                  defaultValue: 'Pause queue',
-                })}
+                {t('deepReviewActionBar.capacityQueue.pauseQueue')}
               </Button>
             )}
             {(capacityQueueState.optionalReviewerCount ?? 0) > 0 && (
@@ -319,9 +282,7 @@ export const CapacityQueueNotice: React.FC<CapacityQueueNoticeProps> = ({
                 onClick={() => void onSkipOptionalQueuedReviewers()}
               >
                 <SkipForward size={13} />
-                {t('deepReviewActionBar.capacityQueue.skipOptionalQueued', {
-                  defaultValue: 'Skip optional extras',
-                })}
+                {t('deepReviewActionBar.capacityQueue.skipOptionalQueued')}
               </Button>
             )}
             <Button
@@ -329,9 +290,7 @@ export const CapacityQueueNotice: React.FC<CapacityQueueNoticeProps> = ({
               size="small"
               onClick={() => void onCancelQueuedReviewers()}
             >
-              {t('deepReviewActionBar.capacityQueue.cancelQueued', {
-                defaultValue: 'Cancel queued reviewers',
-              })}
+              {t('deepReviewActionBar.capacityQueue.cancelQueued')}
             </Button>
           </>
         )}
@@ -340,9 +299,7 @@ export const CapacityQueueNotice: React.FC<CapacityQueueNoticeProps> = ({
           size="small"
           onClick={() => void onOpenReviewSettings()}
         >
-          {t('deepReviewActionBar.capacityQueue.openReviewSettings', {
-            defaultValue: 'Open Review settings',
-          })}
+          {t('deepReviewActionBar.capacityQueue.openReviewSettings')}
         </Button>
       </div>
     </div>

@@ -29,7 +29,7 @@ const mobileWebSourceDir = path.join(root, 'src', 'mobile-web', 'src');
 const mobileWebMessagesPath = path.join(mobileWebSourceDir, 'i18n', 'messages.ts');
 const installerSourceDir = path.join(root, 'BitFun-Installer', 'src');
 const installerLocalesDir = path.join(installerSourceDir, 'i18n', 'locales');
-const coreLocalesDir = path.join(root, 'src', 'crates', 'core', 'locales');
+const coreLocalesDir = path.join(root, 'src', 'crates', 'assembly', 'core', 'locales');
 const relayHomepageDir = path.join(root, 'src', 'apps', 'relay-server', 'static', 'homepage');
 const relayHomepageI18nPath = path.join(relayHomepageDir, 'i18n.json');
 const supportedLocales = fs
@@ -44,10 +44,12 @@ let errorCount = 0;
 let warningCount = 0;
 let auditTypeScript = null;
 let cliOptions = { reportJsonPath: null };
+let governanceBaselineCache;
 const reportCategories = [
   'confirmedUnusedKeys',
   'dynamicKeyCandidates',
   'sharedTermDuplicates',
+  'sameTextLocaleInventory',
   'l10nQualityCandidates',
   'literalDefaultValueFallbacks',
   'localeFormatCandidates',
@@ -66,6 +68,7 @@ const governanceReport = {
   confirmedUnusedKeys: [],
   dynamicKeyCandidates: [],
   sharedTermDuplicates: [],
+  sameTextLocaleInventory: [],
   l10nQualityCandidates: [],
   literalDefaultValueFallbacks: [],
   localeFormatCandidates: [],
@@ -244,19 +247,113 @@ function hasHanText(value) {
   return /\p{Script=Han}/u.test(String(value));
 }
 
+const zhTwSameTextTerminologySignals = ['了解'];
+// Keep this as a review signal, not a converter. The goal is to catch obvious
+// Simplified-copy residue without flagging every valid same-writing Han term.
+const zhTwSameTextScriptSignals = new Set([
+  '这',
+  '个',
+  '们',
+  '为',
+  '与',
+  '开',
+  '关',
+  '发',
+  '复',
+  '后',
+  '过',
+  '还',
+  '进',
+  '选',
+  '连',
+  '远',
+  '时',
+  '设',
+  '数',
+  '据',
+  '页',
+  '项',
+  '态',
+  '错',
+  '误',
+  '删',
+  '编',
+  '导',
+  '启',
+  '闭',
+  '间',
+  '类',
+  '显',
+  '隐',
+  '径',
+  '档',
+  '检',
+  '测',
+  '权',
+  '务',
+  '动',
+  '应',
+  '统',
+  '议',
+  '读',
+  '写',
+  '话',
+  '请',
+  '询',
+  '详',
+  '语',
+  '认',
+  '让',
+  '讲',
+  '试',
+  '论',
+  '证',
+  '评',
+  '识',
+  '访',
+  '调',
+  '变',
+  '图',
+  '标',
+  '链',
+  '节',
+  '览',
+  '获',
+]);
+
+function getZhTwSameTextSignal(value) {
+  const text = String(value);
+  for (const phrase of zhTwSameTextTerminologySignals) {
+    if (text.includes(phrase)) {
+      return { type: 'terminology', match: phrase };
+    }
+  }
+
+  for (const character of text) {
+    if (zhTwSameTextScriptSignals.has(character)) {
+      return { type: 'script-variant', match: character };
+    }
+  }
+
+  return null;
+}
+
 function sortByReportIdentity(left, right) {
   return JSON.stringify(left).localeCompare(JSON.stringify(right));
 }
 
 function countEntriesBy(entries, field, options = {}) {
   const emptyLabel = options.emptyLabel ?? '';
+  const includeKeys = options.includeKeys ?? [];
+  const counts = entries.reduce((acc, entry) => {
+    const value = entry[field] ?? emptyLabel;
+    const key = value === '' ? emptyLabel : value;
+    acc.set(key, (acc.get(key) ?? 0) + 1);
+    return acc;
+  }, new Map(includeKeys.map((key) => [key, 0])));
+
   return Object.fromEntries(
-    Array.from(entries.reduce((counts, entry) => {
-      const value = entry[field] ?? emptyLabel;
-      const key = value === '' ? emptyLabel : value;
-      counts.set(key, (counts.get(key) ?? 0) + 1);
-      return counts;
-    }, new Map()).entries())
+    Array.from(counts.entries())
       .sort(([left], [right]) => String(left).localeCompare(String(right))),
   );
 }
@@ -266,6 +363,9 @@ function finalizeGovernanceReport() {
     governanceReport[category].sort(sortByReportIdentity);
     governanceReport.summary.counts[category] = governanceReport[category].length;
   }
+
+  const governanceSurfaceIds = collectGovernanceBudgetSurfaceIds();
+  const localeFormatSurfaceIds = collectLocaleFormatSurfaceIds();
 
   governanceReport.summary.byCategory = {
     confirmedUnusedKeys: {
@@ -279,12 +379,18 @@ function finalizeGovernanceReport() {
     sharedTermDuplicates: {
       byNamespace: countEntriesBy(governanceReport.sharedTermDuplicates, 'namespace', { emptyLabel: '<none>' }),
       bySharedKey: countEntriesBy(governanceReport.sharedTermDuplicates, 'sharedKey'),
-      bySurface: countEntriesBy(governanceReport.sharedTermDuplicates, 'surface'),
+      bySurface: countEntriesBy(governanceReport.sharedTermDuplicates, 'surface', { includeKeys: governanceSurfaceIds }),
+    },
+    sameTextLocaleInventory: {
+      byAllowlistState: countEntriesBy(governanceReport.sameTextLocaleInventory, 'allowlistState'),
+      byNamespace: countEntriesBy(governanceReport.sameTextLocaleInventory, 'namespace', { emptyLabel: '<none>' }),
+      bySignalType: countEntriesBy(governanceReport.sameTextLocaleInventory, 'signalType'),
+      bySurface: countEntriesBy(governanceReport.sameTextLocaleInventory, 'surface', { includeKeys: governanceSurfaceIds }),
     },
     l10nQualityCandidates: {
       byComparisonLocale: countEntriesBy(governanceReport.l10nQualityCandidates, 'comparisonLocale'),
       byNamespace: countEntriesBy(governanceReport.l10nQualityCandidates, 'namespace', { emptyLabel: '<none>' }),
-      bySurface: countEntriesBy(governanceReport.l10nQualityCandidates, 'surface'),
+      bySurface: countEntriesBy(governanceReport.l10nQualityCandidates, 'surface', { includeKeys: governanceSurfaceIds }),
     },
     literalDefaultValueFallbacks: {
       byFile: countEntriesBy(governanceReport.literalDefaultValueFallbacks, 'file'),
@@ -292,7 +398,7 @@ function finalizeGovernanceReport() {
     },
     localeFormatCandidates: {
       byFile: countEntriesBy(governanceReport.localeFormatCandidates, 'file'),
-      bySurface: countEntriesBy(governanceReport.localeFormatCandidates, 'surface'),
+      bySurface: countEntriesBy(governanceReport.localeFormatCandidates, 'surface', { includeKeys: localeFormatSurfaceIds }),
     },
   };
 }
@@ -1009,7 +1115,7 @@ function collectI18nResourceEntries(namespaces) {
         locale,
         key,
         value,
-        file: `src/crates/core/locales/${locale}.ftl`,
+        file: `src/crates/assembly/core/locales/${locale}.ftl`,
       });
     }
   }
@@ -1242,8 +1348,13 @@ function readL10nIdenticalAllowlist() {
 }
 
 function readGovernanceBaseline() {
+  if (governanceBaselineCache !== undefined) {
+    return governanceBaselineCache;
+  }
+
   if (!fs.existsSync(governanceBaselinePath)) {
     reportError('Missing scripts/i18n-governance-baseline.json');
+    governanceBaselineCache = null;
     return null;
   }
 
@@ -1252,6 +1363,7 @@ function readGovernanceBaseline() {
     baseline = readJsonFile(governanceBaselinePath);
   } catch (error) {
     reportError(`Failed to parse scripts/i18n-governance-baseline.json: ${error.message}`);
+    governanceBaselineCache = null;
     return null;
   }
 
@@ -1260,10 +1372,27 @@ function readGovernanceBaseline() {
   }
   if (!isPlainObject(baseline.budgets)) {
     reportError('scripts/i18n-governance-baseline.json must define a budgets object');
+    governanceBaselineCache = null;
     return null;
   }
 
+  governanceBaselineCache = baseline;
   return baseline;
+}
+
+function collectGovernanceBudgetSurfaceIds() {
+  const baseline = readGovernanceBaseline();
+  if (!baseline) return [];
+
+  const surfaces = new Set();
+  for (const budget of Object.values(baseline.budgets)) {
+    if (!isPlainObject(budget?.bySurface)) continue;
+    for (const surface of Object.keys(budget.bySurface)) {
+      surfaces.add(surface);
+    }
+  }
+
+  return Array.from(surfaces).sort();
 }
 
 function allowlistTargetForGroup(entry, group) {
@@ -1402,11 +1531,44 @@ function collectSharedTermDuplicates(resourceEntries) {
   }
 }
 
+function collectSameTextLocaleInventory(resourceGroups, allowedIdenticalMatches) {
+  for (const group of resourceGroups) {
+    const simplified = group.valueByLocale.get('zh-CN');
+    const traditional = group.valueByLocale.get('zh-TW');
+    if (!simplified || !traditional || simplified !== traditional || !hasHanText(traditional)) {
+      continue;
+    }
+
+    const signal = getZhTwSameTextSignal(traditional);
+    const allowlisted = allowedIdenticalMatches.has(l10nIdenticalMatchId(group, 'zh-TW', 'zh-CN'));
+
+    governanceReport.sameTextLocaleInventory.push({
+      surface: group.surface,
+      namespace: group.namespace,
+      key: group.key,
+      resourceKey: group.resourceKey,
+      locale: 'zh-TW',
+      comparisonLocale: 'zh-CN',
+      value: traditional,
+      files: group.files,
+      reason: 'same-text-locale-pair',
+      signal,
+      signalType: signal?.type ?? 'none',
+      allowlisted,
+      allowlistState: allowlisted ? 'allowlisted' : 'unreviewed',
+    });
+  }
+}
+
 function collectL10nQualityCandidates(resourceGroups, allowedIdenticalMatches) {
   for (const group of resourceGroups) {
     const simplified = group.valueByLocale.get('zh-CN');
     const traditional = group.valueByLocale.get('zh-TW');
     if (!simplified || !traditional || simplified !== traditional || !hasHanText(traditional)) {
+      continue;
+    }
+    const signal = getZhTwSameTextSignal(traditional);
+    if (!signal) {
       continue;
     }
     if (allowedIdenticalMatches.has(l10nIdenticalMatchId(group, 'zh-TW', 'zh-CN'))) {
@@ -1423,6 +1585,7 @@ function collectL10nQualityCandidates(resourceGroups, allowedIdenticalMatches) {
       value: traditional,
       files: group.files,
       reason: 'matches-comparison-locale',
+      signal,
     });
   }
 }
@@ -1536,6 +1699,7 @@ function auditI18nGovernanceReport(namespaces) {
   collectConfirmedUnusedKeys();
   collectDynamicKeyCandidates(resourceGroups);
   collectSharedTermDuplicates(resourceEntries);
+  collectSameTextLocaleInventory(resourceGroups, allowedIdenticalMatches);
   collectL10nQualityCandidates(resourceGroups, allowedIdenticalMatches);
   auditGovernanceBaseline();
 }
@@ -1817,6 +1981,12 @@ function isLiteralFallbackInitializer(ts, initializer) {
       ts.isTemplateExpression(element)
     ));
   }
+  if (ts.isBinaryExpression(value)) {
+    return (
+      isLiteralFallbackInitializer(ts, value.left) ||
+      isLiteralFallbackInitializer(ts, value.right)
+    );
+  }
   return false;
 }
 
@@ -1959,7 +2129,10 @@ function countCjkSourceLines(scanRoot, predicate) {
 function shouldSkipLocaleFormatSourceScan(file) {
   const normalized = toPosixPath(path.relative(root, file));
   return (
+    // Surface i18n owners are the only approved locations for direct Intl usage;
+    // product code must call their exported formatting helpers instead.
     normalized === 'src/web-ui/src/infrastructure/i18n/core/I18nService.ts' ||
+    normalized === 'src/mobile-web/src/i18n/I18nProvider.tsx' ||
     normalized.endsWith('/generatedLocaleContract.ts') ||
     normalized.endsWith('.test.ts') ||
     normalized.endsWith('.test.tsx') ||
@@ -1968,9 +2141,8 @@ function shouldSkipLocaleFormatSourceScan(file) {
   );
 }
 
-function collectLocaleFormatUsageFindings() {
-  const formatPattern = /\b(?:new\s+)?Intl\.(?:DateTimeFormat|NumberFormat|RelativeTimeFormat)\s*\(|\.\s*toLocale(?:String|DateString|TimeString)\s*\(/g;
-  const specs = [
+function createLocaleFormatScanSpecs() {
+  return [
     {
       surface: 'web-ui',
       root: webSourceDir,
@@ -2000,10 +2172,19 @@ function collectLocaleFormatUsageFindings() {
     },
     {
       surface: 'core-miniapp',
-      root: path.join(root, 'src', 'crates', 'core', 'src', 'miniapp', 'builtin', 'assets'),
+      root: path.join(root, 'src', 'crates', 'contracts', 'product-domains', 'src', 'miniapp', 'builtin', 'assets'),
       predicate: (file) => file.endsWith('.js'),
     },
   ];
+}
+
+function collectLocaleFormatSurfaceIds() {
+  return sortedUnique(createLocaleFormatScanSpecs().map((spec) => spec.surface));
+}
+
+function collectLocaleFormatUsageFindings() {
+  const formatPattern = /\b(?:new\s+)?Intl\.(?:DateTimeFormat|NumberFormat|RelativeTimeFormat)\s*\(|\.\s*toLocale(?:String|DateString|TimeString)\s*\(/g;
+  const specs = createLocaleFormatScanSpecs();
   const findings = [];
 
   for (const spec of specs) {

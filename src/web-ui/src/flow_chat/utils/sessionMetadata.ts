@@ -364,6 +364,7 @@ export function buildSessionMetadata(
 ): SessionMetadata {
   const stats = calculateSessionStats(session);
   const sessionKind = normalizeSessionKind(session.sessionKind);
+  const persistedSessionKind = sessionKind === 'subagent' ? 'subagent' : 'standard';
 
   return {
     ...existingMetadata,
@@ -389,6 +390,7 @@ export function buildSessionMetadata(
       stats.toolCallCount,
       existingMetadata?.toolCallCount ?? 0
     ),
+    sessionKind: persistedSessionKind,
     status: 'active',
     snapshotSessionId: existingMetadata?.snapshotSessionId,
     tags: buildSessionTags(sessionKind, existingMetadata?.tags),

@@ -13,7 +13,7 @@ pub fn spawn_workspace_background_warmup(state: &AppState, workspace_info: Works
     let agent_registry = state.agent_registry.clone();
     let workspace_search_service = state.workspace_search_service.clone();
 
-    tokio::spawn(async move {
+    tauri::async_runtime::spawn(async move {
         warm_workspace_background_services(
             workspace_path,
             agent_registry,

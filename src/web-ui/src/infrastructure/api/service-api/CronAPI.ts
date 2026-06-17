@@ -2,6 +2,7 @@ import { api } from './ApiClient';
 import { createTauriCommandError } from '../errors/TauriCommandError';
 
 export type CronJobRunStatus = 'queued' | 'running' | 'ok' | 'error' | 'cancelled';
+export type CronJobTargetKind = 'session' | 'workspace';
 
 export type CronSchedule =
   | {
@@ -22,6 +23,30 @@ export type CronSchedule =
 export interface CronJobPayload {
   text: string;
 }
+
+export interface CronWorkspaceRef {
+  workspaceId?: string | null;
+  workspacePath: string;
+  remoteConnectionId?: string | null;
+  remoteSshHost?: string | null;
+}
+
+export interface CronLaunchSpec {
+  agentType: string;
+  modelId?: string | null;
+}
+
+export type CronJobTarget =
+  | {
+    kind: 'session';
+    sessionId: string;
+    workspace: CronWorkspaceRef;
+  }
+  | {
+    kind: 'workspace';
+    workspace: CronWorkspaceRef;
+    launch: CronLaunchSpec;
+  };
 
 export interface CronJobState {
   nextRunAtMs?: number | null;
@@ -45,8 +70,7 @@ export interface CronJob {
   schedule: CronSchedule;
   payload: CronJobPayload;
   enabled: boolean;
-  sessionId: string;
-  workspacePath: string;
+  target: CronJobTarget;
   createdAtMs: number;
   configUpdatedAtMs: number;
   updatedAtMs: number;
@@ -55,7 +79,10 @@ export interface CronJob {
 
 export interface ListCronJobsRequest {
   workspacePath?: string;
+  workspaceId?: string;
+  remoteConnectionId?: string;
   sessionId?: string;
+  targetKind?: CronJobTargetKind;
 }
 
 export interface CreateCronJobRequest {
@@ -63,8 +90,7 @@ export interface CreateCronJobRequest {
   schedule: CronSchedule;
   payload: CronJobPayload;
   enabled?: boolean;
-  sessionId: string;
-  workspacePath: string;
+  target: CronJobTarget;
 }
 
 export interface UpdateCronJobRequest {
@@ -72,8 +98,7 @@ export interface UpdateCronJobRequest {
   schedule?: CronSchedule;
   payload?: CronJobPayload;
   enabled?: boolean;
-  sessionId?: string;
-  workspacePath?: string;
+  target?: CronJobTarget;
 }
 
 export class CronAPI {

@@ -240,10 +240,10 @@
     align-items: center;
     height: 12px;
     padding: 0 4px;
-    border: 1px solid color-mix(in srgb, var(--color-accent-400, #8b5cf6) 34%, var(--border-subtle));
+    border: 1px solid color-mix(in srgb, var(--color-accent-400) 34%, var(--border-subtle));
     border-radius: 999px;
-    background: color-mix(in srgb, var(--color-accent-400, #8b5cf6) 13%, var(--element-bg-soft));
-    color: color-mix(in srgb, var(--color-accent-400, #8b5cf6) 62%, var(--color-text-primary));
+    background: color-mix(in srgb, var(--color-accent-400) 13%, var(--element-bg-soft));
+    color: color-mix(in srgb, var(--color-accent-400) 62%, var(--color-text-primary));
     font-size: var(--font-size-xxs);
     font-weight: 600;
     letter-spacing: 0.02em;
@@ -259,10 +259,10 @@
     gap: 3px;
     height: 14px;
     padding: 0 5px;
-    border: 1px solid color-mix(in srgb, var(--color-accent-400, #8b5cf6) 44%, var(--border-subtle));
+    border: 1px solid color-mix(in srgb, var(--color-accent-400) 44%, var(--border-subtle));
     border-radius: 999px;
-    background: color-mix(in srgb, var(--color-accent-400, #8b5cf6) 18%, var(--element-bg-soft));
-    color: color-mix(in srgb, var(--color-accent-400, #8b5cf6) 82%, var(--color-text-primary));
+    background: color-mix(in srgb, var(--color-accent-400) 18%, var(--element-bg-soft));
+    color: color-mix(in srgb, var(--color-accent-400) 82%, var(--color-text-primary));
     font-size: var(--font-size-xxs);
     font-weight: 600;
     letter-spacing: 0.02em;
@@ -270,6 +270,37 @@
 
     svg {
       animation: bitfun-nav-session-spin 1s linear infinite;
+    }
+  }
+
+  &__inline-item-background-subagent-badge {
+    flex: 0 0 auto;
+    position: relative;
+    display: inline-grid;
+    place-items: center;
+    width: 16px;
+    height: 16px;
+    padding: 0;
+    border: 1px solid color-mix(in srgb, var(--color-success) 36%, var(--border-subtle));
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--color-success) 12%, var(--element-bg-soft));
+    color: color-mix(in srgb, var(--color-success) 76%, var(--color-text-primary));
+    overflow: hidden;
+  }
+
+  &__inline-item-background-subagent-icon {
+    grid-area: 1 / 1;
+    transition: opacity $motion-fast $easing-standard, transform $motion-fast $easing-standard;
+
+    &.is-bot {
+      animation: bitfun-nav-background-subagent-bot-cycle 3.6s ease-in-out infinite;
+    }
+
+    &.is-loader {
+      opacity: 0;
+      animation:
+        bitfun-nav-background-subagent-loader-cycle 3.6s ease-in-out infinite,
+        bitfun-nav-session-spin 1s linear infinite;
     }
   }
 
@@ -281,10 +312,10 @@
     gap: 3px;
     height: 14px;
     padding: 0 5px;
-    border: 1px solid color-mix(in srgb, var(--color-warning, #f59e0b) 35%, var(--border-subtle));
+    border: 1px solid color-mix(in srgb, var(--color-warning) 35%, var(--border-subtle));
     border-radius: 999px;
-    background: color-mix(in srgb, var(--color-warning, #f59e0b) 14%, transparent);
-    color: color-mix(in srgb, var(--color-warning, #f59e0b) 80%, var(--color-text-primary));
+    background: color-mix(in srgb, var(--color-warning) 14%, transparent);
+    color: color-mix(in srgb, var(--color-warning) 80%, var(--color-text-primary));
     font-size: var(--font-size-xxs);
     font-weight: 600;
     letter-spacing: 0.02em;
@@ -320,18 +351,18 @@
     width: 7px;
     height: 7px;
     border-radius: 50%;
-    border: 1px solid var(--color-bg-primary, #111114);
-    background: var(--color-success, #22c55e);
+    border: 1px solid var(--color-bg-primary);
+    background: var(--color-success);
     box-shadow:
-      0 0 0 1px color-mix(in srgb, var(--color-success, #22c55e) 35%, transparent),
-      0 0 6px color-mix(in srgb, var(--color-success, #22c55e) 42%, transparent);
+      0 0 0 1px color-mix(in srgb, var(--color-success) 35%, transparent),
+      0 0 6px color-mix(in srgb, var(--color-success) 42%, transparent);
 
     &.is-error,
     &.is-interrupted {
-      background: var(--color-error, #ef4444);
+      background: var(--color-error);
       box-shadow:
-        0 0 0 1px color-mix(in srgb, var(--color-error, #ef4444) 35%, transparent),
-        0 0 6px color-mix(in srgb, var(--color-error, #ef4444) 42%, transparent);
+        0 0 0 1px color-mix(in srgb, var(--color-error) 35%, transparent),
+        0 0 6px color-mix(in srgb, var(--color-error) 42%, transparent);
     }
 
     // High-priority attention states: larger, brighter, with subtle pulse
@@ -344,17 +375,17 @@
     }
 
     &.is-ask-user {
-      background: var(--color-warning, #f59e0b);
+      background: var(--color-warning);
       box-shadow:
-        0 0 0 1.5px color-mix(in srgb, var(--color-warning, #f59e0b) 45%, transparent),
-        0 0 8px color-mix(in srgb, var(--color-warning, #f59e0b) 55%, transparent);
+        0 0 0 1.5px color-mix(in srgb, var(--color-warning) 45%, transparent),
+        0 0 8px color-mix(in srgb, var(--color-warning) 55%, transparent);
     }
 
     &.is-tool-confirm {
-      background: var(--color-accent-500, #8b5cf6);
+      background: var(--color-accent-500);
       box-shadow:
-        0 0 0 1.5px color-mix(in srgb, var(--color-accent-500, #8b5cf6) 45%, transparent),
-        0 0 8px color-mix(in srgb, var(--color-accent-500, #8b5cf6) 55%, transparent);
+        0 0 0 1.5px color-mix(in srgb, var(--color-accent-500) 45%, transparent),
+        0 0 8px color-mix(in srgb, var(--color-accent-500) 55%, transparent);
     }
 
     // Pulse animation for high-priority states
@@ -430,9 +461,9 @@
     overflow-y: auto;
     padding: $size-gap-1 0;
     border-radius: $size-radius-base;
-    background: var(--color-bg-elevated, #1e1e22);
-    border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    background: var(--color-bg-elevated);
+    border: 1px solid var(--border-subtle);
+    box-shadow: 0 4px 12px var(--color-overlay-black-25);
     z-index: 10000;
     transform-origin: top left;
     animation: bitfun-footer-menu-in $motion-fast $easing-decelerate forwards;
@@ -470,8 +501,8 @@
     }
 
     &.is-danger:hover:not(:disabled) {
-      color: var(--color-error, #ef4444);
-      background: color-mix(in srgb, var(--color-error, #ef4444) 10%, transparent);
+      color: var(--color-error);
+      background: color-mix(in srgb, var(--color-error) 10%, transparent);
     }
   }
 
@@ -568,8 +599,8 @@
                 background $motion-fast $easing-standard;
 
     &.confirm:hover {
-      color: var(--color-success, #22c55e);
-      background: color-mix(in srgb, var(--color-success, #22c55e) 12%, transparent);
+      color: var(--color-success);
+      background: color-mix(in srgb, var(--color-success) 12%, transparent);
     }
 
     &.cancel:hover {
@@ -584,7 +615,7 @@
     border-radius: 50%;
 
     &.is-running {
-      color: var(--color-success, #4caf50);
+      color: var(--color-success);
       fill: currentColor;
     }
 
@@ -621,13 +652,13 @@
     margin-left: auto;
 
     &.is-healthy {
-      background: var(--color-success, #4caf50);
-      box-shadow: 0 0 4px color-mix(in srgb, var(--color-success, #4caf50) 40%, transparent);
+      background: var(--color-success);
+      box-shadow: 0 0 4px color-mix(in srgb, var(--color-success) 40%, transparent);
     }
 
     &.is-error {
-      background: var(--color-warning, #f59e0b);
-      box-shadow: 0 0 4px color-mix(in srgb, var(--color-warning, #f59e0b) 40%, transparent);
+      background: var(--color-warning);
+      box-shadow: 0 0 4px color-mix(in srgb, var(--color-warning) 40%, transparent);
     }
   }
 
@@ -639,7 +670,7 @@
   // Unhealthy MCP server indicator
   &__inline-item.is-unhealthy {
     .bitfun-nav-panel__inline-item-icon {
-      color: var(--color-warning, #f59e0b);
+      color: var(--color-warning);
       opacity: 0.9;
     }
   }
@@ -652,6 +683,34 @@
   }
   to {
     transform: rotate(360deg);
+  }
+}
+
+@keyframes bitfun-nav-background-subagent-bot-cycle {
+  0%,
+  62%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  70%,
+  88% {
+    opacity: 0;
+    transform: scale(0.82);
+  }
+}
+
+@keyframes bitfun-nav-background-subagent-loader-cycle {
+  0%,
+  62%,
+  100% {
+    opacity: 0;
+  }
+
+  70%,
+  88% {
+    opacity: 1;
   }
 }
 
@@ -670,6 +729,18 @@
 
   .bitfun-nav-panel__inline-item-review-badge svg {
     animation: none;
+  }
+
+  .bitfun-nav-panel__inline-item-background-subagent-icon {
+    animation: none;
+
+    &.is-bot {
+      opacity: 1;
+    }
+
+    &.is-loader {
+      opacity: 0;
+    }
   }
 
   .bitfun-nav-panel__items--session-blocks .bitfun-nav-panel__inline-item:hover .bitfun-nav-panel__inline-item-icon:not(.is-running) {

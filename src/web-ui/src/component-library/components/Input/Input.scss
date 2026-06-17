@@ -38,27 +38,27 @@
   &--default {
     .bitfun-input-container {
       background: transparent;
-      border: 1px solid var(--border-base, rgba(255, 255, 255, 0.14));
+      border: 1px solid var(--border-base);
     }
   }
 
   &--filled {
     .bitfun-input-container {
-      background: var(--element-bg-subtle, rgba(255, 255, 255, 0.05));
+      background: var(--element-bg-subtle);
       border: 1px solid transparent;
 
       &:hover:not(.bitfun-input-wrapper--disabled &) {
-        background: var(--element-bg-soft, rgba(255, 255, 255, 0.08));
-        border-color: var(--border-base, rgba(255, 255, 255, 0.14));
+        background: var(--element-bg-soft);
+        border-color: var(--border-base);
       }
 
       &:focus-within {
-        background: var(--element-bg-soft, rgba(255, 255, 255, 0.08));
+        background: var(--element-bg-soft);
         border-color: transparent;
       }
 
       &:hover:focus-within {
-        border-color: var(--color-accent-500, #60a5fa);
+        border-color: var(--color-accent-500);
       }
     }
   }
@@ -66,26 +66,26 @@
   &--outlined {
     .bitfun-input-container {
       background: transparent;
-      border: 1px solid var(--border-medium, rgba(255, 255, 255, 0.20));
+      border: 1px solid var(--border-medium);
     }
   }
 
   &--error {
     .bitfun-input-container {
-      border-color: var(--color-error-border, rgba(199, 112, 112, 0.3)) !important;
+      border-color: var(--color-error-border) !important;
 
       &:hover:not(.bitfun-input-wrapper--disabled &) {
-        border-color: var(--color-error, #c77070) !important;
+        border-color: var(--color-error) !important;
       }
 
       &:focus-within {
-        border-color: var(--color-error, #c77070) !important;
+        border-color: var(--color-error) !important;
       }
     }
   }
 
   &--disabled {
-    opacity: var(--opacity-disabled, 0.6);
+    opacity: var(--opacity-disabled);
     cursor: default;
 
     .bitfun-input-container {
@@ -95,31 +95,31 @@
 }
 
 .bitfun-input-label {
-  font-size: var(--font-size-sm, 14px);
-  font-weight: var(--font-weight-medium, 500);
-  color: var(--color-text-secondary, #e5e5e5);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
   letter-spacing: 0.2px;
 }
 
 .bitfun-input-container {
   display: flex;
   align-items: center;
-  gap: var(--size-gap-2, 8px);
-  padding: 0 var(--size-gap-3, 12px);
+  gap: var(--size-gap-2);
+  padding: 0 var(--size-gap-3);
   border-radius: 4px;
-  transition: all var(--motion-base, 0.3s) var(--easing-standard, cubic-bezier(0.4, 0, 0.2, 1));
+  transition: all var(--motion-base) var(--easing-standard);
   position: relative;
   min-width: 0;
   overflow: hidden;
 
   &:hover:not(.bitfun-input-wrapper--disabled &) {
-    background: var(--element-bg-subtle, rgba(255, 255, 255, 0.05));
-    border-color: var(--border-strong, rgba(255, 255, 255, 0.26));
+    background: var(--element-bg-subtle);
+    border-color: var(--border-strong);
   }
 
   &:focus-within {
     background: transparent;
-    border-color: var(--color-accent-500, #60a5fa);
+    border-color: var(--color-accent-500);
     outline: none;
   }
 }
@@ -131,7 +131,7 @@
   border: none !important;
   outline: none !important;
   box-shadow: none !important;
-  color: var(--color-text-primary, #e8e8e8);
+  color: var(--color-text-primary);
   font-family: inherit;
   position: relative;
   z-index: 1;
@@ -141,8 +141,8 @@
   &::placeholder {
     color: color-mix(
       in srgb,
-      var(--color-text-muted, #a0a0a0) 40%,
-      var(--color-bg-primary, #121214)
+      var(--color-text-muted) 40%,
+      var(--color-bg-primary)
     );
   }
 
@@ -166,7 +166,7 @@
 
 .bitfun-input-prefix,
 .bitfun-input-suffix {
-  color: var(--color-text-muted, #a0a0a0);
+  color: var(--color-text-muted);
   display: flex;
   align-items: center;
   flex-shrink: 0;
@@ -175,7 +175,7 @@
 }
 
 .bitfun-input-error-message {
-  font-size: var(--font-size-xs, 12px);
-  color: var(--color-error, #c77070);
+  font-size: var(--font-size-xs);
+  color: var(--color-error);
   margin-top: -2px;
 }

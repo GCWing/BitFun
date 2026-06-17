@@ -36,7 +36,7 @@
   background: var(--color-bg-primary);
   border: 1px solid var(--border-subtle);
   border-radius: 12px;
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 16px 48px var(--color-overlay-black-40);
   width: 380px;
   max-width: calc(100vw - 48px);
   max-height: min(520px, calc(100vh - 48px));
@@ -125,10 +125,10 @@
 
 .branch-select-dialog__error {
   padding: 8px 12px;
-  background: rgba(244, 67, 54, 0.08);
-  border: 1px solid rgba(244, 67, 54, 0.2);
+  background: var(--color-error-bg);
+  border: 1px solid var(--color-error-border);
   border-radius: 6px;
-  color: #f44336;
+  color: var(--color-error);
   font-size: 12px;
 }
 
@@ -261,7 +261,7 @@
 
   &--worktree {
     color: var(--color-warning);
-    background: rgba(255, 152, 0, 0.1);
+    background: var(--color-warning-bg);
   }
 }
 

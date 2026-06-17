@@ -43,6 +43,8 @@ export interface LayoutState {
   chatCollapsed: boolean;
   rightPanelWidth: number; // Fixed right panel width
   rightPanelCollapsed: boolean;
+  bottomTerminalPanelHeight: number;
+  bottomTerminalPanelCollapsed: boolean;
   leftPanelActiveTab: PanelType;
   rightPanelTabs: TabInfo[];
   rightPanelActiveTabId: string | null;
@@ -187,11 +189,13 @@ export interface UseAppReturn {
   toggleLeftPanel: () => void;
   toggleCenterPanel: () => void;
   toggleRightPanel: () => void;
+  toggleBottomTerminalPanel: () => void;
   toggleChatPanel: () => void;
   switchLeftPanelTab: (tab: PanelType) => void;
   updateLeftPanelWidth: (width: number, options?: { persist?: boolean }) => void;
   updateCenterPanelWidth: (width: number) => void;
   updateRightPanelWidth: (width: number) => void;
+  updateBottomTerminalPanelHeight: (height: number) => void;
   
   // Agent actions - selectAgent removed; backend decides agent selection
   updateAgentConfig: (agentId: string, config: Partial<AgentConfig>) => Promise<void>;
@@ -231,6 +235,8 @@ export const DEFAULT_LAYOUT_STATE: LayoutState = {
     ? Math.max(540, Math.min(800, Math.floor(window.innerWidth * 0.35))) // Right 35%, min 540px (for config-tabs), max 800px
     : 540,
   rightPanelCollapsed: true,
+  bottomTerminalPanelHeight: 300,
+  bottomTerminalPanelCollapsed: true,
   leftPanelActiveTab: 'sessions', // Default to sessions list
   rightPanelTabs: [],
   rightPanelActiveTabId: null

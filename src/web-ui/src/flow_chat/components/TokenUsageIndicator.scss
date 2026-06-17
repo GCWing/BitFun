@@ -35,7 +35,7 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--color-overlay-white-05);
     border-radius: 8px;
     overflow: hidden;
   }
@@ -69,7 +69,7 @@
   }
   
   &__percentage {
-    line-height: var(--flowchat-compact-line-height, 1.32);
+    line-height: var(--flowchat-compact-line-height);
     font-weight: 600;
     font-size: var(--flowchat-font-size-xxs);
   }
@@ -86,7 +86,7 @@
   // Normal state (0-69%)
   &--normal {
     background: rgba(59, 130, 246, 0.08);
-    color: rgb(96, 165, 250);
+    color: var(--color-accent-500);
     border: 1px solid rgba(59, 130, 246, 0.25);
     
     .bitfun-token-usage__progress-fill {
@@ -99,7 +99,7 @@
     
     &:hover {
       background: rgba(59, 130, 246, 0.12);
-      border-color: rgba(96, 165, 250, 0.4);
+      border-color: var(--color-accent-400);
       
       .bitfun-token-usage__progress-fill {
         background: linear-gradient(

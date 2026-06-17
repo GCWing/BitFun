@@ -16,7 +16,7 @@ Main areas:
 - `src/lib.rs`, `src/main.rs`: app setup and wiring
 - `src/computer_use/`: OS-specific automation support
 
-If a change affects shared product behavior across runtimes, the implementation likely belongs in `src/crates/core`.
+If a change affects shared product behavior across runtimes, the implementation likely belongs in `src/crates/assembly/core`.
 
 ## Local rules
 

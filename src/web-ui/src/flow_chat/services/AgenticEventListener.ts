@@ -48,8 +48,7 @@ export interface AgenticEventCallbacks {
   onContextCompressionStarted?: (event: AgenticEvent) => void;
   onContextCompressionCompleted?: (event: AgenticEvent) => void;
   onContextCompressionFailed?: (event: AgenticEvent) => void;
-  onGoalVerificationStarted?: (event: AgenticEvent) => void;
-  onGoalVerificationFinished?: (event: AgenticEvent) => void;
+  onThreadGoalUpdated?: (event: { sessionId: string; goal?: Record<string, unknown> | null }) => void;
   onSessionTitleGenerated?: (event: SessionTitleGeneratedEvent) => void;
   onSessionModelAutoMigrated?: (event: SessionModelAutoMigratedEvent) => void;
   onUserSteeringInjected?: (event: UserSteeringInjectedEvent) => void;
@@ -226,18 +225,10 @@ export class AgenticEventListener {
         this.unlistenFunctions.push(unlisten);
       }
 
-      if (callbacks.onGoalVerificationStarted) {
-        const unlisten = agentAPI.onGoalVerificationStarted((event) => {
-          logger.debug('Goal verification started:', event);
-          callbacks.onGoalVerificationStarted?.(event);
-        });
-        this.unlistenFunctions.push(unlisten);
-      }
-
-      if (callbacks.onGoalVerificationFinished) {
-        const unlisten = agentAPI.onGoalVerificationFinished((event) => {
-          logger.debug('Goal verification finished:', event);
-          callbacks.onGoalVerificationFinished?.(event);
+      if (callbacks.onThreadGoalUpdated) {
+        const unlisten = agentAPI.onThreadGoalUpdated((event) => {
+          logger.debug('Thread goal updated:', event);
+          callbacks.onThreadGoalUpdated?.(event);
         });
         this.unlistenFunctions.push(unlisten);
       }

@@ -95,7 +95,7 @@
   svg {
     flex-shrink: 0;
     margin-top: 2px;
-    color: var(--color-success, #22c55e);
+    color: var(--color-success);
   }
 
   &--success {
@@ -389,10 +389,72 @@
   }
 }
 
-// ==================== Dependencies section animated entry ====================
+// ==================== Dependencies section ====================
 
 .bitfun-about-dialog__dependencies-section {
+  margin-bottom: 16px;
   animation: about-section-enter 0.4s ease-out 0.25s both;
+}
+
+.bitfun-about-dialog__dependencies-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: transparent;
+  border: 1px dashed var(--border-subtle);
+  border-radius: 8px;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  
+  &:hover {
+    background: var(--element-bg-subtle);
+    border-color: var(--border-base);
+    border-style: solid;
+    color: var(--color-text-primary);
+    
+    svg {
+      color: var(--color-accent-500);
+    }
+  }
+  
+  span {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  svg {
+    color: var(--color-text-muted);
+    transition: all 0.2s ease;
+  }
+}
+
+.bitfun-about-dialog__dependencies-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 18px;
+  padding: 0 6px;
+  background: rgba(99, 102, 241, 0.1);
+  color: var(--color-accent-400);
+  font-size: 10px;
+  font-weight: 600;
+  border-radius: 9px;
+}
+
+.bitfun-about-dialog__dependencies-list {
+  margin-top: 8px;
+  padding: 4px;
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  animation: about-list-expand 0.25s ease-out;
 }
 
 @keyframes about-list-expand {
@@ -406,155 +468,30 @@
   }
 }
 
-// ==================== Footer ====================
-
-.bitfun-about-dialog__footer {
-  flex-shrink: 0;
-  padding: 16px 24px 20px;
-  text-align: center;
-  position: relative;
-  animation: about-section-enter 0.4s ease-out 0.3s both;
-  
-  &::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 24px;
-    right: 24px;
-    height: 1px;
-    background: linear-gradient(90deg, transparent 0%, var(--border-subtle) 50%, transparent 100%);
-  }
-}
-
-.bitfun-about-dialog__links {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-
-.bitfun-about-dialog__link {
-  font-size: 11px;
-  color: var(--color-text-muted);
-  text-decoration: none;
-  cursor: pointer;
-  transition: color 0.2s ease;
-  background: none;
-  border: none;
-  padding: 0;
-  font-family: inherit;
-
-  &:hover {
-    color: var(--color-accent-400);
-    text-decoration: underline;
-  }
-}
-
-.bitfun-about-dialog__link-sep {
-  font-size: 11px;
-  color: var(--border-subtle);
-}
-
-// ==================== Sub-dialogs (open source / user agreement) ====================
-
-.bitfun-about-dialog__sub-content {
-  padding: 20px 24px 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  max-height: min(520px, calc(100vh - 200px));
-  overflow-y: auto;
-}
-
-.bitfun-about-dialog__sub-desc {
-  font-size: 12px;
-  color: var(--color-text-secondary);
-  line-height: 1.6;
-  margin: 0;
-}
-
-// ==================== Category section ====================
-
-.bitfun-about-dialog__sub-category {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.bitfun-about-dialog__sub-category-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 0 2px;
-}
-
-.bitfun-about-dialog__sub-category-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--color-text-primary);
-  margin: 0;
-}
-
-.bitfun-about-dialog__sub-category-count {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 18px;
-  height: 16px;
-  padding: 0 5px;
-  font-size: 9px;
-  font-weight: 600;
-  border-radius: 8px;
-  letter-spacing: 0.02em;
-}
-
-.bitfun-about-dialog__sub-category-count--frontend {
-  background: rgba(59, 130, 246, 0.12);
-  color: #60A5FA;
-}
-
-.bitfun-about-dialog__sub-category-count--backend {
-  background: rgba(52, 211, 153, 0.12);
-  color: #34D399;
-}
-
-// ==================== Dependencies list grid ====================
-
 .bitfun-about-dialog__dependencies-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 6px;
+  gap: 4px;
 }
 
 .bitfun-about-dialog__dependency-item {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 9px 12px;
-  background: linear-gradient(135deg,
-    rgba(255, 255, 255, 0.04) 0%,
-    rgba(255, 255, 255, 0.02) 100%
-  );
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
+  padding: 8px 10px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
   transition: all 0.2s ease;
   min-width: 0;
-
+  
   &:hover {
-    background: linear-gradient(135deg,
-      rgba(59, 130, 246, 0.08) 0%,
-      rgba(139, 92, 246, 0.05) 100%
-    );
-    border-color: rgba(59, 130, 246, 0.25);
-    transform: translateY(-1px);
-    box-shadow:
-      0 4px 12px rgba(96, 165, 250, 0.1),
-      0 2px 4px rgba(0, 0, 0, 0.1);
-
+    background: var(--element-bg-subtle);
+    border-color: var(--border-subtle);
+    
     .bitfun-about-dialog__dependency-icon {
-      background: rgba(59, 130, 246, 0.15);
-
+      background: rgba(99, 102, 241, 0.1);
+      
       svg {
         color: var(--color-accent-500);
       }
@@ -564,19 +501,19 @@
 
 .bitfun-about-dialog__dependency-icon {
   flex-shrink: 0;
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--element-bg-subtle);
   border-radius: 6px;
   transition: all 0.2s ease;
 
   svg {
-    width: 13px;
-    height: 13px;
-    color: var(--color-text-muted);
+    width: 12px;
+    height: 12px;
+    color: var(--color-text-secondary);
     transition: color 0.2s ease;
   }
 }
@@ -597,17 +534,6 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  background: none;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-  text-align: left;
-  transition: color 0.2s ease;
-
-  &:hover {
-    color: var(--color-accent-400);
-    text-decoration: underline;
-  }
 }
 
 .bitfun-about-dialog__dependency-license {
@@ -618,47 +544,54 @@
 .bitfun-about-dialog__dependency-tag {
   display: inline-flex;
   align-items: center;
-  padding: 2px 6px;
+  padding: 1px 5px;
   font-size: 8px;
   font-weight: 600;
-  border-radius: 4px;
+  border-radius: 3px;
   text-transform: uppercase;
   letter-spacing: 0.3px;
   margin-left: auto;
   flex-shrink: 0;
-
+  
+  // Frontend tag - blue
   &--frontend {
-    background: rgba(59, 130, 246, 0.1);
-    color: #60A5FA;
-    border: 1px solid rgba(59, 130, 246, 0.15);
+    background: var(--color-accent-100);
+    color: var(--color-accent-500);
+    border: 1px solid var(--color-accent-200);
   }
 
+  // Backend tag - green
   &--backend {
-    background: rgba(52, 211, 153, 0.1);
-    color: #34D399;
-    border: 1px solid rgba(52, 211, 153, 0.15);
+    background: var(--color-success-bg);
+    color: var(--color-success);
+    border: 1px solid var(--color-success-border);
+  }
+
+  // General tag - purple
+  &--general {
+    background: var(--color-purple-100);
+    color: var(--color-purple-500);
+    border: 1px solid var(--color-purple-200);
   }
 }
 
-.bitfun-about-dialog__sub-footnote {
-  font-size: 11px;
-  color: var(--color-text-muted);
-  margin: 0;
-  padding-top: 12px;
-  border-top: 1px solid var(--border-subtle);
+// ==================== Footer ====================
+
+.bitfun-about-dialog__footer {
+  flex-shrink: 0;
+  padding: 16px 24px 20px;
   text-align: center;
-}
-
-// ==================== Responsive ====================
-
-@media (max-width: 580px) {
-  .bitfun-about-dialog__sub-content {
-    padding: 16px 16px 20px;
-    max-height: min(460px, calc(100vh - 160px));
-  }
-
-  .bitfun-about-dialog__dependencies-grid {
-    grid-template-columns: 1fr;
+  position: relative;
+  animation: about-section-enter 0.4s ease-out 0.3s both;
+  
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 24px;
+    right: 24px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent 0%, var(--border-subtle) 50%, transparent 100%);
   }
 }
 
@@ -695,6 +628,10 @@
 
   .bitfun-about-dialog__scrollable {
     padding: 0 16px;
+  }
+
+  .bitfun-about-dialog__dependencies-grid {
+    grid-template-columns: 1fr;
   }
 
   .bitfun-about-dialog__footer {

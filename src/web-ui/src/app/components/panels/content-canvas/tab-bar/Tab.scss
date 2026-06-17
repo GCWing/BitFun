@@ -21,15 +21,15 @@
   border-bottom: 1px solid transparent;
 
   &:hover {
-    background: var(--color-bg-hover, rgba(255, 255, 255, 0.05));
+    background: var(--color-bg-hover);
   }
 
   // ==================== State styles ====================
 
   // Active state - match canvas-tab-bar is-active-group background
   &.is-active {
-    background: var(--color-bg-scene, rgba(255, 255, 255, 0.08));
-    border-bottom: 1px solid var(--color-primary, #60a5fa);
+    background: var(--color-bg-scene);
+    border-bottom: 1px solid var(--color-primary);
   }
 
   // Preview state - italic title
@@ -64,7 +64,7 @@
 
   &.is-file-deleted {
     .canvas-tab__title {
-      color: var(--color-text-secondary, rgba(255, 255, 255, 0.55));
+      color: var(--color-text-secondary);
     }
   }
 
@@ -78,7 +78,7 @@
   // Type icon (e.g. task-detail)
   &__type-icon {
     flex-shrink: 0;
-    color: var(--color-text-secondary, rgba(255, 255, 255, 0.5));
+    color: var(--color-text-secondary);
     display: flex;
     align-items: center;
   }
@@ -93,13 +93,13 @@
     padding: 0;
     background: none;
     border: none;
-    color: var(--color-primary, #60a5fa);
+    color: var(--color-primary);
     cursor: pointer;
     border-radius: 2px;
     flex-shrink: 0;
 
     &:hover {
-      background: var(--color-bg-hover, rgba(255, 255, 255, 0.1));
+      background: var(--color-bg-hover);
     }
   }
 
@@ -112,7 +112,7 @@
     white-space: nowrap;
     font-size: 12px;
     // Inactive state: lighter text color
-    color: var(--color-text-secondary, rgba(255, 255, 255, 0.6));
+    color: var(--color-text-secondary);
     line-height: 1.4;
     transition: color 0.15s ease, font-weight 0.15s ease;
   }
@@ -124,7 +124,7 @@
 
   // Active state title color is brighter
   &.is-active &__title {
-    color: var(--color-text-primary, rgba(255, 255, 255, 0.95));
+    color: var(--color-text-primary);
   }
 
   // Dirty indicator
@@ -132,7 +132,7 @@
     display: none;
     flex-shrink: 0;
     font-size: 10px;
-    color: var(--color-warning, #f59e0b);
+    color: var(--color-warning);
     margin-left: 2px;
   }
 
@@ -146,7 +146,7 @@
     padding: 0;
     background: none;
     border: none;
-    color: var(--color-text-secondary, rgba(255, 255, 255, 0.6));
+    color: var(--color-text-secondary);
     cursor: pointer;
     border-radius: 2px;
     flex-shrink: 0;
@@ -154,8 +154,8 @@
     transition: opacity 0.15s ease, background-color 0.15s ease;
 
     &:hover {
-      background: var(--color-bg-hover, rgba(255, 255, 255, 0.1));
-      color: var(--color-text-primary, rgba(255, 255, 255, 0.9));
+      background: var(--color-bg-hover);
+      color: var(--color-text-primary);
     }
   }
 
@@ -174,7 +174,7 @@
     padding: 0;
     background: none;
     border: none;
-    color: var(--color-text-secondary, rgba(255, 255, 255, 0.6));
+    color: var(--color-text-secondary);
     cursor: pointer;
     border-radius: 2px;
     flex-shrink: 0;
@@ -182,8 +182,8 @@
     transition: opacity 0.15s ease, background-color 0.15s ease;
 
     &:hover {
-      background: var(--color-bg-hover, rgba(255, 255, 255, 0.1));
-      color: var(--color-text-primary, rgba(255, 255, 255, 0.9));
+      background: var(--color-bg-hover);
+      color: var(--color-text-primary);
     }
   }
 
@@ -202,7 +202,7 @@
   top: 0;
   bottom: 0;
   width: 2px;
-  background: var(--color-primary, #60a5fa);
+  background: var(--color-primary);
   border-radius: 1px;
   z-index: 10;
   pointer-events: none;

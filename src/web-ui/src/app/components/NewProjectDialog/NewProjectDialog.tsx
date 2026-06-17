@@ -12,7 +12,6 @@ import {
   Check,
   X
 } from 'lucide-react';
-// import { open } from '@tauri-apps/plugin-dialog';
 import { useTranslation } from 'react-i18next';
 import { createLogger } from '@/shared/utils/logger';
 import { Modal, Button, Input } from '@/component-library';

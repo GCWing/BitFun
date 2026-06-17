@@ -114,7 +114,7 @@ export interface ReviewActionPersistedState {
 export type SessionStatus = 'active' | 'archived' | 'completed';
 export type DialogTurnKind = 'user_dialog' | 'manual_compaction' | 'local_command';
 
-export type LocalCommandKind = 'usage_report' | 'goal_pending' | 'goal_verifying';
+export type LocalCommandKind = 'usage_report';
 
 export interface LocalCommandMetadata {
   localCommandKind: LocalCommandKind;
@@ -124,8 +124,14 @@ export interface LocalCommandMetadata {
   modelVisible: false;
   usageReport?: Record<string, any>;
   usageReportStatus?: 'loading' | 'completed';
-  goalPendingId?: string;
-  goalVerifyingId?: string;
+  threadGoalKickoff?: boolean;
+  threadGoalObjectiveUpdated?: boolean;
+  threadGoalContinuation?: boolean;
+  threadGoalContinuationCheck?: boolean;
+  threadGoalObjective?: string;
+  objective?: string;
+  autoContinuationAttempt?: number;
+  autoContinuationMax?: number;
 }
 
 export interface SessionList {
@@ -150,7 +156,17 @@ export interface DialogTurnData {
   startTime: number;
   endTime?: number;
   durationMs?: number;
+  tokenUsage?: DialogTurnTokenUsageData;
   status: TurnStatus;
+  finishReason?: string;
+  hasFinalResponse?: boolean;
+}
+
+export interface DialogTurnTokenUsageData {
+  inputTokens: number;
+  outputTokens?: number;
+  totalTokens: number;
+  timestamp: number;
 }
 
 export interface UserMessageData {
@@ -164,6 +180,7 @@ export interface ModelRoundData {
   id: string;
   turnId: string;
   roundIndex: number;
+  roundGroupId?: string;
   timestamp: number;
   renderHints?: ModelRoundRenderHints;
   textItems: TextItemData[];
@@ -197,6 +214,8 @@ export interface TextItemData {
   orderIndex?: number;
   isMarkdown?: boolean;
   subagentSessionId?: string;
+  attemptId?: string;
+  attemptIndex?: number;
 }
 
 export interface ThinkingItemData {
@@ -208,6 +227,8 @@ export interface ThinkingItemData {
   orderIndex?: number;
   status?: string;
   subagentSessionId?: string;
+  attemptId?: string;
+  attemptIndex?: number;
 }
 
 export interface ToolItemData {
@@ -225,8 +246,10 @@ export interface ToolItemData {
   executionMs?: number;
   orderIndex?: number;
   status?: string;
-  interruptionReason?: 'app_restart';
+  interruptionReason?: 'app_restart' | 'retry_superseded';
   subagentSessionId?: string;
+  attemptId?: string;
+  attemptIndex?: number;
 }
 
 export interface ToolCallData {

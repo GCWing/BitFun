@@ -167,26 +167,25 @@
     "controls": {
       "refreshTooltip": "Refresh available terminals",
       "autoDetect": "Auto Detect (Recommended)",
-      "description": "Default shell type for new terminals",
+      "description": "Default shell type for new terminals and for agent command execution in local workspaces.",
+      "cmdFallbackMessage": "Agent commands actually use PowerShell.",
       "placeholder": "Select default terminal",
       "noShells": "No available terminals detected"
     },
-    "warnings": {
-      "cmd": "CMD does not support shell integration. AI commands will execute via PowerShell.",
-      "gitBash": "Git Bash with oh-my-zsh may cause shell integration to fail. If issues occur, switch to PowerShell."
-    },
-    "recommendations": {
-      "pwsh": {
-        "prefix": "We recommend installing",
-        "name": "PowerShell Core",
-        "suffix": "for better cross-platform experience and modern features",
-        "link": "Download"
+    "panelPosition": {
+      "label": "Open terminal in",
+      "description": "Where terminal tabs open when launched from the Shell navigation in a session",
+      "placeholder": "Select terminal location",
+      "options": {
+        "right": "Right panel",
+        "bottom": "Bottom panel"
       }
     },
     "messages": {
       "loading": "Loading...",
       "loadFailed": "Failed to load configuration",
       "updated": "Default terminal updated",
+      "panelPositionUpdated": "Terminal panel location updated",
       "saveFailed": "Failed to save configuration",
       "refreshed": "Available terminals list refreshed"
     }

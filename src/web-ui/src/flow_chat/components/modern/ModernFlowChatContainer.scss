@@ -3,12 +3,14 @@
  */
 
 .modern-flowchat-container.flow-chat-typography {
-  font-family: var(--font-sans, var(--font-family-sans, inherit));
+  font-family: var(--font-sans);
   font-size: var(--flowchat-font-size-base);
-  line-height: var(--flowchat-text-line-height, 1.58);
+  line-height: var(--flowchat-text-line-height);
 }
 
 .modern-flowchat-container {
+  --modern-flowchat-input-bg: #1e1e1e;
+
   width: 100%;
   height: 100%;
   display: flex;
@@ -36,12 +38,11 @@
     background: transparent;
   }
 
-  
   &__input {
     flex-shrink: 0;
-    padding: var(--flowchat-card-expanded-pad-x, 0.625rem);
-    background: var(--color-surface, #1e1e1e);
-    border-top: 1px solid var(--color-border, #3a3a3a);
+    padding: var(--flowchat-card-expanded-pad-x);
+    background: var(--color-surface, var(--modern-flowchat-input-bg));
+    border-top: 1px solid var(--color-border);
   }
 }
 
@@ -53,7 +54,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: var(--flowchat-control-gap, 0.5rem);
+  gap: var(--flowchat-control-gap);
   padding: var(--size-gap-8, 32px);
   color: var(--color-text-secondary);
   text-align: center;
@@ -65,7 +66,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--color-accent, #5b8def);
+  color: var(--color-accent);
 
   svg {
     animation: history-placeholder-spin 1.1s linear infinite;
@@ -73,7 +74,7 @@
 }
 
 .history-session-placeholder__icon--failed {
-  color: var(--color-warning, #f59e0b);
+  color: var(--color-warning);
 
   svg {
     animation: none;
@@ -91,13 +92,13 @@
   color: var(--color-text-primary);
   font-size: var(--flowchat-font-size-xl);
   font-weight: 600;
-  line-height: var(--flowchat-support-line-height, 1.45);
+  line-height: var(--flowchat-support-line-height);
 }
 
 .history-session-placeholder__description {
   margin: 0;
   font-size: var(--flowchat-font-size-sm);
-  line-height: var(--flowchat-support-line-height, 1.45);
+  line-height: var(--flowchat-support-line-height);
 }
 
 .history-session-placeholder__retry {
@@ -105,19 +106,71 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: var(--flowchat-inline-gap, 0.35rem);
-  padding: 0 var(--size-gap-3, 12px);
-  border: 1px solid var(--color-border, rgba(255, 255, 255, 0.12));
+  gap: var(--flowchat-inline-gap);
+  padding: 0 var(--size-gap-3);
+  border: 1px solid var(--color-border);
   border-radius: 6px;
   color: var(--color-text-primary);
-  background: var(--color-surface-hover, rgba(255, 255, 255, 0.06));
+  background: var(--color-surface-hover);
   font: inherit;
   font-size: var(--flowchat-font-size-sm);
   cursor: pointer;
 }
 
 .history-session-placeholder__retry:hover {
-  background: var(--color-surface-active, rgba(255, 255, 255, 0.1));
+  background: var(--color-surface-active, var(--color-overlay-white-10));
+}
+
+.modern-flowchat-container__history-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  pointer-events: none;
+  background: var(--color-bg-scene);
+}
+
+.modern-flowchat-container__history-open-intent-shield {
+  position: absolute;
+  inset: 0;
+  z-index: 11;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 76px;
+  pointer-events: auto;
+  background: var(--color-bg-scene);
+  contain: paint;
+}
+
+.modern-flowchat-container__history-open-intent-shield::before {
+  content: "";
+  position: absolute;
+  top: 116px;
+  left: 50%;
+  width: min(720px, calc(100% - 48px));
+  height: min(220px, calc(100% - 168px));
+  min-height: 120px;
+  transform: translateX(-50%);
+  border-radius: 8px;
+  opacity: 0.72;
+  background:
+    linear-gradient(90deg, transparent 0 4%, var(--color-surface-hover) 4% 62%, transparent 62% 100%) 0 0 / 100% 24px no-repeat,
+    linear-gradient(90deg, transparent 0 9%, var(--color-surface-hover) 9% 86%, transparent 86% 100%) 0 48px / 100% 24px no-repeat,
+    linear-gradient(90deg, transparent 0 6%, var(--color-surface-hover) 6% 74%, transparent 74% 100%) 0 96px / 100% 24px no-repeat,
+    linear-gradient(90deg, transparent 0 12%, var(--color-surface-hover) 12% 68%, transparent 68% 100%) 0 144px / 100% 24px no-repeat;
+}
+
+.modern-flowchat-container__history-open-intent-spinner {
+  position: relative;
+  z-index: 1;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-accent);
+  border-radius: 50%;
+  background: var(--color-bg-scene);
+  box-shadow: 0 0 0 6px var(--color-bg-scene);
+  animation: history-placeholder-spin 0.9s linear infinite;
 }
 
 @keyframes history-placeholder-spin {

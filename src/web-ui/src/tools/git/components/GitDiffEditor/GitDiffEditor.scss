@@ -22,7 +22,7 @@ $_diff-padding-desktop: 32px;
     gap: $size-gap-2;
     padding: $size-gap-3 $size-gap-4;
     background: var(--color-bg-primary);
-    border: 1px solid rgba(239, 68, 68, 0.3);
+    border: 1px solid var(--color-error-border);
     border-radius: 0;
     border-bottom: 1px solid rgba(239, 68, 68, 0.5);
     color: var(--color-error);
@@ -48,8 +48,8 @@ $_diff-padding-desktop: 32px;
     border-radius: 6px;
     
     box-shadow: 
-      inset 0 1px 3px rgba(0, 0, 0, 0.2),
-      0 0 0 1px rgba(255, 255, 255, 0.03);
+      inset 0 1px 3px var(--color-overlay-black-20),
+      0 0 0 1px var(--color-overlay-white-03);
     
     background: linear-gradient(
       180deg,
@@ -84,10 +84,10 @@ $_diff-padding-desktop: 32px;
         outline: none !important;
         border: none !important;
         box-shadow: none !important;
-        color: var(--color-text-muted, rgba(255, 255, 255, 0.35)) !important;
+        color: var(--color-text-muted) !important;
         
         &:hover {
-          color: var(--color-text-secondary, rgba(255, 255, 255, 0.5)) !important;
+          color: var(--color-text-secondary) !important;
           background: transparent !important;
         }
         
@@ -167,19 +167,19 @@ $_diff-padding-desktop: 32px;
           bottom: 0;
           left: 50%;
           width: 1px;
-          background: var(--border-medium, rgba(255, 255, 255, 0.08));
-          border-left: 1px dashed var(--border-medium, rgba(255, 255, 255, 0.08));
+          background: var(--border-medium);
+          border-left: 1px dashed var(--border-medium);
           transition: all 0.2s ease;
         }
         
         &:hover::before {
           border-left-style: solid;
-          border-left-color: var(--border-light, rgba(255, 255, 255, 0.2));
+          border-left-color: var(--border-light, var(--color-overlay-white-20));
         }
       }
       
       .monaco-diff-editor.side-by-side .editor.original {
-        border-right: 1px dashed var(--border-medium, rgba(255, 255, 255, 0.08)) !important;
+        border-right: 1px dashed var(--border-medium) !important;
         
         &:hover {
           border-right-style: solid !important;
@@ -187,7 +187,7 @@ $_diff-padding-desktop: 32px;
       }
       
       .monaco-diff-editor.side-by-side .editor.modified {
-        border-left: 1px dashed var(--border-medium, rgba(255, 255, 255, 0.08)) !important;
+        border-left: 1px dashed var(--border-medium) !important;
         
         &:hover {
           border-left-style: solid !important;
@@ -195,11 +195,11 @@ $_diff-padding-desktop: 32px;
       }
       
       .monaco-diff-editor .diffViewport {
-        background: rgba(255, 255, 255, 0.02) !important;
+        background: var(--color-overlay-white-02) !important;
       }
       
       .monaco-diff-editor .diagonal-fill {
-        background-color: var(--color-bg-secondary, #0d0d0f) !important;
+        background-color: var(--color-bg-secondary) !important;
         background-image: repeating-linear-gradient(
           45deg,
           transparent,
@@ -216,8 +216,8 @@ $_diff-padding-desktop: 32px;
     top: $size-gap-3;
     right: $size-gap-3;
     padding: $size-gap-2 $size-gap-4;
-    background: rgba(0, 0, 0, 0.8);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: var(--color-overlay-black-80);
+    border: 1px solid var(--color-overlay-white-10);
     border-radius: $size-radius-base;
     color: var(--color-text-secondary);
     font-size: var(--font-size-sm);
@@ -225,7 +225,7 @@ $_diff-padding-desktop: 32px;
     z-index: $z-overlay;
     animation: git-diff-editor-fade-in 0.2s ease-out;
     backdrop-filter: blur(4px);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 2px 8px var(--color-overlay-black-30);
   }
 
   &__processing-overlay {
@@ -262,7 +262,7 @@ $_diff-padding-desktop: 32px;
     animation: git-diff-editor-spin $motion-lazy $easing-standard infinite;
     box-shadow: 
       0 0 20px rgba(96, 165, 250, 0.3),
-      0 0 40px rgba(96, 165, 250, 0.15);
+      0 0 40px var(--color-accent-200);
   }
 
   &__completed-message {
@@ -285,14 +285,14 @@ $_diff-padding-desktop: 32px;
     border-radius: $size-radius-full;
     margin-bottom: $size-gap-6;
     animation: git-diff-editor-scale-bounce 0.5s $easing-standard;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 8px 24px var(--color-overlay-black-30);
 
     &--accepted {
       background: linear-gradient(135deg, 
         color.adjust($color-success, $lightness: 10%) 0%, 
         $color-success 100%
       );
-      color: #ffffff;
+      color: var(--color-static-white);
       box-shadow: 
         0 8px 24px rgba(34, 197, 94, 0.4),
         0 0 40px rgba(34, 197, 94, 0.2);
@@ -303,14 +303,14 @@ $_diff-padding-desktop: 32px;
         color.adjust($color-error, $lightness: 10%) 0%, 
         $color-error 100%
       );
-      color: #ffffff;
+      color: var(--color-static-white);
       box-shadow: 
         0 8px 24px rgba(239, 68, 68, 0.4),
         0 0 40px rgba(239, 68, 68, 0.2);
     }
 
     svg {
-      filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.3));
+      filter: drop-shadow(0 2px 8px var(--color-overlay-black-30));
     }
   }
 

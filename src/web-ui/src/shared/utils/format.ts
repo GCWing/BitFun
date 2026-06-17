@@ -48,11 +48,6 @@ export const truncateText = (text: string, maxLength: number): string => {
   return text.substring(0, maxLength - 3) + '...';
 };
 
-export const formatTimestamp = (timestamp: number): string => {
-  const date = new Date(timestamp);
-  return date.toLocaleTimeString();
-};
-
 export const formatFilePath = (filePath: string, maxLength: number = 50): string => {
   if (filePath.length <= maxLength) return filePath;
   

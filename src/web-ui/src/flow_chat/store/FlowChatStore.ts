@@ -8,6 +8,7 @@ import {
   Session,
   DialogTurn,
   ModelRound,
+  ModelRoundAttempt,
   FlowItem,
   FlowToolItem,
   FlowImageAnalysisItem,
@@ -17,6 +18,7 @@ import {
   SessionConfig,
   SessionContextRestoreState,
   SessionHistoryState,
+  TokenUsage,
 } from '../types/flow-chat';
 import { createLogger } from '@/shared/utils/logger';
 import {
@@ -27,7 +29,10 @@ import {
 import { elapsedMs, nowMs } from '@/shared/utils/timing';
 import { i18nService } from '@/infrastructure/i18n/core/I18nService';
 import type { DialogTurnData, LocalCommandMetadata, SessionKind } from '@/shared/types/session-history';
-import type { SessionInfo as AgentSessionInfo } from '@/infrastructure/api/service-api/AgentAPI';
+import type {
+  SessionInfo as AgentSessionInfo,
+  SessionViewRestoreTiming,
+} from '@/infrastructure/api/service-api/AgentAPI';
 import type { SessionMetadataPage } from '@/infrastructure/api/service-api/SessionAPI';
 import {
   deriveLastFinishedAtFromMetadata,
@@ -53,6 +58,8 @@ import {
 import type { WorkspaceInfo } from '@/shared/types';
 import { sessionBelongsToWorkspaceNavRow } from '../utils/sessionOrdering';
 import { sessionMatchesWorkspace } from '../utils/workspaceScope';
+import { resolveThreadGoalUserMessageDisplay } from '../utils/threadGoalDisplay';
+import { useBackgroundSubagentActivityStore } from './backgroundSubagentActivityStore';
 import { storage } from '@/shared/utils/storageAdapter';
 
 const log = createLogger('FlowChatStore');
@@ -67,8 +74,265 @@ const VALID_AGENT_TYPES = new Set([
   'DeepResearch',
 ]);
 const METADATA_LIST_RECENT_DEDUPE_TTL_MS = 1000;
-const HISTORICAL_SESSION_INITIAL_TAIL_TURN_COUNT = 3;
-const HISTORICAL_SESSION_FULL_HISTORY_DELAY_MS = 150;
+const HISTORICAL_SESSION_INITIAL_REMOTE_TAIL_TURN_COUNT = 3;
+const HISTORICAL_SESSION_INITIAL_LOCAL_TAIL_TURN_COUNT = 8;
+const HISTORICAL_SESSION_FULL_HISTORY_IDLE_TIMEOUT_MS = 1500;
+const HISTORICAL_SESSION_FULL_HISTORY_FIRST_PAINT_TIMEOUT_MS = 2500;
+const HISTORICAL_SESSION_FULL_HISTORY_STABLE_VIEWPORT_DELAY_MS = 250;
+const MAX_DEFERRED_FULL_HISTORY_PROJECTIONS = 3;
+
+function itemMatchesIdentity(item: AnyFlowItem, itemId: string): boolean {
+  if (item.id === itemId) {
+    return true;
+  }
+
+  if (item.type === 'tool') {
+    return (item as FlowToolItem).toolCall?.id === itemId;
+  }
+
+  return false;
+}
+
+function withAttemptMetadata<T extends AnyFlowItem>(
+  item: T,
+  attempt: { id: string; index: number },
+): T {
+  if (item.attemptId === attempt.id && item.attemptIndex === attempt.index) {
+    return item;
+  }
+
+  return {
+    ...item,
+    attemptId: attempt.id,
+    attemptIndex: attempt.index,
+  };
+}
+
+function sortAttemptEntries<T extends { index: number }>(attempts: T[]): T[] {
+  return [...attempts].sort((left, right) => left.index - right.index);
+}
+
+function isFlowItemActiveStatus(status: AnyFlowItem['status']): boolean {
+  return [
+    'pending',
+    'queued',
+    'waiting',
+    'preparing',
+    'running',
+    'streaming',
+    'receiving',
+    'pending_confirmation',
+    'confirmed',
+    'analyzing',
+  ].includes(status);
+}
+
+function normalizeSupersededItem(item: AnyFlowItem, endedAt: number): AnyFlowItem {
+  if (item.type === 'text') {
+    return {
+      ...item,
+      isStreaming: false,
+      status: 'completed',
+      runtimeStatus: undefined,
+    };
+  }
+
+  if (item.type === 'thinking') {
+    return {
+      ...item,
+      isStreaming: false,
+      isCollapsed: true,
+      status: 'completed',
+    };
+  }
+
+  if (item.type === 'tool') {
+    const toolItem = item as FlowToolItem;
+    if (!isFlowItemActiveStatus(toolItem.status)) {
+      return item;
+    }
+
+    const startTime = toolItem.startTime;
+    return {
+      ...toolItem,
+      status: 'cancelled',
+      requiresConfirmation: false,
+      acpPermission: undefined,
+      isParamsStreaming: false,
+      interruptionReason: 'retry_superseded',
+      endTime: toolItem.endTime ?? endedAt,
+      durationMs: toolItem.durationMs ?? (
+        typeof startTime === 'number' ? Math.max(0, endedAt - startTime) : undefined
+      ),
+      toolResult: toolItem.toolResult ?? {
+        result: null,
+        success: false,
+        error: 'Superseded by a newer retry in the same model round.',
+      },
+    };
+  }
+
+  return item;
+}
+
+function deriveAttemptStatus(
+  round: ModelRound,
+  attempt: ModelRoundAttempt,
+  attemptIndex: number,
+  attemptCount: number,
+): ModelRoundAttempt['status'] {
+  const isLatestAttempt = attemptIndex === attemptCount - 1;
+  if (!isLatestAttempt) {
+    return 'superseded';
+  }
+
+  if (round.status === 'completed') {
+    return 'completed';
+  }
+  if (round.status === 'cancelled') {
+    return 'cancelled';
+  }
+  if (round.status === 'error') {
+    return 'failed';
+  }
+  if (attempt.status === 'superseded') {
+    return 'superseded';
+  }
+  return 'streaming';
+}
+
+function normalizePersistedToolInterruptionReason(
+  interruptionReason: unknown,
+  status: unknown,
+): FlowToolItem['interruptionReason'] {
+  if (interruptionReason === 'retry_superseded') {
+    return 'retry_superseded';
+  }
+
+  if (interruptionReason === 'app_restart') {
+    return 'app_restart';
+  }
+
+  return isTransientToolStatus(status) ? 'app_restart' : undefined;
+}
+
+function flattenRoundAttemptItems(round: ModelRound): AnyFlowItem[] {
+  const attempts = sortAttemptEntries(round.attempts ?? []);
+  return attempts.flatMap(attempt => attempt.items);
+}
+
+function deriveRoundAttemptsFromItems(items: AnyFlowItem[]): ModelRound['attempts'] | undefined {
+  const attempts: Array<ModelRoundAttempt> = [];
+  const byKey = new Map<string, number>();
+  const leadingUnassigned: AnyFlowItem[] = [];
+  let currentAttemptKey: string | null = null;
+  let hasAttemptedItems = false;
+
+  const getOrCreateAttempt = (id: string, index: number) => {
+    const key = `${id}::${index}`;
+    const existingIndex = byKey.get(key);
+    if (existingIndex !== undefined) {
+      return attempts[existingIndex];
+    }
+
+    const attempt: ModelRoundAttempt = { id, index, status: 'streaming', items: [] as AnyFlowItem[] };
+    byKey.set(key, attempts.length);
+    attempts.push(attempt);
+    return attempt;
+  };
+
+  for (const item of items) {
+    const attemptId = typeof item.attemptId === 'string' && item.attemptId.length > 0
+      ? item.attemptId
+      : undefined;
+    const attemptIndex = typeof item.attemptIndex === 'number' && Number.isFinite(item.attemptIndex)
+      ? item.attemptIndex
+      : undefined;
+
+    if (attemptId || attemptIndex !== undefined) {
+      hasAttemptedItems = true;
+      const resolvedIndex = attemptIndex ?? attempts.length + 1;
+      const resolvedId = attemptId ?? `attempt:${resolvedIndex}`;
+      const attempt = getOrCreateAttempt(resolvedId, resolvedIndex);
+
+      if (leadingUnassigned.length > 0 && attempts.length === 1 && attempt.items.length === 0) {
+        attempt.items.push(...leadingUnassigned.map(unassigned => withAttemptMetadata(unassigned, attempt)));
+        leadingUnassigned.length = 0;
+      }
+
+      attempt.items.push(withAttemptMetadata(item, attempt));
+      currentAttemptKey = `${attempt.id}::${attempt.index}`;
+      continue;
+    }
+
+    if (currentAttemptKey) {
+      const attemptIndexInList = byKey.get(currentAttemptKey);
+      if (attemptIndexInList !== undefined) {
+        const attempt = attempts[attemptIndexInList];
+        attempt.items.push(withAttemptMetadata(item, attempt));
+        continue;
+      }
+    }
+
+    leadingUnassigned.push(item);
+  }
+
+  if (!hasAttemptedItems) {
+    return undefined;
+  }
+
+  if (leadingUnassigned.length > 0 && attempts.length > 0) {
+    const firstAttempt = attempts[0];
+    firstAttempt.items.unshift(...leadingUnassigned.map(item => withAttemptMetadata(item, firstAttempt)));
+  }
+
+  return sortAttemptEntries(attempts);
+}
+
+function synchronizeRoundAttempts(round: ModelRound): ModelRound {
+  const attempts = round.attempts ?? deriveRoundAttemptsFromItems(round.items);
+  if (!attempts || attempts.length === 0) {
+    return round;
+  }
+
+  const endedAt = round.endTime ?? Date.now();
+  const sortedAttempts = sortAttemptEntries(attempts).map((attempt, index, allAttempts) => {
+    const status = deriveAttemptStatus(round, attempt, index, allAttempts.length);
+    return {
+      ...attempt,
+      status,
+      items: status === 'superseded'
+        ? attempt.items.map(item => normalizeSupersededItem(item, endedAt))
+        : attempt.items.map(item => {
+            if (item.type === 'text') {
+              return round.isStreaming ? item : { ...item, isStreaming: false };
+            }
+            if (item.type === 'thinking') {
+              return round.isStreaming ? item : { ...item, isStreaming: false };
+            }
+            return item;
+          }),
+    };
+  });
+  const disableExploreGrouping = sortedAttempts.length > 1;
+
+  return {
+    ...round,
+    attempts: sortedAttempts,
+    items: flattenRoundAttemptItems({ ...round, attempts: sortedAttempts }),
+    renderHints: disableExploreGrouping
+      ? {
+          ...(round.renderHints ?? {}),
+          disableExploreGrouping: true,
+        }
+      : round.renderHints,
+  };
+}
+
+interface FullHistoryHydrationReleaseOptions {
+  immediate?: boolean;
+  reason?: string;
+}
 
 interface MetadataListRequest {
   promise: Promise<void>;
@@ -83,8 +347,13 @@ interface MetadataPageRequest {
 }
 
 interface FullHistoryHydrationRequest {
+  sessionId: string;
+  remote: boolean;
+  requireActiveSession: boolean;
+  sessionTraceId: string;
   promise: Promise<void>;
-  timer?: ReturnType<typeof setTimeout>;
+  cancel?: () => void;
+  releaseAfterInitialPaint?: (options?: FullHistoryHydrationReleaseOptions) => void;
 }
 
 interface CompleteSessionHistoryLoadRequest {
@@ -93,12 +362,150 @@ interface CompleteSessionHistoryLoadRequest {
   remoteConnectionId?: string;
   remoteSshHost?: string;
   includeInternal?: boolean;
+  requireActiveSession?: boolean;
   initialSessionTraceId: string;
   expectedDialogTurnIds: string[];
 }
 
+interface DeferredFullHistoryProjection {
+  remote: boolean;
+  requireActiveSession: boolean;
+  expectedDialogTurnIds: string[];
+  dialogTurns: DialogTurn[];
+  contextRestoreState: SessionContextRestoreState;
+  restoredSessionInfo?: AgentSessionInfo;
+  restoredLastUserDialogMode?: string;
+}
+
 function areStringArraysEqual(left: string[], right: string[]): boolean {
   return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function startsWithStringArray(values: string[], prefix: string[]): boolean {
+  return values.length >= prefix.length && prefix.every((value, index) => values[index] === value);
+}
+
+function scheduleHistoricalSessionFullHydrate(callback: () => void): () => void {
+  let cancelled = false;
+  const run = () => {
+    if (cancelled) {
+      return;
+    }
+    callback();
+  };
+
+  const requestIdleCallback = (globalThis as {
+    requestIdleCallback?: (callback: () => void, options?: { timeout?: number }) => number;
+  }).requestIdleCallback;
+  const cancelIdleCallback = (globalThis as {
+    cancelIdleCallback?: (handle: number) => void;
+  }).cancelIdleCallback;
+
+  if (typeof requestIdleCallback === 'function') {
+    const handle = requestIdleCallback(run, {
+      timeout: HISTORICAL_SESSION_FULL_HISTORY_IDLE_TIMEOUT_MS,
+    });
+    return () => {
+      cancelled = true;
+      cancelIdleCallback?.(handle);
+    };
+  }
+
+  const timer = globalThis.setTimeout(run, HISTORICAL_SESSION_FULL_HISTORY_IDLE_TIMEOUT_MS);
+  return () => {
+    cancelled = true;
+    globalThis.clearTimeout(timer);
+  };
+}
+
+function scheduleLocalHistoricalSessionFullHydrate(
+  callback: (reason: 'initial_paint' | 'timeout' | 'explicit') => void,
+): {
+  cancel: () => void;
+  releaseAfterInitialPaint: (options?: FullHistoryHydrationReleaseOptions) => void;
+} {
+  let cancelled = false;
+  let started = false;
+  let cancelIdle: (() => void) | undefined;
+  let stableViewportTimer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = globalThis.setTimeout(
+    () => start('timeout'),
+    HISTORICAL_SESSION_FULL_HISTORY_FIRST_PAINT_TIMEOUT_MS,
+  );
+
+  function start(reason: 'initial_paint' | 'timeout' | 'explicit') {
+    if (cancelled || started) {
+      return;
+    }
+
+    started = true;
+    globalThis.clearTimeout(timeout);
+    if (stableViewportTimer) {
+      globalThis.clearTimeout(stableViewportTimer);
+      stableViewportTimer = undefined;
+    }
+    cancelIdle = scheduleHistoricalSessionFullHydrate(() => callback(reason));
+  }
+
+  return {
+    cancel: () => {
+      cancelled = true;
+      globalThis.clearTimeout(timeout);
+      if (stableViewportTimer) {
+        globalThis.clearTimeout(stableViewportTimer);
+      }
+      cancelIdle?.();
+    },
+    releaseAfterInitialPaint: (options?: FullHistoryHydrationReleaseOptions) => {
+      if (options?.immediate === true) {
+        start('explicit');
+        return;
+      }
+      if (stableViewportTimer || started || cancelled) {
+        return;
+      }
+      globalThis.clearTimeout(timeout);
+      stableViewportTimer = globalThis.setTimeout(
+        () => start('initial_paint'),
+        HISTORICAL_SESSION_FULL_HISTORY_STABLE_VIEWPORT_DELAY_MS,
+      );
+    },
+  };
+}
+
+function historicalSessionInitialTailTurnCount(remote: boolean): number {
+  return remote
+    ? HISTORICAL_SESSION_INITIAL_REMOTE_TAIL_TURN_COUNT
+    : HISTORICAL_SESSION_INITIAL_LOCAL_TAIL_TURN_COUNT;
+}
+
+function sessionViewRestoreTimingTraceFields(
+  timing: SessionViewRestoreTiming | undefined,
+): Record<string, unknown> {
+  if (!timing) {
+    return {};
+  }
+
+  return {
+    restoreResolveStorageDurationMs: timing.resolveStoragePathDurationMs,
+    restoreVisibilityMetadataDurationMs: timing.visibilityMetadataDurationMs,
+    restoreLoadSessionWithTurnsDurationMs: timing.loadSessionWithTurnsDurationMs,
+    restoreNormalizeTurnIdsDurationMs: timing.normalizeTurnIdsDurationMs,
+    restoreTotalDurationMs: timing.totalDurationMs,
+    restoreTurnTailCount: timing.turnLoad?.requestedTailTurnCount,
+    restoreTurnLoadedCount: timing.turnLoad?.loadedTurnCount,
+    restoreTurnTotalCount: timing.turnLoad?.totalTurnCount,
+    restoreTurnFileCount: timing.turnLoad?.turnFileCount,
+    restoreTurnMissingFileCount: timing.turnLoad?.missingTurnFileCount,
+    restoreTurnFastPath: timing.turnLoad?.fastPath,
+    restoreTurnMetadataDurationMs: timing.turnLoad?.metadataDurationMs,
+    restoreTurnStateDurationMs: timing.turnLoad?.stateDurationMs,
+    restoreTurnScanDurationMs: timing.turnLoad?.scanDurationMs,
+    restoreTurnReadDurationMs: timing.turnLoad?.readDurationMs,
+    restoreTurnMaxReadDurationMs: timing.turnLoad?.maxTurnReadDurationMs,
+    restoreTurnBuildSessionDurationMs: timing.turnLoad?.buildSessionDurationMs,
+    restoreTurnTotalDurationMs: timing.turnLoad?.totalDurationMs,
+  };
 }
 
 function isUnsupportedTauriCommandError(error: unknown, command: string): boolean {
@@ -145,14 +552,25 @@ function isValidPersistedAgentType(agentType: string): boolean {
   return VALID_AGENT_TYPES.has(agentType) || agentType.startsWith('acp:');
 }
 
+interface SelectorListener<T = any> {
+  selector: (state: FlowChatState) => T;
+  callback: (selected: T) => void;
+  isEqual: (a: T, b: T) => boolean;
+  lastValue: T | undefined;
+  hasLastValue: boolean;
+}
+
 export class FlowChatStore {
   private static instance: FlowChatStore;
   private state: FlowChatState;
   private listeners: Set<(state: FlowChatState) => void> = new Set();
+  private selectorListeners: Set<SelectorListener> = new Set();
   private silentMode = false;
   private metadataListRequests = new Map<string, MetadataListRequest>();
   private metadataPageRequests = new Map<string, MetadataPageRequest>();
   private fullHistoryHydrationRequests = new Map<string, FullHistoryHydrationRequest>();
+  private deferredFullHistoryProjections = new Map<string, DeferredFullHistoryProjection>();
+  private fullHistoryProjectionApplyRequests = new Set<string>();
   private unsupportedRestoreCommands = new Set<string>();
   private onPersistUnreadCompletion?: (sessionId: string, value: 'completed' | 'error' | 'interrupted' | undefined) => void;
 
@@ -262,19 +680,33 @@ export class FlowChatStore {
     }
 
     const remote = isRemoteTraceContext(request.remoteConnectionId, request.remoteSshHost);
+    const requireActiveSession = request.requireActiveSession === true;
     startupTrace.markPhase('historical_session_full_hydrate_scheduled', {
       remote,
+      sessionId: request.sessionId,
       sessionTraceId: request.initialSessionTraceId,
       loadedTurnCount: request.expectedDialogTurnIds.length,
+      requireActiveSession,
+      scheduler: remote ? 'idle' : 'after_initial_paint_idle',
     });
 
-    let timer: ReturnType<typeof setTimeout> | undefined;
+    let cancelScheduled: (() => void) | undefined;
+    let releaseAfterInitialPaint: ((options?: FullHistoryHydrationReleaseOptions) => void) | undefined;
+    let resolveRequest: (() => void) | undefined;
     const promise = new Promise<void>(resolve => {
-      timer = setTimeout(() => {
+      resolveRequest = resolve;
+      const startFullHydrate = (trigger: 'idle' | 'initial_paint' | 'timeout' | 'explicit') => {
+        startupTrace.markPhase('historical_session_full_hydrate_released', {
+          remote,
+          sessionId: request.sessionId,
+          sessionTraceId: request.initialSessionTraceId,
+          trigger,
+        });
         void this.completeSessionHistoryLoad(request)
           .catch(error => {
             startupTrace.markPhase('historical_session_full_hydrate_failed', {
               remote,
+              sessionId: request.sessionId,
               sessionTraceId: `${request.initialSessionTraceId}-full`,
             });
             log.warn('Failed to complete partial session history restore', {
@@ -283,7 +715,16 @@ export class FlowChatStore {
             });
           })
           .finally(resolve);
-      }, HISTORICAL_SESSION_FULL_HISTORY_DELAY_MS);
+      };
+
+      if (remote) {
+        cancelScheduled = scheduleHistoricalSessionFullHydrate(() => startFullHydrate('idle'));
+        return;
+      }
+
+      const scheduled = scheduleLocalHistoricalSessionFullHydrate(startFullHydrate);
+      cancelScheduled = scheduled.cancel;
+      releaseAfterInitialPaint = scheduled.releaseAfterInitialPaint;
     }).finally(() => {
       const currentRequest = this.fullHistoryHydrationRequests.get(requestKey);
       if (currentRequest?.promise === promise) {
@@ -291,7 +732,275 @@ export class FlowChatStore {
       }
     });
 
-    this.fullHistoryHydrationRequests.set(requestKey, { promise, timer });
+    this.fullHistoryHydrationRequests.set(requestKey, {
+      sessionId: request.sessionId,
+      remote,
+      requireActiveSession,
+      sessionTraceId: request.initialSessionTraceId,
+      promise,
+      cancel: () => {
+        cancelScheduled?.();
+        resolveRequest?.();
+      },
+      releaseAfterInitialPaint: (options?: FullHistoryHydrationReleaseOptions) => {
+        releaseAfterInitialPaint?.(options);
+      },
+    });
+  }
+
+  private cancelLocalSessionHistoryCompletion(sessionId: string, reason: string): boolean {
+    let cancelled = false;
+    for (const [requestKey, request] of this.fullHistoryHydrationRequests) {
+      if (request.sessionId !== sessionId || request.remote || !request.requireActiveSession) {
+        continue;
+      }
+      request.cancel?.();
+      this.fullHistoryHydrationRequests.delete(requestKey);
+      startupTrace.markPhase('historical_session_full_hydrate_cancelled', {
+        remote: false,
+        sessionId,
+        sessionTraceId: request.sessionTraceId,
+        reason,
+      });
+      cancelled = true;
+    }
+    return cancelled;
+  }
+
+  private clearRemovedSessionHistoryState(sessionIds: Iterable<string>, reason: string): void {
+    const removedSessionIds = new Set(sessionIds);
+    if (removedSessionIds.size === 0) {
+      return;
+    }
+
+    for (const [requestKey, request] of this.fullHistoryHydrationRequests) {
+      if (!removedSessionIds.has(request.sessionId)) {
+        continue;
+      }
+
+      request.cancel?.();
+      this.fullHistoryHydrationRequests.delete(requestKey);
+      startupTrace.markPhase('historical_session_full_hydrate_cancelled', {
+        remote: request.remote,
+        sessionId: request.sessionId,
+        sessionTraceId: request.sessionTraceId,
+        reason,
+      });
+    }
+
+    for (const sessionId of removedSessionIds) {
+      this.deferredFullHistoryProjections.delete(sessionId);
+      this.fullHistoryProjectionApplyRequests.delete(sessionId);
+    }
+  }
+
+  private scheduleActiveLocalPartialSessionHistoryCompletion(
+    sessionId: string,
+    reason: string
+  ): boolean {
+    const session = this.state.sessions.get(sessionId);
+    if (
+      this.state.activeSessionId !== sessionId ||
+      !session ||
+      session.historyState !== 'ready' ||
+      session.isPartial !== true ||
+      isRemoteTraceContext(session.remoteConnectionId, session.remoteSshHost) ||
+      this.hasPendingSessionHistoryCompletion(sessionId) ||
+      this.hasDeferredSessionHistoryProjection(sessionId)
+    ) {
+      return false;
+    }
+
+    const workspacePath = session.workspacePath || session.config.workspacePath;
+    if (!workspacePath || session.dialogTurns.length === 0) {
+      return false;
+    }
+
+    const sessionTraceId = `${sessionId.slice(0, 8)}-${Math.random().toString(36).slice(2, 8)}`;
+    startupTrace.markPhase('historical_session_full_hydrate_rescheduled', {
+      remote: false,
+      sessionId,
+      sessionTraceId,
+      reason,
+      loadedTurnCount: session.dialogTurns.length,
+      totalTurnCount: session.totalTurnCount,
+    });
+    this.scheduleCompleteSessionHistoryLoad({
+      sessionId,
+      workspacePath,
+      initialSessionTraceId: sessionTraceId,
+      requireActiveSession: true,
+      expectedDialogTurnIds: session.dialogTurns.map(turn => turn.id),
+    });
+    return true;
+  }
+
+  public hasPendingSessionHistoryCompletion(sessionId: string): boolean {
+    for (const request of this.fullHistoryHydrationRequests.values()) {
+      if (request.sessionId === sessionId) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  public hasDeferredSessionHistoryProjection(sessionId: string): boolean {
+    return this.deferredFullHistoryProjections.has(sessionId);
+  }
+
+  public requestSessionFullHistoryProjection(sessionId: string, reason: string): boolean {
+    this.fullHistoryProjectionApplyRequests.add(sessionId);
+    const applied = this.applyDeferredSessionHistoryProjection(sessionId, reason);
+    const released = this.releaseSessionHistoryCompletionAfterInitialPaint(sessionId, {
+      immediate: true,
+      reason,
+    });
+
+    if (!applied && !released) {
+      this.fullHistoryProjectionApplyRequests.delete(sessionId);
+    }
+
+    if (applied || released) {
+      startupTrace.markPhase('historical_session_full_hydrate_projection_requested', {
+        sessionId,
+        reason,
+        applied,
+        released,
+      });
+    }
+
+    return applied || released;
+  }
+
+  public releaseSessionHistoryCompletionAfterInitialPaint(
+    sessionId: string,
+    options?: FullHistoryHydrationReleaseOptions
+  ): boolean {
+    let released = false;
+    for (const request of this.fullHistoryHydrationRequests.values()) {
+      if (request.sessionId !== sessionId) {
+        continue;
+      }
+      request.releaseAfterInitialPaint?.(options);
+      released = true;
+    }
+    return released;
+  }
+
+  private shouldDeferFullHistoryProjection(sessionId: string, remote: boolean, _requireActiveSession: boolean): boolean {
+    return (
+      !remote &&
+      this.state.activeSessionId === sessionId &&
+      !this.fullHistoryProjectionApplyRequests.has(sessionId)
+    );
+  }
+
+  private setDeferredFullHistoryProjection(
+    sessionId: string,
+    projection: DeferredFullHistoryProjection
+  ): void {
+    this.deferredFullHistoryProjections.delete(sessionId);
+    this.deferredFullHistoryProjections.set(sessionId, projection);
+
+    while (this.deferredFullHistoryProjections.size > MAX_DEFERRED_FULL_HISTORY_PROJECTIONS) {
+      const oldestSessionId = this.deferredFullHistoryProjections.keys().next().value;
+      if (!oldestSessionId) {
+        break;
+      }
+
+      this.deferredFullHistoryProjections.delete(oldestSessionId);
+      this.fullHistoryProjectionApplyRequests.delete(oldestSessionId);
+      startupTrace.markPhase('historical_session_full_hydrate_deferred_projection_evicted', {
+        sessionId: oldestSessionId,
+        reason: 'cache-limit',
+      });
+    }
+  }
+
+  private applyDeferredSessionHistoryProjection(sessionId: string, reason: string): boolean {
+    const projection = this.deferredFullHistoryProjections.get(sessionId);
+    if (!projection) {
+      return false;
+    }
+
+    const result = this.applyCompletedSessionHistoryProjection(sessionId, projection);
+    if (result.applied) {
+      this.deferredFullHistoryProjections.delete(sessionId);
+      this.fullHistoryProjectionApplyRequests.delete(sessionId);
+      startupTrace.markPhase('historical_session_full_hydrate_deferred_projection_applied', {
+        remote: projection.remote,
+        sessionId,
+        reason,
+        turnCount: projection.dialogTurns.length,
+        preservedTurnCount: result.preservedTurnCount,
+      });
+    }
+
+    return result.applied;
+  }
+
+  private applyCompletedSessionHistoryProjection(
+    sessionId: string,
+    projection: DeferredFullHistoryProjection
+  ): { applied: boolean; preservedTurnCount: number } {
+    let applied = false;
+    let preservedTurnCount = 0;
+
+    this.setState(prev => {
+      if (projection.requireActiveSession && !projection.remote && prev.activeSessionId !== sessionId) {
+        return prev;
+      }
+
+      const session = prev.sessions.get(sessionId);
+      if (!session || session.historyState !== 'ready') {
+        return prev;
+      }
+
+      const currentDialogTurns = session.dialogTurns;
+      const currentDialogTurnIds = currentDialogTurns.map(turn => turn.id);
+      const canMergeCurrentTurns =
+        areStringArraysEqual(currentDialogTurnIds, projection.expectedDialogTurnIds) ||
+        startsWithStringArray(currentDialogTurnIds, projection.expectedDialogTurnIds);
+      if (!canMergeCurrentTurns) {
+        return prev;
+      }
+
+      const currentDialogTurnsById = new Map(currentDialogTurns.map(turn => [turn.id, turn]));
+      const restoredDialogTurnIds = new Set(projection.dialogTurns.map(turn => turn.id));
+      const appendedCurrentDialogTurns = currentDialogTurns
+        .slice(projection.expectedDialogTurnIds.length)
+        .filter(turn => !restoredDialogTurnIds.has(turn.id));
+      const mergedDialogTurns = [
+        ...projection.dialogTurns.map(turn => currentDialogTurnsById.get(turn.id) ?? turn),
+        ...appendedCurrentDialogTurns,
+      ];
+      preservedTurnCount = mergedDialogTurns.reduce(
+        (count, turn) => count + (currentDialogTurnsById.get(turn.id) === turn ? 1 : 0),
+        0,
+      );
+      const newSessions = new Map(prev.sessions);
+      newSessions.set(sessionId, {
+        ...session,
+        dialogTurns: mergedDialogTurns,
+        isPartial: false,
+        loadedTurnCount: mergedDialogTurns.length,
+        totalTurnCount: mergedDialogTurns.length,
+        contextRestoreState:
+          session.contextRestoreState === 'ready' ? 'ready' : projection.contextRestoreState,
+        mode: projection.restoredSessionInfo?.agentType || session.mode,
+        lastUserDialogMode: projection.restoredLastUserDialogMode,
+        lastSubmittedMode:
+          projection.restoredSessionInfo?.lastSubmittedAgentType ?? session.lastSubmittedMode,
+      });
+      applied = true;
+
+      return {
+        ...prev,
+        sessions: newSessions,
+      };
+    });
+
+    return { applied, preservedTurnCount };
   }
 
   private async completeSessionHistoryLoad(
@@ -300,8 +1009,18 @@ export class FlowChatStore {
     const fullTraceId = `${request.initialSessionTraceId}-full`;
     const startedAt = nowMs();
     const remote = isRemoteTraceContext(request.remoteConnectionId, request.remoteSshHost);
+    if (request.requireActiveSession === true && !remote && this.state.activeSessionId !== request.sessionId) {
+      startupTrace.markPhase('historical_session_full_hydrate_skipped', {
+        remote,
+        sessionId: request.sessionId,
+        sessionTraceId: fullTraceId,
+        reason: 'inactive-before-start',
+      });
+      return;
+    }
     startupTrace.markPhase('historical_session_full_hydrate_start', {
       remote,
+      sessionId: request.sessionId,
       sessionTraceId: fullTraceId,
       loadedTurnCount: request.expectedDialogTurnIds.length,
     });
@@ -317,6 +1036,18 @@ export class FlowChatStore {
       undefined,
     );
 
+    if (request.requireActiveSession === true && !remote && this.state.activeSessionId !== request.sessionId) {
+      startupTrace.markPhase('historical_session_full_hydrate_skipped', {
+        remote,
+        sessionId: request.sessionId,
+        sessionTraceId: fullTraceId,
+        reason: 'inactive-after-restore',
+        ...sessionViewRestoreTimingTraceFields(restored.timings),
+        durationMs: elapsedMs(startedAt),
+      });
+      return;
+    }
+
     const convertStartedAt = nowMs();
     const dialogTurns = this.convertToDialogTurns(restored.turns);
     const restoredLastUserDialogMode =
@@ -325,52 +1056,55 @@ export class FlowChatStore {
       restored.contextRestoreState === 'ready' ? 'ready' : 'pending';
     startupTrace.markPhase('historical_session_full_hydrate_convert_end', {
       remote,
+      sessionId: request.sessionId,
       sessionTraceId: fullTraceId,
       turnCount: dialogTurns.length,
       durationMs: elapsedMs(convertStartedAt),
     });
 
+    const projection: DeferredFullHistoryProjection = {
+      remote,
+      requireActiveSession: request.requireActiveSession === true,
+      expectedDialogTurnIds: request.expectedDialogTurnIds,
+      dialogTurns,
+      contextRestoreState,
+      restoredSessionInfo: restored.session,
+      restoredLastUserDialogMode,
+    };
     let applied = false;
-    this.setState(prev => {
-      const session = prev.sessions.get(request.sessionId);
-      if (!session || session.historyState !== 'ready') {
-        return prev;
-      }
-
-      const currentDialogTurnIds = session.dialogTurns.map(turn => turn.id);
-      if (!areStringArraysEqual(currentDialogTurnIds, request.expectedDialogTurnIds)) {
-        return prev;
-      }
-
-      const newSessions = new Map(prev.sessions);
-      newSessions.set(request.sessionId, {
-        ...session,
-        dialogTurns,
-        contextRestoreState:
-          session.contextRestoreState === 'ready' ? 'ready' : contextRestoreState,
-        mode: restored.session.agentType || session.mode,
-        lastUserDialogMode: restoredLastUserDialogMode,
-        lastSubmittedMode:
-          restored.session.lastSubmittedAgentType ?? session.lastSubmittedMode,
+    let preservedTurnCount = 0;
+    if (this.shouldDeferFullHistoryProjection(request.sessionId, remote, request.requireActiveSession === true)) {
+      this.setDeferredFullHistoryProjection(request.sessionId, projection);
+      startupTrace.markPhase('historical_session_full_hydrate_deferred_projection', {
+        remote,
+        sessionId: request.sessionId,
+        sessionTraceId: fullTraceId,
+        turnCount: dialogTurns.length,
       });
-      applied = true;
-
-      return {
-        ...prev,
-        sessions: newSessions,
-      };
-    });
+    } else {
+      const result = this.applyCompletedSessionHistoryProjection(request.sessionId, projection);
+      applied = result.applied;
+      preservedTurnCount = result.preservedTurnCount;
+      if (applied) {
+        this.deferredFullHistoryProjections.delete(request.sessionId);
+        this.fullHistoryProjectionApplyRequests.delete(request.sessionId);
+      }
+    }
 
     startupTrace.markPhase('historical_session_full_hydrate_end', {
       remote,
+      sessionId: request.sessionId,
       sessionTraceId: fullTraceId,
       turnCount: dialogTurns.length,
       applied,
+      preservedTurnCount,
+      ...sessionViewRestoreTimingTraceFields(restored.timings),
       durationMs: elapsedMs(startedAt),
     });
     if (applied) {
       markPhaseAfterAnimationFrames(startupTrace, 'historical_session_full_hydrate_after_state_commit_frame', {
         remote,
+        sessionId: request.sessionId,
         sessionTraceId: fullTraceId,
         turnCount: dialogTurns.length,
         durationMs: elapsedMs(startedAt),
@@ -385,11 +1119,26 @@ export class FlowChatStore {
     this.state = newState;
     
     if (!this.silentMode) {
+      // Notify plain listeners (backward compat)
       this.listeners.forEach(listener => {
         try {
           listener(newState);
         } catch (error) {
           console.error('[FlowChatStore] Listener threw an error, skipping:', error);
+        }
+      });
+
+      // Notify selector listeners
+      this.selectorListeners.forEach(entry => {
+        try {
+          const nextValue = entry.selector(newState);
+          if (!entry.hasLastValue || !entry.isEqual(entry.lastValue, nextValue)) {
+            entry.lastValue = nextValue;
+            entry.hasLastValue = true;
+            entry.callback(nextValue);
+          }
+        } catch (error) {
+          console.error('[FlowChatStore] Selector listener threw an error, skipping:', error);
         }
       });
     }
@@ -418,6 +1167,18 @@ export class FlowChatStore {
         listener(this.state);
       } catch (error) {
         console.error('[FlowChatStore] Listener threw an error during notifyListeners, skipping:', error);
+      }
+    });
+    this.selectorListeners.forEach(entry => {
+      try {
+        const nextValue = entry.selector(this.state);
+        if (!entry.hasLastValue || !entry.isEqual(entry.lastValue, nextValue)) {
+          entry.lastValue = nextValue;
+          entry.hasLastValue = true;
+          entry.callback(nextValue);
+        }
+      } catch (error) {
+        console.error('[FlowChatStore] Selector listener threw an error during notifyListeners, skipping:', error);
       }
     });
   }
@@ -479,6 +1240,24 @@ export class FlowChatStore {
     this.listeners.add(listener);
     return () => {
       this.listeners.delete(listener);
+    };
+  }
+
+  public subscribeSelector<T>(
+    selector: (state: FlowChatState) => T,
+    callback: (selected: T) => void,
+    options?: { isEqual?: (a: T, b: T) => boolean },
+  ): () => void {
+    const entry: SelectorListener<T> = {
+      selector,
+      callback,
+      isEqual: options?.isEqual ?? Object.is,
+      lastValue: undefined,
+      hasLastValue: false,
+    };
+    this.selectorListeners.add(entry);
+    return () => {
+      this.selectorListeners.delete(entry);
     };
   }
 
@@ -647,6 +1426,12 @@ export class FlowChatStore {
   }
 
   public switchSession(sessionId: string): void {
+    const previousSessionId = this.state.activeSessionId;
+    const targetSessionExists = this.state.sessions.has(sessionId);
+    if (targetSessionExists && previousSessionId && previousSessionId !== sessionId) {
+      this.cancelLocalSessionHistoryCompletion(previousSessionId, 'session-switch');
+    }
+
     let sessionMode: string | undefined;
     
     this.setState(prev => {
@@ -673,6 +1458,10 @@ export class FlowChatStore {
     window.dispatchEvent(new CustomEvent('bitfun:session-switched', {
       detail: { sessionId, mode: sessionMode || 'agentic' }
     }));
+
+    if (targetSessionExists && previousSessionId !== sessionId) {
+      this.scheduleActiveLocalPartialSessionHistoryCompletion(sessionId, 'session-switch');
+    }
   }
 
   /**
@@ -742,6 +1531,53 @@ export class FlowChatStore {
 
       const updatedSession = {
         ...session,
+        goalModeActive: active,
+        lastActiveAt: Date.now(),
+      };
+
+      const newSessions = new Map(prev.sessions);
+      newSessions.set(sessionId, updatedSession);
+
+      return {
+        ...prev,
+        sessions: newSessions,
+      };
+    });
+  }
+
+  public setThreadGoal(
+    sessionId: string,
+    goal: Session['threadGoal'] | null
+  ): void {
+    this.setState(prev => {
+      const session = prev.sessions.get(sessionId);
+      if (!session) return prev;
+
+      const active =
+        Boolean(goal) &&
+        (goal!.status === 'active' || goal!.status === 'budgetLimited');
+
+      const prevGoal = session.threadGoal;
+      const sameGoal =
+        (prevGoal == null && goal == null) ||
+        (prevGoal != null &&
+          goal != null &&
+          prevGoal.goalId === goal.goalId &&
+          prevGoal.status === goal.status &&
+          prevGoal.objective === goal.objective &&
+          prevGoal.updatedAt === goal.updatedAt &&
+          prevGoal.tokensUsed === goal.tokensUsed &&
+          prevGoal.tokenBudget === goal.tokenBudget &&
+          prevGoal.timeUsedSeconds === goal.timeUsedSeconds &&
+          (prevGoal.autoContinuationCount ?? 0) === (goal.autoContinuationCount ?? 0));
+
+      if (sameGoal && Boolean(session.goalModeActive) === active) {
+        return prev;
+      }
+
+      const updatedSession = {
+        ...session,
+        threadGoal: goal ?? undefined,
         goalModeActive: active,
         lastActiveAt: Date.now(),
       };
@@ -1005,6 +1841,8 @@ export class FlowChatStore {
     if (removedSessionIds.length === 0) {
       return [];
     }
+    this.clearRemovedSessionHistoryState(removedSessionIds, 'session-removed');
+    useBackgroundSubagentActivityStore.getState().removeSessions(removedSessionIds);
 
     this.setState(prev => {
       const removedSessionIdSet = new Set(removedSessionIds);
@@ -1161,6 +1999,7 @@ export class FlowChatStore {
     if (removedSessionIds.length === 0) {
       return [];
     }
+    this.clearRemovedSessionHistoryState(removedSessionIds, 'sessions-removed');
 
     const removedSessionIdSet = new Set(removedSessionIds);
 
@@ -1279,140 +2118,6 @@ export class FlowChatStore {
       };
     });
     return dialogTurn;
-  }
-
-  public addLocalGoalPendingTurn(params: {
-    sessionId: string;
-    message: string;
-    pendingId: string;
-  }): DialogTurn | null {
-    const session = this.state.sessions.get(params.sessionId);
-    if (!session) {
-      log.warn('Session not found, cannot add local goal pending turn', {
-        sessionId: params.sessionId,
-      });
-      return null;
-    }
-
-    const generatedAt = Date.now();
-    const metadata: LocalCommandMetadata = {
-      localCommandKind: 'goal_pending',
-      modelVisible: false,
-      goalPendingId: params.pendingId,
-      generatedAt,
-    };
-    const turnIndex = session.dialogTurns.length;
-    const dialogTurn: DialogTurn = {
-      id: `local-goal-${params.pendingId}`,
-      sessionId: params.sessionId,
-      kind: 'local_command',
-      userMessage: {
-        id: `local-goal-user-${params.pendingId}`,
-        content: params.message,
-        timestamp: generatedAt,
-        metadata,
-      },
-      modelRounds: [],
-      status: 'processing',
-      startTime: generatedAt,
-      endTime: generatedAt,
-      backendTurnIndex: turnIndex,
-    };
-
-    this.setState(prev => {
-      const currentSession = prev.sessions.get(params.sessionId);
-      if (!currentSession) return prev;
-
-      if (currentSession.dialogTurns.some(turn => turn.id === dialogTurn.id)) {
-        return prev;
-      }
-
-      const newSessions = new Map(prev.sessions);
-      newSessions.set(params.sessionId, {
-        ...currentSession,
-        dialogTurns: [...currentSession.dialogTurns, dialogTurn],
-      });
-
-      return {
-        ...prev,
-        sessions: newSessions,
-      };
-    });
-    return dialogTurn;
-  }
-
-  public addLocalGoalVerifyingTurn(params: {
-    sessionId: string;
-    message: string;
-    verifyingId: string;
-  }): DialogTurn | null {
-    this.removeLocalGoalVerifyingTurn(params.sessionId);
-
-    const session = this.state.sessions.get(params.sessionId);
-    if (!session) {
-      log.warn('Session not found, cannot add local goal verifying turn', {
-        sessionId: params.sessionId,
-      });
-      return null;
-    }
-
-    const generatedAt = Date.now();
-    const metadata: LocalCommandMetadata = {
-      localCommandKind: 'goal_verifying',
-      modelVisible: false,
-      goalVerifyingId: params.verifyingId,
-      generatedAt,
-    };
-    const turnIndex = session.dialogTurns.length;
-    const dialogTurn: DialogTurn = {
-      id: `local-goal-verify-${params.verifyingId}`,
-      sessionId: params.sessionId,
-      kind: 'local_command',
-      userMessage: {
-        id: `local-goal-verify-user-${params.verifyingId}`,
-        content: params.message,
-        timestamp: generatedAt,
-        metadata,
-      },
-      modelRounds: [],
-      status: 'processing',
-      startTime: generatedAt,
-      endTime: generatedAt,
-      backendTurnIndex: turnIndex,
-    };
-
-    this.setState(prev => {
-      const currentSession = prev.sessions.get(params.sessionId);
-      if (!currentSession) return prev;
-
-      if (currentSession.dialogTurns.some(turn => turn.id === dialogTurn.id)) {
-        return prev;
-      }
-
-      const newSessions = new Map(prev.sessions);
-      newSessions.set(params.sessionId, {
-        ...currentSession,
-        dialogTurns: [...currentSession.dialogTurns, dialogTurn],
-      });
-
-      return {
-        ...prev,
-        sessions: newSessions,
-      };
-    });
-    return dialogTurn;
-  }
-
-  public removeLocalGoalVerifyingTurn(sessionId: string): void {
-    const session = this.state.sessions.get(sessionId);
-    if (!session) return;
-
-    const verifyingTurn = session.dialogTurns.find(
-      turn => turn.userMessage?.metadata?.localCommandKind === 'goal_verifying',
-    );
-    if (!verifyingTurn) return;
-
-    this.deleteDialogTurn(sessionId, verifyingTurn.id);
   }
 
   public deleteDialogTurn(sessionId: string, dialogTurnId: string): void {
@@ -1603,7 +2308,7 @@ export class FlowChatStore {
   public addModelRound(sessionId: string, dialogTurnId: string, modelRound: ModelRound): void {
     this.updateDialogTurn(sessionId, dialogTurnId, turn => ({
       ...turn,
-      modelRounds: [...turn.modelRounds, modelRound],
+      modelRounds: [...turn.modelRounds, synchronizeRoundAttempts(modelRound)],
       status: 'processing'
     }));
   }
@@ -1612,7 +2317,7 @@ export class FlowChatStore {
     this.updateDialogTurn(sessionId, dialogTurnId, turn => ({
       ...turn,
       modelRounds: turn.modelRounds.map(round => 
-        round.id === modelRoundId ? updater(round) : round
+        round.id === modelRoundId ? synchronizeRoundAttempts(updater(round)) : round
       )
     }));
   }
@@ -1628,13 +2333,43 @@ export class FlowChatStore {
     if (updates.length === 0) return;
     
     this.updateDialogTurn(sessionId, dialogTurnId, turn => {
-      const updatedModelRounds = turn.modelRounds.map(round => ({
-        ...round,
-        items: round.items.map(item => {
-          const update = updates.find(u => u.itemId === item.id);
-          return update ? ({ ...item, ...update.changes } as AnyFlowItem) : item;
-        })
-      }));
+      const updatedModelRounds = turn.modelRounds.map(round => {
+        const activeAttempts = round.attempts ?? deriveRoundAttemptsFromItems(round.items);
+
+        if (activeAttempts && activeAttempts.length > 0) {
+          let roundChanged = false;
+          const nextAttempts = activeAttempts.map(attempt => {
+            let attemptChanged = false;
+            const nextItems = attempt.items.map(item => {
+              const update = updates.find(u => itemMatchesIdentity(item, u.itemId));
+              if (!update) {
+                return item;
+              }
+
+              attemptChanged = true;
+              roundChanged = true;
+              return { ...item, ...update.changes } as AnyFlowItem;
+            });
+
+            return attemptChanged ? { ...attempt, items: nextItems } : attempt;
+          });
+
+          return roundChanged
+            ? synchronizeRoundAttempts({
+                ...round,
+                attempts: nextAttempts,
+              })
+            : round;
+        }
+
+        return {
+          ...round,
+          items: round.items.map(item => {
+            const update = updates.find(u => itemMatchesIdentity(item, u.itemId));
+            return update ? ({ ...item, ...update.changes } as AnyFlowItem) : item;
+          })
+        };
+      });
       
       return {
         ...turn,
@@ -1667,11 +2402,67 @@ export class FlowChatStore {
       }
 
       const updatedModelRounds = [...turn.modelRounds];
-      
-      updatedModelRounds[targetModelRoundIndex] = {
-        ...targetModelRound,
-        items: [...targetModelRound.items, item]
-      };
+      const activeAttempts = targetModelRound.attempts ?? deriveRoundAttemptsFromItems(targetModelRound.items);
+      const incomingAttemptId = typeof item.attemptId === 'string' && item.attemptId.length > 0
+        ? item.attemptId
+        : undefined;
+      const incomingAttemptIndex = typeof item.attemptIndex === 'number' && Number.isFinite(item.attemptIndex)
+        ? item.attemptIndex
+        : undefined;
+
+      if (!activeAttempts || activeAttempts.length === 0) {
+        if (!incomingAttemptId && incomingAttemptIndex === undefined) {
+          updatedModelRounds[targetModelRoundIndex] = {
+            ...targetModelRound,
+            items: [...targetModelRound.items, item]
+          };
+        } else {
+          const initialAttempt = {
+            id: incomingAttemptId ?? `attempt:${incomingAttemptIndex ?? 1}`,
+            index: incomingAttemptIndex ?? 1,
+          };
+          const attemptItems = [
+            ...targetModelRound.items.map(existing => withAttemptMetadata(existing, initialAttempt)),
+            withAttemptMetadata(item, initialAttempt),
+          ];
+          updatedModelRounds[targetModelRoundIndex] = synchronizeRoundAttempts({
+            ...targetModelRound,
+            attempts: [{
+              ...initialAttempt,
+              status: 'streaming',
+              items: attemptItems,
+            }],
+          });
+        }
+      } else {
+        const latestAttempt = sortAttemptEntries(activeAttempts)[activeAttempts.length - 1];
+        const targetAttempt = {
+          id: incomingAttemptId ?? latestAttempt.id,
+          index: incomingAttemptIndex ?? latestAttempt.index,
+        };
+        const normalizedItem = withAttemptMetadata(item, targetAttempt);
+        const targetAttemptKey = `${targetAttempt.id}::${targetAttempt.index}`;
+        let attemptFound = false;
+        const nextAttempts = activeAttempts.map(attempt => {
+          const attemptKey = `${attempt.id}::${attempt.index}`;
+          if (attemptKey !== targetAttemptKey) {
+            return attempt;
+          }
+
+          attemptFound = true;
+          return {
+            ...attempt,
+            items: [...attempt.items, normalizedItem],
+          };
+        });
+
+        updatedModelRounds[targetModelRoundIndex] = synchronizeRoundAttempts({
+          ...targetModelRound,
+          attempts: attemptFound
+            ? nextAttempts
+            : [...nextAttempts, { ...targetAttempt, status: 'streaming', items: [normalizedItem] }],
+        });
+      }
 
       return {
         ...turn,
@@ -1700,26 +2491,47 @@ export class FlowChatStore {
       
       const updatedModelRounds = turn.modelRounds.map(modelRound => {
         if (updated) return modelRound;
-        
-        const updatedItems = modelRound.items.map((item: any) => {
-          const toolCallId =
-            item.type === 'tool' ? ((item as FlowToolItem).toolCall?.id as string | undefined) : undefined;
-          const idMatches = item.id === itemId || (toolCallId !== undefined && toolCallId === itemId);
-          if (idMatches) {
-            const updatedItem = { ...item, ...updates };
-            return updatedItem;
+
+        const activeAttempts = modelRound.attempts ?? deriveRoundAttemptsFromItems(modelRound.items);
+        if (activeAttempts && activeAttempts.length > 0) {
+          let foundInAttempts = false;
+          const nextAttempts = activeAttempts.map(attempt => {
+            let attemptChanged = false;
+            const nextItems = attempt.items.map(item => {
+              if (!itemMatchesIdentity(item, itemId)) {
+                return item;
+              }
+
+              foundInAttempts = true;
+              attemptChanged = true;
+              return { ...item, ...updates } as AnyFlowItem;
+            });
+
+            return attemptChanged ? { ...attempt, items: nextItems } : attempt;
+          });
+
+          if (foundInAttempts) {
+            updated = true;
+            return synchronizeRoundAttempts({
+              ...modelRound,
+              attempts: nextAttempts,
+            });
           }
-          return item;
+        }
+
+        const updatedItems = modelRound.items.map((item: any) => {
+          if (!itemMatchesIdentity(item, itemId)) {
+            return item;
+          }
+
+          return { ...item, ...updates };
         });
-        
-        if (updatedItems.some((item: any) => {
-          const tc = item.type === 'tool' ? (item as FlowToolItem).toolCall?.id : undefined;
-          return item.id === itemId || tc === itemId;
-        })) {
+
+        if (updatedItems.some((item: any) => itemMatchesIdentity(item, itemId))) {
           updated = true;
           return { ...modelRound, items: updatedItems };
         }
-        
+
         return modelRound;
       });
       
@@ -1778,20 +2590,50 @@ export class FlowChatStore {
 
   public updateTokenUsage(
     sessionId: string, 
-    tokenUsage: { inputTokens: number; outputTokens?: number; totalTokens: number }
+    tokenUsage: { inputTokens: number; outputTokens?: number; totalTokens: number },
+    dialogTurnId?: string
   ): void {
     this.setState(prev => {
       const session = prev.sessions.get(sessionId);
       if (!session) return prev;
 
+      const nextTokenUsage = {
+        inputTokens: tokenUsage.inputTokens,
+        outputTokens: tokenUsage.outputTokens,
+        totalTokens: tokenUsage.totalTokens,
+        timestamp: Date.now()
+      };
+      let dialogTurns = session.dialogTurns;
+      if (dialogTurnId) {
+        const turnIndex = session.dialogTurns.findIndex(turn => turn.id === dialogTurnId);
+        if (turnIndex !== -1) {
+          const previousTurnUsage = session.dialogTurns[turnIndex].tokenUsage;
+          const accumulatedOutputTokens = previousTurnUsage
+            ? (
+                typeof previousTurnUsage.outputTokens === 'number' &&
+                typeof nextTokenUsage.outputTokens === 'number'
+                  ? previousTurnUsage.outputTokens + nextTokenUsage.outputTokens
+                  : undefined
+              )
+            : nextTokenUsage.outputTokens;
+          const accumulatedTurnUsage: TokenUsage = {
+            inputTokens: (previousTurnUsage?.inputTokens ?? 0) + nextTokenUsage.inputTokens,
+            outputTokens: accumulatedOutputTokens,
+            totalTokens: (previousTurnUsage?.totalTokens ?? 0) + nextTokenUsage.totalTokens,
+            timestamp: nextTokenUsage.timestamp,
+          };
+          dialogTurns = [...session.dialogTurns];
+          dialogTurns[turnIndex] = {
+            ...dialogTurns[turnIndex],
+            tokenUsage: accumulatedTurnUsage,
+          };
+        }
+      }
+
       const updatedSession = {
         ...session,
-        currentTokenUsage: {
-          inputTokens: tokenUsage.inputTokens,
-          outputTokens: tokenUsage.outputTokens,
-          totalTokens: tokenUsage.totalTokens,
-          timestamp: Date.now()
-        }
+        currentTokenUsage: nextTokenUsage,
+        dialogTurns
       };
 
       const newSessions = new Map(prev.sessions);
@@ -2092,7 +2934,7 @@ export class FlowChatStore {
    */
   private async saveCancelledDialogTurn(sessionId: string, turnId: string): Promise<void> {
     try {
-      const { sessionAPI } = await import('@/infrastructure/api');
+      const { sessionAPI } = await import('@/infrastructure/api/service-api/SessionAPI');
       const session = this.state.sessions.get(sessionId);
       if (!session) {
         log.warn('Session not found, skipping save', { sessionId, turnId });
@@ -2137,6 +2979,8 @@ export class FlowChatStore {
               isStreaming: false,
               timestamp: item.timestamp,
               status: item.status,
+              attemptId: item.attemptId,
+              attemptIndex: item.attemptIndex,
             }));
           
           const toolItems = round.items
@@ -2158,6 +3002,8 @@ export class FlowChatStore {
               preflightMs: (item as any).preflightMs,
               confirmationWaitMs: (item as any).confirmationWaitMs,
               executionMs: (item as any).executionMs,
+              attemptId: item.attemptId,
+              attemptIndex: item.attemptIndex,
             }));
           
           const thinkingItems = round.items
@@ -2169,12 +3015,15 @@ export class FlowChatStore {
               isCollapsed: (item as any).isCollapsed || false,
               timestamp: item.timestamp,
               status: item.status,
+              attemptId: item.attemptId,
+              attemptIndex: item.attemptIndex,
             }));
           
           return {
             id: round.id,
             turnId,
             roundIndex,
+            roundGroupId: round.roundGroupId,
             timestamp: round.startTime,
             renderHints: round.renderHints,
             textItems,
@@ -2198,6 +3047,7 @@ export class FlowChatStore {
         startTime: dialogTurn.startTime,
         endTime: dialogTurn.endTime || Date.now(),
         durationMs: (dialogTurn.endTime || Date.now()) - dialogTurn.startTime,
+        tokenUsage: dialogTurn.tokenUsage,
         status: 'cancelled' as const
       };
 
@@ -2301,20 +3151,19 @@ export class FlowChatStore {
     let defaultModels: Record<string, string> = {};
     try {
       const { configManager } = await import('@/infrastructure/config/services/ConfigManager');
-      const [modelsResult, defaultModelsResult] = await Promise.allSettled([
-        configManager.getConfig<any[]>('ai.models'),
-        configManager.getConfig<Record<string, string>>('ai.default_models'),
+      const configData = await configManager.getConfigs([
+        'ai.models',
+        'ai.default_models',
       ]);
 
-      if (modelsResult.status === 'fulfilled' && Array.isArray(modelsResult.value)) {
-        models = modelsResult.value;
+      if (Array.isArray(configData['ai.models'])) {
+        models = configData['ai.models'];
       }
       if (
-        defaultModelsResult.status === 'fulfilled' &&
-        defaultModelsResult.value &&
-        typeof defaultModelsResult.value === 'object'
+        configData['ai.default_models'] &&
+        typeof configData['ai.default_models'] === 'object'
       ) {
-        defaultModels = defaultModelsResult.value;
+        defaultModels = configData['ai.default_models'] as Record<string, string>;
       }
     } catch (error) {
       log.warn('Failed to load model config for session metadata, using defaults', { error });
@@ -2538,9 +3387,28 @@ export class FlowChatStore {
     });
 
     try {
-      const { sessionAPI } = await import('@/infrastructure/api');
+      const importStartedAt = nowMs();
+      startupTrace.markPhase('session_metadata_api_import_start', {
+        remote,
+        source: traceSource,
+        metadataListTraceId,
+      });
+      const { sessionAPI } = await import('@/infrastructure/api/service-api/SessionAPI');
+      startupTrace.markPhase('session_metadata_api_import_end', {
+        remote,
+        source: traceSource,
+        metadataListTraceId,
+        durationMs: elapsedMs(importStartedAt),
+      });
       let page: SessionMetadataPage;
+      const pageRequestStartedAt = nowMs();
       try {
+        startupTrace.markPhase('session_metadata_page_request_start', {
+          remote,
+          source: traceSource,
+          metadataListTraceId,
+          command: 'list_persisted_sessions_page',
+        });
         page = await sessionAPI.listSessionsPage({
           workspacePath,
           limit,
@@ -2548,12 +3416,42 @@ export class FlowChatStore {
           remoteConnectionId,
           remoteSshHost,
         });
+        startupTrace.markPhase('session_metadata_page_request_end', {
+          remote,
+          source: traceSource,
+          metadataListTraceId,
+          command: 'list_persisted_sessions_page',
+          durationMs: elapsedMs(pageRequestStartedAt),
+        });
       } catch (error) {
         if (!isUnsupportedTauriCommandError(error, 'list_persisted_sessions_page')) {
+          startupTrace.markPhase('session_metadata_page_request_failed', {
+            remote,
+            source: traceSource,
+            metadataListTraceId,
+            command: 'list_persisted_sessions_page',
+            durationMs: elapsedMs(pageRequestStartedAt),
+          });
           throw error;
         }
 
+        const fallbackStartedAt = nowMs();
+        startupTrace.markPhase('session_metadata_page_request_start', {
+          remote,
+          source: traceSource,
+          metadataListTraceId,
+          command: 'list_persisted_sessions',
+          fallback: true,
+        });
         const sessions = await sessionAPI.listSessions(workspacePath, remoteConnectionId, remoteSshHost);
+        startupTrace.markPhase('session_metadata_page_request_end', {
+          remote,
+          source: traceSource,
+          metadataListTraceId,
+          command: 'list_persisted_sessions',
+          fallback: true,
+          durationMs: elapsedMs(fallbackStartedAt),
+        });
         page = {
           sessions,
           totalTopLevelCount: sessions.length,
@@ -2608,7 +3506,7 @@ export class FlowChatStore {
       metadataListTraceId,
     });
     try {
-      const { sessionAPI } = await import('@/infrastructure/api');
+      const { sessionAPI } = await import('@/infrastructure/api/service-api/SessionAPI');
       const sessions = await sessionAPI.listSessions(workspacePath, remoteConnectionId, remoteSshHost);
       sessionCount = sessions.length;
       startupTrace.markPhase('session_metadata_list_loaded', {
@@ -2624,20 +3522,19 @@ export class FlowChatStore {
       let defaultModels: Record<string, string> = {};
       try {
         const { configManager } = await import('@/infrastructure/config/services/ConfigManager');
-        const [modelsResult, defaultModelsResult] = await Promise.allSettled([
-          configManager.getConfig<any[]>('ai.models'),
-          configManager.getConfig<Record<string, string>>('ai.default_models'),
+        const configData = await configManager.getConfigs([
+          'ai.models',
+          'ai.default_models',
         ]);
 
-        if (modelsResult.status === 'fulfilled' && Array.isArray(modelsResult.value)) {
-          models = modelsResult.value;
+        if (Array.isArray(configData['ai.models'])) {
+          models = configData['ai.models'];
         }
         if (
-          defaultModelsResult.status === 'fulfilled' &&
-          defaultModelsResult.value &&
-          typeof defaultModelsResult.value === 'object'
+          configData['ai.default_models'] &&
+          typeof configData['ai.default_models'] === 'object'
         ) {
-          defaultModels = defaultModelsResult.value;
+          defaultModels = configData['ai.default_models'] as Record<string, string>;
         }
       } catch (error) {
         log.warn('Failed to load model config for session metadata, using defaults', { error });
@@ -2652,7 +3549,7 @@ export class FlowChatStore {
           if (isLegacyPersistedBtwSession(metadata)) {
             return;
           }
-          // Skip archived sessions — they are managed in the settings page
+          // Skip archived sessions - they are managed in the settings page
           if (metadata.status === 'archived') {
             return;
           }
@@ -2827,12 +3724,17 @@ export class FlowChatStore {
     remoteSshHost?: string,
     options?: {
       includeInternal?: boolean;
+      deferFullHistoryUntilActive?: boolean;
     }
   ): Promise<void> {
     const traceStartedAt = nowMs();
     const remote = isRemoteTraceContext(remoteConnectionId, remoteSshHost);
     const sessionTraceId = `${sessionId.slice(0, 8)}-${Math.random().toString(36).slice(2, 8)}`;
-    startupTrace.markPhase('historical_session_hydrate_start', { remote, sessionTraceId });
+    startupTrace.markPhase('historical_session_hydrate_start', {
+      remote,
+      sessionId,
+      sessionTraceId,
+    });
     this.setSessionHistoryState(sessionId, 'hydrating');
 
     try {
@@ -2848,9 +3750,14 @@ export class FlowChatStore {
       let restoredHistoryPartial = false;
       let restoredLoadedTurnCount: number | undefined;
       let restoredTotalTurnCount: number | undefined;
+      let restoredTiming: SessionViewRestoreTiming | undefined;
       if (!isAcpSession) {
         const restoreStartedAt = nowMs();
-        startupTrace.markPhase('historical_session_restore_start', { remote, sessionTraceId });
+        startupTrace.markPhase('historical_session_restore_start', {
+          remote,
+          sessionId,
+          sessionTraceId,
+        });
         try {
           const { agentAPI } = await import('@/infrastructure/api');
           const restoreSessionViewSupportKey = restoreCommandSupportKey(
@@ -2888,6 +3795,7 @@ export class FlowChatStore {
                 this.unsupportedRestoreCommands.add(restoreSessionWithTurnsSupportKey);
                 startupTrace.markPhase('historical_session_restore_fallback', {
                   remote,
+                  sessionId,
                   sessionTraceId,
                   from: 'restore_session_with_turns',
                   to: 'restore_session',
@@ -2919,7 +3827,7 @@ export class FlowChatStore {
                 remoteSshHost,
                 sessionTraceId,
                 options?.includeInternal,
-                HISTORICAL_SESSION_INITIAL_TAIL_TURN_COUNT,
+                historicalSessionInitialTailTurnCount(remote),
               );
               restoredSessionInfo = restored.session;
               turns = restored.turns;
@@ -2928,6 +3836,7 @@ export class FlowChatStore {
               restoredHistoryPartial = restored.isPartial === true;
               restoredLoadedTurnCount = restored.loadedTurnCount;
               restoredTotalTurnCount = restored.totalTurnCount;
+              restoredTiming = restored.timings;
             } catch (error) {
               if (!isUnsupportedTauriCommandError(error, 'restore_session_view')) {
                 throw error;
@@ -2935,6 +3844,7 @@ export class FlowChatStore {
               this.unsupportedRestoreCommands.add(restoreSessionViewSupportKey);
               startupTrace.markPhase('historical_session_restore_fallback', {
                 remote,
+                sessionId,
                 sessionTraceId,
                 from: 'restore_session_view',
                 to: 'restore_session_with_turns',
@@ -2947,18 +3857,21 @@ export class FlowChatStore {
           }
           startupTrace.markPhase('historical_session_restore_end', {
             remote,
+            sessionId,
             sessionTraceId,
             turnCount: Array.isArray(turns) ? turns.length : 0,
             loadedTurnCount: restoredLoadedTurnCount,
             totalTurnCount: restoredTotalTurnCount,
             isPartial: restoredHistoryPartial,
             contextRestoreState,
+            ...sessionViewRestoreTimingTraceFields(restoredTiming),
             durationMs: elapsedMs(restoreStartedAt),
           });
         } catch (error) {
           contextRestoreState = 'pending';
           startupTrace.markPhase('historical_session_restore_failed', {
             remote,
+            sessionId,
             sessionTraceId,
             durationMs: elapsedMs(restoreStartedAt),
           });
@@ -2968,8 +3881,12 @@ export class FlowChatStore {
       
       if (!turns) {
         const turnsLoadStartedAt = nowMs();
-        startupTrace.markPhase('historical_session_turns_load_start', { remote, sessionTraceId });
-        const { sessionAPI } = await import('@/infrastructure/api');
+        startupTrace.markPhase('historical_session_turns_load_start', {
+          remote,
+          sessionId,
+          sessionTraceId,
+        });
+        const { sessionAPI } = await import('@/infrastructure/api/service-api/SessionAPI');
         turns = await sessionAPI.loadSessionTurns(
           sessionId,
           workspacePath,
@@ -2979,6 +3896,7 @@ export class FlowChatStore {
         );
         startupTrace.markPhase('historical_session_turns_load_end', {
           remote,
+          sessionId,
           sessionTraceId,
           turnCount: Array.isArray(turns) ? turns.length : 0,
           durationMs: elapsedMs(turnsLoadStartedAt),
@@ -2986,6 +3904,7 @@ export class FlowChatStore {
       }
       startupTrace.markPhase('historical_session_turns_loaded', {
         remote,
+        sessionId,
         sessionTraceId,
         turnCount: Array.isArray(turns) ? turns.length : 0,
       });
@@ -2996,11 +3915,12 @@ export class FlowChatStore {
         restoredSessionInfo?.lastUserDialogAgentType || this.deriveLastUserDialogMode(dialogTurns);
       startupTrace.markPhase('historical_session_convert_end', {
         remote,
+        sessionId,
         sessionTraceId,
         turnCount: dialogTurns.length,
         durationMs: elapsedMs(convertStartedAt),
       });
-
+      
       const stateCommitStartedAt = nowMs();
       this.setState(prev => {
         const session = prev.sessions.get(sessionId);
@@ -3012,6 +3932,9 @@ export class FlowChatStore {
           isHistorical: false,
           historyState: 'ready' as const,
           contextRestoreState,
+          isPartial: restoredHistoryPartial,
+          loadedTurnCount: restoredLoadedTurnCount ?? dialogTurns.length,
+          totalTurnCount: restoredTotalTurnCount ?? dialogTurns.length,
           error: null,
           mode: restoredSessionInfo?.agentType || session.mode,
           lastUserDialogMode: restoredLastUserDialogMode,
@@ -3029,6 +3952,7 @@ export class FlowChatStore {
       });
       startupTrace.markPhase('historical_session_state_commit_end', {
         remote,
+        sessionId,
         sessionTraceId,
         turnCount: dialogTurns.length,
         totalTurnCount: restoredTotalTurnCount,
@@ -3037,6 +3961,7 @@ export class FlowChatStore {
       });
       markPhaseAfterAnimationFrames(startupTrace, 'historical_session_after_state_commit_frame', {
         remote,
+        sessionId,
         sessionTraceId,
         turnCount: dialogTurns.length,
         totalTurnCount: restoredTotalTurnCount,
@@ -3045,12 +3970,13 @@ export class FlowChatStore {
       }, {
         frameCount: 2,
       });
-
+      
       // Reset state machine to IDLE after loading history
       // This handles the case where restoreSession triggered events that left the state machine in PROCESSING
       stateMachineManager.reset(sessionId);
       startupTrace.markPhase('historical_session_hydrate_end', {
         remote,
+        sessionId,
         sessionTraceId,
         turnCount: dialogTurns.length,
         totalTurnCount: restoredTotalTurnCount,
@@ -3058,15 +3984,31 @@ export class FlowChatStore {
         durationMs: elapsedMs(traceStartedAt),
       });
       if (restoredHistoryPartial) {
-        this.scheduleCompleteSessionHistoryLoad({
-          sessionId,
-          workspacePath,
-          remoteConnectionId,
-          remoteSshHost,
-          includeInternal: options?.includeInternal,
-          initialSessionTraceId: sessionTraceId,
-          expectedDialogTurnIds: dialogTurns.map(turn => turn.id),
-        });
+        const deferFullHistoryUntilActive =
+          !remote &&
+          options?.deferFullHistoryUntilActive === true &&
+          this.state.activeSessionId !== sessionId;
+        if (!deferFullHistoryUntilActive) {
+          this.scheduleCompleteSessionHistoryLoad({
+            sessionId,
+            workspacePath,
+            remoteConnectionId,
+            remoteSshHost,
+            includeInternal: options?.includeInternal,
+            requireActiveSession: options?.deferFullHistoryUntilActive === true,
+            initialSessionTraceId: sessionTraceId,
+            expectedDialogTurnIds: dialogTurns.map(turn => turn.id),
+          });
+        } else {
+          startupTrace.markPhase('historical_session_full_hydrate_deferred', {
+            remote,
+            sessionId,
+            sessionTraceId,
+            reason: 'inactive-after-tail-restore',
+            loadedTurnCount: dialogTurns.length,
+            totalTurnCount: restoredTotalTurnCount,
+          });
+        }
       }
     } catch (error) {
       this.setState(prev => {
@@ -3087,6 +4029,7 @@ export class FlowChatStore {
       });
       startupTrace.markPhase('historical_session_hydrate_failed', {
         remote,
+        sessionId,
         sessionTraceId,
         durationMs: elapsedMs(traceStartedAt),
       });
@@ -3128,13 +4071,19 @@ export class FlowChatStore {
           }))
         : undefined;
 
-      const displayContent =
+      const rawDisplay =
         metadata?.localCommandKind === 'usage_report'
-          || metadata?.localCommandKind === 'goal_pending'
-          || metadata?.localCommandKind === 'goal_verifying'
+          || metadata?.threadGoalKickoff
+          || metadata?.threadGoalObjectiveUpdated
+          || metadata?.threadGoalContinuation
           ? turn.userMessage.content
           : metadata?.original_text || this.cleanRemoteUserInput(turn.userMessage.content);
+      const displayContent = resolveThreadGoalUserMessageDisplay(
+        rawDisplay,
+        metadata as Record<string, unknown> | undefined
+      );
       const normalizedTurnStatus = normalizeRecoveredTurnStatus(turn.status, { error: undefined });
+      const rawTokenUsage = turn.tokenUsage ?? turn.token_usage;
 
       return {
       id: turn.turnId,
@@ -3152,76 +4101,81 @@ export class FlowChatStore {
       },
       modelRounds: turn.modelRounds.map((round: any) => {
         const normalizedRoundStatus = normalizeRecoveredRoundStatus(round.status, normalizedTurnStatus);
+        const flatItems = [
+          ...round.textItems.map((text: any) => ({
+            id: text.id,
+            type: 'text' as const,
+            content: text.content,
+            isStreaming: false,
+            isMarkdown: text.isMarkdown !== undefined ? text.isMarkdown : true,
+            timestamp: text.timestamp,
+            status: normalizeRecoveredTextStatus(text.status, normalizedTurnStatus),
+            orderIndex: text.orderIndex,
+            subagentSessionId: text.subagentSessionId,
+            attemptId: text.attemptId,
+            attemptIndex: text.attemptIndex,
+          })),
+          ...round.toolItems.map((tool: any) => ({
+            id: tool.id,
+            type: 'tool' as const,
+            toolName: tool.toolName,
+            interruptionReason: normalizePersistedToolInterruptionReason(
+              tool.interruptionReason,
+              tool.status,
+            ),
+            toolCall: tool.toolCall,
+            toolResult: tool.toolResult,
+            aiIntent: tool.aiIntent,
+            requiresConfirmation: tool.requiresConfirmation,
+            userConfirmed: tool.userConfirmed,
+            acpPermission: tool.acpPermission,
+            startTime: tool.startTime,
+            endTime: tool.endTime,
+            durationMs: tool.durationMs,
+            queueWaitMs: tool.queueWaitMs,
+            preflightMs: tool.preflightMs,
+            confirmationWaitMs: tool.confirmationWaitMs,
+            executionMs: tool.executionMs,
+            timestamp: tool.startTime,
+            status: normalizeRecoveredToolStatus(
+              tool.status,
+              normalizedTurnStatus,
+              tool.toolResult,
+              { preservePendingConfirmation: true },
+            ),
+            orderIndex: tool.orderIndex,
+            subagentSessionId: tool.subagentSessionId,
+            subagentModelId: tool.subagentModelId,
+            subagentModelAlias: tool.subagentModelAlias,
+            attemptId: tool.attemptId,
+            attemptIndex: tool.attemptIndex,
+          })),
+          ...(round.thinkingItems || []).map((thinking: any) => ({
+            id: thinking.id,
+            type: 'thinking' as const,
+            content: thinking.content,
+            isStreaming: false,
+            isCollapsed: thinking.isCollapsed ?? true,
+            timestamp: thinking.timestamp,
+            status: normalizeRecoveredThinkingStatus(thinking.status, normalizedTurnStatus),
+            orderIndex: thinking.orderIndex,
+            subagentSessionId: thinking.subagentSessionId,
+            attemptId: thinking.attemptId,
+            attemptIndex: thinking.attemptIndex,
+          })),
+        ].sort((a: any, b: any) => {
+          const aIndex = a.orderIndex !== undefined ? a.orderIndex : a.timestamp || 0;
+          const bIndex = b.orderIndex !== undefined ? b.orderIndex : b.timestamp || 0;
 
-        return {
+          return aIndex - bIndex;
+        });
+
+        const hydratedRound = synchronizeRoundAttempts({
           id: round.id,
-          turnId: round.turnId,
           index: round.roundIndex ?? 0,
+          roundGroupId: round.roundGroupId,
           renderHints: round.renderHints,
-          items: [
-            ...round.textItems.map((text: any) => ({
-              id: text.id,
-              type: 'text' as const,
-              content: text.content,
-              isStreaming: false,
-              isMarkdown: text.isMarkdown !== undefined ? text.isMarkdown : true,
-              timestamp: text.timestamp,
-              status: normalizeRecoveredTextStatus(text.status, normalizedTurnStatus),
-              orderIndex: text.orderIndex,
-              subagentSessionId: text.subagentSessionId,
-            })),
-            ...round.toolItems.map((tool: any) => ({
-              id: tool.id,
-              type: 'tool' as const,
-              toolName: tool.toolName,
-              interruptionReason:
-                tool.interruptionReason === 'app_restart'
-                  ? 'app_restart'
-                  : isTransientToolStatus(tool.status)
-                    ? 'app_restart'
-                    : undefined,
-              toolCall: tool.toolCall,
-              toolResult: tool.toolResult,
-              aiIntent: tool.aiIntent,
-              requiresConfirmation: tool.requiresConfirmation,
-              userConfirmed: tool.userConfirmed,
-              acpPermission: tool.acpPermission,
-              startTime: tool.startTime,
-              endTime: tool.endTime,
-              durationMs: tool.durationMs,
-              queueWaitMs: tool.queueWaitMs,
-              preflightMs: tool.preflightMs,
-              confirmationWaitMs: tool.confirmationWaitMs,
-              executionMs: tool.executionMs,
-              timestamp: tool.startTime,
-              status: normalizeRecoveredToolStatus(
-                tool.status,
-                normalizedTurnStatus,
-                tool.toolResult,
-                { preservePendingConfirmation: true },
-              ),
-              orderIndex: tool.orderIndex,
-              subagentSessionId: tool.subagentSessionId,
-              subagentModelId: tool.subagentModelId,
-              subagentModelAlias: tool.subagentModelAlias,
-            })),
-            ...(round.thinkingItems || []).map((thinking: any) => ({
-              id: thinking.id,
-              type: 'thinking' as const,
-              content: thinking.content,
-              isStreaming: false,
-              isCollapsed: thinking.isCollapsed ?? true,
-              timestamp: thinking.timestamp,
-              status: normalizeRecoveredThinkingStatus(thinking.status, normalizedTurnStatus),
-              orderIndex: thinking.orderIndex,
-              subagentSessionId: thinking.subagentSessionId,
-            })),
-          ].sort((a: any, b: any) => {
-            const aIndex = a.orderIndex !== undefined ? a.orderIndex : a.timestamp || 0;
-            const bIndex = b.orderIndex !== undefined ? b.orderIndex : b.timestamp || 0;
-            
-            return aIndex - bIndex;
-          }),
+          items: flatItems,
           isStreaming: false,
           isComplete: normalizedRoundStatus !== 'pending' && normalizedRoundStatus !== 'streaming',
           status: normalizedRoundStatus,
@@ -3237,13 +4191,34 @@ export class FlowChatStore {
           attemptCount: round.attemptCount,
           failureCategory: round.failureCategory,
           tokenDetails: round.tokenDetails,
-          timestamp: round.timestamp,
-        };
+        });
+
+        return hydratedRound;
       }),
       timestamp: turn.timestamp,
       status: normalizedTurnStatus,
+      finishReason:
+        typeof turn.finishReason === 'string'
+          ? turn.finishReason
+          : typeof turn.finish_reason === 'string'
+            ? turn.finish_reason
+            : undefined,
+      hasFinalResponse:
+        typeof turn.hasFinalResponse === 'boolean'
+          ? turn.hasFinalResponse
+          : typeof turn.has_final_response === 'boolean'
+            ? turn.has_final_response
+            : undefined,
       startTime: turn.startTime,
       endTime: turn.endTime,
+      tokenUsage: rawTokenUsage
+        ? {
+            inputTokens: rawTokenUsage.inputTokens ?? rawTokenUsage.input_tokens,
+            outputTokens: rawTokenUsage.outputTokens ?? rawTokenUsage.output_tokens,
+            totalTokens: rawTokenUsage.totalTokens ?? rawTokenUsage.total_tokens,
+            timestamp: rawTokenUsage.timestamp,
+          }
+        : undefined,
       backendTurnIndex: turn.turnIndex,
     };
     });

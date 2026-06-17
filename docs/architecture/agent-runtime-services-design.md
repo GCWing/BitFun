@@ -1,31 +1,56 @@
 # Agent Runtime SDK 与 Runtime Services 设计
 
 本文是 [`core-decomposition.md`](core-decomposition.md) 的开发设计文档，描述目标模块、
-接口、crate 内部结构和迁移保护。`bitfun-runtime-services` 已建立 typed service bundle、
-builder、provider registry、capability availability 和 fake provider 基础；`bitfun-agent-runtime`
-已创建并只承接可独立构建的 scheduler/background delivery 纯决策。`bitfun-harness` 仍是目标 crate；
-未迁移的 session manager、prompt loop、subagent registry 和 concrete scheduler lifecycle 不得被描述为已完成。
+接口、crate 内部结构和行为保护。本文只记录设计约束，不记录实现过程或验证记录。
 
 ## 1. 设计目标与边界
 
 - Agent Runtime SDK 可被 Desktop、CLI、Server、Remote、ACP 等产品形态嵌入。
+- Agent Runtime SDK 对外提供稳定、窄口径的 runtime API，而不是暴露 `bitfun-core`、产品命令路径或 concrete manager。
 - Runtime 不感知平台差异、工具实现差异和构建形态差异。
-- Tool 使用通用接口和 provider 注册，不绑定底层实现。
-- 具体 service 实现由上层 Product Assembly 注入。
+- Tool 使用通用接口和 provider group 注册，不绑定底层实现。
+- 具体 adapter 与 service 实现由上层 Product Assembly 注入。
 - Harness 可扩展，新增 SDD 等工作流不侵入 runtime kernel。
 - 每个 crate 只依赖最小稳定集合，依赖方向可检查。
 
-### 1.1 crate 划分
+### 1.1 SDK 发布边界
+
+Agent Runtime SDK 的发布边界以调用方能力为准，而不是以物理 crate 命名为准。达到目标状态时，外部调用方
+应能在不依赖 `bitfun-core`、app crate、Tauri 或产品内部 manager 的情况下完成以下动作：
+
+- 构建 runtime：注入 model provider、`RuntimeServices`、tool provider、harness provider、agent definitions、
+  hooks 和 runtime config。
+- 发起执行：创建或恢复 session，提交 turn，取消 turn，消费 provider-neutral event stream。
+- 执行工具：通过稳定 tool manifest、permission request、tool result、artifact ref 和 cancellation contract
+  管理工具调用。
+- 扩展能力：通过 registry 注册 subagent、prompt module、skill、MCP/API tool、harness workflow 和 post-turn
+  processor。
+- 处理运维语义：接收 typed error、usage/cost/cache facts、telemetry event、checkpoint/resume facts 和
+  unsupported capability。
+
+因此，SDK readiness 的最低标准是：
+
+- 公共 façade 只暴露 builder、runner、request/response DTO、event stream、typed error 和 registry API。
+- 所有 DTO 可序列化，所有 runtime handle 通过 typed port 注入，不进入 wire contract。
+- `bitfun-agent-runtime`、Tool primitives、Runtime Services 和 Harness 能通过 fake provider 独立测试。
+- SDK minimal feature 不牵引 Desktop、Tauri、Git provider、MCP client、AI HTTP client、remote SSH 或产品 UI。
+- 完整产品能力只能通过 Product Assembly 或兼容 `bitfun-core/product-full` 组装，不反向污染 SDK API。
+
+只要外部调用方仍必须导入 `bitfun-core`、启用 `product-full`、持有 concrete service manager、读取产品命令
+registry 或依赖全局 mutable state，SDK 发布边界就不成立。
+
+### 1.2 crate 划分
 
 ```text
 bitfun-core-types
 bitfun-events
 bitfun-runtime-ports
-bitfun-runtime-services      # PR1 基础壳层
-bitfun-agent-tools
-tool-runtime
-bitfun-agent-runtime         # 已创建，当前仅承接 scheduler/background delivery 决策
-bitfun-harness               # 目标
+bitfun-runtime-services      # typed service bundle / capability availability
+tool-contracts              # Cargo package: bitfun-agent-tools
+tool-provider-groups        # Cargo package: bitfun-tool-packs
+tool-execution              # Cargo package: tool-runtime
+bitfun-agent-runtime         # agent kernel contracts and portable runtime decisions
+bitfun-harness               # workflow descriptor / provider / registry contracts
 bitfun-services-core
 bitfun-services-integrations
 bitfun-product-domains
@@ -45,25 +70,25 @@ Product Assembly
   -> product capability packs
   -> bitfun-agent-runtime
   -> bitfun-harness
-  -> tool-runtime
+  -> tool-contracts / tool-provider-groups / tool-execution
   -> bitfun-runtime-services
-  -> 具体 service crates
+  -> adapters / services
 
 Product Capability packs
   -> bitfun-harness
   -> bitfun-agent-runtime
-  -> tool-runtime
+  -> tool-provider-groups
   -> bitfun-product-domains
 
 bitfun-agent-runtime
   -> bitfun-runtime-ports
   -> bitfun-events
   -> bitfun-agent-stream
-  -> tool-runtime
+  -> tool-contracts
   -> bitfun-runtime-services
 
-tool-runtime
-  -> bitfun-agent-tools
+tool-execution
+  -> tool-contracts
   -> bitfun-runtime-ports
   -> bitfun-events
 
@@ -71,7 +96,7 @@ bitfun-runtime-services
   -> bitfun-runtime-ports
   -> bitfun-core-types / bitfun-events（仅当 service DTO 或 event contract 需要时引入）
 
-具体 service crates
+adapters / services
   -> bitfun-runtime-ports
   -> bitfun-core-types
   -> 允许的 third-party 依赖
@@ -81,8 +106,8 @@ bitfun-runtime-services
 禁止依赖：
 
 - `bitfun-runtime-ports` -> `bitfun-core`
-- `bitfun-agent-tools` -> 具体 service crate
-- `tool-runtime` -> 具体 tool 实现 crate
+- `tool-contracts` -> 具体 service crate
+- `tool-execution` -> 产品 registry / permission policy / 具体 tool 实现 crate
 - `bitfun-agent-runtime` -> `bitfun-core`
 - `bitfun-agent-runtime` -> Tauri / CLI / ACP protocol / Web UI
 - `bitfun-harness` -> 具体 filesystem / Git / terminal manager
@@ -90,10 +115,10 @@ bitfun-runtime-services
 目标 crate 创建或继续扩展准入：
 
 - 只有当 owner 边界、旧路径兼容、focused tests、依赖收益和 boundary check 都能同时落地时，才创建新的目标 crate。
-- `bitfun-runtime-services` 已按该准入建立基础壳层；继续扩展时仍必须保持 typed builder、本地 service、remote service 和 fake provider 三类注入路径可测试。
-- `bitfun-agent-runtime` 已通过 scheduler/background delivery 纯决策满足创建准入；继续扩展时仍必须保持旧路径 facade、focused tests 和 boundary check。
-- `bitfun-harness` 的创建前提是至少两个 workflow 可以通过 provider contract 注册，例如 Deep Review 与 MiniApp / DeepResearch。
-- 若目标 crate 只能承接单个 helper 或只能通过 `bitfun-core` 才能测试，继续留在迁移期 facade，不提前拆 crate。
+- `bitfun-runtime-services` 的扩展必须保持 typed builder、本地 service、remote service 和 fake provider 三类注入路径可测试。
+- `bitfun-agent-runtime` 的扩展必须保持旧路径 facade、focused tests 和 boundary check，且不得吸收 concrete service、product surface 或平台实现。
+- `bitfun-harness` 的扩展必须保持 descriptor / registry、旧路径兼容、focused tests 和 boundary check，且不得把 provider 注册误写成 concrete workflow execution。
+- 若目标 crate 只能承接单个 helper 或只能通过 `bitfun-core` 才能测试，应继续留在初始兼容 facade，不提前拆 crate。
 
 ## 2. 稳定接口与运行时服务
 
@@ -157,7 +182,7 @@ pub trait WorkspacePort: Send + Sync {
 
 ### 2.2 Runtime Services
 
-当前 crate：`bitfun-runtime-services`。
+目标 owner crate：`bitfun-runtime-services`。
 
 职责：
 
@@ -235,29 +260,66 @@ Remote ports 的边界：
 
 ### 3.1 Agent Runtime SDK
 
-当前 crate：`bitfun-agent-runtime`。
+目标 owner crate：`bitfun-agent-runtime`。
 
-当前已承接范围：
-
-- background delivery 状态决策：Processing 注入当前运行 turn；Missing / Idle / Error 提交 agent-session follow-up turn。
-
-仍留在 `bitfun-core` 的范围：
-
-- concrete scheduler 生命周期、session manager、turn id 生成、injection buffer、submit 执行、prompt loop、subagent registry 和 post-turn hook。
-
-职责：
+目标职责：
 
 - session 生命周期。
 - dialog turn / model round 生命周期。
 - scheduler / queue / cancellation。
 - prompt loop 和 context assembly。
 - prompt cache 协调。
-- subagent registry 查询和 delegation policy。
+- agent definition registry、subagent registry 查询和 delegation policy。
 - fork context seeding。
 - tool call 调度。
 - permission 协调。
 - runtime events。
 - post-turn processor。
+
+公共 façade：
+
+```rust
+pub struct AgentRuntimeBuilder {
+    // typed runtime parts only
+}
+
+pub struct AgentRunRequest {
+    pub session: SessionSelector,
+    pub input: AgentInput,
+    pub cancellation: CancellationToken,
+}
+
+pub struct AgentRunHandle {
+    pub session_id: SessionId,
+    pub turn_id: TurnId,
+    pub events: AgentEventStream,
+}
+
+impl AgentRuntimeBuilder {
+    pub fn with_services(self, services: RuntimeServices) -> Self;
+    pub fn with_tools(self, tools: Arc<ToolRuntime>) -> Self;
+    pub fn with_harnesses(self, harnesses: Arc<HarnessRegistry>) -> Self;
+    pub fn with_agents(self, agents: Arc<dyn AgentDefinitionRegistry>) -> Self;
+    pub fn with_hooks(self, hooks: RuntimeHookRegistry) -> Self;
+    pub fn build(self) -> Result<AgentRuntime, RuntimeBuildError>;
+}
+
+impl AgentRuntime {
+    pub async fn run(&self, request: AgentRunRequest) -> Result<AgentRunHandle, RuntimeError>;
+}
+```
+
+该 façade 是目标 API 形态。它必须只接收已组装的 typed parts，不负责创建
+filesystem、terminal、MCP、AI client、Remote provider 或产品命令。
+
+旧路径兼容约束：
+
+- `bitfun-agent-runtime` 只能依赖稳定契约、Tool Runtime、Runtime Services 接口和注入的 provider。
+- concrete scheduler 生命周期、session metadata store、token subscriber、event delivery、product `Tool`
+  handler、concrete prompt assembly、workspace / remote / config IO、custom subagent file IO 和平台 adapter
+  在行为等价未证明前不得下沉到 runtime kernel。
+- prompt、event、thread goal、scheduler 或 subagent 的纯事实如果进入 Agent Runtime SDK，必须同时删除旧 owner
+  实现主体，保留旧路径兼容，并具备 focused contract test 与 boundary check。
 
 建议内部模块：
 
@@ -363,37 +425,43 @@ impl AgentRuntime {
 
 - `SessionManager -> Session -> DialogTurn -> ModelRound` 语义不变。
 - `/goal` custom metadata、post-turn verification、continuation event 不漂移。
+- `get_goal` / `create_goal` / `update_goal` 的 tool response wire shape、blocked/complete 语义和 token budget report 不漂移。
 - `Task.run_in_background` delivery 不漂移。
 - `Task.fork_context` 禁止字段、prompt cache clone、context seeding 不漂移。
 - DeepResearch citation renumber post-turn hook 保持 deterministic。
 
-### 3.2 Tool Runtime
+### 3.2 Tool Primitives
 
 所属 crate：
 
-- `bitfun-agent-tools`
-- `tool-runtime`
-- `bitfun-tool-packs`
+- `tool-contracts`（Cargo package: `bitfun-agent-tools`）
+- `tool-provider-groups`（Cargo package: `bitfun-tool-packs`）
+- `tool-execution`（Cargo package: `tool-runtime`）
 
 目标职责：
 
-- `bitfun-agent-tools`：tool DTO、manifest、exposure、schema、path policy、result policy。
-- `tool-runtime`：provider registry、permission gate、execution pipeline、hook。
-- `bitfun-tool-packs`：tool pack feature metadata 和 provider plan。
+- `tool-contracts`：tool DTO、manifest、exposure、schema、path policy、result policy、admission gate 和 provider-neutral registry assembly。
+- `tool-provider-groups`：tool provider group feature metadata 和 provider plan。
+- `tool-execution`：低层 file/search/tool IO helper，不拥有产品 registry、permission policy 或 agent-facing tool surface。
 
-建议 `tool-runtime` 模块：
+建议模块：
 
 ```text
-tool-runtime
-  runtime.rs
-  registry.rs
-  provider.rs
-  context.rs
-  permission.rs
-  execution.rs
-  hooks.rs
-  result.rs
-  catalog.rs
+tool-contracts
+  framework.rs
+  restrictions.rs
+  file_guidance.rs
+  tool_result_storage.rs
+  tool_execution_presentation.rs
+
+tool-provider-groups
+  provider_groups.rs
+
+tool-execution
+  filesystem.rs
+  search.rs
+  remote.rs
+  result_window.rs
 ```
 
 核心接口：
@@ -424,22 +492,37 @@ pub struct ToolExecutionContext {
 }
 ```
 
+目标职责：
+
+- provider-neutral manifest、catalog、permission gate、execution admission、tool hook、execution result
+  presentation 和 result artifact policy。
+- `GetToolSpec` catalog、detail、assistant result 和 collapsed-tool unlock observation。
+- workspace service、path policy、runtime artifact reference、remote path containment 和 tool context facts 的
+  稳定 contract。
+
+旧路径兼容约束：
+
+- core 可以保留旧路径 facade、concrete tool adapter、state update、registry lookup、confirmation、actual
+  execution 和 filesystem persistence；目标状态要求只有在等价测试保护下才能移动这些行为。
+- workspace file/shell contract 保留既有错误与取消语义；不得把错误分类、取消语义或产品 tool exposure
+  变更混入 owner 边界移动。
+
 设计约束：
 
 - `ToolExecutionContext` 不暴露具体 manager。
 - `ToolContextFacts` 只包含 portable facts。
-- Tool Runtime 只消费 `ToolExecutionServices` 这样的窄 service 视图，不依赖完整
+- Tool primitives 只消费 `ToolExecutionServices` 这样的窄 service 视图，不依赖完整
   `RuntimeServices` bundle。
-- path policy、runtime artifact ref、remote POSIX containment 由 `bitfun-agent-tools` 承载。
+- path policy、runtime artifact ref、remote POSIX containment 由 `tool-contracts` 承载。
 - MCP tool 作为 external tool provider 注入，不内置在 Agent Runtime SDK。
-- `GetToolSpec` 是 tool runtime/catalog 能力，不是产品 UI。
+- `GetToolSpec` 是 tool catalog 能力，不是产品 UI。
 
 必须保护：
 
 - prompt-visible manifest。
 - expanded / collapsed exposure。
 - `GetToolSpec` schema / assistant detail / detail JSON。
-- collapsed unlock state。
+- collapsed unlock state 与 persistence 生命周期。
 - readonly / enabled snapshot filter。
 - MCP / ACP / desktop tool catalog 等价。
 - oversized tool result persistence、flush、preview、artifact ref。
@@ -447,13 +530,13 @@ pub struct ToolExecutionContext {
 
 ### 3.3 Harness Layer
 
-目标 crate：`bitfun-harness`。
+目标 owner crate：`bitfun-harness`。
 
 职责：
 
-- 把 SDD、DeepReview、DeepResearch、MiniApp、function-agent 等工作流从 runtime kernel
-  中分离。
-- 定义 workflow plan、step、policy、artifact、review gate、post-processor。
+- 把 SDD、DeepReview、DeepResearch、MiniApp、function-agent 等工作流从 runtime kernel 中分离。
+- 定义 workflow descriptor、route plan、provider registry、workflow plan、step、policy、artifact、
+  review gate 和 post-processor。
 - 通过 Agent Runtime SDK、Tool Runtime 和 service ports 编排。
 
 建议内部模块：
@@ -508,24 +591,26 @@ pub struct HarnessExecutionContext {
 - harness 不直接访问 concrete filesystem / Git / terminal。
 - 产品命令只映射到 harness capability，不把命令展示逻辑下沉。
 - 新 harness 通过 provider 注册，不改 Agent Runtime SDK 内核。
+- descriptor-only / legacy-facade provider 只能表达 route plan；不得被描述为已经拥有 concrete workflow execution。
+  执行语义移动必须单独证明行为等价。
 
 ## 4. 产品组装与扩展
 
 ### 4.1 Product Assembly
 
-Product Assembly 是 composition root。它可以位于 `bitfun-core` 迁移期 facade 内，也可以在
-后续拆成独立 Product Assembly crate。
+Product Assembly 是 composition root。初始状态可由 `bitfun-core` 兼容 facade 承载；目标状态可拆成独立
+Product Assembly crate。
 
 职责：
 
-- 创建具体 service 实现。
+- 创建或接收具体 adapter / service 实现。
 - 构建 `RuntimeServices`。
-- 注册 tool providers。
+- 注册 tool provider groups。
 - 注册 harness providers。
 - 注册 agent definitions、subagents、skills、prompt modules。
 - 建立产品 feature matrix。
-- 把 surface 命令映射到 capability / harness / runtime request。
-- 根据交付形态选择 `DeliveryProfile`、`CapabilitySet` 和 service provider 集合。
+- 把 interface 命令映射到 capability / harness / runtime request。
+- 根据交付形态选择 `DeliveryProfile`、`CapabilitySet`、adapter 和 service provider 集合。
 - 对不支持能力返回 typed unsupported / unavailable 错误，而不是让下层 runtime 判断产品形态。
 
 建议模块：
@@ -644,6 +729,8 @@ pub fn build_desktop_runtime(input: DesktopAssemblyInput) -> Result<ProductRunti
 - assembly 不得改变底层 runtime 语义来适配某个 surface。
 - `DeliveryProfile` 只能影响 capability/provider 选择，不得让下层出现 `if desktop`
   或 `if cli` 这样的 product 分支。
+- Tauri handle、window、command macro 和 desktop app state 只能存在于 Desktop provider 或
+  transport/API adapter；runtime parts 只接收 typed service port、DTO、event fact 和 capability availability。
 - feature group 是构建时能力边界，`CapabilitySet` 是产品运行时能力边界；两者必须在
   assembly 中显式对应。
 - 任何交付形态减少能力前，必须先更新 product matrix 并补产品入口验证。
@@ -800,14 +887,14 @@ pub trait BeforeToolExecution: Send + Sync {
 - hook 不得获取未声明的具体 service。
 - 修改 prompt / manifest / output 的 hook 必须有 snapshot 测试。
 
-## 5. 质量保护与完成定义
+## 5. 质量保护与目标态判定
 
 ### 5.1 鲁棒性设计
 
 错误：
 
 - contract 层使用 portable error facts。
-- runtime 层做错误分类和事件上报。
+- Agent Runtime SDK / Runtime Services 负责错误分类和事件上报边界。
 - Product Surface 只负责展示逻辑。
 - unsupported capability 必须明确，不允许泛化为 unknown failure。
 
@@ -830,11 +917,10 @@ pub trait BeforeToolExecution: Send + Sync {
 - fork context 继续保留禁止字段和递归 subagent 保护。
 - provider registry 构建后应尽量 immutable，避免 runtime 期间 materialization 漂移。
 
-### 5.2 计划边界
+### 5.2 设计边界
 
-本文只描述目标接口、crate 内部结构和行为保护要求，不定义 PR 顺序。Runtime Services、
-Tool Runtime、Agent Runtime SDK、Harness Layer 和 Product Assembly 的阶段边界、PR 范围和执行安排
-由 [`core-decomposition-plan.md`](../plans/core-decomposition-plan.md) 维护。
+本文只描述目标接口、crate 内部结构和行为保护要求。若验证发现目标接口、crate 归属、行为边界或风险判断不成立，
+应先修正设计判断，再调整实现边界。
 
 ### 5.3 测试策略
 
@@ -877,12 +963,14 @@ Product 测试：
 - MCP dynamic tool catalog。
 - MiniApp 与 review workflow。
 
-### 5.4 完成定义
+### 5.4 目标态判定口径
 
 - `bitfun-agent-runtime` 能在不依赖 `bitfun-core` 的情况下构建 runtime kernel。
+- Agent Runtime SDK façade 能通过 fake model provider、fake runtime services、fake tool provider 和 fake
+  harness provider 完成最小 session / turn / event stream 流程。
 - `bitfun-runtime-services` 提供 typed service injection，并由 boundary check 保护。
-- `tool-runtime` 承担 provider registry 和 execution pipeline，具体 tool 通过 provider 注入。
+- `tool-contracts`、`tool-provider-groups` 和 `tool-execution` 分别承担 tool contract、provider group plan 和低层 execution helper；具体 tool 通过 Product Assembly 注册。
 - `bitfun-harness` 支持工作流 provider 扩展。
-- `bitfun-core` 只作为迁移期 facade / product-full assembly。
+- `bitfun-core` 只作为兼容 facade / product-full assembly。
 - 所有产品形态通过 Product Assembly 显式启用能力。
 - 所有高风险行为有 snapshot、focused regression 或 product check 保护。

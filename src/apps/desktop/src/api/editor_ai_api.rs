@@ -125,7 +125,7 @@ pub async fn editor_ai_stream(
         let mut full_text = String::new();
         let mut last_finish_reason: Option<String> = None;
 
-        let mut stream = match client.send_message_stream(messages, None).await {
+        let mut stream = match client.send_message_stream(messages, None, None).await {
             Ok(response) => response.stream,
             Err(error) => {
                 runtime.remove(&request_id).await;

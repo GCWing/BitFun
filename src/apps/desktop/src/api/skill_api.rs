@@ -908,17 +908,34 @@ pub async fn delete_skill(
             .await
             .ok_or_else(|| format!("Skill '{}' not found", skill_key))?;
 
-        remote_fs
-            .remove_dir_all(&entry.connection_id, &skill_info.path)
-            .await
-            .map_err(|e| format!("Failed to delete remote skill folder: {}", e))?;
+        match skill_info.level {
+            SkillLocation::Project => {
+                remote_fs
+                    .remove_dir_all(&entry.connection_id, &skill_info.path)
+                    .await
+                    .map_err(|e| format!("Failed to delete remote skill folder: {}", e))?;
+                info!(
+                    "Remote project skill deleted: key={}, path={}",
+                    skill_key, skill_info.path
+                );
+            }
+            SkillLocation::User => {
+                let skill_path = std::path::PathBuf::from(&skill_info.path);
+                if skill_path.exists() {
+                    tokio::fs::remove_dir_all(&skill_path)
+                        .await
+                        .map_err(|e| format!("Failed to delete local skill folder: {}", e))?;
+                }
+                info!(
+                    "Local user skill deleted in remote workspace context: key={}, path={}",
+                    skill_key,
+                    skill_path.display()
+                );
+            }
+        }
 
         registry.refresh().await;
 
-        info!(
-            "Remote skill deleted: key={}, path={}",
-            skill_key, skill_info.path
-        );
         return Ok(format!("Skill '{}' deleted successfully", skill_info.name));
     }
 

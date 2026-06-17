@@ -1,7 +1,8 @@
  
 
 import { listen, UnlistenFn } from '@tauri-apps/api/event';
-import { ITransportAdapter } from './base';
+import { elapsedMs, nowMs } from '@/shared/utils/timing';
+import { ITransportAdapter, type TransportRequestTiming } from './base';
 import { createLogger } from '@/shared/utils/logger';
 import { sanitizeErrorForLog } from '../logSanitizer';
 
@@ -71,23 +72,36 @@ export class TauriTransportAdapter implements ITransportAdapter {
     this.connected = true;
   }
 
-  async request<T>(action: string, params?: any): Promise<T> {
+  async request<T>(action: string, params?: any, timing?: TransportRequestTiming): Promise<T> {
+    const transportStartedAt = nowMs();
     if (!this.connected) {
       await this.connect();
     }
 
+    const adapterInitStartedAt = nowMs();
     await this.ensureInitialized();
+    if (timing) {
+      timing.adapterInitDurationMs = elapsedMs(adapterInitStartedAt);
+    }
 
     try {
       if (!this.invokeFn) {
         throw new Error('Tauri invoke function not initialized');
       }
+      const invokeStartedAt = nowMs();
       const result = params !== undefined
         ? await this.invokeFn(action, params)
         : await this.invokeFn(action);
+      if (timing) {
+        timing.invokeDurationMs = elapsedMs(invokeStartedAt);
+        timing.transportDurationMs = elapsedMs(transportStartedAt);
+      }
 
       return result as T;
     } catch (error) {
+      if (timing) {
+        timing.transportDurationMs = elapsedMs(transportStartedAt);
+      }
       if (!isExpectedTauriRequestError(action, params, error)) {
         log.error('Request failed', { action, error: sanitizeErrorForLog(error) });
       }

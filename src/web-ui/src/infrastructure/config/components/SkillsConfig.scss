@@ -73,8 +73,8 @@
     .search__wrapper {
       background: linear-gradient(
         180deg,
-        rgba(255, 255, 255, 0.06) 0%,
-        rgba(255, 255, 255, 0.03) 100%
+        var(--color-overlay-white-06) 0%,
+        var(--color-overlay-white-03) 100%
       );
       border: 1px solid var(--border-subtle);
       border-radius: $size-radius-lg;
@@ -87,8 +87,8 @@
     border-radius: $size-radius-lg;
     background: linear-gradient(
       180deg,
-      rgba(255, 255, 255, 0.04) 0%,
-      rgba(255, 255, 255, 0.02) 100%
+      var(--color-overlay-white-04) 0%,
+      var(--color-overlay-white-02) 100%
     );
     color: var(--color-text-secondary);
     font-size: var(--font-size-sm);
@@ -113,8 +113,8 @@
     border-radius: $size-radius-lg;
     background: linear-gradient(
       180deg,
-      rgba(255, 255, 255, 0.05) 0%,
-      rgba(255, 255, 255, 0.03) 100%
+      var(--color-overlay-white-05) 0%,
+      var(--color-overlay-white-03) 100%
     );
     box-shadow: $shadow-xs;
     transition:
@@ -265,7 +265,7 @@
     font-weight: $font-weight-medium;
     color: var(--color-text-muted);
     border: 1px solid var(--border-subtle);
-    background: rgba(255, 255, 255, 0.06);
+    background: var(--color-overlay-white-06);
   }
 
   &__market-item-action {
@@ -292,8 +292,8 @@
   &__market-skeleton-btn {
     position: relative;
     overflow: hidden;
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: var(--color-overlay-white-08);
+    border: 1px solid var(--color-overlay-white-08);
     border-radius: $size-radius-sm;
 
     &::after {

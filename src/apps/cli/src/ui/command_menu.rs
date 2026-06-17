@@ -8,7 +8,7 @@ use ratatui::{
     Frame,
 };
 
-use crate::commands::{match_prefix_in, CommandSpec, COMMAND_SPECS};
+use crate::commands::{match_substring_in, CommandSpec, COMMAND_SPECS};
 use crate::ui::theme::{StyleKind, Theme};
 
 pub struct CommandMenuState {
@@ -61,7 +61,7 @@ impl CommandMenuState {
         if query == "/" {
             self.items = commands.iter().collect();
         } else {
-            self.items = match_prefix_in(query, commands);
+            self.items = match_substring_in(query, commands);
         }
         self.items.sort_by_key(|spec| spec.name);
 

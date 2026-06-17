@@ -46,7 +46,7 @@
     padding: 0;
     border: 1px dashed var(--border-subtle);
     border-radius: 10px;
-    background: var(--element-bg-subtle, transparent);
+    background: var(--element-bg-subtle);
     overflow: hidden;
   }
 }
@@ -114,7 +114,7 @@
   word-break: break-word;
   border-radius: 8px;
   border: 1px solid var(--border-subtle);
-  background: var(--color-bg-muted);
+  background: var(--color-bg-subtle);
   color: var(--color-text-secondary);
 }
 

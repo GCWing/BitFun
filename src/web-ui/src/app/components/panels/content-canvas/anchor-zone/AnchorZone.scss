@@ -5,7 +5,7 @@
 .canvas-anchor-zone {
   display: flex;
   flex-direction: column;
-  background: var(--color-bg-primary, #1a1a1a);
+  background: var(--color-bg-primary);
   border: 1px solid var(--border-base);
   overflow: hidden;
 
@@ -56,7 +56,7 @@
   // Resizing state
   &.is-resizing {
     .canvas-anchor-zone__resizer-line {
-      background: var(--color-primary, #60a5fa);
+      background: var(--color-primary);
     }
   }
 
@@ -89,7 +89,7 @@
 
     &:hover {
       .canvas-anchor-zone__resizer-line {
-        background: var(--color-primary, #60a5fa);
+        background: var(--color-primary);
       }
     }
   }
@@ -105,7 +105,7 @@
     align-items: center;
     justify-content: space-between;
     padding: 6px 12px;
-    background: var(--color-bg-secondary, rgba(255, 255, 255, 0.03));
+    background: var(--color-bg-secondary);
     border-bottom: 1px solid var(--border-base);
     flex-shrink: 0;
   }
@@ -116,10 +116,10 @@
     gap: 8px;
     font-size: 12px;
     font-weight: 500;
-    color: var(--color-text-primary, rgba(255, 255, 255, 0.9));
+    color: var(--color-text-primary);
 
     svg {
-      color: var(--color-text-secondary, rgba(255, 255, 255, 0.6));
+      color: var(--color-text-secondary);
     }
   }
 
@@ -138,19 +138,19 @@
     padding: 0;
     background: none;
     border: none;
-    color: var(--color-text-secondary, rgba(255, 255, 255, 0.6));
+    color: var(--color-text-secondary);
     cursor: pointer;
     border-radius: 4px;
     transition: background-color 0.15s ease, color 0.15s ease;
 
     &:hover {
-      background: var(--color-bg-hover, rgba(255, 255, 255, 0.1));
-      color: var(--color-text-primary, rgba(255, 255, 255, 0.9));
+      background: var(--color-bg-hover);
+      color: var(--color-text-primary);
     }
   }
 
   &__close-btn:hover {
-    color: var(--color-danger, #f87171);
+    color: var(--color-danger);
   }
 
   // Content area

@@ -14,11 +14,55 @@ export function isAcpAgentType(agentType: string | null | undefined): boolean {
   return acpClientIdFromAgentType(agentType) !== null;
 }
 
+export function acpAgentTypeFromSession(
+  session: Pick<Session, 'config' | 'mode'> | null | undefined,
+): string | null {
+  const configClientId = acpClientIdFromAgentType(session?.config?.agentType);
+  if (configClientId) return `${ACP_AGENT_TYPE_PREFIX}${configClientId}`;
+
+  const modeClientId = acpClientIdFromAgentType(session?.mode);
+  return modeClientId ? `${ACP_AGENT_TYPE_PREFIX}${modeClientId}` : null;
+}
+
 export function isAcpFlowSession(
   session: Pick<Session, 'config' | 'mode'> | null | undefined,
 ): boolean {
-  return Boolean(
-    isAcpAgentType(session?.config?.agentType) ||
-    isAcpAgentType(session?.mode),
-  );
+  return acpAgentTypeFromSession(session) !== null;
+}
+
+export interface AcpSessionRef {
+  sessionId: string;
+  clientId: string;
+  workspacePath?: string;
+  remoteConnectionId?: string;
+  remoteSshHost?: string;
+}
+
+export function acpSessionRef(
+  session:
+    | Pick<
+        Session,
+        'sessionId' | 'config' | 'mode' | 'workspacePath' | 'remoteConnectionId' | 'remoteSshHost'
+      >
+    | null
+    | undefined,
+): AcpSessionRef | null {
+  if (!session?.sessionId) return null;
+
+  const clientId =
+    acpClientIdFromAgentType(session.config?.agentType) ??
+    acpClientIdFromAgentType(session.mode);
+  if (!clientId) return null;
+
+  return {
+    sessionId: session.sessionId,
+    clientId,
+    workspacePath: session.workspacePath ?? session.config?.workspacePath,
+    remoteConnectionId: session.remoteConnectionId ?? session.config?.remoteConnectionId,
+    remoteSshHost: session.remoteSshHost,
+  };
+}
+
+export function acpSlashCommandText(name: string): string {
+  return `/${name} `;
 }

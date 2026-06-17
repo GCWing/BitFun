@@ -37,7 +37,7 @@ export const ForkSessionButton: React.FC<ForkSessionButtonProps> = ({
     } catch (error) {
       log.error('Failed to fork session', { sessionId, turnId, error });
       notificationService.error(
-        t('modelRound.forkFailed', { defaultValue: 'Failed to fork session' }),
+        t('modelRound.forkFailed'),
         { duration: 3500 }
       );
     } finally {
@@ -51,7 +51,7 @@ export const ForkSessionButton: React.FC<ForkSessionButtonProps> = ({
 
   return (
     <Tooltip
-      content={t('modelRound.forkDialog', { defaultValue: 'Fork session from here' })}
+      content={t('modelRound.forkDialog')}
       placement="top"
     >
       <button

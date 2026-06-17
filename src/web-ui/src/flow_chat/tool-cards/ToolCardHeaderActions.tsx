@@ -42,13 +42,13 @@ export const ToolCardCopyAction: React.FC<ToolCardCopyActionProps> = ({
   ariaLabel,
   className,
   disabled,
-  showSuccessNotification
+  showSuccessNotification,
 }) => {
   const { copied, copy } = useCopyTextAction({
     getText,
     successMessage,
     failureMessage,
-    showSuccessNotification
+    showSuccessNotification,
   });
 
   return (

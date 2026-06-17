@@ -53,6 +53,7 @@ import type { SessionUsagePanelTab } from './sessionUsagePanelTypes';
 import './SessionUsagePanel.scss';
 
 const log = createLogger('SessionUsagePanel');
+type UsageTranslator = (key: string, options?: Record<string, unknown>) => string;
 interface SessionUsagePanelProps {
   report?: SessionUsageReport;
   markdown?: string;
@@ -1076,8 +1077,21 @@ function getUsageFileName(filePath: string): string {
 
 function UsageSlowest({ report, sessionId }: { report: SessionUsageReport; sessionId?: string }) {
   const { t } = useTranslation('flow-chat');
-  const handleJumpToTurn = useCallback((span: SessionUsageReport['slowest'][number]) => {
-    if (!sessionId || !span.turnId) return;
+  const handleJumpToSpan = useCallback((span: SessionUsageReport['slowest'][number]) => {
+    if (!sessionId) return;
+
+    if (span.itemId && typeof span.turnIndex === 'number') {
+      const request: FlowChatFocusItemRequest = {
+        sessionId,
+        turnIndex: span.turnIndex,
+        itemId: span.itemId,
+        source: 'usage-report',
+      };
+      globalEventBus.emit(FLOWCHAT_FOCUS_ITEM_EVENT, request, 'SessionUsagePanel');
+      return;
+    }
+
+    if (!span.turnId) return;
 
     const request: FlowChatPinTurnToTopRequest = {
       sessionId,
@@ -1113,21 +1127,37 @@ function UsageSlowest({ report, sessionId }: { report: SessionUsageReport; sessi
         rows={report.slowest.map((span, index) => {
           const spanHelp = getSlowSpanHelp(span, t);
           const spanLabel = getSlowSpanLabel(span, t);
-          const canJumpToTurn = Boolean(sessionId && span.turnId);
+          const detailRows = getSlowSpanDetailRows(span, t);
+          const canJumpToSpan = Boolean(
+            sessionId &&
+            (span.turnId || (span.itemId && typeof span.turnIndex === 'number'))
+          );
           const jumpHelp = t('usage.actions.jumpToTurn');
-          const labelCell: UsageTableCell = canJumpToTurn
+          const labelCell: UsageTableCell = canJumpToSpan
             ? {
               node: (
-                <Tooltip content={spanHelp ? `${spanHelp} ${jumpHelp}` : jumpHelp}>
-                  <button
-                    type="button"
-                    className="session-usage-panel__turn-link"
-                    onClick={() => handleJumpToTurn(span)}
-                    aria-label={`${jumpHelp}: ${spanLabel}`}
-                  >
-                    {spanLabel}
-                  </button>
-                </Tooltip>
+                <div className="session-usage-panel__slow-span">
+                  <Tooltip content={spanHelp ? `${spanHelp} ${jumpHelp}` : jumpHelp}>
+                    <button
+                      type="button"
+                      className="session-usage-panel__turn-link"
+                      onClick={() => handleJumpToSpan(span)}
+                      aria-label={`${jumpHelp}: ${spanLabel}`}
+                    >
+                      {spanLabel}
+                    </button>
+                  </Tooltip>
+                  {detailRows.length > 0 && (
+                    <dl className="session-usage-panel__slow-span-details">
+                      {detailRows.map(row => (
+                        <div key={row.label}>
+                          <dt>{row.label}</dt>
+                          <dd>{row.value}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  )}
+                </div>
               ),
             }
             : spanHelp
@@ -1145,6 +1175,70 @@ function UsageSlowest({ report, sessionId }: { report: SessionUsageReport; sessi
       />
     </section>
   );
+}
+
+function getSlowSpanDetailRows(
+  span: SessionUsageReport['slowest'][number],
+  t: UsageTranslator
+): Array<{ label: string; value: string }> {
+  if (span.kind !== 'tool' || span.redacted) {
+    return [];
+  }
+
+  const rows: Array<{ label: string; value: string }> = [];
+  if (span.inputSummary) {
+    rows.push({
+      label: t('usage.slowest.details.input'),
+      value: span.inputSummary,
+    });
+  }
+  if (span.status) {
+    rows.push({
+      label: t('usage.slowest.details.status'),
+      value: getSlowToolStatusLabel(span.status, t),
+    });
+  }
+  if (typeof span.exitCode === 'number') {
+    rows.push({
+      label: t('usage.slowest.details.exitCode'),
+      value: String(span.exitCode),
+    });
+  }
+  if (span.timedOut === true) {
+    rows.push({
+      label: t('usage.slowest.details.timedOut'),
+      value: t('usage.status.timedOut'),
+    });
+  }
+  if (typeof span.executionMs === 'number') {
+    rows.push({
+      label: t('usage.slowest.details.execution'),
+      value: formatUsageDuration(span.executionMs, t),
+    });
+  }
+  if (span.errorSummary) {
+    rows.push({
+      label: t('usage.slowest.details.error'),
+      value: span.errorSummary,
+    });
+  }
+  return rows;
+}
+
+function getSlowToolStatusLabel(
+  status: string,
+  t: UsageTranslator
+): string {
+  if (status === 'failed') {
+    return t('shared:statuses.failed');
+  }
+  if (status === 'succeeded') {
+    return t('shared:statuses.done');
+  }
+  if (status === 'timed_out') {
+    return t('usage.status.timedOut');
+  }
+  return status;
 }
 
 interface UsageTableProps {

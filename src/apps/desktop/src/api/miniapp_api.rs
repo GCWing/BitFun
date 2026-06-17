@@ -1,7 +1,13 @@
 //! MiniApp API — Tauri commands for MiniApp CRUD, JS Worker, and dialog.
 
 use crate::api::app_state::AppState;
+use crate::startup_trace::DesktopStartupTrace;
 use bitfun_core::infrastructure::events::{emit_global_event, BackendEvent};
+use bitfun_core::miniapp::ai_bridge::{
+    available_models_for_permissions, build_ai_message_plan, require_enabled_ai_permissions,
+    validate_model, MiniAppAiMessageRole, MiniAppAiModelDescriptor, MiniAppAiModelInfo,
+};
+use bitfun_core::miniapp::rate_limit::{MiniAppRateLimitState, MiniAppRateLimitSubject};
 use bitfun_core::miniapp::{
     dispatch_host, is_host_primitive, InstallResult as CoreInstallResult, MiniApp,
     MiniAppAiContext, MiniAppCustomizationMetadata, MiniAppDraft, MiniAppMeta,
@@ -16,7 +22,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, State};
 
 // ============== Request/Response DTOs ==============
@@ -352,12 +358,18 @@ async fn ensure_worker_dependencies(
 // ============== App management commands ==============
 
 #[tauri::command]
-pub async fn list_miniapps(state: State<'_, AppState>) -> Result<Vec<MiniAppMeta>, String> {
-    state
+pub async fn list_miniapps(
+    state: State<'_, AppState>,
+    startup_trace: State<'_, DesktopStartupTrace>,
+) -> Result<Vec<MiniAppMeta>, String> {
+    let trace_started = Instant::now();
+    let result = state
         .miniapp_manager
         .list()
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string());
+    startup_trace.record_tauri_command_elapsed("list_miniapps", None, trace_started);
+    result
 }
 
 #[tauri::command]
@@ -680,11 +692,16 @@ pub async fn miniapp_worker_stop(state: State<'_, AppState>, app_id: String) -> 
 #[tauri::command]
 pub async fn miniapp_worker_list_running(
     state: State<'_, AppState>,
+    startup_trace: State<'_, DesktopStartupTrace>,
 ) -> Result<Vec<String>, String> {
-    let Some(ref pool) = state.js_worker_pool else {
-        return Ok(vec![]);
+    let trace_started = Instant::now();
+    let result = if let Some(ref pool) = state.js_worker_pool {
+        Ok(pool.list_running().await)
+    } else {
+        Ok(vec![])
     };
-    Ok(pool.list_running().await)
+    startup_trace.record_tauri_command_elapsed("miniapp_worker_list_running", None, trace_started);
+    result
 }
 
 #[tauri::command]
@@ -1113,14 +1130,14 @@ pub async fn miniapp_decline_builtin_update(
 static AI_STREAM_REGISTRY: OnceLock<Mutex<HashMap<String, Arc<AtomicBool>>>> = OnceLock::new();
 
 /// Per-app rate limiter state: app_id → (request_count, window_start_ms).
-static AI_RATE_LIMITER: OnceLock<Mutex<HashMap<String, (u32, u64)>>> = OnceLock::new();
+static AI_RATE_LIMITER: OnceLock<Mutex<MiniAppRateLimitState>> = OnceLock::new();
 
 fn ai_stream_registry() -> &'static Mutex<HashMap<String, Arc<AtomicBool>>> {
     AI_STREAM_REGISTRY.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
-fn ai_rate_limiter() -> &'static Mutex<HashMap<String, (u32, u64)>> {
-    AI_RATE_LIMITER.get_or_init(|| Mutex::new(HashMap::new()))
+fn ai_rate_limiter() -> &'static Mutex<MiniAppRateLimitState> {
+    AI_RATE_LIMITER.get_or_init(|| Mutex::new(MiniAppRateLimitState::default()))
 }
 
 fn now_ms() -> u64 {
@@ -1128,47 +1145,6 @@ fn now_ms() -> u64 {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_millis() as u64
-}
-
-/// Check and increment the rate limiter for a given app. Returns Err if rate limit exceeded.
-fn check_rate_limit(app_id: &str, rate_limit_per_minute: u32) -> Result<(), String> {
-    if rate_limit_per_minute == 0 {
-        return Ok(());
-    }
-    let now = now_ms();
-    let window_ms: u64 = 60_000;
-    let mut map = ai_rate_limiter().lock().unwrap_or_else(|p| p.into_inner());
-    let entry = map.entry(app_id.to_string()).or_insert((0, now));
-    if now - entry.1 >= window_ms {
-        *entry = (1, now);
-    } else {
-        entry.0 += 1;
-        if entry.0 > rate_limit_per_minute {
-            return Err(format!(
-                "AI rate limit exceeded: max {} requests/minute",
-                rate_limit_per_minute
-            ));
-        }
-    }
-    Ok(())
-}
-
-/// Validate the requested model against the app's allowed_models list.
-/// Returns the resolved model id (may be "primary" / "fast") to pass to AIClientFactory.
-fn validate_model(
-    model: Option<&str>,
-    ai_perms: &bitfun_core::miniapp::AiPermissions,
-) -> Result<String, String> {
-    let requested = model.unwrap_or("primary");
-    if let Some(ref allowed) = ai_perms.allowed_models {
-        if !allowed.is_empty() && !allowed.iter().any(|m| m == requested) {
-            return Err(format!(
-                "Model '{}' is not allowed by this MiniApp's AI permissions",
-                requested
-            ));
-        }
-    }
-    Ok(requested.to_string())
 }
 
 // ---- Request/Response DTOs for AI commands ----
@@ -1245,15 +1221,6 @@ pub struct MiniAppAiListModelsRequest {
     pub app_id: String,
 }
 
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MiniAppAiModelInfo {
-    pub id: String,
-    pub name: String,
-    pub provider: String,
-    pub is_default: bool,
-}
-
 // ---- Payload structs for Tauri events ----
 
 #[derive(Debug, Serialize, Clone)]
@@ -1272,22 +1239,19 @@ fn build_messages_for_ai(
     system_prompt: Option<&str>,
     chat_messages: &[MiniAppAiChatMessage],
 ) -> Vec<Message> {
-    let mut msgs = Vec::new();
-    if let Some(sp) = system_prompt {
-        if !sp.is_empty() {
-            msgs.push(Message::system(sp.to_string()));
-        }
-    }
-    for m in chat_messages {
-        let role = m.role.to_lowercase();
-        if role == "assistant" {
-            msgs.push(Message::assistant(m.content.clone()));
-        } else {
-            // Treat any unrecognized role as "user" for safety
-            msgs.push(Message::user(m.content.clone()));
-        }
-    }
-    msgs
+    build_ai_message_plan(
+        system_prompt,
+        chat_messages
+            .iter()
+            .map(|message| (message.role.as_str(), message.content.as_str())),
+    )
+    .into_iter()
+    .map(|message| match message.role {
+        MiniAppAiMessageRole::System => Message::system(message.content),
+        MiniAppAiMessageRole::Assistant => Message::assistant(message.content),
+        MiniAppAiMessageRole::User => Message::user(message.content),
+    })
+    .collect()
 }
 
 // ---- Commands ----
@@ -1304,18 +1268,18 @@ pub async fn miniapp_ai_complete(
         .await
         .map_err(|e| e.to_string())?;
 
-    let ai_perms = app
-        .permissions
-        .ai
-        .as_ref()
-        .ok_or("AI access is not enabled for this MiniApp")?;
-
-    if !ai_perms.enabled {
-        return Err("AI access is not enabled for this MiniApp".to_string());
-    }
+    let ai_perms = require_enabled_ai_permissions(app.permissions.ai.as_ref())?;
 
     let rate_limit = ai_perms.rate_limit_per_minute.unwrap_or(0);
-    check_rate_limit(&request.app_id, rate_limit)?;
+    ai_rate_limiter()
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .check(
+            &request.app_id,
+            rate_limit,
+            now_ms(),
+            MiniAppRateLimitSubject::Ai,
+        )?;
 
     let model_ref = validate_model(request.model.as_deref(), ai_perms)?;
 
@@ -1334,7 +1298,7 @@ pub async fn miniapp_ai_complete(
     );
 
     let stream_response = ai_client
-        .send_message_stream(messages, None)
+        .send_message_stream(messages, None, None)
         .await
         .map_err(|e| format!("AI request failed: {}", e))?;
 
@@ -1388,18 +1352,18 @@ pub async fn miniapp_ai_chat(
         .await
         .map_err(|e| e.to_string())?;
 
-    let ai_perms = miniapp
-        .permissions
-        .ai
-        .as_ref()
-        .ok_or("AI access is not enabled for this MiniApp")?;
-
-    if !ai_perms.enabled {
-        return Err("AI access is not enabled for this MiniApp".to_string());
-    }
+    let ai_perms = require_enabled_ai_permissions(miniapp.permissions.ai.as_ref())?;
 
     let rate_limit = ai_perms.rate_limit_per_minute.unwrap_or(0);
-    check_rate_limit(&request.app_id, rate_limit)?;
+    ai_rate_limiter()
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .check(
+            &request.app_id,
+            rate_limit,
+            now_ms(),
+            MiniAppRateLimitSubject::Ai,
+        )?;
 
     let model_ref = validate_model(request.model.as_deref(), ai_perms)?;
 
@@ -1412,7 +1376,7 @@ pub async fn miniapp_ai_chat(
     let messages = build_messages_for_ai(request.system_prompt.as_deref(), &request.messages);
 
     let stream_response = ai_client
-        .send_message_stream(messages, None)
+        .send_message_stream(messages, None, None)
         .await
         .map_err(|e| format!("AI request failed: {}", e))?;
 
@@ -1559,15 +1523,7 @@ pub async fn miniapp_ai_list_models(
         .await
         .map_err(|e| e.to_string())?;
 
-    let ai_perms = miniapp
-        .permissions
-        .ai
-        .as_ref()
-        .ok_or("AI access is not enabled for this MiniApp")?;
-
-    if !ai_perms.enabled {
-        return Err("AI access is not enabled for this MiniApp".to_string());
-    }
+    let ai_perms = require_enabled_ai_permissions(miniapp.permissions.ai.as_ref())?;
 
     let global_config = state
         .config_service
@@ -1584,34 +1540,21 @@ pub async fn miniapp_ai_list_models(
         .resolve_model_selection("fast")
         .unwrap_or_default();
 
-    let allowed = ai_perms.allowed_models.as_deref().unwrap_or(&[]);
-
-    let models: Vec<MiniAppAiModelInfo> = global_config
-        .ai
-        .models
-        .iter()
-        .filter(|m| m.enabled)
-        .filter(|m| {
-            if allowed.is_empty() {
-                // No restriction — allow all
-                true
-            } else {
-                // Allow if model id/name matches any entry in allowed list,
-                // or if "primary"/"fast" is in allowed and this model is the resolved target.
-                allowed.iter().any(|a| match a.as_str() {
-                    "primary" => m.id == primary_id,
-                    "fast" => m.id == fast_id,
-                    other => m.id == other || m.name == other,
-                })
-            }
-        })
-        .map(|m| MiniAppAiModelInfo {
-            id: m.id.clone(),
-            name: m.name.clone(),
-            provider: m.provider.clone(),
-            is_default: m.id == primary_id,
-        })
-        .collect();
+    let models = available_models_for_permissions(
+        global_config
+            .ai
+            .models
+            .iter()
+            .map(|model| MiniAppAiModelDescriptor {
+                id: model.id.clone(),
+                name: model.name.clone(),
+                provider: model.provider.clone(),
+                enabled: model.enabled,
+            }),
+        ai_perms.allowed_models.as_deref().unwrap_or(&[]),
+        &primary_id,
+        &fast_id,
+    );
 
     Ok(models)
 }

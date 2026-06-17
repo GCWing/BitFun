@@ -5,6 +5,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
 import { ModernFlowChatContainer } from './ModernFlowChatContainer';
 import type { Session } from '../../types/flow-chat';
+import { flowChatStore } from '../../store/FlowChatStore';
+import {
+  clearHistorySessionOpenTransition,
+  dispatchHistorySessionOpenIntent,
+  HISTORY_SESSION_OPEN_INTENT_EVENT,
+} from '../../services/sessionOpenIntent';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -15,6 +21,37 @@ const stateMocks = vi.hoisted(() => ({
 }));
 
 const switchChatSessionMock = vi.hoisted(() => vi.fn());
+const virtualListMock = vi.hoisted(() => ({
+  scrollToTurn: vi.fn(),
+  scrollToIndex: vi.fn(),
+  scrollToPhysicalBottomAndClearPin: vi.fn(),
+  scrollToTurnEndAndClearPin: vi.fn(() => true),
+  scrollToLatestEndPosition: vi.fn(),
+  isTurnRenderedInViewport: vi.fn(() => false),
+  isTurnTextRenderedInViewport: vi.fn(() => false),
+  pinTurnToTop: vi.fn(() => true),
+}));
+const virtualListActionClickMock = vi.hoisted(() => vi.fn());
+const startupTraceMock = vi.hoisted(() => ({
+  markPhase: vi.fn(),
+}));
+const searchStateMock = vi.hoisted(() => ({
+  searchQuery: '',
+  onSearchChange: vi.fn(),
+  matches: [] as unknown[],
+  matchIndices: [] as number[],
+  currentMatchIndex: -1,
+  currentMatchVirtualIndex: -1,
+  goToNext: vi.fn(),
+  goToPrev: vi.fn(),
+  clearSearch: vi.fn(),
+}));
+const headerPropsMock = vi.hoisted(() => ({
+  latest: null as Record<string, unknown> | null,
+}));
+const agentApiMock = vi.hoisted(() => ({
+  listBackgroundCommandActivities: vi.fn(() => Promise.resolve({ activities: [] })),
+}));
 
 vi.mock('react-i18next', () => ({
   initReactI18next: {
@@ -63,6 +100,10 @@ vi.mock('@/infrastructure/contexts/WorkspaceContext', () => ({
   }),
 }));
 
+vi.mock('@/infrastructure/api', () => ({
+  agentAPI: agentApiMock,
+}));
+
 vi.mock('../../utils/acpSession', () => ({
   isAcpFlowSession: () => false,
 }));
@@ -74,11 +115,28 @@ vi.mock('../../store/modernFlowChatStore', () => ({
 }));
 
 vi.mock('./VirtualMessageList', () => ({
-  VirtualMessageList: React.forwardRef(() => <div data-testid="virtual-list" />),
+  VirtualMessageList: React.forwardRef((_, ref) => {
+    React.useImperativeHandle(ref, () => virtualListMock);
+    return (
+      <div data-testid="virtual-list">
+        <button type="button" data-testid="virtual-list-action" onClick={virtualListActionClickMock}>
+          Hidden action
+        </button>
+      </div>
+    );
+  }),
+}));
+
+vi.mock('@/shared/utils/startupTrace', () => ({
+  isRemoteTraceContext: () => false,
+  startupTrace: startupTraceMock,
 }));
 
 vi.mock('./FlowChatHeader', () => ({
-  FlowChatHeader: () => <div data-testid="flowchat-header" />,
+  FlowChatHeader: (props: Record<string, unknown>) => {
+    headerPropsMock.latest = props;
+    return <div data-testid="flowchat-header" />;
+  },
 }));
 
 vi.mock('../WelcomePanel', () => ({
@@ -121,17 +179,7 @@ vi.mock('./useFlowChatToolActions', () => ({
 }));
 
 vi.mock('./useFlowChatSearch', () => ({
-  useFlowChatSearch: () => ({
-    searchQuery: '',
-    onSearchChange: vi.fn(),
-    matches: [],
-    matchIndices: [],
-    currentMatchIndex: -1,
-    currentMatchVirtualIndex: -1,
-    goToNext: vi.fn(),
-    goToPrev: vi.fn(),
-    clearSearch: vi.fn(),
-  }),
+  useFlowChatSearch: () => searchStateMock,
 }));
 
 function createSession(overrides: Partial<Session> = {}): Session {
@@ -153,17 +201,73 @@ function createSession(overrides: Partial<Session> = {}): Session {
   };
 }
 
+function createTurn(id: string, content: string, status: 'completed' | 'processing' = 'completed') {
+  return {
+    id,
+    turnId: id,
+    sessionId: 'session-1',
+    timestamp: 1,
+    userMessage: { id: `user-${id}`, content, timestamp: 1 },
+    modelRounds: [],
+    startTime: 1,
+    status,
+  };
+}
+
+let rafCallbacks: FrameRequestCallback[] = [];
+
+function flushAnimationFrame() {
+  const callbacks = rafCallbacks;
+  rafCallbacks = [];
+  act(() => {
+    callbacks.forEach(callback => callback(performance.now()));
+  });
+}
+
 describe('ModernFlowChatContainer historical empty state', () => {
   let container: HTMLDivElement;
   let root: Root;
 
   beforeEach(() => {
+    rafCallbacks = [];
+    vi.stubGlobal('requestAnimationFrame', vi.fn((callback: FrameRequestCallback) => {
+      rafCallbacks.push(callback);
+      return rafCallbacks.length;
+    }));
+    vi.stubGlobal('cancelAnimationFrame', vi.fn());
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
     stateMocks.virtualItems = [];
     stateMocks.visibleTurnInfo = null;
     switchChatSessionMock.mockReset();
+    virtualListMock.scrollToTurn.mockReset();
+    virtualListMock.scrollToIndex.mockReset();
+    virtualListMock.scrollToPhysicalBottomAndClearPin.mockReset();
+    virtualListMock.scrollToTurnEndAndClearPin.mockReset();
+    virtualListMock.scrollToTurnEndAndClearPin.mockReturnValue(true);
+    virtualListMock.scrollToLatestEndPosition.mockReset();
+    virtualListMock.isTurnRenderedInViewport.mockReset();
+    virtualListMock.isTurnRenderedInViewport.mockReturnValue(false);
+    virtualListMock.isTurnTextRenderedInViewport.mockReset();
+    virtualListMock.isTurnTextRenderedInViewport.mockReturnValue(false);
+    virtualListMock.pinTurnToTop.mockReset();
+    virtualListMock.pinTurnToTop.mockReturnValue(true);
+    virtualListActionClickMock.mockReset();
+    startupTraceMock.markPhase.mockReset();
+    agentApiMock.listBackgroundCommandActivities.mockClear();
+    agentApiMock.listBackgroundCommandActivities.mockResolvedValue({ activities: [] });
+    searchStateMock.searchQuery = '';
+    searchStateMock.onSearchChange.mockReset();
+    searchStateMock.matches = [];
+    searchStateMock.matchIndices = [];
+    searchStateMock.currentMatchIndex = -1;
+    searchStateMock.currentMatchVirtualIndex = -1;
+    searchStateMock.goToNext.mockReset();
+    searchStateMock.goToPrev.mockReset();
+    searchStateMock.clearSearch.mockReset();
+    headerPropsMock.latest = null;
+    clearHistorySessionOpenTransition();
   });
 
   afterEach(() => {
@@ -174,6 +278,8 @@ describe('ModernFlowChatContainer historical empty state', () => {
     }
     container?.remove();
     stateMocks.activeSession = null;
+    clearHistorySessionOpenTransition();
+    vi.unstubAllGlobals();
   });
 
   it('shows a history loading shell for metadata-only sessions instead of the new-session welcome', () => {
@@ -196,6 +302,465 @@ describe('ModernFlowChatContainer historical empty state', () => {
 
     expect(container.textContent).toContain('Loading saved session');
     expect(container.querySelector('[data-testid="welcome-panel"]')).toBeNull();
+  });
+
+  it('does not show the new-session welcome while a restored session is waiting for virtual items', () => {
+    stateMocks.activeSession = createSession({
+      isHistorical: false,
+      historyState: 'ready',
+      dialogTurns: [{
+        id: 'turn-1',
+        turnId: 'turn-1',
+        sessionId: 'session-1',
+        timestamp: 1,
+        userMessage: { id: 'user-1', content: 'Saved prompt', timestamp: 1 },
+        modelRounds: [],
+        startTime: 1,
+        status: 'completed',
+      }],
+    } as Partial<Session>);
+
+    act(() => {
+      root.render(<ModernFlowChatContainer />);
+    });
+
+    expect(container.textContent).toContain('Loading saved session');
+    expect(container.querySelector('[data-testid="welcome-panel"]')).toBeNull();
+  });
+
+  it('covers the current message list after a historical session open intent', async () => {
+    stateMocks.activeSession = createSession({
+      sessionId: 'current-session',
+      isHistorical: false,
+      historyState: 'ready',
+      dialogTurns: [createTurn('turn-1', 'Current visible prompt')],
+    } as Partial<Session>);
+    stateMocks.virtualItems = [
+      { type: 'user-message', turnId: 'turn-1', data: { id: 'user-turn-1', content: 'Current visible prompt' } },
+    ];
+
+    await act(async () => {
+      root.render(<ModernFlowChatContainer />);
+    });
+
+    expect(container.querySelector('[data-testid="virtual-list"]')).not.toBeNull();
+    expect(container.querySelector('.modern-flowchat-container__history-overlay')).toBeNull();
+
+    act(() => {
+      window.dispatchEvent(new CustomEvent(HISTORY_SESSION_OPEN_INTENT_EVENT, {
+        detail: { sessionId: 'history-session', sessionTitle: 'Saved investigation' },
+      }));
+    });
+
+    expect(container.textContent).not.toContain('Loading saved session');
+    expect(container.querySelector('[data-testid="virtual-list"]')).not.toBeNull();
+    expect(container.querySelector('.modern-flowchat-container__history-overlay')).toBeNull();
+    expect(container.querySelector('.modern-flowchat-container__history-open-intent-shield')).not.toBeNull();
+    expect(container.querySelector('.modern-flowchat-container__history-open-intent-spinner')).not.toBeNull();
+    expect(container.textContent).toContain('Hidden action');
+    expect(container.textContent).not.toContain('Saved investigation');
+    expect(container.querySelector('.modern-flowchat-container__messages')?.getAttribute('data-show-history-open-intent-overlay'))
+      .toBe('true');
+    (container.querySelector('[data-testid="virtual-list-action"]') as HTMLButtonElement | null)?.click();
+    expect(virtualListActionClickMock).not.toHaveBeenCalled();
+
+    stateMocks.activeSession = createSession({
+      sessionId: 'history-session',
+      historyState: 'metadata-only',
+    } as Partial<Session>);
+    stateMocks.virtualItems = [];
+
+    await act(async () => {
+      root.render(<ModernFlowChatContainer />);
+    });
+
+    expect(container.textContent).not.toContain('Loading saved session');
+    expect(container.querySelector('.modern-flowchat-container__history-overlay')).toBeNull();
+    expect(container.querySelector('[data-testid="welcome-panel"]')).toBeNull();
+    expect(container.querySelector('.modern-flowchat-container__history-open-intent-shield')).not.toBeNull();
+    expect(container.querySelector('.modern-flowchat-container__messages')?.getAttribute('data-show-history-loading-layer'))
+      .toBe('false');
+    expect(container.querySelector('.modern-flowchat-container__messages')?.getAttribute('data-show-history-open-intent-overlay'))
+      .toBe('true');
+
+    stateMocks.activeSession = createSession({
+      sessionId: 'history-session',
+      isHistorical: false,
+      historyState: 'ready',
+      dialogTurns: [createTurn('turn-2', 'Restored latest prompt')],
+    } as Partial<Session>);
+    stateMocks.virtualItems = [
+      { type: 'user-message', turnId: 'turn-2', data: { id: 'user-turn-2', content: 'Restored latest prompt' } },
+    ];
+
+    await act(async () => {
+      root.render(<ModernFlowChatContainer />);
+    });
+
+    expect(container.querySelector('[data-testid="virtual-list"]')).not.toBeNull();
+    expect(container.querySelector('.modern-flowchat-container__history-open-intent-shield')).toBeNull();
+    expect(container.querySelector('.modern-flowchat-container__messages')?.getAttribute('data-show-history-open-intent-overlay'))
+      .toBe('false');
+  });
+
+  it('removes the loading layer when a hydrating session receives its initial tail turns', async () => {
+    stateMocks.activeSession = createSession({
+      sessionId: 'history-session',
+      historyState: 'hydrating',
+      dialogTurns: [],
+    } as Partial<Session>);
+    stateMocks.virtualItems = [];
+
+    await act(async () => {
+      root.render(<ModernFlowChatContainer />);
+    });
+
+    const initialOverlay = container.querySelector('.modern-flowchat-container__history-overlay');
+    expect(initialOverlay).not.toBeNull();
+    expect(container.querySelector('[data-testid="virtual-list"]')).toBeNull();
+
+    stateMocks.activeSession = createSession({
+      sessionId: 'history-session',
+      isHistorical: false,
+      historyState: 'ready',
+      contextRestoreState: 'pending',
+      dialogTurns: [
+        createTurn('turn-1', 'Older restored prompt'),
+        createTurn('turn-2', 'Latest restored prompt'),
+      ],
+    } as Partial<Session>);
+    stateMocks.virtualItems = [
+      { type: 'user-message', turnId: 'turn-1', data: { id: 'user-turn-1', content: 'Older restored prompt' } },
+      { type: 'user-message', turnId: 'turn-2', data: { id: 'user-turn-2', content: 'Latest restored prompt' } },
+    ];
+    virtualListMock.isTurnTextRenderedInViewport.mockReturnValue(false);
+
+    await act(async () => {
+      root.render(<ModernFlowChatContainer />);
+    });
+
+    expect(container.querySelector('[data-testid="virtual-list"]')).not.toBeNull();
+    expect(container.querySelector('.modern-flowchat-container__history-overlay')).not.toBe(initialOverlay);
+    expect(container.querySelector('.modern-flowchat-container__history-overlay')).toBeNull();
+    expect(container.textContent).not.toContain('Loading saved session');
+    expect(container.querySelector('.modern-flowchat-container__messages')?.getAttribute('data-show-history-transition-overlay'))
+      .toBe('true');
+  });
+
+  it('keeps restored content visible while restored latest text is not ready', async () => {
+    stateMocks.activeSession = createSession({
+      isHistorical: false,
+      historyState: 'ready',
+      contextRestoreState: 'pending',
+      dialogTurns: [
+        createTurn('turn-1', 'Older restored prompt'),
+        createTurn('turn-2', 'Latest restored prompt'),
+      ],
+    } as Partial<Session>);
+    stateMocks.virtualItems = [
+      { type: 'user-message', turnId: 'turn-1', data: { id: 'user-turn-1', content: 'Older restored prompt' } },
+      { type: 'user-message', turnId: 'turn-2', data: { id: 'user-turn-2', content: 'Latest restored prompt' } },
+    ];
+    virtualListMock.isTurnTextRenderedInViewport.mockReturnValue(false);
+
+    await act(async () => {
+      root.render(<ModernFlowChatContainer />);
+    });
+
+    expect(container.querySelector('[data-testid="virtual-list"]')).not.toBeNull();
+    expect(container.textContent).not.toContain('Loading saved session');
+    expect(container.querySelector('.modern-flowchat-container__history-overlay')).toBeNull();
+    expect(container.querySelector('.modern-flowchat-container__messages')?.getAttribute('data-show-history-transition-overlay'))
+      .toBe('true');
+
+    flushAnimationFrame();
+    expect(container.querySelector('[data-testid="virtual-list"]')).not.toBeNull();
+    expect(container.textContent).not.toContain('Loading saved session');
+    expect(container.querySelector('.modern-flowchat-container__history-overlay')).toBeNull();
+
+    virtualListMock.isTurnTextRenderedInViewport.mockReturnValue(true);
+    flushAnimationFrame();
+
+    expect(container.textContent).not.toContain('Loading saved session');
+    expect(container.querySelector('.modern-flowchat-container__history-overlay')).toBeNull();
+  });
+
+  it('does not show the initial history progress again when full hydration adds older turns', async () => {
+    stateMocks.activeSession = createSession({
+      isHistorical: false,
+      historyState: 'ready',
+      contextRestoreState: 'pending',
+      dialogTurns: [
+        createTurn('turn-1', 'Older restored prompt'),
+        createTurn('turn-2', 'Latest restored prompt'),
+      ],
+    } as Partial<Session>);
+    stateMocks.virtualItems = [
+      { type: 'user-message', turnId: 'turn-1', data: { id: 'user-turn-1', content: 'Older restored prompt' } },
+      { type: 'user-message', turnId: 'turn-2', data: { id: 'user-turn-2', content: 'Latest restored prompt' } },
+    ];
+    virtualListMock.isTurnTextRenderedInViewport.mockReturnValue(false);
+
+    await act(async () => {
+      root.render(<ModernFlowChatContainer />);
+    });
+
+    expect(container.querySelector('.modern-flowchat-container__history-overlay')).toBeNull();
+
+    virtualListMock.isTurnTextRenderedInViewport.mockReturnValue(true);
+    flushAnimationFrame();
+
+    expect(container.querySelector('.modern-flowchat-container__history-overlay')).toBeNull();
+
+    stateMocks.activeSession = createSession({
+      isHistorical: false,
+      historyState: 'ready',
+      contextRestoreState: 'pending',
+      dialogTurns: [
+        createTurn('turn-0', 'Restored older prompt'),
+        createTurn('turn-1', 'Older restored prompt'),
+        createTurn('turn-2', 'Latest restored prompt'),
+      ],
+    } as Partial<Session>);
+    stateMocks.virtualItems = [
+      { type: 'user-message', turnId: 'turn-0', data: { id: 'user-turn-0', content: 'Restored older prompt' } },
+      { type: 'user-message', turnId: 'turn-1', data: { id: 'user-turn-1', content: 'Older restored prompt' } },
+      { type: 'user-message', turnId: 'turn-2', data: { id: 'user-turn-2', content: 'Latest restored prompt' } },
+    ];
+
+    await act(async () => {
+      root.render(<ModernFlowChatContainer />);
+    });
+
+    expect(container.querySelector('.modern-flowchat-container__history-overlay')).toBeNull();
+  });
+
+  it('blocks pointer activation until restored latest text is visible', async () => {
+    const releaseSpy = vi
+      .spyOn(flowChatStore, 'releaseSessionHistoryCompletionAfterInitialPaint')
+      .mockReturnValue(true);
+
+    stateMocks.activeSession = createSession({
+      isHistorical: false,
+      historyState: 'ready',
+      contextRestoreState: 'pending',
+      dialogTurns: [
+        createTurn('turn-1', 'Older restored prompt'),
+        createTurn('turn-2', 'Latest restored prompt'),
+      ],
+    } as Partial<Session>);
+    stateMocks.virtualItems = [
+      { type: 'user-message', turnId: 'turn-1', data: { id: 'user-turn-1', content: 'Older restored prompt' } },
+      { type: 'user-message', turnId: 'turn-2', data: { id: 'user-turn-2', content: 'Latest restored prompt' } },
+    ];
+    virtualListMock.isTurnTextRenderedInViewport.mockReturnValue(false);
+
+    await act(async () => {
+      root.render(<ModernFlowChatContainer />);
+    });
+
+    const hiddenAction = container.querySelector('[data-testid="virtual-list-action"]') as HTMLButtonElement;
+    expect(hiddenAction).not.toBeNull();
+    expect(container.textContent).not.toContain('Loading saved session');
+    expect(container.querySelector('.modern-flowchat-container__history-overlay')).toBeNull();
+
+    act(() => {
+      hiddenAction.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    });
+
+    expect(virtualListActionClickMock).not.toHaveBeenCalled();
+
+    virtualListMock.isTurnTextRenderedInViewport.mockReturnValue(true);
+    flushAnimationFrame();
+    flushAnimationFrame();
+    flushAnimationFrame();
+
+    expect(container.querySelector('.modern-flowchat-container__history-overlay')).toBeNull();
+    expect(releaseSpy).toHaveBeenCalledWith('session-1');
+    expect(startupTraceMock.markPhase).toHaveBeenCalledWith(
+      'historical_session_initial_content_painted',
+      expect.objectContaining({
+        sessionId: 'session-1',
+        latestTurnId: 'turn-2',
+        released: true,
+      }),
+    );
+
+    act(() => {
+      hiddenAction.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    });
+
+    expect(virtualListActionClickMock).toHaveBeenCalledTimes(1);
+    releaseSpy.mockRestore();
+  });
+
+  it('defers background command snapshot until restored latest text is visible and painted', async () => {
+    const releaseSpy = vi
+      .spyOn(flowChatStore, 'releaseSessionHistoryCompletionAfterInitialPaint')
+      .mockReturnValue(true);
+
+    stateMocks.activeSession = createSession({
+      isHistorical: false,
+      historyState: 'ready',
+      contextRestoreState: 'pending',
+      dialogTurns: [
+        createTurn('turn-1', 'Older restored prompt'),
+        createTurn('turn-2', 'Latest restored prompt'),
+      ],
+    } as Partial<Session>);
+    stateMocks.virtualItems = [
+      { type: 'user-message', turnId: 'turn-1', data: { id: 'user-turn-1', content: 'Older restored prompt' } },
+      { type: 'user-message', turnId: 'turn-2', data: { id: 'user-turn-2', content: 'Latest restored prompt' } },
+    ];
+    virtualListMock.isTurnTextRenderedInViewport.mockReturnValue(false);
+
+    await act(async () => {
+      root.render(<ModernFlowChatContainer />);
+    });
+
+    expect(agentApiMock.listBackgroundCommandActivities).not.toHaveBeenCalled();
+
+    virtualListMock.isTurnTextRenderedInViewport.mockReturnValue(true);
+    flushAnimationFrame();
+    expect(releaseSpy).not.toHaveBeenCalled();
+    expect(agentApiMock.listBackgroundCommandActivities).not.toHaveBeenCalled();
+
+    flushAnimationFrame();
+    expect(releaseSpy).not.toHaveBeenCalled();
+    expect(agentApiMock.listBackgroundCommandActivities).not.toHaveBeenCalled();
+
+    flushAnimationFrame();
+    expect(releaseSpy).toHaveBeenCalledWith('session-1');
+    expect(agentApiMock.listBackgroundCommandActivities).not.toHaveBeenCalled();
+
+    flushAnimationFrame();
+    expect(agentApiMock.listBackgroundCommandActivities).not.toHaveBeenCalled();
+
+    flushAnimationFrame();
+    expect(agentApiMock.listBackgroundCommandActivities).toHaveBeenCalledTimes(1);
+    expect(agentApiMock.listBackgroundCommandActivities).toHaveBeenCalledWith({
+      agentSessionId: 'session-1',
+    });
+
+    releaseSpy.mockRestore();
+  });
+
+  it('skips stale background command snapshot when another history session open starts first', async () => {
+    const releaseSpy = vi
+      .spyOn(flowChatStore, 'releaseSessionHistoryCompletionAfterInitialPaint')
+      .mockReturnValue(true);
+
+    stateMocks.activeSession = createSession({
+      isHistorical: false,
+      historyState: 'ready',
+      contextRestoreState: 'pending',
+      dialogTurns: [
+        createTurn('turn-1', 'Older restored prompt'),
+        createTurn('turn-2', 'Latest restored prompt'),
+      ],
+    } as Partial<Session>);
+    stateMocks.virtualItems = [
+      { type: 'user-message', turnId: 'turn-1', data: { id: 'user-turn-1', content: 'Older restored prompt' } },
+      { type: 'user-message', turnId: 'turn-2', data: { id: 'user-turn-2', content: 'Latest restored prompt' } },
+    ];
+    virtualListMock.isTurnTextRenderedInViewport.mockReturnValue(false);
+
+    await act(async () => {
+      root.render(<ModernFlowChatContainer />);
+    });
+
+    virtualListMock.isTurnTextRenderedInViewport.mockReturnValue(true);
+    flushAnimationFrame();
+    flushAnimationFrame();
+
+    act(() => {
+      dispatchHistorySessionOpenIntent('session-2', 'Next saved session');
+    });
+    flushAnimationFrame();
+
+    expect(releaseSpy).toHaveBeenCalledWith('session-1');
+    flushAnimationFrame();
+    flushAnimationFrame();
+    expect(agentApiMock.listBackgroundCommandActivities).not.toHaveBeenCalled();
+
+    releaseSpy.mockRestore();
+  });
+
+  it('keeps full history projection deferred when latest text visibility signal is missed', async () => {
+    const releaseSpy = vi
+      .spyOn(flowChatStore, 'releaseSessionHistoryCompletionAfterInitialPaint')
+      .mockReturnValue(true);
+
+    stateMocks.activeSession = createSession({
+      isHistorical: false,
+      historyState: 'ready',
+      contextRestoreState: 'pending',
+      dialogTurns: [
+        createTurn('turn-1', 'Older restored prompt'),
+        createTurn('turn-2', 'Latest restored prompt'),
+      ],
+    } as Partial<Session>);
+    stateMocks.virtualItems = [
+      { type: 'user-message', turnId: 'turn-1', data: { id: 'user-turn-1', content: 'Older restored prompt' } },
+      { type: 'user-message', turnId: 'turn-2', data: { id: 'user-turn-2', content: 'Latest restored prompt' } },
+    ];
+    virtualListMock.isTurnTextRenderedInViewport.mockReturnValue(false);
+
+    await act(async () => {
+      root.render(<ModernFlowChatContainer />);
+    });
+
+    for (let index = 0; index < 30; index += 1) {
+      flushAnimationFrame();
+    }
+
+    expect(container.textContent).not.toContain('Loading saved session');
+    expect(releaseSpy).not.toHaveBeenCalled();
+    expect(startupTraceMock.markPhase).toHaveBeenCalledWith(
+      'historical_session_initial_content_paint_signal_missed',
+      expect.objectContaining({ attempts: 30 }),
+    );
+
+    releaseSpy.mockRestore();
+  });
+
+  it('requests full history projection when searching a partially loaded session', async () => {
+    const pendingSpy = vi
+      .spyOn(flowChatStore, 'hasPendingSessionHistoryCompletion')
+      .mockReturnValue(true);
+    const projectionSpy = vi
+      .spyOn(flowChatStore, 'requestSessionFullHistoryProjection')
+      .mockReturnValue(true);
+
+    searchStateMock.searchQuery = 'older prompt';
+    stateMocks.activeSession = createSession({
+      isHistorical: false,
+      historyState: 'ready',
+      contextRestoreState: 'ready',
+      dialogTurns: [
+        createTurn('turn-2', 'Latest restored prompt'),
+      ],
+    } as Partial<Session>);
+    stateMocks.virtualItems = [
+      { type: 'user-message', turnId: 'turn-2', data: { id: 'user-turn-2', content: 'Latest restored prompt' } },
+    ];
+    virtualListMock.isTurnTextRenderedInViewport.mockReturnValue(false);
+
+    await act(async () => {
+      root.render(<ModernFlowChatContainer />);
+    });
+
+    expect(projectionSpy).toHaveBeenCalledWith('session-1', 'search');
+    expect(startupTraceMock.markPhase).toHaveBeenCalledWith(
+      'historical_session_full_hydrate_released_for_search',
+      expect.objectContaining({
+        queryLength: 'older prompt'.length,
+        turnCount: 1,
+      }),
+    );
+
+    projectionSpy.mockRestore();
+    pendingSpy.mockRestore();
   });
 
   it('keeps the new-session welcome for genuinely new empty sessions', () => {
@@ -228,5 +793,378 @@ describe('ModernFlowChatContainer historical empty state', () => {
     });
 
     expect(switchChatSessionMock).toHaveBeenCalledWith('session-1');
+  });
+
+  it('shows global turn numbers for partial tail history while navigation stays within loaded turns', async () => {
+    stateMocks.activeSession = createSession({
+      isHistorical: false,
+      historyState: 'ready',
+      isPartial: true,
+      loadedTurnCount: 2,
+      totalTurnCount: 100,
+      dialogTurns: [
+        createTurn('turn-99', 'Recent restored prompt'),
+        createTurn('turn-100', 'Latest restored prompt'),
+      ],
+    } as Partial<Session>);
+    stateMocks.virtualItems = [
+      { type: 'user-message', turnId: 'turn-99', data: { id: 'user-turn-99', content: 'Recent restored prompt' } },
+      { type: 'user-message', turnId: 'turn-100', data: { id: 'user-turn-100', content: 'Latest restored prompt' } },
+    ];
+    stateMocks.visibleTurnInfo = {
+      turnId: 'turn-100',
+      turnIndex: 2,
+      totalTurns: 2,
+      userMessage: 'Latest restored prompt',
+    };
+
+    await act(async () => {
+      root.render(<ModernFlowChatContainer />);
+    });
+
+    expect(headerPropsMock.latest).toMatchObject({
+      currentTurn: 100,
+      totalTurns: 100,
+      canJumpToPreviousTurn: true,
+      canJumpToNextTurn: false,
+    });
+    expect(headerPropsMock.latest?.turns).toMatchObject([
+      { turnId: 'turn-99', turnIndex: 99 },
+      { turnId: 'turn-100', turnIndex: 100 },
+    ]);
+
+    act(() => {
+      (headerPropsMock.latest?.onJumpToPreviousTurn as (() => void) | undefined)?.();
+    });
+
+    expect(virtualListMock.pinTurnToTop).toHaveBeenLastCalledWith('turn-99', {
+      behavior: 'smooth',
+      pinMode: 'transient',
+    });
+  });
+
+  it('does not expose previous navigation before the loaded tail range in partial history', async () => {
+    stateMocks.activeSession = createSession({
+      isHistorical: false,
+      historyState: 'ready',
+      isPartial: true,
+      loadedTurnCount: 2,
+      totalTurnCount: 100,
+      dialogTurns: [
+        createTurn('turn-99', 'Recent restored prompt'),
+        createTurn('turn-100', 'Latest restored prompt'),
+      ],
+    } as Partial<Session>);
+    stateMocks.virtualItems = [
+      { type: 'user-message', turnId: 'turn-99', data: { id: 'user-turn-99', content: 'Recent restored prompt' } },
+      { type: 'user-message', turnId: 'turn-100', data: { id: 'user-turn-100', content: 'Latest restored prompt' } },
+    ];
+    stateMocks.visibleTurnInfo = {
+      turnId: 'turn-99',
+      turnIndex: 1,
+      totalTurns: 2,
+      userMessage: 'Recent restored prompt',
+    };
+
+    await act(async () => {
+      root.render(<ModernFlowChatContainer />);
+    });
+
+    expect(headerPropsMock.latest).toMatchObject({
+      currentTurn: 99,
+      totalTurns: 100,
+      canJumpToPreviousTurn: false,
+      canJumpToNextTurn: true,
+    });
+
+    act(() => {
+      (headerPropsMock.latest?.onJumpToPreviousTurn as (() => void) | undefined)?.();
+    });
+
+    expect(virtualListMock.pinTurnToTop).not.toHaveBeenCalled();
+  });
+
+  it('lets streaming restored sessions use follow-output instead of container sticky anchoring', async () => {
+    stateMocks.activeSession = createSession({
+      historyState: 'ready',
+      dialogTurns: [
+        createTurn('turn-1', 'Older restored prompt'),
+        createTurn('turn-2', 'Latest restored prompt', 'processing'),
+      ],
+    } as Partial<Session>);
+    stateMocks.virtualItems = [
+      { type: 'user-message', turnId: 'turn-1', data: { id: 'user-turn-1', content: 'Older restored prompt' } },
+      { type: 'user-message', turnId: 'turn-2', data: { id: 'user-turn-2', content: 'Latest restored prompt' } },
+    ];
+
+    await act(async () => {
+      root.render(<ModernFlowChatContainer />);
+    });
+
+    expect(container.querySelector('[data-testid="virtual-list"]')).not.toBeNull();
+    expect(virtualListMock.pinTurnToTop).not.toHaveBeenCalled();
+    expect(startupTraceMock.markPhase).toHaveBeenCalledWith(
+      'historical_session_latest_anchor_skipped',
+      expect.objectContaining({ reason: 'streaming_follow_output', mode: 'sticky-latest' }),
+    );
+  });
+
+  it('scrolls completed restored history to the tail after hydration clears isHistorical', async () => {
+    stateMocks.activeSession = createSession({
+      isHistorical: false,
+      historyState: 'ready',
+      dialogTurns: [
+        createTurn('turn-1', 'Older restored prompt'),
+        createTurn('turn-2', 'Latest restored prompt'),
+      ],
+    } as Partial<Session>);
+    stateMocks.virtualItems = [
+      { type: 'user-message', turnId: 'turn-1', data: { id: 'user-turn-1', content: 'Older restored prompt' } },
+      { type: 'user-message', turnId: 'turn-2', data: { id: 'user-turn-2', content: 'Latest restored prompt' } },
+    ];
+
+    await act(async () => {
+      root.render(<ModernFlowChatContainer />);
+    });
+
+    flushAnimationFrame();
+
+    expect(virtualListMock.scrollToTurnEndAndClearPin).toHaveBeenCalledTimes(1);
+    expect(virtualListMock.scrollToTurnEndAndClearPin).toHaveBeenCalledWith('turn-2');
+    expect(virtualListMock.pinTurnToTop).not.toHaveBeenCalled();
+    expect(startupTraceMock.markPhase).toHaveBeenCalledWith(
+      'historical_session_latest_anchor_attempt',
+      expect.objectContaining({ accepted: true, attempt: 1, mode: 'bottom' }),
+    );
+  });
+
+  it('retries completed history tail anchoring when the virtual list is not ready on the first frame', async () => {
+    stateMocks.activeSession = createSession({
+      isHistorical: false,
+      historyState: 'ready',
+      dialogTurns: [
+        createTurn('turn-1', 'Older restored prompt'),
+        createTurn('turn-2', 'Latest restored prompt'),
+      ],
+    } as Partial<Session>);
+    stateMocks.virtualItems = [
+      { type: 'user-message', turnId: 'turn-1', data: { id: 'user-turn-1', content: 'Older restored prompt' } },
+      { type: 'user-message', turnId: 'turn-2', data: { id: 'user-turn-2', content: 'Latest restored prompt' } },
+    ];
+    virtualListMock.scrollToTurnEndAndClearPin
+      .mockReturnValueOnce(false)
+      .mockReturnValueOnce(true);
+
+    await act(async () => {
+      root.render(<ModernFlowChatContainer />);
+    });
+
+    flushAnimationFrame();
+    expect(virtualListMock.scrollToTurnEndAndClearPin).toHaveBeenCalledTimes(1);
+    expect(virtualListMock.scrollToTurnEndAndClearPin).toHaveBeenLastCalledWith('turn-2');
+
+    flushAnimationFrame();
+    expect(virtualListMock.scrollToTurnEndAndClearPin).toHaveBeenCalledTimes(2);
+    expect(virtualListMock.scrollToTurnEndAndClearPin).toHaveBeenLastCalledWith('turn-2');
+    expect(startupTraceMock.markPhase).toHaveBeenCalledWith(
+      'historical_session_latest_anchor_attempt',
+      expect.objectContaining({ accepted: false, attempt: 1, mode: 'bottom' }),
+    );
+    expect(startupTraceMock.markPhase).toHaveBeenCalledWith(
+      'historical_session_latest_anchor_attempt',
+      expect.objectContaining({ accepted: true, attempt: 2, mode: 'bottom' }),
+    );
+  });
+
+  it('does not re-anchor local restored history after full hydration expands the same latest turn', async () => {
+    stateMocks.activeSession = createSession({
+      isHistorical: false,
+      historyState: 'ready',
+      dialogTurns: [
+        createTurn('turn-80', 'Latest restored prompt'),
+      ],
+    } as Partial<Session>);
+    stateMocks.virtualItems = [
+      { type: 'user-message', turnId: 'turn-80', data: { id: 'user-turn-80', content: 'Latest restored prompt' } },
+    ];
+
+    await act(async () => {
+      root.render(<ModernFlowChatContainer />);
+    });
+
+    flushAnimationFrame();
+
+    expect(virtualListMock.scrollToTurnEndAndClearPin).toHaveBeenCalledTimes(1);
+    expect(virtualListMock.scrollToTurnEndAndClearPin).toHaveBeenLastCalledWith('turn-80');
+
+    stateMocks.activeSession = createSession({
+      isHistorical: false,
+      historyState: 'ready',
+      dialogTurns: [
+        createTurn('turn-1', 'Older restored prompt'),
+        createTurn('turn-80', 'Latest restored prompt'),
+      ],
+    } as Partial<Session>);
+    stateMocks.virtualItems = [
+      { type: 'user-message', turnId: 'turn-1', data: { id: 'user-turn-1', content: 'Older restored prompt' } },
+      { type: 'user-message', turnId: 'turn-80', data: { id: 'user-turn-80', content: 'Latest restored prompt' } },
+    ];
+
+    await act(async () => {
+      root.render(<ModernFlowChatContainer />);
+    });
+
+    flushAnimationFrame();
+
+    expect(virtualListMock.scrollToTurnEndAndClearPin).toHaveBeenCalledTimes(1);
+    expect(virtualListMock.scrollToTurnEndAndClearPin).toHaveBeenLastCalledWith('turn-80');
+    expect(virtualListMock.pinTurnToTop).not.toHaveBeenCalled();
+    expect(startupTraceMock.markPhase).toHaveBeenCalledWith(
+      'historical_session_latest_anchor_skipped',
+      expect.objectContaining({ reason: 'local_full_history_projection' }),
+    );
+  });
+
+  it('does not re-anchor local full hydration when the latest restored turn is already visible', async () => {
+    stateMocks.activeSession = createSession({
+      isHistorical: false,
+      historyState: 'ready',
+      dialogTurns: [
+        createTurn('turn-80', 'Latest restored prompt'),
+      ],
+    } as Partial<Session>);
+    stateMocks.virtualItems = [
+      { type: 'user-message', turnId: 'turn-80', data: { id: 'user-turn-80', content: 'Latest restored prompt' } },
+    ];
+
+    await act(async () => {
+      root.render(<ModernFlowChatContainer />);
+    });
+
+    flushAnimationFrame();
+
+    expect(virtualListMock.scrollToTurnEndAndClearPin).toHaveBeenCalledTimes(1);
+    expect(virtualListMock.scrollToTurnEndAndClearPin).toHaveBeenLastCalledWith('turn-80');
+
+    stateMocks.visibleTurnInfo = {
+      turnId: 'turn-80',
+      turnIndex: 1,
+      totalTurns: 1,
+      userMessage: 'Latest restored prompt',
+    };
+    virtualListMock.isTurnRenderedInViewport.mockReturnValue(true);
+    stateMocks.activeSession = createSession({
+      isHistorical: false,
+      historyState: 'ready',
+      dialogTurns: [
+        createTurn('turn-1', 'Older restored prompt'),
+        createTurn('turn-80', 'Latest restored prompt'),
+      ],
+    } as Partial<Session>);
+    stateMocks.virtualItems = [
+      { type: 'user-message', turnId: 'turn-1', data: { id: 'user-turn-1', content: 'Older restored prompt' } },
+      { type: 'user-message', turnId: 'turn-80', data: { id: 'user-turn-80', content: 'Latest restored prompt' } },
+    ];
+
+    await act(async () => {
+      root.render(<ModernFlowChatContainer />);
+    });
+
+    expect(virtualListMock.scrollToTurnEndAndClearPin).toHaveBeenCalledTimes(1);
+    expect(virtualListMock.scrollToTurnEndAndClearPin).toHaveBeenLastCalledWith('turn-80');
+
+    flushAnimationFrame();
+
+    expect(virtualListMock.scrollToTurnEndAndClearPin).toHaveBeenCalledTimes(1);
+    expect(virtualListMock.scrollToTurnEndAndClearPin).toHaveBeenLastCalledWith('turn-80');
+    expect(virtualListMock.pinTurnToTop).not.toHaveBeenCalled();
+  });
+
+  it('does not repeat immediate latest anchoring after visible turn info catches up', async () => {
+    stateMocks.activeSession = createSession({
+      isHistorical: true,
+      historyState: 'ready',
+      dialogTurns: [
+        createTurn('turn-80', 'Latest restored prompt'),
+      ],
+    } as Partial<Session>);
+    stateMocks.virtualItems = [
+      { type: 'user-message', turnId: 'turn-80', data: { id: 'user-turn-80', content: 'Latest restored prompt' } },
+    ];
+
+    await act(async () => {
+      root.render(<ModernFlowChatContainer />);
+    });
+
+    expect(virtualListMock.scrollToTurnEndAndClearPin).toHaveBeenCalledTimes(1);
+    expect(virtualListMock.scrollToTurnEndAndClearPin).toHaveBeenLastCalledWith('turn-80');
+
+    stateMocks.visibleTurnInfo = {
+      turnId: 'turn-80',
+      turnIndex: 1,
+      totalTurns: 1,
+      userMessage: 'Latest restored prompt',
+    };
+
+    await act(async () => {
+      root.render(<ModernFlowChatContainer />);
+    });
+
+    expect(virtualListMock.scrollToTurnEndAndClearPin).toHaveBeenCalledTimes(1);
+    expect(virtualListMock.pinTurnToTop).not.toHaveBeenCalled();
+  });
+
+  it('does not re-anchor local full hydration when visible turn info is stale after prepending older turns', async () => {
+    stateMocks.activeSession = createSession({
+      isHistorical: false,
+      historyState: 'ready',
+      dialogTurns: [
+        createTurn('turn-80', 'Latest restored prompt'),
+      ],
+    } as Partial<Session>);
+    stateMocks.virtualItems = [
+      { type: 'user-message', turnId: 'turn-80', data: { id: 'user-turn-80', content: 'Latest restored prompt' } },
+    ];
+
+    await act(async () => {
+      root.render(<ModernFlowChatContainer />);
+    });
+
+    flushAnimationFrame();
+
+    expect(virtualListMock.scrollToTurnEndAndClearPin).toHaveBeenCalledTimes(1);
+    expect(virtualListMock.scrollToTurnEndAndClearPin).toHaveBeenLastCalledWith('turn-80');
+
+    stateMocks.visibleTurnInfo = {
+      turnId: 'turn-80',
+      turnIndex: 1,
+      totalTurns: 1,
+      userMessage: 'Latest restored prompt',
+    };
+    virtualListMock.isTurnRenderedInViewport.mockReturnValue(false);
+    stateMocks.activeSession = createSession({
+      isHistorical: false,
+      historyState: 'ready',
+      dialogTurns: [
+        createTurn('turn-1', 'Older restored prompt'),
+        createTurn('turn-44', 'Middle restored prompt'),
+        createTurn('turn-80', 'Latest restored prompt'),
+      ],
+    } as Partial<Session>);
+    stateMocks.virtualItems = [
+      { type: 'user-message', turnId: 'turn-1', data: { id: 'user-turn-1', content: 'Older restored prompt' } },
+      { type: 'user-message', turnId: 'turn-44', data: { id: 'user-turn-44', content: 'Middle restored prompt' } },
+      { type: 'user-message', turnId: 'turn-80', data: { id: 'user-turn-80', content: 'Latest restored prompt' } },
+    ];
+
+    await act(async () => {
+      root.render(<ModernFlowChatContainer />);
+    });
+
+    flushAnimationFrame();
+
+    expect(virtualListMock.scrollToTurnEndAndClearPin).toHaveBeenCalledTimes(1);
+    expect(virtualListMock.scrollToTurnEndAndClearPin).toHaveBeenLastCalledWith('turn-80');
+    expect(virtualListMock.pinTurnToTop).not.toHaveBeenCalled();
   });
 });

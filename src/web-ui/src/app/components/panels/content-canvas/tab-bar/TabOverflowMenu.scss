@@ -33,8 +33,8 @@
 
   &.is-open {
     border-style: solid;
-    border-color: var(--color-primary, #60a5fa);
-    color: var(--color-primary, #60a5fa);
+    border-color: var(--color-primary);
+    color: var(--color-primary);
   }
 
   // Styles when overflow exists
@@ -59,28 +59,28 @@
   &__badge {
     font-size: 10px;
     font-weight: 600;
-    color: var(--color-primary, #60a5fa);
+    color: var(--color-primary);
     margin-left: 2px;
     transition: color 0.15s ease;
   }
 
   // Keep badge color on hover
   &:hover &__badge {
-    color: var(--color-primary, #60a5fa);
+    color: var(--color-primary);
   }
 
   // Badge color when open
   &.is-open &__badge {
-    color: var(--color-primary, #60a5fa);
+    color: var(--color-primary);
   }
 }
 
 // Overflow menu
 .canvas-tab-overflow-menu {
-  background: var(--color-bg-elevated, var(--color-bg-primary, #1a1a1a));
+  background: var(--color-bg-elevated);
   border: 1px solid var(--border-base);
   border-radius: 6px;
-  box-shadow: 0 8px 24px var(--color-shadow, rgba(0, 0, 0, 0.5));
+  box-shadow: 0 8px 24px var(--color-shadow, var(--color-overlay-black-50));
   min-width: 200px;
   max-width: 280px;
   max-height: 360px;
@@ -157,7 +157,7 @@
     }
 
     &::-webkit-scrollbar-thumb {
-      background: var(--color-scrollbar, rgba(255, 255, 255, 0.15));
+      background: var(--color-scrollbar, var(--color-overlay-white-15));
       border-radius: 3px;
     }
   }
@@ -174,7 +174,7 @@
     &:hover {
       // Use element-bg-medium for clear hover in light/dark themes
       // Light theme: blue-gray tint; dark theme: translucent white
-      background: var(--element-bg-medium, var(--element-bg-base, var(--color-bg-hover)));
+      background: var(--element-bg-medium);
 
       .canvas-tab-overflow-menu__item-close {
         opacity: 1;
@@ -186,7 +186,7 @@
       background: var(--color-accent-100, var(--color-accent-200, var(--element-bg-base)));
 
       .canvas-tab-overflow-menu__item-title {
-        color: var(--color-primary, var(--color-accent-500));
+        color: var(--color-primary);
       }
     }
 
@@ -228,7 +228,7 @@
       transition: all 0.1s ease;
 
       &:hover {
-        background: var(--color-error-alpha);
+        background: var(--color-error-bg);
         color: var(--color-error);
       }
     }

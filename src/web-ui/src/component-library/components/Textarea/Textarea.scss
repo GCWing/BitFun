@@ -8,8 +8,8 @@
   width: 100%;
 
   &__label {
-    font-size: var(--font-size-sm, 14px);
-    font-weight: var(--font-weight-medium, 500);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
     color: var(--color-text-primary);
     line-height: 1.4;
   }
@@ -69,7 +69,7 @@
     }
 
     &:disabled {
-      opacity: var(--opacity-disabled, 0.4);
+      opacity: var(--opacity-disabled);
       cursor: default;
     }
   }

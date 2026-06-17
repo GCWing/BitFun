@@ -41,7 +41,7 @@
         
         > span[style] {
           &:hover {
-            background-color: rgba(255, 255, 255, 0.05) !important;
+            background-color: var(--color-overlay-white-05) !important;
           }
         }
         
@@ -60,7 +60,7 @@
       padding-right: 1em !important;
       text-align: right !important;
       user-select: none !important;
-      color: var(--color-text-muted, #666) !important;
+      color: var(--color-text-muted) !important;
       opacity: 0.6 !important;
     }
     
@@ -69,7 +69,7 @@
   &__plain {
     margin: 0;
     padding: 0;
-    color: var(--color-text-primary, #d4d4d4);
+    color: var(--color-text-primary);
     background: transparent;
     border: 0;
     overflow: visible;
@@ -77,7 +77,7 @@
     word-break: break-word;
     font-family: var(--markdown-font-mono, "Fira Code", "JetBrains Mono", Consolas, "Courier New", monospace);
     font-size: var(--flowchat-font-size-sm);
-    line-height: var(--flowchat-code-line-height, 1.52);
+    line-height: var(--flowchat-code-line-height);
 
     code {
       display: block;
@@ -96,12 +96,12 @@
     transition: background-color 0.15s ease, border-color 0.15s ease;
 
     &:hover {
-      background-color: rgba(255, 255, 255, 0.05);
+      background-color: var(--color-overlay-white-05);
     }
 
     &--highlighted {
       background-color: rgba(99, 102, 241, 0.15);
-      border-left-color: var(--color-accent-500, #6366f1);
+      border-left-color: var(--color-accent-500);
 
       &:hover {
         background-color: rgba(99, 102, 241, 0.2);
@@ -112,7 +112,7 @@
   &__plain-line-number {
     flex: 0 0 2.5em;
     padding-right: 1em;
-    color: var(--color-text-muted, #666);
+    color: var(--color-text-muted);
     text-align: right;
     user-select: none;
     opacity: 0.6;
@@ -129,7 +129,7 @@
     align-items: center;
     justify-content: center;
     min-height: 60px;
-    color: var(--color-text-muted, #888);
+    color: var(--color-text-muted);
     font-size: var(--flowchat-font-size-sm);
     font-style: italic;
   }
@@ -143,7 +143,7 @@
   
   
   &__placeholder {
-    color: var(--color-text-muted, #888);
+    color: var(--color-text-muted);
     font-style: italic;
   }
   
@@ -152,12 +152,12 @@
     display: inline-block;
     width: 2px;
     height: 14px;
-    background: var(--color-accent-500, #6366f1);
+    background: var(--color-accent-500);
     margin-left: 2px;
     vertical-align: text-bottom;
     animation: code-preview-cursor-blink 1s ease-in-out infinite;
     border-radius: 1px;
-    box-shadow: 0 0 4px var(--color-accent-400, #818cf8);
+    box-shadow: 0 0 4px var(--color-accent-400);
   }
 }
 
@@ -177,19 +177,19 @@
 .light .code-preview {
   .code-preview__content {
     .linenumber {
-      color: var(--color-text-muted, #94a3b8) !important;
+      color: var(--color-text-muted) !important;
     }
 
     pre code > span[style]:hover {
-      background-color: rgba(0, 0, 0, 0.06) !important;
+      background-color: var(--color-overlay-black-06) !important;
     }
   }
 
   .code-preview__plain-line-number {
-    color: var(--color-text-muted, #94a3b8);
+    color: var(--color-text-muted);
   }
 
   .code-preview__plain-line:hover {
-    background-color: rgba(0, 0, 0, 0.06);
+    background-color: var(--color-overlay-black-06);
   }
 }

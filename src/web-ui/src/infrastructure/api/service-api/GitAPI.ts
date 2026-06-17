@@ -3,6 +3,7 @@
 import { api } from './ApiClient';
 import { createTauriCommandError } from '../errors/TauriCommandError';
 import { createLogger } from '@/shared/utils/logger';
+import { startupTrace } from '@/shared/utils/startupTrace';
 
 const log = createLogger('GitAPI');
 const REPOSITORY_PROBE_CACHE_TTL_MS = 1000;
@@ -241,8 +242,11 @@ export class GitAPI {
   }
 
    
-  async getStatus(repositoryPath: string): Promise<GitStatus> {
+  async getStatus(repositoryPath: string, traceSource = 'unknown'): Promise<GitStatus> {
     try {
+      if (globalThis.__BITFUN_PERF_TRACE_ENABLED__ === true) {
+        startupTrace.markPhase('git_status_request', { source: traceSource });
+      }
       return await api.invoke('git_get_status', { 
         request: { repositoryPath } 
       });

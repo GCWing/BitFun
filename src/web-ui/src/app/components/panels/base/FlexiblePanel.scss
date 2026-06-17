@@ -359,8 +359,8 @@
   gap: $size-gap-2;
   padding: $size-gap-4;
   margin: $size-gap-4;
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  background: var(--color-error-bg);
+  border: 1px solid var(--color-error-border);
   border-radius: $size-radius-base;
   color: var(--color-error);
 

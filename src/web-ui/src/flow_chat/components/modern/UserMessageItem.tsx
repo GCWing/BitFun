@@ -4,7 +4,6 @@
  */
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { useTranslation } from 'react-i18next';
 import { Copy, Check, RotateCcw, Loader2, ArrowDownToLine, X, CircleUser, Pencil } from 'lucide-react';
 import type { DialogTurn, FlowUserSteeringItem } from '../../types/flow-chat';
 import { flowChatManager } from '../../services/FlowChatManager';
@@ -13,6 +12,7 @@ import { useActiveSession } from '../../store/modernFlowChatStore';
 import { flowChatStore } from '../../store/FlowChatStore';
 import { useMessageEditStore } from '../../store/messageEditStore';
 import { snapshotAPI } from '@/infrastructure/api';
+import { useI18n } from '@/infrastructure/i18n';
 import { notificationService } from '@/shared/notification-system';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import { shouldIgnoreCardToggleClick } from '@/shared/utils/textSelection';
@@ -40,7 +40,7 @@ interface UserMessageItemProps {
 
 export const UserMessageItem = React.memo<UserMessageItemProps>(
   ({ message, turnId, steeringStatus }) => {
-    const { t } = useTranslation('flow-chat');
+    const { t, formatDate } = useI18n('flow-chat');
     const {
       config,
       sessionId,
@@ -69,9 +69,13 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
     const messageContent = typeof message?.content === 'string' ? message.content : String(message?.content || '');
     const messageImages = useMemo(() => message?.images ?? [], [message?.images]);
     const isUsageReportMessage = message?.metadata?.localCommandKind === 'usage_report';
-    const isGoalPendingMessage = message?.metadata?.localCommandKind === 'goal_pending';
-    const isGoalVerifyingMessage = message?.metadata?.localCommandKind === 'goal_verifying';
-    const isGoalLoadingMessage = isGoalPendingMessage || isGoalVerifyingMessage;
+    const isGoalLoadingMessage = Boolean(message?.metadata?.threadGoalKickoff);
+    const isThreadGoalContinuationCheck = Boolean(message?.metadata?.threadGoalContinuation);
+    const isThreadGoalSystemMessage = Boolean(
+      message?.metadata?.threadGoalKickoff
+      || message?.metadata?.threadGoalObjectiveUpdated
+      || message?.metadata?.threadGoalContinuation
+    );
     const isUsageReportLoading = message?.metadata?.usageReportStatus === 'loading';
     const usageReport = coerceSessionUsageReport(message?.metadata?.usageReport);
     const sessionRelationship = useMemo(
@@ -88,6 +92,7 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
     const isFailed = dialogTurn?.status === 'error';
     const isEditing = editingTurnId === turnId;
     const resolvedSessionId = sessionId ?? currentSession?.sessionId;
+    const historyActionsBlockedByPartialRestore = currentSession?.isPartial === true;
     const isSystemTriggered = Boolean(
       message?.metadata?.triggerSource && message.metadata.triggerSource !== 'desktop_ui',
     );
@@ -96,20 +101,25 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
       canShowRollbackAction &&
       !!resolvedSessionId &&
       turnIndex >= 0 &&
+      !historyActionsBlockedByPartialRestore &&
       !isRollingBack &&
       !isEditSubmitting;
     const canEditBase =
       allowUserMessageEdit &&
       !!resolvedSessionId &&
       turnIndex >= 0 &&
+      !historyActionsBlockedByPartialRestore &&
+      !isThreadGoalSystemMessage &&
       !isSystemTriggered &&
       !steeringStatus;
     const canEdit = canEditBase && !isEditSubmitting && !isRollingBack;
-    const canShowEditAction = allowUserMessageEdit && !isFailed;
+    const canShowEditAction = allowUserMessageEdit && !isFailed && !isThreadGoalSystemMessage;
     const editDisabledReason = isSystemTriggered
       ? t('message.cannotEdit')
       : steeringStatus
         ? t('message.cannotEdit')
+        : historyActionsBlockedByPartialRestore
+          ? t('message.editDisabledHistoryNotReady')
         : !resolvedSessionId || turnIndex < 0
           ? t('message.editDisabledHistoryNotReady')
           : t('message.cannotEdit');
@@ -126,6 +136,9 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
       const reproduction = reproductionMatch ? reproductionMatch[1].trim() : null;
 
       let cleaned = messageContent.replace(reproductionRegex, '').trim();
+      if (isThreadGoalContinuationCheck) {
+        cleaned = cleaned.replace(/\s*\n+\s*/g, ' ').trim();
+      }
 
       // Strip [Image: ...] context lines when images are shown as thumbnails.
       if (messageImages.length > 0) {
@@ -135,7 +148,7 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
       }
 
       return { displayText: cleaned, reproductionSteps: reproduction };
-    }, [messageContent, messageImages]);
+    }, [isThreadGoalContinuationCheck, messageContent, messageImages]);
     
     // Check whether content overflows.
     useEffect(() => {
@@ -380,7 +393,10 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
       >
         {config?.showTimestamps && (
           <div className="user-message-item__timestamp">
-            {new Date(message.timestamp).toLocaleTimeString()}
+            {formatDate(new Date(message.timestamp), {
+              hour: '2-digit',
+              minute: '2-digit',
+            })}
           </div>
         )}
         {isEditing ? (

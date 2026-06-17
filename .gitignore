@@ -17,6 +17,8 @@ dist-ssr
 *.local
 **/dist
 **/dist-ssr
+!src/crates/contracts/product-domains/src/miniapp/builtin/assets/ppt-live/dist/
+!src/crates/contracts/product-domains/src/miniapp/builtin/assets/ppt-live/dist/ui.bundle.js
 
 # Build outputs - Rust/Tauri
 target/
@@ -52,6 +54,7 @@ src/apps/desktop/.tauri/*.key
 !.vscode/extensions.json
 .idea
 .claude
+.codebuddy
 .DS_Store
 *.suo
 *.ntvs*
@@ -61,6 +64,10 @@ src/apps/desktop/.tauri/*.key
 
 # E2E test reports and screenshots
 tests/e2e/reports/
+
+# Eval job artifacts
+.eval/
+Cross.toml
 
 # BitFun sandbox data - auto managed
 .bitfun/

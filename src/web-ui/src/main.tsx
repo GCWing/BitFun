@@ -2,6 +2,7 @@ import ReactDOM from "react-dom/client";
 import App from "./app/App";
 import AgentCompanionDesktopPet from "./app/components/AgentCompanionDesktopPet/AgentCompanionDesktopPet";
 import AppErrorBoundary from "./app/components/AppErrorBoundary";
+import { STARTUP_OVERLAY_HIDDEN_EVENT } from "./app/startup/startupSignals";
 import { WorkspaceProvider } from "./infrastructure/contexts/WorkspaceProvider";
 import "./app/styles/index.scss";
 
@@ -25,6 +26,29 @@ startupTrace.markPhase('first_script_eval', {
   viteMode: import.meta.env.MODE,
   isDev: import.meta.env.DEV,
 });
+
+async function traceStartupStep<T>(
+  phase: string,
+  step: string,
+  run: () => Promise<T>
+): Promise<T> {
+  const startedAt = nowMs();
+  startupTrace.markPhase(`${phase}_start`, { step });
+  try {
+    const value = await run();
+    startupTrace.markPhase(`${phase}_end`, {
+      step,
+      durationMs: elapsedMs(startedAt),
+    });
+    return value;
+  } catch (error) {
+    startupTrace.markPhase(`${phase}_failed`, {
+      step,
+      durationMs: elapsedMs(startedAt),
+    });
+    throw error;
+  }
+}
 
 /** Dedupe only for white-screen heuristic (empty #root), not for Error Boundary logs. */
 const WHITE_SCREEN_LOGGED_FLAG = '__bitfun_white_screen_crash_logged__';
@@ -177,24 +201,21 @@ document.addEventListener(
 async function initializeBeforeRender(): Promise<void> {
   const phaseStartedAt = nowMs();
   startupTrace.markPhase('before_render_start');
-  await measureAsyncAndLog(log, 'Startup step completed', () => initLogger(), {
-    data: { step: 'initLogger' },
-  });
-
-  await measureAsyncAndLog(log, 'Startup step completed', async () => {
-    const { initializeFrontendLogLevelSync } = await import('./infrastructure/config/services/FrontendLogLevelSync');
-    await initializeFrontendLogLevelSync();
-  }, {
-    data: { step: 'initializeFrontendLogLevelSync' },
+  await traceStartupStep('before_render_step', 'init_logger', async () => {
+    await measureAsyncAndLog(log, 'Startup step completed', () => initLogger(), {
+      data: { step: 'initLogger' },
+    });
   });
 
   log.info('Initializing BitFun');
 
-  await measureAsyncAndLog(log, 'Startup step completed', async () => {
-    const { themeService } = await import('./infrastructure/theme');
-    await themeService.initialize();
-  }, {
-    data: { step: 'themeService.initialize' },
+  await traceStartupStep('before_render_step', 'theme_service_initialize', async () => {
+    await measureAsyncAndLog(log, 'Startup step completed', async () => {
+      const { themeService } = await import('./infrastructure/theme');
+      await themeService.initialize();
+    }, {
+      data: { step: 'themeService.initialize' },
+    });
   });
   log.info('Theme system initialized');
   logElapsed(log, 'Startup phase completed', phaseStartedAt, {
@@ -227,8 +248,16 @@ async function initializeAfterRender(): Promise<void> {
       });
     })(),
     (async () => {
-      const { installFrontendLogLevelConfigWatcher } = await import('./infrastructure/config/services/FrontendLogLevelSync');
+      const {
+        initializeFrontendLogLevelSync,
+        installFrontendLogLevelConfigWatcher,
+      } = await import('./infrastructure/config/services/FrontendLogLevelSync');
+      await initializeFrontendLogLevelSync();
       await installFrontendLogLevelConfigWatcher();
+    })(),
+    (async () => {
+      const { themeService } = await import('./infrastructure/theme');
+      await themeService.ensureUserThemesLoaded();
     })(),
     (async () => {
       const { registerDefaultContextTypes } = await import('./shared/context-system/core/registerDefaultTypes');
@@ -259,6 +288,7 @@ async function initializeAfterRender(): Promise<void> {
     const names = [
       'EditorConfigPreload',
       'LogLevelConfigWatcher',
+      'UserThemes',
       'DefaultContextTypes',
       'RecommendationProviders',
       'Tools',
@@ -288,11 +318,15 @@ async function startApplication(): Promise<void> {
   }
 
   // I18n Provider.
-  const i18nProviderImportResult = await measureAsyncAndLog(
-    log,
-    'Startup step completed',
-    () => import('./infrastructure/i18n'),
-    { data: { step: 'loadI18nProvider' } }
+  const i18nProviderImportResult = await traceStartupStep(
+    'startup_step',
+    'load_i18n_provider',
+    () => measureAsyncAndLog(
+      log,
+      'Startup step completed',
+      () => import('./infrastructure/i18n'),
+      { data: { step: 'loadI18nProvider' } }
+    )
   );
   const { I18nProvider } = i18nProviderImportResult.value;
   const isAgentCompanionWindow = new URLSearchParams(window.location.search)
@@ -340,7 +374,7 @@ async function startApplication(): Promise<void> {
   });
 
   startupTrace.markPhase('non_critical_init_scheduled', {
-    signalName: 'bitfun:interactive-shell-ready',
+    signalName: STARTUP_OVERLAY_HIDDEN_EVENT,
     fallbackTimeoutMs: 10000,
     frameCount: 1,
   });
@@ -359,7 +393,7 @@ async function startApplication(): Promise<void> {
       });
     }
   }, {
-    signalName: 'bitfun:interactive-shell-ready',
+    signalName: STARTUP_OVERLAY_HIDDEN_EVENT,
     fallbackTimeoutMs: 10000,
     frameCount: 1,
     onError: error => {

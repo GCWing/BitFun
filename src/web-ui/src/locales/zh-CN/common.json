@@ -150,6 +150,7 @@
         "default": "默认"
       },
       "empty": {
+        "all": "暂无终端",
         "manual": "还没有用户终端",
         "agent": "还没有 Agent 终端",
         "quickNew": "快速新建"
@@ -159,14 +160,10 @@
       "newSession": "新建会话",
       "newCodeSession": "新建 Code 会话",
       "newCoworkSession": "新建 Cowork 会话",
-      "newCodeSessionShort": "编码会话",
-      "newCoworkSessionShort": "办公会话",
       "newExternalAgentSessionShort": "{{agentName}} 会话",
       "newClawSession": "新建 Claw 会话",
       "modeCode": "Code",
       "modeCowork": "Cowork",
-      "codeSessionMode": "Code 会话",
-      "coworkSessionMode": "Cowork 会话",
       "noSessions": "暂无会话",
       "rename": "重命名",
       "delete": "删除",
@@ -189,17 +186,35 @@
       "needsToolConfirm": "等待确认",
       "badgeNeedsInput": "等待中",
       "badgeNeedsConfirm": "待确认",
+      "badgeBackgroundSubagents": "后台 {{count}}",
+      "backgroundSubagentsRunning": "{{count}} 个后台子 Agent 运行中",
       "needProjectWorkspaceForSession": "请先打开或添加项目工作区。编码与工作（Cowork）会话不能在助理区域创建。",
+      "manage": "批量管理会话",
+      "batchManageDescription": "选择此工作区中的会话，然后批量归档或删除。",
+      "batchSelectionSummary": "已选择 {{count}} 个 · 共 {{total}} 个会话",
+      "batchSelectedShort": "已选",
+      "batchReadyLabel": "可执行批量操作",
+      "batchLoadFailed": "加载批量管理会话失败。",
+      "noSessionsToManage": "此工作区暂无可管理的会话。",
+      "batchChildSession": "子会话",
+      "batchTurnsLabel": "{{count}} 轮",
       "archive": "归档",
       "archiveAll": "归档所有会话",
+      "archiveSelected": "归档所选",
       "archiveConfirmTitle": "归档会话",
       "archiveConfirmMessage": "确定要归档此会话吗？它将从会话列表中隐藏，可在设置中恢复。",
       "archiveAllConfirmTitle": "归档所有会话",
       "archiveAllConfirmMessage": "确定要归档此工作区中的所有会话吗？它们将从会话列表中隐藏，可在设置中恢复。",
+      "bulkArchiveConfirmTitle": "归档所选会话",
+      "bulkArchiveConfirmMessage": "确定要归档所选的 {{count}} 个会话吗？它们将从会话列表中隐藏，可在设置中恢复。",
       "unarchive": "恢复",
       "unarchiveConfirmTitle": "恢复会话",
       "unarchiveConfirmMessage": "确定要恢复此会话吗？它将重新出现在会话列表中。",
       "deleteArchived": "删除",
+      "deleteSelected": "删除所选",
+      "deletedSelected": "已删除 {{count}} 个会话",
+      "bulkDeleteConfirmTitle": "删除所选会话",
+      "bulkDeleteConfirmMessage": "确定要永久删除所选的 {{count}} 个会话吗？此操作无法撤销。",
       "deleteArchivedConfirmTitle": "删除已归档会话",
       "deleteArchivedConfirmMessage": "确定要永久删除此已归档会话吗？此操作无法撤销。",
       "deleteAllArchived": "删除全部已归档",
@@ -214,11 +229,13 @@
       "restoreFailed": "恢复会话失败",
       "deleteArchivedFailed": "删除会话失败",
       "deleteAllArchivedFailed": "删除全部已归档会话失败",
-      "archiveAllFailed": "归档会话失败"
+      "archiveAllFailed": "归档会话失败",
+      "bulkArchiveFailed": "批量归档会话失败",
+      "bulkDeleteFailed": "批量删除会话失败"
     },
     "scheduledJobs": {
       "title": "定时任务",
-      "open": "打开定时任务",
+      "open": "定时任务",
       "shortLabel": "定时任务",
       "listTitle": "任务列表",
       "assistantFallback": "当前助理",
@@ -228,6 +245,7 @@
       "fields": {
         "workspacePath": "工作区路径",
         "session": "会话",
+        "agentType": "Agent 类型",
         "name": "任务名称",
         "enabled": "启用状态",
         "enabledHint": "启用该任务",
@@ -242,10 +260,15 @@
       "placeholders": {
         "workspacePath": "请输入工作区路径",
         "session": "请选择或输入会话 ID",
+        "optionalSession": "留空则创建新会话后执行",
+        "agentType": "例如：agentic、Cowork 或 Claw",
         "name": "例如：每日全球新闻简报",
         "anchorMs": "留空则使用创建时刻",
         "timezone": "例如：Asia/Shanghai",
-        "prompt": "请输入定时触发时发送给助理的内容"
+        "prompt": "请输入定时触发时发送给 Agent 的内容"
+      },
+      "hints": {
+        "cronExpr": "Cron 格式：分 时 日 月 周，例如 0 8 * * * 表示每天 08:00。"
       },
       "scheduleKinds": {
         "at": "单次执行",
@@ -256,6 +279,10 @@
         "every": "每 {{everyMinutes}} 分钟",
         "cron": "Cron: {{expr}}",
         "cronWithTz": "Cron: {{expr}} · {{tz}}"
+      },
+      "targets": {
+        "session": "会话",
+        "newSession": "新会话"
       },
       "status": {
         "idle": "待命",
@@ -276,13 +303,9 @@
         "create": "创建任务",
         "cancel": "取消"
       },
-      "editor": {
-        "editTitle": "编辑任务",
-        "createTitle": "新建任务"
-      },
       "empty": {
-        "title": "还没有定时任务",
-        "description": "点击右上角的加号创建第一条定时任务。"
+        "title": "此会话还没有定时任务",
+        "workspaceTitle": "此工作区还没有定时任务，触发时会新建会话并执行。"
       },
       "deleteDialog": {
         "title": "删除任务“{{name}}”？"
@@ -439,8 +462,6 @@
     "errorCreateFailed": "创建工作区失败"
   },
   "remoteConnect": {
-    "tabLan": "局域网",
-    "tabBitfunServer": "BitFun服务器",
     "tabNgrok": "内网穿透",
     "tabCustomServer": "自建服务器",
     "tabBot": "IM机器人",
@@ -614,6 +635,7 @@
     "select": "选择",
     "selectAll": "全选",
     "deselectAll": "取消全选",
+    "invertSelection": "反选",
     "expand": "展开",
     "collapse": "收起",
     "more": "更多",
@@ -691,10 +713,6 @@
     "globalMenu": {
       "name": "全局菜单",
       "description": "提供全局通用的菜单项"
-    },
-    "projectContextDocumentMenu": {
-      "name": "工程上下文文档菜单",
-      "description": "提供工程上下文文档的删除操作"
     }
   },
   "status": {
@@ -902,7 +920,6 @@
     "terminal": "终端",
     "git": "Git",
     "fileViewer": "文件查看",
-    "projectContext": "项目概况",
     "agents": "智能体",
     "skills": "技能",
     "miniApps": "小应用",
@@ -913,6 +930,7 @@
     "panelView": "面板视图"
   },
   "loading": {
+    "app": "正在启动 BitFun...",
     "scenes": "正在加载场景",
     "workspace": "正在加载工作区..."
   },
@@ -1108,6 +1126,13 @@
     "message": "请选择关闭操作：退出程序将完全停止运行，最小化到托盘可保持后台运行随时唤回。",
     "quit": "退出程序",
     "minimizeToTray": "最小化到托盘"
+  },
+  "reviewPlatform": {
+    "relativeTime": {
+      "minutesAgo": "{{count}} 分钟前",
+      "hoursAgo": "{{count}} 小时前",
+      "daysAgo": "{{count}} 天前"
+    }
   },
   "bashCommandFailedHint": "命令执行失败，如需完整环境，请前往应用市场下载 DevBox，然后重启 BitFun",
   "collapse": "折叠",

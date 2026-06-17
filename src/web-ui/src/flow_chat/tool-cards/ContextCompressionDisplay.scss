@@ -11,7 +11,7 @@
   .compression-info {
     display: flex;
     align-items: center;
-    gap: var(--flowchat-control-gap, 0.5rem);
+    gap: var(--flowchat-control-gap);
     flex-wrap: nowrap;
 
     .token-stat {
@@ -46,7 +46,7 @@
   }
 
   .error-content {
-    padding: var(--flowchat-card-expanded-pad-y, 0.5rem) var(--size-gap-4, 16px);
+    padding: var(--flowchat-card-expanded-pad-y) var(--size-gap-4);
     background: rgba(239, 68, 68, 0.05);
     border-top: 1px solid rgba(239, 68, 68, 0.2);
 
@@ -61,9 +61,9 @@
   }
 
   .compression-detail-note {
-    padding: var(--flowchat-card-expanded-pad-y, 0.5rem) var(--size-gap-4, 16px);
+    padding: var(--flowchat-card-expanded-pad-y) var(--size-gap-4);
     font-size: var(--flowchat-font-size-sm);
-    line-height: var(--flowchat-support-line-height, 1.45);
+    line-height: var(--flowchat-support-line-height);
     color: var(--tool-card-text-secondary);
     background: rgba(148, 163, 184, 0.08);
     border-top: 1px solid rgba(148, 163, 184, 0.18);

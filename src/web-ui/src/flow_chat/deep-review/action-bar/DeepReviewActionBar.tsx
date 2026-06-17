@@ -199,9 +199,7 @@ export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({ childSessionId
 
     const toolIds = buildCapacityQueueControlToolIds(capacityQueueState, action);
     if (!childSessionId || !capacityQueueState.dialogTurnId || toolIds.length === 0) {
-      notificationService.error(t('deepReviewActionBar.capacityQueue.controlFailed', {
-        defaultValue: 'Queue control is unavailable because this reviewer is missing session, turn, or tool identifiers. Use Stop to interrupt the review, or wait for the queue state to refresh.',
-      }));
+      notificationService.error(t('deepReviewActionBar.capacityQueue.controlFailed'));
       return;
     }
 
@@ -223,13 +221,11 @@ export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({ childSessionId
           failed: failedResults.length,
           total: toolIds.length,
           reason,
-          defaultValue: `Queue control partly applied; ${failedResults.length} of ${toolIds.length} reviewers failed: ${reason}. Wait for the queue state to refresh, then retry or use Stop if it is stuck.`,
         }));
         return;
       }
       notificationService.error(t('deepReviewActionBar.capacityQueue.controlFailedWithReason', {
         reason,
-        defaultValue: 'Queue control failed: {{reason}}. Try again, or use Stop to interrupt the review if the queue is stuck.',
       }));
       return;
     }
@@ -273,7 +269,6 @@ export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({ childSessionId
       return t('deepReviewActionBar.progressResumePreserved', {
         preserved: progressSummary.completed,
         total: progressSummary.total,
-        defaultValue: `${progressSummary.completed}/${progressSummary.total} preserved, continuing remaining review`,
       });
     }
     return t('deepReviewActionBar.progressHandled', {
@@ -331,9 +326,7 @@ export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({ childSessionId
       if (elapsed > 3 * 60 * 1000 && !longRunningNotified) {
         setLongRunningNotified(true);
         notificationService.info(
-          t('deepReviewActionBar.longRunningHint', {
-            defaultValue: 'Review is still running. This may take a few more minutes.',
-          }),
+          t('deepReviewActionBar.longRunningHint'),
           { duration: 5000 },
         );
       }
@@ -494,7 +487,6 @@ export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({ childSessionId
         childSessionId,
         t('deepReviewActionBar.retryIncompleteRequestDisplay', {
           count: retryableSlices.length,
-          defaultValue: `Retry ${retryableSlices.length} incomplete Deep Review slice(s)`,
         }),
         'DeepReview',
         'agentic',
@@ -504,9 +496,7 @@ export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({ childSessionId
       log.error('Failed to start DeepReview retry slices', { childSessionId, error });
       const message = error instanceof Error
         ? error.message
-        : t('deepReviewActionBar.retryIncompleteFailed', {
-          defaultValue: 'Unable to retry incomplete Deep Review slices.',
-        });
+        : t('deepReviewActionBar.retryIncompleteFailed');
       notificationService.error(message, { duration: 5000 });
     } finally {
       store.setActiveAction(null, undefined, childSessionId);
@@ -537,16 +527,10 @@ export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({ childSessionId
 
     if (currentInput.trim()) {
       const confirmed = await confirmWarning(
-        t('deepReviewActionBar.replaceInputConfirmTitle', {
-          defaultValue: 'Replace current input?',
-        }),
-        t('deepReviewActionBar.replaceInputConfirmMessage', {
-          defaultValue: 'The chat input already has text. Filling this plan will replace the current draft.',
-        }),
+        t('deepReviewActionBar.replaceInputConfirmTitle'),
+        t('deepReviewActionBar.replaceInputConfirmMessage'),
         {
-          confirmText: t('deepReviewActionBar.replaceInputConfirmAction', {
-            defaultValue: 'Replace input',
-          }),
+          confirmText: t('deepReviewActionBar.replaceInputConfirmAction'),
         },
       );
       if (!confirmed) return;
@@ -569,16 +553,10 @@ export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({ childSessionId
 
     if (!interruption.canResume) {
       const confirmed = await confirmWarning(
-        t('deepReviewActionBar.resumeBlockedConfirmTitle', {
-          defaultValue: 'Continue review?',
-        }),
-        t('deepReviewActionBar.resumeBlockedConfirmMessage', {
-          defaultValue: 'The error that interrupted the review has not been resolved. Continuing may fail again. Do you want to proceed?',
-        }),
+        t('deepReviewActionBar.resumeBlockedConfirmTitle'),
+        t('deepReviewActionBar.resumeBlockedConfirmMessage'),
         {
-          confirmText: t('deepReviewActionBar.resumeBlockedConfirmAction', {
-            defaultValue: 'Continue anyway',
-          }),
+          confirmText: t('deepReviewActionBar.resumeBlockedConfirmAction'),
         },
       );
       if (!confirmed) return;
@@ -589,14 +567,10 @@ export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({ childSessionId
     store.updatePhase('resume_running', undefined, childSessionId ?? undefined);
     store.minimize(childSessionId ?? undefined);
     try {
-      await continueDeepReviewSession(interruption, t('deepReviewActionBar.resumeRequestDisplay', {
-        defaultValue: 'Continue interrupted Deep Review',
-      }), { force: !interruption.canResume });
+      await continueDeepReviewSession(interruption, t('deepReviewActionBar.resumeRequestDisplay'), { force: !interruption.canResume });
     } catch (error) {
       log.error('Failed to continue interrupted Deep Review', { childSessionId, error });
-      const message = t('deepReviewActionBar.resumeFailedMessage', {
-        defaultValue: 'Unable to continue Deep Review. Check the model settings or try again later.',
-      });
+      const message = t('deepReviewActionBar.resumeFailedMessage');
       store.updatePhase('resume_failed', message, childSessionId ?? undefined);
       store.restore(childSessionId ?? undefined);
       notificationService.error(message, { duration: 5000 });
@@ -628,16 +602,12 @@ export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({ childSessionId
       setShowPartialResults(true);
     } else if (type === 'reduce_reviewers') {
       notificationService.info(
-        t('deepReviewActionBar.degradation.reduceReviewersPending', {
-          defaultValue: 'Reduced reviewer mode will be supported in a future update.',
-        }),
+        t('deepReviewActionBar.degradation.reduceReviewersPending'),
         { duration: 3000 },
       );
     } else if (type === 'compress_context') {
       notificationService.info(
-        t('deepReviewActionBar.degradation.compressContextPending', {
-          defaultValue: 'Context compression will be supported in a future update.',
-        }),
+        t('deepReviewActionBar.degradation.compressContextPending'),
         { duration: 3000 },
       );
     }
@@ -651,13 +621,9 @@ export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({ childSessionId
 
     try {
       await navigator.clipboard.writeText(diagnostics);
-      notificationService.success(t('deepReviewActionBar.diagnosticsCopied', {
-        defaultValue: 'Diagnostics copied',
-      }), { duration: 2500 });
+      notificationService.success(t('deepReviewActionBar.diagnosticsCopied'), { duration: 2500 });
     } catch {
-      notificationService.error(t('deepReviewActionBar.diagnosticsCopyFailed', {
-        defaultValue: 'Failed to copy diagnostics',
-      }), { duration: 2500 });
+      notificationService.error(t('deepReviewActionBar.diagnosticsCopyFailed'), { duration: 2500 });
     }
   }, [interruption, t]);
 
@@ -667,25 +633,21 @@ export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({ childSessionId
       if (phase === 'review_interrupted') {
         return t('deepReviewActionBar.reviewInterruptedWithReason', {
           reason: categoryLabel,
-          defaultValue: `Deep review interrupted: ${categoryLabel}`,
         });
       }
       if (phase === 'resume_blocked') {
         return t('deepReviewActionBar.resumeBlockedWithReason', {
           reason: categoryLabel,
-          defaultValue: `Cannot continue: ${categoryLabel}`,
         });
       }
       if (phase === 'resume_failed') {
         return t('deepReviewActionBar.resumeFailedWithReason', {
           reason: categoryLabel,
-          defaultValue: `Continue failed: ${categoryLabel}`,
         });
       }
       if (phase === 'review_error') {
         return t('deepReviewActionBar.reviewErrorWithReason', {
           reason: categoryLabel,
-          defaultValue: `Review error: ${categoryLabel}`,
         });
       }
     }
@@ -701,49 +663,27 @@ export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({ childSessionId
         });
       case 'fix_running':
         if (lastSubmittedAction === 'fix-review') {
-          return t('deepReviewActionBar.fixAndReviewRunning', {
-            defaultValue: 'Fixing and preparing re-review...',
-          });
+          return t('deepReviewActionBar.fixAndReviewRunning');
         }
-        return t('deepReviewActionBar.fixRunning', {
-          defaultValue: 'Fixing in progress...',
-        });
+        return t('deepReviewActionBar.fixRunning');
       case 'fix_completed':
-        return t('deepReviewActionBar.fixCompleted', {
-          defaultValue: 'Fix completed',
-        });
+        return t('deepReviewActionBar.fixCompleted');
       case 'fix_failed':
-        return t('deepReviewActionBar.fixFailed', {
-          defaultValue: 'Fix failed',
-        });
+        return t('deepReviewActionBar.fixFailed');
       case 'fix_timeout':
-        return t('deepReviewActionBar.fixTimeout', {
-          defaultValue: 'Fix timed out',
-        });
+        return t('deepReviewActionBar.fixTimeout');
       case 'review_waiting_capacity':
-        return t('deepReviewActionBar.reviewWaitingCapacity', {
-          defaultValue: 'Review queue waiting',
-        });
+        return t('deepReviewActionBar.reviewWaitingCapacity');
       case 'review_interrupted':
-        return t('deepReviewActionBar.reviewInterrupted', {
-          defaultValue: 'Deep review interrupted',
-        });
+        return t('deepReviewActionBar.reviewInterrupted');
       case 'resume_blocked':
-        return t('deepReviewActionBar.resumeBlocked', {
-          defaultValue: 'Action required before continuing',
-        });
+        return t('deepReviewActionBar.resumeBlocked');
       case 'resume_running':
-        return t('deepReviewActionBar.resumeRunning', {
-          defaultValue: 'Continuing review...',
-        });
+        return t('deepReviewActionBar.resumeRunning');
       case 'resume_failed':
-        return t('deepReviewActionBar.resumeFailed', {
-          defaultValue: 'Continue failed',
-        });
+        return t('deepReviewActionBar.resumeFailed');
       case 'review_error':
-        return t('deepReviewActionBar.reviewError', {
-          defaultValue: 'Review error',
-        });
+        return t('deepReviewActionBar.reviewError');
       default:
         return '';
     }
@@ -765,7 +705,7 @@ export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({ childSessionId
         phaseIconClass={phaseConfig.iconClass}
         phaseTitle={phaseTitle}
         errorMessage={errorMessage}
-        minimizeLabel={t('deepReviewActionBar.minimize', { defaultValue: 'Minimize' })}
+        minimizeLabel={t('deepReviewActionBar.minimize')}
         onMinimize={handleMinimize}
       />
 
@@ -779,7 +719,6 @@ export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({ childSessionId
             <span className="deep-review-action-bar__elapsed">
               {t('deepReviewActionBar.elapsedTime', {
                 time: formatElapsedTime(elapsedMs),
-                defaultValue: `Running for ${formatElapsedTime(elapsedMs)}`,
               })}
             </span>
           )}
@@ -840,9 +779,7 @@ export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({ childSessionId
       {showInterruptionDetails && interruption?.errorDetail?.category === 'context_overflow' && (
         <div className="deep-review-action-bar__degradation">
           <span className="deep-review-action-bar__degradation-title">
-            {t('deepReviewActionBar.contextOverflowTitle', {
-              defaultValue: 'Context limit reached. Choose how to proceed:',
-            })}
+            {t('deepReviewActionBar.contextOverflowTitle')}
           </span>
           {degradationOptions.map((option) => (
             <button
@@ -908,9 +845,7 @@ export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({ childSessionId
         <div className="deep-review-action-bar__no-issues">
           <CheckCircle size={18} className="deep-review-action-bar__no-issues-icon" />
           <span className="deep-review-action-bar__no-issues-text">
-            {t('reviewActionBar.noIssuesFound', {
-              defaultValue: 'No issues found. Great job!',
-            })}
+            {t('reviewActionBar.noIssuesFound')}
           </span>
         </div>
       )}
@@ -920,9 +855,7 @@ export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({ childSessionId
         <div className="deep-review-action-bar__fix-done">
           <CheckCircle size={16} className="deep-review-action-bar__fix-done-icon" />
           <span className="deep-review-action-bar__fix-done-text">
-            {t('deepReviewActionBar.fixCompletedMessage', {
-              defaultValue: 'All fixes applied successfully.',
-            })}
+            {t('deepReviewActionBar.fixCompletedMessage')}
           </span>
         </div>
       )}
@@ -938,16 +871,14 @@ export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({ childSessionId
             <MessageSquare size={14} />
             <span>
               {showCustomInput
-                ? t('deepReviewActionBar.hideCustomInput', { defaultValue: 'Hide instructions' })
-                : t('deepReviewActionBar.showCustomInput', { defaultValue: 'Add instructions' })}
+                ? t('deepReviewActionBar.hideCustomInput')
+                : t('deepReviewActionBar.showCustomInput')}
             </span>
           </button>
           {showCustomInput && (
             <textarea
               className="deep-review-action-bar__custom-textarea"
-              placeholder={t('deepReviewActionBar.customInstructionsPlaceholder', {
-                defaultValue: 'Describe additional requirements or context for the fix...',
-              })}
+              placeholder={t('deepReviewActionBar.customInstructionsPlaceholder')}
               value={customInstructions}
               onChange={(e) => store.setCustomInstructions(e.target.value, childSessionId ?? undefined)}
               rows={2}

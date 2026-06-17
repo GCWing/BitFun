@@ -25,10 +25,8 @@ export const StickyTaskIndicator: React.FC<StickyTaskIndicatorProps> = ({
 }) => {
   const { t } = useTranslation('flow-chat');
 
-  const label = taskInfo?.label || t('toolCards.taskTool.defaultAgentKind', { defaultValue: 'Task' });
-  const tooltip = t('stickyTaskIndicator.tooltip', {
-    defaultValue: 'Jump to current task',
-  });
+  const label = taskInfo?.label || t('toolCards.taskTool.defaultAgentKind');
+  const tooltip = t('stickyTaskIndicator.tooltip');
 
   return (
     <div

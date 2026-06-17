@@ -4,7 +4,13 @@ import { createRoot, type Root } from 'react-dom/client';
 import { JSDOM } from 'jsdom';
 
 import { FileOperationToolCard } from './FileOperationToolCard';
-import type { FlowToolItem, ToolCardConfig } from '../types/flow-chat';
+import { FlowChatContext } from '../components/modern/FlowChatContext';
+import type { FlowToolItem, Session, ToolCardConfig } from '../types/flow-chat';
+import {
+  clearHistorySessionOpenTransition,
+  clearRecentHistorySessionOpenIntent,
+  dispatchHistorySessionOpenIntent,
+} from '../services/sessionOpenIntent';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -12,10 +18,15 @@ const mocks = vi.hoisted(() => ({
   currentWorkspace: undefined as undefined | { rootPath: string },
   createDiffEditorTab: vi.fn(),
   openFile: vi.fn(),
+  codePreviewProps: [] as Array<Record<string, unknown>>,
+  inlineDiffPreviewProps: [] as Array<Record<string, unknown>>,
   getOperationDiff: vi.fn(async () => ({
     originalContent: '',
     modifiedContent: '',
     anchorLine: undefined,
+  })),
+  useGitState: vi.fn(() => ({
+    isRepository: false,
   })),
 }));
 
@@ -34,6 +45,11 @@ vi.mock('../../component-library', () => ({
 }));
 
 vi.mock('@/component-library', () => ({
+  CubeLoading: () => <span data-testid="cube-loading" />,
+  IconButton: ({ children, onClick }: { children: React.ReactNode; onClick?: React.MouseEventHandler }) => (
+    <button type="button" onClick={onClick}>{children}</button>
+  ),
+  ToolProcessingDots: () => <span data-testid="tool-processing-dots" />,
   Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
@@ -57,11 +73,17 @@ vi.mock('../../tools/snapshot_system/core/SnapshotEventBus', () => ({
 }));
 
 vi.mock('../components/CodePreview', () => ({
-  CodePreview: ({ content }: { content: string }) => <pre>{content}</pre>,
+  CodePreview: (props: Record<string, unknown>) => {
+    mocks.codePreviewProps.push(props);
+    return <pre>{String(props.content ?? '')}</pre>;
+  },
 }));
 
 vi.mock('../components/InlineDiffPreview', () => ({
-  InlineDiffPreview: ({ modifiedContent }: { modifiedContent: string }) => <pre>{modifiedContent}</pre>,
+  InlineDiffPreview: (props: Record<string, unknown>) => {
+    mocks.inlineDiffPreviewProps.push(props);
+    return <pre>{String(props.modifiedContent ?? '')}</pre>;
+  },
 }));
 
 vi.mock('../../shared/utils/tabUtils', () => ({
@@ -93,9 +115,7 @@ vi.mock('@/shared/notification-system', () => ({
 }));
 
 vi.mock('@/tools/git/hooks/useGitState', () => ({
-  useGitState: () => ({
-    isRepository: false,
-  }),
+  useGitState: mocks.useGitState,
 }));
 
 describe('FileOperationToolCard', () => {
@@ -111,6 +131,11 @@ describe('FileOperationToolCard', () => {
     vi.stubGlobal('document', dom.window.document);
     vi.stubGlobal('HTMLElement', dom.window.HTMLElement);
     vi.stubGlobal('CustomEvent', dom.window.CustomEvent);
+    vi.stubGlobal('ResizeObserver', class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    });
 
     container = dom.window.document.getElementById('root') as HTMLDivElement;
     root = createRoot(container);
@@ -118,6 +143,12 @@ describe('FileOperationToolCard', () => {
     mocks.currentWorkspace = undefined;
     mocks.createDiffEditorTab.mockReset();
     mocks.openFile.mockReset();
+    mocks.codePreviewProps = [];
+    mocks.inlineDiffPreviewProps = [];
+    mocks.useGitState.mockClear();
+    mocks.useGitState.mockReturnValue({
+      isRepository: false,
+    });
     mocks.getOperationDiff.mockReset();
     mocks.getOperationDiff.mockResolvedValue({
       originalContent: '',
@@ -126,11 +157,171 @@ describe('FileOperationToolCard', () => {
     });
   });
 
+  it('does not trigger passive git refresh while historical restore is pending', async () => {
+    mocks.currentWorkspace = { rootPath: 'D:/workspace/BitFun' };
+    const toolItem: FlowToolItem = {
+      id: 'tool-history',
+      type: 'tool',
+      toolName: 'Write',
+      status: 'completed',
+      toolCall: {
+        id: 'call-history',
+        name: 'Write',
+        input: {
+          file_path: 'src/newFile.ts',
+          content: 'export const value = 1;',
+        },
+      },
+      toolResult: {
+        success: true,
+        result: {
+          file_path: 'src/newFile.ts',
+        },
+      },
+    } as FlowToolItem;
+
+    await act(async () => {
+      root.render(
+        <FlowChatContext.Provider
+          value={{
+            sessionId: 'history-session',
+            activeSessionOverride: {
+              sessionId: 'history-session',
+              isHistorical: true,
+              contextRestoreState: 'pending',
+            } as Session,
+          }}
+        >
+          <FileOperationToolCard
+            toolItem={toolItem}
+            config={{} as ToolCardConfig}
+            sessionId="history-session"
+          />
+        </FlowChatContext.Provider>
+      );
+    });
+
+    expect(mocks.useGitState).toHaveBeenCalledWith(expect.objectContaining({
+      repositoryPath: 'D:/workspace/BitFun',
+      isActive: false,
+      refreshOnMount: false,
+      refreshOnActive: false,
+      participateInWindowFocusRefresh: false,
+      layers: ['basic'],
+    }));
+  });
+
+  it('keeps passive git refresh enabled for normal active sessions', async () => {
+    mocks.currentWorkspace = { rootPath: 'D:/workspace/BitFun' };
+    const toolItem: FlowToolItem = {
+      id: 'tool-active',
+      type: 'tool',
+      toolName: 'Write',
+      status: 'completed',
+      toolCall: {
+        id: 'call-active',
+        name: 'Write',
+        input: {
+          file_path: 'src/newFile.ts',
+          content: 'export const value = 1;',
+        },
+      },
+      toolResult: {
+        success: true,
+        result: {
+          file_path: 'src/newFile.ts',
+        },
+      },
+    } as FlowToolItem;
+
+    await act(async () => {
+      root.render(
+        <FlowChatContext.Provider
+          value={{
+            sessionId: 'active-session',
+            activeSessionOverride: {
+              sessionId: 'active-session',
+              isHistorical: false,
+            } as Session,
+          }}
+        >
+          <FileOperationToolCard
+            toolItem={toolItem}
+            config={{} as ToolCardConfig}
+            sessionId="active-session"
+          />
+        </FlowChatContext.Provider>
+      );
+    });
+
+    expect(mocks.useGitState).toHaveBeenCalledWith(expect.objectContaining({
+      repositoryPath: 'D:/workspace/BitFun',
+      isActive: true,
+      refreshOnMount: true,
+      refreshOnActive: false,
+    }));
+  });
+
   afterEach(() => {
     act(() => {
       root.unmount();
     });
+    clearRecentHistorySessionOpenIntent();
+    clearHistorySessionOpenTransition();
     vi.unstubAllGlobals();
+  });
+
+  it('does not trigger passive git refresh during history open transition', async () => {
+    mocks.currentWorkspace = { rootPath: 'D:/workspace/BitFun' };
+    dispatchHistorySessionOpenIntent('history-session', 'History');
+    const toolItem: FlowToolItem = {
+      id: 'tool-transition',
+      type: 'tool',
+      toolName: 'Write',
+      status: 'completed',
+      toolCall: {
+        id: 'call-transition',
+        name: 'Write',
+        input: {
+          file_path: 'src/newFile.ts',
+          content: 'export const value = 1;',
+        },
+      },
+      toolResult: {
+        success: true,
+        result: {
+          file_path: 'src/newFile.ts',
+        },
+      },
+    } as FlowToolItem;
+
+    await act(async () => {
+      root.render(
+        <FlowChatContext.Provider
+          value={{
+            sessionId: 'history-session',
+            activeSessionOverride: {
+              sessionId: 'history-session',
+              isHistorical: true,
+              contextRestoreState: 'ready',
+            } as Session,
+          }}
+        >
+          <FileOperationToolCard
+            toolItem={toolItem}
+            config={{} as ToolCardConfig}
+            sessionId="history-session"
+          />
+        </FlowChatContext.Provider>
+      );
+    });
+
+    expect(mocks.useGitState).toHaveBeenCalledWith(expect.objectContaining({
+      repositoryPath: 'D:/workspace/BitFun',
+      isActive: false,
+      refreshOnMount: false,
+      refreshOnActive: false,
+    }));
   });
 
   it('renders failed write cards outside WorkspaceProvider', () => {
@@ -461,5 +652,216 @@ describe('FileOperationToolCard', () => {
       'Use Read to load the current contents of src/main.rs before calling Edit on it.',
     );
     expect(container.querySelector('.file-operation-card--guidance')).not.toBeNull();
+  });
+
+  it('shows receiving content label while write content streams before file_path', async () => {
+    const toolItem: FlowToolItem = {
+      id: 'tool-1',
+      type: 'tool',
+      toolName: 'Write',
+      status: 'receiving',
+      isParamsStreaming: true,
+      toolCall: {
+        id: 'call-1',
+        name: 'Write',
+        input: {
+          content: 'const value = 1;',
+        },
+      },
+      partialParams: {
+        content: 'const value = 1;',
+      },
+    } as FlowToolItem;
+
+    const config: ToolCardConfig = {
+      toolName: 'Write',
+      displayName: 'Write',
+      icon: 'WRITE',
+      requiresConfirmation: false,
+      resultDisplayType: 'detailed',
+      description: 'Write a file',
+      displayMode: 'standard',
+    };
+
+    await act(async () => {
+      root.render(
+        <FileOperationToolCard
+          toolItem={toolItem}
+          config={config}
+          sessionId="session-1"
+        />
+      );
+    });
+
+    expect(container.textContent).toContain('toolCards.file.receivingContent');
+    expect(container.textContent).not.toContain('toolCards.file.parsingPath');
+  });
+
+  it('disables nested code-preview autoscroll while write content is streaming', async () => {
+    const toolItem: FlowToolItem = {
+      id: 'tool-1',
+      type: 'tool',
+      toolName: 'Write',
+      status: 'streaming',
+      isParamsStreaming: true,
+      toolCall: {
+        id: 'call-1',
+        name: 'Write',
+        input: {
+          file_path: 'src/generated.ts',
+          content: 'const value = 1;\nconst value2 = 2;',
+        },
+      },
+      partialParams: {
+        file_path: 'src/generated.ts',
+        content: 'const value = 1;\nconst value2 = 2;',
+      },
+    } as FlowToolItem;
+
+    const config: ToolCardConfig = {
+      toolName: 'Write',
+      displayName: 'Write',
+      icon: 'WRITE',
+      requiresConfirmation: false,
+      resultDisplayType: 'detailed',
+      description: 'Write a file',
+      displayMode: 'standard',
+    };
+
+    await act(async () => {
+      root.render(
+        <FileOperationToolCard
+          toolItem={toolItem}
+          config={config}
+          sessionId="session-1"
+        />
+      );
+    });
+
+    expect(mocks.codePreviewProps).toHaveLength(1);
+    expect(mocks.codePreviewProps[0]).toMatchObject({
+      isStreaming: true,
+      autoScrollToBottom: false,
+    });
+  });
+
+  it('keeps completed write preview compact while auto-collapsing from streaming', async () => {
+    const config: ToolCardConfig = {
+      toolName: 'Write',
+      displayName: 'Write',
+      icon: 'WRITE',
+      requiresConfirmation: false,
+      resultDisplayType: 'detailed',
+      description: 'Write a file',
+      displayMode: 'standard',
+    };
+    const streamingToolItem: FlowToolItem = {
+      id: 'tool-1',
+      type: 'tool',
+      toolName: 'Write',
+      status: 'streaming',
+      isParamsStreaming: true,
+      toolCall: {
+        id: 'call-1',
+        name: 'Write',
+        input: {
+          file_path: 'src/generated.ts',
+          content: 'line 1\nline 2\nline 3\nline 4\nline 5\nline 6',
+        },
+      },
+      partialParams: {
+        file_path: 'src/generated.ts',
+        content: 'line 1\nline 2\nline 3\nline 4\nline 5\nline 6',
+      },
+    } as FlowToolItem;
+    const completedToolItem: FlowToolItem = {
+      ...streamingToolItem,
+      status: 'completed',
+      isParamsStreaming: false,
+      toolResult: {
+        success: true,
+        result: {
+          file_path: 'src/generated.ts',
+        },
+      },
+    } as FlowToolItem;
+
+    await act(async () => {
+      root.render(
+        <FileOperationToolCard
+          toolItem={streamingToolItem}
+          config={config}
+          sessionId="session-1"
+        />
+      );
+    });
+
+    mocks.inlineDiffPreviewProps = [];
+
+    await act(async () => {
+      root.render(
+        <FileOperationToolCard
+          toolItem={completedToolItem}
+          config={config}
+          sessionId="session-1"
+        />
+      );
+    });
+
+    expect(mocks.inlineDiffPreviewProps.length).toBeGreaterThan(0);
+    expect(mocks.inlineDiffPreviewProps.map(props => props.maxHeight)).not.toContain(330);
+    expect(mocks.inlineDiffPreviewProps.map(props => props.maxHeight)).toContain(88);
+  });
+
+  it('uses the larger diff preview height after a completed write card is manually expanded', async () => {
+    const toolItem: FlowToolItem = {
+      id: 'tool-1',
+      type: 'tool',
+      toolName: 'Write',
+      status: 'completed',
+      isParamsStreaming: false,
+      toolCall: {
+        id: 'call-1',
+        name: 'Write',
+        input: {
+          file_path: 'src/generated.ts',
+          content: 'line 1\nline 2\nline 3\nline 4\nline 5\nline 6',
+        },
+      },
+      toolResult: {
+        success: true,
+        result: {
+          file_path: 'src/generated.ts',
+        },
+      },
+    } as FlowToolItem;
+    const config: ToolCardConfig = {
+      toolName: 'Write',
+      displayName: 'Write',
+      icon: 'WRITE',
+      requiresConfirmation: false,
+      resultDisplayType: 'detailed',
+      description: 'Write a file',
+      displayMode: 'standard',
+    };
+
+    await act(async () => {
+      root.render(
+        <FileOperationToolCard
+          toolItem={toolItem}
+          config={config}
+          sessionId="session-1"
+        />
+      );
+    });
+
+    mocks.inlineDiffPreviewProps = [];
+
+    const card = container.querySelector('.base-tool-card') as HTMLDivElement | null;
+    await act(async () => {
+      card?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(mocks.inlineDiffPreviewProps.map(props => props.maxHeight)).toContain(330);
   });
 });

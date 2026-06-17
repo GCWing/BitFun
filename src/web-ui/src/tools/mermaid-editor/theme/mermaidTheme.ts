@@ -26,6 +26,7 @@ export function getThemeType(): 'dark' | 'light' {
   if (dataTheme?.includes('light')) return 'light';
   if (dataTheme?.includes('dark')) return 'dark';
   if (document.documentElement.classList.contains('light')) return 'light';
+  if (typeof window.matchMedia !== 'function') return 'dark';
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 

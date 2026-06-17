@@ -44,7 +44,15 @@ export interface ExplorerChildrenRequest {
   options?: FileSystemOptions;
 }
 
+export interface ExplorerWatchOptions {
+  recursive?: boolean;
+}
+
 export interface ExplorerFileSystemProvider {
   getChildren(request: ExplorerChildrenRequest): Promise<FileSystemNode[]>;
-  watch(rootPath: string, callback: (event: FileSystemChangeEvent) => void): () => void;
+  watch(
+    rootPath: string,
+    callback: (event: FileSystemChangeEvent) => void,
+    options?: ExplorerWatchOptions
+  ): () => void;
 }

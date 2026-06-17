@@ -47,11 +47,11 @@
 
 // Status icon colors
 .tcss-check {
-  color: var(--color-success, #4ade80);
+  color: var(--color-success);
 }
 
 .tcss-error {
-  color: var(--color-error, #f87171);
+  color: var(--color-error);
   filter: drop-shadow(0 0 3px rgba(248, 113, 113, 0.35));
 }
 
