@@ -37,6 +37,10 @@ mod tests {
         );
         assert_eq!(resolve_builtin_default_enabled("pdf", "Team"), Some(false));
         assert_eq!(
+            resolve_builtin_default_enabled("miniapp-dev", "Team"),
+            Some(false)
+        );
+        assert_eq!(
             resolve_builtin_default_enabled("find-skills", "DeepResearch"),
             Some(true)
         );

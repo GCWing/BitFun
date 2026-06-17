@@ -63,6 +63,7 @@ fn project_skill(dir_name: &str) -> SkillInfo {
 fn builtin_skill_catalog_and_mode_policy_are_runtime_owned() {
     assert_eq!(builtin_skill_group_key("docx"), Some("office"));
     assert_eq!(builtin_skill_group_key("find-skills"), Some("meta"));
+    assert_eq!(builtin_skill_group_key("miniapp-dev"), Some("miniapp"));
     assert_eq!(
         builtin_skill_group_key("agent-browser"),
         Some("computer-use")
@@ -81,6 +82,22 @@ fn builtin_skill_catalog_and_mode_policy_are_runtime_owned() {
     assert_eq!(
         resolve_builtin_default_enabled("find-skills", "DeepResearch"),
         Some(true)
+    );
+    assert_eq!(
+        resolve_builtin_default_enabled("miniapp-dev", "agentic"),
+        Some(true)
+    );
+    assert_eq!(
+        resolve_builtin_default_enabled("miniapp-dev", "Cowork"),
+        Some(false)
+    );
+    assert_eq!(
+        resolve_builtin_default_enabled("miniapp-dev", "DeepResearch"),
+        Some(false)
+    );
+    assert_eq!(
+        resolve_builtin_default_enabled("miniapp-dev", "Team"),
+        Some(false)
     );
     assert_eq!(
         resolve_builtin_default_enabled("agent-browser", "coding_shared"),

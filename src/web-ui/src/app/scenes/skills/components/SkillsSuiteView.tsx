@@ -18,9 +18,10 @@ const UNGROUPED_SKILL_GROUP = '__ungrouped__';
 
 const SKILL_GROUP_ORDER: Record<string, number> = {
   meta: 0,
-  'computer-use': 1,
-  office: 2,
-  gstack: 3,
+  miniapp: 1,
+  'computer-use': 2,
+  office: 3,
+  gstack: 4,
   [UNGROUPED_SKILL_GROUP]: 99,
 };
 
@@ -70,6 +71,8 @@ function getSkillGroupLabel(groupKey: string, t: (key: string) => string): strin
       return t('suite.groups.computerUse');
     case 'meta':
       return t('suite.groups.meta');
+    case 'miniapp':
+      return t('suite.groups.miniapp');
     case 'gstack':
       return t('suite.groups.gstack');
     default:

@@ -17,6 +17,7 @@ mod tests {
         assert_eq!(builtin_skill_group_key("pptx"), Some("office"));
         assert_eq!(builtin_skill_group_key("xlsx"), Some("office"));
         assert_eq!(builtin_skill_group_key("find-skills"), Some("meta"));
+        assert_eq!(builtin_skill_group_key("miniapp-dev"), Some("miniapp"));
         assert_eq!(builtin_skill_group_key("writing-skills"), Some("meta"));
         assert_eq!(
             builtin_skill_group_key("agent-browser"),

@@ -53,7 +53,9 @@ const UNGROUPED_SKILL_GROUP = '__ungrouped__';
 const SKILL_GROUP_ORDER: Record<string, number> = {
   office: 0,
   meta: 1,
-  team: 2,
+  miniapp: 2,
+  gstack: 3,
+  team: 4,
   [UNGROUPED_SKILL_GROUP]: 99,
 };
 
@@ -114,6 +116,10 @@ function getSkillGroupLabel(groupKey: string, t: TFunction<'scenes/agents'>): st
       return t('agentsOverview.skillGroups.computerUse');
     case 'meta':
       return t('agentsOverview.skillGroups.meta');
+    case 'miniapp':
+      return t('agentsOverview.skillGroups.miniapp');
+    case 'gstack':
+      return t('agentsOverview.skillGroups.gstack');
     case 'team':
       return t('agentsOverview.skillGroups.team');
     default:

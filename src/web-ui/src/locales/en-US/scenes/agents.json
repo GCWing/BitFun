@@ -122,6 +122,8 @@
       "computerUse": "Computer Use",
       "office": "Office",
       "meta": "Meta",
+      "miniapp": "MiniApp",
+      "gstack": "gstack",
       "team": "Team",
       "other": "Other"
     },

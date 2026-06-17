@@ -73,6 +73,11 @@ const DISABLE_GSTACK: SkillPolicyRule = SkillPolicyRule {
     effect: PolicyEffect::Disable,
 };
 
+const DISABLE_MINIAPP: SkillPolicyRule = SkillPolicyRule {
+    selector: SkillSelector::Group(BuiltinSkillGroup::MiniApp),
+    effect: PolicyEffect::Disable,
+};
+
 const ENABLE_OFFICE: SkillPolicyRule = SkillPolicyRule {
     selector: SkillSelector::Group(BuiltinSkillGroup::Office),
     effect: PolicyEffect::Enable,
@@ -107,7 +112,7 @@ const COWORK_POLICY: ModeSkillPolicy = ModeSkillPolicy {
 
 const TEAM_POLICY: ModeSkillPolicy = ModeSkillPolicy {
     builtin_default: PolicyEffect::Enable,
-    rules: &[DISABLE_OFFICE],
+    rules: &[DISABLE_OFFICE, DISABLE_MINIAPP],
 };
 
 fn policy_for_mode(mode_id: &str) -> ModeSkillPolicy {

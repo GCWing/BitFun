@@ -2,6 +2,7 @@
 pub(super) enum BuiltinSkillGroup {
     Office,
     Meta,
+    MiniApp,
     ComputerUse,
     Gstack,
 }
@@ -11,6 +12,7 @@ impl BuiltinSkillGroup {
         match self {
             Self::Office => "office",
             Self::Meta => "meta",
+            Self::MiniApp => "miniapp",
             Self::ComputerUse => "computer-use",
             Self::Gstack => "gstack",
         }
@@ -35,6 +37,10 @@ const BUILTIN_SKILL_SPECS: &[BuiltinSkillSpec] = &[
     BuiltinSkillSpec {
         dir_name: "find-skills",
         group: BuiltinSkillGroup::Meta,
+    },
+    BuiltinSkillSpec {
+        dir_name: "miniapp-dev",
+        group: BuiltinSkillGroup::MiniApp,
     },
     BuiltinSkillSpec {
         dir_name: "gstack-autoplan",

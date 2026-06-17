@@ -1,0 +1,25 @@
+{
+  "id": "git-graph-sample",
+  "name": "Git Graph",
+  "description": "交互式 Git 提交图谱，通过 Worker 端 simple-git 读取仓库，UI 端 SVG 渲染。展示前后端协同与端侧三方库使用。",
+  "icon": "📊",
+  "category": "developer",
+  "tags": ["git", "graph", "example"],
+  "version": 1,
+  "created_at": 0,
+  "updated_at": 0,
+  "permissions": {
+    "fs": {
+      "read": ["{appdata}", "{workspace}", "{user-selected}"],
+      "write": ["{appdata}"]
+    },
+    "shell": { "allow": ["git"] },
+    "net": { "allow": [] },
+    "node": {
+      "enabled": true,
+      "max_memory_mb": 256,
+      "timeout_ms": 30000
+    }
+  },
+  "ai_context": null
+}
