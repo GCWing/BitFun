@@ -12,7 +12,7 @@ use log::debug;
 use serde_json::{json, Value};
 
 // Use skills module
-use super::skills::{get_skill_registry, SkillLocation};
+use super::skills::{get_skill_registry, render_loaded_skill_for_assistant};
 
 /// Skill tool
 pub struct SkillTool;
@@ -268,20 +268,8 @@ impl Tool for SkillTool {
             }
         };
 
-        let location_str = match skill_data.location {
-            SkillLocation::User => "user",
-            SkillLocation::Project => "project",
-        };
-
-        let loaded_from = if use_stable_key {
-            format!(" from stable key '{}'", skill_data.key)
-        } else {
-            String::new()
-        };
-        let result_for_assistant = format!(
-            "Skill '{}' loaded successfully{}. Note: any paths mentioned in this skill are relative to {}, not the workspace.\n\n<skill_content>\n{}\n</skill_content>",
-            skill_data.name, loaded_from, skill_data.path, skill_data.content
-        );
+        let location_str = skill_data.location.as_str();
+        let result_for_assistant = render_loaded_skill_for_assistant(&skill_data, use_stable_key);
 
         let result = ToolResult::Result {
             data: json!({

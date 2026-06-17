@@ -21,6 +21,7 @@ pub mod scheduler;
 pub mod sdk;
 pub mod session_control;
 pub mod skill_agent_snapshot;
+pub mod skills;
 pub mod thread_goal;
 pub mod thread_goal_tools;
 pub mod tool_confirmation;

@@ -1097,12 +1097,12 @@ export const requiredContentRules = [
   {
     path: 'src/crates/execution/agent-runtime/tests/custom_subagent_discovery_contracts.rs',
     reason:
-      'agent-runtime custom subagent discovery owner must keep behavior-equivalence contracts for directory priority, deduplication, and load errors',
+      'agent-runtime custom subagent discovery owner must keep behavior-equivalence contracts for BitFun directory priority, foreign directory exclusion, and load errors',
     patterns: [
       {
         regex:
-          /\bcustom_subagent_discovery_preserves_directory_priority_and_deduplication\b/,
-        message: 'missing custom subagent discovery priority/dedup regression',
+          /\bcustom_subagent_discovery_preserves_bitfun_priority_and_ignores_foreign_agent_dirs\b/,
+        message: 'missing custom subagent discovery priority/foreign-dir regression',
       },
       {
         regex:

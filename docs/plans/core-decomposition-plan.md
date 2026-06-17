@@ -20,7 +20,7 @@
 - `bitfun-core --no-default-features` 已裁掉 workspace-search owner、debug ingest HTTP server、AI provider adapter runtime 和 direct `reqwest`。
 - Desktop / CLI / ACP 仍通过 `bitfun-core/product-full` 获取完整能力；Server / Remote / Web / Mobile Web 不直接依赖 core。Product Assembly 已按入口矩阵裁剪能力计划：完整兼容入口保留 product-full 能力，无直接 core 入口不再 materialize product-full capability packs、feature groups、runtime services、tool groups 或 harness routes。
 - Runtime Services、Agent Runtime、Tool Contracts、Tool Execution、Harness、Product Domains、Services Core、Services Integrations 等 owner crate 已建立；Agent Runtime SDK 内部 facade 已能注入 runtime services、tool registry、harness registry、hook registry 和 workspace-scoped agent registry，部分 concrete 生命周期仍由 core concrete manager 或产品命令路径持有。
-- 最新 custom agent / mode 路径已纳入 `agent-runtime` owner：schema、默认值、markdown IO、discovery、validation 与 review 工具过滤规则由 runtime 持有；core 和 desktop 只保留产品工具/模型查询、日志、registry 写入、文件路径选择和命令入口。
+- 最新 custom agent / mode / skill 路径已纳入 `agent-runtime` owner：schema、默认值、skill catalog/root specs、mode policy、selection/shadow 规则、markdown parse/render、validation 与 review 工具过滤规则由 runtime 持有；core 和 desktop 只保留产品工具/模型查询、日志、registry/config 写入、文件路径选择、扫描加载 IO 和命令入口。
 - PR-B 已收口 Agent lifecycle 与 tool side-effect owner：turn skill/agent snapshot DTO / diff / render / store、file-read session state、session evidence ledger 与 compression-contract projection、dialog-turn cancellation token store、tool confirmation / user-question wait channel state 已迁入 `agent-runtime`；background exec output capture、tool cancellation token store 已迁入 `tool-execution`；core 保留 resolver、产品事件、具体工具执行、IO 编排和旧路径兼容 re-export。
 - PR-C 已收口 Harness / product workflow 的低风险 owner：MiniApp AI / Agent permission、rate-limit、model/message/session/workspace/turn-text 规则迁入 `product-domains`；DeepResearch 后处理 gate 迁入 `agent-runtime`，report IO 继续由 `services-integrations` 持有；function-agent AI concrete acquisition 收拢为 core port adapter，旧 `runtime_services` 路径删除。
 - H2 concrete adapter 收口已完成：MiniApp AI / Agent 请求计划、stream payload、runtime event payload、worker restart / draft key / workspace input 规则迁入 `product-domains`；DeepReview concrete Task launch、session metadata cache persistence 和 MiniApp concrete AI factory / scheduler / worker pool 调用已复核为 adapter 边界，不在下层 owner crate 中实现。
@@ -38,7 +38,8 @@
 
 ## 4. 后续大块专项
 
-H4 收口后，设计文档中已批准的大块 owner 迁移专项暂不再保留新的待执行项。
+设计文档中已批准的大块 owner 迁移专项不再按旧 H 标签继续拆分；后续以最新代码审计触发。当前不能宣称 `bitfun-core` 中所有 owner 已彻底迁完：core 仍允许承载 compatibility facade、`product-full` assembly、产品命令适配、concrete manager 接线和少量迁移期 adapter。若最新主干或审计发现 provider-neutral owner 仍留在 core，必须同步迁出主体并删除或显著简化旧 core 路径。
+
 后续只在出现以下情况时重新开专项：
 
 - Agent Runtime SDK 需要从 workspace 内 preview facade 变成独立发布包。

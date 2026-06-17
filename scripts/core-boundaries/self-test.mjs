@@ -1156,7 +1156,7 @@ export function runManifestParserSelfTest({
     {
       path: 'src/crates/execution/agent-runtime/tests/custom_subagent_discovery_contracts.rs',
       contracts: [
-        'custom_subagent_discovery_preserves_directory_priority_and_deduplication',
+        'custom_subagent_discovery_preserves_bitfun_priority_and_ignores_foreign_agent_dirs',
         'custom_subagent_discovery_reports_parse_errors_without_dropping_valid_files',
       ],
     },

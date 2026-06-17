@@ -31,7 +31,7 @@ fn build_definition(
 }
 
 #[test]
-fn custom_subagent_discovery_preserves_directory_priority_and_deduplication() {
+fn custom_subagent_discovery_preserves_bitfun_priority_and_ignores_foreign_agent_dirs() {
     let workspace = TestTempDir::new("bitfun-runtime-subagent-workspace");
     let bitfun_user = TestTempDir::new("bitfun-runtime-subagent-user");
     let home = TestTempDir::new("bitfun-runtime-subagent-home");
@@ -95,21 +95,11 @@ fn custom_subagent_discovery_preserves_directory_priority_and_deduplication() {
         dirs.iter()
             .map(|entry| entry.path.as_path())
             .collect::<Vec<_>>(),
-        vec![
-            project_bitfun.as_path(),
-            project_claude.as_path(),
-            user_bitfun.as_path(),
-            home_claude.as_path(),
-        ]
+        vec![project_bitfun.as_path(), user_bitfun.as_path()]
     );
     assert_eq!(
         dirs.iter().map(|entry| entry.level).collect::<Vec<_>>(),
-        vec![
-            CustomSubagentKind::Project,
-            CustomSubagentKind::Project,
-            CustomSubagentKind::User,
-            CustomSubagentKind::User,
-        ]
+        vec![CustomSubagentKind::Project, CustomSubagentKind::User]
     );
 
     let report = load_custom_subagent_definitions(&roots);
@@ -120,7 +110,7 @@ fn custom_subagent_discovery_preserves_directory_priority_and_deduplication() {
             .iter()
             .map(|loaded| loaded.definition.id.as_str())
             .collect::<Vec<_>>(),
-        vec!["Shared", "UserOnly", "HomeOnly"]
+        vec!["Shared", "UserOnly"]
     );
     assert_eq!(
         report.definitions[0].definition.description,

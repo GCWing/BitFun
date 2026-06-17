@@ -1,96 +1,11 @@
-//! Skill resolution helpers.
+//! Compatibility re-export for skill availability resolution.
 //!
-//! This module combines the built-in policy layer with user/project overrides
-//! and produces a single effective availability decision for a skill in a mode.
+//! The provider-neutral owner lives in `bitfun-agent-runtime`.
 
-use super::mode_overrides::UserModeSkillOverrides;
-use super::policy::resolve_builtin_default_enabled;
-use super::types::{ModeSkillStateReason, SkillInfo, SkillLocation};
-use std::collections::HashSet;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ModeSkillState {
-    pub default_enabled: bool,
-    pub effective_enabled: bool,
-    pub reason: ModeSkillStateReason,
-}
-
-pub fn resolve_skill_default_enabled_for_mode(skill: &SkillInfo, mode_id: &str) -> bool {
-    match skill.level {
-        SkillLocation::Project => true,
-        SkillLocation::User => {
-            if !skill.is_builtin {
-                true
-            } else {
-                resolve_builtin_default_enabled(&skill.dir_name, mode_id).unwrap_or(true)
-            }
-        }
-    }
-}
-
-fn resolve_default_state_for_user_skill(skill: &SkillInfo, mode_id: &str) -> ModeSkillState {
-    if !skill.is_builtin {
-        return ModeSkillState {
-            default_enabled: true,
-            effective_enabled: true,
-            reason: ModeSkillStateReason::CustomUserDefaultEnabled,
-        };
-    }
-
-    let default_enabled = resolve_builtin_default_enabled(&skill.dir_name, mode_id).unwrap_or(true);
-    ModeSkillState {
-        default_enabled,
-        effective_enabled: default_enabled,
-        reason: if default_enabled {
-            ModeSkillStateReason::BuiltinPolicyEnabled
-        } else {
-            ModeSkillStateReason::BuiltinPolicyDisabled
-        },
-    }
-}
-
-pub fn resolve_skill_state_for_mode(
-    skill: &SkillInfo,
-    mode_id: &str,
-    user_overrides: &UserModeSkillOverrides,
-    disabled_project_skills: &HashSet<String>,
-) -> ModeSkillState {
-    match skill.level {
-        SkillLocation::Project => {
-            let disabled = disabled_project_skills.contains(&skill.key);
-            ModeSkillState {
-                default_enabled: true,
-                effective_enabled: !disabled,
-                reason: if disabled {
-                    ModeSkillStateReason::DisabledByProjectOverride
-                } else {
-                    ModeSkillStateReason::ProjectDefaultEnabled
-                },
-            }
-        }
-        SkillLocation::User => {
-            let default_state = resolve_default_state_for_user_skill(skill, mode_id);
-
-            if default_state.default_enabled {
-                if user_overrides.disabled_skills.contains(&skill.key) {
-                    return ModeSkillState {
-                        default_enabled: true,
-                        effective_enabled: false,
-                        reason: ModeSkillStateReason::DisabledByUserOverride,
-                    };
-                }
-            } else if user_overrides.enabled_skills.contains(&skill.key) {
-                return ModeSkillState {
-                    default_enabled: false,
-                    effective_enabled: true,
-                    reason: ModeSkillStateReason::EnabledByUserOverride,
-                };
-            }
-
-            default_state
-        }
-    }
-}
+pub use bitfun_agent_runtime::skills::{
+    normalize_user_mode_skill_overrides, resolve_skill_default_enabled_for_mode,
+    resolve_skill_state_for_mode, ModeSkillState,
+};
 
 #[cfg(test)]
 mod tests {

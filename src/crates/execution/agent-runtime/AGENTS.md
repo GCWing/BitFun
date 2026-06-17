@@ -28,7 +28,8 @@ port-backed `sdk` / `AgentRuntime` facade that can be built and tested without
   planning, agent-session reply planning, thread-goal accounting/mutation/continuation decisions,
   scheduled-job lifecycle state transitions, runtime event facts,
   registry visibility/availability, custom subagent schema/default decisions,
-  builtin agent definition catalog, thread-goal metadata / event payload /
+  builtin agent definition catalog, skill catalog/root/mode/selection facts,
+  thread-goal metadata / event payload /
   token usage / scheduler delivery plans, thread-goal tool wire contracts,
   user-question validation/result/channel contracts, SessionControl input/cancel-route/result contracts, DeepReview
   policy/manifest/budget/queue/report/cache/shared-context/task-execution
