@@ -20,13 +20,13 @@
 
 .bitfun-chat-input-pixel-pet {
   /* FIXED panda body palette — never inverted. */
-  --bitfun-pet-color: #1f2024;
+  --bitfun-pet-color: #202024;
   --bitfun-pet-cream: #fafaf9;
 
   /* Decorative palette — inverts between light/dark themes so overlays
      stay readable on either chat background. */
-  --bitfun-pet-decor: #1f2024;
-  --bitfun-pet-decor-soft: rgba(31, 32, 36, 0.55);
+  --bitfun-pet-decor: #202024;
+  --bitfun-pet-decor-soft: rgba(32, 32, 36, 0.55);
   --bitfun-petdex-width: 42px;
   --bitfun-petdex-height: 46px;
   --bitfun-petdex-margin-top: -8px;

@@ -414,7 +414,29 @@ function colorDistance(a, b) {
   );
 }
 
-function buildNearColorPairs(colorCounts) {
+function colorPairKey(left, right) {
+  return [left, right].sort((a, b) => a.localeCompare(b)).join(' <-> ');
+}
+
+function buildNearColorPairRow({ a, b, distance, alphaDiff, colorFiles }) {
+  const aFiles = Array.from(colorFiles.get(a.color) ?? []).sort();
+  const bFiles = Array.from(colorFiles.get(b.color) ?? []).sort();
+  return {
+    key: colorPairKey(a.color, b.color),
+    a: a.color,
+    b: b.color,
+    distance,
+    alphaDiff,
+    count: a.count + b.count,
+    files: Array.from(new Set([...aFiles, ...bFiles])).sort().slice(0, 8),
+    filesByColor: {
+      [a.color]: aFiles.slice(0, 5),
+      [b.color]: bFiles.slice(0, 5),
+    },
+  };
+}
+
+function buildNearColorPairs(colorCounts, colorFiles) {
   const parsed = Array.from(colorCounts.entries())
     .map(([color, count]) => ({ color, count, parsed: parseColor(color) }))
     .filter(entry => entry.parsed);
@@ -429,17 +451,21 @@ function buildNearColorPairs(colorCounts) {
       const alphaDiff = Math.abs(a.parsed.a - b.parsed.a);
       const distance = colorDistance(a.parsed, b.parsed);
       if (distance <= 2 && alphaDiff <= 0.003) {
-        indistinguishable.push({ a: a.color, b: b.color, distance, alphaDiff, count: a.count + b.count });
+        indistinguishable.push(buildNearColorPairRow({ a, b, distance, alphaDiff, colorFiles }));
       } else if (distance <= 10 && alphaDiff <= 0.03) {
-        near.push({ a: a.color, b: b.color, distance, alphaDiff, count: a.count + b.count });
+        near.push(buildNearColorPairRow({ a, b, distance, alphaDiff, colorFiles }));
       }
     }
   }
 
   const byImpact = (a, b) => b.count - a.count || a.distance - b.distance;
+  indistinguishable.sort(byImpact);
+  near.sort(byImpact);
   return {
-    indistinguishable: indistinguishable.sort(byImpact).slice(0, 50),
-    near: near.sort(byImpact).slice(0, 50),
+    indistinguishableTotal: indistinguishable.length,
+    nearTotal: near.length,
+    indistinguishable: indistinguishable.slice(0, 50),
+    near: near.slice(0, 50),
   };
 }
 
@@ -668,6 +694,7 @@ function audit(options) {
 
   const colorCounts = new Map();
   const componentColorCounts = new Map();
+  const componentColorFiles = new Map();
   const fallbackTokenCounts = new Map();
   const fallbackTokenFiles = new Map();
   const varUsageCounts = new Map();
@@ -720,6 +747,7 @@ function audit(options) {
       } else {
         componentColorOccurrences += 1;
         incrementMap(componentColorCounts, color);
+        addToSetMap(componentColorFiles, color, relativePath);
         incrementMap(componentFileColorCounts, relativePath);
 
         const colorKey = canonicalColorKey(color);
@@ -867,7 +895,7 @@ function audit(options) {
   const runtimeOnlyRequiredContractVars = runtimeOnlyRequiredContractEntries
     .slice(0, REPORT_ROW_LIMIT);
 
-  const nearPairs = buildNearColorPairs(componentColorCounts);
+  const nearPairs = buildNearColorPairs(componentColorCounts, componentColorFiles);
   const uniqueComponentColors = componentColorCounts.size;
   const tokenAliasLiteralRows = buildTokenAliasLiteralRows({
     tokenAliasLiteralCounts,
@@ -1133,8 +1161,8 @@ function printText(report) {
     }
   }
 
-  console.log('\nIndistinguishable component color pairs (sample):');
-  if (report.nearPairs.indistinguishable.length === 0) {
+  console.log(`\nIndistinguishable component color pairs (total=${report.nearPairs.indistinguishableTotal}, sample):`);
+  if (report.nearPairs.indistinguishableTotal === 0) {
     console.log('  none');
   } else {
     for (const pair of report.nearPairs.indistinguishable.slice(0, 10)) {
@@ -1142,8 +1170,8 @@ function printText(report) {
     }
   }
 
-  console.log('\nNear component color pairs needing evidence (sample):');
-  if (report.nearPairs.near.length === 0) {
+  console.log(`\nNear component color pairs needing evidence (total=${report.nearPairs.nearTotal}, sample):`);
+  if (report.nearPairs.nearTotal === 0) {
     console.log('  none');
   } else {
     for (const pair of report.nearPairs.near.slice(0, 10)) {

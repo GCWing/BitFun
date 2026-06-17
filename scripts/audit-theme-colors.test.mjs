@@ -296,6 +296,43 @@ test('theme color audit reports app literals that duplicate token values', (t) =
   assert.equal(report.colorScopes.exception.occurrences, 1);
 });
 
+test('theme color audit reports near color pair sources and enforces pair budgets', (t) => {
+  const { dir, sourceRoot } = createFixture({
+    'app/One.scss': '.one { color: #111111; }\n',
+    'app/Two.scss': '.two { color: #111112; }\n',
+  });
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const reportPath = path.join(dir, 'theme-report.json');
+
+  const reportResult = runAudit(['--root', sourceRoot, '--report-json', reportPath, '--no-baseline']);
+  assert.equal(reportResult.status, 0, reportResult.stderr || reportResult.stdout);
+  assert.match(reportResult.stdout, /Indistinguishable component color pairs \(total=1, sample\):/);
+
+  const report = readJson(reportPath);
+  assert.equal(report.nearPairs.indistinguishableTotal, 1);
+  assert.equal(report.nearPairs.indistinguishable.length, 1);
+  assert.equal(report.nearPairs.indistinguishable[0].key, '#111111 <-> #111112');
+  assert.deepEqual(
+    report.nearPairs.indistinguishable[0].files.map(file => file.replace(/\\/g, '/').split('/').slice(-2).join('/')),
+    ['app/One.scss', 'app/Two.scss'],
+  );
+
+  const baselinePath = path.join(dir, 'theme-baseline.json');
+  writeText(baselinePath, `${JSON.stringify({
+    version: 1,
+    budgets: {
+      'nearPairs.indistinguishableTotal': { max: 0 },
+    },
+  }, null, 2)}\n`);
+
+  const blocked = runAudit(['--root', sourceRoot, '--baseline', baselinePath]);
+  assert.notEqual(blocked.status, 0, 'new indistinguishable color pairs must fail the audit');
+  assert.match(
+    `${blocked.stdout}\n${blocked.stderr}`,
+    /nearPairs\.indistinguishableTotal has 1 candidate\(s\), baseline is 0/,
+  );
+});
+
 test('theme color audit excludes test files from production color budgets', (t) => {
   const { dir, sourceRoot } = createFixture({
     'component-library/styles/tokens.scss': ':root { --color-error: #ef4444; }\n',

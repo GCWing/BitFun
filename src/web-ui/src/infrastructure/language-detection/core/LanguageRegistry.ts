@@ -660,7 +660,7 @@ const BUILTIN_LANGUAGES: Language[] = [
     extensions: ['txt', 'text', 'log'],
     monacoId: 'plaintext',
     iconType: 'text',
-    color: '#6e7681',
+    color: '#6e7781',
     supportsComments: false,
   },
 ];

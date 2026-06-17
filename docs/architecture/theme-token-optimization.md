@@ -1,6 +1,6 @@
 # 主题与颜色 Token 优化方案
 
-> 当前基线：`gcwing/main` 的 `bb051cdb`，扫描日期为 2026-06-17。
+> 当前基线：`gcwing/main` 的 `e5024fdd`，扫描日期为 2026-06-17。
 
 本文档用于梳理 BitFun 前端主题、硬编码颜色、重复 token、近似色冗余、
 命名漂移和后续治理方案。目标不是把所有看起来相近的颜色都合并，而是让
@@ -64,15 +64,17 @@
 | 忽略的测试文件数 | 211 |
 | 包含颜色字面量的文件数 | 75 |
 | 颜色字面量出现次数 | 1930 |
-| 唯一颜色字面量数量 | 1040 |
+| 唯一颜色字面量数量 | 1038 |
 | 组件或非 token 文件中的颜色出现次数 | 273 |
-| 组件或非 token 唯一颜色数量 | 235 |
+| 组件或非 token 唯一颜色数量 | 233 |
 | App UI 颜色出现次数 | 108 |
 | App UI 唯一颜色数量 | 94 |
 | `var(--token, fallback)` 出现次数 | 31 |
 | fallback 唯一 token 数 | 10 |
 | token-equivalent app literal 出现次数 | 13 |
 | token-equivalent app literal 唯一颜色数量 | 11 |
+| 普通组件肉眼不可区分 near color pair | 0 |
+| 普通组件需证据复核的 near color pair | 35 |
 
 当前审计未发现 CSS 变量契约层面的硬错误：
 
@@ -154,8 +156,30 @@ fallback 决策表：
 | Phase 2：精确重复合并 | 部分完成 | 本轮已集中 code snippet language identity，并减少 StreamText 重复 visual-effect literal |
 | Phase 3：legacy fallback 迁移 | 部分完成 | 本轮已集中 widget/miniapp boundary fallback；剩余 10 个 fallback token 已完成决策表 |
 | Phase 4：组件 token 抽取 | 进行中 | 本轮补充 visual effect 私有变量和 boundary fallback owner，Flow Chat、tool card、diff/git 仍需按 surface 继续抽取 |
-| Phase 5：近似色合并 | 未开始 | 只能在调用点、相邻关系和视觉证据齐备后推进 |
-| Phase 6：防回退约束 | 未开始 | 适合先做目录级或 diff-based guard，暂不全局硬失败 |
+| Phase 5：近似色合并 | 已完成首轮 | 本轮仅合并审计标记为 `indistinguishable` 的 2 个 pair，其余 near pair 保持延后 |
+| Phase 6：防回退约束 | 已完成首轮 | baseline 已约束 app raw color、fallback、CSS var 契约和普通组件 near-pair 数量，新增普通组件不可区分 pair 会失败 |
+
+Phase 5 首轮决策：
+
+| pair | 决策 | 调用点 | 依据 |
+| --- | --- | --- | --- |
+| `#1f2024` -> `#202024` | merge | `ChatInputPixelPet.scss` panda body/decor；`bitfun-dark.theme.ts` editor subtle border | RGB distance = 1，非状态色，非相邻 surface 边界；panda 固定深色与 editor border 不在同一视觉层级承担区分 |
+| `#6e7681` -> `#6e7781` | merge | `LanguageRegistry.ts` Plain Text identity；`prismTheme.ts` light comment | RGB distance = 1，均为 neutral muted 文本/identity 色，不表达状态严重程度或数据差异 |
+| top near pairs | defer | `DiffEditor.scss`、`GitDiffEditor.scss`、`ContextMenu.scss`、`TiptapEditor.scss`、Flow Chat capture fallback 等 | alpha 或暗色层级差异可能表达 overlay/elevation/diff state，需截图和相邻关系证据后再处理 |
+
+Phase 6 首轮约束：
+
+| 约束 | 当前值 | baseline | 作用 |
+| --- | ---: | ---: | --- |
+| `nearPairs.indistinguishableTotal` | 0 | 0 | 阻止新增普通组件肉眼不可区分 pair 未被合并或记录 |
+| `nearPairs.nearTotal` | 35 | 35 | 阻止新增普通组件 near color 债务，减少时要求同步降低 baseline |
+| `colorScopes.appUi.uniqueColors` | 233 | 233 | 阻止普通组件 raw color 唯一色回涨 |
+| `colorScopes.appUi.occurrences` | 273 | 273 | 阻止普通组件 raw color 出现次数回涨 |
+| CSS var governance errors | 0 | 0 | 保持 unresolved、fallback-only、non-contract 和 dynamic family 错误为零 |
+
+`nearPairs.*` 只基于非 token、非 exception 的普通组件颜色计算。Theme preset、
+editor、syntax、terminal、language identity、boundary fallback 等专用域通过各自
+`colorDomainScopes.*` 预算约束，不用该 near-pair guard 直接判定是否可合并。
 
 ## 现有架构地图
 

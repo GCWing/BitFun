@@ -9,7 +9,7 @@
       "max": 10
     },
     "colorScopes.appUi.uniqueColors": {
-      "max": 235
+      "max": 233
     },
     "colorScopes.appUi.occurrences": {
       "max": 273
@@ -49,6 +49,12 @@
     },
     "tokenAliasLiterals.uniqueColors": {
       "max": 11
+    },
+    "nearPairs.indistinguishableTotal": {
+      "max": 0
+    },
+    "nearPairs.nearTotal": {
+      "max": 35
     },
     "colorDomainScopes.themePreset.occurrences": {
       "max": 1033
