@@ -70,6 +70,17 @@ function isWebviewNotFoundError(error: unknown): boolean {
   return formatUnknownError(error).toLowerCase().includes('webview not found');
 }
 
+function isWebviewApiUnavailable(error: unknown): boolean {
+  const message = formatUnknownError(error);
+  const lowered = message.toLowerCase();
+  return (
+    lowered.includes('webview api not available') ||
+    lowered.includes('webview is not supported') ||
+    lowered.includes('webview unavailable') ||
+    lowered.includes('no webview')
+  );
+}
+
 async function waitForWebviewCreated(handle: BrowserWebviewHandle): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     let settled = false;
@@ -135,6 +146,7 @@ const BrowserPanel: React.FC<BrowserPanelProps> = ({ isActive, initialUrl }) => 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isInspectorActive, setIsInspectorActive] = useState(false);
+  const [webviewUnavailable, setWebviewUnavailable] = useState(false);
 
   const addContext = useContextStore((s) => s.addContext);
 
@@ -278,9 +290,14 @@ const BrowserPanel: React.FC<BrowserPanelProps> = ({ isActive, initialUrl }) => 
           .catch(() => {});
       }, 500);
     } catch (loadError) {
-      const message = formatUnknownError(loadError);
-      log.error('Load browser panel url failed', loadError);
-      setError(message);
+      if (isWebviewApiUnavailable(loadError)) {
+        log.warn('Webview API not available, falling back to iframe');
+        setWebviewUnavailable(true);
+      } else {
+        const message = formatUnknownError(loadError);
+        log.error('Load browser panel url failed', loadError);
+        setError(message);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -296,7 +313,7 @@ const BrowserPanel: React.FC<BrowserPanelProps> = ({ isActive, initialUrl }) => 
 
   // Activate / deactivate webview based on shouldShowWebview
   useEffect(() => {
-    if (!isTauri) return;
+    if (!isTauri || webviewUnavailable) return;
 
     if (shouldShowWebview) {
       if (!webviewRef.current) {
@@ -565,7 +582,7 @@ const BrowserPanel: React.FC<BrowserPanelProps> = ({ isActive, initialUrl }) => 
       ) : null}
 
       <div className="browser-panel__content">
-        {!isTauri ? (
+        {!isTauri || webviewUnavailable ? (
           <iframe
             className="browser-panel__iframe"
             src={currentUrl}

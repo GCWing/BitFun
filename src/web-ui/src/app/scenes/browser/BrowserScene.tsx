@@ -71,6 +71,17 @@ function isWebviewNotFoundError(error: unknown): boolean {
   return message.toLowerCase().includes('webview not found');
 }
 
+function isWebviewApiUnavailable(error: unknown): boolean {
+  const message = formatUnknownError(error);
+  const lowered = message.toLowerCase();
+  return (
+    lowered.includes('webview api not available') ||
+    lowered.includes('webview is not supported') ||
+    lowered.includes('webview unavailable') ||
+    lowered.includes('no webview')
+  );
+}
+
 async function evalWebview(label: string, script: string): Promise<void> {
   const { invoke } = await import('@tauri-apps/api/core');
   await invoke('browser_webview_eval', { request: { label, script } });
@@ -152,6 +163,7 @@ const BrowserScene: React.FC = () => {
   const [currentUrl, setCurrentUrl] = useState(DEFAULT_URL);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [webviewUnavailable, setWebviewUnavailable] = useState(false);
 
   const syncWebviewBounds = useCallback(async (handle?: BrowserWebviewHandle | null) => {
     const target = handle ?? webviewRef.current;
@@ -295,9 +307,14 @@ const BrowserScene: React.FC = () => {
           .catch(() => {});
       }, 500);
     } catch (loadError) {
-      const message = formatUnknownError(loadError);
-      log.error('Load browser url failed', loadError);
-      setError(message);
+      if (isWebviewApiUnavailable(loadError)) {
+        log.warn('Webview API not available, falling back to iframe');
+        setWebviewUnavailable(true);
+      } else {
+        const message = formatUnknownError(loadError);
+        log.error('Load browser url failed', loadError);
+        setError(message);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -316,7 +333,7 @@ const BrowserScene: React.FC = () => {
   }, [syncWebviewBounds]);
 
   useEffect(() => {
-    if (!isTauri) {
+    if (!isTauri || webviewUnavailable) {
       return;
     }
 
@@ -510,7 +527,7 @@ const BrowserScene: React.FC = () => {
       ) : null}
 
       <div className="browser-scene__content">
-        {!isTauri ? (
+        {!isTauri || webviewUnavailable ? (
           <iframe
             className="browser-scene__iframe"
             src={currentUrl}
