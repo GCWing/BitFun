@@ -202,30 +202,30 @@
   }
 
   &-danger {
-    background: rgba(199, 112, 112, 0.18);
+    background: rgba(var(--component-action-danger-rgb), 0.18);
     color: var(--color-error);
 
     &:hover {
-      background: rgba(199, 112, 112, 0.28);
+      background: rgba(var(--component-action-danger-rgb), 0.28);
       color: var(--color-static-white);
     }
 
     &:active {
-      background: rgba(199, 112, 112, 0.22);
+      background: rgba(var(--component-action-danger-rgb), 0.22);
     }
   }
 
   &-success {
-    background: rgba(110, 184, 140, 0.18);
+    background: rgba(var(--component-action-success-rgb), 0.18);
     color: var(--color-success);
 
     &:hover {
-      background: rgba(110, 184, 140, 0.28);
+      background: rgba(var(--component-action-success-rgb), 0.28);
       color: var(--color-static-white);
     }
 
     &:active {
-      background: rgba(110, 184, 140, 0.22);
+      background: rgba(var(--component-action-success-rgb), 0.22);
     }
   }
 

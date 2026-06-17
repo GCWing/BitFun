@@ -4,107 +4,21 @@ import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 
-const DEFAULT_ROOT = 'src/web-ui/src';
-const DEFAULT_BASELINE_PATH = 'scripts/theme-color-governance-baseline.json';
-const COLOR_EXTENSIONS = new Set(['.css', '.scss', '.sass', '.ts', '.tsx', '.js', '.jsx']);
-const TOKEN_PATH_PARTS = [
-  'component-library/styles',
-  'infrastructure/theme',
-  'theme/presets',
-];
-const TOKEN_ALIAS_SOURCE_PATH_PARTS = [
-  'component-library/styles/tokens.scss',
-];
-const CONTRACT_VAR_DEFINITION_PATH_PARTS = [
-  'component-library/styles',
-  'infrastructure/theme',
-  'tools/generative-widget/themePayload.ts',
-];
-const STATIC_CONTRACT_VAR_DEFINITION_PATH_PARTS = [
-  'component-library/styles',
-];
-const RUNTIME_CONTRACT_VAR_DEFINITION_PATH_PARTS = [
-  'infrastructure/theme',
-];
-const EXCEPTION_PATH_PARTS = [
-  'monaco',
-  'terminal',
-  'mermaid',
-  'syntax',
-  'CodeEditor',
-];
-const COLOR_DOMAIN_RULES = [
-  {
-    key: 'themePreset',
-    label: 'Theme presets',
-    pathParts: ['infrastructure/theme/presets', 'theme/presets'],
-  },
-  {
-    key: 'themeRuntime',
-    label: 'Theme runtime',
-    pathParts: ['infrastructure/theme/core'],
-  },
-  {
-    key: 'tokenContract',
-    label: 'Token contracts',
-    pathParts: ['component-library/styles'],
-  },
-  {
-    key: 'generatedWidget',
-    label: 'Generated widget',
-    pathParts: ['tools/generative-widget'],
-  },
-  {
-    key: 'mermaid',
-    label: 'Mermaid',
-    pathParts: ['tools/mermaid-editor'],
-  },
-  {
-    key: 'editor',
-    label: 'Editor',
-    pathParts: ['tools/editor', 'component-library/components/CodeEditor'],
-  },
-  {
-    key: 'syntax',
-    label: 'Syntax',
-    pathParts: ['shared/prism'],
-  },
-  {
-    key: 'terminal',
-    label: 'Terminal',
-    pathParts: [
-      'tools/terminal',
-      'flow_chat/tool-cards/TerminalToolCard',
-      'app/components/panels/TerminalEditModal',
-    ],
-  },
-  {
-    key: 'debugOverlay',
-    label: 'Debug overlay',
-    pathParts: ['shared/inspector'],
-  },
-  {
-    key: 'languageIdentity',
-    label: 'Language identity',
-    pathParts: ['infrastructure/language-detection'],
-  },
-  {
-    key: 'visualEffect',
-    label: 'Visual effects',
-    pathParts: [
-      'component-library/components/TextStrokeEffect',
-      'component-library/components/StreamText',
-    ],
-  },
-];
-const COLOR_DOMAIN_KEYS = [
-  ...COLOR_DOMAIN_RULES.map(rule => rule.key),
-  'appUi',
-];
-const COLOR_DOMAIN_LABELS = Object.fromEntries([
-  ...COLOR_DOMAIN_RULES.map(rule => [rule.key, rule.label]),
-  ['appUi', 'App UI'],
-]);
+import {
+  COLOR_DOMAIN_KEYS,
+  COLOR_DOMAIN_LABELS,
+  COLOR_DOMAIN_RULES,
+  COLOR_EXTENSIONS,
+  CONTRACT_VAR_DEFINITION_PATH_PARTS,
+  DEFAULT_BASELINE_PATH,
+  DEFAULT_ROOT,
+  EXCEPTION_PATH_PARTS,
+  REGISTERED_DYNAMIC_VAR_PREFIXES,
+  RUNTIME_CONTRACT_VAR_DEFINITION_PATH_PARTS,
+  STATIC_CONTRACT_VAR_DEFINITION_PATH_PARTS,
+  TOKEN_ALIAS_SOURCE_PATH_PARTS,
+  TOKEN_PATH_PARTS,
+} from './theme-css-var-contract.mjs';
 
 const COLOR_PATTERN =
   /#[0-9a-fA-F]{3,8}\b|rgba?\(\s*[-+]?\d*\.?\d+\s*,\s*[-+]?\d*\.?\d+\s*,\s*[-+]?\d*\.?\d+(?:\s*,\s*(?:[-+]?\d*\.?\d+|var\([^)]+\)))?\s*\)|hsla?\(\s*[-+]?\d*\.?\d+(?:deg|rad|turn)?\s*,\s*[-+]?\d*\.?\d+%\s*,\s*[-+]?\d*\.?\d+%(?:\s*,\s*(?:[-+]?\d*\.?\d+|var\([^)]+\)))?\s*\)/g;
@@ -559,6 +473,7 @@ function applyBaseline(report, options) {
 
 function audit(options) {
   const root = path.resolve(options.root);
+  const checksFullThemeSourceRoot = root === path.resolve(DEFAULT_ROOT);
   const files = walkFiles(root);
   const cwd = process.cwd();
   const tokenAliasDefinitionsByColorKey = collectTokenAliasDefinitions(files, cwd);
@@ -575,6 +490,7 @@ function audit(options) {
   const runtimeContractVarDefinitions = new Set();
   const varUsageFiles = new Map();
   const dynamicDefinitionPrefixes = new Set();
+  const dynamicDefinitionFiles = new Map();
   const fileColorCounts = new Map();
   const componentFileColorCounts = new Map();
   const exceptionColorCounts = new Map();
@@ -666,6 +582,7 @@ function audit(options) {
 
     for (const match of collectMatches(content, CSS_VAR_DYNAMIC_SET_PATTERN)) {
       dynamicDefinitionPrefixes.add(match[1]);
+      addToSetMap(dynamicDefinitionFiles, match[1], relativePath);
     }
 
     for (const match of collectMatches(content, VAR_FALLBACK_PATTERN)) {
@@ -708,6 +625,19 @@ function audit(options) {
     .filter(entry => entry.kind && entry.kind !== 'css')
     .sort((a, b) => b.count - a.count || a.key.localeCompare(b.key))
     .slice(0, REPORT_ROW_LIMIT);
+  const unregisteredDynamicFamilyEntries = Array.from(dynamicDefinitionPrefixes)
+    .filter(prefix => !REGISTERED_DYNAMIC_VAR_PREFIXES.has(prefix))
+    .sort((a, b) => a.localeCompare(b))
+    .map(prefix => ({
+      key: prefix,
+      files: Array.from(dynamicDefinitionFiles.get(prefix) ?? []).sort().slice(0, 5),
+    }));
+  const staleRegisteredDynamicFamilyEntries = checksFullThemeSourceRoot
+    ? Array.from(REGISTERED_DYNAMIC_VAR_PREFIXES)
+      .filter(prefix => !dynamicDefinitionPrefixes.has(prefix))
+      .sort((a, b) => a.localeCompare(b))
+      .map(prefix => ({ key: prefix }))
+    : [];
   const nonContractDefinedEntries = Array.from(varUsageCounts.entries())
     .filter(([name]) => definedVars.has(name) && !contractVarDefinitions.has(name))
     .map(([key, count]) => ({
@@ -816,6 +746,8 @@ function audit(options) {
       staticContractDefinedUnique: staticContractVarDefinitions.size,
       runtimeContractDefinedUnique: runtimeContractVarDefinitions.size,
       dynamicFamilyPrefixes: Array.from(dynamicDefinitionPrefixes).sort(),
+      unregisteredDynamicFamilyUnique: unregisteredDynamicFamilyEntries.length,
+      staleRegisteredDynamicFamilyUnique: staleRegisteredDynamicFamilyEntries.length,
       unresolvedUnique: unresolvedVarEntries.length,
       fallbackOnlyUnique: fallbackOnlyEntries.length,
       unresolvedRequiredUnique: unresolvedRequiredEntries.length,
@@ -825,6 +757,8 @@ function audit(options) {
       nonContractCssPrivateUnique: nonContractCssPrivateEntries.length,
     },
     dynamicDefinedVars,
+    unregisteredDynamicFamilies: unregisteredDynamicFamilyEntries,
+    staleRegisteredDynamicFamilies: staleRegisteredDynamicFamilyEntries,
     nonContractDefinedVars,
     nonContractDynamicInputVars,
     nonContractCssPrivateVars,
@@ -905,6 +839,8 @@ function printText(report) {
     `staticContract=${report.cssVarDefinitions.staticContractDefinedUnique}, ` +
     `runtimeContract=${report.cssVarDefinitions.runtimeContractDefinedUnique}, ` +
     `dynamicFamilies=${report.cssVarDefinitions.dynamicFamilyPrefixes.length}, ` +
+    `unregisteredDynamicFamilies=${report.cssVarDefinitions.unregisteredDynamicFamilyUnique}, ` +
+    `staleRegisteredDynamicFamilies=${report.cssVarDefinitions.staleRegisteredDynamicFamilyUnique}, ` +
     `unresolved=${report.cssVarDefinitions.unresolvedUnique}, ` +
     `fallbackOnly=${report.cssVarDefinitions.fallbackOnlyUnique}, ` +
     `requiredMissing=${report.cssVarDefinitions.unresolvedRequiredUnique}, ` +
@@ -921,6 +857,18 @@ function printText(report) {
       .map(row => `  ${row.count.toString().padStart(5)}  ${row.key}  ${row.kind}`)
       .join('\n') || '  none'
   );
+
+  console.log('\nUnregistered dynamic CSS var families:');
+  if (report.unregisteredDynamicFamilies.length === 0) {
+    console.log('  none');
+  } else {
+    for (const row of report.unregisteredDynamicFamilies.slice(0, 10)) {
+      console.log(`  ${row.key}  definitions=${row.files.join(', ')}`);
+    }
+  }
+
+  console.log('\nStale registered dynamic CSS var families:');
+  console.log(printRows(report.staleRegisteredDynamicFamilies.slice(0, 10).map(row => ({ ...row, count: 1 }))));
 
   console.log('\nFallback-only unresolved CSS vars (top):');
   console.log(printRows(report.fallbackOnlyVars.slice(0, 10)));

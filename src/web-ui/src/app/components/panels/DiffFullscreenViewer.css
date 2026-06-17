@@ -9,7 +9,7 @@
   right: 0;
   bottom: 0;
   z-index: 999999;
-  background: rgba(0, 0, 0, 0.95);
+  background: var(--diff-fullscreen-overlay-strong-bg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -29,7 +29,7 @@
 .diff-fullscreen-container {
   width: 100vw;
   height: 100vh;
-  background: #0a0a0a;
+  background: var(--diff-fullscreen-surface-bg);
   display: flex;
   flex-direction: column;
   position: relative;
@@ -55,7 +55,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 12px 20px;
-  background: rgba(0, 0, 0, 0.9);
+  background: var(--diff-fullscreen-overlay-bg);
   border-bottom: 1px solid var(--color-overlay-white-10);
   backdrop-filter: blur(8px);
   flex-shrink: 0;
@@ -90,7 +90,7 @@
 }
 
 .file-path-full {
-  color: rgba(255, 255, 255, 0.5);
+  color: color-mix(in srgb, var(--color-static-white) 50%, transparent);
   font-size: 12px;
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
   white-space: nowrap;
@@ -174,7 +174,7 @@
   flex: 1;
   min-height: 0;
   position: relative;
-  background: #0a0a0a;
+  background: var(--diff-fullscreen-surface-bg);
   pointer-events: auto;
   z-index: 1;
 }
@@ -236,7 +236,7 @@
 .fullscreen-loading-overlay .loading-spinner {
   width: 24px;
   height: 24px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
+  border: 2px solid color-mix(in srgb, var(--color-static-white) 30%, transparent);
   border-top: 2px solid var(--color-overlay-white-90);
   border-radius: 50%;
   animation: spin 1s linear infinite;
@@ -286,7 +286,7 @@
   }
   
   .diff-fullscreen-header {
-    background: rgba(0, 0, 0, 0.95);
+    background: var(--diff-fullscreen-overlay-strong-bg);
     border-bottom-color: var(--color-overlay-white-15);
   }
   

@@ -80,8 +80,8 @@ $_indent-width: 8px;
   color: var(--color-text-muted);
   background: linear-gradient(
     180deg,
-    rgba(255, 255, 255, 0.025) 0%,
-    rgba(255, 255, 255, 0.015) 100%
+    rgba(var(--color-static-white-rgb), 0.025) 0%,
+    rgba(var(--color-static-white-rgb), 0.015) 100%
   );
   overflow: hidden;
   
@@ -236,95 +236,95 @@ $_indent-width: 8px;
   }
 
   &--image {
-    color: #5ba882;
+    color: rgb(var(--file-explorer-icon-image-rgb));
   }
 
   &--code {
-    color: #9678c4;
+    color: rgb(var(--file-explorer-icon-code-rgb));
   }
 
   &--javascript {
-    color: #c9b35c;
+    color: rgb(var(--file-explorer-icon-javascript-rgb));
   }
 
   &--typescript {
-    color: #5a8fc8;
+    color: rgb(var(--file-explorer-icon-typescript-rgb));
   }
 
   &--react {
-    color: #5cb8c8;
+    color: rgb(var(--file-explorer-icon-react-rgb));
   }
 
   &--vue {
-    color: #5fb88a;
+    color: rgb(var(--file-explorer-icon-vue-rgb));
   }
 
   &--python {
-    color: #5a88b8;
+    color: rgb(var(--file-explorer-icon-python-rgb));
   }
 
   &--rust {
-    color: #c49a6a;
+    color: rgb(var(--file-explorer-icon-rust-rgb));
   }
 
   &--go {
-    color: #4aa8b8;
+    color: rgb(var(--file-explorer-icon-go-rgb));
   }
 
   &--java {
-    color: #c8985a;
+    color: rgb(var(--file-explorer-icon-java-rgb));
   }
 
   &--c-cpp {
-    color: #6a9ac8;
+    color: rgb(var(--file-explorer-icon-c-cpp-rgb));
   }
 
   &--html {
-    color: #c87a5a;
+    color: rgb(var(--file-explorer-icon-html-rgb));
   }
 
   &--css {
-    color: #5a90b8;
+    color: rgb(var(--file-explorer-icon-css-rgb));
   }
 
   &--sass {
-    color: #b87a98;
+    color: rgb(var(--file-explorer-icon-sass-rgb));
   }
 
   &--config {
-    color: #b8a858;
+    color: rgb(var(--file-explorer-icon-config-rgb));
   }
 
   &--json {
-    color: #b8a858;
+    color: rgb(var(--file-explorer-icon-config-rgb));
   }
 
   &--markdown {
-    color: #5a7aaa;
+    color: rgb(var(--file-explorer-icon-markdown-rgb));
   }
 
   &--text {
-    color: #8a8a98;
+    color: rgb(var(--file-explorer-icon-text-rgb));
   }
 
   &--database {
-    color: #b89858;
+    color: rgb(var(--file-explorer-icon-database-rgb));
   }
 
   &--font {
-    color: #9678c4;
+    color: rgb(var(--file-explorer-icon-code-rgb));
   }
 
   &--audio {
-    color: #b8789a;
+    color: rgb(var(--file-explorer-icon-audio-rgb));
   }
 
   &--video {
-    color: #b87878;
+    color: rgb(var(--file-explorer-icon-video-rgb));
   }
 
   &--archive {
-    color: #a88858;
+    color: rgb(var(--file-explorer-icon-archive-rgb));
   }
 }
 

@@ -46,12 +46,16 @@
 }
 
 .snapshot-card--compact.snapshot-card--rejected {
-  border-color: rgba(107, 114, 128, 0.5);
-  background: linear-gradient(135deg, rgba(107, 114, 128, 0.02), rgba(107, 114, 128, 0.01));
+  border-color: rgba(var(--snapshot-card-neutral-rgb), 0.5);
+  background: linear-gradient(
+    135deg,
+    rgba(var(--snapshot-card-neutral-rgb), 0.02),
+    rgba(var(--snapshot-card-neutral-rgb), 0.01)
+  );
   opacity: 0.7;
 
   &:hover {
-    border-color: rgba(107, 114, 128, 0.7);
+    border-color: rgba(var(--snapshot-card-neutral-rgb), 0.7);
   }
 }
 
@@ -214,11 +218,11 @@
 
 .snapshot-card__action-btn--fullscreen {
   color: tokens.$color-text-secondary;
-  border: 1px solid rgba(107, 114, 128, 0.3);
+  border: 1px solid rgba(var(--snapshot-card-neutral-rgb), 0.3);
 
   &:hover:not(:disabled) {
-    background: rgba(107, 114, 128, 0.15);
-    border-color: rgba(107, 114, 128, 0.5);
+    background: rgba(var(--snapshot-card-neutral-rgb), 0.15);
+    border-color: rgba(var(--snapshot-card-neutral-rgb), 0.5);
     color: tokens.$color-text-primary;
   }
 }

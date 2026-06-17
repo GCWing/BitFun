@@ -409,6 +409,8 @@ export class ThemeService {
     root.style.setProperty('--color-bg-primary', colors.background.primary);
     root.style.setProperty('--color-static-white', '#ffffff');
     root.style.setProperty('--color-static-black', '#000000');
+    root.style.setProperty('--color-static-white-rgb', '255, 255, 255');
+    root.style.setProperty('--color-static-black-rgb', '0, 0, 0');
     [
       ['--color-overlay-white-02', 'rgba(255, 255, 255, 0.02)'],
       ['--color-overlay-white-03', 'rgba(255, 255, 255, 0.03)'],

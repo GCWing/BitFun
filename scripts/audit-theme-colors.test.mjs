@@ -5,6 +5,12 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
+import {
+  COLOR_DOMAIN_KEYS,
+  COLOR_DOMAIN_RULES,
+  DYNAMIC_VAR_FAMILY_CONTRACTS,
+} from './theme-css-var-contract.mjs';
+
 const root = process.cwd();
 
 function writeText(filePath, content) {
@@ -31,6 +37,42 @@ function runAudit(args) {
     encoding: 'utf8',
   });
 }
+
+test('theme CSS var contract registry is explicit and non-overlapping', () => {
+  const domainKeys = new Set(COLOR_DOMAIN_RULES.map(rule => rule.key));
+  assert.equal(domainKeys.size, COLOR_DOMAIN_RULES.length, 'color domain keys must be unique');
+  assert.ok(COLOR_DOMAIN_KEYS.includes('appUi'), 'app UI must remain the fallback color domain');
+  for (const rule of COLOR_DOMAIN_RULES) {
+    assert.equal(typeof rule.label, 'string');
+    assert.ok(rule.label.trim(), `${rule.key} must have a label`);
+    assert.ok(Array.isArray(rule.pathParts) && rule.pathParts.length > 0, `${rule.key} must have path parts`);
+  }
+
+  const dynamicPrefixes = new Set(DYNAMIC_VAR_FAMILY_CONTRACTS.map(contract => contract.prefix));
+  assert.equal(
+    dynamicPrefixes.size,
+    DYNAMIC_VAR_FAMILY_CONTRACTS.length,
+    'dynamic CSS var family prefixes must be unique',
+  );
+  for (const contract of DYNAMIC_VAR_FAMILY_CONTRACTS) {
+    assert.match(contract.prefix, /^--[a-z0-9-]+-$/);
+    assert.ok(contract.owner.includes('src/web-ui/src/'), `${contract.prefix} must name a source owner`);
+    assert.ok(contract.reason.trim().length >= 20, `${contract.prefix} must explain why it is dynamic`);
+  }
+});
+
+test('repository dynamic CSS var families match the registered contract', () => {
+  const result = runAudit(['--json', '--no-baseline']);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+
+  const report = JSON.parse(result.stdout);
+  const registeredPrefixes = DYNAMIC_VAR_FAMILY_CONTRACTS
+    .map(contract => contract.prefix)
+    .sort();
+  assert.deepEqual(report.cssVarDefinitions.dynamicFamilyPrefixes, registeredPrefixes);
+  assert.equal(report.cssVarDefinitions.unregisteredDynamicFamilyUnique, 0);
+  assert.equal(report.cssVarDefinitions.staleRegisteredDynamicFamilyUnique, 0);
+});
 
 test('theme color audit emits scoped machine-readable reports', (t) => {
   const { dir, sourceRoot } = createFixture({
@@ -68,6 +110,8 @@ test('theme color audit emits scoped machine-readable reports', (t) => {
   assert.equal(report.tokenAliasLiterals.occurrences, 0);
   assert.equal(report.tokenAliasLiterals.uniqueColors, 0);
   assert.equal(report.cssVarDefinitions.runtimeOnlyRequiredContractUnique, 1);
+  assert.equal(report.cssVarDefinitions.unregisteredDynamicFamilyUnique, 0);
+  assert.equal(report.cssVarDefinitions.staleRegisteredDynamicFamilyUnique, 0);
   assert.equal(report.summary.baseline.enforced, false);
 });
 
@@ -222,6 +266,55 @@ test('theme color audit fails when metrics exceed the checked baseline', (t) => 
     `${result.stdout}\n${result.stderr}`,
     /fallbackOccurrences has 1 candidate\(s\), baseline is 0/,
   );
+});
+
+test('theme color audit requires dynamic CSS var families to be registered', (t) => {
+  const { dir, sourceRoot } = createFixture({
+    'infrastructure/theme/core/ThemeService.ts': [
+      "for (const [key, value] of Object.entries(theme.extra)) {",
+      "  document.documentElement.style.setProperty(`--unregistered-${key}`, value);",
+      '}',
+      '',
+    ].join('\n'),
+  });
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const baselinePath = path.join(dir, 'theme-baseline.json');
+  writeText(baselinePath, `${JSON.stringify({
+    version: 1,
+    budgets: {
+      'cssVarDefinitions.unregisteredDynamicFamilyUnique': { max: 0 },
+    },
+  }, null, 2)}\n`);
+
+  const result = runAudit(['--root', sourceRoot, '--baseline', baselinePath]);
+  assert.notEqual(result.status, 0, 'unregistered dynamic CSS var families must fail the audit');
+  assert.match(
+    `${result.stdout}\n${result.stderr}`,
+    /cssVarDefinitions\.unregisteredDynamicFamilyUnique has 1 candidate\(s\), baseline is 0/,
+  );
+  assert.match(`${result.stdout}\n${result.stderr}`, /--unregistered-/);
+});
+
+test('theme color audit accepts registered dynamic CSS var families', (t) => {
+  const { dir, sourceRoot } = createFixture({
+    'infrastructure/theme/core/ThemeService.ts': [
+      "for (const [key, value] of Object.entries(theme.effects.spacing)) {",
+      "  document.documentElement.style.setProperty(`--spacing-${key}`, value);",
+      '}',
+      '',
+    ].join('\n'),
+  });
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const baselinePath = path.join(dir, 'theme-baseline.json');
+  writeText(baselinePath, `${JSON.stringify({
+    version: 1,
+    budgets: {
+      'cssVarDefinitions.unregisteredDynamicFamilyUnique': { max: 0 },
+    },
+  }, null, 2)}\n`);
+
+  const result = runAudit(['--root', sourceRoot, '--baseline', baselinePath]);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
 });
 
 test('theme color audit requires non-contract cross-file vars to be explicitly allowlisted', (t) => {

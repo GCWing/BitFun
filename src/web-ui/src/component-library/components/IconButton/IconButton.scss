@@ -102,41 +102,41 @@
     color: var(--color-text-secondary);
 
     &:hover:not(:disabled) {
-      background: rgba(199, 112, 112, 0.28);
+      background: rgba(var(--component-action-danger-rgb), 0.28);
       color: var(--color-error);
     }
 
     &:active:not(:disabled) {
-      background: rgba(199, 112, 112, 0.22);
+      background: rgba(var(--component-action-danger-rgb), 0.22);
       color: var(--color-error);
     }
   }
 
   &--success {
-    background: rgba(110, 184, 140, 0.18);
+    background: rgba(var(--component-action-success-rgb), 0.18);
     color: var(--color-success);
 
     &:hover:not(:disabled) {
-      background: rgba(110, 184, 140, 0.28);
+      background: rgba(var(--component-action-success-rgb), 0.28);
       color: var(--color-static-white);
     }
 
     &:active:not(:disabled) {
-      background: rgba(110, 184, 140, 0.22);
+      background: rgba(var(--component-action-success-rgb), 0.22);
     }
   }
 
   &--warning {
-    background: rgba(201, 148, 77, 0.18);
+    background: rgba(var(--component-action-warning-rgb), 0.18);
     color: var(--color-warning);
 
     &:hover:not(:disabled) {
-      background: rgba(201, 148, 77, 0.28);
+      background: rgba(var(--component-action-warning-rgb), 0.28);
       color: var(--color-static-white);
     }
 
     &:active:not(:disabled) {
-      background: rgba(201, 148, 77, 0.22);
+      background: rgba(var(--component-action-warning-rgb), 0.22);
     }
   }
 
