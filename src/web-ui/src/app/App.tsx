@@ -25,6 +25,7 @@ import {
   isStartupOverlayPresent,
 } from './startup/startupOverlay';
 import { ToolbarModeProvider } from '../flow_chat/components/toolbar-mode/ToolbarModeProvider';
+import { FlowChatStore } from '@/flow_chat/store/FlowChatStore';
 
 const log = createLogger('App');
 
@@ -676,6 +677,102 @@ function App() {
 
     return () => {
       unlisten?.();
+    };
+  }, []);
+
+  // Listen for the Agent Companion pet window requesting completion dismissal.
+  // The pet window cannot call FlowChatStore directly because it runs in a
+  // separate WebView with its own JavaScript context (separate singleton).
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    void import('@tauri-apps/api/event')
+      .then(({ listen }) => listen<{ sessionId?: string }>(
+        'agent-companion://dismiss-completion',
+        event => {
+          const sessionId = event.payload?.sessionId;
+          if (!sessionId) return;
+          FlowChatStore.getInstance().clearSessionUnreadCompletion(sessionId);
+        },
+      ))
+      .then(removeListener => {
+        unlisten = removeListener;
+      })
+      .catch(error => {
+        log.warn('Failed to listen for Agent companion dismiss-completion events', error);
+      });
+
+    return () => {
+      unlisten?.();
+    };
+  }, []);
+
+  // Auto-dismiss Agent Companion completion bubbles after 5 seconds.
+  // Subscribes directly to FlowChatStore (not the activity bridge) to avoid
+  // any timing issues in the buildAgentCompanionActivity → emit chain.
+  // Timers live in the main window so they aren't throttled by the WebView
+  // engine (the pet window is a small unfocused overlay window).
+  useEffect(() => {
+    const AUTO_DISMISS_DELAY_MS = 5000;
+    const store = FlowChatStore.getInstance();
+    const timers = new Map<string, ReturnType<typeof setTimeout>>();
+    const scheduled = new Set<string>();
+
+    const checkAndSchedule = () => {
+      const state = store.getState();
+      const completionKinds: ReadonlySet<string | undefined> = new Set([
+        'completed',
+        'error',
+        'interrupted',
+      ]);
+
+      state.sessions.forEach(session => {
+        const sessionId = session.sessionId;
+        const hasCompletion = completionKinds.has(session.hasUnreadCompletion);
+
+        if (hasCompletion && !scheduled.has(sessionId)) {
+          scheduled.add(sessionId);
+          log.info('[AgentCompanion auto-dismiss] Scheduling timer', { sessionId, completionKind: session.hasUnreadCompletion });
+          const timerId = setTimeout(() => {
+            log.info('[AgentCompanion auto-dismiss] Timer fired, clearing unread completion', { sessionId });
+            store.clearSessionUnreadCompletion(sessionId);
+            timers.delete(sessionId);
+            scheduled.delete(sessionId);
+          }, AUTO_DISMISS_DELAY_MS);
+          timers.set(sessionId, timerId);
+        } else if (!hasCompletion && scheduled.has(sessionId)) {
+          const timerId = timers.get(sessionId);
+          if (timerId) {
+            clearTimeout(timerId);
+            timers.delete(sessionId);
+          }
+          scheduled.delete(sessionId);
+          log.info('[AgentCompanion auto-dismiss] Cancelled timer (completion cleared)', { sessionId });
+        }
+      });
+
+      // Clean up timers for sessions that no longer exist.
+      const existingIds = new Set(
+        Array.from(state.sessions.values()).map(s => s.sessionId),
+      );
+      timers.forEach((timerId, sessionId) => {
+        if (!existingIds.has(sessionId)) {
+          clearTimeout(timerId);
+          timers.delete(sessionId);
+          scheduled.delete(sessionId);
+          log.info('[AgentCompanion auto-dismiss] Cancelled timer (session removed)', { sessionId });
+        }
+      });
+    };
+
+    log.info('[AgentCompanion auto-dismiss] Subscribing to FlowChatStore');
+    const unsubscribe = store.subscribe(checkAndSchedule);
+    // Run immediately for any pre-existing completions (e.g. restored sessions).
+    checkAndSchedule();
+
+    return () => {
+      log.info('[AgentCompanion auto-dismiss] Unsubscribing, clearing timers');
+      unsubscribe();
+      timers.forEach(timerId => clearTimeout(timerId));
     };
   }, []);
 

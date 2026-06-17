@@ -217,7 +217,7 @@ pub struct AgentCompanionPetSelection {
 fn default_agent_companion_pet() -> Option<AgentCompanionPetSelection> {
     Some(AgentCompanionPetSelection {
         id: "bitfun".to_string(),
-        display_name: "Bitfun".to_string(),
+        display_name: "BitFun".to_string(),
         description: Some(
             "BitFun's mascot — Bifang, a figure from Chinese mythology said to live on Mount Zhang'e. In the Classic of Mountains and Seas (Shan Hai Jing · Western Mountains), Bifang is described as crane-like with one foot, blue feathers marked with red, and a white beak.".to_string(),
         ),
@@ -1880,7 +1880,7 @@ mod tests {
             .as_ref()
             .expect("default companion pet should be present");
         assert_eq!(pet.id, "bitfun");
-        assert_eq!(pet.display_name, "Bitfun");
+        assert_eq!(pet.display_name, "BitFun");
         assert_eq!(pet.package_path, "/agent-companion-pets/bitfun");
         assert_eq!(
             pet.spritesheet_path,

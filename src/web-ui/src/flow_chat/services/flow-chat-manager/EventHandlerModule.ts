@@ -149,9 +149,11 @@ export const __test_only__ = {
   mergeParamsPartialEventData,
 };
 
-function shouldMarkUnreadCompletion(sessionId: string): boolean {
-  const activeSessionId = FlowChatStore.getInstance().getState().activeSessionId;
-  return sessionId !== activeSessionId || !isAppWindowFocused();
+function shouldMarkUnreadCompletion(_sessionId: string): boolean {
+  // Always mark completions so the Agent Companion pet can show a completion
+  // bubble. The main window auto-dismisses the unread flag after 5 seconds,
+  // so there is no risk of stale indicators.
+  return true;
 }
 
 function logDroppedDataEvent(
