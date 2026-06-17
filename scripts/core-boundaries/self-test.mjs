@@ -1432,6 +1432,31 @@ export function runManifestParserSelfTest({
       ],
     },
     {
+      path: 'src/crates/execution/agent-runtime/src/event_queue.rs',
+      contracts: ['EventQueue', 'impl StreamEventSink for EventQueue', 'clear_session'],
+    },
+    {
+      path: 'src/crates/execution/agent-runtime/src/event_router.rs',
+      contracts: ['EventSubscriber', 'EventRouter', 'route_batch'],
+    },
+    {
+      path: 'src/crates/execution/agent-runtime/src/prompt_markup.rs',
+      contracts: [
+        'PromptEnvelope',
+        'render_user_query',
+        'strip_prompt_markup',
+        'strips_current_and_legacy_system_reminder_suffix',
+      ],
+    },
+    {
+      path: 'src/crates/execution/agent-runtime/src/remote_file_delivery.rs',
+      contracts: [
+        'TOOL_CONTEXT_REMOTE_FILE_DELIVERY_KEY',
+        'remote_file_delivery_reminder',
+        'user_workspace_relative_file_link',
+      ],
+    },
+    {
       path: 'src/crates/execution/agent-runtime/src/scheduled_job.rs',
       contracts: [
         'ScheduledJobRuntimeState',
@@ -1568,6 +1593,20 @@ export function runManifestParserSelfTest({
       ],
     },
     {
+      path: 'src/crates/services/services-core/src/managed_runtime.rs',
+      contracts: [
+        'ManagedRuntimeResolver',
+        'RuntimeSource',
+        'resolve_command',
+        'merged_path_env',
+        'normalizes_windows_alias_for_managed_lookup',
+      ],
+    },
+    {
+      path: 'src/crates/assembly/core/src/service/runtime/mod.rs',
+      contracts: ['ManagedRuntimeResolver::new', 'get_path_manager_arc'],
+    },
+    {
       path: 'src/crates/assembly/core/src/agentic/persistence/manager.rs',
       contracts: [
         'SessionMetadataStore',
@@ -1642,6 +1681,10 @@ export function runManifestParserSelfTest({
         'summarize_dialog_turn_cancellation',
         'ToolCancellationTokenStore',
         'count_tool_states',
+        'ToolStateEventFacts',
+        'ToolStateEventKind',
+        'tool_state_event_data',
+        'sanitize_tool_result_for_event',
       ],
     },
     {

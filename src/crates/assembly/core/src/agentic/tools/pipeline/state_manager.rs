@@ -4,11 +4,15 @@
 
 use super::types::ToolTask;
 use crate::agentic::core::ToolExecutionState;
-use crate::agentic::events::{AgenticEvent, EventQueue, ToolEventData};
+use crate::agentic::events::AgenticEvent;
+use bitfun_agent_stream::StreamEventSink;
 use dashmap::DashMap;
 use log::debug;
 use std::sync::Arc;
-use tool_runtime::pipeline::{count_tool_states, ToolTaskStateKind};
+use tool_runtime::pipeline::{
+    count_tool_states, tool_state_event_data, ToolStateEventFacts, ToolStateEventKind,
+    ToolTaskStateKind,
+};
 
 pub(crate) fn tool_task_state_kind(state: &ToolExecutionState) -> ToolTaskStateKind {
     match state {
@@ -28,41 +32,18 @@ pub struct ToolStateManager {
     /// Tool task status (by tool ID)
     tasks: Arc<DashMap<String, ToolTask>>,
 
-    /// Event queue
-    event_queue: Arc<EventQueue>,
+    /// Event sink
+    event_sink: Arc<dyn StreamEventSink>,
 }
 
 impl ToolStateManager {
-    fn sanitize_tool_result_for_event(result: &serde_json::Value) -> serde_json::Value {
-        let mut sanitized = result.clone();
-        Self::redact_data_url_in_json(&mut sanitized);
-        sanitized
-    }
-
-    fn redact_data_url_in_json(value: &mut serde_json::Value) {
-        match value {
-            serde_json::Value::Object(map) => {
-                let had_data_url = map.remove("data_url").is_some();
-                if had_data_url {
-                    map.insert("has_data_url".to_string(), serde_json::json!(true));
-                }
-                for child in map.values_mut() {
-                    Self::redact_data_url_in_json(child);
-                }
-            }
-            serde_json::Value::Array(arr) => {
-                for child in arr {
-                    Self::redact_data_url_in_json(child);
-                }
-            }
-            _ => {}
-        }
-    }
-
-    pub fn new(event_queue: Arc<EventQueue>) -> Self {
+    pub fn new<E>(event_sink: Arc<E>) -> Self
+    where
+        E: StreamEventSink + 'static,
+    {
         Self {
             tasks: Arc::new(DashMap::new()),
-            event_queue,
+            event_sink,
         }
     }
 
@@ -162,42 +143,27 @@ impl ToolStateManager {
 
     /// Send state change event (full version)
     async fn emit_state_change_event(&self, task: ToolTask) {
-        let tool_event = match &task.state {
-            ToolExecutionState::Queued { position } => ToolEventData::Queued {
-                tool_id: task.tool_call.tool_id.clone(),
-                tool_name: task.tool_call.tool_name.clone(),
+        let state = match &task.state {
+            ToolExecutionState::Queued { position } => ToolStateEventKind::Queued {
                 position: *position,
             },
-
-            ToolExecutionState::Waiting { dependencies } => ToolEventData::Waiting {
-                tool_id: task.tool_call.tool_id.clone(),
-                tool_name: task.tool_call.tool_name.clone(),
+            ToolExecutionState::Waiting { dependencies } => ToolStateEventKind::Waiting {
                 dependencies: dependencies.clone(),
             },
-
-            ToolExecutionState::Running { .. } => ToolEventData::Started {
-                tool_id: task.tool_call.tool_id.clone(),
-                tool_name: task.tool_call.tool_name.clone(),
+            ToolExecutionState::Running { .. } => ToolStateEventKind::Running {
                 params: task.tool_call.arguments.clone(),
                 timeout_seconds: task.options.timeout_secs,
             },
-
             ToolExecutionState::Streaming {
                 chunks_received, ..
-            } => ToolEventData::Streaming {
-                tool_id: task.tool_call.tool_id.clone(),
-                tool_name: task.tool_call.tool_name.clone(),
+            } => ToolStateEventKind::Streaming {
                 chunks_received: *chunks_received,
             },
-
             ToolExecutionState::AwaitingConfirmation { params, .. } => {
-                ToolEventData::ConfirmationNeeded {
-                    tool_id: task.tool_call.tool_id.clone(),
-                    tool_name: task.tool_call.tool_name.clone(),
+                ToolStateEventKind::AwaitingConfirmation {
                     params: params.clone(),
                 }
             }
-
             ToolExecutionState::Completed {
                 result,
                 duration_ms,
@@ -205,10 +171,8 @@ impl ToolStateManager {
                 preflight_ms,
                 confirmation_wait_ms,
                 execution_ms,
-            } => ToolEventData::Completed {
-                tool_id: task.tool_call.tool_id.clone(),
-                tool_name: task.tool_call.tool_name.clone(),
-                result: Self::sanitize_tool_result_for_event(&result.content()),
+            } => ToolStateEventKind::Completed {
+                result: result.content(),
                 result_for_assistant: match result {
                     crate::agentic::tools::framework::ToolResult::Result {
                         result_for_assistant,
@@ -222,7 +186,6 @@ impl ToolStateManager {
                 confirmation_wait_ms: *confirmation_wait_ms,
                 execution_ms: *execution_ms,
             },
-
             ToolExecutionState::Failed {
                 error,
                 is_retryable: _,
@@ -231,9 +194,7 @@ impl ToolStateManager {
                 preflight_ms,
                 confirmation_wait_ms,
                 execution_ms,
-            } => ToolEventData::Failed {
-                tool_id: task.tool_call.tool_id.clone(),
-                tool_name: task.tool_call.tool_name.clone(),
+            } => ToolStateEventKind::Failed {
                 error: error.clone(),
                 duration_ms: *duration_ms,
                 queue_wait_ms: *queue_wait_ms,
@@ -241,7 +202,6 @@ impl ToolStateManager {
                 confirmation_wait_ms: *confirmation_wait_ms,
                 execution_ms: *execution_ms,
             },
-
             ToolExecutionState::Cancelled {
                 reason,
                 duration_ms,
@@ -249,9 +209,7 @@ impl ToolStateManager {
                 preflight_ms,
                 confirmation_wait_ms,
                 execution_ms,
-            } => ToolEventData::Cancelled {
-                tool_id: task.tool_call.tool_id.clone(),
-                tool_name: task.tool_call.tool_name.clone(),
+            } => ToolStateEventKind::Cancelled {
                 reason: reason.clone(),
                 duration_ms: *duration_ms,
                 queue_wait_ms: *queue_wait_ms,
@@ -260,6 +218,11 @@ impl ToolStateManager {
                 execution_ms: *execution_ms,
             },
         };
+        let tool_event = tool_state_event_data(ToolStateEventFacts {
+            tool_id: task.tool_call.tool_id.clone(),
+            tool_name: task.tool_call.tool_name.clone(),
+            state,
+        });
 
         let event = AgenticEvent::ToolEvent {
             session_id: task.context.session_id,
@@ -270,7 +233,7 @@ impl ToolStateManager {
             tool_event,
         };
 
-        let _ = self.event_queue.enqueue(event, None).await;
+        self.event_sink.enqueue(event, None).await;
     }
 
     /// Get statistics
@@ -297,10 +260,26 @@ mod tests {
     use super::super::types::{ToolExecutionContext, ToolExecutionOptions, ToolTask};
     use super::*;
     use crate::agentic::core::ToolCall;
-    use crate::agentic::events::EventQueueConfig;
     use std::collections::HashMap;
     use std::time::Duration;
     use tokio::time::timeout;
+
+    struct BlockingEventSink {
+        started: tokio::sync::Notify,
+        release: tokio::sync::Notify,
+    }
+
+    #[async_trait::async_trait]
+    impl StreamEventSink for BlockingEventSink {
+        async fn enqueue(
+            &self,
+            _event: AgenticEvent,
+            _priority: Option<bitfun_events::AgenticEventPriority>,
+        ) {
+            self.started.notify_one();
+            self.release.notified().await;
+        }
+    }
 
     fn test_task(tool_id: &str) -> ToolTask {
         ToolTask::new(
@@ -336,11 +315,13 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn update_state_does_not_hold_task_lock_while_emitting_event() {
-        let event_queue = Arc::new(EventQueue::new(EventQueueConfig::default()));
-        let manager = Arc::new(ToolStateManager::new(event_queue.clone()));
+        let event_sink = Arc::new(BlockingEventSink {
+            started: tokio::sync::Notify::new(),
+            release: tokio::sync::Notify::new(),
+        });
+        let manager = Arc::new(ToolStateManager::new(event_sink.clone()));
         let tool_id = manager.create_task(test_task("tool-1")).await;
 
-        let queue_guard = event_queue.lock_queue_for_test().await;
         let update_manager = manager.clone();
         let update_tool_id = tool_id.clone();
         let update_handle = tokio::spawn(async move {
@@ -355,7 +336,7 @@ mod tests {
                 .await;
         });
 
-        tokio::task::yield_now().await;
+        event_sink.started.notified().await;
 
         let read_manager = manager.clone();
         let read_tool_id = tool_id.clone();
@@ -367,7 +348,7 @@ mod tests {
             .expect("blocking task should complete");
         assert!(task.is_some());
 
-        drop(queue_guard);
+        event_sink.release.notify_one();
         timeout(Duration::from_secs(1), update_handle)
             .await
             .expect("state update should finish after event queue is released")

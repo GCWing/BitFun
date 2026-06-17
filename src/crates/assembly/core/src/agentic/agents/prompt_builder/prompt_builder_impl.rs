@@ -1,5 +1,4 @@
 //! System prompts module providing main dialogue and agent dialogue prompts
-use crate::agentic::remote_file_delivery::user_workspace_relative_file_link;
 use crate::agentic::tools::implementations::ExecCommandTool;
 use crate::agentic::util::remote_workspace_layout::build_remote_workspace_layout_preview;
 use crate::agentic::workspace::WorkspaceBackend;
@@ -23,6 +22,7 @@ use bitfun_agent_runtime::prompt::{
     RemoteExecutionHints, RuntimeContextFacts, RuntimeContextNeeds, RuntimeShellFacts,
     ToolListingSections, UserContextPolicy, UserContextSection, WorkspaceContextFacts,
 };
+use bitfun_agent_runtime::remote_file_delivery::user_workspace_relative_file_link;
 use log::{debug, warn};
 use std::path::Path;
 

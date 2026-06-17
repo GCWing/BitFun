@@ -288,6 +288,8 @@ fn target_override_rank(target: &str) -> Option<u8> {
 
     if matches_target_rule(target, "bitfun_core::agentic::events::queue")
         || matches_target_rule(target, "bitfun_core::agentic::events::router")
+        || matches_target_rule(target, "bitfun_agent_runtime::event_queue")
+        || matches_target_rule(target, "bitfun_agent_runtime::event_router")
     {
         return Some(level_rank(tracing::Level::DEBUG));
     }
@@ -418,6 +420,13 @@ mod tests {
         assert_eq!(
             allowed_level_rank_for_target(
                 "bitfun_core::agentic::events::queue",
+                tracing::Level::TRACE,
+            ),
+            level_rank(tracing::Level::DEBUG)
+        );
+        assert_eq!(
+            allowed_level_rank_for_target(
+                "bitfun_agent_runtime::event_queue",
                 tracing::Level::TRACE,
             ),
             level_rank(tracing::Level::DEBUG)

@@ -1,9 +1,7 @@
-//! Event Router
-//!
-//! Responsible for distributing events to internal subscribers (frontend events are sent directly using Tauri emit)
+//! Provider-neutral runtime event router.
 
-use super::types::{AgenticEvent, EventEnvelope};
-use crate::util::errors::BitFunResult;
+use crate::event_bus::{EventBusResult, EventSubscriberResult};
+use bitfun_events::{AgenticEvent, AgenticEventEnvelope as EventEnvelope};
 use dashmap::DashMap;
 use log::{debug, trace, warn};
 use std::sync::Arc;
@@ -13,7 +11,7 @@ use std::sync::Arc;
 /// Used for internal system subscribers (e.g. logging system, monitoring system, etc.)
 #[async_trait::async_trait]
 pub trait EventSubscriber: Send + Sync + 'static {
-    async fn on_event(&self, event: &AgenticEvent) -> BitFunResult<()>;
+    async fn on_event(&self, event: &AgenticEvent) -> EventSubscriberResult;
 }
 
 /// Event router
@@ -36,7 +34,7 @@ impl EventRouter {
     /// Route event to internal subscribers
     ///
     /// Note: frontend events are sent directly using lib.rs:emit_to_frontend(), not through this router
-    pub async fn route(&self, envelope: EventEnvelope) -> BitFunResult<()> {
+    pub async fn route(&self, envelope: EventEnvelope) -> EventBusResult<()> {
         let event = &envelope.event;
 
         // First collect subscribers list (avoid holding DashMap iterator across await points)
@@ -72,7 +70,7 @@ impl EventRouter {
     }
 
     /// Route batch of events
-    pub async fn route_batch(&self, envelopes: Vec<EventEnvelope>) -> BitFunResult<()> {
+    pub async fn route_batch(&self, envelopes: Vec<EventEnvelope>) -> EventBusResult<()> {
         // First collect subscribers list (avoid holding DashMap iterator across await points)
         let subscribers: Vec<(String, Arc<dyn EventSubscriber>)> = self
             .internal_subscribers

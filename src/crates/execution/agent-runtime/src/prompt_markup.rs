@@ -136,3 +136,41 @@ fn strip_after_first_system_reminder(text: &str) -> &str {
         (None, None) => text,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn render_and_strip_user_query_block() {
+        let rendered = render_user_query("  hello  ");
+
+        assert!(has_prompt_markup(&rendered));
+        assert_eq!(strip_prompt_markup(&rendered), "hello");
+    }
+
+    #[test]
+    fn strips_current_and_legacy_system_reminder_suffix() {
+        assert_eq!(
+            strip_prompt_markup("answer\n<system_reminder>\ninternal\n</system_reminder>"),
+            "answer"
+        );
+        assert_eq!(
+            strip_prompt_markup("answer\n<system-reminder>\ninternal\n</system-reminder>"),
+            "answer"
+        );
+    }
+
+    #[test]
+    fn detects_system_reminder_only_blocks() {
+        assert!(is_system_reminder_only(
+            "<system_reminder>\ninternal\n</system_reminder>"
+        ));
+        assert!(is_system_reminder_only(
+            "<system-reminder>\ninternal\n</system-reminder>"
+        ));
+        assert!(!is_system_reminder_only(
+            "visible\n<system_reminder>x</system_reminder>"
+        ));
+    }
+}

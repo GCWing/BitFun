@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+bitfun-events = { path = "../../contracts/events" }
 dashmap = { workspace = true }
 globset = { workspace = true }
 dunce = { workspace = true }
@@ -12,6 +13,7 @@ grep-searcher = { workspace = true }
 ignore = { workspace = true }
 log = { workspace = true }
 serde = { workspace = true }
+serde_json = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { workspace = true }
 vte = { workspace = true, features = ["ansi"] }

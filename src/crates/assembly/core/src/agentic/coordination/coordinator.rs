@@ -29,10 +29,6 @@ use crate::agentic::goal_mode::{
     ThreadGoalStore,
 };
 use crate::agentic::image_analysis::ImageContextData;
-use crate::agentic::remote_file_delivery::{
-    needs_computer_links_for_source, remote_file_delivery_reminder,
-    TOOL_CONTEXT_REMOTE_FILE_DELIVERY_KEY,
-};
 use crate::agentic::round_preempt::DialogRoundInjectionSource;
 use crate::agentic::session::SessionManager;
 use crate::agentic::side_question::build_btw_user_input;
@@ -58,6 +54,10 @@ use crate::service::workspace::{
 };
 use crate::service_agent_runtime::CoreServiceAgentRuntime;
 use crate::util::errors::{BitFunError, BitFunResult};
+use bitfun_agent_runtime::remote_file_delivery::{
+    needs_computer_links_for_source, remote_file_delivery_reminder,
+    TOOL_CONTEXT_REMOTE_FILE_DELIVERY_KEY,
+};
 use bitfun_runtime_ports::{
     AgentBackgroundResultRequest, AgentThreadGoalDeliveryKind, AgentThreadGoalDeliveryRequest,
     DelegationPolicy, SubagentContextMode, ThreadGoal, ThreadGoalContinuationPlan,

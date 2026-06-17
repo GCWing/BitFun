@@ -323,6 +323,11 @@ pub fn build_log_plugin<R: Runtime>(log_targets: Vec<Target>) -> TauriPlugin<R> 
             "bitfun_core::agentic::events::router",
             log::LevelFilter::Debug,
         )
+        .level_for("bitfun_agent_runtime::event_queue", log::LevelFilter::Debug)
+        .level_for(
+            "bitfun_agent_runtime::event_router",
+            log::LevelFilter::Debug,
+        )
         .level_for("hyper_util", log::LevelFilter::Info)
         .level_for("h2", log::LevelFilter::Info)
         .level_for("portable_pty", log::LevelFilter::Info)

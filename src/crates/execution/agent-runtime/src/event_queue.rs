@@ -1,10 +1,10 @@
-//! Event Queue
-//!
-//! Provides priority queue and batch processing functionality
+//! Provider-neutral runtime event queue.
 
-use super::types::{AgenticEvent, EventEnvelope, EventPriority};
-use crate::util::errors::BitFunResult;
+use crate::event_bus::EventBusResult;
 use bitfun_agent_stream::StreamEventSink;
+use bitfun_events::{
+    AgenticEvent, AgenticEventEnvelope as EventEnvelope, AgenticEventPriority as EventPriority,
+};
 use log::{debug, trace, warn};
 use std::collections::BinaryHeap;
 use std::sync::Arc;
@@ -77,7 +77,7 @@ impl EventQueue {
         &self,
         event: AgenticEvent,
         priority: Option<EventPriority>,
-    ) -> BitFunResult<String> {
+    ) -> EventBusResult<String> {
         let priority = priority.unwrap_or_else(|| event.default_priority());
         let envelope = EventEnvelope::new(event, priority);
         let event_id = envelope.id.clone();
@@ -177,15 +177,8 @@ impl EventQueue {
         self.broadcast_tx.subscribe()
     }
 
-    #[cfg(test)]
-    pub(crate) async fn lock_queue_for_test(
-        &self,
-    ) -> tokio::sync::MutexGuard<'_, BinaryHeap<std::cmp::Reverse<EventEnvelope>>> {
-        self.queue.lock().await
-    }
-
     /// Clear all events for a session
-    pub async fn clear_session(&self, session_id: &str) -> BitFunResult<()> {
+    pub async fn clear_session(&self, session_id: &str) -> EventBusResult<()> {
         // Remove all events for this session from the queue
         let queue_len = {
             let mut queue = self.queue.lock().await;

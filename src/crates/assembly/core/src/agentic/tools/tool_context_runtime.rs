@@ -7,7 +7,6 @@
 
 use crate::agentic::coordination::get_global_coordinator;
 use crate::agentic::deep_review::tool_context;
-use crate::agentic::remote_file_delivery::TOOL_CONTEXT_REMOTE_FILE_DELIVERY_KEY;
 use crate::agentic::session::EvidenceLedgerCheckpoint;
 use crate::agentic::tools::computer_use_host::ComputerUseHostRef;
 use crate::agentic::tools::framework::{
@@ -36,6 +35,7 @@ use bitfun_agent_runtime::checkpoint::{
     build_light_checkpoint as build_runtime_light_checkpoint, GitStatusCheckpointFacts,
     LightCheckpointWorkspaceFacts,
 };
+use bitfun_agent_runtime::remote_file_delivery::TOOL_CONTEXT_REMOTE_FILE_DELIVERY_KEY;
 use bitfun_agent_tools::{PortableToolContextProvider, ToolContextFacts, ToolWorkspaceKind};
 use bitfun_runtime_ports::{DelegationPolicy, ToolRuntimeHandles};
 use log::warn;

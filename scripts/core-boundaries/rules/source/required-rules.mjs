@@ -1645,6 +1645,86 @@ export const requiredContentRules = [
     ],
   },
   {
+    path: 'src/crates/execution/agent-runtime/src/event_queue.rs',
+    reason:
+      'agent-runtime must own provider-neutral runtime event queue delivery without core queue implementation',
+    patterns: [
+      {
+        regex: /\bpub struct EventQueue\b/,
+        message: 'missing runtime event queue owner',
+      },
+      {
+        regex: /\bimpl StreamEventSink for EventQueue\b/,
+        message: 'missing stream event sink implementation',
+      },
+      {
+        regex: /\bpub async fn clear_session\b/,
+        message: 'missing session-scoped event queue cleanup',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/execution/agent-runtime/src/event_router.rs',
+    reason:
+      'agent-runtime must own provider-neutral event subscriber routing without core router implementation',
+    patterns: [
+      {
+        regex: /\bpub trait EventSubscriber\b/,
+        message: 'missing event subscriber contract',
+      },
+      {
+        regex: /\bpub struct EventRouter\b/,
+        message: 'missing event router owner',
+      },
+      {
+        regex: /\bpub async fn route_batch\b/,
+        message: 'missing batched event routing entrypoint',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/execution/agent-runtime/src/prompt_markup.rs',
+    reason:
+      'agent-runtime must own provider-neutral prompt markup contracts used by core compatibility paths',
+    patterns: [
+      {
+        regex: /\bpub struct PromptEnvelope\b/,
+        message: 'missing prompt envelope owner',
+      },
+      {
+        regex: /\bpub fn render_user_query\b/,
+        message: 'missing user-query prompt markup helper',
+      },
+      {
+        regex: /\bpub fn strip_prompt_markup\b/,
+        message: 'missing prompt markup stripping helper',
+      },
+      {
+        regex: /\bstrips_current_and_legacy_system_reminder_suffix\b/,
+        message: 'missing legacy system-reminder markup regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/execution/agent-runtime/src/remote_file_delivery.rs',
+    reason:
+      'agent-runtime must own provider-neutral remote file delivery prompt facts without core implementation',
+    patterns: [
+      {
+        regex: /\bTOOL_CONTEXT_REMOTE_FILE_DELIVERY_KEY\b/,
+        message: 'missing remote file delivery context key',
+      },
+      {
+        regex: /\bpub fn remote_file_delivery_reminder\b/,
+        message: 'missing remote file delivery reminder owner',
+      },
+      {
+        regex: /\bpub fn user_workspace_relative_file_link\b/,
+        message: 'missing remote file link presentation helper',
+      },
+    ],
+  },
+  {
     path: 'src/crates/execution/agent-runtime/src/scheduled_job.rs',
     reason:
       'agent-runtime must own scheduled-job portable lifecycle state and transition decisions without concrete cron storage, schedule parsing, or session dispatch',
@@ -2552,6 +2632,48 @@ export const requiredContentRules = [
     ],
   },
   {
+    path: 'src/crates/services/services-core/src/managed_runtime.rs',
+    reason:
+      'services-core must own managed runtime command resolution and PATH merge rules while core supplies only the product runtime root',
+    patterns: [
+      {
+        regex: /\bpub struct ManagedRuntimeResolver\b/,
+        message: 'missing managed runtime resolver owner',
+      },
+      {
+        regex: /\bpub enum RuntimeSource\b/,
+        message: 'missing managed runtime source contract',
+      },
+      {
+        regex: /\bpub fn resolve_command\b/,
+        message: 'missing managed runtime command resolution entrypoint',
+      },
+      {
+        regex: /\bpub fn merged_path_env\b/,
+        message: 'missing managed runtime PATH merge owner',
+      },
+      {
+        regex: /\bnormalizes_windows_alias_for_managed_lookup\b/,
+        message: 'missing Windows command alias regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/service/runtime/mod.rs',
+    reason:
+      'core runtime service must remain a thin compatibility adapter over services-core managed runtime owner',
+    patterns: [
+      {
+        regex: /\bManagedRuntimeResolver::new\b/,
+        message: 'missing services-core managed runtime delegation',
+      },
+      {
+        regex: /\bget_path_manager_arc\b/,
+        message: 'missing product-managed runtime root adapter',
+      },
+    ],
+  },
+  {
     path: 'src/crates/assembly/core/src/service/filesystem/service.rs',
     reason:
       'core filesystem service may keep remote-workspace overlay and BitFunError compatibility, but local filesystem owner must remain services-core',
@@ -2827,6 +2949,22 @@ export const requiredContentRules = [
       {
         regex: /\bpub fn count_tool_states\b/,
         message: 'missing tool state counting policy',
+      },
+      {
+        regex: /\bpub struct ToolStateEventFacts\b/,
+        message: 'missing provider-neutral tool event facts owner',
+      },
+      {
+        regex: /\bpub enum ToolStateEventKind\b/,
+        message: 'missing provider-neutral tool event state owner',
+      },
+      {
+        regex: /\bpub fn tool_state_event_data\b/,
+        message: 'missing tool state event payload owner',
+      },
+      {
+        regex: /\bpub fn sanitize_tool_result_for_event\b/,
+        message: 'missing tool result event redaction owner',
       },
     ],
   },

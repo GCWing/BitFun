@@ -13,6 +13,8 @@ crate-type = ["rlib"]
 default = []
 
 [dependencies]
+async-trait = { workspace = true }
+bitfun-agent-stream = { path = "../agent-stream" }
 bitfun-agent-tools = { path = "../tool-contracts" }
 bitfun-events = { path = "../../contracts/events" }
 bitfun-harness = { path = "../harness" }
@@ -30,4 +32,3 @@ tokio = { workspace = true }
 tokio-util = { workspace = true }
 
 [dev-dependencies]
-async-trait = { workspace = true }

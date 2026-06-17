@@ -179,6 +179,12 @@ impl From<bitfun_agent_stream::StreamProcessorError> for BitFunError {
     }
 }
 
+impl From<bitfun_agent_runtime::event_bus::EventBusError> for BitFunError {
+    fn from(error: bitfun_agent_runtime::event_bus::EventBusError) -> Self {
+        Self::Agent(error.to_string())
+    }
+}
+
 impl From<bitfun_agent_tools::computer_use::ComputerUseContractError> for BitFunError {
     fn from(error: bitfun_agent_tools::computer_use::ComputerUseContractError) -> Self {
         Self::Tool(error.to_string())
