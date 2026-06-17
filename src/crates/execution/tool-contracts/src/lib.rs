@@ -3,6 +3,7 @@
 //! Pure tool DTOs and helpers live here before the concrete tool framework and
 //! tool packs are moved out of the core facade.
 
+pub mod computer_use;
 pub mod execution_gate;
 pub mod file_guidance;
 pub mod file_read_freshness;
