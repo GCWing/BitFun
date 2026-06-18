@@ -53,7 +53,7 @@ $_diff-padding-desktop: 32px;
     
     background: linear-gradient(
       180deg,
-      rgba(255, 255, 255, 0.01) 0%,
+      color-mix(in srgb, var(--color-static-white) 1%, transparent) 0%,
       transparent 100%
     );
     
@@ -204,8 +204,8 @@ $_diff-padding-desktop: 32px;
           45deg,
           transparent,
           transparent 3px,
-          rgba(255, 255, 255, 0.015) 3px,
-          rgba(255, 255, 255, 0.015) 6px
+          color-mix(in srgb, var(--color-static-white) 1.5%, transparent) 3px,
+          color-mix(in srgb, var(--color-static-white) 1.5%, transparent) 6px
         ) !important;
       }
     }

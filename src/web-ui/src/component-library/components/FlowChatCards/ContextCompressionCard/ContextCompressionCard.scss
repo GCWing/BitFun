@@ -10,7 +10,11 @@
 
   width: 100%;
   max-width: 100%;
-  background: linear-gradient(135deg, rgba(20, 20, 20, 0.95), rgba(15, 15, 15, 0.98));
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--color-bg-secondary) 95%, transparent),
+    color-mix(in srgb, var(--color-bg-primary) 98%, transparent)
+  );
   border: 1px solid color-mix(in srgb, var(--context-compression-accent) 60%, transparent);
   border-radius: 50px;
   margin: 6px 0;
@@ -49,7 +53,11 @@
     box-shadow: 0 4px 16px color-mix(in srgb, var(--context-compression-accent) 30%, transparent),
                 0 2px 8px color-mix(in srgb, var(--context-compression-accent) 20%, transparent),
                 inset 0 1px 0 var(--color-overlay-white-10);
-    background: linear-gradient(135deg, rgba(25, 25, 25, 0.98), #141414);
+    background: linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--color-bg-secondary) 98%, transparent),
+      var(--color-bg-primary)
+    );
   }
 }
 

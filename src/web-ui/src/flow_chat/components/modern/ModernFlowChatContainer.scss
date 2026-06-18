@@ -9,7 +9,7 @@
 }
 
 .modern-flowchat-container {
-  --modern-flowchat-input-bg: #1e1e1e;
+  --modern-flowchat-input-bg: var(--color-bg-secondary);
 
   width: 100%;
   height: 100%;

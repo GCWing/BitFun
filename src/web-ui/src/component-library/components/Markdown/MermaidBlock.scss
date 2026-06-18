@@ -3,6 +3,8 @@
  * Styles for rendering Mermaid diagrams during streaming output
  */
 .mermaid-block {
+  --mermaid-block-shadow-color: var(--color-overlay-black-40);
+
   margin: var(--flowchat-markdown-block-gap) 0;
   border-radius: 6px;
   overflow: hidden;
@@ -12,7 +14,7 @@
 
   &:hover {
     box-shadow:
-      0 8px 24px var(--shadow-color, var(--color-overlay-black-40)),
+      0 8px 24px var(--mermaid-block-shadow-color),
       inset 0 1px 0 var(--element-bg-medium),
       inset 0 -1px 0 var(--element-bg-subtle);
     border-color: var(--element-bg-strong);

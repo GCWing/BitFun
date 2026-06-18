@@ -470,7 +470,7 @@
     backdrop-filter: blur(16px) saturate(1.2);
     -webkit-backdrop-filter: blur(16px) saturate(1.2);
     box-shadow:
-      0 8px 24px rgba(0, 0, 0, 0.35),
+      0 8px 24px color-mix(in srgb, var(--color-static-black) 35%, transparent),
       inset 0 1px 0 var(--color-overlay-white-08),
       inset 0 -1px 0 var(--color-overlay-white-02);
     transition:
@@ -481,7 +481,7 @@
   .m-editor-inline-ai:hover .m-editor-inline-ai__panel {
     transform: translateY(-4px);
     box-shadow:
-      0 16px 40px rgba(0, 0, 0, 0.45),
+      0 16px 40px color-mix(in srgb, var(--color-static-black) 45%, transparent),
       0 0 28px var(--color-accent-100),
       inset 0 1px 0 var(--color-overlay-white-12),
       inset 0 -1px 0 var(--color-overlay-white-03);
@@ -491,17 +491,17 @@
   :root[data-theme-type='light'] &,
   .light & {
     .m-editor-inline-ai__panel {
-      border-color: rgba(15, 23, 42, 0.12);
+      border-color: var(--color-overlay-slate-12);
       box-shadow:
-        0 8px 24px rgba(15, 23, 42, 0.08),
-        inset 0 1px 0 rgba(255, 255, 255, 0.85);
+        0 8px 24px var(--color-overlay-slate-08),
+        inset 0 1px 0 color-mix(in srgb, var(--color-static-white) 85%, transparent);
     }
 
     .m-editor-inline-ai:hover .m-editor-inline-ai__panel {
       box-shadow:
-        0 14px 36px rgba(15, 23, 42, 0.12),
+        0 14px 36px var(--color-overlay-slate-12),
         0 0 24px var(--glass-blue-subtle),
-        inset 0 1px 0 rgba(255, 255, 255, 0.95);
+        inset 0 1px 0 var(--color-overlay-white-95);
     }
   }
 
@@ -528,8 +528,8 @@
   :root[data-theme-type='light'] &,
   .light & {
     .m-editor-inline-ai__composer-input .bitfun-input-container {
-      background: rgba(15, 23, 42, 0.04);
-      border-color: rgba(15, 23, 42, 0.1);
+      background: var(--color-overlay-slate-04);
+      border-color: var(--color-overlay-slate-10);
     }
   }
 
@@ -654,7 +654,7 @@
   :root[data-theme-type='light'] &,
   .light & {
     .m-editor-inline-ai__quick-action:hover {
-      background: rgba(15, 23, 42, 0.08);
+      background: var(--color-overlay-slate-08);
     }
   }
 

@@ -305,7 +305,7 @@
   background: linear-gradient(135deg,
     var(--color-overlay-white-02) 0%,
     transparent 50%,
-    rgba(255, 255, 255, 0.01) 100%);
+    color-mix(in srgb, var(--color-static-white) 1%, transparent) 100%);
   pointer-events: none;
   z-index: var(--z-decoration);
   border-radius: inherit;

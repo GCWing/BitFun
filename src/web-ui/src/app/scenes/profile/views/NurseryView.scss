@@ -244,14 +244,14 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
     transition: transform 0.55s $easing-standard, color 0.4s ease;
 
     &--1 {
-      color: rgba(52, 211, 153, 0.13);
+      color: color-mix(in srgb, var(--color-success) 13%, transparent);
       top: -14px;
       right: -14px;
       transform: rotate(18deg);
     }
 
     &--2 {
-      color: rgba(96, 165, 250, 0.09);
+      color: color-mix(in srgb, var(--color-accent-500) 9%, transparent);
       bottom: 4px;
       right: 22px;
       transform: rotate(-12deg);
@@ -260,18 +260,25 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
 
   &:hover &__deco-egg--1 {
     transform: rotate(26deg) scale(1.1);
-    color: rgba(52, 211, 153, 0.24);
+    color: color-mix(in srgb, var(--color-success) 24%, transparent);
   }
 
   &:hover &__deco-egg--2 {
     transform: rotate(-22deg) translateY(-5px) scale(1.1);
-    color: rgba(96, 165, 250, 0.18);
+    color: color-mix(in srgb, var(--color-accent-500) 18%, transparent);
   }
 }
 
 // ── Assistant card (mirrors AgentCard style) ───────────────────────────────
 
 .assistant-card {
+  --assistant-card-default-gradient: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--color-accent-500) 20%, transparent) 0%,
+    var(--card-bg-purple-hover) 100%
+  );
+  --assistant-card-gradient: var(--assistant-card-default-gradient);
+
   width: 360px;
   height: 200px;
   border-radius: 15px;
@@ -298,7 +305,7 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
     left: 0;
     right: 0;
     bottom: 40px;
-    background: var(--assistant-card-gradient, linear-gradient(135deg, rgba(96, 165, 250, 0.2) 0%, var(--card-bg-purple-hover) 100%));
+    background: var(--assistant-card-gradient);
     opacity: 0;
     transition: opacity 0.35s ease;
     pointer-events: none;
@@ -432,7 +439,7 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
       content: '';
       position: absolute;
       inset: 0;
-      background: var(--assistant-card-gradient, linear-gradient(135deg, rgba(96, 165, 250, 0.2) 0%, var(--card-bg-purple-hover) 100%));
+      background: var(--assistant-card-gradient);
       opacity: 0.4;
       transition: opacity 0.35s ease;
       pointer-events: none;

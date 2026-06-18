@@ -159,7 +159,7 @@
     align-items: center;
     justify-content: center;
     gap: 16px;
-    color: #888888;
+    color: var(--color-text-muted);
 
     p {
       margin: 0;
@@ -170,8 +170,8 @@
   &__spinner {
     width: 40px;
     height: 40px;
-    border: 3px solid #2a2a2a;
-    border-top-color: #007acc;
+    border: 3px solid var(--border-medium);
+    border-top-color: var(--color-accent-500);
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
   }
@@ -194,14 +194,14 @@
 
     p {
       margin: 0;
-      color: #f48771;
+      color: var(--color-error);
       font-size: 14px;
     }
   }
 
   &__error-path {
     font-size: 12px;
-    color: #666666;
+    color: var(--color-text-muted);
     word-break: break-all;
     max-width: 600px;
   }
