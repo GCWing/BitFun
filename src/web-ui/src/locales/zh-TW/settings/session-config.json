@@ -1,7 +1,7 @@
 {
   "personalizationPage": {
     "title": "個性化",
-    "subtitle": "會話標題自動生成、Agent 夥伴"
+    "subtitle": "會話標題自動生成"
   },
   "permissionsPage": {
     "title": "權限管理",
@@ -12,33 +12,6 @@
       "title": "會話標題自動生成",
       "subtitle": "新對話時 AI 自動生成簡潔標題",
       "warning": "會話標題將使用用戶消息的前 20 個字符"
-    },
-    "agentCompanion": {
-      "title": "Agent 夥伴",
-      "subtitle": "控制 BitFun 夥伴的顯示方式。",
-      "enable": "顯示 Agent 夥伴",
-      "displayModeLabel": "顯示位置",
-      "displayModeDescription": "選擇夥伴顯示在輸入框內，還是作為軟體外的懸浮桌面寵物。",
-      "displayInput": "輸入框內",
-      "displayInputDesc": "在會話輸入框收起時顯示。",
-      "displayDesktop": "懸浮桌面寵物",
-      "displayDesktopDesc": "在軟體外顯示為置頂的無邊框小視窗，可拖動。",
-      "petLabel": "夥伴形象",
-      "petDescription": "選擇預置形象，或匯入從 petdex.crafter.run 下載的 Petdex zip。",
-      "petPlaceholder": "選擇夥伴形象",
-      "groupPreset": "預置",
-      "groupImported": "已匯入",
-      "import": "匯入",
-      "importing": "匯入中",
-      "importHint": "可以去 https://petdex.crafter.run/zh 下載形象 zip 後匯入。",
-      "importDialogTitle": "選擇 Petdex 形象 zip",
-      "importFailed": "匯入 Agent 夥伴形象失敗",
-      "delete": "刪除已匯入形象",
-      "deleteConfirmTitle": "刪除形象",
-      "deleteConfirmBody": "從本機刪除此已匯入的夥伴形象？此操作無法復原。",
-      "deleteSuccess": "已刪除匯入的形象",
-      "deleteFailed": "刪除匯入形象失敗",
-      "refresh": "重新整理形象列表"
     },
     "workspaceSearch": {
       "title": "加速工作區搜尋",
