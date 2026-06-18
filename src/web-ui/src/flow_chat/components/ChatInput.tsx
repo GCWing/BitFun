@@ -6,7 +6,7 @@
 import React, { useRef, useCallback, useEffect, useReducer, useState, useMemo, useSyncExternalStore } from 'react';
 import path from 'path-browserify';
 import { useTranslation } from 'react-i18next';
-import { ArrowUp, Image, RotateCcw, Plus, X, Sparkles, Loader2, ChevronRight, Files, MessageSquarePlus, Star } from 'lucide-react';
+import { ArrowUp, BotMessageSquare, Image, RotateCcw, Plus, X, Sparkles, Loader2, ChevronRight, Files, MessageSquarePlus, Star } from 'lucide-react';
 import { ContextDropZone, useContextStore } from '../../shared/context-system';
 import { useActiveSessionState } from '@/flow_chat/hooks';
 import { RichTextInput, type MentionState } from './RichTextInput';
@@ -69,6 +69,7 @@ import {
 } from '../utils/chatInputMode';
 import { useSceneStore } from '@/app/stores/sceneStore';
 import type { SceneTabId } from '@/app/components/SceneBar/types';
+import { useAgentsStore } from '@/app/scenes/agents/agentsStore';
 import { configAPI } from '@/infrastructure/api/service-api/ConfigAPI';
 import type { ModeSkillInfo } from '@/infrastructure/config/types';
 import MCPAPI, { type MCPPrompt, type MCPPromptMessage, type MCPServerInfo } from '@/infrastructure/api/service-api/MCPAPI';
@@ -656,6 +657,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   );
 
   const openScene = useSceneStore(s => s.openScene);
+  const openCreateAgent = useAgentsStore(s => s.openCreateAgent);
   const [boostPanelSkills, setBoostPanelSkills] = useState<ModeSkillInfo[]>([]);
   const [boostSkillsLoading, setBoostSkillsLoading] = useState(false);
   const [userDefaultModeId, setUserDefaultModeId] = useState<string | null>(null);
@@ -692,6 +694,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       setSkillsFlyoutOpen(false);
     }, 150);
   }, [clearSkillsTimer]);
+
+  const handleOpenCreateCustomMode = useCallback(
+    (event: React.MouseEvent | React.KeyboardEvent) => {
+      event.stopPropagation();
+      dispatchMode({ type: 'CLOSE_DROPDOWN' });
+      openCreateAgent();
+      openScene('agents' as SceneTabId);
+    },
+    [openCreateAgent, openScene]
+  );
   
   const setChatInputActive = useChatInputState(state => state.setActive);
   const setChatInputExpanded = useChatInputState(state => state.setExpanded);
@@ -3483,7 +3495,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                       {canSwitchModes && (
                         <>
                           <div className="bitfun-chat-input__boost-section">
-                            {incrementalCodeModes.length > 0 ? (
+                            {incrementalCodeModes.length > 0 && (
                               incrementalCodeModes.map(modeOption => {
                                 const modeDescription =
                                   t(`chatInput.modeDescriptions.${modeOption.id}`, { defaultValue: '' }) ||
@@ -3528,10 +3540,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                                   </Tooltip>
                                 );
                               })
-                            ) : (
-                              <div className="bitfun-chat-input__agent-boost-empty bitfun-chat-input__agent-boost-empty--inline">
-                                {t('chatInput.noIncrementalModes')}
-                              </div>
                             )}
                           </div>
 
@@ -3560,6 +3568,17 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                         >
                           <Image size={14} className="bitfun-chat-input__boost-context-icon" aria-hidden />
                           <span>{t('input.addImage')}</span>
+                        </div>
+
+                        <div
+                          role="button"
+                          tabIndex={0}
+                          className="bitfun-chat-input__boost-context-row"
+                          onClick={handleOpenCreateCustomMode}
+                          onKeyDown={e => e.key === 'Enter' && handleOpenCreateCustomMode(e)}
+                        >
+                          <BotMessageSquare size={14} className="bitfun-chat-input__boost-context-icon" aria-hidden />
+                          <span>{t('chatInput.createCustomMode')}</span>
                         </div>
 
                         <div

@@ -560,6 +560,7 @@
     "openSkillsLibrary": "管理 Skills…",
     "insertSkillLine": "Please use the Skill tool with command \"{{name}}\".",
     "addModeMenuTitle": "附加模式",
+    "createCustomMode": "自定义模式",
     "resetToAgentic": "恢复默认模式",
     "noIncrementalModes": "暂无可附加模式",
     "defaultModeSetTooltip": "将 {{mode}} 设为新聊天默认模式",

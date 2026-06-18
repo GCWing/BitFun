@@ -560,6 +560,7 @@
     "openSkillsLibrary": "Manage skills…",
     "insertSkillLine": "Please use the Skill tool with command \"{{name}}\".",
     "addModeMenuTitle": "Add mode",
+    "createCustomMode": "Custom mode",
     "resetToAgentic": "Back to default mode",
     "noIncrementalModes": "No add-on modes available",
     "defaultModeSetTooltip": "Use {{mode}} as the default mode for new chats",
