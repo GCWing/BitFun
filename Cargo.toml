@@ -218,6 +218,11 @@ shellexpand = "3"
 ssh_config = "0.1"
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 
+[patch.crates-io]
+# tao 0.35.3 can re-enter its Windows window callback while holding input locks.
+# Use the upstream fix until it is included in a crates.io release.
+tao = { git = "https://github.com/tauri-apps/tao.git", rev = "c704261c519c58cfdd0bc2d58ba24e06a0b71c92" }
+
 [profile.dev]
 incremental = true
 
