@@ -145,6 +145,9 @@ jobs:
       - name: Audit theme color governance
         run: pnpm run theme:color-audit
 
+      - name: Validate theme visual governance contract
+        run: pnpm run theme:visual-contract
+
       - name: Lint web UI
         run: pnpm run lint:web
 

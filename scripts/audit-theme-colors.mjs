@@ -7,15 +7,19 @@ import process from 'node:process';
 import {
   COLOR_DOMAIN_KEYS,
   COLOR_DOMAIN_LABELS,
+  COLOR_DOMAIN_CONTRACTS,
   COLOR_DOMAIN_RULES,
   COLOR_EXTENSIONS,
   CONTRACT_VAR_DEFINITION_PATH_PARTS,
   DEFAULT_BASELINE_PATH,
   DEFAULT_ROOT,
   EXCEPTION_PATH_PARTS,
+  FALLBACK_VAR_CONTRACTS,
   REGISTERED_DYNAMIC_VAR_PREFIXES,
   RUNTIME_CONTRACT_VAR_DEFINITION_PATH_PARTS,
   STATIC_CONTRACT_VAR_DEFINITION_PATH_PARTS,
+  TOKEN_COMPATIBILITY_ALIAS_CONTRACTS,
+  TOKEN_COMPATIBILITY_ALIAS_FAMILY_CONTRACTS,
   TOKEN_ALIAS_SOURCE_PATH_PARTS,
   TOKEN_PATH_PARTS,
 } from './theme-css-var-contract.mjs';
@@ -31,6 +35,36 @@ const CSS_VAR_SET_PROPERTY_PATTERN = /\.setProperty\(\s*['"`](--[a-zA-Z0-9_-]+)/
 const CSS_VAR_INLINE_STYLE_PATTERN = /['"`](--[a-zA-Z0-9_-]+)['"`]\s*:/g;
 const CSS_VAR_DYNAMIC_SET_PATTERN = /\.setProperty\(\s*`(--[a-zA-Z0-9_-]*)\$\{/g;
 const REPORT_ROW_LIMIT = 100;
+const COLOR_DOMAIN_CONTRACT_BY_KEY = new Map(COLOR_DOMAIN_CONTRACTS.map(contract => [contract.key, contract]));
+const FALLBACK_VAR_CONTRACT_BY_KEY = new Map(FALLBACK_VAR_CONTRACTS.map(contract => [contract.key, contract]));
+const TOKEN_COMPATIBILITY_ALIAS_BY_KEY = new Map(
+  TOKEN_COMPATIBILITY_ALIAS_CONTRACTS.map(contract => [contract.key, contract]),
+);
+
+function resolveCompatibilityAliasContract(name) {
+  const explicit = TOKEN_COMPATIBILITY_ALIAS_BY_KEY.get(name);
+  if (explicit) {
+    return explicit;
+  }
+
+  const family = TOKEN_COMPATIBILITY_ALIAS_FAMILY_CONTRACTS.find(contract => (
+    name.startsWith(contract.prefix)
+    && name.length > contract.prefix.length
+  ));
+  if (!family) {
+    return null;
+  }
+
+  return {
+    key: name,
+    canonical: `${family.canonicalPrefix}${name.slice(family.prefix.length)}`,
+    owner: family.owner,
+    reason: family.reason,
+    removal: family.removal,
+    familyPrefix: family.prefix,
+    canonicalPrefix: family.canonicalPrefix,
+  };
+}
 
 function parseArgs(argv) {
   const options = {
@@ -673,14 +707,6 @@ function applyBaseline(report, options) {
     category: 'nonContractCssPrivate',
     reportField: 'nonContractCssPrivateVars',
   }));
-  baselineSummary.failures.push(...evaluateAllowlistCategory({
-    report,
-    baseline,
-    baselineLabel,
-    category: 'intentionalFallbackTokens',
-    reportField: 'fallbackVars',
-  }));
-
   return baselineSummary;
 }
 
@@ -921,6 +947,100 @@ function audit(options) {
       count,
       files: Array.from(fallbackTokenFiles.get(key) ?? []).sort().slice(0, 5),
     }));
+  const compatibilityAliasEntries = Array.from(varUsageCounts.entries())
+    .map(([key, count]) => {
+      const contract = resolveCompatibilityAliasContract(key);
+      if (!contract) {
+        return null;
+      }
+      return {
+        key,
+        count,
+        canonical: contract.canonical,
+        familyPrefix: contract.familyPrefix ?? null,
+        files: Array.from(varUsageFiles.get(key) ?? []).sort().slice(0, 5),
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.count - a.count || a.key.localeCompare(b.key));
+  const compatibilityAliasFamilyEntries = TOKEN_COMPATIBILITY_ALIAS_FAMILY_CONTRACTS
+    .map(contract => {
+      const usedEntries = Array.from(varUsageCounts.entries())
+        .filter(([key]) => key.startsWith(contract.prefix) && key.length > contract.prefix.length);
+      const usageCount = usedEntries.reduce((total, [, count]) => total + count, 0);
+      const usedUnique = usedEntries.length;
+      const isDefined = (
+        dynamicDefinitionPrefixes.has(contract.prefix)
+        || Array.from(definedVars).some(key => key.startsWith(contract.prefix))
+      );
+      const canonicalIsDefined = (
+        dynamicDefinitionPrefixes.has(contract.canonicalPrefix)
+        || Array.from(definedVars).some(key => key.startsWith(contract.canonicalPrefix))
+      );
+      return {
+        key: contract.prefix,
+        canonical: contract.canonicalPrefix,
+        count: usageCount,
+        usedUnique,
+        defined: isDefined,
+        canonicalDefined: canonicalIsDefined,
+      };
+    })
+    .sort((a, b) => a.key.localeCompare(b.key));
+  const missingCompatibilityAliasCanonicalEntries = compatibilityAliasEntries
+    .filter(entry => entry.familyPrefix && !getDefinitionKind(entry.canonical))
+    .map(entry => ({
+      key: entry.key,
+      canonical: entry.canonical,
+      count: entry.count,
+      files: entry.files,
+    }))
+    .sort((a, b) => a.key.localeCompare(b.key));
+  const staleCompatibilityAliasEntries = checksFullThemeSourceRoot
+    ? TOKEN_COMPATIBILITY_ALIAS_CONTRACTS
+      .map(contract => ({
+        key: contract.key,
+        canonical: contract.canonical,
+        definitionKind: getDefinitionKind(contract.key),
+        canonicalDefinitionKind: getDefinitionKind(contract.canonical),
+      }))
+      .filter(entry => !entry.definitionKind || !entry.canonicalDefinitionKind)
+      .sort((a, b) => a.key.localeCompare(b.key))
+    : [];
+  const staleCompatibilityAliasFamilyEntries = checksFullThemeSourceRoot
+    ? compatibilityAliasFamilyEntries
+      .filter(entry => !entry.defined || !entry.canonicalDefined)
+      .map(entry => ({ key: entry.key, canonical: entry.canonical }))
+    : [];
+  const uncontractedFallbackVars = fallbackVars
+    .filter(entry => !FALLBACK_VAR_CONTRACT_BY_KEY.has(entry.key))
+    .map(entry => ({
+      key: entry.key,
+      count: entry.count,
+      files: entry.files,
+    }));
+  const staleFallbackContractEntries = checksFullThemeSourceRoot
+    ? FALLBACK_VAR_CONTRACTS
+      .filter(contract => !fallbackTokenCounts.has(contract.key))
+      .map(contract => ({ key: contract.key }))
+      .sort((a, b) => a.key.localeCompare(b.key))
+    : [];
+  const missingColorDomainContractEntries = COLOR_DOMAIN_RULES
+    .filter(rule => !COLOR_DOMAIN_CONTRACT_BY_KEY.has(rule.key))
+    .map(rule => ({ key: rule.key }))
+    .sort((a, b) => a.key.localeCompare(b.key));
+  const staleColorDomainContractEntries = COLOR_DOMAIN_CONTRACTS
+    .filter(contract => !COLOR_DOMAIN_KEYS.includes(contract.key))
+    .map(contract => ({ key: contract.key }))
+    .sort((a, b) => a.key.localeCompare(b.key));
+  const activeUncontractedColorDomainEntries = Object.entries(colorDomainScopes)
+    .filter(([key, scope]) => (
+      key !== 'appUi'
+      && scope.occurrences > 0
+      && !COLOR_DOMAIN_CONTRACT_BY_KEY.has(key)
+    ))
+    .map(([key, scope]) => ({ key, count: scope.occurrences }))
+    .sort((a, b) => a.key.localeCompare(b.key));
 
   return {
     root: normalizePath(path.relative(cwd, root)) || '.',
@@ -962,6 +1082,38 @@ function audit(options) {
     topFiles: topEntries(fileColorCounts, options.top),
     topFallbackTokens: fallbackVars.slice(0, options.top).map(({ key, count }) => ({ key, count })),
     fallbackVars,
+    fallbackContracts: {
+      registeredUnique: FALLBACK_VAR_CONTRACTS.length,
+      uncontractedUnique: uncontractedFallbackVars.length,
+      staleRegisteredUnique: staleFallbackContractEntries.length,
+    },
+    uncontractedFallbackVars,
+    staleFallbackContracts: staleFallbackContractEntries,
+    compatibilityAliases: {
+      registeredUnique: TOKEN_COMPATIBILITY_ALIAS_CONTRACTS.length,
+      usedUnique: compatibilityAliasEntries.length,
+      occurrences: compatibilityAliasEntries.reduce((total, entry) => total + entry.count, 0),
+      staleRegisteredUnique: staleCompatibilityAliasEntries.length,
+      familyRegisteredUnique: TOKEN_COMPATIBILITY_ALIAS_FAMILY_CONTRACTS.length,
+      familyUsedUnique: compatibilityAliasFamilyEntries.filter(entry => entry.usedUnique > 0).length,
+      familyOccurrences: compatibilityAliasFamilyEntries.reduce((total, entry) => total + entry.count, 0),
+      staleRegisteredFamilyUnique: staleCompatibilityAliasFamilyEntries.length,
+      missingCanonicalUnique: missingCompatibilityAliasCanonicalEntries.length,
+      top: compatibilityAliasEntries.slice(0, options.top),
+      families: compatibilityAliasFamilyEntries,
+    },
+    staleCompatibilityAliases: staleCompatibilityAliasEntries,
+    staleCompatibilityAliasFamilies: staleCompatibilityAliasFamilyEntries,
+    missingCompatibilityAliasCanonicals: missingCompatibilityAliasCanonicalEntries,
+    colorDomainContracts: {
+      registeredUnique: COLOR_DOMAIN_CONTRACTS.length,
+      missingRegisteredUnique: missingColorDomainContractEntries.length,
+      staleRegisteredUnique: staleColorDomainContractEntries.length,
+      activeUncontractedUnique: activeUncontractedColorDomainEntries.length,
+    },
+    missingColorDomainContracts: missingColorDomainContractEntries,
+    staleColorDomainContracts: staleColorDomainContractEntries,
+    activeUncontractedColorDomains: activeUncontractedColorDomainEntries,
     tokenAliasLiterals: {
       occurrences: sumMapValues(tokenAliasLiteralCounts),
       uniqueColors: tokenAliasLiteralCounts.size,
@@ -1022,6 +1174,26 @@ function printText(report) {
   console.log(`Fallback var unique tokens: ${report.fallbackUniqueTokens}`);
   console.log(`Token-equivalent app literal occurrences: ${report.tokenAliasLiterals.occurrences}`);
   console.log(`Token-equivalent app literal unique colors: ${report.tokenAliasLiterals.uniqueColors}`);
+  console.log(
+    `Compatibility aliases: registered=${report.compatibilityAliases.registeredUnique}, ` +
+    `used=${report.compatibilityAliases.usedUnique}, ` +
+    `occurrences=${report.compatibilityAliases.occurrences}, ` +
+    `stale=${report.compatibilityAliases.staleRegisteredUnique}, ` +
+    `families=${report.compatibilityAliases.familyRegisteredUnique}, ` +
+    `staleFamilies=${report.compatibilityAliases.staleRegisteredFamilyUnique}, ` +
+    `missingCanonicals=${report.compatibilityAliases.missingCanonicalUnique}`
+  );
+  console.log(
+    `Fallback contracts: registered=${report.fallbackContracts.registeredUnique}, ` +
+    `uncontracted=${report.fallbackContracts.uncontractedUnique}, ` +
+    `stale=${report.fallbackContracts.staleRegisteredUnique}`
+  );
+  console.log(
+    `Color domain contracts: registered=${report.colorDomainContracts.registeredUnique}, ` +
+    `missing=${report.colorDomainContracts.missingRegisteredUnique}, ` +
+    `stale=${report.colorDomainContracts.staleRegisteredUnique}, ` +
+    `activeUncontracted=${report.colorDomainContracts.activeUncontractedUnique}`
+  );
 
   console.log('\nTop colors:');
   console.log(printRows(report.topColors));
@@ -1048,6 +1220,73 @@ function printText(report) {
 
   console.log('\nTop fallback tokens:');
   console.log(printRows(report.topFallbackTokens));
+
+  console.log('\nUncontracted fallback tokens:');
+  console.log(printRows(report.uncontractedFallbackVars.slice(0, 10)));
+
+  console.log('\nStale fallback token contracts:');
+  console.log(printRows(report.staleFallbackContracts.slice(0, 10).map(row => ({ ...row, count: 1 }))));
+
+  console.log('\nTop compatibility alias usage:');
+  if (report.compatibilityAliases.top.length === 0) {
+    console.log('  none');
+  } else {
+    for (const row of report.compatibilityAliases.top.slice(0, 10)) {
+      console.log(
+        `  ${row.count.toString().padStart(5)}  ${row.key} -> ${row.canonical}  files=${row.files.join(', ')}`
+      );
+    }
+  }
+
+  console.log('\nCompatibility alias families:');
+  if (report.compatibilityAliases.families.length === 0) {
+    console.log('  none');
+  } else {
+    for (const row of report.compatibilityAliases.families) {
+      console.log(
+        `  ${row.count.toString().padStart(5)}  ${row.key}* -> ${row.canonical}*  ` +
+        `usedUnique=${row.usedUnique}  defined=${row.defined}  canonicalDefined=${row.canonicalDefined}`
+      );
+    }
+  }
+
+  console.log('\nStale compatibility aliases:');
+  if (report.staleCompatibilityAliases.length === 0) {
+    console.log('  none');
+  } else {
+    for (const row of report.staleCompatibilityAliases.slice(0, 10)) {
+      console.log(`  ${row.key} -> ${row.canonical}`);
+    }
+  }
+
+  console.log('\nStale compatibility alias families:');
+  if (report.staleCompatibilityAliasFamilies.length === 0) {
+    console.log('  none');
+  } else {
+    for (const row of report.staleCompatibilityAliasFamilies.slice(0, 10)) {
+      console.log(`  ${row.key}* -> ${row.canonical}*`);
+    }
+  }
+
+  console.log('\nMissing compatibility alias family canonicals:');
+  if (report.missingCompatibilityAliasCanonicals.length === 0) {
+    console.log('  none');
+  } else {
+    for (const row of report.missingCompatibilityAliasCanonicals.slice(0, 10)) {
+      console.log(
+        `  ${row.key} -> ${row.canonical}  ` +
+        `count=${row.count}  files=${row.files.join(', ')}`
+      );
+    }
+  }
+
+  console.log('\nColor domain contract gaps:');
+  const colorDomainGapRows = [
+    ...report.missingColorDomainContracts.map(row => ({ ...row, count: 1 })),
+    ...report.staleColorDomainContracts.map(row => ({ ...row, count: 1 })),
+    ...report.activeUncontractedColorDomains,
+  ];
+  console.log(printRows(colorDomainGapRows.slice(0, 10)));
 
   console.log('\nTop token-equivalent app literals:');
   if (report.tokenAliasLiterals.top.length === 0) {

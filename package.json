@@ -27,6 +27,7 @@
     "i18n:audit": "node scripts/i18n-audit.mjs",
     "theme:color-audit": "node scripts/audit-theme-colors.mjs",
     "theme:color-audit:test": "node --test scripts/audit-theme-colors.test.mjs",
+    "theme:visual-contract": "node scripts/validate-theme-visual-contract.mjs",
     "check:repo-hygiene": "node scripts/check-repo-hygiene.mjs",
     "check:github-config": "pnpm --dir src/web-ui exec node ../../scripts/check-github-config.mjs",
     "fmt:rs": "node scripts/format-changed-rust.mjs",

@@ -6,9 +6,13 @@ import path from 'node:path';
 import test from 'node:test';
 
 import {
+  COLOR_DOMAIN_CONTRACTS,
   COLOR_DOMAIN_KEYS,
   COLOR_DOMAIN_RULES,
   DYNAMIC_VAR_FAMILY_CONTRACTS,
+  FALLBACK_VAR_CONTRACTS,
+  TOKEN_COMPATIBILITY_ALIAS_CONTRACTS,
+  TOKEN_COMPATIBILITY_ALIAS_FAMILY_CONTRACTS,
 } from './theme-css-var-contract.mjs';
 
 const root = process.cwd();
@@ -58,6 +62,65 @@ test('theme CSS var contract registry is explicit and non-overlapping', () => {
     assert.match(contract.prefix, /^--[a-z0-9-]+-$/);
     assert.ok(contract.owner.includes('src/web-ui/src/'), `${contract.prefix} must name a source owner`);
     assert.ok(contract.reason.trim().length >= 20, `${contract.prefix} must explain why it is dynamic`);
+    if (contract.canonicalPrefix !== undefined) {
+      assert.match(contract.canonicalPrefix, /^--[a-z0-9-]+-$/);
+    }
+  }
+
+  const domainContractKeys = new Set(COLOR_DOMAIN_CONTRACTS.map(contract => contract.key));
+  assert.equal(
+    domainContractKeys.size,
+    COLOR_DOMAIN_CONTRACTS.length,
+    'color domain contracts must be unique',
+  );
+  assert.deepEqual(
+    [...domainContractKeys].sort(),
+    COLOR_DOMAIN_RULES.map(rule => rule.key).sort(),
+    'every specialized color domain must have an owner contract',
+  );
+  for (const contract of COLOR_DOMAIN_CONTRACTS) {
+    assert.ok(contract.owner.includes('src/web-ui/src/'), `${contract.key} must name a source owner`);
+    assert.ok(contract.reason.trim().length >= 30, `${contract.key} must explain why the domain exists`);
+    assert.ok(contract.mergePolicy.trim().length >= 30, `${contract.key} must define a merge policy`);
+  }
+
+  const compatibilityAliasKeys = new Set(TOKEN_COMPATIBILITY_ALIAS_CONTRACTS.map(contract => contract.key));
+  assert.equal(
+    compatibilityAliasKeys.size,
+    TOKEN_COMPATIBILITY_ALIAS_CONTRACTS.length,
+    'compatibility alias keys must be unique',
+  );
+  for (const contract of TOKEN_COMPATIBILITY_ALIAS_CONTRACTS) {
+    assert.match(contract.key, /^--[a-z0-9-]+$/);
+    assert.match(contract.canonical, /^--[a-z0-9-]+$/);
+    assert.notEqual(contract.key, contract.canonical, `${contract.key} must point to a different canonical token`);
+    assert.ok(contract.owner.includes('src/web-ui/src/'), `${contract.key} must name a source owner`);
+    assert.ok(contract.reason.trim().length >= 30, `${contract.key} must explain compatibility need`);
+    assert.ok(contract.removal.trim().length >= 30, `${contract.key} must define retirement criteria`);
+  }
+
+  const compatibilityAliasPrefixes = new Set(TOKEN_COMPATIBILITY_ALIAS_FAMILY_CONTRACTS.map(contract => contract.prefix));
+  assert.equal(
+    compatibilityAliasPrefixes.size,
+    TOKEN_COMPATIBILITY_ALIAS_FAMILY_CONTRACTS.length,
+    'compatibility alias family prefixes must be unique',
+  );
+  for (const contract of TOKEN_COMPATIBILITY_ALIAS_FAMILY_CONTRACTS) {
+    assert.match(contract.prefix, /^--[a-z0-9-]+-$/);
+    assert.match(contract.canonicalPrefix, /^--[a-z0-9-]+-$/);
+    assert.notEqual(contract.prefix, contract.canonicalPrefix, `${contract.prefix} must point to a different family`);
+    assert.ok(contract.owner.includes('src/web-ui/src/'), `${contract.prefix} must name a source owner`);
+    assert.ok(contract.reason.trim().length >= 30, `${contract.prefix} must explain compatibility need`);
+    assert.ok(contract.removal.trim().length >= 30, `${contract.prefix} must define retirement criteria`);
+  }
+
+  const fallbackContractKeys = new Set(FALLBACK_VAR_CONTRACTS.map(contract => contract.key));
+  assert.equal(fallbackContractKeys.size, FALLBACK_VAR_CONTRACTS.length, 'fallback contracts must be unique');
+  for (const contract of FALLBACK_VAR_CONTRACTS) {
+    assert.match(contract.key, /^--[a-z0-9-]+$/);
+    assert.ok(contract.owner.includes('src/web-ui/src/'), `${contract.key} must name a source owner`);
+    assert.ok(contract.reason.trim().length >= 30, `${contract.key} must explain why fallback is intentional`);
+    assert.ok(contract.boundary.trim().length >= 10, `${contract.key} must classify the fallback boundary`);
   }
 });
 
@@ -72,6 +135,44 @@ test('repository dynamic CSS var families match the registered contract', () => 
   assert.deepEqual(report.cssVarDefinitions.dynamicFamilyPrefixes, registeredPrefixes);
   assert.equal(report.cssVarDefinitions.unregisteredDynamicFamilyUnique, 0);
   assert.equal(report.cssVarDefinitions.staleRegisteredDynamicFamilyUnique, 0);
+  assert.equal(report.compatibilityAliases.staleRegisteredUnique, 0);
+  assert.equal(report.compatibilityAliases.staleRegisteredFamilyUnique, 0);
+  assert.equal(report.compatibilityAliases.missingCanonicalUnique, 0);
+  assert.equal(report.fallbackContracts.uncontractedUnique, 0);
+  assert.equal(report.fallbackContracts.staleRegisteredUnique, 0);
+  assert.equal(report.colorDomainContracts.missingRegisteredUnique, 0);
+  assert.equal(report.colorDomainContracts.staleRegisteredUnique, 0);
+  assert.equal(report.colorDomainContracts.activeUncontractedUnique, 0);
+});
+
+test('theme color audit reports alias family usages whose exact canonical key is missing', (t) => {
+  const { dir, sourceRoot } = createFixture({
+    'component-library/styles/tokens.scss': [
+      ':root {',
+      '  --size-radius-sm: 6px;',
+      '  --radius-sm: var(--size-radius-sm);',
+      '  --radius-ghost: 10px;',
+      '}',
+      '',
+    ].join('\n'),
+    'app/App.scss': [
+      '.app {',
+      '  border-radius: var(--radius-ghost);',
+      '}',
+      '',
+    ].join('\n'),
+  });
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  const result = runAudit(['--root', sourceRoot, '--json', '--no-baseline']);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+
+  const report = JSON.parse(result.stdout);
+  assert.equal(report.compatibilityAliases.missingCanonicalUnique, 1);
+  assert.deepEqual(
+    report.missingCompatibilityAliasCanonicals.map(row => [row.key, row.canonical]),
+    [['--radius-ghost', '--size-radius-ghost']],
+  );
 });
 
 test('theme color audit emits scoped machine-readable reports', (t) => {
@@ -113,6 +214,65 @@ test('theme color audit emits scoped machine-readable reports', (t) => {
   assert.equal(report.cssVarDefinitions.unregisteredDynamicFamilyUnique, 0);
   assert.equal(report.cssVarDefinitions.staleRegisteredDynamicFamilyUnique, 0);
   assert.equal(report.summary.baseline.enforced, false);
+});
+
+test('theme color audit reports compatibility alias usage without treating it as raw color debt', (t) => {
+  const { dir, sourceRoot } = createFixture({
+    'component-library/styles/tokens.scss': [
+      ':root {',
+      '  --color-accent-500: #60a5fa;',
+      '  --color-primary: var(--color-accent-500);',
+      '  --size-radius-sm: 6px;',
+      '  --radius-sm: var(--size-radius-sm);',
+      '}',
+      '',
+    ].join('\n'),
+    'app/App.scss': [
+      '.app {',
+      '  color: var(--color-primary);',
+      '  border-radius: var(--radius-sm);',
+      '}',
+      '',
+    ].join('\n'),
+  });
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  const result = runAudit(['--root', sourceRoot, '--json', '--no-baseline']);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+
+  const report = JSON.parse(result.stdout);
+  assert.equal(report.compatibilityAliases.usedUnique, 2);
+  assert.equal(report.compatibilityAliases.occurrences, 2);
+  assert.equal(report.compatibilityAliases.familyUsedUnique, 1);
+  assert.equal(report.compatibilityAliases.familyOccurrences, 1);
+  assert.equal(report.compatibilityAliases.missingCanonicalUnique, 0);
+  assert.deepEqual(
+    report.compatibilityAliases.top.map(row => [row.key, row.canonical]),
+    [
+      ['--color-primary', '--color-accent-500'],
+      ['--radius-sm', '--size-radius-sm'],
+    ],
+  );
+  assert.equal(report.colorScopes.appUi.occurrences, 0);
+});
+
+test('theme color audit reports fallback tokens that lack a boundary contract', (t) => {
+  const { dir, sourceRoot } = createFixture({
+    'app/App.scss': [
+      '.app {',
+      '  color: var(--runtime-accent, var(--color-accent-500));',
+      '}',
+      '',
+    ].join('\n'),
+  });
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  const result = runAudit(['--root', sourceRoot, '--json', '--no-baseline']);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+
+  const report = JSON.parse(result.stdout);
+  assert.equal(report.fallbackContracts.uncontractedUnique, 1);
+  assert.deepEqual(report.uncontractedFallbackVars.map(row => row.key), ['--runtime-accent']);
 });
 
 test('theme color audit reports specialized color domains separately from app UI', (t) => {
@@ -378,7 +538,7 @@ test('theme color audit fails when metrics exceed the checked baseline', (t) => 
   );
 });
 
-test('theme color audit requires intentional fallback tokens to be allowlisted', (t) => {
+test('theme color audit fails when fallback tokens lack a boundary contract', (t) => {
   const { dir, sourceRoot } = createFixture({
     'app/App.scss': [
       '.app {',
@@ -389,62 +549,19 @@ test('theme color audit requires intentional fallback tokens to be allowlisted',
   });
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const baselinePath = path.join(dir, 'theme-baseline.json');
-  const baseline = {
-    version: 1,
-    budgets: {
-      fallbackUniqueTokens: { max: 1 },
-    },
-    allowlists: {
-      intentionalFallbackTokens: [],
-    },
-  };
-  writeText(baselinePath, `${JSON.stringify(baseline, null, 2)}\n`);
-
-  const blocked = runAudit(['--root', sourceRoot, '--baseline', baselinePath]);
-  assert.notEqual(blocked.status, 0, 'unallowlisted fallback tokens must fail the audit');
-  assert.match(
-    `${blocked.stdout}\n${blocked.stderr}`,
-    /intentionalFallbackTokens is missing allowlist entry for --runtime-accent/,
-  );
-
-  baseline.allowlists.intentionalFallbackTokens.push({
-    key: '--runtime-accent',
-    owner: 'scripts/audit-theme-colors.test.mjs',
-    reason: 'fixture runtime color fallback',
-  });
-  writeText(baselinePath, `${JSON.stringify(baseline, null, 2)}\n`);
-
-  const allowed = runAudit(['--root', sourceRoot, '--baseline', baselinePath]);
-  assert.equal(allowed.status, 0, allowed.stderr || allowed.stdout);
-});
-
-test('theme color audit fails stale intentional fallback token allowlist entries', (t) => {
-  const { dir, sourceRoot } = createFixture({
-    'app/App.scss': '.app { color: var(--color-accent-500); }\n',
-  });
-  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
-  const baselinePath = path.join(dir, 'theme-baseline.json');
   writeText(baselinePath, `${JSON.stringify({
     version: 1,
     budgets: {
-      fallbackUniqueTokens: { max: 0 },
-    },
-    allowlists: {
-      intentionalFallbackTokens: [
-        {
-          key: '--removed-fallback',
-          owner: 'scripts/audit-theme-colors.test.mjs',
-          reason: 'fixture stale fallback token',
-        },
-      ],
+      fallbackUniqueTokens: { max: 1 },
+      'fallbackContracts.uncontractedUnique': { max: 0 },
     },
   }, null, 2)}\n`);
 
   const result = runAudit(['--root', sourceRoot, '--baseline', baselinePath]);
-  assert.notEqual(result.status, 0, 'stale fallback allowlist entries must fail the audit');
+  assert.notEqual(result.status, 0, 'uncontracted fallback tokens must fail the audit');
   assert.match(
     `${result.stdout}\n${result.stderr}`,
-    /intentionalFallbackTokens allowlist entry --removed-fallback is stale/,
+    /fallbackContracts\.uncontractedUnique has 1 candidate\(s\), baseline is 0/,
   );
 });
 

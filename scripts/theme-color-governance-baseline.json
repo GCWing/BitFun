@@ -8,6 +8,51 @@
     "fallbackUniqueTokens": {
       "max": 7
     },
+    "fallbackContracts.uncontractedUnique": {
+      "max": 0
+    },
+    "fallbackContracts.staleRegisteredUnique": {
+      "max": 0
+    },
+    "compatibilityAliases.registeredUnique": {
+      "max": 63
+    },
+    "compatibilityAliases.usedUnique": {
+      "max": 68
+    },
+    "compatibilityAliases.occurrences": {
+      "max": 609
+    },
+    "compatibilityAliases.staleRegisteredUnique": {
+      "max": 0
+    },
+    "compatibilityAliases.familyRegisteredUnique": {
+      "max": 2
+    },
+    "compatibilityAliases.familyUsedUnique": {
+      "max": 2
+    },
+    "compatibilityAliases.familyOccurrences": {
+      "max": 51
+    },
+    "compatibilityAliases.staleRegisteredFamilyUnique": {
+      "max": 0
+    },
+    "compatibilityAliases.missingCanonicalUnique": {
+      "max": 0
+    },
+    "colorDomainContracts.registeredUnique": {
+      "max": 13
+    },
+    "colorDomainContracts.missingRegisteredUnique": {
+      "max": 0
+    },
+    "colorDomainContracts.staleRegisteredUnique": {
+      "max": 0
+    },
+    "colorDomainContracts.activeUncontractedUnique": {
+      "max": 0
+    },
     "colorScopes.appUi.uniqueColors": {
       "max": 0
     },
@@ -119,44 +164,5 @@
     "colorDomainScopes.mermaid.uniqueColors": {
       "max": 95
     }
-  },
-  "allowlists": {
-    "intentionalFallbackTokens": [
-      {
-        "key": "--surface-stagger-index",
-        "owner": "src/web-ui/src/app/components/GalleryLayout; app scene cards",
-        "reason": "runtime inline animation index with zero fallback for first-paint and non-animated states"
-      },
-      {
-        "key": "--mission-control-group-color",
-        "owner": "src/web-ui/src/app/components/panels/content-canvas/mission-control",
-        "reason": "runtime group identity color with accent fallback when no group color is assigned"
-      },
-      {
-        "key": "--char-index",
-        "owner": "src/web-ui/src/component-library/components/StreamText",
-        "reason": "runtime per-character animation offset with zero fallback outside animated rendering"
-      },
-      {
-        "key": "--gallery-grid-min",
-        "owner": "src/web-ui/src/app/components/GalleryLayout",
-        "reason": "runtime layout sizing input with stable grid fallback"
-      },
-      {
-        "key": "--gallery-skeleton-height",
-        "owner": "src/web-ui/src/app/components/GalleryLayout",
-        "reason": "runtime skeleton sizing input with stable placeholder fallback"
-      },
-      {
-        "key": "--primary-color",
-        "owner": "src/web-ui/src/component-library/components/Markdown",
-        "reason": "embedded markdown primary accent override with global accent fallback"
-      },
-      {
-        "key": "--scene-viewport-border-width",
-        "owner": "src/web-ui/src/app/scenes/SceneViewport.scss",
-        "reason": "runtime viewport layout override with stable one-pixel default"
-      }
-    ]
   }
 }
