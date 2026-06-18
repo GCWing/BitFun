@@ -3339,6 +3339,76 @@ export const requiredContentRules = [
     ],
   },
   {
+    path: 'src/crates/execution/tool-execution/src/exec_command.rs',
+    reason:
+      'tool-runtime must own provider-neutral ExecCommand presentation, control facts, completion shape, and session-not-found result builders while core keeps concrete process managers',
+    patterns: [
+      {
+        regex: /\bpub enum ExecCommandControlAction\b/,
+        message: 'missing provider-neutral exec control action contract',
+      },
+      {
+        regex: /\bpub struct ExecCommandControlRequest\b/,
+        message: 'missing provider-neutral exec control request contract',
+      },
+      {
+        regex: /\bpub fn render_exec_command_response_for_assistant\b/,
+        message: 'missing ExecCommand assistant response owner',
+      },
+      {
+        regex: /\bpub fn render_write_stdin_response_for_assistant\b/,
+        message: 'missing WriteStdin assistant response owner',
+      },
+      {
+        regex: /\bpub fn exec_control_session_not_found_result\b/,
+        message: 'missing ExecControl session-not-found result owner',
+      },
+      {
+        regex: /\bpub fn exec_command_background_output_status\b/,
+        message: 'missing ExecCommand background-output status owner',
+      },
+      {
+        regex: /\bcompletion_value_uses_stable_snake_case_shape\b/,
+        message: 'missing ExecCommand completion shape regression',
+      },
+      {
+        regex: /\bbackground_output_status_maps_terminal_completion_without_core_types\b/,
+        message: 'missing ExecCommand background status regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/execution/tool-execution/src/computer_use.rs',
+    reason:
+      'tool-runtime must own provider-neutral Computer Use loop detection, screenshot hashing, verification, and retry policy while core keeps host adapters',
+    patterns: [
+      {
+        regex: /\bpub struct ComputerUseOptimizer\b/,
+        message: 'missing Computer Use optimizer owner',
+      },
+      {
+        regex: /\bpub fn hash_screenshot_bytes\b/,
+        message: 'missing Computer Use screenshot hash owner',
+      },
+      {
+        regex: /\bpub struct VerificationResult\b/,
+        message: 'missing Computer Use verification result contract',
+      },
+      {
+        regex: /\bpub fn should_retry_action_message\b/,
+        message: 'missing provider-neutral Computer Use retry decision owner',
+      },
+      {
+        regex: /\bdetects_repeated_action_loop\b/,
+        message: 'missing Computer Use loop detection regression',
+      },
+      {
+        regex: /\bretry_decision_uses_error_text_without_core_error_type\b/,
+        message: 'missing Computer Use retry decision regression',
+      },
+    ],
+  },
+  {
     path: 'src/crates/assembly/core/src/service/remote_ssh/mod.rs',
     reason:
       'core remote SSH compatibility facade must keep service-backed SSH surfaces behind the ssh-remote feature while preserving lightweight workspace identity helpers',

@@ -5,7 +5,6 @@ use super::background_command_output::{
 use super::env_snapshot::{remote_env_snapshot_for, RemoteEnvSnapshot};
 use super::local_shell::{resolve_local_exec_shell, ResolvedLocalExecShell};
 use super::progress::ExecOutputProgressBridge;
-use super::rendering::render_exec_response_for_assistant_with_notes;
 use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext, ValidationResult};
 use crate::infrastructure::events::event_system::{
     get_global_event_system, BackendEvent::BackgroundCommandLifecycle,
@@ -28,6 +27,11 @@ use terminal_core::{
     LocalExecSessionCompletionStatus, ShellType,
 };
 use tokio::sync::mpsc;
+use tool_runtime::exec_command::{
+    exec_command_background_output_status, exec_command_completion_value,
+    render_exec_command_response_for_assistant, ExecCommandCompletion, ExecCommandCompletionSource,
+    ExecCommandCompletionStatus,
+};
 
 const REMOTE_SHELL_PROBE_TIMEOUT_MS: u64 = 3_000;
 const REMOTE_NON_TTY_INTERRUPT_GRACE_SECONDS: u64 = 2;
@@ -341,115 +345,65 @@ exit "$__bitfun_status""#
     }
 
     fn response_for_assistant(data: &Value) -> String {
-        let mut status_lines = Vec::new();
-        let mut note_lines = Vec::new();
-        let completion = data.get("completion");
-        let completion_source = completion
-            .and_then(|value| value.get("source"))
-            .and_then(Value::as_str);
-        let completion_status = completion
-            .and_then(|value| value.get("status"))
-            .and_then(Value::as_str);
-        if completion_source == Some("out_of_band_control") {
-            match completion_status {
-                Some("interrupted") => {
-                    status_lines.push("Process was interrupted externally.".to_string())
-                }
-                Some("killed") => {
-                    status_lines.push("Process was terminated externally.".to_string())
-                }
-                Some(status) => {
-                    status_lines.push(format!("Process ended externally with status {status}."))
-                }
-                None => status_lines.push("Process ended externally.".to_string()),
-            }
-            if let Some(exit_code) = data.get("exit_code").and_then(Value::as_i64) {
-                status_lines.push(format!("Process exited with code {exit_code}."));
-            }
-        } else if let Some(exit_code) = data.get("exit_code").and_then(Value::as_i64) {
-            status_lines.push(format!("Process exited with code {exit_code}."));
-        } else if let Some(session_id) = data.get("session_id").and_then(Value::as_i64) {
-            status_lines.push(format!(
-                "Process is still running. session_id: {session_id}"
-            ));
-        }
-        if data.get("tty").and_then(Value::as_bool) == Some(false)
-            && data
-                .get("output")
-                .and_then(Value::as_str)
-                .map(str::is_empty)
-                .unwrap_or(true)
-        {
-            note_lines.push(
-                "No output was produced. In non-TTY mode, programs may block-buffer pipe output; use unbuffered flags/env vars or TTY mode if progressive output matters."
-                    .to_string(),
-            );
-        }
-        render_exec_response_for_assistant_with_notes(data, status_lines, note_lines, 3)
+        render_exec_command_response_for_assistant(data)
     }
 
     fn local_completion_value(completion: LocalExecSessionCompletion) -> Value {
-        json!({
-            "status": match completion.status {
-                LocalExecSessionCompletionStatus::Exited => "exited",
-                LocalExecSessionCompletionStatus::Interrupted => "interrupted",
-                LocalExecSessionCompletionStatus::Killed => "killed",
-                LocalExecSessionCompletionStatus::Pruned => "pruned",
-            },
-            "source": match completion.source {
-                LocalExecSessionCompletionSource::Process => "process",
-                LocalExecSessionCompletionSource::OutOfBandControl => "out_of_band_control",
-            },
-        })
+        exec_command_completion_value(Self::local_completion(completion))
     }
 
     fn remote_completion_value(completion: RemoteExecSessionCompletion) -> Value {
-        json!({
-            "status": match completion.status {
-                RemoteExecSessionCompletionStatus::Exited => "exited",
-                RemoteExecSessionCompletionStatus::Interrupted => "interrupted",
-                RemoteExecSessionCompletionStatus::Killed => "killed",
-                RemoteExecSessionCompletionStatus::Pruned => "pruned",
+        exec_command_completion_value(Self::remote_completion(completion))
+    }
+
+    fn local_completion(completion: LocalExecSessionCompletion) -> ExecCommandCompletion {
+        ExecCommandCompletion {
+            status: match completion.status {
+                LocalExecSessionCompletionStatus::Exited => ExecCommandCompletionStatus::Exited,
+                LocalExecSessionCompletionStatus::Interrupted => {
+                    ExecCommandCompletionStatus::Interrupted
+                }
+                LocalExecSessionCompletionStatus::Killed => ExecCommandCompletionStatus::Killed,
+                LocalExecSessionCompletionStatus::Pruned => ExecCommandCompletionStatus::Pruned,
             },
-            "source": match completion.source {
-                RemoteExecSessionCompletionSource::Process => "process",
-                RemoteExecSessionCompletionSource::OutOfBandControl => "out_of_band_control",
+            source: match completion.source {
+                LocalExecSessionCompletionSource::Process => ExecCommandCompletionSource::Process,
+                LocalExecSessionCompletionSource::OutOfBandControl => {
+                    ExecCommandCompletionSource::OutOfBandControl
+                }
             },
-        })
+        }
+    }
+
+    fn remote_completion(completion: RemoteExecSessionCompletion) -> ExecCommandCompletion {
+        ExecCommandCompletion {
+            status: match completion.status {
+                RemoteExecSessionCompletionStatus::Exited => ExecCommandCompletionStatus::Exited,
+                RemoteExecSessionCompletionStatus::Interrupted => {
+                    ExecCommandCompletionStatus::Interrupted
+                }
+                RemoteExecSessionCompletionStatus::Killed => ExecCommandCompletionStatus::Killed,
+                RemoteExecSessionCompletionStatus::Pruned => ExecCommandCompletionStatus::Pruned,
+            },
+            source: match completion.source {
+                RemoteExecSessionCompletionSource::Process => ExecCommandCompletionSource::Process,
+                RemoteExecSessionCompletionSource::OutOfBandControl => {
+                    ExecCommandCompletionSource::OutOfBandControl
+                }
+            },
+        }
     }
 
     fn local_background_output_status_for_completion(
         completion: Option<LocalExecSessionCompletion>,
     ) -> BackgroundCommandOutputStatus {
-        match completion.map(|completion| completion.status) {
-            Some(LocalExecSessionCompletionStatus::Interrupted) => {
-                BackgroundCommandOutputStatus::Interrupted
-            }
-            Some(LocalExecSessionCompletionStatus::Killed) => BackgroundCommandOutputStatus::Killed,
-            Some(LocalExecSessionCompletionStatus::Pruned) => BackgroundCommandOutputStatus::Pruned,
-            Some(LocalExecSessionCompletionStatus::Exited) | None => {
-                BackgroundCommandOutputStatus::Exited
-            }
-        }
+        exec_command_background_output_status(completion.map(Self::local_completion))
     }
 
     fn remote_background_output_status_for_completion(
         completion: Option<RemoteExecSessionCompletion>,
     ) -> BackgroundCommandOutputStatus {
-        match completion.map(|completion| completion.status) {
-            Some(RemoteExecSessionCompletionStatus::Interrupted) => {
-                BackgroundCommandOutputStatus::Interrupted
-            }
-            Some(RemoteExecSessionCompletionStatus::Killed) => {
-                BackgroundCommandOutputStatus::Killed
-            }
-            Some(RemoteExecSessionCompletionStatus::Pruned) => {
-                BackgroundCommandOutputStatus::Pruned
-            }
-            Some(RemoteExecSessionCompletionStatus::Exited) | None => {
-                BackgroundCommandOutputStatus::Exited
-            }
-        }
+        exec_command_background_output_status(completion.map(Self::remote_completion))
     }
 
     fn local_lifecycle_status(status: ExecProcessLifecycleStatus) -> &'static str {

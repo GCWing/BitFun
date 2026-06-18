@@ -1,5 +1,7 @@
 pub mod background_command_output;
+pub mod computer_use;
 pub mod context;
+pub mod exec_command;
 pub mod fs;
 pub mod pipeline;
 pub mod search;

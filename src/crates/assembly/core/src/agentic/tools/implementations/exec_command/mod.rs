@@ -5,7 +5,6 @@ mod env_snapshot;
 mod input;
 mod local_shell;
 mod progress;
-mod rendering;
 mod stdin;
 
 pub use background_command_output::{

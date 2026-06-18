@@ -4,6 +4,7 @@ Scope: this guide applies to `src/crates/execution/tool-execution`.
 
 `tool-runtime` owns low-level reusable tool execution helpers such as filesystem
 and search utilities, provider-neutral pipeline planning/retry/token policy,
+ExecCommand presentation/control facts, Computer Use loop/retry policies,
 prompt-safe tool context facts/custom-data materialization and extension merge,
 and background exec-output capture state. It is not the product tool registry,
 permission model, or agent-facing tool surface.
@@ -19,9 +20,13 @@ permission model, or agent-facing tool surface.
 - Preserve existing filesystem/search behavior when moving helpers here. Do not
   change path containment, encoding, cancellation, or result presentation
   semantics as a side effect of refactoring.
-- Background exec-output helpers may own retained output buffers, cursors, and
-  lifecycle metadata; concrete local/remote process managers stay in services
-  or core adapters.
+- Background exec-output and ExecCommand presentation helpers may own retained
+  output buffers, cursors, lifecycle metadata, assistant response text, and
+  provider-neutral completion shapes; concrete local/remote process managers
+  stay in services or core adapters.
+- Computer Use helpers here may own provider-neutral loop detection, screenshot
+  hash, verification, and retry policy. Host APIs, permissions, captures, OCR,
+  accessibility, and OS input remain in host adapters.
 - Provider-neutral contracts belong in `tool-contracts` (`bitfun-agent-tools`);
   product provider grouping belongs in `tool-provider-groups`
   (`bitfun-tool-packs`).
