@@ -3,7 +3,6 @@
 import { api } from './ApiClient';
 import { createTauriCommandError } from '../errors/TauriCommandError';
 import { openUrl } from '@tauri-apps/plugin-opener';
-import { disable as autostartDisable, enable as autostartEnable, isEnabled as autostartIsEnabled } from '@tauri-apps/plugin-autostart';
 import { createLogger } from '@/shared/utils/logger';
 
 
@@ -172,19 +171,6 @@ export class SystemAPI {
     }
   }
 
-  /** Desktop only: whether the app is registered to launch at OS login. */
-  async getLaunchAtLoginEnabled(): Promise<boolean> {
-    if (typeof window === 'undefined' || !('__TAURI__' in window)) {
-      return false;
-    }
-    try {
-      return await autostartIsEnabled();
-    } catch (error) {
-      log.error('Failed to read launch-at-login state', error);
-      throw createTauriCommandError('autostart_is_enabled', error);
-    }
-  }
-
   /** Desktop only: send an OS-level desktop notification. */
   async sendSystemNotification(title: string, body?: string): Promise<void> {
     if (typeof window === 'undefined' || !('__TAURI__' in window)) {
@@ -196,23 +182,6 @@ export class SystemAPI {
       });
     } catch (error) {
       log.warn('Failed to send system notification', { title, error });
-    }
-  }
-
-  /** Desktop only: register or unregister launch at OS login. */
-  async setLaunchAtLoginEnabled(enabled: boolean): Promise<void> {
-    if (typeof window === 'undefined' || !('__TAURI__' in window)) {
-      return;
-    }
-    try {
-      if (enabled) {
-        await autostartEnable();
-      } else {
-        await autostartDisable();
-      }
-    } catch (error) {
-      log.error('Failed to set launch-at-login', { enabled, error });
-      throw createTauriCommandError('autostart_set', error, { enabled });
     }
   }
 
