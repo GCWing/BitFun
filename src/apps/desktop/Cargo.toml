@@ -10,7 +10,7 @@ name = "bitfun_desktop_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [[bin]]
-name = "BitFun"
+name = "bitfun-desktop"
 path = "src/main.rs"
 
 [build-dependencies]

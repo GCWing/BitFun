@@ -26,6 +26,7 @@ import {
 } from './startup/startupOverlay';
 import { ToolbarModeProvider } from '../flow_chat/components/toolbar-mode/ToolbarModeProvider';
 import { FlowChatStore } from '@/flow_chat/store/FlowChatStore';
+import { isAppWindowFocused } from '@/flow_chat/services/flow-chat-manager/EventHandlerModule';
 
 const log = createLogger('App');
 
@@ -555,16 +556,24 @@ function App() {
         'error',
         'interrupted',
       ]);
+      const activeSessionId = state.activeSessionId;
+      const windowFocused = isAppWindowFocused();
 
       state.sessions.forEach(session => {
         const sessionId = session.sessionId;
         const hasCompletion = completionKinds.has(session.hasUnreadCompletion);
 
         if (hasCompletion && !scheduled.has(sessionId)) {
+          // Skip auto-dismiss for the active focused session — the user
+          // sees the completion directly in the chat UI.
+          if (sessionId === activeSessionId && windowFocused) {
+            store.clearSessionUnreadCompletion(sessionId);
+            return;
+          }
           scheduled.add(sessionId);
-          log.info('[AgentCompanion auto-dismiss] Scheduling timer', { sessionId, completionKind: session.hasUnreadCompletion });
+          log.debug('[AgentCompanion auto-dismiss] Scheduling timer', { sessionId, completionKind: session.hasUnreadCompletion });
           const timerId = setTimeout(() => {
-            log.info('[AgentCompanion auto-dismiss] Timer fired, clearing unread completion', { sessionId });
+            log.debug('[AgentCompanion auto-dismiss] Timer fired, clearing unread completion', { sessionId });
             store.clearSessionUnreadCompletion(sessionId);
             timers.delete(sessionId);
             scheduled.delete(sessionId);
@@ -577,7 +586,7 @@ function App() {
             timers.delete(sessionId);
           }
           scheduled.delete(sessionId);
-          log.info('[AgentCompanion auto-dismiss] Cancelled timer (completion cleared)', { sessionId });
+          log.debug('[AgentCompanion auto-dismiss] Cancelled timer (completion cleared)', { sessionId });
         }
       });
 
@@ -590,18 +599,18 @@ function App() {
           clearTimeout(timerId);
           timers.delete(sessionId);
           scheduled.delete(sessionId);
-          log.info('[AgentCompanion auto-dismiss] Cancelled timer (session removed)', { sessionId });
+          log.debug('[AgentCompanion auto-dismiss] Cancelled timer (session removed)', { sessionId });
         }
       });
     };
 
-    log.info('[AgentCompanion auto-dismiss] Subscribing to FlowChatStore');
+    log.debug('[AgentCompanion auto-dismiss] Subscribing to FlowChatStore');
     const unsubscribe = store.subscribe(checkAndSchedule);
     // Run immediately for any pre-existing completions (e.g. restored sessions).
     checkAndSchedule();
 
     return () => {
-      log.info('[AgentCompanion auto-dismiss] Unsubscribing, clearing timers');
+      log.debug('[AgentCompanion auto-dismiss] Unsubscribing, clearing timers');
       unsubscribe();
       timers.forEach(timerId => clearTimeout(timerId));
     };
