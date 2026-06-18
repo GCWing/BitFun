@@ -26,6 +26,7 @@
 - File tool 的 provider-neutral 结果展示、写入 mode/status/line-count 规则、Edit guardrail 分类和 Delete success 文本已迁入 `tool-execution`；file-read state 的 provider-neutral guardrail / freshness 语义已迁入 `agent-runtime`；core 保留 ToolResult 包装、权限、checkpoint、read-state adapter、remote shell/FS 调用和旧工具入口。
 - PR-C 已收口 Harness / product workflow 的低风险 owner：MiniApp AI / Agent permission、rate-limit、model/message/session/workspace/turn-text 规则迁入 `product-domains`；DeepResearch 后处理 gate 迁入 `agent-runtime`，report IO 继续由 `services-integrations` 持有；function-agent AI concrete acquisition 收拢为 core port adapter，旧 `runtime_services` 路径删除。
 - H2 concrete adapter 收口已完成：MiniApp AI / Agent 请求计划、stream payload、runtime event payload、worker restart / draft key / workspace input 规则迁入 `product-domains`；DeepReview concrete Task launch、session metadata cache persistence 和 MiniApp concrete AI factory / scheduler / worker pool 调用已复核为 adapter 边界，不在下层 owner crate 中实现。
+- Remote Connect IM bot 的 provider-neutral 支撑已迁入 `services-integrations`：bot config / persistence / form-state、file auto-push helper、locale / menu rendering、chat state / interaction DTO 和 command parsing。`bitfun-core` 仍保留 command router 与 Telegram / Feishu / Weixin adapters，因为它们还依赖 coordinator、session manager、image context 和具体平台 I/O。
 
 ## 3. 已完成但仍需保持的边界
 
@@ -70,6 +71,7 @@
 | Workspace layout / Cargo path | `cargo metadata --no-deps --format-version 1` |
 | Runtime Services / backend events | `cargo test -p bitfun-runtime-services`，`cargo check -p bitfun-core --no-default-features` |
 | Services Core session migration | `cargo test -p bitfun-services-core merge_legacy_session_store`，core workspace-runtime focused tests |
+| Remote Connect / IM bot support | `cargo test -p bitfun-services-integrations --features remote-connect --lib remote_connect::bot::`，`cargo test -p bitfun-core --features product-full remote_connect::bot::command_router` |
 | Agent lifecycle / scheduler | `cargo test -p bitfun-agent-runtime`，core scheduler / session focused tests |
 | Tool / terminal | `cargo test -p bitfun-agent-tools`，`cargo test -p tool-runtime`，terminal / exec-command focused tests |
 | Harness / Product Domains | `cargo test -p bitfun-harness`，`cargo test -p bitfun-product-domains`，DeepReview / MiniApp focused tests |

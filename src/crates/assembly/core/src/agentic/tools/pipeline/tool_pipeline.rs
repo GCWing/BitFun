@@ -1337,8 +1337,9 @@ mod tests {
     use crate::agentic::round_preempt::{
         DialogRoundInjectionInterrupt, SessionRoundInjectionBuffer,
     };
-    use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext, ValidationResult};
+    use crate::agentic::tools::framework::{Tool, ToolResult, ValidationResult};
     use crate::agentic::tools::implementations::task_tool::TaskTool;
+    use crate::agentic::tools::tool_context_runtime::ToolUseContext;
     use crate::agentic::tools::ToolRuntimeRestrictions;
     use async_trait::async_trait;
     use bitfun_runtime_ports::{
