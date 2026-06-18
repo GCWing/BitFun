@@ -1139,6 +1139,7 @@ pub async fn run() {
             get_app_version,
             check_for_updates,
             install_update,
+            api::system_api::open_html_file_in_browser,
             restart_app,
             send_system_notification,
             api::system_api::quit_app,

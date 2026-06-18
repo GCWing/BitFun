@@ -25,6 +25,7 @@
     "createFileFailed": "Failed to create file",
     "createFolderFailed": "Failed to create folder",
     "renameFailed": "Rename failed",
+    "openInBrowserFailed": "Failed to open file in browser",
     "revealFailed": "Failed to open file manager"
   },
   "workspace": {

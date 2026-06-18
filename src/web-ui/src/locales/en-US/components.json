@@ -342,12 +342,12 @@
     "collapse": "Collapse"
   },
   "tabs": {
-    "close": "Close Tab",
+    "close": "Close",
     "popOut": "Pop out as scene",
-    "closeOthers": "Close Other Tabs",
-    "closeAll": "Close All Tabs",
+    "closeOthers": "Close Others",
+    "closeAll": "Close All",
     "closeRight": "Close Tabs to the Right",
-    "pin": "Pin Tab",
+    "pin": "Pin",
     "unpin": "Unpin Tab",
     "unsaved": "Unsaved",
     "fileDeleted": "Deleted",

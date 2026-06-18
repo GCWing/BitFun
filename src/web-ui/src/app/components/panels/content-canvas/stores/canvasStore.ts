@@ -173,6 +173,33 @@ const getGroup = (draft: CanvasStoreState, groupId: EditorGroupId): EditorGroupS
   return draft.tertiaryGroup;
 };
 
+const getVisibleTabs = (group: EditorGroupState) => group.tabs.filter(t => !t.isHidden);
+const getVisibleCount = (group: EditorGroupState) => getVisibleTabs(group).length;
+
+const ensureValidActiveTab = (group: EditorGroupState) => {
+  const visibleTabs = getVisibleTabs(group);
+  if (visibleTabs.length === 0) {
+    group.activeTabId = null;
+  } else if (group.activeTabId === null || !visibleTabs.find(t => t.id === group.activeTabId)) {
+    group.activeTabId = visibleTabs[0]?.id || null;
+  }
+};
+
+const keepPinnedTabsOnly = (group: EditorGroupState) => {
+  group.tabs = group.tabs.filter(tab => tab.state === 'pinned');
+  ensureValidActiveTab(group);
+};
+
+const getPinnedBoundary = (group: EditorGroupState) => {
+  const firstUnpinnedIndex = group.tabs.findIndex(tab => tab.state !== 'pinned');
+  return firstUnpinnedIndex === -1 ? group.tabs.length : firstUnpinnedIndex;
+};
+
+const insertTabRespectingPinnedBoundary = (group: EditorGroupState, tab: CanvasTab) => {
+  const insertIndex = getPinnedBoundary(group);
+  group.tabs.splice(insertIndex, 0, tab);
+};
+
 // ==================== Store Creation ====================
 
 const createCanvasStoreHook = () => create<CanvasStore>()(
@@ -211,7 +238,7 @@ const createCanvasStoreHook = () => create<CanvasStore>()(
           }
           
           const newTab = createTab(content, state);
-          group.tabs.unshift(newTab);
+          insertTabRespectingPinnedBoundary(group, newTab);
           group.activeTabId = newTab.id;
           draft.activeGroupId = targetGroupId;
         });
@@ -487,8 +514,7 @@ const createCanvasStoreHook = () => create<CanvasStore>()(
         set((draft) => {
           if (groupId) {
             const group = getGroup(draft, groupId);
-            group.tabs = [];
-            group.activeTabId = null;
+            keepPinnedTabsOnly(group);
 
             const pCount = draft.primaryGroup.tabs.filter(t => !t.isHidden).length;
             const sCount = draft.secondaryGroup.tabs.filter(t => !t.isHidden).length;
@@ -593,11 +619,62 @@ const createCanvasStoreHook = () => create<CanvasStore>()(
               }
             }
           } else {
-            draft.primaryGroup = createEditorGroupState();
-            draft.secondaryGroup = createEditorGroupState();
-            draft.tertiaryGroup = createEditorGroupState();
-            draft.layout.splitMode = 'none';
-            draft.activeGroupId = 'primary';
+            keepPinnedTabsOnly(draft.primaryGroup);
+            keepPinnedTabsOnly(draft.secondaryGroup);
+            keepPinnedTabsOnly(draft.tertiaryGroup);
+
+            const pCount = getVisibleCount(draft.primaryGroup);
+            const sCount = getVisibleCount(draft.secondaryGroup);
+            const tCount = getVisibleCount(draft.tertiaryGroup);
+
+            if (pCount === 0 && sCount === 0 && tCount === 0) {
+              draft.primaryGroup = createEditorGroupState();
+              draft.secondaryGroup = createEditorGroupState();
+              draft.tertiaryGroup = createEditorGroupState();
+              draft.layout.splitMode = 'none';
+              draft.activeGroupId = 'primary';
+            } else if (draft.layout.splitMode === 'grid') {
+              if (pCount > 0 && sCount > 0 && tCount > 0) {
+                ensureValidActiveTab(draft.primaryGroup);
+                ensureValidActiveTab(draft.secondaryGroup);
+                ensureValidActiveTab(draft.tertiaryGroup);
+              } else {
+                const remainingGroups: EditorGroupState[] = [];
+                if (pCount > 0) remainingGroups.push(draft.primaryGroup);
+                if (sCount > 0) remainingGroups.push(draft.secondaryGroup);
+                if (tCount > 0) remainingGroups.push(draft.tertiaryGroup);
+
+                draft.primaryGroup = remainingGroups[0] ? { ...remainingGroups[0] } : createEditorGroupState();
+                draft.secondaryGroup = remainingGroups[1] ? { ...remainingGroups[1] } : createEditorGroupState();
+                draft.tertiaryGroup = remainingGroups[2] ? { ...remainingGroups[2] } : createEditorGroupState();
+                draft.layout.splitMode = remainingGroups.length >= 3 ? 'grid' : remainingGroups.length === 2 ? 'horizontal' : 'none';
+                draft.activeGroupId = 'primary';
+                ensureValidActiveTab(draft.primaryGroup);
+                ensureValidActiveTab(draft.secondaryGroup);
+                ensureValidActiveTab(draft.tertiaryGroup);
+              }
+            } else if (draft.layout.splitMode === 'horizontal' || draft.layout.splitMode === 'vertical') {
+              if (pCount > 0 && sCount > 0) {
+                ensureValidActiveTab(draft.primaryGroup);
+                ensureValidActiveTab(draft.secondaryGroup);
+              } else if (pCount > 0) {
+                draft.secondaryGroup = createEditorGroupState();
+                draft.tertiaryGroup = createEditorGroupState();
+                draft.layout.splitMode = 'none';
+                draft.activeGroupId = 'primary';
+                ensureValidActiveTab(draft.primaryGroup);
+              } else if (sCount > 0) {
+                draft.primaryGroup = { ...draft.secondaryGroup };
+                draft.secondaryGroup = createEditorGroupState();
+                draft.tertiaryGroup = createEditorGroupState();
+                draft.layout.splitMode = 'none';
+                draft.activeGroupId = 'primary';
+                ensureValidActiveTab(draft.primaryGroup);
+              }
+            } else {
+              ensureValidActiveTab(draft.primaryGroup);
+              draft.activeGroupId = 'primary';
+            }
           }
         });
       },
@@ -676,6 +753,12 @@ const createCanvasStoreHook = () => create<CanvasStore>()(
               tab.state = 'active';
             } else {
               tab.state = 'pinned';
+            }
+
+            const tabIndex = group.tabs.findIndex(t => t.id === tabId);
+            if (tabIndex !== -1) {
+              const [movedTab] = group.tabs.splice(tabIndex, 1);
+              insertTabRespectingPinnedBoundary(group, movedTab);
             }
           }
         });
@@ -810,7 +893,11 @@ const createCanvasStoreHook = () => create<CanvasStore>()(
           if (tabIndex === -1 || tabIndex === newIndex) return;
           
           const [tab] = group.tabs.splice(tabIndex, 1);
-          group.tabs.splice(newIndex, 0, tab);
+          const pinnedBoundary = getPinnedBoundary(group);
+          const targetIndex = tab.state === 'pinned'
+            ? Math.max(0, Math.min(newIndex, pinnedBoundary))
+            : Math.max(pinnedBoundary, Math.min(newIndex, group.tabs.length));
+          group.tabs.splice(targetIndex, 0, tab);
         });
       },
       

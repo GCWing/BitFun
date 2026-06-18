@@ -151,6 +151,10 @@ export interface TabContext extends BaseContext {
    
   tabType?: string;
    
+  filePath?: string;
+   
+  workspacePath?: string;
+   
   isActive: boolean;
    
   isClosable: boolean;

@@ -10,6 +10,7 @@ import { workspaceManager } from '../../../infrastructure/services/business/work
 import { isRemoteWorkspace } from '../../../shared/types';
 import { addFileMentionToChat } from '@/shared/utils/chatContext';
 import { dirnameAbsolutePath } from '@/shared/utils/pathUtils';
+import { isHtmlFilePath } from '@/shared/utils/htmlFilePreview';
 
 export class FileExplorerMenuProvider implements IMenuProvider {
   readonly id = 'file-explorer';
@@ -34,7 +35,7 @@ export class FileExplorerMenuProvider implements IMenuProvider {
 
   async getMenuItems(context: MenuContext): Promise<MenuItem[]> {
     const items: MenuItem[] = [];
-    const revealInExplorerDisabled = isRemoteWorkspace(workspaceManager.getState().currentWorkspace);
+    const localFileActionsDisabled = isRemoteWorkspace(workspaceManager.getState().currentWorkspace);
 
     if (context.type === ContextType.EMPTY_SPACE) {
       const emptyContext = context as any;
@@ -99,6 +100,19 @@ export class FileExplorerMenuProvider implements IMenuProvider {
           globalEventBus.emit('file:open', { path: fileContext.filePath });
         }
       });
+
+      if (isHtmlFilePath(fileContext.filePath)) {
+        items.push({
+          id: 'file-open-html-in-browser',
+          label: i18nService.t('common:file.openInBrowser'),
+          icon: 'ExternalLink',
+          command: 'file.open-html-in-browser',
+          disabled: localFileActionsDisabled,
+          onClick: async (ctx) => {
+            await commandExecutor.execute('file.open-html-in-browser', ctx);
+          }
+        });
+      }
 
       items.push({
         id: 'file-download',
@@ -248,7 +262,7 @@ export class FileExplorerMenuProvider implements IMenuProvider {
       label: i18nService.t('common:file.reveal'),
       icon: 'FolderOpen',
       command: 'file.reveal-in-explorer',
-      disabled: revealInExplorerDisabled,
+      disabled: localFileActionsDisabled,
       onClick: async (ctx) => {
         await commandExecutor.execute('file.reveal-in-explorer', ctx);
       }

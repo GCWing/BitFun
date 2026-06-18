@@ -342,12 +342,12 @@
     "collapse": "收起"
   },
   "tabs": {
-    "close": "關閉標籤",
+    "close": "關閉",
     "popOut": "彈出為獨立場景",
-    "closeOthers": "關閉其他標籤",
-    "closeAll": "關閉所有標籤",
+    "closeOthers": "關閉其他",
+    "closeAll": "全部關閉",
     "closeRight": "關閉右側標籤",
-    "pin": "固定標籤",
+    "pin": "固定",
     "unpin": "取消固定",
     "unsaved": "未儲存",
     "fileDeleted": "已刪除",

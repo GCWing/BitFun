@@ -1,5 +1,6 @@
 //! System API
 
+use std::path::Path;
 use std::sync::{Arc, Mutex, OnceLock};
 
 use crate::api::app_state::AppState;
@@ -7,6 +8,7 @@ use crate::startup_trace::DesktopStartupTrace;
 use bitfun_core::service::system;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, Position, Size, State};
+use tauri_plugin_opener::OpenerExt;
 use tauri_plugin_updater::UpdaterExt;
 
 /// Emitted during `install_update` download; matches `installUpdateWithProgress` / frontend listener.
@@ -145,6 +147,43 @@ pub async fn install_update(app: AppHandle, request: InstallUpdateRequest) -> Re
         )
         .await
         .map_err(|e| e.to_string())
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpenHtmlFileInBrowserRequest {
+    pub path: String,
+}
+
+fn is_html_file_path(path: &Path) -> bool {
+    path.extension()
+        .and_then(|extension| extension.to_str())
+        .map(|extension| {
+            extension.eq_ignore_ascii_case("html") || extension.eq_ignore_ascii_case("htm")
+        })
+        .unwrap_or(false)
+}
+
+#[tauri::command]
+pub async fn open_html_file_in_browser(
+    app: AppHandle,
+    request: OpenHtmlFileInBrowserRequest,
+) -> Result<(), String> {
+    let path = Path::new(&request.path);
+
+    if !is_html_file_path(path) {
+        return Err("Only HTML files can be opened in the browser".to_string());
+    }
+
+    let metadata = std::fs::metadata(path)
+        .map_err(|error| format!("Failed to read HTML file metadata: {}", error))?;
+    if !metadata.is_file() {
+        return Err("HTML path is not a file".to_string());
+    }
+
+    app.opener()
+        .open_path(&request.path, None::<&str>)
+        .map_err(|error| format!("Failed to open HTML file in browser: {}", error))
 }
 
 #[derive(Debug, Deserialize, Default)]

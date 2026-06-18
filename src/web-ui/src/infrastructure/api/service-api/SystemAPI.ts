@@ -93,6 +93,16 @@ export class SystemAPI {
     }
   }
 
+  async openHtmlFileInBrowser(path: string): Promise<void> {
+    try {
+      await api.invoke('open_html_file_in_browser', {
+        request: { path }
+      });
+    } catch (error) {
+      throw createTauriCommandError('open_html_file_in_browser', error, { path });
+    }
+  }
+
    
   async showInFolder(path: string): Promise<void> {
     try {
