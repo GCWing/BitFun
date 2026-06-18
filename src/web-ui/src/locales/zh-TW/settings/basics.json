@@ -73,19 +73,6 @@
       "flowChatPxOption": "{{n}} px"
     }
   },
-  "launchAtLogin": {
-    "sections": {
-      "title": "登錄時啟動",
-      "hint": "登錄本用戶後是否自動運行 BitFun"
-    },
-    "toggleLabel": "開機自動啟動",
-    "toggleDescription": "登錄系統後自動啟動 BitFun；具體表現因操作系統而異。",
-    "messages": {
-      "loading": "載入中…",
-      "loadFailed": "無法讀取開機啟動設置",
-      "saveFailed": "無法更新開機啟動設置"
-    }
-  },
   "logging": {
     "sections": {
       "logging": "日誌",

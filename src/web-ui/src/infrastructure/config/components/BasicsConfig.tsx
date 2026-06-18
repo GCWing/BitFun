@@ -11,7 +11,6 @@ import {
   ConfigPageMessage,
 } from '@/component-library';
 import { configAPI, workspaceAPI } from '@/infrastructure/api';
-import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import type { CloseBehavior } from '@/infrastructure/api/service-api/SystemAPI';
 import {
   getTerminalService,
@@ -37,103 +36,6 @@ import type {
 import './BasicsConfig.scss';
 
 const log = createLogger('BasicsConfig');
-
-function BasicsLaunchAtLoginSection() {
-  const { t } = useTranslation('settings/basics');
-  const isTauri = typeof window !== 'undefined' && '__TAURI__' in window;
-  const [enabled, setEnabled] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
-
-  const showMessage = useCallback((type: 'success' | 'error' | 'info', text: string) => {
-    setMessage({ type, text });
-    setTimeout(() => setMessage(null), 3000);
-  }, []);
-
-  useEffect(() => {
-    if (!isTauri) {
-      setLoading(false);
-      return;
-    }
-
-    let cancelled = false;
-    void (async () => {
-      try {
-        setLoading(true);
-        const v = await systemAPI.getLaunchAtLoginEnabled();
-        if (!cancelled) {
-          setEnabled(v);
-        }
-      } catch (error) {
-        log.error('Failed to load launch-at-login state', error);
-        if (!cancelled) {
-          showMessage('error', t('launchAtLogin.messages.loadFailed'));
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [isTauri, showMessage, t]);
-
-  const handleToggle = useCallback(
-    async (next: boolean) => {
-      const previous = enabled;
-      setEnabled(next);
-      setSaving(true);
-      try {
-        await systemAPI.setLaunchAtLoginEnabled(next);
-      } catch (error) {
-        setEnabled(previous);
-        log.error('Failed to set launch-at-login', { next, error });
-        showMessage('error', t('launchAtLogin.messages.saveFailed'));
-      } finally {
-        setSaving(false);
-      }
-    },
-    [enabled, showMessage, t]
-  );
-
-  if (!isTauri) {
-    return null;
-  }
-
-  if (loading) {
-    return <ConfigPageLoading text={t('launchAtLogin.messages.loading')} />;
-  }
-
-  return (
-    <div className="bitfun-launch-at-login-config">
-      <div className="bitfun-launch-at-login-config__content">
-        <ConfigPageMessage message={message} />
-        <ConfigPageSection
-          title={t('launchAtLogin.sections.title')}
-          description={t('launchAtLogin.sections.hint')}
-        >
-          <ConfigPageRow
-            label={t('launchAtLogin.toggleLabel')}
-            description={t('launchAtLogin.toggleDescription')}
-            align="center"
-          >
-            <Switch
-              checked={enabled}
-              onChange={(e) => {
-                void handleToggle(e.target.checked);
-              }}
-              disabled={saving}
-            />
-          </ConfigPageRow>
-        </ConfigPageSection>
-      </div>
-    </div>
-  );
-}
 
 function BasicsAutoUpdateSection() {
   const { t } = useTranslation('settings/basics');
@@ -813,7 +715,6 @@ const BasicsConfig: React.FC = () => {
     <ConfigPageLayout className="bitfun-basics-config">
       <ConfigPageHeader title={t('title')} subtitle={t('subtitle')} />
       <ConfigPageContent className="bitfun-basics-config__content">
-        <BasicsLaunchAtLoginSection />
         <BasicsAutoUpdateSection />
         <BasicsWindowBehaviorSection />
         <BasicsLoggingSection />
