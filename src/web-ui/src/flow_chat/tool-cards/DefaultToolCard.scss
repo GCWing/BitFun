@@ -19,6 +19,8 @@
 }
 
 .default-tool-card {
+  --default-tool-card-confirm-text-rgb: 134, 239, 172;
+
   .compact-tool-card {
     min-height: 0;
     padding: 0 !important;
@@ -166,7 +168,7 @@
   .default-tool-card__button--confirm {
     background: color-mix(in srgb, var(--tool-card-positive-color) 12%, transparent);
     border-color: color-mix(in srgb, var(--tool-card-positive-color) 26%, transparent);
-    color: #86efac;
+    color: rgb(var(--default-tool-card-confirm-text-rgb));
   }
 
   .default-tool-card__button--confirm:hover:not(:disabled) {

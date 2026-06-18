@@ -30,12 +30,14 @@ export const RUNTIME_CONTRACT_VAR_DEFINITION_PATH_PARTS = [
 export const EXCEPTION_PATH_PARTS = [
   'shared/theme/uiExceptionAccents',
   'shared/theme/languageIdentityAccents',
+  'shared/theme/syntaxHighlightAccents',
   'shared/theme/themeBoundaryFallbacks',
   'monaco',
   'terminal',
   'mermaid',
   'syntax',
   'CodeEditor',
+  'tools/editor/themes',
 ];
 
 export const COLOR_DOMAIN_RULES = [
@@ -72,12 +74,12 @@ export const COLOR_DOMAIN_RULES = [
   {
     key: 'editor',
     label: 'Editor',
-    pathParts: ['tools/editor', 'component-library/components/CodeEditor'],
+    pathParts: ['tools/editor', 'component-library/components/CodeEditor', 'infrastructure/theme/integrations/MonacoThemeSync'],
   },
   {
     key: 'syntax',
     label: 'Syntax',
-    pathParts: ['shared/prism'],
+    pathParts: ['shared/prism', 'shared/theme/syntaxHighlightAccents'],
   },
   {
     key: 'terminal',

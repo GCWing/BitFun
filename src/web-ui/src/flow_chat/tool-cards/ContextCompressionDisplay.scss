@@ -1,5 +1,7 @@
 /* Context compression card styles. */
 .context-compression-display {
+  --context-compression-note-rgb: 148, 163, 184;
+
   .compression-icon {
     color: var(--color-text-secondary);
   }
@@ -65,7 +67,7 @@
     font-size: var(--flowchat-font-size-sm);
     line-height: var(--flowchat-support-line-height);
     color: var(--tool-card-text-secondary);
-    background: rgba(148, 163, 184, 0.08);
-    border-top: 1px solid rgba(148, 163, 184, 0.18);
+    background: rgba(var(--context-compression-note-rgb), 0.08);
+    border-top: 1px solid rgba(var(--context-compression-note-rgb), 0.18);
   }
 }

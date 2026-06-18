@@ -18,6 +18,7 @@ import { configManager } from '@/infrastructure/config/services/ConfigManager';
 import type { AIModelConfig, AgentProfileConfigItem, ModeSkillInfo } from '@/infrastructure/config/types';
 import { MCPAPI, type MCPServerInfo } from '@/infrastructure/api/service-api/MCPAPI';
 import { notificationService } from '@/shared/notification-system';
+import { UI_EXCEPTION_ACCENTS } from '@/shared/theme/uiExceptionAccents';
 import type { DynamicToolInfo } from '@/shared/types/agent-api';
 import { createLogger } from '@/shared/utils/logger';
 import { useNurseryStore } from '../nurseryStore';
@@ -60,7 +61,7 @@ const CTX_SEGMENT_COLORS: Record<CtxSegKey, string> = {
   systemPrompt: 'var(--color-success)',
   toolInjection: 'var(--color-accent-500)',
   rules: 'var(--color-purple-soft)',
-  memories: '#f472b6',
+  memories: UI_EXCEPTION_ACCENTS.templateContext.memories,
 };
 
 const CTX_LABEL_I18N_KEY: Record<CtxSegKey, string> = {

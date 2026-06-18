@@ -162,7 +162,7 @@
 :root[data-theme-type='light'] .flow-text-block .markdown-renderer .code-block-wrapper .copy-button.copy-success:hover,
 [data-theme-type='light'] .flow-text-block .markdown-renderer .code-block-wrapper .copy-button.copy-success:hover,
 .light .flow-text-block .markdown-renderer .code-block-wrapper .copy-button.copy-success:hover {
-  color: #1a7f37;
+  color: var(--markdown-copy-success-color-light);
 }
 
 :root[data-theme='light'] .flow-text-block .markdown-renderer .inline-code,

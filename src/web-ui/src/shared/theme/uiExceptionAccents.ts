@@ -5,6 +5,33 @@ export const UI_EXCEPTION_ACCENTS = {
   generativeUi: '#38bdf8',
   miniApp: '#7c8cef',
   mermaidDiagram: '#22c55e',
+  agentCapability: {
+    docs: '#6eb88c',
+    testing: '#c9944d',
+    creative: '#e879a0',
+    ops: '#5ea3a3',
+  },
+  insights: {
+    positive: '#6eb88c',
+    time: '#818cf8',
+    neutral: '#c9944d',
+    issue: '#c77070',
+  },
+  progress: {
+    compacting: '#0f766e',
+  },
+  templateContext: {
+    memories: '#f472b6',
+  },
+  reviewTeam: {
+    memberDefault: '#64748b',
+    businessLogic: '#2563eb',
+    performance: '#d97706',
+    security: '#dc2626',
+    architecture: '#0891b2',
+    frontend: '#059669',
+    judge: '#7c3aed',
+  },
   tealAction: '#14b8a6',
   todo: '#0d9488',
   textStroke: [

@@ -1,34 +1,10 @@
 import type { CSSProperties } from 'react';
+import { SHARED_PRISM_COLOR_SCHEME } from '@/shared/theme/syntaxHighlightAccents';
 
 type PrismBlockStyles = {
   pre: CSSProperties;
   code: CSSProperties;
 };
-
-const PRISM_COLOR_SCHEME = {
-  light: {
-    foreground: '#24292f',
-    comment: '#6e7781',
-    keyword: '#cf222e',
-    string: '#0a3069',
-    functionName: '#8250df',
-    number: '#0550ae',
-    tag: '#116329',
-    punctuation: '#57606a',
-    property: '#953800',
-  },
-  dark: {
-    foreground: '#d4d4d4',
-    comment: '#6a9955',
-    keyword: '#c586c0',
-    string: '#ce9178',
-    functionName: '#dcdcaa',
-    number: '#b5cea8',
-    tag: '#569cd6',
-    punctuation: '#d4d4d4',
-    property: '#9cdcfe',
-  },
-} as const;
 
 const PRE_KEY = 'pre[class*="language-"]' as const;
 const CODE_KEY = 'code[class*="language-"]' as const;
@@ -37,7 +13,9 @@ export function buildSharedPrismStyle(
   isLight: boolean,
   blockStyles: PrismBlockStyles,
 ): Record<string, CSSProperties> {
-  const colors = isLight ? PRISM_COLOR_SCHEME.light : PRISM_COLOR_SCHEME.dark;
+  const colors = isLight
+    ? SHARED_PRISM_COLOR_SCHEME.light
+    : SHARED_PRISM_COLOR_SCHEME.dark;
 
   return {
     [PRE_KEY]: {

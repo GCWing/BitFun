@@ -20,11 +20,11 @@ export function getAlphaColor(color: string, alphaHex = '44', percent = 27): str
 
 export const CAPABILITY_ACCENT: Record<CapabilityCategory, string> = {
   coding: 'var(--color-accent-500)',
-  docs: '#6eb88c',
+  docs: UI_EXCEPTION_ACCENTS.agentCapability.docs,
   analysis: 'var(--color-purple-500)',
-  testing: '#c9944d',
-  creative: '#e879a0',
-  ops: '#5ea3a3',
+  testing: UI_EXCEPTION_ACCENTS.agentCapability.testing,
+  creative: UI_EXCEPTION_ACCENTS.agentCapability.creative,
+  ops: UI_EXCEPTION_ACCENTS.agentCapability.ops,
 };
 
 export function getCapabilityAccentBorder(category: CapabilityCategory): string {

@@ -9,16 +9,16 @@
       "max": 7
     },
     "colorScopes.appUi.uniqueColors": {
-      "max": 204
+      "max": 0
     },
     "colorScopes.appUi.occurrences": {
-      "max": 234
+      "max": 0
     },
     "colorScopes.token.uniqueColors": {
       "max": 697
     },
     "colorScopes.exception.uniqueColors": {
-      "max": 212
+      "max": 274
     },
     "cssVarDefinitions.unresolvedRequiredUnique": {
       "max": 0
@@ -45,16 +45,16 @@
       "max": 0
     },
     "tokenAliasLiterals.occurrences": {
-      "max": 12
+      "max": 0
     },
     "tokenAliasLiterals.uniqueColors": {
-      "max": 10
+      "max": 0
     },
     "nearPairs.indistinguishableTotal": {
       "max": 0
     },
     "nearPairs.nearTotal": {
-      "max": 16
+      "max": 0
     },
     "colorDomainScopes.themePreset.occurrences": {
       "max": 1033
@@ -75,13 +75,13 @@
       "max": 0
     },
     "colorDomainScopes.boundaryFallback.occurrences": {
-      "max": 21
+      "max": 22
     },
     "colorDomainScopes.boundaryFallback.uniqueColors": {
-      "max": 21
+      "max": 22
     },
     "colorDomainScopes.editor.occurrences": {
-      "max": 136
+      "max": 56
     },
     "colorDomainScopes.syntax.occurrences": {
       "max": 18
@@ -93,25 +93,25 @@
       "max": 0
     },
     "colorDomainScopes.uiException.occurrences": {
-      "max": 21
+      "max": 38
     },
     "colorDomainScopes.uiException.uniqueColors": {
-      "max": 19
+      "max": 34
     },
     "colorDomainScopes.languageIdentity.occurrences": {
-      "max": 57
+      "max": 52
     },
     "colorDomainScopes.languageIdentity.uniqueColors": {
       "max": 50
     },
     "colorDomainScopes.visualEffect.occurrences": {
-      "max": 22
+      "max": 0
     },
     "colorDomainScopes.appUi.occurrences": {
-      "max": 84
+      "max": 0
     },
     "colorDomainScopes.appUi.uniqueColors": {
-      "max": 75
+      "max": 0
     },
     "colorDomainScopes.mermaid.occurrences": {
       "max": 139

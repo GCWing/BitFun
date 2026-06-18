@@ -3,7 +3,8 @@
  */
 
 .readonly-code-block {
-  --readonly-code-selection-bg: rgba(30, 136, 229, 0.3);
+  --readonly-code-selection-rgb: 30, 136, 229;
+  --readonly-code-selection-bg: rgba(var(--readonly-code-selection-rgb), 0.3);
 
   position: relative;
   width: 100%;

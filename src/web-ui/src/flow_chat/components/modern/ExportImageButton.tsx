@@ -16,6 +16,7 @@ import type { DialogTurn, FlowTextItem, FlowToolItem, FlowThinkingItem } from '.
 import { i18nService } from '@/infrastructure/i18n';
 import { workspaceAPI } from '@/infrastructure/api';
 import { createLogger } from '@/shared/utils/logger';
+import { FLOWCHAT_CAPTURE_FALLBACK_COLOR } from '@/shared/theme/themeBoundaryFallbacks';
 import { withTimeout } from '@/shared/utils/timing';
 import { downloadDir, join } from '@tauri-apps/api/path';
 import { writeFile } from '@tauri-apps/plugin-fs';
@@ -218,7 +219,7 @@ export const ExportImageButton: React.FC<ExportImageButtonProps> = ({
       
       // Get theme background color.
       const computedStyle = getComputedStyle(document.documentElement);
-      const bgColor = computedStyle.getPropertyValue('--color-bg-flowchat').trim() || '#121214';
+      const bgColor = computedStyle.getPropertyValue('--color-bg-flowchat').trim() || FLOWCHAT_CAPTURE_FALLBACK_COLOR.background;
 
       // Pre-load the logo as an HTMLImageElement. We do NOT try to embed it
       // inside the captured DOM (unreliable with <img>/data URLs inside an

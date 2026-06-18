@@ -338,7 +338,9 @@
   
   &--mermaid-node {
     .bitfun-context-card__icon {
-      color: #ff3670;
+      --context-card-mermaid-node-icon-rgb: 255, 54, 112;
+
+      color: rgb(var(--context-card-mermaid-node-icon-rgb));
     }
   }
   

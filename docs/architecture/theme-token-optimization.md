@@ -1,6 +1,6 @@
 # 主题与颜色 Token 优化方案
 
-> 当前基线：`gcwing/main` 的 `617086b8`，扫描日期为 2026-06-18。
+> 当前基线：`gcwing/main` 的 `d8f2d2e2`，扫描日期为 2026-06-18。
 
 本文档用于梳理 BitFun 前端主题、硬编码颜色、重复 token、近似色冗余、
 命名漂移和后续治理方案。目标不是把所有看起来相近的颜色都合并，而是让
@@ -53,28 +53,33 @@
 
 ## 当前现状
 
-基于最新 `gcwing/main` 的扫描结果，前几轮迁移已经把测试文件噪声、明显的
-跨文件未定义 key、debug overlay 游离色值和部分 widget/editor fallback 收敛掉。
-当前剩余问题更集中在 app UI 字面量、少量边界 fallback、identity/exception 色值
-归属，以及近似色是否能安全合并的证据不足。
+基于最新 `gcwing/main` 的扫描结果，当前 PR 已把普通 app/component 层的 raw color
+literal、token-equivalent app literal 和普通组件 near color pair 收敛到 0。剩余色值
+全部落在明确 owner 的专用域：theme preset/runtime、token contract、boundary fallback、
+Mermaid、Monaco/editor、Prism syntax、terminal ANSI、language identity 和 UI exception
+registry。
+
+`colorScopes.exception`、`colorDomainScopes.uiException` 和 `colorDomainScopes.boundaryFallback`
+的数值上升不是新增游离色，而是把原先散在 service/component 文件中的身份色、review team
+角色色、Prism palette、截图兜底色和 Monaco theme palette 归入显式 owner 后的结果。
 
 | 指标 | 当前基线 |
 | --- | ---: |
-| 扫描的生产前端文件数 | 1524 |
-| 忽略的测试文件数 | 212 |
-| 包含颜色字面量的文件数 | 65 |
-| 颜色字面量出现次数 | 1891 |
-| 唯一颜色字面量数量 | 1025 |
-| 组件或非 token 文件中的颜色出现次数 | 234 |
-| 组件或非 token 唯一颜色数量 | 204 |
-| App UI 颜色出现次数 | 84 |
-| App UI 唯一颜色数量 | 75 |
+| 扫描的生产前端文件数 | 1526 |
+| 忽略的测试文件数 | 213 |
+| 包含颜色字面量的文件数 | 26 |
+| 颜色字面量出现次数 | 1718 |
+| 唯一颜色字面量数量 | 913 |
+| 组件或非 token 文件中的颜色出现次数 | 0 |
+| 组件或非 token 唯一颜色数量 | 0 |
+| App UI 颜色出现次数 | 0 |
+| App UI 唯一颜色数量 | 0 |
 | `var(--token, fallback)` 出现次数 | 25 |
 | fallback 唯一 token 数 | 7 |
-| token-equivalent app literal 出现次数 | 12 |
-| token-equivalent app literal 唯一颜色数量 | 10 |
+| token-equivalent app literal 出现次数 | 0 |
+| token-equivalent app literal 唯一颜色数量 | 0 |
 | 普通组件肉眼不可区分 near color pair | 0 |
-| 普通组件需证据复核的 near color pair | 16 |
+| 普通组件需证据复核的 near color pair | 0 |
 
 当前审计未发现 CSS 变量契约层面的硬错误：
 
@@ -88,34 +93,34 @@
 | non-contract dynamic inputs | 0 |
 | non-contract component-private vars | 0 |
 
-剩余债务集中在几个专用域和少量 app UI 文件：
+剩余颜色集中在几个专用域；普通 app UI 不再保留 raw color literal：
 
 | 区域 | 当前出现次数 | 当前唯一色数 | 说明 |
 | --- | ---: | ---: | --- |
 | Theme presets | 1033 | 611 | 主题个性与 palette 映射，不作为普通 app literal 直接合并 |
 | Token contracts | 268 | 159 | `tokens.scss` 等静态契约根 |
-| Editor | 136 | 110 | Monaco/editor 专用域，不能直接泛化到 app token |
+| Editor | 56 | 53 | Monaco/editor 专用域，不能直接泛化到 app token；组件装饰色已迁出 raw literal |
 | Mermaid | 139 | 95 | Mermaid 专用渲染域 |
 | Theme runtime | 54 | 45 | `ThemeService.ts` 运行时注入 |
-| Language identity | 57 | 50 | 语言身份色，应保留数据语义或迁入 identity registry |
+| Language identity | 52 | 50 | 语言身份色，已集中到 identity registry |
 | Terminal | 38 | 30 | terminal/ANSI 专用域 |
-| Boundary fallback | 21 | 21 | iframe/miniapp 早期渲染兜底值，不作为普通 app token |
-| Visual effects | 22 | 22 | 动效和装饰效果，需按效果语义审查 |
-| UI exception registry | 21 | 19 | 已归档的 UI 例外色 |
+| Boundary fallback | 22 | 22 | iframe/miniapp/截图兜底值，不作为普通 app token |
+| Visual effects | 0 | 0 | StreamText/TextStroke raw literal 已迁出普通组件层 |
+| UI exception registry | 38 | 34 | 已归档的 UI 例外色，包含 review team、agent capability、template context、insights 和 inspector 等固定身份色 |
 | Generated widget | 0 | 0 | 颜色默认值已迁到 boundary fallback registry |
-| App UI | 84 | 75 | 后续普通组件迁移的主战场 |
+| App UI | 0 | 0 | 普通 app/component raw color 已清零；后续新增必须先进入 token/exception 决策 |
+| Syntax | 18 | 17 | Prism syntax palette，保留为专用渲染域 |
 
-剩余高频普通组件或边界文件：
+剩余高频文件均为专用 palette 或集中 registry：
 
 | 文件 | 颜色出现次数 | 后续处理策略 |
 | --- | ---: | --- |
-| `src/web-ui/src/component-library/components/CodeEditor/CodeEditor.scss` | 65 | editor surface 专用域，先保持 exception namespace |
-| `src/web-ui/src/shared/theme/themeBoundaryFallbacks.ts` | 21 | isolated surface 边界默认值，保留集中 owner |
-| `src/web-ui/src/component-library/components/StreamText/StreamText.scss` | 21 | visual effect，应迁入视觉效果 token/例外域 |
-| `src/web-ui/src/shared/theme/uiExceptionAccents.ts` | 21 | 已归档 UI 例外，继续要求显式 owner/role |
-| `src/web-ui/src/shared/prism/prismTheme.ts` | 18 | syntax theme，不泛化到 app token |
-| `src/web-ui/src/tools/editor/components/DiffEditor.scss` | 18 | diff/editor 专用域，按 git/diff token 处理 |
-| `src/web-ui/src/app/scenes/profile/views/NurseryView.scss` | 0 | app scene surface 中的 assistant 默认 gradient 和 deco alpha 已迁到 token/color-mix |
+| `src/web-ui/src/tools/editor/themes/bitfun-dark.theme.ts` | 47 | Monaco theme palette；不拆散到普通 app token |
+| `src/web-ui/src/shared/theme/languageIdentityAccents.ts` | 52 | 内置 language/file identity registry；调用方复用常量 |
+| `src/web-ui/src/shared/theme/uiExceptionAccents.ts` | 38 | 固定 UI 身份/角色色 registry；新增必须说明 owner/role |
+| `src/web-ui/src/tools/terminal/utils/xtermTheme.ts` | 36 | terminal ANSI palette；不与 app semantic color 合并 |
+| `src/web-ui/src/shared/theme/themeBoundaryFallbacks.ts` | 22 | isolated surface 和截图兜底值；集中 owner |
+| `src/web-ui/src/shared/theme/syntaxHighlightAccents.ts` | 18 | Prism syntax palette；不泛化到 app token |
 
 当前 fallback token 都已进入 allowlist，但仍需要逐项决策是否保留边界 fallback：
 
@@ -147,29 +152,39 @@ fallback 决策表：
 | --- | --- | --- |
 | Phase 0：基线与工具 | 已完成主体 | 审计脚本可区分测试文件、fallback token、dynamic families 和 exception domains |
 | Phase 1：canonical token 契约 | 已完成主体，继续补文档 | 静态/runtime/widget 契约已有治理入口，仍需保持文档基线同步 |
-| Phase 2：精确重复合并 | 持续完成 | 本轮继续移除 token-equivalent app literal，并把 ImageViewer 状态色迁到文本、边框、强调、错误 token |
-| Phase 3：legacy fallback 迁移 | 持续完成 | `--shadow-color`、`--assistant-card-gradient`、`--operation-color` 已落到组件根默认值，fallback unique token 从 10 降到 7 |
-| Phase 4：组件 token 抽取 | 持续完成 | agent surface、Mermaid、Snapshot、Nursery、ContextCompression、ImageViewer、Tiptap inline AI 等 surface 已补根默认值或改用 contract token |
-| Phase 5：近似色合并 | 持续完成 | app UI / editor 中安全的极近似 alpha 已改为 token/color-mix；DiffEditor、Monaco、language identity、StreamText 等相邻或跨域身份色保持延后 |
-| Phase 6：防回退约束 | 持续完成 | baseline 已同步降到当前审计值，防止 app raw color、fallback、token-equivalent literal 和普通组件 near-pair 回涨 |
+| Phase 2：精确重复合并 | 本轮完成 | token-equivalent app literal 已从 12/10 清零；截图兜底、language identity 和 review/agent/insights 固定色已迁入显式 registry |
+| Phase 3：legacy fallback 迁移 | 本轮完成 | fallback unique token 保持 7，普通组件内不再保留 raw fallback palette；边界 fallback 只保留在 allowlist 或 registry |
+| Phase 4：组件 token 抽取 | 本轮完成 | CodeEditor、StreamText、ChatInputPixelPet、ReferencesPanel、AgentCompanion、tool-card、editor 组件装饰色已抽为组件私有 RGB channel 或复用 contract token |
+| Phase 5：近似色合并 | 本轮完成 | 普通组件 near pair 已清零；极近似视觉色只在不相邻或不承担状态差异时合并，Monaco/terminal/Mermaid/syntax 专用 palette 不强行合并 |
+| Phase 6：防回退约束 | 本轮完成 | baseline 已同步到 component/non-token=0、appUi=0、token-equivalent=0、nearPair=0，防止普通 app raw color 回涨 |
 
-Phase 5 首轮决策：
+Phase 5 决策记录：
 
 | pair | 决策 | 调用点 | 依据 |
 | --- | --- | --- | --- |
 | `#1f2024` -> `#202024` | merge | `ChatInputPixelPet.scss` panda body/decor；`bitfun-dark.theme.ts` editor subtle border | RGB distance = 1，非状态色，非相邻 surface 边界；panda 固定深色与 editor border 不在同一视觉层级承担区分 |
 | `#6e7681` -> `#6e7781` | merge | `LanguageRegistry.ts` Plain Text identity；`prismTheme.ts` light comment | RGB distance = 1，均为 neutral muted 文本/identity 色，不表达状态严重程度或数据差异 |
 | app UI / editor alpha raw values | merge to token/color-mix | `ContextMenu.scss`、`TiptapEditor.scss`、`GitDiffEditor.scss`、`AIModelConfig.scss`、`NurseryView.scss`、`AgentCard.scss`、`ImageViewer.scss` | 色相来自现有 accent/success/overlay/text/error contract，透明度仅表达层级；迁移为 token/color-mix 保留层级但移除游离 raw color |
-| remaining top near pairs | defer | `DiffEditor.scss`、`bitfun-dark.theme.ts`、`LanguageRegistry.ts`、`StreamText.scss`、`prismTheme.ts`、Flow Chat capture fallback 等 | Diff added/deleted、Monaco/editor、syntax、language identity、visual effect 和 capture fallback 属于相邻状态或跨域身份色；没有截图/相邻关系证据前不强行合并 |
+| DiffEditor added/deleted alpha values | component-tokenize | `DiffEditor.scss` | `0.15/0.18/0.20/0.38` 表达统计徽标、行背景、强调行和字符级 diff 的层级差异，不能直接合并；改为 `--diff-editor-*` 组件 token 后保留层级并移除游离 raw rgba |
+| `#ff8800` -> `#ff8c00` | merge | `StreamText.scss` rainbow/fire orange | RGB distance = 4，均为 visual-effect 暖橙，非相邻状态色，合并后不影响用户区分 |
+| `#ffdd00` -> `#ffd700` | merge | `StreamText.scss` fire yellow；editor/reference yellow | RGB distance = 6，均为亮黄强调色，调用点不相邻，不承担不同业务状态 |
+| `#7dd3fc` -> `#7DCFFF` | merge | `GenerativeWidgetToolCard.scss`；`bitfun-dark.theme.ts` editor link | RGB distance = 5，均为非状态 sky/cyan 强调，调用点跨 surface 且不相邻 |
+| `#00b4d8` -> `#00add8` | merge | `StreamText.scss` ocean mid；Go language identity | RGB distance = 7，同为 cyan/blue identity/visual-effect 色，非错误/警告/状态强度 |
+| `#141414` vs `#121214` | preserve | `LanguageRegistry.ts` reStructuredText identity；Flow Chat capture/editor fallback | RGB distance = 2.83，但 `#141414` 是已存在的 language identity，迁移到 registry 时保持原值；`#121214` 仅作为截图/边界兜底 |
+| remaining near pairs | none in ordinary components | 无 | 审计口径下普通组件 near pair 已清零；后续只在专用 palette 自身重设计时处理 Monaco/terminal/Mermaid/syntax 内部近似色 |
+| Monaco theme palette | classify as exception | `tools/editor/themes/bitfun-dark.theme.ts` | 该文件是 Monaco theme 完整色板，不是普通 app UI；归入 editor/exception 后不再被误计为 component raw color |
+| Flow Chat capture fallback | boundary fallback | `ExportImageButton.tsx`、`captureElementToDownloadsPng.tsx` -> `themeBoundaryFallbacks.ts` | `#121214` 只在 root theme 变量不可用时兜底截图背景，集中 owner 后避免截图工具重复携带 raw fallback |
 
 Phase 6 首轮约束：
 
 | 约束 | 当前值 | baseline | 作用 |
 | --- | ---: | ---: | --- |
 | `nearPairs.indistinguishableTotal` | 0 | 0 | 阻止新增普通组件肉眼不可区分 pair 未被合并或记录 |
-| `nearPairs.nearTotal` | 16 | 16 | 阻止新增普通组件 near color 债务，减少时要求同步降低 baseline |
-| `colorScopes.appUi.uniqueColors` | 204 | 204 | 阻止普通组件 raw color 唯一色回涨 |
-| `colorScopes.appUi.occurrences` | 234 | 234 | 阻止普通组件 raw color 出现次数回涨 |
+| `nearPairs.nearTotal` | 0 | 0 | 阻止新增普通组件 near color 债务；新增必须合并、归类或记录理由 |
+| `colorScopes.appUi.uniqueColors` | 0 | 0 | 阻止普通组件 raw color 唯一色回涨 |
+| `colorScopes.appUi.occurrences` | 0 | 0 | 阻止普通组件 raw color 出现次数回涨 |
+| `tokenAliasLiterals.occurrences` | 0 | 0 | 阻止重新出现可映射到 token 的 app literal |
+| `colorDomainScopes.appUi.occurrences` | 0 | 0 | 阻止未归类 app UI 色值回涨 |
 | CSS var governance errors | 0 | 0 | 保持 unresolved、fallback-only、non-contract 和 dynamic family 错误为零 |
 
 `nearPairs.*` 只基于非 token、非 exception 的普通组件颜色计算。Theme preset、

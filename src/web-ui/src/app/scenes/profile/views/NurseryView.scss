@@ -44,7 +44,7 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
     transition: opacity 0.30s $easing-standard;
     user-select: none;
     -webkit-user-drag: none;
-    filter: drop-shadow(2px 6px 14px rgba(0, 0, 0, 0.24));
+    filter: drop-shadow(2px 6px 14px rgba(var(--color-static-black-rgb), 0.24));
 
     &--default {
       opacity: 1;
@@ -216,7 +216,7 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
     }
 
     &--muted {
-      border-color: rgba(255, 255, 255, 0.14);
+      border-color: rgba(var(--color-static-white-rgb), 0.14);
       background: var(--element-bg-soft);
     }
 
@@ -505,7 +505,7 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
       color 0.15s ease;
 
     &:hover {
-      background: rgba(255, 255, 255, 0.14);
+      background: rgba(var(--color-static-white-rgb), 0.14);
       color: var(--color-text-primary);
     }
 
@@ -584,7 +584,7 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
   border-radius: 14px;
   padding: 24px;
   width: min(400px, calc(100vw - 40px));
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 20px 60px rgba(var(--color-static-black-rgb), 0.35);
 
   &__title {
     margin: 0 0 10px;

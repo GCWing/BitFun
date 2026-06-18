@@ -13,6 +13,7 @@ import {
   SessionStateMachine,
   SessionDerivedState,
 } from './types';
+import { UI_EXCEPTION_ACCENTS } from '@/shared/theme/uiExceptionAccents';
 
 /** Optional live chat input draft while PROCESSING (mirrors input box); used so send mode stays `split` when user has typed a follow-up. */
 export type DeriveSessionOptions = {
@@ -216,7 +217,7 @@ function getProgressBarLabel(
 function getProgressBarColor(phase: ProcessingPhase | null): string {
   switch (phase) {
     case ProcessingPhase.COMPACTING:
-      return '#0f766e';
+      return UI_EXCEPTION_ACCENTS.progress.compacting;
 
     case ProcessingPhase.STARTING:
       return 'var(--color-accent-600)';

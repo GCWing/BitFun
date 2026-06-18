@@ -235,8 +235,10 @@
   }
 
   &__model-option-thinking {
+    --default-model-thinking-rgb: 180, 160, 255;
+
     flex-shrink: 0;
-    color: rgba(180, 160, 255, 0.9);
+    color: rgba(var(--default-model-thinking-rgb), 0.9);
     width: 11px;
     height: 11px;
   }

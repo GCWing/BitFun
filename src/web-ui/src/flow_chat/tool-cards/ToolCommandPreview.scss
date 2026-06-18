@@ -15,7 +15,9 @@
 }
 
 .tool-command-preview__empty {
-  color: #e06c75;
+  --tool-command-preview-empty-rgb: 224, 108, 117;
+
+  color: rgb(var(--tool-command-preview-empty-rgb));
   font-style: italic;
 }
 

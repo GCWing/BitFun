@@ -15,6 +15,10 @@
 }
 
 .references-panel {
+  --references-panel-file-icon-rgb: 127, 219, 202;
+  --references-panel-accent-shadow-rgb: 59, 130, 246;
+  --references-panel-mark-rgb: 255, 215, 0;
+
   position: fixed;
   width: 500px;
   max-width: 90vw;
@@ -152,7 +156,7 @@
     flex-shrink: 0;
     width: 16px;
     height: 16px;
-    color: #7FDBCA;
+    color: rgb(var(--references-panel-file-icon-rgb));
     opacity: 0.9;
   }
 }
@@ -206,8 +210,8 @@
     color: var(--color-text-primary);
     
     box-shadow: 
-      inset 0 0 0 1px rgba(59, 130, 246, 0.2),
-      0 2px 8px rgba(59, 130, 246, 0.1);
+      inset 0 0 0 1px rgba(var(--references-panel-accent-shadow-rgb), 0.2),
+      0 2px 8px rgba(var(--references-panel-accent-shadow-rgb), 0.1);
 
     .references-panel__reference-icon {
       opacity: 1;
@@ -260,8 +264,8 @@
   transition: color $motion-instant ease;
 
   mark {
-    background: rgba(255, 215, 0, 0.2);
-    color: #ffd700;
+    background: rgba(var(--references-panel-mark-rgb), 0.2);
+    color: rgb(var(--references-panel-mark-rgb));
     font-weight: $font-weight-semibold;
   }
 }
@@ -283,15 +287,15 @@
 @media (prefers-contrast: high) {
   .references-panel {
     border-width: 2px;
-    border-color: rgba(255, 255, 255, 0.5);
+    border-color: rgba(var(--color-static-white-rgb), 0.5);
     box-shadow: 
       $shadow-2xl,
-      0 0 0 2px rgba(0, 0, 0, 0.9);
+      0 0 0 2px rgba(var(--color-static-black-rgb), 0.9);
   }
   
   .references-panel__reference-item:hover {
     background: var(--color-accent-300);
-    border: 1px solid rgba(59, 130, 246, 0.5);
+    border: 1px solid rgba(var(--references-panel-accent-shadow-rgb), 0.5);
   }
 }
 

@@ -289,6 +289,10 @@ body > div[style*="z-index:999999"] {
 
 /* Print styles */
 @media print {
+  :root {
+    --print-border-rgb: 153, 153, 153;
+  }
+
   * {
     background: transparent !important;
     color: black !important;
@@ -307,7 +311,7 @@ body > div[style*="z-index:999999"] {
   
   pre,
   blockquote {
-    border: 1px solid #999999;
+    border: 1px solid rgb(var(--print-border-rgb));
     page-break-inside: avoid;
   }
   

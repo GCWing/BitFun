@@ -226,6 +226,8 @@
   }
 
   .task-failed-badge {
+    --task-failed-badge-rgb: 107, 114, 128;
+
     display: inline-flex;
     align-items: center;
     padding: 0.1rem var(--flowchat-inline-gap);
@@ -234,7 +236,7 @@
     font-weight: 500;
     flex-shrink: 0;
     color: var(--color-text-muted);
-    background: rgba(107, 114, 128, 0.15);
+    background: rgba(var(--task-failed-badge-rgb), 0.15);
   }
 
   .agent-type-badge {

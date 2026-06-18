@@ -106,13 +106,14 @@
 // Dark theme
 @media (prefers-color-scheme: dark) {
   .snapshot-rollback-button {
-    --color-border: #374151;
-    --color-bg-elevated: #1f2937;
-    --color-text-secondary: #9ca3af;
+    --snapshot-rollback-dark-secondary-rgb: 156, 163, 175;
+    --color-border: color-mix(in srgb, rgb(var(--color-overlay-slate-rgb)) 82%, var(--color-static-white));
+    --color-bg-elevated: color-mix(in srgb, rgb(var(--color-overlay-slate-rgb)) 94%, var(--color-static-white));
+    --color-text-secondary: rgb(var(--snapshot-rollback-dark-secondary-rgb));
     --color-primary: var(--color-accent-500);
     --color-primary-bg: var(--card-bg-accent);
     --color-error: var(--color-error-soft);
-    --color-error-bg: rgba(248, 113, 113, 0.1);
+    --color-error-bg: color-mix(in srgb, var(--color-error-soft) 10%, transparent);
   }
 }
 

@@ -17,6 +17,14 @@
   --bitfun-agent-companion-gap: 8px;
   --bitfun-agent-companion-pet-width: 96px;
   --bitfun-agent-companion-pet-height: 96px;
+  --bitfun-agent-companion-bubble-copy-rgb: 31, 41, 55;
+  --bitfun-agent-companion-warning-rgb: 217, 119, 6;
+  --bitfun-agent-companion-warning-bg-rgb: 255, 251, 235;
+  --bitfun-agent-companion-success-rgb: 22, 163, 74;
+  --bitfun-agent-companion-success-bg-rgb: 240, 253, 244;
+  --bitfun-agent-companion-error-rgb: 220, 38, 38;
+  --bitfun-agent-companion-error-bg-rgb: 254, 242, 242;
+  --bitfun-agent-companion-bubble-fg: rgb(var(--bitfun-agent-companion-bubble-copy-rgb));
 
   width: 100vw;
   height: 100vh;
@@ -88,7 +96,7 @@
 
     &::-webkit-scrollbar-thumb {
       border-radius: 999px;
-      background: rgba(15, 23, 42, 0.18);
+      background: color-mix(in srgb, rgb(var(--color-overlay-slate-rgb)) 18%, transparent);
     }
   }
 
@@ -103,7 +111,7 @@
     border: 1px solid var(--color-overlay-slate-10);
     border-radius: 10px 10px 2px 10px;
     background: var(--color-overlay-white-92);
-    color: #1f2937;
+    color: var(--bitfun-agent-companion-bubble-fg);
     backdrop-filter: blur(10px);
     cursor: pointer;
 
@@ -146,7 +154,7 @@
     margin-top: 2px;
     font-size: 10px;
     line-height: 1.25;
-    color: rgba(31, 41, 55, 0.7);
+    color: rgba(var(--bitfun-agent-companion-bubble-copy-rgb), 0.7);
   }
 
   &__bubble-output {
@@ -157,7 +165,7 @@
     height: calc(12px * 4);
     font-size: 10px;
     line-height: 12px;
-    color: rgba(31, 41, 55, 0.82);
+    color: rgba(var(--bitfun-agent-companion-bubble-copy-rgb), 0.82);
     white-space: pre-wrap;
     word-break: break-word;
     overflow-wrap: anywhere;
@@ -176,26 +184,26 @@
       height: 1em;
       margin-left: 2px;
       vertical-align: -0.12em;
-      background: rgba(31, 41, 55, 0.55);
+      background: rgba(var(--bitfun-agent-companion-bubble-copy-rgb), 0.55);
       animation: bitfun-agent-companion-caret 920ms steps(2, start) infinite;
     }
   }
 
   &__bubble--attention,
   &__bubble--waiting {
-    border-color: rgba(217, 119, 6, 0.22);
-    background: rgba(255, 251, 235, 0.94);
+    border-color: rgba(var(--bitfun-agent-companion-warning-rgb), 0.22);
+    background: rgba(var(--bitfun-agent-companion-warning-bg-rgb), 0.94);
   }
 
   &__bubble--completed {
-    border-color: rgba(22, 163, 74, 0.18);
-    background: rgba(240, 253, 244, 0.94);
+    border-color: rgba(var(--bitfun-agent-companion-success-rgb), 0.18);
+    background: rgba(var(--bitfun-agent-companion-success-bg-rgb), 0.94);
   }
 
   &__bubble--error,
   &__bubble--interrupted {
-    border-color: rgba(220, 38, 38, 0.18);
-    background: rgba(254, 242, 242, 0.94);
+    border-color: rgba(var(--bitfun-agent-companion-error-rgb), 0.18);
+    background: rgba(var(--bitfun-agent-companion-error-bg-rgb), 0.94);
   }
 
   .bitfun-chat-input-pixel-pet {

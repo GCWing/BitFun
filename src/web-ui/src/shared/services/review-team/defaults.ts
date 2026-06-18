@@ -6,6 +6,7 @@ import type {
   ReviewTokenBudgetMode,
 } from './types';
 import { REVIEW_STRATEGY_PROFILES } from './strategy';
+import { UI_EXCEPTION_ACCENTS } from '@/shared/theme/uiExceptionAccents';
 
 export const DEFAULT_REVIEW_TEAM_ID = 'default-review-team';
 export const DEFAULT_REVIEW_TEAM_CONFIG_PATH = 'ai.review_teams.default';
@@ -99,7 +100,7 @@ export const PROMPT_BYTE_ESTIMATE_PER_FILE_BYTES = 1_800;
 export const PROMPT_BYTE_ESTIMATE_PER_CHANGED_LINE_BYTES = 120;
 export const PROMPT_BYTE_ESTIMATE_UNKNOWN_LINES_PER_FILE = 80;
 
-export const REVIEW_TEAM_MEMBER_ACCENT_DEFAULT = '#64748b';
+export const REVIEW_TEAM_MEMBER_ACCENT_DEFAULT = UI_EXCEPTION_ACCENTS.reviewTeam.memberDefault;
 
 export const EXTRA_MEMBER_DEFAULTS = {
   roleName: 'Additional Specialist Reviewer',
@@ -152,7 +153,7 @@ export const DEFAULT_REVIEW_TEAM_CORE_ROLES: ReviewTeamCoreRoleDefinition[] = [
       'Check boundary cases, rollback paths, and data integrity assumptions.',
       'Focus on issues that can break user outcomes or product intent.',
     ],
-    accentColor: '#2563eb',
+    accentColor: UI_EXCEPTION_ACCENTS.reviewTeam.businessLogic,
   },
   {
     key: 'performance',
@@ -166,7 +167,7 @@ export const DEFAULT_REVIEW_TEAM_CORE_ROLES: ReviewTeamCoreRoleDefinition[] = [
       'Flag blocking work, N+1 patterns, and wasteful data movement.',
       'Keep performance advice practical and aligned with the existing architecture.',
     ],
-    accentColor: '#d97706',
+    accentColor: UI_EXCEPTION_ACCENTS.reviewTeam.performance,
   },
   {
     key: 'security',
@@ -180,7 +181,7 @@ export const DEFAULT_REVIEW_TEAM_CORE_ROLES: ReviewTeamCoreRoleDefinition[] = [
       'Look for injection, unsafe command execution, and exposure risks.',
       'Highlight concrete fixes that reduce risk without broad rewrites.',
     ],
-    accentColor: '#dc2626',
+    accentColor: UI_EXCEPTION_ACCENTS.reviewTeam.security,
   },
   {
     key: 'architecture',
@@ -194,7 +195,7 @@ export const DEFAULT_REVIEW_TEAM_CORE_ROLES: ReviewTeamCoreRoleDefinition[] = [
       'Verify API contracts, tool schemas, and transport messages stay consistent.',
       'Ensure platform-agnostic code does not leak platform-specific details.',
     ],
-    accentColor: '#0891b2',
+    accentColor: UI_EXCEPTION_ACCENTS.reviewTeam.architecture,
   },
   {
     key: 'frontend',
@@ -208,7 +209,7 @@ export const DEFAULT_REVIEW_TEAM_CORE_ROLES: ReviewTeamCoreRoleDefinition[] = [
       'Check React performance patterns (memoization, virtualization, effect dependencies).',
       'Flag accessibility violations and frontend-backend API contract drift.',
     ],
-    accentColor: '#059669',
+    accentColor: UI_EXCEPTION_ACCENTS.reviewTeam.frontend,
     conditional: true,
   },
   {
@@ -224,7 +225,7 @@ export const DEFAULT_REVIEW_TEAM_CORE_ROLES: ReviewTeamCoreRoleDefinition[] = [
       'Spot-check specific code locations only when a reviewer claim needs verification.',
       'Ensure every surviving issue has an actionable fix or follow-up plan.',
     ],
-    accentColor: '#7c3aed',
+    accentColor: UI_EXCEPTION_ACCENTS.reviewTeam.judge,
   },
 ];
 

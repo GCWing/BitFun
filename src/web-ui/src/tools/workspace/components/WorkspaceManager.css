@@ -216,7 +216,7 @@
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.4px;
-  color: rgba(255, 255, 255, 0.55);
+  color: rgba(var(--color-static-white-rgb), 0.55);
 }
 
 .workspace-related-paths__list {

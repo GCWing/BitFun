@@ -486,7 +486,7 @@
     color: var(--color-static-white);
     background: $color-success;
     font-weight: $font-weight-semibold;
-    box-shadow: 0 1px 4px rgba(110, 184, 140, 0.35);
+    box-shadow: 0 1px 4px rgba(var(--component-action-success-rgb), 0.35);
     cursor: default;
   }
 

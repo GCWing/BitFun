@@ -89,7 +89,7 @@ $toast-width: 320px;
   background: var(--color-bg-primary);
   border: 1px solid var(--border-base);
   border-radius: $size-radius-lg;
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.14);
+  box-shadow: 0 6px 24px rgba(var(--color-static-black-rgb), 0.14);
   overflow: hidden;
 
   &--entering {

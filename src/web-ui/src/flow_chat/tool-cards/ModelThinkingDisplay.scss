@@ -111,7 +111,9 @@
 }
 
 .flow-thinking-item.streaming .thinking-content {
-  color: #9ca3af;
+  --model-thinking-streaming-text-rgb: 156, 163, 175;
+
+  color: rgb(var(--model-thinking-streaming-text-rgb));
 }
 
 /* Content wrapper with fade gradients */

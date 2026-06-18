@@ -20,13 +20,15 @@
 
 .bitfun-chat-input-pixel-pet {
   /* FIXED panda body palette — never inverted. */
-  --bitfun-pet-color: #202024;
-  --bitfun-pet-cream: #fafaf9;
+  --bitfun-pet-color-rgb: 32, 32, 36;
+  --bitfun-pet-cream-rgb: 250, 250, 249;
+  --bitfun-pet-color: rgb(var(--bitfun-pet-color-rgb));
+  --bitfun-pet-cream: rgb(var(--bitfun-pet-cream-rgb));
 
   /* Decorative palette — inverts between light/dark themes so overlays
      stay readable on either chat background. */
-  --bitfun-pet-decor: #202024;
-  --bitfun-pet-decor-soft: rgba(32, 32, 36, 0.55);
+  --bitfun-pet-decor: rgb(var(--bitfun-pet-color-rgb));
+  --bitfun-pet-decor-soft: rgba(var(--bitfun-pet-color-rgb), 0.55);
   --bitfun-petdex-width: 42px;
   --bitfun-petdex-height: 46px;
   --bitfun-petdex-margin-top: -8px;
@@ -54,6 +56,7 @@
     width: 100%;
     height: 100%;
     overflow: visible;
+    color: var(--bitfun-pet-cream);
     shape-rendering: geometricPrecision;
   }
 
@@ -104,8 +107,8 @@
    outlines on every internal element. */
 :root[data-theme-type='dark'] .bitfun-chat-input-pixel-pet,
 [data-theme-type='dark'] .bitfun-chat-input-pixel-pet {
-  --bitfun-pet-decor: #fafaf9;
-  --bitfun-pet-decor-soft: rgba(250, 251, 249, 0.6);
+  --bitfun-pet-decor: rgb(var(--bitfun-pet-cream-rgb));
+  --bitfun-pet-decor-soft: rgba(var(--bitfun-pet-cream-rgb), 0.6);
 
   .bitfun-panda-head__silhouette {
     filter: url(#bitfun-panda-outline);

@@ -1,13 +1,19 @@
 @use '../../styles/tokens.scss' as tokens;
 
 .code-editor {
-  --code-editor-blue-100: rgba(130, 170, 255, 1);
-  --code-editor-blue-40: rgba(130, 170, 255, 0.4);
-  --code-editor-blue-30: rgba(130, 170, 255, 0.3);
-  --code-editor-blue-25: rgba(130, 170, 255, 0.25);
-  --code-editor-teal-15: rgba(127, 219, 202, 0.15);
-  --code-editor-teal-08: rgba(127, 219, 202, 0.08);
-  --code-editor-current-find-50: rgba(255, 152, 0, 0.5);
+  --code-editor-blue-rgb: 130, 170, 255;
+  --code-editor-teal-rgb: 127, 219, 202;
+  --code-editor-purple-rgb: 199, 146, 234;
+  --code-editor-warm-rgb: 225, 171, 128;
+  --code-editor-find-rgb: 255, 193, 7;
+  --code-editor-current-find-rgb: 255, 152, 0;
+  --code-editor-blue-100: rgba(var(--code-editor-blue-rgb), 1);
+  --code-editor-blue-40: rgba(var(--code-editor-blue-rgb), 0.4);
+  --code-editor-blue-30: rgba(var(--code-editor-blue-rgb), 0.3);
+  --code-editor-blue-25: rgba(var(--code-editor-blue-rgb), 0.25);
+  --code-editor-teal-15: rgba(var(--code-editor-teal-rgb), 0.15);
+  --code-editor-teal-08: rgba(var(--code-editor-teal-rgb), 0.08);
+  --code-editor-current-find-50: rgba(var(--code-editor-current-find-rgb), 0.5);
 
   position: relative;
   width: 100%;
@@ -22,17 +28,17 @@
     background: var(--color-bg-primary);
     border: 1px solid var(--code-editor-blue-25);
     box-shadow:
-      0 8px 32px rgba(0, 0, 0, 0.5),
+      0 8px 32px rgba(var(--color-static-black-rgb), 0.5),
       0 0 0 1px var(--code-editor-teal-08) inset,
-      0 2px 16px rgba(130, 170, 255, 0.12);
+      0 2px 16px rgba(var(--code-editor-blue-rgb), 0.12);
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
     &:hover {
       border-color: var(--code-editor-blue-40);
       box-shadow:
-        0 12px 48px rgba(0, 0, 0, 0.6),
-        0 0 0 1px rgba(127, 219, 202, 0.12) inset,
-        0 2px 20px rgba(130, 170, 255, 0.2);
+        0 12px 48px rgba(var(--color-static-black-rgb), 0.6),
+        0 0 0 1px rgba(var(--code-editor-teal-rgb), 0.12) inset,
+        0 2px 20px rgba(var(--code-editor-blue-rgb), 0.2);
     }
 
     &::before {
@@ -44,9 +50,9 @@
       height: 2px;
       background: linear-gradient(90deg,
         transparent 0%,
-        rgba(199, 146, 234, 0.3) 25%,
-        rgba(130, 170, 255, 0.5) 50%,
-        rgba(127, 219, 202, 0.3) 75%,
+        rgba(var(--code-editor-purple-rgb), 0.3) 25%,
+        rgba(var(--code-editor-blue-rgb), 0.5) 50%,
+        rgba(var(--code-editor-teal-rgb), 0.3) 75%,
         transparent 100%
       );
       z-index: 1;
@@ -61,7 +67,7 @@
         }
 
         .margin-view-overlays .line-numbers {
-          color: rgba(255, 255, 255, 0.35);
+          color: rgba(var(--color-static-white-rgb), 0.35);
           font-weight: 400;
           font-variant-numeric: tabular-nums;
           transition: color 0.2s ease;
@@ -70,7 +76,7 @@
         .margin-view-overlays .current-line ~ .line-numbers {
           color: var(--code-editor-blue-100);
           font-weight: 700;
-          text-shadow: 0 0 10px rgba(130, 170, 255, 0.6);
+          text-shadow: 0 0 10px rgba(var(--code-editor-blue-rgb), 0.6);
           transform: scale(1.05);
         }
 
@@ -80,11 +86,11 @@
 
         .view-overlays .current-line {
           background: linear-gradient(90deg,
-            rgba(130, 170, 255, 0.08) 0%,
-            rgba(127, 219, 202, 0.06) 50%,
-            rgba(199, 146, 234, 0.04) 100%
+            rgba(var(--code-editor-blue-rgb), 0.08) 0%,
+            rgba(var(--code-editor-teal-rgb), 0.06) 50%,
+            rgba(var(--code-editor-purple-rgb), 0.04) 100%
           );
-          border-left: 3px solid rgba(130, 170, 255, 0.5);
+          border-left: 3px solid rgba(var(--code-editor-blue-rgb), 0.5);
           border-right: none;
           animation: pulse-highlight 2s ease-in-out infinite;
         }
@@ -108,60 +114,60 @@
 
           .slider {
             background: linear-gradient(135deg,
-              rgba(225, 171, 128, 0.35),
-              rgba(199, 146, 234, 0.35)
+              rgba(var(--code-editor-warm-rgb), 0.35),
+              rgba(var(--code-editor-purple-rgb), 0.35)
             ) !important;
             border-radius: 6px;
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
             &:hover {
               background: linear-gradient(135deg,
-                rgba(225, 171, 128, 0.55),
-                rgba(199, 146, 234, 0.55)
+                rgba(var(--code-editor-warm-rgb), 0.55),
+                rgba(var(--code-editor-purple-rgb), 0.55)
               ) !important;
-              box-shadow: 0 0 8px rgba(225, 171, 128, 0.4);
+              box-shadow: 0 0 8px rgba(var(--code-editor-warm-rgb), 0.4);
             }
 
             &.active {
               background: linear-gradient(135deg,
-                rgba(225, 171, 128, 0.7),
-                rgba(199, 146, 234, 0.7)
+                rgba(var(--code-editor-warm-rgb), 0.7),
+                rgba(var(--code-editor-purple-rgb), 0.7)
               ) !important;
-              box-shadow: 0 0 12px rgba(225, 171, 128, 0.5);
+              box-shadow: 0 0 12px rgba(var(--code-editor-warm-rgb), 0.5);
             }
           }
         }
 
         .cursor {
           background: linear-gradient(180deg,
-            rgba(130, 170, 255, 1),
-            rgba(127, 219, 202, 1)
+            rgba(var(--code-editor-blue-rgb), 1),
+            rgba(var(--code-editor-teal-rgb), 1)
           );
           width: 2px !important;
           box-shadow:
-            0 0 16px rgba(130, 170, 255, 0.9),
-            0 0 32px rgba(127, 219, 202, 0.5);
+            0 0 16px rgba(var(--code-editor-blue-rgb), 0.9),
+            0 0 32px rgba(var(--code-editor-teal-rgb), 0.5);
           animation: cursor-glow 1.5s ease-in-out infinite;
         }
 
         @keyframes cursor-glow {
           0%, 100% {
             box-shadow:
-              0 0 16px rgba(130, 170, 255, 0.9),
-              0 0 32px rgba(127, 219, 202, 0.5);
+              0 0 16px rgba(var(--code-editor-blue-rgb), 0.9),
+              0 0 32px rgba(var(--code-editor-teal-rgb), 0.5);
           }
           50% {
             box-shadow:
-              0 0 20px rgba(130, 170, 255, 1),
-              0 0 40px rgba(127, 219, 202, 0.7);
+              0 0 20px rgba(var(--code-editor-blue-rgb), 1),
+              0 0 40px rgba(var(--code-editor-teal-rgb), 0.7);
           }
         }
 
         .bracket-match {
           background: var(--code-editor-teal-15);
-          border: 1px solid rgba(127, 219, 202, 0.7);
+          border: 1px solid rgba(var(--code-editor-teal-rgb), 0.7);
           border-radius: 2px;
-          box-shadow: 0 0 10px rgba(127, 219, 202, 0.4);
+          box-shadow: 0 0 10px rgba(var(--code-editor-teal-rgb), 0.4);
           animation: bracket-pulse 0.3s ease-out;
         }
 
@@ -178,16 +184,16 @@
         }
 
         .findMatch {
-          background: rgba(255, 193, 7, 0.35);
-          border: 1px solid rgba(255, 193, 7, 0.7);
+          background: rgba(var(--code-editor-find-rgb), 0.35);
+          border: 1px solid rgba(var(--code-editor-find-rgb), 0.7);
           border-radius: 2px;
-          box-shadow: 0 0 6px rgba(255, 193, 7, 0.3);
+          box-shadow: 0 0 6px rgba(var(--code-editor-find-rgb), 0.3);
           animation: find-pulse 0.5s ease-out;
         }
 
         .currentFindMatch {
           background: var(--code-editor-current-find-50);
-          border: 1px solid rgba(255, 152, 0, 1);
+          border: 1px solid rgba(var(--code-editor-current-find-rgb), 1);
           border-radius: 2px;
           box-shadow: 0 0 10px var(--code-editor-current-find-50);
           animation: current-find-pulse 1s ease-in-out infinite;
@@ -213,18 +219,18 @@
             box-shadow: 0 0 10px var(--code-editor-current-find-50);
           }
           50% {
-            box-shadow: 0 0 16px rgba(255, 152, 0, 0.8);
+            box-shadow: 0 0 16px rgba(var(--code-editor-current-find-rgb), 0.8);
           }
         }
 
         .cldr {
           &.codicon {
-            color: rgba(255, 255, 255, 0.4);
+            color: rgba(var(--color-static-white-rgb), 0.4);
             transition: all 0.2s ease;
 
             &:hover {
               color: var(--code-editor-blue-100);
-              text-shadow: 0 0 10px rgba(130, 170, 255, 0.8);
+              text-shadow: 0 0 10px rgba(var(--code-editor-blue-rgb), 0.8);
               transform: scale(1.1);
             }
           }
@@ -238,7 +244,7 @@
           border: 1px solid var(--code-editor-blue-40);
           border-radius: 10px;
           box-shadow:
-            0 12px 48px rgba(0, 0, 0, 0.7),
+            0 12px 48px rgba(var(--color-static-black-rgb), 0.7),
             0 0 0 1px var(--code-editor-teal-08) inset,
             0 4px 16px var(--code-editor-blue-25);
           backdrop-filter: blur(20px);
@@ -254,9 +260,9 @@
             height: 2px;
             background: linear-gradient(90deg,
               transparent 0%,
-              rgba(199, 146, 234, 0.4) 25%,
-              rgba(130, 170, 255, 0.7) 50%,
-              rgba(127, 219, 202, 0.4) 75%,
+              rgba(var(--code-editor-purple-rgb), 0.4) 25%,
+              rgba(var(--code-editor-blue-rgb), 0.7) 50%,
+              rgba(var(--code-editor-teal-rgb), 0.4) 75%,
               transparent 100%
             );
           }
@@ -268,7 +274,7 @@
 
             &.focused {
               background: linear-gradient(90deg,
-                rgba(130, 170, 255, 0.2) 0%,
+                rgba(var(--code-editor-blue-rgb), 0.2) 0%,
                 var(--code-editor-teal-15) 100%
               );
               box-shadow: 0 0 12px var(--code-editor-blue-30);
@@ -276,7 +282,7 @@
             }
 
             &:hover {
-              background: rgba(130, 170, 255, 0.12);
+              background: rgba(var(--code-editor-blue-rgb), 0.12);
             }
           }
         }
@@ -289,7 +295,7 @@
           border: 1px solid var(--code-editor-blue-40);
           border-radius: 8px;
           box-shadow:
-            0 8px 40px rgba(0, 0, 0, 0.7),
+            0 8px 40px rgba(var(--color-static-black-rgb), 0.7),
             0 0 0 1px var(--code-editor-teal-08) inset,
             0 2px 12px var(--code-editor-blue-25);
           backdrop-filter: blur(20px);
@@ -316,7 +322,7 @@
           border: 1px solid var(--code-editor-blue-40);
           border-radius: 8px;
           box-shadow:
-            0 8px 40px rgba(0, 0, 0, 0.7),
+            0 8px 40px rgba(var(--color-static-black-rgb), 0.7),
             0 0 0 1px var(--code-editor-teal-08) inset,
             0 2px 12px var(--code-editor-blue-25);
           backdrop-filter: blur(20px);
@@ -326,7 +332,7 @@
             transition: all 0.2s ease;
 
             &.focused {
-              background: rgba(130, 170, 255, 0.1);
+              background: rgba(var(--code-editor-blue-rgb), 0.1);
             }
           }
         }
@@ -341,15 +347,15 @@
 
           .minimap-slider {
             background: linear-gradient(135deg,
-              rgba(130, 170, 255, 0.2),
+              rgba(var(--code-editor-blue-rgb), 0.2),
               var(--code-editor-teal-15)
             ) !important;
             border: 1px solid var(--code-editor-blue-30);
 
             &:hover {
               background: linear-gradient(135deg,
-                rgba(130, 170, 255, 0.3),
-                rgba(127, 219, 202, 0.25)
+                rgba(var(--code-editor-blue-rgb), 0.3),
+                rgba(var(--code-editor-teal-rgb), 0.25)
               ) !important;
             }
           }
@@ -357,11 +363,11 @@
 
         .indent-guides {
           .indent-guide {
-            border-left: 1px solid rgba(255, 255, 255, 0.06);
+            border-left: 1px solid var(--color-overlay-white-06);
 
             &.indent-guide-active {
-              border-left: 1px solid rgba(130, 170, 255, 0.6);
-              box-shadow: -1px 0 6px rgba(130, 170, 255, 0.4);
+              border-left: 1px solid rgba(var(--code-editor-blue-rgb), 0.6);
+              box-shadow: -1px 0 6px rgba(var(--code-editor-blue-rgb), 0.4);
             }
           }
         }
@@ -398,7 +404,7 @@
     background: color-mix(in srgb, var(--color-bg-primary) 85%, transparent);
     border: 1px solid var(--code-editor-blue-40);
     border-radius: 6px;
-    color: rgba(130, 170, 255, 0.8);
+    color: rgba(var(--code-editor-blue-rgb), 0.8);
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -409,12 +415,12 @@
 
     &:hover {
       background: color-mix(in srgb, var(--color-bg-primary) 95%, transparent);
-      border-color: rgba(130, 170, 255, 0.8);
+      border-color: rgba(var(--code-editor-blue-rgb), 0.8);
       color: var(--code-editor-blue-100);
       box-shadow:
-        0 4px 16px rgba(0, 0, 0, 0.6),
+        0 4px 16px rgba(var(--color-static-black-rgb), 0.6),
         0 0 20px var(--code-editor-blue-40),
-        0 0 40px rgba(127, 219, 202, 0.2);
+        0 0 40px rgba(var(--code-editor-teal-rgb), 0.2);
       transform: scale(1.08);
     }
 

@@ -30,3 +30,7 @@ export const MINI_APP_SCROLLBAR_FALLBACKS = {
     thumbHover: 'rgba(0, 0, 0, 0.28)',
   },
 } as const;
+
+export const FLOWCHAT_CAPTURE_FALLBACK_COLOR = {
+  background: '#121214',
+} as const;

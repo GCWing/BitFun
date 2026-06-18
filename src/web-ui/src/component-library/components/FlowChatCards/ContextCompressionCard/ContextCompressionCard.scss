@@ -6,14 +6,19 @@
 
 .context-compression-card {
 
-  --context-compression-accent: #a855f7;
+  --context-compression-accent-rgb: 168, 85, 247;
+  --context-compression-bg-start-rgb: 20, 20, 20;
+  --context-compression-bg-end-rgb: 15, 15, 15;
+  --context-compression-hover-bg-start-rgb: 25, 25, 25;
+  --context-compression-hover-bg-end-rgb: 20, 20, 20;
+  --context-compression-accent: rgb(var(--context-compression-accent-rgb));
 
   width: 100%;
   max-width: 100%;
   background: linear-gradient(
     135deg,
-    color-mix(in srgb, var(--color-bg-secondary) 95%, transparent),
-    color-mix(in srgb, var(--color-bg-primary) 98%, transparent)
+    rgba(var(--context-compression-bg-start-rgb), 0.95),
+    rgba(var(--context-compression-bg-end-rgb), 0.98)
   );
   border: 1px solid color-mix(in srgb, var(--context-compression-accent) 60%, transparent);
   border-radius: 50px;
@@ -55,8 +60,8 @@
                 inset 0 1px 0 var(--color-overlay-white-10);
     background: linear-gradient(
       135deg,
-      color-mix(in srgb, var(--color-bg-secondary) 98%, transparent),
-      var(--color-bg-primary)
+      rgba(var(--context-compression-hover-bg-start-rgb), 0.98),
+      rgb(var(--context-compression-hover-bg-end-rgb))
     );
   }
 }

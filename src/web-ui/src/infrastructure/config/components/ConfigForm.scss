@@ -158,13 +158,21 @@ $config-input-height: 32px;
 
 
 .bitfun-config-form__select {
+  --bitfun-config-select-chevron-rgb: 150, 163, 180;
+
   height: $config-input-height !important;
   line-height: $config-input-height !important;
   cursor: pointer !important;
-  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none'%3e%3cpath d='M2.5 4.5L6 8L9.5 4.5' stroke='rgba(150, 163, 180, 0.8)' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3e%3c/svg%3e") !important;
-  background-position: right 10px center !important;
+  background-image:
+    linear-gradient(45deg, transparent 50%, rgba(var(--bitfun-config-select-chevron-rgb), 0.8) 50%),
+    linear-gradient(135deg, rgba(var(--bitfun-config-select-chevron-rgb), 0.8) 50%, transparent 50%) !important;
+  background-position:
+    calc(100% - 16px) 50%,
+    calc(100% - 11px) 50% !important;
   background-repeat: no-repeat !important;
-  background-size: 12px !important;
+  background-size:
+    5px 5px,
+    5px 5px !important;
   padding: 0 32px 0 12px !important;
   -webkit-appearance: none !important;
   -moz-appearance: none !important;
