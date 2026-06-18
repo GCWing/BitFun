@@ -1790,7 +1790,8 @@ mod tests {
 
         assert!(notice.contains("file may have been written with partial content"));
         assert!(notice.contains("latest Read result"));
-        assert!(notice.contains("issue ONE Edit call"));
+        assert!(notice.contains("issue ONE Write call"));
+        assert!(notice.contains("`mode`: \"a\""));
     }
 
     #[test]

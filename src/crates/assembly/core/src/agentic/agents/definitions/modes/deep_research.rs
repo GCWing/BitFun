@@ -99,7 +99,7 @@ mod tests {
         assert!(tools.contains(&"Write".to_string()));
         assert!(
             tools.contains(&"Edit".to_string()),
-            "Edit required so the agent can continue a Write that was truncated by max_tokens"
+            "Edit required for targeted file updates during research synthesis"
         );
         assert!(tools.contains(&"ExecCommand".to_string()));
         assert!(tools.contains(&"WriteStdin".to_string()));

@@ -189,14 +189,14 @@ impl FileWriteTool {
                     "type": "string",
                     "description": "The absolute path to the file to write (must be absolute, not relative)"
                 },
-                "content": {
-                    "type": "string",
-                    "description": "The content to write to the file"
-                },
                 "mode": {
                     "type": "string",
                     "enum": ["w", "a"],
                     "description": "Write mode: 'w' overwrites the file (default), 'a' appends to the file and creates it if missing"
+                },
+                "content": {
+                    "type": "string",
+                    "description": "The content to write to the file"
                 }
             },
             "required": ["file_path", "content"],
@@ -208,13 +208,17 @@ impl FileWriteTool {
         r#"Writes a file to the local filesystem.
 
 Usage:
-- Always output `file_path` first when calling this tool. Example: `{"file_path": "src/main.rs", "content": "fn main() {}"}`.
+- Always order arguments as: `file_path`, optional `mode`, then `content` last.
 - This tool defaults to `mode=\"w\"`, which overwrites the existing file if there is one at the provided path.
 - Use `mode=\"a\"` to append content; it also creates the file if it does not exist.
 - If this is an existing file, you MUST use the Read tool first to read the file's contents. This tool will fail if you did not read the file first.
 - Prefer the Edit tool for modifying existing files — it only sends the diff. Only use this tool to create new files or for complete rewrites.
 - NEVER create documentation files (*.md) or README files unless explicitly requested by the User.
-- Only use emojis if the user explicitly requests it. Avoid writing emojis to files unless asked."#
+- Only use emojis if the user explicitly requests it. Avoid writing emojis to files unless asked.
+
+Examples:
+- Overwrite or create: `{"file_path": "/path/to/main.rs", "content": "fn main() {}"}`
+- Append: `{"file_path": "/path/to/main.rs", "mode": "a", "content": "more text"}`"#
             .to_string()
     }
 }
