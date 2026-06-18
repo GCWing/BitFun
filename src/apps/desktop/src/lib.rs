@@ -547,9 +547,39 @@ pub async fn run() {
             }
 
             let app_handle = app.handle().clone();
+            let workspace_startup_bootstrap_snapshot = {
+                let app_state: tauri::State<'_, api::app_state::AppState> = app.state();
+                let startup_trace_state: tauri::State<'_, startup_trace::DesktopStartupTrace> =
+                    app.state();
+                tokio::task::block_in_place(|| {
+                    tokio::runtime::Handle::current().block_on(
+                        prepare_workspace_startup_bootstrap_snapshot(
+                            &app_state,
+                            &app_handle,
+                            &startup_trace_state,
+                        ),
+                    )
+                })
+                .and_then(|snapshot| {
+                    serde_json::to_value(snapshot)
+                        .map_err(|error| {
+                            log::warn!(
+                                "Failed to serialize workspace startup bootstrap snapshot, frontend will fall back to startup command: {}",
+                                error
+                            );
+                            error
+                        })
+                        .ok()
+                })
+            };
             let window_started = Instant::now();
             startup_trace.record_phase("main_window_create_start", "native_window");
-            theme::create_main_window(&app_handle, &startup_trace_id, &startup_trace);
+            theme::create_main_window(
+                &app_handle,
+                &startup_trace_id,
+                &startup_trace,
+                workspace_startup_bootstrap_snapshot,
+            );
             let window_duration_ms = elapsed_ms(window_started);
             startup_trace.record_step(
                 "native_step_end",

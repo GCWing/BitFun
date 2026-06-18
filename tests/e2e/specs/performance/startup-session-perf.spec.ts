@@ -16,6 +16,7 @@ import {
   waitForTracePhaseCount,
   type StartupTraceSnapshot,
 } from '../../helpers/performance-trace';
+import { readStartupResourceTimingSummary } from '../../helpers/performance-resource-timing';
 import { StartupPage } from '../../page-objects/StartupPage';
 import { ensureWorkspaceOpen } from '../../helpers/workspace-utils';
 import { openWorkspace } from '../../helpers/workspace-helper';
@@ -4582,6 +4583,7 @@ describe('Performance telemetry', () => {
     const startup = summarizeStartup(snapshot);
     const breakdown = summarizeStartupBreakdown(snapshot);
     const apiSegments = summarizeApiCommandSegments(snapshot);
+    const resourceTiming = await readStartupResourceTimingSummary(startup.interactiveShellReadyMs);
     const maxInteractiveMs = numericEnv('BITFUN_E2E_PERF_MAX_INTERACTIVE_MS');
 
     console.log('[Perf] startup', JSON.stringify({
@@ -4599,6 +4601,7 @@ describe('Performance telemetry', () => {
       traceId: snapshot.traceId,
       startup,
       breakdown,
+      resourceTiming,
       apiSegments,
       api: snapshot.api,
       native: snapshot.native,

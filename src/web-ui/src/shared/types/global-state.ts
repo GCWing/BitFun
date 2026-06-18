@@ -14,6 +14,13 @@ import { createLogger } from '../utils/logger';
 
 const logger = createLogger('GlobalStateAPI');
 
+declare global {
+  // Native startup may inject this once to avoid a first-window IPC waterfall.
+  var __BITFUN_BOOTSTRAP_WORKSPACE_STARTUP_STATE__:
+    | APIWorkspaceStartupStateSnapshot
+    | undefined;
+}
+
 
 export enum AppStatus {
   Initializing = 'initializing',
@@ -402,11 +409,72 @@ function mapWorkspaceStartupStateSnapshot(
   };
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function isWorkspaceStartupStateSnapshot(
+  value: unknown
+): value is APIWorkspaceStartupStateSnapshot {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    typeof value.cleanupRemovedCount === 'number' &&
+    (value.currentWorkspace === null || isRecord(value.currentWorkspace)) &&
+    Array.isArray(value.recentWorkspaces) &&
+    Array.isArray(value.openedWorkspaces) &&
+    (
+      value.legacyRemoteWorkspace === undefined ||
+      value.legacyRemoteWorkspace === null ||
+      isRecord(value.legacyRemoteWorkspace)
+    )
+  );
+}
+
+function consumeBootstrapWorkspaceStartupStateSnapshot():
+  | APIWorkspaceStartupStateSnapshot
+  | undefined {
+  if (
+    !Object.prototype.hasOwnProperty.call(
+      globalThis,
+      '__BITFUN_BOOTSTRAP_WORKSPACE_STARTUP_STATE__'
+    )
+  ) {
+    return undefined;
+  }
+
+  const snapshot = globalThis.__BITFUN_BOOTSTRAP_WORKSPACE_STARTUP_STATE__;
+  delete globalThis.__BITFUN_BOOTSTRAP_WORKSPACE_STARTUP_STATE__;
+
+  if (!isWorkspaceStartupStateSnapshot(snapshot)) {
+    logger.warn('Ignored invalid bootstrap workspace startup state snapshot');
+    return undefined;
+  }
+
+  return snapshot;
+}
+
  
 export function createGlobalStateAPI(): GlobalStateAPI {
   return {
     
     async initializeWorkspaceStartupState(): Promise<WorkspaceStartupState> {
+      const bootstrapSnapshot = consumeBootstrapWorkspaceStartupStateSnapshot();
+      if (bootstrapSnapshot) {
+        try {
+          const mappedSnapshot = mapWorkspaceStartupStateSnapshot(bootstrapSnapshot);
+          logger.debug(
+            'initializeWorkspaceStartupState returned from bootstrap',
+            summarizeWorkspacesForLog(mappedSnapshot.recentWorkspaces)
+          );
+          return mappedSnapshot;
+        } catch (error) {
+          logger.warn('Failed to map bootstrap workspace startup state snapshot', { error });
+        }
+      }
+
       const snapshot = await globalAPI.initializeWorkspaceStartupState();
       const mappedSnapshot = mapWorkspaceStartupStateSnapshot(snapshot);
       logger.debug(

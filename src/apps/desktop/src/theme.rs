@@ -217,6 +217,7 @@ struct StartupBootstrapConfig {
 }
 
 const MAX_BOOTSTRAP_KEYBINDINGS_JSON_BYTES: usize = 64 * 1024;
+const MAX_BOOTSTRAP_WORKSPACE_STATE_JSON_BYTES: usize = 64 * 1024;
 
 impl Default for ThemeConfig {
     fn default() -> Self {
@@ -455,6 +456,7 @@ impl ThemeConfig {
         &self,
         startup_trace_id: &str,
         bootstrap_config: &StartupBootstrapConfig,
+        workspace_startup_state: Option<&serde_json::Value>,
     ) -> String {
         let theme_type = if self.is_light { "light" } else { "dark" };
         let startup_locale = &bootstrap_config.locale;
@@ -483,6 +485,11 @@ impl ThemeConfig {
             .filter(|json| json.len() <= MAX_BOOTSTRAP_KEYBINDINGS_JSON_BYTES)
             .map(|json| format!("window.__BITFUN_BOOTSTRAP_KEYBINDINGS__ = {json};"))
             .unwrap_or_default();
+        let bootstrap_workspace_startup_state_assignment = workspace_startup_state
+            .and_then(|state| serde_json::to_string(state).ok())
+            .filter(|json| json.len() <= MAX_BOOTSTRAP_WORKSPACE_STATE_JSON_BYTES)
+            .map(|json| format!("window.__BITFUN_BOOTSTRAP_WORKSPACE_STARTUP_STATE__ = {json};"))
+            .unwrap_or_default();
 
         format!(
             r#"
@@ -496,6 +503,7 @@ impl ThemeConfig {
                 window.__BITFUN_BOOTSTRAP_THEME_ID__ = {bootstrap_theme_id_json};
                 window.__BITFUN_BOOTSTRAP_THEME_SELECTION__ = {bootstrap_theme_selection_json};
                 {bootstrap_keybindings_assignment}
+                {bootstrap_workspace_startup_state_assignment}
                 function applyTheme() {{
                     var root = document.documentElement;
                     if (!root) return false;
@@ -545,6 +553,8 @@ impl ThemeConfig {
             startup_messages_json = startup_messages_json,
             show_startup_window_controls = show_startup_window_controls,
             bootstrap_keybindings_assignment = bootstrap_keybindings_assignment,
+            bootstrap_workspace_startup_state_assignment =
+                bootstrap_workspace_startup_state_assignment,
         )
     }
 
@@ -561,12 +571,17 @@ pub fn create_main_window(
     app_handle: &tauri::AppHandle,
     startup_trace_id: &str,
     startup_trace: &DesktopStartupTrace,
+    workspace_startup_state: Option<serde_json::Value>,
 ) {
     let total_started_at = Instant::now();
     let bootstrap_config = ThemeConfig::load_startup_bootstrap_config();
     let theme = bootstrap_config.theme.clone();
     let bg_color = theme.to_tauri_color();
-    let init_script = theme.generate_init_script(startup_trace_id, &bootstrap_config);
+    let init_script = theme.generate_init_script(
+        startup_trace_id,
+        &bootstrap_config,
+        workspace_startup_state.as_ref(),
+    );
     startup_trace.record_step(
         "native_step_end",
         "native_window",

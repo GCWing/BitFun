@@ -111,6 +111,41 @@ describe('startup performance contract', () => {
     expect(configManagerSource).toContain('delete globalThis.__BITFUN_BOOTSTRAP_KEYBINDINGS__');
   });
 
+  it('keeps workspace startup state on the bootstrap path with command fallback', () => {
+    const globalStateSource = readSource('../../shared/types/global-state.ts');
+    const desktopThemeSource = readSource('../../../../apps/desktop/src/theme.rs');
+    const desktopLibSource = readSource('../../../../apps/desktop/src/lib.rs');
+    const desktopCommandsSource = readSource('../../../../apps/desktop/src/api/commands.rs');
+
+    expect(desktopThemeSource).toContain('__BITFUN_BOOTSTRAP_WORKSPACE_STARTUP_STATE__');
+    expect(desktopThemeSource).toContain('MAX_BOOTSTRAP_WORKSPACE_STATE_JSON_BYTES');
+    expect(desktopLibSource).toContain('prepare_workspace_startup_bootstrap_snapshot');
+    expect(desktopLibSource).toContain('tokio::task::block_in_place');
+    expect(desktopLibSource).not.toContain('tauri::async_runtime::block_on(prepare_workspace_startup_bootstrap_snapshot');
+    expect(desktopCommandsSource).toContain('initialize_workspace_startup_state_impl');
+    expect(globalStateSource).toContain('consumeBootstrapWorkspaceStartupStateSnapshot');
+    expect(globalStateSource).toContain('__BITFUN_BOOTSTRAP_WORKSPACE_STARTUP_STATE__');
+    expect(globalStateSource).toContain(
+      'delete globalThis.__BITFUN_BOOTSTRAP_WORKSPACE_STARTUP_STATE__'
+    );
+  });
+
+  it('keeps startup resource timing as bounded E2E-only report data', () => {
+    const perfSpecSource = readSource(
+      '../../../../../tests/e2e/specs/performance/startup-session-perf.spec.ts'
+    );
+    const resourceTimingSource = readSource(
+      '../../../../../tests/e2e/helpers/performance-resource-timing.ts'
+    );
+
+    expect(perfSpecSource).toContain('readStartupResourceTimingSummary');
+    expect(perfSpecSource).toContain('resourceTiming');
+    expect(resourceTimingSource).toContain('sanitizeResourceTimingName');
+    expect(resourceTimingSource).toContain('MAX_RESOURCE_TIMING_ENTRIES');
+    expect(resourceTimingSource).not.toContain('console.log');
+    expect(resourceTimingSource).not.toContain('createLogger');
+  });
+
   it('keeps built-in theme startup on the bootstrap path without pre-render config writes', () => {
     const mainSource = readSource('../../main.tsx');
     const themeServiceSource = readSource('../../infrastructure/theme/core/ThemeService.ts');

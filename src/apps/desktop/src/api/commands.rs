@@ -2026,6 +2026,48 @@ pub async fn initialize_workspace_startup_state(
     startup_trace: State<'_, DesktopStartupTrace>,
 ) -> Result<WorkspaceStartupStateSnapshotDto, String> {
     let command_started = Instant::now();
+    let result =
+        initialize_workspace_startup_state_impl(&state, &app, &startup_trace, command_started)
+            .await;
+    startup_trace.record_tauri_command_elapsed(
+        "initialize_workspace_startup_state",
+        None,
+        command_started,
+    );
+    result
+}
+
+pub async fn prepare_workspace_startup_bootstrap_snapshot(
+    state: &State<'_, AppState>,
+    app: &tauri::AppHandle,
+    startup_trace: &State<'_, DesktopStartupTrace>,
+) -> Option<WorkspaceStartupStateSnapshotDto> {
+    let started = Instant::now();
+    let snapshot =
+        initialize_workspace_startup_state_impl(state, app, startup_trace, started).await;
+    startup_trace.record_elapsed_step(
+        "native_setup",
+        "prepare_workspace_startup_bootstrap_snapshot",
+        started,
+    );
+    match snapshot {
+        Ok(snapshot) => Some(snapshot),
+        Err(error) => {
+            warn!(
+                "Failed to prepare workspace startup bootstrap snapshot, frontend will fall back to startup command: {}",
+                error
+            );
+            None
+        }
+    }
+}
+
+async fn initialize_workspace_startup_state_impl(
+    state: &State<'_, AppState>,
+    app: &tauri::AppHandle,
+    startup_trace: &State<'_, DesktopStartupTrace>,
+    command_started: Instant,
+) -> Result<WorkspaceStartupStateSnapshotDto, String> {
     let trace = startup_trace.inner();
 
     initialize_global_state_impl(&state, &app, trace).await;
@@ -2042,11 +2084,6 @@ pub async fn initialize_workspace_startup_state(
     {
         Ok(removed_count) => removed_count,
         Err(error) => {
-            startup_trace.record_tauri_command_elapsed(
-                "initialize_workspace_startup_state",
-                None,
-                command_started,
-            );
             return Err(error);
         }
     };
@@ -2057,11 +2094,6 @@ pub async fn initialize_workspace_startup_state(
         "tauri_command",
         "initialize_workspace_startup_state.collect_workspace_state_snapshot",
         snapshot_started,
-    );
-    startup_trace.record_tauri_command_elapsed(
-        "initialize_workspace_startup_state",
-        None,
-        command_started,
     );
 
     Ok(WorkspaceStartupStateSnapshotDto {
