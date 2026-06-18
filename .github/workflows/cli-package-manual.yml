@@ -14,6 +14,14 @@ on:
           - macos-arm64
           - macos-x64
           - all
+      ubuntu_version:
+        description: "Ubuntu runner baseline for Linux builds. Ignored for macOS."
+        required: true
+        default: "22.04"
+        type: choice
+        options:
+          - "22.04"
+          - "24.04"
       ref_name:
         description: "Branch, tag, or commit SHA to build. Leave empty to use the selected workflow ref."
         required: false
@@ -23,7 +31,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: cli-package-manual-${{ inputs.platform }}-${{ inputs.ref_name || github.ref }}
+  group: cli-package-manual-${{ inputs.platform }}-${{ inputs.ubuntu_version }}-${{ inputs.ref_name || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -46,6 +54,7 @@ jobs:
         shell: bash
         env:
           INPUT_PLATFORM: ${{ inputs.platform }}
+          INPUT_UBUNTU_VERSION: ${{ inputs.ubuntu_version }}
           INPUT_REF_NAME: ${{ inputs.ref_name }}
         run: |
           set -euo pipefail
@@ -55,12 +64,29 @@ jobs:
           SHORT_SHA="$(git rev-parse --short HEAD)"
           CHECKOUT_REF="$FULL_SHA"
 
+          case "${INPUT_UBUNTU_VERSION}" in
+            22.04)
+              LINUX_X64_RUNNER="ubuntu-22.04"
+              LINUX_ARM64_RUNNER="ubuntu-22.04-arm"
+              LINUX_NAME_SUFFIX="ubuntu2204"
+              ;;
+            24.04)
+              LINUX_X64_RUNNER="ubuntu-24.04"
+              LINUX_ARM64_RUNNER="ubuntu-24.04-arm"
+              LINUX_NAME_SUFFIX="ubuntu2404"
+              ;;
+            *)
+              echo "Unsupported ubuntu_version: ${INPUT_UBUNTU_VERSION}" >&2
+              exit 1
+              ;;
+          esac
+
           case "${INPUT_PLATFORM}" in
             linux-arm64)
-              MATRIX='{"platform":[{"os":"ubuntu-24.04-arm","name":"linux-arm64","target":"aarch64-unknown-linux-gnu","can_smoke_test":true}]}'
+              MATRIX="{\"platform\":[{\"os\":\"${LINUX_ARM64_RUNNER}\",\"name\":\"linux-arm64-${LINUX_NAME_SUFFIX}\",\"target\":\"aarch64-unknown-linux-gnu\",\"can_smoke_test\":true}]}"
               ;;
             linux-x64)
-              MATRIX='{"platform":[{"os":"ubuntu-latest","name":"linux-x64","target":"x86_64-unknown-linux-gnu","can_smoke_test":true}]}'
+              MATRIX="{\"platform\":[{\"os\":\"${LINUX_X64_RUNNER}\",\"name\":\"linux-x64-${LINUX_NAME_SUFFIX}\",\"target\":\"x86_64-unknown-linux-gnu\",\"can_smoke_test\":true}]}"
               ;;
             macos-arm64)
               MATRIX='{"platform":[{"os":"macos-15","name":"macos-arm64","target":"aarch64-apple-darwin","can_smoke_test":true}]}'
@@ -69,7 +95,7 @@ jobs:
               MATRIX='{"platform":[{"os":"macos-15-intel","name":"macos-x64","target":"x86_64-apple-darwin","can_smoke_test":true}]}'
               ;;
             all)
-              MATRIX='{"platform":[{"os":"macos-15","name":"macos-arm64","target":"aarch64-apple-darwin","can_smoke_test":true},{"os":"macos-15-intel","name":"macos-x64","target":"x86_64-apple-darwin","can_smoke_test":true},{"os":"ubuntu-latest","name":"linux-x64","target":"x86_64-unknown-linux-gnu","can_smoke_test":true},{"os":"ubuntu-24.04-arm","name":"linux-arm64","target":"aarch64-unknown-linux-gnu","can_smoke_test":true}]}'
+              MATRIX="{\"platform\":[{\"os\":\"macos-15\",\"name\":\"macos-arm64\",\"target\":\"aarch64-apple-darwin\",\"can_smoke_test\":true},{\"os\":\"macos-15-intel\",\"name\":\"macos-x64\",\"target\":\"x86_64-apple-darwin\",\"can_smoke_test\":true},{\"os\":\"${LINUX_X64_RUNNER}\",\"name\":\"linux-x64-${LINUX_NAME_SUFFIX}\",\"target\":\"x86_64-unknown-linux-gnu\",\"can_smoke_test\":true},{\"os\":\"${LINUX_ARM64_RUNNER}\",\"name\":\"linux-arm64-${LINUX_NAME_SUFFIX}\",\"target\":\"aarch64-unknown-linux-gnu\",\"can_smoke_test\":true}]}"
               ;;
             *)
               echo "Unsupported platform: ${INPUT_PLATFORM}" >&2
