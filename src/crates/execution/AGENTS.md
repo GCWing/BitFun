@@ -18,7 +18,7 @@ delivery form.
 | `harness` | Harness workflow contracts and registry primitives | [AGENTS.md](harness/AGENTS.md) |
 | `runtime-services` | Typed runtime service assembly and service availability facts | [AGENTS.md](runtime-services/AGENTS.md) |
 | `tool-provider-groups` | Tool provider group facts and product-full tool group composition. Cargo package remains `bitfun-tool-packs`. | [AGENTS.md](tool-provider-groups/AGENTS.md) |
-| `tool-execution` | Low-level file/search/tool IO helpers. Cargo package remains `tool-runtime`. | [AGENTS.md](tool-execution/AGENTS.md) |
+| `tool-execution` | Low-level file/search/tool IO helpers, prompt-safe tool context facts, and provider-neutral tool runtime policies. Cargo package remains `tool-runtime`. | [AGENTS.md](tool-execution/AGENTS.md) |
 
 ## Placement Rules
 

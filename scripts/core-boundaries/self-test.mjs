@@ -2286,6 +2286,9 @@ export function runManifestParserSelfTest({
       contracts: [
         'pub struct ToolUseContext',
         'to_tool_context_facts',
+        'project_tool_context_facts',
+        'build_tool_runtime_custom_data',
+        'delegation_policy_from_custom_data',
         'impl PortableToolContextProvider for ToolUseContext',
         'tool_context_facts_omit_runtime_owner_fields_even_when_context_is_populated',
         'customData',

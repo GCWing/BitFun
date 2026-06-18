@@ -2,8 +2,8 @@
 //!
 //! This module intentionally keeps service handles, workspace runtime lookup,
 //! path enforcement, cancellation/post-call hooks, and checkpoint recording in
-//! core. The portable facts projection uses `bitfun-agent-tools` DTOs while the
-//! runtime owner type stays here.
+//! core. Provider-neutral context projection and custom-data materialization are
+//! owned by `tool-runtime` while the runtime owner type stays here.
 
 use crate::agentic::coordination::get_global_coordinator;
 use crate::agentic::deep_review::tool_context;
@@ -45,6 +45,11 @@ use std::collections::HashMap;
 use std::future::Future;
 use std::path::{Path, PathBuf};
 use tokio_util::sync::CancellationToken;
+use tool_runtime::context::{
+    build_tool_runtime_custom_data, delegation_policy_from_custom_data,
+    primary_model_supports_image_understanding as runtime_primary_model_supports_image_understanding,
+    project_tool_context_facts, ToolRuntimeContextFactsInput, ToolRuntimeCustomDataInput,
+};
 
 /// Core-owned tool use context.
 #[derive(Debug, Clone)]
@@ -66,22 +71,7 @@ pub struct ToolUseContext {
 
 impl ToolUseContext {
     pub(crate) fn delegation_policy(&self) -> DelegationPolicy {
-        let allow_subagent_spawn = self
-            .custom_data
-            .get("delegation_allow_subagent_spawn")
-            .and_then(|value| value.as_bool())
-            .unwrap_or(true);
-        let nesting_depth = self
-            .custom_data
-            .get("delegation_nesting_depth")
-            .and_then(|value| value.as_u64())
-            .and_then(|value| u8::try_from(value).ok())
-            .unwrap_or(0);
-
-        DelegationPolicy {
-            allow_subagent_spawn,
-            nesting_depth,
-        }
+        delegation_policy_from_custom_data(&self.custom_data)
     }
 
     pub fn workspace_root(&self) -> Option<&Path> {
@@ -104,7 +94,7 @@ impl ToolUseContext {
             }
         });
 
-        ToolContextFacts {
+        project_tool_context_facts(ToolRuntimeContextFactsInput {
             tool_call_id: self.tool_call_id.clone(),
             agent_type: self.agent_type.clone(),
             session_id: self.session_id.clone(),
@@ -117,16 +107,13 @@ impl ToolUseContext {
                     .to_string()
             }),
             runtime_tool_restrictions: self.runtime_tool_restrictions.clone(),
-        }
+        })
     }
 
     /// Whether the session primary model accepts image inputs (from tool-definition / pipeline context).
     /// Defaults to **true** when unset (e.g. API listings without model metadata).
     pub fn primary_model_supports_image_understanding(&self) -> bool {
-        self.custom_data
-            .get("primary_model_supports_image_understanding")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(true)
+        runtime_primary_model_supports_image_understanding(&self.custom_data)
     }
 
     pub fn cancellation_token(&self) -> Option<&CancellationToken> {
@@ -264,60 +251,8 @@ pub(crate) fn build_tool_description_context(
 }
 
 fn build_tool_context_custom_data(context: &ToolExecutionContext) -> HashMap<String, Value> {
-    let mut map = HashMap::new();
-
-    map.insert(
-        "delegation_allow_subagent_spawn".to_string(),
-        serde_json::json!(context.delegation_policy.allow_subagent_spawn),
-    );
-    map.insert(
-        "delegation_nesting_depth".to_string(),
-        serde_json::json!(context.delegation_policy.nesting_depth),
-    );
-
-    if let Some(turn_index) = context.context_vars.get("turn_index") {
-        if let Ok(n) = turn_index.parse::<u64>() {
-            map.insert("turn_index".to_string(), serde_json::json!(n));
-        }
-    }
-
-    if let Some(provider) = context.context_vars.get("primary_model_provider") {
-        if !provider.is_empty() {
-            map.insert(
-                "primary_model_provider".to_string(),
-                serde_json::json!(provider),
-            );
-        }
-    }
-    if let Some(supports_images) = context
-        .context_vars
-        .get("primary_model_supports_image_understanding")
-    {
-        if let Ok(flag) = supports_images.parse::<bool>() {
-            map.insert(
-                "primary_model_supports_image_understanding".to_string(),
-                serde_json::json!(flag),
-            );
-        }
-    }
-    if let Some(acp_transport) = context.context_vars.get("acp_transport") {
-        if let Ok(flag) = acp_transport.parse::<bool>() {
-            map.insert("acp_transport".to_string(), serde_json::json!(flag));
-        }
-    }
-    if let Some(remote_file_delivery) = context
-        .context_vars
-        .get(TOOL_CONTEXT_REMOTE_FILE_DELIVERY_KEY)
-    {
-        if let Ok(flag) = remote_file_delivery.parse::<bool>() {
-            map.insert(
-                TOOL_CONTEXT_REMOTE_FILE_DELIVERY_KEY.to_string(),
-                serde_json::json!(flag),
-            );
-        }
-    }
-
-    let deep_review_parent_context = context.subagent_parent_info.as_ref().map(|parent_info| {
+    let mut extension_custom_data = HashMap::new();
+    let deep_review_parent = context.subagent_parent_info.as_ref().map(|parent_info| {
         tool_context::DeepReviewToolParentContext {
             tool_call_id: parent_info.tool_call_id.as_str(),
             session_id: parent_info.session_id.as_str(),
@@ -326,11 +261,15 @@ fn build_tool_context_custom_data(context: &ToolExecutionContext) -> HashMap<Str
     });
     tool_context::append_tool_use_context_data(
         &context.context_vars,
-        deep_review_parent_context,
-        &mut map,
+        deep_review_parent,
+        &mut extension_custom_data,
     );
-
-    map
+    build_tool_runtime_custom_data(ToolRuntimeCustomDataInput {
+        context_vars: &context.context_vars,
+        delegation_policy: context.delegation_policy,
+        remote_file_delivery_key: TOOL_CONTEXT_REMOTE_FILE_DELIVERY_KEY,
+        extension_custom_data: Some(&extension_custom_data),
+    })
 }
 
 impl ToolUseContext {

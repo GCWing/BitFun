@@ -3,8 +3,9 @@
 Scope: this guide applies to `src/crates/execution/tool-execution`.
 
 `tool-runtime` owns low-level reusable tool execution helpers such as filesystem
-and search utilities, provider-neutral pipeline planning/retry/token policy, and
-background exec-output capture state. It is not the product tool registry,
+and search utilities, provider-neutral pipeline planning/retry/token policy,
+prompt-safe tool context facts/custom-data materialization and extension merge,
+and background exec-output capture state. It is not the product tool registry,
 permission model, or agent-facing tool surface.
 
 ## Guardrails
@@ -13,7 +14,8 @@ permission model, or agent-facing tool surface.
   transport adapters, or AI providers.
 - Keep this crate focused on reusable execution primitives and pure utilities.
   Product-specific tool exposure, prompt-visible manifests, `GetToolSpec`,
-  collapsed unlock state, and `ToolUseContext` stay outside this crate.
+  collapsed unlock state, concrete runtime handles, and the `ToolUseContext`
+  owner type stay outside this crate.
 - Preserve existing filesystem/search behavior when moving helpers here. Do not
   change path containment, encoding, cancellation, or result presentation
   semantics as a side effect of refactoring.

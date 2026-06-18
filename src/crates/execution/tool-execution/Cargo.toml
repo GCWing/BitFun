@@ -4,7 +4,9 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+bitfun-agent-tools = { path = "../tool-contracts" }
 bitfun-events = { path = "../../contracts/events" }
+bitfun-runtime-ports = { path = "../../contracts/runtime-ports" }
 dashmap = { workspace = true }
 globset = { workspace = true }
 dunce = { workspace = true }
