@@ -8,16 +8,20 @@ import { AlertCircle, RefreshCw, Terminal as TerminalIcon, Trash2 } from 'lucide
 import Terminal, { TerminalRef } from './Terminal';
 import { useTerminal } from '../hooks/useTerminal';
 import { registerTerminalActions, unregisterTerminalActions } from '../services/TerminalActionManager';
-import { ResizeRepaintGuard, createResizeRepaintScreenSnapshot, terminalReplayHasScreenText } from '../utils';
-import { confirmWarning } from '@/component-library';
+import {
+  POWERSHELL_READLINE_PASTE_SEQUENCE,
+  ResizeRepaintGuard,
+  createResizeRepaintScreenSnapshot,
+  resolveTerminalPaste,
+  shouldUsePowerShellReadlinePaste,
+  terminalReplayHasScreenText,
+} from '../utils';
 import { createLogger } from '@/shared/utils/logger';
 import type { SessionResponse, TerminalReplayEvent } from '../types';
+import type { TerminalPasteDecision } from '../utils';
 import './Terminal.scss';
 
 const log = createLogger('ConnectedTerminal');
-
-/** Line threshold for multi-line paste confirmation. */
-const MULTILINE_PASTE_THRESHOLD = 1;
 
 /**
  * Matches a standalone absolute cursor position command: ESC [ R ; C H
@@ -339,40 +343,28 @@ const ConnectedTerminal: React.FC<ConnectedTerminalProps> = memo(({
     flushOutputQueue();
   }, [flushOutputQueue]);
 
-  // Handle paste with multi-line confirmation.
-  const handlePaste = useCallback(async (text: string): Promise<boolean> => {
-    if (isExited) {
+  const handlePasteShortcut = useCallback(async (): Promise<boolean> => {
+    const shellType = session?.shellType ?? initialSession?.shellType;
+    if (isExited || !shouldUsePowerShellReadlinePaste(shellType)) {
       return false;
     }
 
-    const lines = text.split('\n');
-    const lineCount = lines.length;
+    await write(POWERSHELL_READLINE_PASTE_SEQUENCE);
+    return true;
+  }, [initialSession?.shellType, isExited, session?.shellType, write]);
 
-    if (lineCount > MULTILINE_PASTE_THRESHOLD) {
-      const maxPreviewLines = 10;
-      const previewLines = lines.slice(0, maxPreviewLines);
-      let preview = previewLines.join('\n');
-      if (lineCount > maxPreviewLines) {
-        preview += `\n... (${lineCount} lines total)`;
-      }
-
-      const confirmed = await confirmWarning(
-        'Paste multiple lines',
-        `The clipboard contains ${lineCount} lines. Pasting multiple lines in a terminal may execute multiple commands.`,
-        {
-          confirmText: 'Paste',
-          cancelText: 'Cancel',
-          preview,
-          previewMaxHeight: 150,
-        }
-      );
-
-      if (!confirmed) {
-        return false;
-      }
+  // Handle paste with VS Code-style multi-line safety policy.
+  const handlePaste = useCallback(async (
+    text: string,
+    context: { bracketedPasteMode: boolean },
+  ): Promise<TerminalPasteDecision> => {
+    if (isExited) {
+      return { allow: false };
     }
 
-    return true;
+    return resolveTerminalPaste(text, {
+      bracketedPasteMode: context.bracketedPasteMode,
+    });
   }, [isExited]);
 
   const handleSendCtrlC = useCallback(() => {
@@ -409,9 +401,10 @@ const ConnectedTerminal: React.FC<ConnectedTerminalProps> = memo(({
     registerTerminalActions(terminalId, {
       getTerminal: () => terminalRef.current?.getTerminal() || null,
       isReadOnly: isExited,
-      write: async (data: string) => {
+      pasteShortcut: handlePasteShortcut,
+      paste: (data: string) => {
         if (!isExited) {
-          await write(data);
+          terminalRef.current?.paste(data);
         }
       },
       clear: () => {
@@ -422,7 +415,7 @@ const ConnectedTerminal: React.FC<ConnectedTerminalProps> = memo(({
     return () => {
       unregisterTerminalActions(terminalId);
     };
-  }, [terminalId, isExited, write]);
+  }, [terminalId, isExited, handlePasteShortcut]);
 
   if (isLoading) {
     return (
@@ -494,6 +487,7 @@ const ConnectedTerminal: React.FC<ConnectedTerminalProps> = memo(({
         onResize={handleResize}
         onTitleChange={handleTitleChange}
         onReady={handleTerminalReady}
+        onPasteShortcut={handlePasteShortcut}
         onPaste={handlePaste}
         preventShrinkBelowColsRef={preventShrinkBelowColsRef}
         resizeSuspended={resizeSuspended}

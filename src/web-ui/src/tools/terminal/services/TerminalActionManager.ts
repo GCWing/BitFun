@@ -6,18 +6,17 @@
 
 import { Terminal as XTerm } from '@xterm/xterm';
 import { globalEventBus } from '@/infrastructure/event-bus';
-import { confirmWarning } from '@/component-library';
 import { createLogger } from '@/shared/utils/logger';
+import { resolveTerminalPaste } from '../utils';
 
 const log = createLogger('TerminalActionManager');
-
-/** Line threshold for multi-line paste confirmation. */
-const MULTILINE_PASTE_THRESHOLD = 1;
 
 export interface TerminalActionHandler {
   getTerminal: () => XTerm | null;
   /** Read-only terminals cannot paste or clear. */
   isReadOnly?: boolean;
+  pasteShortcut?: () => Promise<boolean> | boolean;
+  paste?: (data: string) => Promise<void> | void;
   write?: (data: string) => Promise<void> | void;
   clear?: () => void;
 }
@@ -125,7 +124,7 @@ class TerminalActionManager {
       return;
     }
 
-    if (shortcutAction === 'paste' && (handler.isReadOnly || !handler.write)) {
+    if (shortcutAction === 'paste' && handler.isReadOnly) {
       return;
     }
 
@@ -140,7 +139,7 @@ class TerminalActionManager {
     }
 
     if (shortcutAction === 'paste') {
-      void this.handlePaste({ terminalId });
+      void this.handlePasteShortcut({ terminalId, handler });
       return;
     }
 
@@ -259,13 +258,24 @@ class TerminalActionManager {
   /**
    * Paste handler with multi-line confirmation.
    */
+  private handlePasteShortcut = async (data: {
+    terminalId: string;
+    handler: TerminalActionHandler;
+  }): Promise<void> => {
+    if (data.handler.pasteShortcut && await data.handler.pasteShortcut()) {
+      return;
+    }
+
+    await this.handlePaste({ terminalId: data.terminalId });
+  };
+
   private handlePaste = async (data: { terminalId: string }): Promise<void> => {
     const handler = this.handlers.get(data.terminalId);
     if (!handler) {
       return;
     }
 
-    if (handler.isReadOnly || !handler.write) {
+    if (handler.isReadOnly) {
       return;
     }
 
@@ -275,39 +285,38 @@ class TerminalActionManager {
         return;
       }
 
-      const lines = text.split('\n');
-      const lineCount = lines.length;
-      
-      if (lineCount > MULTILINE_PASTE_THRESHOLD) {
-        const maxPreviewLines = 10;
-        const previewLines = lines.slice(0, maxPreviewLines);
-        let preview = previewLines.join('\n');
-        if (lineCount > maxPreviewLines) {
-          preview += `\n... (${lineCount} lines total)`;
-        }
-        
-        const confirmed = await confirmWarning(
-          'Paste multiple lines',
-          `The clipboard contains ${lineCount} lines. Pasting multiple lines in a terminal may execute multiple commands.`,
-          {
-            confirmText: 'Paste',
-            cancelText: 'Cancel',
-            preview,
-            previewMaxHeight: 150,
-          }
-        );
-
-        if (!confirmed) {
-          return;
-        }
+      const terminal = handler.getTerminal();
+      const pasteDecision = await resolveTerminalPaste(text, {
+        bracketedPasteMode: terminal?.modes.bracketedPasteMode,
+      });
+      if (!pasteDecision.allow) {
+        return;
       }
 
-      await handler.write(text);
+      await this.pasteText(handler, terminal, pasteDecision.text);
       
     } catch (err) {
       log.error('Paste failed', { terminalId: data.terminalId, error: err });
     }
   };
+
+  private async pasteText(
+    handler: TerminalActionHandler,
+    terminal: XTerm | null,
+    text: string,
+  ): Promise<void> {
+    if (handler.paste) {
+      await handler.paste(text);
+      return;
+    }
+
+    if (terminal) {
+      terminal.paste(text);
+      return;
+    }
+
+    await handler.write?.(text);
+  }
 
   private handleSelectAll = (data: { terminalId: string }): void => {
     const handler = this.handlers.get(data.terminalId);

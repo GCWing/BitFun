@@ -1,10 +1,12 @@
 /**
  * Confirm dialog service
- * Provides an imperative API and returns Promise<boolean>
+ * Provides imperative APIs for confirmation dialogs.
  */
 
 import { create } from 'zustand';
 import type { ConfirmDialogType } from './ConfirmDialog';
+
+export type ConfirmDialogChoice = 'confirm' | 'secondary' | 'cancel';
 
 export interface ConfirmDialogOptions {
   /** Title */
@@ -15,6 +17,8 @@ export interface ConfirmDialogOptions {
   type?: ConfirmDialogType;
   /** Confirm button text */
   confirmText?: string;
+  /** Optional secondary action text */
+  secondaryText?: string;
   /** Cancel button text */
   cancelText?: string;
   /** Whether the confirm button uses danger styling */
@@ -33,12 +37,16 @@ interface ConfirmDialogState {
   /** Options */
   options: ConfirmDialogOptions | null;
   /** Resolve callback */
-  resolve: ((value: boolean) => void) | null;
+  resolve: ((value: ConfirmDialogChoice) => void) | null;
   
   /** Show the dialog */
   show: (options: ConfirmDialogOptions) => Promise<boolean>;
+  /** Show the dialog and return the selected action. */
+  showChoice: (options: ConfirmDialogOptions) => Promise<ConfirmDialogChoice>;
   /** Confirm */
   confirm: () => void;
+  /** Secondary action */
+  secondary: () => void;
   /** Cancel */
   cancel: () => void;
   /** Close */
@@ -55,6 +63,16 @@ export const useConfirmDialogStore = create<ConfirmDialogState>((set, get) => ({
       set({
         isOpen: true,
         options,
+        resolve: (value) => resolve(value === 'confirm'),
+      });
+    });
+  },
+
+  showChoice: (options: ConfirmDialogOptions) => {
+    return new Promise<ConfirmDialogChoice>((resolve) => {
+      set({
+        isOpen: true,
+        options,
         resolve,
       });
     });
@@ -63,7 +81,19 @@ export const useConfirmDialogStore = create<ConfirmDialogState>((set, get) => ({
   confirm: () => {
     const { resolve } = get();
     if (resolve) {
-      resolve(true);
+      resolve('confirm');
+    }
+    set({
+      isOpen: false,
+      options: null,
+      resolve: null,
+    });
+  },
+
+  secondary: () => {
+    const { resolve } = get();
+    if (resolve) {
+      resolve('secondary');
     }
     set({
       isOpen: false,
@@ -75,7 +105,7 @@ export const useConfirmDialogStore = create<ConfirmDialogState>((set, get) => ({
   cancel: () => {
     const { resolve } = get();
     if (resolve) {
-      resolve(false);
+      resolve('cancel');
     }
     set({
       isOpen: false,
@@ -87,7 +117,7 @@ export const useConfirmDialogStore = create<ConfirmDialogState>((set, get) => ({
   close: () => {
     const { resolve } = get();
     if (resolve) {
-      resolve(false);
+      resolve('cancel');
     }
     set({
       isOpen: false,
@@ -99,6 +129,10 @@ export const useConfirmDialogStore = create<ConfirmDialogState>((set, get) => ({
 
 export function confirmDialog(options: ConfirmDialogOptions): Promise<boolean> {
   return useConfirmDialogStore.getState().show(options);
+}
+
+export function confirmDialogChoice(options: ConfirmDialogOptions): Promise<ConfirmDialogChoice> {
+  return useConfirmDialogStore.getState().showChoice(options);
 }
 
 export function confirmWarning(title: string, message: React.ReactNode, options?: Partial<ConfirmDialogOptions>): Promise<boolean> {

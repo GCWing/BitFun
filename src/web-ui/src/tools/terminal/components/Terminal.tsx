@@ -15,6 +15,7 @@ import {
   getXtermFontWeights,
   DEFAULT_XTERM_MINIMUM_CONTRAST_RATIO,
 } from '../utils';
+import type { TerminalPasteDecision } from '../utils';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import { themeService } from '@/infrastructure/theme/core/ThemeService';
 import { createLogger } from '@/shared/utils/logger';
@@ -124,10 +125,21 @@ export interface TerminalProps {
   onResize?: (cols: number, rows: number) => void;
   onReady?: (terminal: XTerm) => void;
   /**
-   * Paste interceptor: return true to allow, false to block.
-   * Uses the default multi-line confirmation when omitted.
+   * Keyboard paste shortcut interceptor. Return true when the shortcut was
+   * handled without reading clipboard text, for example by sending Ctrl+V to a
+   * shell that owns paste behavior.
    */
-  onPaste?: (text: string) => Promise<boolean> | boolean;
+  onPasteShortcut?: (
+    context: { terminal: XTerm; bracketedPasteMode: boolean },
+  ) => Promise<boolean> | boolean;
+  /**
+   * Paste interceptor: return true to allow, false to block, or a decision with
+   * modified text. When omitted, paste is allowed and xterm handles normalization.
+   */
+  onPaste?: (
+    text: string,
+    context: { terminal: XTerm; bracketedPasteMode: boolean },
+  ) => Promise<boolean | TerminalPasteDecision> | boolean | TerminalPasteDecision;
   /**
    * When set to a positive value, doXtermResize skips any resize that would
    * shrink the terminal below this column count. Used during history replay to
@@ -149,6 +161,7 @@ export interface TerminalRef {
   clear: () => void;
   reset: () => void;
   focus: () => void;
+  paste: (data: string) => void;
   fit: () => void;
   /** Flush pending debounced resize operations. */
   flushResize: () => void;
@@ -165,6 +178,21 @@ export interface TerminalRef {
  */
 function getInitialXtermTheme(overrides: TerminalOptions['theme'] = {}): ITheme {
   return buildXtermTheme(themeService.getCurrentTheme(), overrides);
+}
+
+function normalizePasteDecision(
+  decision: boolean | TerminalPasteDecision | undefined,
+  originalText: string,
+): TerminalPasteDecision {
+  if (decision === false) {
+    return { allow: false };
+  }
+
+  if (decision === true || decision === undefined) {
+    return { allow: true, text: originalText };
+  }
+
+  return decision;
 }
 
 const DEFAULT_OPTIONS: TerminalOptions = {
@@ -188,6 +216,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(({
   onTitleChange,
   onResize,
   onReady,
+  onPasteShortcut,
   onPaste,
   preventShrinkBelowColsRef,
   resizeSuspended = false,
@@ -210,6 +239,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(({
   const onTitleChangeRef = useRef(onTitleChange);
   const onResizeRef = useRef(onResize);
   const onReadyRef = useRef(onReady);
+  const onPasteShortcutRef = useRef(onPasteShortcut);
   const onPasteRef = useRef(onPaste);
   const resizeSuspendedRef = useRef(resizeSuspended);
   const pendingFitAfterSuspendRef = useRef(false);
@@ -239,6 +269,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(({
   onTitleChangeRef.current = onTitleChange;
   onResizeRef.current = onResize;
   onReadyRef.current = onReady;
+  onPasteShortcutRef.current = onPasteShortcut;
   onPasteRef.current = onPaste;
   resizeSuspendedRef.current = resizeSuspended;
   mergedOptionsRef.current = mergedOptions;
@@ -423,6 +454,9 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(({
     focus: () => {
       terminalRef.current?.focus();
     },
+    paste: (data: string) => {
+      terminalRef.current?.paste(data);
+    },
     fit: () => fit(false),
     flushResize,
     forceRedraw,
@@ -582,24 +616,67 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(({
       onTitleChangeRef.current?.(title);
     });
 
-    // Intercept paste (Ctrl+V / Ctrl+Shift+V).
+    const pasteText = async (text: string): Promise<void> => {
+      if (!text) return;
+
+      const activeTerminal = terminalRef.current ?? terminal;
+      let pasteDecision: TerminalPasteDecision = { allow: true, text };
+      if (onPasteRef.current) {
+        pasteDecision = normalizePasteDecision(
+          await onPasteRef.current(text, {
+            terminal: activeTerminal,
+            bracketedPasteMode: activeTerminal.modes.bracketedPasteMode,
+          }),
+          text,
+        );
+      }
+
+      if (!pasteDecision.allow) {
+        return;
+      }
+
+      activeTerminal.paste(pasteDecision.text);
+    };
+
+    const handleNativePaste = (event: ClipboardEvent) => {
+      const text = event.clipboardData?.getData('text/plain') ?? '';
+      if (!text) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      pasteText(text).catch((err) => {
+        log.error('Paste failed', err);
+      });
+    };
+
+    container.addEventListener('paste', handleNativePaste, true);
+
+    // Intercept paste (Ctrl+V / Ctrl+Shift+V) so callers can apply the same
+    // policy as context-menu paste before xterm normalizes/sends the data.
     terminal.attachCustomKeyEventHandler((event: KeyboardEvent) => {
       if (event.type === 'keydown' && event.ctrlKey && (event.key === 'v' || event.key === 'V')) {
         event.preventDefault();
         
         (async () => {
           try {
-            const text = await navigator.clipboard.readText();
-            if (!text) return;
-
-            if (onPasteRef.current) {
-              const allowed = await onPasteRef.current(text);
-              if (!allowed) {
+            const activeTerminal = terminalRef.current ?? terminal;
+            if (onPasteShortcutRef.current) {
+              const handled = await onPasteShortcutRef.current({
+                terminal: activeTerminal,
+                bracketedPasteMode: activeTerminal.modes.bracketedPasteMode,
+              });
+              if (handled) {
                 return;
               }
             }
 
-            onDataRef.current?.(text);
+            const text = await navigator.clipboard.readText();
+            if (!text) return;
+
+            await pasteText(text);
           } catch (err) {
             log.error('Paste failed', err);
           }
@@ -668,6 +745,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(({
       dataDisposable.dispose();
       binaryDisposable.dispose();
       titleDisposable.dispose();
+      container.removeEventListener('paste', handleNativePaste, true);
       resizeObserver.disconnect();
       intersectionObserver.disconnect();
       fontLoadCancelled = true;
