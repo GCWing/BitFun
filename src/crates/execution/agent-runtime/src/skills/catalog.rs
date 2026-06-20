@@ -109,6 +109,10 @@ const BUILTIN_SKILL_SPECS: &[BuiltinSkillSpec] = &[
         group: BuiltinSkillGroup::Office,
     },
     BuiltinSkillSpec {
+        dir_name: "synod-presets",
+        group: BuiltinSkillGroup::Meta,
+    },
+    BuiltinSkillSpec {
         dir_name: "writing-skills",
         group: BuiltinSkillGroup::Meta,
     },
