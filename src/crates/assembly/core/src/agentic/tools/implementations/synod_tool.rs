@@ -448,3 +448,77 @@ fn councillor_role_prompt(role: &str, shared_prompt: &str) -> String {
         )
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::agentic::tools::framework::Tool;
+
+    #[test]
+    fn synod_tool_basics() {
+        let tool = SynodTool::new();
+        assert_eq!(tool.name(), "Synod");
+        assert!(tool.is_readonly());
+        assert!(!tool.is_concurrency_safe(None));
+        assert!(tool.manages_own_execution_timeout());
+        assert!(!tool.short_description().is_empty());
+        let schema = tool.input_schema();
+        let props = schema.get("properties").unwrap();
+        assert!(props.get("prompt").is_some());
+        assert!(props.get("councillors").is_some());
+        assert!(props.get("preset").is_some());
+        assert!(props.get("judge_model").is_some());
+        assert!(props.get("group_timeout_seconds").is_some());
+        assert!(props.get("partial_tolerance").is_some());
+    }
+
+    #[test]
+    fn parse_preset_review_expands_correctly() {
+        let input = json!({ "prompt": "test", "preset": "review" });
+        let councillors = parse_councillors(&input).unwrap();
+        assert_eq!(councillors.len(), 3);
+        assert_eq!(councillors[0].name, "架构");
+        assert_eq!(councillors[0].model, "primary");
+    }
+
+    #[test]
+    fn parse_preset_deep_expands_correctly() {
+        let input = json!({ "prompt": "test", "preset": "deep" });
+        let councillors = parse_councillors(&input).unwrap();
+        assert_eq!(councillors.len(), 2);
+        assert_eq!(councillors[0].name, "主审");
+        assert_eq!(councillors[1].name, "对抗");
+    }
+
+    #[test]
+    fn parse_custom_councillors_overrides_preset() {
+        let input = json!({
+            "prompt": "test",
+            "preset": "review",
+            "councillors": [{ "name": "自定义A", "model": "primary", "role": "关注安全性" }]
+        });
+        let councillors = parse_councillors(&input).unwrap();
+        assert_eq!(councillors.len(), 1);
+        assert_eq!(councillors[0].name, "自定义A");
+    }
+
+    #[test]
+    fn parse_unknown_preset_returns_error() {
+        let input = json!({ "prompt": "test", "preset": "nonexistent" });
+        assert!(parse_councillors(&input).is_err());
+    }
+
+    #[test]
+    fn councillor_prompt_with_role_includes_role_text() {
+        let result = councillor_role_prompt("关注安全性", "这个方案安全吗？");
+        assert!(result.contains("关注安全性"));
+        assert!(result.contains("这个方案安全吗？"));
+    }
+
+    #[test]
+    fn councillor_prompt_without_role_uses_generic_instruction() {
+        let result = councillor_role_prompt("", "这个方案安全吗？");
+        assert!(!result.contains("从这个角度"));
+        assert!(result.contains("独立分析"));
+    }
+}
