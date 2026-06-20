@@ -39,6 +39,12 @@ impl AgentRegistry {
 
     /// Load user custom agents globally and project subagents for the given workspace.
     pub async fn load_custom_agents(&self, workspace_root: Option<&Path>) {
+        // Ensure built-in agents are installed before scanning the directory.
+        if let Err(error) = crate::agentic::tools::implementations::agents::builtin::ensure_builtin_agents_installed().await
+        {
+            log::debug!("Failed to install built-in agents: {}", error);
+        }
+
         self.load_custom_agents_from_discovery_roots(
             workspace_root,
             &custom_agent_discovery_roots(workspace_root),

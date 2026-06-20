@@ -1,5 +1,6 @@
 //! Tool implementation module
 
+pub mod agents;
 pub mod ask_user_question_tool;
 pub mod bash_tool;
 pub mod code_review_tool;
