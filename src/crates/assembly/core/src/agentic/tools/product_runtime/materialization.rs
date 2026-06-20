@@ -28,6 +28,7 @@ impl StaticToolProviderFactory<dyn Tool> for ProductConcreteToolFactory {
             "GetTime" => Some(Arc::new(GetTimeTool::new())),
             "Task" => Some(Arc::new(TaskTool::new())),
             "Skill" => Some(Arc::new(SkillTool::new())),
+            "Synod" => Some(Arc::new(SynodTool::new())),
             "AskUserQuestion" => Some(Arc::new(AskUserQuestionTool::new())),
             "TodoWrite" => Some(Arc::new(TodoWriteTool::new())),
             "get_goal" => Some(Arc::new(GetGoalTool::new())),
