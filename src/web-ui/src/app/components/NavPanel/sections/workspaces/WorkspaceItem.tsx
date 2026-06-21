@@ -83,6 +83,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
     setActiveWorkspace,
     closeWorkspaceById,
     deleteAssistantWorkspace,
+    deleteWorkspace,
     resetAssistantWorkspace,
   } = useWorkspaceContext();
   const { switchLeftPanelTab } = useApp();
@@ -109,10 +110,12 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
   const [worktreeModalOpen, setWorktreeModalOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleteWorktreeDialogOpen, setDeleteWorktreeDialogOpen] = useState(false);
+  const [deleteWorkspaceDialogOpen, setDeleteWorkspaceDialogOpen] = useState(false);
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
   const [relatedPathsDialogOpen, setRelatedPathsDialogOpen] = useState(false);
   const [isDeletingAssistant, setIsDeletingAssistant] = useState(false);
   const [isDeletingWorktree, setIsDeletingWorktree] = useState(false);
+  const [isDeletingWorkspace, setIsDeletingWorkspace] = useState(false);
   const [isResettingWorkspace, setIsResettingWorkspace] = useState(false);
   const [sessionsCollapsed, setSessionsCollapsed] = useState(false);
   const [searchIndexModalOpen, setSearchIndexModalOpen] = useState(false);
@@ -474,6 +477,30 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
       );
     }
   }, [closeWorkspaceById, t, workspace.id]);
+
+  const handleRequestDeleteWorkspace = useCallback(() => {
+    setMenuOpen(false);
+    setDeleteWorkspaceDialogOpen(true);
+  }, []);
+
+  const handleConfirmDeleteWorkspace = useCallback(async () => {
+    if (isDeletingWorkspace) {
+      return;
+    }
+
+    setIsDeletingWorkspace(true);
+    try {
+      await deleteWorkspace(workspace.id);
+      notificationService.success(t('nav.workspaces.workspaceDeleted'), { duration: 2500 });
+    } catch (error) {
+      notificationService.error(
+        error instanceof Error ? error.message : t('nav.workspaces.deleteWorkspaceFailed'),
+        { duration: 4000 }
+      );
+    } finally {
+      setIsDeletingWorkspace(false);
+    }
+  }, [deleteWorkspace, isDeletingWorkspace, t, workspace.id]);
 
   const handleOpenSessionBatchModal = useCallback(() => {
     setMenuOpen(false);
@@ -1288,6 +1315,15 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                   <FolderOpen size={13} />
                   <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.workspaces.actions.close')}</span>
                 </button>
+                <button
+                  type="button"
+                  className="bitfun-nav-panel__workspace-item-menu-item is-danger"
+                  onClick={handleRequestDeleteWorkspace}
+                  disabled={isDeletingWorkspace}
+                >
+                  <Trash2 size={13} />
+                  <span className="bitfun-nav-panel__workspace-item-menu-label">{t('nav.workspaces.actions.deleteWorkspace')}</span>
+                </button>
               </div>,
               document.body
             )}
@@ -1325,6 +1361,17 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
         cancelText={t('actions.cancel')}
         confirmDanger
         preview={`${t('nav.workspaces.deleteWorktreeDialog.pathLabel')}\n${workspace.rootPath}`}
+      />
+      <ConfirmDialog
+        isOpen={deleteWorkspaceDialogOpen}
+        onClose={() => setDeleteWorkspaceDialogOpen(false)}
+        onConfirm={() => { void handleConfirmDeleteWorkspace(); }}
+        title={t('nav.workspaces.deleteWorkspaceDialog.title', { name: workspaceDisplayName })}
+        message={t('nav.workspaces.deleteWorkspaceDialog.message')}
+        confirmText={t('nav.workspaces.actions.deleteWorkspace')}
+        cancelText={t('actions.cancel')}
+        confirmDanger
+        preview={`${t('nav.workspaces.deleteWorkspaceDialog.pathLabel')}\n${workspace.rootPath}`}
       />
       {relatedPathsDialogOpen && (
         <Suspense fallback={null}>

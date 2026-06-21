@@ -248,6 +248,16 @@ export class GlobalAPI {
     }
   }
 
+  async deleteWorkspace(workspaceId: string): Promise<void> {
+    try {
+      await api.invoke('delete_workspace', {
+        request: { workspaceId }
+      });
+    } catch (error) {
+      throw createTauriCommandError('delete_workspace', error, { workspaceId });
+    }
+  }
+
   async resetAssistantWorkspace(workspaceId: string): Promise<WorkspaceInfo> {
     try {
       return await api.invoke('reset_assistant_workspace', {

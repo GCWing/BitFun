@@ -231,6 +231,10 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children }
     return await workspaceManager.deleteAssistantWorkspace(workspaceId);
   }, []);
 
+  const deleteWorkspace = useCallback(async (workspaceId: string): Promise<void> => {
+    return await workspaceManager.deleteWorkspace(workspaceId);
+  }, []);
+
   const resetAssistantWorkspace = useCallback(async (workspaceId: string): Promise<WorkspaceInfo> => {
     return await workspaceManager.resetAssistantWorkspace(workspaceId);
   }, []);
@@ -295,6 +299,7 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children }
       closeWorkspace,
       closeWorkspaceById,
       deleteAssistantWorkspace,
+      deleteWorkspace,
       resetAssistantWorkspace,
       switchWorkspace,
       setActiveWorkspace,
@@ -314,6 +319,7 @@ export const WorkspaceProvider: React.FC<WorkspaceProviderProps> = ({ children }
     closeWorkspace,
     closeWorkspaceById,
     deleteAssistantWorkspace,
+    deleteWorkspace,
     resetAssistantWorkspace,
     switchWorkspace,
     setActiveWorkspace,

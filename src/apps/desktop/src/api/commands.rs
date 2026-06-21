@@ -389,6 +389,12 @@ pub struct DeleteAssistantWorkspaceRequest {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct DeleteWorkspaceRequest {
+    pub workspace_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ResetAssistantWorkspaceRequest {
     pub workspace_id: String,
 }
@@ -1648,6 +1654,85 @@ pub async fn delete_assistant_workspace(
         "Assistant workspace deleted: workspace_id={}, assistant_id={}, path={}",
         request.workspace_id,
         assistant_id,
+        workspace_info.root_path.display()
+    );
+
+    Ok(())
+}
+
+/// Remove a workspace from the registry.
+///
+/// Unlike `delete_assistant_workspace`, this does NOT delete the workspace's
+/// project directory on disk — the user's files are preserved. It only:
+///   1. Closes the workspace if it is the active one.
+///   2. Unregisters a remote restore entry for remote workspaces.
+///   3. Removes the workspace from the in-memory registry and recent list.
+///   4. Reapplies (or clears) the active workspace context.
+///
+/// This is the "delete" counterpart to "close": close unloads but keeps the
+/// workspace in the list; delete removes it from the list entirely.
+#[tauri::command]
+pub async fn delete_workspace(
+    state: State<'_, AppState>,
+    app: tauri::AppHandle,
+    request: DeleteWorkspaceRequest,
+) -> Result<(), String> {
+    let workspace_info = state
+        .workspace_service
+        .get_workspace(&request.workspace_id)
+        .await
+        .ok_or_else(|| format!("Workspace not found: {}", request.workspace_id))?;
+
+    let is_active_workspace = state
+        .workspace_service
+        .get_current_workspace()
+        .await
+        .map(|workspace| workspace.id == request.workspace_id)
+        .unwrap_or(false);
+
+    if is_active_workspace {
+        state
+            .workspace_service
+            .close_workspace(&request.workspace_id)
+            .await
+            .map_err(|e| format!("Failed to close workspace before deletion: {}", e))?;
+    }
+
+    if workspace_info.workspace_kind == WorkspaceKind::Remote {
+        if let Some(rw) = remote_workspace_from_info(&workspace_info) {
+            state
+                .unregister_remote_workspace_entry(&rw.connection_id, &rw.remote_path)
+                .await;
+        }
+    }
+
+    state
+        .workspace_service
+        .remove_workspace(&request.workspace_id)
+        .await
+        .map_err(|e| format!("Failed to remove workspace state: {}", e))?;
+
+    if let Some(current_workspace) = state.workspace_service.get_current_workspace().await {
+        apply_active_workspace_context(&state, &app, &current_workspace, None).await;
+    } else {
+        clear_active_workspace_context(&state, &app, None).await;
+    }
+
+    if let Err(e) = state
+        .workspace_identity_watch_service
+        .sync_watched_workspaces()
+        .await
+    {
+        warn!(
+            "Failed to sync workspace identity watchers after workspace deletion: {}",
+            e
+        );
+    }
+
+    info!(
+        "Workspace deleted: workspace_id={}, kind={}, path={}",
+        request.workspace_id,
+        workspace_info.workspace_kind,
         workspace_info.root_path.display()
     );
 

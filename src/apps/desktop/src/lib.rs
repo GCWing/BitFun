@@ -1103,6 +1103,7 @@ pub async fn _run() {
             delete_assistant_workspace,
             reset_assistant_workspace,
             close_workspace,
+            delete_workspace,
             set_active_workspace,
             reorder_opened_workspaces,
             get_current_workspace,
