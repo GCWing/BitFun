@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FolderOpen, RefreshCw, ChevronDown, Plus, Trash2, Check } from 'lucide-react';
+import { FolderOpen, RefreshCw, ChevronDown } from 'lucide-react';
 import {
   Switch,
   NumberInput,
@@ -17,14 +17,6 @@ import {
 } from '@/component-library';
 import { ConfigPageHeader, ConfigPageLayout, ConfigPageContent, ConfigPageSection, ConfigPageRow } from './common';
 import { aiExperienceConfigService, type AIExperienceSettings } from '../services/AIExperienceConfigService';
-import {
-  DEFAULT_AGENT_COMPANION_PET,
-  deleteAgentCompanionPetPackage,
-  importAgentCompanionPetPackage,
-  listAgentCompanionPets,
-  releaseAgentCompanionPetPreviewBlobs,
-  type AgentCompanionPetPackage,
-} from '../services/AgentCompanionPetService';
 import { configManager } from '../services/ConfigManager';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import { useNotification, notificationService } from '@/shared/notification-system';
@@ -36,7 +28,6 @@ import {
   DEFAULT_LANGUAGE_TEMPLATES,
 } from '../types';
 import { ModelSelectionRadio } from './ModelSelectionRadio';
-import { ChatInputPixelPet } from '@/flow_chat/components/ChatInputPixelPet';
 import {workspaceAPI} from "@/infrastructure";
 import { createLogger } from '@/shared/utils/logger';
 import './AIFeaturesConfig.scss';
@@ -79,11 +70,6 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
   // ── Session config state ─────────────────────────────────────────────────
   const [isLoading, setIsLoading] = useState(true);
   const [settings, setSettings] = useState<AIExperienceSettings | null>(null);
-  const [companionPets, setCompanionPets] = useState<AgentCompanionPetPackage[]>([]);
-  const [companionPetsLoading, setCompanionPetsLoading] = useState(false);
-  const [companionPetImporting, setCompanionPetImporting] = useState(false);
-  const [companionPetDeletingPath, setCompanionPetDeletingPath] = useState<string | null>(null);
-  const [companionPetListExpanded, setCompanionPetListExpanded] = useState(false);
   const [models, setModels] = useState<AIModelConfig[]>([]);
   const [funcAgentModels, setFuncAgentModels] = useState<Record<string, string>>({});
   const [skipToolConfirmation, setSkipToolConfirmation] = useState(true);
@@ -159,7 +145,6 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
         confirmTimeout,
         debugConfigData,
         browserControlPreferredBrowser,
-        loadedCompanionPets,
       ] = await Promise.all([
         aiExperienceConfigService.getSettingsAsync(),
         configManager.getConfig<AIModelConfig[]>('ai.models') || [],
@@ -169,11 +154,9 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
         configManager.getConfig<number | null>('ai.tool_confirmation_timeout_secs'),
         configManager.getConfig<DebugModeConfig>('ai.debug_mode_config'),
         configManager.getConfig<string>('ai.browser_control_preferred_browser'),
-        listAgentCompanionPets(),
       ]);
 
       setSettings(loadedSettings);
-      setCompanionPets(loadedCompanionPets);
       setModels(allModels as AIModelConfig[]);
       setFuncAgentModels(funcAgentModelsData as Record<string, string>);
       setSkipToolConfirmation(skipConfirm ?? true);
@@ -212,113 +195,6 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
       notification.error(t('messages.saveFailed'));
       setSettings(settings);
     }
-  };
-
-  const handleRefreshCompanionPets = async () => {
-    setCompanionPetsLoading(true);
-    try {
-      setCompanionPets(await listAgentCompanionPets());
-    } finally {
-      setCompanionPetsLoading(false);
-    }
-  };
-
-  const handleImportCompanionPet = async () => {
-    if (!IS_TAURI_DESKTOP) return;
-    setCompanionPetImporting(true);
-    try {
-      const selected = null;
-      if (!selected || Array.isArray(selected)) return;
-      const imported = await importAgentCompanionPetPackage(selected);
-      const refreshed = await listAgentCompanionPets();
-      setCompanionPets(refreshed);
-      await updateSetting('agent_companion_pet', {
-        id: imported.id,
-        displayName: imported.displayName,
-        description: imported.description,
-        source: imported.source,
-        packagePath: imported.packagePath,
-        spritesheetPath: imported.spritesheetPath,
-        spritesheetMimeType: imported.spritesheetMimeType,
-      });
-    } catch (error) {
-      log.error('Failed to import Agent companion pet', error);
-      notification.error(t('features.agentCompanion.importFailed'));
-    } finally {
-      setCompanionPetImporting(false);
-    }
-  };
-
-  const handleDeleteCompanionPet = async (event: React.MouseEvent, pet: AgentCompanionPetPackage) => {
-    event.preventDefault();
-    event.stopPropagation();
-    if (!IS_TAURI_DESKTOP || pet.source !== 'user' || !settings) return;
-    const confirmed = null;
-    if (!confirmed) return;
-    setCompanionPetDeletingPath(pet.packagePath);
-    try {
-      await deleteAgentCompanionPetPackage(pet.packagePath);
-      releaseAgentCompanionPetPreviewBlobs(pet.packagePath, pet.spritesheetPath);
-      const refreshed = await listAgentCompanionPets();
-      setCompanionPets(refreshed);
-      if (settings.agent_companion_pet?.packagePath === pet.packagePath) {
-        const next = { ...settings, agent_companion_pet: DEFAULT_AGENT_COMPANION_PET };
-        setSettings(next);
-        await aiExperienceConfigService.saveSettings(next);
-      }
-      notification.success(t('features.agentCompanion.deleteSuccess'));
-    } catch (error) {
-      log.error('Failed to delete Agent companion pet', error);
-      notification.error(t('features.agentCompanion.deleteFailed'));
-    } finally {
-      setCompanionPetDeletingPath(null);
-    }
-  };
-
-  const companionPetOptions: SelectOption[] = companionPets.map(pet => ({
-    value: pet.packagePath,
-    label: pet.displayName,
-    description: pet.description ?? undefined,
-    group: pet.source === 'preset'
-      ? t('features.agentCompanion.groupPreset')
-      : t('features.agentCompanion.groupImported'),
-  }));
-
-  const companionDisplayModeOptions: SelectOption[] = [
-    {
-      value: 'desktop',
-      label: t('features.agentCompanion.displayDesktop'),
-      description: t('features.agentCompanion.displayDesktopDesc'),
-    },
-    {
-      value: 'input',
-      label: t('features.agentCompanion.displayInput'),
-      description: t('features.agentCompanion.displayInputDesc'),
-    },
-  ];
-
-  const selectedCompanionPetPackage = settings?.agent_companion_pet
-    ? companionPets.find(pet => pet.packagePath === settings.agent_companion_pet?.packagePath) ?? null
-    : null;
-  const selectedCompanionPet = selectedCompanionPetPackage ?? settings?.agent_companion_pet ?? DEFAULT_AGENT_COMPANION_PET;
-  const selectedCompanionPetValue = selectedCompanionPet.packagePath;
-  const selectedCompanionPetOption = companionPetOptions.find(option => option.value === selectedCompanionPetValue)
-    ?? companionPetOptions[0];
-
-  const handleCompanionPetChange = async (value: string | number | (string | number)[]) => {
-    const selectedValue = String(Array.isArray(value) ? value[0] : value);
-    const pet = companionPets.find(item => item.packagePath === selectedValue);
-    if (!pet) return;
-    await updateSetting('agent_companion_pet', {
-      id: pet.id,
-      displayName: pet.displayName,
-      description: pet.description,
-      source: pet.source,
-      packagePath: pet.packagePath,
-      spritesheetPath: pet.spritesheetPath,
-      spritesheetMimeType: pet.spritesheetMimeType,
-    });
-    setCompanionPetListExpanded(false);
   };
 
   const getModelName = useCallback((modelId: string | null | undefined): string | undefined => {
@@ -673,193 +549,6 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
                 layout="horizontal"
                 size="small"
               />
-            </div>
-          </ConfigPageRow>
-        </ConfigPageSection>
-
-        {/* ── Agent companion (collapsed input) ─────────────────── */}
-        <ConfigPageSection
-          title={t('features.agentCompanion.title')}
-          description={t('features.agentCompanion.subtitle')}
-        >
-          <ConfigPageRow label={t('features.agentCompanion.enable')} align="center">
-            <div className="bitfun-func-agent-config__row-control">
-              <Switch
-                checked={settings.enable_agent_companion}
-                onChange={(e) => updateSetting('enable_agent_companion', e.target.checked)}
-                size="small"
-              />
-            </div>
-          </ConfigPageRow>
-          <ConfigPageRow
-            label={t('features.agentCompanion.displayModeLabel')}
-            description={t('features.agentCompanion.displayModeDescription')}
-            align="center"
-          >
-            <Select
-              className="bitfun-func-agent-config__pet-select"
-              size="small"
-              options={companionDisplayModeOptions}
-              value={settings.agent_companion_display_mode}
-              onChange={(value) => {
-                const selectedValue = String(Array.isArray(value) ? value[0] : value);
-                void updateSetting(
-                  'agent_companion_display_mode',
-                  selectedValue === 'desktop' ? 'desktop' : 'input',
-                );
-              }}
-            />
-          </ConfigPageRow>
-          <ConfigPageRow
-            label={(
-              <span className="bitfun-func-agent-config__pet-row-heading">
-                <span className="bitfun-func-agent-config__pet-row-copy">
-                  <span className="bitfun-func-agent-config__pet-row-title">
-                    {t('features.agentCompanion.petLabel')}
-                  </span>
-                  <span className="bitfun-func-agent-config__pet-row-description">
-                    {t('features.agentCompanion.petDescription')}
-                  </span>
-                </span>
-                <span className="bitfun-func-agent-config__pet-actions">
-                  <IconButton
-                    type="button"
-                    size="small"
-                    variant="ghost"
-                    onClick={() => void handleRefreshCompanionPets()}
-                    disabled={companionPetsLoading}
-                    aria-label={t('features.agentCompanion.refresh')}
-                    tooltip={t('features.agentCompanion.refresh')}
-                  >
-                    <RefreshCw size={14} />
-                  </IconButton>
-                  <Button
-                    size="small"
-                    variant="secondary"
-                    onClick={() => void handleImportCompanionPet()}
-                    disabled={!IS_TAURI_DESKTOP || companionPetImporting}
-                    title={t('features.agentCompanion.importHint')}
-                  >
-                    <Plus size={14} />
-                    {companionPetImporting ? t('features.agentCompanion.importing') : t('features.agentCompanion.import')}
-                  </Button>
-                </span>
-              </span>
-            )}
-            align="start"
-            multiline
-            className="bitfun-func-agent-config__pet-row"
-          >
-            <div className="bitfun-func-agent-config__pet-picker">
-              <div className="bitfun-func-agent-config__pet-chooser">
-                <button
-                  type="button"
-                  className="bitfun-func-agent-config__pet-expand-button"
-                  aria-expanded={companionPetListExpanded}
-                  aria-controls="bitfun-companion-pet-list"
-                  onClick={() => setCompanionPetListExpanded((expanded) => !expanded)}
-                >
-                  <span className="bitfun-func-agent-config__pet-expand-current">
-                    <span className="bitfun-func-agent-config__pet-select-thumb" aria-hidden>
-                      {selectedCompanionPetPackage ? (
-                        <span
-                          className="bitfun-func-agent-config__pet-preview-sprite"
-                          style={{ '--bitfun-pet-preview-src': `url("${selectedCompanionPetPackage.previewSrc}")` } as React.CSSProperties}
-                        />
-                      ) : (
-                        <ChatInputPixelPet mood="rest" pet={selectedCompanionPet} className="bitfun-func-agent-config__pet-select-panda" />
-                      )}
-                    </span>
-                    <span className="bitfun-func-agent-config__pet-select-value">
-                      {selectedCompanionPetOption?.label ?? t('features.agentCompanion.petPlaceholder')}
-                    </span>
-                  </span>
-                  <ChevronDown
-                    size={14}
-                    className={companionPetListExpanded ? 'bitfun-func-agent-config__pet-expand-chevron--open' : undefined}
-                  />
-                </button>
-                {companionPetListExpanded && (
-                  <div
-                    id="bitfun-companion-pet-list"
-                    className="bitfun-func-agent-config__pet-list"
-                    role="radiogroup"
-                    aria-label={t('features.agentCompanion.petLabel')}
-                  >
-                    {companionPetOptions.map((option, index) => {
-                      const pet = companionPets.find(item => item.packagePath === option.value);
-                      const isUserPet = pet?.source === 'user';
-                      const isDeleting = !!pet && companionPetDeletingPath === pet.packagePath;
-                      const isSelected = option.value === selectedCompanionPetValue;
-                      const showGroup = option.group && option.group !== companionPetOptions[index - 1]?.group;
-                      return (
-                        <React.Fragment key={String(option.value)}>
-                          {showGroup && (
-                            <div className="bitfun-func-agent-config__pet-list-group">
-                              {option.group}
-                            </div>
-                          )}
-                          <div
-                            className={`bitfun-func-agent-config__pet-select-option${isSelected ? ' bitfun-func-agent-config__pet-select-option--selected' : ''}`}
-                            role="radio"
-                            tabIndex={0}
-                            aria-checked={isSelected}
-                            onClick={() => void handleCompanionPetChange(option.value)}
-                            onKeyDown={(event) => {
-                              if (event.key === 'Enter' || event.key === ' ') {
-                                event.preventDefault();
-                                void handleCompanionPetChange(option.value);
-                              }
-                            }}
-                          >
-                            <div className="bitfun-func-agent-config__pet-select-option-main">
-                              <span className="bitfun-func-agent-config__pet-select-thumb" aria-hidden>
-                                {pet ? (
-                                  <span
-                                    className="bitfun-func-agent-config__pet-preview-sprite"
-                                    style={{ '--bitfun-pet-preview-src': `url("${pet.previewSrc}")` } as React.CSSProperties}
-                                  />
-                                ) : (
-                                  <ChatInputPixelPet
-                                    mood="rest"
-                                    pet={DEFAULT_AGENT_COMPANION_PET}
-                                    className="bitfun-func-agent-config__pet-select-panda"
-                                  />
-                                )}
-                              </span>
-                              <span className="bitfun-func-agent-config__pet-select-text">
-                                <span className="bitfun-func-agent-config__pet-select-label">{option.label}</span>
-                                {option.description && (
-                                  <span className="bitfun-func-agent-config__pet-select-description">{option.description}</span>
-                                )}
-                              </span>
-                            </div>
-                            <div className={`bitfun-func-agent-config__pet-select-actions${isUserPet && IS_TAURI_DESKTOP && pet ? ' bitfun-func-agent-config__pet-select-actions--deletable' : ''}`}>
-                              {isSelected && (
-                                <Check className="bitfun-func-agent-config__pet-select-check" size={14} aria-hidden />
-                              )}
-                              {isUserPet && IS_TAURI_DESKTOP && pet && (
-                                <IconButton
-                                  type="button"
-                                  size="small"
-                                  variant="danger"
-                                  className="bitfun-func-agent-config__pet-select-delete"
-                                  disabled={isDeleting}
-                                  aria-label={t('features.agentCompanion.delete')}
-                                  tooltip={t('features.agentCompanion.delete')}
-                                  onClick={(e) => void handleDeleteCompanionPet(e, pet)}
-                                >
-                                  <Trash2 size={14} />
-                                </IconButton>
-                              )}
-                            </div>
-                          </div>
-                        </React.Fragment>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
             </div>
           </ConfigPageRow>
         </ConfigPageSection>
