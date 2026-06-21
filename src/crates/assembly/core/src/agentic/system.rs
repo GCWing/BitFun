@@ -26,6 +26,13 @@ pub struct AgenticSystem {
 
 /// Initialize the agentic runtime and register the global coordinator.
 pub async fn init_agentic_system() -> Result<AgenticSystem> {
+    init_agentic_system_with_config(session::SessionManagerConfig::default()).await
+}
+
+/// Initialize the agentic runtime with a custom session manager configuration.
+pub async fn init_agentic_system_with_config(
+    session_config: session::SessionManagerConfig,
+) -> Result<AgenticSystem> {
     info!("Initializing agentic system");
 
     let _ai_client_factory = AIClientFactory::get_global().await?;
@@ -49,7 +56,7 @@ pub async fn init_agentic_system() -> Result<AgenticSystem> {
     let session_manager = Arc::new(session::SessionManager::new(
         context_store,
         persistence_manager,
-        Default::default(),
+        session_config,
     ));
 
     let tool_registry = tools::registry::get_global_tool_registry();

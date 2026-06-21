@@ -22,6 +22,8 @@ pub struct ExecCommandArgs {
     pub output_format: ExecOutputFormat,
     pub output_patch: Option<String>,
     pub confirm: bool,
+    pub no_title: bool,
+    pub no_persist: bool,
 }
 
 pub async fn handle_exec_command(config: CliConfig, args: ExecCommandArgs) -> Result<()> {
@@ -45,10 +47,15 @@ pub async fn handle_exec_command(config: CliConfig, args: ExecCommandArgs) -> Re
     if args.fork_session && args.session_id.is_some() {
         anyhow::bail!("--fork-session cannot be combined with --session-id");
     }
+    if args.no_persist && (args.continue_last || resume.is_some() || args.fork_session) {
+        anyhow::bail!(
+            "--no-persist cannot be combined with --continue, --resume, --session, or --fork-session"
+        );
+    }
 
     let skip_confirmation = !args.confirm;
-    let (agentic_system, original_skip_confirmation) =
-        crate::initialize_core_services(skip_confirmation)
+    let (agentic_system, original_skip_confirmation, original_title_generation) =
+        crate::initialize_core_services(skip_confirmation, args.no_title, args.no_persist)
             .await
             .map_err(|error| {
                 emit_exit_diagnostic(
@@ -82,6 +89,7 @@ pub async fn handle_exec_command(config: CliConfig, args: ExecCommandArgs) -> Re
 
     crate::shutdown_mcp_servers().await;
     crate::restore_tool_confirmation(original_skip_confirmation).await;
+    crate::restore_session_title_generation(original_title_generation).await;
 
     run_result
 }
