@@ -1368,11 +1368,24 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
         onClose={() => setDeleteWorkspaceDialogOpen(false)}
         onConfirm={() => { void handleConfirmDeleteWorkspace(); }}
         title={t('nav.workspaces.deleteWorkspaceDialog.title', { name: workspaceDisplayName })}
-        message={t('nav.workspaces.deleteWorkspaceDialog.message')}
+        message={
+          <>
+            <div>{t('nav.workspaces.deleteWorkspaceDialog.message')}</div>
+            <div style={{
+              marginTop: '8px',
+              fontFamily: 'Consolas, Monaco, Courier New, monospace',
+              fontSize: 'var(--font-size-xs)',
+              color: 'var(--color-text-primary)',
+              wordBreak: 'break-all',
+              lineHeight: 1.5,
+            }}>
+              {workspace.rootPath}
+            </div>
+          </>
+        }
         confirmText={t('nav.workspaces.actions.deleteWorkspace')}
         cancelText={t('actions.cancel')}
         confirmDanger
-        preview={`${t('nav.workspaces.deleteWorkspaceDialog.pathLabel')}\n${workspace.rootPath}`}
       />
       {relatedPathsDialogOpen && (
         <Suspense fallback={null}>
