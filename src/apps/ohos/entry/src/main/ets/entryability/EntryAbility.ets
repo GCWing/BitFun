@@ -164,6 +164,9 @@ export default class EntryAbility extends RustAbility {
       })
     }, 40)
     RustModule.registerArktsFunction('reveal_in_explorer', async (err: Error, arg: string): Promise<string> => {
+      if (!arg.startsWith('file://')) {
+        arg = 'file://' + arg;
+      }
       const path = arg.replace('file://', 'file://docs');
       const want: Want = {
         bundleName: 'com.huawei.hmos.filemanager',
