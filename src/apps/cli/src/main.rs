@@ -69,6 +69,10 @@ struct Cli {
     /// Enable verbose logging
     #[arg(short, long, global = true)]
     verbose: bool,
+
+    /// Disable file logging (stderr logging will still be used)
+    #[arg(long, global = true)]
+    no_log_file: bool,
 }
 
 #[derive(Subcommand)]
@@ -122,6 +126,14 @@ enum Commands {
         /// Tool execution requires confirmation (default: no confirmation to avoid blocking non-interactive mode)
         #[arg(long)]
         confirm: bool,
+
+        /// Suppress session title generation (saves an AI API call)
+        #[arg(long)]
+        no_title: bool,
+
+        /// Disable session persistence to disk
+        #[arg(long)]
+        no_persist: bool,
     },
 
     /// Session management
@@ -365,10 +377,16 @@ async fn initialize_terminal_service() {
 }
 
 /// Initialize all core services (config, AI client, agentic system).
-/// Returns (agentic_system, original_skip_confirmation).
+/// Returns (agentic_system, original_skip_confirmation, original_title_generation).
 async fn initialize_core_services(
     skip_tool_confirmation: bool,
-) -> Result<(agent::agentic_system::AgenticSystem, bool)> {
+    suppress_title_generation: bool,
+    disable_persistence: bool,
+) -> Result<(
+    agent::agentic_system::AgenticSystem,
+    bool,
+    bool,
+)> {
     use bitfun_core::infrastructure::ai::AIClientFactory;
 
     bitfun_core::service::config::initialize_global_config()
@@ -393,6 +411,25 @@ async fn initialize_core_services(
             .await;
     }
 
+    // Save and override session title generation setting
+    let original_title_generation = if let Some(ref svc) = config_service {
+        svc.get_config::<bool>(Some("app.ai_experience.enable_session_title_generation"))
+            .await
+            .unwrap_or(true)
+    } else {
+        true
+    };
+    if suppress_title_generation {
+        if let Some(ref svc) = config_service {
+            let _ = svc
+                .set_config(
+                    "app.ai_experience.enable_session_title_generation",
+                    false,
+                )
+                .await;
+        }
+    }
+
     AIClientFactory::initialize_global()
         .await
         .expect("Failed to initialize global AIClientFactory");
@@ -400,9 +437,20 @@ async fn initialize_core_services(
 
     initialize_terminal_service().await;
 
-    let agentic_system = agent::agentic_system::init_agentic_system()
-        .await
-        .expect("Failed to initialize agentic system");
+    let agentic_system = if disable_persistence {
+        use bitfun_core::agentic::session::SessionManagerConfig;
+        let session_config = SessionManagerConfig {
+            enable_persistence: false,
+            ..Default::default()
+        };
+        agent::agentic_system::init_agentic_system_with_config(session_config)
+            .await
+            .expect("Failed to initialize agentic system")
+    } else {
+        agent::agentic_system::init_agentic_system()
+            .await
+            .expect("Failed to initialize agentic system")
+    };
     tracing::info!("Agentic system initialized");
 
     // Initialize MCP service in background (non-blocking)
@@ -437,13 +485,25 @@ async fn initialize_core_services(
         }
     }
 
-    Ok((agentic_system, original_skip_confirmation))
+    Ok((agentic_system, original_skip_confirmation, original_title_generation))
 }
 
 /// Restore original tool confirmation setting
 async fn restore_tool_confirmation(original: bool) {
     if let Ok(svc) = bitfun_core::service::config::get_global_config_service().await {
         let _ = svc.set_config("ai.skip_tool_confirmation", original).await;
+    }
+}
+
+/// Restore original session title generation setting
+async fn restore_session_title_generation(original: bool) {
+    if let Ok(svc) = bitfun_core::service::config::get_global_config_service().await {
+        let _ = svc
+            .set_config(
+                "app.ai_experience.enable_session_title_generation",
+                original,
+            )
+            .await;
     }
 }
 
@@ -476,7 +536,8 @@ async fn run_interactive(
     let workspace = setup_workspace();
 
     // 3. Initialize core services
-    let (agentic_system, original_skip_confirmation) = initialize_core_services(true).await?;
+    let (agentic_system, original_skip_confirmation, original_title_generation) =
+        initialize_core_services(true, false, false).await?;
 
     // 4. Show startup page (with full command support)
     let mut startup_page = StartupPage::new(
@@ -490,6 +551,7 @@ async fn run_interactive(
         StartupResult::Exit => {
             shutdown_mcp_servers().await;
             restore_tool_confirmation(original_skip_confirmation).await;
+            restore_session_title_generation(original_title_generation).await;
             ui::restore_terminal(terminal)?;
             println!("Goodbye!");
             return Ok(());
@@ -520,6 +582,7 @@ async fn run_interactive(
     // 6. Cleanup
     shutdown_mcp_servers().await;
     restore_tool_confirmation(original_skip_confirmation).await;
+    restore_session_title_generation(original_title_generation).await;
     println!("Goodbye!");
 
     Ok(())
@@ -539,15 +602,15 @@ async fn run_cli() -> Result<()> {
         tracing::Level::ERROR
     };
 
-    if is_tui_mode || is_exec_mode {
-        logging::init_file_logging(file_log_level);
-    } else {
+    if cli.no_log_file || (!is_tui_mode && !is_exec_mode) {
         tracing_subscriber::fmt()
             .with_max_level(stderr_log_level)
             .with_writer(std::io::stderr)
             .with_ansi(false)
             .with_target(false)
             .init();
+    } else {
+        logging::init_file_logging(file_log_level);
     }
 
     let config = CliConfig::load().unwrap_or_else(|e| {
@@ -575,6 +638,8 @@ async fn run_cli() -> Result<()> {
             output_format,
             output_patch,
             confirm,
+            no_title,
+            no_persist,
         }) => {
             root_handlers::handle_exec_command(
                 config,
@@ -589,6 +654,8 @@ async fn run_cli() -> Result<()> {
                     output_format,
                     output_patch,
                     confirm,
+                    no_title,
+                    no_persist,
                 },
             )
             .await?;
@@ -722,7 +789,8 @@ async fn run_interactive_with_session(config: CliConfig, session_id: String) -> 
     ui::render_loading(&mut terminal, "Initializing system, please wait...")?;
 
     let workspace = setup_workspace();
-    let (agentic_system, original_skip_confirmation) = initialize_core_services(true).await?;
+    let (agentic_system, original_skip_confirmation, original_title_generation) =
+        initialize_core_services(true, false, false).await?;
     let workspace_path = workspace
         .clone()
         .map(PathBuf::from)
@@ -739,6 +807,7 @@ async fn run_interactive_with_session(config: CliConfig, session_id: String) -> 
 
     shutdown_mcp_servers().await;
     restore_tool_confirmation(original_skip_confirmation).await;
+    restore_session_title_generation(original_title_generation).await;
     println!("Goodbye!");
 
     run_result?;
