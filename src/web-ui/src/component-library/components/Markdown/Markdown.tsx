@@ -33,14 +33,8 @@ const log = createLogger('Markdown');
 const COMPUTER_LINK_PREFIX = 'computer://';
 const FILE_LINK_PREFIX = 'file://';
 const WORKSPACE_FOLDER_PLACEHOLDER = '{{workspaceFolder}}';
-let markdownMathRendererPreload: Promise<typeof import('./MarkdownMathRenderer')> | undefined;
 
-export function preloadMarkdownMathRenderer() {
-  markdownMathRendererPreload ??= import('./MarkdownMathRenderer');
-  return markdownMathRendererPreload;
-}
-
-const MarkdownMathRenderer = React.lazy(preloadMarkdownMathRenderer);
+const MarkdownMathRenderer = React.lazy(() => import('./MarkdownMathRenderer'));
 
 // Module-level cache so that all simultaneously-mounting Markdown instances
 // (e.g. dozens of history blocks after a workspace switch) share a single

@@ -180,12 +180,13 @@ function hasHomeRepaintPrefix(data: string): boolean {
   return clearMatch.index <= 96;
 }
 
-// eslint-disable-next-line no-control-regex -- Matching absolute cursor positioning commands in terminal output.
-const ABSOLUTE_CURSOR_POSITION_RE = /\x1b\[(\d+);(\d+)H/g;
-// eslint-disable-next-line no-control-regex -- Matching erase-in-line commands in terminal output.
+// ANSI ESC (0x1B). Build these regexes from a string so ESLint does not flag
+// the control character in a regex literal while we still match terminal CSI.
+const ESCAPE_CHARACTER = String.fromCharCode(27);
+const ABSOLUTE_CURSOR_POSITION_RE = new RegExp(`${ESCAPE_CHARACTER}\\[(\\d+);(\\d+)H`, 'g');
 // Keep this regex non-global: inspect() is called repeatedly on the same guard,
 // and a stateful /g test here would intermittently miss identical redraw packets.
-const ERASE_IN_LINE_RE = /\x1b\[[0-2]?K/;
+const ERASE_IN_LINE_RE = new RegExp(`${ESCAPE_CHARACTER}\\[[0-2]?K`);
 
 function isPromptOnlyResizeRedraw(
   pending: PendingResizeRepaint,

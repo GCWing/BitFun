@@ -40,6 +40,7 @@ import {
   isLikelyFileNotFoundError,
 } from '@/shared/utils/fsErrorUtils';
 import { useI18n } from '@/infrastructure/i18n';
+import type { LineRange } from '@/component-library/components/Markdown';
 import { EditorBreadcrumb } from './EditorBreadcrumb';
 import { EditorStatusBar } from './EditorStatusBar';
 import largeFileExpansionLabels from './largeFileExpansionLabels.json';
@@ -84,7 +85,7 @@ export interface CodeEditorProps {
   /** Jump to column (deprecated, use jumpToRange) */
   jumpToColumn?: number;
   /** Jump to line range (preferred, supports single or multi-line selection) */
-  jumpToRange?: import('@/component-library/components/Markdown').LineRange;
+  jumpToRange?: LineRange;
   /** Unique token for repeated jump requests to the same location. */
   navigationToken?: number;
   /** When false, disk sync polling is paused (e.g. background editor tab). */
@@ -102,9 +103,22 @@ const LARGE_FILE_MAX_LINE_LENGTH = 20000;
 const LARGE_FILE_RENDER_LINE_LIMIT = 10000;
 const LARGE_FILE_MAX_TOKENIZATION_LINE_LENGTH = 2000;
 const LARGE_FILE_EXPANSION_LABELS = largeFileExpansionLabels;
+const NAVIGATION_RECOVERY_MAX_ATTEMPTS = 6;
+const NAVIGATION_RECOVERY_TIMEOUT_MS = 1500;
+const NAVIGATION_POST_JUMP_SETTLE_MS = 80;
+const NAVIGATION_RETRY_THROTTLE_MS = 40;
 
 /** Poll disk metadata for open file; only while tab is active (see isActiveTab). */
 const FILE_SYNC_POLL_INTERVAL_MS = 1000;
+
+interface PendingNavigationRequest {
+  key: string;
+  range: LineRange;
+  targetColumn: number;
+  attemptCount: number;
+  requestedAtMs: number;
+  lastAttemptedAtMs: number;
+}
 
 function getPollOffsetMs(filePath: string): number {
   let hash = 0;
@@ -262,6 +276,10 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
   const savedVersionIdRef = useRef<number>(0);
   const hasChangesRef = useRef<boolean>(false);
   const lastJumpPositionRef = useRef<{ filePath: string; line: number; column: number; endLine?: number } | null>(null);
+  const pendingNavigationRef = useRef<PendingNavigationRequest | null>(null);
+  const completedNavigationKeyRef = useRef<string | null>(null);
+  const navigationSettleTimerRef = useRef<number | null>(null);
+  const navigationSettleFrameRef = useRef<number | null>(null);
   const filePathRef = useRef<string>(filePath);
   const saveFileContentRef = useRef<() => Promise<void>>();
   const latestEditorConfigRef = useRef<Partial<EditorConfigType> | null>(null);
@@ -396,11 +414,65 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     return LARGE_FILE_EXPANSION_LABELS.some((label) => text.includes(label));
   }, []);
 
+  const clearScheduledNavigationSettlement = useCallback(() => {
+    if (navigationSettleTimerRef.current !== null) {
+      window.clearTimeout(navigationSettleTimerRef.current);
+      navigationSettleTimerRef.current = null;
+    }
+    if (navigationSettleFrameRef.current !== null) {
+      window.cancelAnimationFrame(navigationSettleFrameRef.current);
+      navigationSettleFrameRef.current = null;
+    }
+  }, []);
+
+  const getRequestedJumpRange = useCallback((): LineRange | undefined => (
+    jumpToRange ||
+    (jumpToLine ? { start: jumpToLine, end: jumpToColumn ? jumpToLine : undefined } : undefined)
+  ), [jumpToColumn, jumpToLine, jumpToRange]);
+
+  const buildNavigationRequestKey = useCallback((range: LineRange): string => (
+    [
+      filePath,
+      navigationToken ?? 'static',
+      range.start,
+      range.end ?? range.start,
+    ].join(':')
+  ), [filePath, navigationToken]);
+
+  const isEditorViewportReady = useCallback((editor: monaco.editor.IStandaloneCodeEditor | null): boolean => {
+    if (!editor) {
+      return false;
+    }
+
+    const containerRect = containerRef.current?.getBoundingClientRect();
+    if (containerRect && (containerRect.width < 2 || containerRect.height < 2)) {
+      return false;
+    }
+
+    const domNode = typeof editor.getDomNode === 'function' ? editor.getDomNode() : null;
+    if (domNode instanceof HTMLElement) {
+      const domRect = domNode.getBoundingClientRect();
+      if (domRect.width < 2 || domRect.height < 2) {
+        return false;
+      }
+    }
+
+    const layoutInfo = typeof editor.getLayoutInfo === 'function' ? editor.getLayoutInfo() : null;
+    if (layoutInfo && (layoutInfo.width < 2 || layoutInfo.height < 2)) {
+      return false;
+    }
+
+    return true;
+  }, []);
+
   useEffect(() => {
     filePathRef.current = filePath;
     pendingModelContentRef.current = null;
     lastJumpPositionRef.current = null;
-  }, [filePath]);
+    pendingNavigationRef.current = null;
+    completedNavigationKeyRef.current = null;
+    clearScheduledNavigationSettlement();
+  }, [clearScheduledNavigationSettlement, filePath]);
 
   useEffect(() => {
     if (!statusBarPopover) return;
@@ -964,6 +1036,9 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
 
     return () => {
       isUnmountedRef.current = true;
+      clearScheduledNavigationSettlement();
+      pendingNavigationRef.current = null;
+      completedNavigationKeyRef.current = null;
       if (macosEditorBindingCleanupRef.current) {
         macosEditorBindingCleanupRef.current();
         macosEditorBindingCleanupRef.current = null;
@@ -1007,7 +1082,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
         log.error('Failed to cleanup EditorReadyManager', err);
       });
     };
-  }, [filePath, detectedLanguage, detectLargeFileMode]);
+  }, [clearScheduledNavigationSettlement, filePath, detectedLanguage, detectLargeFileMode]);
 
   useEffect(() => {
     if (monacoReady && pendingModelContentRef.current !== null) {
@@ -1166,101 +1241,175 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     );
   }, []);
 
-  // Handle initial jump (after content load). If the model has fewer lines than requested,
-  // wait for content to sync into the model; otherwise we clamp to line 1, set lastJump,
-  // and dedupe blocks a correct jump after the real text arrives.
-  useEffect(() => {
-    const editor = editorRef.current;
-    const model = modelRef.current;
-
-    const finalRange =
-      jumpToRange ||
-      (jumpToLine ? { start: jumpToLine, end: jumpToColumn ? jumpToLine : undefined } : undefined);
-
-    if (!finalRange) {
+  const reconcilePendingNavigation = useCallback(() => {
+    const pending = pendingNavigationRef.current;
+    if (!pending || completedNavigationKeyRef.current === pending.key) {
       return;
     }
 
-    const targetColumn = 1;
-    const lastJump = lastJumpPositionRef.current;
+    const editor = editorRef.current;
+    const model = modelRef.current;
+    if (!editor || !model || !monacoReady || loading || !isActiveTab) {
+      return;
+    }
+
+    if (!isEditorViewportReady(editor)) {
+      return;
+    }
+
+    if (isJumpStillApplied(editor, model, pending.range.start, pending.targetColumn, pending.range.end)) {
+      completedNavigationKeyRef.current = pending.key;
+      pendingNavigationRef.current = null;
+      clearScheduledNavigationSettlement();
+      return;
+    }
+
+    const maxLineNeeded = Math.max(pending.range.start, pending.range.end ?? pending.range.start);
+    const lineCount = model.getLineCount();
+    if (lineCount < maxLineNeeded) {
+      return;
+    }
+
+    const attemptAgeMs = nowMs() - pending.requestedAtMs;
     if (
-      lastJump &&
-      lastJump.filePath === filePath &&
-      lastJump.line === finalRange.start &&
-      lastJump.endLine === finalRange.end &&
-      isJumpStillApplied(editor, model, finalRange.start, targetColumn, finalRange.end)
+      pending.attemptCount >= NAVIGATION_RECOVERY_MAX_ATTEMPTS ||
+      attemptAgeMs > NAVIGATION_RECOVERY_TIMEOUT_MS
     ) {
       return;
     }
 
-    if (!editor || !model || !monacoReady) {
+    const currentTime = nowMs();
+    if (currentTime - pending.lastAttemptedAtMs < NAVIGATION_RETRY_THROTTLE_MS) {
       return;
     }
 
-    if (loading) {
-      return;
-    }
+    pending.attemptCount += 1;
+    pending.lastAttemptedAtMs = currentTime;
+    lastJumpPositionRef.current = {
+      filePath,
+      line: pending.range.start,
+      column: pending.targetColumn,
+      endLine: pending.range.end,
+    };
+    performJump(editor, model, pending.range.start, pending.targetColumn, pending.range.end);
 
-    const maxLineNeeded = Math.max(finalRange.start, finalRange.end ?? finalRange.start);
-    const lineCount = model.getLineCount();
-
-    const applyJumpForCurrentModel = () => {
-      const ed = editorRef.current;
-      const md = modelRef.current;
-      if (!ed || !md) {
+    clearScheduledNavigationSettlement();
+    navigationSettleTimerRef.current = window.setTimeout(() => {
+      navigationSettleTimerRef.current = null;
+      if (isUnmountedRef.current) {
         return;
       }
-      lastJumpPositionRef.current = {
-        filePath,
-        line: finalRange.start,
-        column: targetColumn,
-        endLine: finalRange.end,
-      };
-      performJump(ed, md, finalRange.start, targetColumn, finalRange.end);
-    };
+      navigationSettleFrameRef.current = window.requestAnimationFrame(() => {
+        navigationSettleFrameRef.current = null;
+        reconcilePendingNavigation();
+      });
+    }, NAVIGATION_POST_JUMP_SETTLE_MS);
+  }, [
+    clearScheduledNavigationSettlement,
+    filePath,
+    isActiveTab,
+    isEditorViewportReady,
+    isJumpStillApplied,
+    loading,
+    monacoReady,
+    performJump,
+  ]);
 
-    if (lineCount >= maxLineNeeded) {
-      applyJumpForCurrentModel();
+  useEffect(() => {
+    const requestedRange = getRequestedJumpRange();
+    if (!requestedRange) {
+      pendingNavigationRef.current = null;
+      completedNavigationKeyRef.current = null;
+      clearScheduledNavigationSettlement();
       return;
     }
 
-    let finished = false;
-    let timeoutId: number | null = null;
-    let contentDisposable: { dispose: () => void } | null = null;
+    const requestKey = buildNavigationRequestKey(requestedRange);
+    if (
+      pendingNavigationRef.current?.key === requestKey ||
+      completedNavigationKeyRef.current === requestKey
+    ) {
+      return;
+    }
 
-    const finishOnce = () => {
-      if (finished) {
-        return;
+    pendingNavigationRef.current = {
+      key: requestKey,
+      range: requestedRange,
+      targetColumn: 1,
+      attemptCount: 0,
+      requestedAtMs: nowMs(),
+      lastAttemptedAtMs: 0,
+    };
+    completedNavigationKeyRef.current = null;
+    clearScheduledNavigationSettlement();
+  }, [
+    buildNavigationRequestKey,
+    clearScheduledNavigationSettlement,
+    getRequestedJumpRange,
+  ]);
+
+  useEffect(() => {
+    if (!pendingNavigationRef.current) {
+      return;
+    }
+    reconcilePendingNavigation();
+  }, [
+    content,
+    filePath,
+    isActiveTab,
+    loading,
+    monacoReady,
+    navigationToken,
+    reconcilePendingNavigation,
+  ]);
+
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor || !pendingNavigationRef.current) {
+      return;
+    }
+
+    const scheduleReconcile = () => {
+      if (navigationSettleFrameRef.current !== null) {
+        window.cancelAnimationFrame(navigationSettleFrameRef.current);
       }
-      finished = true;
-      contentDisposable?.dispose();
-      contentDisposable = null;
-      if (timeoutId != null) {
-        clearTimeout(timeoutId);
-        timeoutId = null;
-      }
-      applyJumpForCurrentModel();
+      navigationSettleFrameRef.current = window.requestAnimationFrame(() => {
+        navigationSettleFrameRef.current = null;
+        reconcilePendingNavigation();
+      });
     };
 
-    contentDisposable = model.onDidChangeContent(() => {
-      const md = modelRef.current;
-      if (md && md.getLineCount() >= maxLineNeeded) {
-        finishOnce();
-      }
+    const layoutDisposable = editor.onDidLayoutChange(() => {
+      scheduleReconcile();
     });
+    const modelDisposable = modelRef.current?.onDidChangeContent(() => {
+      scheduleReconcile();
+    }) ?? null;
 
-    timeoutId = window.setTimeout(finishOnce, 600);
+    let resizeObserver: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(() => {
+        scheduleReconcile();
+      });
+      if (containerRef.current) {
+        resizeObserver.observe(containerRef.current);
+      }
+      const domNode = editor.getDomNode();
+      if (domNode instanceof HTMLElement) {
+        resizeObserver.observe(domNode);
+      }
+    }
 
     return () => {
-      finished = true;
-      contentDisposable?.dispose();
-      contentDisposable = null;
-      if (timeoutId != null) {
-        clearTimeout(timeoutId);
-        timeoutId = null;
+      layoutDisposable.dispose();
+      modelDisposable?.dispose();
+      resizeObserver?.disconnect();
+      if (navigationSettleFrameRef.current !== null) {
+        window.cancelAnimationFrame(navigationSettleFrameRef.current);
+        navigationSettleFrameRef.current = null;
       }
     };
-  }, [jumpToRange, jumpToLine, jumpToColumn, navigationToken, monacoReady, loading, content, filePath, performJump, isJumpStillApplied]);
+  }, [filePath, isActiveTab, monacoReady, navigationToken, reconcilePendingNavigation]);
 
   // Status bar popover: open and confirm
   const openStatusBarPopover = useCallback((type: 'position' | 'indent' | 'encoding' | 'language', e: React.MouseEvent) => {

@@ -48,8 +48,8 @@ async function preloadDeferredRenderersDefault(): Promise<void> {
     { preloadMarkdownMathRenderer },
     { preloadTerminalOutputRenderer },
   ] = await Promise.all([
-    import('@/component-library/components/Markdown/Markdown'),
-    import('@/tools/terminal/components/LazyTerminalOutputRenderer'),
+    import('@/component-library/components/Markdown/MarkdownMathRenderer.preload'),
+    import('@/tools/terminal/components/TerminalOutputRenderer.preload'),
   ]);
 
   await Promise.all([
