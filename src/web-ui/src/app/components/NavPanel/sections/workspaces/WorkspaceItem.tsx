@@ -491,6 +491,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
     setIsDeletingWorkspace(true);
     try {
       await deleteWorkspace(workspace.id);
+      setDeleteWorkspaceDialogOpen(false);
       notificationService.success(t('nav.workspaces.workspaceDeleted'), { duration: 2500 });
     } catch (error) {
       notificationService.error(

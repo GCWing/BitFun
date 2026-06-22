@@ -1660,17 +1660,19 @@ pub async fn delete_assistant_workspace(
     Ok(())
 }
 
-/// Remove a workspace from the registry.
+/// Remove a workspace from the registry and delete its project directory on disk.
 ///
-/// Unlike `delete_assistant_workspace`, this does NOT delete the workspace's
-/// project directory on disk — the user's files are preserved. It only:
+/// This is the destructive counterpart to "close": close unloads but keeps the
+/// workspace in the list and leaves files on disk; delete removes the workspace
+/// from the list and recursively deletes its `root_path` directory. It:
 ///   1. Closes the workspace if it is the active one.
 ///   2. Unregisters a remote restore entry for remote workspaces.
-///   3. Removes the workspace from the in-memory registry and recent list.
-///   4. Reapplies (or clears) the active workspace context.
+///   3. Deletes the workspace directory on disk for local workspaces.
+///   4. Removes the workspace from the in-memory registry and recent list.
+///   5. Reapplies (or clears) the active workspace context.
 ///
-/// This is the "delete" counterpart to "close": close unloads but keeps the
-/// workspace in the list; delete removes it from the list entirely.
+/// Remote workspaces cannot be deleted locally; their `root_path` lives on the
+/// remote host, so disk deletion is skipped for them.
 #[tauri::command]
 pub async fn delete_workspace(
     state: State<'_, AppState>,
@@ -1706,6 +1708,25 @@ pub async fn delete_workspace(
         }
     }
 
+    let workspace_path_str = workspace_info.root_path.to_string_lossy().to_string();
+    let is_remote = is_remote_path(&workspace_path_str).await
+        || workspace_info.workspace_kind == WorkspaceKind::Remote;
+
+    if !is_remote && !workspace_path_str.trim().is_empty() {
+        if is_unsafe_workspace_deletion_path(&workspace_info.root_path) {
+            return Err(format!(
+                "Refusing to delete unsafe workspace path: {}",
+                workspace_info.root_path.display()
+            ));
+        }
+
+        state
+            .filesystem_service
+            .delete_directory(&workspace_path_str, true)
+            .await
+            .map_err(|e| format!("Failed to delete workspace files: {}", e))?;
+    }
+
     state
         .workspace_service
         .remove_workspace(&request.workspace_id)
@@ -1737,6 +1758,28 @@ pub async fn delete_workspace(
     );
 
     Ok(())
+}
+
+/// Returns true if the path is unsafe to delete as a workspace directory.
+///
+/// Blocks filesystem roots, relative paths, and any path with fewer than two
+/// components (e.g. `/`, `C:\`) to avoid catastrophic deletions.
+fn is_unsafe_workspace_deletion_path(path: &Path) -> bool {
+    if path.is_relative() {
+        return true;
+    }
+
+    let mut components = path.components();
+    let first = components.next();
+    if first.is_none() {
+        return true;
+    }
+
+    if components.next().is_none() {
+        return true;
+    }
+
+    false
 }
 
 async fn clear_directory_contents(directory: &Path) -> Result<(), String> {

@@ -336,6 +336,8 @@
       "createAssistantFailed": "新增個人助理失敗",
       "deleteAssistantFailed": "刪除個人助理失敗",
       "assistantDeleted": "已刪除個人助理",
+      "deleteWorkspaceFailed": "刪除工作區失敗",
+      "workspaceDeleted": "已刪除工作區",
       "resetWorkspaceFailed": "重設工作區失敗",
       "workspaceReset": "已重設工作區",
       "reorderFailed": "調整工作區順序失敗",
@@ -364,6 +366,7 @@
         "newSession": "新增會話",
         "newAssistant": "新增個人助理",
         "deleteAssistant": "刪除個人助理",
+        "deleteWorkspace": "刪除工作區",
         "resetWorkspace": "重設工作區",
         "initAgents": "初始化 AGENTS.md",
         "manageRelatedPaths": "關聯目錄",
@@ -410,6 +413,11 @@
         "title": "刪除 {{name}}？",
         "message": "此操作會關閉該工作區，並刪除對應的 worktree 目錄。",
         "pathLabel": "Worktree 路徑"
+      },
+      "deleteWorkspaceDialog": {
+        "title": "刪除 {{name}}？",
+        "message": "此操作會永久刪除該工作區目錄及其中的所有檔案，無法復原。",
+        "pathLabel": "工作區路徑"
       }
     },
     "agents": {

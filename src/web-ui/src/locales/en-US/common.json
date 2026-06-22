@@ -416,7 +416,7 @@
       },
       "deleteWorkspaceDialog": {
         "title": "Delete {{name}}?",
-        "message": "This removes the workspace from the list. The project files on disk are not deleted and can be reopened later.",
+        "message": "This will permanently delete the workspace directory and all files inside it. This action cannot be undone.",
         "pathLabel": "Workspace path"
       }
     },
