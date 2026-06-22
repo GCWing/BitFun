@@ -61,6 +61,7 @@ import { sessionBelongsToWorkspaceNavRow } from '../utils/sessionOrdering';
 import { sessionMatchesWorkspace } from '../utils/workspaceScope';
 import { resolveThreadGoalUserMessageDisplay } from '../utils/threadGoalDisplay';
 import { useBackgroundSubagentActivityStore } from './backgroundSubagentActivityStore';
+import { recordHistorySessionDiagnosticEvent } from '../services/historySessionDiagnostics';
 
 const log = createLogger('FlowChatStore');
 const VALID_AGENT_TYPES = new Set([
@@ -3962,6 +3963,12 @@ export class FlowChatStore {
           isPartial: restoredHistoryPartial,
           durationMs: elapsedMs(traceStartedAt),
         });
+        recordHistorySessionDiagnosticEvent(sessionId, 'store_stale_commit_skipped', {
+          remote,
+          loadedTurnCount: restoredLoadedTurnCount,
+          totalTurnCount: restoredTotalTurnCount,
+          isPartial: restoredHistoryPartial,
+        });
         startupTrace.markPhase('historical_session_hydrate_end', {
           remote,
           sessionId,
@@ -4024,6 +4031,12 @@ export class FlowChatStore {
         totalTurnCount: restoredTotalTurnCount,
         isPartial: restoredHistoryPartial,
         durationMs: elapsedMs(stateCommitStartedAt),
+      });
+      recordHistorySessionDiagnosticEvent(sessionId, 'store_state_commit_finished', {
+        remote,
+        dialogTurnCount: dialogTurns.length,
+        totalTurnCount: restoredTotalTurnCount,
+        isPartial: restoredHistoryPartial,
       });
       markPhaseAfterAnimationFrames(startupTrace, 'historical_session_after_state_commit_frame', {
         remote,
@@ -4098,6 +4111,9 @@ export class FlowChatStore {
         sessionId,
         sessionTraceId,
         durationMs: elapsedMs(traceStartedAt),
+      });
+      recordHistorySessionDiagnosticEvent(sessionId, 'store_hydrate_failed', {
+        remote,
       });
       log.error('Failed to load session history', { sessionId, error });
       throw error;

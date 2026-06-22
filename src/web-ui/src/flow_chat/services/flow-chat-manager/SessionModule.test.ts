@@ -371,6 +371,122 @@ describe('SessionModule historical session coordination', () => {
     await load.promise;
   });
 
+  it('retries a reused preload that stale-skipped after explicit activation', async () => {
+    const stalePreload = createDeferred<void>();
+    const retryLoad = createDeferred<void>();
+    const { context, flowChatStore } = createContext(createSession());
+    context.pendingHistoryLoads.set('history-other', Promise.resolve());
+    persistenceMocks.touchSessionActivity.mockResolvedValue(undefined);
+    flowChatStore.loadSessionHistory
+      .mockReturnValueOnce(stalePreload.promise)
+      .mockImplementationOnce(async () => {
+        await retryLoad.promise;
+        flowChatStore.setState((prev: any) => {
+          const session = prev.sessions.get('history-1');
+          return {
+            ...prev,
+            sessions: new Map(prev.sessions).set('history-1', {
+              ...session,
+              isHistorical: false,
+              historyState: 'ready',
+              dialogTurns: [{
+                id: 'turn-1',
+                userMessage: { id: 'user-1', content: 'Restored prompt', timestamp: 1 },
+                modelRounds: [],
+                status: 'completed',
+              }],
+            }),
+          };
+        });
+      });
+
+    preloadHistoricalSessionForOpen(context, 'history-1');
+    await Promise.resolve();
+
+    expect(flowChatStore.loadSessionHistory).toHaveBeenCalledTimes(1);
+
+    dispatchHistorySessionOpenIntent('history-1', 'Saved session');
+    const switching = switchChatSession(context, 'history-1');
+    await Promise.resolve();
+
+    expect(flowChatStore.switchSession).toHaveBeenCalledWith('history-1');
+
+    stalePreload.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(flowChatStore.loadSessionHistory).toHaveBeenCalledTimes(2);
+
+    retryLoad.resolve();
+    await switching;
+
+    expect(context.flowChatStore.getState().sessions.get('history-1')).toMatchObject({
+      isHistorical: false,
+      historyState: 'ready',
+    });
+  });
+
+  it('does not retry a reused stale preload after a newer switch request supersedes it', async () => {
+    const stalePreload = createDeferred<void>();
+    const newerSwitchLoad = createDeferred<void>();
+    const { context, flowChatStore } = createContext(createSession());
+    context.pendingHistoryLoads.set('history-other', Promise.resolve());
+    flowChatStore.setState((prev: any) => ({
+      ...prev,
+      sessions: new Map(prev.sessions).set('history-2', createSession({
+        sessionId: 'history-2',
+        title: 'Newer target',
+      })),
+    }));
+    persistenceMocks.touchSessionActivity.mockResolvedValue(undefined);
+    flowChatStore.loadSessionHistory
+      .mockReturnValueOnce(stalePreload.promise)
+      .mockImplementationOnce(async () => {
+        await newerSwitchLoad.promise;
+        flowChatStore.setState((prev: any) => {
+          const session = prev.sessions.get('history-2');
+          return {
+            ...prev,
+            sessions: new Map(prev.sessions).set('history-2', {
+              ...session,
+              isHistorical: false,
+              historyState: 'ready',
+              dialogTurns: [{
+                id: 'turn-2',
+                userMessage: { id: 'user-2', content: 'Newer prompt', timestamp: 1 },
+                modelRounds: [],
+                status: 'completed',
+              }],
+            }),
+          };
+        });
+      });
+
+    preloadHistoricalSessionForOpen(context, 'history-1');
+    await Promise.resolve();
+
+    dispatchHistorySessionOpenIntent('history-1', 'Saved session');
+    const firstSwitch = switchChatSession(context, 'history-1');
+    await Promise.resolve();
+    expect(flowChatStore.switchSession).toHaveBeenCalledWith('history-1');
+
+    const secondSwitch = switchChatSession(context, 'history-2');
+    await Promise.resolve();
+    expect(flowChatStore.loadSessionHistory).toHaveBeenCalledTimes(2);
+
+    stalePreload.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(flowChatStore.loadSessionHistory).toHaveBeenCalledTimes(2);
+
+    newerSwitchLoad.resolve();
+    await firstSwitch;
+    await secondSwitch;
+
+    expect(flowChatStore.switchSession).toHaveBeenLastCalledWith('history-2');
+  });
+
   it('does not preload standalone historical opens before the transition shield paints', () => {
     const { context, flowChatStore } = createContext(createSession());
 

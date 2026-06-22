@@ -30,6 +30,11 @@ import {
   hasRenderableSessionContent,
 } from '../sessionOpenIntent';
 import {
+  clearHistorySessionHydratePending,
+  markHistorySessionHydratePending,
+  recordHistorySessionDiagnosticEvent,
+} from '../historySessionDiagnostics';
+import {
   DEFAULT_CHAT_INPUT_MODE_CONFIG_PATH,
   normalizeUserDefaultChatInputModeId,
 } from '../../utils/chatInputMode';
@@ -132,12 +137,45 @@ const resolveEffectiveSshHost = (
 async function hydrateHistoricalSession(
   context: FlowChatContext,
   sessionId: string,
-  notifyOnError: boolean
+  notifyOnError: boolean,
+  options?: {
+    isRetryStillRelevant?: () => boolean;
+    retryActiveStaleReuse?: boolean;
+  },
 ): Promise<void> {
   const existing = context.pendingHistoryLoads.get(sessionId);
   if (existing) {
     startupTrace.markPhase('historical_session_hydrate_reused');
+    recordHistorySessionDiagnosticEvent(sessionId, 'hydrate_reused_pending', {
+      notifyOnError,
+      retryActiveStaleReuse: options?.retryActiveStaleReuse === true,
+    });
     await existing;
+    const retryStillRelevant = options?.isRetryStillRelevant?.() !== false;
+    const shouldRetryActiveStale = shouldRetryActiveStaleHydrate(context, sessionId);
+    recordHistorySessionDiagnosticEvent(sessionId, 'hydrate_reused_settled', {
+      retryActiveStaleReuse: options?.retryActiveStaleReuse === true,
+      retryStillRelevant,
+      shouldRetryActiveStale,
+    });
+    if (
+      options?.retryActiveStaleReuse === true &&
+      retryStillRelevant &&
+      shouldRetryActiveStale
+    ) {
+      if (context.pendingHistoryLoads.get(sessionId) === existing) {
+        context.pendingHistoryLoads.delete(sessionId);
+      }
+      startupTrace.markPhase('historical_session_hydrate_retry_active_stale_reuse', {
+        sessionId,
+      });
+      recordHistorySessionDiagnosticEvent(sessionId, 'hydrate_retry_active_stale_reuse_started');
+      await hydrateHistoricalSession(context, sessionId, notifyOnError);
+    } else if (options?.retryActiveStaleReuse === true) {
+      recordHistorySessionDiagnosticEvent(sessionId, 'hydrate_retry_active_stale_reuse_skipped', {
+        reason: retryStillRelevant ? 'active_stale_condition_not_met' : 'switch_superseded',
+      });
+    }
     return;
   }
   const traceStartedAt = nowMs();
@@ -145,12 +183,25 @@ async function hydrateHistoricalSession(
   const loadPromise = (async () => {
     const session = context.flowChatStore.getState().sessions.get(sessionId);
     if (!session?.isHistorical) {
+      recordHistorySessionDiagnosticEvent(sessionId, 'hydrate_request_skipped', {
+        reason: session ? 'not_historical' : 'missing_session',
+      });
       return;
     }
 
     const workspacePath = requireSessionWorkspacePath(session.workspacePath, sessionId);
     const remote = isRemoteTraceContext(session.remoteConnectionId, session.remoteSshHost);
+    markHistorySessionHydratePending(sessionId, {
+      notifyOnError,
+      remote,
+      deferFullHistoryUntilActive: true,
+    });
     startupTrace.markPhase('historical_session_hydrate_request', { remote });
+    recordHistorySessionDiagnosticEvent(sessionId, 'hydrate_request_started', {
+      remote,
+      historyState: session.historyState,
+      hasRenderableContent: hasRenderableSessionContent(session),
+    });
 
     // Prefer the current workspace's connection info over the session's
     // stored values.  When the user changes the SSH port the session's
@@ -181,10 +232,12 @@ async function hydrateHistoricalSession(
 
   try {
     await loadPromise;
+    recordHistorySessionDiagnosticEvent(sessionId, 'hydrate_request_finished');
     startupTrace.markPhase('historical_session_hydrate_request_end', {
       durationMs: elapsedMs(traceStartedAt),
     });
   } catch (error) {
+    recordHistorySessionDiagnosticEvent(sessionId, 'hydrate_request_failed');
     startupTrace.markPhase('historical_session_hydrate_request_failed', {
       durationMs: elapsedMs(traceStartedAt),
     });
@@ -196,6 +249,9 @@ async function hydrateHistoricalSession(
     }
     throw error;
   } finally {
+    clearHistorySessionHydratePending(sessionId, 'settled', {
+      pendingStillCurrent: context.pendingHistoryLoads.get(sessionId) === loadPromise,
+    });
     if (context.pendingHistoryLoads.get(sessionId) === loadPromise) {
       context.pendingHistoryLoads.delete(sessionId);
     }
@@ -210,6 +266,20 @@ function shouldHydrateHistoricalSessionBeforeSwitch(session: Session | undefined
     return false;
   }
   return !hasRenderableSessionContent(session);
+}
+
+function shouldRetryActiveStaleHydrate(context: FlowChatContext, sessionId: string): boolean {
+  const state = context.flowChatStore.getState();
+  if (state.activeSessionId !== sessionId) {
+    return false;
+  }
+
+  const session = state.sessions.get(sessionId);
+  if (!session || session.historyState !== 'metadata-only') {
+    return false;
+  }
+
+  return shouldHydrateHistoricalSessionBeforeSwitch(session);
 }
 
 export function preloadHistoricalSessionForOpen(
@@ -570,6 +640,15 @@ export async function switchChatSession(
     const shouldActivateBeforeHydrate =
       shouldHydrateBeforeSwitch &&
       consumeRecentHistorySessionOpenIntent(sessionId);
+    recordHistorySessionDiagnosticEvent(sessionId, 'switch_requested', {
+      switchRequestId,
+      isRemoteSession,
+      isHistorical: session?.isHistorical === true,
+      historyState: session?.historyState,
+      hasRenderableContent: session ? hasRenderableSessionContent(session) : false,
+      shouldHydrateBeforeSwitch,
+      shouldActivateBeforeHydrate,
+    });
 
     const touchActiveSessionInBackground = () => {
       scheduleSessionActivityTouch(() => {
@@ -591,6 +670,9 @@ export async function switchChatSession(
 
     if (shouldActivateBeforeHydrate) {
       context.flowChatStore.switchSession(sessionId);
+      recordHistorySessionDiagnosticEvent(sessionId, 'switch_activated_before_hydrate', {
+        switchRequestId,
+      });
       startupTrace.markPhase('historical_session_switch', {
         historical: true,
         remote: false,
@@ -601,13 +683,20 @@ export async function switchChatSession(
 
     if (shouldHydrateBeforeSwitch) {
       try {
-        await hydrateHistoricalSession(context, sessionId, true);
+        await hydrateHistoricalSession(context, sessionId, true, {
+          isRetryStillRelevant: () => switchRequestId === latestSwitchRequestId,
+          retryActiveStaleReuse: shouldActivateBeforeHydrate,
+        });
       } catch {
         // The hydrate path already marks the session failed and notifies the user.
         // Continue with activation so the failed state is visible.
       }
 
       if (switchRequestId !== latestSwitchRequestId) {
+        recordHistorySessionDiagnosticEvent(sessionId, 'switch_superseded', {
+          switchRequestId,
+          latestSwitchRequestId,
+        });
         startupTrace.markPhase('historical_session_switch_superseded', {
           sessionId,
         });
@@ -622,6 +711,10 @@ export async function switchChatSession(
     // flashing while the old large session is unmounted immediately.
     if (!shouldActivateBeforeHydrate) {
       context.flowChatStore.switchSession(sessionId);
+      recordHistorySessionDiagnosticEvent(sessionId, 'switch_activated_after_hydrate', {
+        switchRequestId,
+        shouldHydrateBeforeSwitch,
+      });
       startupTrace.markPhase('historical_session_switch', {
         historical: Boolean(session?.isHistorical),
         remote: isRemoteSession,
@@ -632,6 +725,9 @@ export async function switchChatSession(
 
     if (session?.isHistorical && !shouldHydrateBeforeSwitch) {
       // Load history in the background — do not block the UI.
+      recordHistorySessionDiagnosticEvent(sessionId, 'switch_background_hydrate_started', {
+        switchRequestId,
+      });
       void hydrateHistoricalSession(context, sessionId, true);
     }
   } catch (error) {

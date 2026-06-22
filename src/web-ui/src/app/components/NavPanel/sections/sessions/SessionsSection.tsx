@@ -26,6 +26,7 @@ import {
   dispatchHistorySessionOpenIntent,
   shouldShowHistorySessionOpenIntent,
 } from '@/flow_chat/services/sessionOpenIntent';
+import { recordHistorySessionDiagnosticEvent } from '@/flow_chat/services/historySessionDiagnostics';
 import { resolveSessionRelationship } from '@/flow_chat/utils/sessionMetadata';
 import {
   compareSessionsForNavStable,
@@ -616,7 +617,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
   const lastHistoryOpenIntentRef = useRef<{ sessionId: string; atMs: number } | null>(null);
 
   const dispatchHistoryOpenIntentForSession = useCallback(
-    (session: Session): HistoryOpenIntentDispatchResult => {
+    (session: Session, source: 'pointerdown' | 'switch'): HistoryOpenIntentDispatchResult => {
       const sessionId = session.sessionId;
       if (
         sessionId === activeSessionId ||
@@ -634,11 +635,18 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
         lastIntent.sessionId === sessionId &&
         now - lastIntent.atMs < 250
       ) {
+        recordHistorySessionDiagnosticEvent(sessionId, 'history_open_intent_deduped', {
+          source,
+          ageMs: Math.round(now - lastIntent.atMs),
+        });
         return 'already-pending';
       }
 
       lastHistoryOpenIntentRef.current = { sessionId, atMs: now };
       dispatchHistorySessionOpenIntent(sessionId, getTitle(session));
+      recordHistorySessionDiagnosticEvent(sessionId, 'history_open_intent_source', {
+        source,
+      });
       return 'dispatched';
     },
     [activeSessionId, runningSessionIds],
@@ -650,7 +658,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
       try {
         const session = flowChatStore.getState().sessions.get(sessionId);
         const historyOpenIntentDispatch = session
-          ? dispatchHistoryOpenIntentForSession(session)
+          ? dispatchHistoryOpenIntentForSession(session, 'switch')
           : 'none';
         if (session && historyOpenIntentDispatch !== 'none') {
           flowChatManager.preloadHistoricalSessionForOpen(sessionId);
@@ -721,7 +729,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
         return;
       }
 
-      const historyOpenIntentDispatch = dispatchHistoryOpenIntentForSession(session);
+      const historyOpenIntentDispatch = dispatchHistoryOpenIntentForSession(session, 'pointerdown');
       if (historyOpenIntentDispatch !== 'none') {
         flowChatManager.preloadHistoricalSessionForOpen(session.sessionId);
       }

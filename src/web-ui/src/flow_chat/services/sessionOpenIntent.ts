@@ -1,4 +1,8 @@
 import type { Session } from '../types/flow-chat';
+import {
+  beginHistorySessionDiagnostics,
+  recordHistorySessionDiagnosticEvent,
+} from './historySessionDiagnostics';
 
 export const HISTORY_SESSION_OPEN_INTENT_EVENT = 'flowchat:history-session-open-intent';
 const RECENT_HISTORY_OPEN_INTENT_MS = 750;
@@ -70,6 +74,7 @@ export function shouldShowHistorySessionOpenIntent(
 
 export function dispatchHistorySessionOpenIntent(sessionId: string, sessionTitle?: string): void {
   const atMs = nowMs();
+  beginHistorySessionDiagnostics(sessionId, 'history_open_intent_dispatched');
   recentHistoryOpenIntent = {
     sessionId,
     atMs,
@@ -81,6 +86,9 @@ export function dispatchHistorySessionOpenIntent(sessionId: string, sessionTitle
       activeHistorySessionOpenTransition?.sessionId === sessionId &&
       activeHistorySessionOpenTransition.atMs === atMs
     ) {
+      recordHistorySessionDiagnosticEvent(sessionId, 'history_open_transition_expired', {
+        durationMs: HISTORY_SESSION_OPEN_TRANSITION_MAX_MS,
+      });
       activeHistorySessionOpenTransition = null;
       activeHistorySessionOpenTransitionTimer = null;
       notifyHistorySessionOpenTransitionListeners();
@@ -106,7 +114,15 @@ export function consumeRecentHistorySessionOpenIntent(sessionId: string): boolea
 
   const now = nowMs();
   recentHistoryOpenIntent = null;
-  return now - recent.atMs <= RECENT_HISTORY_OPEN_INTENT_MS;
+  const ageMs = Math.round(now - recent.atMs);
+  const consumed = ageMs <= RECENT_HISTORY_OPEN_INTENT_MS;
+  recordHistorySessionDiagnosticEvent(sessionId, consumed
+    ? 'history_open_intent_consumed'
+    : 'history_open_intent_expired', {
+    ageMs,
+    maxAgeMs: RECENT_HISTORY_OPEN_INTENT_MS,
+  });
+  return consumed;
 }
 
 export function clearRecentHistorySessionOpenIntent(sessionId?: string): void {
@@ -130,6 +146,12 @@ export function getHistorySessionOpenTransitionSnapshot(): HistorySessionOpenTra
 
 export function clearHistorySessionOpenTransition(sessionId?: string): void {
   if (!sessionId || activeHistorySessionOpenTransition?.sessionId === sessionId) {
+    if (activeHistorySessionOpenTransition) {
+      recordHistorySessionDiagnosticEvent(
+        activeHistorySessionOpenTransition.sessionId,
+        'history_open_transition_cleared',
+      );
+    }
     activeHistorySessionOpenTransition = null;
     clearHistorySessionOpenTransitionTimer();
     notifyHistorySessionOpenTransitionListeners();

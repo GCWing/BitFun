@@ -505,7 +505,7 @@ describe('startup performance contract', () => {
     expect(source).toContain("historyOpenIntentDispatch !== 'none'");
     expect(source).not.toContain('if (historyOpenIntentDispatched)');
     expect(pointerDownStart).toBeGreaterThan(switchStart);
-    expect(source.slice(pointerDownStart)).toContain('dispatchHistoryOpenIntentForSession(session)');
+    expect(source.slice(pointerDownStart)).toContain("dispatchHistoryOpenIntentForSession(session, 'pointerdown')");
     expect(intentSource).toContain('RECENT_HISTORY_OPEN_INTENT_MS');
     expect(intentSource).toContain('HISTORY_SESSION_OPEN_TRANSITION_MAX_MS');
     expect(intentSource).toContain('subscribeHistorySessionOpenTransition');

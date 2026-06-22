@@ -35,6 +35,11 @@ const virtualListActionClickMock = vi.hoisted(() => vi.fn());
 const startupTraceMock = vi.hoisted(() => ({
   markPhase: vi.fn(),
 }));
+const historySessionDiagnosticsMock = vi.hoisted(() => ({
+  beginHistorySessionDiagnostics: vi.fn(() => 'diag-1'),
+  recordHistorySessionDiagnosticEvent: vi.fn(),
+  warnHistorySessionLoadingLayerStalled: vi.fn(),
+}));
 const searchStateMock = vi.hoisted(() => ({
   searchQuery: '',
   onSearchChange: vi.fn(),
@@ -131,6 +136,8 @@ vi.mock('@/shared/utils/startupTrace', () => ({
   isRemoteTraceContext: () => false,
   startupTrace: startupTraceMock,
 }));
+
+vi.mock('../../services/historySessionDiagnostics', () => historySessionDiagnosticsMock);
 
 vi.mock('./FlowChatHeader', () => ({
   FlowChatHeader: (props: Record<string, unknown>) => {
@@ -255,6 +262,10 @@ describe('ModernFlowChatContainer historical empty state', () => {
     virtualListMock.pinTurnToTop.mockReturnValue(true);
     virtualListActionClickMock.mockReset();
     startupTraceMock.markPhase.mockReset();
+    historySessionDiagnosticsMock.beginHistorySessionDiagnostics.mockReset();
+    historySessionDiagnosticsMock.beginHistorySessionDiagnostics.mockReturnValue('diag-1');
+    historySessionDiagnosticsMock.recordHistorySessionDiagnosticEvent.mockReset();
+    historySessionDiagnosticsMock.warnHistorySessionLoadingLayerStalled.mockReset();
     agentApiMock.listBackgroundCommandActivities.mockClear();
     agentApiMock.listBackgroundCommandActivities.mockResolvedValue({ activities: [] });
     searchStateMock.searchQuery = '';
@@ -279,6 +290,7 @@ describe('ModernFlowChatContainer historical empty state', () => {
     container?.remove();
     stateMocks.activeSession = null;
     clearHistorySessionOpenTransition();
+    vi.useRealTimers();
     vi.unstubAllGlobals();
   });
 
@@ -302,6 +314,45 @@ describe('ModernFlowChatContainer historical empty state', () => {
 
     expect(container.textContent).toContain('Loading saved session');
     expect(container.querySelector('[data-testid="welcome-panel"]')).toBeNull();
+  });
+
+  it('reports a stalled history loading layer after the diagnostic threshold', async () => {
+    vi.useFakeTimers();
+    stateMocks.activeSession = createSession({
+      sessionId: 'history-session',
+      historyState: 'metadata-only',
+      dialogTurns: [],
+    } as Partial<Session>);
+
+    await act(async () => {
+      root.render(<ModernFlowChatContainer />);
+    });
+
+    expect(container.textContent).toContain('Loading saved session');
+    expect(historySessionDiagnosticsMock.warnHistorySessionLoadingLayerStalled).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(799);
+    });
+
+    expect(historySessionDiagnosticsMock.warnHistorySessionLoadingLayerStalled).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
+
+    expect(historySessionDiagnosticsMock.warnHistorySessionLoadingLayerStalled).toHaveBeenCalledWith(
+      'history-session',
+      expect.objectContaining({
+        durationMs: 800,
+        historyState: 'metadata-only',
+        isHistorical: true,
+        isRemote: false,
+        activeSessionIdMatches: true,
+        hasRenderableContent: false,
+        dialogTurnCount: 0,
+      }),
+    );
   });
 
   it('does not show the new-session welcome while a restored session is waiting for virtual items', () => {
