@@ -23,7 +23,9 @@ use crate::agentic::image_analysis::{
     ImageLimits,
 };
 use crate::agentic::round_preempt::RoundInjectionKind;
-use crate::agentic::session::{CompressionMode, ContextCompressor, SessionManager};
+use crate::agentic::session::{
+    CompressionMode, ContextCompressor, SessionManager, UserContextCacheIdentity,
+};
 use crate::agentic::skill_agent_snapshot::build_skill_agent_tool_listing_sections_from_snapshot;
 use crate::agentic::tools::implementations::{SkillTool, TaskTool};
 use crate::agentic::tools::product_runtime::{
@@ -711,6 +713,12 @@ impl ExecutionEngine {
             return PrependedPromptReminders::default();
         };
 
+        // Extract remote execution info before prompt_context is moved into PromptBuilder.
+        let remote_connection_for_cache = prompt_context
+            .remote_execution
+            .as_ref()
+            .map(|remote| remote.connection_display_name.replace('|', "/"));
+
         let prompt_builder = PromptBuilder::new(prompt_context);
         let baseline_snapshot = if let Some(snapshot) = self
             .session_manager
@@ -731,7 +739,19 @@ impl ExecutionEngine {
                 session_id
             );
         }
-        let user_context_identity = current_agent.user_context_cache_identity();
+        let user_context_identity = {
+            let base_identity = current_agent.user_context_cache_identity();
+            // Append the remote connection to the cache scope so a failed overlay
+            // (cached without remote hints) does not persist across reconnects.
+            if let Some(connection) = &remote_connection_for_cache {
+                UserContextCacheIdentity::new(format!(
+                    "{}|remote:{}",
+                    base_identity.scope_key, connection
+                ))
+            } else {
+                base_identity
+            }
+        };
         let user_context = if let Some(cached_user_context) = self
             .session_manager
             .cached_user_context(session_id, &user_context_identity)

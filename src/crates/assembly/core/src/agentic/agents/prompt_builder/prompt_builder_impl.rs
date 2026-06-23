@@ -155,11 +155,24 @@ pub async fn build_prompt_context_for_workspace(
     let Some(connection_id) = workspace.connection_id() else {
         return Some(base);
     };
+    let connection_display_name = match &workspace.backend {
+        WorkspaceBackend::Remote {
+            connection_name, ..
+        } => connection_name.clone(),
+        _ => connection_id.to_string(),
+    };
     let Some(manager) = get_remote_workspace_manager() else {
         warn!(
-            "Remote workspace active but RemoteWorkspaceStateManager is missing; using client OS hints only"
+            "Remote workspace active but RemoteWorkspaceStateManager is missing; using minimal remote hints"
         );
-        return Some(base);
+        return Some(base.with_remote_prompt_overlay(
+            RemoteExecutionHints {
+                connection_display_name,
+                kernel_name: "unknown".to_string(),
+                hostname: "unknown".to_string(),
+            },
+            None,
+        ));
     };
 
     let ssh_manager = manager.get_ssh_manager().await;
@@ -172,12 +185,6 @@ pub async fn build_prompt_context_for_workspace(
         }
     } else {
         ("Linux".to_string(), "remote".to_string())
-    };
-    let connection_display_name = match &workspace.backend {
-        WorkspaceBackend::Remote {
-            connection_name, ..
-        } => connection_name.clone(),
-        _ => connection_id.to_string(),
     };
     let remote_layout = if let Some(ref fs) = file_service {
         match build_remote_workspace_layout_preview(fs, connection_id, &workspace_path, 200).await {
@@ -735,6 +742,38 @@ mod tests {
         assert!(runtime_context.contains("Local BitFun client OS:"));
         assert!(runtime_context.contains("Computer use and UI automation operate on the local BitFun desktop, even when workspace file and shell tools target a remote host."));
         assert!(runtime_context.contains("ExecCommand uses the remote user's default POSIX shell"));
+    }
+
+    #[tokio::test]
+    async fn runtime_context_omits_local_client_os_for_remote_with_only_control_hub() {
+        // Simulates a remote workspace where ComputerUse is disabled (filtered
+        // out by is_available_in_context) but ControlHub remains available.
+        // The agent must NOT see "Local BitFun client OS" because that signal
+        // causes it to mistake the client OS for the workspace execution OS.
+        let context = PromptBuilderContext::new("/workspace/project", None, None)
+            .with_runtime_context_needs(RuntimeContextNeeds::from_tool_names([
+                "Read",
+                "ExecCommand",
+                "ControlHub",
+            ]))
+            .with_remote_prompt_overlay(
+                RemoteExecutionHints {
+                    connection_display_name: "dev-server".to_string(),
+                    kernel_name: "Linux".to_string(),
+                    hostname: "devbox".to_string(),
+                },
+                None,
+            );
+        let runtime_context = PromptBuilder::new(context)
+            .build_runtime_context_reminder()
+            .await
+            .expect("runtime context should build");
+
+        assert!(runtime_context
+            .contains("Workspace file and shell tools operate on remote SSH connection"));
+        assert!(runtime_context.contains("## ExecCommand Shell"));
+        assert!(!runtime_context.contains("## Local Client"));
+        assert!(!runtime_context.contains("Local BitFun client OS:"));
     }
 
     #[tokio::test]

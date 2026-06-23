@@ -759,9 +759,18 @@ Output:
 
     async fn description_with_context(
         &self,
-        _context: Option<&ToolUseContext>,
+        context: Option<&ToolUseContext>,
     ) -> BitFunResult<String> {
-        self.description().await
+        let mut base = self.description().await?;
+        if context.map(|c| c.is_remote()).unwrap_or(false) {
+            base = format!(
+                r#"**Remote workspace:** Commands run on the **SSH server** in the remote user's default POSIX shell, invoked as `<shell> -lc <cmd>`. Use **Unix** syntax and POSIX paths — not PowerShell, `cmd.exe`, or Windows paths.
+
+{base}"#,
+                base = base
+            );
+        }
+        Ok(base)
     }
 
     fn short_description(&self) -> String {
@@ -1102,7 +1111,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn description_with_context_stays_stable_for_local_and_remote_workspaces() {
+    async fn description_with_context_adds_remote_note_for_remote_workspaces() {
         let tool = ExecCommandTool::new();
         let base = tool.description().await.expect("description should build");
         let session_identity =
@@ -1127,11 +1136,14 @@ mod tests {
             runtime_handles: bitfun_runtime_ports::ToolRuntimeHandles::default(),
         };
 
-        assert_eq!(
-            base,
-            tool.description_with_context(Some(&remote_context))
-                .await
-                .expect("contextual description should build")
-        );
+        let remote_desc = tool
+            .description_with_context(Some(&remote_context))
+            .await
+            .expect("contextual description should build");
+
+        assert_ne!(base, remote_desc);
+        assert!(remote_desc.contains("**Remote workspace:**"));
+        assert!(remote_desc.contains("SSH server"));
+        assert!(remote_desc.contains("POSIX"));
     }
 }
