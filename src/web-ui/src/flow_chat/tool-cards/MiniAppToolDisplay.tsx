@@ -33,20 +33,9 @@ export const InitMiniAppDisplay: React.FC<ToolCardProps> = ({ toolItem }) => {
   const miniAppFiles = useMemo(() => {
     const files = toolResult?.result?.files;
     if (Array.isArray(files)) {
-      return files
-        .map(file => {
-          if (typeof file === 'string') return file;
-          if (file && typeof file === 'object') {
-            const record = file as Record<string, unknown>;
-            return typeof record.path === 'string'
-              ? record.path
-              : typeof record.file_path === 'string'
-                ? record.file_path
-                : '';
-          }
-          return '';
-        })
-        .filter((filePath): filePath is string => filePath.length > 0);
+      return files.filter((filePath): filePath is string => (
+        typeof filePath === 'string' && filePath.length > 0
+      ));
     }
     return path ? [path] : [];
   }, [path, toolResult?.result?.files]);
