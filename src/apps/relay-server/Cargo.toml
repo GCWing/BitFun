@@ -14,29 +14,32 @@ name = "bitfun-relay-server"
 path = "src/main.rs"
 
 [dependencies]
+# NOTE: Dependencies are intentionally inlined rather than inherited from the
+# workspace so that this crate can be built standalone inside its Docker
+# context (src/apps/relay-server/) without copying the whole workspace.
 # Web framework
-axum = { workspace = true }
-tower-http = { workspace = true }
+axum = { version = "0.8", features = ["json", "ws"] }
+tower-http = { version = "0.6.11", features = ["cors", "fs"] }
 
 # Async runtime
-tokio = { workspace = true }
-futures-util = { workspace = true }
+tokio = { version = "1.52", features = ["full"] }
+futures-util = "0.3.31"
 
 # Serialization
-serde = { workspace = true }
-serde_json = { workspace = true }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 
 # Error handling
-anyhow = { workspace = true }
+anyhow = "1.0"
 
 # Logging
-tracing = { workspace = true }
-tracing-subscriber = { workspace = true }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 # Utilities
-uuid = { workspace = true }
-chrono = { workspace = true }
-dashmap = { workspace = true }
-rand = { workspace = true }
-base64 = { workspace = true }
-sha2 = { workspace = true }
+uuid = { version = "1.0", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde", "clock"] }
+dashmap = "6"
+rand = "0.8"
+base64 = "0.22"
+sha2 = "0.10"
