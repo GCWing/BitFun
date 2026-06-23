@@ -894,6 +894,68 @@ describe('ModernFlowChatContainer historical empty state', () => {
     });
   });
 
+  it('retries header turn selection without advancing header state until the virtual list accepts it', async () => {
+    stateMocks.activeSession = createSession({
+      isHistorical: false,
+      historyState: 'ready',
+      dialogTurns: [
+        createTurn('turn-1', 'Older prompt'),
+        createTurn('turn-2', 'Latest prompt'),
+      ],
+    } as Partial<Session>);
+    stateMocks.virtualItems = [
+      { type: 'user-message', turnId: 'turn-1', data: { id: 'user-turn-1', content: 'Older prompt' } },
+      { type: 'user-message', turnId: 'turn-2', data: { id: 'user-turn-2', content: 'Latest prompt' } },
+    ];
+    stateMocks.visibleTurnInfo = {
+      turnId: 'turn-2',
+      turnIndex: 2,
+      totalTurns: 2,
+      userMessage: 'Latest prompt',
+    };
+    virtualListMock.pinTurnToTop.mockReturnValue(false);
+
+    await act(async () => {
+      root.render(<ModernFlowChatContainer />);
+    });
+
+    expect(headerPropsMock.latest).toMatchObject({
+      currentTurn: 2,
+      totalTurns: 2,
+    });
+
+    await act(async () => {
+      (headerPropsMock.latest?.onJumpToTurn as ((turnId: string) => void) | undefined)?.('turn-1');
+    });
+
+    expect(virtualListMock.pinTurnToTop).toHaveBeenLastCalledWith('turn-1', {
+      behavior: 'smooth',
+      pinMode: 'transient',
+    });
+    expect(headerPropsMock.latest).toMatchObject({
+      currentTurn: 2,
+      totalTurns: 2,
+    });
+
+    virtualListMock.pinTurnToTop.mockReturnValue(true);
+    stateMocks.virtualItems = [
+      ...stateMocks.virtualItems,
+    ];
+
+    await act(async () => {
+      root.render(<ModernFlowChatContainer />);
+    });
+
+    expect(virtualListMock.pinTurnToTop).toHaveBeenLastCalledWith('turn-1', {
+      behavior: 'smooth',
+      pinMode: 'transient',
+    });
+    expect(headerPropsMock.latest).toMatchObject({
+      currentTurn: 1,
+      totalTurns: 2,
+    });
+  });
+
   it('does not expose previous navigation before the loaded tail range in partial history', async () => {
     stateMocks.activeSession = createSession({
       isHistorical: false,

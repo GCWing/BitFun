@@ -220,6 +220,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
   const activeSession = useActiveSession();
   const visibleTurnInfo = useVisibleTurnInfo();
   const [pendingHeaderTurnId, setPendingHeaderTurnId] = useState<string | null>(null);
+  const [queuedHeaderTurnPinId, setQueuedHeaderTurnPinId] = useState<string | null>(null);
   const [pendingHistoryOpenSession, setPendingHistoryOpenSession] = useState<HistorySessionOpenIntentDetail | null>(null);
   const [searchOpenRequest, setSearchOpenRequest] = useState(0);
   // Track whether a slash-command or @-mention popup is open in ChatInput.
@@ -663,6 +664,47 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     }
   }, [pendingHeaderTurnId, turnSummaries, visibleTurnInfo?.turnId]);
 
+  const requestHeaderTurnPin = useCallback((turnId: string) => {
+    const isLatestTurn = turnSummaries[turnSummaries.length - 1]?.turnId === turnId;
+    const targetTurn = findDialogTurn(activeSession?.dialogTurns, turnId);
+    const pinMode = isLatestTurn && shouldUseStickyLatestPin(targetTurn)
+      ? 'sticky-latest'
+      : 'transient';
+
+    return virtualListRef.current?.pinTurnToTop(turnId, {
+      behavior: 'smooth',
+      pinMode,
+    }) ?? false;
+  }, [activeSession?.dialogTurns, turnSummaries]);
+
+  useEffect(() => {
+    if (!queuedHeaderTurnPinId) return;
+
+    if (visibleTurnInfo?.turnId === queuedHeaderTurnPinId) {
+      setQueuedHeaderTurnPinId(null);
+      return;
+    }
+
+    const targetStillExists = turnSummaries.some(turn => turn.turnId === queuedHeaderTurnPinId);
+    if (!targetStillExists) {
+      setQueuedHeaderTurnPinId(null);
+      setPendingHeaderTurnId(null);
+      return;
+    }
+
+    const accepted = requestHeaderTurnPin(queuedHeaderTurnPinId);
+    if (!accepted) return;
+
+    setQueuedHeaderTurnPinId(null);
+    setPendingHeaderTurnId(queuedHeaderTurnPinId);
+  }, [
+    queuedHeaderTurnPinId,
+    requestHeaderTurnPin,
+    turnSummaries,
+    virtualItems,
+    visibleTurnInfo?.turnId,
+  ]);
+
   useLayoutEffect(() => {
     autoPinnedTurnKeyRef.current = null;
     releasedHistoryCompletionKeyRef.current = null;
@@ -672,6 +714,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     setHistoryInitialContentReadyKey(null);
     setHistoryInitialContentPostPaintKey(null);
     setPendingHeaderTurnId(null);
+    setQueuedHeaderTurnPinId(null);
   }, [activeSession?.sessionId]);
 
   useLayoutEffect(() => {
@@ -969,19 +1012,23 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
   const handleJumpToTurn = useCallback((turnId: string) => {
     if (!turnId) return;
 
-    const isLatestTurn = turnSummaries[turnSummaries.length - 1]?.turnId === turnId;
-    const targetTurn = findDialogTurn(activeSession?.dialogTurns, turnId);
-    const pinMode = isLatestTurn && shouldUseStickyLatestPin(targetTurn)
-      ? 'sticky-latest'
-      : 'transient';
+    const targetStillExists = turnSummaries.some(turn => turn.turnId === turnId);
+    if (!targetStillExists) {
+      setQueuedHeaderTurnPinId(null);
+      setPendingHeaderTurnId(null);
+      return;
+    }
 
-    const accepted = virtualListRef.current?.pinTurnToTop(turnId, {
-      behavior: 'smooth',
-      pinMode,
-    }) ?? false;
+    const accepted = requestHeaderTurnPin(turnId);
+    if (accepted) {
+      setQueuedHeaderTurnPinId(null);
+      setPendingHeaderTurnId(turnId);
+      return;
+    }
 
-    setPendingHeaderTurnId(accepted ? turnId : null);
-  }, [activeSession?.dialogTurns, turnSummaries]);
+    setQueuedHeaderTurnPinId(turnId);
+    setPendingHeaderTurnId(null);
+  }, [requestHeaderTurnPin, turnSummaries]);
 
   const handleJumpToPreviousTurn = useCallback(() => {
     if (!navigationVisibleTurnInfo || navigationVisibleTurnInfo.turnIndex <= 1) return;

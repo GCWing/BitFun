@@ -313,8 +313,14 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
 
   const handleTurnSelect = (turnId: string) => {
     if (!onJumpToTurn) return;
+    const selectedTurn = displayTurns.find(turn => turn.turnId === turnId);
+    if (selectedTurn?.turnIndex === currentTurn) {
+      onJumpToTurn(turnId);
+      setIsTurnListOpen(false);
+      return;
+    }
+
     onJumpToTurn(turnId);
-    setIsTurnListOpen(false);
   };
 
   const handleSubagentSelect = (sessionId: string) => {
@@ -908,4 +914,3 @@ export const FlowChatHeader: React.FC<FlowChatHeaderProps> = ({
 };
 
 FlowChatHeader.displayName = 'FlowChatHeader';
-
