@@ -24,11 +24,6 @@ impl GeneralPurposeAgent {
                 "ExecCommand".to_string(),
                 "WriteStdin".to_string(),
                 "ExecControl".to_string(),
-                "WebSearch".to_string(),
-                "WebFetch".to_string(),
-                "ExecCommand".to_string(),
-                "WriteStdin".to_string(),
-                "ExecControl".to_string(),
             ],
         }
     }
@@ -49,7 +44,7 @@ impl Agent for GeneralPurposeAgent {
     }
 
     fn description(&self) -> &str {
-        r#"General-purpose implementation and research subagent for multi-step tasks that need focused codebase search, targeted file edits."#
+        r#"General-purpose implementation subagent for multi-step tasks that need focused codebase search and targeted file edits."#
     }
 
     fn prompt_template_name(&self, _model_name: Option<&str>) -> &str {
