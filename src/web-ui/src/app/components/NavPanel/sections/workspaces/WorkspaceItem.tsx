@@ -1373,9 +1373,12 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
             <div>{t('nav.workspaces.deleteWorkspaceDialog.message')}</div>
             <div style={{
               marginTop: '8px',
+              padding: '6px 10px',
               fontFamily: 'Consolas, Monaco, Courier New, monospace',
               fontSize: 'var(--font-size-xs)',
               color: 'var(--color-text-primary)',
+              background: 'var(--color-bg-subtle)',
+              borderRadius: 'var(--size-radius-base, 6px)',
               wordBreak: 'break-all',
               lineHeight: 1.5,
             }}>
