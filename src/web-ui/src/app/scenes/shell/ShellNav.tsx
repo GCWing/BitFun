@@ -315,7 +315,7 @@ const ShellNav: React.FC = () => {
       >
         {hasVisibleContent ? (
           <div className="bitfun-shell-nav__terminal-list" data-testid="shell-command-list">
-            {visibleEntries.map((entry) => (
+            {entries.map((entry) => (
               <ShellNavEntryItem
                 key={entry.sessionId}
                 entry={entry}

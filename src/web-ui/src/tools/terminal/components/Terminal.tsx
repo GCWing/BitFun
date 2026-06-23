@@ -823,7 +823,6 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(({
       data-shortcut-scope="terminal"
       data-terminal-id={terminalId}
       data-session-id={sessionId}
-      data-supports-copy-paste={supportsCopyPaste?'true':'false'}
       data-testid="shell-command-item"
       data-command-id={sessionId}
     >

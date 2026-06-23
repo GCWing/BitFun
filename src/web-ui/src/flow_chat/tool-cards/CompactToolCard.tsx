@@ -70,7 +70,6 @@ export const CompactToolCard: React.FC<CompactToolCardProps> = ({
         className={`compact-tool-card-wrapper--expanded-card ${className}`.trim()}
         header={header}
         expandedContent={expandedContent}
-        headerExpandAffordance={clickable || Boolean(onClick)}
         toggleTestId={toggleTestId}
         headerExpandAffordance={clickable || Boolean(onClick)}
       />
