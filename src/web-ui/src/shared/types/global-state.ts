@@ -79,8 +79,6 @@ export interface WorkspaceIdentity {
   creature?: string;
   vibe?: string;
   emoji?: string;
-  modelPrimary?: string;
-  modelFast?: string;
 }
 
 export interface WorkspaceWorktreeInfo {

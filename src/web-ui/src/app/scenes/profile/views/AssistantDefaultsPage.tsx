@@ -12,19 +12,17 @@ import {
 } from 'lucide-react';
 import { GalleryZone } from '@/app/components';
 import '@/app/components/GalleryLayout/GalleryLayout.scss';
-import { Select, Switch, type SelectOption } from '@/component-library';
+import { Switch } from '@/component-library';
 import { configAPI } from '@/infrastructure/api/service-api/ConfigAPI';
-import { configManager } from '@/infrastructure/config/services/ConfigManager';
-import type { AIModelConfig, AgentProfileConfigItem, ModeSkillInfo } from '@/infrastructure/config/types';
+import type { AgentProfileConfigItem, ModeSkillInfo } from '@/infrastructure/config/types';
 import { MCPAPI, type MCPServerInfo } from '@/infrastructure/api/service-api/MCPAPI';
 import { notificationService } from '@/shared/notification-system';
-import { UI_EXCEPTION_ACCENTS } from '@/shared/theme/uiExceptionAccents';
 import type { DynamicToolInfo } from '@/shared/types/agent-api';
 import { createLogger } from '@/shared/utils/logger';
+import { ModelSelector } from '@/flow_chat/components/ModelSelector';
 import { useNurseryStore } from '../nurseryStore';
-import { formatTokenCount } from './useTokenEstimate';
 
-const log = createLogger('TemplateConfigPage');
+const log = createLogger('AssistantDefaultsPage');
 const ASSISTANT_MODE_ID = 'Claw';
 
 interface ToolInfo {
@@ -39,8 +37,6 @@ type TemplateDetail =
   | { type: 'mcpServer'; serverId: string }
   | { type: 'skill'; skill: ModeSkillInfo };
 
-type ModelSlot = 'primary' | 'fast';
-
 function isMcpTool(tool: ToolInfo): boolean {
   return tool.dynamic_info?.providerKind === 'mcp' && Boolean(tool.dynamic_info.mcp);
 }
@@ -51,45 +47,6 @@ function getMcpServerName(tool: ToolInfo): string {
 
 function getMcpShortName(tool: ToolInfo): string {
   return tool.dynamic_info?.mcp?.toolName ?? tool.name;
-}
-
-type CtxSegKey = 'systemPrompt' | 'toolInjection' | 'rules' | 'memories';
-
-const CTX_SEGMENT_ORDER: readonly CtxSegKey[] = ['systemPrompt', 'toolInjection', 'rules', 'memories'];
-
-const CTX_SEGMENT_COLORS: Record<CtxSegKey, string> = {
-  systemPrompt: 'var(--color-success)',
-  toolInjection: 'var(--color-accent-500)',
-  rules: 'var(--color-purple-soft)',
-  memories: UI_EXCEPTION_ACCENTS.templateContext.memories,
-};
-
-const CTX_LABEL_I18N_KEY: Record<CtxSegKey, string> = {
-  systemPrompt: 'nursery.template.tokenSystemPrompt',
-  toolInjection: 'nursery.template.tokenToolInjection',
-  rules: 'nursery.template.tokenRules',
-  memories: 'nursery.template.tokenMemories',
-};
-
-function fmtPct(val: number, total: number): string {
-  if (total === 0) return '0%';
-  return `${Math.round((val / total) * 100)}%`;
-}
-
-// ── Claw agent token estimates (based on actual prompt files) ─────────────
-// claw_mode.md ≈ 838 tok + persona files (BOOTSTRAP/SOUL/USER/IDENTITY) ≈ 600 tok
-const CLAW_SYS_TOKENS = 1438;
-const TOKENS_PER_TOOL = 45;   // matches backend estimation
-const TOKENS_PER_RULE = 80;
-const TOKENS_PER_MEMORY = 60;
-const CTX_WINDOW = 128_000;
-
-interface MockBreakdown {
-  systemPrompt: number;
-  toolInjection: number;
-  rules: number;
-  memories: number;
-  total: number;
 }
 
 function buildDuplicateSkillNameSet(skills: ModeSkillInfo[]): Set<string> {
@@ -115,24 +72,10 @@ function formatSkillDisplayName(skill: ModeSkillInfo, duplicateNames: Set<string
   return `${skill.name} [${formatSkillOrigin(skill)}]`;
 }
 
-function buildMockBreakdown(
-  toolCount: number,
-  rulesCount: number,
-  memoriesCount: number,
-): MockBreakdown {
-  const systemPrompt = CLAW_SYS_TOKENS;
-  const toolInjection = toolCount * TOKENS_PER_TOOL;
-  const rules = rulesCount * TOKENS_PER_RULE;
-  const memories = memoriesCount * TOKENS_PER_MEMORY;
-  return { systemPrompt, toolInjection, rules, memories, total: systemPrompt + toolInjection + rules + memories };
-}
-
-const TemplateConfigPage: React.FC = () => {
+const AssistantDefaultsPage: React.FC = () => {
   const { t } = useTranslation('scenes/profile');
   const { openGallery } = useNurseryStore();
 
-  const [models, setModels] = useState<AIModelConfig[]>([]);
-  const [funcAgentModels, setFuncAgentModels] = useState<Record<string, string>>({});
   const [assistantModeConfig, setAssistantModeConfig] = useState<AgentProfileConfigItem | null>(null);
   const [availableTools, setAvailableTools] = useState<ToolInfo[]>([]);
   const [mcpServers, setMcpServers] = useState<MCPServerInfo[]>([]);
@@ -142,11 +85,6 @@ const TemplateConfigPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [detail, setDetail] = useState<TemplateDetail | null>(null);
-
-  const enabledToolCount = useMemo(
-    () => assistantModeConfig?.enabled_tools?.length ?? 0,
-    [assistantModeConfig],
-  );
 
   const skillsEnabled = useMemo(
     () => modeSkills.filter((skill) => skill.effectiveEnabled),
@@ -160,20 +98,6 @@ const TemplateConfigPage: React.FC = () => {
   const duplicateSkillNames = useMemo(
     () => buildDuplicateSkillNameSet(modeSkills),
     [modeSkills],
-  );
-
-  const tokenBreakdown = useMemo(
-    () => buildMockBreakdown(enabledToolCount, 0, 0),
-    [enabledToolCount],
-  );
-
-  const ctxSegments = useMemo(
-    () => CTX_SEGMENT_ORDER.map((key) => ({
-      key,
-      color: CTX_SEGMENT_COLORS[key],
-      label: t(CTX_LABEL_I18N_KEY[key]),
-    })),
-    [t],
   );
 
   // Split tools into built-in vs MCP
@@ -216,22 +140,18 @@ const TemplateConfigPage: React.FC = () => {
       setLoading(true);
       try {
         const { invoke } = await import('@tauri-apps/api/core');
-        const [allModels, funcModels, modeConf, tools, skillList, servers] = await Promise.all([
-          configManager.getConfig<AIModelConfig[]>('ai.models').catch(() => [] as AIModelConfig[]),
-          configManager.getConfig<Record<string, string>>('ai.func_agent_models').catch(() => ({} as Record<string, string>)),
+        const [modeConf, tools, skillList, servers] = await Promise.all([
           configAPI.getAgentProfileConfig(ASSISTANT_MODE_ID).catch(() => null as AgentProfileConfigItem | null),
           invoke<ToolInfo[]>('get_all_tools_info').catch(() => [] as ToolInfo[]),
           configAPI.getModeSkillConfigs({ modeId: ASSISTANT_MODE_ID }).catch(() => [] as ModeSkillInfo[]),
           MCPAPI.getServers().catch(() => [] as MCPServerInfo[]),
         ]);
-        setModels(allModels ?? []);
-        setFuncAgentModels(funcModels ?? {});
         setAssistantModeConfig(modeConf);
         setAvailableTools(tools);
         setModeSkills(skillList ?? []);
         setMcpServers(servers ?? []);
       } catch (e) {
-        log.error('Failed to load template config', e);
+        log.error('Failed to load assistant defaults config', e);
       } finally {
         setLoading(false);
       }
@@ -246,42 +166,6 @@ const TemplateConfigPage: React.FC = () => {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [detail]);
-
-  const buildModelOptions = useCallback((slot: ModelSlot): SelectOption[] => {
-    const presets: SelectOption[] = [
-      { value: 'preset:primary', label: t('slotDefault.primary'), group: t('modelGroups.presets') },
-      { value: 'preset:fast',    label: t('slotDefault.fast'),    group: t('modelGroups.presets') },
-    ];
-    const modelOptions: SelectOption[] = models
-      .filter((m) => m.enabled && !!m.id)
-      .map((m) => ({ value: `model:${m.id}`, label: m.name, group: t('modelGroups.models') }));
-    if (slot === 'fast') return [...presets, ...modelOptions];
-    return [presets[0], ...modelOptions];
-  }, [models, t]);
-
-  const getSelectedValue = useCallback((slot: ModelSlot): string => {
-    const id = funcAgentModels[slot] ?? '';
-    if (!id) return '';
-    return ['primary', 'fast'].includes(id) ? `preset:${id}` : `model:${id}`;
-  }, [funcAgentModels]);
-
-  const handleModelChange = useCallback(async (
-    slot: ModelSlot,
-    raw: string | number | (string | number)[],
-  ) => {
-    if (Array.isArray(raw)) return;
-    const rawStr = String(raw);
-    const newId = rawStr.startsWith('preset:') ? rawStr.replace('preset:', '') : rawStr.replace('model:', '');
-    const updated = { ...funcAgentModels, [slot]: newId };
-    setFuncAgentModels(updated);
-    try {
-      await configManager.setConfig('ai.func_agent_models', updated);
-      notificationService.success(t('notifications.modelUpdated'));
-    } catch (e) {
-      log.error('Failed to update model', e);
-      notificationService.error(t('notifications.updateFailed'));
-    }
-  }, [funcAgentModels, t]);
 
   const handleToolToggle = useCallback(async (toolName: string) => {
     if (!assistantModeConfig) return;
@@ -375,30 +259,6 @@ const TemplateConfigPage: React.FC = () => {
       return next;
     });
   }, []);
-
-  // Context breakdown: each segment = part / total  (composition of consumed tokens)
-  const ctxTotal = tokenBreakdown.total;
-
-  const segmentWidths = useMemo(() => {
-    if (ctxTotal === 0) return CTX_SEGMENT_ORDER.map(() => 0);
-    return CTX_SEGMENT_ORDER.map((key) => {
-      const val = tokenBreakdown[key];
-      return typeof val === 'number' ? (val / ctxTotal) * 100 : 0;
-    });
-  }, [tokenBreakdown, ctxTotal]);
-
-  const contextZoneSubtitle = useMemo(
-    () => (
-      <>
-        <strong>{formatTokenCount(ctxTotal)}</strong>
-        {' tok · '}
-        <span>
-          {fmtPct(ctxTotal, CTX_WINDOW)} of {formatTokenCount(CTX_WINDOW)}
-        </span>
-      </>
-    ),
-    [ctxTotal],
-  );
 
   const openToolDetail = useCallback((tool: ToolInfo, isMcp: boolean) => {
     setDetail((prev) => (
@@ -761,78 +621,24 @@ const TemplateConfigPage: React.FC = () => {
             </div>
 
             <div className="gallery-zones tc-template-shell__zones">
-            <div className="tc-template-model-context-row">
             <GalleryZone
+              className="tc-template-model-zone"
               title={t('cards.model')}
               subtitle={t('nursery.template.sectionModelsSubtitle')}
-            >
-              <div className="tc-template-model-panel">
-                <div className="tc-hero__models">
-                  <div className="tc-model-slot">
-                    <span className="tc-model-slot__label">{t('modelSlots.primary.label')}</span>
-                    <div className="tc-model-slot__select">
-                      <Select
-                        size="small"
-                        options={buildModelOptions('primary')}
-                        value={getSelectedValue('primary')}
-                        onChange={(v) => handleModelChange('primary', v)}
-                        placeholder={t('slotDefault.primary')}
-                      />
-                    </div>
-                  </div>
-                  <div className="tc-model-slot">
-                    <span className="tc-model-slot__label">{t('modelSlots.fast.label')}</span>
-                    <div className="tc-model-slot__select">
-                      <Select
-                        size="small"
-                        options={buildModelOptions('fast')}
-                        value={getSelectedValue('fast')}
-                        onChange={(v) => handleModelChange('fast', v)}
-                        placeholder={t('slotDefault.fast')}
-                      />
-                    </div>
+              tools={(
+                <div className="tc-model-slot tc-model-slot--header">
+                  <div className="tc-model-slot__select tc-model-slot__select--model-selector">
+                    <ModelSelector
+                      currentMode={ASSISTANT_MODE_ID}
+                      className="tc-model-slot__selector"
+                      dropdownPlacement="bottom"
+                    />
                   </div>
                 </div>
-              </div>
-            </GalleryZone>
-
-            <GalleryZone
-              title={t('nursery.template.tokenTitle')}
-              subtitle={contextZoneSubtitle}
+              )}
             >
-              <div className="tc-template-context-panel">
-                <div className="tc-ctx__bar">
-                  {ctxTotal === 0 ? (
-                    <div className="tc-ctx__segment tc-ctx__segment--empty" />
-                  ) : ctxSegments.map(({ key, color, label }, i) => (
-                    segmentWidths[i] > 0 && (
-                      <div
-                        key={key}
-                        className="tc-ctx__segment"
-                        style={{ width: `${segmentWidths[i]}%`, background: color }}
-                        title={`${label}: ${formatTokenCount(tokenBreakdown[key as keyof typeof tokenBreakdown] as number)} (${fmtPct(tokenBreakdown[key as keyof typeof tokenBreakdown] as number, ctxTotal)})`}
-                      />
-                    )
-                  ))}
-                </div>
-
-                <div className="tc-ctx__legend tc-ctx__legend--template-split">
-                  {ctxSegments.map(({ key, color, label }) => {
-                    const val = tokenBreakdown[key as keyof typeof tokenBreakdown];
-                    const num = typeof val === 'number' ? val : 0;
-                    return (
-                      <div key={key} className="tc-ctx__legend-item">
-                        <span className="tc-ctx__legend-dot" style={{ background: color }} />
-                        <span className="tc-ctx__legend-name">{label}</span>
-                        <span className="tc-ctx__legend-val">{formatTokenCount(num)}</span>
-                        <span className="tc-ctx__legend-pct">{fmtPct(num, ctxTotal)}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
+              {null}
             </GalleryZone>
-            </div>
 
             <GalleryZone
               title={t('cards.skills')}
@@ -916,4 +722,4 @@ const TemplateConfigPage: React.FC = () => {
   );
 };
 
-export default TemplateConfigPage;
+export default AssistantDefaultsPage;

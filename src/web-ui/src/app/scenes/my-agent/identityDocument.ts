@@ -6,10 +6,6 @@ export interface IdentityDocument {
   vibe: string;
   emoji: string;
   body: string;
-  /** Override for primary model slot. Empty string = inherit from template. */
-  modelPrimary?: string;
-  /** Override for fast model slot. Empty string = inherit from template. */
-  modelFast?: string;
 }
 
 export const EMPTY_IDENTITY_DOCUMENT: IdentityDocument = {
@@ -18,8 +14,6 @@ export const EMPTY_IDENTITY_DOCUMENT: IdentityDocument = {
   vibe: '',
   emoji: '',
   body: '',
-  modelPrimary: '',
-  modelFast: '',
 };
 
 const FRONTMATTER_FIELDS: Array<keyof Omit<IdentityDocument, 'body'>> = [
@@ -27,8 +21,6 @@ const FRONTMATTER_FIELDS: Array<keyof Omit<IdentityDocument, 'body'>> = [
   'creature',
   'vibe',
   'emoji',
-  'modelPrimary',
-  'modelFast',
 ];
 
 export interface MarkdownFrontmatterSections {
@@ -108,8 +100,6 @@ export function parseIdentityDocument(content: string): IdentityDocument {
     vibe: normalizeShortField(parsed.vibe),
     emoji: normalizeShortField(parsed.emoji),
     body: sections.body,
-    modelPrimary: normalizeShortField(parsed.modelPrimary),
-    modelFast: normalizeShortField(parsed.modelFast),
   };
 }
 
@@ -120,16 +110,9 @@ export function serializeIdentityDocument(document: IdentityDocument): string {
     vibe: normalizeShortField(document.vibe),
     emoji: normalizeShortField(document.emoji),
     body: normalizeLineEndings(document.body || '').replace(/^\n+/, '').trimEnd(),
-    modelPrimary: normalizeShortField(document.modelPrimary ?? ''),
-    modelFast: normalizeShortField(document.modelFast ?? ''),
   };
 
-  const optionalFields = new Set<keyof Omit<IdentityDocument, 'body'>>(['modelPrimary', 'modelFast']);
   const frontmatter = FRONTMATTER_FIELDS
-    .filter((field) => {
-      if (optionalFields.has(field)) return !!normalized[field];
-      return true;
-    })
     .map((field) => {
       const value = normalized[field];
       return value ? `${field}: ${serializeScalar(value)}` : `${field}:`;

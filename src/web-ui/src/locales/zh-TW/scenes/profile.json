@@ -123,14 +123,14 @@
       "title":              "助理",
       "subtitle":           "管理你的所有助理實例",
       "newAssistant":       "新增助理",
-      "assistantsTitle":    "已孵化的助理",
+      "assistantsTitle":    "助理實例",
       "assistantsSubtitle": "點擊助理卡片進行設定"
     },
 
     "template": {
-      "title":        "孵化模板",
-      "subtitle":     "新助理孵化時繼承這裡的設定",
-      "configure":    "設定模板",
+      "title":        "助理配置",
+      "subtitle":     "配置助理的模型，技能和工具",
+      "configure":    "修改配置",
       "tokenTitle":   "上下文佔用估算",
       "tokenSystemPrompt": "系統提示詞",
       "tokenToolInjection": "工具描述注入",
@@ -138,6 +138,7 @@
       "tokenMemories": "記憶",
       "tokenTotal":   "默認總佔用",
       "stats": {
+        "autoDefault":    "自動",
         "primaryDefault": "主力模型",
         "fastDefault":    "快速模型",
         "tools":          "{{count}} 個工具",
@@ -151,7 +152,7 @@
       "mcpToolsSection": "MCP 工具",
       "mcpEmptyTitle": "未連接 MCP 伺服器",
       "mcpEmptyHint": "在設置中新增 MCP 伺服器後，其工具將顯示於此",
-      "sectionModelsSubtitle": "新助理孵化時繼承的主力與快速模型槽位",
+      "sectionModelsSubtitle": "助理預設使用的模型",
       "mcpServerNoTools": "該伺服器暫無可用工具",
       "closeDetail": "關閉詳情",
       "detailPanel": "詳情面板",

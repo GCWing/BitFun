@@ -47,8 +47,6 @@ describe('identityDocument frontmatter helpers', () => {
       vibe: 'Calm',
       emoji: '🙂',
       body: '# Body\n\nHello',
-      modelPrimary: '',
-      modelFast: '',
     });
 
     expect(serialized).toBe([
@@ -86,8 +84,6 @@ describe('identityDocument frontmatter helpers', () => {
       vibe: 'Calm',
       emoji: '🙂',
       body: '# Body\n\nHello',
-      modelPrimary: '',
-      modelFast: '',
     });
   });
 });

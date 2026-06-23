@@ -37,6 +37,8 @@ interface ModelSelectorProps {
   currentMode: string;
   /** Custom class name. */
   className?: string;
+  /** Preferred dropdown placement relative to the trigger. */
+  dropdownPlacement?: 'top' | 'bottom';
   /** Current session ID (used to update session mode config). */
   sessionId?: string;
   /** Current token count. */
@@ -156,6 +158,7 @@ const syncAcpContextUsageToStore = (
 export const ModelSelector: React.FC<ModelSelectorProps> = ({
   currentMode,
   className = '',
+  dropdownPlacement = 'top',
   sessionId,
   currentTokens = 0,
   maxTokens = 0,
@@ -328,13 +331,16 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     const updatePosition = () => {
       if (!dropdownRef.current) return;
       const rect = dropdownRef.current.getBoundingClientRect();
+      const placementStyle = dropdownPlacement === 'bottom'
+        ? { top: `${rect.bottom + 6}px`, bottom: 'auto' }
+        : { top: 'auto', bottom: `${window.innerHeight - rect.top + 6}px` };
       setDropdownStyle({
         position: 'fixed',
         visibility: 'visible',
-        bottom: `${window.innerHeight - rect.top + 6}px`,
         left: `${rect.left}px`,
         minWidth: '220px',
         maxWidth: '280px',
+        ...placementStyle,
       });
     };
 
@@ -347,7 +353,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       window.removeEventListener('scroll', updatePosition, true);
       window.removeEventListener('resize', updatePosition);
     };
-  }, [dropdownOpen]);
+  }, [dropdownOpen, dropdownPlacement]);
 
   const acpAvailableModels = useMemo((): ModelInfo[] => {
     if (!isAcpSession || !acpOptions) return [];
