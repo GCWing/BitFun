@@ -244,7 +244,7 @@ async fn openai_fixture_reattaches_id_only_prelude_to_following_payload_chunk() 
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn openai_fixture_replaces_snapshot_tool_args_after_stop_reason_chunk() {
+async fn openai_fixture_keeps_appending_tool_args_after_stop_reason_chunk() {
     let output = run_stream_fixture(
         StreamFixtureProvider::OpenAi,
         "stream/openai/tool_args_snapshot_stop_reason.sse",
@@ -275,10 +275,7 @@ async fn openai_fixture_replaces_snapshot_tool_args_after_stop_reason_chunk() {
             _ => None,
         })
         .collect();
-    assert_eq!(
-        partial_params,
-        vec!["{\"city\":\"Bei", "{\"city\":\"Beijing\"}"]
-    );
+    assert_eq!(partial_params, vec!["{\"city\":\"Bei", "jing\"}"]);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

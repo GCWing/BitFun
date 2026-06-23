@@ -102,9 +102,9 @@ pub fn build_invalid_tool_call_error_message(
     tool_name: &str,
     tool_is_error: bool,
     recovered_from_truncation: bool,
-    raw_arguments_preview: Option<String>,
+    _raw_arguments_preview: Option<String>,
 ) -> String {
-    let error_msg = if tool_name.is_empty() && tool_is_error {
+    if tool_name.is_empty() && tool_is_error {
         "Missing valid tool name and arguments are invalid JSON.".to_string()
     } else if tool_name.is_empty() {
         "Missing valid tool name.".to_string()
@@ -114,11 +114,5 @@ pub fn build_invalid_tool_call_error_message(
         )
     } else {
         "Arguments are invalid JSON.".to_string()
-    };
-
-    if let Some(raw_arguments_preview) = raw_arguments_preview {
-        format!("{error_msg} Raw arguments: {raw_arguments_preview}")
-    } else {
-        error_msg
     }
 }

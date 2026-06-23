@@ -163,7 +163,7 @@ fn invalid_tool_call_error_message_preserves_current_contract() {
         build_invalid_tool_call_error_message("", true, false, Some("{\"path\"".to_string()));
     assert_eq!(
         message,
-        "Missing valid tool name and arguments are invalid JSON. Raw arguments: {\"path\""
+        "Missing valid tool name and arguments are invalid JSON."
     );
 
     let message = build_invalid_tool_call_error_message("", false, false, None);
