@@ -112,6 +112,8 @@ export const ReadFileDisplay: React.FC<ToolCardProps> = React.memo(({
     status !== 'error'
   );
 
+  const [shouldExpand, setShouldExpand] = useState(true);
+
   if (status === 'error') {
     return null;
   }
@@ -153,8 +155,6 @@ export const ReadFileDisplay: React.FC<ToolCardProps> = React.memo(({
     }
     return null;
   };
-
-  const [shouldExpand, setShouldExpand] = useState(true);
 
   const handleMouseDown = () => {
     setShouldExpand(true);

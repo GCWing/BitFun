@@ -200,6 +200,7 @@ export interface GlobalStateAPI {
   ): Promise<WorkspaceInfo>;
   createAssistantWorkspace(): Promise<WorkspaceInfo>;
   deleteAssistantWorkspace(workspaceId: string): Promise<void>;
+  deleteWorkspace(workspaceId: string): Promise<void>;
   resetAssistantWorkspace(workspaceId: string): Promise<WorkspaceInfo>;
   closeWorkspace(workspaceId: string): Promise<void>;
   setActiveWorkspace(workspaceId: string): Promise<WorkspaceInfo>;
@@ -407,6 +408,10 @@ export function createGlobalStateAPI(): GlobalStateAPI {
 
     async deleteAssistantWorkspace(workspaceId: string): Promise<void> {
       return await globalAPI.deleteAssistantWorkspace(workspaceId);
+    },
+
+    async deleteWorkspace(workspaceId: string): Promise<void> {
+      return await globalAPI.deleteWorkspace(workspaceId);
     },
 
     async resetAssistantWorkspace(workspaceId: string): Promise<WorkspaceInfo> {

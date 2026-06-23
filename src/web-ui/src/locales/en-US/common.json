@@ -336,6 +336,8 @@
       "createAssistantFailed": "Failed to create personal assistant",
       "deleteAssistantFailed": "Failed to delete personal assistant",
       "assistantDeleted": "Personal assistant deleted",
+      "deleteWorkspaceFailed": "Failed to delete workspace",
+      "workspaceDeleted": "Workspace deleted",
       "resetWorkspaceFailed": "Failed to reset workspace",
       "workspaceReset": "Workspace reset",
       "reorderFailed": "Failed to reorder workspaces",
@@ -364,6 +366,7 @@
         "newSession": "New session",
         "newAssistant": "New personal assistant",
         "deleteAssistant": "Delete personal assistant",
+        "deleteWorkspace": "Delete workspace",
         "resetWorkspace": "Reset workspace",
         "initAgents": "Initialize AGENTS.md",
         "manageRelatedPaths": "Related directories",
@@ -410,6 +413,11 @@
         "title": "Delete {{name}}?",
         "message": "This will close the workspace and remove the worktree directory.",
         "pathLabel": "Worktree path"
+      },
+      "deleteWorkspaceDialog": {
+        "title": "Delete {{name}}?",
+        "message": "This will permanently delete the workspace directory and all files inside it. This action cannot be undone.",
+        "pathLabel": "Workspace path"
       }
     },
     "agents": {

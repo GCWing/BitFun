@@ -25,6 +25,7 @@ export interface WorkspaceContextValue extends WorkspaceState {
   closeWorkspace: () => Promise<void>;
   closeWorkspaceById: (workspaceId: string) => Promise<void>;
   deleteAssistantWorkspace: (workspaceId: string) => Promise<void>;
+  deleteWorkspace: (workspaceId: string) => Promise<void>;
   resetAssistantWorkspace: (workspaceId: string) => Promise<WorkspaceInfo>;
   switchWorkspace: (workspace: WorkspaceInfo) => Promise<WorkspaceInfo>;
   setActiveWorkspace: (workspaceId: string) => Promise<WorkspaceInfo>;

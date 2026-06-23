@@ -740,6 +740,49 @@ class WorkspaceManager {
     }
   }
 
+  public async deleteWorkspace(workspaceId: string): Promise<void> {
+    try {
+      this.setLoading(true);
+      this.setError(null);
+
+      log.info('Deleting workspace', { workspaceId });
+
+      const removedWorkspace = this.state.openedWorkspaces.get(workspaceId);
+      if (removedWorkspace) {
+        await this.cancelRunningSessionsForWorkspace(removedWorkspace);
+      }
+
+      await globalStateAPI.deleteWorkspace(workspaceId);
+
+      if (removedWorkspace) {
+        const { flowChatStore } = await import('@/flow_chat/store/FlowChatStore');
+        flowChatStore.removeSessionsForWorkspace(removedWorkspace);
+      }
+
+      const [currentWorkspace, recentWorkspaces, openedWorkspaces] = await Promise.all([
+        globalStateAPI.getCurrentWorkspace(),
+        globalStateAPI.getRecentWorkspaces(),
+        globalStateAPI.getOpenedWorkspaces(),
+      ]);
+
+      this.updateWorkspaceState(
+        currentWorkspace,
+        recentWorkspaces,
+        openedWorkspaces,
+        false,
+        null,
+        { type: 'workspace:removed', workspaceId }
+      );
+
+      this.emit({ type: 'workspace:active-changed', workspace: currentWorkspace });
+    } catch (error) {
+      log.error('Failed to delete workspace', { workspaceId, error });
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.updateState({ loading: false, error: errorMessage }, { type: 'workspace:error', error: errorMessage });
+      throw error;
+    }
+  }
+
   public async resetAssistantWorkspace(workspaceId: string): Promise<WorkspaceInfo> {
     try {
       this.setLoading(true);
