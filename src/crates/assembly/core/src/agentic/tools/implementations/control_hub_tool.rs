@@ -108,7 +108,7 @@ Use this tool via `{ domain, action, params }` for browser automation, terminal 
 - Use the `Bash` tool to run new commands; this domain only signals existing terminal sessions.
 
 ### domain: "meta"
-- `capabilities` — returns `{ domains: { browser, terminal, meta }, host: { os, arch }, schema_version }`.
+- `capabilities` — returns `{ domains: { browser, terminal, meta }, host: { os, arch }, workspace_execution: { is_remote }, schema_version }`.
 - `route_hint` — maps a free-form intent to the appropriate ControlHub domain, or tells you to use `ComputerUse` for local computer/system/desktop work.
 
 ## Unified Response Envelope
@@ -134,6 +134,11 @@ Branch on `ok` and `error.code`, not on English messages.
     ) -> BitFunResult<Vec<ToolResult>> {
         match domain {
             "desktop" => {
+                let hint = if context.is_remote() {
+                    "Desktop automation (screenshots, OCR, mouse, keyboard) is not available in remote workspace sessions. Use ExecCommand for shell-based alternatives on the remote SSH host."
+                } else {
+                    "Use the dedicated ComputerUse tool/agent for screenshots, OCR, mouse, keyboard, and desktop app control."
+                };
                 Ok(err_response(
                     "desktop",
                     action,
@@ -141,24 +146,27 @@ Branch on `ok` and `error.code`, not on English messages.
                         ErrorCode::InvalidParams,
                         "The desktop domain has moved out of ControlHub.",
                     )
-                    .with_hint(
-                        "Use the dedicated ComputerUse tool/agent for screenshots, OCR, mouse, keyboard, and desktop app control.",
-                    ),
+                    .with_hint(hint),
                 ))
             }
             "browser" => self.handle_browser(action, params).await,
             "terminal" => self.handle_terminal(action, params, context).await,
-            "system" => Ok(err_response(
-                "system",
-                action,
-                ControlHubError::new(
-                    ErrorCode::InvalidParams,
-                    "The system domain has moved out of ControlHub.",
-                )
-                .with_hint(
-                    "Use the dedicated ComputerUse tool/agent for open_app, open_url, open_file, clipboard, OS info, and local scripts.",
-                ),
-            )),
+            "system" => {
+                let hint = if context.is_remote() {
+                    "System actions (open_app, open_url, clipboard, OS info, local scripts) are not available in remote workspace sessions. Use ExecCommand for shell-based alternatives on the remote SSH host."
+                } else {
+                    "Use the dedicated ComputerUse tool/agent for open_app, open_url, open_file, clipboard, OS info, and local scripts."
+                };
+                Ok(err_response(
+                    "system",
+                    action,
+                    ControlHubError::new(
+                        ErrorCode::InvalidParams,
+                        "The system domain has moved out of ControlHub.",
+                    )
+                    .with_hint(hint),
+                ))
+            }
             "meta" => self.handle_meta(action, params, context).await,
             other => Err(BitFunError::tool(format!(
                 "Unknown domain: '{}'. Valid ControlHub domains: browser, terminal, meta. Use ComputerUse for desktop/system actions.",
@@ -236,6 +244,18 @@ Branch on `ok` and `error.code`, not on English messages.
                     Option<String>,
                 ) = (None, None);
 
+                let is_remote = context.is_remote();
+                let workspace_execution = if is_remote {
+                    json!({
+                        "is_remote": true,
+                        "note": "Workspace file and shell tools operate on the remote SSH host, not the local client."
+                    })
+                } else {
+                    json!({
+                        "is_remote": false
+                    })
+                };
+
                 let body = json!({
                     "domains": {
                         "browser":  {
@@ -254,7 +274,8 @@ Branch on `ok` and `error.code`, not on English messages.
                         "display_server": display_server,
                         "desktop_environment": desktop_env,
                     },
-                    "schema_version": "1.1",
+                    "workspace_execution": workspace_execution,
+                    "schema_version": "1.2",
                 });
                 Ok(vec![ToolResult::ok(
                     body,
@@ -324,14 +345,24 @@ Branch on `ok` and `error.code`, not on English messages.
                         break;
                     }
                 }
+                let is_remote = context.is_remote();
                 for kw in desktop_kw {
                     if lower.contains(kw) {
-                        push(
-                            &mut suggestions,
-                            "ComputerUse",
-                            75,
-                            "Matches local desktop/system keywords; use the ComputerUse tool/agent",
-                        );
+                        if is_remote {
+                            push(
+                                &mut suggestions,
+                                "unavailable",
+                                75,
+                                "Desktop automation is not available in remote workspace sessions. Use ExecCommand for shell-based alternatives on the remote SSH host.",
+                            );
+                        } else {
+                            push(
+                                &mut suggestions,
+                                "ComputerUse",
+                                75,
+                                "Matches local desktop/system keywords; use the ComputerUse tool/agent",
+                            );
+                        }
                         break;
                     }
                 }
@@ -348,12 +379,21 @@ Branch on `ok` and `error.code`, not on English messages.
                 }
                 for kw in system_kw {
                     if lower.contains(kw) {
-                        push(
-                            &mut suggestions,
-                            "ComputerUse",
-                            70,
-                            "Matches OS/launch keywords; use the ComputerUse tool/agent",
-                        );
+                        if is_remote {
+                            push(
+                                &mut suggestions,
+                                "unavailable",
+                                70,
+                                "System actions (open_app, clipboard, OS info, local scripts) are not available in remote workspace sessions. Use ExecCommand for shell-based alternatives on the remote SSH host.",
+                            );
+                        } else {
+                            push(
+                                &mut suggestions,
+                                "ComputerUse",
+                                70,
+                                "Matches OS/launch keywords; use the ComputerUse tool/agent",
+                            );
+                        }
                         break;
                     }
                 }
@@ -744,9 +784,7 @@ Branch on `ok` and `error.code`, not on English messages.
                 let ws_url = page
                     .web_socket_debugger_url
                     .as_ref()
-                    .ok_or_else(|| {
-                        BitFunError::tool("New tab has no WebSocket URL".to_string())
-                    })?;
+                    .ok_or_else(|| BitFunError::tool("New tab has no WebSocket URL".to_string()))?;
                 let client = CdpClient::connect(ws_url).await?;
                 let session = BrowserSession {
                     session_id: page.id.clone(),
@@ -769,7 +807,10 @@ Branch on `ok` and `error.code`, not on English messages.
                         "page_title": page.title,
                         "activated": activate,
                     }),
-                    Some(format!("New tab opened: {} (session {})", page.title, session.session_id)),
+                    Some(format!(
+                        "New tab opened: {} (session {})",
+                        page.title, session.session_id
+                    )),
                 )])
             }
 
@@ -859,8 +900,7 @@ Branch on `ok` and `error.code`, not on English messages.
                 )])
             }
 
-            "list_sessions" | "network" | "network_requests"
-            | "console" | "errors" | "trace" => {
+            "list_sessions" | "network" | "network_requests" | "console" | "errors" | "trace" => {
                 match action {
                     "list_sessions" => {
                         let registry = browser_sessions();
@@ -875,13 +915,9 @@ Branch on `ok` and `error.code`, not on English messages.
                         )])
                     }
                     "network" | "network_requests" => {
-                        let session = browser_sessions()
-                            .get(session_id_param.as_deref())
-                            .await?;
+                        let session = browser_sessions().get(session_id_param.as_deref()).await?;
                         let state = &session.state;
-                        let sub = params
-                            .get("sub_command")
-                            .and_then(|v| v.as_str());
+                        let sub = params.get("sub_command").and_then(|v| v.as_str());
                         match sub {
                             Some("clear") => {
                                 state.clear_network().await;
@@ -907,18 +943,13 @@ Branch on `ok` and `error.code`, not on English messages.
                                 )])
                             }
                             _ => {
-                                let filter =
-                                    params.get("filter").and_then(|v| v.as_str());
-                                let method =
-                                    params.get("method").and_then(|v| v.as_str());
-                                let status =
-                                    params.get("status").and_then(|v| v.as_str());
-                                let since =
-                                    params.get("since").and_then(|v| v.as_str());
-                                let limit = params
-                                    .get("limit")
-                                    .and_then(|v| v.as_u64())
-                                    .unwrap_or(20) as usize;
+                                let filter = params.get("filter").and_then(|v| v.as_str());
+                                let method = params.get("method").and_then(|v| v.as_str());
+                                let status = params.get("status").and_then(|v| v.as_str());
+                                let since = params.get("since").and_then(|v| v.as_str());
+                                let limit =
+                                    params.get("limit").and_then(|v| v.as_u64()).unwrap_or(20)
+                                        as usize;
                                 let events = if sub == Some("requests") {
                                     state
                                         .query_network_requests(
@@ -927,9 +958,7 @@ Branch on `ok` and `error.code`, not on English messages.
                                         .await
                                 } else {
                                     state
-                                        .query_network(
-                                            filter, method, status, since, limit,
-                                        )
+                                        .query_network(filter, method, status, since, limit)
                                         .await
                                 };
                                 Ok(vec![ToolResult::ok(
@@ -940,13 +969,9 @@ Branch on `ok` and `error.code`, not on English messages.
                         }
                     }
                     "console" => {
-                        let session = browser_sessions()
-                            .get(session_id_param.as_deref())
-                            .await?;
+                        let session = browser_sessions().get(session_id_param.as_deref()).await?;
                         let state = &session.state;
-                        let sub = params
-                            .get("sub_command")
-                            .and_then(|v| v.as_str());
+                        let sub = params.get("sub_command").and_then(|v| v.as_str());
                         if sub == Some("clear") {
                             state.clear_console().await;
                             return Ok(vec![ToolResult::ok(
@@ -954,14 +979,10 @@ Branch on `ok` and `error.code`, not on English messages.
                                 Some("Console events cleared".to_string()),
                             )]);
                         }
-                        let filter =
-                            params.get("filter").and_then(|v| v.as_str());
-                        let since =
-                            params.get("since").and_then(|v| v.as_str());
-                        let limit = params
-                            .get("limit")
-                            .and_then(|v| v.as_u64())
-                            .unwrap_or(20) as usize;
+                        let filter = params.get("filter").and_then(|v| v.as_str());
+                        let since = params.get("since").and_then(|v| v.as_str());
+                        let limit =
+                            params.get("limit").and_then(|v| v.as_u64()).unwrap_or(20) as usize;
                         let events = state.query_console(filter, since, limit).await;
                         Ok(vec![ToolResult::ok(
                             json!({ "events": events, "count": events.len() }),
@@ -969,13 +990,9 @@ Branch on `ok` and `error.code`, not on English messages.
                         )])
                     }
                     "errors" => {
-                        let session = browser_sessions()
-                            .get(session_id_param.as_deref())
-                            .await?;
+                        let session = browser_sessions().get(session_id_param.as_deref()).await?;
                         let state = &session.state;
-                        let sub = params
-                            .get("sub_command")
-                            .and_then(|v| v.as_str());
+                        let sub = params.get("sub_command").and_then(|v| v.as_str());
                         if sub == Some("clear") {
                             state.clear_errors().await;
                             return Ok(vec![ToolResult::ok(
@@ -983,14 +1000,10 @@ Branch on `ok` and `error.code`, not on English messages.
                                 Some("JS error events cleared".to_string()),
                             )]);
                         }
-                        let filter =
-                            params.get("filter").and_then(|v| v.as_str());
-                        let since =
-                            params.get("since").and_then(|v| v.as_str());
-                        let limit = params
-                            .get("limit")
-                            .and_then(|v| v.as_u64())
-                            .unwrap_or(20) as usize;
+                        let filter = params.get("filter").and_then(|v| v.as_str());
+                        let since = params.get("since").and_then(|v| v.as_str());
+                        let limit =
+                            params.get("limit").and_then(|v| v.as_u64()).unwrap_or(20) as usize;
                         let events = state.query_errors(filter, since, limit).await;
                         Ok(vec![ToolResult::ok(
                             json!({ "events": events, "count": events.len() }),
@@ -998,13 +1011,9 @@ Branch on `ok` and `error.code`, not on English messages.
                         )])
                     }
                     "trace" => {
-                        let session = browser_sessions()
-                            .get(session_id_param.as_deref())
-                            .await?;
+                        let session = browser_sessions().get(session_id_param.as_deref()).await?;
                         let state = &session.state;
-                        let sub = params
-                            .get("sub_command")
-                            .and_then(|v| v.as_str());
+                        let sub = params.get("sub_command").and_then(|v| v.as_str());
                         match sub {
                             Some("start") => {
                                 let result = state.trace_start().await;
@@ -1014,10 +1023,9 @@ Branch on `ok` and `error.code`, not on English messages.
                                 )])
                             }
                             Some("stop") => {
-                                let limit = params
-                                    .get("limit")
-                                    .and_then(|v| v.as_u64())
-                                    .unwrap_or(200) as usize;
+                                let limit =
+                                    params.get("limit").and_then(|v| v.as_u64()).unwrap_or(200)
+                                        as usize;
                                 let result = state.trace_stop(limit).await;
                                 Ok(vec![ToolResult::ok(
                                     result,
@@ -1039,10 +1047,9 @@ Branch on `ok` and `error.code`, not on English messages.
                                 )])
                             }
                             _ => {
-                                let limit = params
-                                    .get("limit")
-                                    .and_then(|v| v.as_u64())
-                                    .unwrap_or(100) as usize;
+                                let limit =
+                                    params.get("limit").and_then(|v| v.as_u64()).unwrap_or(100)
+                                        as usize;
                                 let result = state.trace_stop(limit).await;
                                 Ok(vec![ToolResult::ok(
                                     result,
@@ -1808,9 +1815,13 @@ impl Tool for ControlHubTool {
 
     async fn description_with_context(
         &self,
-        _context: Option<&ToolUseContext>,
+        context: Option<&ToolUseContext>,
     ) -> BitFunResult<String> {
-        Ok(Self::description_text())
+        let mut base = Self::description_text();
+        if context.map(|c| c.is_remote()).unwrap_or(false) {
+            base.push_str("\n\n**Remote workspace:** Only `browser` and `meta` domains are available. `desktop` and `system` domains (screenshots, OCR, mouse/keyboard, app launching, clipboard, OS info, local scripts) are **not available** in remote sessions — the `ComputerUse` tool is disabled. Use `ExecCommand` for shell-based alternatives on the remote SSH host.");
+        }
+        Ok(base)
     }
 
     fn input_schema(&self) -> Value {
@@ -2393,8 +2404,8 @@ mod control_hub_tests {
         // schema_version must have been bumped since we added new fields.
         assert_eq!(
             payload.get("schema_version").and_then(|v| v.as_str()),
-            Some("1.1"),
-            "schema_version must be bumped to 1.1: {payload}"
+            Some("1.2"),
+            "schema_version must be bumped to 1.2: {payload}"
         );
 
         assert!(

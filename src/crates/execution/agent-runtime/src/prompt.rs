@@ -66,6 +66,12 @@ pub struct RuntimeContextNeeds {
     pub exec_command: bool,
     pub exec_control: bool,
     pub computer_use: bool,
+    /// `ControlHub` is available. Distinct from `computer_use` because in remote
+    /// workspaces `ControlHub` stays available (browser/terminal on the local
+    /// client) while `ComputerUse` is disabled, and the agent should NOT receive
+    /// the prominent "Local BitFun client OS" block that belongs to desktop
+    /// automation.
+    pub control_hub: bool,
 }
 
 impl RuntimeContextNeeds {
@@ -88,8 +94,11 @@ impl RuntimeContextNeeds {
                         needs.exec_control = true;
                     }
                 }
-                "ComputerUse" | "ControlHub" => {
+                "ComputerUse" => {
                     needs.computer_use = true;
+                }
+                "ControlHub" => {
+                    needs.control_hub = true;
                 }
                 _ => {}
             }
@@ -98,7 +107,11 @@ impl RuntimeContextNeeds {
     }
 
     pub fn is_empty(self) -> bool {
-        !self.workspace_tools && !self.exec_command && !self.exec_control && !self.computer_use
+        !self.workspace_tools
+            && !self.exec_command
+            && !self.exec_control
+            && !self.computer_use
+            && !self.control_hub
     }
 }
 
@@ -189,12 +202,24 @@ pub fn render_runtime_context_reminder(facts: &RuntimeContextFacts) -> Option<St
         local_client_lines
             .push(runtime_computer_use_key_chord_guidance(&facts.host_os).to_string());
         push_runtime_context_section(&mut lines, "Local Client", local_client_lines);
+    }
 
-        if facts.supports_image_understanding == Some(false) {
+    // Text-only model guidance applies to both ComputerUse (desktop) and
+    // ControlHub (browser). In remote workspaces only `control_hub` is true
+    // (ComputerUse is disabled), so we emit a browser-scoped variant that does
+    // not reference desktop automation actions unavailable in remote mode.
+    if facts.supports_image_understanding == Some(false) {
+        if facts.needs.computer_use {
             push_runtime_context_section(
                 &mut lines,
                 "Computer Use Input Strategy",
                 computer_use_text_only_model_guidance(),
+            );
+        } else if facts.needs.control_hub {
+            push_runtime_context_section(
+                &mut lines,
+                "Browser Input Strategy",
+                control_hub_browser_text_only_guidance(),
             );
         }
     }
@@ -386,6 +411,17 @@ fn computer_use_text_only_model_guidance() -> Vec<String> {
         "- When using `ComputerUse` or `ControlHub` with `domain: \"browser\"`, do not use `screenshot` and avoid `domain:\"browser\" action:\"screenshot\"`; image bytes will be unreadable.".to_string(),
         "- Action priority: 1) Terminal/CLI/system commands (`ExecCommand`, or `ComputerUse` `run_script`; use `WriteStdin`/`ExecControl` for running ExecCommand sessions) 2) Keyboard shortcuts (`key_chord`, `type_text`) 3) UI control: `click_element` (AX) -> `locate` -> `move_to_text` (use `move_to_text_match_index` when multiple OCR hits are listed) -> `mouse_move` (`use_screen_coordinates: true` with coordinates from tool JSON) -> `click`. For browser work, prefer `snapshot` then click by `@e*` ref over screenshots.".to_string(),
         "- Never guess coordinates. Always use precise methods: AX, OCR, system coordinates from tool results, or browser snapshot refs.".to_string(),
+    ]
+}
+
+/// Browser-only text-only guidance for remote workspaces where `ComputerUse` is
+/// disabled but `ControlHub` browser/terminal domains remain available on the
+/// local client. Deliberately omits desktop-automation actions (`key_chord`,
+/// `click_element`, AX, OCR) that are unavailable in remote mode.
+fn control_hub_browser_text_only_guidance() -> Vec<String> {
+    vec![
+        "- The configured primary model does not accept image inputs.".to_string(),
+        "- When using `ControlHub` with `domain: \"browser\"`, do not use `screenshot` or `domain:\"browser\" action:\"screenshot\"`; image bytes will be unreadable. Use `snapshot` then click by `@e*` ref instead.".to_string(),
     ]
 }
 
