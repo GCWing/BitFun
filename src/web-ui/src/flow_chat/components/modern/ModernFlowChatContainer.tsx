@@ -98,6 +98,7 @@ type BackgroundCommandSummary = {
 };
 
 const LATEST_TURN_AUTO_PIN_MAX_ATTEMPTS = 8;
+const HEADER_TURN_JUMP_MAX_ATTEMPTS = 30;
 const HISTORY_INITIAL_CONTENT_PAINT_MAX_ATTEMPTS = 30;
 const HISTORY_LOADING_LAYER_STALL_WARN_MS = 800;
 const MOCK_BACKGROUND_ACTIVITIES_STORAGE_KEY = 'bitfun.flowChat.mockBackgroundActivities';
@@ -220,6 +221,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
   const activeSession = useActiveSession();
   const visibleTurnInfo = useVisibleTurnInfo();
   const [pendingHeaderTurnId, setPendingHeaderTurnId] = useState<string | null>(null);
+  const [deferredHeaderTurnJump, setDeferredHeaderTurnJump] = useState<{ turnId: string; attempts: number } | null>(null);
   const [pendingHistoryOpenSession, setPendingHistoryOpenSession] = useState<HistorySessionOpenIntentDetail | null>(null);
   const [searchOpenRequest, setSearchOpenRequest] = useState(0);
   // Track whether a slash-command or @-mention popup is open in ChatInput.
@@ -672,6 +674,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     setHistoryInitialContentReadyKey(null);
     setHistoryInitialContentPostPaintKey(null);
     setPendingHeaderTurnId(null);
+    setDeferredHeaderTurnJump(null);
   }, [activeSession?.sessionId]);
 
   useLayoutEffect(() => {
@@ -966,22 +969,70 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     turnSummaries.length,
   ]);
 
-  const handleJumpToTurn = useCallback((turnId: string) => {
-    if (!turnId) return;
-
+  const pinHeaderTurnToTop = useCallback((turnId: string) => {
     const isLatestTurn = turnSummaries[turnSummaries.length - 1]?.turnId === turnId;
     const targetTurn = findDialogTurn(activeSession?.dialogTurns, turnId);
     const pinMode = isLatestTurn && shouldUseStickyLatestPin(targetTurn)
       ? 'sticky-latest'
       : 'transient';
 
-    const accepted = virtualListRef.current?.pinTurnToTop(turnId, {
+    return virtualListRef.current?.pinTurnToTop(turnId, {
       behavior: 'smooth',
       pinMode,
     }) ?? false;
-
-    setPendingHeaderTurnId(accepted ? turnId : null);
   }, [activeSession?.dialogTurns, turnSummaries]);
+
+  useEffect(() => {
+    if (!deferredHeaderTurnJump) return;
+
+    if (visibleTurnInfo?.turnId === deferredHeaderTurnJump.turnId) {
+      setDeferredHeaderTurnJump(null);
+      return;
+    }
+
+    const targetStillExists = turnSummaries.some(turn => turn.turnId === deferredHeaderTurnJump.turnId);
+    if (!targetStillExists || deferredHeaderTurnJump.attempts >= HEADER_TURN_JUMP_MAX_ATTEMPTS) {
+      setDeferredHeaderTurnJump(null);
+      return;
+    }
+
+    const frameId = requestAnimationFrame(() => {
+      const accepted = pinHeaderTurnToTop(deferredHeaderTurnJump.turnId);
+      if (accepted) {
+        setPendingHeaderTurnId(deferredHeaderTurnJump.turnId);
+        setDeferredHeaderTurnJump(null);
+        return;
+      }
+
+      setDeferredHeaderTurnJump(current => {
+        if (!current || current.turnId !== deferredHeaderTurnJump.turnId) {
+          return current;
+        }
+        return {
+          ...current,
+          attempts: current.attempts + 1,
+        };
+      });
+    });
+
+    return () => {
+      cancelAnimationFrame(frameId);
+    };
+  }, [
+    deferredHeaderTurnJump,
+    pinHeaderTurnToTop,
+    turnSummaries,
+    visibleTurnInfo?.turnId,
+    virtualItems.length,
+  ]);
+
+  const handleJumpToTurn = useCallback((turnId: string) => {
+    if (!turnId) return;
+
+    const accepted = pinHeaderTurnToTop(turnId);
+    setPendingHeaderTurnId(accepted ? turnId : null);
+    setDeferredHeaderTurnJump(accepted ? null : { turnId, attempts: 0 });
+  }, [pinHeaderTurnToTop]);
 
   const handleJumpToPreviousTurn = useCallback(() => {
     if (!navigationVisibleTurnInfo || navigationVisibleTurnInfo.turnIndex <= 1) return;
