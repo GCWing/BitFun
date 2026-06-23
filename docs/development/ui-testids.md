@@ -192,6 +192,9 @@ Avoid adding IDs to these surfaces unless there is a clear automated workflow.
 | Chat user message content | `chat-user-message-content` | User message text content. Pair with `data-turn-id`. |
 | Chat assistant message | `chat-assistant-message` | Repeated model round container. Pair with `data-turn-id`, `data-round-id`, `data-status`, `data-model-id`, `data-model-alias`, and `data-streaming`. |
 | Chat assistant message content | `chat-assistant-message-content` | Assistant text block. Pair with `data-turn-id`, `data-flow-item-id`, `data-status`, and `data-streaming`. |
+| Chat explore group | `chat-explore-group` | Explore-group root that wraps collapsed/merged tool rounds. Includes `data-group-kind`, `data-expanded`, `data-read-count`, `data-search-count`, and `data-command-count`. |
+| Chat explore group toggle | `chat-explore-group-toggle` | Real click target that expands/collapses an explore group. Includes `data-group-kind` and `data-expanded`. |
+| Chat explore group content | `chat-explore-group-content` | Inner content container for explore-group items. Includes `data-group-kind` and `data-expanded`. |
 | Chat thinking panel | `chat-thinking-panel` | Thinking/reasoning panel root. Includes `data-status`, `data-streaming`, and `data-expanded`. |
 | Chat thinking toggle | `chat-thinking-toggle` | Clickable thinking expand/collapse header. |
 | Chat thinking content | `chat-thinking-content` | Thinking/reasoning text content. Includes `data-status` and `data-streaming`. |
@@ -248,6 +251,29 @@ Avoid adding IDs to these surfaces unless there is a clear automated workflow.
 | Model save button | `settings-model-save-btn` | Saves the model provider/configuration form. |
 | Model row | `settings-model-row` | Repeated saved model row. Pair with `data-model-id`, `data-model-name`, and `data-config-id`. |
 | Model test status | `settings-model-test-status` | Repeated saved model test status. Pair with `data-model-id`, `data-model-name`, `data-config-id`, and `data-status` (`success` or `error`). |
+
+## Settings Appearance
+
+| Element name | data-testid | Notes |
+|---|---|---|
+| Appearance config root | `appearance-config` | Appearance page content root inside the settings scene. |
+| Appearance theme section | `appearance-theme-section` | Language and theme settings section root. |
+| Appearance font section | `appearance-font-section` | Font preference section root. |
+| Appearance language select | `appearance-language-select` | Language select trigger in Appearance settings. |
+| Appearance language option | `appearance-language-option` | Repeated language dropdown option. Includes `data-locale-id` and Select-provided `data-selected`. |
+| Appearance theme select | `appearance-theme-select` | Theme select trigger in Appearance settings. |
+| Appearance theme option | `appearance-theme-option` | Repeated theme dropdown option. Includes `data-theme-id` and Select-provided `data-selected`. |
+| Appearance UI font level group | `appearance-ui-font-level-group` | UI font preset button group root. |
+| Appearance UI font level button | `appearance-ui-font-level-btn` | Repeated preset button. Includes `data-font-level` and `data-selected`. |
+| Appearance UI font custom controls | `appearance-ui-font-custom-controls` | Custom UI font px controls root, rendered when custom is active. |
+| Appearance UI font custom input | `appearance-ui-font-custom-input` | Custom UI font px number input. Includes `data-font-level="custom"`. |
+| Appearance UI font custom step minus | `appearance-ui-font-custom-step-minus` | Custom UI font px decrement button. |
+| Appearance UI font custom step plus | `appearance-ui-font-custom-step-plus` | Custom UI font px increment button. |
+| Appearance UI font preview | `appearance-ui-font-preview` | UI font preview area. |
+| Appearance Flow Chat font toggle | `appearance-flowchat-font-toggle` | Flow Chat independent font size toggle input. |
+| Appearance Flow Chat font select | `appearance-flowchat-font-select` | Flow Chat font size select trigger. |
+| Appearance Flow Chat font option | `appearance-flowchat-font-option` | Repeated Flow Chat font size option. Includes `data-font-px` and Select-provided `data-selected`. |
+| Appearance font reset button | `appearance-font-reset-btn` | Resets font preferences to defaults. |
 
 ## Shell Panel
 

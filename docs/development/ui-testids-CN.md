@@ -193,6 +193,9 @@
 | Chat 用户消息内容 | `chat-user-message-content` | 用户消息文本内容。配合 `data-turn-id` 使用。 |
 | Chat assistant 消息 | `chat-assistant-message` | 重复的模型轮次容器。配合 `data-turn-id`、`data-round-id`、`data-status`、`data-model-id`、`data-model-alias` 和 `data-streaming` 使用。 |
 | Chat assistant 消息内容 | `chat-assistant-message-content` | assistant 文本块。配合 `data-turn-id`、`data-flow-item-id`、`data-status` 和 `data-streaming` 使用。 |
+| Chat explore group | `chat-explore-group` | ExploreGroup 根节点，用于包裹折叠/合并后的工具轮次。包含 `data-group-kind`、`data-expanded`、`data-read-count`、`data-search-count` 和 `data-command-count`。 |
+| Chat explore group toggle | `chat-explore-group-toggle` | ExploreGroup 真实展开/收起点击目标。包含 `data-group-kind` 和 `data-expanded`。 |
+| Chat explore group content | `chat-explore-group-content` | ExploreGroup 内层内容容器。包含 `data-group-kind` 和 `data-expanded`。 |
 | Chat thinking 面板 | `chat-thinking-panel` | thinking/reasoning 面板根节点。包含 `data-status`、`data-streaming` 和 `data-expanded`。 |
 | Chat thinking 展开按钮 | `chat-thinking-toggle` | 可点击的 thinking 展开/收起 header。 |
 | Chat thinking 内容 | `chat-thinking-content` | thinking/reasoning 文本内容。包含 `data-status` 和 `data-streaming`。 |
@@ -248,6 +251,29 @@
 | 模型保存按钮 | `settings-model-save-btn` | 保存模型提供商/模型配置表单。 |
 | 模型行 | `settings-model-row` | 重复的已保存模型行。配合 `data-model-id`、`data-model-name` 和 `data-config-id` 使用。 |
 | 模型测试状态 | `settings-model-test-status` | 重复的已保存模型测试状态。配合 `data-model-id`、`data-model-name`、`data-config-id` 和 `data-status` 使用，`data-status` 可为 `success` 或 `error`。 |
+
+## Settings Appearance
+
+| 元素名称 | data-testid | 说明 |
+|---|---|---|
+| Appearance 页面根节点 | `appearance-config` | Settings 场景中 Appearance 页面内容根节点。 |
+| Appearance 主题区域 | `appearance-theme-section` | 语言和主题配置区域根节点。 |
+| Appearance 字体区域 | `appearance-font-section` | 字体偏好配置区域根节点。 |
+| Appearance 语言选择器 | `appearance-language-select` | Appearance 中 language Select 的真实触发节点。 |
+| Appearance 语言选项 | `appearance-language-option` | 重复的语言下拉选项。包含 `data-locale-id`，并带有 Select 组件提供的 `data-selected`。 |
+| Appearance 主题选择器 | `appearance-theme-select` | Appearance 中 theme Select 的真实触发节点。 |
+| Appearance 主题选项 | `appearance-theme-option` | 重复的主题下拉选项。包含 `data-theme-id`，并带有 Select 组件提供的 `data-selected`。 |
+| Appearance UI 字号分组 | `appearance-ui-font-level-group` | UI font size 预置级别按钮组根节点。 |
+| Appearance UI 字号按钮 | `appearance-ui-font-level-btn` | 重复的 UI font size 预置级别按钮。包含 `data-font-level` 和 `data-selected`。 |
+| Appearance UI 自定义字号控制区 | `appearance-ui-font-custom-controls` | custom UI 字号控制区根节点，仅在 custom 激活时渲染。 |
+| Appearance UI 自定义字号输入框 | `appearance-ui-font-custom-input` | custom UI 字号 px 输入框。包含 `data-font-level="custom"`。 |
+| Appearance UI 自定义字号减一按钮 | `appearance-ui-font-custom-step-minus` | custom UI 字号减一按钮。 |
+| Appearance UI 自定义字号加一按钮 | `appearance-ui-font-custom-step-plus` | custom UI 字号加一按钮。 |
+| Appearance UI 字号预览区 | `appearance-ui-font-preview` | UI 字号预览区域。 |
+| Appearance Flow Chat 字号开关 | `appearance-flowchat-font-toggle` | Flow Chat 独立字号开关的真实 input 节点。 |
+| Appearance Flow Chat 字号选择器 | `appearance-flowchat-font-select` | Flow Chat 字号 Select 的真实触发节点。 |
+| Appearance Flow Chat 字号选项 | `appearance-flowchat-font-option` | 重复的 Flow Chat 字号下拉选项。包含 `data-font-px`，并带有 Select 组件提供的 `data-selected`。 |
+| Appearance 字体重置按钮 | `appearance-font-reset-btn` | 重置字体偏好到默认值。 |
 
 ## Shell Panel
 
