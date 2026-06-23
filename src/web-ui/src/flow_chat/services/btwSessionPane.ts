@@ -1,13 +1,9 @@
 import { i18nService } from '@/infrastructure/i18n';
-import { appManager } from '@/app/services/AppManager';
-import { useSceneStore } from '@/app/stores/sceneStore';
 import { createTab } from '@/shared/utils/tabUtils';
 import type { PanelContent } from '@/app/components/panels/base/types';
 import { useAgentCanvasStore } from '@/app/components/panels/content-canvas/stores';
 import type { CanvasTab } from '@/app/components/panels/content-canvas/types';
 import { flowChatStore } from '../store/FlowChatStore';
-import { flowChatManager } from './FlowChatManager';
-import { syncSessionToModernStore } from './storeSync';
 import { resolveSessionTitle } from '../utils/sessionTitle';
 
 export const BTW_SESSION_PANEL_TYPE = 'btw-session' as const;
@@ -195,37 +191,6 @@ export function ensureBtwSessionAvailable(params: EnsureBtwSessionAvailableParam
     resolvedRemoteSshHost,
     { includeInternal: params.includeInternal },
   );
-}
-
-export async function openMainSession(
-  sessionId: string,
-  options?: {
-    workspaceId?: string;
-    activateWorkspace?: (workspaceId: string) => void | Promise<unknown>;
-  }
-): Promise<void> {
-  appManager.updateLayout({
-    leftPanelActiveTab: 'sessions',
-    leftPanelCollapsed: false,
-  });
-
-  if (options?.workspaceId && options.activateWorkspace) {
-    await options.activateWorkspace(options.workspaceId);
-  }
-
-  const isTargetActive = () => flowChatStore.getState().activeSessionId === sessionId;
-
-  if (isTargetActive()) {
-    syncSessionToModernStore(sessionId);
-  } else {
-    await flowChatManager.switchChatSession(sessionId);
-    if (!isTargetActive()) {
-      return;
-    }
-    syncSessionToModernStore(sessionId);
-  }
-
-  useSceneStore.getState().openScene('session');
 }
 
 export function openBtwSessionInAuxPane(params: {

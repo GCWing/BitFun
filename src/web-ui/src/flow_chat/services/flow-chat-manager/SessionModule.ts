@@ -18,6 +18,7 @@ import type { AIModelConfig, DefaultModelsConfig } from '@/infrastructure/config
 import type { FlowChatContext, SessionConfig } from './types';
 import type { Session } from '../../types/flow-chat';
 import { touchSessionActivity, cleanupSaveState } from './PersistenceModule';
+import { cleanupSessionBuffers } from './TextChunkModule';
 import {
   createTextSessionTitleDescriptor,
   createDefaultSessionTitleDescriptor,
@@ -747,8 +748,18 @@ export async function deleteChatSession(
   sessionId: string
 ): Promise<void> {
   try {
+    const stateBeforeDelete = context.flowChatStore.getState();
     const removedSessionIds = context.flowChatStore.getCascadeSessionIds(sessionId);
-    await context.flowChatStore.deleteSession(sessionId);
+    const removedSessionIdSet = new Set(removedSessionIds);
+    const removedActiveSession = Boolean(
+      stateBeforeDelete.activeSessionId
+      && removedSessionIdSet.has(stateBeforeDelete.activeSessionId)
+    );
+    await context.flowChatStore.deleteSession(
+      sessionId,
+      removedActiveSession ? { nextActiveSessionId: null } : undefined,
+    );
+
     removedSessionIds.forEach(id => {
       context.processingManager.clearSessionStatus(id);
       cleanupSaveState(context, id);
@@ -756,6 +767,52 @@ export async function deleteChatSession(
   } catch (error) {
     log.error('Failed to delete chat session', { sessionId, error });
     notificationService.error('Failed to delete session', {
+      duration: 3000
+    });
+    throw error;
+  }
+}
+
+export async function archiveChatSession(
+  context: FlowChatContext,
+  sessionId: string
+): Promise<void> {
+  try {
+    const stateBeforeArchive = context.flowChatStore.getState();
+    const session = stateBeforeArchive.sessions.get(sessionId);
+    if (!session) {
+      throw new Error(`Session does not exist: ${sessionId}`);
+    }
+
+    const removedSessionIds = context.flowChatStore.getCascadeSessionIds(sessionId);
+    const removedSessionIdSet = new Set(removedSessionIds);
+    const removedActiveSession = Boolean(
+      stateBeforeArchive.activeSessionId
+      && removedSessionIdSet.has(stateBeforeArchive.activeSessionId)
+    );
+
+    await sessionAPI.archiveSession(
+      sessionId,
+      requireSessionWorkspacePath(session.workspacePath, sessionId),
+      session.remoteConnectionId,
+      session.remoteSshHost,
+    );
+
+    const { stateMachineManager } = await import('../../state-machine');
+    context.flowChatStore.removeSession(
+      sessionId,
+      removedActiveSession ? { nextActiveSessionId: null } : undefined,
+    );
+
+    removedSessionIds.forEach(id => {
+      stateMachineManager.delete(id);
+      context.processingManager.clearSessionStatus(id);
+      cleanupSaveState(context, id);
+      cleanupSessionBuffers(context, id);
+    });
+  } catch (error) {
+    log.error('Failed to archive chat session', { sessionId, error });
+    notificationService.error('Failed to archive session', {
       duration: 3000
     });
     throw error;

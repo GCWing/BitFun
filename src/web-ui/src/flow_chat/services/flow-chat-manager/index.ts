@@ -35,6 +35,7 @@ export {
   preloadHistoricalSessionForOpen,
   switchChatSession,
   deleteChatSession,
+  archiveChatSession,
   renameChatSessionTitle,
   forkChatSession,
 } from './SessionModule';

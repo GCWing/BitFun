@@ -19,9 +19,9 @@ import { createLogger } from '@/shared/utils/logger';
 import { useAgentCanvasStore } from '@/app/components/panels/content-canvas/stores';
 import {
   openBtwSessionInAuxPane,
-  openMainSession,
   selectActiveBtwSessionTab,
-} from '@/flow_chat/services/openBtwSession';
+} from '@/flow_chat/services/btwSessionPane';
+import { openMainSession } from '@/flow_chat/services/sessionActivation';
 import {
   dispatchHistorySessionOpenIntent,
   shouldShowHistorySessionOpenIntent,
@@ -47,7 +47,6 @@ import type {
   BackgroundSubagentActivityItem,
 } from '@/flow_chat/utils/backgroundSubagentActivity';
 import { computeFixedPopoverPosition } from '@/shared/utils/fixedPopoverViewport';
-import { sessionAPI } from '@/infrastructure/api/service-api/SessionAPI';
 import { confirmWarning } from '@/component-library/components/ConfirmDialog/confirmService';
 import { scheduleAfterStartupPaint, scheduleAfterStartupSignal } from '@/shared/utils/startupTaskScheduling';
 import {
@@ -803,15 +802,13 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
       );
       if (!confirmed) return;
       try {
-        await sessionAPI.archiveSession(sessionId, workspacePath || '', remoteConnectionId || undefined, remoteSshHost || undefined);
-        // Remove from in-memory state only — do NOT delete from disk
-        flowChatManager.discardLocalSession(sessionId);
+        await flowChatManager.archiveChatSession(sessionId);
         window.dispatchEvent(new CustomEvent('bitfun:session-archived'));
       } catch (err) {
         log.error('Failed to archive session', err);
       }
     },
-    [workspacePath, remoteConnectionId, remoteSshHost, t]
+    [t]
   );
 
   const handleStartEdit = useCallback(

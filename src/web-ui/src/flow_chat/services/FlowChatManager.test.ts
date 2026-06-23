@@ -4,6 +4,7 @@ import { FlowChatManager } from './FlowChatManager';
 const storeMocks = vi.hoisted(() => ({
   store: {} as any,
   initializeEventListeners: vi.fn(),
+  switchChatSession: vi.fn(),
   eventBatchers: [] as Array<{
     flushNow: ReturnType<typeof vi.fn>;
     destroy: ReturnType<typeof vi.fn>;
@@ -53,8 +54,9 @@ vi.mock('./flow-chat-manager', () => ({
   saveAllInProgressTurns: vi.fn(),
   immediateSaveDialogTurn: vi.fn(),
   createChatSession: vi.fn(),
-  switchChatSession: vi.fn(),
+  switchChatSession: (...args: unknown[]) => storeMocks.switchChatSession(...args),
   deleteChatSession: vi.fn(),
+  archiveChatSession: vi.fn(),
   renameChatSessionTitle: vi.fn(),
   forkChatSession: vi.fn(),
   cleanupSaveState: vi.fn(),
@@ -115,6 +117,9 @@ describe('FlowChatManager initialization', () => {
     vi.clearAllMocks();
     storeMocks.eventBatchers.length = 0;
     storeMocks.initializeEventListeners.mockResolvedValue(() => {});
+    storeMocks.switchChatSession.mockImplementation(async (context: any, sessionId: string) => {
+      context.flowChatStore.switchSession(sessionId);
+    });
   });
 
   it('flushes and destroys the batcher when the singleton is disposed', () => {
@@ -269,7 +274,6 @@ describe('FlowChatManager initialization', () => {
       undefined,
       undefined,
       undefined,
-      { deferFullHistoryUntilActive: true },
     );
 
     activeSessionId = 'history-2';
@@ -380,5 +384,57 @@ describe('FlowChatManager initialization', () => {
     expect(storeMocks.store.switchSession).not.toHaveBeenCalledWith('history-1');
     expect((manager as unknown as { context: { currentWorkspacePath: string | null } })
       .context.currentWorkspacePath).toBe('D:/workspace/Other');
+  });
+
+  it('ignores child subagent sessions when auto-selecting a workspace session', async () => {
+    const sessions = new Map<string, any>([
+      ['parent-1', createHistoricalSession({
+        sessionId: 'parent-1',
+        title: 'Parent session',
+        isHistorical: false,
+        historyState: 'ready',
+        createdAt: 10,
+        lastFinishedAt: 30,
+        workspacePath: 'D:/workspace/BitFun',
+        sessionKind: 'normal',
+      })],
+      ['subagent-1', createHistoricalSession({
+        sessionId: 'subagent-1',
+        title: 'Subagent session',
+        isHistorical: false,
+        historyState: 'ready',
+        createdAt: 40,
+        lastFinishedAt: undefined,
+        workspacePath: 'D:/workspace/BitFun',
+        sessionKind: 'subagent',
+        parentSessionId: 'parent-1',
+        mode: 'Explore',
+      })],
+    ]);
+    let activeSessionId: string | null = null;
+
+    storeMocks.store = {
+      registerPersistUnreadCompletionCallback: vi.fn(),
+      loadSessionMetadataPage: vi.fn(async () => ({
+        sessions: [],
+        totalTopLevelCount: 2,
+        hasMore: false,
+      })),
+      getState: vi.fn(() => ({
+        sessions,
+        activeSessionId,
+      })),
+      loadSessionHistory: vi.fn(async () => undefined),
+      switchSession: vi.fn((sessionId: string) => {
+        activeSessionId = sessionId;
+      }),
+    };
+
+    const manager = FlowChatManager.getInstance();
+    await expect(manager.initialize('D:/workspace/BitFun')).resolves.toBe(true);
+
+    expect(storeMocks.store.switchSession).toHaveBeenCalledTimes(1);
+    expect(storeMocks.store.switchSession).toHaveBeenCalledWith('parent-1');
+    expect(storeMocks.store.switchSession).not.toHaveBeenCalledWith('subagent-1');
   });
 });

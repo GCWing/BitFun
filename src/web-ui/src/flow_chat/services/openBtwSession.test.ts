@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ensureBtwSessionAvailable, openBtwSessionInAuxPane, openMainSession } from './openBtwSession';
+import { ensureBtwSessionAvailable, openBtwSessionInAuxPane } from './btwSessionPane';
+import { openMainSession } from './sessionActivation';
 
 const mocks = vi.hoisted(() => ({
   createTab: vi.fn(),
@@ -321,5 +322,37 @@ describe('openMainSession', () => {
     expect(mocks.switchChatSession).toHaveBeenCalledWith('session-b');
     expect(mocks.syncSessionToModernStore).not.toHaveBeenCalledWith('session-b');
     expect(mocks.openScene).not.toHaveBeenCalledWith('session');
+  });
+
+  it('rehydrates an already-active metadata-only historical session before syncing it', async () => {
+    sessions.set('session-b', {
+      sessionId: 'session-b',
+      isHistorical: true,
+      historyState: 'metadata-only',
+      dialogTurns: [],
+    });
+    activeSessionId = 'session-b';
+
+    await openMainSession('session-b');
+
+    expect(mocks.switchChatSession).toHaveBeenCalledWith('session-b');
+    expect(mocks.syncSessionToModernStore).toHaveBeenCalledWith('session-b');
+    expect(mocks.openScene).toHaveBeenCalledWith('session');
+  });
+
+  it('does not re-switch an already-active ready session', async () => {
+    sessions.set('session-b', {
+      sessionId: 'session-b',
+      isHistorical: false,
+      historyState: 'ready',
+      dialogTurns: [{ id: 'turn-1' }],
+    });
+    activeSessionId = 'session-b';
+
+    await openMainSession('session-b');
+
+    expect(mocks.switchChatSession).not.toHaveBeenCalled();
+    expect(mocks.syncSessionToModernStore).toHaveBeenCalledWith('session-b');
+    expect(mocks.openScene).toHaveBeenCalledWith('session');
   });
 });

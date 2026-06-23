@@ -1,5 +1,6 @@
 import { FlowChatStore } from '@/flow_chat/store/FlowChatStore';
-import { openBtwSessionInAuxPane, openMainSession } from '@/flow_chat/services/openBtwSession';
+import { openBtwSessionInAuxPane } from '@/flow_chat/services/btwSessionPane';
+import { activateMainSession, openMainSession } from '@/flow_chat/services/sessionActivation';
 import { resolveSessionRelationship } from '@/flow_chat/utils/sessionMetadata';
 
 export async function openAgentCompanionSession(sessionId: string): Promise<boolean> {
@@ -22,6 +23,5 @@ export async function openAgentCompanionSession(sessionId: string): Promise<bool
     return true;
   }
 
-  flowChatStore.switchSession(sessionId);
-  return true;
+  return activateMainSession(sessionId);
 }

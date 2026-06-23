@@ -78,6 +78,10 @@ const METADATA_LIST_RECENT_DEDUPE_TTL_MS = 1000;
 const HISTORICAL_SESSION_INITIAL_REMOTE_TAIL_TURN_COUNT = 3;
 const HISTORICAL_SESSION_INITIAL_LOCAL_TAIL_TURN_COUNT = 3;
 const HISTORICAL_SESSION_FULL_HISTORY_IDLE_TIMEOUT_MS = 1500;
+
+type RemoveSessionOptions = {
+  nextActiveSessionId?: string | null;
+};
 const HISTORICAL_SESSION_FULL_HISTORY_FIRST_PAINT_TIMEOUT_MS = 2500;
 const MAX_DEFERRED_FULL_HISTORY_PROJECTIONS = 3;
 
@@ -560,6 +564,7 @@ export class FlowChatStore {
   private deferredFullHistoryProjections = new Map<string, DeferredFullHistoryProjection>();
   private fullHistoryProjectionApplyRequests = new Set<string>();
   private unsupportedRestoreCommands = new Set<string>();
+  private pendingRemoveSessionOptions = new Map<string, RemoveSessionOptions>();
   private onPersistUnreadCompletion?: (sessionId: string, value: 'completed' | 'error' | 'interrupted' | undefined) => void;
 
   private constructor() {
@@ -1774,10 +1779,13 @@ export class FlowChatStore {
     });
   }
 
-  public async deleteSession(sessionId: string): Promise<void> {
+  public async deleteSession(sessionId: string, options?: RemoveSessionOptions): Promise<void> {
     const sessionIdsToDelete = this.getCascadeSessionIds(sessionId);
     if (sessionIdsToDelete.length === 0) {
       return;
+    }
+    if (options) {
+      this.pendingRemoveSessionOptions.set(sessionId, options);
     }
 
     const { stateMachineManager } = await import('../state-machine');
@@ -1816,14 +1824,18 @@ export class FlowChatStore {
       log.error('Failed to delete session on backend', { sessionId, error });
     }
 
-    this.removeSession(sessionId);
+    this.removeSession(sessionId, options);
+    this.pendingRemoveSessionOptions.delete(sessionId);
   }
 
-  public removeSession(sessionId: string): string[] {
+  public removeSession(sessionId: string, options?: RemoveSessionOptions): string[] {
     const removedSessionIds = this.getCascadeSessionIds(sessionId);
     if (removedSessionIds.length === 0) {
+      this.pendingRemoveSessionOptions.delete(sessionId);
       return [];
     }
+    const resolvedOptions = options ?? this.pendingRemoveSessionOptions.get(sessionId);
+    this.pendingRemoveSessionOptions.delete(sessionId);
     this.clearRemovedSessionHistoryState(removedSessionIds, 'session-removed');
     useBackgroundSubagentActivityStore.getState().removeSessions(removedSessionIds);
 
@@ -1872,8 +1884,12 @@ export class FlowChatStore {
 
       let newActiveSessionId = prev.activeSessionId;
       if (prev.activeSessionId && removedSessionIdSet.has(prev.activeSessionId)) {
-        const remainingSessions = Array.from(newSessions.keys());
-        newActiveSessionId = remainingSessions.length > 0 ? remainingSessions[0] : null;
+        if (resolvedOptions && 'nextActiveSessionId' in resolvedOptions) {
+          newActiveSessionId = resolvedOptions.nextActiveSessionId ?? null;
+        } else {
+          const remainingSessions = Array.from(newSessions.keys());
+          newActiveSessionId = remainingSessions.length > 0 ? remainingSessions[0] : null;
+        }
       }
 
       return {

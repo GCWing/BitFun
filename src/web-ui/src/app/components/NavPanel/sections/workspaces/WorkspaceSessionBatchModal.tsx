@@ -220,20 +220,10 @@ const WorkspaceSessionBatchModal: React.FC<WorkspaceSessionBatchModalProps> = ({
     setActionKind('archive');
     try {
       const results = await Promise.allSettled(
-        selectedIds.map(sessionId =>
-          sessionAPI.archiveSession(
-            sessionId,
-            workspacePath,
-            remoteConnectionId || undefined,
-            remoteSshHost || undefined
-          )
-        )
+        selectedIds.map(sessionId => flowChatManager.archiveChatSession(sessionId))
       );
       const successCount = results.filter(result => result.status === 'fulfilled').length;
       if (successCount > 0) {
-        selectedIds.forEach(sessionId => {
-          flowChatManager.discardLocalSession(sessionId);
-        });
         await refreshWorkspaceSessions();
         window.dispatchEvent(new CustomEvent('bitfun:session-archived'));
         notificationService.success(t('nav.sessions.archivedAll', { count: successCount }), { duration: 3000 });
@@ -251,8 +241,6 @@ const WorkspaceSessionBatchModal: React.FC<WorkspaceSessionBatchModalProps> = ({
   }, [
     loadSessions,
     refreshWorkspaceSessions,
-    remoteConnectionId,
-    remoteSshHost,
     selectedCount,
     selectedSessionIds,
     t,
@@ -274,32 +262,23 @@ const WorkspaceSessionBatchModal: React.FC<WorkspaceSessionBatchModalProps> = ({
     const deletionPlan = getDeletionPlan(selectedSessionIds, sessions);
     setActionKind('delete');
     try {
-      const results = await Promise.allSettled(
-        deletionPlan.allIds.map(sessionId =>
-          sessionAPI.deleteSession(
-            sessionId,
-            workspacePath,
-            remoteConnectionId || undefined,
-            remoteSshHost || undefined
-          )
-        )
-      );
       const successIds = new Set<string>();
-      results.forEach((result, index) => {
-        if (result.status === 'fulfilled') {
-          successIds.add(deletionPlan.allIds[index]);
-        }
-      });
 
-      const removableRootIds = deletionPlan.rootIds.filter(rootId => {
+      for (const rootId of deletionPlan.rootIds) {
         const cascadeIds = getDeletionPlan(new Set([rootId]), sessions).allIds;
-        return cascadeIds.every(id => successIds.has(id));
-      });
+        try {
+          await flowChatManager.deleteChatSession(rootId);
+          cascadeIds.forEach(id => successIds.add(id));
+        } catch (error) {
+          log.error('Failed to delete selected root session', {
+            error,
+            rootSessionId: rootId,
+            workspacePath,
+          });
+        }
+      }
 
-      if (removableRootIds.length > 0) {
-        removableRootIds.forEach(sessionId => {
-          flowChatManager.discardLocalSession(sessionId);
-        });
+      if (successIds.size > 0) {
         await refreshWorkspaceSessions();
         notificationService.success(t('nav.sessions.deletedSelected', { count: successIds.size }), { duration: 3000 });
       }
@@ -316,8 +295,6 @@ const WorkspaceSessionBatchModal: React.FC<WorkspaceSessionBatchModalProps> = ({
   }, [
     loadSessions,
     refreshWorkspaceSessions,
-    remoteConnectionId,
-    remoteSshHost,
     selectedCount,
     selectedSessionIds,
     sessions,

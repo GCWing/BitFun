@@ -12,7 +12,8 @@ import { useCanvasStore } from './stores';
 import { useTabLifecycle, useKeyboardShortcuts, usePanelTabCoordinator } from './hooks';
 import type { AnchorPosition } from './types';
 import { TAB_EVENTS } from './types';
-import { openMainSession, selectActiveBtwSessionTab } from '@/flow_chat/services/openBtwSession';
+import { selectActiveBtwSessionTab } from '@/flow_chat/services/btwSessionPane';
+import { openMainSession } from '@/flow_chat/services/sessionActivation';
 import { isSamePath } from '@/shared/utils/pathUtils';
 import './ContentCanvas.scss';
 export interface ContentCanvasProps {

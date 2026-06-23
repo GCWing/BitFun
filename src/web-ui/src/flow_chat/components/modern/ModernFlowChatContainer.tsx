@@ -44,7 +44,7 @@ import { parsePullRequestUrl } from '@/shared/utils/pullRequestLinks';
 import { createBackgroundCommandOutputTab, createReviewPlatformPullRequestDetailTab } from '@/shared/utils/tabUtils';
 import { isAcpFlowSession } from '../../utils/acpSession';
 import { flowChatStore } from '../../store/FlowChatStore';
-import { openBtwSessionInAuxPane } from '../../services/openBtwSession';
+import { openBtwSessionInAuxPane } from '../../services/btwSessionPane';
 import { resolveThreadGoalHeaderTitle } from '../../utils/threadGoalDisplay';
 import {
   findDialogTurn,

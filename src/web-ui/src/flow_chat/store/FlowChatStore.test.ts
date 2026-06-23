@@ -8,6 +8,7 @@ const apiMocks = vi.hoisted(() => ({
   listSessionsPage: vi.fn(),
   loadSessionTurns: vi.fn(),
   saveSessionTurn: vi.fn(),
+  deleteSession: vi.fn(),
   restoreSession: vi.fn(),
   restoreSessionView: vi.fn(),
   restoreSessionWithTurns: vi.fn(),
@@ -32,6 +33,7 @@ const configManagerMock = vi.hoisted(() => {
 });
 
 const stateMachineManagerMock = vi.hoisted(() => ({
+  delete: vi.fn(),
   getOrCreate: vi.fn(),
   reset: vi.fn(),
 }));
@@ -56,6 +58,7 @@ vi.mock('@/infrastructure/api/service-api/SessionAPI', () => ({
 
 vi.mock('@/infrastructure/api/service-api/AgentAPI', () => ({
   agentAPI: {
+    deleteSession: apiMocks.deleteSession,
     restoreSession: apiMocks.restoreSession,
     get restoreSessionView() {
       return apiMocks.restoreSessionView;
@@ -101,6 +104,7 @@ const resetStore = () => {
   ((flowChatStore as any).deferredFullHistoryProjections as Map<string, unknown> | undefined)?.clear();
   ((flowChatStore as any).fullHistoryProjectionApplyRequests as Set<string> | undefined)?.clear();
   ((flowChatStore as any).unsupportedRestoreCommands as Set<string> | undefined)?.clear();
+  ((flowChatStore as any).pendingRemoveSessionOptions as Map<string, unknown> | undefined)?.clear();
   flowChatStore.setState((): FlowChatState => ({
     sessions: new Map(),
     activeSessionId: null,
@@ -194,6 +198,77 @@ describe('FlowChatStore metadata persistence callbacks', () => {
 
     expect(persist).toHaveBeenCalledTimes(1);
     expect(persist).toHaveBeenCalledWith(session.sessionId, undefined);
+  });
+});
+
+describe('FlowChatStore session removal active selection', () => {
+  afterEach(() => {
+    resetStore();
+  });
+
+  it('can clear the active session atomically while keeping other sessions', () => {
+    const keepSession = createSession({
+      sessionId: 'session-keep',
+      title: 'Keep me',
+    });
+    const removeSession = createSession({
+      sessionId: 'session-remove',
+      title: 'Remove me',
+    });
+
+    flowChatStore.setState(() => ({
+      sessions: new Map([
+        [keepSession.sessionId, keepSession],
+        [removeSession.sessionId, removeSession],
+      ]),
+      activeSessionId: removeSession.sessionId,
+    }));
+
+    const removedSessionIds = flowChatStore.removeSession(removeSession.sessionId, {
+      nextActiveSessionId: null,
+    });
+
+    expect(removedSessionIds).toEqual(['session-remove']);
+    expect(flowChatStore.getState().activeSessionId).toBeNull();
+    expect(Array.from(flowChatStore.getState().sessions.keys())).toEqual(['session-keep']);
+  });
+
+  it('reuses pending delete intent when a concurrent local remove wins the race', async () => {
+    const deleteDeferred = createDeferred<void>();
+    apiMocks.deleteSession.mockImplementation(() => deleteDeferred.promise);
+    const keepSession = createSession({
+      sessionId: 'session-keep',
+      title: 'Keep me',
+      workspacePath: 'D:/workspace/BitFun',
+    });
+    const removeSession = createSession({
+      sessionId: 'session-remove',
+      title: 'Remove me',
+      workspacePath: 'D:/workspace/BitFun',
+    });
+
+    flowChatStore.setState(() => ({
+      sessions: new Map([
+        [keepSession.sessionId, keepSession],
+        [removeSession.sessionId, removeSession],
+      ]),
+      activeSessionId: removeSession.sessionId,
+    }));
+
+    const deleting = flowChatStore.deleteSession(removeSession.sessionId, {
+      nextActiveSessionId: null,
+    });
+    await flushAsyncWork();
+
+    const removedSessionIds = flowChatStore.removeSession(removeSession.sessionId);
+    expect(removedSessionIds).toEqual(['session-remove']);
+    expect(flowChatStore.getState().activeSessionId).toBeNull();
+
+    deleteDeferred.resolve();
+    await deleting;
+
+    expect(flowChatStore.getState().activeSessionId).toBeNull();
+    expect(Array.from(flowChatStore.getState().sessions.keys())).toEqual(['session-keep']);
   });
 });
 

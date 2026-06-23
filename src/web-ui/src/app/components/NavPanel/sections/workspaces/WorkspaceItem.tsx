@@ -19,7 +19,7 @@ import { workspaceAPI } from '@/infrastructure/api';
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
 import { notificationService } from '@/shared/notification-system';
 import { flowChatManager } from '@/flow_chat/services/FlowChatManager';
-import { openMainSession } from '@/flow_chat/services/openBtwSession';
+import { openMainSession } from '@/flow_chat/services/sessionActivation';
 import {
   getHistorySessionOpenTransitionSnapshot,
   subscribeHistorySessionOpenTransition,

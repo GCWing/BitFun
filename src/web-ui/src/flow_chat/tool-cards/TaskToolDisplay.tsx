@@ -23,7 +23,7 @@ import { getReviewerContextBySubagentId } from '@/shared/services/reviewTeamServ
 import type { ReviewerContext } from '@/shared/services/reviewTeamService';
 import { hasAcpPermissionOptions } from './AcpPermissionActions.utils';
 import { AcpPermissionActions } from './AcpPermissionActions';
-import { openBtwSessionInAuxPane } from '../services/openBtwSession';
+import { openBtwSessionInAuxPane } from '../services/btwSessionPane';
 import { flowChatStore } from '../store/FlowChatStore';
 import { useSessionGoalModeActive } from '../hooks/useSessionGoalModeActive';
 import './TaskToolDisplay.scss';

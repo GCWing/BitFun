@@ -76,7 +76,7 @@ vi.mock('../../services/BtwThreadService', () => ({
   createBtwChildSession: vi.fn(),
 }));
 
-vi.mock('../../services/openBtwSession', () => ({
+vi.mock('../../services/btwSessionPane', () => ({
   openBtwSessionInAuxPane: vi.fn(),
 }));
 
