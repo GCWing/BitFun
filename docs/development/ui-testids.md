@@ -65,8 +65,8 @@ Avoid adding IDs to these surfaces unless there is a clear automated workflow.
   - `nav-workspace-item` + `data-workspace-id`
   - `nav-session-item` + `data-session-id`
   - `settings-nav-tab` + `data-settings-tab`
-  - `agents-agent-card` + `data-agent-id`
-  - `skills-installed-card` + `data-skill-key`
+  - `agent-list-item` + `data-agent-id` / `data-agent-name`
+  - `skill-list-item` + `data-skill-id` / `data-skill-name`
   - `skills-market-card` + `data-skill-install-id`
 
 ## App Shell
@@ -102,16 +102,18 @@ Avoid adding IDs to these surfaces unless there is a clear automated workflow.
 | New code session button | `nav-new-code-session-btn` | Creates or opens a code session for the active project workspace. |
 | New cowork session button | `nav-new-cowork-session-btn` | Creates or opens a cowork session for the active project workspace. |
 | Assistant button | `nav-assistant-btn` | Opens assistant/persona scene. |
-| Extensions toggle | `nav-extensions-toggle` | Expands Agents/Skills entries. |
-| Agents button | `nav-agents-btn` | Opens Agents scene. |
-| Skills button | `nav-skills-btn` | Opens Skills scene. |
+| Agent/Skill entry | `agent-skill-entry` | Expands the Agents/Skills navigation entry group. |
+| Agent/Skill panel | `agent-skill-panel` | Agents/Skills entry group or active discovery scene root. |
+| Agent/Skill tabs | `agent-skill-tabs` | Navigation tab container for Agent and Skill entries. |
+| Agent tab | `agent-tab` | Opens the Agents discovery scene. |
+| Skill tab | `skill-tab` | Opens the Skills discovery scene. |
 | Navigation sections | `nav-sections` | Container for workspace/session sections. |
 | Navigation bottom bar | `nav-bottom-bar` | Container for Mini App/footer region. |
 | Footer more button | `nav-footer-more-btn` | Opens the footer overflow menu. |
 | Footer menu | `nav-footer-menu` | Overflow menu opened from the footer more button. |
 | Footer settings item | `nav-footer-settings-item` | Opens the Settings scene from the footer menu. |
-| Footer shell button | `nav-footer-shell-btn` | Opens or closes the shell scene nav. |
-| Footer browser button | `nav-footer-browser-btn` | Opens browser scene or browser panel depending on active context. |
+| Footer shell button | `shell-panel-entry` | Opens or closes the shell scene nav. |
+| Footer browser button | `browser-panel-entry` | Opens browser scene or browser panel depending on active context. |
 
 ## Navigation Workspaces
 
@@ -198,6 +200,9 @@ Avoid adding IDs to these surfaces unless there is a clear automated workflow.
 | Chat shell command text | `chat-shell-command-text` | Shell command text node. |
 | Chat shell command output | `chat-shell-command-output` | Shell command stdout/stderr or live output area. |
 | Chat shell command exit code | `chat-shell-command-exit-code` | Exit code node. Includes `data-exit-code` and `data-status`. |
+| Chat shell tool card | `chat-shell-tool-card` | Outer FlowToolCard wrapper for Bash. Includes `data-tool-name` and `data-tool-card-id`. |
+| Chat shell tool open panel | `chat-shell-tool-open-panel` | Opens the associated terminal panel when a terminal session is available. |
+| Chat browser tool card | `chat-browser-tool-card` | Outer FlowToolCard wrapper for WebFetch. Includes `data-tool-name` and `data-tool-card-id`. |
 | Chat file change card | `chat-file-change-card` | File operation card root. Includes `data-status`, `data-action`, `data-path`, and `data-expanded`. |
 | Chat file change toggle | `chat-file-change-toggle` | Click target for expanding/collapsing a file operation card. |
 | Chat file change path | `chat-file-change-path` | File path/name node. Includes `data-path`. |
@@ -244,6 +249,48 @@ Avoid adding IDs to these surfaces unless there is a clear automated workflow.
 | Model row | `settings-model-row` | Repeated saved model row. Pair with `data-model-id`, `data-model-name`, and `data-config-id`. |
 | Model test status | `settings-model-test-status` | Repeated saved model test status. Pair with `data-model-id`, `data-model-name`, `data-config-id`, and `data-status` (`success` or `error`). |
 
+## Shell Panel
+
+| Element name | data-testid | Notes |
+|---|---|---|
+| Shell panel entry | `shell-panel-entry` | Footer entry that opens the Shell scene/nav. |
+| Shell panel | `shell-panel` | Shell scene, shell nav, or terminal scene root. |
+| Shell panel title | `shell-panel-title` | Shell nav title or active terminal toolbar title. |
+| Shell command list | `shell-command-list` | Shell nav terminal list or active terminal container. |
+| Shell command item | `shell-command-item` | Shell nav row or active xterm root. Includes `data-command-id` and, when available, `data-command-status`. |
+| Shell command text | `shell-command-text` | Shell nav terminal/session label. |
+| Shell command output | `shell-command-output` | Real xterm output container for the active terminal. |
+| Shell command exit code | `shell-command-exit-code` | Terminal status bar exit code when the session has exited. Includes `data-exit-code` and `data-status`. |
+| Shell command status | `shell-command-status` | Shell nav status dot, terminal loading/error state, or terminal status bar. Includes `data-command-status`. |
+| Shell command rerun | `shell-command-rerun` | Retry button in terminal error state or Ctrl+C toolbar action on active terminal. |
+| Shell panel close | `shell-panel-close` | Active terminal close button. |
+
+Notes:
+
+- The standalone xterm terminal does not expose a structured per-command history DOM. Tests should use `shell-command-output` for rendered terminal output and `chat-shell-command-*` for structured Bash ToolCard assertions.
+- `shell-command-copy` is not currently exposed because the active terminal copy action is context-menu/selection driven rather than a stable visible button.
+
+## Browser Panel
+
+| Element name | data-testid | Notes |
+|---|---|---|
+| Browser panel entry | `browser-panel-entry` | Footer entry that opens the Browser scene or Browser panel, depending on active context. |
+| Browser panel | `browser-panel` | Browser scene or right-side Browser panel root. |
+| Browser panel title | `browser-panel-title` | Browser toolbar/form region. |
+| Browser URL input | `browser-url-input` | Real URL input field. Press Enter to open the typed URL. |
+| Browser page frame | `browser-page-frame` | iframe/webview host content area. |
+| Browser loading indicator | `browser-loading-indicator` | Refresh/loading icon while a URL is loading. |
+| Browser error message | `browser-error-message` | URL validation/connectivity/webview load failure message. |
+| Browser current URL | `browser-current-url` | Current URL display in the webview placeholder. |
+| Browser refresh button | `browser-refresh-button` | Refreshes the current browser page. |
+| Browser back button | `browser-back-button` | Navigates browser history back. |
+| Browser forward button | `browser-forward-button` | Navigates browser history forward. |
+
+Notes:
+
+- `browser-open-button` is not currently exposed because URL navigation is submitted by the existing address form via Enter; no dedicated visible open button exists.
+- `browser-panel-close` depends on the surrounding scene/canvas tab chrome rather than the Browser component itself.
+
 ## Notifications
 
 | Element name | data-testid | Notes |
@@ -267,8 +314,18 @@ Avoid adding IDs to these surfaces unless there is a clear automated workflow.
 
 | Element name | data-testid | Notes |
 |---|---|---|
-| Agents scene root | `agents-scene` | Agents gallery page root. |
-| Agents zones container | `agents-zones` | Container for all agent zones. |
+| Agent/Skill panel | `agent-skill-panel` | Agents scene root when the Agents discovery page is active. |
+| Agent list | `agent-list` | Container for all agent zones and cards. |
+| Agent list item | `agent-list-item` | Repeated card. Includes `data-agent-id`, `data-agent-name`, and `data-agent-kind`. |
+| Agent list item title | `agent-list-item-title` | Agent card title. |
+| Agent list item description | `agent-list-item-description` | Agent card description. |
+| Agent list empty | `agent-list-empty` | Empty state for an agent list section. |
+| Agent detail panel | `agent-detail-panel` | Agent detail modal root. |
+| Agent detail title | `agent-detail-title` | Agent detail modal title. |
+| Agent detail description | `agent-detail-description` | Agent detail description. |
+| Agent detail tools section | `agent-detail-tools-section` | Agent capability/tools section. |
+| Agent detail tool item | `agent-detail-tool-item` | Repeated enabled tool item. Includes `data-tool-name`. |
+| Agent detail close | `agent-detail-close` | Modal close button. |
 | Core anchor button | `agents-anchor-core` | Scrolls to core agents zone. |
 | Teams anchor button | `agents-anchor-teams` | Scrolls to teams zone. |
 | Custom agents anchor button | `agents-anchor-custom` | Scrolls to custom agents zone. |
@@ -280,9 +337,7 @@ Avoid adding IDs to these surfaces unless there is a clear automated workflow.
 | Agent source filter | `agents-source-filter` | Repeated item. Pair with `data-agent-source`. |
 | Agent kind filter | `agents-kind-filter` | Repeated item. Pair with `data-agent-kind`. |
 | Create agent button | `agents-create-agent-btn` | Opens custom agent creation page. |
-| Core agent card | `agents-core-agent-card` | Repeated item. Pair with `data-agent-id` and `data-agent-kind`. |
 | Agent team card | `agents-team-card` | Repeated item. Pair with `data-team-id`. |
-| Agent card | `agents-agent-card` | Repeated item. Pair with `data-agent-id`, `data-agent-kind`, and `data-subagent-source`. |
 | BTW stop review button | `btw-session-panel-stop-review` | Stops review session from BTW panel. |
 | BTW origin button | `btw-session-panel-origin-button` | Opens origin session from BTW panel. |
 
@@ -290,7 +345,17 @@ Avoid adding IDs to these surfaces unless there is a clear automated workflow.
 
 | Element name | data-testid | Notes |
 |---|---|---|
-| Skills scene root | `skills-scene` | Skills scene root. |
+| Agent/Skill panel | `agent-skill-panel` | Skills scene root when the Skills discovery page is active. |
+| Skill list | `skill-list` | Installed skill list grid by default. Also used for marketplace results. |
+| Skill list item | `skill-list-item` | Repeated installed skill card. Includes `data-skill-id`, `data-skill-name`, `data-skill-key`, `data-skill-level`, and `data-skill-builtin`. |
+| Skill list item title | `skill-list-item-title` | Skill card title. |
+| Skill list item description | `skill-list-item-description` | Skill card description when present. |
+| Skill list empty | `skill-list-empty` | Empty state for installed or marketplace skill list. |
+| Skill detail panel | `skill-detail-panel` | Skill detail modal root. |
+| Skill detail title | `skill-detail-title` | Skill detail modal title. |
+| Skill detail description | `skill-detail-description` | Skill detail description. |
+| Skill detail capabilities section | `skill-detail-capabilities-section` | Detail metadata/capability rows for installed or marketplace skill. |
+| Skill detail close | `skill-detail-close` | Modal close button. |
 | Skills tabs root | `skills-tabs` | Installed/discover tabs container. |
 | Installed tab | `skills-tab-installed` | Includes `data-skills-tab-active`. |
 | Discover tab | `skills-tab-discover` | Includes `data-skills-tab-active`. |

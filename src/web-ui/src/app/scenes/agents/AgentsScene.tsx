@@ -556,7 +556,7 @@ const AgentsHomeView: React.FC = () => {
   );
 
   return (
-    <GalleryLayout className="bitfun-agents-scene" data-testid="agents-scene">
+    <GalleryLayout className="bitfun-agents-scene" data-testid="agent-skill-panel">
       <GalleryPageHeader
         title={t('page.title')}
         subtitle={t('page.subtitle')}
@@ -612,7 +612,7 @@ const AgentsHomeView: React.FC = () => {
         )}
       />
 
-      <div className="gallery-zones" data-testid="agents-zones">
+      <div className="gallery-zones" data-testid="agent-list">
         <GalleryZone
           id="core-agents-zone"
           data-testid="agents-core-zone"
@@ -628,6 +628,7 @@ const AgentsHomeView: React.FC = () => {
             <GalleryEmpty
               icon={<Cpu size={32} strokeWidth={1.5} />}
               message={t('coreAgentsZone.empty')}
+              testId="agent-list-empty"
             />
           ) : (
             <div className="core-agents-grid">
@@ -766,6 +767,7 @@ const AgentsHomeView: React.FC = () => {
             <GalleryEmpty
               icon={<Bot size={32} strokeWidth={1.5} />}
               message={allAgents.length === 0 ? t('agentsZone.empty.noAgents') : t('agentsZone.empty.noMatch')}
+              testId="agent-list-empty"
             />
           ) : null}
 
@@ -826,6 +828,10 @@ const AgentsHomeView: React.FC = () => {
         description={selectedAgent
           ? getAgentDescription(t, selectedAgent)
           : undefined}
+        testId="agent-detail-panel"
+        titleTestId="agent-detail-title"
+        descriptionTestId="agent-detail-description"
+        closeButtonTestId="agent-detail-close"
         meta={selectedAgent ? (
           <>
             <span>{t('agentCard.meta.tools', { count: selectedAgentToolCount })}</span>
@@ -884,7 +890,7 @@ const AgentsHomeView: React.FC = () => {
             ) : null}
 
             {selectedAgentCapabilityTabs.length > 0 ? (
-              <div className="agent-card__section">
+              <div className="agent-card__section" data-testid="agent-detail-tools-section">
                 <div className="agent-card__section-head">
                   <div className="agent-card__tab-list" role="tablist" aria-label={t('agentsOverview.capabilities')}>
                     {selectedAgentCapabilityTabs.map((tab) => {
@@ -1121,7 +1127,13 @@ const AgentsHomeView: React.FC = () => {
                   ) : (
                     <div className="agent-card__chip-grid">
                       {selectedAgentTools.map((tool) => (
-                        <span key={tool} className="agent-card__chip" title={tool}>
+                        <span
+                          key={tool}
+                          className="agent-card__chip"
+                          title={tool}
+                          data-testid="agent-detail-tool-item"
+                          data-tool-name={tool}
+                        >
                           {tool.replace(/_/g, ' ')}
                         </span>
                       ))}

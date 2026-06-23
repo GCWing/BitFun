@@ -529,7 +529,7 @@ const MainNav: React.FC<MainNavProps> = ({
           </button>
         </Tooltip>
 
-        <div className="bitfun-nav-panel__top-action-expand">
+        <div className="bitfun-nav-panel__top-action-expand" data-testid="agent-skill-panel">
           <Tooltip content={extensionsLabel} placement="right" followCursor>
             <button
               type="button"
@@ -541,7 +541,7 @@ const MainNav: React.FC<MainNavProps> = ({
               onClick={() => setIsExtensionsOpen(v => !v)}
               aria-expanded={isExtensionsOpen}
               aria-label={extensionsLabel}
-              data-testid="nav-extensions-toggle"
+              data-testid="agent-skill-entry"
             >
               <span className="bitfun-nav-panel__top-action-expand-icons" aria-hidden="true">
                 <Blocks size={15} className="bitfun-nav-panel__top-action-expand-icon-default" />
@@ -557,7 +557,10 @@ const MainNav: React.FC<MainNavProps> = ({
             </button>
           </Tooltip>
 
-          <div className={`bitfun-nav-panel__top-action-sublist${isExtensionsOpen ? ' is-open' : ''}`}>
+          <div
+            className={`bitfun-nav-panel__top-action-sublist${isExtensionsOpen ? ' is-open' : ''}`}
+            data-testid="agent-skill-tabs"
+          >
             <Tooltip content={agentsTooltip} placement="right" followCursor>
               <button
                 type="button"
@@ -568,7 +571,7 @@ const MainNav: React.FC<MainNavProps> = ({
                 ].filter(Boolean).join(' ')}
                 onClick={handleOpenAgents}
                 aria-label={agentsTooltip}
-                data-testid="nav-agents-btn"
+                data-testid="agent-tab"
               >
                 <span className="bitfun-nav-panel__top-action-icon-slot" aria-hidden="true">
                   <Users size={15} />
@@ -587,7 +590,7 @@ const MainNav: React.FC<MainNavProps> = ({
                 ].filter(Boolean).join(' ')}
                 onClick={handleOpenSkills}
                 aria-label={skillsTooltip}
-                data-testid="nav-skills-btn"
+                data-testid="skill-tab"
               >
                 <span className="bitfun-nav-panel__top-action-icon-slot" aria-hidden="true">
                   <Puzzle size={15} />

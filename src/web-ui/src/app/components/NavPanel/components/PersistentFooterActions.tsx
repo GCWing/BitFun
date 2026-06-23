@@ -251,7 +251,7 @@ const PersistentFooterActions: React.FC = () => {
               aria-label={t('scenes.shell')}
               aria-pressed={showSceneNav && navSceneId === 'shell'}
               onClick={handleOpenShell}
-              data-testid="nav-footer-shell-btn"
+              data-testid="shell-panel-entry"
             >
               <span className="bitfun-nav-panel__footer-btn-icon-swap" aria-hidden="true">
                 <SquareTerminal size={15} className="bitfun-nav-panel__footer-btn-icon-swap-default" />
@@ -267,7 +267,7 @@ const PersistentFooterActions: React.FC = () => {
               aria-label={t('scenes.browser')}
               aria-pressed={isBrowserActive}
               onClick={handleOpenBrowser}
-              data-testid="nav-footer-browser-btn"
+              data-testid="browser-panel-entry"
             >
               <span className="bitfun-nav-panel__footer-btn-icon-swap" aria-hidden="true">
                 <Globe size={15} className="bitfun-nav-panel__footer-btn-icon-swap-default" />

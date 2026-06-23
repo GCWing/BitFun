@@ -419,8 +419,8 @@ const ConnectedTerminal: React.FC<ConnectedTerminalProps> = memo(({
 
   if (isLoading) {
     return (
-      <div className={`bitfun-terminal ${className}`}>
-        <div className="bitfun-terminal__loading">
+      <div className={`bitfun-terminal ${className}`} data-testid="shell-command-list">
+        <div className="bitfun-terminal__loading" data-testid="shell-command-status" data-command-status="loading">
           <div className="bitfun-terminal__loading-spinner" />
           <span className="bitfun-terminal__loading-text">Connecting to terminal...</span>
         </div>
@@ -430,13 +430,14 @@ const ConnectedTerminal: React.FC<ConnectedTerminalProps> = memo(({
 
   if (error) {
     return (
-      <div className={`bitfun-terminal ${className}`}>
-        <div className="bitfun-terminal__error">
+      <div className={`bitfun-terminal ${className}`} data-testid="shell-command-list">
+        <div className="bitfun-terminal__error" data-testid="shell-command-status" data-command-status="error">
           <AlertCircle className="bitfun-terminal__error-icon" size={32} />
           <span className="bitfun-terminal__error-message">{error}</span>
           <button 
             className="bitfun-terminal__error-retry"
             onClick={handleRetry}
+            data-testid="shell-command-rerun"
           >
             <RefreshCw size={14} />
             <span>Retry</span>
@@ -447,12 +448,17 @@ const ConnectedTerminal: React.FC<ConnectedTerminalProps> = memo(({
   }
 
   return (
-    <div className={`bitfun-terminal ${className}`}>
+    <div
+      className={`bitfun-terminal ${className}`}
+      data-testid="shell-command-list"
+      data-command-id={sessionId}
+      data-command-status={isExited ? 'exited' : 'running'}
+    >
       {showToolbar && (
         <div className="bitfun-terminal__toolbar">
           <div className="bitfun-terminal__toolbar-left">
             <TerminalIcon size={14} />
-            <span className="bitfun-terminal__toolbar-title">
+            <span className="bitfun-terminal__toolbar-title" data-testid="shell-panel-title">
               {title}
               {session && (
                 <span className="shell-type">({session.shellType})</span>
@@ -464,6 +470,7 @@ const ConnectedTerminal: React.FC<ConnectedTerminalProps> = memo(({
               className="bitfun-terminal__toolbar-btn"
               onClick={handleSendCtrlC}
               title="Send Ctrl+C"
+              data-testid="shell-command-rerun"
             >
               <span style={{ fontSize: 10, fontWeight: 'bold' }}>^C</span>
             </button>
@@ -471,6 +478,7 @@ const ConnectedTerminal: React.FC<ConnectedTerminalProps> = memo(({
               className="bitfun-terminal__toolbar-btn bitfun-terminal__toolbar-btn--danger"
               onClick={handleClose}
               title="Close terminal"
+              data-testid="shell-panel-close"
             >
               <Trash2 size={14} />
             </button>
@@ -500,7 +508,11 @@ const ConnectedTerminal: React.FC<ConnectedTerminalProps> = memo(({
           error ? 'bitfun-terminal__statusbar--error' : ''
         }`}>
           <div className="bitfun-terminal__statusbar-left">
-            <span className="bitfun-terminal__statusbar-item">
+            <span
+              className="bitfun-terminal__statusbar-item"
+              data-testid="shell-command-status"
+              data-command-status={isExited ? 'exited' : 'running'}
+            >
               {session.shellType}
             </span>
             <span className="bitfun-terminal__statusbar-item">
@@ -515,7 +527,12 @@ const ConnectedTerminal: React.FC<ConnectedTerminalProps> = memo(({
               {session.cols}×{session.rows}
             </span>
             {isExited && exitCode !== null && (
-              <span className="bitfun-terminal__statusbar-item">
+              <span
+                className="bitfun-terminal__statusbar-item"
+                data-testid="shell-command-exit-code"
+                data-exit-code={exitCode}
+                data-status={exitCode === 0 ? 'success' : 'failed'}
+              >
                 Exit code: {exitCode}
               </span>
             )}

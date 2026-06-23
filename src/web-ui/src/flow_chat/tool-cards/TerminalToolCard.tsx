@@ -464,6 +464,7 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
         size="xs"
         onClick={handleOpenInPanel}
         tooltip={t('toolCards.terminal.openInPanel')}
+        data-testid="chat-shell-tool-open-panel"
       >
         <ExternalLink size={12} />
       </IconButton>

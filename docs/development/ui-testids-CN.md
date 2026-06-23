@@ -64,8 +64,8 @@
   - `nav-workspace-item` + `data-workspace-id`
   - `nav-session-item` + `data-session-id`
   - `settings-nav-tab` + `data-settings-tab`
-  - `agents-agent-card` + `data-agent-id`
-  - `skills-installed-card` + `data-skill-key`
+  - `agent-list-item` + `data-agent-id` / `data-agent-name`
+  - `skill-list-item` + `data-skill-id` / `data-skill-name`
   - `skills-market-card` + `data-skill-install-id`
 
 ## App Shell
@@ -101,16 +101,18 @@
 | 新建 Code 会话按钮 | `nav-new-code-session-btn` | 为活动项目工作区创建或打开 code 会话。 |
 | 新建 Cowork 会话按钮 | `nav-new-cowork-session-btn` | 为活动项目工作区创建或打开 cowork 会话。 |
 | Assistant 按钮 | `nav-assistant-btn` | 打开 assistant/persona 场景。 |
-| Extensions 展开按钮 | `nav-extensions-toggle` | 展开 Agents/Skills 入口。 |
-| Agents 按钮 | `nav-agents-btn` | 打开 Agents 场景。 |
-| Skills 按钮 | `nav-skills-btn` | 打开 Skills 场景。 |
+| Agent/Skill 入口 | `agent-skill-entry` | 展开 Agents/Skills 导航入口组。 |
+| Agent/Skill 面板 | `agent-skill-panel` | Agents/Skills 入口组或当前发现页根节点。 |
+| Agent/Skill tabs | `agent-skill-tabs` | Agent 和 Skill 入口 tab 容器。 |
+| Agent tab | `agent-tab` | 打开 Agents 发现页。 |
+| Skill tab | `skill-tab` | 打开 Skills 发现页。 |
 | 导航 sections 容器 | `nav-sections` | 工作区/会话 section 容器。 |
 | 导航底部栏 | `nav-bottom-bar` | Mini App/footer 区域容器。 |
 | 底部更多按钮 | `nav-footer-more-btn` | 打开底部溢出菜单。 |
 | 底部菜单 | `nav-footer-menu` | 由底部更多按钮打开的溢出菜单。 |
 | 底部设置菜单项 | `nav-footer-settings-item` | 从底部菜单打开 Settings 场景。 |
-| 底部 Shell 按钮 | `nav-footer-shell-btn` | 打开或关闭 shell 场景导航。 |
-| 底部 Browser 按钮 | `nav-footer-browser-btn` | 根据当前上下文打开 browser 场景或 browser 面板。 |
+| 底部 Shell 按钮 | `shell-panel-entry` | 打开或关闭 shell 场景导航。 |
+| 底部 Browser 按钮 | `browser-panel-entry` | 根据当前上下文打开 browser 场景或 browser 面板。 |
 
 ## Navigation Workspaces
 
@@ -199,6 +201,9 @@
 | Chat shell 命令文本 | `chat-shell-command-text` | Shell 命令文本节点。 |
 | Chat shell 命令输出 | `chat-shell-command-output` | Shell 命令 stdout/stderr 或实时输出区域。 |
 | Chat shell 命令退出码 | `chat-shell-command-exit-code` | 退出码节点。包含 `data-exit-code` 和 `data-status`。 |
+| Chat shell 工具卡片 | `chat-shell-tool-card` | Bash 的外层 FlowToolCard wrapper。包含 `data-tool-name` 和 `data-tool-card-id`。 |
+| Chat shell 工具打开面板按钮 | `chat-shell-tool-open-panel` | 存在 terminal session 时，从 Bash ToolCard 打开关联终端面板。 |
+| Chat browser 工具卡片 | `chat-browser-tool-card` | WebFetch 的外层 FlowToolCard wrapper。包含 `data-tool-name` 和 `data-tool-card-id`。 |
 | Chat 文件变更卡片 | `chat-file-change-card` | 文件操作卡片根节点。包含 `data-status`、`data-action`、`data-path` 和 `data-expanded`。 |
 | Chat 文件变更展开按钮 | `chat-file-change-toggle` | 文件操作卡片的展开/收起点击目标。 |
 | Chat 文件变更路径 | `chat-file-change-path` | 文件路径/名称节点。包含 `data-path`。 |
@@ -244,6 +249,48 @@
 | 模型行 | `settings-model-row` | 重复的已保存模型行。配合 `data-model-id`、`data-model-name` 和 `data-config-id` 使用。 |
 | 模型测试状态 | `settings-model-test-status` | 重复的已保存模型测试状态。配合 `data-model-id`、`data-model-name`、`data-config-id` 和 `data-status` 使用，`data-status` 可为 `success` 或 `error`。 |
 
+## Shell Panel
+
+| 元素名称 | data-testid | 说明 |
+|---|---|---|
+| Shell 面板入口 | `shell-panel-entry` | 打开 Shell 场景/导航的底部入口。 |
+| Shell 面板 | `shell-panel` | Shell 场景、Shell 导航或 Terminal 场景根节点。 |
+| Shell 面板标题 | `shell-panel-title` | Shell 导航标题或当前终端 toolbar 标题。 |
+| Shell 命令列表 | `shell-command-list` | Shell 导航终端列表或当前终端容器。 |
+| Shell 命令项 | `shell-command-item` | Shell 导航行或当前 xterm 根节点。包含 `data-command-id`，可用时包含 `data-command-status`。 |
+| Shell 命令文本 | `shell-command-text` | Shell 导航中的终端/session 标签。 |
+| Shell 命令输出 | `shell-command-output` | 当前终端的真实 xterm 输出容器。 |
+| Shell 命令退出码 | `shell-command-exit-code` | session 退出后终端状态栏中的退出码。包含 `data-exit-code` 和 `data-status`。 |
+| Shell 命令状态 | `shell-command-status` | Shell 导航状态点、终端加载/错误状态或终端状态栏。包含 `data-command-status`。 |
+| Shell 命令重新运行 | `shell-command-rerun` | 终端错误状态下的重试按钮，或活动终端 toolbar 上的 Ctrl+C 动作。 |
+| Shell 面板关闭 | `shell-panel-close` | 当前终端关闭按钮。 |
+
+说明：
+
+- 独立 xterm 终端没有结构化的逐命令历史 DOM。测试应使用 `shell-command-output` 断言终端渲染输出，使用 `chat-shell-command-*` 断言结构化 Bash ToolCard。
+- `shell-command-copy` 当前未暴露，因为活动终端复制能力基于选择/右键上下文菜单，并不是稳定可见按钮。
+
+## Browser Panel
+
+| 元素名称 | data-testid | 说明 |
+|---|---|---|
+| Browser 面板入口 | `browser-panel-entry` | 根据当前上下文打开 Browser 场景或 Browser 面板的底部入口。 |
+| Browser 面板 | `browser-panel` | Browser 场景或右侧 Browser 面板根节点。 |
+| Browser 面板标题 | `browser-panel-title` | Browser toolbar/form 区域。 |
+| Browser URL 输入框 | `browser-url-input` | 真实 URL 输入框。按 Enter 打开输入的 URL。 |
+| Browser 页面容器 | `browser-page-frame` | iframe/webview host 内容区域。 |
+| Browser 加载状态 | `browser-loading-indicator` | URL 加载中时的刷新/加载图标。 |
+| Browser 错误信息 | `browser-error-message` | URL 校验、连通性或 webview 加载失败信息。 |
+| Browser 当前 URL | `browser-current-url` | webview placeholder 中展示的当前 URL。 |
+| Browser 刷新按钮 | `browser-refresh-button` | 刷新当前 Browser 页面。 |
+| Browser 后退按钮 | `browser-back-button` | Browser 历史后退。 |
+| Browser 前进按钮 | `browser-forward-button` | Browser 历史前进。 |
+
+说明：
+
+- `browser-open-button` 当前未暴露，因为 URL 导航通过现有地址栏表单按 Enter 提交；当前没有独立可见的打开按钮。
+- `browser-panel-close` 属于外层 scene/canvas tab chrome，不在 Browser 组件自身内部。
+
 ## Notifications
 
 | 元素名称 | data-testid | 说明 |
@@ -267,8 +314,18 @@
 
 | 元素名称 | data-testid | 说明 |
 |---|---|---|
-| Agents 场景根节点 | `agents-scene` | Agents gallery 页面根节点。 |
-| Agents 区域容器 | `agents-zones` | 所有 agent 区域的容器。 |
+| Agent/Skill 面板 | `agent-skill-panel` | Agents 发现页激活时的场景根节点。 |
+| Agent 列表 | `agent-list` | 所有 agent 区域和卡片的容器。 |
+| Agent 列表项 | `agent-list-item` | 重复卡片。包含 `data-agent-id`、`data-agent-name` 和 `data-agent-kind`。 |
+| Agent 列表项标题 | `agent-list-item-title` | Agent 卡片标题。 |
+| Agent 列表项描述 | `agent-list-item-description` | Agent 卡片描述。 |
+| Agent 列表空状态 | `agent-list-empty` | Agent 列表区块为空时的状态。 |
+| Agent 详情面板 | `agent-detail-panel` | Agent 详情弹窗根节点。 |
+| Agent 详情标题 | `agent-detail-title` | Agent 详情弹窗标题。 |
+| Agent 详情描述 | `agent-detail-description` | Agent 详情描述。 |
+| Agent 详情工具区域 | `agent-detail-tools-section` | Agent 能力/工具区域。 |
+| Agent 详情工具项 | `agent-detail-tool-item` | 重复的已启用工具项。包含 `data-tool-name`。 |
+| Agent 详情关闭按钮 | `agent-detail-close` | 详情弹窗关闭按钮。 |
 | Core 锚点按钮 | `agents-anchor-core` | 滚动到 core agents 区域。 |
 | Teams 锚点按钮 | `agents-anchor-teams` | 滚动到 teams 区域。 |
 | Custom agents 锚点按钮 | `agents-anchor-custom` | 滚动到 custom agents 区域。 |
@@ -280,9 +337,7 @@
 | Agent source 过滤器 | `agents-source-filter` | 重复项。配合 `data-agent-source` 使用。 |
 | Agent kind 过滤器 | `agents-kind-filter` | 重复项。配合 `data-agent-kind` 使用。 |
 | 创建 agent 按钮 | `agents-create-agent-btn` | 打开 custom agent 创建页。 |
-| Core agent 卡片 | `agents-core-agent-card` | 重复项。配合 `data-agent-id` 和 `data-agent-kind` 使用。 |
 | Agent team 卡片 | `agents-team-card` | 重复项。配合 `data-team-id` 使用。 |
-| Agent 卡片 | `agents-agent-card` | 重复项。配合 `data-agent-id`、`data-agent-kind` 和 `data-subagent-source` 使用。 |
 | BTW 停止 review 按钮 | `btw-session-panel-stop-review` | 从 BTW 面板停止 review session。 |
 | BTW origin 按钮 | `btw-session-panel-origin-button` | 从 BTW 面板打开 origin session。 |
 
@@ -290,7 +345,17 @@
 
 | 元素名称 | data-testid | 说明 |
 |---|---|---|
-| Skills 场景根节点 | `skills-scene` | Skills 场景根节点。 |
+| Agent/Skill 面板 | `agent-skill-panel` | Skills 发现页激活时的场景根节点。 |
+| Skill 列表 | `skill-list` | 默认安装技能列表网格，也用于 marketplace 搜索结果。 |
+| Skill 列表项 | `skill-list-item` | 重复的已安装 skill 卡片。包含 `data-skill-id`、`data-skill-name`、`data-skill-key`、`data-skill-level` 和 `data-skill-builtin`。 |
+| Skill 列表项标题 | `skill-list-item-title` | Skill 卡片标题。 |
+| Skill 列表项描述 | `skill-list-item-description` | 存在时为 Skill 卡片描述。 |
+| Skill 列表空状态 | `skill-list-empty` | 已安装或 marketplace skill 列表为空时的状态。 |
+| Skill 详情面板 | `skill-detail-panel` | Skill 详情弹窗根节点。 |
+| Skill 详情标题 | `skill-detail-title` | Skill 详情弹窗标题。 |
+| Skill 详情描述 | `skill-detail-description` | Skill 详情描述。 |
+| Skill 详情能力区域 | `skill-detail-capabilities-section` | 已安装或 marketplace skill 的详情元数据/能力说明区域。 |
+| Skill 详情关闭按钮 | `skill-detail-close` | 详情弹窗关闭按钮。 |
 | Skills tabs 根节点 | `skills-tabs` | Installed/discover tabs 容器。 |
 | Installed tab | `skills-tab-installed` | 包含 `data-skills-tab-active`。 |
 | Discover tab | `skills-tab-discover` | 包含 `data-skills-tab-active`。 |

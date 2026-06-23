@@ -25,6 +25,9 @@ export interface ModalProps {
   draggable?: boolean;
   resizable?: boolean;
   placement?: 'center' | 'bottom-left' | 'bottom-right';
+  testId?: string;
+  titleTestId?: string;
+  closeButtonTestId?: string;
 }
 
 export const Modal: React.FC<ModalProps> = ({
@@ -42,6 +45,9 @@ export const Modal: React.FC<ModalProps> = ({
   draggable = false,
   resizable = false,
   placement = 'center',
+  testId,
+  titleTestId,
+  closeButtonTestId,
 }) => {
   const { t } = useI18n('components');
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
@@ -279,6 +285,7 @@ export const Modal: React.FC<ModalProps> = ({
         onClick={(e) => e.stopPropagation()}
         onMouseDown={handleMouseDown}
         style={appliedStyle}
+        data-testid={testId}
       >
         {(title || showCloseButton) && (
           <div
@@ -302,7 +309,7 @@ export const Modal: React.FC<ModalProps> = ({
               >
                 {title && (
                   <div className="modal__title-group">
-                    <h2 className="modal__title">{title}</h2>
+                    <h2 className="modal__title" data-testid={titleTestId}>{title}</h2>
                     {titleExtra && <span className="modal__title-extra">{titleExtra}</span>}
                   </div>
                 )}
@@ -314,6 +321,7 @@ export const Modal: React.FC<ModalProps> = ({
                 onClick={onClose}
                 aria-label={t('modal.close')}
                 type="button"
+                data-testid={closeButtonTestId}
               >
                 <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
                   <line x1="3" y1="3" x2="11" y2="11" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>

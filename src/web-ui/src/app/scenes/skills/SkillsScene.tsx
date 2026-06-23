@@ -166,8 +166,8 @@ const SkillsScene: React.FC = () => {
   }, [installedTotalPages]);
 
   return (
-    <div className="bitfun-skills-scene">
-      <div className="skills-tabs-bar">
+    <div className="bitfun-skills-scene" data-testid="agent-skill-panel">
+      <div className="skills-tabs-bar" data-testid="skills-tabs">
         <div className="skills-tabs-bar__tabs">
           <button
             type="button"
@@ -265,7 +265,7 @@ const SkillsScene: React.FC = () => {
                   )}
 
                   {!installed.loading && !installed.error && installedFiltered.length === 0 && (
-                    <div className="skills-main__empty">
+                    <div className="skills-main__empty" data-testid="skill-list-empty">
                       <Package size={28} strokeWidth={1.2} />
                       <span>
                         {installed.skills.length === 0
@@ -277,7 +277,7 @@ const SkillsScene: React.FC = () => {
 
                   {!installed.loading && !installed.error && (
                     <>
-                      <div className="skills-main__grid">
+                      <div className="skills-main__grid" data-testid="skill-list">
                         {pagedInstalledSkills.map((skill, index) => (
                           <div
                             key={skill.key}
@@ -296,15 +296,21 @@ const SkillsScene: React.FC = () => {
                               }
                             }}
                             aria-label={skill.name}
+                            data-testid="skill-list-item"
+                            data-skill-key={skill.key}
+                            data-skill-id={skill.key}
+                            data-skill-name={skill.name}
+                            data-skill-level={skill.level}
+                            data-skill-builtin={skill.isBuiltin ? 'true' : 'false'}
                           >
                             <div className="skills-card__top">
                               <div className="skills-card__icon">
                                 <Puzzle size={18} strokeWidth={1.6} />
                               </div>
                               <div className="skills-card__info">
-                                <span className="skills-card__name">{skill.name}</span>
+                                <span className="skills-card__name" data-testid="skill-list-item-title">{skill.name}</span>
                                 {skill.description?.trim() && (
-                                  <span className="skills-card__desc">{skill.description}</span>
+                                  <span className="skills-card__desc" data-testid="skill-list-item-description">{skill.description}</span>
                                 )}
                               </div>
                               {skill.isBuiltin && (
@@ -469,7 +475,7 @@ const SkillsScene: React.FC = () => {
               )}
 
               {!market.marketLoading && !market.marketError && !market.loadingMore && market.marketSkills.length === 0 && (
-                <div className="skills-discover__empty">
+                <div className="skills-discover__empty" data-testid="skill-list-empty">
                   <Package size={28} strokeWidth={1.5} />
                   <span>{marketQuery ? t('market.empty.noMatch') : t('market.empty.noSkills')}</span>
                 </div>
@@ -485,13 +491,18 @@ const SkillsScene: React.FC = () => {
                     </div>
                   )}
 
-                  <div className="skills-discover__grid">
+                  <div className="skills-discover__grid" data-testid="skill-list">
                     {market.marketSkills.map((skill, index) => {
                       const isInstalled = installedSkillNames.has(skill.name);
                       const isDownloading = market.downloadingPackage === skill.installId;
                       return (
                         <SkillCard
                           key={skill.installId}
+                          data-testid="skills-market-card"
+                          data-skill-install-id={skill.installId}
+                          data-skill-id={skill.installId}
+                          data-skill-name={skill.name}
+                          data-skill-installed={isInstalled ? 'true' : 'false'}
                           name={skill.name}
                           description={skill.description}
                           index={index}
@@ -601,6 +612,10 @@ const SkillsScene: React.FC = () => {
           </Badge>
         ) : null}
         description={selectedInstalledSkill?.description ?? selectedMarketSkill?.description}
+        testId="skill-detail-panel"
+        titleTestId="skill-detail-title"
+        descriptionTestId="skill-detail-description"
+        closeButtonTestId="skill-detail-close"
         meta={selectedMarketSkill ? (
           <span className="bitfun-skills-scene__market-meta">
             <TrendingUp size={12} />
@@ -660,7 +675,7 @@ const SkillsScene: React.FC = () => {
                 </span>
               </div>
             )}
-            <div className="bitfun-skills-scene__detail-row">
+            <div className="bitfun-skills-scene__detail-row" data-testid="skill-detail-capabilities-section">
               <span className="bitfun-skills-scene__detail-label">{t('list.item.pathLabel')}</span>
               {canRevealSkillPath ? (
                 <button
@@ -680,7 +695,7 @@ const SkillsScene: React.FC = () => {
         ) : null}
 
         {selectedMarketSkill?.source ? (
-          <div className="bitfun-skills-scene__detail-row">
+          <div className="bitfun-skills-scene__detail-row" data-testid="skill-detail-capabilities-section">
             <span className="bitfun-skills-scene__detail-label">{t('market.item.sourceLabel')}</span>
             <span className="bitfun-skills-scene__detail-value">{selectedMarketSkill.source}</span>
           </div>
