@@ -1545,6 +1545,12 @@ mod tests {
             .as_deref()
             .unwrap_or_default()
             .contains("Provided arguments: {\"operation\":\"log\""));
+        assert!(!result
+            .result
+            .result_for_assistant
+            .as_deref()
+            .unwrap_or_default()
+            .contains("Raw arguments:"));
     }
 
     #[tokio::test]
