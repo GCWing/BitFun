@@ -735,7 +735,11 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
             isOpen={showNewProjectDialog}
             onClose={() => setShowNewProjectDialog(false)}
             onConfirm={handleConfirmNewProject}
-            defaultParentPath={hasWorkspace ? currentWorkspace?.rootPath : '/storage/Users/currentUser/Documents'}
+            defaultParentPath={
+              hasWorkspace && currentWorkspace?.workspaceKind !== WorkspaceKind.Assistant
+                ? currentWorkspace?.rootPath
+                : '/storage/Users/currentUser/Documents'
+            }
           />
         </Suspense>
       )}
