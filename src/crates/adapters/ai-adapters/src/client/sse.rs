@@ -4,13 +4,20 @@ use crate::stream::UnifiedResponse;
 use crate::trace::{ModelExchangeRequestAttempt, ModelExchangeTraceConfig};
 use anyhow::{anyhow, Result};
 use chrono::{DateTime, Utc};
+use futures::Stream;
 use log::{debug, error, warn};
 use reqwest::{
     header::{HeaderMap, RETRY_AFTER},
     StatusCode,
 };
+use std::future::Future;
+use std::pin::Pin;
+use std::task::{Context, Poll};
 use std::time::Duration;
 use tokio::sync::mpsc;
+use tokio::task::JoinHandle;
+use tokio_stream::wrappers::UnboundedReceiverStream;
+use tokio_util::sync::CancellationToken;
 
 const BASE_RETRY_DELAY_MS: u64 = 500;
 /// Maximum delay applied to a `Retry-After` header value.
@@ -107,7 +114,42 @@ fn retry_delay_ms(attempt: usize, headers: &HeaderMap) -> u64 {
     retry_after_delay_ms(headers).unwrap_or_else(|| exponential_retry_delay_ms(attempt))
 }
 
-pub(crate) async fn execute_sse_request<BuildRequest, SpawnHandler>(
+struct ManagedResponseStream {
+    inner: UnboundedReceiverStream<Result<UnifiedResponse>>,
+    handler_cancel: CancellationToken,
+    handler_task: Option<JoinHandle<()>>,
+}
+
+impl ManagedResponseStream {
+    fn new(
+        rx: mpsc::UnboundedReceiver<Result<UnifiedResponse>>,
+        handler_cancel: CancellationToken,
+        handler_task: JoinHandle<()>,
+    ) -> Self {
+        Self {
+            inner: UnboundedReceiverStream::new(rx),
+            handler_cancel,
+            handler_task: Some(handler_task),
+        }
+    }
+}
+
+impl Stream for ManagedResponseStream {
+    type Item = Result<UnifiedResponse>;
+
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        Pin::new(&mut self.inner).poll_next(cx)
+    }
+}
+
+impl Drop for ManagedResponseStream {
+    fn drop(&mut self) {
+        self.handler_cancel.cancel();
+        let _ = self.handler_task.take();
+    }
+}
+
+pub(crate) async fn execute_sse_request<BuildRequest, BuildHandler, HandlerFuture>(
     label: &str,
     url: &str,
     request_body: &serde_json::Value,
@@ -115,16 +157,17 @@ pub(crate) async fn execute_sse_request<BuildRequest, SpawnHandler>(
     ttft_timeout: Option<Duration>,
     trace: Option<ModelExchangeTraceConfig>,
     build_request: BuildRequest,
-    spawn_handler: SpawnHandler,
+    build_handler: BuildHandler,
 ) -> Result<StreamResponse>
 where
     BuildRequest: Fn() -> reqwest::RequestBuilder,
-    SpawnHandler: Fn(
+    BuildHandler: Fn(
         reqwest::Response,
         mpsc::UnboundedSender<Result<UnifiedResponse>>,
         Option<mpsc::UnboundedSender<String>>,
         Option<Duration>,
-    ),
+    ) -> HandlerFuture,
+    HandlerFuture: Future<Output = ()> + Send + 'static,
 {
     let mut last_error = None;
     for attempt in 0..max_tries {
@@ -288,10 +331,18 @@ where
         let (tx, rx) = mpsc::unbounded_channel();
         let (tx_raw, rx_raw) = mpsc::unbounded_channel();
         let remaining_ttft_timeout = remaining_ttft_timeout(request_start_time, ttft_timeout);
-        spawn_handler(response, tx, Some(tx_raw), remaining_ttft_timeout);
+        let handler_cancel = CancellationToken::new();
+        let handler_cancel_for_task = handler_cancel.clone();
+        let handler_future = build_handler(response, tx, Some(tx_raw), remaining_ttft_timeout);
+        let handler_task = tokio::spawn(async move {
+            tokio::select! {
+                _ = handler_cancel_for_task.cancelled() => {}
+                _ = handler_future => {}
+            }
+        });
 
         return Ok(StreamResponse {
-            stream: Box::pin(tokio_stream::wrappers::UnboundedReceiverStream::new(rx)),
+            stream: Box::pin(ManagedResponseStream::new(rx, handler_cancel, handler_task)),
             raw_sse_rx: Some(rx_raw),
             trace_handle,
         });
@@ -311,6 +362,10 @@ where
 mod tests {
     use super::*;
     use reqwest::header::HeaderValue;
+    use std::sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    };
 
     #[test]
     fn format_ttft_timeout_error_includes_timeout_seconds() {
@@ -331,6 +386,29 @@ mod tests {
         let remaining = remaining.expect("remaining timeout");
         assert!(remaining <= Duration::from_secs(3));
         assert!(remaining > Duration::from_secs(2));
+    }
+
+    #[tokio::test]
+    async fn managed_response_stream_drop_cancels_handler_task() {
+        let (_tx, rx) = mpsc::unbounded_channel();
+        let handler_cancel = CancellationToken::new();
+        let handler_cancel_for_task = handler_cancel.clone();
+        let observed_cancel = Arc::new(AtomicBool::new(false));
+        let observed_cancel_for_task = Arc::clone(&observed_cancel);
+        let handler_task = tokio::spawn(async move {
+            tokio::select! {
+                _ = handler_cancel_for_task.cancelled() => {
+                    observed_cancel_for_task.store(true, Ordering::SeqCst);
+                }
+                _ = tokio::time::sleep(Duration::from_secs(60)) => {}
+            }
+        });
+
+        let stream = ManagedResponseStream::new(rx, handler_cancel, handler_task);
+        drop(stream);
+
+        tokio::time::sleep(Duration::from_millis(20)).await;
+        assert!(observed_cancel.load(Ordering::SeqCst));
     }
 
     #[test]
