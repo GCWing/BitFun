@@ -220,7 +220,7 @@ pub(crate) fn should_retry_remote_scan_fallback_as_files_with_matches(
     primary_search_mode: SearchModeConfig,
     search_results: &SearchResults,
 ) -> bool {
-    let primary_has_details = !search_results.hits.is_empty()
+    let primary_has_details = !search_results.line_matches.is_empty()
         || !search_results.file_counts.is_empty()
         || !search_results.file_match_counts.is_empty()
         || !search_results.matched_paths.is_empty();
@@ -289,8 +289,9 @@ fn hex_encode(bytes: &[u8]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::workspace_search::flashgrep::protocol::LineMatch;
     use crate::workspace_search::flashgrep::{
-        FileCount, SearchBackend, SearchHit, SearchModeConfig, SearchResults,
+        FileCount, SearchBackend, SearchModeConfig, SearchResults,
     };
     use std::path::{Path, PathBuf};
 
@@ -450,16 +451,16 @@ mod tests {
             &with_file_counts,
         ));
 
-        let mut with_hits = search_results_with_counts(7, 12);
-        with_hits.hits.push(SearchHit {
+        let mut with_line_matches = search_results_with_counts(7, 12);
+        with_line_matches.line_matches.push(LineMatch {
             path: "/repo/src/lib.rs".to_string(),
-            matches: Vec::new(),
-            lines: Vec::new(),
+            line_number: 42,
+            line_text: Some("needle".to_string()),
         });
         assert!(!should_retry_remote_scan_fallback_as_files_with_matches(
             SearchBackend::ScanFallback,
             SearchModeConfig::LineMatches,
-            &with_hits,
+            &with_line_matches,
         ));
         assert!(!should_retry_remote_scan_fallback_as_files_with_matches(
             SearchBackend::IndexedClean,
@@ -492,7 +493,6 @@ mod tests {
             file_counts: Vec::new(),
             file_match_counts: Vec::new(),
             line_matches: Vec::new(),
-            hits: Vec::new(),
         }
     }
 

@@ -2,10 +2,10 @@
 
 mod client;
 pub mod error;
-mod protocol;
+pub(crate) mod protocol;
 mod repo_session;
 mod rpc_client;
-mod types;
+pub(crate) mod types;
 
 pub const FLASHGREP_LOG_TARGET: &str = "flashgrep";
 

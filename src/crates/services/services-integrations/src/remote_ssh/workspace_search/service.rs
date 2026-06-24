@@ -9,16 +9,15 @@ use crate::remote_ssh::{normalize_remote_workspace_path, RemoteWorkspaceEntry};
 use crate::workspace_search::flashgrep::error::AppError;
 use crate::workspace_search::flashgrep::{
     drain_content_length_messages, log_flashgrep_stderr_line_with_context, ClientCapabilities,
-    ClientInfo, ConsistencyMode, FlashgrepRepoSession, GlobOutcome, GlobParams, GlobRequest,
-    InitializeParams, OpenRepoParams, ProtocolClient, QuerySpec, RefreshPolicyConfig, RepoConfig,
-    RepoRef, RepoStatus, Request, Response, SearchBackend, SearchModeConfig, SearchOutcome,
-    SearchParams, SearchRequest, SearchResults, TaskRef, TaskStatus, FLASHGREP_LOG_TARGET,
+    ClientInfo, FlashgrepRepoSession, GlobOutcome, GlobParams, GlobRequest, InitializeParams,
+    OpenRepoParams, ProtocolClient, QuerySpec, RefreshPolicyConfig, RepoConfig, RepoRef,
+    RepoStatus, Request, Response, SearchBackend, SearchModeConfig, SearchOutcome, SearchParams,
+    SearchRequest, SearchResults, TaskRef, TaskStatus, FLASHGREP_LOG_TARGET,
 };
 use crate::workspace_search::result_mapping::convert_search_results;
 use crate::workspace_search::{
     ContentSearchRequest, ContentSearchResult, GlobSearchRequest, GlobSearchResult,
-    IndexTaskHandle, WorkspaceIndexStatus, WorkspaceSearchFileCount, WorkspaceSearchHit,
-    WorkspaceSearchRepoStatus,
+    IndexTaskHandle, WorkspaceIndexStatus, WorkspaceSearchFileCount, WorkspaceSearchRepoStatus,
 };
 use async_trait::async_trait;
 use bitfun_services_core::filesystem::FileSearchOutcome;
@@ -355,7 +354,6 @@ impl RemoteStdioRepoSession {
                     repo_id: self.repo_id.clone(),
                     query,
                     scope,
-                    consistency: ConsistencyMode::WorkspaceEventual,
                     allow_scan_fallback: true,
                 },
             })
@@ -633,10 +631,10 @@ impl RemoteWorkspaceSearchService {
 
         let mut results = convert_search_results(&raw_results, output_mode);
         log::debug!(
-            "Remote workspace content search converted: backend={:?}, repo_phase={:?}, hits={}, file_counts={}, file_match_counts={}, matched_paths={}, converted_results={}, matched_lines={}, matched_occurrences={}",
+            "Remote workspace content search converted: backend={:?}, repo_phase={:?}, line_matches={}, file_counts={}, file_match_counts={}, matched_paths={}, converted_results={}, matched_lines={}, matched_occurrences={}",
             backend,
             repo_status.phase,
-            raw_results.hits.len(),
+            raw_results.line_matches.len(),
             raw_results.file_counts.len(),
             raw_results.file_match_counts.len(),
             raw_results.matched_paths.len(),
@@ -659,12 +657,7 @@ impl RemoteWorkspaceSearchService {
                 .into_iter()
                 .map(WorkspaceSearchFileCount::from)
                 .collect(),
-            hits: raw_results
-                .hits
-                .clone()
-                .into_iter()
-                .map(WorkspaceSearchHit::from)
-                .collect(),
+            hits: Vec::new(),
             backend: backend.into(),
             repo_status: repo_status.into(),
             candidate_docs: raw_results.candidate_docs,
