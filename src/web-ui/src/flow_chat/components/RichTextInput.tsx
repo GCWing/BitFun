@@ -4,19 +4,36 @@
  */
 
 import React, { useRef, useEffect, useCallback, useState } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { Puzzle } from 'lucide-react';
 import type { ContextItem } from '../../shared/types/context';
 import { getRichTextExternalSyncAction } from './richTextInputSync';
 import {
   getWidgetPromptReferenceMatches,
   parseWidgetPromptReferenceToken,
 } from '@/tools/generative-widget/widgetPromptReference';
+import {
+  getSkillPromptReferenceMatches,
+  parseSkillPromptReferenceToken,
+} from '../utils/skillPromptReference';
 import './RichTextInput.scss';
+
+const SKILL_REFERENCE_BADGE_ICON = renderToStaticMarkup(
+  <Puzzle size={12} strokeWidth={2.2} aria-hidden="true" />,
+);
 
 /** @ mention state */
 export interface MentionState {
   isActive: boolean;
   query: string;
   startOffset: number;  // Position of the @ symbol in text
+}
+
+export interface InlineTriggerState {
+  isActive: boolean;
+  trigger: '/' | '$' | null;
+  query: string;
+  startOffset: number;
 }
 
 export interface RichTextInputProps
@@ -39,6 +56,8 @@ export interface RichTextInputProps
   onRemoveContext: (id: string) => void;
   /** Callback when @ mention state changes */
   onMentionStateChange?: (state: MentionState) => void;
+  /** Callback when inline trigger state changes for / or $ */
+  onInlineTriggerStateChange?: (state: InlineTriggerState) => void;
 }
 
 function isWhitespaceCharacter(char: string | undefined): boolean {
@@ -137,6 +156,7 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
   contexts,
   onRemoveContext,
   onMentionStateChange,
+  onInlineTriggerStateChange,
   ...restProps
 }, ref) => {
   const editorRef = useRef<HTMLDivElement>(null);
@@ -145,6 +165,12 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
   const isComposingRef = useRef(false);
   const lastContextIdsRef = useRef<Set<string>>(new Set());
   const mentionStateRef = useRef<MentionState>({ isActive: false, query: '', startOffset: 0 });
+  const inlineTriggerStateRef = useRef<InlineTriggerState>({
+    isActive: false,
+    trigger: null,
+    query: '',
+    startOffset: 0,
+  });
   const triggerSyncRef = useRef<(() => void) | null>(null);
 
   const closeMention = useCallback(() => {
@@ -155,6 +181,25 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
     mentionStateRef.current = { isActive: false, query: '', startOffset: 0 };
     onMentionStateChange?.({ isActive: false, query: '', startOffset: 0 });
   }, [onMentionStateChange]);
+
+  const closeInlineTrigger = useCallback(() => {
+    if (!inlineTriggerStateRef.current.isActive) {
+      return;
+    }
+
+    inlineTriggerStateRef.current = {
+      isActive: false,
+      trigger: null,
+      query: '',
+      startOffset: 0,
+    };
+    onInlineTriggerStateChange?.({
+      isActive: false,
+      trigger: null,
+      query: '',
+      startOffset: 0,
+    });
+  }, [onInlineTriggerStateChange]);
 
   // Create tag element with pill style
   const createTagElement = useCallback((context: ContextItem): HTMLSpanElement => {
@@ -238,9 +283,64 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
     return tag;
   }, [internalRef, removeInlineTokenElement]);
 
+  const createSkillReferenceElement = useCallback((token: string): HTMLSpanElement | null => {
+    const payload = parseSkillPromptReferenceToken(token);
+    if (!payload) {
+      return null;
+    }
+
+    const tag = document.createElement('span');
+    tag.className = 'rich-text-tag-pill rich-text-tag-pill--skill-ref';
+    tag.contentEditable = 'false';
+    tag.dataset.tagFormat = token;
+    tag.dataset.inlineTokenType = 'skill-ref';
+    tag.title = `Skill: ${payload.skillName}`;
+
+    const badge = document.createElement('span');
+    badge.className = 'rich-text-tag-pill__badge rich-text-tag-pill__badge--icon';
+    badge.innerHTML = SKILL_REFERENCE_BADGE_ICON;
+
+    const text = document.createElement('span');
+    text.className = 'rich-text-tag-pill__text rich-text-tag-pill__text--skill-ref';
+    text.textContent = payload.skillName;
+
+    const remove = document.createElement('button');
+    remove.className = 'rich-text-tag-pill__remove';
+    remove.textContent = '×';
+    remove.title = 'Remove';
+    remove.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      removeInlineTokenElement(tag);
+      requestAnimationFrame(() => {
+        internalRef.current?.focus();
+        triggerSyncRef.current?.();
+      });
+    };
+
+    tag.appendChild(badge);
+    tag.appendChild(text);
+    tag.appendChild(remove);
+
+    return tag;
+  }, [internalRef, removeInlineTokenElement]);
+
+  const createInlineTokenElement = useCallback((token: string): HTMLSpanElement | null => {
+    return createWidgetReferenceElement(token) ?? createSkillReferenceElement(token);
+  }, [createSkillReferenceElement, createWidgetReferenceElement]);
+
   const renderValueWithInlineTokens = useCallback((editor: HTMLElement, text: string) => {
     const fragment = document.createDocumentFragment();
-    const matches = getWidgetPromptReferenceMatches(text);
+    const matches = [
+      ...getWidgetPromptReferenceMatches(text).map(match => ({
+        ...match,
+        kind: 'widget-ref' as const,
+      })),
+      ...getSkillPromptReferenceMatches(text).map(match => ({
+        ...match,
+        kind: 'skill-ref' as const,
+      })),
+    ].sort((a, b) => a.start - b.start);
 
     if (matches.length === 0) {
       editor.textContent = text;
@@ -253,7 +353,9 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
         fragment.appendChild(document.createTextNode(text.slice(cursor, match.start)));
       }
 
-      const tokenElement = createWidgetReferenceElement(match.token);
+      const tokenElement = match.kind === 'widget-ref'
+        ? createWidgetReferenceElement(match.token)
+        : createSkillReferenceElement(match.token);
       if (tokenElement) {
         fragment.appendChild(tokenElement);
       } else {
@@ -267,7 +369,7 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
     }
 
     editor.replaceChildren(fragment);
-  }, [createWidgetReferenceElement]);
+  }, [createSkillReferenceElement, createWidgetReferenceElement]);
 
   /** Map textContent offsets to a DOM Range to replace only the @ span. */
   const getRangeByTextOffsets = useCallback((root: Node, start: number, end: number): Range | null => {
@@ -349,21 +451,21 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
     return sanitizeText(text).trim();
   }, [internalRef]);
 
-  // Detect @ mention
-  const detectMention = useCallback(() => {
+  // Detect @ mention plus inline / and $ triggers near the caret.
+  const detectActiveTrigger = useCallback(() => {
     if (!internalRef.current) return;
     
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0) {
-      // No selection, close mention
       closeMention();
+      closeInlineTrigger();
       return;
     }
     
     const range = selection.getRangeAt(0);
     if (!range.collapsed) {
-      // Non-collapsed selection, close mention
       closeMention();
+      closeInlineTrigger();
       return;
     }
     
@@ -393,41 +495,70 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
     
     const textBeforeCursor = fullText.slice(0, cursorPosition);
     
-    // Find the last @
-    const lastAtIndex = textBeforeCursor.lastIndexOf('@');
-    
-    if (lastAtIndex !== -1) {
-      const charBeforeAt = textBeforeCursor[lastAtIndex - 1];
-      if (!isWhitespaceCharacter(charBeforeAt)) {
-        closeMention();
-        return;
-      }
+    const candidates = ['@', '/', '$'] as const;
+    let selectedTrigger: (typeof candidates)[number] | null = null;
+    let selectedIndex = -1;
 
-      // Extract query after @ up to the cursor
-      const query = textBeforeCursor.slice(lastAtIndex + 1);
-      
-      // If query contains whitespace, the mention is complete
-      if (!query.includes(' ') && !query.includes('\n')) {
-        const newState: MentionState = {
-          isActive: true,
-          query,
-          startOffset: lastAtIndex,
-        };
-        
-        // Update only on state changes
-        if (!mentionStateRef.current.isActive || 
+    for (const trigger of candidates) {
+      const index = textBeforeCursor.lastIndexOf(trigger);
+      if (index > selectedIndex) {
+        selectedIndex = index;
+        selectedTrigger = trigger;
+      }
+    }
+
+    if (selectedTrigger !== null && selectedIndex !== -1) {
+      const charBeforeTrigger = textBeforeCursor[selectedIndex - 1];
+      const query = textBeforeCursor.slice(selectedIndex + 1);
+
+      if (
+        isWhitespaceCharacter(charBeforeTrigger) &&
+        !query.includes(' ') &&
+        !query.includes('\n')
+      ) {
+        if (selectedTrigger === '@') {
+          const newState: MentionState = {
+            isActive: true,
+            query,
+            startOffset: selectedIndex,
+          };
+
+          if (
+            !mentionStateRef.current.isActive ||
             mentionStateRef.current.query !== query ||
-            mentionStateRef.current.startOffset !== lastAtIndex) {
-          mentionStateRef.current = newState;
-          onMentionStateChange?.(newState);
+            mentionStateRef.current.startOffset !== selectedIndex
+          ) {
+            mentionStateRef.current = newState;
+            onMentionStateChange?.(newState);
+          }
+          closeInlineTrigger();
+          return;
+        }
+
+        closeMention();
+        const nextInlineTriggerState: InlineTriggerState = {
+          isActive: true,
+          trigger: selectedTrigger,
+          query,
+          startOffset: selectedIndex,
+        };
+        const currentInlineTriggerState = inlineTriggerStateRef.current;
+        if (
+          currentInlineTriggerState.isActive !== nextInlineTriggerState.isActive ||
+          currentInlineTriggerState.trigger !== nextInlineTriggerState.trigger ||
+          currentInlineTriggerState.query !== nextInlineTriggerState.query ||
+          currentInlineTriggerState.startOffset !== nextInlineTriggerState.startOffset
+        ) {
+          inlineTriggerStateRef.current = nextInlineTriggerState;
+          onInlineTriggerStateChange?.(nextInlineTriggerState);
         }
         return;
       }
     }
-    
-    // No valid mention, close it
+
     closeMention();
-  }, [closeMention, internalRef, onMentionStateChange]);
+    closeInlineTrigger();
+  }, [closeInlineTrigger, closeMention, internalRef, onInlineTriggerStateChange, onMentionStateChange]);
 
   /** Compute the cursor's character offset within the editor. */
   const getCursorOffset = useCallback((editor: HTMLElement): number => {
@@ -518,9 +649,9 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
     
     // Ensure detection runs after DOM updates
     requestAnimationFrame(() => {
-      detectMention();
+      detectActiveTrigger();
     });
-  }, [contexts, detectMention, extractTextContent, getCursorOffset, internalRef, onChange, setCursorOffset]);
+  }, [contexts, detectActiveTrigger, extractTextContent, getCursorOffset, internalRef, onChange, setCursorOffset]);
 
   triggerSyncRef.current = handleInput;
 
@@ -559,8 +690,9 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
       return;
     }
     
-    // Plain text paste - close any active mention to prevent @ in pasted content from triggering mention mode
+    // Plain text paste - close active triggers so pasted marker characters do not immediately reopen pickers
     closeMention();
+    closeInlineTrigger();
     
     const text = e.clipboardData.getData('text/plain');
     const largePastePlaceholder = onLargePaste?.(text);
@@ -571,7 +703,7 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
     requestAnimationFrame(() => {
       isComposingRef.current = false;
     });
-  }, [closeMention, internalRef, onLargePaste]);
+  }, [closeInlineTrigger, closeMention, internalRef, onLargePaste]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     const nativeEvent = e.nativeEvent as KeyboardEvent;
@@ -679,6 +811,90 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
     closeMention();
   }, [closeMention, createTagElement, getRangeByTextOffsets, handleInput, insertTagAtCursor, internalRef]);
 
+  const replaceActiveInlineTrigger = useCallback((replacementText: string) => {
+    if (!internalRef.current || !inlineTriggerStateRef.current.isActive) {
+      return;
+    }
+
+    const editor = internalRef.current;
+    const triggerStart = inlineTriggerStateRef.current.startOffset;
+    const triggerEnd = triggerStart + 1 + inlineTriggerStateRef.current.query.length;
+    const range = getRangeByTextOffsets(editor, triggerStart, triggerEnd);
+    if (!range) {
+      return;
+    }
+
+    range.deleteContents();
+    const selection = window.getSelection();
+    if (replacementText) {
+      const inlineTokenElement = createInlineTokenElement(replacementText);
+      const replacementNode = inlineTokenElement ?? document.createTextNode(replacementText);
+      const trailingSpace = document.createTextNode(' ');
+      const fragment = document.createDocumentFragment();
+      fragment.appendChild(replacementNode);
+      fragment.appendChild(trailingSpace);
+      range.insertNode(fragment);
+
+      if (selection) {
+        const newRange = document.createRange();
+        newRange.setStartAfter(trailingSpace);
+        newRange.setEndAfter(trailingSpace);
+        selection.removeAllRanges();
+        selection.addRange(newRange);
+      }
+    } else if (selection) {
+      const newRange = document.createRange();
+      newRange.setStart(range.startContainer, range.startOffset);
+      newRange.collapse(true);
+      selection.removeAllRanges();
+      selection.addRange(newRange);
+    }
+
+    editor.focus();
+    closeInlineTrigger();
+    handleInput();
+  }, [closeInlineTrigger, createInlineTokenElement, getRangeByTextOffsets, handleInput, internalRef]);
+
+  const appendInlineTokenAtEnd = useCallback((token: string) => {
+    if (!internalRef.current) {
+      return;
+    }
+
+    const editor = internalRef.current;
+    const currentTextContent = extractTextContent();
+    if (!currentTextContent) {
+      editor.replaceChildren();
+    }
+    editor.focus();
+
+    const range = document.createRange();
+    range.selectNodeContents(editor);
+    range.collapse(false);
+
+    const fragment = document.createDocumentFragment();
+    if (currentTextContent) {
+      fragment.appendChild(document.createTextNode(' '));
+    }
+
+    const inlineTokenElement = createInlineTokenElement(token);
+    fragment.appendChild(inlineTokenElement ?? document.createTextNode(token));
+
+    const trailingSpace = document.createTextNode(' ');
+    fragment.appendChild(trailingSpace);
+    range.insertNode(fragment);
+
+    const selection = window.getSelection();
+    if (selection) {
+      const newRange = document.createRange();
+      newRange.setStartAfter(trailingSpace);
+      newRange.setEndAfter(trailingSpace);
+      selection.removeAllRanges();
+      selection.addRange(newRange);
+    }
+
+    handleInput();
+  }, [createInlineTokenElement, extractTextContent, handleInput, internalRef]);
+
   /** Insert @ at caret and open the file/folder mention picker (e.g. from ChatInput + menu). */
   const openMention = useCallback(() => {
     const editor = internalRef.current;
@@ -707,19 +923,22 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
 
     document.execCommand('insertText', false, mentionTriggerText);
     requestAnimationFrame(() => {
-      detectMention();
+      detectActiveTrigger();
     });
-  }, [detectMention, getCursorOffset, internalRef]);
+  }, [detectActiveTrigger, getCursorOffset, internalRef]);
 
   // Expose methods to parent
   useEffect(() => {
     if (internalRef.current) {
       (internalRef.current as any).insertTag = insertTagAtCursor;
       (internalRef.current as any).insertTagReplacingMention = insertTagReplacingMention;
+      (internalRef.current as any).replaceActiveInlineTrigger = replaceActiveInlineTrigger;
+      (internalRef.current as any).appendInlineTokenAtEnd = appendInlineTokenAtEnd;
       (internalRef.current as any).openMention = openMention;
       (internalRef.current as any).closeMention = closeMention;
+      (internalRef.current as any).closeInlineTrigger = closeInlineTrigger;
     }
-  }, [closeMention, insertTagAtCursor, insertTagReplacingMention, openMention, internalRef]);
+  }, [appendInlineTokenAtEnd, closeInlineTrigger, closeMention, insertTagAtCursor, insertTagReplacingMention, openMention, replaceActiveInlineTrigger, internalRef]);
 
   // Initialize and sync value changes from external sources.
   // This editor is effectively controlled by comparing the parent's value
@@ -801,9 +1020,10 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
     // Delay closing to allow picker clicks
     setTimeout(() => {
       closeMention();
+      closeInlineTrigger();
     }, 200);
     onBlur?.();
-  }, [closeMention, onBlur]);
+  }, [closeInlineTrigger, closeMention, onBlur]);
 
   // Handle IME composition
   const handleCompositionStart = useCallback(() => {

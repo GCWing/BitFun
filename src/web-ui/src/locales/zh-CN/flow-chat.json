@@ -555,6 +555,7 @@
     "boostStartBtw": "发起侧问",
     "boostAddContext": "引用文件或文件夹",
     "boostSkills": "Skills",
+    "modeSection": "模式",
     "boostSkillsLoading": "正在加载 Skills…",
     "boostSkillsEmpty": "暂无已启用的 Skill",
     "openSkillsLibrary": "管理 Skills…",

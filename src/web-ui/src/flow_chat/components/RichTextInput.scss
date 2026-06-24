@@ -195,6 +195,15 @@
   }
 }
 
+.rich-text-tag-pill--skill-ref {
+  background: color-mix(in srgb, var(--color-warning) 16%, transparent);
+  color: color-mix(in srgb, var(--color-warning) 96%, var(--color-text-primary));
+
+  &:hover {
+    background: color-mix(in srgb, var(--color-warning) 24%, transparent);
+  }
+}
+
 .rich-text-tag-pill__badge {
   display: inline-flex;
   align-items: center;
@@ -211,9 +220,31 @@
   text-transform: uppercase;
 }
 
+.rich-text-tag-pill__badge--icon {
+  min-width: 18px;
+  padding: 0 3px;
+  background: transparent;
+  letter-spacing: 0;
+  text-transform: none;
+
+  svg {
+    width: 12px;
+    height: 12px;
+    stroke: currentColor;
+    fill: none;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    flex-shrink: 0;
+  }
+}
+
 .rich-text-tag-pill__text--widget-ref {
   font-family: $font-family-sans;
   max-width: 260px;
+}
+
+.rich-text-tag-pill__text--skill-ref {
+  max-width: 220px;
 }
 
 .rich-text-tag-pill__remove {

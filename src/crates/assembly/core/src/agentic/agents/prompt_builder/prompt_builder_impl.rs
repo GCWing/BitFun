@@ -572,6 +572,7 @@ mod tests {
             .expect("runtime context should build");
 
         assert!(skill_listing.contains("# Skill Listing"));
+        assert!(skill_listing.contains("A skill is a set of instructions provided through a `SKILL.md` source."));
         assert!(skill_listing.contains("<available_skills>"));
         assert!(!skill_listing.contains("# Agent Listing"));
         assert!(agent_listing.contains("# Agent Listing"));

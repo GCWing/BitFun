@@ -555,6 +555,7 @@
     "boostStartBtw": "Start side question",
     "boostAddContext": "Reference file or folder",
     "boostSkills": "Skills",
+    "modeSection": "Modes",
     "boostSkillsLoading": "Loading skills…",
     "boostSkillsEmpty": "No enabled skills",
     "openSkillsLibrary": "Manage skills…",
