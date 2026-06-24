@@ -15,7 +15,7 @@ afterEach(() => {
 });
 
 describe('startupOverlay', () => {
-  it('fades and removes the existing startup overlay', async () => {
+  it('removes the existing startup overlay when its exit animation completes', async () => {
     vi.useFakeTimers();
     document.body.innerHTML = '<div id="bitfun-startup-overlay"></div>';
 
@@ -25,7 +25,22 @@ describe('startupOverlay', () => {
     expect(overlay?.classList.contains('bitfun-startup-overlay--exiting')).toBe(true);
     expect(overlay?.getAttribute('aria-hidden')).toBe('true');
 
-    await vi.advanceTimersByTimeAsync(650);
+    overlay?.dispatchEvent(new Event('animationend'));
+    await hidden;
+
+    expect(isStartupOverlayPresent()).toBe(false);
+  });
+
+  it('falls back to a timer when the exit animation event is not delivered', async () => {
+    vi.useFakeTimers();
+    document.body.innerHTML = '<div id="bitfun-startup-overlay"></div>';
+
+    const hidden = hideStartupOverlay();
+
+    await vi.advanceTimersByTimeAsync(449);
+    expect(isStartupOverlayPresent()).toBe(true);
+
+    await vi.advanceTimersByTimeAsync(1);
     await hidden;
 
     expect(isStartupOverlayPresent()).toBe(false);

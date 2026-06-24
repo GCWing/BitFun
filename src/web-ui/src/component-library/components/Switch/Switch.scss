@@ -100,17 +100,17 @@
 
   &__input:checked + &__track &__thumb {
     left: calc(100% - 18px);
-    background: var(--btn-primary-bg, var(--color-accent-500));
-    border-color: var(--btn-primary-bg, var(--color-accent-500));
+    background: var(--btn-primary-bg);
+    border-color: var(--btn-primary-bg);
   }
 
   :root[data-theme-type='dark'] &__input:checked + &__track &__thumb {
     background: var(--color-accent-500);
-    border-color: var(--color-accent-600, #{tokens.$color-accent-600});
+    border-color: var(--color-accent-600);
   }
 
   &__input:focus-visible + &__track {
-    outline: 2px solid var(--color-accent-400, #{tokens.$color-accent-400});
+    outline: 2px solid var(--color-accent-400);
     outline-offset: 2px;
   }
 
@@ -133,8 +133,8 @@
   }
 
   &:hover:not(&--disabled):not(&--loading) &__input:checked + &__track &__thumb {
-    background: var(--btn-primary-hover-bg, var(--color-accent-500));
-    border-color: var(--btn-primary-hover-bg, var(--color-accent-500));
+    background: var(--btn-primary-hover-bg);
+    border-color: var(--btn-primary-hover-bg);
   }
 
   :root[data-theme-type='dark'] &:hover:not(&--disabled):not(&--loading) &__input:checked + &__track &__thumb {
@@ -143,7 +143,7 @@
   }
 
   &__input:checked + &__track &__loading {
-    color: rgba(255, 255, 255, 0.92);
+    color: var(--color-overlay-white-92);
   }
 
   &__input:active:not(:disabled) + &__track {
@@ -159,7 +159,7 @@
   &__label {
     font-size: var(--font-size-sm);
     font-weight: tokens.$font-weight-medium;
-    color: var(--color-text-primary, tokens.$color-text-primary);
+    color: var(--color-text-primary);
     line-height: tokens.$line-height-base;
   }
 

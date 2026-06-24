@@ -7,6 +7,7 @@ export * from './DeleteCommand';
 export * from './CopyPathCommand';
 export * from './CopyRelativePathCommand';
 export * from './RevealInExplorerCommand';
+export * from './OpenHtmlInBrowserCommand';
 
 import { NewFileCommand } from './NewFileCommand';
 import { NewFolderCommand } from './NewFolderCommand';
@@ -15,6 +16,7 @@ import { DeleteFileCommand } from './DeleteCommand';
 import { CopyPathCommand } from './CopyPathCommand';
 import { CopyRelativePathCommand } from './CopyRelativePathCommand';
 import { RevealInExplorerCommand } from './RevealInExplorerCommand';
+import { OpenHtmlInBrowserCommand } from './OpenHtmlInBrowserCommand';
 
  
 export function getFileCommands() {
@@ -25,7 +27,8 @@ export function getFileCommands() {
     new DeleteFileCommand(),
     new CopyPathCommand(),
     new CopyRelativePathCommand(),
-    new RevealInExplorerCommand()
+    new RevealInExplorerCommand(),
+    new OpenHtmlInBrowserCommand()
   ];
 }
 

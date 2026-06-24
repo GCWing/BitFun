@@ -83,7 +83,7 @@
       opacity: 1;
 
       &:hover {
-        background: rgba(239, 68, 68, 0.2);
+        background: color-mix(in srgb, var(--color-error) 20%, transparent);
         color: var(--color-error);
       }
     }
@@ -162,10 +162,10 @@
 
       &--active {
         background: linear-gradient(135deg,
-          rgba(96, 165, 250, 0.9) 0%,
+          color-mix(in srgb, var(--color-accent-500) 90%, transparent) 0%,
           var(--color-accent-800) 100%);
         color: var(--color-static-white);
-        box-shadow: 0 4px 12px rgba(96, 165, 250, 0.3);
+        box-shadow: 0 4px 12px color-mix(in srgb, var(--color-accent-500) 30%, transparent);
       }
     }
   }
@@ -201,16 +201,16 @@
         background: linear-gradient(135deg,
           tokens.$color-purple-200 0%,
           tokens.$color-purple-300 100%);
-        box-shadow: 0 2px 8px rgba(139, 92, 246, 0.2);
+        box-shadow: 0 2px 8px color-mix(in srgb, var(--color-purple-500) 20%, transparent);
       }
     }
 
     &.bitfun-tabs--pill {
       .bitfun-tabs__tab--active {
         background: linear-gradient(135deg,
-          rgba(139, 92, 246, 0.9) 0%,
+          color-mix(in srgb, var(--color-purple-500) 90%, transparent) 0%,
           var(--color-purple-800) 100%);
-        box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+        box-shadow: 0 4px 12px color-mix(in srgb, var(--color-purple-500) 30%, transparent);
       }
     }
   }
@@ -252,8 +252,8 @@
           tokens.$color-accent-600 0%,
           tokens.$color-purple-600 100%);
         box-shadow:
-          0 4px 12px rgba(96, 165, 250, 0.2),
-          0 4px 12px rgba(139, 92, 246, 0.2);
+          0 4px 12px color-mix(in srgb, var(--color-accent-500) 20%, transparent),
+          0 4px 12px color-mix(in srgb, var(--color-purple-500) 20%, transparent);
       }
     }
   }

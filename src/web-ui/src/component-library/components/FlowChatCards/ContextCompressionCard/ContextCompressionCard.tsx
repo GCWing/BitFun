@@ -6,6 +6,7 @@
 import React from 'react';
 import { Loader2, CheckCircle, XCircle, Archive } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n';
+import { UI_EXCEPTION_ACCENTS } from '@/shared/theme/uiExceptionAccents';
 import { BaseToolCard, BaseToolCardProps } from '../BaseToolCard';
 import './ContextCompressionCard.scss';
 
@@ -114,7 +115,7 @@ export const ContextCompressionCard: React.FC<ContextCompressionCardProps> = ({
       displayMode={displayMode}
       input={input}
       result={result}
-      primaryColor="#a855f7"
+      primaryColor={UI_EXCEPTION_ACCENTS.contextCompression}
       className="context-compression-card"
       {...baseProps}
     >

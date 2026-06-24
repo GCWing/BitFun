@@ -52,7 +52,7 @@ vi.mock('../../store/FlowChatStore', () => ({
   },
 }));
 
-vi.mock('../../services/openBtwSession', () => ({
+vi.mock('../../services/btwSessionPane', () => ({
   ensureBtwSessionAvailable: (...args: unknown[]) => ensureBtwSessionAvailableMock(...args),
 }));
 

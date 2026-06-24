@@ -2,15 +2,17 @@
  * User message item styles (BEM).
  */
 
+@use '../../../component-library/styles/tokens.scss' as tokens;
+
 .user-message-item {
-  padding: var(--flowchat-user-message-pad-y, 0.32rem) var(--flowchat-user-message-pad-x, 0.75rem);
+  padding: var(--flowchat-user-message-pad-y) var(--flowchat-user-message-pad-x);
   background: color-mix(in srgb, var(--element-bg-medium) 86%, var(--color-bg-flowchat));
-  border: 1px solid color-mix(in srgb, var(--border-muted, transparent) 38%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border-muted) 38%, transparent);
   border-radius: var(--flowchat-card-radius);
   margin:
     0.06rem
     var(--flowchat-content-inline-pad)
-    var(--flowchat-turn-gap, 0.46rem)
+    var(--flowchat-turn-gap)
     var(--flowchat-content-inline-pad);
   box-shadow: 0 1px 0 color-mix(in srgb, var(--color-static-white) 4%, transparent) inset;
   transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
@@ -19,7 +21,7 @@
   
   &:hover {
     background: color-mix(in srgb, var(--element-bg-medium) 92%, var(--color-bg-flowchat));
-    border-color: color-mix(in srgb, var(--border-muted, transparent) 56%, transparent);
+    border-color: color-mix(in srgb, var(--border-muted) 56%, transparent);
 
     .user-message-item__copy-btn {
       opacity: 1;
@@ -427,7 +429,7 @@
   position: fixed;
   inset: 0;
   z-index: 9999;
-  background: rgba(0, 0, 0, 0.85);
+  background: tokens.$modal-backdrop;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -459,7 +461,7 @@
   transition: background 0.15s ease;
 
   &:hover {
-    background: rgba(255, 255, 255, 0.3);
+    background: rgba(var(--color-static-white-rgb), 0.3);
   }
 }
 

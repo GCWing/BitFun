@@ -1,4 +1,4 @@
-use super::types::AgentEntry;
+use super::types::{AgentEntry, AgentSource};
 use super::visibility::SubagentVisibilityPolicy;
 use super::AgentRegistry;
 use crate::agentic::agents::registry::catalog::builtin_agent_specs;
@@ -30,6 +30,7 @@ impl AgentRegistry {
                 id,
                 AgentEntry {
                     category,
+                    source: AgentSource::Builtin,
                     subagent_source,
                     agent,
                     visibility_policy,
@@ -61,6 +62,7 @@ impl AgentRegistry {
         Self {
             agents: std::sync::RwLock::new(Self::build_builtin_agents()),
             project_subagents: std::sync::RwLock::new(HashMap::new()),
+            user_custom_agents_loaded: std::sync::RwLock::new(false),
         }
     }
 
@@ -69,8 +71,9 @@ impl AgentRegistry {
         &self,
         agent: Arc<dyn Agent>,
         category: AgentCategory,
+        source: AgentSource,
         subagent_source: Option<SubAgentSource>,
-        custom_config: Option<super::types::CustomSubagentConfig>,
+        custom_config: Option<super::types::CustomAgentConfig>,
     ) {
         let id = agent.id().to_string();
         let visibility_policy = SubagentVisibilityPolicy::public();
@@ -83,6 +86,7 @@ impl AgentRegistry {
             id,
             AgentEntry {
                 category,
+                source,
                 subagent_source,
                 agent,
                 visibility_policy,

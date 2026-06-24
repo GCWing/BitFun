@@ -22,8 +22,6 @@ const AssistantCard: React.FC<AssistantCardProps> = ({ workspace, onClick, onNew
   const emoji = identity?.emoji?.trim() ?? '';
   const creature = identity?.creature?.trim() || '';
   const vibe = identity?.vibe?.trim() || '';
-  const modelPrimary = identity?.modelPrimary?.trim() || '';
-  const modelFast = identity?.modelFast?.trim() || '';
 
   const gradient = getCardGradient(workspace.id || name);
 
@@ -67,8 +65,6 @@ const AssistantCard: React.FC<AssistantCardProps> = ({ workspace, onClick, onNew
           </div>
           <div className="assistant-card__badges">
             {creature && <Badge variant="neutral">{creature}</Badge>}
-            {modelPrimary && <Badge variant="accent">{modelPrimary}</Badge>}
-            {modelFast && <Badge variant="neutral">{modelFast}</Badge>}
           </div>
         </div>
       </div>

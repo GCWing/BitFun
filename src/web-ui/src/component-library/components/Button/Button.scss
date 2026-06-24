@@ -22,26 +22,26 @@
   transition: all var(--motion-fast) var(--easing-standard);
 
   &:focus-visible {
-    outline: 2px solid rgba(96, 165, 250, 0.5);
+    outline: 2px solid color-mix(in srgb, var(--color-accent-500) 50%, transparent);
     outline-offset: 1px;
   }
 
   &-sm {
-    height: var(--button-height-sm, 32px);
+    height: var(--button-height-sm);
     padding: 0 var(--size-gap-3);
     font-size: var(--font-size-sm);
   }
 
   &-base {
-    height: var(--button-height-base, 40px);
+    height: var(--button-height-base);
     padding: 0 var(--size-gap-4);
-    font-size: var(--font-size-base, 15px);
+    font-size: var(--font-size-base);
   }
 
   &-lg {
-    height: var(--button-height-lg, 48px);
+    height: var(--button-height-lg);
     padding: 0 var(--size-gap-6);
-    font-size: var(--font-size-lg, 16px);
+    font-size: var(--font-size-lg);
   }
 
   &:hover:not(:disabled) {
@@ -74,7 +74,7 @@
     &:focus-visible {
       outline-color: color-mix(
         in srgb,
-        var(--btn-primary-color, var(--color-accent-500)) 55%,
+        var(--btn-primary-color) 55%,
         transparent
       );
     }
@@ -128,15 +128,15 @@
 
   &-icon-only {
     padding: 0;
-    width: var(--button-height-base, 40px);
+    width: var(--button-height-base);
     aspect-ratio: 1;
 
     &.btn-sm {
-      width: var(--button-height-sm, 32px);
+      width: var(--button-height-sm);
     }
 
     &.btn-lg {
-      width: var(--button-height-lg, 48px);
+      width: var(--button-height-lg);
     }
   }
 
@@ -184,48 +184,48 @@
   }
 
   &-ai {
-    background: rgba(139, 92, 246, 0.18);
-    color: tokens.$color-purple-500;
+    background: color-mix(in srgb, var(--color-purple-500) 18%, transparent);
+    color: var(--color-purple-500);
 
     &:hover {
-      background: rgba(139, 92, 246, 0.28);
+      background: color-mix(in srgb, var(--color-purple-500) 28%, transparent);
       color: var(--color-static-white);
 
       svg {
-        color: tokens.$color-purple-500;
+        color: var(--color-purple-500);
       }
     }
 
     &:active {
-      background: rgba(139, 92, 246, 0.22);
+      background: color-mix(in srgb, var(--color-purple-500) 22%, transparent);
     }
   }
 
   &-danger {
-    background: rgba(199, 112, 112, 0.18);
+    background: rgba(var(--component-action-danger-rgb), 0.18);
     color: var(--color-error);
 
     &:hover {
-      background: rgba(199, 112, 112, 0.28);
+      background: rgba(var(--component-action-danger-rgb), 0.28);
       color: var(--color-static-white);
     }
 
     &:active {
-      background: rgba(199, 112, 112, 0.22);
+      background: rgba(var(--component-action-danger-rgb), 0.22);
     }
   }
 
   &-success {
-    background: rgba(110, 184, 140, 0.18);
+    background: rgba(var(--component-action-success-rgb), 0.18);
     color: var(--color-success);
 
     &:hover {
-      background: rgba(110, 184, 140, 0.28);
+      background: rgba(var(--component-action-success-rgb), 0.28);
       color: var(--color-static-white);
     }
 
     &:active {
-      background: rgba(110, 184, 140, 0.22);
+      background: rgba(var(--component-action-success-rgb), 0.22);
     }
   }
 

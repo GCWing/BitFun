@@ -65,7 +65,7 @@ function LoadingGlyph() {
   );
 }
 
-export interface SearchProps {
+export interface SearchProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'onChange' | 'onFocus' | 'onBlur' | 'onKeyDown'> {
   value?: string;
   defaultValue?: string;
   placeholder?: string;
@@ -125,6 +125,7 @@ export const Search = forwardRef<HTMLInputElement, SearchProps>(({
   inputAriaLabel,
   ariaControls,
   ariaExpanded,
+  ...rootProps
 }, ref) => {
   const { t } = useI18n('components');
   
@@ -225,7 +226,7 @@ export const Search = forwardRef<HTMLInputElement, SearchProps>(({
     .join(' ');
 
   return (
-    <div className={classNames}>
+    <div {...rootProps} className={classNames}>
       <div 
         className="search__wrapper"
         onMouseEnter={() => setIsHovered(true)}

@@ -10,7 +10,7 @@ import { useMyAgentStore } from '@/app/scenes/my-agent/myAgentStore';
 import { useNurseryStore } from '@/app/scenes/profile/nurseryStore';
 import { flowChatStore } from '@/flow_chat/store/FlowChatStore';
 import { findWorkspaceForSession } from '@/flow_chat/utils/workspaceScope';
-import { openMainSession } from '@/flow_chat/services/openBtwSession';
+import { openMainSession } from '@/flow_chat/services/sessionActivation';
 import type { FlowChatState, Session } from '@/flow_chat/types/flow-chat';
 import type { SessionMetadata } from '@/shared/types/session-history';
 import type { WorkspaceInfo } from '@/shared/types';

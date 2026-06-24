@@ -485,7 +485,7 @@
     "openWorkspaceFolderFailed": "打开工作区文件夹失败：{{error}}",
     "spaceToActivate": "按<space>空格键</space>快速键入",
     "assistantPlaceholder": "给 {{name}} 发送消息...",
-    "sendHint": "Enter 发送 / Shift+Enter 换行"
+    "sendHint": "Enter 发送 / Ctrl+Enter 或 Shift+Enter 换行"
   },
   "workspaceStrip": {
     "branchTooltipUnavailable": "非 Git 仓库或当前无分支"
@@ -555,13 +555,20 @@
     "boostStartBtw": "发起侧问",
     "boostAddContext": "引用文件或文件夹",
     "boostSkills": "Skills",
+    "modeSection": "模式",
     "boostSkillsLoading": "正在加载 Skills…",
     "boostSkillsEmpty": "暂无已启用的 Skill",
     "openSkillsLibrary": "管理 Skills…",
     "insertSkillLine": "Please use the Skill tool with command \"{{name}}\".",
     "addModeMenuTitle": "附加模式",
+    "createCustomMode": "自定义模式",
     "resetToAgentic": "恢复默认模式",
     "noIncrementalModes": "暂无可附加模式",
+    "defaultModeSetTooltip": "将 {{mode}} 设为新聊天默认模式",
+    "defaultModeUnsetTooltip": "默认模式覆盖已启用，点击清除",
+    "defaultModeSet": "已将 {{mode}} 设为新聊天默认模式。",
+    "defaultModeCleared": "已清除默认模式覆盖。",
+    "defaultModeSaveFailed": "保存默认模式失败。",
     "switchMode": "切换模式",
     "promptCacheGuardTitle": "切换该模式会重置提示词缓存复用",
     "promptCacheGuardBody": "下一次请求将从 {{fromMode}} 切换到 {{toMode}}，当前会话将无法继续复用现有的提示词缓存。要继续发送吗？",

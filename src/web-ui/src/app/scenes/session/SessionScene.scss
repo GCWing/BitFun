@@ -130,8 +130,8 @@
       inset: 0;
       background: linear-gradient(
         to right,
-        rgba(88, 166, 255, 0.25) 0%,
-        rgba(88, 166, 255, 0.12) 50%,
+        rgba(var(--session-pane-resizer-accent-rgb), 0.25) 0%,
+        rgba(var(--session-pane-resizer-accent-rgb), 0.12) 50%,
         transparent 100%
       );
       pointer-events: none;
@@ -140,12 +140,12 @@
     }
 
     &::after {
-      content: var(--panel-collapse-hint-right, 'Release to collapse');
+      content: var(--panel-collapse-hint-right);
       position: absolute;
       left: 50%;
       top: 50%;
       transform: translate(-50%, -50%);
-      color: rgba(88, 166, 255, 0.9);
+      color: rgba(var(--session-pane-resizer-accent-rgb), 0.9);
       font-size: var(--flowchat-font-size-sm);
       font-weight: 600;
       pointer-events: none;
@@ -216,7 +216,7 @@
   }
 
   &__icon {
-    color: rgba(128, 128, 128, 0.6);
+    color: rgba(var(--session-pane-resizer-muted-rgb), 0.6);
     transition: color $motion-base $easing-standard;
   }
 
@@ -225,9 +225,9 @@
     .bitfun-pane-resizer__line {
       background: linear-gradient(180deg,
         transparent 0%,
-        rgba(88, 166, 255, 0.4) 20%,
-        rgba(88, 166, 255, 0.8) 50%,
-        rgba(88, 166, 255, 0.4) 80%,
+        rgba(var(--session-pane-resizer-accent-rgb), 0.4) 20%,
+        rgba(var(--session-pane-resizer-accent-rgb), 0.8) 50%,
+        rgba(var(--session-pane-resizer-accent-rgb), 0.4) 80%,
         transparent 100%
       );
       width: 2px;
@@ -235,25 +235,25 @@
       opacity: 1;
     }
     .bitfun-pane-resizer__handle { opacity: 1; }
-    .bitfun-pane-resizer__icon { color: rgba(88, 166, 255, 0.9); }
+    .bitfun-pane-resizer__icon { color: rgba(var(--session-pane-resizer-accent-rgb), 0.9); }
   }
 
   &--dragging {
     .bitfun-pane-resizer__line {
       background: linear-gradient(180deg,
         transparent 0%,
-        rgba(88, 166, 255, 0.6) 20%,
-        rgba(88, 166, 255, 1) 50%,
-        rgba(88, 166, 255, 0.6) 80%,
+        rgba(var(--session-pane-resizer-accent-rgb), 0.6) 20%,
+        rgba(var(--session-pane-resizer-accent-rgb), 1) 50%,
+        rgba(var(--session-pane-resizer-accent-rgb), 0.6) 80%,
         transparent 100%
       );
-      box-shadow: 0 0 12px rgba(88, 166, 255, 0.5);
+      box-shadow: 0 0 12px rgba(var(--session-pane-resizer-accent-rgb), 0.5);
       width: 2px;
       height: 60px;
       opacity: 1;
     }
     .bitfun-pane-resizer__handle { opacity: 1; }
-    .bitfun-pane-resizer__icon { color: rgba(88, 166, 255, 1); }
+    .bitfun-pane-resizer__icon { color: rgba(var(--session-pane-resizer-accent-rgb), 1); }
   }
 
   &:focus {
@@ -261,12 +261,12 @@
     .bitfun-pane-resizer__line {
       background: linear-gradient(180deg,
         transparent 0%,
-        rgba(88, 166, 255, 0.5) 20%,
-        rgba(88, 166, 255, 0.9) 50%,
-        rgba(88, 166, 255, 0.5) 80%,
+        rgba(var(--session-pane-resizer-accent-rgb), 0.5) 20%,
+        rgba(var(--session-pane-resizer-accent-rgb), 0.9) 50%,
+        rgba(var(--session-pane-resizer-accent-rgb), 0.5) 80%,
         transparent 100%
       );
-      box-shadow: 0 0 8px rgba(88, 166, 255, 0.4);
+      box-shadow: 0 0 8px rgba(var(--session-pane-resizer-accent-rgb), 0.4);
       width: 2px;
       height: 55px;
       opacity: 1;
@@ -276,7 +276,7 @@
 
   &:focus-visible {
     .bitfun-pane-resizer__line {
-      outline: 2px solid rgba(88, 166, 255, 0.8);
+      outline: 2px solid rgba(var(--session-pane-resizer-accent-rgb), 0.8);
       outline-offset: 2px;
     }
   }
@@ -367,7 +367,7 @@
   }
 
   &__icon {
-    color: rgba(128, 128, 128, 0.6);
+    color: rgba(var(--session-pane-resizer-muted-rgb), 0.6);
     transition: color $motion-base $easing-standard;
   }
 
@@ -376,9 +376,9 @@
     .bitfun-bottom-pane-resizer__line {
       background: linear-gradient(90deg,
         transparent 0%,
-        rgba(88, 166, 255, 0.4) 20%,
-        rgba(88, 166, 255, 0.8) 50%,
-        rgba(88, 166, 255, 0.4) 80%,
+        rgba(var(--session-pane-resizer-accent-rgb), 0.4) 20%,
+        rgba(var(--session-pane-resizer-accent-rgb), 0.8) 50%,
+        rgba(var(--session-pane-resizer-accent-rgb), 0.4) 80%,
         transparent 100%
       );
       height: 2px;
@@ -386,25 +386,25 @@
       opacity: 1;
     }
     .bitfun-bottom-pane-resizer__handle { opacity: 1; }
-    .bitfun-bottom-pane-resizer__icon { color: rgba(88, 166, 255, 0.9); }
+    .bitfun-bottom-pane-resizer__icon { color: rgba(var(--session-pane-resizer-accent-rgb), 0.9); }
   }
 
   &--dragging {
     .bitfun-bottom-pane-resizer__line {
       background: linear-gradient(90deg,
         transparent 0%,
-        rgba(88, 166, 255, 0.6) 20%,
-        rgba(88, 166, 255, 1) 50%,
-        rgba(88, 166, 255, 0.6) 80%,
+        rgba(var(--session-pane-resizer-accent-rgb), 0.6) 20%,
+        rgba(var(--session-pane-resizer-accent-rgb), 1) 50%,
+        rgba(var(--session-pane-resizer-accent-rgb), 0.6) 80%,
         transparent 100%
       );
-      box-shadow: 0 0 12px rgba(88, 166, 255, 0.5);
+      box-shadow: 0 0 12px rgba(var(--session-pane-resizer-accent-rgb), 0.5);
       height: 2px;
       width: 86px;
       opacity: 1;
     }
     .bitfun-bottom-pane-resizer__handle { opacity: 1; }
-    .bitfun-bottom-pane-resizer__icon { color: rgba(88, 166, 255, 1); }
+    .bitfun-bottom-pane-resizer__icon { color: rgba(var(--session-pane-resizer-accent-rgb), 1); }
   }
 
   &:focus {
@@ -412,12 +412,12 @@
     .bitfun-bottom-pane-resizer__line {
       background: linear-gradient(90deg,
         transparent 0%,
-        rgba(88, 166, 255, 0.5) 20%,
-        rgba(88, 166, 255, 0.9) 50%,
-        rgba(88, 166, 255, 0.5) 80%,
+        rgba(var(--session-pane-resizer-accent-rgb), 0.5) 20%,
+        rgba(var(--session-pane-resizer-accent-rgb), 0.9) 50%,
+        rgba(var(--session-pane-resizer-accent-rgb), 0.5) 80%,
         transparent 100%
       );
-      box-shadow: 0 0 8px rgba(88, 166, 255, 0.4);
+      box-shadow: 0 0 8px rgba(var(--session-pane-resizer-accent-rgb), 0.4);
       height: 2px;
       width: 80px;
       opacity: 1;
@@ -427,7 +427,7 @@
 
   &:focus-visible {
     .bitfun-bottom-pane-resizer__line {
-      outline: 2px solid rgba(88, 166, 255, 0.8);
+      outline: 2px solid rgba(var(--session-pane-resizer-accent-rgb), 0.8);
       outline-offset: 2px;
     }
   }

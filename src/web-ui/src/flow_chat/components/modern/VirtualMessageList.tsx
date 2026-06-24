@@ -4126,7 +4126,10 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
 
   if (virtualItems.length === 0) {
     return (
-      <div className="virtual-message-list virtual-message-list--empty">
+      <div
+        className="virtual-message-list virtual-message-list--empty"
+        data-testid="flowchat-message-list-empty"
+      >
         <div className="empty-state">
           <p>No messages yet</p>
         </div>
@@ -4137,6 +4140,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef>((_, ref) => 
   return (
     <div
       className="virtual-message-list"
+      data-testid="flowchat-message-list"
     >
       {useStaticInitialHistoryList ? (
         <div

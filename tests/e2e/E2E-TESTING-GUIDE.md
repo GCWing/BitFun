@@ -197,6 +197,38 @@ pnpm run desktop:build:release-fast
 cross-env E2E_TEST_WORKSPACE=<workspace-path> BITFUN_E2E_PERF_SESSION_ID=perf-long-session-000 pnpm run e2e:test:perf:release-fast
 ```
 
+For cold-start outlier checks, prefer the focused stability runner instead of
+the full perf spec:
+
+```bash
+pnpm run desktop:build:release-fast
+cross-env E2E_TEST_WORKSPACE=<workspace-path> pnpm run e2e:test:perf:startup-stability:release-fast
+```
+
+It repeats only the startup telemetry case. Tune sample count and threshold gates
+with `BITFUN_E2E_PERF_STARTUP_ITERATIONS`,
+`BITFUN_E2E_PERF_STARTUP_MAX_INTERACTIVE_MS`,
+`BITFUN_E2E_PERF_STARTUP_MAX_FIRST_SCRIPT_MS`, and
+`BITFUN_E2E_PERF_STARTUP_MAX_MAIN_SHOWN_TO_INTERACTIVE_MS`.
+The runner prints concise summaries by default; set
+`BITFUN_E2E_PERF_RUNNER_STREAM_LOGS=1` only when debugging a failing run.
+
+For long-session interaction risk, run the smallest matching profile:
+
+```bash
+cross-env E2E_TEST_WORKSPACE=<workspace-path> BITFUN_E2E_PERF_SESSION_ID=perf-long-session-000 BITFUN_E2E_PERF_MATRIX_PROFILE=core pnpm run e2e:test:perf:long-session-interactions:release-fast
+```
+
+Profiles are `core`, `scroll`, `resize`, and `full`. Use `core` for general
+session-open or rapid-switch changes, `scroll` for viewport anchoring changes,
+`resize` for layout/size changes, and `full` only when the change spans multiple
+session rendering paths. A performance PR should run the focused command that
+matches the touched surface plus any nearby unit/contract tests; it does not need
+every E2E suite unless the change broadens the runtime or product surface.
+The matrix fails when an expected performance report is missing so skipped
+fixtures are not mistaken for valid data; use
+`BITFUN_E2E_PERF_ALLOW_MISSING_REPORTS=1` only for runner plumbing checks.
+
 For debug-only comparison, build the debug binary and run:
 
 ```bash

@@ -22,9 +22,10 @@ use crate::agentic::image_analysis::{
     build_multimodal_message_with_images, process_image_contexts_for_provider, ImageContextData,
     ImageLimits,
 };
-use crate::agentic::remote_file_delivery::TOOL_CONTEXT_REMOTE_FILE_DELIVERY_KEY;
 use crate::agentic::round_preempt::RoundInjectionKind;
-use crate::agentic::session::{CompressionMode, ContextCompressor, SessionManager};
+use crate::agentic::session::{
+    CompressionMode, ContextCompressor, SessionManager, UserContextCacheIdentity,
+};
 use crate::agentic::skill_agent_snapshot::build_skill_agent_tool_listing_sections_from_snapshot;
 use crate::agentic::tools::implementations::{SkillTool, TaskTool};
 use crate::agentic::tools::product_runtime::{
@@ -42,6 +43,7 @@ use crate::util::token_counter::TokenCounter;
 use crate::util::types::Message as AIMessage;
 use crate::util::types::ToolDefinition;
 use crate::util::{elapsed_ms_u64, truncate_at_char_boundary};
+use bitfun_agent_runtime::remote_file_delivery::TOOL_CONTEXT_REMOTE_FILE_DELIVERY_KEY;
 use bitfun_ai_adapters::ModelExchangeTraceConfig;
 use log::{debug, error, info, trace, warn};
 use sha2::{Digest, Sha256};
@@ -87,6 +89,12 @@ struct CompressionRuntimeScaffold {
     prepended_prompt_reminders: PrependedPromptReminders,
     primary_supports_image_understanding: bool,
     compression_contract_limit: usize,
+}
+
+#[derive(Debug, Clone)]
+struct TurnPromptScaffold {
+    system_prompt_message: Message,
+    prepended_prompt_reminders: PrependedPromptReminders,
 }
 
 #[derive(Debug, Clone)]
@@ -705,6 +713,12 @@ impl ExecutionEngine {
             return PrependedPromptReminders::default();
         };
 
+        // Extract remote execution info before prompt_context is moved into PromptBuilder.
+        let remote_connection_for_cache = prompt_context
+            .remote_execution
+            .as_ref()
+            .map(|remote| remote.connection_display_name.replace('|', "/"));
+
         let prompt_builder = PromptBuilder::new(prompt_context);
         let baseline_snapshot = if let Some(snapshot) = self
             .session_manager
@@ -725,7 +739,19 @@ impl ExecutionEngine {
                 session_id
             );
         }
-        let user_context_identity = current_agent.user_context_cache_identity();
+        let user_context_identity = {
+            let base_identity = current_agent.user_context_cache_identity();
+            // Append the remote connection to the cache scope so a failed overlay
+            // (cached without remote hints) does not persist across reconnects.
+            if let Some(connection) = &remote_connection_for_cache {
+                UserContextCacheIdentity::new(format!(
+                    "{}|remote:{}",
+                    base_identity.scope_key, connection
+                ))
+            } else {
+                base_identity
+            }
+        };
         let user_context = if let Some(cached_user_context) = self
             .session_manager
             .cached_user_context(session_id, &user_context_identity)
@@ -803,6 +829,116 @@ impl ExecutionEngine {
             .remember_system_prompt(session_id, identity, system_prompt.clone())
             .await;
         Ok(system_prompt)
+    }
+
+    async fn resolve_turn_prompt_scaffold(
+        &self,
+        context: &ExecutionContext,
+        current_agent: &dyn crate::agentic::agents::Agent,
+        model_name: &str,
+        supports_image_understanding: bool,
+        tool_listing_sections: ToolListingSections,
+        runtime_context_needs: RuntimeContextNeeds,
+        stage: &str,
+    ) -> BitFunResult<TurnPromptScaffold> {
+        debug!(
+            "Resolving turn prompt scaffold: session_id={}, turn_id={}, stage={}, agent={}, model={}",
+            context.session_id,
+            context.dialog_turn_id,
+            stage,
+            current_agent.name(),
+            model_name
+        );
+
+        let prompt_context = Self::build_prompt_context(
+            context,
+            model_name,
+            supports_image_understanding,
+            tool_listing_sections,
+            runtime_context_needs,
+        )
+        .await;
+        let prepended_prompt_reminders = self
+            .build_cached_prepended_prompt_reminders(
+                &context.session_id,
+                current_agent,
+                prompt_context.as_ref(),
+                &context.context,
+            )
+            .await;
+        let system_prompt = self
+            .resolve_cached_system_prompt(
+                &context.session_id,
+                current_agent,
+                prompt_context.as_ref(),
+            )
+            .await?;
+
+        Self::log_turn_prompt_scaffold(
+            &context.session_id,
+            &context.dialog_turn_id,
+            stage,
+            system_prompt.len(),
+            &prepended_prompt_reminders,
+        );
+
+        Ok(TurnPromptScaffold {
+            system_prompt_message: Message::system(system_prompt),
+            prepended_prompt_reminders,
+        })
+    }
+
+    fn log_turn_prompt_scaffold(
+        session_id: &str,
+        turn_id: &str,
+        stage: &str,
+        system_prompt_len: usize,
+        prepended_prompt_reminders: &PrependedPromptReminders,
+    ) {
+        debug!(
+            "Turn prompt scaffold resolved: session_id={}, turn_id={}, stage={}, system_prompt_len={} bytes, skill_listing_len={}, agent_listing_len={}, collapsed_tool_listing_len={}, user_context_len={}, runtime_context_len={}",
+            session_id,
+            turn_id,
+            stage,
+            system_prompt_len,
+            prepended_prompt_reminders
+                .skill_listing
+                .as_ref()
+                .map(|text| text.len())
+                .unwrap_or(0),
+            prepended_prompt_reminders
+                .agent_listing
+                .as_ref()
+                .map(|text| text.len())
+                .unwrap_or(0),
+            prepended_prompt_reminders
+                .collapsed_tool_listing
+                .as_ref()
+                .map(|text| text.len())
+                .unwrap_or(0),
+            prepended_prompt_reminders
+                .user_context
+                .as_ref()
+                .map(|text| text.len())
+                .unwrap_or(0),
+            prepended_prompt_reminders
+                .runtime_context
+                .as_ref()
+                .map(|text| text.len())
+                .unwrap_or(0)
+        );
+    }
+
+    fn apply_turn_prompt_scaffold_to_messages(
+        messages: &mut Vec<Message>,
+        scaffold: &TurnPromptScaffold,
+    ) {
+        match messages.first_mut() {
+            Some(first_message) if first_message.role == MessageRole::System => {
+                *first_message = scaffold.system_prompt_message.clone();
+            }
+            _ => messages.insert(0, scaffold.system_prompt_message.clone()),
+        }
     }
 
     pub(crate) async fn resolve_model_id_for_turn(
@@ -1330,11 +1466,14 @@ impl ExecutionEngine {
         context: &ExecutionContext,
     ) -> BitFunResult<CompressionRuntimeScaffold> {
         let agent_registry = get_agent_registry();
-        if let Some(workspace) = context.workspace.as_ref() {
-            agent_registry
-                .load_custom_subagents(workspace.root_path())
-                .await;
-        }
+        agent_registry
+            .load_custom_agents(
+                context
+                    .workspace
+                    .as_ref()
+                    .map(|workspace| workspace.root_path()),
+            )
+            .await;
 
         let current_agent = agent_registry
             .get_agent(
@@ -1484,35 +1623,23 @@ impl ExecutionEngine {
         // prefix/KV cache misses on subsequent rounds.
         let tool_definitions = tool_manifest.map(|manifest| manifest.tool_definitions);
 
-        let prompt_context = Self::build_prompt_context(
-            context,
-            &ai_client.config.model,
-            primary_supports_image_understanding,
-            tool_listing_sections,
-            runtime_context_needs,
-        )
-        .await;
-        let prepended_prompt_reminders = self
-            .build_cached_prepended_prompt_reminders(
-                &context.session_id,
+        let turn_prompt_scaffold = self
+            .resolve_turn_prompt_scaffold(
+                context,
                 current_agent.as_ref(),
-                prompt_context.as_ref(),
-                &context.context,
-            )
-            .await;
-        let system_prompt = self
-            .resolve_cached_system_prompt(
-                &context.session_id,
-                current_agent.as_ref(),
-                prompt_context.as_ref(),
+                &ai_client.config.model,
+                primary_supports_image_understanding,
+                tool_listing_sections,
+                runtime_context_needs,
+                "compression_scaffold",
             )
             .await?;
 
         Ok(CompressionRuntimeScaffold {
             ai_client,
             tool_definitions,
-            system_prompt_message: Message::system(system_prompt),
-            prepended_prompt_reminders,
+            system_prompt_message: turn_prompt_scaffold.system_prompt_message,
+            prepended_prompt_reminders: turn_prompt_scaffold.prepended_prompt_reminders,
             primary_supports_image_understanding,
             compression_contract_limit: context_profile_policy.compression_contract_limit,
         })
@@ -1994,11 +2121,14 @@ impl ExecutionEngine {
         // Things that remain constant in a dialog turn: 1.agent, 2.system prompt, 3.tools, 4.ai client
         // 1. Get current agent
         let agent_registry = get_agent_registry();
-        if let Some(workspace) = context.workspace.as_ref() {
-            agent_registry
-                .load_custom_subagents(workspace.root_path())
-                .await;
-        }
+        agent_registry
+            .load_custom_agents(
+                context
+                    .workspace
+                    .as_ref()
+                    .map(|workspace| workspace.root_path()),
+            )
+            .await;
         let current_agent = agent_registry
             .get_agent(
                 &agent_type,
@@ -2211,69 +2341,23 @@ impl ExecutionEngine {
             (vec![], None)
         };
 
-        // 4. Get System Prompt from current Agent
-        debug!(
-            "Building system prompt from agent: {}, model={}",
-            current_agent.name(),
-            ai_client.config.model
-        );
-        let prompt_context = Self::build_prompt_context(
-            &context,
-            &ai_client.config.model,
-            primary_supports_image_understanding,
-            tool_listing_sections,
-            runtime_context_needs,
-        )
-        .await;
-        let prepended_prompt_reminders = self
-            .build_cached_prepended_prompt_reminders(
-                &context.session_id,
+        // 4. Resolve the prompt scaffold used by model requests in this turn.
+        // It is refreshed after successful context compression so the first
+        // post-compaction request builds the new provider-side prefix cache.
+        let mut turn_prompt_scaffold = self
+            .resolve_turn_prompt_scaffold(
+                &context,
                 current_agent.as_ref(),
-                prompt_context.as_ref(),
-                &context.context,
-            )
-            .await;
-        let prepended_reminders = prepended_prompt_reminders.ordered_reminders();
-        let system_prompt = self
-            .resolve_cached_system_prompt(
-                &context.session_id,
-                current_agent.as_ref(),
-                prompt_context.as_ref(),
+                &ai_client.config.model,
+                primary_supports_image_understanding,
+                tool_listing_sections.clone(),
+                runtime_context_needs,
+                "turn_start",
             )
             .await?;
-        debug!("System prompt built, length: {} bytes", system_prompt.len());
-        debug!(
-            "Prepended reminders built: skill_listing_len={} agent_listing_len={} collapsed_tool_listing_len={} user_context_len={} runtime_context_len={}",
-            prepended_prompt_reminders
-                .skill_listing
-                .as_ref()
-                .map(|text| text.len())
-                .unwrap_or(0),
-            prepended_prompt_reminders
-                .agent_listing
-                .as_ref()
-                .map(|text| text.len())
-                .unwrap_or(0),
-            prepended_prompt_reminders
-                .collapsed_tool_listing
-                .as_ref()
-                .map(|text| text.len())
-                .unwrap_or(0),
-            prepended_prompt_reminders
-                .user_context
-                .as_ref()
-                .map(|text| text.len())
-                .unwrap_or(0),
-            prepended_prompt_reminders
-                .runtime_context
-                .as_ref()
-                .map(|text| text.len())
-                .unwrap_or(0)
-        );
-        let system_prompt_message = Message::system(system_prompt.clone());
 
         // Add System Prompt to the beginning of message list (only for this execution, not persisted)
-        let mut messages = vec![system_prompt_message.clone()];
+        let mut messages = vec![turn_prompt_scaffold.system_prompt_message.clone()];
         messages.extend(initial_messages);
 
         let mut round_index = 0;
@@ -2440,8 +2524,8 @@ impl ExecutionEngine {
                         context_window,
                         ai_client.clone(),
                         &tool_definitions,
-                        system_prompt_message.clone(),
-                        &prepended_prompt_reminders,
+                        turn_prompt_scaffold.system_prompt_message.clone(),
+                        &turn_prompt_scaffold.prepended_prompt_reminders,
                         primary_supports_image_understanding,
                         context_profile_policy.compression_contract_limit,
                         context.workspace.as_ref(),
@@ -2459,6 +2543,21 @@ impl ExecutionEngine {
                         );
 
                         messages = compressed_messages;
+                        turn_prompt_scaffold = self
+                            .resolve_turn_prompt_scaffold(
+                                &context,
+                                current_agent.as_ref(),
+                                &ai_client.config.model,
+                                primary_supports_image_understanding,
+                                tool_listing_sections.clone(),
+                                runtime_context_needs,
+                                "after_context_compression",
+                            )
+                            .await?;
+                        Self::apply_turn_prompt_scaffold_to_messages(
+                            &mut messages,
+                            &turn_prompt_scaffold,
+                        );
                         full_compression_count += 1;
                         consecutive_compression_failures = 0;
                     }
@@ -2562,6 +2661,9 @@ impl ExecutionEngine {
                 messages.len()
             );
 
+            let prepended_reminders = turn_prompt_scaffold
+                .prepended_prompt_reminders
+                .ordered_reminders();
             let ai_messages = Self::build_ai_messages_for_send(
                 &messages,
                 &ai_client.config.format,
@@ -3013,6 +3115,9 @@ impl ExecutionEngine {
                     context.session_id, context.dialog_turn_id, reason
                 );
 
+                let finalize_prepended_reminders = turn_prompt_scaffold
+                    .prepended_prompt_reminders
+                    .ordered_reminders();
                 let final_round_result = self
                     .run_finalize_round(
                         ai_client.clone(),
@@ -3022,7 +3127,7 @@ impl ExecutionEngine {
                         finalize_round_group_id.clone(),
                         &execution_context_vars,
                         primary_supports_image_understanding,
-                        &prepended_reminders,
+                        &finalize_prepended_reminders,
                         &messages,
                         finalize_reminder,
                         tool_definitions.clone(),
@@ -3052,7 +3157,7 @@ impl ExecutionEngine {
                             finalize_round_group_id.clone(),
                             &execution_context_vars,
                             primary_supports_image_understanding,
-                            &prepended_reminders,
+                            &finalize_prepended_reminders,
                             &messages,
                             finalize_reminder,
                             tool_definitions.clone(),
@@ -3272,7 +3377,8 @@ impl ExecutionEngine {
 
 #[cfg(test)]
 mod tests {
-    use super::{ContextHealthSnapshot, ExecutionEngine};
+    use super::{ContextHealthSnapshot, ExecutionEngine, TurnPromptScaffold};
+    use crate::agentic::agents::PrependedPromptReminders;
     use crate::agentic::core::{InternalReminderKind, Message, MessageRole, ToolCall, ToolResult};
     use crate::agentic::tools::ToolRuntimeRestrictions;
     use crate::service::config::types::AIConfig;
@@ -3290,6 +3396,13 @@ mod tests {
             provider: "anthropic".to_string(),
             enabled: true,
             ..Default::default()
+        }
+    }
+
+    fn message_text(message: &Message) -> Option<&str> {
+        match &message.content {
+            crate::agentic::core::MessageContent::Text(text) => Some(text.as_str()),
+            _ => None,
         }
     }
 
@@ -3323,6 +3436,41 @@ mod tests {
 
         assert!(total_tokens > conversation_tokens);
         assert!(usage_ratio < total_tokens as f32 / 128_000_f32);
+        assert_eq!(messages[1].role, MessageRole::User);
+    }
+
+    #[test]
+    fn refreshed_turn_prompt_scaffold_replaces_existing_system_message() {
+        let scaffold = TurnPromptScaffold {
+            system_prompt_message: Message::system("new system prompt".to_string()),
+            prepended_prompt_reminders: PrependedPromptReminders::default(),
+        };
+        let mut messages = vec![
+            Message::system("old system prompt".to_string()),
+            Message::user("hello".to_string()),
+        ];
+
+        ExecutionEngine::apply_turn_prompt_scaffold_to_messages(&mut messages, &scaffold);
+
+        assert_eq!(messages.len(), 2);
+        assert_eq!(messages[0].role, MessageRole::System);
+        assert_eq!(message_text(&messages[0]), Some("new system prompt"));
+        assert_eq!(messages[1].role, MessageRole::User);
+    }
+
+    #[test]
+    fn refreshed_turn_prompt_scaffold_inserts_system_message_when_missing() {
+        let scaffold = TurnPromptScaffold {
+            system_prompt_message: Message::system("new system prompt".to_string()),
+            prepended_prompt_reminders: PrependedPromptReminders::default(),
+        };
+        let mut messages = vec![Message::user("hello".to_string())];
+
+        ExecutionEngine::apply_turn_prompt_scaffold_to_messages(&mut messages, &scaffold);
+
+        assert_eq!(messages.len(), 2);
+        assert_eq!(messages[0].role, MessageRole::System);
+        assert_eq!(message_text(&messages[0]), Some("new system prompt"));
         assert_eq!(messages[1].role, MessageRole::User);
     }
 

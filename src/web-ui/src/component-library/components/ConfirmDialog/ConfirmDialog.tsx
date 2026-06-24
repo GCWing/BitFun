@@ -19,6 +19,8 @@ export interface ConfirmDialogProps {
   onClose: () => void;
   /** Confirm callback */
   onConfirm: () => void;
+  /** Secondary action callback */
+  onSecondary?: () => void;
   /** Cancel callback */
   onCancel?: () => void;
   /** Title */
@@ -29,6 +31,8 @@ export interface ConfirmDialogProps {
   type?: ConfirmDialogType;
   /** Confirm button text */
   confirmText?: string;
+  /** Optional secondary action text */
+  secondaryText?: string;
   /** Cancel button text */
   cancelText?: string;
   /** Whether the confirm button uses danger styling */
@@ -52,11 +56,13 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   isOpen,
   onClose,
   onConfirm,
+  onSecondary,
   onCancel,
   title,
   message,
   type = 'warning',
   confirmText,
+  secondaryText,
   cancelText,
   confirmDanger = false,
   showCancel = true,
@@ -83,6 +89,10 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
 
   const handleConfirm = () => {
     onConfirm();
+  };
+
+  const handleSecondary = () => {
+    onSecondary?.();
   };
 
   const handleCancel = () => {
@@ -133,6 +143,15 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
               onClick={handleCancel}
             >
               {resolvedCancelText}
+            </Button>
+          )}
+          {secondaryText && (
+            <Button
+              variant="secondary"
+              size="medium"
+              onClick={handleSecondary}
+            >
+              {secondaryText}
             </Button>
           )}
           <Button

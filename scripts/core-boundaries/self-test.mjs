@@ -986,6 +986,7 @@ export function runManifestParserSelfTest({
         'RuntimeServices',
         'RuntimeServicesBuilder',
         'CapabilityAvailability',
+        'RuntimeServiceMarkerPort',
         'RuntimeServicesProvider',
         'RuntimeServicesRegistry',
         'CapabilityMismatch',
@@ -1012,6 +1013,7 @@ export function runManifestParserSelfTest({
         'capability_availability_reports_optional_service_status_without_side_effects',
         'builder_rejects_port_registered_under_the_wrong_capability',
         'registered_remote_ports_expose_owner_contract_methods',
+        'marker_ports_register_optional_service_availability_without_core_dependency',
       ],
     },
     {
@@ -1050,6 +1052,45 @@ export function runManifestParserSelfTest({
       ],
     },
     {
+      path: 'src/crates/execution/agent-runtime/src/sdk.rs',
+      contracts: [
+        'AGENT_RUNTIME_SDK_API_VERSION',
+        '#[non_exhaustive]',
+        'AgentRuntimeSdkStability',
+        'AgentRuntimeSdkCompatibility',
+        'impl AgentRuntimeSdkCompatibility',
+        'bitfun_agent_tools',
+        'bitfun_harness',
+        'bitfun_runtime_services',
+        'PortResult',
+        'RuntimeServicePort',
+        'FileSystemPort',
+        'RemoteWorkspacePort',
+      ],
+    },
+    {
+      path: 'src/crates/execution/agent-runtime/Cargo.toml',
+      contracts: ['[features]', 'default = []'],
+    },
+    {
+      path: 'src/crates/execution/agent-runtime/tests/sdk_smoke.rs',
+      contracts: [
+        'sdk_facade_exposes_versioned_preview_compatibility_contract',
+        'sdk_facade_runs_with_fake_provider_and_local_event_stream',
+        'sdk_facade_accepts_fake_services_tools_harnesses_and_hooks_without_core',
+      ],
+    },
+    {
+      path: 'src/crates/execution/agent-runtime/examples/sdk_minimal.rs',
+      contracts: [
+        'bitfun_agent_runtime::sdk',
+        'AgentRuntimeSdkCompatibility::current',
+        'impl AgentSubmissionPort for ExampleAgentProvider',
+        'AgentRuntimeBuilder::new',
+        'AgentRunRequest::new',
+      ],
+    },
+    {
       path: 'src/crates/execution/agent-runtime/src/agents.rs',
       contracts: [
         'SubagentQueryContext',
@@ -1081,29 +1122,41 @@ export function runManifestParserSelfTest({
       ],
     },
     {
+      path: 'src/crates/execution/agent-runtime/src/custom_agent.rs',
+      contracts: [
+        'CustomAgentKind',
+        'CustomAgentDiscoveryRoots',
+        'CustomAgentLoadReport',
+        'CustomAgentDefinition',
+        'CustomAgentDefinitionError',
+        'DEFAULT_CUSTOM_MODE_TOOLS',
+        'DEFAULT_CUSTOM_SUBAGENT_TOOLS',
+        'custom_agent_read_markdown_file',
+        'custom_agent_save_markdown_file',
+        'custom_agent_possible_dirs',
+        'load_custom_agent_definitions',
+        'CustomAgentValidationContext',
+        'CustomAgentValidationReport',
+        'CustomAgentModelFallback',
+        'validate_custom_agent_definition',
+        'custom_agent_review_writable_tools',
+      ],
+    },
+    {
       path: 'src/crates/execution/agent-runtime/src/custom_subagent.rs',
       contracts: [
-        'CustomSubagentKind',
-        'CustomSubagentDiscoveryRoots',
-        'CustomSubagentLoadReport',
-        'CustomSubagentDefinition',
-        'CustomSubagentDefinitionError',
-        'DEFAULT_CUSTOM_SUBAGENT_TOOLS',
-        'custom_subagent_tools_from_front_matter',
-        'custom_subagent_tools_to_front_matter',
-        'custom_subagent_readonly_should_save',
-        'custom_subagent_review_should_save',
-        'custom_subagent_model_should_save',
-        'custom_subagent_read_markdown_file',
-        'custom_subagent_save_markdown_parts',
-        'custom_subagent_possible_dirs',
+        'pub type CustomSubagentKind = CustomAgentLevel',
+        'pub type CustomSubagentDefinition = CustomAgentDefinition',
+        'pub type CustomSubagentDiscoveryRoots = CustomAgentDiscoveryRoots',
         'load_custom_subagent_definitions',
+        'custom_agent_read_markdown_file',
+        'custom_agent_save_markdown_file',
       ],
     },
     {
       path: 'src/crates/execution/agent-runtime/tests/custom_subagent_discovery_contracts.rs',
       contracts: [
-        'custom_subagent_discovery_preserves_directory_priority_and_deduplication',
+        'custom_subagent_discovery_preserves_bitfun_priority_and_ignores_foreign_agent_dirs',
         'custom_subagent_discovery_reports_parse_errors_without_dropping_valid_files',
       ],
     },
@@ -1115,14 +1168,19 @@ export function runManifestParserSelfTest({
         'custom_subagent_default_fields_are_omitted_when_saved',
         'custom_subagent_definition_from_front_matter_preserves_schema_and_defaults',
         'custom_subagent_definition_reports_legacy_missing_field_errors',
-        'custom_subagent_markdown_io_preserves_legacy_front_matter_shape',
+        'custom_subagent_markdown_io_writes_canonical_front_matter',
         'custom_subagent_markdown_parse_errors_match_legacy_prefixes',
       ],
     },
     {
       path: 'src/crates/execution/agent-runtime/src/post_call_hooks.rs',
       contracts: [
-        'PostCallHookKind',
+        'RuntimeHookKind',
+        'RuntimeHookErrorPolicy',
+        'RuntimeHookPlan',
+        'RuntimeHookRegistry',
+        'EmptyHookId',
+        'InvalidTimeoutMillis',
         'successful_tool_post_call_hooks',
         'SuccessfulToolPostCallHookExecutor',
         'run_successful_tool_post_call_hooks',
@@ -1130,7 +1188,12 @@ export function runManifestParserSelfTest({
     },
     {
       path: 'src/crates/execution/agent-runtime/tests/post_call_hook_contracts.rs',
-      contracts: ['successful_tool_call_routes_to_shared_context_measurement_hook'],
+      contracts: [
+        'successful_tool_call_routes_to_shared_context_measurement_hook',
+        'runtime_hook_registry_preserves_order_timeout_and_error_policy',
+        'runtime_hook_registry_rejects_duplicate_ids',
+        'runtime_hook_registry_rejects_unstable_ids_and_zero_timeouts',
+      ],
     },
     {
       path: 'src/crates/execution/agent-runtime/tests/post_call_hook_execution_contracts.rs',
@@ -1369,6 +1432,31 @@ export function runManifestParserSelfTest({
       ],
     },
     {
+      path: 'src/crates/execution/agent-runtime/src/event_queue.rs',
+      contracts: ['EventQueue', 'impl StreamEventSink for EventQueue', 'clear_session'],
+    },
+    {
+      path: 'src/crates/execution/agent-runtime/src/event_router.rs',
+      contracts: ['EventSubscriber', 'EventRouter', 'route_batch'],
+    },
+    {
+      path: 'src/crates/execution/agent-runtime/src/prompt_markup.rs',
+      contracts: [
+        'PromptEnvelope',
+        'render_user_query',
+        'strip_prompt_markup',
+        'strips_current_and_legacy_system_reminder_suffix',
+      ],
+    },
+    {
+      path: 'src/crates/execution/agent-runtime/src/remote_file_delivery.rs',
+      contracts: [
+        'TOOL_CONTEXT_REMOTE_FILE_DELIVERY_KEY',
+        'remote_file_delivery_reminder',
+        'user_workspace_relative_file_link',
+      ],
+    },
+    {
       path: 'src/crates/execution/agent-runtime/src/scheduled_job.rs',
       contracts: [
         'ScheduledJobRuntimeState',
@@ -1505,6 +1593,20 @@ export function runManifestParserSelfTest({
       ],
     },
     {
+      path: 'src/crates/services/services-core/src/managed_runtime.rs',
+      contracts: [
+        'ManagedRuntimeResolver',
+        'RuntimeSource',
+        'resolve_command',
+        'merged_path_env',
+        'normalizes_windows_alias_for_managed_lookup',
+      ],
+    },
+    {
+      path: 'src/crates/assembly/core/src/service/runtime/mod.rs',
+      contracts: ['ManagedRuntimeResolver::new', 'get_path_manager_arc'],
+    },
+    {
       path: 'src/crates/assembly/core/src/agentic/persistence/manager.rs',
       contracts: [
         'SessionMetadataStore',
@@ -1516,6 +1618,25 @@ export function runManifestParserSelfTest({
         'load_metadata',
         'delete_session_dir_and_index',
         'ensure_runtime_for_write',
+      ],
+    },
+    {
+      path: 'src/crates/assembly/product-capabilities/src/lib.rs',
+      contracts: [
+        'HarnessProviderDescriptor',
+        'build_descriptor_harness_registry',
+        'ProductCapabilityAssembly',
+        'ProductFeatureGroup',
+        'ProductRuntimeAssembly',
+        'feature_groups_from_tool_provider_group_plan',
+      ],
+    },
+    {
+      path: 'src/crates/assembly/product-capabilities/tests/product_capabilities.rs',
+      contracts: [
+        'product_assembly_plan_exposes_build_feature_groups_explicitly',
+        'product_runtime_assembly_reports_runtime_service_capability_gaps',
+        'product_harness_provider_plans_legacy_facade_without_execution',
       ],
     },
     {
@@ -1535,7 +1656,12 @@ export function runManifestParserSelfTest({
     },
     {
       path: 'src/crates/assembly/core/src/agentic/tools/restrictions.rs',
-      contracts: ['denied_tool_messages', 'custom_deny_message_overrides_generic_runtime_error'],
+      contracts: [
+        'tool_restrictions_for_delegation_policy',
+        'miniapp_headless_agent_tool_restrictions',
+        'impl From<ToolRestrictionError> for BitFunError',
+        'is_local_path_within_root',
+      ],
     },
     {
       path: 'src/crates/assembly/core/src/agentic/tools/tool_result_storage.rs',
@@ -1555,6 +1681,10 @@ export function runManifestParserSelfTest({
         'summarize_dialog_turn_cancellation',
         'ToolCancellationTokenStore',
         'count_tool_states',
+        'ToolStateEventFacts',
+        'ToolStateEventKind',
+        'tool_state_event_data',
+        'sanitize_tool_result_for_event',
       ],
     },
     {
@@ -2058,9 +2188,7 @@ export function runManifestParserSelfTest({
       contracts: [
         'ProductConcreteToolFactory',
         'StaticToolProviderFactory',
-        'ProductToolProviderPlanAdapter',
-        'StaticToolProviderPlan',
-        'create_registry_from_static_provider_plans',
+        'create_registry_from_static_provider_entries',
         'create_product_tool_registry_from_plan',
         'materialize_tool',
         'GetToolSpecTool',
@@ -2080,6 +2208,7 @@ export function runManifestParserSelfTest({
         'materialize_static_tool_provider_groups',
         'ToolRuntimeAssembly',
         'create_registry_from_static_provider_plans',
+        'create_registry_from_static_provider_entries',
         'ToolCatalogRuntime',
         'ToolDecoratorRef',
         'SnapshotToolWrapper',
@@ -2089,6 +2218,9 @@ export function runManifestParserSelfTest({
         'resolve_readonly_enabled_tools',
         'build_get_tool_spec_duplicate_load_result',
         'build_get_tool_spec_detail_result',
+        'miniapp_headless_agent_tool_restrictions',
+        'tool_restrictions_for_delegation_policy',
+        'denied_tool_messages',
         'resolve_get_tool_spec_execution_plan',
         'resolve_get_tool_spec_execution_result_from_provider',
         'GetToolSpecRuntime',
@@ -2154,6 +2286,9 @@ export function runManifestParserSelfTest({
       contracts: [
         'pub struct ToolUseContext',
         'to_tool_context_facts',
+        'project_tool_context_facts',
+        'build_tool_runtime_custom_data',
+        'delegation_policy_from_custom_data',
         'impl PortableToolContextProvider for ToolUseContext',
         'tool_context_facts_omit_runtime_owner_fields_even_when_context_is_populated',
         'customData',
@@ -3038,6 +3173,20 @@ export function runManifestParserSelfTest({
   );
   if (!sessionControlRuleText.includes('create_session_with_workspace_and_creator')) {
     throw new Error('SessionControl old create-path boundary rule must cover legacy create path');
+  }
+
+  const sdkSmokeRuleText = forbiddenRuleTextForPath(
+    'src/crates/execution/agent-runtime/tests/sdk_smoke.rs',
+  );
+  for (const forbiddenSdkSmokeImport of [
+    'bitfun_runtime_services::test_support',
+    'FakeRuntimeServicesProvider',
+  ]) {
+    if (!sdkSmokeRuleText.includes(forbiddenSdkSmokeImport)) {
+      throw new Error(
+        `SDK smoke boundary rule must forbid ${forbiddenSdkSmokeImport}`,
+      );
+    }
   }
 
   const remoteWorkspaceRule = forbiddenContentRules.find(

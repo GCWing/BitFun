@@ -165,15 +165,22 @@ export type StartupPerfBreakdown = {
       estimatedQueueOrBridgeMs?: number;
       steps: Record<string, number>;
     };
+    initializeWorkspaceStartupState?: {
+      frontendDurationMs?: number;
+      backendDurationMs?: number;
+      estimatedQueueOrBridgeMs?: number;
+    };
     beforeInteractive: {
       matchedCount: number;
       totalFrontendDurationMs: number;
+      totalFrontendDurationUntilInteractiveMs: number;
       totalBackendDurationMs: number;
       totalEstimatedQueueOrBridgeMs: number;
       byCommand: Array<{
         command: string;
         count: number;
         frontendDurationMs: number;
+        frontendDurationUntilInteractiveMs: number;
         backendDurationMs: number;
         estimatedQueueOrBridgeMs: number;
       }>;
@@ -181,7 +188,9 @@ export type StartupPerfBreakdown = {
         command: string;
         target?: string;
         startedAtMs?: number;
+        endedAtMs?: number;
         frontendDurationMs: number;
+        frontendDurationUntilInteractiveMs?: number;
         backendDurationMs?: number;
         estimatedQueueOrBridgeMs?: number;
         transportDurationMs?: number;
@@ -194,13 +203,16 @@ export type StartupPerfBreakdown = {
   apiBeforeInteractive: {
     count: number;
     totalDurationMs: number;
+    totalDurationUntilInteractiveMs: number;
     maxDurationMs?: number;
     byCommand: StartupTraceCommandAggregate[];
     slowCalls: Array<{
       command: string;
       target?: string;
       startedAtMs?: number;
+      endedAtMs?: number;
       durationMs: number;
+      durationUntilInteractiveMs?: number;
       outcome: 'success' | 'failure';
       remote: boolean;
     }>;
@@ -211,7 +223,9 @@ export interface StartupApiCommandSegment {
   command: string;
   target?: string;
   startedAtMs?: number;
+  endedAtMs?: number;
   frontendDurationMs: number;
+  frontendDurationUntilInteractiveMs?: number;
   backendDurationMs?: number;
   estimatedQueueOrBridgeMs?: number;
   transportDurationMs?: number;
@@ -362,6 +376,18 @@ function aggregateApiCalls(calls: StartupTraceApiCallRecord[]): StartupTraceComm
     .sort((left, right) => right.totalDurationMs - left.totalDurationMs);
 }
 
+function durationUntilCutoffMs(
+  startedAtMs: number | undefined,
+  durationMs: number,
+  cutoffMs: number | undefined,
+): number {
+  if (startedAtMs === undefined || cutoffMs === undefined) {
+    return durationMs;
+  }
+  const endMs = startedAtMs + durationMs;
+  return Math.max(0, Math.min(endMs, cutoffMs) - startedAtMs);
+}
+
 export function summarizeApiCommandSegments(
   snapshot: StartupTraceSnapshot,
   frontendCalls: StartupTraceApiCallRecord[] = snapshot.api.calls ?? [],
@@ -394,6 +420,7 @@ function matchBackendCommandSegments(
       command: call.command,
       target: call.target,
       startedAtMs: round(call.startedAtMs),
+      endedAtMs: round(call.endedAtMs),
       frontendDurationMs: round(call.durationMs) ?? 0,
       backendDurationMs: round(backendDurationMs),
       estimatedQueueOrBridgeMs: round(
@@ -414,12 +441,20 @@ function matchBackendCommandSegments(
 function summarizeBackendCommandOverlap(
   frontendCalls: StartupTraceApiCallRecord[],
   nativeEvents: StartupTraceNativeEvent[],
+  cutoffMs?: number,
 ) {
-  const matched = matchBackendCommandSegments(frontendCalls, nativeEvents);
+  const matched = matchBackendCommandSegments(frontendCalls, nativeEvents)
+    .map(call => ({
+      ...call,
+      frontendDurationUntilInteractiveMs: round(
+        durationUntilCutoffMs(call.startedAtMs, call.frontendDurationMs, cutoffMs)
+      ),
+    }));
   const byCommand = new Map<string, {
     command: string;
     count: number;
     frontendDurationMs: number;
+    frontendDurationUntilInteractiveMs: number;
     backendDurationMs: number;
     estimatedQueueOrBridgeMs: number;
   }>();
@@ -428,11 +463,15 @@ function summarizeBackendCommandOverlap(
       command: call.command,
       count: 0,
       frontendDurationMs: 0,
+      frontendDurationUntilInteractiveMs: 0,
       backendDurationMs: 0,
       estimatedQueueOrBridgeMs: 0,
     };
     existing.count += 1;
     existing.frontendDurationMs = round((existing.frontendDurationMs ?? 0) + call.frontendDurationMs) ?? 0;
+    existing.frontendDurationUntilInteractiveMs = round(
+      (existing.frontendDurationUntilInteractiveMs ?? 0) + (call.frontendDurationUntilInteractiveMs ?? 0)
+    ) ?? 0;
     existing.backendDurationMs = round((existing.backendDurationMs ?? 0) + (call.backendDurationMs ?? 0)) ?? 0;
     existing.estimatedQueueOrBridgeMs = round(
       (existing.estimatedQueueOrBridgeMs ?? 0) + (call.estimatedQueueOrBridgeMs ?? 0)
@@ -444,6 +483,9 @@ function summarizeBackendCommandOverlap(
     matchedCount: matched.filter(call => call.backendDurationMs !== undefined).length,
     totalFrontendDurationMs: round(
       matched.reduce((total, call) => total + call.frontendDurationMs, 0)
+    ) ?? 0,
+    totalFrontendDurationUntilInteractiveMs: round(
+      matched.reduce((total, call) => total + (call.frontendDurationUntilInteractiveMs ?? call.frontendDurationMs), 0)
     ) ?? 0,
     totalBackendDurationMs: round(
       matched.reduce((total, call) => total + (call.backendDurationMs ?? 0), 0)
@@ -510,22 +552,31 @@ export function summarizeStartupBreakdown(snapshot: StartupTraceSnapshot): Start
   const nonCriticalDone = first('non_critical_init_done')?.atMs;
   const apiCalls = snapshot.api.calls ?? [];
   const initializeGlobalStateApiCall = apiCalls.find(call => call.command === 'initialize_global_state');
-  const initializeGlobalStateBackendDuration = nativeCommandStep('initialize_global_state.total')?.durationMs;
-  const initializeGlobalStateStepPrefix = 'initialize_global_state.';
-  const initializeGlobalStateBackendSteps = Object.fromEntries(
-    (snapshot.native?.events ?? [])
-      .filter(event =>
-        event.category === 'tauri_command' &&
-        typeof event.step === 'string' &&
-        event.step.startsWith(initializeGlobalStateStepPrefix) &&
-        event.step !== 'initialize_global_state.total' &&
-        typeof event.durationMs === 'number'
-      )
-      .map(event => [
-        event.step!.slice(initializeGlobalStateStepPrefix.length),
-        event.durationMs as number,
-      ])
+  const initializeWorkspaceStartupStateApiCall = apiCalls.find(call =>
+    call.command === 'initialize_workspace_startup_state'
   );
+  const initializeGlobalStateBackendDuration = initializeGlobalStateApiCall
+    ? nativeCommandStep('initialize_global_state.total')?.durationMs
+    : undefined;
+  const initializeWorkspaceStartupStateBackendDuration =
+    nativeCommandStep('initialize_workspace_startup_state')?.durationMs;
+  const initializeGlobalStateStepPrefix = 'initialize_global_state.';
+  const initializeGlobalStateBackendSteps = initializeGlobalStateApiCall
+    ? Object.fromEntries(
+        (snapshot.native?.events ?? [])
+          .filter(event =>
+            event.category === 'tauri_command' &&
+            typeof event.step === 'string' &&
+            event.step.startsWith(initializeGlobalStateStepPrefix) &&
+            event.step !== 'initialize_global_state.total' &&
+            typeof event.durationMs === 'number'
+          )
+          .map(event => [
+            event.step!.slice(initializeGlobalStateStepPrefix.length),
+            event.durationMs as number,
+          ])
+      )
+    : {};
   const apiBeforeInteractive = apiCalls.filter(call =>
     typeof call.startedAtMs === 'number' &&
     (interactive === undefined || call.startedAtMs <= interactive)
@@ -534,6 +585,7 @@ export function summarizeStartupBreakdown(snapshot: StartupTraceSnapshot): Start
   const backendBeforeInteractive = summarizeBackendCommandOverlap(
     apiBeforeInteractive,
     snapshot.native?.events ?? [],
+    interactive,
   );
   const slowApiCalls = [...apiBeforeInteractive]
     .sort((left, right) => right.durationMs - left.durationMs)
@@ -542,7 +594,11 @@ export function summarizeStartupBreakdown(snapshot: StartupTraceSnapshot): Start
       command: call.command,
       target: call.target,
       startedAtMs: round(call.startedAtMs),
+      endedAtMs: round(call.endedAtMs),
       durationMs: round(call.durationMs) ?? 0,
+      durationUntilInteractiveMs: round(
+        durationUntilCutoffMs(call.startedAtMs, call.durationMs, interactive)
+      ),
       outcome: call.outcome,
       remote: call.remote,
     }));
@@ -611,6 +667,8 @@ export function summarizeStartupBreakdown(snapshot: StartupTraceSnapshot): Start
       steps: {
         ensureIdentityListener: numeric(workspaceStepDuration('ensure_identity_listener')) ?? 0,
         initializeGlobalState: numeric(workspaceStepDuration('initialize_global_state')) ?? 0,
+        initializeWorkspaceStartupState:
+          numeric(workspaceStepDuration('initialize_workspace_startup_state')) ?? 0,
         cleanupInvalidWorkspaces: numeric(workspaceStepDuration('cleanup_invalid_workspaces')) ?? 0,
         fetchWorkspaceState: numeric(workspaceStepDuration('fetch_workspace_state')) ?? 0,
         updateWorkspaceState: numeric(workspaceStepDuration('update_workspace_state')) ?? 0,
@@ -634,22 +692,40 @@ export function summarizeStartupBreakdown(snapshot: StartupTraceSnapshot): Start
       ),
     },
     tauriCommand: {
-      initializeGlobalState: {
-        frontendDurationMs: round(initializeGlobalStateApiCall?.durationMs),
-        backendDurationMs: round(initializeGlobalStateBackendDuration),
+      initializeGlobalState: initializeGlobalStateApiCall
+        ? {
+            frontendDurationMs: round(initializeGlobalStateApiCall.durationMs),
+            backendDurationMs: round(initializeGlobalStateBackendDuration),
+            estimatedQueueOrBridgeMs: round(
+              initializeGlobalStateBackendDuration !== undefined
+                ? initializeGlobalStateApiCall.durationMs - initializeGlobalStateBackendDuration
+                : undefined
+            ),
+            steps: initializeGlobalStateBackendSteps,
+          }
+        : undefined,
+      initializeWorkspaceStartupState: {
+        frontendDurationMs: round(initializeWorkspaceStartupStateApiCall?.durationMs),
+        backendDurationMs: round(initializeWorkspaceStartupStateBackendDuration),
         estimatedQueueOrBridgeMs: round(
-          initializeGlobalStateApiCall?.durationMs !== undefined &&
-            initializeGlobalStateBackendDuration !== undefined
-            ? initializeGlobalStateApiCall.durationMs - initializeGlobalStateBackendDuration
+          initializeWorkspaceStartupStateApiCall?.durationMs !== undefined &&
+            initializeWorkspaceStartupStateBackendDuration !== undefined
+            ? initializeWorkspaceStartupStateApiCall.durationMs -
+              initializeWorkspaceStartupStateBackendDuration
             : undefined
         ),
-        steps: initializeGlobalStateBackendSteps,
       },
       beforeInteractive: backendBeforeInteractive,
     },
     apiBeforeInteractive: {
       count: apiBeforeInteractive.length,
       totalDurationMs: round(apiBeforeInteractive.reduce((total, call) => total + call.durationMs, 0)) ?? 0,
+      totalDurationUntilInteractiveMs: round(
+        apiBeforeInteractive.reduce(
+          (total, call) => total + durationUntilCutoffMs(call.startedAtMs, call.durationMs, interactive),
+          0,
+        )
+      ) ?? 0,
       maxDurationMs: apiBeforeInteractive.length > 0
         ? round(Math.max(...apiBeforeInteractive.map(call => call.durationMs)))
         : undefined,

@@ -1,11 +1,15 @@
 //! System API
 
+use std::path::Path;
 use std::sync::{Arc, Mutex, OnceLock};
 
 use crate::api::app_state::AppState;
+use crate::startup_trace::DesktopStartupTrace;
 use bitfun_core::service::system;
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, Position, Size, State};
+#[cfg(not(target_env = "ohos"))]
+use tauri_plugin_opener::OpenerExt;
 #[cfg(not(target_env = "ohos"))]
 use tauri_plugin_updater::UpdaterExt;
 
@@ -166,6 +170,43 @@ pub async fn install_update(app: AppHandle, request: InstallUpdateRequest) -> Re
         Err("Not supported on this platform".to_string())
     }
 
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpenHtmlFileInBrowserRequest {
+    pub path: String,
+}
+
+fn is_html_file_path(path: &Path) -> bool {
+    path.extension()
+        .and_then(|extension| extension.to_str())
+        .map(|extension| {
+            extension.eq_ignore_ascii_case("html") || extension.eq_ignore_ascii_case("htm")
+        })
+        .unwrap_or(false)
+}
+
+#[tauri::command]
+pub async fn open_html_file_in_browser(
+    app: AppHandle,
+    request: OpenHtmlFileInBrowserRequest,
+) -> Result<(), String> {
+    let path = Path::new(&request.path);
+
+    if !is_html_file_path(path) {
+        return Err("Only HTML files can be opened in the browser".to_string());
+    }
+
+    let metadata = std::fs::metadata(path)
+        .map_err(|error| format!("Failed to read HTML file metadata: {}", error))?;
+    if !metadata.is_file() {
+        return Err("HTML path is not a file".to_string());
+    }
+
+    app.opener()
+        .open_path(&request.path, None::<&str>)
+        .map_err(|error| format!("Failed to open HTML file in browser: {}", error))
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -443,9 +484,15 @@ pub fn ohos_mark_clean_shutdown() {
 /// Hide the main window so it lives only in the system tray (used by the "ask"
 /// dialog when the user chooses to minimize instead of quitting).
 #[tauri::command]
-pub async fn minimize_to_tray(app: tauri::AppHandle) -> Result<(), String> {
+pub async fn minimize_to_tray(
+    app: tauri::AppHandle,
+    startup_trace: State<'_, DesktopStartupTrace>,
+) -> Result<(), String> {
     #[cfg(not(target_env = "ohos"))]
     {
+        if let Err(error) = crate::tray::setup_tray(&app, &startup_trace) {
+            log::warn!("Failed to initialize tray before minimizing: {}", error);
+        }
         if let Some(window) = app.get_webview_window("main") {
             window.hide().map_err(|e| e.to_string())?;
             log::info!("Main window minimized to tray via command");
@@ -456,12 +503,23 @@ pub async fn minimize_to_tray(app: tauri::AppHandle) -> Result<(), String> {
     {
         Err("Do not support the minimize to tray via command".to_string())
     }
+
+}
+
+/// Initialize the desktop tray after the startup shell has become interactive.
+#[tauri::command]
+pub async fn initialize_tray_after_startup(
+    app: tauri::AppHandle,
+    startup_trace: State<'_, DesktopStartupTrace>,
+) -> Result<(), String> {
+    crate::tray::setup_tray(&app, &startup_trace).map_err(|e| e.to_string())
 }
 
 /// Minimal startup-window controls used by the static pre-React splash.
 #[tauri::command]
 pub async fn startup_window_control(
     state: State<'_, AppState>,
+    startup_trace: State<'_, DesktopStartupTrace>,
     app: tauri::AppHandle,
     request: StartupWindowControlRequest,
 ) -> Result<(), String> {
@@ -496,20 +554,22 @@ pub async fn startup_window_control(
                     .await
                     .unwrap_or_else(|_| "minimize_to_tray".to_string());
 
-                if behavior == "quit" {
-                    log::info!("Quit requested from startup window control");
-                    crate::crash_diagnostics::mark_clean_shutdown("startup_window_control");
-                    crate::perform_process_exit_cleanup();
-                    app.exit(0);
-                } else {
-                    window.hide().map_err(|error| {
-                        format!("Failed to hide main window during startup close: {}", error)
-                    })?;
-                    log::info!("Main window hidden from startup window control");
+            if behavior == "quit" {
+                log::info!("Quit requested from startup window control");
+                crate::crash_diagnostics::mark_clean_shutdown("startup_window_control");
+                crate::perform_process_exit_cleanup();
+                app.exit(0);
+            } else {
+                if let Err(error) = crate::tray::setup_tray(&app, &startup_trace) {
+                    log::warn!("Failed to initialize tray before startup close: {}", error);
                 }
+                window.hide().map_err(|error| {
+                    format!("Failed to hide main window during startup close: {}", error)
+                })?;
+                log::info!("Main window hidden from startup window control");
             }
         }
-
+    }
         Ok(())
     }
 

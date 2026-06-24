@@ -19,6 +19,10 @@ export const requiredContentRules = [
         message: 'missing capability availability contract',
       },
       {
+        regex: /\bpub struct RuntimeServiceMarkerPort\b/,
+        message: 'missing runtime service marker port owner',
+      },
+      {
         regex: /\bpub trait RuntimeServicesProvider\b/,
         message: 'missing runtime services provider contract',
       },
@@ -98,6 +102,10 @@ export const requiredContentRules = [
       {
         regex: /\bregistered_remote_ports_expose_owner_contract_methods\b/,
         message: 'missing remote port owner contract regression',
+      },
+      {
+        regex: /\bmarker_ports_register_optional_service_availability_without_core_dependency\b/,
+        message: 'missing marker-port capability availability regression',
       },
     ],
   },
@@ -195,6 +203,22 @@ export const requiredContentRules = [
         message: 'missing agent runtime event stream builder hook',
       },
       {
+        regex: /\bpub trait RuntimeToolRegistry\b/,
+        message: 'missing SDK tool registry abstraction',
+      },
+      {
+        regex: /\bpub fn with_tool_registry\b/,
+        message: 'missing SDK tool registry builder hook',
+      },
+      {
+        regex: /\bpub fn with_harness_registry\b/,
+        message: 'missing SDK harness registry builder hook',
+      },
+      {
+        regex: /\bpub fn with_hook_registry\b/,
+        message: 'missing SDK hook registry builder hook',
+      },
+      {
         regex: /\bpub enum SessionSelector\b/,
         message: 'missing session selector contract',
       },
@@ -225,6 +249,126 @@ export const requiredContentRules = [
       {
         regex: /\bport_errors_remain_typed\b/,
         message: 'missing typed port error regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/execution/agent-runtime/tests/sdk_smoke.rs',
+    reason:
+      'agent-runtime SDK smoke tests must prove the facade works with injected fake provider, services, tools, harnesses, and hooks without core',
+    patterns: [
+      {
+        regex: /\bsdk_facade_exposes_versioned_preview_compatibility_contract\b/,
+        message: 'missing SDK API version and compatibility smoke',
+      },
+      {
+        regex: /\bsdk_facade_runs_with_fake_provider_and_local_event_stream\b/,
+        message: 'missing SDK fake-provider event-stream smoke',
+      },
+      {
+        regex: /\bsdk_facade_accepts_fake_services_tools_harnesses_and_hooks_without_core\b/,
+        message: 'missing SDK services/tools/harnesses/hooks injection smoke',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/execution/agent-runtime/src/sdk.rs',
+    reason:
+      'agent-runtime SDK public facade must expose versioned compatibility metadata and only stable injection contracts',
+    patterns: [
+      {
+        regex: /\bpub const AGENT_RUNTIME_SDK_API_VERSION\b/,
+        message: 'missing SDK API version constant',
+      },
+      {
+        regex: /\bpub enum AgentRuntimeSdkStability\b/,
+        message: 'missing SDK stability contract',
+      },
+      {
+        regex: /#\[non_exhaustive\]\s+pub enum AgentRuntimeSdkStability/s,
+        message: 'SDK stability contract must remain externally extensible',
+      },
+      {
+        regex: /\bpub struct AgentRuntimeSdkCompatibility\b/,
+        message: 'missing SDK compatibility contract',
+      },
+      {
+        regex: /#\[non_exhaustive\]\s+pub struct AgentRuntimeSdkCompatibility/s,
+        message: 'SDK compatibility contract must remain externally extensible',
+      },
+      {
+        regex: /\bimpl AgentRuntimeSdkCompatibility\b/,
+        message: 'missing current SDK compatibility entrypoint',
+      },
+      {
+        regex: /\bpub use bitfun_agent_tools::\{/,
+        message: 'missing SDK tool registry re-exports',
+      },
+      {
+        regex: /\bpub use bitfun_harness::\{/,
+        message: 'missing SDK harness registry re-exports',
+      },
+      {
+        regex: /\bpub use bitfun_runtime_services::\{/,
+        message: 'missing SDK runtime-services re-exports',
+      },
+      {
+        regex: /\bPortResult\b/,
+        message: 'missing SDK port result re-export',
+      },
+      {
+        regex: /\bRuntimeServicePort\b/,
+        message: 'missing SDK runtime service port re-export',
+      },
+      {
+        regex: /\bFileSystemPort\b/,
+        message: 'missing SDK filesystem service port re-export',
+      },
+      {
+        regex: /\bRemoteWorkspacePort\b/,
+        message: 'missing SDK remote workspace service port re-export',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/execution/agent-runtime/Cargo.toml',
+    reason:
+      'agent-runtime SDK package must keep an explicit empty default feature set for minimal embedders',
+    patterns: [
+      {
+        regex: /\[features\]/,
+        message: 'missing explicit SDK feature section',
+      },
+      {
+        regex: /default = \[\]/,
+        message: 'agent-runtime default feature set must stay empty',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/execution/agent-runtime/examples/sdk_minimal.rs',
+    reason:
+      'agent-runtime SDK must keep a minimal external embedder example that uses the sdk facade without core',
+    patterns: [
+      {
+        regex: /\buse bitfun_agent_runtime::sdk::\{/,
+        message: 'SDK example must import through the public sdk facade',
+      },
+      {
+        regex: /\bAgentRuntimeSdkCompatibility::current\b/,
+        message: 'SDK example must expose the compatibility contract',
+      },
+      {
+        regex: /\bimpl AgentSubmissionPort for ExampleAgentProvider\b/,
+        message: 'SDK example must show caller-provided submission port injection',
+      },
+      {
+        regex: /\bAgentRuntimeBuilder::new\(\)/,
+        message: 'SDK example must build through AgentRuntimeBuilder',
+      },
+      {
+        regex: /\bAgentRunRequest::new\b/,
+        message: 'SDK example must run through AgentRunRequest',
       },
     ],
   },
@@ -676,6 +820,69 @@ export const requiredContentRules = [
         regex: /\bProductCapabilityAssembly\b/,
         message: 'missing product capability assembly owner',
       },
+      {
+        regex: /\bProductFeatureGroup\b/,
+        message: 'missing product feature group fact owner',
+      },
+      {
+        regex: /\bProductRuntimeAssembly\b/,
+        message: 'missing product runtime assembly owner',
+      },
+      {
+        regex: /\bProductDeliveryProfileEntry\b/,
+        message: 'missing product delivery profile entry matrix',
+      },
+      {
+        regex: /\bMobileWeb\b/,
+        message: 'missing mobile web delivery profile coverage',
+      },
+      {
+        regex: /\bProductAssembler\b/,
+        message: 'missing typed product assembler',
+      },
+      {
+        regex: /\bProductAssemblyInput\b/,
+        message: 'missing product assembly input contract',
+      },
+      {
+        regex: /\bProductRuntimeParts\b/,
+        message: 'missing product runtime parts output',
+      },
+      {
+        regex: /\bfeature_groups_from_tool_provider_group_plan\b/,
+        message: 'missing tool-provider feature group projection owner',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/product-capabilities/tests/product_capabilities.rs',
+    reason:
+      'product-capabilities tests must protect product shape facts, runtime service gap reporting, and legacy harness routing',
+    patterns: [
+      {
+        regex: /\bproduct_assembly_plan_exposes_build_feature_groups_explicitly\b/,
+        message: 'missing product feature group shape regression',
+      },
+      {
+        regex: /\bproduct_runtime_assembly_reports_runtime_service_capability_gaps\b/,
+        message: 'missing product runtime service gap regression',
+      },
+      {
+        regex: /\bproduct_delivery_profile_matrix_documents_current_core_dependency_shape\b/,
+        message: 'missing delivery profile entry matrix regression',
+      },
+      {
+        regex: /\ball_current_product_profiles\b/,
+        message: 'missing delivery profile matrix coverage guard',
+      },
+      {
+        regex: /\bproduct_assembler_builds_runtime_parts_from_explicit_profile_input\b/,
+        message: 'missing typed product assembler regression',
+      },
+      {
+        regex: /\bproduct_harness_provider_plans_legacy_facade_without_execution\b/,
+        message: 'missing legacy harness route non-execution regression',
+      },
     ],
   },
   {
@@ -786,81 +993,116 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/execution/agent-runtime/src/custom_subagent.rs',
+    path: 'src/crates/execution/agent-runtime/src/custom_agent.rs',
     reason:
-      'agent-runtime must own custom subagent portable schema defaults, discovery, and markdown front-matter IO',
+      'agent-runtime must own custom agent portable schema defaults, discovery, validation, and markdown front-matter IO',
     patterns: [
       {
-        regex: /\bpub enum CustomSubagentKind\b/,
-        message: 'missing custom subagent source-kind contract',
+        regex: /\bpub enum CustomAgentKind\b/,
+        message: 'missing custom agent kind contract',
       },
       {
-        regex: /\bpub struct CustomSubagentDiscoveryRoots\b/,
-        message: 'missing custom subagent discovery root contract',
+        regex: /\bpub struct CustomAgentDiscoveryRoots\b/,
+        message: 'missing custom agent discovery root contract',
       },
       {
-        regex: /\bpub struct CustomSubagentLoadReport\b/,
-        message: 'missing custom subagent load report contract',
+        regex: /\bpub struct CustomAgentLoadReport\b/,
+        message: 'missing custom agent load report contract',
       },
       {
-        regex: /\bpub struct CustomSubagentDefinition\b/,
-        message: 'missing custom subagent definition schema',
+        regex: /\bpub struct CustomAgentDefinition\b/,
+        message: 'missing custom agent definition schema',
       },
       {
-        regex: /\bpub enum CustomSubagentDefinitionError\b/,
-        message: 'missing custom subagent definition validation errors',
+        regex: /\bpub enum CustomAgentDefinitionError\b/,
+        message: 'missing custom agent definition validation errors',
+      },
+      {
+        regex: /\bDEFAULT_CUSTOM_MODE_TOOLS\b/,
+        message: 'missing custom mode default tools contract',
       },
       {
         regex: /\bDEFAULT_CUSTOM_SUBAGENT_TOOLS\b/,
         message: 'missing custom subagent default tools contract',
       },
       {
-        regex: /\bpub fn custom_subagent_tools_from_front_matter\b/,
-        message: 'missing custom subagent tools front-matter parser',
+        regex: /\bpub fn custom_agent_read_markdown_file\b/,
+        message: 'missing custom agent markdown file reader',
       },
       {
-        regex: /\bpub fn custom_subagent_tools_to_front_matter\b/,
-        message: 'missing custom subagent tools front-matter serializer',
+        regex: /\bpub fn custom_agent_save_markdown_file\b/,
+        message: 'missing custom agent markdown file writer',
       },
       {
-        regex: /\bpub const fn custom_subagent_readonly_should_save\b/,
-        message: 'missing custom subagent readonly save decision',
+        regex: /\bpub fn custom_agent_possible_dirs\b/,
+        message: 'missing custom agent directory discovery owner',
       },
       {
-        regex: /\bpub const fn custom_subagent_review_should_save\b/,
-        message: 'missing custom subagent review save decision',
+        regex: /\bpub fn load_custom_agent_definitions\b/,
+        message: 'missing custom agent definition loading owner',
       },
       {
-        regex: /\bpub fn custom_subagent_model_should_save\b/,
-        message: 'missing custom subagent model save decision',
+        regex: /\bpub struct CustomAgentValidationContext\b/,
+        message: 'missing custom agent validation context',
       },
       {
-        regex: /\bpub fn custom_subagent_read_markdown_file\b/,
-        message: 'missing custom subagent markdown file reader',
+        regex: /\bpub struct CustomAgentValidationReport\b/,
+        message: 'missing custom agent validation report',
       },
       {
-        regex: /\bpub fn custom_subagent_save_markdown_parts\b/,
-        message: 'missing custom subagent markdown file writer',
+        regex: /\bpub struct CustomAgentModelFallback\b/,
+        message: 'missing custom agent model fallback contract',
       },
       {
-        regex: /\bpub fn custom_subagent_possible_dirs\b/,
-        message: 'missing custom subagent directory discovery owner',
+        regex: /\bpub fn validate_custom_agent_definition\b/,
+        message: 'missing custom agent validation owner',
+      },
+      {
+        regex: /\bpub fn custom_agent_review_writable_tools\b/,
+        message: 'missing custom agent review-tool validation owner',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/execution/agent-runtime/src/custom_subagent.rs',
+    reason:
+      'agent-runtime custom_subagent module must stay a legacy compatibility wrapper over custom_agent owner decisions',
+    patterns: [
+      {
+        regex: /\bpub type CustomSubagentKind = CustomAgentLevel\b/,
+        message: 'missing custom subagent kind compatibility alias',
+      },
+      {
+        regex: /\bpub type CustomSubagentDefinition = CustomAgentDefinition\b/,
+        message: 'missing custom subagent definition compatibility alias',
+      },
+      {
+        regex: /\bpub type CustomSubagentDiscoveryRoots = CustomAgentDiscoveryRoots\b/,
+        message: 'missing custom subagent discovery root compatibility alias',
       },
       {
         regex: /\bpub fn load_custom_subagent_definitions\b/,
-        message: 'missing custom subagent definition loading owner',
+        message: 'missing custom subagent filtered load wrapper',
+      },
+      {
+        regex: /\bcustom_agent_read_markdown_file\b/,
+        message: 'missing custom subagent markdown read delegation',
+      },
+      {
+        regex: /\bcustom_agent_save_markdown_file\b/,
+        message: 'missing custom subagent markdown save delegation',
       },
     ],
   },
   {
     path: 'src/crates/execution/agent-runtime/tests/custom_subagent_discovery_contracts.rs',
     reason:
-      'agent-runtime custom subagent discovery owner must keep behavior-equivalence contracts for directory priority, deduplication, and load errors',
+      'agent-runtime custom subagent discovery owner must keep behavior-equivalence contracts for BitFun directory priority, foreign directory exclusion, and load errors',
     patterns: [
       {
         regex:
-          /\bcustom_subagent_discovery_preserves_directory_priority_and_deduplication\b/,
-        message: 'missing custom subagent discovery priority/dedup regression',
+          /\bcustom_subagent_discovery_preserves_bitfun_priority_and_ignores_foreign_agent_dirs\b/,
+        message: 'missing custom subagent discovery priority/foreign-dir regression',
       },
       {
         regex:
@@ -895,7 +1137,7 @@ export const requiredContentRules = [
         message: 'missing custom subagent missing-field regression',
       },
       {
-        regex: /\bcustom_subagent_markdown_io_preserves_legacy_front_matter_shape\b/,
+        regex: /\bcustom_subagent_markdown_io_writes_canonical_front_matter\b/,
         message: 'missing custom subagent markdown IO regression',
       },
       {
@@ -907,11 +1149,39 @@ export const requiredContentRules = [
   {
     path: 'src/crates/execution/agent-runtime/src/post_call_hooks.rs',
     reason:
-      'agent-runtime must own portable post-call hook routing decisions while concrete hook execution stays in the owning runtime',
+      'agent-runtime must own portable hook registry and post-call routing decisions while concrete hook execution stays in the owning runtime',
     patterns: [
       {
-        regex: /\bpub enum PostCallHookKind\b/,
-        message: 'missing post-call hook kind contract',
+        regex: /\bpub enum RuntimeHookKind\b/,
+        message: 'missing runtime hook kind contract',
+      },
+      {
+        regex: /\bpub enum RuntimeHookErrorPolicy\b/,
+        message: 'missing runtime hook error policy contract',
+      },
+      {
+        regex: /\bpub struct RuntimeHookPlan\b/,
+        message: 'missing runtime hook plan contract',
+      },
+      {
+        regex: /\bpub struct RuntimeHookRegistry\b/,
+        message: 'missing runtime hook registry contract',
+      },
+      {
+        regex: /\btimeout_millis\b/,
+        message: 'missing runtime hook timeout contract',
+      },
+      {
+        regex: /\bDuplicateHookId\b/,
+        message: 'missing runtime hook duplicate-id guard',
+      },
+      {
+        regex: /\bEmptyHookId\b/,
+        message: 'missing runtime hook empty-id guard',
+      },
+      {
+        regex: /\bInvalidTimeoutMillis\b/,
+        message: 'missing runtime hook non-zero-timeout guard',
       },
       {
         regex: /\bpub const fn successful_tool_post_call_hooks\b/,
@@ -935,6 +1205,18 @@ export const requiredContentRules = [
       {
         regex: /\bsuccessful_tool_call_routes_to_shared_context_measurement_hook\b/,
         message: 'missing successful tool post-call hook routing regression',
+      },
+      {
+        regex: /\bruntime_hook_registry_preserves_order_timeout_and_error_policy\b/,
+        message: 'missing runtime hook order/timeout/error-policy regression',
+      },
+      {
+        regex: /\bruntime_hook_registry_rejects_duplicate_ids\b/,
+        message: 'missing runtime hook duplicate-id regression',
+      },
+      {
+        regex: /\bruntime_hook_registry_rejects_unstable_ids_and_zero_timeouts\b/,
+        message: 'missing runtime hook invalid-id/timeout regression',
       },
     ],
   },
@@ -1363,6 +1645,86 @@ export const requiredContentRules = [
     ],
   },
   {
+    path: 'src/crates/execution/agent-runtime/src/event_queue.rs',
+    reason:
+      'agent-runtime must own provider-neutral runtime event queue delivery without core queue implementation',
+    patterns: [
+      {
+        regex: /\bpub struct EventQueue\b/,
+        message: 'missing runtime event queue owner',
+      },
+      {
+        regex: /\bimpl StreamEventSink for EventQueue\b/,
+        message: 'missing stream event sink implementation',
+      },
+      {
+        regex: /\bpub async fn clear_session\b/,
+        message: 'missing session-scoped event queue cleanup',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/execution/agent-runtime/src/event_router.rs',
+    reason:
+      'agent-runtime must own provider-neutral event subscriber routing without core router implementation',
+    patterns: [
+      {
+        regex: /\bpub trait EventSubscriber\b/,
+        message: 'missing event subscriber contract',
+      },
+      {
+        regex: /\bpub struct EventRouter\b/,
+        message: 'missing event router owner',
+      },
+      {
+        regex: /\bpub async fn route_batch\b/,
+        message: 'missing batched event routing entrypoint',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/execution/agent-runtime/src/prompt_markup.rs',
+    reason:
+      'agent-runtime must own provider-neutral prompt markup contracts used by core compatibility paths',
+    patterns: [
+      {
+        regex: /\bpub struct PromptEnvelope\b/,
+        message: 'missing prompt envelope owner',
+      },
+      {
+        regex: /\bpub fn render_user_query\b/,
+        message: 'missing user-query prompt markup helper',
+      },
+      {
+        regex: /\bpub fn strip_prompt_markup\b/,
+        message: 'missing prompt markup stripping helper',
+      },
+      {
+        regex: /\bstrips_current_and_legacy_system_reminder_suffix\b/,
+        message: 'missing legacy system-reminder markup regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/execution/agent-runtime/src/remote_file_delivery.rs',
+    reason:
+      'agent-runtime must own provider-neutral remote file delivery prompt facts without core implementation',
+    patterns: [
+      {
+        regex: /\bTOOL_CONTEXT_REMOTE_FILE_DELIVERY_KEY\b/,
+        message: 'missing remote file delivery context key',
+      },
+      {
+        regex: /\bpub fn remote_file_delivery_reminder\b/,
+        message: 'missing remote file delivery reminder owner',
+      },
+      {
+        regex: /\bpub fn user_workspace_relative_file_link\b/,
+        message: 'missing remote file link presentation helper',
+      },
+    ],
+  },
+  {
     path: 'src/crates/execution/agent-runtime/src/scheduled_job.rs',
     reason:
       'agent-runtime must own scheduled-job portable lifecycle state and transition decisions without concrete cron storage, schedule parsing, or session dispatch',
@@ -1750,42 +2112,46 @@ export const requiredContentRules = [
   {
     path: 'src/crates/assembly/core/src/agentic/agents/definitions/custom/subagent.rs',
     reason:
-      'core custom subagent path must stay a compatibility facade over agent-runtime schema/default and markdown IO decisions',
+      'core custom subagent path must stay a compatibility facade over agent-runtime custom-agent schema/default and markdown IO decisions',
     patterns: [
       {
         regex: /pub use bitfun_agent_runtime::custom_subagent::CustomSubagentKind/,
         message: 'missing custom subagent kind compatibility re-export',
       },
       {
-        regex: /\bCustomSubagentDefinition::new\b/,
-        message: 'missing custom subagent definition construction delegation',
+        regex: /\bCustomAgentDefinition::new\b/,
+        message: 'missing custom agent definition construction delegation',
       },
       {
-        regex: /\bcustom_subagent_read_markdown_file\b/,
-        message: 'missing custom subagent markdown read delegation',
+        regex: /\bcustom_agent_read_markdown_file\b/,
+        message: 'missing custom agent markdown read delegation',
       },
       {
-        regex: /\bcustom_subagent_save_markdown_parts\b/,
-        message: 'missing custom subagent markdown save delegation',
+        regex: /\bCustomAgentData::from_definition\b/,
+        message: 'missing custom agent data adapter delegation',
       },
     ],
   },
   {
     path: 'src/crates/assembly/core/src/agentic/agents/registry/custom.rs',
     reason:
-      'core custom subagent registry must delegate portable discovery/loading to agent-runtime while retaining validation and registry writes',
+      'core custom agent registry must delegate portable discovery/loading and validation to agent-runtime while retaining product tool/model lookup, logging, and registry writes',
     patterns: [
       {
-        regex: /\bload_custom_subagent_definitions\b/,
-        message: 'missing custom subagent runtime load delegation',
+        regex: /\bload_custom_agent_definitions\b/,
+        message: 'missing custom agent runtime load delegation',
       },
       {
-        regex: /\bCustomSubagentDiscoveryRoots\b/,
-        message: 'missing custom subagent runtime discovery root adapter',
+        regex: /\bCustomAgentDiscoveryRoots\b/,
+        message: 'missing custom agent runtime discovery root adapter',
       },
       {
-        regex: /\bCustomSubagent::from_definition\b/,
-        message: 'missing custom subagent runtime definition adapter',
+        regex: /\bvalidate_custom_agent_definition\b/,
+        message: 'missing custom agent runtime validation delegation',
+      },
+      {
+        regex: /\bcustom_agent_from_definition\b/,
+        message: 'missing custom agent runtime definition adapter',
       },
     ],
   },
@@ -2266,6 +2632,48 @@ export const requiredContentRules = [
     ],
   },
   {
+    path: 'src/crates/services/services-core/src/managed_runtime.rs',
+    reason:
+      'services-core must own managed runtime command resolution and PATH merge rules while core supplies only the product runtime root',
+    patterns: [
+      {
+        regex: /\bpub struct ManagedRuntimeResolver\b/,
+        message: 'missing managed runtime resolver owner',
+      },
+      {
+        regex: /\bpub enum RuntimeSource\b/,
+        message: 'missing managed runtime source contract',
+      },
+      {
+        regex: /\bpub fn resolve_command\b/,
+        message: 'missing managed runtime command resolution entrypoint',
+      },
+      {
+        regex: /\bpub fn merged_path_env\b/,
+        message: 'missing managed runtime PATH merge owner',
+      },
+      {
+        regex: /\bnormalizes_windows_alias_for_managed_lookup\b/,
+        message: 'missing Windows command alias regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/service/runtime/mod.rs',
+    reason:
+      'core runtime service must remain a thin compatibility adapter over services-core managed runtime owner',
+    patterns: [
+      {
+        regex: /\bManagedRuntimeResolver::new\b/,
+        message: 'missing services-core managed runtime delegation',
+      },
+      {
+        regex: /\bget_path_manager_arc\b/,
+        message: 'missing product-managed runtime root adapter',
+      },
+    ],
+  },
+  {
     path: 'src/crates/assembly/core/src/service/filesystem/service.rs',
     reason:
       'core filesystem service may keep remote-workspace overlay and BitFunError compatibility, but local filesystem owner must remain services-core',
@@ -2400,15 +2808,23 @@ export const requiredContentRules = [
   {
     path: 'src/crates/assembly/core/src/agentic/tools/restrictions.rs',
     reason:
-      'core tool restrictions facade must preserve per-tool denial messages while runtime restrictions live in agent-tools',
+      'core tool restrictions facade must delegate runtime restriction policy to agent-tools while preserving core error and local-path adapters',
     patterns: [
       {
-        regex: /\bdenied_tool_messages\b/,
-        message: 'missing per-tool denial message field propagation',
+        regex: /\btool_restrictions_for_delegation_policy\b/,
+        message: 'missing agent-tools runtime restriction policy re-export',
       },
       {
-        regex: /\bcustom_deny_message_overrides_generic_runtime_error\b/,
-        message: 'missing custom deny message regression',
+        regex: /\bminiapp_headless_agent_tool_restrictions\b/,
+        message: 'missing agent-tools MiniApp headless restriction re-export',
+      },
+      {
+        regex: /\bimpl From<ToolRestrictionError> for BitFunError\b/,
+        message: 'missing core error mapping adapter',
+      },
+      {
+        regex: /\bis_local_path_within_root\b/,
+        message: 'missing local filesystem path containment adapter',
       },
     ],
   },
@@ -2533,6 +2949,61 @@ export const requiredContentRules = [
       {
         regex: /\bpub fn count_tool_states\b/,
         message: 'missing tool state counting policy',
+      },
+      {
+        regex: /\bpub struct ToolStateEventFacts\b/,
+        message: 'missing provider-neutral tool event facts owner',
+      },
+      {
+        regex: /\bpub enum ToolStateEventKind\b/,
+        message: 'missing provider-neutral tool event state owner',
+      },
+      {
+        regex: /\bpub fn tool_state_event_data\b/,
+        message: 'missing tool state event payload owner',
+      },
+      {
+        regex: /\bpub fn sanitize_tool_result_for_event\b/,
+        message: 'missing tool result event redaction owner',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/execution/tool-execution/src/context.rs',
+    reason:
+      'tool-runtime must own provider-neutral tool custom-data materialization and context facts projection while core keeps runtime handles and concrete ToolUseContext',
+    patterns: [
+      {
+        regex: /\bpub struct ToolRuntimeCustomDataInput\b/,
+        message: 'missing tool runtime custom-data input DTO',
+      },
+      {
+        regex: /\bpub fn build_tool_runtime_custom_data\b/,
+        message: 'missing tool runtime custom-data owner',
+      },
+      {
+        regex: /\bpub struct ToolRuntimeContextFactsInput\b/,
+        message: 'missing tool runtime context facts input DTO',
+      },
+      {
+        regex: /\bpub fn project_tool_context_facts\b/,
+        message: 'missing tool runtime context facts projection owner',
+      },
+      {
+        regex: /\bpub fn delegation_policy_from_custom_data\b/,
+        message: 'missing delegation policy parsing owner',
+      },
+      {
+        regex: /\bpub fn primary_model_supports_image_understanding\b/,
+        message: 'missing model image-support policy owner',
+      },
+      {
+        regex: /\bmaterializes_provider_neutral_tool_custom_data\b/,
+        message: 'missing tool runtime custom-data regression',
+      },
+      {
+        regex: /\bprojects_prompt_safe_tool_context_facts_only\b/,
+        message: 'missing prompt-safe context facts regression',
       },
     ],
   },
@@ -2864,6 +3335,76 @@ export const requiredContentRules = [
       {
         regex: /\bbackground_command_output_reads_snapshot_then_incremental_chunks\b/,
         message: 'missing background command output snapshot/incremental regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/execution/tool-execution/src/exec_command.rs',
+    reason:
+      'tool-runtime must own provider-neutral ExecCommand presentation, control facts, completion shape, and session-not-found result builders while core keeps concrete process managers',
+    patterns: [
+      {
+        regex: /\bpub enum ExecCommandControlAction\b/,
+        message: 'missing provider-neutral exec control action contract',
+      },
+      {
+        regex: /\bpub struct ExecCommandControlRequest\b/,
+        message: 'missing provider-neutral exec control request contract',
+      },
+      {
+        regex: /\bpub fn render_exec_command_response_for_assistant\b/,
+        message: 'missing ExecCommand assistant response owner',
+      },
+      {
+        regex: /\bpub fn render_write_stdin_response_for_assistant\b/,
+        message: 'missing WriteStdin assistant response owner',
+      },
+      {
+        regex: /\bpub fn exec_control_session_not_found_result\b/,
+        message: 'missing ExecControl session-not-found result owner',
+      },
+      {
+        regex: /\bpub fn exec_command_background_output_status\b/,
+        message: 'missing ExecCommand background-output status owner',
+      },
+      {
+        regex: /\bcompletion_value_uses_stable_snake_case_shape\b/,
+        message: 'missing ExecCommand completion shape regression',
+      },
+      {
+        regex: /\bbackground_output_status_maps_terminal_completion_without_core_types\b/,
+        message: 'missing ExecCommand background status regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/execution/tool-execution/src/computer_use.rs',
+    reason:
+      'tool-runtime must own provider-neutral Computer Use loop detection, screenshot hashing, verification, and retry policy while core keeps host adapters',
+    patterns: [
+      {
+        regex: /\bpub struct ComputerUseOptimizer\b/,
+        message: 'missing Computer Use optimizer owner',
+      },
+      {
+        regex: /\bpub fn hash_screenshot_bytes\b/,
+        message: 'missing Computer Use screenshot hash owner',
+      },
+      {
+        regex: /\bpub struct VerificationResult\b/,
+        message: 'missing Computer Use verification result contract',
+      },
+      {
+        regex: /\bpub fn should_retry_action_message\b/,
+        message: 'missing provider-neutral Computer Use retry decision owner',
+      },
+      {
+        regex: /\bdetects_repeated_action_loop\b/,
+        message: 'missing Computer Use loop detection regression',
+      },
+      {
+        regex: /\bretry_decision_uses_error_text_without_core_error_type\b/,
+        message: 'missing Computer Use retry decision regression',
       },
     ],
   },
@@ -5087,7 +5628,7 @@ export const requiredContentRules = [
   {
     path: 'src/crates/assembly/core/src/agentic/tools/product_runtime/materialization.rs',
     reason:
-      'product runtime materialization must keep only concrete tool construction and product plan adapter while delegating generic registry assembly to agent-tools',
+      'product runtime materialization must keep only concrete tool construction while delegating generic provider-entry registry assembly to agent-tools',
     patterns: [
       {
         regex: /\bProductConcreteToolFactory\b/,
@@ -5098,16 +5639,8 @@ export const requiredContentRules = [
         message: 'missing concrete tool factory implementation',
       },
       {
-        regex: /\bProductToolProviderPlanAdapter\b/,
-        message: 'missing product provider plan adapter',
-      },
-      {
-        regex: /\bimpl StaticToolProviderPlan for ProductToolProviderPlanAdapter\b/,
-        message: 'missing product provider plan adapter contract',
-      },
-      {
-        regex: /\bcreate_registry_from_static_provider_plans\b/,
-        message: 'missing generic agent-tools plan-to-registry delegation',
+        regex: /\bcreate_registry_from_static_provider_entries\b/,
+        message: 'missing generic agent-tools provider-entry registry delegation',
       },
       {
         regex: /\bcreate_product_tool_registry_from_plan\b/,
@@ -5301,8 +5834,24 @@ export const requiredContentRules = [
         message: 'missing generic static-provider plan-to-registry helper',
       },
       {
+        regex: /\bcreate_registry_from_static_provider_entries\b/,
+        message: 'missing generic static-provider entry-to-registry helper',
+      },
+      {
         regex: /\bpub fn install_static_provider\b/,
         message: 'missing static provider registry installer',
+      },
+      {
+        regex: /\bpub fn miniapp_headless_agent_tool_restrictions\b/,
+        message: 'missing MiniApp headless runtime restriction policy owner',
+      },
+      {
+        regex: /\bpub fn tool_restrictions_for_delegation_policy\b/,
+        message: 'missing delegation-policy runtime restriction owner',
+      },
+      {
+        regex: /\bdenied_tool_messages\b/,
+        message: 'missing per-tool denial message propagation owner',
       },
       {
         regex: /\bpub fn build_get_tool_spec_duplicate_load_result\b/,
@@ -5454,6 +6003,18 @@ export const requiredContentRules = [
       {
         regex: /\bto_tool_context_facts\b/,
         message: 'missing portable ToolUseContext facts projection',
+      },
+      {
+        regex: /\bproject_tool_context_facts\b/,
+        message: 'missing tool-runtime context facts owner delegation',
+      },
+      {
+        regex: /\bbuild_tool_runtime_custom_data\b/,
+        message: 'missing tool-runtime custom-data owner delegation',
+      },
+      {
+        regex: /\bdelegation_policy_from_custom_data\b/,
+        message: 'missing tool-runtime delegation policy owner delegation',
       },
       {
         regex: /\bimpl PortableToolContextProvider for ToolUseContext\b/,

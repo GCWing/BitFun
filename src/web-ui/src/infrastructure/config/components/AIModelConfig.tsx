@@ -1373,6 +1373,8 @@ const AIModelConfig: React.FC = () => {
           <div className="bitfun-ai-model-config__provider-selection">
             
             <Card
+              data-testid="settings-model-custom-config-btn"
+              data-provider-id="custom"
               variant="default"
               padding="medium"
               interactive
@@ -1398,6 +1400,8 @@ const AIModelConfig: React.FC = () => {
               {providers.map(provider => (
                 <Card
                   key={provider.id}
+                  data-testid="settings-model-provider-option"
+                  data-provider-id={provider.id}
                   variant="default"
                   padding="medium"
                   interactive
@@ -1463,15 +1467,30 @@ const AIModelConfig: React.FC = () => {
       ? remoteModelOptions.map(model => ({
           label: model.display_name || model.id,
           value: model.id,
-          description: model.display_name && model.display_name !== model.id ? model.id : undefined
+          description: model.display_name && model.display_name !== model.id ? model.id : undefined,
+          testId: 'settings-model-option',
+          testAttributes: {
+            'data-model-id': model.id,
+            'data-model-name': model.id,
+          },
         }))
       : (currentTemplate?.models || []).map(model => ({
           label: model,
-          value: model
+          value: model,
+          testId: 'settings-model-option',
+          testAttributes: {
+            'data-model-id': model,
+            'data-model-name': model,
+          },
         }));
     const selectedModelOptions: SelectOption[] = selectedModelDrafts.map(draft => ({
       label: draft.modelName,
       value: draft.modelName,
+      testId: 'settings-model-option',
+      testAttributes: {
+        'data-model-id': draft.modelName,
+        'data-model-name': draft.modelName,
+      },
     }));
     const availableModelOptions: SelectOption[] = Array.from(
       new Map(
@@ -1568,14 +1587,22 @@ const AIModelConfig: React.FC = () => {
     const renderSelectedModelRows = () => {
       if (selectedModelDrafts.length === 0) {
         return (
-          <div className="bitfun-ai-model-config__selected-models-empty">
+          <div
+            className="bitfun-ai-model-config__selected-models-empty"
+            data-testid="settings-model-selected-list-empty"
+            data-selected-count="0"
+          >
             {t('providerSelection.noModelsSelected')}
           </div>
         );
       }
 
       return (
-        <div className="bitfun-ai-model-config__selected-models-list">
+        <div
+          className="bitfun-ai-model-config__selected-models-list"
+          data-testid="settings-model-selected-list"
+          data-selected-count={selectedModelDrafts.length}
+        >
           {selectedModelDrafts.map(draft => {
             const isExpanded = expandedModelCards.has(draft.key) || selectedModelDrafts.length === 1;
             const categoryLabel = categoryCompactLabels[draft.category] ?? draft.category;
@@ -1604,7 +1631,15 @@ const AIModelConfig: React.FC = () => {
               ?? Math.min(Math.floor(draft.maxTokens * 0.75), 10000);
 
             return (
-              <div key={draft.key} className="bitfun-ai-model-config__selected-model-row">
+              <div
+                key={draft.key}
+                className="bitfun-ai-model-config__selected-model-row"
+                data-testid="settings-model-selected-row"
+                data-model-id={draft.modelName}
+                data-model-name={draft.modelName}
+                data-selected="true"
+                data-expanded={isExpanded ? 'true' : 'false'}
+              >
                 <div
                   className={[
                     'bitfun-ai-model-config__selected-model-head',
@@ -1635,6 +1670,9 @@ const AIModelConfig: React.FC = () => {
                     </div>
                     {!editingConfig.id && (
                       <IconButton
+                        data-testid="settings-model-selected-remove-btn"
+                        data-model-id={draft.modelName}
+                        data-model-name={draft.modelName}
                         variant="ghost"
                         size="small"
                         className="bitfun-ai-model-config__selected-model-remove"
@@ -1806,6 +1844,7 @@ const AIModelConfig: React.FC = () => {
     const renderApiKeyRow = (label: string) => (
       <ConfigPageRow label={label} align="center" wide>
         <Input
+          data-testid="settings-model-api-key-input"
           type={showApiKey ? 'text' : 'password'}
           value={editingConfig.api_key || ''}
           onChange={(e) => {
@@ -1830,7 +1869,7 @@ const AIModelConfig: React.FC = () => {
             {isFromTemplate ? (
               <>
                 <ConfigPageRow label={`${t('form.configName')} *`} align="center" wide>
-                  <Input value={editingConfig.name || ''} onChange={(e) => setEditingConfig(prev => ({ ...prev, name: e.target.value }))} placeholder={t('form.configNamePlaceholder')} inputSize="small" />
+                  <Input data-testid="settings-model-provider-name-input" value={editingConfig.name || ''} onChange={(e) => setEditingConfig(prev => ({ ...prev, name: e.target.value }))} placeholder={t('form.configNamePlaceholder')} inputSize="small" />
                 </ConfigPageRow>
                 {renderAuthRow()}
                 {!authIsCli && renderApiKeyRow(`${t('form.apiKey')} *`)}
@@ -1856,6 +1895,7 @@ const AIModelConfig: React.FC = () => {
                       />
                     )}
                     <Input
+                      data-testid="settings-model-base-url-input"
                       type="url"
                       value={editingConfig.base_url || ''}
                       onChange={(e) => {
@@ -1885,6 +1925,7 @@ const AIModelConfig: React.FC = () => {
                 </ConfigPageRow>
                 <ConfigPageRow label={t('form.provider')} align="center" wide>
                   <Select
+                    data-testid="settings-model-request-format-select"
                     value={editingConfig.provider || 'openai'}
                     onChange={(value) => {
                       const provider = value as string;
@@ -1911,6 +1952,9 @@ const AIModelConfig: React.FC = () => {
                   <div className="bitfun-ai-model-config__control-stack">
                     <div className="bitfun-ai-model-config__model-picker-row">
                       <Select
+                        data-testid="settings-model-select"
+                        triggerTestId="settings-model-select-btn"
+                        dropdownTestId="settings-model-select-menu"
                         value={selectedModelValues}
                         onChange={(value) => {
                           const nextModelNames = Array.isArray(value) ? value.map(item => String(item)) : [String(value)];
@@ -1933,6 +1977,7 @@ const AIModelConfig: React.FC = () => {
                     </div>
                     <div className="bitfun-ai-model-config__manual-model-entry">
                       <Input
+                        data-testid="settings-model-manual-name-input"
                         value={manualModelInput}
                         onChange={(e) => setManualModelInput(e.target.value)}
                         onKeyDown={(e) => {
@@ -1944,7 +1989,7 @@ const AIModelConfig: React.FC = () => {
                         placeholder={t('providerSelection.inputModelName')}
                         inputSize="small"
                       />
-                      <Button variant="secondary" size="small" onClick={addManualModelDraft}>
+                      <Button data-testid="settings-model-add-custom-btn" variant="secondary" size="small" onClick={addManualModelDraft}>
                         {t('providerSelection.addCustomModel')}
                       </Button>
                     </div>
@@ -1962,13 +2007,14 @@ const AIModelConfig: React.FC = () => {
                 {isProviderScopedEditing && (
                   <>
                     <ConfigPageRow label={`${t('form.configName')} *`} align="center" wide>
-                      <Input value={editingConfig.name || ''} onChange={(e) => setEditingConfig(prev => ({ ...prev, name: e.target.value }))} placeholder={t('form.configNamePlaceholder')} inputSize="small" />
+                      <Input data-testid="settings-model-provider-name-input" value={editingConfig.name || ''} onChange={(e) => setEditingConfig(prev => ({ ...prev, name: e.target.value }))} placeholder={t('form.configNamePlaceholder')} inputSize="small" />
                     </ConfigPageRow>
                     {renderAuthRow()}
                     {!authIsCli && renderApiKeyRow(`${t('form.apiKey')} *`)}
                     <ConfigPageRow label={`${t('form.baseUrl')} *`} align="center" wide>
                       <div className="bitfun-ai-model-config__control-stack">
                         <Input
+                          data-testid="settings-model-base-url-input"
                           type="url"
                           value={editingConfig.base_url || ''}
                           onChange={(e) => {
@@ -1997,7 +2043,7 @@ const AIModelConfig: React.FC = () => {
                       </div>
                     </ConfigPageRow>
                     <ConfigPageRow label={t('form.provider')} align="center" wide>
-                      <Select value={editingConfig.provider || 'openai'} onChange={(value) => {
+                      <Select data-testid="settings-model-request-format-select" value={editingConfig.provider || 'openai'} onChange={(value) => {
                         const provider = value as string;
                         resetRemoteModelDiscovery();
                         setSelectedModelDrafts(prevDrafts =>
@@ -2025,6 +2071,9 @@ const AIModelConfig: React.FC = () => {
                   <div className="bitfun-ai-model-config__control-stack">
                     <div className="bitfun-ai-model-config__model-picker-row">
                       <Select
+                        data-testid="settings-model-select"
+                        triggerTestId="settings-model-select-btn"
+                        dropdownTestId="settings-model-select-menu"
                         value={editingConfig.id ? (selectedModelValues[0] || '') : selectedModelValues}
                         onChange={(value) => {
                           const nextModelNames = Array.isArray(value)
@@ -2047,6 +2096,7 @@ const AIModelConfig: React.FC = () => {
                     </div>
                     <div className="bitfun-ai-model-config__manual-model-entry">
                       <Input
+                        data-testid="settings-model-manual-name-input"
                         value={manualModelInput}
                         onChange={(e) => setManualModelInput(e.target.value)}
                         onKeyDown={(e) => {
@@ -2058,7 +2108,7 @@ const AIModelConfig: React.FC = () => {
                         placeholder={t('providerSelection.inputModelName')}
                         inputSize="small"
                       />
-                      <Button variant="secondary" size="small" onClick={addManualModelDraft}>
+                      <Button data-testid="settings-model-add-custom-btn" variant="secondary" size="small" onClick={addManualModelDraft}>
                         {t('providerSelection.addCustomModel')}
                       </Button>
                     </div>
@@ -2253,7 +2303,7 @@ const AIModelConfig: React.FC = () => {
 
           <div className="bitfun-ai-model-config__form-actions bitfun-ai-model-config__form-actions--sticky">
             <Button variant="secondary" onClick={closeEditingModal}>{t('actions.cancel')}</Button>
-            <Button variant="primary" onClick={handleSave}>{t('actions.save')}</Button>
+            <Button data-testid="settings-model-save-btn" variant="primary" onClick={handleSave}>{t('actions.save')}</Button>
           </div>
         </div>
       </>
@@ -2275,6 +2325,11 @@ const AIModelConfig: React.FC = () => {
         </span>
         {testResult && (
           <span
+            data-testid="settings-model-test-status"
+            data-config-id={config.id || ''}
+            data-model-id={config.model_name}
+            data-model-name={config.model_name}
+            data-status={testResult.success ? 'success' : 'error'}
             className={`bitfun-ai-model-config__status-dot ${testResult.success ? 'is-success' : 'is-error'}`}
             title={testResult.message}
           />
@@ -2383,6 +2438,10 @@ const AIModelConfig: React.FC = () => {
         expanded={isExpanded}
         onToggle={() => config.id && toggleExpanded(config.id)}
         disabled={!config.enabled}
+        data-testid="settings-model-row"
+        data-config-id={config.id || ''}
+        data-model-id={config.model_name}
+        data-model-name={config.model_name}
       />
     );
   };
@@ -2489,13 +2548,13 @@ const AIModelConfig: React.FC = () => {
             <div className="bitfun-ai-model-config__empty">
               <Wifi size={36} />
               <p>{t('empty.noModels')}</p>
-              <Button variant="primary" size="small" onClick={handleCreateNew}>
+              <Button data-testid="settings-model-create-first-config-btn" variant="primary" size="small" onClick={handleCreateNew}>
                 <Plus size={14} />
                 {t('actions.createFirst')}
               </Button>
             </div>
           ) : (
-            <div className="bitfun-ai-model-config__collection">
+            <div className="bitfun-ai-model-config__collection" data-testid="settings-model-list">
               {providerGroups.map(group => (
                 <div key={group.key} className="bitfun-ai-model-config__provider-group">
                   <div className="bitfun-ai-model-config__provider-group-header">

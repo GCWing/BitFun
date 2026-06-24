@@ -244,10 +244,10 @@ const ShellNav: React.FC = () => {
   }, [deleteEntry, t]);
 
   return (
-    <div className="bitfun-shell-nav">
+    <div className="bitfun-shell-nav" data-testid="shell-panel">
       <div className="bitfun-shell-nav__header">
         <div className="bitfun-shell-nav__title-group">
-          <span className="bitfun-shell-nav__title">{t('nav.shell.title')}</span>
+          <span className="bitfun-shell-nav__title" data-testid="shell-panel-title">{t('nav.shell.title')}</span>
           <ShellNavWorkspaceSwitcher
             workspaceName={workspaceName}
             hasMultipleWorkspaces={hasMultipleWorkspaces}
@@ -314,7 +314,7 @@ const ShellNav: React.FC = () => {
         className={`bitfun-shell-nav__sections${!hasVisibleContent ? ' bitfun-shell-nav__sections--empty' : ''}`}
       >
         {hasVisibleContent ? (
-          <div className="bitfun-shell-nav__terminal-list">
+          <div className="bitfun-shell-nav__terminal-list" data-testid="shell-command-list">
             {entries.map((entry) => (
               <ShellNavEntryItem
                 key={entry.sessionId}

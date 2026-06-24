@@ -1,7 +1,7 @@
-use super::prompt_markup::is_system_reminder_only;
 use crate::agentic::image_analysis::ImageContextData;
 use crate::util::types::{Message as AIMessage, ToolCall as AIToolCall, ToolImageAttachment};
 use crate::util::TokenCounter;
+use bitfun_agent_runtime::prompt_markup::is_system_reminder_only;
 pub use bitfun_runtime_ports::{CompressionContract, CompressionContractItem};
 use log::warn;
 use serde::{Deserialize, Serialize};

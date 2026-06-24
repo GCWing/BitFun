@@ -47,7 +47,7 @@
 
   &__action {
     font-weight: 500;
-    color: #e0e0e0;
+    color: var(--tool-card-text-primary);
   }
 
 
@@ -69,7 +69,7 @@
     align-items: flex-start;
     gap: 8px;
     padding: 6px 0;
-    border-bottom: 1px solid #1a1a1a;
+    border-bottom: 1px solid var(--tool-card-border-subtle);
 
     &:last-child {
       border-bottom: none;
@@ -79,13 +79,13 @@
   &__label {
     font-size: 12px;
     font-weight: 600;
-    color: #a0a0a0;
+    color: var(--tool-card-text-muted);
     min-width: 80px;
   }
 
   &__value {
     font-size: 13px;
-    color: #e0e0e0;
+    color: var(--tool-card-text-primary);
     flex: 1;
   }
 
@@ -101,17 +101,17 @@
     width: 100%;
     padding: 10px 12px;
     background: var(--color-bg-primary);
-    border: 1px solid #1a1a1a;
+    border: 1px solid var(--tool-card-border-subtle);
     border-radius: 4px;
-    color: #e0e0e0;
+    color: var(--tool-card-text-primary);
     font-size: 13px;
     font-weight: 500;
     cursor: pointer;
     transition: all 0.2s ease;
 
     &:hover {
-      background: #0a0a0a;
-      border-color: #2a2a2a;
+      background: var(--color-bg-primary);
+      border-color: var(--border-medium);
     }
 
     svg:first-child {
@@ -124,7 +124,7 @@
     }
 
     svg:last-child {
-      color: #6b7280;
+      color: var(--tool-card-text-muted);
     }
   }
 
@@ -132,7 +132,7 @@
     margin-top: 8px;
     padding: 12px;
     background: var(--color-bg-primary);
-    border: 1px solid #1a1a1a;
+    border: 1px solid var(--tool-card-border-subtle);
     border-radius: 4px;
     max-height: 400px;
     overflow-y: auto;
@@ -143,7 +143,7 @@
     margin: 0;
     font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
     font-size: 12px;
-    color: #e0e0e0;
+    color: var(--tool-card-text-primary);
     line-height: 1.5;
     white-space: pre-wrap;
     word-break: break-word;
@@ -156,8 +156,8 @@
     gap: 8px;
     margin-top: 12px;
     padding: 12px;
-    background: rgba(124, 58, 237, 0.05);
-    border: 1px solid rgba(124, 58, 237, 0.2);
+    background: color-mix(in srgb, var(--color-purple-600) 5%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-purple-600) 20%, transparent);
     border-radius: 4px;
     color: var(--color-purple-600);
     font-size: 13px;

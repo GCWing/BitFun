@@ -126,7 +126,7 @@
 
   &.is-active {
     border-color: var(--color-primary);
-    background: rgba(var(--color-primary-rgb, 99 102 241) / 0.08);
+    background: rgba(var(--color-primary-rgb) / 0.08);
     color: var(--color-text-primary);
     font-weight: $font-weight-semibold;
   }
@@ -166,7 +166,7 @@
 
   &.is-on {
     border: 1px solid var(--color-primary);
-    background: rgba(var(--color-primary-rgb, 99 102 241) / 0.08);
+    background: rgba(var(--color-primary-rgb) / 0.08);
     color: var(--color-text-primary);
   }
 }
@@ -176,7 +176,8 @@
   font-size: 11px;
 }
 
-.th-create-panel__tool-tooltip {
+.th-create-panel__tool-tooltip,
+.th-create-panel__context-tooltip {
   .bitfun-tooltip__content {
     width: max-content;
     max-width: min(520px, calc(100vw - 32px));

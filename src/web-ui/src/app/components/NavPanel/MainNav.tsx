@@ -27,6 +27,7 @@ import { useSceneStore } from '../../stores/sceneStore';
 import { useMyAgentStore } from '../../scenes/my-agent/myAgentStore';
 import { useMiniAppCatalogSync } from '../../scenes/miniapps/hooks/useMiniAppCatalogSync';
 import { flowChatManager } from '@/flow_chat/services/FlowChatManager';
+import { resolveAgentTypeForSessionCreation } from '@/flow_chat/services/flow-chat-manager';
 import { workspaceManager } from '@/infrastructure/services/business/workspaceManager';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import { createLogger } from '@/shared/utils/logger';
@@ -218,12 +219,13 @@ const MainNav: React.FC<MainNavProps> = ({
         if (target.id !== currentWorkspace?.id) {
           await setActiveWorkspace(target.id);
         }
-        const reusableId = findReusableEmptySessionId(target, mode);
+        const effectiveMode = await resolveAgentTypeForSessionCreation(mode, target);
+        const reusableId = findReusableEmptySessionId(target, effectiveMode);
         if (reusableId) {
           await flowChatManager.switchChatSession(reusableId);
           return;
         }
-        await flowChatManager.createChatSession(flowChatSessionConfigForWorkspace(target), mode);
+        await flowChatManager.createChatSession(flowChatSessionConfigForWorkspace(target), effectiveMode);
       } catch (err) {
         log.error('Failed to create session', err);
       }
@@ -413,28 +415,30 @@ const MainNav: React.FC<MainNavProps> = ({
           {recentWorkspaces.map((workspace) => {
             const { hostPrefix, folderLabel, tooltip } = getRecentWorkspaceLineParts(workspace);
             return (
-              <button
-                key={workspace.id}
-                type="button"
-                className="bitfun-nav-panel__workspace-menu-item bitfun-nav-panel__workspace-menu-item--workspace"
-                role="menuitem"
-                title={tooltip}
-                onClick={() => { void handleSwitchWorkspace(workspace.id); }}
-              >
-                <FolderOpen size={13} aria-hidden="true" />
-                <span className="bitfun-nav-panel__workspace-menu-item-main">
-                  {hostPrefix ? (
-                    <>
-                      <span className="bitfun-nav-panel__workspace-menu-item-host">{hostPrefix}</span>
-                      <span className="bitfun-nav-panel__workspace-menu-item-host-sep" aria-hidden>
-                        ·
-                      </span>
-                    </>
-                  ) : null}
-                  <span className="bitfun-nav-panel__workspace-menu-item-name">{folderLabel}</span>
-                </span>
-                {workspace.id === currentWorkspace?.id ? <Check size={12} aria-hidden="true" /> : null}
-              </button>
+            <button
+              key={workspace.id}
+              type="button"
+              className="bitfun-nav-panel__workspace-menu-item bitfun-nav-panel__workspace-menu-item--workspace"
+              role="menuitem"
+              title={tooltip}
+              onClick={() => { void handleSwitchWorkspace(workspace.id); }}
+              data-testid="nav-workspace-menu-recent-workspace"
+              data-workspace-id={workspace.id}
+            >
+              <FolderOpen size={13} aria-hidden="true" />
+              <span className="bitfun-nav-panel__workspace-menu-item-main">
+                {hostPrefix ? (
+                  <>
+                    <span className="bitfun-nav-panel__workspace-menu-item-host">{hostPrefix}</span>
+                    <span className="bitfun-nav-panel__workspace-menu-item-host-sep" aria-hidden>
+                      ·
+                    </span>
+                  </>
+                ) : null}
+                <span className="bitfun-nav-panel__workspace-menu-item-name">{folderLabel}</span>
+              </span>
+              {workspace.id === currentWorkspace?.id ? <Check size={12} aria-hidden="true" /> : null}
+            </button>
             );
           })}
         </div>
@@ -462,6 +466,7 @@ const MainNav: React.FC<MainNavProps> = ({
               className="bitfun-nav-panel__search-trigger"
               onClick={() => setSearchOpen(true)}
               aria-label={t('nav.search.triggerTooltip')}
+              data-testid="nav-search-trigger"
             >
               <span className="bitfun-nav-panel__search-trigger__icon" aria-hidden="true">
                 <span className="bitfun-nav-panel__search-trigger__icon-inner">
@@ -485,6 +490,7 @@ const MainNav: React.FC<MainNavProps> = ({
             className="bitfun-nav-panel__top-action-btn"
             onClick={handleCreateCodeSession}
             aria-label={createCodeTooltip}
+            data-testid="nav-new-code-session-btn"
           >
             <span className="bitfun-nav-panel__top-action-icon-circle" aria-hidden="true">
               <Plus size={12} />
@@ -499,6 +505,7 @@ const MainNav: React.FC<MainNavProps> = ({
             className="bitfun-nav-panel__top-action-btn"
             onClick={handleCreateCoworkSession}
             aria-label={createCoworkTooltip}
+            data-testid="nav-new-cowork-session-btn"
           >
             <span className="bitfun-nav-panel__top-action-icon-circle" aria-hidden="true">
               <Plus size={12} />
@@ -513,6 +520,7 @@ const MainNav: React.FC<MainNavProps> = ({
             className={`bitfun-nav-panel__top-action-btn${isAssistantActive ? ' is-active' : ''}`}
             onClick={handleOpenAssistant}
             aria-label={assistantTooltip}
+            data-testid="nav-assistant-btn"
           >
             <span className="bitfun-nav-panel__top-action-icon-slot" aria-hidden="true">
               <User size={15} />
@@ -521,7 +529,7 @@ const MainNav: React.FC<MainNavProps> = ({
           </button>
         </Tooltip>
 
-        <div className="bitfun-nav-panel__top-action-expand">
+        <div className="bitfun-nav-panel__top-action-expand" data-testid="agent-skill-panel">
           <Tooltip content={extensionsLabel} placement="right" followCursor>
             <button
               type="button"
@@ -533,6 +541,7 @@ const MainNav: React.FC<MainNavProps> = ({
               onClick={() => setIsExtensionsOpen(v => !v)}
               aria-expanded={isExtensionsOpen}
               aria-label={extensionsLabel}
+              data-testid="agent-skill-entry"
             >
               <span className="bitfun-nav-panel__top-action-expand-icons" aria-hidden="true">
                 <Blocks size={15} className="bitfun-nav-panel__top-action-expand-icon-default" />
@@ -548,7 +557,10 @@ const MainNav: React.FC<MainNavProps> = ({
             </button>
           </Tooltip>
 
-          <div className={`bitfun-nav-panel__top-action-sublist${isExtensionsOpen ? ' is-open' : ''}`}>
+          <div
+            className={`bitfun-nav-panel__top-action-sublist${isExtensionsOpen ? ' is-open' : ''}`}
+            data-testid="agent-skill-tabs"
+          >
             <Tooltip content={agentsTooltip} placement="right" followCursor>
               <button
                 type="button"
@@ -559,6 +571,7 @@ const MainNav: React.FC<MainNavProps> = ({
                 ].filter(Boolean).join(' ')}
                 onClick={handleOpenAgents}
                 aria-label={agentsTooltip}
+                data-testid="agent-tab"
               >
                 <span className="bitfun-nav-panel__top-action-icon-slot" aria-hidden="true">
                   <Users size={15} />
@@ -577,6 +590,7 @@ const MainNav: React.FC<MainNavProps> = ({
                 ].filter(Boolean).join(' ')}
                 onClick={handleOpenSkills}
                 aria-label={skillsTooltip}
+                data-testid="skill-tab"
               >
                 <span className="bitfun-nav-panel__top-action-icon-slot" aria-hidden="true">
                   <Puzzle size={15} />
@@ -589,7 +603,7 @@ const MainNav: React.FC<MainNavProps> = ({
       </div>
 
       {/* ── Sections ────────────────────────────────── */}
-      <div className="bitfun-nav-panel__sections">
+      <div className="bitfun-nav-panel__sections" data-testid="nav-sections">
 
         {/* Assistant sessions */}
         <div className="bitfun-nav-panel__section">
@@ -641,6 +655,7 @@ const MainNav: React.FC<MainNavProps> = ({
                     aria-label={addWorkspaceTooltip}
                     aria-expanded={workspaceMenuOpen}
                     onClick={toggleWorkspaceMenu}
+                    data-testid="nav-workspace-add-btn"
                   >
                     <Plus size="var(--bitfun-nav-row-action-icon-size)" />
                   </button>
@@ -660,7 +675,7 @@ const MainNav: React.FC<MainNavProps> = ({
       </div>
 
       {/* ── Bottom: MiniApp ───────────────────────── */}
-      <div className="bitfun-nav-panel__bottom-bar">
+      <div className="bitfun-nav-panel__bottom-bar" data-testid="nav-bottom-bar">
         <div className="bitfun-nav-panel__miniapp-footer">
           <MiniAppEntry
             isActive={activeTabId === 'miniapps' || !!activeMiniAppId}

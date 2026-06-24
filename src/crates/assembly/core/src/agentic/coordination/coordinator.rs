@@ -29,10 +29,6 @@ use crate::agentic::goal_mode::{
     ThreadGoalStore,
 };
 use crate::agentic::image_analysis::ImageContextData;
-use crate::agentic::remote_file_delivery::{
-    needs_computer_links_for_source, remote_file_delivery_reminder,
-    TOOL_CONTEXT_REMOTE_FILE_DELIVERY_KEY,
-};
 use crate::agentic::round_preempt::DialogRoundInjectionSource;
 use crate::agentic::session::SessionManager;
 use crate::agentic::side_question::build_btw_user_input;
@@ -42,6 +38,7 @@ use crate::agentic::skill_agent_snapshot::{
 use crate::agentic::tools::pipeline::{SubagentParentInfo, ToolPipeline};
 use crate::agentic::tools::{
     is_miniapp_headless_agent_run, miniapp_headless_agent_tool_restrictions,
+    tool_restrictions_for_delegation_policy as runtime_tool_restrictions_for_delegation_policy,
     ToolRuntimeRestrictions,
 };
 use crate::agentic::workspace::WorkspaceServices;
@@ -57,6 +54,10 @@ use crate::service::workspace::{
 };
 use crate::service_agent_runtime::CoreServiceAgentRuntime;
 use crate::util::errors::{BitFunError, BitFunResult};
+use bitfun_agent_runtime::remote_file_delivery::{
+    needs_computer_links_for_source, remote_file_delivery_reminder,
+    TOOL_CONTEXT_REMOTE_FILE_DELIVERY_KEY,
+};
 use bitfun_runtime_ports::{
     AgentBackgroundResultRequest, AgentThreadGoalDeliveryKind, AgentThreadGoalDeliveryRequest,
     DelegationPolicy, SubagentContextMode, ThreadGoal, ThreadGoalContinuationPlan,
@@ -222,20 +223,6 @@ fn build_subagent_session_relationship(
 
 fn fork_subagent_system_reminder() -> String {
     "<system_reminder>You are now running as a forked subagent. Messages before this reminder were inherited from the parent agent as context. Messages after this reminder are the request for you. Do not call the Task tool to launch another subagent. Use the tools available to complete the task directly.</system_reminder>".to_string()
-}
-
-fn runtime_tool_restrictions_for_delegation_policy(
-    delegation_policy: DelegationPolicy,
-) -> ToolRuntimeRestrictions {
-    let mut restrictions = ToolRuntimeRestrictions::default();
-    if !delegation_policy.allow_subagent_spawn {
-        restrictions.denied_tool_names.insert("Task".to_string());
-        restrictions.denied_tool_messages.insert(
-            "Task".to_string(),
-            "Recursive subagent delegation is blocked. Use direct tools instead.".to_string(),
-        );
-    }
-    restrictions
 }
 
 struct HiddenSubagentExecutionRequest {
@@ -1725,13 +1712,13 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         skill_agent_context_vars: &HashMap<String, String>,
     ) -> BitFunResult<WrappedUserInputPayload> {
         let agent_registry = get_agent_registry();
-        if let Some(workspace) = workspace {
-            if !workspace.is_remote() {
-                agent_registry
-                    .load_custom_subagents(workspace.root_path())
-                    .await;
-            }
-        }
+        agent_registry
+            .load_custom_agents(
+                workspace
+                    .filter(|binding| !binding.is_remote())
+                    .map(|binding| binding.root_path()),
+            )
+            .await;
         let current_agent = agent_registry
             .get_agent(agent_type, workspace.map(|binding| binding.root_path()))
             .ok_or_else(|| BitFunError::NotFound(format!("Agent not found: {}", agent_type)))?;

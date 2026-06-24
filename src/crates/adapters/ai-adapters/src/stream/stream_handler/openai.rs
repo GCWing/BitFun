@@ -1,7 +1,7 @@
 use super::inline_think::InlineThinkParser;
 use super::stream_stats::StreamStats;
 use super::{next_stream_item, TimedStreamItem};
-use crate::stream::types::openai::{OpenAISSEData, OpenAIToolCallArgumentsNormalizer};
+use crate::stream::types::openai::OpenAISSEData;
 use crate::stream::types::unified::UnifiedResponse;
 use anyhow::{anyhow, Result};
 use eventsource_stream::Eventsource;
@@ -20,20 +20,14 @@ const AI_STREAM_RESPONSE_TARGET: &str = "ai::openai_stream_response";
 
 #[derive(Debug)]
 struct OpenAIResponseNormalizer {
-    tool_arguments_normalizer: OpenAIToolCallArgumentsNormalizer,
     inline_think_parser: InlineThinkParser,
 }
 
 impl OpenAIResponseNormalizer {
     fn new(inline_think_in_text: bool) -> Self {
         Self {
-            tool_arguments_normalizer: OpenAIToolCallArgumentsNormalizer::default(),
             inline_think_parser: InlineThinkParser::new(inline_think_in_text),
         }
-    }
-
-    fn normalize_sse_data(&mut self, sse_data: &mut OpenAISSEData) {
-        sse_data.normalize_tool_call_arguments(&mut self.tool_arguments_normalizer);
     }
 
     fn normalize_response(&mut self, response: UnifiedResponse) -> Vec<UnifiedResponse> {
@@ -175,7 +169,7 @@ pub async fn handle_openai_stream(
         }
 
         stats.increment("chunk:chat_completion");
-        let mut sse_data: OpenAISSEData = match serde_json::from_value(event_json) {
+        let sse_data: OpenAISSEData = match serde_json::from_value(event_json) {
             Ok(event) => event,
             Err(e) => {
                 let error_msg = format!("SSE data schema error: {}, data: {}", e, &raw);
@@ -195,8 +189,6 @@ pub async fn handle_openai_stream(
                 tool_call_count
             );
         }
-
-        normalizer.normalize_sse_data(&mut sse_data);
 
         let has_empty_choices = sse_data.is_choices_empty();
         let unified_responses = sse_data.into_unified_responses();

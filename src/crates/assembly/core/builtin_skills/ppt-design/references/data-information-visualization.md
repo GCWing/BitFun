@@ -13,7 +13,7 @@
 5. 数据诚信
 6. 可编辑 PPTX 实现
 7. 常见失败模式
-8. 回看提示
+8. 写时参考
 
 ## 1. 灵活判断框架
 
@@ -173,8 +173,104 @@
 - 热力矩阵：每个单元格使用离散的 3–5 档纯色，不依赖连续渐变。
 - 复杂地图、桑基图、密集网络、复杂 SVG：不适合默认可编辑路径。改为简化结构、表格/条形图，或明确只用于 1920 HTML 演讲版。
 - 所有图表文字仍遵守「div 不直接写文字」；背景、边框放在 `div`，文本放在 `<p>/<h*>`。
+- **布局纪律（防止塌陷与重叠，硬约束）**：
+  - **不要用垂直方向的 `flex:1` 去拉伸连接线/竖线**。当容器高度不确定（嵌套 `flex:1`、或父容器无明确高度）时，`flex:1` 的竖线会塌陷为 0 高度，导致时间线、连接线消失、内容堆叠。连接线一律用**固定 `height` 的 div**（如 `height:12px`）。
+  - **不要用绝对定位画多象限/多区域布局**。绝对定位元素若只设 `top` 不设 `height`（或只设 `left` 不设 `width`）会无限撑开，与相邻绝对定位元素重叠。多区域等分一律用 **CSS grid**（`grid-template-columns`/`grid-template-rows`），高度由 grid 自动均分，绝不塌陷。
+  - **水平等宽列用 `flex:1` 是安全的**（横向 `display:flex` + 子项 `flex:1` 等分宽度），本纪律只针对垂直拉伸。
 
 纯 HTML 演讲版可以使用 SVG path、clip-path 和渐变，但仍需保证图形真实表达数据，不把视觉效果当作证据。
+
+### 6.1 架构图 / 流程图 / 系统图的可编辑实现
+
+技术方案、工程分析、项目架构、系统设计这类内容，架构图和流程图几乎是不可或缺的表达。它们在可编辑 PPTX 路径下完全可以用纯 HTML/CSS 实现——关键是**把节点、连接线、标签都拆成独立的 div/p 元素**，不用 SVG path、不用 background-image。
+
+**通用构建积木**：
+- **节点框**：`<div style="border:1.5px solid #主色; padding:6px 10px;">` + 内部 `<p>` 写节点名。
+- **连接线（水平/垂直）**：`<div style="width:宽度; height:1.5px; background:#主色;">`（水平）或 `height:高度; width:1.5px;`（垂直）。
+- **箭头**：CSS 三角形 `<div style="width:0; height:0; border-left:5px solid #主色; border-top:4px solid transparent; border-bottom:4px solid transparent;">`（右箭头）；其它方向调整 border 边。
+- **分组容器（泳道/层）**：`<div style="border:1px solid #e2e8f0; background:#f8fafc; padding:10px;">`，内部用 flex 或 grid 排子节点。
+- **所有文字放 `<p>`/`<span>`**，背景/边框放 `div`。
+
+**① 分层架构图（系统组成：分层结构）**
+```html
+<div style="display:flex; flex-direction:column; gap:8px;">
+  <!-- 一层 -->
+  <div style="border:1px solid #e2e8f0; background:#f8fafc; padding:8px 10px;">
+    <p style="font-size:11px; font-weight:700; color:#64748b; margin:0 0 4px 0;">第一层（如接入/表层）</p>
+    <div style="display:flex; gap:6px;">
+      <div style="flex:1; border:1.5px solid #1e3a8a; padding:5px 8px; text-align:center;">
+        <p style="font-size:11px; font-weight:700; color:#1e3a8a; margin:0;">模块一</p>
+      </div>
+      <div style="flex:1; border:1.5px solid #1e3a8a; padding:5px 8px; text-align:center;">
+        <p style="font-size:11px; font-weight:700; color:#1e3a8a; margin:0;">模块二</p>
+      </div>
+    </div>
+  </div>
+  <!-- 层间连接：用一个居中的竖线 div -->
+  <div style="display:flex; justify-content:center;">
+    <div style="width:1.5px; height:12px; background:#94a3b8;"></div>
+  </div>
+  <!-- 下一层同构，层名与模块名由具体主题决定 -->
+</div>
+```
+> 适用：任何分层结构的系统组成——微服务架构、技术栈分层、数据流水线、组织层级、产品模块图等。每层一个分组容器，层内模块用并排节点框，层间用竖线连接。旁边的文字解读栏逐层解释职责。
+
+**② 线性流程图（步骤序列：输入→处理→输出）**
+```html
+<div style="display:flex; align-items:center; gap:0; flex-wrap:wrap;">
+  <div style="border:1.5px solid #1e3a8a; padding:6px 10px; text-align:center; min-width:70px;">
+    <p style="font-size:11px; font-weight:700; color:#1e3a8a; margin:0;">① 步骤一</p>
+  </div>
+  <div style="width:16px; height:1.5px; background:#1e3a8a;"></div>
+  <div style="width:0; height:0; border-left:5px solid #1e3a8a; border-top:4px solid transparent; border-bottom:4px solid transparent;"></div>
+  <div style="border:1.5px solid #1e3a8a; padding:6px 10px; text-align:center; min-width:70px;">
+    <p style="font-size:11px; font-weight:700; color:#1e3a8a; margin:0;">② 步骤二</p>
+  </div>
+  <!-- 后续节点同构，步骤多时可折行（flex-wrap） -->
+</div>
+```
+> 适用：任何线性流程——数据处理流水线、CI/CD、请求处理链路、业务审批、项目阶段等。节点用动词开头，箭头明确方向。步骤超过 6 个时折行或拆成两行，旁边配编号解读。
+
+**③ 泳道图（多角色交接）**
+```html
+<div style="display:flex; gap:0; border:1px solid #e2e8f0;">
+  <!-- 泳道：每条一列，左侧角色标签 -->
+  <div style="display:flex; width:100%;">
+    <div style="width:80px; background:#f1f5f9; border-right:1px solid #e2e8f0; display:flex; align-items:center; justify-content:center;">
+      <p style="font-size:11px; font-weight:700; color:#1e3a8a; writing-mode:vertical-rl; margin:0;">角色一</p>
+    </div>
+    <div style="flex:1; padding:8px; display:flex; align-items:center; gap:6px;">
+      <div style="border:1.5px solid #1e3a8a; padding:5px 8px;"><p style="font-size:10px; color:#1e3a8a; margin:0;">动作A</p></div>
+    </div>
+  </div>
+  <!-- 其它泳道（角色二/角色三）同构，纵向堆叠，跨泳道箭头用绝对定位或简化为文字标注 -->
+</div>
+```
+> 适用：多角色协作流程、多团队交接、跨部门审批等多泳道场景。
+
+**④ 因果链 / 问题树（根因分析）**
+```html
+<div style="display:flex; flex-direction:column; align-items:center; gap:6px;">
+  <!-- 结果在顶部，原因在下方逐层展开 -->
+  <div style="border:1.5px solid #dc2626; padding:5px 12px; background:#fef2f2;">
+    <p style="font-size:11px; font-weight:700; color:#dc2626; margin:0;">现象：待分析的表层结果</p>
+  </div>
+  <div style="width:1.5px; height:10px; background:#94a3b8;"></div>
+  <!-- 分叉：用 flex 横排多个原因节点 -->
+  <div style="display:flex; gap:12px;">
+    <div style="border:1px solid #e2e8f0; padding:5px 8px;"><p style="font-size:10px; color:#1f2937; margin:0;">原因一</p></div>
+    <div style="border:1px solid #e2e8f0; padding:5px 8px;"><p style="font-size:10px; color:#1f2937; margin:0;">原因二</p></div>
+    <div style="border:1px solid #e2e8f0; padding:5px 8px;"><p style="font-size:10px; color:#1f2937; margin:0;">原因三</p></div>
+  </div>
+</div>
+```
+> 适用：故障复盘、性能问题根因分析、业务归因、技术方案的风险推演等任何「由果溯因」场景。
+
+**架构图/流程图的质量要点**：
+- 节点是否用**动词或明确名词**（不是模糊的「处理模块」）？
+- 箭头方向是否清晰？跨层/跨步的依赖是否标全？
+- 旁边是否有**逐节点/逐层的文字解读**（不能只有图没有解释）？
+- 节点数量是否在可读范围（线性流程 ≤ 7 步，分层架构 ≤ 4 层，超出就拆页或分层展开）？
 
 ## 7. 常见风险信号
 
@@ -191,9 +287,9 @@
 - 复杂图塞在半页，字号和标签小到无法演示。
 - 为了「更像数据页」编造数字、补齐缺失值或伪造精度。
 
-## 8. 回看提示
+## 8. 写时参考（不要求生成后回头逐页复核）
 
-完成 deck 后可以整体回看，不要求每页都满足同一种标准：
+以下要点供写每页时参考，不要求生成完 deck 后再整体回看或返工：
 
 1. 有数据或结构的页面里，是否错过了能显著提升理解的可视化机会？
 2. 是否也存在为了“看起来丰富”而硬加的图表或图示？

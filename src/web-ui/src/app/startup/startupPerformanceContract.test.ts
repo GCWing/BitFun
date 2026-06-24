@@ -9,6 +9,20 @@ function readSource(relativePath: string): string {
   return readFileSync(fileURLToPath(new URL(relativePath, import.meta.url)), 'utf8');
 }
 
+function dynamicImportSpecifiers(source: string): string[] {
+  return Array.from(
+    source.matchAll(/import\(\s*(['"])(.*?)\1\s*\)/g),
+    match => match[2]
+  );
+}
+
+function staticImportSpecifiers(source: string): string[] {
+  return Array.from(
+    source.matchAll(/from\s+(['"])(.*?)\1/g),
+    match => match[2]
+  );
+}
+
 describe('startup performance contract', () => {
   it('keeps the pre-React startup fallback logo-only', () => {
     const source = readSource('../../../index.html');
@@ -41,6 +55,12 @@ describe('startup performance contract', () => {
     expect(alphaAt(64, 64)).toBeGreaterThan(240);
   });
 
+  it('keeps the startup overlay exit short enough for a fast visual handoff', () => {
+    const source = readSource('../../../index.html');
+
+    expect(source).toContain('animation: bitfun-startup-overlay-exit 0.32s ease-in-out both;');
+  });
+
   it('keeps editor and tool infrastructure out of the first startup module', () => {
     const source = readSource('../../main.tsx');
 
@@ -51,6 +71,17 @@ describe('startup performance contract', () => {
 
     expect(source).toContain("import('./tools/initializeTools')");
     expect(source).toContain("import('./shared/context-menu-system')");
+  });
+
+  it('keeps the required i18n provider off an async startup waterfall', () => {
+    const source = readSource('../../main.tsx');
+
+    expect(source).toContain(
+      'import { I18nProvider } from "./infrastructure/i18n/providers/I18nProvider"'
+    );
+    expect(source).not.toMatch(/import\(['"]\.\/infrastructure\/i18n['"]\)/);
+    expect(source).toContain("step: 'load_i18n_provider'");
+    expect(source).toContain("mode: 'static'");
   });
 
   it('does not block first React render on frontend log-level config reads', () => {
@@ -64,6 +95,55 @@ describe('startup performance contract', () => {
     expect(mainSource).toContain('installFrontendLogLevelConfigWatcher');
     expect(loggerSource).toContain('__BITFUN_BOOTSTRAP_LOG_LEVEL__');
     expect(themeSource).toContain('__BITFUN_BOOTSTRAP_LOG_LEVEL__');
+  });
+
+  it('keeps startup keybindings on the bootstrap path instead of a first-window IPC', () => {
+    const configManagerSource = readSource('../../infrastructure/config/services/ConfigManager.ts');
+    const themeSource = readSource('../../../../apps/desktop/src/theme.rs');
+
+    expect(themeSource).toContain('__BITFUN_BOOTSTRAP_KEYBINDINGS__');
+    expect(themeSource).toContain('keybindings: global_config.app.keybindings');
+    expect(themeSource).toContain('MAX_BOOTSTRAP_KEYBINDINGS_JSON_BYTES');
+    expect(themeSource).toContain('.filter(|json| json.len() <= MAX_BOOTSTRAP_KEYBINDINGS_JSON_BYTES)');
+    expect(configManagerSource).toContain('consumeBootstrapOptionalConfig');
+    expect(configManagerSource).toContain('__BITFUN_BOOTSTRAP_KEYBINDINGS__');
+    expect(configManagerSource).toContain("path !== 'app.keybindings'");
+    expect(configManagerSource).toContain('delete globalThis.__BITFUN_BOOTSTRAP_KEYBINDINGS__');
+  });
+
+  it('keeps workspace startup state on the bootstrap path with command fallback', () => {
+    const globalStateSource = readSource('../../shared/types/global-state.ts');
+    const desktopThemeSource = readSource('../../../../apps/desktop/src/theme.rs');
+    const desktopLibSource = readSource('../../../../apps/desktop/src/lib.rs');
+    const desktopCommandsSource = readSource('../../../../apps/desktop/src/api/commands.rs');
+
+    expect(desktopThemeSource).toContain('__BITFUN_BOOTSTRAP_WORKSPACE_STARTUP_STATE__');
+    expect(desktopThemeSource).toContain('MAX_BOOTSTRAP_WORKSPACE_STATE_JSON_BYTES');
+    expect(desktopLibSource).toContain('prepare_workspace_startup_bootstrap_snapshot');
+    expect(desktopLibSource).toContain('tokio::task::block_in_place');
+    expect(desktopLibSource).not.toContain('tauri::async_runtime::block_on(prepare_workspace_startup_bootstrap_snapshot');
+    expect(desktopCommandsSource).toContain('initialize_workspace_startup_state_impl');
+    expect(globalStateSource).toContain('consumeBootstrapWorkspaceStartupStateSnapshot');
+    expect(globalStateSource).toContain('__BITFUN_BOOTSTRAP_WORKSPACE_STARTUP_STATE__');
+    expect(globalStateSource).toContain(
+      'delete globalThis.__BITFUN_BOOTSTRAP_WORKSPACE_STARTUP_STATE__'
+    );
+  });
+
+  it('keeps startup resource timing as bounded E2E-only report data', () => {
+    const perfSpecSource = readSource(
+      '../../../../../tests/e2e/specs/performance/startup-session-perf.spec.ts'
+    );
+    const resourceTimingSource = readSource(
+      '../../../../../tests/e2e/helpers/performance-resource-timing.ts'
+    );
+
+    expect(perfSpecSource).toContain('readStartupResourceTimingSummary');
+    expect(perfSpecSource).toContain('resourceTiming');
+    expect(resourceTimingSource).toContain('sanitizeResourceTimingName');
+    expect(resourceTimingSource).toContain('MAX_RESOURCE_TIMING_ENTRIES');
+    expect(resourceTimingSource).not.toContain('console.log');
+    expect(resourceTimingSource).not.toContain('createLogger');
   });
 
   it('keeps built-in theme startup on the bootstrap path without pre-render config writes', () => {
@@ -98,6 +178,30 @@ describe('startup performance contract', () => {
     );
   });
 
+  it('keeps system tray creation out of the synchronous Tauri setup path', () => {
+    const desktopLibSource = readSource('../../../../apps/desktop/src/lib.rs');
+    const traySource = readSource('../../../../apps/desktop/src/tray.rs');
+    const appSource = readSource('../App.tsx');
+
+    expect(desktopLibSource).not.toContain('crate::tray::setup_tray(app, &startup_trace)');
+    expect(desktopLibSource).not.toContain('Failed to set up system tray');
+    expect(traySource).toContain('const TRAY_TRACE_CATEGORY: &str = "native_background";');
+    expect(traySource).not.toContain('record_elapsed_step("native_setup", "setup_tray.');
+    expect(appSource).toContain('initializeTrayAfterStartup');
+  });
+
+  it('does not turn tray initialization failure into a close-to-tray behavior change', () => {
+    const systemApiSource = readSource('../../../../apps/desktop/src/api/system_api.rs');
+    const minimizeStart = systemApiSource.indexOf('pub async fn minimize_to_tray');
+    const initializeTrayStart = systemApiSource.indexOf('pub async fn initialize_tray_after_startup');
+    const minimizeSource = systemApiSource.slice(minimizeStart, initializeTrayStart);
+
+    expect(minimizeSource).toContain('crate::tray::setup_tray(&app, &startup_trace)');
+    expect(minimizeSource).toContain('Failed to initialize tray before minimizing');
+    expect(minimizeSource).toContain('window.hide()');
+    expect(minimizeSource).not.toContain('setup_tray(&app, &startup_trace).map_err');
+  });
+
   it('starts non-critical work after the startup overlay handoff', () => {
     const source = readSource('../../main.tsx');
 
@@ -124,6 +228,14 @@ describe('startup performance contract', () => {
     expect(source).toContain('}, [interactiveShellReady, startupOverlayVisible]);');
   });
 
+  it('keeps ACP requirement probing out of the startup background path', () => {
+    const source = readSource('./deferredStartupSystems.ts');
+
+    expect(source).not.toContain('probeClientRequirements');
+    expect(source).not.toContain('probe_acp_client_requirements');
+    expect(source).not.toContain('acp_client_requirements');
+  });
+
   it('does not initialize AI from the root app component', () => {
     const source = readSource('../App.tsx');
 
@@ -142,6 +254,58 @@ describe('startup performance contract', () => {
     expect(source).toContain("import('./layout/AppLayout')");
     expect(source).toContain('app_layout_ready');
     expect(source).toContain('!appLayoutReady');
+  });
+
+  it('keeps non-default shell surfaces out of the startup import path', () => {
+    const appSource = readSource('../App.tsx');
+    const appLayoutSource = readSource('../layout/AppLayout.tsx');
+    const footerSource = readSource('../components/NavPanel/components/PersistentFooterActions.tsx');
+    const chatPaneSource = readSource('../scenes/session/ChatPane.tsx');
+    const chatInputSource = readSource('../../flow_chat/components/ChatInput.tsx');
+    const toolbarModeProviderSource = readSource(
+      '../../flow_chat/components/toolbar-mode/ToolbarModeProvider.tsx'
+    );
+
+    expect(appSource).not.toContain("from '../flow_chat/components/toolbar-mode'");
+    expect(appSource).toContain(
+      "from '../flow_chat/components/toolbar-mode/ToolbarModeProvider'"
+    );
+    expect(appLayoutSource).not.toContain(
+      "from '../../flow_chat/components/toolbar-mode'"
+    );
+    expect(appLayoutSource).not.toContain("import { FloatingMiniChat } from './FloatingMiniChat'");
+    expect(appLayoutSource).toContain(
+      "import('../../flow_chat/components/toolbar-mode/ToolbarMode')"
+    );
+    expect(appLayoutSource).toContain("import('./FloatingMiniChat')");
+    expect(appLayoutSource).not.toContain("import { AboutDialog }");
+    expect(appLayoutSource).not.toContain("from '../../tools/workspace'");
+    expect(appLayoutSource).toContain("import('../components/AboutDialog')");
+    expect(appLayoutSource).toContain("import('../../tools/workspace/components/WorkspaceManager')");
+    expect(appLayoutSource).toContain("import { FlowChatManager }");
+    expect(appLayoutSource).not.toContain("import('../../flow_chat/services/FlowChatManager')");
+    expect(footerSource).not.toContain("import { AboutDialog }");
+    expect(footerSource).toContain("import('../../AboutDialog')");
+    expect(chatPaneSource).not.toContain("from '../../../flow_chat'");
+    expect(chatPaneSource).toContain(
+      "from '../../../flow_chat/components/modern/ModernFlowChatContainer'"
+    );
+    expect(chatPaneSource).toContain("from '../../../flow_chat/components/ChatInput'");
+    expect(chatInputSource).not.toContain("from '@/flow_chat'");
+    expect(chatInputSource).toContain("from '@/flow_chat/services/FlowChatManager'");
+    expect(toolbarModeProviderSource).toContain("await import('./ToolbarMode')");
+    expect(toolbarModeProviderSource.indexOf("await import('./ToolbarMode')")).toBeLessThan(
+      toolbarModeProviderSource.indexOf('setIsToolbarMode(true)')
+    );
+  });
+
+  it('keeps restored historical tail content out of enter animations', () => {
+    const source = readSource('../../flow_chat/components/modern/ModernFlowChatContainer.scss');
+
+    expect(source).toContain('[data-history-state="ready"][data-is-partial="true"]');
+    expect(source).toContain('.user-message-item');
+    expect(source).toContain('.model-round-item');
+    expect(source).toContain('animation: none');
   });
 
   it('releases interactive shell readiness without waiting for an extra AppLayout state commit', () => {
@@ -341,7 +505,7 @@ describe('startup performance contract', () => {
     expect(source).toContain("historyOpenIntentDispatch !== 'none'");
     expect(source).not.toContain('if (historyOpenIntentDispatched)');
     expect(pointerDownStart).toBeGreaterThan(switchStart);
-    expect(source.slice(pointerDownStart)).toContain('dispatchHistoryOpenIntentForSession(session)');
+    expect(source.slice(pointerDownStart)).toContain("dispatchHistoryOpenIntentForSession(session, 'pointerdown')");
     expect(intentSource).toContain('RECENT_HISTORY_OPEN_INTENT_MS');
     expect(intentSource).toContain('HISTORY_SESSION_OPEN_TRANSITION_MAX_MS');
     expect(intentSource).toContain('subscribeHistorySessionOpenTransition');
@@ -500,11 +664,42 @@ describe('startup performance contract', () => {
 
   it('keeps startup session metadata paging on the narrow SessionAPI entrypoint', () => {
     const source = readSource('../../flow_chat/store/FlowChatStore.ts');
+    const imports = dynamicImportSpecifiers(source);
 
     expect(source).toContain("import('@/infrastructure/api/service-api/SessionAPI')");
-    expect(source).not.toMatch(
-      /const\s+\{\s*sessionAPI\s*\}\s*=\s*await\s+import\(['"]@\/infrastructure\/api['"]\)/
+    expect(imports).not.toContain('@/infrastructure/api');
+  });
+
+  it('keeps historical session restore on the narrow AgentAPI entrypoint', () => {
+    const source = readSource('../../flow_chat/store/FlowChatStore.ts');
+    const imports = dynamicImportSpecifiers(source);
+    const staticImports = staticImportSpecifiers(source);
+    const agentApiDynamicImports = imports.filter(specifier => specifier.endsWith('/AgentAPI'));
+    const agentApiStaticImports = staticImports.filter(specifier => specifier.endsWith('/AgentAPI'));
+
+    expect(agentApiStaticImports).toEqual(['@/infrastructure/api/service-api/AgentAPI']);
+    expect(agentApiDynamicImports.length).toBeGreaterThan(0);
+    expect(new Set(agentApiDynamicImports)).toEqual(
+      new Set(['@/infrastructure/api/service-api/AgentAPI'])
     );
+    expect(staticImports).not.toContain('@/infrastructure/api');
+    expect(imports).not.toContain('@/infrastructure/api');
+  });
+
+  it('keeps session interaction hot paths off the broad API barrel', () => {
+    const hotPathSources = [
+      '../../flow_chat/hooks/useFlowChat.ts',
+      '../../flow_chat/components/modern/ModernFlowChatContainer.tsx',
+      '../../flow_chat/components/modern/useFlowChatSync.ts',
+      '../../flow_chat/components/ChatInput.tsx',
+      '../../flow_chat/services/flow-chat-manager/PersistenceModule.ts',
+      '../../flow_chat/state-machine/SessionStateMachine.ts',
+    ].map(readSource);
+
+    for (const source of hotPathSources) {
+      expect(staticImportSpecifiers(source)).not.toContain('@/infrastructure/api');
+      expect(dynamicImportSpecifiers(source)).not.toContain('@/infrastructure/api');
+    }
   });
 
   it('keeps Agent companion implementation modules out of the root startup bundle', () => {

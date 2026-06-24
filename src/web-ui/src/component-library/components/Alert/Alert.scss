@@ -15,8 +15,8 @@
   &--success {
     border-color: var(--color-success-border);
     background: linear-gradient(135deg,
-      rgba(52, 211, 153, 0.06) 0%,
-      rgba(52, 211, 153, 0.04) 100%);
+      color-mix(in srgb, var(--color-success) 6%, transparent) 0%,
+      color-mix(in srgb, var(--color-success) 4%, transparent) 100%);
 
     .alert__icon {
       color: var(--color-success);
@@ -30,8 +30,8 @@
   &--error {
     border-color: var(--color-error-border);
     background: linear-gradient(135deg,
-      rgba(239, 68, 68, 0.06) 0%,
-      rgba(239, 68, 68, 0.04) 100%);
+      color-mix(in srgb, var(--color-error) 6%, transparent) 0%,
+      color-mix(in srgb, var(--color-error) 4%, transparent) 100%);
 
     .alert__icon {
       color: var(--color-error);
@@ -45,8 +45,8 @@
   &--warning {
     border-color: var(--color-warning-border);
     background: linear-gradient(135deg,
-      rgba(245, 158, 11, 0.06) 0%,
-      rgba(245, 158, 11, 0.04) 100%);
+      color-mix(in srgb, var(--color-warning) 6%, transparent) 0%,
+      color-mix(in srgb, var(--color-warning) 4%, transparent) 100%);
 
     .alert__icon {
       color: var(--color-warning);
@@ -60,7 +60,7 @@
   &--info {
     border-color: var(--color-info-border);
     background: linear-gradient(135deg,
-      rgba(96, 165, 250, 0.06) 0%,
+      color-mix(in srgb, var(--color-accent-500) 6%, transparent) 0%,
       var(--color-accent-50) 100%);
 
     .alert__icon {

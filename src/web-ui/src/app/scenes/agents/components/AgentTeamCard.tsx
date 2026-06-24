@@ -1,8 +1,10 @@
 import React from 'react';
 import { ShieldCheck, Sparkles } from 'lucide-react';
+import { AGENT_TEAM_TAG_COLORS } from '../agentTheme';
 import './AgentTeamCard.scss';
 
 interface AgentTeamCardProps {
+  teamId?: string;
   index?: number;
   title: string;
   subtitle: string;
@@ -11,13 +13,8 @@ interface AgentTeamCardProps {
   onOpen: () => void;
 }
 
-const TAG_COLORS = [
-  { color: '#f59e0b', border: '#f59e0b44' },
-  { color: '#14b8a6', border: '#14b8a644' },
-  { color: '#6366f1', border: '#6366f144' },
-];
-
 const AgentTeamCard: React.FC<AgentTeamCardProps> = ({
+  teamId,
   index = 0,
   title,
   subtitle,
@@ -28,7 +25,7 @@ const AgentTeamCard: React.FC<AgentTeamCardProps> = ({
   return (
     <div
       className="agent-team-card"
-      style={{ '--card-index': index } as React.CSSProperties}
+      style={{ '--surface-stagger-index': index } as React.CSSProperties}
       role="button"
       tabIndex={0}
       onClick={onOpen}
@@ -38,6 +35,8 @@ const AgentTeamCard: React.FC<AgentTeamCardProps> = ({
         }
       }}
       aria-label={title}
+      data-testid="agents-team-card"
+      data-team-id={teamId ?? ''}
     >
       <div className="agent-team-card__header">
         <div className="agent-team-card__icon">
@@ -65,8 +64,8 @@ const AgentTeamCard: React.FC<AgentTeamCardProps> = ({
               key={name}
               className="agent-team-card__tag-chip"
               style={{
-                color: TAG_COLORS[i % TAG_COLORS.length].color,
-                borderColor: TAG_COLORS[i % TAG_COLORS.length].border,
+                color: AGENT_TEAM_TAG_COLORS[i % AGENT_TEAM_TAG_COLORS.length].color,
+                borderColor: AGENT_TEAM_TAG_COLORS[i % AGENT_TEAM_TAG_COLORS.length].border,
               }}
             >
               {name}

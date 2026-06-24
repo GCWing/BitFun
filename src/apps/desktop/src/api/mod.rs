@@ -13,6 +13,7 @@ pub mod computer_use_api;
 pub mod config_api;
 pub mod context_upload_api;
 pub mod cron_api;
+pub mod custom_agent_api;
 pub mod debug_api;
 pub mod diff_api;
 pub mod dto;

@@ -111,7 +111,7 @@ pub struct AppConfig {
     pub right_panel: RightPanelConfig,
     pub notifications: NotificationConfig,
     #[serde(default)]
-    pub session_config: AppSessionConfig,
+    pub flow_chat: AppFlowChatConfig,
     pub ai_experience: AIExperienceConfig,
     /// User-defined keyboard shortcut overrides.
     /// Stored as opaque JSON so the backend remains schema-agnostic;
@@ -154,13 +154,13 @@ pub struct ModelExchangeTracingConfig {
     pub mode: ModelExchangeTracingMode,
 }
 
-/// Session-related UI preferences.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// FlowChat UI preferences.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
-pub struct AppSessionConfig {
-    /// Default new session mode used by the frontend.
-    /// Supported values: "code", "cowork".
-    pub default_mode: String,
+pub struct AppFlowChatConfig {
+    /// Optional user override for the default ChatInput mode id.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default_mode_id: Option<String>,
 }
 
 /// A user-defined quick action for the FlowChat post-coding actions menu.
@@ -591,6 +591,10 @@ pub struct AIConfig {
     #[serde(default = "default_subagent_max_concurrency")]
     pub subagent_max_concurrency: usize,
 
+    /// Scheduling policy for multiple subagent launch calls in the same model batch.
+    #[serde(default = "default_subagent_batch_execution_policy")]
+    pub subagent_batch_execution_policy: SubagentBatchExecutionPolicy,
+
     /// Global proxy configuration.
     pub proxy: ProxyConfig,
 
@@ -630,6 +634,18 @@ pub struct AIConfig {
     /// Maximum number of rounds per dialog turn before soft-pausing.
     #[serde(default = "default_max_rounds")]
     pub max_rounds: usize,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum SubagentBatchExecutionPolicy {
+    /// Preserve the tool-owned concurrency-safety decision.
+    #[default]
+    SafeOnly,
+    /// Force multiple Task calls from the same model batch into parallel scheduling.
+    ForceParallel,
+    /// Treat all Task calls as serial even when a subagent is read-only.
+    Serial,
 }
 
 impl AIConfig {
@@ -775,6 +791,10 @@ fn default_skip_tool_confirmation() -> bool {
 
 fn default_subagent_max_concurrency() -> usize {
     5
+}
+
+fn default_subagent_batch_execution_policy() -> SubagentBatchExecutionPolicy {
+    SubagentBatchExecutionPolicy::SafeOnly
 }
 
 pub const DEFAULT_MAX_ROUNDS: usize = 200;
@@ -1345,7 +1365,7 @@ impl Default for AppConfig {
                 dialog_completion_notify: true,
                 enable_startup_tips: true,
             },
-            session_config: AppSessionConfig::default(),
+            flow_chat: AppFlowChatConfig::default(),
             ai_experience: AIExperienceConfig::default(),
             keybindings: None,
             close_button_behavior: default_close_button_behavior(),
@@ -1368,14 +1388,6 @@ impl Default for ModelExchangeTracingConfig {
     fn default() -> Self {
         Self {
             mode: ModelExchangeTracingMode::Off,
-        }
-    }
-}
-
-impl Default for AppSessionConfig {
-    fn default() -> Self {
-        Self {
-            default_mode: "code".to_string(),
         }
     }
 }
@@ -1590,6 +1602,7 @@ impl Default for AIConfig {
             review_team_rate_limit_status: default_review_team_rate_limit_status(),
             review_team_project_strategy_overrides: std::collections::HashMap::new(),
             subagent_max_concurrency: default_subagent_max_concurrency(),
+            subagent_batch_execution_policy: default_subagent_batch_execution_policy(),
             proxy: ProxyConfig::default(),
             stream_idle_timeout_secs: default_stream_idle_timeout(),
             stream_ttft_timeout_secs: default_stream_ttft_timeout(),
@@ -1806,7 +1819,7 @@ impl AIModelConfig {
 mod tests {
     use super::{
         AIConfig, AIExperienceConfig, AIModelConfig, AppLoggingConfig, GlobalConfig,
-        ModelExchangeTracingMode, ReasoningMode,
+        ModelExchangeTracingMode, ReasoningMode, SubagentBatchExecutionPolicy,
     };
 
     #[test]
@@ -1951,7 +1964,6 @@ mod tests {
                     "dialog_completion_notify": true,
                     "enable_startup_tips": true
                 },
-                "session_config": { "default_mode": "code" },
                 "ai_experience": {
                     "enable_session_title_generation": true,
                     "enable_welcome_panel_ai_analysis": false,
@@ -1981,6 +1993,44 @@ mod tests {
         assert_eq!(
             serialized["app"]["ai_experience"]["quick_actions"][0]["id"],
             "custom_1"
+        );
+    }
+
+    #[test]
+    fn legacy_app_session_config_is_ignored() {
+        let config: GlobalConfig = serde_json::from_value(serde_json::json!({
+            "app": {
+                "session_config": {
+                    "default_mode": "cowork"
+                }
+            }
+        }))
+        .expect("legacy app session config should be ignored");
+
+        let serialized = serde_json::to_value(&config).expect("config should serialize");
+        assert!(serialized["app"].get("session_config").is_none());
+    }
+
+    #[test]
+    fn app_flow_chat_default_mode_id_round_trips() {
+        let config: GlobalConfig = serde_json::from_value(serde_json::json!({
+            "app": {
+                "flow_chat": {
+                    "default_mode_id": "PlannerPlus"
+                }
+            }
+        }))
+        .expect("flow chat config should deserialize");
+
+        assert_eq!(
+            config.app.flow_chat.default_mode_id.as_deref(),
+            Some("PlannerPlus")
+        );
+
+        let serialized = serde_json::to_value(&config).expect("config should serialize");
+        assert_eq!(
+            serialized["app"]["flow_chat"]["default_mode_id"],
+            "PlannerPlus"
         );
     }
 
@@ -2054,6 +2104,10 @@ mod tests {
         assert_eq!(config.stream_idle_timeout_secs, Some(45));
         assert_eq!(config.stream_ttft_timeout_secs, Some(30));
         assert_eq!(config.subagent_max_concurrency, 5);
+        assert_eq!(
+            config.subagent_batch_execution_policy,
+            SubagentBatchExecutionPolicy::SafeOnly
+        );
         let review_team = config
             .review_teams
             .get("default")
@@ -2085,6 +2139,10 @@ mod tests {
         assert_eq!(config.stream_idle_timeout_secs, Some(45));
         assert_eq!(config.stream_ttft_timeout_secs, Some(30));
         assert_eq!(config.subagent_max_concurrency, 5);
+        assert_eq!(
+            config.subagent_batch_execution_policy,
+            SubagentBatchExecutionPolicy::SafeOnly
+        );
         assert!(config.review_teams.contains_key("default"));
     }
 
@@ -2119,6 +2177,28 @@ mod tests {
         .expect("config with subagent_max_concurrency should deserialize");
 
         assert_eq!(config.subagent_max_concurrency, 9);
+    }
+
+    #[test]
+    fn deserializes_explicit_subagent_batch_execution_policy() {
+        let config: AIConfig = serde_json::from_value(serde_json::json!({
+            "models": [],
+            "agent_models": {},
+            "func_agent_models": {},
+            "default_models": {},
+            "agent_profiles": {},
+            "subagent_batch_execution_policy": "force_parallel",
+            "proxy": {
+                "enabled": false,
+                "url": ""
+            }
+        }))
+        .expect("config with subagent_batch_execution_policy should deserialize");
+
+        assert_eq!(
+            config.subagent_batch_execution_policy,
+            SubagentBatchExecutionPolicy::ForceParallel
+        );
     }
 
     #[test]

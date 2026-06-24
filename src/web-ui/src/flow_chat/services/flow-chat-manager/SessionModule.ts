@@ -4,6 +4,7 @@
  */
 
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
+import { configAPI } from '@/infrastructure/api/service-api/ConfigAPI';
 import { sessionAPI } from '@/infrastructure/api/service-api/SessionAPI';
 import { notificationService } from '../../../shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
@@ -17,6 +18,7 @@ import type { AIModelConfig, DefaultModelsConfig } from '@/infrastructure/config
 import type { FlowChatContext, SessionConfig } from './types';
 import type { Session } from '../../types/flow-chat';
 import { touchSessionActivity, cleanupSaveState } from './PersistenceModule';
+import { cleanupSessionBuffers } from './TextChunkModule';
 import {
   createTextSessionTitleDescriptor,
   createDefaultSessionTitleDescriptor,
@@ -28,6 +30,15 @@ import {
   consumeRecentHistorySessionOpenIntent,
   hasRenderableSessionContent,
 } from '../sessionOpenIntent';
+import {
+  clearHistorySessionHydratePending,
+  markHistorySessionHydratePending,
+  recordHistorySessionDiagnosticEvent,
+} from '../historySessionDiagnostics';
+import {
+  DEFAULT_CHAT_INPUT_MODE_CONFIG_PATH,
+  normalizeUserDefaultChatInputModeId,
+} from '../../utils/chatInputMode';
 
 const log = createLogger('SessionModule');
 const pendingSessionCreations = new Map<string, Promise<string>>();
@@ -127,12 +138,45 @@ const resolveEffectiveSshHost = (
 async function hydrateHistoricalSession(
   context: FlowChatContext,
   sessionId: string,
-  notifyOnError: boolean
+  notifyOnError: boolean,
+  options?: {
+    isRetryStillRelevant?: () => boolean;
+    retryActiveStaleReuse?: boolean;
+  },
 ): Promise<void> {
   const existing = context.pendingHistoryLoads.get(sessionId);
   if (existing) {
     startupTrace.markPhase('historical_session_hydrate_reused');
+    recordHistorySessionDiagnosticEvent(sessionId, 'hydrate_reused_pending', {
+      notifyOnError,
+      retryActiveStaleReuse: options?.retryActiveStaleReuse === true,
+    });
     await existing;
+    const retryStillRelevant = options?.isRetryStillRelevant?.() !== false;
+    const shouldRetryActiveStale = shouldRetryActiveStaleHydrate(context, sessionId);
+    recordHistorySessionDiagnosticEvent(sessionId, 'hydrate_reused_settled', {
+      retryActiveStaleReuse: options?.retryActiveStaleReuse === true,
+      retryStillRelevant,
+      shouldRetryActiveStale,
+    });
+    if (
+      options?.retryActiveStaleReuse === true &&
+      retryStillRelevant &&
+      shouldRetryActiveStale
+    ) {
+      if (context.pendingHistoryLoads.get(sessionId) === existing) {
+        context.pendingHistoryLoads.delete(sessionId);
+      }
+      startupTrace.markPhase('historical_session_hydrate_retry_active_stale_reuse', {
+        sessionId,
+      });
+      recordHistorySessionDiagnosticEvent(sessionId, 'hydrate_retry_active_stale_reuse_started');
+      await hydrateHistoricalSession(context, sessionId, notifyOnError);
+    } else if (options?.retryActiveStaleReuse === true) {
+      recordHistorySessionDiagnosticEvent(sessionId, 'hydrate_retry_active_stale_reuse_skipped', {
+        reason: retryStillRelevant ? 'active_stale_condition_not_met' : 'switch_superseded',
+      });
+    }
     return;
   }
   const traceStartedAt = nowMs();
@@ -140,12 +184,25 @@ async function hydrateHistoricalSession(
   const loadPromise = (async () => {
     const session = context.flowChatStore.getState().sessions.get(sessionId);
     if (!session?.isHistorical) {
+      recordHistorySessionDiagnosticEvent(sessionId, 'hydrate_request_skipped', {
+        reason: session ? 'not_historical' : 'missing_session',
+      });
       return;
     }
 
     const workspacePath = requireSessionWorkspacePath(session.workspacePath, sessionId);
     const remote = isRemoteTraceContext(session.remoteConnectionId, session.remoteSshHost);
+    markHistorySessionHydratePending(sessionId, {
+      notifyOnError,
+      remote,
+      deferFullHistoryUntilActive: true,
+    });
     startupTrace.markPhase('historical_session_hydrate_request', { remote });
+    recordHistorySessionDiagnosticEvent(sessionId, 'hydrate_request_started', {
+      remote,
+      historyState: session.historyState,
+      hasRenderableContent: hasRenderableSessionContent(session),
+    });
 
     // Prefer the current workspace's connection info over the session's
     // stored values.  When the user changes the SSH port the session's
@@ -176,10 +233,12 @@ async function hydrateHistoricalSession(
 
   try {
     await loadPromise;
+    recordHistorySessionDiagnosticEvent(sessionId, 'hydrate_request_finished');
     startupTrace.markPhase('historical_session_hydrate_request_end', {
       durationMs: elapsedMs(traceStartedAt),
     });
   } catch (error) {
+    recordHistorySessionDiagnosticEvent(sessionId, 'hydrate_request_failed');
     startupTrace.markPhase('historical_session_hydrate_request_failed', {
       durationMs: elapsedMs(traceStartedAt),
     });
@@ -191,6 +250,9 @@ async function hydrateHistoricalSession(
     }
     throw error;
   } finally {
+    clearHistorySessionHydratePending(sessionId, 'settled', {
+      pendingStillCurrent: context.pendingHistoryLoads.get(sessionId) === loadPromise,
+    });
     if (context.pendingHistoryLoads.get(sessionId) === loadPromise) {
       context.pendingHistoryLoads.delete(sessionId);
     }
@@ -205,6 +267,20 @@ function shouldHydrateHistoricalSessionBeforeSwitch(session: Session | undefined
     return false;
   }
   return !hasRenderableSessionContent(session);
+}
+
+function shouldRetryActiveStaleHydrate(context: FlowChatContext, sessionId: string): boolean {
+  const state = context.flowChatStore.getState();
+  if (state.activeSessionId !== sessionId) {
+    return false;
+  }
+
+  const session = state.sessions.get(sessionId);
+  if (!session || session.historyState !== 'metadata-only') {
+    return false;
+  }
+
+  return shouldHydrateHistoricalSessionBeforeSwitch(session);
 }
 
 export function preloadHistoricalSessionForOpen(
@@ -312,14 +388,44 @@ const resolveSessionWorkspace = (
   return pathMatches[0];
 };
 
-const resolveAgentType = (
+export const resolveAgentTypeForSessionCreation = async (
   requestedMode: string | undefined,
   workspace: WorkspaceInfo | null
-): string => {
+): Promise<string> => {
   if (isAssistantWorkspace(workspace)) {
     return 'Claw';
   }
-  return requestedMode || 'agentic';
+
+  const normalizedRequestedMode = requestedMode?.trim();
+  if (normalizedRequestedMode && normalizedRequestedMode !== 'agentic') {
+    return normalizedRequestedMode;
+  }
+
+  try {
+    const configuredDefaultMode = normalizeUserDefaultChatInputModeId(
+      await configAPI.getConfig(DEFAULT_CHAT_INPUT_MODE_CONFIG_PATH, {
+        skipRetryOnNotFound: true,
+      }),
+    );
+    if (!configuredDefaultMode) {
+      return normalizedRequestedMode || 'agentic';
+    }
+
+    const availableModes = await agentAPI.getAvailableModes();
+    if (availableModes.some(mode => mode.id === configuredDefaultMode)) {
+      return configuredDefaultMode;
+    }
+
+    log.warn('Ignoring unavailable default chat input mode preference during session creation', {
+      modeId: configuredDefaultMode,
+    });
+  } catch (error) {
+    log.warn('Failed to resolve default chat input mode preference during session creation', {
+      error,
+    });
+  }
+
+  return normalizedRequestedMode || 'agentic';
 };
 
 function requireSessionWorkspacePath(
@@ -427,14 +533,15 @@ export async function createChatSession(
       workspace?.workspaceKind === WorkspaceKind.Remote
         ? workspace.sshHost?.trim() || undefined
         : undefined;
-    const agentType = resolveAgentType(mode, workspace);
+    const agentType = await resolveAgentTypeForSessionCreation(mode, workspace);
     const sessionMode = normalizeSessionDisplayMode(agentType, workspace);
-    const creationKey =
+    const workspaceCreationKey =
       workspace?.id?.trim()
         ? workspace.id
         : remoteConnectionId != null && remoteConnectionId !== ''
           ? `${remoteConnectionId}\n${workspacePath}`
           : workspacePath;
+    const creationKey = JSON.stringify([workspaceCreationKey, agentType]);
 
     const pendingCreation = pendingSessionCreations.get(creationKey);
     if (pendingCreation) {
@@ -534,6 +641,15 @@ export async function switchChatSession(
     const shouldActivateBeforeHydrate =
       shouldHydrateBeforeSwitch &&
       consumeRecentHistorySessionOpenIntent(sessionId);
+    recordHistorySessionDiagnosticEvent(sessionId, 'switch_requested', {
+      switchRequestId,
+      isRemoteSession,
+      isHistorical: session?.isHistorical === true,
+      historyState: session?.historyState,
+      hasRenderableContent: session ? hasRenderableSessionContent(session) : false,
+      shouldHydrateBeforeSwitch,
+      shouldActivateBeforeHydrate,
+    });
 
     const touchActiveSessionInBackground = () => {
       scheduleSessionActivityTouch(() => {
@@ -555,6 +671,9 @@ export async function switchChatSession(
 
     if (shouldActivateBeforeHydrate) {
       context.flowChatStore.switchSession(sessionId);
+      recordHistorySessionDiagnosticEvent(sessionId, 'switch_activated_before_hydrate', {
+        switchRequestId,
+      });
       startupTrace.markPhase('historical_session_switch', {
         historical: true,
         remote: false,
@@ -565,13 +684,20 @@ export async function switchChatSession(
 
     if (shouldHydrateBeforeSwitch) {
       try {
-        await hydrateHistoricalSession(context, sessionId, true);
+        await hydrateHistoricalSession(context, sessionId, true, {
+          isRetryStillRelevant: () => switchRequestId === latestSwitchRequestId,
+          retryActiveStaleReuse: shouldActivateBeforeHydrate,
+        });
       } catch {
         // The hydrate path already marks the session failed and notifies the user.
         // Continue with activation so the failed state is visible.
       }
 
       if (switchRequestId !== latestSwitchRequestId) {
+        recordHistorySessionDiagnosticEvent(sessionId, 'switch_superseded', {
+          switchRequestId,
+          latestSwitchRequestId,
+        });
         startupTrace.markPhase('historical_session_switch_superseded', {
           sessionId,
         });
@@ -586,6 +712,10 @@ export async function switchChatSession(
     // flashing while the old large session is unmounted immediately.
     if (!shouldActivateBeforeHydrate) {
       context.flowChatStore.switchSession(sessionId);
+      recordHistorySessionDiagnosticEvent(sessionId, 'switch_activated_after_hydrate', {
+        switchRequestId,
+        shouldHydrateBeforeSwitch,
+      });
       startupTrace.markPhase('historical_session_switch', {
         historical: Boolean(session?.isHistorical),
         remote: isRemoteSession,
@@ -596,6 +726,9 @@ export async function switchChatSession(
 
     if (session?.isHistorical && !shouldHydrateBeforeSwitch) {
       // Load history in the background — do not block the UI.
+      recordHistorySessionDiagnosticEvent(sessionId, 'switch_background_hydrate_started', {
+        switchRequestId,
+      });
       void hydrateHistoricalSession(context, sessionId, true);
     }
   } catch (error) {
@@ -615,8 +748,18 @@ export async function deleteChatSession(
   sessionId: string
 ): Promise<void> {
   try {
+    const stateBeforeDelete = context.flowChatStore.getState();
     const removedSessionIds = context.flowChatStore.getCascadeSessionIds(sessionId);
-    await context.flowChatStore.deleteSession(sessionId);
+    const removedSessionIdSet = new Set(removedSessionIds);
+    const removedActiveSession = Boolean(
+      stateBeforeDelete.activeSessionId
+      && removedSessionIdSet.has(stateBeforeDelete.activeSessionId)
+    );
+    await context.flowChatStore.deleteSession(
+      sessionId,
+      removedActiveSession ? { nextActiveSessionId: null } : undefined,
+    );
+
     removedSessionIds.forEach(id => {
       context.processingManager.clearSessionStatus(id);
       cleanupSaveState(context, id);
@@ -624,6 +767,52 @@ export async function deleteChatSession(
   } catch (error) {
     log.error('Failed to delete chat session', { sessionId, error });
     notificationService.error('Failed to delete session', {
+      duration: 3000
+    });
+    throw error;
+  }
+}
+
+export async function archiveChatSession(
+  context: FlowChatContext,
+  sessionId: string
+): Promise<void> {
+  try {
+    const stateBeforeArchive = context.flowChatStore.getState();
+    const session = stateBeforeArchive.sessions.get(sessionId);
+    if (!session) {
+      throw new Error(`Session does not exist: ${sessionId}`);
+    }
+
+    const removedSessionIds = context.flowChatStore.getCascadeSessionIds(sessionId);
+    const removedSessionIdSet = new Set(removedSessionIds);
+    const removedActiveSession = Boolean(
+      stateBeforeArchive.activeSessionId
+      && removedSessionIdSet.has(stateBeforeArchive.activeSessionId)
+    );
+
+    await sessionAPI.archiveSession(
+      sessionId,
+      requireSessionWorkspacePath(session.workspacePath, sessionId),
+      session.remoteConnectionId,
+      session.remoteSshHost,
+    );
+
+    const { stateMachineManager } = await import('../../state-machine');
+    context.flowChatStore.removeSession(
+      sessionId,
+      removedActiveSession ? { nextActiveSessionId: null } : undefined,
+    );
+
+    removedSessionIds.forEach(id => {
+      stateMachineManager.delete(id);
+      context.processingManager.clearSessionStatus(id);
+      cleanupSaveState(context, id);
+      cleanupSessionBuffers(context, id);
+    });
+  } catch (error) {
+    log.error('Failed to archive chat session', { sessionId, error });
+    notificationService.error('Failed to archive session', {
       duration: 3000
     });
     throw error;

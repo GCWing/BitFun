@@ -334,7 +334,7 @@
     justify-content: space-between;
     gap: $size-gap-1;
     padding: 2px 2px 2px $size-gap-2;
-    color: var(--color-text-tertiary, var(--color-text-secondary));
+      color: var(--color-text-tertiary);
     font-size: var(--flowchat-font-size-xs);
   }
 

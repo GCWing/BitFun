@@ -1,10 +1,11 @@
 //! MiniApp lifecycle revision helpers.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::miniapp::types::{
     MiniApp, MiniAppAiContext, MiniAppMeta, MiniAppPermissions, MiniAppRuntimeState, MiniAppSource,
 };
+use serde_json::{json, Value};
 
 #[derive(Debug, Clone)]
 pub struct MiniAppCreateInput {
@@ -329,6 +330,58 @@ pub fn workspace_dir_string(workspace_root: Option<&Path>) -> String {
         .unwrap_or_default()
 }
 
+pub fn workspace_root_from_input(workspace_path: Option<&str>) -> Option<PathBuf> {
+    workspace_path
+        .map(str::trim)
+        .filter(|path| !path.is_empty())
+        .map(PathBuf::from)
+}
+
+pub fn draft_worker_key(app_id: &str, draft_id: &str) -> String {
+    format!("{app_id}:draft:{draft_id}")
+}
+
+pub fn should_stop_worker_for_runtime_update(app: &MiniApp) -> bool {
+    app.runtime.worker_restart_required
+}
+
+pub fn should_emit_worker_restarted(
+    was_running: bool,
+    deps_installed: bool,
+    worker_restart_required: bool,
+) -> bool {
+    !was_running || deps_installed || worker_restart_required
+}
+
+pub fn worker_restart_reason(deps_installed: bool) -> &'static str {
+    if deps_installed {
+        "deps-installed"
+    } else {
+        "runtime-restart"
+    }
+}
+
+pub fn miniapp_runtime_event_payload(app: &MiniApp, reason: &str) -> Value {
+    json!({
+        "id": app.id,
+        "name": app.name,
+        "version": app.version,
+        "updatedAt": app.updated_at,
+        "reason": reason,
+        "runtime": {
+            "sourceRevision": app.runtime.source_revision,
+            "depsRevision": app.runtime.deps_revision,
+            "depsDirty": app.runtime.deps_dirty,
+            "workerRestartRequired": app.runtime.worker_restart_required,
+            "uiRecompileRequired": app.runtime.ui_recompile_required,
+        }
+    })
+}
+
+pub fn miniapp_worker_stopped_payload(app_id: &str, reason: &str) -> Value {
+    json!({ "id": app_id, "reason": reason })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -359,5 +412,61 @@ mod tests {
         assert_eq!(meta.name, "Imported");
         assert_eq!(meta.description, "Imported app");
         assert_eq!(meta.version, 7);
+    }
+
+    #[test]
+    fn host_event_helpers_preserve_existing_worker_and_payload_contract() {
+        let app = build_created_app(
+            "app-1".to_string(),
+            MiniAppCreateInput {
+                name: "App".to_string(),
+                description: "Desc".to_string(),
+                icon: "box".to_string(),
+                category: "utility".to_string(),
+                tags: vec![],
+                source: MiniAppSource::default(),
+                permissions: MiniAppPermissions::default(),
+                ai_context: None,
+            },
+            "<html></html>".to_string(),
+            123,
+        );
+
+        assert_eq!(
+            miniapp_runtime_event_payload(&app, "create"),
+            serde_json::json!({
+                "id": "app-1",
+                "name": "App",
+                "version": 1,
+                "updatedAt": 123,
+                "reason": "create",
+                "runtime": {
+                    "sourceRevision": "src:1:123",
+                    "depsRevision": "",
+                    "depsDirty": false,
+                    "workerRestartRequired": true,
+                    "uiRecompileRequired": false
+                }
+            })
+        );
+
+        assert_eq!(
+            miniapp_worker_stopped_payload("app-1", "pending-restart"),
+            serde_json::json!({ "id": "app-1", "reason": "pending-restart" })
+        );
+        assert_eq!(draft_worker_key("app-1", "draft-1"), "app-1:draft:draft-1");
+        assert_eq!(
+            workspace_root_from_input(Some(" /workspace ")),
+            Some(std::path::PathBuf::from("/workspace"))
+        );
+        assert_eq!(workspace_root_from_input(Some("   ")), None);
+        assert_eq!(workspace_root_from_input(None), None);
+        assert!(should_stop_worker_for_runtime_update(&app));
+        assert!(!should_emit_worker_restarted(true, false, false));
+        assert!(should_emit_worker_restarted(false, false, false));
+        assert!(should_emit_worker_restarted(true, true, false));
+        assert!(should_emit_worker_restarted(true, false, true));
+        assert_eq!(worker_restart_reason(true), "deps-installed");
+        assert_eq!(worker_restart_reason(false), "runtime-restart");
     }
 }

@@ -14,7 +14,7 @@
   right: 0;
   bottom: 0;
   z-index: $z-modal;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(var(--color-static-black-rgb), 0.6);
   display: flex;
   align-items: center;
   justify-content: center;

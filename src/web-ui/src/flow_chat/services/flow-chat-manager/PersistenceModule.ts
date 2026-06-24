@@ -262,7 +262,7 @@ async function performSaveDialogTurnToDisk(
   turnId: string
 ): Promise<void> {
   try {
-    const { sessionAPI } = await import('@/infrastructure/api');
+    const { sessionAPI } = await import('@/infrastructure/api/service-api/SessionAPI');
 
     const session = context.flowChatStore.getState().sessions.get(sessionId);
     if (!session) {
@@ -497,7 +497,7 @@ export async function updateSessionMetadata(
   sessionId: string
 ): Promise<void> {
   try {
-    const { sessionAPI } = await import('@/infrastructure/api');
+    const { sessionAPI } = await import('@/infrastructure/api/service-api/SessionAPI');
 
     const session = context.flowChatStore.getState().sessions.get(sessionId);
     if (!session) return;
@@ -540,7 +540,7 @@ export async function touchSessionActivity(
   remoteSshHost?: string
 ): Promise<void> {
   try {
-    const { sessionAPI } = await import('@/infrastructure/api');
+    const { sessionAPI } = await import('@/infrastructure/api/service-api/SessionAPI');
     await sessionAPI.touchSessionActivity(
       sessionId,
       requireWorkspacePath(sessionId, workspacePath),

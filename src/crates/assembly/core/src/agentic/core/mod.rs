@@ -5,9 +5,12 @@
 pub mod dialog_turn;
 pub mod message;
 pub mod messages_helper;
-pub mod prompt_markup;
 pub mod session;
 pub mod state;
+pub use bitfun_agent_runtime::prompt_markup::{
+    has_prompt_markup, is_system_reminder_only, render_system_reminder, render_user_query,
+    strip_prompt_markup, PromptBlock, PromptBlockKind, PromptEnvelope,
+};
 pub use bitfun_core_types::SessionKind;
 pub use dialog_turn::{new_turn_id, TurnStats};
 pub use message::{
@@ -17,9 +20,5 @@ pub use message::{
     MessageSemanticKind, ToolCall, ToolResult,
 };
 pub use messages_helper::{MessageHelper, RequestReasoningTokenPolicy};
-pub use prompt_markup::{
-    has_prompt_markup, is_system_reminder_only, render_system_reminder, render_user_query,
-    strip_prompt_markup, PromptBlock, PromptBlockKind, PromptEnvelope,
-};
 pub use session::{CompressionState, Session, SessionConfig, SessionSummary};
 pub use state::{ProcessingPhase, SessionState, ToolExecutionState};

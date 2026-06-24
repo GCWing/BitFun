@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FolderOpen, RefreshCw, ChevronDown } from 'lucide-react';
+import { FolderOpen, RefreshCw, ChevronDown, Plus, Trash2, Check, Info } from 'lucide-react';
 import {
   Switch,
   NumberInput,
@@ -13,6 +13,7 @@ import {
   ConfigPageLoading,
   Modal,
   Select,
+  Tooltip,
   type SelectOption,
 } from '@/component-library';
 import { ConfigPageHeader, ConfigPageLayout, ConfigPageContent, ConfigPageSection, ConfigPageRow } from './common';
@@ -52,6 +53,16 @@ type BrowserControlBrowserOption = {
   installed: boolean;
 };
 
+type SubagentBatchExecutionPolicy = 'safe_only' | 'force_parallel' | 'serial';
+
+const DEFAULT_SUBAGENT_BATCH_EXECUTION_POLICY: SubagentBatchExecutionPolicy = 'safe_only';
+
+function normalizeSubagentBatchExecutionPolicy(value: unknown): SubagentBatchExecutionPolicy {
+  return value === 'force_parallel' || value === 'serial' || value === 'safe_only'
+    ? value
+    : DEFAULT_SUBAGENT_BATCH_EXECUTION_POLICY;
+}
+
 const DEFAULT_BROWSER_CONTROL_BROWSER = 'default';
 
 export type SessionSettingsPanelVariant = 'personalization' | 'permissions';
@@ -75,6 +86,8 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
   const [skipToolConfirmation, setSkipToolConfirmation] = useState(true);
   const [executionTimeout, setExecutionTimeout] = useState('');
   const [confirmationTimeout, setConfirmationTimeout] = useState('');
+  const [subagentBatchExecutionPolicy, setSubagentBatchExecutionPolicy] =
+    useState<SubagentBatchExecutionPolicy>(DEFAULT_SUBAGENT_BATCH_EXECUTION_POLICY);
   const [toolExecConfigLoading, setToolExecConfigLoading] = useState(false);
 
   // ── Browser control state ───────────────────────────────────────────────
@@ -143,6 +156,7 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
         skipConfirm,
         execTimeout,
         confirmTimeout,
+        loadedSubagentBatchExecutionPolicy,
         debugConfigData,
         browserControlPreferredBrowser,
       ] = await Promise.all([
@@ -152,6 +166,7 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
         configManager.getConfig<boolean>('ai.skip_tool_confirmation'),
         configManager.getConfig<number | null>('ai.tool_execution_timeout_secs'),
         configManager.getConfig<number | null>('ai.tool_confirmation_timeout_secs'),
+        configManager.getConfig<SubagentBatchExecutionPolicy>('ai.subagent_batch_execution_policy'),
         configManager.getConfig<DebugModeConfig>('ai.debug_mode_config'),
         configManager.getConfig<string>('ai.browser_control_preferred_browser'),
       ]);
@@ -162,6 +177,7 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
       setSkipToolConfirmation(skipConfirm ?? true);
       setExecutionTimeout(execTimeout != null ? String(execTimeout) : '');
       setConfirmationTimeout(confirmTimeout != null ? String(confirmTimeout) : '');
+      setSubagentBatchExecutionPolicy(normalizeSubagentBatchExecutionPolicy(loadedSubagentBatchExecutionPolicy));
       if (debugConfigData) setDebugConfig(debugConfigData);
       setPreferredBrowser(browserControlPreferredBrowser || DEFAULT_BROWSER_CONTROL_BROWSER);
 
@@ -195,6 +211,153 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
       notification.error(t('messages.saveFailed'));
       setSettings(settings);
     }
+  };
+
+  const handleRefreshCompanionPets = async () => {
+    setCompanionPetsLoading(true);
+    try {
+      setCompanionPets(await listAgentCompanionPets());
+    } finally {
+      setCompanionPetsLoading(false);
+    }
+  };
+
+  const handleImportCompanionPet = async () => {
+    if (!IS_TAURI_DESKTOP) return;
+    setCompanionPetImporting(true);
+    try {
+      const selected = await open({
+        directory: false,
+        multiple: false,
+        title: t('features.agentCompanion.importDialogTitle'),
+        filters: [{ name: 'Petdex', extensions: ['zip'] }],
+      });
+      if (!selected || Array.isArray(selected)) return;
+      const imported = await importAgentCompanionPetPackage(selected);
+      const refreshed = await listAgentCompanionPets();
+      setCompanionPets(refreshed);
+      await updateSetting('agent_companion_pet', {
+        id: imported.id,
+        displayName: imported.displayName,
+        description: imported.description,
+        source: imported.source,
+        packagePath: imported.packagePath,
+        spritesheetPath: imported.spritesheetPath,
+        spritesheetMimeType: imported.spritesheetMimeType,
+      });
+    } catch (error) {
+      log.error('Failed to import Agent companion pet', error);
+      notification.error(t('features.agentCompanion.importFailed'));
+    } finally {
+      setCompanionPetImporting(false);
+    }
+  };
+
+  const handleDeleteCompanionPet = async (event: React.MouseEvent, pet: AgentCompanionPetPackage) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!IS_TAURI_DESKTOP || pet.source !== 'user' || !settings) return;
+    const confirmed = await ask(t('features.agentCompanion.deleteConfirmBody'), {
+      title: t('features.agentCompanion.deleteConfirmTitle'),
+      kind: 'warning',
+    });
+    if (!confirmed) return;
+    setCompanionPetDeletingPath(pet.packagePath);
+    try {
+      await deleteAgentCompanionPetPackage(pet.packagePath);
+      releaseAgentCompanionPetPreviewBlobs(pet.packagePath, pet.spritesheetPath);
+      const refreshed = await listAgentCompanionPets();
+      setCompanionPets(refreshed);
+      if (settings.agent_companion_pet?.packagePath === pet.packagePath) {
+        const next = { ...settings, agent_companion_pet: DEFAULT_AGENT_COMPANION_PET };
+        setSettings(next);
+        await aiExperienceConfigService.saveSettings(next);
+      }
+      notification.success(t('features.agentCompanion.deleteSuccess'));
+    } catch (error) {
+      log.error('Failed to delete Agent companion pet', error);
+      notification.error(t('features.agentCompanion.deleteFailed'));
+    } finally {
+      setCompanionPetDeletingPath(null);
+    }
+  };
+
+  const companionPetOptions: SelectOption[] = companionPets.map(pet => ({
+    value: pet.packagePath,
+    label: pet.displayName,
+    description: pet.description ?? undefined,
+    group: pet.source === 'preset'
+      ? t('features.agentCompanion.groupPreset')
+      : t('features.agentCompanion.groupImported'),
+  }));
+
+  const companionDisplayModeOptions: SelectOption[] = [
+    {
+      value: 'desktop',
+      label: t('features.agentCompanion.displayDesktop'),
+      description: t('features.agentCompanion.displayDesktopDesc'),
+    },
+    {
+      value: 'input',
+      label: t('features.agentCompanion.displayInput'),
+      description: t('features.agentCompanion.displayInputDesc'),
+    },
+  ];
+
+  const subagentBatchExecutionPolicyOptions: SelectOption[] = [
+    {
+      value: 'safe_only',
+      label: tTools('config.subagentBatchPolicy.safeOnly'),
+    },
+    {
+      value: 'force_parallel',
+      label: tTools('config.subagentBatchPolicy.forceParallel'),
+    },
+  ];
+
+  const subagentBatchPolicyLabel = (
+    <span className="bitfun-func-agent-config__label-with-tooltip">
+      <span>{tTools('config.subagentBatchPolicy.label')}</span>
+      <Tooltip
+        content={
+          <span className="bitfun-func-agent-config__policy-tooltip">
+            <strong>{tTools('config.subagentBatchPolicy.safeOnly')}</strong>
+            <span>{tTools('config.subagentBatchPolicy.safeOnlyDesc')}</span>
+            <strong>{tTools('config.subagentBatchPolicy.forceParallel')}</strong>
+            <span>{tTools('config.subagentBatchPolicy.forceParallelDesc')}</span>
+          </span>
+        }
+        placement="top"
+      >
+        <span className="bitfun-func-agent-config__label-tooltip-icon" aria-label={tTools('config.subagentBatchPolicy.tooltipLabel')}>
+          <Info size={14} />
+        </span>
+      </Tooltip>
+    </span>
+  );
+
+  const selectedCompanionPetPackage = settings?.agent_companion_pet
+    ? companionPets.find(pet => pet.packagePath === settings.agent_companion_pet?.packagePath) ?? null
+    : null;
+  const selectedCompanionPet = selectedCompanionPetPackage ?? settings?.agent_companion_pet ?? DEFAULT_AGENT_COMPANION_PET;
+  const selectedCompanionPetValue = selectedCompanionPet.packagePath;
+  const selectedCompanionPetOption = companionPetOptions.find(option => option.value === selectedCompanionPetValue)
+    ?? companionPetOptions[0];
+
+  const handleCompanionPetChange = async (value: string | number | (string | number)[]) => {
+    const selectedValue = String(Array.isArray(value) ? value[0] : value);
+    const pet = companionPets.find(item => item.packagePath === selectedValue);
+    if (!pet) return;
+    await updateSetting('agent_companion_pet', {
+      id: pet.id,
+      displayName: pet.displayName,
+      description: pet.description,
+      source: pet.source,
+      packagePath: pet.packagePath,
+      spritesheetPath: pet.spritesheetPath,
+      spritesheetMimeType: pet.spritesheetMimeType,
+    });
+    setCompanionPetListExpanded(false);
   };
 
   const getModelName = useCallback((modelId: string | null | undefined): string | undefined => {
@@ -245,6 +408,27 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
         `${tTools('messages.saveFailed')}: ` + (error instanceof Error ? error.message : String(error))
       );
       setSkipToolConfirmation(!checked);
+    } finally {
+      setToolExecConfigLoading(false);
+    }
+  };
+
+  const handleSubagentBatchExecutionPolicyChange = async (value: string | number | (string | number)[]) => {
+    const nextPolicy = normalizeSubagentBatchExecutionPolicy(Array.isArray(value) ? value[0] : value);
+    const previousPolicy = subagentBatchExecutionPolicy;
+    setSubagentBatchExecutionPolicy(nextPolicy);
+    setToolExecConfigLoading(true);
+    try {
+      await configManager.setConfig('ai.subagent_batch_execution_policy', nextPolicy);
+      notificationService.success(tTools('messages.saveSuccess'), { duration: 2000 });
+      const { globalEventBus } = await import('@/infrastructure/event-bus');
+      globalEventBus.emit('mode:config:updated');
+    } catch (error) {
+      log.error('Failed to save subagent_batch_execution_policy', error);
+      notificationService.error(
+        `${tTools('messages.saveFailed')}: ` + (error instanceof Error ? error.message : String(error))
+      );
+      setSubagentBatchExecutionPolicy(previousPolicy);
     } finally {
       setToolExecConfigLoading(false);
     }
@@ -587,6 +771,17 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
                 onChange={(e) => handleSkipToolConfirmationChange(e.target.checked)}
                 disabled={toolExecConfigLoading}
                 size="small"
+              />
+            </div>
+          </ConfigPageRow>
+          <ConfigPageRow label={subagentBatchPolicyLabel} description={tTools('config.subagentBatchPolicy.desc')} align="center">
+            <div className="bitfun-func-agent-config__row-control">
+              <Select
+                value={subagentBatchExecutionPolicy}
+                options={subagentBatchExecutionPolicyOptions}
+                size="small"
+                disabled={toolExecConfigLoading}
+                onChange={handleSubagentBatchExecutionPolicyChange}
               />
             </div>
           </ConfigPageRow>

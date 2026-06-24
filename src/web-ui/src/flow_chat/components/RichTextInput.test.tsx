@@ -183,6 +183,23 @@ describeWithJsdom('RichTextInput external sync', () => {
     expect(editor.firstChild).not.toBe(originalTextNode);
   });
 
+  it('renders externally inserted skill tokens as inline pills', async () => {
+    const harnessRef = createRef<HarnessHandle>();
+    const editor = await renderHarness(harnessRef);
+
+    await act(async () => {
+      harnessRef.current?.setValue('Use [$pdf] please');
+    });
+
+    const skillPill = editor.querySelector(
+      '[data-inline-token-type="skill-ref"]',
+    ) as HTMLElement | null;
+    expect(skillPill).toBeTruthy();
+    expect(skillPill?.getAttribute('data-tag-format')).toBe('[$pdf]');
+    expect(skillPill?.querySelector('.lucide-puzzle')).toBeTruthy();
+    expect(editor.textContent).toContain('pdf');
+  });
+
   it('keeps Escape owned by IME composition', async () => {
     const onKeyDown = vi.fn();
 
@@ -246,6 +263,176 @@ describeWithJsdom('RichTextInput external sync', () => {
       query: 'root',
       startOffset: 0,
     });
+  });
+
+  it('reports inline skill triggers for $ and middle-of-text /', async () => {
+    const onInlineTriggerStateChange = vi.fn();
+
+    await act(async () => {
+      root.render(
+        <RichTextInput
+          value=""
+          onChange={() => {}}
+          onInlineTriggerStateChange={onInlineTriggerStateChange}
+          contexts={emptyContexts}
+          onRemoveContext={() => {}}
+        />
+      );
+    });
+
+    const editor = container.querySelector('.rich-text-input');
+    expect(editor).toBeInstanceOf(HTMLDivElement);
+
+    await updateEditorText(editor as HTMLDivElement, '$pdf');
+    expect(onInlineTriggerStateChange).toHaveBeenLastCalledWith({
+      isActive: true,
+      trigger: '$',
+      query: 'pdf',
+      startOffset: 0,
+    });
+
+    await updateEditorText(editor as HTMLDivElement, 'please /pdf');
+    expect(onInlineTriggerStateChange).toHaveBeenLastCalledWith({
+      isActive: true,
+      trigger: '/',
+      query: 'pdf',
+      startOffset: 7,
+    });
+  });
+
+  it('can replace an active inline trigger with a skill token', async () => {
+    const onChange = vi.fn();
+
+    await act(async () => {
+      root.render(
+        <RichTextInput
+          value="$pdf"
+          onChange={onChange}
+          contexts={emptyContexts}
+          onRemoveContext={() => {}}
+        />
+      );
+    });
+
+    const editor = container.querySelector('.rich-text-input') as (HTMLDivElement & {
+      replaceActiveInlineTrigger?: (replacementText: string) => void;
+    }) | null;
+    expect(editor).toBeTruthy();
+
+    setCaret(editor!, '$pdf'.length);
+    await act(async () => {
+      editor!.dispatchEvent(new window.Event('input', { bubbles: true }));
+    });
+
+    await act(async () => {
+      editor?.replaceActiveInlineTrigger?.('[$pdf]');
+    });
+
+    expect(onChange).toHaveBeenCalledWith('[$pdf]', emptyContexts);
+    const skillPill = editor?.querySelector('.rich-text-tag-pill--skill-ref');
+    expect(skillPill).toBeTruthy();
+    expect(skillPill?.querySelector('.lucide-puzzle')).toBeTruthy();
+    expect(skillPill?.nextSibling?.textContent).toBe(' ');
+    const selection = window.getSelection();
+    expect(selection?.anchorNode).toBe(editor);
+    expect(selection?.anchorOffset).toBeGreaterThan(Array.from(editor?.childNodes ?? []).indexOf(skillPill as ChildNode));
+  });
+
+  it('can close an active inline trigger imperatively', async () => {
+    const onInlineTriggerStateChange = vi.fn();
+
+    await act(async () => {
+      root.render(
+        <RichTextInput
+          value="$pdf"
+          onChange={() => {}}
+          onInlineTriggerStateChange={onInlineTriggerStateChange}
+          contexts={emptyContexts}
+          onRemoveContext={() => {}}
+        />
+      );
+    });
+
+    const editor = container.querySelector('.rich-text-input') as (HTMLDivElement & {
+      closeInlineTrigger?: () => void;
+    }) | null;
+    expect(editor).toBeTruthy();
+
+    setCaret(editor!, '$pdf'.length);
+    await act(async () => {
+      editor!.dispatchEvent(new window.Event('input', { bubbles: true }));
+    });
+
+    await act(async () => {
+      editor?.closeInlineTrigger?.();
+    });
+
+    expect(onInlineTriggerStateChange).toHaveBeenLastCalledWith({
+      isActive: false,
+      trigger: null,
+      query: '',
+      startOffset: 0,
+    });
+  });
+
+  it('can append an inline skill token at the end with trailing space', async () => {
+    const onChange = vi.fn();
+
+    await act(async () => {
+      root.render(
+        <RichTextInput
+          value="hello"
+          onChange={onChange}
+          contexts={emptyContexts}
+          onRemoveContext={() => {}}
+        />
+      );
+    });
+
+    const editor = container.querySelector('.rich-text-input') as (HTMLDivElement & {
+      appendInlineTokenAtEnd?: (token: string) => void;
+    }) | null;
+    expect(editor).toBeTruthy();
+
+    await act(async () => {
+      editor?.appendInlineTokenAtEnd?.('[$pdf]');
+    });
+
+    expect(onChange).toHaveBeenCalledWith('hello [$pdf]', emptyContexts);
+    const skillPill = editor?.querySelector('.rich-text-tag-pill--skill-ref');
+    expect(skillPill).toBeTruthy();
+    expect(skillPill?.previousSibling?.textContent).toBe(' ');
+    expect(skillPill?.nextSibling?.textContent).toBe(' ');
+  });
+
+  it('clears placeholder br before appending the first inline skill token', async () => {
+    const onChange = vi.fn();
+
+    await act(async () => {
+      root.render(
+        <RichTextInput
+          value=""
+          onChange={onChange}
+          contexts={emptyContexts}
+          onRemoveContext={() => {}}
+        />
+      );
+    });
+
+    const editor = container.querySelector('.rich-text-input') as (HTMLDivElement & {
+      appendInlineTokenAtEnd?: (token: string) => void;
+    }) | null;
+    expect(editor).toBeTruthy();
+
+    editor!.innerHTML = '<br>';
+
+    await act(async () => {
+      editor?.appendInlineTokenAtEnd?.('[$pdf]');
+    });
+
+    expect(onChange).toHaveBeenCalledWith('[$pdf]', emptyContexts);
+    expect(editor?.querySelector('br')).toBeFalsy();
+    expect(editor?.firstChild).toBe(editor?.querySelector('.rich-text-tag-pill--skill-ref'));
   });
 
   it('inserts a separating space when opening mention from a mid-word caret', async () => {

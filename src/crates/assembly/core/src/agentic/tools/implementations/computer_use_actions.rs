@@ -33,6 +33,7 @@ fn loop_tracker_observe(
     target_sig: &str,
     before_digest: &str,
     after_digest: &str,
+    text_only: bool,
 ) -> Option<String> {
     let pid = pid?;
     // A digest change means the action mutated the tree — that is real
@@ -57,9 +58,24 @@ fn loop_tracker_observe(
         *entry = (sig, before_digest.to_string(), 1);
     }
     if entry.2 >= 2 {
+        // The primary model cannot consume screenshot images, so the classic
+        // "just take a screenshot to see what's wrong" recovery is **not**
+        // available — pointing the model at `screenshot` here would send it
+        // into a hard-reject loop (the `screenshot` action is gated to
+        // multimodal providers). Route it to the text-only observation +
+        // targeting fallbacks instead so the agent always has a live path.
+        let recovery = if text_only {
+            "NEXT TURN you MUST switch tactic (do NOT call `screenshot` — the primary model is text-only and that action is rejected): \
+             (1) re-run `get_app_state` for the frontmost app and pick a different `node_idx` (or `text_contains` / `title_contains` / `role_substring`), \
+             (2) locate the visible text with `move_to_text` + `move_to_text_match_index`, or `click_target` with `target_text`, \
+             (3) drive the app with `key_chord` shortcuts (e.g. command+F search, Tab focus, Return confirm), \
+             (4) for messaging apps use `paste` (clipboard) + `key_chord` to submit, or `run_apple_script` (macOS) to drive the app directly."
+        } else {
+            "NEXT TURN you MUST: (1) run `desktop.screenshot { screenshot_window: false }` to see the full display, (2) switch tactic — different `node_idx`, different `ocr_text` needle, or a keyboard shortcut."
+        };
         Some(format!(
-            "Detected {} consecutive `{}` calls on the same target ({}) without any AX tree mutation (digest unchanged). The target is almost certainly invisible / disabled / in a Canvas-WebGL surface that AX cannot describe. NEXT TURN you MUST: (1) run `desktop.screenshot {{ screenshot_window: false }}` to see the full display, (2) switch tactic — different `node_idx`, different `ocr_text` needle, or a keyboard shortcut.",
-            entry.2, action, target_sig
+            "Detected {} consecutive `{}` calls on the same target ({}) without any AX tree mutation (digest unchanged). The target is almost certainly invisible / disabled / in a Canvas-WebGL surface that AX cannot describe. {}",
+            entry.2, action, target_sig, recovery
         ))
     } else {
         None
@@ -315,7 +331,10 @@ impl ComputerUseActions {
             | "interactive_scroll"
             | "build_visual_mark_view"
             | "visual_click" => {
-                return self.handle_desktop_ax(host, action, params).await;
+                let text_only = !context.primary_model_supports_image_understanding();
+                return self
+                    .handle_desktop_ax(host, action, params, text_only)
+                    .await;
             }
             "focus_display" => {
                 // Accept `null` (or omitted `display_id`) to clear the pin
@@ -395,6 +414,7 @@ impl ComputerUseActions {
         host: &ComputerUseHostRef,
         action: &str,
         params: &Value,
+        text_only: bool,
     ) -> BitFunResult<Vec<ToolResult>> {
         // ── Helpers ─────────────────────────────────────────────────
         fn parse_selector(v: &Value) -> BitFunResult<AppSelector> {
@@ -973,6 +993,7 @@ impl ComputerUseActions {
                         &target_sig,
                         before.as_deref().unwrap_or(""),
                         &after.digest,
+                        text_only,
                     );
                 }
 
@@ -1022,6 +1043,7 @@ impl ComputerUseActions {
                         &target_sig,
                         before.as_deref().unwrap_or(""),
                         &after.digest,
+                        text_only,
                     );
                 }
                 let data = json!({
@@ -2359,5 +2381,64 @@ async fn clipboard_write(text: &str) -> Result<(), String> {
     {
         let _ = text;
         Err("clipboard not implemented for this OS".to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::loop_tracker_observe;
+
+    // A unique PID avoids interference with the shared APP_LOOP_TRACKER state
+    // across tests in the same process.
+    const TEXT_ONLY_PID: i32 = 9_999_001;
+    const VISUAL_PID: i32 = 9_999_002;
+
+    fn first_warning(text_only: bool, pid: i32) -> String {
+        // First call seeds (count=1, no warning). Second consecutive identical
+        // (unchanged digest) call trips the guard (count>=2) and returns the hint.
+        let _ = loop_tracker_observe(Some(pid), "app_click", "[1]", "d0", "d0", text_only);
+        loop_tracker_observe(Some(pid), "app_click", "[1]", "d0", "d0", text_only)
+            .expect("second consecutive no-progress call should warn")
+    }
+
+    /// Text-only recovery hint must NOT send the model to `screenshot` (that
+    /// action is hard-rejected for text-only models and would loop forever).
+    #[test]
+    fn text_only_loop_warning_never_points_at_screenshot() {
+        let warning = first_warning(true, TEXT_ONLY_PID);
+        assert!(
+            !warning.contains("desktop.screenshot") && !warning.contains("run `screenshot`"),
+            "text-only loop warning must not tell the model to screenshot: {}",
+            warning
+        );
+        assert!(
+            warning.contains("describe_screen")
+                || warning.contains("get_app_state")
+                || warning.contains("move_to_text")
+                || warning.contains("key_chord"),
+            "text-only loop warning should offer a text-only recovery path: {}",
+            warning
+        );
+    }
+
+    /// Visual-capable models keep the classic screenshot recovery hint.
+    #[test]
+    fn visual_loop_warning_keeps_screenshot_recovery() {
+        let warning = first_warning(false, VISUAL_PID);
+        assert!(
+            warning.contains("screenshot"),
+            "visual loop warning should still offer screenshot recovery: {}",
+            warning
+        );
+    }
+
+    /// A genuine tree mutation (digest changes) must NOT trigger the warning,
+    /// even on the same target — progress resets the streak.
+    #[test]
+    fn progressed_action_does_not_warn() {
+        let pid = 9_999_003;
+        let _ = loop_tracker_observe(Some(pid), "app_click", "[2]", "d0", "d1", true);
+        let second = loop_tracker_observe(Some(pid), "app_click", "[2]", "d1", "d2", true);
+        assert!(second.is_none(), "digest change = progress, no warning");
     }
 }

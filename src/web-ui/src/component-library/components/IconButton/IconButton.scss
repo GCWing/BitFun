@@ -85,15 +85,15 @@
 
 
   &--primary {
-    background: rgba(96, 165, 250, 0.20);
+    background: color-mix(in srgb, var(--color-accent-500) 20%, transparent);
     color: var(--color-static-white);
 
     &:hover:not(:disabled) {
-      background: rgba(96, 165, 250, 0.30);
+      background: color-mix(in srgb, var(--color-accent-500) 30%, transparent);
     }
 
     &:active:not(:disabled) {
-      background: rgba(96, 165, 250, 0.24);
+      background: color-mix(in srgb, var(--color-accent-500) 24%, transparent);
     }
   }
 
@@ -102,60 +102,60 @@
     color: var(--color-text-secondary);
 
     &:hover:not(:disabled) {
-      background: rgba(199, 112, 112, 0.28);
+      background: rgba(var(--component-action-danger-rgb), 0.28);
       color: var(--color-error);
     }
 
     &:active:not(:disabled) {
-      background: rgba(199, 112, 112, 0.22);
+      background: rgba(var(--component-action-danger-rgb), 0.22);
       color: var(--color-error);
     }
   }
 
   &--success {
-    background: rgba(110, 184, 140, 0.18);
+    background: rgba(var(--component-action-success-rgb), 0.18);
     color: var(--color-success);
 
     &:hover:not(:disabled) {
-      background: rgba(110, 184, 140, 0.28);
+      background: rgba(var(--component-action-success-rgb), 0.28);
       color: var(--color-static-white);
     }
 
     &:active:not(:disabled) {
-      background: rgba(110, 184, 140, 0.22);
+      background: rgba(var(--component-action-success-rgb), 0.22);
     }
   }
 
   &--warning {
-    background: rgba(201, 148, 77, 0.18);
+    background: rgba(var(--component-action-warning-rgb), 0.18);
     color: var(--color-warning);
 
     &:hover:not(:disabled) {
-      background: rgba(201, 148, 77, 0.28);
+      background: rgba(var(--component-action-warning-rgb), 0.28);
       color: var(--color-static-white);
     }
 
     &:active:not(:disabled) {
-      background: rgba(201, 148, 77, 0.22);
+      background: rgba(var(--component-action-warning-rgb), 0.22);
     }
   }
 
   &--ai {
-    background: rgba(139, 92, 246, 0.18);
-    color: tokens.$color-purple-500;
+    background: color-mix(in srgb, var(--color-purple-500) 18%, transparent);
+    color: var(--color-purple-500);
 
     &:hover:not(:disabled) {
-      background: rgba(139, 92, 246, 0.28);
+      background: color-mix(in srgb, var(--color-purple-500) 28%, transparent);
       color: var(--color-static-white);
     }
 
     &:active:not(:disabled) {
-      background: rgba(139, 92, 246, 0.22);
+      background: color-mix(in srgb, var(--color-purple-500) 22%, transparent);
     }
   }
 
   &:focus-visible {
-    outline: 2px solid rgba(96, 165, 250, 0.5);
+    outline: 2px solid color-mix(in srgb, var(--color-accent-500) 50%, transparent);
     outline-offset: 1px;
   }
 

@@ -1,6 +1,7 @@
 use tool_runtime::pipeline::{
     count_tool_states, partition_tool_batches, retry_delay_ms, should_cancel_tool_state,
-    should_retry_tool_attempt, summarize_dialog_turn_cancellation, ToolCancellationTokenStore,
+    should_retry_tool_attempt, summarize_dialog_turn_cancellation,
+    tool_call_concurrency_safe_for_batch, SubagentBatchExecutionPolicy, ToolCancellationTokenStore,
     ToolExecutionErrorClass, ToolRetryAttemptFacts, ToolTaskStateKind,
 };
 
@@ -41,6 +42,46 @@ fn partitions_serial_tools_as_individual_batches() {
     assert!(!batches[0].is_concurrent);
     assert_eq!(batches[1].task_ids, vec!["bash_1"]);
     assert!(!batches[1].is_concurrent);
+}
+
+#[test]
+fn subagent_batch_policy_preserves_task_concurrency_contract() {
+    assert!(!tool_call_concurrency_safe_for_batch(
+        "Task",
+        false,
+        2,
+        SubagentBatchExecutionPolicy::SafeOnly,
+    ));
+    assert!(tool_call_concurrency_safe_for_batch(
+        "Task",
+        true,
+        1,
+        SubagentBatchExecutionPolicy::SafeOnly,
+    ));
+    assert!(tool_call_concurrency_safe_for_batch(
+        "Task",
+        false,
+        2,
+        SubagentBatchExecutionPolicy::ForceParallel,
+    ));
+    assert!(!tool_call_concurrency_safe_for_batch(
+        "Task",
+        false,
+        1,
+        SubagentBatchExecutionPolicy::ForceParallel,
+    ));
+    assert!(!tool_call_concurrency_safe_for_batch(
+        "Task",
+        true,
+        2,
+        SubagentBatchExecutionPolicy::Serial,
+    ));
+    assert!(tool_call_concurrency_safe_for_batch(
+        "Read",
+        true,
+        0,
+        SubagentBatchExecutionPolicy::Serial,
+    ));
 }
 
 #[test]

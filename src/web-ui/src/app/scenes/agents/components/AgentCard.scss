@@ -11,7 +11,7 @@
   overflow: hidden;
   cursor: pointer;
   animation: agent-card-in 0.22s $easing-decelerate both;
-  animation-delay: calc(var(--card-index, 0) * 35ms);
+  animation-delay: calc(var(--surface-stagger-index, 0) * 35ms);
   transition:
     transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
     box-shadow 0.35s ease;
@@ -365,7 +365,7 @@
 
     &.is-active {
       border-color: color-mix(in srgb, var(--border-subtle) 88%, transparent);
-      border-bottom-color: var(--color-surface-base, var(--surface-base, transparent));
+      border-bottom-color: transparent;
       background: color-mix(in srgb, var(--element-bg-subtle) 96%, transparent);
       color: var(--color-accent-500);
       box-shadow:
@@ -506,8 +506,8 @@
       color: var(--color-accent-500);
 
       &:hover {
-        border-color: rgba(96, 165, 250, 0.6);
-        background: rgba(96, 165, 250, 0.12);
+        border-color: color-mix(in srgb, var(--color-accent-500) 60%, transparent);
+        background: color-mix(in srgb, var(--color-accent-500) 12%, transparent);
       }
     }
   }

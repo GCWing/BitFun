@@ -161,7 +161,7 @@
     font-size: var(--tool-card-action-font-size);
     font-weight: 500;
     line-height: var(--flowchat-support-line-height);
-    color: var(--tool-card-text-secondary, var(--color-text-secondary));
+    color: var(--tool-card-text-secondary);
     background: transparent;
     white-space: pre-wrap;
     word-break: break-word;
@@ -310,8 +310,8 @@
     border-radius: 6px;
     font-size: var(--tool-card-action-font-size);
     color: var(--color-error);
-    background: rgba(239, 68, 68, 0.08);
-    border: 1px solid rgba(239, 68, 68, 0.2);
+    background: var(--glass-red-base);
+    border: 1px solid color-mix(in srgb, var(--color-error) 20%, transparent);
     flex-shrink: 0;
 
     svg {

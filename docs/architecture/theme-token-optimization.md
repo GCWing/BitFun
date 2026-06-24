@@ -1,6 +1,6 @@
 # 主题与颜色 Token 优化方案
 
-> 基线：`gcwing/main` 的 `b5f4f131`，扫描日期为 2026-06-15。
+> 当前基线：`gcwing/main` 的 `8d85e236`，扫描日期为 2026-06-18。
 
 本文档用于梳理 BitFun 前端主题、硬编码颜色、重复 token、近似色冗余、
 命名漂移和后续治理方案。目标不是把所有看起来相近的颜色都合并，而是让
@@ -53,63 +53,184 @@
 
 ## 当前现状
 
-基于最新 `gcwing/main` 的扫描结果，当前颜色系统已经具备一定抽象，但分散
-程度较高，重复和命名漂移明显。
+基于最新 `gcwing/main` 的扫描结果，当前 PR 已把普通 app/component 层的 raw color
+literal、token-equivalent app literal 和普通组件 near color pair 收敛到 0。剩余色值
+全部落在明确 owner 的专用域：theme preset/runtime、token contract、boundary fallback、
+Mermaid、Monaco/editor、Prism syntax、terminal ANSI、language identity 和 UI exception
+registry。
+
+`colorScopes.exception`、`colorDomainScopes.uiException` 和 `colorDomainScopes.boundaryFallback`
+的数值上升不是新增游离色，而是把原先散在 service/component 文件中的身份色、review team
+角色色、Prism palette、截图兜底色和 Monaco theme palette 归入显式 owner 后的结果。
 
 | 指标 | 当前基线 |
 | --- | ---: |
-| 扫描的前端文件数 | 1711 |
-| 包含颜色字面量的文件数 | 297 |
-| 颜色字面量出现次数 | 5572 |
-| 唯一颜色字面量数量 | 1532 |
-| 组件或非 token 文件中的颜色出现次数 | 3735 |
-| 包含组件或非 token 颜色的文件数 | 272 |
-| `var(--token, fallback-color)` 出现次数 | 2847 |
+| 扫描的生产前端文件数 | 1526 |
+| 忽略的测试文件数 | 213 |
+| 包含颜色字面量的文件数 | 26 |
+| 颜色字面量出现次数 | 1718 |
+| 唯一颜色字面量数量 | 913 |
+| 组件或非 token 文件中的颜色出现次数 | 0 |
+| 组件或非 token 唯一颜色数量 | 0 |
+| App UI 颜色出现次数 | 0 |
+| App UI 唯一颜色数量 | 0 |
+| `var(--token, fallback)` 出现次数 | 25 |
+| fallback 唯一 token 数 | 7 |
+| token-equivalent app literal 出现次数 | 0 |
+| token-equivalent app literal 唯一颜色数量 | 0 |
+| 普通组件肉眼不可区分 near color pair | 0 |
+| 普通组件需证据复核的 near color pair | 0 |
 
-债务集中在少数高频 UI 区域：
+当前审计未发现 CSS 变量契约层面的硬错误：
 
-| 区域 | 文件 | 非 token 颜色出现次数 |
-| --- | --- | ---: |
-| Flow Chat 输入区 | `src/web-ui/src/flow_chat/components/ChatInput.scss` | 158 |
-| Toolbar mode | `src/web-ui/src/flow_chat/components/toolbar-mode/ToolbarMode.scss` | 94 |
-| Code editor | `src/web-ui/src/component-library/components/CodeEditor/CodeEditor.scss` | 86 |
-| Profile nursery view | `src/web-ui/src/app/scenes/profile/views/NurseryView.scss` | 78 |
-| Generative widget frame | `src/web-ui/src/tools/generative-widget/GenerativeWidgetFrame.tsx` | 78 |
-| Select 组件 | `src/web-ui/src/component-library/components/Select/Select.scss` | 70 |
-| Code review tool card | `src/web-ui/src/flow_chat/tool-cards/CodeReviewToolCard.scss` | 70 |
-| Stream text | `src/web-ui/src/component-library/components/StreamText/StreamText.scss` | 66 |
-| Snapshot diff viewer | `src/web-ui/src/flow_chat/tool-cards/SnapshotFullscreenDiffViewer.css` | 64 |
-| Workspace manager | `src/web-ui/src/tools/workspace/components/WorkspaceManager.css` | 64 |
+| 契约指标 | 当前值 |
+| --- | ---: |
+| unresolved CSS vars | 0 |
+| fallback-only unresolved vars | 0 |
+| unregistered dynamic families | 0 |
+| stale registered dynamic families | 0 |
+| non-contract cross-file vars | 0 |
+| non-contract dynamic inputs | 0 |
+| non-contract component-private vars | 0 |
 
-重复最多的原始色值主要是应用强调色、状态色、白色半透明叠层和暗色表面叠层：
+本轮补充了机器可校验的治理契约，用于把“可删除债务”和“必须保留的兼容/边界”
+分开：
 
-| 色值 | 次数 | 推测角色 |
+| 治理契约指标 | 当前值 | 说明 |
 | --- | ---: | --- |
-| `#60a5fa` | 162 | blue accent / focus / info |
-| `rgba(255, 255, 255, 0.08)` | 115 | 暗色主题 subtle overlay |
-| `rgba(255, 255, 255, 0.1)` | 112 | 暗色主题 hover/elevated overlay |
-| `#f59e0b` | 112 | warning |
-| `#ffffff` | 107 | white / inverse text |
-| `#ef4444` | 110 | error / danger |
-| `#22c55e` | 77 | success |
-| `#3b82f6` | 70 | primary / info |
-| `rgba(255, 255, 255, 0.05)` | 70 | 暗色主题低强度 overlay |
-| `rgba(255, 255, 255, 0.06)` | 68 | 暗色主题低强度 overlay |
+| compatibility alias contracts | 63 | 显式列出历史别名、canonical 目标、owner、保留原因和退场条件 |
+| compatibility alias 使用 key | 68 | 包含 `--radius-*`、`--spacing-*` 展开的实际使用 key；这些 key 不能直接删除 |
+| compatibility alias 使用次数 | 609 | 当前仍是重要兼容面，后续迁移应逐步降低并同步降低 baseline |
+| stale compatibility alias contracts | 0 | 防止 registry 保留已经没有静态/runtime 定义的旧 key |
+| compatibility alias family contracts | 2 | `--radius-* -> --size-radius-*`、`--spacing-* -> --size-gap-*` |
+| stale compatibility alias family contracts | 0 | 防止动态 family 或 canonical family 失配 |
+| missing compatibility alias family canonicals | 0 | 防止新增 `--radius-x` / `--spacing-x` 但缺少对应 canonical key |
+| fallback token contracts | 7 | 每个 `var(--token, fallback)` 边界 fallback 都有 owner、reason 和 boundary |
+| uncontracted fallback tokens | 0 | 防止新增未解释的 fallback key |
+| stale fallback token contracts | 0 | 防止已删除 fallback 继续留在 registry 中 |
+| color domain contracts | 13 | 每个专用域都有 owner、reason 和 merge policy |
+| active uncontracted color domains | 0 | 防止新增专用域但没有 owner/合并策略 |
 
-fallback 也已经形成了第二套分散色板。高频 fallback token 如下：
+剩余颜色集中在几个专用域；普通 app UI 不再保留 raw color literal：
+
+| 区域 | 当前出现次数 | 当前唯一色数 | 说明 |
+| --- | ---: | ---: | --- |
+| Theme presets | 1033 | 611 | 主题个性与 palette 映射，不作为普通 app literal 直接合并 |
+| Token contracts | 268 | 159 | `tokens.scss` 等静态契约根 |
+| Editor | 56 | 53 | Monaco/editor 专用域，不能直接泛化到 app token；组件装饰色已迁出 raw literal |
+| Mermaid | 139 | 95 | Mermaid 专用渲染域 |
+| Theme runtime | 54 | 45 | `ThemeService.ts` 运行时注入 |
+| Language identity | 52 | 50 | 语言身份色，已集中到 identity registry |
+| Terminal | 38 | 30 | terminal/ANSI 专用域 |
+| Boundary fallback | 22 | 22 | iframe/miniapp/截图兜底值，不作为普通 app token |
+| Visual effects | 0 | 0 | StreamText/TextStroke raw literal 已迁出普通组件层 |
+| UI exception registry | 38 | 34 | 已归档的 UI 例外色，包含 review team、agent capability、template context、insights 和 inspector 等固定身份色 |
+| Generated widget | 0 | 0 | 颜色默认值已迁到 boundary fallback registry |
+| App UI | 0 | 0 | 普通 app/component raw color 已清零；后续新增必须先进入 token/exception 决策 |
+| Syntax | 18 | 17 | Prism syntax palette，保留为专用渲染域 |
+
+剩余高频文件均为专用 palette 或集中 registry：
+
+| 文件 | 颜色出现次数 | 后续处理策略 |
+| --- | ---: | --- |
+| `src/web-ui/src/tools/editor/themes/bitfun-dark.theme.ts` | 47 | Monaco theme palette；不拆散到普通 app token |
+| `src/web-ui/src/shared/theme/languageIdentityAccents.ts` | 52 | 内置 language/file identity registry；调用方复用常量 |
+| `src/web-ui/src/shared/theme/uiExceptionAccents.ts` | 38 | 固定 UI 身份/角色色 registry；新增必须说明 owner/role |
+| `src/web-ui/src/tools/terminal/utils/xtermTheme.ts` | 36 | terminal ANSI palette；不与 app semantic color 合并 |
+| `src/web-ui/src/shared/theme/themeBoundaryFallbacks.ts` | 22 | isolated surface 和截图兜底值；集中 owner |
+| `src/web-ui/src/shared/theme/syntaxHighlightAccents.ts` | 18 | Prism syntax palette；不泛化到 app token |
+
+当前 fallback token 都已进入 allowlist，但仍需要逐项决策是否保留边界 fallback：
 
 | fallback token | 次数 |
 | --- | ---: |
-| `--color-accent-500` | 147 |
-| `--color-warning` | 127 |
-| `--color-error` | 117 |
-| `--color-success` | 109 |
-| `--color-text-muted` | 77 |
-| `--color-text-primary` | 75 |
-| `--color-text-secondary` | 71 |
-| `--border-subtle` | 55 |
-| `--element-bg-subtle` | 39 |
-| `--color-primary` | 41 |
+| `--surface-stagger-index` | 12 |
+| `--mission-control-group-color` | 6 |
+| `--char-index` | 3 |
+| `--gallery-grid-min` | 1 |
+| `--gallery-skeleton-height` | 1 |
+| `--primary-color` | 1 |
+| `--scene-viewport-border-width` | 1 |
+
+fallback 决策表：
+
+| fallback token | 决策 | 依据 | 后续动作 |
+| --- | --- | --- | --- |
+| `--surface-stagger-index` | 保留 | 运行时 inline 动画序号，`0` 是安全首帧/无动画默认值 | 不迁移为颜色 token；保持 allowlist |
+| `--mission-control-group-color` | 保留 | 分组身份色由数据或 inline style 驱动，静态删除会丢失未设置分组色时的 accent 兜底 | 后续 content-canvas token 抽取时复核是否改为组件根默认值 |
+| `--char-index` | 保留 | StreamText 每字符动画偏移，`0` fallback 是无序号渲染的安全默认值 | 不迁移为颜色 token；保持 allowlist |
+| `--gallery-grid-min` | 保留 | runtime layout sizing 输入，不属于颜色债务；`320px` 保持 responsive grid 下限 | 保持 allowlist，后续只在 layout token 方案中处理 |
+| `--gallery-skeleton-height` | 保留 | runtime skeleton sizing 输入，不属于颜色债务；`140px` 保持占位高度稳定 | 保持 allowlist，后续只在 layout token 方案中处理 |
+| `--primary-color` | 延后 | Markdown 嵌入内容可覆盖 primary accent，边界语义不同于全局 app primary | Markdown token 抽取时决定是否转为 `--markdown-primary-color` contract |
+| `--scene-viewport-border-width` | 保留 | viewport border width 是 runtime layout override，`1px` fallback 保持默认边界可见 | 保持 allowlist，后续只在 scene layout token 方案中处理 |
+
+阶段状态：
+
+| 阶段 | 状态 | 当前判断 |
+| --- | --- | --- |
+| Phase 0：基线与工具 | 已完成主体 | 审计脚本可区分测试文件、fallback token、dynamic families 和 exception domains |
+| Phase 1：canonical token 契约 | 本轮强化 | compatibility alias registry 已记录 63 个显式 alias 和 2 个 alias family，包含 canonical 目标、owner、保留原因和退场条件 |
+| Phase 2：精确重复合并 | 本轮完成 | token-equivalent app literal 已从 12/10 清零；截图兜底、language identity 和 review/agent/insights 固定色已迁入显式 registry |
+| Phase 3：legacy fallback 迁移 | 本轮强化 | fallback unique token 保持 7，且全部进入 fallback contract registry；新增未登记 fallback 会被审计报告和 baseline 拦截 |
+| Phase 4：组件 token 抽取 | 本轮完成 | CodeEditor、StreamText、ChatInputPixelPet、ReferencesPanel、AgentCompanion、tool-card、editor 组件装饰色已抽为组件私有 RGB channel 或复用 contract token |
+| Phase 5：近似色合并 | 本轮完成 | 普通组件 near pair 已清零；极近似视觉色只在不相邻或不承担状态差异时合并，Monaco/terminal/Mermaid/syntax 专用 palette 不强行合并 |
+| Phase 6：防回退约束 | 本轮强化 | baseline 已同步到 component/non-token=0、appUi=0、token-equivalent=0、nearPair=0，并新增 alias、fallback、domain contract 防回退指标 |
+
+Phase 5 决策记录：
+
+| pair | 决策 | 调用点 | 依据 |
+| --- | --- | --- | --- |
+| `#1f2024` -> `#202024` | merge | `ChatInputPixelPet.scss` panda body/decor；`bitfun-dark.theme.ts` editor subtle border | RGB distance = 1，非状态色，非相邻 surface 边界；panda 固定深色与 editor border 不在同一视觉层级承担区分 |
+| `#6e7681` -> `#6e7781` | merge | `LanguageRegistry.ts` Plain Text identity；`prismTheme.ts` light comment | RGB distance = 1，均为 neutral muted 文本/identity 色，不表达状态严重程度或数据差异 |
+| app UI / editor alpha raw values | merge to token/color-mix | `ContextMenu.scss`、`TiptapEditor.scss`、`GitDiffEditor.scss`、`AIModelConfig.scss`、`NurseryView.scss`、`AgentCard.scss`、`ImageViewer.scss` | 色相来自现有 accent/success/overlay/text/error contract，透明度仅表达层级；迁移为 token/color-mix 保留层级但移除游离 raw color |
+| DiffEditor added/deleted alpha values | component-tokenize | `DiffEditor.scss` | `0.15/0.18/0.20/0.38` 表达统计徽标、行背景、强调行和字符级 diff 的层级差异，不能直接合并；改为 `--diff-editor-*` 组件 token 后保留层级并移除游离 raw rgba |
+| `#ff8800` -> `#ff8c00` | merge | `StreamText.scss` rainbow/fire orange | RGB distance = 4，均为 visual-effect 暖橙，非相邻状态色，合并后不影响用户区分 |
+| `#ffdd00` -> `#ffd700` | merge | `StreamText.scss` fire yellow；editor/reference yellow | RGB distance = 6，均为亮黄强调色，调用点不相邻，不承担不同业务状态 |
+| `#7dd3fc` -> `#7DCFFF` | merge | `GenerativeWidgetToolCard.scss`；`bitfun-dark.theme.ts` editor link | RGB distance = 5，均为非状态 sky/cyan 强调，调用点跨 surface 且不相邻 |
+| `#00b4d8` -> `#00add8` | merge | `StreamText.scss` ocean mid；Go language identity | RGB distance = 7，同为 cyan/blue identity/visual-effect 色，非错误/警告/状态强度 |
+| `#141414` vs `#121214` | preserve | `LanguageRegistry.ts` reStructuredText identity；Flow Chat capture/editor fallback | RGB distance = 2.83，但 `#141414` 是已存在的 language identity，迁移到 registry 时保持原值；`#121214` 仅作为截图/边界兜底 |
+| remaining near pairs | none in ordinary components | 无 | 审计口径下普通组件 near pair 已清零；后续只在专用 palette 自身重设计时处理 Monaco/terminal/Mermaid/syntax 内部近似色 |
+| Monaco theme palette | classify as exception | `tools/editor/themes/bitfun-dark.theme.ts` | 该文件是 Monaco theme 完整色板，不是普通 app UI；归入 editor/exception 后不再被误计为 component raw color |
+| Flow Chat capture fallback | boundary fallback | `ExportImageButton.tsx`、`captureElementToDownloadsPng.tsx` -> `themeBoundaryFallbacks.ts` | `#121214` 只在 root theme 变量不可用时兜底截图背景，集中 owner 后避免截图工具重复携带 raw fallback |
+
+Phase 6 首轮约束：
+
+| 约束 | 当前值 | baseline | 作用 |
+| --- | ---: | ---: | --- |
+| `nearPairs.indistinguishableTotal` | 0 | 0 | 阻止新增普通组件肉眼不可区分 pair 未被合并或记录 |
+| `nearPairs.nearTotal` | 0 | 0 | 阻止新增普通组件 near color 债务；新增必须合并、归类或记录理由 |
+| `colorScopes.appUi.uniqueColors` | 0 | 0 | 阻止普通组件 raw color 唯一色回涨 |
+| `colorScopes.appUi.occurrences` | 0 | 0 | 阻止普通组件 raw color 出现次数回涨 |
+| `tokenAliasLiterals.occurrences` | 0 | 0 | 阻止重新出现可映射到 token 的 app literal |
+| `colorDomainScopes.appUi.occurrences` | 0 | 0 | 阻止未归类 app UI 色值回涨 |
+| CSS var governance errors | 0 | 0 | 保持 unresolved、fallback-only、non-contract 和 dynamic family 错误为零 |
+| `compatibilityAliases.staleRegisteredUnique` | 0 | 0 | 防止兼容 alias registry 保留没有定义或 canonical 目标缺失的 key |
+| `compatibilityAliases.staleRegisteredFamilyUnique` | 0 | 0 | 防止 `--radius-*`、`--spacing-*` 这类动态 family 与 canonical family 失配 |
+| `compatibilityAliases.missingCanonicalUnique` | 0 | 0 | 防止 family alias 具体 key 缺失对应 canonical key |
+| `fallbackContracts.uncontractedUnique` | 0 | 0 | 防止新增未说明边界的 `var(--token, fallback)` |
+| `fallbackContracts.staleRegisteredUnique` | 0 | 0 | 防止已删除 fallback 继续留在 registry 中 |
+| `colorDomainContracts.activeUncontractedUnique` | 0 | 0 | 防止新增专用颜色域但没有 owner 和 merge policy |
+
+`nearPairs.*` 只基于非 token、非 exception 的普通组件颜色计算。Theme preset、
+editor、syntax、terminal、language identity、boundary fallback 等专用域通过各自
+`colorDomainScopes.*` 预算约束，不用该 near-pair guard 直接判定是否可合并。
+
+视觉证据契约新增在 `scripts/theme-visual-governance-contract.json`，并由
+`pnpm run theme:visual-contract` 校验。它不是截图替代品，而是后续 PR 的覆盖面
+清单：任何影响主题或 UI 色值的变更，都应确认是否触达以下 surface，并按 contract
+补充 focused visual review、contrast review、boundary render review 或 mobile build review。
+
+| surface | 覆盖形态 | 重点风险 |
+| --- | --- | --- |
+| app-shell | desktop webview、web、desktop、narrow、dark/light/system | 旧 alias 仍在 shell 邻近组件使用，system theme 不能假设桌面专有行为 |
+| flow-chat | desktop webview、web、desktop、narrow、streaming/error/empty | virtualized 和历史 turn 可能隐藏 token 回归 |
+| tool-cards-review | tool card、review panel、expanded/collapsed/status | danger alias 保留 destructive 语义，不能和 error 无证据合并 |
+| code-editor-diff | Monaco、diff、selection、added/deleted/conflict | editor/diff 色表达相邻状态，不能按数值相似直接合并 |
+| terminal | ANSI normal/bright、selection、error | ANSI 语义独立于 app semantic color |
+| markdown-mermaid | Markdown、Prism、Mermaid、diagram/error | `--primary-color` 是 embedded override；Mermaid 角色不等于 app status |
+| generated-widget | iframe fallback、host payload、loading/error | widget payload 兼容是保留多组旧 alias 的主要原因 |
+| theme-settings | theme switcher、system/custom theme preview | custom theme preview 可能比普通组件更早暴露 runtime alias 缺失 |
+| mobile-web-shell | mobile-web、mobile/narrow、loading/error/navigation | mobile web 是独立构建目标，不能只依赖 desktop WebView 验证 |
 
 ## 现有架构地图
 
@@ -535,6 +656,9 @@ semantic token 描述产品级语义，应作为共享 UI 的默认使用层。
 
 - 对组件中新 app raw color 的 lint 或 audit 检查。
 - 已知 exception file 与 namespace allowlist。
+- compatibility alias、fallback token、color domain 的机器可校验 owner/reason contract。
+- 覆盖 app-shell、Flow Chat、tool card/review、editor/diff、terminal、Mermaid/Markdown、
+  generated widget、theme settings 和 mobile web 的视觉证据契约。
 - CI 在迁移期只阻止新增问题，不因历史 baseline 直接失败。
 
 验收标准：
@@ -542,6 +666,9 @@ semantic token 描述产品级语义，应作为共享 UI 的默认使用层。
 - 新增组件级 raw color 必须有明确原因。
 - 历史迁移可以按目录增量推进。
 - exception 可见、可审查。
+- 兼容 alias 和边界 fallback 可见、可审查，且 stale contract 为 0。
+- CI 至少运行 `theme:color-audit:test`、`theme:color-audit` 和
+  `theme:visual-contract`。
 
 ## 风险清单
 
@@ -636,6 +763,9 @@ alpha 差异经常承担 elevation 和交互状态，不应全部压成一个值
 
 实现类 PR：
 
+- `pnpm run theme:color-audit:test`
+- `pnpm run theme:color-audit`
+- `pnpm run theme:visual-contract`
 - `pnpm run lint:web`
 - `pnpm run type-check:web`
 - `pnpm --dir src/web-ui run test:run`
@@ -690,6 +820,8 @@ alpha 差异经常承担 elevation 和交互状态，不应全部压成一个值
 - 变更是否同时影响 light 和 dark theme。
 - 变更是否影响 generated widget、code editor、terminal、Mermaid 或第三方内容。
 - 删除 fallback 前，兼容 alias 是否已经存在。
+- 新增或保留的 compatibility alias、fallback token、color domain 是否进入对应 contract。
+- 变更影响的 surface 是否已对照 `theme-visual-governance-contract.json` 确认覆盖形态。
 - 高风险 surface 是否有截图或 focused visual check。
 - PR 描述是否说明了任何用户可见视觉变化。
 
@@ -714,10 +846,15 @@ alpha 差异经常承担 elevation 和交互状态，不应全部压成一个值
 - 范围和影响 surface。
 - before/after 指标。
 - 用户可见 surface 的截图。
+- 命中的 visual governance surface 和对应证据类型。
 - 明确保留的近似色列表。
 - 验证命令和结果。
 
 ## 待决问题
+
+以下问题仍是产品语义决策，不再是未登记游离 key。当前已进入
+`TOKEN_COMPATIBILITY_ALIAS_CONTRACTS` 或 `TOKEN_COMPATIBILITY_ALIAS_FAMILY_CONTRACTS`，
+删除前必须先完成调用点迁移、widget payload 兼容检查和视觉复核。
 
 - `--color-text-tertiary` 应转正为一等 semantic token，还是迁移到
   `--color-text-muted`。
@@ -741,3 +878,4 @@ alpha 差异经常承担 elevation 和交互状态，不应全部压成一个值
 - 相邻 surface、交互状态、状态语义和主题个性仍能被用户清楚识别。
 - 静态 token、运行时 token、widget payload token 对齐。
 - 新增 raw color 必须经过可见 review 决策。
+- 主题治理 CI 覆盖颜色审计、契约测试和视觉证据契约校验。

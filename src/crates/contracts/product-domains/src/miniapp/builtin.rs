@@ -112,7 +112,7 @@ pub const BUILTIN_APPS: &[BuiltinMiniAppBundle] = &[
     },
     BuiltinMiniAppBundle {
         id: "builtin-ppt-live",
-        version: 174,
+        version: 184,
         meta_json: include_str!("builtin/assets/ppt-live/meta.json"),
         html: include_str!("builtin/assets/ppt-live/index.html"),
         css: include_str!("builtin/assets/ppt-live/style.css"),
@@ -312,32 +312,26 @@ mod tests {
             Some(0)
         );
         assert!(app.ui_js.contains("Unsupported PPT Live action"));
-        // Planning, render, fallback, and continuation turns reuse the hidden
-        // agent backend and its pinned skill-derived project contract. The
-        // bundle is minified, so structural checks read the source.
+        // A single cowork agent turn loads the ppt-design skill and produces
+        // the whole deck end to end. The prompt is intentionally minimal — the
+        // skill owns all design rules via progressive disclosure.
         let adapter_source = include_str!("builtin/assets/ppt-live/src/bitfun-backend-adapter.js");
         assert!(adapter_source.contains("sessionId: options.sessionId"));
         assert!(adapter_source.contains("user::bitfun-system::ppt-design"));
-        assert!(adapter_source.contains("references/editable-pptx.md"));
-        assert!(adapter_source.contains("references/slide-decks.md"));
-        assert!(adapter_source.contains("references/content-guidelines.md"));
-        assert!(adapter_source.contains("buildPlanPrompt"));
-        assert!(adapter_source.contains("buildSessionSlidePrompt"));
-        assert!(adapter_source.contains("buildSlidesPrompt"));
-        assert!(adapter_source.contains("buildLegacyPrompt"));
-        assert!(adapter_source.contains("MINIAPP_HEADLESS_AGENT_RULES"));
-        assert!(adapter_source.contains("app.agent.run(prompt"));
-        assert!(adapter_source.contains("AUTOMATIC COMPLETION CONTINUATION"));
-        assert!(adapter_source.contains("do not merely explain what remains"));
+        assert!(adapter_source.contains("buildAgentPrompt"));
         assert!(!adapter_source.contains("app.ai"));
         assert!(!adapter_source.contains("installFallbackBackend"));
-        assert!(app.ui_js.contains("SAME deck Agent Session"));
-        assert!(app.ui_js.contains("interrupted before it finished"));
+        // The prompt must delegate design rules to the skill, not restate them.
+        assert!(!adapter_source.contains("EDITABLE_PPTX_HARD_RULES"));
+        assert!(!adapter_source.contains("PPT_DESIGN_REQUIRED_REFERENCES"));
+        assert!(!adapter_source.contains("comparisons -> tables/matrices"));
+        assert!(!adapter_source.contains("Design quality bar"));
+        assert!(!adapter_source.contains("Müller-Brockmann"));
         assert!(app.ui_js.contains("Unknown MiniApp agent session"));
-        // Staged generation follows the ppt-design skill's native file
-        // protocol: the agent works inside a deck project directory under the
-        // app's appdata storage, writes project.json and slides/slide-NN.html,
-        // and ui.js reads the files back instead of parsing giant JSON text.
+        // Generation follows the ppt-design skill's native file protocol: the
+        // agent works inside a deck project directory under the app's appdata
+        // storage, writes project.json and slides/slide-NN.html, and ui.js
+        // reads the files back instead of parsing giant JSON text.
         assert!(adapter_source.contains("protocol: 'files'"));
         assert!(adapter_source.contains("appDataWorkspace: options.appDataWorkspace"));
         assert!(app.ui_js.contains("project.json"));
@@ -358,29 +352,20 @@ mod tests {
         assert!(!meta["permissions"]["ai"]["enabled"]
             .as_bool()
             .unwrap_or(true));
-        assert!(adapter_source.contains("data-information-visualization.md"));
-        assert!(adapter_source.contains("references/content-guidelines.md"));
-        assert!(adapter_source.contains("comparisons -> tables/matrices"));
-        // The standalone fallback render prompt (used when the planning
-        // session is lost) must reload the design skill itself.
-        assert!(app.ui_js.contains("user::bitfun-system::ppt-design"));
+        // The single cowork agent turn loads the ppt-design skill itself.
+        assert!(adapter_source.contains("user::bitfun-system::ppt-design"));
         let ppt_live_source = include_str!("builtin/assets/ppt-live/ui.js");
-        assert!(ppt_live_source.contains("for (const slidePlan of renderPlans)"));
-        assert!(ppt_live_source.contains("prepareSlidesForPptxExport"));
-        let export_source = include_str!("builtin/assets/ppt-live/src/export-slide-browser.js");
-        assert!(export_source.contains("validateSlideForPptxGeneration"));
-        assert!(ppt_live_source.contains("planningEvidenceIssues"));
-        assert!(ppt_live_source.contains("completedById"));
-        assert!(ppt_live_source.contains("PPT_BACKEND_CONTINUATION_MAX_ATTEMPTS"));
-        assert!(ppt_live_source.contains("completionRecoveryInput"));
-        assert!(ppt_live_source.contains("tryReadDeckJsonFile"));
-        assert!(ppt_live_source.contains("tryReadDeckPlanFile"));
-        assert!(ppt_live_source.contains("runStagedPlanPhase"));
-        assert!(ppt_live_source.contains("runStagedSlide"));
-        assert!(ppt_live_source.contains("recoveryExhaustedError"));
+        // Single-turn cowork generation: one agent turn produces the whole deck.
+        assert!(ppt_live_source.contains("runCoworkDeckGeneration"));
+        assert!(ppt_live_source.contains("readDeckFromProjectFiles"));
+        assert!(ppt_live_source.contains("pushAgentStreamEntry"));
         assert!(!ppt_live_source.contains("PPT_PARALLEL_SLIDE_WORKERS"));
         assert!(!ppt_live_source.contains("runWithConcurrencyLimit"));
         assert!(!ppt_live_source.contains("enrichSources(state)"));
+        // Staged multi-turn protocol was removed.
+        assert!(!ppt_live_source.contains("runStagedDeckGeneration"));
+        assert!(!ppt_live_source.contains("PPT_PLAN_BATCH_SIZE"));
+        assert!(!ppt_live_source.contains("PPT_BACKEND_CONTINUATION_MAX_ATTEMPTS"));
         assert!(app.html.contains("exportPptx"));
         assert!(!app.html.contains("src=\"./ui.js\""));
         assert!(!app.html.contains("href=\"./style.css\""));

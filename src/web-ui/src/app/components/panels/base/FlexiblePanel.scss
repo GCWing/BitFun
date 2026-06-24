@@ -207,12 +207,12 @@
 
   &.needs-fix {
     box-shadow: 
-      0 0 4px rgba(251, 191, 36, 0.25),
-      0 0 8px rgba(251, 191, 36, 0.2),
-      inset 0 0 12px rgba(251, 191, 36, 0.2),
-      inset 0 0 20px rgba(251, 191, 36, 0.15),
-      inset 0 0 30px rgba(251, 191, 36, 0.08),
-      inset 0 0 40px rgba(251, 191, 36, 0.03);
+      0 0 4px color-mix(in srgb, var(--color-warning) 25%, transparent),
+      0 0 8px color-mix(in srgb, var(--color-warning) 20%, transparent),
+      inset 0 0 12px color-mix(in srgb, var(--color-warning) 20%, transparent),
+      inset 0 0 20px color-mix(in srgb, var(--color-warning) 15%, transparent),
+      inset 0 0 30px color-mix(in srgb, var(--color-warning) 8%, transparent),
+      inset 0 0 40px color-mix(in srgb, var(--color-warning) 3%, transparent);
     border: none;
     animation: bitfun-flexible-panel-yellow-glow-pulse 3s ease-in-out infinite alternate;
   }
@@ -221,22 +221,22 @@
 @keyframes bitfun-flexible-panel-yellow-glow-pulse {
   from {
     box-shadow: 
-      0 0 4px rgba(251, 191, 36, 0.25),
-      0 0 8px rgba(251, 191, 36, 0.2),
-      inset 0 0 12px rgba(251, 191, 36, 0.2),
-      inset 0 0 20px rgba(251, 191, 36, 0.15),
-      inset 0 0 30px rgba(251, 191, 36, 0.08),
-      inset 0 0 40px rgba(251, 191, 36, 0.03);
+      0 0 4px color-mix(in srgb, var(--color-warning) 25%, transparent),
+      0 0 8px color-mix(in srgb, var(--color-warning) 20%, transparent),
+      inset 0 0 12px color-mix(in srgb, var(--color-warning) 20%, transparent),
+      inset 0 0 20px color-mix(in srgb, var(--color-warning) 15%, transparent),
+      inset 0 0 30px color-mix(in srgb, var(--color-warning) 8%, transparent),
+      inset 0 0 40px color-mix(in srgb, var(--color-warning) 3%, transparent);
     border: none;
   }
   to {
     box-shadow: 
-      0 0 6px rgba(251, 191, 36, 0.35),
-      0 0 12px rgba(251, 191, 36, 0.25),
-      inset 0 0 16px rgba(251, 191, 36, 0.3),
-      inset 0 0 25px rgba(251, 191, 36, 0.2),
-      inset 0 0 35px rgba(251, 191, 36, 0.12),
-      inset 0 0 45px rgba(251, 191, 36, 0.06);
+      0 0 6px color-mix(in srgb, var(--color-warning) 35%, transparent),
+      0 0 12px color-mix(in srgb, var(--color-warning) 25%, transparent),
+      inset 0 0 16px color-mix(in srgb, var(--color-warning) 30%, transparent),
+      inset 0 0 25px color-mix(in srgb, var(--color-warning) 20%, transparent),
+      inset 0 0 35px color-mix(in srgb, var(--color-warning) 12%, transparent),
+      inset 0 0 45px color-mix(in srgb, var(--color-warning) 6%, transparent);
     border: none;
   }
 }
@@ -484,13 +484,13 @@
 
     &.needs-fix {
       box-shadow: 
-        0 0 4px rgba(251, 191, 36, 0.25),
-        0 0 8px rgba(251, 191, 36, 0.2),
-        inset 0 0 12px rgba(251, 191, 36, 0.2),
-        inset 0 0 20px rgba(251, 191, 36, 0.15),
-        inset 0 0 30px rgba(251, 191, 36, 0.08),
-        inset 0 0 40px rgba(251, 191, 36, 0.03);
-      border: 1px solid rgba(251, 191, 36, 0.4);
+        0 0 4px color-mix(in srgb, var(--color-warning) 25%, transparent),
+        0 0 8px color-mix(in srgb, var(--color-warning) 20%, transparent),
+        inset 0 0 12px color-mix(in srgb, var(--color-warning) 20%, transparent),
+        inset 0 0 20px color-mix(in srgb, var(--color-warning) 15%, transparent),
+        inset 0 0 30px color-mix(in srgb, var(--color-warning) 8%, transparent),
+        inset 0 0 40px color-mix(in srgb, var(--color-warning) 3%, transparent);
+      border: 1px solid color-mix(in srgb, var(--color-warning) 40%, transparent);
       animation: bitfun-flexible-panel-yellow-glow-pulse 3s ease-in-out infinite alternate;
     }
   }
@@ -548,13 +548,13 @@
 
   &.needs-fix {
     box-shadow: 
-      0 0 4px rgba(251, 191, 36, 0.25),
-      0 0 8px rgba(251, 191, 36, 0.2),
-      inset 0 0 12px rgba(251, 191, 36, 0.2),
-      inset 0 0 20px rgba(251, 191, 36, 0.15),
-      inset 0 0 30px rgba(251, 191, 36, 0.08),
-      inset 0 0 40px rgba(251, 191, 36, 0.03);
-    border: 1px solid rgba(251, 191, 36, 0.4);
+      0 0 4px color-mix(in srgb, var(--color-warning) 25%, transparent),
+      0 0 8px color-mix(in srgb, var(--color-warning) 20%, transparent),
+      inset 0 0 12px color-mix(in srgb, var(--color-warning) 20%, transparent),
+      inset 0 0 20px color-mix(in srgb, var(--color-warning) 15%, transparent),
+      inset 0 0 30px color-mix(in srgb, var(--color-warning) 8%, transparent),
+      inset 0 0 40px color-mix(in srgb, var(--color-warning) 3%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-warning) 40%, transparent);
     animation: bitfun-flexible-panel-yellow-glow-pulse 3s ease-in-out infinite alternate;
     transition: box-shadow $motion-base $easing-standard;
   }

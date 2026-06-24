@@ -4,7 +4,7 @@
 
 .flow-text-block {
   width: 100%;
-  margin: 0 0 var(--flowchat-flow-item-gap, 0.45rem) 0;
+  margin: 0 0 var(--flowchat-flow-item-gap) 0;
   font-size: var(--flowchat-font-size-base);
   line-height: var(--flowchat-text-line-height);
   /* Transparent border to match the box-sizing of bordered cards (BaseToolCard,
@@ -108,7 +108,7 @@
   }
 
   .markdown-renderer .code-block-wrapper .copy-button.copy-success:hover {
-    color: #22c55e;
+    color: var(--markdown-copy-success-color);
     transform: scale(1.08);
   }
 
@@ -162,7 +162,7 @@
 :root[data-theme-type='light'] .flow-text-block .markdown-renderer .code-block-wrapper .copy-button.copy-success:hover,
 [data-theme-type='light'] .flow-text-block .markdown-renderer .code-block-wrapper .copy-button.copy-success:hover,
 .light .flow-text-block .markdown-renderer .code-block-wrapper .copy-button.copy-success:hover {
-  color: #1a7f37;
+  color: var(--markdown-copy-success-color-light);
 }
 
 :root[data-theme='light'] .flow-text-block .markdown-renderer .inline-code,

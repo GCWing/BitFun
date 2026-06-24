@@ -33,14 +33,8 @@ const log = createLogger('Markdown');
 const COMPUTER_LINK_PREFIX = 'computer://';
 const FILE_LINK_PREFIX = 'file://';
 const WORKSPACE_FOLDER_PLACEHOLDER = '{{workspaceFolder}}';
-let markdownMathRendererPreload: Promise<typeof import('./MarkdownMathRenderer')> | undefined;
 
-export function preloadMarkdownMathRenderer() {
-  markdownMathRendererPreload ??= import('./MarkdownMathRenderer');
-  return markdownMathRendererPreload;
-}
-
-const MarkdownMathRenderer = React.lazy(preloadMarkdownMathRenderer);
+const MarkdownMathRenderer = React.lazy(() => import('./MarkdownMathRenderer'));
 
 // Module-level cache so that all simultaneously-mounting Markdown instances
 // (e.g. dozens of history blocks after a workspace switch) share a single
@@ -1061,8 +1055,11 @@ export const Markdown = React.memo<MarkdownProps>(({
         lineHeight: '1.55',
       };
       const codeTagStyle: React.CSSProperties = {
-        fontFamily: 'var(--markdown-font-mono, "Fira Code", "JetBrains Mono", Consolas, "Courier New", monospace)',
+        fontFamily: 'var(--markdown-font-mono)',
       };
+      const gutterColor = isLight
+        ? 'rgb(var(--markdown-code-gutter-light-rgb))'
+        : 'rgb(var(--markdown-code-gutter-dark-rgb))';
 
       return (
         <div className={`code-block-wrapper${hasMultipleLines ? '' : ' code-block-wrapper--single-line'}`}>
@@ -1085,7 +1082,7 @@ export const Markdown = React.memo<MarkdownProps>(({
               language={normalizedLang}
               bodyStyle={codeBodyStyle}
               codeTagStyle={codeTagStyle}
-              gutterColor={isLight ? '#999' : '#666'}
+              gutterColor={gutterColor}
             />
           ) : (
             <AsyncPrismSyntaxHighlighter
@@ -1095,7 +1092,7 @@ export const Markdown = React.memo<MarkdownProps>(({
               customStyle={codeBodyStyle}
               codeTagProps={{ style: codeTagStyle }}
               lineNumberStyle={{
-                color: isLight ? '#999' : '#666',
+                color: gutterColor,
                 paddingRight: '1em',
                 textAlign: 'right',
                 userSelect: 'none',
@@ -1107,7 +1104,7 @@ export const Markdown = React.memo<MarkdownProps>(({
                 language: normalizedLang,
                 bodyStyle: codeBodyStyle,
                 codeTagStyle,
-                gutterColor: isLight ? '#999' : '#666',
+                gutterColor,
               }}
               traceContext={traceContext}
             >

@@ -1,0 +1,218 @@
+{
+  "version": 1,
+  "description": "Visual review contract for theme-token governance. This is a coverage contract, not proof that screenshots or contrast checks already passed.",
+  "surfaces": [
+    {
+      "key": "app-shell",
+      "owner": "src/web-ui/src/app/layout; src/web-ui/src/app/components/NavPanel",
+      "platforms": ["desktop-webview", "web"],
+      "formFactors": ["desktop", "narrow"],
+      "themes": ["dark", "light", "system"],
+      "states": ["default", "hover", "focus", "selected", "disabled"],
+      "tokenFamilies": ["--color-bg-*", "--color-text-*", "--element-bg-*", "--border-*", "--bitfun-nav-*"],
+      "evidence": [
+        {
+          "type": "theme-color-audit",
+          "command": "pnpm run theme:color-audit",
+          "requirement": "No appUi raw colors, unresolved vars, unregistered dynamic families, or near ordinary component color pairs."
+        },
+        {
+          "type": "focused-visual-review",
+          "requirement": "Review desktop and narrow layouts after any shell, nav, background, border, or text token change."
+        }
+      ],
+      "risks": [
+        "Short legacy aliases such as --color-primary and --text-secondary are still used by shell-adjacent components.",
+        "System theme resolution must not assume desktop-only media query behavior."
+      ]
+    },
+    {
+      "key": "flow-chat",
+      "owner": "src/web-ui/src/flow_chat; src/web-ui/src/app/scenes/session",
+      "platforms": ["desktop-webview", "web"],
+      "formFactors": ["desktop", "narrow"],
+      "themes": ["dark", "light", "system"],
+      "states": ["default", "streaming", "hover", "focus", "selected", "error", "empty"],
+      "tokenFamilies": ["--flowchat-*", "--tool-card-*", "--color-bg-flowchat", "--color-text-*", "--accent-primary"],
+      "evidence": [
+        {
+          "type": "theme-color-audit",
+          "command": "pnpm run theme:color-audit",
+          "requirement": "Flow Chat changes must not add appUi raw colors or unregistered dynamic CSS var families."
+        },
+        {
+          "type": "focused-visual-review",
+          "requirement": "Review streaming, completed, background-command, markdown, and empty states in dark and light themes."
+        }
+      ],
+      "risks": [
+        "Streaming and virtualized items can hide token regressions until historical turns are rendered.",
+        "Several high-use compatibility aliases are still visible in Flow Chat surfaces."
+      ]
+    },
+    {
+      "key": "tool-cards-review",
+      "owner": "src/web-ui/src/flow_chat/tool-cards; src/web-ui/src/app/components/panels/review-platform",
+      "platforms": ["desktop-webview", "web"],
+      "formFactors": ["desktop", "narrow"],
+      "themes": ["dark", "light", "system"],
+      "states": ["default", "expanded", "collapsed", "hover", "focus", "success", "warning", "error"],
+      "tokenFamilies": ["--tool-card-*", "--color-success*", "--color-warning*", "--color-error*", "--color-danger*"],
+      "evidence": [
+        {
+          "type": "theme-color-audit",
+          "command": "pnpm run theme:color-audit",
+          "requirement": "Tool-card status colors must remain tokenized and must not introduce token-equivalent app literals."
+        },
+        {
+          "type": "focused-visual-review",
+          "requirement": "Review expanded and compact cards, review results, and destructive/error affordances separately."
+        }
+      ],
+      "risks": [
+        "Danger aliases intentionally preserve destructive-action semantics even when they map to error colors today.",
+        "Expanded cards can combine border, text, and status tokens in the same viewport."
+      ]
+    },
+    {
+      "key": "code-editor-diff",
+      "owner": "src/web-ui/src/tools/editor; src/web-ui/src/component-library/components/CodeEditor",
+      "platforms": ["desktop-webview", "web"],
+      "formFactors": ["desktop", "narrow"],
+      "themes": ["dark", "light", "system"],
+      "states": ["default", "focus", "selection", "search", "added", "deleted", "changed", "conflict"],
+      "tokenFamilies": ["Monaco palette", "--diff-editor-*", "--git-color-*", "--color-text-*"],
+      "evidence": [
+        {
+          "type": "theme-color-audit",
+          "command": "pnpm run theme:color-audit",
+          "requirement": "Editor colors must stay in editor, syntax, or token contract domains instead of appUi."
+        },
+        {
+          "type": "contrast-review",
+          "requirement": "Review syntax, selection, inline diff, and gutter contrast before merging editor palette changes."
+        }
+      ],
+      "risks": [
+        "Editor and diff colors encode adjacent semantic states and cannot be merged by numeric similarity alone.",
+        "Monaco theme payloads may not use normal CSS variable fallback behavior."
+      ]
+    },
+    {
+      "key": "terminal",
+      "owner": "src/web-ui/src/tools/terminal; src/web-ui/src/flow_chat/tool-cards/TerminalToolCard",
+      "platforms": ["desktop-webview", "web"],
+      "formFactors": ["desktop", "narrow"],
+      "themes": ["dark", "light", "system"],
+      "states": ["default", "focus", "selection", "ansi-normal", "ansi-bright", "error"],
+      "tokenFamilies": ["terminal ANSI palette", "--color-text-*", "--border-*"],
+      "evidence": [
+        {
+          "type": "theme-color-audit",
+          "command": "pnpm run theme:color-audit",
+          "requirement": "Terminal colors must remain in the terminal domain and must not be counted as generic app UI colors."
+        },
+        {
+          "type": "contrast-review",
+          "requirement": "Review normal and bright ANSI colors against terminal background before merging terminal palette changes."
+        }
+      ],
+      "risks": [
+        "ANSI colors may look close to app semantic colors but carry external terminal meaning.",
+        "Terminal cards are embedded inside Flow Chat and need both terminal and card contrast reviewed."
+      ]
+    },
+    {
+      "key": "markdown-mermaid",
+      "owner": "src/web-ui/src/component-library/components/Markdown; src/web-ui/src/tools/mermaid-editor",
+      "platforms": ["desktop-webview", "web"],
+      "formFactors": ["desktop", "narrow"],
+      "themes": ["dark", "light", "system"],
+      "states": ["default", "code", "table", "link", "diagram", "error"],
+      "tokenFamilies": ["--markdown-*", "--primary-color", "Mermaid palette", "Prism palette"],
+      "evidence": [
+        {
+          "type": "theme-color-audit",
+          "command": "pnpm run theme:color-audit",
+          "requirement": "Markdown, Prism, and Mermaid colors must remain in syntax, mermaid, boundary, or token domains."
+        },
+        {
+          "type": "focused-visual-review",
+          "requirement": "Review prose, links, tables, code blocks, and diagrams in dark and light themes after token changes."
+        }
+      ],
+      "risks": [
+        "--primary-color is an embedded-content override and must not be removed as a normal fallback.",
+        "Mermaid graph roles do not map directly to app status colors."
+      ]
+    },
+    {
+      "key": "generated-widget",
+      "owner": "src/web-ui/src/tools/generative-widget",
+      "platforms": ["generated-widget", "web"],
+      "formFactors": ["iframe", "desktop", "narrow"],
+      "themes": ["dark", "light", "system"],
+      "states": ["fallback-before-host-payload", "host-payload", "loading", "error"],
+      "tokenFamilies": ["--color-*", "--border-*", "--element-bg-*", "--radius-*", "--size-radius-*", "--spacing-*", "--size-gap-*"],
+      "evidence": [
+        {
+          "type": "boundary-render-review",
+          "requirement": "Review iframe fallback rendering and host payload rendering whenever widget payload tokens change."
+        },
+        {
+          "type": "theme-color-audit",
+          "command": "pnpm run theme:color-audit",
+          "requirement": "Generated widget fallback colors must remain centralized in themeBoundaryFallbacks."
+        }
+      ],
+      "risks": [
+        "Widget payload compatibility is why several legacy aliases cannot be deleted immediately.",
+        "Iframe first paint depends on boundary fallback values before host variables arrive."
+      ]
+    },
+    {
+      "key": "theme-settings",
+      "owner": "src/web-ui/src/app/scenes/settings; src/web-ui/src/infrastructure/theme",
+      "platforms": ["desktop-webview", "web"],
+      "formFactors": ["desktop", "narrow"],
+      "themes": ["dark", "light", "system"],
+      "states": ["default", "selected", "hover", "focus", "custom-theme", "system-theme"],
+      "tokenFamilies": ["--color-accent-*", "--color-primary*", "--color-bg-*", "--color-text-*"],
+      "evidence": [
+        {
+          "type": "theme-color-audit",
+          "command": "pnpm run theme:color-audit",
+          "requirement": "Theme runtime and preset changes must keep dynamic family and domain contracts clean."
+        },
+        {
+          "type": "focused-visual-review",
+          "requirement": "Review theme switcher, system theme resolution, and custom theme previews after theme runtime changes."
+        }
+      ],
+      "risks": [
+        "Theme selection can resolve differently under system mode.",
+        "Custom theme previews can expose missing runtime aliases before ordinary components do."
+      ]
+    },
+    {
+      "key": "mobile-web-shell",
+      "owner": "src/mobile-web; src/web-ui/src/component-library/styles",
+      "platforms": ["mobile-web"],
+      "formFactors": ["mobile", "narrow"],
+      "themes": ["dark", "light", "system"],
+      "states": ["default", "loading", "error", "navigation"],
+      "tokenFamilies": ["shared web tokens", "--color-bg-*", "--color-text-*", "--border-*"],
+      "evidence": [
+        {
+          "type": "mobile-build-review",
+          "command": "pnpm --dir src/mobile-web run type-check && pnpm run build:mobile-web",
+          "requirement": "Theme contract changes must not assume desktop-only WebView behavior or break the mobile web build."
+        }
+      ],
+      "risks": [
+        "Mobile web is a separate build target and may not exercise desktop-only theme runtime paths.",
+        "Narrow form factor can surface contrast and spacing regressions that desktop screenshots miss."
+      ]
+    }
+  ]
+}

@@ -102,6 +102,7 @@ remote-connect = [
     "base64",
     "bitfun-runtime-ports",
     "chrono",
+    "dirs",
     "futures",
     "hostname",
     "image",

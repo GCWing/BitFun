@@ -74,6 +74,8 @@ export const ToolbarModeProvider: React.FC<ToolbarModeProviderProps> = ({ childr
         isDecorated,
       };
 
+      await import('./ToolbarMode');
+
       setIsToolbarMode(true);
       setIsExpanded(true);
 

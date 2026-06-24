@@ -43,7 +43,7 @@
       &:focus {
         outline: none;
         border-color: var(--color-primary);
-        box-shadow: 0 0 0 2px rgba(var(--color-primary-rgb, 96 165 250) / 0.1);
+        box-shadow: 0 0 0 2px rgba(var(--color-primary-rgb) / 0.1);
       }
 
       &::placeholder {

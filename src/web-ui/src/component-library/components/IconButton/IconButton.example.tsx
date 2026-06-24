@@ -23,13 +23,13 @@ export const IconButtonExample: React.FC = () => {
   const { t } = useI18n('components');
 
   return (
-    <div style={{ padding: '24px', background: '#1a1a1a', minHeight: '100vh' }}>
+    <div style={{ padding: '24px', background: 'var(--preview-bg)', minHeight: '100vh' }}>
       <h2 style={{ color: 'var(--color-static-white)', marginBottom: '24px' }}>
         {t('componentLibrary.iconButtonExample.title')}
       </h2>
       
       <div style={{ marginBottom: '32px' }}>
-        <h3 style={{ color: '#a0a0a0', marginBottom: '16px' }}>
+        <h3 style={{ color: 'var(--preview-text-muted)', marginBottom: '16px' }}>
           {t('componentLibrary.iconButtonExample.sections.basic')}
         </h3>
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
@@ -49,7 +49,7 @@ export const IconButtonExample: React.FC = () => {
       </div>
 
       <div style={{ marginBottom: '32px' }}>
-        <h3 style={{ color: '#a0a0a0', marginBottom: '16px' }}>
+        <h3 style={{ color: 'var(--preview-text-muted)', marginBottom: '16px' }}>
           {t('componentLibrary.iconButtonExample.sections.ghost')}
         </h3>
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
@@ -66,7 +66,7 @@ export const IconButtonExample: React.FC = () => {
       </div>
 
       <div style={{ marginBottom: '32px' }}>
-        <h3 style={{ color: '#a0a0a0', marginBottom: '16px' }}>
+        <h3 style={{ color: 'var(--preview-text-muted)', marginBottom: '16px' }}>
           {t('componentLibrary.iconButtonExample.sections.primary')}
         </h3>
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
@@ -86,7 +86,7 @@ export const IconButtonExample: React.FC = () => {
       </div>
 
       <div style={{ marginBottom: '32px' }}>
-        <h3 style={{ color: '#a0a0a0', marginBottom: '16px' }}>
+        <h3 style={{ color: 'var(--preview-text-muted)', marginBottom: '16px' }}>
           {t('componentLibrary.iconButtonExample.sections.shape')}
         </h3>
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
@@ -100,7 +100,7 @@ export const IconButtonExample: React.FC = () => {
       </div>
 
       <div style={{ marginBottom: '32px' }}>
-        <h3 style={{ color: '#a0a0a0', marginBottom: '16px' }}>
+        <h3 style={{ color: 'var(--preview-text-muted)', marginBottom: '16px' }}>
           {t('componentLibrary.iconButtonExample.sections.other')}
         </h3>
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
@@ -119,11 +119,11 @@ export const IconButtonExample: React.FC = () => {
         </div>
       </div>
 
-      <div style={{ marginTop: '48px', padding: '16px', background: 'rgba(255,255,255,0.05)', borderRadius: '8px' }}>
+      <div style={{ marginTop: '48px', padding: '16px', background: 'var(--color-overlay-white-05)', borderRadius: '8px' }}>
         <h3 style={{ color: 'var(--color-static-white)', marginBottom: '12px' }}>
           {t('componentLibrary.iconButtonExample.sections.usage')}
         </h3>
-        <ul style={{ color: '#a0a0a0', lineHeight: '1.8' }}>
+        <ul style={{ color: 'var(--preview-text-muted)', lineHeight: '1.8' }}>
           <li>
             <strong>{t('componentLibrary.iconButtonExample.usage.defaultGhost.label')}</strong>
             {t('componentLibrary.iconButtonExample.usage.defaultGhost.text')}

@@ -3,6 +3,12 @@
 import React from "react";
 import "./TextStrokeEffect.scss";
 
+import {
+  TEXT_STROKE_GRADIENT_COLORS,
+  TEXT_STROKE_GRADIENT_OFFSETS,
+  buildTextStrokeColorCycle,
+} from './TextStrokeEffectGradient';
+
 export interface TextStrokeEffectProps {
   text: string;
   duration?: number;
@@ -38,46 +44,20 @@ export const TextStrokeEffect: React.FC<TextStrokeEffectProps> = ({
     >
       <defs>
         <linearGradient id="textStrokeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-          <stop offset="0%" stopColor="#eab308">
-            <animate
-              attributeName="stop-color"
-              values="#eab308; #ef4444; #3b82f6; #06b6d4; #8b5cf6; #eab308"
-              dur={`${duration}s`}
-              repeatCount="indefinite"
-            />
-          </stop>
-          <stop offset="25%" stopColor="#ef4444">
-            <animate
-              attributeName="stop-color"
-              values="#ef4444; #3b82f6; #06b6d4; #8b5cf6; #eab308; #ef4444"
-              dur={`${duration}s`}
-              repeatCount="indefinite"
-            />
-          </stop>
-          <stop offset="50%" stopColor="#3b82f6">
-            <animate
-              attributeName="stop-color"
-              values="#3b82f6; #06b6d4; #8b5cf6; #eab308; #ef4444; #3b82f6"
-              dur={`${duration}s`}
-              repeatCount="indefinite"
-            />
-          </stop>
-          <stop offset="75%" stopColor="#06b6d4">
-            <animate
-              attributeName="stop-color"
-              values="#06b6d4; #8b5cf6; #eab308; #ef4444; #3b82f6; #06b6d4"
-              dur={`${duration}s`}
-              repeatCount="indefinite"
-            />
-          </stop>
-          <stop offset="100%" stopColor="#8b5cf6">
-            <animate
-              attributeName="stop-color"
-              values="#8b5cf6; #eab308; #ef4444; #3b82f6; #06b6d4; #8b5cf6"
-              dur={`${duration}s`}
-              repeatCount="indefinite"
-            />
-          </stop>
+          {TEXT_STROKE_GRADIENT_COLORS.map((color, index) => (
+            <stop
+              key={color}
+              offset={TEXT_STROKE_GRADIENT_OFFSETS[index]}
+              stopColor={color}
+            >
+              <animate
+                attributeName="stop-color"
+                values={buildTextStrokeColorCycle(index)}
+                dur={`${duration}s`}
+                repeatCount="indefinite"
+              />
+            </stop>
+          ))}
         </linearGradient>
       </defs>
 

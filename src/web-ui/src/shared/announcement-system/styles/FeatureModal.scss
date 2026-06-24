@@ -4,7 +4,7 @@
 .feature-modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.55);
+  background: rgba(var(--color-static-black-rgb), 0.55);
   z-index: calc(#{$z-modal} + 10);
   display: flex;
   align-items: center;
@@ -23,7 +23,7 @@
   background: var(--color-bg-primary);
   border-radius: $size-radius-lg;
   border: 1px solid var(--border-base);
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.28);
+  box-shadow: 0 24px 64px rgba(var(--color-static-black-rgb), 0.28);
   display: flex;
   flex-direction: column;
   overflow: hidden;

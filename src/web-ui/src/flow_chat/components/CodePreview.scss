@@ -6,7 +6,7 @@
 @use '../../component-library/styles/_extended-mixins' as mixins;
 
 .code-preview {
-  --markdown-font-mono: "Fira Code", "JetBrains Mono", Consolas, "Courier New", monospace;
+  --markdown-font-mono: var(--font-family-mono);
 
   position: relative;
   width: 100%;
@@ -31,7 +31,7 @@
         white-space: pre-wrap !important;
         word-break: break-word !important;
         cursor: text;
-        font-family: var(--markdown-font-mono, "Fira Code", "JetBrains Mono", Consolas, "Courier New", monospace) !important;
+        font-family: var(--markdown-font-mono) !important;
         font-weight: 400 !important;
 
         // Prism themes mark many tokens bold; match markdown body / code blocks (regular weight).
@@ -46,10 +46,10 @@
         }
         
         .code-line--highlighted {
-          background-color: rgba(99, 102, 241, 0.15) !important;
+          background-color: color-mix(in srgb, var(--color-accent-500) 15%, transparent) !important;
           
           &:hover {
-            background-color: rgba(99, 102, 241, 0.2) !important;
+            background-color: color-mix(in srgb, var(--color-accent-500) 20%, transparent) !important;
           }
         }
       }
@@ -75,7 +75,7 @@
     overflow: visible;
     white-space: pre-wrap;
     word-break: break-word;
-    font-family: var(--markdown-font-mono, "Fira Code", "JetBrains Mono", Consolas, "Courier New", monospace);
+    font-family: var(--markdown-font-mono);
     font-size: var(--flowchat-font-size-sm);
     line-height: var(--flowchat-code-line-height);
 
@@ -100,11 +100,11 @@
     }
 
     &--highlighted {
-      background-color: rgba(99, 102, 241, 0.15);
+      background-color: color-mix(in srgb, var(--color-accent-500) 15%, transparent);
       border-left-color: var(--color-accent-500);
 
       &:hover {
-        background-color: rgba(99, 102, 241, 0.2);
+        background-color: color-mix(in srgb, var(--color-accent-500) 20%, transparent);
       }
     }
   }

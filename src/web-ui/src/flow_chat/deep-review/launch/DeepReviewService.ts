@@ -1,7 +1,7 @@
 import { agentAPI } from '@/infrastructure/api';
 import { createLogger } from '@/shared/utils/logger';
 import { createBtwChildSession } from '../../services/BtwThreadService';
-import { closeBtwSessionInAuxPane, openBtwSessionInAuxPane } from '../../services/openBtwSession';
+import { closeBtwSessionInAuxPane, openBtwSessionInAuxPane } from '../../services/btwSessionPane';
 import { FlowChatManager } from '../../services/FlowChatManager';
 import { flowChatStore } from '../../store/FlowChatStore';
 import { insertReviewSessionSummaryMarker } from '../../services/ReviewSessionMarkerService';

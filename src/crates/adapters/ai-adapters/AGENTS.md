@@ -2,8 +2,9 @@
 
 Scope: this guide applies to `src/crates/adapters/ai-adapters`.
 
-`bitfun-ai-adapters` owns provider-specific request/response mapping and stream
-protocol parsing. Keep provider quirks here, then convert stream chunks into the
+`bitfun-ai-adapters` owns provider-specific request/response mapping, stream
+protocol parsing, and provider/model selection helpers that are independent of
+core config IO. Keep provider quirks here, then convert stream chunks into the
 provider-neutral contracts owned by `bitfun-agent-stream`.
 
 ## Guardrails

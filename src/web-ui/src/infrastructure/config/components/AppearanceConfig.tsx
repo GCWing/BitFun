@@ -49,18 +49,26 @@ function AppearanceThemeSection() {
         value: SYSTEM_THEME_ID,
         label: t('appearance.systemTheme'),
         description: t('appearance.systemThemeDescription'),
+        testId: 'appearance-theme-option',
+        testAttributes: {
+          'data-theme-id': SYSTEM_THEME_ID,
+        },
       },
       ...themes.map((theme) => ({
         value: theme.id,
         label: getThemeDisplayName(theme),
         description: getThemeDisplayDescription(theme),
+        testId: 'appearance-theme-option',
+        testAttributes: {
+          'data-theme-id': theme.id,
+        },
       })),
     ],
     [themes, t, getThemeDisplayDescription, getThemeDisplayName]
   );
 
   return (
-    <div className="theme-config">
+    <div className="theme-config" data-testid="appearance-theme-section">
       <div className="theme-config__content">
         <ConfigPageSection title={t('appearance.title')} description={t('appearance.hint')}>
           <ConfigPageRow
@@ -77,9 +85,14 @@ function AppearanceThemeSection() {
                 options={supportedLocales.map((locale) => ({
                   value: locale.id,
                   label: locale.nativeName,
+                  testId: 'appearance-language-option',
+                  testAttributes: {
+                    'data-locale-id': locale.id,
+                  },
                 }))}
                 disabled={isChanging}
                 placeholder={t('appearance.language')}
+                triggerTestId="appearance-language-select"
               />
             </div>
           </ConfigPageRow>
@@ -95,6 +108,7 @@ function AppearanceThemeSection() {
                   onChange={(value) => handleThemeChange(value as string)}
                   disabled={loading}
                   options={themeSelectOptions}
+                  triggerTestId="appearance-theme-select"
                   renderOption={(option) => {
                     const v = String(option.value);
                     const fullTheme =
@@ -381,8 +395,10 @@ const AppearanceConfig: React.FC = () => {
     <ConfigPageLayout className="bitfun-appearance-config">
       <ConfigPageHeader title={t('title')} subtitle={t('subtitle')} />
       <ConfigPageContent className="bitfun-appearance-config__content">
-        <AppearanceThemeSection />
-        <FontPreferencePanel />
+        <div data-testid="appearance-config">
+          <AppearanceThemeSection />
+          <FontPreferencePanel />
+        </div>
       </ConfigPageContent>
     </ConfigPageLayout>
   );

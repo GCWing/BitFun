@@ -862,6 +862,57 @@ pub enum RoundInjectionKind {
     ThreadGoalObjectiveUpdated,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum RoundInjectionToolPreemption {
+    None,
+    InterruptAfterCurrentAtomicUnit,
+    CancelRunningCooperatively,
+    CancelRunningForcefully,
+}
+
+impl RoundInjectionToolPreemption {
+    pub const fn should_interrupt_after_current_atomic_unit(self) -> bool {
+        !matches!(self, Self::None)
+    }
+
+    pub const fn should_cancel_running_tools(self) -> bool {
+        matches!(
+            self,
+            Self::CancelRunningCooperatively | Self::CancelRunningForcefully
+        )
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RoundInjectionExecutionPolicy {
+    pub tool_preemption: RoundInjectionToolPreemption,
+}
+
+impl RoundInjectionExecutionPolicy {
+    pub const fn new(tool_preemption: RoundInjectionToolPreemption) -> Self {
+        Self { tool_preemption }
+    }
+}
+
+impl Default for RoundInjectionExecutionPolicy {
+    fn default() -> Self {
+        Self::new(RoundInjectionToolPreemption::None)
+    }
+}
+
+impl RoundInjectionKind {
+    pub const fn default_execution_policy(self) -> RoundInjectionExecutionPolicy {
+        match self {
+            Self::UserSteering => RoundInjectionExecutionPolicy::new(
+                RoundInjectionToolPreemption::InterruptAfterCurrentAtomicUnit,
+            ),
+            Self::BackgroundResult | Self::ThreadGoalObjectiveUpdated => {
+                RoundInjectionExecutionPolicy::new(RoundInjectionToolPreemption::None)
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RoundInjectionTarget {
     /// Only inject into the exact targeted running turn.
@@ -876,6 +927,7 @@ pub enum RoundInjectionTarget {
 pub struct RoundInjection {
     pub id: String,
     pub kind: RoundInjectionKind,
+    pub execution_policy: RoundInjectionExecutionPolicy,
     pub target: RoundInjectionTarget,
     pub content: String,
     pub display_content: String,
@@ -885,6 +937,11 @@ pub struct RoundInjection {
 /// Observes round-boundary injections for a given running turn.
 pub trait DialogRoundInjectionSource: Send + Sync {
     fn has_pending(&self, session_id: &str, turn_id: &str) -> bool;
+    fn pending_tool_preemption(
+        &self,
+        session_id: &str,
+        turn_id: &str,
+    ) -> RoundInjectionToolPreemption;
     fn take_pending(&self, session_id: &str, turn_id: &str) -> Vec<RoundInjection>;
 }
 
@@ -1642,6 +1699,18 @@ mod tests {
             RoundInjectionTarget::ExactTurn("turn_1".to_string())
         );
         assert_ne!(target, RoundInjectionTarget::CurrentRunningTurn);
+        assert_eq!(
+            RoundInjectionKind::UserSteering
+                .default_execution_policy()
+                .tool_preemption,
+            RoundInjectionToolPreemption::InterruptAfterCurrentAtomicUnit
+        );
+        assert_eq!(
+            RoundInjectionKind::BackgroundResult
+                .default_execution_policy()
+                .tool_preemption,
+            RoundInjectionToolPreemption::None
+        );
     }
 
     #[test]
@@ -1653,6 +1722,18 @@ mod tests {
         impl DialogRoundInjectionSource for StaticInjectionSource {
             fn has_pending(&self, session_id: &str, turn_id: &str) -> bool {
                 session_id == "session_1" && turn_id == "turn_1"
+            }
+
+            fn pending_tool_preemption(
+                &self,
+                session_id: &str,
+                turn_id: &str,
+            ) -> RoundInjectionToolPreemption {
+                if self.has_pending(session_id, turn_id) {
+                    self.injection.execution_policy.tool_preemption
+                } else {
+                    RoundInjectionToolPreemption::None
+                }
             }
 
             fn take_pending(&self, session_id: &str, turn_id: &str) -> Vec<RoundInjection> {
@@ -1668,6 +1749,7 @@ mod tests {
             injection: RoundInjection {
                 id: "injection_1".to_string(),
                 kind: RoundInjectionKind::BackgroundResult,
+                execution_policy: RoundInjectionKind::BackgroundResult.default_execution_policy(),
                 target: RoundInjectionTarget::CurrentRunningTurn,
                 content: "result".to_string(),
                 display_content: "result".to_string(),
@@ -1677,6 +1759,10 @@ mod tests {
 
         assert!(source.has_pending("session_1", "turn_1"));
         assert!(!source.has_pending("session_2", "turn_1"));
+        assert_eq!(
+            source.pending_tool_preemption("session_1", "turn_1"),
+            RoundInjectionToolPreemption::None
+        );
         let drained = source.take_pending("session_1", "turn_1");
         assert_eq!(drained.len(), 1);
         assert_eq!(drained[0].id, "injection_1");

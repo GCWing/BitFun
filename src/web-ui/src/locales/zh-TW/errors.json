@@ -25,6 +25,7 @@
     "createFileFailed": "Failed to create file",
     "createFolderFailed": "Failed to create folder",
     "renameFailed": "Rename failed",
+    "openInBrowserFailed": "在瀏覽器中開啟檔案失敗",
     "revealFailed": "Failed to open file manager"
   },
   "workspace": {

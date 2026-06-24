@@ -1,6 +1,6 @@
 import React from 'react';
 import { Package, Puzzle } from 'lucide-react';
-import { getCardGradient, getCardColorRgb } from '@/shared/utils/cardGradients';
+import { getCardGradient } from '@/shared/utils/cardGradients';
 import './SkillCard.scss';
 
 type SkillCardActionTone = 'primary' | 'danger' | 'success' | 'muted';
@@ -15,7 +15,7 @@ export interface SkillCardAction {
   onClick: () => void;
 }
 
-interface SkillCardProps {
+interface SkillCardProps extends Omit<React.HTMLAttributes<HTMLDivElement>, 'children'> {
   name: string;
   description?: string;
   index?: number;
@@ -37,17 +37,21 @@ const SkillCard: React.FC<SkillCardProps> = ({
   meta,
   actions = [],
   onOpenDetails,
+  className,
+  style,
+  ...rootProps
 }) => {
   const Icon = iconKind === 'market' ? Package : Puzzle;
   const openDetails = () => onOpenDetails?.();
 
   return (
     <div
-      className="skill-card"
+      {...rootProps}
+      className={['skill-card', className].filter(Boolean).join(' ')}
       style={{
-        '--card-index': index,
+        ...style,
+        '--surface-stagger-index': index,
         '--skill-card-gradient': getCardGradient(accentSeed ?? name),
-        '--skill-card-color-rgb': getCardColorRgb(accentSeed ?? name),
       } as React.CSSProperties}
       onClick={openDetails}
       tabIndex={0}
@@ -104,6 +108,8 @@ const SkillCard: React.FC<SkillCardProps> = ({
                 disabled={action.disabled}
                 aria-label={action.ariaLabel}
                 title={action.title ?? action.ariaLabel}
+                data-testid="skills-card-action"
+                data-skill-action={action.id}
               >
                 {action.icon}
               </button>

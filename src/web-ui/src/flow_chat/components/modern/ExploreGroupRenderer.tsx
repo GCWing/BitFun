@@ -25,6 +25,27 @@ export interface ExploreGroupRendererProps {
   turnId: string;
 }
 
+function getExploreGroupKind(
+  stats: ExploreGroupData['stats'],
+  itemCount: number
+): 'read' | 'search' | 'command' | 'mixed' | 'other' {
+  const activeKinds = [
+    stats.readCount > 0 ? 'read' : null,
+    stats.searchCount > 0 ? 'search' : null,
+    stats.commandCount > 0 ? 'command' : null,
+  ].filter(Boolean) as Array<'read' | 'search' | 'command'>;
+
+  if (activeKinds.length === 1) {
+    return activeKinds[0];
+  }
+
+  if (activeKinds.length > 1) {
+    return 'mixed';
+  }
+
+  return itemCount > 0 ? 'other' : 'mixed';
+}
+
 export const ExploreGroupRenderer: React.FC<ExploreGroupRendererProps> = React.memo(({
   data,
   turnId,
@@ -67,6 +88,7 @@ export const ExploreGroupRenderer: React.FC<ExploreGroupRendererProps> = React.m
   const defaultExpanded = !wasCutByCritical;
   const isExpanded = hasExplicitState ? explicitExpanded : defaultExpanded;
   const isCollapsed = !isExpanded;
+  const groupKind = getExploreGroupKind(stats, allItems.length);
   // Header is always interactive so the user can collapse/expand at any time.
   const allowManualToggle = true;
 
@@ -216,11 +238,23 @@ export const ExploreGroupRenderer: React.FC<ExploreGroupRendererProps> = React.m
   return (
     <div
       ref={cardRootRef}
+      data-testid="chat-explore-group"
       data-tool-card-id={groupId}
+      data-group-kind={groupKind}
+      data-expanded={isExpanded ? 'true' : 'false'}
+      data-read-count={String(stats.readCount)}
+      data-search-count={String(stats.searchCount)}
+      data-command-count={String(stats.commandCount)}
       className={className}
     >
       {allowManualToggle && (
-        <div className="explore-region__header" onClick={handleToggle}>
+        <div
+          className="explore-region__header"
+          onClick={handleToggle}
+          data-testid="chat-explore-group-toggle"
+          data-group-kind={groupKind}
+          data-expanded={isExpanded ? 'true' : 'false'}
+        >
           <ChevronRight size={14} className="explore-region__icon" />
           <span className="explore-region__summary">{displaySummary}</span>
         </div>
@@ -232,7 +266,14 @@ export const ExploreGroupRenderer: React.FC<ExploreGroupRendererProps> = React.m
         durationMs={320}
         disableAnimation={isGroupStreaming}
       >
-        <div ref={containerRef} className="explore-region__content" onScroll={checkScrollState}>
+        <div
+          ref={containerRef}
+          className="explore-region__content"
+          onScroll={checkScrollState}
+          data-testid="chat-explore-group-content"
+          data-group-kind={groupKind}
+          data-expanded={isExpanded ? 'true' : 'false'}
+        >
           {allItems.map((item, idx) => (
             <ExploreItemRenderer
               key={item.id}

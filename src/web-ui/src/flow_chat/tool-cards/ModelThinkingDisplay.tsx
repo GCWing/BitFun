@@ -32,6 +32,10 @@ export const ModelThinkingDisplay: React.FC<ModelThinkingDisplayProps> = ({
   const { content, isStreaming, status } = thinkingItem;
   const wrapperRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+  const shouldFollowTailRef = useRef(true);
+  const tailFollowPauseVersionRef = useRef(0);
+  const tailFollowUserPauseUntilMsRef = useRef(0);
+  const touchScrollStartYRef = useRef<number | null>(null);
 
   const isActive = isStreaming || status === 'streaming';
   const displayContent = useTypewriter(content, isActive);
@@ -70,20 +74,83 @@ export const ModelThinkingDisplay: React.FC<ModelThinkingDisplayProps> = ({
     }
   }, [applyExpandedState, isExpanded, shouldDefaultExpanded]);
 
+  const renderedContent = isActive ? displayContent : content;
+
+  const getThinkingScrollGap = useCallback((el: HTMLElement) => (
+    el.scrollHeight - el.scrollTop - el.clientHeight
+  ), []);
+
+  const scrollThinkingToBottom = useCallback((expectedPauseVersion?: number) => {
+    const el = contentRef.current;
+    if (!el) return;
+    if (
+      expectedPauseVersion !== undefined &&
+      expectedPauseVersion !== tailFollowPauseVersionRef.current
+    ) {
+      return;
+    }
+    if (!shouldFollowTailRef.current) {
+      return;
+    }
+
+    el.scrollTop = el.scrollHeight;
+    shouldFollowTailRef.current = true;
+  }, []);
+
+  const pauseTailFollowForUserScroll = useCallback(() => {
+    shouldFollowTailRef.current = false;
+    tailFollowPauseVersionRef.current += 1;
+    tailFollowUserPauseUntilMsRef.current = performance.now() + 700;
+  }, []);
+
   // Auto-scroll to bottom while content grows.
   useEffect(() => {
     if (isExpanded && contentRef.current) {
       const el = contentRef.current;
-      const gap = el.scrollHeight - el.scrollTop - el.clientHeight;
-      if (gap < 80) {
+      const gap = getThinkingScrollGap(el);
+      const wasNearBottom = gap < 80;
+      const userPauseActive = performance.now() <= tailFollowUserPauseUntilMsRef.current;
+      if (wasNearBottom && !userPauseActive) {
+        shouldFollowTailRef.current = true;
+      }
+      const shouldScroll = shouldFollowTailRef.current || (wasNearBottom && !userPauseActive);
+      if (shouldScroll) {
+        const scheduledPauseVersion = tailFollowPauseVersionRef.current;
         requestAnimationFrame(() => {
-          if (contentRef.current) {
-            contentRef.current.scrollTop = contentRef.current.scrollHeight;
-          }
+          scrollThinkingToBottom(scheduledPauseVersion);
         });
       }
     }
-  }, [displayContent, isExpanded]);
+  }, [
+    displayContent,
+    getThinkingScrollGap,
+    isExpanded,
+    scrollThinkingToBottom,
+  ]);
+
+  useEffect(() => {
+    const el = contentRef.current;
+    if (!el || !isExpanded) {
+      return;
+    }
+
+    const observer = new ResizeObserver(() => {
+      if (isActive && shouldFollowTailRef.current) {
+        const scheduledPauseVersion = tailFollowPauseVersionRef.current;
+        requestAnimationFrame(() => {
+          scrollThinkingToBottom(scheduledPauseVersion);
+        });
+      }
+    });
+
+    observer.observe(el);
+    const markdownEl = el.querySelector('.thinking-markdown');
+    if (markdownEl instanceof HTMLElement) {
+      observer.observe(markdownEl);
+    }
+
+    return () => observer.disconnect();
+  }, [isActive, isExpanded, scrollThinkingToBottom]);
 
   // Scroll-state detection for fade gradients.
   const [scrollState, setScrollState] = useState({ hasScroll: false, atTop: true, atBottom: true });
@@ -91,12 +158,24 @@ export const ModelThinkingDisplay: React.FC<ModelThinkingDisplayProps> = ({
   const checkScrollState = useCallback(() => {
     const el = contentRef.current;
     if (!el) return;
-    setScrollState({
+    const gap = getThinkingScrollGap(el);
+    const nextScrollState = {
       hasScroll: el.scrollHeight > el.clientHeight,
       atTop: el.scrollTop <= 5,
-      atBottom: el.scrollTop + el.clientHeight >= el.scrollHeight - 5,
+      atBottom: gap <= 5,
+    };
+    if (
+      nextScrollState.atBottom &&
+      performance.now() > tailFollowUserPauseUntilMsRef.current
+    ) {
+      shouldFollowTailRef.current = true;
+    }
+    setScrollState({
+      hasScroll: nextScrollState.hasScroll,
+      atTop: nextScrollState.atTop,
+      atBottom: nextScrollState.atBottom,
     });
-  }, []);
+  }, [getThinkingScrollGap]);
 
   useEffect(() => {
     if (isExpanded) {
@@ -129,6 +208,44 @@ export const ModelThinkingDisplay: React.FC<ModelThinkingDisplayProps> = ({
     shouldExpand.current = true;
   };
 
+  const handleContentWheelCapture = useCallback((event: React.WheelEvent<HTMLDivElement>) => {
+    if (event.deltaY < 0) {
+      pauseTailFollowForUserScroll();
+    }
+  }, [pauseTailFollowForUserScroll]);
+
+  const handleContentTouchStart = useCallback((event: React.TouchEvent<HTMLDivElement>) => {
+    touchScrollStartYRef.current = event.touches[0]?.clientY ?? null;
+  }, []);
+
+  const handleContentTouchMove = useCallback((event: React.TouchEvent<HTMLDivElement>) => {
+    const startY = touchScrollStartYRef.current;
+    const currentY = event.touches[0]?.clientY;
+    if (startY === null || currentY === undefined) {
+      return;
+    }
+
+    if (currentY - startY > 6) {
+      touchScrollStartYRef.current = currentY;
+      pauseTailFollowForUserScroll();
+    }
+  }, [pauseTailFollowForUserScroll]);
+
+  const handleContentTouchEnd = useCallback(() => {
+    touchScrollStartYRef.current = null;
+  }, []);
+
+  const handleContentKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (
+      event.key === 'ArrowUp' ||
+      event.key === 'PageUp' ||
+      event.key === 'Home' ||
+      (event.key === ' ' && event.shiftKey)
+    ) {
+      pauseTailFollowForUserScroll();
+    }
+  }, [pauseTailFollowForUserScroll]);
+
   const headerLabel = (isExpanded
     ? (isActive ? t('toolCards.think.thinking') : t('toolCards.think.thinkingProcess'))
     : contentLengthText).replace(/ /g, '\u00A0');
@@ -138,11 +255,18 @@ export const ModelThinkingDisplay: React.FC<ModelThinkingDisplayProps> = ({
     isExpanded ? 'expanded' : 'collapsed',
   ].filter(Boolean).join(' ');
 
-  const renderedContent = isActive ? displayContent : content;
-
   return (
-    <div ref={wrapperRef} data-tool-card-id={thinkingItem.id} className={wrapperClassName}>
+    <div
+      ref={wrapperRef}
+      data-testid="chat-thinking-panel"
+      data-tool-card-id={thinkingItem.id}
+      data-status={status}
+      data-streaming={isActive ? 'true' : 'false'}
+      data-expanded={isExpanded ? 'true' : 'false'}
+      className={wrapperClassName}
+    >
       <div
+        data-testid="chat-thinking-toggle"
         className="thinking-collapsed-header"
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
@@ -156,8 +280,16 @@ export const ModelThinkingDisplay: React.FC<ModelThinkingDisplayProps> = ({
         <div className={`thinking-content-wrapper ${scrollState.hasScroll ? 'has-scroll' : ''} ${scrollState.atTop ? 'at-top' : ''} ${scrollState.atBottom ? 'at-bottom' : ''}`}>
           <div
             ref={contentRef}
+            data-testid="chat-thinking-content"
+            data-status={status}
+            data-streaming={isActive ? 'true' : 'false'}
             className={`thinking-content expanded`}
             onScroll={checkScrollState}
+            onWheelCapture={handleContentWheelCapture}
+            onTouchStart={handleContentTouchStart}
+            onTouchMove={handleContentTouchMove}
+            onTouchEnd={handleContentTouchEnd}
+            onKeyDown={handleContentKeyDown}
           >
             <Markdown
               content={renderedContent}

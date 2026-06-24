@@ -128,9 +128,9 @@
 .form-select.error:focus,
 .form-textarea.error:focus {
   box-shadow: 
-    0 4px 16px rgba(239, 68, 68, 0.15),
+    0 4px 16px var(--glass-red-hover),
     0 2px 8px var(--color-overlay-black-08),
-    0 0 0 2px rgba(239, 68, 68, 0.2);
+    0 0 0 2px color-mix(in srgb, var(--color-error) 20%, transparent);
 }
 
 /* Success state */
@@ -145,9 +145,9 @@
 .form-select.success:focus,
 .form-textarea.success:focus {
   box-shadow: 
-    0 4px 16px rgba(52, 211, 153, 0.15),
+    0 4px 16px var(--glass-green-hover),
     0 2px 8px var(--color-overlay-black-08),
-    0 0 0 2px rgba(52, 211, 153, 0.2);
+    0 0 0 2px color-mix(in srgb, var(--color-success) 20%, transparent);
 }
 
 /* Disabled state */
@@ -382,7 +382,7 @@
   background: var(--color-primary-500);
   border-radius: 50%;
   cursor: pointer;
-  box-shadow: 0 2px 8px rgba(96, 165, 250, 0.3);
+  box-shadow: 0 2px 8px var(--border-accent-soft);
   transition: all var(--motion-fast) var(--easing-standard);
 }
 
@@ -398,7 +398,7 @@
   border-radius: 50%;
   border: none;
   cursor: pointer;
-  box-shadow: 0 2px 8px rgba(96, 165, 250, 0.3);
+  box-shadow: 0 2px 8px var(--border-accent-soft);
 }
 
 /* ========== Responsive ========== */

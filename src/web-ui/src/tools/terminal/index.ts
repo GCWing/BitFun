@@ -50,6 +50,8 @@ export type {
   ExecuteCommandRequest,
   ExecuteCommandResponse,
   SendCommandRequest,
+  TerminalReplayEvent,
+  GetHistoryResponse,
   TerminalEventType,
   TerminalEventBase,
   TerminalReadyEvent,

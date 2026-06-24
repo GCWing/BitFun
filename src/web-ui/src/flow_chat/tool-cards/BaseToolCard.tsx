@@ -48,6 +48,8 @@ export interface BaseToolCardProps {
   isFailed?: boolean;
   /** Whether user confirmation is required (for highlighting border) */
   requiresConfirmation?: boolean;
+  /** data-testid for the real click target that expands/collapses the card. */
+  toggleTestId?: string;
   /**
    * When set, controls hover chevron on the left tool icon.
    * When omitted: true if the card is clickable, not failed, and expandedContent is passed and truthy.
@@ -71,6 +73,7 @@ export const BaseToolCard: React.FC<BaseToolCardProps> = ({
   errorContent,
   isFailed = false,
   requiresConfirmation = false,
+  toggleTestId,
   headerExpandAffordance: headerExpandAffordanceProp,
   headerAffordanceKind: headerAffordanceKindProp = 'expand',
 }) => {
@@ -108,6 +111,7 @@ export const BaseToolCard: React.FC<BaseToolCardProps> = ({
     >
       <div 
         className={`base-tool-card status-${status} ${isExpanded ? 'expanded' : ''} ${resolvedHeaderExpandAffordance ? 'base-tool-card--header-expandable' : ''}`.trim()}
+        data-testid={onClick ? toggleTestId : undefined}
         onClick={handleCardClick}
       >
         <ToolCardHeaderLayoutContext.Provider value={headerLayoutValue}>
@@ -150,6 +154,8 @@ export interface ToolCardHeaderProps {
   onAffordanceClick?: (e: React.MouseEvent<HTMLButtonElement>) => void;
   /** Action text */
   action?: string;
+  actionTestId?: string;
+  actionDataAttributes?: Record<`data-${string}`, string | number | boolean | undefined>;
   /** Main content */
   content?: ReactNode;
   /** Right extra content (e.g., statistics, buttons, etc.) */
@@ -169,6 +175,8 @@ export const ToolCardHeader: React.FC<ToolCardHeaderProps> = ({
   headerExpanded,
   onAffordanceClick,
   action,
+  actionTestId,
+  actionDataAttributes,
   content,
   extra,
   statusIcon,
@@ -193,7 +201,11 @@ export const ToolCardHeader: React.FC<ToolCardHeaderProps> = ({
           onAffordanceClick={onAffordanceClick}
         />
       )}
-      {action && <span className="tool-card-action">{action}</span>}
+      {action && (
+        <span className="tool-card-action" data-testid={actionTestId} {...actionDataAttributes}>
+          {action}
+        </span>
+      )}
       {content && <div className="tool-card-content">{content}</div>}
       {extra && <div className="tool-card-extra">{extra}</div>}
       {statusIcon && (

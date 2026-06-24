@@ -4,7 +4,8 @@ import { useTranslation } from 'react-i18next';
 import type { ToolCardProps } from '../types/flow-chat';
 import { BaseToolCard, ToolCardHeader } from './BaseToolCard';
 import { flowChatStore } from '../store/FlowChatStore';
-import { openBtwSessionInAuxPane, openMainSession } from '../services/openBtwSession';
+import { openBtwSessionInAuxPane } from '../services/btwSessionPane';
+import { openMainSession } from '../services/sessionActivation';
 import { snapshotAPI } from '@/infrastructure/api';
 import {
   collectReviewChangedFiles,

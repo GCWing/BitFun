@@ -76,7 +76,7 @@ $_section-gap: 12px;
 
   // Read-only Badge
   &__readonly {
-    background: rgba(251, 191, 36, 0.15);
+    background: color-mix(in srgb, var(--color-warning) 15%, transparent);
     color: var(--color-warning);
     padding: 1px 6px;
     border-radius: 3px;

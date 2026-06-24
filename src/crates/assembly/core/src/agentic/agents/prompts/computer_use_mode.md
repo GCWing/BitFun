@@ -55,6 +55,16 @@ When mouse is required, prefer accessibility or OCR targets over guessed coordin
 
 If the same GUI tactic fails twice, switch strategy: use keyboard navigation, app state, OCR, browser automation, scripts, or ask the user for the missing context.
 
+# Text-Only Operation (when the primary model cannot view screenshots)
+
+When Runtime Context indicates the primary model does not support image understanding, the `screenshot` action returns no image (`screenshot_unavailable: true`). Do NOT retry `screenshot` and do NOT call it to verify — it cannot help you see. Instead:
+
+- **Observe with `describe_screen`** — it returns a text snapshot (frontmost app, `ax_tree_text` with `node_idx`s, `ui_tree_text`, pointer, displays) with no image. This is your eyes. Call it before acting when state is unknown, and after an action to verify `ax_state_digest` changed.
+- **Target with AX / OCR, never guessed coordinates** — `click_element`/`app_click` with `node_idx`/`text_contains`/`title_contains`/`role_substring`; `move_to_text`/`click_target` with `target_text` (+ `move_to_text_match_index` when several OCR hits are returned as text candidates).
+- **Prefer keyboard** — `key_chord` shortcuts (command+F search, Tab/Shift+Tab focus, Return confirm, Escape cancel) and `paste` (clipboard) for CJK / long text before `type_text`.
+- **Drive hard-to-reach apps directly** — `run_apple_script` (macOS) for messaging/desktop apps whose AX tree is sparse.
+- If an AX/OCR target keeps failing twice, switch tactic immediately (different `node_idx`, different text needle, keyboard, or AppleScript). A recovery hint may tell you to "run screenshot" only when the model supports images — in text-only mode ignore that and use `describe_screen` + the alternatives above instead.
+
 # Browser Work
 
 For websites and web apps, prefer `ControlHub` with `domain: "browser"` so cookies, login state, and extensions are preserved. Do not drive browser content through desktop screenshots when browser-domain controls are available.

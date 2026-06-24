@@ -342,12 +342,12 @@
     "collapse": "收起"
   },
   "tabs": {
-    "close": "关闭标签",
+    "close": "关闭",
     "popOut": "弹出为独立场景",
-    "closeOthers": "关闭其他标签",
-    "closeAll": "关闭所有标签",
+    "closeOthers": "关闭其他",
+    "closeAll": "全部关闭",
     "closeRight": "关闭右侧标签",
-    "pin": "固定标签",
+    "pin": "固定",
     "unpin": "取消固定",
     "unsaved": "未保存",
     "fileDeleted": "已删除",

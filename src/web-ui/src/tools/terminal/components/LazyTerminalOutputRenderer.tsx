@@ -5,20 +5,13 @@ import type {
 } from './TerminalOutputRenderer';
 
 const DeferredTerminalOutputRenderer = React.lazy(() =>
-  preloadTerminalOutputRenderer().then((module) => ({
+  import('./TerminalOutputRenderer').then((module) => ({
     default: module.TerminalOutputRenderer,
   }))
 );
-
-let terminalOutputRendererPreload: Promise<typeof import('./TerminalOutputRenderer')> | undefined;
 const FALLBACK_OUTPUT_FONT_SIZE = 12;
 const FALLBACK_OUTPUT_LINE_HEIGHT = 1.4;
 const FALLBACK_OUTPUT_ROW_HEIGHT = Math.ceil(FALLBACK_OUTPUT_FONT_SIZE * FALLBACK_OUTPUT_LINE_HEIGHT);
-
-export function preloadTerminalOutputRenderer() {
-  terminalOutputRendererPreload ??= import('./TerminalOutputRenderer');
-  return terminalOutputRendererPreload;
-}
 
 function stripTerminalControlSequences(content: string): string {
   return content

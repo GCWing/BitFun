@@ -2,12 +2,12 @@
 //!
 //! Used to create and store plan files during the planning phase
 
-use crate::agentic::remote_file_delivery::{
-    computer_link as build_computer_link, user_file_link, TOOL_CONTEXT_REMOTE_FILE_DELIVERY_KEY,
-};
 use crate::agentic::tools::framework::{Tool, ToolExposure, ToolResult, ToolUseContext};
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
+use bitfun_agent_runtime::remote_file_delivery::{
+    computer_link as build_computer_link, user_file_link, TOOL_CONTEXT_REMOTE_FILE_DELIVERY_KEY,
+};
 use serde::Serialize;
 use serde_json::{json, Value};
 use tokio::fs;

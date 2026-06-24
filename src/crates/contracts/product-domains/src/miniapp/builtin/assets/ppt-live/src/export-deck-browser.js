@@ -9,7 +9,7 @@ import { exportElementDeckToPptx } from './pptx-element-export.js';
 
 const MIME_PPTX = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
 
-const RASTER_TEXT_TYPES = new Set(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'list', 'merged-text']);
+const RASTER_TEXT_TYPES = new Set(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'text', 'list', 'merged-text']);
 
 function filterSlideDataForRasterBackdrop(slideData) {
   return {

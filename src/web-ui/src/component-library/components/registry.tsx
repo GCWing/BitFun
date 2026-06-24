@@ -71,7 +71,7 @@ function createMockToolItem(
       resultDisplayType: 'summary',
       description: '',
       displayMode: 'compact',
-      primaryColor: '#6b7280'
+      primaryColor: 'var(--color-text-muted)'
     }
   } as FlowToolItem;
 }
@@ -281,25 +281,25 @@ export const componentRegistry: ComponentCategory[] = [
           <div style={{ display: 'flex', flexDirection: 'column', gap: '32px', padding: '20px' }}>
             {}
             <div>
-              <div style={{ fontSize: '12px', color: '#666', marginBottom: '16px', fontWeight: 500 }}>尺寸</div>
+              <div style={{ fontSize: '12px', color: 'var(--preview-text-disabled)', marginBottom: '16px', fontWeight: 500 }}>尺寸</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '48px', alignItems: 'flex-end' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
                   <CubeLoading size="small" />
-                  <span style={{ fontSize: '12px', color: '#999' }}>Small</span>
+                  <span style={{ fontSize: '12px', color: 'var(--preview-text-subtle)' }}>Small</span>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
                   <CubeLoading size="medium" />
-                  <span style={{ fontSize: '12px', color: '#999' }}>Medium</span>
+                  <span style={{ fontSize: '12px', color: 'var(--preview-text-subtle)' }}>Medium</span>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
                   <CubeLoading size="large" />
-                  <span style={{ fontSize: '12px', color: '#999' }}>Large</span>
+                  <span style={{ fontSize: '12px', color: 'var(--preview-text-subtle)' }}>Large</span>
                 </div>
               </div>
             </div>
             {}
             <div>
-              <div style={{ fontSize: '12px', color: '#666', marginBottom: '16px', fontWeight: 500 }}>With text</div>
+              <div style={{ fontSize: '12px', color: 'var(--preview-text-disabled)', marginBottom: '16px', fontWeight: 500 }}>With text</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '48px', alignItems: 'flex-start' }}>
                 <CubeLoading text="加载中.." />
                 <CubeLoading size="large" text="加载中.." />
@@ -360,9 +360,9 @@ export const componentRegistry: ComponentCategory[] = [
                 lineHeight: '1.8',
                 minHeight: '120px',
                 padding: '20px',
-                background: 'rgba(255, 255, 255, 0.02)',
+                background: 'var(--color-overlay-white-02)',
                 borderRadius: '8px',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
+                border: '1px solid var(--color-overlay-white-10)',
                 maxWidth: '700px'
               }}>
                 <StreamText
@@ -458,10 +458,10 @@ name: 'Search - Demo',
                     <button
                       style={{
                         padding: '4px 6px',
-                        background: searchOptions.caseSensitive ? 'rgba(96, 165, 250, 0.2)' : 'transparent',
-                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        background: searchOptions.caseSensitive ? 'color-mix(in srgb, var(--color-accent-500) 20%, transparent)' : 'transparent',
+                        border: '1px solid var(--color-overlay-white-10)',
                         borderRadius: '4px',
-                        color: searchOptions.caseSensitive ? '#60a5fa' : '#a0a0a0',
+                        color: searchOptions.caseSensitive ? 'var(--color-accent-500)' : 'var(--color-text-muted)',
                         cursor: 'pointer',
                         fontSize: '12px',
                       }}
@@ -473,10 +473,10 @@ name: 'Search - Demo',
                     <button
                       style={{
                         padding: '4px 6px',
-                        background: searchOptions.useRegex ? 'rgba(96, 165, 250, 0.2)' : 'transparent',
-                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        background: searchOptions.useRegex ? 'color-mix(in srgb, var(--color-accent-500) 20%, transparent)' : 'transparent',
+                        border: '1px solid var(--color-overlay-white-10)',
                         borderRadius: '4px',
-                        color: searchOptions.useRegex ? '#60a5fa' : '#a0a0a0',
+                        color: searchOptions.useRegex ? 'var(--color-accent-500)' : 'var(--color-text-muted)',
                         cursor: 'pointer',
                         fontSize: '12px',
                       }}
@@ -1476,7 +1476,7 @@ console.log(user.greet());`);
                 resultDisplayType: 'detailed',
                 description: 'MCP工具调用',
                 displayMode: 'compact',
-                primaryColor: '#8b5cf6'
+                primaryColor: 'var(--color-purple-500)'
               }}
               sessionId="preview-session"
             />
@@ -1496,7 +1496,7 @@ console.log(user.greet());`);
                 resultDisplayType: 'detailed',
                 description: 'MCP工具调用',
                 displayMode: 'compact',
-                primaryColor: '#8b5cf6'
+                primaryColor: 'var(--color-purple-500)'
               }}
               sessionId="preview-session"
             />

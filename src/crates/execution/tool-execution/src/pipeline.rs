@@ -1,5 +1,6 @@
 //! Provider-neutral tool pipeline planning helpers.
 
+use bitfun_events::ToolEventData;
 use dashmap::DashMap;
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
@@ -8,6 +9,14 @@ use tokio_util::sync::CancellationToken;
 pub struct ToolBatch {
     pub task_ids: Vec<String>,
     pub is_concurrent: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SubagentBatchExecutionPolicy {
+    #[default]
+    SafeOnly,
+    ForceParallel,
+    Serial,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -67,6 +76,58 @@ pub struct ToolStateCounts {
     pub completed: usize,
     pub failed: usize,
     pub cancelled: usize,
+}
+
+#[derive(Debug, Clone)]
+pub struct ToolStateEventFacts {
+    pub tool_id: String,
+    pub tool_name: String,
+    pub state: ToolStateEventKind,
+}
+
+#[derive(Debug, Clone)]
+pub enum ToolStateEventKind {
+    Queued {
+        position: usize,
+    },
+    Waiting {
+        dependencies: Vec<String>,
+    },
+    Running {
+        params: serde_json::Value,
+        timeout_seconds: Option<u64>,
+    },
+    Streaming {
+        chunks_received: usize,
+    },
+    AwaitingConfirmation {
+        params: serde_json::Value,
+    },
+    Completed {
+        result: serde_json::Value,
+        result_for_assistant: Option<String>,
+        duration_ms: u64,
+        queue_wait_ms: Option<u64>,
+        preflight_ms: Option<u64>,
+        confirmation_wait_ms: Option<u64>,
+        execution_ms: Option<u64>,
+    },
+    Failed {
+        error: String,
+        duration_ms: Option<u64>,
+        queue_wait_ms: Option<u64>,
+        preflight_ms: Option<u64>,
+        confirmation_wait_ms: Option<u64>,
+        execution_ms: Option<u64>,
+    },
+    Cancelled {
+        reason: String,
+        duration_ms: Option<u64>,
+        queue_wait_ms: Option<u64>,
+        preflight_ms: Option<u64>,
+        confirmation_wait_ms: Option<u64>,
+        execution_ms: Option<u64>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -132,6 +193,25 @@ pub fn partition_tool_batches(task_ids: &[String], flags: &[bool]) -> Vec<ToolBa
     batches
 }
 
+pub fn tool_call_concurrency_safe_for_batch(
+    tool_name: &str,
+    tool_is_concurrency_safe: bool,
+    same_batch_subagent_call_count: usize,
+    subagent_batch_execution_policy: SubagentBatchExecutionPolicy,
+) -> bool {
+    if tool_name != "Task" {
+        return tool_is_concurrency_safe;
+    }
+
+    match subagent_batch_execution_policy {
+        SubagentBatchExecutionPolicy::SafeOnly => tool_is_concurrency_safe,
+        SubagentBatchExecutionPolicy::ForceParallel => {
+            same_batch_subagent_call_count > 1 || tool_is_concurrency_safe
+        }
+        SubagentBatchExecutionPolicy::Serial => false,
+    }
+}
+
 pub fn should_retry_tool_attempt(facts: ToolRetryAttemptFacts) -> bool {
     facts.attempts < facts.max_attempts
         && matches!(facts.error_class, ToolExecutionErrorClass::Retryable)
@@ -179,4 +259,166 @@ pub fn count_tool_states(states: impl IntoIterator<Item = ToolTaskStateKind>) ->
     }
 
     counts
+}
+
+pub fn sanitize_tool_result_for_event(result: &serde_json::Value) -> serde_json::Value {
+    let mut sanitized = result.clone();
+    redact_data_url_in_json(&mut sanitized);
+    sanitized
+}
+
+pub fn tool_state_event_data(facts: ToolStateEventFacts) -> ToolEventData {
+    let ToolStateEventFacts {
+        tool_id,
+        tool_name,
+        state,
+    } = facts;
+
+    match state {
+        ToolStateEventKind::Queued { position } => ToolEventData::Queued {
+            tool_id,
+            tool_name,
+            position,
+        },
+        ToolStateEventKind::Waiting { dependencies } => ToolEventData::Waiting {
+            tool_id,
+            tool_name,
+            dependencies,
+        },
+        ToolStateEventKind::Running {
+            params,
+            timeout_seconds,
+        } => ToolEventData::Started {
+            tool_id,
+            tool_name,
+            params,
+            timeout_seconds,
+        },
+        ToolStateEventKind::Streaming { chunks_received } => ToolEventData::Streaming {
+            tool_id,
+            tool_name,
+            chunks_received,
+        },
+        ToolStateEventKind::AwaitingConfirmation { params } => ToolEventData::ConfirmationNeeded {
+            tool_id,
+            tool_name,
+            params,
+        },
+        ToolStateEventKind::Completed {
+            result,
+            result_for_assistant,
+            duration_ms,
+            queue_wait_ms,
+            preflight_ms,
+            confirmation_wait_ms,
+            execution_ms,
+        } => ToolEventData::Completed {
+            tool_id,
+            tool_name,
+            result: sanitize_tool_result_for_event(&result),
+            result_for_assistant,
+            duration_ms,
+            queue_wait_ms,
+            preflight_ms,
+            confirmation_wait_ms,
+            execution_ms,
+        },
+        ToolStateEventKind::Failed {
+            error,
+            duration_ms,
+            queue_wait_ms,
+            preflight_ms,
+            confirmation_wait_ms,
+            execution_ms,
+        } => ToolEventData::Failed {
+            tool_id,
+            tool_name,
+            error,
+            duration_ms,
+            queue_wait_ms,
+            preflight_ms,
+            confirmation_wait_ms,
+            execution_ms,
+        },
+        ToolStateEventKind::Cancelled {
+            reason,
+            duration_ms,
+            queue_wait_ms,
+            preflight_ms,
+            confirmation_wait_ms,
+            execution_ms,
+        } => ToolEventData::Cancelled {
+            tool_id,
+            tool_name,
+            reason,
+            duration_ms,
+            queue_wait_ms,
+            preflight_ms,
+            confirmation_wait_ms,
+            execution_ms,
+        },
+    }
+}
+
+fn redact_data_url_in_json(value: &mut serde_json::Value) {
+    match value {
+        serde_json::Value::Object(map) => {
+            let had_data_url = map.remove("data_url").is_some();
+            if had_data_url {
+                map.insert("has_data_url".to_string(), serde_json::json!(true));
+            }
+            for child in map.values_mut() {
+                redact_data_url_in_json(child);
+            }
+        }
+        serde_json::Value::Array(arr) => {
+            for child in arr {
+                redact_data_url_in_json(child);
+            }
+        }
+        _ => {}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ToolStateEventKind;
+    use super::{sanitize_tool_result_for_event, tool_state_event_data, ToolStateEventFacts};
+    use bitfun_events::ToolEventData;
+    use serde_json::json;
+
+    #[test]
+    fn completed_event_redacts_data_urls_recursively() {
+        let data = tool_state_event_data(ToolStateEventFacts {
+            tool_id: "tool-1".to_string(),
+            tool_name: "Screenshot".to_string(),
+            state: ToolStateEventKind::Completed {
+                result: json!({
+                    "data_url": "data:image/png;base64,AAAA",
+                    "nested": [{ "data_url": "data:image/png;base64,BBBB" }]
+                }),
+                result_for_assistant: Some("done".to_string()),
+                duration_ms: 10,
+                queue_wait_ms: Some(1),
+                preflight_ms: None,
+                confirmation_wait_ms: None,
+                execution_ms: Some(9),
+            },
+        });
+
+        let ToolEventData::Completed { result, .. } = data else {
+            panic!("expected completed event");
+        };
+        assert_eq!(result["has_data_url"], true);
+        assert!(result.get("data_url").is_none());
+        assert_eq!(result["nested"][0]["has_data_url"], true);
+        assert!(result["nested"][0].get("data_url").is_none());
+    }
+
+    #[test]
+    fn sanitize_keeps_values_without_data_urls() {
+        let result = sanitize_tool_result_for_event(&json!({ "text": "ok" }));
+
+        assert_eq!(result, json!({ "text": "ok" }));
+    }
 }

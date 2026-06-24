@@ -70,7 +70,7 @@
       }
       
       .default-model-config__expand-line {
-        border-color: var(--border-soft, var(--color-overlay-white-15));
+        border-color: var(--border-base);
       }
     }
     
@@ -140,12 +140,12 @@
     font-size: var(--font-size-xs);
     font-weight: $font-weight-medium;
     border-radius: $size-radius-sm;
-    background: rgba(var(--color-success-rgb, 34, 197, 94), 0.15);
+    background: var(--color-success-bg);
     border: none;
     color: var(--color-text-secondary);
     
     &--optional {
-      background: rgba(var(--color-warning-rgb, 234, 179, 8), 0.12);
+      background: var(--color-warning-bg);
       color: var(--color-text-muted);
     }
   }
@@ -235,8 +235,10 @@
   }
 
   &__model-option-thinking {
+    --default-model-thinking-rgb: 180, 160, 255;
+
     flex-shrink: 0;
-    color: rgba(180, 160, 255, 0.9);
+    color: rgba(var(--default-model-thinking-rgb), 0.9);
     width: 11px;
     height: 11px;
   }

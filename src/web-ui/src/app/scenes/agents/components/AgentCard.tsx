@@ -8,7 +8,8 @@ import {
 import { useTranslation } from 'react-i18next';
 import { Badge } from '@/component-library';
 import type { AgentWithCapabilities } from '../agentsStore';
-import { AGENT_ICON_MAP, CAPABILITY_ACCENT } from '../agentsIcons';
+import { AGENT_ICON_MAP } from '../agentsIcons';
+import { CAPABILITY_ACCENT, getCapabilityAccentBorder } from '../agentTheme';
 import { getCardGradient } from '@/shared/utils/cardGradients';
 import { getAgentBadge, getAgentDescription, getCapabilityLabel } from '../utils';
 import './AgentCard.scss';
@@ -31,16 +32,18 @@ const AgentCard: React.FC<AgentCardProps> = ({
   onOpenDetails,
 }) => {
   const { t } = useTranslation('scenes/agents');
-  const badge = getAgentBadge(t, agent.agentKind, agent.subagentSource);
+  const badge = getAgentBadge(t, agent.agentKind, agent.source ?? agent.subagentSource);
   const Icon = AGENT_ICON_MAP[(agent.iconKey ?? 'bot') as keyof typeof AGENT_ICON_MAP] ?? Bot;
   const totalTools = toolCount ?? agent.toolCount ?? agent.defaultTools?.length ?? 0;
+  const isCustomMode = agent.agentKind === 'mode' && agent.source !== 'builtin';
+  const showsModelBadge = Boolean(agent.model) && !isCustomMode;
   const openDetails = () => onOpenDetails(agent);
 
   return (
     <div
       className="agent-card"
       style={{
-        '--card-index': index,
+        '--surface-stagger-index': index,
         '--agent-card-gradient': getCardGradient(agent.id || agent.name),
       } as React.CSSProperties}
       onClick={openDetails}
@@ -48,6 +51,11 @@ const AgentCard: React.FC<AgentCardProps> = ({
       tabIndex={0}
       onKeyDown={(e) => e.key === 'Enter' && openDetails()}
       aria-label={agent.name}
+      data-testid="agent-list-item"
+      data-agent-id={agent.id}
+      data-agent-name={agent.name}
+      data-agent-kind={agent.agentKind}
+      data-subagent-source={agent.subagentSource ?? ''}
     >
       {/* Header: icon + name */}
       <div className="agent-card__header">
@@ -58,13 +66,13 @@ const AgentCard: React.FC<AgentCardProps> = ({
         </div>
         <div className="agent-card__header-info">
           <div className="agent-card__title-row">
-            <span className="agent-card__name">{agent.name}</span>
+            <span className="agent-card__name" data-testid="agent-list-item-title">{agent.name}</span>
             <div className="agent-card__badges">
               <Badge variant={badge.variant}>
                 {agent.agentKind === 'mode' ? <Cpu size={10} /> : <Bot size={10} />}
                 {badge.label}
               </Badge>
-              {agent.model ? (
+              {showsModelBadge ? (
                 <Badge variant="neutral">{agent.model}</Badge>
               ) : null}
             </div>
@@ -74,7 +82,7 @@ const AgentCard: React.FC<AgentCardProps> = ({
 
       {/* Body: description + meta */}
       <div className="agent-card__body">
-        <p className="agent-card__desc">
+        <p className="agent-card__desc" data-testid="agent-list-item-description">
           {getAgentDescription(t, agent)}
         </p>
       </div>
@@ -87,7 +95,7 @@ const AgentCard: React.FC<AgentCardProps> = ({
               className="agent-card__cap-chip"
               style={{
                 color: CAPABILITY_ACCENT[cap.category],
-                borderColor: `${CAPABILITY_ACCENT[cap.category]}44`,
+                borderColor: getCapabilityAccentBorder(cap.category),
               }}
             >
               {getCapabilityLabel(t, cap.category)}

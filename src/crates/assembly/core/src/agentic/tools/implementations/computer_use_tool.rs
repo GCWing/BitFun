@@ -1,16 +1,10 @@
 //! Desktop automation (Computer use).
 
-use super::computer_use_input::{
-    coordinate_mode, ensure_pointer_move_uses_screen_coordinates_only, parse_screenshot_params,
-    use_screen_coordinates,
-};
 use super::computer_use_locate::execute_computer_use_locate;
 use crate::agentic::tools::computer_use_capability::computer_use_desktop_available;
 use crate::agentic::tools::computer_use_host::{
-    ComputerScreenshot, ComputerUseHost, ComputerUseNavigateQuadrant,
+    AppSelector, ComputerScreenshot, ComputerUseHost, ComputerUseNavigateQuadrant,
     ComputerUseScreenshotRefinement, OcrRegionNative, ScreenshotCropCenter, UiElementLocateQuery,
-    COMPUTER_USE_POINT_CROP_HALF_MAX, COMPUTER_USE_POINT_CROP_HALF_MIN,
-    COMPUTER_USE_QUADRANT_CLICK_READY_MAX_LONG_EDGE, COMPUTER_USE_QUADRANT_EDGE_EXPAND_PX,
 };
 use crate::agentic::tools::computer_use_optimizer::hash_screenshot_bytes;
 use crate::agentic::tools::framework::{Tool, ToolExposure, ToolResult, ToolUseContext};
@@ -19,6 +13,11 @@ use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::types::ToolImageAttachment;
 use async_trait::async_trait;
 use base64::{engine::general_purpose::STANDARD as B64, Engine as _};
+use bitfun_agent_tools::computer_use::{
+    build_screenshot_tool_body_and_hint, coordinate_mode,
+    ensure_pointer_move_uses_screen_coordinates_only, parse_screenshot_params,
+    use_screen_coordinates,
+};
 use log::{debug, warn};
 use serde_json::{json, Value};
 
@@ -104,6 +103,7 @@ impl ComputerUseTool {
         format!(
             "Desktop automation (host OS: {}). {} \
 The **primary model cannot consume images** in tool results — **do not** use **`screenshot`**.\n\
+**OBSERVE & VERIFY (text-only):** Use **`describe_screen`** as your eyes — it returns a text snapshot (frontmost app + AX tree `ax_tree_text` with `node_idx`s + `ui_tree_text` + pointer) with NO image. Call it before acting when UI state is unknown, and after an action to verify the `ax_state_digest` changed. This replaces the `screenshot` observe→act→verify loop for text-only models.\n\
 **ACTION PRIORITY (CRITICAL):** Always think in this order:\n\
 1. **Terminal/CLI/System commands first** — Use Bash tool for terminal commands, system scripts (e.g., macOS `osascript`), shell automation. Most efficient.\n\
 2. **Keyboard shortcuts second** — Use **`key_chord`** / **`type_text`** for system/app shortcuts, navigation keys.\n\
@@ -145,8 +145,8 @@ The **primary model cannot consume images** in tool results — **do not** use *
             "properties": {
                 "action": {
                     "type": "string",
-                    "enum": ["click_target", "move_to_target", "click_element", "move_to_text", "click", "mouse_move", "scroll", "drag", "locate", "key_chord", "type_text", "pointer_move_rel", "wait", "list_displays", "focus_display", "paste", "list_apps", "get_app_state", "app_click", "app_type_text", "app_scroll", "app_key_chord", "app_wait_for", "build_interactive_view", "interactive_click", "interactive_type_text", "interactive_scroll", "build_visual_mark_view", "visual_click", "open_app", "open_url", "open_file", "clipboard_get", "clipboard_set", "run_script", "run_apple_script", "get_os_info"],
-                    "description": "The action to perform. **Primary model is text-only — no `screenshot`.** **ACTION PRIORITY:** 1) Use Bash tool for CLI/terminal/system commands first. 2) **`open_app`** to launch apps. **`run_apple_script`** for AppleScript (macOS). 3) Prefer `key_chord` for shortcuts/navigation. 4) Only when above fail: `click_target` / `move_to_target` (AX → OCR → screen coords in one call), then lower-level `click_element`, `move_to_text`, or `mouse_move` + `click`. Never guess coordinates."
+                    "enum": ["click_target", "move_to_target", "click_element", "move_to_text", "click", "mouse_move", "scroll", "drag", "locate", "key_chord", "type_text", "pointer_move_rel", "wait", "list_displays", "focus_display", "paste", "list_apps", "get_app_state", "describe_screen", "app_click", "app_type_text", "app_scroll", "app_key_chord", "app_wait_for", "build_interactive_view", "interactive_click", "interactive_type_text", "interactive_scroll", "build_visual_mark_view", "visual_click", "open_app", "open_url", "open_file", "clipboard_get", "clipboard_set", "run_script", "run_apple_script", "get_os_info"],
+                    "description": "The action to perform. **Primary model is text-only — no `screenshot`.** **ACTION PRIORITY:** 1) Use Bash tool for CLI/terminal/system commands first. 2) **`open_app`** to launch apps. **`run_apple_script`** for AppleScript (macOS). 3) Prefer `key_chord` for shortcuts/navigation. 4) Only when above fail: `click_target` / `move_to_target` (AX → OCR → screen coords in one call), then lower-level `click_element`, `move_to_text`, or `mouse_move` + `click`. Never guess coordinates. **`describe_screen`** is the text-only equivalent of `screenshot`: it returns a structured text snapshot (frontmost app + AX tree + UI tree text + pointer + window geometry) with NO image — use it to observe and verify state when the primary model cannot view screenshots."
                 },
                 "x": { "type": "integer", "description": "For `mouse_move` and `drag`: X in **global display** units when **`use_screen_coordinates`: true** (required). **Not** for `click`." },
                 "y": { "type": "integer", "description": "For `mouse_move` and `drag`: Y in **global display** units when **`use_screen_coordinates`: true** (required). **Not** for `click`." },
@@ -370,6 +370,82 @@ The **primary model cannot consume images** in tool results — **do not** use *
             matches.len(),
         );
         Ok(vec![ToolResult::ok(body, Some(hint))])
+    }
+
+    /// Text-only observation action: returns a structured text snapshot of
+    /// the desktop (frontmost app + AX tree + condensed UI tree text +
+    /// pointer + displays) with **no image bytes**. This is the observe and
+    /// verify step that closes the cowork loop for text-only primary models
+    /// that cannot consume `screenshot` JPEGs.
+    async fn describe_screen(
+        host: &dyn ComputerUseHost,
+        _input: &Value,
+    ) -> BitFunResult<Vec<ToolResult>> {
+        let session_snap = host.computer_use_session_snapshot().await;
+        let interaction = host.computer_use_interaction_state();
+        let pointer = session_snap.pointer_global.clone();
+        let displays = interaction.displays.clone();
+
+        // Build a frontmost-app selector from the session snapshot. The AX
+        // tree (`get_app_state`) is the richest text signal; `enumerate_ui_tree_text`
+        // is a condensed fallback that also covers apps whose `get_app_state`
+        // AX dump is sparse (Canvas / WebView surfaces).
+        let selector = session_snap
+            .foreground_application
+            .as_ref()
+            .map(|fg| AppSelector {
+                name: fg.name.clone(),
+                bundle_id: fg.bundle_id.clone(),
+                pid: fg.process_id,
+            });
+
+        let mut ax_tree_text: Option<String> = None;
+        let mut ax_nodes_count: Option<usize> = None;
+        let mut ax_digest: Option<String> = None;
+        let mut window_title: Option<String> = None;
+        if let Some(app) = selector.as_ref() {
+            match host.get_app_state(app.clone(), 8, true).await {
+                Ok(snap) => {
+                    // Deliberately drop `snap.screenshot` (JPEG) — describe_screen
+                    // never returns image bytes so text-only models are safe.
+                    window_title = snap.window_title.clone();
+                    ax_nodes_count = Some(snap.nodes.len());
+                    ax_digest = Some(snap.digest.clone());
+                    ax_tree_text = Some(snap.tree_text).filter(|t| !t.trim().is_empty());
+                }
+                Err(e) => {
+                    debug!("describe_screen: get_app_state failed: {}", e);
+                }
+            }
+        }
+
+        let ui_tree_text = host.enumerate_ui_tree_text().await;
+
+        let mut body = json!({
+            "success": true,
+            "action": "describe_screen",
+            "image_bytes": false,
+            "foreground_application": session_snap.foreground_application,
+            "pointer_global": pointer,
+            "displays": displays,
+            "window_title": window_title,
+            "ax_tree_text": ax_tree_text,
+            "ax_nodes_count": ax_nodes_count,
+            "ax_state_digest": ax_digest,
+            "ui_tree_text": ui_tree_text,
+        });
+
+        let input_coords = json!({
+            "kind": "describe_screen",
+        });
+        body = computer_use_augment_result_json(host, body, Some(input_coords)).await;
+
+        // Guide the model to use the returned text fields as its "screen view":
+        // pick `node_idx` from `ax_tree_text` for `app_click`/`click_element`, or
+        // match visible text via `move_to_text`, and compare `ax_state_digest`
+        // before/after an action to verify a mutation.
+        let hint = "describe_screen: text snapshot returned (no image). Use `ax_tree_text` node indices for `app_click`/`click_element`, match visible text with `move_to_text`, and compare `ax_state_digest` across actions to verify state changes.";
+        Ok(vec![ToolResult::ok(body, Some(hint.to_string()))])
     }
 
     fn primary_api_format(ctx: &ToolUseContext) -> String {
@@ -702,196 +778,12 @@ The **primary model cannot consume images** in tool results — **do not** use *
         debug_rel: Option<String>,
     ) -> BitFunResult<(Value, ToolImageAttachment, String)> {
         let b64 = B64.encode(&shot.bytes);
-        let pointer_marker_note = match (shot.pointer_image_x, shot.pointer_image_y) {
-            (Some(_), Some(_)) => "The JPEG includes a **synthetic red cursor with gray border** marking the **actual mouse position** on this bitmap (not the OS arrow). The **tip** is the true hotspot for **visual confirmation** only — **do not** use JPEG pixel indices for `mouse_move`; use `use_screen_coordinates: true` with globals from tool results (`pointer_global`, `move_to_text` global_center_*, `locate`, AX) or `move_to_text` / `click_element`.",
-            _ => "No pointer overlay in this JPEG (pointer_image_x/y null): the cursor is not on this bitmap (e.g. another display). Do not infer position from the image; use global coordinates with `use_screen_coordinates: true`, or move the pointer onto this display and screenshot again.",
-        };
-        let mut data = json!({
-            "success": true,
-            "mime_type": shot.mime_type,
-            "image_width": shot.image_width,
-            "image_height": shot.image_height,
-            "display_width_px": shot.image_width,
-            "display_height_px": shot.image_height,
-            "native_width": shot.native_width,
-            "native_height": shot.native_height,
-            "display_origin_x": shot.display_origin_x,
-            "display_origin_y": shot.display_origin_y,
-            "vision_scale": shot.vision_scale,
-            "pointer_image_x": shot.pointer_image_x,
-            "pointer_image_y": shot.pointer_image_y,
-            "pointer_marker": pointer_marker_note,
-            "screenshot_crop_center": shot.screenshot_crop_center,
-            "point_crop_half_extent_native": shot.point_crop_half_extent_native,
-            "navigation_native_rect": shot.navigation_native_rect,
-            "quadrant_navigation_click_ready": shot.quadrant_navigation_click_ready,
-            "image_content_rect": shot.image_content_rect,
-            "image_global_bounds": shot.image_global_bounds,
-            "implicit_confirmation_crop_applied": shot.implicit_confirmation_crop_applied,
-            "debug_screenshot_path": debug_rel,
-            "ui_tree_text": shot.ui_tree_text,
-        });
-        let shortcut_policy = format!(
-            "**Verify step:** after **`click`**, **`key_chord`**, **`type_text`**, **`scroll`**, or **`drag`**, check **`interaction_state.recommend_screenshot_to_verify_last_action`** — when true, call **`screenshot`** next to confirm UI state (Cowork-style). \
-**Targeting priority:** `click_element` → **`move_to_text`** (OCR + move; no prior `screenshot` for targeting) → **`screenshot`** (confirm / drill) + **`mouse_move`** (**`use_screen_coordinates`: true only**) + **`click`** last. **Screenshots are for confirmation and navigation — do not guess move targets from JPEG pixels.** **`click`** never moves the pointer. **Host-only mandatory screenshot:** before **`click`** or Enter **`key_chord`** when the pointer changed since the last capture — **not** before `mouse_move`, `scroll`, `type_text`, `locate`, `wait`, or non-Enter `key_chord`. **Valid basis for a guarded `click`:** `FullDisplay`, `quadrant_navigation_click_ready`, or point crop; or bare **`screenshot`** after a pointer-changing action (**~500×500** implicit confirmation around mouse/caret). **`mouse_move`** must use **global** coordinates (from `move_to_text` global_center_*, `locate`, AX, or `pointer_global`). **Bare confirmation `screenshot`:** whenever the host still requires a capture before **`click`** or Enter **`key_chord`** (`requires_fresh_screenshot_*`), a bare `screenshot` (no crop / no reset) is **~500×500** centered on **mouse** (`screenshot_implicit_center` default `mouse`) — **including during quadrant drill** and the **first** such capture in a session. Before Enter in a text field, set **`screenshot_implicit_center`: `text_caret`**. Use **`screenshot_reset_navigation`**: true for a **full-screen** capture instead. **If AX failed:** try **`move_to_text`** before a long screenshot drill. **Optional refinement** for tiny targets: `screenshot_navigate_quadrant` until `quadrant_navigation_click_ready` (long edge < {} px) or point crop. Small moves: **ComputerUseMouseStep** over tiny **ComputerUseMousePrecise** (screen globals only).",
-            COMPUTER_USE_QUADRANT_CLICK_READY_MAX_LONG_EDGE
-        );
-        let region_crop_size_note = shot
-            .point_crop_half_extent_native
-            .map(|h| {
-                let edge = h.saturating_mul(2);
-                format!(
-                    "Crop frame (~{}×{} native, half-extent {} px; clamped {}..{}): ",
-                    edge,
-                    edge,
-                    h,
-                    COMPUTER_USE_POINT_CROP_HALF_MIN,
-                    COMPUTER_USE_POINT_CROP_HALF_MAX
-                )
-            })
-            .unwrap_or_else(|| "Crop frame (~500×500 native, half-extent 250 px): ".to_string());
-        let hierarchical_navigation = if shot.screenshot_crop_center.is_some() {
-            json!({
-                "phase": "region_crop",
-                "image_is_crop_only": true,
-                "shortcut_policy": shortcut_policy,
-                "instruction": format!(
-                    "{}**Image pixel (0,0)** is the **top-left of this crop** in **full-capture native** space (same whole-screen bitmap as a full-screen shot — not local 0..crop only). This view is for **confirmation / drill** — do **not** use JPEG pixels for `mouse_move`. For another view, call screenshot with new `screenshot_crop_center_*` in that same full-capture space; optional `screenshot_crop_half_extent_native` adjusts crop size. See shortcut_policy.",
-                    region_crop_size_note
-                )
-            })
-        } else if shot.quadrant_navigation_click_ready {
-            json!({
-                "phase": "quadrant_terminal",
-                "image_is_crop_only": true,
-                "shortcut_policy": shortcut_policy,
-                "instruction": "Region is small enough for precise pointer: **`quadrant_navigation_click_ready`** is true. **Do not** use **`ComputerUseMouseStep`** / **`pointer_move_rel`** immediately after a **`screenshot`** (host blocks — vision nudges are wrong). First **`move_to_text`**, **`mouse_move`** (`use_screen_coordinates`: true), or **`click_element`**, then optional **`ComputerUseMouseStep`** / **`ComputerUseMousePrecise`**. Then **`ComputerUseMouseClick`** (`action`: click). Host requires a **fresh** screenshot before the next **`click`** or Enter **`key_chord`** if pointer state changed since last capture (see shortcut_policy)."
-            })
-        } else if !Self::shot_covers_full_display(shot) {
-            json!({
-                "phase": "quadrant_drill",
-                "image_is_crop_only": true,
-                "shortcut_policy": shortcut_policy,
-                "instruction": format!(
-                    "**Keep drilling (default):** call **`screenshot`** again with **`screenshot_navigate_quadrant`**: `top_left` | `top_right` | `bottom_left` | `bottom_right` — pick the tile that contains your target. The host expands the chosen quadrant by **{} px** on each side (clamped) so split-edge controls stay in-frame. Repeat until `quadrant_navigation_click_ready`. To restart from the full display, set **`screenshot_reset_navigation`**: true on the next screenshot. Coordinates remain **full-display native**. See shortcut_policy.",
-                    COMPUTER_USE_QUADRANT_EDGE_EXPAND_PX
-                )
-            })
-        } else {
-            json!({
-                "phase": "full_display",
-                "image_is_crop_only": false,
-                "host_auto_quadrant": false,
-                "next_step_for_mouse_click": "**First:** **`move_to_text`** if visible text can name the target (OCR + move pointer; then **`click`** if you need a press). **If you must move by globals:** **`mouse_move`** with **`use_screen_coordinates`: true** and coordinates from **`locate`**, **`move_to_text`**, or **`pointer_global`** — **not** from guessing JPEG pixels. Then **`click`** when the host allows (`interaction_state.click_ready`). **Optional refinement:** `screenshot_crop_center_*`, quadrant drill, or **`screenshot_navigate_quadrant`** for smaller targets. Host never splits the screen unless you pass `screenshot_navigate_quadrant`.",
-                "shortcut_policy": shortcut_policy,
-                "instruction": "Full frame: JPEG aligns with **full-display native** space for **visual confirmation** only. **Prefer `move_to_text`** when readable text exists (then **`click`**). **Do not** derive `mouse_move` targets from this bitmap — use **`use_screen_coordinates`: true** with globals from tools, or AX/OCR actions. Then **`click`** when host allows (`click_ready`). For tiny targets, optionally narrow with `screenshot_crop_center_*` or quadrant drill. **`screenshot`**-heavy paths are **last** for targeting. See `next_step_for_mouse_click`, `recommended_next_for_click_targeting`, shortcut_policy."
-            })
-        };
-        if let Some(obj) = data.as_object_mut() {
-            obj.insert(
-                "hierarchical_navigation".to_string(),
-                hierarchical_navigation,
-            );
-            if shot.screenshot_crop_center.is_none() && !shot.quadrant_navigation_click_ready {
-                if Self::shot_covers_full_display(shot) {
-                    obj.insert(
-                        "recommended_next_for_click_targeting".to_string(),
-                        Value::String(
-                            "move_to_text_then_click_or_mouse_move_screen_globals_then_click"
-                                .to_string(),
-                        ),
-                    );
-                } else {
-                    let rec = format!(
-                        "move_to_text_first_then_{}",
-                        "screenshot_navigate_quadrant_until_click_ready"
-                    );
-                    obj.insert(
-                        "recommended_next_for_click_targeting".to_string(),
-                        Value::String(rec),
-                    );
-                }
-            }
-        }
+        let (data, hint) = build_screenshot_tool_body_and_hint(shot, debug_rel);
         let attach = ToolImageAttachment {
             mime_type: shot.mime_type.clone(),
             data_base64: b64,
         };
-        let pointer_line = match (shot.pointer_image_x, shot.pointer_image_y) {
-            (Some(px), Some(py)) => format!(
-                " TRUE POINTER: **red cursor with gray border** (tip = hotspot) in the JPEG at image x={}, y={} — **confirmation only**; use **`mouse_move`** with **`use_screen_coordinates`: true** using globals from tool JSON (`pointer_global`, `move_to_text`, `locate`), then **`click`**. **Do not** use **`pointer_move_rel`** / **ComputerUseMouseStep** as the next action after this **`screenshot`** (host blocks). Prior screenshot is stale after **ComputerUseMousePrecise** / **ComputerUseMouseStep** / `pointer_move_rel` until you screenshot again.",
-                px, py
-            ),
-            _ => " TRUE POINTER: not on this capture (pointer_image_x/y null). No red synthetic cursor — OS mouse may be on another display; use use_screen_coordinates with global coords or bring the pointer here and re-screenshot."
-                .to_string(),
-        };
-        let debug_line = debug_rel
-            .as_ref()
-            .map(|p| {
-                format!(
-                    " Same JPEG saved under workspace: {} (verify red cursor tip vs pointer_image_*).",
-                    p
-                )
-            })
-            .unwrap_or_default();
-        let hint = if let Some(c) = shot.screenshot_crop_center {
-            format!(
-                "Region crop screenshot {}x{} around full-display native center ({}, {}). **Confirm** UI state here — do **not** use JPEG pixels for `mouse_move`.{}.{} After pointer moves, screenshot again before click (host).",
-                shot.image_width,
-                shot.image_height,
-                c.x,
-                c.y,
-                pointer_line,
-                debug_line
-            )
-        } else if shot.quadrant_navigation_click_ready {
-            format!(
-                "Quadrant terminal {}x{} (native region {:?}). **`quadrant_navigation_click_ready`**: align with **ComputerUseMouseStep** / **`mouse_move`** (**`use_screen_coordinates`: true** only) / **ComputerUseMousePrecise**, then **`ComputerUseMouseClick`** (`action`: click) — **`click`** has no coordinates.{}.{}",
-                shot.image_width,
-                shot.image_height,
-                shot.navigation_native_rect,
-                pointer_line,
-                debug_line
-            )
-        } else if !Self::shot_covers_full_display(shot) {
-            format!(
-                "Quadrant drill view {}x{} (native region {:?}). Call **`screenshot`** with **`screenshot_navigate_quadrant`** to subdivide, or **`screenshot_reset_navigation`**: true for full screen.{}.{}",
-                shot.image_width,
-                shot.image_height,
-                shot.navigation_native_rect,
-                pointer_line,
-                debug_line
-            )
-        } else {
-            let nx = shot.native_width.saturating_sub(1);
-            let ny = shot.native_height.saturating_sub(1);
-            format!(
-                "Full screenshot {}x{} (vision_scale={}). **Display native** range **0..={}** x **0..={}** (JPEG matches this rect for **confirmation**). **Targeting:** prefer **`move_to_text`** when text is visible; **`screenshot` + quad** is lowest priority. **`mouse_move`** uses **`use_screen_coordinates`: true** with globals from tools — **not** JPEG guesses; then **`click`** when allowed (see `interaction_state`). **Only** guarded **`click`** / Enter **`key_chord`** need a fresh capture after pointer moves (see shortcut_policy).{}.{}",
-                shot.image_width,
-                shot.image_height,
-                shot.vision_scale,
-                nx,
-                ny,
-                pointer_line,
-                debug_line
-            )
-        };
         Ok((data, attach, hint))
-    }
-
-    fn shot_covers_full_display(shot: &ComputerScreenshot) -> bool {
-        if shot.screenshot_crop_center.is_some() {
-            return false;
-        }
-        match shot.navigation_native_rect {
-            None => true,
-            Some(n) => {
-                n.x0 == 0
-                    && n.y0 == 0
-                    && n.width == shot.native_width
-                    && n.height == shot.native_height
-            }
-        }
     }
 }
 
@@ -1302,7 +1194,7 @@ impl Tool for ComputerUseTool {
             "properties": {
                 "action": {
                     "type": "string",
-                    "enum": ["screenshot", "click_target", "move_to_target", "click_element", "move_to_text", "click", "mouse_move", "scroll", "drag", "locate", "key_chord", "type_text", "pointer_move_rel", "wait", "list_displays", "focus_display", "paste", "list_apps", "get_app_state", "app_click", "app_type_text", "app_scroll", "app_key_chord", "app_wait_for", "build_interactive_view", "interactive_click", "interactive_type_text", "interactive_scroll", "build_visual_mark_view", "visual_click", "open_app", "open_url", "open_file", "clipboard_get", "clipboard_set", "run_script", "run_apple_script", "get_os_info"],
+                    "enum": ["screenshot", "describe_screen", "click_target", "move_to_target", "click_element", "move_to_text", "click", "mouse_move", "scroll", "drag", "locate", "key_chord", "type_text", "pointer_move_rel", "wait", "list_displays", "focus_display", "paste", "list_apps", "get_app_state", "app_click", "app_type_text", "app_scroll", "app_key_chord", "app_wait_for", "build_interactive_view", "interactive_click", "interactive_type_text", "interactive_scroll", "build_visual_mark_view", "visual_click", "open_app", "open_url", "open_file", "clipboard_get", "clipboard_set", "run_script", "run_apple_script", "get_os_info"],
                     "description": "The action to perform. **ACTION PRIORITY:** 1) Use Bash tool for CLI/terminal/system commands (most efficient). 2) **`open_app`** to launch apps by name. **`run_apple_script`** to run AppleScript (macOS). 3) Prefer **`key_chord`** for shortcuts/navigation keys over mouse. 4) Only when above fail: `click_target` / `move_to_target` (AX → OCR → screen coords in one call) before lower-level `click_element`, `move_to_text`, or `mouse_move` + `click`. **`screenshot`** is for observation/confirmation ONLY — never derive mouse coordinates from screenshots. `click` = press at **current pointer only** (no x/y params). `scroll` supports optional position (`scroll_x`/`scroll_y`). `type_text`, `drag`, `pointer_move_rel`, `wait`, `locate` = standard actions."
                 },
                 "x": { "type": "integer", "description": "For `mouse_move` and `drag`: X in **global display** units when **`use_screen_coordinates`: true** (required). **Not** for `click`." },
@@ -1467,6 +1359,15 @@ impl Tool for ComputerUseTool {
 
         match action {
             "locate" => execute_computer_use_locate(input, context).await,
+
+            // Text-only observation: the "eyes" of the desktop loop when the
+            // primary model cannot consume screenshot images. Returns a
+            // structured text snapshot (frontmost app + AX tree + UI tree text
+            // + pointer + displays) with NO image bytes. This is the observe and
+            // verify step that closes the cowork loop for text-only models.
+            "describe_screen" => {
+                return Self::describe_screen(host_ref, input).await;
+            }
 
             // Unified target resolver: AX first, OCR second, explicit screen
             // coordinates last. This is the preferred mouse path for common
@@ -1952,6 +1853,30 @@ impl Tool for ComputerUseTool {
             }
 
             "screenshot" => {
+                // Text-only soft gate: instead of hard-rejecting (which crashes
+                // the agent loop when a stale hint or the model itself asks for
+                // `screenshot`), return a success envelope that points the model
+                // at the text-only observe action. The model keeps its turn and
+                // switches to `describe_screen` / AX / OCR / keyboard tactics.
+                if !context.primary_model_supports_image_understanding() {
+                    let body = json!({
+                        "success": true,
+                        "action": "screenshot",
+                        "screenshot_unavailable": true,
+                        "reason": "primary_model_is_text_only",
+                        "instruction": "The primary model cannot consume image bytes, so `screenshot` produced nothing. Use `describe_screen` to observe the desktop as text (frontmost app + AX tree + UI tree text + pointer), then act with `click_target`/`click_element`/`move_to_text`/`key_chord`/`paste`. Never retry `screenshot`."
+                    });
+                    let input_coords = json!({ "kind": "screenshot", "text_only": true });
+                    let body =
+                        computer_use_augment_result_json(host_ref, body, Some(input_coords)).await;
+                    return Ok(vec![ToolResult::ok(
+                        body,
+                        Some(
+                            "screenshot unavailable (text-only model): use describe_screen to observe."
+                                .to_string(),
+                        ),
+                    )]);
+                }
                 Self::require_multimodal_tool_output_for_screenshot(context)?;
                 let (params, ignored_crop_for_quadrant) = parse_screenshot_params(input)?;
                 let crop_for_debug = params.crop_center;
@@ -2296,4 +2221,61 @@ fn req_i32(input: &Value, key: &str) -> BitFunResult<i32> {
         .and_then(|v| v.as_i64())
         .map(|v| v as i32)
         .ok_or_else(|| BitFunError::tool(format!("{} is required (integer)", key)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ComputerUseTool;
+    use crate::agentic::tools::framework::Tool;
+    use serde_json::Value;
+
+    fn action_enum(schema: &Value) -> Vec<String> {
+        schema
+            .get("properties")
+            .and_then(|p| p.get("action"))
+            .and_then(|a| a.get("enum"))
+            .and_then(|e| e.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Text-only schema must NOT advertise `screenshot` (hard-rejected at runtime)
+    /// but MUST advertise `describe_screen` (the text-only observe action).
+    #[test]
+    fn text_only_schema_omits_screenshot_and_offers_describe_screen() {
+        let schema = ComputerUseTool::input_schema_text_only();
+        let actions = action_enum(&schema);
+        assert!(
+            !actions.iter().any(|a| a == "screenshot"),
+            "text-only schema must not list `screenshot` — it is rejected for text-only models. Got: {:?}",
+            actions
+        );
+        assert!(
+            actions.iter().any(|a| a == "describe_screen"),
+            "text-only schema must list `describe_screen` as the observe action. Got: {:?}",
+            actions
+        );
+    }
+
+    /// Full (visual) schema keeps `screenshot` and also offers `describe_screen`.
+    #[test]
+    fn full_schema_keeps_screenshot_and_offers_describe_screen() {
+        let schema = ComputerUseTool::new().input_schema();
+        let actions = action_enum(&schema);
+        assert!(actions.iter().any(|a| a == "screenshot"));
+        assert!(actions.iter().any(|a| a == "describe_screen"));
+    }
+
+    /// Text-only tool description must steer the model to `describe_screen` and
+    /// away from `screenshot`.
+    #[test]
+    fn text_only_description_steers_to_describe_screen() {
+        let desc = ComputerUseTool::description_text_only();
+        assert!(desc.contains("describe_screen"));
+        assert!(desc.to_lowercase().contains("do not"));
+    }
 }

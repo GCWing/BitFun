@@ -42,7 +42,7 @@
 
   
   &__spinner {
-    color: #ca8a04;
+    color: var(--color-warning);
     animation: bitfun-spin 1s linear infinite;
   }
 

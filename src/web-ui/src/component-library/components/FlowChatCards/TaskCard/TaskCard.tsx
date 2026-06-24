@@ -54,7 +54,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       displayMode={displayMode}
       input={input}
       result={result}
-      primaryColor="#7c3aed"
+      primaryColor="var(--color-purple-600)"
       className="task-card"
       {...baseProps}
     >

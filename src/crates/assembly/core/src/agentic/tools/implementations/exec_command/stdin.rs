@@ -1,5 +1,4 @@
 use super::progress::ExecOutputProgressBridge;
-use super::rendering::render_exec_response_for_assistant;
 use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext, ValidationResult};
 use crate::service::remote_ssh::{
     get_global_remote_exec_process_manager, RemoteExecError, RemoteExecSessionCompletion,
@@ -11,6 +10,11 @@ use serde_json::{json, Value};
 use terminal_core::{
     get_global_exec_process_manager, LocalExecSessionCompletion, LocalExecSessionCompletionSource,
     LocalExecSessionCompletionStatus, LocalWriteStdinRequest, TerminalError,
+};
+use tool_runtime::exec_command::{
+    exec_command_completion_value, exec_command_session_id_from_input,
+    render_write_stdin_response_for_assistant, write_stdin_session_not_found_result,
+    ExecCommandCompletion, ExecCommandCompletionSource, ExecCommandCompletionStatus,
 };
 
 const DEFAULT_TOOL_YIELD_TIME_MS: u64 = 30_000;
@@ -29,99 +33,57 @@ impl WriteStdinTool {
     }
 
     pub(crate) fn session_id_from_input(input: &Value) -> Option<i32> {
-        input.get("session_id").and_then(|value| {
-            value
-                .as_i64()
-                .and_then(|id| i32::try_from(id).ok())
-                .or_else(|| value.as_u64().and_then(|id| i32::try_from(id).ok()))
-        })
+        exec_command_session_id_from_input(input)
     }
 
     fn response_for_assistant(data: &Value) -> String {
-        let mut status_lines = Vec::new();
-        let completion = data.get("completion");
-        let completion_source = completion
-            .and_then(|value| value.get("source"))
-            .and_then(Value::as_str);
-        let completion_status = completion
-            .and_then(|value| value.get("status"))
-            .and_then(Value::as_str);
-        if completion_source == Some("out_of_band_control") {
-            match completion_status {
-                Some("interrupted") => {
-                    status_lines.push("Process was interrupted externally.".to_string())
-                }
-                Some("killed") => {
-                    status_lines.push("Process was terminated externally.".to_string())
-                }
-                Some(status) => {
-                    status_lines.push(format!("Process ended externally with status {status}."))
-                }
-                None => status_lines.push("Process ended externally.".to_string()),
-            }
-            if let Some(exit_code) = data.get("exit_code").and_then(Value::as_i64) {
-                status_lines.push(format!("Process exited with code {exit_code}."));
-            }
-        } else if let Some(exit_code) = data.get("exit_code").and_then(Value::as_i64) {
-            status_lines.push(format!("Process exited with code {exit_code}."));
-        } else if let Some(session_id) = data.get("session_id").and_then(Value::as_i64) {
-            status_lines.push(format!(
-                "Process is still running. session_id: {session_id}"
-            ));
-        }
-        render_exec_response_for_assistant(data, status_lines, 4)
+        render_write_stdin_response_for_assistant(data)
     }
 
     fn session_not_found_result(session_id: i32, remote: bool) -> Vec<ToolResult> {
-        let message = format!(
-            "ExecCommand session {session_id} was not found. It may have already exited, been collected, or been pruned."
-        );
-        let mut data = json!({
-            "status": "session_not_found",
-            "message": message,
-            "requested_session_id": session_id,
-            "session_id": null,
-            "exit_code": null,
-            "output": "",
-            "original_output_chars": 0,
-        });
-        if remote {
-            data["remote"] = json!(true);
-        }
+        let result = write_stdin_session_not_found_result(session_id, remote);
 
         vec![ToolResult::Result {
-            data,
-            result_for_assistant: Some(message),
+            data: result.data,
+            result_for_assistant: Some(result.assistant_message),
             image_attachments: None,
         }]
     }
 
     fn local_completion_value(completion: LocalExecSessionCompletion) -> Value {
-        json!({
-            "status": match completion.status {
-                LocalExecSessionCompletionStatus::Exited => "exited",
-                LocalExecSessionCompletionStatus::Interrupted => "interrupted",
-                LocalExecSessionCompletionStatus::Killed => "killed",
-                LocalExecSessionCompletionStatus::Pruned => "pruned",
+        exec_command_completion_value(ExecCommandCompletion {
+            status: match completion.status {
+                LocalExecSessionCompletionStatus::Exited => ExecCommandCompletionStatus::Exited,
+                LocalExecSessionCompletionStatus::Interrupted => {
+                    ExecCommandCompletionStatus::Interrupted
+                }
+                LocalExecSessionCompletionStatus::Killed => ExecCommandCompletionStatus::Killed,
+                LocalExecSessionCompletionStatus::Pruned => ExecCommandCompletionStatus::Pruned,
             },
-            "source": match completion.source {
-                LocalExecSessionCompletionSource::Process => "process",
-                LocalExecSessionCompletionSource::OutOfBandControl => "out_of_band_control",
+            source: match completion.source {
+                LocalExecSessionCompletionSource::Process => ExecCommandCompletionSource::Process,
+                LocalExecSessionCompletionSource::OutOfBandControl => {
+                    ExecCommandCompletionSource::OutOfBandControl
+                }
             },
         })
     }
 
     fn remote_completion_value(completion: RemoteExecSessionCompletion) -> Value {
-        json!({
-            "status": match completion.status {
-                RemoteExecSessionCompletionStatus::Exited => "exited",
-                RemoteExecSessionCompletionStatus::Interrupted => "interrupted",
-                RemoteExecSessionCompletionStatus::Killed => "killed",
-                RemoteExecSessionCompletionStatus::Pruned => "pruned",
+        exec_command_completion_value(ExecCommandCompletion {
+            status: match completion.status {
+                RemoteExecSessionCompletionStatus::Exited => ExecCommandCompletionStatus::Exited,
+                RemoteExecSessionCompletionStatus::Interrupted => {
+                    ExecCommandCompletionStatus::Interrupted
+                }
+                RemoteExecSessionCompletionStatus::Killed => ExecCommandCompletionStatus::Killed,
+                RemoteExecSessionCompletionStatus::Pruned => ExecCommandCompletionStatus::Pruned,
             },
-            "source": match completion.source {
-                RemoteExecSessionCompletionSource::Process => "process",
-                RemoteExecSessionCompletionSource::OutOfBandControl => "out_of_band_control",
+            source: match completion.source {
+                RemoteExecSessionCompletionSource::Process => ExecCommandCompletionSource::Process,
+                RemoteExecSessionCompletionSource::OutOfBandControl => {
+                    ExecCommandCompletionSource::OutOfBandControl
+                }
             },
         })
     }

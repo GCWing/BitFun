@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 import { useToolbarModeContext } from './ToolbarModeContext';
 import { flowChatStore } from '../../store/FlowChatStore';
-import { syncSessionToModernStore } from '../../services/storeSync';
+import { activateMainSession } from '../../services/sessionActivation';
 import { FlowChatState } from '../../types/flow-chat';
 import { compareSessionsForDisplay } from '../../utils/sessionOrdering';
 import { createLogger } from '@/shared/utils/logger';
@@ -235,9 +235,11 @@ export const ToolbarMode: React.FC = () => {
   const handleSwitchSession = useCallback((e: React.MouseEvent, sessionId: string) => {
     e.stopPropagation();
     e.preventDefault();
-    flowChatStore.switchSession(sessionId);
-    syncSessionToModernStore(sessionId);
-    setShowSessionPicker(false);
+    void activateMainSession(sessionId).then((activated) => {
+      if (activated) {
+        setShowSessionPicker(false);
+      }
+    });
   }, []);
   
   const handleCancel = useCallback(() => {

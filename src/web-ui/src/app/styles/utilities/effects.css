@@ -12,7 +12,7 @@
 }
 
 .u-shadow-card-hover {
-  box-shadow: 0 8px 20px rgba(59, 130, 246, 0.15);
+  box-shadow: 0 8px 20px var(--border-accent-subtle);
 }
 
 .u-border {

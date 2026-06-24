@@ -1,4 +1,3 @@
-use super::rendering::render_exec_response_for_assistant;
 use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext, ValidationResult};
 use crate::service::remote_ssh::{
     get_global_remote_exec_process_manager, RemoteExecControlAction, RemoteExecControlOrigin,
@@ -12,6 +11,16 @@ use terminal_core::{
     get_global_exec_process_manager, LocalExecControlAction, LocalExecControlOrigin,
     LocalExecControlRequest, LocalExecSessionCompletion, LocalExecSessionCompletionSource,
     LocalExecSessionCompletionStatus, TerminalError,
+};
+use tool_runtime::exec_command::{
+    exec_command_control_action_from_input, exec_command_control_action_name,
+    exec_command_session_id_from_input, exec_control_session_not_found_result,
+    render_exec_control_response_for_assistant,
+};
+pub use tool_runtime::exec_command::{
+    ExecCommandCompletion, ExecCommandCompletionSource, ExecCommandCompletionStatus,
+    ExecCommandControlAction, ExecCommandControlOrigin, ExecCommandControlRequest,
+    ExecCommandControlResponse,
 };
 
 // ExecControl termination semantics by execution surface:
@@ -35,60 +44,6 @@ use terminal_core::{
 // - Remote Windows SSH hosts are not part of the current ExecCommand contract;
 //   remote workspaces assume POSIX paths and shells.
 pub struct ExecControlTool;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ExecCommandControlAction {
-    Interrupt,
-    Kill,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ExecCommandControlOrigin {
-    ModelTool,
-    OutOfBand,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ExecCommandCompletionStatus {
-    Exited,
-    Interrupted,
-    Killed,
-    Pruned,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ExecCommandCompletionSource {
-    Process,
-    OutOfBandControl,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ExecCommandCompletion {
-    pub status: ExecCommandCompletionStatus,
-    pub source: ExecCommandCompletionSource,
-}
-
-#[derive(Debug, Clone)]
-pub struct ExecCommandControlRequest {
-    pub session_id: i32,
-    pub action: ExecCommandControlAction,
-    pub origin: ExecCommandControlOrigin,
-    pub remote: bool,
-    pub yield_time_ms: Option<u64>,
-}
-
-#[derive(Debug, Clone)]
-pub struct ExecCommandControlResponse {
-    pub chunk_id: String,
-    pub wall_time_seconds: f64,
-    pub output: String,
-    pub session_id: Option<i32>,
-    pub exit_code: Option<i32>,
-    pub original_output_chars: usize,
-    pub action: ExecCommandControlAction,
-    pub remote: bool,
-    pub completion: Option<ExecCommandCompletion>,
-}
 
 #[derive(Debug, thiserror::Error)]
 pub enum ExecCommandControlError {
@@ -177,40 +132,15 @@ impl ExecControlTool {
     }
 
     fn session_id_from_input(input: &Value) -> Option<i32> {
-        input.get("session_id").and_then(|value| {
-            value
-                .as_i64()
-                .and_then(|id| i32::try_from(id).ok())
-                .or_else(|| value.as_u64().and_then(|id| i32::try_from(id).ok()))
-        })
+        exec_command_session_id_from_input(input)
     }
 
     fn action_from_input(input: &Value) -> Option<ExecCommandControlAction> {
-        match input.get("action").and_then(Value::as_str)?.trim() {
-            "interrupt" => Some(ExecCommandControlAction::Interrupt),
-            "kill" => Some(ExecCommandControlAction::Kill),
-            _ => None,
-        }
+        exec_command_control_action_from_input(input)
     }
 
     fn response_for_assistant(data: &Value, action: ExecCommandControlAction) -> String {
-        let mut status_lines = Vec::new();
-        match action {
-            ExecCommandControlAction::Interrupt => {
-                status_lines.push("Sent interrupt to process.".to_string())
-            }
-            ExecCommandControlAction::Kill => {
-                status_lines.push("Sent kill to process.".to_string())
-            }
-        }
-        if let Some(exit_code) = data.get("exit_code").and_then(Value::as_i64) {
-            status_lines.push(format!("Process exited with code {exit_code}."));
-        } else if let Some(session_id) = data.get("session_id").and_then(Value::as_i64) {
-            status_lines.push(format!(
-                "Process is still running. session_id: {session_id}"
-            ));
-        }
-        render_exec_response_for_assistant(data, status_lines, 4)
+        render_exec_control_response_for_assistant(data, action)
     }
 
     fn session_not_found_result(
@@ -218,30 +148,11 @@ impl ExecControlTool {
         action: ExecCommandControlAction,
         remote: bool,
     ) -> Vec<ToolResult> {
-        let action_name = match action {
-            ExecCommandControlAction::Interrupt => "interrupt",
-            ExecCommandControlAction::Kill => "kill",
-        };
-        let message = format!(
-            "No {action_name} was sent because ExecCommand session {session_id} was not found. It may have already exited, been collected, or been pruned."
-        );
-        let mut data = json!({
-            "status": "session_not_found",
-            "message": message,
-            "requested_session_id": session_id,
-            "session_id": null,
-            "exit_code": null,
-            "output": "",
-            "original_output_chars": 0,
-            "action": action_name,
-        });
-        if remote {
-            data["remote"] = json!(true);
-        }
+        let result = exec_control_session_not_found_result(session_id, action, remote);
 
         vec![ToolResult::Result {
-            data,
-            result_for_assistant: Some(message),
+            data: result.data,
+            result_for_assistant: Some(result.assistant_message),
             image_attachments: None,
         }]
     }
@@ -336,10 +247,7 @@ impl ExecControlTool {
             Err(ExecCommandControlError::Tool(error)) => return Err(error),
         };
 
-        let action_name = match action {
-            ExecCommandControlAction::Interrupt => "interrupt",
-            ExecCommandControlAction::Kill => "kill",
-        };
+        let action_name = exec_command_control_action_name(action);
         let data = json!({
             "chunk_id": response.chunk_id,
             "wall_time_seconds": response.wall_time_seconds,
@@ -480,10 +388,7 @@ Output is only what was produced during this tool call's wait window."#
             Err(ExecCommandControlError::Tool(error)) => return Err(error),
         };
 
-        let action_name = match action {
-            ExecCommandControlAction::Interrupt => "interrupt",
-            ExecCommandControlAction::Kill => "kill",
-        };
+        let action_name = exec_command_control_action_name(action);
         let data = json!({
             "chunk_id": response.chunk_id,
             "wall_time_seconds": response.wall_time_seconds,

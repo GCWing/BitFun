@@ -45,6 +45,8 @@ function parseArgs(argv) {
     toolResultChars: 12_000,
     toolItems: 2,
     denseGroups: 160,
+    lastActiveAtBase: undefined,
+    lastActiveStepMs: 1_000,
     cleanup: false,
   };
 
@@ -98,6 +100,12 @@ function parseArgs(argv) {
       case '--dense-groups':
         options.denseGroups = Number(next());
         break;
+      case '--last-active-at-base':
+        options.lastActiveAtBase = Number(next());
+        break;
+      case '--last-active-step-ms':
+        options.lastActiveStepMs = Number(next());
+        break;
       case '--cleanup':
         options.cleanup = true;
         break;
@@ -113,10 +121,16 @@ function parseArgs(argv) {
   if (!options.workspace) {
     throw new Error('Missing --workspace');
   }
-  for (const key of ['sessionCount', 'longSessionIndex', 'longTurns', 'shortTurns', 'assistantChars', 'toolResultChars', 'toolItems', 'denseGroups']) {
+  for (const key of ['sessionCount', 'longSessionIndex', 'longTurns', 'shortTurns', 'assistantChars', 'toolResultChars', 'toolItems', 'denseGroups', 'lastActiveStepMs']) {
     if (!Number.isFinite(options[key]) || options[key] < 0) {
       throw new Error(`Invalid numeric value for ${key}`);
     }
+  }
+  if (options.lastActiveAtBase !== undefined && !Number.isFinite(options.lastActiveAtBase)) {
+    throw new Error('Invalid numeric value for lastActiveAtBase');
+  }
+  if (options.lastActiveStepMs <= 0) {
+    throw new Error('--last-active-step-ms must be greater than 0');
   }
   if (options.sessionCount < 1) {
     throw new Error('--session-count must be at least 1');
@@ -148,6 +162,8 @@ Options:
   --tool-result-chars <n>   Raw tool result chars per tool item. Default: 12000
   --tool-items <n>          Tool item count per turn. Default: 2
   --dense-groups <n>        Groups in the latest dense-visible turn. Default: 160
+  --last-active-at-base <n> Epoch-ms lastActiveAt for session index 0. Default: Date.now()
+  --last-active-step-ms <n> lastActiveAt decrement per session index. Default: 1000
   --session-prefix <text>   Session id prefix. Default: perf-long-session
   --scenario <name>         Fixture shape: mixed-visible, dense-visible, explore-only, or user-only-latest. Default: mixed-visible
   --bitfun-home <path>      BitFun home root. Default: BITFUN_E2E_HOME or isolated tests/e2e/.bitfun/runtime/home; BITFUN_HOME is used only with BITFUN_E2E_USE_REAL_PROFILE=1
@@ -704,13 +720,14 @@ async function generate(options) {
   const seededWorkspaceState = await seedWorkspaceState(options, workspacePath);
 
   const now = Date.now();
+  const lastActiveAtBase = options.lastActiveAtBase ?? now;
   const generatedMetadata = [];
   for (let sessionIndex = 0; sessionIndex < options.sessionCount; sessionIndex += 1) {
     const sessionId = `${options.sessionPrefix}-${String(sessionIndex).padStart(3, '0')}`;
     const isLongSession = sessionIndex === options.longSessionIndex;
     const turnCount = isLongSession ? options.longTurns : options.shortTurns;
     const createdAt = now - sessionIndex * 60_000;
-    const lastActiveAt = now - sessionIndex * 1_000;
+    const lastActiveAt = lastActiveAtBase - sessionIndex * options.lastActiveStepMs;
     const sessionDir = path.join(sessionsRoot, sessionId);
     const turnsDir = path.join(sessionDir, 'turns');
     const metadata = makeMetadata({

@@ -17,6 +17,7 @@ export interface EditorAreaProps {
   onTabCloseWithDirtyCheck?: (tabId: string, groupId: EditorGroupId) => Promise<boolean>;
   onTabCloseAllWithDirtyCheck?: (groupId: EditorGroupId) => Promise<boolean>;
   disablePopOut?: boolean;
+  terminalResizeSuspended?: boolean;
 }
 
 export const EditorArea: React.FC<EditorAreaProps> = ({
@@ -27,6 +28,7 @@ export const EditorArea: React.FC<EditorAreaProps> = ({
   onTabCloseWithDirtyCheck,
   onTabCloseAllWithDirtyCheck,
   disablePopOut = false,
+  terminalResizeSuspended = false,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const topRowRef = useRef<HTMLDivElement>(null);
@@ -148,6 +150,7 @@ export const EditorArea: React.FC<EditorAreaProps> = ({
       onCloseAllTabs={handleCloseAllTabs(groupId)}
       onInteraction={onInteraction}
       disablePopOut={disablePopOut}
+      terminalResizeSuspended={terminalResizeSuspended}
     />
   );
 

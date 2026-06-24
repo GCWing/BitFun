@@ -28,7 +28,7 @@
     align-items: center;
     gap: 8px;
     padding: 6px 0;
-    border-bottom: 1px solid #1a1a1a;
+    border-bottom: 1px solid var(--tool-card-border-subtle);
 
     &:last-child {
       border-bottom: none;
@@ -38,13 +38,13 @@
   &__label {
     font-size: 12px;
     font-weight: 600;
-    color: #a0a0a0;
+    color: var(--tool-card-text-muted);
     min-width: 80px;
   }
 
   &__value {
     font-size: 13px;
-    color: #e0e0e0;
+    color: var(--tool-card-text-primary);
     flex: 1;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -56,7 +56,7 @@
     margin-top: 12px;
     padding: 12px;
     background: var(--color-bg-primary);
-    border: 1px solid #1a1a1a;
+    border: 1px solid var(--tool-card-border-subtle);
     border-radius: 4px;
   }
 
@@ -66,7 +66,7 @@
     gap: 6px;
     font-size: 12px;
     font-weight: 600;
-    color: #a0a0a0;
+    color: var(--tool-card-text-muted);
     margin-bottom: 8px;
 
     svg {
@@ -76,7 +76,7 @@
 
   &__preview-content {
     font-size: 13px;
-    color: #e0e0e0;
+    color: var(--tool-card-text-primary);
   }
 
 

@@ -136,7 +136,7 @@ html, body {
   border: 1px solid var(--border-subtle);
   border-radius: $size-radius-base;
   background: color-mix(in srgb, var(--color-bg-elevated) 92%, transparent);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28);
+  box-shadow: 0 10px 30px rgba(var(--color-static-black-rgb), 0.28);
   color: var(--color-text-primary);
   font-size: var(--font-size-sm);
   line-height: 1.35;

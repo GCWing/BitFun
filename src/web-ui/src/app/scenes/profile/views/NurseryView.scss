@@ -44,7 +44,7 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
     transition: opacity 0.30s $easing-standard;
     user-select: none;
     -webkit-user-drag: none;
-    filter: drop-shadow(2px 6px 14px rgba(0, 0, 0, 0.24));
+    filter: drop-shadow(2px 6px 14px rgba(var(--color-static-black-rgb), 0.24));
 
     &--default {
       opacity: 1;
@@ -79,9 +79,9 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
   border: none;
   background: linear-gradient(
     135deg,
-    rgba(16, 185, 129, 0.10) 0%,
-    rgba(59, 130, 246, 0.07) 55%,
-    rgba(139, 92, 246, 0.10) 100%
+    color-mix(in srgb, var(--color-success) 10%, transparent) 0%,
+    color-mix(in srgb, var(--color-accent-600) 7%, transparent) 55%,
+    var(--card-bg-purple) 100%
   );
   position: relative;
   text-align: left;
@@ -95,7 +95,7 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
     content: '';
     position: absolute;
     inset: 0;
-    background: linear-gradient(135deg, rgba(52, 211, 153, 0.08) 0%, var(--color-accent-100) 100%);
+    background: linear-gradient(135deg, var(--glass-green-base) 0%, var(--color-accent-100) 100%);
     opacity: 0;
     transition: opacity 0.32s ease;
     pointer-events: none;
@@ -178,8 +178,8 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
     gap: 4px;
     padding: 2px 7px;
     border-radius: $size-radius-full;
-    border: 1px solid rgba(52, 211, 153, 0.18);
-    background: rgba(52, 211, 153, 0.06);
+    border: 1px solid color-mix(in srgb, var(--color-success) 18%, transparent);
+    background: color-mix(in srgb, var(--color-success) 6%, transparent);
     font-size: var(--font-size-2xs);
     font-weight: $font-weight-medium;
     color: var(--color-text-muted);
@@ -190,8 +190,8 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
       background $motion-fast $easing-standard;
 
     &--accent {
-      border-color: rgba(96, 165, 250, 0.22);
-      background: rgba(96, 165, 250, 0.07);
+      border-color: color-mix(in srgb, var(--color-accent-500) 22%, transparent);
+      background: color-mix(in srgb, var(--color-accent-500) 7%, transparent);
     }
 
     &--muted {
@@ -200,8 +200,8 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
     }
 
     &--token {
-      border-color: rgba(251, 191, 36, 0.20);
-      background: rgba(251, 191, 36, 0.06);
+      border-color: color-mix(in srgb, var(--color-warning) 20%, transparent);
+      background: color-mix(in srgb, var(--color-warning) 6%, transparent);
     }
   }
 
@@ -211,18 +211,18 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
     background: var(--color-success-bg);
 
     &--accent {
-      border-color: rgba(96, 165, 250, 0.36);
-      background: rgba(96, 165, 250, 0.12);
+      border-color: color-mix(in srgb, var(--color-accent-500) 36%, transparent);
+      background: color-mix(in srgb, var(--color-accent-500) 12%, transparent);
     }
 
     &--muted {
-      border-color: rgba(255, 255, 255, 0.14);
-      background: rgba(255, 255, 255, 0.07);
+      border-color: rgba(var(--color-static-white-rgb), 0.14);
+      background: var(--element-bg-soft);
     }
 
     &--token {
-      border-color: rgba(251, 191, 36, 0.36);
-      background: rgba(251, 191, 36, 0.10);
+      border-color: color-mix(in srgb, var(--color-warning) 36%, transparent);
+      background: color-mix(in srgb, var(--color-warning) 10%, transparent);
     }
   }
 
@@ -244,14 +244,14 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
     transition: transform 0.55s $easing-standard, color 0.4s ease;
 
     &--1 {
-      color: rgba(52, 211, 153, 0.13);
+      color: color-mix(in srgb, var(--color-success) 13%, transparent);
       top: -14px;
       right: -14px;
       transform: rotate(18deg);
     }
 
     &--2 {
-      color: rgba(96, 165, 250, 0.09);
+      color: color-mix(in srgb, var(--color-accent-500) 9%, transparent);
       bottom: 4px;
       right: 22px;
       transform: rotate(-12deg);
@@ -260,18 +260,25 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
 
   &:hover &__deco-egg--1 {
     transform: rotate(26deg) scale(1.1);
-    color: rgba(52, 211, 153, 0.24);
+    color: color-mix(in srgb, var(--color-success) 24%, transparent);
   }
 
   &:hover &__deco-egg--2 {
     transform: rotate(-22deg) translateY(-5px) scale(1.1);
-    color: rgba(96, 165, 250, 0.18);
+    color: color-mix(in srgb, var(--color-accent-500) 18%, transparent);
   }
 }
 
 // ── Assistant card (mirrors AgentCard style) ───────────────────────────────
 
 .assistant-card {
+  --assistant-card-default-gradient: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--color-accent-500) 20%, transparent) 0%,
+    var(--card-bg-purple-hover) 100%
+  );
+  --assistant-card-gradient: var(--assistant-card-default-gradient);
+
   width: 360px;
   height: 200px;
   border-radius: 15px;
@@ -285,7 +292,7 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
   text-align: left;
   font-family: $font-family-sans;
   animation: nursery-card-in 0.22s $easing-decelerate both;
-  animation-delay: calc(var(--card-index, 0) * 40ms);
+  animation-delay: calc(var(--surface-stagger-index, 0) * 40ms);
   transition:
     transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
     box-shadow 0.35s ease;
@@ -298,7 +305,7 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
     left: 0;
     right: 0;
     bottom: 40px;
-    background: var(--assistant-card-gradient, linear-gradient(135deg, rgba(96,165,250,0.2) 0%, rgba(139,92,246,0.14) 100%));
+    background: var(--assistant-card-gradient);
     opacity: 0;
     transition: opacity 0.35s ease;
     pointer-events: none;
@@ -432,7 +439,7 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
       content: '';
       position: absolute;
       inset: 0;
-      background: var(--assistant-card-gradient, linear-gradient(135deg, rgba(96,165,250,0.2) 0%, rgba(139,92,246,0.14) 100%));
+      background: var(--assistant-card-gradient);
       opacity: 0.4;
       transition: opacity 0.35s ease;
       pointer-events: none;
@@ -498,7 +505,7 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
       color 0.15s ease;
 
     &:hover {
-      background: rgba(255, 255, 255, 0.14);
+      background: rgba(var(--color-static-white-rgb), 0.14);
       color: var(--color-text-primary);
     }
 
@@ -530,7 +537,7 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
       color 0.15s ease;
 
     &:hover {
-      background: rgba(239, 68, 68, 0.18);
+      background: color-mix(in srgb, var(--color-error) 18%, transparent);
       color: var(--color-error);
     }
 
@@ -552,7 +559,7 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
     font-size: var(--font-size-2xs);
     font-weight: $font-weight-semibold;
     color: var(--color-accent-400);
-    background: rgba(96, 165, 250, 0.12);
+    background: color-mix(in srgb, var(--color-accent-500) 12%, transparent);
     white-space: nowrap;
     flex-shrink: 0;
   }
@@ -572,12 +579,12 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
 
 .nursery-delete-dialog {
   pointer-events: auto;
-  background: var(--color-bg-elevated, var(--color-bg-secondary));
+  background: var(--color-bg-elevated);
   border: 1px solid var(--border-subtle);
   border-radius: 14px;
   padding: 24px;
   width: min(400px, calc(100vw - 40px));
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 20px 60px rgba(var(--color-static-black-rgb), 0.35);
 
   &__title {
     margin: 0 0 10px;
@@ -624,11 +631,11 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
     }
 
     &--confirm {
-      background: rgba(239, 68, 68, 0.15);
+      background: var(--glass-red-hover);
       color: var(--color-error);
 
       &:hover:not(:disabled) {
-        background: rgba(239, 68, 68, 0.25);
+        background: color-mix(in srgb, var(--color-error) 25%, transparent);
       }
     }
   }
@@ -641,7 +648,7 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
   }
 }
 
-// ── Sub-page chrome (shared by TemplateConfigPage / AssistantConfigPage) ───
+// ── Sub-page chrome (shared by AssistantDefaultsPage / AssistantConfigPage) ───
 
 .nursery-page {
   display: flex;
@@ -782,7 +789,7 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
   }
 }
 
-// TemplateConfigPage: split view fills area under bar; main column scrolls, detail column matches height
+// AssistantDefaultsPage: split view fills area under bar; main column scrolls, detail column matches height
 .nursery-page__content:has(.tc-template-shell--has-detail) {
   overflow: hidden;
   min-height: 0;
@@ -1277,7 +1284,7 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// TemplateConfigPage — Hero panel + Tools + Skills
+// AssistantDefaultsPage — Hero panel + Tools + Skills
 // ════════════════════════════════════════════════════════════════════════════
 
 // ── Centered shell + optional detail column ────────────────────────────────
@@ -1463,77 +1470,20 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
   padding: 0;
 }
 
-// Model + context chapters side by side (same row as one `gallery-zones` child)
-.tc-template-model-context-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 0;
-  column-gap: 0;
-  align-items: stretch;
-
-  > .gallery-zone {
-    min-width: 0;
-  }
-
-  > .gallery-zone:first-child {
-    border-right: 1px solid var(--border-subtle);
-    padding-right: $size-gap-5;
-  }
-
-  > .gallery-zone:last-child {
-    padding-left: $size-gap-5;
-  }
-}
-
-@media (max-width: 800px) {
-  .tc-template-model-context-row {
-    grid-template-columns: 1fr;
-
-    > .gallery-zone:first-child {
-      border-right: none;
-      padding-right: 0;
-      border-bottom: 1px solid var(--border-subtle);
-      padding-bottom: $size-gap-5;
-      margin-bottom: $size-gap-5;
-    }
-
-    > .gallery-zone:last-child {
-      padding-left: 0;
-    }
-  }
-}
-
-.tc-template-model-panel,
-.tc-template-context-panel {
+.tc-template-model-panel {
   min-width: 0;
 }
 
-// Narrow column: legend label may wrap
-.tc-ctx__legend--template-split {
-  grid-template-columns: 8px minmax(0, 1fr) auto auto;
-
-  .tc-ctx__legend-name {
-    white-space: normal;
-    overflow-wrap: break-word;
+// Template selector stack
+.tc-template-model-zone {
+  .gallery-zone__header {
+    align-items: flex-start;
   }
-}
 
-// Two rows: primary + fast (was single horizontal row in `.tc-hero__models`)
-.tc-template-model-panel .tc-hero__models {
-  flex-direction: column;
-  align-items: stretch;
-  gap: $size-gap-3;
-}
-
-.tc-template-model-panel .tc-model-slot {
-  flex: none;
-  width: 100%;
-}
-
-.tc-template-context-panel {
-  display: flex;
-  flex-direction: column;
-  gap: $size-gap-2;
+  .gallery-zone__tools {
+    flex: 0 0 min(360px, 100%);
+    width: min(360px, 100%);
+  }
 }
 
 .tc-template-detail {
@@ -1934,7 +1884,7 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
 
     &--mcp {
       color: var(--color-warning);
-      background: rgba(251, 146, 60, 0.1);
+      background: color-mix(in srgb, var(--color-warning) 10%, transparent);
       border-color: transparent;
     }
   }
@@ -2159,8 +2109,8 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
     border-radius: 14px;
     background:
       linear-gradient(135deg,
-        rgba(16, 185, 129, 0.09) 0%,
-        rgba(59, 130, 246, 0.06) 55%,
+        color-mix(in srgb, var(--color-success) 9%, transparent) 0%,
+        color-mix(in srgb, var(--color-accent-600) 6%, transparent) 55%,
         var(--color-purple-100) 100%
       ),
       var(--element-bg-subtle);
@@ -2254,26 +2204,26 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
     gap: 4px;
     padding: 2px 7px;
     border-radius: $size-radius-full;
-    border: 1px solid rgba(52, 211, 153, 0.18);
-    background: rgba(52, 211, 153, 0.06);
+    border: 1px solid color-mix(in srgb, var(--color-success) 18%, transparent);
+    background: color-mix(in srgb, var(--color-success) 6%, transparent);
     font-size: var(--font-size-2xs);
     font-weight: $font-weight-medium;
     color: var(--color-text-muted);
     letter-spacing: 0.1px;
 
     &--fast {
-      border-color: rgba(96, 165, 250, 0.22);
-      background: rgba(96, 165, 250, 0.07);
+      border-color: color-mix(in srgb, var(--color-accent-500) 22%, transparent);
+      background: color-mix(in srgb, var(--color-accent-500) 7%, transparent);
     }
 
     &--tools {
-      border-color: rgba(251, 191, 36, 0.22);
-      background: rgba(251, 191, 36, 0.06);
+      border-color: color-mix(in srgb, var(--color-warning) 22%, transparent);
+      background: color-mix(in srgb, var(--color-warning) 6%, transparent);
     }
 
     &--skills {
-      border-color: rgba(139, 92, 246, 0.22);
-      background: rgba(139, 92, 246, 0.07);
+      border-color: color-mix(in srgb, var(--color-purple-500) 22%, transparent);
+      background: color-mix(in srgb, var(--color-purple-500) 7%, transparent);
     }
   }
 }
@@ -2287,6 +2237,11 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
   align-items: center;
   gap: $size-gap-2;
 
+  &--header {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
   &__label {
     flex-shrink: 0;
     font-size: var(--font-size-sm);
@@ -2297,6 +2252,54 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
   &__select {
     flex: 1;
     min-width: 0;
+  }
+
+  &__select--model-selector {
+    display: flex;
+    align-items: center;
+  }
+
+  &__selector {
+    width: 100%;
+
+    .bitfun-model-selector__trigger {
+      width: 100%;
+      justify-content: space-between;
+      min-height: 32px;
+      padding: 0 10px;
+      border: 1px solid var(--border-subtle);
+      border-radius: $size-radius-base;
+      background: var(--element-bg-medium);
+      color: var(--color-text-primary);
+      opacity: 1;
+      font-size: var(--font-size-sm);
+    }
+
+    .bitfun-model-selector__name {
+      max-width: none;
+      flex: 1;
+      text-align: left;
+    }
+  }
+}
+
+@media (max-width: 800px) {
+  .tc-template-model-zone {
+    .gallery-zone__header {
+      align-items: stretch;
+      flex-direction: column;
+    }
+
+    .gallery-zone__tools {
+      width: 100%;
+      flex-basis: auto;
+      margin-left: 0;
+      justify-content: stretch;
+    }
+  }
+
+  .tc-model-slot--header {
+    justify-content: stretch;
   }
 }
 
@@ -2494,23 +2497,23 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
     &--connected,
     &--healthy {
       color: var(--color-success);
-      background: rgba(52, 211, 153, 0.08);
-      border-color: rgba(52, 211, 153, 0.22);
+      background: var(--glass-green-base);
+      border-color: color-mix(in srgb, var(--color-success) 22%, transparent);
     }
 
     &--starting,
     &--reconnecting {
       color: var(--color-warning);
-      background: rgba(245, 158, 11, 0.08);
-      border-color: rgba(245, 158, 11, 0.22);
+      background: color-mix(in srgb, var(--color-warning) 8%, transparent);
+      border-color: color-mix(in srgb, var(--color-warning) 22%, transparent);
     }
 
     &--failed,
     &--stopped,
     &--stopping {
       color: var(--color-error);
-      background: rgba(248, 113, 113, 0.08);
-      border-color: rgba(248, 113, 113, 0.22);
+      background: color-mix(in srgb, var(--color-error) 8%, transparent);
+      border-color: color-mix(in srgb, var(--color-error) 22%, transparent);
     }
 
     &--unknown,
@@ -2604,7 +2607,7 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
 
     &--mcp {
       color: var(--color-warning);
-      background: rgba(251, 146, 60, 0.1);
+      background: color-mix(in srgb, var(--color-warning) 10%, transparent);
     }
   }
 
@@ -2798,8 +2801,6 @@ $acp-content-top: clamp(40px, 4.5vh, 52px);
     flex-direction: column;
     overflow: hidden;
     padding: 0;
-    // Shared with AssistantQuickInput (.aqi) and .acp-sessions-area horizontal inset
-    --acp-left-inline-pad: #{$size-gap-6};
   }
 
   &__right {
@@ -2818,8 +2819,8 @@ $acp-content-top: clamp(40px, 4.5vh, 52px);
   display: flex;
   align-items: flex-start;
   gap: $size-gap-3;
-  // Match .aqi and .acp-sessions-area horizontal inset (--acp-left-inline-pad on .acp-layout__left)
-  padding: $acp-content-top var(--acp-left-inline-pad) $size-gap-5;
+  // Match .aqi and .acp-sessions-area horizontal inset from the shared profile ACP token
+  padding: $acp-content-top var(--profile-acp-left-inline-pad) $size-gap-5;
   flex-shrink: 0;
 
   &__info {
@@ -2905,7 +2906,7 @@ $acp-content-top: clamp(40px, 4.5vh, 52px);
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: $size-gap-3 var(--acp-left-inline-pad) $size-gap-5;
+  padding: $size-gap-3 var(--profile-acp-left-inline-pad) $size-gap-5;
 
   &__title {
     margin: 0 0 $size-gap-2;
@@ -3015,9 +3016,9 @@ $acp-content-top: clamp(40px, 4.5vh, 52px);
   border-radius: $size-radius-base;
   background: linear-gradient(
     135deg,
-    rgba(16, 185, 129, 0.06) 0%,
-    rgba(59, 130, 246, 0.04) 55%,
-    rgba(139, 92, 246, 0.06) 100%
+    color-mix(in srgb, var(--color-success) 6%, transparent) 0%,
+    color-mix(in srgb, var(--color-accent-600) 4%, transparent) 55%,
+    color-mix(in srgb, var(--color-purple-500) 6%, transparent) 100%
   );
   border: 1px solid var(--border-subtle);
 
@@ -3405,6 +3406,51 @@ $acp-content-top: clamp(40px, 4.5vh, 52px);
     .m-editor-edit-panel,
     .m-editor-preview-panel {
       background: transparent;
+    }
+  }
+
+  &__hybrid {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: $size-gap-3;
+  }
+
+  &__frontmatter {
+    flex: 0 0 auto;
+    min-height: 0;
+  }
+
+  &__frontmatter-textarea {
+    width: 100%;
+    min-height: 0;
+    height: auto;
+    padding: 0;
+    overflow: hidden;
+    resize: none;
+    font-size: var(--font-size-xs);
+    line-height: $line-height-relaxed;
+  }
+
+  &__divider {
+    flex: 0 0 auto;
+    height: 1px;
+    background: var(--border-subtle);
+  }
+
+  &__body-editor {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    
+    .m-editor,
+    .m-editor > div,
+    .m-editor-textarea {
+      flex: 1;
+      min-height: 0;
     }
   }
 }

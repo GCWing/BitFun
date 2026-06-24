@@ -1,8 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  archiveChatSession,
+  deleteChatSession,
   ensureBackendSession,
   preloadHistoricalSessionForOpen,
   retryCreateBackendSession,
+  resolveAgentTypeForSessionCreation,
   SESSION_ACTIVITY_TOUCH_DELAY_MS,
   switchChatSession,
 } from './SessionModule';
@@ -16,19 +19,37 @@ import type { ReviewTeamRunManifest } from '@/shared/services/reviewTeamService'
 const agentApiMocks = vi.hoisted(() => ({
   ensureCoordinatorSession: vi.fn(),
   createSession: vi.fn(),
+  getAvailableModes: vi.fn(),
+}));
+
+const configApiMocks = vi.hoisted(() => ({
+  getConfig: vi.fn(),
+}));
+
+const sessionApiMocks = vi.hoisted(() => ({
+  archiveSession: vi.fn(),
 }));
 
 const persistenceMocks = vi.hoisted(() => ({
   touchSessionActivity: vi.fn(),
   cleanupSaveState: vi.fn(),
+  cleanupSessionBuffers: vi.fn(),
+}));
+
+const stateMachineMocks = vi.hoisted(() => ({
+  delete: vi.fn(),
 }));
 
 vi.mock('@/infrastructure/api/service-api/AgentAPI', () => ({
   agentAPI: agentApiMocks,
 }));
 
+vi.mock('@/infrastructure/api/service-api/ConfigAPI', () => ({
+  configAPI: configApiMocks,
+}));
+
 vi.mock('@/infrastructure/api/service-api/SessionAPI', () => ({
-  sessionAPI: {},
+  sessionAPI: sessionApiMocks,
 }));
 
 vi.mock('../../../shared/notification-system', () => ({
@@ -56,6 +77,14 @@ vi.mock('@/infrastructure/services/business/workspaceManager', () => ({
 vi.mock('./PersistenceModule', () => ({
   touchSessionActivity: persistenceMocks.touchSessionActivity,
   cleanupSaveState: persistenceMocks.cleanupSaveState,
+}));
+
+vi.mock('./TextChunkModule', () => ({
+  cleanupSessionBuffers: persistenceMocks.cleanupSessionBuffers,
+}));
+
+vi.mock('../../state-machine', () => ({
+  stateMachineManager: stateMachineMocks,
 }));
 
 function createDeferred<T>() {
@@ -93,10 +122,32 @@ function createSession(overrides: Partial<Session> = {}): Session {
   };
 }
 
-function createContext(session: Session) {
+function createContext(
+  session: Session,
+  options?: {
+    additionalSessions?: Session[];
+    activeSessionId?: string | null;
+    deleteSessionImpl?: (
+      sessionId: string,
+      options?: { nextActiveSessionId?: string | null },
+    ) => Promise<void> | void;
+    removeSessionImpl?: (
+      sessionId: string,
+      options?: { nextActiveSessionId?: string | null },
+    ) => string[] | void;
+    getCascadeSessionIdsImpl?: (sessionId: string) => string[];
+  },
+) {
+  const initialSessions = new Map<string, Session>([
+    [session.sessionId, session],
+    ...((options?.additionalSessions ?? []).map(extra => [extra.sessionId, extra] as const)),
+  ]);
   let state = {
-    sessions: new Map([[session.sessionId, session]]),
-    activeSessionId: null as string | null,
+    sessions: initialSessions,
+    activeSessionId: options?.activeSessionId ?? null as string | null,
+  };
+  const processingManager = {
+    clearSessionStatus: vi.fn(),
   };
   const flowChatStore = {
     getState: () => state,
@@ -104,6 +155,51 @@ function createContext(session: Session) {
       state = { ...state, activeSessionId: sessionId };
     }),
     loadSessionHistory: vi.fn(),
+    getCascadeSessionIds: vi.fn((sessionId: string) => (
+      options?.getCascadeSessionIdsImpl?.(sessionId) ?? [sessionId]
+    )),
+    deleteSession: vi.fn(async (
+      sessionId: string,
+      deleteOptions?: { nextActiveSessionId?: string | null },
+    ) => {
+      if (options?.deleteSessionImpl) {
+        await options.deleteSessionImpl(sessionId, deleteOptions);
+        return;
+      }
+      const nextSessions = new Map(state.sessions);
+      nextSessions.delete(sessionId);
+      state = {
+        ...state,
+        sessions: nextSessions,
+        activeSessionId: state.activeSessionId === sessionId
+          ? deleteOptions && 'nextActiveSessionId' in deleteOptions
+            ? deleteOptions.nextActiveSessionId ?? null
+            : null
+          : state.activeSessionId,
+      };
+    }),
+    removeSession: vi.fn((
+      sessionId: string,
+      removeOptions?: { nextActiveSessionId?: string | null },
+    ) => {
+      if (options?.removeSessionImpl) {
+        return options.removeSessionImpl(sessionId, removeOptions) ?? [sessionId];
+      }
+      const removedSessionIds = options?.getCascadeSessionIdsImpl?.(sessionId) ?? [sessionId];
+      const removedSessionIdSet = new Set(removedSessionIds);
+      const nextSessions = new Map(state.sessions);
+      removedSessionIds.forEach(id => nextSessions.delete(id));
+      state = {
+        ...state,
+        sessions: nextSessions,
+        activeSessionId: state.activeSessionId && removedSessionIdSet.has(state.activeSessionId)
+          ? removeOptions && 'nextActiveSessionId' in removeOptions
+            ? removeOptions.nextActiveSessionId ?? null
+            : null
+          : state.activeSessionId,
+      };
+      return removedSessionIds;
+    }),
     setState: vi.fn((updater: any) => {
       state = updater(state);
     }),
@@ -112,12 +208,44 @@ function createContext(session: Session) {
   return {
     context: {
       flowChatStore,
+      processingManager,
       pendingHistoryLoads: new Map<string, Promise<void>>(),
       pendingContextRestores: new Map<string, Promise<void>>(),
     } as any,
     flowChatStore,
+    processingManager,
   };
 }
+
+describe('resolveAgentTypeForSessionCreation', () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('uses the configured default mode for internal agentic session creation', async () => {
+    configApiMocks.getConfig.mockResolvedValue('PlannerPlus');
+    agentApiMocks.getAvailableModes.mockResolvedValue([
+      { id: 'agentic' },
+      { id: 'PlannerPlus' },
+    ]);
+
+    await expect(resolveAgentTypeForSessionCreation('agentic', null)).resolves.toBe('PlannerPlus');
+  });
+
+  it('does not override explicit non-agentic modes', async () => {
+    await expect(resolveAgentTypeForSessionCreation('Cowork', null)).resolves.toBe('Cowork');
+
+    expect(configApiMocks.getConfig).not.toHaveBeenCalled();
+    expect(agentApiMocks.getAvailableModes).not.toHaveBeenCalled();
+  });
+
+  it('falls back to agentic when the configured default mode is unavailable', async () => {
+    configApiMocks.getConfig.mockResolvedValue('MissingMode');
+    agentApiMocks.getAvailableModes.mockResolvedValue([{ id: 'agentic' }]);
+
+    await expect(resolveAgentTypeForSessionCreation('agentic', null)).resolves.toBe('agentic');
+  });
+});
 
 describe('SessionModule historical session coordination', () => {
   beforeEach(() => {
@@ -331,6 +459,122 @@ describe('SessionModule historical session coordination', () => {
     await load.promise;
   });
 
+  it('retries a reused preload that stale-skipped after explicit activation', async () => {
+    const stalePreload = createDeferred<void>();
+    const retryLoad = createDeferred<void>();
+    const { context, flowChatStore } = createContext(createSession());
+    context.pendingHistoryLoads.set('history-other', Promise.resolve());
+    persistenceMocks.touchSessionActivity.mockResolvedValue(undefined);
+    flowChatStore.loadSessionHistory
+      .mockReturnValueOnce(stalePreload.promise)
+      .mockImplementationOnce(async () => {
+        await retryLoad.promise;
+        flowChatStore.setState((prev: any) => {
+          const session = prev.sessions.get('history-1');
+          return {
+            ...prev,
+            sessions: new Map(prev.sessions).set('history-1', {
+              ...session,
+              isHistorical: false,
+              historyState: 'ready',
+              dialogTurns: [{
+                id: 'turn-1',
+                userMessage: { id: 'user-1', content: 'Restored prompt', timestamp: 1 },
+                modelRounds: [],
+                status: 'completed',
+              }],
+            }),
+          };
+        });
+      });
+
+    preloadHistoricalSessionForOpen(context, 'history-1');
+    await Promise.resolve();
+
+    expect(flowChatStore.loadSessionHistory).toHaveBeenCalledTimes(1);
+
+    dispatchHistorySessionOpenIntent('history-1', 'Saved session');
+    const switching = switchChatSession(context, 'history-1');
+    await Promise.resolve();
+
+    expect(flowChatStore.switchSession).toHaveBeenCalledWith('history-1');
+
+    stalePreload.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(flowChatStore.loadSessionHistory).toHaveBeenCalledTimes(2);
+
+    retryLoad.resolve();
+    await switching;
+
+    expect(context.flowChatStore.getState().sessions.get('history-1')).toMatchObject({
+      isHistorical: false,
+      historyState: 'ready',
+    });
+  });
+
+  it('does not retry a reused stale preload after a newer switch request supersedes it', async () => {
+    const stalePreload = createDeferred<void>();
+    const newerSwitchLoad = createDeferred<void>();
+    const { context, flowChatStore } = createContext(createSession());
+    context.pendingHistoryLoads.set('history-other', Promise.resolve());
+    flowChatStore.setState((prev: any) => ({
+      ...prev,
+      sessions: new Map(prev.sessions).set('history-2', createSession({
+        sessionId: 'history-2',
+        title: 'Newer target',
+      })),
+    }));
+    persistenceMocks.touchSessionActivity.mockResolvedValue(undefined);
+    flowChatStore.loadSessionHistory
+      .mockReturnValueOnce(stalePreload.promise)
+      .mockImplementationOnce(async () => {
+        await newerSwitchLoad.promise;
+        flowChatStore.setState((prev: any) => {
+          const session = prev.sessions.get('history-2');
+          return {
+            ...prev,
+            sessions: new Map(prev.sessions).set('history-2', {
+              ...session,
+              isHistorical: false,
+              historyState: 'ready',
+              dialogTurns: [{
+                id: 'turn-2',
+                userMessage: { id: 'user-2', content: 'Newer prompt', timestamp: 1 },
+                modelRounds: [],
+                status: 'completed',
+              }],
+            }),
+          };
+        });
+      });
+
+    preloadHistoricalSessionForOpen(context, 'history-1');
+    await Promise.resolve();
+
+    dispatchHistorySessionOpenIntent('history-1', 'Saved session');
+    const firstSwitch = switchChatSession(context, 'history-1');
+    await Promise.resolve();
+    expect(flowChatStore.switchSession).toHaveBeenCalledWith('history-1');
+
+    const secondSwitch = switchChatSession(context, 'history-2');
+    await Promise.resolve();
+    expect(flowChatStore.loadSessionHistory).toHaveBeenCalledTimes(2);
+
+    stalePreload.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(flowChatStore.loadSessionHistory).toHaveBeenCalledTimes(2);
+
+    newerSwitchLoad.resolve();
+    await firstSwitch;
+    await secondSwitch;
+
+    expect(flowChatStore.switchSession).toHaveBeenLastCalledWith('history-2');
+  });
+
   it('does not preload standalone historical opens before the transition shield paints', () => {
     const { context, flowChatStore } = createContext(createSession());
 
@@ -365,6 +609,150 @@ describe('SessionModule historical session coordination', () => {
     preloadHistoricalSessionForOpen(context, 'history-1');
 
     expect(flowChatStore.loadSessionHistory).not.toHaveBeenCalled();
+  });
+
+  it('returns to the welcome state after deleting an empty new active session', async () => {
+    const activeSession = createSession({
+      sessionId: 'active-1',
+      title: 'Current session',
+      isHistorical: false,
+      historyState: 'new',
+    });
+    const fallbackSession = createSession({
+      sessionId: 'history-2',
+      title: 'Assistant session',
+    });
+    const { context, flowChatStore, processingManager } = createContext(activeSession, {
+      additionalSessions: [fallbackSession],
+      activeSessionId: 'active-1',
+      deleteSessionImpl: async (
+        deletedSessionId: string,
+        deleteOptions?: { nextActiveSessionId?: string | null },
+      ) => {
+        expect(deletedSessionId).toBe('active-1');
+        expect(deleteOptions).toEqual({ nextActiveSessionId: null });
+        flowChatStore.setState((prev: any) => {
+          const nextSessions = new Map(prev.sessions);
+          nextSessions.delete(deletedSessionId);
+          return {
+            ...prev,
+            sessions: nextSessions,
+            activeSessionId: deleteOptions && 'nextActiveSessionId' in deleteOptions
+              ? deleteOptions.nextActiveSessionId ?? null
+              : 'history-2',
+          };
+        });
+      },
+    });
+    persistenceMocks.touchSessionActivity.mockResolvedValueOnce(undefined);
+
+    const deleting = deleteChatSession(context, 'active-1');
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(flowChatStore.deleteSession).toHaveBeenCalledWith(
+      'active-1',
+      { nextActiveSessionId: null },
+    );
+    await deleting;
+
+    expect(flowChatStore.loadSessionHistory).not.toHaveBeenCalled();
+    expect(flowChatStore.getState().activeSessionId).toBeNull();
+    expect(processingManager.clearSessionStatus).toHaveBeenCalledWith('active-1');
+    expect(persistenceMocks.cleanupSaveState).toHaveBeenCalledWith(context, 'active-1');
+  });
+
+  it('returns to the welcome state after deleting a non-empty active session', async () => {
+    const activeSession = createSession({
+      sessionId: 'active-1',
+      title: 'Current session',
+      isHistorical: false,
+      historyState: 'ready',
+      dialogTurns: [{
+        id: 'turn-1',
+        userMessage: { id: 'user-1', content: 'hello', timestamp: 1 },
+        modelRounds: [],
+        status: 'completed',
+      } as any],
+    });
+    const fallbackSession = createSession({
+      sessionId: 'history-2',
+      title: 'Assistant session',
+    });
+    const { context, flowChatStore, processingManager } = createContext(activeSession, {
+      additionalSessions: [fallbackSession],
+      activeSessionId: 'active-1',
+      deleteSessionImpl: async (
+        deletedSessionId: string,
+        deleteOptions?: { nextActiveSessionId?: string | null },
+      ) => {
+        expect(deletedSessionId).toBe('active-1');
+        expect(deleteOptions).toEqual({ nextActiveSessionId: null });
+        flowChatStore.setState((prev: any) => {
+          const nextSessions = new Map(prev.sessions);
+          nextSessions.delete(deletedSessionId);
+          return {
+            ...prev,
+            sessions: nextSessions,
+            activeSessionId: deleteOptions && 'nextActiveSessionId' in deleteOptions
+              ? deleteOptions.nextActiveSessionId ?? null
+              : 'history-2',
+          };
+        });
+      },
+    });
+    persistenceMocks.touchSessionActivity.mockResolvedValueOnce(undefined);
+
+    const deleting = deleteChatSession(context, 'active-1');
+    await Promise.resolve();
+
+    expect(flowChatStore.deleteSession).toHaveBeenCalledWith(
+      'active-1',
+      { nextActiveSessionId: null },
+    );
+    await deleting;
+
+    expect(flowChatStore.loadSessionHistory).not.toHaveBeenCalled();
+    expect(flowChatStore.switchSession).not.toHaveBeenCalled();
+    expect(flowChatStore.getState().activeSessionId).toBeNull();
+    expect(processingManager.clearSessionStatus).toHaveBeenCalledWith('active-1');
+    expect(persistenceMocks.cleanupSaveState).toHaveBeenCalledWith(context, 'active-1');
+  });
+
+  it('returns to the welcome state after archiving an active session', async () => {
+    const activeSession = createSession({
+      sessionId: 'active-1',
+      title: 'Current session',
+      isHistorical: false,
+      historyState: 'ready',
+    });
+    const fallbackSession = createSession({
+      sessionId: 'history-2',
+      title: 'Assistant session',
+    });
+    const { context, flowChatStore, processingManager } = createContext(activeSession, {
+      additionalSessions: [fallbackSession],
+      activeSessionId: 'active-1',
+    });
+    sessionApiMocks.archiveSession.mockResolvedValueOnce(undefined);
+
+    await archiveChatSession(context, 'active-1');
+
+    expect(sessionApiMocks.archiveSession).toHaveBeenCalledWith(
+      'active-1',
+      'D:/workspace/BitFun',
+      undefined,
+      undefined,
+    );
+    expect(flowChatStore.removeSession).toHaveBeenCalledWith(
+      'active-1',
+      { nextActiveSessionId: null },
+    );
+    expect(flowChatStore.getState().activeSessionId).toBeNull();
+    expect(stateMachineMocks.delete).toHaveBeenCalledWith('active-1');
+    expect(processingManager.clearSessionStatus).toHaveBeenCalledWith('active-1');
+    expect(persistenceMocks.cleanupSaveState).toHaveBeenCalledWith(context, 'active-1');
+    expect(persistenceMocks.cleanupSessionBuffers).toHaveBeenCalledWith(context, 'active-1');
   });
 
   it('reuses pending historical hydration before ensuring the backend session', async () => {

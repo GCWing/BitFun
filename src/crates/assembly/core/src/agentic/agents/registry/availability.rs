@@ -128,7 +128,7 @@ pub fn set_override_state(
 mod tests {
     use super::*;
     use crate::agentic::agents::definitions::custom::{CustomSubagent, CustomSubagentKind};
-    use crate::agentic::agents::registry::types::AgentCategory;
+    use crate::agentic::agents::registry::types::{AgentCategory, AgentSource};
     use crate::agentic::agents::registry::visibility::SubagentVisibilityPolicy;
     use crate::service::config::types::AgentSubagentOverrideState;
     use std::sync::Arc;
@@ -158,6 +158,11 @@ mod tests {
 
         AgentEntry {
             category: AgentCategory::SubAgent,
+            source: match source {
+                SubAgentSource::Builtin => AgentSource::Builtin,
+                SubAgentSource::Project => AgentSource::Project,
+                SubAgentSource::User => AgentSource::User,
+            },
             subagent_source: Some(source),
             agent,
             visibility_policy: SubagentVisibilityPolicy::public(),

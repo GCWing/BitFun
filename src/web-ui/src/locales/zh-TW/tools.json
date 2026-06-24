@@ -202,6 +202,13 @@
     "scrollToBottom": "滾動到底部",
     "copySelection": "複製選中內容",
     "paste": "粘貼",
+    "pasteDialog": {
+      "title": "貼上多行內容",
+      "message": "剪貼簿包含 {{lineCount}} 行內容。將多行內容貼到終端可能會執行多條命令。",
+      "confirm": "貼上",
+      "pasteAsOneLine": "貼上為一行",
+      "cancel": "取消"
+    },
     "selectAll": "全選",
     "find": "查找",
     "shell": "Shell",

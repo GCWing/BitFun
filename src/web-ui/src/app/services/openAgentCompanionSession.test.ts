@@ -5,13 +5,17 @@ import type { Session } from '@/flow_chat/types/flow-chat';
 const mocks = vi.hoisted(() => ({
   openBtwSessionInAuxPane: vi.fn(),
   openMainSession: vi.fn(() => Promise.resolve()),
-  switchSession: vi.fn(),
+  activateMainSession: vi.fn(() => Promise.resolve(true)),
   sessions: new Map<string, Session>(),
 }));
 
-vi.mock('@/flow_chat/services/openBtwSession', () => ({
+vi.mock('@/flow_chat/services/btwSessionPane', () => ({
   openBtwSessionInAuxPane: (...args: unknown[]) => mocks.openBtwSessionInAuxPane(...args),
+}));
+
+vi.mock('@/flow_chat/services/sessionActivation', () => ({
   openMainSession: (...args: unknown[]) => mocks.openMainSession(...args),
+  activateMainSession: (...args: unknown[]) => mocks.activateMainSession(...args),
 }));
 
 vi.mock('@/flow_chat/store/FlowChatStore', () => ({
@@ -20,7 +24,6 @@ vi.mock('@/flow_chat/store/FlowChatStore', () => ({
       getState: () => ({
         sessions: mocks.sessions,
       }),
-      switchSession: (...args: unknown[]) => mocks.switchSession(...args),
     }),
   },
 }));
@@ -43,7 +46,7 @@ describe('openAgentCompanionSession', () => {
   beforeEach(() => {
     mocks.openBtwSessionInAuxPane.mockClear();
     mocks.openMainSession.mockClear();
-    mocks.switchSession.mockClear();
+    mocks.activateMainSession.mockClear();
     mocks.sessions.clear();
   });
 
@@ -64,7 +67,7 @@ describe('openAgentCompanionSession', () => {
       parentSessionId: 'parent-session',
       workspacePath: 'D:/workspace/project',
     });
-    expect(mocks.switchSession).not.toHaveBeenCalled();
+    expect(mocks.activateMainSession).not.toHaveBeenCalled();
   });
 
   it('keeps regular sessions on the main chat route', async () => {
@@ -73,7 +76,7 @@ describe('openAgentCompanionSession', () => {
     const opened = await openAgentCompanionSession('session-1');
 
     expect(opened).toBe(true);
-    expect(mocks.switchSession).toHaveBeenCalledWith('session-1');
+    expect(mocks.activateMainSession).toHaveBeenCalledWith('session-1');
     expect(mocks.openMainSession).not.toHaveBeenCalled();
     expect(mocks.openBtwSessionInAuxPane).not.toHaveBeenCalled();
   });

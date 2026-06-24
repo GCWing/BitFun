@@ -137,4 +137,26 @@ mod tests {
             compatibility_registry.get_collapsed_tool_names()
         );
     }
+
+    #[test]
+    fn product_tool_runtime_keeps_no_direct_core_profiles_empty() {
+        for profile in [
+            DeliveryProfile::Server,
+            DeliveryProfile::Remote,
+            DeliveryProfile::Web,
+            DeliveryProfile::MobileWeb,
+        ] {
+            let runtime = ProductToolRuntime::for_profile(profile);
+            let registry = runtime.create_registry();
+
+            assert!(
+                registry.get_tool_names().is_empty(),
+                "{profile} must not expose product-full tools"
+            );
+            assert!(
+                registry.get_collapsed_tool_names().is_empty(),
+                "{profile} must not expose collapsed product-full tools"
+            );
+        }
+    }
 }

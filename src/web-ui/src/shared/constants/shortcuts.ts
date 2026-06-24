@@ -223,6 +223,11 @@ export const CHAT_SHORTCUTS: ShortcutDef[] = [
     config: mod('N', { scope: 'chat' }),
     descriptionKey: 'keyboard.shortcuts.chat.newSession',
   },
+  {
+    id: 'chat.insertNewline',
+    config: { key: 'Enter', ctrl: true, scope: 'chat', allowInInput: true },
+    descriptionKey: 'keyboard.shortcuts.chat.insertNewline',
+  },
 ];
 
 // ─── File tree shortcuts (scope: 'filetree') ──────────────────────────────

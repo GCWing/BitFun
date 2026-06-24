@@ -1,0 +1,56 @@
+<svg width="960" height="300" viewBox="0 0 960 300" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Code Agent benchmark completion rates</title>
+  <desc id="desc">Completion rates for BitFun, Open Code, and Claude Code on SWE-Bench-Pro and SWE-Bench-Verified. BitFun is first in each group.</desc>
+  <rect width="960" height="300" rx="18" fill="#ffffff"/>
+  <rect x="1" y="1" width="958" height="298" rx="18" fill="none" stroke="#e5edf3"/>
+  <style>
+    .axis { font: 600 11px Inter, "Segoe UI", Arial, sans-serif; fill: #7b8797; }
+    .bench { font: 800 15px Inter, "Segoe UI", Arial, sans-serif; fill: #111b2d; }
+    .agent { font: 700 12px Inter, "Segoe UI", Arial, sans-serif; fill: #435166; }
+    .value { font: 800 12px Inter, "Segoe UI", Arial, sans-serif; fill: #263244; }
+    .value-bitfun { font: 800 13px Inter, "Segoe UI", Arial, sans-serif; fill: #1463d7; }
+    .grid { stroke: #e7edf4; stroke-width: 1; }
+  </style>
+
+  <line x1="330" y1="52" x2="850" y2="52" class="grid"/>
+  <line x1="330" y1="52" x2="330" y2="250" class="grid"/>
+  <line x1="460" y1="52" x2="460" y2="250" class="grid"/>
+  <line x1="590" y1="52" x2="590" y2="250" class="grid"/>
+  <line x1="720" y1="52" x2="720" y2="250" class="grid"/>
+  <line x1="850" y1="52" x2="850" y2="250" class="grid"/>
+  <text x="330" y="36" text-anchor="middle" class="axis">0</text>
+  <text x="460" y="36" text-anchor="middle" class="axis">20</text>
+  <text x="590" y="36" text-anchor="middle" class="axis">40</text>
+  <text x="720" y="36" text-anchor="middle" class="axis">60</text>
+  <text x="850" y="36" text-anchor="middle" class="axis">80</text>
+
+  <text x="58" y="88" class="bench">SWE-Bench-Pro</text>
+  <text x="230" y="75" class="agent">BitFun</text>
+  <rect x="330" y="64" width="520" height="10" rx="5" fill="#eef5ff"/>
+  <rect x="330" y="64" width="338" height="10" rx="5" fill="#2f80ed"/>
+  <text x="682" y="74" class="value-bitfun">52%</text>
+  <text x="230" y="103" class="agent">Open Code</text>
+  <rect x="330" y="92" width="520" height="10" rx="5" fill="#f3f5f8"/>
+  <rect x="330" y="92" width="332" height="10" rx="5" fill="#8a95a6"/>
+  <text x="676" y="102" class="value">51%</text>
+  <text x="230" y="131" class="agent">Claude Code</text>
+  <rect x="330" y="120" width="520" height="10" rx="5" fill="#f3f5f8"/>
+  <rect x="330" y="120" width="325" height="10" rx="5" fill="#b6beca"/>
+  <text x="669" y="130" class="value">50%</text>
+
+  <line x1="58" y1="154" x2="902" y2="154" class="grid"/>
+
+  <text x="58" y="195" class="bench">SWE-Bench-Verified</text>
+  <text x="230" y="182" class="agent">BitFun</text>
+  <rect x="330" y="171" width="520" height="10" rx="5" fill="#eef5ff"/>
+  <rect x="330" y="171" width="481" height="10" rx="5" fill="#2f80ed"/>
+  <text x="825" y="181" class="value-bitfun">74%</text>
+  <text x="230" y="210" class="agent">Open Code</text>
+  <rect x="330" y="199" width="520" height="10" rx="5" fill="#f3f5f8"/>
+  <rect x="330" y="199" width="468" height="10" rx="5" fill="#8a95a6"/>
+  <text x="812" y="209" class="value">72%</text>
+  <text x="230" y="238" class="agent">Claude Code</text>
+  <rect x="330" y="227" width="520" height="10" rx="5" fill="#f3f5f8"/>
+  <rect x="330" y="227" width="449" height="10" rx="5" fill="#b6beca"/>
+  <text x="793" y="237" class="value">69%</text>
+</svg>

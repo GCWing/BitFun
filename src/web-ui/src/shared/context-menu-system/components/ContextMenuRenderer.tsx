@@ -20,11 +20,13 @@ import {
   MessageSquarePlus,
   Navigation,
   PanelRightOpen,
+  Pin,
   Plus,
   RefreshCw,
   Scissors,
   Search,
   Trash2,
+  X,
   type LucideIcon,
 } from 'lucide-react';
 import { ContextMenu } from './ui/ContextMenu';
@@ -53,11 +55,13 @@ const CONTEXT_MENU_ICONS = {
   MessageSquarePlus,
   Navigation,
   PanelRightOpen,
+  Pin,
   Plus,
   RefreshCw,
   Scissors,
   Search,
   Trash2,
+  X,
 } satisfies Record<string, LucideIcon>;
 
 function getIconComponent(icon: any): string | React.ReactNode | undefined {

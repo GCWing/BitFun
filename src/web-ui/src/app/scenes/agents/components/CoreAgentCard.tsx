@@ -9,6 +9,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import type { AgentWithCapabilities } from '../agentsStore';
 import { AGENT_ICON_MAP } from '../agentsIcons';
+import { getAlphaColor } from '../agentTheme';
 import { getAgentDescription } from '../utils';
 import './CoreAgentCard.scss';
 
@@ -41,28 +42,36 @@ const CoreAgentCard: React.FC<CoreAgentCardProps> = ({
   const Icon = AGENT_ICON_MAP[(agent.iconKey ?? 'bot') as keyof typeof AGENT_ICON_MAP] ?? Bot;
   const totalTools = toolCount ?? agent.toolCount ?? agent.defaultTools?.length ?? 0;
   const openDetails = () => onOpenDetails(agent);
+  const cardGradient = [
+    `linear-gradient(135deg, ${getAlphaColor(meta.accentColor, '40', 25)} 0%,`,
+    `${getAlphaColor(meta.accentColor, '15', 8)} 100%)`,
+  ].join(' ');
 
   return (
     <div
       className="core-agent-card"
       style={{
-        '--card-index': index,
+        '--surface-stagger-index': index,
         '--core-accent': meta.accentColor,
         '--core-accent-bg': meta.accentBg,
-        '--core-card-gradient': `linear-gradient(135deg, ${meta.accentColor}40 0%, ${meta.accentColor}15 100%)`,
+        '--core-card-gradient': cardGradient,
       } as React.CSSProperties}
       onClick={openDetails}
       role="button"
       tabIndex={0}
       onKeyDown={(e) => e.key === 'Enter' && openDetails()}
       aria-label={agent.name}
+      data-testid="agent-list-item"
+      data-agent-id={agent.id}
+      data-agent-name={agent.name}
+      data-agent-kind={agent.agentKind}
     >
       <div className="core-agent-card__top">
         <div className="core-agent-card__icon-wrap">
           <Icon size={28} strokeWidth={1.6} />
         </div>
         <div className="core-agent-card__top-info">
-          <span className="core-agent-card__name">{agent.name}</span>
+          <span className="core-agent-card__name" data-testid="agent-list-item-title">{agent.name}</span>
           <span className="core-agent-card__role">
             <Sparkles size={10} strokeWidth={2} />
             {meta.role}
@@ -71,7 +80,7 @@ const CoreAgentCard: React.FC<CoreAgentCardProps> = ({
       </div>
 
       <div className="core-agent-card__body">
-        <p className="core-agent-card__desc">
+        <p className="core-agent-card__desc" data-testid="agent-list-item-description">
           {getAgentDescription(t, agent)}
         </p>
       </div>

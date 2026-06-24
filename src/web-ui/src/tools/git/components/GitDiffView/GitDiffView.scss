@@ -374,7 +374,7 @@ $opacity-high: 0.8 !default;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(0, 0, 0, 0.6);
+    background: rgba(var(--color-static-black-rgb), 0.6);
     z-index: $z-modal;
     backdrop-filter: blur(4px);
     animation: bitfun-git-diff-view-fade-in 0.2s ease-out;
@@ -415,7 +415,7 @@ $opacity-high: 0.8 !default;
   &__ai-spinner {
     width: 14px;
     height: 14px;
-    border: 2px solid rgba(255, 255, 255, 0.3);
+    border: 2px solid rgba(var(--color-static-white-rgb), 0.3);
     border-top-color: currentColor;
     border-radius: 50%;
     animation: bitfun-git-diff-view-spin 0.8s linear infinite;
@@ -470,7 +470,7 @@ $opacity-high: 0.8 !default;
       outline: none;
       border-color: var(--color-accent-500);
       background: $element-bg-medium;
-      box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.1);
+      box-shadow: 0 0 0 3px var(--card-bg-accent);
     }
 
     &::placeholder {
@@ -489,8 +489,8 @@ $opacity-high: 0.8 !default;
     gap: $size-gap-2;
     padding: $size-gap-3;
     margin-top: $size-gap-2;
-    background: rgba(96, 165, 250, 0.05);
-    border: 1px solid rgba(96, 165, 250, 0.2);
+    background: color-mix(in srgb, var(--color-accent-500) 5%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-accent-500) 20%, transparent);
     border-radius: $size-radius-base;
     animation: bitfun-git-diff-view-slide-up 0.3s ease-out;
   }
@@ -513,7 +513,7 @@ $opacity-high: 0.8 !default;
     font-weight: $font-weight-medium;
     color: var(--color-accent-500);
     background: var(--color-accent-200);
-    border: 1px solid rgba(96, 165, 250, 0.3);
+    border: 1px solid color-mix(in srgb, var(--color-accent-500) 30%, transparent);
     border-radius: $size-radius-sm;
     text-transform: capitalize;
   }

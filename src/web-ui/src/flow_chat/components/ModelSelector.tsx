@@ -37,6 +37,8 @@ interface ModelSelectorProps {
   currentMode: string;
   /** Custom class name. */
   className?: string;
+  /** Preferred dropdown placement relative to the trigger. */
+  dropdownPlacement?: 'top' | 'bottom';
   /** Current session ID (used to update session mode config). */
   sessionId?: string;
   /** Current token count. */
@@ -156,6 +158,7 @@ const syncAcpContextUsageToStore = (
 export const ModelSelector: React.FC<ModelSelectorProps> = ({
   currentMode,
   className = '',
+  dropdownPlacement = 'top',
   sessionId,
   currentTokens = 0,
   maxTokens = 0,
@@ -328,13 +331,16 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     const updatePosition = () => {
       if (!dropdownRef.current) return;
       const rect = dropdownRef.current.getBoundingClientRect();
+      const placementStyle = dropdownPlacement === 'bottom'
+        ? { top: `${rect.bottom + 6}px`, bottom: 'auto' }
+        : { top: 'auto', bottom: `${window.innerHeight - rect.top + 6}px` };
       setDropdownStyle({
         position: 'fixed',
         visibility: 'visible',
-        bottom: `${window.innerHeight - rect.top + 6}px`,
         left: `${rect.left}px`,
         minWidth: '220px',
         maxWidth: '280px',
+        ...placementStyle,
       });
     };
 
@@ -347,7 +353,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       window.removeEventListener('scroll', updatePosition, true);
       window.removeEventListener('resize', updatePosition);
     };
-  }, [dropdownOpen]);
+  }, [dropdownOpen, dropdownPlacement]);
 
   const acpAvailableModels = useMemo((): ModelInfo[] => {
     if (!isAcpSession || !acpOptions) return [];
@@ -564,6 +570,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       >
         <Tooltip content={acpTooltip}>
           <button
+            data-testid="chat-model-selector-btn"
             className={`bitfun-model-selector__trigger ${dropdownOpen ? 'bitfun-model-selector__trigger--open' : ''}`}
             onClick={() => {
               const nextOpen = !dropdownOpen;
@@ -587,7 +594,12 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
         </Tooltip>
 
         {dropdownOpen && createPortal(
-          <div className="bitfun-model-selector__dropdown" ref={portalDropdownRef} style={dropdownStyle}>
+          <div
+            className="bitfun-model-selector__dropdown"
+            ref={portalDropdownRef}
+            style={dropdownStyle}
+            data-testid="chat-model-selector-menu"
+          >
             <div className="bitfun-model-selector__dropdown-header">
               <span>ACP model</span>
               <span className="bitfun-model-selector__dropdown-hint">
@@ -602,6 +614,10 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                 return (
                   <Tooltip key={model.id} content={model.id} placement="right">
                     <div
+                      data-testid="chat-model-selector-option"
+                      data-model-id={model.id}
+                      data-model-name={model.modelName}
+                      data-selected={isSelected ? 'true' : 'false'}
                       className={`bitfun-model-selector__option ${isSelected ? 'bitfun-model-selector__option--selected' : ''}`}
                       onClick={() => handleSelectModel(model.id)}
                     >
@@ -650,6 +666,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
     >
       <Tooltip content={tooltipContent}>
         <button
+          data-testid="chat-model-selector-btn"
           className={`bitfun-model-selector__trigger ${dropdownOpen ? 'bitfun-model-selector__trigger--open' : ''}`}
           onClick={() => setDropdownOpen(!dropdownOpen)}
           disabled={loading}
@@ -675,7 +692,12 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       </Tooltip>
 
       {dropdownOpen && createPortal(
-        <div className="bitfun-model-selector__dropdown" ref={portalDropdownRef} style={dropdownStyle}>
+        <div
+          className="bitfun-model-selector__dropdown"
+          ref={portalDropdownRef}
+          style={dropdownStyle}
+          data-testid="chat-model-selector-menu"
+        >
           <div className="bitfun-model-selector__dropdown-header">
             <span>{t('modelSelector.modelSelection')}</span>
             <span className="bitfun-model-selector__dropdown-hint">
@@ -685,6 +707,10 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
 
           <Tooltip content={t('modelSelector.autoModelDesc')} placement="right">
             <div
+              data-testid="chat-model-selector-option"
+              data-model-id="auto"
+              data-model-name="auto"
+              data-selected={currentModelId === 'auto' ? 'true' : 'false'}
               className={`bitfun-model-selector__option bitfun-model-selector__option--special ${currentModelId === 'auto' ? 'bitfun-model-selector__option--selected' : ''}`}
               onClick={() => handleSelectModel('auto')}
             >
@@ -708,6 +734,10 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             return (
               <Tooltip content={primaryTooltip} placement="right">
                 <div
+                  data-testid="chat-model-selector-option"
+                  data-model-id="primary"
+                  data-model-name={primaryModel?.model_name || 'primary'}
+                  data-selected={currentModelId === 'primary' ? 'true' : 'false'}
                   className={`bitfun-model-selector__option bitfun-model-selector__option--special ${currentModelId === 'primary' ? 'bitfun-model-selector__option--selected' : ''}`}
                   onClick={() => handleSelectModel('primary')}
                 >
@@ -733,6 +763,10 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
             return (
               <Tooltip content={fastTooltip} placement="right">
                 <div
+                  data-testid="chat-model-selector-option"
+                  data-model-id="fast"
+                  data-model-name={fastModel?.model_name || 'fast'}
+                  data-selected={currentModelId === 'fast' ? 'true' : 'false'}
                   className={`bitfun-model-selector__option bitfun-model-selector__option--special ${currentModelId === 'fast' ? 'bitfun-model-selector__option--selected' : ''}`}
                   onClick={() => handleSelectModel('fast')}
                 >
@@ -756,6 +790,10 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
               return (
                 <Tooltip key={model.id} content={buildModelMetaText(model)} placement="right">
                   <div
+                    data-testid="chat-model-selector-option"
+                    data-model-id={model.id}
+                    data-model-name={model.modelName}
+                    data-selected={isSelected ? 'true' : 'false'}
                     className={`bitfun-model-selector__option ${isSelected ? 'bitfun-model-selector__option--selected' : ''}`}
                     onClick={() => handleSelectModel(model.id)}
                   >

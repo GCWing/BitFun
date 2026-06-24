@@ -11,7 +11,7 @@
   overflow: hidden;
   cursor: pointer;
   animation: miniapp-card-in 0.22s $easing-decelerate both;
-  animation-delay: calc(var(--card-index, 0) * 35ms);
+  animation-delay: calc(var(--surface-stagger-index, 0) * 35ms);
   transition:
     transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
     box-shadow 0.35s ease;
@@ -92,7 +92,7 @@
   &__icon {
     color: var(--color-text-primary);
     animation: miniapp-icon-pop 0.5s $easing-decelerate both;
-    animation-delay: calc(var(--card-index, 0) * 35ms + 60ms);
+    animation-delay: calc(var(--surface-stagger-index, 0) * 35ms + 60ms);
     transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
   }
 
@@ -240,7 +240,7 @@
     height: 30px;
     border-radius: $size-radius-sm;
     border: none;
-    background: rgba(247, 234, 234, 0.3);
+    background: rgba(var(--miniapp-card-action-bg-rgb), 0.3);
     color: var(--color-text-secondary);
     cursor: pointer;
     transition:
@@ -252,17 +252,17 @@
     }
 
     &--primary:hover {
-      background: rgba(247, 234, 234, 0.6);
+      background: rgba(var(--miniapp-card-action-bg-rgb), 0.6);
       color: var(--color-accent-400);
     }
 
     &--danger:hover {
-      background: rgba(247, 234, 234, 0.6);
+      background: rgba(var(--miniapp-card-action-bg-rgb), 0.6);
       color: var(--color-error);
     }
 
     &--stop:hover {
-      background: rgba(247, 234, 234, 0.6);
+      background: rgba(var(--miniapp-card-action-bg-rgb), 0.6);
       color: var(--color-success);
     }
   }

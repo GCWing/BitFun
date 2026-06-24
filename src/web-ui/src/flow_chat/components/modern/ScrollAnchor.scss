@@ -3,6 +3,8 @@
  */
 
 .scroll-anchor {
+  --delay: 0s;
+
   position: absolute;
   right: 0;
   top: 44px;
@@ -54,7 +56,7 @@
     transition: all 0.15s ease;
 
     animation: anchorFade 0.3s ease backwards;
-    animation-delay: var(--delay, 0s);
+    animation-delay: var(--delay);
 
     &::before {
       content: '';

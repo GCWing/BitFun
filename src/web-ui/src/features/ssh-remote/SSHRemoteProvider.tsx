@@ -395,12 +395,19 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
         ws => ws.workspaceKind === WorkspaceKind.Remote && ws.connectionId
       );
 
-      // Also check legacy single-workspace persisted in app_state
+      // Also check legacy single-workspace persisted in app_state.
+      // Startup normally receives this in the workspace snapshot, so avoid a
+      // second early invoke unless the snapshot was unavailable.
       let legacyWorkspace: RemoteWorkspace | null = null;
-      try {
-        legacyWorkspace = await sshApi.getWorkspaceInfo();
-      } catch {
-        // Ignore
+      const startupLegacyWorkspace = workspaceManager.consumeStartupLegacyRemoteWorkspaceSnapshot();
+      if (startupLegacyWorkspace.available) {
+        legacyWorkspace = startupLegacyWorkspace.workspace;
+      } else {
+        try {
+          legacyWorkspace = await sshApi.getWorkspaceInfo();
+        } catch {
+          // Ignore
+        }
       }
 
       // Key by connection + path so two servers at the same remote path stay distinct.

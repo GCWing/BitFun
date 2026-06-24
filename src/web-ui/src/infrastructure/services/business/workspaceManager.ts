@@ -1,7 +1,10 @@
  
 
-import {
+import type {
+  RemoteWorkspaceSnapshot,
   WorkspaceInfo,
+} from '../../../shared/types';
+import {
   WorkspaceKind,
   globalStateAPI,
   isRemoteWorkspace,
@@ -73,6 +76,12 @@ class WorkspaceManager {
   private isInitialized = false;
   private isInitializing = false;
   private identityEventListening = false;
+  private identityListenerReady = false;
+  private identityListenerRegistrationPromise: Promise<void> | null = null;
+  private identityListenerReadyResyncPending = false;
+  private startupLegacyRemoteWorkspaceSnapshotAvailable = false;
+  private startupLegacyRemoteWorkspaceSnapshotConsumed = false;
+  private startupLegacyRemoteWorkspace: RemoteWorkspaceSnapshot | null = null;
 
   private constructor() {
     this.state = {
@@ -104,6 +113,24 @@ class WorkspaceManager {
     this.listeners.add(listener);
     return () => {
       this.listeners.delete(listener);
+    };
+  }
+
+  public consumeStartupLegacyRemoteWorkspaceSnapshot(): {
+    available: boolean;
+    workspace: RemoteWorkspaceSnapshot | null;
+  } {
+    if (
+      !this.startupLegacyRemoteWorkspaceSnapshotAvailable ||
+      this.startupLegacyRemoteWorkspaceSnapshotConsumed
+    ) {
+      return { available: false, workspace: null };
+    }
+
+    this.startupLegacyRemoteWorkspaceSnapshotConsumed = true;
+    return {
+      available: true,
+      workspace: this.startupLegacyRemoteWorkspace,
     };
   }
 
@@ -312,26 +339,87 @@ class WorkspaceManager {
   }
 
   private async ensureIdentityChangeListener(): Promise<void> {
+    if (this.identityListenerRegistrationPromise) {
+      return this.identityListenerRegistrationPromise;
+    }
     if (this.identityEventListening) {
       return;
     }
 
     this.identityEventListening = true;
+    this.identityListenerReady = false;
     const registrationStartedAt = nowMs();
 
-    try {
-      await listen<WorkspaceIdentityChangedEvent>('workspace-identity-changed', event => {
-        this.applyIdentityUpdate(event.payload);
-      });
-      startupTrace.markPhase('workspace_identity_listener_ready', {
-        durationMs: elapsedMs(registrationStartedAt),
-      });
-    } catch (error) {
+    const handleRegistrationFailure = (error: unknown): void => {
       this.identityEventListening = false;
+      this.identityListenerReady = false;
+      this.identityListenerReadyResyncPending = false;
       startupTrace.markPhase('workspace_identity_listener_failed', {
         durationMs: elapsedMs(registrationStartedAt),
       });
       log.error('Failed to subscribe workspace identity updates', { error });
+    };
+
+    try {
+      this.identityListenerRegistrationPromise = listen<WorkspaceIdentityChangedEvent>(
+        'workspace-identity-changed',
+        event => {
+          this.applyIdentityUpdate(event.payload);
+        }
+      )
+        .then(() => {
+          this.identityListenerReady = true;
+          startupTrace.markPhase('workspace_identity_listener_ready', {
+            durationMs: elapsedMs(registrationStartedAt),
+          });
+          if (this.identityListenerReadyResyncPending && this.isInitialized) {
+            void this.syncWorkspaceStateAfterIdentityListenerReady();
+          }
+        })
+        .catch(handleRegistrationFailure)
+        .finally(() => {
+          this.identityListenerRegistrationPromise = null;
+        });
+    } catch (error) {
+      handleRegistrationFailure(error);
+      this.identityListenerRegistrationPromise = null;
+      return;
+    }
+
+    return this.identityListenerRegistrationPromise;
+  }
+
+  private async syncWorkspaceStateAfterIdentityListenerReady(): Promise<void> {
+    if (!this.identityListenerReadyResyncPending || !this.isInitialized || !this.identityListenerReady) {
+      return;
+    }
+    this.identityListenerReadyResyncPending = false;
+
+    const syncStartedAt = nowMs();
+    try {
+      const [currentWorkspace, recentWorkspaces, openedWorkspaces] = await Promise.all([
+        globalStateAPI.getCurrentWorkspace(),
+        globalStateAPI.getRecentWorkspaces(),
+        globalStateAPI.getOpenedWorkspaces(),
+      ]);
+      this.updateWorkspaceState(
+        currentWorkspace,
+        recentWorkspaces,
+        openedWorkspaces,
+        this.state.loading,
+        this.state.error,
+        currentWorkspace
+          ? { type: 'workspace:updated', workspace: currentWorkspace }
+          : { type: 'workspace:recent-updated' }
+      );
+      startupTrace.markPhase('workspace_identity_listener_post_ready_sync_end', {
+        durationMs: elapsedMs(syncStartedAt),
+      });
+    } catch (error) {
+      startupTrace.markPhase('workspace_identity_listener_post_ready_sync_failed', {
+        durationMs: elapsedMs(syncStartedAt),
+      });
+      log.warn('Failed to refresh workspace identity state after listener registration', { error });
     }
   }
 
@@ -375,6 +463,9 @@ class WorkspaceManager {
           null;
 
     if (!updatedWorkspace) {
+      if (!this.isInitialized) {
+        this.identityListenerReadyResyncPending = true;
+      }
       return;
     }
 
@@ -401,31 +492,35 @@ class WorkspaceManager {
       log.info('Initializing workspace state');
 
       const identityListenerStartedAt = markWorkspaceStartupStepStart('ensure_identity_listener');
-      const identityListenerReady = this.ensureIdentityChangeListener()
-        .finally(() => {
-          markWorkspaceStartupStepEnd('ensure_identity_listener', identityListenerStartedAt, {
-            blocking: true,
-            overlappedWithGlobalState: true,
-          });
-        });
+      void this.ensureIdentityChangeListener();
+      markWorkspaceStartupStepEnd('ensure_identity_listener', identityListenerStartedAt, {
+        blocking: false,
+      });
 
-      const globalStateStartedAt = markWorkspaceStartupStepStart('initialize_global_state');
-      const initResult = await globalStateAPI.initializeGlobalState();
-      markWorkspaceStartupStepEnd('initialize_global_state', globalStateStartedAt);
-      log.debug('Backend initialization completed', { result: initResult });
-      await identityListenerReady;
-
-      const cleanupStartedAt = markWorkspaceStartupStepStart('cleanup_invalid_workspaces');
-      await globalStateAPI.cleanupInvalidWorkspaces();
-      markWorkspaceStartupStepEnd('cleanup_invalid_workspaces', cleanupStartedAt);
+      const startupStateStartedAt = markWorkspaceStartupStepStart('initialize_workspace_startup_state');
+      const {
+        cleanupRemovedCount,
+        recentWorkspaces,
+        openedWorkspaces,
+        currentWorkspace,
+        legacyRemoteWorkspace,
+      } = await globalStateAPI.initializeWorkspaceStartupState();
+      if (!this.identityListenerReady) {
+        this.identityListenerReadyResyncPending = true;
+      }
+      this.startupLegacyRemoteWorkspace = legacyRemoteWorkspace;
+      this.startupLegacyRemoteWorkspaceSnapshotAvailable = true;
+      this.startupLegacyRemoteWorkspaceSnapshotConsumed = false;
+      markWorkspaceStartupStepEnd('initialize_workspace_startup_state', startupStateStartedAt, {
+        removedCount: cleanupRemovedCount,
+        includesGlobalStateInitialization: true,
+        includesWorkspaceStateSnapshot: true,
+        includesLegacyRemoteWorkspace: true,
+      });
 
       const fetchStateStartedAt = markWorkspaceStartupStepStart('fetch_workspace_state');
-      const [recentWorkspaces, openedWorkspaces, currentWorkspace] = await Promise.all([
-        globalStateAPI.getRecentWorkspaces(),
-        globalStateAPI.getOpenedWorkspaces(),
-        globalStateAPI.getCurrentWorkspace(),
-      ]);
       markWorkspaceStartupStepEnd('fetch_workspace_state', fetchStateStartedAt, {
+        source: 'startup_cleanup_snapshot',
         recentCount: recentWorkspaces.length,
         openedCount: openedWorkspaces.length,
         hasCurrentWorkspace: currentWorkspace !== null,
@@ -452,6 +547,9 @@ class WorkspaceManager {
 
       this.emit({ type: 'workspace:loading', loading: false });
       this.isInitialized = true;
+      if (this.identityListenerReadyResyncPending) {
+        void this.syncWorkspaceStateAfterIdentityListenerReady();
+      }
       startupTrace.markPhase('workspace_initialize_end', {
         durationMs: elapsedMs(initializeStartedAt),
         recentCount: recentWorkspaces.length,

@@ -13,20 +13,7 @@ pub struct SkillSnapshotEntry {
 
 impl SkillSnapshotEntry {
     fn to_xml_desc(&self) -> String {
-        format!(
-            r#"<skill>
-<name>
-{}
-</name>
-<description>
-{}
-</description>
-<location>
-{}
-</location>
-</skill>"#,
-            self.name, self.description, self.location
-        )
+        format!(r#"<skill name="{}">{}</skill>"#, self.name, self.description)
     }
 }
 
@@ -385,12 +372,12 @@ mod tests {
                 SkillSnapshotEntry {
                     name: "skill-a".to_string(),
                     description: "desc-a".to_string(),
-                    location: "/a".to_string(),
+                    location: "C:/skills/skill-a".to_string(),
                 },
                 SkillSnapshotEntry {
                     name: "skill-b".to_string(),
                     description: "desc-b".to_string(),
-                    location: "/b".to_string(),
+                    location: "C:/skills/skill-b".to_string(),
                 },
             ],
             subagents: vec![AgentSnapshotEntry {
@@ -404,12 +391,12 @@ mod tests {
                 SkillSnapshotEntry {
                     name: "skill-a".to_string(),
                     description: "desc-a2".to_string(),
-                    location: "/a".to_string(),
+                    location: "C:/skills/skill-a".to_string(),
                 },
                 SkillSnapshotEntry {
                     name: "skill-c".to_string(),
                     description: "desc-c".to_string(),
-                    location: "/c".to_string(),
+                    location: "C:/skills/skill-c".to_string(),
                 },
             ],
             subagents: vec![AgentSnapshotEntry {
@@ -430,11 +417,27 @@ mod tests {
         assert!(skill_update.contains("## Changed Skills"));
         assert!(skill_update.contains("## Added Skills"));
         assert!(skill_update.contains("## Removed Skills"));
-        assert!(skill_update.contains("skill-a"));
-        assert!(skill_update.contains("skill-c"));
+        assert!(skill_update.contains(r#"<skill name="skill-a">desc-a2</skill>"#));
+        assert!(skill_update.contains(r#"<skill name="skill-c">desc-c</skill>"#));
+        assert!(!skill_update.contains("C:/skills/skill-a"));
+        assert!(!skill_update.contains("C:/skills/skill-c"));
         assert!(skill_update.contains("- skill-b"));
         assert!(agent_update.contains("## Changed Agents"));
         assert!(agent_update.contains("Grep"));
+    }
+
+    #[test]
+    fn full_skill_listing_renders_inline_name_and_description_without_location() {
+        let listing = super::render_full_skill_listing_body(&[SkillSnapshotEntry {
+            name: "skill-a".to_string(),
+            description: "desc-a".to_string(),
+            location: "C:/skills/skill-a".to_string(),
+        }]);
+
+        assert!(listing.contains("<available_skills>"));
+        assert!(listing.contains(r#"<skill name="skill-a">desc-a</skill>"#));
+        assert!(!listing.contains("<location>"));
+        assert!(!listing.contains("C:/skills/skill-a"));
     }
 
     #[test]
@@ -473,7 +476,7 @@ mod tests {
                 skills: vec![SkillSnapshotEntry {
                     name: "skill-a".to_string(),
                     description: "desc-a".to_string(),
-                    location: "/a".to_string(),
+                    location: "C:/skills/skill-a".to_string(),
                 }],
                 ..Default::default()
             },
@@ -485,7 +488,7 @@ mod tests {
                 skills: vec![SkillSnapshotEntry {
                     name: "skill-b".to_string(),
                     description: "desc-b".to_string(),
-                    location: "/b".to_string(),
+                    location: "C:/skills/skill-b".to_string(),
                 }],
                 ..Default::default()
             },

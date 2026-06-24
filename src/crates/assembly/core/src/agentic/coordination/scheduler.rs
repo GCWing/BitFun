@@ -33,11 +33,12 @@ use uuid::Uuid;
 use bitfun_agent_runtime::scheduler::{
     build_thread_goal_objective_updated_delivery_plan, build_thread_goal_resumed_delivery_plan,
     resolve_agent_session_reply_action, resolve_background_delivery_action,
-    resolve_background_delivery_injection, resolve_dialog_steering_action,
-    resolve_turn_outcome_lifecycle_plan, ActiveDialogTurn, ActiveDialogTurnStore,
-    AgentSessionReplyAction, AgentSessionReplyPlan, BackgroundDeliveryAction,
-    BackgroundDeliveryFacts, BackgroundInjectionKind, DialogReplySuppressionSet,
-    DialogSteeringAction, DialogTurnQueue, GoalContinuationAfterTurnAction, SessionAbortFlags,
+    resolve_background_delivery_injection, resolve_dialog_start_route,
+    resolve_dialog_steering_action, resolve_turn_outcome_lifecycle_plan, ActiveDialogTurn,
+    ActiveDialogTurnStore, AgentSessionReplyAction, AgentSessionReplyPlan,
+    BackgroundDeliveryAction, BackgroundDeliveryFacts, BackgroundInjectionKind,
+    DialogReplySuppressionSet, DialogStartRoute, DialogStartRouteFacts, DialogSteeringAction,
+    DialogTurnQueue, GoalContinuationAfterTurnAction, SessionAbortFlags,
     ThreadGoalDeliveryReminder, ThreadGoalDeliveryReminderKind, TurnOutcomeQueueAction,
     TurnOutcomeStatus,
 };
@@ -722,72 +723,79 @@ impl DialogScheduler {
         session_id: &str,
         queued_turn: &QueuedTurn,
     ) -> Result<String, String> {
-        let res = match queued_turn
+        let images = queued_turn
             .image_contexts
             .as_ref()
-            .filter(|imgs| !imgs.is_empty())
-        {
-            Some(imgs) => {
-                if queued_turn.prepended_messages.is_empty() {
-                    self.coordinator
-                        .start_dialog_turn_with_image_contexts(
-                            session_id.to_string(),
-                            queued_turn.user_input.clone(),
-                            queued_turn.original_user_input.clone(),
-                            imgs.clone(),
-                            queued_turn.turn_id.clone(),
-                            queued_turn.agent_type.clone(),
-                            queued_turn.workspace_path.clone(),
-                            queued_turn.policy,
-                            queued_turn.user_message_metadata.clone(),
-                        )
-                        .await
-                } else {
-                    self.coordinator
-                        .start_dialog_turn_with_image_contexts_and_prepended_messages(
-                            session_id.to_string(),
-                            queued_turn.user_input.clone(),
-                            queued_turn.original_user_input.clone(),
-                            imgs.clone(),
-                            queued_turn.turn_id.clone(),
-                            queued_turn.agent_type.clone(),
-                            queued_turn.workspace_path.clone(),
-                            queued_turn.policy,
-                            queued_turn.user_message_metadata.clone(),
-                            queued_turn.prepended_messages.clone(),
-                        )
-                        .await
-                }
+            .filter(|imgs| !imgs.is_empty());
+        let route = resolve_dialog_start_route(DialogStartRouteFacts {
+            has_image_contexts: images.is_some(),
+            has_prepended_messages: !queued_turn.prepended_messages.is_empty(),
+        });
+
+        let res = match route {
+            DialogStartRoute::Plain => {
+                self.coordinator
+                    .start_dialog_turn(
+                        session_id.to_string(),
+                        queued_turn.user_input.clone(),
+                        queued_turn.original_user_input.clone(),
+                        queued_turn.turn_id.clone(),
+                        queued_turn.agent_type.clone(),
+                        queued_turn.workspace_path.clone(),
+                        queued_turn.policy,
+                        queued_turn.user_message_metadata.clone(),
+                    )
+                    .await
             }
-            None => {
-                if queued_turn.prepended_messages.is_empty() {
-                    self.coordinator
-                        .start_dialog_turn(
-                            session_id.to_string(),
-                            queued_turn.user_input.clone(),
-                            queued_turn.original_user_input.clone(),
-                            queued_turn.turn_id.clone(),
-                            queued_turn.agent_type.clone(),
-                            queued_turn.workspace_path.clone(),
-                            queued_turn.policy,
-                            queued_turn.user_message_metadata.clone(),
-                        )
-                        .await
-                } else {
-                    self.coordinator
-                        .start_dialog_turn_with_prepended_messages(
-                            session_id.to_string(),
-                            queued_turn.user_input.clone(),
-                            queued_turn.original_user_input.clone(),
-                            queued_turn.turn_id.clone(),
-                            queued_turn.agent_type.clone(),
-                            queued_turn.workspace_path.clone(),
-                            queued_turn.policy,
-                            queued_turn.user_message_metadata.clone(),
-                            queued_turn.prepended_messages.clone(),
-                        )
-                        .await
-                }
+            DialogStartRoute::WithPrependedMessages => {
+                self.coordinator
+                    .start_dialog_turn_with_prepended_messages(
+                        session_id.to_string(),
+                        queued_turn.user_input.clone(),
+                        queued_turn.original_user_input.clone(),
+                        queued_turn.turn_id.clone(),
+                        queued_turn.agent_type.clone(),
+                        queued_turn.workspace_path.clone(),
+                        queued_turn.policy,
+                        queued_turn.user_message_metadata.clone(),
+                        queued_turn.prepended_messages.clone(),
+                    )
+                    .await
+            }
+            DialogStartRoute::WithImageContexts => {
+                self.coordinator
+                    .start_dialog_turn_with_image_contexts(
+                        session_id.to_string(),
+                        queued_turn.user_input.clone(),
+                        queued_turn.original_user_input.clone(),
+                        images
+                            .cloned()
+                            .expect("image-context route requires image contexts"),
+                        queued_turn.turn_id.clone(),
+                        queued_turn.agent_type.clone(),
+                        queued_turn.workspace_path.clone(),
+                        queued_turn.policy,
+                        queued_turn.user_message_metadata.clone(),
+                    )
+                    .await
+            }
+            DialogStartRoute::WithImageContextsAndPrependedMessages => {
+                self.coordinator
+                    .start_dialog_turn_with_image_contexts_and_prepended_messages(
+                        session_id.to_string(),
+                        queued_turn.user_input.clone(),
+                        queued_turn.original_user_input.clone(),
+                        images
+                            .cloned()
+                            .expect("image-context route requires image contexts"),
+                        queued_turn.turn_id.clone(),
+                        queued_turn.agent_type.clone(),
+                        queued_turn.workspace_path.clone(),
+                        queued_turn.policy,
+                        queued_turn.user_message_metadata.clone(),
+                        queued_turn.prepended_messages.clone(),
+                    )
+                    .await
             }
         };
 

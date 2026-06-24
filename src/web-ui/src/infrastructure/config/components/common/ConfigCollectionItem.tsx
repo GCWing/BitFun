@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import './ConfigCollectionItem.scss';
 
-export interface ConfigCollectionItemProps {
+export interface ConfigCollectionItemProps extends React.HTMLAttributes<HTMLDivElement> {
   label: React.ReactNode;
   badge?: React.ReactNode;
   badgePlacement?: 'inline' | 'below';
@@ -23,6 +23,7 @@ export const ConfigCollectionItem: React.FC<ConfigCollectionItemProps> = ({
   expanded: expandedProp,
   onToggle,
   className = '',
+  ...rootProps
 }) => {
   const [internalExpanded, setInternalExpanded] = useState(false);
   const isControlled = expandedProp !== undefined;
@@ -40,6 +41,7 @@ export const ConfigCollectionItem: React.FC<ConfigCollectionItemProps> = ({
 
   return (
     <div
+      {...rootProps}
       className={`bitfun-collection-item ${isExpanded ? 'is-expanded' : ''} ${disabled ? 'is-disabled' : ''} ${className}`}
     >
       <div

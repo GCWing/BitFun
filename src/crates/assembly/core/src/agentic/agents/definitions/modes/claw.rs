@@ -37,6 +37,7 @@ impl ClawMode {
                 // Local desktop/system control is delegated to the ComputerUse
                 // agent/tool instead of being surfaced as a ControlHub domain.
                 "ControlHub".to_string(),
+                "InitMiniApp".to_string(),
             ],
         }
     }
@@ -77,5 +78,18 @@ impl Agent for ClawMode {
 
     fn is_readonly(&self) -> bool {
         false
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ClawMode;
+    use crate::agentic::agents::Agent;
+
+    #[test]
+    fn claw_mode_includes_init_miniapp_in_default_tools() {
+        assert!(ClawMode::new()
+            .default_tools()
+            .contains(&"InitMiniApp".to_string()));
     }
 }

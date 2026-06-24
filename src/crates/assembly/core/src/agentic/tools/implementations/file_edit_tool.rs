@@ -14,7 +14,8 @@ use async_trait::async_trait;
 use serde_json::{json, Value};
 use std::path::Path;
 use tool_runtime::fs::edit_file::{
-    apply_edit_to_content, edit_local_file_with_content, EditLocalFileWithContentRequest,
+    apply_edit_to_content, edit_local_file_with_content, edit_success_message,
+    is_edit_content_guardrail_error, EditLocalFileWithContentRequest,
 };
 
 pub struct FileEditTool;
@@ -63,10 +64,6 @@ impl FileEditTool {
         } else {
             error
         }
-    }
-
-    fn is_edit_content_guardrail_error(error: &str) -> bool {
-        error.contains("old_string not found in file") || error.contains("`old_string` appears")
     }
 
     async fn edit_read_state_guardrail_error(
@@ -273,7 +270,7 @@ impl Tool for FileEditTool {
             if let Err(error) =
                 apply_edit_to_content(&file_content, old_string, new_string, replace_all)
             {
-                if Self::is_edit_content_guardrail_error(&error) {
+                if is_edit_content_guardrail_error(&error) {
                     return Self::guidance_failure(error);
                 }
 
@@ -336,7 +333,7 @@ impl Tool for FileEditTool {
             Self::assert_atomic_edit_freshness(context, &resolved, &content)?;
             let edit_result = apply_edit_to_content(&content, old_string, new_string, replace_all)
                 .map_err(|error| {
-                    if Self::is_edit_content_guardrail_error(&error) {
+                    if is_edit_content_guardrail_error(&error) {
                         BitFunError::tool(file_tool_guidance_message(error))
                     } else {
                         BitFunError::tool(error)
@@ -367,10 +364,7 @@ impl Tool for FileEditTool {
                     "old_end_line": edit_result.edit_result.old_end_line,
                     "new_end_line": edit_result.edit_result.new_end_line,
                 }),
-                result_for_assistant: Some(format!(
-                    "Successfully edited {}",
-                    resolved.logical_path
-                )),
+                result_for_assistant: Some(edit_success_message(&resolved.logical_path)),
                 image_attachments: None,
             };
             return Ok(vec![result]);
@@ -393,7 +387,7 @@ impl Tool for FileEditTool {
             replace_all,
         })
         .map_err(|error| {
-            if Self::is_edit_content_guardrail_error(&error) {
+            if is_edit_content_guardrail_error(&error) {
                 BitFunError::tool(file_tool_guidance_message(error))
             } else {
                 BitFunError::tool(error)
@@ -419,7 +413,7 @@ impl Tool for FileEditTool {
                 "old_end_line": edit_result.edit_result.old_end_line,
                 "new_end_line": edit_result.edit_result.new_end_line,
             }),
-            result_for_assistant: Some(format!("Successfully edited {}", resolved.logical_path)),
+            result_for_assistant: Some(edit_success_message(&resolved.logical_path)),
             image_attachments: None,
         };
 
@@ -494,18 +488,5 @@ mod tests {
             FileEditTool::new().short_description(),
             "A tool for editing files"
         );
-    }
-
-    #[test]
-    fn edit_content_guardrail_detection_matches_apply_edit_errors() {
-        assert!(FileEditTool::is_edit_content_guardrail_error(
-            "old_string not found in file."
-        ));
-        assert!(FileEditTool::is_edit_content_guardrail_error(
-            "`old_string` appears 2 times in file, either provide a larger string with more surrounding context to make it unique or use `replace_all` to change every instance of `old_string`.\n"
-        ));
-        assert!(!FileEditTool::is_edit_content_guardrail_error(
-            "Permission denied"
-        ));
     }
 }

@@ -12,7 +12,7 @@ $modal-edge-gutter-sm: 10px;
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.55);
+  background: rgba(var(--color-static-black-rgb), 0.55);
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
   display: flex;
@@ -56,7 +56,7 @@ $modal-edge-gutter-sm: 10px;
   background: var(--color-bg-primary);
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 16px 40px rgba(var(--color-static-black-rgb), 0.45);
   max-height: calc(100vh - 48px);
   overflow: hidden;
   animation: modal-dialog-enter 0.3s cubic-bezier(0.16, 1, 0.3, 1);
@@ -95,7 +95,7 @@ $modal-edge-gutter-sm: 10px;
   }
 
   &--dragging {
-    box-shadow: 0 20px 48px rgba(0, 0, 0, 0.55);
+    box-shadow: 0 20px 48px rgba(var(--color-static-black-rgb), 0.55);
     z-index: tokens.$z-modal-active;
   }
 

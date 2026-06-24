@@ -2,9 +2,11 @@
 @use './AgentSurfaceCard' as surface;
 
 .core-agent-card {
+  --core-accent: var(--color-accent-500);
+
   @include surface.agent-surface-card(
     var(--core-card-gradient),
-    var(--core-accent, var(--color-accent-500))
+    var(--core-accent)
   );
 
   // ── Header ────────────────────────────────────────────────────────
@@ -29,7 +31,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    color: var(--core-accent, var(--color-accent-500));
+    color: var(--core-accent);
     transition: transform $motion-fast $easing-decelerate;
   }
 
@@ -58,7 +60,7 @@
     gap: 4px;
     font-size: var(--font-size-xs);
     font-weight: $font-weight-medium;
-    color: var(--core-accent, var(--color-accent-500));
+    color: var(--core-accent);
     opacity: 0.9;
   }
 
@@ -110,7 +112,7 @@
 
     strong {
       font-weight: $font-weight-semibold;
-      color: var(--core-accent, var(--color-accent-500));
+      color: var(--core-accent);
       opacity: 0.9;
     }
   }

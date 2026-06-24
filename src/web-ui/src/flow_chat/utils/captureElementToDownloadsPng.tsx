@@ -4,6 +4,7 @@ import { notificationService } from '@/shared/notification-system';
 import { i18nService } from '@/infrastructure/i18n';
 import { workspaceAPI } from '@/infrastructure/api';
 import { createLogger } from '@/shared/utils/logger';
+import { FLOWCHAT_CAPTURE_FALLBACK_COLOR } from '@/shared/theme/themeBoundaryFallbacks';
 import { withTimeout } from '@/shared/utils/timing';
 
 const log = createLogger('captureElementToDownloadsPng');
@@ -18,7 +19,7 @@ export async function captureElementToDownloadsPng(
   fileNamePrefix: string,
 ): Promise<void> {
   const computedStyle = getComputedStyle(document.documentElement);
-  const bgColor = computedStyle.getPropertyValue('--color-bg-flowchat').trim() || '#121214';
+  const bgColor = computedStyle.getPropertyValue('--color-bg-flowchat').trim() || FLOWCHAT_CAPTURE_FALLBACK_COLOR.background;
 
   await new Promise((resolve) => setTimeout(resolve, 0));
 

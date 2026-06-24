@@ -1,4 +1,8 @@
 .generative-widget-card {
+  --generative-widget-card-icon-rgb: 125, 207, 255;
+  --generative-widget-card-error-rgb: 253, 164, 175;
+  --generative-widget-card-error-soft-rgb: 252, 165, 165;
+
   overflow: hidden;
 }
 
@@ -12,7 +16,7 @@
 }
 
 .generative-widget-card__icon {
-  color: #7dd3fc;
+  color: rgb(var(--generative-widget-card-icon-rgb));
 }
 
 .generative-widget-card__title {
@@ -35,7 +39,7 @@
 }
 
 .generative-widget-card__status--error {
-  color: #fda4af;
+  color: rgb(var(--generative-widget-card-error-rgb));
 }
 
 .generative-widget-card__preview {
@@ -57,7 +61,7 @@
 }
 
 .generative-widget-card__placeholder--error {
-  color: #fca5a5;
+  color: rgb(var(--generative-widget-card-error-soft-rgb));
 }
 
 .generative-widget-card__capture-root {

@@ -5,16 +5,19 @@ use crate::agentic::session::FileReadState;
 use crate::agentic::tools::framework::ToolPathResolution;
 use crate::agentic::tools::tool_context_runtime::ToolUseContext;
 use crate::util::errors::BitFunResult;
-use bitfun_agent_tools::{
-    file_read_facts_are_fresh, file_read_facts_content_matches, FileReadFreshnessFacts,
+pub use bitfun_agent_runtime::file_read_state::{
+    assert_file_not_unexpectedly_modified, content_unchanged_since_full_read,
+    FILE_UNEXPECTEDLY_MODIFIED_ERROR,
+};
+use bitfun_agent_runtime::file_read_state::{
+    validate_edit_content_freshness_against_read_state, validate_prior_read_state,
+    validate_write_content_freshness_against_read_state,
+    validate_write_mtime_freshness_against_read_state, FileMutationKind,
 };
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tool_runtime::fs::read_file::ReadFileResult;
 use tool_runtime::util::read_line_prefix::read_tool_output_to_file_content;
-
-pub const FILE_UNEXPECTEDLY_MODIFIED_ERROR: &str =
-    "File has been unexpectedly modified. Read it again before attempting to write it.";
 
 pub fn validate_write_has_prior_read(
     context: &ToolUseContext,
@@ -22,24 +25,14 @@ pub fn validate_write_has_prior_read(
 ) -> Option<String> {
     let session_id = context.session_id.as_deref()?;
     let coordinator = get_global_coordinator()?;
-    let Some(read_state) = coordinator
+    let read_state = coordinator
         .get_session_manager()
-        .get_file_read_state(session_id, &resolved.logical_path)
-    else {
-        return Some(format!(
-            "Use Read to load the current contents of {} before calling Write on it.",
-            resolved.logical_path
-        ));
-    };
-
-    if read_state.is_partial_view {
-        return Some(format!(
-            "Use Read to load the full contents of {} before calling Write on it.",
-            resolved.logical_path
-        ));
-    }
-
-    None
+        .get_file_read_state(session_id, &resolved.logical_path);
+    validate_prior_read_state(
+        &resolved.logical_path,
+        read_state.as_ref(),
+        FileMutationKind::Write,
+    )
 }
 
 pub fn read_state_tracking_enabled(context: &ToolUseContext) -> bool {
@@ -62,14 +55,13 @@ pub fn record_file_read_state(
     // `is_partial_view` is reserved for auto-injected content the model has not
     // explicitly read (see Claude Code's FileState.isPartialView). Normal Read
     // tool calls with offset/limit still count as a valid read for Edit/Write.
-    let state = FileReadState {
-        content: read_tool_output_to_file_content(&read_result.content),
+    let state = FileReadState::from_read_tool_content(
+        read_tool_output_to_file_content(&read_result.content),
         timestamp_ms,
-        start_line: read_result.start_line,
-        end_line: read_result.end_line,
-        total_lines: read_result.total_lines,
-        is_partial_view: false,
-    };
+        read_result.start_line,
+        read_result.end_line,
+        read_result.total_lines,
+    );
 
     coordinator.get_session_manager().set_file_read_state(
         session_id,
@@ -87,33 +79,6 @@ pub fn get_stored_file_read_state(
     coordinator
         .get_session_manager()
         .get_file_read_state(session_id, &resolved.logical_path)
-}
-
-pub fn content_unchanged_since_full_read(
-    read_state: &FileReadState,
-    current_content: &str,
-) -> bool {
-    file_read_facts_content_matches(file_read_freshness_facts(read_state), current_content)
-}
-
-pub fn assert_file_not_unexpectedly_modified(
-    read_state: Option<&FileReadState>,
-    current_content: &str,
-    current_mtime_ms: Option<u64>,
-) -> Result<(), String> {
-    let Some(read_state) = read_state else {
-        return Err(FILE_UNEXPECTEDLY_MODIFIED_ERROR.to_string());
-    };
-
-    if !file_read_facts_are_fresh(
-        file_read_freshness_facts(read_state),
-        current_content,
-        current_mtime_ms,
-    ) {
-        return Err(FILE_UNEXPECTEDLY_MODIFIED_ERROR.to_string());
-    }
-
-    Ok(())
 }
 
 pub async fn validate_edit_against_read_state(
@@ -152,28 +117,19 @@ pub async fn validate_write_against_read_state(
     let read_state = get_stored_file_read_state(context, resolved)?;
 
     if let Some(current_mtime_ms) = file_modification_time_ms(context, resolved).await {
-        if current_mtime_ms > read_state.timestamp_ms {
-            return Some(format!(
-                "The file {} changed after it was last read. Use Read again, then retry Write.",
-                resolved.logical_path
-            ));
-        }
-        return None;
+        return validate_write_mtime_freshness_against_read_state(
+            &resolved.logical_path,
+            &read_state,
+            current_mtime_ms,
+        );
     }
 
     let current_content = read_current_file_content(context, resolved).await.ok()?;
-    if !file_read_facts_are_fresh(
-        file_read_freshness_facts(&read_state),
+    validate_write_content_freshness_against_read_state(
+        &resolved.logical_path,
+        &read_state,
         &current_content,
-        None,
-    ) {
-        return Some(format!(
-            "The file {} no longer matches the last Read result. Use Read again, then retry Write.",
-            resolved.logical_path
-        ));
-    }
-
-    None
+    )
 }
 
 pub async fn validate_existing_file_read_before_write(
@@ -187,65 +143,20 @@ pub async fn validate_existing_file_read_before_write(
     validate_write_against_read_state(context, resolved).await
 }
 
-fn validate_edit_content_freshness_against_read_state(
-    logical_path: &str,
-    read_state: &FileReadState,
-    current_content: &str,
-    current_mtime_ms: Option<u64>,
-) -> Option<String> {
-    if file_read_facts_are_fresh(
-        file_read_freshness_facts(read_state),
-        current_content,
-        current_mtime_ms,
-    ) {
-        return None;
-    }
-
-    if current_mtime_ms.is_some() {
-        return Some(format!(
-            "The file {} changed after it was last read. Use Read again, then retry Edit.",
-            logical_path
-        ));
-    }
-
-    Some(format!(
-        "The file {} no longer matches the last Read result. Use Read again, then retry Edit.",
-        logical_path
-    ))
-}
-
-fn file_read_freshness_facts(read_state: &FileReadState) -> FileReadFreshnessFacts<'_> {
-    FileReadFreshnessFacts {
-        content: &read_state.content,
-        timestamp_ms: read_state.timestamp_ms,
-        is_full_file_read: read_state.is_full_file_read(),
-    }
-}
-
 pub fn validate_edit_has_prior_read(
     context: &ToolUseContext,
     resolved: &ToolPathResolution,
 ) -> Option<String> {
     let session_id = context.session_id.as_deref()?;
     let coordinator = get_global_coordinator()?;
-    let Some(read_state) = coordinator
+    let read_state = coordinator
         .get_session_manager()
-        .get_file_read_state(session_id, &resolved.logical_path)
-    else {
-        return Some(format!(
-            "Use Read to load the current contents of {} before calling Edit on it.",
-            resolved.logical_path
-        ));
-    };
-
-    if read_state.is_partial_view {
-        return Some(format!(
-            "Use Read to load the full contents of {} before calling Edit on it.",
-            resolved.logical_path
-        ));
-    }
-
-    None
+        .get_file_read_state(session_id, &resolved.logical_path);
+    validate_prior_read_state(
+        &resolved.logical_path,
+        read_state.as_ref(),
+        FileMutationKind::Edit,
+    )
 }
 
 pub fn update_file_read_state_after_mutation(
@@ -261,20 +172,7 @@ pub fn update_file_read_state_after_mutation(
         return;
     };
 
-    let line_count = content.lines().count();
-    let (start_line, end_line) = if line_count == 0 {
-        (0, 0)
-    } else {
-        (1, line_count)
-    };
-    let state = FileReadState {
-        content: content.to_string(),
-        timestamp_ms,
-        start_line,
-        end_line,
-        total_lines: line_count,
-        is_partial_view: false,
-    };
+    let state = FileReadState::from_full_content(content, timestamp_ms);
 
     coordinator.get_session_manager().set_file_read_state(
         session_id,
@@ -356,7 +254,6 @@ pub fn local_file_modification_time_ms(path: &Path) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agentic::session::FileReadState;
     use crate::agentic::tools::framework::ToolPathBackend;
     use crate::agentic::tools::tool_context_runtime::ToolUseContext;
     use crate::agentic::WorkspaceBinding;
@@ -428,150 +325,5 @@ mod tests {
 
         // Without a coordinator this stays permissive in unit tests.
         assert!(validate_edit_has_prior_read(&context, &resolution).is_none());
-    }
-
-    #[test]
-    fn validate_content_freshness_allows_partial_read_range_without_full_file() {
-        let state = FileReadState {
-            content: "middle\n".to_string(),
-            timestamp_ms: 100,
-            start_line: 50,
-            end_line: 100,
-            total_lines: 556,
-            is_partial_view: false,
-        };
-
-        assert!(validate_edit_content_freshness_against_read_state(
-            "src/state.js",
-            &state,
-            "different full file\n",
-            Some(200),
-        )
-        .is_some());
-    }
-
-    #[test]
-    fn assert_file_not_unexpectedly_modified_allows_matching_full_read_after_newer_mtime() {
-        let state = FileReadState {
-            content: "alpha\n".to_string(),
-            timestamp_ms: 100,
-            start_line: 1,
-            end_line: 1,
-            total_lines: 1,
-            is_partial_view: false,
-        };
-
-        assert!(assert_file_not_unexpectedly_modified(Some(&state), "alpha\n", Some(200)).is_ok());
-    }
-
-    #[test]
-    fn assert_file_not_unexpectedly_modified_rejects_changed_full_read_after_newer_mtime() {
-        let state = FileReadState {
-            content: "alpha\n".to_string(),
-            timestamp_ms: 100,
-            start_line: 1,
-            end_line: 1,
-            total_lines: 1,
-            is_partial_view: false,
-        };
-
-        assert!(assert_file_not_unexpectedly_modified(Some(&state), "beta\n", Some(200)).is_err());
-    }
-
-    #[test]
-    fn assert_file_not_unexpectedly_modified_rejects_partial_read_after_newer_mtime() {
-        let state = FileReadState {
-            content: "middle\n".to_string(),
-            timestamp_ms: 100,
-            start_line: 50,
-            end_line: 100,
-            total_lines: 556,
-            is_partial_view: false,
-        };
-
-        assert!(
-            assert_file_not_unexpectedly_modified(Some(&state), "full file\n", Some(200)).is_err()
-        );
-    }
-
-    fn read_state(content: &str, timestamp_ms: u64) -> FileReadState {
-        FileReadState {
-            content: content.to_string(),
-            timestamp_ms,
-            start_line: 1,
-            end_line: 1,
-            total_lines: 1,
-            is_partial_view: false,
-        }
-    }
-
-    #[test]
-    fn validate_content_freshness_allows_matching_remote_content_without_mtime() {
-        let state = read_state("alpha\n", 100);
-
-        assert!(validate_edit_content_freshness_against_read_state(
-            "src/main.rs",
-            &state,
-            "alpha\n",
-            None,
-        )
-        .is_none());
-    }
-
-    #[test]
-    fn validate_content_freshness_rejects_changed_remote_content_without_mtime() {
-        let state = read_state("alpha\n", 100);
-
-        assert_eq!(
-            validate_edit_content_freshness_against_read_state(
-                "src/main.rs",
-                &state,
-                "beta\n",
-                None,
-            )
-            .as_deref(),
-            Some(
-                "The file src/main.rs no longer matches the last Read result. Use Read again, then retry Edit."
-            )
-        );
-    }
-
-    #[test]
-    fn validate_content_freshness_allows_newer_mtime_when_full_read_content_matches() {
-        let state = read_state("alpha\n", 100);
-
-        assert!(validate_edit_content_freshness_against_read_state(
-            "src/main.rs",
-            &state,
-            "alpha\n",
-            Some(200),
-        )
-        .is_none());
-    }
-
-    #[test]
-    fn validate_content_freshness_rejects_newer_mtime_when_content_differs() {
-        let state = read_state("alpha\n", 100);
-
-        assert!(validate_edit_content_freshness_against_read_state(
-            "src/main.rs",
-            &state,
-            "beta\n",
-            Some(200),
-        )
-        .is_some());
-    }
-
-    #[test]
-    fn validate_content_freshness_ignores_older_mtime_even_when_content_differs() {
-        let state = read_state("alpha\n", 200);
-
-        assert!(validate_edit_content_freshness_against_read_state(
-            "src/main.rs",
-            &state,
-            "beta\n",
-            Some(100),
-        )
-        .is_none());
     }
 }

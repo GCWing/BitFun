@@ -649,14 +649,14 @@
       margin-bottom: 6px;
       padding: 6px 8px;
       border-radius: 4px;
-      background: rgba(59, 130, 246, 0.08);
-      border: 1px solid rgba(59, 130, 246, 0.16);
+      background: var(--glass-blue-subtle);
+      border: 1px solid color-mix(in srgb, var(--color-accent-600) 16%, transparent);
       font-size: var(--flowchat-font-size-xs);
     }
 
     .issue-suggestion {
-      background: rgba(34, 197, 94, 0.06);
-      border: 1px solid rgba(34, 197, 94, 0.15);
+      background: color-mix(in srgb, var(--tool-card-positive-color) 6%, transparent);
+      border: 1px solid var(--tool-card-positive-bg-hover);
       border-radius: 4px;
       padding: 8px;
       display: flex;
@@ -874,14 +874,14 @@
           margin-bottom: 6px;
           padding: 6px 8px;
           border-radius: 4px;
-          background: rgba(59, 130, 246, 0.08);
-          border: 1px solid rgba(59, 130, 246, 0.16);
+          background: var(--glass-blue-subtle);
+          border: 1px solid color-mix(in srgb, var(--color-accent-600) 16%, transparent);
           font-size: var(--flowchat-font-size-xs);
         }
 
         .issue-suggestion {
-          background: rgba(34, 197, 94, 0.06);
-          border: 1px solid rgba(34, 197, 94, 0.15);
+          background: color-mix(in srgb, var(--tool-card-positive-color) 6%, transparent);
+          border: 1px solid var(--tool-card-positive-bg-hover);
           border-radius: 4px;
           padding: 8px;
           display: flex;
@@ -1118,11 +1118,11 @@
     border-radius: 12px;
     background:
       linear-gradient(180deg, color-mix(in srgb, var(--color-bg-elevated) 94%, transparent), color-mix(in srgb, var(--color-bg-primary) 90%, transparent)),
-      color-mix(in srgb, var(--color-accent-500) 8%, var(--color-bg-elevated, transparent));
+      color-mix(in srgb, var(--color-accent-500) 8%, var(--color-bg-elevated));
     backdrop-filter: blur(16px) saturate(1.15);
     -webkit-backdrop-filter: blur(16px) saturate(1.15);
     box-shadow:
-      0 14px 34px rgba(0, 0, 0, 0.24),
+      0 14px 34px rgba(var(--color-static-black-rgb), 0.24),
       inset 0 1px 0 color-mix(in srgb, white 10%, transparent);
     display: flex;
     flex-direction: column;

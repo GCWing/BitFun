@@ -12,6 +12,7 @@ const RASTER_TEXT_SELECTOR_BY_TYPE = {
   h4: ['h4'],
   h5: ['h5'],
   h6: ['h6'],
+  text: ['div', 'section', 'article', 'aside', 'td', 'th', 'span', 'small', 'label', 'a', 'code', 'button'],
   list: ['li'],
   'merged-text': ['span', 'em', 'strong', 'b', 'i', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'],
 };
@@ -61,7 +62,7 @@ export function slideHtmlForRasterBackdrop(html, slideData = null) {
   return `${styleTag}${markup.replace(/<body\b/i, '<body data-pptx-raster="1"')}`;
 }
 
-const RASTER_TEXT_TYPES = new Set(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'list', 'merged-text']);
+const RASTER_TEXT_TYPES = new Set(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'text', 'list', 'merged-text']);
 
 export function filterSlideDataForRasterBackdrop(slideData) {
   return {
@@ -266,11 +267,6 @@ export async function validateSlideForPptxGeneration(html) {
     }
 
     body.querySelectorAll('div').forEach((div) => {
-      [...div.childNodes].forEach((node) => {
-        if (node.nodeType === Node.TEXT_NODE && node.textContent.replace(/\s+/g, ' ').trim()) {
-          add('direct_div_text', 'Visible DIV text must be wrapped in p, h1-h6, or li.', div);
-        }
-      });
       const computed = view.getComputedStyle(div);
       if (computed.backgroundImage && computed.backgroundImage !== 'none') {
         add('div_background_image', 'DIV background-image is unsupported; use an img element.', div);
@@ -397,14 +393,12 @@ export async function prepareSlidesForPptxExport(slides, options = {}) {
       let rasterBase64 = null;
       const vectorTextCount = countVectorTextElements(item.slideData);
       const rasterOnly = vectorTextCount === 0;
-      if (typeof options.renderRaster === 'function') {
+      if (rasterOnly && typeof options.renderRaster === 'function') {
         try {
           if (typeof options.onRasterProgress === 'function') {
             options.onRasterProgress(index, slide);
           }
-          const rasterHtml = rasterOnly
-            ? slideExportHtml(slide)
-            : slideHtmlForRasterBackdrop(slide.html, item.slideData);
+          const rasterHtml = slideExportHtml(slide);
           rasterBase64 = await options.renderRaster(rasterHtml, index);
         } catch {
           rasterBase64 = null;

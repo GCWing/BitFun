@@ -33,7 +33,7 @@ export const BaseToolCard: React.FC<BaseToolCardProps> = ({
   displayName,
   icon,
   description,
-  primaryColor = '#667eea',
+  primaryColor = 'var(--color-accent-600)',
   status = 'pending',
   displayMode = 'standard',
   requiresConfirmation = false,

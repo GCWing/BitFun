@@ -151,7 +151,7 @@
     }
 
     &:hover .welcome-scene__recent-time-btn:hover {
-      background: var(--element-bg-muted);
+      background: var(--element-bg-subtle);
 
       .welcome-scene__recent-time-btn__icon svg {
         transform: scale(1.12);
@@ -227,7 +227,7 @@
 
     &:focus-visible {
       color: var(--color-text-primary);
-      outline: 2px solid var(--focus-ring-color, var(--color-accent));
+      outline: 2px solid var(--color-accent);
       outline-offset: -2px;
       z-index: 1;
     }

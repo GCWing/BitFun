@@ -202,6 +202,13 @@
     "scrollToBottom": "Scroll to Bottom",
     "copySelection": "Copy Selection",
     "paste": "Paste",
+    "pasteDialog": {
+      "title": "Paste multiple lines",
+      "message": "The clipboard contains {{lineCount}} lines. Pasting multiple lines in a terminal may execute multiple commands.",
+      "confirm": "Paste",
+      "pasteAsOneLine": "Paste as one line",
+      "cancel": "Cancel"
+    },
     "selectAll": "Select All",
     "find": "Find",
     "shell": "Shell",

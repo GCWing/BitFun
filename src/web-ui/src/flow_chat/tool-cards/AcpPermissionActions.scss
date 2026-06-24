@@ -16,8 +16,8 @@
   padding: 0 var(--flowchat-card-expanded-pad-x);
   border: 1px solid var(--color-border);
   border-radius: 6px;
-  background: var(--color-surface, transparent);
-  color: var(--color-text);
+  background: transparent;
+  color: var(--color-text-primary);
   font-size: var(--flowchat-font-size-sm);
   line-height: var(--flowchat-compact-line-height);
   cursor: pointer;

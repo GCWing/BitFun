@@ -49,8 +49,11 @@ const SceneViewport: React.FC<SceneViewportProps> = ({ workspacePath, isEntering
   // All tabs closed — show empty state
   if (openTabs.length === 0) {
     return (
-      <div className="bitfun-scene-viewport">
-        <div className="bitfun-scene-viewport__clip bitfun-scene-viewport__clip--empty">
+      <div className="bitfun-scene-viewport" data-testid="scene-viewport">
+        <div
+          className="bitfun-scene-viewport__clip bitfun-scene-viewport__clip--empty"
+          data-testid="scene-viewport-empty"
+        >
           <p className="bitfun-scene-viewport__empty-hint">{t('welcomeScene.emptyHint')}</p>
         </div>
       </div>
@@ -58,8 +61,8 @@ const SceneViewport: React.FC<SceneViewportProps> = ({ workspacePath, isEntering
   }
 
   return (
-    <div className="bitfun-scene-viewport">
-      <div className="bitfun-scene-viewport__clip">
+    <div className="bitfun-scene-viewport" data-testid="scene-viewport">
+      <div className="bitfun-scene-viewport__clip" data-testid="scene-viewport-clip">
         {openTabs.map(tab => {
           const isActive = tab.id === activeTabId;
           return (
@@ -70,6 +73,9 @@ const SceneViewport: React.FC<SceneViewportProps> = ({ workspacePath, isEntering
                 isActive && 'bitfun-scene-viewport__scene--active',
               ].filter(Boolean).join(' ')}
               aria-hidden={!isActive}
+              data-testid="scene-viewport-scene"
+              data-scene-id={tab.id}
+              data-scene-active={isActive ? 'true' : 'false'}
             >
               <Suspense
                 fallback={

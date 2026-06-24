@@ -12,31 +12,10 @@ import { useCallback } from 'react';
 import { FlowChatManager } from '../services/FlowChatManager';
 import { notificationService } from '@/shared/notification-system';
 import type { ContextItem, ImageContext } from '@/shared/types/context';
-import type { AIModelConfig, DefaultModelsConfig } from '@/infrastructure/config/types';
 import { createLogger } from '@/shared/utils/logger';
 import { formatContextForPrompt } from '@/shared/utils/contextPrompt';
 
 const log = createLogger('FlowChat');
-
-function normalizeModelSelection(
-  modelId: string | undefined,
-  models: AIModelConfig[],
-  defaultModels: DefaultModelsConfig,
-): string {
-  const value = modelId?.trim();
-  if (!value || value === 'auto') return 'auto';
-
-  if (value === 'primary' || value === 'fast') {
-    const resolvedDefaultId = value === 'primary' ? defaultModels.primary : defaultModels.fast;
-    const matchedModel = models.find(model => model.id === resolvedDefaultId);
-    return matchedModel ? value : 'auto';
-  }
-
-  const matchedModel = models.find(model =>
-    model.id === value || model.name === value || model.model_name === value,
-  );
-  return matchedModel ? value : 'auto';
-}
 
 interface UseMessageSenderProps {
   /** Current session ID */
@@ -109,24 +88,16 @@ export function useMessageSender(props: UseMessageSenderProps): UseMessageSender
 
     try {
       const flowChatManager = FlowChatManager.getInstance();
+      let agentTypeForSend = currentAgentType || 'agentic';
 
       if (!sessionId) {
-        const { configManager } = await import('@/infrastructure/config/services/ConfigManager');
-        const configData = await configManager.getConfigs([
-          'ai.agent_models',
-          'ai.models',
-          'ai.default_models',
-        ]);
-        const agentModels = (configData['ai.agent_models'] as Record<string, string> | undefined) || {};
-        const allModels = (configData['ai.models'] as AIModelConfig[] | undefined) || [];
-        const defaultModels = (configData['ai.default_models'] as DefaultModelsConfig | undefined) || {};
         const agentType = currentAgentType || 'agentic';
-        const modelId = normalizeModelSelection(agentModels[agentType], allModels, defaultModels);
 
-        sessionId = await flowChatManager.createChatSession({
-          modelName: modelId || undefined
-        }, agentType);
-        log.debug('Session created', { sessionId, modelId, agentType });
+        sessionId = await flowChatManager.createChatSession({}, agentType);
+        agentTypeForSend =
+          FlowChatManager.getInstance().getFlowChatState().sessions.get(sessionId)?.mode ||
+          agentType;
+        log.debug('Session created', { sessionId, agentType, effectiveAgentType: agentTypeForSend });
       } else {
         log.debug('Reusing existing session', { sessionId });
       }
@@ -208,7 +179,7 @@ export function useMessageSender(props: UseMessageSenderProps): UseMessageSender
         fullMessage,
         sessionId || undefined,
         displayMessage,
-        currentAgentType || 'agentic',
+        agentTypeForSend,
         undefined,
         imageContextsForBackend
       );
@@ -220,7 +191,7 @@ export function useMessageSender(props: UseMessageSenderProps): UseMessageSender
       onSuccess?.(trimmedMessage);
       log.info('Message sent successfully', {
         sessionId,
-        agentType: currentAgentType || 'agentic',
+        agentType: agentTypeForSend,
         contextCount: contexts.length,
         imageCount: imageContexts.length,
       });

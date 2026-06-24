@@ -1,0 +1,63 @@
+import { createHash } from 'node:crypto';
+import { describe, expect, it } from 'vitest';
+
+import { builtinThemes } from './index';
+
+function hashTheme(theme: unknown): string {
+  return createHash('sha256')
+    .update(JSON.stringify(theme))
+    .digest('hex');
+}
+
+describe('builtin theme preset output', () => {
+  it('keeps resolved preset objects stable across helper refactors', () => {
+    expect(builtinThemes.map(theme => ({
+      id: theme.id,
+      type: theme.type,
+      hash: hashTheme(theme),
+    }))).toMatchInlineSnapshot(`
+      [
+        {
+          "hash": "063f8984522a0be4753e2fa36e47030f8e86cfb09057d617ffbb6c37e3821ef1",
+          "id": "bitfun-light",
+          "type": "light",
+        },
+        {
+          "hash": "466b9c64bb1625b6d191209f289802a388c29fb21d307bd139e9bfda9d4db067",
+          "id": "bitfun-slate",
+          "type": "dark",
+        },
+        {
+          "hash": "51f8ff5912d12b0105b1b595930c4d564381fb1c8ce5c6b9436a97ba31bef80e",
+          "id": "bitfun-dark",
+          "type": "dark",
+        },
+        {
+          "hash": "df6cadb36332f77286c3ac9a862dc8cd7805944ee86ed57af6e1f3b40f4f2e08",
+          "id": "bitfun-midnight",
+          "type": "dark",
+        },
+        {
+          "hash": "46ac5adf2b0dd0bc633f27665e1544893eb57617c123500b2d5b543690eca1f9",
+          "id": "bitfun-china-style",
+          "type": "light",
+        },
+        {
+          "hash": "5b2db0c0dfc253022fadd1d5bc07da65e7f473c27d66fe297cc695a50466699c",
+          "id": "bitfun-china-night",
+          "type": "dark",
+        },
+        {
+          "hash": "e974f329a592a936fe1794f7bedc9f68d1579db1663435175eb429c96e4b37d1",
+          "id": "bitfun-cyber",
+          "type": "dark",
+        },
+        {
+          "hash": "1c391cd9207188d5edf906dabd3f23f28e07952c10f1ee9ebf30432747fc0fa0",
+          "id": "bitfun-tokyo-night",
+          "type": "dark",
+        },
+      ]
+    `);
+  });
+});

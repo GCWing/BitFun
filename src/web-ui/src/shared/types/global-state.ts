@@ -6,11 +6,20 @@ import { workspaceAPI } from '@/infrastructure/api';
 import type {
   ApplicationState as APIApplicationState,
   AppStatus as APIAppStatus,
+  RemoteWorkspaceSnapshot as APIRemoteWorkspaceSnapshot,
+  WorkspaceStartupStateSnapshot as APIWorkspaceStartupStateSnapshot,
   WorkspaceInfo as APIWorkspaceInfo,
 } from '@/infrastructure/api/service-api/GlobalAPI';
 import { createLogger } from '../utils/logger';
 
 const logger = createLogger('GlobalStateAPI');
+
+declare global {
+  // Native startup may inject this once to avoid a first-window IPC waterfall.
+  var __BITFUN_BOOTSTRAP_WORKSPACE_STARTUP_STATE__:
+    | APIWorkspaceStartupStateSnapshot
+    | undefined;
+}
 
 
 export enum AppStatus {
@@ -70,8 +79,6 @@ export interface WorkspaceIdentity {
   creature?: string;
   vibe?: string;
   emoji?: string;
-  modelPrimary?: string;
-  modelFast?: string;
 }
 
 export interface WorkspaceWorktreeInfo {
@@ -109,6 +116,13 @@ export interface WorkspaceInfo {
    * Logical workspace host for stable scoping: `{sshHost}:{rootPath}`.
    * Local / assistant workspaces use `localhost` (from backend); remote uses SSH config host.
    */
+  sshHost?: string;
+}
+
+export interface RemoteWorkspaceSnapshot {
+  connectionId: string;
+  connectionName: string;
+  remotePath: string;
   sshHost?: string;
 }
 
@@ -181,10 +195,18 @@ export interface CacheStatistics {
   oldestCacheAge?: string;
 }
 
+export interface WorkspaceStartupState {
+  cleanupRemovedCount: number;
+  currentWorkspace: WorkspaceInfo | null;
+  recentWorkspaces: WorkspaceInfo[];
+  openedWorkspaces: WorkspaceInfo[];
+  legacyRemoteWorkspace: RemoteWorkspaceSnapshot | null;
+}
+
  
 export interface GlobalStateAPI {
   
-  initializeGlobalState(): Promise<string>;
+  initializeWorkspaceStartupState(): Promise<WorkspaceStartupState>;
   
   
   getAppState(): Promise<ApplicationState>;
@@ -346,6 +368,21 @@ function mapWorkspaceInfo(workspace: APIWorkspaceInfo): WorkspaceInfo {
   };
 }
 
+function mapRemoteWorkspaceSnapshot(
+  workspace: APIRemoteWorkspaceSnapshot | null | undefined
+): RemoteWorkspaceSnapshot | null {
+  if (!workspace) {
+    return null;
+  }
+
+  return {
+    connectionId: workspace.connectionId,
+    connectionName: workspace.connectionName,
+    remotePath: workspace.remotePath,
+    sshHost: workspace.sshHost?.trim() || undefined,
+  };
+}
+
 function mapApplicationState(state: APIApplicationState): ApplicationState {
   const now = new Date().toISOString();
   return {
@@ -358,12 +395,92 @@ function mapApplicationState(state: APIApplicationState): ApplicationState {
   };
 }
 
+function mapWorkspaceStartupStateSnapshot(
+  snapshot: APIWorkspaceStartupStateSnapshot
+): WorkspaceStartupState {
+  const recentWorkspaces = snapshot.recentWorkspaces.map(mapWorkspaceInfo);
+  return {
+    cleanupRemovedCount: snapshot.cleanupRemovedCount,
+    currentWorkspace: snapshot.currentWorkspace ? mapWorkspaceInfo(snapshot.currentWorkspace) : null,
+    recentWorkspaces,
+    openedWorkspaces: snapshot.openedWorkspaces.map(mapWorkspaceInfo),
+    legacyRemoteWorkspace: mapRemoteWorkspaceSnapshot(snapshot.legacyRemoteWorkspace),
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function isWorkspaceStartupStateSnapshot(
+  value: unknown
+): value is APIWorkspaceStartupStateSnapshot {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    typeof value.cleanupRemovedCount === 'number' &&
+    (value.currentWorkspace === null || isRecord(value.currentWorkspace)) &&
+    Array.isArray(value.recentWorkspaces) &&
+    Array.isArray(value.openedWorkspaces) &&
+    (
+      value.legacyRemoteWorkspace === undefined ||
+      value.legacyRemoteWorkspace === null ||
+      isRecord(value.legacyRemoteWorkspace)
+    )
+  );
+}
+
+function consumeBootstrapWorkspaceStartupStateSnapshot():
+  | APIWorkspaceStartupStateSnapshot
+  | undefined {
+  if (
+    !Object.prototype.hasOwnProperty.call(
+      globalThis,
+      '__BITFUN_BOOTSTRAP_WORKSPACE_STARTUP_STATE__'
+    )
+  ) {
+    return undefined;
+  }
+
+  const snapshot = globalThis.__BITFUN_BOOTSTRAP_WORKSPACE_STARTUP_STATE__;
+  delete globalThis.__BITFUN_BOOTSTRAP_WORKSPACE_STARTUP_STATE__;
+
+  if (!isWorkspaceStartupStateSnapshot(snapshot)) {
+    logger.warn('Ignored invalid bootstrap workspace startup state snapshot');
+    return undefined;
+  }
+
+  return snapshot;
+}
+
  
 export function createGlobalStateAPI(): GlobalStateAPI {
   return {
     
-    async initializeGlobalState(): Promise<string> {
-      return await globalAPI.initializeGlobalState();
+    async initializeWorkspaceStartupState(): Promise<WorkspaceStartupState> {
+      const bootstrapSnapshot = consumeBootstrapWorkspaceStartupStateSnapshot();
+      if (bootstrapSnapshot) {
+        try {
+          const mappedSnapshot = mapWorkspaceStartupStateSnapshot(bootstrapSnapshot);
+          logger.debug(
+            'initializeWorkspaceStartupState returned from bootstrap',
+            summarizeWorkspacesForLog(mappedSnapshot.recentWorkspaces)
+          );
+          return mappedSnapshot;
+        } catch (error) {
+          logger.warn('Failed to map bootstrap workspace startup state snapshot', { error });
+        }
+      }
+
+      const snapshot = await globalAPI.initializeWorkspaceStartupState();
+      const mappedSnapshot = mapWorkspaceStartupStateSnapshot(snapshot);
+      logger.debug(
+        'initializeWorkspaceStartupState returned',
+        summarizeWorkspacesForLog(mappedSnapshot.recentWorkspaces)
+      );
+      return mappedSnapshot;
     },
 
     

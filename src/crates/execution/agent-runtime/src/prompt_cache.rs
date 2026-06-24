@@ -166,6 +166,53 @@ impl SessionPromptCache {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PromptCachePersistenceWriteAction {
+    Save,
+    Delete,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PromptCacheRestoreDecision {
+    Keep(SessionPromptCache),
+    SavePruned(SessionPromptCache),
+    DeleteExpired,
+}
+
+impl PromptCacheRestoreDecision {
+    pub fn into_cache(self) -> Option<SessionPromptCache> {
+        match self {
+            Self::Keep(cache) | Self::SavePruned(cache) => Some(cache),
+            Self::DeleteExpired => None,
+        }
+    }
+}
+
+pub fn reconcile_prompt_cache_restore(
+    mut cache: SessionPromptCache,
+    persistence_ttl: Option<Duration>,
+) -> PromptCacheRestoreDecision {
+    if !cache.apply_persistence_ttl(persistence_ttl) {
+        return PromptCacheRestoreDecision::Keep(cache);
+    }
+
+    if cache.is_empty() {
+        PromptCacheRestoreDecision::DeleteExpired
+    } else {
+        PromptCacheRestoreDecision::SavePruned(cache)
+    }
+}
+
+pub fn prompt_cache_persist_action(
+    cache: &SessionPromptCache,
+) -> PromptCachePersistenceWriteAction {
+    if cache.is_empty() {
+        PromptCachePersistenceWriteAction::Delete
+    } else {
+        PromptCachePersistenceWriteAction::Save
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PromptCacheScope {
     SystemPrompt,
     UserContext,

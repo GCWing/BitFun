@@ -16,7 +16,7 @@ pub use bitfun_product_domains::miniapp::customization::{
 };
 pub use bitfun_product_domains::miniapp::draft::{MiniAppDraft, MiniAppDraftManifest};
 pub use bitfun_product_domains::miniapp::{
-    agent_bridge, ai_bridge, bridge_builder, permission_policy, rate_limit, types,
+    agent_bridge, ai_bridge, bridge_builder, lifecycle, permission_policy, rate_limit, types,
 };
 
 pub use builtin::{seed_builtin_miniapps, BuiltinApp, BUILTIN_APPS};

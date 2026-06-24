@@ -6,6 +6,7 @@
 import React from 'react';
 import { CheckSquare, Square, Circle } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n';
+import { UI_EXCEPTION_ACCENTS } from '@/shared/theme/uiExceptionAccents';
 import { BaseToolCard, BaseToolCardProps } from '../BaseToolCard';
 import './TodoCard.scss';
 
@@ -71,7 +72,7 @@ export const TodoCard: React.FC<TodoCardProps> = ({
       displayMode={displayMode}
       input={input}
       result={result}
-      primaryColor="#0d9488"
+      primaryColor={UI_EXCEPTION_ACCENTS.todo}
       className="todo-card"
       {...baseProps}
     >

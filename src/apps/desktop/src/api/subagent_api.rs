@@ -2,15 +2,13 @@
 
 use crate::api::app_state::AppState;
 use bitfun_core::agentic::agents::{
-    subagent_source_from_custom_kind, AgentCategory, AgentInfo, CustomSubagent,
-    CustomSubagentConfig, CustomSubagentDetail, CustomSubagentKind, SubAgentSource,
+    AgentInfo, CustomSubagent, CustomSubagentDetail, CustomSubagentKind, SubAgentSource,
     SubagentListScope, SubagentQueryContext,
 };
 use log::warn;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
-use std::sync::Arc;
 use tauri::State;
 
 #[derive(Debug, Clone, Deserialize)]
@@ -357,19 +355,12 @@ pub async fn create_subagent(
         path_str.clone(),
         kind,
     );
-    subagent.review = review;
+    subagent.set_review(review);
     subagent.save_to_file(None).map_err(|e| e.to_string())?;
-
-    let custom_config = CustomSubagentConfig {
-        model: subagent.model.clone(),
-    };
-
-    state.agent_registry.register_agent(
-        Arc::new(subagent),
-        AgentCategory::SubAgent,
-        Some(subagent_source_from_custom_kind(kind)),
-        Some(custom_config),
-    );
+    state
+        .agent_registry
+        .load_custom_agents(workspace.as_deref())
+        .await;
 
     Ok(())
 }
