@@ -1,3 +1,4 @@
+use crate::agentic::image_analysis::{optimize_image_for_provider, ImageLimits};
 use crate::agentic::tools::framework::{
     Tool, ToolExposure, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
@@ -247,7 +248,7 @@ impl Tool for ViewImageTool {
                 "detail": {
                     "type": "string",
                     "enum": ["original"],
-                    "description": "Optional detail override. Supported value: original. The current BitFun tool attaches the original local image bytes."
+                    "description": "Optional detail override. Supported value: original. BitFun preserves image detail when possible and may optimize bytes to fit the active provider limits."
                 }
             },
             "required": ["path"],
@@ -396,12 +397,30 @@ impl Tool for ViewImageTool {
         let input_path = Self::path_from_input(input)?;
         let path = Self::resolve_path(input_path, Some(context))?;
         let bytes = Self::read_image_bytes(&path, Some(context)).await?;
-        let mime_type = Self::mime_type_for_image(&bytes)?;
-        let data_base64 = base64::engine::general_purpose::STANDARD.encode(bytes);
+        let original_mime_type = Self::mime_type_for_image(&bytes)?;
+        let provider = Self::primary_api_format(context);
+        let processed = optimize_image_for_provider(bytes, &provider, Some(original_mime_type))
+            .map_err(|err| {
+                BitFunError::tool(format!("unable to prepare image for model vision: {}", err))
+            })?;
+        let limits = ImageLimits::for_provider(&provider);
+        if processed.data.len() > limits.max_size {
+            return Err(BitFunError::tool(format!(
+                "image is too large for {} after optimization: {} bytes > {} bytes",
+                provider,
+                processed.data.len(),
+                limits.max_size
+            )));
+        }
+        let mime_type = processed.mime_type.clone();
+        let data_base64 = base64::engine::general_purpose::STANDARD.encode(&processed.data);
         let summary = format!("Attached image: {}", path.display_path());
         let data = json!({
             "path": path.display_path(),
-            "mime_type": mime_type,
+            "mime_type": mime_type.clone(),
+            "width": processed.width,
+            "height": processed.height,
+            "size": processed.data.len(),
             "summary": summary,
         });
 
@@ -409,7 +428,7 @@ impl Tool for ViewImageTool {
             data,
             Some("Image attached for model vision.".to_string()),
             vec![ToolImageAttachment {
-                mime_type: mime_type.to_string(),
+                mime_type,
                 data_base64,
             }],
         )])
@@ -428,19 +447,22 @@ mod tests {
     use crate::agentic::WorkspaceBinding;
     use crate::service::remote_ssh::workspace_state::workspace_session_identity;
     use async_trait::async_trait;
+    use image::{ImageBuffer, ImageFormat, Rgb};
     use serde_json::json;
     use std::collections::HashMap;
     use std::fs;
+    use std::io::Cursor;
     use std::path::PathBuf;
     use std::sync::Arc;
 
-    const ONE_BY_ONE_PNG: &[u8] = &[
-        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44,
-        0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x04, 0x00, 0x00, 0x00, 0xb5,
-        0x1c, 0x0c, 0x02, 0x00, 0x00, 0x00, 0x0b, 0x49, 0x44, 0x41, 0x54, 0x78, 0x01, 0x63, 0xfc,
-        0xff, 0x1f, 0x00, 0x03, 0x03, 0x02, 0x00, 0xf7, 0x7f, 0x2d, 0xa4, 0x00, 0x00, 0x00, 0x00,
-        0x49, 0x45, 0x4e, 0x44, 0xae, 0x42, 0x60, 0x82,
-    ];
+    fn png_bytes(width: u32, height: u32) -> Vec<u8> {
+        let image = ImageBuffer::from_pixel(width, height, Rgb([80u8, 120u8, 160u8]));
+        let mut encoded = Cursor::new(Vec::new());
+        image
+            .write_to(&mut encoded, ImageFormat::Png)
+            .expect("encode png");
+        encoded.into_inner()
+    }
 
     struct FakeRemoteFs;
 
@@ -448,7 +470,7 @@ mod tests {
     impl WorkspaceFileSystem for FakeRemoteFs {
         async fn read_file(&self, path: &str) -> anyhow::Result<Vec<u8>> {
             if path == "/remote/workspace/screenshots/pixel.png" {
-                return Ok(ONE_BY_ONE_PNG.to_vec());
+                return Ok(png_bytes(1, 1));
             }
             anyhow::bail!("not found: {}", path)
         }
@@ -557,7 +579,7 @@ mod tests {
     async fn view_image_attaches_local_image() {
         let dir = tempfile::tempdir().expect("tempdir");
         let path = dir.path().join("pixel.png");
-        fs::write(&path, ONE_BY_ONE_PNG).expect("write png");
+        fs::write(&path, png_bytes(1, 1)).expect("write png");
 
         let results = ViewImageTool::new()
             .call_impl(
@@ -586,7 +608,7 @@ mod tests {
     async fn view_image_reads_local_absolute_path_without_workspace() {
         let dir = tempfile::tempdir().expect("tempdir");
         let path = dir.path().join("pixel.png");
-        fs::write(&path, ONE_BY_ONE_PNG).expect("write png");
+        fs::write(&path, png_bytes(1, 1)).expect("write png");
 
         let results = ViewImageTool::new()
             .call_impl(&json!({ "path": path }), &context("openai", true))
@@ -612,7 +634,7 @@ mod tests {
     async fn view_image_rejects_text_only_model() {
         let dir = tempfile::tempdir().expect("tempdir");
         let path = dir.path().join("pixel.png");
-        fs::write(&path, ONE_BY_ONE_PNG).expect("write png");
+        fs::write(&path, png_bytes(1, 1)).expect("write png");
 
         let error = ViewImageTool::new()
             .call_impl(
@@ -640,6 +662,38 @@ mod tests {
             .expect_err("non-image should be rejected");
 
         assert!(error.to_string().contains("supported image files"));
+    }
+
+    #[tokio::test]
+    async fn view_image_optimizes_image_for_provider_limits() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("large.png");
+        fs::write(&path, png_bytes(2400, 2400)).expect("write png");
+
+        let results = ViewImageTool::new()
+            .call_impl(
+                &json!({ "path": path }),
+                &local_workspace_context("anthropic", true, dir.path().to_path_buf()),
+            )
+            .await
+            .expect("view image result");
+
+        let ToolResult::Result {
+            data,
+            image_attachments,
+            ..
+        } = &results[0]
+        else {
+            panic!("expected result");
+        };
+        assert!(data["width"].as_u64().expect("width") <= 1568);
+        assert!(data["height"].as_u64().expect("height") <= 2390);
+        assert!(data["size"].as_u64().expect("size") <= 5 * 1024 * 1024);
+        let attachments = image_attachments.as_ref().expect("image attachments");
+        assert_eq!(
+            attachments[0].mime_type,
+            data["mime_type"].as_str().expect("mime type")
+        );
     }
 
     #[tokio::test]
@@ -708,7 +762,7 @@ mod tests {
         let workspace = tempfile::tempdir().expect("workspace tempdir");
         let outside = tempfile::tempdir().expect("outside tempdir");
         let path = outside.path().join("pixel.png");
-        fs::write(&path, ONE_BY_ONE_PNG).expect("write png");
+        fs::write(&path, png_bytes(1, 1)).expect("write png");
 
         let results = ViewImageTool::new()
             .call_impl(
