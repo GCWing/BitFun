@@ -1397,6 +1397,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         } catch {
           // ignore
         }
+      }
     }
   }, [
     activeSessionMode,

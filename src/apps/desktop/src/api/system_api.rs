@@ -204,9 +204,19 @@ pub async fn open_html_file_in_browser(
         return Err("HTML path is not a file".to_string());
     }
 
-    app.opener()
-        .open_path(&request.path, None::<&str>)
-        .map_err(|error| format!("Failed to open HTML file in browser: {}", error))
+    #[cfg(not(target_env = "ohos"))]
+    {
+        app.opener()
+            .open_path(&request.path, None::<&str>)
+            .map_err(|error| format!("Failed to open HTML file in browser: {}", error))
+    }
+
+    #[cfg(target_env = "ohos")]
+    {
+        use crate::api::ohos::browser::open_browser;
+        open_browser(request.path).await
+    }
+
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -512,7 +522,15 @@ pub async fn initialize_tray_after_startup(
     app: tauri::AppHandle,
     startup_trace: State<'_, DesktopStartupTrace>,
 ) -> Result<(), String> {
-    crate::tray::setup_tray(&app, &startup_trace).map_err(|e| e.to_string())
+    #[cfg(not(target_env = "ohos"))]
+    {
+        crate::tray::setup_tray(&app, &startup_trace).map_err(|e| e.to_string())
+    }
+    #[cfg(target_env = "ohos")]
+    {
+        Err("Do not support the initialized tray before startup".to_string())
+    }
+
 }
 
 /// Minimal startup-window controls used by the static pre-React splash.

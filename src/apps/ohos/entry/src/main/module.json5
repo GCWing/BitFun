@@ -93,6 +93,14 @@
           ],
           "when": "always"
         }
+      },
+      {
+        "name": "ohos.permission.kernel.ALLOW_WRITABLE_CODE_MEMORY",
+        "reason": "$string:permission_writable_code_memory_reason"
+      },
+      {
+        "name": "ohos.permission.ALLOW_EXTERNAL_NATIVE_CODE",
+        "reason": "$string:permission_external_native_code_reason"
       }
     ],
     "extensionAbilities": [

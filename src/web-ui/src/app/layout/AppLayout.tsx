@@ -25,7 +25,6 @@ import { FlowChatManager } from '../../flow_chat/services/FlowChatManager';
 import WorkspaceBody from './WorkspaceBody';
 import { useToolbarModeContext } from '../../flow_chat/components/toolbar-mode/ToolbarModeContext';
 import { MCPInteractionDialog } from '../components/MCPInteractionDialog/MCPInteractionDialog';
-import { WorkspaceManager } from '../../tools/workspace';
 import { workspaceAPI } from '@/infrastructure/api';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import type { CloseBehavior } from '@/infrastructure/api/service-api/SystemAPI';
@@ -39,8 +38,6 @@ import { shortcutManager, parseStoredKeybindings } from '@/infrastructure/servic
 import { useSessionModeStore } from '../stores/sessionModeStore';
 import { isMacOSDesktopRuntime } from '@/infrastructure/runtime';
 import './AppLayout.scss';
-
-type TransitionDirection = 'entering' | 'returning' | null;
 
 const log = createLogger('AppLayout');
 const ACP_SESSION_PENDING_TIMEOUT_MS = 75_000;

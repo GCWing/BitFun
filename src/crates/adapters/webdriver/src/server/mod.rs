@@ -57,7 +57,7 @@ impl AppState {
 }
 
 pub fn start(state: Arc<AppState>) {
-    tokio::spawn(async move {
+    tauri::async_runtime::spawn(async move {
         if let Err(error) = serve(state).await {
             log::error!("Embedded WebDriver failed to start: {}", error);
         }

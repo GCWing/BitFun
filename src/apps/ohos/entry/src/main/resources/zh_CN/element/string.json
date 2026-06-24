@@ -39,6 +39,14 @@
         {
             "name": "permission_download_directory_reason",
             "value": "用于访问下载目录以进行文件管理和项目操作"
+        },
+        {
+            "name": "permission_writable_code_memory_reason",
+            "value": "用于允许可写代码内存以支持运行时代码生成和JIT编译"
+        },
+        {
+            "name": "permission_external_native_code_reason",
+            "value": "用于允许加载和执行外部原生代码库"
         }
     ]
 }

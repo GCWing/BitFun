@@ -572,71 +572,42 @@ pub async fn _run() {
             }
 
             let app_handle = app.handle().clone();
-            let workspace_startup_bootstrap_snapshot = {
-                let app_state: tauri::State<'_, api::app_state::AppState> = app.state();
-                let startup_trace_state: tauri::State<'_, startup_trace::DesktopStartupTrace> =
-                    app.state();
-                tokio::task::block_in_place(|| {
-                    tokio::runtime::Handle::current().block_on(
-                        prepare_workspace_startup_bootstrap_snapshot(
-                            &app_state,
-                            &app_handle,
-                            &startup_trace_state,
-                        ),
-                    )
-                })
-                .and_then(|snapshot| {
-                    serde_json::to_value(snapshot)
-                        .map_err(|error| {
-                            log::warn!(
-                                "Failed to serialize workspace startup bootstrap snapshot, frontend will fall back to startup command: {}",
-                                error
-                            );
-                            error
-                        })
-                        .ok()
-                })
-            };
-            let window_started = Instant::now();
-            startup_trace.record_phase("main_window_create_start", "native_window");
-            theme::create_main_window(
-                &app_handle,
-                &startup_trace_id,
-                &startup_trace,
-                workspace_startup_bootstrap_snapshot,
-            );
-            let window_duration_ms = elapsed_ms(window_started);
-            startup_trace.record_step(
-                "native_step_end",
-                "native_window",
-                "create_main_window",
-                window_duration_ms,
-            );
-            log::debug!(
+
+            #[cfg(not(target_env = "ohos"))]
+            {
+                let window_duration_ms = elapsed_ms(window_started);
+                startup_trace.record_step(
+                    "native_step_end",
+                    "native_window",
+                    "create_main_window",
+                    window_duration_ms,
+                );
+                log::debug!(
                 "Desktop startup step completed: step=create_main_window, duration_ms={}",
                 window_duration_ms
-            );
-            let webdriver_started = Instant::now();
-            bitfun_webdriver::maybe_start(app_handle.clone());
-            startup_trace.record_elapsed_step(
-                "native_setup",
-                "maybe_start_webdriver",
-                webdriver_started,
-            );
-            let window_phase_duration_ms = elapsed_ms(setup_started);
-            let since_process_start_ms = elapsed_ms(startup_started);
-            startup_trace.record_step(
-                "native_step_end",
-                "native_setup",
-                "tauri_setup_until_main_window_created",
-                window_phase_duration_ms,
-            );
-            startup_trace.record_phase("tauri_setup_window_phase_end", "native_setup");
-            log::debug!(
-                "Desktop startup timing: phase=tauri_setup_until_main_window_created, duration_ms={}, since_process_start_ms={}",
-                window_phase_duration_ms,
-                since_process_start_ms
-            );
+                    );
+                let webdriver_started = Instant::now();
+                bitfun_webdriver::maybe_start(app_handle.clone());
+                startup_trace.record_elapsed_step(
+                    "native_setup",
+                    "maybe_start_webdriver",
+                    webdriver_started,
+                );
+                let window_phase_duration_ms = elapsed_ms(setup_started);
+                let since_process_start_ms = elapsed_ms(startup_started);
+                startup_trace.record_step(
+                    "native_step_end",
+                    "native_setup",
+                    "tauri_setup_until_main_window_created",
+                    window_phase_duration_ms,
+                );
+                startup_trace.record_phase("tauri_setup_window_phase_end", "native_setup");
+                log::debug!(
+                    "Desktop startup timing: phase=tauri_setup_until_main_window_created, duration_ms={}, since_process_start_ms={}",
+                    window_phase_duration_ms,
+                    since_process_start_ms
+                );
+            }
 
             #[cfg(target_os = "macos")]
             {
@@ -695,7 +666,7 @@ pub async fn _run() {
                     app.state();
                 let terminal_state_inner = api::terminal_api::TerminalState::new();
                 let app_handle_clone = app_handle.clone();
-                tauri::async_time::spawn(async move {
+                tauri::async_runtime::spawn(async move {
                     api::terminal_api::start_terminal_event_loop(
                         terminal_state_inner,
                         app_handle_clone,

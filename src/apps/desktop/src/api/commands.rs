@@ -1763,7 +1763,7 @@ pub async fn delete_workspace(
     }
 
     info!(
-        "Workspace deleted: workspace_id={}, kind={}, path={}",
+        "Workspace deleted: workspace_id={:?}, kind={:?}, path={:?}",
         request.workspace_id,
         workspace_info.workspace_kind,
         workspace_info.root_path.display()

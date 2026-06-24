@@ -590,7 +590,7 @@ const BrowserPanel: React.FC<BrowserPanelProps> = ({ isActive, initialUrl }) => 
       ) : null}
 
       <div className="browser-panel__content" data-testid="browser-page-frame">
-        {!isTauri ? || webviewUnavailable ? (
+        {!isTauri || webviewUnavailable ? (
           <iframe
             className="browser-panel__iframe"
             src={currentUrl}

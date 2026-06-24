@@ -23,7 +23,6 @@ import { Badge, Button, ConfirmDialog, Input, Modal, Search, Select } from '@/co
 import { GalleryDetailModal } from '@/app/components';
 import type { SkillInfo, SkillLevel, SkillMarketItem } from '@/infrastructure/config/types';
 import { workspaceAPI } from '@/infrastructure/api';
-import { systemAPI } from '@/infrastructure/api';
 import { workspaceManager } from '@/infrastructure/services/business/workspaceManager';
 import { useNotification } from '@/shared/notification-system';
 import { isRemoteWorkspace } from '@/shared/types';

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { FolderOpen, RefreshCw, ChevronDown, Plus, Trash2, Check, Info } from 'lucide-react';
+import { FolderOpen, RefreshCw, ChevronDown, Info } from 'lucide-react';
 import {
   Switch,
   NumberInput,
@@ -213,97 +213,6 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
     }
   };
 
-  const handleRefreshCompanionPets = async () => {
-    setCompanionPetsLoading(true);
-    try {
-      setCompanionPets(await listAgentCompanionPets());
-    } finally {
-      setCompanionPetsLoading(false);
-    }
-  };
-
-  const handleImportCompanionPet = async () => {
-    if (!IS_TAURI_DESKTOP) return;
-    setCompanionPetImporting(true);
-    try {
-      const selected = await open({
-        directory: false,
-        multiple: false,
-        title: t('features.agentCompanion.importDialogTitle'),
-        filters: [{ name: 'Petdex', extensions: ['zip'] }],
-      });
-      if (!selected || Array.isArray(selected)) return;
-      const imported = await importAgentCompanionPetPackage(selected);
-      const refreshed = await listAgentCompanionPets();
-      setCompanionPets(refreshed);
-      await updateSetting('agent_companion_pet', {
-        id: imported.id,
-        displayName: imported.displayName,
-        description: imported.description,
-        source: imported.source,
-        packagePath: imported.packagePath,
-        spritesheetPath: imported.spritesheetPath,
-        spritesheetMimeType: imported.spritesheetMimeType,
-      });
-    } catch (error) {
-      log.error('Failed to import Agent companion pet', error);
-      notification.error(t('features.agentCompanion.importFailed'));
-    } finally {
-      setCompanionPetImporting(false);
-    }
-  };
-
-  const handleDeleteCompanionPet = async (event: React.MouseEvent, pet: AgentCompanionPetPackage) => {
-    event.preventDefault();
-    event.stopPropagation();
-    if (!IS_TAURI_DESKTOP || pet.source !== 'user' || !settings) return;
-    const confirmed = await ask(t('features.agentCompanion.deleteConfirmBody'), {
-      title: t('features.agentCompanion.deleteConfirmTitle'),
-      kind: 'warning',
-    });
-    if (!confirmed) return;
-    setCompanionPetDeletingPath(pet.packagePath);
-    try {
-      await deleteAgentCompanionPetPackage(pet.packagePath);
-      releaseAgentCompanionPetPreviewBlobs(pet.packagePath, pet.spritesheetPath);
-      const refreshed = await listAgentCompanionPets();
-      setCompanionPets(refreshed);
-      if (settings.agent_companion_pet?.packagePath === pet.packagePath) {
-        const next = { ...settings, agent_companion_pet: DEFAULT_AGENT_COMPANION_PET };
-        setSettings(next);
-        await aiExperienceConfigService.saveSettings(next);
-      }
-      notification.success(t('features.agentCompanion.deleteSuccess'));
-    } catch (error) {
-      log.error('Failed to delete Agent companion pet', error);
-      notification.error(t('features.agentCompanion.deleteFailed'));
-    } finally {
-      setCompanionPetDeletingPath(null);
-    }
-  };
-
-  const companionPetOptions: SelectOption[] = companionPets.map(pet => ({
-    value: pet.packagePath,
-    label: pet.displayName,
-    description: pet.description ?? undefined,
-    group: pet.source === 'preset'
-      ? t('features.agentCompanion.groupPreset')
-      : t('features.agentCompanion.groupImported'),
-  }));
-
-  const companionDisplayModeOptions: SelectOption[] = [
-    {
-      value: 'desktop',
-      label: t('features.agentCompanion.displayDesktop'),
-      description: t('features.agentCompanion.displayDesktopDesc'),
-    },
-    {
-      value: 'input',
-      label: t('features.agentCompanion.displayInput'),
-      description: t('features.agentCompanion.displayInputDesc'),
-    },
-  ];
-
   const subagentBatchExecutionPolicyOptions: SelectOption[] = [
     {
       value: 'safe_only',
@@ -335,30 +244,6 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
       </Tooltip>
     </span>
   );
-
-  const selectedCompanionPetPackage = settings?.agent_companion_pet
-    ? companionPets.find(pet => pet.packagePath === settings.agent_companion_pet?.packagePath) ?? null
-    : null;
-  const selectedCompanionPet = selectedCompanionPetPackage ?? settings?.agent_companion_pet ?? DEFAULT_AGENT_COMPANION_PET;
-  const selectedCompanionPetValue = selectedCompanionPet.packagePath;
-  const selectedCompanionPetOption = companionPetOptions.find(option => option.value === selectedCompanionPetValue)
-    ?? companionPetOptions[0];
-
-  const handleCompanionPetChange = async (value: string | number | (string | number)[]) => {
-    const selectedValue = String(Array.isArray(value) ? value[0] : value);
-    const pet = companionPets.find(item => item.packagePath === selectedValue);
-    if (!pet) return;
-    await updateSetting('agent_companion_pet', {
-      id: pet.id,
-      displayName: pet.displayName,
-      description: pet.description,
-      source: pet.source,
-      packagePath: pet.packagePath,
-      spritesheetPath: pet.spritesheetPath,
-      spritesheetMimeType: pet.spritesheetMimeType,
-    });
-    setCompanionPetListExpanded(false);
-  };
 
   const getModelName = useCallback((modelId: string | null | undefined): string | undefined => {
     if (!modelId) return undefined;
