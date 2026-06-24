@@ -19,7 +19,6 @@ import { isCollapsibleTool } from '../../tool-cards/toolCardMetadata';
 import { useFlowChatContext } from './FlowChatContext';
 import { FlowChatStore } from '../../store/FlowChatStore';
 import { taskCollapseStateManager } from '../../store/TaskCollapseStateManager';
-import { ExportImageButton } from './ExportImageButton';
 import { ForkSessionButton } from './ForkSessionButton';
 import {
   buildModelRoundItemGroups,
@@ -758,6 +757,10 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
                   </div>
               )}
 
+              <span className="model-round-item__ai-disclaimer">
+                {t('modelRound.aiDisclaimer', { defaultValue: '以上内容均由 AI 生成，仅供参考' })}
+              </span>
+
               <ForkSessionButton sessionId={sessionId} turnId={turnId} />
 
               <Tooltip content={copied ? t('modelRound.copiedDialog') : t('modelRound.copyDialog')} placement="top">
@@ -769,8 +772,6 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
                   {copied ? <Check size={14} /> : <Copy size={14} />}
                 </button>
               </Tooltip>
-
-              <ExportImageButton turnId={turnId} />
             </div>
         )}
       </div>

@@ -1,6 +1,8 @@
 /** Agent IDs hidden from the Agents overview UI (not listed, not counted). */
 export const STATIC_HIDDEN_AGENT_IDS = new Set<string>([
   'Claw',
+  'debug',
+  'ComputerUse',
 ]);
 
 export const FALLBACK_REVIEW_HIDDEN_AGENT_IDS = new Set<string>([
