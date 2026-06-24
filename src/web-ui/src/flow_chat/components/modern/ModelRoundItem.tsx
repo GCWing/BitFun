@@ -744,6 +744,9 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
 
         {isTurnComplete && isLastRound && hasContent && (
             <div className="model-round-item__footer">
+              <span className="model-round-item__ai-disclaimer">
+                {t('modelRound.aiDisclaimer', { defaultValue: '以上内容均由 AI 生成，仅供参考' })}
+              </span>
               {usageMetaItems.length > 0 && (
                   <div
                       className="model-round-item__meta"
