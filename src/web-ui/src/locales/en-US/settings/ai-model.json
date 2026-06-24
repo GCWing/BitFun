@@ -219,6 +219,7 @@
   },
   "streamIdleTimeout": {
     "title": "Streaming Timeout",
+    "effectiveNextRound": "Changes take effect next turn.",
     "label": "Idle Timeout (seconds)",
     "hint": "Global idle timeout between streamed chunks after the stream starts. Leave empty to wait indefinitely.",
     "placeholder": "Leave empty for no timeout",
@@ -229,7 +230,7 @@
   "streamTtftTimeout": {
     "title": "First Token Timeout",
     "label": "TTFT Timeout (seconds)",
-    "hint": "Maximum wait time for the model to start streaming after a request is sent. Leave empty to wait indefinitely.",
+    "hint": "Maximum wait time after a request is sent for the first effective streamed output. Leave empty to wait indefinitely.",
     "placeholder": "Leave empty for no timeout",
     "invalid": "Enter a positive integer in seconds, or leave this field empty.",
     "save": "Save First Token Timeout",

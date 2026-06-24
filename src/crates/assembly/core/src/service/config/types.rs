@@ -770,7 +770,7 @@ fn default_stream_idle_timeout() -> Option<u64> {
     Some(45)
 }
 
-/// Default time-to-first-token timeout while opening a stream.
+/// Default timeout while waiting for the first effective streamed output.
 fn default_stream_ttft_timeout() -> Option<u64> {
     Some(30)
 }
@@ -2144,6 +2144,26 @@ mod tests {
             SubagentBatchExecutionPolicy::SafeOnly
         );
         assert!(config.review_teams.contains_key("default"));
+    }
+
+    #[test]
+    fn deserializes_explicit_null_stream_ttft_timeout_as_none() {
+        let config: AIConfig = serde_json::from_value(serde_json::json!({
+            "models": [],
+            "agent_models": {},
+            "func_agent_models": {},
+            "default_models": {},
+            "agent_profiles": {},
+            "proxy": {
+                "enabled": false,
+                "url": ""
+            },
+            "stream_ttft_timeout_secs": null
+        }))
+        .expect("config with explicit null stream_ttft_timeout_secs should deserialize");
+
+        assert_eq!(config.stream_ttft_timeout_secs, None);
+        assert_eq!(config.stream_idle_timeout_secs, Some(45));
     }
 
     #[test]

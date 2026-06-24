@@ -37,22 +37,20 @@ pub struct StreamResponse {
     pub trace_handle: Option<ModelExchangeRequestTraceHandle>,
 }
 
-/// Default time to wait for the first response headers / stream body to start.
+/// Default time to wait for the first effective streamed output after a request starts.
 pub const DEFAULT_STREAM_TTFT_TIMEOUT_SECS: u64 = 30;
 
 /// Default idle time between streamed chunks once the stream has started.
 pub const DEFAULT_STREAM_IDLE_TIMEOUT_SECS: u64 = 45;
-
-/// Minimum TTFT for models with explicit reasoning enabled.
-pub const REASONING_STREAM_TTFT_TIMEOUT_SECS: u64 = 45;
 
 /// Runtime stream behavior shared across provider implementations.
 #[derive(Debug, Clone, Default)]
 pub struct StreamOptions {
     /// Maximum idle time between streamed chunks. `None` means wait indefinitely.
     pub idle_timeout: Option<Duration>,
-    /// Maximum time to wait for HTTP response headers when opening a stream.
-    /// `None` means wait indefinitely.
+    /// Maximum time to wait for the first effective streamed output (text,
+    /// reasoning, or tool-call data) after a request starts. `None` means wait
+    /// indefinitely.
     pub ttft_timeout: Option<Duration>,
 }
 
@@ -100,7 +98,7 @@ impl AIClient {
         self.stream_options.idle_timeout
     }
 
-    /// Returns the configured time-to-first-token timeout for opening a stream, if any.
+    /// Returns the configured timeout for the first effective streamed output, if any.
     pub fn stream_ttft_timeout(&self) -> Option<Duration> {
         self.stream_options.ttft_timeout
     }

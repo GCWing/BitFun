@@ -55,9 +55,16 @@ where
 fn format_ttft_timeout_error(label: &str, ttft_timeout: Option<Duration>) -> String {
     let timeout_secs = ttft_timeout.map(|timeout| timeout.as_secs()).unwrap_or(0);
     format!(
-        "{} TTFT timeout after {}s waiting for response headers",
+        "{} TTFT timeout after {}s waiting for first effective stream output",
         label, timeout_secs
     )
+}
+
+fn remaining_ttft_timeout(
+    started_at: std::time::Instant,
+    ttft_timeout: Option<Duration>,
+) -> Option<Duration> {
+    ttft_timeout.map(|timeout| timeout.saturating_sub(started_at.elapsed()))
 }
 
 fn format_transport_error(label: &str, error: &reqwest::Error) -> String {
@@ -116,6 +123,7 @@ where
         reqwest::Response,
         mpsc::UnboundedSender<Result<UnifiedResponse>>,
         Option<mpsc::UnboundedSender<String>>,
+        Option<Duration>,
     ),
 {
     let mut last_error = None;
@@ -279,7 +287,8 @@ where
 
         let (tx, rx) = mpsc::unbounded_channel();
         let (tx_raw, rx_raw) = mpsc::unbounded_channel();
-        spawn_handler(response, tx, Some(tx_raw));
+        let remaining_ttft_timeout = remaining_ttft_timeout(request_start_time, ttft_timeout);
+        spawn_handler(response, tx, Some(tx_raw), remaining_ttft_timeout);
 
         return Ok(StreamResponse {
             stream: Box::pin(tokio_stream::wrappers::UnboundedReceiverStream::new(rx)),
@@ -311,6 +320,17 @@ mod tests {
         );
 
         assert!(message.contains("TTFT timeout after 30s"));
+        assert!(message.contains("first effective stream output"));
+    }
+
+    #[test]
+    fn remaining_ttft_timeout_subtracts_elapsed_request_time() {
+        let start = std::time::Instant::now() - Duration::from_secs(2);
+        let remaining = remaining_ttft_timeout(start, Some(Duration::from_secs(5)));
+
+        let remaining = remaining.expect("remaining timeout");
+        assert!(remaining <= Duration::from_secs(3));
+        assert!(remaining > Duration::from_secs(2));
     }
 
     #[test]

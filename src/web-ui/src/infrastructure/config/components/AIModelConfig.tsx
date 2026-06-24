@@ -2446,6 +2446,38 @@ const AIModelConfig: React.FC = () => {
     );
   };
 
+  const streamTtftTimeoutLabel = (
+    <span className="bitfun-ai-model-config__inline-header-main">
+      <span>{t('streamTtftTimeout.label')}</span>
+      <Tooltip content={t('streamTtftTimeout.hint')} placement="top">
+        <span
+          className="bitfun-ai-model-config__inline-header-info"
+          role="button"
+          tabIndex={0}
+          aria-label={t('streamTtftTimeout.hint')}
+        >
+          <Info size={14} />
+        </span>
+      </Tooltip>
+    </span>
+  );
+
+  const streamIdleTimeoutLabel = (
+    <span className="bitfun-ai-model-config__inline-header-main">
+      <span>{t('streamIdleTimeout.label')}</span>
+      <Tooltip content={t('streamIdleTimeout.hint')} placement="top">
+        <span
+          className="bitfun-ai-model-config__inline-header-info"
+          role="button"
+          tabIndex={0}
+          aria-label={t('streamIdleTimeout.hint')}
+        >
+          <Info size={14} />
+        </span>
+      </Tooltip>
+    </span>
+  );
+
   
   return (
     <ConfigPageLayout className="bitfun-ai-model-config">
@@ -2587,7 +2619,7 @@ const AIModelConfig: React.FC = () => {
 
         <ConfigPageSection
           title={t('streamIdleTimeout.title')}
-          description={`${t('streamTtftTimeout.hint')} ${t('streamIdleTimeout.hint')}`}
+          description={t('streamIdleTimeout.effectiveNextRound')}
           extra={(
             <Button
               variant="primary"
@@ -2604,7 +2636,7 @@ const AIModelConfig: React.FC = () => {
           )}
         >
           <ConfigPageRow
-            label={t('streamTtftTimeout.label')}
+            label={streamTtftTimeoutLabel}
             align="center"
           >
             <Input
@@ -2615,7 +2647,7 @@ const AIModelConfig: React.FC = () => {
             />
           </ConfigPageRow>
           <ConfigPageRow
-            label={t('streamIdleTimeout.label')}
+            label={streamIdleTimeoutLabel}
             align="center"
           >
             <Input

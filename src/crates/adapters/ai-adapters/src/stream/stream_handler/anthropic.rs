@@ -1,6 +1,6 @@
 use super::inline_think::InlineThinkParser;
 use super::stream_stats::StreamStats;
-use super::{next_stream_item, TimedStreamItem};
+use super::{next_stream_item, StreamTimeoutController, StreamTimeoutStage, TimedStreamItem};
 use crate::stream::types::anthropic::{
     AnthropicSSEError, ContentBlock, ContentBlockDelta, ContentBlockStart, MessageDelta,
     MessageStart, Usage,
@@ -26,16 +26,18 @@ pub async fn handle_anthropic_stream(
     tx_event: mpsc::UnboundedSender<Result<UnifiedResponse>>,
     tx_raw_sse: Option<mpsc::UnboundedSender<String>>,
     inline_think_in_text: bool,
+    ttft_timeout: Option<Duration>,
     idle_timeout: Option<Duration>,
 ) {
     let mut stream = response.bytes_stream().eventsource();
     let mut usage = Usage::default();
     let mut stats = StreamStats::new("Anthropic");
     let mut inline_think_parser = InlineThinkParser::new(inline_think_in_text);
+    let mut timeout_controller = StreamTimeoutController::new(ttft_timeout, idle_timeout);
     let mut received_finish_reason = false;
 
     loop {
-        let sse = match next_stream_item(&mut stream, idle_timeout).await {
+        let sse = match next_stream_item(&mut stream, &timeout_controller).await {
             TimedStreamItem::Item(Ok(sse)) => sse,
             TimedStreamItem::End => {
                 if received_finish_reason {
@@ -60,7 +62,18 @@ pub async fn handle_anthropic_stream(
                 let _ = tx_event.send(Err(anyhow!(error_msg)));
                 return;
             }
-            TimedStreamItem::TimedOut => {
+            TimedStreamItem::TimedOut(StreamTimeoutStage::Ttft) => {
+                let timeout_secs = ttft_timeout.map(|timeout| timeout.as_secs()).unwrap_or(0);
+                let error_msg = format!(
+                    "Anthropic stream TTFT timeout after {}s waiting for first effective output",
+                    timeout_secs
+                );
+                stats.log_summary("ttft_timeout");
+                error!("{}", error_msg);
+                let _ = tx_event.send(Err(anyhow!(error_msg)));
+                return;
+            }
+            TimedStreamItem::TimedOut(StreamTimeoutStage::Idle) => {
                 let timeout_secs = idle_timeout.map(|timeout| timeout.as_secs()).unwrap_or(0);
                 let error_msg = format!(
                     "SSE Timeout: idle timeout waiting for SSE after {}s",
@@ -133,6 +146,7 @@ pub async fn handle_anthropic_stream(
                 ) {
                     emit_normalized_response(
                         &mut inline_think_parser,
+                        &mut timeout_controller,
                         &tx_event,
                         &mut stats,
                         UnifiedResponse::from(content_block_start),
@@ -154,6 +168,7 @@ pub async fn handle_anthropic_stream(
                 match UnifiedResponse::try_from(content_block_delta) {
                     Ok(unified_response) => emit_normalized_response(
                         &mut inline_think_parser,
+                        &mut timeout_controller,
                         &tx_event,
                         &mut stats,
                         unified_response,
@@ -188,6 +203,7 @@ pub async fn handle_anthropic_stream(
                 }
                 emit_normalized_response(
                     &mut inline_think_parser,
+                    &mut timeout_controller,
                     &tx_event,
                     &mut stats,
                     unified_response,
@@ -344,11 +360,13 @@ fn trace_unified_response_if_useful(response: &UnifiedResponse) {
 
 fn emit_normalized_response(
     inline_think_parser: &mut InlineThinkParser,
+    timeout_controller: &mut StreamTimeoutController,
     tx_event: &mpsc::UnboundedSender<Result<UnifiedResponse>>,
     stats: &mut StreamStats,
     unified_response: UnifiedResponse,
 ) {
     for normalized_response in inline_think_parser.normalize_response(unified_response) {
+        timeout_controller.observe_unified_response(&normalized_response);
         trace_unified_response_if_useful(&normalized_response);
         stats.record_unified_response(&normalized_response);
         let _ = tx_event.send(Ok(normalized_response));

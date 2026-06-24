@@ -1,5 +1,5 @@
 use super::stream_stats::StreamStats;
-use super::{next_stream_item, TimedStreamItem};
+use super::{next_stream_item, StreamTimeoutController, StreamTimeoutStage, TimedStreamItem};
 use crate::stream::types::responses::{
     parse_responses_output_item, ResponsesCompleted, ResponsesDone, ResponsesStreamEvent,
 };
@@ -46,10 +46,12 @@ impl InProgressToolCall {
 }
 
 fn emit_unified_response(
+    timeout_controller: &mut StreamTimeoutController,
     tx_event: &mpsc::UnboundedSender<Result<UnifiedResponse>>,
     stats: &mut StreamStats,
     unified_response: UnifiedResponse,
 ) {
+    timeout_controller.observe_unified_response(&unified_response);
     trace!(
         target: AI_STREAM_RESPONSE_TARGET,
         "Responses unified response: {:?}",
@@ -60,6 +62,7 @@ fn emit_unified_response(
 }
 
 fn emit_tool_call_item(
+    timeout_controller: &mut StreamTimeoutController,
     tx_event: &mpsc::UnboundedSender<Result<UnifiedResponse>>,
     stats: &mut StreamStats,
     output_index: Option<usize>,
@@ -67,7 +70,7 @@ fn emit_tool_call_item(
 ) {
     if let Some(unified_response) = parse_responses_output_item(item_value, output_index) {
         if unified_response.tool_call.is_some() {
-            emit_unified_response(tx_event, stats, unified_response);
+            emit_unified_response(timeout_controller, tx_event, stats, unified_response);
         }
     }
 }
@@ -85,6 +88,7 @@ fn cleanup_tool_call_tracking(
 }
 
 fn handle_function_call_arguments_delta(
+    timeout_controller: &mut StreamTimeoutController,
     tx_event: &mpsc::UnboundedSender<Result<UnifiedResponse>>,
     stats: &mut StreamStats,
     output_index: Option<usize>,
@@ -128,11 +132,12 @@ fn handle_function_call_arguments_delta(
         }),
         ..Default::default()
     };
-    emit_unified_response(tx_event, stats, unified_response);
+    emit_unified_response(timeout_controller, tx_event, stats, unified_response);
     Ok(())
 }
 
 fn handle_function_call_output_item_done(
+    timeout_controller: &mut StreamTimeoutController,
     tx_event: &mpsc::UnboundedSender<Result<UnifiedResponse>>,
     stats: &mut StreamStats,
     event_output_index: Option<usize>,
@@ -149,14 +154,14 @@ fn handle_function_call_output_item_done(
     });
 
     let Some(output_index) = output_index else {
-        emit_tool_call_item(tx_event, stats, event_output_index, item_value);
+        emit_tool_call_item(timeout_controller, tx_event, stats, event_output_index, item_value);
         return;
     };
 
     let Some(tc) = tool_calls_by_output_index.get_mut(&output_index) else {
         // The provider may send `output_item.done` with an output_index even when the
         // earlier `output_item.added` event was omitted or missed. Fall back to the full item.
-        emit_tool_call_item(tx_event, stats, Some(output_index), item_value);
+        emit_tool_call_item(timeout_controller, tx_event, stats, Some(output_index), item_value);
         return;
     };
 
@@ -194,7 +199,7 @@ fn handle_function_call_output_item_done(
                 }),
                 ..Default::default()
             };
-            emit_unified_response(tx_event, stats, unified_response);
+            emit_unified_response(timeout_controller, tx_event, stats, unified_response);
         }
     }
 
@@ -227,6 +232,7 @@ pub async fn handle_responses_stream(
     response: Response,
     tx_event: mpsc::UnboundedSender<Result<UnifiedResponse>>,
     tx_raw_sse: Option<mpsc::UnboundedSender<String>>,
+    ttft_timeout: Option<Duration>,
     idle_timeout: Option<Duration>,
 ) {
     let mut stream = response.bytes_stream().eventsource();
@@ -236,9 +242,10 @@ pub async fn handle_responses_stream(
     let mut tool_calls_by_output_index: HashMap<usize, InProgressToolCall> = HashMap::new();
     let mut tool_call_index_by_id: HashMap<String, usize> = HashMap::new();
     let mut stats = StreamStats::new("Responses");
+    let mut timeout_controller = StreamTimeoutController::new(ttft_timeout, idle_timeout);
 
     loop {
-        let sse = match next_stream_item(&mut stream, idle_timeout).await {
+        let sse = match next_stream_item(&mut stream, &timeout_controller).await {
             TimedStreamItem::Item(Ok(sse)) => sse,
             TimedStreamItem::End => {
                 if received_finish_reason {
@@ -258,7 +265,18 @@ pub async fn handle_responses_stream(
                 let _ = tx_event.send(Err(anyhow!(error_msg)));
                 return;
             }
-            TimedStreamItem::TimedOut => {
+            TimedStreamItem::TimedOut(StreamTimeoutStage::Ttft) => {
+                let timeout_secs = ttft_timeout.map(|timeout| timeout.as_secs()).unwrap_or(0);
+                let error_msg = format!(
+                    "Responses stream TTFT timeout after {}s waiting for first effective output",
+                    timeout_secs
+                );
+                stats.log_summary("ttft_timeout");
+                error!("{}", error_msg);
+                let _ = tx_event.send(Err(anyhow!(error_msg)));
+                return;
+            }
+            TimedStreamItem::TimedOut(StreamTimeoutStage::Idle) => {
                 let timeout_secs = idle_timeout.map(|timeout| timeout.as_secs()).unwrap_or(0);
                 let error_msg = format!("Responses SSE stream timeout after {}s", timeout_secs);
                 stats.log_summary("sse_stream_timeout");
@@ -345,7 +363,12 @@ pub async fn handle_responses_stream(
                         text: Some(delta),
                         ..Default::default()
                     };
-                    emit_unified_response(&tx_event, &mut stats, unified_response);
+                    emit_unified_response(
+                        &mut timeout_controller,
+                        &tx_event,
+                        &mut stats,
+                        unified_response,
+                    );
                 }
             }
             "response.reasoning_text.delta" | "response.reasoning_summary_text.delta" => {
@@ -354,11 +377,17 @@ pub async fn handle_responses_stream(
                         reasoning_content: Some(delta),
                         ..Default::default()
                     };
-                    emit_unified_response(&tx_event, &mut stats, unified_response);
+                    emit_unified_response(
+                        &mut timeout_controller,
+                        &tx_event,
+                        &mut stats,
+                        unified_response,
+                    );
                 }
             }
             "response.function_call_arguments.delta" => {
                 if let Err(err) = handle_function_call_arguments_delta(
+                    &mut timeout_controller,
                     &tx_event,
                     &mut stats,
                     event.output_index,
@@ -381,6 +410,7 @@ pub async fn handle_responses_stream(
                 // For tool calls, prefer streaming deltas and only use item.done as a tail-filler / fallback.
                 if item_value.get("type").and_then(Value::as_str) == Some("function_call") {
                     handle_function_call_output_item_done(
+                        &mut timeout_controller,
                         &tx_event,
                         &mut stats,
                         event.output_index,
@@ -398,7 +428,12 @@ pub async fn handle_responses_stream(
                         unified_response.text = None;
                     }
                     if unified_response.text.is_some() || unified_response.tool_call.is_some() {
-                        emit_unified_response(&tx_event, &mut stats, unified_response);
+                        emit_unified_response(
+                            &mut timeout_controller,
+                            &tx_event,
+                            &mut stats,
+                            unified_response,
+                        );
                     }
                 }
             }
@@ -444,7 +479,12 @@ pub async fn handle_responses_stream(
                                         ),
                                         ..Default::default()
                                     };
-                                    emit_unified_response(&tx_event, &mut stats, unified_response);
+                                    emit_unified_response(
+                                        &mut timeout_controller,
+                                        &tx_event,
+                                        &mut stats,
+                                        unified_response,
+                                    );
                                 }
                             }
                         }
@@ -461,7 +501,12 @@ pub async fn handle_responses_stream(
                             finish_reason: Some("stop".to_string()),
                             ..Default::default()
                         };
-                        emit_unified_response(&tx_event, &mut stats, unified_response);
+                        emit_unified_response(
+                            &mut timeout_controller,
+                            &tx_event,
+                            &mut stats,
+                            unified_response,
+                        );
                         continue;
                     }
                     Some(Err(e)) => {
@@ -479,7 +524,12 @@ pub async fn handle_responses_stream(
                             finish_reason: Some("stop".to_string()),
                             ..Default::default()
                         };
-                        emit_unified_response(&tx_event, &mut stats, unified_response);
+                        emit_unified_response(
+                            &mut timeout_controller,
+                            &tx_event,
+                            &mut stats,
+                            unified_response,
+                        );
                         continue;
                     }
                 }
@@ -496,7 +546,12 @@ pub async fn handle_responses_stream(
                             finish_reason: Some("stop".to_string()),
                             ..Default::default()
                         };
-                        emit_unified_response(&tx_event, &mut stats, unified_response);
+                        emit_unified_response(
+                            &mut timeout_controller,
+                            &tx_event,
+                            &mut stats,
+                            unified_response,
+                        );
                         continue;
                     }
                     Some(Err(e)) => {
@@ -513,7 +568,12 @@ pub async fn handle_responses_stream(
                             finish_reason: Some("stop".to_string()),
                             ..Default::default()
                         };
-                        emit_unified_response(&tx_event, &mut stats, unified_response);
+                        emit_unified_response(
+                            &mut timeout_controller,
+                            &tx_event,
+                            &mut stats,
+                            unified_response,
+                        );
                         continue;
                     }
                 }
@@ -565,7 +625,12 @@ pub async fn handle_responses_stream(
                     finish_reason: Some(finish_reason),
                     ..Default::default()
                 };
-                emit_unified_response(&tx_event, &mut stats, unified_response);
+                emit_unified_response(
+                    &mut timeout_controller,
+                    &tx_event,
+                    &mut stats,
+                    unified_response,
+                );
                 continue;
             }
             _ => {}
@@ -578,7 +643,7 @@ mod tests {
     use super::{
         super::stream_stats::StreamStats, extract_api_error_message,
         handle_function_call_arguments_delta, handle_function_call_output_item_done,
-        InProgressToolCall,
+        InProgressToolCall, StreamTimeoutController,
     };
     use serde_json::json;
     use std::collections::HashMap;
@@ -632,8 +697,10 @@ mod tests {
         let mut tool_calls_by_output_index: HashMap<usize, InProgressToolCall> = HashMap::new();
         let mut tool_call_index_by_id: HashMap<String, usize> = HashMap::new();
         let mut stats = StreamStats::new("Responses");
+        let mut timeout_controller = StreamTimeoutController::new(None, None);
 
         handle_function_call_output_item_done(
+            &mut timeout_controller,
             &tx_event,
             &mut stats,
             Some(3),
@@ -666,8 +733,10 @@ mod tests {
         let (tx_event, _rx_event) = mpsc::unbounded_channel();
         let mut tool_calls_by_output_index: HashMap<usize, InProgressToolCall> = HashMap::new();
         let mut stats = StreamStats::new("Responses");
+        let mut timeout_controller = StreamTimeoutController::new(None, None);
 
         let err = handle_function_call_arguments_delta(
+            &mut timeout_controller,
             &tx_event,
             &mut stats,
             None,
@@ -684,8 +753,10 @@ mod tests {
         let (tx_event, _rx_event) = mpsc::unbounded_channel();
         let mut tool_calls_by_output_index: HashMap<usize, InProgressToolCall> = HashMap::new();
         let mut stats = StreamStats::new("Responses");
+        let mut timeout_controller = StreamTimeoutController::new(None, None);
 
         let err = handle_function_call_arguments_delta(
+            &mut timeout_controller,
             &tx_event,
             &mut stats,
             Some(2),

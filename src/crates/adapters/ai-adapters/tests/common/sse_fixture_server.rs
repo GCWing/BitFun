@@ -18,6 +18,7 @@ use tokio_stream::StreamExt;
 pub struct FixtureSseServerOptions {
     pub chunk_size: usize,
     pub chunk_delay: Duration,
+    pub initial_delay: Duration,
 }
 
 impl Default for FixtureSseServerOptions {
@@ -25,6 +26,7 @@ impl Default for FixtureSseServerOptions {
         Self {
             chunk_size: 23,
             chunk_delay: Duration::from_millis(1),
+            initial_delay: Duration::ZERO,
         }
     }
 }
@@ -81,6 +83,9 @@ async fn stream_fixture_handler(State(state): State<FixtureSseState>) -> impl In
     let (tx, rx) = mpsc::channel::<Bytes>(8);
 
     tokio::spawn(async move {
+        if !state.options.initial_delay.is_zero() {
+            tokio::time::sleep(state.options.initial_delay).await;
+        }
         let chunk_size = state.options.chunk_size.max(1);
         for chunk in state.payload.chunks(chunk_size) {
             if tx.send(Bytes::copy_from_slice(chunk)).await.is_err() {
