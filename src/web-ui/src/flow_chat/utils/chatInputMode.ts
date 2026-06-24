@@ -1,4 +1,112 @@
+import { WorkspaceKind, type WorkspaceInfo } from '@/shared/types';
+
 export const DEFAULT_CHAT_INPUT_MODE_CONFIG_PATH = 'app.flow_chat.default_mode_id';
+
+type WorkspaceResolutionInfo = Pick<
+  WorkspaceInfo,
+  'id' | 'rootPath' | 'workspaceKind' | 'connectionId'
+>;
+
+function normalizeOptionalString(value: string | null | undefined): string | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}
+
+function normalizeWorkspacePath(value: string | null | undefined): string | null {
+  const trimmed = normalizeOptionalString(value);
+  if (!trimmed) {
+    return null;
+  }
+
+  return trimmed.replace(/[\\/]+$/, '');
+}
+
+function isWorkspaceConnectionCompatible(
+  workspaceConnectionId: string | null | undefined,
+  sessionRemoteConnectionId: string | null | undefined,
+): boolean {
+  const normalizedWorkspaceConnectionId = normalizeOptionalString(workspaceConnectionId);
+  const normalizedSessionRemoteConnectionId = normalizeOptionalString(sessionRemoteConnectionId);
+
+  if (normalizedSessionRemoteConnectionId && normalizedWorkspaceConnectionId) {
+    return normalizedWorkspaceConnectionId === normalizedSessionRemoteConnectionId;
+  }
+
+  if (normalizedSessionRemoteConnectionId && !normalizedWorkspaceConnectionId) {
+    return false;
+  }
+
+  return true;
+}
+
+function resolveSessionWorkspaceMatch(params: {
+  currentWorkspace?: WorkspaceResolutionInfo | null;
+  sessionWorkspaceId?: string | null;
+  sessionWorkspacePath?: string | null;
+  sessionRemoteConnectionId?: string | null;
+  openedWorkspaces?: Iterable<WorkspaceResolutionInfo>;
+}): WorkspaceResolutionInfo | null {
+  const normalizedSessionWorkspaceId = normalizeOptionalString(params.sessionWorkspaceId);
+  const normalizedSessionWorkspacePath = normalizeWorkspacePath(params.sessionWorkspacePath);
+  const normalizedSessionRemoteConnectionId = normalizeOptionalString(params.sessionRemoteConnectionId);
+  const currentWorkspace = params.currentWorkspace ?? null;
+  const openedWorkspaces = params.openedWorkspaces ?? [];
+
+  if (normalizedSessionWorkspaceId) {
+    if (currentWorkspace?.id === normalizedSessionWorkspaceId) {
+      return currentWorkspace;
+    }
+
+    for (const workspace of openedWorkspaces) {
+      if (workspace.id === normalizedSessionWorkspaceId) {
+        return workspace;
+      }
+    }
+  }
+
+  if (!normalizedSessionWorkspacePath) {
+    return null;
+  }
+
+  const matchingWorkspaces: WorkspaceResolutionInfo[] = [];
+  const pushIfMatching = (workspace: WorkspaceResolutionInfo | null | undefined) => {
+    if (!workspace) {
+      return;
+    }
+
+    if (normalizeWorkspacePath(workspace.rootPath) !== normalizedSessionWorkspacePath) {
+      return;
+    }
+
+    if (!isWorkspaceConnectionCompatible(workspace.connectionId, normalizedSessionRemoteConnectionId)) {
+      return;
+    }
+
+    if (!matchingWorkspaces.some(candidate => candidate.id === workspace.id)) {
+      matchingWorkspaces.push(workspace);
+    }
+  };
+
+  pushIfMatching(currentWorkspace);
+  for (const workspace of openedWorkspaces) {
+    pushIfMatching(workspace);
+  }
+
+  if (normalizedSessionRemoteConnectionId) {
+    const exactConnectionMatch = matchingWorkspaces.find(
+      (workspace) => normalizeOptionalString(workspace.connectionId) === normalizedSessionRemoteConnectionId,
+    );
+    if (exactConnectionMatch) {
+      return exactConnectionMatch;
+    }
+  }
+
+  return matchingWorkspaces[0] ?? null;
+}
 
 export function normalizeUserDefaultChatInputModeId(value: unknown): string | null {
   if (typeof value !== 'string') {
@@ -7,6 +115,28 @@ export function normalizeUserDefaultChatInputModeId(value: unknown): string | nu
 
   const trimmed = value.trim();
   return trimmed ? trimmed : null;
+}
+
+export function resolveSessionAssistantWorkspace(params: {
+  currentWorkspace?: WorkspaceResolutionInfo | null;
+  sessionWorkspaceId?: string | null;
+  sessionWorkspacePath?: string | null;
+  sessionRemoteConnectionId?: string | null;
+  openedWorkspaces?: Iterable<WorkspaceResolutionInfo>;
+}): boolean {
+  const matchedWorkspace = resolveSessionWorkspaceMatch(params);
+  if (matchedWorkspace) {
+    return matchedWorkspace.workspaceKind === WorkspaceKind.Assistant;
+  }
+
+  const hasExplicitSessionWorkspace =
+    normalizeOptionalString(params.sessionWorkspaceId) !== null
+    || normalizeWorkspacePath(params.sessionWorkspacePath) !== null;
+  if (hasExplicitSessionWorkspace) {
+    return false;
+  }
+
+  return params.currentWorkspace?.workspaceKind === WorkspaceKind.Assistant;
 }
 
 export function resolveWorkspaceChatInputMode(params: {

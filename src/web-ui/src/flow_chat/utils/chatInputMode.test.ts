@@ -3,8 +3,25 @@ import { describe, expect, it } from 'vitest';
 import {
   normalizeUserDefaultChatInputModeId,
   resolveAvailableChatInputMode,
+  resolveSessionAssistantWorkspace,
   resolveWorkspaceChatInputMode,
 } from './chatInputMode';
+import { WorkspaceKind, type WorkspaceInfo, WorkspaceType } from '@/shared/types';
+
+function createWorkspace(overrides: Partial<WorkspaceInfo>): WorkspaceInfo {
+  return {
+    id: overrides.id ?? 'workspace-1',
+    name: overrides.name ?? 'Workspace',
+    rootPath: overrides.rootPath ?? 'D:/workspace/project',
+    workspaceType: overrides.workspaceType ?? WorkspaceType.SingleProject,
+    workspaceKind: overrides.workspaceKind ?? WorkspaceKind.Normal,
+    languages: overrides.languages ?? [],
+    openedAt: overrides.openedAt ?? new Date(0).toISOString(),
+    lastAccessed: overrides.lastAccessed ?? new Date(0).toISOString(),
+    tags: overrides.tags ?? [],
+    ...overrides,
+  };
+}
 
 describe('normalizeUserDefaultChatInputModeId', () => {
   it('normalizes non-empty strings and rejects blank values', () => {
@@ -73,6 +90,67 @@ describe('resolveWorkspaceChatInputMode', () => {
         sessionMode: undefined,
       })
     ).toBe('agentic');
+  });
+});
+
+describe('resolveSessionAssistantWorkspace', () => {
+  it('does not treat a project session as assistant during workspace scene transitions', () => {
+    const projectWorkspace = createWorkspace({
+      id: 'project-1',
+      rootPath: 'E:/Projects/repos/claude-code',
+      workspaceKind: WorkspaceKind.Normal,
+    });
+    const assistantWorkspace = createWorkspace({
+      id: 'assistant-1',
+      rootPath: 'C:/Users/wsp/.bitfun/personal_assistant/workspace',
+      workspaceKind: WorkspaceKind.Assistant,
+    });
+
+    expect(
+      resolveSessionAssistantWorkspace({
+        currentWorkspace: assistantWorkspace,
+        sessionWorkspaceId: projectWorkspace.id,
+        sessionWorkspacePath: projectWorkspace.rootPath,
+        openedWorkspaces: [projectWorkspace, assistantWorkspace],
+      }),
+    ).toBe(false);
+  });
+
+  it('recognizes assistant sessions from their own workspace scope even before current workspace catches up', () => {
+    const projectWorkspace = createWorkspace({
+      id: 'project-1',
+      rootPath: 'E:/Projects/repos/claude-code',
+      workspaceKind: WorkspaceKind.Normal,
+    });
+    const assistantWorkspace = createWorkspace({
+      id: 'assistant-1',
+      rootPath: 'C:/Users/wsp/.bitfun/personal_assistant/workspace',
+      workspaceKind: WorkspaceKind.Assistant,
+    });
+
+    expect(
+      resolveSessionAssistantWorkspace({
+        currentWorkspace: projectWorkspace,
+        sessionWorkspaceId: assistantWorkspace.id,
+        sessionWorkspacePath: assistantWorkspace.rootPath,
+        openedWorkspaces: [projectWorkspace, assistantWorkspace],
+      }),
+    ).toBe(true);
+  });
+
+  it('falls back to the current workspace kind when the session has no explicit workspace scope yet', () => {
+    const assistantWorkspace = createWorkspace({
+      id: 'assistant-1',
+      rootPath: 'C:/Users/wsp/.bitfun/personal_assistant/workspace',
+      workspaceKind: WorkspaceKind.Assistant,
+    });
+
+    expect(
+      resolveSessionAssistantWorkspace({
+        currentWorkspace: assistantWorkspace,
+        openedWorkspaces: [assistantWorkspace],
+      }),
+    ).toBe(true);
   });
 });
 

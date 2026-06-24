@@ -27,8 +27,7 @@ import { AcpPlanPanel } from './AcpPlanPanel';
 import type { FlowChatState } from '../types/flow-chat';
 import type { FileContext, DirectoryContext, ImageContext } from '@/types/context.ts';
 import { SmartRecommendations } from './smart-recommendations';
-import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
-import { WorkspaceKind } from '@/shared/types';
+import { useCurrentWorkspace, useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import { createImageContextFromFile, createImageContextFromClipboard } from '../utils/imageUtils';
 import { isSlashCommand, stripSlashCommand } from '../utils/slashCommand';
 import { notificationService } from '@/shared/notification-system';
@@ -66,6 +65,7 @@ import {
   DEFAULT_CHAT_INPUT_MODE_CONFIG_PATH,
   normalizeUserDefaultChatInputModeId,
   resolveAvailableChatInputMode,
+  resolveSessionAssistantWorkspace,
 } from '../utils/chatInputMode';
 import { useSceneStore } from '@/app/stores/sceneStore';
 import type { SceneTabId } from '@/app/components/SceneBar/types';
@@ -618,6 +618,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const { transition, setQueuedInput } = useSessionStateMachineActions(effectiveTargetSessionId);
 
   const { workspace, workspacePath, workspaceName } = useCurrentWorkspace();
+  const { openedWorkspaces } = useWorkspaceContext();
 
   const chatStripRepositoryPath = useMemo(() => {
     const fromContext = (workspacePath || '').trim();
@@ -635,7 +636,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const [tokenUsage, setTokenUsage] = React.useState<ContextUsageDisplay>(
     getSessionContextUsageDisplay()
   );
-  const isAssistantWorkspace = workspace?.workspaceKind === WorkspaceKind.Assistant;
+  const isAssistantWorkspace = useMemo(
+    () => resolveSessionAssistantWorkspace({
+      currentWorkspace: workspace,
+      sessionWorkspaceId: effectiveTargetSession?.workspaceId,
+      sessionWorkspacePath: effectiveTargetSession?.workspacePath,
+      sessionRemoteConnectionId: effectiveTargetSession?.remoteConnectionId,
+      openedWorkspaces: openedWorkspaces.values(),
+    }),
+    [effectiveTargetSession, openedWorkspaces, workspace],
+  );
   const currentMode = modeState.current;
   const isModeDropdownOpen = modeState.dropdownOpen;
   const acpTargetAgentType = useMemo(
