@@ -131,9 +131,7 @@ fn custom_mode_markdown_save_omits_default_fields() {
 fn custom_mode_markdown_save_round_trips_custom_policy_and_model() {
     let dir = TestTempDir::new("bitfun-runtime-custom-mode-custom");
     let path = dir.join("planner.md");
-    let policy = UserContextPolicy::empty()
-        .with_workspace_instructions()
-        .with_workspace_memory_files();
+    let policy = UserContextPolicy::empty().with_workspace_instructions();
     let definition = build_mode_definition(
         Some("PlannerPlus"),
         Some("PlannerPlus"),
@@ -154,7 +152,6 @@ fn custom_mode_markdown_save_round_trips_custom_policy_and_model() {
     assert!(saved.contains("model: primary"));
     assert!(saved.contains("user_context_policy:"));
     assert!(saved.contains("- workspace_instructions"));
-    assert!(saved.contains("- workspace_memory_files"));
     assert!(saved.contains("- Read"));
     assert!(saved.contains("- Grep"));
 

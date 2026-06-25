@@ -583,9 +583,7 @@ async fn explicit_custom_mode_load_exposes_user_mode_metadata_in_modes_info() {
         "PlannerPlus",
         "Planner Plus",
         vec!["Read".to_string(), "Grep".to_string()],
-        UserContextPolicy::empty()
-            .with_workspace_instructions()
-            .with_workspace_memory_files(),
+        UserContextPolicy::empty().with_workspace_instructions(),
         "primary",
         true,
     );
@@ -674,9 +672,7 @@ async fn custom_mode_detail_reports_kind_level_model_path_and_policy() {
         "PlannerPlus",
         "Planner Plus",
         vec!["Read".to_string(), "Grep".to_string()],
-        UserContextPolicy::empty()
-            .with_workspace_instructions()
-            .with_workspace_memory_files(),
+        UserContextPolicy::empty().with_workspace_instructions(),
         "primary",
         true,
     );
@@ -696,10 +692,7 @@ async fn custom_mode_detail_reports_kind_level_model_path_and_policy() {
     assert_eq!(detail.path, mode_path.to_string_lossy().to_string());
     assert_eq!(
         detail.user_context_policy,
-        vec![
-            "workspace_instructions".to_string(),
-            "workspace_memory_files".to_string(),
-        ]
+        vec!["workspace_instructions".to_string()]
     );
     assert_eq!(detail.tools, vec!["Read".to_string(), "Grep".to_string()]);
     assert!(detail.readonly);
@@ -778,8 +771,7 @@ async fn updating_custom_mode_definition_rewrites_file_and_preserves_mode_kind()
             None,
             Some(
                 UserContextPolicy::empty()
-                    .with_workspace_context()
-                    .with_workspace_memory_files(),
+                    .with_workspace_context(),
             ),
             Some("primary".to_string()),
         )
@@ -800,16 +792,12 @@ async fn updating_custom_mode_definition_rewrites_file_and_preserves_mode_kind()
     assert_eq!(detail.tools, vec!["Read".to_string(), "Grep".to_string()]);
     assert_eq!(
         detail.user_context_policy,
-        vec![
-            "workspace_context".to_string(),
-            "workspace_memory_files".to_string(),
-        ]
+        vec!["workspace_context".to_string()]
     );
     assert!(saved.contains("kind: mode"));
     assert!(saved.contains("name: Planner Pro"));
     assert!(saved.contains("model: primary"));
     assert!(saved.contains("- workspace_context"));
-    assert!(saved.contains("- workspace_memory_files"));
 }
 
 struct CustomAgentTestEnv {

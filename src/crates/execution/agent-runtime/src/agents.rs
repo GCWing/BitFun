@@ -51,7 +51,6 @@ pub fn shared_coding_mode_user_context_policy() -> UserContextPolicy {
     UserContextPolicy::empty()
         .with_workspace_context()
         .with_workspace_instructions()
-        .with_workspace_memory_files()
         .with_project_layout()
 }
 

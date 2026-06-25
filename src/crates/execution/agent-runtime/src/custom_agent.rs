@@ -667,7 +667,6 @@ fn metadata_user_context_policy(metadata: &Value) -> Result<Option<UserContextPo
         let section = match section.trim() {
             "workspace_context" => UserContextSection::WorkspaceContext,
             "workspace_instructions" => UserContextSection::WorkspaceInstructions,
-            "workspace_memory_files" => UserContextSection::WorkspaceMemoryFiles,
             "project_layout" => UserContextSection::ProjectLayout,
             _ => {
                 return Err(CustomAgentDefinitionError::InvalidUserContextPolicy
@@ -752,9 +751,6 @@ fn custom_agent_markdown_metadata(definition: &CustomAgentDefinition) -> Value {
                                 UserContextSection::WorkspaceContext => "workspace_context",
                                 UserContextSection::WorkspaceInstructions => {
                                     "workspace_instructions"
-                                }
-                                UserContextSection::WorkspaceMemoryFiles => {
-                                    "workspace_memory_files"
                                 }
                                 UserContextSection::ProjectLayout => "project_layout",
                             }

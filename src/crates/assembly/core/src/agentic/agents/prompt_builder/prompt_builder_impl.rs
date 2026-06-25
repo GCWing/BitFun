@@ -3,15 +3,12 @@ use crate::agentic::tools::implementations::ExecCommandTool;
 use crate::agentic::util::remote_workspace_layout::build_remote_workspace_layout_preview;
 use crate::agentic::workspace::WorkspaceBackend;
 use crate::agentic::WorkspaceBinding;
-use crate::service::agent_memory::{
-    build_workspace_agent_memory_prompt, build_workspace_instruction_files_context,
-    build_workspace_memory_files_context,
-};
 use crate::service::bootstrap::build_workspace_persona_prompt;
 use crate::service::config::get_app_language_code;
 use crate::service::config::global::GlobalConfigManager;
 use crate::service::filesystem::get_formatted_directory_listing;
 use crate::service::i18n::LocaleId;
+use crate::service::instruction_context::build_workspace_instruction_files_context;
 use crate::service::remote_ssh::workspace_state::get_remote_workspace_manager;
 use crate::service::workspace::get_global_workspace_service;
 use crate::service::workspace::RelatedPath;
@@ -29,7 +26,6 @@ use std::path::Path;
 /// Placeholder constants
 const PLACEHOLDER_PERSONA: &str = "{PERSONA}";
 const PLACEHOLDER_LANGUAGE_PREFERENCE: &str = "{LANGUAGE_PREFERENCE}";
-const PLACEHOLDER_AGENT_MEMORY: &str = "{AGENT_MEMORY}";
 const PLACEHOLDER_CLAW_WORKSPACE: &str = "{CLAW_WORKSPACE}";
 const PLACEHOLDER_VISUAL_MODE: &str = "{VISUAL_MODE}";
 const PLACEHOLDER_SESSION_ID: &str = "{SESSION_ID}";
@@ -328,17 +324,6 @@ impl PromptBuilder {
                     ),
                 }
             }
-            if policy.includes(UserContextSection::WorkspaceMemoryFiles) {
-                match build_workspace_memory_files_context(workspace).await {
-                    Ok(Some(prompt)) => additional_sections.push(prompt),
-                    Ok(None) => {}
-                    Err(e) => warn!(
-                        "Failed to build workspace memory context: path={} error={}",
-                        workspace.display(),
-                        e
-                    ),
-                }
-            }
         }
 
         if policy.includes(UserContextSection::ProjectLayout) {
@@ -424,7 +409,6 @@ Do not read from, modify, create, move, or delete files outside this workspace u
     /// Supported placeholders:
     /// - `{PERSONA}` - Workspace persona files (BOOTSTRAP.md, SOUL.md, USER.md, IDENTITY.md)
     /// - `{LANGUAGE_PREFERENCE}` - User language preference (read from global config)
-    /// - `{AGENT_MEMORY}` - Agent memory instructions + auto-loaded memory index
     /// - `{CLAW_WORKSPACE}` - Claw-specific workspace ownership and boundary rules
     /// - `{VISUAL_MODE}` - Visual mode instruction (Mermaid diagrams, read from global config)
     ///
@@ -464,28 +448,6 @@ Do not read from, modify, create, move, or delete files outside this workspace u
         if result.contains(PLACEHOLDER_CLAW_WORKSPACE) {
             let claw_workspace = self.get_claw_workspace_instruction();
             result = result.replace(PLACEHOLDER_CLAW_WORKSPACE, &claw_workspace);
-        }
-
-        // Replace {AGENT_MEMORY}
-        if result.contains(PLACEHOLDER_AGENT_MEMORY) {
-            let agent_memory = if self.context.remote_execution.is_some() {
-                "# Agent memory\nSession memory under `.bitfun/` is stored on the **remote** host for this workspace. Use file tools with POSIX paths under the workspace root if you need to read it.\n\n"
-                    .to_string()
-            } else {
-                let workspace = Path::new(&self.context.workspace_path);
-                match build_workspace_agent_memory_prompt(workspace).await {
-                    Ok(prompt) => prompt,
-                    Err(e) => {
-                        warn!(
-                            "Failed to build workspace agent memory prompt: path={} error={}",
-                            workspace.display(),
-                            e
-                        );
-                        String::new()
-                    }
-                }
-            };
-            result = result.replace(PLACEHOLDER_AGENT_MEMORY, &agent_memory);
         }
 
         // Replace {VISUAL_MODE}

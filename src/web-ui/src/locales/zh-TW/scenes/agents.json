@@ -168,8 +168,6 @@
       "contextWorkspaceContextTooltip": "加入目前工作區身分和會話級概況，幫助 Agent 知道自己正在處理哪個專案。",
       "contextWorkspaceInstructions": "工作區說明",
       "contextWorkspaceInstructionsTooltip": "加入 AGENTS.md 等專案指引，讓 Agent 遵循倉庫約定和本地規則。",
-      "contextWorkspaceMemoryFiles": "工作區記憶檔案",
-      "contextWorkspaceMemoryFilesTooltip": "在可用時加入持久化的工作區記憶，幫助 Agent 重用長期專案知識。",
       "contextProjectLayout": "專案結構",
       "contextProjectLayoutTooltip": "加入精簡的專案結構摘要，幫助 Agent 更快判斷相關檔案和目錄。",
       "noWorkspace": "需要先開啟項目",

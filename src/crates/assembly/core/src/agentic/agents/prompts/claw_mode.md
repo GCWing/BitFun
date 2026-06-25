@@ -65,4 +65,3 @@ Keep narration brief and value-dense. For multi-step work, state the near-term p
 
 {CLAW_WORKSPACE}
 {PERSONA}
-{AGENT_MEMORY}
