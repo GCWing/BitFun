@@ -41,7 +41,7 @@ vi.mock('./BtwThreadService', () => ({
   createBtwChildSession: (...args: any[]) => mockCreateBtwChildSession(...args),
 }));
 
-vi.mock('./openBtwSession', () => ({
+vi.mock('./btwSessionPane', () => ({
   closeBtwSessionInAuxPane: (...args: any[]) => mockCloseBtwSessionInAuxPane(...args),
   openBtwSessionInAuxPane: (...args: any[]) => mockOpenBtwSessionInAuxPane(...args),
 }));

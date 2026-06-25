@@ -43,7 +43,7 @@ vi.mock('./ToolTimeoutIndicator', () => ({
   ToolTimeoutIndicator: () => <span data-testid="tool-timeout-indicator" />,
 }));
 
-vi.mock('../services/openBtwSession', () => ({
+vi.mock('../services/btwSessionPane', () => ({
   openBtwSessionInAuxPane: (...args: unknown[]) => mocks.openBtwSessionInAuxPane(...args),
 }));
 

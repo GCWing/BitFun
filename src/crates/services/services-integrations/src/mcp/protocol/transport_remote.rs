@@ -512,7 +512,7 @@ impl RemoteMCPTransport {
                 let info = service.peer().peer_info().ok_or_else(|| {
                     MCPRuntimeError::mcp("Handshake succeeded but server info missing".to_string())
                 })?;
-                Ok(map_rmcp_initialize_result(info))
+                Ok(map_rmcp_initialize_result(&info))
             }
             ClientState::Connecting { transport } => {
                 let Some(transport) = transport.take() else {
@@ -546,7 +546,7 @@ impl RemoteMCPTransport {
                     service: Arc::clone(&service),
                 };
 
-                Ok(map_rmcp_initialize_result(info))
+                Ok(map_rmcp_initialize_result(&info))
             }
         }
     }

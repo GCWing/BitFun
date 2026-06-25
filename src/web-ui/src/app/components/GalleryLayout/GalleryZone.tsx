@@ -1,6 +1,6 @@
 import React from 'react';
 
-interface GalleryZoneProps {
+interface GalleryZoneProps extends Omit<React.HTMLAttributes<HTMLElement>, 'title'> {
   id?: string;
   title: string;
   subtitle?: React.ReactNode;
@@ -16,8 +16,9 @@ const GalleryZone: React.FC<GalleryZoneProps> = ({
   tools,
   children,
   className,
+  ...sectionProps
 }) => (
-  <section id={id} className={['gallery-zone', className].filter(Boolean).join(' ')}>
+  <section {...sectionProps} id={id} className={['gallery-zone', className].filter(Boolean).join(' ')}>
     <div className="gallery-zone__header">
       <div className="gallery-zone__heading">
         <span className="gallery-zone__title">{title}</span>

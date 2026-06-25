@@ -229,6 +229,46 @@
 
 ---
 
+## 9. 技术方案 / 工程分析 / 架构汇报
+
+**规格**：
+- 标准 16:9（960×540pt 可编辑 或 1920×1080px 演讲）
+- 典型页数：8–15 页
+
+**关键设计要素**：
+- **架构图和流程图是这类内容的核心表达**——系统组成用分层架构图，请求/数据流用线性流程图，多角色协作用泳道图，根因分析用因果链。不要用纯文字段落描述"系统有哪些模块"或"请求经过哪些步骤"，必须画出来。
+- 架构图/流程图旁必须有**逐节点/逐层的文字解读栏**（图不能自己说话）。
+- 技术选型对比用矩阵/表格；性能/容量指标用对比柱或仪表；时序/演进用时间线。
+- 关键设计决策（为什么选 A 不选 B）单独成页，用「方案 × 维度」矩阵 + 判断。
+- 整体结构建议：背景与目标 → 系统架构总览（分层架构图）→ 核心流程深拆（流程图/泳道图）→ 关键技术选型（矩阵）→ 性能与容量（数据图）→ 风险与对策（因果链/风险矩阵）→ 演进规划（时间线）。
+
+**推荐风格**：Müller-Brockmann 网格 / Pentagram 信息建筑 / insight-report（若需高密度报告型）
+
+**推荐参考**：`references/data-information-visualization.md` 第 6.1 节「架构图/流程图/系统图的可编辑实现」给出了分层架构图、线性流程图、泳道图、因果链的纯 CSS snippet，直接套用。
+
+**场景提示词模板**：
+```
+[风格DNA插入此处]
+- Technical architecture / engineering analysis deck, 16:9
+- System composition MUST use layered architecture diagram (div + border, not SVG)
+- Request/data flow MUST use linear flow diagram with arrow direction
+- Multi-role collaboration MUST use swimlane diagram
+- Root-cause analysis MUST use causal chain / problem tree
+- Each diagram paired with a per-node/per-layer text explanation column
+- Tech selection comparison uses matrix table with verdict per row
+- Structure: context → architecture overview → flow deep-dive → tech selection → metrics → risks → roadmap
+```
+
+**典型页面触发规则**（生成 outline 时逐页判断）：
+- 页面涉及「系统由哪些部分组成」「模块依赖关系」→ **分层架构图**（不是文字列表）
+- 页面涉及「请求/数据/任务经过哪些步骤」→ **线性流程图**（不是编号文字）
+- 页面涉及「多个角色/团队如何协作」→ **泳道图**
+- 页面涉及「为什么出这个故障/问题」「根因是什么」→ **因果链/问题树**
+- 页面涉及「方案 A vs B vs C 选型」→ **对比矩阵**（不是散文）
+- 页面涉及「未来怎么演进」「里程碑」→ **时间线/阶段带**
+
+---
+
 ## 组合示例
 
 **场景**：公众号封面，介绍一款AI编程工具，想要专业但有温度

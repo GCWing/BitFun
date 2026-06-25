@@ -23,8 +23,8 @@ export interface ResizeCallback {
 export interface ResizeDebounceOptions {
   getTerminal: () => Terminal | null;
   isVisible: () => boolean;
-  /** Local xterm resize callback. */
-  onXtermResize: (cols: number, rows: number) => void;
+  /** Local xterm resize callback. Returns false when resize was intentionally skipped. */
+  onXtermResize: (cols: number, rows: number) => boolean;
   /** Backend PTY resize callback (debounced/merged). */
   onBackendResize: (cols: number, rows: number) => void | Promise<void>;
   /** Optional hook invoked after flush. */
@@ -117,8 +117,11 @@ export class TerminalResizeDebouncer {
       this.clearPendingJobs();
       if (this.isNewApi) {
         const opts = this.options as ResizeDebounceOptions;
-        opts.onXtermResize(cols, rows);
-        this.scheduleBackendResize(cols, rows);
+        // Backend resize is scheduled only after xterm accepted the same size.
+        // This prevents PTY/frontend geometry drift when callers suppress a fit.
+        if (opts.onXtermResize(cols, rows)) {
+          this.scheduleBackendResize(cols, rows);
+        }
       } else {
         this.executeResize(cols, rows, true);
       }
@@ -136,11 +139,14 @@ export class TerminalResizeDebouncer {
     if (this.isNewApi) {
       const opts = this.options as ResizeDebounceOptions;
       
-      if (rowsChanged && !colsChanged) {
-        opts.onXtermResize(currentCols, rows);
-        this.scheduleBackendResize(currentCols, rows);
+      if (rowsChanged) {
+        // Row-only updates are still gated by local success; skipped local
+        // resizes must not be mirrored to the PTY.
+        if (opts.onXtermResize(currentCols, rows)) {
+          this.scheduleBackendResize(currentCols, rows);
+        }
       }
-      else if (colsChanged) {
+      if (colsChanged) {
         this.debounceXtermResizeX(cols, rows);
       }
     } else {
@@ -205,10 +211,14 @@ export class TerminalResizeDebouncer {
   private executeResize(cols: number, rows: number, includeBackend: boolean): void {
     if (this.isNewApi) {
       const opts = this.options as ResizeDebounceOptions;
-      opts.onXtermResize(cols, rows);
+      const resized = opts.onXtermResize(cols, rows);
       if (includeBackend) {
-        opts.onBackendResize(cols, rows);
-        opts.onResizeComplete?.();
+        // Flush can run after a suspended resize. Respect the local result so a
+        // stale pending target cannot resize only the backend.
+        if (resized) {
+          opts.onBackendResize(cols, rows);
+          opts.onResizeComplete?.();
+        }
       }
     } else {
       const opts = this.options as LegacyResizeDebounceOptions;
@@ -225,8 +235,9 @@ export class TerminalResizeDebouncer {
       this.resizeXTimeoutId = null;
       if (!this.disposed && this.isNewApi) {
         const opts = this.options as ResizeDebounceOptions;
-        opts.onXtermResize(cols, rows);
-        this.scheduleBackendResize(cols, rows);
+        if (opts.onXtermResize(cols, rows)) {
+          this.scheduleBackendResize(cols, rows);
+        }
       }
     }, RESIZE_X_DEBOUNCE_MS);
   }

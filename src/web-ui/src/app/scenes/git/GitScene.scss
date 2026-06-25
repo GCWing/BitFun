@@ -91,9 +91,9 @@
     align-items: center;
     gap: 6px;
     padding: 8px 16px;
-    border: 1px solid var(--btn-primary-border, var(--border-medium));
+    border: 1px solid var(--btn-primary-border);
     border-radius: 8px;
-    background: var(--btn-primary-bg, var(--element-bg-medium));
+    background: var(--btn-primary-bg);
     color: var(--btn-primary-color);
     box-shadow: var(--btn-primary-shadow);
     font-size: 12px;

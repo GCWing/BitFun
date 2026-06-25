@@ -103,5 +103,5 @@
 .info-list dd {
   margin: 0;
   color: var(--color-text-secondary);
-  font-family: var(--tool-card-font-mono, 'Courier New', monospace);
+  font-family: var(--tool-card-font-mono);
 }

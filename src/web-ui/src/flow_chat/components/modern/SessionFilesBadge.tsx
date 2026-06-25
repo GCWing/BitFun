@@ -25,7 +25,7 @@ import { notificationService } from '../../../shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
 import { runWithConcurrencyLimit } from '@/shared/utils/runWithConcurrencyLimit';
 import { createBtwChildSession } from '../../services/BtwThreadService';
-import { openBtwSessionInAuxPane } from '../../services/openBtwSession';
+import { openBtwSessionInAuxPane } from '../../services/btwSessionPane';
 import {
   buildDeepReviewLaunchFromSessionFiles,
   buildDeepReviewPreviewFromSessionFiles,

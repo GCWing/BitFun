@@ -39,7 +39,7 @@ function validateTextBoxPosition(slideData, bodyDimensions) {
   const slideHeightInches = bodyDimensions.height / PX_PER_IN;
   const minBottomMargin = 0.5;
   for (const el of slideData.elements) {
-    if (!['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'list', 'merged-text'].includes(el.type)) continue;
+    if (!['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'text', 'list', 'merged-text'].includes(el.type)) continue;
     const fontSize = el.style?.fontSize || 0;
     const bottomEdge = el.position.y + el.position.h;
     const distanceFromBottom = slideHeightInches - bottomEdge;
@@ -132,13 +132,14 @@ function addElements(slideData, targetSlide, pres) {
     } else {
       const lineHeight = el.style.lineSpacing || el.style.fontSize * 1.2;
       const isSingleLine = el.position.h <= lineHeight * 1.5;
-      const widthIncrease = el.position.w * (isSingleLine ? 0.02 : 0.06);
+      const isVerticalText = el.style.vert && el.style.vert !== 'horz';
+      const widthIncrease = isVerticalText ? 0 : el.position.w * (isSingleLine ? 0.02 : 0.06);
       let adjustedX = el.position.x;
       let adjustedW = capTextBoxWidth(el.position.x, el.position.w + widthIncrease);
       const align = el.style.align;
-      if (align === 'center') {
+      if (!isVerticalText && align === 'center') {
         adjustedX = el.position.x - ((adjustedW - el.position.w) / 2);
-      } else if (align === 'right') {
+      } else if (!isVerticalText && align === 'right') {
         adjustedX = el.position.x - (adjustedW - el.position.w);
       }
       adjustedX = Math.max(0, adjustedX);
@@ -154,7 +155,7 @@ function addElements(slideData, targetSlide, pres) {
         bold: el.style.bold,
         italic: el.style.italic,
         underline: el.style.underline,
-        valign: 'top',
+        valign: isVerticalText ? 'mid' : (el.style.valign || 'top'),
         lineSpacing: el.style.lineSpacing,
         paraSpaceBefore: el.style.paraSpaceBefore,
         paraSpaceAfter: el.style.paraSpaceAfter,
@@ -165,6 +166,7 @@ function addElements(slideData, targetSlide, pres) {
       if (el.style.align) textOptions.align = el.style.align;
       if (el.style.margin) textOptions.margin = el.style.margin;
       if (el.style.rotate !== undefined) textOptions.rotate = el.style.rotate;
+      if (el.style.vert) textOptions.vert = el.style.vert;
       if (el.style.transparency != null && el.style.transparency !== undefined) {
         textOptions.transparency = el.style.transparency;
       }

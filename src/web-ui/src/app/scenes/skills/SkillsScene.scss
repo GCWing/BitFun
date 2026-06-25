@@ -303,7 +303,7 @@
   border: 1px solid color-mix(in srgb, var(--color-accent-500) 20%, var(--border-subtle));
   border-radius: $size-radius-full;
   background: color-mix(in srgb, var(--color-accent-500) 8%, transparent);
-  color: var(--color-accent-600, var(--color-text-secondary));
+  color: var(--color-accent-600);
   font-size: var(--font-size-xs);
   font-weight: $font-weight-medium;
   cursor: pointer;
@@ -316,7 +316,7 @@
   &:hover {
     background: color-mix(in srgb, var(--color-accent-500) 14%, transparent);
     border-color: color-mix(in srgb, var(--color-accent-500) 35%, var(--border-medium));
-    color: var(--color-accent-600, var(--color-text-primary));
+    color: var(--color-accent-600);
   }
 
   &:focus-visible {
@@ -348,7 +348,7 @@
   background:
     radial-gradient(circle at top right, color-mix(in srgb, var(--color-accent-500) 12%, transparent), transparent 42%),
     linear-gradient(180deg, color-mix(in srgb, var(--color-accent-500) 7%, var(--color-bg-secondary)), var(--color-bg-secondary));
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 10px 30px rgba(var(--color-static-black-rgb), 0.05);
 }
 
 .skills-suite__hero-copy {
@@ -515,7 +515,7 @@
   border: 1px solid var(--border-subtle);
   border-radius: $size-radius-lg;
   background: var(--color-bg-secondary);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 8px 24px rgba(var(--color-static-black-rgb), 0.04);
 }
 
 .skills-suite__group-head {
@@ -654,7 +654,7 @@
   background: var(--color-bg-secondary);
   cursor: pointer;
   animation: skills-card-in 0.18s $easing-decelerate both;
-  animation-delay: calc(var(--card-index, 0) * 30ms);
+  animation-delay: calc(var(--surface-stagger-index, 0) * 30ms);
   transition:
     border-color $motion-fast $easing-standard,
     box-shadow $motion-fast $easing-standard,
@@ -819,7 +819,7 @@
   background: var(--element-bg-subtle);
   border: 1px solid var(--border-subtle);
   animation: skills-card-in 0.2s $easing-decelerate both;
-  animation-delay: calc(var(--card-index, 0) * 40ms);
+  animation-delay: calc(var(--surface-stagger-index, 0) * 40ms);
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -998,7 +998,7 @@
   background: var(--element-bg-subtle);
   border: 1px solid var(--border-subtle);
   animation: skills-card-in 0.18s $easing-decelerate both;
-  animation-delay: calc(var(--card-index, 0) * 40ms);
+  animation-delay: calc(var(--surface-stagger-index, 0) * 40ms);
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

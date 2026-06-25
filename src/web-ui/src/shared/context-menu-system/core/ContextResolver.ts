@@ -438,6 +438,8 @@ export class ContextResolver {
     const tabTitle = tabElement.getAttribute('data-tab-title') || 
                     tabElement.textContent?.trim() || '';
     const tabType = tabElement.getAttribute('data-tab-type') || undefined;
+    const filePath = tabElement.getAttribute('data-file-path') || undefined;
+    const workspacePath = tabElement.getAttribute('data-workspace-path') || undefined;
     const isActive = tabElement.classList.contains('active') ||
                     tabElement.getAttribute('data-active') === 'true';
     const isClosable = tabElement.getAttribute('data-closable') !== 'false';
@@ -448,6 +450,8 @@ export class ContextResolver {
       tabId,
       tabTitle,
       tabType,
+      filePath,
+      workspacePath,
       isActive,
       isClosable
     };

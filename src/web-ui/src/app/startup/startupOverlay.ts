@@ -1,6 +1,6 @@
 const STARTUP_OVERLAY_ID = 'bitfun-startup-overlay';
 const EXIT_CLASS = 'bitfun-startup-overlay--exiting';
-const DEFAULT_EXIT_MS = 650;
+const EXIT_FALLBACK_MS = 450;
 
 declare global {
   interface Window {
@@ -24,24 +24,50 @@ export function isStartupOverlayPresent(): boolean {
   return getOverlay() !== null;
 }
 
-export function hideStartupOverlay(): Promise<void> {
+function waitForOverlayExitAnimation(overlay: HTMLElement): Promise<void> {
+  return new Promise(resolve => {
+    let done = false;
+    const state: { fallbackTimer: number | undefined } = {
+      fallbackTimer: undefined,
+    };
+
+    function finish() {
+      if (done) {
+        return;
+      }
+      done = true;
+      overlay.removeEventListener('animationend', handleAnimationEnd);
+      if (state.fallbackTimer !== undefined) {
+        window.clearTimeout(state.fallbackTimer);
+      }
+      resolve();
+    }
+
+    function handleAnimationEnd(event: AnimationEvent) {
+      if (event.target !== overlay) {
+        return;
+      }
+      finish();
+    }
+
+    overlay.addEventListener('animationend', handleAnimationEnd);
+    state.fallbackTimer = window.setTimeout(finish, EXIT_FALLBACK_MS);
+  });
+}
+
+export async function hideStartupOverlay(): Promise<void> {
   const overlay = getOverlay();
   if (!overlay) {
-    return Promise.resolve();
+    return;
   }
 
   if (overlay.classList.contains(EXIT_CLASS)) {
-    return new Promise(resolve => {
-      window.setTimeout(resolve, DEFAULT_EXIT_MS);
-    });
+    await waitForOverlayExitAnimation(overlay);
+    return;
   }
 
   overlay.classList.add(EXIT_CLASS);
   overlay.setAttribute('aria-hidden', 'true');
-  return new Promise(resolve => {
-    window.setTimeout(() => {
-      overlay.remove();
-      resolve();
-    }, DEFAULT_EXIT_MS);
-  });
+  await waitForOverlayExitAnimation(overlay);
+  overlay.remove();
 }

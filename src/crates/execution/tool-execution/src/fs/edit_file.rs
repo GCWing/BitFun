@@ -56,6 +56,14 @@ pub struct EditLocalFileOutcome {
     pub edit_result: EditResult,
 }
 
+pub fn is_edit_content_guardrail_error(error: &str) -> bool {
+    error.contains("old_string not found in file") || error.contains("`old_string` appears")
+}
+
+pub fn edit_success_message(logical_path: &str) -> String {
+    format!("Successfully edited {}", logical_path)
+}
+
 /// Count lines before given byte position (line numbers start from 1)
 fn count_lines_before(content: &str, byte_pos: usize) -> usize {
     content[..byte_pos].matches('\n').count() + 1
@@ -495,7 +503,10 @@ pub fn edit_local_file_with_content(
 
 #[cfg(test)]
 mod tests {
-    use super::{apply_edit_to_content, edit_file, sanitize_read_tool_copied_text, EditResult};
+    use super::{
+        apply_edit_to_content, edit_file, edit_success_message, is_edit_content_guardrail_error,
+        sanitize_read_tool_copied_text, EditResult,
+    };
     use std::fs;
     use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -579,6 +590,25 @@ mod tests {
             .expect_err("empty old_string should fail");
 
         assert_eq!(error, "old_string cannot be empty.");
+    }
+
+    #[test]
+    fn edit_content_guardrail_detection_matches_apply_edit_errors() {
+        assert!(is_edit_content_guardrail_error(
+            "old_string not found in file."
+        ));
+        assert!(is_edit_content_guardrail_error(
+            "`old_string` appears 2 times in file, either provide a larger string with more surrounding context to make it unique or use `replace_all` to change every instance of `old_string`.\n"
+        ));
+        assert!(!is_edit_content_guardrail_error("Permission denied"));
+    }
+
+    #[test]
+    fn edit_success_message_matches_tool_presentation() {
+        assert_eq!(
+            edit_success_message("src/lib.rs"),
+            "Successfully edited src/lib.rs"
+        );
     }
 
     #[test]

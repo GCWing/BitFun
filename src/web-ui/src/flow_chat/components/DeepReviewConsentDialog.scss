@@ -7,8 +7,8 @@
 }
 
 .deep-review-consent {
-  --deep-review-accent: #2563eb;
-  --deep-review-accent-strong: #1d4ed8;
+  --deep-review-accent: var(--deep-review-consent-accent);
+  --deep-review-accent-strong: var(--deep-review-consent-accent-strong);
   --deep-review-warm: var(--color-warning);
   display: flex;
   flex-direction: column;
@@ -23,8 +23,8 @@
 :root[data-theme='dark'] .deep-review-consent,
 :root[data-theme-type='dark'] .deep-review-consent {
   --deep-review-accent: var(--color-accent-600);
-  --deep-review-accent-strong: #2563eb;
-  --deep-review-warm: #fbbf24;
+  --deep-review-accent-strong: var(--deep-review-consent-accent-strong-dark);
+  --deep-review-warm: var(--deep-review-consent-warm-dark);
 }
 
 .deep-review-consent__header {

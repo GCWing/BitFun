@@ -520,14 +520,15 @@ const BrowserPanel: React.FC<BrowserPanelProps> = ({ isActive, initialUrl }) => 
   }, [addContext, isInspectorActive, isTauri]);
 
   return (
-    <div className="browser-panel">
-      <form className="browser-panel__toolbar" onSubmit={handleSubmit}>
+    <div className="browser-panel" data-testid="browser-panel">
+      <form className="browser-panel__toolbar" onSubmit={handleSubmit} data-testid="browser-panel-title">
         <IconButton
           type="button"
           variant="ghost"
           size="small"
           onClick={handleGoBack}
           aria-label={t('nav.back')}
+          data-testid="browser-back-button"
         >
           <ChevronLeft size={14} />
         </IconButton>
@@ -537,6 +538,7 @@ const BrowserPanel: React.FC<BrowserPanelProps> = ({ isActive, initialUrl }) => 
           size="small"
           onClick={handleGoForward}
           aria-label={t('nav.forward')}
+          data-testid="browser-forward-button"
         >
           <ChevronRight size={14} />
         </IconButton>
@@ -547,8 +549,13 @@ const BrowserPanel: React.FC<BrowserPanelProps> = ({ isActive, initialUrl }) => 
           onClick={handleRefresh}
           disabled={isLoading}
           aria-label={t('actions.refresh')}
+          data-testid="browser-refresh-button"
         >
-          <RefreshCw size={14} className={isLoading ? 'browser-panel__spinning' : undefined} />
+          <RefreshCw
+            size={14}
+            className={isLoading ? 'browser-panel__spinning' : undefined}
+            data-testid={isLoading ? 'browser-loading-indicator' : undefined}
+          />
         </IconButton>
         <div className="browser-panel__address">
           <Globe size={16} />
@@ -558,6 +565,7 @@ const BrowserPanel: React.FC<BrowserPanelProps> = ({ isActive, initialUrl }) => 
             onChange={(e) => setInputValue(e.target.value)}
             placeholder={t('browserView.addressPlaceholder', { exampleUrl: 'https://example.com' })}
             spellCheck={false}
+            data-testid="browser-url-input"
           />
         </div>
         {isTauri && (
@@ -575,13 +583,13 @@ const BrowserPanel: React.FC<BrowserPanelProps> = ({ isActive, initialUrl }) => 
       </form>
 
       {error ? (
-        <div className="browser-panel__error">
+        <div className="browser-panel__error" data-testid="browser-error-message">
           <AlertTriangle size={16} />
           <span>{error}</span>
         </div>
       ) : null}
 
-      <div className="browser-panel__content">
+      <div className="browser-panel__content" data-testid="browser-page-frame">
         {!isTauri || webviewUnavailable ? (
           <iframe
             className="browser-panel__iframe"
@@ -593,7 +601,7 @@ const BrowserPanel: React.FC<BrowserPanelProps> = ({ isActive, initialUrl }) => 
           <div ref={viewportRef} className="browser-panel__webview-host">
             <div className="browser-panel__webview-placeholder">
               <Globe size={20} />
-              <span>{currentUrl}</span>
+              <span data-testid="browser-current-url">{currentUrl}</span>
             </div>
           </div>
         )}

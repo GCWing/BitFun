@@ -14,10 +14,10 @@
   align-items: center;
   gap: 4px;
   padding: 6px 10px;
-  background: rgba(0, 0, 0, 0.7);
+  background: rgba(var(--color-static-black-rgb), 0.7);
   border: 1px solid var(--color-overlay-white-20);
   border-radius: 6px;
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--color-overlay-white-80);
   font-size: var(--flowchat-font-size-xs);
   font-weight: 500;
   cursor: pointer;
@@ -42,30 +42,30 @@
 
 .copy-output-button:hover {
   background: var(--color-accent-700);
-  border-color: rgba(59, 130, 246, 0.6);
+  border-color: var(--border-accent-strong);
   color: white;
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+  box-shadow: 0 4px 12px var(--border-accent-soft);
 }
 
 .copy-output-button:active {
   transform: translateY(0);
-  box-shadow: 0 2px 6px rgba(59, 130, 246, 0.4);
+  box-shadow: 0 2px 6px var(--border-accent);
 }
 
 .copy-output-button.copied {
-  background: rgba(34, 197, 94, 0.9);
-  border-color: rgba(34, 197, 94, 0.7);
-  color: white;
+  background: color-mix(in srgb, var(--flowchat-copy-success-color) 90%, transparent);
+  border-color: color-mix(in srgb, var(--flowchat-copy-success-color) 70%, transparent);
+  color: var(--color-static-white);
   opacity: 1;
   pointer-events: auto;
 }
 
 .copy-output-button.copied:hover {
-  background: rgba(34, 197, 94, 0.9);
-  border-color: rgba(34, 197, 94, 0.7);
+  background: color-mix(in srgb, var(--flowchat-copy-success-color) 90%, transparent);
+  border-color: color-mix(in srgb, var(--flowchat-copy-success-color) 70%, transparent);
   transform: translateY(0);
-  box-shadow: 0 2px 8px rgba(34, 197, 94, 0.4);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--flowchat-copy-success-color) 40%, transparent);
 }
 
 .button-icon {
@@ -108,7 +108,7 @@
 /* High contrast mode support */
 @media (prefers-contrast: high) {
   .copy-output-button {
-    background: rgba(0, 0, 0, 0.9);
+    background: rgba(var(--color-static-black-rgb), 0.9);
     border-color: var(--color-overlay-white-60);
     color: white;
   }
@@ -136,9 +136,9 @@
 }
 
 .copy-output-button.edit-button:hover {
-  background: rgba(139, 92, 246, 0.8);
-  border-color: rgba(139, 92, 246, 0.6);
-  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+  background: color-mix(in srgb, var(--color-purple-500) 80%, transparent);
+  border-color: color-mix(in srgb, var(--color-purple-500) 60%, transparent);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--color-purple-500) 30%, transparent);
 }
 
 .copy-output-button.edit-button:active {

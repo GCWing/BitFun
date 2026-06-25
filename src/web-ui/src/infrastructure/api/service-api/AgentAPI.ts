@@ -4,6 +4,7 @@ import { api } from './ApiClient';
 import { createTauriCommandError } from '../errors/TauriCommandError';
 import type { DialogTurnData, SessionRelationship } from '@/shared/types/session-history';
 import type { ImageContextData as ImageInputContextData } from './ImageContextTypes';
+import type { AgentSource } from './CustomAgentAPI';
 import type { ReviewTeamRunManifest } from '@/shared/services/reviewTeamService';
 
 
@@ -255,6 +256,9 @@ export interface ModeInfo {
   configProfileId: string;
   configProfileLabel?: string;
   configProfileMemberModeIds: string[];
+  source: AgentSource;
+  path?: string;
+  model?: string;
 }
 
 
@@ -1055,6 +1059,7 @@ export class AgentAPI {
       promptCacheScopeKey: agentType,
       configProfileId: agentType,
       configProfileMemberModeIds: [agentType],
+      source: 'builtin',
       agent_type: agentType,
       when_to_use: `Use ${agentType} for related tasks`,
       tools: 'all',

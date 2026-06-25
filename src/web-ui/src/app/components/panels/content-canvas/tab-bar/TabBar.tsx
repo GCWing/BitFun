@@ -289,6 +289,14 @@ export const TabBar: React.FC<TabBarProps> = ({
     }
   }, [draggingTabId]);
 
+  const handleCloseOtherTabs = useCallback((targetTabId: string) => async () => {
+    for (const tab of visibleTabs) {
+      if (tab.id !== targetTabId && tab.state !== 'pinned') {
+        await onTabClose(tab.id);
+      }
+    }
+  }, [onTabClose, visibleTabs]);
+
   return (
     <div
       ref={containerRef}
@@ -321,6 +329,8 @@ export const TabBar: React.FC<TabBarProps> = ({
               onDragEnd={onDragEnd}
               isDragging={draggingTabId === tab.id}
               onPopOut={onTabPopOut ? () => onTabPopOut(tab.id) : undefined}
+              onCloseOthers={visibleTabs.length > 1 ? handleCloseOtherTabs(tab.id) : undefined}
+              onCloseAll={onCloseAllTabs}
             />
           </div>
         ))}

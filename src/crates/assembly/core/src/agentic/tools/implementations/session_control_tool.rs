@@ -12,7 +12,7 @@ use crate::agentic::tools::framework::{
 use crate::service_agent_runtime::CoreServiceAgentRuntime;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
-use bitfun_agent_runtime::runtime::AgentRuntime;
+use bitfun_agent_runtime::sdk::AgentRuntime;
 use bitfun_agent_runtime::session_control::{
     render_session_control_tool_use_message, resolve_session_control_cancel_route,
     session_control_agent_type_or_default, session_control_cancel_result_message,

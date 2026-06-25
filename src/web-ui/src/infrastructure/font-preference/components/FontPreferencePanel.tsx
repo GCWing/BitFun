@@ -100,6 +100,10 @@ export function FontPreferencePanel() {
       FLOW_CHAT_PX_OPTIONS.map((n) => ({
         value: n,
         label: t('appearance.fontSize.flowChatPxOption', { n }),
+        testId: 'appearance-flowchat-font-option',
+        testAttributes: {
+          'data-font-px': n,
+        },
       })),
     [t]
   );
@@ -127,10 +131,11 @@ export function FontPreferencePanel() {
   );
 
   return (
-    <ConfigPageSection
-      title={t('appearance.fontSize.title')}
-      description={t('appearance.fontSize.hint')}
-    >
+    <div data-testid="appearance-font-section">
+      <ConfigPageSection
+        title={t('appearance.fontSize.title')}
+        description={t('appearance.fontSize.hint')}
+      >
       {/* UI Font Size */}
       <ConfigPageRow
         className="font-pref-panel__row--ui"
@@ -141,7 +146,12 @@ export function FontPreferencePanel() {
       >
         <div className="font-pref-panel__ui-size">
           <div className="font-pref-panel__ui-segment-block">
-            <div className="font-pref-panel__level-buttons" role="group" aria-label={t('appearance.fontSize.uiSizeLabel')}>
+            <div
+              className="font-pref-panel__level-buttons"
+              role="group"
+              aria-label={t('appearance.fontSize.uiSizeLabel')}
+              data-testid="appearance-ui-font-level-group"
+            >
               {UI_LEVELS.map((l) => (
                 <button
                   key={l}
@@ -152,6 +162,9 @@ export function FontPreferencePanel() {
                   ].join(' ').trim()}
                   onClick={() => void handleLevelClick(l)}
                   aria-pressed={level === l}
+                  data-testid="appearance-ui-font-level-btn"
+                  data-font-level={l}
+                  data-selected={level === l ? 'true' : 'false'}
                 >
                   <span
                     className="font-pref-panel__level-label"
@@ -170,6 +183,9 @@ export function FontPreferencePanel() {
                   ].join(' ').trim()}
                   onClick={() => void handleLevelClick('custom')}
                   aria-pressed={level === 'custom'}
+                  data-testid="appearance-ui-font-level-btn"
+                  data-font-level="custom"
+                  data-selected={level === 'custom' ? 'true' : 'false'}
                 >
                   <span
                     className="font-pref-panel__level-label"
@@ -183,6 +199,7 @@ export function FontPreferencePanel() {
                     className="font-pref-panel__custom-controls"
                     role="group"
                     aria-label={t('appearance.fontSize.customPxLabel')}
+                    data-testid="appearance-ui-font-custom-controls"
                   >
                     <div className="font-pref-panel__stepper">
                       <button
@@ -190,6 +207,7 @@ export function FontPreferencePanel() {
                         className="font-pref-panel__step-btn"
                         onClick={() => handleCustomStep(-1)}
                         aria-label="-1"
+                        data-testid="appearance-ui-font-custom-step-minus"
                       >−</button>
                       <input
                         type="number"
@@ -205,12 +223,15 @@ export function FontPreferencePanel() {
                         onChange={handleCustomInputChange}
                         onFocus={() => void handleLevelClick('custom')}
                         aria-invalid={!!customError}
+                        data-testid="appearance-ui-font-custom-input"
+                        data-font-level="custom"
                       />
                       <button
                         type="button"
                         className="font-pref-panel__step-btn"
                         onClick={() => handleCustomStep(1)}
                         aria-label="+1"
+                        data-testid="appearance-ui-font-custom-step-plus"
                       >+</button>
                     </div>
                     <span className="font-pref-panel__custom-unit">px</span>
@@ -228,6 +249,7 @@ export function FontPreferencePanel() {
             className="font-pref-panel__preview"
             style={{ fontSize: `${previewBasePx}px` }}
             aria-label="Font size preview"
+            data-testid="appearance-ui-font-preview"
           >
             {t('appearance.fontSize.previewText')}
           </div>
@@ -248,6 +270,7 @@ export function FontPreferencePanel() {
               checked={fcIndependent}
               onChange={(e) => handleFlowChatCustomToggle(e.target.checked)}
               label={t('appearance.fontSize.flowChatCustomToggle')}
+              data-testid="appearance-flowchat-font-toggle"
             />
           </div>
           {fcIndependent && (
@@ -258,6 +281,7 @@ export function FontPreferencePanel() {
                 options={flowChatPxOptions}
                 onChange={handleFlowChatPxChange}
                 placement="bottom"
+                triggerTestId="appearance-flowchat-font-select"
               />
             </div>
           )}
@@ -270,10 +294,12 @@ export function FontPreferencePanel() {
           type="button"
           className="font-pref-panel__reset-btn"
           onClick={() => void handleReset()}
+          data-testid="appearance-font-reset-btn"
         >
           {t('appearance.fontSize.resetButton')}
         </button>
       </ConfigPageRow>
-    </ConfigPageSection>
+      </ConfigPageSection>
+    </div>
   );
 }

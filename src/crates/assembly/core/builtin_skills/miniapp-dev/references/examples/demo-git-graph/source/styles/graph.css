@@ -1,0 +1,23 @@
+/* ── Graph SVG in rows ───────────── */
+.commit-row__graph svg .graph-line {
+  fill: none;
+  stroke-width: 1.5;
+}
+.commit-row__graph svg .graph-line--uncommitted {
+  stroke: var(--graph-uncommitted);
+  stroke-dasharray: 3 3;
+}
+.commit-row__graph svg .graph-node {
+  stroke-width: 1.5;
+  transition: r 0.15s;
+}
+.commit-row__graph svg .graph-node--commit {
+  stroke: var(--graph-node-stroke);
+}
+.commit-row__graph svg .graph-node--uncommitted {
+  fill: none;
+  stroke: var(--graph-uncommitted);
+}
+.commit-row:hover .commit-row__graph svg .graph-node--commit {
+  r: 5;
+}

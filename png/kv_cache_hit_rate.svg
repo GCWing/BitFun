@@ -1,0 +1,45 @@
+<svg width="960" height="340" viewBox="0 0 960 340" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">KV Cache hit rate distribution</title>
+  <desc id="desc">KV Cache hit rate distribution across 728 valid cache records.</desc>
+  <rect width="960" height="340" rx="18" fill="#ffffff"/>
+  <rect x="1" y="1" width="958" height="338" rx="18" fill="none" stroke="#e5edf3"/>
+  <style>
+    .axis { font: 600 11px Inter, "Segoe UI", Arial, sans-serif; fill: #7b8797; }
+    .bin { font: 700 12px Inter, "Segoe UI", Arial, sans-serif; fill: #435166; }
+    .count { font: 800 13px Inter, "Segoe UI", Arial, sans-serif; fill: #1f2a3d; }
+    .grid { stroke: #e7edf4; stroke-width: 1; }
+  </style>
+
+  <line x1="90" y1="278" x2="890" y2="278" class="grid"/>
+  <line x1="90" y1="194" x2="890" y2="194" class="grid"/>
+  <line x1="90" y1="110" x2="890" y2="110" class="grid"/>
+  <line x1="90" y1="68" x2="890" y2="68" class="grid"/>
+  <text x="72" y="282" text-anchor="end" class="axis">0</text>
+  <text x="72" y="198" text-anchor="end" class="axis">100</text>
+  <text x="72" y="114" text-anchor="end" class="axis">200</text>
+  <text x="72" y="72" text-anchor="end" class="axis">250</text>
+
+  <rect x="120" y="272" width="86" height="6" rx="3" fill="#c7ced8"/>
+  <text x="163" y="262" text-anchor="middle" class="count">7</text>
+  <text x="163" y="309" text-anchor="middle" class="bin">80-90%</text>
+
+  <rect x="250" y="267" width="86" height="11" rx="4" fill="#b9c1cc"/>
+  <text x="293" y="257" text-anchor="middle" class="count">13</text>
+  <text x="293" y="309" text-anchor="middle" class="bin">90-95%</text>
+
+  <rect x="380" y="191" width="86" height="87" rx="6" fill="#9da8b8"/>
+  <text x="423" y="181" text-anchor="middle" class="count">103</text>
+  <text x="423" y="309" text-anchor="middle" class="bin">95-98%</text>
+
+  <rect x="510" y="86" width="86" height="192" rx="7" fill="#2f80ed"/>
+  <text x="553" y="76" text-anchor="middle" class="count">228</text>
+  <text x="553" y="309" text-anchor="middle" class="bin">98-99%</text>
+
+  <rect x="640" y="77" width="86" height="201" rx="7" fill="#1463d7"/>
+  <text x="683" y="67" text-anchor="middle" class="count">239</text>
+  <text x="683" y="309" text-anchor="middle" class="bin">99-99.5%</text>
+
+  <rect x="770" y="162" width="86" height="116" rx="7" fill="#73aaf5"/>
+  <text x="813" y="152" text-anchor="middle" class="count">138</text>
+  <text x="813" y="309" text-anchor="middle" class="bin">&gt;=99.5%</text>
+</svg>

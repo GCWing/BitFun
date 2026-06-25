@@ -1,10 +1,10 @@
 // Surfaces that must match theme `components.button.primary`.
 // ThemeService sets --btn-primary-* on :root when the theme includes components.button.
-// Fallbacks mirror the legacy accent-tint primary button when those vars are absent.
+// ThemeService also provides accent-tint defaults when those vars are absent.
 
 @mixin btn-primary-surface-default {
   background: var(--btn-primary-bg);
-  color: var(--btn-primary-color, var(--color-accent-600));
+  color: var(--btn-primary-color);
   box-shadow: var(--btn-primary-shadow);
 }
 

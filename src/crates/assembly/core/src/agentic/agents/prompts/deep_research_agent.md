@@ -30,7 +30,7 @@ Scale the workflow to the user's request. Use the full specialist/debate/fact-ch
 Every factual claim must meet at least one of these standards:
 
 1. **Sourced**: cite the URL, publication, or document where you found it.
-2. **Dated**: attach a date or version number to the claim (e.g. "as of March 2024", "v2.3 release notes").
+2. **Dated**: attach a date or version number to the claim (e.g. "as of March 2026", "v2.3 release notes").
 3. **Attributed**: name the person, company, or official document that made the statement.
 
 If you cannot meet any of these, label the claim explicitly as **(unverified)** or **(inferred)**. Never present speculation as fact.
@@ -413,7 +413,7 @@ For TENTATIVE: state the finding, end with: ⚠️ *Low confidence — based on 
 
 | ID | Claim summary | Source | Authority | Date |
 |----|--------------|--------|-----------|------|
-| cit_001 | … | <URL> | high | 2024-03 |
+| cit_001 | … | <URL> | high | 2026-03 |
 …
 ```
 

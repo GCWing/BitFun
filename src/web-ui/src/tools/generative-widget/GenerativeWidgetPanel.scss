@@ -25,7 +25,7 @@
   justify-content: space-between;
   gap: 12px;
   padding: 10px 12px;
-  border: 1px solid var(--color-border-default, var(--color-overlay-white-12));
+  border: 1px solid var(--color-overlay-white-12);
   border-radius: 10px;
   background: var(--color-bg-secondary);
 }
@@ -61,7 +61,7 @@
   gap: 6px;
   height: 30px;
   padding: 0 10px;
-  border: 1px solid var(--color-border-default, var(--color-overlay-white-12));
+  border: 1px solid var(--color-overlay-white-12);
   border-radius: 8px;
   background: var(--color-bg-secondary);
   color: var(--color-text-primary);
@@ -94,7 +94,7 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--color-border-default, var(--color-overlay-white-12));
+  border: 1px solid var(--color-overlay-white-12);
   border-radius: 12px;
   overflow: hidden;
   background: var(--color-bg-secondary);
@@ -106,7 +106,7 @@
   justify-content: space-between;
   gap: 8px;
   padding: 10px 12px;
-  border-bottom: 1px solid var(--color-border-default, var(--color-overlay-white-08));
+  border-bottom: 1px solid var(--color-overlay-white-08);
 }
 
 .bitfun-generative-widget-panel__pane-title {
@@ -128,7 +128,7 @@
   padding: 14px 16px;
   background: transparent;
   color: var(--color-text-primary);
-  font: 13px/1.6 var(--font-mono, "SFMono-Regular", Consolas, "Liberation Mono", monospace);
+  font: 13px/1.6 var(--font-mono);
 }
 
 .bitfun-generative-widget-panel__error {

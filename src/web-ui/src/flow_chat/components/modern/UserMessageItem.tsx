@@ -390,6 +390,10 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
       <div 
         ref={containerRef}
         className={`user-message-item ${expanded ? 'user-message-item--expanded' : ''}${isFailed ? ' user-message-item--failed' : ''}`}
+        data-testid="chat-user-message"
+        data-turn-id={turnId}
+        data-status={dialogTurn?.status || ''}
+        data-failed={isFailed ? 'true' : 'false'}
       >
         {config?.showTimestamps && (
           <div className="user-message-item__timestamp">
@@ -429,6 +433,8 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
                 <div 
                   ref={contentRef}
                   className="user-message-item__content"
+                  data-testid="chat-user-message-content"
+                  data-turn-id={turnId}
                   onClick={handleToggleExpand}
                   title={(hasOverflow || expanded) ? (expanded ? t('message.clickToCollapse') : t('message.clickToExpand')) : undefined}
                   style={{
@@ -448,6 +454,8 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
                 <div 
                   ref={contentRef}
                   className="user-message-item__content"
+                  data-testid="chat-user-message-content"
+                  data-turn-id={turnId}
                   onClick={handleToggleExpand}
                   title={(hasOverflow || expanded) ? (expanded ? t('message.clickToCollapse') : t('message.clickToExpand')) : undefined}
                   style={{

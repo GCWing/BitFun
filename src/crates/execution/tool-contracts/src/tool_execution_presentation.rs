@@ -24,7 +24,7 @@ pub fn is_write_like_tool_name(tool_name: &str) -> bool {
 pub fn build_tool_call_truncation_recovery_notice(tool_name: &str) -> String {
     if is_write_like_tool_name(tool_name) {
         return format!(
-            "[Your previous {tool_name} call was truncated mid-stream by max_tokens and was auto-repaired before execution; the file may have been written with partial content. Use the latest Read result for that file (or call Read once if no current Read result is available) to inspect what is on disk. To finish it, issue ONE Edit call where `old_string` is a final unique substring from the current file and `new_string` is that same substring plus the continuation. If you do not have a concrete plan for the continuation, stop tool-calling and tell the user the output was truncated (suggest raising max_tokens). Do NOT rewrite the whole file with Write.]\n\nOriginal tool result follows.\n\n"
+            "[Your previous {tool_name} call was truncated mid-stream by max_tokens and was auto-repaired before execution; the file may have been written with partial content. Use the latest Read result for that file (or call Read once if no current Read result is available) to inspect what is on disk. To finish it, issue ONE {tool_name} call with `mode`: \"a\" and `content` set only to the missing continuation. If you do not have a concrete plan for the continuation, stop tool-calling and tell the user the output was truncated (suggest raising max_tokens). Do NOT rewrite the whole file with overwrite mode.]\n\nOriginal tool result follows.\n\n"
         );
     }
 
@@ -102,9 +102,9 @@ pub fn build_invalid_tool_call_error_message(
     tool_name: &str,
     tool_is_error: bool,
     recovered_from_truncation: bool,
-    raw_arguments_preview: Option<String>,
+    _raw_arguments_preview: Option<String>,
 ) -> String {
-    let error_msg = if tool_name.is_empty() && tool_is_error {
+    if tool_name.is_empty() && tool_is_error {
         "Missing valid tool name and arguments are invalid JSON.".to_string()
     } else if tool_name.is_empty() {
         "Missing valid tool name.".to_string()
@@ -114,11 +114,5 @@ pub fn build_invalid_tool_call_error_message(
         )
     } else {
         "Arguments are invalid JSON.".to_string()
-    };
-
-    if let Some(raw_arguments_preview) = raw_arguments_preview {
-        format!("{error_msg} Raw arguments: {raw_arguments_preview}")
-    } else {
-        error_msg
     }
 }

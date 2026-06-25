@@ -8,12 +8,16 @@ use super::types::{FinishReason, RoundContext, RoundResult};
 use crate::agentic::core::{Message, ToolCall};
 use crate::agentic::events::{AgenticEvent, EventPriority, EventQueue, ToolEventData};
 use crate::agentic::tools::computer_use_host::ComputerUseHostRef;
-use crate::agentic::tools::pipeline::{ToolExecutionContext, ToolExecutionOptions, ToolPipeline};
+use crate::agentic::tools::pipeline::{
+    SubagentBatchExecutionPolicy as PipelineSubagentBatchExecutionPolicy, ToolExecutionContext,
+    ToolExecutionOptions, ToolPipeline,
+};
 use crate::agentic::tools::registry::get_global_tool_registry;
 use crate::agentic::tools::tool_context_runtime;
 use crate::agentic::tools::tool_result_storage;
 use crate::agentic::MessageContent;
 use crate::infrastructure::ai::AIClient;
+use crate::service::config::types::SubagentBatchExecutionPolicy as ConfigSubagentBatchExecutionPolicy;
 use crate::service::config::GlobalConfigManager;
 use crate::util::elapsed_ms_u64;
 use crate::util::errors::{BitFunError, BitFunResult};
@@ -42,6 +46,22 @@ impl RoundExecutor {
 
     fn has_user_visible_assistant_text(text: &str) -> bool {
         !text.trim().is_empty()
+    }
+
+    fn map_subagent_batch_execution_policy(
+        policy: ConfigSubagentBatchExecutionPolicy,
+    ) -> PipelineSubagentBatchExecutionPolicy {
+        match policy {
+            ConfigSubagentBatchExecutionPolicy::SafeOnly => {
+                PipelineSubagentBatchExecutionPolicy::SafeOnly
+            }
+            ConfigSubagentBatchExecutionPolicy::ForceParallel => {
+                PipelineSubagentBatchExecutionPolicy::ForceParallel
+            }
+            ConfigSubagentBatchExecutionPolicy::Serial => {
+                PipelineSubagentBatchExecutionPolicy::Serial
+            }
+        }
     }
 
     async fn sleep_with_cancellation(
@@ -713,11 +733,16 @@ impl RoundExecutor {
             };
 
             // Read tool execution related configuration from global config
-            let (needs_confirmation, tool_execution_timeout, tool_confirmation_timeout) = {
+            let (
+                needs_confirmation,
+                tool_execution_timeout,
+                tool_confirmation_timeout,
+                subagent_batch_execution_policy,
+            ) = {
                 let config_service = GlobalConfigManager::get_service().await.ok();
 
                 // Timeout and skip confirmation settings
-                let (exec_timeout, confirm_timeout, skip_confirmation) =
+                let (exec_timeout, confirm_timeout, skip_confirmation, task_policy) =
                     if let Some(ref service) = config_service {
                         let ai_config: crate::service::config::types::AIConfig =
                             service.get_config(Some("ai")).await.unwrap_or_default();
@@ -730,9 +755,17 @@ impl RoundExecutor {
                             ai_config.tool_execution_timeout_secs,
                             ai_config.tool_confirmation_timeout_secs,
                             ai_config.skip_tool_confirmation,
+                            Self::map_subagent_batch_execution_policy(
+                                ai_config.subagent_batch_execution_policy,
+                            ),
                         )
                     } else {
-                        (None, None, false) // Default: no timeout, requires confirmation
+                        (
+                            None,
+                            None,
+                            false,
+                            PipelineSubagentBatchExecutionPolicy::default(),
+                        ) // Default: no timeout, requires confirmation
                     };
 
                 let skip_from_context = context
@@ -761,7 +794,7 @@ impl RoundExecutor {
                     requires_permission
                 };
 
-                (needs_confirm, exec_timeout, confirm_timeout)
+                (needs_confirm, exec_timeout, confirm_timeout, task_policy)
             };
 
             // Create tool execution options (use configured timeout values)
@@ -769,6 +802,7 @@ impl RoundExecutor {
                 confirm_before_run: needs_confirmation,
                 timeout_secs: tool_execution_timeout,
                 confirmation_timeout_secs: tool_confirmation_timeout,
+                subagent_batch_execution_policy,
                 ..ToolExecutionOptions::default()
             };
 

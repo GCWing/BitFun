@@ -6,10 +6,21 @@
 
 .context-compression-card {
 
+  --context-compression-accent-rgb: 168, 85, 247;
+  --context-compression-bg-start-rgb: 20, 20, 20;
+  --context-compression-bg-end-rgb: 15, 15, 15;
+  --context-compression-hover-bg-start-rgb: 25, 25, 25;
+  --context-compression-hover-bg-end-rgb: 20, 20, 20;
+  --context-compression-accent: rgb(var(--context-compression-accent-rgb));
+
   width: 100%;
   max-width: 100%;
-  background: linear-gradient(135deg, rgba(20, 20, 20, 0.95), rgba(15, 15, 15, 0.98));
-  border: 1px solid rgba(168, 85, 247, 0.6);
+  background: linear-gradient(
+    135deg,
+    rgba(var(--context-compression-bg-start-rgb), 0.95),
+    rgba(var(--context-compression-bg-end-rgb), 0.98)
+  );
+  border: 1px solid color-mix(in srgb, var(--context-compression-accent) 60%, transparent);
   border-radius: 50px;
   margin: 6px 0;
   padding: 0;
@@ -43,11 +54,15 @@
   }
 
   &:hover {
-    border-color: rgba(168, 85, 247, 0.9);
-    box-shadow: 0 4px 16px rgba(168, 85, 247, 0.3),
-                0 2px 8px rgba(168, 85, 247, 0.2),
+    border-color: color-mix(in srgb, var(--context-compression-accent) 90%, transparent);
+    box-shadow: 0 4px 16px color-mix(in srgb, var(--context-compression-accent) 30%, transparent),
+                0 2px 8px color-mix(in srgb, var(--context-compression-accent) 20%, transparent),
                 inset 0 1px 0 var(--color-overlay-white-10);
-    background: linear-gradient(135deg, rgba(25, 25, 25, 0.98), rgba(20, 20, 20, 1));
+    background: linear-gradient(
+      135deg,
+      rgba(var(--context-compression-hover-bg-start-rgb), 0.98),
+      rgb(var(--context-compression-hover-bg-end-rgb))
+    );
   }
 }
 
@@ -101,7 +116,7 @@
 
 .context-compression-card__status-spinner {
   animation: spin 1s linear infinite;
-  color: #a855f7;
+  color: var(--context-compression-accent);
 }
 
 .context-compression-card__status-success {
@@ -113,7 +128,7 @@
 }
 
 .context-compression-card__status-pending {
-  color: #a855f7;
+  color: var(--context-compression-accent);
 }
 
 @keyframes spin {
@@ -191,7 +206,7 @@
 }
 
 .context-compression-card__processing-icon {
-  color: #a855f7;
+  color: var(--context-compression-accent);
   animation: spin 1s linear infinite;
   flex-shrink: 0;
 }

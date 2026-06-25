@@ -287,6 +287,7 @@ export function generationSteps() {
 }
 
 const GENERATION_EVENT_LIMIT = 80;
+const GENERATION_STREAM_LIMIT = 200;
 
 function normalizeGenerationEvent(event = {}) {
   const source = typeof event === 'string' ? { title: event } : event || {};
@@ -310,6 +311,9 @@ export function normalizeGeneration(value = {}) {
     ? value.events.map(normalizeGenerationEvent).slice(-GENERATION_EVENT_LIMIT)
     : [];
   const maxEventSeq = events.reduce((max, event) => Math.max(max, Number(event.seq) || 0), 0);
+  const stream = Array.isArray(value.agentStream)
+    ? value.agentStream.slice(-GENERATION_STREAM_LIMIT)
+    : [];
   return {
     active: Boolean(value.active),
     current: value.current || 'idle',
@@ -321,6 +325,7 @@ export function normalizeGeneration(value = {}) {
       status: known.get(step.id)?.status || 'pending',
     })),
     events,
+    agentStream: stream,
   };
 }
 

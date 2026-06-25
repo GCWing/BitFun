@@ -15,7 +15,7 @@ import { useTranslation } from 'react-i18next';
 import { IconButton, Textarea } from '@/component-library';
 import { ModelSelector } from '@/flow_chat/components/ModelSelector';
 import { flowChatManager } from '@/flow_chat/services/FlowChatManager';
-import { openMainSession } from '@/flow_chat/services/openBtwSession';
+import { openMainSession } from '@/flow_chat/services/sessionActivation';
 import { useImeEnterGuard } from '@/flow_chat/hooks/useImeEnterGuard';
 import { useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import { notificationService } from '@/shared/notification-system';

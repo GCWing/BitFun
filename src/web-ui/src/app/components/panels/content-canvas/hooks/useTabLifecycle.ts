@@ -144,8 +144,16 @@ export const useTabLifecycle = (options: UseTabLifecycleOptions = {}): UseTabLif
    * Dirty check before closing a tab.
    */
   const handleCloseWithDirtyCheck = useCallback(async (tabId: string, groupId: EditorGroupId): Promise<boolean> => {
-    const { primaryGroup: latestPrimaryGroup, secondaryGroup: latestSecondaryGroup } = canvasStoreApi.getState();
-    const group = groupId === 'primary' ? latestPrimaryGroup : latestSecondaryGroup;
+    const {
+      primaryGroup: latestPrimaryGroup,
+      secondaryGroup: latestSecondaryGroup,
+      tertiaryGroup: latestTertiaryGroup,
+    } = canvasStoreApi.getState();
+    const group = groupId === 'primary'
+      ? latestPrimaryGroup
+      : groupId === 'secondary'
+        ? latestSecondaryGroup
+        : latestTertiaryGroup;
     const tab = group.tabs.find(t => t.id === tabId);
 
     if (!tab) {
@@ -173,11 +181,20 @@ export const useTabLifecycle = (options: UseTabLifecycleOptions = {}): UseTabLif
    * Dirty check before closing all tabs.
    */
   const handleCloseAllWithDirtyCheck = useCallback(async (groupId: EditorGroupId): Promise<boolean> => {
-    const { primaryGroup: latestPrimaryGroup, secondaryGroup: latestSecondaryGroup } = canvasStoreApi.getState();
-    const group = groupId === 'primary' ? latestPrimaryGroup : latestSecondaryGroup;
-    const dirtyTabs = group.tabs.filter(t => t.isDirty);
+    const {
+      primaryGroup: latestPrimaryGroup,
+      secondaryGroup: latestSecondaryGroup,
+      tertiaryGroup: latestTertiaryGroup,
+    } = canvasStoreApi.getState();
+    const group = groupId === 'primary'
+      ? latestPrimaryGroup
+      : groupId === 'secondary'
+        ? latestSecondaryGroup
+        : latestTertiaryGroup;
+    const closableTabs = group.tabs.filter(t => t.state !== 'pinned');
+    const dirtyTabs = closableTabs.filter(t => t.isDirty);
 
-    if (dirtyTabs.length === 0) {
+    if (closableTabs.length === 0 || dirtyTabs.length === 0) {
       closeAllTabs(groupId);
       return true;
     }

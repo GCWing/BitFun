@@ -534,7 +534,7 @@
     white-space: nowrap;
 
     &:hover {
-      color: var(--accent-primary-hover, var(--accent-primary));
+      color: var(--accent-primary-hover);
     }
 
     &:focus-visible {
@@ -595,7 +595,7 @@
     cursor: pointer;
 
     &:hover {
-      color: var(--accent-primary-hover, var(--accent-primary));
+      color: var(--accent-primary-hover);
     }
 
     &:focus-visible {

@@ -123,14 +123,14 @@
       "title":              "Assistant",
       "subtitle":           "Manage all your assistant instances",
       "newAssistant":       "New Assistant",
-      "assistantsTitle":    "Hatched Assistants",
+      "assistantsTitle":    "Assistant Instances",
       "assistantsSubtitle": "Click a card to configure"
     },
 
     "template": {
-      "title":        "Hatch Template",
-      "subtitle":     "New assistants inherit these settings",
-      "configure":    "Configure",
+      "title":        "Assistant Defaults",
+      "subtitle":     "Configure assistant models, skills, and tools",
+      "configure":    "Assistant Settings",
       "tokenTitle":   "Context Usage Estimate",
       "tokenSystemPrompt": "System Prompt",
       "tokenToolInjection": "Tool Injection",
@@ -138,6 +138,7 @@
       "tokenMemories": "Memories",
       "tokenTotal":   "Default Total",
       "stats": {
+        "autoDefault":    "Auto",
         "primaryDefault": "Primary model",
         "fastDefault":    "Fast model",
         "tools":          "{{count}} tools",
@@ -151,7 +152,7 @@
       "mcpToolsSection": "MCP tools",
       "mcpEmptyTitle": "No MCP servers connected",
       "mcpEmptyHint": "Add MCP servers in Settings to see their tools here.",
-      "sectionModelsSubtitle": "Primary and fast model slots inherited when hatching new assistants",
+      "sectionModelsSubtitle": "Default model used by assistants",
       "mcpServerNoTools": "No tools available from this server",
       "closeDetail": "Close detail",
       "detailPanel": "Detail panel",

@@ -252,7 +252,7 @@
 
     &--deep {
       color: var(--color-text-primary);
-      font-weight: var(--font-weight-normal, 400);
+      font-weight: var(--font-weight-normal);
 
       &:hover:not(:disabled) {
         background: var(--element-bg-soft);

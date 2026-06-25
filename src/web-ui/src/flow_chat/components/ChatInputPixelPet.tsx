@@ -468,7 +468,7 @@ export const ChatInputPixelPet: React.FC<ChatInputPixelPetProps> = ({
               height="130%"
             >
               <feMorphology in="SourceAlpha" operator="dilate" radius="6" result="OUT" />
-              <feFlood floodColor="#fafaf9" floodOpacity="0.25" />
+              <feFlood floodColor="currentColor" floodOpacity="0.25" />
               <feComposite in2="OUT" operator="in" result="OUT_FILLED" />
               <feMerge>
                 <feMergeNode in="OUT_FILLED" />

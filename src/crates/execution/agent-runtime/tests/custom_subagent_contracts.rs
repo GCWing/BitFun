@@ -1,3 +1,7 @@
+use bitfun_agent_runtime::custom_agent::{
+    CustomAgentKind, DEFAULT_CUSTOM_SUBAGENT_MODEL, DEFAULT_CUSTOM_SUBAGENT_READONLY,
+    DEFAULT_CUSTOM_SUBAGENT_REVIEW,
+};
 use bitfun_agent_runtime::custom_subagent::{
     custom_subagent_model_or_default, custom_subagent_model_should_save,
     custom_subagent_read_markdown_file, custom_subagent_read_markdown_str,
@@ -6,11 +10,35 @@ use bitfun_agent_runtime::custom_subagent::{
     custom_subagent_save_markdown_file, custom_subagent_tools_are_default,
     custom_subagent_tools_from_front_matter, custom_subagent_tools_to_front_matter,
     CustomSubagentDefinition, CustomSubagentDefinitionError, CustomSubagentKind,
-    DEFAULT_CUSTOM_SUBAGENT_MODEL, DEFAULT_CUSTOM_SUBAGENT_READONLY,
-    DEFAULT_CUSTOM_SUBAGENT_REVIEW,
 };
 use std::fs;
 use std::path::PathBuf;
+
+fn build_definition(
+    id: Option<&str>,
+    name: Option<&str>,
+    description: Option<&str>,
+    tools: Option<Vec<String>>,
+    readonly: Option<bool>,
+    review: Option<bool>,
+    model: Option<&str>,
+    level: CustomSubagentKind,
+) -> Result<CustomSubagentDefinition, CustomSubagentDefinitionError> {
+    CustomSubagentDefinition::from_front_matter_fields(
+        id,
+        name,
+        description,
+        Some(CustomAgentKind::Subagent),
+        tools,
+        readonly,
+        review,
+        model,
+        None,
+        "Review the selected files.".to_string(),
+        level,
+    )
+    .map(|parsed| parsed.definition)
+}
 
 #[test]
 fn custom_subagent_defaults_match_existing_front_matter_contract() {
@@ -69,26 +97,28 @@ fn custom_subagent_kind_remains_project_or_user() {
 
 #[test]
 fn custom_subagent_definition_from_front_matter_preserves_schema_and_defaults() {
-    let definition = CustomSubagentDefinition::from_front_matter_fields(
+    let definition = build_definition(
         Some("ReviewExtra"),
         Some("Additional code reviewer"),
+        Some("Review agent for changed files"),
         None,
         None,
         Some(true),
         Some("deepseek-reasoner"),
-        "Review the selected files.".to_string(),
         CustomSubagentKind::User,
     )
     .expect("front matter fields should build a definition");
 
-    assert_eq!(definition.name, "ReviewExtra");
-    assert_eq!(definition.description, "Additional code reviewer");
+    assert_eq!(definition.id, "ReviewExtra");
+    assert_eq!(definition.name, "Additional code reviewer");
+    assert_eq!(definition.description, "Review agent for changed files");
+    assert_eq!(definition.kind, CustomAgentKind::Subagent);
+    assert_eq!(definition.level, CustomSubagentKind::User);
     assert_eq!(definition.tools, ["LS", "Read", "Glob", "Grep"]);
     assert!(definition.readonly);
     assert!(definition.review);
-    assert_eq!(definition.kind, CustomSubagentKind::User);
     assert_eq!(definition.model, "deepseek-reasoner");
-    assert_eq!(definition.tools_front_matter(), None);
+    assert!(definition.tools_are_default());
     assert!(!definition.should_save_readonly());
     assert!(definition.should_save_review());
     assert!(definition.should_save_model());
@@ -96,28 +126,28 @@ fn custom_subagent_definition_from_front_matter_preserves_schema_and_defaults() 
 
 #[test]
 fn custom_subagent_definition_reports_legacy_missing_field_errors() {
-    let missing_name = CustomSubagentDefinition::from_front_matter_fields(
+    let missing_name = build_definition(
+        None,
         None,
         Some("Additional code reviewer"),
         None,
         None,
         None,
         None,
-        "Review the selected files.".to_string(),
         CustomSubagentKind::Project,
     )
     .expect_err("missing name should fail");
     assert_eq!(missing_name, CustomSubagentDefinitionError::MissingName);
     assert_eq!(missing_name.message(), "Missing name field");
 
-    let missing_description = CustomSubagentDefinition::from_front_matter_fields(
+    let missing_description = build_definition(
         Some("ReviewExtra"),
+        Some("Additional code reviewer"),
         None,
         None,
         None,
         None,
         None,
-        "Review the selected files.".to_string(),
         CustomSubagentKind::Project,
     )
     .expect_err("missing description should fail");
@@ -129,17 +159,17 @@ fn custom_subagent_definition_reports_legacy_missing_field_errors() {
 }
 
 #[test]
-fn custom_subagent_markdown_io_preserves_legacy_front_matter_shape() {
+fn custom_subagent_markdown_io_writes_canonical_front_matter() {
     let dir = TestTempDir::new("bitfun-agent-runtime-subagent");
     let path = dir.join("reviewer.md");
-    let definition = CustomSubagentDefinition::from_front_matter_fields(
+    let definition = build_definition(
         Some("Reviewer"),
         Some("Review changed code"),
-        Some("Read, Grep"),
+        Some("Review changed files and report findings"),
+        Some(vec!["Read".to_string(), "Grep".to_string()]),
         Some(false),
         Some(true),
         Some("deepseek-reasoner"),
-        "Review the selected files.".to_string(),
         CustomSubagentKind::Project,
     )
     .expect("definition should be valid");
@@ -148,10 +178,13 @@ fn custom_subagent_markdown_io_preserves_legacy_front_matter_shape() {
 
     let saved = fs::read_to_string(&path).expect("saved file should be readable");
     assert!(saved.starts_with("---\n"));
-    assert!(saved.contains("name: Reviewer"));
-    assert!(saved.contains("description: Review changed code"));
-    assert!(saved.contains("tools: Read, Grep"));
-    assert!(saved.contains("readonly: false"));
+    assert!(saved.contains("schema_version: 1"));
+    assert!(saved.contains("kind: subagent"));
+    assert!(saved.contains("id: Reviewer"));
+    assert!(saved.contains("name: Review changed code"));
+    assert!(saved.contains("description: Review changed files and report findings"));
+    assert!(saved.contains("- Read"));
+    assert!(saved.contains("- Grep"));
     assert!(saved.contains("review: true"));
     assert!(saved.contains("model: deepseek-reasoner"));
     assert!(saved.ends_with("Review the selected files."));
@@ -159,6 +192,7 @@ fn custom_subagent_markdown_io_preserves_legacy_front_matter_shape() {
     let loaded = custom_subagent_read_markdown_file(&path, CustomSubagentKind::Project)
         .expect("saved definition should load");
     assert_eq!(loaded, definition);
+    assert!(loaded.readonly, "review subagents must be readonly");
 }
 
 #[test]

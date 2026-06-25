@@ -12,8 +12,8 @@ the product tool runtime.
   UI dependencies.
 - This crate may own provider-neutral tool DTOs, validation/restriction facts,
   path and artifact contracts, pure manifest/catalog/exposure helpers, result
-  presentation policy, deterministic admission policy, and portable tool context
-  facts.
+  presentation policy, deterministic admission policy, portable tool context
+  facts, and runtime restriction policy shaping.
 - This crate may own generic provider contracts, containers, materialization,
   and registry assembly. Concrete tool construction and product runtime
   registration stay outside this crate until a reviewed owner move proves

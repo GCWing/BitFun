@@ -477,14 +477,15 @@ const BrowserScene: React.FC = () => {
   }, [isTauri]);
 
   return (
-    <div className="browser-scene">
-      <form className="browser-scene__toolbar" onSubmit={handleSubmit}>
+    <div className="browser-scene" data-testid="browser-panel">
+      <form className="browser-scene__toolbar" onSubmit={handleSubmit} data-testid="browser-panel-title">
         <IconButton
           type="button"
           variant="ghost"
           size="small"
           onClick={handleGoBack}
           aria-label={t('nav.back')}
+          data-testid="browser-back-button"
         >
           <ChevronLeft size={14} />
         </IconButton>
@@ -494,6 +495,7 @@ const BrowserScene: React.FC = () => {
           size="small"
           onClick={handleGoForward}
           aria-label={t('nav.forward')}
+          data-testid="browser-forward-button"
         >
           <ChevronRight size={14} />
         </IconButton>
@@ -504,8 +506,13 @@ const BrowserScene: React.FC = () => {
           onClick={handleRefresh}
           disabled={isLoading}
           aria-label={t('actions.refresh')}
+          data-testid="browser-refresh-button"
         >
-          <RefreshCw size={14} className={isLoading ? 'browser-scene__spinning' : undefined} />
+          <RefreshCw
+            size={14}
+            className={isLoading ? 'browser-scene__spinning' : undefined}
+            data-testid={isLoading ? 'browser-loading-indicator' : undefined}
+          />
         </IconButton>
         <div className="browser-scene__address">
           <Globe size={16} />
@@ -515,18 +522,19 @@ const BrowserScene: React.FC = () => {
             onChange={(event) => setInputValue(event.target.value)}
             placeholder={t('browserView.addressPlaceholder', { exampleUrl: 'https://example.com' })}
             spellCheck={false}
+            data-testid="browser-url-input"
           />
         </div>
       </form>
 
       {error ? (
-        <div className="browser-scene__error">
+        <div className="browser-scene__error" data-testid="browser-error-message">
           <AlertTriangle size={16} />
           <span>{error}</span>
         </div>
       ) : null}
 
-      <div className="browser-scene__content">
+      <div className="browser-scene__content" data-testid="browser-page-frame">
         {!isTauri || webviewUnavailable ? (
           <iframe
             className="browser-scene__iframe"
@@ -538,7 +546,7 @@ const BrowserScene: React.FC = () => {
           <div ref={viewportRef} className="browser-scene__webview-host">
             <div className="browser-scene__webview-placeholder">
               <Globe size={20} />
-              <span>{currentUrl}</span>
+              <span data-testid="browser-current-url">{currentUrl}</span>
             </div>
           </div>
         )}

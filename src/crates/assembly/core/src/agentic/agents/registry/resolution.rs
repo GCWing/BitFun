@@ -8,7 +8,7 @@ use std::path::Path;
 
 impl AgentRegistry {
     /// get model ID used by agent from agent_models[agent_type] in configuration
-    /// - custom subagent: read model configuration from custom_config cache
+    /// - file-backed custom agent: read model configuration from custom_config cache
     /// - built-in subagent/mode: read model configuration from global configuration ai.agent_models
     pub async fn get_model_id_for_agent(
         &self,
@@ -28,14 +28,14 @@ impl AgentRegistry {
                 let model = config.model;
                 if !model.is_empty() {
                     debug!(
-                        "[AgentRegistry] Custom subagent '{}' using model from cache: {}",
+                        "[AgentRegistry] Custom agent '{}' using model from cache: {}",
                         agent_type, model
                     );
                     return Ok(model);
                 }
 
                 debug!(
-                    "[AgentRegistry] Custom subagent '{}' using default model: fast",
+                    "[AgentRegistry] Custom agent '{}' has empty cached model, using fallback default",
                     agent_type
                 );
                 return Ok("fast".to_string());

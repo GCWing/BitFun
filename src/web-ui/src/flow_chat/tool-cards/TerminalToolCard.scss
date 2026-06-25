@@ -20,9 +20,6 @@
    * Match collapsed thinking summary (`.thinking-label`, `ModelThinkingDisplay.scss`):
    * sans + `sm` + line-height 1.5 + normal — not monospace (mono reads “thinner” vs “思考了 N 字”).
    */
-  --tool-compact-summary-font:
-    var(--font-family-sans);
-
   .compact-card-action,
   .compact-card-content .tool-command-preview.tool-command-preview--compact {
     font-family: var(--tool-compact-summary-font);
@@ -131,7 +128,7 @@
       border: none !important;
       outline: none !important;
       box-shadow: none !important;
-      color: var(--text-secondary, var(--color-text-secondary));
+      color: var(--text-secondary);
     }
   }
 

@@ -16,7 +16,10 @@ use async_trait::async_trait;
 use serde_json::{json, Value};
 use std::path::Path;
 use tokio::fs;
-use tool_runtime::fs::{write_local_file, WriteLocalFileMode, WriteLocalFileRequest};
+use tool_runtime::fs::{
+    parse_write_local_file_mode, write_file_success_outcome, write_local_file,
+    write_same_content_outcome, WriteLocalFileMode, WriteLocalFileOutcome, WriteLocalFileRequest,
+};
 
 pub struct FileWriteTool;
 
@@ -32,24 +35,6 @@ impl Default for FileWriteTool {
 impl FileWriteTool {
     pub fn new() -> Self {
         Self
-    }
-
-    fn parse_mode_value(mode: Option<&str>) -> Result<WriteLocalFileMode, String> {
-        match mode.unwrap_or("w") {
-            "w" => Ok(WriteLocalFileMode::Write),
-            "a" => Ok(WriteLocalFileMode::Append),
-            other => Err(format!(
-                "mode must be either 'w' (overwrite) or 'a' (append), got '{}'",
-                other
-            )),
-        }
-    }
-
-    fn mode_label(mode: WriteLocalFileMode) -> &'static str {
-        match mode {
-            WriteLocalFileMode::Write => "w",
-            WriteLocalFileMode::Append => "a",
-        }
     }
 
     fn format_write_freshness_guidance(logical_path: &str, error: String) -> String {
@@ -178,19 +163,17 @@ impl FileWriteTool {
     fn write_success_result(
         logical_path: &str,
         mode: WriteLocalFileMode,
-        bytes_written: usize,
-        lines_written: usize,
-        status: &str,
-        assistant_message: String,
+        outcome: WriteLocalFileOutcome,
     ) -> ToolResult {
+        let assistant_message = outcome.assistant_message;
         ToolResult::Result {
             data: json!({
                 "file_path": logical_path,
-                "mode": Self::mode_label(mode),
-                "bytes_written": bytes_written,
-                "lines_written": lines_written,
+                "mode": mode.as_str(),
+                "bytes_written": outcome.bytes_written,
+                "lines_written": outcome.lines_written,
                 "success": true,
-                "status": status,
+                "status": outcome.status.as_str(),
                 "message": assistant_message,
             }),
             result_for_assistant: Some(assistant_message),
@@ -206,14 +189,14 @@ impl FileWriteTool {
                     "type": "string",
                     "description": "The absolute path to the file to write (must be absolute, not relative)"
                 },
-                "content": {
-                    "type": "string",
-                    "description": "The content to write to the file"
-                },
                 "mode": {
                     "type": "string",
                     "enum": ["w", "a"],
                     "description": "Write mode: 'w' overwrites the file (default), 'a' appends to the file and creates it if missing"
+                },
+                "content": {
+                    "type": "string",
+                    "description": "The content to write to the file"
                 }
             },
             "required": ["file_path", "content"],
@@ -225,13 +208,17 @@ impl FileWriteTool {
         r#"Writes a file to the local filesystem.
 
 Usage:
-- Always output `file_path` first when calling this tool. Example: `{"file_path": "src/main.rs", "content": "fn main() {}"}`.
+- Always order arguments as: `file_path`, optional `mode`, then `content` last.
 - This tool defaults to `mode=\"w\"`, which overwrites the existing file if there is one at the provided path.
 - Use `mode=\"a\"` to append content; it also creates the file if it does not exist.
 - If this is an existing file, you MUST use the Read tool first to read the file's contents. This tool will fail if you did not read the file first.
 - Prefer the Edit tool for modifying existing files — it only sends the diff. Only use this tool to create new files or for complete rewrites.
 - NEVER create documentation files (*.md) or README files unless explicitly requested by the User.
-- Only use emojis if the user explicitly requests it. Avoid writing emojis to files unless asked."#
+- Only use emojis if the user explicitly requests it. Avoid writing emojis to files unless asked.
+
+Examples:
+- Overwrite or create: `{"file_path": "/path/to/main.rs", "content": "fn main() {}"}`
+- Append: `{"file_path": "/path/to/main.rs", "mode": "a", "content": "more text"}`"#
             .to_string()
     }
 }
@@ -515,7 +502,7 @@ impl Tool for FileWriteTool {
         }
 
         if let Err(message) =
-            Self::parse_mode_value(input.get("mode").and_then(|value| value.as_str()))
+            parse_write_local_file_mode(input.get("mode").and_then(|value| value.as_str()))
         {
             return ValidationResult {
                 result: false,
@@ -575,7 +562,7 @@ impl Tool for FileWriteTool {
     }
 
     fn render_tool_use_message(&self, input: &Value, options: &ToolRenderOptions) -> String {
-        let mode = Self::parse_mode_value(input.get("mode").and_then(|v| v.as_str()))
+        let mode = parse_write_local_file_mode(input.get("mode").and_then(|v| v.as_str()))
             .unwrap_or(WriteLocalFileMode::Write);
         if let Some(file_path) = input.get("file_path").and_then(|v| v.as_str()) {
             if options.verbose {
@@ -628,7 +615,7 @@ impl Tool for FileWriteTool {
             .and_then(|v| v.as_str())
             .ok_or_else(|| BitFunError::tool("content is required".to_string()))?;
         let content = content.to_string();
-        let mode = Self::parse_mode_value(input.get("mode").and_then(|v| v.as_str()))
+        let mode = parse_write_local_file_mode(input.get("mode").and_then(|v| v.as_str()))
             .map_err(BitFunError::tool)?;
 
         let file_already_exists = Self::file_exists(context, &resolved).await;
@@ -639,13 +626,7 @@ impl Tool for FileWriteTool {
             let result = Self::write_success_result(
                 &resolved.logical_path,
                 mode,
-                0,
-                0,
-                "already_exists_same_content",
-                format!(
-                    "Write skipped because {} already exists with identical content.",
-                    resolved.logical_path
-                ),
+                write_same_content_outcome(&resolved.logical_path),
             );
             return Ok(vec![result]);
         }
@@ -671,52 +652,15 @@ impl Tool for FileWriteTool {
             let timestamp_ms = file_mutation_timestamp_ms(context, &resolved).await;
             update_file_read_state_after_mutation(context, &resolved, &final_content, timestamp_ms);
 
-            let (status, assistant_message) = match (mode, file_already_exists) {
-                (WriteLocalFileMode::Write, true) => (
-                    "overwritten",
-                    format!(
-                        "Successfully overwrote {} ({} bytes).",
-                        resolved.logical_path,
-                        content.len()
-                    ),
-                ),
-                (WriteLocalFileMode::Write, false) => (
-                    "created",
-                    format!(
-                        "Successfully created {} ({} bytes).",
-                        resolved.logical_path,
-                        content.len()
-                    ),
-                ),
-                (WriteLocalFileMode::Append, true) => (
-                    "appended",
-                    format!(
-                        "Successfully appended to {} ({} bytes).",
-                        resolved.logical_path,
-                        content.len()
-                    ),
-                ),
-                (WriteLocalFileMode::Append, false) => (
-                    "created",
-                    format!(
-                        "Successfully created {} ({} bytes).",
-                        resolved.logical_path,
-                        content.len()
-                    ),
-                ),
-            };
-
             let result = Self::write_success_result(
                 &resolved.logical_path,
                 mode,
-                content.len(),
-                if content.is_empty() {
-                    0
-                } else {
-                    content.lines().count().max(1)
-                },
-                status,
-                assistant_message,
+                write_file_success_outcome(
+                    &resolved.logical_path,
+                    mode,
+                    file_already_exists,
+                    &content,
+                ),
             );
             return Ok(vec![result]);
         }
@@ -735,14 +679,7 @@ impl Tool for FileWriteTool {
         let timestamp_ms = file_mutation_timestamp_ms(context, &resolved).await;
         update_file_read_state_after_mutation(context, &resolved, &final_content, timestamp_ms);
 
-        let result = Self::write_success_result(
-            &resolved.logical_path,
-            mode,
-            outcome.bytes_written,
-            outcome.lines_written,
-            outcome.status.as_str(),
-            outcome.assistant_message,
-        );
+        let result = Self::write_success_result(&resolved.logical_path, mode, outcome);
 
         Ok(vec![result])
     }

@@ -24,11 +24,11 @@ use bitfun_core::agentic::coordination::{
 };
 use bitfun_core::agentic::core::{MessageContent, MessageRole, SessionConfig};
 use bitfun_core::miniapp::agent_bridge::{
-    agent_owner, agent_run_metadata, default_agent_run_id, extract_agent_turn_text,
-    requested_session_id, require_enabled_agent_permissions, resolve_agent_workspace_path,
-    session_name_or_default, validate_reused_session, MiniAppAgentRateLimiter,
-    MiniAppAgentRunRecord, MiniAppAgentRunRegistry, MiniAppAgentTurnMessage,
-    MiniAppAgentTurnMessageRole, MINIAPP_AGENT_KIND, UNKNOWN_AGENT_RUN_MESSAGE,
+    agent_run_id_from_request, build_agent_submission_plan, extract_agent_turn_text,
+    plan_agent_workspace, require_agent_prompt, require_enabled_agent_permissions,
+    validate_reused_session, MiniAppAgentRateLimiter, MiniAppAgentRunRecord,
+    MiniAppAgentRunRegistry, MiniAppAgentTurnMessage, MiniAppAgentTurnMessageRole,
+    MINIAPP_AGENT_KIND, UNKNOWN_AGENT_RUN_MESSAGE,
 };
 
 // ============== Run registry ==============
@@ -55,22 +55,6 @@ fn now_ms() -> u64 {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_millis() as u64
-}
-
-/// Resolve a MiniApp-requested agent workspace inside the app's own appdata
-/// directory. The subdir must be a clean relative path (no `..`, no absolute
-/// or rooted components) so a MiniApp can never point the agent outside its
-/// own storage. The directory is created if missing.
-fn resolve_app_data_workspace(
-    state: &AppState,
-    app_id: &str,
-    subdir: &str,
-) -> Result<String, String> {
-    let app_data_dir = state.miniapp_manager.path_manager().miniapp_dir(app_id);
-    let workspace = resolve_agent_workspace_path(None, Some(subdir), &app_data_dir)?;
-    std::fs::create_dir_all(&workspace)
-        .map_err(|e| format!("Failed to create MiniApp agent workspace: {}", e))?;
-    Ok(workspace.to_string_lossy().to_string())
 }
 
 fn check_agent_rate_limit(app_id: &str, rate_limit_per_minute: u32) -> Result<(), String> {
@@ -178,50 +162,51 @@ pub async fn miniapp_agent_run(
     scheduler: State<'_, Arc<DialogScheduler>>,
     request: MiniAppAgentRunRequest,
 ) -> Result<MiniAppAgentRunResponse, String> {
-    if request.prompt.trim().is_empty() {
-        return Err("prompt is required".to_string());
-    }
+    require_agent_prompt(&request.prompt)?;
     let agent_perms = require_agent_permission(&state, &request.app_id).await?;
     check_agent_rate_limit(
         &request.app_id,
         agent_perms.rate_limit_per_minute.unwrap_or(0),
     )?;
 
-    let workspace_path = if let Some(subdir) = request
-        .app_data_workspace
-        .as_deref()
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-    {
-        resolve_app_data_workspace(&state, &request.app_id, subdir)?
-    } else {
-        request
-            .workspace_path
-            .as_deref()
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .ok_or("workspacePath is required for MiniApp agent runs")?
-            .to_string()
-    };
-
-    let run_id = request
+    let app_data_dir = state
+        .miniapp_manager
+        .path_manager()
+        .miniapp_dir(&request.app_id);
+    let workspace_plan = plan_agent_workspace(
+        request.workspace_path.as_deref(),
+        request.app_data_workspace.as_deref(),
+        &app_data_dir,
+    )?;
+    if workspace_plan.create_if_missing {
+        std::fs::create_dir_all(&workspace_plan.path)
+            .map_err(|e| format!("Failed to create MiniApp agent workspace: {}", e))?;
+    }
+    let workspace_path = workspace_plan.workspace_path.clone();
+    let run_sequence = if request
         .run_id
         .as_deref()
         .map(str::trim)
         .filter(|value| !value.is_empty())
-        .map(str::to_string)
-        .unwrap_or_else(|| {
-            default_agent_run_id(
-                &request.app_id,
-                AGENT_RUN_COUNTER.fetch_add(1, Ordering::Relaxed),
-            )
-        });
-    let owner = agent_owner(&request.app_id, &run_id);
-    let session_name = session_name_or_default(request.session_name.as_deref());
+        .is_some()
+    {
+        0
+    } else {
+        AGENT_RUN_COUNTER.fetch_add(1, Ordering::Relaxed)
+    };
+    let run_id =
+        agent_run_id_from_request(&request.app_id, request.run_id.as_deref(), run_sequence);
+    let submission_plan = build_agent_submission_plan(
+        &request.app_id,
+        &run_id,
+        request.session_name.as_deref(),
+        request.session_id.as_deref(),
+        &workspace_path,
+        request.enable_tools,
+    );
 
-    let requested_session_id = requested_session_id(request.session_id.as_deref());
-
-    let session_id = if let Some(existing_session_id) = requested_session_id {
+    let session_id = if let Some(existing_session_id) = submission_plan.requested_session_id.clone()
+    {
         // Reuse a hidden session created by an earlier run of this MiniApp so
         // the new turn shares its context (skills, research, prior outputs).
         let session = coordinator
@@ -232,15 +217,14 @@ pub async fn miniapp_agent_run(
             session.created_by.as_deref(),
             session.config.workspace_path.as_deref(),
             &request.app_id,
-            &workspace_path,
+            &submission_plan.workspace_path,
         )?;
         existing_session_id
     } else {
         // One hidden session per task keeps MiniApp work isolated and out of
         // the visible session list. Follow-up turns may reuse it via sessionId.
-        let enable_tools = request.enable_tools.unwrap_or(true);
         let config = SessionConfig {
-            enable_tools,
+            enable_tools: submission_plan.enable_tools,
             safe_mode: true,
             auto_compact: true,
             enable_context_compression: true,
@@ -252,11 +236,11 @@ pub async fn miniapp_agent_run(
         let session = coordinator
             .create_hidden_subagent_session_with_workspace(
                 None,
-                session_name,
+                submission_plan.session_name.clone(),
                 MINIAPP_AGENT_KIND.to_string(),
                 config,
-                workspace_path.clone(),
-                Some(owner),
+                submission_plan.workspace_path.clone(),
+                Some(submission_plan.owner.clone()),
             )
             .await
             .map_err(|e| format!("Failed to create MiniApp agent session: {}", e))?;
@@ -265,19 +249,18 @@ pub async fn miniapp_agent_run(
 
     let policy = DialogSubmissionPolicy::for_source(DialogTriggerSource::DesktopApi)
         .with_skip_tool_confirmation(true);
-    let metadata = agent_run_metadata(&request.app_id, &run_id);
 
     let outcome = scheduler
         .submit(
             session_id.clone(),
             request.prompt.clone(),
             Some("MiniApp agent run".to_string()),
-            Some(run_id.clone()),
+            Some(submission_plan.run_id.clone()),
             MINIAPP_AGENT_KIND.to_string(),
-            Some(workspace_path),
+            Some(submission_plan.workspace_path.clone()),
             policy,
             None,
-            Some(metadata),
+            Some(submission_plan.metadata.clone()),
             None,
         )
         .await
@@ -291,13 +274,13 @@ pub async fn miniapp_agent_run(
     agent_run_registry().register(MiniAppAgentRunRecord {
         app_id: request.app_id.clone(),
         session_id: session_id.clone(),
-        turn_id: run_id.clone(),
+        turn_id: submission_plan.run_id.clone(),
     });
 
     Ok(MiniAppAgentRunResponse {
         session_id,
-        turn_id: run_id.clone(),
-        action_run_id: run_id,
+        turn_id: submission_plan.run_id.clone(),
+        action_run_id: submission_plan.run_id,
         status: status.to_string(),
     })
 }

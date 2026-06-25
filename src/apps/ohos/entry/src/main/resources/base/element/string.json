@@ -38,6 +38,14 @@
         {
             "name": "permission_download_directory_reason",
             "value": "Used to access download directory for file management and project operations"
+        },
+        {
+            "name": "permission_writable_code_memory_reason",
+            "value": "Used to allow writable code memory for runtime code generation and JIT compilation"
+        },
+        {
+            "name": "permission_external_native_code_reason",
+            "value": "Used to allow loading and executing external native code libraries"
         }
     ]
 }

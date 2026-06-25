@@ -49,6 +49,7 @@ impl CoworkMode {
                 "WebSearch".to_string(),
                 "WebFetch".to_string(),
                 "ControlHub".to_string(),
+                "InitMiniApp".to_string(),
             ],
         }
     }
@@ -93,5 +94,18 @@ impl Agent for CoworkMode {
 
     fn is_readonly(&self) -> bool {
         false
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::CoworkMode;
+    use crate::agentic::agents::Agent;
+
+    #[test]
+    fn cowork_mode_includes_init_miniapp_in_default_tools() {
+        assert!(CoworkMode::new()
+            .default_tools()
+            .contains(&"InitMiniApp".to_string()));
     }
 }

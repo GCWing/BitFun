@@ -2,7 +2,7 @@ import React from 'react';
 import { Tooltip } from '../../component-library';
 import './ToolCommandPreview.scss';
 
-interface ToolCommandPreviewProps {
+interface ToolCommandPreviewProps extends React.HTMLAttributes<HTMLElement> {
   command?: string | null;
   emptyText: React.ReactNode;
   as?: 'span' | 'code';
@@ -18,17 +18,18 @@ export const ToolCommandPreview = React.forwardRef<HTMLElement, ToolCommandPrevi
   className,
   tooltipContent,
   tooltipPlacement = 'bottom',
+  ...restProps
 }, ref) => {
   const content = command?.trim()
     ? command
     : <span className="tool-command-preview__empty">{emptyText}</span>;
   const resolvedClassName = `tool-command-preview${className ? ` ${className}` : ''}`;
   const node = as === 'code' ? (
-    <code ref={ref} className={resolvedClassName}>
+    <code ref={ref} className={resolvedClassName} {...restProps}>
       {content}
     </code>
   ) : (
-    <span ref={ref} className={resolvedClassName}>
+    <span ref={ref} className={resolvedClassName} {...restProps}>
       {content}
     </span>
   );

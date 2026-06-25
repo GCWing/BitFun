@@ -8,8 +8,8 @@ use async_trait::async_trait;
 use serde_json::{json, Value};
 use std::path::Path;
 use tool_runtime::fs::{
-    build_remote_delete_command, delete_local_path, inspect_local_delete_target,
-    DeleteLocalPathRequest,
+    build_remote_delete_command, delete_local_path, delete_path_success_message,
+    inspect_local_delete_target, DeleteLocalPathRequest,
 };
 
 /// File deletion tool - provides safe file/directory deletion functionality
@@ -278,9 +278,7 @@ Important notes:
                 .and_then(|v| v.as_bool())
                 .unwrap_or(false);
 
-            let type_name = if is_directory { "directory" } else { "file" };
-
-            format!("Successfully deleted {} at: {}", type_name, path)
+            delete_path_success_message(path, is_directory)
         } else {
             "Deletion completed".to_string()
         }

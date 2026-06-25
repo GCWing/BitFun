@@ -163,7 +163,7 @@ fn invalid_tool_call_error_message_preserves_current_contract() {
         build_invalid_tool_call_error_message("", true, false, Some("{\"path\"".to_string()));
     assert_eq!(
         message,
-        "Missing valid tool name and arguments are invalid JSON. Raw arguments: {\"path\""
+        "Missing valid tool name and arguments are invalid JSON."
     );
 
     let message = build_invalid_tool_call_error_message("", false, false, None);
@@ -189,8 +189,10 @@ fn truncation_recovery_notice_preserves_write_like_guidance() {
     let notice = build_tool_call_truncation_recovery_notice("Write");
 
     assert!(notice.contains("latest Read result"));
-    assert!(notice.contains("ONE Edit call"));
-    assert!(notice.contains("Do NOT rewrite the whole file with Write"));
+    assert!(notice.contains("ONE Write call"));
+    assert!(notice.contains("`mode`: \"a\""));
+    assert!(notice.contains("missing continuation"));
+    assert!(notice.contains("Do NOT rewrite the whole file with overwrite mode"));
     assert!(notice.ends_with("Original tool result follows.\n\n"));
 }
 
@@ -1223,7 +1225,7 @@ fn collapsed_tool_stub_definition_preserves_prompt_visible_guardrail() {
     assert!(stub.description.contains("Fetch a URL"));
     assert!(stub
         .description
-        .contains("THIS TOOL IS COLLAPSED. You MUST call GetToolSpec({\"tool_name\":\"WebFetch\"}) before first calling WebFetch."));
+        .contains("THIS IS A COLLAPSED TOOL. Before first use, call GetToolSpec({\"tool_name\":\"WebFetch\"}) to load its schema."));
     assert_eq!(
         stub.parameters,
         json!({
@@ -1288,7 +1290,7 @@ fn prompt_visible_manifest_builder_preserves_expanded_and_collapsed_contract() {
     );
     assert!(definitions[2]
         .description
-        .contains("THIS TOOL IS COLLAPSED. You MUST call GetToolSpec({\"tool_name\":\"WebFetch\"}) before first calling WebFetch."));
+        .contains("THIS IS A COLLAPSED TOOL. Before first use, call GetToolSpec({\"tool_name\":\"WebFetch\"}) to load its schema."));
 }
 
 #[test]
@@ -2128,7 +2130,7 @@ async fn contextual_manifest_resolver_preserves_runtime_visible_manifest_contrac
         .expect("collapsed WebFetch stub");
     assert!(web_fetch
         .description
-        .contains("THIS TOOL IS COLLAPSED. You MUST call GetToolSpec({\"tool_name\":\"WebFetch\"}) before first calling WebFetch."));
+        .contains("THIS IS A COLLAPSED TOOL. Before first use, call GetToolSpec({\"tool_name\":\"WebFetch\"}) to load its schema."));
     assert_eq!(web_fetch.parameters["additionalProperties"], true);
     assert_eq!(web_fetch.parameters["properties"], json!({}));
 }

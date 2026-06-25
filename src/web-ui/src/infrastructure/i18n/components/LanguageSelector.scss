@@ -9,12 +9,12 @@
   &--dropdown {
     .language-selector__select {
       appearance: none;
-      background: var(--input-bg, var(--color-bg-secondary));
-      border: 1px solid var(--input-border, var(--border-base));
+      background: var(--input-bg);
+      border: 1px solid var(--input-border);
       border-radius: var(--radius-sm);
       padding: 6px 28px 6px 10px;
       font-size: 13px;
-      color: var(--input-text, var(--color-text-primary));
+      color: var(--input-text);
       cursor: pointer;
       transition: all 0.2s ease;
       
@@ -24,14 +24,14 @@
       background-position: right 8px center;
       
       &:hover:not(:disabled) {
-        border-color: var(--input-border-hover, var(--border-medium));
-        background-color: var(--input-bg-hover, var(--color-bg-tertiary));
+        border-color: var(--input-border-hover);
+        background-color: var(--input-bg-hover);
       }
       
       &:focus {
         outline: none;
-        border-color: var(--input-border-focus, var(--color-accent-400));
-        box-shadow: 0 0 0 2px rgba(var(--color-accent-400-rgb, 99, 102, 241), 0.2);
+        border-color: var(--input-border-focus);
+        box-shadow: 0 0 0 2px color-mix(in srgb, var(--input-border-focus) 20%, transparent);
       }
       
       &:disabled {

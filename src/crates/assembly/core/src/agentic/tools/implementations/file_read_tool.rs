@@ -12,7 +12,9 @@ use log::{debug, warn};
 use serde_json::{json, Value};
 use std::path::Path;
 use std::time::Instant;
-use tool_runtime::fs::read_file::{build_remote_read_command, parse_remote_read_output, read_file};
+use tool_runtime::fs::read_file::{
+    build_read_file_presentation, build_remote_read_command, parse_remote_read_output, read_file,
+};
 
 pub struct FileReadTool {
     default_max_lines_to_read: usize,
@@ -346,47 +348,19 @@ Usage:
         };
         record_file_read_state(context, &resolved, &read_file_result, timestamp_ms);
 
-        let mut result_for_assistant = format!(
-            "Read lines {}-{} from {} ({} total lines)\n<file_content>\n{}\n</file_content>",
-            read_file_result.start_line,
-            read_file_result.end_line,
-            resolved.logical_path,
-            read_file_result.total_lines,
-            read_file_result.content
-        );
-
-        let has_more = read_file_result.end_line < read_file_result.total_lines;
-        if has_more {
-            let next_start = read_file_result.end_line + 1;
-            if read_file_result.hit_total_char_limit {
-                result_for_assistant.push_str(
-                    &format!("\n\n[Output truncated after reaching the Read tool size limit. Use start_line={} and limit to continue reading.]", next_start));
-            } else {
-                result_for_assistant.push_str(
-                    &format!("\n\n[Showing lines {}-{} of {} total. Use start_line={} and limit to continue reading.]",
-                        read_file_result.start_line, read_file_result.end_line, read_file_result.total_lines, next_start));
-            }
-        }
-
-        let lines_read = if read_file_result.total_lines == 0
-            || read_file_result.end_line < read_file_result.start_line
-        {
-            0
-        } else {
-            read_file_result.end_line - read_file_result.start_line + 1
-        };
+        let presentation = build_read_file_presentation(&resolved.logical_path, &read_file_result);
 
         let result = ToolResult::Result {
             data: json!({
                 "file_path": resolved.logical_path,
                 "content": read_file_result.content,
                 "total_lines": read_file_result.total_lines,
-                "lines_read": lines_read,
+                "lines_read": presentation.lines_read,
                 "start_line": read_file_result.start_line,
                 "size": read_file_result.content.len(),
                 "hit_total_char_limit": read_file_result.hit_total_char_limit
             }),
-            result_for_assistant: Some(result_for_assistant),
+            result_for_assistant: Some(presentation.result_for_assistant),
             image_attachments: None,
         };
 

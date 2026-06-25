@@ -33,14 +33,15 @@ import {
   useAgentsStore,
 } from './agentsStore';
 import { useAgentsList } from './hooks/useAgentsList';
-import { AGENT_ICON_MAP, CAPABILITY_ACCENT } from './agentsIcons';
+import { AGENT_ICON_MAP } from './agentsIcons';
+import { CAPABILITY_ACCENT, CORE_AGENT_ACCENTS, DEFAULT_CORE_AGENT_ACCENT } from './agentTheme';
 import { getCardGradient } from '@/shared/utils/cardGradients';
 import { getAgentBadge, getAgentDescription, getCapabilityLabel } from './utils';
 import './AgentsView.scss';
 import './AgentsScene.scss';
 import { useGallerySceneAutoRefresh } from '@/app/hooks/useGallerySceneAutoRefresh';
 import { CORE_AGENT_IDS, isAgentInOverviewZone } from './agentVisibility';
-import { SubagentAPI } from '@/infrastructure/api/service-api/SubagentAPI';
+import { CustomAgentAPI } from '@/infrastructure/api/service-api/CustomAgentAPI';
 import type { ModeSkillInfo } from '@/infrastructure/config/types';
 import type { SubagentInfo } from '@/infrastructure/api/service-api/SubagentAPI';
 import { useNotification } from '@/shared/notification-system';
@@ -52,7 +53,9 @@ const UNGROUPED_SKILL_GROUP = '__ungrouped__';
 const SKILL_GROUP_ORDER: Record<string, number> = {
   office: 0,
   meta: 1,
-  team: 2,
+  miniapp: 2,
+  gstack: 3,
+  team: 4,
   [UNGROUPED_SKILL_GROUP]: 99,
 };
 
@@ -113,6 +116,10 @@ function getSkillGroupLabel(groupKey: string, t: TFunction<'scenes/agents'>): st
     //   return t('agentsOverview.skillGroups.computerUse');
     case 'meta':
       return t('agentsOverview.skillGroups.meta');
+    case 'miniapp':
+      return t('agentsOverview.skillGroups.miniapp');
+    case 'gstack':
+      return t('agentsOverview.skillGroups.gstack');
     case 'team':
       return t('agentsOverview.skillGroups.team');
     default:
@@ -258,19 +265,15 @@ const AgentsHomeView: React.FC = () => {
   const coreAgentMeta = useMemo((): Record<string, CoreAgentMeta> => ({
     agentic: {
       role: t('coreAgentsZone.modes.agentic.role'),
-      accentColor: '#6366f1',
-      accentBg: 'rgba(99,102,241,0.10)',
+      ...CORE_AGENT_ACCENTS.agentic,
     },
     Cowork: {
       role: t('coreAgentsZone.modes.cowork.role'),
-      accentColor: '#14b8a6',
-      accentBg: 'rgba(20,184,166,0.10)',
+      ...CORE_AGENT_ACCENTS.Cowork,
     },
-    // ComputerUse disabled for HarmonyOS
     // ComputerUse: {
     //   role: t('coreAgentsZone.modes.computerUse.role'),
-    //   accentColor: '#f59e0b',
-    //   accentBg: 'rgba(245,158,11,0.10)',
+    //   ...CORE_AGENT_ACCENTS.ComputerUse,
     // },
   }), [t]);
 
@@ -522,10 +525,7 @@ const AgentsHomeView: React.FC = () => {
 
   const handleDeleteCustomAgent = useCallback(async () => {
     if (!selectedAgent) return;
-    if (
-      selectedAgent.agentKind !== 'subagent'
-      || (selectedAgent.subagentSource !== 'user' && selectedAgent.subagentSource !== 'project')
-    ) {
+    if ((selectedAgent.source ?? selectedAgent.subagentSource ?? 'builtin') === 'builtin') {
       return;
     }
     const id = selectedAgent.id;
@@ -537,7 +537,7 @@ const AgentsHomeView: React.FC = () => {
     if (!ok) return;
     setDeletingAgent(true);
     try {
-      await SubagentAPI.deleteSubagent(id);
+      await CustomAgentAPI.deleteCustomAgent(id);
       notification.success(t('agentsOverview.deleteSuccess', { name }));
       closeAgentDetails();
       await loadAgents();
@@ -550,14 +550,13 @@ const AgentsHomeView: React.FC = () => {
     }
   }, [selectedAgent, closeAgentDetails, loadAgents, notification, t]);
 
-  const canManageCustomSubagent = Boolean(
+  const canManageCustomAgent = Boolean(
     selectedAgent
-    && selectedAgent.agentKind === 'subagent'
-    && (selectedAgent.subagentSource === 'user' || selectedAgent.subagentSource === 'project'),
+    && (selectedAgent.source ?? selectedAgent.subagentSource ?? 'builtin') !== 'builtin',
   );
 
   return (
-    <GalleryLayout className="bitfun-agents-scene">
+    <GalleryLayout className="bitfun-agents-scene" data-testid="agent-skill-panel">
       <GalleryPageHeader
         title={t('page.title')}
         subtitle={t('page.subtitle')}
@@ -567,6 +566,7 @@ const AgentsHomeView: React.FC = () => {
               type="button"
               className="gallery-anchor-btn"
               onClick={() => scrollToZone('core-agents-zone')}
+              data-testid="agents-anchor-core"
             >
               {t('nav.coreAgents')}
             </button>
@@ -574,6 +574,7 @@ const AgentsHomeView: React.FC = () => {
               type="button"
               className="gallery-anchor-btn"
               onClick={() => scrollToZone('teams-zone')}
+              data-testid="agents-anchor-teams"
             >
               {t('nav.teams')}
             </button>
@@ -581,6 +582,7 @@ const AgentsHomeView: React.FC = () => {
               type="button"
               className="gallery-anchor-btn"
               onClick={() => scrollToZone('agents-zone')}
+              data-testid="agents-anchor-custom"
             >
               {t('nav.agents')}
             </button>
@@ -600,6 +602,7 @@ const AgentsHomeView: React.FC = () => {
                   type="button"
                   className="gallery-search-btn"
                   aria-label={t('page.searchPlaceholder')}
+                  data-testid="agents-search-btn"
                 >
                   <SearchIcon size={14} />
                 </button>
@@ -609,9 +612,10 @@ const AgentsHomeView: React.FC = () => {
         )}
       />
 
-      <div className="gallery-zones">
+      <div className="gallery-zones" data-testid="agent-list">
         <GalleryZone
           id="core-agents-zone"
+          data-testid="agents-core-zone"
           title={t('coreAgentsZone.title')}
           subtitle={t('coreAgentsZone.subtitle')}
           tools={(
@@ -624,6 +628,7 @@ const AgentsHomeView: React.FC = () => {
             <GalleryEmpty
               icon={<Cpu size={32} strokeWidth={1.5} />}
               message={t('coreAgentsZone.empty')}
+              testId="agent-list-empty"
             />
           ) : (
             <div className="core-agents-grid">
@@ -632,7 +637,7 @@ const AgentsHomeView: React.FC = () => {
                   key={agent.id}
                   agent={agent}
                   index={index}
-                  meta={coreAgentMeta[agent.id] ?? { role: agent.name, accentColor: '#6366f1', accentBg: 'rgba(99,102,241,0.10)' }}
+                  meta={coreAgentMeta[agent.id] ?? { role: agent.name, ...DEFAULT_CORE_AGENT_ACCENT }}
                   toolCount={getDisplayedToolCount(agent)}
                   skillCount={agent.agentKind === 'mode' && modeHasSkillTool(getModeConfig(agent.id)?.enabled_tools ?? agent.defaultTools ?? [])
                     ? getConfiguredEnabledSkillKeys(getModeSkills(agent.id)).length
@@ -649,6 +654,7 @@ const AgentsHomeView: React.FC = () => {
 
         <GalleryZone
           id="teams-zone"
+          data-testid="agents-teams-zone"
           title={t('teamsZone.title')}
           subtitle={t('teamsZone.subtitle')}
           tools={(
@@ -657,6 +663,7 @@ const AgentsHomeView: React.FC = () => {
                 type="button"
                 className="gallery-action-btn"
                 onClick={openReviewTeam}
+                data-testid="agents-review-team-configure-btn"
               >
                 <ShieldCheck size={15} />
                 <span>{t('reviewTeams.detail.open')}</span>
@@ -692,6 +699,7 @@ const AgentsHomeView: React.FC = () => {
 
         <GalleryZone
           id="agents-zone"
+          data-testid="agents-custom-zone"
           title={t('agentsZone.title')}
           subtitle={t('agentsZone.subtitle')}
           tools={(
@@ -710,6 +718,8 @@ const AgentsHomeView: React.FC = () => {
                         agentFilterLevel === key && 'gallery-cat-chip--active',
                       ].filter(Boolean).join(' ')}
                       onClick={() => setAgentFilterLevel(agentFilterLevel === key ? 'all' : key)}
+                      data-testid="agents-source-filter"
+                      data-agent-source={key}
                     >
                       <span>{label}</span>
                       <span className="gallery-filter-count">{count}</span>
@@ -729,6 +739,8 @@ const AgentsHomeView: React.FC = () => {
                         agentFilterType === key && 'gallery-cat-chip--active',
                       ].filter(Boolean).join(' ')}
                       onClick={() => setAgentFilterType(agentFilterType === key ? 'all' : key)}
+                      data-testid="agents-kind-filter"
+                      data-agent-kind={key}
                     >
                       <span>{label}</span>
                       <span className="gallery-filter-count">{count}</span>
@@ -740,6 +752,7 @@ const AgentsHomeView: React.FC = () => {
                 type="button"
                 className="gallery-action-btn gallery-action-btn--primary"
                 onClick={openCreateAgent}
+                data-testid="agents-create-agent-btn"
               >
                 <Plus size={15} />
                 <span>{t('page.newAgent')}</span>
@@ -754,6 +767,7 @@ const AgentsHomeView: React.FC = () => {
             <GalleryEmpty
               icon={<Bot size={32} strokeWidth={1.5} />}
               message={allAgents.length === 0 ? t('agentsZone.empty.noAgents') : t('agentsZone.empty.noMatch')}
+              testId="agent-list-empty"
             />
           ) : null}
 
@@ -790,9 +804,23 @@ const AgentsHomeView: React.FC = () => {
         title={selectedAgent?.name ?? ''}
         badges={selectedAgent ? (
           <>
-            <Badge variant={getAgentBadge(t, selectedAgent.agentKind, selectedAgent.subagentSource).variant}>
+            <Badge
+              variant={
+                getAgentBadge(
+                  t,
+                  selectedAgent.agentKind,
+                  selectedAgent.source ?? selectedAgent.subagentSource,
+                ).variant
+              }
+            >
               {selectedAgent.agentKind === 'mode' ? <Cpu size={10} /> : <Bot size={10} />}
-              {getAgentBadge(t, selectedAgent.agentKind, selectedAgent.subagentSource).label}
+              {
+                getAgentBadge(
+                  t,
+                  selectedAgent.agentKind,
+                  selectedAgent.source ?? selectedAgent.subagentSource,
+                ).label
+              }
             </Badge>
             {selectedAgent.model ? <Badge variant="neutral">{selectedAgent.model}</Badge> : null}
           </>
@@ -800,6 +828,10 @@ const AgentsHomeView: React.FC = () => {
         description={selectedAgent
           ? getAgentDescription(t, selectedAgent)
           : undefined}
+        testId="agent-detail-panel"
+        titleTestId="agent-detail-title"
+        descriptionTestId="agent-detail-description"
+        closeButtonTestId="agent-detail-close"
         meta={selectedAgent ? (
           <>
             <span>{t('agentCard.meta.tools', { count: selectedAgentToolCount })}</span>
@@ -858,7 +890,7 @@ const AgentsHomeView: React.FC = () => {
             ) : null}
 
             {selectedAgentCapabilityTabs.length > 0 ? (
-              <div className="agent-card__section">
+              <div className="agent-card__section" data-testid="agent-detail-tools-section">
                 <div className="agent-card__section-head">
                   <div className="agent-card__tab-list" role="tablist" aria-label={t('agentsOverview.capabilities')}>
                     {selectedAgentCapabilityTabs.map((tab) => {
@@ -1095,7 +1127,13 @@ const AgentsHomeView: React.FC = () => {
                   ) : (
                     <div className="agent-card__chip-grid">
                       {selectedAgentTools.map((tool) => (
-                        <span key={tool} className="agent-card__chip" title={tool}>
+                        <span
+                          key={tool}
+                          className="agent-card__chip"
+                          title={tool}
+                          data-testid="agent-detail-tool-item"
+                          data-tool-name={tool}
+                        >
                           {tool.replace(/_/g, ' ')}
                         </span>
                       ))}
@@ -1266,7 +1304,7 @@ const AgentsHomeView: React.FC = () => {
                 ) : null}
               </div>
             ) : null}
-            {canManageCustomSubagent ? (
+            {canManageCustomAgent ? (
               <div className="agent-card__section">
                 <div className="agent-card__section-head">
                   <div className="agent-card__section-title">

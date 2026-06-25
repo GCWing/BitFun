@@ -3,9 +3,11 @@
 //! This module owns remote-connect wire assembly, runtime-port request
 //! construction, compatibility re-exports, and remote session tracker state.
 //! Pairing, encryption, QR generation, relay websocket lifecycle primitives,
-//! and command routing live here. Product assembly and concrete runtime hosts
-//! stay in `bitfun-core` until their ports are explicit.
+//! wire command routing, and provider-neutral IM bot support live here. Product
+//! assembly, concrete runtime hosts, and IM bot command routing that still needs
+//! session/runtime hosts stay in `bitfun-core` until their ports are explicit.
 
+pub mod bot;
 pub mod device;
 pub mod encryption;
 pub mod pairing;

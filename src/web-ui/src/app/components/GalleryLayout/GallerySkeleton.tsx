@@ -24,7 +24,7 @@ const GallerySkeleton: React.FC<GallerySkeletonProps> = ({
       <div
         key={`gallery-skeleton-${index}`}
         className="gallery-skeleton-card"
-        style={{ '--card-index': index } as React.CSSProperties}
+        style={{ '--surface-stagger-index': index } as React.CSSProperties}
       />
     ))}
   </div>

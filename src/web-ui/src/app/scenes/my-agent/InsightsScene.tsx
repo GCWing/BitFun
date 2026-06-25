@@ -11,6 +11,7 @@ import type { InsightsReport, InsightsReportMeta, InsightsStats } from '@/infras
 import { useInsightsStore } from './insightsStore';
 import { createLogger } from '@/shared/utils/logger';
 import { notificationService } from '@/shared/notification-system';
+import { UI_EXCEPTION_ACCENTS } from '@/shared/theme/uiExceptionAccents';
 import '@/app/components/GalleryLayout/GalleryLayout.scss';
 import './InsightsScene.scss';
 
@@ -737,12 +738,12 @@ const StatItem: React.FC<{ value: string; label: string }> = ({ value, label }) 
 
 // Bar chart palette (default + semantic roles)
 const CHART_COLORS = {
-  blue: '#60a5fa',      // default / primary series
-  green: '#6eb88c',     // positive / success
-  purple: '#8b5cf6',    // distribution / category
-  indigo: '#818cf8',    // time-related
-  orange: '#c9944d',    // time-of-day / neutral
-  red: '#c77070',       // issues / errors
+  blue: 'var(--color-accent-500)',      // default / primary series
+  green: UI_EXCEPTION_ACCENTS.insights.positive,     // positive / success
+  purple: 'var(--color-purple-500)',    // distribution / category
+  indigo: UI_EXCEPTION_ACCENTS.insights.time,    // time-related
+  orange: UI_EXCEPTION_ACCENTS.insights.neutral,    // time-of-day / neutral
+  red: UI_EXCEPTION_ACCENTS.insights.issue,       // issues / errors
 } as const;
 
 type ChartColor = typeof CHART_COLORS[keyof typeof CHART_COLORS];

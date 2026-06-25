@@ -12,6 +12,7 @@ use crate::service::config::types::{
     AgentProfileConfig, AgentProfileView, ParentSubagentOverrideConfig,
 };
 use crate::util::errors::*;
+use bitfun_agent_runtime::skills::normalize_user_mode_skill_overrides;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::collections::{HashMap, HashSet};
@@ -57,19 +58,12 @@ fn normalize_tools(tools: Vec<String>, valid_tools: &HashSet<String>) -> Vec<Str
         .collect()
 }
 
-fn normalize_skill_keys(keys: Vec<String>) -> Vec<String> {
-    dedupe_preserving_order(keys)
-}
-
 fn normalize_skill_override_lists(
     disabled_user_skills: Vec<String>,
     enabled_user_skills: Vec<String>,
 ) -> (Vec<String>, Vec<String>) {
-    let disabled_user_skills = normalize_skill_keys(disabled_user_skills);
-    let disabled_set: HashSet<String> = disabled_user_skills.iter().cloned().collect();
-    let mut enabled_user_skills = normalize_skill_keys(enabled_user_skills);
-    enabled_user_skills.retain(|key| !disabled_set.contains(key));
-    (disabled_user_skills, enabled_user_skills)
+    let overrides = normalize_user_mode_skill_overrides(disabled_user_skills, enabled_user_skills);
+    (overrides.disabled_skills, overrides.enabled_skills)
 }
 
 fn normalize_subagent_overrides(

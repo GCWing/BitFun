@@ -12,7 +12,8 @@ import { useCanvasStore } from './stores';
 import { useTabLifecycle, useKeyboardShortcuts, usePanelTabCoordinator } from './hooks';
 import type { AnchorPosition } from './types';
 import { TAB_EVENTS } from './types';
-import { openMainSession, selectActiveBtwSessionTab } from '@/flow_chat/services/openBtwSession';
+import { selectActiveBtwSessionTab } from '@/flow_chat/services/btwSessionPane';
+import { openMainSession } from '@/flow_chat/services/sessionActivation';
 import { isSamePath } from '@/shared/utils/pathUtils';
 import './ContentCanvas.scss';
 export interface ContentCanvasProps {
@@ -38,6 +39,8 @@ export interface ContentCanvasProps {
   onExpandPanel?: () => void;
   /** Custom collapse behavior for canvases hosted outside the right panel. */
   onCollapsePanel?: () => void;
+  /** Suspend terminal fit/PTY resize while the hosting panel is animating. */
+  terminalResizeSuspended?: boolean;
 }
 
 export const ContentCanvas: React.FC<ContentCanvasProps> = ({
@@ -51,10 +54,13 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
   isPanelCollapsed,
   onExpandPanel,
   onCollapsePanel,
+  terminalResizeSuspended = false,
 }) => {
   // Store state
   const {
     primaryGroup,
+    secondaryGroup,
+    tertiaryGroup,
     layout,
     isMissionControlOpen,
     setAnchorPosition,
@@ -106,11 +112,14 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
     void openMainSession(activeBtwSessionData.parentSessionId);
   }, [activeBtwSessionData?.parentSessionId, activeBtwSessionData?.workspacePath, activeBtwSessionTab?.id, mode, workspacePath]);
 
-  // Check if primary group has visible tabs
-  const hasPrimaryVisibleTabs = useMemo(() => {
-    const primaryVisible = primaryGroup.tabs.filter(t => !t.isHidden).length;
-    return primaryVisible > 0;
-  }, [primaryGroup.tabs]);
+  // Keep the editor area mounted for hidden terminal tabs. Closing a terminal
+  // tab backgrounds it without destroying the xterm instance.
+  const hasRenderableTabs = useMemo(() => {
+    const groups = [primaryGroup, secondaryGroup, tertiaryGroup];
+    return groups.some(group =>
+      group.tabs.some(tab => !tab.isHidden || tab.content.type === 'terminal')
+    );
+  }, [primaryGroup, secondaryGroup, tertiaryGroup]);
 
   // Handle anchor close
   const handleAnchorClose = useCallback(() => {
@@ -139,8 +148,8 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
 
   // Render content
   const renderContent = () => {
-    // Show empty state when primary group has no visible tabs
-    if (!hasPrimaryVisibleTabs) {
+    // Show empty state when there are no visible tabs and no terminal keep-alive tabs.
+    if (!hasRenderableTabs) {
       return <EmptyState onClose={disablePopOut ? undefined : collapsePanel} />;
     }
 
@@ -156,6 +165,7 @@ export const ContentCanvas: React.FC<ContentCanvasProps> = ({
             onTabCloseWithDirtyCheck={handleCloseWithDirtyCheck}
             onTabCloseAllWithDirtyCheck={handleCloseAllWithDirtyCheck}
             disablePopOut={disablePopOut}
+            terminalResizeSuspended={terminalResizeSuspended}
           />
         </div>
 

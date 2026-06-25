@@ -268,8 +268,8 @@
     gap: tokens.$size-gap-3;
     padding: tokens.$size-gap-4;
     background: linear-gradient(135deg,
-      rgba(239, 68, 68, 0.08) 0%,
-      rgba(220, 38, 38, 0.06) 100%);
+      color-mix(in srgb, var(--color-error) 8%, transparent) 0%,
+      color-mix(in srgb, var(--color-error) 6%, transparent) 100%);
     border: 1px solid tokens.$color-error-border;
     border-radius: tokens.$size-radius-base;
     margin-top: tokens.$size-gap-4;

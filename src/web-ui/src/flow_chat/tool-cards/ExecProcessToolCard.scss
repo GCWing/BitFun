@@ -25,7 +25,7 @@
 
   .exec-process-copy-output-btn {
     background: var(--color-bg-scene);
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.16);
+    box-shadow: 0 1px 4px rgba(var(--color-static-black-rgb), 0.16);
 
     &:hover:not(:disabled) {
       background: var(--element-bg-subtle);

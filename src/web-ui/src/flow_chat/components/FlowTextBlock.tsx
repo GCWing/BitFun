@@ -24,9 +24,16 @@ interface FlowTextBlockProps {
   className?: string;
   replayStreamingOnMount?: boolean;
   traceContext?: MarkdownTraceContext;
+  testId?: string;
+  testAttributes?: Record<`data-${string}`, string | number | boolean | undefined>;
 }
 
-const RuntimeStatusBlock: React.FC<Pick<FlowTextBlockProps, 'textItem' | 'className'>> = ({ textItem, className = '' }) => {
+const RuntimeStatusBlock: React.FC<Pick<FlowTextBlockProps, 'textItem' | 'className' | 'testId' | 'testAttributes'>> = ({
+  textItem,
+  className = '',
+  testId,
+  testAttributes,
+}) => {
   const { t } = useTranslation('flow-chat/processing-hints');
   const rawHints = t('items', { returnObjects: true });
   const hints = Array.isArray(rawHints)
@@ -38,7 +45,11 @@ const RuntimeStatusBlock: React.FC<Pick<FlowTextBlockProps, 'textItem' | 'classN
   const hint = hints[hintIndex] ?? '';
 
   return (
-    <div className={`flow-text-block flow-text-block--runtime-status ${className}`}>
+    <div
+      className={`flow-text-block flow-text-block--runtime-status ${className}`}
+      data-testid={testId}
+      {...testAttributes}
+    >
       <DotMatrixLoader size="medium" className="flow-text-block__runtime-status-icon" />
       {hint && <span className="flow-text-block__runtime-status-text">{hint}</span>}
     </div>
@@ -54,6 +65,8 @@ export const FlowTextBlock = React.memo<FlowTextBlockProps>(({
   className = '',
   replayStreamingOnMount = true,
   traceContext,
+  testId,
+  testAttributes,
 }) => {
   const {
     onFileViewRequest,
@@ -112,11 +125,25 @@ export const FlowTextBlock = React.memo<FlowTextBlockProps>(({
   const markdownTraceContext = isStartupRenderTraceEnabled() ? traceContext : undefined;
 
   if (textItem.runtimeStatus) {
-    return <RuntimeStatusBlock textItem={textItem} className={className} />;
+    return (
+      <RuntimeStatusBlock
+        textItem={textItem}
+        className={className}
+        testId={testId}
+        testAttributes={testAttributes}
+      />
+    );
   }
 
   return (
-    <div className={`flow-text-block ${className} ${isActivelyStreaming ? 'streaming flow-text-block--streaming' : ''}`}>
+    <div
+      className={`flow-text-block ${className} ${isActivelyStreaming ? 'streaming flow-text-block--streaming' : ''}`}
+      data-testid={testId}
+      data-flow-item-id={textItem.id}
+      data-status={textItem.status}
+      data-streaming={isStreaming ? 'true' : 'false'}
+      {...testAttributes}
+    >
       {textItem.isMarkdown ? (
         <MarkdownRenderer
           content={displayContent}
@@ -152,6 +179,9 @@ export const FlowTextBlock = React.memo<FlowTextBlockProps>(({
     prev.isStreaming === next.isStreaming &&
     prev.status === next.status &&
     prevProps.className === nextProps.className &&
-    prevProps.replayStreamingOnMount === nextProps.replayStreamingOnMount
+    prevProps.replayStreamingOnMount === nextProps.replayStreamingOnMount &&
+    prevProps.traceContext === nextProps.traceContext &&
+    prevProps.testId === nextProps.testId &&
+    prevProps.testAttributes === nextProps.testAttributes
   );
 });

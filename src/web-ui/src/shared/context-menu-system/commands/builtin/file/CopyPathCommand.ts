@@ -2,8 +2,20 @@
 
 import { BaseCommand } from '../../BaseCommand';
 import { CommandResult } from '../../../types/command.types';
-import { MenuContext, ContextType, FileNodeContext } from '../../../types/context.types';
+import { MenuContext, ContextType, FileNodeContext, TabContext } from '../../../types/context.types';
 import { i18nService } from '@/infrastructure/i18n';
+
+function getContextFilePath(context: MenuContext): string | undefined {
+  if (context.type === ContextType.FILE_NODE || context.type === ContextType.FOLDER_NODE) {
+    return (context as FileNodeContext).filePath;
+  }
+
+  if (context.type === ContextType.TAB) {
+    return (context as TabContext).filePath;
+  }
+
+  return undefined;
+}
 
 export class CopyPathCommand extends BaseCommand {
   constructor() {
@@ -18,21 +30,28 @@ export class CopyPathCommand extends BaseCommand {
   }
 
   canExecute(context: MenuContext): boolean {
-    return context.type === ContextType.FILE_NODE || 
-           context.type === ContextType.FOLDER_NODE;
+    if (context.type === ContextType.FILE_NODE || context.type === ContextType.FOLDER_NODE) {
+      return true;
+    }
+
+    return context.type === ContextType.TAB && Boolean((context as TabContext).filePath);
   }
 
   async execute(context: MenuContext): Promise<CommandResult> {
     try {
       const t = i18nService.getT();
-      const fileContext = context as FileNodeContext;
+      const filePath = getContextFilePath(context);
+
+      if (!filePath) {
+        return this.failure(t('errors:contextMenu.copyPathFailed'));
+      }
       
       if (navigator.clipboard) {
-        await navigator.clipboard.writeText(fileContext.filePath);
+        await navigator.clipboard.writeText(filePath);
       } else {
         
         const textarea = document.createElement('textarea');
-        textarea.value = fileContext.filePath;
+        textarea.value = filePath;
         textarea.style.position = 'fixed';
         textarea.style.opacity = '0';
         document.body.appendChild(textarea);
@@ -41,7 +60,7 @@ export class CopyPathCommand extends BaseCommand {
         document.body.removeChild(textarea);
       }
 
-      return this.success(t('common:contextMenu.status.copyPathSuccess'), { path: fileContext.filePath });
+      return this.success(t('common:contextMenu.status.copyPathSuccess'), { path: filePath });
     } catch (error) {
       const t = i18nService.getT();
       return this.failure(t('errors:contextMenu.copyPathFailed'), error as Error);

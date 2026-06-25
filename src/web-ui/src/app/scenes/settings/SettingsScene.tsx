@@ -74,9 +74,13 @@ const SettingsScene: React.FC = () => {
   }
 
   return (
-    <div className="bitfun-settings-scene">
+    <div className="bitfun-settings-scene" data-testid="settings-scene" data-settings-tab={resolvedTab}>
       {Content && (
-        <div key={resolvedTab} className="bitfun-settings-scene__content-wrapper">
+        <div
+          key={resolvedTab}
+          className="bitfun-settings-scene__content-wrapper"
+          data-testid="settings-scene-content"
+        >
           <Suspense fallback={<SettingsSceneLoading />}>
             <Content />
           </Suspense>

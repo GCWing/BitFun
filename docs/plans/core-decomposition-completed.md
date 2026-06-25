@@ -15,31 +15,35 @@
 
 ## 2. 已迁移 owner
 
-- `services-core` 已承接 session layout、metadata store CRUD / index rebuild、metadata pagination、metadata construction / mutation、lineage / branch shaping、JSON file store、filesystem primitives、diagnostic redaction、session usage/token usage 基础服务。
+- `services-core` 已承接 session layout、metadata store CRUD / index rebuild、metadata pagination、metadata construction / mutation、lineage / branch shaping、JSON file store、filesystem primitives、managed runtime command resolution / PATH merge、diagnostic redaction、session usage/token usage 基础服务。
 - `services-core` 已承接 workspace-runtime legacy session-store merge、metadata 冲突选择、index rebuild 和 legacy path copy/move fallback；core workspace-runtime 只保留路径计算、runtime layout ensure 和错误兼容映射。
-- `runtime-services` 已承接 typed runtime service assembly、capability availability、provider registry、capability validation 和 backend event delivery；core backend event system 只保留兼容 re-export。
+- `runtime-services` 已承接 typed runtime service assembly、capability availability、provider registry、capability validation、无副作用 capability marker ports 和 backend event delivery；core backend event system 只保留兼容 re-export。
 - `bitfun-events` 已承接 backend event DTO、agentic event DTO 和 platform-neutral `EventEmitter` trait。
-- `services-integrations` 已承接 remote-connect primitives、wire command routing / response assembly、workspace search concrete owner、remote SSH/SFTP/PTY owner、DeepResearch report IO / display-map sidecar、MiniApp host dispatch / storage / worker / import IO。
-- `tool-contracts` 已承接 provider-neutral tool DTO、manifest/catalog/admission/result presentation、confirmation facts、truncation recovery presentation。
-- `tool-execution` 已承接 local / remote IO helper、Bash shell helper、batching plan、retry policy、state counting、cancellation-state/token-store policy、background exec output capture 和部分 result rendering。
-- `agent-runtime` 已承接 scheduler/background delivery 纯决策、dialog lifecycle port contracts、session management/cancellation port contracts、thread-goal facts、prompt / prompt-cache facts、turn skill/agent snapshot DTO/diff/render/store、file-read session state、session evidence ledger 与 compression-contract projection、dialog-turn cancellation token store、tool confirmation / user-question wait channel state、custom subagent discovery/loading、post-call hook routing、DeepReview provider-neutral policy/queue/retry/diagnostics shaping、DeepResearch citation renumber 与 report post-process gate。
+- `services-integrations` 已承接 remote-connect primitives、wire command routing / response assembly、IM bot provider-neutral config / persistence / file auto-push / locale / menu / state / command parsing、workspace search concrete owner、remote SSH/SFTP/PTY owner、DeepResearch report IO / display-map sidecar、MiniApp host dispatch / storage / worker / import IO。
+- `tool-contracts` 已承接 provider-neutral tool DTO、manifest/catalog/admission/result presentation、Computer Use DTO/input parser/screenshot payload、confirmation facts、truncation recovery presentation、runtime restriction policy 和 provider-entry materialization；core 只保留 Computer Use 旧 public path re-export / compatibility shim 与产品执行入口。
+- `tool-execution` 已承接 local / remote IO helper、Bash shell helper、batching plan、retry policy、state counting、tool state event payload shaping / result redaction、cancellation-state/token-store policy、background exec output capture、ExecCommand provider-neutral 呈现 / control facts / completion shape、prompt-safe tool context facts / custom-data materialization、Computer Use loop detection / screenshot hash / verification / retry policy，以及 File tool 的 provider-neutral 结果展示、写入 mode/status/line-count 规则、Edit guardrail 分类和 Delete success 文本；core 只保留 ToolResult 包装、权限、checkpoint、runtime handles、process manager / host adapter 调用、read-state adapter、remote shell/FS 调用和旧工具入口。
+- `agent-runtime` 已承接 scheduler/background delivery 纯决策、dialog lifecycle port contracts、runtime event queue/router、session management/cancellation port contracts、thread-goal facts、prompt markup / prompt / prompt-cache facts 与持久化写入决策、remote file delivery prompt facts、turn skill/agent snapshot DTO/diff/render/store、file-read session state / prior-read guardrail / freshness 决策、session evidence ledger 与 compression-contract projection、dialog-turn cancellation token store、tool confirmation / user-question wait channel state、custom agent / mode / subagent schema、默认值、discovery/loading、markdown IO、validation、review 工具过滤、skill catalog/root specs、mode policy、selection/shadow/mode-info 规则、assistant payload rendering、post-call hook routing、DeepReview provider-neutral policy/queue/retry/diagnostics shaping 与 queue event payload shaping、DeepResearch citation renumber 与 report post-process gate，并建立不暴露 `bitfun-core` / `product-full` / concrete manager 的内部 SDK facade。SDK facade 已支持注入 fake runtime services、tool registry、harness registry、hook registry 和 agent registry。
 - `harness` 已建立 descriptor、route plan 和 legacy provider registry。
-- `product-domains` 已承接 MiniApp state/workflow planning、compile / permission adaptation、import lifecycle、AI / Agent permission、rate-limit、model/message/session/workspace/turn-text bridge rules、function-agent prompt/parser/response policy 和部分 Git snapshot/fallback 逻辑。
+- `product-domains` 已承接 MiniApp state/workflow planning、compile / permission adaptation、import lifecycle、AI / Agent permission、rate-limit、model/message/session/workspace/turn-text bridge rules、AI / Agent 请求计划、stream / runtime event payload、worker restart / draft key / workspace input 规则、function-agent prompt/parser/response policy 和部分 Git snapshot/fallback 逻辑。
 - `bitfun-core` 的 function-agent AI concrete acquisition 已从旧 `runtime_services` 路径收拢到明确的 core port adapter；Git / AI compatibility re-export 仍保留旧 public path。
-- Product Assembly 已承接 `DeliveryProfile`、`CapabilitySet`、product-full provider plan、service availability report 和 profile-scoped harness registry 入口。
+- Product Assembly 已承接 `DeliveryProfile`、当前交付形态入口矩阵、`CapabilitySet`、feature group matrix、profile-scoped capability plan、product-full provider plan、service availability report、profile-scoped harness registry 入口与 legacy-route 行为保护，以及 `ProductAssembler` 对 explicit profile input、runtime services、harness registry 和 service requirement 的验证；core 只保留兼容 re-export。ProductFull / Desktop / CLI / ACP 保留完整能力；Server / Remote / Web / MobileWeb 不再 materialize product-full capability packs、feature groups、runtime services、tool groups 或 harness routes。
 
 ## 3. 已建立保护
 
 - owner crate 不得依赖回 `bitfun-core`。
 - `product-full` 保持完整产品能力集合。
 - boundary check 覆盖 owner crate 禁止依赖、旧路径 facade-only、feature gate、six-layer path 解析、Product Assembly 收口和高风险 owner 回流。
-- focused baseline 覆盖 tool manifest、GetToolSpec、execution admission、workspace search、remote workspace fallback、MCP config/catalog、prompt cache、custom subagent、thread-goal tools、AskUserQuestion、DeepReview policy、tool confirmation、session restore、MiniApp storage/builtin/import、function-agent Git、scheduled-job state 等路径。
+- focused tests 覆盖当前 delivery profile 能力裁剪、ProductAssembler 缺失 service 报告、无直接 core 入口的空 capability plan、SDK fake provider / services / tool / harness / hook / workspace-scoped agent registry 闭环，以及 runtime hook 顺序、timeout、错误策略和重复 id 拦截。
+- focused baseline 覆盖 tool manifest、GetToolSpec、execution admission、workspace search、remote workspace fallback、MCP config/catalog、prompt cache、custom agent / mode / subagent、thread-goal tools、AskUserQuestion、DeepReview policy、tool confirmation、session restore、MiniApp storage/builtin/import、function-agent Git、scheduled-job state 等路径。
+- H4 已完成 Agent Runtime SDK 发布准备的 workspace 内收口：`sdk` facade 暴露 v1 preview 兼容元数据、空默认 feature、稳定注入 registry/service 类型、最小外部 embedder 示例，以及 boundary required rules / self-test 保护。
 
-## 4. 明确未完成
+## 4. Adapter 边界与后续专项
 
-- `bitfun-core` 仍是完整 product runtime 组装点，尚未退化为纯 compatibility facade。
-- 产品入口仍主要通过 `bitfun-core/product-full` 获取完整能力，交付形态级 feature / dependency trimming 未完成。
-- concrete scheduler lifecycle、prompt-cache persistence orchestration、tool pipeline scheduler glue、concrete prompt assembly、AI client factory / provider acquisition 仍在 core 或产品路径，待 PR-D 通过 SDK / provider port 统一收口。
-- DeepReview concrete Task launch、queue event emission 和 session metadata cache persistence 仍是 core adapter，因为它们依赖 coordinator、session manager、subagent runtime 和产品事件；provider-neutral policy / queue / retry / report shaping 已在 `agent-runtime`。
-- MiniApp larger workflow 的 UI asset / desktop scheduler / AI factory 调用仍属于产品 host adapter；可复用规则已迁入 `product-domains`，不再在 desktop 命令内重复实现。
-- Agent Runtime SDK 具备候选原语，但尚未形成可独立发布的稳定外部 SDK 边界。
+- `bitfun-core` 仍承载 compatibility facade / `product-full` assembly 和少量迁移期 adapter；不应继续新增 owner 逻辑。
+- 产品入口的能力裁剪已由 Product Assembly profile plan 表达；后续新增入口必须先明确 `ProductCoreDependencyMode`、unsupported / unavailable 语义和兼容性测试。
+- H1 剩余 owner 决策已迁出：dialog start route / outcome lifecycle 继续由 `agent-runtime` 给出可测试决策，tool pipeline 的 Task batch 策略由 `tool-execution` 持有，prompt runtime / workspace / user-context 组合由 `agent-runtime` 持有，AI model selector / cache-key 解析由 `bitfun-ai-adapters` 持有。`bitfun-core` 仍只保留 coordinator 调用、config IO、credential overlay、prompt 事实收集和 prompt-cache persistence IO 等 concrete adapter。
+- DeepReview concrete Task launch 和 session metadata cache persistence 仍是 core adapter，因为它们依赖 coordinator、session manager、subagent runtime 和产品事件；provider-neutral policy / queue / retry / report shaping 与 queue event payload shaping 已在 `agent-runtime`，core 只负责事件发送。
+- H2 已完成：MiniApp AI / Agent 请求计划、stream payload、runtime event payload、worker restart / draft key / workspace input 规则已迁入 `product-domains`，desktop 命令只保留 AI factory、scheduler、worker pool、目录创建和事件发送等 concrete host 调用。
+- MiniApp larger workflow 的 UI asset / desktop scheduler / AI factory 调用仍属于产品 host adapter；可复用规则不得回流到 desktop 命令内重复实现。
+- Agent Runtime SDK 已具备 v1 preview workspace 内公开边界、最小 fake-provider 闭环、runtime services / tool / harness / hook / workspace-scoped agent registry 注入基线、最小 feature 证明和外部 embedder 示例。若后续要独立发布为外部包，需要单独评审发布流程、crate packaging、semver 承诺和长期兼容策略。
+- Skill registry 主体 owner 已收口到 `agent-runtime`：`bitfun-core` 保留本地/远端扫描、config/registry IO、缓存和加载错误映射；内置 skill 分组、root/slot/key 事实、mode default/override、visible resolution、shadow 标记、mode skill info 和加载后 assistant payload 由 runtime 统一给出。

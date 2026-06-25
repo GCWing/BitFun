@@ -1,5 +1,47 @@
 /* Streaming text output styles */
 .stream-text {
+  --stream-text-matrix-green-rgb: 0, 255, 0;
+  --stream-text-rainbow-pink-rgb: 255, 0, 128;
+  --stream-text-rainbow-orange-rgb: 255, 140, 0;
+  --stream-text-rainbow-teal-rgb: 64, 224, 208;
+  --stream-text-rainbow-sky-rgb: 0, 191, 255;
+  --stream-text-rainbow-purple-rgb: 147, 112, 219;
+  --stream-text-rainbow-hot-pink-rgb: 255, 20, 147;
+  --stream-text-fire-red-rgb: 255, 0, 0;
+  --stream-text-fire-yellow-rgb: 255, 215, 0;
+  --stream-text-ocean-deep-rgb: 0, 119, 190;
+  --stream-text-ocean-mid-rgb: 0, 173, 216;
+  --stream-text-ocean-foam-rgb: 72, 202, 228;
+  --stream-text-sunset-coral-rgb: 255, 107, 107;
+  --stream-text-sunset-yellow-rgb: 255, 217, 61;
+  --stream-text-sunset-pink-rgb: 255, 159, 243;
+  --stream-text-glitch-magenta-rgb: 255, 0, 255;
+  --stream-text-glitch-cyan-rgb: 0, 255, 255;
+  --stream-text-theme-purple-rgb: 168, 85, 247;
+  --stream-text-theme-purple-neon-rgb: 192, 132, 252;
+  --stream-text-theme-green-rgb: 34, 197, 94;
+  --stream-text-matrix-green: rgb(var(--stream-text-matrix-green-rgb));
+  --stream-text-rainbow-pink: rgb(var(--stream-text-rainbow-pink-rgb));
+  --stream-text-rainbow-orange: rgb(var(--stream-text-rainbow-orange-rgb));
+  --stream-text-rainbow-teal: rgb(var(--stream-text-rainbow-teal-rgb));
+  --stream-text-rainbow-sky: rgb(var(--stream-text-rainbow-sky-rgb));
+  --stream-text-rainbow-purple: rgb(var(--stream-text-rainbow-purple-rgb));
+  --stream-text-rainbow-hot-pink: rgb(var(--stream-text-rainbow-hot-pink-rgb));
+  --stream-text-fire-red: rgb(var(--stream-text-fire-red-rgb));
+  --stream-text-fire-orange: var(--stream-text-rainbow-orange);
+  --stream-text-fire-yellow: rgb(var(--stream-text-fire-yellow-rgb));
+  --stream-text-ocean-deep: rgb(var(--stream-text-ocean-deep-rgb));
+  --stream-text-ocean-mid: rgb(var(--stream-text-ocean-mid-rgb));
+  --stream-text-ocean-foam: rgb(var(--stream-text-ocean-foam-rgb));
+  --stream-text-sunset-coral: rgb(var(--stream-text-sunset-coral-rgb));
+  --stream-text-sunset-yellow: rgb(var(--stream-text-sunset-yellow-rgb));
+  --stream-text-sunset-pink: rgb(var(--stream-text-sunset-pink-rgb));
+  --stream-text-glitch-magenta: rgb(var(--stream-text-glitch-magenta-rgb));
+  --stream-text-glitch-cyan: rgb(var(--stream-text-glitch-cyan-rgb));
+  --stream-text-theme-purple: rgb(var(--stream-text-theme-purple-rgb));
+  --stream-text-theme-purple-neon: rgb(var(--stream-text-theme-purple-neon-rgb));
+  --stream-text-theme-green: rgb(var(--stream-text-theme-green-rgb));
+
   display: inline;
   font-family: var(--font-family-sans);
   line-height: 1.6;
@@ -112,8 +154,8 @@
     opacity: 0;
     transform: translate(calc(var(--char-index, 0) * -2px), 0);
     text-shadow:
-      2px 0 #ff00ff,
-      -2px 0 #00ffff;
+      2px 0 var(--stream-text-glitch-magenta),
+      -2px 0 var(--stream-text-glitch-cyan);
   }
   20% {
     transform: translate(calc(var(--char-index, 0) * 2px), -2px);
@@ -123,8 +165,8 @@
   }
   60% {
     text-shadow:
-      1px 0 #ff00ff,
-      -1px 0 #00ffff;
+      1px 0 var(--stream-text-glitch-magenta),
+      -1px 0 var(--stream-text-glitch-cyan);
   }
   100% {
     opacity: 1;
@@ -140,8 +182,8 @@
   20%, 60% {
     opacity: 0.8;
     text-shadow:
-      1px 0 #ff00ff,
-      -1px 0 #00ffff;
+      1px 0 var(--stream-text-glitch-magenta),
+      -1px 0 var(--stream-text-glitch-cyan);
   }
 }
 
@@ -181,9 +223,9 @@
 
 
 .stream-text--matrix {
-  color: #0f0;
+  color: var(--stream-text-matrix-green);
   font-family: 'Courier New', monospace;
-  text-shadow: 0 0 5px #0f0;
+  text-shadow: 0 0 5px var(--stream-text-matrix-green);
 }
 
 .stream-text--matrix .stream-text__char--matrix {
@@ -195,18 +237,18 @@
     opacity: 0;
     transform: translateY(-20px);
     color: var(--color-static-white);
-    text-shadow: 0 0 20px #0f0;
+    text-shadow: 0 0 20px var(--stream-text-matrix-green);
   }
   50% {
     opacity: 1;
-    color: #0f0;
-    text-shadow: 0 0 10px #0f0, 0 0 20px #0f0;
+    color: var(--stream-text-matrix-green);
+    text-shadow: 0 0 10px var(--stream-text-matrix-green), 0 0 20px var(--stream-text-matrix-green);
   }
   100% {
     opacity: 1;
     transform: translateY(0);
-    color: #0f0;
-    text-shadow: 0 0 5px #0f0;
+    color: var(--stream-text-matrix-green);
+    text-shadow: 0 0 5px var(--stream-text-matrix-green);
   }
 }
 
@@ -214,12 +256,12 @@
 .stream-text--gradient {
   background: linear-gradient(
     90deg,
-    #ff0080,
-    #ff8c00,
-    #40e0d0,
-    #00bfff,
-    #9370db,
-    #ff1493
+    var(--stream-text-rainbow-pink),
+    var(--stream-text-rainbow-orange),
+    var(--stream-text-rainbow-teal),
+    var(--stream-text-rainbow-sky),
+    var(--stream-text-rainbow-purple),
+    var(--stream-text-rainbow-hot-pink)
   );
   background-size: 200% auto;
   -webkit-background-clip: text;
@@ -326,7 +368,7 @@
   20% {
     opacity: 1;
     filter: brightness(2);
-    text-shadow: 0 0 8px rgba(255, 255, 255, 0.8);
+    text-shadow: 0 0 8px var(--color-overlay-white-80);
   }
   100% {
     opacity: 1;
@@ -358,7 +400,7 @@
 .stream-cursor--block {
   width: 0.6em;
   height: 1em;
-  background: rgba(59, 130, 246, 0.6);
+  background: var(--border-accent-strong);
   animation: cursor-blink 1s step-end infinite;
 }
 
@@ -377,8 +419,8 @@
   background: var(--color-accent-600);
   box-shadow:
     0 0 10px var(--color-accent-700),
-    0 0 20px rgba(59, 130, 246, 0.6),
-    0 0 30px rgba(59, 130, 246, 0.4);
+    0 0 20px var(--border-accent-strong),
+    0 0 30px var(--border-accent);
   animation: cursor-glow 1s ease-in-out infinite;
 }
 
@@ -387,14 +429,14 @@
     opacity: 1;
     box-shadow:
       0 0 10px var(--color-accent-700),
-      0 0 20px rgba(59, 130, 246, 0.6);
+      0 0 20px var(--border-accent-strong);
   }
   50% {
     opacity: 0.7;
     box-shadow:
       0 0 20px var(--color-accent-600),
       0 0 40px var(--color-accent-700),
-      0 0 60px rgba(59, 130, 246, 0.6);
+      0 0 60px var(--border-accent-strong);
   }
 }
 
@@ -404,11 +446,11 @@
   height: 1em;
   background: linear-gradient(
     180deg,
-    #ff0080,
-    #ff8c00,
-    #40e0d0,
-    #00bfff,
-    #9370db
+    var(--stream-text-rainbow-pink),
+    var(--stream-text-rainbow-orange),
+    var(--stream-text-rainbow-teal),
+    var(--stream-text-rainbow-sky),
+    var(--stream-text-rainbow-purple)
   );
   animation: cursor-rainbow 2s linear infinite;
 }
@@ -454,16 +496,16 @@
 
 
 .stream-text--theme-purple {
-  color: #a855f7;
+  color: var(--stream-text-theme-purple);
 }
 
 .stream-text--theme-purple.stream-text--neon {
-  color: #c084fc;
+  color: var(--stream-text-theme-purple-neon);
 }
 
 
 .stream-text--theme-green {
-  color: #22c55e;
+  color: var(--stream-text-theme-green);
 }
 
 .stream-text--theme-green.stream-text--neon {
@@ -474,12 +516,12 @@
 .stream-text--theme-rainbow {
   background: linear-gradient(
     90deg,
-    #ff0080 0%,
-    #ff8c00 20%,
-    #40e0d0 40%,
-    #00bfff 60%,
-    #9370db 80%,
-    #ff1493 100%
+    var(--stream-text-rainbow-pink) 0%,
+    var(--stream-text-rainbow-orange) 20%,
+    var(--stream-text-rainbow-teal) 40%,
+    var(--stream-text-rainbow-sky) 60%,
+    var(--stream-text-rainbow-purple) 80%,
+    var(--stream-text-rainbow-hot-pink) 100%
   );
   background-size: 200% auto;
   -webkit-background-clip: text;
@@ -492,11 +534,11 @@
 .stream-text--theme-fire {
   background: linear-gradient(
     90deg,
-    #ff0000,
-    #ff8800,
-    #ffdd00,
-    #ff8800,
-    #ff0000
+    var(--stream-text-fire-red),
+    var(--stream-text-fire-orange),
+    var(--stream-text-fire-yellow),
+    var(--stream-text-fire-orange),
+    var(--stream-text-fire-red)
   );
   background-size: 200% auto;
   -webkit-background-clip: text;
@@ -509,11 +551,11 @@
 .stream-text--theme-ocean {
   background: linear-gradient(
     90deg,
-    #0077be,
-    #00b4d8,
-    #48cae4,
-    #00b4d8,
-    #0077be
+    var(--stream-text-ocean-deep),
+    var(--stream-text-ocean-mid),
+    var(--stream-text-ocean-foam),
+    var(--stream-text-ocean-mid),
+    var(--stream-text-ocean-deep)
   );
   background-size: 200% auto;
   -webkit-background-clip: text;
@@ -526,11 +568,11 @@
 .stream-text--theme-sunset {
   background: linear-gradient(
     90deg,
-    #ff6b6b,
-    #ffd93d,
-    #ff9ff3,
-    #ffd93d,
-    #ff6b6b
+    var(--stream-text-sunset-coral),
+    var(--stream-text-sunset-yellow),
+    var(--stream-text-sunset-pink),
+    var(--stream-text-sunset-yellow),
+    var(--stream-text-sunset-coral)
   );
   background-size: 200% auto;
   -webkit-background-clip: text;

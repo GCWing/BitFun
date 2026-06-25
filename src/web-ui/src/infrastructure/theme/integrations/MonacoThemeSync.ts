@@ -9,6 +9,13 @@ const log = createLogger('MonacoThemeSync');
 
 
 const SEMANTIC_HIGHLIGHTING_RULES = BitFunDarkTheme.rules;
+const TRANSPARENT_MONACO_BORDER = '#00000000';
+const TRANSPARENT_MONACO_BORDER_COLORS = {
+  'focusBorder': TRANSPARENT_MONACO_BORDER,
+  'contrastBorder': TRANSPARENT_MONACO_BORDER,
+  'diffEditor.insertedTextBorder': TRANSPARENT_MONACO_BORDER,
+  'diffEditor.removedTextBorder': TRANSPARENT_MONACO_BORDER,
+} as const;
 
 function getBitfunLightMonacoTheme(): Monaco.editor.IStandaloneThemeData {
   return {
@@ -16,15 +23,12 @@ function getBitfunLightMonacoTheme(): Monaco.editor.IStandaloneThemeData {
     inherit: true,
     rules: SEMANTIC_HIGHLIGHTING_RULES,
     colors: convertColorsToHex({
-      'focusBorder': '#00000000',
-      'contrastBorder': '#00000000',
-      'diffEditor.insertedTextBorder': '#00000000',
-      'diffEditor.removedTextBorder': '#00000000',
+      ...TRANSPARENT_MONACO_BORDER_COLORS,
 
       'editor.selectionBackground': 'rgba(15, 23, 42, 0.14)',
       'editor.selectionForeground': '#1e293b',
       'editor.inactiveSelectionBackground': 'rgba(15, 23, 42, 0.09)',
-      'editor.selectionHighlightBackground': 'rgba(15, 23, 42, 0.10)',
+      'editor.selectionHighlightBackground': 'rgba(15, 23, 42, 0.1)',
       'editor.selectionHighlightBorder': 'rgba(15, 23, 42, 0.22)',
       'editor.wordHighlightBackground': 'rgba(15, 23, 42, 0.07)',
       'editor.wordHighlightStrongBackground': 'rgba(15, 23, 42, 0.11)',
@@ -275,12 +279,8 @@ export class MonacoThemeSync {
       'editor.wordHighlightBackground': themeColors.accent[100],
       'editor.wordHighlightStrongBackground': themeColors.accent[200],
       'editor.lineHighlightBackground': themeColors.background.secondary,
-      
-      'focusBorder': '#00000000',
-      'contrastBorder': '#00000000',
-      
-      'diffEditor.insertedTextBorder': '#00000000',
-      'diffEditor.removedTextBorder': '#00000000',
+
+      ...TRANSPARENT_MONACO_BORDER_COLORS,
     };
     
     
@@ -299,7 +299,7 @@ export class MonacoThemeSync {
         const isLightSelection = this.isLightColor(monacoColors.selection);
         if (!isLightSelection) {
           
-          mappedMonacoColors['editor.selectionForeground'] = '#FFFFFF';
+          mappedMonacoColors['editor.selectionForeground'] = '#ffffff';
         }
       }
       if (monacoColors.cursor) {

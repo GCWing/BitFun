@@ -398,6 +398,7 @@ Usage notes:
 - Use 'timeout_seconds' when you need a hard deadline for the subagent. When omitted, the session execution timeout from settings is used. When provided, the effective timeout is the larger of the requested value and the session execution timeout. Set it to 0 with no configured session execution timeout to disable the timeout.
 - For DeepReview only, set 'retry' to true when re-dispatching a reviewer after that same reviewer returned partial_timeout or an explicit transient capacity failure in the current turn. Retry calls must include retry_coverage with source_packet_id, source_status, covered_files, and a smaller retry_scope_files list. Do not set 'auto_retry' unless this is a backend-owned automatic retry admitted by Review Team settings; model-issued retry decisions should omit it or set it to false. Example retry_coverage: {{ "source_packet_id": "reviewer-123", "source_status": "partial_timeout", "covered_files": ["src/main.rs"], "retry_scope_files": ["src/parser.rs"] }}.
 - Launch independent agents concurrently when that improves coverage or latency; send parallel Task calls in a single assistant message.
+- When launching multiple non-read-only subagents in parallel, assign non-overlapping scopes and outputs so their file edits, commands, or external side effects do not conflict.
 - When the agent is done, it will return a single message back to you.
 - Treat subagent outputs as useful evidence, but verify details yourself before making edits or final claims that depend on exact code.
 - Clearly tell the agent whether you expect it to write code or just to do research (search, file reads, web fetches, etc.), since it is not aware of the user's intent.
@@ -421,9 +422,7 @@ Usage notes:
     async fn get_enabled_agents(context: Option<&ToolUseContext>) -> Vec<AgentInfo> {
         let registry = get_agent_registry();
         let workspace_root = context.and_then(|ctx| ctx.workspace_root());
-        if let Some(workspace_root) = workspace_root {
-            registry.load_custom_subagents(workspace_root).await;
-        }
+        registry.load_custom_agents(workspace_root).await;
         registry
             .get_subagents_for_query(&SubagentQueryContext {
                 parent_agent_type: context.and_then(|ctx| ctx.agent_type.as_deref()),
@@ -1602,6 +1601,11 @@ mod tests {
         get_agent_registry().register_agent(
             Arc::new(PromptOrderTestAgent { id: id.to_string() }),
             AgentCategory::SubAgent,
+            match source {
+                SubAgentSource::Builtin => crate::agentic::agents::AgentSource::Builtin,
+                SubAgentSource::Project => crate::agentic::agents::AgentSource::Project,
+                SubAgentSource::User => crate::agentic::agents::AgentSource::User,
+            },
             Some(source),
             custom_config,
         );
@@ -1916,20 +1920,20 @@ mod tests {
 
         let builtin_a = "AAAPromptOrderBuiltin";
         let builtin_z = "ZZZPromptOrderBuiltin";
-        let user_a = "AAAPromptOrderUser";
-        let user_z = "ZZZPromptOrderUser";
+        let project_a = "AAAPromptOrderProject";
+        let project_z = "ZZZPromptOrderProject";
         register_prompt_order_test_subagent(builtin_z, SubAgentSource::Builtin, None);
         register_prompt_order_test_subagent(builtin_a, SubAgentSource::Builtin, None);
         register_prompt_order_test_subagent(
-            user_z,
-            SubAgentSource::User,
+            project_z,
+            SubAgentSource::Project,
             Some(CustomSubagentConfig {
                 model: "fast".to_string(),
             }),
         );
         register_prompt_order_test_subagent(
-            user_a,
-            SubAgentSource::User,
+            project_a,
+            SubAgentSource::Project,
             Some(CustomSubagentConfig {
                 model: "fast".to_string(),
             }),
@@ -1941,20 +1945,20 @@ mod tests {
 
         let builtin_a_index = find_agent_block_index(&description, builtin_a);
         let builtin_z_index = find_agent_block_index(&description, builtin_z);
-        let user_a_index = find_agent_block_index(&description, user_a);
-        let user_z_index = find_agent_block_index(&description, user_z);
+        let project_a_index = find_agent_block_index(&description, project_a);
+        let project_z_index = find_agent_block_index(&description, project_z);
 
         assert!(
             builtin_a_index < builtin_z_index,
             "builtin subagents should be sorted alphabetically"
         );
         assert!(
-            builtin_z_index < user_a_index,
-            "builtin subagents should render before user subagents"
+            builtin_z_index < project_a_index,
+            "builtin subagents should render before project subagents"
         );
         assert!(
-            user_a_index < user_z_index,
-            "user subagents should be sorted alphabetically"
+            project_a_index < project_z_index,
+            "project subagents should be sorted alphabetically"
         );
     }
 

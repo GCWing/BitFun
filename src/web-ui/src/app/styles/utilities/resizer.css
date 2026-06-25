@@ -3,9 +3,9 @@
 .u-panel-resizer {
   width: 2px;
   background: linear-gradient(180deg,
-    rgba(255, 255, 255, 0.01) 0%,
+    color-mix(in srgb, var(--color-static-white) 1%, transparent) 0%,
     var(--color-overlay-white-02) 50%,
-    rgba(255, 255, 255, 0.01) 100%);
+    color-mix(in srgb, var(--color-static-white) 1%, transparent) 100%);
   cursor: col-resize;
   position: relative;
   z-index: var(--z-base);
@@ -24,11 +24,11 @@
   width: 3px;
   background: linear-gradient(180deg,
     var(--color-accent-100) 0%,
-    rgba(139, 92, 246, 0.12) 50%,
+    color-mix(in srgb, var(--color-purple-500) 12%, transparent) 50%,
     var(--color-accent-100) 100%);
   opacity: 0.4;
   box-shadow:
-    0 0 6px rgba(96, 165, 250, 0.05),
+    0 0 6px color-mix(in srgb, var(--color-accent-500) 5%, transparent),
     0 0 12px var(--color-purple-50),
     inset 0 0 3px var(--color-overlay-white-02);
   transform: scaleY(1.02);
@@ -37,12 +37,12 @@
 .u-panel-resizer.dragging {
   width: 4px;
   background: linear-gradient(180deg,
-    rgba(96, 165, 250, 0.3) 0%,
-    rgba(139, 92, 246, 0.5) 50%,
-    rgba(96, 165, 250, 0.3) 100%);
+    color-mix(in srgb, var(--color-accent-500) 30%, transparent) 0%,
+    color-mix(in srgb, var(--color-purple-500) 50%, transparent) 50%,
+    color-mix(in srgb, var(--color-accent-500) 30%, transparent) 100%);
   opacity: 0.8;
   box-shadow:
-    0 0 12px rgba(96, 165, 250, 0.2),
+    0 0 12px color-mix(in srgb, var(--color-accent-500) 20%, transparent),
     0 0 24px var(--color-purple-200),
     inset 0 0 6px var(--color-overlay-white-05);
   transform: scaleY(1.15);
@@ -68,7 +68,7 @@
 .u-panel-resizer.dragging .u-resizer-line {
   width: 1px;
   height: 30px;
-  background: rgba(255, 255, 255, 0.3);
+  background: color-mix(in srgb, var(--color-static-white) 30%, transparent);
   opacity: 0.6;
   transform: scaleY(1.1);
 }

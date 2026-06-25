@@ -7,6 +7,7 @@
 
 import type { FlowItem, FlowToolItem, ToolCardConfig } from '../types/flow-chat';
 import { isMcpToolName, parseMcpToolName } from '@/infrastructure/mcp/toolName';
+import { UI_EXCEPTION_ACCENTS } from '@/shared/theme/uiExceptionAccents';
 
 // Tool card config map - uses backend tool names
 export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
@@ -19,7 +20,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'summary',
     description: 'Read file contents',
     displayMode: 'compact',
-    primaryColor: '#3b82f6'
+    primaryColor: 'var(--color-accent-600)'
   },
   'Write': {
     toolName: 'Write',
@@ -29,7 +30,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'summary',
     description: 'Write or create a file',
     displayMode: 'standard',
-    primaryColor: '#22c55e'
+    primaryColor: 'var(--tool-card-write-color)'
   },
   'Edit': {
     toolName: 'Edit',
@@ -39,7 +40,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Edit file contents',
     displayMode: 'standard',
-    primaryColor: '#f59e0b'
+    primaryColor: 'var(--color-warning)'
   },
   'Delete': {
     toolName: 'Delete',
@@ -49,7 +50,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'summary',
     description: 'Delete a file',
     displayMode: 'detailed',
-    primaryColor: '#ef4444'
+    primaryColor: 'var(--color-error)'
   },
   'LS': {
     toolName: 'LS',
@@ -59,7 +60,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'summary',
     description: 'List directory contents',
     displayMode: 'compact',
-    primaryColor: '#6366f1'
+    primaryColor: 'var(--color-indigo-500)'
   },
 
   // Search tools
@@ -71,7 +72,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Search text in files',
     displayMode: 'compact',
-    primaryColor: '#8b5cf6'
+    primaryColor: 'var(--color-purple-500)'
   },
   'Glob': {
     toolName: 'Glob',
@@ -81,7 +82,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'summary',
     description: 'Search files by pattern',
     displayMode: 'compact',
-    primaryColor: '#06b6d4'
+    primaryColor: 'var(--tool-card-file-search-color)'
   },
 
   // Web tools
@@ -93,7 +94,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Search the web',
     displayMode: 'compact',
-    primaryColor: '#0ea5e9'
+    primaryColor: 'var(--tool-card-web-search-color)'
   },
   'WebFetch': {
     toolName: 'WebFetch',
@@ -103,7 +104,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Fetch webpage content',
     displayMode: 'standard',
-    primaryColor: '#0ea5e9'
+    primaryColor: 'var(--tool-card-web-search-color)'
   },
 
   // Advanced tools
@@ -115,7 +116,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Run a specialized AI task',
     displayMode: 'detailed',
-    primaryColor: '#7c3aed'
+    primaryColor: 'var(--color-purple-600)'
   },
   'TodoWrite': {
     toolName: 'TodoWrite',
@@ -125,7 +126,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'summary',
     description: 'Manage task lists',
     displayMode: 'standard',
-    primaryColor: '#0d9488'
+    primaryColor: UI_EXCEPTION_ACCENTS.todo
   },
   'submit_code_review': {
     toolName: 'submit_code_review',
@@ -135,7 +136,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Submit code review results',
     displayMode: 'compact',
-    primaryColor: '#8b5cf6'
+    primaryColor: 'var(--color-purple-500)'
   },
   'ContextCompression': {
     toolName: 'ContextCompression',
@@ -145,7 +146,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Compress conversation context to reduce tokens',
     displayMode: 'compact',
-    primaryColor: '#a855f7'
+    primaryColor: UI_EXCEPTION_ACCENTS.contextCompression
   },
   'GetToolSpec': {
     toolName: 'GetToolSpec',
@@ -155,7 +156,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Read usage instructions and schema for a collapsed tool',
     displayMode: 'compact',
-    primaryColor: '#14b8a6'
+    primaryColor: UI_EXCEPTION_ACCENTS.tealAction
   },
 
   // Skill tool
@@ -167,7 +168,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Load and run skills',
     displayMode: 'compact',
-    primaryColor: '#8b5cf6'
+    primaryColor: 'var(--color-purple-500)'
   },
 
   // AskUserQuestion tool
@@ -179,7 +180,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Ask the user a question and wait for a reply',
     displayMode: 'detailed',
-    primaryColor: '#8b5cf6'
+    primaryColor: 'var(--color-purple-500)'
   },
 
   'ReviewSessionSummary': {
@@ -190,7 +191,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'hidden',
     description: 'Review session summary marker',
     displayMode: 'detailed',
-    primaryColor: '#0ea5e9'
+    primaryColor: 'var(--tool-card-web-search-color)'
   },
 
   // Git version control tool
@@ -202,7 +203,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Run Git commands',
     displayMode: 'compact',
-    primaryColor: '#f97316' // Orange, Git brand color
+    primaryColor: 'var(--tool-card-git-color)' // Orange, Git brand color
   },
 
   // GetFileDiff tool
@@ -214,7 +215,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Get file diffs (Baseline/Git/Full)',
     displayMode: 'compact',
-    primaryColor: '#8b5cf6' // Purple
+    primaryColor: 'var(--color-purple-500)'
   },
 
   // CreatePlan tool
@@ -226,7 +227,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Create and manage project plans',
     displayMode: 'detailed',
-    primaryColor: '#f59e0b' // Orange
+    primaryColor: 'var(--color-warning)'
   },
 
   // TerminalControl tool
@@ -238,7 +239,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'summary',
     description: 'Kill or interrupt a terminal session',
     displayMode: 'compact',
-    primaryColor: '#ef4444'
+    primaryColor: 'var(--color-error)'
   },
 
   'SessionControl': {
@@ -249,7 +250,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'summary',
     description: 'Create, delete, or list sessions',
     displayMode: 'compact',
-    primaryColor: '#3b82f6'
+    primaryColor: 'var(--color-accent-600)'
   },
 
   'SessionMessage': {
@@ -260,7 +261,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'summary',
     description: 'Send a message to another session',
     displayMode: 'compact',
-    primaryColor: '#8b5cf6'
+    primaryColor: 'var(--color-purple-500)'
   },
 
   // Bash terminal tool
@@ -272,7 +273,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Run commands in the terminal',
     displayMode: 'standard',
-    primaryColor: '#10b981' // Teal, classic terminal color
+    primaryColor: 'var(--tool-card-terminal-color)' // Teal, classic terminal color
   },
 
   'ExecCommand': {
@@ -283,7 +284,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Run a command in a fresh process',
     displayMode: 'standard',
-    primaryColor: '#10b981'
+    primaryColor: 'var(--tool-card-terminal-color)'
   },
 
   'WriteStdin': {
@@ -294,7 +295,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Write to or poll a running command process',
     displayMode: 'standard',
-    primaryColor: '#10b981'
+    primaryColor: 'var(--tool-card-terminal-color)'
   },
 
   'ExecControl': {
@@ -305,7 +306,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Interrupt or kill a running command process',
     displayMode: 'standard',
-    primaryColor: '#ef4444'
+    primaryColor: 'var(--color-error)'
   },
 
   // MiniApp tool
@@ -317,7 +318,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Create Mini App skeleton for editing',
     displayMode: 'standard',
-    primaryColor: '#7c8cef'
+    primaryColor: UI_EXCEPTION_ACCENTS.miniApp
   },
   'GenerativeUI': {
     toolName: 'GenerativeUI',
@@ -327,7 +328,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: 'Render interactive widget previews inline in FlowChat',
     displayMode: 'detailed',
-    primaryColor: '#38bdf8'
+    primaryColor: UI_EXCEPTION_ACCENTS.generativeUi
   },
 };
 
@@ -348,7 +349,7 @@ export function getToolCardConfig(toolName: string): ToolCardConfig {
       resultDisplayType: 'detailed',
       description: 'MCP',
       displayMode: 'compact',
-      primaryColor: '#8b5cf6'
+      primaryColor: 'var(--color-purple-500)'
     };
   }
 
@@ -361,7 +362,7 @@ export function getToolCardConfig(toolName: string): ToolCardConfig {
     resultDisplayType: 'summary',
     description: `Run ${toolName} tool`,
     displayMode: 'standard',
-    primaryColor: '#6b7280'
+    primaryColor: 'var(--color-text-muted)'
   };
 }
 

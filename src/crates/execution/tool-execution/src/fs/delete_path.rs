@@ -23,6 +23,11 @@ pub struct DeleteLocalPathOutcome {
     pub recursive: bool,
 }
 
+pub fn delete_path_success_message(path: &str, is_directory: bool) -> String {
+    let type_name = if is_directory { "directory" } else { "file" };
+    format!("Successfully deleted {} at: {}", type_name, path)
+}
+
 pub fn inspect_local_delete_target(path: &Path) -> Result<LocalDeleteTarget, String> {
     if !path.exists() {
         return Ok(LocalDeleteTarget {
@@ -82,5 +87,22 @@ pub fn build_remote_delete_command(resolved_path: &str, recursive: bool) -> Stri
         format!("rm -rf {}", shell_single_quote(resolved_path))
     } else {
         format!("rm -f {}", shell_single_quote(resolved_path))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::delete_path_success_message;
+
+    #[test]
+    fn delete_path_success_message_reports_target_type() {
+        assert_eq!(
+            delete_path_success_message("old.txt", false),
+            "Successfully deleted file at: old.txt"
+        );
+        assert_eq!(
+            delete_path_success_message("tmp", true),
+            "Successfully deleted directory at: tmp"
+        );
     }
 }

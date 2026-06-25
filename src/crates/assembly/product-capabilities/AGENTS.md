@@ -3,8 +3,9 @@
 Scope: this guide applies to `src/crates/assembly/product-capabilities`.
 
 `bitfun-product-capabilities` owns product capability pack assembly facts: which
-runtime services, tool provider group ids, harness provider descriptors, and
-profile-scoped harness registries a product capability selects. It does not own
+delivery profiles, runtime services, feature groups, tool provider group ids,
+harness provider descriptors, profile-scoped harness registries, and runtime
+service availability wrappers a product capability selects. It does not own
 concrete runtime execution.
 
 ## Guardrails
@@ -12,8 +13,12 @@ concrete runtime execution.
 - Do not depend on `bitfun-core`, app crates, Tauri, product-domain
   implementations, concrete service crates, AI adapters, transport adapters,
   terminal, tool-runtime, or concrete tool implementations.
-- Keep this crate limited to stable capability ids, service capability facts,
-  tool provider group id selection, and harness provider descriptor selection.
+- Keep this crate limited to stable delivery profile facts, capability ids,
+  feature group facts, service capability facts, runtime service availability
+  checks, tool provider group id selection, and harness provider descriptor
+  selection.
+- `ProductAssembler` may validate explicit profile input and return immutable
+  runtime parts; it must not create concrete services or product state.
 - Do not encode product UI behavior, permission decisions, session lifecycle,
   filesystem/process IO, Git/AI provider acquisition, or feature defaults here.
 - Preserve default product tool provider order and legacy harness provider ids

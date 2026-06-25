@@ -7,10 +7,12 @@
 pub use bitfun_product_capabilities::{
     default_product_assembly_plan, default_product_capability_assembly,
     default_product_capability_registry, default_product_harness_registry,
-    product_assembly_plan_for_profile, DeliveryProfile, ProductAssemblyPlan,
+    product_assembly_plan_for_profile, product_delivery_profile_entries, DeliveryProfile,
+    ProductAssembler, ProductAssemblyError, ProductAssemblyInput, ProductAssemblyPlan,
     ProductCapabilityAssembly, ProductCapabilityId, ProductCapabilityPack,
-    ProductCapabilityRegistry, ProductCapabilitySet, ProductServiceCapabilityAvailability,
+    ProductCapabilityRegistry, ProductCapabilitySet, ProductCoreDependencyMode,
+    ProductDeliveryProfileEntry, ProductRuntimeParts, ProductServiceCapabilityAvailability,
     ProductServiceCapabilityRequirement, ProductServiceCapabilityStatus,
 };
 
-pub use crate::product_runtime::CoreRuntimeServicesProvider;
+pub use crate::product_runtime::{CoreProductRuntimeAssembly, CoreRuntimeServicesProvider};

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Plus, Egg, Settings, Star, Wrench, BarChart2 } from 'lucide-react';
+import { Plus, Egg, Settings, Star, Wrench } from 'lucide-react';
 import {
   GalleryLayout,
   GalleryPageHeader,
@@ -14,11 +14,11 @@ import { flowChatManager } from '@/flow_chat/services/FlowChatManager';
 import type { WorkspaceInfo } from '@/shared/types';
 import { configAPI } from '@/infrastructure/api/service-api/ConfigAPI';
 import { configManager } from '@/infrastructure/config/services/ConfigManager';
-import type { AIModelConfig } from '@/infrastructure/config/types';
+import type { AIModelConfig, DefaultModelsConfig } from '@/infrastructure/config/types';
+import { getModelDisplayName } from '@/infrastructure/config/services/modelConfigs';
 import { createLogger } from '@/shared/utils/logger';
 import AssistantCard from './AssistantCard';
 import { useNurseryStore } from '../nurseryStore';
-import { estimateTokens, formatTokenCount } from './useTokenEstimate';
 
 interface DeleteConfirmState {
   workspaceId: string;
@@ -26,10 +26,10 @@ interface DeleteConfirmState {
 }
 
 const log = createLogger('NurseryGallery');
+const ASSISTANT_MODE_ID = 'Claw';
 
 interface TemplateStats {
-  primaryModelName: string;
-  fastModelName: string;
+  defaultModelName: string;
   enabledToolCount: number;
 }
 
@@ -38,7 +38,7 @@ const NurseryGallery: React.FC = () => {
   const { assistantWorkspacesList, createAssistantWorkspace, setActiveWorkspace, deleteAssistantWorkspace } = useWorkspaceContext();
   const openScene = useSceneStore(s => s.openScene);
   const { switchLeftPanelTab } = useApp();
-  const { openTemplate, openAssistant } = useNurseryStore();
+  const { openDefaults, openAssistant } = useNurseryStore();
   const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirmState | null>(null);
@@ -47,24 +47,43 @@ const NurseryGallery: React.FC = () => {
   useEffect(() => {
     (async () => {
       try {
-        const [allModels, funcModels, modeConf] = await Promise.all([
+        const [allModels, defaultModels, agentModels, modeConf] = await Promise.all([
           configManager.getConfig<AIModelConfig[]>('ai.models').catch(() => [] as AIModelConfig[]),
-          configManager.getConfig<Record<string, string>>('ai.func_agent_models').catch(() => ({} as Record<string, string>)),
-          configAPI.getAgentProfileConfig('agentic').catch(() => null),
+          configManager.getConfig<DefaultModelsConfig>('ai.default_models').catch(() => ({} as DefaultModelsConfig)),
+          configManager.getConfig<Record<string, string>>('ai.agent_models').catch(() => ({} as Record<string, string>)),
+          configAPI.getAgentProfileConfig(ASSISTANT_MODE_ID).catch(() => null),
         ]);
         const models = allModels ?? [];
-        const fm = funcModels ?? {};
+        const defaults = defaultModels ?? {};
+        const configuredAgentModels = agentModels ?? {};
 
-        const resolveModelName = (slotId: string, fallback: string): string => {
-          const id = fm[slotId] ?? '';
-          if (!id || id === slotId) return fallback;
-          const found = models.find((m) => m.id === id && m.enabled);
-          return found?.name ?? fallback;
+        const findEnabledModelByRef = (modelRef?: string | null): AIModelConfig | null => {
+          const trimmed = modelRef?.trim();
+          if (!trimmed) return null;
+          return models.find((model) => model.enabled && model.id === trimmed) ?? null;
+        };
+
+        const resolveClawDefaultModelName = (): string => {
+          const configuredModel = configuredAgentModels[ASSISTANT_MODE_ID]?.trim() || 'auto';
+          if (configuredModel === 'auto') {
+            return t('nursery.template.stats.autoDefault');
+          }
+          if (configuredModel === 'primary') {
+            return findEnabledModelByRef(defaults.primary)
+              ? getModelDisplayName(findEnabledModelByRef(defaults.primary)!)
+              : t('nursery.template.stats.primaryDefault');
+          }
+          if (configuredModel === 'fast') {
+            const fastModel = findEnabledModelByRef(defaults.fast) ?? findEnabledModelByRef(defaults.primary);
+            return fastModel ? getModelDisplayName(fastModel) : t('nursery.template.stats.fastDefault');
+          }
+
+          const explicitModel = findEnabledModelByRef(configuredModel);
+          return explicitModel ? getModelDisplayName(explicitModel) : configuredModel;
         };
 
         setTemplateStats({
-          primaryModelName: resolveModelName('primary', t('nursery.template.stats.primaryDefault')),
-          fastModelName: resolveModelName('fast', t('nursery.template.stats.fastDefault')),
+          defaultModelName: resolveClawDefaultModelName(),
           enabledToolCount: modeConf?.enabled_tools?.length ?? 0,
         });
       } catch (e) {
@@ -72,11 +91,6 @@ const NurseryGallery: React.FC = () => {
       }
     })();
   }, [t]);
-
-  const tokenBreakdown = useMemo(
-    () => (templateStats ? estimateTokens('', templateStats.enabledToolCount, 0, 0) : null),
-    [templateStats],
-  );
 
   const handleCreateAssistant = useCallback(async () => {
     if (creating) return;
@@ -177,7 +191,7 @@ const NurseryGallery: React.FC = () => {
         <button
           type="button"
           className="nursery-template-card"
-          onClick={openTemplate}
+          onClick={openDefaults}
           aria-label={t('nursery.template.title')}
         >
           <div className="nursery-template-card__content">
@@ -185,25 +199,15 @@ const NurseryGallery: React.FC = () => {
             <p className="nursery-template-card__subtitle">{t('nursery.template.subtitle')}</p>
 
             {/* Key stats */}
-            {templateStats && tokenBreakdown && (
+            {templateStats && (
               <div className="nursery-template-card__stats">
                 <span className="nursery-template-card__stat">
                   <Star size={10} strokeWidth={2} />
-                  {templateStats.primaryModelName}
+                  {templateStats.defaultModelName}
                 </span>
-                {templateStats.fastModelName !== templateStats.primaryModelName && (
-                  <span className="nursery-template-card__stat nursery-template-card__stat--accent">
-                    <Star size={10} strokeWidth={1.5} style={{ opacity: 0.7 }} />
-                    {templateStats.fastModelName}
-                  </span>
-                )}
                 <span className="nursery-template-card__stat nursery-template-card__stat--muted">
                   <Wrench size={10} strokeWidth={2} />
                   {t('nursery.template.stats.tools', { count: templateStats.enabledToolCount })}
-                </span>
-                <span className="nursery-template-card__stat nursery-template-card__stat--token">
-                  <BarChart2 size={10} strokeWidth={2} />
-                  ~{formatTokenCount(tokenBreakdown.total)} tok · {tokenBreakdown.percentage}
                 </span>
               </div>
             )}
@@ -243,7 +247,7 @@ const NurseryGallery: React.FC = () => {
                   onClick={() => openAssistant(workspace.id)}
                   onNewSession={() => { void handleNewAssistantSession(workspace); }}
                   onDelete={isPrimary ? undefined : () => handleDeleteRequest(workspace)}
-                  style={{ '--card-index': i } as React.CSSProperties}
+                  style={{ '--surface-stagger-index': i } as React.CSSProperties}
                 />
               );
             })}

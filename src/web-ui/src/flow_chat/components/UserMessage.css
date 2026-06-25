@@ -26,9 +26,9 @@
   overflow: hidden;
 
   /* Use CSS variables for tag colors. */
-  color: var(--tag-color);
-  background: var(--tag-color);
-  border-color: var(--tag-color);
+  color: var(--inline-context-tag-color);
+  background: var(--inline-context-tag-color);
+  border-color: var(--inline-context-tag-color);
 
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);

@@ -61,9 +61,9 @@ async fn warm_workspace_background_services(
 
     if is_workspace_active(&workspace_path, &target_path).await {
         let subagents_started_at = Instant::now();
-        agent_registry.load_custom_subagents(&target_path).await;
+        agent_registry.load_custom_agents(Some(&target_path)).await;
         debug!(
-            "Workspace custom subagent warmup completed: path={}, elapsed_ms={}",
+            "Workspace custom agent warmup completed: path={}, elapsed_ms={}",
             target_path.display(),
             subagents_started_at.elapsed().as_millis()
         );

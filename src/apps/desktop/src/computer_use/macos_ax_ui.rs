@@ -318,14 +318,6 @@ impl CandidateMatch {
             score += 20;
         }
 
-        // WeChat (and similar): global search field is often the first AXTextField match but is the wrong target
-        // when the user wants the **chat composer**. Deprioritize known search chrome.
-        if let Some(ref id) = self.identifier {
-            if id.contains("_SC_SEARCH_FIELD") {
-                score -= 1500;
-            }
-        }
-
         // Among text inputs, the composer is usually **lower** on screen than the top search bar.
         let rl = self.role.to_lowercase();
         if rl.contains("textfield") || rl.contains("textarea") {
@@ -719,7 +711,7 @@ pub fn locate_ui_element_center(
 
     if candidates.is_empty() {
         return Err(BitFunError::tool(
-            "No accessibility element matched in the frontmost app. Tips: `role_substring` **`TextArea`** also matches **`AXTextField`** (WeChat compose is often TextField). Use `filter_combine: \"any\"` for OR matching; match UI language; ensure the target app is focused. For chat apps, if the conversation is already open, **`type_text`** may work without clicking. Or use `move_to_text` / `screenshot`."
+            "No accessibility element matched in the frontmost app. Tips: `role_substring` **`TextArea`** also matches **`AXTextField`**; use `text_contains` for any visible label; use `filter_combine: \"any\"` for OR matching; match the UI language; ensure the target app is focused. If the AX tree is sparse, fall back to `move_to_text` (OCR) or `describe_screen` / `screenshot` to observe, or `key_chord` keyboard navigation."
                 .to_string(),
         ));
     }
@@ -1223,4 +1215,83 @@ unsafe fn first_ax_window_from_ax_windows(app: AXUIElementRef) -> Option<AXUIEle
         ax_release(retained as CFTypeRef);
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io::Read;
+
+    fn module_source() -> String {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("src/computer_use/macos_ax_ui.rs");
+        let mut src = String::new();
+        std::fs::File::open(&path)
+            .unwrap()
+            .read_to_string(&mut src)
+            .unwrap();
+        src
+    }
+
+    /// Extract the body of `fn rank_score` (the AX candidate scoring logic),
+    /// by brace-matching the function body.
+    fn rank_score_body(src: &str) -> &str {
+        let sig = src.find("fn rank_score").expect("rank_score present");
+        let open = src[sig..].find('{').expect("rank_score body open brace") + sig;
+        let mut depth: i32 = 0;
+        let mut end = open;
+        for (i, b) in src[open..].char_indices() {
+            match b {
+                '{' => depth += 1,
+                '}' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        end = open + i;
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+        &src[open + 1..end]
+    }
+
+    /// Guard against regressing special-case, app-specific adaptations in the AX
+    /// ranking logic. A prior WeChat-private hack inspected the `identifier`
+    /// field for a vendor prefix and applied a hardcoded score penalty. It must
+    /// not come back: AX ranking stays generic (role, visibility, size, depth,
+    /// screen position) and app-specific disambiguation is left to the model via
+    /// `describe_screen` / `get_app_state`.
+    #[test]
+    fn ax_ranking_does_not_branch_on_identifier() {
+        let src = module_source();
+        let body = rank_score_body(&src);
+        assert!(
+            !body.contains("identifier"),
+            "rank_score must not branch on the AX `identifier` field — that invites app-specific hacks. Got: {}",
+            body
+        );
+    }
+
+    /// The "no AX element matched" error must stay model-neutral and app-agnostic:
+    /// no WeChat / chat-app specific guidance baked into a generic locate failure.
+    #[test]
+    fn no_match_error_is_app_agnostic() {
+        let src = module_source();
+        // The error string lives outside the test module, so scoping to the
+        // pre-`#[cfg(test)]` slice keeps the assertion self-contained.
+        let scope_end = src.find("#[cfg(test)]").unwrap_or(src.len());
+        let scope = &src[..scope_end];
+        let err_start = scope
+            .find("No accessibility element matched in the frontmost app")
+            .expect("no-match error string present");
+        let err_end = scope[err_start..]
+            .find('\n')
+            .unwrap_or(scope.len() - err_start);
+        let err = &scope[err_start..err_start + err_end];
+        assert!(
+            !err.contains("WeChat") && !err.contains("chat app"),
+            "no-match error must not name a specific app/category: {}",
+            err
+        );
+    }
 }

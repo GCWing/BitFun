@@ -53,6 +53,17 @@ In **Remote Connect → Self-Hosted → Server URL**, use one of:
 
 `/relay` is only needed when your reverse proxy is configured with that path prefix.
 
+### Network Binding
+
+By default, the relay process listens on `0.0.0.0:9700` (all interfaces) and Docker Compose publishes the container port on the host's `0.0.0.0:9700`.
+
+If you need to restrict the service to localhost only, set the environment variable before running `start.sh`/`restart.sh`/`deploy.sh`:
+
+```bash
+export RELAY_HOST_BIND_IP=127.0.0.1
+bash deploy.sh
+```
+
 ### Manual Run
 
 ```bash
@@ -79,8 +90,8 @@ RELAY_PORT=9700 ./target/release/bitfun-relay-server
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `RELAY_PORT` | `9700` | Server listen port |
-| `RELAY_STATIC_DIR` | `./static` | Path to mobile web static files (fallback SPA) |
-| `RELAY_ROOM_WEB_DIR` | `/tmp/bitfun-room-web` | Directory for per-room uploaded mobile-web files |
+| `RELAY_STATIC_DIR` | _(none)_ | Path to mobile web static files fallback SPA. When unset, no fallback static files are served. Docker Compose sets this to `/app/static`. |
+| `RELAY_ROOM_WEB_DIR` | `/tmp/bitfun-room-web` | Directory for per-room uploaded mobile-web files. Docker Compose uses a named volume mounted at `/app/room-web`. |
 | `RELAY_ROOM_TTL` | `3600` | Room TTL in seconds (0 = no expiry) |
 
 ## API Endpoints

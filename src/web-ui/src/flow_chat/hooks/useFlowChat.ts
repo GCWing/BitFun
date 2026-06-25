@@ -1,5 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { aiApi, agentAPI, snapshotAPI } from '@/infrastructure/api';
+import { aiApi } from '@/infrastructure/api/service-api/AIApi';
+import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
+import { snapshotAPI } from '@/infrastructure/api/service-api/SnapshotAPI';
 import { stateMachineManager } from '../state-machine';
 import { 
   FlowChatState, 

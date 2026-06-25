@@ -74,9 +74,9 @@
     overflow: hidden;
     border: 1px solid var(--border-subtle);
     border-radius: $size-radius-lg;
-    background: var(--color-bg-elevated, var(--color-bg-primary));
+    background: var(--color-bg-elevated);
     box-shadow:
-      0 24px 70px rgba(0, 0, 0, 0.34),
+      0 24px 70px rgba(var(--color-static-black-rgb), 0.34),
       0 0 0 1px color-mix(in srgb, var(--color-static-white) 4%, transparent);
   }
 
@@ -175,7 +175,7 @@
     gap: $size-gap-2;
     max-width: min(520px, calc(100% - #{$size-gap-6}));
     padding: $size-gap-2 $size-gap-3;
-    border: 1px solid var(--color-success-border, var(--border-subtle));
+    border: 1px solid var(--color-success-border);
     border-radius: $size-radius-base;
     background: var(--color-bg-surface);
     color: var(--color-text-primary);
@@ -202,10 +202,10 @@
   overflow: hidden;
   border: 1px solid var(--border-subtle);
   border-radius: $size-radius-lg;
-  background: var(--color-bg-elevated, var(--color-bg-primary));
+  background: var(--color-bg-elevated);
   color: var(--color-text-primary);
   box-shadow:
-    0 24px 70px rgba(0, 0, 0, 0.36),
+    0 24px 70px rgba(var(--color-static-black-rgb), 0.36),
     0 0 0 1px color-mix(in srgb, var(--color-static-white) 4%, transparent);
   isolation: isolate;
 
@@ -248,7 +248,7 @@
     gap: $size-gap-2;
     padding: $size-gap-3;
     border-bottom: 1px solid var(--border-subtle);
-    background: var(--color-warning-bg, var(--color-bg-subtle));
+    background: var(--color-warning-bg);
 
     svg {
       flex: 0 0 auto;
@@ -308,7 +308,7 @@
       line-height: $line-height-relaxed;
 
       &:focus {
-        outline: 2px solid var(--color-primary-border, var(--color-primary));
+        outline: 2px solid var(--color-primary);
         outline-offset: 1px;
       }
     }
@@ -335,15 +335,15 @@
   }
 
   &__error {
-    border: 1px solid var(--color-danger-border, var(--border-subtle));
-    background: var(--color-danger-bg, var(--color-bg-subtle));
+    border: 1px solid var(--color-danger-border);
+    background: var(--color-danger-bg);
     color: var(--color-danger);
   }
 
   &__status {
     gap: $size-gap-2;
-    border: 1px solid var(--color-success-border, var(--border-subtle));
-    background: var(--color-success-bg, var(--color-bg-subtle));
+    border: 1px solid var(--color-success-border);
+    background: var(--color-success-bg);
     color: var(--color-text-secondary);
 
     svg {
@@ -359,12 +359,12 @@
     overflow: hidden;
     border: 1px solid var(--border-subtle);
     border-radius: $size-radius-base;
-    background: var(--color-bg-flowchat, var(--color-bg-primary));
+    background: var(--color-bg-flowchat);
 
     .btw-session-panel {
       min-height: 0;
       width: 100%;
-      background: var(--color-bg-flowchat, var(--color-bg-primary));
+      background: var(--color-bg-flowchat);
     }
 
     .btw-session-panel__header-right {

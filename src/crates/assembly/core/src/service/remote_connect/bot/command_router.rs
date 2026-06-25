@@ -15,228 +15,23 @@
 //!     `execute_forwarded_turn`, `apply_interactive_request`.
 
 use log::{error, info};
-use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::future::Future;
-use std::pin::Pin;
-use std::sync::Arc;
 
 pub use super::locale::{current_bot_language, BotLanguage};
 use super::locale::{fmt_count, strings_for, BotStrings};
-use super::menu::{MenuItem, MenuItemStyle, MenuView};
+use super::menu::{MenuItem, MenuView};
+pub use bitfun_services_integrations::remote_connect::bot::{
+    parse_command, BotAction, BotActionStyle, BotChatState, BotCommand, BotDisplayMode,
+    BotInteractionHandler, BotInteractiveRequest, BotMessageSender, BotQuestion, BotQuestionOption,
+    PendingAction,
+};
 
 // ── Constants ──────────────────────────────────────────────────────
 
-/// How long a pending interactive prompt stays valid before auto-clearing.
-const PENDING_TTL_SECS: i64 = 5 * 60;
 /// How many invalid replies are tolerated before pending state is auto-cleared.
 const PENDING_INVALID_LIMIT: u8 = 3;
 
 // ── Per-chat state ─────────────────────────────────────────────────
-
-/// Display mode for IM bot sessions.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
-pub enum BotDisplayMode {
-    /// Expert mode: can create Code / Cowork sessions on real workspaces.
-    #[serde(rename = "pro")]
-    Pro,
-    /// Default assistant mode: Claw sessions on the assistant workspace.
-    #[serde(rename = "assistant")]
-    #[default]
-    Assistant,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BotChatState {
-    pub chat_id: String,
-    pub paired: bool,
-    pub current_workspace: Option<String>,
-    pub current_assistant: Option<String>,
-    /// Human-readable name of the active assistant (e.g. "默认助理" / "Bob").
-    /// Populated alongside `current_assistant` from `WorkspaceInfo.name` so
-    /// the assistant-mode menu body can show a meaningful label instead of
-    /// the workspace directory name (which is often a generic
-    /// "workspace" / "workspace-<uuid>" folder).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub current_assistant_name: Option<String>,
-    pub current_session_id: Option<String>,
-    #[serde(default)]
-    pub display_mode: BotDisplayMode,
-
-    /// Active interactive prompt awaiting a user reply.
-    /// Not persisted — cleared on bot restart.
-    #[serde(skip)]
-    pub pending_action: Option<PendingAction>,
-    /// Unix timestamp (seconds) when the current `pending_action` becomes
-    /// invalid.  Refreshed whenever a new pending action is set.
-    #[serde(skip)]
-    pub pending_expires_at: i64,
-    /// How many invalid replies the user has sent against the current
-    /// pending action.  Resets on every successful transition.
-    #[serde(skip)]
-    pub pending_invalid_count: u8,
-
-    /// Commands corresponding to the items in the most recent menu, used so
-    /// numeric replies (`1` ~ `last_menu_commands.len()`) work without
-    /// platform-native buttons.  Not persisted.
-    #[serde(skip, default)]
-    pub last_menu_commands: Vec<String>,
-}
-
-impl BotChatState {
-    pub fn new(chat_id: String) -> Self {
-        Self {
-            chat_id,
-            paired: false,
-            current_workspace: None,
-            current_assistant: None,
-            current_assistant_name: None,
-            current_session_id: None,
-            display_mode: BotDisplayMode::Assistant,
-            pending_action: None,
-            pending_expires_at: 0,
-            pending_invalid_count: 0,
-            last_menu_commands: Vec::new(),
-        }
-    }
-
-    /// Returns the workspace root path that should be used to resolve relative
-    /// file references emitted by the agent (e.g. markdown links in replies).
-    ///
-    /// In Pro mode this is the explicitly switched workspace
-    /// (`current_workspace`); in Assistant mode the agent runs against the
-    /// per-user assistant workspace held in `current_assistant`. IM platform
-    /// adapters MUST consult both — looking only at `current_workspace` causes
-    /// auto-push to silently drop relative-path attachments produced by
-    /// assistant sessions (the most common case for end users).
-    pub fn active_workspace_path(&self) -> Option<String> {
-        self.current_workspace
-            .clone()
-            .or_else(|| self.current_assistant.clone())
-    }
-
-    fn set_pending(&mut self, action: PendingAction) {
-        self.pending_action = Some(action);
-        self.pending_expires_at = now_secs() + PENDING_TTL_SECS;
-        self.pending_invalid_count = 0;
-    }
-
-    fn clear_pending(&mut self) {
-        self.pending_action = None;
-        self.pending_expires_at = 0;
-        self.pending_invalid_count = 0;
-    }
-
-    fn pending_expired(&self) -> bool {
-        self.pending_action.is_some() && now_secs() > self.pending_expires_at
-    }
-}
-
-fn now_secs() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs() as i64)
-        .unwrap_or(0)
-}
-
-// ── Pending action ─────────────────────────────────────────────────
-
-#[derive(Debug, Clone)]
-pub enum PendingAction {
-    SelectWorkspace {
-        options: Vec<(String, String)>,
-    },
-    SelectAssistant {
-        options: Vec<(String, String)>,
-    },
-    SelectSession {
-        options: Vec<(String, String)>,
-        page: usize,
-        has_more: bool,
-    },
-    AskUserQuestion {
-        tool_id: String,
-        questions: Vec<BotQuestion>,
-        current_index: usize,
-        answers: Vec<Value>,
-        awaiting_custom_text: bool,
-        pending_answer: Option<Value>,
-    },
-    /// Confirm switching to the other display mode and then run `target_cmd`.
-    ConfirmModeSwitch {
-        target_mode: BotDisplayMode,
-        target_cmd: String,
-    },
-}
-
-// ── Question DTOs ──────────────────────────────────────────────────
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BotQuestionOption {
-    pub label: String,
-    #[serde(default)]
-    pub description: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BotQuestion {
-    #[serde(default)]
-    pub question: String,
-    #[serde(default)]
-    pub header: String,
-    #[serde(default)]
-    pub options: Vec<BotQuestionOption>,
-    #[serde(rename = "multiSelect", default)]
-    pub multi_select: bool,
-}
-
-// ── Action / handle result (compat surface) ────────────────────────
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum BotActionStyle {
-    Primary,
-    Default,
-}
-
-#[derive(Debug, Clone)]
-pub struct BotAction {
-    pub label: String,
-    pub command: String,
-    pub style: BotActionStyle,
-}
-
-impl BotAction {
-    pub fn primary(label: impl Into<String>, command: impl Into<String>) -> Self {
-        Self {
-            label: label.into(),
-            command: command.into(),
-            style: BotActionStyle::Primary,
-        }
-    }
-    pub fn secondary(label: impl Into<String>, command: impl Into<String>) -> Self {
-        Self {
-            label: label.into(),
-            command: command.into(),
-            style: BotActionStyle::Default,
-        }
-    }
-}
-
-impl From<MenuItem> for BotAction {
-    fn from(item: MenuItem) -> Self {
-        let style = match item.style {
-            MenuItemStyle::Primary => BotActionStyle::Primary,
-            // Danger and Default both map to non-primary on platforms that
-            // don't have a native danger style.
-            _ => BotActionStyle::Default,
-        };
-        BotAction {
-            label: item.label,
-            command: item.command,
-            style,
-        }
-    }
-}
 
 pub struct HandleResult {
     pub reply: String,
@@ -247,20 +42,6 @@ pub struct HandleResult {
     /// can read this directly instead of `actions`.
     pub menu: MenuView,
 }
-
-#[derive(Debug, Clone)]
-pub struct BotInteractiveRequest {
-    pub reply: String,
-    pub actions: Vec<BotAction>,
-    pub menu: MenuView,
-    pub pending_action: PendingAction,
-}
-
-pub type BotInteractionHandler =
-    Arc<dyn Fn(BotInteractiveRequest) -> Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync>;
-
-pub type BotMessageSender =
-    Arc<dyn Fn(String) -> Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync>;
 
 pub struct ForwardRequest {
     pub session_id: String,
@@ -276,141 +57,6 @@ pub struct ForwardedTurnResult {
 }
 
 // ── BotCommand ─────────────────────────────────────────────────────
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum BotCommand {
-    /// Show welcome (unpaired) or main menu (paired).  Triggered by
-    /// `/start`, `/menu`, `/m`, `菜单`, or `0` at the top level.
-    Menu,
-    /// Show settings sub-menu.
-    Settings,
-    /// Show help text.
-    Help,
-    /// Switch display mode.
-    SwitchMode(BotDisplayMode),
-    /// Toggle verbose execution-detail mode (persisted globally).
-    SetVerbose(bool),
-    /// Generic "switch" entry — picks workspace or assistant by mode.
-    SwitchContext,
-    /// Generic "new session" entry — picks the right session type by mode.
-    NewSession,
-    /// Specific session creators (kept as hidden aliases).
-    NewCodeSession,
-    NewCoworkSession,
-    NewClawSession,
-    /// Resume an existing session (workspace or assistant by mode).
-    ResumeSession,
-    /// Cancel currently running task.
-    CancelTask(Option<String>),
-    /// Pairing code submitted before pairing.
-    PairingCode(String),
-    /// Numeric reply to a menu / pending action.
-    NumberSelection(usize),
-    /// Free-form chat message forwarded to the AI session.
-    ChatMessage(String),
-}
-
-// ── Command parsing ────────────────────────────────────────────────
-
-fn normalize_im_command_text(text: &str) -> String {
-    text.trim()
-        .chars()
-        .map(|c| match c {
-            '\u{FF10}'..='\u{FF19}' => {
-                char::from_u32(c as u32 - 0xFF10 + u32::from(b'0')).unwrap_or(c)
-            }
-            c => c,
-        })
-        .collect()
-}
-
-fn strip_numeric_reply_suffix(s: &str) -> &str {
-    s.trim_end_matches(|c: char| {
-        matches!(
-            c,
-            '.' | '。' | '、' | ',' | '，' | ':' | '：' | ';' | '；' | ')' | '）' | ']' | '】'
-        )
-    })
-    .trim()
-}
-
-pub fn parse_command(text: &str) -> BotCommand {
-    let normalized = normalize_im_command_text(text);
-    let trimmed = normalized.trim();
-    if let Some(rest) = trimmed.strip_prefix("/cancel_task") {
-        let arg = rest.trim();
-        return if arg.is_empty() {
-            BotCommand::CancelTask(None)
-        } else {
-            BotCommand::CancelTask(Some(arg.to_string()))
-        };
-    }
-    if let Some(rest) = trimmed.strip_prefix("/cancel") {
-        let arg = rest.trim();
-        return if arg.is_empty() {
-            BotCommand::CancelTask(None)
-        } else {
-            BotCommand::CancelTask(Some(arg.to_string()))
-        };
-    }
-    let lower = trimmed.to_ascii_lowercase();
-    match lower.as_str() {
-        // Top-level navigation / settings.
-        "/start" | "/menu" | "/m" | "菜单" => return BotCommand::Menu,
-        "/settings" | "/s" | "设置" => return BotCommand::Settings,
-        "/help" | "/?" | "/h" | "帮助" | "？" => return BotCommand::Help,
-
-        // Mode switches (visible).
-        "/expert" | "/pro" | "专业模式" => {
-            return BotCommand::SwitchMode(BotDisplayMode::Pro);
-        }
-        "/assistant" | "助理模式" => {
-            return BotCommand::SwitchMode(BotDisplayMode::Assistant);
-        }
-
-        // Verbose toggles.
-        "/verbose" | "详细" => return BotCommand::SetVerbose(true),
-        "/concise" | "简洁" => return BotCommand::SetVerbose(false),
-
-        // Generic switch (picks workspace or assistant by mode).
-        "/switch" | "切换" => return BotCommand::SwitchContext,
-        // Hidden aliases.
-        "/switch_workspace" | "切换工作区" => return BotCommand::SwitchContext,
-        "/switch_assistant" | "切换助理" => return BotCommand::SwitchContext,
-
-        // Generic "new" picks the right session type by mode.
-        "/new" | "/n" | "新建" | "新建会话" | "新会话" => return BotCommand::NewSession,
-        // Hidden aliases / power users.
-        "/new_code_session" | "新建编码会话" => return BotCommand::NewCodeSession,
-        "/new_cowork_session" | "新建协作会话" => {
-            return BotCommand::NewCoworkSession;
-        }
-        "/new_claw_session" | "新建助理会话" => return BotCommand::NewClawSession,
-
-        // Resume.
-        "/resume" | "/r" | "/resume_session" | "恢复" | "恢复会话" => {
-            return BotCommand::ResumeSession;
-        }
-        _ => {}
-    }
-
-    if trimmed.len() == 6 && trimmed.chars().all(|c| c.is_ascii_digit()) {
-        return BotCommand::PairingCode(trimmed.to_string());
-    }
-
-    let num_token = strip_numeric_reply_suffix(trimmed);
-    if let Ok(n) = num_token.parse::<usize>() {
-        if n <= 99 {
-            // `0` is intentionally returned as `NumberSelection(0)` so context
-            // such as "next page" inside SelectSession can override the
-            // default "0 = back to menu" interpretation.  See `handle_number`.
-            return BotCommand::NumberSelection(n);
-        }
-    }
-    BotCommand::ChatMessage(trimmed.to_string())
-}
-
-// ── Public welcome / help text (compat) ───────────────────────────
 
 pub fn welcome_message(language: BotLanguage) -> &'static str {
     strings_for(language).welcome
@@ -2419,7 +2065,7 @@ mod state_tests {
         state.set_pending(PendingAction::SelectWorkspace { options: vec![] });
         assert!(state.pending_action.is_some());
         assert!(!state.pending_expired());
-        state.pending_expires_at = now_secs() - 1;
+        state.pending_expires_at = 0;
         assert!(state.pending_expired());
     }
 

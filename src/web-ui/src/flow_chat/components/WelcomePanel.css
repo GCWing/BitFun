@@ -9,7 +9,7 @@
   justify-content: center;
   width: 100%;
   height: 100%;
-  padding: var(--size-gap-8, 32px) var(--size-gap-6);
+  padding: var(--size-gap-8) var(--size-gap-6);
   box-sizing: border-box;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -233,7 +233,7 @@
   background: var(--color-bg-elevated);
   border: 1px solid var(--border-base);
   border-radius: calc(var(--flowchat-card-radius) + 2px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+  box-shadow: 0 8px 24px var(--color-overlay-black-15);
   overflow: hidden;
   animation: wp-dropdownIn 0.15s ease-out;
 }

@@ -10,6 +10,7 @@ use tauri::{AppHandle, State};
 use crate::api::app_state::AppState;
 use crate::api::session_storage_path::desktop_effective_session_storage_path;
 use crate::startup_trace::DesktopStartupTrace;
+use bitfun_core::agentic::agents::AgentSource;
 use bitfun_core::agentic::coordination::{
     AssistantBootstrapBlockReason, AssistantBootstrapEnsureOutcome, AssistantBootstrapSkipReason,
     ConversationCoordinator, DialogScheduler, DialogSubmissionPolicy, DialogTriggerSource,
@@ -2009,6 +2010,9 @@ pub async fn get_available_modes(
                 config_profile_id,
                 config_profile_label: info.config_profile_label,
                 config_profile_member_mode_ids: info.config_profile_member_mode_ids,
+                source: info.source,
+                path: info.path,
+                model: info.model,
             }
         })
         .collect();
@@ -2037,6 +2041,11 @@ pub struct ModeInfoDTO {
     pub config_profile_label: Option<String>,
     #[serde(default)]
     pub config_profile_member_mode_ids: Vec<String>,
+    pub source: AgentSource,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
 }
 
 fn assistant_bootstrap_outcome_to_response(

@@ -12,6 +12,8 @@ $_dropdown-width: 220px;
 
 // Breadcrumb Navigation
 .editor-breadcrumb {
+  --editor-breadcrumb-folder-rgb: 232, 181, 65;
+
   display: flex;
   align-items: center;
   height: $_breadcrumb-height;
@@ -60,7 +62,7 @@ $_dropdown-width: 220px;
     }
     
     &--folder .editor-breadcrumb__item-icon {
-      color: #e8b541;
+      color: rgb(var(--editor-breadcrumb-folder-rgb));
     }
     
     &--file .editor-breadcrumb__item-icon {
@@ -203,7 +205,7 @@ $_dropdown-width: 220px;
       
       svg { width: 14px; height: 14px; }
       
-      .lucide-folder { color: #e8b541; }
+      .lucide-folder { color: rgb(var(--editor-breadcrumb-folder-rgb)); }
     }
     
     &-name {

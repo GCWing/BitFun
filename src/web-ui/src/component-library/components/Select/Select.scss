@@ -81,7 +81,7 @@
   &__placeholder {
     flex: 1;
     font-size: var(--font-size-sm);
-    line-height: var(--line-height-base, 1.5);
+    line-height: var(--line-height-base);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -240,7 +240,7 @@
     border-radius: 0 0 var(--size-radius-sm) var(--size-radius-sm);
     box-shadow: 0 4px 12px var(--color-overlay-black-40);
     z-index: tokens.$z-dropdown;
-    animation: select-dropdown-appear var(--motion-fast) var(--easing-decelerate, cubic-bezier(0, 0, 0.2, 1));
+    animation: select-dropdown-appear var(--motion-fast) var(--easing-decelerate);
     overflow: hidden;
     display: flex;
     flex-direction: column;

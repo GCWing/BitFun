@@ -23,7 +23,7 @@ export interface AppConfig {
   sidebar: SidebarConfig;
   right_panel: RightPanelConfig;
   notifications: NotificationConfig;
-  session_config: AppSessionConfig;
+  flow_chat?: AppFlowChatConfig;
   ai_experience: AIExperienceConfig;
 }
 
@@ -40,8 +40,9 @@ export interface AppLoggingConfig {
   model_exchange_tracing: ModelExchangeTracingConfig;
 }
 
-// Reserved; legacy `default_mode` in saved JSON is ignored by the app.
-export type AppSessionConfig = Record<string, never>;
+export interface AppFlowChatConfig {
+  default_mode_id?: string | null;
+}
 
 export interface SidebarConfig {
   width: number;
@@ -199,6 +200,7 @@ export interface AIConfig {
   stream_ttft_timeout_secs?: number | null;
   tool_execution_timeout_secs?: number | null;
   tool_confirmation_timeout_secs?: number | null;
+  subagent_batch_execution_policy?: 'safe_only' | 'force_parallel' | 'serial';
   skip_tool_confirmation?: boolean;
   computer_use_enabled?: boolean;
   browser_control_preferred_browser?: string;
@@ -480,6 +482,7 @@ export interface WorkspaceConfig {
 
 export interface IConfigManager {
   getConfig<T = any>(path?: string): Promise<T>;
+  getOptionalConfig<T = any>(path: string): Promise<T | undefined>;
   getConfigs(paths: string[]): Promise<Record<string, unknown>>;
   setConfig<T = any>(path: string, value: T): Promise<void>;
   resetConfig(path?: string): Promise<void>;
@@ -539,7 +542,8 @@ export type ConfigPath =
   | 'app.language'
   | 'app.auto_update'
   | 'app.telemetry'
-  | 'app.session_config'
+  | 'app.flow_chat'
+  | 'app.flow_chat.default_mode_id'
   | 'app.sidebar'
   | 'app.sidebar.width'
   | 'app.sidebar.collapsed'

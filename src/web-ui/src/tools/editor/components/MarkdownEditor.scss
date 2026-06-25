@@ -159,11 +159,6 @@
 
 // Markdown preview inside m-editor only (align with flow-chat markdown chrome via shared CSS vars)
 .m-editor .markdown-body {
-  --m-editor-list-indent: 1.75rem;
-  --m-editor-list-marker-width: 1.25rem;
-  --m-editor-list-gap: 0.25rem;
-  --m-editor-task-checkbox-size: 1rem;
-
   color: var(--color-text-secondary);
   font-family: $font-family-sans;
   font-size: var(--font-size-sm);
@@ -323,7 +318,7 @@
     list-style: none;
     position: relative;
     margin-bottom: $size-gap-1;
-    padding-left: calc(var(--m-editor-list-marker-width) + var(--m-editor-list-gap));
+    padding-left: calc(var(--markdown-editor-list-marker-width) + var(--markdown-editor-list-gap));
   }
 
   > ul:not(.contains-task-list) > li::before,
@@ -331,7 +326,7 @@
     position: absolute;
     left: 0;
     top: 0;
-    width: var(--m-editor-list-marker-width);
+    width: var(--markdown-editor-list-marker-width);
     color: var(--color-text-primary);
     font-weight: $font-weight-medium;
   }
@@ -358,7 +353,7 @@
   li > ol {
     margin-top: $size-gap-1;
     margin-bottom: 0;
-    padding-left: var(--m-editor-list-indent);
+    padding-left: var(--markdown-editor-list-indent);
   }
 
   li {
@@ -498,7 +493,7 @@
   details {
     margin: 0 0 $size-gap-4;
     padding: $size-gap-3 $size-gap-4;
-    background: color-mix(in srgb, var(--color-bg-secondary, #{$element-bg-subtle}) 86%, transparent);
+    background: color-mix(in srgb, var(--color-bg-secondary) 86%, transparent);
     border: 1px solid var(--border-subtle);
     border-radius: $size-radius-lg;
 
@@ -543,24 +538,24 @@
   > ul.contains-task-list > .task-list-item {
     list-style: none;
     position: relative;
-    padding-left: calc(var(--m-editor-list-marker-width) + var(--m-editor-list-gap));
+    padding-left: calc(var(--markdown-editor-list-marker-width) + var(--markdown-editor-list-gap));
     margin-bottom: $size-gap-1;
   }
 
   > ul.contains-task-list > .task-list-item > input[type="checkbox"] {
     position: absolute;
-    left: calc((var(--m-editor-list-marker-width) - var(--m-editor-task-checkbox-size)) / 2);
+    left: calc((var(--markdown-editor-list-marker-width) - var(--markdown-editor-task-checkbox-size)) / 2);
     top: 0.15rem;
     margin: 0;
-    width: var(--m-editor-task-checkbox-size);
-    height: var(--m-editor-task-checkbox-size);
+    width: var(--markdown-editor-task-checkbox-size);
+    height: var(--markdown-editor-task-checkbox-size);
   }
 
   .task-list-item > ul,
   .task-list-item > ol {
     margin-top: $size-gap-1;
     margin-bottom: 0;
-    padding-left: var(--m-editor-list-indent);
+    padding-left: var(--markdown-editor-list-indent);
   }
 
   // KaTeX math formula styles

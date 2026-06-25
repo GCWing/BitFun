@@ -9,7 +9,15 @@ description = "Agent runtime contracts and owner decisions for BitFun"
 name = "bitfun_agent_runtime"
 crate-type = ["rlib"]
 
+[features]
+default = []
+
 [dependencies]
+async-trait = { workspace = true }
+bitfun-agent-stream = { path = "../agent-stream" }
+bitfun-agent-tools = { path = "../tool-contracts" }
+bitfun-events = { path = "../../contracts/events" }
+bitfun-harness = { path = "../harness" }
 bitfun-runtime-ports = { path = "../../contracts/runtime-ports" }
 bitfun-runtime-services = { path = "../runtime-services" }
 dashmap = { workspace = true }
@@ -24,4 +32,3 @@ tokio = { workspace = true }
 tokio-util = { workspace = true }
 
 [dev-dependencies]
-async-trait = { workspace = true }

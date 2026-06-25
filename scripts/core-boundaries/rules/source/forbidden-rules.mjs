@@ -2,6 +2,21 @@
 
 export const forbiddenContentRules = [
   {
+    path: 'src/crates/execution/agent-runtime/tests/sdk_smoke.rs',
+    patterns: [
+      {
+        regex: /\bbitfun_runtime_services::test_support\b/,
+        message:
+          'agent-runtime SDK smoke tests must prove the public sdk facade is enough; do not rely on runtime-services test_support',
+      },
+      {
+        regex: /\bFakeRuntimeServicesProvider\b/,
+        message:
+          'agent-runtime SDK smoke tests must build fake services through sdk-reexported ports and RuntimeServicesBuilder',
+      },
+    ],
+  },
+  {
     path: 'src/crates/contracts/core-types/src/ai.rs',
     patterns: [
       {
@@ -1172,6 +1187,46 @@ export const forbiddenContentRules = [
         regex: /\btokio::spawn\b/,
         message:
           'core exec_command output path must not own background output capture tasks; use tool-runtime background_command_output',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/computer_use_optimizer.rs',
+    patterns: [
+      {
+        regex: /\bpub struct ComputerUseOptimizer\b/,
+        message:
+          'core Computer Use optimizer facade must not own optimizer state; use tool-runtime computer_use',
+      },
+      {
+        regex: /\bVecDeque\b/,
+        message:
+          'core Computer Use optimizer facade must not own action history storage; use tool-runtime computer_use',
+      },
+      {
+        regex: /\bpub fn hash_screenshot_bytes\b/,
+        message:
+          'core Computer Use optimizer facade must not own screenshot hashing; use tool-runtime computer_use',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/computer_use_verification.rs',
+    patterns: [
+      {
+        regex: /\bpub struct VerificationResult\b/,
+        message:
+          'core Computer Use verification facade must not own verification contracts; use tool-runtime computer_use',
+      },
+      {
+        regex: /\bpub struct RetryStrategy\b/,
+        message:
+          'core Computer Use verification facade must not own retry strategy state; use tool-runtime computer_use',
+      },
+      {
+        regex: /\bpub fn detect_visual_change\b/,
+        message:
+          'core Computer Use verification facade must not own visual-change logic; use tool-runtime computer_use',
       },
     ],
   },

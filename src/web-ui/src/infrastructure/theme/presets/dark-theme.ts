@@ -1,6 +1,16 @@
  
 
 import { ThemeConfig } from '../types';
+import {
+  createDarkNeutralBorder,
+  createDarkNeutralElement,
+  createDarkNeutralScrollbar,
+  createStandardEasing,
+  createStandardRadius,
+  createStandardSpacing,
+  createStandardTypography,
+  createWindowControls,
+} from './shared';
 
 export const bitfunDarkTheme: ThemeConfig = {
   
@@ -77,22 +87,9 @@ export const bitfunDarkTheme: ThemeConfig = {
       highlightBg: 'rgba(255, 255, 255, 0.1)',
     },
     
-    border: {
-      subtle: 'rgba(255, 255, 255, 0.12)',
-      base: 'rgba(255, 255, 255, 0.18)',
-      medium: 'rgba(255, 255, 255, 0.24)',
-      strong: 'rgba(255, 255, 255, 0.32)',
-      prominent: 'rgba(255, 255, 255, 0.4)',
-    },
+    border: createDarkNeutralBorder(),
     
-    element: {
-      subtle: 'rgba(255, 255, 255, 0.05)',
-      soft: 'rgba(255, 255, 255, 0.07)',
-      base: 'rgba(255, 255, 255, 0.095)',
-      medium: 'rgba(255, 255, 255, 0.125)',
-      strong: 'rgba(255, 255, 255, 0.155)',
-      elevated: 'rgba(255, 255, 255, 0.19)',
-    },
+    element: createDarkNeutralElement(),
     
     git: {
       branch: '#a1a1aa',
@@ -107,10 +104,7 @@ export const bitfunDarkTheme: ThemeConfig = {
       stagedBg: 'rgba(34, 197, 94, 0.1)',
     },
     
-    scrollbar: {
-      thumb: 'rgba(255, 255, 255, 0.15)',
-      thumbHover: 'rgba(255, 255, 255, 0.28)',
-    },
+    scrollbar: createDarkNeutralScrollbar(),
   },
   
   
@@ -138,27 +132,9 @@ export const bitfunDarkTheme: ThemeConfig = {
       intense: 'blur(20px) saturate(1.4) brightness(1.15)',
     },
     
-    radius: {
-      sm: '6px',
-      base: '8px',
-      lg: '12px',
-      xl: '16px',
-      '2xl': '20px',
-      full: '9999px',
-    },
+    radius: createStandardRadius(),
     
-    spacing: {
-      1: '4px',
-      2: '8px',
-      3: '12px',
-      4: '16px',
-      5: '20px',
-      6: '24px',
-      8: '32px',
-      10: '40px',
-      12: '48px',
-      16: '64px',
-    },
+    spacing: createStandardSpacing(),
     
     opacity: {
       disabled: 0.6,
@@ -178,61 +154,17 @@ export const bitfunDarkTheme: ThemeConfig = {
       lazy: '1s',
     },
     
-    easing: {
-      standard: 'cubic-bezier(0.4, 0, 0.2, 1)',
-      decelerate: 'cubic-bezier(0, 0, 0.2, 1)',
-      accelerate: 'cubic-bezier(0.4, 0, 1, 1)',
-      bounce: 'cubic-bezier(0.68, -0.55, 0.265, 1.55)',
-      smooth: 'cubic-bezier(0.4, 0, 0.2, 1)',
-    },
+    easing: createStandardEasing(),
   },
   
   
-  typography: {
-    font: {
-      sans: "'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Segoe UI', 'Microsoft YaHei UI', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif",
-      mono: "'JetBrains Mono', 'FiraCode', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, 'Cascadia Mono', 'Cascadia Code', Consolas, 'Liberation Mono', 'Courier New', monospace",
-    },
-    
-    weight: {
-      normal: 400,
-      medium: 500,
-      semibold: 600,
-      bold: 700,
-    },
-    
-    size: {
-      xs: '12px',
-      sm: '13px',
-      base: '14px',
-      lg: '15px',
-      xl: '16px',
-      '2xl': '18px',
-      '3xl': '22px',
-      '4xl': '26px',
-      '5xl': '32px',
-    },
-    
-    lineHeight: {
-      tight: 1.2,
-      base: 1.5,
-      relaxed: 1.6,
-    },
-  },
+  typography: createStandardTypography(),
   
   
   components: {
     
-    windowControls: {
-      minimize: {
-        dot: 'rgba(255, 255, 255, 0.38)',
-        dotShadow: '0 0 4px rgba(0, 0, 0, 0.35)',
-        hoverBg: 'rgba(255, 255, 255, 0.1)',
-        hoverColor: '#e4e4e4',
-        hoverBorder: 'rgba(255, 255, 255, 0.16)',
-        hoverShadow: '0 2px 8px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.08)',
-      },
-      maximize: {
+    windowControls: createWindowControls({
+      standard: {
         dot: 'rgba(255, 255, 255, 0.38)',
         dotShadow: '0 0 4px rgba(0, 0, 0, 0.35)',
         hoverBg: 'rgba(255, 255, 255, 0.1)',
@@ -254,7 +186,7 @@ export const bitfunDarkTheme: ThemeConfig = {
         disabledDot: 'rgba(255, 255, 255, 0.1)',
         flowGradient: 'linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.05), transparent)',
       },
-    },
+    }),
     
     button: {
       
@@ -272,7 +204,7 @@ export const bitfunDarkTheme: ThemeConfig = {
         transform: 'none',
       },
       active: {
-        background: 'rgba(255, 255, 255, 0.10)',
+        background: 'rgba(255, 255, 255, 0.1)',
         color: '#c8c8c8',
         border: 'transparent',
         shadow: 'none',
@@ -312,7 +244,7 @@ export const bitfunDarkTheme: ThemeConfig = {
           shadow: 'none',
         },
         hover: {
-          background: 'rgba(255, 255, 255, 0.10)',
+          background: 'rgba(255, 255, 255, 0.1)',
           color: '#c8c8c8',
           border: 'transparent',
           shadow: 'none',

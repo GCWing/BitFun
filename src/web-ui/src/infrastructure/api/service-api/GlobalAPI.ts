@@ -66,6 +66,21 @@ export interface WorkspaceInfo {
   sshHost?: string;
 }
 
+export interface RemoteWorkspaceSnapshot {
+  connectionId: string;
+  connectionName: string;
+  remotePath: string;
+  sshHost?: string;
+}
+
+export interface WorkspaceStartupStateSnapshot {
+  cleanupRemovedCount: number;
+  currentWorkspace: WorkspaceInfo | null;
+  recentWorkspaces: WorkspaceInfo[];
+  openedWorkspaces: WorkspaceInfo[];
+  legacyRemoteWorkspace?: RemoteWorkspaceSnapshot | null;
+}
+
 export interface UpdateAppStatusRequest {
   status: AppStatus;
 }
@@ -118,13 +133,11 @@ export interface ScanWorkspaceInfoRequest {
 
 export class GlobalAPI {
    
-  async initializeGlobalState(): Promise<string> {
+  async initializeWorkspaceStartupState(): Promise<WorkspaceStartupStateSnapshot> {
     try {
-      return await api.invoke('initialize_global_state', { 
-        request: {} 
-      });
+      return await api.invoke('initialize_workspace_startup_state');
     } catch (error) {
-      throw createTauriCommandError('initialize_global_state', error);
+      throw createTauriCommandError('initialize_workspace_startup_state', error);
     }
   }
 

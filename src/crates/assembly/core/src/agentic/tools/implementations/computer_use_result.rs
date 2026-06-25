@@ -1,3 +1,7 @@
+//! Compatibility shims for the former core-owned Computer Use result helpers.
+//!
+//! The active screenshot tool body builder now lives in `bitfun-agent-tools`.
+
 use crate::agentic::tools::computer_use_host::{ComputerScreenshot, ComputerUseInteractionState};
 use serde_json::{json, Value};
 
@@ -12,12 +16,6 @@ pub fn build_screenshot_body(
     debug_rel: Option<String>,
     interaction: &ComputerUseInteractionState,
 ) -> Value {
-    // Phase 2: introduce explicit `image_jpeg_*` / `display_native_*` names
-    // so it's unambiguous which dimensions describe the encoded JPEG that
-    // the model sees vs. the underlying display capture in native pixels.
-    // Old names (`image_width`, `native_width`, `display_origin_*`,
-    // `display_width_px`) are kept as aliases for backward compatibility
-    // with prompts and consumers already in production.
     let mut data = json!({
         "success": true,
         "mime_type": shot.mime_type,
@@ -57,37 +55,7 @@ mod tests {
     };
 
     #[test]
-    fn append_interaction_state_includes_structured_block() {
-        let mut body = json!({ "success": true });
-        let interaction = ComputerUseInteractionState {
-            click_ready: false,
-            enter_ready: true,
-            requires_fresh_screenshot_before_click: true,
-            requires_fresh_screenshot_before_enter: false,
-            recommend_screenshot_to_verify_last_action: true,
-            last_screenshot_kind: Some(ComputerUseInteractionScreenshotKind::FullDisplay),
-            last_mutation: None,
-            recommended_next_action: Some("screenshot_navigate_quadrant".to_string()),
-            displays: vec![],
-            active_display_id: None,
-        };
-
-        append_interaction_state(&mut body, &interaction);
-
-        assert_eq!(body["interaction_state"]["click_ready"], json!(false));
-        assert_eq!(body["interaction_state"]["enter_ready"], json!(true));
-        assert_eq!(
-            body["interaction_state"]["recommended_next_action"],
-            json!("screenshot_navigate_quadrant")
-        );
-        assert_eq!(
-            body["interaction_state"]["recommend_screenshot_to_verify_last_action"],
-            json!(true)
-        );
-    }
-
-    #[test]
-    fn screenshot_body_keeps_existing_fields_and_adds_interaction_state() {
+    fn compatibility_body_keeps_explicit_dimension_aliases() {
         let shot = ComputerScreenshot {
             screenshot_id: Some("test-shot".to_string()),
             bytes: vec![1, 2, 3],
@@ -130,22 +98,13 @@ mod tests {
 
         let body = build_screenshot_body(&shot, None, &interaction);
 
-        assert_eq!(body["success"], json!(true));
-        assert_eq!(body["mime_type"], json!("image/jpeg"));
+        assert_eq!(body["image_jpeg_width"], json!(100));
+        assert_eq!(body["display_native_width"], json!(100));
+        assert_eq!(body["image_width"], body["image_jpeg_width"]);
+        assert_eq!(body["native_width"], body["display_native_width"]);
         assert_eq!(
             body["interaction_state"]["last_screenshot_kind"],
             json!("full_display")
         );
-        // Phase 2: new explicit names plus their legacy aliases must both be
-        // present so old prompts and new prompts can both consume the body.
-        assert_eq!(body["image_jpeg_width"], json!(100));
-        assert_eq!(body["image_jpeg_height"], json!(80));
-        assert_eq!(body["display_native_width"], json!(100));
-        assert_eq!(body["display_native_height"], json!(80));
-        assert_eq!(body["display_native_origin_x"], json!(0));
-        assert_eq!(body["display_native_origin_y"], json!(0));
-        assert_eq!(body["image_width"], body["image_jpeg_width"]);
-        assert_eq!(body["native_width"], body["display_native_width"]);
-        assert_eq!(body["display_origin_x"], body["display_native_origin_x"]);
     }
 }

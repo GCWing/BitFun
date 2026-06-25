@@ -6,6 +6,7 @@ interface GalleryEmptyProps {
   isError?: boolean;
   action?: React.ReactNode;
   className?: string;
+  testId?: string;
 }
 
 const GalleryEmpty: React.FC<GalleryEmptyProps> = ({
@@ -14,8 +15,9 @@ const GalleryEmpty: React.FC<GalleryEmptyProps> = ({
   isError = false,
   action,
   className,
+  testId,
 }) => (
-  <div className={['gallery-empty', isError && 'gallery-empty--error', className].filter(Boolean).join(' ')}>
+  <div className={['gallery-empty', isError && 'gallery-empty--error', className].filter(Boolean).join(' ')} data-testid={testId}>
     {icon}
     <span>{message}</span>
     {action}

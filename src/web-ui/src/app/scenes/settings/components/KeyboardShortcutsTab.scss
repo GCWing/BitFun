@@ -19,7 +19,7 @@
       border-radius: 6px;
       /* Match Search defaults; --color-border alone can be undefined and drop the border */
       border: 1px solid var(--border-base);
-      background: var(--color-bg-input, var(--color-surface));
+      background: var(--input-bg);
       transition: border-color 0.15s ease, box-shadow 0.15s ease;
     }
 
@@ -53,7 +53,7 @@
     padding: 8px 12px;
     margin-bottom: 16px;
     border-radius: 6px;
-    background: var(--color-error-surface, var(--color-error-bg));
+    background: var(--color-error-bg);
     color: var(--color-error);
     font-size: 13px;
   }
@@ -147,7 +147,7 @@
     padding: 3px 8px;
     border-radius: 4px;
     border: 1px solid var(--color-border);
-    background: var(--color-surface);
+    background: var(--element-bg-subtle);
     color: var(--color-text-secondary);
     font-family: ui-monospace, 'Cascadia Code', 'Fira Code', monospace;
     font-size: 12px;

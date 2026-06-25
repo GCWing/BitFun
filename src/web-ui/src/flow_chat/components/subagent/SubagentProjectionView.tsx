@@ -8,7 +8,7 @@ import { taskCollapseStateManager } from '../../store/TaskCollapseStateManager';
 import { SmoothHeightCollapse } from '../modern/SmoothHeightCollapse';
 import { FlowChatStore } from '../../store/FlowChatStore';
 import { getSubagentProjectionState } from '../../utils/subagentProjection';
-import { ensureBtwSessionAvailable } from '../../services/openBtwSession';
+import { ensureBtwSessionAvailable } from '../../services/btwSessionPane';
 import './SubagentProjectionView.scss';
 
 interface SubagentProjectionViewProps {

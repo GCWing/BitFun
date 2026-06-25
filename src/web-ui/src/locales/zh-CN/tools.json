@@ -202,6 +202,13 @@
     "scrollToBottom": "滚动到底部",
     "copySelection": "复制选中内容",
     "paste": "粘贴",
+    "pasteDialog": {
+      "title": "粘贴多行内容",
+      "message": "剪贴板包含 {{lineCount}} 行内容。将多行内容粘贴到终端可能会执行多条命令。",
+      "confirm": "粘贴",
+      "pasteAsOneLine": "粘贴为一行",
+      "cancel": "取消"
+    },
     "selectAll": "全选",
     "find": "查找",
     "shell": "Shell",

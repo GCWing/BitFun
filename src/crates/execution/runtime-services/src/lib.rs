@@ -35,6 +35,44 @@ pub struct CapabilityAvailability {
     pub available: bool,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct RuntimeServiceMarkerPort {
+    capability: RuntimeServiceCapability,
+}
+
+impl RuntimeServiceMarkerPort {
+    const fn new(capability: RuntimeServiceCapability) -> Self {
+        Self { capability }
+    }
+
+    pub fn terminal_port() -> Arc<dyn TerminalPort> {
+        Arc::new(Self::new(RuntimeServiceCapability::Terminal))
+    }
+
+    pub fn network_port() -> Arc<dyn NetworkPort> {
+        Arc::new(Self::new(RuntimeServiceCapability::Network))
+    }
+
+    pub fn git_port() -> Arc<dyn GitPort> {
+        Arc::new(Self::new(RuntimeServiceCapability::Git))
+    }
+
+    pub fn mcp_catalog_port() -> Arc<dyn McpCatalogPort> {
+        Arc::new(Self::new(RuntimeServiceCapability::McpCatalog))
+    }
+}
+
+impl RuntimeServicePort for RuntimeServiceMarkerPort {
+    fn capability(&self) -> RuntimeServiceCapability {
+        self.capability
+    }
+}
+
+impl TerminalPort for RuntimeServiceMarkerPort {}
+impl NetworkPort for RuntimeServiceMarkerPort {}
+impl GitPort for RuntimeServiceMarkerPort {}
+impl McpCatalogPort for RuntimeServiceMarkerPort {}
+
 #[derive(Clone)]
 pub struct RuntimeServices {
     pub filesystem: Arc<dyn FileSystemPort>,

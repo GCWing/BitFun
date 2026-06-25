@@ -3,6 +3,8 @@
  * Styles for rendering Mermaid diagrams during streaming output
  */
 .mermaid-block {
+  --mermaid-block-shadow-color: var(--color-overlay-black-40);
+
   margin: var(--flowchat-markdown-block-gap) 0;
   border-radius: 6px;
   overflow: hidden;
@@ -12,7 +14,7 @@
 
   &:hover {
     box-shadow:
-      0 8px 24px var(--shadow-color, var(--color-overlay-black-40)),
+      0 8px 24px var(--mermaid-block-shadow-color),
       inset 0 1px 0 var(--element-bg-medium),
       inset 0 -1px 0 var(--element-bg-subtle);
     border-color: var(--element-bg-strong);
@@ -175,8 +177,8 @@
       background: transparent;
       border: none;
       border-radius: 0;
-      font-family: var(--font-family-mono, 'Consolas', 'Monaco', 'Courier New', monospace);
-      font-size: var(--flowchat-code-font-size, 0.92em);
+      font-family: var(--font-family-mono);
+      font-size: var(--flowchat-code-font-size);
       line-height: var(--flowchat-code-line-height);
       color: var(--color-text-primary);
       overflow-x: auto;
@@ -300,7 +302,7 @@
 @media print {
   .mermaid-block {
     break-inside: avoid;
-    border: 1px solid #000;
+    border: 1px solid var(--color-static-black);
 
     .mermaid-block__actions {
       display: none;

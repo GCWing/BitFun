@@ -19,8 +19,12 @@
   &__particle {
     position: absolute;
     border-radius: 50%;
-    background: linear-gradient(135deg, rgba(139, 92, 246, 0.8), rgba(59, 130, 246, 0.6));
-    box-shadow: 0 0 6px rgba(139, 92, 246, 0.5);
+    background: linear-gradient(
+      135deg,
+      rgba(var(--cube-logo-particle-rgb), 0.8),
+      var(--border-accent-strong)
+    );
+    box-shadow: 0 0 6px rgba(var(--cube-logo-particle-rgb), 0.5);
     animation: cube-logo-particle-float 5s ease-in-out infinite;
   }
 
@@ -53,25 +57,25 @@
     position: absolute;
     backface-visibility: visible;
     box-sizing: border-box;
-    border: 0.3px solid rgba(110, 110, 120, 0.5);
+    border: 0.3px solid rgba(var(--cube-logo-face-border-rgb), 0.5);
 
     &--front {
-      background: rgba(38, 38, 44, 0.85);
+      background: rgba(var(--cube-logo-face-front-rgb), 0.85);
     }
     &--back {
-      background: rgba(30, 30, 35, 0.8);
+      background: rgba(var(--cube-logo-face-back-rgb), 0.8);
     }
     &--top {
-      background: rgba(52, 52, 60, 0.88);
+      background: rgba(var(--cube-logo-face-top-rgb), 0.88);
     }
     &--bottom {
-      background: rgba(25, 25, 30, 0.75);
+      background: rgba(var(--cube-logo-face-bottom-rgb), 0.75);
     }
     &--right {
-      background: rgba(45, 45, 52, 0.85);
+      background: rgba(var(--cube-logo-face-right-rgb), 0.85);
     }
     &--left {
-      background: rgba(32, 32, 38, 0.8);
+      background: rgba(var(--cube-logo-face-left-rgb), 0.8);
     }
   }
 
@@ -79,53 +83,53 @@
     border: none;
 
     &--front {
-      background: rgba(38, 38, 44, 0.85);
-      box-shadow: inset 0 0 0 0.5px rgba(65, 65, 75, 0.3);
+      background: rgba(var(--cube-logo-face-front-rgb), 0.85);
+      box-shadow: inset 0 0 0 0.5px rgba(var(--cube-logo-face-front-shadow-rgb), 0.3);
     }
     &--back {
-      background: rgba(30, 30, 35, 0.8);
-      box-shadow: inset 0 0 0 0.5px rgba(55, 55, 62, 0.25);
+      background: rgba(var(--cube-logo-face-back-rgb), 0.8);
+      box-shadow: inset 0 0 0 0.5px rgba(var(--cube-logo-face-back-shadow-rgb), 0.25);
     }
     &--top {
-      background: rgba(52, 52, 60, 0.88);
-      box-shadow: inset 0 0 0 0.5px rgba(78, 78, 88, 0.32);
+      background: rgba(var(--cube-logo-face-top-rgb), 0.88);
+      box-shadow: inset 0 0 0 0.5px rgba(var(--cube-logo-face-top-shadow-rgb), 0.32);
     }
     &--bottom {
-      background: rgba(25, 25, 30, 0.75);
-      box-shadow: inset 0 0 0 0.5px rgba(48, 48, 56, 0.22);
+      background: rgba(var(--cube-logo-face-bottom-rgb), 0.75);
+      box-shadow: inset 0 0 0 0.5px rgba(var(--cube-logo-face-bottom-shadow-rgb), 0.22);
     }
     &--right {
-      background: rgba(45, 45, 52, 0.85);
-      box-shadow: inset 0 0 0 0.5px rgba(72, 72, 80, 0.3);
+      background: rgba(var(--cube-logo-face-right-rgb), 0.85);
+      box-shadow: inset 0 0 0 0.5px rgba(var(--cube-logo-face-right-shadow-rgb), 0.3);
     }
     &--left {
-      background: rgba(32, 32, 38, 0.8);
-      box-shadow: inset 0 0 0 0.5px rgba(58, 58, 66, 0.28);
+      background: rgba(var(--cube-logo-face-left-rgb), 0.8);
+      box-shadow: inset 0 0 0 0.5px rgba(var(--cube-logo-face-left-shadow-rgb), 0.28);
     }
   }
 }
 
 :root[data-theme-type="light"] {
   .cube-logo__face {
-    border: 0.3px solid rgba(90, 123, 178, 0.40);
+    border: 0.3px solid rgba(var(--cube-logo-face-border-rgb), 0.4);
 
     &--front {
-      background: rgba(90, 123, 178, 0.45);
+      background: rgba(var(--cube-logo-face-front-rgb), 0.45);
     }
     &--back {
-      background: rgba(90, 123, 178, 0.40);
+      background: rgba(var(--cube-logo-face-back-rgb), 0.4);
     }
     &--top {
-      background: rgba(124, 107, 153, 0.40);
+      background: rgba(var(--cube-logo-face-top-rgb), 0.4);
     }
     &--bottom {
-      background: rgba(90, 123, 178, 0.50);
+      background: rgba(var(--cube-logo-face-bottom-rgb), 0.5);
     }
     &--right {
-      background: rgba(124, 107, 153, 0.45);
+      background: rgba(var(--cube-logo-face-right-rgb), 0.45);
     }
     &--left {
-      background: rgba(107, 90, 137, 0.40);
+      background: rgba(var(--cube-logo-face-left-rgb), 0.4);
     }
   }
 
@@ -133,34 +137,38 @@
     border: none;
 
     &--front {
-      background: rgba(90, 123, 178, 0.45);
-      box-shadow: inset 0 0 0 0.5px rgba(90, 123, 178, 0.30);
+      background: rgba(var(--cube-logo-face-front-rgb), 0.45);
+      box-shadow: inset 0 0 0 0.5px rgba(var(--cube-logo-face-front-shadow-rgb), 0.3);
     }
     &--back {
-      background: rgba(90, 123, 178, 0.40);
-      box-shadow: inset 0 0 0 0.5px rgba(90, 123, 178, 0.25);
+      background: rgba(var(--cube-logo-face-back-rgb), 0.4);
+      box-shadow: inset 0 0 0 0.5px rgba(var(--cube-logo-face-back-shadow-rgb), 0.25);
     }
     &--top {
-      background: rgba(124, 107, 153, 0.40);
-      box-shadow: inset 0 0 0 0.5px rgba(124, 107, 153, 0.30);
+      background: rgba(var(--cube-logo-face-top-rgb), 0.4);
+      box-shadow: inset 0 0 0 0.5px rgba(var(--cube-logo-face-top-shadow-rgb), 0.3);
     }
     &--bottom {
-      background: rgba(90, 123, 178, 0.50);
-      box-shadow: inset 0 0 0 0.5px rgba(90, 123, 178, 0.35);
+      background: rgba(var(--cube-logo-face-bottom-rgb), 0.5);
+      box-shadow: inset 0 0 0 0.5px rgba(var(--cube-logo-face-bottom-shadow-rgb), 0.35);
     }
     &--right {
-      background: rgba(124, 107, 153, 0.45);
-      box-shadow: inset 0 0 0 0.5px rgba(124, 107, 153, 0.30);
+      background: rgba(var(--cube-logo-face-right-rgb), 0.45);
+      box-shadow: inset 0 0 0 0.5px rgba(var(--cube-logo-face-right-shadow-rgb), 0.3);
     }
     &--left {
-      background: rgba(107, 90, 137, 0.40);
-      box-shadow: inset 0 0 0 0.5px rgba(107, 90, 137, 0.28);
+      background: rgba(var(--cube-logo-face-left-rgb), 0.4);
+      box-shadow: inset 0 0 0 0.5px rgba(var(--cube-logo-face-left-shadow-rgb), 0.28);
     }
   }
 
   .cube-logo__particle {
-    background: linear-gradient(135deg, rgba(90, 123, 178, 0.5), rgba(124, 107, 153, 0.35));
-    box-shadow: 0 0 6px rgba(90, 123, 178, 0.3);
+    background: linear-gradient(
+      135deg,
+      rgba(var(--cube-logo-particle-rgb), 0.5),
+      rgba(var(--cube-logo-particle-secondary-rgb), 0.35)
+    );
+    box-shadow: 0 0 6px rgba(var(--cube-logo-particle-rgb), 0.3);
   }
 }
 

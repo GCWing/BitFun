@@ -9,7 +9,7 @@
 }
 
 .modern-flowchat-container {
-  --modern-flowchat-input-bg: #1e1e1e;
+  --modern-flowchat-input-bg: var(--color-bg-secondary);
 
   width: 100%;
   height: 100%;
@@ -38,10 +38,17 @@
     background: transparent;
   }
 
+  &__messages[data-history-state="ready"][data-is-partial="true"] {
+    .user-message-item,
+    .model-round-item {
+      animation: none;
+    }
+  }
+
   &__input {
     flex-shrink: 0;
     padding: var(--flowchat-card-expanded-pad-x);
-    background: var(--color-surface, var(--modern-flowchat-input-bg));
+    background: var(--modern-flowchat-input-bg);
     border-top: 1px solid var(--color-border);
   }
 }
@@ -55,7 +62,7 @@
   align-items: center;
   justify-content: center;
   gap: var(--flowchat-control-gap);
-  padding: var(--size-gap-8, 32px);
+  padding: var(--size-gap-8);
   color: var(--color-text-secondary);
   text-align: center;
 }
@@ -118,7 +125,7 @@
 }
 
 .history-session-placeholder__retry:hover {
-  background: var(--color-surface-active, var(--color-overlay-white-10));
+  background: var(--color-overlay-white-10);
 }
 
 .modern-flowchat-container__history-overlay {

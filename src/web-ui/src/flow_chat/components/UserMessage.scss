@@ -97,11 +97,11 @@
   
   &__icon {
     flex-shrink: 0;
-    color: var(--tag-color);
+    color: var(--inline-context-tag-color);
   }
   
   &__label {
-    color: var(--tag-color);
+    color: var(--inline-context-tag-color);
     max-width: 200px;
     overflow: hidden;
     text-overflow: ellipsis;

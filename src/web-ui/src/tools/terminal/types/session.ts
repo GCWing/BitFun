@@ -92,8 +92,19 @@ export interface SendCommandRequest {
   command: string;
 }
 
+export interface TerminalReplayEvent {
+  /** PTY column count to apply before writing data. */
+  cols: number;
+  /** PTY row count to apply before writing data. */
+  rows: number;
+  /** Raw terminal data to write at the specified dimensions. */
+  data: string;
+}
+
 export interface GetHistoryResponse {
   sessionId: string;
+  /** Ordered resize/data events for terminal recovery. */
+  events?: TerminalReplayEvent[];
   data: string;
   /** Current history size in bytes. */
   historySize: number;

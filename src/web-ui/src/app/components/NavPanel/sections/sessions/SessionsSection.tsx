@@ -19,13 +19,14 @@ import { createLogger } from '@/shared/utils/logger';
 import { useAgentCanvasStore } from '@/app/components/panels/content-canvas/stores';
 import {
   openBtwSessionInAuxPane,
-  openMainSession,
   selectActiveBtwSessionTab,
-} from '@/flow_chat/services/openBtwSession';
+} from '@/flow_chat/services/btwSessionPane';
+import { openMainSession } from '@/flow_chat/services/sessionActivation';
 import {
   dispatchHistorySessionOpenIntent,
   shouldShowHistorySessionOpenIntent,
 } from '@/flow_chat/services/sessionOpenIntent';
+import { recordHistorySessionDiagnosticEvent } from '@/flow_chat/services/historySessionDiagnostics';
 import { resolveSessionRelationship } from '@/flow_chat/utils/sessionMetadata';
 import {
   compareSessionsForNavStable,
@@ -46,7 +47,6 @@ import type {
   BackgroundSubagentActivityItem,
 } from '@/flow_chat/utils/backgroundSubagentActivity';
 import { computeFixedPopoverPosition } from '@/shared/utils/fixedPopoverViewport';
-import { sessionAPI } from '@/infrastructure/api/service-api/SessionAPI';
 import { confirmWarning } from '@/component-library/components/ConfirmDialog/confirmService';
 import { scheduleAfterStartupPaint, scheduleAfterStartupSignal } from '@/shared/utils/startupTaskScheduling';
 import {
@@ -616,7 +616,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
   const lastHistoryOpenIntentRef = useRef<{ sessionId: string; atMs: number } | null>(null);
 
   const dispatchHistoryOpenIntentForSession = useCallback(
-    (session: Session): HistoryOpenIntentDispatchResult => {
+    (session: Session, source: 'pointerdown' | 'switch'): HistoryOpenIntentDispatchResult => {
       const sessionId = session.sessionId;
       if (
         sessionId === activeSessionId ||
@@ -634,11 +634,18 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
         lastIntent.sessionId === sessionId &&
         now - lastIntent.atMs < 250
       ) {
+        recordHistorySessionDiagnosticEvent(sessionId, 'history_open_intent_deduped', {
+          source,
+          ageMs: Math.round(now - lastIntent.atMs),
+        });
         return 'already-pending';
       }
 
       lastHistoryOpenIntentRef.current = { sessionId, atMs: now };
       dispatchHistorySessionOpenIntent(sessionId, getTitle(session));
+      recordHistorySessionDiagnosticEvent(sessionId, 'history_open_intent_source', {
+        source,
+      });
       return 'dispatched';
     },
     [activeSessionId, runningSessionIds],
@@ -650,7 +657,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
       try {
         const session = flowChatStore.getState().sessions.get(sessionId);
         const historyOpenIntentDispatch = session
-          ? dispatchHistoryOpenIntentForSession(session)
+          ? dispatchHistoryOpenIntentForSession(session, 'switch')
           : 'none';
         if (session && historyOpenIntentDispatch !== 'none') {
           flowChatManager.preloadHistoricalSessionForOpen(sessionId);
@@ -721,7 +728,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
         return;
       }
 
-      const historyOpenIntentDispatch = dispatchHistoryOpenIntentForSession(session);
+      const historyOpenIntentDispatch = dispatchHistoryOpenIntentForSession(session, 'pointerdown');
       if (historyOpenIntentDispatch !== 'none') {
         flowChatManager.preloadHistoricalSessionForOpen(session.sessionId);
       }
@@ -795,15 +802,13 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
       );
       if (!confirmed) return;
       try {
-        await sessionAPI.archiveSession(sessionId, workspacePath || '', remoteConnectionId || undefined, remoteSshHost || undefined);
-        // Remove from in-memory state only — do NOT delete from disk
-        flowChatManager.discardLocalSession(sessionId);
+        await flowChatManager.archiveChatSession(sessionId);
         window.dispatchEvent(new CustomEvent('bitfun:session-archived'));
       } catch (err) {
         log.error('Failed to archive session', err);
       }
     },
-    [workspacePath, remoteConnectionId, remoteSshHost, t]
+    [t]
   );
 
   const handleStartEdit = useCallback(
@@ -1023,9 +1028,11 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
               ]
                 .filter(Boolean)
                 .join(' ')}
-              data-testid="session-nav-item"
+              data-testid="nav-session-item"
               data-session-id={session.sessionId}
-              data-session-title={sessionTitle}
+              data-session-kind={relationship.kind}
+              data-session-level={String(level)}
+              data-session-active={isRowActive ? 'true' : 'false'}
               onPointerDown={event => handleSessionOpenPointerDown(event, session)}
               onClick={() => handleSwitch(session.sessionId)}
             >
@@ -1225,7 +1232,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
         <button
           type="button"
           className={`bitfun-nav-panel__inline-toggle${metadataPageState.isLoading ? ' is-loading' : ''}`}
-          data-testid="session-nav-show-more"
+          data-testid="nav-session-list-toggle"
           data-session-nav-toggle-action={expandToggleState.action}
           disabled={metadataPageState.isLoading}
           onClick={() => { void handleExpandToggle(); }}

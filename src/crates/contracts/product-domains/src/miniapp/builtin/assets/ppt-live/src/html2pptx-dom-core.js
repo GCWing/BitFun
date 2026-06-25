@@ -110,22 +110,18 @@ export function extractSlideDataFromDocument(doc = document) {
       return text;
     };
 
-    // Extract rotation angle from CSS transform and writing-mode
-    const getRotation = (transform, writingMode) => {
+    const getTextDirection = (writingMode) => {
+      if (writingMode === 'vertical-rl' || writingMode === 'vertical-lr') {
+        return 'eaVert';
+      }
+      return null;
+    };
+
+    // Extract rotation angle from CSS transform only. CSS writing-mode is exported
+    // as native PowerPoint vertical text so its box geometry stays anchored.
+    const getRotation = (transform) => {
       let angle = 0;
 
-      // Handle writing-mode first
-      // PowerPoint: 90° = text rotated 90° clockwise (reads top to bottom, letters upright)
-      // PowerPoint: 270° = text rotated 270° clockwise (reads bottom to top, letters upright)
-      if (writingMode === 'vertical-rl') {
-        // vertical-rl alone = text reads top to bottom = 90° in PowerPoint
-        angle = 90;
-      } else if (writingMode === 'vertical-lr') {
-        // vertical-lr alone = text reads bottom to top = 270° in PowerPoint
-        angle = 270;
-      }
-
-      // Then add any transform rotation
       if (transform && transform !== 'none') {
         // Try to match rotate() function
         const rotateMatch = transform.match(/rotate\((-?\d+(?:\.\d+)?)deg\)/);
@@ -256,7 +252,7 @@ export function extractSlideDataFromDocument(doc = document) {
           const computed = view.getComputedStyle(node);
 
           // Handle inline elements with computed styles
-          if (node.tagName === 'SPAN' || node.tagName === 'B' || node.tagName === 'STRONG' || node.tagName === 'I' || node.tagName === 'EM' || node.tagName === 'U') {
+          if (['SPAN', 'B', 'STRONG', 'I', 'EM', 'U', 'SMALL', 'LABEL', 'A', 'CODE', 'MARK', 'SUB', 'SUP'].includes(node.tagName)) {
             const isBold = computed.fontWeight === 'bold' || parseInt(computed.fontWeight) >= 600;
             if (isBold && !shouldSkipBold(computed.fontFamily)) options.bold = true;
             if (computed.fontStyle === 'italic') options.italic = true;
@@ -341,6 +337,18 @@ export function extractSlideDataFromDocument(doc = document) {
       height: rect.height,
     });
     const rectFor = (el) => boxFor(el.getBoundingClientRect());
+    const textRectFor = (el) => {
+      try {
+        const range = document.createRange();
+        range.selectNodeContents(el);
+        const rect = boxFor(range.getBoundingClientRect());
+        range.detach?.();
+        if (rect.width > 0 && rect.height > 0) return rect;
+      } catch {
+        // Fall back to the element box when Range geometry is unavailable.
+      }
+      return rectFor(el);
+    };
 
     const resolveTextColor = (computed, el) => {
       const channels = parseRgbChannels(computed.color);
@@ -424,7 +432,171 @@ export function extractSlideDataFromDocument(doc = document) {
     const elements = [];
     const placeholders = [];
     const textTags = ['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'UL', 'OL', 'LI'];
+    const genericInlineTextTags = new Set([
+      'SPAN', 'SMALL', 'LABEL', 'A', 'CODE', 'BUTTON', 'B', 'STRONG', 'I', 'EM', 'U', 'MARK', 'SUB', 'SUP',
+    ]);
+    const tableCellTags = new Set(['TD', 'TH']);
+    const containerTags = new Set(['DIV', 'SECTION', 'ARTICLE', 'ASIDE', ...tableCellTags]);
     const processed = new Set();
+
+    const hasTextOwnerAncestor = (el) => {
+      let parent = el.parentElement;
+      while (parent && parent !== body) {
+        if (textTags.includes(parent.tagName) || parent.dataset?.pptxMerge === 'true') return true;
+        parent = parent.parentElement;
+      }
+      return false;
+    };
+
+    const hasDirectText = (el) => Array.from(el.childNodes).some(
+      (node) => node.nodeType === Node.TEXT_NODE && node.textContent.replace(/\s+/g, ' ').trim(),
+    );
+
+    const isGenericTextElement = (el) => {
+      if (!el.textContent.replace(/\s+/g, ' ').trim() || hasTextOwnerAncestor(el)) return false;
+      if (genericInlineTextTags.has(el.tagName)) return true;
+      if (!containerTags.has(el.tagName) || (!hasDirectText(el) && !tableCellTags.has(el.tagName))) return false;
+      if (el.querySelector('p,h1,h2,h3,h4,h5,h6,ul,ol,li')) return false;
+      return !Array.from(el.children).some((child) => containerTags.has(child.tagName));
+    };
+
+    const resolveTextAlign = (computed) => {
+      if (computed.textAlign && !['start', 'auto'].includes(computed.textAlign)) {
+        return computed.textAlign === 'end' ? 'right' : computed.textAlign;
+      }
+      if (computed.display.includes('flex')) {
+        if (computed.justifyContent === 'center') return 'center';
+        if (computed.justifyContent === 'flex-end' || computed.justifyContent === 'end') return 'right';
+      }
+      if (computed.display.includes('grid')) {
+        if ((computed.justifyItems || computed.placeItems || '').includes('center')) return 'center';
+        if ((computed.justifyItems || computed.placeItems || '').includes('end')) return 'right';
+      }
+      return 'left';
+    };
+
+    const resolveVerticalAlign = (computed, rect) => {
+      if (computed.display === 'table-cell') {
+        if (computed.verticalAlign === 'middle') return 'mid';
+        if (computed.verticalAlign === 'bottom') return 'bottom';
+      }
+      if (!computed.display.includes('flex') && !computed.display.includes('grid')) {
+        const lineHeight = parseFloat(computed.lineHeight || '0');
+        return lineHeight >= rect.height * 0.75 ? 'mid' : 'top';
+      }
+      const alignment = computed.alignItems || computed.placeItems || '';
+      if (alignment.includes('center')) return 'mid';
+      if (alignment.includes('end')) return 'bottom';
+      return 'top';
+    };
+
+    const emitTextElement = (el, type = el.tagName.toLowerCase(), exactFrame = false, rectOverride = null) => {
+      const rect = rectOverride || rectFor(el);
+      const text = el.textContent.replace(/\s+/g, ' ').trim();
+      if (rect.width === 0 || rect.height === 0 || !text) return false;
+
+      if (type !== 'text' && el.tagName !== 'LI' && /^[•\-\*▪▸○●◆◇■□]\s/.test(text.trimStart())) {
+        errors.push(
+          `Text element <${el.tagName.toLowerCase()}> starts with bullet symbol "${text.substring(0, 20)}...". ` +
+          'Use <ul> or <ol> lists instead of manual bullet symbols.'
+        );
+        return false;
+      }
+
+      const computed = view.getComputedStyle(el);
+      if (computed.display === 'none' || computed.visibility === 'hidden' || parseFloat(computed.opacity || '1') <= 0) {
+        return false;
+      }
+      const rotation = getRotation(computed.transform);
+      const textDirection = getTextDirection(computed.writingMode);
+      const frame = exactFrame
+        ? getPositionAndSize(el, rect, rotation)
+        : expandTextFrame(el, rect, rotation);
+      const isBold = computed.fontWeight === 'bold' || parseInt(computed.fontWeight, 10) >= 600;
+      const lineSpacing = computed.lineHeight && computed.lineHeight !== 'normal'
+        ? pxToPoints(computed.lineHeight)
+        : null;
+
+      const baseStyle = {
+        fontSize: pxToPoints(computed.fontSize),
+        fontFace: computed.fontFamily.split(',')[0].replace(/['"]/g, '').trim(),
+        color: resolveTextColor(computed, el),
+        align: resolveTextAlign(computed),
+        valign: exactFrame ? resolveVerticalAlign(computed, rect) : 'top',
+        lineSpacing,
+        paraSpaceBefore: pxToPoints(computed.marginTop),
+        paraSpaceAfter: pxToPoints(computed.marginBottom),
+        margin: [
+          pxToPoints(computed.paddingLeft),
+          pxToPoints(computed.paddingRight),
+          pxToPoints(computed.paddingBottom),
+          pxToPoints(computed.paddingTop)
+        ]
+      };
+
+      const transparency = extractAlpha(computed.color);
+      if (transparency !== null) baseStyle.transparency = transparency;
+      if (rotation !== null) baseStyle.rotate = rotation;
+      if (textDirection !== null) baseStyle.vert = textDirection;
+
+      const hasFormatting = el.querySelector('b, i, u, strong, em, span, small, label, a, code, mark, sub, sup, br');
+      if (hasFormatting) {
+        const transformStr = computed.textTransform;
+        const runBase = {};
+        if (isBold && !shouldSkipBold(computed.fontFamily)) runBase.bold = true;
+        let runs = parseInlineFormatting(el, runBase, [], (str) => applyTextTransform(str, transformStr));
+        const runText = runs.map((run) => run.text).join('').trim();
+        if (!runText && text) {
+          runs = [{ text: applyTextTransform(text, transformStr), options: { ...runBase } }];
+        }
+
+        const adjustedStyle = { ...baseStyle };
+        if (adjustedStyle.lineSpacing) {
+          const maxFontSize = Math.max(
+            adjustedStyle.fontSize,
+            ...runs.map((run) => run.options?.fontSize || 0),
+          );
+          if (maxFontSize > adjustedStyle.fontSize) {
+            adjustedStyle.lineSpacing = maxFontSize * (adjustedStyle.lineSpacing / adjustedStyle.fontSize);
+          }
+        }
+
+        pushElement({
+          type,
+          text: runs,
+          position: {
+            x: pxToInch(frame.x),
+            y: pxToInch(frame.y),
+            w: pxToInch(frame.w),
+            h: pxToInch(frame.h),
+          },
+          style: adjustedStyle,
+        }, el);
+      } else {
+        pushElement({
+          type,
+          text: applyTextTransform(text, computed.textTransform),
+          position: {
+            x: pxToInch(frame.x),
+            y: pxToInch(frame.y),
+            w: pxToInch(frame.w),
+            h: pxToInch(frame.h),
+          },
+          style: {
+            ...baseStyle,
+            bold: isBold && !shouldSkipBold(computed.fontFamily),
+            italic: computed.fontStyle === 'italic',
+            underline: computed.textDecoration.includes('underline'),
+          },
+        }, el);
+      }
+
+      processed.add(el);
+      if (type === 'text') {
+        el.querySelectorAll('span,small,label,a,code,b,strong,i,em,u,mark,sub,sup').forEach((child) => processed.add(child));
+      }
+      return true;
+    };
 
     document.querySelectorAll('*').forEach((el) => {
       if (processed.has(el)) return;
@@ -565,7 +737,7 @@ export function extractSlideDataFromDocument(doc = document) {
           if (elemItalic) runBaseOptions.italic = true;
           if (elemUnderline) runBaseOptions.underline = true;
 
-          const hasInline = textEl.querySelector('b, i, u, strong, em, span, br');
+          const hasInline = textEl.querySelector('b, i, u, strong, em, span, small, label, a, code, mark, sub, sup, br');
           let runs;
           if (hasInline) {
             runs = parseInlineFormatting(
@@ -608,8 +780,17 @@ export function extractSlideDataFromDocument(doc = document) {
         return;
       }
 
+      const genericTextExtracted = isGenericTextElement(el)
+        ? emitTextElement(
+            el,
+            'text',
+            true,
+            genericInlineTextTags.has(el.tagName) ? textRectFor(el) : null,
+          )
+        : false;
+
       // Text tags with decorative boxes (pills, chips) become a shape + text.
-      if (textTags.includes(el.tagName)) {
+      if (textTags.includes(el.tagName) || genericInlineTextTags.has(el.tagName)) {
         const computed = view.getComputedStyle(el);
         const hasBg = computed.backgroundColor && computed.backgroundColor !== 'rgba(0, 0, 0, 0)';
         const hasBorder = (computed.borderWidth && parseFloat(computed.borderWidth) > 0) ||
@@ -703,24 +884,10 @@ export function extractSlideDataFromDocument(doc = document) {
       }
 
       // Extract container blocks with backgrounds/borders as shapes
-      const containerTags = new Set(['DIV', 'SECTION', 'ARTICLE', 'ASIDE']);
       const isContainer = containerTags.has(el.tagName);
       if (isContainer) {
         const computed = view.getComputedStyle(el);
         const hasBg = computed.backgroundColor && computed.backgroundColor !== 'rgba(0, 0, 0, 0)';
-
-        // Validate: Check for unwrapped text content in DIV
-        for (const node of el.childNodes) {
-          if (node.nodeType === Node.TEXT_NODE) {
-            const text = node.textContent.trim();
-            if (text) {
-              errors.push(
-                `DIV element contains unwrapped text "${text.substring(0, 50)}${text.length > 50 ? '...' : ''}". ` +
-                'All text must be wrapped in <p>, <h1>-<h6>, <ul>, or <ol> tags to appear in PowerPoint.'
-              );
-            }
-          }
-        }
 
         // Check for background images on shapes
         const bgImage = computed.backgroundImage;
@@ -863,6 +1030,8 @@ export function extractSlideDataFromDocument(doc = document) {
         }
       }
 
+      if (genericTextExtracted) return;
+
       // Extract bullet lists as single text block
       if (el.tagName === 'UL' || el.tagName === 'OL') {
         const rect = rectFor(el);
@@ -942,100 +1111,7 @@ export function extractSlideDataFromDocument(doc = document) {
       // Extract text elements (P, H1, H2, etc.)
       if (!textTags.includes(el.tagName)) return;
 
-      const rect = rectFor(el);
-      const text = el.textContent.trim();
-      if (rect.width === 0 || rect.height === 0 || !text) return;
-
-      // Validate: Check for manual bullet symbols in text elements (not in lists)
-      if (el.tagName !== 'LI' && /^[•\-\*▪▸○●◆◇■□]\s/.test(text.trimStart())) {
-        errors.push(
-          `Text element <${el.tagName.toLowerCase()}> starts with bullet symbol "${text.substring(0, 20)}...". ` +
-          'Use <ul> or <ol> lists instead of manual bullet symbols.'
-        );
-        return;
-      }
-
-      const computed = view.getComputedStyle(el);
-      const rotation = getRotation(computed.transform, computed.writingMode);
-      const { x, y, w, h } = expandTextFrame(el, rect, rotation);
-      const isBold = computed.fontWeight === 'bold' || parseInt(computed.fontWeight, 10) >= 600;
-
-      const baseStyle = {
-        fontSize: pxToPoints(computed.fontSize),
-        fontFace: computed.fontFamily.split(',')[0].replace(/['"]/g, '').trim(),
-        color: resolveTextColor(computed, el),
-        align: computed.textAlign === 'start' ? 'left' : computed.textAlign,
-        lineSpacing: pxToPoints(computed.lineHeight),
-        paraSpaceBefore: pxToPoints(computed.marginTop),
-        paraSpaceAfter: pxToPoints(computed.marginBottom),
-        // PptxGenJS margin array is [left, right, bottom, top] (not [top, right, bottom, left] as documented)
-        margin: [
-          pxToPoints(computed.paddingLeft),
-          pxToPoints(computed.paddingRight),
-          pxToPoints(computed.paddingBottom),
-          pxToPoints(computed.paddingTop)
-        ]
-      };
-
-      const transparency = extractAlpha(computed.color);
-      if (transparency !== null) baseStyle.transparency = transparency;
-
-      if (rotation !== null) baseStyle.rotate = rotation;
-
-      const hasFormatting = el.querySelector('b, i, u, strong, em, span, br');
-
-      if (hasFormatting) {
-        // Text with inline formatting
-        const transformStr = computed.textTransform;
-        const runBase = {};
-        if (isBold && !shouldSkipBold(computed.fontFamily)) runBase.bold = true;
-        let runs = parseInlineFormatting(el, runBase, [], (str) => applyTextTransform(str, transformStr));
-        const runText = runs.map((run) => run.text).join('').trim();
-        if (!runText && text) {
-          runs = [{
-            text: applyTextTransform(text, transformStr),
-            options: { ...runBase },
-          }];
-        }
-
-        // Adjust lineSpacing based on largest fontSize in runs
-        const adjustedStyle = { ...baseStyle };
-        if (adjustedStyle.lineSpacing) {
-          const maxFontSize = Math.max(
-            adjustedStyle.fontSize,
-            ...runs.map(r => r.options?.fontSize || 0)
-          );
-          if (maxFontSize > adjustedStyle.fontSize) {
-            const lineHeightMultiplier = adjustedStyle.lineSpacing / adjustedStyle.fontSize;
-            adjustedStyle.lineSpacing = maxFontSize * lineHeightMultiplier;
-          }
-        }
-
-        pushElement({
-          type: el.tagName.toLowerCase(),
-          text: runs,
-          position: { x: pxToInch(x), y: pxToInch(y), w: pxToInch(w), h: pxToInch(h) },
-          style: adjustedStyle
-        }, el);
-      } else {
-        // Plain text - inherit CSS formatting
-        const textTransform = computed.textTransform;
-        const transformedText = applyTextTransform(text, textTransform);
-
-        pushElement({
-          type: el.tagName.toLowerCase(),
-          text: transformedText,
-          position: { x: pxToInch(x), y: pxToInch(y), w: pxToInch(w), h: pxToInch(h) },
-          style: {
-            ...baseStyle,
-            bold: isBold && !shouldSkipBold(computed.fontFamily),
-            italic: computed.fontStyle === 'italic',
-            underline: computed.textDecoration.includes('underline')
-          }
-        }, el);
-      }
-
-      processed.add(el);
+      emitTextElement(el);
     });
 
     const paintRank = (type) => {

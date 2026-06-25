@@ -30,10 +30,12 @@ export {
 
 export {
   getModelMaxTokens,
+  resolveAgentTypeForSessionCreation,
   createChatSession,
   preloadHistoricalSessionForOpen,
   switchChatSession,
   deleteChatSession,
+  archiveChatSession,
   renameChatSessionTitle,
   forkChatSession,
 } from './SessionModule';

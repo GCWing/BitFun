@@ -3,6 +3,7 @@
  * Maps to --bitfun-* CSS variables for iframe theme sync.
  */
 import type { ThemeConfig, ThemeType } from '@/infrastructure/theme/types';
+import { MINI_APP_SCROLLBAR_FALLBACKS } from '@/shared/theme/themeBoundaryFallbacks';
 
 export interface MiniAppThemePayload {
   type: ThemeType;
@@ -53,10 +54,9 @@ export function buildMiniAppThemeVars(theme: ThemeConfig | null): MiniAppThemePa
     vars['--bitfun-scrollbar-thumb'] = colors.scrollbar.thumb;
     vars['--bitfun-scrollbar-thumb-hover'] = colors.scrollbar.thumbHover;
   } else {
-    vars['--bitfun-scrollbar-thumb'] =
-      theme.type === 'dark' ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.15)';
-    vars['--bitfun-scrollbar-thumb-hover'] =
-      theme.type === 'dark' ? 'rgba(255, 255, 255, 0.22)' : 'rgba(0, 0, 0, 0.28)';
+    const scrollbarFallback = MINI_APP_SCROLLBAR_FALLBACKS[theme.type];
+    vars['--bitfun-scrollbar-thumb'] = scrollbarFallback.thumb;
+    vars['--bitfun-scrollbar-thumb-hover'] = scrollbarFallback.thumbHover;
   }
 
   return {

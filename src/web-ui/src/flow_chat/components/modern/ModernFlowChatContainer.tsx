@@ -44,7 +44,7 @@ import { parsePullRequestUrl } from '@/shared/utils/pullRequestLinks';
 import { createBackgroundCommandOutputTab, createReviewPlatformPullRequestDetailTab } from '@/shared/utils/tabUtils';
 import { isAcpFlowSession } from '../../utils/acpSession';
 import { flowChatStore } from '../../store/FlowChatStore';
-import { openBtwSessionInAuxPane } from '../../services/openBtwSession';
+import { openBtwSessionInAuxPane } from '../../services/btwSessionPane';
 import { resolveThreadGoalHeaderTitle } from '../../utils/threadGoalDisplay';
 import {
   findDialogTurn,
@@ -52,14 +52,19 @@ import {
 } from '../../utils/flowChatTurnScrollPolicy';
 import { isRemoteTraceContext, startupTrace } from '@/shared/utils/startupTrace';
 import { scheduleAfterStartupPaint } from '@/shared/utils/startupTaskScheduling';
-import { agentAPI } from '@/infrastructure/api';
+import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
 import { notificationService } from '@/shared/notification-system';
 import {
   clearHistorySessionOpenTransition,
   getHistorySessionOpenTransitionSnapshot,
+  hasRenderableSessionContent,
   HISTORY_SESSION_OPEN_INTENT_EVENT,
   type HistorySessionOpenIntentDetail,
 } from '../../services/sessionOpenIntent';
+import {
+  recordHistorySessionDiagnosticEvent,
+  warnHistorySessionLoadingLayerStalled,
+} from '../../services/historySessionDiagnostics';
 import {
   type BackgroundSubagentActivityItem,
 } from '../../utils/backgroundSubagentActivity';
@@ -94,6 +99,7 @@ type BackgroundCommandSummary = {
 
 const LATEST_TURN_AUTO_PIN_MAX_ATTEMPTS = 8;
 const HISTORY_INITIAL_CONTENT_PAINT_MAX_ATTEMPTS = 30;
+const HISTORY_LOADING_LAYER_STALL_WARN_MS = 800;
 const MOCK_BACKGROUND_ACTIVITIES_STORAGE_KEY = 'bitfun.flowChat.mockBackgroundActivities';
 
 const MOCK_BACKGROUND_SUBAGENTS: BackgroundSubagentSummary[] = [
@@ -522,6 +528,53 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     showHistoryOpenIntentOverlay;
   const showHistoryLoadingLayer =
     !showHistoryOpenIntentOverlay && !showFailedHistoryPlaceholder && showHistoryPlaceholder;
+  useEffect(() => {
+    if (!showHistoryLoadingLayer || !activeSession?.sessionId) {
+      return;
+    }
+
+    const sessionId = activeSession.sessionId;
+    recordHistorySessionDiagnosticEvent(sessionId, 'loading_layer_entered', {
+      historyState,
+      isHistorical: activeSession.isHistorical === true,
+      isRemote: isRemoteTraceContext(activeSession.remoteConnectionId, activeSession.remoteSshHost),
+      hasRenderableContent: hasRenderableSessionContent(activeSession),
+      dialogTurnCount: activeSession.dialogTurns.length,
+    });
+
+    const timeoutId = window.setTimeout(() => {
+      const latestState = flowChatStore.getState();
+      const latestSession = latestState.sessions.get(sessionId) ?? activeSession;
+      const activeSessionIdMatches = latestState.activeSessionId
+        ? latestState.activeSessionId === sessionId
+        : activeSession.sessionId === sessionId;
+
+      warnHistorySessionLoadingLayerStalled(sessionId, {
+        durationMs: HISTORY_LOADING_LAYER_STALL_WARN_MS,
+        historyState: latestSession.historyState,
+        isHistorical: latestSession.isHistorical === true,
+        isRemote: isRemoteTraceContext(latestSession.remoteConnectionId, latestSession.remoteSshHost),
+        activeSessionIdMatches,
+        hasRenderableContent: hasRenderableSessionContent(latestSession),
+        dialogTurnCount: latestSession.dialogTurns.length,
+        hasPendingHistoryCompletion,
+        hasDeferredHistoryProjection,
+      });
+    }, HISTORY_LOADING_LAYER_STALL_WARN_MS);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      recordHistorySessionDiagnosticEvent(sessionId, 'loading_layer_exited', {
+        historyState,
+      });
+    };
+  }, [
+    activeSession,
+    hasDeferredHistoryProjection,
+    hasPendingHistoryCompletion,
+    historyState,
+    showHistoryLoadingLayer,
+  ]);
   const blockHistoryOverlayActivation = useCallback((event: React.SyntheticEvent<HTMLElement>) => {
     if (!showHistoryLoadingLayer && !shouldBlockHistoryTransitionInteraction) {
       return;
@@ -1310,12 +1363,23 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     { priority: 15, description: 'keyboard.shortcuts.chat.search' }
   );
 
+  useShortcut(
+    'chat.insertNewline',
+    { key: 'Enter', ctrl: true, scope: 'chat', allowInInput: true },
+    () => {
+      document.execCommand('insertLineBreak');
+    },
+    { priority: 25, description: 'keyboard.shortcuts.chat.insertNewline' }
+  );
+
   return (
     <FlowChatContext.Provider value={contextValue}>
       <div
         ref={chatScopeRef}
         className={`modern-flowchat-container flow-chat-typography ${className}`}
         data-shortcut-scope="chat"
+        data-testid="flowchat-container"
+        data-session-id={activeSession?.sessionId ?? ''}
       >
         <FlowChatHeader
           currentTurn={effectiveVisibleTurnInfo?.turnIndex ?? 0}
@@ -1361,6 +1425,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
 
         <div
           className="modern-flowchat-container__messages"
+          data-testid="flowchat-messages"
           data-active-session-id={activeSession?.sessionId ?? ''}
           data-history-state={historyState ?? 'none'}
           data-context-restore-state={activeSession?.contextRestoreState ?? 'none'}

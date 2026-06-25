@@ -39,6 +39,7 @@ pub use registry::{
     get_readonly_registered_tool_names, get_readonly_tools,
 };
 pub use restrictions::{
-    is_miniapp_headless_agent_run, miniapp_headless_agent_tool_restrictions, ToolPathOperation,
-    ToolPathPolicy, ToolRuntimeRestrictions,
+    is_miniapp_headless_agent_run, miniapp_headless_agent_tool_restrictions,
+    tool_restrictions_for_delegation_policy, ToolPathOperation, ToolPathPolicy,
+    ToolRuntimeRestrictions,
 };

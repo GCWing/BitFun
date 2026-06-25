@@ -29,7 +29,7 @@
   overflow: hidden;
   cursor: pointer;
   animation: skill-card-in 0.22s $easing-decelerate both;
-  animation-delay: calc(var(--card-index, 0) * 35ms);
+  animation-delay: calc(var(--surface-stagger-index, 0) * 35ms);
   transition:
     transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
     box-shadow 0.35s ease;
@@ -87,7 +87,7 @@
   &__icon {
     color: var(--color-text-primary);
     animation: skill-card-icon-pop 0.46s $easing-decelerate both;
-    animation-delay: calc(var(--card-index, 0) * 35ms + 50ms);
+    animation-delay: calc(var(--surface-stagger-index, 0) * 35ms + 50ms);
   }
 
   &__badges {

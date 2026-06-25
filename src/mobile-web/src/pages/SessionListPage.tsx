@@ -191,7 +191,10 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
   const toastTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
   const hasSearchQuery = searchQuery.trim().length > 0;
-  const showResumeCard = !loading && sessions.length > 0 && !hasSearchQuery;
+  // Show the resume card as soon as session data is available — don't gate it
+  // behind `loading`, otherwise a background refresh hides the card and makes it
+  // pop back in after the network round-trip, lagging behind the rest of the UI.
+  const showResumeCard = sessions.length > 0 && !hasSearchQuery;
 
   // ── Long-press context menu ─────────────────────────────────────
   const clearLongPressTimer = () => {
@@ -286,6 +289,7 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
   const offsetRef = useRef(0);
   const listRef = useRef<HTMLDivElement>(null);
   const listRequestSeqRef = useRef(0);
+  const initLoadedPathRef = useRef<string | undefined>(undefined);
   const touchStartY = useRef(0);
   const isPulling = useRef(false);
 
@@ -411,11 +415,13 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
           });
           setCurrentWorkspace(null);
           setDisplayMode('assistant');
+          initLoadedPathRef.current = info.path;
           await loadFirstPage(info.path);
         } else {
           const ws = info.has_workspace ? info : null;
           setCurrentWorkspace(ws);
           if (ws?.path) {
+            initLoadedPathRef.current = ws.path;
             await loadFirstPage(ws.path);
           } else {
             await trySelectFirstProWorkspace();
@@ -470,6 +476,13 @@ const SessionListPage: React.FC<SessionListPageProps> = ({ sessionMgr, onSelectS
   useEffect(() => {
     const workspacePath = displayMode === 'assistant' ? currentAssistant?.path : currentWorkspace?.path;
     if (!workspacePath) return;
+    // Skip the redundant first load when init() already loaded this path —
+    // otherwise the state change from init() triggers a second loadFirstPage
+    // 250 ms later, causing an extra network round-trip and a loading flicker.
+    if (initLoadedPathRef.current === workspacePath) {
+      initLoadedPathRef.current = undefined;
+      return;
+    }
     const timer = setTimeout(() => {
       loadFirstPage(workspacePath, searchQuery);
     }, 250);

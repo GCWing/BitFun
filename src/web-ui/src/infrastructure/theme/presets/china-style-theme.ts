@@ -1,6 +1,13 @@
  
 
 import { ThemeConfig } from '../types';
+import {
+  createChinaTypography,
+  createCompactRadius,
+  createStandardEasing,
+  createStandardSpacing,
+  createWindowControls,
+} from './shared';
 
 export const bitfunChinaStyleTheme: ThemeConfig = {
   
@@ -77,7 +84,7 @@ export const bitfunChinaStyleTheme: ThemeConfig = {
     
     border: {
       subtle: 'rgba(106, 92, 70, 0.12)',      
-      base: 'rgba(106, 92, 70, 0.20)',        
+      base: 'rgba(106, 92, 70, 0.2)',
       medium: 'rgba(106, 92, 70, 0.28)',      
       strong: 'rgba(106, 92, 70, 0.36)',      
       prominent: 'rgba(106, 92, 70, 0.48)',   
@@ -86,7 +93,7 @@ export const bitfunChinaStyleTheme: ThemeConfig = {
     element: {
       subtle: 'rgba(46, 94, 138, 0.03)',      
       soft: 'rgba(46, 94, 138, 0.06)',        
-      base: 'rgba(46, 94, 138, 0.10)',        
+      base: 'rgba(46, 94, 138, 0.1)',
       medium: 'rgba(46, 94, 138, 0.14)',      
       strong: 'rgba(46, 94, 138, 0.18)',      
       elevated: 'rgba(255, 255, 255, 0.85)',  
@@ -120,7 +127,7 @@ export const bitfunChinaStyleTheme: ThemeConfig = {
     glow: {
       blue: '0 8px 24px rgba(46, 94, 138, 0.18), 0 4px 12px rgba(46, 94, 138, 0.12), 0 2px 6px rgba(106, 92, 70, 0.05)',
       purple: '0 8px 24px rgba(126, 176, 155, 0.18), 0 4px 12px rgba(126, 176, 155, 0.12), 0 2px 6px rgba(106, 92, 70, 0.05)',
-      mixed: '0 8px 24px rgba(46, 94, 138, 0.12), 0 4px 12px rgba(126, 176, 155, 0.10), 0 2px 6px rgba(106, 92, 70, 0.05)',
+      mixed: '0 8px 24px rgba(46, 94, 138, 0.12), 0 4px 12px rgba(126, 176, 155, 0.1), 0 2px 6px rgba(106, 92, 70, 0.05)',
     },
     
     blur: {
@@ -131,27 +138,9 @@ export const bitfunChinaStyleTheme: ThemeConfig = {
       intense: 'blur(20px) saturate(1.12) brightness(1.03)',
     },
     
-    radius: {
-      sm: '4px',                   
-      base: '6px',
-      lg: '10px',
-      xl: '14px',
-      '2xl': '18px',
-      full: '9999px',
-    },
+    radius: createCompactRadius(),
     
-    spacing: {
-      1: '4px',
-      2: '8px',
-      3: '12px',
-      4: '16px',
-      5: '20px',
-      6: '24px',
-      8: '32px',
-      10: '40px',
-      12: '48px',
-      16: '64px',
-    },
+    spacing: createStandardSpacing(),
     
     opacity: {
       disabled: 0.5,
@@ -171,61 +160,17 @@ export const bitfunChinaStyleTheme: ThemeConfig = {
       lazy: '1.2s',                 
     },
     
-    easing: {
-      standard: 'cubic-bezier(0.4, 0, 0.2, 1)',
-      decelerate: 'cubic-bezier(0, 0, 0.2, 1)',
-      accelerate: 'cubic-bezier(0.4, 0, 1, 1)',
-      bounce: 'cubic-bezier(0.68, -0.55, 0.265, 1.55)',
-      smooth: 'cubic-bezier(0.25, 0.1, 0.25, 1)',    
-    },
+    easing: createStandardEasing('cubic-bezier(0.25, 0.1, 0.25, 1)'),
   },
   
   
-  typography: {
-    font: {
-      sans: "'Noto Sans SC', 'Source Han Sans CN', -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Segoe UI', 'Microsoft YaHei UI', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif",
-      mono: "'Source Han Mono CN', 'Noto Sans Mono CJK SC', 'JetBrains Mono', 'FiraCode', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, 'Cascadia Mono', 'Cascadia Code', Consolas, 'Liberation Mono', 'Courier New', monospace",
-    },
-    
-    weight: {
-      normal: 400,
-      medium: 500,
-      semibold: 600,
-      bold: 700,
-    },
-    
-    size: {
-      xs: '12px',
-      sm: '13px',
-      base: '14px',
-      lg: '15px',
-      xl: '16px',
-      '2xl': '18px',
-      '3xl': '22px',
-      '4xl': '26px',
-      '5xl': '32px',
-    },
-    
-    lineHeight: {
-      tight: 1.3,
-      base: 1.6,                    
-      relaxed: 1.8,
-    },
-  },
+  typography: createChinaTypography(),
   
   
   components: {
     
-    windowControls: {
-      minimize: {
-        dot: 'rgba(46, 94, 138, 0.45)',
-        dotShadow: '0 0 4px rgba(46, 94, 138, 0.2)',
-        hoverBg: 'rgba(46, 94, 138, 0.12)',
-        hoverColor: '#2e5e8a',
-        hoverBorder: 'rgba(46, 94, 138, 0.2)',
-        hoverShadow: '0 2px 8px rgba(46, 94, 138, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.5)',
-      },
-      maximize: {
+    windowControls: createWindowControls({
+      standard: {
         dot: 'rgba(46, 94, 138, 0.45)',
         dotShadow: '0 0 4px rgba(46, 94, 138, 0.2)',
         hoverBg: 'rgba(46, 94, 138, 0.12)',
@@ -247,7 +192,7 @@ export const bitfunChinaStyleTheme: ThemeConfig = {
         disabledDot: 'rgba(106, 92, 70, 0.1)',
         flowGradient: 'linear-gradient(90deg, transparent, rgba(106, 92, 70, 0.05), rgba(106, 92, 70, 0.08), rgba(106, 92, 70, 0.05), transparent)',
       },
-    },
+    }),
     
     button: {
       
@@ -351,7 +296,7 @@ export const bitfunChinaStyleTheme: ThemeConfig = {
       'editor.selectionBackground': 'rgba(46, 94, 138, 0.28)',   
       'editor.selectionForeground': '#1a1a1a',                   
       'editor.inactiveSelectionBackground': 'rgba(46, 94, 138, 0.18)',  
-      'editor.selectionHighlightBackground': 'rgba(46, 94, 138, 0.20)',  
+      'editor.selectionHighlightBackground': 'rgba(46, 94, 138, 0.2)',
       'editor.selectionHighlightBorder': 'rgba(46, 94, 138, 0.35)',      
       'editorCursor.foreground': '#2e5e8a',       
       'editor.wordHighlightBackground': 'rgba(46, 94, 138, 0.12)',  

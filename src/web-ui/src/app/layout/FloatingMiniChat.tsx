@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { flowChatStore } from '../../flow_chat/store/FlowChatStore';
 import { syncSessionToModernStore } from '../../flow_chat/services/storeSync';
+import { activateMainSession } from '../../flow_chat/services/sessionActivation';
 import { useToolbarModeContext } from '../../flow_chat/components/toolbar-mode/ToolbarModeContext';
 import type { FlowChatState } from '../../flow_chat/types/flow-chat';
 import { compareSessionsForDisplay } from '../../flow_chat/utils/sessionOrdering';
@@ -113,9 +114,11 @@ export const FloatingMiniChat: React.FC = () => {
   const handleSwitchSession = useCallback((e: React.MouseEvent, sessionId: string) => {
     e.stopPropagation();
     e.preventDefault();
-    flowChatStore.switchSession(sessionId);
-    syncSessionToModernStore(sessionId);
-    setShowSessionPicker(false);
+    void activateMainSession(sessionId).then((activated) => {
+      if (activated) {
+        setShowSessionPicker(false);
+      }
+    });
   }, []);
 
   const handleCancel = useCallback(() => {

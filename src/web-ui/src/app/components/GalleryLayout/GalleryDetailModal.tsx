@@ -13,6 +13,10 @@ interface GalleryDetailModalProps {
   meta?: React.ReactNode;
   actions?: React.ReactNode;
   children?: React.ReactNode;
+  testId?: string;
+  titleTestId?: string;
+  descriptionTestId?: string;
+  closeButtonTestId?: string;
 }
 
 const GalleryDetailModal: React.FC<GalleryDetailModalProps> = ({
@@ -26,8 +30,21 @@ const GalleryDetailModal: React.FC<GalleryDetailModalProps> = ({
   meta,
   actions,
   children,
+  testId,
+  titleTestId,
+  descriptionTestId,
+  closeButtonTestId,
 }) => (
-  <Modal isOpen={isOpen} onClose={onClose} size="medium" title={title} contentInset>
+  <Modal
+    isOpen={isOpen}
+    onClose={onClose}
+    size="medium"
+    title={title}
+    contentInset
+    testId={testId}
+    titleTestId={titleTestId}
+    closeButtonTestId={closeButtonTestId}
+  >
     <div className="gallery-detail-modal">
       <div className="gallery-detail-modal__hero">
         {icon ? (
@@ -41,7 +58,7 @@ const GalleryDetailModal: React.FC<GalleryDetailModalProps> = ({
         <div className="gallery-detail-modal__summary">
           {badges ? <div className="gallery-detail-modal__badges">{badges}</div> : null}
           {description?.trim() ? (
-            <p className="gallery-detail-modal__description">{description.trim()}</p>
+            <p className="gallery-detail-modal__description" data-testid={descriptionTestId}>{description.trim()}</p>
           ) : null}
           {meta ? <div className="gallery-detail-modal__meta">{meta}</div> : null}
         </div>

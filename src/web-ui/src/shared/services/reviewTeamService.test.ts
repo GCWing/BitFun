@@ -5,6 +5,7 @@ import {
   DEFAULT_REVIEW_TEAM_EXECUTION_POLICY,
   DEFAULT_REVIEW_TEAM_STRATEGY_LEVEL,
   FALLBACK_REVIEW_TEAM_DEFINITION,
+  REVIEW_TEAM_MEMBER_ACCENT_DEFAULT,
   REVIEW_STRATEGY_DEFINITIONS,
   buildEffectiveReviewTeamManifest,
   buildReviewTeamPromptBlock,
@@ -457,7 +458,7 @@ describe('reviewTeamService', () => {
               roleName: id,
               description: `${id} description`,
               responsibilities: [`${id} responsibility`],
-              accentColor: '#64748b',
+              accentColor: REVIEW_TEAM_MEMBER_ACCENT_DEFAULT,
               conditional: id === 'ReviewFrontend',
             })),
             {

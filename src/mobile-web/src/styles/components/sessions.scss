@@ -166,6 +166,7 @@
   cursor: pointer;
   transition: transform var(--motion-fast) var(--easing-standard),
     background var(--motion-fast) var(--easing-standard);
+  animation: sessionItemIn var(--motion-base) var(--easing-decelerate) both;
 
   &:active {
     transform: scale(0.985);

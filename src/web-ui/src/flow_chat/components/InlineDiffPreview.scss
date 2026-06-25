@@ -4,12 +4,12 @@
  */
 
 .inline-diff-preview {
-  --markdown-font-mono: "Fira Code", "JetBrains Mono", Consolas, "Courier New", monospace;
+  --markdown-font-mono: var(--font-family-mono);
 
   position: relative;
   width: 100%;
   background: transparent;
-  font-family: var(--markdown-font-mono, "Fira Code", "JetBrains Mono", Consolas, "Courier New", monospace);
+  font-family: var(--markdown-font-mono);
   font-size: var(--flowchat-font-size-sm);
   font-weight: 400;
   
@@ -96,7 +96,7 @@
   }
 
   &--removed {
-    background: var(--git-color-deleted-bg, var(--color-error-bg));
+    background: var(--git-color-deleted-bg);
 
     .diff-line__gutter {
       background: var(--git-color-deleted-bg-hover);

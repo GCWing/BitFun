@@ -81,7 +81,7 @@ const NavPanel: React.FC<NavPanelProps> = ({ className = '' }) => {
   ].filter(Boolean).join(' ');
 
   return (
-    <nav className={`bitfun-nav-panel ${className}`} aria-label={t('nav.aria.mainNav')}>
+    <nav className={`bitfun-nav-panel ${className}`} aria-label={t('nav.aria.mainNav')} data-testid="nav-panel">
       <div ref={contentRef} className={contentCls}>
 
         <div className="bitfun-nav-panel__layer bitfun-nav-panel__layer--main">

@@ -59,7 +59,7 @@ license: MIT
 
 | 用户目标 | HTML 怎么写 |
 |----------|----------------|
-| 要在 PowerPoint 里改字 | 960×540pt + 四条硬约束；写完对照 editable-pptx 自检 |
+| 要在 PowerPoint 里改字 | 960×540pt + 四条硬约束；写时遵守 editable-pptx 规则 |
 | 只要演讲/视觉自由、不改 pptx | 可用 1920×1080px；复杂 CSS/渐变可保留 |
 | 既要复杂视觉又要可改字 pptx | **不可兼得**——说明限制；保留 1920 演讲版或另做简化 960 版 |
 
@@ -74,9 +74,9 @@ license: MIT
 
 架构选型（多文件 vs 单文件 deck-stage）、聚合 `index.html`、grammar showcase → `references/slide-decks.md`。
 
-## 防溢出预算（每页必检，违规即重写该页）
+## 防溢出预算（写前心算，一次写对）
 
-溢出 = 渲染后内容超出 960×540pt 画布，是最常见的硬伤。写每页 HTML 前先做**垂直预算心算**，写完后逐页核对：
+溢出 = 渲染后内容超出 960×540pt 画布，是最常见的硬伤。写每页 HTML 前先做**垂直预算心算**，一次写对：
 
 - 可用高度恒等式：`540pt = 标题区 + 正文区 + 底部脚注 + 安全边距`。标题区按 70–95pt、脚注行按 20–25pt、**底部安全边距 ≥ 36pt（0.5in，PPTX 导出校验线）** 预留，正文区实际只有约 **390–420pt**。
 - 预算估算法：正文每行 ≈ `font-size × line-height`（如 12px × 1.5 ≈ 13.5pt/行）；表格每行 ≈ 字号 + 上下 padding；卡片 = 内容行数 × 行高 + padding × 2 + 间距。**所有块的预算之和必须 ≤ 正文区高度**，估不下就删行、合栏或拆页，禁止靠缩字号硬塞。
@@ -106,6 +106,14 @@ license: MIT
 | 分布与关联 | 点图、直方图、散点图、2×2 |
 | 流程与系统 | 流程图、泳道、架构图、关系图 |
 | 层级与论证 | 树状图、问题树、证据链、结构化文字 |
+
+**技术方案 / 工程分析 / 项目架构类内容的特别触发**：当 deck 主题涉及软件架构、系统设计、技术方案、工程复盘、数据处理流水线等内容时，**架构图和流程图几乎总是比文字更有效，必须在对应页面使用，而不是用编号列表或散文描述系统组成与处理步骤**。具体地：
+- 页面讲「系统由哪些模块组成」「模块间依赖关系」→ **分层架构图**（不是文字列表）
+- 页面讲「请求/数据/任务经过哪些步骤」→ **线性流程图带箭头**（不是编号段落）
+- 页面讲「多个角色/团队如何协作」→ **泳道图**
+- 页面讲「为什么出这个故障/问题」→ **因果链/问题树**
+
+实现方法见 `references/data-information-visualization.md` 第 6.1 节，提供了分层架构图、线性流程图、泳道图、因果链的纯 CSS 可编辑 snippet，直接套用。
 
 原则：
 
@@ -141,7 +149,7 @@ DNA 与样例 → `references/design-styles.md`。
 | styleKey | 预设 | 一句话 DNA |
 |----------|------|------------|
 | `clean-business` | 简洁商务 | 纯白背景、平静蓝强调、产品文档式极简 |
-| `insight-report` | 洞察汇报 | 分析文档式高密度页：完整句子论证、固定分析框架、满版矩阵与过程叙事 |
+| `insight-report` | 洞察汇报 | 把 raw 数据转为有效信息：数据可视化优先、版式多样、完整句子论证与固定分析框架 |
 | `minimal-gallery` | 黑白极简 | 严格网格、黑白灰、画册式留白 |
 | `bold-editorial` | 黑白红大字 | 白底黑色大字、红色点缀、非对称编辑排版 |
 | `yellow-magazine` | 黄底黑字杂志 | 高识别度黄底黑字、手写点缀、杂志感 |
@@ -153,11 +161,10 @@ DNA 与样例 → `references/design-styles.md`。
 
 ## 工作流
 
-1. **假设 + 纲**：更新 `project.json` 的 `outline[]` / `slide_order`；顺带识别可能受益于图表、图示或更强视觉表达的页面，先不批量写 HTML。
+1. **假设 + 纲**：更新 `project.json` 的 `outline[]` / `slide_order`；顺带识别可能受益于图表、图示或更强视觉表达的页面，先不批量写 HTML。**若主题涉及技术方案/工程/系统/项目分析，必须在 outline 阶段就识别出哪些页是「系统组成」「处理流程」「多角色协作」「根因分析」，并标注用架构图/流程图/泳道图/因果链**（参考上方「技术方案类内容的特别触发」）。
 2. **≥5 页先打样**：做 2 页视觉差异最大的 showcase，定 grammar 再批量（见 slide-decks.md）。
-3. **逐页 HTML**：封面 `slide-01`（标题/副标题/作者或日期）→ 按 outline 生成其余页；根据内容与风格自由选择图表、图示、文字、图片或混合构图，每页完整内联 CSS。
-4. **整体视觉 + PPTX 自检**：检查是否遗漏明显的可视化机会，也检查是否为了变化而滥用图表；再逐页核对四条硬约束，违规即改 HTML。
-5. **改稿范围**（输入里若有 `scope`）：
+3. **逐页 HTML**：封面 `slide-01`（标题/副标题/作者或日期）→ 按 outline 生成其余页；根据内容与风格自由选择图表、图示、文字、图片或混合构图，每页完整内联 CSS。写每页时一次写对，写完即止，不回头逐页复核或返工改 HTML。
+4. **改稿范围**（输入里若有 `scope`）：
    - `deck`：可改 outline 与任意 `slides/*.html`
    - `current_slide` / `slide_index`：**只改指定页**，不动其他 slide 文件
 
@@ -212,8 +219,8 @@ DNA 与样例 → `references/design-styles.md`。
 | 风格 DNA | `references/design-styles.md` |
 | 风格预设（stylePreset）视觉规范 | `references/style-presets/<styleKey>.md` |
 | 文案与排版 | `references/content-guidelines.md` |
-| 场景版式 | `references/scene-templates.md` |
-| 数据可视化、信息可视化与图表实现 | `references/data-information-visualization.md` |
+| 场景版式（含技术方案/工程分析/架构汇报场景） | `references/scene-templates.md` |
+| 数据可视化、信息可视化、图表与架构图/流程图实现 | `references/data-information-visualization.md` |
 
 ## 不在范围
 

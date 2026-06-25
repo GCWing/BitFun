@@ -11,7 +11,10 @@ pub mod resolver;
 pub mod types;
 
 pub use registry::SkillRegistry;
-pub use types::{ModeSkillInfo, ModeSkillStateReason, SkillData, SkillInfo, SkillLocation};
+pub use types::{
+    render_loaded_skill_for_assistant, ModeSkillInfo, ModeSkillStateReason, SkillData, SkillInfo,
+    SkillLocation,
+};
 
 /// Get global Skill registry instance
 pub fn get_skill_registry() -> &'static SkillRegistry {

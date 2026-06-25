@@ -846,7 +846,7 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
     if (toolItem.toolName === 'Edit') {
       if (status !== 'completed' && newStringContent) {
         return (
-          <div className="streaming-content-preview">
+          <div className="streaming-content-preview" data-testid="chat-file-change-preview">
             <div className="preview-text">
               <CodePreview
                 content={newStringContent}
@@ -864,7 +864,7 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
       
       if (status === 'completed' && !isParamsStreaming && (oldStringContent || newStringContent)) {
         return (
-          <div className="streaming-content-preview">
+          <div className="streaming-content-preview" data-testid="chat-file-change-preview">
             <div className="preview-text">
               <InlineDiffPreview
                 originalContent={oldStringContent}
@@ -885,7 +885,7 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
     if (toolItem.toolName === 'Write') {
       if (status !== 'completed' && contentPreview) {
         return (
-          <div className="streaming-content-preview">
+          <div className="streaming-content-preview" data-testid="chat-file-change-preview">
             <div className="preview-text">
               <CodePreview
                 content={contentPreview}
@@ -903,7 +903,7 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
       
       if (status === 'completed' && !isParamsStreaming && contentPreview) {
         return (
-          <div className="streaming-content-preview">
+          <div className="streaming-content-preview" data-testid="chat-file-change-preview">
             <div className="preview-text">
               <InlineDiffPreview
                 originalContent=""
@@ -945,6 +945,14 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
   );
 
   const isDeleteTool = toolItem.toolName === 'Delete';
+  const fileChangeAction =
+    toolItem.toolName === 'Write'
+      ? 'create'
+      : toolItem.toolName === 'Edit'
+        ? 'modify'
+        : toolItem.toolName === 'Delete'
+          ? 'delete'
+          : toolItem.toolName.toLowerCase();
 
   const getDeleteStatusIcon = () => {
     switch (status) {
@@ -965,9 +973,29 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
 
   const renderDeleteContent = () => {
     if (status === 'error') {
-      return `${t('toolCards.file.delete')}${t('toolCards.file.failed')}: ${fileName}`;
+      return (
+        <>
+          <span data-testid="chat-file-change-action" data-action={fileChangeAction}>
+            {t('toolCards.file.delete')}{t('toolCards.file.failed')}
+          </span>
+          {': '}
+          <span className="delete-file-name" data-testid="chat-file-change-path" data-path={currentFilePath}>
+            {fileName}
+          </span>
+        </>
+      );
     }
-    return <>{t('toolCards.file.delete')}: <span className="delete-file-name">{fileName}</span></>;
+    return (
+      <>
+        <span data-testid="chat-file-change-action" data-action={fileChangeAction}>
+          {t('toolCards.file.delete')}
+        </span>
+        {': '}
+        <span className="delete-file-name" data-testid="chat-file-change-path" data-path={currentFilePath}>
+          {fileName}
+        </span>
+      </>
+    );
   };
 
   const expandedContent = renderExpandedContent();
@@ -1006,6 +1034,8 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
             : undefined
         }
         action={actionText}
+        actionTestId="chat-file-change-action"
+        actionDataAttributes={{ 'data-action': fileChangeAction }}
       content={
         isFailed ? (
           <span
@@ -1020,7 +1050,11 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
         ) : (
           <>
             <Tooltip content={currentFilePath || fileName} placement="top">
-              <span className={`file-name ${isDeleteTool ? 'file-name--muted' : ''}`}>
+              <span
+                className={`file-name ${isDeleteTool ? 'file-name--muted' : ''}`}
+                data-testid="chat-file-change-path"
+                data-path={currentFilePath}
+              >
                 {fileName}
               </span>
             </Tooltip>
@@ -1119,57 +1153,75 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
 
   if (isDeleteTool) {
     return (
-      <CompactToolCard
-        status={status}
-        isExpanded={false}
-        className="read-file-card delete-file-card"
-        clickable={false}
-        header={
-          <CompactToolCardHeader
-            icon={getDeleteStatusIcon()}
-            content={renderDeleteContent()}
-            extra={showConfirmationActions ? (
-              <ToolCardHeaderActions className="file-op-header-actions">
-                {hasAcpPermissionOptions(toolItem) ? (
-                  <AcpPermissionActions
-                    toolItem={toolItem}
-                    input={toolCall?.input}
-                    buttonClassName="file-op-header-action"
-                    onConfirm={onConfirm}
-                    onReject={onReject}
-                  />
-                ) : (
-                  <>
-                    <IconButton
-                      className="tool-card-header-action file-op-header-action file-op-confirm-btn"
-                      variant="success"
-                      size="xs"
-                      onClick={handleConfirmClick}
-                      tooltip={t('toolCards.mcp.confirmExecute')}
-                    >
-                      <Check size={12} />
-                    </IconButton>
-                    <IconButton
-                      className="tool-card-header-action file-op-header-action file-op-reject-btn"
-                      variant="danger"
-                      size="xs"
-                      onClick={handleRejectClick}
-                      tooltip={t('toolCards.mcp.cancel')}
-                    >
-                      <X size={12} />
-                    </IconButton>
-                  </>
-                )}
-              </ToolCardHeaderActions>
-            ) : undefined}
-          />
-        }
-      />
+      <div
+        ref={cardRootRef}
+        data-testid="chat-file-change-card"
+        data-tool-card-id={toolId ?? ''}
+        data-status={status}
+        data-action={fileChangeAction}
+        data-path={currentFilePath}
+        data-expanded="false"
+      >
+        <CompactToolCard
+          status={status}
+          isExpanded={false}
+          className="read-file-card delete-file-card"
+          clickable={false}
+          header={
+            <CompactToolCardHeader
+              icon={getDeleteStatusIcon()}
+              content={renderDeleteContent()}
+              extra={showConfirmationActions ? (
+                <ToolCardHeaderActions className="file-op-header-actions">
+                  {hasAcpPermissionOptions(toolItem) ? (
+                    <AcpPermissionActions
+                      toolItem={toolItem}
+                      input={toolCall?.input}
+                      buttonClassName="file-op-header-action"
+                      onConfirm={onConfirm}
+                      onReject={onReject}
+                    />
+                  ) : (
+                    <>
+                      <IconButton
+                        className="tool-card-header-action file-op-header-action file-op-confirm-btn"
+                        variant="success"
+                        size="xs"
+                        onClick={handleConfirmClick}
+                        tooltip={t('toolCards.mcp.confirmExecute')}
+                      >
+                        <Check size={12} />
+                      </IconButton>
+                      <IconButton
+                        className="tool-card-header-action file-op-header-action file-op-reject-btn"
+                        variant="danger"
+                        size="xs"
+                        onClick={handleRejectClick}
+                        tooltip={t('toolCards.mcp.cancel')}
+                      >
+                        <X size={12} />
+                      </IconButton>
+                    </>
+                  )}
+                </ToolCardHeaderActions>
+              ) : undefined}
+            />
+          }
+        />
+      </div>
     );
   }
 
   return (
-    <div ref={cardRootRef} data-tool-card-id={toolId ?? ''}>
+    <div
+      ref={cardRootRef}
+      data-testid="chat-file-change-card"
+      data-tool-card-id={toolId ?? ''}
+      data-status={status}
+      data-action={fileChangeAction}
+      data-path={currentFilePath}
+      data-expanded={isCardContentExpanded ? 'true' : 'false'}
+    >
       <BaseToolCard
         status={status}
         isExpanded={isCardContentExpanded}
@@ -1184,6 +1236,7 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
         }
         isFailed={isFailed}
         requiresConfirmation={showConfirmationActions}
+        toggleTestId="chat-file-change-toggle"
         headerExpandAffordance={hasExpandableContent}
         headerAffordanceKind="expand"
       />

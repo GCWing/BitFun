@@ -34,7 +34,7 @@ Unless otherwise stated by the user or existing template
 ### Number Formatting Standards
 
 #### Required Format Rules
-- **Years**: Format as text strings (e.g., "2024" not "2,024")
+- **Years**: Format as text strings (e.g., "2026" not "2,026")
 - **Currency**: Use $#,##0 format; ALWAYS specify units in headers ("Revenue ($mm)")
 - **Zeros**: Use number formatting to make all zeros "-", including percentages (e.g., "$#,##0;($#,##0);-")
 - **Percentages**: Default to 0.0% format (one decimal)

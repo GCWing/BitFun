@@ -5,14 +5,14 @@
 //! `params` and returns a JSON `result`.
 
 use crate::bootstrap::ServerAppState;
-use anyhow::{Result, anyhow};
+use anyhow::{anyhow, Result};
 use bitfun_core::agentic::agents::SubAgentSource;
 use bitfun_core::agentic::coordination::{DialogSubmissionPolicy, DialogTriggerSource};
 use bitfun_core::agentic::core::SessionConfig;
 use bitfun_core::agentic::deep_review_policy::{
-    DeepReviewQueueControlAction, apply_deep_review_queue_control,
+    apply_deep_review_queue_control, DeepReviewQueueControlAction,
 };
-use bitfun_core::service::i18n::{LocaleId, LocaleMetadata, sync_global_i18n_service_locale};
+use bitfun_core::service::i18n::{sync_global_i18n_service_locale, LocaleId, LocaleMetadata};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -210,9 +210,10 @@ pub async fn dispatch(
             let workspace =
                 workspace_root_from_request(request.get("workspacePath").and_then(|v| v.as_str()));
 
-            if let Some(workspace) = workspace.as_deref() {
-                state.agent_registry.load_custom_subagents(workspace).await;
-            }
+            state
+                .agent_registry
+                .load_custom_agents(workspace.as_deref())
+                .await;
 
             if state
                 .agent_registry

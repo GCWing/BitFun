@@ -167,7 +167,18 @@ async function deleteProbeSession(sessionId: string): Promise<void> {
   }).catch(() => undefined);
 }
 
+async function setProbeScriptTimeout(sessionId: string, timeoutMs: number): Promise<void> {
+  await fetch(`http://${DRIVER_HOST}:${DRIVER_PORT}/session/${sessionId}/timeouts`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ script: timeoutMs }),
+  }).catch(() => undefined);
+}
+
 async function probeDocumentReady(sessionId: string): Promise<boolean> {
+  await setProbeScriptTimeout(sessionId, 1000);
   const response = await fetch(`http://${DRIVER_HOST}:${DRIVER_PORT}/session/${sessionId}/execute/sync`, {
     method: 'POST',
     headers: {

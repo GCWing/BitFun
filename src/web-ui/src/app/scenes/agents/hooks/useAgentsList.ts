@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { TFunction } from 'i18next';
 import { agentAPI, type ModeInfo } from '@/infrastructure/api/service-api/AgentAPI';
+import type { AgentSource } from '@/infrastructure/api/service-api/CustomAgentAPI';
 import { SubagentAPI, type SubagentInfo } from '@/infrastructure/api/service-api/SubagentAPI';
 import { configAPI } from '@/infrastructure/api/service-api/ConfigAPI';
 import type { AgentProfileConfigItem, ModeSkillInfo } from '@/infrastructure/config/types';
@@ -11,6 +12,7 @@ import { enrichCapabilities } from '../utils';
 import { STATIC_HIDDEN_AGENT_IDS, isAgentInOverviewZone } from '../agentVisibility';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { loadDefaultReviewTeamDefinition } from '@/shared/services/reviewTeamService';
+import { globalEventBus } from '@/infrastructure/event-bus';
 
 export type FilterLevel = 'all' | 'builtin' | 'user' | 'project';
 export type FilterType = 'all' | 'mode' | 'subagent';
@@ -81,6 +83,12 @@ function buildModeConfigsByProfile(
   }
 
   return byProfile;
+}
+
+function resolveAgentSource(
+  agent: Pick<AgentWithCapabilities, 'source' | 'subagentSource'>,
+): AgentSource {
+  return agent.source ?? agent.subagentSource ?? 'builtin';
 }
 
 export function useAgentsList({
@@ -165,6 +173,9 @@ export function useAgentsList({
           defaultTools: mode.defaultTools ?? [],
           defaultEnabled: true,
           effectiveEnabled: true,
+          source: mode.source,
+          path: mode.path,
+          model: mode.model,
           configProfileId: mode.configProfileId,
           configProfileLabel: mode.configProfileLabel,
           configProfileMemberModeIds: mode.configProfileMemberModeIds,
@@ -202,6 +213,17 @@ export function useAgentsList({
 
   useEffect(() => {
     void loadAgents();
+  }, [loadAgents]);
+
+  useEffect(() => {
+    const handleCustomAgentUpdated = () => {
+      void loadAgents();
+    };
+
+    globalEventBus.on('custom-agent:updated', handleCustomAgentUpdated);
+    return () => {
+      globalEventBus.off('custom-agent:updated', handleCustomAgentUpdated);
+    };
   }, [loadAgents]);
 
   const getModeProfile = useCallback((agentId: string): ModeProfileEntry | null => {
@@ -419,7 +441,7 @@ export function useAgentsList({
     }
 
     if (filterLevel !== 'all') {
-      const level = agent.agentKind === 'mode' ? 'builtin' : (agent.subagentSource ?? 'builtin');
+      const level = resolveAgentSource(agent);
       if (level !== filterLevel) return false;
     }
 
@@ -433,9 +455,9 @@ export function useAgentsList({
 
   const counts = useMemo(() => ({
     all: overviewAgents.length,
-    builtin: overviewAgents.filter((agent) => (agent.agentKind === 'mode' ? 'builtin' : (agent.subagentSource ?? 'builtin')) === 'builtin').length,
-    user: overviewAgents.filter((agent) => agent.subagentSource === 'user').length,
-    project: overviewAgents.filter((agent) => agent.subagentSource === 'project').length,
+    builtin: overviewAgents.filter((agent) => resolveAgentSource(agent) === 'builtin').length,
+    user: overviewAgents.filter((agent) => resolveAgentSource(agent) === 'user').length,
+    project: overviewAgents.filter((agent) => resolveAgentSource(agent) === 'project').length,
     mode: overviewAgents.filter((agent) => agent.agentKind === 'mode').length,
     subagent: overviewAgents.filter((agent) => agent.agentKind === 'subagent').length,
   }), [overviewAgents]);

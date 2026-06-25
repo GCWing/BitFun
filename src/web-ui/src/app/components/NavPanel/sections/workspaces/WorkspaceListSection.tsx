@@ -152,9 +152,17 @@ const WorkspaceListSection: React.FC<WorkspaceListSectionProps> = ({ variant }) 
   }, [reorderOpenedWorkspacesInSection, t, variant]);
 
   return (
-    <div className={`bitfun-nav-panel__workspace-list${draggedWorkspaceId ? ' is-dragging' : ''}`}>
+    <div
+      className={`bitfun-nav-panel__workspace-list${draggedWorkspaceId ? ' is-dragging' : ''}`}
+      data-testid="nav-workspace-list"
+      data-workspace-list={variant}
+    >
       {workspaces.length === 0 ? (
-        <div className="bitfun-nav-panel__workspace-list-empty">
+        <div
+          className="bitfun-nav-panel__workspace-list-empty"
+          data-testid="nav-workspace-list-empty"
+          data-workspace-list={variant}
+        >
           {emptyLabel}
         </div>
       ) : (
@@ -168,6 +176,9 @@ const WorkspaceListSection: React.FC<WorkspaceListSectionProps> = ({ variant }) 
               dropTarget?.workspaceId === workspace.id && dropTarget.position === 'before' && 'is-before',
               dropTarget?.workspaceId === workspace.id && dropTarget.position === 'after' && 'is-after',
             ].filter(Boolean).join(' ')}
+            data-testid="nav-workspace-drop-target"
+            data-workspace-id={workspace.id}
+            data-workspace-list={variant}
             onDragOver={handleDragOver(workspace.id)}
             onDragLeave={handleDragLeave(workspace.id)}
             onDrop={(event) => { void handleDrop(workspace.id)(event); }}

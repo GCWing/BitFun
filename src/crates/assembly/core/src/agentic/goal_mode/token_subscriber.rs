@@ -2,7 +2,7 @@
 
 use crate::agentic::coordination::get_global_coordinator;
 use crate::agentic::events::{AgenticEvent, EventSubscriber};
-use crate::util::errors::BitFunResult;
+use bitfun_agent_runtime::event_bus::EventSubscriberResult;
 use bitfun_agent_runtime::thread_goal::{
     should_record_thread_goal_token_usage, ThreadGoalTokenUsageFacts,
 };
@@ -12,7 +12,7 @@ pub struct ThreadGoalTokenSubscriber;
 
 #[async_trait::async_trait]
 impl EventSubscriber for ThreadGoalTokenSubscriber {
-    async fn on_event(&self, event: &AgenticEvent) -> BitFunResult<()> {
+    async fn on_event(&self, event: &AgenticEvent) -> EventSubscriberResult {
         let AgenticEvent::TokenUsageUpdated {
             session_id,
             turn_id,

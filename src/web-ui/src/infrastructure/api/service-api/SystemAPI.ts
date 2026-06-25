@@ -99,6 +99,16 @@ export class SystemAPI {
     }
   }
 
+  async openHtmlFileInBrowser(path: string): Promise<void> {
+    try {
+      await api.invoke('open_html_file_in_browser', {
+        request: { path }
+      });
+    } catch (error) {
+      throw createTauriCommandError('open_html_file_in_browser', error, { path });
+    }
+  }
+
    
   async showInFolder(path: string): Promise<void> {
     try {
@@ -202,6 +212,15 @@ export class SystemAPI {
       await api.invoke('minimize_to_tray', { request: {} });
     } catch (error) {
       throw createTauriCommandError('minimize_to_tray', error);
+    }
+  }
+
+  /** Desktop only: initialize the system tray after the startup shell is visible. */
+  async initializeTrayAfterStartup(): Promise<void> {
+    try {
+      await api.invoke('initialize_tray_after_startup', { request: {} });
+    } catch (error) {
+      throw createTauriCommandError('initialize_tray_after_startup', error);
     }
   }
 

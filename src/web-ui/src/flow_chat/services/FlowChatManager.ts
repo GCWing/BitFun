@@ -15,10 +15,12 @@ import { stateMachineManager } from '../state-machine';
 import { EventBatcher } from './EventBatcher';
 import { createLogger } from '@/shared/utils/logger';
 import type { WorkspaceInfo } from '@/shared/types';
+import type { Session } from '../types/flow-chat';
 import {
   compareSessionsForDisplay,
   sessionBelongsToWorkspaceNavRow,
 } from '../utils/sessionOrdering';
+import { resolveSessionRelationship } from '../utils/sessionMetadata';
 
 import type { FlowChatContext, SessionConfig, DialogTurn } from './flow-chat-manager/types';
 import {
@@ -28,6 +30,7 @@ import {
   preloadHistoricalSessionForOpen as preloadHistoricalSessionForOpenModule,
   switchChatSession as switchChatSessionModule,
   deleteChatSession as deleteChatSessionModule,
+  archiveChatSession as archiveChatSessionModule,
   renameChatSessionTitle as renameChatSessionTitleModule,
   forkChatSession as forkChatSessionModule,
   cleanupSaveState,
@@ -205,9 +208,19 @@ export class FlowChatManager {
           remoteSshHost
         );
       };
+      const isAutoSelectableWorkspaceSession = (
+        session: Pick<Session, 'isTransient' | 'sessionKind' | 'parentSessionId' | 'btwOrigin'>
+      ) => {
+        if (session.isTransient) {
+          return false;
+        }
+        return !resolveSessionRelationship(session).displayAsChild;
+      };
 
       let state = this.context.flowChatStore.getState();
-      let workspaceSessions = Array.from(state.sessions.values()).filter(sessionMatchesWorkspace);
+      let workspaceSessions = Array
+        .from(state.sessions.values())
+        .filter(session => sessionMatchesWorkspace(session) && isAutoSelectableWorkspaceSession(session));
       if (
         preferredMode &&
         initialMetadataPage.hasMore &&
@@ -227,7 +240,9 @@ export class FlowChatManager {
             return false;
           }
           state = this.context.flowChatStore.getState();
-          workspaceSessions = Array.from(state.sessions.values()).filter(sessionMatchesWorkspace);
+          workspaceSessions = Array
+            .from(state.sessions.values())
+            .filter(session => sessionMatchesWorkspace(session) && isAutoSelectableWorkspaceSession(session));
           if (workspaceSessions.some(session => session.mode === preferredMode) || !nextPage.hasMore) {
             break;
           }
@@ -268,7 +283,6 @@ export class FlowChatManager {
             undefined,
             latestSession.remoteConnectionId,
             latestSession.remoteSshHost,
-            { deferFullHistoryUntilActive: true },
           );
           if (this.disposed) {
             return false;
@@ -296,7 +310,7 @@ export class FlowChatManager {
           return hasHistoricalSessions;
         }
 
-        this.context.flowChatStore.switchSession(latestSession.sessionId);
+        await switchChatSessionModule(this.context, latestSession.sessionId);
       }
 
       if (isCurrentInitializationRequest()) {
@@ -436,6 +450,10 @@ export class FlowChatManager {
 
   async deleteChatSession(sessionId: string): Promise<void> {
     return deleteChatSessionModule(this.context, sessionId);
+  }
+
+  async archiveChatSession(sessionId: string): Promise<void> {
+    return archiveChatSessionModule(this.context, sessionId);
   }
 
   public discardLocalSession(sessionId: string): string[] {

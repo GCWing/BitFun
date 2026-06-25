@@ -6,7 +6,10 @@
 
 use crate::miniapp::types::AiPermissions;
 use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
 pub const AI_ACCESS_DISABLED_MESSAGE: &str = "AI access is not enabled for this MiniApp";
+pub const AI_MESSAGES_REQUIRED_MESSAGE: &str = "messages must not be empty";
+pub const AI_STREAM_ID_REQUIRED_MESSAGE: &str = "streamId is required";
 
 pub fn require_enabled_ai_permissions(
     ai_permissions: Option<&AiPermissions>,
@@ -95,6 +98,30 @@ pub struct MiniAppAiMessagePlan {
     pub content: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MiniAppAiRequestPlan {
+    pub model_ref: String,
+    pub messages: Vec<MiniAppAiMessagePlan>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MiniAppAiUsage {
+    pub prompt_tokens: u32,
+    pub completion_tokens: u32,
+    pub total_tokens: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MiniAppAiStreamPayload {
+    pub app_id: String,
+    pub stream_id: String,
+    #[serde(rename = "type")]
+    pub payload_type: String,
+    pub data: Value,
+}
+
 pub fn build_ai_message_plan<'a, I>(
     system_prompt: Option<&str>,
     chat_messages: I,
@@ -121,6 +148,98 @@ where
         });
     }
     messages
+}
+
+pub fn plan_ai_complete_request(
+    ai_permissions: &AiPermissions,
+    model: Option<&str>,
+    system_prompt: Option<&str>,
+    prompt: &str,
+) -> Result<MiniAppAiRequestPlan, String> {
+    Ok(MiniAppAiRequestPlan {
+        model_ref: validate_model(model, ai_permissions)?,
+        messages: build_ai_message_plan(system_prompt, [("user", prompt)]),
+    })
+}
+
+pub fn plan_ai_chat_request<'a, I>(
+    ai_permissions: &AiPermissions,
+    model: Option<&str>,
+    system_prompt: Option<&str>,
+    chat_messages: I,
+) -> Result<MiniAppAiRequestPlan, String>
+where
+    I: IntoIterator<Item = (&'a str, &'a str)>,
+{
+    let chat_messages: Vec<(&'a str, &'a str)> = chat_messages.into_iter().collect();
+    if chat_messages.is_empty() {
+        return Err(AI_MESSAGES_REQUIRED_MESSAGE.to_string());
+    }
+    Ok(MiniAppAiRequestPlan {
+        model_ref: validate_model(model, ai_permissions)?,
+        messages: build_ai_message_plan(system_prompt, chat_messages),
+    })
+}
+
+pub fn require_non_empty_ai_messages(message_count: usize) -> Result<(), String> {
+    if message_count == 0 {
+        return Err(AI_MESSAGES_REQUIRED_MESSAGE.to_string());
+    }
+    Ok(())
+}
+
+pub fn require_non_empty_stream_id(stream_id: &str) -> Result<String, String> {
+    if stream_id.trim().is_empty() {
+        return Err(AI_STREAM_ID_REQUIRED_MESSAGE.to_string());
+    }
+    Ok(stream_id.to_string())
+}
+
+pub fn ai_stream_chunk_payload(
+    app_id: &str,
+    stream_id: &str,
+    text: Option<String>,
+    reasoning_content: Option<String>,
+) -> MiniAppAiStreamPayload {
+    MiniAppAiStreamPayload {
+        app_id: app_id.to_string(),
+        stream_id: stream_id.to_string(),
+        payload_type: "chunk".to_string(),
+        data: json!({
+            "text": text,
+            "reasoningContent": reasoning_content,
+        }),
+    }
+}
+
+pub fn ai_stream_error_payload(
+    app_id: &str,
+    stream_id: &str,
+    message: impl Into<String>,
+) -> MiniAppAiStreamPayload {
+    MiniAppAiStreamPayload {
+        app_id: app_id.to_string(),
+        stream_id: stream_id.to_string(),
+        payload_type: "error".to_string(),
+        data: json!({ "message": message.into() }),
+    }
+}
+
+pub fn ai_stream_done_payload(
+    app_id: &str,
+    stream_id: &str,
+    full_text: impl Into<String>,
+    usage: Option<MiniAppAiUsage>,
+) -> MiniAppAiStreamPayload {
+    MiniAppAiStreamPayload {
+        app_id: app_id.to_string(),
+        stream_id: stream_id.to_string(),
+        payload_type: "done".to_string(),
+        data: json!({
+            "fullText": full_text.into(),
+            "usage": usage,
+        }),
+    }
 }
 
 #[cfg(test)]
@@ -191,5 +310,106 @@ mod tests {
         assert_eq!(messages[0].role, MiniAppAiMessageRole::System);
         assert_eq!(messages[1].role, MiniAppAiMessageRole::Assistant);
         assert_eq!(messages[2].role, MiniAppAiMessageRole::User);
+    }
+
+    #[test]
+    fn ai_request_plans_preserve_model_and_message_contract() {
+        let perms = ai_permissions(Some(vec!["primary".to_string(), "m-fast".to_string()]));
+
+        let complete =
+            plan_ai_complete_request(&perms, None, Some("system"), "hello").expect("complete plan");
+        assert_eq!(complete.model_ref, "primary");
+        assert_eq!(complete.messages.len(), 2);
+        assert_eq!(complete.messages[0].role, MiniAppAiMessageRole::System);
+        assert_eq!(complete.messages[1].role, MiniAppAiMessageRole::User);
+        assert_eq!(complete.messages[1].content, "hello");
+
+        let chat = plan_ai_chat_request(
+            &perms,
+            Some("m-fast"),
+            Some("system"),
+            [("assistant", "prior"), ("tool", "fallback user")],
+        )
+        .expect("chat plan");
+        assert_eq!(chat.model_ref, "m-fast");
+        assert_eq!(chat.messages[1].role, MiniAppAiMessageRole::Assistant);
+        assert_eq!(chat.messages[2].role, MiniAppAiMessageRole::User);
+
+        assert_eq!(
+            plan_ai_chat_request(&perms, None, None, Vec::<(&str, &str)>::new()).unwrap_err(),
+            AI_MESSAGES_REQUIRED_MESSAGE
+        );
+        assert_eq!(
+            require_non_empty_ai_messages(0).unwrap_err(),
+            AI_MESSAGES_REQUIRED_MESSAGE
+        );
+        assert!(require_non_empty_ai_messages(1).is_ok());
+        assert_eq!(
+            require_non_empty_stream_id("   ").unwrap_err(),
+            AI_STREAM_ID_REQUIRED_MESSAGE
+        );
+        assert_eq!(
+            require_non_empty_stream_id(" stream-1 ").unwrap(),
+            " stream-1 "
+        );
+    }
+
+    #[test]
+    fn ai_stream_payload_helpers_preserve_wire_shape() {
+        assert_eq!(
+            serde_json::to_value(ai_stream_chunk_payload(
+                "app-1",
+                "stream-1",
+                Some("text".to_string()),
+                Some("reasoning".to_string()),
+            ))
+            .unwrap(),
+            serde_json::json!({
+                "appId": "app-1",
+                "streamId": "stream-1",
+                "type": "chunk",
+                "data": {
+                    "text": "text",
+                    "reasoningContent": "reasoning"
+                }
+            })
+        );
+
+        assert_eq!(
+            serde_json::to_value(ai_stream_done_payload(
+                "app-1",
+                "stream-1",
+                "final",
+                Some(MiniAppAiUsage {
+                    prompt_tokens: 1,
+                    completion_tokens: 2,
+                    total_tokens: 3,
+                }),
+            ))
+            .unwrap(),
+            serde_json::json!({
+                "appId": "app-1",
+                "streamId": "stream-1",
+                "type": "done",
+                "data": {
+                    "fullText": "final",
+                    "usage": {
+                        "promptTokens": 1,
+                        "completionTokens": 2,
+                        "totalTokens": 3
+                    }
+                }
+            })
+        );
+
+        assert_eq!(
+            serde_json::to_value(ai_stream_error_payload("app-1", "stream-1", "failed")).unwrap(),
+            serde_json::json!({
+                "appId": "app-1",
+                "streamId": "stream-1",
+                "type": "error",
+                "data": { "message": "failed" }
+            })
+        );
     }
 }

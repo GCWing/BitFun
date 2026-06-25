@@ -100,13 +100,13 @@
   &:hover &__indicator {
     opacity: 1;
     transform: scale(1.05);
-    box-shadow: 0 4px 12px rgba(96, 165, 250, 0.5);
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--color-accent-500) 50%, transparent);
   }
 
   &.is-active &__indicator {
     opacity: 1;
     transform: scale(1.1);
-    box-shadow: 0 4px 16px rgba(96, 165, 250, 0.6);
+    box-shadow: 0 4px 16px color-mix(in srgb, var(--color-accent-500) 60%, transparent);
   }
 
   &--center {
