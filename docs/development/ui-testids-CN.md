@@ -188,7 +188,7 @@
 
 | Chat 模型选择按钮 | `chat-model-selector-btn` | 打开当前会话的模型选择器。 |
 | Chat 模型选择菜单 | `chat-model-selector-menu` | 模型选择下拉菜单根节点。 |
-| Chat 模型选择项 | `chat-model-selector-option` | 重复项。配合 `data-model-id`、`data-model-name` 和 `data-selected` 使用。 |
+| Chat 模型选择项 | `chat-model-selector-option` | 重复项。配合 `data-option-kind`、`data-model-role`、`data-model-id`、`data-model-name`、`data-provider-id` 和 `data-selected` 使用。别名入口会继续保留 `data-model-id="auto" / "primary" / "fast"`；其中 `primary-alias` 和 `fast-alias` 还会额外提供 `data-resolved-model-id`、`data-resolved-model-name` 和 `data-resolved-provider-id`。 |
 | Chat 用户消息 | `chat-user-message` | 重复的用户消息。配合 `data-turn-id`、`data-status` 和 `data-failed` 使用。 |
 | Chat 用户消息内容 | `chat-user-message-content` | 用户消息文本内容。配合 `data-turn-id` 使用。 |
 | Chat assistant 消息 | `chat-assistant-message` | 重复的模型轮次容器。配合 `data-turn-id`、`data-round-id`、`data-status`、`data-model-id`、`data-model-alias` 和 `data-streaming` 使用。 |
@@ -241,16 +241,21 @@
 | 模型请求格式选择器 | `settings-model-request-format-select` | 请求格式选择器，例如 OpenAI-compatible 或 Anthropic。 |
 | 模型选择按钮 | `settings-model-select-btn` | 打开模型选择下拉框。 |
 | 模型选择菜单 | `settings-model-select-menu` | 模型选择下拉框根节点。 |
-| 模型选择项 | `settings-model-option` | 重复的下拉项。配合 `data-model-id`、`data-model-name` 和 `data-selected` 使用。 |
+| 模型选择项 | `settings-model-option` | 重复的下拉项。配合 `data-option-kind="model"`、`data-model-role="normal"`、`data-model-state="selectable"`、`data-model-source`、`data-model-id`、`data-model-name`、`data-provider-id` 和 `data-selected` 使用。 |
 | 手动模型名称输入框 | `settings-model-manual-name-input` | 手动/自定义模型名称输入字段。 |
 | 添加自定义模型按钮 | `settings-model-add-custom-btn` | 将手动模型名称加入已选模型列表。 |
 | 已选模型列表 | `settings-model-selected-list` | 已选模型草稿列表。包含 `data-selected-count`。 |
 | 已选模型空状态 | `settings-model-selected-list-empty` | 已选模型草稿为空时的状态。包含 `data-selected-count="0"`。 |
-| 已选模型行 | `settings-model-selected-row` | 重复的已选模型草稿。配合 `data-model-id`、`data-model-name`、`data-selected` 和 `data-expanded` 使用。 |
-| 已选模型移除按钮 | `settings-model-selected-remove-btn` | 移除已选模型草稿。配合 `data-model-id` 和 `data-model-name` 使用。 |
+| 已选模型行 | `settings-model-selected-row` | 重复的已选模型草稿。配合 `data-option-kind="selected-draft"`、`data-model-role="normal"`、`data-model-state="draft"`、`data-model-id`、`data-model-name`、`data-provider-id`、`data-config-id`、`data-selected` 和 `data-expanded` 使用。 |
+| 已选模型移除按钮 | `settings-model-selected-remove-btn` | 移除已选模型草稿。配合 `data-option-kind="selected-draft"`、`data-model-role="normal"`、`data-model-state="draft"`、`data-model-id`、`data-model-name`、`data-provider-id` 和 `data-config-id` 使用。 |
 | 模型保存按钮 | `settings-model-save-btn` | 保存模型提供商/模型配置表单。 |
-| 模型行 | `settings-model-row` | 重复的已保存模型行。配合 `data-model-id`、`data-model-name` 和 `data-config-id` 使用。 |
-| 模型测试状态 | `settings-model-test-status` | 重复的已保存模型测试状态。配合 `data-model-id`、`data-model-name`、`data-config-id` 和 `data-status` 使用，`data-status` 可为 `success` 或 `error`。 |
+| 模型行 | `settings-model-row` | 重复的已保存模型行。配合 `data-option-kind="saved-model"`、`data-model-role="normal"`、`data-model-state="saved"`、`data-model-id`、`data-model-name`、`data-provider-id` 和 `data-config-id` 使用。 |
+| 模型测试状态 | `settings-model-test-status` | 重复的已保存模型测试状态。配合 `data-option-kind="saved-model-status"`、`data-model-role="normal"`、`data-model-state="saved"`、`data-model-id`、`data-model-name`、`data-provider-id`、`data-config-id` 和 `data-status` 使用，`data-status` 可为 `success` 或 `error`。 |
+
+模型定位建议：
+- 在聊天页里，优先使用 `data-option-kind` 和 `data-model-role` 区分 `auto`、`primary-alias`、`fast-alias`、`acp-model` 与真实 `model`，不要只靠展示文案或 `data-model-name`。
+- `data-model-name` 更适合作为展示元数据，不应单独当作唯一键。需要唯一定位时，应与 `data-model-id`、`data-provider-id`，或别名入口专用的 `data-resolved-model-id` 组合使用。
+- 在设置页里，先用 `data-model-state` 区分“下拉可选项 / 草稿已选项 / 已保存项 / 已保存测试状态”，再按 `data-model-id` 或 `data-provider-id` 进一步过滤。
 
 ## Settings Appearance
 
