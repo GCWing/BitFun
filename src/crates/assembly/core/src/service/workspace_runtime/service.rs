@@ -296,11 +296,6 @@ impl WorkspaceRuntimeService {
                         strategy: RuntimeMigrationStrategy::MoveIfTargetMissing,
                     },
                     RuntimeMigrationSpec {
-                        source: legacy_project_root.join("memory"),
-                        target: context.memory_dir.clone(),
-                        strategy: RuntimeMigrationStrategy::MoveIfTargetMissing,
-                    },
-                    RuntimeMigrationSpec {
                         source: legacy_project_root.join("plans"),
                         target: context.plans_dir.clone(),
                         strategy: RuntimeMigrationStrategy::MoveIfTargetMissing,

@@ -76,7 +76,6 @@ impl Agent for ClawMode {
         UserContextPolicy::empty()
             .with_workspace_context()
             .with_workspace_instructions()
-            .with_workspace_memory_files()
     }
 
     fn is_readonly(&self) -> bool {
