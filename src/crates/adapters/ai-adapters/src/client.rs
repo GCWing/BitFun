@@ -114,6 +114,18 @@ impl AIClient {
         }
     }
 
+    /// Clone this client with a different max output token limit while
+    /// reusing the HTTP client.
+    pub fn with_max_tokens(&self, max_tokens: Option<u32>) -> Self {
+        let mut config = self.config.clone();
+        config.max_tokens = max_tokens;
+        Self {
+            client: self.client.clone(),
+            config,
+            stream_options: self.stream_options.clone(),
+        }
+    }
+
     pub async fn send_message_stream(
         &self,
         messages: Vec<Message>,
@@ -1262,6 +1274,17 @@ mod tests {
         assert_eq!(request_body["max_output_tokens"], 4096);
         assert_eq!(request_body["temperature"], 0.1);
         assert!(request_body.get("reasoning").is_none());
+    }
+
+    #[test]
+    fn with_max_tokens_overrides_output_limit() {
+        let client = make_test_client("responses", None);
+
+        let overridden = client.with_max_tokens(Some(2048));
+
+        assert_eq!(client.config.max_tokens, Some(8192));
+        assert_eq!(overridden.config.max_tokens, Some(2048));
+        assert_eq!(overridden.config.model, client.config.model);
     }
 
     #[test]

@@ -1086,7 +1086,7 @@ impl CompressionContract {
 
     pub fn render_for_model(&self) -> String {
         let mut lines = vec![
-            "Compaction contract: preserve these factual fields when continuing the task."
+            "The following facts were retained during compression. Use them as authoritative context when continuing the task."
                 .to_string(),
         ];
 
@@ -1833,7 +1833,7 @@ mod tests {
 
         let rendered = contract.render_for_model();
 
-        assert!(rendered.contains("Compaction contract"));
+        assert!(rendered.contains("The following facts were retained during compression."));
         assert!(rendered.contains("Touched files:"));
         assert!(rendered.contains("- src/lib.rs"));
         assert!(rendered.contains(

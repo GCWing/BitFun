@@ -237,7 +237,7 @@ fn renders_contract_facts_even_when_tool_results_are_cleared() {
 
     assert!(summary_artifact
         .summary_text
-        .contains("Compaction contract:"));
+        .contains("The following facts were retained during compression."));
     assert!(summary_artifact.summary_text.contains("src/main.rs"));
     assert!(summary_artifact.summary_text.contains("cargo test"));
     assert!(summary_artifact

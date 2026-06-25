@@ -258,6 +258,7 @@ pub struct ExecutionEngine {
 }
 
 impl ExecutionEngine {
+    const COMPRESSION_MAX_TOKENS: u32 = 8192;
     const FINALIZE_AFTER_REPEATED_TOOL_FAILURES_REMINDER: &'static str = "This turn must end now because repeated tool failures have prevented further progress. Ignore any unfinished work. Your task now is to give the user a final answer. Do not call any more tools; any tool call will fail. Respond in plain text only. Summarize what was completed, what failed, the evidence available from the tool results, and the single best next step for the user.";
     const FINALIZE_AFTER_MAX_ROUNDS_REMINDER: &'static str = "This turn must end now because it has reached the round limit. Ignore any unfinished work. Your task now is to give the user a final answer. Do not call any more tools; any tool call will fail. Respond in plain text only. Summarize the most useful completed work and evidence collected so far, and clearly distinguish resolved items from anything still unresolved.";
     const FINALIZE_TOOL_DENIED_MESSAGE: &'static str =
@@ -379,6 +380,19 @@ impl ExecutionEngine {
     fn should_continue_after_partial_response(reason: &str) -> bool {
         let lower = reason.to_ascii_lowercase();
         !lower.contains("cancelled")
+    }
+
+    fn compression_request_max_tokens(configured_max_tokens: Option<u32>, cap: u32) -> Option<u32> {
+        Some(configured_max_tokens.unwrap_or(cap).min(cap))
+    }
+
+    fn build_compression_ai_client(
+        ai_client: &crate::infrastructure::ai::AIClient,
+    ) -> crate::infrastructure::ai::AIClient {
+        ai_client.with_max_tokens(Self::compression_request_max_tokens(
+            ai_client.config.max_tokens,
+            Self::COMPRESSION_MAX_TOKENS,
+        ))
     }
 
     /// Detect periodic tool-signature loops in the trailing window.
@@ -1331,7 +1345,6 @@ impl ExecutionEngine {
         provider: &str,
         attach_images: bool,
         prepended_prompt_reminders: &PrependedPromptReminders,
-        contract: Option<&crate::agentic::core::CompressionContract>,
     ) -> BitFunResult<Vec<AIMessage>> {
         let prepended_reminders = prepended_prompt_reminders.ordered_reminders();
         let mut compression_messages = Self::build_ai_messages_for_send(
@@ -1344,7 +1357,7 @@ impl ExecutionEngine {
         )
         .await?;
         compression_messages.push(AIMessage::user(
-            self.context_compressor.build_compact_prompt(contract),
+            self.context_compressor.build_compact_prompt(),
         ));
         Ok(compression_messages)
     }
@@ -1359,9 +1372,10 @@ impl ExecutionEngine {
     ) -> BitFunResult<String> {
         let mut last_error = None;
         let base_wait_time_ms = 500;
+        let compression_ai_client = Arc::new(Self::build_compression_ai_client(ai_client.as_ref()));
 
         for attempt in 0..max_tries {
-            let result = ai_client
+            let result = compression_ai_client
                 .send_message_with_trace(
                     request_messages.clone(),
                     tool_definitions.clone(),
@@ -1426,7 +1440,6 @@ impl ExecutionEngine {
         tool_definitions: &Option<Vec<ToolDefinition>>,
         prepended_prompt_reminders: &PrependedPromptReminders,
         primary_supports_image_understanding: bool,
-        contract: Option<&crate::agentic::core::CompressionContract>,
         trace_config: Option<ModelExchangeTraceConfig>,
     ) -> BitFunResult<Option<String>> {
         let request_messages = self
@@ -1437,7 +1450,6 @@ impl ExecutionEngine {
                 &ai_client.config.format,
                 primary_supports_image_understanding,
                 prepended_prompt_reminders,
-                contract,
             )
             .await?;
 
@@ -1721,7 +1733,6 @@ impl ExecutionEngine {
                 tool_definitions,
                 prepended_prompt_reminders,
                 primary_supports_image_understanding,
-                compression_contract.as_ref(),
                 trace_config,
             )
             .await
@@ -1947,7 +1958,6 @@ impl ExecutionEngine {
                 &scaffold.tool_definitions,
                 &scaffold.prepended_prompt_reminders,
                 scaffold.primary_supports_image_understanding,
-                compression_contract.as_ref(),
                 trace_config,
             )
             .await
@@ -3383,6 +3393,7 @@ mod tests {
     use crate::agentic::tools::ToolRuntimeRestrictions;
     use crate::service::config::types::AIConfig;
     use crate::service::config::types::AIModelConfig;
+    use crate::util::types::config as ai_config_types;
     use crate::util::types::ToolDefinition;
     use serde_json::json;
     use sha2::{Digest, Sha256};
@@ -3494,6 +3505,60 @@ mod tests {
         let summary = ExecutionEngine::tool_signature_args_summary(args);
 
         assert_eq!(summary, args);
+    }
+
+    #[test]
+    fn compression_request_max_tokens_clamps_to_global_cap() {
+        assert_eq!(
+            ExecutionEngine::compression_request_max_tokens(Some(16_000), 8192),
+            Some(8192)
+        );
+        assert_eq!(
+            ExecutionEngine::compression_request_max_tokens(Some(4096), 8192),
+            Some(4096)
+        );
+        assert_eq!(
+            ExecutionEngine::compression_request_max_tokens(None, 8192),
+            Some(8192)
+        );
+    }
+
+    #[test]
+    fn build_compression_ai_client_overrides_only_max_tokens() {
+        let client = crate::infrastructure::ai::AIClient::new(ai_config_types::AIConfig {
+            name: "test".to_string(),
+            base_url: "https://example.com/v1".to_string(),
+            request_url: "https://example.com/v1/responses".to_string(),
+            api_key: "key".to_string(),
+            model: "test-model".to_string(),
+            format: "responses".to_string(),
+            context_window: 128_000,
+            max_tokens: None,
+            temperature: None,
+            top_p: None,
+            reasoning_mode: Default::default(),
+            inline_think_in_text: true,
+            custom_headers: None,
+            custom_headers_mode: None,
+            skip_ssl_verify: false,
+            reasoning_effort: None,
+            thinking_budget_tokens: None,
+            custom_request_body: None,
+            custom_request_body_mode: None,
+        });
+
+        let compression_client = ExecutionEngine::build_compression_ai_client(&client);
+
+        assert_eq!(client.config.max_tokens, None);
+        assert_eq!(
+            compression_client.config.max_tokens,
+            Some(ExecutionEngine::COMPRESSION_MAX_TOKENS)
+        );
+        assert_eq!(compression_client.config.model, client.config.model);
+        assert_eq!(
+            compression_client.config.request_url,
+            client.config.request_url
+        );
     }
 
     #[test]
