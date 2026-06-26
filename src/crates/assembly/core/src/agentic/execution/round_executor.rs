@@ -721,6 +721,7 @@ impl RoundExecutor {
                 attempt_index: Some((attempt_index + 1) as u32),
                 agent_type: context.agent_type.clone(),
                 workspace: context.workspace.clone(),
+                primary_model_facts: context.primary_model_facts.clone(),
                 context_vars: context.context_vars.clone(),
                 subagent_parent_info,
                 delegation_policy: context.delegation_policy,
@@ -1345,6 +1346,9 @@ mod tests {
             collapsed_tools: Vec::new(),
             unlocked_collapsed_tools: Vec::new(),
             model_name: "model-1".to_string(),
+            primary_model_facts: tool_runtime::context::PrimaryModelFacts::new(
+                "model-1", "model-1", "openai", true,
+            ),
             agent_type: "agentic".to_string(),
             context_vars: HashMap::new(),
             delegation_policy: DelegationPolicy::top_level(),

@@ -3,6 +3,50 @@ use bitfun_runtime_ports::DelegationPolicy;
 use serde_json::Value;
 use std::collections::HashMap;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PrimaryModelFacts {
+    pub model_id: String,
+    pub model_name: String,
+    pub api_format: String,
+    pub supports_image_inputs: bool,
+}
+
+impl PrimaryModelFacts {
+    pub fn new(
+        model_id: impl Into<String>,
+        model_name: impl Into<String>,
+        api_format: impl Into<String>,
+        supports_image_inputs: bool,
+    ) -> Self {
+        Self {
+            model_id: model_id.into(),
+            model_name: model_name.into(),
+            api_format: api_format.into(),
+            supports_image_inputs,
+        }
+    }
+
+    pub fn multimodal_tool_output_supported(&self) -> bool {
+        matches!(
+            self.api_format.to_lowercase().as_str(),
+            "anthropic" | "openai" | "response" | "responses"
+        )
+    }
+}
+
+impl Default for PrimaryModelFacts {
+    fn default() -> Self {
+        Self {
+            model_id: String::new(),
+            model_name: String::new(),
+            api_format: String::new(),
+            // Preserve the historical behavior for listing/API contexts that do
+            // not carry model metadata.
+            supports_image_inputs: true,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct ToolRuntimeCustomDataInput<'a> {
     pub context_vars: &'a HashMap<String, String>,
@@ -37,12 +81,6 @@ pub fn build_tool_runtime_custom_data(
     );
 
     insert_u64_context_var(input.context_vars, &mut map, "turn_index");
-    insert_non_empty_string_context_var(input.context_vars, &mut map, "primary_model_provider");
-    insert_bool_context_var(
-        input.context_vars,
-        &mut map,
-        "primary_model_supports_image_understanding",
-    );
     insert_bool_context_var(input.context_vars, &mut map, "acp_transport");
     insert_bool_context_var(input.context_vars, &mut map, input.remote_file_delivery_key);
     if let Some(extension_custom_data) = input.extension_custom_data {
@@ -85,17 +123,6 @@ pub fn delegation_policy_from_custom_data(
     }
 }
 
-/// Whether the session primary model accepts image inputs.
-///
-/// Defaults to true when unset so API listings without model metadata keep the
-/// historical behavior.
-pub fn primary_model_supports_image_understanding(custom_data: &HashMap<String, Value>) -> bool {
-    custom_data
-        .get("primary_model_supports_image_understanding")
-        .and_then(Value::as_bool)
-        .unwrap_or(true)
-}
-
 fn insert_u64_context_var(
     context_vars: &HashMap<String, String>,
     map: &mut HashMap<String, Value>,
@@ -120,26 +147,12 @@ fn insert_bool_context_var(
     }
 }
 
-fn insert_non_empty_string_context_var(
-    context_vars: &HashMap<String, String>,
-    map: &mut HashMap<String, Value>,
-    key: &str,
-) {
-    if let Some(value) = context_vars
-        .get(key)
-        .map(String::as_str)
-        .filter(|value| !value.is_empty())
-    {
-        map.insert(key.to_string(), serde_json::json!(value));
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::{
         build_tool_runtime_custom_data, delegation_policy_from_custom_data,
-        primary_model_supports_image_understanding, project_tool_context_facts,
-        ToolRuntimeContextFactsInput, ToolRuntimeCustomDataInput,
+        project_tool_context_facts, PrimaryModelFacts, ToolRuntimeContextFactsInput,
+        ToolRuntimeCustomDataInput,
     };
     use bitfun_agent_tools::{ToolRuntimeRestrictions, ToolWorkspaceKind};
     use bitfun_runtime_ports::DelegationPolicy;
@@ -150,11 +163,6 @@ mod tests {
     fn materializes_provider_neutral_tool_custom_data() {
         let mut context_vars = HashMap::new();
         context_vars.insert("turn_index".to_string(), "7".to_string());
-        context_vars.insert("primary_model_provider".to_string(), "openai".to_string());
-        context_vars.insert(
-            "primary_model_supports_image_understanding".to_string(),
-            "false".to_string(),
-        );
         context_vars.insert("acp_transport".to_string(), "true".to_string());
         context_vars.insert("remote_file_delivery".to_string(), "true".to_string());
         let extension_custom_data = HashMap::from([("extension_key".to_string(), json!("kept"))]);
@@ -169,11 +177,6 @@ mod tests {
         assert_eq!(custom_data["delegation_allow_subagent_spawn"], json!(false));
         assert_eq!(custom_data["delegation_nesting_depth"], json!(1));
         assert_eq!(custom_data["turn_index"], json!(7));
-        assert_eq!(custom_data["primary_model_provider"], json!("openai"));
-        assert_eq!(
-            custom_data["primary_model_supports_image_understanding"],
-            json!(false)
-        );
         assert_eq!(custom_data["acp_transport"], json!(true));
         assert_eq!(custom_data["remote_file_delivery"], json!(true));
         assert_eq!(custom_data["extension_key"], json!("kept"));
@@ -183,11 +186,6 @@ mod tests {
     fn custom_data_ignores_invalid_or_empty_context_values() {
         let mut context_vars = HashMap::new();
         context_vars.insert("turn_index".to_string(), "not-a-number".to_string());
-        context_vars.insert("primary_model_provider".to_string(), "".to_string());
-        context_vars.insert(
-            "primary_model_supports_image_understanding".to_string(),
-            "not-bool".to_string(),
-        );
         context_vars.insert("acp_transport".to_string(), "not-bool".to_string());
         context_vars.insert("remote_file_delivery".to_string(), "not-bool".to_string());
 
@@ -201,8 +199,6 @@ mod tests {
         assert_eq!(custom_data["delegation_allow_subagent_spawn"], json!(true));
         assert_eq!(custom_data["delegation_nesting_depth"], json!(0));
         assert!(!custom_data.contains_key("turn_index"));
-        assert!(!custom_data.contains_key("primary_model_provider"));
-        assert!(!custom_data.contains_key("primary_model_supports_image_understanding"));
         assert!(!custom_data.contains_key("acp_transport"));
         assert!(!custom_data.contains_key("remote_file_delivery"));
     }
@@ -211,17 +207,9 @@ mod tests {
     fn extension_custom_data_cannot_override_runtime_owned_values() {
         let mut context_vars = HashMap::new();
         context_vars.insert("turn_index".to_string(), "7".to_string());
-        context_vars.insert(
-            "primary_model_supports_image_understanding".to_string(),
-            "true".to_string(),
-        );
         let extension_custom_data = HashMap::from([
             ("turn_index".to_string(), json!(99)),
             ("delegation_allow_subagent_spawn".to_string(), json!(false)),
-            (
-                "primary_model_supports_image_understanding".to_string(),
-                json!(false),
-            ),
             ("extension_key".to_string(), json!("kept")),
         ]);
 
@@ -234,10 +222,6 @@ mod tests {
 
         assert_eq!(custom_data["delegation_allow_subagent_spawn"], json!(true));
         assert_eq!(custom_data["turn_index"], json!(7));
-        assert_eq!(
-            custom_data["primary_model_supports_image_understanding"],
-            json!(true)
-        );
         assert_eq!(custom_data["extension_key"], json!("kept"));
     }
 
@@ -246,11 +230,6 @@ mod tests {
         let mut custom_data = HashMap::new();
         custom_data.insert("delegation_allow_subagent_spawn".to_string(), json!(false));
         custom_data.insert("delegation_nesting_depth".to_string(), json!(3));
-        custom_data.insert(
-            "primary_model_supports_image_understanding".to_string(),
-            json!(false),
-        );
-
         assert_eq!(
             delegation_policy_from_custom_data(&custom_data),
             DelegationPolicy {
@@ -258,8 +237,7 @@ mod tests {
                 nesting_depth: 3
             }
         );
-        assert!(!primary_model_supports_image_understanding(&custom_data));
-        assert!(primary_model_supports_image_understanding(&HashMap::new()));
+        assert!(PrimaryModelFacts::default().supports_image_inputs);
     }
 
     #[test]

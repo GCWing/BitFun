@@ -1130,6 +1130,7 @@ mod tests {
                 session_identity,
             )),
             unlocked_collapsed_tools: Vec::new(),
+            primary_model_facts: tool_runtime::context::PrimaryModelFacts::default(),
             custom_data: HashMap::new(),
             computer_use_host: None,
             runtime_tool_restrictions: ToolRuntimeRestrictions::default(),

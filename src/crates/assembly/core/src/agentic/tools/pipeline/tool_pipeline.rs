@@ -1439,6 +1439,7 @@ mod tests {
             attempt_index: None,
             agent_type: "agent".to_string(),
             workspace: None,
+            primary_model_facts: tool_runtime::context::PrimaryModelFacts::default(),
             context_vars: HashMap::new(),
             subagent_parent_info: None,
             delegation_policy: bitfun_runtime_ports::DelegationPolicy::top_level(),
@@ -1809,13 +1810,6 @@ mod tests {
             .insert("turn_index".to_string(), "7".to_string());
         task.context
             .context_vars
-            .insert("primary_model_provider".to_string(), "openai".to_string());
-        task.context.context_vars.insert(
-            "primary_model_supports_image_understanding".to_string(),
-            "true".to_string(),
-        );
-        task.context
-            .context_vars
             .insert("acp_transport".to_string(), "true".to_string());
         task.context.collapsed_tools = vec!["WebFetch".to_string()];
         task.context.unlocked_collapsed_tools = vec!["WebFetch".to_string()];
@@ -1839,14 +1833,10 @@ mod tests {
             .is_tool_allowed("WebFetch"));
         assert!(!context.runtime_tool_restrictions.is_tool_allowed("Bash"));
         assert_eq!(context.custom_data["turn_index"], json!(7));
-        assert_eq!(
-            context.custom_data["primary_model_provider"],
-            json!("openai")
-        );
-        assert_eq!(
-            context.custom_data["primary_model_supports_image_understanding"],
-            json!(true)
-        );
+        assert!(!context.custom_data.contains_key("primary_model_provider"));
+        assert!(!context
+            .custom_data
+            .contains_key("primary_model_supports_image_understanding"));
         assert_eq!(context.custom_data["acp_transport"], json!(true));
 
         let facts = context.to_tool_context_facts();

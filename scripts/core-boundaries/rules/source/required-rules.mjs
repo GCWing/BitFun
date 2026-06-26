@@ -2994,8 +2994,12 @@ export const requiredContentRules = [
         message: 'missing delegation policy parsing owner',
       },
       {
-        regex: /\bpub fn primary_model_supports_image_understanding\b/,
-        message: 'missing model image-support policy owner',
+        regex: /\bpub struct PrimaryModelFacts\b/,
+        message: 'missing typed primary model facts owner',
+      },
+      {
+        regex: /\bpub fn multimodal_tool_output_supported\b/,
+        message: 'missing primary model multimodal tool-output policy owner',
       },
       {
         regex: /\bmaterializes_provider_neutral_tool_custom_data\b/,

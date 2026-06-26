@@ -140,6 +140,7 @@ mod tests {
             dialog_turn_id: None,
             workspace: None,
             unlocked_collapsed_tools: vec!["WebFetch".to_string()],
+            primary_model_facts: tool_runtime::context::PrimaryModelFacts::default(),
             custom_data: HashMap::new(),
             computer_use_host: None,
             runtime_tool_restrictions: ToolRuntimeRestrictions::default(),

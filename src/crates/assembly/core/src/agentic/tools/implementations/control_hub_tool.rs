@@ -2066,6 +2066,7 @@ mod control_hub_tests {
             dialog_turn_id: None,
             workspace: None,
             unlocked_collapsed_tools: Vec::new(),
+            primary_model_facts: tool_runtime::context::PrimaryModelFacts::default(),
             custom_data: std::collections::HashMap::new(),
             computer_use_host: None,
             runtime_tool_restrictions: Default::default(),
