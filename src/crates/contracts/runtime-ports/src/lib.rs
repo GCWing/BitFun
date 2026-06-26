@@ -577,6 +577,10 @@ pub struct AgentSessionCreateRequest {
     pub agent_type: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub workspace_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_ssh_host: Option<String>,
     #[serde(default, skip_serializing_if = "serde_json::Map::is_empty")]
     pub metadata: serde_json::Map<String, serde_json::Value>,
 }
@@ -594,6 +598,10 @@ pub struct AgentSessionCreateResult {
 #[serde(rename_all = "camelCase")]
 pub struct AgentSessionListRequest {
     pub workspace_path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_ssh_host: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -611,12 +619,26 @@ pub struct AgentSessionSummary {
 pub struct AgentSessionDeleteRequest {
     pub workspace_path: String,
     pub session_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_ssh_host: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentSessionWorkspaceRequest {
     pub session_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSessionWorkspaceBinding {
+    pub workspace_path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_ssh_host: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -646,6 +668,10 @@ pub struct AgentDialogTurnRequest {
     pub agent_type: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub workspace_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_ssh_host: Option<String>,
     pub policy: DialogSubmissionPolicy,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reply_route: Option<AgentSessionReplyRoute>,
@@ -841,6 +867,10 @@ pub const fn should_skip_agent_session_reply(
 pub struct AgentSessionReplyRoute {
     pub source_session_id: String,
     pub source_workspace_path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_remote_connection_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_remote_ssh_host: Option<String>,
 }
 
 /// Outcome for steering a message into an already-running dialog turn.
@@ -1199,6 +1229,11 @@ pub trait AgentSessionManagementPort: Send + Sync {
         &self,
         request: AgentSessionWorkspaceRequest,
     ) -> PortResult<Option<String>>;
+
+    async fn resolve_session_workspace_binding(
+        &self,
+        request: AgentSessionWorkspaceRequest,
+    ) -> PortResult<Option<AgentSessionWorkspaceBinding>>;
 }
 
 #[async_trait::async_trait]
@@ -1619,10 +1654,14 @@ mod tests {
         let route = AgentSessionReplyRoute {
             source_session_id: "requester_session".to_string(),
             source_workspace_path: "/workspace/requester".to_string(),
+            source_remote_connection_id: Some("conn-1".to_string()),
+            source_remote_ssh_host: Some("host-1".to_string()),
         };
 
         assert_eq!(route.source_session_id, "requester_session");
         assert_eq!(route.source_workspace_path, "/workspace/requester");
+        assert_eq!(route.source_remote_connection_id.as_deref(), Some("conn-1"));
+        assert_eq!(route.source_remote_ssh_host.as_deref(), Some("host-1"));
     }
 
     #[test]
@@ -1902,6 +1941,8 @@ mod tests {
             turn_id: Some("turn_1".to_string()),
             agent_type: "agentic".to_string(),
             workspace_path: Some("/workspace/project".to_string()),
+            remote_connection_id: Some("conn-1".to_string()),
+            remote_ssh_host: Some("host-1".to_string()),
             policy: DialogSubmissionPolicy::new(
                 AgentSubmissionSource::RemoteRelay,
                 DialogQueuePriority::High,
@@ -1910,6 +1951,8 @@ mod tests {
             reply_route: Some(AgentSessionReplyRoute {
                 source_session_id: "source_session".to_string(),
                 source_workspace_path: "/workspace/source".to_string(),
+                source_remote_connection_id: Some("conn-1".to_string()),
+                source_remote_ssh_host: Some("host-1".to_string()),
             }),
             prepended_reminders: vec![AgentDialogPrependedReminder {
                 kind: "session_message_request".to_string(),
@@ -1931,10 +1974,14 @@ mod tests {
         assert_eq!(json["turnId"], "turn_1");
         assert_eq!(json["agentType"], "agentic");
         assert_eq!(json["workspacePath"], "/workspace/project");
+        assert_eq!(json["remoteConnectionId"], "conn-1");
+        assert_eq!(json["remoteSshHost"], "host-1");
         assert_eq!(json["policy"]["triggerSource"], "remote_relay");
         assert_eq!(json["policy"]["queuePriority"], "high");
         assert_eq!(json["policy"]["skipToolConfirmation"], true);
         assert_eq!(json["replyRoute"]["sourceSessionId"], "source_session");
+        assert_eq!(json["replyRoute"]["sourceRemoteConnectionId"], "conn-1");
+        assert_eq!(json["replyRoute"]["sourceRemoteSshHost"], "host-1");
         assert_eq!(
             json["prependedReminders"][0]["kind"],
             "session_message_request"
@@ -2023,6 +2070,8 @@ mod tests {
     fn agent_session_management_contracts_serialize_stable_shape() {
         let list_request = AgentSessionListRequest {
             workspace_path: "/workspace/project".to_string(),
+            remote_connection_id: Some("conn-1".to_string()),
+            remote_ssh_host: Some("host-1".to_string()),
         };
         let summary = AgentSessionSummary {
             session_id: "session_1".to_string(),
@@ -2034,9 +2083,16 @@ mod tests {
         let delete_request = AgentSessionDeleteRequest {
             workspace_path: "/workspace/project".to_string(),
             session_id: "session_1".to_string(),
+            remote_connection_id: Some("conn-1".to_string()),
+            remote_ssh_host: Some("host-1".to_string()),
         };
         let workspace_request = AgentSessionWorkspaceRequest {
             session_id: "session_1".to_string(),
+        };
+        let workspace_binding = AgentSessionWorkspaceBinding {
+            workspace_path: "/workspace/project".to_string(),
+            remote_connection_id: Some("conn-1".to_string()),
+            remote_ssh_host: Some("host-1".to_string()),
         };
 
         let list_json = serde_json::to_value(list_request).expect("serialize list request");
@@ -2044,13 +2100,22 @@ mod tests {
         let delete_json = serde_json::to_value(delete_request).expect("serialize delete request");
         let workspace_json =
             serde_json::to_value(workspace_request).expect("serialize workspace request");
+        let binding_json =
+            serde_json::to_value(workspace_binding).expect("serialize workspace binding");
 
         assert_eq!(list_json["workspacePath"], "/workspace/project");
+        assert_eq!(list_json["remoteConnectionId"], "conn-1");
+        assert_eq!(list_json["remoteSshHost"], "host-1");
         assert_eq!(summary_json["sessionId"], "session_1");
         assert_eq!(summary_json["createdAtMs"], 1000);
         assert_eq!(summary_json["lastActiveAtMs"], 2000);
         assert_eq!(delete_json["sessionId"], "session_1");
+        assert_eq!(delete_json["remoteConnectionId"], "conn-1");
+        assert_eq!(delete_json["remoteSshHost"], "host-1");
         assert_eq!(workspace_json["sessionId"], "session_1");
+        assert_eq!(binding_json["workspacePath"], "/workspace/project");
+        assert_eq!(binding_json["remoteConnectionId"], "conn-1");
+        assert_eq!(binding_json["remoteSshHost"], "host-1");
     }
 
     #[test]

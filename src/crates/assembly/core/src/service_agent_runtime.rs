@@ -1026,6 +1026,8 @@ impl RemoteDialogRuntimeHost for CoreRemoteDialogRuntimeHost<'_> {
                 turn_id: Some(submission.turn_id),
                 agent_type: submission.resolved_agent_type,
                 workspace_path: submission.binding_workspace,
+                remote_connection_id: None,
+                remote_ssh_host: None,
                 policy,
                 reply_route: None,
                 prepended_reminders: Vec::new(),

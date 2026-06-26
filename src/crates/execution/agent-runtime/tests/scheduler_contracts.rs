@@ -300,6 +300,8 @@ fn active_dialog_turn_owns_agent_session_reply_suppression_facts() {
     let route = AgentSessionReplyRoute {
         source_session_id: "source-session".to_string(),
         source_workspace_path: "workspace".to_string(),
+        source_remote_connection_id: Some("conn-1".to_string()),
+        source_remote_ssh_host: Some("host-1".to_string()),
     };
     let turn = ActiveDialogTurn::new(
         "turn-1".to_string(),
@@ -400,6 +402,8 @@ fn agent_session_reply_action_forwards_completed_outcome_with_legacy_reminder_te
     };
     assert_eq!(plan.target_session_id, "source-session");
     assert_eq!(plan.target_workspace_path, "workspace");
+    assert_eq!(plan.target_remote_connection_id.as_deref(), Some("conn-1"));
+    assert_eq!(plan.target_remote_ssh_host.as_deref(), Some("host-1"));
     assert_eq!(plan.user_input, "done");
     assert_eq!(
         plan.reminder_text,
@@ -609,6 +613,8 @@ fn agent_session_turn(source_session_id: &str) -> ActiveDialogTurn {
         Some(AgentSessionReplyRoute {
             source_session_id: source_session_id.to_string(),
             source_workspace_path: "workspace".to_string(),
+            source_remote_connection_id: Some("conn-1".to_string()),
+            source_remote_ssh_host: Some("host-1".to_string()),
         }),
     )
 }

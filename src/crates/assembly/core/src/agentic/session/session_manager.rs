@@ -20,17 +20,20 @@ use crate::agentic::session::{
     TurnSkillAgentSnapshotStore, UserContextCacheIdentity,
 };
 use crate::agentic::skill_agent_snapshot::TurnSkillAgentSnapshot;
+use crate::agentic::workspace::WorkspaceBinding;
+use crate::agentic::ConversationCoordinator;
 use crate::infrastructure::ai::get_global_ai_client_factory;
 use crate::service::config::{
     get_app_language_code, get_global_config_service, short_model_user_language_instruction,
     subscribe_config_updates, ConfigUpdateEvent,
 };
+use crate::service::remote_ssh::workspace_state::LOCAL_WORKSPACE_SSH_HOST;
 use crate::service::session::{
     DialogTurnData, DialogTurnKind, ModelRoundData, SessionMetadata, SessionRelationship,
     TextItemData, TurnStatus, UserMessageData,
 };
 use crate::service::snapshot::ensure_snapshot_manager_for_workspace;
-use crate::service::workspace::get_global_workspace_service;
+use crate::service::workspace::{get_global_workspace_service, WorkspaceInfo, WorkspaceKind};
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::sanitize_plain_model_output;
 use crate::util::timing::elapsed_ms_u64;
@@ -107,7 +110,7 @@ pub struct SessionManager {
     /// Active sessions in memory
     sessions: Arc<DashMap<String, Session>>,
 
-    /// Runtime cache of session_id -> effective workspace path.
+    /// Runtime cache of session_id -> effective session storage path.
     /// Populated on session create/restore and used to restore evicted sessions
     /// or resolve workspace-bound operations that only receive a session_id.
     /// This cache is intentionally retained across memory eviction, but should
@@ -477,41 +480,221 @@ impl SessionManager {
             }
         }
 
-        let workspace_service = get_global_workspace_service()?;
-        let mut workspaces = workspace_service.list_workspace_infos().await;
-        workspaces.sort_by(|left, right| right.last_accessed.cmp(&left.last_accessed));
-        let candidates: Vec<PathBuf> = workspaces
-            .into_iter()
-            .map(|workspace| workspace.root_path)
-            .collect();
+        if let Some(binding) = self.resolve_session_workspace_binding(session_id).await {
+            return Some(binding.root_path().to_path_buf());
+        }
 
-        for workspace_path in candidates {
-            match self
-                .persistence_manager
-                .load_session_metadata(&workspace_path, session_id)
+        None
+    }
+
+    pub async fn resolve_session_workspace_binding(
+        &self,
+        session_id: &str,
+    ) -> Option<WorkspaceBinding> {
+        if let Some(config) = self
+            .get_session(session_id)
+            .map(|session| session.config.clone())
+        {
+            if let Some(binding) = ConversationCoordinator::build_workspace_binding(&config).await {
+                return Some(binding);
+            }
+        }
+
+        let indexed_workspace_path = self
+            .session_workspace_index
+            .get(session_id)
+            .map(|entry| entry.clone());
+        if let Some(session_storage_path) = indexed_workspace_path {
+            if let Some(binding) = self
+                .resolve_persisted_session_workspace_binding(
+                    session_id,
+                    &session_storage_path,
+                    None,
+                )
                 .await
             {
-                Ok(Some(metadata)) => {
-                    if let Some(bound_workspace) =
-                        metadata.workspace_path.filter(|path| !path.is_empty())
-                    {
-                        return Some(PathBuf::from(bound_workspace));
-                    }
-                    return Some(workspace_path);
-                }
-                Ok(None) => {}
-                Err(err) => {
-                    debug!(
-                        "Failed to load session metadata while resolving workspace: session_id={} workspace={} error={}",
-                        session_id,
-                        workspace_path.display(),
-                        err
-                    );
-                }
+                return Some(binding);
+            }
+        }
+
+        for workspace in self.tracked_workspace_candidates().await? {
+            let Some(session_storage_path) =
+                Self::session_storage_path_for_workspace_info(&workspace).await
+            else {
+                continue;
+            };
+
+            if let Some(binding) = self
+                .resolve_persisted_session_workspace_binding(
+                    session_id,
+                    &session_storage_path,
+                    Some(&workspace),
+                )
+                .await
+            {
+                self.session_workspace_index
+                    .insert(session_id.to_string(), session_storage_path);
+                return Some(binding);
             }
         }
 
         None
+    }
+
+    async fn resolve_persisted_session_workspace_binding(
+        &self,
+        session_id: &str,
+        session_storage_path: &Path,
+        workspace_hint: Option<&WorkspaceInfo>,
+    ) -> Option<WorkspaceBinding> {
+        let metadata = match self
+            .persistence_manager
+            .load_session_metadata(session_storage_path, session_id)
+            .await
+        {
+            Ok(Some(metadata)) => metadata,
+            Ok(None) => return None,
+            Err(err) => {
+                debug!(
+                    "Failed to load session metadata while resolving workspace binding: session_id={} storage_path={} error={}",
+                    session_id,
+                    session_storage_path.display(),
+                    err
+                );
+                return None;
+            }
+        };
+
+        let config = self
+            .session_config_from_persisted_metadata(&metadata, workspace_hint)
+            .await?;
+
+        ConversationCoordinator::build_workspace_binding(&config).await
+    }
+
+    async fn session_config_from_persisted_metadata(
+        &self,
+        metadata: &SessionMetadata,
+        workspace_hint: Option<&WorkspaceInfo>,
+    ) -> Option<SessionConfig> {
+        let workspace_path = metadata
+            .workspace_path
+            .as_deref()
+            .map(str::trim)
+            .filter(|path| !path.is_empty())
+            .map(str::to_string)
+            .or_else(|| {
+                workspace_hint.map(|workspace| workspace.root_path.to_string_lossy().to_string())
+            })?;
+
+        let mut config = SessionConfig {
+            workspace_path: Some(workspace_path.clone()),
+            ..SessionConfig::default()
+        };
+
+        let remote_hostname = metadata
+            .workspace_hostname
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty() && *value != LOCAL_WORKSPACE_SSH_HOST)
+            .map(str::to_string);
+
+        let matched_workspace = match workspace_hint {
+            Some(workspace) => Some(workspace.clone()),
+            None if remote_hostname.is_some() => {
+                self.match_tracked_remote_workspace(&workspace_path, remote_hostname.as_deref())
+                    .await
+            }
+            None => None,
+        };
+
+        if let Some(workspace) = matched_workspace.as_ref() {
+            config.workspace_id = Some(workspace.id.clone());
+            if workspace.workspace_kind == WorkspaceKind::Remote {
+                config.remote_connection_id =
+                    workspace.remote_ssh_connection_id().map(ToOwned::to_owned);
+                config.remote_ssh_host = workspace
+                    .metadata
+                    .get("sshHost")
+                    .and_then(|value| value.as_str())
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                    .map(str::to_string);
+                if config.remote_connection_id.is_none() {
+                    return None;
+                }
+            }
+        } else if remote_hostname.is_some() {
+            return None;
+        }
+
+        Some(config)
+    }
+
+    async fn match_tracked_remote_workspace(
+        &self,
+        workspace_path: &str,
+        ssh_host: Option<&str>,
+    ) -> Option<WorkspaceInfo> {
+        let Some(ssh_host) = ssh_host.map(str::trim).filter(|value| !value.is_empty()) else {
+            return None;
+        };
+
+        let normalized_workspace_path =
+            crate::service::remote_ssh::normalize_remote_workspace_path(workspace_path);
+
+        self.tracked_workspace_candidates()
+            .await?
+            .into_iter()
+            .find(|workspace| {
+                if workspace.workspace_kind != WorkspaceKind::Remote {
+                    return false;
+                }
+
+                if crate::service::remote_ssh::normalize_remote_workspace_path(
+                    &workspace.root_path.to_string_lossy(),
+                ) != normalized_workspace_path
+                {
+                    return false;
+                }
+
+                let workspace_host = workspace
+                    .metadata
+                    .get("sshHost")
+                    .and_then(|value| value.as_str())
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty());
+
+                workspace_host == Some(ssh_host)
+            })
+    }
+
+    async fn tracked_workspace_candidates(&self) -> Option<Vec<WorkspaceInfo>> {
+        let workspace_service = get_global_workspace_service()?;
+        let mut workspaces = workspace_service.list_workspace_infos().await;
+        workspaces.sort_by(|left, right| right.last_accessed.cmp(&left.last_accessed));
+        Some(workspaces)
+    }
+
+    async fn session_storage_path_for_workspace_info(workspace: &WorkspaceInfo) -> Option<PathBuf> {
+        let remote_connection_id = workspace.remote_ssh_connection_id().map(ToOwned::to_owned);
+        let remote_ssh_host = workspace
+            .metadata
+            .get("sshHost")
+            .and_then(|value| value.as_str())
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string);
+
+        CoreSessionStorePort::default()
+            .resolve_session_storage_path(SessionStoragePathRequest {
+                workspace_path: workspace.root_path.clone(),
+                remote_connection_id,
+                remote_ssh_host,
+            })
+            .await
+            .ok()
+            .map(|resolution| resolution.effective_storage_path)
     }
 
     fn build_messages_from_turns(turns: &[DialogTurnData]) -> Vec<Message> {

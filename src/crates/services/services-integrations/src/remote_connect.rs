@@ -79,6 +79,8 @@ pub fn build_remote_session_create_request(
         session_name: session_name.into(),
         agent_type: agent_type.into(),
         workspace_path: workspace_path.map(Into::into),
+        remote_connection_id: None,
+        remote_ssh_host: None,
         metadata,
     }
 }

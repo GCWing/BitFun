@@ -30,6 +30,7 @@ use crate::agentic::goal_mode::{
 };
 use crate::agentic::image_analysis::ImageContextData;
 use crate::agentic::round_preempt::DialogRoundInjectionSource;
+use crate::agentic::session::session_store_port::CoreSessionStorePort;
 use crate::agentic::session::SessionManager;
 use crate::agentic::side_question::build_btw_user_input;
 use crate::agentic::skill_agent_snapshot::{
@@ -59,9 +60,9 @@ use bitfun_agent_runtime::remote_file_delivery::{
     TOOL_CONTEXT_REMOTE_FILE_DELIVERY_KEY,
 };
 use bitfun_runtime_ports::{
-    AgentBackgroundResultRequest, AgentThreadGoalDeliveryKind, AgentThreadGoalDeliveryRequest,
-    DelegationPolicy, SubagentContextMode, ThreadGoal, ThreadGoalContinuationPlan,
-    ThreadGoalStatus,
+    AgentBackgroundResultRequest, AgentSessionWorkspaceBinding, AgentThreadGoalDeliveryKind,
+    AgentThreadGoalDeliveryRequest, DelegationPolicy, SessionStoragePathRequest, SessionStorePort,
+    SubagentContextMode, ThreadGoal, ThreadGoalContinuationPlan, ThreadGoalStatus,
 };
 use dashmap::DashMap;
 use log::{debug, error, info, warn};
@@ -515,7 +516,7 @@ pub struct ConversationCoordinator {
 }
 
 impl ConversationCoordinator {
-    async fn resolve_workspace_id_for_config(config: &SessionConfig) -> Option<String> {
+    pub(crate) async fn resolve_workspace_id_for_config(config: &SessionConfig) -> Option<String> {
         let explicit = config
             .workspace_id
             .as_deref()
@@ -623,7 +624,9 @@ impl ConversationCoordinator {
     /// SSH connection (e.g. the user changed the port and the old ID is now
     /// stale), this method attempts to remap to the current workspace
     /// registration so that historical sessions continue to work.
-    async fn build_workspace_binding(config: &SessionConfig) -> Option<WorkspaceBinding> {
+    pub(crate) async fn build_workspace_binding(
+        config: &SessionConfig,
+    ) -> Option<WorkspaceBinding> {
         let workspace_path = config.workspace_path.as_ref()?;
         let path_buf = PathBuf::from(workspace_path);
         let workspace_id = Self::resolve_workspace_id_for_config(config).await;
@@ -1896,6 +1899,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             Some(turn_id.clone()),
             ASSISTANT_BOOTSTRAP_AGENT_TYPE.to_string(),
             Some(workspace_root.to_string_lossy().to_string()),
+            None,
+            None,
             DialogSubmissionPolicy::for_source(DialogTriggerSource::DesktopApi)
                 .with_skip_tool_confirmation(true),
             Some(metadata),
@@ -1926,6 +1931,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         turn_id: Option<String>,
         agent_type: String,
         workspace_path: Option<String>,
+        remote_connection_id: Option<String>,
+        remote_ssh_host: Option<String>,
         submission_policy: DialogSubmissionPolicy,
         user_message_metadata: Option<serde_json::Value>,
     ) -> BitFunResult<()> {
@@ -1937,6 +1944,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             turn_id,
             agent_type,
             workspace_path,
+            remote_connection_id,
+            remote_ssh_host,
             submission_policy,
             user_message_metadata,
             Vec::new(),
@@ -1954,6 +1963,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         turn_id: Option<String>,
         agent_type: String,
         workspace_path: Option<String>,
+        remote_connection_id: Option<String>,
+        remote_ssh_host: Option<String>,
         submission_policy: DialogSubmissionPolicy,
         user_message_metadata: Option<serde_json::Value>,
         prepended_messages: Vec<Message>,
@@ -1966,6 +1977,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             turn_id,
             agent_type,
             workspace_path,
+            remote_connection_id,
+            remote_ssh_host,
             submission_policy,
             user_message_metadata,
             prepended_messages,
@@ -1984,6 +1997,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         turn_id: Option<String>,
         agent_type: String,
         workspace_path: Option<String>,
+        remote_connection_id: Option<String>,
+        remote_ssh_host: Option<String>,
         submission_policy: DialogSubmissionPolicy,
         user_message_metadata: Option<serde_json::Value>,
     ) -> BitFunResult<()> {
@@ -1995,6 +2010,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             turn_id,
             agent_type,
             workspace_path,
+            remote_connection_id,
+            remote_ssh_host,
             submission_policy,
             user_message_metadata,
             Vec::new(),
@@ -2013,6 +2030,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         turn_id: Option<String>,
         agent_type: String,
         workspace_path: Option<String>,
+        remote_connection_id: Option<String>,
+        remote_ssh_host: Option<String>,
         submission_policy: DialogSubmissionPolicy,
         user_message_metadata: Option<serde_json::Value>,
         prepended_messages: Vec<Message>,
@@ -2025,6 +2044,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             turn_id,
             agent_type,
             workspace_path,
+            remote_connection_id,
+            remote_ssh_host,
             submission_policy,
             user_message_metadata,
             prepended_messages,
@@ -2035,6 +2056,24 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
 
     fn thread_goal_store(&self) -> ThreadGoalStore<'_> {
         ThreadGoalStore::new(self.session_manager.as_ref())
+    }
+
+    async fn resolve_session_restore_path(
+        workspace_path: &str,
+        remote_connection_id: Option<&str>,
+        remote_ssh_host: Option<&str>,
+    ) -> BitFunResult<PathBuf> {
+        let request = SessionStoragePathRequest {
+            workspace_path: PathBuf::from(workspace_path),
+            remote_connection_id: remote_connection_id.map(ToOwned::to_owned),
+            remote_ssh_host: remote_ssh_host.map(ToOwned::to_owned),
+        };
+
+        CoreSessionStorePort::default()
+            .resolve_session_storage_path(request)
+            .await
+            .map(|resolution| resolution.effective_storage_path)
+            .map_err(|error| BitFunError::Session(error.to_string()))
     }
 
     fn require_main_session_workspace(&self, session_id: &str) -> BitFunResult<PathBuf> {
@@ -2716,6 +2755,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         turn_id: Option<String>,
         agent_type: String,
         workspace_path: Option<String>,
+        remote_connection_id: Option<String>,
+        remote_ssh_host: Option<String>,
         submission_policy: DialogSubmissionPolicy,
         extra_user_message_metadata: Option<serde_json::Value>,
         additional_prepended_messages: Vec<Message>,
@@ -2736,8 +2777,14 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                         session_id
                     ))
                 })?;
+                let restore_path = Self::resolve_session_restore_path(
+                    &workspace_path,
+                    remote_connection_id.as_deref(),
+                    remote_ssh_host.as_deref(),
+                )
+                .await?;
                 self.session_manager
-                    .restore_session(Path::new(&workspace_path), &session_id)
+                    .restore_session(&restore_path, &session_id)
                     .await?
             }
         };
@@ -3004,14 +3051,11 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             )
             .await?;
         let effective_user_input = wrapped_user_input_payload.content.clone();
-        let mut prepended_messages = additional_prepended_messages;
-        if needs_computer_links_for_source(submission_policy.trigger_source) {
-            prepended_messages.push(Message::internal_reminder(
-                InternalReminderKind::RemoteFileDelivery,
-                remote_file_delivery_reminder(),
-            ));
-        }
-        prepended_messages.extend(wrapped_user_input_payload.prepended_messages.clone());
+        let prepended_messages = merge_prepended_messages_for_turn(
+            additional_prepended_messages,
+            wrapped_user_input_payload.prepended_messages.clone(),
+            needs_computer_links_for_source(submission_policy.trigger_source),
+        );
 
         if original_user_input != effective_user_input {
             let mut metadata =
@@ -5138,6 +5182,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             Some(turn_id.clone()),
             child_session.agent_type.clone(),
             child_session.config.workspace_path.clone(),
+            child_session.config.remote_connection_id.clone(),
+            child_session.config.remote_ssh_host.clone(),
             DialogSubmissionPolicy::for_source(DialogTriggerSource::DesktopApi)
                 .with_skip_tool_confirmation(true),
             user_message_metadata,
@@ -5648,6 +5694,8 @@ impl bitfun_runtime_ports::AgentSubmissionPort for ConversationCoordinator {
                 request.agent_type,
                 SessionConfig {
                     workspace_path: Some(workspace_path.clone()),
+                    remote_connection_id: request.remote_connection_id.clone(),
+                    remote_ssh_host: request.remote_ssh_host.clone(),
                     ..Default::default()
                 },
                 workspace_path,
@@ -5705,6 +5753,8 @@ impl bitfun_runtime_ports::AgentSubmissionPort for ConversationCoordinator {
             Some(turn_id.clone()),
             session.agent_type.clone(),
             session.config.workspace_path.clone(),
+            session.config.remote_connection_id.clone(),
+            session.config.remote_ssh_host.clone(),
             DialogSubmissionPolicy::for_source(trigger_source),
             user_message_metadata,
         )
@@ -5726,10 +5776,27 @@ impl bitfun_runtime_ports::AgentSubmissionPort for ConversationCoordinator {
         &self,
         session_id: &str,
     ) -> bitfun_runtime_ports::PortResult<Option<String>> {
-        Ok(self
+        if let Some(session) = self.get_session_manager().get_session(session_id) {
+            return Ok(Some(session.agent_type.clone()));
+        }
+
+        let Some(binding) = self
             .get_session_manager()
-            .get_session(session_id)
-            .map(|session| session.agent_type.clone()))
+            .resolve_session_workspace_binding(session_id)
+            .await
+        else {
+            return Ok(None);
+        };
+
+        self.restore_session(&binding.session_storage_path(), session_id)
+            .await
+            .map(|session| Some(session.agent_type))
+            .map_err(|error| {
+                bitfun_runtime_ports::PortError::new(
+                    bitfun_runtime_ports::PortErrorKind::Backend,
+                    error.to_string(),
+                )
+            })
     }
 }
 
@@ -5749,13 +5816,38 @@ fn runtime_session_summary(session: SessionSummary) -> bitfun_runtime_ports::Age
     }
 }
 
+fn runtime_session_workspace_binding(binding: WorkspaceBinding) -> AgentSessionWorkspaceBinding {
+    AgentSessionWorkspaceBinding {
+        workspace_path: binding.root_path_string(),
+        remote_connection_id: binding.connection_id().map(ToOwned::to_owned),
+        remote_ssh_host: if binding.is_remote() {
+            Some(binding.session_identity.hostname.clone()).filter(|value| !value.trim().is_empty())
+        } else {
+            None
+        },
+    }
+}
+
 #[async_trait::async_trait]
 impl bitfun_runtime_ports::AgentSessionManagementPort for ConversationCoordinator {
     async fn list_sessions(
         &self,
         request: bitfun_runtime_ports::AgentSessionListRequest,
     ) -> bitfun_runtime_ports::PortResult<Vec<bitfun_runtime_ports::AgentSessionSummary>> {
-        self.list_sessions(Path::new(&request.workspace_path))
+        let effective_storage_path = Self::resolve_session_restore_path(
+            &request.workspace_path,
+            request.remote_connection_id.as_deref(),
+            request.remote_ssh_host.as_deref(),
+        )
+        .await
+        .map_err(|error| {
+            bitfun_runtime_ports::PortError::new(
+                bitfun_runtime_ports::PortErrorKind::Backend,
+                error.to_string(),
+            )
+        })?;
+
+        self.list_sessions(&effective_storage_path)
             .await
             .map(|sessions| {
                 sessions
@@ -5775,7 +5867,20 @@ impl bitfun_runtime_ports::AgentSessionManagementPort for ConversationCoordinato
         &self,
         request: bitfun_runtime_ports::AgentSessionDeleteRequest,
     ) -> bitfun_runtime_ports::PortResult<()> {
-        self.delete_session(Path::new(&request.workspace_path), &request.session_id)
+        let effective_storage_path = Self::resolve_session_restore_path(
+            &request.workspace_path,
+            request.remote_connection_id.as_deref(),
+            request.remote_ssh_host.as_deref(),
+        )
+        .await
+        .map_err(|error| {
+            bitfun_runtime_ports::PortError::new(
+                bitfun_runtime_ports::PortErrorKind::Backend,
+                error.to_string(),
+            )
+        })?;
+
+        self.delete_session(&effective_storage_path, &request.session_id)
             .await
             .map_err(|error| {
                 bitfun_runtime_ports::PortError::new(
@@ -5793,6 +5898,18 @@ impl bitfun_runtime_ports::AgentSessionManagementPort for ConversationCoordinato
             .resolve_session_workspace_path(&request.session_id)
             .await
             .map(|path| path.to_string_lossy().into_owned()))
+    }
+
+    async fn resolve_session_workspace_binding(
+        &self,
+        request: bitfun_runtime_ports::AgentSessionWorkspaceRequest,
+    ) -> bitfun_runtime_ports::PortResult<Option<bitfun_runtime_ports::AgentSessionWorkspaceBinding>>
+    {
+        Ok(self
+            .get_session_manager()
+            .resolve_session_workspace_binding(&request.session_id)
+            .await
+            .map(runtime_session_workspace_binding))
     }
 }
 
@@ -5953,13 +6070,47 @@ pub fn get_global_coordinator() -> Option<Arc<ConversationCoordinator>> {
     GLOBAL_COORDINATOR.get().cloned()
 }
 
+fn merge_prepended_messages_for_turn(
+    additional_prepended_messages: Vec<Message>,
+    wrapped_prepended_messages: Vec<Message>,
+    include_remote_file_delivery: bool,
+) -> Vec<Message> {
+    let mut prepended_messages = Vec::new();
+    let mut scheduled_job_messages = Vec::new();
+    let mut remote_file_delivery_messages = Vec::new();
+
+    for message in additional_prepended_messages {
+        if matches!(
+            message.internal_reminder_kind(),
+            Some(InternalReminderKind::ScheduledJob)
+        ) {
+            scheduled_job_messages.push(message);
+        } else {
+            prepended_messages.push(message);
+        }
+    }
+
+    if include_remote_file_delivery {
+        remote_file_delivery_messages.push(Message::internal_reminder(
+            InternalReminderKind::RemoteFileDelivery,
+            remote_file_delivery_reminder(),
+        ));
+    }
+
+    prepended_messages.extend(wrapped_prepended_messages);
+    prepended_messages.extend(remote_file_delivery_messages);
+    prepended_messages.extend(scheduled_job_messages);
+    prepended_messages
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        normalize_subagent_max_concurrency, resolve_agent_session_create_created_by,
-        resolve_agent_submission_turn_id, ConversationCoordinator,
+        merge_prepended_messages_for_turn, normalize_subagent_max_concurrency,
+        resolve_agent_session_create_created_by, resolve_agent_submission_turn_id,
+        ConversationCoordinator,
     };
-    use crate::agentic::core::SessionConfig;
+    use crate::agentic::core::{InternalReminderKind, Message, SessionConfig};
     use crate::agentic::events::{EventQueue, EventQueueConfig, EventRouter};
     use crate::agentic::execution::{
         ExecutionEngine, ExecutionEngineConfig, RoundExecutor, StreamProcessor,
@@ -6214,6 +6365,8 @@ mod tests {
                 session_name: "Worker".to_string(),
                 agent_type: "agentic".to_string(),
                 workspace_path: Some(workspace_path.to_string_lossy().into_owned()),
+                remote_connection_id: None,
+                remote_ssh_host: None,
                 metadata,
             },
         )
@@ -6354,6 +6507,37 @@ mod tests {
                 .turn_skill_agent_snapshot(&child_session.session_id, 0)
                 .await,
             Some(baseline_snapshot)
+        );
+    }
+
+    #[test]
+    fn merge_prepended_messages_places_scheduled_job_after_mode_reminder() {
+        let merged = merge_prepended_messages_for_turn(
+            vec![
+                Message::internal_reminder(InternalReminderKind::ScheduledJob, "scheduled"),
+                Message::internal_reminder(InternalReminderKind::Generic, "generic"),
+            ],
+            vec![
+                Message::internal_reminder(InternalReminderKind::SkillListingDiff, "skills"),
+                Message::internal_reminder(InternalReminderKind::AgentMode, "mode"),
+            ],
+            true,
+        );
+
+        let kinds = merged
+            .iter()
+            .map(|message| message.internal_reminder_kind())
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            kinds,
+            vec![
+                Some(InternalReminderKind::Generic),
+                Some(InternalReminderKind::SkillListingDiff),
+                Some(InternalReminderKind::AgentMode),
+                Some(InternalReminderKind::RemoteFileDelivery),
+                Some(InternalReminderKind::ScheduledJob),
+            ]
         );
     }
 }
