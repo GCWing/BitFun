@@ -276,9 +276,15 @@ impl PathManager {
     ///
     /// Session/chat persistence for SSH workspaces lives under
     /// `{this}/{sanitized_host}/{remote_path_segments}/sessions/`.
+    pub fn remote_ssh_mirror_root_dir(&self) -> PathBuf {
+        self.bitfun_home_dir().join("remote_ssh")
+    }
+
+    /// Root for per-host, per-remote-path workspace mirrors using the default
+    /// process path manager.
     pub fn remote_ssh_mirror_root() -> PathBuf {
         Self::new()
-            .map(|pm| pm.bitfun_home_dir().join("remote_ssh"))
+            .map(|pm| pm.remote_ssh_mirror_root_dir())
             .unwrap_or_else(|_| {
                 dirs::home_dir()
                     .unwrap_or_else(|| PathBuf::from("."))

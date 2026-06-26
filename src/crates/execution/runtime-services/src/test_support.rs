@@ -64,6 +64,8 @@ impl RemoteWorkspaceRuntimeHost for FakeRuntimePort {
             git_branch: Some("main".to_string()),
             kind: RemoteWorkspaceKind::Remote,
             assistant_id: None,
+            remote_connection_id: Some("conn-1".to_string()),
+            remote_ssh_host: Some("host-1".to_string()),
         })
     }
 

@@ -415,11 +415,53 @@ impl SessionManager {
                 .unwrap_or(true)
     }
 
-    /// Resolve the effective storage path for a session's workspace.
-    async fn effective_workspace_path_from_config(config: &SessionConfig) -> Option<PathBuf> {
-        CoreSessionStorePort::resolve_storage_path_for_config(config)
+    async fn effective_storage_path_for_config_with_persistence(
+        persistence_manager: &PersistenceManager,
+        config: &SessionConfig,
+    ) -> Option<PathBuf> {
+        let workspace_path = config.workspace_path.as_ref()?;
+        let identity =
+            crate::service::remote_ssh::workspace_state::resolve_workspace_session_identity(
+                workspace_path,
+                config.remote_connection_id.as_deref(),
+                config.remote_ssh_host.as_deref(),
+            )
+            .await?;
+
+        let runtime_service = persistence_manager.runtime_service();
+        Some(if identity.hostname == LOCAL_WORKSPACE_SSH_HOST {
+            runtime_service
+                .context_for_local_workspace(Path::new(identity.logical_workspace_path()))
+                .sessions_dir
+        } else if identity.hostname == "_unresolved" {
+            bitfun_services_integrations::remote_ssh::unresolved_remote_session_storage_dir(
+                runtime_service.path_manager().remote_ssh_mirror_root_dir(),
+                identity.remote_connection_id.as_deref().unwrap_or_default(),
+                identity.logical_workspace_path(),
+            )
+        } else {
+            runtime_service
+                .context_for_remote_workspace(&identity.hostname, identity.logical_workspace_path())
+                .sessions_dir
+        })
+    }
+
+    async fn effective_storage_path_for_config(&self, config: &SessionConfig) -> Option<PathBuf> {
+        Self::effective_storage_path_for_config_with_persistence(
+            self.persistence_manager.as_ref(),
+            config,
+        )
+        .await
+    }
+
+    async fn effective_storage_path_for_workspace_path(&self, workspace_path: &Path) -> PathBuf {
+        let tmp_config = SessionConfig {
+            workspace_path: Some(workspace_path.to_string_lossy().to_string()),
+            ..Default::default()
+        };
+        self.effective_storage_path_for_config(&tmp_config)
             .await
-            .map(|resolution| resolution.effective_storage_path)
+            .unwrap_or_else(|| workspace_path.to_path_buf())
     }
 
     #[allow(dead_code)]
@@ -433,58 +475,7 @@ impl SessionManager {
     /// For remote workspaces, maps the remote path to a local session storage path.
     async fn effective_session_workspace_path(&self, session_id: &str) -> Option<PathBuf> {
         let config = self.sessions.get(session_id)?.config.clone();
-        Self::effective_workspace_path_from_config(&config).await
-    }
-
-    /// Resolve the logical workspace path bound to a session.
-    ///
-    /// This prefers the in-memory session config, then the persisted metadata
-    /// reachable via the session workspace index, and finally scans tracked
-    /// workspaces known to the global workspace service ordered by recent access.
-    pub async fn resolve_session_workspace_path(&self, session_id: &str) -> Option<PathBuf> {
-        if let Some(workspace_path) = self
-            .get_session(session_id)
-            .and_then(|session| session.config.workspace_path)
-            .filter(|path| !path.is_empty())
-        {
-            return Some(PathBuf::from(workspace_path));
-        }
-
-        let indexed_workspace_path = self
-            .session_workspace_index
-            .get(session_id)
-            .map(|entry| entry.clone());
-        if let Some(workspace_path) = indexed_workspace_path {
-            match self
-                .persistence_manager
-                .load_session_metadata(&workspace_path, session_id)
-                .await
-            {
-                Ok(Some(metadata)) => {
-                    if let Some(bound_workspace) =
-                        metadata.workspace_path.filter(|path| !path.is_empty())
-                    {
-                        return Some(PathBuf::from(bound_workspace));
-                    }
-                    return Some(workspace_path);
-                }
-                Ok(None) => {}
-                Err(err) => {
-                    debug!(
-                        "Failed to load indexed session metadata while resolving workspace: session_id={} workspace={} error={}",
-                        session_id,
-                        workspace_path.display(),
-                        err
-                    );
-                }
-            }
-        }
-
-        if let Some(binding) = self.resolve_session_workspace_binding(session_id).await {
-            return Some(binding.root_path().to_path_buf());
-        }
-
-        None
+        self.effective_storage_path_for_config(&config).await
     }
 
     pub async fn resolve_session_workspace_binding(
@@ -1322,7 +1313,8 @@ impl SessionManager {
             BitFunError::Validation("Session workspace_path is required".to_string())
         })?;
 
-        let session_storage_path = Self::effective_workspace_path_from_config(&config)
+        let session_storage_path = self
+            .effective_storage_path_for_config(&config)
             .await
             .ok_or_else(|| {
                 BitFunError::Validation("Session workspace_path is required".to_string())
@@ -2686,15 +2678,9 @@ impl SessionManager {
         };
         let restore_started_at = Instant::now();
         let storage_path_started_at = Instant::now();
-        let session_storage_path = CoreSessionStorePort
-            .resolve_session_storage_path(SessionStoragePathRequest {
-                workspace_path: restore_request.workspace_path.clone(),
-                remote_connection_id: None,
-                remote_ssh_host: None,
-            })
-            .await
-            .map(|resolution| resolution.effective_storage_path)
-            .unwrap_or_else(|_| restore_request.workspace_path.clone());
+        let session_storage_path = self
+            .effective_storage_path_for_workspace_path(&restore_request.workspace_path)
+            .await;
         let resolve_storage_path_duration_ms = elapsed_ms_u64(storage_path_started_at);
         debug!(
             "Session view restore phase completed: session_id={}, phase=resolve_storage_path, duration_ms={}",
@@ -2830,16 +2816,9 @@ impl SessionManager {
         let session_already_in_memory = self.sessions.contains_key(session_id);
 
         let storage_path_started_at = Instant::now();
-        let session_storage_path = {
-            let ws = workspace_path.to_string_lossy().to_string();
-            let tmp_config = SessionConfig {
-                workspace_path: Some(ws),
-                ..Default::default()
-            };
-            Self::effective_workspace_path_from_config(&tmp_config)
-                .await
-                .unwrap_or_else(|| workspace_path.to_path_buf())
-        };
+        let session_storage_path = self
+            .effective_storage_path_for_workspace_path(workspace_path)
+            .await;
         debug!(
             "Session restore phase completed: session_id={}, phase=resolve_storage_path, duration_ms={}",
             session_id,
@@ -3449,7 +3428,8 @@ impl SessionManager {
         let session = self
             .get_session(session_id)
             .ok_or_else(|| BitFunError::NotFound(format!("Session not found: {}", session_id)))?;
-        let workspace_path = Self::effective_workspace_path_from_config(&session.config)
+        let workspace_path = self
+            .effective_storage_path_for_config(&session.config)
             .await
             .ok_or_else(|| {
                 BitFunError::Validation(format!(
@@ -3678,7 +3658,8 @@ impl SessionManager {
         let session = self
             .get_session(session_id)
             .ok_or_else(|| BitFunError::NotFound(format!("Session not found: {}", session_id)))?;
-        let workspace_path = Self::effective_workspace_path_from_config(&session.config)
+        let workspace_path = self
+            .effective_storage_path_for_config(&session.config)
             .await
             .ok_or_else(|| {
                 BitFunError::Validation(format!(
@@ -4409,7 +4390,11 @@ impl SessionManager {
                         continue;
                     }
                     if let Some(workspace_path) =
-                        Self::effective_workspace_path_from_config(&snapshot.session.config).await
+                        Self::effective_storage_path_for_config_with_persistence(
+                            persistence.as_ref(),
+                            &snapshot.session.config,
+                        )
+                        .await
                     {
                         if !Self::auto_save_snapshot_is_current(&sessions, &snapshot) {
                             continue;
@@ -4471,7 +4456,11 @@ impl SessionManager {
 
                     if enable_persistence && Self::should_persist_session(&session) {
                         if let Some(workspace_path) =
-                            Self::effective_workspace_path_from_config(&session.config).await
+                            Self::effective_storage_path_for_config_with_persistence(
+                                persistence.as_ref(),
+                                &session.config,
+                            )
+                            .await
                         {
                             if Self::cleanup_snapshot_for_candidate(
                                 &sessions,
@@ -4528,7 +4517,6 @@ mod tests {
     use crate::service::config::types::{
         AIConfig as ServiceAIConfig, AIModelConfig as ServiceAIModelConfig,
     };
-    use crate::service::remote_ssh::workspace_state::local_workspace_roots_equal;
     use crate::service::session::{
         DialogTurnData, DialogTurnKind, ModelRoundData, SessionKind, SessionMetadata,
         SessionRelationship, SessionRelationshipKind, ToolCallData, ToolItemData, ToolResultData,
@@ -4596,11 +4584,17 @@ mod tests {
         )
     }
 
+    fn test_path_manager() -> Arc<PathManager> {
+        let root =
+            std::env::temp_dir().join(format!("bitfun-session-manager-test-{}", Uuid::new_v4()));
+        Arc::new(PathManager::with_user_root_for_tests(
+            root.join("user-root"),
+        ))
+    }
+
     fn in_memory_test_manager() -> SessionManager {
-        let persistence_manager = Arc::new(
-            PersistenceManager::new(Arc::new(PathManager::new().expect("path manager")))
-                .expect("persistence manager"),
-        );
+        let persistence_manager =
+            Arc::new(PersistenceManager::new(test_path_manager()).expect("persistence manager"));
         SessionManager::new(
             Arc::new(SessionContextStore::new()),
             persistence_manager,
@@ -5175,12 +5169,52 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn core_session_store_port_resolves_local_storage_to_sessions_dir() {
+        use bitfun_runtime_ports::{
+            SessionStorageKind, SessionStoragePathRequest, SessionStorePort,
+        };
+
+        let workspace = TestWorkspace::new();
+        let path_manager = workspace.path_manager();
+        let port = CoreSessionStorePort::with_path_manager_for_tests(path_manager.clone());
+        let resolution = port
+            .resolve_session_storage_path(SessionStoragePathRequest {
+                workspace_path: workspace.path().to_path_buf(),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+            })
+            .await
+            .expect("storage path should resolve");
+
+        assert_eq!(resolution.storage_kind, SessionStorageKind::Local);
+        assert_eq!(
+            resolution.effective_storage_path,
+            path_manager.project_sessions_dir(workspace.path())
+        );
+        assert_ne!(resolution.effective_storage_path, workspace.path());
+
+        let resolved_again = port
+            .resolve_session_storage_path(SessionStoragePathRequest {
+                workspace_path: resolution.effective_storage_path.clone(),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+            })
+            .await
+            .expect("resolved sessions dir should pass through");
+        assert_eq!(
+            resolved_again.effective_storage_path,
+            resolution.effective_storage_path
+        );
+    }
+
+    #[tokio::test]
     async fn core_session_store_port_resolves_unresolved_remote_storage_path() {
         use bitfun_runtime_ports::{
             SessionStorageKind, SessionStoragePathRequest, SessionStorePort,
         };
 
-        let port = CoreSessionStorePort;
+        let workspace = TestWorkspace::new();
+        let port = CoreSessionStorePort::with_path_manager_for_tests(workspace.path_manager());
         let resolution = port
             .resolve_session_storage_path(SessionStoragePathRequest {
                 workspace_path: PathBuf::from("/remote/project"),
@@ -5203,11 +5237,57 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn core_session_store_port_resolved_remote_sessions_dir_passes_through_only_sessions_root(
+    ) {
+        use bitfun_runtime_ports::{
+            SessionStorageKind, SessionStoragePathRequest, SessionStorePort,
+        };
+
+        let workspace = TestWorkspace::new();
+        let path_manager = workspace.path_manager();
+        let port = CoreSessionStorePort::with_path_manager_for_tests(path_manager.clone());
+        let sessions_dir =
+            bitfun_services_integrations::remote_ssh::remote_workspace_session_mirror_dir(
+                path_manager.remote_ssh_mirror_root_dir(),
+                "example-host",
+                "/root/repo",
+            );
+        let resolved = port
+            .resolve_session_storage_path(SessionStoragePathRequest {
+                workspace_path: sessions_dir.clone(),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+            })
+            .await
+            .expect("resolved remote sessions dir should pass through");
+
+        assert_eq!(resolved.storage_kind, SessionStorageKind::Remote);
+        assert_eq!(resolved.effective_storage_path, sessions_dir);
+
+        let runtime_root = bitfun_services_integrations::remote_ssh::remote_workspace_runtime_root(
+            path_manager.remote_ssh_mirror_root_dir(),
+            "example-host",
+            "/root/repo",
+        );
+        let runtime_root_resolution = port
+            .resolve_session_storage_path(SessionStoragePathRequest {
+                workspace_path: runtime_root.clone(),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+            })
+            .await;
+
+        assert!(
+            runtime_root_resolution.is_err(),
+            "remote runtime root must not pass as a resolved sessions dir"
+        );
+    }
+
+    #[tokio::test]
     async fn restore_session_view_loads_turns_without_restoring_runtime_context() {
         let workspace = TestWorkspace::new();
         let persistence_manager = Arc::new(
-            PersistenceManager::new(Arc::new(PathManager::new().expect("path manager")))
-                .expect("persistence manager"),
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
         );
         let manager = test_manager(persistence_manager.clone());
         let session_id = Uuid::new_v4().to_string();
@@ -5347,8 +5427,7 @@ mod tests {
     async fn restore_session_view_preserves_full_visible_tool_result_payload() {
         let workspace = TestWorkspace::new();
         let persistence_manager = Arc::new(
-            PersistenceManager::new(Arc::new(PathManager::new().expect("path manager")))
-                .expect("persistence manager"),
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
         );
         let manager = test_manager(persistence_manager.clone());
         let session_id = Uuid::new_v4().to_string();
@@ -6089,7 +6168,13 @@ mod tests {
     #[tokio::test]
     async fn delete_session_removes_workspace_cache_entry() {
         let workspace = TestWorkspace::new();
-        let manager = in_memory_test_manager();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let expected_storage_path = persistence_manager
+            .path_manager()
+            .project_sessions_dir(workspace.path());
+        let manager = test_manager(persistence_manager);
         let session = manager
             .create_session(
                 "Cached session".to_string(),
@@ -6107,8 +6192,8 @@ mod tests {
                 .session_workspace_index
                 .get(&session.session_id)
                 .as_deref()
-                .map(|entry| local_workspace_roots_equal(entry, workspace.path())),
-            Some(true)
+                .map(|entry| entry.to_path_buf()),
+            Some(expected_storage_path)
         );
 
         manager
@@ -6204,10 +6289,8 @@ mod tests {
 
     #[tokio::test]
     async fn records_subagent_partial_timeout_in_evidence_ledger() {
-        let persistence_manager = Arc::new(
-            PersistenceManager::new(Arc::new(PathManager::new().expect("path manager")))
-                .expect("persistence manager"),
-        );
+        let persistence_manager =
+            Arc::new(PersistenceManager::new(test_path_manager()).expect("persistence manager"));
         let manager = test_manager(persistence_manager);
 
         let event = manager.record_subagent_partial_timeout(

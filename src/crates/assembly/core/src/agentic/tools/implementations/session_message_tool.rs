@@ -201,6 +201,15 @@ impl SessionMessageTool {
         }
     }
 
+    fn same_workspace_identity(
+        left: &SessionMessageWorkspaceTarget,
+        right: &SessionMessageWorkspaceTarget,
+    ) -> bool {
+        left.workspace_path == right.workspace_path
+            && left.remote_connection_id == right.remote_connection_id
+            && left.remote_ssh_host == right.remote_ssh_host
+    }
+
     fn format_forwarded_message(
         &self,
         message: &str,
@@ -534,15 +543,7 @@ Allowed agent types when creating a session:
                     let requested_workspace = self.resolve_workspace(workspace, context)?;
                     let requested_target =
                         self.workspace_target_from_context(requested_workspace.clone(), context);
-                    let remote_mismatch = requested_target
-                        .remote_connection_id
-                        .as_deref()
-                        .zip(workspace_target.remote_connection_id.as_deref())
-                        .map(|(left, right)| left != right)
-                        .unwrap_or(false);
-                    if requested_target.workspace_path != workspace_target.workspace_path
-                        || remote_mismatch
-                    {
+                    if !Self::same_workspace_identity(&requested_target, &workspace_target) {
                         return Err(BitFunError::NotFound(format!(
                             "Session '{}' not found in workspace '{}'",
                             target_session_id, requested_target.workspace_path
@@ -721,6 +722,46 @@ mod tests {
         fn drop(&mut self) {
             let _ = fs::remove_dir_all(&self.path);
         }
+    }
+
+    fn workspace_target(
+        workspace_path: &str,
+        remote_connection_id: Option<&str>,
+        remote_ssh_host: Option<&str>,
+    ) -> SessionMessageWorkspaceTarget {
+        SessionMessageWorkspaceTarget {
+            workspace_path: workspace_path.to_string(),
+            remote_connection_id: remote_connection_id.map(ToOwned::to_owned),
+            remote_ssh_host: remote_ssh_host.map(ToOwned::to_owned),
+        }
+    }
+
+    #[test]
+    fn workspace_identity_matches_full_remote_tuple() {
+        let left = workspace_target("/root/repo", Some("conn-1"), Some("host-a"));
+        let right = workspace_target("/root/repo", Some("conn-1"), Some("host-a"));
+
+        assert!(SessionMessageTool::same_workspace_identity(&left, &right));
+    }
+
+    #[test]
+    fn workspace_identity_rejects_remote_local_parity_mismatch() {
+        let requested = workspace_target("/root/repo", None, None);
+        let target = workspace_target("/root/repo", Some("conn-1"), Some("host-a"));
+
+        assert!(!SessionMessageTool::same_workspace_identity(
+            &requested, &target
+        ));
+    }
+
+    #[test]
+    fn workspace_identity_rejects_remote_host_mismatch() {
+        let requested = workspace_target("/root/repo", Some("conn-1"), Some("host-a"));
+        let target = workspace_target("/root/repo", Some("conn-1"), Some("host-b"));
+
+        assert!(!SessionMessageTool::same_workspace_identity(
+            &requested, &target
+        ));
     }
 
     #[tokio::test]

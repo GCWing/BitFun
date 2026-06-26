@@ -471,7 +471,7 @@ describe('startup performance contract', () => {
 
     expect(getStart).toBeGreaterThan(-1);
     expect(clearStart).toBeGreaterThan(getStart);
-    expect(getSource).toContain('resolve_session_workspace_path_for_thread_goal_read');
+    expect(getSource).toContain('resolve_thread_goal_storage_path');
     expect(getSource).not.toContain('ensure_session_for_thread_goal');
     expect(getSource).not.toContain('restore_session');
   });

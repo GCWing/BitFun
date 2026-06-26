@@ -350,6 +350,12 @@ mod tests {
     use std::path::PathBuf;
 
     fn test_context(root: PathBuf) -> ToolUseContext {
+        let mut custom_data = HashMap::new();
+        custom_data.insert(
+            "__bitfun_test_runtime_root".to_string(),
+            json!(root.join("runtime")),
+        );
+
         ToolUseContext {
             tool_call_id: Some("call_1".to_string()),
             agent_type: Some("agent".to_string()),
@@ -357,7 +363,7 @@ mod tests {
             dialog_turn_id: Some("turn_1".to_string()),
             workspace: Some(WorkspaceBinding::new(None, root)),
             unlocked_collapsed_tools: Vec::new(),
-            custom_data: HashMap::new(),
+            custom_data,
             computer_use_host: None,
             runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
             runtime_handles: bitfun_runtime_ports::ToolRuntimeHandles::default(),

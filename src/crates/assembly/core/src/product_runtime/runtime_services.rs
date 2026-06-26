@@ -28,7 +28,7 @@ impl CoreRuntimeServicesProvider {
 
 impl RuntimeServicesProvider for CoreRuntimeServicesProvider {
     fn register(&self, builder: RuntimeServicesBuilder) -> RuntimeServicesBuilder {
-        let session_store: Arc<dyn SessionStorePort> = Arc::new(CoreSessionStorePort);
+        let session_store: Arc<dyn SessionStorePort> = Arc::new(CoreSessionStorePort::default());
         let builder = builder
             .with_session_store(session_store)
             .with_optional_terminal(Some(RuntimeServiceMarkerPort::terminal_port()))

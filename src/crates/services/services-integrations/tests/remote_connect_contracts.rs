@@ -33,14 +33,15 @@ use bitfun_services_integrations::remote_connect::{
     RemoteChatHistoryTurn, RemoteCommand, RemoteCommandRuntimeHost, RemoteConnectSubmissionSource,
     RemoteDefaultModelsConfig, RemoteDialogQueuePriority, RemoteDialogResolvedSubmission,
     RemoteDialogRuntimeHost, RemoteDialogSchedulerOutcomeFact, RemoteDialogSubmissionPolicy,
-    RemoteDialogSubmissionRequest, RemoteDialogSubmitOutcome, RemoteImageContext,
-    RemoteImageContextAdapter, RemoteModelCapabilityFact, RemoteModelCatalog,
+    RemoteDialogSubmissionRequest, RemoteDialogSubmitOutcome, RemoteDialogWorkspaceBinding,
+    RemoteImageContext, RemoteImageContextAdapter, RemoteModelCapabilityFact, RemoteModelCatalog,
     RemoteModelCatalogFacts, RemoteModelConfig, RemoteModelFacts, RemoteReasoningModeFact,
     RemoteRecentWorkspaceFacts, RemoteResponse, RemoteSessionMetadata, RemoteSessionStateTracker,
-    RemoteSessionTrackerHost, RemoteSessionTrackerRegistry, RemoteTerminalPrewarmRequest,
-    RemoteToolStatus, RemoteWorkspaceFacts, RemoteWorkspaceFileChunk, RemoteWorkspaceFileContent,
-    RemoteWorkspaceFileInfo, RemoteWorkspaceFileRuntimeHost, RemoteWorkspaceKind,
-    RemoteWorkspaceUpdate, TrackerEvent, REMOTE_FILE_MAX_CHUNK_BYTES, REMOTE_FILE_MAX_READ_BYTES,
+    RemoteSessionTrackerHost, RemoteSessionTrackerRegistry, RemoteSessionWorkspaceIdentity,
+    RemoteTerminalPrewarmRequest, RemoteToolStatus, RemoteWorkspaceFacts, RemoteWorkspaceFileChunk,
+    RemoteWorkspaceFileContent, RemoteWorkspaceFileInfo, RemoteWorkspaceFileRuntimeHost,
+    RemoteWorkspaceKind, RemoteWorkspaceUpdate, TrackerEvent, REMOTE_FILE_MAX_CHUNK_BYTES,
+    REMOTE_FILE_MAX_READ_BYTES,
 };
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -331,14 +332,12 @@ fn remote_chat_history_assembly_skips_in_progress_assistant_history() {
 
 #[test]
 fn remote_connect_cancel_and_restore_policy_preserve_runtime_decisions() {
+    let binding = RemoteDialogWorkspaceBinding::local("D:/workspace/project");
     assert_eq!(
-        remote_session_restore_target(false, Some("D:/workspace/project")),
+        remote_session_restore_target(false, Some(&binding)),
         Some("D:/workspace/project")
     );
-    assert_eq!(
-        remote_session_restore_target(true, Some("D:/workspace/project")),
-        None
-    );
+    assert_eq!(remote_session_restore_target(true, Some(&binding)), None);
     assert_eq!(remote_session_restore_target(false, None), None);
 
     assert_eq!(
@@ -415,7 +414,7 @@ fn remote_history_contract_turn(is_in_progress: bool) -> RemoteChatHistoryTurn {
 
 struct RecordingDialogHost {
     session_exists: bool,
-    binding_workspace: Option<String>,
+    binding_workspace: Option<RemoteDialogWorkspaceBinding>,
     generated_turn_id: String,
     restore_error: bool,
     submit_outcome: RemoteDialogSubmitOutcome,
@@ -427,7 +426,7 @@ impl RecordingDialogHost {
     fn new(session_exists: bool, binding_workspace: Option<&str>) -> Self {
         Self {
             session_exists,
-            binding_workspace: binding_workspace.map(ToOwned::to_owned),
+            binding_workspace: binding_workspace.map(RemoteDialogWorkspaceBinding::local),
             generated_turn_id: "turn-generated".to_string(),
             restore_error: false,
             submit_outcome: RemoteDialogSubmitOutcome::Started {
@@ -446,6 +445,20 @@ impl RecordingDialogHost {
 
     fn with_submit_outcome(mut self, submit_outcome: RemoteDialogSubmitOutcome) -> Self {
         self.submit_outcome = submit_outcome;
+        self
+    }
+
+    fn with_remote_binding(
+        mut self,
+        workspace_path: &str,
+        remote_connection_id: &str,
+        remote_ssh_host: &str,
+    ) -> Self {
+        self.binding_workspace = Some(RemoteDialogWorkspaceBinding {
+            workspace_path: workspace_path.to_string(),
+            remote_connection_id: Some(remote_connection_id.to_string()),
+            remote_ssh_host: Some(remote_ssh_host.to_string()),
+        });
         self
     }
 
@@ -473,7 +486,10 @@ impl RemoteDialogRuntimeHost for RecordingDialogHost {
             .push(format!("ensure_tracker:{session_id}"));
     }
 
-    async fn resolve_binding_workspace(&self, session_id: &str) -> Option<String> {
+    async fn resolve_binding_workspace(
+        &self,
+        session_id: &str,
+    ) -> Option<RemoteDialogWorkspaceBinding> {
         self.events
             .lock()
             .unwrap()
@@ -587,7 +603,7 @@ fn remote_state(
 
 #[async_trait::async_trait]
 impl RemoteCancelRuntimeHost for RecordingCancelHost {
-    async fn resolve_restore_workspace(&self, session_id: &str) -> Option<String> {
+    async fn resolve_session_storage_dir(&self, session_id: &str) -> Option<String> {
         self.events
             .lock()
             .unwrap()
@@ -687,6 +703,8 @@ impl RemoteCommandRuntimeHost for RecordingCommandHost {
             git_branch: None,
             workspace_kind: None,
             assistant_id: None,
+            remote_connection_id: None,
+            remote_ssh_host: None,
         }
     }
 
@@ -939,7 +957,10 @@ async fn remote_connect_dialog_runtime_owns_restore_prewarm_and_submit_order() {
     assert_eq!(submitted.content, "hello");
     assert_eq!(submitted.resolved_agent_type, "agentic");
     assert_eq!(
-        submitted.binding_workspace.as_deref(),
+        submitted
+            .binding_workspace
+            .as_ref()
+            .map(|binding| binding.workspace_path.as_str()),
         Some("D:/workspace/project")
     );
     assert_eq!(submitted.image_contexts, vec!["image-1".to_string()]);
@@ -953,6 +974,38 @@ async fn remote_connect_dialog_runtime_owns_restore_prewarm_and_submit_order() {
         RemoteDialogQueuePriority::Normal
     );
     assert!(submitted.policy.skip_tool_confirmation);
+}
+
+#[tokio::test]
+async fn remote_connect_dialog_runtime_preserves_remote_workspace_identity() {
+    let host = RecordingDialogHost::new(false, None).with_remote_binding(
+        "/home/wsp/project",
+        "ssh-1",
+        "dev-host",
+    );
+
+    submit_remote_dialog(
+        &host,
+        RemoteDialogSubmissionRequest {
+            session_id: "session-1".to_string(),
+            content: "hello".to_string(),
+            agent_type: Some("code".to_string()),
+            image_contexts: Vec::<String>::new(),
+            policy: RemoteDialogSubmissionPolicy::for_source(RemoteConnectSubmissionSource::Relay),
+            turn_id: Some("turn-remote".to_string()),
+        },
+    )
+    .await
+    .expect("dialog submit succeeds");
+
+    let submitted = host.submitted();
+    let binding = submitted
+        .binding_workspace
+        .as_ref()
+        .expect("binding workspace should be preserved");
+    assert_eq!(binding.workspace_path, "/home/wsp/project");
+    assert_eq!(binding.remote_connection_id.as_deref(), Some("ssh-1"));
+    assert_eq!(binding.remote_ssh_host.as_deref(), Some("dev-host"));
 }
 
 #[tokio::test]
@@ -1437,6 +1490,8 @@ fn remote_connect_workspace_response_helpers_own_wire_shape() {
         git_branch: Some("main".to_string()),
         kind: RemoteWorkspaceKind::Remote,
         assistant_id: Some("assistant-1".to_string()),
+        remote_connection_id: Some("ssh-1".to_string()),
+        remote_ssh_host: Some("dev-host".to_string()),
     };
 
     let info_json = serde_json::to_value(remote_workspace_info_response(Some(workspace.clone())))
@@ -1448,6 +1503,8 @@ fn remote_connect_workspace_response_helpers_own_wire_shape() {
     assert_eq!(info_json["git_branch"], "main");
     assert_eq!(info_json["workspace_kind"], "remote");
     assert_eq!(info_json["assistant_id"], "assistant-1");
+    assert_eq!(info_json["remote_connection_id"], "ssh-1");
+    assert_eq!(info_json["remote_ssh_host"], "dev-host");
 
     let empty_json =
         serde_json::to_value(remote_workspace_info_response(None)).expect("serialize empty info");
@@ -1569,6 +1626,8 @@ fn remote_connect_session_response_helpers_own_pagination_and_timestamps() {
             git_branch: Some("main".to_string()),
             kind: RemoteWorkspaceKind::Normal,
             assistant_id: None,
+            remote_connection_id: None,
+            remote_ssh_host: None,
         }),
         metadata,
         Some("project"),
@@ -1579,6 +1638,8 @@ fn remote_connect_session_response_helpers_own_pagination_and_timestamps() {
     assert_eq!(initial_json["resp"], "initial_sync");
     assert_eq!(initial_json["has_workspace"], true);
     assert_eq!(initial_json["workspace_kind"], "normal");
+    assert!(initial_json.get("remote_connection_id").is_none());
+    assert!(initial_json.get("remote_ssh_host").is_none());
     assert_eq!(initial_json["has_more_sessions"], true);
     assert_eq!(initial_json["sessions"].as_array().unwrap().len(), 3);
     assert_eq!(initial_json["authenticated_user_id"], "user-1");
@@ -1618,6 +1679,10 @@ fn remote_connect_session_create_contract_preserves_workspace_binding() {
         "Remote Session",
         "agentic",
         Some("D:/workspace/project"),
+        RemoteSessionWorkspaceIdentity::new(
+            Some("ssh-1".to_string()),
+            Some("dev-host".to_string()),
+        ),
         RemoteConnectSubmissionSource::Relay,
     );
 
@@ -1628,6 +1693,8 @@ fn remote_connect_session_create_contract_preserves_workspace_binding() {
         Some("D:/workspace/project")
     );
     assert_eq!(request.metadata["source"], "remote_relay");
+    assert_eq!(request.remote_connection_id.as_deref(), Some("ssh-1"));
+    assert_eq!(request.remote_ssh_host.as_deref(), Some("dev-host"));
 }
 
 #[test]
@@ -1728,12 +1795,16 @@ fn remote_connect_command_wire_shape_lives_in_owner_contract() {
 
     let list = serde_json::to_value(RemoteCommand::ListSessions {
         workspace_path: Some("/workspace/project".to_string()),
+        remote_connection_id: Some("conn-1".to_string()),
+        remote_ssh_host: Some("host-1".to_string()),
         limit: Some(30),
         offset: Some(0),
         query: Some("alpha".to_string()),
     })
     .expect("serialize list command");
     assert_eq!(list["cmd"], "list_sessions");
+    assert_eq!(list["remote_connection_id"], "conn-1");
+    assert_eq!(list["remote_ssh_host"], "host-1");
     assert_eq!(list["query"], "alpha");
 
     let rename = serde_json::to_value(RemoteCommand::UpdateSessionTitle {

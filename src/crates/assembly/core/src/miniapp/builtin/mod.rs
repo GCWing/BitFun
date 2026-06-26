@@ -154,14 +154,36 @@ mod tests {
         MiniAppCustomizationMetadata, MiniAppCustomizationOrigin, MiniAppCustomizationOriginKind,
     };
 
-    fn test_manager() -> Arc<MiniAppManager> {
+    struct TestMiniAppManager {
+        manager: Arc<MiniAppManager>,
+        root: std::path::PathBuf,
+    }
+
+    impl std::ops::Deref for TestMiniAppManager {
+        type Target = Arc<MiniAppManager>;
+
+        fn deref(&self) -> &Self::Target {
+            &self.manager
+        }
+    }
+
+    impl Drop for TestMiniAppManager {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.root);
+        }
+    }
+
+    fn test_manager() -> TestMiniAppManager {
         let root = std::env::temp_dir().join(format!(
             "bitfun-miniapp-builtin-customization-{}",
             uuid::Uuid::new_v4()
         ));
         let path_manager =
-            Arc::new(crate::infrastructure::PathManager::with_user_root_for_tests(root));
-        Arc::new(MiniAppManager::new(path_manager))
+            Arc::new(crate::infrastructure::PathManager::with_user_root_for_tests(root.clone()));
+        TestMiniAppManager {
+            manager: Arc::new(MiniAppManager::new(path_manager)),
+            root,
+        }
     }
 
     async fn write_outdated_builtin_marker(app_dir: &std::path::Path) {

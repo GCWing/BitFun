@@ -1293,6 +1293,7 @@ async fn create_session(state: &mut BotChatState, agent_type: &str) -> HandleRes
         session_name,
         agent_type,
         Some(workspace_path.clone()),
+        Default::default(),
         RemoteConnectSubmissionSource::Bot,
     );
     let runtime = match CoreServiceAgentRuntime::agent_runtime(coordinator.clone()) {

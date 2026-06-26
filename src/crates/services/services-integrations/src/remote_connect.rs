@@ -21,10 +21,10 @@ use bitfun_runtime_ports::{
 };
 pub use bitfun_runtime_ports::{
     RemoteAssistantWorkspaceFacts, RemoteFileChunkRange, RemoteInitialSyncRuntimeHost,
-    RemoteProjectionPort, RemoteRecentWorkspaceFacts, RemoteSessionMetadata, RemoteWorkspaceFacts,
-    RemoteWorkspaceFileChunk, RemoteWorkspaceFileContent, RemoteWorkspaceFileInfo,
-    RemoteWorkspaceFileRuntimeHost, RemoteWorkspaceKind, RemoteWorkspacePort,
-    RemoteWorkspaceRuntimeHost, RemoteWorkspaceUpdate,
+    RemoteProjectionPort, RemoteRecentWorkspaceFacts, RemoteSessionMetadata,
+    RemoteSessionWorkspaceIdentity, RemoteWorkspaceFacts, RemoteWorkspaceFileChunk,
+    RemoteWorkspaceFileContent, RemoteWorkspaceFileInfo, RemoteWorkspaceFileRuntimeHost,
+    RemoteWorkspaceKind, RemoteWorkspacePort, RemoteWorkspaceRuntimeHost, RemoteWorkspaceUpdate,
 };
 pub use device::DeviceIdentity;
 pub use encryption::{decrypt_from_base64, encrypt_to_base64, KeyPair};
@@ -67,6 +67,7 @@ pub fn build_remote_session_create_request(
     session_name: impl Into<String>,
     agent_type: impl Into<String>,
     workspace_path: Option<impl Into<String>>,
+    workspace_identity: RemoteSessionWorkspaceIdentity,
     source: RemoteConnectSubmissionSource,
 ) -> AgentSessionCreateRequest {
     let mut metadata = serde_json::Map::new();
@@ -79,8 +80,8 @@ pub fn build_remote_session_create_request(
         session_name: session_name.into(),
         agent_type: agent_type.into(),
         workspace_path: workspace_path.map(Into::into),
-        remote_connection_id: None,
-        remote_ssh_host: None,
+        remote_connection_id: workspace_identity.remote_connection_id,
+        remote_ssh_host: workspace_identity.remote_ssh_host,
         metadata,
     }
 }
@@ -190,12 +191,12 @@ pub fn resolve_remote_execution_image_contexts<T>(
 
 pub fn remote_session_restore_target<'a>(
     session_exists: bool,
-    binding_workspace: Option<&'a str>,
+    binding_workspace: Option<&'a RemoteDialogWorkspaceBinding>,
 ) -> Option<&'a str> {
     if session_exists {
         None
     } else {
-        binding_workspace
+        binding_workspace.map(|binding| binding.workspace_path.as_str())
     }
 }
 
@@ -231,7 +232,7 @@ pub struct RemoteCancelTaskRequest {
 
 #[async_trait::async_trait]
 pub trait RemoteCancelRuntimeHost: Send + Sync {
-    async fn resolve_restore_workspace(&self, session_id: &str) -> Option<String>;
+    async fn resolve_session_storage_dir(&self, session_id: &str) -> Option<String>;
 
     async fn remote_control_state(
         &self,
@@ -241,7 +242,7 @@ pub trait RemoteCancelRuntimeHost: Send + Sync {
     async fn restore_remote_session(
         &self,
         session_id: &str,
-        workspace_path: &str,
+        restore_path_hint: &str,
     ) -> Result<(), String>;
 
     async fn cancel_remote_turn(&self, session_id: &str, turn_id: &str) -> Result<(), String>;
@@ -258,11 +259,16 @@ where
 
     let mut state = host.remote_control_state(&session_id).await?;
     if state.is_none() {
-        let workspace_path = host
-            .resolve_restore_workspace(&session_id)
+        let session_storage_dir = host
+            .resolve_session_storage_dir(&session_id)
             .await
-            .ok_or_else(|| format!("Workspace path not available for session: {}", session_id))?;
-        host.restore_remote_session(&session_id, &workspace_path)
+            .ok_or_else(|| {
+                format!(
+                    "Session storage directory not available for session: {}",
+                    session_id
+                )
+            })?;
+        host.restore_remote_session(&session_id, &session_storage_dir)
             .await
             .map_err(|error| format!("Session not found: {error}"))?;
         state = host.remote_control_state(&session_id).await?;
@@ -324,12 +330,29 @@ pub struct RemoteTerminalPrewarmRequest {
     pub binding_workspace: Option<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemoteDialogWorkspaceBinding {
+    pub workspace_path: String,
+    pub remote_connection_id: Option<String>,
+    pub remote_ssh_host: Option<String>,
+}
+
+impl RemoteDialogWorkspaceBinding {
+    pub fn local(workspace_path: impl Into<String>) -> Self {
+        Self {
+            workspace_path: workspace_path.into(),
+            remote_connection_id: None,
+            remote_ssh_host: None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct RemoteDialogResolvedSubmission<ImageContext> {
     pub session_id: String,
     pub content: String,
     pub resolved_agent_type: String,
-    pub binding_workspace: Option<String>,
+    pub binding_workspace: Option<RemoteDialogWorkspaceBinding>,
     pub image_contexts: Vec<ImageContext>,
     pub policy: RemoteDialogSubmissionPolicy,
     pub turn_id: String,
@@ -379,7 +402,10 @@ pub trait RemoteDialogRuntimeHost: Send + Sync {
 
     fn ensure_tracker(&self, session_id: &str);
 
-    async fn resolve_binding_workspace(&self, session_id: &str) -> Option<String>;
+    async fn resolve_binding_workspace(
+        &self,
+        session_id: &str,
+    ) -> Option<RemoteDialogWorkspaceBinding>;
 
     async fn remote_session_exists(&self, session_id: &str) -> Result<bool, String>;
 
@@ -421,7 +447,7 @@ where
     let session_exists = host.remote_session_exists(&session_id).await?;
 
     if let Some(workspace_path) =
-        remote_session_restore_target(session_exists, binding_workspace.as_deref())
+        remote_session_restore_target(session_exists, binding_workspace.as_ref())
     {
         let _ = host
             .restore_remote_session(&session_id, workspace_path)
@@ -430,7 +456,9 @@ where
 
     host.prewarm_remote_terminal(RemoteTerminalPrewarmRequest {
         session_id: session_id.clone(),
-        binding_workspace: binding_workspace.clone(),
+        binding_workspace: binding_workspace
+            .as_ref()
+            .map(|binding| binding.workspace_path.clone()),
     });
 
     let resolved_agent_type = resolve_remote_agent_type(agent_type.as_deref()).to_string();
@@ -804,6 +832,8 @@ pub fn remote_workspace_info_response(workspace: Option<RemoteWorkspaceFacts>) -
             git_branch: workspace.git_branch,
             workspace_kind: Some(workspace.kind.as_wire_str().to_string()),
             assistant_id: workspace.assistant_id,
+            remote_connection_id: workspace.remote_connection_id,
+            remote_ssh_host: workspace.remote_ssh_host,
         },
         None => RemoteResponse::WorkspaceInfo {
             has_workspace: false,
@@ -812,6 +842,8 @@ pub fn remote_workspace_info_response(workspace: Option<RemoteWorkspaceFacts>) -
             git_branch: None,
             workspace_kind: None,
             assistant_id: None,
+            remote_connection_id: None,
+            remote_ssh_host: None,
         },
     }
 }
@@ -929,18 +961,28 @@ pub fn remote_initial_sync_response(
     has_more_sessions: bool,
     authenticated_user_id: Option<String>,
 ) -> RemoteResponse {
-    let (has_workspace, path, project_name, git_branch, workspace_kind, assistant_id) =
-        match workspace {
-            Some(workspace) => (
-                true,
-                Some(workspace.path.clone()),
-                Some(workspace.name.clone()),
-                workspace.git_branch.clone(),
-                Some(workspace.kind.as_wire_str().to_string()),
-                workspace.assistant_id.clone(),
-            ),
-            None => (false, None, None, None, None, None),
-        };
+    let (
+        has_workspace,
+        path,
+        project_name,
+        git_branch,
+        workspace_kind,
+        assistant_id,
+        remote_connection_id,
+        remote_ssh_host,
+    ) = match workspace {
+        Some(workspace) => (
+            true,
+            Some(workspace.path.clone()),
+            Some(workspace.name.clone()),
+            workspace.git_branch.clone(),
+            Some(workspace.kind.as_wire_str().to_string()),
+            workspace.assistant_id.clone(),
+            workspace.remote_connection_id.clone(),
+            workspace.remote_ssh_host.clone(),
+        ),
+        None => (false, None, None, None, None, None, None, None),
+    };
     let workspace_path = path.as_deref();
     let sessions = metadata
         .iter()
@@ -954,6 +996,8 @@ pub fn remote_initial_sync_response(
         git_branch,
         workspace_kind,
         assistant_id,
+        remote_connection_id,
+        remote_ssh_host,
         sessions,
         has_more_sessions,
         authenticated_user_id,
@@ -1002,8 +1046,13 @@ where
         .and_then(|path| path.file_name())
         .map(|name| name.to_string_lossy().to_string());
 
+    let workspace_identity = workspace
+        .as_ref()
+        .map(RemoteSessionWorkspaceIdentity::from_workspace)
+        .unwrap_or_default();
+
     let (sessions, has_more) = if let Some(path) = workspace_path.as_deref() {
-        match host.list_session_metadata(path).await {
+        match host.list_session_metadata(path, workspace_identity).await {
             Ok(metadata) => {
                 let total = metadata.len();
                 let page_size = 100usize;
@@ -1066,6 +1115,7 @@ pub trait RemoteSessionRuntimeHost: Send + Sync {
     async fn list_session_metadata(
         &self,
         workspace_path: &Path,
+        workspace_identity: RemoteSessionWorkspaceIdentity,
     ) -> Result<Vec<RemoteSessionMetadata>, String>;
     async fn resolve_default_assistant_workspace_path(&self) -> Result<String, String>;
     async fn create_session(&self, request: AgentSessionCreateRequest) -> Result<String, String>;
@@ -1080,13 +1130,17 @@ pub trait RemoteSessionRuntimeHost: Send + Sync {
     ) -> Result<String, String>;
     async fn ensure_session_loaded(&self, session_id: &str) -> Result<(), String>;
     async fn update_session_title(&self, session_id: &str, title: &str) -> Result<String, String>;
-    async fn resolve_session_workspace_path(&self, session_id: &str) -> Option<PathBuf>;
+    async fn resolve_session_storage_dir(&self, session_id: &str) -> Option<PathBuf>;
     async fn load_remote_chat_messages(
         &self,
-        workspace_path: &Path,
+        session_storage_dir: &Path,
         session_id: &str,
     ) -> (Vec<ChatMessage>, bool);
-    async fn delete_session(&self, workspace_path: &Path, session_id: &str) -> Result<(), String>;
+    async fn delete_session(
+        &self,
+        session_storage_dir: &Path,
+        session_id: &str,
+    ) -> Result<(), String>;
     fn remove_tracker(&self, session_id: &str);
 }
 
@@ -1097,6 +1151,8 @@ where
     match command {
         RemoteCommand::ListSessions {
             workspace_path,
+            remote_connection_id,
+            remote_ssh_host,
             limit,
             offset,
             query,
@@ -1119,7 +1175,15 @@ where
                 .file_name()
                 .map(|name| name.to_string_lossy().to_string());
 
-            match host.list_session_metadata(&workspace_path).await {
+            let workspace_identity = RemoteSessionWorkspaceIdentity::new(
+                remote_connection_id.clone(),
+                remote_ssh_host.clone(),
+            );
+
+            match host
+                .list_session_metadata(&workspace_path, workspace_identity)
+                .await
+            {
                 Ok(metadata) => {
                     let query = query
                         .as_deref()
@@ -1149,6 +1213,8 @@ where
             agent_type,
             session_name,
             workspace_path,
+            remote_connection_id,
+            remote_ssh_host,
         } => {
             let agent = resolve_remote_agent_type(agent_type.as_deref());
             let is_claw = agent == "Claw";
@@ -1187,6 +1253,10 @@ where
                 session_name,
                 agent,
                 Some(binding_workspace),
+                RemoteSessionWorkspaceIdentity::new(
+                    remote_connection_id.clone(),
+                    remote_ssh_host.clone(),
+                ),
                 RemoteConnectSubmissionSource::Relay,
             );
             match host.create_session(request).await {
@@ -1227,24 +1297,32 @@ where
             limit: _,
             before_message_id: _,
         } => {
-            let Some(workspace_path) = host.resolve_session_workspace_path(session_id).await else {
+            let Some(session_storage_dir) = host.resolve_session_storage_dir(session_id).await
+            else {
                 return RemoteResponse::Error {
-                    message: format!("Workspace path not available for session: {}", session_id),
+                    message: format!(
+                        "Session storage directory not available for session: {}",
+                        session_id
+                    ),
                 };
             };
             let (chat_messages, has_more) = host
-                .load_remote_chat_messages(&workspace_path, session_id)
+                .load_remote_chat_messages(&session_storage_dir, session_id)
                 .await;
             remote_messages_response(session_id.clone(), chat_messages, has_more)
         }
         RemoteCommand::DeleteSession { session_id } => {
-            let Some(workspace_path) = host.resolve_session_workspace_path(session_id).await else {
+            let Some(session_storage_dir) = host.resolve_session_storage_dir(session_id).await
+            else {
                 return RemoteResponse::Error {
-                    message: format!("Workspace path not available for session: {}", session_id),
+                    message: format!(
+                        "Session storage directory not available for session: {}",
+                        session_id
+                    ),
                 };
             };
 
-            match host.delete_session(&workspace_path, session_id).await {
+            match host.delete_session(&session_storage_dir, session_id).await {
                 Ok(()) => {
                     host.remove_tracker(session_id);
                     remote_session_deleted_response(session_id.clone())
@@ -1262,10 +1340,10 @@ where
 pub trait RemotePollRuntimeHost: Send + Sync {
     fn ensure_tracker(&self, session_id: &str) -> Arc<RemoteSessionStateTracker>;
     async fn load_model_catalog(&self, session_id: &str) -> Option<RemoteModelCatalog>;
-    async fn resolve_session_workspace_path(&self, session_id: &str) -> Option<PathBuf>;
+    async fn resolve_session_storage_dir(&self, session_id: &str) -> Option<PathBuf>;
     async fn load_remote_chat_messages(
         &self,
-        workspace_path: &Path,
+        session_storage_dir: &Path,
         session_id: &str,
     ) -> (Vec<ChatMessage>, bool);
 }
@@ -1305,13 +1383,16 @@ where
         );
     }
 
-    let Some(workspace_path) = host.resolve_session_workspace_path(session_id).await else {
+    let Some(session_storage_dir) = host.resolve_session_storage_dir(session_id).await else {
         return RemoteResponse::Error {
-            message: format!("Workspace path not available for session: {}", session_id),
+            message: format!(
+                "Session storage directory not available for session: {}",
+                session_id
+            ),
         };
     };
     let (all_chat_messages, _) = host
-        .load_remote_chat_messages(&workspace_path, session_id)
+        .load_remote_chat_messages(&session_storage_dir, session_id)
         .await;
     let total_msg_count = all_chat_messages.len();
     let new_messages = all_chat_messages
@@ -1913,6 +1994,10 @@ pub enum RemoteCommand {
     },
     ListSessions {
         workspace_path: Option<String>,
+        #[serde(default)]
+        remote_connection_id: Option<String>,
+        #[serde(default)]
+        remote_ssh_host: Option<String>,
         limit: Option<usize>,
         offset: Option<usize>,
         query: Option<String>,
@@ -1921,6 +2006,10 @@ pub enum RemoteCommand {
         agent_type: Option<String>,
         session_name: Option<String>,
         workspace_path: Option<String>,
+        #[serde(default)]
+        remote_connection_id: Option<String>,
+        #[serde(default)]
+        remote_ssh_host: Option<String>,
     },
     GetModelCatalog {
         session_id: Option<String>,
@@ -2004,6 +2093,10 @@ pub enum RemoteResponse {
         workspace_kind: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
         assistant_id: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        remote_connection_id: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        remote_ssh_host: Option<String>,
     },
     RecentWorkspaces {
         workspaces: Vec<RecentWorkspaceEntry>,
@@ -2068,6 +2161,10 @@ pub enum RemoteResponse {
         workspace_kind: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
         assistant_id: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        remote_connection_id: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        remote_ssh_host: Option<String>,
         sessions: Vec<SessionInfo>,
         has_more_sessions: bool,
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -3073,6 +3170,8 @@ mod tests {
                 git_branch: Some("main".to_string()),
                 kind: RemoteWorkspaceKind::Normal,
                 assistant_id: None,
+                remote_connection_id: None,
+                remote_ssh_host: None,
             })
         }
 
@@ -3124,6 +3223,8 @@ mod tests {
                 git_branch: Some("main".to_string()),
                 workspace_kind: Some("normal".to_string()),
                 assistant_id: None,
+                remote_connection_id: None,
+                remote_ssh_host: None,
             }
         );
 
@@ -3147,6 +3248,7 @@ mod tests {
     #[derive(Default)]
     struct FakeSessionHost {
         created_requests: Mutex<Vec<AgentSessionCreateRequest>>,
+        list_identities: Mutex<Vec<RemoteSessionWorkspaceIdentity>>,
         removed_trackers: Mutex<Vec<String>>,
     }
 
@@ -3155,7 +3257,12 @@ mod tests {
         async fn list_session_metadata(
             &self,
             _workspace_path: &Path,
+            workspace_identity: RemoteSessionWorkspaceIdentity,
         ) -> Result<Vec<RemoteSessionMetadata>, String> {
+            self.list_identities
+                .lock()
+                .unwrap()
+                .push(workspace_identity);
             Ok(vec![
                 RemoteSessionMetadata {
                     session_id: "session-a".to_string(),
@@ -3220,13 +3327,13 @@ mod tests {
             Ok(title.trim().to_string())
         }
 
-        async fn resolve_session_workspace_path(&self, _session_id: &str) -> Option<PathBuf> {
+        async fn resolve_session_storage_dir(&self, _session_id: &str) -> Option<PathBuf> {
             Some(PathBuf::from("/workspace/project"))
         }
 
         async fn load_remote_chat_messages(
             &self,
-            _workspace_path: &Path,
+            _session_storage_dir: &Path,
             _session_id: &str,
         ) -> (Vec<ChatMessage>, bool) {
             (
@@ -3247,7 +3354,7 @@ mod tests {
 
         async fn delete_session(
             &self,
-            _workspace_path: &Path,
+            _session_storage_dir: &Path,
             _session_id: &str,
         ) -> Result<(), String> {
             Ok(())
@@ -3269,6 +3376,8 @@ mod tests {
             &host,
             &RemoteCommand::ListSessions {
                 workspace_path: Some("/workspace/project".to_string()),
+                remote_connection_id: Some("conn-1".to_string()),
+                remote_ssh_host: Some("host-1".to_string()),
                 limit: Some(20),
                 offset: Some(0),
                 query: Some("keep".to_string()),
@@ -3285,6 +3394,16 @@ mod tests {
             sessions[0].workspace_path.as_deref(),
             Some("/workspace/project")
         );
+        let list_identities = host.list_identities.lock().unwrap();
+        assert_eq!(
+            list_identities[0].remote_connection_id.as_deref(),
+            Some("conn-1")
+        );
+        assert_eq!(
+            list_identities[0].remote_ssh_host.as_deref(),
+            Some("host-1")
+        );
+        drop(list_identities);
 
         let created = handle_remote_session_command(
             &host,
@@ -3292,6 +3411,8 @@ mod tests {
                 agent_type: Some("Cowork".to_string()),
                 session_name: None,
                 workspace_path: Some("/workspace/project".to_string()),
+                remote_connection_id: Some("conn-1".to_string()),
+                remote_ssh_host: Some("host-1".to_string()),
             },
         )
         .await;
@@ -3307,6 +3428,14 @@ mod tests {
         assert_eq!(
             created_requests[0].workspace_path.as_deref(),
             Some("/workspace/project")
+        );
+        assert_eq!(
+            created_requests[0].remote_connection_id.as_deref(),
+            Some("conn-1")
+        );
+        assert_eq!(
+            created_requests[0].remote_ssh_host.as_deref(),
+            Some("host-1")
         );
     }
 
@@ -3348,13 +3477,13 @@ mod tests {
             None
         }
 
-        async fn resolve_session_workspace_path(&self, _session_id: &str) -> Option<PathBuf> {
+        async fn resolve_session_storage_dir(&self, _session_id: &str) -> Option<PathBuf> {
             None
         }
 
         async fn load_remote_chat_messages(
             &self,
-            _workspace_path: &Path,
+            _session_storage_dir: &Path,
             _session_id: &str,
         ) -> (Vec<ChatMessage>, bool) {
             (Vec::new(), false)
@@ -3381,7 +3510,8 @@ mod tests {
         assert_eq!(
             response,
             RemoteResponse::Error {
-                message: "Workspace path not available for session: session-a".to_string(),
+                message: "Session storage directory not available for session: session-a"
+                    .to_string(),
             }
         );
     }

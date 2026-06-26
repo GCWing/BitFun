@@ -1014,7 +1014,7 @@ async fn ensure_session_for_thread_goal(
         .ok_or_else(|| format!("Session workspace_path is missing: {session_id}"))
 }
 
-async fn resolve_session_workspace_path_for_thread_goal_read(
+async fn resolve_thread_goal_storage_path(
     coordinator: &Arc<ConversationCoordinator>,
     app_state: &AppState,
     session_id: &str,
@@ -1022,6 +1022,15 @@ async fn resolve_session_workspace_path_for_thread_goal_read(
     remote_connection_id: Option<&str>,
     remote_ssh_host: Option<&str>,
 ) -> Result<PathBuf, String> {
+    if let Some(storage_path) = coordinator
+        .get_session_manager()
+        .resolve_session_workspace_binding(session_id)
+        .await
+        .map(|binding| binding.session_storage_dir())
+    {
+        return Ok(storage_path);
+    }
+
     if let Some(workspace_path) = coordinator
         .get_session_manager()
         .get_session(session_id)
@@ -1057,7 +1066,7 @@ pub async fn get_session_thread_goal(
         if session_id.is_empty() {
             return Err("session_id is required".to_string());
         }
-        let workspace_path = resolve_session_workspace_path_for_thread_goal_read(
+        let storage_path = resolve_thread_goal_storage_path(
             coordinator.inner(),
             app_state.inner(),
             session_id,
@@ -1067,7 +1076,7 @@ pub async fn get_session_thread_goal(
         )
         .await?;
         let goal = coordinator
-            .get_thread_goal(session_id, workspace_path.as_path())
+            .get_thread_goal(session_id, storage_path.as_path())
             .await
             .map_err(|error| error.to_string())?;
         Ok(GetSessionThreadGoalResponse { goal })
@@ -1227,6 +1236,8 @@ pub async fn run_init_agents_md(
         .submit_init_agents_md(
             session_id.to_string(),
             workspace_path,
+            request.remote_connection_id.clone(),
+            request.remote_ssh_host.clone(),
             DialogSubmissionPolicy::for_source(DialogTriggerSource::DesktopUi),
         )
         .await
