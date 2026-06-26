@@ -64,6 +64,10 @@ function isWhitespaceCharacter(char: string | undefined): boolean {
   return !char || /\s/.test(char);
 }
 
+function trimEdgeLineBreaks(text: string): string {
+  return text.replace(/^[\r\n]+/, '').replace(/[\r\n]+$/, '');
+}
+
 function getContextDisplayName(context: ContextItem): string {
   switch (context.type) {
     case 'file': return context.fileName;
@@ -448,7 +452,11 @@ export const RichTextInput = React.forwardRef<HTMLDivElement, RichTextInputProps
     };
     
     internalRef.current.childNodes.forEach(traverse);
-    return sanitizeText(text).trim();
+    const sanitizedText = sanitizeText(text);
+    const extractedText = sanitizedText.startsWith('/')
+      ? trimEdgeLineBreaks(sanitizedText)
+      : sanitizedText.trim();
+    return extractedText;
   }, [internalRef]);
 
   // Detect @ mention plus inline / and $ triggers near the caret.

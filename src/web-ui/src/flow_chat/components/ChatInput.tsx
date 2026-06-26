@@ -29,7 +29,7 @@ import type { FileContext, DirectoryContext, ImageContext } from '@/types/contex
 import { SmartRecommendations } from './smart-recommendations';
 import { useCurrentWorkspace, useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import { createImageContextFromFile, createImageContextFromClipboard } from '../utils/imageUtils';
-import { isSlashCommand, stripSlashCommand } from '../utils/slashCommand';
+import { getSlashCommandPickerQuery, isSlashCommand, stripSlashCommand } from '../utils/slashCommand';
 import { notificationService } from '@/shared/notification-system';
 import { inputReducer, initialInputState } from '../reducers/inputReducer';
 import { modeReducer, initialModeState } from '../reducers/modeReducer';
@@ -1828,7 +1828,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     if (text.startsWith('/')) {
       const afterSlash = text.slice(1);
       const hasWhitespace = /\s/.test(afterSlash);
-      const query = afterSlash.trimStart().split(/\s+/, 1)[0]?.toLowerCase?.() ?? '';
+      const pickerQuery = getSlashCommandPickerQuery(text);
+      const query = pickerQuery ?? afterSlash.trimStart().split(/\s+/, 1)[0]?.toLowerCase?.() ?? '';
       const matchedMcpPrompt = localSlashCommandsEnabled
         ? resolveTypedMcpPromptCommand(text)
         : null;
@@ -1852,7 +1853,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         // Only show the picker for "/..." patterns that are plausibly a command (/ or /b... /d...).
         // Once the user types a space (starts composing the real question), stop showing the picker
         // so Enter can submit "/btw ..." or "/DeepReview ..." instead of selecting from the picker.
-        if (!hasWhitespace && (query === '' || query.startsWith('b') || query.startsWith('d') || query.startsWith('g') || query.startsWith('u'))) {
+        if (pickerQuery !== null && (query === '' || query.startsWith('b') || query.startsWith('d') || query.startsWith('g') || query.startsWith('u'))) {
           setSlashCommandState({
             isActive: true,
             kind: 'actions',
@@ -1866,7 +1867,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       }
 
       // When idle, keep the picker for mode switching, but don't interfere with executable slash commands.
-      if (!isBtwCommand && !isGoalCommand && !isCompactCommand && !isUsageCommand && !isDeepReviewCommand && !matchedMcpPrompt) {
+      if (pickerQuery !== null && !isBtwCommand && !isGoalCommand && !isCompactCommand && !isUsageCommand && !isDeepReviewCommand && !matchedMcpPrompt) {
         setSlashCommandState({
           isActive: true,
           kind: 'all',
@@ -2985,11 +2986,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             getRichTextInlineTriggerController()?.closeInlineTrigger?.();
           }
           setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
-
-          // For mode switching picker, "/" is just a trigger and should be cleared on cancel.
-          if (kind !== 'actions' && kind !== 'skills') {
-            dispatchInput({ type: 'CLEAR_VALUE' });
-          }
           return;
         }
         
