@@ -457,6 +457,36 @@ pub struct RemoteWorkspaceFacts {
     pub kind: RemoteWorkspaceKind,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub assistant_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_ssh_host: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RemoteSessionWorkspaceIdentity {
+    pub remote_connection_id: Option<String>,
+    pub remote_ssh_host: Option<String>,
+}
+
+impl RemoteSessionWorkspaceIdentity {
+    pub fn new(remote_connection_id: Option<String>, remote_ssh_host: Option<String>) -> Self {
+        Self {
+            remote_connection_id,
+            remote_ssh_host,
+        }
+    }
+
+    pub fn from_workspace(workspace: &RemoteWorkspaceFacts) -> Self {
+        Self::new(
+            workspace.remote_connection_id.clone(),
+            workspace.remote_ssh_host.clone(),
+        )
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.remote_connection_id.is_none() && self.remote_ssh_host.is_none()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -549,6 +579,7 @@ pub trait RemoteInitialSyncRuntimeHost: Send + Sync {
     async fn list_session_metadata(
         &self,
         workspace_path: &Path,
+        workspace_identity: RemoteSessionWorkspaceIdentity,
     ) -> Result<Vec<RemoteSessionMetadata>, String>;
 }
 
@@ -697,6 +728,10 @@ pub struct AgentBackgroundResultRequest {
     pub agent_type: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub workspace_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_ssh_host: Option<String>,
     pub content: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub display_content: Option<String>,
@@ -718,6 +753,10 @@ pub struct AgentThreadGoalDeliveryRequest {
     pub agent_type: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub workspace_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_ssh_host: Option<String>,
     pub kind: AgentThreadGoalDeliveryKind,
     pub goal: ThreadGoal,
 }
@@ -1225,11 +1264,6 @@ pub trait AgentSessionManagementPort: Send + Sync {
 
     async fn delete_session(&self, request: AgentSessionDeleteRequest) -> PortResult<()>;
 
-    async fn resolve_session_workspace_path(
-        &self,
-        request: AgentSessionWorkspaceRequest,
-    ) -> PortResult<Option<String>>;
-
     async fn resolve_session_workspace_binding(
         &self,
         request: AgentSessionWorkspaceRequest,
@@ -1672,6 +1706,8 @@ mod tests {
             git_branch: Some("main".to_string()),
             kind: RemoteWorkspaceKind::Remote,
             assistant_id: Some("assistant_1".to_string()),
+            remote_connection_id: Some("conn-1".to_string()),
+            remote_ssh_host: Some("host-1".to_string()),
         };
         let session = RemoteSessionMetadata {
             session_id: "session_1".to_string(),
@@ -1684,6 +1720,8 @@ mod tests {
 
         assert_eq!(workspace.kind.as_wire_str(), "remote");
         assert_eq!(workspace.assistant_id.as_deref(), Some("assistant_1"));
+        assert_eq!(workspace.remote_connection_id.as_deref(), Some("conn-1"));
+        assert_eq!(workspace.remote_ssh_host.as_deref(), Some("host-1"));
         assert_eq!(session.turn_count, 3);
     }
 
@@ -2000,6 +2038,8 @@ mod tests {
             session_id: "session_1".to_string(),
             agent_type: "agentic".to_string(),
             workspace_path: Some("/workspace/project".to_string()),
+            remote_connection_id: Some("conn-1".to_string()),
+            remote_ssh_host: Some("host-1".to_string()),
             content: "full result".to_string(),
             display_content: Some("short result".to_string()),
             metadata,
@@ -2010,6 +2050,8 @@ mod tests {
         assert_eq!(json["sessionId"], "session_1");
         assert_eq!(json["agentType"], "agentic");
         assert_eq!(json["workspacePath"], "/workspace/project");
+        assert_eq!(json["remoteConnectionId"], "conn-1");
+        assert_eq!(json["remoteSshHost"], "host-1");
         assert_eq!(json["content"], "full result");
         assert_eq!(json["displayContent"], "short result");
         assert_eq!(json["metadata"]["kind"], "background_result");
@@ -2021,6 +2063,8 @@ mod tests {
             session_id: "session_1".to_string(),
             agent_type: "agentic".to_string(),
             workspace_path: Some("/workspace/project".to_string()),
+            remote_connection_id: Some("conn-1".to_string()),
+            remote_ssh_host: Some("host-1".to_string()),
             kind: AgentThreadGoalDeliveryKind::ObjectiveUpdated,
             goal: ThreadGoal {
                 goal_id: "goal_1".to_string(),
@@ -2041,6 +2085,8 @@ mod tests {
         assert_eq!(json["sessionId"], "session_1");
         assert_eq!(json["agentType"], "agentic");
         assert_eq!(json["workspacePath"], "/workspace/project");
+        assert_eq!(json["remoteConnectionId"], "conn-1");
+        assert_eq!(json["remoteSshHost"], "host-1");
         assert_eq!(json["kind"], "objective_updated");
         assert_eq!(json["goal"]["goalId"], "goal_1");
     }

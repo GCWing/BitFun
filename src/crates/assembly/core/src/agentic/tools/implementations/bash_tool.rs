@@ -54,6 +54,8 @@ async fn deliver_background_bash_result(
     parent_session_id: String,
     parent_agent_type: String,
     parent_workspace_path: Option<String>,
+    parent_remote_connection_id: Option<String>,
+    parent_remote_ssh_host: Option<String>,
     delivery_text: String,
     display_text: String,
     metadata: serde_json::Map<String, Value>,
@@ -76,6 +78,8 @@ async fn deliver_background_bash_result(
             session_id: parent_session_id.clone(),
             agent_type: parent_agent_type,
             workspace_path: parent_workspace_path,
+            remote_connection_id: parent_remote_connection_id,
+            remote_ssh_host: parent_remote_ssh_host,
             content: delivery_text,
             display_content: Some(display_text),
             metadata,
@@ -1107,6 +1111,16 @@ impl BashTool {
         let parent_workspace_path = context
             .workspace_root()
             .map(|path| path.to_string_lossy().to_string());
+        let parent_remote_connection_id = context
+            .workspace
+            .as_ref()
+            .and_then(|workspace| workspace.connection_id().map(ToOwned::to_owned));
+        let parent_remote_ssh_host = context
+            .workspace
+            .as_ref()
+            .filter(|workspace| workspace.is_remote())
+            .map(|workspace| workspace.session_identity.hostname.clone())
+            .filter(|value| !value.trim().is_empty());
         let command = command_str.to_string();
         let working_directory = initial_cwd.to_string();
         let terminal_session_id = bg_session_id.clone();
@@ -1230,6 +1244,8 @@ impl BashTool {
                             parent_session_id.clone(),
                             parent_agent_type.clone(),
                             parent_workspace_path.clone(),
+                            parent_remote_connection_id.clone(),
+                            parent_remote_ssh_host.clone(),
                             delivery_text,
                             display_text,
                             json_object_metadata(metadata),
@@ -1268,6 +1284,8 @@ impl BashTool {
                             parent_session_id.clone(),
                             parent_agent_type.clone(),
                             parent_workspace_path.clone(),
+                            parent_remote_connection_id.clone(),
+                            parent_remote_ssh_host.clone(),
                             delivery_text,
                             display_text,
                             json_object_metadata(metadata),
@@ -1308,6 +1326,8 @@ impl BashTool {
                     parent_session_id.clone(),
                     parent_agent_type.clone(),
                     parent_workspace_path.clone(),
+                    parent_remote_connection_id.clone(),
+                    parent_remote_ssh_host.clone(),
                     delivery_text,
                     display_text,
                     json_object_metadata(metadata),

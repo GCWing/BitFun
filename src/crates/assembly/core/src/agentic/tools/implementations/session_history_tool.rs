@@ -261,11 +261,11 @@ Examples:
                 ))
             })?;
         let display_workspace = workspace.root_path_string();
-        let session_storage_path = workspace.session_storage_path();
+        let session_storage_dir = workspace.session_storage_dir();
         let manager = PersistenceManager::new(Arc::new(PathManager::new()?))?;
         let transcript = manager
             .export_session_transcript(
-                &session_storage_path,
+                &session_storage_dir,
                 &session_id,
                 &SessionTranscriptExportOptions {
                     tools: params.tools.unwrap_or(false),

@@ -445,20 +445,6 @@ impl AgentRuntime {
             .map_err(RuntimeError::from)
     }
 
-    pub async fn resolve_session_workspace_path(
-        &self,
-        request: AgentSessionWorkspaceRequest,
-    ) -> Result<Option<String>, RuntimeError> {
-        let session_management = self
-            .session_management
-            .as_ref()
-            .ok_or(RuntimeError::MissingSessionManagementPort)?;
-        session_management
-            .resolve_session_workspace_path(request)
-            .await
-            .map_err(RuntimeError::from)
-    }
-
     pub async fn resolve_session_workspace_binding(
         &self,
         request: AgentSessionWorkspaceRequest,
@@ -637,7 +623,6 @@ mod tests {
         cancelled_turns: Mutex<Vec<AgentTurnCancellationRequest>>,
         listed_sessions: Mutex<Vec<AgentSessionListRequest>>,
         deleted_sessions: Mutex<Vec<AgentSessionDeleteRequest>>,
-        workspace_requests: Mutex<Vec<AgentSessionWorkspaceRequest>>,
         workspace_binding_requests: Mutex<Vec<AgentSessionWorkspaceRequest>>,
         resolved_agent_type: Option<String>,
     }
@@ -661,14 +646,6 @@ mod tests {
         async fn delete_session(&self, request: AgentSessionDeleteRequest) -> PortResult<()> {
             self.deleted_sessions.lock().unwrap().push(request);
             Ok(())
-        }
-
-        async fn resolve_session_workspace_path(
-            &self,
-            request: AgentSessionWorkspaceRequest,
-        ) -> PortResult<Option<String>> {
-            self.workspace_requests.lock().unwrap().push(request);
-            Ok(Some("/workspace/project".to_string()))
         }
 
         async fn resolve_session_workspace_binding(
@@ -957,12 +934,6 @@ mod tests {
             })
             .await
             .expect("delete session");
-        let workspace_path = runtime
-            .resolve_session_workspace_path(AgentSessionWorkspaceRequest {
-                session_id: "session_1".to_string(),
-            })
-            .await
-            .expect("resolve workspace");
         let workspace_binding = runtime
             .resolve_session_workspace_binding(AgentSessionWorkspaceRequest {
                 session_id: "session_1".to_string(),
@@ -972,7 +943,6 @@ mod tests {
             .expect("workspace binding");
 
         assert_eq!(sessions[0].session_id, "session_1");
-        assert_eq!(workspace_path.as_deref(), Some("/workspace/project"));
         assert_eq!(workspace_binding.workspace_path, "/workspace/project");
         assert_eq!(
             workspace_binding.remote_connection_id.as_deref(),
@@ -980,7 +950,6 @@ mod tests {
         );
         assert_eq!(ports.listed_sessions.lock().unwrap().len(), 1);
         assert_eq!(ports.deleted_sessions.lock().unwrap().len(), 1);
-        assert_eq!(ports.workspace_requests.lock().unwrap().len(), 1);
         assert_eq!(ports.workspace_binding_requests.lock().unwrap().len(), 1);
     }
 
@@ -1107,6 +1076,8 @@ mod tests {
                 session_id: "session_1".to_string(),
                 agent_type: "agentic".to_string(),
                 workspace_path: None,
+                remote_connection_id: None,
+                remote_ssh_host: None,
                 content: "result".to_string(),
                 display_content: None,
                 metadata: serde_json::Map::new(),
@@ -1157,6 +1128,8 @@ mod tests {
                 session_id: "session_1".to_string(),
                 agent_type: "agentic".to_string(),
                 workspace_path: Some("/workspace/project".to_string()),
+                remote_connection_id: Some("conn-1".to_string()),
+                remote_ssh_host: Some("host-1".to_string()),
                 content: "result".to_string(),
                 display_content: Some("display".to_string()),
                 metadata: serde_json::Map::new(),
@@ -1169,6 +1142,8 @@ mod tests {
                 session_id: "session_1".to_string(),
                 agent_type: "agentic".to_string(),
                 workspace_path: Some("/workspace/project".to_string()),
+                remote_connection_id: Some("conn-1".to_string()),
+                remote_ssh_host: Some("host-1".to_string()),
                 kind: AgentThreadGoalDeliveryKind::Resumed,
                 goal: ThreadGoal {
                     goal_id: "goal_1".to_string(),
@@ -1193,10 +1168,22 @@ mod tests {
                 .as_deref(),
             Some("display")
         );
+        assert_eq!(
+            lifecycle.background_results.lock().unwrap()[0]
+                .remote_connection_id
+                .as_deref(),
+            Some("conn-1")
+        );
         assert_eq!(lifecycle.thread_goals.lock().unwrap().len(), 1);
         assert_eq!(
             lifecycle.thread_goals.lock().unwrap()[0].kind,
             AgentThreadGoalDeliveryKind::Resumed
+        );
+        assert_eq!(
+            lifecycle.thread_goals.lock().unwrap()[0]
+                .remote_ssh_host
+                .as_deref(),
+            Some("host-1")
         );
     }
 

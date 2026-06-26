@@ -816,6 +816,32 @@ impl ConversationCoordinator {
         }
     }
 
+    async fn restore_path_for_existing_session(&self, session_id: &str) -> BitFunResult<PathBuf> {
+        if let Some(binding) = self
+            .session_manager
+            .resolve_session_workspace_binding(session_id)
+            .await
+        {
+            return Ok(binding.session_storage_dir());
+        }
+
+        let session = self
+            .session_manager
+            .get_session(session_id)
+            .ok_or_else(|| BitFunError::NotFound(format!("Session not found: {}", session_id)))?;
+        session
+            .config
+            .workspace_path
+            .as_deref()
+            .map(PathBuf::from)
+            .ok_or_else(|| {
+                BitFunError::Validation(format!(
+                    "workspace_path is required when restoring session: {}",
+                    session_id
+                ))
+            })
+    }
+
     async fn is_chinese_locale() -> bool {
         use crate::service::config::get_global_config_service;
         use crate::service::config::types::AppConfig;
@@ -1677,24 +1703,32 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .await?;
 
         if context_messages.is_empty() && !session.dialog_turn_ids.is_empty() {
-            if let Some(workspace_path) = session.config.workspace_path.as_deref() {
-                match self
-                    .session_manager
-                    .restore_session(Path::new(workspace_path), session_id)
-                    .await
-                {
-                    Ok(_) => {
-                        context_messages = self
-                            .session_manager
-                            .get_context_messages(session_id)
-                            .await?;
+            match self.restore_path_for_existing_session(session_id).await {
+                Ok(restore_path) => {
+                    match self
+                        .session_manager
+                        .restore_session(&restore_path, session_id)
+                        .await
+                    {
+                        Ok(_) => {
+                            context_messages = self
+                                .session_manager
+                                .get_context_messages(session_id)
+                                .await?;
+                        }
+                        Err(e) => {
+                            debug!(
+                                "Failed to restore parent session context for fork capture: session_id={}, error={}",
+                                session_id, e
+                            );
+                        }
                     }
-                    Err(e) => {
-                        debug!(
-                            "Failed to restore parent session context for fork capture: session_id={}, error={}",
-                            session_id, e
-                        );
-                    }
+                }
+                Err(e) => {
+                    debug!(
+                        "Failed to resolve parent session restore path for fork capture: session_id={}, error={}",
+                        session_id, e
+                    );
                 }
             }
         }
@@ -2100,13 +2134,41 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             })
     }
 
+    async fn require_main_session_storage_path(&self, session_id: &str) -> BitFunResult<PathBuf> {
+        self.require_main_session_workspace(session_id)?;
+        self.session_manager
+            .resolve_session_workspace_binding(session_id)
+            .await
+            .map(|binding| binding.session_storage_dir())
+            .ok_or_else(|| {
+                BitFunError::Validation(format!(
+                    "Session storage path is unavailable: {session_id}"
+                ))
+            })
+    }
+
+    async fn resolve_thread_goal_storage_path(
+        &self,
+        session_id: &str,
+        workspace_path: &Path,
+    ) -> BitFunResult<PathBuf> {
+        if self.session_manager.get_session(session_id).is_some() {
+            self.require_main_session_storage_path(session_id).await
+        } else {
+            Ok(workspace_path.to_path_buf())
+        }
+    }
+
     pub async fn get_thread_goal(
         &self,
         session_id: &str,
         workspace_path: &Path,
     ) -> BitFunResult<Option<ThreadGoal>> {
+        let storage_path = self
+            .resolve_thread_goal_storage_path(session_id, workspace_path)
+            .await?;
         self.thread_goal_store()
-            .get_thread_goal(session_id, workspace_path)
+            .get_thread_goal(session_id, storage_path.as_path())
             .await
     }
 
@@ -2115,9 +2177,12 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         session_id: &str,
         workspace_path: &Path,
     ) -> BitFunResult<()> {
+        let storage_path = self
+            .resolve_thread_goal_storage_path(session_id, workspace_path)
+            .await?;
         self.thread_goal_runtime.clear_active_goal(None);
         self.thread_goal_store()
-            .clear_thread_goal(session_id, workspace_path)
+            .clear_thread_goal(session_id, storage_path.as_path())
             .await?;
         self.emit_thread_goal_updated(session_id, None).await;
         Ok(())
@@ -2126,14 +2191,14 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
     pub async fn create_thread_goal(
         &self,
         session_id: &str,
-        workspace_path: &Path,
+        _workspace_path: &Path,
         objective: String,
         token_budget: Option<i64>,
     ) -> BitFunResult<ThreadGoal> {
-        self.require_main_session_workspace(session_id)?;
+        let storage_path = self.require_main_session_storage_path(session_id).await?;
         let goal = self
             .thread_goal_store()
-            .create_thread_goal(session_id, workspace_path, objective, token_budget)
+            .create_thread_goal(session_id, storage_path.as_path(), objective, token_budget)
             .await?;
         self.thread_goal_runtime.mark_turn_started("", Some(&goal));
         self.emit_thread_goal_updated(session_id, Some(goal.clone()))
@@ -2144,12 +2209,13 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
     pub async fn update_thread_goal_objective(
         &self,
         session_id: &str,
-        workspace_path: &Path,
+        _workspace_path: &Path,
         objective: String,
     ) -> BitFunResult<ThreadGoal> {
-        self.require_main_session_workspace(session_id)?;
+        let storage_path = self.require_main_session_storage_path(session_id).await?;
         let existing = self
-            .get_thread_goal(session_id, workspace_path)
+            .thread_goal_store()
+            .get_thread_goal(session_id, storage_path.as_path())
             .await?
             .ok_or_else(|| {
                 BitFunError::NotFound(format!(
@@ -2166,7 +2232,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .thread_goal_store()
             .set_thread_goal(
                 session_id,
-                workspace_path,
+                storage_path.as_path(),
                 Some(objective),
                 status,
                 None,
@@ -2190,12 +2256,15 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
     pub async fn set_thread_goal_objective(
         &self,
         session_id: &str,
-        workspace_path: &Path,
+        _workspace_path: &Path,
         objective: String,
         replace_existing: bool,
     ) -> BitFunResult<ThreadGoal> {
-        self.require_main_session_workspace(session_id)?;
-        let previous = self.get_thread_goal(session_id, workspace_path).await?;
+        let storage_path = self.require_main_session_storage_path(session_id).await?;
+        let previous = self
+            .thread_goal_store()
+            .get_thread_goal(session_id, storage_path.as_path())
+            .await?;
         let status = if previous.is_some() && !replace_existing {
             None
         } else {
@@ -2205,7 +2274,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .thread_goal_store()
             .set_thread_goal(
                 session_id,
-                workspace_path,
+                storage_path.as_path(),
                 Some(objective),
                 status,
                 None,
@@ -2248,6 +2317,16 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .require_main_session_workspace(session_id)
             .ok()
             .map(|path| path.to_string_lossy().to_string());
+        let (remote_connection_id, remote_ssh_host) = self
+            .session_manager
+            .get_session(session_id)
+            .map(|session| {
+                (
+                    session.config.remote_connection_id.clone(),
+                    session.config.remote_ssh_host.clone(),
+                )
+            })
+            .unwrap_or((None, None));
         let runtime = match CoreServiceAgentRuntime::global_agent_runtime_with_lifecycle_delivery()
         {
             Ok(runtime) => runtime,
@@ -2264,6 +2343,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 session_id: session_id.to_string(),
                 agent_type,
                 workspace_path,
+                remote_connection_id,
+                remote_ssh_host,
                 kind: AgentThreadGoalDeliveryKind::ObjectiveUpdated,
                 goal: goal.clone(),
             })
@@ -2285,12 +2366,13 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         if !is_usage_limit_error(error) {
             return;
         }
-        let workspace_path = match self.require_main_session_workspace(session_id) {
+        let storage_path = match self.require_main_session_storage_path(session_id).await {
             Ok(path) => path,
             Err(_) => return,
         };
         let Ok(Some(goal)) = self
-            .get_thread_goal(session_id, workspace_path.as_path())
+            .thread_goal_store()
+            .get_thread_goal(session_id, storage_path.as_path())
             .await
         else {
             return;
@@ -2301,7 +2383,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         if let Err(error) = self
             .set_thread_goal_status(
                 session_id,
-                workspace_path.as_path(),
+                storage_path.as_path(),
                 ThreadGoalStatus::UsageLimited,
             )
             .await
@@ -2316,18 +2398,28 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
     pub async fn set_thread_goal_status(
         &self,
         session_id: &str,
-        workspace_path: &Path,
+        _workspace_path: &Path,
         status: ThreadGoalStatus,
     ) -> BitFunResult<ThreadGoal> {
-        self.require_main_session_workspace(session_id)?;
-        let previous = self.get_thread_goal(session_id, workspace_path).await?;
+        let storage_path = self.require_main_session_storage_path(session_id).await?;
+        let previous = self
+            .thread_goal_store()
+            .get_thread_goal(session_id, storage_path.as_path())
+            .await?;
         let resuming = status == ThreadGoalStatus::Active
             && previous
                 .as_ref()
                 .is_some_and(|goal| thread_goal_status_is_resumable(goal.status));
         let result = self
             .thread_goal_store()
-            .set_thread_goal(session_id, workspace_path, None, Some(status), None, false)
+            .set_thread_goal(
+                session_id,
+                storage_path.as_path(),
+                None,
+                Some(status),
+                None,
+                false,
+            )
             .await?;
         if !result.goal.is_active() {
             self.thread_goal_runtime.clear_active_goal(None);
@@ -2346,7 +2438,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
 
     /// Pause an active thread goal after the user manually stops a turn so the UI can offer resume.
     pub async fn pause_thread_goal_after_user_cancel(&self, session_id: &str) {
-        let workspace_path = match self.require_main_session_workspace(session_id) {
+        let storage_path = match self.require_main_session_storage_path(session_id).await {
             Ok(path) => path,
             Err(error) => {
                 debug!(
@@ -2357,7 +2449,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             }
         };
         let Ok(Some(goal)) = self
-            .get_thread_goal(session_id, workspace_path.as_path())
+            .thread_goal_store()
+            .get_thread_goal(session_id, storage_path.as_path())
             .await
         else {
             return;
@@ -2366,11 +2459,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             return;
         }
         if let Err(error) = self
-            .set_thread_goal_status(
-                session_id,
-                workspace_path.as_path(),
-                ThreadGoalStatus::Paused,
-            )
+            .set_thread_goal_status(session_id, storage_path.as_path(), ThreadGoalStatus::Paused)
             .await
         {
             warn!(
@@ -2404,6 +2493,16 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .require_main_session_workspace(session_id)
             .ok()
             .map(|path| path.to_string_lossy().to_string());
+        let (remote_connection_id, remote_ssh_host) = self
+            .session_manager
+            .get_session(session_id)
+            .map(|session| {
+                (
+                    session.config.remote_connection_id.clone(),
+                    session.config.remote_ssh_host.clone(),
+                )
+            })
+            .unwrap_or((None, None));
         let session_id = session_id.to_string();
         let goal = goal.clone();
         tokio::spawn(async move {
@@ -2423,6 +2522,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     session_id: session_id.clone(),
                     agent_type,
                     workspace_path,
+                    remote_connection_id,
+                    remote_ssh_host,
                     kind: AgentThreadGoalDeliveryKind::Resumed,
                     goal,
                 })
@@ -2461,9 +2562,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
     }
 
     async fn load_active_thread_goal(&self, session_id: &str) -> BitFunResult<Option<ThreadGoal>> {
-        let workspace_path = self.require_main_session_workspace(session_id)?;
+        let storage_path = self.require_main_session_storage_path(session_id).await?;
         Ok(self
-            .get_thread_goal(session_id, workspace_path.as_path())
+            .thread_goal_store()
+            .get_thread_goal(session_id, storage_path.as_path())
             .await?
             .filter(ThreadGoal::is_active))
     }
@@ -2479,15 +2581,16 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 "Goal objective is required. Use /goal <objective>.".to_string(),
             )
         })?;
-        let workspace_path = self.require_main_session_workspace(&session_id)?;
+        let storage_path = self.require_main_session_storage_path(&session_id).await?;
         let existing = self
-            .get_thread_goal(&session_id, workspace_path.as_path())
+            .thread_goal_store()
+            .get_thread_goal(&session_id, storage_path.as_path())
             .await?;
         let replace_existing = existing.is_some();
         let goal = self
             .set_thread_goal_objective(
                 &session_id,
-                workspace_path.as_path(),
+                storage_path.as_path(),
                 objective,
                 replace_existing,
             )
@@ -2513,7 +2616,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             return Ok(None);
         }
 
-        let workspace_path = match self.require_main_session_workspace(session_id) {
+        let storage_path = match self.require_main_session_storage_path(session_id).await {
             Ok(path) => path,
             Err(_) => return Ok(None),
         };
@@ -2523,14 +2626,15 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .turn_cumulative_billable_tokens(source_turn_id);
 
         let goal_before = self
-            .get_thread_goal(session_id, workspace_path.as_path())
+            .thread_goal_store()
+            .get_thread_goal(session_id, storage_path.as_path())
             .await?;
 
         let plan = maybe_build_continuation_after_turn(
             &self.thread_goal_store(),
             self.thread_goal_runtime.as_ref(),
             session_id,
-            workspace_path.as_path(),
+            storage_path.as_path(),
             source_turn_id,
             turn_tokens,
             turn_completed,
@@ -2538,7 +2642,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         .await?;
 
         let goal_after = self
-            .get_thread_goal(session_id, workspace_path.as_path())
+            .thread_goal_store()
+            .get_thread_goal(session_id, storage_path.as_path())
             .await?;
         if goal_before.as_ref().map(|goal| goal.status)
             != goal_after.as_ref().map(|goal| goal.status)
@@ -2588,14 +2693,9 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         };
 
         if needs_restore {
-            let workspace_path = session.config.workspace_path.as_deref().ok_or_else(|| {
-                BitFunError::Validation(format!(
-                    "workspace_path is required when restoring session: {}",
-                    session_id
-                ))
-            })?;
+            let restore_path = self.restore_path_for_existing_session(&session_id).await?;
             self.session_manager
-                .restore_session(Path::new(workspace_path), &session_id)
+                .restore_session(&restore_path, &session_id)
                 .await?;
         }
 
@@ -2918,24 +3018,34 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 "Starting session history restore: session_id={}",
                 session_id
             );
+            let restore_workspace_path = session
+                .config
+                .workspace_path
+                .as_deref()
+                .or(workspace_path.as_deref())
+                .ok_or_else(|| {
+                    BitFunError::Validation(format!(
+                        "workspace_path is required when restoring session: {}",
+                        session_id
+                    ))
+                })?;
+            let restore_path = Self::resolve_session_restore_path(
+                restore_workspace_path,
+                session
+                    .config
+                    .remote_connection_id
+                    .as_deref()
+                    .or(remote_connection_id.as_deref()),
+                session
+                    .config
+                    .remote_ssh_host
+                    .as_deref()
+                    .or(remote_ssh_host.as_deref()),
+            )
+            .await?;
             match self
                 .session_manager
-                .restore_session(
-                    Path::new(
-                        session
-                            .config
-                            .workspace_path
-                            .as_deref()
-                            .or(workspace_path.as_deref())
-                            .ok_or_else(|| {
-                                BitFunError::Validation(format!(
-                                    "workspace_path is required when restoring session: {}",
-                                    session_id
-                                ))
-                            })?,
-                    ),
-                    &session_id,
-                )
+                .restore_session(&restore_path, &session_id)
                 .await
             {
                 Ok(_) => {
@@ -3230,7 +3340,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         // remote_ssh_host (which would silently fall back to a slugified raw remote path).
         let session_storage_path = session_workspace
             .as_ref()
-            .map(|workspace| workspace.session_storage_path().to_path_buf());
+            .map(|workspace| workspace.session_storage_dir().to_path_buf());
 
         let runtime_tool_restrictions = if is_miniapp_headless_agent_run(
             user_message_metadata.as_ref(),
@@ -3904,15 +4014,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         self.session_manager.list_sessions(workspace_path).await
     }
 
-    pub async fn resolve_session_workspace_path(
-        &self,
-        session_id: &str,
-    ) -> Option<std::path::PathBuf> {
-        self.session_manager
-            .resolve_session_workspace_path(session_id)
-            .await
-    }
-
     /// Get a best-effort message view for a session.
     pub async fn get_messages(&self, session_id: &str) -> BitFunResult<Vec<Message>> {
         self.session_manager.get_messages(session_id).await
@@ -4478,7 +4579,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .map(|workspace| workspace.root_path_string());
         let subagent_session_storage_path = subagent_workspace
             .as_ref()
-            .map(|workspace| workspace.session_storage_path().to_path_buf());
+            .map(|workspace| workspace.session_storage_dir().to_path_buf());
         let subagent_services = Self::build_workspace_services(&subagent_workspace).await;
         let execution_context = ExecutionContext {
             session_id: session_id.clone(),
@@ -5342,6 +5443,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             })?;
         let parent_agent_type = parent_session.agent_type.clone();
         let parent_workspace_path = parent_session.config.workspace_path.clone();
+        let parent_remote_connection_id = parent_session.config.remote_connection_id.clone();
+        let parent_remote_ssh_host = parent_session.config.remote_ssh_host.clone();
         let background_task_id = format!("bg-subagent-{}", uuid::Uuid::new_v4());
         let background_task_id_for_delivery = background_task_id.clone();
         let task_description = request.user_input_text.clone();
@@ -5420,6 +5523,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     session_id: subagent_parent_info.session_id.clone(),
                     agent_type: parent_agent_type,
                     workspace_path: parent_workspace_path,
+                    remote_connection_id: parent_remote_connection_id,
+                    remote_ssh_host: parent_remote_ssh_host,
                     content: delivery_text,
                     display_content: Some(display_text),
                     metadata,
@@ -5788,7 +5893,7 @@ impl bitfun_runtime_ports::AgentSubmissionPort for ConversationCoordinator {
             return Ok(None);
         };
 
-        self.restore_session(&binding.session_storage_path(), session_id)
+        self.restore_session(&binding.session_storage_dir(), session_id)
             .await
             .map(|session| Some(session.agent_type))
             .map_err(|error| {
@@ -5888,16 +5993,6 @@ impl bitfun_runtime_ports::AgentSessionManagementPort for ConversationCoordinato
                     error.to_string(),
                 )
             })
-    }
-
-    async fn resolve_session_workspace_path(
-        &self,
-        request: bitfun_runtime_ports::AgentSessionWorkspaceRequest,
-    ) -> bitfun_runtime_ports::PortResult<Option<String>> {
-        Ok(self
-            .resolve_session_workspace_path(&request.session_id)
-            .await
-            .map(|path| path.to_string_lossy().into_owned()))
     }
 
     async fn resolve_session_workspace_binding(
@@ -6422,6 +6517,14 @@ mod tests {
         let workspace_path =
             std::env::temp_dir().join(format!("bitfun-btw-baseline-test-{}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&workspace_path).expect("workspace dir should exist");
+        struct TempWorkspaceGuard(std::path::PathBuf);
+        impl Drop for TempWorkspaceGuard {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_dir_all(&self.0);
+            }
+        }
+        let _workspace_guard = TempWorkspaceGuard(workspace_path.clone());
+
         let parent_session = session_manager
             .create_session(
                 "Parent".to_string(),

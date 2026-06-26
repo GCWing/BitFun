@@ -5,8 +5,9 @@
 //! **`(connection_id, remote_root_path)`** — *not* by remote path alone, so two
 //! different servers opened at the same path (e.g. `/`) do not overwrite each other.
 
-use crate::infrastructure::{get_path_manager_arc, PathManager};
+use crate::infrastructure::get_path_manager_arc;
 use crate::service::remote_ssh::{RemoteFileService, RemoteTerminalManager, SSHConnectionManager};
+use crate::service::workspace_runtime::WorkspaceRuntimeService;
 pub use bitfun_services_integrations::remote_ssh::{
     local_workspace_stable_storage_id, normalize_remote_workspace_path,
     remote_root_to_mirror_subpath, remote_workspace_stable_id,
@@ -38,14 +39,6 @@ impl WorkspaceSessionIdentity {
 
     pub fn logical_workspace_path(&self) -> &str {
         &self.logical_workspace_path
-    }
-
-    pub fn session_storage_path(&self) -> PathBuf {
-        if self.is_remote() {
-            remote_workspace_session_mirror_dir(&self.hostname, &self.logical_workspace_path)
-        } else {
-            PathBuf::from(&self.logical_workspace_path)
-        }
     }
 }
 
@@ -122,7 +115,7 @@ pub async fn resolve_workspace_session_identity(
 /// Local directory where persisted sessions for this remote workspace root are stored.
 pub fn remote_workspace_runtime_root(ssh_host: &str, remote_root_norm: &str) -> PathBuf {
     bitfun_services_integrations::remote_ssh::remote_workspace_runtime_root(
-        PathManager::remote_ssh_mirror_root(),
+        get_path_manager_arc().remote_ssh_mirror_root_dir(),
         ssh_host,
         remote_root_norm,
     )
@@ -131,7 +124,7 @@ pub fn remote_workspace_runtime_root(ssh_host: &str, remote_root_norm: &str) -> 
 /// Local directory where persisted sessions for this remote workspace root are stored.
 pub fn remote_workspace_session_mirror_dir(ssh_host: &str, remote_root_norm: &str) -> PathBuf {
     bitfun_services_integrations::remote_ssh::remote_workspace_session_mirror_dir(
-        PathManager::remote_ssh_mirror_root(),
+        get_path_manager_arc().remote_ssh_mirror_root_dir(),
         ssh_host,
         remote_root_norm,
     )
@@ -161,7 +154,7 @@ pub fn unresolved_remote_session_storage_dir(
     workspace_path_norm: &str,
 ) -> PathBuf {
     bitfun_services_integrations::remote_ssh::unresolved_remote_session_storage_dir(
-        PathManager::remote_ssh_mirror_root(),
+        get_path_manager_arc().remote_ssh_mirror_root_dir(),
         connection_id,
         workspace_path_norm,
     )
@@ -337,28 +330,35 @@ impl RemoteWorkspaceStateManager {
         remote_workspace_session_mirror_dir(ssh_host, remote_root_norm)
     }
 
-    /// Map a workspace path to the effective session storage path.
-    /// When `remote_connection_id` is set, remote roots map to the local session mirror dir;
-    /// otherwise the path is returned as-is (no path-only inference).
+    /// Map a workspace path to the final on-disk sessions directory.
+    /// Local roots map to `~/.bitfun/projects/<workspace-slug>/sessions`;
+    /// remote roots map to the local SSH mirror sessions dir.
     pub async fn get_effective_session_path(
         &self,
         workspace_path: &str,
         remote_connection_id: Option<&str>,
         remote_ssh_host: Option<&str>,
     ) -> PathBuf {
+        let runtime_service = WorkspaceRuntimeService::new(get_path_manager_arc());
         let remote_id = remote_connection_id
             .map(str::trim)
             .filter(|s| !s.is_empty());
         if remote_id.is_none() {
-            return PathBuf::from(workspace_path);
+            return runtime_service
+                .context_for_local_workspace(Path::new(workspace_path))
+                .sessions_dir;
         }
         let path_norm = normalize_remote_workspace_path(workspace_path);
         if let Some(host) = remote_ssh_host.map(str::trim).filter(|s| !s.is_empty()) {
-            return remote_workspace_session_mirror_dir(host, &path_norm);
+            return runtime_service
+                .context_for_remote_workspace(host, &path_norm)
+                .sessions_dir;
         }
         if let Some(entry) = self.lookup_connection(workspace_path, remote_id).await {
             if !entry.ssh_host.trim().is_empty() {
-                return remote_workspace_session_mirror_dir(&entry.ssh_host, &entry.remote_root);
+                return runtime_service
+                    .context_for_remote_workspace(&entry.ssh_host, &entry.remote_root)
+                    .sessions_dir;
             }
             return unresolved_remote_session_storage_dir(remote_id.unwrap(), &path_norm);
         }
@@ -394,6 +394,7 @@ pub async fn get_effective_session_path(
     remote_connection_id: Option<&str>,
     remote_ssh_host: Option<&str>,
 ) -> std::path::PathBuf {
+    let runtime_service = WorkspaceRuntimeService::new(get_path_manager_arc());
     if let Some(identity) =
         resolve_workspace_session_identity(workspace_path, remote_connection_id, remote_ssh_host)
             .await
@@ -406,10 +407,19 @@ pub async fn get_effective_session_path(
                 );
             }
         }
-        return identity.session_storage_path();
+        if identity.hostname == LOCAL_WORKSPACE_SSH_HOST {
+            return runtime_service
+                .context_for_local_workspace(Path::new(identity.logical_workspace_path()))
+                .sessions_dir;
+        }
+        return runtime_service
+            .context_for_remote_workspace(&identity.hostname, identity.logical_workspace_path())
+            .sessions_dir;
     }
 
-    std::path::PathBuf::from(workspace_path)
+    runtime_service
+        .context_for_local_workspace(Path::new(workspace_path))
+        .sessions_dir
 }
 
 /// Check if a specific path belongs to any registered remote workspace.
@@ -455,7 +465,6 @@ mod tests {
         LOCAL_WORKSPACE_SSH_HOST,
     };
     use crate::infrastructure::PathManager;
-    use std::path::PathBuf;
 
     #[tokio::test]
     async fn local_assistant_path_not_remote_without_connection_id() {
@@ -604,7 +613,7 @@ mod tests {
     }
 
     #[test]
-    fn remote_workspace_session_identity_uses_mirror_dir_for_storage() {
+    fn remote_workspace_session_identity_tracks_logical_root() {
         let identity = workspace_session_identity(
             "/home/wsp/projects/test",
             Some("conn-1"),
@@ -614,14 +623,11 @@ mod tests {
 
         assert_eq!(identity.hostname, "127.0.0.1");
         assert_eq!(identity.logical_workspace_path(), "/home/wsp/projects/test");
-        assert_eq!(
-            identity.session_storage_path(),
-            remote_workspace_session_mirror_dir("127.0.0.1", "/home/wsp/projects/test")
-        );
+        assert!(identity.is_remote());
     }
 
     #[test]
-    fn local_workspace_session_identity_uses_workspace_root_for_storage() {
+    fn local_workspace_session_identity_tracks_logical_root() {
         let workspace_root = std::env::temp_dir().join(format!(
             "bitfun-workspace-identity-{}",
             uuid::Uuid::new_v4()
@@ -632,10 +638,60 @@ mod tests {
             .expect("local identity should resolve");
 
         assert_eq!(identity.hostname, LOCAL_WORKSPACE_SSH_HOST);
+        assert!(!identity.is_remote());
+
+        let _ = std::fs::remove_dir_all(workspace_root);
+    }
+
+    #[tokio::test]
+    async fn effective_session_path_returns_local_sessions_dir() {
+        let workspace_root = std::env::temp_dir().join(format!(
+            "bitfun-local-session-path-test-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&workspace_root).expect("workspace root should exist");
+
+        let expected =
+            crate::infrastructure::get_path_manager_arc().project_sessions_dir(&workspace_root);
+        let actual =
+            super::get_effective_session_path(&workspace_root.to_string_lossy(), None, None).await;
+
+        assert_eq!(actual, expected);
+
+        let _ = std::fs::remove_dir_all(workspace_root);
+    }
+
+    #[tokio::test]
+    async fn effective_session_path_returns_remote_sessions_dir() {
+        let actual = super::get_effective_session_path(
+            "/home/wsp/projects/test",
+            Some("conn-1"),
+            Some("example-host"),
+        )
+        .await;
+
         assert_eq!(
-            identity.session_storage_path(),
-            PathBuf::from(identity.logical_workspace_path())
+            actual,
+            remote_workspace_session_mirror_dir("example-host", "/home/wsp/projects/test")
         );
+    }
+
+    #[tokio::test]
+    async fn manager_effective_session_path_returns_local_sessions_dir() {
+        let workspace_root = std::env::temp_dir().join(format!(
+            "bitfun-manager-local-session-path-test-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&workspace_root).expect("workspace root should exist");
+
+        let manager = super::RemoteWorkspaceStateManager::new();
+        let expected =
+            crate::infrastructure::get_path_manager_arc().project_sessions_dir(&workspace_root);
+        let actual = manager
+            .get_effective_session_path(&workspace_root.to_string_lossy(), None, None)
+            .await;
+
+        assert_eq!(actual, expected);
 
         let _ = std::fs::remove_dir_all(workspace_root);
     }

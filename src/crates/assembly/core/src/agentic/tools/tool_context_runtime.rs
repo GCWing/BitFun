@@ -492,6 +492,16 @@ impl ToolUseContext {
     }
 
     pub fn current_workspace_runtime_root(&self) -> BitFunResult<PathBuf> {
+        #[cfg(test)]
+        if let Some(path) = self
+            .custom_data
+            .get("__bitfun_test_runtime_root")
+            .and_then(|value| value.as_str())
+            .filter(|path| !path.trim().is_empty())
+        {
+            return Ok(PathBuf::from(path));
+        }
+
         let workspace = self.workspace.as_ref().ok_or_else(|| {
             BitFunError::tool("A workspace is required to resolve runtime artifacts".to_string())
         })?;

@@ -20,6 +20,8 @@ pub const DEFAULT_MAX_DIALOG_QUEUE_DEPTH: usize = 20;
 pub struct ActiveDialogTurn {
     turn_id: String,
     workspace_path: Option<String>,
+    remote_connection_id: Option<String>,
+    remote_ssh_host: Option<String>,
     agent_type: String,
     user_input: String,
     user_message_metadata: Option<serde_json::Value>,
@@ -31,6 +33,8 @@ impl ActiveDialogTurn {
     pub fn new(
         turn_id: String,
         workspace_path: Option<String>,
+        remote_connection_id: Option<String>,
+        remote_ssh_host: Option<String>,
         agent_type: String,
         user_input: String,
         user_message_metadata: Option<serde_json::Value>,
@@ -40,6 +44,8 @@ impl ActiveDialogTurn {
         Self {
             turn_id,
             workspace_path,
+            remote_connection_id,
+            remote_ssh_host,
             agent_type,
             user_input,
             user_message_metadata,
@@ -58,6 +64,22 @@ impl ActiveDialogTurn {
 
     pub fn workspace_path_owned(&self) -> Option<String> {
         self.workspace_path.clone()
+    }
+
+    pub fn remote_connection_id(&self) -> Option<&str> {
+        self.remote_connection_id.as_deref()
+    }
+
+    pub fn remote_connection_id_owned(&self) -> Option<String> {
+        self.remote_connection_id.clone()
+    }
+
+    pub fn remote_ssh_host(&self) -> Option<&str> {
+        self.remote_ssh_host.as_deref()
+    }
+
+    pub fn remote_ssh_host_owned(&self) -> Option<String> {
+        self.remote_ssh_host.clone()
     }
 
     pub fn agent_type(&self) -> &str {

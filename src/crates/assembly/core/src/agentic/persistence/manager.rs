@@ -303,25 +303,31 @@ impl PersistenceManager {
 
     /// Resolve the on-disk sessions directory for `workspace_path`.
     ///
-    /// For local workspaces this delegates to `PathManager::project_sessions_dir`,
-    /// which slugifies the workspace root under `~/.bitfun/projects/`.
-    ///
-    /// For remote SSH workspaces, callers (notably `desktop_effective_session_storage_path`)
-    /// pass an already-resolved mirror path under `~/.bitfun/remote_ssh/{host}/{path}/sessions`.
-    /// In that case we MUST use the path as-is; otherwise the slug pipeline would treat the
-    /// mirror path as a workspace root and write/read to a bogus
-    /// `~/.bitfun/projects/<slug-of-mirror-path>/sessions/` location.
+    /// Callers may pass either a logical workspace root or an already-resolved
+    /// managed sessions directory. Local workspace roots are slugified under
+    /// `~/.bitfun/projects/`; already-resolved local/remote sessions
+    /// directories are used as-is.
     fn project_sessions_dir(&self, workspace_path: &Path) -> PathBuf {
-        let remote_mirror_root = PathManager::remote_ssh_mirror_root();
-        if workspace_path.starts_with(&remote_mirror_root) {
-            // Already resolved: either the mirror runtime root, the mirror sessions dir,
-            // or a session sub-dir. Treat the path as the sessions root directly.
-            // (Inputs that already include a trailing `sessions` segment stay correct;
-            // inputs at the mirror runtime root would historically fall back to the
-            // legacy slug, but no current call-site uses that shape.)
+        if self.is_resolved_sessions_dir(workspace_path) {
             return workspace_path.to_path_buf();
         }
         self.path_manager.project_sessions_dir(workspace_path)
+    }
+
+    fn is_resolved_sessions_dir(&self, path: &Path) -> bool {
+        if path.file_name().and_then(|value| value.to_str()) != Some("sessions") {
+            return false;
+        }
+
+        let remote_mirror_root = self.path_manager.remote_ssh_mirror_root_dir();
+        if path.starts_with(&remote_mirror_root) {
+            return true;
+        }
+
+        let projects_root = self.path_manager.projects_root();
+        path.parent()
+            .and_then(|runtime_root| runtime_root.parent())
+            .is_some_and(|candidate| candidate == projects_root.as_path())
     }
 
     fn metadata_path(&self, workspace_path: &Path, session_id: &str) -> PathBuf {
@@ -410,8 +416,7 @@ impl PersistenceManager {
     }
 
     async fn ensure_runtime_for_write(&self, workspace_path: &Path) -> BitFunResult<()> {
-        let remote_mirror_root = PathManager::remote_ssh_mirror_root();
-        if workspace_path.starts_with(&remote_mirror_root) {
+        if self.is_resolved_sessions_dir(workspace_path) {
             return Ok(());
         }
 
@@ -2949,8 +2954,8 @@ mod tests {
     #[tokio::test]
     async fn load_session_with_turns_returns_session_and_persisted_turns() {
         let workspace = TestWorkspace::new();
-        let manager = PersistenceManager::new(Arc::new(PathManager::new().expect("path manager")))
-            .expect("persistence manager");
+        let manager =
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager");
         let session_id = Uuid::new_v4().to_string();
         let session = Session::new_with_id(
             session_id.clone(),
@@ -3046,8 +3051,8 @@ mod tests {
     #[tokio::test]
     async fn save_dialog_turn_updates_metadata_without_scanning_unrelated_turn_files() {
         let workspace = TestWorkspace::new();
-        let manager = PersistenceManager::new(Arc::new(PathManager::new().expect("path manager")))
-            .expect("persistence manager");
+        let manager =
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager");
         let session_id = Uuid::new_v4().to_string();
         let session = Session::new_with_id(
             session_id.clone(),
@@ -3122,8 +3127,8 @@ mod tests {
     #[tokio::test]
     async fn concurrent_dialog_turn_saves_keep_metadata_counts_consistent() {
         let workspace = TestWorkspace::new();
-        let manager = PersistenceManager::new(Arc::new(PathManager::new().expect("path manager")))
-            .expect("persistence manager");
+        let manager =
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager");
         let session_id = Uuid::new_v4().to_string();
         let session = Session::new_with_id(
             session_id.clone(),
@@ -3551,10 +3556,60 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn local_sessions_dir_input_is_used_without_reslugging() {
+        let workspace = TestWorkspace::new();
+        let path_manager = workspace.path_manager();
+        let sessions_dir = path_manager.project_sessions_dir(workspace.path());
+        let manager = PersistenceManager::new(path_manager).expect("persistence manager");
+
+        let metadata = SessionMetadata::new(
+            Uuid::new_v4().to_string(),
+            "Resolved sessions root".to_string(),
+            "agent".to_string(),
+            "model".to_string(),
+        );
+
+        manager
+            .save_session_metadata(&sessions_dir, &metadata)
+            .await
+            .expect("metadata should save under resolved sessions dir");
+
+        assert_eq!(
+            manager.index_path(&sessions_dir),
+            sessions_dir.join("index.json")
+        );
+        assert!(sessions_dir
+            .join(&metadata.session_id)
+            .join("metadata.json")
+            .exists());
+    }
+
+    #[tokio::test]
+    async fn remote_sessions_dir_input_is_used_without_accepting_runtime_root() {
+        let test_root =
+            std::env::temp_dir().join(format!("bitfun-persistence-test-{}", Uuid::new_v4()));
+        let path_manager = Arc::new(PathManager::with_user_root_for_tests(
+            test_root.join("user"),
+        ));
+        let manager = PersistenceManager::new(path_manager.clone()).expect("persistence manager");
+        let runtime_root = path_manager
+            .remote_ssh_mirror_root_dir()
+            .join("example-host")
+            .join("root")
+            .join("repo");
+        let sessions_dir = runtime_root.join("sessions");
+
+        assert_eq!(manager.project_sessions_dir(&sessions_dir), sessions_dir);
+        assert_ne!(manager.project_sessions_dir(&runtime_root), runtime_root);
+
+        let _ = std::fs::remove_dir_all(&test_root);
+    }
+
+    #[tokio::test]
     async fn skill_agent_snapshots_persist_and_truncate_with_context_snapshots() {
         let workspace = TestWorkspace::new();
-        let manager = PersistenceManager::new(Arc::new(PathManager::new().expect("path manager")))
-            .expect("persistence manager");
+        let manager =
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager");
         let session_id = Uuid::new_v4().to_string();
         let snapshot = TurnSkillAgentSnapshot {
             skills: vec![SkillSnapshotEntry {
