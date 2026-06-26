@@ -155,7 +155,7 @@ impl CronService {
         validate_schedule(&schedule, current_ms)?;
 
         let mut job = CronJob {
-            id: format!("cron_{}", Uuid::new_v4().simple()),
+            id: generate_cron_job_id(&jobs),
             name: request.name.trim().to_string(),
             schedule,
             payload: request.payload,
@@ -963,6 +963,16 @@ fn now_ms() -> i64 {
     Utc::now().timestamp_millis()
 }
 
+fn generate_cron_job_id(jobs: &HashMap<String, CronJob>) -> String {
+    loop {
+        let uuid = Uuid::new_v4().simple().to_string();
+        let id = format!("cron_{}", &uuid[..8]);
+        if !jobs.contains_key(&id) {
+            return id;
+        }
+    }
+}
+
 struct EnqueueInput {
     job_id: String,
     job_name: String,
@@ -995,6 +1005,18 @@ fn cron_enqueue_error_is_missing_session(error: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn generate_cron_job_id_uses_short_hex_suffix() {
+        let jobs = HashMap::new();
+        let id = generate_cron_job_id(&jobs);
+
+        assert_eq!(id.len(), "cron_".len() + 8);
+        assert!(id.starts_with("cron_"));
+        assert!(id["cron_".len()..]
+            .chars()
+            .all(|ch| ch.is_ascii_hexdigit() && !ch.is_ascii_uppercase()));
+    }
 
     #[test]
     fn materialize_workspace_ref_normalizes_windows_style_paths() {
