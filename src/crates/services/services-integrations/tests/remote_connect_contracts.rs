@@ -335,7 +335,7 @@ fn remote_connect_cancel_and_restore_policy_preserve_runtime_decisions() {
     let binding = RemoteDialogWorkspaceBinding::local("D:/workspace/project");
     assert_eq!(
         remote_session_restore_target(false, Some(&binding)),
-        Some("D:/workspace/project")
+        Some(binding.clone())
     );
     assert_eq!(remote_session_restore_target(true, Some(&binding)), None);
     assert_eq!(remote_session_restore_target(false, None), None);
@@ -508,12 +508,18 @@ impl RemoteDialogRuntimeHost for RecordingDialogHost {
     async fn restore_remote_session(
         &self,
         session_id: &str,
-        workspace_path: &str,
+        workspace: RemoteDialogWorkspaceBinding,
     ) -> Result<(), String> {
-        self.events
-            .lock()
-            .unwrap()
-            .push(format!("restore:{session_id}:{workspace_path}"));
+        self.events.lock().unwrap().push(format!(
+            "restore:{}:{}:{}:{}",
+            session_id,
+            workspace.workspace_path,
+            workspace
+                .remote_connection_id
+                .as_deref()
+                .unwrap_or("<none>"),
+            workspace.remote_ssh_host.as_deref().unwrap_or("<none>")
+        ));
         if self.restore_error {
             Err("restore failed".to_string())
         } else {
@@ -945,7 +951,7 @@ async fn remote_connect_dialog_runtime_owns_restore_prewarm_and_submit_order() {
             "ensure_tracker:session-1",
             "resolve_workspace:session-1",
             "session_exists:session-1",
-            "restore:session-1:D:/workspace/project",
+            "restore:session-1:D:/workspace/project:<none>:<none>",
             "prewarm:session-1:D:/workspace/project",
             "generate_turn",
             "submit:session-1",
@@ -997,6 +1003,18 @@ async fn remote_connect_dialog_runtime_preserves_remote_workspace_identity() {
     )
     .await
     .expect("dialog submit succeeds");
+
+    assert_eq!(
+        host.events(),
+        vec![
+            "ensure_tracker:session-1",
+            "resolve_workspace:session-1",
+            "session_exists:session-1",
+            "restore:session-1:/home/wsp/project:ssh-1:dev-host",
+            "prewarm:session-1:/home/wsp/project",
+            "submit:session-1",
+        ]
+    );
 
     let submitted = host.submitted();
     let binding = submitted
@@ -1103,7 +1121,7 @@ async fn remote_connect_dialog_runtime_keeps_legacy_restore_failure_tolerance() 
             "ensure_tracker:session-1",
             "resolve_workspace:session-1",
             "session_exists:session-1",
-            "restore:session-1:D:/workspace/project",
+            "restore:session-1:D:/workspace/project:<none>:<none>",
             "prewarm:session-1:D:/workspace/project",
             "submit:session-1",
         ]

@@ -23,7 +23,7 @@ use bitfun_core::agentic::deep_review_policy::{
 };
 use bitfun_core::agentic::goal_mode::{ThreadGoal, ThreadGoalStatus};
 use bitfun_core::agentic::image_analysis::ImageContextData;
-use bitfun_core::agentic::session::{SessionViewRestoreRequest, SessionViewRestoreTiming};
+use bitfun_core::agentic::session::SessionViewRestoreTiming;
 use bitfun_core::agentic::tools::image_context::get_image_context;
 use bitfun_core::agentic::tools::implementations::exec_command::{
     background_command_output_capture, control_exec_command_session, send_exec_command_input,
@@ -763,7 +763,7 @@ pub async fn update_session_title(
         .await;
 
         coordinator
-            .restore_session(&effective, session_id)
+            .restore_session_from_storage_path(&effective, session_id)
             .await
             .map_err(|e| format!("Failed to restore session before renaming: {}", e))?;
     }
@@ -808,10 +808,12 @@ pub async fn ensure_coordinator_session(
     .await;
     let restore_result = if request.include_internal {
         coordinator
-            .restore_internal_session(&effective, session_id)
+            .restore_internal_session_from_storage_path(&effective, session_id)
             .await
     } else {
-        coordinator.restore_session(&effective, session_id).await
+        coordinator
+            .restore_session_from_storage_path(&effective, session_id)
+            .await
     };
     restore_result.map(|_| ()).map_err(|e| e.to_string())
 }
@@ -903,7 +905,7 @@ pub async fn compact_session(
         )
         .await;
         coordinator
-            .restore_session(&effective, session_id)
+            .restore_session_from_storage_path(&effective, session_id)
             .await
             .map_err(|e| format!("Failed to restore session before compacting: {}", e))?;
     }
@@ -951,7 +953,7 @@ pub async fn activate_session_goal(
         )
         .await;
         coordinator
-            .restore_session(&effective, session_id)
+            .restore_session_from_storage_path(&effective, session_id)
             .await
             .map_err(|e| format!("Failed to restore session before activating goal mode: {e}"))?;
     }
@@ -1001,7 +1003,7 @@ async fn ensure_session_for_thread_goal(
         )
         .await;
         coordinator
-            .restore_session(&effective, session_id)
+            .restore_session_from_storage_path(&effective, session_id)
             .await
             .map_err(|e| format!("Failed to restore session before thread goal access: {e}"))?;
     }
@@ -1220,7 +1222,7 @@ pub async fn run_init_agents_md(
         )
         .await;
         coordinator
-            .restore_session(&effective, session_id)
+            .restore_session_from_storage_path(&effective, session_id)
             .await
             .map_err(|e| format!("Failed to restore session before running /init: {e}"))?;
     }
@@ -1711,11 +1713,11 @@ pub async fn restore_session(
     .await;
     let session = if request.include_internal {
         coordinator
-            .restore_internal_session(&effective_path, &request.session_id)
+            .restore_internal_session_from_storage_path(&effective_path, &request.session_id)
             .await
     } else {
         coordinator
-            .restore_session(&effective_path, &request.session_id)
+            .restore_session_from_storage_path(&effective_path, &request.session_id)
             .await
     }
     .map_err(|e| format!("Failed to restore session: {}", e))?;
@@ -1744,48 +1746,45 @@ pub async fn restore_session_view(
             request.remote_connection_id.as_deref(),
             request.remote_ssh_host.as_deref(),
         )
-    .await;
+        .await;
+        let resolve_storage_path_duration_ms =
+            path_started_at.elapsed().as_millis().min(u64::MAX as u128) as u64;
         debug!(
             "restore_session_view storage path resolved: trace_id={}, session_id={}, duration_ms={}",
             trace_id,
             request.session_id,
-            path_started_at.elapsed().as_millis()
+            resolve_storage_path_duration_ms
         );
 
-        let view_request = SessionViewRestoreRequest {
-            workspace_path: effective_path,
-            session_id: request.session_id.clone(),
-            include_internal: request.include_internal,
-            tail_turn_count: request.tail_turn_count,
-        };
-        let tail_turn_count = view_request
+        let session_storage_path = effective_path;
+        let tail_turn_count = request
             .tail_turn_count
             .filter(|count| *count > 0)
             .map(|count| count.min(16));
-        let (session, mut turns, total_turn_count, timings) =
+        let (session, mut turns, total_turn_count, mut timings) =
             if let Some(tail_turn_count) = tail_turn_count {
-                if view_request.include_internal {
+                if request.include_internal {
                     coordinator
-                        .restore_internal_session_view_tail_timed(
-                            &view_request.workspace_path,
-                            &view_request.session_id,
+                        .restore_internal_session_view_from_storage_path_tail_timed(
+                            &session_storage_path,
+                            &request.session_id,
                             tail_turn_count,
                         )
                         .await
                 } else {
                     coordinator
-                        .restore_session_view_tail_timed(
-                            &view_request.workspace_path,
-                            &view_request.session_id,
+                        .restore_session_view_from_storage_path_tail_timed(
+                            &session_storage_path,
+                            &request.session_id,
                             tail_turn_count,
                         )
                         .await
                 }
-            } else if view_request.include_internal {
+            } else if request.include_internal {
                 coordinator
-                    .restore_internal_session_view_timed(
-                        &view_request.workspace_path,
-                        &view_request.session_id,
+                    .restore_internal_session_view_from_storage_path_timed(
+                        &session_storage_path,
+                        &request.session_id,
                     )
                     .await
                     .map(|(session, turns, timings)| {
@@ -1794,7 +1793,10 @@ pub async fn restore_session_view(
                     })
             } else {
                 coordinator
-                    .restore_session_view_timed(&view_request.workspace_path, &view_request.session_id)
+                    .restore_session_view_from_storage_path_timed(
+                        &session_storage_path,
+                        &request.session_id,
+                    )
                     .await
                     .map(|(session, turns, timings)| {
                         let total_turn_count = turns.len();
@@ -1802,6 +1804,7 @@ pub async fn restore_session_view(
                     })
             }
             .map_err(|e| format!("Failed to restore session view: {}", e))?;
+        timings.resolve_storage_path_duration_ms = resolve_storage_path_duration_ms;
         let loaded_turn_count = turns.len();
         let is_partial = loaded_turn_count < total_turn_count;
 
@@ -1882,11 +1885,14 @@ pub async fn restore_session_with_turns(
     );
     let (session, turns) = if request.include_internal {
         coordinator
-            .restore_internal_session_with_turns(&effective_path, &request.session_id)
+            .restore_internal_session_with_turns_from_storage_path(
+                &effective_path,
+                &request.session_id,
+            )
             .await
     } else {
         coordinator
-            .restore_session_with_turns(&effective_path, &request.session_id)
+            .restore_session_with_turns_from_storage_path(&effective_path, &request.session_id)
             .await
     }
     .map_err(|e| format!("Failed to restore session: {}", e))?;

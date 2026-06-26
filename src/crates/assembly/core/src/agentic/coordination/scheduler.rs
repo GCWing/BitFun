@@ -538,7 +538,7 @@ impl DialogScheduler {
                 )
                 .await?;
                 self.session_manager
-                    .restore_session(&restore_path, session_id)
+                    .restore_session_from_storage_path(&restore_path, session_id)
                     .await
                     .map_err(|error| error.to_string())?
             }

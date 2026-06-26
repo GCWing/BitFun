@@ -38,9 +38,7 @@ use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::sanitize_plain_model_output;
 use crate::util::timing::elapsed_ms_u64;
 pub use bitfun_runtime_ports::SessionViewRestoreTiming;
-use bitfun_runtime_ports::{
-    SessionStoragePathRequest, SessionStorePort, SessionViewRestoreRequest,
-};
+use bitfun_runtime_ports::{SessionStoragePathRequest, SessionStorePort};
 use bitfun_services_core::session::{
     apply_session_lineage, collect_hidden_subagent_cascade as collect_hidden_subagent_cascade_ids,
     merge_session_custom_metadata as merge_session_custom_metadata_value,
@@ -115,7 +113,7 @@ pub struct SessionManager {
     /// or resolve workspace-bound operations that only receive a session_id.
     /// This cache is intentionally retained across memory eviction, but should
     /// be cleared when a session is explicitly deleted.
-    session_workspace_index: Arc<DashMap<String, PathBuf>>,
+    session_storage_path_index: Arc<DashMap<String, PathBuf>>,
 
     /// Sub-components
     context_store: Arc<SessionContextStore>,
@@ -464,6 +462,42 @@ impl SessionManager {
             .unwrap_or_else(|| workspace_path.to_path_buf())
     }
 
+    async fn resolve_storage_path_for_workspace_path(&self, workspace_path: &Path) -> PathBuf {
+        let storage_path_started_at = Instant::now();
+        let session_storage_path = self
+            .effective_storage_path_for_workspace_path(workspace_path)
+            .await;
+        debug!(
+            "Session storage path resolved from workspace: workspace_path={}, session_storage_path={}, duration_ms={}",
+            workspace_path.display(),
+            session_storage_path.display(),
+            elapsed_ms_u64(storage_path_started_at)
+        );
+        session_storage_path
+    }
+
+    async fn resolve_storage_path_for_request(
+        &self,
+        request: SessionStoragePathRequest,
+    ) -> BitFunResult<PathBuf> {
+        let storage_path_started_at = Instant::now();
+        let requested_workspace_path = request.workspace_path.clone();
+        let session_storage_path = CoreSessionStorePort::with_path_manager(
+            self.persistence_manager.path_manager().clone(),
+        )
+        .resolve_session_storage_path(request)
+        .await
+        .map(|resolution| resolution.effective_storage_path)
+        .map_err(|error| BitFunError::Session(error.to_string()))?;
+        debug!(
+            "Session storage path resolved from workspace request: workspace_path={}, session_storage_path={}, duration_ms={}",
+            requested_workspace_path.display(),
+            session_storage_path.display(),
+            elapsed_ms_u64(storage_path_started_at)
+        );
+        Ok(session_storage_path)
+    }
+
     #[allow(dead_code)]
     fn session_workspace_path(&self, session_id: &str) -> Option<PathBuf> {
         self.sessions
@@ -473,7 +507,7 @@ impl SessionManager {
 
     /// Resolve the effective storage path for a session by ID.
     /// For remote workspaces, maps the remote path to a local session storage path.
-    async fn effective_session_workspace_path(&self, session_id: &str) -> Option<PathBuf> {
+    async fn effective_session_storage_path(&self, session_id: &str) -> Option<PathBuf> {
         let config = self.sessions.get(session_id)?.config.clone();
         self.effective_storage_path_for_config(&config).await
     }
@@ -491,11 +525,11 @@ impl SessionManager {
             }
         }
 
-        let indexed_workspace_path = self
-            .session_workspace_index
+        let indexed_storage_path = self
+            .session_storage_path_index
             .get(session_id)
             .map(|entry| entry.clone());
-        if let Some(session_storage_path) = indexed_workspace_path {
+        if let Some(session_storage_path) = indexed_storage_path {
             if let Some(binding) = self
                 .resolve_persisted_session_workspace_binding(
                     session_id,
@@ -523,7 +557,7 @@ impl SessionManager {
                 )
                 .await
             {
-                self.session_workspace_index
+                self.session_storage_path_index
                     .insert(session_id.to_string(), session_storage_path);
                 return Some(binding);
             }
@@ -816,7 +850,7 @@ impl SessionManager {
             return;
         }
 
-        let Some(workspace_path) = self.effective_session_workspace_path(session_id).await else {
+        let Some(workspace_path) = self.effective_session_storage_path(session_id).await else {
             debug!(
                 "Skipping context snapshot persistence because workspace path is unavailable: session_id={}, turn_index={}, reason={}",
                 session_id, turn_index, reason
@@ -864,7 +898,7 @@ impl SessionManager {
         }
 
         let cache = if self.should_persist_session_id(session_id) {
-            match self.effective_session_workspace_path(session_id).await {
+            match self.effective_session_storage_path(session_id).await {
                 Some(workspace_path) => {
                     match self
                         .load_prompt_cache_from_persistence(&workspace_path, session_id)
@@ -940,7 +974,7 @@ impl SessionManager {
             return;
         }
 
-        let Some(workspace_path) = self.effective_session_workspace_path(session_id).await else {
+        let Some(workspace_path) = self.effective_session_storage_path(session_id).await else {
             debug!(
                 "Skipping prompt cache persistence because workspace path is unavailable: session_id={}, reason={}",
                 session_id, reason
@@ -986,7 +1020,7 @@ impl SessionManager {
 
         let manager = Self {
             sessions: Arc::new(DashMap::new()),
-            session_workspace_index: Arc::new(DashMap::new()),
+            session_storage_path_index: Arc::new(DashMap::new()),
             context_store,
             prompt_cache_store: Arc::new(SessionPromptCacheStore::new()),
             turn_skill_agent_snapshot_store: Arc::new(TurnSkillAgentSnapshotStore::new()),
@@ -1175,7 +1209,7 @@ impl SessionManager {
 
     fn spawn_model_reconciliation_listener(&self) {
         let sessions = self.sessions.clone();
-        let session_workspace_index = self.session_workspace_index.clone();
+        let session_storage_path_index = self.session_storage_path_index.clone();
         let context_store = self.context_store.clone();
         let prompt_cache_store = self.prompt_cache_store.clone();
         let turn_skill_agent_snapshot_store = self.turn_skill_agent_snapshot_store.clone();
@@ -1199,7 +1233,7 @@ impl SessionManager {
             // surface area we need from the cloned shared fields above.
             let manager = Self {
                 sessions,
-                session_workspace_index,
+                session_storage_path_index,
                 context_store,
                 prompt_cache_store,
                 turn_skill_agent_snapshot_store,
@@ -1339,7 +1373,7 @@ impl SessionManager {
 
         // 1. Add to memory
         self.sessions.insert(session_id.clone(), session.clone());
-        self.session_workspace_index
+        self.session_storage_path_index
             .insert(session_id.clone(), session_storage_path.clone());
 
         // 2. Initialize the in-memory context cache.
@@ -1477,7 +1511,7 @@ impl SessionManager {
             return None;
         }
 
-        let workspace_path = self.effective_session_workspace_path(session_id).await?;
+        let workspace_path = self.effective_session_storage_path(session_id).await?;
         match self
             .load_turn_skill_agent_snapshot_from_persistence(
                 &workspace_path,
@@ -1526,7 +1560,7 @@ impl SessionManager {
             return cached_snapshot;
         }
 
-        let workspace_path = self.effective_session_workspace_path(session_id).await?;
+        let workspace_path = self.effective_session_storage_path(session_id).await?;
         let scan_floor_exclusive = cached_snapshot.as_ref().map(|snapshot| snapshot.0);
         for index in (0..=turn_index).rev() {
             if scan_floor_exclusive.is_some_and(|floor| index <= floor) {
@@ -1573,7 +1607,7 @@ impl SessionManager {
             return;
         }
 
-        let Some(workspace_path) = self.effective_session_workspace_path(session_id).await else {
+        let Some(workspace_path) = self.effective_session_storage_path(session_id).await else {
             debug!(
                 "Skipping turn skill-agent snapshot persistence because workspace path is unavailable: session_id={}, turn_index={}",
                 session_id, turn_index
@@ -1610,7 +1644,7 @@ impl SessionManager {
             return;
         }
 
-        let Some(workspace_path) = self.effective_session_workspace_path(session_id).await else {
+        let Some(workspace_path) = self.effective_session_storage_path(session_id).await else {
             debug!(
                 "Skipping first-turn skill-agent baseline recovery persistence because workspace path is unavailable: session_id={}",
                 session_id
@@ -1657,7 +1691,7 @@ impl SessionManager {
             return;
         }
 
-        let Some(workspace_path) = self.effective_session_workspace_path(session_id).await else {
+        let Some(workspace_path) = self.effective_session_storage_path(session_id).await else {
             debug!(
                 "Skipping listing reminder baseline override persistence because workspace path is unavailable: session_id={}",
                 session_id
@@ -1698,7 +1732,7 @@ impl SessionManager {
             return None;
         }
 
-        let workspace_path = self.effective_session_workspace_path(session_id).await?;
+        let workspace_path = self.effective_session_storage_path(session_id).await?;
         let snapshot = match self
             .persistence_manager
             .load_skill_agent_baseline_override_snapshot(&workspace_path, session_id)
@@ -2015,7 +2049,7 @@ impl SessionManager {
         session_id: &str,
         new_state: SessionState,
     ) -> BitFunResult<()> {
-        let effective_path = self.effective_session_workspace_path(session_id).await;
+        let effective_path = self.effective_session_storage_path(session_id).await;
 
         // IMPORTANT: keep the DashMap guard scope short -- do NOT hold it across .await.
         // Collect the data needed for persistence, then release the guard before doing I/O.
@@ -2059,7 +2093,7 @@ impl SessionManager {
         expected_turn_id: &str,
         new_state: SessionState,
     ) -> BitFunResult<bool> {
-        let effective_path = self.effective_session_workspace_path(session_id).await;
+        let effective_path = self.effective_session_storage_path(session_id).await;
 
         let should_persist = if let Some(mut session) = self.sessions.get_mut(session_id) {
             let owns_processing_turn = matches!(
@@ -2109,7 +2143,7 @@ impl SessionManager {
     /// Update session title (in-memory + persistence)
     pub async fn update_session_title(&self, session_id: &str, title: &str) -> BitFunResult<()> {
         let normalized_title = Self::normalize_session_title_input(title)?;
-        let workspace_path = self.effective_session_workspace_path(session_id).await;
+        let workspace_path = self.effective_session_storage_path(session_id).await;
 
         {
             let Some(mut session) = self.sessions.get_mut(session_id) else {
@@ -2200,7 +2234,7 @@ impl SessionManager {
         }
 
         if self.should_persist_session_id(session_id) {
-            let effective_path = self.effective_session_workspace_path(session_id).await;
+            let effective_path = self.effective_session_storage_path(session_id).await;
             let session_snapshot = self.sessions.get(session_id).map(|s| s.clone());
             // Ref guard released -- DashMap shard lock is free.
             if let (Some(workspace_path), Some(session)) = (effective_path, session_snapshot) {
@@ -2240,7 +2274,7 @@ impl SessionManager {
         }
 
         if self.should_persist_session_id(session_id) {
-            let effective_path = self.effective_session_workspace_path(session_id).await;
+            let effective_path = self.effective_session_storage_path(session_id).await;
             let session_snapshot = self.sessions.get(session_id).map(|s| s.clone());
             if let (Some(workspace_path), Some(session)) = (effective_path, session_snapshot) {
                 self.persistence_manager
@@ -2300,18 +2334,20 @@ impl SessionManager {
         let mut resolved_context_window = None;
 
         // If the session was evicted from memory (idle > 1h), try to restore it
-        // using the workspace path recorded when it was first created/restored.
+        // using the storage path recorded when it was first created/restored.
         if !self.sessions.contains_key(session_id) && self.config.enable_persistence {
-            let workspace_path = self
-                .session_workspace_index
+            let session_storage_path = self
+                .session_storage_path_index
                 .get(session_id)
                 .map(|entry| entry.clone());
-            if let Some(workspace_path) = workspace_path {
+            if let Some(session_storage_path) = session_storage_path {
                 debug!(
                     "Session evicted from memory, restoring for model update: session_id={}",
                     session_id
                 );
-                let _ = self.restore_session(&workspace_path, session_id).await;
+                let _ = self
+                    .restore_session_from_storage_path(&session_storage_path, session_id)
+                    .await;
             }
         }
 
@@ -2331,7 +2367,7 @@ impl SessionManager {
         }
 
         if self.should_persist_session_id(session_id) {
-            let effective_path = self.effective_session_workspace_path(session_id).await;
+            let effective_path = self.effective_session_storage_path(session_id).await;
             let session_snapshot = self.sessions.get(session_id).map(|s| s.clone());
             // Ref guard released -- DashMap shard lock is free.
             if let (Some(workspace_path), Some(session)) = (effective_path, session_snapshot) {
@@ -2520,7 +2556,7 @@ impl SessionManager {
             session_id,
             elapsed_ms_u64(memory_stage_started_at)
         );
-        self.session_workspace_index.remove(session_id);
+        self.session_storage_path_index.remove(session_id);
 
         info!(
             "Session deletion completed: session_id={}, workspace_path={}, duration_ms={}",
@@ -2532,13 +2568,30 @@ impl SessionManager {
         Ok(())
     }
 
-    /// Restore session (from persistent storage)
+    /// Restore session from a local or legacy workspace path.
+    ///
+    /// Callers that know remote identity must use [`Self::restore_session_for_workspace`].
+    /// Callers that already resolved a `sessions` directory must use
+    /// [`Self::restore_session_from_storage_path`].
     pub async fn restore_session(
         &self,
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<Session> {
-        self.restore_session_internal(workspace_path, session_id, false)
+        let session_storage_path = self
+            .resolve_storage_path_for_workspace_path(workspace_path)
+            .await;
+        self.restore_session_from_storage_path(&session_storage_path, session_id)
+            .await
+    }
+
+    pub async fn restore_session_for_workspace(
+        &self,
+        request: SessionStoragePathRequest,
+        session_id: &str,
+    ) -> BitFunResult<Session> {
+        let session_storage_path = self.resolve_storage_path_for_request(request).await?;
+        self.restore_session_from_storage_path(&session_storage_path, session_id)
             .await
     }
 
@@ -2547,18 +2600,53 @@ impl SessionManager {
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<Session> {
-        self.restore_session_internal(workspace_path, session_id, true)
+        let session_storage_path = self
+            .resolve_storage_path_for_workspace_path(workspace_path)
+            .await;
+        self.restore_internal_session_from_storage_path(&session_storage_path, session_id)
             .await
     }
 
-    async fn restore_session_internal(
+    pub async fn restore_internal_session_for_workspace(
         &self,
-        workspace_path: &Path,
+        request: SessionStoragePathRequest,
+        session_id: &str,
+    ) -> BitFunResult<Session> {
+        let session_storage_path = self.resolve_storage_path_for_request(request).await?;
+        self.restore_internal_session_from_storage_path(&session_storage_path, session_id)
+            .await
+    }
+
+    pub async fn restore_session_from_storage_path(
+        &self,
+        session_storage_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<Session> {
+        self.restore_session_from_storage_path_internal(session_storage_path, session_id, false)
+            .await
+    }
+
+    pub async fn restore_internal_session_from_storage_path(
+        &self,
+        session_storage_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<Session> {
+        self.restore_session_from_storage_path_internal(session_storage_path, session_id, true)
+            .await
+    }
+
+    async fn restore_session_from_storage_path_internal(
+        &self,
+        session_storage_path: &Path,
         session_id: &str,
         include_internal: bool,
     ) -> BitFunResult<Session> {
         let (session, _) = self
-            .restore_session_with_turns_internal(workspace_path, session_id, include_internal)
+            .restore_session_with_turns_from_storage_path_internal(
+                session_storage_path,
+                session_id,
+                include_internal,
+            )
             .await?;
         Ok(session)
     }
@@ -2566,6 +2654,10 @@ impl SessionManager {
     /// Restore the persisted session header and turns needed by the UI view
     /// without loading runtime context snapshots or inserting the session into
     /// the in-memory coordinator state.
+    ///
+    /// This workspace-path overload is for local or legacy callers. Remote
+    /// callers must use [`Self::restore_session_view_for_workspace_timed`] or a
+    /// storage-path restore method so remote identity is preserved.
     pub async fn restore_session_view(
         &self,
         workspace_path: &Path,
@@ -2581,9 +2673,31 @@ impl SessionManager {
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<(Session, Vec<DialogTurnData>, SessionViewRestoreTiming)> {
-        self.restore_session_view_internal(workspace_path, session_id, false, None)
-            .await
-            .map(|(session, turns, _, timing)| (session, turns, timing))
+        let storage_path_started_at = Instant::now();
+        let session_storage_path = self
+            .resolve_storage_path_for_workspace_path(workspace_path)
+            .await;
+        let resolve_storage_path_duration_ms = elapsed_ms_u64(storage_path_started_at);
+        let (session, turns, mut timing) = self
+            .restore_session_view_from_storage_path_timed(&session_storage_path, session_id)
+            .await?;
+        timing.resolve_storage_path_duration_ms = resolve_storage_path_duration_ms;
+        Ok((session, turns, timing))
+    }
+
+    pub async fn restore_session_view_for_workspace_timed(
+        &self,
+        request: SessionStoragePathRequest,
+        session_id: &str,
+    ) -> BitFunResult<(Session, Vec<DialogTurnData>, SessionViewRestoreTiming)> {
+        let storage_path_started_at = Instant::now();
+        let session_storage_path = self.resolve_storage_path_for_request(request).await?;
+        let resolve_storage_path_duration_ms = elapsed_ms_u64(storage_path_started_at);
+        let (session, turns, mut timing) = self
+            .restore_session_view_from_storage_path_timed(&session_storage_path, session_id)
+            .await?;
+        timing.resolve_storage_path_duration_ms = resolve_storage_path_duration_ms;
+        Ok((session, turns, timing))
     }
 
     pub async fn restore_internal_session_view(
@@ -2601,9 +2715,37 @@ impl SessionManager {
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<(Session, Vec<DialogTurnData>, SessionViewRestoreTiming)> {
-        self.restore_session_view_internal(workspace_path, session_id, true, None)
-            .await
-            .map(|(session, turns, _, timing)| (session, turns, timing))
+        let storage_path_started_at = Instant::now();
+        let session_storage_path = self
+            .resolve_storage_path_for_workspace_path(workspace_path)
+            .await;
+        let resolve_storage_path_duration_ms = elapsed_ms_u64(storage_path_started_at);
+        let (session, turns, mut timing) = self
+            .restore_internal_session_view_from_storage_path_timed(
+                &session_storage_path,
+                session_id,
+            )
+            .await?;
+        timing.resolve_storage_path_duration_ms = resolve_storage_path_duration_ms;
+        Ok((session, turns, timing))
+    }
+
+    pub async fn restore_internal_session_view_for_workspace_timed(
+        &self,
+        request: SessionStoragePathRequest,
+        session_id: &str,
+    ) -> BitFunResult<(Session, Vec<DialogTurnData>, SessionViewRestoreTiming)> {
+        let storage_path_started_at = Instant::now();
+        let session_storage_path = self.resolve_storage_path_for_request(request).await?;
+        let resolve_storage_path_duration_ms = elapsed_ms_u64(storage_path_started_at);
+        let (session, turns, mut timing) = self
+            .restore_internal_session_view_from_storage_path_timed(
+                &session_storage_path,
+                session_id,
+            )
+            .await?;
+        timing.resolve_storage_path_duration_ms = resolve_storage_path_duration_ms;
+        Ok((session, turns, timing))
     }
 
     pub async fn restore_session_view_tail(
@@ -2628,8 +2770,20 @@ impl SessionManager {
         usize,
         SessionViewRestoreTiming,
     )> {
-        self.restore_session_view_internal(workspace_path, session_id, false, Some(tail_turn_count))
-            .await
+        let storage_path_started_at = Instant::now();
+        let session_storage_path = self
+            .resolve_storage_path_for_workspace_path(workspace_path)
+            .await;
+        let resolve_storage_path_duration_ms = elapsed_ms_u64(storage_path_started_at);
+        let (session, turns, total_turn_count, mut timing) = self
+            .restore_session_view_from_storage_path_tail_timed(
+                &session_storage_path,
+                session_id,
+                tail_turn_count,
+            )
+            .await?;
+        timing.resolve_storage_path_duration_ms = resolve_storage_path_duration_ms;
+        Ok((session, turns, total_turn_count, timing))
     }
 
     pub async fn restore_internal_session_view_tail(
@@ -2654,13 +2808,95 @@ impl SessionManager {
         usize,
         SessionViewRestoreTiming,
     )> {
-        self.restore_session_view_internal(workspace_path, session_id, true, Some(tail_turn_count))
-            .await
+        let storage_path_started_at = Instant::now();
+        let session_storage_path = self
+            .resolve_storage_path_for_workspace_path(workspace_path)
+            .await;
+        let resolve_storage_path_duration_ms = elapsed_ms_u64(storage_path_started_at);
+        let (session, turns, total_turn_count, mut timing) = self
+            .restore_internal_session_view_from_storage_path_tail_timed(
+                &session_storage_path,
+                session_id,
+                tail_turn_count,
+            )
+            .await?;
+        timing.resolve_storage_path_duration_ms = resolve_storage_path_duration_ms;
+        Ok((session, turns, total_turn_count, timing))
     }
 
-    async fn restore_session_view_internal(
+    pub async fn restore_session_view_from_storage_path_timed(
         &self,
-        workspace_path: &Path,
+        session_storage_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<(Session, Vec<DialogTurnData>, SessionViewRestoreTiming)> {
+        self.restore_session_view_from_storage_path_internal(
+            session_storage_path,
+            session_id,
+            false,
+            None,
+        )
+        .await
+        .map(|(session, turns, _, timing)| (session, turns, timing))
+    }
+
+    pub async fn restore_internal_session_view_from_storage_path_timed(
+        &self,
+        session_storage_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<(Session, Vec<DialogTurnData>, SessionViewRestoreTiming)> {
+        self.restore_session_view_from_storage_path_internal(
+            session_storage_path,
+            session_id,
+            true,
+            None,
+        )
+        .await
+        .map(|(session, turns, _, timing)| (session, turns, timing))
+    }
+
+    pub async fn restore_session_view_from_storage_path_tail_timed(
+        &self,
+        session_storage_path: &Path,
+        session_id: &str,
+        tail_turn_count: usize,
+    ) -> BitFunResult<(
+        Session,
+        Vec<DialogTurnData>,
+        usize,
+        SessionViewRestoreTiming,
+    )> {
+        self.restore_session_view_from_storage_path_internal(
+            session_storage_path,
+            session_id,
+            false,
+            Some(tail_turn_count),
+        )
+        .await
+    }
+
+    pub async fn restore_internal_session_view_from_storage_path_tail_timed(
+        &self,
+        session_storage_path: &Path,
+        session_id: &str,
+        tail_turn_count: usize,
+    ) -> BitFunResult<(
+        Session,
+        Vec<DialogTurnData>,
+        usize,
+        SessionViewRestoreTiming,
+    )> {
+        self.restore_session_view_from_storage_path_internal(
+            session_storage_path,
+            session_id,
+            true,
+            Some(tail_turn_count),
+        )
+        .await
+    }
+
+    async fn restore_session_view_from_storage_path_internal(
+        &self,
+        session_storage_path: &Path,
         session_id: &str,
         include_internal: bool,
         tail_turn_count: Option<usize>,
@@ -2670,21 +2906,11 @@ impl SessionManager {
         usize,
         SessionViewRestoreTiming,
     )> {
-        let restore_request = SessionViewRestoreRequest {
-            workspace_path: workspace_path.to_path_buf(),
-            session_id: session_id.to_string(),
-            include_internal,
-            tail_turn_count,
-        };
         let restore_started_at = Instant::now();
-        let storage_path_started_at = Instant::now();
-        let session_storage_path = self
-            .effective_storage_path_for_workspace_path(&restore_request.workspace_path)
-            .await;
-        let resolve_storage_path_duration_ms = elapsed_ms_u64(storage_path_started_at);
+        let resolve_storage_path_duration_ms = 0;
         debug!(
-            "Session view restore phase completed: session_id={}, phase=resolve_storage_path, duration_ms={}",
-            restore_request.session_id,
+            "Session view restore phase completed: session_id={}, phase=use_storage_path, duration_ms={}",
+            session_id,
             resolve_storage_path_duration_ms
         );
 
@@ -2693,39 +2919,34 @@ impl SessionManager {
             .persistence_manager
             .load_session_metadata(&session_storage_path, session_id)
             .await?
-            .is_some_and(|metadata| {
-                !restore_request.include_internal && metadata.should_hide_from_user_lists()
-            })
+            .is_some_and(|metadata| !include_internal && metadata.should_hide_from_user_lists())
         {
             return Err(BitFunError::NotFound(format!(
                 "Session not found: {}",
-                restore_request.session_id
+                session_id
             )));
         }
         let visibility_metadata_duration_ms = elapsed_ms_u64(metadata_started_at);
         debug!(
             "Session view restore phase completed: session_id={}, phase=load_metadata, duration_ms={}",
-            restore_request.session_id,
+            session_id,
             visibility_metadata_duration_ms
         );
 
         let session_started_at = Instant::now();
         let (mut session, persisted_turns, total_turn_count, turn_load) =
-            if let Some(tail_turn_count) = restore_request.tail_turn_count {
+            if let Some(tail_turn_count) = tail_turn_count {
                 self.persistence_manager
                     .load_session_with_tail_turns_timed(
                         &session_storage_path,
-                        &restore_request.session_id,
+                        session_id,
                         tail_turn_count,
                     )
                     .await?
             } else {
                 let (session, turns, timing) = self
                     .persistence_manager
-                    .load_session_with_turns_timed(
-                        &session_storage_path,
-                        &restore_request.session_id,
-                    )
+                    .load_session_with_turns_timed(&session_storage_path, session_id)
                     .await?;
                 let total_turn_count = turns.len();
                 (session, turns, total_turn_count, timing)
@@ -2736,7 +2957,7 @@ impl SessionManager {
             session_id,
             persisted_turns.len(),
             total_turn_count,
-            restore_request.tail_turn_count,
+            tail_turn_count,
             load_session_with_turns_duration_ms
         );
 
@@ -2787,12 +3008,29 @@ impl SessionManager {
     }
 
     /// Restore session and return the persisted turns read during restore.
+    ///
+    /// This workspace-path overload is for local or legacy callers. Remote
+    /// callers must use [`Self::restore_session_with_turns_for_workspace`] or a
+    /// storage-path restore method so remote identity is preserved.
     pub async fn restore_session_with_turns(
         &self,
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<(Session, Vec<DialogTurnData>)> {
-        self.restore_session_with_turns_internal(workspace_path, session_id, false)
+        let session_storage_path = self
+            .resolve_storage_path_for_workspace_path(workspace_path)
+            .await;
+        self.restore_session_with_turns_from_storage_path(&session_storage_path, session_id)
+            .await
+    }
+
+    pub async fn restore_session_with_turns_for_workspace(
+        &self,
+        request: SessionStoragePathRequest,
+        session_id: &str,
+    ) -> BitFunResult<(Session, Vec<DialogTurnData>)> {
+        let session_storage_path = self.resolve_storage_path_for_request(request).await?;
+        self.restore_session_with_turns_from_storage_path(&session_storage_path, session_id)
             .await
     }
 
@@ -2801,13 +3039,58 @@ impl SessionManager {
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<(Session, Vec<DialogTurnData>)> {
-        self.restore_session_with_turns_internal(workspace_path, session_id, true)
-            .await
+        let session_storage_path = self
+            .resolve_storage_path_for_workspace_path(workspace_path)
+            .await;
+        self.restore_internal_session_with_turns_from_storage_path(
+            &session_storage_path,
+            session_id,
+        )
+        .await
     }
 
-    async fn restore_session_with_turns_internal(
+    pub async fn restore_internal_session_with_turns_for_workspace(
         &self,
-        workspace_path: &Path,
+        request: SessionStoragePathRequest,
+        session_id: &str,
+    ) -> BitFunResult<(Session, Vec<DialogTurnData>)> {
+        let session_storage_path = self.resolve_storage_path_for_request(request).await?;
+        self.restore_internal_session_with_turns_from_storage_path(
+            &session_storage_path,
+            session_id,
+        )
+        .await
+    }
+
+    pub async fn restore_session_with_turns_from_storage_path(
+        &self,
+        session_storage_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<(Session, Vec<DialogTurnData>)> {
+        self.restore_session_with_turns_from_storage_path_internal(
+            session_storage_path,
+            session_id,
+            false,
+        )
+        .await
+    }
+
+    pub async fn restore_internal_session_with_turns_from_storage_path(
+        &self,
+        session_storage_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<(Session, Vec<DialogTurnData>)> {
+        self.restore_session_with_turns_from_storage_path_internal(
+            session_storage_path,
+            session_id,
+            true,
+        )
+        .await
+    }
+
+    async fn restore_session_with_turns_from_storage_path_internal(
+        &self,
+        session_storage_path: &Path,
         session_id: &str,
         include_internal: bool,
     ) -> BitFunResult<(Session, Vec<DialogTurnData>)> {
@@ -2815,14 +3098,9 @@ impl SessionManager {
         // Check if session is already in memory
         let session_already_in_memory = self.sessions.contains_key(session_id);
 
-        let storage_path_started_at = Instant::now();
-        let session_storage_path = self
-            .effective_storage_path_for_workspace_path(workspace_path)
-            .await;
         debug!(
-            "Session restore phase completed: session_id={}, phase=resolve_storage_path, duration_ms={}",
-            session_id,
-            elapsed_ms_u64(storage_path_started_at)
+            "Session restore phase completed: session_id={}, phase=use_storage_path, duration_ms=0",
+            session_id
         );
 
         let metadata_started_at = Instant::now();
@@ -3079,8 +3357,8 @@ impl SessionManager {
         // 4. Add to memory (will overwrite if already exists)
         self.sessions
             .insert(session_id.to_string(), session.clone());
-        self.session_workspace_index
-            .insert(session_id.to_string(), session_storage_path.clone());
+        self.session_storage_path_index
+            .insert(session_id.to_string(), session_storage_path.to_path_buf());
 
         Ok((session, persisted_turns))
     }
@@ -3275,7 +3553,7 @@ impl SessionManager {
             )));
         }
 
-        self.effective_session_workspace_path(session_id)
+        self.effective_session_storage_path(session_id)
             .await
             .ok_or_else(|| {
                 BitFunError::Validation(format!(
@@ -3762,7 +4040,7 @@ impl SessionManager {
         }
 
         let workspace_path = self
-            .effective_session_workspace_path(session_id)
+            .effective_session_storage_path(session_id)
             .await
             .ok_or_else(|| {
                 BitFunError::Validation(format!(
@@ -3874,7 +4152,7 @@ impl SessionManager {
         }
 
         let workspace_path = self
-            .effective_session_workspace_path(session_id)
+            .effective_session_storage_path(session_id)
             .await
             .ok_or_else(|| {
                 BitFunError::Validation(format!(
@@ -3936,7 +4214,7 @@ impl SessionManager {
         }
 
         let workspace_path = self
-            .effective_session_workspace_path(session_id)
+            .effective_session_storage_path(session_id)
             .await
             .ok_or_else(|| {
                 BitFunError::Validation(format!(
@@ -4002,7 +4280,7 @@ impl SessionManager {
         }
 
         let workspace_path = self
-            .effective_session_workspace_path(session_id)
+            .effective_session_storage_path(session_id)
             .await
             .ok_or_else(|| {
                 BitFunError::Validation(format!(
@@ -4066,7 +4344,7 @@ impl SessionManager {
         }
 
         let workspace_path = self
-            .effective_session_workspace_path(session_id)
+            .effective_session_storage_path(session_id)
             .await
             .ok_or_else(|| {
                 BitFunError::Validation(format!(
@@ -4122,7 +4400,7 @@ impl SessionManager {
     /// canonical turn history instead of the runtime context cache.
     pub async fn get_messages(&self, session_id: &str) -> BitFunResult<Vec<Message>> {
         if self.config.enable_persistence {
-            if let Some(workspace_path) = self.effective_session_workspace_path(session_id).await {
+            if let Some(workspace_path) = self.effective_session_storage_path(session_id).await {
                 let messages = self
                     .rebuild_messages_from_turns(&workspace_path, session_id)
                     .await?;
@@ -4205,7 +4483,7 @@ impl SessionManager {
         session_id: &str,
         compression_state: CompressionState,
     ) -> BitFunResult<()> {
-        let effective_path = self.effective_session_workspace_path(session_id).await;
+        let effective_path = self.effective_session_storage_path(session_id).await;
 
         // IMPORTANT: keep the DashMap guard scope short -- do NOT hold it across .await.
         let session_snapshot = if let Some(mut session) = self.sessions.get_mut(session_id) {
@@ -4522,6 +4800,7 @@ mod tests {
         SessionRelationship, SessionRelationshipKind, ToolCallData, ToolItemData, ToolResultData,
         TurnStatus, UserMessageData,
     };
+    use bitfun_runtime_ports::SessionStoragePathRequest;
     use dashmap::try_result::TryResult;
     use serde_json::json;
     use std::collections::HashSet;
@@ -5281,6 +5560,113 @@ mod tests {
             runtime_root_resolution.is_err(),
             "remote runtime root must not pass as a resolved sessions dir"
         );
+    }
+
+    #[tokio::test]
+    async fn restore_session_from_storage_path_accepts_resolved_sessions_dir() {
+        let workspace = TestWorkspace::new();
+        let path_manager = workspace.path_manager();
+        let persistence_manager =
+            Arc::new(PersistenceManager::new(path_manager.clone()).expect("persistence manager"));
+        let manager = test_manager(persistence_manager.clone());
+        let sessions_dir = path_manager.project_sessions_dir(workspace.path());
+        let session_id = Uuid::new_v4().to_string();
+        let session = Session::new_with_id(
+            session_id.clone(),
+            "Resolved sessions restore".to_string(),
+            "agentic".to_string(),
+            SessionConfig {
+                workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                ..Default::default()
+            },
+        );
+
+        persistence_manager
+            .save_session(&sessions_dir, &session)
+            .await
+            .expect("session should save to resolved sessions dir");
+
+        let restored = manager
+            .restore_session_from_storage_path(&sessions_dir, &session_id)
+            .await
+            .expect("storage restore should read the resolved sessions dir directly");
+
+        assert_eq!(restored.session_id, session_id);
+    }
+
+    #[tokio::test]
+    async fn restore_session_workspace_api_does_not_accept_resolved_sessions_dir() {
+        let workspace = TestWorkspace::new();
+        let path_manager = workspace.path_manager();
+        let persistence_manager =
+            Arc::new(PersistenceManager::new(path_manager.clone()).expect("persistence manager"));
+        let manager = test_manager(persistence_manager.clone());
+        let sessions_dir = path_manager.project_sessions_dir(workspace.path());
+        let session_id = Uuid::new_v4().to_string();
+        let session = Session::new_with_id(
+            session_id.clone(),
+            "Resolved sessions restore".to_string(),
+            "agentic".to_string(),
+            SessionConfig {
+                workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                ..Default::default()
+            },
+        );
+
+        persistence_manager
+            .save_session(&sessions_dir, &session)
+            .await
+            .expect("session should save to resolved sessions dir");
+
+        let result = manager.restore_session(&sessions_dir, &session_id).await;
+
+        assert!(
+            result.is_err(),
+            "workspace restore should not accept an already-resolved sessions dir"
+        );
+    }
+
+    #[tokio::test]
+    async fn restore_session_for_workspace_uses_remote_identity() {
+        let workspace = TestWorkspace::new();
+        let path_manager = workspace.path_manager();
+        let persistence_manager =
+            Arc::new(PersistenceManager::new(path_manager.clone()).expect("persistence manager"));
+        let manager = test_manager(persistence_manager.clone());
+        let sessions_dir = crate::service::WorkspaceRuntimeService::new(path_manager.clone())
+            .context_for_remote_workspace("dev-host", "/home/wsp/project")
+            .sessions_dir;
+        let session_id = Uuid::new_v4().to_string();
+        let session = Session::new_with_id(
+            session_id.clone(),
+            "Remote identity restore".to_string(),
+            "agentic".to_string(),
+            SessionConfig {
+                workspace_path: Some("/home/wsp/project".to_string()),
+                remote_connection_id: Some("ssh-1".to_string()),
+                remote_ssh_host: Some("dev-host".to_string()),
+                ..Default::default()
+            },
+        );
+
+        persistence_manager
+            .save_session(&sessions_dir, &session)
+            .await
+            .expect("session should save to remote sessions dir");
+
+        let restored = manager
+            .restore_session_for_workspace(
+                SessionStoragePathRequest {
+                    workspace_path: PathBuf::from("/home/wsp/project"),
+                    remote_connection_id: Some("ssh-1".to_string()),
+                    remote_ssh_host: Some("dev-host".to_string()),
+                },
+                &session_id,
+            )
+            .await
+            .expect("workspace restore should use remote identity");
+
+        assert_eq!(restored.session_id, session_id);
     }
 
     #[tokio::test]
@@ -6189,7 +6575,7 @@ mod tests {
 
         assert_eq!(
             manager
-                .session_workspace_index
+                .session_storage_path_index
                 .get(&session.session_id)
                 .as_deref()
                 .map(|entry| entry.to_path_buf()),
@@ -6202,7 +6588,7 @@ mod tests {
             .expect("session should delete");
 
         assert!(manager
-            .session_workspace_index
+            .session_storage_path_index
             .get(&session.session_id)
             .is_none());
     }

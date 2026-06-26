@@ -1707,7 +1707,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 Ok(restore_path) => {
                     match self
                         .session_manager
-                        .restore_session(&restore_path, session_id)
+                        .restore_session_from_storage_path(&restore_path, session_id)
                         .await
                     {
                         Ok(_) => {
@@ -2695,7 +2695,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         if needs_restore {
             let restore_path = self.restore_path_for_existing_session(&session_id).await?;
             self.session_manager
-                .restore_session(&restore_path, &session_id)
+                .restore_session_from_storage_path(&restore_path, &session_id)
                 .await?;
         }
 
@@ -2884,7 +2884,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 )
                 .await?;
                 self.session_manager
-                    .restore_session(&restore_path, &session_id)
+                    .restore_session_from_storage_path(&restore_path, &session_id)
                     .await?
             }
         };
@@ -3045,7 +3045,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .await?;
             match self
                 .session_manager
-                .restore_session(&restore_path, &session_id)
+                .restore_session_from_storage_path(&restore_path, &session_id)
                 .await
             {
                 Ok(_) => {
@@ -3875,6 +3875,46 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .await
     }
 
+    pub async fn restore_session_from_storage_path(
+        &self,
+        session_storage_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<Session> {
+        self.session_manager
+            .restore_session_from_storage_path(session_storage_path, session_id)
+            .await
+    }
+
+    pub async fn restore_internal_session_from_storage_path(
+        &self,
+        session_storage_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<Session> {
+        self.session_manager
+            .restore_internal_session_from_storage_path(session_storage_path, session_id)
+            .await
+    }
+
+    pub async fn restore_session_for_workspace(
+        &self,
+        request: SessionStoragePathRequest,
+        session_id: &str,
+    ) -> BitFunResult<Session> {
+        self.session_manager
+            .restore_session_for_workspace(request, session_id)
+            .await
+    }
+
+    pub async fn restore_internal_session_for_workspace(
+        &self,
+        request: SessionStoragePathRequest,
+        session_id: &str,
+    ) -> BitFunResult<Session> {
+        self.session_manager
+            .restore_internal_session_for_workspace(request, session_id)
+            .await
+    }
+
     pub async fn restore_internal_session(
         &self,
         workspace_path: &Path,
@@ -3893,6 +3933,46 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
     ) -> BitFunResult<(Session, Vec<crate::service::session::DialogTurnData>)> {
         self.session_manager
             .restore_session_with_turns(workspace_path, session_id)
+            .await
+    }
+
+    pub async fn restore_session_with_turns_from_storage_path(
+        &self,
+        session_storage_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<(Session, Vec<crate::service::session::DialogTurnData>)> {
+        self.session_manager
+            .restore_session_with_turns_from_storage_path(session_storage_path, session_id)
+            .await
+    }
+
+    pub async fn restore_internal_session_with_turns_from_storage_path(
+        &self,
+        session_storage_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<(Session, Vec<crate::service::session::DialogTurnData>)> {
+        self.session_manager
+            .restore_internal_session_with_turns_from_storage_path(session_storage_path, session_id)
+            .await
+    }
+
+    pub async fn restore_session_with_turns_for_workspace(
+        &self,
+        request: SessionStoragePathRequest,
+        session_id: &str,
+    ) -> BitFunResult<(Session, Vec<crate::service::session::DialogTurnData>)> {
+        self.session_manager
+            .restore_session_with_turns_for_workspace(request, session_id)
+            .await
+    }
+
+    pub async fn restore_internal_session_with_turns_for_workspace(
+        &self,
+        request: SessionStoragePathRequest,
+        session_id: &str,
+    ) -> BitFunResult<(Session, Vec<crate::service::session::DialogTurnData>)> {
+        self.session_manager
+            .restore_internal_session_with_turns_for_workspace(request, session_id)
             .await
     }
 
@@ -3931,6 +4011,34 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .await
     }
 
+    pub async fn restore_session_view_for_workspace_timed(
+        &self,
+        request: SessionStoragePathRequest,
+        session_id: &str,
+    ) -> BitFunResult<(
+        Session,
+        Vec<crate::service::session::DialogTurnData>,
+        crate::agentic::session::session_manager::SessionViewRestoreTiming,
+    )> {
+        self.session_manager
+            .restore_session_view_for_workspace_timed(request, session_id)
+            .await
+    }
+
+    pub async fn restore_session_view_from_storage_path_timed(
+        &self,
+        session_storage_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<(
+        Session,
+        Vec<crate::service::session::DialogTurnData>,
+        crate::agentic::session::session_manager::SessionViewRestoreTiming,
+    )> {
+        self.session_manager
+            .restore_session_view_from_storage_path_timed(session_storage_path, session_id)
+            .await
+    }
+
     pub async fn restore_session_view_tail(
         &self,
         workspace_path: &Path,
@@ -3958,6 +4066,26 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .await
     }
 
+    pub async fn restore_session_view_from_storage_path_tail_timed(
+        &self,
+        session_storage_path: &Path,
+        session_id: &str,
+        tail_turn_count: usize,
+    ) -> BitFunResult<(
+        Session,
+        Vec<crate::service::session::DialogTurnData>,
+        usize,
+        crate::agentic::session::session_manager::SessionViewRestoreTiming,
+    )> {
+        self.session_manager
+            .restore_session_view_from_storage_path_tail_timed(
+                session_storage_path,
+                session_id,
+                tail_turn_count,
+            )
+            .await
+    }
+
     pub async fn restore_internal_session_view(
         &self,
         workspace_path: &Path,
@@ -3979,6 +4107,34 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
     )> {
         self.session_manager
             .restore_internal_session_view_timed(workspace_path, session_id)
+            .await
+    }
+
+    pub async fn restore_internal_session_view_for_workspace_timed(
+        &self,
+        request: SessionStoragePathRequest,
+        session_id: &str,
+    ) -> BitFunResult<(
+        Session,
+        Vec<crate::service::session::DialogTurnData>,
+        crate::agentic::session::session_manager::SessionViewRestoreTiming,
+    )> {
+        self.session_manager
+            .restore_internal_session_view_for_workspace_timed(request, session_id)
+            .await
+    }
+
+    pub async fn restore_internal_session_view_from_storage_path_timed(
+        &self,
+        session_storage_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<(
+        Session,
+        Vec<crate::service::session::DialogTurnData>,
+        crate::agentic::session::session_manager::SessionViewRestoreTiming,
+    )> {
+        self.session_manager
+            .restore_internal_session_view_from_storage_path_timed(session_storage_path, session_id)
             .await
     }
 
@@ -4006,6 +4162,26 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
     )> {
         self.session_manager
             .restore_internal_session_view_tail_timed(workspace_path, session_id, tail_turn_count)
+            .await
+    }
+
+    pub async fn restore_internal_session_view_from_storage_path_tail_timed(
+        &self,
+        session_storage_path: &Path,
+        session_id: &str,
+        tail_turn_count: usize,
+    ) -> BitFunResult<(
+        Session,
+        Vec<crate::service::session::DialogTurnData>,
+        usize,
+        crate::agentic::session::session_manager::SessionViewRestoreTiming,
+    )> {
+        self.session_manager
+            .restore_internal_session_view_from_storage_path_tail_timed(
+                session_storage_path,
+                session_id,
+                tail_turn_count,
+            )
             .await
     }
 
@@ -5893,7 +6069,7 @@ impl bitfun_runtime_ports::AgentSubmissionPort for ConversationCoordinator {
             return Ok(None);
         };
 
-        self.restore_session(&binding.session_storage_dir(), session_id)
+        self.restore_session_from_storage_path(&binding.session_storage_dir(), session_id)
             .await
             .map(|session| Some(session.agent_type))
             .map_err(|error| {

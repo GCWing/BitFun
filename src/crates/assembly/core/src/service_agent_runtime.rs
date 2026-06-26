@@ -399,7 +399,7 @@ async fn resolve_session_model_id(session_id: &str) -> Option<String> {
     let session_storage_dir =
         CoreServiceAgentRuntime::resolve_session_storage_dir(session_id).await?;
     coordinator
-        .restore_session(&session_storage_dir, session_id)
+        .restore_session_from_storage_path(&session_storage_dir, session_id)
         .await
         .ok()
         .and_then(|session| normalize_remote_session_model_id(session.config.model_id.clone()))
@@ -686,7 +686,7 @@ impl CoreServiceAgentRuntime {
                 ));
             };
             coordinator
-                .restore_session(&session_storage_dir, session_id)
+                .restore_session_from_storage_path(&session_storage_dir, session_id)
                 .await
                 .map_err(|e| format!("Failed to restore session: {e}"))?;
         }
@@ -1022,16 +1022,28 @@ impl RemoteDialogRuntimeHost for CoreRemoteDialogRuntimeHost<'_> {
     async fn restore_remote_session(
         &self,
         session_id: &str,
-        workspace_path: &str,
+        workspace: RemoteDialogWorkspaceBinding,
     ) -> Result<(), String> {
-        let restore_path = CoreServiceAgentRuntime::resolve_session_storage_dir(session_id)
-            .await
-            .unwrap_or_else(|| std::path::PathBuf::from(workspace_path));
-        self.coordinator
-            .restore_session(&restore_path, session_id)
-            .await
-            .map(|_| ())
-            .map_err(|e| e.to_string())
+        if let Some(session_storage_dir) =
+            CoreServiceAgentRuntime::resolve_session_storage_dir(session_id).await
+        {
+            self.coordinator
+                .restore_session_from_storage_path(&session_storage_dir, session_id)
+                .await
+        } else {
+            self.coordinator
+                .restore_session_for_workspace(
+                    SessionStoragePathRequest {
+                        workspace_path: std::path::PathBuf::from(workspace.workspace_path),
+                        remote_connection_id: workspace.remote_connection_id,
+                        remote_ssh_host: workspace.remote_ssh_host,
+                    },
+                    session_id,
+                )
+                .await
+        }
+        .map(|_| ())
+        .map_err(|e| e.to_string())
     }
 
     fn prewarm_remote_terminal(&self, request: RemoteTerminalPrewarmRequest) {
@@ -1271,7 +1283,7 @@ impl RemoteSessionRuntimeHost for CoreRemoteSessionRuntimeHost {
             ));
         };
         self.coordinator
-            .restore_session(&session_storage_dir, session_id)
+            .restore_session_from_storage_path(&session_storage_dir, session_id)
             .await
             .map(|_| ())
             .map_err(|error| format!("Failed to restore session: {error}"))
@@ -1406,7 +1418,7 @@ impl RemoteCancelRuntimeHost for CoreRemoteCancelRuntimeHost {
             .await
             .unwrap_or_else(|| std::path::PathBuf::from(restore_path_hint));
         self.coordinator
-            .restore_session(&restore_path, session_id)
+            .restore_session_from_storage_path(&restore_path, session_id)
             .await
             .map(|_| ())
             .map_err(|error| error.to_string())
