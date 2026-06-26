@@ -159,6 +159,9 @@
 | 会话菜单按钮 | `nav-session-menu-btn` | 打开行操作菜单。配合 `data-session-id` 使用。 |
 | 会话菜单 | `nav-session-menu` | 单个会话的 portal 菜单。配合 `data-session-id` 使用。 |
 | 会话重命名项 | `nav-session-menu-rename` | 开始重命名会话。 |
+| 会话复制 ID 项 | `nav-session-menu-copy-id` | 复制会话 ID。配合 `data-session-id` 使用。 |
+| 会话定时任务项 | `nav-session-menu-scheduled-jobs` | 打开该会话的定时任务。配合 `data-session-id` 使用。 |
+| 会话归档项 | `nav-session-menu-archive` | 归档会话。配合 `data-session-id` 使用。 |
 | 会话删除项 | `nav-session-menu-delete` | 删除会话。 |
 | 会话列表展开按钮 | `nav-session-list-toggle` | 展开/折叠长会话列表。 |
 
