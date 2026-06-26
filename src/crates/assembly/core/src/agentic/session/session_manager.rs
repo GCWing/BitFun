@@ -507,7 +507,12 @@ impl SessionManager {
 
     /// Resolve the effective storage path for a session by ID.
     /// For remote workspaces, maps the remote path to a local session storage path.
-    async fn effective_session_storage_path(&self, session_id: &str) -> Option<PathBuf> {
+    /// For `/cd`-switched sessions, anchors to the original workspace via
+    /// `config.storage_workspace_path` rather than the live `workspace_path`.
+    pub(crate) async fn effective_session_workspace_path(
+        &self,
+        session_id: &str,
+    ) -> Option<PathBuf> {
         let config = self.sessions.get(session_id)?.config.clone();
         self.effective_storage_path_for_config(&config).await
     }
@@ -850,7 +855,7 @@ impl SessionManager {
             return;
         }
 
-        let Some(workspace_path) = self.effective_session_storage_path(session_id).await else {
+        let Some(workspace_path) = self.effective_session_workspace_path(session_id).await else {
             debug!(
                 "Skipping context snapshot persistence because workspace path is unavailable: session_id={}, turn_index={}, reason={}",
                 session_id, turn_index, reason
@@ -898,7 +903,7 @@ impl SessionManager {
         }
 
         let cache = if self.should_persist_session_id(session_id) {
-            match self.effective_session_storage_path(session_id).await {
+            match self.effective_session_workspace_path(session_id).await {
                 Some(workspace_path) => {
                     match self
                         .load_prompt_cache_from_persistence(&workspace_path, session_id)
@@ -974,7 +979,7 @@ impl SessionManager {
             return;
         }
 
-        let Some(workspace_path) = self.effective_session_storage_path(session_id).await else {
+        let Some(workspace_path) = self.effective_session_workspace_path(session_id).await else {
             debug!(
                 "Skipping prompt cache persistence because workspace path is unavailable: session_id={}, reason={}",
                 session_id, reason
@@ -1511,7 +1516,7 @@ impl SessionManager {
             return None;
         }
 
-        let workspace_path = self.effective_session_storage_path(session_id).await?;
+        let workspace_path = self.effective_session_workspace_path(session_id).await?;
         match self
             .load_turn_skill_agent_snapshot_from_persistence(
                 &workspace_path,
@@ -1560,7 +1565,7 @@ impl SessionManager {
             return cached_snapshot;
         }
 
-        let workspace_path = self.effective_session_storage_path(session_id).await?;
+        let workspace_path = self.effective_session_workspace_path(session_id).await?;
         let scan_floor_exclusive = cached_snapshot.as_ref().map(|snapshot| snapshot.0);
         for index in (0..=turn_index).rev() {
             if scan_floor_exclusive.is_some_and(|floor| index <= floor) {
@@ -1607,7 +1612,7 @@ impl SessionManager {
             return;
         }
 
-        let Some(workspace_path) = self.effective_session_storage_path(session_id).await else {
+        let Some(workspace_path) = self.effective_session_workspace_path(session_id).await else {
             debug!(
                 "Skipping turn skill-agent snapshot persistence because workspace path is unavailable: session_id={}, turn_index={}",
                 session_id, turn_index
@@ -1644,7 +1649,7 @@ impl SessionManager {
             return;
         }
 
-        let Some(workspace_path) = self.effective_session_storage_path(session_id).await else {
+        let Some(workspace_path) = self.effective_session_workspace_path(session_id).await else {
             debug!(
                 "Skipping first-turn skill-agent baseline recovery persistence because workspace path is unavailable: session_id={}",
                 session_id
@@ -1691,7 +1696,7 @@ impl SessionManager {
             return;
         }
 
-        let Some(workspace_path) = self.effective_session_storage_path(session_id).await else {
+        let Some(workspace_path) = self.effective_session_workspace_path(session_id).await else {
             debug!(
                 "Skipping listing reminder baseline override persistence because workspace path is unavailable: session_id={}",
                 session_id
@@ -1732,7 +1737,7 @@ impl SessionManager {
             return None;
         }
 
-        let workspace_path = self.effective_session_storage_path(session_id).await?;
+        let workspace_path = self.effective_session_workspace_path(session_id).await?;
         let snapshot = match self
             .persistence_manager
             .load_skill_agent_baseline_override_snapshot(&workspace_path, session_id)
@@ -2049,7 +2054,7 @@ impl SessionManager {
         session_id: &str,
         new_state: SessionState,
     ) -> BitFunResult<()> {
-        let effective_path = self.effective_session_storage_path(session_id).await;
+        let effective_path = self.effective_session_workspace_path(session_id).await;
 
         // IMPORTANT: keep the DashMap guard scope short -- do NOT hold it across .await.
         // Collect the data needed for persistence, then release the guard before doing I/O.
@@ -2093,7 +2098,7 @@ impl SessionManager {
         expected_turn_id: &str,
         new_state: SessionState,
     ) -> BitFunResult<bool> {
-        let effective_path = self.effective_session_storage_path(session_id).await;
+        let effective_path = self.effective_session_workspace_path(session_id).await;
 
         let should_persist = if let Some(mut session) = self.sessions.get_mut(session_id) {
             let owns_processing_turn = matches!(
@@ -2143,7 +2148,7 @@ impl SessionManager {
     /// Update session title (in-memory + persistence)
     pub async fn update_session_title(&self, session_id: &str, title: &str) -> BitFunResult<()> {
         let normalized_title = Self::normalize_session_title_input(title)?;
-        let workspace_path = self.effective_session_storage_path(session_id).await;
+        let workspace_path = self.effective_session_workspace_path(session_id).await;
 
         {
             let Some(mut session) = self.sessions.get_mut(session_id) else {
@@ -2234,7 +2239,7 @@ impl SessionManager {
         }
 
         if self.should_persist_session_id(session_id) {
-            let effective_path = self.effective_session_storage_path(session_id).await;
+            let effective_path = self.effective_session_workspace_path(session_id).await;
             let session_snapshot = self.sessions.get(session_id).map(|s| s.clone());
             // Ref guard released -- DashMap shard lock is free.
             if let (Some(workspace_path), Some(session)) = (effective_path, session_snapshot) {
@@ -2247,6 +2252,84 @@ impl SessionManager {
         debug!(
             "Session agent type updated: session_id={}, agent_type={}",
             session_id, agent_type
+        );
+
+        Ok(())
+    }
+
+    /// Update the session's configured workspace path in memory and persist it.
+    ///
+    /// This re-points the *logical* working directory used by subsequent dialog
+    /// turns (tool execution cwd, workspace binding) without altering:
+    ///
+    /// - The session's existing message history or turn ids
+    /// - The on-disk storage location of the session file and its sidecar
+    ///   artifacts (turn snapshots, prompt cache), which remain anchored at
+    ///   `config.storage_workspace_path` so the session stays discoverable
+    ///   from its original workspace listing
+    /// - `session_workspace_index`, which keeps pointing at the original
+    ///   storage path for the same reason
+    ///
+    /// On the FIRST invocation for a given session, the existing
+    /// `config.workspace_path` is copied into `config.storage_workspace_path`
+    /// to "freeze" the persistence anchor before the live cwd diverges.
+    /// Subsequent calls leave `storage_workspace_path` untouched.
+    ///
+    /// This matches the semantics of an interactive `/cd` switch — preserves
+    /// prompt-cache prefix and session id, and does not relocate the session
+    /// from a UI/listing perspective.
+    pub async fn update_session_workspace_path(
+        &self,
+        session_id: &str,
+        workspace_path: &str,
+    ) -> BitFunResult<()> {
+        if let Some(mut session) = self.sessions.get_mut(session_id) {
+            // Freeze the persistence anchor on first /cd.
+            //
+            // Only freeze when there's an existing non-empty `workspace_path` to
+            // anchor against. If the session was created without any workspace
+            // (rare — typically only synthetic/test sessions), there is nothing
+            // meaningful to preserve, and copying `None` would just make
+            // `effective_storage_workspace_path` fall through to the new live
+            // `workspace_path` anyway. Leaving `storage_workspace_path = None`
+            // keeps the fallback behavior consistent and avoids freezing a
+            // semantically-empty anchor.
+            if session.config.storage_workspace_path.is_none() {
+                if let Some(original) = session
+                    .config
+                    .workspace_path
+                    .as_ref()
+                    .filter(|path| !path.is_empty())
+                {
+                    session.config.storage_workspace_path = Some(original.clone());
+                }
+            }
+            session.config.workspace_path = Some(workspace_path.to_string());
+            session.updated_at = SystemTime::now();
+            session.last_activity_at = SystemTime::now();
+        } else {
+            return Err(BitFunError::NotFound(format!(
+                "Session not found: {}",
+                session_id
+            )));
+        }
+
+        // Persist via the (now-stable) storage anchor — resolved through
+        // `effective_session_workspace_path`, which prefers
+        // `storage_workspace_path` and falls back to `workspace_path`.
+        if self.should_persist_session_id(session_id) {
+            let storage_path = self.effective_session_workspace_path(session_id).await;
+            let session_snapshot = self.sessions.get(session_id).map(|s| s.clone());
+            if let (Some(storage_path), Some(session)) = (storage_path, session_snapshot) {
+                self.persistence_manager
+                    .save_session(&storage_path, &session)
+                    .await?;
+            }
+        }
+
+        debug!(
+            "Session workspace path updated: session_id={}, workspace_path={}",
+            session_id, workspace_path
         );
 
         Ok(())
@@ -2274,7 +2357,7 @@ impl SessionManager {
         }
 
         if self.should_persist_session_id(session_id) {
-            let effective_path = self.effective_session_storage_path(session_id).await;
+            let effective_path = self.effective_session_workspace_path(session_id).await;
             let session_snapshot = self.sessions.get(session_id).map(|s| s.clone());
             if let (Some(workspace_path), Some(session)) = (effective_path, session_snapshot) {
                 self.persistence_manager
@@ -2367,7 +2450,7 @@ impl SessionManager {
         }
 
         if self.should_persist_session_id(session_id) {
-            let effective_path = self.effective_session_storage_path(session_id).await;
+            let effective_path = self.effective_session_workspace_path(session_id).await;
             let session_snapshot = self.sessions.get(session_id).map(|s| s.clone());
             // Ref guard released -- DashMap shard lock is free.
             if let (Some(workspace_path), Some(session)) = (effective_path, session_snapshot) {
@@ -3553,7 +3636,7 @@ impl SessionManager {
             )));
         }
 
-        self.effective_session_storage_path(session_id)
+        self.effective_session_workspace_path(session_id)
             .await
             .ok_or_else(|| {
                 BitFunError::Validation(format!(
@@ -4040,7 +4123,7 @@ impl SessionManager {
         }
 
         let workspace_path = self
-            .effective_session_storage_path(session_id)
+            .effective_session_workspace_path(session_id)
             .await
             .ok_or_else(|| {
                 BitFunError::Validation(format!(
@@ -4152,7 +4235,7 @@ impl SessionManager {
         }
 
         let workspace_path = self
-            .effective_session_storage_path(session_id)
+            .effective_session_workspace_path(session_id)
             .await
             .ok_or_else(|| {
                 BitFunError::Validation(format!(
@@ -4214,7 +4297,7 @@ impl SessionManager {
         }
 
         let workspace_path = self
-            .effective_session_storage_path(session_id)
+            .effective_session_workspace_path(session_id)
             .await
             .ok_or_else(|| {
                 BitFunError::Validation(format!(
@@ -4280,7 +4363,7 @@ impl SessionManager {
         }
 
         let workspace_path = self
-            .effective_session_storage_path(session_id)
+            .effective_session_workspace_path(session_id)
             .await
             .ok_or_else(|| {
                 BitFunError::Validation(format!(
@@ -4344,7 +4427,7 @@ impl SessionManager {
         }
 
         let workspace_path = self
-            .effective_session_storage_path(session_id)
+            .effective_session_workspace_path(session_id)
             .await
             .ok_or_else(|| {
                 BitFunError::Validation(format!(
@@ -4400,7 +4483,7 @@ impl SessionManager {
     /// canonical turn history instead of the runtime context cache.
     pub async fn get_messages(&self, session_id: &str) -> BitFunResult<Vec<Message>> {
         if self.config.enable_persistence {
-            if let Some(workspace_path) = self.effective_session_storage_path(session_id).await {
+            if let Some(workspace_path) = self.effective_session_workspace_path(session_id).await {
                 let messages = self
                     .rebuild_messages_from_turns(&workspace_path, session_id)
                     .await?;
@@ -4483,7 +4566,7 @@ impl SessionManager {
         session_id: &str,
         compression_state: CompressionState,
     ) -> BitFunResult<()> {
-        let effective_path = self.effective_session_storage_path(session_id).await;
+        let effective_path = self.effective_session_workspace_path(session_id).await;
 
         // IMPORTANT: keep the DashMap guard scope short -- do NOT hold it across .await.
         let session_snapshot = if let Some(mut session) = self.sessions.get_mut(session_id) {
