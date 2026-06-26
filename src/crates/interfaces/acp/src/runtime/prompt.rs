@@ -51,6 +51,8 @@ impl BitfunAcpRuntime {
                     None,
                     acp_session.mode_id.clone(),
                     Some(acp_session.cwd.clone()),
+                    None,
+                    None,
                     DialogSubmissionPolicy::for_source(DialogTriggerSource::Cli),
                     Some(acp_user_message_metadata()),
                 )
@@ -67,6 +69,8 @@ impl BitfunAcpRuntime {
                     None,
                     acp_session.mode_id.clone(),
                     Some(acp_session.cwd.clone()),
+                    None,
+                    None,
                     DialogSubmissionPolicy::for_source(DialogTriggerSource::Cli),
                     Some(acp_user_message_metadata()),
                 )

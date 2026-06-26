@@ -24,8 +24,8 @@ use bitfun_agent_runtime::session_control::{
 };
 use bitfun_runtime_ports::{
     AgentSessionCreateRequest, AgentSessionDeleteRequest, AgentSessionListRequest,
-    AgentSessionSummary, AgentSessionWorkspaceRequest, AgentSubmissionSource,
-    AgentTurnCancellationRequest,
+    AgentSessionSummary, AgentSessionWorkspaceBinding, AgentSessionWorkspaceRequest,
+    AgentSubmissionSource, AgentTurnCancellationRequest,
 };
 use serde_json::{json, Value};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -34,6 +34,13 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 pub struct SessionControlTool;
 
 const CANCEL_WAIT_TIMEOUT: Duration = Duration::from_secs(3);
+
+#[derive(Debug, Clone)]
+struct SessionControlWorkspaceTarget {
+    display_workspace: String,
+    remote_connection_id: Option<String>,
+    remote_ssh_host: Option<String>,
+}
 
 impl Default for SessionControlTool {
     fn default() -> Self {
@@ -88,14 +95,14 @@ impl SessionControlTool {
         session_id: Option<&str>,
         context: &ToolUseContext,
         runtime: &AgentRuntime,
-    ) -> BitFunResult<String> {
+    ) -> BitFunResult<SessionControlWorkspaceTarget> {
         match action {
             SessionControlAction::Cancel | SessionControlAction::Delete => {
                 let session_id = session_id.ok_or_else(|| {
                     BitFunError::tool(format!("session_id is required for {}", action.as_str()))
                 })?;
-                if let Some(resolved) = runtime
-                    .resolve_session_workspace_path(AgentSessionWorkspaceRequest {
+                if let Some(binding) = runtime
+                    .resolve_session_workspace_binding(AgentSessionWorkspaceRequest {
                         session_id: session_id.to_string(),
                     })
                     .await
@@ -103,22 +110,47 @@ impl SessionControlTool {
                         BitFunError::tool(CoreServiceAgentRuntime::runtime_error_message(error))
                     })?
                 {
-                    return Ok(resolved);
+                    return Ok(Self::workspace_target_from_binding(binding));
                 }
                 Err(BitFunError::NotFound(format!(
                     "Workspace for session '{}' could not be resolved",
                     session_id
                 )))
             }
-            SessionControlAction::Create | SessionControlAction::List => context
-                .workspace_root()
-                .map(|path| normalize_path(path.to_string_lossy().as_ref()))
-                .ok_or_else(|| {
+            SessionControlAction::Create | SessionControlAction::List => {
+                let workspace = context.workspace.as_ref().ok_or_else(|| {
                     BitFunError::tool(format!(
                         "workspace is required for {} when the current workspace is unavailable",
                         action.as_str()
                     ))
-                }),
+                })?;
+                Ok(Self::workspace_target_from_context(workspace))
+            }
+        }
+    }
+
+    fn workspace_target_from_context(
+        workspace: &crate::agentic::WorkspaceBinding,
+    ) -> SessionControlWorkspaceTarget {
+        SessionControlWorkspaceTarget {
+            display_workspace: normalize_path(&workspace.root_path_string()),
+            remote_connection_id: workspace.connection_id().map(ToOwned::to_owned),
+            remote_ssh_host: if workspace.is_remote() {
+                Some(workspace.session_identity.hostname.clone())
+                    .filter(|value| !value.trim().is_empty())
+            } else {
+                None
+            },
+        }
+    }
+
+    fn workspace_target_from_binding(
+        binding: AgentSessionWorkspaceBinding,
+    ) -> SessionControlWorkspaceTarget {
+        SessionControlWorkspaceTarget {
+            display_workspace: binding.workspace_path,
+            remote_connection_id: binding.remote_connection_id,
+            remote_ssh_host: binding.remote_ssh_host,
         }
     }
 
@@ -141,12 +173,14 @@ impl SessionControlTool {
     async fn ensure_session_exists(
         &self,
         runtime: &AgentRuntime,
-        workspace: &str,
+        workspace: &SessionControlWorkspaceTarget,
         session_id: &str,
     ) -> BitFunResult<()> {
         let existing_sessions = runtime
             .list_sessions(AgentSessionListRequest {
-                workspace_path: workspace.to_string(),
+                workspace_path: workspace.display_workspace.clone(),
+                remote_connection_id: workspace.remote_connection_id.clone(),
+                remote_ssh_host: workspace.remote_ssh_host.clone(),
             })
             .await
             .map_err(|error| {
@@ -160,7 +194,7 @@ impl SessionControlTool {
         } else {
             Err(BitFunError::NotFound(format!(
                 "Session '{}' not found in workspace '{}'",
-                session_id, workspace
+                session_id, workspace.display_workspace
             )))
         }
     }
@@ -344,7 +378,9 @@ Arguments:
                     .create_session(AgentSessionCreateRequest {
                         session_name,
                         agent_type,
-                        workspace_path: Some(workspace.clone()),
+                        workspace_path: Some(workspace.display_workspace.clone()),
+                        remote_connection_id: workspace.remote_connection_id.clone(),
+                        remote_ssh_host: workspace.remote_ssh_host.clone(),
                         metadata,
                     })
                     .await
@@ -356,7 +392,7 @@ Arguments:
                 let created_agent_type = session.agent_type.clone();
                 let result_for_assistant = session_control_created_result_message(
                     &created_session_id,
-                    &workspace,
+                    &workspace.display_workspace,
                     &created_agent_type,
                 );
 
@@ -364,7 +400,7 @@ Arguments:
                     data: json!({
                         "success": true,
                         "action": "create",
-                        "workspace": workspace.clone(),
+                        "workspace": workspace.display_workspace.clone(),
                         "session": {
                             "session_id": created_session_id,
                             "session_name": created_session_name,
@@ -388,7 +424,9 @@ Arguments:
                         &runtime,
                     )
                     .await?;
-                if self.current_workspace_session(context, &workspace) == Some(session_id) {
+                if self.current_workspace_session(context, &workspace.display_workspace)
+                    == Some(session_id)
+                {
                     return Err(BitFunError::tool(
                         "cannot cancel the current session from SessionControl".to_string(),
                     ));
@@ -440,7 +478,7 @@ Arguments:
                 let status = session_control_cancel_status(cancelled_turn_id.as_deref());
                 let result_for_assistant = session_control_cancel_result_message(
                     session_id,
-                    &workspace,
+                    &workspace.display_workspace,
                     cancelled_turn_id.as_deref(),
                 );
 
@@ -448,7 +486,7 @@ Arguments:
                     data: json!({
                         "success": true,
                         "action": "cancel",
-                        "workspace": workspace.clone(),
+                        "workspace": workspace.display_workspace.clone(),
                         "session_id": session_id,
                         "had_active_turn": had_active_turn,
                         "cancelled_turn_id": cancelled_turn_id,
@@ -471,7 +509,9 @@ Arguments:
                         &runtime,
                     )
                     .await?;
-                if self.current_workspace_session(context, &workspace) == Some(session_id) {
+                if self.current_workspace_session(context, &workspace.display_workspace)
+                    == Some(session_id)
+                {
                     return Err(BitFunError::tool(
                         "cannot delete the current session from SessionControl".to_string(),
                     ));
@@ -482,8 +522,10 @@ Arguments:
 
                 runtime
                     .delete_session(AgentSessionDeleteRequest {
-                        workspace_path: workspace.clone(),
+                        workspace_path: workspace.display_workspace.clone(),
                         session_id: session_id.to_string(),
+                        remote_connection_id: workspace.remote_connection_id.clone(),
+                        remote_ssh_host: workspace.remote_ssh_host.clone(),
                     })
                     .await
                     .map_err(|error| {
@@ -494,11 +536,12 @@ Arguments:
                     data: json!({
                         "success": true,
                         "action": "delete",
-                        "workspace": workspace.clone(),
+                        "workspace": workspace.display_workspace.clone(),
                         "session_id": session_id,
                     }),
                     result_for_assistant: Some(session_control_deleted_result_message(
-                        session_id, &workspace,
+                        session_id,
+                        &workspace.display_workspace,
                     )),
                     image_attachments: None,
                 }])
@@ -514,21 +557,27 @@ Arguments:
                     .await?;
                 let sessions = runtime
                     .list_sessions(AgentSessionListRequest {
-                        workspace_path: workspace.clone(),
+                        workspace_path: workspace.display_workspace.clone(),
+                        remote_connection_id: workspace.remote_connection_id.clone(),
+                        remote_ssh_host: workspace.remote_ssh_host.clone(),
                     })
                     .await
                     .map_err(|error| {
                         BitFunError::tool(CoreServiceAgentRuntime::runtime_error_message(error))
                     })?;
-                let current_session_id = self.current_workspace_session(context, &workspace);
-                let result_for_assistant =
-                    self.build_list_result_for_assistant(&workspace, &sessions, current_session_id);
+                let current_session_id =
+                    self.current_workspace_session(context, &workspace.display_workspace);
+                let result_for_assistant = self.build_list_result_for_assistant(
+                    &workspace.display_workspace,
+                    &sessions,
+                    current_session_id,
+                );
 
                 Ok(vec![ToolResult::Result {
                     data: json!({
                         "success": true,
                         "action": "list",
-                        "workspace": workspace.clone(),
+                        "workspace": workspace.display_workspace.clone(),
                         "current_session_id": current_session_id,
                         "count": sessions.len(),
                         "sessions": sessions,

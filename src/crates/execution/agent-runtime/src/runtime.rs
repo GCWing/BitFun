@@ -13,10 +13,11 @@ use bitfun_runtime_ports::{
     AgentBackgroundResultRequest, AgentDialogTurnPort, AgentDialogTurnRequest,
     AgentInputAttachment, AgentLifecycleDeliveryPort, AgentSessionCreateRequest,
     AgentSessionCreateResult, AgentSessionDeleteRequest, AgentSessionListRequest,
-    AgentSessionManagementPort, AgentSessionSummary, AgentSessionWorkspaceRequest,
-    AgentSubmissionPort, AgentSubmissionRequest, AgentSubmissionResult, AgentSubmissionSource,
-    AgentThreadGoalDeliveryRequest, AgentTurnCancellationPort, AgentTurnCancellationRequest,
-    AgentTurnCancellationResult, DialogSubmitOutcome, PortError, RuntimeEventEnvelope,
+    AgentSessionManagementPort, AgentSessionSummary, AgentSessionWorkspaceBinding,
+    AgentSessionWorkspaceRequest, AgentSubmissionPort, AgentSubmissionRequest,
+    AgentSubmissionResult, AgentSubmissionSource, AgentThreadGoalDeliveryRequest,
+    AgentTurnCancellationPort, AgentTurnCancellationRequest, AgentTurnCancellationResult,
+    DialogSubmitOutcome, PortError, RuntimeEventEnvelope,
 };
 use bitfun_runtime_services::RuntimeServices;
 
@@ -458,6 +459,20 @@ impl AgentRuntime {
             .map_err(RuntimeError::from)
     }
 
+    pub async fn resolve_session_workspace_binding(
+        &self,
+        request: AgentSessionWorkspaceRequest,
+    ) -> Result<Option<AgentSessionWorkspaceBinding>, RuntimeError> {
+        let session_management = self
+            .session_management
+            .as_ref()
+            .ok_or(RuntimeError::MissingSessionManagementPort)?;
+        session_management
+            .resolve_session_workspace_binding(request)
+            .await
+            .map_err(RuntimeError::from)
+    }
+
     pub async fn submit_turn(
         &self,
         request: AgentSubmissionRequest,
@@ -569,6 +584,8 @@ impl AgentRuntime {
                         session_name,
                         agent_type,
                         workspace_path,
+                        remote_connection_id: None,
+                        remote_ssh_host: None,
                         metadata,
                     })
                     .await?;
@@ -621,6 +638,7 @@ mod tests {
         listed_sessions: Mutex<Vec<AgentSessionListRequest>>,
         deleted_sessions: Mutex<Vec<AgentSessionDeleteRequest>>,
         workspace_requests: Mutex<Vec<AgentSessionWorkspaceRequest>>,
+        workspace_binding_requests: Mutex<Vec<AgentSessionWorkspaceRequest>>,
         resolved_agent_type: Option<String>,
     }
 
@@ -651,6 +669,21 @@ mod tests {
         ) -> PortResult<Option<String>> {
             self.workspace_requests.lock().unwrap().push(request);
             Ok(Some("/workspace/project".to_string()))
+        }
+
+        async fn resolve_session_workspace_binding(
+            &self,
+            request: AgentSessionWorkspaceRequest,
+        ) -> PortResult<Option<AgentSessionWorkspaceBinding>> {
+            self.workspace_binding_requests
+                .lock()
+                .unwrap()
+                .push(request);
+            Ok(Some(AgentSessionWorkspaceBinding {
+                workspace_path: "/workspace/project".to_string(),
+                remote_connection_id: Some("conn-1".to_string()),
+                remote_ssh_host: Some("host-1".to_string()),
+            }))
         }
     }
 
@@ -889,6 +922,8 @@ mod tests {
         let err = runtime
             .list_sessions(AgentSessionListRequest {
                 workspace_path: "/workspace/project".to_string(),
+                remote_connection_id: None,
+                remote_ssh_host: None,
             })
             .await
             .unwrap_err();
@@ -908,6 +943,8 @@ mod tests {
         let sessions = runtime
             .list_sessions(AgentSessionListRequest {
                 workspace_path: "/workspace/project".to_string(),
+                remote_connection_id: None,
+                remote_ssh_host: None,
             })
             .await
             .expect("list sessions");
@@ -915,6 +952,8 @@ mod tests {
             .delete_session(AgentSessionDeleteRequest {
                 workspace_path: "/workspace/project".to_string(),
                 session_id: "session_1".to_string(),
+                remote_connection_id: None,
+                remote_ssh_host: None,
             })
             .await
             .expect("delete session");
@@ -924,12 +963,25 @@ mod tests {
             })
             .await
             .expect("resolve workspace");
+        let workspace_binding = runtime
+            .resolve_session_workspace_binding(AgentSessionWorkspaceRequest {
+                session_id: "session_1".to_string(),
+            })
+            .await
+            .expect("resolve workspace binding")
+            .expect("workspace binding");
 
         assert_eq!(sessions[0].session_id, "session_1");
         assert_eq!(workspace_path.as_deref(), Some("/workspace/project"));
+        assert_eq!(workspace_binding.workspace_path, "/workspace/project");
+        assert_eq!(
+            workspace_binding.remote_connection_id.as_deref(),
+            Some("conn-1")
+        );
         assert_eq!(ports.listed_sessions.lock().unwrap().len(), 1);
         assert_eq!(ports.deleted_sessions.lock().unwrap().len(), 1);
         assert_eq!(ports.workspace_requests.lock().unwrap().len(), 1);
+        assert_eq!(ports.workspace_binding_requests.lock().unwrap().len(), 1);
     }
 
     #[tokio::test]
@@ -948,6 +1000,8 @@ mod tests {
                 turn_id: Some("turn_1".to_string()),
                 agent_type: "agentic".to_string(),
                 workspace_path: Some("/workspace/project".to_string()),
+                remote_connection_id: None,
+                remote_ssh_host: None,
                 policy: DialogSubmissionPolicy::new(
                     AgentSubmissionSource::RemoteRelay,
                     DialogQueuePriority::Normal,
@@ -1001,6 +1055,8 @@ mod tests {
                 turn_id: Some("turn_1".to_string()),
                 agent_type: "agentic".to_string(),
                 workspace_path: Some("/workspace/project".to_string()),
+                remote_connection_id: None,
+                remote_ssh_host: None,
                 policy: DialogSubmissionPolicy::new(
                     AgentSubmissionSource::RemoteRelay,
                     DialogQueuePriority::High,

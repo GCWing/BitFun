@@ -292,6 +292,8 @@ impl<T> DialogTurnQueue<T> {
 pub struct AgentSessionReplyPlan {
     pub target_session_id: String,
     pub target_workspace_path: String,
+    pub target_remote_connection_id: Option<String>,
+    pub target_remote_ssh_host: Option<String>,
     pub user_input: String,
     pub reminder_text: String,
 }
@@ -828,6 +830,8 @@ pub fn resolve_agent_session_reply_action(
     AgentSessionReplyAction::Forward(AgentSessionReplyPlan {
         target_session_id: reply_route.source_session_id.clone(),
         target_workspace_path: reply_route.source_workspace_path.clone(),
+        target_remote_connection_id: reply_route.source_remote_connection_id.clone(),
+        target_remote_ssh_host: reply_route.source_remote_ssh_host.clone(),
         user_input: outcome.reply_text(),
         reminder_text: format!(
             "This message is an automated reply to a previous SessionMessage call, not a human user message.\n\

@@ -251,19 +251,21 @@ Examples:
         let coordinator = get_global_coordinator()
             .ok_or_else(|| BitFunError::tool("coordinator not initialized".to_string()))?;
         let workspace = coordinator
-            .resolve_session_workspace_path(&session_id)
+            .get_session_manager()
+            .resolve_session_workspace_binding(&session_id)
             .await
-            .map(|path| path.to_string_lossy().to_string())
             .ok_or_else(|| {
                 BitFunError::NotFound(format!(
                     "Workspace for session '{}' could not be resolved",
                     session_id
                 ))
             })?;
+        let display_workspace = workspace.root_path_string();
+        let session_storage_path = workspace.session_storage_path();
         let manager = PersistenceManager::new(Arc::new(PathManager::new()?))?;
         let transcript = manager
             .export_session_transcript(
-                std::path::Path::new(&workspace),
+                &session_storage_path,
                 &session_id,
                 &SessionTranscriptExportOptions {
                     tools: params.tools.unwrap_or(false),
@@ -277,7 +279,7 @@ Examples:
         Ok(vec![ToolResult::Result {
             data: json!({
                 "success": true,
-                "workspace": workspace,
+                "workspace": display_workspace,
                 "transcript": transcript,
             }),
             result_for_assistant: Some(format!(
