@@ -65,7 +65,9 @@ import {
   DEFAULT_CHAT_INPUT_MODE_CONFIG_PATH,
   normalizeUserDefaultChatInputModeId,
   resolveAvailableChatInputMode,
+  resolveChatInputModePolicy,
   resolveSessionAssistantWorkspace,
+  resolveSwitchableChatInputModes,
 } from '../utils/chatInputMode';
 import { useSceneStore } from '@/app/stores/sceneStore';
 import type { SceneTabId } from '@/app/components/SceneBar/types';
@@ -657,16 +659,21 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const activeSessionMode = effectiveTargetSessionId
     ? acpTargetAgentType || flowChatState.sessions.get(effectiveTargetSessionId)?.mode
     : undefined;
-  const canSwitchModes = !isAssistantWorkspace && currentMode !== 'Cowork' && !isAcpTargetSession;
+  const chatInputModePolicy = useMemo(
+    () => resolveChatInputModePolicy({
+      currentMode,
+      isAssistantWorkspace,
+      sessionMode: activeSessionMode,
+      isAcpTargetSession,
+    }),
+    [activeSessionMode, currentMode, isAcpTargetSession, isAssistantWorkspace],
+  );
+  const canSwitchModes = chatInputModePolicy.canSwitchModes;
 
-  // Session-level mode policy: Cowork sessions are fixed; code sessions should not switch into Cowork.
+  // Session-level mode policy: fixed collaboration modes are not selectable boosts.
   const switchableModes = useMemo(
-    () =>
-      modeState.available.filter(mode =>
-        mode.id !== 'Cowork' &&
-        (isAssistantWorkspace || mode.id !== 'Claw')
-      ),
-    [isAssistantWorkspace, modeState.available]
+    () => resolveSwitchableChatInputModes(modeState.available),
+    [modeState.available]
   );
 
   // Stable refs for Shift+Tab mode cycling (avoids adding deps to handleKeyDown)

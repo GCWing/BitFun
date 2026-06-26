@@ -3,7 +3,9 @@ import { describe, expect, it } from 'vitest';
 import {
   normalizeUserDefaultChatInputModeId,
   resolveAvailableChatInputMode,
+  resolveChatInputModePolicy,
   resolveSessionAssistantWorkspace,
+  resolveSwitchableChatInputModes,
   resolveWorkspaceChatInputMode,
 } from './chatInputMode';
 import { WorkspaceKind, type WorkspaceInfo, WorkspaceType } from '@/shared/types';
@@ -90,6 +92,117 @@ describe('resolveWorkspaceChatInputMode', () => {
         sessionMode: undefined,
       })
     ).toBe('agentic');
+  });
+
+  it('keeps Claw sessions synchronized even before workspace state identifies the assistant workspace', () => {
+    expect(
+      resolveWorkspaceChatInputMode({
+        currentMode: 'agentic',
+        isAssistantWorkspace: false,
+        sessionMode: 'Claw',
+      })
+    ).toBe('Claw');
+  });
+});
+
+describe('resolveChatInputModePolicy', () => {
+  it('allows mode switching for normal code sessions', () => {
+    expect(
+      resolveChatInputModePolicy({
+        currentMode: 'agentic',
+        isAssistantWorkspace: false,
+        sessionMode: 'agentic',
+      }),
+    ).toEqual({
+      canSwitchModes: true,
+      fixedModeId: null,
+      fixedReason: null,
+    });
+  });
+
+  it('fixes assistant workspaces to Claw', () => {
+    expect(
+      resolveChatInputModePolicy({
+        currentMode: 'agentic',
+        isAssistantWorkspace: true,
+        sessionMode: 'agentic',
+      }),
+    ).toEqual({
+      canSwitchModes: false,
+      fixedModeId: 'Claw',
+      fixedReason: 'assistant-workspace',
+    });
+  });
+
+  it('fixes Claw sessions even when workspace resolution is temporarily stale', () => {
+    expect(
+      resolveChatInputModePolicy({
+        currentMode: 'agentic',
+        isAssistantWorkspace: false,
+        sessionMode: 'claw',
+      }),
+    ).toEqual({
+      canSwitchModes: false,
+      fixedModeId: 'Claw',
+      fixedReason: 'session-mode',
+    });
+  });
+
+  it('fixes Cowork sessions from current or session mode', () => {
+    expect(
+      resolveChatInputModePolicy({
+        currentMode: 'Cowork',
+        isAssistantWorkspace: false,
+        sessionMode: 'agentic',
+      }),
+    ).toMatchObject({
+      canSwitchModes: false,
+      fixedModeId: 'Cowork',
+      fixedReason: 'current-mode',
+    });
+
+    expect(
+      resolveChatInputModePolicy({
+        currentMode: 'agentic',
+        isAssistantWorkspace: false,
+        sessionMode: 'cowork',
+      }),
+    ).toMatchObject({
+      canSwitchModes: false,
+      fixedModeId: 'Cowork',
+      fixedReason: 'session-mode',
+    });
+  });
+
+  it('fixes ACP sessions without treating them as a product mode', () => {
+    expect(
+      resolveChatInputModePolicy({
+        currentMode: 'agentic',
+        isAssistantWorkspace: false,
+        sessionMode: 'acp:example',
+        isAcpTargetSession: true,
+      }),
+    ).toEqual({
+      canSwitchModes: false,
+      fixedModeId: null,
+      fixedReason: 'acp-session',
+    });
+  });
+});
+
+describe('resolveSwitchableChatInputModes', () => {
+  it('removes fixed collaboration modes from boost selection', () => {
+    expect(
+      resolveSwitchableChatInputModes([
+        { id: 'agentic' },
+        { id: 'Cowork' },
+        { id: 'Claw' },
+        { id: 'PlannerPlus' },
+      ]),
+    ).toEqual([
+      { id: 'agentic' },
+      { id: 'PlannerPlus' },
+    ]);
   });
 });
 
@@ -195,6 +308,17 @@ describe('resolveAvailableChatInputMode', () => {
         isAssistantWorkspace: true,
         sessionMode: 'PlannerPlus',
         availableModeIds: ['agentic', 'Claw'],
+      }),
+    ).toBe('Claw');
+  });
+
+  it('keeps Claw sessions pinned even before assistant workspace resolution catches up', () => {
+    expect(
+      resolveAvailableChatInputMode({
+        currentMode: 'agentic',
+        isAssistantWorkspace: false,
+        sessionMode: 'Claw',
+        availableModeIds: ['agentic', 'Claw', 'PlannerPlus'],
       }),
     ).toBe('Claw');
   });

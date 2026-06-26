@@ -2,10 +2,24 @@ import { WorkspaceKind, type WorkspaceInfo } from '@/shared/types';
 
 export const DEFAULT_CHAT_INPUT_MODE_CONFIG_PATH = 'app.flow_chat.default_mode_id';
 
+const FIXED_CHAT_INPUT_MODE_IDS = new Set(['cowork', 'claw']);
+
 type WorkspaceResolutionInfo = Pick<
   WorkspaceInfo,
   'id' | 'rootPath' | 'workspaceKind' | 'connectionId'
 >;
+
+export type ChatInputFixedModeReason =
+  | 'assistant-workspace'
+  | 'acp-session'
+  | 'current-mode'
+  | 'session-mode';
+
+export interface ChatInputModePolicy {
+  canSwitchModes: boolean;
+  fixedModeId: string | null;
+  fixedReason: ChatInputFixedModeReason | null;
+}
 
 function normalizeOptionalString(value: string | null | undefined): string | null {
   if (typeof value !== 'string') {
@@ -139,6 +153,76 @@ export function resolveSessionAssistantWorkspace(params: {
   return params.currentWorkspace?.workspaceKind === WorkspaceKind.Assistant;
 }
 
+function normalizeModeLookupId(value: string | null | undefined): string | null {
+  return normalizeOptionalString(value)?.toLowerCase() ?? null;
+}
+
+function canonicalFixedModeId(value: string | null | undefined): string | null {
+  switch (normalizeModeLookupId(value)) {
+    case 'cowork':
+      return 'Cowork';
+    case 'claw':
+      return 'Claw';
+    default:
+      return null;
+  }
+}
+
+export function resolveChatInputModePolicy(params: {
+  currentMode: string;
+  isAssistantWorkspace: boolean;
+  sessionMode?: string | null;
+  isAcpTargetSession?: boolean;
+}): ChatInputModePolicy {
+  if (params.isAcpTargetSession) {
+    return {
+      canSwitchModes: false,
+      fixedModeId: null,
+      fixedReason: 'acp-session',
+    };
+  }
+
+  if (params.isAssistantWorkspace) {
+    return {
+      canSwitchModes: false,
+      fixedModeId: 'Claw',
+      fixedReason: 'assistant-workspace',
+    };
+  }
+
+  const fixedSessionModeId = canonicalFixedModeId(params.sessionMode);
+  if (fixedSessionModeId) {
+    return {
+      canSwitchModes: false,
+      fixedModeId: fixedSessionModeId,
+      fixedReason: 'session-mode',
+    };
+  }
+
+  const fixedCurrentModeId = canonicalFixedModeId(params.currentMode);
+  if (fixedCurrentModeId) {
+    return {
+      canSwitchModes: false,
+      fixedModeId: fixedCurrentModeId,
+      fixedReason: 'current-mode',
+    };
+  }
+
+  return {
+    canSwitchModes: true,
+    fixedModeId: null,
+    fixedReason: null,
+  };
+}
+
+export function resolveSwitchableChatInputModes<TMode extends { id: string }>(
+  availableModes: Iterable<TMode>,
+): TMode[] {
+  return Array.from(availableModes).filter(
+    mode => !FIXED_CHAT_INPUT_MODE_IDS.has(normalizeModeLookupId(mode.id) ?? ''),
+  );
+}
+
 export function resolveWorkspaceChatInputMode(params: {
   currentMode: string;
   isAssistantWorkspace: boolean;
@@ -151,7 +235,7 @@ export function resolveWorkspaceChatInputMode(params: {
   }
 
   if (normalizedSessionMode?.toLowerCase() === 'claw') {
-    return null;
+    return params.currentMode === 'Claw' ? null : 'Claw';
   }
 
   if (normalizedSessionMode && normalizedSessionMode !== params.currentMode) {
