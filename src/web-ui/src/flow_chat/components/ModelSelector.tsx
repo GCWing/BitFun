@@ -14,7 +14,7 @@ import { useTranslation } from 'react-i18next';
 import { configManager } from '@/infrastructure/config/services/ConfigManager';
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
 import { ACPClientAPI, type AcpSessionOptions } from '@/infrastructure/api/service-api/ACPClientAPI';
-import { getProviderDisplayName } from '@/infrastructure/config/services/modelConfigs';
+import { getProviderDisplayName, getProviderTemplateId } from '@/infrastructure/config/services/modelConfigs';
 import { getEffectiveReasoningMode, isReasoningVisiblyEnabled } from '@/infrastructure/config/utils/reasoning';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import type { AIModelConfig, DefaultModelsConfig } from '@/infrastructure/config/types';
@@ -57,9 +57,20 @@ interface ModelInfo {
   modelName: string;
   providerName: string;
   provider: string;
+  providerId?: string;
   contextWindow?: number;
   enableThinking?: boolean;
   reasoningEffort?: string;
+}
+
+type ModelOptionKind = 'auto' | 'primary-alias' | 'fast-alias' | 'acp-model' | 'model';
+type ModelRole = 'auto' | 'primary' | 'fast' | 'normal';
+
+function getProviderLocatorId(
+  config: Partial<Pick<AIModelConfig, 'provider' | 'base_url'>> | null | undefined
+): string | undefined {
+  if (!config) return undefined;
+  return getProviderTemplateId(config) || config.provider || undefined;
 }
 
 // Helper: identify special model IDs.
@@ -363,6 +374,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       modelName: model.name,
       providerName: acpClientId ? `${acpClientId} ACP` : 'ACP',
       provider: 'acp',
+      providerId: acpClientId || 'acp',
     }));
   }, [acpClientId, acpOptions, isAcpSession]);
 
@@ -374,6 +386,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       modelName: acpOptions.currentModelId,
       providerName: acpClientId ? `${acpClientId} ACP` : 'ACP',
       provider: 'acp',
+      providerId: acpClientId || 'acp',
     };
   }, [acpAvailableModels, acpClientId, acpOptions?.currentModelId, isAcpSession]);
   
@@ -424,6 +437,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
         modelName: model.model_name,
         providerName: getProviderDisplayName(model),
         provider: model.provider,
+        providerId: getProviderLocatorId(model),
         contextWindow: model.context_window,
         enableThinking: isReasoningVisiblyEnabled(getEffectiveReasoningMode(model)),
         reasoningEffort: model.reasoning_effort,
@@ -439,6 +453,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
       modelName: model.model_name,
       providerName: getProviderDisplayName(model),
       provider: model.provider,
+      providerId: getProviderLocatorId(model),
       contextWindow: model.context_window,
       enableThinking: isReasoningVisiblyEnabled(getEffectiveReasoningMode(model)),
       reasoningEffort: model.reasoning_effort,
@@ -459,6 +474,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
         modelName: m.model_name,
         providerName: getProviderDisplayName(m),
         provider: m.provider,
+        providerId: getProviderLocatorId(m),
         contextWindow: m.context_window,
         enableThinking: isReasoningVisiblyEnabled(getEffectiveReasoningMode(m)),
         reasoningEffort: m.reasoning_effort,
@@ -618,6 +634,9 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                       data-model-id={model.id}
                       data-model-name={model.modelName}
                       data-selected={isSelected ? 'true' : 'false'}
+                      data-option-kind={'acp-model' satisfies ModelOptionKind}
+                      data-model-role={'normal' satisfies ModelRole}
+                      data-provider-id={model.providerId || model.provider || ''}
                       className={`bitfun-model-selector__option ${isSelected ? 'bitfun-model-selector__option--selected' : ''}`}
                       onClick={() => handleSelectModel(model.id)}
                     >
@@ -711,6 +730,9 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
               data-model-id="auto"
               data-model-name="auto"
               data-selected={currentModelId === 'auto' ? 'true' : 'false'}
+              data-option-kind={'auto' satisfies ModelOptionKind}
+              data-model-role={'auto' satisfies ModelRole}
+              data-provider-id="auto"
               className={`bitfun-model-selector__option bitfun-model-selector__option--special ${currentModelId === 'auto' ? 'bitfun-model-selector__option--selected' : ''}`}
               onClick={() => handleSelectModel('auto')}
             >
@@ -738,6 +760,12 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                   data-model-id="primary"
                   data-model-name={primaryModel?.model_name || 'primary'}
                   data-selected={currentModelId === 'primary' ? 'true' : 'false'}
+                  data-option-kind={'primary-alias' satisfies ModelOptionKind}
+                  data-model-role={'primary' satisfies ModelRole}
+                  data-provider-id={getProviderLocatorId(primaryModel) || primaryModel?.provider || ''}
+                  data-resolved-model-id={primaryModel?.id || ''}
+                  data-resolved-model-name={primaryModel?.model_name || ''}
+                  data-resolved-provider-id={getProviderLocatorId(primaryModel) || primaryModel?.provider || ''}
                   className={`bitfun-model-selector__option bitfun-model-selector__option--special ${currentModelId === 'primary' ? 'bitfun-model-selector__option--selected' : ''}`}
                   onClick={() => handleSelectModel('primary')}
                 >
@@ -767,6 +795,12 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                   data-model-id="fast"
                   data-model-name={fastModel?.model_name || 'fast'}
                   data-selected={currentModelId === 'fast' ? 'true' : 'false'}
+                  data-option-kind={'fast-alias' satisfies ModelOptionKind}
+                  data-model-role={'fast' satisfies ModelRole}
+                  data-provider-id={getProviderLocatorId(fastModel) || fastModel?.provider || ''}
+                  data-resolved-model-id={fastModel?.id || ''}
+                  data-resolved-model-name={fastModel?.model_name || ''}
+                  data-resolved-provider-id={getProviderLocatorId(fastModel) || fastModel?.provider || ''}
                   className={`bitfun-model-selector__option bitfun-model-selector__option--special ${currentModelId === 'fast' ? 'bitfun-model-selector__option--selected' : ''}`}
                   onClick={() => handleSelectModel('fast')}
                 >
@@ -794,6 +828,9 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
                     data-model-id={model.id}
                     data-model-name={model.modelName}
                     data-selected={isSelected ? 'true' : 'false'}
+                    data-option-kind={'model' satisfies ModelOptionKind}
+                    data-model-role={'normal' satisfies ModelRole}
+                    data-provider-id={model.providerId || model.provider || ''}
                     className={`bitfun-model-selector__option ${isSelected ? 'bitfun-model-selector__option--selected' : ''}`}
                     onClick={() => handleSelectModel(model.id)}
                   >

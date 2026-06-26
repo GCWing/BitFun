@@ -1463,6 +1463,12 @@ const AIModelConfig: React.FC = () => {
     if (!isEditing || !editingConfig) return null;
     const isFromTemplate = !editingConfig.id && !!currentTemplate;
     const isProviderScopedEditing = !editingConfig.id;
+    const editingProviderId =
+      currentTemplate?.id
+      || selectedProviderId
+      || getProviderTemplateId(editingConfig)
+      || editingConfig.provider
+      || '';
     const fetchedOrPresetModelOptions: SelectOption[] = remoteModelOptions.length > 0
       ? remoteModelOptions.map(model => ({
           label: model.display_name || model.id,
@@ -1471,7 +1477,12 @@ const AIModelConfig: React.FC = () => {
           testId: 'settings-model-option',
           testAttributes: {
             'data-model-id': model.id,
-            'data-model-name': model.id,
+            'data-model-name': model.display_name || model.id,
+            'data-option-kind': 'model',
+            'data-model-role': 'normal',
+            'data-model-state': 'selectable',
+            'data-model-source': 'remote-discovery',
+            'data-provider-id': editingProviderId,
           },
         }))
       : (currentTemplate?.models || []).map(model => ({
@@ -1481,6 +1492,11 @@ const AIModelConfig: React.FC = () => {
           testAttributes: {
             'data-model-id': model,
             'data-model-name': model,
+            'data-option-kind': 'model',
+            'data-model-role': 'normal',
+            'data-model-state': 'selectable',
+            'data-model-source': 'template-preset',
+            'data-provider-id': editingProviderId,
           },
         }));
     const selectedModelOptions: SelectOption[] = selectedModelDrafts.map(draft => ({
@@ -1490,6 +1506,11 @@ const AIModelConfig: React.FC = () => {
       testAttributes: {
         'data-model-id': draft.modelName,
         'data-model-name': draft.modelName,
+        'data-option-kind': 'model',
+        'data-model-role': 'normal',
+        'data-model-state': 'selectable',
+        'data-model-source': 'selected-draft',
+        'data-provider-id': editingProviderId,
       },
     }));
     const availableModelOptions: SelectOption[] = Array.from(
@@ -1637,6 +1658,11 @@ const AIModelConfig: React.FC = () => {
                 data-testid="settings-model-selected-row"
                 data-model-id={draft.modelName}
                 data-model-name={draft.modelName}
+                data-config-id={draft.configId || ''}
+                data-provider-id={editingProviderId}
+                data-option-kind="selected-draft"
+                data-model-role="normal"
+                data-model-state="draft"
                 data-selected="true"
                 data-expanded={isExpanded ? 'true' : 'false'}
               >
@@ -1673,6 +1699,11 @@ const AIModelConfig: React.FC = () => {
                         data-testid="settings-model-selected-remove-btn"
                         data-model-id={draft.modelName}
                         data-model-name={draft.modelName}
+                        data-config-id={draft.configId || ''}
+                        data-provider-id={editingProviderId}
+                        data-option-kind="selected-draft"
+                        data-model-role="normal"
+                        data-model-state="draft"
                         variant="ghost"
                         size="small"
                         className="bitfun-ai-model-config__selected-model-remove"
@@ -2329,6 +2360,10 @@ const AIModelConfig: React.FC = () => {
             data-config-id={config.id || ''}
             data-model-id={config.model_name}
             data-model-name={config.model_name}
+            data-provider-id={getProviderTemplateId(config) || config.provider || ''}
+            data-option-kind="saved-model-status"
+            data-model-role="normal"
+            data-model-state="saved"
             data-status={testResult.success ? 'success' : 'error'}
             className={`bitfun-ai-model-config__status-dot ${testResult.success ? 'is-success' : 'is-error'}`}
             title={testResult.message}
@@ -2442,6 +2477,10 @@ const AIModelConfig: React.FC = () => {
         data-config-id={config.id || ''}
         data-model-id={config.model_name}
         data-model-name={config.model_name}
+        data-provider-id={getProviderTemplateId(config) || config.provider || ''}
+        data-option-kind="saved-model"
+        data-model-role="normal"
+        data-model-state="saved"
       />
     );
   };

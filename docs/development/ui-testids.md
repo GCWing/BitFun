@@ -187,7 +187,7 @@ Avoid adding IDs to these surfaces unless there is a clear automated workflow.
 | Chat input start BTW button | `chat-input-boost-start-btw` | Starts the BTW flow when present. |
 | Chat model selector button | `chat-model-selector-btn` | Opens the session model selector. |
 | Chat model selector menu | `chat-model-selector-menu` | Model selector dropdown root. |
-| Chat model selector option | `chat-model-selector-option` | Repeated item. Pair with `data-model-id`, `data-model-name`, and `data-selected`. |
+| Chat model selector option | `chat-model-selector-option` | Repeated item. Pair with `data-option-kind`, `data-model-role`, `data-model-id`, `data-model-name`, `data-provider-id`, and `data-selected`. Alias entries keep `data-model-id` as `auto` / `primary` / `fast`; `primary-alias` and `fast-alias` also expose `data-resolved-model-id`, `data-resolved-model-name`, and `data-resolved-provider-id`. |
 | Chat user message | `chat-user-message` | Repeated user message. Pair with `data-turn-id`, `data-status`, and `data-failed`. |
 | Chat user message content | `chat-user-message-content` | User message text content. Pair with `data-turn-id`. |
 | Chat assistant message | `chat-assistant-message` | Repeated model round container. Pair with `data-turn-id`, `data-round-id`, `data-status`, `data-model-id`, `data-model-alias`, and `data-streaming`. |
@@ -241,16 +241,21 @@ Avoid adding IDs to these surfaces unless there is a clear automated workflow.
 | Model request format select | `settings-model-request-format-select` | Request format selector, for example OpenAI-compatible vs Anthropic. |
 | Model select button | `settings-model-select-btn` | Opens the model selection dropdown. |
 | Model selection menu | `settings-model-select-menu` | Model selection dropdown root. |
-| Model selection option | `settings-model-option` | Repeated dropdown item. Pair with `data-model-id`, `data-model-name`, and `data-selected`. |
+| Model selection option | `settings-model-option` | Repeated dropdown item. Pair with `data-option-kind="model"`, `data-model-role="normal"`, `data-model-state="selectable"`, `data-model-source`, `data-model-id`, `data-model-name`, `data-provider-id`, and `data-selected`. |
 | Manual model name input | `settings-model-manual-name-input` | Manual/custom model name entry field. |
 | Add custom model button | `settings-model-add-custom-btn` | Adds the manual model name into the selected model list. |
 | Selected model list | `settings-model-selected-list` | Selected model draft list. Includes `data-selected-count`. |
 | Selected model empty state | `settings-model-selected-list-empty` | Empty selected model draft state. Includes `data-selected-count="0"`. |
-| Selected model row | `settings-model-selected-row` | Repeated selected model draft. Pair with `data-model-id`, `data-model-name`, `data-selected`, and `data-expanded`. |
-| Selected model remove button | `settings-model-selected-remove-btn` | Removes a selected model draft. Pair with `data-model-id` and `data-model-name`. |
+| Selected model row | `settings-model-selected-row` | Repeated selected model draft. Pair with `data-option-kind="selected-draft"`, `data-model-role="normal"`, `data-model-state="draft"`, `data-model-id`, `data-model-name`, `data-provider-id`, `data-config-id`, `data-selected`, and `data-expanded`. |
+| Selected model remove button | `settings-model-selected-remove-btn` | Removes a selected model draft. Pair with `data-option-kind="selected-draft"`, `data-model-role="normal"`, `data-model-state="draft"`, `data-model-id`, `data-model-name`, `data-provider-id`, and `data-config-id`. |
 | Model save button | `settings-model-save-btn` | Saves the model provider/configuration form. |
-| Model row | `settings-model-row` | Repeated saved model row. Pair with `data-model-id`, `data-model-name`, and `data-config-id`. |
-| Model test status | `settings-model-test-status` | Repeated saved model test status. Pair with `data-model-id`, `data-model-name`, `data-config-id`, and `data-status` (`success` or `error`). |
+| Model row | `settings-model-row` | Repeated saved model row. Pair with `data-option-kind="saved-model"`, `data-model-role="normal"`, `data-model-state="saved"`, `data-model-id`, `data-model-name`, `data-provider-id`, and `data-config-id`. |
+| Model test status | `settings-model-test-status` | Repeated saved model test status. Pair with `data-option-kind="saved-model-status"`, `data-model-role="normal"`, `data-model-state="saved"`, `data-model-id`, `data-model-name`, `data-provider-id`, `data-config-id`, and `data-status` (`success` or `error`). |
+
+Model locator guidance:
+- Prefer `data-option-kind` plus `data-model-role` to distinguish alias entries from real model entries. Use `auto`, `primary-alias`, `fast-alias`, `acp-model`, and `model` in chat instead of matching by visible text.
+- Treat `data-model-name` as display metadata, not as a unique key by itself. For unique targeting, combine it with `data-model-id`, `data-provider-id`, or the alias-only `data-resolved-model-id`.
+- In settings flows, use `data-model-state` to separate selectable dropdown options, selected drafts, saved configs, and saved test-status nodes before filtering by model id or provider.
 
 ## Settings Appearance
 

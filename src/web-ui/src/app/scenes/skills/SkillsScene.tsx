@@ -179,12 +179,16 @@ const SkillsScene: React.FC = () => {
             type="button"
             className={`skills-tabs-bar__tab ${activeTab === 'installed' ? 'is-active' : ''}`}
             onClick={() => setActiveTab('installed')}
+            data-testid="skills-tab-installed"
+            data-skills-tab-active={activeTab === 'installed' ? 'true' : 'false'}
           ><span>{t('installed.titleAll')}</span></button>
           <span className="skills-tabs-bar__divider" />
           <button
             type="button"
             className={`skills-tabs-bar__tab ${activeTab === 'discover' ? 'is-active' : ''}`}
             onClick={() => setActiveTab('discover')}
+            data-testid="skills-tab-discover"
+            data-skills-tab-active={activeTab === 'discover' ? 'true' : 'false'}
           ><span>{t('market.title')}</span></button>
         </div>
       </div>
@@ -192,7 +196,7 @@ const SkillsScene: React.FC = () => {
       <div className="skills-page">
 
         {activeTab === 'installed' && (
-          <div className="skills-installed">
+          <div className="skills-installed" data-testid="skills-installed-panel">
             <aside className="skills-sidebar">
               <div className="skills-sidebar__header">
                 <h2 className="skills-sidebar__title">{t('installed.titleAll')}</h2>
@@ -425,7 +429,7 @@ const SkillsScene: React.FC = () => {
         )}
 
         {activeTab === 'discover' && (
-          <div className="skills-discover">
+          <div className="skills-discover" data-testid="skills-discover-panel">
             <div className="skills-discover__hero">
               <div className="skills-discover__hero-content">
                 <h1 className="skills-discover__title">{t('market.title')}</h1>
