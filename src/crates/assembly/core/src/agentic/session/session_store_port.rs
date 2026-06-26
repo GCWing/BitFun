@@ -20,11 +20,15 @@ pub struct CoreSessionStorePort {
 }
 
 impl CoreSessionStorePort {
-    #[cfg(test)]
-    pub fn with_path_manager_for_tests(path_manager: Arc<PathManager>) -> Self {
+    pub(crate) fn with_path_manager(path_manager: Arc<PathManager>) -> Self {
         Self {
             path_manager: Some(path_manager),
         }
+    }
+
+    #[cfg(test)]
+    pub fn with_path_manager_for_tests(path_manager: Arc<PathManager>) -> Self {
+        Self::with_path_manager(path_manager)
     }
 
     fn path_manager(&self) -> Arc<PathManager> {

@@ -469,7 +469,7 @@ mod tests {
 
         assert_eq!(
             remote_session_restore_target(false, Some(&binding)),
-            Some("/workspace/project")
+            Some(binding.clone())
         );
         assert_eq!(remote_session_restore_target(true, Some(&binding)), None);
         assert_eq!(remote_session_restore_target(false, None), None);

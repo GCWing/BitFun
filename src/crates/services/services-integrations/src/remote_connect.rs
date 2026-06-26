@@ -189,14 +189,14 @@ pub fn resolve_remote_execution_image_contexts<T>(
     image_contexts.unwrap_or_else(|| legacy_contexts(legacy_images))
 }
 
-pub fn remote_session_restore_target<'a>(
+pub fn remote_session_restore_target(
     session_exists: bool,
-    binding_workspace: Option<&'a RemoteDialogWorkspaceBinding>,
-) -> Option<&'a str> {
+    binding_workspace: Option<&RemoteDialogWorkspaceBinding>,
+) -> Option<RemoteDialogWorkspaceBinding> {
     if session_exists {
         None
     } else {
-        binding_workspace.map(|binding| binding.workspace_path.as_str())
+        binding_workspace.cloned()
     }
 }
 
@@ -412,7 +412,7 @@ pub trait RemoteDialogRuntimeHost: Send + Sync {
     async fn restore_remote_session(
         &self,
         session_id: &str,
-        workspace_path: &str,
+        workspace: RemoteDialogWorkspaceBinding,
     ) -> Result<(), String>;
 
     fn prewarm_remote_terminal(&self, request: RemoteTerminalPrewarmRequest);
@@ -446,12 +446,10 @@ where
     let binding_workspace = host.resolve_binding_workspace(&session_id).await;
     let session_exists = host.remote_session_exists(&session_id).await?;
 
-    if let Some(workspace_path) =
+    if let Some(workspace) =
         remote_session_restore_target(session_exists, binding_workspace.as_ref())
     {
-        let _ = host
-            .restore_remote_session(&session_id, workspace_path)
-            .await;
+        let _ = host.restore_remote_session(&session_id, workspace).await;
     }
 
     host.prewarm_remote_terminal(RemoteTerminalPrewarmRequest {
