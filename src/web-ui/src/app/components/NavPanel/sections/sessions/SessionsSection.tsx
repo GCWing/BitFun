@@ -7,7 +7,7 @@
 
 import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Pencil, Trash2, Check, X, Bot, Code2, ClipboardList, Panda, MoreHorizontal, Loader2, Archive, Clock3 } from 'lucide-react';
+import { Pencil, Trash2, Check, X, Bot, Code2, ClipboardList, Panda, MoreHorizontal, Loader2, Archive, Clock3, Copy } from 'lucide-react';
 import { IconButton, Input, Tooltip } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n';
 import { flowChatStore } from '../../../../../flow_chat/store/FlowChatStore';
@@ -48,6 +48,8 @@ import type {
 } from '@/flow_chat/utils/backgroundSubagentActivity';
 import { computeFixedPopoverPosition } from '@/shared/utils/fixedPopoverViewport';
 import { confirmWarning } from '@/component-library/components/ConfirmDialog/confirmService';
+import { notificationService } from '@/shared/notification-system';
+import { copyTextToClipboard } from '@/shared/utils/textSelection';
 import { scheduleAfterStartupPaint, scheduleAfterStartupSignal } from '@/shared/utils/startupTaskScheduling';
 import {
   SESSION_METADATA_DEFERRED_FALLBACK_MS,
@@ -774,7 +776,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
       }
       const btn = e.currentTarget as HTMLElement;
       const rect = btn.getBoundingClientRect();
-      const { top, left } = computeFixedPopoverPosition(rect, 160, 96, 4, 8);
+      const { top, left } = computeFixedPopoverPosition(rect, 160, 120, 4, 8);
       setSessionMenuPosition({ top, left });
       setOpenMenuSessionId(sessionId);
     },
@@ -806,6 +808,19 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
         window.dispatchEvent(new CustomEvent('bitfun:session-archived'));
       } catch (err) {
         log.error('Failed to archive session', err);
+      }
+    },
+    [t]
+  );
+
+  const handleCopySessionId = useCallback(
+    async (e: React.MouseEvent, sessionId: string) => {
+      e.stopPropagation();
+      const copied = await copyTextToClipboard(sessionId);
+      if (copied) {
+        notificationService.success(t('nav.sessions.copySessionIdSuccess'), { duration: 2000 });
+      } else {
+        notificationService.error(t('nav.sessions.copySessionIdFailed'), { duration: 3000 });
       }
     },
     [t]
@@ -1166,6 +1181,8 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                       ref={openMenuSessionId === session.sessionId ? sessionMenuAnchorRef : undefined}
                       className={`bitfun-nav-panel__inline-item-action-btn${openMenuSessionId === session.sessionId ? ' is-open' : ''}`}
                       onClick={e => handleMenuOpen(e, session.sessionId)}
+                      data-testid="nav-session-menu-btn"
+                      data-session-id={session.sessionId}
                     >
                       <MoreHorizontal size="var(--bitfun-nav-row-action-icon-size)" />
                     </button>
@@ -1176,14 +1193,28 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                       className="bitfun-nav-panel__inline-item-menu-popover"
                       role="menu"
                       style={{ top: `${sessionMenuPosition.top}px`, left: `${sessionMenuPosition.left}px` }}
+                      data-testid="nav-session-menu"
+                      data-session-id={session.sessionId}
                     >
                       <button
                         type="button"
                         className="bitfun-nav-panel__inline-item-menu-item"
                         onClick={e => { setOpenMenuSessionId(null); handleStartEdit(e, session); }}
+                        data-testid="nav-session-menu-rename"
+                        data-session-id={session.sessionId}
                       >
                         <Pencil size={13} />
                         <span>{t('nav.sessions.rename')}</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="bitfun-nav-panel__inline-item-menu-item"
+                        onClick={e => { setOpenMenuSessionId(null); void handleCopySessionId(e, session.sessionId); }}
+                        data-testid="nav-session-menu-copy-id"
+                        data-session-id={session.sessionId}
+                      >
+                        <Copy size={13} />
+                        <span>{t('nav.sessions.copySessionId')}</span>
                       </button>
                       <button
                         type="button"
@@ -1194,6 +1225,8 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                           setScheduledJobsSessionId(session.sessionId);
                         }}
                         disabled={!workspacePath}
+                        data-testid="nav-session-menu-scheduled-jobs"
+                        data-session-id={session.sessionId}
                       >
                         <Clock3 size={13} />
                         <span>{t('nav.scheduledJobs.open')}</span>
@@ -1202,6 +1235,8 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                         type="button"
                         className="bitfun-nav-panel__inline-item-menu-item"
                         onClick={e => { setOpenMenuSessionId(null); void handleArchive(e, session.sessionId); }}
+                        data-testid="nav-session-menu-archive"
+                        data-session-id={session.sessionId}
                       >
                         <Archive size={13} />
                         <span>{t('nav.sessions.archive')}</span>
@@ -1210,6 +1245,8 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                         type="button"
                         className="bitfun-nav-panel__inline-item-menu-item is-danger"
                         onClick={e => { setOpenMenuSessionId(null); void handleDelete(e, session.sessionId); }}
+                        data-testid="nav-session-menu-delete"
+                        data-session-id={session.sessionId}
                       >
                         <Trash2 size={13} />
                         <span>{t('nav.sessions.delete')}</span>
