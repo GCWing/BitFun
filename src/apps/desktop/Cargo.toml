@@ -20,6 +20,7 @@ serde_json = { workspace = true }
 [dependencies]
 # Internal crates
 bitfun-core = { path = "../../crates/assembly/core", default-features = false, features = ["product-full"] }
+bitfun-agent-tools = { path = "../../crates/execution/tool-contracts" }
 bitfun-transport = { path = "../../crates/adapters/transport", features = ["tauri-adapter"] }
 bitfun-webdriver = { path = "../../crates/adapters/webdriver" }
 bitfun-acp = { path = "../../crates/interfaces/acp" }
@@ -71,6 +72,8 @@ bitflags = { workspace = true }
 core-foundation = { workspace = true }
 core-graphics = { workspace = true }
 dispatch = { workspace = true }
+foreign-types = { workspace = true }
+libc = { workspace = true }
 objc2 = { workspace = true, features = ["exception"] }
 objc2-foundation = { workspace = true }
 objc2-app-kit = { workspace = true }
@@ -85,7 +88,12 @@ windows = { workspace = true, features = [
   "Media_Ocr",
   "Storage_Streams",
   "Win32_Foundation",
+  "Win32_Graphics_Dwm",
+  "Win32_Graphics_Gdi",
+  "Win32_Storage_Xps",
   "Win32_System_Com",
+  "Win32_System_Ole",
+  "Win32_System_Variant",
   "Win32_UI_Accessibility",
   "Win32_UI_WindowsAndMessaging",
 ] }

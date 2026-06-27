@@ -154,14 +154,26 @@ fn handle_function_call_output_item_done(
     });
 
     let Some(output_index) = output_index else {
-        emit_tool_call_item(timeout_controller, tx_event, stats, event_output_index, item_value);
+        emit_tool_call_item(
+            timeout_controller,
+            tx_event,
+            stats,
+            event_output_index,
+            item_value,
+        );
         return;
     };
 
     let Some(tc) = tool_calls_by_output_index.get_mut(&output_index) else {
         // The provider may send `output_item.done` with an output_index even when the
         // earlier `output_item.added` event was omitted or missed. Fall back to the full item.
-        emit_tool_call_item(timeout_controller, tx_event, stats, Some(output_index), item_value);
+        emit_tool_call_item(
+            timeout_controller,
+            tx_event,
+            stats,
+            Some(output_index),
+            item_value,
+        );
         return;
     };
 

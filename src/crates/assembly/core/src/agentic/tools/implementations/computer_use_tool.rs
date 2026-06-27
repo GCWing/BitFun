@@ -1814,14 +1814,16 @@ impl Tool for ComputerUseTool {
                 let (sx0, sy0) = Self::resolve_xy_f64(host_ref, input, start_x, start_y)?;
                 let (sx1, sy1) = Self::resolve_xy_f64(host_ref, input, end_x, end_y)?;
 
-                // Move to start, press, move to end, release.
-                host_ref.mouse_move_global_f64(sx0, sy0).await?;
-                host_ref.mouse_down(button).await?;
-                // Small pause for apps that need time to register the press.
-                host_ref.wait_ms(50).await?;
-                host_ref.mouse_move_global_f64(sx1, sy1).await?;
-                host_ref.wait_ms(50).await?;
-                host_ref.mouse_up(button).await?;
+                // Delegate to the host `drag` gesture. The default trait impl
+                // composes foreground mouse_down/move/up; desktop hosts override
+                // it with background (non-disruptive) drag on macOS/Windows.
+                let duration_ms = input
+                    .get("duration_ms")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(100);
+                host_ref
+                    .drag((sx0, sy0), (sx1, sy1), button, duration_ms)
+                    .await?;
                 ComputerUseHost::computer_use_after_committed_ui_action(host_ref);
 
                 let input_coords = json!({

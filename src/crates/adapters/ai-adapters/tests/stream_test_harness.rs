@@ -42,7 +42,9 @@ async fn ttft_timeout_waits_for_first_effective_stream_output_not_http_200() {
     )
     .await;
 
-    let error = output.result.expect_err("fixture should fail with TTFT timeout");
+    let error = output
+        .result
+        .expect_err("fixture should fail with TTFT timeout");
     assert!(
         error
             .error

@@ -4,6 +4,7 @@
 //! tool packs are moved out of the core facade.
 
 pub mod computer_use;
+pub mod element_token;
 pub mod execution_gate;
 pub mod file_guidance;
 pub mod file_read_freshness;

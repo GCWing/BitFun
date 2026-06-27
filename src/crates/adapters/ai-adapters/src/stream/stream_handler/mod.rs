@@ -34,10 +34,7 @@ pub(super) struct StreamTimeoutController {
 }
 
 impl StreamTimeoutController {
-    pub(super) fn new(
-        ttft_timeout: Option<Duration>,
-        idle_timeout: Option<Duration>,
-    ) -> Self {
+    pub(super) fn new(ttft_timeout: Option<Duration>, idle_timeout: Option<Duration>) -> Self {
         Self {
             first_effective_output_deadline: ttft_timeout.map(|timeout| Instant::now() + timeout),
             idle_timeout,

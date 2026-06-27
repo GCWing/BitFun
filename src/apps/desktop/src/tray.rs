@@ -265,7 +265,11 @@ pub fn setup_tray(
             rebuild_tray_menu(&app_handle).await;
         }
     });
-    startup_trace.record_elapsed_step(TRAY_TRACE_CATEGORY, "setup_tray.spawn_refresh", step_started);
+    startup_trace.record_elapsed_step(
+        TRAY_TRACE_CATEGORY,
+        "setup_tray.spawn_refresh",
+        step_started,
+    );
 
     Ok(())
 }

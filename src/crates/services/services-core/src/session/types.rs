@@ -549,11 +549,7 @@ pub struct TextItemData {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub status: Option<String>,
 
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        alias = "attempt_id"
-    )]
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "attempt_id")]
     pub attempt_id: Option<String>,
 
     #[serde(
@@ -598,11 +594,7 @@ pub struct ThinkingItemData {
     #[serde(skip_serializing_if = "Option::is_none", alias = "subagent_session_id")]
     pub subagent_session_id: Option<String>,
 
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        alias = "attempt_id"
-    )]
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "attempt_id")]
     pub attempt_id: Option<String>,
 
     #[serde(
@@ -671,11 +663,7 @@ pub struct ToolItemData {
     #[serde(skip_serializing_if = "Option::is_none", alias = "subagent_session_id")]
     pub subagent_session_id: Option<String>,
 
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        alias = "attempt_id"
-    )]
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "attempt_id")]
     pub attempt_id: Option<String>,
 
     #[serde(
@@ -1274,7 +1262,10 @@ mod tests {
         });
         let tool_with_attempt: ToolItemData = serde_json::from_value(tool_attempt_payload)
             .expect("tool attempt fields should deserialize");
-        assert_eq!(tool_with_attempt.attempt_id.as_deref(), Some("round-1:attempt:2"));
+        assert_eq!(
+            tool_with_attempt.attempt_id.as_deref(),
+            Some("round-1:attempt:2")
+        );
         assert_eq!(tool_with_attempt.attempt_index, Some(2));
     }
 

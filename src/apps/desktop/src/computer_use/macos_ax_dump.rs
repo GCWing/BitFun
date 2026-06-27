@@ -21,14 +21,15 @@ use bitfun_core::agentic::tools::computer_use_host::{AppStateSnapshot, AxNode};
 use bitfun_core::util::errors::{BitFunError, BitFunResult};
 use core_foundation::array::{CFArray, CFArrayRef};
 use core_foundation::base::{CFGetTypeID, CFTypeRef, TCFType};
-use core_foundation::boolean::{CFBooleanGetTypeID, CFBooleanRef};
+use core_foundation::boolean::{CFBoolean, CFBooleanGetTypeID, CFBooleanRef};
 use core_foundation::string::{CFString, CFStringRef};
 use core_graphics::geometry::{CGPoint, CGSize};
 use sha1::{Digest, Sha1};
 use std::collections::{HashMap, VecDeque};
 use std::ffi::c_void;
 use std::sync::{Mutex, OnceLock};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::thread;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 type CFNumberRef = *const c_void;
 type CFTypeID = usize;
@@ -47,8 +48,14 @@ unsafe extern "C" {
         value: *mut CFTypeRef,
     ) -> i32;
     fn AXUIElementCopyActionNames(element: AXUIElementRef, names: *mut CFArrayRef) -> i32;
+    fn AXUIElementSetAttributeValue(
+        element: AXUIElementRef,
+        attribute: CFStringRef,
+        value: CFTypeRef,
+    ) -> i32;
     fn AXValueGetType(value: AXValueRef) -> u32;
     fn AXValueGetValue(value: AXValueRef, the_type: u32, ptr: *mut c_void) -> bool;
+    fn AXUIElementGetTypeID() -> CFTypeID;
 }
 
 #[link(name = "CoreFoundation", kind = "framework")]
@@ -325,6 +332,67 @@ unsafe fn read_action_names(elem: AXUIElementRef) -> Vec<String> {
     out
 }
 
+// ── Chromium AX tree enablement ───────────────────────────────────────────
+//
+// Chromium/Electron apps (Arc, VS Code, Electron shells) ship their
+// web-content AX tree OFF and only build it once an assistive client asks
+// for it. Without this, the first walk of such an app returns an
+// empty/title-bar-only tree. We flip `AXManualAccessibility` (modern, no
+// screen-reader side effects) — or fall back to the legacy
+// `AXEnhancedUserInterface` for older Electron builds — then let the
+// asynchronously-built tree settle before reading it.
+//
+// Ported from cua-driver-rs `ax/bindings.rs:303-315` + `ax/tree.rs:43-154`.
+
+/// How long to let a freshly-enabled Chromium/Electron app build its
+/// web-content AX tree before we read it (seconds).
+const CHROMIUM_SETTLE_SECONDS: f64 = 0.5;
+
+/// Pids for which we have already flipped on accessibility and paid the
+/// one-time settle delay. Repeat snapshots of the same app skip the settle.
+fn enabled_pids() -> &'static Mutex<std::collections::HashSet<i32>> {
+    static ENABLED_PIDS: OnceLock<Mutex<std::collections::HashSet<i32>>> = OnceLock::new();
+    ENABLED_PIDS.get_or_init(|| Mutex::new(std::collections::HashSet::new()))
+}
+
+/// Enable Chromium/Electron accessibility on the app element.
+/// Returns `true` when the enablement attribute was accepted (and thus
+/// the tree needs a settle delay). Native Cocoa apps reject the attribute
+/// and return `false` — they pay no settle cost.
+unsafe fn enable_chromium_accessibility(app_element: AXUIElementRef) -> bool {
+    // Try the modern attribute first (no screen-reader side effects).
+    let key = CFString::new("AXManualAccessibility");
+    let val = CFBoolean::true_value();
+    let st = AXUIElementSetAttributeValue(
+        app_element,
+        key.as_concrete_TypeRef(),
+        val.as_concrete_TypeRef() as CFTypeRef,
+    );
+    if st == 0 {
+        return true;
+    }
+    // `kAXErrorAttributeUnsupported` = -25205. Anything other than that
+    // is a transient error (timeout / app busy) — don't bother with the
+    // legacy fallback, and don't claim enablement happened.
+    if st != -25205 {
+        return false;
+    }
+    // Legacy fallback for older Electron builds.
+    let key2 = CFString::new("AXEnhancedUserInterface");
+    let val2 = CFBoolean::true_value();
+    AXUIElementSetAttributeValue(
+        app_element,
+        key2.as_concrete_TypeRef(),
+        val2.as_concrete_TypeRef() as CFTypeRef,
+    ) == 0
+}
+
+/// Briefly pump the CF run loop to let a freshly-enabled Chromium app
+/// build its AX tree asynchronously over IPC.
+fn pump_run_loop_briefly(seconds: f64) {
+    thread::sleep(Duration::from_secs_f64(seconds));
+}
+
 // ── BFS walker ────────────────────────────────────────────────────────────
 
 struct Queued {
@@ -358,6 +426,25 @@ pub fn dump_app_ax(pid: i32, opts: DumpOpts) -> BitFunResult<AppStateSnapshot> {
             "AXUIElementCreateApplication returned null for pid={}",
             pid
         )));
+    }
+
+    // Chromium/Electron apps ship their web-content AX tree OFF and only
+    // build it once an assistive client asks for it. Flip the enablement
+    // attribute, then — only when the flip took and only the first time
+    // we see this pid — let the asynchronously-built tree settle before
+    // reading it. Native Cocoa apps reject the attribute, paying no cost.
+    let already_enabled = enabled_pids()
+        .lock()
+        .map(|s| s.contains(&pid))
+        .unwrap_or(false);
+    if !already_enabled {
+        let enabled = unsafe { enable_chromium_accessibility(app) };
+        if enabled {
+            pump_run_loop_briefly(CHROMIUM_SETTLE_SECONDS);
+            if let Ok(mut set) = enabled_pids().lock() {
+                set.insert(pid);
+            }
+        }
     }
 
     // Pick the root we'll walk.
@@ -406,7 +493,8 @@ pub fn dump_app_ax(pid: i32, opts: DumpOpts) -> BitFunResult<AppStateSnapshot> {
         // AXValue is the canonical foot-gun: on a slider it's a CFNumber, on
         // a toggle it's a CFBoolean, on a tab group it's an AXUIElementRef
         // pointing at the selected child. Use the type-tolerant reader.
-        let value = unsafe { read_cf_value_attr(cur.elem, "AXValue") };
+        let value = unsafe { read_cf_value_attr(cur.elem, "AXValue") }
+            .or_else(|| unsafe { read_cf_string_attr(cur.elem, "AXPlaceholderValue") });
         let description = unsafe { read_cf_string_attr(cur.elem, "AXDescription") };
         let help = unsafe { read_cf_string_attr(cur.elem, "AXHelp") };
         let identifier = unsafe { read_cf_string_attr(cur.elem, "AXIdentifier") };
@@ -441,24 +529,44 @@ pub fn dump_app_ax(pid: i32, opts: DumpOpts) -> BitFunResult<AppStateSnapshot> {
         refs.push(AxRef(cur.elem));
 
         // Enqueue children — but DO NOT release `cur.elem`; the cache owns it.
-        let children_ref = unsafe { ax_copy_attr(cur.elem, "AXChildren") };
+        // At the application root (parent_idx is None), union `AXChildren`
+        // with `AXWindows`. macOS only puts windows in `AXChildren` when the
+        // app is frontmost; `AXWindows` returns the window list regardless of
+        // focus state. Without this union, backgrounded apps return an empty
+        // tree. (Ported from cua-driver-rs `ax/tree.rs:156-171`.)
         let next_depth = cur.depth + 1;
-        let Some(ch) = children_ref else { continue };
-        unsafe {
-            let arr = CFArray::<*const c_void>::wrap_under_create_rule(ch as CFArrayRef);
-            for i in 0..arr.len() {
-                let Some(slot) = arr.get(i) else { continue };
-                let child = *slot;
-                if child.is_null() {
-                    continue;
-                }
-                let retained = CFRetain(child as CFTypeRef) as AXUIElementRef;
-                if !retained.is_null() {
-                    queue.push_back(Queued {
-                        elem: retained,
-                        parent_idx: Some(idx),
-                        depth: next_depth,
-                    });
+        let attrs: &[&str] = if cur.parent_idx.is_none() {
+            &["AXChildren", "AXWindows"]
+        } else {
+            &["AXChildren"]
+        };
+        let mut seen_ptrs: std::collections::HashSet<usize> = std::collections::HashSet::new();
+        for attr_name in attrs {
+            let children_ref = unsafe { ax_copy_attr(cur.elem, attr_name) };
+            let Some(ch) = children_ref else { continue };
+            unsafe {
+                let arr = CFArray::<*const c_void>::wrap_under_create_rule(ch as CFArrayRef);
+                for i in 0..arr.len() {
+                    let Some(slot) = arr.get(i) else { continue };
+                    let child = *slot;
+                    if child.is_null() {
+                        continue;
+                    }
+                    // Deduplicate by raw pointer identity (AXChildren and
+                    // AXWindows may return the same window elements).
+                    let ptr_key = child as usize;
+                    if seen_ptrs.contains(&ptr_key) {
+                        continue;
+                    }
+                    seen_ptrs.insert(ptr_key);
+                    let retained = CFRetain(child as CFTypeRef) as AXUIElementRef;
+                    if !retained.is_null() {
+                        queue.push_back(Queued {
+                            elem: retained,
+                            parent_idx: Some(idx),
+                            depth: next_depth,
+                        });
+                    }
                 }
             }
         }

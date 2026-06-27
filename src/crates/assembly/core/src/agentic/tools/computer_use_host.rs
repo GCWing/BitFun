@@ -140,6 +140,33 @@ pub trait ComputerUseHost: Send + Sync + std::fmt::Debug {
         ))
     }
 
+    /// Press-drag-release gesture from `from` to `to` in **global screen
+    /// coordinates** with the given `button` over `duration_ms`.
+    ///
+    /// Default implementation composes the foreground `mouse_move_global_f64` /
+    /// `mouse_down` / `mouse_up` primitives (visible cursor movement). Hosts
+    /// that can drag without moving the user's cursor (e.g. the desktop host's
+    /// background `PostMessage` / CGEvent paths) override this.
+    async fn drag(
+        &self,
+        from: (f64, f64),
+        to: (f64, f64),
+        button: &str,
+        duration_ms: u64,
+    ) -> BitFunResult<()> {
+        self.mouse_move_global_f64(from.0, from.1).await?;
+        self.mouse_down(button).await?;
+        let half = (duration_ms / 2).min(2_000);
+        if half > 0 {
+            self.wait_ms(half).await?;
+        }
+        self.mouse_move_global_f64(to.0, to.1).await?;
+        if half > 0 {
+            self.wait_ms(half).await?;
+        }
+        self.mouse_up(button).await
+    }
+
     async fn scroll(&self, delta_x: i32, delta_y: i32) -> BitFunResult<()>;
 
     /// Press key combination; names like "command", "control", "shift", "alt", "return", "tab", "escape", "space", or single letters.
