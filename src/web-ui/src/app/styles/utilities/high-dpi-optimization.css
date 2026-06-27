@@ -14,7 +14,7 @@
   }
   
   /* Input and text area optimization */
-  input, textarea, [contenteditable] {
+  input, textarea {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
@@ -25,6 +25,16 @@
     -webkit-backface-visibility: hidden;
     /* Avoid subpixel rendering issues */
     will-change: auto;
+  }
+
+  /* Keep contenteditable surfaces out of forced compositing.
+     WKWebView on macOS is sensitive to 3D transforms here and can lose
+     stable focus/selection behavior on chat/editor inputs. */
+  [contenteditable] {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    font-feature-settings: "liga", "kern";
   }
   
   /* Avoid blurry transforms */
