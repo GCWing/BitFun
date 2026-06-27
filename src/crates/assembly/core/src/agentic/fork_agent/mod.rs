@@ -51,6 +51,12 @@ impl ForkAgentContextSnapshot {
     pub fn build_child_session_config(&self, max_turns_override: Option<usize>) -> SessionConfig {
         let mut config = self.session_config.clone();
         config.workspace_path = Some(self.workspace_path.clone());
+        // The child is a freshly created session; its persistence should be
+        // anchored to its own (current) workspace, NOT inherit the parent's
+        // post-`/cd` storage anchor. Reset to None so storage resolution
+        // falls back to the live `workspace_path` until the child itself
+        // invokes `/cd`.
+        config.storage_workspace_path = None;
         config.remote_connection_id = self.remote_connection_id.clone();
         config.remote_ssh_host = self.remote_ssh_host.clone();
         config.model_id = self.session_model_id.clone();

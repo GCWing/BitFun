@@ -657,6 +657,7 @@ pub async fn create_session(
             enable_context_compression: c.enable_context_compression.unwrap_or(true),
             compression_threshold: c.compression_threshold.unwrap_or(0.8),
             workspace_path: Some(request.workspace_path.clone()),
+            storage_workspace_path: None,
             workspace_id: request.workspace_id.clone(),
             remote_connection_id: remote_conn.clone(),
             remote_ssh_host: remote_ssh_host.clone(),

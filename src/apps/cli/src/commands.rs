@@ -73,6 +73,10 @@ pub const COMMAND_SPECS: &[CommandSpec] = &[
         description: "Generate session usage report",
     },
     CommandSpec {
+        name: "/cd",
+        description: "Switch session workspace without restarting",
+    },
+    CommandSpec {
         name: "/exit",
         description: "Exit the app",
     },
@@ -227,5 +231,13 @@ mod tests {
         let result = match_substring_in("/HELP", COMMAND_SPECS);
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].name, "/help");
+    }
+
+    #[test]
+    fn test_cd_registered() {
+        let names: Vec<&str> = COMMAND_SPECS.iter().map(|s| s.name).collect();
+        assert!(names.contains(&"/cd"), "/cd should be registered in COMMAND_SPECS");
+        let result = match_substring_in("/cd", COMMAND_SPECS);
+        assert!(result.iter().any(|s| s.name == "/cd"));
     }
 }

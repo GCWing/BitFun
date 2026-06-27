@@ -145,8 +145,24 @@ pub struct SessionConfig {
     pub compression_threshold: f32,
     /// Workspace path bound to this session. Used to run AI in the correct workspace
     /// without changing the desktop's foreground workspace.
+    ///
+    /// This is the *logical* working directory for tool execution. An in-session
+    /// `/cd` mutates this value so subsequent tool calls happen in the new cwd.
+    /// For the *physical* storage location of the session file (which must remain
+    /// stable across `/cd`), see `storage_workspace_path`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub workspace_path: Option<String>,
+    /// Persistence anchor — the original workspace path under which this session
+    /// was created. Once a session has been `/cd`-switched, this preserves the
+    /// directory where the session file and its sidecar artifacts (turn
+    /// snapshots, prompt cache) continue to live, so the session remains
+    /// discoverable from its original workspace listing.
+    ///
+    /// `None` means "no /cd has happened yet" — every storage operation should
+    /// transparently fall back to `workspace_path`, preserving pre-existing
+    /// behavior for sessions that never invoke `/cd`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub storage_workspace_path: Option<String>,
     /// Stable workspace id for resolving workspace-scoped metadata such as related directories.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub workspace_id: Option<String>,
@@ -175,11 +191,26 @@ impl Default for SessionConfig {
             enable_context_compression: true,
             compression_threshold: 0.8, // 80%
             workspace_path: None,
+            storage_workspace_path: None,
             workspace_id: None,
             remote_connection_id: None,
             remote_ssh_host: None,
             model_id: None,
         }
+    }
+}
+
+impl SessionConfig {
+    /// Returns the workspace path to anchor persistence/storage against.
+    ///
+    /// Prefers `storage_workspace_path` (set once after the first `/cd`) and
+    /// falls back to `workspace_path` for pre-`/cd` sessions. Callers that
+    /// touch the on-disk session file, turn snapshots, or prompt cache should
+    /// use this helper so the storage location remains stable across `/cd`.
+    pub fn effective_storage_workspace_path(&self) -> Option<&str> {
+        self.storage_workspace_path
+            .as_deref()
+            .or(self.workspace_path.as_deref())
     }
 }
 
