@@ -628,3 +628,26 @@ describe('handleDialogTurnComplete', () => {
     expect(turn?.hasFinalResponse).toBe(false);
   });
 });
+
+describe('shouldMarkUnreadCompletion', () => {
+  const { shouldMarkUnreadCompletion } = __test_only__;
+
+  it('always returns true regardless of session id', () => {
+    expect(shouldMarkUnreadCompletion('active-session')).toBe(true);
+    expect(shouldMarkUnreadCompletion('background-session')).toBe(true);
+    expect(shouldMarkUnreadCompletion('')).toBe(true);
+  });
+
+  it('returns true for any string input — all completions are marked so the Agent Companion pet can show completion bubbles', () => {
+    const sessions = ['session-1', 'session-2', 'session-3'];
+    sessions.forEach(sessionId => {
+      expect(shouldMarkUnreadCompletion(sessionId)).toBe(true);
+    });
+  });
+
+  it('returns true even when the input is undefined or null (defensive)', () => {
+    // Parameter is typed as `string` but callers may pass unexpected values.
+    expect(shouldMarkUnreadCompletion(undefined as unknown as string)).toBe(true);
+    expect(shouldMarkUnreadCompletion(null as unknown as string)).toBe(true);
+  });
+});

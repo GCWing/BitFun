@@ -1,11 +1,11 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { listen } from '@tauri-apps/api/event';
+import { listen, emit } from '@tauri-apps/api/event';
 import { cursorPosition, getCurrentWindow } from '@tauri-apps/api/window';
 import { aiExperienceConfigService, type AgentCompanionPetSelection, type AIExperienceSettings } from '@/infrastructure/config/services/AIExperienceConfigService';
 import { ChatInputPixelPet, type ChatInputPixelPetMood } from '@/flow_chat/components/ChatInputPixelPet';
 import type { ChatInputPetMood } from '@/flow_chat/utils/chatInputPetMood';
-import type { AgentCompanionActivityPayload, AgentCompanionTaskStatus } from '@/flow_chat/utils/agentCompanionActivity';
+import type { AgentCompanionActivityPayload, AgentCompanionTaskState, AgentCompanionTaskStatus } from '@/flow_chat/utils/agentCompanionActivity';
 import { createLogger } from '@/shared/utils/logger';
 import './AgentCompanionDesktopPet.scss';
 
@@ -25,6 +25,12 @@ const POINTER_HOVER_POLL_INTERVAL_MS = 120;
 /** Clicks shorter/smaller than this use `show_main_window`; beyond it we start a native drag. */
 const PET_DRAG_THRESHOLD_PX = 8;
 const IS_WINDOWS_WEBVIEW = /\bWindows\b/i.test(window.navigator.userAgent);
+/** Tasks in these states are completion bubbles that can be dismissed. */
+const COMPLETION_TASK_STATES: ReadonlySet<AgentCompanionTaskState> = new Set([
+  'completed',
+  'error',
+  'interrupted',
+]);
 
 interface TypewriterOutputState {
   target: string;
@@ -343,6 +349,28 @@ export const AgentCompanionDesktopPet: React.FC = () => {
     }
   }, []);
 
+  /** Dismiss all completed/error/interrupted task bubbles immediately
+   *  by emitting a cross-window Tauri event. The main window listens
+   *  for this event and clears the unread-completion flag in its own
+   *  FlowChatStore, which triggers a store subscription that re-emits
+   *  the activity payload (now without the completion task). */
+  const dismissCompletedTasks = useCallback(async () => {
+    const completionSessionIds = tasks
+      .filter(t => COMPLETION_TASK_STATES.has(t.state))
+      .map(t => t.sessionId);
+
+    if (completionSessionIds.length === 0) return;
+
+    try {
+      await Promise.all(completionSessionIds.map(sessionId =>
+        emit('agent-companion://dismiss-completion', { sessionId }),
+      ));
+      log.info('Dismissed completed task bubbles via user click');
+    } catch (error) {
+      log.warn('Failed to dismiss completion tasks via cross-window event', error);
+    }
+  }, [tasks]);
+
   const onContextMenu = useCallback((event: React.MouseEvent) => {
     event.preventDefault();
   }, []);
@@ -407,6 +435,11 @@ export const AgentCompanionDesktopPet: React.FC = () => {
     const shouldShowMain = !session.dragStarted;
     clearPetPointerSession(event.currentTarget, event.pointerId);
     if (shouldShowMain) {
+      // Dismiss completed task bubbles when user clicks the pet.
+      const hasCompletedTasks = tasks.some(t => COMPLETION_TASK_STATES.has(t.state));
+      if (hasCompletedTasks) {
+        void dismissCompletedTasks();
+      }
       void showMainWindowFromPet();
     }
   };

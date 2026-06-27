@@ -147,11 +147,17 @@ function mergeParamsPartialEventData(
 export const __test_only__ = {
   resolveDialogTurnDisplayContent,
   mergeParamsPartialEventData,
+  shouldMarkUnreadCompletion,
 };
 
-function shouldMarkUnreadCompletion(sessionId: string): boolean {
-  const activeSessionId = FlowChatStore.getInstance().getState().activeSessionId;
-  return sessionId !== activeSessionId || !isAppWindowFocused();
+function shouldMarkUnreadCompletion(_sessionId: string): boolean {
+  // Always mark completions so the Agent Companion pet can show a completion
+  // bubble regardless of which session is active. The main window auto-dismisses
+  // the unread flag after 5 seconds (except for the active focused session,
+  // where the user sees the completion directly in the chat UI), so there is
+  // no risk of stale indicators. This trades an extra persistence write per
+  // completion for reliable cross-window pet notifications.
+  return true;
 }
 
 function logDroppedDataEvent(

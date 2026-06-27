@@ -70,7 +70,7 @@ function getDesktopBinaryPath() {
   const binaryName = `bitfun-desktop${suffix}`;
 
   if (process.platform === 'darwin') {
-    return path.join(ROOT_DIR, 'target', 'debug', 'BitFun.app', 'Contents', 'MacOS', 'BitFun');
+    return path.join(ROOT_DIR, 'target', 'debug', 'BitFun.app', 'Contents', 'MacOS', 'bitfun-desktop');
   }
 
   return path.join(ROOT_DIR, 'target', 'debug', binaryName);
