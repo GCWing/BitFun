@@ -66,11 +66,17 @@ export const ReadFileDisplay: React.FC<ToolCardProps> = React.memo(({
   }, [filePath, toolItem.acpPermission?.toolCall?.rawInput]);
 
   const lineRange = useMemo(() => {
-    const start_line = toolCall?.input?.start_line;
+    // Keep legacy `start_line` so older persisted tool calls still render.
+    const offset = toolCall?.input?.offset ?? toolCall?.input?.start_line;
+    const tail = toolCall?.input?.tail === true;
     const limit = toolCall?.input?.limit;
     
-    if (start_line !== undefined || limit !== undefined) {
-      const startLine = start_line || 1;
+    if (tail && limit !== undefined) {
+      return `tail ${limit} lines`;
+    }
+
+    if (offset !== undefined || limit !== undefined) {
+      const startLine = offset || 1;
       const endLine = limit ? startLine + limit - 1 : undefined;
       
       if (endLine) {
@@ -81,7 +87,7 @@ export const ReadFileDisplay: React.FC<ToolCardProps> = React.memo(({
     }
     
     return null;
-  }, [toolCall?.input?.start_line, toolCall?.input?.limit]);
+  }, [toolCall?.input?.offset, toolCall?.input?.start_line, toolCall?.input?.tail, toolCall?.input?.limit]);
 
   const fileSize = useMemo(() => {
     if (!toolResult?.result) return null;

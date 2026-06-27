@@ -1,4 +1,5 @@
 use crate::util::string::{shell_single_quote, truncate_string_by_chars};
+use std::collections::VecDeque;
 use std::fs::File;
 use std::io::BufRead;
 use std::io::BufReader;
@@ -43,12 +44,12 @@ pub fn build_read_file_presentation(
     if let Some(next_start) = next_start_line {
         if result.hit_total_char_limit {
             result_for_assistant.push_str(&format!(
-                "\n\n[Output truncated after reaching the Read tool size limit. Use start_line={} and limit to continue reading.]",
+                "\n\n[Output truncated after reaching the Read tool size limit. Use offset={} and limit to continue reading.]",
                 next_start
             ));
         } else {
             result_for_assistant.push_str(&format!(
-                "\n\n[Showing lines {}-{} of {} total. Use start_line={} and limit to continue reading.]",
+                "\n\n[Showing lines {}-{} of {} total. Use offset={} and limit to continue reading.]",
                 result.start_line, result.end_line, result.total_lines, next_start
             ));
         }
@@ -77,6 +78,29 @@ pub fn build_remote_read_command(
         path = escaped_path,
         start = start_line,
         end = end_line,
+        max = max_line_chars,
+        budget = max_total_chars,
+        marker = REMOTE_TOTAL_LINES_MARKER,
+        hit_marker = REMOTE_HIT_TOTAL_CHAR_LIMIT_MARKER,
+    ))
+}
+
+pub fn build_remote_tail_read_command(
+    resolved_path: &str,
+    limit: usize,
+    max_line_chars: usize,
+    max_total_chars: usize,
+) -> Result<String, String> {
+    if limit == 0 {
+        return Err("`limit` can't be 0".to_string());
+    }
+
+    let escaped_path = shell_single_quote(resolved_path);
+
+    Ok(format!(
+        "if [ ! -f {path} ]; then exit 3; fi; awk -v limit={limit} -v max={max} -v budget={budget} 'BEGIN {{ total = 0; used = 0; hit = 0; }} {{ total = NR; slot = ((NR - 1) % limit) + 1; lines[slot] = $0; nums[slot] = NR; }} END {{ start = total - limit + 1; if (start < 1) start = 1; for (nr = start; nr <= total; nr++) {{ slot = ((nr - 1) % limit) + 1; line = lines[slot]; if (length(line) > max) {{ line = substr(line, 1, max) \" [truncated]\"; }} rendered = sprintf(\"%6d\\t%s\", nums[slot], line); extra = (used > 0 ? 1 : 0); next_used = used + extra + length(rendered); if (next_used > budget) {{ hit = 1; break; }} print rendered; used = next_used; }} printf(\"{marker}%d\\n\", total) > \"/dev/stderr\"; printf(\"{hit_marker}%d\\n\", hit) > \"/dev/stderr\"; }}' {path}",
+        path = escaped_path,
+        limit = limit,
         max = max_line_chars,
         budget = max_total_chars,
         marker = REMOTE_TOTAL_LINES_MARKER,
@@ -158,6 +182,35 @@ pub fn parse_remote_read_output(
         content,
         hit_total_char_limit,
     })
+}
+
+pub fn parse_remote_tail_read_output(
+    stdout: &str,
+    stderr: &str,
+    status: i32,
+    resolved_path: &str,
+    limit: usize,
+) -> Result<ReadFileResult, String> {
+    let mut result = parse_remote_read_output(stdout, stderr, status, resolved_path, 1)?;
+
+    if result.total_lines == 0 {
+        return Ok(result);
+    }
+
+    let start_line = result.total_lines.saturating_sub(limit).saturating_add(1);
+    let lines_read = if result.content.is_empty() {
+        0
+    } else {
+        result.content.lines().count()
+    };
+    result.start_line = start_line;
+    result.end_line = if lines_read == 0 {
+        start_line
+    } else {
+        start_line.saturating_add(lines_read).saturating_sub(1)
+    };
+
+    Ok(result)
 }
 
 /// start_line: starts from 1
@@ -254,9 +307,99 @@ pub fn read_file(
     })
 }
 
+pub fn read_file_tail(
+    file_path: &str,
+    limit: usize,
+    max_line_chars: usize,
+    max_total_chars: usize,
+) -> Result<ReadFileResult, String> {
+    if limit == 0 {
+        return Err("`limit` can't be 0".to_string());
+    }
+    if max_total_chars == 0 {
+        return Err("`max_total_chars` can't be 0".to_string());
+    }
+
+    let file =
+        File::open(file_path).map_err(|e| format!("Failed to read file {}: {}", file_path, e))?;
+    let reader = BufReader::new(file);
+
+    let mut total_lines = 0usize;
+    let mut tail_lines = VecDeque::with_capacity(limit);
+
+    for line_result in reader.lines() {
+        let line = line_result.map_err(|e| format!("Failed to read file {}: {}", file_path, e))?;
+        total_lines += 1;
+
+        if tail_lines.len() == limit {
+            tail_lines.pop_front();
+        }
+        tail_lines.push_back((total_lines, line));
+    }
+
+    if total_lines == 0 {
+        return Ok(ReadFileResult {
+            start_line: 0,
+            end_line: 0,
+            total_lines: 0,
+            content: String::new(),
+            hit_total_char_limit: false,
+        });
+    }
+
+    let start_line = total_lines.saturating_sub(limit).saturating_add(1);
+    let mut selected_lines = Vec::new();
+    let mut selected_chars = 0usize;
+    let mut hit_total_char_limit = false;
+
+    for (line_number, line) in tail_lines {
+        let line_content = if line.chars().count() > max_line_chars {
+            format!(
+                "{} [truncated]",
+                truncate_string_by_chars(&line, max_line_chars)
+            )
+        } else {
+            line
+        };
+
+        let rendered_line = format!("{:>6}\t{}", line_number, line_content);
+        let separator_chars = usize::from(!selected_lines.is_empty());
+        let next_total_chars = selected_chars
+            .saturating_add(separator_chars)
+            .saturating_add(rendered_line.chars().count());
+
+        if next_total_chars > max_total_chars {
+            hit_total_char_limit = true;
+            break;
+        }
+
+        selected_chars = next_total_chars;
+        selected_lines.push(rendered_line);
+    }
+
+    let end_line = if selected_lines.is_empty() {
+        start_line
+    } else {
+        start_line
+            .saturating_add(selected_lines.len())
+            .saturating_sub(1)
+    };
+
+    Ok(ReadFileResult {
+        start_line,
+        end_line,
+        total_lines,
+        content: selected_lines.join("\n"),
+        hit_total_char_limit,
+    })
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{build_read_file_presentation, read_file, read_file_lines_read, ReadFileResult};
+    use super::{
+        build_read_file_presentation, read_file, read_file_lines_read, read_file_tail,
+        ReadFileResult,
+    };
     use std::fs;
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicU64, Ordering};
@@ -325,7 +468,22 @@ mod tests {
             .contains("Read lines 1-2 from src/lib.rs (4 total lines)"));
         assert!(presentation
             .result_for_assistant
-            .contains("Use start_line=3 and limit to continue reading."));
+            .contains("Use offset=3 and limit to continue reading."));
+    }
+
+    #[test]
+    fn reads_tail_window_with_original_line_numbers() {
+        let path = write_temp_file("one\ntwo\nthree\nfour\nfive\n");
+
+        let result = read_file_tail(path.to_str().expect("utf-8 path"), 2, 50, 100)
+            .expect("tail read should succeed");
+
+        fs::remove_file(&path).expect("temp file should be deleted");
+
+        assert_eq!(result.start_line, 4);
+        assert_eq!(result.end_line, 5);
+        assert_eq!(result.total_lines, 5);
+        assert_eq!(result.content, "     4\tfour\n     5\tfive");
     }
 
     #[test]

@@ -10,10 +10,12 @@ use crate::util::timing::elapsed_ms_u64;
 use async_trait::async_trait;
 use log::{debug, warn};
 use serde_json::{json, Value};
+use std::convert::TryFrom;
 use std::path::Path;
 use std::time::Instant;
 use tool_runtime::fs::read_file::{
-    build_read_file_presentation, build_remote_read_command, parse_remote_read_output, read_file,
+    build_read_file_presentation, build_remote_read_command, build_remote_tail_read_command,
+    parse_remote_read_output, parse_remote_tail_read_output, read_file, read_file_tail,
 };
 
 pub struct FileReadTool {
@@ -50,6 +52,59 @@ impl FileReadTool {
             max_line_chars,
             max_total_chars,
         }
+    }
+
+    fn read_window_start_line(input: &Value) -> Result<usize, String> {
+        Self::optional_line_number(input, "offset")?.map_or(Ok(1), |offset| Ok(offset.max(1)))
+    }
+
+    fn read_tail_mode(input: &Value) -> Result<bool, String> {
+        let tail = match input.get("tail") {
+            Some(value) => value
+                .as_bool()
+                .ok_or_else(|| "tail must be a boolean".to_string())?,
+            None => false,
+        };
+
+        if tail && input.get("offset").is_some() {
+            return Err("Do not provide offset when tail is true".to_string());
+        }
+
+        Ok(tail)
+    }
+
+    fn optional_line_number(input: &Value, key: &str) -> Result<Option<usize>, String> {
+        match input.get(key) {
+            Some(value) => Self::line_number_from_value(value)
+                .map(Some)
+                .map_err(|message| format!("{} {}", key, message)),
+            None => Ok(None),
+        }
+    }
+
+    fn line_number_from_value(value: &Value) -> Result<usize, &'static str> {
+        if let Some(number) = value.as_u64() {
+            return usize::try_from(number).map_err(|_| "is too large");
+        }
+
+        if let Some(number) = value.as_i64() {
+            if number < 0 {
+                return Err("must be a non-negative integer");
+            }
+            return usize::try_from(number as u64).map_err(|_| "is too large");
+        }
+
+        if let Some(number) = value.as_f64() {
+            if !number.is_finite() || number < 0.0 || number.fract() != 0.0 {
+                return Err("must be a non-negative integer");
+            }
+            if number > usize::MAX as f64 {
+                return Err("is too large");
+            }
+            return Ok(number as usize);
+        }
+
+        Err("must be a non-negative integer")
     }
 
     async fn read_remote_window(
@@ -122,6 +177,69 @@ impl FileReadTool {
 
         Ok(result)
     }
+
+    async fn read_remote_tail_window(
+        &self,
+        resolved_path: &str,
+        limit: usize,
+        context: &ToolUseContext,
+    ) -> BitFunResult<tool_runtime::fs::read_file::ReadFileResult> {
+        let ws_shell = context.ws_shell().ok_or_else(|| {
+            BitFunError::tool("Remote workspace shell is unavailable".to_string())
+        })?;
+
+        let command = build_remote_tail_read_command(
+            resolved_path,
+            limit,
+            self.max_line_chars,
+            self.max_total_chars,
+        )
+        .map_err(BitFunError::tool)?;
+
+        let remote_read_started_at = Instant::now();
+        debug!(
+            "Remote file tail read started: path={}, limit={}, timeout_ms={:?}, session_id={:?}, dialog_turn_id={:?}",
+            resolved_path,
+            limit,
+            Option::<u64>::None,
+            context.session_id,
+            context.dialog_turn_id
+        );
+        let (stdout, stderr, status) = ws_shell.exec(&command, None).await.map_err(|e| {
+            warn!(
+                "Remote file tail read failed: path={}, limit={}, duration_ms={}, error={}",
+                resolved_path,
+                limit,
+                elapsed_ms_u64(remote_read_started_at),
+                e
+            );
+            BitFunError::tool(format!("Failed to read file: {}", e))
+        })?;
+        debug!(
+            "Remote file tail read command completed: path={}, limit={}, status={}, stdout_len={}, stderr_len={}, duration_ms={}",
+            resolved_path,
+            limit,
+            status,
+            stdout.len(),
+            stderr.len(),
+            elapsed_ms_u64(remote_read_started_at)
+        );
+
+        let result = parse_remote_tail_read_output(&stdout, &stderr, status, resolved_path, limit)
+            .map_err(BitFunError::tool)?;
+
+        debug!(
+            "Remote file tail read parsed successfully: path={}, start_line={}, end_line={}, total_lines={}, hit_total_char_limit={}, duration_ms={}",
+            resolved_path,
+            result.start_line,
+            result.end_line,
+            result.total_lines,
+            result.hit_total_char_limit,
+            elapsed_ms_u64(remote_read_started_at)
+        );
+
+        Ok(result)
+    }
 }
 
 #[async_trait]
@@ -138,11 +256,12 @@ Usage:
 - The file_path parameter must be workspace-relative, an absolute path inside the current workspace, or an exact `bitfun://runtime/...` URI returned by another tool.
 - Do not read host roots or placeholder paths such as `/workspace`.
 - By default, it reads up to {} lines starting from the beginning of the file. When you plan to Edit a file, prefer this default full read so you see the exact bytes you will need to match.
-- You can optionally specify a start_line and limit. Use a range only when you already know the target lines; the range must include every line you will copy into Edit `old_string`.
+- You can optionally specify an offset and limit. offset is a 1-based line number. Use a range only when you already know the target lines; the range must include every line you will copy into Edit `old_string`.
+- You can set tail=true with limit to read the last N lines. This is useful for command output and logs. Do not combine tail=true with offset.
 - Any lines longer than {} characters will be truncated.
-- Total output is capped at {} characters. If that limit is hit, continue with start_line/limit until the target lines are fully visible, then Edit using only text from those Read results.
+- Total output is capped at {} characters. If that limit is hit, continue with offset/limit, until the target lines are fully visible, then Edit using only text from those Read results.
 - Results are returned using cat -n format, with line numbers starting at 1.
-- This tool can only read files, not directories. To read a directory, use an ls command via the Bash tool.
+- This tool can only read files, not directories.
 - You can call multiple tools in a single response. It is always better to speculatively read multiple potentially useful files in parallel.
 - Avoid tiny repeated slices (e.g. 30-100 line chunks). If you need more context, read a larger window that covers the whole block you will edit.
 "#,
@@ -151,7 +270,7 @@ Usage:
     }
 
     fn short_description(&self) -> String {
-        "Read file contents from the current workspace.".to_string()
+        "Read file contents.".to_string()
     }
 
     fn input_schema(&self) -> Value {
@@ -162,9 +281,13 @@ Usage:
                     "type": "string",
                     "description": "The file to read. Use a workspace-relative path, an absolute path inside the current workspace, or an exact bitfun://runtime URI returned by another tool."
                 },
-                "start_line": {
+                "offset": {
                     "type": "number",
-                    "description": "The line number to start reading from. Only provide if the file is too large to read at once"
+                    "description": "The 1-based line number to start reading from. offset=0 is accepted as offset=1. Only provide if the file is too large to read at once."
+                },
+                "tail": {
+                    "type": "boolean",
+                    "description": "Read the last N lines of the file, where N is limit. Do not provide offset when tail is true."
                 },
                 "limit": {
                     "type": "number",
@@ -212,6 +335,17 @@ Usage:
                 }
             }
         };
+
+        if let Err(message) =
+            Self::read_tail_mode(input).and_then(|_| Self::read_window_start_line(input))
+        {
+            return ValidationResult {
+                result: false,
+                message: Some(message),
+                error_code: Some(400),
+                meta: None,
+            };
+        }
 
         let resolved = match context.map(|ctx| ctx.resolve_tool_path(file_path)) {
             Some(Ok(path)) => path,
@@ -312,10 +446,8 @@ Usage:
             .and_then(|v| v.as_str())
             .ok_or_else(|| BitFunError::tool("file_path is required".to_string()))?;
 
-        let start_line = input
-            .get("start_line")
-            .and_then(|v| v.as_u64())
-            .unwrap_or(1) as usize;
+        let tail = Self::read_tail_mode(input).map_err(BitFunError::tool)?;
+        let start_line = Self::read_window_start_line(input).map_err(BitFunError::tool)?;
 
         let limit = input
             .get("limit")
@@ -325,8 +457,21 @@ Usage:
         let resolved = context.resolve_tool_path(file_path)?;
 
         let read_file_result = if resolved.uses_remote_workspace_backend() {
-            self.read_remote_window(&resolved.resolved_path, start_line, limit, context)
-                .await?
+            if tail {
+                self.read_remote_tail_window(&resolved.resolved_path, limit, context)
+                    .await?
+            } else {
+                self.read_remote_window(&resolved.resolved_path, start_line, limit, context)
+                    .await?
+            }
+        } else if tail {
+            read_file_tail(
+                &resolved.resolved_path,
+                limit,
+                self.max_line_chars,
+                self.max_total_chars,
+            )
+            .map_err(BitFunError::tool)?
         } else {
             read_file(
                 &resolved.resolved_path,
@@ -356,6 +501,8 @@ Usage:
                 "content": read_file_result.content,
                 "total_lines": read_file_result.total_lines,
                 "lines_read": presentation.lines_read,
+                "offset": read_file_result.start_line,
+                "tail": tail,
                 "start_line": read_file_result.start_line,
                 "size": read_file_result.content.len(),
                 "hit_total_char_limit": read_file_result.hit_total_char_limit
@@ -365,5 +512,51 @@ Usage:
         };
 
         Ok(vec![result])
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::FileReadTool;
+    use crate::agentic::tools::framework::Tool;
+    use serde_json::{json, Value};
+
+    #[test]
+    fn read_tool_schema_prefers_offset() {
+        let schema = FileReadTool::new().input_schema();
+        let properties = schema
+            .get("properties")
+            .and_then(Value::as_object)
+            .expect("properties");
+
+        assert!(properties.contains_key("offset"));
+        assert!(properties.contains_key("tail"));
+    }
+
+    #[test]
+    fn read_window_start_line_prefers_offset_and_normalizes_zero() {
+        assert_eq!(
+            FileReadTool::read_window_start_line(&json!({ "offset": 0 })).expect("offset"),
+            1
+        );
+        assert_eq!(
+            FileReadTool::read_window_start_line(&json!({ "offset": 42 })).expect("offset"),
+            42
+        );
+        assert_eq!(
+            FileReadTool::read_window_start_line(&json!({})).expect("default offset"),
+            1
+        );
+    }
+
+    #[test]
+    fn read_tail_mode_rejects_offset() {
+        let error = FileReadTool::read_tail_mode(&json!({
+            "tail": true,
+            "offset": 3
+        }))
+        .expect_err("tail and offset should not coexist");
+
+        assert_eq!(error, "Do not provide offset when tail is true");
     }
 }
