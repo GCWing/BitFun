@@ -71,7 +71,8 @@ type BrowserControlBrowserOption = {
 
 type SubagentBatchExecutionPolicy = 'safe_only' | 'force_parallel' | 'serial';
 
-const DEFAULT_SUBAGENT_BATCH_EXECUTION_POLICY: SubagentBatchExecutionPolicy = 'safe_only';
+const DEFAULT_SUBAGENT_BATCH_EXECUTION_POLICY: SubagentBatchExecutionPolicy = 'force_parallel';
+const DEFAULT_SUBAGENT_MAX_CONCURRENCY = 5;
 
 function normalizeSubagentBatchExecutionPolicy(value: unknown): SubagentBatchExecutionPolicy {
   return value === 'force_parallel' || value === 'serial' || value === 'safe_only'
@@ -105,6 +106,7 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
   const [models, setModels] = useState<AIModelConfig[]>([]);
   const [funcAgentModels, setFuncAgentModels] = useState<Record<string, string>>({});
   const [skipToolConfirmation, setSkipToolConfirmation] = useState(true);
+  const [subagentMaxConcurrency, setSubagentMaxConcurrency] = useState(DEFAULT_SUBAGENT_MAX_CONCURRENCY);
   const [executionTimeout, setExecutionTimeout] = useState('');
   const [confirmationTimeout, setConfirmationTimeout] = useState('');
   const [subagentBatchExecutionPolicy, setSubagentBatchExecutionPolicy] =
@@ -206,6 +208,7 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
         allModels,
         funcAgentModelsData,
         skipConfirm,
+        loadedSubagentMaxConcurrency,
         execTimeout,
         confirmTimeout,
         loadedSubagentBatchExecutionPolicy,
@@ -218,6 +221,7 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
         configManager.getConfig<AIModelConfig[]>('ai.models') || [],
         configManager.getConfig<Record<string, string>>('ai.func_agent_models') || {},
         configManager.getConfig<boolean>('ai.skip_tool_confirmation'),
+        configManager.getConfig<number | null>('ai.subagent_max_concurrency'),
         configManager.getConfig<number | null>('ai.tool_execution_timeout_secs'),
         configManager.getConfig<number | null>('ai.tool_confirmation_timeout_secs'),
         configManager.getConfig<SubagentBatchExecutionPolicy>('ai.subagent_batch_execution_policy'),
@@ -232,6 +236,9 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
       setModels(allModels as AIModelConfig[]);
       setFuncAgentModels(funcAgentModelsData as Record<string, string>);
       setSkipToolConfirmation(skipConfirm ?? true);
+      setSubagentMaxConcurrency(loadedSubagentMaxConcurrency != null
+        ? loadedSubagentMaxConcurrency
+        : DEFAULT_SUBAGENT_MAX_CONCURRENCY);
       setExecutionTimeout(execTimeout != null ? String(execTimeout) : '');
       setConfirmationTimeout(confirmTimeout != null ? String(confirmTimeout) : '');
       setSubagentBatchExecutionPolicy(normalizeSubagentBatchExecutionPolicy(loadedSubagentBatchExecutionPolicy));
@@ -488,6 +495,17 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
       setSubagentBatchExecutionPolicy(previousPolicy);
     } finally {
       setToolExecConfigLoading(false);
+    }
+  };
+
+  const handleSubagentMaxConcurrencyChange = async (value: number) => {
+    if (Number.isNaN(value) || value < 1) return;
+    setSubagentMaxConcurrency(value);
+    try {
+      await configManager.setConfig('ai.subagent_max_concurrency', value);
+    } catch (error) {
+      log.error('Failed to save subagent_max_concurrency', error);
+      notificationService.error(tTools('messages.saveFailed'));
     }
   };
 
@@ -1059,18 +1077,25 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
               />
             </div>
           </ConfigPageRow>
-          <ConfigPageRow label={subagentBatchPolicyLabel} description={tTools('config.subagentBatchPolicy.desc')} align="center">
-            <div className="bitfun-func-agent-config__row-control">
-              <Select
-                value={subagentBatchExecutionPolicy}
-                options={subagentBatchExecutionPolicyOptions}
-                size="small"
-                disabled={toolExecConfigLoading}
-                onChange={handleSubagentBatchExecutionPolicyChange}
-              />
-            </div>
-          </ConfigPageRow>
-          <ConfigPageRow label={tTools('config.confirmTimeout')} description={tTools('config.confirmTimeoutDesc')} align="center">
+          <ConfigPageRow
+            label={(
+              <span className="bitfun-func-agent-config__inline-label">
+                <span>{tTools('config.confirmTimeout')}</span>
+                <Tooltip content={tTools('config.confirmTimeoutHint')} placement="top">
+                  <span
+                    className="bitfun-func-agent-config__inline-info"
+                    role="button"
+                    tabIndex={0}
+                    aria-label={tTools('config.confirmTimeoutHint')}
+                  >
+                    <Info size={14} />
+                  </span>
+                </Tooltip>
+              </span>
+            )}
+            description={tTools('config.confirmTimeoutDesc')}
+            align="center"
+          >
             <div className="bitfun-func-agent-config__row-control">
               <NumberInput
                 value={confirmationTimeout === '' ? 0 : parseInt(confirmationTimeout, 10)}
@@ -1084,7 +1109,25 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
               />
             </div>
           </ConfigPageRow>
-          <ConfigPageRow label={tTools('config.executionTimeout')} description={tTools('config.executionTimeoutDesc')} align="center">
+          <ConfigPageRow
+            label={(
+              <span className="bitfun-func-agent-config__inline-label">
+                <span>{tTools('config.executionTimeout')}</span>
+                <Tooltip content={tTools('config.executionTimeoutHint')} placement="top">
+                  <span
+                    className="bitfun-func-agent-config__inline-info"
+                    role="button"
+                    tabIndex={0}
+                    aria-label={tTools('config.executionTimeoutHint')}
+                  >
+                    <Info size={14} />
+                  </span>
+                </Tooltip>
+              </span>
+            )}
+            description={tTools('config.executionTimeoutDesc')}
+            align="center"
+          >
             <div className="bitfun-func-agent-config__row-control">
               <NumberInput
                 value={executionTimeout === '' ? 0 : parseInt(executionTimeout, 10)}
@@ -1093,6 +1136,38 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
                 max={3600}
                 step={5}
                 unit={tTools('config.seconds')}
+                size="small"
+                variant="compact"
+              />
+            </div>
+          </ConfigPageRow>
+          <ConfigPageRow label={subagentBatchPolicyLabel} description={tTools('config.subagentBatchPolicy.desc')} align="center">
+            <div className="bitfun-func-agent-config__row-control">
+              <Select
+                value={subagentBatchExecutionPolicy}
+                options={subagentBatchExecutionPolicyOptions}
+                size="small"
+                disabled={toolExecConfigLoading}
+                onChange={handleSubagentBatchExecutionPolicyChange}
+              />
+            </div>
+          </ConfigPageRow>
+          <ConfigPageRow
+            label={(
+              <span className="bitfun-func-agent-config__inline-label">
+                <span>{tTools('config.subagentMaxConcurrency')}</span>
+              </span>
+            )}
+            description={tTools('config.subagentMaxConcurrencyDesc')}
+            align="center"
+          >
+            <div className="bitfun-func-agent-config__row-control">
+              <NumberInput
+                value={subagentMaxConcurrency}
+                onChange={(val) => void handleSubagentMaxConcurrencyChange(val)}
+                min={1}
+                max={100}
+                step={1}
                 size="small"
                 variant="compact"
               />

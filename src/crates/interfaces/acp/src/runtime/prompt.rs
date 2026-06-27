@@ -165,6 +165,7 @@ async fn wait_for_prompt_completion(
                     tool_id,
                     tool_name,
                     params,
+                    ..
                 } = tool_event
                 {
                     handle_permission_request(

@@ -9,7 +9,7 @@ import {
   ACPClientAPI,
 } from '@/infrastructure/api/service-api/ACPClientAPI';
 import { flowChatStore } from '../../store/FlowChatStore';
-import type { DialogTurn, FlowItem, FlowToolItem, ModelRound } from '../../types/flow-chat';
+import type { DialogTurn, FlowItem, FlowToolItem, ModelRound, ToolRejectOptions } from '../../types/flow-chat';
 
 const log = createLogger('useFlowChatToolActions');
 
@@ -74,11 +74,22 @@ export function useFlowChatToolActions() {
 
       flowChatStore.updateModelRoundItem(sessionId, turnId, toolId, {
         userConfirmed: approve,
-        status: approve ? 'confirmed' : 'cancelled',
+        status: approve ? 'confirmed' : 'rejected',
         toolCall: {
           ...toolItem.toolCall,
           input: finalInput,
         },
+        ...(approve ? {} : {
+          requiresConfirmation: false,
+          acpPermission: undefined,
+          isParamsStreaming: false,
+          toolResult: {
+            result: null,
+            success: false,
+            error: 'User rejected operation',
+          },
+          endTime: Date.now(),
+        }),
       } as any);
 
       const acpPermission = toolItem.acpPermission;
@@ -104,7 +115,7 @@ export function useFlowChatToolActions() {
     }
   }, []);
 
-  const handleToolReject = useCallback(async (toolId: string, permissionOptionId?: string) => {
+  const handleToolReject = useCallback(async (toolId: string, options?: ToolRejectOptions) => {
     try {
       const { sessionId, toolItem, turnId } = resolveToolContext(toolId);
 
@@ -115,7 +126,16 @@ export function useFlowChatToolActions() {
 
       flowChatStore.updateModelRoundItem(sessionId, turnId, toolId, {
         userConfirmed: false,
-        status: 'cancelled',
+        status: 'rejected',
+        requiresConfirmation: false,
+        acpPermission: undefined,
+        isParamsStreaming: false,
+        toolResult: {
+          result: null,
+          success: false,
+          error: 'User rejected operation',
+        },
+        endTime: Date.now(),
       } as any);
 
       const acpPermission = toolItem.acpPermission;
@@ -123,7 +143,7 @@ export function useFlowChatToolActions() {
         await ACPClientAPI.submitPermissionResponse({
           permissionId: acpPermission.permissionId,
           approve: false,
-          optionId: permissionOptionId,
+          optionId: options?.permissionOptionId,
         });
         return;
       }
@@ -133,6 +153,8 @@ export function useFlowChatToolActions() {
         sessionId,
         toolId,
         'reject',
+        undefined,
+        options?.instruction,
       );
     } catch (error) {
       log.error('Tool rejection failed', error);

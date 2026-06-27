@@ -1085,8 +1085,6 @@ console.log(user.greet());`);
               )}
               config={TOOL_CARD_CONFIGS['Write']}
               sessionId="preview-session"
-              onConfirm={async () => alert('已确认')}
-              onReject={async () => alert('已拒绝')}
             />
 
             <h3 style={{ color: 'var(--color-static-white)', marginTop: '16px', marginBottom: '8px' }}>编辑文件</h3>
@@ -1102,8 +1100,6 @@ console.log(user.greet());`);
               )}
               config={TOOL_CARD_CONFIGS['Edit']}
               sessionId="preview-session"
-              onConfirm={async () => alert('已确认')}
-              onReject={async () => alert('已拒绝')}
             />
 
             <h3 style={{ color: 'var(--color-static-white)', marginTop: '16px', marginBottom: '8px' }}>删除文件</h3>
@@ -1115,8 +1111,6 @@ console.log(user.greet());`);
               )}
               config={TOOL_CARD_CONFIGS['Delete']}
               sessionId="preview-session"
-              onConfirm={async () => alert('已删除')}
-              onReject={async () => alert('已取消')}
             />
           </div>
         ),

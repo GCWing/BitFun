@@ -3,22 +3,16 @@
  */
 
 import React, { useMemo } from 'react';
-import { Check, FileText, X } from 'lucide-react';
+import { FileText } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { IconButton } from '../../component-library';
 import type { ToolCardProps } from '../types/flow-chat';
-import { AcpPermissionActions } from './AcpPermissionActions';
-import { hasAcpPermissionOptions } from './AcpPermissionActions.utils';
 import { CompactToolCard, CompactToolCardHeader } from './CompactToolCard';
-import { ToolCardHeaderActions } from './ToolCardHeaderActions';
 import { ToolCardStatusSlot } from './ToolCardStatusSlot';
 import { isSessionViewPreviewText } from '../utils/sessionViewPreview';
 
 export const ReadFileDisplay: React.FC<ToolCardProps> = React.memo(({
   toolItem,
-  onConfirm,
-  onReject,
-  onOpenInEditor
+  onOpenInEditor,
 }) => {
   const { t } = useTranslation('flow-chat');
   const { toolCall, toolResult, status, requiresConfirmation, userConfirmed } = toolItem;
@@ -109,6 +103,7 @@ export const ReadFileDisplay: React.FC<ToolCardProps> = React.memo(({
     !userConfirmed &&
     status !== 'completed' &&
     status !== 'cancelled' &&
+    status !== 'rejected' &&
     status !== 'error'
   );
 
@@ -154,53 +149,6 @@ export const ReadFileDisplay: React.FC<ToolCardProps> = React.memo(({
     return null;
   };
 
-  const renderActions = () => {
-    if (!showConfirmationActions) {
-      return undefined;
-    }
-
-    return (
-      <ToolCardHeaderActions>
-        {hasAcpPermissionOptions(toolItem) ? (
-          <AcpPermissionActions
-            toolItem={toolItem}
-            input={toolCall?.input}
-            presentation="text"
-            onConfirm={onConfirm}
-            onReject={onReject}
-          />
-        ) : (
-          <>
-            <IconButton
-              className="tool-card-header-action read-file-confirm-btn"
-              variant="success"
-              size="xs"
-              onClick={(event) => {
-                event.stopPropagation();
-                onConfirm?.(toolCall?.input);
-              }}
-              tooltip={t('toolCards.default.waitingConfirm')}
-            >
-              <Check size={12} />
-            </IconButton>
-            <IconButton
-              className="tool-card-header-action read-file-reject-btn"
-              variant="danger"
-              size="xs"
-              onClick={(event) => {
-                event.stopPropagation();
-                onReject?.();
-              }}
-              tooltip={t('toolCards.acpPermission.reject')}
-            >
-              <X size={12} />
-            </IconButton>
-          </>
-        )}
-      </ToolCardHeaderActions>
-    );
-  };
-
   return (
     <CompactToolCard
       status={status}
@@ -212,7 +160,6 @@ export const ReadFileDisplay: React.FC<ToolCardProps> = React.memo(({
         <CompactToolCardHeader
           icon={<ToolCardStatusSlot status={status} toolIcon={<FileText size={16} className="read-file-card-icon" />} />}
           content={renderContent()}
-          extra={renderActions()}
         />
       }
     />

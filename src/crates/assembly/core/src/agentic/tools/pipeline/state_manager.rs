@@ -23,6 +23,7 @@ pub(crate) fn tool_task_state_kind(state: &ToolExecutionState) -> ToolTaskStateK
         ToolExecutionState::AwaitingConfirmation { .. } => ToolTaskStateKind::AwaitingConfirmation,
         ToolExecutionState::Completed { .. } => ToolTaskStateKind::Completed,
         ToolExecutionState::Failed { .. } => ToolTaskStateKind::Failed,
+        ToolExecutionState::Rejected { .. } => ToolTaskStateKind::Rejected,
         ToolExecutionState::Cancelled { .. } => ToolTaskStateKind::Cancelled,
     }
 }
@@ -159,9 +160,17 @@ impl ToolStateManager {
             } => ToolStateEventKind::Streaming {
                 chunks_received: *chunks_received,
             },
-            ToolExecutionState::AwaitingConfirmation { params, .. } => {
+            ToolExecutionState::AwaitingConfirmation { params, timeout_at } => {
+                let confirmation_timeout_secs = task.options.confirmation_timeout_secs.filter(|seconds| *seconds > 0);
                 ToolStateEventKind::AwaitingConfirmation {
                     params: params.clone(),
+                    timeout_at: confirmation_timeout_secs.map(|_| {
+                        timeout_at
+                            .duration_since(std::time::SystemTime::UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_millis()
+                            .min(u128::from(u64::MAX)) as u64
+                    }),
                 }
             }
             ToolExecutionState::Completed {
@@ -202,6 +211,7 @@ impl ToolStateManager {
                 confirmation_wait_ms: *confirmation_wait_ms,
                 execution_ms: *execution_ms,
             },
+            ToolExecutionState::Rejected { .. } => ToolStateEventKind::Rejected,
             ToolExecutionState::Cancelled {
                 reason,
                 duration_ms,
@@ -250,6 +260,7 @@ impl ToolStateManager {
             awaiting_confirmation: counts.awaiting_confirmation,
             completed: counts.completed,
             failed: counts.failed,
+            rejected: counts.rejected,
             cancelled: counts.cancelled,
         }
     }
@@ -367,5 +378,6 @@ pub struct ToolStats {
     pub awaiting_confirmation: usize,
     pub completed: usize,
     pub failed: usize,
+    pub rejected: usize,
     pub cancelled: usize,
 }

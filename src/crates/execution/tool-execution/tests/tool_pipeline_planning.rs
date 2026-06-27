@@ -115,10 +115,12 @@ fn cancellation_policy_preserves_cancellable_and_terminal_state_contract() {
     assert!(!should_cancel_tool_state(ToolTaskStateKind::Streaming));
     assert!(!should_cancel_tool_state(ToolTaskStateKind::Completed));
     assert!(!should_cancel_tool_state(ToolTaskStateKind::Failed));
+    assert!(!should_cancel_tool_state(ToolTaskStateKind::Rejected));
     assert!(!should_cancel_tool_state(ToolTaskStateKind::Cancelled));
 
     assert!(ToolTaskStateKind::Completed.is_terminal());
     assert!(ToolTaskStateKind::Failed.is_terminal());
+    assert!(ToolTaskStateKind::Rejected.is_terminal());
     assert!(ToolTaskStateKind::Cancelled.is_terminal());
     assert!(!ToolTaskStateKind::Running.is_terminal());
 }
@@ -129,11 +131,12 @@ fn dialog_turn_cancellation_summary_counts_cancelled_and_skipped_tasks() {
         ToolTaskStateKind::Queued,
         ToolTaskStateKind::Running,
         ToolTaskStateKind::Completed,
+        ToolTaskStateKind::Rejected,
         ToolTaskStateKind::Cancelled,
     ]);
 
     assert_eq!(summary.cancelled, 2);
-    assert_eq!(summary.skipped, 2);
+    assert_eq!(summary.skipped, 3);
 }
 
 #[test]
@@ -161,10 +164,11 @@ fn state_counts_preserve_pipeline_stats_contract() {
         ToolTaskStateKind::AwaitingConfirmation,
         ToolTaskStateKind::Completed,
         ToolTaskStateKind::Failed,
+        ToolTaskStateKind::Rejected,
         ToolTaskStateKind::Cancelled,
     ]);
 
-    assert_eq!(counts.total, 9);
+    assert_eq!(counts.total, 10);
     assert_eq!(counts.queued, 2);
     assert_eq!(counts.waiting, 1);
     assert_eq!(counts.running, 1);
@@ -172,5 +176,6 @@ fn state_counts_preserve_pipeline_stats_contract() {
     assert_eq!(counts.awaiting_confirmation, 1);
     assert_eq!(counts.completed, 1);
     assert_eq!(counts.failed, 1);
+    assert_eq!(counts.rejected, 1);
     assert_eq!(counts.cancelled, 1);
 }

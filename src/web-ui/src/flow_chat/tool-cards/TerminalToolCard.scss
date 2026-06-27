@@ -286,16 +286,6 @@
   flex-shrink: 0;
 }
 
-/* ========== Confirmation action button group ========== */
-.terminal-confirm-actions {
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 0.125rem;
-  flex-shrink: 0;
-  width: auto;
-}
-
 /* ========== Common action button styles ========== */
 .terminal-action-btn {
   display: flex;
@@ -613,12 +603,6 @@
     .terminal-action-btn {
       width: 16px;
       height: 16px;
-    }
-
-    .terminal-confirm-actions {
-      gap: 1px;
-      width: auto !important;
-      justify-content: flex-start !important;
     }
 
     .terminal-command,

@@ -14,10 +14,14 @@
   "config": {
     "autoExecute": "Auto Execute",
     "autoExecuteDesc": "Skip user confirmation before tool execution.",
+    "subagentMaxConcurrency": "Subagent Concurrency Limit",
+    "subagentMaxConcurrencyDesc": "How many subagents may run in parallel at the same time.",
     "confirmTimeout": "Confirm Timeout",
     "confirmTimeoutDesc": "Maximum time (seconds) to wait for user confirmation of tool calls.",
+    "confirmTimeoutHint": "Set 0 to disable confirmation timeout.",
     "executionTimeout": "Execution Timeout",
-    "executionTimeoutDesc": "Maximum time (seconds) for tool execution, including Task subagent runs.",
+    "executionTimeoutDesc": "Maximum time (seconds) for tool execution.",
+    "executionTimeoutHint": "Set 0 to disable execution timeout. Subagents and command execution tools manage their own execution limits and are not capped by this setting.",
     "subagentBatchPolicy": {
       "label": "Subagent Batch Scheduling",
       "desc": "Choose how multiple subagent launches from the same model response are scheduled.",

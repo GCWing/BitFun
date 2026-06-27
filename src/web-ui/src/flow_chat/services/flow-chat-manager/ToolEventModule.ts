@@ -20,6 +20,7 @@ import type {
   ParamsPartialToolEvent,
   ProgressToolEvent,
   QueuedToolEvent,
+  RejectedToolEvent,
   StartedToolEvent,
   WaitingToolEvent,
 } from '../EventBatcher';
@@ -106,6 +107,12 @@ export function processToolEvent(
       handleCancelled(context, store, sessionId, turnId, toolEvent);
       break;
     }
+
+    case 'Rejected': {
+      flushPendingBatchedEvents(context);
+      handleRejected(context, store, sessionId, turnId, toolEvent);
+      break;
+    }
     
     case 'ConfirmationNeeded': {
       flushPendingBatchedEvents(context);
@@ -173,10 +180,10 @@ function isWriteLikeToolName(toolName: string): boolean {
 
 function shouldIgnoreParamsPartial(status: FlowToolItem['status'], toolName: string): boolean {
   if (isWriteLikeToolName(toolName)) {
-    return ['completed', 'error', 'cancelled', 'pending_confirmation', 'confirmed'].includes(status);
+    return ['completed', 'error', 'cancelled', 'rejected', 'pending_confirmation', 'confirmed'].includes(status);
   }
 
-  return ['running', 'completed', 'error', 'cancelled', 'pending_confirmation', 'confirmed'].includes(status);
+  return ['running', 'completed', 'error', 'cancelled', 'rejected', 'pending_confirmation', 'confirmed'].includes(status);
 }
 
 function applyParamsPartial(
@@ -551,6 +558,35 @@ function handleCancelled(
 }
 
 /**
+ * Handle tool rejected event
+ */
+function handleRejected(
+  context: FlowChatContext,
+  store: FlowChatStore,
+  sessionId: string,
+  turnId: string,
+  toolEvent: RejectedToolEvent
+): void {
+  store.updateModelRoundItem(sessionId, turnId, toolEvent.tool_id, {
+    toolResult: {
+      result: null,
+      success: false,
+      error: 'User rejected operation',
+    },
+    status: 'rejected',
+    userConfirmed: false,
+    requiresConfirmation: false,
+    acpPermission: undefined,
+    isParamsStreaming: false,
+    endTime: Date.now(),
+  } as any);
+
+  store.clearSessionNeedsAttention(sessionId);
+
+  immediateSaveDialogTurn(context, sessionId, turnId);
+}
+
+/**
  * Handle tool confirmation needed event
  */
 function handleConfirmationNeeded(
@@ -561,7 +597,8 @@ function handleConfirmationNeeded(
 ): void {
   store.updateModelRoundItem(sessionId, turnId, toolEvent.tool_id, {
     requiresConfirmation: true,
-    status: 'pending_confirmation'
+    status: 'pending_confirmation',
+    confirmationTimeoutAt: typeof toolEvent.timeout_at === 'number' ? toolEvent.timeout_at : undefined,
   } as any);
 
   const state = store.getState();

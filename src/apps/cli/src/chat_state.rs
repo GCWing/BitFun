@@ -592,6 +592,7 @@ impl ChatState {
                 tool_id,
                 tool_name,
                 params,
+                ..
             } => {
                 self.update_tool(tool_id, |tool| {
                     tool.status = ToolDisplayStatus::ConfirmationNeeded;

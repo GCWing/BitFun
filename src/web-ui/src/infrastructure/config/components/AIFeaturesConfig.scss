@@ -34,6 +34,26 @@
     color: var(--color-text-secondary);
   }
 
+  &__inline-label {
+    display: inline-flex;
+    align-items: center;
+    gap: $size-gap-1;
+    min-width: 0;
+  }
+
+  &__inline-info {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-text-muted);
+    cursor: help;
+    flex-shrink: 0;
+  }
+
+  &__inline-info:hover {
+    color: var(--color-text-secondary);
+  }
+
   &__policy-tooltip {
     max-width: min(320px, calc(100vw - 32px));
     display: grid;

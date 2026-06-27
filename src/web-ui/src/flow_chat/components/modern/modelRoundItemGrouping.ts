@@ -25,7 +25,7 @@ function hasActiveStreamingNarrative(items: FlowItem[]): boolean {
 
 function isActiveToolItem(item: FlowItem): boolean {
   if (item.type !== 'tool') return false;
-  return item.status !== 'completed' && item.status !== 'cancelled' && item.status !== 'error';
+  return item.status !== 'completed' && item.status !== 'cancelled' && item.status !== 'rejected' && item.status !== 'error';
 }
 
 export function isCompletedToolInTransientWindow(item: FlowItem, nowMs: number): boolean {

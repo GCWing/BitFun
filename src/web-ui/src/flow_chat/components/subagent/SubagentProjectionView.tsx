@@ -258,7 +258,7 @@ export const SubagentProjectionView: React.FC<SubagentProjectionViewProps> = ({
   const lastActiveItemId = useMemo(() => {
     for (let index = items.length - 1; index >= 0; index -= 1) {
       const item = items[index];
-      if (item.status !== 'completed' && item.status !== 'cancelled' && item.status !== 'error') {
+      if (item.status !== 'completed' && item.status !== 'cancelled' && item.status !== 'rejected' && item.status !== 'error') {
         return item.id;
       }
       if (item.type === 'thinking' && (item as FlowThinkingItem).isStreaming) {

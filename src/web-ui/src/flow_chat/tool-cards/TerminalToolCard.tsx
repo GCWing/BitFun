@@ -16,7 +16,7 @@
 import React, { useState, useRef, useCallback, useEffect, useLayoutEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ToolCardProps } from '../types/flow-chat';
-import { Terminal, Play, X, ExternalLink, Square } from 'lucide-react';
+import { Terminal, ExternalLink, Square } from 'lucide-react';
 import { ToolCardStatusSlot } from './ToolCardStatusSlot';
 import { createTerminalTab } from '@/shared/utils/tabUtils';
 import { BaseToolCard, ToolCardHeader } from './BaseToolCard';
@@ -29,8 +29,6 @@ import { getTerminalViewState, type TerminalViewState } from './terminalToolCard
 import { ToolTimeoutIndicator } from './ToolTimeoutIndicator';
 import { ToolCardCopyAction, ToolCardHeaderActions } from './ToolCardHeaderActions';
 import { ToolCommandPreview } from './ToolCommandPreview';
-import { hasAcpPermissionOptions } from './AcpPermissionActions.utils';
-import { AcpPermissionActions } from './AcpPermissionActions';
 import { formatSessionViewPreviewText } from '../utils/sessionViewPreview';
 import './TerminalToolCard.scss';
 
@@ -224,8 +222,6 @@ function parseTerminalResult(raw: unknown, durationMs?: number): ParsedTerminalR
 
 export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
   toolItem,
-  onConfirm,
-  onReject,
   onExpand,
   terminalSessionId: propTerminalSessionId,
 }) => {
@@ -385,22 +381,6 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
   ]);
   const waitingMessage = viewState.waitingMessageKey ? t(viewState.waitingMessageKey) : null;
 
-  const handleExecute = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-
-    if (!canExecuteCommand) {
-      return;
-    }
-
-    applyTerminalExpandedState(true, { reason: 'manual' });
-    onConfirm?.(toolCall?.input);
-  }, [applyTerminalExpandedState, canExecuteCommand, onConfirm, toolCall?.input]);
-
-  const handleReject = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-    onReject?.();
-  }, [onReject]);
-
   const handleInterrupt = useCallback(async (e: React.MouseEvent) => {
     e.stopPropagation();
 
@@ -437,7 +417,7 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
 
   const handleCardClick = useCallback((e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
-    if (target.closest('.tool-card-header-actions, .terminal-action-btn, .terminal-confirm-actions')) {
+    if (target.closest('.tool-card-header-actions, .terminal-action-btn')) {
       return;
     }
 
@@ -518,60 +498,18 @@ export const TerminalToolCard: React.FC<TerminalToolCardProps> = ({
 
   const renderHeaderExtra = (includeInterrupt: boolean) => (
     <span className="terminal-header-extra">
-      {/* Always visible: confirmation actions + interrupt */}
-      {(showConfirmButtons || (includeInterrupt && viewState.showInterruptButton)) && (
+      {/* Always visible while running: interrupt */}
+      {includeInterrupt && viewState.showInterruptButton && (
         <span className="terminal-critical-actions">
-          {showConfirmButtons && (
-            <span className="terminal-confirm-actions" onClick={(e) => e.stopPropagation()}>
-              {hasAcpPermissionOptions(toolItem) ? (
-                <AcpPermissionActions
-                  toolItem={toolItem}
-                  input={toolCall?.input}
-                  disabled={!canExecuteCommand}
-                  buttonClassName="terminal-action-btn"
-                  onConfirm={onConfirm}
-                  onReject={onReject}
-                />
-              ) : (
-                <>
-                  <IconButton
-                    className="terminal-action-btn execute-btn"
-                    variant="success"
-                    size="xs"
-                    onClick={handleExecute}
-                    disabled={!canExecuteCommand}
-                    tooltip={
-                      canExecuteCommand
-                        ? t('toolCards.terminal.executeCommandTitle')
-                        : t('toolCards.terminal.commandEmptyWarning')
-                    }
-                  >
-                    <Play size={12} fill="currentColor" />
-                  </IconButton>
-                  <IconButton
-                    className="terminal-action-btn cancel-btn"
-                    variant="danger"
-                    size="xs"
-                    onClick={handleReject}
-                    tooltip={t('toolCards.terminal.cancel')}
-                  >
-                    <X size={14} />
-                  </IconButton>
-                </>
-              )}
-            </span>
-          )}
-          {includeInterrupt && viewState.showInterruptButton && (
-            <IconButton
-              className="terminal-action-btn interrupt-btn"
-              variant="warning"
-              size="xs"
-              onClick={handleInterrupt}
-              tooltip={t('toolCards.terminal.interrupt')}
-            >
-              <Square size={12} fill="currentColor" />
-            </IconButton>
-          )}
+          <IconButton
+            className="terminal-action-btn interrupt-btn"
+            variant="warning"
+            size="xs"
+            onClick={handleInterrupt}
+            tooltip={t('toolCards.terminal.interrupt')}
+          >
+            <Square size={12} fill="currentColor" />
+          </IconButton>
         </span>
       )}
 

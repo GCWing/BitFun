@@ -319,10 +319,6 @@ Output is only what was produced during this tool call's wait window."#
         false
     }
 
-    fn needs_permissions(&self, _input: Option<&Value>) -> bool {
-        true
-    }
-
     fn manages_own_execution_timeout(&self) -> bool {
         true
     }

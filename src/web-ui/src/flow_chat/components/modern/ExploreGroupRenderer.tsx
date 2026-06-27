@@ -7,7 +7,7 @@
 import React, { useRef, useMemo, useCallback, useEffect, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import type { FlowItem, FlowToolItem, FlowTextItem, FlowThinkingItem } from '../../types/flow-chat';
+import type { FlowItem, FlowToolItem, FlowTextItem, FlowThinkingItem, ToolRejectOptions } from '../../types/flow-chat';
 import type { ExploreGroupData } from '../../store/modernFlowChatStore';
 import { createLogger } from '@/shared/utils/logger';
 
@@ -313,9 +313,9 @@ const ExploreItemRenderer = React.memo<ExploreItemRendererProps>(({ item, turnId
     }
   }, [onToolConfirm]);
   
-  const handleReject = useCallback(async (toolId: string, permissionOptionId?: string) => {
+  const handleReject = useCallback(async (toolId: string, options?: ToolRejectOptions) => {
     if (onToolReject) {
-      await onToolReject(toolId, permissionOptionId);
+      await onToolReject(toolId, options);
     }
   }, [onToolReject]);
   

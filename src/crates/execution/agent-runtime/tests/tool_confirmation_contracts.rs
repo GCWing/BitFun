@@ -72,6 +72,14 @@ fn confirmation_failure_mapping_preserves_legacy_reasons_and_errors() {
     assert_eq!(rejected.kind, ConfirmationFailureKind::Rejected);
     assert_eq!(rejected.state_reason, "User rejected: unsafe");
     assert_eq!(rejected.error_message, "Tool was rejected by user: unsafe");
+    assert_eq!(rejected.rejection_instruction.as_deref(), Some("unsafe"));
+
+    let default_rejected = resolve_confirmation_failure(ToolConfirmationOutcome::Rejected {
+        reason: "User rejected".to_string(),
+    })
+    .expect("rejection should produce failure");
+    assert_eq!(default_rejected.kind, ConfirmationFailureKind::Rejected);
+    assert_eq!(default_rejected.rejection_instruction, None);
 
     let closed = resolve_confirmation_failure(ToolConfirmationOutcome::ChannelClosed)
         .expect("closed channel should produce failure");
@@ -86,6 +94,7 @@ fn confirmation_failure_mapping_preserves_legacy_reasons_and_errors() {
     assert_eq!(timeout.kind, ConfirmationFailureKind::Timeout);
     assert_eq!(timeout.state_reason, "Confirmation timeout");
     assert_eq!(timeout.error_message, "Confirmation timeout: Bash");
+    assert_eq!(timeout.rejection_instruction, None);
 }
 
 #[test]

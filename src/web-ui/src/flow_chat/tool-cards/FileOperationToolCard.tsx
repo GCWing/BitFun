@@ -27,9 +27,8 @@ import {
   ChevronRight,
   Loader2,
   Check,
-  X,
 } from 'lucide-react';
-import { CubeLoading, IconButton, ToolProcessingDots } from '../../component-library';
+import { CubeLoading, ToolProcessingDots } from '../../component-library';
 import type { ToolCardProps } from '../types/flow-chat';
 import { BaseToolCard, ToolCardHeader } from './BaseToolCard';
 import { useSnapshotState } from '../../tools/snapshot_system/hooks/useSnapshotState';
@@ -48,8 +47,6 @@ import { hasNonFileUriScheme } from '@/shared/utils/pathUtils';
 import { notificationService } from '@/shared/notification-system';
 import { useGitState } from '@/tools/git/hooks/useGitState';
 import { ToolCardHeaderActions } from './ToolCardHeaderActions';
-import { hasAcpPermissionOptions } from './AcpPermissionActions.utils';
-import { AcpPermissionActions } from './AcpPermissionActions';
 import {
   displayFileToolGuidanceMessage,
   isFileToolGuidanceMessage,
@@ -115,8 +112,6 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
   config,
   sessionId,
   onOpenInEditor,
-  onConfirm,
-  onReject,
   displayContext,
 }) => {
   const { t } = useTranslation('flow-chat');
@@ -261,6 +256,7 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
     !userConfirmed &&
     status !== 'completed' &&
     status !== 'cancelled' &&
+    status !== 'rejected' &&
     status !== 'error'
   );
   
@@ -638,18 +634,6 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
     isFailed,
     toolItem.toolName,
   ]);
-
-  const handleConfirmClick = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    onConfirm?.(toolCall?.input);
-  }, [onConfirm, toolCall?.input]);
-
-  const handleRejectClick = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    onReject?.();
-  }, [onReject]);
 
   const handleOpenFullCodeClick = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -1100,38 +1084,6 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
               {currentFilePath ? t('toolCards.file.receivingParams') : t('toolCards.file.analyzing')}
             </span>
           )}
-          {showConfirmationActions && (
-            hasAcpPermissionOptions(toolItem) ? (
-              <AcpPermissionActions
-                toolItem={toolItem}
-                input={toolCall?.input}
-                buttonClassName="file-op-header-action"
-                onConfirm={onConfirm}
-                onReject={onReject}
-              />
-            ) : (
-              <>
-                <IconButton
-                  className="tool-card-header-action file-op-header-action file-op-confirm-btn"
-                  variant="success"
-                  size="xs"
-                  onClick={handleConfirmClick}
-                  tooltip={t('toolCards.mcp.confirmExecute')}
-                >
-                  <Check size={12} />
-                </IconButton>
-                <IconButton
-                  className="tool-card-header-action file-op-header-action file-op-reject-btn"
-                  variant="danger"
-                  size="xs"
-                  onClick={handleRejectClick}
-                  tooltip={t('toolCards.mcp.cancel')}
-                >
-                  <X size={12} />
-                </IconButton>
-              </>
-            )
-          )}
           {canOpenFullCode && (
             <Tooltip content={t('toolCards.file.openFullCodeHint')} placement="top">
               <button
@@ -1171,40 +1123,6 @@ export const FileOperationToolCard: React.FC<FileOperationToolCardProps> = ({
             <CompactToolCardHeader
               icon={getDeleteStatusIcon()}
               content={renderDeleteContent()}
-              extra={showConfirmationActions ? (
-                <ToolCardHeaderActions className="file-op-header-actions">
-                  {hasAcpPermissionOptions(toolItem) ? (
-                    <AcpPermissionActions
-                      toolItem={toolItem}
-                      input={toolCall?.input}
-                      buttonClassName="file-op-header-action"
-                      onConfirm={onConfirm}
-                      onReject={onReject}
-                    />
-                  ) : (
-                    <>
-                      <IconButton
-                        className="tool-card-header-action file-op-header-action file-op-confirm-btn"
-                        variant="success"
-                        size="xs"
-                        onClick={handleConfirmClick}
-                        tooltip={t('toolCards.mcp.confirmExecute')}
-                      >
-                        <Check size={12} />
-                      </IconButton>
-                      <IconButton
-                        className="tool-card-header-action file-op-header-action file-op-reject-btn"
-                        variant="danger"
-                        size="xs"
-                        onClick={handleRejectClick}
-                        tooltip={t('toolCards.mcp.cancel')}
-                      >
-                        <X size={12} />
-                      </IconButton>
-                    </>
-                  )}
-                </ToolCardHeaderActions>
-              ) : undefined}
             />
           }
         />

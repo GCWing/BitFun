@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 
 import { useTranslation } from 'react-i18next';
-import { CubeLoading, Button } from '../../component-library';
+import { CubeLoading } from '../../component-library';
 import { Markdown } from '@/component-library/components/Markdown/Markdown';
 import type { FlowToolItem, ToolCardProps } from '../types/flow-chat';
 import { BaseToolCard } from './BaseToolCard';
@@ -21,8 +21,6 @@ import { useToolCardHeightContract } from './useToolCardHeightContract';
 import { ToolTimeoutIndicator } from './ToolTimeoutIndicator';
 import { getReviewerContextBySubagentId } from '@/shared/services/reviewTeamService';
 import type { ReviewerContext } from '@/shared/services/reviewTeamService';
-import { hasAcpPermissionOptions } from './AcpPermissionActions.utils';
-import { AcpPermissionActions } from './AcpPermissionActions';
 import { openBtwSessionInAuxPane } from '../services/btwSessionPane';
 import { flowChatStore } from '../store/FlowChatStore';
 import { useSessionGoalModeActive } from '../hooks/useSessionGoalModeActive';
@@ -95,10 +93,8 @@ function isDeepReviewReviewerTask(toolItem: FlowToolItem): boolean {
 export const TaskToolDisplay: React.FC<ToolCardProps> = ({
   toolItem,
   interruptionNote,
-  onConfirm,
-  onReject,
   onOpenInPanel,
-  sessionId
+  sessionId,
 }) => {
   const { t } = useTranslation('flow-chat');
   const defaultTimeoutDisabled = useSessionGoalModeActive(sessionId);
@@ -223,7 +219,7 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
   );
   const hasInterruptionNote = Boolean(interruptionNote);
   const needsConfirmation =
-    requiresConfirmation && !userConfirmed && status !== 'completed';
+    requiresConfirmation && !userConfirmed && status !== 'completed' && status !== 'cancelled' && status !== 'rejected' && status !== 'error';
 
   /* Prompt body: same scroll + Markdown shell as ModelThinkingDisplay. */
   const promptContentRef = useRef<HTMLDivElement>(null);
@@ -258,7 +254,7 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
   const taskErrorMessage = readTaskErrorMessage(toolResult);
   const completedDurationStatus = isFailed
     ? 'error'
-    : status === 'cancelled'
+    : status === 'cancelled' || status === 'rejected'
       ? 'cancelled'
       : status === 'completed' && taskDurationMs != null
         ? 'success'
@@ -509,41 +505,6 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
           </div>
           )
         )}
-        {needsConfirmation && (
-          <div className="tool-actions">
-            {hasAcpPermissionOptions(toolItem) ? (
-              <AcpPermissionActions
-                toolItem={toolItem}
-                input={toolCall?.input}
-                presentation="text"
-                disabled={status === 'streaming'}
-                onConfirm={onConfirm}
-                onReject={onReject}
-              />
-            ) : (
-              <>
-                <Button
-                  className="confirm-button"
-                  variant="primary"
-                  size="small"
-                  onClick={() => onConfirm?.(toolCall?.input)}
-                  disabled={status === 'streaming'}
-                >
-                  {t('toolCards.taskTool.confirmDelegate')}
-                </Button>
-                <Button
-                  className="reject-button"
-                  variant="ghost"
-                  size="small"
-                  onClick={() => onReject?.()}
-                  disabled={status === 'streaming'}
-                >
-                  {t('toolCards.taskTool.cancel')}
-                </Button>
-              </>
-            )}
-          </div>
-        )}
       </div>
     );
   };
@@ -559,7 +520,7 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
         expandedContent={renderExpandedContent()}
         headerExpandAffordance={showHeaderExpandHint}
         isFailed={isFailed}
-        requiresConfirmation={requiresConfirmation && !userConfirmed}
+        requiresConfirmation={needsConfirmation}
       />
     </div>
   );

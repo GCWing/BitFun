@@ -92,6 +92,21 @@ pub enum ToolExecutionState {
         execution_ms: Option<u64>,
     },
 
+    /// Rejected by user before execution
+    Rejected {
+        reason: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        duration_ms: Option<u64>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        queue_wait_ms: Option<u64>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        preflight_ms: Option<u64>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        confirmation_wait_ms: Option<u64>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        execution_ms: Option<u64>,
+    },
+
     /// Cancelled
     Cancelled {
         reason: String,
@@ -119,6 +134,7 @@ pub struct ToolStats {
     pub awaiting_confirmation: usize,
     pub completed: usize,
     pub failed: usize,
+    pub rejected: usize,
     pub cancelled: usize,
 }
 

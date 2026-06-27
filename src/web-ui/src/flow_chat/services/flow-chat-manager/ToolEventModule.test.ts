@@ -48,10 +48,16 @@ function createSessionWithTool(tool: FlowToolItem): Session {
 
 function makeToolContext(): any {
   return {
+    flowChatStore: FlowChatStore.getInstance(),
     eventBatcher: {
       getBufferSize: () => 0,
       flushNow: () => {},
     },
+    saveDebouncers: new Map(),
+    lastSaveTimestamps: new Map(),
+    lastSaveHashes: new Map(),
+    turnSaveInFlight: new Map(),
+    turnSavePending: new Set(),
   };
 }
 
@@ -313,6 +319,67 @@ describe('processToolEvent late Started event behavior', () => {
 
     const updatedTurn = FlowChatStore.getInstance().getState().sessions.get('session-1')?.dialogTurns[0];
     expect(updatedTurn?.modelRounds[0]?.items.some(item => item.id === 'tool-late-1')).toBe(false);
+  });
+});
+
+describe('processToolEvent rejected event behavior', () => {
+  afterEach(() => {
+    resetStore();
+  });
+
+  it('marks a rejected tool as rejected and clears pending confirmation state', () => {
+    const tool: FlowToolItem = {
+      id: 'tool-1',
+      type: 'tool',
+      toolName: 'ExecCommand',
+      timestamp: 1001,
+      status: 'pending_confirmation',
+      requiresConfirmation: true,
+      userConfirmed: undefined,
+      isParamsStreaming: true,
+      acpPermission: {
+        permissionId: 'permission-1',
+        requestedAt: 1001,
+      },
+      toolCall: {
+        id: 'tool-1',
+        input: { cmd: 'npm test' },
+      },
+    };
+
+    FlowChatStore.getInstance().setState(() => ({
+      sessions: new Map([['session-1', createSessionWithTool(tool)]]),
+      activeSessionId: 'session-1',
+    }));
+
+    processToolEvent(
+      makeToolContext(),
+      'session-1',
+      'turn-1',
+      'round-1',
+      {
+        event_type: 'Rejected',
+        tool_id: 'tool-1',
+        tool_name: 'ExecCommand',
+      },
+    );
+
+    const updatedTool = FlowChatStore.getInstance()
+      .findToolItem('session-1', 'turn-1', 'tool-1') as FlowToolItem;
+
+    expect(updatedTool).toMatchObject({
+      status: 'rejected',
+      userConfirmed: false,
+      requiresConfirmation: false,
+      isParamsStreaming: false,
+      toolResult: {
+        result: null,
+        success: false,
+        error: 'User rejected operation',
+      },
+    });
+    expect(updatedTool.acpPermission).toBeUndefined();
+    expect(typeof updatedTool.endTime).toBe('number');
   });
 });
 

@@ -22,10 +22,13 @@ use bitfun_agent_runtime::tool_confirmation::{
 };
 use bitfun_agent_tools::{
     build_invalid_tool_call_error_message, build_tool_call_truncation_recovery_notice,
-    build_tool_execution_error_presentation, build_user_steering_interrupted_presentation,
-    render_tool_result_for_assistant, truncate_raw_tool_arguments_preview,
-    truncate_tool_arguments_preview, validate_tool_execution_admission,
-    ToolExecutionAdmissionRejection, ToolExecutionAdmissionRequest, GET_TOOL_SPEC_TOOL_NAME,
+    build_tool_confirmation_timeout_presentation, build_tool_execution_error_presentation,
+    build_tool_execution_timeout_presentation,
+    build_user_rejected_tool_presentation_with_instruction,
+    build_user_steering_interrupted_presentation, render_tool_result_for_assistant,
+    truncate_raw_tool_arguments_preview, truncate_tool_arguments_preview,
+    validate_tool_execution_admission, ToolExecutionAdmissionRejection,
+    ToolExecutionAdmissionRequest, GET_TOOL_SPEC_TOOL_NAME,
     USER_STEERING_INTERRUPTED_MESSAGE,
 };
 use bitfun_runtime_ports::RoundInjectionToolPreemption;
@@ -203,6 +206,44 @@ fn build_user_steering_interrupted_result(
             result: presentation.result_json,
             result_for_assistant: Some(presentation.result_for_assistant),
             is_error: true,
+            duration_ms: Some(execution_time_ms),
+            image_attachments: None,
+        },
+        execution_time_ms,
+    }
+}
+
+fn build_user_rejected_tool_result(
+    task_id: &str,
+    task: Option<ToolTask>,
+    instruction: Option<&str>,
+) -> ToolExecutionResult {
+    let (tool_id, tool_name, execution_time_ms) = if let Some(task) = task {
+        (
+            task.tool_call.tool_id,
+            task.tool_call.tool_name,
+            elapsed_ms_since(task.created_at),
+        )
+    } else {
+        warn!(
+            "Task not found while building user-rejected result: {}",
+            task_id
+        );
+        (task_id.to_string(), "unknown".to_string(), 0)
+    };
+
+    let presentation =
+        build_user_rejected_tool_presentation_with_instruction(&tool_name, instruction);
+
+    ToolExecutionResult {
+        tool_id: tool_id.clone(),
+        tool_name: tool_name.clone(),
+        result: ModelToolResult {
+            tool_id,
+            tool_name,
+            result: presentation.result_json,
+            result_for_assistant: Some(presentation.result_for_assistant),
+            is_error: false,
             duration_ms: Some(execution_time_ms),
             image_attachments: None,
         },
@@ -797,26 +838,55 @@ impl ToolPipeline {
                 self.state_manager
                     .update_state(
                         &tool_id,
-                        ToolExecutionState::Cancelled {
-                            reason: failure.state_reason,
-                            duration_ms: Some(elapsed_ms_u64(start_time)),
-                            queue_wait_ms: Some(queue_wait_ms),
-                            preflight_ms: Some(preflight_ms),
-                            confirmation_wait_ms: Some(elapsed_ms_u64(confirmation_started_at)),
-                            execution_ms: None,
+                        match failure.kind {
+                            ConfirmationFailureKind::Rejected => ToolExecutionState::Rejected {
+                                reason: failure.state_reason,
+                                duration_ms: Some(elapsed_ms_u64(start_time)),
+                                queue_wait_ms: Some(queue_wait_ms),
+                                preflight_ms: Some(preflight_ms),
+                                confirmation_wait_ms: Some(elapsed_ms_u64(confirmation_started_at)),
+                                execution_ms: None,
+                            },
+                            ConfirmationFailureKind::ChannelClosed
+                            | ConfirmationFailureKind::Timeout => ToolExecutionState::Cancelled {
+                                reason: failure.state_reason,
+                                duration_ms: Some(elapsed_ms_u64(start_time)),
+                                queue_wait_ms: Some(queue_wait_ms),
+                                preflight_ms: Some(preflight_ms),
+                                confirmation_wait_ms: Some(elapsed_ms_u64(confirmation_started_at)),
+                                execution_ms: None,
+                            },
                         },
                     )
                     .await;
 
                 match failure.kind {
                     ConfirmationFailureKind::Rejected => {
-                        return Err(BitFunError::Validation(failure.error_message));
+                        return Ok(build_user_rejected_tool_result(
+                            &tool_id,
+                            self.state_manager.get_task(&tool_id),
+                            failure.rejection_instruction.as_deref(),
+                        ));
                     }
                     ConfirmationFailureKind::ChannelClosed => {
                         return Err(BitFunError::service(failure.error_message));
                     }
                     ConfirmationFailureKind::Timeout => {
-                        return Err(BitFunError::Timeout(failure.error_message));
+                        let presentation = build_tool_confirmation_timeout_presentation(&tool_name);
+                        return Ok(ToolExecutionResult {
+                            tool_id: tool_id.clone(),
+                            tool_name: tool_name.clone(),
+                            result: ModelToolResult {
+                                tool_id,
+                                tool_name,
+                                result: presentation.result_json,
+                                result_for_assistant: Some(presentation.result_for_assistant),
+                                is_error: false,
+                                duration_ms: Some(elapsed_ms_u64(start_time)),
+                                image_attachments: None,
+                            },
+                            execution_time_ms: elapsed_ms_u64(start_time),
+                        });
                     }
                 }
             }
@@ -965,6 +1035,55 @@ impl ToolPipeline {
                     );
 
                     return Err(e);
+                }
+
+                if matches!(e, BitFunError::Timeout(_)) {
+                    let duration_ms = elapsed_ms_u64(start_time);
+                    let presentation = build_tool_execution_timeout_presentation(
+                        &tool_name,
+                        task.options.timeout_secs,
+                    );
+                    let timed_out_tool_id = tool_id.clone();
+                    let timed_out_tool_name = tool_name.clone();
+
+                    self.state_manager
+                        .update_state(
+                            &tool_id,
+                            ToolExecutionState::Cancelled {
+                                reason: presentation.result_for_assistant.clone(),
+                                duration_ms: Some(duration_ms),
+                                queue_wait_ms: Some(queue_wait_ms),
+                                preflight_ms: Some(preflight_ms),
+                                confirmation_wait_ms: Some(confirmation_wait_ms),
+                                execution_ms: Some(execution_ms),
+                            },
+                        )
+                        .await;
+
+                    warn!(
+                        "Tool execution timed out: tool_name={}, duration_ms={}, queue_wait_ms={}, preflight_ms={}, confirmation_wait_ms={}, execution_ms={}",
+                        tool_name,
+                        duration_ms,
+                        queue_wait_ms,
+                        preflight_ms,
+                        confirmation_wait_ms,
+                        execution_ms
+                    );
+
+                    return Ok(ToolExecutionResult {
+                        tool_id: timed_out_tool_id.clone(),
+                        tool_name: timed_out_tool_name.clone(),
+                        result: ModelToolResult {
+                            tool_id: timed_out_tool_id,
+                            tool_name: timed_out_tool_name,
+                            result: presentation.result_json,
+                            result_for_assistant: Some(presentation.result_for_assistant),
+                            is_error: false,
+                            duration_ms: Some(duration_ms),
+                            image_attachments: None,
+                        },
+                        execution_time_ms: duration_ms,
+                    });
                 }
 
                 let error_msg = e.to_string();
@@ -1309,11 +1428,11 @@ impl ToolPipeline {
             );
             Ok(())
         } else {
-            // If the channel does not exist, mark it as cancelled directly
+            // If the channel does not exist, mark it as rejected directly.
             self.state_manager
                 .update_state(
                     tool_id,
-                    ToolExecutionState::Cancelled {
+                    ToolExecutionState::Rejected {
                         reason: format!("User rejected: {}", reason),
                         duration_ms: None,
                         queue_wait_ms: None,
@@ -1356,6 +1475,7 @@ mod tests {
         name: String,
         response: serde_json::Value,
         delay_ms: u64,
+        needs_permissions: bool,
     }
 
     #[async_trait]
@@ -1373,7 +1493,11 @@ mod tests {
         }
 
         fn is_readonly(&self) -> bool {
-            true
+            !self.needs_permissions
+        }
+
+        fn needs_permissions(&self, _input: Option<&serde_json::Value>) -> bool {
+            self.needs_permissions
         }
 
         fn input_schema(&self) -> serde_json::Value {
@@ -1473,6 +1597,25 @@ mod tests {
                 name: name.to_string(),
                 response,
                 delay_ms,
+                needs_permissions: false,
+            }));
+    }
+
+    async fn register_permissioned_static_test_tool(
+        pipeline: &ToolPipeline,
+        name: &str,
+        response: serde_json::Value,
+        delay_ms: u64,
+    ) {
+        pipeline
+            .tool_registry
+            .write()
+            .await
+            .register_tool(Arc::new(StaticTestTool {
+                name: name.to_string(),
+                response,
+                delay_ms,
+                needs_permissions: true,
             }));
     }
 
@@ -1551,6 +1694,136 @@ mod tests {
             .as_deref()
             .unwrap_or_default()
             .contains("Raw arguments:"));
+    }
+
+    #[tokio::test]
+    async fn confirmation_timeout_returns_timeout_result_without_argument_error() {
+        let pipeline = test_tool_pipeline();
+        register_permissioned_static_test_tool(
+            &pipeline,
+            "ExecCommand",
+            json!({ "unexpected": true }),
+            0,
+        )
+        .await;
+
+        let task_id = "tool_1".to_string();
+        pipeline
+            .state_manager
+            .create_task(ToolTask::new(
+                test_tool_call(&task_id, "ExecCommand"),
+                {
+                    let context = test_tool_execution_context();
+                    context
+                },
+                {
+                    let mut options = ToolExecutionOptions::default();
+                    options.confirm_before_run = true;
+                    options.confirmation_timeout_secs = Some(1);
+                    options
+                },
+            ))
+            .await;
+
+        // The public execute_tools path is easier to keep stable via timeout
+        // by not delivering confirmation. We use a second task with the same
+        // setup to exercise the actual pipeline path.
+        let results = pipeline
+            .execute_tools(
+                vec![test_tool_call("tool_1", "ExecCommand")],
+                test_tool_execution_context(),
+                {
+                    let mut options = ToolExecutionOptions::default();
+                    options.confirmation_timeout_secs = Some(0);
+                    options
+                },
+            )
+            .await
+            .expect("timeout should be returned as a tool result");
+
+        assert_eq!(results.len(), 1);
+        let result = &results[0].result;
+        assert!(!result.is_error);
+        assert_eq!(result.result["category"], json!("confirmation_timeout"));
+        assert_eq!(result.result["tool_name"], json!("ExecCommand"));
+        assert!(result.result["provided_arguments"].is_null());
+        let assistant_text = result.result_for_assistant.as_deref().unwrap_or_default();
+        assert!(assistant_text.contains("confirmation window expired"));
+        assert!(!assistant_text.contains("failed"));
+        assert!(!assistant_text.contains("Provided arguments"));
+    }
+
+    #[tokio::test]
+    async fn confirmation_rejection_returns_user_rejected_result_without_argument_error() {
+        let pipeline = test_tool_pipeline();
+        register_permissioned_static_test_tool(
+            &pipeline,
+            "ExecCommand",
+            json!({ "unexpected": true }),
+            0,
+        )
+        .await;
+
+        let reject_pipeline = pipeline.clone();
+        let reject_handle = tokio::spawn(async move {
+            for _ in 0..50 {
+                if reject_pipeline
+                    .state_manager
+                    .get_task("tool_1")
+                    .is_some_and(|task| {
+                        matches!(task.state, ToolExecutionState::AwaitingConfirmation { .. })
+                    })
+                {
+                    reject_pipeline
+                        .reject_tool(
+                            "tool_1",
+                            "Use the built-in status view instead.".to_string(),
+                        )
+                        .await
+                        .expect("reject tool confirmation");
+                    return;
+                }
+                sleep(Duration::from_millis(10)).await;
+            }
+            panic!("tool should enter awaiting confirmation");
+        });
+
+        let results = pipeline
+            .execute_tools(
+                vec![test_tool_call("tool_1", "ExecCommand")],
+                test_tool_execution_context(),
+                ToolExecutionOptions::default(),
+            )
+            .await
+            .expect("user rejection should be returned as a tool result");
+        reject_handle.await.expect("rejection task should finish");
+
+        assert_eq!(results.len(), 1);
+        let result = &results[0].result;
+        assert!(!result.is_error);
+        assert_eq!(result.result["status"], json!("rejected"));
+        assert_eq!(result.result["category"], json!("user_rejected"));
+        assert_eq!(result.result["tool_name"], json!("ExecCommand"));
+        assert_eq!(
+            result.result["instruction"],
+            json!("Use the built-in status view instead.")
+        );
+        assert!(result.result["provided_arguments"].is_null());
+
+        let assistant_text = result.result_for_assistant.as_deref().unwrap_or_default();
+        assert!(assistant_text.contains(
+            "The user rejected this tool call with the following instruction: \"Use the built-in status view instead.\""
+        ));
+        assert!(assistant_text.contains("Do not retry it unless the user explicitly asks you to."));
+        assert!(!assistant_text.contains("invalid_arguments"));
+        assert!(!assistant_text.contains("Provided arguments"));
+        assert!(!assistant_text.contains("failed"));
+
+        let task = pipeline
+            .state_manager
+            .get_task("tool_1")
+            .expect("tool task should be retained");
+        assert!(matches!(task.state, ToolExecutionState::Rejected { .. }));
     }
 
     #[tokio::test]

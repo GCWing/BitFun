@@ -42,6 +42,7 @@ function StatusIcon({ status, size }: { status: ToolCardStatusSlotStatus; size: 
     case 'error':
       return <X size={size} className="tcss-error" />;
     case 'cancelled':
+    case 'rejected':
       return <X size={size} className="tcss-cancelled" />;
     case 'queued':
     case 'waiting':

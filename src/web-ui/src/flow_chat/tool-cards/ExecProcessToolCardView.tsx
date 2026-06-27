@@ -66,6 +66,31 @@ function getAutoExpandedStateForStatus(status: string): boolean | null {
   return null;
 }
 
+function isCancelledStatus(status: string): boolean {
+  return status === 'cancelled';
+}
+
+function isUserRejectedTool(toolItem: FlowToolItem): boolean {
+  if (toolItem.status === 'rejected') {
+    return true;
+  }
+
+  if (toolItem.status === 'cancelled') {
+    if (toolItem.userConfirmed === false) {
+      return true;
+    }
+
+    const error = toolItem.toolResult?.error;
+    return typeof error === 'string' && /\buser rejected\b/i.test(error);
+  }
+
+  return false;
+}
+
+function isRejectedOrCancelledStatus(toolItem: FlowToolItem): boolean {
+  return isCancelledStatus(toolItem.status) || isUserRejectedTool(toolItem);
+}
+
 function readProgressLogs(toolItem: FlowToolItem): string[] {
   const logs = (toolItem as any)._progressLogs;
   return Array.isArray(logs) ? logs.filter((entry): entry is string => typeof entry === 'string') : [];
@@ -149,6 +174,13 @@ export const ExecProcessToolCardView: React.FC<ExecProcessToolCardViewProps> = (
     return typeof progressMessage === 'string' ? progressMessage : '';
   }, [progressLogs, toolItem]);
   const isRunning = status === 'preparing' || status === 'streaming' || status === 'running' || status === 'receiving';
+  const rejectedOrCancelled = isRejectedOrCancelledStatus(toolItem);
+  const cancelledStatusLabelKey = isUserRejectedTool(toolItem)
+    ? 'toolCards.terminal.rejected'
+    : 'toolCards.terminal.cancelled';
+  const cancelledStatusClassName = isUserRejectedTool(toolItem)
+    ? 'status-rejected'
+    : 'status-cancelled';
   const maxRows = isRunning ? EXEC_OUTPUT_STREAMING_MAX_ROWS : EXEC_OUTPUT_EXPANDED_MAX_ROWS;
   const toolId = toolItem.id ?? toolItem.toolCall?.id;
   const icon = <Terminal size={16} className="terminal-card-icon" />;
@@ -333,7 +365,7 @@ export const ExecProcessToolCardView: React.FC<ExecProcessToolCardViewProps> = (
         completedStatus={
           status === 'completed'
             ? model.exitCode === 0 || model.exitCode == null ? 'success' : 'error'
-            : status === 'error' ? 'error' : status === 'cancelled' ? 'cancelled' : undefined
+            : status === 'error' ? 'error' : rejectedOrCancelled ? 'cancelled' : undefined
         }
       />
     </span>
@@ -342,6 +374,11 @@ export const ExecProcessToolCardView: React.FC<ExecProcessToolCardViewProps> = (
   const renderHeaderExtra = () => (
     <span className="terminal-header-extra">
       {renderTimeoutIndicator()}
+      {rejectedOrCancelled && (
+        <span className={`terminal-status-text ${cancelledStatusClassName}`}>
+          {t(cancelledStatusLabelKey)}
+        </span>
+      )}
       <ToolCardHeaderActions className="terminal-header-actions">
         {renderCopyButton()}
       </ToolCardHeaderActions>
@@ -378,15 +415,27 @@ export const ExecProcessToolCardView: React.FC<ExecProcessToolCardViewProps> = (
       );
     }
 
-    if (status === 'cancelled' && liveOutput) {
+    if (rejectedOrCancelled) {
       return (
         <div className="terminal-result-container cancelled">
-          <div className="terminal-result-output">
-            {renderOutputWithCopyAction(liveOutput)}
-          </div>
+          {liveOutput && (
+            <div className="terminal-result-output">
+              {renderOutputWithCopyAction(liveOutput)}
+            </div>
+          )}
           <div className="terminal-result-footer">
-            <span className="terminal-cancelled-text">{t('toolCards.terminal.commandInterrupted')}</span>
+            <span className="terminal-cancelled-text">
+              {t(cancelledStatusLabelKey)}
+            </span>
           </div>
+        </div>
+      );
+    }
+
+    if (status === 'pending_confirmation') {
+      return (
+        <div className="terminal-execution-output terminal-waiting">
+          <span className="waiting-text">{t('toolCards.approval.waiting')}</span>
         </div>
       );
     }
@@ -443,6 +492,11 @@ export const ExecProcessToolCardView: React.FC<ExecProcessToolCardViewProps> = (
           {renderPrimaryText('compact')}
           <span className="compact-extra-on-hover terminal-hover-actions">
             {renderTimeoutIndicator()}
+            {rejectedOrCancelled && (
+              <span className={`terminal-status-text ${cancelledStatusClassName}`}>
+                {t(cancelledStatusLabelKey)}
+              </span>
+            )}
             <ToolCardHeaderActions className="terminal-header-actions">
               {renderCopyButton()}
             </ToolCardHeaderActions>
@@ -464,6 +518,7 @@ export const ExecProcessToolCardView: React.FC<ExecProcessToolCardViewProps> = (
           expandedContent={renderExpandedContent()}
           errorContent={renderErrorContent()}
           isFailed={status === 'error'}
+          requiresConfirmation={status === 'pending_confirmation'}
         />
       ) : (
         <CompactToolCard

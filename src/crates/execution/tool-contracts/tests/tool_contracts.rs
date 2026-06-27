@@ -2,8 +2,9 @@ use bitfun_agent_tools::{
     build_bitfun_runtime_uri, build_collapsed_tool_stub_definition,
     build_get_tool_spec_assistant_detail, build_get_tool_spec_detail_result,
     build_get_tool_spec_duplicate_load_hint, build_get_tool_spec_duplicate_load_result,
-    build_prompt_visible_tool_manifest_definitions, build_tool_path_policy_denial_message,
-    build_tool_runtime_artifact_reference, build_tool_session_runtime_artifact_reference,
+    build_prompt_visible_tool_manifest_definitions, build_tool_execution_timeout_presentation,
+    build_tool_path_policy_denial_message, build_tool_runtime_artifact_reference,
+    build_tool_session_runtime_artifact_reference,
     collect_loaded_collapsed_tool_names, get_tool_spec_input_schema,
     get_tool_spec_is_concurrency_safe, get_tool_spec_is_readonly, get_tool_spec_needs_permissions,
     get_tool_spec_short_description, is_bitfun_runtime_uri, is_remote_posix_path_within_root,
@@ -27,10 +28,13 @@ use bitfun_agent_tools::{
 };
 use bitfun_agent_tools::{
     build_invalid_tool_call_error_message, build_tool_call_truncation_recovery_notice,
-    build_tool_execution_error_presentation, build_user_steering_interrupted_presentation,
-    is_write_like_tool_name, render_tool_result_for_assistant,
-    truncate_raw_tool_arguments_preview_to, truncate_tool_arguments_preview,
-    TOOL_ERROR_ARGUMENTS_PREVIEW_BYTES, USER_STEERING_INTERRUPTED_MESSAGE,
+    build_tool_confirmation_timeout_presentation, build_tool_execution_error_presentation,
+    build_user_rejected_tool_presentation, build_user_rejected_tool_presentation_with_instruction,
+    build_user_steering_interrupted_presentation, is_write_like_tool_name,
+    render_tool_result_for_assistant, truncate_raw_tool_arguments_preview_to,
+    truncate_tool_arguments_preview, TOOL_CONFIRMATION_TIMEOUT_MESSAGE,
+    TOOL_ERROR_ARGUMENTS_PREVIEW_BYTES, USER_REJECTED_TOOL_MESSAGE,
+    USER_STEERING_INTERRUPTED_MESSAGE,
 };
 use bitfun_agent_tools::{
     build_persisted_tool_output_message, count_tool_result_lines, file_tool_guidance_message,
@@ -154,6 +158,84 @@ fn steering_interrupted_presentation_preserves_current_contract() {
     assert_eq!(
         presentation.result_for_assistant,
         USER_STEERING_INTERRUPTED_MESSAGE
+    );
+}
+
+#[test]
+fn tool_confirmation_timeout_presentation_is_not_an_execution_failure() {
+    let presentation = build_tool_confirmation_timeout_presentation("ExecCommand");
+
+    assert_eq!(presentation.result_json["status"], "cancelled");
+    assert_eq!(presentation.result_json["category"], "confirmation_timeout");
+    assert_eq!(presentation.result_json["tool_name"], "ExecCommand");
+    assert_eq!(
+        presentation.result_json["message"],
+        TOOL_CONFIRMATION_TIMEOUT_MESSAGE
+    );
+    assert!(presentation.result_json["provided_arguments"].is_null());
+    assert_eq!(
+        presentation.result_for_assistant,
+        TOOL_CONFIRMATION_TIMEOUT_MESSAGE
+    );
+    assert!(!presentation.result_for_assistant.contains("failed"));
+    assert!(!presentation
+        .result_for_assistant
+        .contains("Provided arguments"));
+}
+
+#[test]
+fn tool_execution_timeout_presentation_includes_timeout_seconds() {
+    let presentation = build_tool_execution_timeout_presentation("ExecCommand", Some(120));
+
+    assert_eq!(presentation.result_json["status"], "timeout");
+    assert_eq!(presentation.result_json["category"], "execution_timeout");
+    assert_eq!(presentation.result_json["tool_name"], "ExecCommand");
+    assert_eq!(presentation.result_json["timeout_seconds"], 120);
+    assert!(
+        presentation
+            .result_for_assistant
+            .contains("This tool call was cancelled because the global tool execution time limit (120 seconds)")
+    );
+    assert!(!presentation.result_for_assistant.contains("Provided arguments"));
+    assert!(!presentation.result_for_assistant.contains("failed"));
+}
+
+#[test]
+fn user_rejected_tool_presentation_is_not_an_argument_error() {
+    let presentation = build_user_rejected_tool_presentation("ExecCommand");
+
+    assert_eq!(presentation.result_json["status"], "rejected");
+    assert_eq!(presentation.result_json["category"], "user_rejected");
+    assert_eq!(presentation.result_json["tool_name"], "ExecCommand");
+    assert_eq!(
+        presentation.result_json["message"],
+        USER_REJECTED_TOOL_MESSAGE
+    );
+    assert!(presentation.result_json["provided_arguments"].is_null());
+    assert_eq!(
+        presentation.result_for_assistant,
+        USER_REJECTED_TOOL_MESSAGE
+    );
+    assert!(!presentation
+        .result_for_assistant
+        .contains("invalid_arguments"));
+    assert!(!presentation.result_for_assistant.contains("failed"));
+    assert!(!presentation
+        .result_for_assistant
+        .contains("Provided arguments"));
+
+    let presentation = build_user_rejected_tool_presentation_with_instruction(
+        "ExecCommand",
+        Some("Use the built-in status view instead."),
+    );
+    assert_eq!(
+        presentation.result_json["instruction"],
+        "Use the built-in status view instead."
+    );
+    assert!(presentation.result_json["provided_arguments"].is_null());
+    assert_eq!(
+        presentation.result_for_assistant,
+        "The user rejected this tool call with the following instruction: \"Use the built-in status view instead.\". Do not retry it unless the user explicitly asks you to. If you cannot complete the task without running this tool call, stop and ask the user how to proceed."
     );
 }
 

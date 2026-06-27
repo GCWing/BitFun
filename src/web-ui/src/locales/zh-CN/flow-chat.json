@@ -1356,6 +1356,21 @@
       "commandInterrupted": "命令已被中断",
       "executionFailed": "命令执行失败"
     },
+    "approval": {
+      "waiting": "等待确认",
+      "confirm": "允许",
+      "reject": "拒绝",
+      "rejectWithInstruction": "说明后拒绝",
+      "confirmTooltip": "允许执行这个工具",
+      "rejectTooltip": "拒绝执行这个工具",
+      "rejectWithInstructionTooltip": "拒绝并告诉助手下一步怎么做",
+      "rejectInstructionLabel": "拒绝说明",
+      "rejectInstructionPlaceholder": "告诉助手改怎么做...",
+      "rejectWithInstructionSubmit": "拒绝",
+      "emptyInputTooltip": "这个工具没有可执行输入",
+      "remaining": "剩余 {{time}}",
+      "ariaLabel": "工具执行确认"
+    },
     "execProcess": {
       "executeCommand": "运行命令:",
       "writeStdin": "写入标准输入:",
@@ -1579,6 +1594,7 @@
       "executing": "执行中...",
       "completed": "已完成",
       "cancelled": "已取消",
+      "rejected": "已拒绝",
       "failed": "执行失败",
       "preparing": "准备中"
     },

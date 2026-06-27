@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { DialogTurn } from '../types/flow-chat';
 import {
+  normalizeRecoveredRoundStatus,
   normalizeRecoveredToolStatus,
   normalizeRecoveredTurnStatus,
   settleInterruptedDialogTurn,
@@ -61,15 +62,10 @@ describe('dialogTurnStability', () => {
     expect(normalizeRecoveredTurnStatus('processing', { error: null })).toBe('cancelled');
   });
 
-  it('keeps pending confirmation tools actionable after recovery', () => {
-    expect(
-      normalizeRecoveredToolStatus(
-        'pending_confirmation',
-        'cancelled',
-        null,
-        { preservePendingConfirmation: true },
-      ),
-    ).toBe('pending_confirmation');
+  it('cancels recovered confirmation states because their runtime approval channel is gone', () => {
+    expect(normalizeRecoveredToolStatus('pending_confirmation', 'cancelled', null)).toBe('cancelled');
+    expect(normalizeRecoveredToolStatus('confirmed', 'cancelled', null)).toBe('cancelled');
+    expect(normalizeRecoveredRoundStatus('pending_confirmation', 'cancelled')).toBe('cancelled');
   });
 
   it('cancels pending confirmation tools during an explicit cancellation settle', () => {
@@ -101,7 +97,46 @@ describe('dialogTurnStability', () => {
     });
 
     const settled = settleInterruptedDialogTurn(turn, 42);
+    expect(settled.modelRounds[0].status).toBe('cancelled');
     expect(settled.modelRounds[0].items[0].status).toBe('cancelled');
+  });
+
+  it('cancels stale pending confirmation tools even when the persisted turn is already cancelled', () => {
+    const turn = createDialogTurn({
+      status: 'cancelled',
+      endTime: 40,
+      modelRounds: [
+        {
+          id: 'round-1',
+          index: 0,
+          items: [
+            {
+              id: 'tool-1',
+              type: 'tool',
+              toolName: 'Terminal',
+              toolCall: {
+                input: { command: 'echo ok' },
+                id: 'tool-1',
+              },
+              timestamp: 2,
+              status: 'pending_confirmation',
+              startTime: 2,
+            },
+          ],
+          isStreaming: false,
+          isComplete: false,
+          status: 'pending_confirmation',
+          startTime: 2,
+        },
+      ],
+    });
+
+    const settled = settleInterruptedDialogTurn(turn, 42);
+    const tool = settled.modelRounds[0].items[0];
+
+    expect(settled.status).toBe('cancelled');
+    expect(settled.modelRounds[0].status).toBe('cancelled');
+    expect(tool.status).toBe('cancelled');
   });
 
   it('cancels transient nested states when settling an interrupted turn', () => {

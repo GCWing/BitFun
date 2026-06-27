@@ -1356,6 +1356,21 @@
       "commandInterrupted": "Command interrupted",
       "executionFailed": "Command execution failed"
     },
+    "approval": {
+      "waiting": "Waiting for confirmation",
+      "confirm": "Allow",
+      "reject": "Reject",
+      "rejectWithInstruction": "Reject with instruction",
+      "confirmTooltip": "Allow this tool run",
+      "rejectTooltip": "Reject this tool run",
+      "rejectWithInstructionTooltip": "Reject and tell the assistant what to do next",
+      "rejectInstructionLabel": "Rejection instruction",
+      "rejectInstructionPlaceholder": "Tell the assistant what to do instead...",
+      "rejectWithInstructionSubmit": "Reject",
+      "emptyInputTooltip": "This tool has no executable input",
+      "remaining": "remaining {{time}}",
+      "ariaLabel": "Tool approval"
+    },
     "execProcess": {
       "executeCommand": "Run command:",
       "writeStdin": "Write stdin:",
@@ -1579,6 +1594,7 @@
       "executing": "Executing...",
       "completed": "Completed",
       "cancelled": "Cancelled",
+      "rejected": "Rejected",
       "failed": "Execution failed",
       "preparing": "Preparing"
     },

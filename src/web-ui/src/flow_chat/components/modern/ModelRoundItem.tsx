@@ -10,7 +10,7 @@
 import React, { useMemo, useState, useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Copy, Check } from 'lucide-react';
-import type { ModelRound, ModelRoundAttempt, FlowItem, FlowTextItem, FlowToolItem, FlowThinkingItem, TokenUsage } from '../../types/flow-chat';
+import type { ModelRound, ModelRoundAttempt, FlowItem, FlowTextItem, FlowToolItem, FlowThinkingItem, TokenUsage, ToolRejectOptions } from '../../types/flow-chat';
 import { useI18n } from '@/infrastructure/i18n';
 import { FlowTextBlock } from '../FlowTextBlock';
 import { FlowToolCard } from '../FlowToolCard';
@@ -882,9 +882,9 @@ const FlowItemRenderer: React.FC<FlowItemRendererProps> = ({
                 await onToolConfirm(toolId, updatedInput, permissionOptionId, approve);
               }
             }}
-            onReject={async (_toolId: string, permissionOptionId?: string) => {
+            onReject={async (_toolId: string, options?: ToolRejectOptions) => {
               if (onToolReject) {
-                await onToolReject(item.id, permissionOptionId);
+                await onToolReject(item.id, options);
               }
             }}
             onOpenInEditor={(filePath: string) => {

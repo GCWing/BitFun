@@ -58,6 +58,7 @@ pub struct ToolConfirmationFailure {
     pub kind: ConfirmationFailureKind,
     pub state_reason: String,
     pub error_message: String,
+    pub rejection_instruction: Option<String>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -123,21 +124,36 @@ pub fn resolve_confirmation_failure(
 ) -> Option<ToolConfirmationFailure> {
     match outcome {
         ToolConfirmationOutcome::Confirmed => None,
-        ToolConfirmationOutcome::Rejected { reason } => Some(ToolConfirmationFailure {
-            kind: ConfirmationFailureKind::Rejected,
-            state_reason: format!("User rejected: {reason}"),
-            error_message: format!("Tool was rejected by user: {reason}"),
-        }),
+        ToolConfirmationOutcome::Rejected { reason } => {
+            let rejection_instruction = normalize_rejection_instruction(&reason);
+            Some(ToolConfirmationFailure {
+                kind: ConfirmationFailureKind::Rejected,
+                state_reason: format!("User rejected: {reason}"),
+                error_message: format!("Tool was rejected by user: {reason}"),
+                rejection_instruction,
+            })
+        }
         ToolConfirmationOutcome::ChannelClosed => Some(ToolConfirmationFailure {
             kind: ConfirmationFailureKind::ChannelClosed,
             state_reason: "Confirmation channel closed".to_string(),
             error_message: "Confirmation channel closed".to_string(),
+            rejection_instruction: None,
         }),
         ToolConfirmationOutcome::Timeout { tool_name } => Some(ToolConfirmationFailure {
             kind: ConfirmationFailureKind::Timeout,
             state_reason: "Confirmation timeout".to_string(),
             error_message: format!("Confirmation timeout: {tool_name}"),
+            rejection_instruction: None,
         }),
+    }
+}
+
+fn normalize_rejection_instruction(reason: &str) -> Option<String> {
+    let trimmed = reason.trim();
+    if trimmed.is_empty() || trimmed.eq_ignore_ascii_case("User rejected") {
+        None
+    } else {
+        Some(trimmed.to_string())
     }
 }
 

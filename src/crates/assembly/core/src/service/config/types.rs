@@ -640,9 +640,9 @@ pub struct AIConfig {
 #[serde(rename_all = "snake_case")]
 pub enum SubagentBatchExecutionPolicy {
     /// Preserve the tool-owned concurrency-safety decision.
-    #[default]
     SafeOnly,
     /// Force multiple Task calls from the same model batch into parallel scheduling.
+    #[default]
     ForceParallel,
     /// Treat all Task calls as serial even when a subagent is read-only.
     Serial,
@@ -794,7 +794,7 @@ fn default_subagent_max_concurrency() -> usize {
 }
 
 fn default_subagent_batch_execution_policy() -> SubagentBatchExecutionPolicy {
-    SubagentBatchExecutionPolicy::SafeOnly
+    SubagentBatchExecutionPolicy::ForceParallel
 }
 
 pub const DEFAULT_MAX_ROUNDS: usize = 200;
@@ -2106,7 +2106,7 @@ mod tests {
         assert_eq!(config.subagent_max_concurrency, 5);
         assert_eq!(
             config.subagent_batch_execution_policy,
-            SubagentBatchExecutionPolicy::SafeOnly
+            SubagentBatchExecutionPolicy::ForceParallel
         );
         let review_team = config
             .review_teams
@@ -2141,7 +2141,7 @@ mod tests {
         assert_eq!(config.subagent_max_concurrency, 5);
         assert_eq!(
             config.subagent_batch_execution_policy,
-            SubagentBatchExecutionPolicy::SafeOnly
+            SubagentBatchExecutionPolicy::ForceParallel
         );
         assert!(config.review_teams.contains_key("default"));
     }

@@ -31,7 +31,7 @@ function statusUsesLoadingShimmer(status: string): boolean {
 
 export interface BaseToolCardProps {
   /** Tool status */
-  status: 'pending' | 'queued' | 'waiting' | 'preparing' | 'streaming' | 'receiving' | 'running' | 'completed' | 'error' | 'cancelled' | 'analyzing' | 'pending_confirmation' | 'confirmed';
+  status: 'pending' | 'queued' | 'waiting' | 'preparing' | 'streaming' | 'receiving' | 'running' | 'completed' | 'error' | 'cancelled' | 'rejected' | 'analyzing' | 'pending_confirmation' | 'confirmed';
   /** Whether expanded */
   isExpanded?: boolean;
   /** Card click callback */
@@ -90,6 +90,7 @@ export const BaseToolCard: React.FC<BaseToolCardProps> = ({
     status !== 'completed' && 
     status !== 'confirmed' &&
     status !== 'cancelled' && 
+    status !== 'rejected' &&
     status !== 'error';
 
   const resolvedHeaderExpandAffordance =

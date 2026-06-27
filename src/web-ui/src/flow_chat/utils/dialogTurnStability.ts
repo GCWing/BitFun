@@ -8,15 +8,24 @@ import type {
 } from '../types/flow-chat';
 
 const TRANSIENT_TURN_STATUSES = new Set(['pending', 'processing', 'finishing', 'image_analyzing', 'cancelling', 'inprogress']);
-const TRANSIENT_ROUND_STATUSES = new Set(['pending', 'streaming']);
-const TERMINAL_ROUND_STATUSES = new Set(['completed', 'cancelled', 'error', 'pending_confirmation']);
-const TRANSIENT_TOOL_STATUSES = new Set(['pending', 'preparing', 'streaming', 'running', 'receiving', 'starting', 'analyzing']);
-const TERMINAL_TOOL_STATUSES = new Set(['completed', 'cancelled', 'error', 'pending_confirmation', 'confirmed']);
-const TERMINAL_ITEM_STATUSES = new Set(['completed', 'cancelled', 'error']);
-const STABLE_ITEM_STATUSES = new Set(['completed', 'cancelled', 'error', 'pending_confirmation', 'confirmed']);
+const TRANSIENT_ROUND_STATUSES = new Set(['pending', 'streaming', 'pending_confirmation']);
+const TERMINAL_ROUND_STATUSES = new Set(['completed', 'cancelled', 'rejected', 'error']);
+const TRANSIENT_TOOL_STATUSES = new Set([
+  'pending',
+  'preparing',
+  'streaming',
+  'running',
+  'receiving',
+  'starting',
+  'analyzing',
+  'pending_confirmation',
+  'confirmed',
+]);
+const TERMINAL_TOOL_STATUSES = new Set(['completed', 'cancelled', 'rejected', 'error']);
+const TERMINAL_ITEM_STATUSES = new Set(['completed', 'cancelled', 'rejected', 'error']);
+const STABLE_ITEM_STATUSES = new Set(['completed', 'cancelled', 'rejected', 'error']);
 
 type SettleInterruptedDialogTurnOptions = {
-  preservePendingConfirmation?: boolean;
   interruptionReason?: FlowToolItem['interruptionReason'];
 };
 
@@ -51,11 +60,7 @@ export function normalizeRecoveredRoundStatus(
   status: unknown,
   parentTurnStatus: DialogTurn['status'],
 ): ModelRound['status'] {
-  if (status === 'pending_confirmation') {
-    return status;
-  }
-
-  if (status === 'completed' || status === 'cancelled' || status === 'error') {
+  if (status === 'completed' || status === 'cancelled' || status === 'rejected' || status === 'error') {
     return status;
   }
 
@@ -72,7 +77,7 @@ export function normalizeRecoveredTextStatus(
   status: unknown,
   parentTurnStatus: DialogTurn['status'],
 ): FlowTextItem['status'] {
-  if (status === 'completed' || status === 'cancelled' || status === 'error') {
+  if (status === 'completed' || status === 'cancelled' || status === 'rejected' || status === 'error') {
     return status;
   }
 
@@ -91,7 +96,7 @@ export function normalizeRecoveredThinkingStatus(
   status: unknown,
   parentTurnStatus: DialogTurn['status'],
 ): FlowThinkingItem['status'] {
-  if (status === 'completed' || status === 'cancelled' || status === 'error') {
+  if (status === 'completed' || status === 'cancelled' || status === 'rejected' || status === 'error') {
     return status;
   }
 
@@ -110,13 +115,8 @@ export function normalizeRecoveredToolStatus(
   status: unknown,
   parentTurnStatus: DialogTurn['status'],
   toolResult?: Pick<NonNullable<FlowToolItem['toolResult']>, 'success' | 'error'> | null,
-  options?: { preservePendingConfirmation?: boolean },
 ): FlowToolItem['status'] {
-  if ((status === 'pending_confirmation' || status === 'confirmed') && options?.preservePendingConfirmation) {
-    return status;
-  }
-
-  if (status === 'completed' || status === 'cancelled' || status === 'error') {
+  if (status === 'completed' || status === 'cancelled' || status === 'rejected' || status === 'error') {
     return status;
   }
 
@@ -181,7 +181,6 @@ function settleInterruptedItem(
       item.status,
       finalTurnStatus,
       item.toolResult,
-      options,
     );
     return {
       ...item,
