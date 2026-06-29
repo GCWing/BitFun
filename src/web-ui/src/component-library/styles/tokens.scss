@@ -1036,7 +1036,7 @@ $badge-info-text: $color-info;
   --mission-control-group-tertiary-color: var(--color-warning);
   --deep-review-consent-accent: #2563eb;
   --deep-review-consent-accent-strong: #1d4ed8;
-  --deep-review-consent-accent-strong-dark: #2563eb;
+  --deep-review-consent-accent-strong-dark: var(--deep-review-consent-accent);
   --deep-review-consent-warm-dark: #fbbf24;
   --component-action-danger-rgb: 199, 112, 112;
   --component-action-success-rgb: 110, 184, 140;

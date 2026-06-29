@@ -66,10 +66,10 @@ registry。
 
 | 指标 | 当前基线 |
 | --- | ---: |
-| 扫描的生产前端文件数 | 1535 |
+| 扫描的生产前端文件数 | 1536 |
 | 忽略的测试文件数 | 221 |
 | 包含颜色字面量的文件数 | 26 |
-| 颜色字面量出现次数 | 1718 |
+| 颜色字面量出现次数 | 1717 |
 | 唯一颜色字面量数量 | 913 |
 | 组件或非 token 文件中的颜色出现次数 | 0 |
 | 组件或非 token 唯一颜色数量 | 0 |
@@ -108,6 +108,12 @@ registry。
 | compatibility alias family 直接使用次数 | 0 | generated widget frame 同时暴露 canonical 与 legacy family，内部 shell 读取 canonical family |
 | stale compatibility alias family contracts | 0 | 防止动态 family 或 canonical family 失配 |
 | missing compatibility alias family canonicals | 0 | 防止新增 `--radius-x` / `--spacing-x` 但缺少对应 canonical key |
+| generated widget payload key | 326 | widget iframe 对外主题变量 allowlist，作为外部边界单独预算，不计入内部 alias 读取 |
+| generated widget payload compatibility alias | 64 | payload 仍暴露已登记 legacy alias，防止已生成或第三方内容读取失败 |
+| generated widget payload compatibility family key | 17 | payload 仍暴露 `--radius-*`、`--spacing-*` 具体 key，同时暴露 canonical family |
+| generated widget payload undefined key | 0 | 防止 payload 引入没有静态、运行时或动态 family 定义的游离 key |
+| generated widget payload missing compatibility canonical | 0 | 防止 payload 暴露 legacy key 但 canonical 目标不存在 |
+| generated widget payload unexported compatibility canonical | 0 | 防止 payload 暴露 legacy key 但遗漏对应 canonical key |
 | fallback token contracts | 0 | 组件 fallback 已通过根 token 或组件根默认值收敛；新增 fallback 会重新要求 owner、reason 和 boundary |
 | uncontracted fallback tokens | 0 | 防止新增未解释的 fallback key |
 | stale fallback token contracts | 0 | 防止已删除 fallback 继续留在 registry 中 |
@@ -119,7 +125,7 @@ registry。
 | 区域 | 当前出现次数 | 当前唯一色数 | 说明 |
 | --- | ---: | ---: | --- |
 | Theme presets | 1033 | 611 | 主题个性与 palette 映射，不作为普通 app literal 直接合并 |
-| Token contracts | 268 | 159 | `tokens.scss` 等静态契约根 |
+| Token contracts | 267 | 159 | `tokens.scss` 等静态契约根 |
 | Editor | 56 | 53 | Monaco/editor 专用域，不能直接泛化到 app token；组件装饰色已迁出 raw literal |
 | Mermaid | 139 | 95 | Mermaid 专用渲染域 |
 | Theme runtime | 54 | 45 | `ThemeService.ts` 运行时注入 |
@@ -163,12 +169,12 @@ fallback 收敛决策表：
 | 阶段 | 状态 | 当前判断 |
 | --- | --- | --- |
 | Phase 0：基线与工具 | 已完成主体 | 审计脚本可区分测试文件、fallback token、dynamic families 和 exception domains |
-| Phase 1：canonical token 契约 | 已完成调用方迁移 | compatibility alias registry 已记录 64 个显式 alias 和 2 个 alias family；内部 `var()` 读取已清零，定义仍保留给旧主题、payload 和外部内容 |
-| Phase 2：精确重复合并 | 已完成主体 | token-equivalent app literal 已清零；截图兜底、language identity 和 review/agent/insights 固定色已迁入显式 registry |
+| Phase 1：canonical token 契约 | 已完成调用方迁移 | compatibility alias registry 已记录 64 个显式 alias 和 2 个 alias family；内部 `var()` 读取已清零；widget payload 的 64 个显式 alias 和 17 个 family key 作为外部兼容面单独预算，并补齐 `--size-radius-2xl` / `--size-radius-full` canonical 导出 |
+| Phase 2：精确重复合并 | 已完成主体 | token-equivalent app literal 已清零；截图兜底、language identity 和 review/agent/insights 固定色已迁入显式 registry；`tokens.scss` 中同域同语义的 deep-review consent 精确重复已改为 alias |
 | Phase 3：legacy fallback 迁移 | 已完成主体 | 组件级 `var(--token, fallback)` 已清零，baseline 降到 0；新增 fallback 会被审计报告和 baseline 拦截 |
 | Phase 4：组件 token 抽取 | 已完成主体 | CodeEditor、StreamText、ChatInputPixelPet、ReferencesPanel、AgentCompanion、tool-card、editor 组件装饰色已抽为组件私有 RGB channel 或复用 contract token |
 | Phase 5：近似色合并 | 已完成主体 | 普通组件 near pair 已清零；极近似视觉色只在不相邻或不承担状态差异时合并，Monaco/terminal/Mermaid/syntax 专用 palette 不强行合并 |
-| Phase 6：防回退约束 | 已强化 | baseline 已同步到 component/non-token=0、appUi=0、token-equivalent=0、nearPair=0、compatibility alias 读取=0、fallback=0，并保留 domain contract 防回退指标 |
+| Phase 6：防回退约束 | 已强化 | baseline 已同步到 component/non-token=0、appUi=0、token-equivalent=0、nearPair=0、compatibility alias 读取=0、fallback=0，并保留 generated widget payload、domain contract 防回退指标 |
 
 Phase 5 决策记录：
 
@@ -205,6 +211,12 @@ Phase 6 防回退约束：
 | `compatibilityAliases.staleRegisteredUnique` | 0 | 0 | 防止兼容 alias registry 保留没有定义或 canonical 目标缺失的 key |
 | `compatibilityAliases.staleRegisteredFamilyUnique` | 0 | 0 | 防止 `--radius-*`、`--spacing-*` 这类动态 family 与 canonical family 失配 |
 | `compatibilityAliases.missingCanonicalUnique` | 0 | 0 | 防止 family alias 具体 key 缺失对应 canonical key |
+| `generatedWidgetPayload.varUnique` | 326 | 326 | 控制 widget 对外主题 payload allowlist 不继续膨胀 |
+| `generatedWidgetPayload.compatibilityAliasUnique` | 64 | 64 | 控制 payload 中显式 legacy alias 数量，后续只能降低或经复审调整 |
+| `generatedWidgetPayload.compatibilityAliasFamilyUnique` | 17 | 17 | 控制 payload 中 legacy size family 具体 key 数量 |
+| `generatedWidgetPayload.undefinedUnique` | 0 | 0 | 防止 payload 导出未定义主题 key |
+| `generatedWidgetPayload.missingCompatibilityCanonicalUnique` | 0 | 0 | 防止 payload 兼容 alias 缺失 canonical 目标 |
+| `generatedWidgetPayload.unexportedCompatibilityCanonicalUnique` | 0 | 0 | 防止 payload 兼容 alias 有 canonical 定义但未导出到 iframe |
 | `fallbackContracts.uncontractedUnique` | 0 | 0 | 防止新增未说明边界的 `var(--token, fallback)` |
 | `fallbackContracts.staleRegisteredUnique` | 0 | 0 | 防止已删除 fallback 继续留在 registry 中 |
 | `colorDomainContracts.activeUncontractedUnique` | 0 | 0 | 防止新增专用颜色域但没有 owner 和 merge policy |
@@ -410,19 +422,19 @@ semantic token 描述产品级语义，应作为共享 UI 的默认使用层。
 
 | 历史或漂移 token | 建议 canonical 目标 | 说明 |
 | --- | --- | --- |
-| `--accent-primary` | `--color-accent-500` 或 `--color-primary` | 先明确 accent 与 primary 是否是两个角色。 |
+| `--accent-primary` | `--color-accent-500` | `--color-primary` 也是同一 accent midpoint 的历史兼容名，新代码不应再以 primary 作为 canonical。 |
 | `--text-primary` | `--color-text-primary` | 仅兼容别名。 |
 | `--text-secondary` | `--color-text-secondary` | 仅兼容别名。 |
 | `--text-muted` | `--color-text-muted` | 仅兼容别名。 |
 | `--bg-primary` | `--color-bg-primary` | 仅兼容别名。 |
 | `--bg-secondary` | `--color-bg-secondary` | 仅兼容别名。 |
 | `--bg-tertiary` | `--color-bg-tertiary` | 仅兼容别名。 |
-| `--border-primary` | `--border-base` | 需要确认调用点是否期望更强边界。 |
-| `--color-border-subtle` | `--border-subtle` | 建议统一 border 命名族。 |
-| `--color-danger` | `--color-error` | 仅当 destructive 与 validation error 不需要区分时合并。 |
-| `--color-bg-hover` | `--element-bg-hover` | 需要确认调用点是 element、card 还是 panel hover。 |
-| `--radius-*` | `--size-radius-*` | 对齐静态 CSS export 与运行时/widget 命名。 |
-| `--spacing-*` | `--size-gap-*` | 对齐静态 CSS export 与运行时/widget 命名。 |
+| `--border-primary` | `--border-base` | 当前 primary border 不表示更强层级，仅保留 legacy spelling。 |
+| `--color-border-subtle` | `--border-subtle` | 统一到 border 命名族。 |
+| `--color-danger` | `--color-error` | 当前共享 error palette，但保留 destructive action 语义；删除前需迁入 error 或 action token。 |
+| `--color-bg-hover` | `--element-bg-hover` | 当前泛化 hover 已收敛到 element interaction layer。 |
+| `--radius-*` | `--size-radius-*` | canonical family 为 `--size-radius-*`，旧 family 只作 legacy/widget payload 兼容。 |
+| `--spacing-*` | `--size-gap-*` | canonical family 为 `--size-gap-*`，旧 family 只作 legacy/widget payload 兼容。 |
 
 ## 近似色合并规则
 
@@ -828,6 +840,8 @@ alpha 差异经常承担 elevation 和交互状态，不应全部压成一个值
 
 建议按证据和 surface 拆分，避免一次性大迁移：
 
+当前 PR 已覆盖前 5 项，并把 widget payload 外部兼容面纳入审计预算：
+
 1. 审计工具和 baseline report。
 2. canonical token map 与 compatibility alias。
 3. 静态和运行时 token 对齐。
@@ -849,21 +863,24 @@ alpha 差异经常承担 elevation 和交互状态，不应全部压成一个值
 - 明确保留的近似色列表。
 - 验证命令和结果。
 
-## 待决问题
+## 已审定兼容策略
 
-以下问题仍是产品语义决策，不再是未登记游离 key。当前已进入
+以下 key 不再视为未登记游离 key。当前已进入
 `TOKEN_COMPATIBILITY_ALIAS_CONTRACTS` 或 `TOKEN_COMPATIBILITY_ALIAS_FAMILY_CONTRACTS`，
-删除前必须先完成调用点迁移、widget payload 兼容检查和视觉复核。
+内部调用方必须使用 canonical token；删除旧 key 前必须先完成 widget payload 兼容检查、
+外部内容影响评估和视觉复核。
 
-- `--color-text-tertiary` 应转正为一等 semantic token，还是迁移到
-  `--color-text-muted`。
-- `--color-primary` 和 `--color-accent-500` 是否是两个角色，还是应统一为
-  一个 accent contract。
-- `--color-danger` 是否需要和 `--color-error` 区分，以表达 destructive action。
-- 尺寸 token 长期应统一为 `--size-radius-*` / `--size-gap-*`，还是继续暴露
-  `--radius-*` / `--spacing-*` 兼容名。
-- 迁移期 CI 应如何严格：只阻止新增 raw app color，还是按目录迁移完成后
-  对该目录启用失败约束。
+- `--color-text-tertiary` 当前不是一等 text ramp，兼容映射到
+  `--color-text-muted`；只有设计系统确认需要独立第三层文本强度时才转正。
+- `--color-primary` 当前是 `--color-accent-500` 的历史兼容名；新代码应使用
+  accent scale 或组件 action token，只有 primary action 与 accent 明确分化时才重新建模。
+- `--color-danger` 当前映射到 `--color-error`，但保留 destructive action 语义；只有破坏性动作
+  明确选择 error token 或迁入专用 action token 后才删除。
+- 尺寸 canonical family 是 `--size-radius-*` / `--size-gap-*`；`--radius-*` /
+  `--spacing-*` 只作为 legacy source 和 generated widget payload 兼容面保留。
+- 迁移期 CI 采用严格 baseline：普通 app raw color、内部 compatibility alias 读取、fallback、
+  未定义 CSS var、payload 未定义 key、payload 缺失 canonical 和 payload 未导出 canonical 均为 0；
+  payload 兼容 alias 数量只允许随迁移降低，不能无依据增长。
 
 ## 完成标准
 

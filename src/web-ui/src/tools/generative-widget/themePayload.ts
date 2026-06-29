@@ -261,6 +261,8 @@ const WIDGET_THEME_VAR_GROUPS = {
   '--size-radius-md',
   '--size-radius-lg',
   '--size-radius-xl',
+  '--size-radius-2xl',
+  '--size-radius-full',
   '--spacing-1',
   '--spacing-2',
   '--spacing-3',

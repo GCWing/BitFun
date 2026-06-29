@@ -7,7 +7,7 @@ import {
   readWidgetThemePayload,
 } from './themePayload';
 
-const WIDGET_THEME_VAR_NAMES_HASH = '3234a6b63576f03b4a7e3f97349f6a042fffaf6300943e5f8972eecdb5347683';
+const WIDGET_THEME_VAR_NAMES_HASH = '703944f63b95646520792c18ee2978a5d10553145a62ee53980aea2ca98baa0b';
 
 function readPayloadWithHostValues(hostValues: Record<string, string> = {}) {
   const requestedNames: string[] = [];
@@ -60,7 +60,7 @@ describe('generated widget theme payload contract', () => {
       first: requestedNames[0],
       last: requestedNames[requestedNames.length - 1],
     }).toEqual({
-      count: 324,
+      count: 326,
       hash: WIDGET_THEME_VAR_NAMES_HASH,
       first: '--color-bg-primary',
       last: '--tool-card-action-font-weight',

@@ -138,6 +138,9 @@ test('repository dynamic CSS var families match the registered contract', () => 
   assert.equal(report.compatibilityAliases.staleRegisteredUnique, 0);
   assert.equal(report.compatibilityAliases.staleRegisteredFamilyUnique, 0);
   assert.equal(report.compatibilityAliases.missingCanonicalUnique, 0);
+  assert.equal(report.generatedWidgetPayload.undefinedUnique, 0);
+  assert.equal(report.generatedWidgetPayload.missingCompatibilityCanonicalUnique, 0);
+  assert.equal(report.generatedWidgetPayload.unexportedCompatibilityCanonicalUnique, 0);
   assert.equal(report.fallbackContracts.uncontractedUnique, 0);
   assert.equal(report.fallbackContracts.staleRegisteredUnique, 0);
   assert.equal(report.colorDomainContracts.missingRegisteredUnique, 0);
@@ -254,6 +257,104 @@ test('theme color audit reports compatibility alias usage without treating it as
     ],
   );
   assert.equal(report.colorScopes.appUi.occurrences, 0);
+});
+
+test('theme color audit budgets generated widget payload compatibility aliases separately', (t) => {
+  const { dir, sourceRoot } = createFixture({
+    'component-library/styles/tokens.scss': [
+      ':root {',
+      '  --color-accent-500: #60a5fa;',
+      '  --color-primary: var(--color-accent-500);',
+      '  --size-radius-sm: 6px;',
+      '  --radius-sm: var(--size-radius-sm);',
+      '}',
+      '',
+    ].join('\n'),
+    'tools/generative-widget/themePayload.ts': [
+      "export const payloadVars = ['--color-accent-500', '--color-primary', '--size-radius-sm', '--radius-sm'];",
+      '',
+    ].join('\n'),
+  });
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  const result = runAudit(['--root', sourceRoot, '--json', '--no-baseline']);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+
+  const report = JSON.parse(result.stdout);
+  assert.equal(report.compatibilityAliases.usedUnique, 0);
+  assert.equal(report.compatibilityAliases.familyUsedUnique, 0);
+  assert.equal(report.generatedWidgetPayload.varUnique, 4);
+  assert.equal(report.generatedWidgetPayload.compatibilityAliasUnique, 1);
+  assert.equal(report.generatedWidgetPayload.compatibilityAliasFamilyUnique, 1);
+  assert.equal(report.generatedWidgetPayload.undefinedUnique, 0);
+  assert.equal(report.generatedWidgetPayload.missingCompatibilityCanonicalUnique, 0);
+  assert.equal(report.generatedWidgetPayload.unexportedCompatibilityCanonicalUnique, 0);
+  assert.deepEqual(
+    report.generatedWidgetPayload.topCompatibilityAliases.map(row => [row.key, row.canonical]),
+    [['--color-primary', '--color-accent-500']],
+  );
+  assert.deepEqual(
+    report.generatedWidgetPayload.topCompatibilityFamilies.map(row => [row.key, row.canonical]),
+    [['--radius-sm', '--size-radius-sm']],
+  );
+});
+
+test('theme color audit reports generated widget payload compatibility aliases without canonicals', (t) => {
+  const { dir, sourceRoot } = createFixture({
+    'component-library/styles/tokens.scss': [
+      ':root {',
+      '  --radius-ghost: 10px;',
+      '}',
+      '',
+    ].join('\n'),
+    'tools/generative-widget/themePayload.ts': [
+      "export const payloadVars = ['--radius-ghost'];",
+      '',
+    ].join('\n'),
+  });
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  const result = runAudit(['--root', sourceRoot, '--json', '--no-baseline']);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+
+  const report = JSON.parse(result.stdout);
+  assert.equal(report.generatedWidgetPayload.undefinedUnique, 0);
+  assert.equal(report.generatedWidgetPayload.compatibilityAliasFamilyUnique, 1);
+  assert.equal(report.generatedWidgetPayload.missingCompatibilityCanonicalUnique, 1);
+  assert.equal(report.generatedWidgetPayload.unexportedCompatibilityCanonicalUnique, 0);
+  assert.deepEqual(
+    report.generatedWidgetPayload.missingCompatibilityCanonicals.map(row => [row.key, row.canonical]),
+    [['--radius-ghost', '--size-radius-ghost']],
+  );
+});
+
+test('theme color audit reports generated widget payload aliases whose canonicals are not exported', (t) => {
+  const { dir, sourceRoot } = createFixture({
+    'component-library/styles/tokens.scss': [
+      ':root {',
+      '  --color-accent-500: #60a5fa;',
+      '  --color-primary: var(--color-accent-500);',
+      '}',
+      '',
+    ].join('\n'),
+    'tools/generative-widget/themePayload.ts': [
+      "export const payloadVars = ['--color-primary'];",
+      '',
+    ].join('\n'),
+  });
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  const result = runAudit(['--root', sourceRoot, '--json', '--no-baseline']);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+
+  const report = JSON.parse(result.stdout);
+  assert.equal(report.generatedWidgetPayload.undefinedUnique, 0);
+  assert.equal(report.generatedWidgetPayload.missingCompatibilityCanonicalUnique, 0);
+  assert.equal(report.generatedWidgetPayload.unexportedCompatibilityCanonicalUnique, 1);
+  assert.deepEqual(
+    report.generatedWidgetPayload.unexportedCompatibilityCanonicals.map(row => [row.key, row.canonical]),
+    [['--color-primary', '--color-accent-500']],
+  );
 });
 
 test('theme color audit reports fallback tokens that lack a boundary contract', (t) => {

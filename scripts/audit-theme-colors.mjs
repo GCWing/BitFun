@@ -34,6 +34,8 @@ const VAR_FALLBACK_PATTERN = /var\(\s*(--[a-zA-Z0-9_-]+)\s*,/g;
 const CSS_VAR_SET_PROPERTY_PATTERN = /\.setProperty\(\s*['"`](--[a-zA-Z0-9_-]+)/g;
 const CSS_VAR_INLINE_STYLE_PATTERN = /['"`](--[a-zA-Z0-9_-]+)['"`]\s*:/g;
 const CSS_VAR_DYNAMIC_SET_PATTERN = /\.setProperty\(\s*`(--[a-zA-Z0-9_-]*)\$\{/g;
+const CSS_VAR_LITERAL_PATTERN = /['"`](--[a-zA-Z0-9_-]+)['"`]/g;
+const GENERATED_WIDGET_THEME_PAYLOAD_PATH = 'tools/generative-widget/themePayload.ts';
 const REPORT_ROW_LIMIT = 100;
 const COLOR_DOMAIN_CONTRACT_BY_KEY = new Map(COLOR_DOMAIN_CONTRACTS.map(contract => [contract.key, contract]));
 const FALLBACK_VAR_CONTRACT_BY_KEY = new Map(FALLBACK_VAR_CONTRACTS.map(contract => [contract.key, contract]));
@@ -192,6 +194,10 @@ function isRuntimeContractVarDefinitionFile(relativePath) {
 
 function isExceptionFile(relativePath) {
   return EXCEPTION_PATH_PARTS.some(part => relativePath.toLowerCase().includes(part.toLowerCase()));
+}
+
+function isGeneratedWidgetThemePayloadFile(relativePath) {
+  return relativePath.endsWith(GENERATED_WIDGET_THEME_PAYLOAD_PATH);
 }
 
 function pathMatchesPart(relativePath, pathPart) {
@@ -742,6 +748,8 @@ function audit(options) {
   const tokenAliasLiteralCounts = new Map();
   const tokenAliasLiteralFiles = new Map();
   const tokenAliasLiteralExamples = new Map();
+  const generatedWidgetPayloadVarCounts = new Map();
+  const generatedWidgetPayloadVarFiles = new Map();
 
   let colorOccurrences = 0;
   let componentColorOccurrences = 0;
@@ -828,6 +836,13 @@ function audit(options) {
       addToSetMap(dynamicDefinitionFiles, match[1], relativePath);
     }
 
+    if (isGeneratedWidgetThemePayloadFile(relativePath)) {
+      for (const match of collectMatches(content, CSS_VAR_LITERAL_PATTERN)) {
+        incrementMap(generatedWidgetPayloadVarCounts, match[1]);
+        addToSetMap(generatedWidgetPayloadVarFiles, match[1], relativePath);
+      }
+    }
+
     for (const match of collectMatches(content, VAR_FALLBACK_PATTERN)) {
       fallbackOccurrences += 1;
       incrementMap(fallbackTokenCounts, match[1]);
@@ -837,6 +852,9 @@ function audit(options) {
 
   const definedVars = new Set(varDefinitionCounts.keys());
   const getDefinitionKinds = name => Array.from(varDefinitionKinds.get(name) ?? ['unknown']).sort();
+  const getExplicitDefinitionKind = name => (
+    definedVars.has(name) ? getDefinitionKinds(name).join('+') : null
+  );
   const getDefinitionKind = name => {
     if (definedVars.has(name)) {
       return getDefinitionKinds(name).join('+');
@@ -996,6 +1014,62 @@ function audit(options) {
       files: entry.files,
     }))
     .sort((a, b) => a.key.localeCompare(b.key));
+  const generatedWidgetPayloadVars = Array.from(generatedWidgetPayloadVarCounts.entries())
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([key, count]) => ({
+      key,
+      count,
+      definitionKind: getExplicitDefinitionKind(key),
+      files: Array.from(generatedWidgetPayloadVarFiles.get(key) ?? []).sort().slice(0, 5),
+    }));
+  const generatedWidgetPayloadCompatibilityAliases = generatedWidgetPayloadVars
+    .map(entry => {
+      const contract = resolveCompatibilityAliasContract(entry.key);
+      if (!contract || contract.familyPrefix) {
+        return null;
+      }
+      return {
+        ...entry,
+        canonical: contract.canonical,
+        canonicalDefinitionKind: getExplicitDefinitionKind(contract.canonical),
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.count - a.count || a.key.localeCompare(b.key));
+  const generatedWidgetPayloadCompatibilityFamilies = generatedWidgetPayloadVars
+    .map(entry => {
+      const contract = resolveCompatibilityAliasContract(entry.key);
+      if (!contract?.familyPrefix) {
+        return null;
+      }
+      return {
+        ...entry,
+        canonical: contract.canonical,
+        familyPrefix: contract.familyPrefix,
+        canonicalPrefix: contract.canonicalPrefix,
+        canonicalDefinitionKind: getExplicitDefinitionKind(contract.canonical),
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.count - a.count || a.key.localeCompare(b.key));
+  const generatedWidgetPayloadUndefinedVars = generatedWidgetPayloadVars
+    .filter(entry => !entry.definitionKind)
+    .sort((a, b) => a.key.localeCompare(b.key));
+  const generatedWidgetPayloadVarNames = new Set(generatedWidgetPayloadVars.map(entry => entry.key));
+  const generatedWidgetPayloadMissingCompatibilityCanonicals = [
+    ...generatedWidgetPayloadCompatibilityAliases,
+    ...generatedWidgetPayloadCompatibilityFamilies,
+  ]
+    .filter(entry => !entry.canonicalDefinitionKind)
+    .map(({ key, canonical, count, files }) => ({ key, canonical, count, files }))
+    .sort((a, b) => a.key.localeCompare(b.key));
+  const generatedWidgetPayloadUnexportedCompatibilityCanonicals = [
+    ...generatedWidgetPayloadCompatibilityAliases,
+    ...generatedWidgetPayloadCompatibilityFamilies,
+  ]
+    .filter(entry => entry.canonicalDefinitionKind && !generatedWidgetPayloadVarNames.has(entry.canonical))
+    .map(({ key, canonical, count, files }) => ({ key, canonical, count, files }))
+    .sort((a, b) => a.key.localeCompare(b.key));
   const staleCompatibilityAliasEntries = checksFullThemeSourceRoot
     ? TOKEN_COMPATIBILITY_ALIAS_CONTRACTS
       .map(contract => ({
@@ -1102,6 +1176,31 @@ function audit(options) {
       top: compatibilityAliasEntries.slice(0, options.top),
       families: compatibilityAliasFamilyEntries,
     },
+    generatedWidgetPayload: {
+      varUnique: generatedWidgetPayloadVars.length,
+      occurrences: generatedWidgetPayloadVars.reduce((total, entry) => total + entry.count, 0),
+      undefinedUnique: generatedWidgetPayloadUndefinedVars.length,
+      compatibilityAliasUnique: generatedWidgetPayloadCompatibilityAliases.length,
+      compatibilityAliasOccurrences: generatedWidgetPayloadCompatibilityAliases.reduce(
+        (total, entry) => total + entry.count,
+        0,
+      ),
+      compatibilityAliasFamilyUnique: generatedWidgetPayloadCompatibilityFamilies.length,
+      compatibilityAliasFamilyOccurrences: generatedWidgetPayloadCompatibilityFamilies.reduce(
+        (total, entry) => total + entry.count,
+        0,
+      ),
+      missingCompatibilityCanonicalUnique: generatedWidgetPayloadMissingCompatibilityCanonicals.length,
+      unexportedCompatibilityCanonicalUnique: generatedWidgetPayloadUnexportedCompatibilityCanonicals.length,
+      topCompatibilityAliases: generatedWidgetPayloadCompatibilityAliases.slice(0, options.top),
+      topCompatibilityFamilies: generatedWidgetPayloadCompatibilityFamilies.slice(0, options.top),
+      undefinedVars: generatedWidgetPayloadUndefinedVars.slice(0, REPORT_ROW_LIMIT),
+      missingCompatibilityCanonicals: generatedWidgetPayloadMissingCompatibilityCanonicals.slice(0, REPORT_ROW_LIMIT),
+      unexportedCompatibilityCanonicals: generatedWidgetPayloadUnexportedCompatibilityCanonicals.slice(
+        0,
+        REPORT_ROW_LIMIT,
+      ),
+    },
     staleCompatibilityAliases: staleCompatibilityAliasEntries,
     staleCompatibilityAliasFamilies: staleCompatibilityAliasFamilyEntries,
     missingCompatibilityAliasCanonicals: missingCompatibilityAliasCanonicalEntries,
@@ -1182,6 +1281,14 @@ function printText(report) {
     `families=${report.compatibilityAliases.familyRegisteredUnique}, ` +
     `staleFamilies=${report.compatibilityAliases.staleRegisteredFamilyUnique}, ` +
     `missingCanonicals=${report.compatibilityAliases.missingCanonicalUnique}`
+  );
+  console.log(
+    `Generated widget payload: vars=${report.generatedWidgetPayload.varUnique}, ` +
+    `undefined=${report.generatedWidgetPayload.undefinedUnique}, ` +
+    `compatAliases=${report.generatedWidgetPayload.compatibilityAliasUnique}, ` +
+    `compatAliasFamilies=${report.generatedWidgetPayload.compatibilityAliasFamilyUnique}, ` +
+    `missingCompatCanonicals=${report.generatedWidgetPayload.missingCompatibilityCanonicalUnique}, ` +
+    `unexportedCompatCanonicals=${report.generatedWidgetPayload.unexportedCompatibilityCanonicalUnique}`
   );
   console.log(
     `Fallback contracts: registered=${report.fallbackContracts.registeredUnique}, ` +
@@ -1273,6 +1380,57 @@ function printText(report) {
     console.log('  none');
   } else {
     for (const row of report.missingCompatibilityAliasCanonicals.slice(0, 10)) {
+      console.log(
+        `  ${row.key} -> ${row.canonical}  ` +
+        `count=${row.count}  files=${row.files.join(', ')}`
+      );
+    }
+  }
+
+  console.log('\nGenerated widget payload compatibility aliases:');
+  if (report.generatedWidgetPayload.topCompatibilityAliases.length === 0) {
+    console.log('  none');
+  } else {
+    for (const row of report.generatedWidgetPayload.topCompatibilityAliases.slice(0, 10)) {
+      console.log(
+        `  ${row.count.toString().padStart(5)}  ${row.key} -> ${row.canonical}  ` +
+        `canonicalDefined=${Boolean(row.canonicalDefinitionKind)}`
+      );
+    }
+  }
+
+  console.log('\nGenerated widget payload compatibility families:');
+  if (report.generatedWidgetPayload.topCompatibilityFamilies.length === 0) {
+    console.log('  none');
+  } else {
+    for (const row of report.generatedWidgetPayload.topCompatibilityFamilies.slice(0, 10)) {
+      console.log(
+        `  ${row.count.toString().padStart(5)}  ${row.key} -> ${row.canonical}  ` +
+        `canonicalDefined=${Boolean(row.canonicalDefinitionKind)}`
+      );
+    }
+  }
+
+  console.log('\nGenerated widget payload undefined vars:');
+  console.log(printRows(report.generatedWidgetPayload.undefinedVars.slice(0, 10)));
+
+  console.log('\nGenerated widget payload missing compatibility canonicals:');
+  if (report.generatedWidgetPayload.missingCompatibilityCanonicals.length === 0) {
+    console.log('  none');
+  } else {
+    for (const row of report.generatedWidgetPayload.missingCompatibilityCanonicals.slice(0, 10)) {
+      console.log(
+        `  ${row.key} -> ${row.canonical}  ` +
+        `count=${row.count}  files=${row.files.join(', ')}`
+      );
+    }
+  }
+
+  console.log('\nGenerated widget payload unexported compatibility canonicals:');
+  if (report.generatedWidgetPayload.unexportedCompatibilityCanonicals.length === 0) {
+    console.log('  none');
+  } else {
+    for (const row of report.generatedWidgetPayload.unexportedCompatibilityCanonicals.slice(0, 10)) {
       console.log(
         `  ${row.key} -> ${row.canonical}  ` +
         `count=${row.count}  files=${row.files.join(', ')}`
