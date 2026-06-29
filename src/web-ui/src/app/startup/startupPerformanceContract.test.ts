@@ -57,8 +57,10 @@ describe('startup performance contract', () => {
 
   it('keeps the startup overlay exit short enough for a fast visual handoff', () => {
     const source = readSource('../../../index.html');
+    const appSource = readSource('../App.tsx');
 
-    expect(source).toContain('animation: bitfun-startup-overlay-exit 0.32s ease-in-out both;');
+    expect(appSource).toContain('const MIN_SPLASH_MS = 650;');
+    expect(source).toContain('animation: bitfun-startup-overlay-exit 0.24s ease-in-out both;');
   });
 
   it('keeps editor and tool infrastructure out of the first startup module', () => {
@@ -702,8 +704,10 @@ describe('startup performance contract', () => {
     }
   });
 
-  it('keeps Agent companion implementation modules out of the root startup bundle', () => {
+  it('keeps Agent companion startup bridge imports lazy in App', () => {
     const source = readSource('../App.tsx');
+    const mainSource = readSource('../../main.tsx');
+    const petSource = readSource('../components/AgentCompanionDesktopPet/AgentCompanionDesktopPet.tsx');
 
     expect(source).not.toMatch(/from\s+['"]@\/flow_chat\/utils\/agentCompanionActivity['"]/);
     expect(source).not.toMatch(/from\s+['"]@\/flow_chat\/services\/AgentCompanionActivityBridge['"]/);
@@ -712,5 +716,31 @@ describe('startup performance contract', () => {
     expect(source).toContain("import('@/flow_chat/utils/agentCompanionActivity')");
     expect(source).toContain("import('@/flow_chat/services/AgentCompanionActivityBridge')");
     expect(source).toContain("import('./services/openAgentCompanionSession')");
+    expect(staticImportSpecifiers(mainSource)).toContain(
+      './app/components/AgentCompanionDesktopPet/AgentCompanionDesktopPet'
+    );
+    expect(dynamicImportSpecifiers(mainSource)).not.toContain(
+      './app/components/AgentCompanionDesktopPet/AgentCompanionDesktopPet'
+    );
+    expect(source).toContain("listen(\n        'agent-companion://ready'");
+    expect(source).toContain("emit('agent-companion://settings-updated', settings)");
+    expect(source).toContain('emitAgentCompanionActivity(buildAgentCompanionActivity())');
+    expect(petSource).toContain("listen<AIExperienceSettings>('agent-companion://settings-updated'");
+    expect(petSource).toContain("listen<AgentCompanionActivityPayload>('agent-companion://activity-updated'");
+    expect(petSource).toContain("emit('agent-companion://ready')");
+    expect(petSource).toContain("getCurrentWindow().hide()");
+  });
+
+  it('cancels stale Agent companion startup sync when settings change', () => {
+    const source = readSource('../App.tsx');
+    const changeListenerIndex = source.indexOf('removeSettingsListener = aiExperienceConfigService.addChangeListener');
+
+    expect(source).toContain('const cancelPendingAgentCompanionStartupSync = () => {');
+    expect(source).toContain('startupSyncHandle?.cancel();');
+    expect(source).toContain('version !== syncVersion');
+    expect(source).toContain("syncAgentCompanionSettings(null, 'startup_idle')");
+    expect(source).toContain("getSettingsAsync({ forceRefresh: true })");
+    expect(changeListenerIndex).toBeGreaterThan(-1);
+    expect(source.slice(changeListenerIndex)).toContain("syncAgentCompanionSettings(settings, 'settings_change')");
   });
 });
