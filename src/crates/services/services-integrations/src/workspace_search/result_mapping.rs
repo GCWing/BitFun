@@ -9,7 +9,7 @@ pub(crate) fn convert_search_results(
 ) -> Vec<FileSearchResult> {
     match output_mode {
         ContentSearchOutputMode::Content => {
-            let line_results = convert_line_matches_to_file_search_results(search_results);
+            let line_results = convert_hits_to_file_search_results(search_results);
             if !line_results.is_empty() {
                 return line_results;
             }
@@ -33,31 +33,42 @@ pub(crate) fn convert_search_results(
     }
 }
 
-fn convert_line_matches_to_file_search_results(
-    search_results: &SearchResults,
-) -> Vec<FileSearchResult> {
+fn convert_hits_to_file_search_results(search_results: &SearchResults) -> Vec<FileSearchResult> {
     search_results
         .line_matches
         .iter()
-        .map(|matched| FileSearchResult {
-            path: matched.path.clone(),
-            name: Path::new(&matched.path)
-                .file_name()
-                .and_then(|file_name| file_name.to_str())
-                .unwrap_or(&matched.path)
-                .to_string(),
-            is_directory: false,
-            match_type: SearchMatchType::Content,
-            line_number: Some(matched.line_number),
-            matched_content: matched
+        .map(|matched| {
+            let matched_content = matched
                 .line_text
                 .clone()
-                .or_else(|| Some(format!("line {}", matched.line_number))),
-            preview_before: None,
-            preview_inside: matched.line_text.clone(),
-            preview_after: None,
+                .unwrap_or_else(|| format!("line {}", matched.line_number));
+            let (preview_before, preview_inside, preview_after) = matched
+                .line_text
+                .as_deref()
+                .map(split_preview)
+                .unwrap_or((None, None, None));
+
+            FileSearchResult {
+                path: matched.path.clone(),
+                name: Path::new(&matched.path)
+                    .file_name()
+                    .and_then(|file_name| file_name.to_str())
+                    .unwrap_or(&matched.path)
+                    .to_string(),
+                is_directory: false,
+                match_type: SearchMatchType::Content,
+                line_number: Some(matched.line_number),
+                matched_content: Some(matched_content),
+                preview_before,
+                preview_inside,
+                preview_after,
+            }
         })
         .collect()
+}
+
+fn split_preview(line_text: &str) -> (Option<String>, Option<String>, Option<String>) {
+    (None, Some(line_text.to_string()), None)
 }
 
 fn convert_file_counts_to_search_results(search_results: &SearchResults) -> Vec<FileSearchResult> {

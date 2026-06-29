@@ -665,6 +665,8 @@ pub struct AgentSessionWorkspaceRequest {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentSessionWorkspaceBinding {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace_id: Option<String>,
     pub workspace_path: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub remote_connection_id: Option<String>,
@@ -1124,6 +1126,33 @@ pub struct ThreadGoalToolResponse {
     pub completion_budget_report: Option<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentThreadGoalGetRequest {
+    pub session_id: String,
+    pub workspace_path: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentThreadGoalCreateRequest {
+    pub session_id: String,
+    pub workspace_path: String,
+    pub objective: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub token_budget: Option<i64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentThreadGoalUpdateStatusRequest {
+    pub session_id: String,
+    pub workspace_path: String,
+    pub status: ThreadGoalStatus,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub turn_id: Option<String>,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CompressionContract {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -1286,6 +1315,24 @@ pub trait AgentLifecycleDeliveryPort: Send + Sync {
     ) -> PortResult<()>;
 
     async fn deliver_thread_goal(&self, request: AgentThreadGoalDeliveryRequest) -> PortResult<()>;
+}
+
+#[async_trait::async_trait]
+pub trait AgentThreadGoalManagementPort: Send + Sync {
+    async fn get_thread_goal(
+        &self,
+        request: AgentThreadGoalGetRequest,
+    ) -> PortResult<Option<ThreadGoal>>;
+
+    async fn create_thread_goal(
+        &self,
+        request: AgentThreadGoalCreateRequest,
+    ) -> PortResult<ThreadGoal>;
+
+    async fn update_thread_goal_status(
+        &self,
+        request: AgentThreadGoalUpdateStatusRequest,
+    ) -> PortResult<ThreadGoal>;
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -2092,6 +2139,37 @@ mod tests {
     }
 
     #[test]
+    fn agent_thread_goal_management_requests_serialize_stable_shape() {
+        let get_request = AgentThreadGoalGetRequest {
+            session_id: "session_1".to_string(),
+            workspace_path: "/workspace/project".to_string(),
+        };
+        let create_request = AgentThreadGoalCreateRequest {
+            session_id: "session_1".to_string(),
+            workspace_path: "/workspace/project".to_string(),
+            objective: "Ship the refactor".to_string(),
+            token_budget: Some(1000),
+        };
+        let update_request = AgentThreadGoalUpdateStatusRequest {
+            session_id: "session_1".to_string(),
+            workspace_path: "/workspace/project".to_string(),
+            status: ThreadGoalStatus::Complete,
+            turn_id: Some("turn_1".to_string()),
+        };
+
+        let get_json = serde_json::to_value(get_request).expect("serialize get request");
+        let create_json = serde_json::to_value(create_request).expect("serialize create request");
+        let update_json = serde_json::to_value(update_request).expect("serialize update request");
+
+        assert_eq!(get_json["sessionId"], "session_1");
+        assert_eq!(get_json["workspacePath"], "/workspace/project");
+        assert_eq!(create_json["objective"], "Ship the refactor");
+        assert_eq!(create_json["tokenBudget"], 1000);
+        assert_eq!(update_json["status"], "complete");
+        assert_eq!(update_json["turnId"], "turn_1");
+    }
+
+    #[test]
     fn agent_turn_cancellation_request_serializes_current_contract() {
         let request = AgentTurnCancellationRequest {
             session_id: "session_1".to_string(),
@@ -2136,6 +2214,7 @@ mod tests {
             session_id: "session_1".to_string(),
         };
         let workspace_binding = AgentSessionWorkspaceBinding {
+            workspace_id: Some("workspace_1".to_string()),
             workspace_path: "/workspace/project".to_string(),
             remote_connection_id: Some("conn-1".to_string()),
             remote_ssh_host: Some("host-1".to_string()),
@@ -2159,6 +2238,7 @@ mod tests {
         assert_eq!(delete_json["remoteConnectionId"], "conn-1");
         assert_eq!(delete_json["remoteSshHost"], "host-1");
         assert_eq!(workspace_json["sessionId"], "session_1");
+        assert_eq!(binding_json["workspaceId"], "workspace_1");
         assert_eq!(binding_json["workspacePath"], "/workspace/project");
         assert_eq!(binding_json["remoteConnectionId"], "conn-1");
         assert_eq!(binding_json["remoteSshHost"], "host-1");

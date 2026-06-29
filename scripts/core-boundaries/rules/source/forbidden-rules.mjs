@@ -215,12 +215,12 @@ export const forbiddenContentRules = [
           'SessionMessage must submit through AgentRuntime dialog lifecycle port, not direct DialogScheduler',
       },
       {
-        regex: /\bcoordinator\s*\.\s*resolve_session_workspace_path\b/,
+        regex: /\bcoordinator\s*\.\s*resolve_session_workspace_binding\b/,
         message:
           'SessionMessage target workspace resolution must flow through AgentRuntime session-management port, not direct coordinator access',
       },
       {
-        regex: /\bresolve_session_workspace_path\s*\(\s*&?target_session_id\b/,
+        regex: /\bresolve_session_workspace_binding\s*\(\s*&?target_session_id\b/,
         message:
           'SessionMessage target workspace resolution must use AgentSessionWorkspaceRequest, not legacy direct session id calls',
       },
@@ -245,12 +245,12 @@ export const forbiddenContentRules = [
           'SessionControl requester-aware cancellation must flow through AgentRuntime cancellation port, not direct DialogScheduler',
       },
       {
-        regex: /\bcoordinator\s*\.\s*resolve_session_workspace_path\b/,
+        regex: /\bcoordinator\s*\.\s*resolve_session_workspace_binding\b/,
         message:
           'SessionControl workspace resolution must flow through AgentRuntime session-management port, not direct coordinator access',
       },
       {
-        regex: /\bresolve_session_workspace_path\s*\(\s*session_id\b/,
+        regex: /\bresolve_session_workspace_binding\s*\(\s*session_id\b/,
         message:
           'SessionControl workspace resolution must use AgentSessionWorkspaceRequest, not legacy direct session id calls',
       },
@@ -290,12 +290,12 @@ export const forbiddenContentRules = [
     path: 'src/crates/assembly/core/src/agentic/tools/implementations/cron_tool.rs',
     patterns: [
       {
-        regex: /\bcoordinator\s*\.\s*resolve_session_workspace_path\b/,
+        regex: /\bcoordinator\s*\.\s*resolve_session_workspace_binding\b/,
         message:
           'CronTool target workspace resolution must flow through AgentRuntime session-management port, not direct coordinator access',
       },
       {
-        regex: /\bresolve_session_workspace_path\s*\(\s*&?session_id\b/,
+        regex: /\bresolve_session_workspace_binding\s*\(\s*&?session_id\b/,
         message:
           'CronTool target workspace resolution must use AgentSessionWorkspaceRequest, not legacy direct session id calls',
       },

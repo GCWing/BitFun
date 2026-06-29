@@ -28,6 +28,10 @@
 - `bitfun-core` 的 function-agent AI concrete acquisition 已从旧 `runtime_services` 路径收拢到明确的 core port adapter；Git / AI compatibility re-export 仍保留旧 public path。
 - Product Assembly 已承接 `DeliveryProfile`、当前交付形态入口矩阵、`CapabilitySet`、feature group matrix、profile-scoped capability plan、product-full provider plan、service availability report、profile-scoped harness registry 入口与 legacy-route 行为保护，以及 `ProductAssembler` 对 explicit profile input、runtime services、harness registry 和 service requirement 的验证；core 只保留兼容 re-export。ProductFull / Desktop / CLI / ACP 保留完整能力；Server / Remote / Web / MobileWeb 不再 materialize product-full capability packs、feature groups、runtime services、tool groups 或 harness routes。
 
+- Agent session/workspace owner routing 已继续收敛：`AgentRuntime` 提供 port-backed session workspace resolution entrypoint；Cron、SessionControl、SessionMessage 和 SessionHistory 不再在工具实现中直接解析目标 session workspace，Cron 保留 target session 可见性验证，workspace identity 中的 `workspace_id` / remote connection / remote host 通过 runtime contract 传递。
+- `/goal` model tool management 已继续收敛：`AgentRuntime` 提供 thread-goal management port，`get_goal` / `create_goal` / `update_goal` 经 `CoreServiceAgentRuntime` 路由到 core concrete adapter；goal lifecycle、metadata、tool response wire shape 和错误类别保持等价。
+- `services-integrations` workspace search result mapping 已承接 flashgrep hit conversion 与 preview split owner，保持缺失 `line_text` 时的既有输出语义，并由 focused tests 覆盖有无 preview 两种路径。
+
 ## 3. 已建立保护
 
 - owner crate 不得依赖回 `bitfun-core`。

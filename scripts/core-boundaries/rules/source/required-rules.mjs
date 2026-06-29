@@ -179,7 +179,7 @@ export const requiredContentRules = [
         message: 'missing agent session delete entrypoint',
       },
       {
-        regex: /\bresolve_session_workspace_path\b/,
+        regex: /\bresolve_session_workspace_binding\b/,
         message: 'missing agent session workspace resolution entrypoint',
       },
       {
@@ -1914,8 +1914,8 @@ export const requiredContentRules = [
         message: 'missing port-backed cron target session list call',
       },
       {
-        regex: /\bresolve_session_workspace_path\b/,
-        message: 'missing port-backed cron target workspace resolution call',
+        regex: /\bresolve_session_workspace_binding\b/,
+        message: 'missing port-backed cron target workspace binding resolution call',
       },
     ],
   },
@@ -4746,8 +4746,8 @@ export const requiredContentRules = [
         message: 'missing port-backed agent session delete call',
       },
       {
-        regex: /\bresolve_session_workspace_path\b/,
-        message: 'missing port-backed session workspace resolution call',
+        regex: /\bresolve_session_workspace_binding\b/,
+        message: 'missing port-backed session workspace binding resolution call',
       },
       {
         regex: /"createdBy"/,
@@ -4789,8 +4789,8 @@ export const requiredContentRules = [
         message: 'missing port-backed target session list call',
       },
       {
-        regex: /\bresolve_session_workspace_path\b/,
-        message: 'missing port-backed target session workspace resolution call',
+        regex: /\bresolve_session_workspace_binding\b/,
+        message: 'missing port-backed target session workspace binding resolution call',
       },
       {
         regex: /"createdBy"/,
