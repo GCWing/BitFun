@@ -27,7 +27,7 @@
 .compact-tool-card-wrapper.git-tool-display {
   .compact-card-action,
   .compact-card-content .tool-command-preview.tool-command-preview--compact {
-    font-family: var(--tool-compact-summary-font);
+    font-family: var(--font-family-sans);
     font-size: var(--flowchat-font-size-sm);
     line-height: var(--flowchat-support-line-height);
     font-weight: normal;
@@ -40,7 +40,7 @@
   }
 
   .output-summary {
-    font-family: var(--tool-compact-summary-font);
+    font-family: var(--font-family-sans);
     font-size: var(--flowchat-font-size-sm);
     line-height: var(--flowchat-support-line-height);
     font-weight: normal;

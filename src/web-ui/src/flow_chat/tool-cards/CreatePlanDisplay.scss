@@ -7,7 +7,7 @@
 .create-plan-display {
   display: flex;
   flex-direction: column;
-  background: var(--color-bg-flowchat);
+  background: var(--color-bg-scene);
   border: 1px solid var(--border-base);
   border-radius: 8px;
   margin: var(--flowchat-card-gap) 0;
@@ -29,7 +29,7 @@
     /* Same chrome as the filled card when params are not ready yet (streaming start). */
     border: 1px solid var(--border-base);
     border-radius: 8px;
-    background: var(--color-bg-flowchat);
+    background: var(--color-bg-scene);
     box-sizing: border-box;
 
     .create-plan-header {
@@ -310,7 +310,7 @@
   /* Plan params still streaming: footer actions read as disabled / grayed. */
   &--plan-generating {
     .create-plan-footer {
-      background: color-mix(in srgb, var(--color-bg-flowchat) 92%, var(--tool-card-text-muted));
+      background: color-mix(in srgb, var(--color-bg-scene) 92%, var(--tool-card-text-muted));
 
       .build-btn:disabled {
         opacity: 1;

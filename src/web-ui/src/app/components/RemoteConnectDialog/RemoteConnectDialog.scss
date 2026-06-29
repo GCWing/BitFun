@@ -310,7 +310,7 @@
 
 .bitfun-remote-connect__error {
   font-size: 12px;
-  color: var(--color-danger);
+  color: var(--color-error);
   text-align: center;
   margin: 0;
 }
@@ -327,7 +327,7 @@
   border: none;
   padding: 0;
   font-size: 12px;
-  color: var(--color-accent);
+  color: var(--color-accent-500);
   text-decoration: underline;
   cursor: pointer;
 

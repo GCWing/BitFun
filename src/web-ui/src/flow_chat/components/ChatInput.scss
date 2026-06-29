@@ -521,7 +521,7 @@
     border-radius: 6px;
     overflow: visible;
     background: var(--element-bg-medium);
-    border: 1px solid var(--color-border-subtle);
+    border: 1px solid var(--border-subtle);
     flex-shrink: 0;
 
     &:hover .bitfun-chat-input__image-chip-remove {
@@ -566,12 +566,12 @@
     transition: opacity 0.15s ease, transform 0.15s ease, background 0.15s ease;
 
     &:hover {
-      background: var(--color-bg-elevated-hover);
+      background: var(--element-bg-hover);
     }
 
     &:focus-visible {
       opacity: 1;
-      outline: 2px solid var(--color-accent);
+      outline: 2px solid var(--color-accent-500);
       outline-offset: 1px;
     }
   }
@@ -694,7 +694,7 @@
   &__agent-boost-empty {
     padding: var(--flowchat-card-expanded-pad-x) var(--flowchat-card-expanded-pad-x);
     font-size: var(--flowchat-font-size-2xs);
-    color: var(--color-text-tertiary);
+    color: var(--color-text-muted);
     text-align: center;
     line-height: var(--flowchat-support-line-height);
 
@@ -858,7 +858,7 @@
 
   &__boost-submenu-spinner {
     animation: spin 0.8s linear infinite;
-    color: var(--color-accent-primary);
+    color: var(--color-accent-500);
   }
 
   &__boost-submenu-list {
@@ -1109,7 +1109,7 @@
   
   &__mode-submenu-dots {
     font-size: var(--flowchat-font-size-xxs);
-    color: var(--color-text-tertiary);
+    color: var(--color-text-muted);
     margin-left: auto;
     letter-spacing: 1px;
   }
@@ -1154,7 +1154,7 @@
     border: none;
     border-radius: 50%;
     background: transparent;
-    color: var(--color-text-tertiary);
+    color: var(--color-text-muted);
     cursor: pointer;
     opacity: 0;
     pointer-events: none;
@@ -1250,7 +1250,7 @@
   
   &__slash-command-hint {
     font-size: var(--flowchat-font-size-xxs);
-    color: var(--color-text-tertiary);
+    color: var(--color-text-muted);
     font-weight: 400;
     text-transform: none;
     letter-spacing: 0;
@@ -1330,7 +1330,7 @@
     font-size: var(--flowchat-font-size-2xs);
     font-weight: 500;
     color: color-mix(in srgb, var(--color-accent-500) 90%, var(--color-text-primary));
-    font-family: var(--font-mono);
+    font-family: var(--font-family-mono);
     flex: 0 0 112px;
     min-width: 0;
     overflow: hidden;
@@ -1371,7 +1371,7 @@
     padding: var(--size-gap-4) var(--flowchat-card-expanded-pad-x);
     text-align: center;
     font-size: var(--flowchat-font-size-2xs);
-    color: var(--color-text-tertiary);
+    color: var(--color-text-muted);
   }
 
   // Popovers: heavy blur + dark shadows read as gray/black on light theme

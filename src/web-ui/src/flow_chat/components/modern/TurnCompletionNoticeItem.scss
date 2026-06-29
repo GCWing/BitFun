@@ -11,24 +11,24 @@
   padding: 6px 10px;
   border: 1px solid transparent;
   border-radius: 12px;
-  background: color-mix(in srgb, var(--color-bg-surface) 92%, transparent);
+  background: color-mix(in srgb, var(--color-bg-secondary) 92%, transparent);
   color: var(--color-text-primary);
   font-size: 12px;
   line-height: 1.45;
 
   &--warning {
     border-color: color-mix(in srgb, var(--color-warning) 45%, transparent);
-    background: color-mix(in srgb, var(--color-warning) 10%, var(--color-bg-surface));
+    background: color-mix(in srgb, var(--color-warning) 10%, var(--color-bg-secondary));
   }
 
   &--error {
     border-color: color-mix(in srgb, var(--color-error) 45%, transparent);
-    background: color-mix(in srgb, var(--color-error) 10%, var(--color-bg-surface));
+    background: color-mix(in srgb, var(--color-error) 10%, var(--color-bg-secondary));
   }
 
   &--info {
-    border-color: color-mix(in srgb, var(--accent-primary) 45%, transparent);
-    background: color-mix(in srgb, var(--accent-primary) 10%, var(--color-bg-surface));
+    border-color: color-mix(in srgb, var(--color-accent-500) 45%, transparent);
+    background: color-mix(in srgb, var(--color-accent-500) 10%, var(--color-bg-secondary));
   }
 }
 

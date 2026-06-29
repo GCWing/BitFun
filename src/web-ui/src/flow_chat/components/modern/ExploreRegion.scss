@@ -22,17 +22,17 @@
     align-items: center;
     gap: 4px;
     padding: 0;
-    color: var(--text-tertiary);
+    color: var(--color-text-muted);
     font-size: var(--flowchat-font-size-sm);
     line-height: var(--flowchat-support-line-height);
     cursor: pointer;
     user-select: none;
-    border-radius: var(--radius-sm);
+    border-radius: var(--size-radius-sm);
     transition: color 0.15s ease, background 0.15s ease;
 
     &:hover {
-    background: var(--bg-hover);
-      color: var(--text-secondary);
+    background: var(--element-bg-hover);
+      color: var(--color-text-secondary);
     }
   }
 
@@ -84,7 +84,7 @@
       border-radius: 2px;
 
       &:hover {
-        background: var(--border-hover);
+        background: var(--border-medium);
       }
     }
   }
@@ -118,8 +118,8 @@
     z-index: 3;
     background: linear-gradient(
       to bottom,
-      var(--color-bg-flowchat) 0%,
-      color-mix(in srgb, var(--color-bg-flowchat) 60%, transparent) 50%,
+      var(--color-bg-scene) 0%,
+      color-mix(in srgb, var(--color-bg-scene) 60%, transparent) 50%,
       transparent 100%
     );
   }
@@ -137,8 +137,8 @@
     z-index: 3;
     background: linear-gradient(
       to top,
-      var(--color-bg-flowchat) 0%,
-      color-mix(in srgb, var(--color-bg-flowchat) 60%, transparent) 50%,
+      var(--color-bg-scene) 0%,
+      color-mix(in srgb, var(--color-bg-scene) 60%, transparent) 50%,
       transparent 100%
     );
   }

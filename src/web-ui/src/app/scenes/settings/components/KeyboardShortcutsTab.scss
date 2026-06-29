@@ -17,7 +17,7 @@
       padding: 0 10px;
       gap: 8px;
       border-radius: 6px;
-      /* Match Search defaults; --color-border alone can be undefined and drop the border */
+      /* Match Search defaults; the canonical border token must stay defined to avoid a dropped border. */
       border: 1px solid var(--border-base);
       background: var(--input-bg);
       transition: border-color 0.15s ease, box-shadow 0.15s ease;
@@ -30,14 +30,14 @@
     &.search--focused .search__wrapper,
     .search__wrapper:focus-within {
       border-color: var(--color-accent-500);
-      box-shadow: 0 0 0 2px var(--color-accent-alpha);
+      box-shadow: 0 0 0 2px var(--color-accent-100);
     }
 
     .search__input {
       font-size: 13px;
 
       &::placeholder {
-        color: var(--color-text-tertiary);
+        color: var(--color-text-muted);
       }
     }
   }
@@ -73,11 +73,11 @@
     transition: background 0.1s;
 
     &:hover {
-      background: var(--color-bg-hover);
+      background: var(--element-bg-hover);
     }
 
     &--recording {
-      background: var(--color-accent-alpha);
+      background: var(--color-accent-100);
     }
 
     &--conflict {
@@ -108,7 +108,7 @@
   &__item-hint {
     font-size: 10px;
     line-height: 1.35;
-    color: var(--color-text-tertiary);
+    color: var(--color-text-muted);
     font-weight: 400;
     white-space: normal;
     opacity: 0.62;
@@ -136,7 +136,7 @@
     user-select: none;
 
     &:hover {
-      border-color: var(--color-border);
+      border-color: var(--border-base);
       color: var(--color-text-secondary);
     }
   }
@@ -146,7 +146,7 @@
     align-items: center;
     padding: 3px 8px;
     border-radius: 4px;
-    border: 1px solid var(--color-border);
+    border: 1px solid var(--border-base);
     background: var(--element-bg-subtle);
     color: var(--color-text-secondary);
     font-family: ui-monospace, 'Cascadia Code', 'Fira Code', monospace;
@@ -158,14 +158,14 @@
     justify-content: center;
 
     &:hover {
-      border-color: var(--color-accent);
+      border-color: var(--color-accent-500);
       color: var(--color-text-primary);
     }
 
     &--recording {
-      border-color: var(--color-accent);
-      background: var(--color-accent-alpha);
-      color: var(--color-accent);
+      border-color: var(--color-accent-500);
+      background: var(--color-accent-100);
+      color: var(--color-accent-500);
       animation: kb-pulse 1s ease-in-out infinite;
     }
 
@@ -182,9 +182,9 @@
     width: 22px;
     height: 22px;
     border-radius: 4px;
-    border: 1px solid var(--color-border);
+    border: 1px solid var(--border-base);
     background: transparent;
-    color: var(--color-text-tertiary);
+    color: var(--color-text-muted);
     font-size: 13px;
     cursor: pointer;
     padding: 0;
@@ -198,7 +198,7 @@
   &__empty {
     padding: 32px;
     text-align: center;
-    color: var(--color-text-tertiary);
+    color: var(--color-text-muted);
     font-size: 14px;
   }
 }
@@ -212,7 +212,7 @@
 .kb-shortcuts-page-header.bitfun-config-page-header {
   .bitfun-config-page-header__subtitle {
     font-size: var(--font-size-xs);
-    color: var(--color-text-tertiary);
+    color: var(--color-text-muted);
     opacity: 0.88;
   }
 }

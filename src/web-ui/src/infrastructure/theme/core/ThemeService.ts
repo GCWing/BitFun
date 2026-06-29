@@ -39,7 +39,7 @@ declare global {
   var __BITFUN_BOOTSTRAP_THEME_SELECTION__: string | undefined;
 }
 
-/** Space-separated R G B for `rgba(var(--color-primary-rgb) / alpha)` in component styles. */
+/** Space-separated R G B channels for accent alpha composition in component styles. */
 function accentColorToRgbChannels(accent: string): string | null {
   const trimmed = accent.trim();
   const hex6 = /^#([0-9a-f]{6})$/i.exec(trimmed);
@@ -503,9 +503,10 @@ export class ThemeService {
       : FLOW_CHAT_LINK_COLORS.dark;
     root.style.setProperty('--flowchat-link-color', flowChatLinkColors.default);
     root.style.setProperty('--flowchat-link-hover-color', flowChatLinkColors.hover);
-    const primaryRgb = accentColorToRgbChannels(primaryAccent);
-    if (primaryRgb) {
-      root.style.setProperty('--color-primary-rgb', primaryRgb);
+    const accentRgb = accentColorToRgbChannels(primaryAccent);
+    if (accentRgb) {
+      root.style.setProperty('--color-accent-500-rgb', accentRgb);
+      root.style.setProperty('--color-primary-rgb', accentRgb);
     }
 
 

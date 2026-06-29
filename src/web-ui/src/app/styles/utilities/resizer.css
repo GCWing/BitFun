@@ -12,7 +12,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all var(--motion-normal) var(--easing-standard);
+  transition: all var(--motion-base) var(--easing-standard);
   border: none;
   flex-shrink: 0;
   opacity: 0.2;
@@ -53,7 +53,7 @@
   height: 20px;
   background: var(--color-overlay-white-10);
   border-radius: var(--size-radius-sm);
-  transition: all var(--motion-normal);
+  transition: all var(--motion-base);
   opacity: 0.2;
 }
 

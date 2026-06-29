@@ -50,7 +50,7 @@
     align-items: center;
     gap: var(--flowchat-inline-gap);
     padding: var(--flowchat-inline-gap) var(--flowchat-card-expanded-pad-x);
-    border-bottom: 1px solid var(--color-border-subtle);
+    border-bottom: 1px solid var(--border-subtle);
     color: var(--color-text-muted);
     font-size: var(--flowchat-font-size-xs);
     font-weight: 500;
@@ -115,7 +115,7 @@
   
   &__spinner {
     animation: spin 1s linear infinite;
-    color: var(--color-accent-primary);
+    color: var(--color-accent-500);
     
     @keyframes spin {
       from { transform: rotate(0deg); }
@@ -193,7 +193,7 @@
     justify-content: center;
     gap: var(--flowchat-control-gap);
     padding: var(--flowchat-inline-gap) var(--flowchat-card-expanded-pad-x);
-    border-top: 1px solid var(--color-border-subtle);
+    border-top: 1px solid var(--border-subtle);
     font-size: var(--flowchat-font-size-xxs);
     color: var(--color-text-muted);
     
@@ -251,14 +251,14 @@
       background: var(--element-bg-medium);
       background: color-mix(
         in srgb,
-        var(--color-accent-primary) 22%,
+        var(--color-accent-500) 22%,
         var(--color-bg-elevated) 78%
       );
 
       .file-mention-picker__item-name {
         color: color-mix(
           in srgb,
-          var(--color-accent-primary) 72%,
+          var(--color-accent-500) 72%,
           var(--color-text-primary)
         );
       }
@@ -267,7 +267,7 @@
       .file-mention-picker__expand-icon {
         color: color-mix(
           in srgb,
-          var(--color-accent-primary) 65%,
+          var(--color-accent-500) 65%,
           var(--color-text-primary)
         );
         opacity: 0.92;

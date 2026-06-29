@@ -229,7 +229,7 @@ export const SessionControlToolCard: React.FC<ToolCardProps> = React.memo(({
                 gap: 2,
                 padding: '8px 10px',
                 borderRadius: 8,
-                background: 'var(--color-bg-subtle)'
+                background: 'var(--element-bg-subtle)'
               }}
             >
               <span style={{ fontFamily: 'var(--tool-card-font-mono)', wordBreak: 'break-all' }}>
@@ -249,7 +249,7 @@ export const SessionControlToolCard: React.FC<ToolCardProps> = React.memo(({
       )}
 
       {toolResult?.error && (
-        <div style={{ color: 'var(--color-danger-text)', whiteSpace: 'pre-wrap' }}>
+        <div style={{ color: 'var(--color-error)', whiteSpace: 'pre-wrap' }}>
           {toolResult.error}
         </div>
       )}

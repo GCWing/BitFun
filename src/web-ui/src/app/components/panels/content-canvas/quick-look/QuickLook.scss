@@ -70,7 +70,7 @@
     flex-shrink: 0;
 
     &:hover {
-      background: var(--color-bg-hover);
+      background: var(--element-bg-hover);
       color: var(--color-text-primary);
     }
   }
@@ -97,17 +97,17 @@
     transition: background-color 0.15s ease, color 0.15s ease;
 
     &:hover {
-      background: var(--color-bg-hover);
+      background: var(--element-bg-hover);
       color: var(--color-text-primary);
     }
   }
 
   &__pin-btn:hover {
-    color: var(--color-primary);
+    color: var(--color-accent-500);
   }
 
   &__close-btn:hover {
-    color: var(--color-danger);
+    color: var(--color-error);
   }
 
   // Content area
@@ -138,7 +138,7 @@
     gap: 4px;
     padding: 6px 12px;
     font-size: 11px;
-    color: var(--color-text-tertiary);
+    color: var(--color-text-muted);
     background: var(--color-bg-secondary);
     border-top: 1px solid var(--border-subtle);
   }

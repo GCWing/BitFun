@@ -40,7 +40,7 @@
       color 160ms ease;
 
     &:hover:not(:disabled) {
-      background: var(--color-bg-hover);
+      background: var(--element-bg-hover);
       color: var(--color-text-primary);
     }
 
@@ -68,7 +68,7 @@
   flex-shrink: 0;
 
   &:hover {
-    background: var(--color-bg-hover);
+    background: var(--element-bg-hover);
     color: var(--color-text-primary);
   }
 }
@@ -239,7 +239,7 @@
     text-align: left;
 
     &:hover {
-      background: var(--color-bg-hover);
+      background: var(--element-bg-hover);
     }
   }
 
@@ -549,7 +549,7 @@
     overflow: hidden;
 
     &:hover {
-      background: var(--color-bg-hover);
+      background: var(--element-bg-hover);
       border-color: var(--border-medium);
     }
 
@@ -773,7 +773,7 @@
         overflow: hidden;
 
         &:hover {
-          background: var(--color-bg-hover);
+          background: var(--element-bg-hover);
           border-color: var(--border-medium);
         }
 

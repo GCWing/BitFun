@@ -13,7 +13,7 @@
     align-items: center;
     gap: 8px;
     padding: 8px 12px;
-    background: var(--color-bg-flowchat);
+    background: var(--color-bg-scene);
     border: 1px solid var(--border-base);
     border-radius: 6px;
     font-size: 13px;
@@ -51,7 +51,7 @@
     gap: 12px;
     margin-top: 8px;
     padding: 8px 10px;
-    background: var(--color-bg-flowchat);
+    background: var(--color-bg-scene);
     border: 1px solid var(--border-base);
     border-radius: 4px;
   }
@@ -86,7 +86,7 @@
   &__list {
     margin-top: 8px;
     padding: 8px;
-    background: var(--color-bg-flowchat);
+    background: var(--color-bg-scene);
     border: 1px solid var(--border-base);
     border-radius: 4px;
   }
@@ -159,7 +159,7 @@
     text-align: center;
     color: var(--tool-card-text-muted);
     font-size: 12px;
-    background: var(--color-bg-flowchat);
+    background: var(--color-bg-scene);
     border: 1px solid var(--border-base);
     border-radius: 4px;
   }

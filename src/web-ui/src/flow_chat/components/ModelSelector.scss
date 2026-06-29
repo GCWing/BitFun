@@ -68,7 +68,7 @@
   }
   
   &__thinking-icon {
-    color: var(--color-text-tertiary);
+    color: var(--color-text-muted);
     flex-shrink: 0;
   }
   
@@ -123,7 +123,7 @@
   }
 
   &__chevron {
-    color: var(--color-text-tertiary);
+    color: var(--color-text-muted);
     flex-shrink: 0;
     transition: transform 0.2s ease;
     
@@ -169,7 +169,7 @@
   
   &__dropdown-hint {
     font-size: var(--flowchat-font-size-2xs);
-    color: var(--color-text-tertiary);
+    color: var(--color-text-muted);
     font-weight: 400;
     text-transform: none;
     letter-spacing: 0;
@@ -265,7 +265,7 @@
   
   &__option-desc {
     font-size: var(--flowchat-font-size-2xs);
-    color: var(--color-text-tertiary);
+    color: var(--color-text-muted);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -291,7 +291,7 @@
   }
   
   &__option-thinking {
-    color: var(--color-text-tertiary);
+    color: var(--color-text-muted);
     flex-shrink: 0;
   }
   

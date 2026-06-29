@@ -33,7 +33,7 @@
     transition: background 0.15s, color 0.15s;
 
     &:hover {
-      background: var(--color-bg-hover);
+      background: var(--element-bg-hover);
       color: var(--color-text-primary);
     }
   }

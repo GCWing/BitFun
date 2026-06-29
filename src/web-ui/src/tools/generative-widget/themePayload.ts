@@ -138,6 +138,7 @@ const WIDGET_THEME_VAR_GROUPS = {
   '--color-accent-300',
   '--color-accent-400',
   FALLBACK_VAR.accent500,
+  '--color-accent-500-rgb',
   FALLBACK_VAR.accent600,
   '--color-accent-700',
   '--color-accent-800',

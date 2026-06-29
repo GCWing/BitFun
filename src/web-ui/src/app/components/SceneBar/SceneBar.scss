@@ -192,7 +192,7 @@ $_tab-v-margin: 6px;   // symmetric top/bottom gap inside SceneBar
                 background $motion-fast $easing-standard;
 
     &:hover {
-      color: var(--color-primary);
+      color: var(--color-accent-500);
       background: var(--element-bg-soft);
     }
 

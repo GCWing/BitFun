@@ -78,8 +78,8 @@
 }
 
 .bitfun-generative-widget-panel__button--primary {
-  border-color: var(--color-primary);
-  background: color-mix(in srgb, var(--color-primary) 18%, transparent);
+  border-color: var(--color-accent-500);
+  background: color-mix(in srgb, var(--color-accent-500) 18%, transparent);
 }
 
 .bitfun-generative-widget-panel__workspace {
@@ -128,7 +128,7 @@
   padding: 14px 16px;
   background: transparent;
   color: var(--color-text-primary);
-  font: 13px/1.6 var(--font-mono);
+  font: 13px/1.6 var(--font-family-mono);
 }
 
 .bitfun-generative-widget-panel__error {

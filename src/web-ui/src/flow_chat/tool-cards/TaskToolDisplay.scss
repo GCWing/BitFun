@@ -12,7 +12,7 @@
     color: var(--color-text-secondary);
 
     &.is-running {
-      color: var(--color-primary);
+      color: var(--color-accent-500);
     }
   }
 
@@ -433,11 +433,11 @@
   }
 
   .confirm-button {
-    background: var(--color-primary);
+    background: var(--color-accent-500);
     color: var(--color-static-white);
 
     &:hover:not(:disabled) {
-      background: var(--color-primary-hover);
+      background: var(--color-accent-600);
     }
   }
 
@@ -501,7 +501,7 @@
   // Expanded state: the wrapper becomes the unified visual container.
   &.task-with-subagent-wrapper--expanded {
     // The wrapper itself provides the unified card appearance.
-    background: var(--color-bg-flowchat);
+    background: var(--color-bg-scene);
     border: 1px solid var(--border-base);
     backdrop-filter: blur(10px);
     overflow: hidden;

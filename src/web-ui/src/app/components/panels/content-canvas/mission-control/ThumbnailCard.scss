@@ -29,14 +29,14 @@
   // Active state - solid border
   &.is-active {
     border-style: solid;
-    border-color: var(--color-primary);
+    border-color: var(--color-accent-500);
 
     .canvas-thumbnail-card__header {
       border-color: var(--color-accent-200);
     }
 
     .canvas-thumbnail-card__icon {
-      color: var(--color-primary);
+      color: var(--color-accent-500);
     }
   }
 
@@ -69,7 +69,7 @@
 
   &__icon {
     flex-shrink: 0;
-    color: var(--color-text-tertiary);
+    color: var(--color-text-muted);
     transition: color 0.15s ease;
   }
 
@@ -123,7 +123,7 @@
     padding: 0;
     background: none;
     border: none;
-    color: var(--color-text-tertiary);
+    color: var(--color-text-muted);
     cursor: pointer;
     border-radius: 3px;
     transition: all 0.1s ease;
@@ -134,7 +134,7 @@
     }
 
     &.is-active {
-      color: var(--color-primary);
+      color: var(--color-accent-500);
     }
   }
 
@@ -194,7 +194,7 @@
     justify-content: center;
     height: 100%;
     gap: 6px;
-    color: var(--color-text-tertiary);
+    color: var(--color-text-muted);
     opacity: 0.6;
 
     svg {
@@ -218,7 +218,7 @@
     justify-content: center;
     width: 14px;
     height: 14px;
-    background: var(--color-primary);
+    background: var(--color-accent-500);
     border-radius: 2px;
     color: var(--color-text-primary);
 

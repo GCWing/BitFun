@@ -257,8 +257,8 @@
 .workspace-type {
   font-size: 12px;
   padding: 2px 8px;
-  background-color: var(--secondary-bg);
-  color: var(--text-secondary);
+  background-color: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
   border-radius: 4px;
   text-transform: capitalize;
 }
@@ -268,7 +268,7 @@
   align-items: center;
   gap: 4px;
   font-size: 12px;
-  color: var(--text-tertiary);
+  color: var(--color-text-muted);
 }
 
 .workspace-actions {

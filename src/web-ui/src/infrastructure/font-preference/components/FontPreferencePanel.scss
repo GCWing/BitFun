@@ -97,11 +97,11 @@
     min-width: 0;
     padding: $size-gap-1 $size-gap-3;
     font-size: var(--font-size-sm);
-    font-family: var(--font-sans);
+    font-family: var(--font-family-sans);
     background: transparent;
     border: 1px solid var(--border-base);
     border-radius: $size-radius-sm;
-    color: var(--text-secondary);
+    color: var(--color-text-secondary);
     cursor: pointer;
     transition: background $motion-fast $easing-standard,
       border-color $motion-fast $easing-standard,
@@ -112,7 +112,7 @@
     &:hover:not(:disabled):not(&--active) {
       background: var(--element-bg-subtle);
       border-color: var(--border-strong);
-      color: var(--text-primary);
+      color: var(--color-text-primary);
     }
 
     &--active {
@@ -154,7 +154,7 @@
 
   &__custom-unit {
     font-size: var(--font-size-sm);
-    color: var(--text-secondary);
+    color: var(--color-text-secondary);
     flex-shrink: 0;
   }
 
@@ -166,7 +166,7 @@
     height: 28px;
     background: transparent;
     border: none;
-    color: var(--text-secondary);
+    color: var(--color-text-secondary);
     cursor: pointer;
     font-size: var(--font-size-base);
     transition: background $motion-fast $easing-standard;
@@ -174,7 +174,7 @@
 
     &:hover:not(:disabled) {
       background: var(--element-bg-subtle);
-      color: var(--text-primary);
+      color: var(--color-text-primary);
     }
 
     &:disabled {
@@ -190,8 +190,8 @@
     border: none;
     border-left: 1px solid var(--border-base);
     border-right: 1px solid var(--border-base);
-    background: var(--bg-primary);
-    color: var(--text-primary);
+    background: var(--color-bg-primary);
+    color: var(--color-text-primary);
     font-size: var(--font-size-sm);
     text-align: center;
     outline: none !important;
@@ -217,22 +217,22 @@
     }
 
     &--error {
-      border-left-color: var(--color-semantic-error);
-      border-right-color: var(--color-semantic-error);
-      color: var(--color-semantic-error);
+      border-left-color: var(--color-error);
+      border-right-color: var(--color-error);
+      color: var(--color-error);
     }
   }
 
   &__error {
     font-size: var(--font-size-xs);
-    color: var(--color-semantic-error);
+    color: var(--color-error);
     width: 100%;
   }
 
   &__custom-hint {
     width: 100%;
     font-size: var(--font-size-xs);
-    color: var(--text-muted);
+    color: var(--color-text-muted);
     line-height: 1.4;
   }
 
@@ -241,10 +241,10 @@
     box-sizing: border-box;
     margin-top: $size-gap-2;
     padding: $size-gap-3 $size-gap-4;
-    background: var(--bg-secondary);
+    background: var(--color-bg-secondary);
     border: 1px solid var(--border-subtle);
     border-radius: $size-radius-sm;
-    color: var(--text-secondary);
+    color: var(--color-text-secondary);
     line-height: 1.6;
     word-wrap: break-word;
     transition: font-size $motion-base $easing-standard;
@@ -254,18 +254,18 @@
     margin-left: auto;
     padding: $size-gap-2 $size-gap-4;
     font-size: var(--font-size-sm);
-    font-family: var(--font-sans);
+    font-family: var(--font-family-sans);
     background: transparent;
     border: 1px solid var(--border-base);
     border-radius: $size-radius-sm;
-    color: var(--text-secondary);
+    color: var(--color-text-secondary);
     cursor: pointer;
     transition: all $motion-fast $easing-standard;
 
     &:hover {
       background: var(--element-bg-subtle);
       border-color: var(--border-strong);
-      color: var(--text-primary);
+      color: var(--color-text-primary);
     }
   }
 }

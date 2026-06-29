@@ -15,13 +15,13 @@
       "max": 0
     },
     "compatibilityAliases.registeredUnique": {
-      "max": 63
+      "max": 64
     },
     "compatibilityAliases.usedUnique": {
-      "max": 68
+      "max": 0
     },
     "compatibilityAliases.occurrences": {
-      "max": 608
+      "max": 0
     },
     "compatibilityAliases.staleRegisteredUnique": {
       "max": 0
@@ -30,10 +30,10 @@
       "max": 2
     },
     "compatibilityAliases.familyUsedUnique": {
-      "max": 2
+      "max": 0
     },
     "compatibilityAliases.familyOccurrences": {
-      "max": 51
+      "max": 0
     },
     "compatibilityAliases.staleRegisteredFamilyUnique": {
       "max": 0

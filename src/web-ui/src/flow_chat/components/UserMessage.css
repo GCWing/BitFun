@@ -79,7 +79,7 @@
 
 .message-timestamp {
   font-size: 0.75em;
-  color: var(--color-text-tertiary);
+  color: var(--color-text-muted);
 }
 
 .message-snapshot-action {

@@ -202,7 +202,7 @@ $_diff-error-max-width: 400px;
   gap: $size-gap-3;
 
   &__icon {
-    color: var(--color-text-tertiary);
+    color: var(--color-text-muted);
     opacity: 0.6;
   }
 
@@ -215,7 +215,7 @@ $_diff-error-max-width: 400px;
   }
 
   &__path {
-    color: var(--color-text-tertiary);
+    color: var(--color-text-muted);
     font-size: var(--font-size-xs);
     font-family: $font-family-mono;
     margin: 0;

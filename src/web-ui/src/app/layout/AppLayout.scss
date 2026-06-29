@@ -119,7 +119,7 @@ html, body {
   width: 100%;
   overflow: hidden;
   position: relative;
-  background: var(--color-bg-flowchat);
+  background: var(--color-bg-scene);
 }
 
 .bitfun-app-acp-session-loading {
@@ -259,14 +259,14 @@ html, body {
 // ==================== Dark theme tweaks ====================
 @media (prefers-color-scheme: dark) {
   .bitfun-app-layout {
-    background: var(--color-bg-flowchat);
+    background: var(--color-bg-scene);
   }
 }
 
 // ==================== High-contrast mode ====================
 @media (prefers-contrast: high) {
   .bitfun-app-layout {
-    background: var(--color-bg-flowchat);
+    background: var(--color-bg-scene);
   }
 }
 

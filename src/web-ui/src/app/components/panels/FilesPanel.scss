@@ -209,8 +209,8 @@
   }
 
   &__search-limit-notice--warning {
-    background: color-mix(in srgb, var(--element-bg-subtle) 64%, var(--color-warning-100) 36%);
-    color: var(--color-warning-700);
+    background: color-mix(in srgb, var(--element-bg-subtle) 64%, var(--color-warning-bg) 36%);
+    color: var(--color-warning);
   }
 
   &__search-spinner {

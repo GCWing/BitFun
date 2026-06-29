@@ -13,7 +13,7 @@
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  background: var(--color-bg-base);
+  background: var(--color-bg-primary);
   color: var(--color-text-primary);
 }
 
@@ -26,7 +26,7 @@
   display: flex;
   align-items: center;
   padding: 8px 12px;
-  background: var(--color-bg-base);
+  background: var(--color-bg-primary);
 }
 
 .skills-tabs-bar__tabs {
@@ -918,7 +918,7 @@
   align-items: center;
   justify-content: center;
   padding: 40px 24px 32px;
-  background: linear-gradient(180deg, var(--color-bg-secondary) 0%, var(--color-bg-base) 100%);
+  background: linear-gradient(180deg, var(--color-bg-secondary) 0%, var(--color-bg-primary) 100%);
   border-bottom: 1px solid var(--border-subtle);
 }
 

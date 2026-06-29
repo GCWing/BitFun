@@ -37,7 +37,7 @@
   }
   
   &-dark {
-    background: var(--color-bg-flowchat);
+    background: var(--color-bg-scene);
     color: var(--color-text-primary);
     
     .m-editor-textarea {
@@ -55,7 +55,7 @@
   }
   
   &-light {
-    background: var(--color-bg-flowchat);
+    background: var(--color-bg-scene);
     color: var(--color-text-primary);
     border: 1px solid var(--border-base);
     

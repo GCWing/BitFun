@@ -1008,7 +1008,7 @@
     resize: vertical;
     border: 1px solid color-mix(in srgb, var(--color-text-primary) 12%, transparent);
     border-radius: $size-radius-base;
-    background: color-mix(in srgb, var(--color-bg-flowchat) 94%, black);
+    background: color-mix(in srgb, var(--color-bg-scene) 94%, black);
     color: var(--color-text-primary);
     padding: $size-gap-3;
     line-height: 1.55;
@@ -1068,7 +1068,7 @@
     word-break: break-word;
     border: 1px solid color-mix(in srgb, var(--color-text-primary) 12%, transparent);
     border-radius: $size-radius-base;
-    background: color-mix(in srgb, var(--color-bg-flowchat) 94%, black);
+    background: color-mix(in srgb, var(--color-bg-scene) 94%, black);
     color: var(--color-text-primary);
     padding: $size-gap-3;
     line-height: 1.55;
@@ -1126,7 +1126,7 @@
     padding: $size-gap-2 $size-gap-3;
     border: 1px solid color-mix(in srgb, var(--color-text-primary) 10%, transparent);
     border-radius: $size-radius-base;
-    background: color-mix(in srgb, var(--color-bg-flowchat) 88%, white);
+    background: color-mix(in srgb, var(--color-bg-scene) 88%, white);
   }
 
   [data-type='details'] > button {
@@ -1184,7 +1184,7 @@
     margin: $size-gap-3 0;
     border: 1px solid color-mix(in srgb, var(--color-text-primary) 10%, transparent);
     border-radius: $size-radius-base;
-    background: color-mix(in srgb, var(--color-bg-flowchat) 88%, white);
+    background: color-mix(in srgb, var(--color-bg-scene) 88%, white);
     overflow: hidden;
   }
 
@@ -1221,7 +1221,7 @@
   }
 
   .m-editor-details-block__summary::placeholder {
-    color: var(--color-text-tertiary);
+    color: var(--color-text-muted);
   }
 
   .m-editor-details-block__body {

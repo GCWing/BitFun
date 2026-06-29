@@ -397,6 +397,13 @@ export const TOKEN_COMPATIBILITY_ALIAS_CONTRACTS = [
     removal: 'Retire only after primary action tokens are componentized and widget payload no longer exports this key.',
   },
   {
+    key: '--color-primary-rgb',
+    canonical: '--color-accent-500-rgb',
+    owner: 'src/web-ui/src/component-library/styles/tokens.scss; src/web-ui/src/infrastructure/theme/core/ThemeService.ts',
+    reason: 'Primary RGB channels are historical accent channels used for alpha composition; the canonical name follows the accent scale.',
+    removal: 'Retire after alpha-composition callers and generated widget payload stop exporting primary-rgb.',
+  },
+  {
     key: '--color-primary-hover',
     canonical: '--color-accent-600',
     owner: 'src/web-ui/src/component-library/styles/tokens.scss; src/web-ui/src/infrastructure/theme/core/ThemeService.ts',

@@ -99,8 +99,8 @@
     margin: 0;
     padding: $size-gap-3 $size-gap-5;
     border-radius: $size-radius-base;
-    background: var(--color-bg-subtle);
-    border: 1px solid var(--color-border);
+    background: var(--element-bg-subtle);
+    border: 1px solid var(--border-base);
   }
 
   &__bullet-list li {
@@ -130,8 +130,8 @@
   &__preview {
     margin-top: $size-gap-3;
     padding: $size-gap-3 $size-gap-4;
-    background: var(--color-bg-subtle);
-    border: 1px solid var(--color-border);
+    background: var(--element-bg-subtle);
+    border: 1px solid var(--border-base);
     border-radius: $size-radius-base;
     text-align: left;
     overflow: auto;
@@ -162,7 +162,7 @@
     justify-content: flex-end;
     align-items: center;
     padding: $size-gap-4 $size-gap-6 $size-gap-5;
-    border-top: 1px solid var(--color-border);
+    border-top: 1px solid var(--border-base);
 
     .btn {
       min-width: 88px;

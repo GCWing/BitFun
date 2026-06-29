@@ -11,7 +11,7 @@
   padding: 12px;
   border: 1px solid color-mix(in srgb, var(--border-base) 68%, transparent);
   border-radius: 8px;
-  background: color-mix(in srgb, var(--color-bg-secondary) 82%, var(--color-bg-flowchat));
+  background: color-mix(in srgb, var(--color-bg-secondary) 82%, var(--color-bg-scene));
   box-shadow: 0 1px 0 color-mix(in srgb, var(--color-text-primary) 4%, transparent) inset;
   color: var(--color-text-primary);
   animation: slideInUp 0.3s ease;
@@ -36,7 +36,7 @@
   &__loading-dots {
     flex: 0 0 auto;
     margin-top: 4px;
-    color: var(--accent-primary);
+    color: var(--color-accent-500);
   }
 
   &__loading-title {
@@ -138,10 +138,10 @@
       width: 12px;
       height: 12px;
       margin: 0;
-      accent-color: var(--accent-primary);
+      accent-color: var(--color-accent-500);
 
       &:focus-visible {
-        outline: 2px solid color-mix(in srgb, var(--accent-primary) 70%, transparent);
+        outline: 2px solid color-mix(in srgb, var(--color-accent-500) 70%, transparent);
         outline-offset: 2px;
       }
     }
@@ -178,7 +178,7 @@
     }
 
     &:focus-visible {
-      outline: 2px solid color-mix(in srgb, var(--accent-primary) 70%, transparent);
+      outline: 2px solid color-mix(in srgb, var(--color-accent-500) 70%, transparent);
       outline-offset: 2px;
     }
 
@@ -339,7 +339,7 @@
     }
 
     &:focus-visible {
-      outline: 2px solid color-mix(in srgb, var(--accent-primary) 70%, transparent);
+      outline: 2px solid color-mix(in srgb, var(--color-accent-500) 70%, transparent);
       outline-offset: 2px;
     }
 

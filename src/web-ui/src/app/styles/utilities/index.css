@@ -159,7 +159,7 @@
 .text-primary { color: var(--color-text-primary); }
 .text-secondary { color: var(--color-text-secondary); }
 .text-muted { color: var(--color-text-muted); }
-.text-blue { color: var(--color-primary-500); }
+.text-blue { color: var(--color-accent-500); }
 .text-success { color: var(--color-success); }
 .text-warning { color: var(--color-warning); }
 .text-error { color: var(--color-error); }
@@ -196,7 +196,7 @@
 .border-0 { border: none; }
 .border-glass { border: 1px solid var(--glass-border-base); }
 .border-glass-hover { border-color: var(--glass-border-hover); }
-.border-focus { border-color: var(--color-primary-400); }
+.border-focus { border-color: var(--color-accent-400); }
 
 /* Border radius */
 .rounded-none { border-radius: 0; }

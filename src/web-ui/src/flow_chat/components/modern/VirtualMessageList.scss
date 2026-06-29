@@ -44,7 +44,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: var(--color-bg-flowchat); /* FlowChat background. */
+    background: var(--color-bg-scene); /* FlowChat background. */
   }
   
   .empty-state {
@@ -96,7 +96,7 @@
     z-index: 2;
     overflow: hidden;
     pointer-events: none;
-    background: var(--color-bg-flowchat);
+    background: var(--color-bg-scene);
     contain: paint;
   }
 

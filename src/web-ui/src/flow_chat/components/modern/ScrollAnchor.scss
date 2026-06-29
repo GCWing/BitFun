@@ -96,7 +96,7 @@
     width: 280px;
     background: var(--color-bg-elevated);
     backdrop-filter: blur(16px);
-    border: 1px solid var(--color-border);
+    border: 1px solid var(--border-base);
     border-radius: 8px;
     box-shadow: 0 4px 20px var(--color-overlay-black-25);
     pointer-events: none;
@@ -114,15 +114,15 @@
       width: 8px;
       height: 8px;
       background: var(--color-bg-elevated);
-      border-right: 1px solid var(--color-border);
-      border-top: 1px solid var(--color-border);
+      border-right: 1px solid var(--border-base);
+      border-top: 1px solid var(--border-base);
     }
   }
 
   &__preview-indicator {
     padding: var(--flowchat-card-expanded-pad-y) var(--flowchat-card-expanded-pad-x);
     background: var(--color-accent-50);
-    border-bottom: 1px solid var(--color-border);
+    border-bottom: 1px solid var(--border-base);
     text-align: center;
   }
 

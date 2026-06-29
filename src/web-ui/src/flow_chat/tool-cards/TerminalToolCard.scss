@@ -22,7 +22,7 @@
    */
   .compact-card-action,
   .compact-card-content .tool-command-preview.tool-command-preview--compact {
-    font-family: var(--tool-compact-summary-font);
+    font-family: var(--font-family-sans);
     font-size: var(--flowchat-font-size-sm);
     line-height: var(--flowchat-support-line-height);
     font-weight: normal;
@@ -35,7 +35,7 @@
 
   .terminal-header-duration .duration-text {
     gap: 0.18rem;
-    font-family: var(--tool-compact-summary-font);
+    font-family: var(--font-family-sans);
     font-size: var(--flowchat-font-size-sm);
     line-height: var(--flowchat-support-line-height);
     font-weight: normal;
@@ -128,7 +128,7 @@
       border: none !important;
       outline: none !important;
       box-shadow: none !important;
-      color: var(--text-secondary);
+      color: var(--color-text-secondary);
     }
   }
 

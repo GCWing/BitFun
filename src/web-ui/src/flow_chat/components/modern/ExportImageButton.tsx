@@ -219,7 +219,7 @@ export const ExportImageButton: React.FC<ExportImageButtonProps> = ({
       
       // Get theme background color.
       const computedStyle = getComputedStyle(document.documentElement);
-      const bgColor = computedStyle.getPropertyValue('--color-bg-flowchat').trim() || FLOWCHAT_CAPTURE_FALLBACK_COLOR.background;
+      const bgColor = computedStyle.getPropertyValue('--color-bg-scene').trim() || FLOWCHAT_CAPTURE_FALLBACK_COLOR.background;
 
       // Pre-load the logo as an HTMLImageElement. We do NOT try to embed it
       // inside the captured DOM (unreliable with <img>/data URLs inside an

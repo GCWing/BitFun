@@ -6,8 +6,8 @@
 
 .user-message-item {
   padding: var(--flowchat-user-message-pad-y) var(--flowchat-user-message-pad-x);
-  background: color-mix(in srgb, var(--element-bg-medium) 86%, var(--color-bg-flowchat));
-  border: 1px solid color-mix(in srgb, var(--border-muted) 38%, transparent);
+  background: color-mix(in srgb, var(--element-bg-medium) 86%, var(--color-bg-scene));
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 38%, transparent);
   border-radius: var(--flowchat-card-radius);
   margin:
     0.06rem
@@ -20,8 +20,8 @@
   position: relative;
   
   &:hover {
-    background: color-mix(in srgb, var(--element-bg-medium) 92%, var(--color-bg-flowchat));
-    border-color: color-mix(in srgb, var(--border-muted) 56%, transparent);
+    background: color-mix(in srgb, var(--element-bg-medium) 92%, var(--color-bg-scene));
+    border-color: color-mix(in srgb, var(--border-subtle) 56%, transparent);
 
     .user-message-item__copy-btn {
       opacity: 1;

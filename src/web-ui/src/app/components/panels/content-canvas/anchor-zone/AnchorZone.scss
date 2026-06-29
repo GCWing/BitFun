@@ -56,7 +56,7 @@
   // Resizing state
   &.is-resizing {
     .canvas-anchor-zone__resizer-line {
-      background: var(--color-primary);
+      background: var(--color-accent-500);
     }
   }
 
@@ -89,7 +89,7 @@
 
     &:hover {
       .canvas-anchor-zone__resizer-line {
-        background: var(--color-primary);
+        background: var(--color-accent-500);
       }
     }
   }
@@ -144,13 +144,13 @@
     transition: background-color 0.15s ease, color 0.15s ease;
 
     &:hover {
-      background: var(--color-bg-hover);
+      background: var(--element-bg-hover);
       color: var(--color-text-primary);
     }
   }
 
   &__close-btn:hover {
-    color: var(--color-danger);
+    color: var(--color-error);
   }
 
   // Content area

@@ -51,7 +51,7 @@
         transition: all 0.15s ease;
 
         &:hover {
-          background: var(--color-bg-hover);
+          background: var(--element-bg-hover);
           border-color: var(--border-medium);
         }
       }
@@ -120,7 +120,7 @@
         font-size: 14px;
         font-weight: 500;
         color: var(--color-text-primary);
-        font-family: var(--font-mono);
+        font-family: var(--font-family-mono);
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
