@@ -674,50 +674,7 @@ export const TOKEN_COMPATIBILITY_ALIAS_FAMILY_CONTRACTS = [
   },
 ];
 
-export const FALLBACK_VAR_CONTRACTS = [
-  {
-    key: '--surface-stagger-index',
-    owner: 'src/web-ui/src/app/components/GalleryLayout',
-    reason: 'Runtime inline animation index with zero fallback for first paint and non-animated states.',
-    boundary: 'layout-runtime-input',
-  },
-  {
-    key: '--mission-control-group-color',
-    owner: 'src/web-ui/src/app/components/panels/content-canvas/mission-control',
-    reason: 'Runtime group identity color with accent fallback when no group color is assigned.',
-    boundary: 'data-driven-identity-color',
-  },
-  {
-    key: '--char-index',
-    owner: 'src/web-ui/src/component-library/components/StreamText',
-    reason: 'Runtime per-character animation offset with zero fallback outside animated rendering.',
-    boundary: 'animation-runtime-input',
-  },
-  {
-    key: '--gallery-grid-min',
-    owner: 'src/web-ui/src/app/components/GalleryLayout',
-    reason: 'Runtime layout sizing input with a stable responsive grid fallback.',
-    boundary: 'layout-runtime-input',
-  },
-  {
-    key: '--gallery-skeleton-height',
-    owner: 'src/web-ui/src/app/components/GalleryLayout',
-    reason: 'Runtime skeleton sizing input with a stable placeholder height fallback.',
-    boundary: 'layout-runtime-input',
-  },
-  {
-    key: '--primary-color',
-    owner: 'src/web-ui/src/component-library/components/Markdown',
-    reason: 'Embedded markdown primary accent override with global accent fallback.',
-    boundary: 'embedded-content-theme-override',
-  },
-  {
-    key: '--scene-viewport-border-width',
-    owner: 'src/web-ui/src/app/scenes/SceneViewport.scss',
-    reason: 'Runtime viewport layout override with a stable one-pixel default.',
-    boundary: 'layout-runtime-input',
-  },
-];
+export const FALLBACK_VAR_CONTRACTS = [];
 
 export const DYNAMIC_VAR_FAMILY_CONTRACTS = [
   {

@@ -230,6 +230,8 @@
 
   // Editor group badge
   &__group-badge {
+    --mission-control-group-color: var(--color-accent-500);
+
     position: absolute;
     bottom: 6px;
     right: 6px;
@@ -237,7 +239,7 @@
     font-size: 9px;
     font-weight: 600;
     color: var(--color-text-primary);
-    background: var(--mission-control-group-color, var(--color-accent-500));
+    background: var(--mission-control-group-color);
     border-radius: 3px;
     z-index: 1;
     box-shadow: 0 1px 3px var(--color-overlay-black-30);
@@ -245,15 +247,15 @@
     text-shadow: 0 1px 2px var(--color-overlay-black-20);
 
     &--primary {
-      background: var(--mission-control-group-color, var(--color-accent-500));
+      --mission-control-group-color: var(--color-accent-500);
     }
 
     &--secondary {
-      background: var(--mission-control-group-color, var(--color-success));
+      --mission-control-group-color: var(--color-success);
     }
 
     &--tertiary {
-      background: var(--mission-control-group-color, var(--color-warning));
+      --mission-control-group-color: var(--color-warning);
     }
   }
 }

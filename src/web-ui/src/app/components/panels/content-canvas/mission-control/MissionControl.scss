@@ -154,7 +154,7 @@
     }
 
     &.is-active {
-      background: var(--mission-control-group-color, var(--color-accent-500));
+      background: var(--mission-control-group-color);
       color: var(--color-text-primary);
       box-shadow: 0 1px 3px var(--color-overlay-black-20);
 
@@ -170,7 +170,7 @@
       width: 6px;
       height: 6px;
       border-radius: 50%;
-      background: var(--mission-control-group-color, var(--color-accent-500));
+      background: var(--mission-control-group-color);
       opacity: 0.6;
       transition: opacity 0.15s ease;
     }

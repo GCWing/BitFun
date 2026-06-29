@@ -1212,6 +1212,9 @@ $badge-info-text: $color-info;
 
   --surface-stagger-index: 0;
   --mission-control-group-color: var(--color-accent-500);
+  --scene-viewport-border-width: 1px;
+  --gallery-grid-min: 320px;
+  --gallery-skeleton-height: 140px;
   --inline-context-tag-color: var(--color-accent-500);
   --deep-review-action-bar-surface: var(--color-bg-secondary);
   --markdown-editor-list-indent: 1.75rem;
@@ -1417,6 +1420,7 @@ $badge-info-text: $color-info;
   --flowchat-markdown-table-cell-pad-x: 0.72rem;
   --flowchat-link-color: #60a5fa;
   --flowchat-link-hover-color: #93c5fd;
+  --markdown-primary-color: var(--color-accent-600);
 
   /* Left nav: one baseline step below flow-chat scale (overwritten by FontPreferenceService). */
   --nav-font-size-xxs: var(--font-size-xxs);

@@ -3,10 +3,10 @@
   "description": "Baseline for Web UI theme color governance. Lower values when debt is removed; do not raise without a documented review reason.",
   "budgets": {
     "fallbackOccurrences": {
-      "max": 25
+      "max": 0
     },
     "fallbackUniqueTokens": {
-      "max": 7
+      "max": 0
     },
     "fallbackContracts.uncontractedUnique": {
       "max": 0

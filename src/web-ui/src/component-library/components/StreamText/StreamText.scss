@@ -1,5 +1,6 @@
 /* Streaming text output styles */
 .stream-text {
+  --char-index: 0;
   --stream-text-matrix-green-rgb: 0, 255, 0;
   --stream-text-rainbow-pink-rgb: 255, 0, 128;
   --stream-text-rainbow-orange-rgb: 255, 140, 0;
@@ -152,16 +153,16 @@
 @keyframes glitch-appear {
   0% {
     opacity: 0;
-    transform: translate(calc(var(--char-index, 0) * -2px), 0);
+    transform: translate(calc(var(--char-index) * -2px), 0);
     text-shadow:
       2px 0 var(--stream-text-glitch-magenta),
       -2px 0 var(--stream-text-glitch-cyan);
   }
   20% {
-    transform: translate(calc(var(--char-index, 0) * 2px), -2px);
+    transform: translate(calc(var(--char-index) * 2px), -2px);
   }
   40% {
-    transform: translate(calc(var(--char-index, 0) * -1px), 2px);
+    transform: translate(calc(var(--char-index) * -1px), 2px);
   }
   60% {
     text-shadow:

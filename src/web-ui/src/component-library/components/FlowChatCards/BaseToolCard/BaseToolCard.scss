@@ -6,6 +6,7 @@
 
 .base-tool-card {
   --primary-color: #{tokens.$color-accent-600};
+  --markdown-primary-color: var(--primary-color);
 
   @include shared.liquid-card-base;
   @include shared.card-light-flow;
