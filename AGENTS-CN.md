@@ -15,7 +15,10 @@ BitFun 是一个由 Rust workspace 与 React 前端组成的项目。
 
 ## 分层模块索引
 
-依赖关系按自上而下读取：上层只能依赖下层，同层 crate 也应保持最小依赖。
+依赖关系按自上而下读取。下表是物理 crate 布局，不是完整概念架构；Product Feature、Agent Kernel、
+Execution、Extension、Cross-platform Adapter 的边界以
+[`docs/architecture/core-decomposition.md`](docs/architecture/core-decomposition.md)
+为准。同层 crate 也应保持最小依赖。
 
 | # | 层级 | 路径 | 职责 | 模块 / 入口 | 层级文档 |
 |---|---|---|---|---|---|
@@ -30,6 +33,7 @@ BitFun 是一个由 Rust workspace 与 React 前端组成的项目。
 
 - 接口与入口层暴露选定产品行为；可复用行为应下移。
 - 组装层只接线下层并选择产品能力事实，不实现具体 adapter、OS 或 service 细节。
+- 产品特性只在内核能力之上组装用户侧命令、UI contribution、设置和默认策略；长程任务、scheduler、permission、session/workspace、memory、DFX、hook 和 event 事实属于 Agent Kernel owner。
 - 适配层翻译协议和外部系统，不拥有产品能力选择或可复用 OS service 行为。
 - 服务实现层负责可复用的 OS、process、terminal、MCP、remote、git、filesystem、session persistence primitives 和 MiniApp runtime IO 能力。
 - 执行原语层只放可移植运行时构件，不拥有宿主或交付形态。
