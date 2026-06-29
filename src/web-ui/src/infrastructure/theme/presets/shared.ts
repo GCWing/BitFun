@@ -1,6 +1,7 @@
 import type {
   BorderColors,
   ElementBackgrounds,
+  GitColors,
   RadiusConfig,
   ScrollbarColors,
   ThemeConfig,
@@ -171,6 +172,16 @@ export function createDarkNeutralElement(): ElementBackgrounds {
     medium: 'rgba(255, 255, 255, 0.125)',
     strong: 'rgba(255, 255, 255, 0.155)',
     elevated: 'rgba(255, 255, 255, 0.19)',
+  };
+}
+
+export function createGitColors(
+  config: Omit<GitColors, 'staged' | 'stagedBg'> & Partial<Pick<GitColors, 'staged' | 'stagedBg'>>,
+): GitColors {
+  return {
+    ...config,
+    staged: config.staged ?? config.added,
+    stagedBg: config.stagedBg ?? config.addedBg,
   };
 }
 

@@ -4,6 +4,7 @@ import { ThemeConfig } from '../types';
 import {
   createChinaTypography,
   createCompactRadius,
+  createGitColors,
   createStandardEasing,
   createStandardSpacing,
   createWindowControls,
@@ -99,7 +100,7 @@ export const bitfunChinaStyleTheme: ThemeConfig = {
       elevated: 'rgba(255, 255, 255, 0.85)',  
     },
     
-    git: {
+    git: createGitColors({
       branch: 'rgb(46, 94, 138)',              
       branchBg: 'rgba(46, 94, 138, 0.08)',
       changes: 'rgb(240, 160, 32)',            
@@ -108,9 +109,7 @@ export const bitfunChinaStyleTheme: ThemeConfig = {
       addedBg: 'rgba(82, 173, 90, 0.08)',
       deleted: 'rgb(200, 16, 46)',             
       deletedBg: 'rgba(200, 16, 46, 0.08)',
-      staged: 'rgb(82, 173, 90)',              
-      stagedBg: 'rgba(82, 173, 90, 0.08)',
-    },
+    }),
   },
   
   

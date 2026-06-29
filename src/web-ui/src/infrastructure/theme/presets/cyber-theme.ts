@@ -4,6 +4,7 @@ import { ThemeConfig } from '../types';
 import {
   createCompactRadius,
   createExpressiveTypography,
+  createGitColors,
   createStandardEasing,
   createStandardSpacing,
   createWindowControls,
@@ -101,7 +102,7 @@ export const bitfunCyberTheme: ThemeConfig = {
       elevated: 'rgba(0, 230, 255, 0.27)',
     },
     
-    git: {
+    git: createGitColors({
       branch: 'rgb(0, 230, 255)',
       branchBg: 'rgba(0, 230, 255, 0.12)',
       changes: 'rgb(255, 204, 0)',
@@ -110,9 +111,7 @@ export const bitfunCyberTheme: ThemeConfig = {
       addedBg: 'rgba(0, 255, 159, 0.12)',
       deleted: 'rgb(255, 0, 85)',
       deletedBg: 'rgba(255, 0, 85, 0.12)',
-      staged: 'rgb(0, 255, 159)',
-      stagedBg: 'rgba(0, 255, 159, 0.12)',
-    },
+    }),
   },
   
   

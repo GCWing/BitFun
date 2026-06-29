@@ -4,6 +4,7 @@ import { ThemeConfig } from '../types';
 import {
   createCompactRadius,
   createExpressiveTypography,
+  createGitColors,
   createStandardEasing,
   createStandardSpacing,
   createWindowControls,
@@ -100,7 +101,7 @@ export const bitfunTokyoNightTheme: ThemeConfig = {
       elevated: 'rgba(122, 162, 247, 0.22)',
     },
 
-    git: {
+    git: createGitColors({
       branch: 'rgb(122, 162, 247)',
       branchBg: 'rgba(122, 162, 247, 0.12)',
       changes: 'rgb(224, 175, 104)',
@@ -111,7 +112,7 @@ export const bitfunTokyoNightTheme: ThemeConfig = {
       deletedBg: 'rgba(247, 118, 142, 0.12)',
       staged: 'rgb(158, 206, 106)',
       stagedBg: 'rgba(158, 206, 106, 0.12)',
-    },
+    }),
 
     scrollbar: {
       thumb: 'rgba(134, 139, 196, 0.15)',

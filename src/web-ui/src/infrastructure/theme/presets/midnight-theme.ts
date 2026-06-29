@@ -2,6 +2,7 @@
 
 import { ThemeConfig } from '../types';
 import {
+  createGitColors,
   createStandardEasing,
   createStandardRadius,
   createStandardSpacing,
@@ -101,7 +102,7 @@ export const bitfunMidnightTheme: ThemeConfig = {
       elevated: 'rgba(255, 255, 255, 0.18)',
     },
     
-    git: {
+    git: createGitColors({
       branch: 'rgb(88, 166, 255)',
       branchBg: 'rgba(88, 166, 255, 0.1)',
       changes: 'rgb(224, 160, 85)',
@@ -110,9 +111,7 @@ export const bitfunMidnightTheme: ThemeConfig = {
       addedBg: 'rgba(106, 171, 115, 0.1)',
       deleted: 'rgb(204, 127, 122)',
       deletedBg: 'rgba(204, 127, 122, 0.1)',
-      staged: 'rgb(106, 171, 115)',
-      stagedBg: 'rgba(106, 171, 115, 0.1)',
-    },
+    }),
   },
   
   

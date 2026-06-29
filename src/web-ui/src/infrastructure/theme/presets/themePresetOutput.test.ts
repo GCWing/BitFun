@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 
 import { builtinThemes } from './index';
+import { createGitColors } from './shared';
 
 function hashTheme(theme: unknown): string {
   return createHash('sha256')
@@ -10,6 +11,38 @@ function hashTheme(theme: unknown): string {
 }
 
 describe('builtin theme preset output', () => {
+  it('aliases staged git colors to added colors unless a theme overrides them', () => {
+    expect(createGitColors({
+      branch: '#64748b',
+      branchBg: 'rgba(100, 116, 139, 0.1)',
+      changes: '#f59e0b',
+      changesBg: 'rgba(245, 158, 11, 0.1)',
+      added: '#22c55e',
+      addedBg: 'rgba(34, 197, 94, 0.1)',
+      deleted: '#ef4444',
+      deletedBg: 'rgba(239, 68, 68, 0.1)',
+    })).toMatchObject({
+      staged: '#22c55e',
+      stagedBg: 'rgba(34, 197, 94, 0.1)',
+    });
+
+    expect(createGitColors({
+      branch: '#64748b',
+      branchBg: 'rgba(100, 116, 139, 0.1)',
+      changes: '#f59e0b',
+      changesBg: 'rgba(245, 158, 11, 0.1)',
+      added: '#22c55e',
+      addedBg: 'rgba(34, 197, 94, 0.1)',
+      deleted: '#ef4444',
+      deletedBg: 'rgba(239, 68, 68, 0.1)',
+      staged: '#10b981',
+      stagedBg: 'rgba(16, 185, 129, 0.1)',
+    })).toMatchObject({
+      staged: '#10b981',
+      stagedBg: 'rgba(16, 185, 129, 0.1)',
+    });
+  });
+
   it('keeps resolved preset objects stable across helper refactors', () => {
     expect(builtinThemes.map(theme => ({
       id: theme.id,

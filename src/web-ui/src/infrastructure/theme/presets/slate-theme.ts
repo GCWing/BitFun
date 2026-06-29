@@ -5,6 +5,7 @@ import {
   createDarkNeutralBorder,
   createDarkNeutralElement,
   createDarkNeutralScrollbar,
+  createGitColors,
   createSlateRadius,
   createStandardEasing,
   createStandardSpacing,
@@ -97,7 +98,7 @@ export const bitfunSlateTheme: ThemeConfig = {
     
     element: createDarkNeutralElement(),
     
-    git: {
+    git: createGitColors({
       branch: '#9ca6b8',
       branchBg: 'rgba(255, 255, 255, 0.06)',
       changes: 'rgb(245, 158, 11)',
@@ -106,9 +107,7 @@ export const bitfunSlateTheme: ThemeConfig = {
       addedBg: 'rgba(127, 184, 153, 0.1)',
       deleted: 'rgb(201, 135, 141)',
       deletedBg: 'rgba(201, 135, 141, 0.1)',
-      staged: 'rgb(127, 184, 153)',
-      stagedBg: 'rgba(127, 184, 153, 0.1)',
-    },
+    }),
     
     scrollbar: createDarkNeutralScrollbar(),
   },

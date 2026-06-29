@@ -350,6 +350,7 @@ test('theme color audit budgets generated widget payload compatibility aliases s
   assert.equal(report.generatedWidgetPayload.varUnique, 4);
   assert.equal(report.generatedWidgetPayload.compatibilityAliasUnique, 1);
   assert.equal(report.generatedWidgetPayload.compatibilityAliasFamilyUnique, 1);
+  assert.equal(report.generatedWidgetPayload.externalOnlyCompatibilityUnique, 2);
   assert.equal(report.generatedWidgetPayload.undefinedUnique, 0);
   assert.equal(report.generatedWidgetPayload.missingCompatibilityCanonicalUnique, 0);
   assert.equal(report.generatedWidgetPayload.unexportedCompatibilityCanonicalUnique, 0);
@@ -361,6 +362,14 @@ test('theme color audit budgets generated widget payload compatibility aliases s
     report.generatedWidgetPayload.topCompatibilityFamilies.map(row => [row.key, row.canonical]),
     [['--radius-sm', '--size-radius-sm']],
   );
+  assert.deepEqual(
+    report.generatedWidgetPayload.externalOnlyCompatibility.map(row => [row.key, row.canonical, row.familyPrefix]),
+    [
+      ['--color-primary', '--color-accent-500', null],
+      ['--radius-sm', '--size-radius-sm', '--radius-'],
+    ],
+  );
+  assert.match(report.generatedWidgetPayload.externalOnlyCompatibility[0].removal, /Retire/);
 });
 
 test('theme color audit reports generated widget payload compatibility aliases without canonicals', (t) => {
@@ -658,12 +667,48 @@ test('theme color audit reports near color pair sources and enforces pair budget
   );
 });
 
+test('theme color audit reports near color pairs inside specialized color domains', (t) => {
+  const { dir, sourceRoot } = createFixture({
+    'tools/mermaid-editor/theme/mermaidTheme.ts': [
+      "export const lightNode = '#111111';",
+      "export const darkNode = '#111112';",
+      '',
+    ].join('\n'),
+    'tools/terminal/utils/xtermTheme.ts': [
+      "export const normalBlack = '#222222';",
+      "export const brightBlack = '#222225';",
+      '',
+    ].join('\n'),
+    'app/App.scss': '.app { color: #333333; }\n',
+  });
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const reportPath = path.join(dir, 'theme-report.json');
+
+  const reportResult = runAudit(['--root', sourceRoot, '--report-json', reportPath, '--no-baseline']);
+  assert.equal(reportResult.status, 0, reportResult.stderr || reportResult.stdout);
+  assert.match(reportResult.stdout, /Specialized color-domain near pairs:/);
+
+  const report = readJson(reportPath);
+  assert.equal(report.colorDomainNearPairs.mermaid.indistinguishableTotal, 1);
+  assert.equal(report.colorDomainNearPairs.terminal.nearTotal, 1);
+  assert.equal(report.colorDomainNearPairs.appUi.indistinguishableTotal, 0);
+  assert.equal(report.colorDomainNearPairs.indistinguishableTotal, 1);
+  assert.equal(report.colorDomainNearPairs.nearTotal, 1);
+  assert.deepEqual(
+    report.colorDomainNearPairs.mermaid.indistinguishable[0].files.map(file => (
+      file.replace(/\\/g, '/').split('/').slice(-3).join('/')
+    )),
+    ['mermaid-editor/theme/mermaidTheme.ts'],
+  );
+});
+
 test('theme color audit excludes test files from production color budgets', (t) => {
   const { dir, sourceRoot } = createFixture({
     'component-library/styles/tokens.scss': ':root { --color-error: #ef4444; }\n',
     'app/App.scss': '.app { color: #ef4444; }\n',
     'app/App.test.tsx': "expect(button).toHaveStyle({ color: '#ef4444' });\n",
     'app/__tests__/Fixture.tsx': "export const visualLock = '#ef4444';\n",
+    'generated/version.ts': "export const buildAccent = '#22c55e';\n",
   });
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
 
@@ -673,6 +718,7 @@ test('theme color audit excludes test files from production color budgets', (t) 
   const report = JSON.parse(result.stdout);
   assert.equal(report.filesScanned, 2);
   assert.equal(report.ignoredTestFiles, 2);
+  assert.equal(report.ignoredGeneratedFiles, 1);
   assert.equal(report.colorScopes.appUi.occurrences, 1);
   assert.equal(report.tokenAliasLiterals.occurrences, 1);
 });

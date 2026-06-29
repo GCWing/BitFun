@@ -66,11 +66,12 @@ registry。
 
 | 指标 | 当前基线 |
 | --- | ---: |
-| 扫描的生产前端文件数 | 1536 |
+| 扫描的生产前端文件数 | 1535 |
 | 忽略的测试文件数 | 221 |
-| 包含颜色字面量的文件数 | 26 |
-| 颜色字面量出现次数 | 1717 |
-| 唯一颜色字面量数量 | 913 |
+| 忽略的构建生成文件数 | 0 |
+| 包含颜色字面量的文件数 | 25 |
+| 颜色字面量出现次数 | 1702 |
+| 唯一颜色字面量数量 | 912 |
 | 组件或非 token 文件中的颜色出现次数 | 0 |
 | 组件或非 token 唯一颜色数量 | 0 |
 | App UI 颜色出现次数 | 0 |
@@ -81,6 +82,8 @@ registry。
 | token-equivalent app literal 唯一颜色数量 | 0 |
 | 普通组件肉眼不可区分 near color pair | 0 |
 | 普通组件需证据复核的 near color pair | 0 |
+| 专用域肉眼不可区分 near color pair | 35 |
+| 专用域需证据复核的 near color pair | 644 |
 
 当前审计未发现 CSS 变量契约层面的硬错误：
 
@@ -115,6 +118,7 @@ registry。
 | generated widget payload key | 326 | widget iframe 对外主题变量 allowlist，作为外部边界单独预算，不计入内部 alias 读取 |
 | generated widget payload compatibility alias | 64 | payload 仍暴露已登记 legacy alias，防止已生成或第三方内容读取失败 |
 | generated widget payload compatibility family key | 17 | payload 仍暴露 `--radius-*`、`--spacing-*` 具体 key，同时暴露 canonical family |
+| generated widget payload external-only compatibility key | 81 | payload 中仍保留且内部产品代码不再读取的 legacy key，是后续外部兼容评估和收缩队列 |
 | generated widget payload undefined key | 0 | 防止 payload 引入没有静态、运行时或动态 family 定义的游离 key |
 | generated widget payload missing compatibility canonical | 0 | 防止 payload 暴露 legacy key 但 canonical 目标不存在 |
 | generated widget payload unexported compatibility canonical | 0 | 防止 payload 暴露 legacy key 但遗漏对应 canonical key |
@@ -128,7 +132,7 @@ registry。
 
 | 区域 | 当前出现次数 | 当前唯一色数 | 说明 |
 | --- | ---: | ---: | --- |
-| Theme presets | 1033 | 611 | 主题个性与 palette 映射，不作为普通 app literal 直接合并 |
+| Theme presets | 1019 | 611 | 主题个性与 palette 映射，不作为普通 app literal 直接合并；git staged 仅在与 added 视觉语义相同时由 preset helper 复用 |
 | Token contracts | 267 | 159 | `tokens.scss` 等静态契约根 |
 | Editor | 56 | 53 | Monaco/editor 专用域，不能直接泛化到 app token；组件装饰色已迁出 raw literal |
 | Mermaid | 139 | 95 | Mermaid 专用渲染域 |
@@ -142,16 +146,39 @@ registry。
 | App UI | 0 | 0 | 普通 app/component raw color 已清零；后续新增必须先进入 token/exception 决策 |
 | Syntax | 18 | 17 | Prism syntax palette，保留为专用渲染域 |
 
+专用域 near color pair 已单独进入证据队列，避免把 editor、terminal、Mermaid、
+theme preset 或 boundary fallback 误算成普通 app UI 债务。当前队列不是自动合并指令，
+而是后续截图和语义复核的候选清单：
+
+| 专用域 | 肉眼不可区分 pair | 需证据复核 pair | 后续处理原则 |
+| --- | ---: | ---: | --- |
+| Theme presets | 30 | 459 | 优先处理同一 theme 内 hex/rgb 完全等价和同 alpha 阶重复；保留主题个性 |
+| Theme runtime | 0 | 50 | 先与静态 token 和 payload contract 对齐，避免 early render 或 system theme 回退 |
+| Token contracts | 2 | 90 | 优先 alias 精确等价值；状态、层级和 alpha ramp 不按数值强合并 |
+| Boundary fallback | 0 | 6 | 只在 iframe/截图 first paint 验证后收缩 |
+| Mermaid | 3 | 32 | 需检查节点、边、文本、错误态和 light/dark Mermaid 输出 |
+| Editor | 0 | 7 | 需检查 Monaco selection、diff、inline highlight 和 light/dark editor 可读性 |
+| Syntax / Terminal / Generated widget / Debug overlay / UI exception / Language identity / Visual effects | 0 | 0 | 当前无 near 队列；新增会被单域 baseline 拦截 |
+
 剩余高频文件均为专用 palette 或集中 registry：
 
 | 文件 | 颜色出现次数 | 后续处理策略 |
 | --- | ---: | --- |
-| `src/web-ui/src/tools/editor/themes/bitfun-dark.theme.ts` | 47 | Monaco theme palette；不拆散到普通 app token |
+| `src/web-ui/src/component-library/styles/tokens.scss` | 242 | 根 token 契约；优先处理同语义 alias，避免把状态/层级 ramp 按数值强合并 |
+| `src/web-ui/src/infrastructure/theme/presets/cyber-theme.ts` | 145 | theme preset palette；保留主题个性，优先继续收敛同一结构下的机械重复 |
+| `src/web-ui/src/infrastructure/theme/presets/tokyo-night-theme.ts` | 145 | theme preset palette；Tokyo git staged 与 added 语义不同，保留显式覆盖 |
+| `src/web-ui/src/infrastructure/theme/presets/china-style-theme.ts` | 128 | theme preset palette；保留主题个性，优先继续收敛同一结构下的机械重复 |
+| `src/web-ui/src/infrastructure/theme/presets/light-theme.ts` | 128 | theme preset palette；保留主题个性，优先继续收敛同一结构下的机械重复 |
+| `src/web-ui/src/infrastructure/theme/presets/china-night-theme.ts` | 122 | theme preset palette；保留主题个性，优先继续收敛同一结构下的机械重复 |
+| `src/web-ui/src/infrastructure/theme/presets/midnight-theme.ts` | 120 | theme preset palette；保留主题个性，优先继续收敛同一结构下的机械重复 |
+| `src/web-ui/src/infrastructure/theme/presets/dark-theme.ts` | 109 | theme preset palette；保留主题个性，优先继续收敛同一结构下的机械重复 |
+| `src/web-ui/src/infrastructure/theme/presets/slate-theme.ts` | 109 | theme preset palette；保留主题个性，优先继续收敛同一结构下的机械重复 |
+| `src/web-ui/src/tools/mermaid-editor/theme/mermaidThemeFallbacks.ts` | 106 | Mermaid 专用渲染兜底；需以节点、边、文本、错误态截图为依据 |
+| `src/web-ui/src/infrastructure/theme/core/ThemeService.ts` | 54 | 运行时注入；需保持 early render、system theme 和 payload 导出兼容 |
 | `src/web-ui/src/shared/theme/languageIdentityAccents.ts` | 52 | 内置 language/file identity registry；调用方复用常量 |
+| `src/web-ui/src/tools/editor/themes/bitfun-dark.theme.ts` | 47 | Monaco theme palette；不拆散到普通 app token |
 | `src/web-ui/src/shared/theme/uiExceptionAccents.ts` | 38 | 固定 UI 身份/角色色 registry；新增必须说明 owner/role |
 | `src/web-ui/src/tools/terminal/utils/xtermTheme.ts` | 36 | terminal ANSI palette；不与 app semantic color 合并 |
-| `src/web-ui/src/shared/theme/themeBoundaryFallbacks.ts` | 22 | isolated surface 和截图兜底值；集中 owner |
-| `src/web-ui/src/shared/theme/syntaxHighlightAccents.ts` | 18 | Prism syntax palette；不泛化到 app token |
 
 组件级 `var(--token, fallback)` 已收敛到 0；原先的 7 个 fallback token 不再需要
 fallback contract registry 保留。
@@ -177,8 +204,8 @@ fallback 收敛决策表：
 | Phase 2：精确重复合并 | 已完成主体 | token-equivalent app literal 已清零；截图兜底、language identity 和 review/agent/insights 固定色已迁入显式 registry；`tokens.scss` 中同域同语义的 deep-review consent 精确重复已改为 alias |
 | Phase 3：legacy fallback 迁移 | 已完成主体 | 组件级 `var(--token, fallback)` 已清零，baseline 降到 0；新增 fallback 会被审计报告和 baseline 拦截 |
 | Phase 4：组件 token 抽取 | 已完成主体 | CodeEditor、StreamText、ChatInputPixelPet、ReferencesPanel、AgentCompanion、tool-card、editor、generative-widget 组件装饰色已抽为组件 token 或复用 contract token；Flow Chat 局部动态 key 已改为 surface namespace |
-| Phase 5：近似色合并 | 已完成主体 | 普通组件 near pair 已清零；极近似视觉色只在不相邻或不承担状态差异时合并，Monaco/terminal/Mermaid/syntax 专用 palette 不强行合并 |
-| Phase 6：防回退约束 | 已强化 | baseline 已同步到 component/non-token=0、appUi=0、token-equivalent=0、nearPair=0、compatibility alias 读取=0、fallback=0、surface rename debt=0，并保留 generated widget payload、domain contract 防回退指标 |
+| Phase 5：近似色合并 | 已完成主体并进入专用域证据队列 | 普通组件 near pair 已清零；极近似视觉色只在不相邻或不承担状态差异时合并，Monaco/terminal/Mermaid/syntax/theme preset 等专用 palette 通过 `colorDomainNearPairs.*` 排队复核 |
+| Phase 6：防回退约束 | 已强化 | baseline 已同步到 component/non-token=0、appUi=0、token-equivalent=0、ordinary nearPair=0、compatibility alias 读取=0、fallback=0、surface rename debt=0，并保留 generated widget payload、external-only compatibility、domain contract 和专用域 near-pair 防回退指标 |
 
 Phase 5 决策记录：
 
@@ -203,6 +230,8 @@ Phase 6 防回退约束：
 | --- | ---: | ---: | --- |
 | `nearPairs.indistinguishableTotal` | 0 | 0 | 阻止新增普通组件肉眼不可区分 pair 未被合并或记录 |
 | `nearPairs.nearTotal` | 0 | 0 | 阻止新增普通组件 near color 债务；新增必须合并、归类或记录理由 |
+| `colorDomainNearPairs.indistinguishableTotal` | 35 | 35 | 控制专用域肉眼不可区分 pair 不继续增长，后续只能逐步降低或补充证据 |
+| `colorDomainNearPairs.nearTotal` | 644 | 644 | 控制 theme preset/runtime/token/editor/Mermaid 等专用域 near 队列规模 |
 | `colorScopes.appUi.uniqueColors` | 0 | 0 | 阻止普通组件 raw color 唯一色回涨 |
 | `colorScopes.appUi.occurrences` | 0 | 0 | 阻止普通组件 raw color 出现次数回涨 |
 | `tokenAliasLiterals.occurrences` | 0 | 0 | 阻止重新出现可映射到 token 的 app literal |
@@ -221,6 +250,7 @@ Phase 6 防回退约束：
 | `generatedWidgetPayload.varUnique` | 326 | 326 | 控制 widget 对外主题 payload allowlist 不继续膨胀 |
 | `generatedWidgetPayload.compatibilityAliasUnique` | 64 | 64 | 控制 payload 中显式 legacy alias 数量，后续只能降低或经复审调整 |
 | `generatedWidgetPayload.compatibilityAliasFamilyUnique` | 17 | 17 | 控制 payload 中 legacy size family 具体 key 数量 |
+| `generatedWidgetPayload.externalOnlyCompatibilityUnique` | 81 | 81 | 标记 payload 中内部代码已不读取、仅因外部兼容保留的收缩候选 |
 | `generatedWidgetPayload.undefinedUnique` | 0 | 0 | 防止 payload 导出未定义主题 key |
 | `generatedWidgetPayload.missingCompatibilityCanonicalUnique` | 0 | 0 | 防止 payload 兼容 alias 缺失 canonical 目标 |
 | `generatedWidgetPayload.unexportedCompatibilityCanonicalUnique` | 0 | 0 | 防止 payload 兼容 alias 有 canonical 定义但未导出到 iframe |
@@ -230,7 +260,8 @@ Phase 6 防回退约束：
 
 `nearPairs.*` 只基于非 token、非 exception 的普通组件颜色计算。Theme preset、
 editor、syntax、terminal、language identity、boundary fallback 等专用域通过各自
-`colorDomainScopes.*` 预算约束，不用该 near-pair guard 直接判定是否可合并。
+`colorDomainScopes.*` 和 `colorDomainNearPairs.*` 预算约束。专用域 near 队列用于
+安排截图和语义复核，不直接判定是否可合并。
 
 视觉证据契约新增在 `scripts/theme-visual-governance-contract.json`，并由
 `pnpm run theme:visual-contract` 校验。它不是截图替代品，而是后续 PR 的覆盖面
@@ -847,7 +878,8 @@ alpha 差异经常承担 elevation 和交互状态，不应全部压成一个值
 
 建议按证据和 surface 拆分，避免一次性大迁移：
 
-已完成的治理批次覆盖前 9 项，并把 widget payload 外部兼容面纳入审计预算：
+已完成的治理批次覆盖前 9 项，并把第 10/11 项所需的专用域 near 队列、
+widget payload external-only 兼容面和 raw color 防回退指标纳入审计预算：
 
 1. 审计工具和 baseline report。
 2. canonical token map 与 compatibility alias。

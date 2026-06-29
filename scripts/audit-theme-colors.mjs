@@ -173,6 +173,13 @@ function isAuditTestFile(relativePath) {
   );
 }
 
+function isGeneratedBuildArtifact(rootRelativePath) {
+  return (
+    rootRelativePath === 'generated/version.ts'
+    || rootRelativePath === 'generated/version-injection.html'
+  );
+}
+
 function isTokenFile(relativePath) {
   return TOKEN_PATH_PARTS.some(part => relativePath.includes(part));
 }
@@ -722,7 +729,22 @@ function audit(options) {
   const checksFullThemeSourceRoot = root === path.resolve(DEFAULT_ROOT);
   const files = walkFiles(root);
   const cwd = process.cwd();
-  const auditedFiles = files.filter(file => !isAuditTestFile(normalizePath(path.relative(cwd, file))));
+  const fileEntries = files.map(file => ({
+    file,
+    relativePath: normalizePath(path.relative(cwd, file)),
+    rootRelativePath: normalizePath(path.relative(root, file)),
+  }));
+  const ignoredTestFiles = fileEntries.filter(entry => isAuditTestFile(entry.relativePath));
+  const ignoredGeneratedFiles = fileEntries.filter(entry => (
+    !isAuditTestFile(entry.relativePath)
+    && isGeneratedBuildArtifact(entry.rootRelativePath)
+  ));
+  const auditedFiles = fileEntries
+    .filter(entry => (
+      !isAuditTestFile(entry.relativePath)
+      && !isGeneratedBuildArtifact(entry.rootRelativePath)
+    ))
+    .map(entry => entry.file);
   const tokenAliasDefinitionsByColorKey = collectTokenAliasDefinitions(auditedFiles, cwd);
 
   const colorCounts = new Map();
@@ -746,6 +768,7 @@ function audit(options) {
   const tokenColorCounts = new Map();
   const colorDomainCounts = new Map();
   const colorDomainFiles = new Map();
+  const colorDomainColorFiles = new Map();
   const tokenAliasLiteralCounts = new Map();
   const tokenAliasLiteralFiles = new Map();
   const tokenAliasLiteralExamples = new Map();
@@ -775,6 +798,9 @@ function audit(options) {
       const domainCounts = colorDomainCounts.get(colorDomain) ?? new Map();
       incrementMap(domainCounts, color);
       colorDomainCounts.set(colorDomain, domainCounts);
+      const domainColorFiles = colorDomainColorFiles.get(colorDomain) ?? new Map();
+      addToSetMap(domainColorFiles, color, relativePath);
+      colorDomainColorFiles.set(colorDomain, domainColorFiles);
       if (tokenFile) {
         incrementMap(tokenColorCounts, color);
       } else if (exceptionFile) {
@@ -959,6 +985,23 @@ function audit(options) {
       topColors: topEntries(counts, options.top),
     }];
   }));
+  const colorDomainNearPairEntries = Object.fromEntries(COLOR_DOMAIN_KEYS.map(key => {
+    const counts = colorDomainCounts.get(key) ?? new Map();
+    const filesByColor = colorDomainColorFiles.get(key) ?? new Map();
+    return [key, buildNearColorPairs(counts, filesByColor)];
+  }));
+  const specializedColorDomainKeys = COLOR_DOMAIN_KEYS.filter(key => key !== 'appUi');
+  const colorDomainNearPairs = {
+    indistinguishableTotal: specializedColorDomainKeys.reduce(
+      (total, key) => total + colorDomainNearPairEntries[key].indistinguishableTotal,
+      0,
+    ),
+    nearTotal: specializedColorDomainKeys.reduce(
+      (total, key) => total + colorDomainNearPairEntries[key].nearTotal,
+      0,
+    ),
+    ...colorDomainNearPairEntries,
+  };
   const fallbackVars = Array.from(fallbackTokenCounts.entries())
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
     .map(([key, count]) => ({
@@ -1033,6 +1076,12 @@ function audit(options) {
         ...entry,
         canonical: contract.canonical,
         canonicalDefinitionKind: getExplicitDefinitionKind(contract.canonical),
+        familyPrefix: null,
+        canonicalPrefix: null,
+        owner: contract.owner,
+        reason: contract.reason,
+        removal: contract.removal,
+        internalUsageCount: varUsageCounts.get(entry.key) ?? 0,
       };
     })
     .filter(Boolean)
@@ -1049,10 +1098,31 @@ function audit(options) {
         familyPrefix: contract.familyPrefix,
         canonicalPrefix: contract.canonicalPrefix,
         canonicalDefinitionKind: getExplicitDefinitionKind(contract.canonical),
+        owner: contract.owner,
+        reason: contract.reason,
+        removal: contract.removal,
+        internalUsageCount: varUsageCounts.get(entry.key) ?? 0,
       };
     })
     .filter(Boolean)
     .sort((a, b) => b.count - a.count || a.key.localeCompare(b.key));
+  const generatedWidgetPayloadExternalOnlyCompatibility = [
+    ...generatedWidgetPayloadCompatibilityAliases,
+    ...generatedWidgetPayloadCompatibilityFamilies,
+  ]
+    .filter(entry => entry.internalUsageCount === 0)
+    .map(entry => ({
+      key: entry.key,
+      canonical: entry.canonical,
+      familyPrefix: entry.familyPrefix,
+      canonicalPrefix: entry.canonicalPrefix,
+      count: entry.count,
+      owner: entry.owner,
+      reason: entry.reason,
+      removal: entry.removal,
+      canonicalDefinitionKind: entry.canonicalDefinitionKind,
+    }))
+    .sort((a, b) => a.key.localeCompare(b.key));
   const generatedWidgetPayloadUndefinedVars = generatedWidgetPayloadVars
     .filter(entry => !entry.definitionKind)
     .sort((a, b) => a.key.localeCompare(b.key));
@@ -1149,7 +1219,8 @@ function audit(options) {
   return {
     root: normalizePath(path.relative(cwd, root)) || '.',
     filesScanned: auditedFiles.length,
-    ignoredTestFiles: files.length - auditedFiles.length,
+    ignoredTestFiles: ignoredTestFiles.length,
+    ignoredGeneratedFiles: ignoredGeneratedFiles.length,
     filesWithColors: fileColorCounts.size,
     colorOccurrences,
     uniqueColors: colorCounts.size,
@@ -1169,6 +1240,7 @@ function audit(options) {
       },
     },
     colorDomainScopes,
+    colorDomainNearPairs,
     componentColorOccurrences,
     componentFilesWithColors: componentFileColorCounts.size,
     uniqueComponentColors,
@@ -1220,10 +1292,16 @@ function audit(options) {
         (total, entry) => total + entry.count,
         0,
       ),
+      externalOnlyCompatibilityUnique: generatedWidgetPayloadExternalOnlyCompatibility.length,
+      externalOnlyCompatibilityOccurrences: generatedWidgetPayloadExternalOnlyCompatibility.reduce(
+        (total, entry) => total + entry.count,
+        0,
+      ),
       missingCompatibilityCanonicalUnique: generatedWidgetPayloadMissingCompatibilityCanonicals.length,
       unexportedCompatibilityCanonicalUnique: generatedWidgetPayloadUnexportedCompatibilityCanonicals.length,
       topCompatibilityAliases: generatedWidgetPayloadCompatibilityAliases.slice(0, options.top),
       topCompatibilityFamilies: generatedWidgetPayloadCompatibilityFamilies.slice(0, options.top),
+      externalOnlyCompatibility: generatedWidgetPayloadExternalOnlyCompatibility.slice(0, REPORT_ROW_LIMIT),
       undefinedVars: generatedWidgetPayloadUndefinedVars.slice(0, REPORT_ROW_LIMIT),
       missingCompatibilityCanonicals: generatedWidgetPayloadMissingCompatibilityCanonicals.slice(0, REPORT_ROW_LIMIT),
       unexportedCompatibilityCanonicals: generatedWidgetPayloadUnexportedCompatibilityCanonicals.slice(
@@ -1299,6 +1377,7 @@ function printText(report) {
   console.log(`Theme color audit: ${report.root}`);
   console.log(`Files scanned: ${report.filesScanned}`);
   console.log(`Ignored test files: ${report.ignoredTestFiles}`);
+  console.log(`Ignored generated files: ${report.ignoredGeneratedFiles}`);
   console.log(`Files with colors: ${report.filesWithColors}`);
   console.log(`Color occurrences: ${report.colorOccurrences}`);
   console.log(`Unique colors: ${report.uniqueColors}`);
@@ -1325,6 +1404,7 @@ function printText(report) {
     `undefined=${report.generatedWidgetPayload.undefinedUnique}, ` +
     `compatAliases=${report.generatedWidgetPayload.compatibilityAliasUnique}, ` +
     `compatAliasFamilies=${report.generatedWidgetPayload.compatibilityAliasFamilyUnique}, ` +
+    `externalOnlyCompat=${report.generatedWidgetPayload.externalOnlyCompatibilityUnique}, ` +
     `missingCompatCanonicals=${report.generatedWidgetPayload.missingCompatibilityCanonicalUnique}, ` +
     `unexportedCompatCanonicals=${report.generatedWidgetPayload.unexportedCompatibilityCanonicalUnique}`
   );
@@ -1364,6 +1444,38 @@ function printText(report) {
       `unique=${scope.uniqueColors.toString().padStart(4)}  ` +
       `files=${scope.filesWithColors.toString().padStart(3)}`
     );
+  }
+
+  console.log('\nSpecialized color-domain near pairs:');
+  let printedDomainNearPairs = false;
+  for (const key of COLOR_DOMAIN_KEYS.filter(domainKey => domainKey !== 'appUi')) {
+    const pairs = report.colorDomainNearPairs[key];
+    if (!pairs || (pairs.indistinguishableTotal === 0 && pairs.nearTotal === 0)) {
+      continue;
+    }
+    printedDomainNearPairs = true;
+    console.log(
+      `  ${COLOR_DOMAIN_LABELS[key].padEnd(18)} ` +
+      `indistinguishable=${pairs.indistinguishableTotal.toString().padStart(4)}  ` +
+      `near=${pairs.nearTotal.toString().padStart(4)}`
+    );
+    for (const pair of pairs.indistinguishable.slice(0, 3)) {
+      console.log(
+        `    indistinguishable ${pair.a} <-> ${pair.b}  ` +
+        `distance=${pair.distance.toFixed(2)}  alphaDiff=${pair.alphaDiff.toFixed(3)}  ` +
+        `combined=${pair.count}`
+      );
+    }
+    for (const pair of pairs.near.slice(0, 3)) {
+      console.log(
+        `    near ${pair.a} <-> ${pair.b}  ` +
+        `distance=${pair.distance.toFixed(2)}  alphaDiff=${pair.alphaDiff.toFixed(3)}  ` +
+        `combined=${pair.count}`
+      );
+    }
+  }
+  if (!printedDomainNearPairs) {
+    console.log('  none');
   }
 
   console.log('\nTop files:');
@@ -1450,6 +1562,19 @@ function printText(report) {
     for (const row of report.generatedWidgetPayload.topCompatibilityFamilies.slice(0, 10)) {
       console.log(
         `  ${row.count.toString().padStart(5)}  ${row.key} -> ${row.canonical}  ` +
+        `canonicalDefined=${Boolean(row.canonicalDefinitionKind)}`
+      );
+    }
+  }
+
+  console.log('\nGenerated widget payload external-only compatibility:');
+  if (report.generatedWidgetPayload.externalOnlyCompatibility.length === 0) {
+    console.log('  none');
+  } else {
+    for (const row of report.generatedWidgetPayload.externalOnlyCompatibility.slice(0, 10)) {
+      const family = row.familyPrefix ? `  family=${row.familyPrefix}*` : '';
+      console.log(
+        `  ${row.count.toString().padStart(5)}  ${row.key} -> ${row.canonical}${family}  ` +
         `canonicalDefined=${Boolean(row.canonicalDefinitionKind)}`
       );
     }

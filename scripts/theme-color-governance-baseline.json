@@ -74,6 +74,12 @@
     "generatedWidgetPayload.compatibilityAliasFamilyOccurrences": {
       "max": 17
     },
+    "generatedWidgetPayload.externalOnlyCompatibilityUnique": {
+      "max": 81
+    },
+    "generatedWidgetPayload.externalOnlyCompatibilityOccurrences": {
+      "max": 81
+    },
     "generatedWidgetPayload.missingCompatibilityCanonicalUnique": {
       "max": 0
     },
@@ -140,8 +146,98 @@
     "nearPairs.nearTotal": {
       "max": 0
     },
+    "colorDomainNearPairs.indistinguishableTotal": {
+      "max": 35
+    },
+    "colorDomainNearPairs.nearTotal": {
+      "max": 644
+    },
+    "colorDomainNearPairs.themePreset.indistinguishableTotal": {
+      "max": 30
+    },
+    "colorDomainNearPairs.themePreset.nearTotal": {
+      "max": 459
+    },
+    "colorDomainNearPairs.themeRuntime.indistinguishableTotal": {
+      "max": 0
+    },
+    "colorDomainNearPairs.themeRuntime.nearTotal": {
+      "max": 50
+    },
+    "colorDomainNearPairs.tokenContract.indistinguishableTotal": {
+      "max": 2
+    },
+    "colorDomainNearPairs.tokenContract.nearTotal": {
+      "max": 90
+    },
+    "colorDomainNearPairs.generatedWidget.indistinguishableTotal": {
+      "max": 0
+    },
+    "colorDomainNearPairs.generatedWidget.nearTotal": {
+      "max": 0
+    },
+    "colorDomainNearPairs.boundaryFallback.indistinguishableTotal": {
+      "max": 0
+    },
+    "colorDomainNearPairs.boundaryFallback.nearTotal": {
+      "max": 6
+    },
+    "colorDomainNearPairs.mermaid.indistinguishableTotal": {
+      "max": 3
+    },
+    "colorDomainNearPairs.mermaid.nearTotal": {
+      "max": 32
+    },
+    "colorDomainNearPairs.editor.indistinguishableTotal": {
+      "max": 0
+    },
+    "colorDomainNearPairs.editor.nearTotal": {
+      "max": 7
+    },
+    "colorDomainNearPairs.syntax.indistinguishableTotal": {
+      "max": 0
+    },
+    "colorDomainNearPairs.syntax.nearTotal": {
+      "max": 0
+    },
+    "colorDomainNearPairs.terminal.indistinguishableTotal": {
+      "max": 0
+    },
+    "colorDomainNearPairs.terminal.nearTotal": {
+      "max": 0
+    },
+    "colorDomainNearPairs.debugOverlay.indistinguishableTotal": {
+      "max": 0
+    },
+    "colorDomainNearPairs.debugOverlay.nearTotal": {
+      "max": 0
+    },
+    "colorDomainNearPairs.uiException.indistinguishableTotal": {
+      "max": 0
+    },
+    "colorDomainNearPairs.uiException.nearTotal": {
+      "max": 0
+    },
+    "colorDomainNearPairs.languageIdentity.indistinguishableTotal": {
+      "max": 0
+    },
+    "colorDomainNearPairs.languageIdentity.nearTotal": {
+      "max": 0
+    },
+    "colorDomainNearPairs.visualEffect.indistinguishableTotal": {
+      "max": 0
+    },
+    "colorDomainNearPairs.visualEffect.nearTotal": {
+      "max": 0
+    },
+    "colorDomainNearPairs.appUi.indistinguishableTotal": {
+      "max": 0
+    },
+    "colorDomainNearPairs.appUi.nearTotal": {
+      "max": 0
+    },
     "colorDomainScopes.themePreset.occurrences": {
-      "max": 1033
+      "max": 1019
     },
     "colorDomainScopes.themePreset.uniqueColors": {
       "max": 611
