@@ -34,8 +34,9 @@ Execution、Extension、Cross-platform Adapter 的边界以
 - 接口与入口层暴露选定产品行为；可复用行为应下移。
 - 组装层只接线下层并选择产品能力事实，不实现具体 adapter、OS 或 service 细节。
 - 产品特性只在内核能力之上组装用户侧命令、UI contribution、设置和默认策略；长程任务、scheduler、permission、session/workspace、memory、DFX、hook 和 event 事实属于 Agent Kernel owner。
-- 适配层翻译协议和外部系统，不拥有产品能力选择或可复用 OS service 行为。
+- 适配层翻译协议和外部 provider 形状，不拥有产品能力选择或可复用 OS service 行为。
 - 服务实现层负责可复用的 OS、process、terminal、MCP、remote、git、filesystem、session persistence primitives 和 MiniApp runtime IO 能力。
+- 外部系统是边界外资源，不是仓库内层级。只有已注册的 adapter、service 或 app-local provider 应调用它们；其他层消费 port 和稳定契约。
 - 执行原语层只放可移植运行时构件，不拥有宿主或交付形态。
 - 契约层保持轻行为，不得向上依赖。
 

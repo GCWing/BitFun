@@ -16,6 +16,7 @@ default = []
 async-trait = { workspace = true }
 bitfun-agent-stream = { path = "../agent-stream" }
 bitfun-agent-tools = { path = "../tool-contracts" }
+bitfun-core-types = { path = "../../contracts/core-types" }
 bitfun-events = { path = "../../contracts/events" }
 bitfun-harness = { path = "../harness" }
 bitfun-runtime-ports = { path = "../../contracts/runtime-ports" }

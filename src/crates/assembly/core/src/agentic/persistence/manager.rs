@@ -3,7 +3,8 @@
 //! Responsible for project-scoped session persistence.
 
 use crate::agentic::core::{
-    strip_prompt_markup, CompressionState, Message, MessageContent, Session, SessionConfig,
+    sanitize_persisted_session_state, strip_prompt_markup, CompressionState, Message,
+    MessageContent, PersistedSessionStateFile as StoredSessionStateFile, Session, SessionConfig,
     SessionState, SessionSummary,
 };
 use crate::agentic::session::{SessionPromptCache, PROMPT_CACHE_SCHEMA_VERSION};
@@ -61,24 +62,6 @@ struct ReadTurnPathsResult {
     turns: Vec<DialogTurnData>,
     missing_turn_file_count: usize,
     max_turn_read_duration_ms: u64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct StoredSessionStateFile {
-    schema_version: u32,
-    config: SessionConfig,
-    snapshot_session_id: Option<String>,
-    // Derived runtime cache for reminder semantics. The source of truth lives
-    // on persisted dialog turns via `DialogTurnData.agent_type`.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    last_user_dialog_agent_type: Option<String>,
-    // Session-level prompt-cache guard state. This records the most recent user
-    // submission accepted by the scheduler and intentionally does not rewind on
-    // history rollback.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    last_submitted_agent_type: Option<String>,
-    compression_state: CompressionState,
-    runtime_state: SessionState,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -594,13 +577,6 @@ impl PersistenceManager {
                 }
             }
             _ => {}
-        }
-    }
-
-    fn sanitize_runtime_state(state: &SessionState) -> SessionState {
-        match state {
-            SessionState::Processing { .. } => SessionState::Idle,
-            other => other.clone(),
         }
     }
 
@@ -1622,7 +1598,7 @@ impl PersistenceManager {
             last_user_dialog_agent_type: session.last_user_dialog_agent_type.clone(),
             last_submitted_agent_type: session.last_submitted_agent_type.clone(),
             compression_state: session.compression_state.clone(),
-            runtime_state: Self::sanitize_runtime_state(&session.state),
+            runtime_state: sanitize_persisted_session_state(&session.state),
         };
         self.save_stored_session_state(workspace_path, &session.session_id, &state)
             .await
@@ -1668,7 +1644,7 @@ impl PersistenceManager {
             .unwrap_or_default();
         let runtime_state = stored_state
             .as_ref()
-            .map(|value| Self::sanitize_runtime_state(&value.runtime_state))
+            .map(|value| sanitize_persisted_session_state(&value.runtime_state))
             .unwrap_or(SessionState::Idle);
         let created_at = Self::unix_ms_to_system_time(metadata.created_at);
         let last_activity_at = Self::unix_ms_to_system_time(metadata.last_active_at);
@@ -1958,7 +1934,7 @@ impl PersistenceManager {
                 runtime_state: SessionState::Idle,
             });
         stored_state.schema_version = SESSION_STORAGE_SCHEMA_VERSION;
-        stored_state.runtime_state = Self::sanitize_runtime_state(state);
+        stored_state.runtime_state = sanitize_persisted_session_state(state);
         self.save_stored_session_state(workspace_path, session_id, &stored_state)
             .await
     }
@@ -1986,7 +1962,7 @@ impl PersistenceManager {
             let state = self
                 .load_stored_session_state(workspace_path, &metadata.session_id)
                 .await?
-                .map(|value| Self::sanitize_runtime_state(&value.runtime_state))
+                .map(|value| sanitize_persisted_session_state(&value.runtime_state))
                 .unwrap_or(SessionState::Idle);
 
             summaries.push(SessionSummary {

@@ -2,7 +2,8 @@
 
 Scope: this guide applies to `src/crates/execution/agent-runtime`.
 
-`bitfun-agent-runtime` owns portable agent runtime decisions and the narrow
+`bitfun-agent-runtime` owns portable agent runtime decisions,
+session/config/context facts, lifecycle helper state, and the narrow
 port-backed `sdk` / `AgentRuntime` facade that can be built and tested without
 `bitfun-core`.
 
@@ -20,7 +21,7 @@ port-backed `sdk` / `AgentRuntime` facade that can be built and tested without
 - Keep concrete scheduler/session lifecycle execution, session metadata IO,
   event emitter wiring, permission UI presentation, and product `Tool` adapter
   execution in `bitfun-core` until a reviewed owner migration proves behavior
-  equivalence. Provider-neutral confirmation/user-question wait channel state
+  equivalence. Provider-neutral confirmation gate/wait-channel and user-question state
   may live here.
 - Prefer pure facts and decisions first: queue policy, background delivery,
   dialog-turn queue state, active-turn facts, cancellation routing and
@@ -31,12 +32,13 @@ port-backed `sdk` / `AgentRuntime` facade that can be built and tested without
   builtin agent definition catalog, skill catalog/root/mode/selection facts,
   thread-goal metadata / event payload /
   token usage / scheduler delivery plans, thread-goal tool wire contracts,
+  session config/defaults/summary and persisted session-state sidecar shape,
   user-question validation/result/channel contracts, SessionControl input/cancel-route/result contracts, DeepReview
   policy/manifest/budget/queue/report/cache/shared-context/task-execution
   shaping decisions, DeepResearch citation renumbering,
   custom subagent markdown front-matter IO, custom subagent discovery/loading,
   post-call hook routing/executor orchestration,
-  tool confirmation planning/failure/wait-result/channel mapping, light checkpoint
+  tool confirmation gate/planning/failure/wait-result/channel mapping, light checkpoint
   summary policy, dialog-turn cancellation token state,
   round-boundary yield/injection state, turn-outcome
   queue decisions, registry source/profile facts, prompt-loop user-context
