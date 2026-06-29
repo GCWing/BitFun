@@ -311,7 +311,9 @@ pub fn build_log_plugin<R: Runtime>(log_targets: Vec<Target>) -> TauriPlugin<R> 
         .level_for("tracing", log::LevelFilter::Off)
         .level_for("opentelemetry_sdk", log::LevelFilter::Off)
         .level_for("opentelemetry-otlp", log::LevelFilter::Off)
-        .level_for("notify", log::LevelFilter::Off)
+        .level_for("notify", log::LevelFilter::Warn)
+        .level_for("html5ever", log::LevelFilter::Warn)
+        .level_for("selectors", log::LevelFilter::Warn)
         // These targets can emit hot-path trace diagnostics during event
         // routing. Keep debug diagnostics, warnings, and errors, but avoid
         // drowning useful app traces in mechanical noise.

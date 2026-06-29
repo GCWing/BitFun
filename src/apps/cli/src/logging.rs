@@ -281,9 +281,15 @@ fn target_override_rank(target: &str) -> Option<u8> {
         || matches_target_rule(target, "tracing")
         || matches_target_rule(target, "opentelemetry_sdk")
         || matches_target_rule(target, "opentelemetry-otlp")
-        || matches_target_rule(target, "notify")
     {
         return Some(0);
+    }
+
+    if matches_target_rule(target, "html5ever")
+        || matches_target_rule(target, "selectors")
+        || matches_target_rule(target, "notify")
+    {
+        return Some(level_rank(tracing::Level::WARN));
     }
 
     if matches_target_rule(target, "bitfun_core::agentic::events::queue")
@@ -436,8 +442,16 @@ mod tests {
             level_rank(tracing::Level::WARN)
         );
         assert_eq!(
+            allowed_level_rank_for_target("html5ever::tokenizer::char_ref", tracing::Level::TRACE,),
+            level_rank(tracing::Level::WARN)
+        );
+        assert_eq!(
+            allowed_level_rank_for_target("selectors::matching", tracing::Level::TRACE),
+            level_rank(tracing::Level::WARN)
+        );
+        assert_eq!(
             allowed_level_rank_for_target("notify", tracing::Level::TRACE),
-            0
+            level_rank(tracing::Level::WARN)
         );
         assert_eq!(
             allowed_level_rank_for_target(

@@ -52,7 +52,7 @@
   height: 16px;
   margin: 0 2px;
   flex-shrink: 0;
-  background: color-mix(in srgb, var(--color-border-subtle) 80%, transparent);
+  background: color-mix(in srgb, var(--border-subtle) 80%, transparent);
 }
 
 .tool-approval-bar__auto-execute-button {
