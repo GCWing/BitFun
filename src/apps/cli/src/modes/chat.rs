@@ -143,6 +143,80 @@ fn agent_display_name(agent_type: &str) -> &'static str {
     }
 }
 
+/// Strip a single pair of matching surrounding ASCII quotes (`"` or `'`).
+/// Smart/curly quotes (U+2018..U+201D) are intentionally not handled — they are
+/// rare in shell-style path input and would complicate the matching logic.
+fn strip_surrounding_quotes(input: &str) -> &str {
+    let bytes = input.as_bytes();
+    if bytes.len() >= 2 {
+        let first = bytes[0];
+        let last = bytes[bytes.len() - 1];
+        if (first == b'"' || first == b'\'') && first == last {
+            return &input[1..input.len() - 1];
+        }
+    }
+    input
+}
+
+/// Reject Windows drive-relative paths like `C:foo` (no separator after the
+/// drive letter). These are treated as relative by `PathBuf::is_absolute`, but
+/// `Path::join` discards the base path's prefix and silently anchors against
+/// the shell's per-drive cwd, which is almost never what the user intended.
+#[cfg(windows)]
+fn is_windows_drive_relative(path: &std::path::Path) -> bool {
+    use std::path::{Component, Prefix};
+    let mut components = path.components();
+    let Some(Component::Prefix(prefix)) = components.next() else {
+        return false;
+    };
+    if !matches!(prefix.kind(), Prefix::Disk(_)) {
+        return false;
+    }
+    // Drive-relative if the prefix is NOT immediately followed by a root separator.
+    !matches!(components.next(), Some(Component::RootDir))
+}
+
+#[cfg(not(windows))]
+fn is_windows_drive_relative(_path: &std::path::Path) -> bool {
+    false
+}
+
+/// Resolve the `/cd` target path: handle `~` / `~/...` expansion and resolve
+/// relative paths against `base`. Returns the absolute (but not yet canonicalized)
+/// path, or a human-readable error message.
+fn resolve_cd_target(arg: &str, base: &std::path::Path) -> std::result::Result<PathBuf, String> {
+    let trimmed = arg.trim();
+    if trimmed.is_empty() {
+        return Err("empty path".to_string());
+    }
+
+    // Tilde expansion: `~` or `~/...` → home dir. Other tilde-prefixed forms
+    // (e.g. `~user/...`) are not supported; treat them as literal paths.
+    let expanded: PathBuf = if trimmed == "~" {
+        dirs::home_dir().ok_or_else(|| "home directory not available".to_string())?
+    } else if let Some(rest) = trimmed.strip_prefix("~/").or_else(|| trimmed.strip_prefix("~\\")) {
+        let mut home =
+            dirs::home_dir().ok_or_else(|| "home directory not available".to_string())?;
+        home.push(rest);
+        home
+    } else {
+        PathBuf::from(trimmed)
+    };
+
+    if is_windows_drive_relative(&expanded) {
+        return Err(format!(
+            "drive-relative path `{}` is ambiguous; use an absolute path like `C:\\foo`",
+            expanded.display()
+        ));
+    }
+
+    if expanded.is_absolute() {
+        Ok(expanded)
+    } else {
+        Ok(base.join(expanded))
+    }
+}
+
 impl ChatMode {
     pub fn new(
         config: CliConfig,
@@ -1748,6 +1822,16 @@ impl ChatMode {
                     chat_state.metadata.total_tokens
                 ));
             }
+            "/cd" => {
+                // Preserve path argument verbatim (paths may contain spaces) by stripping
+                // the command token and any single leading whitespace block from the raw
+                // command line, rather than re-joining whitespace-split parts.
+                let raw_arg = command
+                    .strip_prefix(parts[0])
+                    .map(|rest| rest.trim_start())
+                    .unwrap_or("");
+                self.handle_cd_command(raw_arg, chat_view, chat_state, rt_handle);
+            }
             "/exit" => {
                 if chat_state.is_processing {
                     tracing::info!("User requested cancellation via /exit");
@@ -2892,6 +2976,116 @@ impl ChatMode {
     /// time — does not require `is_processing` to be false because the
     /// registry swap is atomic and a held `SkillInfo` reference is not
     /// kept across the call.
+    /// Handle `/cd [path]` — switch the session workspace in-place.
+    ///
+    /// With no argument, prints the current workspace. With an argument, validates
+    /// the target exists and is a directory, then updates `self.workspace`,
+    /// `chat_state.workspace`, and the agent adapter's internal workspace path so
+    /// that the next `start_dialog_turn` honors the new cwd. The session itself
+    /// (id, message history, model state) is preserved.
+    fn handle_cd_command(
+        &mut self,
+        raw_arg: &str,
+        chat_view: &mut ChatView,
+        chat_state: &mut ChatState,
+        rt_handle: &tokio::runtime::Handle,
+    ) {
+        let trimmed = raw_arg.trim();
+
+        // Bare `/cd` → report current workspace
+        if trimmed.is_empty() {
+            let current = self.agent.workspace_path_string();
+            chat_state.add_system_message(format!("Current workspace: {}", current));
+            chat_view.set_status(Some(format!("cwd: {}", current)));
+            return;
+        }
+
+        // Reject while a turn is in flight — workspace switch mid-turn would
+        // make tool calls land in a different cwd than the model was prompted with.
+        if chat_state.is_processing {
+            chat_view.set_status(Some(
+                "Cannot switch workspace while processing. Press Ctrl+C to cancel first."
+                    .to_string(),
+            ));
+            return;
+        }
+
+        // Strip optional surrounding quotes so users can quote paths with spaces.
+        let unquoted = strip_surrounding_quotes(trimmed);
+
+        let target = match resolve_cd_target(unquoted, &self.agent.workspace_path_buf()) {
+            Ok(path) => path,
+            Err(msg) => {
+                chat_state.add_system_message(format!("/cd failed: {}", msg));
+                chat_view.set_status(Some(format!("/cd failed: {}", msg)));
+                return;
+            }
+        };
+
+        let canonical = match dunce::canonicalize(&target) {
+            Ok(p) => p,
+            Err(err) => {
+                let msg = format!("cannot resolve {}: {}", target.display(), err);
+                chat_state.add_system_message(format!("/cd failed: {}", msg));
+                chat_view.set_status(Some(format!("/cd failed: {}", msg)));
+                return;
+            }
+        };
+
+        if !canonical.is_dir() {
+            let msg = format!("{} is not a directory", canonical.display());
+            chat_state.add_system_message(format!("/cd failed: {}", msg));
+            chat_view.set_status(Some(format!("/cd failed: {}", msg)));
+            return;
+        }
+
+        let canonical_str = canonical.to_string_lossy().to_string();
+
+        // Update order matters. We need:
+        //   1. The core session config (`session.config.workspace_path`) —
+        //      what `start_dialog_turn_internal` actually reads to construct
+        //      the WorkspaceBinding for tool execution
+        //      (see coordinator.rs `build_workspace_binding(&session.config)`).
+        //   2. The agent adapter mutex — used to forward `workspace_path`
+        //      on start_dialog_turn calls (metadata mirroring).
+        //
+        // We try the core update FIRST. If it fails, we never touch the
+        // adapter, leaving session state internally consistent. On success we
+        // then swap the adapter — and on the (very unlikely) chance the
+        // adapter swap is observable as a separate operation, this ordering
+        // ensures the worst case is "next turn uses old metadata but correct
+        // execution cwd", not the reverse.
+        let agent = self.agent.clone();
+        let canonical_for_adapter = canonical.clone();
+        let canonical_for_core = canonical_str.clone();
+        let session_id = chat_state.core_session_id.clone();
+
+        let outcome = tokio::task::block_in_place(|| {
+            rt_handle.block_on(async move {
+                if !session_id.is_empty() {
+                    agent
+                        .coordinator()
+                        .update_session_workspace_path(&session_id, &canonical_for_core)
+                        .await?;
+                }
+                agent.set_workspace_path(Some(canonical_for_adapter)).await;
+                Ok::<(), anyhow::Error>(())
+            })
+        });
+
+        if let Err(err) = outcome {
+            chat_state.add_system_message(format!("/cd failed: {}", err));
+            chat_view.set_status(Some(format!("/cd failed: {}", err)));
+            return;
+        }
+
+        self.workspace = Some(canonical_str.clone());
+        chat_state.workspace = Some(canonical_str.clone());
+
+        chat_state.add_system_message(format!("Workspace switched to: {}", canonical_str));
+        chat_view.set_status(Some(format!("cwd → {}", canonical_str)));
+    }
+
     fn reload_skills_from_disk(
         &self,
         chat_view: &mut ChatView,
@@ -3656,3 +3850,92 @@ impl ChatMode {
         }
     }
 }
+
+#[cfg(test)]
+mod cd_helper_tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn strip_quotes_handles_matching_double_quotes() {
+        assert_eq!(strip_surrounding_quotes("\"hello\""), "hello");
+    }
+
+    #[test]
+    fn strip_quotes_handles_matching_single_quotes() {
+        assert_eq!(strip_surrounding_quotes("'hello'"), "hello");
+    }
+
+    #[test]
+    fn strip_quotes_passes_through_unquoted() {
+        assert_eq!(strip_surrounding_quotes("hello"), "hello");
+    }
+
+    #[test]
+    fn strip_quotes_passes_through_mismatched() {
+        assert_eq!(strip_surrounding_quotes("\"hello'"), "\"hello'");
+        assert_eq!(strip_surrounding_quotes("\""), "\"");
+    }
+
+    #[test]
+    fn resolve_cd_target_rejects_empty() {
+        let base = PathBuf::from("/base");
+        assert!(resolve_cd_target("", &base).is_err());
+        assert!(resolve_cd_target("   ", &base).is_err());
+    }
+
+    #[test]
+    fn resolve_cd_target_joins_relative() {
+        let base = PathBuf::from("/base");
+        let result = resolve_cd_target("sub/dir", &base).expect("relative path should resolve");
+        assert_eq!(result, base.join("sub/dir"));
+    }
+
+    #[test]
+    fn resolve_cd_target_passes_absolute_unchanged() {
+        let base = PathBuf::from("/base");
+        let abs = if cfg!(windows) { "C:\\abs\\path" } else { "/abs/path" };
+        let result = resolve_cd_target(abs, &base).expect("absolute path should resolve");
+        assert_eq!(result, PathBuf::from(abs));
+    }
+
+    #[test]
+    fn resolve_cd_target_expands_tilde_root() {
+        let base = PathBuf::from("/base");
+        let expected = dirs::home_dir();
+        let result = resolve_cd_target("~", &base);
+        match (expected, result) {
+            (Some(home), Ok(resolved)) => assert_eq!(resolved, home),
+            (None, _) => {} // host has no home dir — acceptable in some CI environments
+            (Some(_), Err(_)) => panic!("expected tilde to expand when home dir exists"),
+        }
+    }
+
+    #[test]
+    fn resolve_cd_target_expands_tilde_subpath() {
+        let base = PathBuf::from("/base");
+        if let Some(home) = dirs::home_dir() {
+            let result = resolve_cd_target("~/sub", &base).expect("~/sub should resolve");
+            assert_eq!(result, home.join("sub"));
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn resolve_cd_target_rejects_drive_relative() {
+        let base = PathBuf::from("D:\\base");
+        let result = resolve_cd_target("C:foo", &base);
+        assert!(result.is_err(), "drive-relative path must be rejected");
+        assert!(result.unwrap_err().contains("drive-relative"));
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn resolve_cd_target_drive_relative_check_is_noop_on_unix() {
+        let base = PathBuf::from("/base");
+        // On non-Windows, `C:foo` is just a normal relative path with a colon.
+        let result = resolve_cd_target("C:foo", &base).expect("should resolve on unix");
+        assert_eq!(result, base.join("C:foo"));
+    }
+}
+

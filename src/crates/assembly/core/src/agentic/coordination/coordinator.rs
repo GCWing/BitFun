@@ -3338,9 +3338,24 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         // Pre-resolve the on-disk session storage path (mirror dir for remote workspaces)
         // so the safety-net writer never has to re-resolve without remote_connection_id /
         // remote_ssh_host (which would silently fall back to a slugified raw remote path).
-        let session_storage_path = session_workspace
-            .as_ref()
-            .map(|workspace| workspace.session_storage_dir().to_path_buf());
+        //
+        // IMPORTANT: this MUST anchor to the persistence root, not the live
+        // workspace binding. After an in-session `/cd`, `session_workspace`
+        // reflects the NEW cwd (so tool execution lands in the right place),
+        // but the on-disk session file and its sidecar artifacts (turn
+        // snapshots, prompt cache) stay rooted at the ORIGINAL workspace.
+        // `effective_session_workspace_path` resolves via
+        // `config.storage_workspace_path` first and falls back to
+        // `workspace_path` for sessions that never invoked `/cd`.
+        let session_storage_path = self
+            .session_manager
+            .effective_session_workspace_path(&session_id)
+            .await
+            .or_else(|| {
+                session_workspace
+                    .as_ref()
+                    .map(|workspace| workspace.session_storage_dir().to_path_buf())
+            });
 
         let runtime_tool_restrictions = if is_miniapp_headless_agent_run(
             user_message_metadata.as_ref(),
@@ -5839,6 +5854,28 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         let normalized = Self::normalize_agent_type(agent_type);
         self.session_manager
             .update_session_agent_type(session_id, &normalized)
+            .await
+    }
+
+    /// Switch the working directory used by subsequent dialog turns without
+    /// recreating the session. The session id, message history, and the
+    /// session file's on-disk location are preserved; only the workspace
+    /// binding used to construct tool execution context for the next turn
+    /// is updated. See `SessionManager::update_session_workspace_path` for
+    /// the storage semantics.
+    pub async fn update_session_workspace_path(
+        &self,
+        session_id: &str,
+        workspace_path: &str,
+    ) -> BitFunResult<()> {
+        let trimmed = workspace_path.trim();
+        if trimmed.is_empty() {
+            return Err(BitFunError::validation(
+                "Workspace path must not be empty".to_string(),
+            ));
+        }
+        self.session_manager
+            .update_session_workspace_path(session_id, trimmed)
             .await
     }
 

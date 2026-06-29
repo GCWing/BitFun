@@ -40,7 +40,10 @@ impl CoreSessionStorePort {
     pub async fn resolve_storage_path_for_config(
         config: &SessionConfig,
     ) -> Option<SessionStoragePathResolution> {
-        let workspace_path = config.workspace_path.as_ref()?;
+        // Storage path follows the persistence anchor (set on /cd), not the
+        // live workspace path. Falls back to `workspace_path` when no /cd has
+        // happened yet — preserving original behavior for unmodified sessions.
+        let workspace_path = config.effective_storage_workspace_path()?;
         let request = SessionStoragePathRequest {
             workspace_path: PathBuf::from(workspace_path),
             remote_connection_id: config.remote_connection_id.clone(),
