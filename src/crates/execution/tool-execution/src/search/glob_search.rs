@@ -23,6 +23,11 @@ pub struct LocalGlobRequest {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LocalGlobResult {
     pub matches: Vec<PathBuf>,
+    /// Total number of matches found before applying `limit`.
+    /// `None` when the backend cannot determine a real total (e.g. a backend
+    /// that pre-truncates output). When present, callers can detect silent
+    /// truncation by comparing `matches.len() < total_matches`.
+    pub total_matches: Option<usize>,
 }
 
 pub fn extract_glob_base_directory(pattern: &str) -> (String, String) {
@@ -194,7 +199,7 @@ fn collect_with_walk_fallback(
     apply_gitignore: bool,
     ignore_hidden_files: bool,
     limit: usize,
-) -> Result<Vec<PathBuf>, String> {
+) -> Result<(Vec<PathBuf>, Option<usize>), String> {
     let matcher = build_fallback_matcher(relative_pattern)?;
     let walker = WalkBuilder::new(walk_root)
         .ignore(apply_gitignore)
@@ -205,6 +210,7 @@ fn collect_with_walk_fallback(
         .build();
 
     let mut best_matches = BinaryHeap::with_capacity(limit.saturating_add(1));
+    let mut total_matches = 0usize;
     for entry in walker {
         let entry = match entry {
             Ok(entry) => entry,
@@ -230,6 +236,7 @@ fn collect_with_walk_fallback(
         let relative_path = normalize_path(relative_path);
 
         if match_relative_path(&matcher, relative_pattern, &relative_path) {
+            total_matches += 1;
             let normalized_path = normalize_path(&path);
             let candidate = GlobCandidate {
                 depth: normalized_path.split('/').count(),
@@ -247,11 +254,14 @@ fn collect_with_walk_fallback(
         }
     }
 
-    Ok(best_matches
-        .into_sorted_vec()
-        .into_iter()
-        .map(|candidate| PathBuf::from(candidate.path))
-        .collect())
+    Ok((
+        best_matches
+            .into_sorted_vec()
+            .into_iter()
+            .map(|candidate| PathBuf::from(candidate.path))
+            .collect(),
+        Some(total_matches),
+    ))
 }
 
 pub fn limit_paths(paths: &[PathBuf], limit: usize) -> Vec<PathBuf> {
@@ -309,6 +319,7 @@ pub fn execute_local_glob(request: LocalGlobRequest) -> Result<LocalGlobResult, 
     if !walk_root.exists() || !walk_root.is_dir() || request.limit == 0 {
         return Ok(LocalGlobResult {
             matches: Vec::new(),
+            total_matches: Some(0),
         });
     }
 
@@ -348,7 +359,10 @@ pub fn execute_local_glob(request: LocalGlobRequest) -> Result<LocalGlobResult, 
                 ignore_hidden_files,
                 request.limit,
             )
-            .map(|matches| LocalGlobResult { matches });
+            .map(|(matches, total_matches)| LocalGlobResult {
+                matches,
+                total_matches,
+            });
         }
         Err(error) => return Err(error),
     };
@@ -373,7 +387,10 @@ pub fn execute_local_glob(request: LocalGlobRequest) -> Result<LocalGlobResult, 
                 ignore_hidden_files,
                 request.limit,
             )
-            .map(|matches| LocalGlobResult { matches });
+            .map(|(matches, total_matches)| LocalGlobResult {
+                matches,
+                total_matches,
+            });
         }
         return Err(message);
     }
@@ -387,8 +404,10 @@ pub fn execute_local_glob(request: LocalGlobRequest) -> Result<LocalGlobResult, 
         })
         .collect::<Vec<_>>();
 
+    let total_matches = all_paths.len();
     Ok(LocalGlobResult {
         matches: limit_paths(&all_paths, request.limit),
+        total_matches: Some(total_matches),
     })
 }
 
@@ -494,6 +513,7 @@ mod tests {
 
         let wildcard_matches = collect_with_walk_fallback(root, "*", false, false, 10)
             .expect("fallback glob should succeed")
+            .0
             .into_iter()
             .map(|path| normalized(&path))
             .collect::<Vec<_>>();
@@ -507,6 +527,7 @@ mod tests {
 
         let rust_matches = collect_with_walk_fallback(root, "*.rs", false, false, 10)
             .expect("fallback rust glob should succeed")
+            .0
             .into_iter()
             .map(|path| normalized(&path))
             .collect::<Vec<_>>();
@@ -514,7 +535,8 @@ mod tests {
         assert!(rust_matches[0].ends_with("/src/nested/lib.rs"));
 
         let directory_name_matches = collect_with_walk_fallback(root, "src", false, false, 10)
-            .expect("fallback directory-name glob should succeed");
+            .expect("fallback directory-name glob should succeed")
+            .0;
         assert!(directory_name_matches.is_empty());
     }
 }
