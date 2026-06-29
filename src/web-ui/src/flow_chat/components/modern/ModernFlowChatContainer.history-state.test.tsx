@@ -1018,7 +1018,7 @@ describe('ModernFlowChatContainer historical empty state', () => {
     expect(virtualListMock.pinTurnToTop).not.toHaveBeenCalled();
     expect(startupTraceMock.markPhase).toHaveBeenCalledWith(
       'historical_session_latest_anchor_skipped',
-      expect.objectContaining({ reason: 'streaming_follow_output', mode: 'sticky-latest' }),
+      expect.objectContaining({ reason: 'streaming_follow_output', mode: 'follow-output' }),
     );
   });
 

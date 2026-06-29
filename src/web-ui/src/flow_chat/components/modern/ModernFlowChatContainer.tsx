@@ -49,6 +49,7 @@ import { resolveThreadGoalHeaderTitle } from '../../utils/threadGoalDisplay';
 import {
   findDialogTurn,
   shouldUseStickyLatestPin,
+  shouldUseLatestTurnFollowOutput,
 } from '../../utils/flowChatTurnScrollPolicy';
 import { isRemoteTraceContext, startupTrace } from '@/shared/utils/startupTrace';
 import { scheduleAfterStartupPaint } from '@/shared/utils/startupTaskScheduling';
@@ -588,6 +589,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     () => findDialogTurn(activeSession?.dialogTurns, latestTurnId),
     [activeSession?.dialogTurns, latestTurnId],
   );
+  const latestTurnUsesFollowOutput = shouldUseLatestTurnFollowOutput(latestTurn);
   const latestTurnUsesStickyPin = shouldUseStickyLatestPin(latestTurn);
 
   const navigationVisibleTurnInfo = useMemo<VisibleTurnInfo | null>(() => {
@@ -731,14 +733,14 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     const pinMode = latestTurnUsesStickyPin
       ? 'sticky-latest'
       : null;
-    if (latestTurnUsesStickyPin) {
+    if (latestTurnUsesFollowOutput) {
       autoPinnedTurnKeyRef.current = resolvedLatestTurnKey;
       setPendingHeaderTurnId(null);
       startupTrace.markPhase('historical_session_latest_anchor_skipped', {
         sessionId,
         latestTurnId,
         reason: 'streaming_follow_output',
-        mode: pinMode,
+        mode: pinMode ?? 'follow-output',
         turnCount: turnSummaries.length,
       });
       return;
@@ -871,6 +873,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     activeSession?.remoteSshHost,
     hasPendingHistoryCompletion,
     latestTurnId,
+    latestTurnUsesFollowOutput,
     latestTurnUsesStickyPin,
     turnSummaries.length,
     visibleTurnInfo?.turnId,
