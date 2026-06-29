@@ -1336,6 +1336,31 @@ export const forbiddenContentRules = [
     ],
   },
   {
+    path: 'src/crates/assembly/core/src/agentic/coordination/state_manager.rs',
+    patterns: [
+      {
+        regex: /\bpub\s+struct\s+SessionStateManager\b/,
+        message:
+          'core session state manager path must remain a compatibility facade; use bitfun-agent-runtime session_state_manager',
+      },
+      {
+        regex: /\bDashMap\b/,
+        message:
+          'core session state manager path must not own session state storage; use bitfun-agent-runtime session_state_manager',
+      },
+      {
+        regex: /\bAgenticEvent::SessionStateChanged\b/,
+        message:
+          'core session state manager path must not emit session-state events directly; use bitfun-agent-runtime session_state_manager',
+      },
+      {
+        regex: /\bimpl\s+SessionStateManager\b/,
+        message:
+          'core session state manager path must not reimplement session state transitions; use bitfun-agent-runtime session_state_manager',
+      },
+    ],
+  },
+  {
     path: 'src/crates/assembly/core/src/agentic/coordination/scheduler.rs',
     patterns: [
       {

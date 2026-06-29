@@ -2379,6 +2379,56 @@ export const requiredContentRules = [
     ],
   },
   {
+    path: 'src/crates/execution/agent-runtime/src/session_state_manager.rs',
+    reason:
+      'agent-runtime owns provider-neutral session state storage, transition helpers, and SessionStateChanged event projection',
+    patterns: [
+      {
+        regex: /\bpub struct SessionStateManager\b/,
+        message: 'missing agent-runtime session state manager owner',
+      },
+      {
+        regex: /\bDashMap<String, SessionState>/,
+        message: 'missing session state storage owner',
+      },
+      {
+        regex: /\bEventQueue\b/,
+        message: 'missing runtime event queue integration',
+      },
+      {
+        regex: /\bAgenticEvent::SessionStateChanged\b/,
+        message: 'missing SessionStateChanged event projection',
+      },
+      {
+        regex: /\bsession_state_label_for_state\b/,
+        message: 'missing stable session-state label projection',
+      },
+      {
+        regex: /\bcan_start_new_turn\b/,
+        message: 'missing turn-start guard owner',
+      },
+      {
+        regex: /\bsession_state_manager_emits_compatible_state_change_events\b/,
+        message: 'missing session state event compatibility test',
+      },
+      {
+        regex: /\bsession_state_manager_keeps_turn_start_guard_semantics\b/,
+        message: 'missing session state guard compatibility test',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/coordination/state_manager.rs',
+    reason:
+      'core session state manager path must preserve legacy imports while agent-runtime owns the implementation',
+    patterns: [
+      {
+        regex: /pub use bitfun_agent_runtime::session_state_manager::SessionStateManager;/,
+        message: 'missing SessionStateManager compatibility re-export',
+      },
+    ],
+  },
+  {
     path: 'src/crates/assembly/core/src/agentic/agents/prompt_builder/user_context.rs',
     reason:
       'core prompt_builder user_context path must stay a compatibility facade over agent-runtime',
@@ -7142,27 +7192,23 @@ export const requiredContentRules = [
   {
     path: 'src/crates/assembly/core/src/miniapp/builtin/mod.rs',
     reason:
-      'core must coordinate built-in MiniApp seed decisions and recompilation while services-integrations owns seed filesystem IO',
+      'core must adapt built-in MiniApp seed host operations while product-domains owns seed orchestration and services-integrations owns seed filesystem IO',
     patterns: [
       {
         regex: /\bBUILTIN_APPS\b/,
         message: 'missing product-domain built-in MiniApp bundle re-export/use',
       },
       {
-        regex: /\bbuiltin_content_hash\b/,
-        message: 'missing product-domain built-in MiniApp content hash use',
+        regex: /\bseed_builtin_miniapps_with_host\b/,
+        message: 'missing product-domain built-in MiniApp seed orchestrator use',
       },
       {
-        regex: /\bshould_seed_builtin_app\b/,
-        message: 'missing product-domain built-in MiniApp seed decision use',
+        regex: /\bimpl BuiltinMiniAppSeedHost for CoreBuiltinMiniAppSeedHost\b/,
+        message: 'missing core built-in MiniApp seed host adapter',
       },
       {
-        regex: /\bresolve_builtin_seed_check\b/,
-        message: 'missing product-domain built-in MiniApp seed check use',
-      },
-      {
-        regex: /\bresolve_builtin_seed_action\b/,
-        message: 'missing product-domain built-in MiniApp seed action use',
+        regex: /\bmark_builtin_update_available\b/,
+        message: 'missing built-in MiniApp local-override update-record host delegation',
       },
       {
         regex: /\bminiapp_builtin_io::prepare_builtin_seed_bundle_files\b/,
@@ -8154,7 +8200,7 @@ export const requiredContentRules = [
   {
     path: 'src/crates/contracts/product-domains/src/miniapp/builtin.rs',
     reason:
-      'product-domains owns built-in MiniApp bundle assets, marker, hash, and seed-decision contracts while core keeps asset seeding IO and recompilation',
+      'product-domains owns built-in MiniApp bundle assets, marker, hash, seed orchestration, and host adapter contract while core keeps concrete IO and recompilation',
     patterns: [
       {
         regex: /id: "builtin-pr-review"/,
@@ -8195,6 +8241,22 @@ export const requiredContentRules = [
       {
         regex: /\bpub enum BuiltinSeedAction\b/,
         message: 'missing built-in MiniApp seed action contract',
+      },
+      {
+        regex: /\bpub trait BuiltinMiniAppSeedHost\b/,
+        message: 'missing built-in MiniApp seed host adapter contract',
+      },
+      {
+        regex: /\bpub async fn seed_builtin_miniapps_with_host\b/,
+        message: 'missing built-in MiniApp seed orchestrator',
+      },
+      {
+        regex: /\bpub async fn seed_builtin_miniapp_with_host\b/,
+        message: 'missing built-in MiniApp single-bundle seed orchestrator',
+      },
+      {
+        regex: /\bpub enum BuiltinMiniAppSeedOutcome\b/,
+        message: 'missing built-in MiniApp seed outcome contract',
       },
       {
         regex: /\bpub fn resolve_builtin_seed_check\b/,

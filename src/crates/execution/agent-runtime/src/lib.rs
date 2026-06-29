@@ -29,6 +29,7 @@ pub mod sdk;
 pub mod session;
 pub mod session_control;
 pub mod session_state;
+pub mod session_state_manager;
 pub mod side_question;
 pub mod skill_agent_snapshot;
 pub mod skills;

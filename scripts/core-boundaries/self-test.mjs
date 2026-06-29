@@ -445,6 +445,17 @@ export function runManifestParserSelfTest({
       throw new Error(`core scheduler boundary rule must forbid contract: ${contract}`);
     }
   }
+  const coreSessionStateManagerRuleText = forbiddenRuleTextForPath(
+    'src/crates/assembly/core/src/agentic/coordination/state_manager.rs',
+  );
+  if (!coreSessionStateManagerRuleText) {
+    throw new Error('missing core session state manager boundary rule');
+  }
+  for (const contract of ['SessionStateManager', 'DashMap', 'AgenticEvent::SessionStateChanged']) {
+    if (!coreSessionStateManagerRuleText.includes(contract)) {
+      throw new Error(`core session state manager boundary rule must forbid contract: ${contract}`);
+    }
+  }
   const coreRoundPreemptRuleText = forbiddenRuleTextForPath(
     'src/crates/assembly/core/src/agentic/round_preempt.rs',
   );
@@ -1484,6 +1495,23 @@ export function runManifestParserSelfTest({
     {
       path: 'src/crates/execution/agent-runtime/src/event_queue.rs',
       contracts: ['EventQueue', 'impl StreamEventSink for EventQueue', 'clear_session'],
+    },
+    {
+      path: 'src/crates/execution/agent-runtime/src/session_state_manager.rs',
+      contracts: [
+        'pub struct SessionStateManager',
+        'DashMap<String, SessionState>',
+        'EventQueue',
+        'AgenticEvent::SessionStateChanged',
+        'session_state_label_for_state',
+        'can_start_new_turn',
+        'session_state_manager_emits_compatible_state_change_events',
+        'session_state_manager_keeps_turn_start_guard_semantics',
+      ],
+    },
+    {
+      path: 'src/crates/assembly/core/src/agentic/coordination/state_manager.rs',
+      contracts: ['pub use bitfun_agent_runtime::session_state_manager::SessionStateManager'],
     },
     {
       path: 'src/crates/execution/agent-runtime/src/event_router.rs',
@@ -2734,10 +2762,10 @@ export function runManifestParserSelfTest({
       path: 'src/crates/assembly/core/src/miniapp/builtin/mod.rs',
       contracts: [
         'BUILTIN_APPS',
-        'builtin_content_hash',
-        'should_seed_builtin_app',
-        'resolve_builtin_seed_check',
-        'resolve_builtin_seed_action',
+        'seed_builtin_miniapps_with_host',
+        'BuiltinMiniAppSeedHost',
+        'CoreBuiltinMiniAppSeedHost',
+        'mark_builtin_update_available',
         'miniapp_builtin_io::prepare_builtin_seed_bundle_files',
         'read_builtin_install_marker',
         'miniapp_builtin_io::read_builtin_install_marker',
@@ -2776,6 +2804,10 @@ export function runManifestParserSelfTest({
         'BuiltinSeedArtifacts',
         'BuiltinSeedCheck',
         'BuiltinSeedAction',
+        'BuiltinMiniAppSeedHost',
+        'seed_builtin_miniapps_with_host',
+        'seed_builtin_miniapp_with_host',
+        'BuiltinMiniAppSeedOutcome',
         'resolve_builtin_seed_check',
         'resolve_builtin_seed_action',
         'serialize_builtin_install_marker',

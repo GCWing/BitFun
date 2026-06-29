@@ -27,36 +27,11 @@
 - Custom agent / mode / skill、Agent lifecycle、tool side-effect、Computer Use、file tool、MiniApp、DeepReview、DeepResearch、remote-connect、workspace search、remote SSH/SFTP/PTY 等多批 provider-neutral 或 concrete owner 已迁出。
 - Root boundary scripts 已覆盖核心 owner 防回流、six-layer path 解析、facade-only 文件、custom agent owner / custom subagent wrapper 保护和重点 feature gate。
 - Agent Runtime session workspace resolution、Cron / SessionControl / SessionMessage / SessionHistory 的 target session/workspace owner routing、`/goal` tool management runtime-port routing、session/config/context/lifecycle fact owner 收口，以及 `services-integrations` workspace search preview/result conversion 已纳入已完成摘要；后续计划只保留仍需迁移的 feature/kernel、security/control-plane、execution、extension 和 cross-platform adapter 主体工作。
+- MiniApp built-in seed orchestration 已进入 `product-domains`，core 只保留 concrete host adapter；session state manager 已进入 `agent-runtime`，core 只保留兼容 re-export。
 
-## 3. 后续大块 PR 节奏
+## 3. 大块 PR 节奏
 
 后续不再按旧 H/M 标签判断完成度。每个 PR 必须包含实质迁移或旧路径显著简化，并在提交前做独立第三方视角的功能边界、依赖关系、不同产品形态和操作系统影响复审。
-
-### PR-A：Product Feature 与 Agent Kernel 分界收口
-
-目标：
-
-- 建立 feature bundle / capability pack 的判定口径，把 DeepReview、MiniApp、input command、settings、UI panel 等产品特性从 Agent Kernel 能力中分离；`/goal` 已先完成 model tool 到 AgentRuntime thread-goal management port 的 owner routing。
-- 识别仍留在 `bitfun-core` 中的 provider-neutral feature mapping、command-to-runtime request、UI-facing DTO 和 long-running task 相关旧路径。
-- 迁移或显著简化至少一组实际 feature 主体路径；`/goal` 之后优先选择 DeepReview / MiniApp / input command 的 feature assembly 路径。
-
-保护：
-
-- 保持 long-running task、goal metadata、post-turn、continuation、background delivery、UI state 和 command response wire shape 等价。
-- 补 feature pack / capability matrix focused tests，覆盖 Desktop / CLI / SDK-safe fallback。
-
-### PR-B：Agent Kernel API 与安全控制面收口
-
-目标：
-
-- 继续收敛 Kernel API 的 builder / runner / event stream / permission / session / workspace / memory / DFX contract；session/config/summary facts、persisted session state sidecar、dialog-turn facts、side-question runtime tracking、context profile policy 和 round-level tool confirmation gate 已完成 owner 收口。
-- 把安全控制面所需的 capability/effect/security decision facts 下沉为稳定 contract 或 kernel facts，而不是散落在 UI、tool、MCP、hook 和 plugin 路径。
-- 迁移或显著简化仍在 core 中的 provider-neutral scheduler、permission coordination、event routing、memory/context 或 long-running task 事实路径。
-
-保护：
-
-- session / turn / cancellation / event sequence / permission source / audit facts 不漂移。
-- `cargo test -p bitfun-agent-runtime`、permission / event focused tests、no-default-features check 和 boundary check 必跑。
 
 ### PR-C：Execution 层深迁移
 

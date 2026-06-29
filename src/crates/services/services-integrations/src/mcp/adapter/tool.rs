@@ -173,3 +173,24 @@ pub fn render_mcp_tool_result_for_assistant(
 
     "MCP tool execution completed".to_string()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{render_mcp_tool_result_for_assistant, MCPToolResult, MCPToolResultContent};
+
+    #[test]
+    fn mcp_tool_result_rendering_does_not_pretruncate_before_storage_policy() {
+        let text = "x".repeat(12_001);
+        let result = MCPToolResult {
+            content: Some(vec![MCPToolResultContent::Text { text: text.clone() }]),
+            is_error: false,
+            structured_content: None,
+            meta: None,
+        };
+
+        let rendered = render_mcp_tool_result_for_assistant("large_output", &result, usize::MAX);
+
+        assert_eq!(rendered, text);
+        assert!(!rendered.contains("[Result truncated:"));
+    }
+}
