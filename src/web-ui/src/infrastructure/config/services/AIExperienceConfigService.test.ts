@@ -6,8 +6,16 @@ const configManagerMock = vi.hoisted(() => ({
   watch: vi.fn(),
 }));
 
+const configApiMock = vi.hoisted(() => ({
+  getConfig: vi.fn(),
+}));
+
 vi.mock('./ConfigManager', () => ({
   configManager: configManagerMock,
+}));
+
+vi.mock('@/infrastructure/api/service-api/ConfigAPI', () => ({
+  configAPI: configApiMock,
 }));
 
 vi.mock('./AgentCompanionPetService', () => ({
@@ -54,5 +62,18 @@ describe('AIExperienceConfigService startup behavior', () => {
     expect(configManagerMock.watch).toHaveBeenCalledWith('app.ai_experience', expect.any(Function));
     expect(configManagerMock.getConfig).toHaveBeenCalledTimes(1);
     expect(configManagerMock.getConfig).toHaveBeenCalledWith('app.ai_experience');
+  });
+
+  it('can force refresh settings for cross-window lifecycle synchronization', async () => {
+    configApiMock.getConfig.mockResolvedValueOnce({
+      enable_agent_companion: true,
+      agent_companion_display_mode: 'desktop',
+    });
+    const { aiExperienceConfigService } = await import('./AIExperienceConfigService');
+
+    await aiExperienceConfigService.getSettingsAsync({ forceRefresh: true });
+
+    expect(configApiMock.getConfig).toHaveBeenCalledWith('app.ai_experience');
+    expect(configManagerMock.getConfig).not.toHaveBeenCalled();
   });
 });

@@ -2,6 +2,7 @@
 
 import { configManager } from './ConfigManager';
 import { DEFAULT_AGENT_COMPANION_PET } from './AgentCompanionPetService';
+import { configAPI } from '@/infrastructure/api/service-api/ConfigAPI';
 import { createLogger } from '@/shared/utils/logger';
 
 const log = createLogger('AIExperienceConfig');
@@ -130,10 +131,12 @@ export class AIExperienceConfigService {
   }
 
    
-  async getSettingsAsync(): Promise<AIExperienceSettings> {
+  async getSettingsAsync(options?: { forceRefresh?: boolean }): Promise<AIExperienceSettings> {
     this.ensureConfigWatcher();
     try {
-      const settings = await configManager.getConfig<AIExperienceSettings>(CONFIG_PATH);
+      const settings = options?.forceRefresh
+        ? await configAPI.getConfig(CONFIG_PATH) as AIExperienceSettings
+        : await configManager.getConfig<AIExperienceSettings>(CONFIG_PATH);
       this.cachedSettings = normalizeSettings(settings);
       return this.cachedSettings;
     } catch (error) {

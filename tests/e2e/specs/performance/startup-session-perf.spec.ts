@@ -36,6 +36,10 @@ const LONG_SESSION_RESIZE_BOTTOM_SETTLE_MAX_MS = 120;
 const LONG_SESSION_INPUT_MIN_TOP_RATIO = 0.65;
 const LONG_SESSION_INPUT_BOTTOM_TOLERANCE_PX = 96;
 const LONG_SESSION_MAX_LATEST_TEXT_DELAY_AFTER_VISIBLE_MS = 120;
+const SESSION_NAV_ITEM_SELECTOR =
+  '[data-testid="session-nav-item"], [data-testid="nav-session-item"]';
+const SESSION_NAV_TOGGLE_SELECTOR =
+  '[data-testid="session-nav-show-more"], [data-testid="nav-session-list-toggle"]';
 
 type LongSessionPostVisibleInteraction =
   | 'first-scroll'
@@ -685,28 +689,28 @@ async function waitForOptionalTracePhaseForSessionSince(
   }
 }
 
+function escapeCssAttributeValue(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
+
 async function findSessionItem(sessionId: string): Promise<ReturnType<typeof $> | null> {
+  const targetSelector =
+    `[data-testid="session-nav-item"][data-session-id="${escapeCssAttributeValue(sessionId)}"], ` +
+    `[data-testid="nav-session-item"][data-session-id="${escapeCssAttributeValue(sessionId)}"]`;
   const readVisibleSessionIds = async (): Promise<string[]> =>
-    browser.execute(() =>
-      Array.from(document.querySelectorAll(
-        '[data-testid="session-nav-item"], [data-testid="nav-session-item"]',
-      ))
+    browser.execute((selector) =>
+      Array.from(document.querySelectorAll(selector))
         .map(element => element.getAttribute('data-session-id') || '')
-        .filter(Boolean)
-    );
+        .filter(Boolean),
+    SESSION_NAV_ITEM_SELECTOR);
 
   const findTarget = async (): Promise<ReturnType<typeof $> | null> => {
-    const item = await $(
-      `[data-testid="session-nav-item"][data-session-id="${sessionId}"], ` +
-      `[data-testid="nav-session-item"][data-session-id="${sessionId}"]`,
-    );
+    const item = await $(targetSelector);
     return await item.isExisting() ? item : null;
   };
 
   const findExpandableToggles = async (): Promise<Array<ReturnType<typeof $>>> => {
-    const toggles = await browser.$$(
-      '[data-testid="session-nav-show-more"], [data-testid="nav-session-list-toggle"]',
-    );
+    const toggles = await browser.$$(SESSION_NAV_TOGGLE_SELECTOR);
     const expandable: Array<ReturnType<typeof $>> = [];
     for (const toggle of toggles) {
       if (

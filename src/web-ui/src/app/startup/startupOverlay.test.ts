@@ -37,7 +37,7 @@ describe('startupOverlay', () => {
 
     const hidden = hideStartupOverlay();
 
-    await vi.advanceTimersByTimeAsync(449);
+    await vi.advanceTimersByTimeAsync(349);
     expect(isStartupOverlayPresent()).toBe(true);
 
     await vi.advanceTimersByTimeAsync(1);
