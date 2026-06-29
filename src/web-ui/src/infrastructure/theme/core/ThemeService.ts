@@ -31,6 +31,65 @@ const FLOW_CHAT_LINK_COLORS = {
   },
 } as const;
 
+const THEME_STATIC_COLORS = {
+  white: '#ffffff',
+  black: '#000000',
+} as const;
+
+const THEME_OVERLAYS = {
+  white02: 'rgba(255, 255, 255, 0.02)',
+  white03: 'rgba(255, 255, 255, 0.03)',
+  white04: 'rgba(255, 255, 255, 0.04)',
+  white05: 'rgba(255, 255, 255, 0.05)',
+  white06: 'rgba(255, 255, 255, 0.06)',
+  white08: 'rgba(255, 255, 255, 0.08)',
+  white10: 'rgba(255, 255, 255, 0.1)',
+  white12: 'rgba(255, 255, 255, 0.12)',
+  white15: 'rgba(255, 255, 255, 0.15)',
+  white20: 'rgba(255, 255, 255, 0.2)',
+  white22: 'rgba(255, 255, 255, 0.22)',
+  white60: 'rgba(255, 255, 255, 0.6)',
+  black04: 'rgba(0, 0, 0, 0.04)',
+  black06: 'rgba(0, 0, 0, 0.06)',
+  black08: 'rgba(0, 0, 0, 0.08)',
+  black10: 'rgba(0, 0, 0, 0.1)',
+  black12: 'rgba(0, 0, 0, 0.12)',
+  black15: 'rgba(0, 0, 0, 0.15)',
+  black20: 'rgba(0, 0, 0, 0.2)',
+  black25: 'rgba(0, 0, 0, 0.25)',
+  black28: 'rgba(0, 0, 0, 0.28)',
+  black30: 'rgba(0, 0, 0, 0.3)',
+  black40: 'rgba(0, 0, 0, 0.4)',
+  black50: 'rgba(0, 0, 0, 0.5)',
+  black70: 'rgba(0, 0, 0, 0.7)',
+  black80: 'rgba(0, 0, 0, 0.8)',
+} as const;
+
+const THEME_OVERLAY_TOKEN_VALUES = [
+  ['--color-overlay-white-02', THEME_OVERLAYS.white02],
+  ['--color-overlay-white-03', THEME_OVERLAYS.white03],
+  ['--color-overlay-white-04', THEME_OVERLAYS.white04],
+  ['--color-overlay-white-05', THEME_OVERLAYS.white05],
+  ['--color-overlay-white-06', THEME_OVERLAYS.white06],
+  ['--color-overlay-white-08', THEME_OVERLAYS.white08],
+  ['--color-overlay-white-10', THEME_OVERLAYS.white10],
+  ['--color-overlay-white-12', THEME_OVERLAYS.white12],
+  ['--color-overlay-white-15', THEME_OVERLAYS.white15],
+  ['--color-overlay-white-20', THEME_OVERLAYS.white20],
+  ['--color-overlay-white-60', THEME_OVERLAYS.white60],
+  ['--color-overlay-black-06', THEME_OVERLAYS.black06],
+  ['--color-overlay-black-08', THEME_OVERLAYS.black08],
+  ['--color-overlay-black-10', THEME_OVERLAYS.black10],
+  ['--color-overlay-black-12', THEME_OVERLAYS.black12],
+  ['--color-overlay-black-15', THEME_OVERLAYS.black15],
+  ['--color-overlay-black-20', THEME_OVERLAYS.black20],
+  ['--color-overlay-black-25', THEME_OVERLAYS.black25],
+  ['--color-overlay-black-30', THEME_OVERLAYS.black30],
+  ['--color-overlay-black-40', THEME_OVERLAYS.black40],
+  ['--color-overlay-black-50', THEME_OVERLAYS.black50],
+  ['--color-overlay-black-80', THEME_OVERLAYS.black80],
+] as const;
+
 declare global {
   // Injected by the desktop webview initialization script. These values let the
   // first renderer pass apply the persisted built-in theme without waiting on a
@@ -407,34 +466,11 @@ export class ThemeService {
 
 
     root.style.setProperty('--color-bg-primary', colors.background.primary);
-    root.style.setProperty('--color-static-white', '#ffffff');
-    root.style.setProperty('--color-static-black', '#000000');
+    root.style.setProperty('--color-static-white', THEME_STATIC_COLORS.white);
+    root.style.setProperty('--color-static-black', THEME_STATIC_COLORS.black);
     root.style.setProperty('--color-static-white-rgb', '255, 255, 255');
     root.style.setProperty('--color-static-black-rgb', '0, 0, 0');
-    [
-      ['--color-overlay-white-02', 'rgba(255, 255, 255, 0.02)'],
-      ['--color-overlay-white-03', 'rgba(255, 255, 255, 0.03)'],
-      ['--color-overlay-white-04', 'rgba(255, 255, 255, 0.04)'],
-      ['--color-overlay-white-05', 'rgba(255, 255, 255, 0.05)'],
-      ['--color-overlay-white-06', 'rgba(255, 255, 255, 0.06)'],
-      ['--color-overlay-white-08', 'rgba(255, 255, 255, 0.08)'],
-      ['--color-overlay-white-10', 'rgba(255, 255, 255, 0.1)'],
-      ['--color-overlay-white-12', 'rgba(255, 255, 255, 0.12)'],
-      ['--color-overlay-white-15', 'rgba(255, 255, 255, 0.15)'],
-      ['--color-overlay-white-20', 'rgba(255, 255, 255, 0.2)'],
-      ['--color-overlay-white-60', 'rgba(255, 255, 255, 0.6)'],
-      ['--color-overlay-black-06', 'rgba(0, 0, 0, 0.06)'],
-      ['--color-overlay-black-08', 'rgba(0, 0, 0, 0.08)'],
-      ['--color-overlay-black-10', 'rgba(0, 0, 0, 0.1)'],
-      ['--color-overlay-black-12', 'rgba(0, 0, 0, 0.12)'],
-      ['--color-overlay-black-15', 'rgba(0, 0, 0, 0.15)'],
-      ['--color-overlay-black-20', 'rgba(0, 0, 0, 0.2)'],
-      ['--color-overlay-black-25', 'rgba(0, 0, 0, 0.25)'],
-      ['--color-overlay-black-30', 'rgba(0, 0, 0, 0.3)'],
-      ['--color-overlay-black-40', 'rgba(0, 0, 0, 0.4)'],
-      ['--color-overlay-black-50', 'rgba(0, 0, 0, 0.5)'],
-      ['--color-overlay-black-80', 'rgba(0, 0, 0, 0.8)'],
-    ].forEach(([name, value]) => {
+    THEME_OVERLAY_TOKEN_VALUES.forEach(([name, value]) => {
       root.style.setProperty(name, value);
     });
     root.style.setProperty('--color-bg-secondary', colors.background.secondary);
@@ -465,7 +501,7 @@ export class ThemeService {
       root.style.setProperty('--color-bg-tooltip', colors.background.tooltip);
     }
 
-    root.style.setProperty('--color-overlay', theme.type === 'dark' ? 'rgba(0, 0, 0, 0.5)' : 'rgba(0, 0, 0, 0.3)');
+    root.style.setProperty('--color-overlay', theme.type === 'dark' ? THEME_OVERLAYS.black50 : THEME_OVERLAYS.black30);
 
 
     root.style.setProperty('--color-text-primary', colors.text.primary);
@@ -592,13 +628,13 @@ export class ThemeService {
 
     const scrollbarThumb = colors.scrollbar?.thumb ?? (
         theme.type === 'dark'
-            ? 'rgba(255, 255, 255, 0.12)'
-            : 'rgba(0, 0, 0, 0.15)'
+            ? THEME_OVERLAYS.white12
+            : THEME_OVERLAYS.black15
     );
     const scrollbarThumbHover = colors.scrollbar?.thumbHover ?? (
         theme.type === 'dark'
-            ? 'rgba(255, 255, 255, 0.22)'
-            : 'rgba(0, 0, 0, 0.28)'
+            ? THEME_OVERLAYS.white22
+            : THEME_OVERLAYS.black28
     );
     root.style.setProperty('--scrollbar-thumb', scrollbarThumb);
     root.style.setProperty('--scrollbar-thumb-hover', scrollbarThumbHover);
@@ -894,17 +930,17 @@ export class ThemeService {
       root.style.setProperty('--card-bg-default', 'rgba(255, 255, 255, 0.025)');
       root.style.setProperty('--card-bg-elevated', 'rgba(255, 255, 255, 0.035)');
       root.style.setProperty('--card-bg-subtle', 'rgba(255, 255, 255, 0.015)');
-      root.style.setProperty('--card-bg-hover', 'rgba(255, 255, 255, 0.04)');
-      root.style.setProperty('--card-bg-active', 'rgba(255, 255, 255, 0.05)');
+      root.style.setProperty('--card-bg-hover', THEME_OVERLAYS.white04);
+      root.style.setProperty('--card-bg-active', THEME_OVERLAYS.white05);
       root.style.setProperty('--card-bg-accent', 'rgba(255, 255, 255, 0.09)');
       root.style.setProperty('--card-bg-accent-hover', 'rgba(255, 255, 255, 0.13)');
       root.style.setProperty('--card-bg-purple', 'rgba(139, 92, 246, 0.08)');
       root.style.setProperty('--card-bg-purple-hover', 'rgba(139, 92, 246, 0.12)');
     } else {
 
-      root.style.setProperty('--card-bg-default', 'rgba(0, 0, 0, 0.06)');
-      root.style.setProperty('--card-bg-elevated', 'rgba(0, 0, 0, 0.08)');
-      root.style.setProperty('--card-bg-subtle', 'rgba(0, 0, 0, 0.04)');
+      root.style.setProperty('--card-bg-default', THEME_OVERLAYS.black06);
+      root.style.setProperty('--card-bg-elevated', THEME_OVERLAYS.black08);
+      root.style.setProperty('--card-bg-subtle', THEME_OVERLAYS.black04);
       root.style.setProperty('--card-bg-hover', 'rgba(0, 0, 0, 0.065)');
       root.style.setProperty('--card-bg-active', 'rgba(0, 0, 0, 0.09)');
       root.style.setProperty('--card-bg-accent', 'rgba(15, 23, 42, 0.08)');
@@ -916,7 +952,7 @@ export class ThemeService {
 
     root.style.setProperty('--modal-bg', colors.background.elevated);
     root.style.setProperty('--modal-border', colors.border.base);
-    root.style.setProperty('--modal-overlay', theme.type === 'dark' ? 'rgba(0, 0, 0, 0.7)' : 'rgba(0, 0, 0, 0.5)');
+    root.style.setProperty('--modal-overlay', theme.type === 'dark' ? THEME_OVERLAYS.black70 : THEME_OVERLAYS.black50);
 
 
     root.style.setProperty('--nav-bg', colors.background.secondary);

@@ -1,4 +1,4 @@
- 
+
 
 import { ThemeConfig } from '../types';
 import {
@@ -8,113 +8,137 @@ import {
   createStandardEasing,
   createStandardSpacing,
   createWindowControls,
+  overlayBlack,
+  rgbFromHex,
+  rgbaFromHex,
+  STATIC_WHITE,
 } from './shared';
 
+const CYBER_BACKGROUND = '#101010';
+const CYBER_TEXT_PRIMARY = '#e0f2ff';
+const CYBER_TEXT_SECONDARY = '#c7e7ff';
+const CYBER_TEXT_MUTED = '#7fadcc';
+const CYBER_ACCENT = '#00e6ff';
+const CYBER_ACCENT_HOVER = '#00ccff';
+const CYBER_PURPLE = '#8a2be2';
+const CYBER_PURPLE_HOVER = '#7928ca';
+const CYBER_SUCCESS = '#00ff9f';
+const CYBER_WARNING = '#ffcc00';
+const CYBER_ERROR = '#ff0055';
+
+const cyberAccent = (alpha: number | string) => rgbaFromHex(CYBER_ACCENT, alpha);
+const cyberAccentHover = (alpha: number | string) => rgbaFromHex(CYBER_ACCENT_HOVER, alpha);
+const cyberPurple = (alpha: number | string) => rgbaFromHex(CYBER_PURPLE, alpha);
+const cyberPurpleHover = (alpha: number | string) => rgbaFromHex(CYBER_PURPLE_HOVER, alpha);
+const cyberSuccess = (alpha: number | string) => rgbaFromHex(CYBER_SUCCESS, alpha);
+const cyberWarning = (alpha: number | string) => rgbaFromHex(CYBER_WARNING, alpha);
+const cyberError = (alpha: number | string) => rgbaFromHex(CYBER_ERROR, alpha);
+
 export const bitfunCyberTheme: ThemeConfig = {
-  
+
   id: 'bitfun-cyber',
   name: 'Cyber',
   type: 'dark',
   description: 'Tech-style theme - Deep black hole, neon future, ultimate tech aesthetics',
   author: 'BitFun Team',
   version: '1.0.0',
-  
-  
+
+
   colors: {
     background: {
-      primary: '#101010',        
-      secondary: '#151515',      
-      tertiary: '#1a1a1a',       
-      quaternary: '#1f1f1f',     
-      elevated: '#0d0d0d',       
-      workbench: '#101010',      
+      primary: CYBER_BACKGROUND,
+      secondary: '#151515',
+      tertiary: '#1a1a1a',
+      quaternary: '#1f1f1f',
+      elevated: '#0d0d0d',
+      workbench: CYBER_BACKGROUND,
       scene: '#141414',
       tooltip: 'rgba(16, 16, 16, 0.95)',
     },
-    
+
     text: {
-      primary: '#e0f2ff',        
-      secondary: '#c7e7ff',      
-      muted: '#7fadcc',          
-      disabled: '#4a5a66',       
+      primary: CYBER_TEXT_PRIMARY,
+      secondary: CYBER_TEXT_SECONDARY,
+      muted: CYBER_TEXT_MUTED,
+      disabled: '#4a5a66',
     },
-    
+
     accent: {
-      50: 'rgba(0, 230, 255, 0.05)',
-      100: 'rgba(0, 230, 255, 0.1)',
-      200: 'rgba(0, 230, 255, 0.18)',
-      300: 'rgba(0, 230, 255, 0.3)',
-      400: 'rgba(0, 230, 255, 0.45)',
-      500: '#00e6ff',            
-      600: '#00ccff',            
-      700: 'rgba(0, 204, 255, 0.85)',
-      800: 'rgba(0, 204, 255, 0.95)',
+      50: cyberAccent(0.05),
+      100: cyberAccent(0.1),
+      200: cyberAccent(0.18),
+      300: cyberAccent(0.3),
+      400: cyberAccent(0.45),
+      500: CYBER_ACCENT,
+      600: CYBER_ACCENT_HOVER,
+      700: cyberAccentHover(0.85),
+      800: cyberAccentHover(0.95),
     },
-    
+
     purple: {
-      50: 'rgba(138, 43, 226, 0.05)',
-      100: 'rgba(138, 43, 226, 0.1)',
-      200: 'rgba(138, 43, 226, 0.18)',
-      300: 'rgba(138, 43, 226, 0.3)',
-      400: 'rgba(138, 43, 226, 0.45)',
-      500: '#8a2be2',            
-      600: '#7928ca',            
-      700: 'rgba(121, 40, 202, 0.85)',
-      800: 'rgba(121, 40, 202, 0.95)',
+      50: cyberPurple(0.05),
+      100: cyberPurple(0.1),
+      200: cyberPurple(0.18),
+      300: cyberPurple(0.3),
+      400: cyberPurple(0.45),
+      500: CYBER_PURPLE,
+      600: CYBER_PURPLE_HOVER,
+      700: cyberPurpleHover(0.85),
+      800: cyberPurpleHover(0.95),
     },
-    
+
     semantic: {
-      success: '#00ff9f',        
-      successBg: 'rgba(0, 255, 159, 0.12)',
-      successBorder: 'rgba(0, 255, 159, 0.35)',
-      
-      warning: '#ffcc00',        
-      warningBg: 'rgba(255, 204, 0, 0.12)',
-      warningBorder: 'rgba(255, 204, 0, 0.35)',
-      
-      error: '#ff0055',          
-      errorBg: 'rgba(255, 0, 85, 0.12)',
-      errorBorder: 'rgba(255, 0, 85, 0.35)',
-      
-      info: '#00e6ff',           
-      infoBg: 'rgba(0, 230, 255, 0.12)',
-      infoBorder: 'rgba(0, 230, 255, 0.35)',
-      
-      
+      success: CYBER_SUCCESS,
+      successBg: cyberSuccess(0.12),
+      successBorder: cyberSuccess(0.35),
+
+      warning: CYBER_WARNING,
+      warningBg: cyberWarning(0.12),
+      warningBorder: cyberWarning(0.35),
+
+      error: CYBER_ERROR,
+      errorBg: cyberError(0.12),
+      errorBorder: cyberError(0.35),
+
+      info: CYBER_ACCENT,
+      infoBg: cyberAccent(0.12),
+      infoBorder: cyberAccent(0.35),
+
+
       highlight: '#ffdd44',
       highlightBg: 'rgba(255, 221, 68, 0.15)',
     },
-    
+
     border: {
-      subtle: 'rgba(0, 230, 255, 0.14)',
-      base: 'rgba(0, 230, 255, 0.2)',
-      medium: 'rgba(0, 230, 255, 0.28)',
-      strong: 'rgba(0, 230, 255, 0.36)',
-      prominent: 'rgba(0, 230, 255, 0.5)',
+      subtle: cyberAccent(0.14),
+      base: cyberAccent(0.2),
+      medium: cyberAccent(0.28),
+      strong: cyberAccent(0.36),
+      prominent: cyberAccent(0.5),
     },
-    
+
     element: {
-      subtle: 'rgba(0, 230, 255, 0.06)',
-      soft: 'rgba(0, 230, 255, 0.09)',
-      base: 'rgba(0, 230, 255, 0.13)',
-      medium: 'rgba(0, 230, 255, 0.17)',
-      strong: 'rgba(0, 230, 255, 0.22)',
-      elevated: 'rgba(0, 230, 255, 0.27)',
+      subtle: cyberAccent(0.06),
+      soft: cyberAccent(0.09),
+      base: cyberAccent(0.13),
+      medium: cyberAccent(0.17),
+      strong: cyberAccent(0.22),
+      elevated: cyberAccent(0.27),
     },
-    
+
     git: createGitColors({
-      branch: 'rgb(0, 230, 255)',
-      branchBg: 'rgba(0, 230, 255, 0.12)',
-      changes: 'rgb(255, 204, 0)',
-      changesBg: 'rgba(255, 204, 0, 0.12)',
-      added: 'rgb(0, 255, 159)',
-      addedBg: 'rgba(0, 255, 159, 0.12)',
-      deleted: 'rgb(255, 0, 85)',
-      deletedBg: 'rgba(255, 0, 85, 0.12)',
+      branch: rgbFromHex(CYBER_ACCENT),
+      branchBg: cyberAccent(0.12),
+      changes: rgbFromHex(CYBER_WARNING),
+      changesBg: cyberWarning(0.12),
+      added: rgbFromHex(CYBER_SUCCESS),
+      addedBg: cyberSuccess(0.12),
+      deleted: rgbFromHex(CYBER_ERROR),
+      deletedBg: cyberError(0.12),
     }),
   },
-  
-  
+
+
   effects: {
     shadow: {
       xs: '0 1px 3px rgba(0, 0, 0, 0.9)',
@@ -124,16 +148,16 @@ export const bitfunCyberTheme: ThemeConfig = {
       xl: '0 12px 28px rgba(0, 0, 0, 0.7)',
       '2xl': '0 16px 36px rgba(0, 0, 0, 0.65)',
     },
-    
+
     glow: {
-      
-      blue: '0 0 12px rgba(0, 230, 255, 0.4), 0 0 24px rgba(0, 230, 255, 0.25), 0 0 36px rgba(0, 230, 255, 0.15), 0 4px 16px rgba(0, 0, 0, 0.3)',
-      
-      purple: '0 0 12px rgba(138, 43, 226, 0.4), 0 0 24px rgba(138, 43, 226, 0.25), 0 0 36px rgba(138, 43, 226, 0.15), 0 4px 16px rgba(0, 0, 0, 0.3)',
-      
-      mixed: '0 0 16px rgba(0, 230, 255, 0.35), 0 0 28px rgba(138, 43, 226, 0.25), 0 0 40px rgba(0, 230, 255, 0.12), 0 4px 20px rgba(0, 0, 0, 0.35)',
+
+      blue: `0 0 12px ${cyberAccent(0.4)}, 0 0 24px ${cyberAccent(0.25)}, 0 0 36px ${cyberAccent(0.15)}, 0 4px 16px ${overlayBlack(0.3)}`,
+
+      purple: `0 0 12px ${cyberPurple(0.4)}, 0 0 24px ${cyberPurple(0.25)}, 0 0 36px ${cyberPurple(0.15)}, 0 4px 16px ${overlayBlack(0.3)}`,
+
+      mixed: `0 0 16px ${cyberAccent(0.35)}, 0 0 28px ${cyberPurple(0.25)}, 0 0 40px ${cyberAccent(0.12)}, 0 4px 20px ${overlayBlack(0.35)}`,
     },
-    
+
     blur: {
       subtle: 'blur(4px) saturate(1.2)',
       base: 'blur(8px) saturate(1.3)',
@@ -141,11 +165,11 @@ export const bitfunCyberTheme: ThemeConfig = {
       strong: 'blur(16px) saturate(1.5) brightness(1.15)',
       intense: 'blur(20px) saturate(1.6) brightness(1.2)',
     },
-    
+
     radius: createCompactRadius(),
-    
+
     spacing: createStandardSpacing(),
-    
+
     opacity: {
       disabled: 0.5,
       hover: 0.85,
@@ -153,8 +177,8 @@ export const bitfunCyberTheme: ThemeConfig = {
       overlay: 0.5,
     },
   },
-  
-  
+
+
   motion: {
     duration: {
       instant: '0.08s',
@@ -163,125 +187,125 @@ export const bitfunCyberTheme: ThemeConfig = {
       slow: '0.5s',
       lazy: '0.8s',
     },
-    
+
     easing: createStandardEasing('cubic-bezier(0.25, 0.46, 0.45, 0.94)'),
   },
-  
-  
+
+
   typography: createExpressiveTypography(),
-  
-  
+
+
   components: {
-    
+
     windowControls: createWindowControls({
       standard: {
-        dot: 'rgba(0, 230, 255, 0.5)',
-        dotShadow: '0 0 6px rgba(0, 230, 255, 0.35)',
-        hoverBg: 'rgba(0, 230, 255, 0.15)',
-        hoverColor: '#00e6ff',
-        hoverBorder: 'rgba(0, 230, 255, 0.3)',
-        hoverShadow: '0 0 12px rgba(0, 230, 255, 0.3), 0 2px 8px rgba(0, 230, 255, 0.2), inset 0 1px 0 rgba(0, 230, 255, 0.2)',
+        dot: cyberAccent(0.5),
+        dotShadow: `0 0 6px ${cyberAccent(0.35)}`,
+        hoverBg: cyberAccent(0.15),
+        hoverColor: CYBER_ACCENT,
+        hoverBorder: cyberAccent(0.3),
+        hoverShadow: `0 0 12px ${cyberAccent(0.3)}, 0 2px 8px ${cyberAccent(0.2)}, inset 0 1px 0 ${cyberAccent(0.2)}`,
       },
       close: {
-        dot: 'rgba(255, 0, 85, 0.5)',
-        dotShadow: '0 0 6px rgba(255, 0, 85, 0.35)',
-        hoverBg: 'rgba(255, 0, 85, 0.15)',
-        hoverColor: '#ff0055',
-        hoverBorder: 'rgba(255, 0, 85, 0.3)',
-        hoverShadow: '0 0 12px rgba(255, 0, 85, 0.3), 0 2px 8px rgba(255, 0, 85, 0.2), inset 0 1px 0 rgba(255, 0, 85, 0.2)',
+        dot: cyberError(0.5),
+        dotShadow: `0 0 6px ${cyberError(0.35)}`,
+        hoverBg: cyberError(0.15),
+        hoverColor: CYBER_ERROR,
+        hoverBorder: cyberError(0.3),
+        hoverShadow: `0 0 12px ${cyberError(0.3)}, 0 2px 8px ${cyberError(0.2)}, inset 0 1px 0 ${cyberError(0.2)}`,
       },
       common: {
-        defaultColor: 'rgba(224, 242, 255, 0.9)',
-        defaultDot: 'rgba(0, 230, 255, 0.2)',
-        disabledDot: 'rgba(0, 230, 255, 0.1)',
-        flowGradient: 'linear-gradient(90deg, transparent, rgba(0, 230, 255, 0.08), rgba(0, 230, 255, 0.12), rgba(0, 230, 255, 0.08), transparent)',
+        defaultColor: rgbaFromHex(CYBER_TEXT_PRIMARY, 0.9),
+        defaultDot: cyberAccent(0.2),
+        disabledDot: cyberAccent(0.1),
+        flowGradient: `linear-gradient(90deg, transparent, ${cyberAccent(0.08)}, ${cyberAccent(0.12)}, ${cyberAccent(0.08)}, transparent)`,
       },
     }),
-    
+
     button: {
-      
+
       default: {
-        background: 'rgba(0, 230, 255, 0.08)',
-        color: '#7fadcc',
-        border: 'rgba(0, 230, 255, 0.15)',
-        shadow: '0 0 8px rgba(0, 230, 255, 0.1)',
+        background: cyberAccent(0.08),
+        color: CYBER_TEXT_MUTED,
+        border: cyberAccent(0.15),
+        shadow: `0 0 8px ${cyberAccent(0.1)}`,
       },
       hover: {
-        background: 'rgba(0, 230, 255, 0.14)',
-        color: '#c7e7ff',
-        border: 'rgba(0, 230, 255, 0.3)',
-        shadow: '0 0 16px rgba(0, 230, 255, 0.2), 0 2px 8px rgba(0, 0, 0, 0.3)',
+        background: cyberAccent(0.14),
+        color: CYBER_TEXT_SECONDARY,
+        border: cyberAccent(0.3),
+        shadow: `0 0 16px ${cyberAccent(0.2)}, 0 2px 8px ${overlayBlack(0.3)}`,
         transform: 'translateY(-1px)',
       },
       active: {
-        background: 'rgba(0, 230, 255, 0.12)',
-        color: '#c7e7ff',
-        border: 'rgba(0, 230, 255, 0.35)',
-        shadow: '0 0 12px rgba(0, 230, 255, 0.15)',
+        background: cyberAccent(0.12),
+        color: CYBER_TEXT_SECONDARY,
+        border: cyberAccent(0.35),
+        shadow: `0 0 12px ${cyberAccent(0.15)}`,
         transform: 'translateY(0)',
       },
-      
-      
+
+
       primary: {
         default: {
-          background: 'rgba(0, 230, 255, 0.18)',
-          color: '#e0f2ff',
-          border: 'rgba(0, 230, 255, 0.4)',
-          shadow: '0 0 16px rgba(0, 230, 255, 0.25)',
+          background: cyberAccent(0.18),
+          color: CYBER_TEXT_PRIMARY,
+          border: cyberAccent(0.4),
+          shadow: `0 0 16px ${cyberAccent(0.25)}`,
         },
         hover: {
-          background: 'rgba(0, 230, 255, 0.25)',
-          color: '#ffffff',
-          border: 'rgba(0, 230, 255, 0.6)',
-          shadow: '0 0 24px rgba(0, 230, 255, 0.4), 0 0 36px rgba(0, 230, 255, 0.2), 0 4px 12px rgba(0, 0, 0, 0.3)',
+          background: cyberAccent(0.25),
+          color: STATIC_WHITE,
+          border: cyberAccent(0.6),
+          shadow: `0 0 24px ${cyberAccent(0.4)}, 0 0 36px ${cyberAccent(0.2)}, 0 4px 12px ${overlayBlack(0.3)}`,
           transform: 'translateY(-2px)',
         },
         active: {
-          background: 'rgba(0, 230, 255, 0.22)',
-          color: '#ffffff',
-          border: 'rgba(0, 230, 255, 0.5)',
-          shadow: '0 0 20px rgba(0, 230, 255, 0.3)',
+          background: cyberAccent(0.22),
+          color: STATIC_WHITE,
+          border: cyberAccent(0.5),
+          shadow: `0 0 20px ${cyberAccent(0.3)}`,
           transform: 'translateY(-1px)',
         },
       },
-      
-      
+
+
       ghost: {
         default: {
           background: 'transparent',
-          color: '#7fadcc',
-          border: 'rgba(0, 230, 255, 0.2)',
+          color: CYBER_TEXT_MUTED,
+          border: cyberAccent(0.2),
           shadow: 'none',
         },
         hover: {
-          background: 'rgba(0, 230, 255, 0.1)',
-          color: '#c7e7ff',
-          border: 'rgba(0, 230, 255, 0.35)',
-          shadow: '0 0 12px rgba(0, 230, 255, 0.15)',
+          background: cyberAccent(0.1),
+          color: CYBER_TEXT_SECONDARY,
+          border: cyberAccent(0.35),
+          shadow: `0 0 12px ${cyberAccent(0.15)}`,
           transform: 'translateY(-1px)',
         },
         active: {
-          background: 'rgba(0, 230, 255, 0.08)',
-          color: '#c7e7ff',
-          border: 'rgba(0, 230, 255, 0.3)',
-          shadow: '0 0 8px rgba(0, 230, 255, 0.1)',
+          background: cyberAccent(0.08),
+          color: CYBER_TEXT_SECONDARY,
+          border: cyberAccent(0.3),
+          shadow: `0 0 8px ${cyberAccent(0.1)}`,
           transform: 'translateY(0)',
         },
       },
     },
   },
-  
-  
+
+
   monaco: {
     base: 'vs-dark',
     inherit: true,
     rules: [],
     colors: {
-      background: '#101010',
-      foreground: '#c7e7ff',
+      background: CYBER_BACKGROUND,
+      foreground: CYBER_TEXT_SECONDARY,
       lineHighlight: '#151515',
       selection: '#1a4d66',
-      cursor: '#00e6ff',
+      cursor: CYBER_ACCENT,
     },
   },
 };

@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 
 import { builtinThemes } from './index';
-import { createGitColors } from './shared';
+import { createGitColors, overlayBlack, overlayWhite, rgbFromHex, rgbaFromHex } from './shared';
 
 function hashTheme(theme: unknown): string {
   return createHash('sha256')
@@ -11,6 +11,14 @@ function hashTheme(theme: unknown): string {
 }
 
 describe('builtin theme preset output', () => {
+  it('formats hex palette references as stable rgb strings', () => {
+    expect(rgbFromHex('#00e6ff')).toBe('rgb(0, 230, 255)');
+    expect(rgbaFromHex('#00e6ff', 0.12)).toBe('rgba(0, 230, 255, 0.12)');
+    expect(rgbaFromHex('#00e6ff', '0.12')).toBe('rgba(0, 230, 255, 0.12)');
+    expect(overlayBlack(0.3)).toBe('rgba(0, 0, 0, 0.3)');
+    expect(overlayWhite(0.08)).toBe('rgba(255, 255, 255, 0.08)');
+  });
+
   it('aliases staged git colors to added colors unless a theme overrides them', () => {
     expect(createGitColors({
       branch: '#64748b',

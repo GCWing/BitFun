@@ -105,7 +105,7 @@
       "max": 0
     },
     "colorScopes.token.uniqueColors": {
-      "max": 697
+      "max": 340
     },
     "colorScopes.exception.uniqueColors": {
       "max": 273
@@ -147,16 +147,16 @@
       "max": 0
     },
     "colorDomainNearPairs.indistinguishableTotal": {
-      "max": 35
+      "max": 6
     },
     "colorDomainNearPairs.nearTotal": {
-      "max": 644
+      "max": 377
     },
     "colorDomainNearPairs.themePreset.indistinguishableTotal": {
-      "max": 30
+      "max": 3
     },
     "colorDomainNearPairs.themePreset.nearTotal": {
-      "max": 459
+      "max": 192
     },
     "colorDomainNearPairs.themeRuntime.indistinguishableTotal": {
       "max": 0
@@ -165,7 +165,7 @@
       "max": 50
     },
     "colorDomainNearPairs.tokenContract.indistinguishableTotal": {
-      "max": 2
+      "max": 0
     },
     "colorDomainNearPairs.tokenContract.nearTotal": {
       "max": 90
@@ -237,16 +237,16 @@
       "max": 0
     },
     "colorDomainScopes.themePreset.occurrences": {
-      "max": 1019
+      "max": 231
     },
     "colorDomainScopes.themePreset.uniqueColors": {
-      "max": 611
+      "max": 205
     },
     "colorDomainScopes.themeRuntime.occurrences": {
-      "max": 54
+      "max": 45
     },
     "colorDomainScopes.tokenContract.occurrences": {
-      "max": 267
+      "max": 176
     },
     "colorDomainScopes.generatedWidget.occurrences": {
       "max": 0
@@ -294,7 +294,7 @@
       "max": 0
     },
     "colorDomainScopes.mermaid.occurrences": {
-      "max": 139
+      "max": 105
     },
     "colorDomainScopes.mermaid.uniqueColors": {
       "max": 95

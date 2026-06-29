@@ -1,4 +1,4 @@
- 
+
 
 import { ThemeConfig } from '../types';
 import {
@@ -11,10 +11,38 @@ import {
   createStandardSpacing,
   createStandardTypography,
   createWindowControls,
+  overlayBlack,
+  overlayWhite,
+  rgbFromHex,
+  rgbaFromHex,
+  STATIC_WHITE,
 } from './shared';
 
+const SLATE_BACKGROUND_PRIMARY = '#14161a';
+const SLATE_BACKGROUND_SECONDARY = '#22262c';
+const SLATE_TEXT_PRIMARY = '#eef0f3';
+const SLATE_TEXT_MUTED = '#a8b0bd';
+const SLATE_BUTTON_TEXT = '#dce0e6';
+const SLATE_ACCENT = '#94a3b8';
+const SLATE_ACCENT_HOVER = '#64748b';
+// Keep the original alpha ramp channels separate from the solid 500 stop.
+const SLATE_PURPLE_ALPHA = '#b8c6ff';
+const SLATE_PURPLE = '#b8c4ff';
+const SLATE_PURPLE_HOVER = '#9dacf5';
+const SLATE_SUCCESS = '#7fb899';
+const SLATE_WARNING = '#f59e0b';
+const SLATE_ERROR = '#c9878d';
+
+const slateAccent = (alpha: number | string) => rgbaFromHex(SLATE_ACCENT, alpha);
+const slateAccentHover = (alpha: number | string) => rgbaFromHex(SLATE_ACCENT_HOVER, alpha);
+const slatePurple = (alpha: number | string) => rgbaFromHex(SLATE_PURPLE_ALPHA, alpha);
+const slatePurpleHover = (alpha: number | string) => rgbaFromHex(SLATE_PURPLE_HOVER, alpha);
+const slateSuccess = (alpha: number | string) => rgbaFromHex(SLATE_SUCCESS, alpha);
+const slateWarning = (alpha: number | string) => rgbaFromHex(SLATE_WARNING, alpha);
+const slateError = (alpha: number | string) => rgbaFromHex(SLATE_ERROR, alpha);
+
 export const bitfunSlateTheme: ThemeConfig = {
-  
+
   id: 'bitfun-slate',
   name: 'Slate',
   type: 'dark',
@@ -25,110 +53,110 @@ export const bitfunSlateTheme: ThemeConfig = {
   layout: {
     sceneViewportBorder: false,
   },
-  
+
   colors: {
     background: {
-      primary: '#14161a',
-      secondary: '#22262c',
-      tertiary: '#14161a',
+      primary: SLATE_BACKGROUND_PRIMARY,
+      secondary: SLATE_BACKGROUND_SECONDARY,
+      tertiary: SLATE_BACKGROUND_PRIMARY,
       quaternary: '#2c3038',
-      elevated: '#22262c',
-      workbench: '#14161a',
-      scene: '#22262c',
+      elevated: SLATE_BACKGROUND_SECONDARY,
+      workbench: SLATE_BACKGROUND_PRIMARY,
+      scene: SLATE_BACKGROUND_SECONDARY,
       tooltip: 'rgba(34, 38, 44, 0.96)',
     },
-    
+
     text: {
-      primary: '#eef0f3',
+      primary: SLATE_TEXT_PRIMARY,
       secondary: '#c8ccd2',
       muted: '#9ea4ab',
       disabled: '#65696f',
     },
-    
-    
+
+
     // Cool gray accent — neutral chrome for slate surfaces (links, focus, nav tints).
     accent: {
-      50: 'rgba(226, 232, 240, 0.05)',
-      100: 'rgba(226, 232, 240, 0.09)',
+      50: rgbaFromHex('#e2e8f0', 0.05),
+      100: rgbaFromHex('#e2e8f0', 0.09),
       200: 'rgba(203, 213, 225, 0.14)',
       300: 'rgba(203, 213, 225, 0.24)',
       400: 'rgba(148, 163, 184, 0.45)',
-      500: '#94a3b8',
-      600: '#64748b',
-      700: 'rgba(100, 116, 139, 0.85)',
+      500: SLATE_ACCENT,
+      600: SLATE_ACCENT_HOVER,
+      700: slateAccentHover(0.85),
       800: 'rgba(71, 85, 105, 0.92)',
     },
-    
-    
+
+
     purple: {
-      50: 'rgba(184, 198, 255, 0.04)',
-      100: 'rgba(184, 198, 255, 0.08)',
-      200: 'rgba(184, 198, 255, 0.15)',
-      300: 'rgba(184, 198, 255, 0.25)',
-      400: 'rgba(184, 198, 255, 0.4)',
-      500: '#b8c4ff',
-      600: '#9dacf5',
-      700: 'rgba(157, 172, 245, 0.8)',
-      800: 'rgba(157, 172, 245, 0.9)',
+      50: slatePurple(0.04),
+      100: slatePurple(0.08),
+      200: slatePurple(0.15),
+      300: slatePurple(0.25),
+      400: slatePurple(0.4),
+      500: SLATE_PURPLE,
+      600: SLATE_PURPLE_HOVER,
+      700: slatePurpleHover(0.8),
+      800: slatePurpleHover(0.9),
     },
-    
+
     semantic: {
-      success: '#7fb899',       
-      successBg: 'rgba(127, 184, 153, 0.1)',
-      successBorder: 'rgba(127, 184, 153, 0.3)',
-      
-      warning: '#f59e0b',
-      warningBg: 'rgba(245, 158, 11, 0.1)',
-      warningBorder: 'rgba(245, 158, 11, 0.3)',
-      
-      error: '#c9878d',         
-      errorBg: 'rgba(201, 135, 141, 0.1)',
-      errorBorder: 'rgba(201, 135, 141, 0.3)',
-      
-      info: '#a8b0bd',
-      infoBg: 'rgba(255, 255, 255, 0.07)',
-      infoBorder: 'rgba(255, 255, 255, 0.2)',
-      
-      
+      success: SLATE_SUCCESS,
+      successBg: slateSuccess(0.1),
+      successBorder: slateSuccess(0.3),
+
+      warning: SLATE_WARNING,
+      warningBg: slateWarning(0.1),
+      warningBorder: slateWarning(0.3),
+
+      error: SLATE_ERROR,
+      errorBg: slateError(0.1),
+      errorBorder: slateError(0.3),
+
+      info: SLATE_TEXT_MUTED,
+      infoBg: overlayWhite(0.07),
+      infoBorder: overlayWhite(0.2),
+
+
       highlight: '#c8cdd4',
-      highlightBg: 'rgba(255, 255, 255, 0.1)',
+      highlightBg: overlayWhite(0.1),
     },
-    
+
     border: createDarkNeutralBorder(),
-    
+
     element: createDarkNeutralElement(),
-    
+
     git: createGitColors({
       branch: '#9ca6b8',
-      branchBg: 'rgba(255, 255, 255, 0.06)',
-      changes: 'rgb(245, 158, 11)',
-      changesBg: 'rgba(245, 158, 11, 0.1)',
-      added: 'rgb(127, 184, 153)',
-      addedBg: 'rgba(127, 184, 153, 0.1)',
-      deleted: 'rgb(201, 135, 141)',
-      deletedBg: 'rgba(201, 135, 141, 0.1)',
+      branchBg: overlayWhite(0.06),
+      changes: rgbFromHex(SLATE_WARNING),
+      changesBg: slateWarning(0.1),
+      added: rgbFromHex(SLATE_SUCCESS),
+      addedBg: slateSuccess(0.1),
+      deleted: rgbFromHex(SLATE_ERROR),
+      deletedBg: slateError(0.1),
     }),
-    
+
     scrollbar: createDarkNeutralScrollbar(),
   },
-  
-  
+
+
   effects: {
     shadow: {
-      xs: '0 1px 2px rgba(0, 0, 0, 0.85)',
-      sm: '0 2px 4px rgba(0, 0, 0, 0.8)',
-      base: '0 4px 8px rgba(0, 0, 0, 0.75)',
-      lg: '0 8px 16px rgba(0, 0, 0, 0.7)',
-      xl: '0 12px 24px rgba(0, 0, 0, 0.85)',
-      '2xl': '0 16px 32px rgba(0, 0, 0, 0.9)',
+      xs: `0 1px 2px ${overlayBlack(0.85)}`,
+      sm: `0 2px 4px ${overlayBlack(0.8)}`,
+      base: `0 4px 8px ${overlayBlack(0.75)}`,
+      lg: `0 8px 16px ${overlayBlack(0.7)}`,
+      xl: `0 12px 24px ${overlayBlack(0.85)}`,
+      '2xl': `0 16px 32px ${overlayBlack(0.9)}`,
     },
-    
+
     glow: {
-      blue: '0 12px 32px rgba(148, 163, 184, 0.14), 0 6px 16px rgba(148, 163, 184, 0.1), 0 3px 8px rgba(0, 0, 0, 0.2)',
-      purple: '0 12px 32px rgba(184, 198, 255, 0.2), 0 6px 16px rgba(184, 198, 255, 0.12), 0 3px 8px rgba(0, 0, 0, 0.2)',
-      mixed: '0 12px 32px rgba(255, 255, 255, 0.05), 0 6px 16px rgba(184, 198, 255, 0.1), 0 3px 8px rgba(0, 0, 0, 0.18)',
+      blue: `0 12px 32px ${slateAccent(0.14)}, 0 6px 16px ${slateAccent(0.1)}, 0 3px 8px ${overlayBlack(0.2)}`,
+      purple: `0 12px 32px ${slatePurple(0.2)}, 0 6px 16px ${slatePurple(0.12)}, 0 3px 8px ${overlayBlack(0.2)}`,
+      mixed: `0 12px 32px ${overlayWhite(0.05)}, 0 6px 16px ${slatePurple(0.1)}, 0 3px 8px ${overlayBlack(0.18)}`,
     },
-    
+
     blur: {
       subtle: 'blur(4px) saturate(1.05) brightness(0.98)',
       base: 'blur(8px) saturate(1.08) brightness(0.98)',
@@ -136,11 +164,11 @@ export const bitfunSlateTheme: ThemeConfig = {
       strong: 'blur(16px) saturate(1.15) brightness(0.97)',
       intense: 'blur(20px) saturate(1.18) brightness(0.96)',
     },
-    
+
     radius: createSlateRadius(),
-    
+
     spacing: createStandardSpacing(),
-    
+
     opacity: {
       disabled: 0.5,
       hover: 0.75,
@@ -148,8 +176,8 @@ export const bitfunSlateTheme: ThemeConfig = {
       overlay: 0.5,
     },
   },
-  
-  
+
+
   motion: {
     duration: {
       instant: '0.08s',
@@ -158,106 +186,106 @@ export const bitfunSlateTheme: ThemeConfig = {
       slow: '0.5s',
       lazy: '0.8s',
     },
-    
+
     easing: createStandardEasing(),
   },
-  
-  
+
+
   typography: createStandardTypography(),
-  
-  
+
+
   components: {
-    
+
     windowControls: createWindowControls({
       standard: {
         dot: 'rgba(203, 213, 225, 0.42)',
-        dotShadow: '0 0 4px rgba(0, 0, 0, 0.35)',
-        hoverBg: 'rgba(255, 255, 255, 0.09)',
+        dotShadow: `0 0 4px ${overlayBlack(0.35)}`,
+        hoverBg: overlayWhite(0.09),
         hoverColor: '#e2e6eb',
-        hoverBorder: 'rgba(255, 255, 255, 0.14)',
-        hoverShadow: '0 2px 8px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.06)',
+        hoverBorder: overlayWhite(0.14),
+        hoverShadow: `0 2px 8px ${overlayBlack(0.22)}, inset 0 1px 0 ${overlayWhite(0.06)}`,
       },
       close: {
-        dot: 'rgba(201, 135, 141, 0.5)',
-        dotShadow: '0 0 4px rgba(201, 135, 141, 0.25)',
-        hoverBg: 'rgba(201, 135, 141, 0.15)',
-        hoverColor: '#c9878d',
-        hoverBorder: 'rgba(201, 135, 141, 0.25)',
-        hoverShadow: '0 2px 8px rgba(201, 135, 141, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.08)',
+        dot: slateError(0.5),
+        dotShadow: `0 0 4px ${slateError(0.25)}`,
+        hoverBg: slateError(0.15),
+        hoverColor: SLATE_ERROR,
+        hoverBorder: slateError(0.25),
+        hoverShadow: `0 2px 8px ${slateError(0.18)}, inset 0 1px 0 ${overlayWhite(0.08)}`,
       },
       common: {
         defaultColor: 'rgba(232, 234, 236, 0.92)',
         defaultDot: 'rgba(198, 202, 208, 0.48)',
         disabledDot: 'rgba(168, 171, 176, 0.2)',
-        flowGradient: 'linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.05), transparent)',
+        flowGradient: `linear-gradient(90deg, transparent, ${overlayWhite(0.05)}, ${overlayWhite(0.08)}, ${overlayWhite(0.05)}, transparent)`,
       },
     }),
-    
+
     button: {
-      
+
       default: {
-        background: 'rgba(255, 255, 255, 0.08)',
-        color: '#a8b0bd',
+        background: overlayWhite(0.08),
+        color: SLATE_TEXT_MUTED,
         border: 'transparent',
         shadow: 'none',
       },
       hover: {
-        background: 'rgba(255, 255, 255, 0.12)',
-        color: '#dce0e6',
+        background: overlayWhite(0.12),
+        color: SLATE_BUTTON_TEXT,
         border: 'transparent',
         shadow: 'none',
         transform: 'none',
       },
       active: {
-        background: 'rgba(255, 255, 255, 0.1)',
-        color: '#dce0e6',
+        background: overlayWhite(0.1),
+        color: SLATE_BUTTON_TEXT,
         border: 'transparent',
         shadow: 'none',
         transform: 'none',
       },
-      
-      
+
+
       primary: {
         default: {
-          background: 'rgba(255, 255, 255, 0.14)',
+          background: overlayWhite(0.14),
           color: '#f0f2f5',
           border: 'transparent',
           shadow: 'none',
         },
         hover: {
-          background: 'rgba(255, 255, 255, 0.2)',
-          color: '#ffffff',
+          background: overlayWhite(0.2),
+          color: STATIC_WHITE,
           border: 'transparent',
           shadow: 'none',
           transform: 'none',
         },
         active: {
-          background: 'rgba(255, 255, 255, 0.17)',
-          color: '#ffffff',
+          background: overlayWhite(0.17),
+          color: STATIC_WHITE,
           border: 'transparent',
           shadow: 'none',
           transform: 'none',
         },
       },
-      
-      
+
+
       ghost: {
         default: {
           background: 'transparent',
-          color: '#a8b0bd',
+          color: SLATE_TEXT_MUTED,
           border: 'transparent',
           shadow: 'none',
         },
         hover: {
-          background: 'rgba(255, 255, 255, 0.08)',
-          color: '#dce0e6',
+          background: overlayWhite(0.08),
+          color: SLATE_BUTTON_TEXT,
           border: 'transparent',
           shadow: 'none',
           transform: 'none',
         },
         active: {
-          background: 'rgba(255, 255, 255, 0.06)',
-          color: '#dce0e6',
+          background: overlayWhite(0.06),
+          color: SLATE_BUTTON_TEXT,
           border: 'transparent',
           shadow: 'none',
           transform: 'none',
@@ -265,8 +293,8 @@ export const bitfunSlateTheme: ThemeConfig = {
       },
     },
   },
-  
-  
+
+
   monaco: {
     base: 'vs-dark',
     inherit: true,
@@ -287,9 +315,9 @@ export const bitfunSlateTheme: ThemeConfig = {
     ],
     colors: {
       background: '#1a1c1e',
-      foreground: '#eef0f3',
+      foreground: SLATE_TEXT_PRIMARY,
       lineHighlight: '#22252a',
-      selection: 'rgba(255, 255, 255, 0.12)',
+      selection: overlayWhite(0.12),
       cursor: '#aeb6c3',
     },
   },

@@ -1,4 +1,4 @@
- 
+
 
 import { ThemeConfig } from '../types';
 import {
@@ -8,10 +8,35 @@ import {
   createStandardSpacing,
   createStandardTypography,
   createWindowControls,
+  rgbFromHex,
+  rgbaFromHex,
+  STATIC_BLACK,
+  STATIC_WHITE,
 } from './shared';
 
+const LIGHT_INK = '#0f172a';
+const LIGHT_TEXT_PRIMARY = '#1e293b';
+const LIGHT_TEXT_STRONG = '#334155';
+const LIGHT_ACCENT = '#64748b';
+const LIGHT_ACCENT_HOVER = '#475569';
+const LIGHT_PURPLE = '#7c6b99';
+const LIGHT_PURPLE_HOVER = '#655680';
+const LIGHT_SUCCESS = '#5b9a6f';
+const LIGHT_WARNING = '#c08c42';
+const LIGHT_ERROR = '#c26565';
+const LIGHT_HIGHLIGHT = '#b8863a';
+
+const lightInk = (alpha: number | string) => rgbaFromHex(LIGHT_INK, alpha);
+const lightAccent = (alpha: number | string) => rgbaFromHex(LIGHT_ACCENT, alpha);
+const lightAccentHover = (alpha: number | string) => rgbaFromHex(LIGHT_ACCENT_HOVER, alpha);
+const lightPurpleBase = (alpha: number | string) => rgbaFromHex('#6b5a89', alpha);
+const lightPurpleHover = (alpha: number | string) => rgbaFromHex(LIGHT_PURPLE_HOVER, alpha);
+const lightSuccess = (alpha: number | string) => rgbaFromHex(LIGHT_SUCCESS, alpha);
+const lightWarning = (alpha: number | string) => rgbaFromHex(LIGHT_WARNING, alpha);
+const lightError = (alpha: number | string) => rgbaFromHex(LIGHT_ERROR, alpha);
+
 export const bitfunLightTheme: ThemeConfig = {
-  
+
   id: 'bitfun-light',
   name: 'Light',
   type: 'light',
@@ -22,127 +47,127 @@ export const bitfunLightTheme: ThemeConfig = {
   layout: {
     sceneViewportBorder: false,
   },
-  
-  
+
+
   colors: {
     background: {
       primary: '#f3f3f5',
-      secondary: '#ffffff',        
-      tertiary: '#e8eaee',         
-      quaternary: '#e0e3e8',       
-      elevated: '#ffffff',         
-      workbench: '#eceef1',        
-      scene: '#ffffff',
-      tooltip: 'rgba(255, 255, 255, 0.98)',
+      secondary: STATIC_WHITE,
+      tertiary: '#e8eaee',
+      quaternary: '#e0e3e8',
+      elevated: STATIC_WHITE,
+      workbench: '#eceef1',
+      scene: STATIC_WHITE,
+      tooltip: rgbaFromHex(STATIC_WHITE, 0.98),
     },
-    
+
     text: {
-      primary: '#1e293b',          
-      secondary: '#3d4f66',        
-      muted: '#64748b',            
-      disabled: '#94a3b8',         
+      primary: LIGHT_TEXT_PRIMARY,
+      secondary: '#3d4f66',
+      muted: LIGHT_ACCENT,
+      disabled: '#94a3b8',
     },
-    
-    
+
+
     accent: {
-      50: 'rgba(15, 23, 42, 0.04)',
-      100: 'rgba(15, 23, 42, 0.07)',
-      200: 'rgba(15, 23, 42, 0.1)',
-      300: 'rgba(15, 23, 42, 0.16)',
-      400: 'rgba(15, 23, 42, 0.26)',
-      500: '#64748b',
-      600: '#475569',
-      700: 'rgba(71, 85, 105, 0.88)',
-      800: 'rgba(51, 65, 85, 0.94)',
+      50: lightInk(0.04),
+      100: lightInk(0.07),
+      200: lightInk(0.1),
+      300: lightInk(0.16),
+      400: lightInk(0.26),
+      500: LIGHT_ACCENT,
+      600: LIGHT_ACCENT_HOVER,
+      700: lightAccentHover(0.88),
+      800: rgbaFromHex(LIGHT_TEXT_STRONG, 0.94),
     },
-    
-    
+
+
     purple: {
-      50: 'rgba(107, 90, 137, 0.04)',
-      100: 'rgba(107, 90, 137, 0.08)',
-      200: 'rgba(107, 90, 137, 0.14)',
-      300: 'rgba(107, 90, 137, 0.22)',
-      400: 'rgba(107, 90, 137, 0.36)',
-      500: '#7c6b99',              
-      600: '#655680',              
-      700: 'rgba(101, 86, 128, 0.8)',
-      800: 'rgba(101, 86, 128, 0.9)',
+      50: lightPurpleBase(0.04),
+      100: lightPurpleBase(0.08),
+      200: lightPurpleBase(0.14),
+      300: lightPurpleBase(0.22),
+      400: lightPurpleBase(0.36),
+      500: LIGHT_PURPLE,
+      600: LIGHT_PURPLE_HOVER,
+      700: lightPurpleHover(0.8),
+      800: lightPurpleHover(0.9),
     },
-    
-    
+
+
     semantic: {
-      success: '#5b9a6f',          
-      successBg: 'rgba(91, 154, 111, 0.08)',
-      successBorder: 'rgba(91, 154, 111, 0.25)',
-      
-      warning: '#c08c42',          
-      warningBg: 'rgba(192, 140, 66, 0.08)',
-      warningBorder: 'rgba(192, 140, 66, 0.25)',
-      
-      error: '#c26565',            
-      errorBg: 'rgba(194, 101, 101, 0.08)',
-      errorBorder: 'rgba(194, 101, 101, 0.25)',
-      
-      info: '#64748b',
-      infoBg: 'rgba(100, 116, 139, 0.1)',
-      infoBorder: 'rgba(100, 116, 139, 0.28)',
-      
-      
-      highlight: '#b8863a',
-      highlightBg: 'rgba(184, 134, 58, 0.12)',
+      success: LIGHT_SUCCESS,
+      successBg: lightSuccess(0.08),
+      successBorder: lightSuccess(0.25),
+
+      warning: LIGHT_WARNING,
+      warningBg: lightWarning(0.08),
+      warningBorder: lightWarning(0.25),
+
+      error: LIGHT_ERROR,
+      errorBg: lightError(0.08),
+      errorBorder: lightError(0.25),
+
+      info: LIGHT_ACCENT,
+      infoBg: lightAccent(0.1),
+      infoBorder: lightAccent(0.28),
+
+
+      highlight: LIGHT_HIGHLIGHT,
+      highlightBg: rgbaFromHex(LIGHT_HIGHLIGHT, 0.12),
     },
-    
-    
+
+
     border: {
-      subtle: 'rgba(100, 116, 139, 0.15)',     
-      base: 'rgba(100, 116, 139, 0.22)',       
-      medium: 'rgba(100, 116, 139, 0.32)',     
-      strong: 'rgba(100, 116, 139, 0.42)',     
-      prominent: 'rgba(100, 116, 139, 0.52)',  
+      subtle: lightAccent(0.15),
+      base: lightAccent(0.22),
+      medium: lightAccent(0.32),
+      strong: lightAccent(0.42),
+      prominent: lightAccent(0.52),
     },
-    
-    
+
+
     element: {
-      subtle: 'rgba(15, 23, 42, 0.045)',
-      soft: 'rgba(15, 23, 42, 0.065)',
-      base: 'rgba(15, 23, 42, 0.09)',
-      medium: 'rgba(15, 23, 42, 0.12)',
-      strong: 'rgba(15, 23, 42, 0.16)',
-      elevated: 'rgba(255, 255, 255, 0.92)',
+      subtle: lightInk(0.045),
+      soft: lightInk(0.065),
+      base: lightInk(0.09),
+      medium: lightInk(0.12),
+      strong: lightInk(0.16),
+      elevated: rgbaFromHex(STATIC_WHITE, 0.92),
     },
-    
-    
+
+
     git: createGitColors({
-      branch: 'rgb(71, 85, 105)',
-      branchBg: 'rgba(71, 85, 105, 0.1)',
-      changes: 'rgb(192, 140, 66)',            
-      changesBg: 'rgba(192, 140, 66, 0.08)',
-      added: 'rgb(91, 154, 111)',              
-      addedBg: 'rgba(91, 154, 111, 0.08)',
-      deleted: 'rgb(194, 101, 101)',           
-      deletedBg: 'rgba(194, 101, 101, 0.08)',
+      branch: rgbFromHex(LIGHT_ACCENT_HOVER),
+      branchBg: lightAccentHover(0.1),
+      changes: rgbFromHex(LIGHT_WARNING),
+      changesBg: lightWarning(0.08),
+      added: rgbFromHex(LIGHT_SUCCESS),
+      addedBg: lightSuccess(0.08),
+      deleted: rgbFromHex(LIGHT_ERROR),
+      deletedBg: lightError(0.08),
     }),
   },
-  
-  
+
+
   effects: {
     shadow: {
-      
-      xs: '0 1px 2px rgba(71, 85, 105, 0.06)',
-      sm: '0 2px 4px rgba(71, 85, 105, 0.08)',
-      base: '0 4px 8px rgba(71, 85, 105, 0.1)',
-      lg: '0 8px 16px rgba(71, 85, 105, 0.12)',
-      xl: '0 12px 24px rgba(71, 85, 105, 0.14)',
-      '2xl': '0 16px 32px rgba(71, 85, 105, 0.16)',
+
+      xs: `0 1px 2px ${lightAccentHover(0.06)}`,
+      sm: `0 2px 4px ${lightAccentHover(0.08)}`,
+      base: `0 4px 8px ${lightAccentHover(0.1)}`,
+      lg: `0 8px 16px ${lightAccentHover(0.12)}`,
+      xl: `0 12px 24px ${lightAccentHover(0.14)}`,
+      '2xl': `0 16px 32px ${lightAccentHover(0.16)}`,
     },
-    
-    
+
+
     glow: {
-      blue: '0 8px 24px rgba(15, 23, 42, 0.08), 0 4px 12px rgba(15, 23, 42, 0.05), 0 2px 6px rgba(71, 85, 105, 0.04)',
-      purple: '0 8px 24px rgba(15, 23, 42, 0.07), 0 4px 12px rgba(100, 116, 139, 0.06), 0 2px 6px rgba(71, 85, 105, 0.04)',
-      mixed: '0 8px 24px rgba(15, 23, 42, 0.07), 0 4px 12px rgba(15, 23, 42, 0.05), 0 2px 6px rgba(71, 85, 105, 0.04)',
+      blue: `0 8px 24px ${lightInk(0.08)}, 0 4px 12px ${lightInk(0.05)}, 0 2px 6px ${lightAccentHover(0.04)}`,
+      purple: `0 8px 24px ${lightInk(0.07)}, 0 4px 12px ${lightAccent(0.06)}, 0 2px 6px ${lightAccentHover(0.04)}`,
+      mixed: `0 8px 24px ${lightInk(0.07)}, 0 4px 12px ${lightInk(0.05)}, 0 2px 6px ${lightAccentHover(0.04)}`,
     },
-    
+
     blur: {
       subtle: 'blur(4px) saturate(1.02)',
       base: 'blur(8px) saturate(1.05)',
@@ -150,11 +175,11 @@ export const bitfunLightTheme: ThemeConfig = {
       strong: 'blur(16px) saturate(1.10) brightness(1.02)',
       intense: 'blur(20px) saturate(1.12) brightness(1.03)',
     },
-    
+
     radius: createStandardRadius(),
-    
+
     spacing: createStandardSpacing(),
-    
+
     opacity: {
       disabled: 0.55,
       hover: 0.75,
@@ -162,8 +187,8 @@ export const bitfunLightTheme: ThemeConfig = {
       overlay: 0.35,
     },
   },
-  
-  
+
+
   motion: {
     duration: {
       instant: '0.1s',
@@ -172,106 +197,106 @@ export const bitfunLightTheme: ThemeConfig = {
       slow: '0.6s',
       lazy: '1s',
     },
-    
+
     easing: createStandardEasing(),
   },
-  
-  
+
+
   typography: createStandardTypography(),
-  
-  
+
+
   components: {
-    
+
     windowControls: createWindowControls({
       standard: {
-        dot: 'rgba(100, 116, 139, 0.5)',
-        dotShadow: '0 0 4px rgba(15, 23, 42, 0.12)',
-        hoverBg: 'rgba(15, 23, 42, 0.08)',
-        hoverColor: '#475569',
-        hoverBorder: 'rgba(100, 116, 139, 0.28)',
-        hoverShadow: '0 2px 8px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.6)',
+        dot: lightAccent(0.5),
+        dotShadow: `0 0 4px ${lightInk(0.12)}`,
+        hoverBg: lightInk(0.08),
+        hoverColor: LIGHT_ACCENT_HOVER,
+        hoverBorder: lightAccent(0.28),
+        hoverShadow: `0 2px 8px ${lightInk(0.08)}, inset 0 1px 0 ${rgbaFromHex(STATIC_WHITE, 0.6)}`,
       },
       close: {
-        dot: 'rgba(194, 101, 101, 0.55)',
-        dotShadow: '0 0 4px rgba(194, 101, 101, 0.2)',
-        hoverBg: 'rgba(194, 101, 101, 0.14)',
+        dot: lightError(0.55),
+        dotShadow: `0 0 4px ${lightError(0.2)}`,
+        hoverBg: lightError(0.14),
         hoverColor: '#a85555',
-        hoverBorder: 'rgba(194, 101, 101, 0.25)',
-        hoverShadow: '0 2px 8px rgba(194, 101, 101, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.6)',
+        hoverBorder: lightError(0.25),
+        hoverShadow: `0 2px 8px ${lightError(0.15)}, inset 0 1px 0 ${rgbaFromHex(STATIC_WHITE, 0.6)}`,
       },
       common: {
-        defaultColor: 'rgba(30, 41, 59, 0.95)',
-        defaultDot: 'rgba(100, 116, 139, 0.28)',
-        disabledDot: 'rgba(100, 116, 139, 0.15)',
-        flowGradient: 'linear-gradient(90deg, transparent, rgba(100, 116, 139, 0.06), rgba(100, 116, 139, 0.1), rgba(100, 116, 139, 0.06), transparent)',
+        defaultColor: rgbaFromHex(LIGHT_TEXT_PRIMARY, 0.95),
+        defaultDot: lightAccent(0.28),
+        disabledDot: lightAccent(0.15),
+        flowGradient: `linear-gradient(90deg, transparent, ${lightAccent(0.06)}, ${lightAccent(0.1)}, ${lightAccent(0.06)}, transparent)`,
       },
     }),
-    
+
     button: {
-      
+
       default: {
-        background: 'rgba(15, 23, 42, 0.07)',
-        color: '#475569',
+        background: lightInk(0.07),
+        color: LIGHT_ACCENT_HOVER,
         border: 'transparent',
         shadow: 'none',
       },
       hover: {
-        background: 'rgba(15, 23, 42, 0.11)',
-        color: '#334155',
+        background: lightInk(0.11),
+        color: LIGHT_TEXT_STRONG,
         border: 'transparent',
         shadow: 'none',
         transform: 'none',
       },
       active: {
-        background: 'rgba(15, 23, 42, 0.09)',
-        color: '#334155',
+        background: lightInk(0.09),
+        color: LIGHT_TEXT_STRONG,
         border: 'transparent',
         shadow: 'none',
         transform: 'none',
       },
-      
-      
+
+
       primary: {
         default: {
-          background: '#000000',
-          color: '#ffffff',
+          background: STATIC_BLACK,
+          color: STATIC_WHITE,
           border: 'transparent',
           shadow: 'none',
         },
         hover: {
           background: '#262626',
-          color: '#ffffff',
+          color: STATIC_WHITE,
           border: 'transparent',
           shadow: 'none',
           transform: 'none',
         },
         active: {
           background: '#1a1a1a',
-          color: '#ffffff',
+          color: STATIC_WHITE,
           border: 'transparent',
           shadow: 'none',
           transform: 'none',
         },
       },
-      
-      
+
+
       ghost: {
         default: {
           background: 'transparent',
-          color: '#475569',
+          color: LIGHT_ACCENT_HOVER,
           border: 'transparent',
           shadow: 'none',
         },
         hover: {
-          background: 'rgba(15, 23, 42, 0.08)',
-          color: '#334155',
+          background: lightInk(0.08),
+          color: LIGHT_TEXT_STRONG,
           border: 'transparent',
           shadow: 'none',
           transform: 'none',
         },
         active: {
-          background: 'rgba(15, 23, 42, 0.055)',
-          color: '#334155',
+          background: lightInk(0.055),
+          color: LIGHT_TEXT_STRONG,
           border: 'transparent',
           shadow: 'none',
           transform: 'none',
@@ -279,42 +304,42 @@ export const bitfunLightTheme: ThemeConfig = {
       },
     },
   },
-  
-  
+
+
   monaco: {
     base: 'vs',
     inherit: true,
     rules: [
-      { token: 'comment', foreground: '94a3b8', fontStyle: 'italic' },      
-      { token: 'keyword', foreground: '6b5a89' },                           
-      { token: 'string', foreground: '5b9a6f' },                            
-      { token: 'number', foreground: 'b8863a' },                            
+      { token: 'comment', foreground: '94a3b8', fontStyle: 'italic' },
+      { token: 'keyword', foreground: '6b5a89' },
+      { token: 'string', foreground: '5b9a6f' },
+      { token: 'number', foreground: 'b8863a' },
       { token: 'type', foreground: '475569' },
       { token: 'class', foreground: '475569' },
-      { token: 'function', foreground: '7c6b99' },                          
-      { token: 'variable', foreground: '475569' },                          
-      { token: 'constant', foreground: 'c08c42' },                          
-      { token: 'operator', foreground: '6b5a89' },                          
+      { token: 'function', foreground: '7c6b99' },
+      { token: 'variable', foreground: '475569' },
+      { token: 'constant', foreground: 'c08c42' },
+      { token: 'operator', foreground: '6b5a89' },
       { token: 'tag', foreground: '475569' },
-      { token: 'attribute.name', foreground: '7c6b99' },                    
-      { token: 'attribute.value', foreground: '5b9a6f' },                   
+      { token: 'attribute.name', foreground: '7c6b99' },
+      { token: 'attribute.value', foreground: '5b9a6f' },
     ],
     colors: {
-      background: '#f7f8fa',                      
-      foreground: '#1e293b',                      
-      lineHighlight: '#f0f4f8',                   
-      selection: 'rgba(15, 23, 42, 0.14)',
-      cursor: '#1e293b',
+      background: '#f7f8fa',
+      foreground: LIGHT_TEXT_PRIMARY,
+      lineHighlight: '#f0f4f8',
+      selection: lightInk(0.14),
+      cursor: LIGHT_TEXT_PRIMARY,
 
-      'editor.selectionBackground': 'rgba(15, 23, 42, 0.14)',
-      'editor.selectionForeground': '#1e293b',
-      'editor.inactiveSelectionBackground': 'rgba(15, 23, 42, 0.09)',
-      'editor.selectionHighlightBackground': 'rgba(15, 23, 42, 0.1)',
-      'editor.selectionHighlightBorder': 'rgba(15, 23, 42, 0.22)',
-      'editorCursor.foreground': '#1e293b',
+      'editor.selectionBackground': lightInk(0.14),
+      'editor.selectionForeground': LIGHT_TEXT_PRIMARY,
+      'editor.inactiveSelectionBackground': lightInk(0.09),
+      'editor.selectionHighlightBackground': lightInk(0.1),
+      'editor.selectionHighlightBorder': lightInk(0.22),
+      'editorCursor.foreground': LIGHT_TEXT_PRIMARY,
 
-      'editor.wordHighlightBackground': 'rgba(15, 23, 42, 0.07)',
-      'editor.wordHighlightStrongBackground': 'rgba(15, 23, 42, 0.11)',
+      'editor.wordHighlightBackground': lightInk(0.07),
+      'editor.wordHighlightStrongBackground': lightInk(0.11),
     },
   },
 };

@@ -10,6 +10,43 @@ import type {
 
 type WindowControlState = WindowControlsConfig['minimize'];
 
+export const STATIC_BLACK = '#000000';
+export const STATIC_WHITE = '#ffffff';
+
+function hexToRgbChannels(hex: string): [number, number, number] {
+  const raw = hex.trim().replace(/^#/, '');
+  const expanded = raw.length === 3
+    ? raw.split('').map(channel => channel + channel).join('')
+    : raw;
+  if (!/^[0-9a-f]{6}$/i.test(expanded)) {
+    throw new Error(`Invalid hex color: ${hex}`);
+  }
+  const value = Number.parseInt(expanded, 16);
+  return [
+    (value >> 16) & 255,
+    (value >> 8) & 255,
+    value & 255,
+  ];
+}
+
+export function rgbFromHex(hex: string): string {
+  const [r, g, b] = hexToRgbChannels(hex);
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
+export function rgbaFromHex(hex: string, alpha: number | string): string {
+  const [r, g, b] = hexToRgbChannels(hex);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+export function overlayBlack(alpha: number | string): string {
+  return rgbaFromHex(STATIC_BLACK, alpha);
+}
+
+export function overlayWhite(alpha: number | string): string {
+  return rgbaFromHex(STATIC_WHITE, alpha);
+}
+
 export function createWindowControls(config: {
   standard: WindowControlState;
   close: WindowControlState;
