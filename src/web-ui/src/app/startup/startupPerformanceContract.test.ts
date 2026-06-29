@@ -153,6 +153,8 @@ describe('startup performance contract', () => {
 
     expect(desktopThemeSource).toContain('__BITFUN_BOOTSTRAP_THEME_ID__');
     expect(desktopThemeSource).toContain('__BITFUN_BOOTSTRAP_THEME_SELECTION__');
+    expect(desktopThemeSource).toContain('include_str!("generated/startup_theme_bootstrap.json")');
+    expect(desktopThemeSource).not.toContain('"bitfun-slate" => Some(Self');
     expect(mainSource).toContain("before_render_step', 'theme_service_initialize'");
     expect(themeServiceSource).toContain('getBootstrapThemeSelection');
     expect(themeServiceSource).toContain('applyThemeSelection(bootstrapSelection, { persist: false })');

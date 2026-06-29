@@ -33,6 +33,16 @@ describe('mermaid theme fallback palette', () => {
     });
   });
 
+  it('merges indistinguishable Mermaid fallback colors without removing semantic roles', () => {
+    expect(getMermaidThemeFallback('light', 'nodeFillHover')).toBe('#e0e2e8');
+    expect(getMermaidThemeFallback('dark', 'edgeLabelBorderHover')).toBe(
+      getMermaidThemeFallback('dark', 'nodeStroke')
+    );
+    expect(getMermaidThemeFallback('dark', 'textMuted')).toBe(
+      getMermaidThemeFallback('dark', 'nodeStrokeHover')
+    );
+  });
+
   it('keeps every theme mode on the same fallback key contract', () => {
     const fallbackKeys = Object.keys(MERMAID_THEME_FALLBACKS.dark).sort();
 

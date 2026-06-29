@@ -54,19 +54,19 @@
       "max": 0
     },
     "generatedWidgetPayload.varUnique": {
-      "max": 326
+      "max": 307
     },
     "generatedWidgetPayload.occurrences": {
-      "max": 326
+      "max": 307
     },
     "generatedWidgetPayload.undefinedUnique": {
       "max": 0
     },
     "generatedWidgetPayload.compatibilityAliasUnique": {
-      "max": 64
+      "max": 45
     },
     "generatedWidgetPayload.compatibilityAliasOccurrences": {
-      "max": 64
+      "max": 45
     },
     "generatedWidgetPayload.compatibilityAliasFamilyUnique": {
       "max": 17
@@ -75,10 +75,10 @@
       "max": 17
     },
     "generatedWidgetPayload.externalOnlyCompatibilityUnique": {
-      "max": 81
+      "max": 62
     },
     "generatedWidgetPayload.externalOnlyCompatibilityOccurrences": {
-      "max": 81
+      "max": 62
     },
     "generatedWidgetPayload.missingCompatibilityCanonicalUnique": {
       "max": 0
@@ -108,7 +108,7 @@
       "max": 340
     },
     "colorScopes.exception.uniqueColors": {
-      "max": 273
+      "max": 270
     },
     "cssVarDefinitions.unresolvedRequiredUnique": {
       "max": 0
@@ -147,10 +147,10 @@
       "max": 0
     },
     "colorDomainNearPairs.indistinguishableTotal": {
-      "max": 6
+      "max": 3
     },
     "colorDomainNearPairs.nearTotal": {
-      "max": 377
+      "max": 375
     },
     "colorDomainNearPairs.themePreset.indistinguishableTotal": {
       "max": 3
@@ -183,10 +183,10 @@
       "max": 6
     },
     "colorDomainNearPairs.mermaid.indistinguishableTotal": {
-      "max": 3
+      "max": 0
     },
     "colorDomainNearPairs.mermaid.nearTotal": {
-      "max": 32
+      "max": 30
     },
     "colorDomainNearPairs.editor.indistinguishableTotal": {
       "max": 0
@@ -294,10 +294,10 @@
       "max": 0
     },
     "colorDomainScopes.mermaid.occurrences": {
-      "max": 105
+      "max": 103
     },
     "colorDomainScopes.mermaid.uniqueColors": {
-      "max": 95
+      "max": 92
     }
   }
 }

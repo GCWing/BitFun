@@ -30,6 +30,9 @@ const WINDOWS_STARTUP_MAXIMIZE_SHOW_WAIT_POLL: Duration = Duration::from_millis(
 static AGENT_COMPANION_WINDOW_OPS: OnceLock<tokio::sync::Mutex<()>> = OnceLock::new();
 static AGENT_COMPANION_WINDOW_LAST_POSITION: OnceLock<RwLock<Option<tauri::LogicalPosition<f64>>>> =
     OnceLock::new();
+static STARTUP_THEME_BOOTSTRAP_MANIFEST: OnceLock<StartupThemeBootstrapManifest> = OnceLock::new();
+
+const STARTUP_THEME_BOOTSTRAP_JSON: &str = include_str!("generated/startup_theme_bootstrap.json");
 
 #[cfg(target_os = "windows")]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -209,6 +212,44 @@ pub struct ThemeConfig {
     pub accent_color: String,
 }
 
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct StartupThemeBootstrapManifest {
+    version: u8,
+    default_light_theme_id: String,
+    default_dark_theme_id: String,
+    themes: Vec<StartupThemeBootstrapTheme>,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct StartupThemeBootstrapTheme {
+    id: String,
+    bg_primary: String,
+    bg_secondary: String,
+    bg_scene: String,
+    is_light: bool,
+    text_primary: String,
+    text_muted: String,
+    accent_color: String,
+}
+
+impl StartupThemeBootstrapTheme {
+    fn to_theme_config(&self, selection_id: Option<String>) -> ThemeConfig {
+        ThemeConfig {
+            id: self.id.clone(),
+            selection_id,
+            bg_primary: self.bg_primary.clone(),
+            bg_secondary: self.bg_secondary.clone(),
+            bg_scene: self.bg_scene.clone(),
+            is_light: self.is_light,
+            text_primary: self.text_primary.clone(),
+            text_muted: self.text_muted.clone(),
+            accent_color: self.accent_color.clone(),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 struct StartupBootstrapConfig {
     theme: ThemeConfig,
@@ -221,17 +262,11 @@ const MAX_BOOTSTRAP_WORKSPACE_STATE_JSON_BYTES: usize = 64 * 1024;
 
 impl Default for ThemeConfig {
     fn default() -> Self {
-        let mut theme = Self::get_builtin_theme("bitfun-light").unwrap_or_else(|| Self {
-            id: "bitfun-light".to_string(),
-            selection_id: None,
-            bg_primary: "#f3f3f5".to_string(),
-            bg_secondary: "#ffffff".to_string(),
-            bg_scene: "#ffffff".to_string(),
-            is_light: true,
-            text_primary: "#1e293b".to_string(),
-            text_muted: "#64748b".to_string(),
-            accent_color: "#64748b".to_string(),
-        });
+        let default_light_theme_id = Self::startup_theme_bootstrap_manifest()
+            .default_light_theme_id
+            .as_str();
+        let mut theme = Self::get_builtin_theme(default_light_theme_id)
+            .expect("startup theme bootstrap manifest must include the default light theme");
         theme.selection_id = None;
         theme
     }
@@ -239,97 +274,24 @@ impl Default for ThemeConfig {
 
 impl ThemeConfig {
     pub fn get_builtin_theme(theme_id: &str) -> Option<Self> {
-        match theme_id {
-            "bitfun-slate" => Some(Self {
-                id: theme_id.to_string(),
-                selection_id: Some(theme_id.to_string()),
-                bg_primary: "#1a1c1e".to_string(),
-                bg_secondary: "#1a1c1e".to_string(),
-                bg_scene: "#1d2023".to_string(),
-                is_light: false,
-                text_primary: "#e4e6e8".to_string(),
-                text_muted: "#8a8d92".to_string(),
-                accent_color: "#6b9bd5".to_string(),
-            }),
-            "bitfun-dark" => Some(Self {
-                id: theme_id.to_string(),
-                selection_id: Some(theme_id.to_string()),
-                bg_primary: "#121214".to_string(),
-                bg_secondary: "#18181a".to_string(),
-                bg_scene: "#16161a".to_string(),
-                is_light: false,
-                text_primary: "#e8e8e8".to_string(),
-                text_muted: "rgba(255, 255, 255, 0.4)".to_string(),
-                accent_color: "#60a5fa".to_string(),
-            }),
-            "bitfun-midnight" => Some(Self {
-                id: theme_id.to_string(),
-                selection_id: Some(theme_id.to_string()),
-                bg_primary: "#2b2d30".to_string(),
-                bg_secondary: "#1e1f22".to_string(),
-                bg_scene: "#27292c".to_string(),
-                is_light: false,
-                text_primary: "#bcbec4".to_string(),
-                text_muted: "rgba(255, 255, 255, 0.4)".to_string(),
-                accent_color: "#6c9eff".to_string(),
-            }),
-            "bitfun-cyber" => Some(Self {
-                id: theme_id.to_string(),
-                selection_id: Some(theme_id.to_string()),
-                bg_primary: "#101010".to_string(),
-                bg_secondary: "#151515".to_string(),
-                bg_scene: "#141414".to_string(),
-                is_light: false,
-                text_primary: "#e0f2ff".to_string(),
-                text_muted: "rgba(255, 255, 255, 0.4)".to_string(),
-                accent_color: "#00e6ff".to_string(),
-            }),
-            "bitfun-tokyo-night" => Some(Self {
-                id: theme_id.to_string(),
-                selection_id: Some(theme_id.to_string()),
-                bg_primary: "#1a1b26".to_string(),
-                bg_secondary: "#16161e".to_string(),
-                bg_scene: "#1a1b26".to_string(),
-                is_light: false,
-                text_primary: "#c0caf5".to_string(),
-                text_muted: "rgba(255, 255, 255, 0.4)".to_string(),
-                accent_color: "#7aa2f7".to_string(),
-            }),
-            "bitfun-china-night" => Some(Self {
-                id: theme_id.to_string(),
-                selection_id: Some(theme_id.to_string()),
-                bg_primary: "#1a1814".to_string(),
-                bg_secondary: "#141210".to_string(),
-                bg_scene: "#1e1c17".to_string(),
-                is_light: false,
-                text_primary: "#e8e6e1".to_string(),
-                text_muted: "rgba(255, 255, 255, 0.4)".to_string(),
-                accent_color: "#c4a35a".to_string(),
-            }),
-            "bitfun-light" => Some(Self {
-                id: theme_id.to_string(),
-                selection_id: Some(theme_id.to_string()),
-                bg_primary: "#f3f3f5".to_string(),
-                bg_secondary: "#ffffff".to_string(),
-                bg_scene: "#ffffff".to_string(),
-                is_light: true,
-                text_primary: "#1e293b".to_string(),
-                text_muted: "#64748b".to_string(),
-                accent_color: "#64748b".to_string(),
-            }),
-            "bitfun-china-style" => Some(Self {
-                id: theme_id.to_string(),
-                selection_id: Some(theme_id.to_string()),
-                bg_primary: "#faf8f0".to_string(),
-                bg_secondary: "#f5f3e8".to_string(),
-                bg_scene: "#fdfcf6".to_string(),
-                is_light: true,
-                text_primary: "#1a1a1a".to_string(),
-                text_muted: "rgba(0, 0, 0, 0.5)".to_string(),
-                accent_color: "#2e5e8a".to_string(),
-            }),
-            _ => None,
-        }
+        Self::startup_theme_bootstrap_manifest()
+            .themes
+            .iter()
+            .find(|theme| theme.id == theme_id)
+            .map(|theme| theme.to_theme_config(Some(theme_id.to_string())))
+    }
+
+    fn startup_theme_bootstrap_manifest() -> &'static StartupThemeBootstrapManifest {
+        STARTUP_THEME_BOOTSTRAP_MANIFEST.get_or_init(|| {
+            let manifest: StartupThemeBootstrapManifest =
+                serde_json::from_str(STARTUP_THEME_BOOTSTRAP_JSON)
+                    .expect("startup theme bootstrap manifest must be valid JSON");
+            assert_eq!(
+                manifest.version, 1,
+                "startup theme bootstrap manifest version is unsupported"
+            );
+            manifest
+        })
     }
 
     fn load_startup_bootstrap_config() -> StartupBootstrapConfig {
@@ -417,9 +379,10 @@ impl ThemeConfig {
     /// `system` follows OS light/dark (aligned with web-ui `getSystemPreferredDefaultThemeId`).
     fn resolve_builtin_theme_id(theme_id: &str) -> &str {
         if theme_id == "system" {
+            let manifest = Self::startup_theme_bootstrap_manifest();
             return match dark_light::detect() {
-                Mode::Dark => "bitfun-dark",
-                Mode::Light | Mode::Default => "bitfun-light",
+                Mode::Dark => manifest.default_dark_theme_id.as_str(),
+                Mode::Light | Mode::Default => manifest.default_light_theme_id.as_str(),
             };
         }
         theme_id

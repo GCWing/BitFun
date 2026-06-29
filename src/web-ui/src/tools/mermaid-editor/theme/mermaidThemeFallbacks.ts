@@ -8,12 +8,13 @@ const DARK_NODE_TEXT = '#e0e2e8';
 const DARK_NODE_STROKE = '#5a5e6a';
 const DARK_NODE_BORDER = '#4a4e58';
 const DARK_NODE_STROKE_SUBTLE = '#3a3e48';
+const DARK_NODE_STROKE_HOVER = '#6a6e7a';
 const DARK_CLUSTER_TEXT = '#9a9ea8';
 const DARK_INFO = '#78a8d8';
 const DARK_ERROR = '#e87878';
 
 const LIGHT_NODE_FILL = '#e8eaef';
-const LIGHT_NODE_FILL_HOVER = '#dfe2e8';
+const LIGHT_NODE_FILL_HOVER = '#e0e2e8';
 const LIGHT_NODE_STROKE = '#9ca3af';
 const LIGHT_NODE_STROKE_MUTED = '#d1d5db';
 const LIGHT_NODE_STROKE_HOVER = '#6b7280';
@@ -37,15 +38,15 @@ export const MERMAID_THEME_FALLBACKS = {
     nodeBorder: DARK_NODE_BORDER,
     nodeStrokeMuted: DARK_NODE_BORDER,
     nodeStrokeSubtle: DARK_NODE_STROKE_SUBTLE,
-    nodeStrokeHover: '#6a6e7a',
+    nodeStrokeHover: DARK_NODE_STROKE_HOVER,
     nodeStrokeHoverStrong: '#8a8e9a',
     edgeStroke: DARK_NODE_STROKE,
-    edgeLabelBorderHover: '#5a5e68',
+    edgeLabelBorderHover: DARK_NODE_STROKE,
     clusterFill: '#16181c',
     clusterFillRuntime: 'rgba(24, 26, 30, 0.6)',
     clusterFillHover: 'rgba(34, 36, 42, 0.7)',
     clusterText: DARK_CLUSTER_TEXT,
-    textMuted: '#6a6e78',
+    textMuted: DARK_NODE_STROKE_HOVER,
     arrow: '#7a7e8a',
     edgeLabelBg: '#1a1c20',
     edgeLabelBgStrong: DARK_NODE_FILL_HOVER,
