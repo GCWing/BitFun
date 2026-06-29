@@ -80,7 +80,7 @@ export const SnapshotCard: React.FC<SnapshotCardProps> = ({
     return (
       <div 
         className={`snapshot-card snapshot-card--compact snapshot-card--${snapshotStatus} status-${status}`}
-        style={{ '--operation-color': operationInfo.color } as React.CSSProperties}
+        style={{ '--snapshot-card-operation-color': operationInfo.color } as React.CSSProperties}
         onClick={onViewDetails}
       >
         <FileText className="snapshot-card__icon" size={14} />

@@ -142,7 +142,7 @@
   }
   
   .command-empty {
-    color: #e06c75;
+    color: rgb(var(--tool-command-empty-rgb));
     font-style: italic;
   }
 }

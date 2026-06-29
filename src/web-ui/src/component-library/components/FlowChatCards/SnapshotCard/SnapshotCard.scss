@@ -6,7 +6,7 @@
 
 
 .snapshot-card {
-  --operation-color: #{tokens.$color-accent-500};
+  --snapshot-card-operation-color: #{tokens.$color-accent-500};
 
   @include shared.liquid-card-base;
   font-family: tokens.$font-family-mono;
@@ -83,7 +83,7 @@
 
 .snapshot-card__icon {
   flex-shrink: 0;
-  color: var(--operation-color);
+  color: var(--snapshot-card-operation-color);
   transition: all tokens.$motion-base;
 }
 

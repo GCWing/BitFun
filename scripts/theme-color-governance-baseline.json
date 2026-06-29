@@ -41,6 +41,18 @@
     "compatibilityAliases.missingCanonicalUnique": {
       "max": 0
     },
+    "surfaceTokenRenames.registeredUnique": {
+      "max": 9
+    },
+    "surfaceTokenRenames.activeUnique": {
+      "max": 0
+    },
+    "surfaceTokenRenames.activeOccurrences": {
+      "max": 0
+    },
+    "surfaceTokenRenames.missingCanonicalUnique": {
+      "max": 0
+    },
     "generatedWidgetPayload.varUnique": {
       "max": 326
     },
@@ -90,7 +102,7 @@
       "max": 697
     },
     "colorScopes.exception.uniqueColors": {
-      "max": 274
+      "max": 273
     },
     "cssVarDefinitions.unresolvedRequiredUnique": {
       "max": 0
@@ -159,7 +171,7 @@
       "max": 18
     },
     "colorDomainScopes.terminal.occurrences": {
-      "max": 38
+      "max": 37
     },
     "colorDomainScopes.debugOverlay.occurrences": {
       "max": 0

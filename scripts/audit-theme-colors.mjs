@@ -18,6 +18,7 @@ import {
   REGISTERED_DYNAMIC_VAR_PREFIXES,
   RUNTIME_CONTRACT_VAR_DEFINITION_PATH_PARTS,
   STATIC_CONTRACT_VAR_DEFINITION_PATH_PARTS,
+  SURFACE_TOKEN_RENAME_CONTRACTS,
   TOKEN_COMPATIBILITY_ALIAS_CONTRACTS,
   TOKEN_COMPATIBILITY_ALIAS_FAMILY_CONTRACTS,
   TOKEN_ALIAS_SOURCE_PATH_PARTS,
@@ -1115,6 +1116,35 @@ function audit(options) {
     ))
     .map(([key, scope]) => ({ key, count: scope.occurrences }))
     .sort((a, b) => a.key.localeCompare(b.key));
+  const surfaceTokenRenameEntries = SURFACE_TOKEN_RENAME_CONTRACTS
+    .map(contract => {
+      const usageCount = varUsageCounts.get(contract.key) ?? 0;
+      const definitionCount = varDefinitionCounts.get(contract.key) ?? 0;
+      const files = new Set([
+        ...Array.from(varUsageFiles.get(contract.key) ?? []),
+        ...Array.from(varDefinitionFiles.get(contract.key) ?? []),
+      ]);
+      return {
+        key: contract.key,
+        canonical: contract.canonical,
+        usageCount,
+        definitionCount,
+        count: usageCount + definitionCount,
+        files: Array.from(files).sort().slice(0, 5),
+      };
+    })
+    .filter(entry => entry.count > 0)
+    .sort((a, b) => b.count - a.count || a.key.localeCompare(b.key));
+  const missingSurfaceTokenRenameCanonicalEntries = checksFullThemeSourceRoot
+    ? SURFACE_TOKEN_RENAME_CONTRACTS
+      .map(contract => ({
+        key: contract.key,
+        canonical: contract.canonical,
+        canonicalDefinitionKind: getDefinitionKind(contract.canonical),
+      }))
+      .filter(entry => !entry.canonicalDefinitionKind)
+      .sort((a, b) => a.key.localeCompare(b.key))
+    : [];
 
   return {
     root: normalizePath(path.relative(cwd, root)) || '.',
@@ -1213,6 +1243,14 @@ function audit(options) {
     missingColorDomainContracts: missingColorDomainContractEntries,
     staleColorDomainContracts: staleColorDomainContractEntries,
     activeUncontractedColorDomains: activeUncontractedColorDomainEntries,
+    surfaceTokenRenames: {
+      registeredUnique: SURFACE_TOKEN_RENAME_CONTRACTS.length,
+      activeUnique: surfaceTokenRenameEntries.length,
+      activeOccurrences: surfaceTokenRenameEntries.reduce((total, entry) => total + entry.count, 0),
+      missingCanonicalUnique: missingSurfaceTokenRenameCanonicalEntries.length,
+      active: surfaceTokenRenameEntries.slice(0, REPORT_ROW_LIMIT),
+      missingCanonicals: missingSurfaceTokenRenameCanonicalEntries.slice(0, REPORT_ROW_LIMIT),
+    },
     tokenAliasLiterals: {
       occurrences: sumMapValues(tokenAliasLiteralCounts),
       uniqueColors: tokenAliasLiteralCounts.size,
@@ -1300,6 +1338,12 @@ function printText(report) {
     `missing=${report.colorDomainContracts.missingRegisteredUnique}, ` +
     `stale=${report.colorDomainContracts.staleRegisteredUnique}, ` +
     `activeUncontracted=${report.colorDomainContracts.activeUncontractedUnique}`
+  );
+  console.log(
+    `Surface token renames: registered=${report.surfaceTokenRenames.registeredUnique}, ` +
+    `active=${report.surfaceTokenRenames.activeUnique}, ` +
+    `occurrences=${report.surfaceTokenRenames.activeOccurrences}, ` +
+    `missingCanonicals=${report.surfaceTokenRenames.missingCanonicalUnique}`
   );
 
   console.log('\nTop colors:');
@@ -1445,6 +1489,28 @@ function printText(report) {
     ...report.activeUncontractedColorDomains,
   ];
   console.log(printRows(colorDomainGapRows.slice(0, 10)));
+
+  console.log('\nSurface token rename debt:');
+  if (report.surfaceTokenRenames.active.length === 0) {
+    console.log('  none');
+  } else {
+    for (const row of report.surfaceTokenRenames.active.slice(0, 10)) {
+      console.log(
+        `  ${row.key} -> ${row.canonical}  ` +
+        `count=${row.count}  definitions=${row.definitionCount}  usages=${row.usageCount}  ` +
+        `files=${row.files.join(', ')}`
+      );
+    }
+  }
+
+  console.log('\nSurface token rename missing canonicals:');
+  if (report.surfaceTokenRenames.missingCanonicals.length === 0) {
+    console.log('  none');
+  } else {
+    for (const row of report.surfaceTokenRenames.missingCanonicals.slice(0, 10)) {
+      console.log(`  ${row.key} -> ${row.canonical}`);
+    }
+  }
 
   console.log('\nTop token-equivalent app literals:');
   if (report.tokenAliasLiterals.top.length === 0) {

@@ -1,9 +1,6 @@
 @use '../../../../component-library/styles/tokens.scss' as *;
 
 .m-editor-tiptap {
-  --m-editor-highlight-rgb: 255, 213, 79;
-  --m-editor-highlight-border-rgb: 255, 193, 7;
-
   position: relative;
   width: 100%;
   height: 100%;
@@ -38,7 +35,7 @@
       }
 
       &.m-editor-tiptap-block-highlighted {
-        background: rgba(var(--m-editor-highlight-rgb), 0.15);
+        background: rgba(var(--markdown-editor-highlight-rgb), 0.15);
       }
     }
 
@@ -213,7 +210,7 @@
       }
 
       &[data-block-id].m-editor-tiptap-block-highlighted {
-        border-top-color: rgba(var(--m-editor-highlight-border-rgb), 0.55);
+        border-top-color: rgba(var(--markdown-editor-highlight-border-rgb), 0.55);
       }
     }
 

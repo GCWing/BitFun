@@ -3,7 +3,7 @@
  */
 
 .scroll-anchor {
-  --delay: 0s;
+  --flowchat-scroll-anchor-delay: 0s;
 
   position: absolute;
   right: 0;
@@ -56,7 +56,7 @@
     transition: all 0.15s ease;
 
     animation: anchorFade 0.3s ease backwards;
-    animation-delay: var(--delay);
+    animation-delay: var(--flowchat-scroll-anchor-delay);
 
     &::before {
       content: '';

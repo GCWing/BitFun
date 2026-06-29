@@ -101,7 +101,7 @@ export const BaseToolCard: React.FC<BaseToolCardProps> = ({
     return (
       <div 
         className={`base-tool-card base-tool-card--compact base-tool-card--${currentStatus} ${className}`}
-        style={{ '--primary-color': primaryColor } as React.CSSProperties}
+        style={{ '--base-tool-card-accent-color': primaryColor } as React.CSSProperties}
       >
         <div className="base-tool-card__compact-content">
           {typeof icon === 'string' ? (
@@ -120,7 +120,7 @@ export const BaseToolCard: React.FC<BaseToolCardProps> = ({
   return (
     <div 
       className={`base-tool-card base-tool-card--${displayMode} base-tool-card--${currentStatus} ${className}`}
-      style={{ '--primary-color': primaryColor } as React.CSSProperties}
+      style={{ '--base-tool-card-accent-color': primaryColor } as React.CSSProperties}
     >
       <div className="base-tool-card__header">
         <div className="base-tool-card__info">

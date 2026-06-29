@@ -129,7 +129,7 @@
       "formFactors": ["desktop", "narrow"],
       "themes": ["dark", "light", "system"],
       "states": ["default", "code", "table", "link", "diagram", "error"],
-      "tokenFamilies": ["--markdown-*", "--primary-color", "Mermaid palette", "Prism palette"],
+      "tokenFamilies": ["--markdown-*", "--markdown-primary-color", "Mermaid palette", "Prism palette"],
       "evidence": [
         {
           "type": "theme-color-audit",
@@ -142,7 +142,7 @@
         }
       ],
       "risks": [
-        "--primary-color is an embedded-content override and must not be removed as a normal fallback.",
+        "--markdown-primary-color is the embedded-content accent override and must remain distinct from generic app primary aliases.",
         "Mermaid graph roles do not map directly to app status colors."
       ]
     },

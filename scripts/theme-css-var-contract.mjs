@@ -676,6 +676,63 @@ export const TOKEN_COMPATIBILITY_ALIAS_FAMILY_CONTRACTS = [
 
 export const FALLBACK_VAR_CONTRACTS = [];
 
+export const SURFACE_TOKEN_RENAME_CONTRACTS = [
+  {
+    key: '--primary-color',
+    canonical: '--base-tool-card-accent-color',
+    owner: 'src/web-ui/src/component-library/components/FlowChatCards/BaseToolCard',
+    reason: 'BaseToolCard used a generic local primary color key; the explicit component key prevents accidental global primary-token coupling.',
+  },
+  {
+    key: '--operation-color',
+    canonical: '--snapshot-card-operation-color',
+    owner: 'src/web-ui/src/component-library/components/FlowChatCards/SnapshotCard',
+    reason: 'Snapshot operation color is a card-local role and should not look like a reusable operation namespace for other surfaces.',
+  },
+  {
+    key: '--delay',
+    canonical: '--flowchat-scroll-anchor-delay',
+    owner: 'src/web-ui/src/flow_chat/components/modern/ScrollAnchor',
+    reason: 'ScrollAnchor animation delay is a Flow Chat runtime input; the generic key is too easy to collide with unrelated animation code.',
+  },
+  {
+    key: '--um-failed-fs',
+    canonical: '--user-message-failed-font-size',
+    owner: 'src/web-ui/src/flow_chat/components/modern/UserMessageItem.scss',
+    reason: 'UserMessage failed-state sizing should use readable Flow Chat surface names instead of an abbreviated local key family.',
+  },
+  {
+    key: '--um-failed-lh',
+    canonical: '--user-message-failed-line-height',
+    owner: 'src/web-ui/src/flow_chat/components/modern/UserMessageItem.scss',
+    reason: 'UserMessage failed-state line-height should use readable Flow Chat surface names instead of an abbreviated local key family.',
+  },
+  {
+    key: '--um-failed-line-box',
+    canonical: '--user-message-failed-line-box',
+    owner: 'src/web-ui/src/flow_chat/components/modern/UserMessageItem.scss',
+    reason: 'UserMessage failed-state line box should use readable Flow Chat surface names instead of an abbreviated local key family.',
+  },
+  {
+    key: '--tool-command-preview-empty-rgb',
+    canonical: '--tool-command-empty-rgb',
+    owner: 'src/web-ui/src/flow_chat/tool-cards/ToolCommandPreview.scss; src/web-ui/src/flow_chat/tool-cards/TerminalToolCard.scss',
+    reason: 'Empty command color is shared by command preview and terminal command rendering, so it needs one tool-command token.',
+  },
+  {
+    key: '--m-editor-highlight-rgb',
+    canonical: '--markdown-editor-highlight-rgb',
+    owner: 'src/web-ui/src/tools/editor/meditor/components/TiptapEditor.scss',
+    reason: 'Markdown editor highlight color should use the shared markdown-editor namespace instead of the abbreviated meditor local key.',
+  },
+  {
+    key: '--m-editor-highlight-border-rgb',
+    canonical: '--markdown-editor-highlight-border-rgb',
+    owner: 'src/web-ui/src/tools/editor/meditor/components/TiptapEditor.scss',
+    reason: 'Markdown editor highlight border color should use the shared markdown-editor namespace instead of the abbreviated meditor local key.',
+  },
+];
+
 export const DYNAMIC_VAR_FAMILY_CONTRACTS = [
   {
     prefix: '--blur-',

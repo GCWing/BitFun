@@ -5,8 +5,8 @@
 @use '../shared-styles' as shared;
 
 .base-tool-card {
-  --primary-color: #{tokens.$color-accent-600};
-  --markdown-primary-color: var(--primary-color);
+  --base-tool-card-accent-color: #{tokens.$color-accent-600};
+  --markdown-primary-color: var(--base-tool-card-accent-color);
 
   @include shared.liquid-card-base;
   @include shared.card-light-flow;

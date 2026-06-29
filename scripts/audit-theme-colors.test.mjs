@@ -11,6 +11,7 @@ import {
   COLOR_DOMAIN_RULES,
   DYNAMIC_VAR_FAMILY_CONTRACTS,
   FALLBACK_VAR_CONTRACTS,
+  SURFACE_TOKEN_RENAME_CONTRACTS,
   TOKEN_COMPATIBILITY_ALIAS_CONTRACTS,
   TOKEN_COMPATIBILITY_ALIAS_FAMILY_CONTRACTS,
 } from './theme-css-var-contract.mjs';
@@ -122,6 +123,20 @@ test('theme CSS var contract registry is explicit and non-overlapping', () => {
     assert.ok(contract.reason.trim().length >= 30, `${contract.key} must explain why fallback is intentional`);
     assert.ok(contract.boundary.trim().length >= 10, `${contract.key} must classify the fallback boundary`);
   }
+
+  const surfaceRenameKeys = new Set(SURFACE_TOKEN_RENAME_CONTRACTS.map(contract => contract.key));
+  assert.equal(
+    surfaceRenameKeys.size,
+    SURFACE_TOKEN_RENAME_CONTRACTS.length,
+    'surface token rename contracts must be unique',
+  );
+  for (const contract of SURFACE_TOKEN_RENAME_CONTRACTS) {
+    assert.match(contract.key, /^--[a-z0-9-]+$/);
+    assert.match(contract.canonical, /^--[a-z0-9-]+$/);
+    assert.notEqual(contract.key, contract.canonical, `${contract.key} must point to a different canonical token`);
+    assert.ok(contract.owner.includes('src/web-ui/src/'), `${contract.key} must name a source owner`);
+    assert.ok(contract.reason.trim().length >= 30, `${contract.key} must explain the rename boundary`);
+  }
 });
 
 test('repository dynamic CSS var families match the registered contract', () => {
@@ -146,6 +161,9 @@ test('repository dynamic CSS var families match the registered contract', () => 
   assert.equal(report.colorDomainContracts.missingRegisteredUnique, 0);
   assert.equal(report.colorDomainContracts.staleRegisteredUnique, 0);
   assert.equal(report.colorDomainContracts.activeUncontractedUnique, 0);
+  assert.equal(report.surfaceTokenRenames.activeUnique, 0);
+  assert.equal(report.surfaceTokenRenames.activeOccurrences, 0);
+  assert.equal(report.surfaceTokenRenames.missingCanonicalUnique, 0);
 });
 
 test('theme color audit reports alias family usages whose exact canonical key is missing', (t) => {
@@ -217,6 +235,52 @@ test('theme color audit emits scoped machine-readable reports', (t) => {
   assert.equal(report.cssVarDefinitions.unregisteredDynamicFamilyUnique, 0);
   assert.equal(report.cssVarDefinitions.staleRegisteredDynamicFamilyUnique, 0);
   assert.equal(report.summary.baseline.enforced, false);
+});
+
+test('theme color audit reports deprecated surface-local token names', (t) => {
+  const { dir, sourceRoot } = createFixture({
+    'component-library/styles/tokens.scss': [
+      ':root {',
+      '  --base-tool-card-accent-color: #60a5fa;',
+      '  --snapshot-card-operation-color: #60a5fa;',
+      '}',
+      '',
+    ].join('\n'),
+    'component-library/components/FlowChatCards/BaseToolCard/BaseToolCard.scss': [
+      '.base-tool-card {',
+      '  --primary-color: var(--base-tool-card-accent-color);',
+      '  color: var(--primary-color);',
+      '}',
+      '',
+    ].join('\n'),
+    'component-library/components/FlowChatCards/SnapshotCard/SnapshotCard.tsx': [
+      "export const style = { '--operation-color': 'var(--snapshot-card-operation-color)' };",
+      '',
+    ].join('\n'),
+    'tools/editor/meditor/components/TiptapEditor.scss': [
+      '.m-editor-tiptap {',
+      '  --m-editor-highlight-rgb: var(--markdown-editor-highlight-rgb);',
+      '  background: rgba(var(--m-editor-highlight-rgb), 0.15);',
+      '}',
+      '',
+    ].join('\n'),
+  });
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  const result = runAudit(['--root', sourceRoot, '--json', '--no-baseline']);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+
+  const report = JSON.parse(result.stdout);
+  assert.equal(report.surfaceTokenRenames.activeUnique, 3);
+  assert.equal(report.surfaceTokenRenames.activeOccurrences, 5);
+  assert.deepEqual(
+    report.surfaceTokenRenames.active.map(row => [row.key, row.canonical, row.definitionCount, row.usageCount]),
+    [
+      ['--m-editor-highlight-rgb', '--markdown-editor-highlight-rgb', 1, 1],
+      ['--primary-color', '--base-tool-card-accent-color', 1, 1],
+      ['--operation-color', '--snapshot-card-operation-color', 1, 0],
+    ],
+  );
 });
 
 test('theme color audit reports compatibility alias usage without treating it as raw color debt', (t) => {
