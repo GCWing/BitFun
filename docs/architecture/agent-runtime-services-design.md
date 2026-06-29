@@ -1,16 +1,17 @@
-# Agent Runtime SDK 与 Runtime Services 设计
+# Agent Kernel、Runtime Services 与 Extension API 设计
 
-本文是 [`core-decomposition.md`](core-decomposition.md) 的开发设计文档，描述目标模块、
-接口、crate 内部结构和行为保护。本文只记录设计约束，不记录实现过程或验证记录。
+本文是 [`core-decomposition.md`](core-decomposition.md) 的开发设计文档，描述目标模块、接口、
+crate 内部结构和行为保护。本文只记录设计约束，不记录实现过程或验证记录。
 
 ## 1. 设计目标与边界
 
-- Agent Runtime SDK 可被 Desktop、CLI、Server、Remote、ACP 等产品形态嵌入。
-- Agent Runtime SDK 对外提供稳定、窄口径的 runtime API，而不是暴露 `bitfun-core`、产品命令路径或 concrete manager。
-- Runtime 不感知平台差异、工具实现差异和构建形态差异。
-- Tool 使用通用接口和 provider group 注册，不绑定底层实现。
-- 具体 adapter 与 service 实现由上层 Product Assembly 注入。
-- Harness 可扩展，新增 SDD 等工作流不侵入 runtime kernel。
+- Agent Kernel 可被 Desktop、CLI、Server、Remote、ACP、Web 和独立 SDK 形态嵌入。
+- Agent Kernel 对外提供稳定、窄口径的 Rust runtime API，而不是暴露 `bitfun-core`、产品命令路径或 concrete manager。
+- Product Feature 把内核能力组装为用户侧能力，可能同时触达 Rust 和 UI，但不拥有内核状态机或平台实现。
+- Product API 同时包含 Rust Kernel API 与 UI Extension Contract；OpenCode / ACP / plugin adapter 仅承担映射和注册。
+- Agent Kernel 不感知平台差异、工具实现差异、UI host 差异和构建形态差异。
+- Tool、Skill、MCP、Harness 和 extension 使用通用接口和 provider / contribution 注册，不绑定底层实现。
+- 具体 adapter、service、UI host 和 extension host 实现由上层 Product Assembly 注入。
 - 每个 crate 只依赖最小稳定集合，依赖方向可检查。
 
 ### 1.1 SDK 发布边界
@@ -37,93 +38,81 @@ Agent Runtime SDK 的发布边界以调用方能力为准，而不是以物理 c
 - 完整产品能力只能通过 Product Assembly 或兼容 `bitfun-core/product-full` 组装，不反向污染 SDK API。
 
 SDK 公共 API 以 `AGENT_RUNTIME_SDK_API_VERSION` 标记兼容边界。当前 API version 为 v1 preview：
-小版本更新可以增加可选 builder hook、DTO 字段或 registry 查询能力，但不得改变既有端口语义、
+小版本更新允许增加可选 builder hook、DTO 字段或 registry 查询能力，但不得改变既有端口语义、
 错误分类、session / turn 标识含义或默认 feature 依赖。任何需要调用方改写现有嵌入代码的变更，
 必须提升 API version 并提供兼容迁移路径。
 
 只要外部调用方仍必须导入 `bitfun-core`、启用 `product-full`、持有 concrete service manager、读取产品命令
 registry 或依赖全局 mutable state，SDK 发布边界就不成立。
 
-### 1.2 crate 划分
+### 1.2 内核与特性的分界
 
-```text
-bitfun-core-types
-bitfun-events
-bitfun-runtime-ports
-bitfun-runtime-services      # typed service bundle / capability availability
-tool-contracts              # Cargo package: bitfun-agent-tools
-tool-provider-groups        # Cargo package: bitfun-tool-packs
-tool-execution              # Cargo package: tool-runtime
-bitfun-agent-runtime         # agent kernel contracts and portable runtime decisions
-bitfun-harness               # workflow descriptor / provider / registry contracts
-bitfun-services-core
-bitfun-services-integrations
-bitfun-product-domains
-bitfun-acp
-bitfun-core
-apps/*
-```
+内核能力和产品特性必须分开判断：
 
-目标依赖：
+| 领域 | 属于内核 | 属于产品特性 |
+|---|---|---|
+| 长程任务 | task identity、queue、resume、cancel、event、persistence facts | `/goal` 命令、默认目标模板、UI 展示、设置项和产品文案 |
+| 权限 | permission facts、source identity、decision request、audit event | 桌面弹窗、CLI 提示、Web 状态投影和产品默认选项 |
+| 上下文 | session/workspace facts、context assembly contract、memory port | 具体入口的上下文展示、快捷命令和 feature 默认配置 |
+| 模型调度 | provider-neutral model route request、usage/cost/cache facts | 产品形态默认模型、设置入口和降级文案 |
+| Hook / Event | event schema、hook order、timeout、error policy | 哪些 feature 注册 hook、UI 如何展示 hook 结果 |
 
-```text
-apps/*
-  -> bitfun-core 或 Product Assembly crate
-  -> 按需依赖 bitfun-acp / transport / api-layer
+判断标准：
 
-Product Assembly
-  -> product capability packs
-  -> bitfun-agent-runtime
-  -> bitfun-harness
-  -> tool-contracts / tool-provider-groups / tool-execution
-  -> bitfun-runtime-services
-  -> adapters / services
+- 在 Desktop、CLI、Web、ACP 和 SDK 中都可复用，且不依赖 UI 或平台 concrete 的能力，优先归 Agent Kernel。
+- 会改变用户入口、命令、设置、UI contribution、默认策略或产品文案的能力，归 Product Feature。
+- 会接触 OS、network、terminal、filesystem、remote host、MCP server 或 AI provider concrete 的能力，归 Cross-platform
+  Adapter 或 protocol adapter。
+- 来自外部插件、OpenCode、ACP、external skill 或第三方 package 的能力，先进入 Extension Layer，再由 Product
+  Assembly 注册到 feature / kernel / execution 的稳定接口。
 
-Product Capability packs
-  -> bitfun-harness
-  -> bitfun-agent-runtime
-  -> tool-provider-groups
-  -> bitfun-product-domains
+### 1.3 Product API 与 Extension API
 
-bitfun-agent-runtime
-  -> bitfun-runtime-ports
-  -> bitfun-events
-  -> bitfun-agent-stream
-  -> tool-contracts
-  -> bitfun-runtime-services
+Product API 不应被定义为单一 Rust 后端 API。目标 API 分为三类：
 
-tool-execution
-  -> tool-contracts
-  -> bitfun-runtime-ports
-  -> bitfun-events
+| API | 作用 | 主要消费者 | 约束 |
+|---|---|---|---|
+| Rust Kernel API | 创建 runtime、提交 turn、消费 event、注册 ports/providers/hooks | Product Assembly、SDK、extension adapter | 不暴露 `bitfun-core/product-full` 或 concrete manager |
+| UI Extension Contract | 描述 UI contribution、命令入口、设置项、panel、状态投影 | Web UI、Desktop UI、插件适配层 | 只传 descriptor 和 stable DTO，不 import React/Tauri implementation |
+| Capability / Effect API | 声明 tool、MCP、plugin、hook、network、file、shell 等能力和副作用 | Extension Host、Security Boundary、Product Assembly | 未声明或超声明的能力默认受限 |
 
-bitfun-runtime-services
-  -> bitfun-runtime-ports
-  -> bitfun-core-types / bitfun-events（仅当 service DTO 或 event contract 需要时引入）
+OpenCode adapter、ACP bridge 和未来 plugin runtime 必须把外部 API 映射为上述三类 API，再由 Product Assembly
+统一注册。它们不能直接写 Agent Kernel 权威状态，也不能绕过 permission、sandbox、audit 或 UI host 的渲染边界。
 
-adapters / services
-  -> bitfun-runtime-ports
-  -> bitfun-core-types
-  -> 允许的 third-party 依赖
-  -> External Systems
-```
+Extension registration contract 属于稳定扩展契约，不属于 Product Assembly 的具体实现。Extension Host 和
+OpenCode adapter 只产出可注册的 descriptor、provider 和 contribution；Product Assembly 消费这些 contract 并完成
+产品形态内的注册，避免 Extension 层反向依赖 assembly crate。
+
+### 1.4 API 与 crate 边界
+
+本设计按 API owner 划分 crate，而不是按调用方或产品形态划分。一个 crate 只能拥有一类稳定边界；如果同一文件同时
+处理 UI 入口、产品策略、内核状态和 OS I/O，应拆到对应 owner。
+
+| API / owner | 主要 crate | 允许依赖 | 不允许依赖 | 对外承诺 |
+|---|---|---|---|---|
+| Product Assembly API | `src/crates/assembly/*` | feature packs、Kernel API、Execution API、Runtime Services、platform providers | Agent 内部状态机、具体 UI 组件实现作为下层依赖 | 按产品形态组装能力，输出 typed runtime parts |
+| Product Feature API | `product-capabilities`、`product-domains`、对应 UI contribution owner | Kernel API、Execution API、UI Extension Contract、domain contract | OS concrete、Tauri handle、permission 最终策略 | 把底层能力映射为用户功能和默认策略 |
+| Rust Kernel API | `agent-runtime`、`agent-stream`、`runtime-services`、`runtime-ports`、`events`、`core-types` | stable contracts、tool/harness registry、typed services | `bitfun-core`、Tauri、Web UI、ACP protocol、provider concrete | session / turn / event / permission / scheduler / context 等 SDK 候选接口 |
+| Execution API | `tool-contracts`、`tool-provider-groups`、`tool-execution`、`harness` | stable contracts、runtime ports、注入的 service ports | product registry、UI、具体 filesystem/Git/terminal/MCP client | tool、skills、MCP tool bridge、sandbox、harness 执行语义 |
+| Extension API | extension host / OpenCode / ACP adapter owner | Rust Kernel API contract、UI Extension Contract、Capability/Effect contract | Web UI React implementation、Tauri state、kernel 权威状态写入 | 把外部生态能力转换为 descriptor、provider 和 candidate effect |
+| Cross-platform Adapter API | `services/*`、`adapters/*`、app-local provider | runtime ports、core DTO、允许的第三方库 | Product Feature、Agent Kernel 状态机、UI command | 实现 filesystem、terminal、network、remote、Git、MCP transport、AI provider 等外部 I/O |
+| Stable Contract API | `contracts/*` | 低层无行为依赖或标准序列化依赖 | 上层 crate、concrete manager、UI rendering | DTO、event、port、capability/effect、permission、sandbox、audit、typed error |
 
 禁止依赖：
 
-- `bitfun-runtime-ports` -> `bitfun-core`
-- `tool-contracts` -> 具体 service crate
-- `tool-execution` -> 产品 registry / permission policy / 具体 tool 实现 crate
-- `bitfun-agent-runtime` -> `bitfun-core`
-- `bitfun-agent-runtime` -> Tauri / CLI / ACP protocol / Web UI
-- `bitfun-harness` -> 具体 filesystem / Git / terminal manager
+- `contracts/*` 或 `runtime-ports` 依赖 `bitfun-core`、assembly、apps、UI 或 concrete service。
+- `agent-runtime` 依赖 `bitfun-core`、Tauri、Web UI、ACP protocol、AI provider concrete、MCP client concrete 或 OS service manager。
+- `tool-contracts` 依赖具体 service crate；`tool-execution` 依赖产品 registry、产品 permission policy 或具体 UI。
+- `harness` 依赖具体 filesystem/Git/terminal manager；它只通过 ports 和 provider contract 获取能力。
+- Extension Host 依赖 Web UI React component implementation、Tauri app state 或 concrete core manager。
+- Product Feature 直接依赖 platform adapter concrete、全局 mutable runtime state 或外部系统 client。
 
-目标 crate 创建或继续扩展准入：
+接口暴露原则：
 
-- 只有当 owner 边界、旧路径兼容、focused tests、依赖收益和 boundary check 都能同时落地时，才创建新的目标 crate。
-- `bitfun-runtime-services` 的扩展必须保持 typed builder、本地 service、remote service 和 fake provider 三类注入路径可测试。
-- `bitfun-agent-runtime` 的扩展必须保持旧路径 facade、focused tests 和 boundary check，且不得吸收 concrete service、product surface 或平台实现。
-- `bitfun-harness` 的扩展必须保持 descriptor / registry、旧路径兼容、focused tests 和 boundary check，且不得把 provider 注册误写成 concrete workflow execution。
-- 若目标 crate 只能承接单个 helper 或只能通过 `bitfun-core` 才能测试，应继续留在初始兼容 facade，不提前拆 crate。
+- 对外 API 按层拆分：Rust Kernel API、UI Extension Contract、Capability/Effect API、Product Assembly API 分别定义。
+- 下层不暴露上层对象。Kernel 不返回 UI command；Execution 不返回 React descriptor 以外的 UI 实现；Platform Adapter 不返回产品命令。
+- 注册接口接收 typed provider / descriptor / policy，不接收 `Any`、无类型 service name 或全局 mutable registry。
+- 兼容 facade 可以保留旧路径导出，但旧路径不得成为新 API 的真实 owner。
 
 ## 2. 稳定接口与运行时服务
 
@@ -261,9 +250,50 @@ Remote ports 的边界：
 - 不在 runtime services 中创建 concrete manager；创建发生在 Product Assembly。
 - `RuntimeServices` 是运行时依赖集合，不是全局 mutable app state。
 
-## 3. Runtime / Tool / Harness 内核
+### 2.3 安全控制面接口
 
-### 3.1 Agent Runtime SDK
+安全控制面把 tool、MCP、skills、plugin、hook、shell、network、file、browser/desktop 和 remote 动作归一为
+capability/effect/security decision。它跨越 Kernel、Execution、Extension、Cross-platform Adapter 和 UI projection，
+但最终决策必须由 Product Assembly 注入的确定性策略实现和内核事实共同约束。该接口定义的是跨层 contract，
+不是 contracts crate 内部的具体策略实现。
+
+建议接口：
+
+```rust
+pub struct CapabilityEffectDeclaration {
+    pub capability: CapabilityId,
+    pub source: CapabilitySource,
+    pub targets: Vec<EffectTarget>,
+    pub data_classes: Vec<DataClass>,
+    pub side_effects: Vec<SideEffectKind>,
+    pub execution_domain: ExecutionDomain,
+}
+
+pub struct SecurityDecisionRequest {
+    pub session: SessionIdentity,
+    pub turn: Option<TurnIdentity>,
+    pub agent: AgentIdentity,
+    pub source: CapabilitySource,
+    pub effect: CapabilityEffectDeclaration,
+    pub proposed_action: ProposedAction,
+}
+
+pub trait SecurityDecisionPort: Send + Sync {
+    fn decide(&self, request: SecurityDecisionRequest) -> SecurityDecisionFuture;
+}
+```
+
+约束：
+
+- UI 只展示 decision 和 user options，不成为最终授权来源。
+- Extension Host 必须声明 capability/effect，未知或超声明能力默认受限。
+- `allow_in_sandbox` 只能在实际 sandbox 或隔离路径存在时返回。
+- 远程、ACP、MCP、plugin、browser/desktop 和 cloud task 必须携带 execution domain。
+- 模型输出只能辅助解释和候选判断，不能直接写 permission、audit 或 policy state。
+
+## 3. Kernel / Tool / Harness 内核
+
+### 3.1 Agent Kernel / Runtime SDK
 
 目标 owner crate：`bitfun-agent-runtime`。
 
@@ -271,13 +301,17 @@ Remote ports 的边界：
 
 - session 生命周期。
 - dialog turn / model round 生命周期。
+- long-running task 生命周期、resume/checkpoint fact 和 result delivery。
 - scheduler / queue / cancellation。
+- permission coordination 和安全事实投递。
+- model routing / usage / cost / cache facts。
 - prompt loop 和 context assembly。
 - prompt cache 协调。
+- memory / workspace facts。
+- DFX / telemetry / audit facts。
 - agent definition registry、subagent registry 查询和 delegation policy。
 - fork context seeding。
 - tool call 调度。
-- permission 协调。
 - runtime events。
 - post-turn processor。
 
@@ -327,18 +361,28 @@ impl AgentRuntime {
 
 该 facade 是目标 API 形态。它必须只接收已组装的 typed parts，不负责创建
 filesystem、terminal、MCP、AI client、Remote provider 或产品命令。
-当前 v1 preview API 以 message / attachment / metadata 作为最小输入形态；若后续需要把
+当前 v1 preview API 以 message / attachment / metadata 作为最小输入形态；若把
 model-round cancellation token、structured AgentInput 或更复杂的 event cursor 纳入公开 SDK，
 必须提升 SDK API version 并保留旧路径兼容。
 
-旧路径兼容约束：
+产品特性边界：
+
+- `/goal`、slash command、输入框按钮、设置项、UI panel 和默认文案不进入 Agent Kernel。
+- 内核只提供 goal / long-running task 所需的任务 identity、生命周期、队列、resume/cancel、event 和 persistence fact。
+- Product Feature 负责把这些内核事实映射为 `/goal` 命令、可见状态、快捷操作和默认策略。
+- 若某个 feature 需要修改 Rust 和 UI，必须以 feature pack 同时声明 Rust runtime request、UI contribution 和
+  capability/effect，不得仅在单侧隐式扩展。
+
+兼容边界：
 
 - `bitfun-agent-runtime` 只能依赖稳定契约、Tool Runtime、Runtime Services 接口和注入的 provider。
 - concrete scheduler 生命周期、session metadata store、token subscriber、event delivery、product `Tool`
   handler、concrete prompt assembly、workspace / remote / config IO、custom subagent file IO 和平台 adapter
   在行为等价未证明前不得下沉到 runtime kernel。
-- prompt、event、thread goal、scheduler 或 subagent 的纯事实如果进入 Agent Runtime SDK，必须同时删除旧 owner
-  实现主体，保留旧路径兼容，并具备 focused contract test 与 boundary check。
+- product feature command、UI state、settings persistence、plugin UI rendering 和 delivery-profile 默认策略不得下沉到
+  runtime kernel。
+- prompt、event、thread goal、scheduler 或 subagent 的纯事实如果进入 Agent Runtime SDK，旧 owner 只能保留兼容入口；
+  行为等价需要有 contract test 和 boundary guard 证明。
 
 建议内部模块：
 
@@ -519,9 +563,9 @@ pub struct ToolExecutionContext {
 - workspace service、path policy、runtime artifact reference、remote path containment 和 tool context facts 的
   稳定 contract。
 
-旧路径兼容约束：
+兼容边界：
 
-- core 可以保留旧路径 facade、concrete tool adapter、state update、registry lookup、confirmation、actual
+- core 允许保留旧路径 facade、concrete tool adapter、state update、registry lookup、confirmation、actual
   execution 和 filesystem persistence；目标状态要求只有在等价测试保护下才能移动这些行为。
 - workspace file/shell contract 保留既有错误与取消语义；不得把错误分类、取消语义或产品 tool exposure
   变更混入 owner 边界移动。
@@ -606,7 +650,7 @@ pub struct HarnessExecutionContext {
 
 设计约束：
 
-- harness 可以编排 runtime/tool，但不拥有 session manager internals。
+- harness 允许编排 runtime/tool，但不拥有 session manager internals。
 - harness 不直接访问 concrete filesystem / Git / terminal。
 - 产品命令只映射到 harness capability，不把命令展示逻辑下沉。
 - 新 harness 通过 provider 注册，不改 Agent Runtime SDK 内核。
@@ -618,7 +662,8 @@ pub struct HarnessExecutionContext {
 ### 4.1 Product Assembly
 
 Product Assembly 是 composition root。初始状态可由 `bitfun-core` 兼容 facade 承载；目标状态可拆成独立
-Product Assembly crate。
+Product Assembly crate。它按 feature bundle 触发组装，同时连接 UI host、Rust Kernel、Execution、Extension
+Host 和 Cross-platform Adapter。
 
 职责：
 
@@ -627,8 +672,10 @@ Product Assembly crate。
 - 注册 tool provider groups。
 - 注册 harness providers。
 - 注册 agent definitions、subagents、skills、prompt modules。
+- 注册 extension host、OpenCode adapter、ACP bridge 和 UI contribution provider。
 - 建立产品 feature matrix。
 - 把 interface 命令映射到 capability / harness / runtime request。
+- 把 feature bundle 映射为 Rust runtime request、UI contribution、plugin capability 和安全策略。
 - 根据交付形态选择 `DeliveryProfile`、`CapabilitySet`、adapter 和 service provider 集合。
 - 对不支持能力返回 typed unsupported / unavailable 错误，而不是让下层 runtime 判断产品形态。
 
@@ -639,12 +686,15 @@ product-assembly
   full.rs
   delivery_profile.rs
   capability_set.rs
+  feature_bundle.rs
   desktop.rs
   cli.rs
   server.rs
   remote.rs
   acp.rs
   feature_matrix.rs
+  ui_contributions.rs
+  extensions.rs
   commands.rs
 ```
 
@@ -666,12 +716,15 @@ pub struct CapabilitySet {
     pub harness_packs: Vec<HarnessId>,
     pub service_capabilities: Vec<ServiceCapabilityId>,
     pub command_providers: Vec<CommandProviderId>,
+    pub ui_contributions: Vec<UiContributionId>,
+    pub extension_capabilities: Vec<ExtensionCapabilityId>,
 }
 
 pub struct ProductAssemblyPlan {
     pub profile: DeliveryProfile,
     pub capabilities: CapabilitySet,
     pub feature_groups: Vec<FeatureGroupId>,
+    pub feature_bundles: Vec<FeatureBundleId>,
 }
 
 pub trait ProductAssembler {
@@ -690,6 +743,8 @@ pub struct ProductAssemblyInput {
     pub harness_providers: Vec<Arc<dyn HarnessProvider>>,
     pub agents: Arc<dyn AgentDefinitionRegistry>,
     pub commands: Vec<CommandProviderRef>,
+    pub ui_contributions: Vec<UiContributionProviderRef>,
+    pub extension_host: Option<Arc<dyn ExtensionHost>>,
     pub hooks: RuntimeHookRegistry,
 }
 
@@ -699,6 +754,8 @@ pub struct ProductRuntimeParts {
     pub harnesses: Arc<HarnessRegistry>,
     pub agents: Arc<dyn AgentDefinitionRegistry>,
     pub commands: ProductCommandRegistry,
+    pub ui_contributions: UiContributionRegistry,
+    pub extension_host: Option<Arc<dyn ExtensionHost>>,
     pub hooks: RuntimeHookRegistry,
 }
 ```
@@ -710,6 +767,8 @@ pub struct ProductRuntimeParts {
 - harness provider 只注册到 `HarnessRegistryBuilder`。
 - agent、subagent、prompt、skill 只注册到 `AgentDefinitionRegistry` 或对应 registry。
 - 输入框命令、审核入口、MiniApp 入口只注册到 `ProductCommandRegistry`，再映射到 capability 或 harness。
+- UI panel、command palette item、settings entry 和状态投影只注册为 `UiContributionDescriptor`，由对应 UI host 渲染。
+- OpenCode / ACP / plugin adapter 只注册到 `ExtensionHost`，再产出 tool、hook、UI contribution 或 workflow provider。
 - unsupported / unavailable 能力在 `CapabilityAvailability` 中表达，不让 runtime kernel 读取产品形态。
 
 示例构建流程：
@@ -742,9 +801,9 @@ pub fn build_desktop_runtime(input: DesktopAssemblyInput) -> Result<ProductRunti
 
 约束：
 
-- Product Assembly 可以依赖具体实现；runtime kernel 不可以。
-- 不同产品可以注册不同 surface command，但必须映射到稳定 capability。
-- 输入框命令、审核、MiniApp、ACP client、自定义 tool/subagent/skill 均通过 assembly 注册。
+- Product Assembly 允许依赖具体实现；runtime kernel 不允许依赖具体实现。
+- 不同产品允许注册不同 surface command 和 UI contribution，但必须映射到稳定 capability。
+- 输入框命令、审核、MiniApp、ACP client、自定义 tool/subagent/skill/plugin 均通过 assembly 注册。
 - assembly 不得改变底层 runtime 语义来适配某个 surface。
 - `DeliveryProfile` 只能影响 capability/provider 选择，不得让下层出现 `if desktop`
   或 `if cli` 这样的 product 分支。
@@ -753,22 +812,24 @@ pub fn build_desktop_runtime(input: DesktopAssemblyInput) -> Result<ProductRunti
 - feature group 是构建时能力边界，`CapabilitySet` 是产品运行时能力边界；两者必须在
   assembly 中显式对应。
 - 任何交付形态减少能力前，必须先更新 product matrix 并补产品入口验证。
+- Product Assembly 不能把所有 API 收敛到单个大对象；Rust Kernel API、UI Extension Contract、Capability/Effect API
+  必须按层分开。
 
 ### 4.2 产品形态与组装差异
 
 | 产品形态 | 关键差异 | 组装时必须稳定的下层契约 |
 |---|---|---|
-| Desktop | Tauri window、desktop API、本地 permission UI | runtime events、permission facts、artifact refs、desktop service providers |
-| CLI | TUI、命令输入、终端展示、package workflow | command provider、agent/session/tool contract、CLI-safe service providers |
-| Server | HTTP/WebSocket route、server workspace policy | transport DTO、runtime request/response、workspace identity |
-| Remote / mobile | remote workspace、relay/bot、file/terminal projection | remote state、logical path、permission/event facts |
-| ACP | ACP protocol、client lifecycle、remote probing | external agent/tool capability、environment facts |
-| Web UI / mobile web | UI state、hydration、pairing、session 展示 | API/transport DTO、runtime event facts |
+| Desktop | Tauri window、desktop API、本地 permission UI、UI contribution host | runtime events、permission facts、artifact refs、desktop service providers、UI extension contract |
+| CLI | TUI、命令输入、终端展示、package workflow | command provider、agent/session/tool contract、CLI-safe service providers、text UI contribution |
+| Server / SDK | HTTP/WebSocket route、server workspace policy、外部 SDK 嵌入 | transport DTO、runtime request/response、workspace identity、stable Rust Kernel API |
+| Remote / mobile | remote workspace、relay/bot、file/terminal projection | remote state、logical path、permission/event facts、remote capability facts |
+| ACP | ACP protocol、client lifecycle、remote probing | external agent/tool capability、environment facts、permission bridge |
+| Web UI / mobile web | UI state、hydration、pairing、session 展示、插件 UI contribution | API/transport DTO、runtime event facts、UI extension contract |
 
 ### 4.3 Product Capability 设计
 
-Product Capability 位于 Product Assembly 与 Harness / Runtime / Tool 之间，负责把大块产品能力
-拆成可组装的 capability pack。它不拥有 UI，也不直接执行具体 IO。
+Product Capability 位于 Product Assembly 与 Product Feature / Harness / Runtime / Tool / Extension 之间，负责把
+大块产品能力拆成可组装的 capability pack。它不拥有 UI，也不直接执行具体 IO。
 
 建议模块：
 
@@ -782,6 +843,8 @@ product-capabilities
   remote_control.rs
   mcp_app.rs
   computer_use.rs
+  long_running_task.rs
+  plugin_extension.rs
   command_mapping.rs
 ```
 
@@ -795,21 +858,58 @@ pub trait CapabilityPack: Send + Sync {
     fn harness_packs(&self) -> Vec<HarnessId>;
     fn agent_definitions(&self) -> Vec<AgentDefinitionRef>;
     fn command_providers(&self) -> Vec<CommandProviderRef>;
+    fn ui_contributions(&self) -> Vec<UiContributionRef>;
+    fn extension_capabilities(&self) -> Vec<ExtensionCapabilityRef>;
 }
 ```
 
 分层规则：
 
-- Code Agent pack 可以声明 agent modes、tool packs、prompt modules，但不拥有 tool execution。
-- Deep Review pack 可以声明 harness provider、report artifact contract、queue/retry policy，
+- Code Agent pack 允许声明 agent modes、tool packs、prompt modules，但不拥有 tool execution。
+- Deep Review pack 允许声明 harness provider、report artifact contract、queue/retry policy，
   但 target resolution 和 UI construction 留在 surface。
-- MiniApp pack 可以声明 MiniApp harness、domain ports、artifact policy，但 worker process 和
+- MiniApp pack 允许声明 MiniApp harness、domain ports、artifact policy，但 worker process 和
   filesystem IO 通过 Runtime Services provider。
-- MCP App pack 可以声明 MCP tool/resource/prompt capability，但 MCP transport 属于
+- MCP App pack 允许声明 MCP tool/resource/prompt capability，但 MCP transport 属于
   `bitfun-services-integrations`。
 - Input command pack 只声明 command 到 capability/harness/runtime request 的映射，不共享具体 UI。
+- Long-running task pack 只声明任务入口、默认 policy、UI contribution 和 command 映射；任务生命周期属于 Agent Kernel。
+- Plugin extension pack 只声明插件能力、UI contribution 和外部 API 映射；安全决策和最终状态写入属于 Kernel / Security Boundary。
 
-### 4.4 ACP 扩展方式
+### 4.4 Extension Host 与 OpenCode Adapter
+
+Extension Host 是外部生态接入层，不是第二个 runtime kernel。它负责把 OpenCode、外部插件、external skills、
+自定义工具、hook adapter 和 UI contribution 映射为 BitFun 稳定契约。
+
+建议接口：
+
+```rust
+pub trait ExtensionHost: Send + Sync {
+    fn declared_capabilities(&self) -> Vec<ExtensionCapabilityDeclaration>;
+    fn ui_contributions(&self) -> Vec<UiContributionDescriptor>;
+    fn tool_providers(&self) -> Vec<Arc<dyn ToolProvider>>;
+    fn hook_providers(&self) -> Vec<RuntimeHookProviderRef>;
+    fn workflow_providers(&self) -> Vec<Arc<dyn HarnessProvider>>;
+}
+
+pub struct UiContributionDescriptor {
+    pub id: UiContributionId,
+    pub surface: UiSurfaceId,
+    pub required_capabilities: Vec<CapabilityId>,
+    pub effect_declaration: CapabilityEffectDeclaration,
+    pub payload_schema: serde_json::Value,
+}
+```
+
+OpenCode adapter 的边界：
+
+- 映射 OpenCode plugin / agent / command / tool / event API 到 BitFun extension contract。
+- 提供 UI contribution descriptor，但不 import Web UI component implementation。
+- 注册 custom tool、MCP bridge、hook 和 workflow provider 时必须声明 capability/effect。
+- 不能直接写 session state、permission decision、audit result 或 runtime event sequence。
+- 不能通过外部 API 绕过 BitFun 的 sandbox、permission、network、credential 和 remote execution domain。
+
+### 4.5 ACP 扩展方式
 
 `bitfun-acp` 保持 integration owner。
 
@@ -838,7 +938,7 @@ pub trait ExternalToolProvider: Send + Sync {
 Agent Runtime SDK 只能看到 external agent/tool capability，不感知 ACP protocol、进程管理、
 remote probing 或 startup timeout。
 
-### 4.5 Skills / Prompt / Subagent
+### 4.6 Skills / Prompt / Subagent
 
 建议归属：
 
@@ -855,7 +955,7 @@ remote probing 或 startup timeout。
 - prompt module 只声明可组合内容，不执行 IO。
 - skill resource 访问通过 filesystem/workspace port。
 
-### 4.6 Hook 与 Event 设计
+### 4.7 Hook 与 Event 设计
 
 事件：
 
@@ -981,12 +1081,20 @@ Product 测试：
 - Remote workspace 行为。
 - MCP dynamic tool catalog。
 - MiniApp 与 review workflow。
+- UI contribution descriptor round-trip 和 host fallback。
+- SDK minimal feature / no-default-features 嵌入验证。
+- OpenCode / plugin adapter 的 capability/effect 声明与安全决策测试。
 
 ### 5.4 目标态判定口径
 
 - `bitfun-agent-runtime` 能在不依赖 `bitfun-core` 的情况下构建 runtime kernel。
 - Agent Runtime SDK facade 能通过 fake model provider、fake runtime services、fake tool provider 和 fake
   harness provider 完成最小 session / turn / event stream 流程。
+- 长程任务、scheduler、permission、context、session/workspace、memory、DFX、hook/event 能作为内核能力被产品特性复用。
+- `/goal`、DeepReview、MiniApp、输入框命令、settings 和 UI panel 通过 feature pack / Product Assembly 组装，不进入内核。
+- Product API 同时包含 Rust Kernel API、UI Extension Contract 和 Capability/Effect API。
+- Extension Host / OpenCode adapter 能把外部 plugin API 映射为 BitFun 的 tool、hook、workflow、UI contribution 和
+  capability/effect declaration，并受安全控制面约束。
 - `bitfun-runtime-services` 提供 typed service injection，并由 boundary check 保护。
 - `tool-contracts`、`tool-provider-groups` 和 `tool-execution` 分别承担 tool contract、provider group plan 和低层 execution helper；具体 tool 通过 Product Assembly 注册。
 - `bitfun-harness` 支持工作流 provider 扩展。

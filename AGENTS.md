@@ -15,8 +15,11 @@ Repository rule: **keep product logic platform-agnostic, then expose it through 
 
 ## Layered Module Index
 
-Dependencies flow top to bottom. A layer may depend on lower layers only; keep
-crate dependencies inside each layer to the smallest set needed.
+Dependencies flow top to bottom. This table is the physical crate layout, not
+the full conceptual architecture. For Product Feature / Agent Kernel /
+Execution / Extension / Cross-platform Adapter boundaries, read
+[`docs/architecture/core-decomposition.md`](docs/architecture/core-decomposition.md).
+Keep crate dependencies inside each layer to the smallest set needed.
 
 | # | Layer | Path | Owns | Modules / entries | Layer doc |
 |---|---|---|---|---|---|
@@ -31,6 +34,7 @@ Boundary rules:
 
 - Interfaces and app entrypoints expose selected product behavior; reusable behavior moves down.
 - Assembly wires lower layers and selects product capability facts; it must not implement concrete adapter, OS, or service details.
+- Product features assemble user-facing commands, UI contributions, settings, and default policy on top of kernel capabilities; long-running task, scheduler, permission, session/workspace, memory, DFX, hook, and event facts stay in Agent Kernel owners.
 - Adapters translate protocols and external systems; they should not own product capability selection or reusable OS service behavior.
 - Services implement reusable concrete OS, process, terminal, MCP, remote, git, filesystem, and MiniApp runtime IO capabilities.
 - Execution crates are portable runtime building blocks, not host-specific or delivery-profile owners.
