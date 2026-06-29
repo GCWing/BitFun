@@ -6099,6 +6099,7 @@ fn runtime_session_summary(session: SessionSummary) -> bitfun_runtime_ports::Age
 
 fn runtime_session_workspace_binding(binding: WorkspaceBinding) -> AgentSessionWorkspaceBinding {
     AgentSessionWorkspaceBinding {
+        workspace_id: binding.workspace_id.clone(),
         workspace_path: binding.root_path_string(),
         remote_connection_id: binding.connection_id().map(ToOwned::to_owned),
         remote_ssh_host: if binding.is_remote() {
@@ -6107,6 +6108,27 @@ fn runtime_session_workspace_binding(binding: WorkspaceBinding) -> AgentSessionW
             None
         },
     }
+}
+
+fn runtime_port_error_from_bitfun(error: BitFunError) -> bitfun_runtime_ports::PortError {
+    let (kind, message) = match error {
+        BitFunError::Validation(message) => {
+            (bitfun_runtime_ports::PortErrorKind::InvalidRequest, message)
+        }
+        BitFunError::NotFound(message) => (bitfun_runtime_ports::PortErrorKind::NotFound, message),
+        BitFunError::Cancelled(message) => {
+            (bitfun_runtime_ports::PortErrorKind::Cancelled, message)
+        }
+        BitFunError::Timeout(message) => (bitfun_runtime_ports::PortErrorKind::Timeout, message),
+        BitFunError::NotImplemented(message) => {
+            (bitfun_runtime_ports::PortErrorKind::NotAvailable, message)
+        }
+        other => (
+            bitfun_runtime_ports::PortErrorKind::Backend,
+            other.to_string(),
+        ),
+    };
+    bitfun_runtime_ports::PortError::new(kind, message)
 }
 
 #[async_trait::async_trait]
@@ -6181,6 +6203,49 @@ impl bitfun_runtime_ports::AgentSessionManagementPort for ConversationCoordinato
             .resolve_session_workspace_binding(&request.session_id)
             .await
             .map(runtime_session_workspace_binding))
+    }
+}
+
+#[async_trait::async_trait]
+impl bitfun_runtime_ports::AgentThreadGoalManagementPort for ConversationCoordinator {
+    async fn get_thread_goal(
+        &self,
+        request: bitfun_runtime_ports::AgentThreadGoalGetRequest,
+    ) -> bitfun_runtime_ports::PortResult<Option<ThreadGoal>> {
+        self.get_thread_goal(
+            &request.session_id,
+            std::path::Path::new(&request.workspace_path),
+        )
+        .await
+        .map_err(runtime_port_error_from_bitfun)
+    }
+
+    async fn create_thread_goal(
+        &self,
+        request: bitfun_runtime_ports::AgentThreadGoalCreateRequest,
+    ) -> bitfun_runtime_ports::PortResult<ThreadGoal> {
+        self.create_thread_goal(
+            &request.session_id,
+            std::path::Path::new(&request.workspace_path),
+            request.objective,
+            request.token_budget,
+        )
+        .await
+        .map_err(runtime_port_error_from_bitfun)
+    }
+
+    async fn update_thread_goal_status(
+        &self,
+        request: bitfun_runtime_ports::AgentThreadGoalUpdateStatusRequest,
+    ) -> bitfun_runtime_ports::PortResult<ThreadGoal> {
+        self.update_thread_goal_status(
+            &request.session_id,
+            std::path::Path::new(&request.workspace_path),
+            request.status,
+            request.turn_id.as_deref(),
+        )
+        .await
+        .map_err(runtime_port_error_from_bitfun)
     }
 }
 

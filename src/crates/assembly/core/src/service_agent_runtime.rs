@@ -9,10 +9,10 @@ use bitfun_agent_runtime::sdk::{AgentRuntime, AgentRuntimeBuilder, RuntimeError}
 use bitfun_runtime_ports::{
     AgentDialogTurnPort, AgentDialogTurnRequest, AgentInputAttachment, AgentLifecycleDeliveryPort,
     AgentSessionCreateRequest, AgentSessionManagementPort, AgentSubmissionPort,
-    AgentSubmissionSource, AgentTurnCancellationPort, AgentTurnCancellationRequest,
-    RemoteControlStatePort, RemoteControlStateRequest, RemoteControlStateSnapshot,
-    RemoteSessionWorkspaceIdentity, RuntimeServiceCapability, RuntimeServicePort,
-    SessionStoragePathRequest, SessionStorePort,
+    AgentSubmissionSource, AgentThreadGoalManagementPort, AgentTurnCancellationPort,
+    AgentTurnCancellationRequest, RemoteControlStatePort, RemoteControlStateRequest,
+    RemoteControlStateSnapshot, RemoteSessionWorkspaceIdentity, RuntimeServiceCapability,
+    RuntimeServicePort, SessionStoragePathRequest, SessionStorePort,
 };
 use bitfun_services_integrations::remote_connect::{
     build_remote_chat_messages, build_remote_model_catalog,
@@ -44,6 +44,7 @@ use crate::agentic::coordination::{
 };
 use crate::agentic::image_analysis::ImageContextData;
 use crate::agentic::session::session_store_port::CoreSessionStorePort;
+use crate::agentic::workspace::WorkspaceBinding;
 use crate::service::remote_connect::remote_server::RemoteExecutionDispatcher;
 
 use crate::service::config::types::{AIConfig, GlobalConfig, ModelCapability, ReasoningMode};
@@ -473,6 +474,7 @@ fn agent_input_attachment_from_image_context(context: ImageContextData) -> Agent
 fn core_agent_runtime_builder(
     submission: Arc<dyn AgentSubmissionPort>,
     session_management: Arc<dyn AgentSessionManagementPort>,
+    thread_goal_management: Arc<dyn AgentThreadGoalManagementPort>,
     cancellation: Arc<dyn AgentTurnCancellationPort>,
 ) -> AgentRuntimeBuilder {
     let agent_registry: Arc<dyn bitfun_agent_runtime::sdk::RuntimeAgentRegistry> =
@@ -480,6 +482,7 @@ fn core_agent_runtime_builder(
     AgentRuntimeBuilder::new()
         .with_submission_port(submission)
         .with_session_management_port(session_management)
+        .with_thread_goal_management_port(thread_goal_management)
         .with_cancellation_port(cancellation)
         .with_agent_registry(agent_registry)
 }
@@ -499,26 +502,41 @@ impl RemoteImageContextAdapter for ImageContextData {
 pub(crate) struct CoreServiceAgentRuntime;
 
 impl CoreServiceAgentRuntime {
-    pub(crate) async fn resolve_session_storage_dir(
-        session_id: &str,
-    ) -> Option<std::path::PathBuf> {
+    async fn resolve_session_workspace_binding(session_id: &str) -> Option<WorkspaceBinding> {
         let coordinator = get_global_coordinator()?;
         coordinator
             .get_session_manager()
             .resolve_session_workspace_binding(session_id)
             .await
-            .map(|binding| binding.session_storage_dir())
+    }
+
+    pub(crate) async fn resolve_session_workspace_paths(
+        session_id: &str,
+    ) -> Option<(std::path::PathBuf, std::path::PathBuf)> {
+        Self::resolve_session_workspace_binding(session_id)
+            .await
+            .map(|binding| {
+                (
+                    binding.logical_workspace_path().to_path_buf(),
+                    binding.session_storage_dir(),
+                )
+            })
+    }
+
+    pub(crate) async fn resolve_session_storage_dir(
+        session_id: &str,
+    ) -> Option<std::path::PathBuf> {
+        Self::resolve_session_workspace_paths(session_id)
+            .await
+            .map(|(_, storage_dir)| storage_dir)
     }
 
     pub(crate) async fn resolve_session_logical_workspace_path(
         session_id: &str,
     ) -> Option<std::path::PathBuf> {
-        let coordinator = get_global_coordinator()?;
-        coordinator
-            .get_session_manager()
-            .resolve_session_workspace_binding(session_id)
+        Self::resolve_session_workspace_paths(session_id)
             .await
-            .map(|binding| binding.logical_workspace_path().to_path_buf())
+            .map(|(workspace_path, _)| workspace_path)
     }
 
     pub(crate) async fn resolve_remote_file_workspace_root(
@@ -749,10 +767,16 @@ impl CoreServiceAgentRuntime {
     ) -> Result<AgentRuntime, String> {
         let submission: Arc<dyn AgentSubmissionPort> = coordinator.clone();
         let session_management: Arc<dyn AgentSessionManagementPort> = coordinator.clone();
+        let thread_goal_management: Arc<dyn AgentThreadGoalManagementPort> = coordinator.clone();
         let cancellation: Arc<dyn AgentTurnCancellationPort> = coordinator;
-        core_agent_runtime_builder(submission, session_management, cancellation)
-            .build()
-            .map_err(|error| error.to_string())
+        core_agent_runtime_builder(
+            submission,
+            session_management,
+            thread_goal_management,
+            cancellation,
+        )
+        .build()
+        .map_err(|error| error.to_string())
     }
 
     pub(crate) fn agent_runtime_with_dialog_turns(
@@ -761,14 +785,20 @@ impl CoreServiceAgentRuntime {
     ) -> Result<AgentRuntime, String> {
         let submission: Arc<dyn AgentSubmissionPort> = coordinator.clone();
         let session_management: Arc<dyn AgentSessionManagementPort> = coordinator.clone();
+        let thread_goal_management: Arc<dyn AgentThreadGoalManagementPort> = coordinator.clone();
         let cancellation: Arc<dyn AgentTurnCancellationPort> = coordinator;
         let dialog_turn: Arc<dyn AgentDialogTurnPort> = scheduler.clone();
         let lifecycle_delivery: Arc<dyn AgentLifecycleDeliveryPort> = scheduler;
-        core_agent_runtime_builder(submission, session_management, cancellation)
-            .with_dialog_turn_port(dialog_turn)
-            .with_lifecycle_delivery_port(lifecycle_delivery)
-            .build()
-            .map_err(|error| error.to_string())
+        core_agent_runtime_builder(
+            submission,
+            session_management,
+            thread_goal_management,
+            cancellation,
+        )
+        .with_dialog_turn_port(dialog_turn)
+        .with_lifecycle_delivery_port(lifecycle_delivery)
+        .build()
+        .map_err(|error| error.to_string())
     }
 
     pub(crate) fn agent_runtime_with_lifecycle_delivery(
@@ -777,12 +807,18 @@ impl CoreServiceAgentRuntime {
     ) -> Result<AgentRuntime, String> {
         let submission: Arc<dyn AgentSubmissionPort> = coordinator.clone();
         let session_management: Arc<dyn AgentSessionManagementPort> = coordinator.clone();
+        let thread_goal_management: Arc<dyn AgentThreadGoalManagementPort> = coordinator.clone();
         let cancellation: Arc<dyn AgentTurnCancellationPort> = coordinator;
         let lifecycle_delivery: Arc<dyn AgentLifecycleDeliveryPort> = scheduler;
-        core_agent_runtime_builder(submission, session_management, cancellation)
-            .with_lifecycle_delivery_port(lifecycle_delivery)
-            .build()
-            .map_err(|error| error.to_string())
+        core_agent_runtime_builder(
+            submission,
+            session_management,
+            thread_goal_management,
+            cancellation,
+        )
+        .with_lifecycle_delivery_port(lifecycle_delivery)
+        .build()
+        .map_err(|error| error.to_string())
     }
 
     pub(crate) fn agent_runtime_with_scheduler_ports(
@@ -790,15 +826,21 @@ impl CoreServiceAgentRuntime {
         scheduler: Arc<DialogScheduler>,
     ) -> Result<AgentRuntime, String> {
         let submission: Arc<dyn AgentSubmissionPort> = coordinator.clone();
-        let session_management: Arc<dyn AgentSessionManagementPort> = coordinator;
+        let session_management: Arc<dyn AgentSessionManagementPort> = coordinator.clone();
+        let thread_goal_management: Arc<dyn AgentThreadGoalManagementPort> = coordinator;
         let cancellation: Arc<dyn AgentTurnCancellationPort> = scheduler.clone();
         let dialog_turn: Arc<dyn AgentDialogTurnPort> = scheduler.clone();
         let lifecycle_delivery: Arc<dyn AgentLifecycleDeliveryPort> = scheduler;
-        core_agent_runtime_builder(submission, session_management, cancellation)
-            .with_dialog_turn_port(dialog_turn)
-            .with_lifecycle_delivery_port(lifecycle_delivery)
-            .build()
-            .map_err(|error| error.to_string())
+        core_agent_runtime_builder(
+            submission,
+            session_management,
+            thread_goal_management,
+            cancellation,
+        )
+        .with_dialog_turn_port(dialog_turn)
+        .with_lifecycle_delivery_port(lifecycle_delivery)
+        .build()
+        .map_err(|error| error.to_string())
     }
 
     pub(crate) fn global_agent_runtime_with_lifecycle_delivery() -> Result<AgentRuntime, String> {
@@ -1456,6 +1498,7 @@ mod tests {
         where
             T: AgentSubmissionPort
                 + AgentSessionManagementPort
+                + AgentThreadGoalManagementPort
                 + AgentTurnCancellationPort
                 + RemoteControlStatePort
                 + SessionTranscriptReader,

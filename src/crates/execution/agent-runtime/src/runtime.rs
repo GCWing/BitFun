@@ -15,9 +15,10 @@ use bitfun_runtime_ports::{
     AgentSessionCreateResult, AgentSessionDeleteRequest, AgentSessionListRequest,
     AgentSessionManagementPort, AgentSessionSummary, AgentSessionWorkspaceBinding,
     AgentSessionWorkspaceRequest, AgentSubmissionPort, AgentSubmissionRequest,
-    AgentSubmissionResult, AgentSubmissionSource, AgentThreadGoalDeliveryRequest,
-    AgentTurnCancellationPort, AgentTurnCancellationRequest, AgentTurnCancellationResult,
-    DialogSubmitOutcome, PortError, RuntimeEventEnvelope,
+    AgentSubmissionResult, AgentSubmissionSource, AgentThreadGoalCreateRequest,
+    AgentThreadGoalDeliveryRequest, AgentThreadGoalGetRequest, AgentThreadGoalManagementPort,
+    AgentThreadGoalUpdateStatusRequest, AgentTurnCancellationPort, AgentTurnCancellationRequest,
+    AgentTurnCancellationResult, DialogSubmitOutcome, PortError, RuntimeEventEnvelope, ThreadGoal,
 };
 use bitfun_runtime_services::RuntimeServices;
 
@@ -39,6 +40,8 @@ pub enum RuntimeError {
     MissingCancellationPort,
     #[error("agent session management port is not registered")]
     MissingSessionManagementPort,
+    #[error("agent thread goal management port is not registered")]
+    MissingThreadGoalManagementPort,
     #[error("runtime event sink is not registered")]
     MissingEventSink,
     #[error(transparent)]
@@ -97,6 +100,7 @@ pub trait RuntimeAgentRegistry: Send + Sync {
 pub struct AgentRuntime {
     submission: Arc<dyn AgentSubmissionPort>,
     session_management: Option<Arc<dyn AgentSessionManagementPort>>,
+    thread_goal_management: Option<Arc<dyn AgentThreadGoalManagementPort>>,
     dialog_turn: Option<Arc<dyn AgentDialogTurnPort>>,
     lifecycle_delivery: Option<Arc<dyn AgentLifecycleDeliveryPort>>,
     cancellation: Option<Arc<dyn AgentTurnCancellationPort>>,
@@ -118,6 +122,13 @@ impl std::fmt::Debug for AgentRuntime {
                     .session_management
                     .as_ref()
                     .map(|_| "<dyn AgentSessionManagementPort>"),
+            )
+            .field(
+                "thread_goal_management",
+                &self
+                    .thread_goal_management
+                    .as_ref()
+                    .map(|_| "<dyn AgentThreadGoalManagementPort>"),
             )
             .field(
                 "dialog_turn",
@@ -185,6 +196,7 @@ where
 pub struct AgentRuntimeBuilder {
     submission: Option<Arc<dyn AgentSubmissionPort>>,
     session_management: Option<Arc<dyn AgentSessionManagementPort>>,
+    thread_goal_management: Option<Arc<dyn AgentThreadGoalManagementPort>>,
     dialog_turn: Option<Arc<dyn AgentDialogTurnPort>>,
     lifecycle_delivery: Option<Arc<dyn AgentLifecycleDeliveryPort>>,
     cancellation: Option<Arc<dyn AgentTurnCancellationPort>>,
@@ -211,6 +223,14 @@ impl AgentRuntimeBuilder {
         port: Arc<dyn AgentSessionManagementPort>,
     ) -> Self {
         self.session_management = Some(port);
+        self
+    }
+
+    pub fn with_thread_goal_management_port(
+        mut self,
+        port: Arc<dyn AgentThreadGoalManagementPort>,
+    ) -> Self {
+        self.thread_goal_management = Some(port);
         self
     }
 
@@ -268,6 +288,7 @@ impl AgentRuntimeBuilder {
                 .submission
                 .ok_or(RuntimeBuildError::MissingSubmissionPort)?,
             session_management: self.session_management,
+            thread_goal_management: self.thread_goal_management,
             dialog_turn: self.dialog_turn,
             lifecycle_delivery: self.lifecycle_delivery,
             cancellation: self.cancellation,
@@ -511,6 +532,48 @@ impl AgentRuntime {
             .map_err(RuntimeError::from)
     }
 
+    pub async fn get_thread_goal(
+        &self,
+        request: AgentThreadGoalGetRequest,
+    ) -> Result<Option<ThreadGoal>, RuntimeError> {
+        let thread_goal_management = self
+            .thread_goal_management
+            .as_ref()
+            .ok_or(RuntimeError::MissingThreadGoalManagementPort)?;
+        thread_goal_management
+            .get_thread_goal(request)
+            .await
+            .map_err(RuntimeError::from)
+    }
+
+    pub async fn create_thread_goal(
+        &self,
+        request: AgentThreadGoalCreateRequest,
+    ) -> Result<ThreadGoal, RuntimeError> {
+        let thread_goal_management = self
+            .thread_goal_management
+            .as_ref()
+            .ok_or(RuntimeError::MissingThreadGoalManagementPort)?;
+        thread_goal_management
+            .create_thread_goal(request)
+            .await
+            .map_err(RuntimeError::from)
+    }
+
+    pub async fn update_thread_goal_status(
+        &self,
+        request: AgentThreadGoalUpdateStatusRequest,
+    ) -> Result<ThreadGoal, RuntimeError> {
+        let thread_goal_management = self
+            .thread_goal_management
+            .as_ref()
+            .ok_or(RuntimeError::MissingThreadGoalManagementPort)?;
+        thread_goal_management
+            .update_thread_goal_status(request)
+            .await
+            .map_err(RuntimeError::from)
+    }
+
     pub async fn resolve_session_agent_type(
         &self,
         session_id: &str,
@@ -609,10 +672,10 @@ mod tests {
         AgentSessionCreateResult, AgentSessionDeleteRequest, AgentSessionListRequest,
         AgentSessionManagementPort, AgentSessionSummary, AgentSessionWorkspaceRequest,
         AgentSubmissionResult, AgentThreadGoalDeliveryKind, AgentThreadGoalDeliveryRequest,
-        AgentTurnCancellationResult, ClockPort, DialogQueuePriority, DialogSubmissionPolicy,
-        DialogSubmitOutcome, FileSystemPort, PermissionPort, PortErrorKind, PortResult,
-        RuntimeEventSink, RuntimeEventType, RuntimeServiceCapability, SessionStorePort, ThreadGoal,
-        ThreadGoalStatus, WorkspacePort,
+        AgentThreadGoalManagementPort, AgentTurnCancellationResult, ClockPort, DialogQueuePriority,
+        DialogSubmissionPolicy, DialogSubmitOutcome, FileSystemPort, PermissionPort, PortErrorKind,
+        PortResult, RuntimeEventSink, RuntimeEventType, RuntimeServiceCapability, SessionStorePort,
+        ThreadGoal, ThreadGoalStatus, WorkspacePort,
     };
     use bitfun_runtime_services::{test_support::FakeRuntimePort, RuntimeServicesBuilder};
 
@@ -624,7 +687,25 @@ mod tests {
         listed_sessions: Mutex<Vec<AgentSessionListRequest>>,
         deleted_sessions: Mutex<Vec<AgentSessionDeleteRequest>>,
         workspace_binding_requests: Mutex<Vec<AgentSessionWorkspaceRequest>>,
+        thread_goal_gets: Mutex<Vec<AgentThreadGoalGetRequest>>,
+        thread_goal_creates: Mutex<Vec<AgentThreadGoalCreateRequest>>,
+        thread_goal_updates: Mutex<Vec<AgentThreadGoalUpdateStatusRequest>>,
         resolved_agent_type: Option<String>,
+    }
+
+    fn fake_thread_goal(status: ThreadGoalStatus) -> ThreadGoal {
+        ThreadGoal {
+            goal_id: "goal_1".to_string(),
+            session_id: "session_1".to_string(),
+            objective: "Ship runtime port".to_string(),
+            status,
+            token_budget: Some(1000),
+            tokens_used: 10,
+            time_used_seconds: 5,
+            created_at: 1,
+            updated_at: 2,
+            auto_continuation_count: 0,
+        }
     }
 
     #[async_trait::async_trait]
@@ -657,6 +738,7 @@ mod tests {
                 .unwrap()
                 .push(request);
             Ok(Some(AgentSessionWorkspaceBinding {
+                workspace_id: Some("workspace_1".to_string()),
                 workspace_path: "/workspace/project".to_string(),
                 remote_connection_id: Some("conn-1".to_string()),
                 remote_ssh_host: Some("host-1".to_string()),
@@ -699,6 +781,34 @@ mod tests {
             _session_id: &str,
         ) -> PortResult<Option<String>> {
             Ok(self.resolved_agent_type.clone())
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl AgentThreadGoalManagementPort for FakeAgentRuntimePorts {
+        async fn get_thread_goal(
+            &self,
+            request: AgentThreadGoalGetRequest,
+        ) -> PortResult<Option<ThreadGoal>> {
+            self.thread_goal_gets.lock().unwrap().push(request);
+            Ok(Some(fake_thread_goal(ThreadGoalStatus::Active)))
+        }
+
+        async fn create_thread_goal(
+            &self,
+            request: AgentThreadGoalCreateRequest,
+        ) -> PortResult<ThreadGoal> {
+            self.thread_goal_creates.lock().unwrap().push(request);
+            Ok(fake_thread_goal(ThreadGoalStatus::Active))
+        }
+
+        async fn update_thread_goal_status(
+            &self,
+            request: AgentThreadGoalUpdateStatusRequest,
+        ) -> PortResult<ThreadGoal> {
+            let status = request.status;
+            self.thread_goal_updates.lock().unwrap().push(request);
+            Ok(fake_thread_goal(status))
         }
     }
 
@@ -943,6 +1053,10 @@ mod tests {
             .expect("workspace binding");
 
         assert_eq!(sessions[0].session_id, "session_1");
+        assert_eq!(
+            workspace_binding.workspace_id.as_deref(),
+            Some("workspace_1")
+        );
         assert_eq!(workspace_binding.workspace_path, "/workspace/project");
         assert_eq!(
             workspace_binding.remote_connection_id.as_deref(),
@@ -951,6 +1065,77 @@ mod tests {
         assert_eq!(ports.listed_sessions.lock().unwrap().len(), 1);
         assert_eq!(ports.deleted_sessions.lock().unwrap().len(), 1);
         assert_eq!(ports.workspace_binding_requests.lock().unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn thread_goal_management_requires_registered_port() {
+        let ports = Arc::new(FakeAgentRuntimePorts::default());
+        let runtime = AgentRuntimeBuilder::new()
+            .with_submission_port(ports)
+            .build()
+            .expect("runtime");
+
+        let err = runtime
+            .get_thread_goal(AgentThreadGoalGetRequest {
+                session_id: "session_1".to_string(),
+                workspace_path: "/workspace/project".to_string(),
+            })
+            .await
+            .unwrap_err();
+
+        assert_eq!(err, RuntimeError::MissingThreadGoalManagementPort);
+    }
+
+    #[tokio::test]
+    async fn thread_goal_management_delegates_to_registered_port() {
+        let ports = Arc::new(FakeAgentRuntimePorts::default());
+        let runtime = AgentRuntimeBuilder::new()
+            .with_submission_port(ports.clone())
+            .with_thread_goal_management_port(ports.clone())
+            .build()
+            .expect("runtime");
+
+        let goal = runtime
+            .get_thread_goal(AgentThreadGoalGetRequest {
+                session_id: "session_1".to_string(),
+                workspace_path: "/workspace/project".to_string(),
+            })
+            .await
+            .expect("get goal")
+            .expect("goal");
+        let created = runtime
+            .create_thread_goal(AgentThreadGoalCreateRequest {
+                session_id: "session_1".to_string(),
+                workspace_path: "/workspace/project".to_string(),
+                objective: "Ship runtime port".to_string(),
+                token_budget: Some(1000),
+            })
+            .await
+            .expect("create goal");
+        let updated = runtime
+            .update_thread_goal_status(AgentThreadGoalUpdateStatusRequest {
+                session_id: "session_1".to_string(),
+                workspace_path: "/workspace/project".to_string(),
+                status: ThreadGoalStatus::Complete,
+                turn_id: Some("turn_1".to_string()),
+            })
+            .await
+            .expect("update goal");
+
+        assert_eq!(goal.status, ThreadGoalStatus::Active);
+        assert_eq!(created.objective, "Ship runtime port");
+        assert_eq!(updated.status, ThreadGoalStatus::Complete);
+        assert_eq!(ports.thread_goal_gets.lock().unwrap().len(), 1);
+        assert_eq!(
+            ports.thread_goal_creates.lock().unwrap()[0].token_budget,
+            Some(1000)
+        );
+        assert_eq!(
+            ports.thread_goal_updates.lock().unwrap()[0]
+                .turn_id
+                .as_deref(),
+            Some("turn_1")
+        );
     }
 
     #[tokio::test]

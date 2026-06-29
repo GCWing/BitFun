@@ -743,7 +743,7 @@ export function runManifestParserSelfTest({
     throw new Error('SessionMessage boundary rule must forbid direct scheduler submit');
   }
   const sessionMessageLegacySessionAccessContracts = [
-    'resolve_session_workspace_path',
+    'resolve_session_workspace_binding',
     'list_sessions',
   ];
   for (const contract of sessionMessageLegacySessionAccessContracts) {
@@ -758,7 +758,7 @@ export function runManifestParserSelfTest({
     throw new Error('SessionControl boundary rule must forbid direct scheduler cancellation');
   }
   const sessionControlLegacySessionAccessContracts = [
-    'resolve_session_workspace_path',
+    'resolve_session_workspace_binding',
     'list_sessions',
     'delete_session',
   ];
@@ -777,7 +777,7 @@ export function runManifestParserSelfTest({
     'src/crates/assembly/core/src/agentic/tools/implementations/cron_tool.rs',
   );
   const cronToolLegacySessionAccessContracts = [
-    'resolve_session_workspace_path',
+    'resolve_session_workspace_binding',
     'list_sessions',
   ];
   for (const contract of cronToolLegacySessionAccessContracts) {
@@ -1035,7 +1035,7 @@ export function runManifestParserSelfTest({
         'MissingSessionManagementPort',
         'list_sessions',
         'delete_session',
-        'resolve_session_workspace_path',
+        'resolve_session_workspace_binding',
         'session_management_delegates_to_registered_port',
         'RuntimeServices',
         'RuntimeEventEnvelope',
@@ -1518,7 +1518,7 @@ export function runManifestParserSelfTest({
         'AgentSessionListRequest',
         'AgentSessionWorkspaceRequest',
         'list_sessions',
-        'resolve_session_workspace_path',
+        'resolve_session_workspace_binding',
       ],
     },
     {
@@ -1962,7 +1962,7 @@ export function runManifestParserSelfTest({
         'AgentSessionWorkspaceRequest',
         'list_sessions',
         'delete_session',
-        'resolve_session_workspace_path',
+        'resolve_session_workspace_binding',
         '"createdBy"',
         'AgentTurnCancellationRequest',
         'requester_session_id',
@@ -1976,7 +1976,7 @@ export function runManifestParserSelfTest({
         'AgentSessionListRequest',
         'AgentSessionWorkspaceRequest',
         'list_sessions',
-        'resolve_session_workspace_path',
+        'resolve_session_workspace_binding',
         '"createdBy"',
         'AgentDialogTurnRequest',
         'AgentDialogPrependedReminder',

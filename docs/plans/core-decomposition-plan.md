@@ -24,7 +24,7 @@
 - Runtime Services、Agent Runtime、Tool Contracts、Tool Execution、Harness、Product Domains、Services Core、Services Integrations 等 owner crate 已建立；部分 concrete 生命周期仍由 core concrete manager 或产品命令路径持有。
 - Custom agent / mode / skill、Agent lifecycle、tool side-effect、Computer Use、file tool、MiniApp、DeepReview、DeepResearch、remote-connect、workspace search、remote SSH/SFTP/PTY 等多批 provider-neutral 或 concrete owner 已迁出。
 - Root boundary scripts 已覆盖核心 owner 防回流、six-layer path 解析、facade-only 文件、custom agent owner / custom subagent wrapper 保护和重点 feature gate。
-- 当前 `main` 的 boundary check 仍暴露未闭环 owner：Agent Runtime 缺少 session workspace resolution entrypoint；CronTool、SessionControl、SessionMessage 仍缺 port-backed target session / workspace resolution routing；`services-integrations` workspace search result mapping 仍缺 shared flashgrep preview/result conversion owner。上述缺口优先纳入 PR-A / PR-B / PR-C 的实际迁移范围。
+- Agent Runtime session workspace resolution、Cron / SessionControl / SessionMessage / SessionHistory 的 target session/workspace owner routing、`/goal` tool management runtime-port routing，以及 `services-integrations` workspace search preview/result conversion 已纳入已完成摘要；后续计划只保留仍需迁移的 feature/kernel、security/control-plane、execution、extension 和 cross-platform adapter 主体工作。
 
 ## 3. 后续大块 PR 节奏
 
@@ -34,9 +34,9 @@
 
 目标：
 
-- 建立 feature bundle / capability pack 的判定口径，把 `/goal`、DeepReview、MiniApp、input command、settings、UI panel 等从 Agent Kernel 能力中分离。
+- 建立 feature bundle / capability pack 的判定口径，把 DeepReview、MiniApp、input command、settings、UI panel 等产品特性从 Agent Kernel 能力中分离；`/goal` 已先完成 model tool 到 AgentRuntime thread-goal management port 的 owner routing。
 - 识别仍留在 `bitfun-core` 中的 provider-neutral feature mapping、command-to-runtime request、UI-facing DTO 和 long-running task 相关旧路径。
-- 迁移或显著简化至少一组实际 feature 主体路径，优先选择长程任务 / `/goal` 边界或 DeepReview / MiniApp 的 feature assembly 路径。
+- 迁移或显著简化至少一组实际 feature 主体路径；`/goal` 之后优先选择 DeepReview / MiniApp / input command 的 feature assembly 路径。
 
 保护：
 

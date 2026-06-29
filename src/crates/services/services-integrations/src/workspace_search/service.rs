@@ -866,4 +866,29 @@ mod tests {
         assert_eq!(results[0].matched_content.as_deref(), Some("line 42"));
         assert_eq!(results[0].preview_inside, None);
     }
+
+    #[test]
+    fn content_search_converts_line_matches_with_line_text_preview() {
+        let mut search_results = empty_search_results();
+        search_results.line_matches = serde_json::from_value(serde_json::json!([{
+            "path": "src/search.rs",
+            "line_number": 42,
+            "line_text": "let result = search();"
+        }]))
+        .expect("line_matches should decode");
+
+        let results = convert_search_results(&search_results, ContentSearchOutputMode::Content);
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(
+            results[0].matched_content.as_deref(),
+            Some("let result = search();")
+        );
+        assert_eq!(
+            results[0].preview_inside.as_deref(),
+            Some("let result = search();")
+        );
+        assert_eq!(results[0].preview_before, None);
+        assert_eq!(results[0].preview_after, None);
+    }
 }
