@@ -28,8 +28,6 @@ pub struct MCPToolWrapper {
 }
 
 impl MCPToolWrapper {
-    const MAX_RESULT_TEXT_CHARS: usize = 12_000;
-
     /// Creates a new MCP tool wrapper.
     pub fn new(
         mcp_tool: MCPTool,
@@ -53,6 +51,12 @@ impl MCPToolWrapper {
 
     fn is_blocked_in_context(&self, _context: Option<&ToolUseContext>) -> bool {
         false
+    }
+
+    // Do not pre-truncate MCP output here. The shared tool-result storage policy
+    // owns the model-visible budget and persists oversized results with a preview.
+    fn render_mcp_result_for_assistant(tool_name: &str, result: &MCPToolResult) -> String {
+        render_mcp_tool_result_for_assistant(tool_name, result, usize::MAX)
     }
 }
 
@@ -166,11 +170,7 @@ impl Tool for MCPToolWrapper {
 
     fn render_result_for_assistant(&self, output: &Value) -> String {
         if let Ok(result) = serde_json::from_value::<MCPToolResult>(output.clone()) {
-            return render_mcp_tool_result_for_assistant(
-                &self.mcp_tool.name,
-                &result,
-                Self::MAX_RESULT_TEXT_CHARS,
-            );
+            return Self::render_mcp_result_for_assistant(&self.mcp_tool.name, &result);
         }
 
         "MCP tool execution completed".to_string()
@@ -313,5 +313,27 @@ impl MCPToolAdapter {
 impl Default for MCPToolAdapter {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::service::mcp::protocol::MCPToolResultContent;
+
+    #[test]
+    fn mcp_tool_result_rendering_does_not_pretruncate_before_storage_policy() {
+        let text = "x".repeat(12_001);
+        let result = MCPToolResult {
+            content: Some(vec![MCPToolResultContent::Text { text: text.clone() }]),
+            is_error: false,
+            structured_content: None,
+            meta: None,
+        };
+
+        let rendered = MCPToolWrapper::render_mcp_result_for_assistant("large_output", &result);
+
+        assert_eq!(rendered, text);
+        assert!(!rendered.contains("[Result truncated:"));
     }
 }
