@@ -14,7 +14,11 @@ const messages: Record<string, string> = {
   'toolCards.approval.confirm': 'Allow',
   'toolCards.approval.reject': 'Reject',
   'toolCards.approval.rejectWithInstruction': 'Reject with instruction',
+  'toolCards.approval.enableAutoExecute': 'Enable tool auto execute',
   'toolCards.approval.confirmTooltip': 'Allow this tool run',
+  'toolCards.approval.enableAutoExecuteTooltip': '开启工具自动执行',
+  'toolCards.approval.autoExecuteEnabled': 'Tool auto execute enabled',
+  'toolCards.approval.autoExecuteEnableFailed': 'Failed to enable tool auto execute',
   'toolCards.approval.rejectTooltip': 'Reject this tool run',
   'toolCards.approval.rejectWithInstructionTooltip': 'Reject and tell the assistant what to do next',
   'toolCards.approval.rejectInstructionLabel': 'Rejection instruction',
@@ -54,6 +58,36 @@ vi.mock('@/component-library', () => ({
   ),
 }));
 
+const setConfigMock = vi.hoisted(() => vi.fn());
+const notificationSuccessMock = vi.hoisted(() => vi.fn());
+const notificationErrorMock = vi.hoisted(() => vi.fn());
+const eventBusEmitMock = vi.hoisted(() => vi.fn());
+
+vi.mock('@/infrastructure/config', () => ({
+  configManager: {
+    setConfig: setConfigMock,
+  },
+}));
+
+vi.mock('@/shared/notification-system', () => ({
+  notificationService: {
+    success: notificationSuccessMock,
+    error: notificationErrorMock,
+  },
+}));
+
+vi.mock('@/shared/utils/logger', () => ({
+  createLogger: () => ({
+    error: vi.fn(),
+  }),
+}));
+
+vi.mock('@/infrastructure/event-bus', () => ({
+  globalEventBus: {
+    emit: eventBusEmitMock,
+  },
+}));
+
 function execCommandItem(cmd: string, status: FlowToolItem['status'] = 'pending_confirmation'): FlowToolItem {
   return {
     id: 'tool-exec-1',
@@ -74,6 +108,11 @@ describe('ToolApprovalBar', () => {
   let root: Root;
 
   beforeEach(() => {
+    setConfigMock.mockResolvedValue(undefined);
+    notificationSuccessMock.mockClear();
+    notificationErrorMock.mockClear();
+    eventBusEmitMock.mockClear();
+
     dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', {
       pretendToBeVisual: true,
     });
@@ -165,6 +204,26 @@ describe('ToolApprovalBar', () => {
     const allowButton = container.querySelector('button[aria-label="Allow"]') as HTMLButtonElement;
     expect(allowButton.disabled).toBe(true);
     expect(allowButton.title).toBe('This tool has no executable input');
+  });
+
+  it('enables tool auto execute from the shared approval bar', async () => {
+    await act(async () => {
+      root.render(<ToolApprovalBar toolItem={execCommandItem('npm test')} />);
+    });
+
+    const autoExecuteButton = container.querySelector(
+      'button[aria-label="Enable tool auto execute"]',
+    ) as HTMLButtonElement;
+
+    expect(autoExecuteButton.title).toBe('开启工具自动执行');
+
+    await act(async () => {
+      autoExecuteButton.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(setConfigMock).toHaveBeenCalledWith('ai.skip_tool_confirmation', true);
+    expect(notificationSuccessMock).toHaveBeenCalledWith('Tool auto execute enabled', { duration: 2000 });
+    expect(eventBusEmitMock).toHaveBeenCalledWith('mode:config:updated');
   });
 
   it('does not render for non-confirmation statuses', () => {

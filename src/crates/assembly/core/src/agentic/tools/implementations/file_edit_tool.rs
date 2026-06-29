@@ -158,7 +158,7 @@ impl Tool for FileEditTool {
     }
 
     fn needs_permissions(&self, _input: Option<&Value>) -> bool {
-        false
+        true
     }
 
     async fn validate_input(

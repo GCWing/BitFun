@@ -639,7 +639,7 @@ impl Tool for CronTool {
     }
 
     async fn description(&self) -> BitFunResult<String> {
-        Ok(r#"Manage scheduled jobs for agent sessions.
+        Ok(r#"Manage scheduled jobs.
 
 Defaults:
 - "session_id": defaults to the current session for "list" and "add".
@@ -677,7 +677,7 @@ Patch schema for "update":
     }
 
     fn short_description(&self) -> String {
-        "Manage scheduled jobs for agent sessions.".to_string()
+        "Manage scheduled jobs.".to_string()
     }
 
     fn default_exposure(&self) -> ToolExposure {

@@ -1,11 +1,16 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, MessageSquareX, X } from 'lucide-react';
+import { Check, MessageSquareX, ShieldCheck, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { IconButton } from '@/component-library';
+import { configManager } from '@/infrastructure/config';
+import { notificationService } from '@/shared/notification-system';
+import { createLogger } from '@/shared/utils/logger';
 import { AcpPermissionActions } from '../tool-cards/AcpPermissionActions';
 import { hasAcpPermissionOptions } from '../tool-cards/AcpPermissionActions.utils';
 import type { FlowToolItem, ToolRejectOptions } from '../types/flow-chat';
 import './ToolApprovalBar.scss';
+
+const log = createLogger('ToolApprovalBar');
 
 interface ToolApprovalBarProps {
   toolItem: FlowToolItem;
@@ -35,6 +40,7 @@ export const ToolApprovalBar: React.FC<ToolApprovalBarProps> = ({
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [showInstructionInput, setShowInstructionInput] = useState(false);
   const [instruction, setInstruction] = useState('');
+  const [isEnablingAutoExecute, setIsEnablingAutoExecute] = useState(false);
   const instructionInputRef = useRef<HTMLInputElement | null>(null);
   const input = toolItem.toolCall?.input;
   const hasPermissionOptions = hasAcpPermissionOptions(toolItem);
@@ -98,6 +104,28 @@ export const ToolApprovalBar: React.FC<ToolApprovalBarProps> = ({
     event.preventDefault();
     event.stopPropagation();
     onReject?.();
+  };
+
+  const handleEnableAutoExecute = async (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (isEnablingAutoExecute) {
+      return;
+    }
+
+    setIsEnablingAutoExecute(true);
+    try {
+      await configManager.setConfig('ai.skip_tool_confirmation', true);
+      notificationService.success(t('toolCards.approval.autoExecuteEnabled'), { duration: 2000 });
+      const { globalEventBus } = await import('@/infrastructure/event-bus');
+      globalEventBus.emit('mode:config:updated');
+    } catch (error) {
+      log.error('Failed to enable tool auto execute', { error });
+      notificationService.error(t('toolCards.approval.autoExecuteEnableFailed'));
+    } finally {
+      setIsEnablingAutoExecute(false);
+    }
   };
 
   const handleRejectWithInstruction = (event: React.MouseEvent<HTMLButtonElement>) => {
@@ -187,6 +215,18 @@ export const ToolApprovalBar: React.FC<ToolApprovalBarProps> = ({
                 aria-label={t('toolCards.approval.rejectWithInstruction')}
               >
                 <MessageSquareX size={13} />
+              </IconButton>
+              <span className="tool-approval-bar__divider" aria-hidden="true" />
+              <IconButton
+                className="tool-approval-bar__icon-button tool-approval-bar__auto-execute-button"
+                variant="default"
+                size="xs"
+                onClick={handleEnableAutoExecute}
+                disabled={isEnablingAutoExecute}
+                tooltip={t('toolCards.approval.enableAutoExecuteTooltip')}
+                aria-label={t('toolCards.approval.enableAutoExecute')}
+              >
+                <ShieldCheck size={13} />
               </IconButton>
             </>
           )}

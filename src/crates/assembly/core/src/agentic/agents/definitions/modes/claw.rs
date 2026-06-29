@@ -28,6 +28,7 @@ impl ClawMode {
                 "Grep".to_string(),
                 "Glob".to_string(),
                 "WebSearch".to_string(),
+                "WebFetch".to_string(),
                 "Skill".to_string(),
                 "Git".to_string(),
                 "SessionControl".to_string(),

@@ -47,6 +47,28 @@
   flex-shrink: 0;
 }
 
+.tool-approval-bar__divider {
+  width: 1px;
+  height: 16px;
+  margin: 0 2px;
+  flex-shrink: 0;
+  background: color-mix(in srgb, var(--color-border-subtle) 80%, transparent);
+}
+
+.tool-approval-bar__auto-execute-button {
+  color: var(--color-text-secondary);
+}
+
+.tool-approval-bar__auto-execute-button:hover:not(:disabled) {
+  background: rgba(var(--component-action-success-rgb), 0.18);
+  color: var(--color-success);
+}
+
+.tool-approval-bar__auto-execute-button:active:not(:disabled) {
+  background: rgba(var(--component-action-success-rgb), 0.24);
+  color: var(--color-success);
+}
+
 .tool-approval-bar__instruction {
   display: flex;
   align-items: center;
