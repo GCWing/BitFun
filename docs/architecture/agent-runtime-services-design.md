@@ -91,11 +91,11 @@ OpenCode adapter 只产出可注册的 descriptor、provider 和 contribution；
 | API / owner | 主要 crate | 允许依赖 | 不允许依赖 | 对外承诺 |
 |---|---|---|---|---|
 | Product Assembly API | `src/crates/assembly/*` | feature packs、Kernel API、Execution API、Runtime Services、platform providers | Agent 内部状态机、具体 UI 组件实现作为下层依赖 | 按产品形态组装能力，输出 typed runtime parts |
-| Product Feature API | `product-capabilities`、`product-domains`、对应 UI contribution owner | Kernel API、Execution API、UI Extension Contract、domain contract | OS concrete、Tauri handle、permission 最终策略 | 把底层能力映射为用户功能和默认策略 |
+| Product Feature API | `product-capabilities`、`product-domains`、对应 UI contribution owner | Kernel API、UI Extension Contract、Capability/Effect contract、domain contract | OS concrete、Tauri handle、Execution concrete、permission 最终策略 | 把内核能力和稳定 descriptor 映射为用户功能和默认策略 |
 | Rust Kernel API | `agent-runtime`、`agent-stream`、`runtime-services`、`runtime-ports`、`events`、`core-types` | stable contracts、tool/harness registry、typed services | `bitfun-core`、Tauri、Web UI、ACP protocol、provider concrete | session / turn / event / permission / scheduler / context 等 SDK 候选接口 |
 | Execution API | `tool-contracts`、`tool-provider-groups`、`tool-execution`、`harness` | stable contracts、runtime ports、注入的 service ports | product registry、UI、具体 filesystem/Git/terminal/MCP client | tool、skills、MCP tool bridge、sandbox、harness 执行语义 |
 | Extension API | extension host / OpenCode / ACP adapter owner | Rust Kernel API contract、UI Extension Contract、Capability/Effect contract | Web UI React implementation、Tauri state、kernel 权威状态写入 | 把外部生态能力转换为 descriptor、provider 和 candidate effect |
-| Cross-platform Adapter API | `services/*`、`adapters/*`、app-local provider | runtime ports、core DTO、允许的第三方库 | Product Feature、Agent Kernel 状态机、UI command | 实现 filesystem、terminal、network、remote、Git、MCP transport、AI provider 等外部 I/O |
+| Platform / Provider Adapter API | `services/*`、`adapters/*`、app-local provider | runtime ports、stable DTO、允许的第三方库 | Product Feature、Agent Kernel 状态机、UI command | 实现 filesystem、terminal、network、remote、Git、MCP transport、AI provider 等边界外 I/O |
 | Stable Contract API | `contracts/*` | 低层无行为依赖或标准序列化依赖 | 上层 crate、concrete manager、UI rendering | DTO、event、port、capability/effect、permission、sandbox、audit、typed error |
 
 禁止依赖：
@@ -105,7 +105,7 @@ OpenCode adapter 只产出可注册的 descriptor、provider 和 contribution；
 - `tool-contracts` 依赖具体 service crate；`tool-execution` 依赖产品 registry、产品 permission policy 或具体 UI。
 - `harness` 依赖具体 filesystem/Git/terminal manager；它只通过 ports 和 provider contract 获取能力。
 - Extension Host 依赖 Web UI React component implementation、Tauri app state 或 concrete core manager。
-- Product Feature 直接依赖 platform adapter concrete、全局 mutable runtime state 或外部系统 client。
+- Product Feature 直接依赖 platform adapter concrete、execution concrete、全局 mutable runtime state 或边界外资源 client。
 
 接口暴露原则：
 
@@ -113,6 +113,21 @@ OpenCode adapter 只产出可注册的 descriptor、provider 和 contribution；
 - 下层不暴露上层对象。Kernel 不返回 UI command；Execution 不返回 React descriptor 以外的 UI 实现；Platform Adapter 不返回产品命令。
 - 注册接口接收 typed provider / descriptor / policy，不接收 `Any`、无类型 service name 或全局 mutable registry。
 - 兼容 facade 可以保留旧路径导出，但旧路径不得成为新 API 的真实 owner。
+
+### 1.5 平台适配与边界外资源
+
+Platform / Provider Adapter 是仓库内实现层，负责把稳定 port 转换为 OS、network、terminal、remote、MCP
+transport、AI provider、browser runtime 或第三方库调用。边界外资源不是 crate、不是逻辑层，也不是所有模块可依赖的
+基础设施。
+
+实现规则：
+
+- Product Assembly 是唯一可以选择具体 platform provider 的位置；选择结果以 typed runtime parts 注入。
+- Kernel、Execution、Extension 和 Product Feature 只消费 stable contract、port handle 或 descriptor，不导入具体
+  provider crate。
+- Platform adapter 不读取 delivery profile、feature pack 或 UI command；形态差异由 Product Assembly 注入。
+- 外部资源错误必须在 adapter 边界转换为 typed error、unsupported/unavailable 或 capability/effect fact，不能泄漏为
+  产品层专用分支。
 
 ## 2. 稳定接口与运行时服务
 

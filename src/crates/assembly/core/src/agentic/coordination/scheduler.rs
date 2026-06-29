@@ -429,9 +429,7 @@ impl DialogScheduler {
     fn session_state_fact(state: Option<&SessionState>) -> DialogSessionStateFact {
         match state {
             None => DialogSessionStateFact::Missing,
-            Some(SessionState::Idle) => DialogSessionStateFact::Idle,
-            Some(SessionState::Processing { .. }) => DialogSessionStateFact::Processing,
-            Some(SessionState::Error { .. }) => DialogSessionStateFact::Error,
+            Some(state) => state.dialog_state_fact(),
         }
     }
 

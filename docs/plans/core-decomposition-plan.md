@@ -10,6 +10,8 @@
 
 - `bitfun-core` 最终收敛为 compatibility facade、`product-full` 组装边界和少量迁移期 adapter。
 - 迁移按概念 owner 判断：Product Feature、Agent Kernel、Execution、Extension、Cross-platform Adapter、Stable Contracts。
+- 外部系统不是 owner 层级；OS、Git、MCP server、AI provider、remote host、browser runtime 和 plugin package 只在
+  adapter I/O 边界出现。除 Product Assembly 外，调用方应依赖 port、descriptor 或 stable contract，而不是 concrete provider。
 - 新抽象必须同步删除、迁移或显著简化旧 core 主体路径；纯 facade、纯 guard、纯文档或空接口不算完成。
 - 产品特性和内核能力必须分开：长程任务、调度、权限、上下文、session/workspace、memory、DFX、hook/event 属于内核；`/goal`、UI、settings、命令和默认策略属于产品特性。
 - Product API 同时覆盖 Rust Kernel API、UI Extension Contract 和 Capability/Effect API；不能把所有能力堆进单一后端 API。
@@ -24,7 +26,7 @@
 - Runtime Services、Agent Runtime、Tool Contracts、Tool Execution、Harness、Product Domains、Services Core、Services Integrations 等 owner crate 已建立；部分 concrete 生命周期仍由 core concrete manager 或产品命令路径持有。
 - Custom agent / mode / skill、Agent lifecycle、tool side-effect、Computer Use、file tool、MiniApp、DeepReview、DeepResearch、remote-connect、workspace search、remote SSH/SFTP/PTY 等多批 provider-neutral 或 concrete owner 已迁出。
 - Root boundary scripts 已覆盖核心 owner 防回流、six-layer path 解析、facade-only 文件、custom agent owner / custom subagent wrapper 保护和重点 feature gate。
-- Agent Runtime session workspace resolution、Cron / SessionControl / SessionMessage / SessionHistory 的 target session/workspace owner routing、`/goal` tool management runtime-port routing，以及 `services-integrations` workspace search preview/result conversion 已纳入已完成摘要；后续计划只保留仍需迁移的 feature/kernel、security/control-plane、execution、extension 和 cross-platform adapter 主体工作。
+- Agent Runtime session workspace resolution、Cron / SessionControl / SessionMessage / SessionHistory 的 target session/workspace owner routing、`/goal` tool management runtime-port routing、session/config/context/lifecycle fact owner 收口，以及 `services-integrations` workspace search preview/result conversion 已纳入已完成摘要；后续计划只保留仍需迁移的 feature/kernel、security/control-plane、execution、extension 和 cross-platform adapter 主体工作。
 
 ## 3. 后续大块 PR 节奏
 
@@ -47,7 +49,7 @@
 
 目标：
 
-- 收敛 Kernel API 的 builder / runner / event stream / permission / session / workspace / memory / DFX contract。
+- 继续收敛 Kernel API 的 builder / runner / event stream / permission / session / workspace / memory / DFX contract；session/config/summary facts、persisted session state sidecar、dialog-turn facts、side-question runtime tracking、context profile policy 和 round-level tool confirmation gate 已完成 owner 收口。
 - 把安全控制面所需的 capability/effect/security decision facts 下沉为稳定 contract 或 kernel facts，而不是散落在 UI、tool、MCP、hook 和 plugin 路径。
 - 迁移或显著简化仍在 core 中的 provider-neutral scheduler、permission coordination、event routing、memory/context 或 long-running task 事实路径。
 
@@ -89,6 +91,7 @@
 - 收口 filesystem、network、process/thread/time、terminal、remote、Git、MCP transport、AI/provider protocol、browser/desktop automation 的 adapter/provider 边界。
 - 进一步移除 `bitfun-core` 对 OS/provider concrete 的直接依赖。
 - 建立 Desktop、CLI、Web、ACP、Remote、SDK 的最小能力矩阵和验证口径。
+- 确认 Kernel、Execution、Extension、Product Feature 不直接依赖 platform concrete；具体 provider 只由 Product Assembly 注册。
 
 保护：
 

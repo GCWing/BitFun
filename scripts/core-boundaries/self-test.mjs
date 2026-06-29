@@ -1073,6 +1073,51 @@ export function runManifestParserSelfTest({
       contracts: ['[features]', 'default = []'],
     },
     {
+      path: 'src/crates/execution/agent-runtime/src/context_profile.rs',
+      contracts: [
+        'ContextProfile',
+        'ModelCapabilityProfile',
+        'ContextProfilePolicy',
+        'for_subagent_context_and_models',
+        'model_capability_weak_for_mini',
+      ],
+    },
+    {
+      path: 'src/crates/execution/agent-runtime/src/session_state.rs',
+      contracts: [
+        'SessionState',
+        'ProcessingPhase',
+        'dialog_state_fact',
+        'session_state_label_for_state',
+        'processing_state_serialization_stays_compatible',
+      ],
+    },
+    {
+      path: 'src/crates/execution/agent-runtime/src/session.rs',
+      contracts: [
+        'Session',
+        'SessionConfig',
+        'SessionSummary',
+        'SessionKind',
+        'PersistedSessionStateFile',
+        'sanitize_persisted_session_state',
+        'persisted_session_state_file_shape_stays_compatible',
+      ],
+    },
+    {
+      path: 'src/crates/execution/agent-runtime/src/dialog_turn.rs',
+      contracts: ['new_turn_id', 'TurnStats'],
+    },
+    {
+      path: 'src/crates/execution/agent-runtime/src/side_question.rs',
+      contracts: [
+        'SideQuestionRuntime',
+        'ActiveBtwTurn',
+        'register_btw_turn',
+        'registering_same_request_cancels_previous_token',
+      ],
+    },
+    {
       path: 'src/crates/execution/agent-runtime/tests/sdk_smoke.rs',
       contracts: [
         'sdk_facade_exposes_versioned_preview_compatibility_contract',
@@ -1203,12 +1248,15 @@ export function runManifestParserSelfTest({
       path: 'src/crates/execution/agent-runtime/src/tool_confirmation.rs',
       contracts: [
         'ToolConfirmationRequestFacts',
+        'ToolConfirmationGateFacts',
+        'ToolConfirmationGatePlan',
         'ToolConfirmationPlan',
         'ToolConfirmationOutcome',
         'ToolConfirmationWaitResult',
         'ToolConfirmationResponse',
         'ToolConfirmationChannelStore',
         'ConfirmationFailureKind',
+        'resolve_tool_confirmation_gate',
         'resolve_tool_confirmation_plan',
         'resolve_confirmation_failure',
         'resolve_confirmation_wait_result',
@@ -1241,6 +1289,8 @@ export function runManifestParserSelfTest({
     {
       path: 'src/crates/execution/agent-runtime/tests/tool_confirmation_contracts.rs',
       contracts: [
+        'confirmation_gate_preserves_skip_policy_precedence',
+        'confirmation_gate_requires_confirmation_only_for_permissioned_tools',
         'confirmation_plan_requires_permission_only_when_both_flags_are_true',
         'confirmation_plan_preserves_legacy_no_timeout_one_year_deadline',
         'confirmation_failure_mapping_preserves_legacy_reasons_and_errors',
@@ -1527,7 +1577,9 @@ export function runManifestParserSelfTest({
     },
     {
       path: 'src/crates/assembly/core/src/agentic/events/types.rs',
-      contracts: ['bitfun_agent_runtime::events::session_state_label'],
+      contracts: [
+        'bitfun_agent_runtime::session_state::session_state_label_for_state',
+      ],
     },
     {
       path: 'src/crates/assembly/core/src/agentic/agents/prompt_builder/user_context.rs',

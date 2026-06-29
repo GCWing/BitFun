@@ -30,6 +30,7 @@ impl AgentRuntimeSdkCompatibility {
     }
 }
 
+pub use crate::context_profile::{ContextProfile, ContextProfilePolicy, ModelCapabilityProfile};
 pub use crate::post_call_hooks::{
     RuntimeHookErrorPolicy, RuntimeHookKind, RuntimeHookPlan, RuntimeHookRegistry,
     RuntimeHookRegistryBuildError,
@@ -39,6 +40,7 @@ pub use crate::runtime::{
     RuntimeAgentRegistry, RuntimeAgentRegistryQuery, RuntimeBuildError, RuntimeError,
     RuntimeToolRegistry, SessionSelector,
 };
+pub use crate::session_state::{session_state_label_for_state, ProcessingPhase, SessionState};
 pub use bitfun_agent_tools::{ToolRegistry, ToolRegistryItem};
 pub use bitfun_harness::{
     build_descriptor_harness_registry, HarnessCapability, HarnessProviderDescriptor,

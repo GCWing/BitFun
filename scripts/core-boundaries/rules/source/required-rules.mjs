@@ -346,6 +346,133 @@ export const requiredContentRules = [
     ],
   },
   {
+    path: 'src/crates/execution/agent-runtime/src/context_profile.rs',
+    reason:
+      'agent-runtime must own provider-neutral context profile and model capability policy facts',
+    patterns: [
+      {
+        regex: /\bpub enum ContextProfile\b/,
+        message: 'missing context profile fact',
+      },
+      {
+        regex: /\bpub enum ModelCapabilityProfile\b/,
+        message: 'missing model capability profile fact',
+      },
+      {
+        regex: /\bpub struct ContextProfilePolicy\b/,
+        message: 'missing context profile policy fact',
+      },
+      {
+        regex: /\bfor_subagent_context_and_models\b/,
+        message: 'missing subagent context/model policy helper',
+      },
+      {
+        regex: /\bmodel_capability_weak_for_mini\b/,
+        message: 'missing weak-model regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/execution/agent-runtime/src/session_state.rs',
+    reason:
+      'agent-runtime must own provider-neutral session state facts and event-label projection',
+    patterns: [
+      {
+        regex: /\bpub enum SessionState\b/,
+        message: 'missing session state fact',
+      },
+      {
+        regex: /\bpub enum ProcessingPhase\b/,
+        message: 'missing processing phase fact',
+      },
+      {
+        regex: /\bdialog_state_fact\b/,
+        message: 'missing session state fact projection',
+      },
+      {
+        regex: /\bsession_state_label_for_state\b/,
+        message: 'missing session state label projection',
+      },
+      {
+        regex: /\bprocessing_state_serialization_stays_compatible\b/,
+        message: 'missing session state serialization regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/execution/agent-runtime/src/session.rs',
+    reason:
+      'agent-runtime must own provider-neutral session config, summary, and persisted state facts',
+    patterns: [
+      {
+        regex: /\bpub struct Session\b/,
+        message: 'missing session fact',
+      },
+      {
+        regex: /\bpub struct SessionConfig\b/,
+        message: 'missing session config fact',
+      },
+      {
+        regex: /\bpub struct SessionSummary\b/,
+        message: 'missing session summary fact',
+      },
+      {
+        regex: /\bpub use bitfun_core_types::SessionKind\b/,
+        message: 'missing session kind compatibility export',
+      },
+      {
+        regex: /\bpub struct PersistedSessionStateFile\b/,
+        message: 'missing persisted session state sidecar fact',
+      },
+      {
+        regex: /\bsanitize_persisted_session_state\b/,
+        message: 'missing persisted session state sanitization owner',
+      },
+      {
+        regex: /\bpersisted_session_state_file_shape_stays_compatible\b/,
+        message: 'missing persisted session state wire-shape regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/execution/agent-runtime/src/dialog_turn.rs',
+    reason:
+      'agent-runtime must own provider-neutral dialog-turn id and statistics facts',
+    patterns: [
+      {
+        regex: /\bpub fn new_turn_id\b/,
+        message: 'missing dialog-turn id helper',
+      },
+      {
+        regex: /\bpub struct TurnStats\b/,
+        message: 'missing dialog-turn statistics fact',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/execution/agent-runtime/src/side_question.rs',
+    reason:
+      'agent-runtime must own runtime-only side-question cancellation and active-turn tracking',
+    patterns: [
+      {
+        regex: /\bpub struct SideQuestionRuntime\b/,
+        message: 'missing side-question runtime owner',
+      },
+      {
+        regex: /\bpub struct ActiveBtwTurn\b/,
+        message: 'missing active /btw turn fact',
+      },
+      {
+        regex: /\bregister_btw_turn\b/,
+        message: 'missing active /btw turn registration',
+      },
+      {
+        regex: /\bregistering_same_request_cancels_previous_token\b/,
+        message: 'missing side-question cancellation regression',
+      },
+    ],
+  },
+  {
     path: 'src/crates/execution/agent-runtime/examples/sdk_minimal.rs',
     reason:
       'agent-runtime SDK must keep a minimal external embedder example that uses the sdk facade without core',
@@ -1241,6 +1368,14 @@ export const requiredContentRules = [
         message: 'missing tool confirmation request facts',
       },
       {
+        regex: /\bpub struct ToolConfirmationGateFacts\b/,
+        message: 'missing tool confirmation gate facts',
+      },
+      {
+        regex: /\bpub enum ToolConfirmationGatePlan\b/,
+        message: 'missing tool confirmation gate plan',
+      },
+      {
         regex: /\bpub enum ToolConfirmationPlan\b/,
         message: 'missing tool confirmation plan contract',
       },
@@ -1267,6 +1402,10 @@ export const requiredContentRules = [
       {
         regex: /\bpub fn resolve_tool_confirmation_plan\b/,
         message: 'missing tool confirmation plan resolver',
+      },
+      {
+        regex: /\bpub fn resolve_tool_confirmation_gate\b/,
+        message: 'missing tool confirmation gate resolver',
       },
       {
         regex: /\bpub fn resolve_confirmation_failure\b/,
@@ -1313,6 +1452,14 @@ export const requiredContentRules = [
       {
         regex: /\bconfirmation_plan_requires_permission_only_when_both_flags_are_true\b/,
         message: 'missing tool confirmation gate regression',
+      },
+      {
+        regex: /\bconfirmation_gate_preserves_skip_policy_precedence\b/,
+        message: 'missing tool confirmation skip-policy regression',
+      },
+      {
+        regex: /\bconfirmation_gate_requires_confirmation_only_for_permissioned_tools\b/,
+        message: 'missing tool confirmation permissioned-tool regression',
       },
       {
         regex: /\bconfirmation_plan_preserves_legacy_no_timeout_one_year_deadline\b/,
@@ -2226,7 +2373,7 @@ export const requiredContentRules = [
       'core event types must preserve legacy import path while agent-runtime owns session-state labels',
     patterns: [
       {
-        regex: /bitfun_agent_runtime::events::session_state_label/,
+        regex: /bitfun_agent_runtime::session_state::session_state_label_for_state/,
         message: 'missing session-state label owner delegation',
       },
     ],

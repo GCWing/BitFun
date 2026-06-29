@@ -16,6 +16,26 @@ pub struct ToolConfirmationRequestFacts {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ToolConfirmationGateFacts {
+    pub global_skip_tool_confirmation: bool,
+    pub context_skip_tool_confirmation: bool,
+    pub any_tool_needs_permission: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ToolConfirmationGatePlan {
+    SkipByPolicy,
+    SkipNoPermissionedTool,
+    AwaitPermissionedTool,
+}
+
+impl ToolConfirmationGatePlan {
+    pub const fn confirm_before_run(self) -> bool {
+        matches!(self, Self::AwaitPermissionedTool)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ToolConfirmationPlan {
     Skip,
     Await {
@@ -99,6 +119,20 @@ impl ToolConfirmationChannelStore {
         };
         let _ = sender.send(response);
         true
+    }
+}
+
+pub fn resolve_tool_confirmation_gate(
+    facts: ToolConfirmationGateFacts,
+) -> ToolConfirmationGatePlan {
+    if facts.global_skip_tool_confirmation || facts.context_skip_tool_confirmation {
+        return ToolConfirmationGatePlan::SkipByPolicy;
+    }
+
+    if facts.any_tool_needs_permission {
+        ToolConfirmationGatePlan::AwaitPermissionedTool
+    } else {
+        ToolConfirmationGatePlan::SkipNoPermissionedTool
     }
 }
 
