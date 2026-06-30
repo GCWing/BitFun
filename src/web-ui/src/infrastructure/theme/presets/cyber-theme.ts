@@ -106,8 +106,6 @@ export const bitfunCyberTheme: ThemeConfig = {
       infoBorder: cyberAccent(0.35),
 
 
-      highlight: '#ffdd44',
-      highlightBg: 'rgba(255, 221, 68, 0.15)',
     },
 
     border: {
@@ -198,53 +196,10 @@ export const bitfunCyberTheme: ThemeConfig = {
 
   components: {
 
-    windowControls: createWindowControls({
-      standard: {
-        dot: cyberAccent(0.5),
-        dotShadow: `0 0 6px ${cyberAccent(0.35)}`,
-        hoverBg: cyberAccent(0.15),
-        hoverColor: CYBER_ACCENT,
-        hoverBorder: cyberAccent(0.3),
-        hoverShadow: `0 0 12px ${cyberAccent(0.3)}, 0 2px 8px ${cyberAccent(0.2)}, inset 0 1px 0 ${cyberAccent(0.2)}`,
-      },
-      close: {
-        dot: cyberError(0.5),
-        dotShadow: `0 0 6px ${cyberError(0.35)}`,
-        hoverBg: cyberError(0.15),
-        hoverColor: CYBER_ERROR,
-        hoverBorder: cyberError(0.3),
-        hoverShadow: `0 0 12px ${cyberError(0.3)}, 0 2px 8px ${cyberError(0.2)}, inset 0 1px 0 ${cyberError(0.2)}`,
-      },
-      common: {
-        defaultColor: rgbaFromHex(CYBER_TEXT_PRIMARY, 0.9),
-        defaultDot: cyberAccent(0.2),
-        disabledDot: cyberAccent(0.1),
-        flowGradient: `linear-gradient(90deg, transparent, ${cyberAccent(0.08)}, ${cyberAccent(0.12)}, ${cyberAccent(0.08)}, transparent)`,
-      },
-    }),
+    windowControls: createWindowControls(CYBER_ERROR),
 
     button: {
 
-      default: {
-        background: cyberAccent(0.08),
-        color: CYBER_TEXT_MUTED,
-        border: cyberAccent(0.15),
-        shadow: `0 0 8px ${cyberAccent(0.1)}`,
-      },
-      hover: {
-        background: cyberAccent(0.14),
-        color: CYBER_TEXT_SECONDARY,
-        border: cyberAccent(0.3),
-        shadow: `0 0 16px ${cyberAccent(0.2)}, 0 2px 8px ${overlayBlack(0.3)}`,
-        transform: 'translateY(-1px)',
-      },
-      active: {
-        background: cyberAccent(0.12),
-        color: CYBER_TEXT_SECONDARY,
-        border: cyberAccent(0.35),
-        shadow: `0 0 12px ${cyberAccent(0.15)}`,
-        transform: 'translateY(0)',
-      },
 
 
       primary: {
@@ -273,24 +228,12 @@ export const bitfunCyberTheme: ThemeConfig = {
 
       ghost: {
         default: {
-          background: 'transparent',
           color: CYBER_TEXT_MUTED,
-          border: cyberAccent(0.2),
-          shadow: 'none',
         },
         hover: {
           background: cyberAccent(0.1),
           color: CYBER_TEXT_SECONDARY,
           border: cyberAccent(0.35),
-          shadow: `0 0 12px ${cyberAccent(0.15)}`,
-          transform: 'translateY(-1px)',
-        },
-        active: {
-          background: cyberAccent(0.08),
-          color: CYBER_TEXT_SECONDARY,
-          border: cyberAccent(0.3),
-          shadow: `0 0 8px ${cyberAccent(0.1)}`,
-          transform: 'translateY(0)',
         },
       },
     },

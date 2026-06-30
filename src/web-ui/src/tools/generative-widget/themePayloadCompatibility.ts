@@ -80,6 +80,15 @@ const WIDGET_THEME_COMPAT_ALIAS_FALLBACKS = {
   '--spacing-12': '--size-gap-12',
   '--spacing-16': '--size-gap-16',
   '--text-tertiary': '--color-text-muted',
+  '--tool-card-bg-primary': '--element-bg-base',
+  '--tool-card-bg-secondary': '--element-bg-soft',
+  '--tool-card-bg-hover': '--element-bg-medium',
+  '--tool-card-bg-elevated': '--element-bg-elevated',
+  '--tool-card-border': '--border-base',
+  '--tool-card-border-subtle': '--border-subtle',
+  '--tool-card-text-primary': '--color-text-primary',
+  '--tool-card-text-secondary': '--color-text-secondary',
+  '--tool-card-text-muted': '--color-text-muted',
   '--tool-compact-summary-font': '--font-family-sans',
 } as const;
 

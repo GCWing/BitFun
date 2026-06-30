@@ -8,8 +8,6 @@ import type {
   WindowControlsConfig,
 } from '../types';
 
-type WindowControlState = WindowControlsConfig['minimize'];
-
 export const STATIC_BLACK = '#000000';
 export const STATIC_WHITE = '#ffffff';
 
@@ -47,16 +45,9 @@ export function overlayWhite(alpha: number | string): string {
   return rgbaFromHex(STATIC_WHITE, alpha);
 }
 
-export function createWindowControls(config: {
-  standard: WindowControlState;
-  close: WindowControlState;
-  common: WindowControlsConfig['common'];
-}): WindowControlsConfig {
+export function createWindowControls(closeHoverColor: WindowControlsConfig['close']['hoverColor']): WindowControlsConfig {
   return {
-    minimize: { ...config.standard },
-    maximize: { ...config.standard },
-    close: { ...config.close },
-    common: { ...config.common },
+    close: { hoverColor: closeHoverColor },
   };
 }
 

@@ -51,9 +51,9 @@ import './CodeReviewToolCard.scss';
 const log = createLogger('CodeReviewToolCard');
 
 const riskLevelColors: Record<string, string> = {
-  low: 'var(--tool-card-positive-color)',
+  low: 'var(--color-success)',
   medium: 'var(--color-warning)',
-  high: 'var(--tool-card-risk-high-color)',
+  high: 'color-mix(in srgb, var(--color-warning) 55%, var(--color-error))',
   critical: 'var(--color-error)',
 };
 

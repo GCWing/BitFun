@@ -68,10 +68,6 @@ export interface SemanticColors {
   info: ColorValue;
   infoBg: ColorValue;
   infoBorder: ColorValue;
-  
-  
-  highlight: ColorValue;
-  highlightBg: ColorValue;
 }
 
  
@@ -177,33 +173,6 @@ export interface OpacityConfig {
 
  
 export interface ButtonConfig {
-  
-  default: {
-    background: ColorValue;
-    color: ColorValue;
-    border: ColorValue;
-    shadow?: string;
-  };
-  
-  
-  hover: {
-    background: ColorValue;
-    color: ColorValue;
-    border: ColorValue;
-    shadow?: string;
-    transform?: string;
-  };
-  
-  
-  active: {
-    background: ColorValue;
-    color: ColorValue;
-    border: ColorValue;
-    shadow?: string;
-    transform?: string;
-  };
-  
-  
   primary: {
     default: {
       background: ColorValue;
@@ -230,66 +199,20 @@ export interface ButtonConfig {
   
   ghost: {
     default: {
-      background: ColorValue;
       color: ColorValue;
-      border: ColorValue;
-      shadow?: string;
     };
     hover: {
       background: ColorValue;
       color: ColorValue;
       border: ColorValue;
-      shadow?: string;
-      transform?: string;
-    };
-    active: {
-      background: ColorValue;
-      color: ColorValue;
-      border: ColorValue;
-      shadow?: string;
-      transform?: string;
     };
   };
 }
 
  
 export interface WindowControlsConfig {
-  
-  minimize: {
-    dot: ColorValue;           
-    dotShadow?: string;        
-    hoverBg: ColorValue;       
-    hoverColor: ColorValue;    
-    hoverBorder: ColorValue;   
-    hoverShadow?: string;      
-  };
-  
-  
-  maximize: {
-    dot: ColorValue;           
-    dotShadow?: string;        
-    hoverBg: ColorValue;       
-    hoverColor: ColorValue;    
-    hoverBorder: ColorValue;   
-    hoverShadow?: string;      
-  };
-  
-  
   close: {
-    dot: ColorValue;           
-    dotShadow?: string;        
-    hoverBg: ColorValue;       
-    hoverColor: ColorValue;    
-    hoverBorder: ColorValue;   
-    hoverShadow?: string;      
-  };
-  
-  
-  common: {
-    defaultColor: ColorValue;          
-    defaultDot: ColorValue;            
-    disabledDot: ColorValue;           
-    flowGradient?: string;             
+    hoverColor: ColorValue;
   };
 }
 

@@ -27,7 +27,6 @@ const CHINA_STYLE_ERROR = '#c8102e';
 const CHINA_STYLE_BORDER = '#6a5c46';
 
 const chinaStylePaper = (alpha: number | string) => rgbaFromHex(CHINA_STYLE_PAPER, alpha);
-const chinaStyleInk = (alpha: number | string) => rgbaFromHex(CHINA_STYLE_INK, alpha);
 const chinaStyleBlue = (alpha: number | string) => rgbaFromHex(CHINA_STYLE_BLUE, alpha);
 const chinaStyleBlueHover = (alpha: number | string) => rgbaFromHex(CHINA_STYLE_BLUE_HOVER, alpha);
 const chinaStyleGreen = (alpha: number | string) => rgbaFromHex(CHINA_STYLE_GREEN, alpha);
@@ -106,8 +105,6 @@ export const bitfunChinaStyleTheme: ThemeConfig = {
       info: CHINA_STYLE_BLUE,
       infoBg: chinaStyleBlue(0.08),
       infoBorder: chinaStyleBlue(0.25),
-      highlight: CHINA_STYLE_BLUE,
-      highlightBg: chinaStyleBlue(0.12),
     },
 
     border: {
@@ -195,53 +192,10 @@ export const bitfunChinaStyleTheme: ThemeConfig = {
 
   components: {
 
-    windowControls: createWindowControls({
-      standard: {
-        dot: chinaStyleBlue(0.45),
-        dotShadow: `0 0 4px ${chinaStyleBlue(0.2)}`,
-        hoverBg: chinaStyleBlue(0.12),
-        hoverColor: CHINA_STYLE_BLUE,
-        hoverBorder: chinaStyleBlue(0.2),
-        hoverShadow: `0 2px 8px ${chinaStyleBlue(0.15)}, inset 0 1px 0 ${rgbaFromHex(STATIC_WHITE, 0.5)}`,
-      },
-      close: {
-        dot: chinaStyleError(0.45),
-        dotShadow: `0 0 4px ${chinaStyleError(0.2)}`,
-        hoverBg: chinaStyleError(0.12),
-        hoverColor: CHINA_STYLE_ERROR,
-        hoverBorder: chinaStyleError(0.2),
-        hoverShadow: `0 2px 8px ${chinaStyleError(0.15)}, inset 0 1px 0 ${rgbaFromHex(STATIC_WHITE, 0.5)}`,
-      },
-      common: {
-        defaultColor: chinaStyleInk(0.9),
-        defaultDot: chinaStyleBorder(0.2),
-        disabledDot: chinaStyleBorder(0.1),
-        flowGradient: `linear-gradient(90deg, transparent, ${chinaStyleBorder(0.05)}, ${chinaStyleBorder(0.08)}, ${chinaStyleBorder(0.05)}, transparent)`,
-      },
-    }),
+    windowControls: createWindowControls(CHINA_STYLE_ERROR),
 
     button: {
 
-      default: {
-        background: chinaStyleBlue(0.09),
-        color: '#5a5a5a',
-        border: 'transparent',
-        shadow: 'none',
-      },
-      hover: {
-        background: chinaStyleBlue(0.16),
-        color: CHINA_STYLE_BUTTON_TEXT,
-        border: 'transparent',
-        shadow: 'none',
-        transform: 'none',
-      },
-      active: {
-        background: chinaStyleBlue(0.12),
-        color: CHINA_STYLE_BUTTON_TEXT,
-        border: 'transparent',
-        shadow: 'none',
-        transform: 'none',
-      },
 
 
       primary: {
@@ -270,24 +224,12 @@ export const bitfunChinaStyleTheme: ThemeConfig = {
 
       ghost: {
         default: {
-          background: 'transparent',
           color: '#5a5a5a',
-          border: 'transparent',
-          shadow: 'none',
         },
         hover: {
           background: chinaStyleBlue(0.11),
           color: CHINA_STYLE_BUTTON_TEXT,
           border: 'transparent',
-          shadow: 'none',
-          transform: 'none',
-        },
-        active: {
-          background: chinaStyleBlue(0.08),
-          color: CHINA_STYLE_BUTTON_TEXT,
-          border: 'transparent',
-          shadow: 'none',
-          transform: 'none',
         },
       },
     },

@@ -35,7 +35,7 @@
     .create-plan-header {
       justify-content: flex-start;
       gap: var(--flowchat-inline-gap);
-      color: var(--tool-card-text-muted);
+      color: var(--color-text-muted);
       font-size: var(--tool-card-action-font-size);
       border-bottom: none;
     }
@@ -85,7 +85,7 @@
 
       &:hover {
         .file-name {
-          color: var(--tool-card-text-primary);
+          color: var(--color-text-primary);
         }
       }
     }
@@ -116,7 +116,7 @@
     .file-name {
       font-size: var(--flowchat-font-size-xs);
       font-family: var(--tool-card-font-mono);
-      color: var(--tool-card-text-secondary);
+      color: var(--color-text-secondary);
       min-width: 0;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -139,7 +139,7 @@
       border: 1px solid transparent;
       border-radius: 6px;
       background: transparent;
-      color: var(--tool-card-text-muted);
+      color: var(--color-text-muted);
       cursor: pointer;
       transition: all 0.15s ease;
 
@@ -177,14 +177,14 @@
       margin: 0 0 var(--flowchat-inline-gap) 0;
       font-size: var(--flowchat-font-size-base);
       font-weight: 600;
-      color: var(--tool-card-text-primary);
+      color: var(--color-text-primary);
       line-height: var(--flowchat-support-line-height);
     }
 
     .plan-overview {
       margin: 0;
       font-size: var(--tool-card-action-font-size);
-      color: var(--tool-card-text-secondary);
+      color: var(--color-text-secondary);
       line-height: var(--flowchat-support-line-height);
     }
 
@@ -200,7 +200,7 @@
       border: 1px solid transparent;
       border-radius: 6px;
       background: transparent;
-      color: var(--tool-card-text-muted);
+      color: var(--color-text-muted);
       cursor: pointer;
       transition: all 0.15s ease;
 
@@ -249,7 +249,7 @@
         height: 12px;
 
         &--pending {
-          color: var(--tool-card-text-muted);
+          color: var(--color-text-muted);
           opacity: 0.5;
         }
 
@@ -270,12 +270,12 @@
       .todo-content {
         font-size: var(--tool-card-action-font-size);
         line-height: var(--flowchat-support-line-height);
-        color: var(--tool-card-text-secondary);
+        color: var(--color-text-secondary);
       }
 
       &.status-pending {
         .todo-content {
-          color: var(--tool-card-text-secondary);
+          color: var(--color-text-secondary);
         }
       }
 
@@ -283,7 +283,7 @@
         background: var(--glass-blue-subtle);
         
         .todo-content {
-          color: var(--tool-card-text-primary);
+          color: var(--color-text-primary);
           font-weight: 500;
         }
       }
@@ -291,7 +291,7 @@
       &.status-completed {
         .todo-content {
           text-decoration: line-through;
-          color: var(--tool-card-text-muted);
+          color: var(--color-text-muted);
           opacity: 0.6;
         }
       }
@@ -301,7 +301,7 @@
         
         .todo-content {
           text-decoration: line-through;
-          color: var(--tool-card-text-muted);
+          color: var(--color-text-muted);
         }
       }
     }
@@ -310,12 +310,12 @@
   /* Plan params still streaming: footer actions read as disabled / grayed. */
   &--plan-generating {
     .create-plan-footer {
-      background: color-mix(in srgb, var(--color-bg-scene) 92%, var(--tool-card-text-muted));
+      background: color-mix(in srgb, var(--color-bg-scene) 92%, var(--color-text-muted));
 
       .build-btn:disabled {
         opacity: 1;
         cursor: not-allowed;
-        color: var(--tool-card-text-muted);
+        color: var(--color-text-muted);
         background: color-mix(in srgb, var(--element-bg-soft) 80%, transparent);
         border: 1px solid var(--border-base);
         box-shadow: none;
@@ -326,7 +326,7 @@
         }
 
         svg {
-          color: var(--tool-card-text-muted);
+          color: var(--color-text-muted);
         }
       }
     }
@@ -351,7 +351,7 @@
       padding: var(--flowchat-control-pad-y) var(--flowchat-control-pad-x);
       font-size: var(--tool-card-action-font-size);
       font-weight: 500;
-      color: var(--tool-card-text-secondary);
+      color: var(--color-text-secondary);
       background: transparent;
       border: none;
       border-radius: 4px;
@@ -359,7 +359,7 @@
       transition: all 0.15s ease;
 
       &:hover:not(:disabled) {
-        color: var(--tool-card-text-primary);
+        color: var(--color-text-primary);
         background: var(--color-overlay-white-08);
       }
 

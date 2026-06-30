@@ -30,7 +30,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'summary',
     description: 'Write or create a file',
     displayMode: 'standard',
-    primaryColor: 'var(--tool-card-write-color)'
+    primaryColor: 'var(--color-success)'
   },
   'Edit': {
     toolName: 'Edit',

@@ -9,7 +9,6 @@ import {
   createStandardSpacing,
   createWindowControls,
   overlayBlack,
-  overlayWhite,
   rgbFromHex,
   rgbaFromHex,
 } from './shared';
@@ -24,7 +23,6 @@ const CHINA_NIGHT_GREEN_HOVER = '#7aab98';
 const CHINA_NIGHT_SUCCESS = '#6bc072';
 const CHINA_NIGHT_WARNING = '#f5b555';
 const CHINA_NIGHT_ERROR = '#e85555';
-const CHINA_NIGHT_HIGHLIGHT = '#e6a84a';
 
 const chinaNightBackground = (alpha: number | string) => rgbaFromHex(CHINA_NIGHT_BACKGROUND, alpha);
 const chinaNightText = (alpha: number | string) => rgbaFromHex(CHINA_NIGHT_TEXT_PRIMARY, alpha);
@@ -107,8 +105,6 @@ export const bitfunChinaNightTheme: ThemeConfig = {
       infoBorder: chinaNightAccent(0.3),
 
 
-      highlight: CHINA_NIGHT_HIGHLIGHT,
-      highlightBg: rgbaFromHex(CHINA_NIGHT_HIGHLIGHT, 0.15),
     },
 
     border: {
@@ -196,53 +192,10 @@ export const bitfunChinaNightTheme: ThemeConfig = {
 
   components: {
 
-    windowControls: createWindowControls({
-      standard: {
-        dot: chinaNightAccent(0.45),
-        dotShadow: `0 0 4px ${chinaNightAccent(0.2)}`,
-        hoverBg: chinaNightAccent(0.12),
-        hoverColor: CHINA_NIGHT_ACCENT,
-        hoverBorder: chinaNightAccent(0.2),
-        hoverShadow: `0 2px 8px ${chinaNightAccent(0.15)}, inset 0 1px 0 ${overlayWhite(0.1)}`,
-      },
-      close: {
-        dot: chinaNightError(0.45),
-        dotShadow: `0 0 4px ${chinaNightError(0.2)}`,
-        hoverBg: chinaNightError(0.12),
-        hoverColor: CHINA_NIGHT_ERROR,
-        hoverBorder: chinaNightError(0.2),
-        hoverShadow: `0 2px 8px ${chinaNightError(0.15)}, inset 0 1px 0 ${overlayWhite(0.1)}`,
-      },
-      common: {
-        defaultColor: overlayWhite(0.9),
-        defaultDot: overlayWhite(0.2),
-        disabledDot: overlayWhite(0.1),
-        flowGradient: `linear-gradient(90deg, transparent, ${overlayWhite(0.05)}, ${overlayWhite(0.08)}, ${overlayWhite(0.05)}, transparent)`,
-      },
-    }),
+    windowControls: createWindowControls(CHINA_NIGHT_ERROR),
 
     button: {
 
-      default: {
-        background: chinaNightAccent(0.11),
-        color: '#9a9a9a',
-        border: 'transparent',
-        shadow: 'none',
-      },
-      hover: {
-        background: chinaNightAccent(0.19),
-        color: CHINA_NIGHT_BUTTON_TEXT,
-        border: 'transparent',
-        shadow: 'none',
-        transform: 'none',
-      },
-      active: {
-        background: chinaNightAccent(0.15),
-        color: CHINA_NIGHT_BUTTON_TEXT,
-        border: 'transparent',
-        shadow: 'none',
-        transform: 'none',
-      },
 
 
       primary: {
@@ -271,24 +224,12 @@ export const bitfunChinaNightTheme: ThemeConfig = {
 
       ghost: {
         default: {
-          background: 'transparent',
           color: '#9a9a9a',
-          border: 'transparent',
-          shadow: 'none',
         },
         hover: {
           background: chinaNightAccent(0.13),
           color: CHINA_NIGHT_BUTTON_TEXT,
           border: 'transparent',
-          shadow: 'none',
-          transform: 'none',
-        },
-        active: {
-          background: chinaNightAccent(0.11),
-          color: CHINA_NIGHT_BUTTON_TEXT,
-          border: 'transparent',
-          shadow: 'none',
-          transform: 'none',
         },
       },
     },
@@ -324,4 +265,3 @@ export const bitfunChinaNightTheme: ThemeConfig = {
     },
   },
 };
-

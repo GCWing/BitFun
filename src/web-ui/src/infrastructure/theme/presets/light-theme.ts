@@ -24,7 +24,6 @@ const LIGHT_PURPLE_HOVER = '#655680';
 const LIGHT_SUCCESS = '#5b9a6f';
 const LIGHT_WARNING = '#c08c42';
 const LIGHT_ERROR = '#c26565';
-const LIGHT_HIGHLIGHT = '#b8863a';
 
 const lightInk = (alpha: number | string) => rgbaFromHex(LIGHT_INK, alpha);
 const lightAccent = (alpha: number | string) => rgbaFromHex(LIGHT_ACCENT, alpha);
@@ -113,8 +112,6 @@ export const bitfunLightTheme: ThemeConfig = {
       infoBorder: lightAccent(0.28),
 
 
-      highlight: LIGHT_HIGHLIGHT,
-      highlightBg: rgbaFromHex(LIGHT_HIGHLIGHT, 0.12),
     },
 
 
@@ -207,53 +204,10 @@ export const bitfunLightTheme: ThemeConfig = {
 
   components: {
 
-    windowControls: createWindowControls({
-      standard: {
-        dot: lightAccent(0.5),
-        dotShadow: `0 0 4px ${lightInk(0.12)}`,
-        hoverBg: lightInk(0.08),
-        hoverColor: LIGHT_ACCENT_HOVER,
-        hoverBorder: lightAccent(0.28),
-        hoverShadow: `0 2px 8px ${lightInk(0.08)}, inset 0 1px 0 ${rgbaFromHex(STATIC_WHITE, 0.6)}`,
-      },
-      close: {
-        dot: lightError(0.55),
-        dotShadow: `0 0 4px ${lightError(0.2)}`,
-        hoverBg: lightError(0.14),
-        hoverColor: '#a85555',
-        hoverBorder: lightError(0.25),
-        hoverShadow: `0 2px 8px ${lightError(0.15)}, inset 0 1px 0 ${rgbaFromHex(STATIC_WHITE, 0.6)}`,
-      },
-      common: {
-        defaultColor: rgbaFromHex(LIGHT_TEXT_PRIMARY, 0.95),
-        defaultDot: lightAccent(0.28),
-        disabledDot: lightAccent(0.15),
-        flowGradient: `linear-gradient(90deg, transparent, ${lightAccent(0.06)}, ${lightAccent(0.1)}, ${lightAccent(0.06)}, transparent)`,
-      },
-    }),
+    windowControls: createWindowControls('#a85555'),
 
     button: {
 
-      default: {
-        background: lightInk(0.07),
-        color: LIGHT_ACCENT_HOVER,
-        border: 'transparent',
-        shadow: 'none',
-      },
-      hover: {
-        background: lightInk(0.11),
-        color: LIGHT_TEXT_STRONG,
-        border: 'transparent',
-        shadow: 'none',
-        transform: 'none',
-      },
-      active: {
-        background: lightInk(0.09),
-        color: LIGHT_TEXT_STRONG,
-        border: 'transparent',
-        shadow: 'none',
-        transform: 'none',
-      },
 
 
       primary: {
@@ -282,24 +236,12 @@ export const bitfunLightTheme: ThemeConfig = {
 
       ghost: {
         default: {
-          background: 'transparent',
           color: LIGHT_ACCENT_HOVER,
-          border: 'transparent',
-          shadow: 'none',
         },
         hover: {
           background: lightInk(0.08),
           color: LIGHT_TEXT_STRONG,
           border: 'transparent',
-          shadow: 'none',
-          transform: 'none',
-        },
-        active: {
-          background: lightInk(0.055),
-          color: LIGHT_TEXT_STRONG,
-          border: 'transparent',
-          shadow: 'none',
-          transform: 'none',
         },
       },
     },
@@ -343,7 +285,6 @@ export const bitfunLightTheme: ThemeConfig = {
     },
   },
 };
-
 
 
 

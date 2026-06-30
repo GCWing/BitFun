@@ -2,20 +2,8 @@
  * FlowChat Cards preview styles
  */
 
-/* Default tool card CSS variables defined at :root */
+/* Preview-only tool card typography override. */
 :root {
-  --tool-card-bg-primary: var(--color-overlay-white-08);
-  --tool-card-bg-secondary: var(--color-overlay-white-06);
-  --tool-card-bg-hover: var(--color-overlay-white-10);
-  --tool-card-bg-elevated: rgba(var(--color-static-white-rgb), 0.14);
-  
-  --tool-card-border: var(--color-overlay-white-08);
-  --tool-card-border-subtle: var(--color-overlay-white-04);
-  
-  --tool-card-text-primary: var(--color-text-primary);
-  --tool-card-text-secondary: var(--preview-text-muted);
-  --tool-card-text-muted: var(--git-graph-text-muted);
-  
   --tool-card-font-mono: 'SF Mono', 'Monaco', 'Cascadia Code', 'Cascadia Mono', Consolas, 'Inconsolata', 'Fira Code', 'Fira Mono', 'Droid Sans Mono', 'Source Code Pro', 'Lucida Console', 'Courier New', monospace;
 }
 

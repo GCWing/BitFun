@@ -32,8 +32,6 @@
   --markdown-table-header-bg: var(--flowchat-md-table-th-bg);
   --markdown-table-row-stripe: var(--flowchat-md-table-row-stripe);
   --markdown-table-row-hover: var(--flowchat-md-table-hover);
-  --markdown-link-color: var(--flowchat-link-color);
-  --markdown-link-hover-color: var(--flowchat-link-hover-color);
 
   width: 100%;
   max-width: 100%;
@@ -356,7 +354,7 @@
 }
 
 .markdown-renderer .copy-button.copy-success {
-  color: var(--markdown-copy-success-color);
+  color: var(--color-success);
 }
 
 .markdown-renderer pre:has(.code-block-wrapper),
@@ -533,7 +531,7 @@
   padding: 0;
   border: none;
   background: none;
-  color: var(--markdown-link-color);
+  color: var(--flowchat-link-color);
   cursor: pointer;
   font: inherit;
   text-decoration: underline;
@@ -545,7 +543,7 @@
 .markdown-renderer .file-link:hover,
 .markdown-renderer .visualization-link:hover,
 .markdown-renderer .tab-link:hover {
-  color: var(--markdown-link-hover-color);
+  color: var(--flowchat-link-hover-color);
   text-decoration-thickness: 1.5px;
 }
 
@@ -595,8 +593,6 @@
 :root[data-theme-type="light"] .markdown-renderer,
 [data-theme-type="light"] .markdown-renderer,
 .light .markdown-renderer {
-  --markdown-link-color: var(--flowchat-link-color);
-  --markdown-link-hover-color: var(--flowchat-link-hover-color);
   --markdown-code-bg-elevated: var(--markdown-code-bg-light);
   --markdown-inline-code-bg: rgba(var(--color-static-black-rgb), 0.05);
   --markdown-inline-code-border: var(--color-overlay-black-12);
@@ -626,11 +622,11 @@
 
   .copy-button:hover {
     background: var(--color-overlay-slate-06);
-    color: var(--markdown-link-color);
+    color: var(--flowchat-link-color);
   }
 
   .copy-button.copy-success {
-    color: var(--markdown-copy-success-color-light);
+    color: var(--color-success);
   }
 
   blockquote,

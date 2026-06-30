@@ -552,24 +552,6 @@ export class ThemeService {
     root.style.setProperty('--color-bg-elevated', colors.background.elevated);
     root.style.setProperty('--color-bg-workbench', colors.background.workbench);
     root.style.setProperty('--color-bg-scene', colors.background.scene);
-    root.style.setProperty('--color-bg-flowchat', colors.background.scene);
-    root.style.setProperty('--color-bg-surface', colors.background.secondary);
-    root.style.setProperty('--color-bg-base', colors.background.primary);
-    root.style.setProperty('--color-bg-elevated-hover', colors.element.medium);
-    root.style.setProperty('--color-surface-elevated', colors.element.elevated);
-    root.style.setProperty('--color-surface-hover', colors.element.medium);
-    root.style.setProperty('--color-hover', colors.element.medium);
-    root.style.setProperty('--bg-primary', colors.background.primary);
-    root.style.setProperty('--bg-secondary', colors.background.secondary);
-    root.style.setProperty('--bg-tertiary', colors.background.tertiary);
-    root.style.setProperty('--bg-elevated', colors.background.elevated);
-    root.style.setProperty('--bg-hover', colors.element.medium);
-    root.style.setProperty('--secondary-bg', colors.background.secondary);
-    root.style.setProperty('--background-primary', colors.background.primary);
-    root.style.setProperty('--background-secondary', colors.background.secondary);
-    root.style.setProperty('--background-tertiary', colors.background.tertiary);
-    root.style.setProperty('--color-background-secondary', colors.background.secondary);
-    root.style.setProperty('--color-background-tertiary', colors.background.tertiary);
     if (colors.background.tooltip) {
       root.style.setProperty('--color-bg-tooltip', colors.background.tooltip);
     }
@@ -579,14 +561,8 @@ export class ThemeService {
 
     root.style.setProperty('--color-text-primary', colors.text.primary);
     root.style.setProperty('--color-text-secondary', colors.text.secondary);
-    root.style.setProperty('--color-text-tertiary', colors.text.muted);
     root.style.setProperty('--color-text-muted', colors.text.muted);
     root.style.setProperty('--color-text-disabled', colors.text.disabled);
-    root.style.setProperty('--text-primary', colors.text.primary);
-    root.style.setProperty('--text-secondary', colors.text.secondary);
-    root.style.setProperty('--text-tertiary', colors.text.muted);
-    root.style.setProperty('--text-muted', colors.text.muted);
-    root.style.setProperty('--text-disabled', colors.text.disabled);
 
 
     Object.entries(colors.accent).forEach(([key, value]) => {
@@ -594,19 +570,6 @@ export class ThemeService {
     });
 
     const primaryAccent = colors.accent[500];
-    const primaryHover = colors.accent[600];
-    root.style.setProperty('--color-primary', primaryAccent);
-    root.style.setProperty('--color-primary-hover', primaryHover);
-    root.style.setProperty('--color-accent', primaryAccent);
-    root.style.setProperty('--color-accent-primary', primaryAccent);
-    root.style.setProperty('--accent-primary', primaryAccent);
-    root.style.setProperty('--accent-primary-hover', primaryHover);
-    root.style.setProperty('--color-primary-400', colors.accent[400]);
-    root.style.setProperty('--color-primary-500', primaryAccent);
-    root.style.setProperty('--color-primary-alpha', colors.accent[100]);
-    root.style.setProperty('--color-primary-bg', colors.accent[100]);
-    root.style.setProperty('--color-primary-bg-subtle', colors.accent[50]);
-    root.style.setProperty('--color-accent-alpha', colors.accent[100]);
     const flowChatLinkColors = theme.type === 'light'
       ? FLOW_CHAT_LINK_COLORS.light
       : FLOW_CHAT_LINK_COLORS.dark;
@@ -615,7 +578,6 @@ export class ThemeService {
     const accentRgb = accentColorToRgbChannels(primaryAccent);
     if (accentRgb) {
       root.style.setProperty('--color-accent-500-rgb', accentRgb);
-      root.style.setProperty('--color-primary-rgb', accentRgb);
     }
 
 
@@ -629,43 +591,22 @@ export class ThemeService {
     root.style.setProperty('--color-success', colors.semantic.success);
     root.style.setProperty('--color-success-bg', colors.semantic.successBg);
     root.style.setProperty('--color-success-border', colors.semantic.successBorder);
-    root.style.setProperty('--color-success-100', colors.semantic.successBg);
-    root.style.setProperty('--color-success-500', colors.semantic.success);
     root.style.setProperty('--color-warning', colors.semantic.warning);
     root.style.setProperty('--color-warning-bg', colors.semantic.warningBg);
     root.style.setProperty('--color-warning-border', colors.semantic.warningBorder);
-    root.style.setProperty('--color-warning-100', colors.semantic.warningBg);
-    root.style.setProperty('--color-warning-500', colors.semantic.warning);
-    root.style.setProperty('--color-warning-700', colors.semantic.warning);
     root.style.setProperty('--color-error', colors.semantic.error);
     root.style.setProperty('--color-error-bg', colors.semantic.errorBg);
     root.style.setProperty('--color-error-border', colors.semantic.errorBorder);
-    root.style.setProperty('--color-semantic-error', colors.semantic.error);
-    root.style.setProperty('--color-danger', colors.semantic.error);
-    root.style.setProperty('--color-danger-500', colors.semantic.error);
-    root.style.setProperty('--color-danger-text', colors.semantic.error);
-    root.style.setProperty('--color-danger-bg', colors.semantic.errorBg);
-    root.style.setProperty('--color-danger-border', colors.semantic.errorBorder);
-    root.style.setProperty('--color-danger-hover', colors.semantic.error);
     root.style.setProperty('--color-info', colors.semantic.info);
     root.style.setProperty('--color-info-bg', colors.semantic.infoBg);
     root.style.setProperty('--color-info-border', colors.semantic.infoBorder);
-    root.style.setProperty('--color-highlight', colors.semantic.highlight);
-    root.style.setProperty('--color-highlight-bg', colors.semantic.highlightBg);
 
 
     root.style.setProperty('--border-subtle', colors.border.subtle);
-    root.style.setProperty('--border-color', colors.border.subtle);
     root.style.setProperty('--border-base', colors.border.base);
     root.style.setProperty('--border-medium', colors.border.medium);
-    root.style.setProperty('--border-hover', colors.border.medium);
     root.style.setProperty('--border-strong', colors.border.strong);
     root.style.setProperty('--border-prominent', colors.border.prominent);
-    root.style.setProperty('--border-muted', colors.border.subtle);
-    root.style.setProperty('--border-primary', colors.border.base);
-    root.style.setProperty('--color-border', colors.border.base);
-    root.style.setProperty('--color-border-primary', colors.border.base);
-    root.style.setProperty('--color-border-subtle', colors.border.subtle);
 
     const sceneViewportBorder = theme.layout?.sceneViewportBorder ?? true;
     root.style.setProperty(
@@ -679,18 +620,12 @@ export class ThemeService {
     root.style.setProperty('--element-bg-medium', colors.element.medium);
     root.style.setProperty('--element-bg-strong', colors.element.strong);
     root.style.setProperty('--element-bg-elevated', colors.element.elevated);
-    root.style.setProperty('--element-bg', colors.element.base);
     root.style.setProperty('--element-bg-hover', colors.element.medium);
-    root.style.setProperty('--color-bg-hover', colors.element.medium);
-    root.style.setProperty('--color-bg-subtle', colors.element.subtle);
 
 
     root.style.setProperty('--git-color-branch', colors.git.branch);
     root.style.setProperty('--git-color-branch-bg', colors.git.branchBg);
     root.style.setProperty('--git-color-changes', colors.git.changes);
-    root.style.setProperty('--git-color-changes-bg', colors.git.changesBg);
-    root.style.setProperty('--git-color-added', colors.git.added);
-    root.style.setProperty('--git-color-added-bg', colors.git.addedBg);
     root.style.setProperty('--git-color-deleted', colors.git.deleted);
     root.style.setProperty('--git-color-deleted-bg', colors.git.deletedBg);
     root.style.setProperty('--git-color-staged', colors.git.staged);
@@ -773,7 +708,6 @@ export class ThemeService {
       Object.entries(motion.duration).forEach(([key, value]) => {
         root.style.setProperty(`--motion-${key}`, value);
       });
-      root.style.setProperty('--motion-normal', motion.duration.base);
     }
 
 
@@ -785,9 +719,8 @@ export class ThemeService {
 
 
     if (typography?.font) {
-      root.style.setProperty('--font-sans', typography.font.sans);
-      root.style.setProperty('--font-mono', typography.font.mono);
-      root.style.setProperty('--markdown-font-mono', typography.font.mono);
+      root.style.setProperty('--font-family-sans', typography.font.sans);
+      root.style.setProperty('--font-family-mono', typography.font.mono);
     }
 
 
@@ -818,24 +751,6 @@ export class ThemeService {
     const buttonConfig = theme.components?.button;
     if (buttonConfig) {
 
-      root.style.setProperty('--btn-default-bg', buttonConfig.default.background);
-      root.style.setProperty('--btn-default-color', buttonConfig.default.color);
-      root.style.setProperty('--btn-default-border', buttonConfig.default.border);
-      root.style.setProperty('--btn-default-shadow', buttonConfig.default.shadow || 'none');
-
-      root.style.setProperty('--btn-default-hover-bg', buttonConfig.hover.background);
-      root.style.setProperty('--btn-default-hover-color', buttonConfig.hover.color);
-      root.style.setProperty('--btn-default-hover-border', buttonConfig.hover.border);
-      root.style.setProperty('--btn-default-hover-shadow', buttonConfig.hover.shadow || 'none');
-      root.style.setProperty('--btn-default-hover-transform', buttonConfig.hover.transform || 'none');
-
-      root.style.setProperty('--btn-default-active-bg', buttonConfig.active.background);
-      root.style.setProperty('--btn-default-active-color', buttonConfig.active.color);
-      root.style.setProperty('--btn-default-active-border', buttonConfig.active.border);
-      root.style.setProperty('--btn-default-active-shadow', buttonConfig.active.shadow || 'none');
-      root.style.setProperty('--btn-default-active-transform', buttonConfig.active.transform || 'none');
-
-
       root.style.setProperty('--btn-primary-bg', buttonConfig.primary.default.background);
       root.style.setProperty('--btn-primary-color', buttonConfig.primary.default.color);
       root.style.setProperty('--btn-primary-border', buttonConfig.primary.default.border);
@@ -854,33 +769,12 @@ export class ThemeService {
       root.style.setProperty('--btn-primary-active-transform', buttonConfig.primary.active.transform || 'none');
 
 
-      root.style.setProperty('--btn-ghost-bg', buttonConfig.ghost.default.background);
       root.style.setProperty('--btn-ghost-color', buttonConfig.ghost.default.color);
-      root.style.setProperty('--btn-ghost-border', buttonConfig.ghost.default.border);
-      root.style.setProperty('--btn-ghost-shadow', buttonConfig.ghost.default.shadow || 'none');
 
       root.style.setProperty('--btn-ghost-hover-bg', buttonConfig.ghost.hover.background);
       root.style.setProperty('--btn-ghost-hover-color', buttonConfig.ghost.hover.color);
       root.style.setProperty('--btn-ghost-hover-border', buttonConfig.ghost.hover.border);
-      root.style.setProperty('--btn-ghost-hover-shadow', buttonConfig.ghost.hover.shadow || 'none');
-      root.style.setProperty('--btn-ghost-hover-transform', buttonConfig.ghost.hover.transform || 'none');
-
-      root.style.setProperty('--btn-ghost-active-bg', buttonConfig.ghost.active.background);
-      root.style.setProperty('--btn-ghost-active-color', buttonConfig.ghost.active.color);
-      root.style.setProperty('--btn-ghost-active-border', buttonConfig.ghost.active.border);
-      root.style.setProperty('--btn-ghost-active-shadow', buttonConfig.ghost.active.shadow || 'none');
-      root.style.setProperty('--btn-ghost-active-transform', buttonConfig.ghost.active.transform || 'none');
     } else {
-
-      root.style.setProperty('--btn-default-bg', colors.element.base);
-      root.style.setProperty('--btn-default-color', colors.text.secondary);
-      root.style.setProperty('--btn-default-border', colors.border.base);
-      root.style.setProperty('--btn-default-shadow', 'none');
-      root.style.setProperty('--btn-default-hover-bg', colors.element.medium);
-      root.style.setProperty('--btn-default-hover-color', colors.text.primary);
-      root.style.setProperty('--btn-default-hover-border', colors.border.medium);
-      root.style.setProperty('--btn-default-hover-shadow', 'none');
-      root.style.setProperty('--btn-default-hover-transform', 'none');
 
       const a = colors.accent;
       root.style.setProperty('--btn-primary-bg', a[200]);
@@ -897,105 +791,25 @@ export class ThemeService {
       root.style.setProperty('--btn-primary-active-border', 'transparent');
       root.style.setProperty('--btn-primary-active-shadow', 'none');
       root.style.setProperty('--btn-primary-active-transform', 'none');
-      root.style.setProperty('--btn-ghost-bg', 'transparent');
       root.style.setProperty('--btn-ghost-color', colors.text.muted);
-      root.style.setProperty('--btn-ghost-border', 'transparent');
-      root.style.setProperty('--btn-ghost-shadow', 'none');
       root.style.setProperty('--btn-ghost-hover-bg', colors.element.subtle);
       root.style.setProperty('--btn-ghost-hover-color', colors.text.primary);
       root.style.setProperty('--btn-ghost-hover-border', 'transparent');
-      root.style.setProperty('--btn-ghost-hover-shadow', 'none');
-      root.style.setProperty('--btn-ghost-hover-transform', 'none');
-      root.style.setProperty('--btn-ghost-active-bg', colors.element.medium);
-      root.style.setProperty('--btn-ghost-active-color', colors.text.primary);
-      root.style.setProperty('--btn-ghost-active-border', 'transparent');
-      root.style.setProperty('--btn-ghost-active-shadow', 'none');
-      root.style.setProperty('--btn-ghost-active-transform', 'none');
     }
 
 
-    const windowControlsConfig = theme.components?.windowControls;
-    if (windowControlsConfig) {
-
-      root.style.setProperty('--window-control-minimize-dot', windowControlsConfig.minimize.dot);
-      root.style.setProperty('--window-control-minimize-dot-shadow', windowControlsConfig.minimize.dotShadow || 'none');
-      root.style.setProperty('--window-control-minimize-hover-bg', windowControlsConfig.minimize.hoverBg);
-      root.style.setProperty('--window-control-minimize-hover-color', windowControlsConfig.minimize.hoverColor);
-      root.style.setProperty('--window-control-minimize-hover-border', windowControlsConfig.minimize.hoverBorder);
-      root.style.setProperty('--window-control-minimize-hover-shadow', windowControlsConfig.minimize.hoverShadow || 'none');
-
-
-      root.style.setProperty('--window-control-maximize-dot', windowControlsConfig.maximize.dot);
-      root.style.setProperty('--window-control-maximize-dot-shadow', windowControlsConfig.maximize.dotShadow || 'none');
-      root.style.setProperty('--window-control-maximize-hover-bg', windowControlsConfig.maximize.hoverBg);
-      root.style.setProperty('--window-control-maximize-hover-color', windowControlsConfig.maximize.hoverColor);
-      root.style.setProperty('--window-control-maximize-hover-border', windowControlsConfig.maximize.hoverBorder);
-      root.style.setProperty('--window-control-maximize-hover-shadow', windowControlsConfig.maximize.hoverShadow || 'none');
-
-
-      root.style.setProperty('--window-control-close-dot', windowControlsConfig.close.dot);
-      root.style.setProperty('--window-control-close-dot-shadow', windowControlsConfig.close.dotShadow || 'none');
-      root.style.setProperty('--window-control-close-hover-bg', windowControlsConfig.close.hoverBg);
-      root.style.setProperty('--window-control-close-hover-color', windowControlsConfig.close.hoverColor);
-      root.style.setProperty('--window-control-close-hover-border', windowControlsConfig.close.hoverBorder);
-      root.style.setProperty('--window-control-close-hover-shadow', windowControlsConfig.close.hoverShadow || 'none');
-
-
-      root.style.setProperty('--window-control-default-color', windowControlsConfig.common.defaultColor);
-      root.style.setProperty('--window-control-default-dot', windowControlsConfig.common.defaultDot);
-      root.style.setProperty('--window-control-disabled-dot', windowControlsConfig.common.disabledDot);
-      root.style.setProperty('--window-control-flow-gradient', windowControlsConfig.common.flowGradient || 'none');
-    } else {
-
-      root.style.setProperty('--window-control-minimize-dot', colors.accent[400]);
-      root.style.setProperty('--window-control-minimize-dot-shadow', 'none');
-      root.style.setProperty('--window-control-minimize-hover-bg', colors.accent[100]);
-      root.style.setProperty('--window-control-minimize-hover-color', colors.accent[500]);
-      root.style.setProperty('--window-control-minimize-hover-border', colors.accent[200]);
-      root.style.setProperty('--window-control-minimize-hover-shadow', 'none');
-
-      root.style.setProperty('--window-control-maximize-dot', colors.accent[400]);
-      root.style.setProperty('--window-control-maximize-dot-shadow', 'none');
-      root.style.setProperty('--window-control-maximize-hover-bg', colors.accent[100]);
-      root.style.setProperty('--window-control-maximize-hover-color', colors.accent[500]);
-      root.style.setProperty('--window-control-maximize-hover-border', colors.accent[200]);
-      root.style.setProperty('--window-control-maximize-hover-shadow', 'none');
-
-      root.style.setProperty('--window-control-close-dot', colors.semantic.error);
-      root.style.setProperty('--window-control-close-dot-shadow', 'none');
-      root.style.setProperty('--window-control-close-hover-bg', colors.semantic.errorBg);
-      root.style.setProperty('--window-control-close-hover-color', colors.semantic.error);
-      root.style.setProperty('--window-control-close-hover-border', colors.semantic.errorBorder);
-      root.style.setProperty('--window-control-close-hover-shadow', 'none');
-
-      root.style.setProperty('--window-control-default-color', colors.text.primary);
-      root.style.setProperty('--window-control-default-dot', colors.text.muted);
-      root.style.setProperty('--window-control-disabled-dot', colors.text.disabled);
-      root.style.setProperty('--window-control-flow-gradient', 'none');
-    }
+    root.style.setProperty(
+      '--window-control-close-hover-color',
+      theme.components?.windowControls?.close.hoverColor ?? colors.semantic.error,
+    );
 
 
     root.style.setProperty('--input-bg', colors.element.base);
     root.style.setProperty('--input-bg-hover', colors.element.medium);
-    root.style.setProperty('--input-bg-focus', colors.element.soft);
-    root.style.setProperty('--input-bg-disabled', colors.element.subtle);
     root.style.setProperty('--input-border', colors.border.base);
     root.style.setProperty('--input-border-hover', colors.border.medium);
     root.style.setProperty('--input-border-focus', colors.accent[400]);
-    root.style.setProperty('--input-border-error', colors.semantic.error);
     root.style.setProperty('--input-text', colors.text.primary);
-    root.style.setProperty(
-        '--input-placeholder',
-        'color-mix(in srgb, var(--color-text-muted) 40%, var(--color-bg-primary))'
-    );
-
-
-    root.style.setProperty('--card-bg', colors.element.base);
-    root.style.setProperty('--card-bg-hover', colors.element.medium);
-    root.style.setProperty('--card-bg-active', colors.element.elevated);
-    root.style.setProperty('--card-border', colors.border.base);
-    root.style.setProperty('--card-border-hover', colors.border.medium);
-    root.style.setProperty('--card-border-active', colors.accent[300]);
 
 
     if (theme.type === 'dark') {
@@ -1043,17 +857,6 @@ export class ThemeService {
     root.style.setProperty('--tooltip-bg', colors.background.elevated);
     root.style.setProperty('--tooltip-border', colors.border.medium);
     root.style.setProperty('--tooltip-text', colors.text.primary);
-
-
-    root.style.setProperty('--tool-card-bg-primary', colors.element.base);
-    root.style.setProperty('--tool-card-bg-secondary', colors.element.soft);
-    root.style.setProperty('--tool-card-bg-hover', colors.element.medium);
-    root.style.setProperty('--tool-card-bg-elevated', colors.element.elevated);
-    root.style.setProperty('--tool-card-border', colors.border.base);
-    root.style.setProperty('--tool-card-border-subtle', colors.border.subtle);
-    root.style.setProperty('--tool-card-text-primary', colors.text.primary);
-    root.style.setProperty('--tool-card-text-secondary', colors.text.secondary);
-    root.style.setProperty('--tool-card-text-muted', colors.text.muted);
 
 
     root.setAttribute('data-theme', theme.id);

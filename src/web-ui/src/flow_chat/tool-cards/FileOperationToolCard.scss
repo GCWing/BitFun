@@ -161,7 +161,7 @@
     color 0.15s ease;
 
   &:hover:not(.file-op-diff-pill--disabled) {
-    background-color: var(--tool-card-bg-hover);
+    background-color: var(--element-bg-hover);
     color: var(--color-text-primary);
   }
 
@@ -220,7 +220,7 @@
   }
 
   &:hover::before {
-    background-color: var(--tool-card-bg-hover);
+    background-color: var(--element-bg-hover);
   }
 
   &:hover {

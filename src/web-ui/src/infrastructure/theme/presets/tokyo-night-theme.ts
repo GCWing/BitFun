@@ -115,8 +115,6 @@ export const bitfunTokyoNightTheme: ThemeConfig = {
       infoBg: tokyoInfo(0.12),
       infoBorder: tokyoInfo(0.35),
 
-      highlight: TOKYO_WARNING,
-      highlightBg: tokyoWarning(0.15),
     },
 
     border: {
@@ -209,55 +207,9 @@ export const bitfunTokyoNightTheme: ThemeConfig = {
   typography: createExpressiveTypography(),
 
   components: {
-    windowControls: createWindowControls({
-      standard: {
-        dot: tokyoAccent(0.55),
-        dotShadow: `0 0 6px ${tokyoAccent(0.35)}`,
-        hoverBg: tokyoAccent(0.14),
-        hoverColor: TOKYO_ACCENT,
-        hoverBorder: tokyoAccent(0.35),
-        hoverShadow:
-          `0 0 12px ${tokyoAccent(0.28)}, 0 2px 8px ${tokyoAccent(0.15)}, inset 0 1px 0 ${tokyoAccent(0.18)}`,
-      },
-      close: {
-        dot: tokyoError(0.55),
-        dotShadow: `0 0 6px ${tokyoError(0.35)}`,
-        hoverBg: tokyoError(0.14),
-        hoverColor: TOKYO_ERROR,
-        hoverBorder: tokyoError(0.35),
-        hoverShadow:
-          `0 0 12px ${tokyoError(0.28)}, 0 2px 8px ${tokyoError(0.15)}, inset 0 1px 0 ${tokyoError(0.18)}`,
-      },
-      common: {
-        defaultColor: rgbaFromHex(TOKYO_TEXT_PRIMARY, 0.92),
-        defaultDot: tokyoAccent(0.22),
-        disabledDot: tokyoAccent(0.12),
-        flowGradient:
-          `linear-gradient(90deg, transparent, ${tokyoAccent(0.08)}, ${tokyoPurple(0.1)}, ${tokyoAccent(0.08)}, transparent)`,
-      },
-    }),
+    windowControls: createWindowControls(TOKYO_ERROR),
 
     button: {
-      default: {
-        background: tokyoAccent(0.1),
-        color: TOKYO_TEXT_SECONDARY,
-        border: tokyoAccent(0.22),
-        shadow: `0 0 8px ${tokyoAccent(0.12)}`,
-      },
-      hover: {
-        background: tokyoAccent(0.16),
-        color: TOKYO_TEXT_PRIMARY,
-        border: tokyoAccent(0.38),
-        shadow: `0 0 16px ${tokyoAccent(0.22)}, 0 2px 8px ${overlayBlack(0.35)}`,
-        transform: 'translateY(-1px)',
-      },
-      active: {
-        background: tokyoAccent(0.13),
-        color: TOKYO_TEXT_PRIMARY,
-        border: tokyoAccent(0.42),
-        shadow: `0 0 12px ${tokyoAccent(0.18)}`,
-        transform: 'translateY(0)',
-      },
 
       primary: {
         default: {
@@ -285,24 +237,12 @@ export const bitfunTokyoNightTheme: ThemeConfig = {
 
       ghost: {
         default: {
-          background: 'transparent',
           color: TOKYO_TEXT_MUTED,
-          border: tokyoBorder(0.55),
-          shadow: 'none',
         },
         hover: {
           background: tokyoAccent(0.1),
           color: TOKYO_TEXT_PRIMARY,
           border: tokyoAccent(0.35),
-          shadow: `0 0 12px ${tokyoAccent(0.15)}`,
-          transform: 'translateY(-1px)',
-        },
-        active: {
-          background: tokyoAccent(0.08),
-          color: TOKYO_TEXT_SECONDARY,
-          border: tokyoAccent(0.3),
-          shadow: `0 0 8px ${tokyoAccent(0.12)}`,
-          transform: 'translateY(0)',
         },
       },
     },

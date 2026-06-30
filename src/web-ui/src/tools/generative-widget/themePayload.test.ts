@@ -8,7 +8,7 @@ import {
 } from './themePayload';
 import { createWidgetThemeCompatibilityAliasCss } from './themePayloadCompatibility';
 
-const WIDGET_THEME_VAR_NAMES_HASH = '067642ed0dbb41e7c2c33cf18716d6ea6ce423617a7bbe0139a55170e8241d14';
+const WIDGET_THEME_VAR_NAMES_HASH = '6fa7fa2763c01ddceff5da14094ac84c1a7eae21dd3f015559fd78b3bf34b482';
 const RETIRED_WIDGET_THEME_COMPAT_KEYS = [
   '--background-primary',
   '--background-secondary',
@@ -91,7 +91,28 @@ const RETIRED_WIDGET_THEME_COMPAT_KEYS = [
   '--text-primary',
   '--text-secondary',
   '--text-tertiary',
+  '--tool-card-bg-primary',
+  '--tool-card-bg-secondary',
+  '--tool-card-bg-hover',
+  '--tool-card-bg-elevated',
+  '--tool-card-border',
+  '--tool-card-border-subtle',
+  '--tool-card-text-primary',
+  '--tool-card-text-secondary',
+  '--tool-card-text-muted',
   '--tool-compact-summary-font',
+] as const;
+const RETIRED_WIDGET_THEME_INTERNAL_KEYS = [
+  '--btn-ghost-bg',
+  '--btn-ghost-border',
+  '--btn-ghost-shadow',
+  '--btn-ghost-hover-shadow',
+  '--btn-ghost-hover-transform',
+  '--btn-ghost-active-bg',
+  '--btn-ghost-active-color',
+  '--btn-ghost-active-border',
+  '--btn-ghost-active-shadow',
+  '--btn-ghost-active-transform',
 ] as const;
 const STATIC_WIDGET_SHELL_THEME_VARS = new Set([
   '--font-family-mono',
@@ -154,7 +175,7 @@ describe('generated widget theme payload contract', () => {
       first: requestedNames[0],
       last: requestedNames[requestedNames.length - 1],
     }).toEqual({
-      count: 176,
+      count: 157,
       hash: WIDGET_THEME_VAR_NAMES_HASH,
       first: '--color-bg-primary',
       last: '--tool-card-action-font-weight',
@@ -171,6 +192,7 @@ describe('generated widget theme payload contract', () => {
     const { requestedNames } = readPayloadWithHostValues();
 
     expect(requestedNames).not.toEqual(expect.arrayContaining(RETIRED_WIDGET_THEME_COMPAT_KEYS));
+    expect(requestedNames).not.toEqual(expect.arrayContaining(RETIRED_WIDGET_THEME_INTERNAL_KEYS));
     expect(requestedNames).toEqual(
       expect.arrayContaining([
         '--color-accent-50',

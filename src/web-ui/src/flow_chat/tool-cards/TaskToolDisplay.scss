@@ -87,7 +87,7 @@
     }
 
     &:hover::before {
-      background-color: var(--tool-card-bg-hover);
+      background-color: var(--element-bg-hover);
     }
 
     &:hover .task-header-rail__visual {
@@ -331,7 +331,7 @@
     display: flex;
     align-items: center;
     gap: var(--flowchat-inline-gap);
-    color: var(--tool-card-text-secondary);
+    color: var(--color-text-secondary);
     font-size: var(--flowchat-font-size-xs);
     font-weight: 600;
     letter-spacing: 0.01em;
@@ -359,7 +359,7 @@
     margin-bottom: var(--flowchat-card-gap);
     font-size: var(--flowchat-font-size-xs);
     font-weight: 600;
-    color: var(--tool-card-text-secondary);
+    color: var(--color-text-secondary);
     text-transform: uppercase;
     letter-spacing: 0.5px;
     opacity: 0.8;
@@ -398,7 +398,7 @@
     align-items: center;
     gap: var(--flowchat-inline-gap);
     font-size: var(--flowchat-font-size-xs);
-    color: var(--tool-card-text-muted);
+    color: var(--color-text-muted);
   }
 
   .error-task,
@@ -407,7 +407,7 @@
   }
 
   .error-separator {
-    color: var(--tool-card-border);
+    color: var(--border-base);
   }
 
   .tool-actions {
@@ -442,12 +442,12 @@
   }
 
   .reject-button {
-    background: var(--tool-card-bg-secondary);
-    color: var(--tool-card-text-primary);
-    border: 1px solid var(--tool-card-border);
+    background: var(--element-bg-soft);
+    color: var(--color-text-primary);
+    border: 1px solid var(--border-base);
 
     &:hover:not(:disabled) {
-      background: var(--tool-card-bg-hover);
+      background: var(--element-bg-hover);
       border-color: var(--color-error);
       color: var(--color-error);
     }

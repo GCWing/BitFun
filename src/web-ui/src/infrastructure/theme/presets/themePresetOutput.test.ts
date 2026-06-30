@@ -67,42 +67,42 @@ describe('builtin theme preset output', () => {
     }))).toMatchInlineSnapshot(`
       [
         {
-          "hash": "c3b6a5647f5a098c777c5e0669578a2a6a83fe399c4ffe2b16e00b532361e0a5",
+          "hash": "44a6f6daeceecfb0166c667b3252f5766f98de7811599079d58d485605ba5857",
           "id": "bitfun-light",
           "type": "light",
         },
         {
-          "hash": "ebbb8c7b24d44430211ca1cd36e44530dc5b2f0c7b76ed372cb25afc5ad1e90b",
+          "hash": "7bfb47bdfd3658b51c5c3a126aff9fafba00cf83a79d6ee148cfe3cecf9095d0",
           "id": "bitfun-slate",
           "type": "dark",
         },
         {
-          "hash": "545249087b734444881c33a1e6925a5b348f9e7e150a737992177278e0b67cef",
+          "hash": "2033449df1da52308c856bc9fa0bb006ca9416545c7b3971ee0c1700fd3954d2",
           "id": "bitfun-dark",
           "type": "dark",
         },
         {
-          "hash": "5b5429e48817fcd6d5643989f959340e6766ee5a0e3edfdff88f3984c0e343e8",
+          "hash": "2b5f34aa379e97bbea554fa8b376d951c8927bd2d46a25e04cef39d16742ba8d",
           "id": "bitfun-midnight",
           "type": "dark",
         },
         {
-          "hash": "46ac5adf2b0dd0bc633f27665e1544893eb57617c123500b2d5b543690eca1f9",
+          "hash": "e1b7b1ad6ef0bd0b9cb7bc5b020da2112a43367a989837d19856179a24da529d",
           "id": "bitfun-china-style",
           "type": "light",
         },
         {
-          "hash": "bc760598ce85d6e4a7f22349aace0e25ab6cb401535bdd468513a141a2069e82",
+          "hash": "ad731afd2ca6dd1cf75d286a14ffc82bc6cc074cdadff68e1daf382e3c445f4a",
           "id": "bitfun-china-night",
           "type": "dark",
         },
         {
-          "hash": "4b4597856d6c78a81c49a8f50c91d35682d8b53c27635b7097be1cb13a2c7a22",
+          "hash": "b37c0cb6d539a703d1b6c0eca6c374d555ff74c0de0e2ec357bd56241a848fd4",
           "id": "bitfun-cyber",
           "type": "dark",
         },
         {
-          "hash": "1c391cd9207188d5edf906dabd3f23f28e07952c10f1ee9ebf30432747fc0fa0",
+          "hash": "beae87b070e7b95463d50f25e715d7e8268a25aa43b8c8b6775de0ff728732c6",
           "id": "bitfun-tokyo-night",
           "type": "dark",
         },

@@ -117,8 +117,6 @@ export const bitfunSlateTheme: ThemeConfig = {
       infoBorder: overlayWhite(0.2),
 
 
-      highlight: '#c8cdd4',
-      highlightBg: overlayWhite(0.1),
     },
 
     border: createDarkNeutralBorder(),
@@ -195,53 +193,10 @@ export const bitfunSlateTheme: ThemeConfig = {
 
   components: {
 
-    windowControls: createWindowControls({
-      standard: {
-        dot: 'rgba(203, 213, 225, 0.42)',
-        dotShadow: `0 0 4px ${overlayBlack(0.35)}`,
-        hoverBg: overlayWhite(0.09),
-        hoverColor: SLATE_ACCENT_SOFT,
-        hoverBorder: overlayWhite(0.14),
-        hoverShadow: `0 2px 8px ${overlayBlack(0.22)}, inset 0 1px 0 ${overlayWhite(0.06)}`,
-      },
-      close: {
-        dot: slateError(0.5),
-        dotShadow: `0 0 4px ${slateError(0.25)}`,
-        hoverBg: slateError(0.15),
-        hoverColor: SLATE_ERROR,
-        hoverBorder: slateError(0.25),
-        hoverShadow: `0 2px 8px ${slateError(0.18)}, inset 0 1px 0 ${overlayWhite(0.08)}`,
-      },
-      common: {
-        defaultColor: 'rgba(232, 234, 236, 0.92)',
-        defaultDot: 'rgba(198, 202, 208, 0.48)',
-        disabledDot: 'rgba(168, 171, 176, 0.2)',
-        flowGradient: `linear-gradient(90deg, transparent, ${overlayWhite(0.05)}, ${overlayWhite(0.08)}, ${overlayWhite(0.05)}, transparent)`,
-      },
-    }),
+    windowControls: createWindowControls(SLATE_ERROR),
 
     button: {
 
-      default: {
-        background: overlayWhite(0.08),
-        color: SLATE_TEXT_MUTED,
-        border: 'transparent',
-        shadow: 'none',
-      },
-      hover: {
-        background: overlayWhite(0.12),
-        color: SLATE_BUTTON_TEXT,
-        border: 'transparent',
-        shadow: 'none',
-        transform: 'none',
-      },
-      active: {
-        background: overlayWhite(0.1),
-        color: SLATE_BUTTON_TEXT,
-        border: 'transparent',
-        shadow: 'none',
-        transform: 'none',
-      },
 
 
       primary: {
@@ -270,24 +225,12 @@ export const bitfunSlateTheme: ThemeConfig = {
 
       ghost: {
         default: {
-          background: 'transparent',
           color: SLATE_TEXT_MUTED,
-          border: 'transparent',
-          shadow: 'none',
         },
         hover: {
           background: overlayWhite(0.08),
           color: SLATE_BUTTON_TEXT,
           border: 'transparent',
-          shadow: 'none',
-          transform: 'none',
-        },
-        active: {
-          background: overlayWhite(0.06),
-          color: SLATE_BUTTON_TEXT,
-          border: 'transparent',
-          shadow: 'none',
-          transform: 'none',
         },
       },
     },

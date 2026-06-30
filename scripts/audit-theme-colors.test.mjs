@@ -170,20 +170,13 @@ test('repository dynamic CSS var families match the registered contract', () => 
   assert.equal(report.surfaceTokenRenames.missingCanonicalUnique, 0);
 });
 
-test('generated widget iframe compatibility aliases match theme alias contracts', () => {
+test('generated widget iframe compatibility aliases stay outside root/runtime contracts', () => {
   const source = readText(path.join(root, 'src/web-ui/src/tools/generative-widget/themePayloadCompatibility.ts'));
   const aliasEntries = Array.from(source.matchAll(/'([^']+)': '([^']+)'/g))
     .map(([, key, canonical]) => [key, canonical]);
   const aliasKeys = new Set(aliasEntries.map(([key]) => key));
-  const contractByKey = new Map(TOKEN_COMPATIBILITY_ALIAS_CONTRACTS.map(contract => [
-    contract.key,
-    contract,
-  ]));
-  const resolveContract = (key) => {
-    const explicit = contractByKey.get(key);
-    if (explicit) {
-      return explicit;
-    }
+  const explicitContractKeys = new Set(TOKEN_COMPATIBILITY_ALIAS_CONTRACTS.map(contract => contract.key));
+  const resolveFamilyContract = (key) => {
     const family = TOKEN_COMPATIBILITY_ALIAS_FAMILY_CONTRACTS.find(contract => (
       key.startsWith(contract.prefix) && key.length > contract.prefix.length
     ));
@@ -198,11 +191,74 @@ test('generated widget iframe compatibility aliases match theme alias contracts'
 
   assert.ok(aliasEntries.length > 0, 'widget iframe compatibility aliases must be explicit');
   assert.equal(aliasKeys.size, aliasEntries.length, 'widget iframe compatibility aliases must be unique');
+  assert.equal(explicitContractKeys.size, 0, 'explicit root/runtime compatibility alias contracts must remain retired');
   for (const [key, canonical] of aliasEntries) {
-    const contract = resolveContract(key);
-    assert.ok(contract, `${key} must be registered as a compatibility alias`);
-    assert.equal(canonical, contract.canonical, `${key} must point to the registered canonical token`);
+    const familyContract = resolveFamilyContract(key);
+    if (familyContract) {
+      assert.equal(canonical, familyContract.canonical, `${key} must point to the registered family canonical token`);
+    } else {
+      assert.ok(!explicitContractKeys.has(key), `${key} must not re-enter root/runtime compatibility alias contracts`);
+      assert.match(canonical, /^--[a-z0-9-]+$/);
+      assert.notEqual(key, canonical, `${key} must point to a different canonical token`);
+    }
   }
+});
+
+test('retired explicit iframe aliases do not reappear outside the compatibility boundary', () => {
+  const source = readText(path.join(root, 'src/web-ui/src/tools/generative-widget/themePayloadCompatibility.ts'));
+  const retiredExplicitAliases = Array.from(source.matchAll(/'([^']+)': '([^']+)'/g))
+    .map(([, key]) => key)
+    .filter(key => !TOKEN_COMPATIBILITY_ALIAS_FAMILY_CONTRACTS.some(contract => (
+      key.startsWith(contract.prefix) && key.length > contract.prefix.length
+    )));
+  const allowedFiles = new Set([
+    'docs/architecture/theme-token-optimization.md',
+    'src/web-ui/src/tools/generative-widget/themePayloadCompatibility.ts',
+    'src/web-ui/src/tools/generative-widget/themePayload.test.ts',
+  ]);
+  const allowedExtensions = new Set(['.ts', '.tsx', '.scss', '.css', '.mjs', '.json']);
+  const searchRoots = ['docs', 'scripts', 'src/web-ui/src'];
+  const hits = [];
+
+  const scanFile = (filePath) => {
+    const relativePath = path.relative(root, filePath).replace(/\\/g, '/');
+    if (allowedFiles.has(relativePath) || !allowedExtensions.has(path.extname(filePath))) {
+      return;
+    }
+    const text = readText(filePath);
+    for (const key of retiredExplicitAliases) {
+      let index = text.indexOf(key);
+      while (index !== -1) {
+        const before = text[index - 1] || '';
+        const after = text[index + key.length] || '';
+        if (!/[a-zA-Z0-9_-]/.test(before) && !/[a-zA-Z0-9_-]/.test(after)) {
+          const line = text.slice(0, index).split(/\r?\n/).length;
+          hits.push(`${relativePath}:${line}: ${key}`);
+        }
+        index = text.indexOf(key, index + key.length);
+      }
+    }
+  };
+
+  const walk = (dir) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (entry.name === 'node_modules' || entry.name === '.git' || entry.name === 'dist' || entry.name === 'target') {
+        continue;
+      }
+      const entryPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        walk(entryPath);
+      } else {
+        scanFile(entryPath);
+      }
+    }
+  };
+
+  for (const searchRoot of searchRoots) {
+    walk(path.join(root, searchRoot));
+  }
+
+  assert.deepEqual(hits, []);
 });
 
 test('theme color audit reports alias family usages whose exact canonical key is missing', (t) => {
@@ -322,12 +378,10 @@ test('theme color audit reports deprecated surface-local token names', (t) => {
   );
 });
 
-test('theme color audit reports compatibility alias usage without treating it as raw color debt', (t) => {
+test('theme color audit reports compatibility alias family usage without treating it as raw color debt', (t) => {
   const { dir, sourceRoot } = createFixture({
     'component-library/styles/tokens.scss': [
       ':root {',
-      '  --color-accent-500: #60a5fa;',
-      '  --color-primary: var(--color-accent-500);',
       '  --size-radius-sm: 6px;',
       '  --radius-sm: var(--size-radius-sm);',
       '}',
@@ -335,7 +389,6 @@ test('theme color audit reports compatibility alias usage without treating it as
     ].join('\n'),
     'app/App.scss': [
       '.app {',
-      '  color: var(--color-primary);',
       '  border-radius: var(--radius-sm);',
       '}',
       '',
@@ -347,34 +400,29 @@ test('theme color audit reports compatibility alias usage without treating it as
   assert.equal(result.status, 0, result.stderr || result.stdout);
 
   const report = JSON.parse(result.stdout);
-  assert.equal(report.compatibilityAliases.usedUnique, 2);
-  assert.equal(report.compatibilityAliases.occurrences, 2);
+  assert.equal(report.compatibilityAliases.usedUnique, 1);
+  assert.equal(report.compatibilityAliases.occurrences, 1);
   assert.equal(report.compatibilityAliases.familyUsedUnique, 1);
   assert.equal(report.compatibilityAliases.familyOccurrences, 1);
   assert.equal(report.compatibilityAliases.missingCanonicalUnique, 0);
   assert.deepEqual(
     report.compatibilityAliases.top.map(row => [row.key, row.canonical]),
-    [
-      ['--color-primary', '--color-accent-500'],
-      ['--radius-sm', '--size-radius-sm'],
-    ],
+    [['--radius-sm', '--size-radius-sm']],
   );
   assert.equal(report.colorScopes.appUi.occurrences, 0);
 });
 
-test('theme color audit budgets generated widget payload compatibility aliases separately', (t) => {
+test('theme color audit budgets generated widget payload compatibility families separately', (t) => {
   const { dir, sourceRoot } = createFixture({
     'component-library/styles/tokens.scss': [
       ':root {',
-      '  --color-accent-500: #60a5fa;',
-      '  --color-primary: var(--color-accent-500);',
       '  --size-radius-sm: 6px;',
       '  --radius-sm: var(--size-radius-sm);',
       '}',
       '',
     ].join('\n'),
     'tools/generative-widget/themePayload.ts': [
-      "export const payloadVars = ['--color-accent-500', '--color-primary', '--size-radius-sm', '--radius-sm'];",
+      "export const payloadVars = ['--size-radius-sm', '--radius-sm'];",
       '',
     ].join('\n'),
   });
@@ -386,16 +434,16 @@ test('theme color audit budgets generated widget payload compatibility aliases s
   const report = JSON.parse(result.stdout);
   assert.equal(report.compatibilityAliases.usedUnique, 0);
   assert.equal(report.compatibilityAliases.familyUsedUnique, 0);
-  assert.equal(report.generatedWidgetPayload.varUnique, 4);
-  assert.equal(report.generatedWidgetPayload.compatibilityAliasUnique, 1);
+  assert.equal(report.generatedWidgetPayload.varUnique, 2);
+  assert.equal(report.generatedWidgetPayload.compatibilityAliasUnique, 0);
   assert.equal(report.generatedWidgetPayload.compatibilityAliasFamilyUnique, 1);
-  assert.equal(report.generatedWidgetPayload.externalOnlyCompatibilityUnique, 2);
+  assert.equal(report.generatedWidgetPayload.externalOnlyCompatibilityUnique, 1);
   assert.equal(report.generatedWidgetPayload.undefinedUnique, 0);
   assert.equal(report.generatedWidgetPayload.missingCompatibilityCanonicalUnique, 0);
   assert.equal(report.generatedWidgetPayload.unexportedCompatibilityCanonicalUnique, 0);
   assert.deepEqual(
     report.generatedWidgetPayload.topCompatibilityAliases.map(row => [row.key, row.canonical]),
-    [['--color-primary', '--color-accent-500']],
+    [],
   );
   assert.deepEqual(
     report.generatedWidgetPayload.topCompatibilityFamilies.map(row => [row.key, row.canonical]),
@@ -403,10 +451,7 @@ test('theme color audit budgets generated widget payload compatibility aliases s
   );
   assert.deepEqual(
     report.generatedWidgetPayload.externalOnlyCompatibility.map(row => [row.key, row.canonical, row.familyPrefix]),
-    [
-      ['--color-primary', '--color-accent-500', null],
-      ['--radius-sm', '--size-radius-sm', '--radius-'],
-    ],
+    [['--radius-sm', '--size-radius-sm', '--radius-']],
   );
   assert.match(report.generatedWidgetPayload.externalOnlyCompatibility[0].removal, /Retire/);
 });
@@ -440,17 +485,17 @@ test('theme color audit reports generated widget payload compatibility aliases w
   );
 });
 
-test('theme color audit reports generated widget payload aliases whose canonicals are not exported', (t) => {
+test('theme color audit reports generated widget payload family aliases whose canonicals are not exported', (t) => {
   const { dir, sourceRoot } = createFixture({
     'component-library/styles/tokens.scss': [
       ':root {',
-      '  --color-accent-500: #60a5fa;',
-      '  --color-primary: var(--color-accent-500);',
+      '  --size-radius-sm: 6px;',
+      '  --radius-sm: var(--size-radius-sm);',
       '}',
       '',
     ].join('\n'),
     'tools/generative-widget/themePayload.ts': [
-      "export const payloadVars = ['--color-primary'];",
+      "export const payloadVars = ['--radius-sm'];",
       '',
     ].join('\n'),
   });
@@ -461,11 +506,12 @@ test('theme color audit reports generated widget payload aliases whose canonical
 
   const report = JSON.parse(result.stdout);
   assert.equal(report.generatedWidgetPayload.undefinedUnique, 0);
+  assert.equal(report.generatedWidgetPayload.compatibilityAliasFamilyUnique, 1);
   assert.equal(report.generatedWidgetPayload.missingCompatibilityCanonicalUnique, 0);
   assert.equal(report.generatedWidgetPayload.unexportedCompatibilityCanonicalUnique, 1);
   assert.deepEqual(
     report.generatedWidgetPayload.unexportedCompatibilityCanonicals.map(row => [row.key, row.canonical]),
-    [['--color-primary', '--color-accent-500']],
+    [['--radius-sm', '--size-radius-sm']],
   );
 });
 

@@ -60,7 +60,7 @@ export const FLOWCHAT_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'summary',
     description: i18nService.t('components:flowChatCards.toolConfig.write.description'),
     displayMode: 'standard',
-    primaryColor: 'var(--tool-card-write-color)'
+    primaryColor: 'var(--color-success)'
   },
   'Edit': {
     toolName: 'Edit',

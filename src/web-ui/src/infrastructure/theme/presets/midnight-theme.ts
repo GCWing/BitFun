@@ -25,7 +25,6 @@ const MIDNIGHT_SUCCESS = '#6aab73';
 const MIDNIGHT_WARNING = '#e0a055';
 const MIDNIGHT_ERROR = '#cc7f7a';
 const MIDNIGHT_CONTROL_ERROR = '#ef4444';
-const MIDNIGHT_HIGHLIGHT = '#d4a574';
 
 const midnightBackground = (alpha: number | string) => rgbaFromHex(MIDNIGHT_BACKGROUND, alpha);
 const midnightText = (alpha: number | string) => rgbaFromHex(MIDNIGHT_TEXT_PRIMARY, alpha);
@@ -36,7 +35,6 @@ const midnightPurpleHover = (alpha: number | string) => rgbaFromHex(MIDNIGHT_PUR
 const midnightSuccess = (alpha: number | string) => rgbaFromHex(MIDNIGHT_SUCCESS, alpha);
 const midnightWarning = (alpha: number | string) => rgbaFromHex(MIDNIGHT_WARNING, alpha);
 const midnightError = (alpha: number | string) => rgbaFromHex(MIDNIGHT_ERROR, alpha);
-const midnightControlError = (alpha: number | string) => rgbaFromHex(MIDNIGHT_CONTROL_ERROR, alpha);
 
 export const bitfunMidnightTheme: ThemeConfig = {
 
@@ -109,8 +107,6 @@ export const bitfunMidnightTheme: ThemeConfig = {
       infoBorder: midnightAccent(0.3),
 
 
-      highlight: MIDNIGHT_HIGHLIGHT,
-      highlightBg: rgbaFromHex(MIDNIGHT_HIGHLIGHT, 0.15),
     },
 
     border: {
@@ -198,53 +194,10 @@ export const bitfunMidnightTheme: ThemeConfig = {
 
   components: {
 
-    windowControls: createWindowControls({
-      standard: {
-        dot: midnightAccent(0.45),
-        dotShadow: `0 0 4px ${midnightAccent(0.2)}`,
-        hoverBg: midnightAccent(0.12),
-        hoverColor: MIDNIGHT_ACCENT,
-        hoverBorder: midnightAccent(0.2),
-        hoverShadow: `0 2px 8px ${midnightAccent(0.15)}, inset 0 1px 0 ${overlayWhite(0.1)}`,
-      },
-      close: {
-        dot: midnightControlError(0.45),
-        dotShadow: `0 0 4px ${midnightControlError(0.2)}`,
-        hoverBg: midnightControlError(0.12),
-        hoverColor: MIDNIGHT_CONTROL_ERROR,
-        hoverBorder: midnightControlError(0.2),
-        hoverShadow: `0 2px 8px ${midnightControlError(0.15)}, inset 0 1px 0 ${overlayWhite(0.1)}`,
-      },
-      common: {
-        defaultColor: midnightText(0.9),
-        defaultDot: midnightText(0.2),
-        disabledDot: midnightText(0.1),
-        flowGradient: `linear-gradient(90deg, transparent, ${midnightText(0.05)}, ${midnightText(0.08)}, ${midnightText(0.05)}, transparent)`,
-      },
-    }),
+    windowControls: createWindowControls(MIDNIGHT_CONTROL_ERROR),
 
     button: {
 
-      default: {
-        background: midnightText(0.11),
-        color: '#9a9a9a',
-        border: 'transparent',
-        shadow: 'none',
-      },
-      hover: {
-        background: midnightText(0.17),
-        color: MIDNIGHT_BUTTON_TEXT,
-        border: 'transparent',
-        shadow: 'none',
-        transform: 'none',
-      },
-      active: {
-        background: midnightText(0.14),
-        color: MIDNIGHT_BUTTON_TEXT,
-        border: 'transparent',
-        shadow: 'none',
-        transform: 'none',
-      },
 
 
       primary: {
@@ -273,24 +226,12 @@ export const bitfunMidnightTheme: ThemeConfig = {
 
       ghost: {
         default: {
-          background: 'transparent',
           color: '#9a9a9a',
-          border: 'transparent',
-          shadow: 'none',
         },
         hover: {
           background: midnightText(0.13),
           color: MIDNIGHT_BUTTON_TEXT,
           border: 'transparent',
-          shadow: 'none',
-          transform: 'none',
-        },
-        active: {
-          background: midnightText(0.11),
-          color: MIDNIGHT_BUTTON_TEXT,
-          border: 'transparent',
-          shadow: 'none',
-          transform: 'none',
         },
       },
     },
@@ -324,4 +265,3 @@ export const bitfunMidnightTheme: ThemeConfig = {
     },
   },
 };
-

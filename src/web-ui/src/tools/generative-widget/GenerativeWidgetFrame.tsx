@@ -751,7 +751,10 @@ ${createWidgetThemeCompatibilityAliasCss()}
             vars['--color-text-primary'] ||
             getComputedStyle(root).getPropertyValue('--color-text-primary') ||
             body.style.color;
-          body.style.fontFamily = vars['--font-family-sans'] || vars['--font-sans'] || body.style.fontFamily;
+          body.style.fontFamily =
+            vars['--font-family-sans'] ||
+            getComputedStyle(root).getPropertyValue('--font-family-sans') ||
+            body.style.fontFamily;
         }
       }
 

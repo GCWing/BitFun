@@ -109,8 +109,6 @@ export const bitfunDarkTheme: ThemeConfig = {
       infoBorder: overlayWhite(0.24),
 
 
-      highlight: '#a8a8a8',
-      highlightBg: overlayWhite(0.1),
     },
 
     border: createDarkNeutralBorder(),
@@ -187,53 +185,10 @@ export const bitfunDarkTheme: ThemeConfig = {
 
   components: {
 
-    windowControls: createWindowControls({
-      standard: {
-        dot: overlayWhite(0.38),
-        dotShadow: `0 0 4px ${overlayBlack(0.35)}`,
-        hoverBg: overlayWhite(0.1),
-        hoverColor: '#e4e4e4',
-        hoverBorder: overlayWhite(0.16),
-        hoverShadow: `0 2px 8px ${overlayBlack(0.25)}, inset 0 1px 0 ${overlayWhite(0.08)}`,
-      },
-      close: {
-        dot: darkError(0.45),
-        dotShadow: `0 0 4px ${darkError(0.2)}`,
-        hoverBg: darkError(0.12),
-        hoverColor: DARK_ERROR,
-        hoverBorder: darkError(0.2),
-        hoverShadow: `0 2px 8px ${darkError(0.15)}, inset 0 1px 0 ${overlayWhite(0.1)}`,
-      },
-      common: {
-        defaultColor: rgbaFromHex(DARK_TEXT_PRIMARY, 0.9),
-        defaultDot: overlayWhite(0.2),
-        disabledDot: overlayWhite(0.1),
-        flowGradient: `linear-gradient(90deg, transparent, ${overlayWhite(0.05)}, ${overlayWhite(0.08)}, ${overlayWhite(0.05)}, transparent)`,
-      },
-    }),
+    windowControls: createWindowControls(DARK_ERROR),
 
     button: {
 
-      default: {
-        background: overlayWhite(0.08),
-        color: '#9a9a9a',
-        border: 'transparent',
-        shadow: 'none',
-      },
-      hover: {
-        background: overlayWhite(0.14),
-        color: DARK_BUTTON_TEXT,
-        border: 'transparent',
-        shadow: 'none',
-        transform: 'none',
-      },
-      active: {
-        background: overlayWhite(0.1),
-        color: DARK_BUTTON_TEXT,
-        border: 'transparent',
-        shadow: 'none',
-        transform: 'none',
-      },
 
 
       primary: {
@@ -262,24 +217,12 @@ export const bitfunDarkTheme: ThemeConfig = {
 
       ghost: {
         default: {
-          background: 'transparent',
           color: '#9a9a9a',
-          border: 'transparent',
-          shadow: 'none',
         },
         hover: {
           background: overlayWhite(0.1),
           color: DARK_BUTTON_TEXT,
           border: 'transparent',
-          shadow: 'none',
-          transform: 'none',
-        },
-        active: {
-          background: overlayWhite(0.07),
-          color: DARK_BUTTON_TEXT,
-          border: 'transparent',
-          shadow: 'none',
-          transform: 'none',
         },
       },
     },
