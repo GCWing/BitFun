@@ -25,6 +25,7 @@ const CYBER_PURPLE_HOVER = '#7928ca';
 const CYBER_SUCCESS = '#00ff9f';
 const CYBER_WARNING = '#ffcc00';
 const CYBER_ERROR = '#ff0055';
+const CYBER_SURFACE_SECONDARY = '#151515';
 
 const cyberAccent = (alpha: number | string) => rgbaFromHex(CYBER_ACCENT, alpha);
 const cyberAccentHover = (alpha: number | string) => rgbaFromHex(CYBER_ACCENT_HOVER, alpha);
@@ -47,12 +48,12 @@ export const bitfunCyberTheme: ThemeConfig = {
   colors: {
     background: {
       primary: CYBER_BACKGROUND,
-      secondary: '#151515',
+      secondary: CYBER_SURFACE_SECONDARY,
       tertiary: '#1a1a1a',
       quaternary: '#1f1f1f',
       elevated: '#0d0d0d',
       workbench: CYBER_BACKGROUND,
-      scene: '#141414',
+      scene: CYBER_SURFACE_SECONDARY,
       tooltip: 'rgba(16, 16, 16, 0.95)',
     },
 
@@ -303,7 +304,7 @@ export const bitfunCyberTheme: ThemeConfig = {
     colors: {
       background: CYBER_BACKGROUND,
       foreground: CYBER_TEXT_SECONDARY,
-      lineHighlight: '#151515',
+      lineHighlight: CYBER_SURFACE_SECONDARY,
       selection: '#1a4d66',
       cursor: CYBER_ACCENT,
     },

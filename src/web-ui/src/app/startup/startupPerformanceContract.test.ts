@@ -6,7 +6,7 @@ import { shouldScheduleDeferredStartupSystems } from './deferredStartupGate';
 import { STARTUP_OVERLAY_HIDDEN_EVENT } from './startupSignals';
 
 function readSource(relativePath: string): string {
-  return readFileSync(fileURLToPath(new URL(relativePath, import.meta.url)), 'utf8');
+  return readFileSync(fileURLToPath(new URL(relativePath, import.meta.url)), 'utf8').replace(/\r\n?/g, '\n');
 }
 
 function dynamicImportSpecifiers(source: string): string[] {

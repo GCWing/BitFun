@@ -14,6 +14,10 @@ const outputPath = path.join(
 );
 const checkOnly = process.argv.includes('--check');
 
+function normalizeGeneratedText(content) {
+  return String(content).replace(/\r\n?/g, '\n');
+}
+
 const server = await createServer({
   root: webUiRoot,
   logLevel: 'error',
@@ -38,7 +42,10 @@ try {
     : null;
 
   if (checkOnly) {
-    if (currentContent !== nextContent) {
+    const currentContentForCheck = currentContent == null
+      ? null
+      : normalizeGeneratedText(currentContent);
+    if (currentContentForCheck !== normalizeGeneratedText(nextContent)) {
       console.error(
         'Startup theme bootstrap manifest is stale. Run `pnpm run generate-startup-theme-bootstrap`.',
       );

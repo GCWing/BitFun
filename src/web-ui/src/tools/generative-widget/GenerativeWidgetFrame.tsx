@@ -6,6 +6,7 @@ import {
   readWidgetThemePayload,
   type WidgetThemePayload,
 } from './themePayload';
+import { createWidgetThemeCompatibilityAliasCss } from './themePayloadCompatibility';
 import './GenerativeWidgetFrame.scss';
 
 export type WidgetMessage =
@@ -94,8 +95,7 @@ export const GENERATIVE_WIDGET_SHELL_HTML = `<!DOCTYPE html>
 ${createWidgetThemeFallbackCss()}
       --font-family-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       --font-family-mono: "SF Mono", Consolas, monospace;
-      --font-sans: var(--font-family-sans);
-      --font-mono: var(--font-family-mono);
+${createWidgetThemeCompatibilityAliasCss()}
       --font-size-xs: 12px;
       --font-size-sm: 14px;
       --font-size-base: 14px;

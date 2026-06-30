@@ -927,13 +927,13 @@ export class ThemeService {
 
     if (theme.type === 'dark') {
 
-      root.style.setProperty('--card-bg-default', 'rgba(255, 255, 255, 0.025)');
-      root.style.setProperty('--card-bg-elevated', 'rgba(255, 255, 255, 0.035)');
-      root.style.setProperty('--card-bg-subtle', 'rgba(255, 255, 255, 0.015)');
+      root.style.setProperty('--card-bg-default', THEME_OVERLAYS.white03);
+      root.style.setProperty('--card-bg-elevated', THEME_OVERLAYS.white04);
+      root.style.setProperty('--card-bg-subtle', THEME_OVERLAYS.white02);
       root.style.setProperty('--card-bg-hover', THEME_OVERLAYS.white04);
       root.style.setProperty('--card-bg-active', THEME_OVERLAYS.white05);
-      root.style.setProperty('--card-bg-accent', 'rgba(255, 255, 255, 0.09)');
-      root.style.setProperty('--card-bg-accent-hover', 'rgba(255, 255, 255, 0.13)');
+      root.style.setProperty('--card-bg-accent', THEME_OVERLAYS.white08);
+      root.style.setProperty('--card-bg-accent-hover', THEME_OVERLAYS.white12);
       root.style.setProperty('--card-bg-purple', 'rgba(139, 92, 246, 0.08)');
       root.style.setProperty('--card-bg-purple-hover', 'rgba(139, 92, 246, 0.12)');
     } else {
