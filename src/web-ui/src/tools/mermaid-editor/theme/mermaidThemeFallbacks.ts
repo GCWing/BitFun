@@ -9,7 +9,7 @@ const DARK_NODE_STROKE = '#5a5e6a';
 const DARK_NODE_BORDER = '#4a4e58';
 const DARK_NODE_STROKE_SUBTLE = '#3a3e48';
 const DARK_NODE_STROKE_HOVER = '#6a6e7a';
-const DARK_CLUSTER_TEXT = '#a1a1aa';
+const DARK_CLUSTER_TEXT = '#9ca3af';
 const DARK_INFO = '#78a8d8';
 const DARK_ERROR = '#e87878';
 
@@ -52,11 +52,11 @@ export const MERMAID_THEME_FALLBACKS = {
     edgeLabelBg: DARK_NODE_FILL,
     edgeLabelBgStrong: DARK_NODE_FILL_HOVER,
     edgeLabelBgRuntime: 'rgba(26, 28, 32, 0.95)',
-    edgeLabelBgHover: 'rgba(36, 38, 45, 0.98)',
-    noteFill: '#222428',
+    edgeLabelBgHover: DARK_NODE_FILL_HOVER,
+    noteFill: DARK_NODE_FILL_HOVER,
     noteText: DARK_CLUSTER_TEXT,
     noteStroke: DARK_NODE_BORDER,
-    activationFill: '#2a2c32',
+    activationFill: DARK_NODE_FILL_HOVER,
     activationStroke: DARK_NODE_STROKE,
     sectionFill: DARK_NODE_FILL,
     sectionAltFill: DARK_NODE_FILL_HOVER,
@@ -118,7 +118,7 @@ export const MERMAID_THEME_FALLBACKS = {
     gridStroke: 'rgba(156, 163, 175, 0.3)',
     doneFill: 'rgba(34, 197, 94, 0.2)',
     doneStroke: '#16a34a',
-    activeFill: 'rgba(15, 23, 42, 0.08)',
+    activeFill: 'rgba(15, 23, 42, 0.1)',
     activeStroke: LIGHT_HIGHLIGHT_STROKE,
     critFill: 'rgba(239, 68, 68, 0.2)',
     critStroke: LIGHT_ERROR,

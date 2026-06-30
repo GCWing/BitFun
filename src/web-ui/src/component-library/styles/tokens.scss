@@ -9,8 +9,8 @@ $color-static-orange: #f97316;
 
 $overlay-white-02: rgba(255, 255, 255, 0.02);
 $overlay-white-01: $overlay-white-02;
-$overlay-white-03: rgba(255, 255, 255, 0.03);
 $overlay-white-04: rgba(255, 255, 255, 0.04);
+$overlay-white-03: $overlay-white-04;
 $overlay-white-05: rgba(255, 255, 255, 0.05);
 $overlay-white-06: rgba(255, 255, 255, 0.06);
 $overlay-white-08: rgba(255, 255, 255, 0.08);
@@ -43,22 +43,22 @@ $overlay-black-80: rgba(0, 0, 0, 0.8);
 $overlay-black-85: rgba(0, 0, 0, 0.85);
 $overlay-black-90: rgba(0, 0, 0, 0.9);
 
-$color-blue-500-a06: rgba(96, 165, 250, 0.06);
 $color-blue-500-a08: rgba(96, 165, 250, 0.08);
+$color-blue-500-a06: $color-blue-500-a08;
 $color-blue-500-a15: rgba(96, 165, 250, 0.15);
 $color-blue-500-a12: $color-blue-500-a15;
 $color-blue-500-a18: $color-blue-500-a15;
 $color-blue-600-a08: rgba(59, 130, 246, 0.08);
 $color-blue-600-a12: rgba(59, 130, 246, 0.12);
 $color-blue-600-a15: rgba(59, 130, 246, 0.15);
-$color-blue-600-a18: rgba(59, 130, 246, 0.18);
+$color-blue-600-a18: $color-blue-600-a15;
 $color-blue-600-a25: rgba(59, 130, 246, 0.25);
 $color-blue-600-a30: rgba(59, 130, 246, 0.3);
 $color-blue-600-a40: rgba(59, 130, 246, 0.4);
 
-$color-purple-500-a05: rgba(139, 92, 246, 0.05);
 $color-purple-500-a08: rgba(139, 92, 246, 0.08);
-$color-purple-500-a10: rgba(139, 92, 246, 0.1);
+$color-purple-500-a05: $color-purple-500-a08;
+$color-purple-500-a10: $color-purple-500-a08;
 $color-purple-500-a15: rgba(139, 92, 246, 0.15);
 $color-purple-500-a12: $color-purple-500-a15;
 $color-purple-500-a25: rgba(139, 92, 246, 0.25);
@@ -84,11 +84,11 @@ $color-text-disabled: #555555;
 
 // ==================== Neutral surface system ====================
 $element-bg-subtle: $overlay-white-05;
-$element-bg-soft: rgba(255, 255, 255, 0.07);
-$element-bg-base: rgba(255, 255, 255, 0.095);
-$element-bg-medium: rgba(255, 255, 255, 0.125);
-$element-bg-strong: rgba(255, 255, 255, 0.155);
-$element-bg-elevated: rgba(255, 255, 255, 0.19);
+$element-bg-soft: $overlay-white-06;
+$element-bg-base: $overlay-white-10;
+$element-bg-medium: $overlay-white-12;
+$element-bg-strong: $overlay-white-15;
+$element-bg-elevated: $overlay-white-20;
 
 // ==================== Blue system ====================
 $color-accent-50: $color-blue-500-a06;
@@ -241,7 +241,7 @@ $glass-blue-subtle: $color-blue-600-a08;
 $glass-blue-base: linear-gradient(135deg,
   $color-blue-600-a12 0%,
   $color-blue-600-a08 30%,
-  rgba(59, 130, 246, 0.06) 60%,
+  $color-blue-600-a08 60%,
   $color-blue-600-a15 100%);
 $glass-blue-hover: linear-gradient(135deg,
   $color-blue-600-a15 0%,
@@ -264,7 +264,7 @@ $glass-red-subtle: rgba(239, 68, 68, 0.05);
 $glass-red-base: $color-error-bg;
 $glass-red-hover: rgba(239, 68, 68, 0.15);
 
-$glass-green-base: rgba(52, 211, 153, 0.08);
+$glass-green-base: $color-success-bg;
 $glass-green-hover: rgba(52, 211, 153, 0.15);
 
 // ==================== Sizing system ====================
@@ -429,7 +429,7 @@ $card-bg-elevated: $overlay-white-06;
 $card-bg-subtle: $overlay-white-02;
 $card-bg-hover: $overlay-white-06;
 $card-bg-active: $overlay-white-08;
-$card-bg-accent: rgba(96, 165, 250, 0.1);
+$card-bg-accent: $color-blue-500-a08;
 $card-bg-accent-hover: $color-blue-500-a15;
 $card-bg-purple: $color-purple-500-a10;
 $card-bg-purple-hover: $color-purple-500-a15;
@@ -519,7 +519,7 @@ $badge-info-text: $color-info;
       $color-purple-500-a15 0%,
       $color-purple-500-a15 30%,
       $color-purple-500-a08 60%,
-      rgba(139, 92, 246, 0.18) 100%
+      $color-purple-500-a15 100%
     );
     border-color: $color-purple-500-a40;
     box-shadow:
@@ -1038,7 +1038,7 @@ $badge-info-text: $color-info;
   --btn-primary-active-shadow: none;
   --btn-primary-active-transform: none;
   --btn-ghost-bg: transparent;
-  --btn-ghost-color: #8a8a8a;
+  --btn-ghost-color: var(--color-text-muted);
   --btn-ghost-border: transparent;
   --btn-ghost-shadow: none;
   --btn-ghost-hover-bg: var(--color-overlay-white-06);

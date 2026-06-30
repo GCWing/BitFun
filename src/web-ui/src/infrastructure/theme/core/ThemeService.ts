@@ -39,7 +39,6 @@ const THEME_STATIC_COLORS = {
 
 const THEME_OVERLAYS = {
   white02: 'rgba(255, 255, 255, 0.02)',
-  white03: 'rgba(255, 255, 255, 0.03)',
   white04: 'rgba(255, 255, 255, 0.04)',
   white05: 'rgba(255, 255, 255, 0.05)',
   white06: 'rgba(255, 255, 255, 0.06)',
@@ -50,7 +49,6 @@ const THEME_OVERLAYS = {
   white20: 'rgba(255, 255, 255, 0.2)',
   white24: 'rgba(255, 255, 255, 0.24)',
   white60: 'rgba(255, 255, 255, 0.6)',
-  black04: 'rgba(0, 0, 0, 0.04)',
   black06: 'rgba(0, 0, 0, 0.06)',
   black08: 'rgba(0, 0, 0, 0.08)',
   black10: 'rgba(0, 0, 0, 0.1)',
@@ -67,7 +65,7 @@ const THEME_OVERLAYS = {
 
 const THEME_OVERLAY_TOKEN_VALUES = [
   ['--color-overlay-white-02', THEME_OVERLAYS.white02],
-  ['--color-overlay-white-03', THEME_OVERLAYS.white03],
+  ['--color-overlay-white-03', THEME_OVERLAYS.white04],
   ['--color-overlay-white-04', THEME_OVERLAYS.white04],
   ['--color-overlay-white-05', THEME_OVERLAYS.white05],
   ['--color-overlay-white-06', THEME_OVERLAYS.white06],
@@ -1003,7 +1001,7 @@ export class ThemeService {
 
     if (theme.type === 'dark') {
 
-      root.style.setProperty('--card-bg-default', THEME_OVERLAYS.white03);
+      root.style.setProperty('--card-bg-default', THEME_OVERLAYS.white04);
       root.style.setProperty('--card-bg-elevated', THEME_OVERLAYS.white04);
       root.style.setProperty('--card-bg-subtle', THEME_OVERLAYS.white02);
       root.style.setProperty('--card-bg-hover', THEME_OVERLAYS.white04);
@@ -1016,7 +1014,7 @@ export class ThemeService {
 
       root.style.setProperty('--card-bg-default', THEME_OVERLAYS.black06);
       root.style.setProperty('--card-bg-elevated', THEME_OVERLAYS.black08);
-      root.style.setProperty('--card-bg-subtle', THEME_OVERLAYS.black04);
+      root.style.setProperty('--card-bg-subtle', THEME_OVERLAYS.black06);
       root.style.setProperty('--card-bg-hover', THEME_OVERLAYS.black06);
       root.style.setProperty('--card-bg-active', THEME_OVERLAYS.black10);
       root.style.setProperty('--card-bg-accent', 'rgba(15, 23, 42, 0.08)');

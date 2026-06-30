@@ -11,12 +11,12 @@ export const WIDGET_IFRAME_FALLBACK_COLOR = {
   warning: '#f59e0b',
   error: '#ef4444',
   staticWhite: '#ffffff',
-  borderSubtle: 'rgba(255, 255, 255, 0.1)',
-  borderBase: 'rgba(255, 255, 255, 0.15)',
+  borderSubtle: 'rgba(255, 255, 255, 0.12)',
+  borderBase: 'rgba(255, 255, 255, 0.12)',
   borderMedium: 'rgba(255, 255, 255, 0.24)',
   elementBgSubtle: 'rgba(255, 255, 255, 0.05)',
-  elementBgBase: 'rgba(255, 255, 255, 0.08)',
-  elementBgMedium: 'rgba(255, 255, 255, 0.15)',
+  elementBgBase: 'rgba(255, 255, 255, 0.12)',
+  elementBgMedium: 'rgba(255, 255, 255, 0.12)',
   shadowBase: 'rgba(0, 0, 0, 0.4)',
 } as const;
 

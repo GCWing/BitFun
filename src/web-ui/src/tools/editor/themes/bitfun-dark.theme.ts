@@ -19,7 +19,7 @@ const MONACO_DARK_SURFACE = {
   background: '#121214',
   elevated: '#18181a',
   borderSubtle: '#202024',
-  diffDeep: '#0D0D0F',
+  diffDeep: '#121214',
 } as const;
 
 const MONACO_EDITOR_TEXT = {

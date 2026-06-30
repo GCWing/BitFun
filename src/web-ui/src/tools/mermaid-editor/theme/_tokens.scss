@@ -17,7 +17,8 @@ $mermaid-light-node-stroke: rgba(100, 116, 139, 0.35);
 $mermaid-light-edge-label-border: rgba(100, 116, 139, 0.25);
 $mermaid-light-text-primary: #1e293b;
 $mermaid-light-text-secondary: #475569;
-$mermaid-light-surface: #f9fafb;
+$mermaid-light-surface: #f3f4f6;
+$mermaid-light-section-alt-fill: #e8eaef;
 $mermaid-light-highlight-stroke: #334155;
 
 // ==================== Mermaid CSS variables ====================
@@ -145,7 +146,7 @@ $mermaid-light-highlight-stroke: #334155;
   --mermaid-arrow-color: #64748b;
 
   // Subgraph/cluster
-  --mermaid-cluster-fill: rgba(15, 23, 42, 0.04);
+  --mermaid-cluster-fill: #{$mermaid-light-node-fill};
   --mermaid-cluster-stroke: #{$mermaid-light-edge-label-border};
   --mermaid-cluster-text: #{$mermaid-light-text-secondary};
 
@@ -171,12 +172,12 @@ $mermaid-light-highlight-stroke: #334155;
 
   // Gantt chart
   --mermaid-section-fill: #{$mermaid-light-surface};
-  --mermaid-section-alt-fill: #f0f1f3;
+  --mermaid-section-alt-fill: #{$mermaid-light-section-alt-fill};
   --mermaid-grid-stroke: rgba(100, 116, 139, 0.15);
   --mermaid-task-text: #{$mermaid-light-text-primary};
   --mermaid-done-fill: rgba(91, 154, 111, 0.15);
   --mermaid-done-stroke: #5b9a6f;
-  --mermaid-active-fill: rgba(15, 23, 42, 0.08);
+  --mermaid-active-fill: #{$mermaid-light-node-fill-hover};
   --mermaid-active-stroke: #{$mermaid-light-highlight-stroke};
   --mermaid-crit-fill: rgba(194, 101, 101, 0.15);
   --mermaid-crit-stroke: #c26565;

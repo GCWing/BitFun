@@ -10,8 +10,8 @@ describe('BitFunDarkTheme color roles', () => {
     expect(colors['editor.lineHighlightBorder']).toBe('#202024');
     expect(colors['editorWidget.background']).toBe('#18181a');
     expect(colors['editorHoverWidget.statusBarBackground']).toBe('#202024');
-    expect(colors['diffEditor.unchangedRegionBackground']).toBe('#0D0D0F');
-    expect(colors['diffEditor.unchangedCodeBackground']).toBe('#0D0D0F');
+    expect(colors['diffEditor.unchangedRegionBackground']).toBe('#121214');
+    expect(colors['diffEditor.unchangedCodeBackground']).toBe('#121214');
   });
 
   it('keeps BitFun accent roles output-equivalent', () => {

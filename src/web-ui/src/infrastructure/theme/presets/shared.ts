@@ -193,22 +193,22 @@ export function createStandardEasing(smooth = 'cubic-bezier(0.4, 0, 0.2, 1)'): T
 
 export function createDarkNeutralBorder(): BorderColors {
   return {
-    subtle: 'rgba(255, 255, 255, 0.12)',
-    base: 'rgba(255, 255, 255, 0.18)',
-    medium: 'rgba(255, 255, 255, 0.24)',
-    strong: 'rgba(255, 255, 255, 0.3)',
-    prominent: 'rgba(255, 255, 255, 0.4)',
+    subtle: overlayWhite(0.12),
+    base: overlayWhite(0.18),
+    medium: overlayWhite(0.24),
+    strong: overlayWhite(0.3),
+    prominent: overlayWhite(0.4),
   };
 }
 
 export function createDarkNeutralElement(): ElementBackgrounds {
   return {
-    subtle: 'rgba(255, 255, 255, 0.05)',
-    soft: 'rgba(255, 255, 255, 0.07)',
-    base: 'rgba(255, 255, 255, 0.095)',
-    medium: 'rgba(255, 255, 255, 0.125)',
-    strong: 'rgba(255, 255, 255, 0.155)',
-    elevated: 'rgba(255, 255, 255, 0.19)',
+    subtle: overlayWhite(0.05),
+    soft: overlayWhite(0.06),
+    base: overlayWhite(0.1),
+    medium: overlayWhite(0.12),
+    strong: overlayWhite(0.15),
+    elevated: overlayWhite(0.2),
   };
 }
 
@@ -224,7 +224,7 @@ export function createGitColors(
 
 export function createDarkNeutralScrollbar(): ScrollbarColors {
   return {
-    thumb: 'rgba(255, 255, 255, 0.15)',
-    thumbHover: 'rgba(255, 255, 255, 0.28)',
+    thumb: overlayWhite(0.15),
+    thumbHover: overlayWhite(0.3),
   };
 }

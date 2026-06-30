@@ -72,12 +72,12 @@ describe('builtin theme preset output', () => {
           "type": "light",
         },
         {
-          "hash": "f9732d9339162f704c6bd19dbac61e6ecf7819dd3d72a6437cce04812ab16db4",
+          "hash": "ebbb8c7b24d44430211ca1cd36e44530dc5b2f0c7b76ed372cb25afc5ad1e90b",
           "id": "bitfun-slate",
           "type": "dark",
         },
         {
-          "hash": "4d3b604eeed6cac6f06228c93b2771217dda6f5e6a1fd151bc48849f59c229c1",
+          "hash": "545249087b734444881c33a1e6925a5b348f9e7e150a737992177278e0b67cef",
           "id": "bitfun-dark",
           "type": "dark",
         },
