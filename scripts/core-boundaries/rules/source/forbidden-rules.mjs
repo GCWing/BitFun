@@ -32,6 +32,46 @@ export const forbiddenContentRules = [
     ],
   },
   {
+    path: 'src/crates/assembly/core/src/service/lsp/types.rs',
+    patterns: [
+      {
+        regex: /\bpub struct LspPlugin\b/,
+        message:
+          'LSP plugin manifest DTO belongs in bitfun-core-types; keep core LSP types as a compatibility facade',
+      },
+      {
+        regex: /\bpub enum JsonRpcMessage\b/,
+        message:
+          'LSP JSON-RPC DTOs belong in bitfun-core-types; keep core LSP types as a compatibility facade',
+      },
+      {
+        regex: /\buse serde::\{Deserialize,\s*Serialize\}/,
+        message:
+          'core LSP types should not own serialization DTOs after migration to bitfun-core-types',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/service/lsp/registry.rs',
+    patterns: [
+      {
+        regex: /\bpub struct PluginRegistry\b/,
+        message:
+          'LSP plugin registry belongs in bitfun-services-core; keep core registry as a compatibility facade',
+      },
+      {
+        regex: /\bHashMap<String,\s*LspPlugin>\b/,
+        message:
+          'core LSP registry must not own plugin index maps after migration to bitfun-services-core',
+      },
+      {
+        regex: /\bPathBuf::from\(file_path\)/,
+        message:
+          'LSP file-extension lookup belongs in bitfun-services-core registry rules',
+      },
+    ],
+  },
+  {
     path: 'src/crates/assembly/core/src/product_assembly.rs',
     patterns: [
       {

@@ -9,13 +9,13 @@
 ## 1. 基础边界
 
 - 已建立 `product-full` 作为完整产品能力保护开关，产品入口显式启用完整能力。
-- 已抽取 `bitfun-core-types`、`bitfun-events`、`bitfun-runtime-ports`、`bitfun-agent-stream` 等基础契约。
+- 已抽取 `bitfun-core-types`、`bitfun-events`、`bitfun-runtime-ports`、`bitfun-agent-stream` 等基础契约；LSP protocol DTO 和 plugin manifest DTO 已进入 `bitfun-core-types`。
 - 已建立 `bitfun-services-core`、`bitfun-services-integrations`、`bitfun-agent-tools`、`tool-runtime`、`bitfun-tool-packs`、`bitfun-agent-runtime`、`bitfun-runtime-services`、`bitfun-harness`、`bitfun-product-domains`、`bitfun-product-capabilities` 等 owner crate。
 - `src/crates` 已按 `interfaces / assembly / adapters / services / execution / contracts` 六层布局整理，DeepReview path classifier、boundary rules、Cargo workspace path 和根/层级 AGENTS 已同步。
 
 ## 2. 已迁移 owner
 
-- `services-core` 已承接 session layout、metadata store CRUD / index rebuild、metadata pagination、metadata construction / mutation、lineage / branch shaping、JSON file store、filesystem primitives、managed runtime command resolution / PATH merge、diagnostic redaction、session usage/token usage 基础服务。
+- `services-core` 已承接 session layout、metadata store CRUD / index rebuild、metadata pagination、metadata construction / mutation、lineage / branch shaping、JSON file store、filesystem primitives、managed runtime command resolution / PATH merge、LSP plugin registry / extension matching / command-target mapping、diagnostic redaction、session usage/token usage 基础服务。
 - `services-core` 已承接 workspace-runtime legacy session-store merge、metadata 冲突选择、index rebuild 和 legacy path copy/move fallback；core workspace-runtime 只保留路径计算、runtime layout ensure 和错误兼容映射。
 - `runtime-services` 已承接 typed runtime service assembly、capability availability、provider registry、capability validation、无副作用 capability marker ports 和 backend event delivery；core backend event system 只保留兼容 re-export。
 - `bitfun-events` 已承接 backend event DTO、agentic event DTO 和 platform-neutral `EventEmitter` trait。

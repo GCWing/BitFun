@@ -197,7 +197,9 @@ impl PluginLoader {
     pub fn get_server_path(&self, plugin: &LspPlugin) -> Result<PathBuf> {
         let plugin_dir = self.plugins_dir.join(&plugin.id);
 
-        let command = self.resolve_command(&plugin.server.command)?;
+        let command = bitfun_services_core::lsp::resolve_plugin_command_for_current_target(
+            &plugin.server.command,
+        )?;
 
         let command = command.replace('/', std::path::MAIN_SEPARATOR_STR);
 
@@ -253,36 +255,6 @@ impl PluginLoader {
         }
 
         Ok(server_path)
-    }
-
-    /// Resolves placeholders in the command.
-    fn resolve_command(&self, command: &str) -> Result<String> {
-        let mut resolved = command.to_string();
-
-        let platform = if cfg!(target_os = "windows") {
-            "win"
-        } else if cfg!(target_os = "macos") {
-            "darwin"
-        } else if cfg!(target_os = "linux") {
-            "linux"
-        } else {
-            return Err(anyhow!("Unsupported platform"));
-        };
-
-        resolved = resolved.replace("${platform}", platform);
-        resolved = resolved.replace("${os}", platform);
-
-        let arch = if cfg!(target_arch = "x86_64") {
-            "x64"
-        } else if cfg!(target_arch = "aarch64") {
-            "arm64"
-        } else {
-            return Err(anyhow!("Unsupported architecture"));
-        };
-
-        resolved = resolved.replace("${arch}", arch);
-
-        Ok(resolved)
     }
 
     /// Returns the plugin directory path.

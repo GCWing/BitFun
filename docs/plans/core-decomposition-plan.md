@@ -52,18 +52,21 @@
 
 ### PR-D：Extension Host 与 OpenCode / ACP 适配收口
 
-状态：本阶段收口 ACP external-agent tool bridge；Extension/OpenCode/plugin、UI extension、effect / permission mapping 和多形态 SDK 验证转入后续阶段。
+状态：本阶段收口已有消费路径中的 ACP external-agent tool bridge 与 LSP plugin contract / registry owner；OpenCode / UI extension / capability-effect 泛化 API 不提前稳定，等出现真实消费路径后单独接入。
 
 完成口径：
 
 - ACP external-agent tool name、schema、validation、presentation 和 ToolResult shape 由 `bitfun-agent-tools` 承接。
 - `bitfun-acp` 继续持有 ACP protocol、client lifecycle、remote probing、permission bridge 和配置加载；现有 `AcpClientInfo` API shape 不变。
-- OpenCode/plugin concrete host、UI contribution、hook/workflow provider mapping 和 capability/effect policy 仍需在实际消费路径明确后单独接入，避免提前扩大稳定 API。
+- LSP protocol DTO 和 plugin manifest DTO 由 `bitfun-core-types` 承接，`bitfun-core::service::lsp::types` 只保留兼容 re-export。
+- LSP plugin registry、extension/language lookup、surface-facing supported-extension summary 和 manifest command placeholder 解析由 `bitfun-services-core` 承接；core 保留 plugin package IO、server path 检查和 process lifecycle。
+- OpenCode concrete host、UI contribution、hook/workflow provider mapping 和 capability/effect policy 仍需在实际消费路径明确后单独接入，避免提前扩大稳定 API。
 
 保护：
 
 - 插件、OpenCode、ACP、external skills 不能直接写 kernel 权威状态、permission decision、audit event 或 UI implementation。
 - 未声明能力默认受限；UI contribution descriptor 可 round-trip，并在不支持形态返回 unsupported/unavailable。
+- LSP manifest 序列化默认值、registry 查找/卸载/错误文案、supported-extension summary 和跨平台 command placeholder 解析必须有 focused contract tests。
 
 ### PR-E：Cross-platform Adapter 与多形态 SDK 验证
 

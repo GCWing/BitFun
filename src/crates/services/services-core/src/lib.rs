@@ -7,6 +7,7 @@ pub mod diagnostics;
 pub mod diff;
 pub mod filesystem;
 pub mod json_store;
+pub mod lsp;
 pub mod managed_runtime;
 pub mod process_manager;
 pub mod session;

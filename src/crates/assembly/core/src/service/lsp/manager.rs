@@ -11,7 +11,7 @@ use super::plugin_loader::PluginLoader;
 use super::process::{
     CrashCallback, DiagnosticsCallback, LspServerProcess, ProgressCallback, TokenCreateCallback,
 };
-use super::registry::PluginRegistry;
+use super::registry::{LspSupportedExtensions, PluginRegistry};
 use super::types::{CompletionItem, LspPlugin};
 
 /// LSP protocol-layer manager (stateless, pure protocol implementation).
@@ -248,6 +248,12 @@ impl LspManager {
     pub async fn find_plugin_by_file(&self, file_path: &str) -> Option<LspPlugin> {
         let registry = self.registry.read().await;
         registry.find_by_file_path(file_path).cloned()
+    }
+
+    /// Returns surface-facing supported extension facts.
+    pub async fn supported_extensions(&self) -> LspSupportedExtensions {
+        let registry = self.registry.read().await;
+        registry.supported_extensions()
     }
 
     /// Shuts down all servers.
