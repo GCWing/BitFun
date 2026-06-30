@@ -17,13 +17,44 @@ const stateMocks = vi.hoisted(() => ({
   visibleTurnInfo: null as unknown,
   setVisibleTurnInfo: vi.fn(),
 }));
+const flowStoreMocks = vi.hoisted(() => ({
+  hasPendingSessionHistoryCompletion: vi.fn(() => false),
+  hasDeferredSessionHistoryProjection: vi.fn(() => false),
+  requestSessionFullHistoryProjection: vi.fn(),
+  revealPreviousSessionHistoryWindow: vi.fn(() => false),
+  releaseSessionHistoryCompletionAfterInitialPaint: vi.fn(() => false),
+}));
+
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key: string) => {
+      const translations: Record<string, string> = {
+        'historyState.preparingOlderHistory': 'Preparing older history...',
+        'historyState.olderHistoryNotReady': 'Older history is not ready yet.',
+      };
+      return translations[key] ?? key;
+    },
+  }),
+}));
 
 vi.mock('react-virtuoso', () => ({
   Virtuoso: React.forwardRef((props: any, ref) => {
+    const scrollerRef = React.useRef<HTMLDivElement | null>(null);
     React.useImperativeHandle(ref, () => ({
       scrollTo: vi.fn(),
       scrollToIndex: vi.fn(),
     }));
+
+    React.useLayoutEffect(() => {
+      if (!scrollerRef.current) {
+        return;
+      }
+
+      props.scrollerRef?.(scrollerRef.current);
+      return () => {
+        props.scrollerRef?.(null);
+      };
+    }, [props]);
 
     React.useEffect(() => {
       if (props.data?.[0]?.turnId === 'turn-a') {
@@ -32,7 +63,14 @@ vi.mock('react-virtuoso', () => ({
     }, [props]);
 
     return (
-      <div data-testid="virtuoso" data-session-id={stateMocks.activeSession?.sessionId ?? ''}>
+      <div
+        ref={scrollerRef}
+        data-testid="virtuoso"
+        data-virtuoso-scroller="true"
+        data-session-id={stateMocks.activeSession?.sessionId ?? ''}
+        tabIndex={0}
+      >
+        {props.components?.Header ? <props.components.Header /> : null}
         {props.data?.map((item: VirtualItem, index: number) => (
           <div key={item.turnId} className="virtual-item-wrapper" data-turn-id={item.turnId} data-virtual-index={index} data-item-type={item.type}>
             {item.turnId}
@@ -77,9 +115,11 @@ vi.mock('../../store/chatInputStateStore', () => ({
 
 vi.mock('../../store/FlowChatStore', () => ({
   flowChatStore: {
-    hasPendingSessionHistoryCompletion: () => false,
-    hasDeferredSessionHistoryProjection: () => false,
-    requestSessionFullHistoryProjection: vi.fn(),
+    hasPendingSessionHistoryCompletion: flowStoreMocks.hasPendingSessionHistoryCompletion,
+    hasDeferredSessionHistoryProjection: flowStoreMocks.hasDeferredSessionHistoryProjection,
+    requestSessionFullHistoryProjection: flowStoreMocks.requestSessionFullHistoryProjection,
+    revealPreviousSessionHistoryWindow: flowStoreMocks.revealPreviousSessionHistoryWindow,
+    releaseSessionHistoryCompletionAfterInitialPaint: flowStoreMocks.releaseSessionHistoryCompletionAfterInitialPaint,
   },
 }));
 
@@ -136,7 +176,7 @@ vi.mock('./ScrollAnchor', () => ({
   ScrollAnchor: () => null,
 }));
 
-function createSession(sessionId: string, turnId: string): Session {
+function createSession(sessionId: string, turnId: string, overrides: Partial<Session> = {}): Session {
   return {
     sessionId,
     title: sessionId,
@@ -157,6 +197,7 @@ function createSession(sessionId: string, turnId: string): Session {
     todos: [],
     mode: 'agentic',
     sessionKind: 'normal',
+    ...overrides,
   } as Session;
 }
 
@@ -175,18 +216,48 @@ function createItem(turnId: string): VirtualItem {
 describe('VirtualMessageList session boundary', () => {
   let container: HTMLDivElement;
   let root: Root;
+  let rafCallbacks: FrameRequestCallback[];
+
+  const flushAnimationFrame = () => {
+    const callbacks = rafCallbacks;
+    rafCallbacks = [];
+    act(() => {
+      callbacks.forEach(callback => callback(performance.now()));
+    });
+  };
 
   beforeEach(() => {
+    rafCallbacks = [];
+    vi.stubGlobal('requestAnimationFrame', vi.fn((callback: FrameRequestCallback) => {
+      rafCallbacks.push(callback);
+      return rafCallbacks.length;
+    }));
+    vi.stubGlobal('cancelAnimationFrame', vi.fn());
+    vi.stubGlobal('ResizeObserver', class {
+      observe = vi.fn();
+      unobserve = vi.fn();
+      disconnect = vi.fn();
+    });
     container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
     stateMocks.visibleTurnInfo = null;
     stateMocks.setVisibleTurnInfo.mockReset();
+    flowStoreMocks.hasPendingSessionHistoryCompletion.mockReset();
+    flowStoreMocks.hasPendingSessionHistoryCompletion.mockReturnValue(false);
+    flowStoreMocks.hasDeferredSessionHistoryProjection.mockReset();
+    flowStoreMocks.hasDeferredSessionHistoryProjection.mockReturnValue(false);
+    flowStoreMocks.requestSessionFullHistoryProjection.mockReset();
+    flowStoreMocks.revealPreviousSessionHistoryWindow.mockReset();
+    flowStoreMocks.revealPreviousSessionHistoryWindow.mockReturnValue(false);
+    flowStoreMocks.releaseSessionHistoryCompletionAfterInitialPaint.mockReset();
+    flowStoreMocks.releaseSessionHistoryCompletionAfterInitialPaint.mockReturnValue(false);
   });
 
   afterEach(() => {
     act(() => root.unmount());
     container.remove();
+    vi.unstubAllGlobals();
   });
 
   it('resets viewport-local at-bottom state when the active session changes', () => {
@@ -217,11 +288,6 @@ describe('VirtualMessageList session boundary', () => {
       items: [createItem('turn-a')],
       mode: 'bottom-tail',
       targetTurnId: 'turn-a',
-      anchorKey: null,
-      anchorOffsetTopPx: 0,
-      scrollTop: 0,
-      scrollHeight: 100,
-      clientHeight: 100,
       footerHeightPx: 0,
     } as const;
 
@@ -229,5 +295,233 @@ describe('VirtualMessageList session boundary', () => {
     expect(activeSessionHistoryProjectionHandoff(snapshot, 'session-b')).toBeNull();
     expect(activeSessionHistoryProjectionHandoff(snapshot, null)).toBeNull();
     expect(activeSessionHistoryProjectionHandoff(null, 'session-a')).toBeNull();
+  });
+
+  it('does not request full history projection for ordinary upward reading scroll', () => {
+    flowStoreMocks.hasDeferredSessionHistoryProjection.mockReturnValue(true);
+    stateMocks.activeSession = createSession('session-a', 'turn-a', {
+      isHistorical: false,
+      historyState: 'ready',
+      contextRestoreState: 'ready',
+      isPartial: true,
+      dialogTurns: [
+        {
+          id: 'turn-a',
+          sessionId: 'session-a',
+          userMessage: { id: 'user-turn-a', content: 'older loaded prompt', timestamp: 1 },
+          modelRounds: [],
+          status: 'completed',
+          startTime: 1,
+        },
+        {
+          id: 'turn-b',
+          sessionId: 'session-a',
+          userMessage: { id: 'user-turn-b', content: 'latest loaded prompt', timestamp: 2 },
+          modelRounds: [],
+          status: 'completed',
+          startTime: 2,
+        },
+      ],
+    });
+    stateMocks.virtualItems = [createItem('turn-a'), createItem('turn-b')];
+
+    act(() => {
+      root.render(<VirtualMessageList />);
+    });
+
+    const scroller = container.querySelector('[data-virtuoso-scroller="true"]');
+    expect(scroller).not.toBeNull();
+
+    act(() => {
+      scroller?.dispatchEvent(new WheelEvent('wheel', {
+        deltaY: -120,
+        bubbles: true,
+      }));
+    });
+    flushAnimationFrame();
+    flushAnimationFrame();
+
+    expect(flowStoreMocks.requestSessionFullHistoryProjection).not.toHaveBeenCalled();
+    expect(flowStoreMocks.revealPreviousSessionHistoryWindow).toHaveBeenCalledWith('session-a', 'wheel-up');
+  });
+
+  it('does not reveal previous history for upward scroll away from the history boundary', () => {
+    flowStoreMocks.hasDeferredSessionHistoryProjection.mockReturnValue(true);
+    stateMocks.activeSession = createSession('session-a', 'turn-a', {
+      isHistorical: false,
+      historyState: 'ready',
+      contextRestoreState: 'ready',
+      isPartial: true,
+      dialogTurns: [
+        {
+          id: 'turn-a',
+          sessionId: 'session-a',
+          userMessage: { id: 'user-turn-a', content: 'older loaded prompt', timestamp: 1 },
+          modelRounds: [],
+          status: 'completed',
+          startTime: 1,
+        },
+        {
+          id: 'turn-b',
+          sessionId: 'session-a',
+          userMessage: { id: 'user-turn-b', content: 'latest loaded prompt', timestamp: 2 },
+          modelRounds: [],
+          status: 'completed',
+          startTime: 2,
+        },
+      ],
+    });
+    stateMocks.virtualItems = [createItem('turn-a'), createItem('turn-b')];
+
+    act(() => {
+      root.render(<VirtualMessageList />);
+    });
+
+    const scroller = container.querySelector<HTMLElement>('[data-virtuoso-scroller="true"]');
+    expect(scroller).not.toBeNull();
+    if (scroller) {
+      scroller.scrollTop = 2000;
+    }
+
+    act(() => {
+      scroller?.dispatchEvent(new WheelEvent('wheel', {
+        deltaY: -120,
+        bubbles: true,
+      }));
+    });
+    flushAnimationFrame();
+    flushAnimationFrame();
+
+    expect(flowStoreMocks.requestSessionFullHistoryProjection).not.toHaveBeenCalled();
+    expect(flowStoreMocks.revealPreviousSessionHistoryWindow).not.toHaveBeenCalled();
+    expect(container.querySelector('[data-history-boundary-status]')).toBeNull();
+  });
+
+  it('surfaces a not-ready boundary state when a deferred history window cannot be revealed', () => {
+    flowStoreMocks.hasDeferredSessionHistoryProjection.mockReturnValue(true);
+    flowStoreMocks.revealPreviousSessionHistoryWindow.mockReturnValue(false);
+    stateMocks.activeSession = createSession('session-a', 'turn-a', {
+      isHistorical: false,
+      historyState: 'ready',
+      contextRestoreState: 'ready',
+      isPartial: true,
+      dialogTurns: [
+        {
+          id: 'turn-a',
+          sessionId: 'session-a',
+          userMessage: { id: 'user-turn-a', content: 'latest loaded prompt', timestamp: 1 },
+          modelRounds: [],
+          status: 'completed',
+          startTime: 1,
+        },
+      ],
+    });
+    stateMocks.virtualItems = [createItem('turn-a')];
+
+    act(() => {
+      root.render(<VirtualMessageList />);
+    });
+
+    const scroller = container.querySelector('[data-virtuoso-scroller="true"]');
+    expect(scroller).not.toBeNull();
+
+    act(() => {
+      scroller?.dispatchEvent(new WheelEvent('wheel', {
+        deltaY: -120,
+        bubbles: true,
+      }));
+    });
+    flushAnimationFrame();
+    flushAnimationFrame();
+
+    expect(flowStoreMocks.requestSessionFullHistoryProjection).not.toHaveBeenCalled();
+    expect(flowStoreMocks.revealPreviousSessionHistoryWindow).toHaveBeenCalledWith('session-a', 'wheel-up');
+    expect(container.querySelector('[data-history-boundary-status="not-ready"]')?.textContent).toBe('Older history is not ready yet.');
+  });
+
+  it('starts background cache preparation for ordinary upward scroll before deferred cache is ready', () => {
+    flowStoreMocks.hasPendingSessionHistoryCompletion.mockReturnValue(true);
+    stateMocks.activeSession = createSession('session-a', 'turn-a', {
+      isHistorical: false,
+      historyState: 'ready',
+      contextRestoreState: 'ready',
+      isPartial: true,
+      dialogTurns: [
+        {
+          id: 'turn-a',
+          sessionId: 'session-a',
+          userMessage: { id: 'user-turn-a', content: 'latest loaded prompt', timestamp: 1 },
+          modelRounds: [],
+          status: 'completed',
+          startTime: 1,
+        },
+      ],
+    });
+    stateMocks.virtualItems = [createItem('turn-a')];
+
+    act(() => {
+      root.render(<VirtualMessageList />);
+    });
+
+    const scroller = container.querySelector('[data-virtuoso-scroller="true"]');
+    expect(scroller).not.toBeNull();
+
+    act(() => {
+      scroller?.dispatchEvent(new WheelEvent('wheel', {
+        deltaY: -120,
+        bubbles: true,
+      }));
+    });
+    flushAnimationFrame();
+    flushAnimationFrame();
+
+    expect(flowStoreMocks.requestSessionFullHistoryProjection).not.toHaveBeenCalled();
+    expect(flowStoreMocks.revealPreviousSessionHistoryWindow).not.toHaveBeenCalled();
+    expect(flowStoreMocks.releaseSessionHistoryCompletionAfterInitialPaint).toHaveBeenCalledWith('session-a', {
+      immediate: true,
+      reason: 'wheel-up',
+    });
+    expect(container.querySelector('[data-history-boundary-status="preparing"]')?.textContent).toBe('Preparing older history...');
+  });
+
+  it('surfaces a not-ready boundary state when older history work is unavailable', () => {
+    stateMocks.activeSession = createSession('session-a', 'turn-a', {
+      isHistorical: false,
+      historyState: 'ready',
+      contextRestoreState: 'ready',
+      isPartial: true,
+      dialogTurns: [
+        {
+          id: 'turn-a',
+          sessionId: 'session-a',
+          userMessage: { id: 'user-turn-a', content: 'latest loaded prompt', timestamp: 1 },
+          modelRounds: [],
+          status: 'completed',
+          startTime: 1,
+        },
+      ],
+    });
+    stateMocks.virtualItems = [createItem('turn-a')];
+
+    act(() => {
+      root.render(<VirtualMessageList />);
+    });
+
+    const scroller = container.querySelector('[data-virtuoso-scroller="true"]');
+    expect(scroller).not.toBeNull();
+
+    act(() => {
+      scroller?.dispatchEvent(new WheelEvent('wheel', {
+        deltaY: -120,
+        bubbles: true,
+      }));
+    });
+    flushAnimationFrame();
+    flushAnimationFrame();
+
+    expect(flowStoreMocks.requestSessionFullHistoryProjection).not.toHaveBeenCalled();
+    expect(flowStoreMocks.revealPreviousSessionHistoryWindow).not.toHaveBeenCalled();
+    expect(flowStoreMocks.releaseSessionHistoryCompletionAfterInitialPaint).not.toHaveBeenCalled();
+    expect(container.querySelector('[data-history-boundary-status="not-ready"]')?.textContent).toBe('Older history is not ready yet.');
   });
 });

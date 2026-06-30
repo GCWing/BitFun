@@ -975,43 +975,6 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     };
   }, [searchCurrentMatchVirtualIndex]);
 
-  useEffect(() => {
-    const sessionId = activeSession?.sessionId;
-    const trimmedSearchQuery = searchQuery.trim();
-    if (
-      !sessionId ||
-      activeSession.historyState !== 'ready' ||
-      (
-        !hasPendingHistoryCompletion &&
-        !hasDeferredHistoryProjection
-      ) ||
-      trimmedSearchQuery.length === 0
-    ) {
-      return;
-    }
-
-    if (latestTurnId) {
-      releasedHistoryCompletionKeyRef.current = `${sessionId}:${latestTurnId}`;
-    }
-
-    const requested = flowChatStore.requestSessionFullHistoryProjection(sessionId, 'search');
-    if (requested) {
-      startupTrace.markPhase('historical_session_full_hydrate_released_for_search', {
-        sessionId,
-        queryLength: trimmedSearchQuery.length,
-        turnCount: turnSummaries.length,
-      });
-    }
-  }, [
-    activeSession?.historyState,
-    activeSession?.sessionId,
-    hasDeferredHistoryProjection,
-    hasPendingHistoryCompletion,
-    latestTurnId,
-    searchQuery,
-    turnSummaries.length,
-  ]);
-
   const handleJumpToTurn = useCallback((turnId: string) => {
     if (!turnId) return;
 

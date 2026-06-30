@@ -775,7 +775,7 @@ describe('ModernFlowChatContainer historical empty state', () => {
     releaseSpy.mockRestore();
   });
 
-  it('requests full history projection when searching a partially loaded session', async () => {
+  it('keeps partial-session search scoped to the loaded window', async () => {
     const pendingSpy = vi
       .spyOn(flowChatStore, 'hasPendingSessionHistoryCompletion')
       .mockReturnValue(true);
@@ -801,13 +801,10 @@ describe('ModernFlowChatContainer historical empty state', () => {
       root.render(<ModernFlowChatContainer />);
     });
 
-    expect(projectionSpy).toHaveBeenCalledWith('session-1', 'search');
-    expect(startupTraceMock.markPhase).toHaveBeenCalledWith(
+    expect(projectionSpy).not.toHaveBeenCalled();
+    expect(startupTraceMock.markPhase).not.toHaveBeenCalledWith(
       'historical_session_full_hydrate_released_for_search',
-      expect.objectContaining({
-        queryLength: 'older prompt'.length,
-        turnCount: 1,
-      }),
+      expect.anything(),
     );
 
     projectionSpy.mockRestore();

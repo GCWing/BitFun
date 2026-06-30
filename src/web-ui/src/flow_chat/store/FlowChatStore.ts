@@ -78,6 +78,7 @@ const METADATA_LIST_RECENT_DEDUPE_TTL_MS = 1000;
 const HISTORICAL_SESSION_INITIAL_REMOTE_TAIL_TURN_COUNT = 3;
 const HISTORICAL_SESSION_INITIAL_LOCAL_TAIL_TURN_COUNT = 3;
 const HISTORICAL_SESSION_FULL_HISTORY_IDLE_TIMEOUT_MS = 1500;
+const HISTORICAL_SESSION_PREVIOUS_WINDOW_TURN_COUNT = 12;
 
 type RemoveSessionOptions = {
   nextActiveSessionId?: string | null;
@@ -720,7 +721,7 @@ export class FlowChatStore {
       }
     });
 
-    this.fullHistoryHydrationRequests.set(requestKey, {
+    const hydrationRequest: FullHistoryHydrationRequest = {
       sessionId: request.sessionId,
       remote,
       requireActiveSession,
@@ -730,10 +731,15 @@ export class FlowChatStore {
         cancelScheduled?.();
         resolveRequest?.();
       },
-      releaseAfterInitialPaint: (options?: FullHistoryHydrationReleaseOptions) => {
+    };
+
+    if (releaseAfterInitialPaint) {
+      hydrationRequest.releaseAfterInitialPaint = (options?: FullHistoryHydrationReleaseOptions) => {
         releaseAfterInitialPaint?.(options);
-      },
-    });
+      };
+    }
+
+    this.fullHistoryHydrationRequests.set(requestKey, hydrationRequest);
   }
 
   private cancelLocalSessionHistoryCompletion(sessionId: string, reason: string): boolean {
@@ -869,18 +875,25 @@ export class FlowChatStore {
       if (request.sessionId !== sessionId) {
         continue;
       }
-      request.releaseAfterInitialPaint?.(options);
+      if (!request.releaseAfterInitialPaint) {
+        continue;
+      }
+      request.releaseAfterInitialPaint(options);
       released = true;
     }
     return released;
   }
 
   private shouldDeferFullHistoryProjection(sessionId: string, remote: boolean, _requireActiveSession: boolean): boolean {
-    return (
-      !remote &&
-      this.state.activeSessionId === sessionId &&
-      !this.fullHistoryProjectionApplyRequests.has(sessionId)
-    );
+    if (remote) {
+      return true;
+    }
+
+    if (this.fullHistoryProjectionApplyRequests.has(sessionId)) {
+      return false;
+    }
+
+    return this.state.activeSessionId === sessionId;
   }
 
   private setDeferredFullHistoryProjection(
@@ -911,6 +924,16 @@ export class FlowChatStore {
       return false;
     }
 
+    if (projection.remote) {
+      startupTrace.markPhase('historical_session_full_hydrate_remote_projection_blocked', {
+        remote: true,
+        sessionId,
+        reason,
+        turnCount: projection.dialogTurns.length,
+      });
+      return false;
+    }
+
     const result = this.applyCompletedSessionHistoryProjection(sessionId, projection);
     if (result.applied) {
       this.deferredFullHistoryProjections.delete(sessionId);
@@ -925,6 +948,124 @@ export class FlowChatStore {
     }
 
     return result.applied;
+  }
+
+  public revealPreviousSessionHistoryWindow(
+    sessionId: string,
+    reason: string,
+    turnLimit: number = HISTORICAL_SESSION_PREVIOUS_WINDOW_TURN_COUNT
+  ): boolean {
+    const projection = this.deferredFullHistoryProjections.get(sessionId);
+    if (!projection) {
+      return false;
+    }
+
+    const boundedTurnLimit = Math.max(1, Math.floor(turnLimit));
+    let revealed = false;
+    let revealedTurnCount = 0;
+    let loadedTurnCount = 0;
+    let totalTurnCount = projection.dialogTurns.length;
+    let remainingBefore = 0;
+    let nextExpectedDialogTurnIds: string[] = [];
+
+    this.setState(prev => {
+      if (projection.requireActiveSession && !projection.remote && prev.activeSessionId !== sessionId) {
+        return prev;
+      }
+
+      const session = prev.sessions.get(sessionId);
+      if (!session || session.historyState !== 'ready' || session.dialogTurns.length === 0) {
+        return prev;
+      }
+
+      const firstLoadedTurnId = session.dialogTurns[0]?.id;
+      if (!firstLoadedTurnId) {
+        return prev;
+      }
+
+      const firstLoadedIndex = projection.dialogTurns.findIndex(turn => turn.id === firstLoadedTurnId);
+      if (firstLoadedIndex <= 0) {
+        return prev;
+      }
+
+      const startIndex = Math.max(0, firstLoadedIndex - boundedTurnLimit);
+      const currentTurnIds = new Set(session.dialogTurns.map(turn => turn.id));
+      const previousWindow = projection.dialogTurns
+        .slice(startIndex, firstLoadedIndex)
+        .filter(turn => !currentTurnIds.has(turn.id));
+      if (previousWindow.length === 0) {
+        return prev;
+      }
+
+      const currentDialogTurnsById = new Map(session.dialogTurns.map(turn => [turn.id, turn]));
+      const projectionDialogTurnIds = new Set(projection.dialogTurns.map(turn => turn.id));
+      const mergedDialogTurns = [
+        ...previousWindow.map(turn => currentDialogTurnsById.get(turn.id) ?? turn),
+        ...session.dialogTurns,
+      ];
+      nextExpectedDialogTurnIds = [];
+      for (const turn of mergedDialogTurns) {
+        if (!projectionDialogTurnIds.has(turn.id)) {
+          break;
+        }
+        nextExpectedDialogTurnIds.push(turn.id);
+      }
+      revealed = true;
+      revealedTurnCount = previousWindow.length;
+      loadedTurnCount = mergedDialogTurns.length;
+      totalTurnCount = Math.max(
+        session.totalTurnCount ?? 0,
+        projection.dialogTurns.length,
+        mergedDialogTurns.length,
+      );
+      remainingBefore = startIndex;
+
+      const newSessions = new Map(prev.sessions);
+      newSessions.set(sessionId, {
+        ...session,
+        dialogTurns: mergedDialogTurns,
+        isPartial: remainingBefore > 0,
+        loadedTurnCount,
+        totalTurnCount,
+        contextRestoreState:
+          session.contextRestoreState === 'ready' ? 'ready' : projection.contextRestoreState,
+        mode: projection.restoredSessionInfo?.agentType || session.mode,
+        lastUserDialogMode: projection.restoredLastUserDialogMode,
+        lastSubmittedMode:
+          projection.restoredSessionInfo?.lastSubmittedAgentType ?? session.lastSubmittedMode,
+      });
+
+      return {
+        ...prev,
+        sessions: newSessions,
+      };
+    });
+
+    if (!revealed) {
+      return false;
+    }
+
+    if (remainingBefore === 0) {
+      this.deferredFullHistoryProjections.delete(sessionId);
+      this.fullHistoryProjectionApplyRequests.delete(sessionId);
+    } else if (nextExpectedDialogTurnIds.length > 0) {
+      this.deferredFullHistoryProjections.set(sessionId, {
+        ...projection,
+        expectedDialogTurnIds: nextExpectedDialogTurnIds,
+      });
+    }
+
+    startupTrace.markPhase('historical_session_deferred_window_revealed', {
+      remote: projection.remote,
+      sessionId,
+      reason,
+      turnLimit: boundedTurnLimit,
+      revealedTurnCount,
+      loadedTurnCount,
+      totalTurnCount,
+      remainingBefore,
+    });
+    return true;
   }
 
   private applyCompletedSessionHistoryProjection(
