@@ -268,8 +268,8 @@ Model locator guidance:
 | Appearance language option | `appearance-language-option` | Repeated language dropdown option. Includes `data-locale-id` and Select-provided `data-selected`. |
 | Appearance theme select | `appearance-theme-select` | Theme select trigger in Appearance settings. |
 | Appearance theme option | `appearance-theme-option` | Repeated theme dropdown option. Includes `data-theme-id` and Select-provided `data-selected`. |
-| Appearance UI font level group | `appearance-ui-font-level-group` | UI font preset button group root. |
-| Appearance UI font level button | `appearance-ui-font-level-btn` | Repeated preset button. Includes `data-font-level` and `data-selected`. |
+| Appearance font size group | `appearance-font-size-group` | UI font preset button group root for the Appearance page persistence flow. |
+| Appearance font size option | `appearance-font-size-option` | Repeated clickable UI font size option. Includes `data-size-level`, legacy `data-font-level`, `data-selected`, and `aria-pressed`. |
 | Appearance UI font custom controls | `appearance-ui-font-custom-controls` | Custom UI font px controls root, rendered when custom is active. |
 | Appearance UI font custom input | `appearance-ui-font-custom-input` | Custom UI font px number input. Includes `data-font-level="custom"`. |
 | Appearance UI font custom step minus | `appearance-ui-font-custom-step-minus` | Custom UI font px decrement button. |

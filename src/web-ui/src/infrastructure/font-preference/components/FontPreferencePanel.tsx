@@ -150,7 +150,7 @@ export function FontPreferencePanel() {
               className="font-pref-panel__level-buttons"
               role="group"
               aria-label={t('appearance.fontSize.uiSizeLabel')}
-              data-testid="appearance-ui-font-level-group"
+              data-testid="appearance-font-size-group"
             >
               {UI_LEVELS.map((l) => (
                 <button
@@ -162,7 +162,8 @@ export function FontPreferencePanel() {
                   ].join(' ').trim()}
                   onClick={() => void handleLevelClick(l)}
                   aria-pressed={level === l}
-                  data-testid="appearance-ui-font-level-btn"
+                  data-testid="appearance-font-size-option"
+                  data-size-level={l}
                   data-font-level={l}
                   data-selected={level === l ? 'true' : 'false'}
                 >
@@ -183,7 +184,8 @@ export function FontPreferencePanel() {
                   ].join(' ').trim()}
                   onClick={() => void handleLevelClick('custom')}
                   aria-pressed={level === 'custom'}
-                  data-testid="appearance-ui-font-level-btn"
+                  data-testid="appearance-font-size-option"
+                  data-size-level="custom"
                   data-font-level="custom"
                   data-selected={level === 'custom' ? 'true' : 'false'}
                 >
