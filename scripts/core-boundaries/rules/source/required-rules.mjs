@@ -4380,6 +4380,100 @@ export const requiredContentRules = [
     ],
   },
   {
+    path: 'src/crates/execution/tool-contracts/src/mcp_tool_bridge.rs',
+    reason:
+      'agent-tools owns MCP tool bridge naming, descriptor, validation, presentation, and ToolResult shape contracts without depending on MCP transport concrete',
+    patterns: [
+      {
+        regex: /\bpub fn build_mcp_tool_bridge_name\b/,
+        message: 'missing MCP tool bridge prompt-visible name builder',
+      },
+      {
+        regex: /\bpub struct McpToolBridgeDefinition\b/,
+        message: 'missing MCP tool bridge descriptor contract',
+      },
+      {
+        regex: /\bpub struct McpToolBridgeBehaviorHints\b/,
+        message: 'missing MCP tool bridge behavior hint contract',
+      },
+      {
+        regex: /\bpub fn build_mcp_tool_bridge_definition\b/,
+        message: 'missing MCP tool bridge descriptor builder',
+      },
+      {
+        regex: /\bpub fn mcp_tool_bridge_dynamic_tool_info\b/,
+        message: 'missing MCP dynamic tool info bridge',
+      },
+      {
+        regex: /\bpub fn validate_mcp_tool_bridge_input\b/,
+        message: 'missing MCP tool bridge input validation contract',
+      },
+      {
+        regex: /\bpub fn render_mcp_tool_bridge_use_message\b/,
+        message: 'missing MCP tool bridge use-message renderer',
+      },
+      {
+        regex: /\bpub fn render_mcp_tool_bridge_rejected_message\b/,
+        message: 'missing MCP tool bridge rejection-message renderer',
+      },
+      {
+        regex: /\bpub fn render_mcp_tool_bridge_result_message\b/,
+        message: 'missing MCP tool bridge result-message renderer',
+      },
+      {
+        regex: /\bpub fn build_mcp_tool_bridge_result\b/,
+        message: 'missing MCP tool bridge ToolResult builder',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/execution/tool-contracts/src/acp_tool_bridge.rs',
+    reason:
+      'agent-tools owns ACP external-agent tool bridge naming, schema, validation, presentation, and ToolResult contracts without depending on ACP protocol concrete',
+    patterns: [
+      {
+        regex: /\bpub fn build_acp_external_agent_tool_name\b/,
+        message: 'missing ACP external-agent prompt-visible name builder',
+      },
+      {
+        regex: /\bpub struct AcpExternalAgentToolDefinition\b/,
+        message: 'missing ACP external-agent tool definition contract',
+      },
+      {
+        regex: /\bpub fn build_acp_external_agent_tool_definition\b/,
+        message: 'missing ACP external-agent tool definition builder',
+      },
+      {
+        regex: /\bpub fn acp_external_agent_tool_input_schema\b/,
+        message: 'missing ACP external-agent input schema contract',
+      },
+      {
+        regex: /\bpub fn validate_acp_external_agent_tool_input\b/,
+        message: 'missing ACP external-agent input validation contract',
+      },
+      {
+        regex: /\bpub fn render_acp_external_agent_use_message\b/,
+        message: 'missing ACP external-agent use-message renderer',
+      },
+      {
+        regex: /\bpub fn render_acp_external_agent_rejected_message\b/,
+        message: 'missing ACP external-agent rejection-message renderer',
+      },
+      {
+        regex: /\bpub fn render_acp_external_agent_result_message\b/,
+        message: 'missing ACP external-agent result-message renderer',
+      },
+      {
+        regex: /\bpub fn render_acp_external_agent_result_for_assistant\b/,
+        message: 'missing ACP external-agent assistant-result renderer',
+      },
+      {
+        regex: /\bpub fn build_acp_external_agent_tool_result\b/,
+        message: 'missing ACP external-agent ToolResult builder',
+      },
+    ],
+  },
+  {
     path: 'src/crates/execution/tool-contracts/src/file_guidance.rs',
     reason: 'agent-tools owns provider-neutral file tool guidance marker contracts',
     patterns: [

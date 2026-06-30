@@ -198,31 +198,25 @@ fn mcp_remote_client_info_declares_supported_client_capabilities() {
 
 #[test]
 fn mcp_rmcp_initialize_mapping_preserves_server_identity_and_capabilities() {
-    let server_info = rmcp::model::ServerInfo {
-        protocol_version: rmcp::model::ProtocolVersion::LATEST,
-        capabilities: rmcp::model::ServerCapabilities {
-            tools: Some(rmcp::model::ToolsCapability {
-                list_changed: Some(true),
-            }),
-            resources: Some(rmcp::model::ResourcesCapability {
-                subscribe: Some(true),
-                list_changed: Some(false),
-            }),
-            prompts: Some(rmcp::model::PromptsCapability {
-                list_changed: Some(true),
-            }),
-            logging: Some(rmcp::model::JsonObject::new()),
-            ..Default::default()
-        },
-        server_info: rmcp::model::Implementation {
-            name: "docs-server".to_string(),
-            title: Some("Docs Server".to_string()),
-            version: "2.0.0".to_string(),
-            icons: None,
-            website_url: None,
-        },
-        instructions: Some("Fallback description".to_string()),
-    };
+    let mut capabilities = rmcp::model::ServerCapabilities::default();
+    capabilities.tools = Some(rmcp::model::ToolsCapability {
+        list_changed: Some(true),
+    });
+    capabilities.resources = Some(rmcp::model::ResourcesCapability {
+        subscribe: Some(true),
+        list_changed: Some(false),
+    });
+    capabilities.prompts = Some(rmcp::model::PromptsCapability {
+        list_changed: Some(true),
+    });
+    capabilities.logging = Some(rmcp::model::JsonObject::new());
+
+    let server_info = rmcp::model::ServerInfo::new(capabilities)
+        .with_protocol_version(rmcp::model::ProtocolVersion::LATEST)
+        .with_server_info(
+            rmcp::model::Implementation::new("docs-server", "2.0.0").with_title("Docs Server"),
+        )
+        .with_instructions("Fallback description");
 
     let mapped = map_rmcp_initialize_result(&server_info);
 
@@ -262,29 +256,23 @@ fn mcp_rmcp_mapping_preserves_remote_tool_resource_and_prompt_metadata() {
         "ui".to_string(),
         serde_json::json!({ "resourceUri": "ui://widget" }),
     );
-    let tool = rmcp::model::Tool {
-        name: "search".into(),
-        title: Some("Search".to_string()),
-        description: Some("Find items".into()),
-        input_schema: Arc::new(serde_json::Map::new()),
-        output_schema: Some(Arc::new(serde_json::Map::from_iter([(
-            "type".to_string(),
-            serde_json::json!("object"),
-        )]))),
-        annotations: Some(
-            rmcp::model::ToolAnnotations::new()
-                .read_only(true)
-                .destructive(false)
-                .idempotent(true)
-                .open_world(true),
-        ),
-        icons: Some(vec![Icon {
-            src: "https://example.com/tool.png".to_string(),
-            mime_type: Some("image/png".to_string()),
-            sizes: Some(vec!["32x32".to_string()]),
-        }]),
-        meta: Some(tool_meta),
-    };
+    let mut tool = rmcp::model::Tool::new("search", "Find items", serde_json::Map::new());
+    tool.title = Some("Search".to_string());
+    tool.output_schema = Some(Arc::new(serde_json::Map::from_iter([(
+        "type".to_string(),
+        serde_json::json!("object"),
+    )])));
+    tool.annotations = Some(
+        rmcp::model::ToolAnnotations::new()
+            .read_only(true)
+            .destructive(false)
+            .idempotent(true)
+            .open_world(true),
+    );
+    tool.icons = Some(vec![Icon::new("https://example.com/tool.png")
+        .with_mime_type("image/png")
+        .with_sizes(vec!["32x32".to_string()])]);
+    tool.meta = Some(tool_meta);
     let mapped_tool = map_rmcp_tool(tool);
     assert_eq!(mapped_tool.title.as_deref(), Some("Search"));
     assert_eq!(
@@ -316,17 +304,16 @@ fn mcp_rmcp_mapping_preserves_remote_tool_resource_and_prompt_metadata() {
         description: Some("Report".to_string()),
         mime_type: Some("text/markdown".to_string()),
         size: Some(42),
-        icons: Some(vec![Icon {
-            src: "https://example.com/resource.png".to_string(),
-            mime_type: Some("image/png".to_string()),
-            sizes: Some(vec!["64x64".to_string()]),
-        }]),
+        icons: Some(vec![Icon::new("https://example.com/resource.png")
+            .with_mime_type("image/png")
+            .with_sizes(vec!["64x64".to_string()])]),
         meta: Some(resource_meta),
     }
-    .annotate(Annotations {
-        audience: Some(vec![rmcp::model::Role::User]),
-        priority: Some(0.9),
-        last_modified: None,
+    .annotate({
+        let mut annotations = Annotations::default();
+        annotations.audience = Some(vec![rmcp::model::Role::User]);
+        annotations.priority = Some(0.9);
+        annotations
     });
     let mapped_resource = map_rmcp_resource(resource);
     assert_eq!(mapped_resource.title.as_deref(), Some("Quarterly Report"));
@@ -347,23 +334,18 @@ fn mcp_rmcp_mapping_preserves_remote_tool_resource_and_prompt_metadata() {
         Some(&serde_json::json!("catalog"))
     );
 
-    let prompt = rmcp::model::Prompt {
-        name: "summarize".to_string(),
-        title: Some("Summarize".to_string()),
-        description: Some("Summarize content".to_string()),
-        arguments: Some(vec![rmcp::model::PromptArgument {
-            name: "topic".to_string(),
-            title: Some("Topic".to_string()),
-            description: Some("Topic to summarize".to_string()),
-            required: Some(true),
-        }]),
-        icons: Some(vec![Icon {
-            src: "https://example.com/prompt.png".to_string(),
-            mime_type: Some("image/png".to_string()),
-            sizes: Some(vec!["16x16".to_string()]),
-        }]),
-        meta: None,
-    };
+    let prompt = rmcp::model::Prompt::new(
+        "summarize",
+        Some("Summarize content"),
+        Some(vec![rmcp::model::PromptArgument::new("topic")
+            .with_title("Topic")
+            .with_description("Topic to summarize")
+            .with_required(true)]),
+    )
+    .with_title("Summarize")
+    .with_icons(vec![Icon::new("https://example.com/prompt.png")
+        .with_mime_type("image/png")
+        .with_sizes(vec!["16x16".to_string()])]);
     let mapped_prompt = map_rmcp_prompt(prompt);
     assert_eq!(mapped_prompt.title.as_deref(), Some("Summarize"));
     assert_eq!(
@@ -391,16 +373,13 @@ fn mcp_rmcp_mapping_preserves_structured_results_and_resource_links() {
     };
     let mut result_meta = Meta::default();
     result_meta.insert("traceId".to_string(), serde_json::json!("abc123"));
-    let result = rmcp::model::CallToolResult {
-        content: vec![
-            Content::text("done"),
-            Content::resource_link(resource_link),
-            Content::image("aGVsbG8=", "image/png"),
-        ],
-        structured_content: Some(serde_json::json!({ "ok": true })),
-        is_error: Some(false),
-        meta: Some(result_meta),
-    };
+    let mut result = rmcp::model::CallToolResult::success(vec![
+        Content::text("done"),
+        Content::resource_link(resource_link),
+        Content::image("aGVsbG8=", "image/png"),
+    ]);
+    result.structured_content = Some(serde_json::json!({ "ok": true }));
+    result.meta = Some(result_meta);
 
     let mapped = map_rmcp_tool_result(result);
 
@@ -424,12 +403,8 @@ fn mcp_rmcp_mapping_preserves_structured_results_and_resource_links() {
 
 #[test]
 fn mcp_rmcp_mapping_preserves_prompt_message_blocks() {
-    let prompt_message = rmcp::model::PromptMessage {
-        role: rmcp::model::PromptMessageRole::User,
-        content: rmcp::model::PromptMessageContent::Text {
-            text: "hello".to_string(),
-        },
-    };
+    let prompt_message =
+        rmcp::model::PromptMessage::new_text(rmcp::model::PromptMessageRole::User, "hello");
     let mapped = map_rmcp_prompt_message(prompt_message);
     assert!(matches!(
         mapped.content,
@@ -448,12 +423,10 @@ fn mcp_rmcp_mapping_preserves_prompt_message_blocks() {
         meta: None,
     }
     .no_annotation();
-    let prompt_message = rmcp::model::PromptMessage {
-        role: rmcp::model::PromptMessageRole::Assistant,
-        content: rmcp::model::PromptMessageContent::ResourceLink {
-            link: resource_link,
-        },
-    };
+    let prompt_message = rmcp::model::PromptMessage::new(
+        rmcp::model::PromptMessageRole::Assistant,
+        rmcp::model::PromptMessageContent::resource_link(resource_link),
+    );
     let mapped = map_rmcp_prompt_message(prompt_message);
     assert!(matches!(
         mapped.content,
@@ -475,10 +448,10 @@ fn mcp_rmcp_mapping_preserves_prompt_message_blocks() {
         },
     }
     .no_annotation();
-    let prompt_message = rmcp::model::PromptMessage {
-        role: rmcp::model::PromptMessageRole::Assistant,
-        content: rmcp::model::PromptMessageContent::Resource { resource: embedded },
-    };
+    let prompt_message = rmcp::model::PromptMessage::new(
+        rmcp::model::PromptMessageRole::Assistant,
+        rmcp::model::PromptMessageContent::Resource { resource: embedded },
+    );
     let mapped = map_rmcp_prompt_message(prompt_message);
     assert!(matches!(
         mapped.content,
@@ -1552,10 +1525,7 @@ async fn mcp_oauth_credential_vault_uses_injected_data_dir_and_roundtrips_creden
     ));
 
     let vault = MCPRemoteOAuthCredentialVault::new(data_dir.clone());
-    let credentials = StoredCredentials {
-        client_id: "client-123".to_string(),
-        token_response: None,
-    };
+    let credentials = StoredCredentials::new("client-123".to_string(), None, Vec::new(), None);
 
     vault
         .store("server-a", &credentials)

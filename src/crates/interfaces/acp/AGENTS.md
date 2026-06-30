@@ -16,6 +16,9 @@ share only stable capability facts through contract crates.
 - ACP config persistence, remote probing, timeout policy, and workspace surface
   selection are ACP/app-surface behavior. Do not move them into `core-types`,
   `runtime-ports`, or `agent-tools`.
+- ACP external-agent tool naming, schema, validation, presentation, and result
+  shape are portable contracts owned by `bitfun-agent-tools`; ACP should call
+  those helpers instead of redefining them locally.
 - If a future contract is needed, make it observational: environment identity,
   capability facts, and request/response DTOs only.
 

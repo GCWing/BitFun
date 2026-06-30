@@ -2250,7 +2250,7 @@ export const forbiddenContentRules = [
     patterns: [
       {
         regex: /\bfn behavior_hints\b/,
-        message: 'core MCP tool adapter must not own dynamic tool behavior hint rendering; use the integrations helper',
+        message: 'core MCP tool adapter must not own dynamic tool behavior hint rendering; use the execution MCP tool bridge contract',
       },
       {
         regex: /\bfn truncate_for_assistant\b/,
@@ -2262,7 +2262,27 @@ export const forbiddenContentRules = [
       },
       {
         regex: /Tool '\{\}' from MCP server/,
-        message: 'core MCP tool adapter must not own dynamic descriptor text; use the integrations helper',
+        message: 'core MCP tool adapter must not own dynamic descriptor text; use the execution MCP tool bridge contract',
+      },
+      {
+        regex: /\bDynamicMcpToolInfo\b/,
+        message: 'core MCP tool adapter must not own dynamic MCP metadata assembly; use the execution MCP tool bridge contract',
+      },
+      {
+        regex: /Input must be an object/,
+        message: 'core MCP tool adapter must not own bridge input validation text; use the execution MCP tool bridge contract',
+      },
+      {
+        regex: /Using MCP tool/,
+        message: 'core MCP tool adapter must not own bridge tool-use presentation; use the execution MCP tool bridge contract',
+      },
+      {
+        regex: /was rejected by user/,
+        message: 'core MCP tool adapter must not own bridge rejection presentation; use the execution MCP tool bridge contract',
+      },
+      {
+        regex: /completed\. Result:/,
+        message: 'core MCP tool adapter must not own bridge result presentation; use the execution MCP tool bridge contract',
       },
     ],
   },

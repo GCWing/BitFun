@@ -2308,6 +2308,36 @@ export function runManifestParserSelfTest({
       ],
     },
     {
+      path: 'src/crates/execution/tool-contracts/src/mcp_tool_bridge.rs',
+      contracts: [
+        'build_mcp_tool_bridge_name',
+        'McpToolBridgeDefinition',
+        'McpToolBridgeBehaviorHints',
+        'build_mcp_tool_bridge_definition',
+        'mcp_tool_bridge_dynamic_tool_info',
+        'validate_mcp_tool_bridge_input',
+        'render_mcp_tool_bridge_use_message',
+        'render_mcp_tool_bridge_rejected_message',
+        'render_mcp_tool_bridge_result_message',
+        'build_mcp_tool_bridge_result',
+      ],
+    },
+    {
+      path: 'src/crates/execution/tool-contracts/src/acp_tool_bridge.rs',
+      contracts: [
+        'build_acp_external_agent_tool_name',
+        'AcpExternalAgentToolDefinition',
+        'build_acp_external_agent_tool_definition',
+        'acp_external_agent_tool_input_schema',
+        'validate_acp_external_agent_tool_input',
+        'render_acp_external_agent_use_message',
+        'render_acp_external_agent_rejected_message',
+        'render_acp_external_agent_result_message',
+        'render_acp_external_agent_result_for_assistant',
+        'build_acp_external_agent_tool_result',
+      ],
+    },
+    {
       path: 'src/crates/execution/tool-provider-groups/src/lib.rs',
       contracts: [
         'ToolPackFeatureGroup',
@@ -3398,6 +3428,11 @@ export function runManifestParserSelfTest({
     'truncate_for_assistant',
     'MCPToolResultContent',
     'Tool',
+    'DynamicMcpToolInfo',
+    'Input must be an object',
+    'Using MCP tool',
+    'was rejected by user',
+    'completed\\. Result:',
   ];
   const mcpToolAdapterRuleText = mcpToolAdapterRule.patterns
     .map((pattern) => pattern.regex.source)

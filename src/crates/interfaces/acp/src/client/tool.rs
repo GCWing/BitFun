@@ -1,94 +1,81 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use bitfun_core::agentic::tools::framework::{
-    Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
+use bitfun_agent_tools::{
+    acp_external_agent_tool_input_schema, build_acp_external_agent_tool_definition,
+    build_acp_external_agent_tool_name, build_acp_external_agent_tool_result,
+    render_acp_external_agent_rejected_message, render_acp_external_agent_result_for_assistant,
+    render_acp_external_agent_result_message, render_acp_external_agent_use_message,
+    validate_acp_external_agent_tool_input, AcpExternalAgentToolDefinition,
+    AcpExternalAgentToolDefinitionInput, ToolResult, ValidationResult,
 };
+use bitfun_core::agentic::tools::framework::{Tool, ToolRenderOptions, ToolUseContext};
 use bitfun_core::util::errors::{BitFunError, BitFunResult};
-use serde_json::{json, Value};
+use serde_json::Value;
 
 use super::config::AcpClientConfig;
 use super::manager::AcpClientService;
 
 pub struct AcpAgentTool {
     client_id: String,
-    config: AcpClientConfig,
     service: Arc<AcpClientService>,
-    full_name: String,
+    definition: AcpExternalAgentToolDefinition,
 }
 
 impl AcpAgentTool {
     pub fn new(client_id: String, config: AcpClientConfig, service: Arc<AcpClientService>) -> Self {
-        let full_name = Self::tool_name_for(&client_id);
+        let definition = acp_external_agent_definition_for_config(&client_id, &config);
         Self {
             client_id,
-            config,
             service,
-            full_name,
+            definition,
         }
     }
 
     pub fn tool_name_for(client_id: &str) -> String {
-        format!("acp__{}__prompt", sanitize_tool_part(client_id))
+        build_acp_external_agent_tool_name(client_id)
     }
 
-    fn display_name(&self) -> String {
-        self.config
-            .name
-            .clone()
-            .unwrap_or_else(|| self.client_id.clone())
+    fn display_name(&self) -> &str {
+        &self.definition.display_name
     }
+}
+
+pub fn acp_external_agent_definition_for_config(
+    client_id: &str,
+    config: &AcpClientConfig,
+) -> AcpExternalAgentToolDefinition {
+    build_acp_external_agent_tool_definition(AcpExternalAgentToolDefinitionInput {
+        client_id,
+        display_name: config.name.as_deref(),
+        read_only: config.readonly,
+    })
 }
 
 #[async_trait]
 impl Tool for AcpAgentTool {
     fn name(&self) -> &str {
-        &self.full_name
+        &self.definition.tool_name
     }
 
     async fn description(&self) -> BitFunResult<String> {
-        Ok(format!(
-            "Send a prompt to the external ACP agent '{}'. Use this when another local ACP-compatible agent is better suited for a delegated task.",
-            self.display_name()
-        ))
+        Ok(self.definition.description.clone())
     }
 
     fn short_description(&self) -> String {
-        format!(
-            "Delegate a task to the external ACP agent '{}'.",
-            self.display_name()
-        )
+        self.definition.short_description.clone()
     }
 
     fn input_schema(&self) -> Value {
-        json!({
-            "type": "object",
-            "properties": {
-                "prompt": {
-                    "type": "string",
-                    "description": "The task or question to send to the external ACP agent."
-                },
-                "workspace_path": {
-                    "type": "string",
-                    "description": "Optional absolute workspace path. Defaults to the current BitFun workspace."
-                },
-                "timeout_seconds": {
-                    "type": "integer",
-                    "minimum": 0,
-                    "description": "Optional timeout in seconds. Use 0 or omit it to wait without a fixed timeout."
-                }
-            },
-            "required": ["prompt"],
-            "additionalProperties": false
-        })
+        acp_external_agent_tool_input_schema()
     }
 
     fn user_facing_name(&self) -> String {
-        format!("{} (ACP)", self.display_name())
+        self.definition.user_facing_name.clone()
     }
 
     fn is_readonly(&self) -> bool {
-        self.config.readonly
+        self.definition.read_only
     }
 
     fn is_concurrency_safe(&self, _input: Option<&Value>) -> bool {
@@ -96,7 +83,7 @@ impl Tool for AcpAgentTool {
     }
 
     fn needs_permissions(&self, _input: Option<&Value>) -> bool {
-        !self.config.readonly
+        !self.definition.read_only
     }
 
     async fn validate_input(
@@ -104,60 +91,23 @@ impl Tool for AcpAgentTool {
         input: &Value,
         _context: Option<&ToolUseContext>,
     ) -> ValidationResult {
-        match input.get("prompt").and_then(|value| value.as_str()) {
-            Some(prompt) if !prompt.trim().is_empty() => ValidationResult::default(),
-            Some(_) => ValidationResult {
-                result: false,
-                message: Some("prompt cannot be empty".to_string()),
-                error_code: Some(400),
-                meta: None,
-            },
-            None => ValidationResult {
-                result: false,
-                message: Some("prompt is required".to_string()),
-                error_code: Some(400),
-                meta: None,
-            },
-        }
+        validate_acp_external_agent_tool_input(input)
     }
 
     fn render_tool_use_message(&self, input: &Value, _options: &ToolRenderOptions) -> String {
-        let prompt_preview = input
-            .get("prompt")
-            .and_then(|value| value.as_str())
-            .map(truncate_prompt)
-            .unwrap_or_else(|| "prompt".to_string());
-        format!(
-            "Sending ACP prompt to '{}': {}",
-            self.display_name(),
-            prompt_preview
-        )
+        render_acp_external_agent_use_message(self.display_name(), input)
     }
 
     fn render_tool_use_rejected_message(&self) -> String {
-        format!("ACP prompt to '{}' was rejected", self.display_name())
+        render_acp_external_agent_rejected_message(self.display_name())
     }
 
     fn render_tool_result_message(&self, output: &Value) -> String {
-        output
-            .get("response")
-            .and_then(|value| value.as_str())
-            .map(|response| {
-                format!(
-                    "ACP agent '{}' responded:\n{}",
-                    self.display_name(),
-                    response
-                )
-            })
-            .unwrap_or_else(|| format!("ACP agent '{}' completed", self.display_name()))
+        render_acp_external_agent_result_message(self.display_name(), output)
     }
 
     fn render_result_for_assistant(&self, output: &Value) -> String {
-        output
-            .get("response")
-            .and_then(|value| value.as_str())
-            .unwrap_or("ACP agent completed without text output")
-            .to_string()
+        render_acp_external_agent_result_for_assistant(output)
     }
 
     async fn call_impl(
@@ -201,37 +151,45 @@ impl Tool for AcpAgentTool {
             )
             .await?;
 
-        let data = json!({
-            "client_id": self.client_id,
-            "response": response,
-        });
-        Ok(vec![ToolResult::Result {
-            result_for_assistant: Some(self.render_result_for_assistant(&data)),
-            data,
-            image_attachments: None,
-        }])
+        Ok(vec![build_acp_external_agent_tool_result(
+            &self.client_id,
+            response,
+        )])
     }
 }
 
-fn sanitize_tool_part(value: &str) -> String {
-    let sanitized = value
-        .chars()
-        .map(|ch| {
-            if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' {
-                ch
-            } else {
-                '_'
-            }
-        })
-        .collect::<String>();
-    sanitized.trim_matches('_').to_string()
-}
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
 
-fn truncate_prompt(prompt: &str) -> String {
-    const LIMIT: usize = 160;
-    if prompt.chars().count() <= LIMIT {
-        prompt.to_string()
-    } else {
-        format!("{}...", prompt.chars().take(LIMIT).collect::<String>())
+    use super::*;
+    use crate::client::config::AcpClientPermissionMode;
+
+    #[test]
+    fn acp_agent_tool_name_preserves_current_prompt_visible_shape() {
+        assert_eq!(
+            AcpAgentTool::tool_name_for("Claude Code"),
+            "acp__Claude_Code__prompt"
+        );
+    }
+
+    #[test]
+    fn acp_agent_definition_for_config_preserves_tool_contract() {
+        let config = AcpClientConfig {
+            name: Some("Codex".to_string()),
+            command: "codex".to_string(),
+            args: Vec::new(),
+            env: HashMap::new(),
+            enabled: true,
+            readonly: true,
+            permission_mode: AcpClientPermissionMode::Ask,
+        };
+
+        let definition = acp_external_agent_definition_for_config("codex", &config);
+
+        assert_eq!(definition.tool_name, "acp__codex__prompt");
+        assert_eq!(definition.display_name, "Codex");
+        assert_eq!(definition.user_facing_name, "Codex (ACP)");
+        assert!(definition.read_only);
     }
 }

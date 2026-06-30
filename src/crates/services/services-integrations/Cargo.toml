@@ -15,6 +15,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 log = { workspace = true }
 bitfun-agent-runtime = { path = "../../execution/agent-runtime", optional = true }
+bitfun-agent-tools = { path = "../../execution/tool-contracts", optional = true }
 bitfun-events = { path = "../../contracts/events" }
 bitfun-product-domains = { path = "../../contracts/product-domains", default-features = false, optional = true }
 bitfun-runtime-ports = { path = "../../contracts/runtime-ports", optional = true }
@@ -76,6 +77,7 @@ mcp = [
     "anyhow",
     "async-trait",
     "base64",
+    "bitfun-agent-tools",
     "bitfun-services-core",
     "futures",
     "rand",

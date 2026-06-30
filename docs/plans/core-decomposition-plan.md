@@ -35,24 +35,30 @@
 
 ### PR-C：Execution 层深迁移
 
-目标：
+状态：本阶段收口 Execution 层主体迁移，剩余工作转入 PR-D / PR-E。
 
-- 继续迁移 built-in tools、skills、MCP tool bridge、sandbox runner、local/remote tool runtime、harness descriptor / route plan 的实际 owner。
-- 删除或显著简化 core 中对应 tool/harness 主体路径，保留兼容 facade。
-- 区分 MCP tool bridge 与 MCP transport：tool bridge 属于 Execution，transport/client concrete 属于 Cross-platform Adapter。
+完成口径：
+
+- built-in tool provider plan、skills 纯策略、tool runtime assembly、tool execution helper、harness descriptor / route plan 已由 Execution 层 owner 承接，core 保留产品组装和兼容 facade。
+- MCP dynamic tool name、tool info、descriptor、input validation、tool-use / rejected / result presentation、`ToolResult` shape 进入 `bitfun-agent-tools` 的 MCP tool bridge contract。
+- `services-integrations` 只负责 MCP wire / transport / protocol result content 投影，并通过旧导出路径保持兼容。
+- `bitfun-core` 的 MCP tool adapter 只保留 `Tool` trait 适配、MCP connection 调用和旧注册路径，不再持有 bridge 文案、validation 或 dynamic metadata 组装。
+- 当前代码未发现独立 sandbox runner 主体；sandbox 相关内容主要是 capability / permission / execution-domain 事实和局部 guard，后续如出现 concrete runner，需要按 Execution contract 加 Cross-platform Adapter provider 的方式单独评审。
 
 保护：
 
 - prompt-visible manifest、`GetToolSpec`、permission gate、tool result/artifact、collapsed/expanded exposure、MCP/ACP catalog 和 remote/local path containment 等价。
-- `cargo test -p bitfun-agent-tools`、`cargo test -p tool-runtime`、harness / MCP focused tests 和 product shape tests 必跑。
+- PR-C 提交前至少覆盖 `cargo test -p bitfun-agent-tools`、`cargo test -p tool-runtime`、harness / MCP focused tests、product shape tests、`bitfun-core --features product-full` 和 core boundary checks。
 
 ### PR-D：Extension Host 与 OpenCode / ACP 适配收口
 
-目标：
+状态：本阶段收口 ACP external-agent tool bridge；Extension/OpenCode/plugin、UI extension、effect / permission mapping 和多形态 SDK 验证转入后续阶段。
 
-- 定义并落地最小 Extension Host 边界：plugin capability declaration、UI contribution descriptor、tool/hook/workflow provider mapping。
-- 明确 OpenCode adapter 将外部 plugin API 映射到 BitFun Rust Kernel API、UI Extension Contract 和 Capability/Effect API。
-- ACP 保持协议入口和 external agent/tool capability owner，不下沉到 Agent Kernel。
+完成口径：
+
+- ACP external-agent tool name、schema、validation、presentation 和 ToolResult shape 由 `bitfun-agent-tools` 承接。
+- `bitfun-acp` 继续持有 ACP protocol、client lifecycle、remote probing、permission bridge 和配置加载；现有 `AcpClientInfo` API shape 不变。
+- OpenCode/plugin concrete host、UI contribution、hook/workflow provider mapping 和 capability/effect policy 仍需在实际消费路径明确后单独接入，避免提前扩大稳定 API。
 
 保护：
 
@@ -96,7 +102,7 @@
 | Remote Connect / IM bot support | `cargo test -p bitfun-services-integrations --features remote-connect --lib remote_connect::bot::`，`cargo test -p bitfun-core --features product-full remote_connect::bot::command_router` |
 | Tool / MCP / terminal / sandbox | `cargo test -p bitfun-agent-tools`，`cargo test -p tool-runtime`，terminal / exec-command / MCP focused tests |
 | Harness / Product Domains | `cargo test -p bitfun-harness`，`cargo test -p bitfun-product-domains`，DeepReview / MiniApp focused tests |
-| Extension / OpenCode / ACP | extension host focused tests，UI contribution descriptor tests，ACP permission / external tool focused tests |
+| Extension / OpenCode / ACP | extension host focused tests，ACP permission / external tool focused tests |
 | Product shape / SDK | SDK fake-provider smoke，Desktop / CLI / Web / ACP capability matrix checks，cargo tree / metadata 对比 |
 | 大范围 owner 迁移 | `cargo check --workspace`，必要时补 `cargo test --workspace` |
 

@@ -17,7 +17,8 @@ facts. It is an interface crate, not a runtime implementation crate.
   load request and timing facts only. Concrete session persistence, file IO,
   session lifecycle, context restore, and prompt assembly do not belong here.
 - Do not put filesystem writes, process execution, network clients, Git/AI/MCP
-  concrete behavior, product policy, or UI command logic here.
+  concrete behavior, product policy, permission decisions, audit outcomes, UI
+  extension behavior, UI implementation, or UI command logic here.
 - Preserve serialization compatibility for persisted or cross-process DTOs.
 
 ## Verification

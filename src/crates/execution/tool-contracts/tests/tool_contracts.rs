@@ -1,26 +1,34 @@
 use bitfun_agent_tools::{
+    acp_external_agent_tool_input_schema, build_acp_external_agent_tool_definition,
+    build_acp_external_agent_tool_name, build_acp_external_agent_tool_result,
+    normalize_name_for_acp_tool_part, render_acp_external_agent_rejected_message,
+    render_acp_external_agent_result_for_assistant, render_acp_external_agent_result_message,
+    render_acp_external_agent_use_message, validate_acp_external_agent_tool_input,
+    AcpExternalAgentToolDefinitionInput, ACP_TOOL_PREFIX, ACP_TOOL_SUFFIX,
+};
+use bitfun_agent_tools::{
     build_bitfun_runtime_uri, build_collapsed_tool_stub_definition,
     build_get_tool_spec_assistant_detail, build_get_tool_spec_detail_result,
     build_get_tool_spec_duplicate_load_hint, build_get_tool_spec_duplicate_load_result,
     build_prompt_visible_tool_manifest_definitions, build_tool_execution_timeout_presentation,
     build_tool_path_policy_denial_message, build_tool_runtime_artifact_reference,
-    build_tool_session_runtime_artifact_reference,
-    collect_loaded_collapsed_tool_names, get_tool_spec_input_schema,
-    get_tool_spec_is_concurrency_safe, get_tool_spec_is_readonly, get_tool_spec_needs_permissions,
-    get_tool_spec_short_description, is_bitfun_runtime_uri, is_remote_posix_path_within_root,
-    is_tool_path_allowed_by_resolved_roots, normalize_host_path, normalize_runtime_relative_path,
-    parse_bitfun_runtime_uri, posix_resolve_path_with_workspace, posix_style_path_is_absolute,
-    render_get_tool_spec_tool_use_message, resolve_contextual_tool_manifest,
-    resolve_contextual_tool_manifest_from_provider, resolve_get_tool_spec_detail,
-    resolve_get_tool_spec_detail_from_provider,
+    build_tool_session_runtime_artifact_reference, collect_loaded_collapsed_tool_names,
+    get_tool_spec_input_schema, get_tool_spec_is_concurrency_safe, get_tool_spec_is_readonly,
+    get_tool_spec_needs_permissions, get_tool_spec_short_description, is_bitfun_runtime_uri,
+    is_remote_posix_path_within_root, is_tool_path_allowed_by_resolved_roots, normalize_host_path,
+    normalize_runtime_relative_path, parse_bitfun_runtime_uri, posix_resolve_path_with_workspace,
+    posix_style_path_is_absolute, render_get_tool_spec_tool_use_message,
+    resolve_contextual_tool_manifest, resolve_contextual_tool_manifest_from_provider,
+    resolve_get_tool_spec_detail, resolve_get_tool_spec_detail_from_provider,
     resolve_get_tool_spec_execution_result_from_provider, resolve_host_path_with_workspace,
     resolve_readonly_enabled_tools, resolve_tool_manifest_policy, resolve_tool_path_with_context,
     resolve_workspace_tool_path, sort_tool_manifest_definitions,
     summarize_get_tool_spec_collapsed_tools, tool_path_is_effectively_absolute,
-    validate_collapsed_tool_usage, validate_get_tool_spec_input, validate_tool_allowed_by_list,
-    validate_tool_execution_admission, DynamicMcpToolInfo, DynamicToolInfo,
-    GetToolSpecCollapsedToolSummary, GetToolSpecExecutionError, GetToolSpecExecutionPlan,
-    GetToolSpecLoadObservation, GetToolSpecRuntime, InputValidator, PromptVisibleToolManifestItem,
+    validate_collapsed_tool_usage, validate_get_tool_spec_input, validate_mcp_tool_bridge_input,
+    validate_tool_allowed_by_list, validate_tool_execution_admission, DynamicMcpToolInfo,
+    DynamicToolInfo, GetToolSpecCollapsedToolSummary, GetToolSpecExecutionError,
+    GetToolSpecExecutionPlan, GetToolSpecLoadObservation, GetToolSpecRuntime, InputValidator,
+    McpToolBridgeBehaviorHints, McpToolBridgeDefinitionInput, PromptVisibleToolManifestItem,
     ToolContextFacts, ToolExecutionAdmissionRejection, ToolExecutionAdmissionRequest, ToolExposure,
     ToolImageAttachment, ToolManifestDefinition, ToolManifestPolicyTool, ToolPathBackend,
     ToolPathOperation, ToolPathResolution, ToolRenderOptions, ToolResult, ToolRuntimeRestrictions,
@@ -35,6 +43,12 @@ use bitfun_agent_tools::{
     truncate_tool_arguments_preview, TOOL_CONFIRMATION_TIMEOUT_MESSAGE,
     TOOL_ERROR_ARGUMENTS_PREVIEW_BYTES, USER_REJECTED_TOOL_MESSAGE,
     USER_STEERING_INTERRUPTED_MESSAGE,
+};
+use bitfun_agent_tools::{
+    build_mcp_tool_bridge_definition, build_mcp_tool_bridge_name, build_mcp_tool_bridge_result,
+    mcp_tool_bridge_dynamic_tool_info, mcp_tool_bridge_short_description, normalize_name_for_mcp,
+    render_mcp_tool_bridge_rejected_message, render_mcp_tool_bridge_result_message,
+    render_mcp_tool_bridge_use_message, MCP_TOOL_DELIMITER, MCP_TOOL_PREFIX,
 };
 use bitfun_agent_tools::{
     build_persisted_tool_output_message, count_tool_result_lines, file_tool_guidance_message,
@@ -72,6 +86,238 @@ impl StaticToolProviderPlan for TestProviderPlan {
     fn tool_names(&self) -> &'static [&'static str] {
         self.tool_names
     }
+}
+
+#[test]
+fn mcp_tool_bridge_preserves_prompt_visible_name_and_descriptor_contract() {
+    assert_eq!(MCP_TOOL_PREFIX, "mcp__");
+    assert_eq!(MCP_TOOL_DELIMITER, "__");
+    assert_eq!(
+        normalize_name_for_mcp("Acme Search / Primary"),
+        "Acme_Search___Primary"
+    );
+    assert_eq!(
+        build_mcp_tool_bridge_name("Claude Code", "search repos"),
+        "mcp__Claude_Code__search_repos"
+    );
+
+    let definition = build_mcp_tool_bridge_definition(McpToolBridgeDefinitionInput {
+        server_id: "github",
+        server_name: "GitHub",
+        tool_name: "search",
+        title: "Search Docs",
+        description: Some("Find docs"),
+        behavior_hints: McpToolBridgeBehaviorHints {
+            read_only: true,
+            destructive: false,
+            open_world: true,
+        },
+    });
+
+    assert_eq!(definition.full_name, "mcp__github__search");
+    assert_eq!(definition.user_facing_name, "Search Docs (GitHub)");
+    assert_eq!(
+        definition.description,
+        "Tool 'Search Docs' from MCP server 'GitHub': Find docs [Hints: read-only, open-world]"
+    );
+    assert_eq!(definition.provider_id, "github");
+    assert_eq!(definition.provider_kind, "mcp");
+    assert!(definition.read_only);
+    assert_eq!(
+        serde_json::to_value(definition.tool_info.clone()).unwrap(),
+        json!({
+            "server_id": "github",
+            "server_name": "GitHub",
+            "tool_name": "search"
+        })
+    );
+
+    assert_eq!(
+        mcp_tool_bridge_short_description(Some("Find docs"), "GitHub"),
+        "Find docs (GitHub)"
+    );
+    assert_eq!(
+        mcp_tool_bridge_short_description(Some("   "), "GitHub"),
+        "MCP tool (GitHub)"
+    );
+}
+
+#[test]
+fn mcp_tool_bridge_preserves_dynamic_info_validation_and_rendering_contract() {
+    let definition = build_mcp_tool_bridge_definition(McpToolBridgeDefinitionInput {
+        server_id: "github",
+        server_name: "GitHub",
+        tool_name: "search",
+        title: "Search Docs",
+        description: Some("Find docs"),
+        behavior_hints: McpToolBridgeBehaviorHints {
+            read_only: false,
+            destructive: true,
+            open_world: false,
+        },
+    });
+
+    assert_eq!(
+        mcp_tool_bridge_dynamic_tool_info(&definition),
+        DynamicToolInfo {
+            provider_id: "github".to_string(),
+            provider_kind: Some("mcp".to_string()),
+            mcp: Some(DynamicMcpToolInfo {
+                server_id: "github".to_string(),
+                server_name: "GitHub".to_string(),
+                tool_name: "search".to_string(),
+            }),
+        }
+    );
+
+    assert!(validate_mcp_tool_bridge_input(&json!({ "q": "rust" }), "GitHub", false).result);
+    let non_object = validate_mcp_tool_bridge_input(&json!("rust"), "GitHub", false);
+    assert!(!non_object.result);
+    assert_eq!(non_object.error_code, Some(400));
+    assert_eq!(
+        non_object.message.as_deref(),
+        Some("Input must be an object")
+    );
+
+    let remote_blocked = validate_mcp_tool_bridge_input(&json!({}), "GitHub", true);
+    assert!(!remote_blocked.result);
+    assert_eq!(
+        remote_blocked.message.as_deref(),
+        Some("MCP server 'GitHub' runs locally and is unavailable in remote workspace sessions")
+    );
+
+    assert_eq!(
+        render_mcp_tool_bridge_use_message("Search Docs", "GitHub", &json!({ "q": "rust" })),
+        "Using MCP tool 'Search Docs' from 'GitHub' with input: {\"q\":\"rust\"}"
+    );
+    assert_eq!(
+        render_mcp_tool_bridge_rejected_message("Search Docs", "GitHub"),
+        "MCP tool 'Search Docs' from 'GitHub' was rejected by user"
+    );
+    assert_eq!(
+        render_mcp_tool_bridge_result_message("Search Docs", "done"),
+        "MCP tool 'Search Docs' completed. Result: done"
+    );
+
+    let ToolResult::Result {
+        data,
+        result_for_assistant,
+        image_attachments,
+    } = build_mcp_tool_bridge_result(json!({ "ok": true }), "done".to_string())
+    else {
+        panic!("MCP bridge result must use standard result shape");
+    };
+    assert_eq!(data, json!({ "ok": true }));
+    assert_eq!(result_for_assistant.as_deref(), Some("done"));
+    assert!(image_attachments.is_none());
+}
+
+#[test]
+fn acp_external_agent_bridge_preserves_tool_contract() {
+    assert_eq!(ACP_TOOL_PREFIX, "acp__");
+    assert_eq!(ACP_TOOL_SUFFIX, "__prompt");
+    assert_eq!(
+        normalize_name_for_acp_tool_part("Claude Code"),
+        "Claude_Code"
+    );
+    assert_eq!(
+        build_acp_external_agent_tool_name("Claude Code"),
+        "acp__Claude_Code__prompt"
+    );
+
+    let definition =
+        build_acp_external_agent_tool_definition(AcpExternalAgentToolDefinitionInput {
+            client_id: "codex",
+            display_name: Some("Codex"),
+            read_only: false,
+        });
+
+    assert_eq!(definition.tool_name, "acp__codex__prompt");
+    assert_eq!(definition.display_name, "Codex");
+    assert_eq!(definition.user_facing_name, "Codex (ACP)");
+    assert_eq!(
+        definition.description,
+        "Send a prompt to the external ACP agent 'Codex'. Use this when another local ACP-compatible agent is better suited for a delegated task."
+    );
+    assert_eq!(
+        definition.short_description,
+        "Delegate a task to the external ACP agent 'Codex'."
+    );
+    assert!(!definition.read_only);
+
+    assert_eq!(
+        acp_external_agent_tool_input_schema(),
+        json!({
+            "type": "object",
+            "properties": {
+                "prompt": {
+                    "type": "string",
+                    "description": "The task or question to send to the external ACP agent."
+                },
+                "workspace_path": {
+                    "type": "string",
+                    "description": "Optional absolute workspace path. Defaults to the current BitFun workspace."
+                },
+                "timeout_seconds": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Optional timeout in seconds. Use 0 or omit it to wait without a fixed timeout."
+                }
+            },
+            "required": ["prompt"],
+            "additionalProperties": false
+        })
+    );
+
+    let missing_prompt = validate_acp_external_agent_tool_input(&json!({}));
+    assert!(!missing_prompt.result);
+    assert_eq!(missing_prompt.error_code, Some(400));
+    assert_eq!(
+        missing_prompt.message.as_deref(),
+        Some("prompt is required")
+    );
+
+    let empty_prompt = validate_acp_external_agent_tool_input(&json!({ "prompt": "  " }));
+    assert!(!empty_prompt.result);
+    assert_eq!(
+        empty_prompt.message.as_deref(),
+        Some("prompt cannot be empty")
+    );
+    assert!(validate_acp_external_agent_tool_input(&json!({ "prompt": "hello" })).result);
+
+    let long_prompt = "a".repeat(161);
+    assert_eq!(
+        render_acp_external_agent_use_message("Codex", &json!({ "prompt": long_prompt })),
+        format!("Sending ACP prompt to 'Codex': {}...", "a".repeat(160))
+    );
+    assert_eq!(
+        render_acp_external_agent_rejected_message("Codex"),
+        "ACP prompt to 'Codex' was rejected"
+    );
+    assert_eq!(
+        render_acp_external_agent_result_message("Codex", &json!({ "response": "done" })),
+        "ACP agent 'Codex' responded:\ndone"
+    );
+    assert_eq!(
+        render_acp_external_agent_result_message("Codex", &json!({})),
+        "ACP agent 'Codex' completed"
+    );
+    assert_eq!(
+        render_acp_external_agent_result_for_assistant(&json!({})),
+        "ACP agent completed without text output"
+    );
+
+    let ToolResult::Result {
+        data,
+        result_for_assistant,
+        image_attachments,
+    } = build_acp_external_agent_tool_result("codex", "done")
+    else {
+        panic!("ACP bridge result must use standard result shape");
+    };
+    assert_eq!(data, json!({ "client_id": "codex", "response": "done" }));
+    assert_eq!(result_for_assistant.as_deref(), Some("done"));
+    assert!(image_attachments.is_none());
 }
 
 #[test]
@@ -191,12 +437,12 @@ fn tool_execution_timeout_presentation_includes_timeout_seconds() {
     assert_eq!(presentation.result_json["category"], "execution_timeout");
     assert_eq!(presentation.result_json["tool_name"], "ExecCommand");
     assert_eq!(presentation.result_json["timeout_seconds"], 120);
-    assert!(
-        presentation
-            .result_for_assistant
-            .contains("This tool call was cancelled because the global tool execution time limit (120 seconds)")
-    );
-    assert!(!presentation.result_for_assistant.contains("Provided arguments"));
+    assert!(presentation.result_for_assistant.contains(
+        "This tool call was cancelled because the global tool execution time limit (120 seconds)"
+    ));
+    assert!(!presentation
+        .result_for_assistant
+        .contains("Provided arguments"));
     assert!(!presentation.result_for_assistant.contains("failed"));
 }
 
