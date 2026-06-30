@@ -366,6 +366,8 @@ provider-neutral contract。
 应该放这里：
 
 - 可序列化 DTO、identity、event、port trait、artifact ref、typed error。
+- 跨框架 frontend event projection：把内核事件映射为稳定 event name / event type / payload，不包含 Tauri、
+  React、WebSocket delivery 或 OpenCode adapter 实现。
 - capability/effect、permission、sandbox、execution domain、audit facts。
 - UI extension descriptor contract 和跨产品领域的纯规则。
 
@@ -397,6 +399,7 @@ Platform adapter 只实现 ports 并调用边界外资源。
 | `ExtensionHost` / OpenCode adapter | Extension | extension host / adapter | Product Assembly | Product Assembly、UI host、Execution provider registry | 产出 descriptor/provider，不写权威状态 |
 | `RuntimeServicesBuilder` / platform providers | Cross-platform Adapter | services/adapters/app provider | Product Assembly | Kernel/Execution/Harness 通过 port handle | 实现边界外 I/O，不读取 product profile |
 | `SecurityDecisionPort` / `CapabilityEffectPolicy` | Stable Contracts and Security Control Plane | 注入式策略 owner | Product Assembly | Kernel、Execution、Extension、UI projection | 决策可审计，模型/插件不能直接授权 |
+| `AgenticFrontendEvent` / frontend event projection | Stable Contracts and Security Control Plane | `bitfun-events` | 无运行时注册 | Tauri/WebSocket/UI extension/OpenCode adapter | 只定义 event name/type/payload；delivery 由 adapter 执行 |
 
 典型调用链：
 

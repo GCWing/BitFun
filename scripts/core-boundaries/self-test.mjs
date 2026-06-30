@@ -1028,6 +1028,29 @@ export function runManifestParserSelfTest({
       ],
     },
     {
+      path: 'src/crates/contracts/events/src/frontend_projection.rs',
+      contracts: [
+        'AgenticFrontendEvent',
+        'project_agentic_frontend_event',
+        'legacy_flat_message',
+        'deep_review_queue_projection_preserves_camel_case_contract',
+        'legacy_flat_message_keeps_projection_type_authoritative',
+        'legacy_flat_dialog_turn_started_preserves_existing_shape',
+      ],
+    },
+    {
+      path: 'src/crates/adapters/transport/src/adapters/tauri.rs',
+      contracts: ['project_agentic_frontend_event', 'projected.event_name.as_str()'],
+    },
+    {
+      path: 'src/crates/adapters/transport/src/adapters/websocket.rs',
+      contracts: [
+        'project_agentic_frontend_event',
+        'is_legacy_websocket_agentic_event_type',
+        'websocket_keeps_legacy_agentic_event_allowlist',
+      ],
+    },
+    {
       path: 'src/crates/execution/runtime-services/tests/runtime_services_contracts.rs',
       contracts: [
         'builder_requires_mandatory_runtime_services',

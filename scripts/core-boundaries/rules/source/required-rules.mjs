@@ -2,6 +2,71 @@
 
 export const requiredContentRules = [
   {
+    path: 'src/crates/contracts/events/src/frontend_projection.rs',
+    reason:
+      'events contract must own framework-neutral agentic frontend event projection for Tauri, WebSocket, and future extension hosts',
+    patterns: [
+      {
+        regex: /\bpub struct AgenticFrontendEvent\b/,
+        message: 'missing framework-neutral frontend event projection DTO',
+      },
+      {
+        regex: /\bpub fn project_agentic_frontend_event\b/,
+        message: 'missing shared agentic frontend event projection function',
+      },
+      {
+        regex: /\bpub fn legacy_flat_message\b/,
+        message: 'missing legacy flat payload projection helper',
+      },
+      {
+        regex: /\bdeep_review_queue_projection_preserves_camel_case_contract\b/,
+        message: 'missing camelCase queue projection regression test',
+      },
+      {
+        regex: /\blegacy_flat_message_keeps_projection_type_authoritative\b/,
+        message: 'missing WebSocket type precedence regression test',
+      },
+      {
+        regex: /\blegacy_flat_dialog_turn_started_preserves_existing_shape\b/,
+        message: 'missing WebSocket dialog-turn-started shape regression test',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/adapters/transport/src/adapters/tauri.rs',
+    reason:
+      'Tauri transport adapter must only deliver projected events and must not own agentic event field mapping',
+    patterns: [
+      {
+        regex: /\bproject_agentic_frontend_event\b/,
+        message: 'missing shared frontend projection usage in Tauri transport',
+      },
+      {
+        regex: /\.emit\(projected\.event_name\.as_str\(\), projected\.payload\)/,
+        message: 'Tauri transport must emit projected event name and payload',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/adapters/transport/src/adapters/websocket.rs',
+    reason:
+      'WebSocket transport adapter must consume shared event projection while preserving the legacy WebSocket event allowlist',
+    patterns: [
+      {
+        regex: /\bproject_agentic_frontend_event\b/,
+        message: 'missing shared frontend projection usage in WebSocket transport',
+      },
+      {
+        regex: /\bis_legacy_websocket_agentic_event_type\b/,
+        message: 'missing legacy WebSocket agentic event allowlist',
+      },
+      {
+        regex: /\bwebsocket_keeps_legacy_agentic_event_allowlist\b/,
+        message: 'missing WebSocket legacy event allowlist regression',
+      },
+    ],
+  },
+  {
     path: 'src/crates/contracts/core-types/src/lsp.rs',
     reason:
       'core-types must own shared LSP protocol DTOs and plugin manifest wire contracts',

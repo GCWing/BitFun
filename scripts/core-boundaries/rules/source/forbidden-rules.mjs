@@ -2,6 +2,26 @@
 
 export const forbiddenContentRules = [
   {
+    path: 'src/crates/adapters/transport/src/adapters/tauri.rs',
+    patterns: [
+      {
+        regex: /\bAgenticEvent::[A-Z]/,
+        message:
+          'Tauri transport adapter must not match agentic event variants directly; use bitfun-events frontend projection',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/adapters/transport/src/adapters/websocket.rs',
+    patterns: [
+      {
+        regex: /\bAgenticEvent::[A-Z]/,
+        message:
+          'WebSocket transport adapter must not match agentic event variants directly; use bitfun-events frontend projection',
+      },
+    ],
+  },
+  {
     path: 'src/crates/execution/agent-runtime/tests/sdk_smoke.rs',
     patterns: [
       {

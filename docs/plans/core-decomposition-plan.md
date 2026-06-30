@@ -28,6 +28,7 @@
 - Root boundary scripts 已覆盖核心 owner 防回流、six-layer path 解析、facade-only 文件、custom agent owner / custom subagent wrapper 保护和重点 feature gate。
 - Agent Runtime session workspace resolution、Cron / SessionControl / SessionMessage / SessionHistory 的 target session/workspace owner routing、`/goal` tool management runtime-port routing、session/config/context/lifecycle fact owner 收口，以及 `services-integrations` workspace search preview/result conversion 已纳入已完成摘要；后续计划只保留仍需迁移的 feature/kernel、security/control-plane、execution、extension 和 cross-platform adapter 主体工作。
 - MiniApp built-in seed orchestration 已进入 `product-domains`，core 只保留 concrete host adapter；session state manager 已进入 `agent-runtime`，core 只保留兼容 re-export。
+- `bitfun-events` 已承接 Agentic frontend event projection；Tauri/WebSocket transport 不再内联事件字段映射，后续 OpenCode/UI extension adapter 应复用同一稳定投影。
 
 ## 3. 大块 PR 节奏
 

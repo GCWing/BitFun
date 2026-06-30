@@ -7,6 +7,7 @@ pub mod agentic;
 /// - Event abstraction independent of platforms
 pub mod backend;
 pub mod emitter;
+pub mod frontend_projection;
 pub mod types;
 
 pub use agentic::{
@@ -18,4 +19,5 @@ pub use backend::{
     ToolExecutionProgressInfo, ToolExecutionStartedInfo, ToolTerminalReadyInfo,
 };
 pub use emitter::EventEmitter;
+pub use frontend_projection::{project_agentic_frontend_event, AgenticFrontendEvent};
 pub use types::*;
