@@ -80,3 +80,4 @@ ASSETS_LICENSES.md
 
 external/
 /.bitfun/search/flashgrep-index/
+.agents/
