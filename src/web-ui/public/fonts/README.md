@@ -17,9 +17,9 @@ src/web-ui/public/fonts/
 │   └── FiraCode-VF.woff2
 └── Noto_Sans_SC/
     └── static/
-        ├── NotoSansSC-Regular.ttf
-        ├── NotoSansSC-Medium.ttf
-        └── NotoSansSC-SemiBold.ttf
+        ├── NotoSansSC-Regular.woff2
+        ├── NotoSansSC-Medium.woff2
+        └── NotoSansSC-SemiBold.woff2
 ```
 
 ## Fira Code
@@ -45,9 +45,9 @@ src/web-ui/public/fonts/
 
 | Weight | File | Usage |
 |------|------|------|
-| 400 | NotoSansSC-Regular.ttf | Body |
-| 500 | NotoSansSC-Medium.ttf | Heading/Emphasis |
-| 600 | NotoSansSC-SemiBold.ttf | Strong heading |
+| 400 | NotoSansSC-Regular.woff2 | Body |
+| 500 | NotoSansSC-Medium.woff2 | Heading/Emphasis |
+| 600 | NotoSansSC-SemiBold.woff2 | Strong heading |
 
 Only the static weights referenced by `fonts.css` are bundled.
 

@@ -5,9 +5,9 @@ This bundled directory keeps only the static Noto Sans SC weights referenced by
 ../fonts.css.
 
 Included static font files:
-  static/NotoSansSC-Regular.ttf
-  static/NotoSansSC-Medium.ttf
-  static/NotoSansSC-SemiBold.ttf
+  static/NotoSansSC-Regular.woff2
+  static/NotoSansSC-Medium.woff2
+  static/NotoSansSC-SemiBold.woff2
 
 Get started
 -----------
