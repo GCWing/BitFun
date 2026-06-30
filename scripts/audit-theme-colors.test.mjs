@@ -27,6 +27,10 @@ function readJson(filePath) {
   return JSON.parse(fs.readFileSync(filePath, 'utf8'));
 }
 
+function readText(filePath) {
+  return fs.readFileSync(filePath, 'utf8');
+}
+
 function createFixture(files) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bitfun-theme-audit-'));
   const sourceRoot = path.join(dir, 'src', 'web-ui', 'src');
@@ -164,6 +168,25 @@ test('repository dynamic CSS var families match the registered contract', () => 
   assert.equal(report.surfaceTokenRenames.activeUnique, 0);
   assert.equal(report.surfaceTokenRenames.activeOccurrences, 0);
   assert.equal(report.surfaceTokenRenames.missingCanonicalUnique, 0);
+});
+
+test('generated widget iframe compatibility aliases match theme alias contracts', () => {
+  const source = readText(path.join(root, 'src/web-ui/src/tools/generative-widget/themePayloadCompatibility.ts'));
+  const aliasEntries = Array.from(source.matchAll(/'([^']+)': '([^']+)'/g))
+    .map(([, key, canonical]) => [key, canonical]);
+  const aliasKeys = new Set(aliasEntries.map(([key]) => key));
+  const contractByKey = new Map(TOKEN_COMPATIBILITY_ALIAS_CONTRACTS.map(contract => [
+    contract.key,
+    contract,
+  ]));
+
+  assert.ok(aliasEntries.length > 0, 'widget iframe compatibility aliases must be explicit');
+  assert.equal(aliasKeys.size, aliasEntries.length, 'widget iframe compatibility aliases must be unique');
+  for (const [key, canonical] of aliasEntries) {
+    const contract = contractByKey.get(key);
+    assert.ok(contract, `${key} must be registered as a compatibility alias`);
+    assert.equal(canonical, contract.canonical, `${key} must point to the registered canonical token`);
+  }
 });
 
 test('theme color audit reports alias family usages whose exact canonical key is missing', (t) => {

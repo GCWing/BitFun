@@ -6,9 +6,33 @@ import {
   createWidgetThemeFallbackCss,
   readWidgetThemePayload,
 } from './themePayload';
+import { createWidgetThemeCompatibilityAliasCss } from './themePayloadCompatibility';
 
-const WIDGET_THEME_VAR_NAMES_HASH = 'c674aa29ababf56a37ef1d9c7ccf04de06ccddc4ba7599337e079b3f8a42b3e8';
+const WIDGET_THEME_VAR_NAMES_HASH = '9ef54b3c1ec5f55eb2cf4cb48acb3c1c3fb28db0877fdd9b583a2ad7aead352b';
 const RETIRED_WIDGET_THEME_COMPAT_KEYS = [
+  '--border-muted',
+  '--border-primary',
+  '--color-background-secondary',
+  '--color-background-tertiary',
+  '--color-bg-base',
+  '--color-bg-elevated-hover',
+  '--color-bg-flowchat',
+  '--color-bg-hover',
+  '--color-bg-subtle',
+  '--color-bg-surface',
+  '--color-border',
+  '--color-border-primary',
+  '--color-border-subtle',
+  '--color-hover',
+  '--color-semantic-error',
+  '--color-success-100',
+  '--color-success-500',
+  '--color-surface-elevated',
+  '--color-surface-hover',
+  '--color-text-tertiary',
+  '--color-warning-100',
+  '--color-warning-500',
+  '--color-warning-700',
   '--color-accent',
   '--color-accent-primary',
   '--color-accent-alpha',
@@ -28,7 +52,19 @@ const RETIRED_WIDGET_THEME_COMPAT_KEYS = [
   '--color-danger-bg',
   '--color-danger-border',
   '--color-danger-hover',
+  '--element-bg',
+  '--font-mono',
+  '--font-sans',
+  '--markdown-font-mono',
+  '--motion-normal',
+  '--secondary-bg',
+  '--text-tertiary',
+  '--tool-compact-summary-font',
 ] as const;
+const STATIC_WIDGET_SHELL_THEME_VARS = new Set([
+  '--font-family-mono',
+  '--font-family-sans',
+]);
 
 function readPayloadWithHostValues(hostValues: Record<string, string> = {}) {
   const requestedNames: string[] = [];
@@ -66,6 +102,11 @@ function hashNames(names: string[]): string {
     .digest('hex');
 }
 
+function readCompatibilityAliasEntries(css: string): Array<[string, string]> {
+  return Array.from(css.matchAll(/^\s+(--[-\w]+): var\((--[-\w]+)\);$/gm))
+    .map(([, name, canonical]) => [name, canonical]);
+}
+
 describe('generated widget theme payload contract', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -81,7 +122,7 @@ describe('generated widget theme payload contract', () => {
       first: requestedNames[0],
       last: requestedNames[requestedNames.length - 1],
     }).toEqual({
-      count: 307,
+      count: 276,
       hash: WIDGET_THEME_VAR_NAMES_HASH,
       first: '--color-bg-primary',
       last: '--tool-card-action-font-weight',
@@ -94,7 +135,7 @@ describe('generated widget theme payload contract', () => {
     expect(payload?.vars).toEqual(WIDGET_THEME_FALLBACK_VARS);
   });
 
-  it('does not export retired accent and danger compatibility keys', () => {
+  it('does not export retired low-risk compatibility keys', () => {
     const { requestedNames } = readPayloadWithHostValues();
 
     expect(requestedNames).not.toEqual(expect.arrayContaining(RETIRED_WIDGET_THEME_COMPAT_KEYS));
@@ -111,6 +152,21 @@ describe('generated widget theme payload contract', () => {
         '--color-error-border',
       ])
     );
+  });
+
+  it('keeps retired payload keys available as iframe aliases', () => {
+    const { requestedNames } = readPayloadWithHostValues();
+    const compatibilityAliasCss = createWidgetThemeCompatibilityAliasCss();
+    const aliasEntries = readCompatibilityAliasEntries(compatibilityAliasCss);
+
+    expect(aliasEntries.map(([name]) => name).sort()).toEqual([...RETIRED_WIDGET_THEME_COMPAT_KEYS].sort());
+    for (const [key, canonical] of aliasEntries) {
+      expect(RETIRED_WIDGET_THEME_COMPAT_KEYS).toContain(key);
+      expect(requestedNames).toContain(canonical);
+      expect(
+        canonical in WIDGET_THEME_FALLBACK_VARS || STATIC_WIDGET_SHELL_THEME_VARS.has(canonical),
+      ).toBe(true);
+    }
   });
 
   it('renders fallback CSS from the same reviewed fallback map', () => {

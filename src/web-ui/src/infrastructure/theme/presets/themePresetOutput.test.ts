@@ -89,7 +89,7 @@ describe('builtin theme preset output', () => {
           "type": "dark",
         },
         {
-          "hash": "e974f329a592a936fe1794f7bedc9f68d1579db1663435175eb429c96e4b37d1",
+          "hash": "4b4597856d6c78a81c49a8f50c91d35682d8b53c27635b7097be1cb13a2c7a22",
           "id": "bitfun-cyber",
           "type": "dark",
         },

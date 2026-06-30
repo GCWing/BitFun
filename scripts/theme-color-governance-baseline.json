@@ -54,19 +54,19 @@
       "max": 0
     },
     "generatedWidgetPayload.varUnique": {
-      "max": 307
+      "max": 276
     },
     "generatedWidgetPayload.occurrences": {
-      "max": 307
+      "max": 276
     },
     "generatedWidgetPayload.undefinedUnique": {
       "max": 0
     },
     "generatedWidgetPayload.compatibilityAliasUnique": {
-      "max": 45
+      "max": 14
     },
     "generatedWidgetPayload.compatibilityAliasOccurrences": {
-      "max": 45
+      "max": 14
     },
     "generatedWidgetPayload.compatibilityAliasFamilyUnique": {
       "max": 17
@@ -75,10 +75,10 @@
       "max": 17
     },
     "generatedWidgetPayload.externalOnlyCompatibilityUnique": {
-      "max": 62
+      "max": 31
     },
     "generatedWidgetPayload.externalOnlyCompatibilityOccurrences": {
-      "max": 62
+      "max": 31
     },
     "generatedWidgetPayload.missingCompatibilityCanonicalUnique": {
       "max": 0
@@ -105,7 +105,7 @@
       "max": 0
     },
     "colorScopes.token.uniqueColors": {
-      "max": 340
+      "max": 335
     },
     "colorScopes.exception.uniqueColors": {
       "max": 270
@@ -147,22 +147,22 @@
       "max": 0
     },
     "colorDomainNearPairs.indistinguishableTotal": {
-      "max": 3
+      "max": 2
     },
     "colorDomainNearPairs.nearTotal": {
-      "max": 375
+      "max": 346
     },
     "colorDomainNearPairs.themePreset.indistinguishableTotal": {
-      "max": 3
+      "max": 2
     },
     "colorDomainNearPairs.themePreset.nearTotal": {
-      "max": 192
+      "max": 185
     },
     "colorDomainNearPairs.themeRuntime.indistinguishableTotal": {
       "max": 0
     },
     "colorDomainNearPairs.themeRuntime.nearTotal": {
-      "max": 50
+      "max": 28
     },
     "colorDomainNearPairs.tokenContract.indistinguishableTotal": {
       "max": 0
@@ -237,13 +237,13 @@
       "max": 0
     },
     "colorDomainScopes.themePreset.occurrences": {
-      "max": 231
+      "max": 229
     },
     "colorDomainScopes.themePreset.uniqueColors": {
-      "max": 205
+      "max": 204
     },
     "colorDomainScopes.themeRuntime.occurrences": {
-      "max": 45
+      "max": 40
     },
     "colorDomainScopes.tokenContract.occurrences": {
       "max": 176
