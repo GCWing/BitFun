@@ -54,31 +54,31 @@
       "max": 0
     },
     "generatedWidgetPayload.varUnique": {
-      "max": 276
+      "max": 245
     },
     "generatedWidgetPayload.occurrences": {
-      "max": 276
+      "max": 245
     },
     "generatedWidgetPayload.undefinedUnique": {
       "max": 0
     },
     "generatedWidgetPayload.compatibilityAliasUnique": {
-      "max": 14
+      "max": 0
     },
     "generatedWidgetPayload.compatibilityAliasOccurrences": {
-      "max": 14
+      "max": 0
     },
     "generatedWidgetPayload.compatibilityAliasFamilyUnique": {
-      "max": 17
+      "max": 0
     },
     "generatedWidgetPayload.compatibilityAliasFamilyOccurrences": {
-      "max": 17
+      "max": 0
     },
     "generatedWidgetPayload.externalOnlyCompatibilityUnique": {
-      "max": 31
+      "max": 0
     },
     "generatedWidgetPayload.externalOnlyCompatibilityOccurrences": {
-      "max": 31
+      "max": 0
     },
     "generatedWidgetPayload.missingCompatibilityCanonicalUnique": {
       "max": 0
@@ -105,7 +105,7 @@
       "max": 0
     },
     "colorScopes.token.uniqueColors": {
-      "max": 335
+      "max": 334
     },
     "colorScopes.exception.uniqueColors": {
       "max": 270
@@ -147,13 +147,13 @@
       "max": 0
     },
     "colorDomainNearPairs.indistinguishableTotal": {
-      "max": 2
+      "max": 1
     },
     "colorDomainNearPairs.nearTotal": {
       "max": 346
     },
     "colorDomainNearPairs.themePreset.indistinguishableTotal": {
-      "max": 2
+      "max": 1
     },
     "colorDomainNearPairs.themePreset.nearTotal": {
       "max": 185
@@ -237,10 +237,10 @@
       "max": 0
     },
     "colorDomainScopes.themePreset.occurrences": {
-      "max": 229
+      "max": 228
     },
     "colorDomainScopes.themePreset.uniqueColors": {
-      "max": 204
+      "max": 203
     },
     "colorDomainScopes.themeRuntime.occurrences": {
       "max": 40

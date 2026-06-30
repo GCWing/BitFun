@@ -179,11 +179,27 @@ test('generated widget iframe compatibility aliases match theme alias contracts'
     contract.key,
     contract,
   ]));
+  const resolveContract = (key) => {
+    const explicit = contractByKey.get(key);
+    if (explicit) {
+      return explicit;
+    }
+    const family = TOKEN_COMPATIBILITY_ALIAS_FAMILY_CONTRACTS.find(contract => (
+      key.startsWith(contract.prefix) && key.length > contract.prefix.length
+    ));
+    if (!family) {
+      return null;
+    }
+    return {
+      key,
+      canonical: `${family.canonicalPrefix}${key.slice(family.prefix.length)}`,
+    };
+  };
 
   assert.ok(aliasEntries.length > 0, 'widget iframe compatibility aliases must be explicit');
   assert.equal(aliasKeys.size, aliasEntries.length, 'widget iframe compatibility aliases must be unique');
   for (const [key, canonical] of aliasEntries) {
-    const contract = contractByKey.get(key);
+    const contract = resolveContract(key);
     assert.ok(contract, `${key} must be registered as a compatibility alias`);
     assert.equal(canonical, contract.canonical, `${key} must point to the registered canonical token`);
   }

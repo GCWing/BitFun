@@ -2,9 +2,17 @@ import { JSDOM } from 'jsdom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { configAPI } from '@/infrastructure/api';
-import { bitfunLightTheme } from '../presets';
-import type { ThemeConfig } from '../types';
+import { bitfunDarkTheme, bitfunLightTheme } from '../presets';
+import { SYSTEM_THEME_ID, type ThemeConfig } from '../types';
 import { ThemeService } from './ThemeService';
+
+function expectThemeError(
+  result: ReturnType<ThemeService['validateTheme']>,
+  path: string,
+  code: string,
+) {
+  expect(result.errors).toEqual(expect.arrayContaining([expect.objectContaining({ path, code })]));
+}
 
 vi.mock('@/infrastructure/api', () => ({
   configAPI: {
@@ -189,5 +197,206 @@ describe('ThemeService flow chat link tokens', () => {
       'themes.current',
       expect.anything(),
     );
+  });
+
+  it('validates the core theme schema instead of only root fields', () => {
+    const service = new ThemeService();
+    const invalidTheme: ThemeConfig = {
+      ...bitfunLightTheme,
+      id: 'custom-invalid-semantic',
+      name: 'Invalid Semantic',
+      colors: {
+        ...bitfunLightTheme.colors,
+        semantic: {
+          ...bitfunLightTheme.colors.semantic,
+          success: 'not-a-color',
+        },
+      },
+    };
+
+    const result = service.validateTheme(invalidTheme);
+
+    expect(result.valid).toBe(false);
+    expectThemeError(result, 'colors.semantic.success', 'INVALID_COLOR_FORMAT');
+
+    const incompleteTheme = {
+      ...bitfunLightTheme,
+      id: 'custom-incomplete',
+      name: 'Incomplete Custom',
+      effects: undefined,
+      motion: undefined,
+      typography: undefined,
+    } as unknown as ThemeConfig;
+    const incompleteResult = service.validateTheme(incompleteTheme);
+
+    expect(incompleteResult.valid).toBe(false);
+    expectThemeError(incompleteResult, 'effects', 'MISSING_THEME_FIELD_GROUP');
+    expectThemeError(incompleteResult, 'motion', 'MISSING_THEME_FIELD_GROUP');
+    expectThemeError(incompleteResult, 'typography', 'MISSING_THEME_FIELD_GROUP');
+
+    const invalidOptionalTheme = {
+      ...bitfunLightTheme,
+      id: 'custom-invalid-optional-scrollbar',
+      name: 'Invalid Optional Scrollbar',
+      colors: {
+        ...bitfunLightTheme.colors,
+        scrollbar: {
+          thumb: 'invalid',
+          thumbHover: '#ffffff',
+        },
+      },
+    } as unknown as ThemeConfig;
+    const invalidOptionalResult = service.validateTheme(invalidOptionalTheme);
+
+    expect(invalidOptionalResult.valid).toBe(false);
+    expectThemeError(invalidOptionalResult, 'colors.scrollbar.thumb', 'INVALID_COLOR_FORMAT');
+  });
+
+  it('normalizes older partial custom themes before applying them', async () => {
+    const partialCustomTheme = {
+      id: 'custom-partial',
+      name: 'Partial Custom',
+      type: 'light',
+      colors: {
+        background: {
+          primary: '#101820',
+        },
+        text: {
+          primary: '#f8fafc',
+        },
+        accent: {
+          500: '#2f80ed',
+        },
+      },
+    } as unknown as ThemeConfig;
+    vi.mocked(configAPI.getConfig).mockImplementation(async (key: string) => {
+      if (key === 'themes.current') {
+        return 'custom-partial';
+      }
+      if (key === 'themes') {
+        return { custom: [partialCustomTheme] };
+      }
+      return undefined;
+    });
+    const service = new ThemeService();
+
+    await service.initialize();
+
+    const normalized = service.getTheme('custom-partial');
+    expect(service.getCurrentThemeId()).toBe('custom-partial');
+    expect(service.getResolvedThemeId()).toBe('custom-partial');
+    expect(normalized?.colors.background.primary).toBe('#101820');
+    expect(normalized?.colors.background.secondary).toBe(bitfunLightTheme.colors.background.secondary);
+    expect(normalized?.colors.text.primary).toBe('#f8fafc');
+    expect(normalized?.colors.text.secondary).toBe(bitfunLightTheme.colors.text.secondary);
+    expect(normalized?.effects.spacing[4]).toBe(bitfunLightTheme.effects.spacing[4]);
+    expect(document.documentElement.style.getPropertyValue('--color-bg-primary')).toBe('#101820');
+    expect(document.documentElement.style.getPropertyValue('--color-bg-secondary')).toBe(
+      bitfunLightTheme.colors.background.secondary,
+    );
+    expect(configAPI.setConfig).not.toHaveBeenCalledWith('themes.custom', expect.anything());
+  });
+
+  it('skips invalid persisted custom themes before they reach preview or runtime injection', async () => {
+    const invalidCustomTheme = {
+      ...bitfunLightTheme,
+      id: 'custom-broken',
+      name: 'Broken Custom',
+      colors: {
+        ...bitfunLightTheme.colors,
+        background: {
+          ...bitfunLightTheme.colors.background,
+          primary: 'definitely-not-a-color',
+        },
+      },
+    };
+    vi.mocked(configAPI.getConfig).mockImplementation(async (key: string) => {
+      if (key === 'themes.current') {
+        return 'custom-broken';
+      }
+      if (key === 'themes') {
+        return { custom: [invalidCustomTheme] };
+      }
+      return undefined;
+    });
+    const service = new ThemeService();
+
+    await service.initialize();
+
+    expect(service.getTheme('custom-broken')).toBeUndefined();
+    expect(service.getCurrentThemeId()).toBe(SYSTEM_THEME_ID);
+    expect(document.documentElement.getAttribute('data-theme')).not.toBe('custom-broken');
+    expect(configAPI.setConfig).not.toHaveBeenCalledWith('themes.custom', expect.anything());
+  });
+
+  it('persists registered custom themes only after schema normalization succeeds', async () => {
+    const service = new ThemeService();
+    const partialCustomTheme = {
+      id: 'custom-registered',
+      name: 'Registered Custom',
+      type: 'dark',
+      colors: {
+        background: {
+          primary: '#04080f',
+        },
+        text: {
+          primary: '#f8fafc',
+        },
+        accent: {
+          500: '#7c3aed',
+        },
+      },
+    } as unknown as ThemeConfig;
+
+    await service.registerTheme(partialCustomTheme);
+
+    const normalized = service.getTheme('custom-registered');
+    expect(normalized?.colors.background.primary).toBe('#04080f');
+    expect(normalized?.colors.background.secondary).toBe(bitfunDarkTheme.colors.background.secondary);
+    expect(normalized?.effects.radius.base).toBe(bitfunDarkTheme.effects.radius.base);
+    expect(configAPI.setConfig).toHaveBeenCalledWith(
+      'themes.custom',
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'custom-registered',
+          colors: expect.objectContaining({
+            background: expect.objectContaining({
+              primary: '#04080f',
+              secondary: bitfunDarkTheme.colors.background.secondary,
+            }),
+          }),
+        }),
+      ]),
+    );
+
+    await expect(
+      service.registerTheme({
+        ...bitfunLightTheme,
+        id: 'custom-invalid-register',
+        colors: {
+          ...bitfunLightTheme.colors,
+          text: {
+            ...bitfunLightTheme.colors.text,
+            primary: 'invalid',
+          },
+        },
+      }),
+    ).rejects.toThrow(/Invalid theme/);
+    expect(service.getTheme('custom-invalid-register')).toBeUndefined();
+
+    await expect(
+      service.registerTheme({
+        ...bitfunLightTheme,
+        id: '',
+        name: '',
+      }),
+    ).rejects.toThrow(/Theme id cannot be empty/);
+
+    await expect(
+      service.registerTheme({
+        ...bitfunLightTheme,
+        name: 'Builtin Override',
+      }),
+    ).rejects.toThrow(/reserved for a built-in theme/);
   });
 });

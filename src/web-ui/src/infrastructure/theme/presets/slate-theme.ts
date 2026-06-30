@@ -25,8 +25,6 @@ const SLATE_TEXT_MUTED = '#a8b0bd';
 const SLATE_BUTTON_TEXT = '#dce0e6';
 const SLATE_ACCENT = '#94a3b8';
 const SLATE_ACCENT_HOVER = '#64748b';
-// Keep the original alpha ramp channels separate from the solid 500 stop.
-const SLATE_PURPLE_ALPHA = '#b8c6ff';
 const SLATE_PURPLE = '#b8c4ff';
 const SLATE_PURPLE_HOVER = '#9dacf5';
 const SLATE_SUCCESS = '#7fb899';
@@ -35,7 +33,7 @@ const SLATE_ERROR = '#c9878d';
 
 const slateAccent = (alpha: number | string) => rgbaFromHex(SLATE_ACCENT, alpha);
 const slateAccentHover = (alpha: number | string) => rgbaFromHex(SLATE_ACCENT_HOVER, alpha);
-const slatePurple = (alpha: number | string) => rgbaFromHex(SLATE_PURPLE_ALPHA, alpha);
+const slatePurple = (alpha: number | string) => rgbaFromHex(SLATE_PURPLE, alpha);
 const slatePurpleHover = (alpha: number | string) => rgbaFromHex(SLATE_PURPLE_HOVER, alpha);
 const slateSuccess = (alpha: number | string) => rgbaFromHex(SLATE_SUCCESS, alpha);
 const slateWarning = (alpha: number | string) => rgbaFromHex(SLATE_WARNING, alpha);

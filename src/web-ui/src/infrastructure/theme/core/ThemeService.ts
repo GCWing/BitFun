@@ -14,6 +14,7 @@ import {
   ThemeSelectionId,
 } from '../types';
 import { builtinThemes, getSystemPreferredDefaultThemeId } from '../presets';
+import { themeValidator } from '../utils/ThemeValidator';
 import { configAPI } from '@/infrastructure/api';
 import { monacoThemeSync } from '../integrations/MonacoThemeSync';
 import { createLogger } from '@/shared/utils/logger';
@@ -111,6 +112,34 @@ function accentColorToRgbChannels(accent: string): string | null {
     return `${rgb[1]} ${rgb[2]} ${rgb[3]}`;
   }
   return null;
+}
+
+function cloneThemeConfig(theme: ThemeConfig): ThemeConfig {
+  return JSON.parse(JSON.stringify(theme)) as ThemeConfig;
+}
+
+function mergeThemeConfig(base: ThemeConfig, override: Partial<ThemeConfig>): ThemeConfig {
+  const mergeValue = (baseValue: unknown, overrideValue: unknown): unknown => {
+    if (overrideValue === undefined || overrideValue === null) {
+      return baseValue;
+    }
+    if (Array.isArray(baseValue) || Array.isArray(overrideValue)) {
+      return overrideValue;
+    }
+    if (
+      typeof baseValue === 'object' && baseValue !== null &&
+      typeof overrideValue === 'object' && overrideValue !== null
+    ) {
+      const merged: Record<string, unknown> = { ...(baseValue as Record<string, unknown>) };
+      Object.entries(overrideValue as Record<string, unknown>).forEach(([key, value]) => {
+        merged[key] = mergeValue(merged[key], value);
+      });
+      return merged;
+    }
+    return overrideValue;
+  };
+
+  return mergeValue(cloneThemeConfig(base), override) as ThemeConfig;
 }
 
 
@@ -246,10 +275,20 @@ export class ThemeService {
       const themes = themesConfig?.custom;
 
       if (Array.isArray(themes) && themes.length > 0) {
+        let loadedCount = 0;
         themes.forEach(theme => {
-          this.themes.set(theme.id, theme);
+          try {
+            const normalizedTheme = this.normalizeCustomTheme(theme);
+            this.themes.set(normalizedTheme.id, normalizedTheme);
+            loadedCount += 1;
+          } catch (error) {
+            log.warn('Skipped invalid user theme', {
+              id: theme?.id,
+              error: error instanceof Error ? error.message : String(error),
+            });
+          }
         });
-        log.info('Loaded user themes', { count: themes.length });
+        log.info('Loaded user themes', { count: loadedCount, skipped: themes.length - loadedCount });
       }
     } catch (_error) {
 
@@ -276,18 +315,56 @@ export class ThemeService {
 
 
 
-  registerTheme(theme: ThemeConfig): void {
+  private normalizeCustomTheme(theme: ThemeConfig): ThemeConfig {
+    if (!theme || typeof theme !== 'object') {
+      throw new Error('Invalid theme: expected object');
+    }
+    if (!theme.id || theme.id.trim() === '') {
+      throw new Error('Theme id cannot be empty');
+    }
+    if (!theme.name || theme.name.trim() === '') {
+      throw new Error(`Invalid theme ${theme.id}: theme name cannot be empty`);
+    }
     if (theme.id === SYSTEM_THEME_ID) {
       log.error('Reserved theme id', { id: theme.id });
       throw new Error(`Theme id "${SYSTEM_THEME_ID}" is reserved`);
     }
+    if (builtinThemes.some(item => item.id === theme.id)) {
+      log.error('Reserved builtin theme id', { id: theme.id });
+      throw new Error(`Theme id "${theme.id}" is reserved for a built-in theme`);
+    }
+    if (!theme.type || !['dark', 'light'].includes(theme.type)) {
+      throw new Error(`Invalid theme ${theme.id || '<missing>'}: theme type must be "dark" or "light"`);
+    }
+
+    const baseTheme = theme.type === 'light'
+      ? builtinThemes.find(item => item.type === 'light') || builtinThemes[0]
+      : builtinThemes.find(item => item.id === 'bitfun-dark') || builtinThemes.find(item => item.type === 'dark') || builtinThemes[0];
+    const normalized = mergeThemeConfig(baseTheme, theme);
+    const validation = this.validateTheme(normalized);
+
+    if (!validation.valid) {
+      const detail = validation.errors
+        .slice(0, 3)
+        .map(error => `${error.path}: ${error.message}`)
+        .join('; ');
+      throw new Error(`Invalid theme ${theme.id || '<missing>'}: ${detail}`);
+    }
+
+    return normalized;
+  }
+
+
+  async registerTheme(theme: ThemeConfig): Promise<void> {
+    const normalizedTheme = this.normalizeCustomTheme(theme);
     if (this.themes.has(theme.id)) {
       log.warn('Theme already exists, will override', { id: theme.id });
     }
 
-    this.themes.set(theme.id, theme);
-    this.emitEvent('theme:register', theme.id, theme);
-    log.info('Theme registered', { id: theme.id, name: theme.name });
+    this.themes.set(normalizedTheme.id, normalizedTheme);
+    this.emitEvent('theme:register', normalizedTheme.id, normalizedTheme);
+    log.info('Theme registered', { id: normalizedTheme.id, name: normalizedTheme.name });
+    await this.saveUserThemes();
   }
 
 
@@ -1030,6 +1107,15 @@ export class ThemeService {
       return null;
     }
 
+    const validation = this.validateTheme(theme);
+    if (!validation.valid) {
+      log.error('Cannot export invalid theme', {
+        id: themeId,
+        errors: validation.errors.slice(0, 3),
+      });
+      return null;
+    }
+
     const metadata: ThemeMetadata = {
       id: theme.id,
       name: theme.name,
@@ -1042,7 +1128,7 @@ export class ThemeService {
 
     return {
       schema: '2.0.0',
-      theme,
+      theme: cloneThemeConfig(theme),
       metadata,
       exportedAt: new Date().toISOString(),
     };
@@ -1052,30 +1138,7 @@ export class ThemeService {
 
 
   validateTheme(theme: ThemeConfig): ThemeValidationResult {
-    const errors: ThemeValidationResult['errors'] = [];
-    const warnings: ThemeValidationResult['warnings'] = [];
-
-
-    if (!theme.id) {
-      errors.push({ path: 'id', message: 'Missing theme id', code: 'MISSING_ID' });
-    }
-    if (!theme.name) {
-      errors.push({ path: 'name', message: 'Missing theme name', code: 'MISSING_NAME' });
-    }
-    if (!theme.type || !['dark', 'light'].includes(theme.type)) {
-      errors.push({ path: 'type', message: 'Invalid theme type', code: 'INVALID_TYPE' });
-    }
-
-
-    if (!theme.colors) {
-      errors.push({ path: 'colors', message: 'Missing color configuration', code: 'MISSING_COLORS' });
-    }
-
-    return {
-      valid: errors.length === 0,
-      errors,
-      warnings,
-    };
+    return themeValidator.validate(theme);
   }
 
 

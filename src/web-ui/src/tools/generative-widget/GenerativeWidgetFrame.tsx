@@ -103,18 +103,6 @@ ${createWidgetThemeCompatibilityAliasCss()}
       --font-size-2xl: 18px;
       --font-weight-medium: 500;
       --font-weight-semibold: 600;
-      --size-gap-3: 12px;
-      --size-gap-4: 16px;
-      --size-gap-5: 20px;
-      --spacing-3: var(--size-gap-3);
-      --spacing-4: var(--size-gap-4);
-      --spacing-5: var(--size-gap-5);
-      --size-radius-sm: 6px;
-      --size-radius-base: 8px;
-      --size-radius-lg: 12px;
-      --radius-sm: var(--size-radius-sm);
-      --radius-base: var(--size-radius-base);
-      --radius-lg: var(--size-radius-lg);
       --motion-fast: 0.15s;
       --easing-standard: ease;
     }
