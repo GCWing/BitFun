@@ -70,6 +70,12 @@
 
 ### PR-E：Cross-platform Adapter 与多形态 SDK 验证
 
+状态：已完成本轮 SDK / 产品组装验证收口。
+
+- `ProductRuntimeParts` 支持所有权交接到 runtime builder 输入。
+- `bitfun-product-capabilities` 覆盖 SDK no-direct-core profile 和 product-full 兼容 profile 组装到 `AgentRuntimeBuilder` 的无 `bitfun-core` smoke。
+- agent-runtime crate 级规则禁止 product assembly、concrete tool runtime 和平台/provider concrete 依赖回流。
+
 目标：
 
 - 收口 filesystem、network、process/thread/time、terminal、remote、Git、MCP transport、AI/provider protocol、browser/desktop automation 的 adapter/provider 边界。

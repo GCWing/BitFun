@@ -17,6 +17,58 @@ export const forbiddenContentRules = [
     ],
   },
   {
+    path: 'src/crates/execution/agent-runtime/src/sdk.rs',
+    patterns: [
+      {
+        regex: /\bbitfun_core\b/,
+        message: 'SDK facade must not expose bitfun-core',
+      },
+      {
+        regex: /\bbitfun_product_capabilities\b/,
+        message: 'SDK facade must not expose product assembly facts',
+      },
+      {
+        regex: /\btauri\b/,
+        message: 'SDK facade must not expose Tauri APIs',
+      },
+      {
+        regex: /\bAppHandle\b/,
+        message: 'SDK facade must not expose desktop app handles',
+      },
+      {
+        regex: /\breqwest\b/,
+        message: 'SDK facade must not expose concrete HTTP clients',
+      },
+      {
+        regex: /\bgit2\b/,
+        message: 'SDK facade must not expose concrete Git providers',
+      },
+      {
+        regex: /\brmcp\b/,
+        message: 'SDK facade must not expose concrete MCP clients',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/product-capabilities/tests/product_sdk_assembly.rs',
+    patterns: [
+      {
+        regex: /\bbitfun_core\b/,
+        message:
+          'product assembly to SDK smoke must not depend on bitfun-core',
+      },
+      {
+        regex: /\bCoreRuntimeServicesProvider\b/,
+        message:
+          'product assembly to SDK smoke must not use core concrete service adapters',
+      },
+      {
+        regex: /\btauri\b/,
+        message: 'product assembly to SDK smoke must not depend on Tauri',
+      },
+    ],
+  },
+  {
     path: 'src/crates/contracts/core-types/src/ai.rs',
     patterns: [
       {

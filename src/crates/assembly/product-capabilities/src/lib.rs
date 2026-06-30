@@ -142,6 +142,7 @@ pub enum DeliveryProfile {
     Acp,
     Web,
     MobileWeb,
+    Sdk,
 }
 
 impl DeliveryProfile {
@@ -155,6 +156,7 @@ impl DeliveryProfile {
             Self::Acp => "acp",
             Self::Web => "web",
             Self::MobileWeb => "mobile-web",
+            Self::Sdk => "sdk",
         }
     }
 
@@ -168,6 +170,7 @@ impl DeliveryProfile {
             Self::Acp,
             Self::Web,
             Self::MobileWeb,
+            Self::Sdk,
         ]
     }
 }
@@ -242,6 +245,10 @@ const PRODUCT_DELIVERY_PROFILE_ENTRIES: &[ProductDeliveryProfileEntry] = &[
     ),
     ProductDeliveryProfileEntry::new(
         DeliveryProfile::MobileWeb,
+        ProductCoreDependencyMode::NoDirectCoreDependency,
+    ),
+    ProductDeliveryProfileEntry::new(
+        DeliveryProfile::Sdk,
         ProductCoreDependencyMode::NoDirectCoreDependency,
     ),
 ];
@@ -492,6 +499,11 @@ impl ProductRuntimeParts {
 
     pub fn missing_service_requirements(&self) -> &[ProductServiceCapabilityRequirement] {
         &self.missing_service_requirements
+    }
+
+    /// Consume the assembled product output into runtime-builder inputs.
+    pub fn into_runtime_parts(self) -> (RuntimeServices, HarnessRegistry) {
+        (self.services, self.harness_registry)
     }
 }
 
@@ -927,8 +939,7 @@ fn product_capability_registry_for_profile(profile: DeliveryProfile) -> ProductC
         DeliveryProfile::Server
         | DeliveryProfile::Remote
         | DeliveryProfile::Web
-        | DeliveryProfile::MobileWeb => {
-            ProductCapabilityRegistry::new(EMPTY_PRODUCT_CAPABILITY_PACKS)
-        }
+        | DeliveryProfile::MobileWeb
+        | DeliveryProfile::Sdk => ProductCapabilityRegistry::new(EMPTY_PRODUCT_CAPABILITY_PACKS),
     }
 }

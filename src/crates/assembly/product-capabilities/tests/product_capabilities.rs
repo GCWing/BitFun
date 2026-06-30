@@ -196,6 +196,7 @@ fn no_direct_core_profiles_do_not_select_product_full_runtime_capabilities() {
         DeliveryProfile::Remote,
         DeliveryProfile::Web,
         DeliveryProfile::MobileWeb,
+        DeliveryProfile::Sdk,
     ] {
         let plan = product_assembly_plan_for_profile(profile);
 
@@ -275,6 +276,10 @@ fn product_delivery_profile_matrix_documents_current_core_dependency_shape() {
             ),
             (
                 DeliveryProfile::MobileWeb,
+                ProductCoreDependencyMode::NoDirectCoreDependency,
+            ),
+            (
+                DeliveryProfile::Sdk,
                 ProductCoreDependencyMode::NoDirectCoreDependency,
             ),
         ]
@@ -509,6 +514,7 @@ fn product_assembler_allows_no_direct_core_profiles_without_product_services() {
         DeliveryProfile::Remote,
         DeliveryProfile::Web,
         DeliveryProfile::MobileWeb,
+        DeliveryProfile::Sdk,
     ] {
         let services = FakeRuntimeServicesProvider::with_all_required()
             .build_services()

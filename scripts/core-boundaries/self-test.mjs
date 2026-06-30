@@ -674,11 +674,23 @@ export function runManifestParserSelfTest({
   if (!agentRuntimeRule?.forbiddenDeps.includes('bitfun-services-integrations')) {
     throw new Error('agent-runtime lightweight boundary must forbid concrete service integrations');
   }
+  if (!agentRuntimeRule?.forbiddenDeps.includes('bitfun-product-capabilities')) {
+    throw new Error('agent-runtime lightweight boundary must forbid product assembly facts');
+  }
+  if (!agentRuntimeRule?.forbiddenDeps.includes('tool-runtime')) {
+    throw new Error('agent-runtime lightweight boundary must forbid concrete tool runtime');
+  }
   const agentRuntimeProfile = dependencyProfileRules.find(
     (rule) => rule.crateName === 'agent-runtime',
   );
   if (!agentRuntimeProfile?.forbiddenNonOptionalDeps.includes('tauri')) {
     throw new Error('agent-runtime dependency profile must forbid product surface dependencies');
+  }
+  if (!agentRuntimeProfile?.forbiddenNonOptionalDeps.includes('bitfun-product-capabilities')) {
+    throw new Error('agent-runtime dependency profile must forbid product assembly facts');
+  }
+  if (!agentRuntimeProfile?.forbiddenNonOptionalDeps.includes('tool-runtime')) {
+    throw new Error('agent-runtime dependency profile must forbid concrete tool runtime');
   }
   const productCapabilitiesRule = lightweightBoundaryRules.find(
     (rule) => rule.crateName === 'product-capabilities',
@@ -1708,6 +1720,8 @@ export function runManifestParserSelfTest({
         'ProductCapabilityAssembly',
         'ProductFeatureGroup',
         'ProductRuntimeAssembly',
+        'DeliveryProfile::Sdk',
+        'into_runtime_parts',
         'feature_groups_from_tool_provider_group_plan',
       ],
     },
@@ -1717,6 +1731,15 @@ export function runManifestParserSelfTest({
         'product_assembly_plan_exposes_build_feature_groups_explicitly',
         'product_runtime_assembly_reports_runtime_service_capability_gaps',
         'product_harness_provider_plans_legacy_facade_without_execution',
+      ],
+    },
+    {
+      path: 'src/crates/assembly/product-capabilities/tests/product_sdk_assembly.rs',
+      contracts: [
+        'product_runtime_parts_can_build_agent_runtime_sdk_without_core',
+        'sdk_delivery_profile_builds_minimal_agent_runtime_without_product_full_capabilities',
+        'DeliveryProfile::Cli',
+        'DeliveryProfile::Sdk',
       ],
     },
     {
@@ -2232,6 +2255,8 @@ export function runManifestParserSelfTest({
         'product_assembly_plan_for_profile',
         'product_tool_runtime_owner_preserves_registry_contract',
         'product_tool_runtime_registry_preserves_provider_plan_order',
+        'product_tool_runtime_keeps_no_direct_core_profiles_empty',
+        'DeliveryProfile::Sdk',
       ],
     },
     {

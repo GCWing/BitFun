@@ -145,6 +145,7 @@ mod tests {
             DeliveryProfile::Remote,
             DeliveryProfile::Web,
             DeliveryProfile::MobileWeb,
+            DeliveryProfile::Sdk,
         ] {
             let runtime = ProductToolRuntime::for_profile(profile);
             let registry = runtime.create_registry();

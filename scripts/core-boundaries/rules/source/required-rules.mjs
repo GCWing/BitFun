@@ -1083,6 +1083,10 @@ export const requiredContentRules = [
         message: 'missing mobile web delivery profile coverage',
       },
       {
+        regex: /\bDeliveryProfile::Sdk\b/,
+        message: 'missing SDK delivery profile coverage',
+      },
+      {
         regex: /\bProductAssembler\b/,
         message: 'missing typed product assembler',
       },
@@ -1093,6 +1097,10 @@ export const requiredContentRules = [
       {
         regex: /\bProductRuntimeParts\b/,
         message: 'missing product runtime parts output',
+      },
+      {
+        regex: /\binto_runtime_parts\b/,
+        message: 'missing owned runtime-parts handoff for SDK/product assembly consumers',
       },
       {
         regex: /\bfeature_groups_from_tool_provider_group_plan\b/,
@@ -1128,6 +1136,42 @@ export const requiredContentRules = [
       {
         regex: /\bproduct_harness_provider_plans_legacy_facade_without_execution\b/,
         message: 'missing legacy harness route non-execution regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/product-capabilities/tests/product_sdk_assembly.rs',
+    reason:
+      'product-capabilities must prove product runtime parts can feed the SDK runtime without bitfun-core',
+    patterns: [
+      {
+        regex: /\bproduct_runtime_parts_can_build_agent_runtime_sdk_without_core\b/,
+        message: 'missing product assembly to SDK runtime smoke',
+      },
+      {
+        regex:
+          /\bsdk_delivery_profile_builds_minimal_agent_runtime_without_product_full_capabilities\b/,
+        message: 'missing SDK delivery profile minimal runtime smoke',
+      },
+      {
+        regex: /\bProductAssembler::new\(\)/,
+        message: 'product SDK smoke must assemble through ProductAssembler',
+      },
+      {
+        regex: /\binto_runtime_parts\b/,
+        message: 'product SDK smoke must consume owned ProductRuntimeParts',
+      },
+      {
+        regex: /\bAgentRuntimeBuilder::new\(\)/,
+        message: 'product SDK smoke must build through the Agent Runtime SDK facade',
+      },
+      {
+        regex: /\bDeliveryProfile::Cli\b/,
+        message: 'product SDK smoke must cover a product-full compatibility delivery profile',
+      },
+      {
+        regex: /\bDeliveryProfile::Sdk\b/,
+        message: 'product SDK smoke must cover the no-direct-core SDK delivery profile',
       },
     ],
   },
@@ -6032,6 +6076,14 @@ export const requiredContentRules = [
       {
         regex: /\bproduct_tool_runtime_registry_preserves_provider_plan_order\b/,
         message: 'missing product tool provider plan-to-registry order regression',
+      },
+      {
+        regex: /\bproduct_tool_runtime_keeps_no_direct_core_profiles_empty\b/,
+        message: 'missing no-direct-core product tool runtime regression',
+      },
+      {
+        regex: /\bDeliveryProfile::Sdk\b/,
+        message: 'product tool runtime no-direct-core regression must cover SDK profile',
       },
     ],
   },

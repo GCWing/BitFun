@@ -717,12 +717,15 @@ product-assembly
 
 ```rust
 pub enum DeliveryProfile {
+    ProductFull,
     Desktop,
     Cli,
     Server,
     Remote,
     Acp,
     Web,
+    MobileWeb,
+    Sdk,
 }
 
 pub struct CapabilitySet {

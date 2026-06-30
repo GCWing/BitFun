@@ -389,7 +389,7 @@ Platform adapter 只实现 ports 并调用边界外资源。
 
 | 接口 / API | 定义 owner | 实现 owner | 注册者 | 消费者 | 边界 |
 |---|---|---|---|---|---|
-| `ProductAssembler` / `ProductAssemblyPlan` | Product Assembly | 产品入口或 assembly crate | 产品入口 | Desktop / CLI / Web / SDK / ACP | 选择能力，不写 Agent 状态机 |
+| `ProductAssembler` / `ProductAssemblyPlan` | Product Assembly | 产品入口或 assembly crate | 产品入口 | Desktop / CLI / Server / Remote / Web / Mobile Web / SDK / ACP | 选择能力，不写 Agent 状态机 |
 | `ProductFeaturePack` | Product Feature | feature owner | Product Assembly | 产品入口、Kernel API、UI host | 编排 feature，不拥有 OS concrete 或 Extension Host |
 | `AgentRuntimeBuilder` / Kernel API | Agent Kernel | `bitfun-agent-runtime` | Product Assembly / SDK host | Product Feature、SDK、Extension adapter | 接收 typed parts，不创建 concrete manager |
 | `ToolRuntimeBuilder` / Tool contracts | Execution | tool/execution owner | Product Assembly | Agent Kernel 通过 execution port、Harness | 执行 tool，不选择产品形态 |
