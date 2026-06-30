@@ -23,6 +23,7 @@ const SLATE_BACKGROUND_SECONDARY = '#22262c';
 const SLATE_TEXT_PRIMARY = '#eef0f3';
 const SLATE_TEXT_MUTED = '#a8b0bd';
 const SLATE_BUTTON_TEXT = '#dce0e6';
+const SLATE_ACCENT_SOFT = '#e2e8f0';
 const SLATE_ACCENT = '#94a3b8';
 const SLATE_ACCENT_HOVER = '#64748b';
 const SLATE_PURPLE = '#b8c4ff';
@@ -74,8 +75,8 @@ export const bitfunSlateTheme: ThemeConfig = {
 
     // Cool gray accent — neutral chrome for slate surfaces (links, focus, nav tints).
     accent: {
-      50: rgbaFromHex('#e2e8f0', 0.05),
-      100: rgbaFromHex('#e2e8f0', 0.09),
+      50: rgbaFromHex(SLATE_ACCENT_SOFT, 0.05),
+      100: rgbaFromHex(SLATE_ACCENT_SOFT, 0.09),
       200: 'rgba(203, 213, 225, 0.14)',
       300: 'rgba(203, 213, 225, 0.24)',
       400: 'rgba(148, 163, 184, 0.45)',
@@ -199,7 +200,7 @@ export const bitfunSlateTheme: ThemeConfig = {
         dot: 'rgba(203, 213, 225, 0.42)',
         dotShadow: `0 0 4px ${overlayBlack(0.35)}`,
         hoverBg: overlayWhite(0.09),
-        hoverColor: '#e2e6eb',
+        hoverColor: SLATE_ACCENT_SOFT,
         hoverBorder: overlayWhite(0.14),
         hoverShadow: `0 2px 8px ${overlayBlack(0.22)}, inset 0 1px 0 ${overlayWhite(0.06)}`,
       },
@@ -246,7 +247,7 @@ export const bitfunSlateTheme: ThemeConfig = {
       primary: {
         default: {
           background: overlayWhite(0.14),
-          color: '#f0f2f5',
+          color: SLATE_TEXT_PRIMARY,
           border: 'transparent',
           shadow: 'none',
         },

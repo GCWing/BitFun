@@ -36,7 +36,7 @@ vi.mock('@/shared/utils/logger', () => ({
   }),
 }));
 
-describe('ThemeService flow chat link tokens', () => {
+describe('ThemeService runtime theme tokens', () => {
   let dom: JSDOM;
   const bootstrapGlobals = globalThis as typeof globalThis & {
     __BITFUN_BOOTSTRAP_THEME_ID__?: string;
@@ -86,6 +86,38 @@ describe('ThemeService flow chat link tokens', () => {
     expect(rootStyle.getPropertyValue('--color-accent-500')).toBe('#94a3b8');
     expect(rootStyle.getPropertyValue('--flowchat-link-color')).toBe('#60a5fa');
     expect(rootStyle.getPropertyValue('--flowchat-link-hover-color')).toBe('#93c5fd');
+  });
+
+  it('uses canonical light overlay stops for scrollbar fallback hover', async () => {
+    const service = new ThemeService();
+
+    await service.applyTheme('bitfun-light');
+
+    expect(document.documentElement.style.getPropertyValue('--scrollbar-thumb-hover')).toBe('rgba(0, 0, 0, 0.3)');
+  });
+
+  it('keeps dark info border aligned with the canonical medium overlay stop', async () => {
+    const service = new ThemeService();
+
+    await service.applyTheme('bitfun-dark');
+
+    expect(document.documentElement.style.getPropertyValue('--color-info-border')).toBe('rgba(255, 255, 255, 0.24)');
+  });
+
+  it('uses canonical dark overlay stops when a theme omits scrollbar values', () => {
+    const service = new ThemeService();
+    const fallbackTheme: ThemeConfig = {
+      ...bitfunDarkTheme,
+      id: 'fallback-dark',
+      colors: {
+        ...bitfunDarkTheme.colors,
+        scrollbar: undefined,
+      },
+    } as unknown as ThemeConfig;
+
+    (service as unknown as { injectCSSVariables(theme: ThemeConfig): void }).injectCSSVariables(fallbackTheme);
+
+    expect(document.documentElement.style.getPropertyValue('--scrollbar-thumb-hover')).toBe('rgba(255, 255, 255, 0.24)');
   });
 
   it('initializes from bootstrap theme selection without reading or writing themes.current', async () => {

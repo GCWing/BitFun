@@ -12,6 +12,10 @@ const outputPath = path.join(
   repoRoot,
   'src/apps/desktop/src/generated/startup_theme_bootstrap.json',
 );
+const themePromptSnapshotOutputPath = path.join(
+  repoRoot,
+  'src/crates/assembly/core/src/agentic/tools/implementations/generated/theme_prompt_snapshots.json',
+);
 const checkOnly = process.argv.includes('--check');
 
 function normalizeGeneratedText(content) {
@@ -30,31 +34,49 @@ const server = await createServer({
 });
 
 try {
-  const [{ builtinThemes }, { createStartupThemeBootstrapManifest }] = await Promise.all([
+  const [
+    { builtinThemes },
+    { createStartupThemeBootstrapManifest },
+    { createThemePromptSnapshotManifest },
+  ] = await Promise.all([
     server.ssrLoadModule('/src/infrastructure/theme/presets/index.ts'),
     server.ssrLoadModule('/src/infrastructure/theme/presets/startupThemeBootstrap.ts'),
+    server.ssrLoadModule('/src/infrastructure/theme/presets/themePromptSnapshots.ts'),
   ]);
 
-  const manifest = createStartupThemeBootstrapManifest(builtinThemes);
-  const nextContent = `${JSON.stringify(manifest, null, 2)}\n`;
-  const currentContent = fs.existsSync(outputPath)
-    ? fs.readFileSync(outputPath, 'utf8')
-    : null;
+  const generatedFiles = [
+    {
+      label: 'Startup theme bootstrap manifest',
+      outputPath,
+      content: `${JSON.stringify(createStartupThemeBootstrapManifest(builtinThemes), null, 2)}\n`,
+    },
+    {
+      label: 'Theme prompt snapshot manifest',
+      outputPath: themePromptSnapshotOutputPath,
+      content: `${JSON.stringify(createThemePromptSnapshotManifest(builtinThemes), null, 2)}\n`,
+    },
+  ];
 
-  if (checkOnly) {
-    const currentContentForCheck = currentContent == null
-      ? null
-      : normalizeGeneratedText(currentContent);
-    if (currentContentForCheck !== normalizeGeneratedText(nextContent)) {
-      console.error(
-        'Startup theme bootstrap manifest is stale. Run `pnpm run generate-startup-theme-bootstrap`.',
-      );
-      process.exitCode = 1;
+  for (const generatedFile of generatedFiles) {
+    const currentContent = fs.existsSync(generatedFile.outputPath)
+      ? fs.readFileSync(generatedFile.outputPath, 'utf8')
+      : null;
+
+    if (checkOnly) {
+      const currentContentForCheck = currentContent == null
+        ? null
+        : normalizeGeneratedText(currentContent);
+      if (currentContentForCheck !== normalizeGeneratedText(generatedFile.content)) {
+        console.error(
+          `${generatedFile.label} is stale. Run \`pnpm run generate-startup-theme-bootstrap\`.`,
+        );
+        process.exitCode = 1;
+      }
+    } else {
+      fs.mkdirSync(path.dirname(generatedFile.outputPath), { recursive: true });
+      fs.writeFileSync(generatedFile.outputPath, generatedFile.content, 'utf8');
+      console.log(`Generated ${path.relative(repoRoot, generatedFile.outputPath).replace(/\\/g, '/')}`);
     }
-  } else {
-    fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-    fs.writeFileSync(outputPath, nextContent, 'utf8');
-    console.log(`Generated ${path.relative(repoRoot, outputPath).replace(/\\/g, '/')}`);
   }
 } finally {
   await server.close();

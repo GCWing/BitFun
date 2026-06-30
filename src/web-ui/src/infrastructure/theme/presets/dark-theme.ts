@@ -15,6 +15,7 @@ import {
   overlayWhite,
   rgbFromHex,
   rgbaFromHex,
+  STATIC_WHITE,
 } from './shared';
 
 const DARK_BACKGROUND_PRIMARY = '#0e0e10';
@@ -105,7 +106,7 @@ export const bitfunDarkTheme: ThemeConfig = {
 
       info: '#a1a1aa',
       infoBg: overlayWhite(0.08),
-      infoBorder: overlayWhite(0.22),
+      infoBorder: overlayWhite(0.24),
 
 
       highlight: '#a8a8a8',
@@ -244,14 +245,14 @@ export const bitfunDarkTheme: ThemeConfig = {
         },
         hover: {
           background: overlayWhite(0.24),
-          color: '#fafafa',
+          color: STATIC_WHITE,
           border: 'transparent',
           shadow: 'none',
           transform: 'none',
         },
         active: {
           background: overlayWhite(0.2),
-          color: '#fafafa',
+          color: STATIC_WHITE,
           border: 'transparent',
           shadow: 'none',
           transform: 'none',

@@ -23,11 +23,11 @@ export const WIDGET_IFRAME_FALLBACK_COLOR = {
 export const MINI_APP_SCROLLBAR_FALLBACKS = {
   dark: {
     thumb: 'rgba(255, 255, 255, 0.12)',
-    thumbHover: 'rgba(255, 255, 255, 0.22)',
+    thumbHover: 'rgba(255, 255, 255, 0.24)',
   },
   light: {
     thumb: 'rgba(0, 0, 0, 0.15)',
-    thumbHover: 'rgba(0, 0, 0, 0.28)',
+    thumbHover: 'rgba(0, 0, 0, 0.3)',
   },
 } as const;
 

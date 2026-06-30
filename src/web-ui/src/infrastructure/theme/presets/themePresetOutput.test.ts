@@ -51,6 +51,14 @@ describe('builtin theme preset output', () => {
     });
   });
 
+  it('keeps near-neutral preset foregrounds on canonical stops', () => {
+    const serializedThemes = JSON.stringify(builtinThemes).toLowerCase();
+
+    expect(serializedThemes).not.toContain('#fafafa');
+    expect(serializedThemes).not.toContain('#e2e6eb');
+    expect(serializedThemes).not.toContain('#f0f2f5');
+  });
+
   it('keeps resolved preset objects stable across helper refactors', () => {
     expect(builtinThemes.map(theme => ({
       id: theme.id,
@@ -64,12 +72,12 @@ describe('builtin theme preset output', () => {
           "type": "light",
         },
         {
-          "hash": "ec1b586130f8cf732fee35ac6ae21ac84f81073b0a5fcd46fb5d8fb3320dbb02",
+          "hash": "62dd9d9ca53ff4753b7747f4ce23d6e39a349f52d673245be90b335ed6fccd9d",
           "id": "bitfun-slate",
           "type": "dark",
         },
         {
-          "hash": "51f8ff5912d12b0105b1b595930c4d564381fb1c8ce5c6b9436a97ba31bef80e",
+          "hash": "77a8fcade63df09af9ca22a61037edce51919c5b28cdae1df63a0e471a7d5846",
           "id": "bitfun-dark",
           "type": "dark",
         },

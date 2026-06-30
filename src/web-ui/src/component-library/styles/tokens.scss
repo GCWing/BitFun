@@ -20,7 +20,6 @@ $overlay-white-12: rgba(255, 255, 255, 0.12);
 $overlay-white-15: rgba(255, 255, 255, 0.15);
 $overlay-white-18: rgba(255, 255, 255, 0.18);
 $overlay-white-20: rgba(255, 255, 255, 0.2);
-$overlay-white-22: rgba(255, 255, 255, 0.22);
 $overlay-white-24: rgba(255, 255, 255, 0.24);
 $overlay-white-25: rgba(255, 255, 255, 0.25);
 $overlay-white-32: rgba(255, 255, 255, 0.32);
@@ -127,7 +126,7 @@ $color-error-border: rgba(239, 68, 68, 0.3);
 
 $color-info: #a1a1aa;
 $color-info-bg: $overlay-white-08;
-$color-info-border: $overlay-white-22;
+$color-info-border: $overlay-white-24;
 
 // ==================== Git-specific color system ====================
 $git-color-branch: #a1a1aa;
@@ -805,7 +804,6 @@ $badge-info-text: $color-info;
   --color-overlay-white-12: #{$overlay-white-12};
   --color-overlay-white-15: #{$overlay-white-15};
   --color-overlay-white-20: #{$overlay-white-20};
-  --color-overlay-white-22: color-mix(in srgb, var(--color-static-white) 22%, transparent);
   --color-overlay-white-60: #{$overlay-white-60};
   --color-overlay-white-70: color-mix(in srgb, var(--color-static-white) 70%, transparent);
   --color-overlay-white-80: color-mix(in srgb, var(--color-static-white) 80%, transparent);
@@ -1022,7 +1020,7 @@ $badge-info-text: $color-info;
   --button-shadow-hover: #{$button-shadow-hover};
   --button-shadow-active: #{$button-shadow-active};
   --scrollbar-thumb: var(--color-overlay-white-12);
-  --scrollbar-thumb-hover: #{$overlay-white-22};
+  --scrollbar-thumb-hover: #{$overlay-white-24};
   --color-scrollbar: var(--scrollbar-thumb);
   --btn-primary-bg: var(--color-accent-200);
   --btn-primary-color: var(--color-accent-600);

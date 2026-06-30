@@ -48,7 +48,7 @@ const THEME_OVERLAYS = {
   white12: 'rgba(255, 255, 255, 0.12)',
   white15: 'rgba(255, 255, 255, 0.15)',
   white20: 'rgba(255, 255, 255, 0.2)',
-  white22: 'rgba(255, 255, 255, 0.22)',
+  white24: 'rgba(255, 255, 255, 0.24)',
   white60: 'rgba(255, 255, 255, 0.6)',
   black04: 'rgba(0, 0, 0, 0.04)',
   black06: 'rgba(0, 0, 0, 0.06)',
@@ -58,7 +58,6 @@ const THEME_OVERLAYS = {
   black15: 'rgba(0, 0, 0, 0.15)',
   black20: 'rgba(0, 0, 0, 0.2)',
   black25: 'rgba(0, 0, 0, 0.25)',
-  black28: 'rgba(0, 0, 0, 0.28)',
   black30: 'rgba(0, 0, 0, 0.3)',
   black40: 'rgba(0, 0, 0, 0.4)',
   black50: 'rgba(0, 0, 0, 0.5)',
@@ -710,8 +709,8 @@ export class ThemeService {
     );
     const scrollbarThumbHover = colors.scrollbar?.thumbHover ?? (
         theme.type === 'dark'
-            ? THEME_OVERLAYS.white22
-            : THEME_OVERLAYS.black28
+            ? THEME_OVERLAYS.white24
+            : THEME_OVERLAYS.black30
     );
     root.style.setProperty('--scrollbar-thumb', scrollbarThumb);
     root.style.setProperty('--scrollbar-thumb-hover', scrollbarThumbHover);
