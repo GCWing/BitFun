@@ -390,6 +390,13 @@ export const TOKEN_COMPATIBILITY_ALIAS_CONTRACTS = [
     removal: 'Retire after all text-* consumers move to color-text-* names.',
   },
   {
+    key: '--color-overlay-white-03',
+    canonical: '--color-overlay-white-04',
+    owner: 'src/web-ui/src/tools/generative-widget/themePayloadCompatibility.ts',
+    reason: 'The retired 03 overlay spelling is kept only as generated widget iframe fallback compatibility for historical content.',
+    removal: 'Retire after generated widget content no longer relies on the old 03 overlay spelling.',
+  },
+  {
     key: '--color-primary',
     canonical: '--color-accent-500',
     owner: 'src/web-ui/src/component-library/styles/tokens.scss; src/web-ui/src/infrastructure/theme/core/ThemeService.ts',

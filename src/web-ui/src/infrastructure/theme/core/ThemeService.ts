@@ -65,7 +65,6 @@ const THEME_OVERLAYS = {
 
 const THEME_OVERLAY_TOKEN_VALUES = [
   ['--color-overlay-white-02', THEME_OVERLAYS.white02],
-  ['--color-overlay-white-03', THEME_OVERLAYS.white04],
   ['--color-overlay-white-04', THEME_OVERLAYS.white04],
   ['--color-overlay-white-05', THEME_OVERLAYS.white05],
   ['--color-overlay-white-06', THEME_OVERLAYS.white06],
@@ -1014,7 +1013,7 @@ export class ThemeService {
 
       root.style.setProperty('--card-bg-default', THEME_OVERLAYS.black06);
       root.style.setProperty('--card-bg-elevated', THEME_OVERLAYS.black08);
-      root.style.setProperty('--card-bg-subtle', THEME_OVERLAYS.black06);
+      root.style.setProperty('--card-bg-subtle', 'transparent');
       root.style.setProperty('--card-bg-hover', THEME_OVERLAYS.black06);
       root.style.setProperty('--card-bg-active', THEME_OVERLAYS.black10);
       root.style.setProperty('--card-bg-accent', 'rgba(15, 23, 42, 0.08)');

@@ -96,6 +96,20 @@ describe('ThemeService runtime theme tokens', () => {
     expect(document.documentElement.style.getPropertyValue('--scrollbar-thumb-hover')).toBe('rgba(0, 0, 0, 0.3)');
   });
 
+  it('keeps card subtle variants visually below the default card background', async () => {
+    const service = new ThemeService();
+
+    await service.applyTheme('bitfun-dark');
+
+    expect(document.documentElement.style.getPropertyValue('--card-bg-default')).toBe('rgba(255, 255, 255, 0.04)');
+    expect(document.documentElement.style.getPropertyValue('--card-bg-subtle')).toBe('rgba(255, 255, 255, 0.02)');
+
+    await service.applyTheme('bitfun-light');
+
+    expect(document.documentElement.style.getPropertyValue('--card-bg-default')).toBe('rgba(0, 0, 0, 0.06)');
+    expect(document.documentElement.style.getPropertyValue('--card-bg-subtle')).toBe('transparent');
+  });
+
   it('keeps dark info border aligned with the canonical medium overlay stop', async () => {
     const service = new ThemeService();
 

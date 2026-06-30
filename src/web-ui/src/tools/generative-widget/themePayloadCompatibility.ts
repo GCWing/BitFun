@@ -36,6 +36,7 @@ const WIDGET_THEME_COMPAT_ALIAS_FALLBACKS = {
   '--color-warning-100': '--color-warning-bg',
   '--color-warning-500': '--color-warning',
   '--color-warning-700': '--color-warning',
+  '--color-overlay-white-03': '--color-overlay-white-04',
   '--color-accent': '--color-accent-500',
   '--color-accent-primary': '--color-accent-500',
   '--color-accent-alpha': '--color-accent-100',
