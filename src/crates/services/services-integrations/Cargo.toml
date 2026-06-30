@@ -119,7 +119,7 @@ remote-connect = [
     "uuid",
     "x25519-dalek",
 ]
-remote-ssh = ["dunce", "sha2", "tokio-util"]
+remote-ssh = ["anyhow", "dunce", "sha2", "terminal-core", "thiserror", "tokio-util"]
 remote-ssh-concrete = [
     "remote-ssh",
     "aes-gcm",

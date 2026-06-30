@@ -13,6 +13,8 @@ use crate::workspace_search::ContentSearchOutputMode;
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 
+#[cfg(not(feature = "remote-ssh-concrete"))]
+pub mod disabled;
 mod service;
 
 pub use service::{

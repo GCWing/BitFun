@@ -3771,11 +3771,11 @@ export const requiredContentRules = [
   {
     path: 'src/crates/assembly/core/src/service/remote_ssh/mod.rs',
     reason:
-      'core remote SSH compatibility facade must keep service-backed SSH surfaces behind the ssh-remote feature while preserving lightweight workspace identity helpers',
+      'core remote SSH compatibility facade must keep concrete SSH surfaces behind the ssh-remote feature and re-export services-owned disabled stubs for lightweight builds',
     patterns: [
       {
-        regex: /#\[cfg\(not\(feature = "ssh-remote"\)\)\]\s*mod disabled\b/s,
-        message: 'missing disabled remote SSH runtime surface for no-default builds',
+        regex: /#\[cfg\(not\(feature = "ssh-remote"\)\)\]\s*pub use bitfun_services_integrations::remote_ssh::\{/s,
+        message: 'missing services-owned disabled remote SSH re-export for no-default builds',
       },
       {
         regex: /#\[cfg\(feature = "ssh-remote"\)\]\s*pub mod manager\b/s,
@@ -3796,9 +3796,9 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/assembly/core/src/service/remote_ssh/disabled.rs',
+    path: 'src/crates/services/services-integrations/src/remote_ssh/disabled.rs',
     reason:
-      'no-default core builds must expose explicit unsupported remote SSH stubs instead of compiling russh-backed runtime code',
+      'services-integrations must own explicit unsupported remote SSH stubs for lightweight builds',
     patterns: [
       {
         regex: /Remote SSH support is disabled; enable the `ssh-remote` feature/,
@@ -3823,6 +3823,14 @@ export const requiredContentRules = [
     reason:
       'services-integrations remote_ssh must own concrete SSH/SFTP/PTY runtime behind the remote-ssh-concrete feature while keeping lightweight path/type contracts separate',
     patterns: [
+      {
+        regex: /#\[cfg\(not\(feature = "remote-ssh-concrete"\)\)\]\s*mod disabled\b/s,
+        message: 'missing disabled remote SSH owner module',
+      },
+      {
+        regex: /#\[cfg\(not\(feature = "remote-ssh-concrete"\)\)\]\s*pub use disabled::\{/s,
+        message: 'missing disabled remote SSH owner exports',
+      },
       {
         regex: /#\[cfg\(feature = "remote-ssh-concrete"\)\]\s*pub mod manager\b/s,
         message: 'missing concrete SSH manager owner module',
@@ -7063,6 +7071,10 @@ export const requiredContentRules = [
       'remote SSH workspace_search strategy helpers must stay crate-internal and keep behavior-equivalence tests near the owner',
     patterns: [
       {
+        regex: /#\[cfg\(not\(feature = "remote-ssh-concrete"\)\)\]\s*pub mod disabled\b/s,
+        message: 'missing gated service-owned disabled remote workspace search surface',
+      },
+      {
         regex: /\bpub\(crate\)\s+fn\s+build_remote_scope\b/,
         message: 'remote scope helper must stay crate-internal',
       },
@@ -7160,19 +7172,15 @@ export const requiredContentRules = [
         message: 'missing ssh-remote gate for real remote search implementation',
       },
       {
-        regex: /#\[cfg\(not\(feature = "ssh-remote"\)\)\]\s*mod remote_disabled\b/s,
-        message: 'missing disabled remote search implementation for no-default builds',
-      },
-      {
-        regex: /#\[cfg\(not\(feature = "ssh-remote"\)\)\]\s*pub use remote_disabled/s,
-        message: 'missing disabled remote search export',
+        regex: /#\[cfg\(not\(feature = "ssh-remote"\)\)\]\s*pub use bitfun_services_integrations::remote_ssh::workspace_search::disabled/s,
+        message: 'missing service-owned disabled remote search export',
       },
     ],
   },
   {
-    path: 'src/crates/assembly/core/src/service/search/remote_disabled.rs',
+    path: 'src/crates/services/services-integrations/src/remote_ssh/workspace_search/disabled.rs',
     reason:
-      'no-default core builds must keep remote search unavailable with an explicit diagnostic',
+      'services-integrations must own disabled remote workspace search diagnostics for lightweight SSH builds',
     patterns: [
       {
         regex: /Remote SSH search is disabled; enable the `ssh-remote` feature/,
@@ -7647,6 +7655,14 @@ export const requiredContentRules = [
     reason:
       'services-integrations remote-ssh owns workspace path/session identity helpers that do not require concrete SSH runtime handles',
     patterns: [
+      {
+        regex: /\bpub struct WorkspaceSessionIdentity\b/,
+        message: 'missing workspace session identity contract',
+      },
+      {
+        regex: /\bpub fn workspace_session_identity\b/,
+        message: 'missing workspace session identity builder',
+      },
       {
         regex: /\bpub fn remote_workspace_runtime_root\b/,
         message: 'missing remote workspace runtime root helper',

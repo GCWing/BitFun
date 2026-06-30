@@ -2639,6 +2639,8 @@ export function runManifestParserSelfTest({
     {
       path: 'src/crates/services/services-integrations/src/remote_ssh/workspace_search/mod.rs',
       contracts: [
+        'not(feature = "remote-ssh-concrete")',
+        'pub mod disabled',
         'build_remote_scope',
         'shell_escape',
         'should_retry_remote_scan_fallback_as_files_with_matches',
@@ -2652,10 +2654,13 @@ export function runManifestParserSelfTest({
     },
     {
       path: 'src/crates/assembly/core/src/service/search/mod.rs',
-      contracts: ['mod remote_disabled', 'feature = "ssh-remote"', 'pub use remote_disabled'],
+      contracts: [
+        'feature = "ssh-remote"',
+        'bitfun_services_integrations::remote_ssh::workspace_search::disabled',
+      ],
     },
     {
-      path: 'src/crates/assembly/core/src/service/search/remote_disabled.rs',
+      path: 'src/crates/services/services-integrations/src/remote_ssh/workspace_search/disabled.rs',
       contracts: ['Remote SSH search is disabled', 'RemoteWorkspaceSearchService', 'remote_workspace_search_service_for_path'],
     },
     {
@@ -2979,15 +2984,15 @@ export function runManifestParserSelfTest({
     },
     {
       path: 'src/crates/assembly/core/src/service/remote_ssh/mod.rs',
-      contracts: ['mod disabled', 'pub mod manager', 'pub mod remote_fs', 'pub mod remote_terminal', 'pub mod workspace_state'],
-    },
-    {
-      path: 'src/crates/assembly/core/src/service/remote_ssh/disabled.rs',
-      contracts: ['Remote SSH support is disabled', 'SSHConnectionManager', 'RemoteFileService', 'RemoteTerminalManager'],
+      contracts: ['bitfun_services_integrations::remote_ssh', 'pub mod manager', 'pub mod remote_fs', 'pub mod remote_terminal', 'pub mod workspace_state'],
     },
     {
       path: 'src/crates/services/services-integrations/src/remote_ssh/mod.rs',
-      contracts: ['remote-ssh-concrete', 'pub mod manager', 'mod remote_exec', 'pub mod remote_fs', 'pub mod remote_terminal'],
+      contracts: ['mod disabled', 'pub use disabled', 'remote-ssh-concrete', 'pub mod manager', 'mod remote_exec', 'pub mod remote_fs', 'pub mod remote_terminal'],
+    },
+    {
+      path: 'src/crates/services/services-integrations/src/remote_ssh/disabled.rs',
+      contracts: ['Remote SSH support is disabled', 'SSHConnectionManager', 'RemoteFileService', 'RemoteTerminalManager'],
     },
     {
       path: 'src/crates/services/services-integrations/src/remote_ssh/manager.rs',
@@ -3008,6 +3013,8 @@ export function runManifestParserSelfTest({
     {
       path: 'src/crates/services/services-integrations/src/remote_ssh/paths.rs',
       contracts: [
+        'WorkspaceSessionIdentity',
+        'workspace_session_identity',
         'remote_workspace_runtime_root',
         'remote_workspace_session_mirror_dir',
         'canonicalize_local_workspace_root',

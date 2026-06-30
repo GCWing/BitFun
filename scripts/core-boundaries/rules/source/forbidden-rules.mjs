@@ -912,6 +912,11 @@ export const forbiddenContentRules = [
     path: 'src/crates/assembly/core/src/service/search/mod.rs',
     patterns: [
       {
+        regex: /#\[cfg\(not\(feature = "ssh-remote"\)\)\]\s*mod remote_disabled\b/s,
+        message:
+          'core workspace search facade must not own disabled remote search stubs; re-export services-integrations remote_ssh workspace_search disabled surface',
+      },
+      {
         regex: /\bbitfun_services_integrations::workspace_search::flashgrep\b/,
         message:
           'core must not import flashgrep internals; use the remote workspace-search stdio facade instead',
@@ -2658,6 +2663,15 @@ export const forbiddenContentRules = [
     ],
   },
   {
+    path: 'src/crates/assembly/core/src/service/remote_ssh/mod.rs',
+    patterns: [
+      {
+        regex: /#\[cfg\(not\(feature = "ssh-remote"\)\)\]\s*mod disabled\b/s,
+        message: 'core remote SSH facade must not own disabled runtime stubs; re-export services-integrations remote_ssh',
+      },
+    ],
+  },
+  {
     path: 'src/crates/assembly/core/src/service/remote_ssh/workspace_state.rs',
     patterns: [
       {
@@ -2699,6 +2713,14 @@ export const forbiddenContentRules = [
       {
         regex: /\bpub fn unresolved_remote_session_storage_key\b/,
         message: 'core remote SSH workspace runtime must not redefine unresolved session keys; use the integrations contract',
+      },
+      {
+        regex: /\bpub struct WorkspaceSessionIdentity\b/,
+        message: 'core remote SSH workspace runtime must not redefine workspace session identity; use the integrations path helper',
+      },
+      {
+        regex: /\bpub fn workspace_session_identity\b/,
+        message: 'core remote SSH workspace runtime must not redefine workspace session identity construction; use the integrations path helper',
       },
       {
         regex: /\bstruct RegisteredRemoteWorkspace\b/,

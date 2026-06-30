@@ -1,7 +1,7 @@
-//! Disabled remote workspace search surface for lightweight feature builds.
+//! Disabled remote workspace-search surface for lightweight feature builds.
 
-use crate::service::remote_ssh::workspace_state::RemoteWorkspaceEntry;
-use crate::service::search::{
+use crate::remote_ssh::RemoteWorkspaceEntry;
+use crate::workspace_search::{
     ContentSearchRequest, ContentSearchResult, GlobSearchRequest, GlobSearchResult,
     IndexTaskHandle, WorkspaceIndexStatus,
 };

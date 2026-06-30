@@ -4,14 +4,14 @@
 //! `ssh-remote` feature. Concrete SSH, SFTP, PTY, and port-forward operations
 //! stay behind `ssh-remote` and return explicit unsupported errors here.
 
-use crate::service::remote_ssh::types::{
+use crate::remote_ssh::types::{
     RemoteDirEntry, RemoteFileEntry, RemoteTreeNode, SSHCommandOptions, SSHCommandResult,
     SSHConfigEntry, SSHConfigLookupResult, SSHConnectionConfig, SSHConnectionResult,
     SavedConnection, ServerInfo,
 };
-use crate::service::terminal::session::SessionSource;
 use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
+use terminal_core::SessionSource;
 
 fn unsupported() -> anyhow::Error {
     anyhow::anyhow!("Remote SSH support is disabled; enable the `ssh-remote` feature")
@@ -233,14 +233,12 @@ impl SSHConnectionManager {
 
     pub async fn set_remote_workspace(
         &self,
-        _workspace: crate::service::remote_ssh::types::RemoteWorkspace,
+        _workspace: crate::remote_ssh::types::RemoteWorkspace,
     ) -> anyhow::Result<()> {
         Err(unsupported())
     }
 
-    pub async fn get_remote_workspaces(
-        &self,
-    ) -> Vec<crate::service::remote_ssh::types::RemoteWorkspace> {
+    pub async fn get_remote_workspaces(&self) -> Vec<crate::remote_ssh::types::RemoteWorkspace> {
         Vec::new()
     }
 
@@ -253,7 +251,7 @@ impl SSHConnectionManager {
     pub async fn get_remote_workspace(
         &self,
         _connection_id: &str,
-    ) -> Option<crate::service::remote_ssh::types::RemoteWorkspace> {
+    ) -> Option<crate::remote_ssh::types::RemoteWorkspace> {
         None
     }
 

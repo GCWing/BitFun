@@ -6,6 +6,25 @@ use std::path::{Path, PathBuf};
 /// SSH host label for local disk workspaces (`Normal` / `Assistant`).
 pub const LOCAL_WORKSPACE_SSH_HOST: &str = "localhost";
 
+/// Unified workspace identity used to resolve session persistence for local and remote workspaces.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct WorkspaceSessionIdentity {
+    pub hostname: String,
+    /// Canonical local root or normalized remote root used to identify the logical workspace.
+    pub logical_workspace_path: String,
+    pub remote_connection_id: Option<String>,
+}
+
+impl WorkspaceSessionIdentity {
+    pub fn is_remote(&self) -> bool {
+        self.hostname != LOCAL_WORKSPACE_SSH_HOST
+    }
+
+    pub fn logical_workspace_path(&self) -> &str {
+        &self.logical_workspace_path
+    }
+}
+
 /// Normalize a remote POSIX workspace path for registry lookup on any client OS.
 pub fn normalize_remote_workspace_path(path: &str) -> String {
     let mut s = path.replace('\\', "/");
@@ -137,6 +156,38 @@ pub fn local_workspace_roots_equal(a: &Path, b: &Path) -> bool {
         (Ok(left), Ok(right)) => left == right,
         _ => a == b,
     }
+}
+
+/// Build a unified session identity for local or remote workspaces.
+pub fn workspace_session_identity(
+    workspace_path: &str,
+    remote_connection_id: Option<&str>,
+    remote_ssh_host: Option<&str>,
+) -> Option<WorkspaceSessionIdentity> {
+    let remote_connection_id = remote_connection_id
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string);
+
+    if let Some(connection_id) = remote_connection_id {
+        let hostname = remote_ssh_host
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string)?;
+        return Some(WorkspaceSessionIdentity {
+            hostname,
+            logical_workspace_path: normalize_remote_workspace_path(workspace_path),
+            remote_connection_id: Some(connection_id),
+        });
+    }
+
+    let local_root =
+        normalize_local_workspace_root_for_stable_id(Path::new(workspace_path)).ok()?;
+    Some(WorkspaceSessionIdentity {
+        hostname: LOCAL_WORKSPACE_SSH_HOST.to_string(),
+        logical_workspace_path: local_root,
+        remote_connection_id: None,
+    })
 }
 
 /// Human-readable logical key: `{host}:{normalized_absolute_root}`.
