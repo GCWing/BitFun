@@ -7,22 +7,23 @@ $color-static-black: #000000;
 $color-static-emerald: #10b981;
 $color-static-orange: #f97316;
 
-$overlay-white-01: rgba(255, 255, 255, 0.01);
 $overlay-white-02: rgba(255, 255, 255, 0.02);
+$overlay-white-01: $overlay-white-02;
 $overlay-white-03: rgba(255, 255, 255, 0.03);
 $overlay-white-04: rgba(255, 255, 255, 0.04);
 $overlay-white-05: rgba(255, 255, 255, 0.05);
 $overlay-white-06: rgba(255, 255, 255, 0.06);
 $overlay-white-08: rgba(255, 255, 255, 0.08);
-$overlay-white-09: rgba(255, 255, 255, 0.09);
 $overlay-white-10: rgba(255, 255, 255, 0.1);
+$overlay-white-09: $overlay-white-10;
 $overlay-white-12: rgba(255, 255, 255, 0.12);
 $overlay-white-15: rgba(255, 255, 255, 0.15);
 $overlay-white-18: rgba(255, 255, 255, 0.18);
 $overlay-white-20: rgba(255, 255, 255, 0.2);
 $overlay-white-24: rgba(255, 255, 255, 0.24);
-$overlay-white-25: rgba(255, 255, 255, 0.25);
-$overlay-white-32: rgba(255, 255, 255, 0.32);
+$overlay-white-25: $overlay-white-24;
+$overlay-white-30: rgba(255, 255, 255, 0.3);
+$overlay-white-32: $overlay-white-30;
 $overlay-white-40: rgba(255, 255, 255, 0.4);
 $overlay-white-60: rgba(255, 255, 255, 0.6);
 
@@ -44,9 +45,9 @@ $overlay-black-90: rgba(0, 0, 0, 0.9);
 
 $color-blue-500-a06: rgba(96, 165, 250, 0.06);
 $color-blue-500-a08: rgba(96, 165, 250, 0.08);
-$color-blue-500-a12: rgba(96, 165, 250, 0.12);
 $color-blue-500-a15: rgba(96, 165, 250, 0.15);
-$color-blue-500-a18: rgba(96, 165, 250, 0.18);
+$color-blue-500-a12: $color-blue-500-a15;
+$color-blue-500-a18: $color-blue-500-a15;
 $color-blue-600-a08: rgba(59, 130, 246, 0.08);
 $color-blue-600-a12: rgba(59, 130, 246, 0.12);
 $color-blue-600-a15: rgba(59, 130, 246, 0.15);
@@ -58,8 +59,8 @@ $color-blue-600-a40: rgba(59, 130, 246, 0.4);
 $color-purple-500-a05: rgba(139, 92, 246, 0.05);
 $color-purple-500-a08: rgba(139, 92, 246, 0.08);
 $color-purple-500-a10: rgba(139, 92, 246, 0.1);
-$color-purple-500-a12: rgba(139, 92, 246, 0.12);
 $color-purple-500-a15: rgba(139, 92, 246, 0.15);
+$color-purple-500-a12: $color-purple-500-a15;
 $color-purple-500-a25: rgba(139, 92, 246, 0.25);
 $color-purple-500-a30: rgba(139, 92, 246, 0.3);
 $color-purple-500-a40: rgba(139, 92, 246, 0.4);
@@ -90,9 +91,9 @@ $element-bg-strong: rgba(255, 255, 255, 0.155);
 $element-bg-elevated: rgba(255, 255, 255, 0.19);
 
 // ==================== Blue system ====================
-$color-accent-50: rgba(96, 165, 250, 0.04);
+$color-accent-50: $color-blue-500-a06;
 $color-accent-100: $color-blue-500-a08;
-$color-accent-200: rgba(96, 165, 250, 0.15);
+$color-accent-200: $color-blue-500-a15;
 $color-accent-300: rgba(96, 165, 250, 0.25);
 $color-accent-400: rgba(96, 165, 250, 0.4);
 $color-accent-500: #60a5fa;
@@ -101,7 +102,7 @@ $color-accent-700: rgba(59, 130, 246, 0.8);
 $color-accent-800: rgba(59, 130, 246, 0.9);
 
 // ==================== Purple system ====================
-$color-purple-50: rgba(139, 92, 246, 0.04);
+$color-purple-50: $color-purple-500-a05;
 $color-purple-100: $color-purple-500-a08;
 $color-purple-200: $color-purple-500-a15;
 $color-purple-300: $color-purple-500-a25;
@@ -149,7 +150,7 @@ $git-color-added-bg: $git-color-staged-bg;
 $git-color-added-bg-hover: $git-color-staged-bg-hover;
 
 $git-color-deleted: $color-error;
-$git-color-deleted-bg: rgba(239, 68, 68, 0.1);
+$git-color-deleted-bg: $color-error-bg;
 $git-color-deleted-bg-hover: rgba(239, 68, 68, 0.15);
 $git-color-deleted-border: rgba(239, 68, 68, 0.3);
 
@@ -197,7 +198,7 @@ $glow-shadow-blue:
 
 $glow-shadow-purple:
   0 12px 32px $color-purple-500-a25,
-  0 6px 16px rgba(124, 58, 237, 0.18),
+  0 6px 16px $color-purple-500-a15,
   0 3px 8px $overlay-black-10;
 
 $glow-shadow-red:
@@ -251,16 +252,16 @@ $glass-blue-hover: linear-gradient(135deg,
 $glass-purple-base: linear-gradient(135deg,
   $color-purple-500-a08 0%,
   $color-purple-500-a05 30%,
-  rgba(139, 92, 246, 0.06) 60%,
+  $color-purple-500-a05 60%,
   $color-purple-500-a10 100%);
 $glass-purple-hover: linear-gradient(135deg,
   $color-purple-500-a25 0%,
-  rgba(124, 58, 237, 0.18) 30%,
-  rgba(196, 181, 253, 0.15) 60%,
+  $color-purple-500-a15 30%,
+  $color-purple-500-a15 60%,
   $color-purple-500-a30 100%);
 
 $glass-red-subtle: rgba(239, 68, 68, 0.05);
-$glass-red-base: rgba(239, 68, 68, 0.08);
+$glass-red-base: $color-error-bg;
 $glass-red-hover: rgba(239, 68, 68, 0.15);
 
 $glass-green-base: rgba(52, 211, 153, 0.08);
@@ -429,9 +430,9 @@ $card-bg-subtle: $overlay-white-02;
 $card-bg-hover: $overlay-white-06;
 $card-bg-active: $overlay-white-08;
 $card-bg-accent: rgba(96, 165, 250, 0.1);
-$card-bg-accent-hover: rgba(96, 165, 250, 0.14);
+$card-bg-accent-hover: $color-blue-500-a15;
 $card-bg-purple: $color-purple-500-a10;
-$card-bg-purple-hover: rgba(139, 92, 246, 0.14);
+$card-bg-purple-hover: $color-purple-500-a15;
 $card-bg: $card-bg-default;  // Legacy alias
 $card-border: $border-base;
 $card-border-style: solid;
@@ -516,8 +517,8 @@ $badge-info-text: $color-info;
   } @else if $color == 'purple' {
     background: linear-gradient(135deg,
       $color-purple-500-a15 0%,
-      rgba(168, 85, 247, 0.12) 30%,
-      rgba(124, 58, 237, 0.08) 60%,
+      $color-purple-500-a15 30%,
+      $color-purple-500-a08 60%,
       rgba(139, 92, 246, 0.18) 100%
     );
     border-color: $color-purple-500-a40;
@@ -574,7 +575,7 @@ $badge-info-text: $color-info;
       background: linear-gradient(90deg,
         transparent,
         $color-purple-500-a08,
-        rgba(196, 181, 253, 0.15),
+        $color-purple-500-a15,
         $color-purple-500-a08,
         transparent
       );
@@ -1094,7 +1095,7 @@ $badge-info-text: $color-info;
   --git-graph-lane-pink: #ec4899;
   --git-graph-lane-orange: #{$color-static-orange};
   --git-graph-text-primary: #d1d5db;
-  --git-graph-text-muted: #6b7280;
+  --git-graph-text-muted: #64748b;
   --git-graph-text-disabled: #4b5563;
   --git-graph-static-white: #{$button-text-hover};
   --mission-control-group-primary-color: var(--color-accent-600);

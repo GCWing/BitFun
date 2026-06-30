@@ -36,11 +36,11 @@
 }
 
 :root[data-theme-type="light"] {
-  --flowchat-md-inline-code-bg: rgba(0, 0, 0, 0.05);
+  --flowchat-md-inline-code-bg: var(--color-overlay-black-06);
   --flowchat-md-inline-code-border: var(--color-overlay-black-12);
   --flowchat-md-inline-code-fg: #24292f;
   --flowchat-md-inline-code-hover-bg: var(--color-overlay-black-08);
-  --flowchat-md-inline-code-hover-border: rgba(0, 0, 0, 0.18);
+  --flowchat-md-inline-code-hover-border: var(--color-overlay-black-20);
   --flowchat-md-inline-code-hover-fg: #1f2328;
 
   --flowchat-md-pre-bg: #f6f8fa;
@@ -50,7 +50,7 @@
   --flowchat-md-pre-hover-shadow: 0 6px 20px var(--color-overlay-slate-08);
   --flowchat-md-pre-code-fg: var(--color-text-primary);
 
-  --flowchat-md-bq-bg: rgba(15, 23, 42, 0.07);
+  --flowchat-md-bq-bg: var(--color-overlay-slate-08);
   --flowchat-md-bq-border: rgba(15, 23, 42, 0.24);
   --flowchat-md-bq-fg: var(--color-text-secondary);
   --flowchat-md-bq-hover-bg: var(--color-overlay-slate-10);

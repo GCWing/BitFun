@@ -12,7 +12,7 @@ describe('mermaid theme fallback palette', () => {
     expect(getMermaidThemeFallback('dark', 'nodeFill')).toBe('#1c1e23');
     expect(getMermaidThemeFallback('light', 'nodeFill')).toBe('#e8eaef');
     expect(getMermaidThemeFallback('dark', 'nodeText')).toBe('#e0e2e8');
-    expect(getMermaidThemeFallback('light', 'nodeText')).toBe('#1f2937');
+    expect(getMermaidThemeFallback('light', 'nodeText')).toBe('#1e293b');
   });
 
   it('returns paired fallbacks for CSS variable resolution without duplicating call-site literals', () => {

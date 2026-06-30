@@ -1011,18 +1011,18 @@ export class ThemeService {
       root.style.setProperty('--card-bg-accent', THEME_OVERLAYS.white08);
       root.style.setProperty('--card-bg-accent-hover', THEME_OVERLAYS.white12);
       root.style.setProperty('--card-bg-purple', 'rgba(139, 92, 246, 0.08)');
-      root.style.setProperty('--card-bg-purple-hover', 'rgba(139, 92, 246, 0.12)');
+      root.style.setProperty('--card-bg-purple-hover', 'rgba(139, 92, 246, 0.15)');
     } else {
 
       root.style.setProperty('--card-bg-default', THEME_OVERLAYS.black06);
       root.style.setProperty('--card-bg-elevated', THEME_OVERLAYS.black08);
       root.style.setProperty('--card-bg-subtle', THEME_OVERLAYS.black04);
-      root.style.setProperty('--card-bg-hover', 'rgba(0, 0, 0, 0.065)');
-      root.style.setProperty('--card-bg-active', 'rgba(0, 0, 0, 0.09)');
+      root.style.setProperty('--card-bg-hover', THEME_OVERLAYS.black06);
+      root.style.setProperty('--card-bg-active', THEME_OVERLAYS.black10);
       root.style.setProperty('--card-bg-accent', 'rgba(15, 23, 42, 0.08)');
       root.style.setProperty('--card-bg-accent-hover', 'rgba(15, 23, 42, 0.12)');
       root.style.setProperty('--card-bg-purple', 'rgba(124, 58, 237, 0.12)');
-      root.style.setProperty('--card-bg-purple-hover', 'rgba(124, 58, 237, 0.18)');
+      root.style.setProperty('--card-bg-purple-hover', 'rgba(139, 92, 246, 0.15)');
     }
 
 

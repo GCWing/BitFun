@@ -14,7 +14,7 @@ import {
   rgbaFromHex,
 } from './shared';
 
-const CHINA_NIGHT_BACKGROUND = '#1a1814';
+const CHINA_NIGHT_BACKGROUND = '#1a1a1a';
 const CHINA_NIGHT_TEXT_PRIMARY = '#e8e6e1';
 const CHINA_NIGHT_BUTTON_TEXT = '#ccc9c4';
 const CHINA_NIGHT_ACCENT = '#73a5cc';
@@ -50,11 +50,11 @@ export const bitfunChinaNightTheme: ThemeConfig = {
     background: {
       primary: CHINA_NIGHT_BACKGROUND,
       secondary: '#212019',
-      tertiary: '#262420',
-      quaternary: '#2d2926',
-      elevated: '#2d2926',
+      tertiary: '#262626',
+      quaternary: '#262626',
+      elevated: '#262626',
       workbench: CHINA_NIGHT_BACKGROUND,
-      scene: '#1e1c17',
+      scene: CHINA_NIGHT_BACKGROUND,
       tooltip: chinaNightBackground(0.95),
     },
 
@@ -125,7 +125,7 @@ export const bitfunChinaNightTheme: ThemeConfig = {
       base: chinaNightAccent(0.12),
       medium: chinaNightAccent(0.16),
       strong: chinaNightAccent(0.2),
-      elevated: rgbaFromHex('#2d2926', 0.95),
+      elevated: rgbaFromHex('#262626', 0.95),
     },
 
     git: createGitColors({
@@ -225,7 +225,7 @@ export const bitfunChinaNightTheme: ThemeConfig = {
 
       default: {
         background: chinaNightAccent(0.11),
-        color: '#a29d96',
+        color: '#9a9a9a',
         border: 'transparent',
         shadow: 'none',
       },
@@ -272,7 +272,7 @@ export const bitfunChinaNightTheme: ThemeConfig = {
       ghost: {
         default: {
           background: 'transparent',
-          color: '#a29d96',
+          color: '#9a9a9a',
           border: 'transparent',
           shadow: 'none',
         },

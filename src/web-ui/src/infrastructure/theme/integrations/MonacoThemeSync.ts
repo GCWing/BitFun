@@ -27,11 +27,11 @@ function getBitfunLightMonacoTheme(): Monaco.editor.IStandaloneThemeData {
 
       'editor.selectionBackground': 'rgba(15, 23, 42, 0.14)',
       'editor.selectionForeground': '#1e293b',
-      'editor.inactiveSelectionBackground': 'rgba(15, 23, 42, 0.09)',
+      'editor.inactiveSelectionBackground': 'rgba(15, 23, 42, 0.08)',
       'editor.selectionHighlightBackground': 'rgba(15, 23, 42, 0.1)',
       'editor.selectionHighlightBorder': 'rgba(15, 23, 42, 0.22)',
-      'editor.wordHighlightBackground': 'rgba(15, 23, 42, 0.07)',
-      'editor.wordHighlightStrongBackground': 'rgba(15, 23, 42, 0.11)',
+      'editor.wordHighlightBackground': 'rgba(15, 23, 42, 0.08)',
+      'editor.wordHighlightStrongBackground': 'rgba(15, 23, 42, 0.1)',
     }),
   };
 }

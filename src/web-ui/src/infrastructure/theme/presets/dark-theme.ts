@@ -53,7 +53,7 @@ export const bitfunDarkTheme: ThemeConfig = {
       primary: DARK_BACKGROUND_PRIMARY,
       secondary: DARK_BACKGROUND_SECONDARY,
       tertiary: DARK_BACKGROUND_PRIMARY,
-      quaternary: '#252528',
+      quaternary: '#262626',
       elevated: DARK_BACKGROUND_SECONDARY,
       workbench: DARK_BACKGROUND_PRIMARY,
       scene: DARK_BACKGROUND_SECONDARY,
@@ -239,7 +239,7 @@ export const bitfunDarkTheme: ThemeConfig = {
       primary: {
         default: {
           background: overlayWhite(0.16),
-          color: '#f4f4f5',
+          color: '#f3f3f5',
           border: 'transparent',
           shadow: 'none',
         },
@@ -295,7 +295,7 @@ export const bitfunDarkTheme: ThemeConfig = {
     colors: {
       background: '#121214',
       foreground: DARK_TEXT_PRIMARY,
-      lineHighlight: '#18181a',
+      lineHighlight: DARK_BACKGROUND_SECONDARY,
       selection: overlayWhite(0.12),
       cursor: '#c4c4c4',
     },

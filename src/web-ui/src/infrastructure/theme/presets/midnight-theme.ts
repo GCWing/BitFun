@@ -56,7 +56,7 @@ export const bitfunMidnightTheme: ThemeConfig = {
       quaternary: '#3c3f41',
       elevated: MIDNIGHT_BACKGROUND,
       workbench: '#212121',
-      scene: '#27292c',
+      scene: MIDNIGHT_BACKGROUND,
       tooltip: midnightBackground(0.94),
     },
 
@@ -227,7 +227,7 @@ export const bitfunMidnightTheme: ThemeConfig = {
 
       default: {
         background: midnightText(0.11),
-        color: '#949699',
+        color: '#9a9a9a',
         border: 'transparent',
         shadow: 'none',
       },
@@ -274,7 +274,7 @@ export const bitfunMidnightTheme: ThemeConfig = {
       ghost: {
         default: {
           background: 'transparent',
-          color: '#949699',
+          color: '#9a9a9a',
           border: 'transparent',
           shadow: 'none',
         },

@@ -17,7 +17,7 @@ $mermaid-light-node-stroke: rgba(100, 116, 139, 0.35);
 $mermaid-light-edge-label-border: rgba(100, 116, 139, 0.25);
 $mermaid-light-text-primary: #1e293b;
 $mermaid-light-text-secondary: #475569;
-$mermaid-light-surface: #f7f8fa;
+$mermaid-light-surface: #f9fafb;
 $mermaid-light-highlight-stroke: #334155;
 
 // ==================== Mermaid CSS variables ====================
@@ -199,7 +199,7 @@ $mermaid-light-highlight-stroke: #334155;
 
   // Background
   --mermaid-bg: var(--color-bg-scene);
-  --mermaid-container-border: rgba(100, 116, 139, 0.18);
+  --mermaid-container-border: rgba(100, 116, 139, 0.2);
 }
 
 // ==================== Mixins ====================

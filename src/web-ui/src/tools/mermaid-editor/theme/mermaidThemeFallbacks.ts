@@ -9,7 +9,7 @@ const DARK_NODE_STROKE = '#5a5e6a';
 const DARK_NODE_BORDER = '#4a4e58';
 const DARK_NODE_STROKE_SUBTLE = '#3a3e48';
 const DARK_NODE_STROKE_HOVER = '#6a6e7a';
-const DARK_CLUSTER_TEXT = '#9a9ea8';
+const DARK_CLUSTER_TEXT = '#a1a1aa';
 const DARK_INFO = '#78a8d8';
 const DARK_ERROR = '#e87878';
 
@@ -17,9 +17,10 @@ const LIGHT_NODE_FILL = '#e8eaef';
 const LIGHT_NODE_FILL_HOVER = '#e0e2e8';
 const LIGHT_NODE_STROKE = '#9ca3af';
 const LIGHT_NODE_STROKE_MUTED = '#d1d5db';
-const LIGHT_NODE_STROKE_HOVER = '#6b7280';
-const LIGHT_EDGE_LABEL_BG = '#f3f4f6';
-const LIGHT_SECTION_ALT_FILL = '#e5e7eb';
+const LIGHT_NODE_STROKE_HOVER = '#64748b';
+const MERMAID_SOFT_LIGHT_SURFACE = '#f3f4f6';
+const LIGHT_EDGE_LABEL_BG = MERMAID_SOFT_LIGHT_SURFACE;
+const LIGHT_SECTION_ALT_FILL = LIGHT_NODE_FILL_HOVER;
 const LIGHT_TITLE_TEXT = '#111827';
 const LIGHT_HIGHLIGHT_STROKE = '#334155';
 const LIGHT_ERROR = '#dc2626';
@@ -33,7 +34,7 @@ export const MERMAID_THEME_FALLBACKS = {
     nodeFillHover: DARK_NODE_FILL_HOVER,
     nodeFillHoverRuntime: 'rgba(38, 40, 48, 0.95)',
     nodeText: DARK_NODE_TEXT,
-    nodeTextStrong: '#f0f2f8',
+    nodeTextStrong: MERMAID_SOFT_LIGHT_SURFACE,
     nodeStroke: DARK_NODE_STROKE,
     nodeBorder: DARK_NODE_BORDER,
     nodeStrokeMuted: DARK_NODE_BORDER,
@@ -48,7 +49,7 @@ export const MERMAID_THEME_FALLBACKS = {
     clusterText: DARK_CLUSTER_TEXT,
     textMuted: DARK_NODE_STROKE_HOVER,
     arrow: '#7a7e8a',
-    edgeLabelBg: '#1a1c20',
+    edgeLabelBg: DARK_NODE_FILL,
     edgeLabelBgStrong: DARK_NODE_FILL_HOVER,
     edgeLabelBgRuntime: 'rgba(26, 28, 32, 0.95)',
     edgeLabelBgHover: 'rgba(36, 38, 45, 0.98)',
@@ -76,7 +77,7 @@ export const MERMAID_THEME_FALLBACKS = {
     pieTitleText: DARK_NODE_TEXT,
     pieLegendText: DARK_CLUSTER_TEXT,
     pieStroke: DARK_NODE_FILL,
-    errorFill: 'rgba(232, 120, 120, 0.12)',
+    errorFill: 'rgba(232, 120, 120, 0.15)',
     error: DARK_ERROR,
     highlightStroke: '#a8acb8',
     highlightGlow: 'drop-shadow(0 0 6px rgba(168, 172, 184, 0.4))',
@@ -87,7 +88,7 @@ export const MERMAID_THEME_FALLBACKS = {
     nodeFillRuntime: LIGHT_NODE_FILL,
     nodeFillHover: LIGHT_NODE_FILL_HOVER,
     nodeFillHoverRuntime: LIGHT_NODE_FILL_HOVER,
-    nodeText: '#1f2937',
+    nodeText: '#1e293b',
     nodeTextStrong: LIGHT_TITLE_TEXT,
     nodeStroke: LIGHT_NODE_STROKE,
     nodeBorder: LIGHT_NODE_STROKE,
@@ -100,7 +101,7 @@ export const MERMAID_THEME_FALLBACKS = {
     clusterFill: LIGHT_CLUSTER_FILL,
     clusterFillRuntime: LIGHT_CLUSTER_FILL,
     clusterFillHover: 'rgba(209, 213, 219, 0.8)',
-    clusterText: '#4b5563',
+    clusterText: '#475569',
     textMuted: LIGHT_NODE_STROKE_HOVER,
     arrow: LIGHT_NODE_STROKE_HOVER,
     edgeLabelBg: LIGHT_EDGE_LABEL_BG,
@@ -129,8 +130,8 @@ export const MERMAID_THEME_FALLBACKS = {
     pie7: '#06b6d4',
     pie8: '#84cc16',
     pieTitleText: LIGHT_TITLE_TEXT,
-    pieLegendText: '#374151',
-    pieStroke: '#f9fafb',
+    pieLegendText: LIGHT_HIGHLIGHT_STROKE,
+    pieStroke: MERMAID_SOFT_LIGHT_SURFACE,
     errorFill: 'rgba(239, 68, 68, 0.15)',
     error: LIGHT_ERROR,
     highlightStroke: LIGHT_HIGHLIGHT_STROKE,

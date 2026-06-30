@@ -196,7 +196,7 @@ export function createDarkNeutralBorder(): BorderColors {
     subtle: 'rgba(255, 255, 255, 0.12)',
     base: 'rgba(255, 255, 255, 0.18)',
     medium: 'rgba(255, 255, 255, 0.24)',
-    strong: 'rgba(255, 255, 255, 0.32)',
+    strong: 'rgba(255, 255, 255, 0.3)',
     prominent: 'rgba(255, 255, 255, 0.4)',
   };
 }

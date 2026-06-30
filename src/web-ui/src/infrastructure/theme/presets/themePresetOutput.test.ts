@@ -67,22 +67,22 @@ describe('builtin theme preset output', () => {
     }))).toMatchInlineSnapshot(`
       [
         {
-          "hash": "063f8984522a0be4753e2fa36e47030f8e86cfb09057d617ffbb6c37e3821ef1",
+          "hash": "c3b6a5647f5a098c777c5e0669578a2a6a83fe399c4ffe2b16e00b532361e0a5",
           "id": "bitfun-light",
           "type": "light",
         },
         {
-          "hash": "62dd9d9ca53ff4753b7747f4ce23d6e39a349f52d673245be90b335ed6fccd9d",
+          "hash": "f9732d9339162f704c6bd19dbac61e6ecf7819dd3d72a6437cce04812ab16db4",
           "id": "bitfun-slate",
           "type": "dark",
         },
         {
-          "hash": "77a8fcade63df09af9ca22a61037edce51919c5b28cdae1df63a0e471a7d5846",
+          "hash": "4d3b604eeed6cac6f06228c93b2771217dda6f5e6a1fd151bc48849f59c229c1",
           "id": "bitfun-dark",
           "type": "dark",
         },
         {
-          "hash": "df6cadb36332f77286c3ac9a862dc8cd7805944ee86ed57af6e1f3b40f4f2e08",
+          "hash": "5b5429e48817fcd6d5643989f959340e6766ee5a0e3edfdff88f3984c0e343e8",
           "id": "bitfun-midnight",
           "type": "dark",
         },
@@ -92,7 +92,7 @@ describe('builtin theme preset output', () => {
           "type": "light",
         },
         {
-          "hash": "5b2db0c0dfc253022fadd1d5bc07da65e7f473c27d66fe297cc695a50466699c",
+          "hash": "bc760598ce85d6e4a7f22349aace0e25ab6cb401535bdd468513a141a2069e82",
           "id": "bitfun-china-night",
           "type": "dark",
         },

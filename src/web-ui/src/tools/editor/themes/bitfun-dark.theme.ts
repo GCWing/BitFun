@@ -406,7 +406,7 @@ export const BitFunDarkTheme: editor.IStandaloneThemeData = {
     'diffEditor.modifiedLineBackground': '#1F6FEB28',
 
     'diffEditor.border': '#2A2D35',
-    'diffEditor.diagonalFill': '#16181D',
+    'diffEditor.diagonalFill': MONACO_DARK_SURFACE.elevated,
     'diffEditor.unchangedRegionBackground': MONACO_DARK_SURFACE.diffDeep,
     'diffEditor.unchangedCodeBackground': MONACO_DARK_SURFACE.diffDeep,
 

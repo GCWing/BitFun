@@ -325,7 +325,7 @@ export const bitfunLightTheme: ThemeConfig = {
       { token: 'attribute.value', foreground: '5b9a6f' },
     ],
     colors: {
-      background: '#f7f8fa',
+      background: '#f3f3f5',
       foreground: LIGHT_TEXT_PRIMARY,
       lineHighlight: '#f0f4f8',
       selection: lightInk(0.14),

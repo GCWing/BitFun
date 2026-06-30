@@ -313,9 +313,9 @@ export const bitfunSlateTheme: ThemeConfig = {
       { token: 'attribute.value', foreground: '8fc8a9' },
     ],
     colors: {
-      background: '#1a1c1e',
+      background: '#1a1a1a',
       foreground: SLATE_TEXT_PRIMARY,
-      lineHighlight: '#22252a',
+      lineHighlight: SLATE_BACKGROUND_SECONDARY,
       selection: overlayWhite(0.12),
       cursor: '#aeb6c3',
     },
