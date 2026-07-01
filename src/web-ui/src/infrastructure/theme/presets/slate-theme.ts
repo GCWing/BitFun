@@ -61,7 +61,7 @@ export const bitfunSlateTheme: ThemeConfig = {
       elevated: SLATE_BACKGROUND_SECONDARY,
       workbench: SLATE_BACKGROUND_PRIMARY,
       scene: SLATE_BACKGROUND_SECONDARY,
-      tooltip: 'rgba(34, 38, 44, 0.96)',
+      tooltip: rgbaFromHex(SLATE_BACKGROUND_SECONDARY, 0.96),
     },
 
     text: {

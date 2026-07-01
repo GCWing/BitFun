@@ -57,7 +57,7 @@ export const bitfunDarkTheme: ThemeConfig = {
       elevated: DARK_BACKGROUND_SECONDARY,
       workbench: DARK_BACKGROUND_PRIMARY,
       scene: DARK_BACKGROUND_SECONDARY,
-      tooltip: 'rgba(28, 28, 31, 0.96)',
+      tooltip: rgbaFromHex(DARK_BACKGROUND_SECONDARY, 0.96),
     },
 
     text: {

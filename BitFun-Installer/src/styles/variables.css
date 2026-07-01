@@ -1,9 +1,9 @@
 :root {
   --color-bg-primary: #121214;
-  --color-bg-secondary: #18181a;
+  --color-bg-secondary: #1a1c1e;
   --color-bg-tertiary: #121214;
   --color-bg-quaternary: #202024;
-  --color-bg-elevated: #18181a;
+  --color-bg-elevated: #1a1c1e;
   --color-bg-workbench: #121214;
   --color-bg-flowchat: #121214;
   --color-bg-tooltip: rgba(30, 30, 32, 0.92);
@@ -38,10 +38,10 @@
 
   --element-bg-subtle: rgba(255, 255, 255, 0.06);
   --element-bg-soft: rgba(255, 255, 255, 0.10);
-  --element-bg-base: rgba(255, 255, 255, 0.13);
-  --element-bg-medium: rgba(255, 255, 255, 0.17);
+  --element-bg-base: rgba(255, 255, 255, 0.12);
+  --element-bg-medium: rgba(255, 255, 255, 0.18);
   --element-bg-strong: rgba(255, 255, 255, 0.21);
-  --element-bg-elevated: rgba(255, 255, 255, 0.25);
+  --element-bg-elevated: rgba(255, 255, 255, 0.24);
 
   --border-subtle: rgba(255, 255, 255, 0.12);
   --border-base: rgba(255, 255, 255, 0.18);

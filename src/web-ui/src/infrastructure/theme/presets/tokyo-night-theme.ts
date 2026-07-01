@@ -64,7 +64,7 @@ export const bitfunTokyoNightTheme: ThemeConfig = {
       elevated: '#20222c',
       workbench: TOKYO_BACKGROUND_SECONDARY,
       scene: TOKYO_BACKGROUND_PRIMARY,
-      tooltip: 'rgba(22, 22, 30, 0.94)',
+      tooltip: rgbaFromHex(TOKYO_BACKGROUND_SECONDARY, 0.94),
     },
 
     text: {
