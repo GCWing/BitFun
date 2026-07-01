@@ -10,13 +10,8 @@ import {
 const BLACK = '0, 0, 0';
 const WHITE = '255, 255, 255';
 const ACCENT = '96, 165, 250';
-const ACCENT_STRONG = '59, 130, 246';
 const PURPLE = '139, 92, 246';
-const PURPLE_STRONG = '124, 58, 237';
 const PINK = '236, 72, 153';
-const PINK_STRONG = '219, 39, 119';
-const ORANGE = '249, 115, 22';
-const ORANGE_STRONG = '234, 88, 12';
 const SUCCESS = '52, 211, 153';
 const WARNING = '245, 158, 11';
 const ERROR = '239, 68, 68';
@@ -36,8 +31,6 @@ const PURPLE_500 = '#8b5cf6';
 const PURPLE_600 = '#7c3aed';
 const PINK_500 = '#ec4899';
 const PINK_600 = '#db2777';
-const ORANGE_500 = '#f97316';
-const ORANGE_600 = '#ea580c';
 const SUCCESS_500 = '#34d399';
 const WARNING_500 = '#f59e0b';
 const ERROR_500 = '#ef4444';
@@ -67,10 +60,9 @@ export const darkTheme: MobileThemeVars = {
   '--element-bg-strong': alpha(WHITE, '0.19'),
   '--element-bg-elevated': alpha(WHITE, '0.24'),
 
-  ...colorRamp('--color-accent', ACCENT, ACCENT_500, ACCENT_600, ACCENT_STRONG),
-  ...colorRamp('--color-purple', PURPLE, PURPLE_500, PURPLE_600, PURPLE_STRONG),
-  ...colorRamp('--color-pink', PINK, PINK_500, PINK_600, PINK_STRONG),
-  ...colorRamp('--color-orange', ORANGE, ORANGE_500, ORANGE_600, ORANGE_STRONG),
+  ...colorRamp('--color-accent', ACCENT, ACCENT_500, ACCENT_600),
+  ...colorRamp('--color-purple', PURPLE, PURPLE_500, PURPLE_600),
+  ...colorRamp('--color-pink', PINK, PINK_500, PINK_600),
 
   '--color-success': SUCCESS_500,
   '--color-success-bg': alpha(SUCCESS, '0.1'),
@@ -95,46 +87,20 @@ export const darkTheme: MobileThemeVars = {
   '--border-strong': alpha(WHITE, '0.32'),
   '--border-prominent': alpha(INFO, '0.5'),
 
-  '--glow-blue': shadow(
-    `0 12px 32px ${alpha(INFO, '0.25')}`,
-    `0 6px 16px ${alpha(INFO, '0.18')}`,
-    `0 3px 8px ${alpha(BLACK, '0.1')}`,
-  ),
-  '--glow-purple': shadow(
-    `0 12px 32px ${alpha(PURPLE, '0.25')}`,
-    `0 6px 16px ${alpha(PURPLE, '0.18')}`,
-    `0 3px 8px ${alpha(BLACK, '0.1')}`,
-  ),
-  '--glow-orange': shadow(
-    `0 12px 32px ${alpha(ORANGE, '0.25')}`,
-    `0 6px 16px ${alpha(ORANGE, '0.18')}`,
-    `0 3px 8px ${alpha(BLACK, '0.1')}`,
-  ),
-  '--glow-mixed': shadow(
-    `0 12px 32px ${alpha(INFO, '0.2')}`,
-    `0 6px 16px ${alpha(PURPLE, '0.15')}`,
-    `0 3px 8px ${alpha(BLACK, '0.1')}`,
-  ),
-
   '--shadow-xs': `0 1px 2px ${alpha(BLACK, '0.9')}`,
   '--shadow-sm': `0 2px 4px ${alpha(BLACK, '0.8')}`,
   '--shadow-base': `0 4px 8px ${alpha(BLACK, '0.7')}`,
   '--shadow-lg': `0 8px 16px ${alpha(BLACK, '0.6')}`,
   '--shadow-xl': `0 12px 24px ${alpha(BLACK, '0.5')}`,
-  '--shadow-2xl': `0 16px 32px ${alpha(BLACK, '0.4')}`,
 
   '--blur-subtle': 'blur(4px) saturate(1.05)',
   '--blur-base': 'blur(8px) saturate(1.1)',
-  '--blur-medium': 'blur(12px) saturate(1.2)',
-  '--blur-strong': 'blur(16px) saturate(1.3) brightness(1.1)',
-  '--blur-intense': 'blur(20px) saturate(1.4) brightness(1.15)',
 
   ...commonMobileThemeVars,
 
   '--opacity-disabled': '0.6',
   '--opacity-hover': '0.8',
   '--opacity-focus': '0.9',
-  '--opacity-overlay': '0.4',
 
   '--scrollbar-thumb': alpha(WHITE, '0.15'),
   '--scrollbar-thumb-hover': alpha(WHITE, '0.24'),

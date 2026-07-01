@@ -13,6 +13,7 @@ import {
   CONTRACT_VAR_DEFINITION_PATH_PARTS,
   DEFAULT_BASELINE_PATH,
   DEFAULT_ROOT,
+  DYNAMIC_VAR_FAMILY_CONTRACTS,
   EXCEPTION_PATH_PARTS,
   FALLBACK_VAR_CONTRACTS,
   REGISTERED_DYNAMIC_VAR_PREFIXES,
@@ -35,6 +36,7 @@ const VAR_FALLBACK_PATTERN = /var\(\s*(--[a-zA-Z0-9_-]+)\s*,/g;
 const CSS_VAR_SET_PROPERTY_PATTERN = /\.setProperty\(\s*['"`](--[a-zA-Z0-9_-]+)/g;
 const CSS_VAR_INLINE_STYLE_PATTERN = /['"`](--[a-zA-Z0-9_-]+)['"`]\s*:/g;
 const CSS_VAR_DYNAMIC_SET_PATTERN = /\.setProperty\(\s*`(--[a-zA-Z0-9_-]*)\$\{/g;
+const CSS_VAR_COLOR_RAMP_PATTERN = /colorRamp\(\s*['"`](--[a-zA-Z0-9_-]+)['"`]/g;
 const CSS_VAR_LITERAL_PATTERN = /['"`](--[a-zA-Z0-9_-]+)['"`]/g;
 const GENERATED_WIDGET_THEME_PAYLOAD_PATH = 'tools/generative-widget/themePayload.ts';
 const REPORT_ROW_LIMIT = 100;
@@ -240,6 +242,22 @@ function addToSetMap(map, key, value) {
 function collectMatches(content, pattern) {
   pattern.lastIndex = 0;
   return Array.from(content.matchAll(pattern));
+}
+
+function contractOwnerMatchesRoot(contract, rootRelativePath) {
+  return String(contract.owner ?? '')
+    .split(';')
+    .map(owner => owner.trim())
+    .filter(Boolean)
+    .some(owner => (
+      owner === rootRelativePath
+      || owner.startsWith(`${rootRelativePath}/`)
+      || rootRelativePath.startsWith(`${owner}/`)
+    ));
+}
+
+function colorRampPrefix(name) {
+  return name.endsWith('-') ? name : `${name}-`;
 }
 
 function previousNonWhitespace(chars) {
@@ -727,6 +745,7 @@ function applyBaseline(report, options) {
 function audit(options) {
   const root = path.resolve(options.root);
   const checksFullThemeSourceRoot = root === path.resolve(DEFAULT_ROOT);
+  const rootRelativePath = normalizePath(path.relative(process.cwd(), root));
   const files = walkFiles(root);
   const cwd = process.cwd();
   const fileEntries = files.map(file => ({
@@ -863,6 +882,12 @@ function audit(options) {
       addToSetMap(dynamicDefinitionFiles, match[1], relativePath);
     }
 
+    for (const match of collectMatches(content, CSS_VAR_COLOR_RAMP_PATTERN)) {
+      const prefix = colorRampPrefix(match[1]);
+      dynamicDefinitionPrefixes.add(prefix);
+      addToSetMap(dynamicDefinitionFiles, prefix, relativePath);
+    }
+
     if (isGeneratedWidgetThemePayloadFile(relativePath)) {
       for (const match of collectMatches(content, CSS_VAR_LITERAL_PATTERN)) {
         incrementMap(generatedWidgetPayloadVarCounts, match[1]);
@@ -922,7 +947,9 @@ function audit(options) {
       files: Array.from(dynamicDefinitionFiles.get(prefix) ?? []).sort().slice(0, 5),
     }));
   const staleRegisteredDynamicFamilyEntries = checksFullThemeSourceRoot
-    ? Array.from(REGISTERED_DYNAMIC_VAR_PREFIXES)
+    ? DYNAMIC_VAR_FAMILY_CONTRACTS
+      .filter(contract => contractOwnerMatchesRoot(contract, rootRelativePath))
+      .map(contract => contract.prefix)
       .filter(prefix => !dynamicDefinitionPrefixes.has(prefix))
       .sort((a, b) => a.localeCompare(b))
       .map(prefix => ({ key: prefix }))

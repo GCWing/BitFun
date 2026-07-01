@@ -4,6 +4,8 @@ export const DEFAULT_BASELINE_PATH = 'scripts/theme-color-governance-baseline.js
 export const COLOR_EXTENSIONS = new Set(['.css', '.scss', '.sass', '.ts', '.tsx', '.js', '.jsx']);
 
 export const TOKEN_PATH_PARTS = [
+  'BitFun-Installer/src/styles/variables.css',
+  'BitFun-Installer/src/theme',
   'component-library/styles',
   'infrastructure/theme',
   'theme/presets',
@@ -14,16 +16,21 @@ export const TOKEN_ALIAS_SOURCE_PATH_PARTS = [
 ];
 
 export const CONTRACT_VAR_DEFINITION_PATH_PARTS = [
+  'BitFun-Installer/src/styles/variables.css',
+  'BitFun-Installer/src/theme/installerThemeRuntime.ts',
   'component-library/styles',
   'infrastructure/theme',
+  'src/mobile-web/src/theme/presets',
   'tools/generative-widget/themePayload.ts',
 ];
 
 export const STATIC_CONTRACT_VAR_DEFINITION_PATH_PARTS = [
+  'BitFun-Installer/src/styles/variables.css',
   'component-library/styles',
 ];
 
 export const RUNTIME_CONTRACT_VAR_DEFINITION_PATH_PARTS = [
+  'BitFun-Installer/src/theme/installerThemeRuntime.ts',
   'infrastructure/theme',
 ];
 
@@ -44,7 +51,7 @@ export const COLOR_DOMAIN_RULES = [
   {
     key: 'themePreset',
     label: 'Theme presets',
-    pathParts: ['infrastructure/theme/presets', 'theme/presets'],
+    pathParts: ['BitFun-Installer/src/theme', 'infrastructure/theme/presets', 'theme/presets'],
   },
   {
     key: 'themeRuntime',
@@ -54,7 +61,7 @@ export const COLOR_DOMAIN_RULES = [
   {
     key: 'tokenContract',
     label: 'Token contracts',
-    pathParts: ['component-library/styles'],
+    pathParts: ['BitFun-Installer/src/styles/variables.css', 'component-library/styles'],
   },
   {
     key: 'generatedWidget',
@@ -292,13 +299,18 @@ export const DYNAMIC_VAR_FAMILY_CONTRACTS = [
   },
   {
     prefix: '--color-accent-',
-    owner: 'src/web-ui/src/infrastructure/theme/core/ThemeService.ts',
-    reason: 'Theme runtime exports the active accent palette scale by numeric stop.',
+    owner: 'src/web-ui/src/infrastructure/theme/core/ThemeService.ts; src/mobile-web/src/theme/presets; BitFun-Installer/src/theme',
+    reason: 'Theme runtime, mobile presets, and installer theme data export the active accent palette scale by numeric stop.',
   },
   {
     prefix: '--color-purple-',
-    owner: 'src/web-ui/src/infrastructure/theme/core/ThemeService.ts',
-    reason: 'Theme runtime exports the secondary purple palette scale by numeric stop.',
+    owner: 'src/web-ui/src/infrastructure/theme/core/ThemeService.ts; src/mobile-web/src/theme/presets; BitFun-Installer/src/theme',
+    reason: 'Theme runtime, mobile presets, and installer theme data export the secondary purple palette scale by numeric stop.',
+  },
+  {
+    prefix: '--color-pink-',
+    owner: 'src/mobile-web/src/theme/presets',
+    reason: 'Mobile presets export assistant-mode identity accents by numeric stop for session and picker states.',
   },
   {
     prefix: '--easing-',

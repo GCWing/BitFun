@@ -15,7 +15,6 @@ export function colorRamp(
   rgb: string,
   solid500: string,
   solid600: string,
-  strongRgb: string = rgb,
   stops: readonly [string, string, string, string, string] = ['0.04', '0.08', '0.15', '0.25', '0.4'],
 ): MobileThemeVars {
   return {
@@ -26,8 +25,6 @@ export function colorRamp(
     [`${prefix}-400`]: alpha(rgb, stops[4]),
     [`${prefix}-500`]: solid500,
     [`${prefix}-600`]: solid600,
-    [`${prefix}-700`]: alpha(strongRgb, '0.8'),
-    [`${prefix}-800`]: alpha(strongRgb, '0.9'),
   };
 }
 
@@ -54,12 +51,9 @@ export const commonMobileThemeVars: MobileThemeVars = {
   '--motion-fast': '0.15s',
   '--motion-base': '0.3s',
   '--motion-slow': '0.6s',
-  '--motion-lazy': '1s',
 
   '--easing-standard': 'cubic-bezier(0.4, 0, 0.2, 1)',
   '--easing-decelerate': 'cubic-bezier(0, 0, 0.2, 1)',
-  '--easing-accelerate': 'cubic-bezier(0.4, 0, 1, 1)',
-  '--easing-bounce': 'cubic-bezier(0.68, -0.55, 0.265, 1.55)',
   '--easing-smooth': 'cubic-bezier(0.4, 0, 0.2, 1)',
 
   '--font-family-sans': "'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'SF Pro Display', Roboto, sans-serif",

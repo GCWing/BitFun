@@ -100,8 +100,8 @@
     }
   }
 
-  ul > li::marker { color: #888; font-size: 1.2em; font-weight: bold; }
-  ol > li::marker { color: #888; font-weight: bold; }
+  ul > li::marker { color: var(--color-text-muted); font-size: 1.2em; font-weight: bold; }
+  ol > li::marker { color: var(--color-text-muted); font-weight: bold; }
 
   ul ul, ol ol, ul ol, ol ul {
     margin-top: 0.1rem;

@@ -228,12 +228,12 @@
   border-radius: var(--size-radius-sm);
   border: none;
   background: var(--color-error);
-  color: white;
+  color: var(--btn-primary-color);
   cursor: pointer;
   flex-shrink: 0;
   transition: all var(--motion-fast) var(--easing-standard);
   margin-left: auto;
-  box-shadow: 0 1px 4px rgba(239, 68, 68, 0.35);
+  box-shadow: 0 1px 4px var(--color-error-border);
 
   &:active {
     transform: scale(0.9);
@@ -589,7 +589,7 @@
   .is-selected & {
     border-color: var(--color-accent-500);
     background: var(--color-accent-500);
-    color: white;
+    color: var(--btn-primary-color);
   }
 
   &--multi {
@@ -773,7 +773,7 @@
 .chat-todo-card__item-text {
   font-size: var(--font-size-xs);
   color: var(--color-text-primary);
-  line-height: var(--line-height-normal);
+  line-height: var(--line-height-base);
 
   .chat-todo-card__item--in_progress & {
     color: var(--color-accent-500);

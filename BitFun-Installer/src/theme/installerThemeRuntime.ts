@@ -3,6 +3,9 @@ import { SYSTEM_THEME_ID, type ThemeId, type ThemePreferenceId } from '../types/
 import type { InstallerTheme } from './installerThemesData';
 import { findInstallerThemeById } from './installerThemesData';
 
+const ACCENT_STOPS = ['50', '100', '200', '300', '400', '500', '600'] as const;
+const SECONDARY_ACCENT_STOPS = ['50', '100', '200', '400', '500', '600', '800'] as const;
+
 /** Same rule as main app `getSystemPreferredDefaultThemeId`: dark -> bitfun-dark, else bitfun-light. */
 export function getSystemPreferredBuiltinThemeId(): ThemeId {
   if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
@@ -45,15 +48,13 @@ export function applyInstallerThemeToDocument(theme: InstallerTheme): void {
   root.style.setProperty('--color-highlight', colors.semantic.highlight);
   root.style.setProperty('--color-highlight-bg', colors.semantic.highlightBg);
 
-  Object.entries(colors.accent).forEach(([key, value]) => {
-    root.style.setProperty(`--color-accent-${key}`, value);
+  ACCENT_STOPS.forEach((key) => {
+    root.style.setProperty(`--color-accent-${key}`, colors.accent[key]);
   });
 
-  if (colors.purple) {
-    Object.entries(colors.purple).forEach(([key, value]) => {
-      root.style.setProperty(`--color-purple-${key}`, value);
-    });
-  }
+  SECONDARY_ACCENT_STOPS.forEach((key) => {
+    root.style.setProperty(`--color-purple-${key}`, colors.purple[key]);
+  });
 
   root.setAttribute('data-theme', theme.id);
   root.setAttribute('data-theme-type', theme.type);

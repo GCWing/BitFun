@@ -29,7 +29,7 @@ export function ThemeSetup({ options, setOptions, onLaunch, onClose }: ThemeSetu
     width: '100%',
     borderRadius: 12,
     padding: 8,
-    background: active ? 'rgba(96, 165, 250, 0.14)' : 'rgba(148, 163, 184, 0.08)',
+    background: active ? 'var(--color-accent-100)' : 'var(--element-bg-subtle)',
     border: 'none',
     cursor: 'pointer',
     transition: 'background 0.2s ease',

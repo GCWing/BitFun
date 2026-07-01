@@ -17,6 +17,34 @@ import {
 } from './theme-css-var-contract.mjs';
 
 const root = process.cwd();
+const SOURCE_OWNER_ROOTS = [
+  'BitFun-Installer/src',
+  'src/mobile-web/src',
+  'src/web-ui/src',
+];
+
+function contractOwnerHasKnownSource(owner) {
+  return String(owner ?? '')
+    .split(';')
+    .map(entry => entry.trim())
+    .filter(Boolean)
+    .some(entry => SOURCE_OWNER_ROOTS.some(sourceRoot => (
+      entry === sourceRoot
+      || entry.startsWith(`${sourceRoot}/`)
+    )));
+}
+
+function contractOwnerMatchesRoot(contract, sourceRoot) {
+  return String(contract.owner ?? '')
+    .split(';')
+    .map(entry => entry.trim())
+    .filter(Boolean)
+    .some(entry => (
+      entry === sourceRoot
+      || entry.startsWith(`${sourceRoot}/`)
+      || sourceRoot.startsWith(`${entry}/`)
+    ));
+}
 
 function writeText(filePath, content) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
@@ -65,7 +93,7 @@ test('theme CSS var contract registry is explicit and non-overlapping', () => {
   );
   for (const contract of DYNAMIC_VAR_FAMILY_CONTRACTS) {
     assert.match(contract.prefix, /^--[a-z0-9-]+-$/);
-    assert.ok(contract.owner.includes('src/web-ui/src/'), `${contract.prefix} must name a source owner`);
+    assert.ok(contractOwnerHasKnownSource(contract.owner), `${contract.prefix} must name a source owner`);
     assert.ok(contract.reason.trim().length >= 20, `${contract.prefix} must explain why it is dynamic`);
     if (contract.canonicalPrefix !== undefined) {
       assert.match(contract.canonicalPrefix, /^--[a-z0-9-]+-$/);
@@ -144,30 +172,33 @@ test('theme CSS var contract registry is explicit and non-overlapping', () => {
 });
 
 test('repository dynamic CSS var families match the registered contract', () => {
-  const result = runAudit(['--json', '--no-baseline']);
-  assert.equal(result.status, 0, result.stderr || result.stdout);
+  for (const sourceRoot of SOURCE_OWNER_ROOTS) {
+    const result = runAudit(['--root', sourceRoot, '--json', '--no-baseline']);
+    assert.equal(result.status, 0, result.stderr || result.stdout);
 
-  const report = JSON.parse(result.stdout);
-  const registeredPrefixes = DYNAMIC_VAR_FAMILY_CONTRACTS
-    .map(contract => contract.prefix)
-    .sort();
-  assert.deepEqual(report.cssVarDefinitions.dynamicFamilyPrefixes, registeredPrefixes);
-  assert.equal(report.cssVarDefinitions.unregisteredDynamicFamilyUnique, 0);
-  assert.equal(report.cssVarDefinitions.staleRegisteredDynamicFamilyUnique, 0);
-  assert.equal(report.compatibilityAliases.staleRegisteredUnique, 0);
-  assert.equal(report.compatibilityAliases.staleRegisteredFamilyUnique, 0);
-  assert.equal(report.compatibilityAliases.missingCanonicalUnique, 0);
-  assert.equal(report.generatedWidgetPayload.undefinedUnique, 0);
-  assert.equal(report.generatedWidgetPayload.missingCompatibilityCanonicalUnique, 0);
-  assert.equal(report.generatedWidgetPayload.unexportedCompatibilityCanonicalUnique, 0);
-  assert.equal(report.fallbackContracts.uncontractedUnique, 0);
-  assert.equal(report.fallbackContracts.staleRegisteredUnique, 0);
-  assert.equal(report.colorDomainContracts.missingRegisteredUnique, 0);
-  assert.equal(report.colorDomainContracts.staleRegisteredUnique, 0);
-  assert.equal(report.colorDomainContracts.activeUncontractedUnique, 0);
-  assert.equal(report.surfaceTokenRenames.activeUnique, 0);
-  assert.equal(report.surfaceTokenRenames.activeOccurrences, 0);
-  assert.equal(report.surfaceTokenRenames.missingCanonicalUnique, 0);
+    const report = JSON.parse(result.stdout);
+    const registeredPrefixes = DYNAMIC_VAR_FAMILY_CONTRACTS
+      .filter(contract => contractOwnerMatchesRoot(contract, sourceRoot))
+      .map(contract => contract.prefix)
+      .sort();
+    assert.deepEqual(report.cssVarDefinitions.dynamicFamilyPrefixes, registeredPrefixes);
+    assert.equal(report.cssVarDefinitions.unregisteredDynamicFamilyUnique, 0);
+    assert.equal(report.cssVarDefinitions.staleRegisteredDynamicFamilyUnique, 0);
+    assert.equal(report.compatibilityAliases.staleRegisteredUnique, 0);
+    assert.equal(report.compatibilityAliases.staleRegisteredFamilyUnique, 0);
+    assert.equal(report.compatibilityAliases.missingCanonicalUnique, 0);
+    assert.equal(report.generatedWidgetPayload.undefinedUnique, 0);
+    assert.equal(report.generatedWidgetPayload.missingCompatibilityCanonicalUnique, 0);
+    assert.equal(report.generatedWidgetPayload.unexportedCompatibilityCanonicalUnique, 0);
+    assert.equal(report.fallbackContracts.uncontractedUnique, 0);
+    assert.equal(report.fallbackContracts.staleRegisteredUnique, 0);
+    assert.equal(report.colorDomainContracts.missingRegisteredUnique, 0);
+    assert.equal(report.colorDomainContracts.staleRegisteredUnique, 0);
+    assert.equal(report.colorDomainContracts.activeUncontractedUnique, 0);
+    assert.equal(report.surfaceTokenRenames.activeUnique, 0);
+    assert.equal(report.surfaceTokenRenames.activeOccurrences, 0);
+    assert.equal(report.surfaceTokenRenames.missingCanonicalUnique, 0);
+  }
 });
 
 test('generated widget iframe compatibility aliases stay outside root/runtime contracts', () => {

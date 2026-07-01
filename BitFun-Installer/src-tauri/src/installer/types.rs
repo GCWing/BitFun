@@ -70,6 +70,9 @@ impl From<bitfun_ai_adapters::types::RemoteModelInfo> for RemoteModelInfo {
 pub enum ConnectionTestMessageCode {
     ToolCallsNotDetected,
     ImageInputCheckFailed,
+    TlsOrCertificateIssue,
+    ProxyIssue,
+    NetworkIssue,
 }
 
 impl From<bitfun_ai_adapters::types::ConnectionTestMessageCode> for ConnectionTestMessageCode {
@@ -80,6 +83,13 @@ impl From<bitfun_ai_adapters::types::ConnectionTestMessageCode> for ConnectionTe
             }
             bitfun_ai_adapters::types::ConnectionTestMessageCode::ImageInputCheckFailed => {
                 Self::ImageInputCheckFailed
+            }
+            bitfun_ai_adapters::types::ConnectionTestMessageCode::TlsOrCertificateIssue => {
+                Self::TlsOrCertificateIssue
+            }
+            bitfun_ai_adapters::types::ConnectionTestMessageCode::ProxyIssue => Self::ProxyIssue,
+            bitfun_ai_adapters::types::ConnectionTestMessageCode::NetworkIssue => {
+                Self::NetworkIssue
             }
         }
     }

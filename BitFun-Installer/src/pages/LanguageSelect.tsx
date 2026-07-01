@@ -44,13 +44,13 @@ export function LanguageSelect({ onSelect }: LanguageSelectProps) {
           <img src={logoUrl} alt="BitFun" style={{
             display: 'block', margin: '0 auto 16px',
             width: 56, height: 56, borderRadius: 14,
-            filter: 'drop-shadow(0 0 40px rgba(100, 180, 255, 0.15))',
+            filter: 'drop-shadow(0 0 40px var(--color-accent-100))',
           }} />
           <h1 style={{
             fontFamily: 'var(--font-sans)', fontSize: 42, fontWeight: 700,
             color: 'var(--color-text-primary)', letterSpacing: '-0.03em',
             lineHeight: 0.95, margin: '0 0 16px 0',
-            textShadow: '0 0 60px rgba(100, 180, 255, 0.3)',
+            textShadow: '0 0 60px var(--color-accent-200)',
           }}>BitFun</h1>
         </div>
 
@@ -106,9 +106,9 @@ export function LanguageSelect({ onSelect }: LanguageSelectProps) {
                       style={{
                         display: 'flex', alignItems: 'center', gap: 12,
                         padding: '14px 16px', width: '100%',
-                        background: isSelected ? 'rgba(96, 165, 250, 0.14)' : 'rgba(148, 163, 184, 0.08)',
+                        background: isSelected ? 'var(--color-accent-100)' : 'var(--element-bg-subtle)',
                         border: 'none',
-                        borderRadius: 'var(--radius-sm)',
+                        borderRadius: 'var(--size-radius-sm)',
                         cursor: 'pointer', textAlign: 'left',
                         transition: 'all 0.25s ease',
                         outline: 'none',
@@ -117,12 +117,12 @@ export function LanguageSelect({ onSelect }: LanguageSelectProps) {
                       }}
                       onMouseEnter={(e) => {
                         if (!isSelected) {
-                          e.currentTarget.style.background = 'rgba(148, 163, 184, 0.14)';
+                          e.currentTarget.style.background = 'var(--element-bg-soft)';
                         }
                       }}
                       onMouseLeave={(e) => {
                         if (!isSelected) {
-                          e.currentTarget.style.background = 'rgba(148, 163, 184, 0.08)';
+                          e.currentTarget.style.background = 'var(--element-bg-subtle)';
                         }
                       }}
                     >
