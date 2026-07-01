@@ -1,9 +1,12 @@
 import type {
+  AccentColors,
   BorderColors,
   ElementBackgrounds,
   GitColors,
   RadiusConfig,
   ScrollbarColors,
+  SecondaryAccentColors,
+  SemanticColors,
   ThemeConfig,
   WindowControlsConfig,
 } from '../types';
@@ -43,6 +46,101 @@ export function overlayBlack(alpha: number | string): string {
 
 export function overlayWhite(alpha: number | string): string {
   return rgbaFromHex(STATIC_WHITE, alpha);
+}
+
+export interface AccentScaleInput {
+  base: string;
+  hover?: string;
+  stops?: Partial<AccentColors>;
+  alpha?: Partial<Record<50 | 100 | 200 | 300 | 400 | 700 | 800, number | string>>;
+}
+
+export interface SecondaryAccentScaleInput {
+  base: string;
+  hover?: string;
+  stops?: Partial<SecondaryAccentColors>;
+  alpha?: Partial<Record<50 | 100 | 200 | 400 | 800, number | string>>;
+}
+
+export interface SemanticColorsInput {
+  success: string;
+  warning: string;
+  error: string;
+  info: string;
+  bgAlpha?: number | string;
+  borderAlpha?: number | string;
+  overrides?: Partial<SemanticColors>;
+}
+
+export function createAccentScale(input: AccentScaleInput): AccentColors {
+  const hover = input.hover ?? input.base;
+  const alpha = {
+    50: 0.04,
+    100: 0.08,
+    200: 0.15,
+    300: 0.25,
+    400: 0.4,
+    700: 0.8,
+    800: 0.9,
+    ...input.alpha,
+  };
+
+  return {
+    50: rgbaFromHex(input.base, alpha[50]),
+    100: rgbaFromHex(input.base, alpha[100]),
+    200: rgbaFromHex(input.base, alpha[200]),
+    300: rgbaFromHex(input.base, alpha[300]),
+    400: rgbaFromHex(input.base, alpha[400]),
+    500: input.base,
+    600: hover,
+    700: rgbaFromHex(hover, alpha[700]),
+    800: rgbaFromHex(hover, alpha[800]),
+    ...input.stops,
+  };
+}
+
+export function createSecondaryAccentScale(input: SecondaryAccentScaleInput): SecondaryAccentColors {
+  const hover = input.hover ?? input.base;
+  const alpha = {
+    50: 0.04,
+    100: 0.08,
+    200: 0.15,
+    400: 0.4,
+    800: 0.9,
+    ...input.alpha,
+  };
+
+  return {
+    50: rgbaFromHex(input.base, alpha[50]),
+    100: rgbaFromHex(input.base, alpha[100]),
+    200: rgbaFromHex(input.base, alpha[200]),
+    400: rgbaFromHex(input.base, alpha[400]),
+    500: input.base,
+    600: hover,
+    800: rgbaFromHex(hover, alpha[800]),
+    ...input.stops,
+  };
+}
+
+export function createSemanticColors(input: SemanticColorsInput): SemanticColors {
+  const bgAlpha = input.bgAlpha ?? 0.1;
+  const borderAlpha = input.borderAlpha ?? 0.3;
+
+  return {
+    success: input.success,
+    successBg: rgbaFromHex(input.success, bgAlpha),
+    successBorder: rgbaFromHex(input.success, borderAlpha),
+    warning: input.warning,
+    warningBg: rgbaFromHex(input.warning, bgAlpha),
+    warningBorder: rgbaFromHex(input.warning, borderAlpha),
+    error: input.error,
+    errorBg: rgbaFromHex(input.error, bgAlpha),
+    errorBorder: rgbaFromHex(input.error, borderAlpha),
+    info: input.info,
+    infoBg: rgbaFromHex(input.info, bgAlpha),
+    infoBorder: rgbaFromHex(input.info, borderAlpha),
+    ...input.overrides,
+  };
 }
 
 export function createWindowControls(closeHoverColor: WindowControlsConfig['close']['hoverColor']): WindowControlsConfig {
@@ -190,7 +288,7 @@ export function createDarkNeutralBorder(): BorderColors {
 
 export function createDarkNeutralElement(): ElementBackgrounds {
   return {
-    subtle: overlayWhite(0.05),
+    subtle: overlayWhite(0.06),
     soft: overlayWhite(0.06),
     base: overlayWhite(0.1),
     medium: overlayWhite(0.12),

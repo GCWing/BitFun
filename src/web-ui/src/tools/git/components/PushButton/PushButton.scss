@@ -58,8 +58,8 @@
 
   &__menu {
     min-width: 120px;
-    background: $element-bg-subtle;
-    border: 1px solid $border-base;
+    background: var(--element-bg-subtle);
+    border: 1px solid var(--border-base);
     border-radius: $size-radius-base;
     box-shadow: 0 8px 20px var(--color-overlay-black-80);
     z-index: $z-dropdown;

@@ -3,8 +3,11 @@
 import { ThemeConfig } from '../types';
 import {
   createChinaTypography,
+  createAccentScale,
   createCompactRadius,
   createGitColors,
+  createSemanticColors,
+  createSecondaryAccentScale,
   createStandardEasing,
   createStandardSpacing,
   createWindowControls,
@@ -28,9 +31,6 @@ const CHINA_STYLE_BORDER = '#6a5c46';
 
 const chinaStylePaper = (alpha: number | string) => rgbaFromHex(CHINA_STYLE_PAPER, alpha);
 const chinaStyleBlue = (alpha: number | string) => rgbaFromHex(CHINA_STYLE_BLUE, alpha);
-const chinaStyleBlueHover = (alpha: number | string) => rgbaFromHex(CHINA_STYLE_BLUE_HOVER, alpha);
-const chinaStyleGreen = (alpha: number | string) => rgbaFromHex(CHINA_STYLE_GREEN, alpha);
-const chinaStyleGreenHover = (alpha: number | string) => rgbaFromHex(CHINA_STYLE_GREEN_HOVER, alpha);
 const chinaStyleSuccess = (alpha: number | string) => rgbaFromHex(CHINA_STYLE_SUCCESS, alpha);
 const chinaStyleWarning = (alpha: number | string) => rgbaFromHex(CHINA_STYLE_WARNING, alpha);
 const chinaStyleError = (alpha: number | string) => rgbaFromHex(CHINA_STYLE_ERROR, alpha);
@@ -65,45 +65,18 @@ export const bitfunChinaStyleTheme: ThemeConfig = {
       disabled: '#9a9a9a',
     },
 
-    accent: {
-      50: chinaStyleBlue(0.04),
-      100: chinaStyleBlue(0.08),
-      200: chinaStyleBlue(0.15),
-      300: chinaStyleBlue(0.25),
-      400: chinaStyleBlue(0.4),
-      500: CHINA_STYLE_BLUE,
-      600: CHINA_STYLE_BLUE_HOVER,
-      700: chinaStyleBlueHover(0.8),
-      800: chinaStyleBlueHover(0.9),
-    },
+    accent: createAccentScale({ base: CHINA_STYLE_BLUE, hover: CHINA_STYLE_BLUE_HOVER }),
 
-    purple: {
-      50: chinaStyleGreen(0.04),
-      100: chinaStyleGreen(0.08),
-      200: chinaStyleGreen(0.15),
-      400: chinaStyleGreen(0.4),
-      500: CHINA_STYLE_GREEN,
-      600: CHINA_STYLE_GREEN_HOVER,
-      800: chinaStyleGreenHover(0.9),
-    },
+    purple: createSecondaryAccentScale({ base: CHINA_STYLE_GREEN, hover: CHINA_STYLE_GREEN_HOVER }),
 
-    semantic: {
+    semantic: createSemanticColors({
       success: CHINA_STYLE_SUCCESS,
-      successBg: chinaStyleSuccess(0.08),
-      successBorder: chinaStyleSuccess(0.25),
-
       warning: CHINA_STYLE_WARNING,
-      warningBg: chinaStyleWarning(0.08),
-      warningBorder: chinaStyleWarning(0.25),
-
       error: CHINA_STYLE_ERROR,
-      errorBg: chinaStyleError(0.08),
-      errorBorder: chinaStyleError(0.25),
-
       info: CHINA_STYLE_BLUE,
-      infoBg: chinaStyleBlue(0.08),
-      infoBorder: chinaStyleBlue(0.25),
-    },
+      bgAlpha: 0.08,
+      borderAlpha: 0.25,
+    }),
 
     border: {
       subtle: chinaStyleBorder(0.12),

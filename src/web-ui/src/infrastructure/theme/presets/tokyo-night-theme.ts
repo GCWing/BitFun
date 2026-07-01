@@ -2,9 +2,12 @@
 
 import { ThemeConfig } from '../types';
 import {
+  createAccentScale,
   createCompactRadius,
   createExpressiveTypography,
   createGitColors,
+  createSemanticColors,
+  createSecondaryAccentScale,
   createStandardEasing,
   createStandardSpacing,
   createWindowControls,
@@ -33,13 +36,9 @@ const TOKYO_GIT_ADDED = '#41a6b5';
 const TOKYO_PRIMARY_BUTTON = '#3d59a1';
 
 const tokyoAccent = (alpha: number | string) => rgbaFromHex(TOKYO_ACCENT, alpha);
-const tokyoAccentHover = (alpha: number | string) => rgbaFromHex(TOKYO_ACCENT_HOVER, alpha);
-const tokyoPurple = (alpha: number | string) => rgbaFromHex(TOKYO_PURPLE, alpha);
-const tokyoPurpleHover = (alpha: number | string) => rgbaFromHex(TOKYO_PURPLE_HOVER, alpha);
 const tokyoSuccess = (alpha: number | string) => rgbaFromHex(TOKYO_SUCCESS, alpha);
 const tokyoWarning = (alpha: number | string) => rgbaFromHex(TOKYO_WARNING, alpha);
 const tokyoError = (alpha: number | string) => rgbaFromHex(TOKYO_ERROR, alpha);
-const tokyoInfo = (alpha: number | string) => rgbaFromHex(TOKYO_INFO, alpha);
 const tokyoBorder = (alpha: number | string) => rgbaFromHex(TOKYO_BORDER, alpha);
 const tokyoScrollbar = (alpha: number | string) => rgbaFromHex(TOKYO_SCROLLBAR, alpha);
 const tokyoGitAdded = (alpha: number | string) => rgbaFromHex(TOKYO_GIT_ADDED, alpha);
@@ -74,46 +73,26 @@ export const bitfunTokyoNightTheme: ThemeConfig = {
       disabled: '#545c7e',
     },
 
-    accent: {
-      50: tokyoAccent(0.05),
-      100: tokyoAccent(0.08),
-      200: tokyoAccent(0.15),
-      300: tokyoAccent(0.25),
-      400: tokyoAccent(0.4),
-      500: TOKYO_ACCENT,
-      600: TOKYO_ACCENT_HOVER,
-      700: tokyoAccentHover(0.85),
-      800: tokyoAccentHover(0.95),
-    },
+    accent: createAccentScale({
+      base: TOKYO_ACCENT,
+      hover: TOKYO_ACCENT_HOVER,
+      alpha: { 50: 0.05, 700: 0.85, 800: 0.95 },
+    }),
 
-    purple: {
-      50: tokyoPurple(0.05),
-      100: tokyoPurple(0.08),
-      200: tokyoPurple(0.15),
-      400: tokyoPurple(0.4),
-      500: TOKYO_PURPLE,
-      600: TOKYO_PURPLE_HOVER,
-      800: tokyoPurpleHover(0.95),
-    },
+    purple: createSecondaryAccentScale({
+      base: TOKYO_PURPLE,
+      hover: TOKYO_PURPLE_HOVER,
+      alpha: { 50: 0.05, 800: 0.95 },
+    }),
 
-    semantic: {
+    semantic: createSemanticColors({
       success: TOKYO_SUCCESS,
-      successBg: tokyoSuccess(0.12),
-      successBorder: tokyoSuccess(0.35),
-
       warning: TOKYO_WARNING,
-      warningBg: tokyoWarning(0.12),
-      warningBorder: tokyoWarning(0.35),
-
       error: TOKYO_ERROR,
-      errorBg: tokyoError(0.12),
-      errorBorder: tokyoError(0.35),
-
       info: TOKYO_INFO,
-      infoBg: tokyoInfo(0.12),
-      infoBorder: tokyoInfo(0.35),
-
-    },
+      bgAlpha: 0.12,
+      borderAlpha: 0.35,
+    }),
 
     border: {
       subtle: tokyoBorder(0.45),

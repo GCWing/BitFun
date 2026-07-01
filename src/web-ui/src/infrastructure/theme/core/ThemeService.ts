@@ -52,7 +52,7 @@ const LINE_HEIGHT_TOKENS = ['tight', 'base', 'relaxed'] as const;
 const THEME_OVERLAYS = {
   white02: 'rgba(255, 255, 255, 0.02)',
   white04: 'rgba(255, 255, 255, 0.04)',
-  white05: 'rgba(255, 255, 255, 0.05)',
+  white05: 'rgba(255, 255, 255, 0.06)',
   white06: 'rgba(255, 255, 255, 0.06)',
   white08: 'rgba(255, 255, 255, 0.08)',
   white10: 'rgba(255, 255, 255, 0.1)',
@@ -120,6 +120,15 @@ function accentColorToRgbChannels(accent: string): string | null {
     return `${rgb[1]} ${rgb[2]} ${rgb[3]}`;
   }
   return null;
+}
+
+function colorWithAlpha(color: string, alpha: number): string {
+  const channels = accentColorToRgbChannels(color);
+  if (channels) {
+    return `rgba(${channels.replace(/\s+/g, ', ')}, ${alpha})`;
+  }
+  const percent = `${Math.round(alpha * 1000) / 10}%`;
+  return `color-mix(in srgb, ${color} ${percent}, transparent)`;
 }
 
 function cloneThemeConfig(theme: ThemeConfig): ThemeConfig {
@@ -637,11 +646,30 @@ export class ThemeService {
 
     root.style.setProperty('--git-color-branch', colors.git.branch);
     root.style.setProperty('--git-color-branch-bg', colors.git.branchBg);
+    root.style.setProperty('--git-color-branch-bg-hover', colors.element.medium);
+    root.style.setProperty('--git-color-branch-border', colors.border.base);
     root.style.setProperty('--git-color-changes', colors.git.changes);
+    root.style.setProperty('--git-color-changes-bg', colors.git.changesBg);
+    root.style.setProperty('--git-color-changes-bg-hover', colorWithAlpha(colors.git.changes, 0.15));
+    root.style.setProperty('--git-color-changes-border', colorWithAlpha(colors.git.changes, 0.3));
+    root.style.setProperty('--git-color-added', colors.git.added);
+    root.style.setProperty('--git-color-added-bg', colors.git.addedBg);
+    root.style.setProperty('--git-color-added-bg-hover', colorWithAlpha(colors.git.added, 0.15));
+    root.style.setProperty('--git-color-added-border', colorWithAlpha(colors.git.added, 0.3));
     root.style.setProperty('--git-color-deleted', colors.git.deleted);
     root.style.setProperty('--git-color-deleted-bg', colors.git.deletedBg);
+    root.style.setProperty('--git-color-deleted-bg-hover', colorWithAlpha(colors.git.deleted, 0.15));
+    root.style.setProperty('--git-color-deleted-border', colorWithAlpha(colors.git.deleted, 0.3));
     root.style.setProperty('--git-color-staged', colors.git.staged);
     root.style.setProperty('--git-color-staged-bg', colors.git.stagedBg);
+    root.style.setProperty('--git-color-staged-bg-hover', colorWithAlpha(colors.git.staged, 0.15));
+    root.style.setProperty('--git-color-staged-border', colorWithAlpha(colors.git.staged, 0.3));
+    root.style.setProperty('--git-color-pull', colors.git.branch);
+    root.style.setProperty('--git-color-pull-bg', colors.git.branchBg);
+    root.style.setProperty('--git-color-pull-bg-hover', colors.element.medium);
+    root.style.setProperty('--git-color-push', colors.git.staged);
+    root.style.setProperty('--git-color-push-bg', colors.git.stagedBg);
+    root.style.setProperty('--git-color-push-bg-hover', colorWithAlpha(colors.git.staged, 0.15));
 
 
 

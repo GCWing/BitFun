@@ -70,7 +70,7 @@
     position: absolute;
     font-size: 9px;
     font-weight: tokens.$font-weight-semibold;
-    color: tokens.$color-text-muted;
+    color: var(--color-text-muted);
     text-transform: uppercase;
     letter-spacing: 0.5px;
     transition: opacity 0.2s ease;

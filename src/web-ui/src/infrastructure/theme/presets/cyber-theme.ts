@@ -2,9 +2,12 @@
 
 import { ThemeConfig } from '../types';
 import {
+  createAccentScale,
   createCompactRadius,
   createExpressiveTypography,
   createGitColors,
+  createSemanticColors,
+  createSecondaryAccentScale,
   createStandardEasing,
   createStandardSpacing,
   createWindowControls,
@@ -28,9 +31,6 @@ const CYBER_ERROR = '#ff0055';
 const CYBER_SURFACE_SECONDARY = '#151515';
 
 const cyberAccent = (alpha: number | string) => rgbaFromHex(CYBER_ACCENT, alpha);
-const cyberAccentHover = (alpha: number | string) => rgbaFromHex(CYBER_ACCENT_HOVER, alpha);
-const cyberPurple = (alpha: number | string) => rgbaFromHex(CYBER_PURPLE, alpha);
-const cyberPurpleHover = (alpha: number | string) => rgbaFromHex(CYBER_PURPLE_HOVER, alpha);
 const cyberSuccess = (alpha: number | string) => rgbaFromHex(CYBER_SUCCESS, alpha);
 const cyberWarning = (alpha: number | string) => rgbaFromHex(CYBER_WARNING, alpha);
 const cyberError = (alpha: number | string) => rgbaFromHex(CYBER_ERROR, alpha);
@@ -64,47 +64,26 @@ export const bitfunCyberTheme: ThemeConfig = {
       disabled: '#4a5a66',
     },
 
-    accent: {
-      50: cyberAccent(0.05),
-      100: cyberAccent(0.1),
-      200: cyberAccent(0.18),
-      300: cyberAccent(0.3),
-      400: cyberAccent(0.45),
-      500: CYBER_ACCENT,
-      600: CYBER_ACCENT_HOVER,
-      700: cyberAccentHover(0.85),
-      800: cyberAccentHover(0.95),
-    },
+    accent: createAccentScale({
+      base: CYBER_ACCENT,
+      hover: CYBER_ACCENT_HOVER,
+      alpha: { 50: 0.05, 100: 0.1, 200: 0.18, 300: 0.3, 400: 0.45, 700: 0.85, 800: 0.95 },
+    }),
 
-    purple: {
-      50: cyberPurple(0.05),
-      100: cyberPurple(0.1),
-      200: cyberPurple(0.18),
-      400: cyberPurple(0.45),
-      500: CYBER_PURPLE,
-      600: CYBER_PURPLE_HOVER,
-      800: cyberPurpleHover(0.95),
-    },
+    purple: createSecondaryAccentScale({
+      base: CYBER_PURPLE,
+      hover: CYBER_PURPLE_HOVER,
+      alpha: { 50: 0.05, 100: 0.1, 200: 0.18, 400: 0.45, 800: 0.95 },
+    }),
 
-    semantic: {
+    semantic: createSemanticColors({
       success: CYBER_SUCCESS,
-      successBg: cyberSuccess(0.12),
-      successBorder: cyberSuccess(0.35),
-
       warning: CYBER_WARNING,
-      warningBg: cyberWarning(0.12),
-      warningBorder: cyberWarning(0.35),
-
       error: CYBER_ERROR,
-      errorBg: cyberError(0.12),
-      errorBorder: cyberError(0.35),
-
       info: CYBER_ACCENT,
-      infoBg: cyberAccent(0.12),
-      infoBorder: cyberAccent(0.35),
-
-
-    },
+      bgAlpha: 0.12,
+      borderAlpha: 0.35,
+    }),
 
     border: {
       subtle: cyberAccent(0.14),

@@ -2,9 +2,12 @@
 
 import { ThemeConfig } from '../types';
 import {
+  createAccentScale,
   createChinaTypography,
   createCompactRadius,
   createGitColors,
+  createSemanticColors,
+  createSecondaryAccentScale,
   createStandardEasing,
   createStandardSpacing,
   createWindowControls,
@@ -27,9 +30,6 @@ const CHINA_NIGHT_ERROR = '#e85555';
 const chinaNightBackground = (alpha: number | string) => rgbaFromHex(CHINA_NIGHT_BACKGROUND, alpha);
 const chinaNightText = (alpha: number | string) => rgbaFromHex(CHINA_NIGHT_TEXT_PRIMARY, alpha);
 const chinaNightAccent = (alpha: number | string) => rgbaFromHex(CHINA_NIGHT_ACCENT, alpha);
-const chinaNightAccentHover = (alpha: number | string) => rgbaFromHex(CHINA_NIGHT_ACCENT_HOVER, alpha);
-const chinaNightGreen = (alpha: number | string) => rgbaFromHex(CHINA_NIGHT_GREEN, alpha);
-const chinaNightGreenHover = (alpha: number | string) => rgbaFromHex(CHINA_NIGHT_GREEN_HOVER, alpha);
 const chinaNightSuccess = (alpha: number | string) => rgbaFromHex(CHINA_NIGHT_SUCCESS, alpha);
 const chinaNightWarning = (alpha: number | string) => rgbaFromHex(CHINA_NIGHT_WARNING, alpha);
 const chinaNightError = (alpha: number | string) => rgbaFromHex(CHINA_NIGHT_ERROR, alpha);
@@ -63,47 +63,17 @@ export const bitfunChinaNightTheme: ThemeConfig = {
       disabled: '#5f5d59',
     },
 
-    accent: {
-      50: chinaNightAccent(0.04),
-      100: chinaNightAccent(0.08),
-      200: chinaNightAccent(0.15),
-      300: chinaNightAccent(0.25),
-      400: chinaNightAccent(0.4),
-      500: CHINA_NIGHT_ACCENT,
-      600: CHINA_NIGHT_ACCENT_HOVER,
-      700: chinaNightAccentHover(0.8),
-      800: chinaNightAccentHover(0.9),
-    },
+    accent: createAccentScale({ base: CHINA_NIGHT_ACCENT, hover: CHINA_NIGHT_ACCENT_HOVER }),
 
-    purple: {
-      50: chinaNightGreen(0.04),
-      100: chinaNightGreen(0.08),
-      200: chinaNightGreen(0.15),
-      400: chinaNightGreen(0.4),
-      500: CHINA_NIGHT_GREEN,
-      600: CHINA_NIGHT_GREEN_HOVER,
-      800: chinaNightGreenHover(0.9),
-    },
+    purple: createSecondaryAccentScale({ base: CHINA_NIGHT_GREEN, hover: CHINA_NIGHT_GREEN_HOVER }),
 
-    semantic: {
+    semantic: createSemanticColors({
       success: CHINA_NIGHT_SUCCESS,
-      successBg: chinaNightSuccess(0.12),
-      successBorder: chinaNightSuccess(0.3),
-
       warning: CHINA_NIGHT_WARNING,
-      warningBg: chinaNightWarning(0.12),
-      warningBorder: chinaNightWarning(0.3),
-
       error: CHINA_NIGHT_ERROR,
-      errorBg: chinaNightError(0.12),
-      errorBorder: chinaNightError(0.3),
-
       info: CHINA_NIGHT_ACCENT,
-      infoBg: chinaNightAccent(0.12),
-      infoBorder: chinaNightAccent(0.3),
-
-
-    },
+      bgAlpha: 0.12,
+    }),
 
     border: {
       subtle: chinaNightText(0.1),

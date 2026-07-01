@@ -2,7 +2,16 @@ import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 
 import { builtinThemes } from './index';
-import { createGitColors, overlayBlack, overlayWhite, rgbFromHex, rgbaFromHex } from './shared';
+import {
+  createAccentScale,
+  createGitColors,
+  createSemanticColors,
+  createSecondaryAccentScale,
+  overlayBlack,
+  overlayWhite,
+  rgbFromHex,
+  rgbaFromHex,
+} from './shared';
 
 function hashTheme(theme: unknown): string {
   return createHash('sha256')
@@ -51,6 +60,50 @@ describe('builtin theme preset output', () => {
     });
   });
 
+  it('derives repeated palette families from compact authoring inputs', () => {
+    expect(createAccentScale({
+      base: '#60a5fa',
+      hover: '#3b82f6',
+    })).toEqual({
+      50: 'rgba(96, 165, 250, 0.04)',
+      100: 'rgba(96, 165, 250, 0.08)',
+      200: 'rgba(96, 165, 250, 0.15)',
+      300: 'rgba(96, 165, 250, 0.25)',
+      400: 'rgba(96, 165, 250, 0.4)',
+      500: '#60a5fa',
+      600: '#3b82f6',
+      700: 'rgba(59, 130, 246, 0.8)',
+      800: 'rgba(59, 130, 246, 0.9)',
+    });
+
+    expect(createSecondaryAccentScale({
+      base: '#8b5cf6',
+      hover: '#7c3aed',
+    })).toEqual({
+      50: 'rgba(139, 92, 246, 0.04)',
+      100: 'rgba(139, 92, 246, 0.08)',
+      200: 'rgba(139, 92, 246, 0.15)',
+      400: 'rgba(139, 92, 246, 0.4)',
+      500: '#8b5cf6',
+      600: '#7c3aed',
+      800: 'rgba(124, 58, 237, 0.9)',
+    });
+
+    expect(createSemanticColors({
+      success: '#34d399',
+      warning: '#f59e0b',
+      error: '#ef4444',
+      info: '#a1a1aa',
+    })).toMatchObject({
+      successBg: 'rgba(52, 211, 153, 0.1)',
+      successBorder: 'rgba(52, 211, 153, 0.3)',
+      warningBg: 'rgba(245, 158, 11, 0.1)',
+      errorBorder: 'rgba(239, 68, 68, 0.3)',
+      infoBg: 'rgba(161, 161, 170, 0.1)',
+      infoBorder: 'rgba(161, 161, 170, 0.3)',
+    });
+  });
+
   it('keeps near-neutral preset foregrounds on canonical stops', () => {
     const serializedThemes = JSON.stringify(builtinThemes).toLowerCase();
 
@@ -72,12 +125,12 @@ describe('builtin theme preset output', () => {
           "type": "light",
         },
         {
-          "hash": "e6310cfa9ee13263e955a4abaabbbba63713c1210ec981bc49c5b5f786c880e8",
+          "hash": "c27ab539f87e1c5e1072f6b4e8b74ad5088a461485f34965318b654156f1f728",
           "id": "bitfun-slate",
           "type": "dark",
         },
         {
-          "hash": "235f2c1d67c65426031fb5f6c7f47b37e9a29e102adb501194a6cb87dbbb6880",
+          "hash": "644ebf466f1a722c329b7298b2fb2c40f7b352e338d0e6abf5ae22d1b233114f",
           "id": "bitfun-dark",
           "type": "dark",
         },

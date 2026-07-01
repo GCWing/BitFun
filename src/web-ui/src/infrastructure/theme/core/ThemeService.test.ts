@@ -118,6 +118,35 @@ describe('ThemeService runtime theme tokens', () => {
     expect(document.documentElement.style.getPropertyValue('--color-info-border')).toBe('rgba(255, 255, 255, 0.24)');
   });
 
+  it('exports the complete git runtime token family from the resolved theme', async () => {
+    const service = new ThemeService();
+
+    await service.applyTheme('bitfun-dark');
+
+    const rootStyle = document.documentElement.style;
+    expect(rootStyle.getPropertyValue('--git-color-branch')).toBe('#a1a1aa');
+    expect(rootStyle.getPropertyValue('--git-color-branch-bg')).toBe('rgba(255, 255, 255, 0.06)');
+    expect(rootStyle.getPropertyValue('--git-color-branch-bg-hover')).toBe('rgba(255, 255, 255, 0.12)');
+    expect(rootStyle.getPropertyValue('--git-color-branch-border')).toBe('rgba(255, 255, 255, 0.18)');
+    expect(rootStyle.getPropertyValue('--git-color-added')).toBe('rgb(34, 197, 94)');
+    expect(rootStyle.getPropertyValue('--git-color-added-bg')).toBe('rgba(34, 197, 94, 0.1)');
+    expect(rootStyle.getPropertyValue('--git-color-added-bg-hover')).toBe('rgba(34, 197, 94, 0.15)');
+    expect(rootStyle.getPropertyValue('--git-color-added-border')).toBe('rgba(34, 197, 94, 0.3)');
+    expect(rootStyle.getPropertyValue('--git-color-changes-bg')).toBe('rgba(245, 158, 11, 0.1)');
+    expect(rootStyle.getPropertyValue('--git-color-changes-bg-hover')).toBe('rgba(245, 158, 11, 0.15)');
+    expect(rootStyle.getPropertyValue('--git-color-changes-border')).toBe('rgba(245, 158, 11, 0.3)');
+    expect(rootStyle.getPropertyValue('--git-color-deleted-bg-hover')).toBe('rgba(239, 68, 68, 0.15)');
+    expect(rootStyle.getPropertyValue('--git-color-deleted-border')).toBe('rgba(239, 68, 68, 0.3)');
+    expect(rootStyle.getPropertyValue('--git-color-staged-bg-hover')).toBe('rgba(34, 197, 94, 0.15)');
+    expect(rootStyle.getPropertyValue('--git-color-staged-border')).toBe('rgba(34, 197, 94, 0.3)');
+    expect(rootStyle.getPropertyValue('--git-color-pull')).toBe('#a1a1aa');
+    expect(rootStyle.getPropertyValue('--git-color-pull-bg')).toBe('rgba(255, 255, 255, 0.06)');
+    expect(rootStyle.getPropertyValue('--git-color-pull-bg-hover')).toBe('rgba(255, 255, 255, 0.12)');
+    expect(rootStyle.getPropertyValue('--git-color-push')).toBe('rgb(34, 197, 94)');
+    expect(rootStyle.getPropertyValue('--git-color-push-bg')).toBe('rgba(34, 197, 94, 0.1)');
+    expect(rootStyle.getPropertyValue('--git-color-push-bg-hover')).toBe('rgba(34, 197, 94, 0.15)');
+  });
+
   it('uses canonical dark overlay stops when a theme omits scrollbar values', () => {
     const service = new ThemeService();
     const fallbackTheme: ThemeConfig = {

@@ -2,66 +2,19 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  checkBudgetBaseline,
+  cliHexColorDistance,
+  cliRgbToHex,
+  normalizeCliHexColor,
+  writeReportJson,
+} from './theme-color-audit-utils.mjs';
 
 const DEFAULT_ROOT = 'src/apps/cli';
 const DEFAULT_BASELINE = 'scripts/theme-color-governance-baseline.cli.json';
 const DEFAULT_NEAR_THRESHOLD = 10;
 
-function blendAlphaChannel(channel, alpha, base) {
-  return Math.round((channel * alpha + base * (255 - alpha)) / 255);
-}
-
-export function normalizeHexColor(value, options = {}) {
-  if (typeof value !== 'string') {
-    return null;
-  }
-  const match = /^#([0-9a-f]{6}|[0-9a-f]{8})$/i.exec(value.trim());
-  if (!match) {
-    return null;
-  }
-  const raw = match[1].toLowerCase();
-  if (raw.length === 6) {
-    return `#${raw}`;
-  }
-
-  const base = options.mode === 'light' ? 255 : 0;
-  const alpha = Number.parseInt(raw.slice(6, 8), 16);
-  return rgbToHex(
-    blendAlphaChannel(Number.parseInt(raw.slice(0, 2), 16), alpha, base),
-    blendAlphaChannel(Number.parseInt(raw.slice(2, 4), 16), alpha, base),
-    blendAlphaChannel(Number.parseInt(raw.slice(4, 6), 16), alpha, base),
-  );
-}
-
-function hexToRgb(hex) {
-  const normalized = normalizeHexColor(hex);
-  if (!normalized) {
-    return null;
-  }
-  const raw = normalized.slice(1);
-  return [
-    Number.parseInt(raw.slice(0, 2), 16),
-    Number.parseInt(raw.slice(2, 4), 16),
-    Number.parseInt(raw.slice(4, 6), 16),
-  ];
-}
-
-function rgbToHex(r, g, b) {
-  return `#${[r, g, b].map(value => value.toString(16).padStart(2, '0')).join('')}`;
-}
-
-function colorDistance(a, b) {
-  const rgbA = hexToRgb(a);
-  const rgbB = hexToRgb(b);
-  if (!rgbA || !rgbB) {
-    return Number.POSITIVE_INFINITY;
-  }
-  return Math.hypot(
-    rgbA[0] - rgbB[0],
-    rgbA[1] - rgbB[1],
-    rgbA[2] - rgbB[2],
-  );
-}
+export { normalizeCliHexColor as normalizeHexColor, writeReportJson } from './theme-color-audit-utils.mjs';
 
 export function collectPresetColorEntriesFromJson(file, jsonText) {
   const parsed = JSON.parse(jsonText);
@@ -96,7 +49,7 @@ function collectColorValueEntries({ file, key, value, theme, defs, mode, seen })
     if (trimmed === '' || trimmed.toLowerCase() === 'none' || trimmed.toLowerCase() === 'transparent') {
       return [];
     }
-    const color = normalizeHexColor(trimmed, { mode });
+    const color = normalizeCliHexColor(trimmed, { mode });
     if (color) {
       return [{ file, key, color }];
     }
@@ -161,7 +114,7 @@ export function collectRustFallbackEntriesFromText(file, sourceText) {
     entries.push({
       file,
       key: match[1],
-      color: rgbToHex(
+      color: cliRgbToHex(
         Number.parseInt(match[2], 10),
         Number.parseInt(match[3], 10),
         Number.parseInt(match[4], 10),
@@ -187,7 +140,7 @@ export function findNearPairs(entries, threshold = DEFAULT_NEAR_THRESHOLD) {
   const pairs = [];
   for (let i = 0; i < colors.length; i += 1) {
     for (let j = i + 1; j < colors.length; j += 1) {
-      const distance = colorDistance(colors[i], colors[j]);
+      const distance = cliHexColorDistance(colors[i], colors[j]);
       if (distance > 0 && distance <= threshold) {
         pairs.push({
           a: colors[i],
@@ -331,56 +284,8 @@ function parseArgs(argv) {
   return options;
 }
 
-function getMetric(report, pathExpression) {
-  return pathExpression.split('.').reduce((value, key) => {
-    if (value && Object.prototype.hasOwnProperty.call(value, key)) {
-      return value[key];
-    }
-    return undefined;
-  }, report);
-}
-
 export function checkBaseline(report, baselinePath) {
-  if (!baselinePath) {
-    return [];
-  }
-  const baseline = JSON.parse(fs.readFileSync(baselinePath, 'utf8'));
-  const baselineLabel = baselinePath;
-  const failures = [];
-  if (baseline.version !== 1) {
-    failures.push(`${baselineLabel} must use version 1`);
-  }
-  if (!baseline.budgets || typeof baseline.budgets !== 'object' || Array.isArray(baseline.budgets)) {
-    failures.push(`${baselineLabel} must define a budgets object`);
-    return failures;
-  }
-  for (const [metric, budget] of Object.entries(baseline.budgets ?? {})) {
-    if (!budget || typeof budget !== 'object' || Array.isArray(budget)) {
-      failures.push(`${baselineLabel} ${metric} budget must be an object`);
-      continue;
-    }
-    if (typeof budget.max !== 'number') {
-      failures.push(`${baselineLabel} ${metric}.max must be a number`);
-      continue;
-    }
-    const actual = getMetric(report, metric);
-    if (typeof actual !== 'number') {
-      failures.push(`${baselineLabel} references unknown numeric metric ${metric}`);
-      continue;
-    }
-    if (actual > budget.max) {
-      failures.push(`${metric} has ${actual} candidate(s), baseline is ${budget.max}`);
-    } else if (actual < budget.max) {
-      failures.push(`${metric} has ${actual} candidate(s), below baseline ${budget.max}; lower ${baselineLabel}.`);
-    }
-  }
-  return failures;
-}
-
-export function writeReportJson(report, reportJsonPath) {
-  const outputPath = path.resolve(reportJsonPath);
-  fs.mkdirSync(path.dirname(outputPath), { recursive: true });
-  fs.writeFileSync(outputPath, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
+  return checkBudgetBaseline(report, baselinePath);
 }
 
 function printRows(title, rows, top) {

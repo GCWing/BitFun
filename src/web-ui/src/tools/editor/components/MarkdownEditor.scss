@@ -113,9 +113,9 @@
     gap: $size-gap-4;
     padding: $size-gap-8;
     text-align: center;
-    background: $element-bg-base;
+    background: var(--element-bg-base);
     border-radius: $size-radius-lg;
-    border: 1px solid $border-base;
+    border: 1px solid var(--border-base);
     backdrop-filter: blur(8px);
 
     .error-icon {

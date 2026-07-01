@@ -2,7 +2,10 @@
 
 import { ThemeConfig } from '../types';
 import {
+  createAccentScale,
   createGitColors,
+  createSemanticColors,
+  createSecondaryAccentScale,
   createStandardEasing,
   createStandardRadius,
   createStandardSpacing,
@@ -29,9 +32,6 @@ const MIDNIGHT_CONTROL_ERROR = '#ef4444';
 const midnightBackground = (alpha: number | string) => rgbaFromHex(MIDNIGHT_BACKGROUND, alpha);
 const midnightText = (alpha: number | string) => rgbaFromHex(MIDNIGHT_TEXT_PRIMARY, alpha);
 const midnightAccent = (alpha: number | string) => rgbaFromHex(MIDNIGHT_ACCENT, alpha);
-const midnightAccentHover = (alpha: number | string) => rgbaFromHex(MIDNIGHT_ACCENT_HOVER, alpha);
-const midnightPurple = (alpha: number | string) => rgbaFromHex(MIDNIGHT_PURPLE, alpha);
-const midnightPurpleHover = (alpha: number | string) => rgbaFromHex(MIDNIGHT_PURPLE_HOVER, alpha);
 const midnightSuccess = (alpha: number | string) => rgbaFromHex(MIDNIGHT_SUCCESS, alpha);
 const midnightWarning = (alpha: number | string) => rgbaFromHex(MIDNIGHT_WARNING, alpha);
 const midnightError = (alpha: number | string) => rgbaFromHex(MIDNIGHT_ERROR, alpha);
@@ -65,47 +65,16 @@ export const bitfunMidnightTheme: ThemeConfig = {
       disabled: '#4e5157',
     },
 
-    accent: {
-      50: midnightAccent(0.04),
-      100: midnightAccent(0.08),
-      200: midnightAccent(0.15),
-      300: midnightAccent(0.25),
-      400: midnightAccent(0.4),
-      500: MIDNIGHT_ACCENT,
-      600: MIDNIGHT_ACCENT_HOVER,
-      700: midnightAccentHover(0.8),
-      800: midnightAccentHover(0.9),
-    },
+    accent: createAccentScale({ base: MIDNIGHT_ACCENT, hover: MIDNIGHT_ACCENT_HOVER }),
 
-    purple: {
-      50: midnightPurple(0.04),
-      100: midnightPurple(0.08),
-      200: midnightPurple(0.15),
-      400: midnightPurple(0.4),
-      500: MIDNIGHT_PURPLE,
-      600: MIDNIGHT_PURPLE_HOVER,
-      800: midnightPurpleHover(0.9),
-    },
+    purple: createSecondaryAccentScale({ base: MIDNIGHT_PURPLE, hover: MIDNIGHT_PURPLE_HOVER }),
 
-    semantic: {
+    semantic: createSemanticColors({
       success: MIDNIGHT_SUCCESS,
-      successBg: midnightSuccess(0.1),
-      successBorder: midnightSuccess(0.3),
-
       warning: MIDNIGHT_WARNING,
-      warningBg: midnightWarning(0.1),
-      warningBorder: midnightWarning(0.3),
-
       error: MIDNIGHT_ERROR,
-      errorBg: midnightError(0.1),
-      errorBorder: midnightError(0.3),
-
       info: MIDNIGHT_ACCENT,
-      infoBg: midnightAccent(0.1),
-      infoBorder: midnightAccent(0.3),
-
-
-    },
+    }),
 
     border: {
       subtle: overlayWhite(0.08),

@@ -2,10 +2,13 @@
 
 import { ThemeConfig } from '../types';
 import {
+  createAccentScale,
   createDarkNeutralBorder,
   createDarkNeutralElement,
   createDarkNeutralScrollbar,
   createGitColors,
+  createSemanticColors,
+  createSecondaryAccentScale,
   createSlateRadius,
   createStandardEasing,
   createStandardSpacing,
@@ -32,9 +35,6 @@ const SLATE_SUCCESS = '#7fb899';
 const SLATE_WARNING = '#f59e0b';
 const SLATE_ERROR = '#c9878d';
 
-const slateAccentHover = (alpha: number | string) => rgbaFromHex(SLATE_ACCENT_HOVER, alpha);
-const slatePurple = (alpha: number | string) => rgbaFromHex(SLATE_PURPLE, alpha);
-const slatePurpleHover = (alpha: number | string) => rgbaFromHex(SLATE_PURPLE_HOVER, alpha);
 const slateSuccess = (alpha: number | string) => rgbaFromHex(SLATE_SUCCESS, alpha);
 const slateWarning = (alpha: number | string) => rgbaFromHex(SLATE_WARNING, alpha);
 const slateError = (alpha: number | string) => rgbaFromHex(SLATE_ERROR, alpha);
@@ -73,48 +73,33 @@ export const bitfunSlateTheme: ThemeConfig = {
 
 
     // Cool gray accent — neutral chrome for slate surfaces (links, focus, nav tints).
-    accent: {
-      50: rgbaFromHex(SLATE_ACCENT_SOFT, 0.05),
-      100: rgbaFromHex(SLATE_ACCENT_SOFT, 0.09),
-      200: 'rgba(203, 213, 225, 0.14)',
-      300: 'rgba(203, 213, 225, 0.24)',
-      400: 'rgba(148, 163, 184, 0.45)',
-      500: SLATE_ACCENT,
-      600: SLATE_ACCENT_HOVER,
-      700: slateAccentHover(0.85),
-      800: 'rgba(71, 85, 105, 0.92)',
-    },
+    accent: createAccentScale({
+      base: SLATE_ACCENT,
+      hover: SLATE_ACCENT_HOVER,
+      alpha: { 700: 0.85 },
+      stops: {
+        50: rgbaFromHex(SLATE_ACCENT_SOFT, 0.05),
+        100: rgbaFromHex(SLATE_ACCENT_SOFT, 0.09),
+        200: 'rgba(203, 213, 225, 0.14)',
+        300: 'rgba(203, 213, 225, 0.24)',
+        400: 'rgba(148, 163, 184, 0.45)',
+        800: 'rgba(71, 85, 105, 0.92)',
+      },
+    }),
 
 
-    purple: {
-      50: slatePurple(0.04),
-      100: slatePurple(0.08),
-      200: slatePurple(0.15),
-      400: slatePurple(0.4),
-      500: SLATE_PURPLE,
-      600: SLATE_PURPLE_HOVER,
-      800: slatePurpleHover(0.9),
-    },
+    purple: createSecondaryAccentScale({ base: SLATE_PURPLE, hover: SLATE_PURPLE_HOVER }),
 
-    semantic: {
+    semantic: createSemanticColors({
       success: SLATE_SUCCESS,
-      successBg: slateSuccess(0.1),
-      successBorder: slateSuccess(0.3),
-
       warning: SLATE_WARNING,
-      warningBg: slateWarning(0.1),
-      warningBorder: slateWarning(0.3),
-
       error: SLATE_ERROR,
-      errorBg: slateError(0.1),
-      errorBorder: slateError(0.3),
-
       info: SLATE_TEXT_MUTED,
-      infoBg: overlayWhite(0.07),
-      infoBorder: overlayWhite(0.2),
-
-
-    },
+      overrides: {
+        infoBg: overlayWhite(0.07),
+        infoBorder: overlayWhite(0.2),
+      },
+    }),
 
     border: createDarkNeutralBorder(),
 

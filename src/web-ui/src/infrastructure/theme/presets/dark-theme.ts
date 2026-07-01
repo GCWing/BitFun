@@ -2,10 +2,13 @@
 
 import { ThemeConfig } from '../types';
 import {
+  createAccentScale,
   createDarkNeutralBorder,
   createDarkNeutralElement,
   createDarkNeutralScrollbar,
   createGitColors,
+  createSemanticColors,
+  createSecondaryAccentScale,
   createStandardEasing,
   createStandardRadius,
   createStandardSpacing,
@@ -30,11 +33,6 @@ const DARK_SUCCESS = '#34d399';
 const DARK_WARNING = '#f59e0b';
 const DARK_ERROR = '#ef4444';
 
-const darkAccent = (alpha: number | string) => rgbaFromHex(DARK_ACCENT, alpha);
-const darkAccentHover = (alpha: number | string) => rgbaFromHex(DARK_ACCENT_HOVER, alpha);
-const darkPurple = (alpha: number | string) => rgbaFromHex(DARK_PURPLE, alpha);
-const darkPurpleHover = (alpha: number | string) => rgbaFromHex(DARK_PURPLE_HOVER, alpha);
-const darkSuccess = (alpha: number | string) => rgbaFromHex(DARK_SUCCESS, alpha);
 const darkWarning = (alpha: number | string) => rgbaFromHex(DARK_WARNING, alpha);
 const darkError = (alpha: number | string) => rgbaFromHex(DARK_ERROR, alpha);
 
@@ -67,47 +65,20 @@ export const bitfunDarkTheme: ThemeConfig = {
       disabled: '#555555',
     },
 
-    accent: {
-      50: darkAccent(0.04),
-      100: darkAccent(0.08),
-      200: darkAccent(0.15),
-      300: darkAccent(0.25),
-      400: darkAccent(0.4),
-      500: DARK_ACCENT,
-      600: DARK_ACCENT_HOVER,
-      700: darkAccentHover(0.8),
-      800: darkAccentHover(0.9),
-    },
+    accent: createAccentScale({ base: DARK_ACCENT, hover: DARK_ACCENT_HOVER }),
 
-    purple: {
-      50: darkPurple(0.04),
-      100: darkPurple(0.08),
-      200: darkPurple(0.15),
-      400: darkPurple(0.4),
-      500: DARK_PURPLE,
-      600: DARK_PURPLE_HOVER,
-      800: darkPurpleHover(0.9),
-    },
+    purple: createSecondaryAccentScale({ base: DARK_PURPLE, hover: DARK_PURPLE_HOVER }),
 
-    semantic: {
+    semantic: createSemanticColors({
       success: DARK_SUCCESS,
-      successBg: darkSuccess(0.1),
-      successBorder: darkSuccess(0.3),
-
       warning: DARK_WARNING,
-      warningBg: darkWarning(0.1),
-      warningBorder: darkWarning(0.3),
-
       error: DARK_ERROR,
-      errorBg: darkError(0.1),
-      errorBorder: darkError(0.3),
-
       info: '#a1a1aa',
-      infoBg: overlayWhite(0.08),
-      infoBorder: overlayWhite(0.24),
-
-
-    },
+      overrides: {
+        infoBg: overlayWhite(0.08),
+        infoBorder: overlayWhite(0.24),
+      },
+    }),
 
     border: createDarkNeutralBorder(),
 

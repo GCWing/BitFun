@@ -2,7 +2,10 @@
 
 import { ThemeConfig } from '../types';
 import {
+  createAccentScale,
   createGitColors,
+  createSemanticColors,
+  createSecondaryAccentScale,
   createStandardEasing,
   createStandardRadius,
   createStandardSpacing,
@@ -28,8 +31,6 @@ const LIGHT_ERROR = '#c26565';
 const lightInk = (alpha: number | string) => rgbaFromHex(LIGHT_INK, alpha);
 const lightAccent = (alpha: number | string) => rgbaFromHex(LIGHT_ACCENT, alpha);
 const lightAccentHover = (alpha: number | string) => rgbaFromHex(LIGHT_ACCENT_HOVER, alpha);
-const lightPurpleBase = (alpha: number | string) => rgbaFromHex('#6b5a89', alpha);
-const lightPurpleHover = (alpha: number | string) => rgbaFromHex(LIGHT_PURPLE_HOVER, alpha);
 const lightSuccess = (alpha: number | string) => rgbaFromHex(LIGHT_SUCCESS, alpha);
 const lightWarning = (alpha: number | string) => rgbaFromHex(LIGHT_WARNING, alpha);
 const lightError = (alpha: number | string) => rgbaFromHex(LIGHT_ERROR, alpha);
@@ -68,49 +69,43 @@ export const bitfunLightTheme: ThemeConfig = {
     },
 
 
-    accent: {
-      50: lightInk(0.04),
-      100: lightInk(0.07),
-      200: lightInk(0.1),
-      300: lightInk(0.16),
-      400: lightInk(0.26),
-      500: LIGHT_ACCENT,
-      600: LIGHT_ACCENT_HOVER,
-      700: lightAccentHover(0.88),
-      800: rgbaFromHex(LIGHT_TEXT_STRONG, 0.94),
-    },
+    accent: createAccentScale({
+      base: LIGHT_ACCENT,
+      hover: LIGHT_ACCENT_HOVER,
+      alpha: { 700: 0.88 },
+      stops: {
+        50: lightInk(0.04),
+        100: lightInk(0.07),
+        200: lightInk(0.1),
+        300: lightInk(0.16),
+        400: lightInk(0.26),
+        800: rgbaFromHex(LIGHT_TEXT_STRONG, 0.94),
+      },
+    }),
 
 
-    purple: {
-      50: lightPurpleBase(0.04),
-      100: lightPurpleBase(0.08),
-      200: lightPurpleBase(0.14),
-      400: lightPurpleBase(0.36),
-      500: LIGHT_PURPLE,
-      600: LIGHT_PURPLE_HOVER,
-      800: lightPurpleHover(0.9),
-    },
+    purple: createSecondaryAccentScale({
+      base: '#6b5a89',
+      hover: LIGHT_PURPLE_HOVER,
+      alpha: { 200: 0.14, 400: 0.36 },
+      stops: {
+        500: LIGHT_PURPLE,
+      },
+    }),
 
 
-    semantic: {
+    semantic: createSemanticColors({
       success: LIGHT_SUCCESS,
-      successBg: lightSuccess(0.08),
-      successBorder: lightSuccess(0.25),
-
       warning: LIGHT_WARNING,
-      warningBg: lightWarning(0.08),
-      warningBorder: lightWarning(0.25),
-
       error: LIGHT_ERROR,
-      errorBg: lightError(0.08),
-      errorBorder: lightError(0.25),
-
       info: LIGHT_ACCENT,
-      infoBg: lightAccent(0.1),
-      infoBorder: lightAccent(0.28),
-
-
-    },
+      bgAlpha: 0.08,
+      borderAlpha: 0.25,
+      overrides: {
+        infoBg: lightAccent(0.1),
+        infoBorder: lightAccent(0.28),
+      },
+    }),
 
 
     border: {

@@ -31,7 +31,7 @@
     gap: $size-gap-2;
     padding: $size-gap-2 $size-gap-3;
     background: var(--color-bg-primary);
-    border-bottom: 1px solid $border-base;
+    border-bottom: 1px solid var(--border-base);
     min-height: 32px;
     flex-shrink: 0;
   }
@@ -109,7 +109,7 @@
   &__divider {
     width: 1px;
     height: 20px;
-    background: $border-base;
+    background: var(--border-base);
     margin: 0 $size-gap-1;
   }
 

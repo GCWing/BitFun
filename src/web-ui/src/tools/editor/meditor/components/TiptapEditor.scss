@@ -744,7 +744,7 @@
     bottom: 6px;
     width: 2px;
     border-radius: 999px;
-    background: $color-accent-400;
+    background: var(--color-accent-400);
   }
 
   .m-editor-inline-ai-preview--streaming,
@@ -758,11 +758,11 @@
   .m-editor-inline-ai-preview--error {
     .m-editor-inline-ai-preview__title,
     .m-editor-inline-ai-preview__body {
-      color: $color-error;
+      color: var(--color-error);
     }
 
     .m-editor-inline-ai-preview__body::before {
-      background: $color-error-border;
+      background: var(--color-error-border);
     }
   }
 

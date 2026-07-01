@@ -42,7 +42,7 @@ $_diff-error-max-width: 400px;
   align-items: center;
   padding: 0 $size-gap-3;
   background: var(--color-bg-primary);
-  border-bottom: 1px solid $border-base;
+  border-bottom: 1px solid var(--border-base);
   flex-shrink: 0;
   height: $_diff-toolbar-height;
   min-height: $_diff-toolbar-height;
@@ -106,8 +106,8 @@ $_diff-error-max-width: 400px;
     min-width: 32px;
     height: 32px;
     padding: 0 $size-gap-3;
-    background: $element-bg-base;
-    border: 1px solid $border-base;
+    background: var(--element-bg-base);
+    border: 1px solid var(--border-base);
     border-radius: $size-radius-base;
     color: var(--color-text-secondary);
     font-size: var(--font-size-lg);
@@ -116,7 +116,7 @@ $_diff-error-max-width: 400px;
     transition: all $motion-base $easing-standard;
 
     &:hover:not(:disabled) {
-      background: $element-bg-medium;
+      background: var(--element-bg-medium);
       border-color: var(--color-accent-500);
       color: var(--color-accent-500);
       transform: translateY(-1px);
@@ -137,7 +137,7 @@ $_diff-error-max-width: 400px;
     }
 
     &:focus-visible {
-      outline: 2px solid $color-accent-500;
+      outline: 2px solid var(--color-accent-500);
       outline-offset: 2px;
     }
   }
@@ -529,7 +529,7 @@ $_diff-error-max-width: 400px;
 // High Contrast Mode
 @media (prefers-contrast: high) {
   .diff-editor-container {
-    border: 2px solid $border-base;
+    border: 2px solid var(--border-base);
   }
 
   .diff-editor-toolbar {

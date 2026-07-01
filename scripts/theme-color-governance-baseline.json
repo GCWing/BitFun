@@ -105,7 +105,7 @@
       "max": 0
     },
     "colorScopes.token.uniqueColors": {
-      "max": 247
+      "max": 246
     },
     "colorScopes.exception.uniqueColors": {
       "max": 245
@@ -131,6 +131,9 @@
     "cssVarDefinitions.unregisteredDynamicFamilyUnique": {
       "max": 0
     },
+    "cssVarDefinitions.dynamicFamilyUnexportedUnique": {
+      "max": 0
+    },
     "cssVarDefinitions.staleRegisteredDynamicFamilyUnique": {
       "max": 0
     },
@@ -150,7 +153,7 @@
       "max": 0
     },
     "colorDomainNearPairs.nearTotal": {
-      "max": 108
+      "max": 102
     },
     "colorDomainNearPairs.themePreset.indistinguishableTotal": {
       "max": 0
@@ -162,13 +165,13 @@
       "max": 0
     },
     "colorDomainNearPairs.themeRuntime.nearTotal": {
-      "max": 13
+      "max": 10
     },
     "colorDomainNearPairs.tokenContract.indistinguishableTotal": {
       "max": 0
     },
     "colorDomainNearPairs.tokenContract.nearTotal": {
-      "max": 16
+      "max": 13
     },
     "colorDomainNearPairs.generatedWidget.indistinguishableTotal": {
       "max": 0
@@ -246,7 +249,7 @@
       "max": 35
     },
     "colorDomainScopes.tokenContract.occurrences": {
-      "max": 127
+      "max": 126
     },
     "colorDomainScopes.generatedWidget.occurrences": {
       "max": 0

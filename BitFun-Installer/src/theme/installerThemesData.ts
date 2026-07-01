@@ -116,7 +116,7 @@ export const THEMES: InstallerTheme[] = [
       purple: createSecondaryRamp('139, 92, 246', '#8b5cf6', '#7c3aed', '124, 58, 237'),
       semantic: { success: '#34d399', warning: '#f59e0b', error: '#ef4444', info: '#e1ab80', highlight: '#d4a574', highlightBg: alpha('212, 165, 116', '0.15') },
       border: { subtle: alpha('255, 255, 255', '0.12'), base: alpha('255, 255, 255', '0.18'), medium: alpha('255, 255, 255', '0.24'), strong: alpha('255, 255, 255', '0.32'), prominent: alpha('225, 171, 128', '0.50') },
-      element: { subtle: alpha('255, 255, 255', '0.06'), soft: alpha('255, 255, 255', '0.10'), base: alpha('255, 255, 255', '0.12'), medium: alpha('255, 255, 255', '0.18'), strong: alpha('255, 255, 255', '0.21'), elevated: alpha('255, 255, 255', '0.24') },
+      element: { subtle: alpha('255, 255, 255', '0.06'), soft: alpha('255, 255, 255', '0.12'), base: alpha('255, 255, 255', '0.12'), medium: alpha('255, 255, 255', '0.18'), strong: alpha('255, 255, 255', '0.24'), elevated: alpha('255, 255, 255', '0.24') },
     },
   },
   {
@@ -214,7 +214,7 @@ export const THEMES: InstallerTheme[] = [
       purple: createSecondaryRamp('184, 198, 255', '#b8c4ff', '#9dacf5', '157, 172, 245'),
       semantic: { success: '#7fb899', warning: '#d4a574', error: '#c9878d', info: '#7ab0ee', highlight: '#e2e4e7', highlightBg: alpha('212, 214, 216', '0.12') },
       border: { subtle: alpha('255, 255, 255', '0.12'), base: alpha('255, 255, 255', '0.18'), medium: alpha('255, 255, 255', '0.24'), strong: alpha('255, 255, 255', '0.32'), prominent: alpha('255, 255, 255', '0.45') },
-      element: { subtle: alpha('255, 255, 255', '0.06'), soft: alpha('255, 255, 255', '0.10'), base: alpha('255, 255, 255', '0.12'), medium: alpha('255, 255, 255', '0.18'), strong: alpha('255, 255, 255', '0.21'), elevated: alpha('255, 255, 255', '0.24') },
+      element: { subtle: alpha('255, 255, 255', '0.06'), soft: alpha('255, 255, 255', '0.12'), base: alpha('255, 255, 255', '0.12'), medium: alpha('255, 255, 255', '0.18'), strong: alpha('255, 255, 255', '0.24'), elevated: alpha('255, 255, 255', '0.24') },
     },
   },
 ];

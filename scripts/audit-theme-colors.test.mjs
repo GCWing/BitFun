@@ -359,6 +359,7 @@ test('theme color audit emits scoped machine-readable reports', (t) => {
   assert.equal(report.tokenAliasLiterals.uniqueColors, 0);
   assert.equal(report.cssVarDefinitions.runtimeOnlyRequiredContractUnique, 1);
   assert.equal(report.cssVarDefinitions.unregisteredDynamicFamilyUnique, 0);
+  assert.equal(report.cssVarDefinitions.dynamicFamilyUnexportedUnique, 0);
   assert.equal(report.cssVarDefinitions.staleRegisteredDynamicFamilyUnique, 0);
   assert.equal(report.summary.baseline.enforced, false);
 });
@@ -939,6 +940,54 @@ test('theme color audit accepts registered dynamic CSS var families', (t) => {
 
   const result = runAudit(['--root', sourceRoot, '--baseline', baselinePath]);
   assert.equal(result.status, 0, result.stderr || result.stdout);
+});
+
+test('theme color audit requires exact exports for dynamic-family CSS var usages', (t) => {
+  const { dir, sourceRoot } = createFixture({
+    'component-library/styles/tokens.scss': [
+      ':root {',
+      '  --color-purple-200: rgba(139, 92, 246, 0.15);',
+      '}',
+      '',
+    ].join('\n'),
+    'infrastructure/theme/core/ThemeService.ts': [
+      "for (const [key, value] of Object.entries(theme.colors.purple)) {",
+      "  document.documentElement.style.setProperty(`--color-purple-${key}`, value);",
+      '}',
+      '',
+    ].join('\n'),
+    'component-library/components/Tabs/Tabs.scss': [
+      '.tabs {',
+      '  border-color: var(--color-purple-300);',
+      '}',
+      '',
+    ].join('\n'),
+  });
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const baselinePath = path.join(dir, 'theme-baseline.json');
+  writeText(baselinePath, `${JSON.stringify({
+    version: 1,
+    budgets: {
+      'cssVarDefinitions.dynamicFamilyUnexportedUnique': { max: 0 },
+    },
+  }, null, 2)}\n`);
+
+  const reportResult = runAudit(['--root', sourceRoot, '--json', '--no-baseline']);
+  assert.equal(reportResult.status, 0, reportResult.stderr || reportResult.stdout);
+  const report = JSON.parse(reportResult.stdout);
+  assert.equal(report.cssVarDefinitions.dynamicFamilyUnexportedUnique, 1);
+  assert.deepEqual(
+    report.dynamicFamilyUnexportedVars.map(row => [row.key, row.prefix]),
+    [['--color-purple-300', '--color-purple-']],
+  );
+
+  const blocked = runAudit(['--root', sourceRoot, '--baseline', baselinePath]);
+  assert.notEqual(blocked.status, 0, 'dynamic-family usages without exact exports must fail the audit');
+  assert.match(
+    `${blocked.stdout}\n${blocked.stderr}`,
+    /cssVarDefinitions\.dynamicFamilyUnexportedUnique has 1 candidate\(s\), baseline is 0/,
+  );
+  assert.match(`${blocked.stdout}\n${blocked.stderr}`, /--color-purple-300/);
 });
 
 test('theme color audit requires non-contract cross-file vars to be explicitly allowlisted', (t) => {

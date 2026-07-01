@@ -37,7 +37,7 @@
 
   &--green {
     background: color-mix(in srgb, var(--color-success) 14%, transparent);
-    color: tokens.$color-success;
+    color: var(--color-success);
 
     &:hover {
       background: color-mix(in srgb, var(--color-success) 20%, transparent);
@@ -46,7 +46,7 @@
 
   &--red {
     background: color-mix(in srgb, var(--color-error) 14%, transparent);
-    color: tokens.$color-error;
+    color: var(--color-error);
 
     &:hover {
       background: color-mix(in srgb, var(--color-error) 20%, transparent);
@@ -55,7 +55,7 @@
 
   &--yellow {
     background: color-mix(in srgb, var(--color-warning) 14%, transparent);
-    color: tokens.$color-warning;
+    color: var(--color-warning);
 
     &:hover {
       background: color-mix(in srgb, var(--color-warning) 20%, transparent);
@@ -64,7 +64,7 @@
 
   &--purple {
     background: var(--card-bg-purple-hover);
-    color: tokens.$color-purple-500;
+    color: var(--color-purple-500);
 
     &:hover {
       background: color-mix(in srgb, var(--color-purple-500) 20%, transparent);
@@ -72,12 +72,12 @@
   }
 
   &--gray {
-    background: tokens.$element-bg-medium;
-    color: tokens.$color-text-secondary;
+    background: var(--element-bg-medium);
+    color: var(--color-text-secondary);
 
     &:hover {
-      background: tokens.$element-bg-strong;
-      color: tokens.$color-text-primary;
+      background: var(--element-bg-strong);
+      color: var(--color-text-primary);
     }
   }
 

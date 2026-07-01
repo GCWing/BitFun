@@ -25,6 +25,7 @@ import {
   TOKEN_ALIAS_SOURCE_PATH_PARTS,
   TOKEN_PATH_PARTS,
 } from './theme-css-var-contract.mjs';
+import { writeReportJson } from './theme-color-audit-utils.mjs';
 
 const COLOR_PATTERN =
   /#[0-9a-fA-F]{3,8}\b|rgba?\(\s*[-+]?\d*\.?\d+\s*,\s*[-+]?\d*\.?\d+\s*,\s*[-+]?\d*\.?\d+(?:\s*,\s*(?:[-+]?\d*\.?\d+|var\([^)]+\)))?\s*\)|hsla?\(\s*[-+]?\d*\.?\d+(?:deg|rad|turn)?\s*,\s*[-+]?\d*\.?\d+%\s*,\s*[-+]?\d*\.?\d+%(?:\s*,\s*(?:[-+]?\d*\.?\d+|var\([^)]+\)))?\s*\)/g;
@@ -907,11 +908,14 @@ function audit(options) {
   const getExplicitDefinitionKind = name => (
     definedVars.has(name) ? getDefinitionKinds(name).join('+') : null
   );
+  const getDynamicDefinitionPrefix = name => (
+    Array.from(dynamicDefinitionPrefixes).find(prefix => name.startsWith(prefix)) ?? null
+  );
   const getDefinitionKind = name => {
     if (definedVars.has(name)) {
       return getDefinitionKinds(name).join('+');
     }
-    const dynamicPrefix = Array.from(dynamicDefinitionPrefixes).find(prefix => name.startsWith(prefix));
+    const dynamicPrefix = getDynamicDefinitionPrefix(name);
     return dynamicPrefix ? `dynamic-family:${dynamicPrefix}*` : null;
   };
   const unresolvedVarEntries = Array.from(varUsageCounts.entries())
@@ -938,6 +942,23 @@ function audit(options) {
     .map(([key, count]) => ({ key, count, kind: getDefinitionKind(key) }))
     .filter(entry => entry.kind && entry.kind !== 'css')
     .sort((a, b) => b.count - a.count || a.key.localeCompare(b.key))
+    .slice(0, REPORT_ROW_LIMIT);
+  const requiresExactDynamicFamilyDefinitions = staticContractVarDefinitions.size > 0;
+  const dynamicFamilyUnexportedEntries = requiresExactDynamicFamilyDefinitions
+    ? Array.from(varUsageCounts.entries())
+      .map(([key, count]) => {
+        const prefix = getDynamicDefinitionPrefix(key);
+        return {
+          key,
+          count,
+          prefix,
+          files: Array.from(varUsageFiles.get(key) ?? []).sort().slice(0, 5),
+        };
+      })
+      .filter(entry => entry.prefix && !definedVars.has(entry.key))
+      .sort((a, b) => b.count - a.count || a.key.localeCompare(b.key))
+    : [];
+  const dynamicFamilyUnexportedVars = dynamicFamilyUnexportedEntries
     .slice(0, REPORT_ROW_LIMIT);
   const unregisteredDynamicFamilyEntries = Array.from(dynamicDefinitionPrefixes)
     .filter(prefix => !REGISTERED_DYNAMIC_VAR_PREFIXES.has(prefix))
@@ -1368,6 +1389,7 @@ function audit(options) {
       staticContractDefinedUnique: staticContractVarDefinitions.size,
       runtimeContractDefinedUnique: runtimeContractVarDefinitions.size,
       dynamicFamilyPrefixes: Array.from(dynamicDefinitionPrefixes).sort(),
+      dynamicFamilyUnexportedUnique: dynamicFamilyUnexportedEntries.length,
       unregisteredDynamicFamilyUnique: unregisteredDynamicFamilyEntries.length,
       staleRegisteredDynamicFamilyUnique: staleRegisteredDynamicFamilyEntries.length,
       unresolvedUnique: unresolvedVarEntries.length,
@@ -1379,6 +1401,7 @@ function audit(options) {
       nonContractCssPrivateUnique: nonContractCssPrivateEntries.length,
     },
     dynamicDefinedVars,
+    dynamicFamilyUnexportedVars,
     unregisteredDynamicFamilies: unregisteredDynamicFamilyEntries,
     staleRegisteredDynamicFamilies: staleRegisteredDynamicFamilyEntries,
     nonContractDefinedVars,
@@ -1690,6 +1713,7 @@ function printText(report) {
     `fallbackOnly=${report.cssVarDefinitions.fallbackOnlyUnique}, ` +
     `requiredMissing=${report.cssVarDefinitions.unresolvedRequiredUnique}, ` +
     `runtimeOnlyRequired=${report.cssVarDefinitions.runtimeOnlyRequiredContractUnique}, ` +
+    `dynamicFamilyUnexported=${report.cssVarDefinitions.dynamicFamilyUnexportedUnique}, ` +
     `nonContractCrossFile=${report.cssVarDefinitions.nonContractCrossFileUnique}, ` +
     `nonContractDynamicInputs=${report.cssVarDefinitions.nonContractDynamicInputUnique}, ` +
     `nonContractCssPrivate=${report.cssVarDefinitions.nonContractCssPrivateUnique}`
@@ -1714,6 +1738,18 @@ function printText(report) {
 
   console.log('\nStale registered dynamic CSS var families:');
   console.log(printRows(report.staleRegisteredDynamicFamilies.slice(0, 10).map(row => ({ ...row, count: 1 }))));
+
+  console.log('\nDynamic-family CSS vars without exact export (top):');
+  if (report.dynamicFamilyUnexportedVars.length === 0) {
+    console.log('  none');
+  } else {
+    for (const row of report.dynamicFamilyUnexportedVars.slice(0, 10)) {
+      console.log(
+        `  ${row.count.toString().padStart(5)}  ${row.key}  ` +
+        `prefix=${row.prefix}  files=${row.files.join(', ')}`
+      );
+    }
+  }
 
   console.log('\nFallback-only unresolved CSS vars (top):');
   console.log(printRows(report.fallbackOnlyVars.slice(0, 10)));
@@ -1800,9 +1836,7 @@ try {
   const report = audit(options);
   const baselineSummary = applyBaseline(report, options);
   if (options.reportJson) {
-    const reportJsonPath = path.resolve(options.reportJson);
-    fs.mkdirSync(path.dirname(reportJsonPath), { recursive: true });
-    fs.writeFileSync(reportJsonPath, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
+    writeReportJson(report, options.reportJson);
   }
   if (options.json) {
     console.log(JSON.stringify(report, null, 2));

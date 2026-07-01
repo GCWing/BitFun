@@ -478,8 +478,8 @@
   display: inline-flex;
   align-items: center;
   padding: 3px;
-  background: $element-bg-base;
-  border: 1px solid $border-subtle;
+  background: var(--element-bg-base);
+  border: 1px solid var(--border-subtle);
   border-radius: 20px;
 }
 
@@ -487,7 +487,7 @@
   padding: 5px 14px;
   font-size: var(--font-size-xs);
   font-weight: $font-weight-medium;
-  color: $color-text-muted;
+  color: var(--color-text-muted);
   background: transparent;
   border: none;
   border-radius: 17px;
@@ -495,20 +495,20 @@
   transition: all $motion-fast $easing-standard;
 
   &:hover:not(.is-active) {
-    color: $color-text-primary;
-    background: $element-bg-subtle;
+    color: var(--color-text-primary);
+    background: var(--element-bg-subtle);
   }
 
   &.is-active {
     color: var(--color-static-white);
-    background: $color-success;
+    background: var(--color-success);
     font-weight: $font-weight-semibold;
     box-shadow: 0 1px 4px rgba(var(--component-action-success-rgb), 0.35);
     cursor: default;
   }
 
   &:focus-visible {
-    outline: 2px solid rgba($color-success, 0.5);
+    outline: 2px solid color-mix(in srgb, var(--color-success) 50%, transparent);
     outline-offset: 1px;
   }
 }

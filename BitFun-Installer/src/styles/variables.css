@@ -37,10 +37,10 @@
   --color-highlight-bg: rgba(212, 165, 116, 0.15);
 
   --element-bg-subtle: rgba(255, 255, 255, 0.06);
-  --element-bg-soft: rgba(255, 255, 255, 0.10);
+  --element-bg-soft: rgba(255, 255, 255, 0.12);
   --element-bg-base: rgba(255, 255, 255, 0.12);
   --element-bg-medium: rgba(255, 255, 255, 0.18);
-  --element-bg-strong: rgba(255, 255, 255, 0.21);
+  --element-bg-strong: rgba(255, 255, 255, 0.24);
   --element-bg-elevated: rgba(255, 255, 255, 0.24);
 
   --border-subtle: rgba(255, 255, 255, 0.12);

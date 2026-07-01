@@ -87,7 +87,7 @@
       "max": 0
     },
     "colorDomainNearPairs.tokenContract.nearTotal": {
-      "max": 4
+      "max": 1
     },
     "colorDomainNearPairs.appUi.indistinguishableTotal": {
       "max": 0
@@ -105,7 +105,7 @@
       "max": 43
     },
     "colorDomainScopes.tokenContract.uniqueColors": {
-      "max": 36
+      "max": 34
     },
     "colorDomainScopes.appUi.occurrences": {
       "max": 0
