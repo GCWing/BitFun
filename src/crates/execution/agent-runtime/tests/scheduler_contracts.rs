@@ -245,7 +245,7 @@ fn dialog_turn_queue_clear_and_requeue_front_preserve_scheduler_recovery_contrac
     queue.requeue_front("s1", "retry", DialogQueuePriority::Low);
 
     assert_eq!(queue.dequeue_next("s1"), Some("retry"));
-    assert_eq!(queue.clear("s1"), 1);
+    assert_eq!(queue.clear("s1"), vec!["queued"]);
     assert!(!queue.has_items("s1"));
     assert_eq!(queue.depth("s1"), 0);
 }
@@ -261,6 +261,34 @@ fn dialog_turn_queue_requeued_turn_keeps_original_priority_for_later_ordering() 
 
     assert_eq!(queue.dequeue_next("s1"), Some("new-high"));
     assert_eq!(queue.dequeue_next("s1"), Some("retry-low"));
+}
+
+#[test]
+fn dialog_turn_queue_removes_matching_queued_turn_without_reordering_others() {
+    let queue = DialogTurnQueue::default();
+
+    queue
+        .enqueue("s1", "normal-1", DialogQueuePriority::Normal)
+        .expect("first normal turn should enqueue");
+    queue
+        .enqueue("s1", "high", DialogQueuePriority::High)
+        .expect("high-priority turn should enqueue");
+    queue
+        .enqueue("s1", "normal-2", DialogQueuePriority::Normal)
+        .expect("second normal turn should enqueue");
+    queue
+        .enqueue("s2", "other-session", DialogQueuePriority::High)
+        .expect("other session turn should enqueue");
+
+    assert_eq!(
+        queue.remove_first_matching("s1", |turn| *turn == "normal-1"),
+        Some("normal-1")
+    );
+    assert_eq!(queue.depth("s1"), 2);
+    assert_eq!(queue.dequeue_next("s1"), Some("high"));
+    assert_eq!(queue.dequeue_next("s1"), Some("normal-2"));
+    assert_eq!(queue.dequeue_next("s1"), None);
+    assert_eq!(queue.dequeue_next("s2"), Some("other-session"));
 }
 
 #[test]

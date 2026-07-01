@@ -176,6 +176,7 @@ interface TaskWithSubagentWrapperProps {
   parentTaskToolId: string;
   parentSessionId?: string;
   directSubagentSessionId?: string;
+  directSubagentDialogTurnId?: string;
   turnId: string;
   roundId?: string;
   completedToolExitNowMs: number;
@@ -187,6 +188,7 @@ const TaskWithSubagentWrapper: React.FC<TaskWithSubagentWrapperProps> = React.me
   parentTaskToolId,
   parentSessionId,
   directSubagentSessionId,
+  directSubagentDialogTurnId,
   turnId,
   roundId,
   completedToolExitNowMs,
@@ -219,6 +221,7 @@ const TaskWithSubagentWrapper: React.FC<TaskWithSubagentWrapperProps> = React.me
         parentTaskToolId={parentTaskToolId}
         parentSessionId={parentSessionId}
         directSubagentSessionId={directSubagentSessionId}
+        directSubagentDialogTurnId={directSubagentDialogTurnId}
         parentToolIds={new Set<string>([parentTaskToolId, (taskItem as FlowToolItem).toolCall?.id].filter(Boolean) as string[])}
         liveItemsMode={isTaskRunning ? 'full-turn' : 'last-round'}
         turnId={turnId}
@@ -457,6 +460,7 @@ export const ModelRoundItem = React.memo<ModelRoundItemProps>(
                   parentTaskToolId={projectedSubagent.id}
                   parentSessionId={sessionId}
                   directSubagentSessionId={projectedSubagent.subagentSessionId}
+                  directSubagentDialogTurnId={projectedSubagent.subagentDialogTurnId}
                   turnId={turnId}
                   roundId={options.roundId}
                   completedToolExitNowMs={transientNowMs}

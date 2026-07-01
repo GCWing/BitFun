@@ -929,6 +929,46 @@ describe('FlowChatStore historical session hydration state', () => {
     });
   });
 
+  it('merges restored session model selection into an existing subagent shell', async () => {
+    apiMocks.restoreSessionView.mockResolvedValueOnce({
+      session: {
+        sessionId: 'subagent-1',
+        sessionName: 'Subagent 1',
+        agentType: 'Explore',
+        modelName: 'model-subagent',
+        state: 'Idle',
+        turnCount: 0,
+        createdAt: 1,
+      },
+      turns: [],
+      contextRestoreState: 'ready',
+    });
+    flowChatStore.setState(() => ({
+      sessions: new Map([
+        ['subagent-1', createSession({
+          sessionId: 'subagent-1',
+          sessionKind: 'subagent',
+          mode: 'Explore',
+          config: { agentType: 'Explore' },
+          workspacePath: 'D:/workspace/BitFun',
+        })],
+      ]),
+      activeSessionId: 'parent-1',
+    }));
+
+    await flowChatStore.loadSessionHistory(
+      'subagent-1',
+      'D:/workspace/BitFun',
+      undefined,
+      undefined,
+      undefined,
+      { includeInternal: true },
+    );
+
+    expect(flowChatStore.getState().sessions.get('subagent-1')?.config.modelName)
+      .toBe('model-subagent');
+  });
+
   it('starts backend restore before notifying hydrating state', async () => {
     const events: string[] = [];
     const restore = createDeferred<{

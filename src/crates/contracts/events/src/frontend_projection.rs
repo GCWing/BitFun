@@ -142,6 +142,7 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
         )),
         AgenticEvent::SubagentSessionLinked {
             session_id,
+            subagent_dialog_turn_id,
             parent_session_id,
             parent_dialog_turn_id,
             parent_tool_call_id,
@@ -151,6 +152,7 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
             "subagent-session-linked",
             json!({
                 "sessionId": session_id,
+                "subagentDialogTurnId": subagent_dialog_turn_id,
                 "parentSessionId": parent_session_id,
                 "parentDialogTurnId": parent_dialog_turn_id,
                 "parentToolCallId": parent_tool_call_id,

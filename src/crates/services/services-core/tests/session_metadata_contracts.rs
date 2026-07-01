@@ -61,10 +61,11 @@ fn tool_item(id: &str) -> ToolItemData {
         is_subagent_item: None,
         parent_task_tool_id: None,
         subagent_session_id: None,
+        subagent_dialog_turn_id: None,
         attempt_id: None,
         attempt_index: None,
         subagent_model_id: None,
-        subagent_model_alias: None,
+        subagent_model_display_name: None,
         status: Some("completed".to_string()),
         interruption_reason: None,
     }

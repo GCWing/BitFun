@@ -756,6 +756,11 @@
         "short": "MiniApp",
         "title": "MiniApp editor",
         "origin": "MiniApp"
+      },
+      "subagent": {
+        "short": "Agent",
+        "title": "Subagent session",
+        "origin": "Subagent"
       }
     }
   },
@@ -1543,6 +1548,7 @@
       "headerLinePrefix": "{{agentType}} agent",
       "headerLineSuffix": ": {{description}}",
       "defaultAgentKind": "Sub-agent",
+      "cancelSession": "Cancel session: {{sessionId}}",
       "waitingConfirm": "Waiting for confirmation",
       "executing": "Executing...",
       "subAgentFailed": "Sub-agent task execution failed",

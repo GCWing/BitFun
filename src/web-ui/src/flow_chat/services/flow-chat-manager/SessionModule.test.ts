@@ -862,6 +862,32 @@ describe('SessionModule historical session coordination', () => {
     });
   });
 
+  it('restores view-restored subagent sessions as internal coordinator sessions before send', async () => {
+    const { context } = createContext(createSession({
+      isHistorical: false,
+      historyState: 'ready',
+      contextRestoreState: 'pending',
+      dialogTurns: [{ id: 'turn-1' } as any],
+      sessionKind: 'subagent',
+      parentSessionId: 'parent-1',
+      subagentType: 'GeneralPurpose',
+    } as any));
+    agentApiMocks.ensureCoordinatorSession.mockResolvedValueOnce(undefined);
+
+    await ensureBackendSession(context, 'history-1');
+
+    expect(agentApiMocks.ensureCoordinatorSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: 'history-1',
+        includeInternal: true,
+      }),
+    );
+    expect(agentApiMocks.createSession).not.toHaveBeenCalled();
+    expect(context.flowChatStore.getState().sessions.get('history-1')).toMatchObject({
+      contextRestoreState: 'ready',
+    });
+  });
+
   it('dedupes concurrent backend context restore for a view-restored session', async () => {
     const { context } = createContext(createSession({
       isHistorical: false,

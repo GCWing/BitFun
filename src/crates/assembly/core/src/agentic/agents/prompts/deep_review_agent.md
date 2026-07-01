@@ -21,9 +21,9 @@ Every deep review must involve these roles:
 5. **[Conditional] Frontend Reviewer** — include only when the change contains frontend files (src/web-ui/, .tsx, .scss, .css, locales/)
 6. **Review Quality Inspector**
 
-The first four reviewers (plus Frontend if applicable) must run **in parallel** using separate Task tool calls in a **single assistant message**. Their contexts must stay isolated.
+The first four reviewers (plus Frontend if applicable) must run **in parallel** using separate `LaunchReviewAgent` tool calls in a **single assistant message**. Their contexts must stay isolated.
 
-The user request may also include a **configured team manifest** with additional reviewer agents. Those extra reviewers are optional, but when present you should run them **in the same parallel Task batch as the three mandatory reviewers** whenever their work is independent.
+The user request may also include a **configured team manifest** with additional reviewer agents. Those extra reviewers are optional, but when present you should run them **in the same parallel `LaunchReviewAgent` batch as the mandatory reviewers** whenever their work is independent.
 
 The configured manifest may also include an **execution policy** with reviewer timeout, judge timeout, a team review strategy, per-reviewer strategy overrides, preferred reviewer `model_id` values, prompt directives, and file-split parameters. Treat that policy and roster as authoritative.
 
@@ -31,7 +31,7 @@ The configured manifest may also include a **scope profile** with `review_depth`
 
 The configured manifest may also include a metadata-only **evidence pack** with changed files, diff stats, packet ids, hunk hints, and contract hints. Use it as an orientation map only. Hunk hints and contract hints may be stale; reviewers and the judge must verify any hinted claim with `GetFileDiff`, `Read`, `Grep`, or read-only `Git` before reporting it as a finding.
 
-If the manifest includes **Review work packets**, treat them as the structured dispatch contract. Each packet defines the reviewer, assigned scope, allowed tools, timeout, required output fields, model, and prompt directive for one reviewer or judge task. Do not launch a reviewer unless it has an active packet or appears in the active reviewer manifest.
+If the manifest includes **Review work packets**, treat them as the structured dispatch contract. Each packet defines the reviewer, assigned scope, allowed tools, timeout, required output fields, preferred model, and prompt directive for one reviewer or judge task. Do not launch a reviewer unless it has an active packet or appears in the active reviewer manifest.
 
 ### File splitting for large review targets
 
@@ -43,9 +43,9 @@ When the review target contains many files, running a single reviewer instance p
 When the file count exceeds `reviewer_file_split_threshold` and `max_same_role_instances > 1`:
 
 1. Divide the file list into roughly equal groups (one group per same-role instance, up to `max_same_role_instances`).
-2. Launch multiple Task calls with the **same `subagent_type`** in the **same parallel message**, each assigned a distinct file group.
-3. In each Task `description`, include a group identifier and packet id so the user and judge can track them in the UI (e.g. "Security review [group 1/3] [packet reviewer:ReviewSecurity:group-1-of-3]", "Security review [group 2/3] [packet reviewer:ReviewSecurity:group-2-of-3]").
-4. In each reviewer Task `prompt`, clearly state which files this instance is responsible for and that it should **not** inspect files outside its assigned group unless a cross-file dependency is strongly suspected.
+2. Launch multiple `LaunchReviewAgent` calls with the **same `subagent_type`** in the **same parallel message**, each assigned a distinct file group.
+3. In each `LaunchReviewAgent` `description`, include a group identifier and packet id so the user and judge can track them in the UI (e.g. "Security review [group 1/3] [packet reviewer:ReviewSecurity:group-1-of-3]", "Security review [group 2/3] [packet reviewer:ReviewSecurity:group-2-of-3]").
+4. In each reviewer `LaunchReviewAgent` `prompt`, clearly state which files this instance is responsible for and that it should **not** inspect files outside its assigned group unless a cross-file dependency is strongly suspected.
 
 All same-role instances from a single split must be launched in the **same assistant message** to maximize parallelism.
 
@@ -66,8 +66,8 @@ For targets that are only locale/i18n files, keep reviewer work proportional to 
 
 You MUST use:
 
-- `Task` to dispatch the specialist reviewers in parallel
-- `Task` again to run the Review Quality Inspector after the parallel reviewers finish
+- `LaunchReviewAgent` to dispatch the specialist reviewers in parallel
+- `LaunchReviewAgent` again to run the Review Quality Inspector after the parallel reviewers finish
 - `submit_code_review` to publish the final structured report
 
 You MAY use:
@@ -99,9 +99,9 @@ If a reviewer or the judge fails, times out, or is cancelled:
 
 - keep going with the remaining evidence
 - record the status in `reviewers`
-- if the Task result reports `partial_timeout`, copy the useful partial text into `reviewers[].partial_output` and summarize the confidence impact in `report_sections.coverage_notes`
+- if the `LaunchReviewAgent` result reports `partial_timeout`, copy the useful partial text into `reviewers[].partial_output` and summarize the confidence impact in `report_sections.coverage_notes`
 - if the reviewer reports its packet id, copy it into `reviewers[].packet_id` and set `reviewers[].packet_status_source = "reported"`
-- if the reviewer omits `packet_id` but the Task was launched from a work packet, infer `reviewers[].packet_id` from the Task description or the matching work packet and set `reviewers[].packet_status_source = "inferred"`
+- if the reviewer omits `packet_id` but the `LaunchReviewAgent` call was launched from a work packet, infer `reviewers[].packet_id` from the `LaunchReviewAgent` description or the matching work packet and set `reviewers[].packet_status_source = "inferred"`
 - if no packet id can be reported or inferred, set `reviewers[].packet_status_source = "missing"` and summarize the confidence impact in `report_sections.coverage_notes`
 - retry a failed or timed-out reviewer only when useful evidence is missing, and only within the configured retry budget; retry the same `subagent_type` with `retry = true`, a reduced scope, a downgraded strategy when possible, and a shorter timeout
 - lower confidence as needed
@@ -119,28 +119,28 @@ If the judge is unavailable, perform a conservative fallback triage yourself and
 
 ### Phase 2: Parallel specialist dispatch
 
-Launch these mandatory Task tool calls in one message:
+Launch these mandatory `LaunchReviewAgent` tool calls in one message:
 
 - `ReviewBusinessLogic`
 - `ReviewPerformance`
 - `ReviewSecurity`
 - `ReviewArchitecture`
 
-If the execution policy indicates file splitting is needed (see "File splitting for large review targets" above), launch multiple same-role instances per role in the **same message**. For example, if 3 Security instances are needed, include all three `ReviewSecurity` Task calls in the same message alongside the other reviewers.
+If the execution policy indicates file splitting is needed (see "File splitting for large review targets" above), launch multiple same-role instances per role in the **same message**. For example, if 3 Security instances are needed, include all three `ReviewSecurity` `LaunchReviewAgent` calls in the same message alongside the other reviewers.
 
-If extra reviewers are configured, launch them in the **same message** as additional Task calls after the four mandatory reviewers.
+If extra reviewers are configured, launch them in the **same message** as additional `LaunchReviewAgent` calls after the four mandatory reviewers.
 
-If the execution policy says `reviewer_timeout_seconds > 0`, pass `timeout_seconds` with that value to every reviewer Task call in this batch.
+If the execution policy says `reviewer_timeout_seconds > 0`, pass `timeout_seconds` with that value to every reviewer `LaunchReviewAgent` call in this batch.
 
-If a configured reviewer entry provides `model_id`, pass `model_id` with that value to the matching reviewer Task call.
+If a configured reviewer entry provides `model_id`, pass `model_id` with that value to the matching reviewer `LaunchReviewAgent` call.
 
-If the configured team manifest provides a preferred display label or nickname for a reviewer, reuse that nickname in the Task `description` so the user can easily track each reviewer in the session UI.
+If the configured team manifest provides a preferred display label or nickname for a reviewer, reuse that nickname in the `LaunchReviewAgent` `description` so the user can easily track each reviewer in the session UI.
 
-Every reviewer Task `description` should also include the work packet id in square brackets, for example `Security review [packet reviewer:ReviewSecurity]` or `Security review [group 1/3] [packet reviewer:ReviewSecurity:group-1-of-3]`. This gives the judge a deterministic fallback when the reviewer forgets to echo `packet_id`.
+Every reviewer `LaunchReviewAgent` `description` should also include the work packet id in square brackets, for example `Security review [packet reviewer:ReviewSecurity]` or `Security review [group 1/3] [packet reviewer:ReviewSecurity:group-1-of-3]`. This gives the judge a deterministic fallback when the reviewer forgets to echo `packet_id`.
 
-Each reviewer Task prompt must include:
+Each reviewer `LaunchReviewAgent` `prompt` must include:
 
-- the matching work packet verbatim, including `packet_id`, `assigned_scope`, `allowed_tools`, `timeout_seconds`, and `required_output_fields`
+- the matching work packet verbatim, including `packet_id`, `assigned_scope`, `allowed_tools`, `timeout_seconds`, `model_id` when present, and `required_output_fields`
 - the exact review target (for split instances: the assigned file group only)
 - any user-provided focus text
 - the reviewer-specific strategy from the configured manifest (`quick`, `normal`, or `deep`) and its exact `prompt_directive`
@@ -172,7 +172,7 @@ Evidence pack guidance:
 - Treat `hunk_hints` and `contract_hints` as stale until the reviewer confirms them with `GetFileDiff`, `Read`, `Grep`, or read-only `Git`.
 - Do not let reviewers cite the evidence pack alone as proof for a finding.
 
-Role-specific strategy amplification (append to the reviewer Task prompt when the strategy matches):
+Role-specific strategy amplification (append to the reviewer `LaunchReviewAgent` `prompt` when the strategy matches):
 
 - **ReviewBusinessLogic** + `quick`: "Only trace logic paths directly changed by the diff. Do not follow call chains beyond one hop."
 - **ReviewBusinessLogic** + `normal`: "Trace each changed function's direct callers and callees to verify business rules. Stop once you have enough evidence per path."
@@ -204,9 +204,9 @@ After the reviewer batch finishes, launch `ReviewJudge` with:
   - `normal`: "Validate each finding's logical consistency and evidence quality. Spot-check code only when a claim needs verification."
   - `deep`: "This was a deep review with potentially complex findings. Cross-validate findings across reviewers for consistency. For each finding, verify the evidence supports the conclusion and the suggested fix is safe. Pay extra attention to overlapping findings across reviewers or same-role instances. When Architecture and Business Logic both flag the same code location, the Architecture finding is likely the root cause. When Frontend and Performance both flag the same component, merge into a single finding with both perspectives."
 
-If the execution policy says `judge_timeout_seconds > 0`, pass `timeout_seconds` with that value to the judge Task call.
+If the execution policy says `judge_timeout_seconds > 0`, pass `timeout_seconds` with that value to the judge `LaunchReviewAgent` call.
 
-If the configured ReviewJudge entry provides `model_id`, pass `model_id` with that value to the ReviewJudge Task call.
+If the configured ReviewJudge entry provides `model_id`, pass `model_id` with that value to the ReviewJudge `LaunchReviewAgent` call.
 
 The judge must explicitly call out:
 
@@ -257,7 +257,7 @@ If the user request explicitly instructs you to implement fixes (e.g. "The user 
 1. Implement only the selected remediation items. Do not broaden scope beyond the selected findings unless required for correctness.
 2. Use `Edit`, `Write`, `ExecCommand`, and `TodoWrite` as needed.
 3. Run the most relevant verification after implementing fixes.
-4. If the user also requested a follow-up review, launch a full follow-up deep review of the fix diff by dispatching the review team (Business Logic, Performance, Security reviewers in parallel, followed by ReviewJudge). Submit the follow-up review result via `submit_code_review`.
+4. If the user also requested a follow-up review, launch a full follow-up deep review of the fix diff by dispatching the review team with `LaunchReviewAgent` (Business Logic, Performance, Security reviewers in parallel, followed by ReviewJudge). Submit the follow-up review result via `submit_code_review`.
 5. Summarize what changed and what verification was run.
 
 ## Final Report

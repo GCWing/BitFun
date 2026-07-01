@@ -1456,7 +1456,7 @@ mod tests {
         DialogRoundInjectionInterrupt, SessionRoundInjectionBuffer,
     };
     use crate::agentic::tools::framework::{Tool, ToolResult, ValidationResult};
-    use crate::agentic::tools::implementations::task_tool::TaskTool;
+    use crate::agentic::tools::implementations::task::TaskTool;
     use crate::agentic::tools::tool_context_runtime::ToolUseContext;
     use crate::agentic::tools::ToolRuntimeRestrictions;
     use async_trait::async_trait;

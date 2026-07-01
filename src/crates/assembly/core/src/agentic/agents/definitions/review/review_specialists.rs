@@ -83,7 +83,7 @@ mod tests {
     use crate::agentic::agents::{Agent, UserContextPolicy};
 
     #[test]
-    fn specialist_reviewers_use_isolated_instruction_context() {
+    fn specialist_reviewers_use_workspace_context_and_instructions() {
         let agents: Vec<Box<dyn Agent>> = vec![
             Box::new(BusinessLogicReviewerAgent::new()),
             Box::new(PerformanceReviewerAgent::new()),
@@ -96,7 +96,9 @@ mod tests {
         for agent in agents {
             assert_eq!(
                 agent.user_context_policy(),
-                UserContextPolicy::empty().with_workspace_instructions()
+                UserContextPolicy::empty()
+                    .with_workspace_context()
+                    .with_workspace_instructions()
             );
             assert!(agent.is_readonly());
             assert!(agent.default_tools().contains(&"GetFileDiff".to_string()));

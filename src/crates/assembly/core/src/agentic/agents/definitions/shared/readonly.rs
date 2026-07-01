@@ -46,7 +46,9 @@ impl ReadonlySubagent {
             prompt_template,
             default_tools,
             tool_exposure_overrides,
-            user_context_policy: UserContextPolicy::empty().with_workspace_instructions(),
+            user_context_policy: UserContextPolicy::empty()
+                .with_workspace_context()
+                .with_workspace_instructions(),
         }
     }
 

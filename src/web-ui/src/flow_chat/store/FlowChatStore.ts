@@ -4167,6 +4167,12 @@ export class FlowChatStore {
           loadedTurnCount: restoredLoadedTurnCount ?? dialogTurns.length,
           totalTurnCount: restoredTotalTurnCount ?? dialogTurns.length,
           error: null,
+          config: {
+            ...session.config,
+            ...(restoredSessionInfo?.modelName
+              ? { modelName: restoredSessionInfo.modelName }
+              : {}),
+          },
           mode: restoredSessionInfo?.agentType || session.mode,
           lastUserDialogMode: restoredLastUserDialogMode,
           lastSubmittedMode:
@@ -4385,8 +4391,9 @@ export class FlowChatStore {
             ),
             orderIndex: tool.orderIndex,
             subagentSessionId: tool.subagentSessionId,
+            subagentDialogTurnId: tool.subagentDialogTurnId,
             subagentModelId: tool.subagentModelId,
-            subagentModelAlias: tool.subagentModelAlias,
+            subagentModelDisplayName: tool.subagentModelDisplayName,
             attemptId: tool.attemptId,
             attemptIndex: tool.attemptIndex,
           })),

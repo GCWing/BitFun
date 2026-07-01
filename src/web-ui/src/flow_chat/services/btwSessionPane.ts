@@ -171,8 +171,17 @@ export function ensureBtwSessionAvailable(params: EnsureBtwSessionAvailableParam
   }
 
   const sessionToHydrate = flowChatStore.getState().sessions.get(params.childSessionId);
+  const hasLoadedDialogTurns = Boolean(sessionToHydrate?.dialogTurns?.length);
+  const shouldHydrateMissingSubagentModel =
+    Boolean(
+      sessionToHydrate &&
+      (params.sessionKind === 'subagent' || sessionToHydrate.sessionKind === 'subagent') &&
+      !sessionToHydrate.config?.modelName &&
+      !hasLoadedDialogTurns
+    );
   const shouldHydrate =
     !existingSession ||
+    shouldHydrateMissingSubagentModel ||
     Boolean(
       sessionToHydrate?.isHistorical &&
       (sessionToHydrate.historyState === 'metadata-only' || sessionToHydrate.historyState === 'failed')

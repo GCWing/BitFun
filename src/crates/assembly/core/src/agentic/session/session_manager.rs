@@ -2436,11 +2436,61 @@ impl SessionManager {
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<()> {
+        self.delete_session_from_paths(workspace_path, workspace_path, session_id)
+            .await
+    }
+
+    pub(crate) async fn delete_session_by_id(&self, session_id: &str) -> BitFunResult<()> {
+        let session = self
+            .sessions
+            .get(session_id)
+            .map(|entry| entry.value().clone());
+        let session_storage_path = if let Some(session) = session.as_ref() {
+            self.effective_storage_path_for_config(&session.config)
+                .await
+                .or_else(|| {
+                    self.session_storage_path_index
+                        .get(session_id)
+                        .map(|entry| entry.value().clone())
+                })
+        } else {
+            self.session_storage_path_index
+                .get(session_id)
+                .map(|entry| entry.value().clone())
+        };
+        let Some(session_storage_path) = session_storage_path else {
+            return Err(BitFunError::NotFound(format!(
+                "Session storage path not found: {}",
+                session_id
+            )));
+        };
+        let cleanup_workspace_path = session
+            .as_ref()
+            .and_then(|session| session.config.workspace_path.as_deref())
+            .map(PathBuf::from)
+            .or_else(|| {
+                self.session_storage_path_index
+                    .get(session_id)
+                    .map(|entry| entry.value().clone())
+            })
+            .unwrap_or_else(|| session_storage_path.clone());
+
+        self.delete_session_from_paths(&cleanup_workspace_path, &session_storage_path, session_id)
+            .await
+    }
+
+    async fn delete_session_from_paths(
+        &self,
+        cleanup_workspace_path: &Path,
+        session_storage_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<()> {
         let delete_started_at = Instant::now();
         debug!(
-            "Session deletion started: session_id={}, workspace_path={}, persistence_enabled={}",
+            "Session deletion started: session_id={}, cleanup_workspace_path={}, session_storage_path={}, persistence_enabled={}",
             session_id,
-            workspace_path.display(),
+            cleanup_workspace_path.display(),
+            session_storage_path.display(),
             self.config.enable_persistence
         );
 
@@ -2450,7 +2500,8 @@ impl SessionManager {
             "Session deletion stage starting: session_id={}, stage=snapshot_cleanup",
             session_id
         );
-        if let Ok(snapshot_manager) = ensure_snapshot_manager_for_workspace(workspace_path) {
+        if let Ok(snapshot_manager) = ensure_snapshot_manager_for_workspace(cleanup_workspace_path)
+        {
             let snapshot_service = snapshot_manager.get_snapshot_service();
             let snapshot_service = snapshot_service.read().await;
             if let Err(e) = snapshot_service.accept_session(session_id).await {
@@ -2494,7 +2545,7 @@ impl SessionManager {
                 session_id
             );
             self.persistence_manager
-                .delete_session(workspace_path, session_id)
+                .delete_session(session_storage_path, session_id)
                 .await?;
             debug!(
                 "Session deletion stage completed: session_id={}, stage=persistence_delete, duration_ms={}",
@@ -2519,7 +2570,7 @@ impl SessionManager {
                 Ok(_) => {}
                 Err(e) => {
                     warn!(
-                        "Failed to remove scheduled jobs for deleted session_id={}: {}",
+                        "Failed to remove scheduled jobs for session_id={}: {}",
                         session_id, e
                     );
                 }
@@ -2573,9 +2624,10 @@ impl SessionManager {
         self.session_storage_path_index.remove(session_id);
 
         info!(
-            "Session deletion completed: session_id={}, workspace_path={}, duration_ms={}",
+            "Session deletion completed: session_id={}, cleanup_workspace_path={}, session_storage_path={}, duration_ms={}",
             session_id,
-            workspace_path.display(),
+            cleanup_workspace_path.display(),
+            session_storage_path.display(),
             elapsed_ms_u64(delete_started_at)
         );
 
@@ -4171,10 +4223,11 @@ impl SessionManager {
                                     is_subagent_item: None,
                                     parent_task_tool_id: None,
                                     subagent_session_id: None,
+                                    subagent_dialog_turn_id: None,
                                     attempt_id: None,
                                     attempt_index: None,
                                     subagent_model_id: None,
-                                    subagent_model_alias: None,
+                                    subagent_model_display_name: None,
                                     status: Some("completed".to_string()),
                                     interruption_reason: None,
                                 });
@@ -6183,10 +6236,11 @@ mod tests {
                 is_subagent_item: None,
                 parent_task_tool_id: None,
                 subagent_session_id: None,
+                subagent_dialog_turn_id: None,
                 attempt_id: None,
                 attempt_index: None,
                 subagent_model_id: None,
-                subagent_model_alias: None,
+                subagent_model_display_name: None,
                 status: Some("completed".to_string()),
                 interruption_reason: None,
             }],

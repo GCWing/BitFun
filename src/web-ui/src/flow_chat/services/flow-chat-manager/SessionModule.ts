@@ -996,6 +996,7 @@ export async function ensureBackendSession(
       workspacePath,
       remoteConnectionId: effectiveConnectionId,
       remoteSshHost: effectiveSshHost,
+      includeInternal: latestSession.sessionKind === 'subagent',
     });
     markBackendContextReady();
   };

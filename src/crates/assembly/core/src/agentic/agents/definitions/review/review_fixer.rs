@@ -65,7 +65,9 @@ impl Agent for ReviewFixerAgent {
     }
 
     fn user_context_policy(&self) -> UserContextPolicy {
-        UserContextPolicy::empty().with_workspace_instructions()
+        UserContextPolicy::empty()
+            .with_workspace_context()
+            .with_workspace_instructions()
     }
 
     fn tool_exposure_overrides(&self) -> &AgentToolPolicyOverrides {
@@ -89,7 +91,9 @@ mod tests {
 
         assert_eq!(
             agent.user_context_policy(),
-            UserContextPolicy::empty().with_workspace_instructions()
+            UserContextPolicy::empty()
+                .with_workspace_context()
+                .with_workspace_instructions()
         );
         assert!(tools.contains(&"Edit".to_string()));
         assert!(tools.contains(&"Write".to_string()));

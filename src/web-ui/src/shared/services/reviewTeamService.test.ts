@@ -835,8 +835,8 @@ describe('reviewTeamService', () => {
     expect(promptBlock).toContain('"allowed_tools"');
     expect(promptBlock).toContain('- max_retries_per_role: 1');
     expect(promptBlock).toContain('set retry to true');
-    expect(promptBlock).toContain('Each reviewer Task prompt must include the matching work packet verbatim.');
-    expect(promptBlock).toContain('If the reviewer omits packet_id but the Task was launched from a packet, infer the packet_id from the Task description or work packet and mark packet_status_source as inferred.');
+    expect(promptBlock).toContain('Each reviewer LaunchReviewAgent prompt must include the matching work packet verbatim.');
+    expect(promptBlock).toContain('If the reviewer omits packet_id but the LaunchReviewAgent call was launched from a packet, infer the packet_id from the LaunchReviewAgent description or work packet and mark packet_status_source as inferred.');
   });
 
   it('adds a locale-only guardrail for i18n-only frontend review targets', () => {
@@ -1326,7 +1326,7 @@ describe('reviewTeamService', () => {
     const promptBlock = buildReviewTeamPromptBlock(team, manifest);
     expect(promptBlock).toContain('- max_parallel_instances: 4');
     expect(promptBlock).toContain('- max_queue_wait_seconds: 1200');
-    expect(promptBlock).toContain('Launch reviewer Tasks by launch_batch');
+    expect(promptBlock).toContain('Launch reviewer LaunchReviewAgent calls by launch_batch');
     expect(promptBlock).toContain('"launch_batch": 2');
   });
 
@@ -2111,7 +2111,7 @@ describe('reviewTeamService', () => {
     expect(promptBlock).toContain('strategy: deep');
     expect(promptBlock).toContain('model_id: primary');
     expect(promptBlock).toContain(`prompt_directive: ${REVIEW_STRATEGY_DEFINITIONS.deep.roleDirectives.ReviewSecurity}`);
-    expect(promptBlock).toContain('pass model_id with that value to the matching Task call');
+    expect(promptBlock).toContain('pass model_id with that value to the matching LaunchReviewAgent call');
     expect(promptBlock).toContain('Token/time impact: approximately 1.8-2.5x token usage and 1.5-2.5x runtime.');
   });
 

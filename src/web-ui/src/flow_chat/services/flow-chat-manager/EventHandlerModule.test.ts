@@ -11,7 +11,7 @@ import {
 import { stateMachineManager } from '../../state-machine';
 import { SessionExecutionEvent, SessionExecutionState } from '../../state-machine/types';
 import { FlowChatStore } from '../../store/FlowChatStore';
-import type { DialogTurn, FlowUserSteeringItem, ModelRound, Session } from '../../types/flow-chat';
+import type { DialogTurn, FlowToolItem, FlowUserSteeringItem, ModelRound, Session } from '../../types/flow-chat';
 import type { FlowChatContext } from './types';
 
 vi.mock('@/infrastructure/i18n/core/I18nService', () => ({
@@ -92,6 +92,104 @@ describe('mergeParamsPartialEventData', () => {
     expect((merged.toolEvent as any).params).toBe('{"file_path":"src/app.ts","content":"hello');
   });
 
+});
+
+describe('subagent model display helpers', () => {
+  beforeEach(() => {
+    resetFlowChatStore();
+  });
+
+  afterEach(() => {
+    resetFlowChatStore();
+  });
+
+  it('resolves model refs to configured request model names', () => {
+    const models = [
+      {
+        id: 'model-primary',
+        name: 'Primary Config',
+        model_name: 'gpt-primary',
+      },
+      {
+        id: 'model-fast',
+        name: 'Fast Config',
+        model_name: 'gpt-fast',
+      },
+      {
+        id: 'model-custom',
+        name: 'Custom Config',
+        model_name: 'gpt-custom',
+      },
+    ] as any[];
+
+    expect(__test_only__.resolveModelDisplayNameFromConfig(
+      'primary',
+      models,
+      { primary: 'model-primary', fast: 'model-fast' },
+    )).toBe('gpt-primary');
+    expect(__test_only__.resolveModelDisplayNameFromConfig(
+      'fast',
+      models,
+      { primary: 'model-primary', fast: 'model-fast' },
+    )).toBe('gpt-fast');
+    expect(__test_only__.resolveModelDisplayNameFromConfig(
+      'Custom Config',
+      models,
+      { primary: 'model-primary', fast: 'model-fast' },
+    )).toBe('gpt-custom');
+    expect(__test_only__.resolveModelDisplayNameFromConfig(
+      'missing-model',
+      models,
+      { primary: 'model-primary', fast: 'model-fast' },
+    )).toBe('missing-model');
+  });
+
+  it('finds the parent task card by subagent session and dialog turn', () => {
+    const firstTask = makeTaskTool('task-1', {
+      subagentSessionId: 'subagent-1',
+      subagentDialogTurnId: 'child-turn-1',
+    });
+    const secondTask = makeTaskTool('task-2', {
+      subagentSessionId: 'subagent-1',
+      subagentDialogTurnId: 'child-turn-2',
+    });
+
+    FlowChatStore.getInstance().setState(() => ({
+      sessions: new Map([[
+        'parent-session',
+        {
+          sessionId: 'parent-session',
+          title: 'Parent Session',
+          dialogTurns: [{
+            id: 'parent-turn',
+            sessionId: 'parent-session',
+            userMessage: {
+              id: 'user-1',
+              content: 'Run subagents',
+              timestamp: 900,
+            },
+            modelRounds: [makeRound('round-1', [firstTask, secondTask])],
+            status: 'processing',
+            startTime: 900,
+          }],
+          status: 'idle',
+          config: { agentType: 'agentic' },
+          createdAt: 800,
+          lastActiveAt: 1000,
+          error: null,
+          sessionKind: 'normal',
+        } as Session,
+      ]]),
+      activeSessionId: 'parent-session',
+    }));
+
+    expect(__test_only__.findSubagentParentInfoByRound('subagent-1', 'child-turn-2'))
+      .toEqual({
+        sessionId: 'parent-session',
+        dialogTurnId: 'parent-turn',
+        toolCallId: 'task-2',
+      });
+  });
 });
 
 describe('shouldProcessEvent', () => {
@@ -339,6 +437,23 @@ function makeRound(id: string, items: ModelRound['items'] = []): ModelRound {
     isComplete: false,
     status: 'streaming',
     startTime: 1000,
+  };
+}
+
+function makeTaskTool(id: string, overrides: Partial<FlowToolItem> = {}): FlowToolItem {
+  return {
+    id,
+    type: 'tool',
+    toolName: 'Task',
+    timestamp: 1000,
+    status: 'completed',
+    toolCall: {
+      id,
+      input: {
+        prompt: 'Run task',
+      },
+    },
+    ...overrides,
   };
 }
 

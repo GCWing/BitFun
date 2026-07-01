@@ -126,6 +126,7 @@ pub enum AgenticEvent {
     /// with the parent tool call that launched it.
     SubagentSessionLinked {
         session_id: String,
+        subagent_dialog_turn_id: String,
         parent_session_id: String,
         parent_dialog_turn_id: String,
         parent_tool_call_id: String,
@@ -634,6 +635,7 @@ mod tests {
     fn subagent_session_linked_serializes_stable_contract() {
         let event = AgenticEvent::SubagentSessionLinked {
             session_id: "child-session".to_string(),
+            subagent_dialog_turn_id: "child-turn-1".to_string(),
             parent_session_id: "parent-session".to_string(),
             parent_dialog_turn_id: "turn-1".to_string(),
             parent_tool_call_id: "tool-1".to_string(),
@@ -646,6 +648,7 @@ mod tests {
         let serialized = serde_json::to_value(event).expect("serialize event");
         assert_eq!(serialized["type"], "SubagentSessionLinked");
         assert_eq!(serialized["session_id"], "child-session");
+        assert_eq!(serialized["subagent_dialog_turn_id"], "child-turn-1");
         assert_eq!(serialized["parent_session_id"], "parent-session");
         assert_eq!(serialized["parent_dialog_turn_id"], "turn-1");
         assert_eq!(serialized["parent_tool_call_id"], "tool-1");

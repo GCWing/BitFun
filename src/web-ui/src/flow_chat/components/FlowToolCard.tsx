@@ -123,8 +123,9 @@ export const FlowToolCard: React.FC<FlowToolCardProps> = React.memo(({
     prevProps.toolItem.acpPermission === nextProps.toolItem.acpPermission &&
     prevProps.toolItem.isParamsStreaming === nextProps.toolItem.isParamsStreaming &&
     prevProps.toolItem.subagentSessionId === nextProps.toolItem.subagentSessionId &&
+    prevProps.toolItem.subagentDialogTurnId === nextProps.toolItem.subagentDialogTurnId &&
     prevProps.toolItem.subagentModelId === nextProps.toolItem.subagentModelId &&
-    prevProps.toolItem.subagentModelAlias === nextProps.toolItem.subagentModelAlias &&
+    prevProps.toolItem.subagentModelDisplayName === nextProps.toolItem.subagentModelDisplayName &&
     prevProps.displayContext === nextProps.displayContext &&
     prevProgress === nextProgress &&
     prevProgressLogs === nextProgressLogs &&

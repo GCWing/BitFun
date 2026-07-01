@@ -227,15 +227,18 @@ describeWithJsdom('ReviewTeamPage', () => {
     vi.clearAllMocks();
   });
 
-  async function waitForText(text: string, maxTicks = 20) {
-    for (let i = 0; i < maxTicks; i++) {
+  async function waitForText(text: string, timeoutMs = 2_000) {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
       await act(async () => {
-        await Promise.resolve();
+        await new Promise(resolve => setTimeout(resolve, 10));
       });
       if (container.textContent?.includes(text)) return;
     }
-    throw new Error(`waitForText: "${text}" not found after ${maxTicks} ticks`);
+    throw new Error(`waitForText: "${text}" not found after ${timeoutMs}ms`);
   }
+
+  const jsdomTestTimeoutMs = 10_000;
 
   it('loads review team data only once on initial render', async () => {
     const { default: ReviewTeamPage } = await import('./ReviewTeamPage');
@@ -246,7 +249,7 @@ describeWithJsdom('ReviewTeamPage', () => {
     await waitForText('Team Overview');
 
     expect(loadDefaultReviewTeam).toHaveBeenCalledTimes(1);
-  });
+  }, jsdomTestTimeoutMs);
 
   it('renders a read-only team overview with a settings entry point', async () => {
     const { default: ReviewTeamPage } = await import('./ReviewTeamPage');
@@ -263,7 +266,7 @@ describeWithJsdom('ReviewTeamPage', () => {
     expect(container.textContent).toContain('1800s');
     expect(container.textContent).toContain('20 files');
     expect(container.textContent).toContain('3 max');
-  });
+  }, jsdomTestTimeoutMs);
 
   it('opens the review settings tab from the overview page', async () => {
     const { useSettingsStore } = await import('@/app/scenes/settings/settingsStore');
@@ -288,7 +291,7 @@ describeWithJsdom('ReviewTeamPage', () => {
 
     expect(useSettingsStore.getState().activeTab).toBe('review');
     expect(useSceneStore.getState().activeTabId).toBe('settings');
-  });
+  }, jsdomTestTimeoutMs);
 
   it('opens review settings from the current policy summary', async () => {
     const { useSettingsStore } = await import('@/app/scenes/settings/settingsStore');
@@ -312,7 +315,7 @@ describeWithJsdom('ReviewTeamPage', () => {
 
     expect(useSettingsStore.getState().activeTab).toBe('review');
     expect(useSceneStore.getState().activeTabId).toBe('settings');
-  });
+  }, jsdomTestTimeoutMs);
 
   it('keeps rendering after selecting a review team member with missing optional fields', async () => {
     loadDefaultReviewTeam.mockResolvedValue({
@@ -370,5 +373,5 @@ describeWithJsdom('ReviewTeamPage', () => {
 
     expect(container.textContent).toContain('Responsibilities');
     expect(container.textContent).toContain('Logic');
-  });
+  }, jsdomTestTimeoutMs);
 });

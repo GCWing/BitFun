@@ -35,7 +35,7 @@ const log = createLogger('ModelSelector');
 const ACP_SESSION_OPTIONS_TIMEOUT_MS = 65_000;
 
 interface ModelSelectorProps {
-  /** Current mode ID. */
+  /** Current target agent type. */
   currentMode: string;
   /** Custom class name. */
   className?: string;

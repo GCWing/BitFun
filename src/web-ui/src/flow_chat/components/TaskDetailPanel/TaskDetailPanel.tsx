@@ -31,6 +31,7 @@ type FlowChatSession = NonNullable<ReturnType<FlowChatStore['getState']>['sessio
 interface TaskDetailSnapshot {
   toolItem: FlowToolItem | null;
   subagentSessionId?: string;
+  subagentDialogTurnId?: string;
   subagentItems: FlowItem[];
   isSubagentRunning: boolean;
 }
@@ -80,6 +81,7 @@ function areSnapshotsEqual(prev: TaskDetailSnapshot, next: TaskDetailSnapshot): 
   return (
     prev.toolItem === next.toolItem &&
     prev.subagentSessionId === next.subagentSessionId &&
+    prev.subagentDialogTurnId === next.subagentDialogTurnId &&
     prev.isSubagentRunning === next.isSubagentRunning &&
     areFlowItemsEqual(prev.subagentItems, next.subagentItems)
   );
@@ -90,6 +92,7 @@ function collectTaskDetailSnapshot(
   sessionId: string | undefined,
   parentTaskToolIds: Set<string>,
   directSubagentSessionId?: string,
+  directSubagentDialogTurnId?: string,
 ): TaskDetailSnapshot {
   if (parentTaskToolIds.size === 0 && !directSubagentSessionId) {
     return { toolItem: null, subagentItems: [], subagentSessionId: undefined, isSubagentRunning: false };
@@ -128,12 +131,14 @@ function collectTaskDetailSnapshot(
     parentSessionId: sessionId,
     parentToolIds: parentTaskToolIds,
     directSubagentSessionId,
+    directSubagentDialogTurnId,
   });
 
   if (toolItem || projection.items.length > 0 || projection.session || !preferredSession) {
     return {
       toolItem,
       subagentSessionId: projection.session?.sessionId,
+      subagentDialogTurnId: projection.turn?.id,
       subagentItems: projection.items,
       isSubagentRunning: projection.isRunning,
     };
@@ -143,11 +148,13 @@ function collectTaskDetailSnapshot(
     parentSessionId: undefined,
     parentToolIds: parentTaskToolIds,
     directSubagentSessionId,
+    directSubagentDialogTurnId,
   });
 
   return {
     toolItem,
     subagentSessionId: fallbackProjection.session?.sessionId,
+    subagentDialogTurnId: fallbackProjection.turn?.id,
     subagentItems: fallbackProjection.items,
     isSubagentRunning: fallbackProjection.isRunning,
   };
@@ -176,6 +183,7 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({ data }) => {
   const parentTaskToolId = initialToolItem?.id;
   const parentTaskToolCallId = initialToolItem?.toolCall?.id;
   const directSubagentSessionId = initialToolItem?.subagentSessionId;
+  const directSubagentDialogTurnId = initialToolItem?.subagentDialogTurnId;
   const parentTaskToolIds = useMemo(
     () => new Set([parentTaskToolId, parentTaskToolCallId].filter(Boolean) as string[]),
     [parentTaskToolId, parentTaskToolCallId],
@@ -185,6 +193,7 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({ data }) => {
     toolItem: initialToolItem ?? null,
     subagentItems: [],
     subagentSessionId: initialToolItem?.subagentSessionId,
+    subagentDialogTurnId: initialToolItem?.subagentDialogTurnId,
     isSubagentRunning: false,
   }));
   const [isSnapshotHydrated, setIsSnapshotHydrated] = useState(false);
@@ -209,6 +218,7 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({ data }) => {
       toolItem: initialToolItem ?? null,
       subagentItems: [],
       subagentSessionId: initialToolItem?.subagentSessionId,
+      subagentDialogTurnId: initialToolItem?.subagentDialogTurnId,
       isSubagentRunning: false,
     };
     let hydrationFrameId: number | null = null;
@@ -237,6 +247,7 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({ data }) => {
           sessionId,
           parentTaskToolIds,
           directSubagentSessionId,
+          directSubagentDialogTurnId,
         );
 
         if (!areSnapshotsEqual(previousSnapshot, nextSnapshot)) {
@@ -261,6 +272,7 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({ data }) => {
         sessionId,
         parentTaskToolIds,
         directSubagentSessionId,
+        directSubagentDialogTurnId,
       );
 
       setTaskSnapshot(current => areSnapshotsEqual(current, previousSnapshot) ? current : previousSnapshot);
@@ -290,7 +302,14 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({ data }) => {
       }
       unsubscribe?.();
     };
-  }, [sessionId, parentTaskToolIds, directSubagentSessionId, initialToolItem, initialToolItem?.status]);
+  }, [
+    sessionId,
+    parentTaskToolIds,
+    directSubagentSessionId,
+    directSubagentDialogTurnId,
+    initialToolItem,
+    initialToolItem?.status,
+  ]);
 
   const toolItem = taskSnapshot.toolItem || initialToolItem;
   const status = toolItem?.status;
@@ -564,6 +583,7 @@ export const TaskDetailPanel: React.FC<TaskDetailPanelProps> = ({ data }) => {
               <SubagentProjectionView
                 parentTaskToolId={toolItem.id}
                 subagentSessionId={subagentSessionId}
+                directSubagentDialogTurnId={taskSnapshot.subagentDialogTurnId}
                 items={visibleSubagentItems}
                 sessionId={subagentSessionId}
                 compactText={false}

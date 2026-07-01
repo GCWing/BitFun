@@ -437,8 +437,9 @@ export function convertDialogTurnToBackendFormat(dialogTurn: DialogTurn, turnInd
               status: item.status || 'completed',
               orderIndex: index,
               subagentSessionId: toolItem.subagentSessionId,
+              subagentDialogTurnId: toolItem.subagentDialogTurnId,
               subagentModelId: toolItem.subagentModelId,
-              subagentModelAlias: toolItem.subagentModelAlias,
+              subagentModelDisplayName: toolItem.subagentModelDisplayName,
               attemptId: item.attemptId,
               attemptIndex: item.attemptIndex,
             };

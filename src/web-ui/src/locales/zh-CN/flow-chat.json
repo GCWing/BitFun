@@ -756,6 +756,11 @@
         "short": "小应用",
         "title": "小应用编辑",
         "origin": "小应用"
+      },
+      "subagent": {
+        "short": "智能体",
+        "title": "子智能体会话",
+        "origin": "子智能体"
       }
     }
   },
@@ -1543,6 +1548,7 @@
       "headerLinePrefix": "{{agentType}} 智能体",
       "headerLineSuffix": "：{{description}}",
       "defaultAgentKind": "子代理",
+      "cancelSession": "取消会话：{{sessionId}}",
       "waitingConfirm": "等待确认",
       "executing": "执行中...",
       "subAgentFailed": "子代理任务执行失败",

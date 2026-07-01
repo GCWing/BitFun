@@ -31,6 +31,8 @@ import type {
   SessionModelAutoMigratedEvent,
   SubagentSessionLinkedEvent,
 } from '@/infrastructure/api/service-api/AgentAPI';
+import { configManager } from '@/infrastructure/config/services/ConfigManager';
+import type { AIModelConfig, DefaultModelsConfig } from '@/infrastructure/config/types';
 import { i18nService } from '@/infrastructure/i18n/core/I18nService';
 import { MCPAPI } from '@/infrastructure/api/service-api/MCPAPI';
 import { ACPClientAPI, type AcpPermissionRequestEvent } from '@/infrastructure/api/service-api/ACPClientAPI';
@@ -147,6 +149,8 @@ function mergeParamsPartialEventData(
 export const __test_only__ = {
   resolveDialogTurnDisplayContent,
   mergeParamsPartialEventData,
+  findSubagentParentInfoByRound,
+  resolveModelDisplayNameFromConfig,
 };
 
 function shouldMarkUnreadCompletion(sessionId: string): boolean {
@@ -259,6 +263,7 @@ function handleDeepReviewQueueStateChanged(event: DeepReviewQueueStateChangedEve
 function attachSubagentSessionToParentTool(
   parentInfo: SubagentParentInfo,
   subagentSessionId: string,
+  subagentDialogTurnId?: string,
 ): void {
   const store = FlowChatStore.getInstance();
   const parentSession = store.getState().sessions.get(parentInfo.sessionId);
@@ -276,8 +281,12 @@ function attachSubagentSessionToParentTool(
     parentInfo.dialogTurnId,
     parentInfo.toolCallId,
   );
+  const parentTaskTool = parentTool?.type === 'tool' ? parentTool as FlowToolItem : null;
 
-  if (parentTool?.subagentSessionId === subagentSessionId) {
+  if (
+    parentTaskTool?.subagentSessionId === subagentSessionId &&
+    (!subagentDialogTurnId || parentTaskTool.subagentDialogTurnId === subagentDialogTurnId)
+  ) {
     return;
   }
 
@@ -287,6 +296,7 @@ function attachSubagentSessionToParentTool(
     parentInfo.toolCallId,
     {
       subagentSessionId,
+      ...(subagentDialogTurnId ? { subagentDialogTurnId } : {}),
     } as any,
   );
 }
@@ -470,6 +480,8 @@ function handleSubagentSessionLinked(
   const parentDialogTurnId =
     event?.parentDialogTurnId ?? (event as any)?.parent_dialog_turn_id;
   const parentToolCallId = event?.parentToolCallId ?? (event as any)?.parent_tool_call_id;
+  const subagentDialogTurnId =
+    event?.subagentDialogTurnId ?? (event as any)?.subagent_dialog_turn_id;
   const agentType = event?.agentType ?? (event as any)?.agent_type;
 
   if (!childSessionId || !parentSessionId || !parentDialogTurnId || !parentToolCallId) {
@@ -483,7 +495,7 @@ function handleSubagentSessionLinked(
     toolCallId: parentToolCallId,
   };
 
-  attachSubagentSessionToParentTool(parentInfo, childSessionId);
+  attachSubagentSessionToParentTool(parentInfo, childSessionId, subagentDialogTurnId);
   ensureSubagentSession(context, parentInfo, childSessionId, event as Record<string, unknown>, agentType);
   reconcileBackgroundSubagentSession(childSessionId);
 }
@@ -509,6 +521,142 @@ function getLinkedSubagentParentInfo(sessionId: string): SubagentParentInfo | un
     dialogTurnId: parentTurnId,
     toolCallId: session.parentToolCallId,
   };
+}
+
+function findSubagentParentInfoByRound(
+  subagentSessionId: string,
+  subagentDialogTurnId: string,
+): SubagentParentInfo | undefined {
+  const state = FlowChatStore.getInstance().getState();
+
+  for (const session of state.sessions.values()) {
+    for (const turn of session.dialogTurns) {
+      for (const round of turn.modelRounds) {
+        for (const item of round.items) {
+          if (item.type !== 'tool') {
+            continue;
+          }
+
+          const toolItem = item as FlowToolItem;
+          if (
+            toolItem.toolName?.toLowerCase() === 'task' &&
+            toolItem.subagentSessionId === subagentSessionId &&
+            toolItem.subagentDialogTurnId === subagentDialogTurnId
+          ) {
+            return {
+              sessionId: session.sessionId,
+              dialogTurnId: turn.id,
+              toolCallId: toolItem.toolCall?.id || toolItem.id,
+            };
+          }
+        }
+      }
+    }
+  }
+
+  return undefined;
+}
+
+function readConfigString(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function findConfiguredModel(
+  models: AIModelConfig[],
+  modelRef: string | null | undefined,
+): AIModelConfig | null {
+  const value = modelRef?.trim();
+  if (!value) {
+    return null;
+  }
+
+  return models.find(model =>
+    model.id === value ||
+    model.name === value ||
+    model.model_name === value
+  ) ?? null;
+}
+
+function resolveModelDisplayNameFromConfig(
+  modelId: string,
+  models: AIModelConfig[],
+  defaultModels: DefaultModelsConfig,
+): string {
+  const fallback = modelId.trim();
+  if (!fallback) {
+    return '';
+  }
+
+  let modelRef = fallback;
+  if (fallback === 'primary') {
+    modelRef = readConfigString(defaultModels.primary) || fallback;
+  } else if (fallback === 'fast') {
+    modelRef =
+      readConfigString(defaultModels.fast) ||
+      readConfigString(defaultModels.primary) ||
+      fallback;
+  }
+
+  const model = findConfiguredModel(models, modelRef);
+  return readConfigString(model?.model_name) || fallback;
+}
+
+async function resolveSubagentModelDisplayName(modelId: string): Promise<string> {
+  try {
+    const configData = await configManager.getConfigs([
+      'ai.models',
+      'ai.default_models',
+    ]);
+    const models = (configData['ai.models'] as AIModelConfig[] | undefined) || [];
+    const defaultModels =
+      (configData['ai.default_models'] as DefaultModelsConfig | undefined) || {};
+
+    return resolveModelDisplayNameFromConfig(modelId, models, defaultModels);
+  } catch (error) {
+    log.warn('Failed to resolve subagent model display name', { modelId, error });
+    return modelId;
+  }
+}
+
+function updateSubagentParentTaskModel(
+  context: FlowChatContext,
+  parentInfo: SubagentParentInfo,
+  modelId: string,
+  modelDisplayName: string,
+): void {
+  const store = FlowChatStore.getInstance();
+  store.updateModelRoundItem(
+    parentInfo.sessionId,
+    parentInfo.dialogTurnId,
+    parentInfo.toolCallId,
+    { subagentModelId: modelId, subagentModelDisplayName: modelDisplayName } as Partial<FlowToolItem>,
+  );
+  debouncedSaveDialogTurn(context, parentInfo.sessionId, parentInfo.dialogTurnId, 800);
+}
+
+function patchSubagentParentTaskModelDisplayName(
+  context: FlowChatContext,
+  parentInfo: SubagentParentInfo,
+  modelId: string,
+  displayName: string,
+): void {
+  const store = FlowChatStore.getInstance();
+  const currentItem = store.findToolItem(
+    parentInfo.sessionId,
+    parentInfo.dialogTurnId,
+    parentInfo.toolCallId,
+  );
+
+  if (currentItem?.type !== 'tool') {
+    return;
+  }
+
+  const currentTool = currentItem as FlowToolItem;
+  if (currentTool.subagentModelId !== modelId) {
+    return;
+  }
+
+  updateSubagentParentTaskModel(context, parentInfo, modelId, displayName);
 }
 
 /**
@@ -1758,16 +1906,22 @@ function handleModelRoundStart(context: FlowChatContext, event: any): void {
   context.flowChatStore.addModelRound(sessionId, turnId, modelRound);
   scheduleModelResponseStatus(context, sessionId, turnId, roundId);
 
-  const linkedParentInfo = getLinkedSubagentParentInfo(sessionId);
   const modelIdRaw = event.modelId ?? (event as any).model_id;
   const modelId = typeof modelIdRaw === 'string' ? modelIdRaw.trim() : '';
+  const linkedParentInfo =
+    findSubagentParentInfoByRound(sessionId, turnId) ||
+    getLinkedSubagentParentInfo(sessionId);
   if (linkedParentInfo && modelId) {
-    store.updateModelRoundItem(
-      linkedParentInfo.sessionId,
-      linkedParentInfo.dialogTurnId,
-      linkedParentInfo.toolCallId,
-      { subagentModelId: modelId, subagentModelAlias: modelId } as Partial<FlowToolItem>,
-    );
+    updateSubagentParentTaskModel(context, linkedParentInfo, modelId, modelId);
+    void resolveSubagentModelDisplayName(modelId)
+      .then(displayName => {
+        if (displayName && displayName !== modelId) {
+          patchSubagentParentTaskModelDisplayName(context, linkedParentInfo, modelId, displayName);
+        }
+      })
+      .catch(error => {
+        log.warn('Failed to patch subagent model display name', { modelId, error });
+      });
   }
   
   immediateSaveDialogTurn(context, sessionId, turnId);

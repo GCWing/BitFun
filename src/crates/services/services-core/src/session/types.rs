@@ -691,6 +691,12 @@ pub struct ToolItemData {
     #[serde(skip_serializing_if = "Option::is_none", alias = "subagent_session_id")]
     pub subagent_session_id: Option<String>,
 
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        alias = "subagent_dialog_turn_id"
+    )]
+    pub subagent_dialog_turn_id: Option<String>,
+
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "attempt_id")]
     pub attempt_id: Option<String>,
 
@@ -706,9 +712,9 @@ pub struct ToolItemData {
 
     #[serde(
         skip_serializing_if = "Option::is_none",
-        alias = "subagent_model_alias"
+        alias = "subagent_model_display_name"
     )]
-    pub subagent_model_alias: Option<String>,
+    pub subagent_model_display_name: Option<String>,
 
     /// Status field
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -1335,6 +1341,7 @@ mod tests {
             "toolName": "write_file",
             "toolCall": { "id": "call-2", "input": {} },
             "startTime": 1,
+            "subagentDialogTurnId": "child-turn-1",
             "attemptId": "round-1:attempt:2",
             "attemptIndex": 2
         });
@@ -1345,6 +1352,13 @@ mod tests {
             Some("round-1:attempt:2")
         );
         assert_eq!(tool_with_attempt.attempt_index, Some(2));
+        assert_eq!(
+            tool_with_attempt.subagent_dialog_turn_id.as_deref(),
+            Some("child-turn-1")
+        );
+
+        let encoded_tool = serde_json::to_value(&tool_with_attempt).expect("tool should serialize");
+        assert_eq!(encoded_tool["subagentDialogTurnId"], "child-turn-1");
     }
 
     #[test]

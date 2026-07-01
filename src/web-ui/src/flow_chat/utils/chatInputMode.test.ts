@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  isChatInputActionVisibleForTarget,
   normalizeUserDefaultChatInputModeId,
   resolveAvailableChatInputMode,
+  resolveChatInputCanUseSkills,
+  resolveChatInputSendAgentType,
   resolveChatInputModePolicy,
   resolveSessionAssistantWorkspace,
   resolveSwitchableChatInputModes,
@@ -203,6 +206,171 @@ describe('resolveSwitchableChatInputModes', () => {
       { id: 'agentic' },
       { id: 'PlannerPlus' },
     ]);
+  });
+});
+
+describe('resolveChatInputSendAgentType', () => {
+  it('keeps normal sessions on the composer or ACP target mode', () => {
+    expect(
+      resolveChatInputSendAgentType({
+        isSubagentTarget: false,
+        sessionMode: 'Explore',
+        acpTargetAgentType: null,
+        composerMode: 'agentic',
+      }),
+    ).toBe('agentic');
+
+    expect(
+      resolveChatInputSendAgentType({
+        isSubagentTarget: false,
+        sessionMode: 'agentic',
+        acpTargetAgentType: 'acp:example',
+        composerMode: 'agentic',
+      }),
+    ).toBe('acp:example');
+  });
+
+  it('keeps subagent continuations on the child session mode instead of the parent composer mode', () => {
+    expect(
+      resolveChatInputSendAgentType({
+        isSubagentTarget: true,
+        subagentType: 'Not provided',
+        sessionMode: 'Explore',
+        acpTargetAgentType: null,
+        composerMode: 'Team',
+      }),
+    ).toBe('Explore');
+  });
+
+  it('falls back to subagent relationship type when session mode is unavailable', () => {
+    expect(
+      resolveChatInputSendAgentType({
+        isSubagentTarget: true,
+        subagentType: 'ReviewSecurity',
+        sessionMode: undefined,
+        acpTargetAgentType: null,
+        composerMode: 'agentic',
+      }),
+    ).toBe('ReviewSecurity');
+  });
+
+  it('ignores display placeholders when resolving subagent targets', () => {
+    expect(
+      resolveChatInputSendAgentType({
+        isSubagentTarget: true,
+        subagentType: 'Not provided',
+        sessionMode: 'Not provided',
+        acpTargetAgentType: null,
+        composerMode: 'agentic',
+      }),
+    ).toBe('agentic');
+  });
+});
+
+describe('resolveChatInputCanUseSkills', () => {
+  it('allows skills when the target agent exposes the Skill tool', () => {
+    expect(
+      resolveChatInputCanUseSkills({
+        isSubagentTarget: true,
+        targetAgentType: 'Explore',
+        availableAgents: [
+          { id: 'Explore', defaultTools: ['Read', 'Skill'] },
+        ],
+      }),
+    ).toBe(true);
+  });
+
+  it('hides skills when the target agent does not expose the Skill tool', () => {
+    expect(
+      resolveChatInputCanUseSkills({
+        isSubagentTarget: true,
+        targetAgentType: 'ReviewSecurity',
+        availableAgents: [
+          { id: 'ReviewSecurity', defaultTools: ['Read', 'Grep', 'Glob'] },
+        ],
+      }),
+    ).toBe(false);
+
+    expect(
+      resolveChatInputCanUseSkills({
+        isSubagentTarget: false,
+        targetAgentType: 'ReadOnly',
+        availableAgents: [
+          { id: 'ReadOnly', defaultTools: ['Read', 'Grep', 'Glob'] },
+        ],
+      }),
+    ).toBe(false);
+  });
+
+  it('hides skills for unknown subagent targets while preserving normal-session fallback', () => {
+    expect(
+      resolveChatInputCanUseSkills({
+        isSubagentTarget: true,
+        targetAgentType: 'MissingSubagent',
+        availableAgents: [],
+      }),
+    ).toBe(false);
+
+    expect(
+      resolveChatInputCanUseSkills({
+        isSubagentTarget: false,
+        targetAgentType: 'agentic',
+        availableAgents: [],
+      }),
+    ).toBe(true);
+  });
+
+  it('preserves the normal-session fallback when tool metadata is missing', () => {
+    expect(
+      resolveChatInputCanUseSkills({
+        isSubagentTarget: false,
+        targetAgentType: 'agentic',
+        availableAgents: [{ id: 'agentic' }],
+      }),
+    ).toBe(true);
+
+    expect(
+      resolveChatInputCanUseSkills({
+        isSubagentTarget: true,
+        targetAgentType: 'Explore',
+        availableAgents: [{ id: 'Explore' }],
+      }),
+    ).toBe(false);
+  });
+});
+
+describe('isChatInputActionVisibleForTarget', () => {
+  it('hides main-session slash actions for subagent targets', () => {
+    for (const actionId of ['goal', 'deepreview', 'init']) {
+      expect(
+        isChatInputActionVisibleForTarget({
+          actionId,
+          isSubagentTarget: true,
+        }),
+      ).toBe(false);
+    }
+  });
+
+  it('keeps other slash actions visible for subagent targets', () => {
+    for (const actionId of ['usage', 'compact', 'reload-skills']) {
+      expect(
+        isChatInputActionVisibleForTarget({
+          actionId,
+          isSubagentTarget: true,
+        }),
+      ).toBe(true);
+    }
+  });
+
+  it('keeps main-session slash actions visible for normal targets', () => {
+    for (const actionId of ['goal', 'deepreview', 'init']) {
+      expect(
+        isChatInputActionVisibleForTarget({
+          actionId,
+          isSubagentTarget: false,
+        }),
+      ).toBe(true);
+    }
   });
 });
 

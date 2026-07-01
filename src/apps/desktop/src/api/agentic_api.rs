@@ -299,6 +299,8 @@ pub struct SessionResponse {
     pub session_name: String,
     /// Current/default mode selection for the next dialog turn.
     pub agent_type: String,
+    /// Current/default model selection for the next dialog turn.
+    pub model_name: Option<String>,
     /// Mode of the last surviving user dialog turn in session history.
     pub last_user_dialog_agent_type: Option<String>,
     /// Mode of the most recent user submission accepted by the scheduler.
@@ -2088,6 +2090,7 @@ pub async fn list_sessions(
             session_id: summary.session_id,
             session_name: summary.session_name,
             agent_type: summary.agent_type,
+            model_name: None,
             last_user_dialog_agent_type: summary.last_user_dialog_agent_type,
             last_submitted_agent_type: summary.last_submitted_agent_type,
             state: format!("{:?}", summary.state),
@@ -2265,6 +2268,7 @@ fn session_to_response_with_turn_count(session: Session, turn_count: usize) -> S
         session_id: session.session_id,
         session_name: session.session_name,
         agent_type: session.agent_type,
+        model_name: session.config.model_id,
         last_user_dialog_agent_type: session.last_user_dialog_agent_type,
         last_submitted_agent_type: session.last_submitted_agent_type,
         state: format!("{:?}", session.state),
@@ -2322,10 +2326,11 @@ mod tests {
             is_subagent_item: None,
             parent_task_tool_id: None,
             subagent_session_id: None,
+            subagent_dialog_turn_id: None,
             attempt_id: None,
             attempt_index: None,
             subagent_model_id: None,
-            subagent_model_alias: None,
+            subagent_model_display_name: None,
             status: None,
             interruption_reason: None,
         }

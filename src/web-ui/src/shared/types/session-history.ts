@@ -249,6 +249,7 @@ export interface ToolItemData {
   status?: string;
   interruptionReason?: 'app_restart' | 'retry_superseded';
   subagentSessionId?: string;
+  subagentDialogTurnId?: string;
   attemptId?: string;
   attemptIndex?: number;
 }

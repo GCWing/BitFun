@@ -289,17 +289,28 @@ impl<T> DialogTurnQueue<T> {
         Ok(queue.len())
     }
 
-    pub fn clear(&self, session_id: &str) -> usize {
+    pub fn clear(&self, session_id: &str) -> Vec<T> {
         self.inner
             .remove(session_id)
-            .map(|(_, queue)| queue.len())
-            .unwrap_or(0)
+            .map(|(_, queue)| queue.into_iter().map(|item| item.turn).collect())
+            .unwrap_or_default()
     }
 
     pub fn dequeue_next(&self, session_id: &str) -> Option<T> {
         self.inner
             .get_mut(session_id)
             .and_then(|mut q| q.pop_front().map(|item| item.turn))
+    }
+
+    pub fn remove_first_matching<F>(&self, session_id: &str, mut predicate: F) -> Option<T>
+    where
+        F: FnMut(&T) -> bool,
+    {
+        self.inner.get_mut(session_id).and_then(|mut q| {
+            q.iter()
+                .position(|item| predicate(&item.turn))
+                .and_then(|index| q.remove(index).map(|item| item.turn))
+        })
     }
 
     pub fn requeue_front(&self, session_id: &str, turn: T, priority: DialogQueuePriority) {

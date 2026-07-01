@@ -90,6 +90,8 @@ export interface SessionInfo {
   /** Current/default mode selection for the next dialog turn. */
   sessionName: string;
   agentType: string;
+  /** Current/default model selection for the next dialog turn. */
+  modelName?: string;
   /** Mode of the last surviving user dialog turn in session history. */
   lastUserDialogAgentType?: string;
   /** Mode of the most recent user submission accepted by the runtime. */
@@ -317,6 +319,7 @@ export interface ToolEvent extends AgenticEvent {
 }
 
 export interface SubagentSessionLinkedEvent extends AgenticEvent {
+  subagentDialogTurnId?: string;
   parentSessionId: string;
   parentDialogTurnId: string;
   parentToolCallId: string;

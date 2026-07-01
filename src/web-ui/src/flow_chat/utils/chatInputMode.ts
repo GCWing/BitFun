@@ -3,6 +3,7 @@ import { WorkspaceKind, type WorkspaceInfo } from '@/shared/types';
 export const DEFAULT_CHAT_INPUT_MODE_CONFIG_PATH = 'app.flow_chat.default_mode_id';
 
 const FIXED_CHAT_INPUT_MODE_IDS = new Set(['cowork', 'claw']);
+const SUBAGENT_HIDDEN_CHAT_INPUT_ACTION_IDS = new Set(['goal', 'deepreview', 'init']);
 
 type WorkspaceResolutionInfo = Pick<
   WorkspaceInfo,
@@ -28,6 +29,15 @@ function normalizeOptionalString(value: string | null | undefined): string | nul
 
   const trimmed = value.trim();
   return trimmed ? trimmed : null;
+}
+
+function normalizeAgentTypeString(value: string | null | undefined): string | null {
+  const normalized = normalizeOptionalString(value);
+  if (!normalized || normalized.toLowerCase() === 'not provided') {
+    return null;
+  }
+
+  return normalized;
 }
 
 function normalizeWorkspacePath(value: string | null | undefined): string | null {
@@ -221,6 +231,62 @@ export function resolveSwitchableChatInputModes<TMode extends { id: string }>(
   return Array.from(availableModes).filter(
     mode => !FIXED_CHAT_INPUT_MODE_IDS.has(normalizeModeLookupId(mode.id) ?? ''),
   );
+}
+
+export function resolveChatInputSendAgentType(params: {
+  isSubagentTarget: boolean;
+  subagentType?: string | null;
+  sessionMode?: string | null;
+  acpTargetAgentType?: string | null;
+  composerMode: string;
+}): string {
+  const composerMode = normalizeAgentTypeString(params.composerMode) ?? 'agentic';
+  if (!params.isSubagentTarget) {
+    return normalizeAgentTypeString(params.acpTargetAgentType) ?? composerMode;
+  }
+
+  return (
+    normalizeAgentTypeString(params.sessionMode) ??
+    normalizeAgentTypeString(params.subagentType) ??
+    composerMode
+  );
+}
+
+export function resolveChatInputCanUseSkills(params: {
+  isSubagentTarget: boolean;
+  targetAgentType: string;
+  availableAgents: Iterable<{ id: string; defaultTools?: string[] }>;
+}): boolean {
+  const targetAgentType = normalizeModeLookupId(params.targetAgentType);
+  if (!targetAgentType) {
+    return !params.isSubagentTarget;
+  }
+
+  for (const agent of params.availableAgents) {
+    if (normalizeModeLookupId(agent.id) !== targetAgentType) {
+      continue;
+    }
+
+    if (!Array.isArray(agent.defaultTools)) {
+      return !params.isSubagentTarget;
+    }
+
+    return agent.defaultTools.some(tool => normalizeModeLookupId(tool) === 'skill');
+  }
+
+  return !params.isSubagentTarget;
+}
+
+export function isChatInputActionVisibleForTarget(params: {
+  actionId: string;
+  isSubagentTarget: boolean;
+}): boolean {
+  if (!params.isSubagentTarget) {
+    return true;
+  }
+
+  const actionId = normalizeModeLookupId(params.actionId);
+  return !actionId || !SUBAGENT_HIDDEN_CHAT_INPUT_ACTION_IDS.has(actionId);
 }
 
 export function resolveWorkspaceChatInputMode(params: {

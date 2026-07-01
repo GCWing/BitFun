@@ -350,6 +350,7 @@ mod tests {
             "ExecControl",
             "GetTime",
             "Task",
+            "LaunchReviewAgent",
             "Skill",
             "AskUserQuestion",
             "TodoWrite",

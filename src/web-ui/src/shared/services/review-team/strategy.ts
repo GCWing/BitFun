@@ -14,7 +14,7 @@ export const REVIEW_STRATEGY_COMMON_RULES: ReviewStrategyCommonRules = {
   reviewerPromptRules: [
     'Each reviewer must follow its own strategy field.',
     'Member-level strategy overrides take precedence over the team strategy.',
-    'The reviewer Task prompt must include the resolved prompt_directive.',
+    'The reviewer LaunchReviewAgent prompt must include the resolved prompt_directive.',
   ],
 };
 

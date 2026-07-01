@@ -5,15 +5,15 @@
 use super::{
     scheduler::{
         abort_thread_goal_continuation_for_session, clear_thread_goal_continuation_abort,
-        DialogSubmissionPolicy,
+        get_global_scheduler, DialogSubmissionPolicy, HiddenSubagentQueueCancelHandle,
     },
     turn_outcome::TurnOutcome,
 };
 use crate::agentic::agents::get_agent_registry;
 use crate::agentic::context_profile::ContextProfilePolicy;
 use crate::agentic::core::{
-    InternalReminderKind, Message, MessageContent, ProcessingPhase, Session, SessionConfig,
-    SessionKind, SessionState, SessionSummary, TurnStats,
+    InternalReminderKind, Message, MessageContent, MessageSemanticKind, ProcessingPhase, Session,
+    SessionConfig, SessionKind, SessionState, SessionSummary, TurnStats,
 };
 use crate::agentic::events::{
     AgenticEvent, DeepReviewQueueState, EventPriority, EventQueue, EventRouter, EventSubscriber,
@@ -70,7 +70,7 @@ use dashmap::DashMap;
 use log::{debug, error, info, warn};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::sync::OnceLock;
 use tokio::sync::{mpsc, watch, OwnedSemaphorePermit, RwLock, Semaphore};
@@ -93,6 +93,7 @@ pub struct SubagentResult {
     pub status: SubagentResultStatus,
     pub reason: Option<String>,
     pub ledger_event_id: Option<String>,
+    pub session_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -105,6 +106,7 @@ pub enum SubagentResultStatus {
 pub(crate) struct SubagentExecutionRequest {
     pub(crate) task_description: String,
     pub(crate) context_mode: SubagentContextMode,
+    pub(crate) target_session_id: Option<String>,
     pub(crate) subagent_type: Option<String>,
     pub(crate) workspace_path: Option<String>,
     pub(crate) model_id: Option<String>,
@@ -150,6 +152,7 @@ impl SubagentResult {
             status: SubagentResultStatus::Completed,
             reason: None,
             ledger_event_id: None,
+            session_id: None,
         }
     }
 
@@ -159,7 +162,13 @@ impl SubagentResult {
             status: SubagentResultStatus::PartialTimeout,
             reason: Some(reason),
             ledger_event_id: None,
+            session_id: None,
         }
+    }
+
+    fn with_session_id(mut self, session_id: String) -> Self {
+        self.session_id = Some(session_id);
+        self
     }
 
     fn with_ledger_event_id(mut self, event_id: String) -> Self {
@@ -174,36 +183,40 @@ impl SubagentResult {
     pub fn ledger_event_id(&self) -> Option<&str> {
         self.ledger_event_id.as_deref()
     }
+
+    pub fn session_id(&self) -> Option<&str> {
+        self.session_id.as_deref()
+    }
 }
 
 #[derive(Debug, Clone)]
 pub struct BackgroundSubagentStartResult {
     pub background_task_id: String,
+    pub session_id: String,
 }
 
 fn format_background_subagent_delivery_text(
-    background_task_id: &str,
-    agent_type: &str,
+    subagent_session_id: &str,
     outcome: Result<&SubagentResult, &BitFunError>,
 ) -> String {
     match outcome {
         Ok(result) => {
             if result.is_partial_timeout() {
                 format!(
-                    "Background subagent '{}' (background_task_id='{}') completed with partial timeout result:\n<partial_result status=\"partial_timeout\">\n{}\n</partial_result>",
-                    agent_type, background_task_id, result.text
+                    "Background subagent (session_id='{}') completed with partial timeout result:\n<partial_result status=\"partial_timeout\">\n{}\n</partial_result>",
+                    subagent_session_id, result.text
                 )
             } else {
                 format!(
-                    "Background subagent '{}' (background_task_id='{}') completed successfully:\n<result>\n{}\n</result>",
-                    agent_type, background_task_id, result.text
+                    "Background subagent (session_id='{}') completed successfully:\n<result>\n{}\n</result>",
+                    subagent_session_id, result.text
                 )
             }
         }
         Err(error) => {
             format!(
-                "Background subagent '{}' (background_task_id='{}') failed before producing a final result.\nError: {}",
-                agent_type, background_task_id, error
+                "Background subagent (session_id='{}') failed before producing a final result.\nError: {}",
+                subagent_session_id, error
             )
         }
     }
@@ -243,7 +256,25 @@ fn fork_subagent_system_reminder() -> String {
     "<system_reminder>You are now running as a forked subagent. Messages before this reminder were inherited from the parent agent as context. Messages after this reminder are the request for you. Do not call the Task tool to launch another subagent. Use the tools available to complete the task directly.</system_reminder>".to_string()
 }
 
-struct HiddenSubagentExecutionRequest {
+fn session_created_by_parent(session: &Session, parent_session_id: &str) -> bool {
+    let created_by_marker = format!("session-{}", parent_session_id);
+    session.created_by.as_deref() == Some(created_by_marker.as_str())
+}
+
+fn session_lineage_matches_parent(
+    relationship: Option<&SessionRelationship>,
+    parent_session_id: &str,
+) -> bool {
+    relationship.is_some_and(|relationship| {
+        relationship.kind == Some(SessionRelationshipKind::Subagent)
+            && relationship.parent_session_id.as_deref() == Some(parent_session_id)
+    })
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct HiddenSubagentExecutionRequest {
+    target_session_id: Option<String>,
+    dialog_turn_id: Option<String>,
     session_name: String,
     agent_type: String,
     session_config: SessionConfig,
@@ -257,6 +288,37 @@ struct HiddenSubagentExecutionRequest {
     prompt_cache_source_session_id: Option<String>,
     session_kind: SessionKind,
     emit_lifecycle_events: bool,
+    prepared_session_created: bool,
+}
+
+impl HiddenSubagentExecutionRequest {
+    pub(super) fn target_session_id(&self) -> Option<&str> {
+        self.target_session_id.as_deref()
+    }
+
+    pub(super) fn set_dialog_turn_id(&mut self, dialog_turn_id: String) {
+        self.dialog_turn_id = Some(dialog_turn_id);
+    }
+
+    pub(super) fn agent_type(&self) -> &str {
+        &self.agent_type
+    }
+
+    pub(super) fn user_input_text(&self) -> &str {
+        &self.user_input_text
+    }
+
+    pub(super) fn parent_dialog_turn_id(&self) -> Option<&str> {
+        self.subagent_parent_info
+            .as_ref()
+            .map(|info| info.dialog_turn_id.as_str())
+    }
+
+    fn prepared_session_id_created_by_this_request(&self) -> Option<&str> {
+        self.prepared_session_created
+            .then_some(self.target_session_id.as_deref())
+            .flatten()
+    }
 }
 
 pub use bitfun_runtime_ports::DialogTriggerSource;
@@ -319,6 +381,20 @@ struct ActiveSubagentExecution {
     subagent_dialog_turn_id: String,
     cancel_token: CancellationToken,
     abort_handle: tokio::task::AbortHandle,
+}
+
+#[derive(Clone)]
+enum BackgroundSubagentCancelTarget {
+    Scheduler(HiddenSubagentQueueCancelHandle),
+    Direct(CancellationToken),
+}
+
+#[derive(Clone)]
+struct BackgroundSubagentTaskControl {
+    parent_session_id: String,
+    subagent_session_id: String,
+    suppress_delivery: Arc<AtomicBool>,
+    cancel_target: BackgroundSubagentCancelTarget,
 }
 
 /// Ensures orphaned subagent work is stopped when the parent tool await is dropped.
@@ -521,6 +597,8 @@ pub struct ConversationCoordinator {
     subagent_timeout_registry: Arc<RwLock<HashMap<String, Arc<SubagentTimeoutHandle>>>>,
     /// Active subagent executions keyed by subagent session id.
     active_subagent_executions: Arc<DashMap<String, ActiveSubagentExecution>>,
+    /// Background Task runs keyed by background_task_id.
+    background_subagent_tasks: Arc<DashMap<String, BackgroundSubagentTaskControl>>,
     /// Notifies DialogScheduler of turn outcomes; injected after construction
     scheduler_notify_tx: OnceLock<mpsc::Sender<(String, TurnOutcome)>>,
     /// Round-boundary user steering source (mid-turn user message injection); injected after construction
@@ -957,10 +1035,11 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 is_subagent_item: None,
                 parent_task_tool_id: None,
                 subagent_session_id: None,
+                subagent_dialog_turn_id: None,
                 attempt_id: None,
                 attempt_index: None,
                 subagent_model_id: None,
-                subagent_model_alias: None,
+                subagent_model_display_name: None,
                 status: Some("completed".to_string()),
                 interruption_reason: None,
                 queue_wait_ms: None,
@@ -1033,10 +1112,11 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 is_subagent_item: None,
                 parent_task_tool_id: None,
                 subagent_session_id: None,
+                subagent_dialog_turn_id: None,
                 attempt_id: None,
                 attempt_index: None,
                 subagent_model_id: None,
-                subagent_model_alias: None,
+                subagent_model_display_name: None,
                 status: Some("error".to_string()),
                 interruption_reason: None,
                 queue_wait_ms: None,
@@ -1078,6 +1158,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             subagent_profile_concurrency_limiters: Arc::new(RwLock::new(HashMap::new())),
             subagent_timeout_registry: Arc::new(RwLock::new(HashMap::new())),
             active_subagent_executions: Arc::new(DashMap::new()),
+            background_subagent_tasks: Arc::new(DashMap::new()),
             scheduler_notify_tx: OnceLock::new(),
             round_injection_source: OnceLock::new(),
             active_turns_per_session: Arc::new(DashMap::new()),
@@ -1109,6 +1190,14 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
 
     pub fn remote_exec_port(&self) -> Option<Arc<dyn RemoteExecPort>> {
         self.remote_exec_port.get().map(Arc::clone)
+    }
+
+    pub(super) fn execution_cancel_token_for_dialog_turn(
+        &self,
+        dialog_turn_id: &str,
+    ) -> Option<CancellationToken> {
+        self.execution_engine
+            .cancel_token_for_dialog_turn(dialog_turn_id)
     }
 
     /// Inject the DialogScheduler notification channel after construction.
@@ -4593,6 +4682,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         timeout_seconds: Option<u64>,
     ) -> BitFunResult<SubagentResult> {
         let HiddenSubagentExecutionRequest {
+            target_session_id,
+            dialog_turn_id,
             session_name,
             agent_type,
             session_config,
@@ -4606,7 +4697,9 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             prompt_cache_source_session_id,
             session_kind,
             emit_lifecycle_events,
+            prepared_session_created,
         } = request;
+        let prepared_target_session_id = target_session_id.clone();
 
         let requested_timeout_seconds = timeout_seconds.filter(|seconds| *seconds > 0);
         let parent_thread_goal_active = if let Some(parent_info) = subagent_parent_info.as_ref() {
@@ -4673,24 +4766,39 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         if let Some(token) = cancel_token {
             if token.is_cancelled() {
                 debug!("Subagent task cancelled before execution");
+                self.cleanup_prepared_hidden_subagent_session_id_if_unsubmitted(
+                    prepared_target_session_id.clone(),
+                    prepared_session_created,
+                )
+                .await;
                 return Err(BitFunError::Cancelled(
                     "Subagent task has been cancelled".to_string(),
                 ));
             }
         }
 
-        // Create independent subagent session.
-        // Use create_subagent_session (not create_session) so that no SessionCreated
-        // event is emitted to the transport layer — subagent sessions are internal
-        // implementation details and must not appear in the UI session list.
-        let (permits, wait_ms) = self
+        // Acquire execution capacity before starting the subagent turn. The
+        // target hidden session may have been created by the scheduler before
+        // this point so per-session queueing can use its real session_id.
+        let (permits, wait_ms) = match self
             .acquire_subagent_concurrency_permit(
                 &agent_type,
                 context_profile_policy.subagent_concurrency_cap,
                 cancel_token,
                 initial_deadline,
             )
-            .await?;
+            .await
+        {
+            Ok(value) => value,
+            Err(error) => {
+                self.cleanup_prepared_hidden_subagent_session_id_if_unsubmitted(
+                    prepared_target_session_id.clone(),
+                    prepared_session_created,
+                )
+                .await;
+                return Err(error);
+            }
+        };
         let _permit_guard = SubagentConcurrencyPermitGuard::new(permits, agent_type.clone());
 
         if let Some(token) = cancel_token {
@@ -4699,6 +4807,11 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     "Subagent task cancelled after waiting for concurrency slot: agent_type={}",
                     agent_type
                 );
+                self.cleanup_prepared_hidden_subagent_session_id_if_unsubmitted(
+                    prepared_target_session_id.clone(),
+                    prepared_session_created,
+                )
+                .await;
                 return Err(BitFunError::Cancelled(
                     "Subagent task has been cancelled".to_string(),
                 ));
@@ -4709,59 +4822,115 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 "Subagent timed out before session creation after waiting for concurrency slot: agent_type={}, wait_ms={}",
                 agent_type, wait_ms
             );
+            self.cleanup_prepared_hidden_subagent_session_id_if_unsubmitted(
+                prepared_target_session_id.clone(),
+                prepared_session_created,
+            )
+            .await;
             return Err(BitFunError::Timeout(timeout_error_message.clone()));
         }
 
-        let session = self
-            .create_hidden_agent_session(
-                None,
-                session_name,
-                agent_type.clone(),
-                session_config,
-                created_by,
-                session_kind,
-            )
-            .await?;
+        let session = match target_session_id {
+            Some(target_session_id) => match self.session_manager.get_session(&target_session_id) {
+                Some(session) => {
+                    if session.kind != session_kind {
+                        let error = if session_kind == SessionKind::Subagent {
+                            BitFunError::Validation(format!(
+                                "Subagent execution target must be a subagent session: {}",
+                                target_session_id
+                            ))
+                        } else {
+                            BitFunError::Validation(format!(
+                                "Hidden agent execution target has unexpected kind: {}",
+                                target_session_id
+                            ))
+                        };
+                        self.cleanup_prepared_hidden_subagent_session_id_if_unsubmitted(
+                            prepared_target_session_id.clone(),
+                            prepared_session_created,
+                        )
+                        .await;
+                        return Err(error);
+                    }
+                    session
+                }
+                None => {
+                    let error = BitFunError::NotFound(format!(
+                        "Subagent session not found: {}",
+                        target_session_id
+                    ));
+                    self.cleanup_prepared_hidden_subagent_session_id_if_unsubmitted(
+                        prepared_target_session_id.clone(),
+                        prepared_session_created,
+                    )
+                    .await;
+                    return Err(error);
+                }
+            },
+            None => {
+                let session = self
+                    .create_hidden_agent_session(
+                        None,
+                        session_name.clone(),
+                        agent_type.clone(),
+                        session_config.clone(),
+                        created_by.clone(),
+                        session_kind,
+                    )
+                    .await?;
+                let session_id = session.session_id.clone();
+                if let Some(source_session_id) = prompt_cache_source_session_id.as_deref() {
+                    let copied = self
+                        .session_manager
+                        .clone_prompt_cache(source_session_id, &session_id)
+                        .await;
+                    debug!(
+                        "Forked prompt cache into hidden agent session: source_session_id={}, session_id={}, copied={}",
+                        source_session_id, session_id, copied
+                    );
+                    self.session_manager
+                        .seed_forked_skill_agent_listing_baselines(source_session_id, &session_id)
+                        .await;
+                }
+                self.session_manager
+                    .replace_context_messages(&session_id, initial_messages.clone())
+                    .await;
+                session
+            }
+        };
         let session_id = session.session_id.clone();
         // Sync context window from AI config so subagents with large-context
         // models are not prematurely capped at SessionConfig::default()'s 128128.
-        self.session_manager
+        if let Err(error) = self
+            .session_manager
             .refresh_session_context_window(&session_id)
-            .await?;
-        if let Some(source_session_id) = prompt_cache_source_session_id.as_deref() {
-            let copied = self
-                .session_manager
-                .clone_prompt_cache(source_session_id, &session_id)
-                .await;
-            debug!(
-                "Forked prompt cache into subagent session: source_session_id={}, session_id={}, copied={}",
-                source_session_id, session_id, copied
-            );
-            self.session_manager
-                .seed_forked_skill_agent_listing_baselines(source_session_id, &session_id)
-                .await;
-        }
-        self.session_manager
-            .replace_context_messages(&session_id, initial_messages.clone())
+            .await
+        {
+            self.cleanup_prepared_hidden_subagent_session_id_if_unsubmitted(
+                Some(session_id.clone()),
+                prepared_session_created,
+            )
             .await;
-        self.session_manager
+            return Err(error);
+        }
+        drop(session_name);
+        drop(session_config);
+        drop(created_by);
+        drop(prompt_cache_source_session_id);
+        if let Err(error) = self
+            .session_manager
             .persist_session_lineage(
                 &session_id,
                 build_subagent_session_relationship(subagent_parent_info.as_ref(), &agent_type),
             )
-            .await?;
-
-        if let Some(parent_info) = subagent_parent_info.as_ref() {
-            if emit_lifecycle_events {
-                self.emit_event(AgenticEvent::SubagentSessionLinked {
-                    session_id: session_id.clone(),
-                    parent_session_id: parent_info.session_id.clone(),
-                    parent_dialog_turn_id: parent_info.dialog_turn_id.clone(),
-                    parent_tool_call_id: parent_info.tool_call_id.clone(),
-                    agent_type: Some(agent_type.clone()),
-                })
-                .await;
-            }
+            .await
+        {
+            self.cleanup_prepared_hidden_subagent_session_id_if_unsubmitted(
+                Some(session_id.clone()),
+                prepared_session_created,
+            )
+            .await;
+            return Err(error);
         }
 
         // Register timeout handle so it can be adjusted at runtime.
@@ -4781,6 +4950,11 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             if token.is_cancelled() {
                 debug!("Subagent task cancelled before AI call, cleaning up resources");
                 let _ = self.cleanup_subagent_resources(&session_id).await;
+                self.cleanup_prepared_hidden_subagent_session_id_if_unsubmitted(
+                    Some(session_id.clone()),
+                    prepared_session_created,
+                )
+                .await;
                 let mut registry = self.subagent_timeout_registry.write().await;
                 registry.remove(&session_id);
                 return Err(BitFunError::Cancelled(
@@ -4794,20 +4968,26 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 agent_type, session_id, wait_ms
             );
             let _ = self.cleanup_subagent_resources(&session_id).await;
+            self.cleanup_prepared_hidden_subagent_session_id_if_unsubmitted(
+                Some(session_id.clone()),
+                prepared_session_created,
+            )
+            .await;
             let mut registry = self.subagent_timeout_registry.write().await;
             registry.remove(&session_id);
             return Err(BitFunError::Timeout(timeout_error_message.clone()));
         }
 
         let turn_index = self.session_manager.get_turn_count(&session_id);
-        let requested_dialog_turn_id = format!("subagent-{}", uuid::Uuid::new_v4());
+        let requested_dialog_turn_id =
+            dialog_turn_id.unwrap_or_else(|| format!("subagent-{}", uuid::Uuid::new_v4()));
         let dialog_turn_id = self
             .session_manager
             .start_dialog_turn_with_existing_context(
                 &session_id,
                 agent_type.clone(),
                 user_input_text.clone(),
-                Some(requested_dialog_turn_id),
+                Some(requested_dialog_turn_id.clone()),
                 None,
             )
             .await?;
@@ -4815,6 +4995,27 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             "Generated unique dialog_turn_id for subagent: {}",
             dialog_turn_id
         );
+        self.persist_reused_subagent_user_input_context_if_needed(
+            prepared_target_session_id.as_deref(),
+            prepared_session_created,
+            &session_id,
+            &dialog_turn_id,
+            &user_input_text,
+        )
+        .await?;
+        if let Some(parent_info) = subagent_parent_info.as_ref() {
+            if emit_lifecycle_events {
+                self.emit_event(AgenticEvent::SubagentSessionLinked {
+                    session_id: session_id.clone(),
+                    subagent_dialog_turn_id: dialog_turn_id.clone(),
+                    parent_session_id: parent_info.session_id.clone(),
+                    parent_dialog_turn_id: parent_info.dialog_turn_id.clone(),
+                    parent_tool_call_id: parent_info.tool_call_id.clone(),
+                    agent_type: Some(agent_type.clone()),
+                })
+                .await;
+            }
+        }
 
         // Register a dedicated subagent token so both external cancellation and
         // coordinator-enforced timeouts can stop the same dialog turn.
@@ -4865,6 +5066,27 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         let subagent_session_storage_path = subagent_workspace
             .as_ref()
             .map(|workspace| workspace.session_storage_dir().to_path_buf());
+        if subagent_cancel_token.is_cancelled() {
+            debug!(
+                "Subagent task cancelled after dialog turn registration: agent_type={}, session_id={}, dialog_turn_id={}",
+                agent_type, session_id, dialog_turn_id
+            );
+            Self::persist_cancelled_dialog_turn(
+                &self.event_queue,
+                &self.session_manager,
+                None,
+                &session_id,
+                &dialog_turn_id,
+                emit_lifecycle_events,
+            )
+            .await;
+            let _ = self.cleanup_subagent_resources(&session_id).await;
+            let mut registry = self.subagent_timeout_registry.write().await;
+            registry.remove(&session_id);
+            return Err(BitFunError::Cancelled(
+                "Subagent task has been cancelled".to_string(),
+            ));
+        }
         let subagent_services = Self::build_workspace_services(&subagent_workspace).await;
         let execution_context = ExecutionContext {
             session_id: session_id.clone(),
@@ -5210,6 +5432,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                                 response_text,
                                 timeout_error_message.clone(),
                             ))
+                            .map(|result| result.with_session_id(session_id.clone()))
                         }
                     }
                     Ok(Ok(Err(error))) => {
@@ -5453,7 +5676,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             subagent_started_at.elapsed().as_millis()
         );
         execution_scope.disarm();
-        Ok(SubagentResult::completed(response_text))
+        Ok(SubagentResult::completed(response_text).with_session_id(session_id))
     }
 
     pub async fn capture_fork_agent_context_snapshot(
@@ -5613,6 +5836,132 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         Ok(turn_id)
     }
 
+    async fn ensure_subagent_session_loaded_for_reuse(
+        &self,
+        target_session_id: &str,
+        parent_session_id: &str,
+    ) -> BitFunResult<Session> {
+        let session = match self.session_manager.get_session(target_session_id) {
+            Some(session) => session,
+            None => {
+                let binding = self
+                    .session_manager
+                    .resolve_session_workspace_binding(parent_session_id)
+                    .await
+                    .ok_or_else(|| {
+                        BitFunError::NotFound(format!(
+                            "Parent session workspace not found: {}",
+                            parent_session_id
+                        ))
+                    })?;
+                self.session_manager
+                    .restore_internal_session_from_storage_path(
+                        &binding.session_storage_dir(),
+                        target_session_id,
+                    )
+                    .await?
+            }
+        };
+
+        if session.kind != SessionKind::Subagent {
+            return Err(BitFunError::Validation(format!(
+                "Subagent execution target must be a subagent session: {}",
+                target_session_id
+            )));
+        }
+
+        if !self
+            .subagent_session_owned_by_parent(&session, parent_session_id)
+            .await
+        {
+            return Err(BitFunError::Validation(format!(
+                "Subagent session '{}' was not created by parent session '{}'",
+                target_session_id, parent_session_id
+            )));
+        }
+
+        if matches!(session.state, SessionState::Error { .. }) {
+            return Err(BitFunError::Validation(format!(
+                "Subagent session is in error state and cannot be reused: {}",
+                target_session_id
+            )));
+        }
+
+        Ok(session)
+    }
+
+    async fn subagent_session_owned_by_parent(
+        &self,
+        session: &Session,
+        parent_session_id: &str,
+    ) -> bool {
+        match self
+            .restore_path_for_existing_session(&session.session_id)
+            .await
+        {
+            Ok(storage_path) => {
+                match self
+                    .session_manager
+                    .load_session_metadata(&storage_path, &session.session_id)
+                    .await
+                {
+                    Ok(Some(metadata))
+                        if session_lineage_matches_parent(
+                            metadata.relationship.as_ref(),
+                            parent_session_id,
+                        ) =>
+                    {
+                        return true;
+                    }
+                    Ok(_) => {}
+                    Err(error) => {
+                        debug!(
+                            "Failed to load subagent session metadata for lineage ownership check: session_id={}, parent_session_id={}, error={}",
+                            session.session_id, parent_session_id, error
+                        );
+                    }
+                }
+            }
+            Err(error) => {
+                debug!(
+                    "Failed to resolve subagent session storage for lineage ownership check: session_id={}, parent_session_id={}, error={}",
+                    session.session_id, parent_session_id, error
+                );
+            }
+        }
+
+        session_created_by_parent(session, parent_session_id)
+    }
+
+    async fn load_reusable_subagent_context_messages(
+        &self,
+        session: &Session,
+    ) -> BitFunResult<Vec<Message>> {
+        let session_id = &session.session_id;
+        let mut context_messages = self
+            .session_manager
+            .get_context_messages(session_id)
+            .await?;
+        let needs_restore = if context_messages.is_empty() {
+            !session.dialog_turn_ids.is_empty()
+        } else {
+            context_messages.len() == 1 && !session.dialog_turn_ids.is_empty()
+        };
+
+        if needs_restore {
+            let restore_path = self.restore_path_for_existing_session(session_id).await?;
+            self.session_manager
+                .restore_internal_session_from_storage_path(&restore_path, session_id)
+                .await?;
+            context_messages = self
+                .session_manager
+                .get_context_messages(session_id)
+                .await?;
+        }
+
+        Ok(context_messages)
+    }
+
     async fn resolve_hidden_subagent_execution_request(
         &self,
         request: SubagentExecutionRequest,
@@ -5637,6 +5986,69 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
 
         match request.context_mode {
             SubagentContextMode::Fresh => {
+                if let Some(target_session_id) = request.target_session_id.as_deref() {
+                    if request.subagent_type.is_some() {
+                        return Err(BitFunError::Validation(
+                            "subagent_type is not allowed when target_session_id is provided"
+                                .to_string(),
+                        ));
+                    }
+                    if request.workspace_path.is_some() {
+                        return Err(BitFunError::Validation(
+                            "workspace_path is not allowed when target_session_id is provided"
+                                .to_string(),
+                        ));
+                    }
+
+                    let parent_session_id = request.subagent_parent_info.session_id.clone();
+                    let mut session = self
+                        .ensure_subagent_session_loaded_for_reuse(
+                            target_session_id,
+                            &parent_session_id,
+                        )
+                        .await?;
+                    if let Some(model_id) = model_id.as_deref() {
+                        let session_id = session.session_id.clone();
+                        self.session_manager
+                            .update_session_model_id(&session_id, model_id)
+                            .await?;
+                        session =
+                            self.session_manager
+                                .get_session(&session_id)
+                                .ok_or_else(|| {
+                                    BitFunError::NotFound(format!(
+                                        "Subagent session not found after model update: {}",
+                                        session_id
+                                    ))
+                                })?;
+                    }
+                    let mut initial_messages = self
+                        .load_reusable_subagent_context_messages(&session)
+                        .await?;
+                    initial_messages.push(Message::user(task_description.clone()));
+
+                    return Ok(HiddenSubagentExecutionRequest {
+                        target_session_id: Some(session.session_id.clone()),
+                        dialog_turn_id: None,
+                        session_name: session.session_name.clone(),
+                        agent_type: session.agent_type.clone(),
+                        session_config: session.config.clone(),
+                        initial_messages,
+                        user_input_text: task_description,
+                        created_by: session.created_by.clone(),
+                        subagent_parent_info: Some(request.subagent_parent_info),
+                        context: request.context,
+                        delegation_policy: request.delegation_policy,
+                        runtime_tool_restrictions: runtime_tool_restrictions_for_delegation_policy(
+                            request.delegation_policy,
+                        ),
+                        prompt_cache_source_session_id: None,
+                        session_kind: SessionKind::Subagent,
+                        emit_lifecycle_events: true,
+                        prepared_session_created: false,
+                    });
+                }
+
                 let agent_type = request.subagent_type.ok_or_else(|| {
                     BitFunError::Validation(
                         "subagent_type is required when context_mode is 'fresh'".to_string(),
@@ -5650,6 +6062,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 })?;
 
                 Ok(HiddenSubagentExecutionRequest {
+                    target_session_id: None,
+                    dialog_turn_id: None,
                     session_name: format!("Subagent: {}", task_description),
                     agent_type,
                     session_config: Self::build_session_config_for_workspace(
@@ -5669,9 +6083,15 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     prompt_cache_source_session_id: None,
                     session_kind: SessionKind::Subagent,
                     emit_lifecycle_events: true,
+                    prepared_session_created: false,
                 })
             }
             SubagentContextMode::Fork => {
+                if request.target_session_id.is_some() {
+                    return Err(BitFunError::Validation(
+                        "target_session_id is not allowed when context_mode is 'fork'".to_string(),
+                    ));
+                }
                 if request.subagent_type.is_some() {
                     return Err(BitFunError::Validation(
                         "subagent_type is not allowed when context_mode is 'fork'".to_string(),
@@ -5682,15 +6102,13 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                         "workspace_path is not allowed when context_mode is 'fork'".to_string(),
                     ));
                 }
-                if model_id.is_some() {
-                    return Err(BitFunError::Validation(
-                        "model_id is not allowed when context_mode is 'fork'".to_string(),
-                    ));
-                }
-
                 let snapshot = self
                     .capture_fork_agent_context_snapshot(&request.subagent_parent_info.session_id)
                     .await?;
+                let mut session_config = snapshot.build_child_session_config(None);
+                if let Some(model_id) = model_id {
+                    session_config.model_id = Some(model_id);
+                }
                 let mut initial_messages = snapshot.messages.clone();
                 initial_messages.push(Message::internal_reminder(
                     InternalReminderKind::ForkSubagent,
@@ -5699,9 +6117,11 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 initial_messages.push(Message::user(task_description.clone()));
 
                 Ok(HiddenSubagentExecutionRequest {
+                    target_session_id: None,
+                    dialog_turn_id: None,
                     session_name: format!("Fork: {}", task_description),
                     agent_type: snapshot.parent_agent_type.clone(),
-                    session_config: snapshot.build_child_session_config(None),
+                    session_config,
                     initial_messages,
                     user_input_text: task_description,
                     created_by,
@@ -5714,28 +6134,254 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     prompt_cache_source_session_id: Some(snapshot.parent_session_id),
                     session_kind: SessionKind::Subagent,
                     emit_lifecycle_events: true,
+                    prepared_session_created: false,
                 })
             }
         }
+    }
+
+    pub(super) async fn prepare_hidden_subagent_execution_request(
+        &self,
+        mut request: HiddenSubagentExecutionRequest,
+    ) -> BitFunResult<HiddenSubagentExecutionRequest> {
+        if let Some(target_session_id) = request.target_session_id.as_deref() {
+            let session = self
+                .session_manager
+                .get_session(target_session_id)
+                .ok_or_else(|| {
+                    BitFunError::NotFound(format!(
+                        "Subagent session not found: {}",
+                        target_session_id
+                    ))
+                })?;
+            if session.kind != SessionKind::Subagent {
+                return Err(BitFunError::Validation(format!(
+                    "Subagent execution target must be a subagent session: {}",
+                    target_session_id
+                )));
+            }
+            return Ok(request);
+        }
+
+        let session = self
+            .create_hidden_agent_session(
+                None,
+                request.session_name.clone(),
+                request.agent_type.clone(),
+                request.session_config.clone(),
+                request.created_by.clone(),
+                request.session_kind,
+            )
+            .await?;
+        let session_id = session.session_id.clone();
+
+        if let Some(source_session_id) = request.prompt_cache_source_session_id.as_deref() {
+            let copied = self
+                .session_manager
+                .clone_prompt_cache(source_session_id, &session_id)
+                .await;
+            debug!(
+                "Forked prompt cache into subagent session: source_session_id={}, session_id={}, copied={}",
+                source_session_id, session_id, copied
+            );
+            self.session_manager
+                .seed_forked_skill_agent_listing_baselines(source_session_id, &session_id)
+                .await;
+        }
+        self.session_manager
+            .replace_context_messages(&session_id, request.initial_messages.clone())
+            .await;
+
+        request.target_session_id = Some(session_id);
+        request.prepared_session_created = true;
+        Ok(request)
+    }
+
+    pub(crate) async fn cleanup_prepared_hidden_subagent_session_if_unsubmitted(
+        &self,
+        request: &HiddenSubagentExecutionRequest,
+    ) {
+        self.cleanup_prepared_hidden_subagent_session_id_if_unsubmitted(
+            request
+                .prepared_session_id_created_by_this_request()
+                .map(str::to_owned),
+            request.prepared_session_created,
+        )
+        .await;
+    }
+
+    async fn cleanup_prepared_hidden_subagent_session_id_if_unsubmitted(
+        &self,
+        session_id: Option<String>,
+        prepared_session_created: bool,
+    ) {
+        if !prepared_session_created {
+            return;
+        }
+        let Some(session_id) = session_id else {
+            return;
+        };
+        if let Err(error) = self.session_manager.delete_session_by_id(&session_id).await {
+            warn!(
+                "Failed to clean up unsubmitted hidden subagent session: session_id={}, error={}",
+                session_id, error
+            );
+        }
+    }
+
+    pub(crate) async fn prepare_subagent_execution_request(
+        &self,
+        request: SubagentExecutionRequest,
+    ) -> BitFunResult<HiddenSubagentExecutionRequest> {
+        let request = self
+            .resolve_hidden_subagent_execution_request(request)
+            .await?;
+        self.prepare_hidden_subagent_execution_request(request)
+            .await
     }
 
     /// Execute subagent task directly
     /// DialogTurnStarted event not needed for now
     ///
     /// Returns SubagentResult with the final text response
+    pub(super) async fn execute_prepared_hidden_subagent(
+        &self,
+        request: HiddenSubagentExecutionRequest,
+        cancel_token: Option<&CancellationToken>,
+        timeout_seconds: Option<u64>,
+    ) -> BitFunResult<SubagentResult> {
+        self.execute_hidden_subagent_internal(request, cancel_token, timeout_seconds)
+            .await
+    }
+
+    async fn await_hidden_subagent_receiver(
+        receiver: tokio::sync::oneshot::Receiver<BitFunResult<SubagentResult>>,
+    ) -> BitFunResult<SubagentResult> {
+        receiver
+            .await
+            .map_err(|_| BitFunError::tool("Subagent result channel closed".to_string()))?
+    }
+
+    async fn await_hidden_subagent_cancellation(
+        receiver: impl std::future::Future<Output = BitFunResult<SubagentResult>>,
+        wait_timeout: Duration,
+    ) -> BitFunResult<SubagentResult> {
+        match tokio::time::timeout(wait_timeout, receiver).await {
+            Ok(result) => result,
+            Err(_) => Err(BitFunError::Cancelled(
+                "Subagent task has been cancelled".to_string(),
+            )),
+        }
+    }
+
+    fn register_background_subagent_task(
+        &self,
+        background_task_id: String,
+        parent_session_id: String,
+        subagent_session_id: String,
+        cancel_target: BackgroundSubagentCancelTarget,
+    ) -> Arc<AtomicBool> {
+        let suppress_delivery = Arc::new(AtomicBool::new(false));
+        self.background_subagent_tasks.insert(
+            background_task_id,
+            BackgroundSubagentTaskControl {
+                parent_session_id,
+                subagent_session_id,
+                suppress_delivery: suppress_delivery.clone(),
+                cancel_target,
+            },
+        );
+        suppress_delivery
+    }
+
+    pub(crate) async fn cancel_background_subagents_for_parent(
+        &self,
+        parent_session_id: &str,
+        subagent_session_id: &str,
+    ) -> BitFunResult<usize> {
+        self.ensure_subagent_session_loaded_for_reuse(subagent_session_id, parent_session_id)
+            .await?;
+
+        let controls: Vec<(String, BackgroundSubagentTaskControl)> = self
+            .background_subagent_tasks
+            .iter()
+            .filter(|entry| {
+                entry.parent_session_id == parent_session_id
+                    && entry.subagent_session_id == subagent_session_id
+            })
+            .map(|entry| (entry.key().clone(), entry.value().clone()))
+            .collect();
+
+        for (background_task_id, control) in &controls {
+            control.suppress_delivery.store(true, Ordering::SeqCst);
+            self.background_subagent_tasks.remove(background_task_id);
+            debug!(
+                "Cancelling background subagent task: background_task_id={}, parent_session_id={}, subagent_session_id={}",
+                background_task_id, parent_session_id, subagent_session_id
+            );
+            match &control.cancel_target {
+                BackgroundSubagentCancelTarget::Scheduler(handle) => {
+                    if let Some(scheduler) = get_global_scheduler() {
+                        scheduler.request_hidden_subagent_cancellation(handle).await;
+                    } else {
+                        warn!(
+                            "Cannot cancel scheduler-backed background subagent because scheduler is unavailable: background_task_id={}, subagent_session_id={}",
+                            background_task_id, subagent_session_id
+                        );
+                    }
+                }
+                BackgroundSubagentCancelTarget::Direct(token) => {
+                    token.cancel();
+                }
+            }
+        }
+
+        Ok(controls.len())
+    }
+
     pub(crate) async fn execute_subagent(
         &self,
         request: SubagentExecutionRequest,
         cancel_token: Option<&CancellationToken>,
         timeout_seconds: Option<u64>,
     ) -> BitFunResult<SubagentResult> {
-        self.execute_hidden_subagent_internal(
-            self.resolve_hidden_subagent_execution_request(request)
-                .await?,
-            cancel_token,
-            timeout_seconds,
-        )
-        .await
+        let request = self.prepare_subagent_execution_request(request).await?;
+        let Some(scheduler) = get_global_scheduler() else {
+            return self
+                .execute_prepared_hidden_subagent(request, cancel_token, timeout_seconds)
+                .await;
+        };
+        let submit_result = match scheduler
+            .submit_hidden_subagent(request.clone(), timeout_seconds)
+            .await
+        {
+            Ok(submit_result) => submit_result,
+            Err(error) => {
+                self.cleanup_prepared_hidden_subagent_session_if_unsubmitted(&request)
+                    .await;
+                return Err(BitFunError::tool(error));
+            }
+        };
+        let receiver = submit_result.receiver;
+        let result = if let Some(token) = cancel_token {
+            let received = Self::await_hidden_subagent_receiver(receiver);
+            tokio::pin!(received);
+            tokio::select! {
+                _ = token.cancelled() => {
+                    scheduler
+                        .request_hidden_subagent_cancellation(&submit_result.cancel_handle)
+                        .await;
+                    Self::await_hidden_subagent_cancellation(
+                        &mut received,
+                        SUBAGENT_TIMEOUT_GRACE_PERIOD,
+                    ).await
+                },
+                result = &mut received => result,
+            }
+        } else {
+            Self::await_hidden_subagent_receiver(receiver).await
+        };
+        result
     }
 
     /// Execute a hidden internal agent without requiring a parent Task/session.
@@ -5757,6 +6403,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         }
 
         let hidden_request = HiddenSubagentExecutionRequest {
+            target_session_id: None,
+            dialog_turn_id: None,
             session_name: request.session_name,
             agent_type: request.agent_type,
             session_config: Self::build_session_config_for_workspace(
@@ -5774,6 +6422,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             prompt_cache_source_session_id: None,
             session_kind: request.session_kind,
             emit_lifecycle_events: request.emit_lifecycle_events,
+            prepared_session_created: false,
         };
 
         self.execute_hidden_subagent_internal(hidden_request, cancel_token, timeout_seconds)
@@ -5788,22 +6437,43 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         let request = self
             .resolve_hidden_subagent_execution_request(request)
             .await?;
+        let request = self
+            .prepare_hidden_subagent_execution_request(request)
+            .await?;
+        let subagent_session_id = request
+            .target_session_id()
+            .ok_or_else(|| {
+                BitFunError::Validation(
+                    "prepared hidden subagent request is missing target_session_id".to_string(),
+                )
+            })?
+            .to_string();
         let agent_type = request.agent_type.clone();
-        let subagent_parent_info = request.subagent_parent_info.clone().ok_or_else(|| {
-            BitFunError::Validation(
-                "subagent_parent_info is required when creating a background subagent session"
-                    .to_string(),
-            )
-        })?;
-        let parent_session = self
+        let subagent_parent_info = match request.subagent_parent_info.clone() {
+            Some(info) => info,
+            None => {
+                self.cleanup_prepared_hidden_subagent_session_if_unsubmitted(&request)
+                    .await;
+                return Err(BitFunError::Validation(
+                    "subagent_parent_info is required when creating a background subagent session"
+                        .to_string(),
+                ));
+            }
+        };
+        let parent_session = match self
             .session_manager
             .get_session(&subagent_parent_info.session_id)
-            .ok_or_else(|| {
-                BitFunError::NotFound(format!(
+        {
+            Some(session) => session,
+            None => {
+                self.cleanup_prepared_hidden_subagent_session_if_unsubmitted(&request)
+                    .await;
+                return Err(BitFunError::NotFound(format!(
                     "Parent session not found: {}",
                     subagent_parent_info.session_id
-                ))
-            })?;
+                )));
+            }
+        };
         let parent_agent_type = parent_session.agent_type.clone();
         let parent_workspace_path = parent_session.config.workspace_path.clone();
         let parent_remote_connection_id = parent_session.config.remote_connection_id.clone();
@@ -5811,39 +6481,217 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         let background_task_id = format!("bg-subagent-{}", uuid::Uuid::new_v4());
         let background_task_id_for_delivery = background_task_id.clone();
         let task_description = request.user_input_text.clone();
-        let coordinator = get_global_coordinator()
-            .ok_or_else(|| BitFunError::service("Coordinator not initialized".to_string()))?;
+        let coordinator = match get_global_coordinator() {
+            Some(coordinator) => coordinator,
+            None => {
+                self.cleanup_prepared_hidden_subagent_session_if_unsubmitted(&request)
+                    .await;
+                return Err(BitFunError::service(
+                    "Coordinator not initialized".to_string(),
+                ));
+            }
+        };
         let parent_cancel_token = self
             .execution_engine
             .cancel_token_for_dialog_turn(&subagent_parent_info.dialog_turn_id)
             .map(|token| token.child_token());
 
+        if let Some(scheduler) = get_global_scheduler() {
+            let submit_result = match scheduler
+                .submit_hidden_subagent(request.clone(), timeout_seconds)
+                .await
+            {
+                Ok(submit_result) => submit_result,
+                Err(error) => {
+                    self.cleanup_prepared_hidden_subagent_session_if_unsubmitted(&request)
+                        .await;
+                    return Err(BitFunError::tool(error));
+                }
+            };
+            let receiver = submit_result.receiver;
+            let cancel_handle = submit_result.cancel_handle.clone();
+            let scheduler_for_cancel = scheduler.clone();
+            let suppress_delivery = self.register_background_subagent_task(
+                background_task_id.clone(),
+                subagent_parent_info.session_id.clone(),
+                subagent_session_id.clone(),
+                BackgroundSubagentCancelTarget::Scheduler(cancel_handle.clone()),
+            );
+            let background_subagent_tasks = self.background_subagent_tasks.clone();
+            let subagent_session_id_for_delivery = subagent_session_id.clone();
+
+            tokio::spawn(async move {
+                let result = match parent_cancel_token.as_ref() {
+                    Some(token) => {
+                        let received = Self::await_hidden_subagent_receiver(receiver);
+                        tokio::pin!(received);
+                        tokio::select! {
+                            _ = token.cancelled() => {
+                                scheduler_for_cancel
+                                    .request_hidden_subagent_cancellation(&cancel_handle)
+                                    .await;
+                                Self::await_hidden_subagent_cancellation(
+                                    &mut received,
+                                    SUBAGENT_TIMEOUT_GRACE_PERIOD,
+                                ).await
+                            },
+                            result = &mut received => result,
+                        }
+                    }
+                    None => Self::await_hidden_subagent_receiver(receiver).await,
+                };
+                background_subagent_tasks.remove(&background_task_id_for_delivery);
+                if suppress_delivery.load(Ordering::SeqCst) {
+                    debug!(
+                        "Suppressing cancelled background subagent result delivery: background_task_id={}, parent_session_id={}",
+                        background_task_id_for_delivery, subagent_parent_info.session_id
+                    );
+                    return;
+                }
+
+                let (delivery_text, display_text) = match result {
+                    Ok(result) => (
+                        format_background_subagent_delivery_text(
+                            &subagent_session_id_for_delivery,
+                            Ok(&result),
+                        ),
+                        format_background_subagent_display_text(Ok(&result)),
+                    ),
+                    Err(error) => (
+                        format_background_subagent_delivery_text(
+                            &subagent_session_id_for_delivery,
+                            Err(&error),
+                        ),
+                        format_background_subagent_display_text(Err(&error)),
+                    ),
+                };
+
+                let mut metadata = serde_json::Map::new();
+                metadata.insert(
+                    "kind".to_string(),
+                    serde_json::Value::String("background_result".to_string()),
+                );
+                metadata.insert(
+                    "sourceKind".to_string(),
+                    serde_json::Value::String("subagent".to_string()),
+                );
+                metadata.insert(
+                    "backgroundTaskId".to_string(),
+                    serde_json::Value::String(background_task_id_for_delivery.clone()),
+                );
+                metadata.insert(
+                    "subagentType".to_string(),
+                    serde_json::Value::String(agent_type),
+                );
+                metadata.insert(
+                    "taskDescription".to_string(),
+                    serde_json::Value::String(task_description),
+                );
+
+                let runtime =
+                    match CoreServiceAgentRuntime::global_agent_runtime_with_lifecycle_delivery() {
+                        Ok(runtime) => runtime,
+                        Err(error) => {
+                            warn!(
+                                "Agent runtime lifecycle delivery is not available; background subagent result dropped: background_task_id={}, parent_session_id={}, error={}",
+                                background_task_id_for_delivery,
+                                subagent_parent_info.session_id,
+                                error
+                            );
+                            return;
+                        }
+                    };
+
+                if let Err(error) = runtime
+                    .deliver_background_result(AgentBackgroundResultRequest {
+                        session_id: subagent_parent_info.session_id.clone(),
+                        agent_type: parent_agent_type,
+                        workspace_path: parent_workspace_path,
+                        remote_connection_id: parent_remote_connection_id,
+                        remote_ssh_host: parent_remote_ssh_host,
+                        content: delivery_text,
+                        display_content: Some(display_text),
+                        metadata,
+                    })
+                    .await
+                {
+                    warn!(
+                        "Failed to deliver background subagent result through scheduler path: background_task_id={}, parent_session_id={}, error={}",
+                        background_task_id_for_delivery,
+                        subagent_parent_info.session_id,
+                        CoreServiceAgentRuntime::runtime_error_message(error)
+                    );
+                }
+            });
+
+            return Ok(BackgroundSubagentStartResult {
+                background_task_id,
+                session_id: subagent_session_id,
+            });
+        }
+
+        let background_cancel_token = CancellationToken::new();
+        let execution_cancel_token = CancellationToken::new();
+        let background_cancel_token_for_bridge = background_cancel_token.clone();
+        let execution_cancel_token_for_bridge = execution_cancel_token.clone();
+        let cancel_bridge_handle = match parent_cancel_token {
+            Some(parent_cancel_token) => tokio::spawn(async move {
+                tokio::select! {
+                    _ = parent_cancel_token.cancelled() => {
+                        execution_cancel_token_for_bridge.cancel();
+                    }
+                    _ = background_cancel_token_for_bridge.cancelled() => {
+                        execution_cancel_token_for_bridge.cancel();
+                    }
+                }
+            }),
+            None => tokio::spawn(async move {
+                background_cancel_token_for_bridge.cancelled().await;
+                execution_cancel_token_for_bridge.cancel();
+            }),
+        };
+        let suppress_delivery = self.register_background_subagent_task(
+            background_task_id.clone(),
+            subagent_parent_info.session_id.clone(),
+            subagent_session_id.clone(),
+            BackgroundSubagentCancelTarget::Direct(background_cancel_token),
+        );
+        let background_subagent_tasks = self.background_subagent_tasks.clone();
+        let subagent_session_id_for_delivery = subagent_session_id.clone();
+
         tokio::spawn(async move {
             let (delivery_text, display_text) = match coordinator
                 .execute_hidden_subagent_internal(
                     request,
-                    parent_cancel_token.as_ref(),
+                    Some(&execution_cancel_token),
                     timeout_seconds,
                 )
                 .await
             {
                 Ok(result) => (
                     format_background_subagent_delivery_text(
-                        &background_task_id_for_delivery,
-                        &agent_type,
+                        &subagent_session_id_for_delivery,
                         Ok(&result),
                     ),
                     format_background_subagent_display_text(Ok(&result)),
                 ),
                 Err(error) => (
                     format_background_subagent_delivery_text(
-                        &background_task_id_for_delivery,
-                        &agent_type,
+                        &subagent_session_id_for_delivery,
                         Err(&error),
                     ),
                     format_background_subagent_display_text(Err(&error)),
                 ),
             };
+            cancel_bridge_handle.abort();
+            background_subagent_tasks.remove(&background_task_id_for_delivery);
+            if suppress_delivery.load(Ordering::SeqCst) {
+                debug!(
+                    "Suppressing cancelled background subagent result delivery: background_task_id={}, parent_session_id={}",
+                    background_task_id_for_delivery, subagent_parent_info.session_id
+                );
+                return;
+            }
 
             let mut metadata = serde_json::Map::new();
             metadata.insert(
@@ -5901,7 +6749,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             }
         });
 
-        Ok(BackgroundSubagentStartResult { background_task_id })
+        Ok(BackgroundSubagentStartResult {
+            background_task_id,
+            session_id: subagent_session_id,
+        })
     }
 
     /// Clean up runtime-only subagent resources.
@@ -5958,6 +6809,38 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             cleanup_started_at.elapsed().as_millis()
         );
         Ok(())
+    }
+
+    fn should_persist_reused_subagent_user_input_context(
+        prepared_target_session_id: Option<&str>,
+        prepared_session_created: bool,
+        session_id: &str,
+    ) -> bool {
+        !prepared_session_created && prepared_target_session_id == Some(session_id)
+    }
+
+    async fn persist_reused_subagent_user_input_context_if_needed(
+        &self,
+        prepared_target_session_id: Option<&str>,
+        prepared_session_created: bool,
+        session_id: &str,
+        dialog_turn_id: &str,
+        user_input_text: &str,
+    ) -> BitFunResult<()> {
+        if !Self::should_persist_reused_subagent_user_input_context(
+            prepared_target_session_id,
+            prepared_session_created,
+            session_id,
+        ) {
+            return Ok(());
+        }
+
+        let user_message = Message::user(user_input_text.to_string())
+            .with_semantic_kind(MessageSemanticKind::ActualUserInput)
+            .with_turn_id(dialog_turn_id.to_string());
+        self.session_manager
+            .add_message(session_id, user_message)
+            .await
     }
 
     /// Generate session title
@@ -6649,9 +7532,12 @@ mod tests {
     use super::{
         merge_prepended_messages_for_turn, normalize_subagent_max_concurrency,
         resolve_agent_session_create_created_by, resolve_agent_submission_turn_id,
-        ConversationCoordinator,
+        ConversationCoordinator, SubagentExecutionRequest,
     };
-    use crate::agentic::core::{InternalReminderKind, Message, SessionConfig, SessionKind};
+    use crate::agentic::core::{
+        InternalReminderKind, Message, MessageContent, MessageRole, MessageSemanticKind,
+        SessionConfig, SessionKind,
+    };
     use crate::agentic::events::{EventQueue, EventQueueConfig, EventRouter};
     use crate::agentic::execution::{
         ExecutionEngine, ExecutionEngineConfig, RoundExecutor, StreamProcessor,
@@ -6663,6 +7549,7 @@ mod tests {
         SystemPromptCacheIdentity, UserContextCacheIdentity,
     };
     use crate::agentic::skill_agent_snapshot::SkillSnapshotEntry;
+    use crate::agentic::tools::pipeline::SubagentParentInfo;
     use crate::agentic::tools::registry::ToolRegistry;
     use crate::agentic::tools::{ToolPipeline, ToolStateManager};
     use crate::agentic::TurnSkillAgentSnapshot;
@@ -6670,8 +7557,9 @@ mod tests {
     use crate::service::remote_ssh::workspace_state::init_remote_workspace_manager;
     use bitfun_runtime_ports::{
         AgentSessionCreateRequest, AgentSubmissionPort, AgentSubmissionRequest,
-        AgentSubmissionSource,
+        AgentSubmissionSource, DelegationPolicy, SubagentContextMode,
     };
+    use std::collections::HashMap;
     use std::sync::Arc;
     use std::time::Duration;
     use tokio::sync::RwLock as TokioRwLock;
@@ -6771,40 +7659,65 @@ mod tests {
     }
 
     #[test]
-    fn background_subagent_delivery_text_includes_background_task_id() {
+    fn subagent_lineage_ownership_requires_matching_parent() {
+        use crate::service::session::{SessionRelationship, SessionRelationshipKind};
+
+        let relationship = SessionRelationship {
+            kind: Some(SessionRelationshipKind::Subagent),
+            parent_session_id: Some("parent-session".to_string()),
+            parent_request_id: None,
+            parent_dialog_turn_id: None,
+            parent_turn_index: None,
+            parent_tool_call_id: None,
+            subagent_type: None,
+        };
+
+        assert!(super::session_lineage_matches_parent(
+            Some(&relationship),
+            "parent-session"
+        ));
+        assert!(!super::session_lineage_matches_parent(
+            Some(&relationship),
+            "other-parent"
+        ));
+        assert!(!super::session_lineage_matches_parent(
+            None,
+            "parent-session"
+        ));
+    }
+
+    #[test]
+    fn background_subagent_delivery_text_uses_session_id() {
         let completed = super::SubagentResult::completed("done".to_string());
-        let completed_text = super::format_background_subagent_delivery_text(
-            "bg-subagent-123",
-            "GeneralPurpose",
-            Ok(&completed),
-        );
+        let completed_text =
+            super::format_background_subagent_delivery_text("subagent-session-123", Ok(&completed));
         assert!(completed_text.contains(
-            "Background subagent 'GeneralPurpose' (background_task_id='bg-subagent-123') completed successfully:"
+            "Background subagent (session_id='subagent-session-123') completed successfully:"
         ));
         assert!(completed_text.contains("<result>\n"));
-        assert!(!completed_text.contains("background_task_id=\"bg-subagent-123\""));
+        assert!(!completed_text.contains("background_task_id"));
+        assert!(!completed_text.contains("bg-subagent-123"));
 
         let partial =
             super::SubagentResult::partial_timeout("partial".to_string(), "timeout".to_string());
-        let partial_text = super::format_background_subagent_delivery_text(
-            "bg-subagent-456",
-            "GeneralPurpose",
-            Ok(&partial),
-        );
+        let partial_text =
+            super::format_background_subagent_delivery_text("subagent-session-456", Ok(&partial));
         assert!(partial_text.contains(
-            "Background subagent 'GeneralPurpose' (background_task_id='bg-subagent-456') completed with partial timeout result:"
+            "Background subagent (session_id='subagent-session-456') completed with partial timeout result:"
         ));
         assert!(partial_text.contains("<partial_result status=\"partial_timeout\">\n"));
-        assert!(!partial_text.contains("background_task_id=\"bg-subagent-456\""));
+        assert!(!partial_text.contains("background_task_id"));
+        assert!(!partial_text.contains("bg-subagent-456"));
 
         let failed_text = super::format_background_subagent_delivery_text(
-            "bg-subagent-789",
-            "GeneralPurpose",
+            "subagent-session-789",
             Err(&crate::util::errors::BitFunError::tool("boom".to_string())),
         );
         assert!(failed_text.contains(
-            "Background subagent 'GeneralPurpose' (background_task_id='bg-subagent-789') failed before producing a final result."
+            "Background subagent (session_id='subagent-session-789') failed before producing a final result."
         ));
+        assert!(!failed_text.contains("background_task_id"));
+        assert!(!failed_text.contains("bg-subagent-789"));
         assert!(failed_text.contains("Error:"));
     }
 
@@ -6972,6 +7885,141 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn reused_subagent_send_input_updates_requested_model() {
+        let (coordinator, session_manager) = test_coordinator();
+        let workspace_path = std::env::temp_dir().join(format!(
+            "bitfun-reused-subagent-model-test-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&workspace_path).expect("workspace dir should exist");
+        struct TempWorkspaceGuard(std::path::PathBuf);
+        impl Drop for TempWorkspaceGuard {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_dir_all(&self.0);
+            }
+        }
+        let _workspace_guard = TempWorkspaceGuard(workspace_path.clone());
+
+        let subagent_session = coordinator
+            .create_hidden_agent_session(
+                None,
+                "Reusable subagent".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    model_id: Some("parent-model".to_string()),
+                    workspace_path: Some(workspace_path.to_string_lossy().into_owned()),
+                    ..Default::default()
+                },
+                Some("session-parent-session".to_string()),
+                SessionKind::Subagent,
+            )
+            .await
+            .expect("subagent session should be created");
+
+        let request = SubagentExecutionRequest {
+            task_description: "Continue the investigation".to_string(),
+            context_mode: SubagentContextMode::Fresh,
+            target_session_id: Some(subagent_session.session_id.clone()),
+            subagent_type: None,
+            workspace_path: None,
+            model_id: Some("fast".to_string()),
+            subagent_parent_info: SubagentParentInfo {
+                session_id: "parent-session".to_string(),
+                dialog_turn_id: "parent-turn".to_string(),
+                tool_call_id: "task-tool".to_string(),
+            },
+            context: HashMap::new(),
+            delegation_policy: DelegationPolicy::top_level().spawn_child(),
+        };
+
+        let prepared = coordinator
+            .prepare_subagent_execution_request(request)
+            .await
+            .expect("send_input request should prepare with a requested model");
+
+        assert_eq!(prepared.session_config.model_id.as_deref(), Some("fast"));
+        assert_eq!(
+            session_manager
+                .get_session(&subagent_session.session_id)
+                .expect("subagent session should remain available")
+                .config
+                .model_id
+                .as_deref(),
+            Some("fast")
+        );
+    }
+
+    #[tokio::test]
+    async fn fork_subagent_request_allows_requested_model_override() {
+        let (coordinator, session_manager) = test_coordinator();
+        let workspace_path =
+            std::env::temp_dir().join(format!("bitfun-fork-model-test-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&workspace_path).expect("workspace dir should exist");
+        struct TempWorkspaceGuard(std::path::PathBuf);
+        impl Drop for TempWorkspaceGuard {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_dir_all(&self.0);
+            }
+        }
+        let _workspace_guard = TempWorkspaceGuard(workspace_path.clone());
+
+        let parent_session = session_manager
+            .create_session(
+                "Parent".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    model_id: Some("parent-model".to_string()),
+                    workspace_path: Some(workspace_path.to_string_lossy().into_owned()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("parent session should be created");
+        session_manager
+            .replace_context_messages(
+                &parent_session.session_id,
+                vec![Message::user("parent context".to_string())],
+            )
+            .await;
+
+        let request = SubagentExecutionRequest {
+            task_description: "Fork and inspect the repo".to_string(),
+            context_mode: SubagentContextMode::Fork,
+            target_session_id: None,
+            subagent_type: None,
+            workspace_path: None,
+            model_id: Some("fast".to_string()),
+            subagent_parent_info: SubagentParentInfo {
+                session_id: parent_session.session_id.clone(),
+                dialog_turn_id: "parent-turn".to_string(),
+                tool_call_id: "task-tool".to_string(),
+            },
+            context: HashMap::new(),
+            delegation_policy: DelegationPolicy::top_level().spawn_child(),
+        };
+
+        let prepared = coordinator
+            .prepare_subagent_execution_request(request)
+            .await
+            .expect("fork request should prepare with a requested model");
+
+        assert_eq!(prepared.session_config.model_id.as_deref(), Some("fast"));
+        assert_eq!(
+            prepared.prompt_cache_source_session_id.as_deref(),
+            Some(parent_session.session_id.as_str())
+        );
+        assert_eq!(
+            session_manager
+                .get_session(prepared.target_session_id().expect("prepared session id"))
+                .expect("forked subagent session should exist")
+                .config
+                .model_id
+                .as_deref(),
+            Some("fast")
+        );
+    }
+
+    #[tokio::test]
     async fn hidden_agent_session_uses_requested_ephemeral_kind() {
         let (coordinator, session_manager) = test_coordinator();
         let workspace_path = std::env::temp_dir().join(format!(
@@ -7010,6 +8058,85 @@ mod tests {
                 .kind,
             SessionKind::EphemeralChild
         );
+    }
+
+    #[tokio::test]
+    async fn reused_subagent_input_is_added_to_runtime_context() {
+        let (coordinator, session_manager) = test_coordinator();
+        let workspace_path = std::env::temp_dir().join(format!(
+            "bitfun-reused-subagent-input-context-test-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&workspace_path).expect("workspace dir should exist");
+        struct TempWorkspaceGuard(std::path::PathBuf);
+        impl Drop for TempWorkspaceGuard {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_dir_all(&self.0);
+            }
+        }
+        let _workspace_guard = TempWorkspaceGuard(workspace_path.clone());
+
+        let session = coordinator
+            .create_hidden_agent_session(
+                None,
+                "Reusable subagent".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace_path.to_string_lossy().into_owned()),
+                    ..Default::default()
+                },
+                Some("session-parent".to_string()),
+                SessionKind::Subagent,
+            )
+            .await
+            .expect("subagent session should be created");
+        session_manager
+            .replace_context_messages(
+                &session.session_id,
+                vec![Message::assistant("previous answer".to_string())],
+            )
+            .await;
+
+        let turn_id = session_manager
+            .start_dialog_turn_with_existing_context(
+                &session.session_id,
+                "agentic".to_string(),
+                "continue investigation".to_string(),
+                Some("subagent-turn-reuse".to_string()),
+                None,
+            )
+            .await
+            .expect("turn should start");
+        coordinator
+            .persist_reused_subagent_user_input_context_if_needed(
+                Some(&session.session_id),
+                false,
+                &session.session_id,
+                &turn_id,
+                "continue investigation",
+            )
+            .await
+            .expect("user input context should persist");
+
+        let context_messages = session_manager
+            .get_context_messages(&session.session_id)
+            .await
+            .expect("context should be readable");
+        assert_eq!(context_messages.len(), 2);
+        let user_message = context_messages.last().expect("user message should exist");
+        assert_eq!(user_message.role, MessageRole::User);
+        assert_eq!(
+            user_message.metadata.turn_id.as_deref(),
+            Some("subagent-turn-reuse")
+        );
+        assert_eq!(
+            user_message.metadata.semantic_kind,
+            Some(MessageSemanticKind::ActualUserInput)
+        );
+        assert!(matches!(
+            &user_message.content,
+            MessageContent::Text(text) if text == "continue investigation"
+        ));
     }
 
     #[tokio::test]

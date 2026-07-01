@@ -95,9 +95,12 @@ export interface FlowToolItem extends FlowItem {
   confirmationWaitMs?: number;
   executionMs?: number;
 
-  /** Resolved when a subagent model round completes (parent Task tool only). */
+  /** Subagent model identity captured on the parent Task tool. */
   subagentModelId?: string;
-  subagentModelAlias?: string;
+  subagentModelDisplayName?: string;
+
+  /** Child dialog turn produced by this parent Task call. */
+  subagentDialogTurnId?: string;
   
   // Streaming parameter buffering.
   isParamsStreaming?: boolean;  // Params are streaming in.

@@ -10,7 +10,9 @@
 //! - FIFO ordering within the same priority level
 //! - Queue cleared on unrecoverable failure
 
-use super::coordinator::{ConversationCoordinator, DialogTriggerSource};
+use super::coordinator::{
+    ConversationCoordinator, DialogTriggerSource, HiddenSubagentExecutionRequest, SubagentResult,
+};
 use super::turn_outcome::TurnOutcome;
 use crate::agentic::core::{InternalReminderKind, Message, SessionState};
 use crate::agentic::goal_mode::{
@@ -22,13 +24,17 @@ use crate::agentic::init_agents_md::build_init_agents_md_user_input;
 use crate::agentic::round_preempt::{DialogRoundInjectionSource, SessionRoundInjectionBuffer};
 use crate::agentic::session::session_store_port::CoreSessionStorePort;
 use crate::agentic::session::SessionManager;
+use crate::util::errors::{BitFunError, BitFunResult};
 use bitfun_runtime_ports::{ThreadGoal, MAX_THREAD_GOAL_AUTO_CONTINUATIONS};
 use log::{debug, info, warn};
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering as AtomicOrdering};
 use std::sync::Arc;
 use std::sync::OnceLock;
 use std::time::{Duration, SystemTime};
 use tokio::sync::mpsc;
+use tokio::sync::oneshot;
+use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use bitfun_agent_runtime::scheduler::{
@@ -73,6 +79,96 @@ pub struct QueuedTurn {
     pub image_contexts: Option<Vec<ImageContextData>>,
     #[allow(dead_code)]
     pub enqueued_at: SystemTime,
+    execution: QueuedTurnExecution,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) enum QueuedTurnExecution {
+    Standard,
+    HiddenSubagent(HiddenSubagentQueuedExecution),
+}
+
+impl Default for QueuedTurnExecution {
+    fn default() -> Self {
+        Self::Standard
+    }
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct HiddenSubagentQueuedExecution {
+    request: HiddenSubagentExecutionRequest,
+    timeout_seconds: Option<u64>,
+    result_tx: SharedSubagentResultSender,
+    cancellation: HiddenSubagentQueueCancellation,
+}
+
+#[derive(Debug, Clone, Default)]
+pub(crate) struct SharedSubagentResultSender {
+    inner: Arc<std::sync::Mutex<Option<oneshot::Sender<BitFunResult<SubagentResult>>>>>,
+}
+
+impl SharedSubagentResultSender {
+    fn new(sender: oneshot::Sender<BitFunResult<SubagentResult>>) -> Self {
+        Self {
+            inner: Arc::new(std::sync::Mutex::new(Some(sender))),
+        }
+    }
+
+    fn send(&self, result: BitFunResult<SubagentResult>) {
+        let Some(sender) = self.inner.lock().ok().and_then(|mut guard| guard.take()) else {
+            return;
+        };
+        let _ = sender.send(result);
+    }
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct HiddenSubagentQueueCancellation {
+    cancelled: Arc<AtomicBool>,
+    token: CancellationToken,
+}
+
+impl Default for HiddenSubagentQueueCancellation {
+    fn default() -> Self {
+        Self {
+            cancelled: Arc::new(AtomicBool::new(false)),
+            token: CancellationToken::new(),
+        }
+    }
+}
+
+impl HiddenSubagentQueueCancellation {
+    fn cancel(&self) {
+        self.cancelled.store(true, AtomicOrdering::SeqCst);
+        self.token.cancel();
+    }
+
+    fn is_cancelled(&self) -> bool {
+        self.cancelled.load(AtomicOrdering::SeqCst)
+    }
+
+    fn child_token(&self) -> CancellationToken {
+        self.token.child_token()
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct HiddenSubagentSubmitResult {
+    pub receiver: oneshot::Receiver<BitFunResult<SubagentResult>>,
+    pub cancel_handle: HiddenSubagentQueueCancelHandle,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct HiddenSubagentQueueCancelHandle {
+    session_id: String,
+    turn_id: String,
+    cancellation: HiddenSubagentQueueCancellation,
+    result_tx: SharedSubagentResultSender,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ActiveInternalTurn {
+    HiddenSubagent,
 }
 
 /// Message queue manager for dialog turns.
@@ -87,6 +183,7 @@ pub struct DialogScheduler {
     queues: Arc<DialogTurnQueue<QueuedTurn>>,
     /// Currently active turn metadata keyed by target session ID
     active_turns: Arc<ActiveDialogTurnStore>,
+    active_internal_turns: Arc<dashmap::DashMap<String, ActiveInternalTurn>>,
     /// Turns whose cancelled auto-reply should be suppressed because the source
     /// agent explicitly cancelled its own outstanding SessionMessage request.
     suppressed_cancelled_replies: Arc<DialogReplySuppressionSet>,
@@ -116,6 +213,7 @@ impl DialogScheduler {
             session_manager,
             queues: Arc::new(DialogTurnQueue::default()),
             active_turns: Arc::new(ActiveDialogTurnStore::default()),
+            active_internal_turns: Arc::new(dashmap::DashMap::new()),
             suppressed_cancelled_replies: Arc::new(DialogReplySuppressionSet::default()),
             goal_continuation_abort: Arc::new(SessionAbortFlags::default()),
             outcome_tx,
@@ -508,9 +606,111 @@ impl DialogScheduler {
             user_message_metadata,
             image_contexts,
             enqueued_at: SystemTime::now(),
+            execution: QueuedTurnExecution::Standard,
         };
         self.submit_queued_turn(session_id, resolved_turn_id, queued_turn)
             .await
+    }
+
+    pub(crate) async fn submit_hidden_subagent(
+        &self,
+        mut request: HiddenSubagentExecutionRequest,
+        timeout_seconds: Option<u64>,
+    ) -> Result<HiddenSubagentSubmitResult, String> {
+        let session_id = request
+            .target_session_id()
+            .ok_or_else(|| {
+                "prepared hidden subagent request is missing target_session_id".to_string()
+            })?
+            .to_string();
+        let resolved_turn_id = format!("subagent-{}", Uuid::new_v4());
+        request.set_dialog_turn_id(resolved_turn_id.clone());
+        let agent_type = request.agent_type().to_string();
+        let user_input = request.user_input_text().to_string();
+        let session = self
+            .session_manager
+            .get_session(&session_id)
+            .ok_or_else(|| {
+                format!(
+                    "Subagent session not found before scheduler submit: {}",
+                    session_id
+                )
+            })?;
+        let (result_tx, result_rx) = oneshot::channel();
+        let result_tx = SharedSubagentResultSender::new(result_tx);
+        let cancellation = HiddenSubagentQueueCancellation::default();
+        let queued_turn = QueuedTurn {
+            user_input: user_input.clone(),
+            original_user_input: Some(user_input),
+            prepended_messages: Vec::new(),
+            turn_id: Some(resolved_turn_id.clone()),
+            agent_type,
+            workspace_path: session.config.workspace_path.clone(),
+            remote_connection_id: session.config.remote_connection_id.clone(),
+            remote_ssh_host: session.config.remote_ssh_host.clone(),
+            policy: DialogSubmissionPolicy::for_source(DialogTriggerSource::AgentSession)
+                .with_skip_tool_confirmation(true),
+            reply_route: None,
+            user_message_metadata: None,
+            image_contexts: None,
+            enqueued_at: SystemTime::now(),
+            execution: QueuedTurnExecution::HiddenSubagent(HiddenSubagentQueuedExecution {
+                request,
+                timeout_seconds,
+                result_tx: result_tx.clone(),
+                cancellation: cancellation.clone(),
+            }),
+        };
+
+        self.submit_queued_turn(session_id.clone(), resolved_turn_id.clone(), queued_turn)
+            .await?;
+        Ok(HiddenSubagentSubmitResult {
+            receiver: result_rx,
+            cancel_handle: HiddenSubagentQueueCancelHandle {
+                session_id,
+                turn_id: resolved_turn_id,
+                cancellation,
+                result_tx,
+            },
+        })
+    }
+
+    pub(crate) async fn request_hidden_subagent_cancellation(
+        &self,
+        handle: &HiddenSubagentQueueCancelHandle,
+    ) {
+        handle.cancellation.cancel();
+        let removed_turn = self
+            .queues
+            .remove_first_matching(&handle.session_id, |turn| {
+                turn.turn_id.as_deref() == Some(handle.turn_id.as_str())
+            });
+        if let Some(removed_turn) = removed_turn {
+            if let QueuedTurnExecution::HiddenSubagent(execution) = removed_turn.execution {
+                self.coordinator
+                    .cleanup_prepared_hidden_subagent_session_if_unsubmitted(&execution.request)
+                    .await;
+            }
+            handle.result_tx.send(Err(BitFunError::Cancelled(
+                "Subagent task has been cancelled".to_string(),
+            )));
+            debug!(
+                "Removed queued hidden subagent turn after cancellation: session_id={}, turn_id={}",
+                handle.session_id, handle.turn_id
+            );
+            return;
+        }
+
+        if let Err(error) = self
+            .coordinator
+            .cancel_dialog_turn(&handle.session_id, &handle.turn_id)
+            .await
+        {
+            debug!(
+                "Hidden subagent turn cancellation request did not hit an active turn: session_id={}, turn_id={}, error={}",
+                handle.session_id, handle.turn_id, error
+            );
+        }
     }
 
     async fn resolve_session_agent_type(
@@ -577,10 +777,15 @@ impl DialogScheduler {
             .session_manager
             .get_session(&session_id)
             .map(|s| s.state.clone());
+        let state_fact = if self.active_turns.contains(&session_id) {
+            DialogSessionStateFact::Processing
+        } else {
+            Self::session_state_fact(state.as_ref())
+        };
 
         let queue_has_items = self.queues.has_items(&session_id);
         let action = resolve_dialog_submit_queue_action(DialogSubmitQueueFacts {
-            session_state: Self::session_state_fact(state.as_ref()),
+            session_state: state_fact,
             queue_has_items,
             policy: queued_turn.policy,
         });
@@ -729,7 +934,22 @@ impl DialogScheduler {
     }
 
     fn clear_queue(&self, session_id: &str) {
-        let count = self.queues.clear(session_id);
+        let cleared_turns = self.queues.clear(session_id);
+        let count = cleared_turns.len();
+        for queued_turn in cleared_turns {
+            if let QueuedTurnExecution::HiddenSubagent(execution) = queued_turn.execution {
+                let coordinator = self.coordinator.clone();
+                tokio::spawn(async move {
+                    coordinator
+                        .cleanup_prepared_hidden_subagent_session_if_unsubmitted(&execution.request)
+                        .await;
+                    execution.result_tx.send(Err(BitFunError::Cancelled(
+                        "Subagent task was cancelled because a previous queued turn failed"
+                            .to_string(),
+                    )));
+                });
+            }
+        }
         if count > 0 {
             info!(
                 "Cleared {} queued messages: session_id={}",
@@ -780,6 +1000,12 @@ impl DialogScheduler {
         session_id: &str,
         queued_turn: &QueuedTurn,
     ) -> Result<String, String> {
+        if let QueuedTurnExecution::HiddenSubagent(execution) = &queued_turn.execution {
+            return self
+                .start_hidden_subagent_turn(session_id, queued_turn, execution)
+                .await;
+        }
+
         let images = queued_turn
             .image_contexts
             .as_ref()
@@ -903,6 +1129,140 @@ impl DialogScheduler {
         Ok(resolved)
     }
 
+    async fn start_hidden_subagent_turn(
+        &self,
+        session_id: &str,
+        queued_turn: &QueuedTurn,
+        execution: &HiddenSubagentQueuedExecution,
+    ) -> Result<String, String> {
+        let turn_id = queued_turn
+            .turn_id
+            .clone()
+            .ok_or_else(|| "hidden subagent queued turn is missing turn_id".to_string())?;
+        let request = execution.request.clone();
+        let parent_cancel_token = request.parent_dialog_turn_id().and_then(|turn_id| {
+            self.coordinator
+                .execution_cancel_token_for_dialog_turn(turn_id)
+                .map(|token| token.child_token())
+        });
+        let timeout_seconds = execution.timeout_seconds;
+        let result_tx = execution.result_tx.clone();
+        let coordinator = self.coordinator.clone();
+        let outcome_tx = self.outcome_tx.clone();
+        let session_id_owned = session_id.to_string();
+        let turn_id_for_task = turn_id.clone();
+
+        if execution.cancellation.is_cancelled() {
+            self.coordinator
+                .cleanup_prepared_hidden_subagent_session_if_unsubmitted(&execution.request)
+                .await;
+            let _ = outcome_tx
+                .send((
+                    session_id_owned,
+                    TurnOutcome::Cancelled {
+                        turn_id: turn_id.clone(),
+                    },
+                ))
+                .await;
+            result_tx.send(Err(BitFunError::Cancelled(
+                "Subagent task has been cancelled".to_string(),
+            )));
+            return Ok(turn_id);
+        }
+
+        let queue_cancel_token = execution.cancellation.child_token();
+        let execution_cancel_token = CancellationToken::new();
+        let queue_cancel_token_for_bridge = queue_cancel_token.clone();
+        let execution_cancel_token_for_bridge = execution_cancel_token.clone();
+        let cancel_bridge_handle = match parent_cancel_token {
+            Some(parent_cancel_token) => tokio::spawn(async move {
+                tokio::select! {
+                    _ = parent_cancel_token.cancelled() => {
+                        execution_cancel_token_for_bridge.cancel();
+                    }
+                    _ = queue_cancel_token_for_bridge.cancelled() => {
+                        execution_cancel_token_for_bridge.cancel();
+                    }
+                }
+            }),
+            None => tokio::spawn(async move {
+                queue_cancel_token_for_bridge.cancelled().await;
+                execution_cancel_token_for_bridge.cancel();
+            }),
+        };
+
+        self.active_turns.insert(
+            session_id,
+            ActiveDialogTurn::new(
+                turn_id.clone(),
+                queued_turn.workspace_path.clone(),
+                queued_turn.remote_connection_id.clone(),
+                queued_turn.remote_ssh_host.clone(),
+                queued_turn.agent_type.clone(),
+                queued_turn
+                    .original_user_input
+                    .clone()
+                    .unwrap_or_else(|| queued_turn.user_input.clone()),
+                queued_turn.user_message_metadata.clone(),
+                queued_turn.policy,
+                queued_turn.reply_route.clone(),
+            ),
+        );
+        self.active_internal_turns
+            .insert(session_id.to_string(), ActiveInternalTurn::HiddenSubagent);
+
+        tokio::spawn(async move {
+            let outcome = coordinator
+                .execute_prepared_hidden_subagent(
+                    request,
+                    Some(&execution_cancel_token),
+                    timeout_seconds,
+                )
+                .await;
+            match outcome {
+                Ok(result) => {
+                    let _ = outcome_tx
+                        .send((
+                            session_id_owned.clone(),
+                            TurnOutcome::Completed {
+                                turn_id: turn_id_for_task.clone(),
+                                final_response: result.text.clone(),
+                            },
+                        ))
+                        .await;
+                    result_tx.send(Ok(result));
+                }
+                Err(BitFunError::Cancelled(error_text)) => {
+                    let _ = outcome_tx
+                        .send((
+                            session_id_owned.clone(),
+                            TurnOutcome::Cancelled {
+                                turn_id: turn_id_for_task.clone(),
+                            },
+                        ))
+                        .await;
+                    result_tx.send(Err(BitFunError::Cancelled(error_text)));
+                }
+                Err(error) => {
+                    let error_text = error.to_string();
+                    let _ = outcome_tx
+                        .send((
+                            session_id_owned.clone(),
+                            TurnOutcome::Failed {
+                                turn_id: turn_id_for_task.clone(),
+                                error: error_text.clone(),
+                            },
+                        ))
+                        .await;
+                    result_tx.send(Err(error));
+                }
+            }
+            cancel_bridge_handle.abort();
+        });
+
+        Ok(turn_id)
+    }
+
     async fn forward_agent_session_reply(
         &self,
         responder_session_id: &str,
@@ -975,23 +1335,30 @@ impl DialogScheduler {
                 self.take_suppressed_cancelled_reply(&session_id, outcome.turn_id());
 
             let active_turn = self.active_turns.remove(&session_id);
-            if let Some(active_turn) = active_turn.as_ref() {
-                match resolve_agent_session_reply_action(
-                    &session_id,
-                    active_turn,
-                    &outcome,
-                    suppressed_cancelled_reply,
-                ) {
-                    AgentSessionReplyAction::NoReply => {}
-                    AgentSessionReplyAction::SkipSuppressedCancelledReply => {
-                        debug!(
+            let active_internal_turn = self
+                .active_internal_turns
+                .remove(&session_id)
+                .map(|(_, turn)| turn);
+            let is_internal_turn = active_internal_turn.is_some();
+            if !is_internal_turn {
+                if let Some(active_turn) = active_turn.as_ref() {
+                    match resolve_agent_session_reply_action(
+                        &session_id,
+                        active_turn,
+                        &outcome,
+                        suppressed_cancelled_reply,
+                    ) {
+                        AgentSessionReplyAction::NoReply => {}
+                        AgentSessionReplyAction::SkipSuppressedCancelledReply => {
+                            debug!(
                             "Skipping cancelled auto-reply because the source session explicitly cancelled its own SessionMessage request: session_id={}, turn_id={}",
                             session_id,
                             outcome.turn_id()
                         );
-                    }
-                    AgentSessionReplyAction::Forward(plan) => {
-                        self.forward_agent_session_reply(&session_id, plan).await;
+                        }
+                        AgentSessionReplyAction::Forward(plan) => {
+                            self.forward_agent_session_reply(&session_id, plan).await;
+                        }
                     }
                 }
             }
@@ -1003,90 +1370,94 @@ impl DialogScheduler {
                 self.clear_queue(&session_id);
             }
 
-            if let Some(active_turn) = active_turn.as_ref() {
-                match lifecycle_plan.goal_continuation {
-                    GoalContinuationAfterTurnAction::SkipNoActiveTurn => {}
-                    GoalContinuationAfterTurnAction::AbortForCancelled => {
-                        self.goal_continuation_abort.mark(&session_id);
-                        debug!(
+            if !is_internal_turn {
+                if let Some(active_turn) = active_turn.as_ref() {
+                    match lifecycle_plan.goal_continuation {
+                        GoalContinuationAfterTurnAction::SkipNoActiveTurn => {}
+                        GoalContinuationAfterTurnAction::AbortForCancelled => {
+                            self.goal_continuation_abort.mark(&session_id);
+                            debug!(
                             "Skipping thread goal continuation after user-cancelled turn: session_id={}, turn_id={}",
                             session_id,
                             outcome.turn_id()
                         );
-                    }
-                    GoalContinuationAfterTurnAction::Evaluate { turn_completed } => {
-                        self.goal_continuation_abort.clear(&session_id);
-                        match self
-                            .coordinator
-                            .prepare_goal_continuation_after_turn(
-                                &session_id,
-                                &outcome.turn_id(),
-                                active_turn.user_input(),
-                                active_turn.user_message_metadata(),
-                                turn_completed,
-                            )
-                            .await
-                        {
-                            Ok(Some(plan)) => {
-                                let prepended: Vec<Message> = plan
-                                    .prepended_reminders
-                                    .into_iter()
-                                    .map(|text| {
-                                        Message::internal_reminder(
-                                            InternalReminderKind::GoalContinuation,
-                                            text,
-                                        )
-                                    })
-                                    .collect();
-                                let mut last_error = None;
-                                for attempt in 1..=MAX_THREAD_GOAL_AUTO_CONTINUATIONS {
-                                    if self.goal_continuation_abort.contains(&session_id) {
-                                        debug!(
+                        }
+                        GoalContinuationAfterTurnAction::Evaluate { turn_completed } => {
+                            self.goal_continuation_abort.clear(&session_id);
+                            match self
+                                .coordinator
+                                .prepare_goal_continuation_after_turn(
+                                    &session_id,
+                                    &outcome.turn_id(),
+                                    active_turn.user_input(),
+                                    active_turn.user_message_metadata(),
+                                    turn_completed,
+                                )
+                                .await
+                            {
+                                Ok(Some(plan)) => {
+                                    let prepended: Vec<Message> = plan
+                                        .prepended_reminders
+                                        .into_iter()
+                                        .map(|text| {
+                                            Message::internal_reminder(
+                                                InternalReminderKind::GoalContinuation,
+                                                text,
+                                            )
+                                        })
+                                        .collect();
+                                    let mut last_error = None;
+                                    for attempt in 1..=MAX_THREAD_GOAL_AUTO_CONTINUATIONS {
+                                        if self.goal_continuation_abort.contains(&session_id) {
+                                            debug!(
                                         "Aborting goal continuation submit retries after user cancellation: session_id={}",
                                         session_id
                                     );
-                                        break;
-                                    }
-                                    match self
-                                        .submit_with_prepended_messages(
-                                            session_id.clone(),
-                                            "Continue working toward the active thread goal."
-                                                .to_string(),
-                                            Some(plan.display_message.clone()),
-                                            None,
-                                            active_turn.agent_type_owned(),
-                                            active_turn.workspace_path_owned(),
-                                            active_turn.remote_connection_id_owned(),
-                                            active_turn.remote_ssh_host_owned(),
-                                            DialogSubmissionPolicy::for_source(
-                                                DialogTriggerSource::AgentSession,
-                                            ),
-                                            None,
-                                            Some(plan.user_message_metadata.clone()),
-                                            prepended.clone(),
-                                            None,
-                                        )
-                                        .await
-                                    {
-                                        Ok(_) => {
-                                            last_error = None;
                                             break;
                                         }
-                                        Err(error) => {
-                                            last_error = Some(error);
-                                            if self.goal_continuation_abort.contains(&session_id) {
-                                                debug!(
+                                        match self
+                                            .submit_with_prepended_messages(
+                                                session_id.clone(),
+                                                "Continue working toward the active thread goal."
+                                                    .to_string(),
+                                                Some(plan.display_message.clone()),
+                                                None,
+                                                active_turn.agent_type_owned(),
+                                                active_turn.workspace_path_owned(),
+                                                active_turn.remote_connection_id_owned(),
+                                                active_turn.remote_ssh_host_owned(),
+                                                DialogSubmissionPolicy::for_source(
+                                                    DialogTriggerSource::AgentSession,
+                                                ),
+                                                None,
+                                                Some(plan.user_message_metadata.clone()),
+                                                prepended.clone(),
+                                                None,
+                                            )
+                                            .await
+                                        {
+                                            Ok(_) => {
+                                                last_error = None;
+                                                break;
+                                            }
+                                            Err(error) => {
+                                                last_error = Some(error);
+                                                if self
+                                                    .goal_continuation_abort
+                                                    .contains(&session_id)
+                                                {
+                                                    debug!(
                                                 "Aborting goal continuation submit retries after user cancellation: session_id={}",
                                                 session_id
                                             );
-                                                break;
-                                            }
-                                            if attempt < MAX_THREAD_GOAL_AUTO_CONTINUATIONS {
-                                                let delay_ms =
-                                                    goal_continuation_submit_retry_delay_ms(
-                                                        attempt,
-                                                    );
-                                                warn!(
+                                                    break;
+                                                }
+                                                if attempt < MAX_THREAD_GOAL_AUTO_CONTINUATIONS {
+                                                    let delay_ms =
+                                                        goal_continuation_submit_retry_delay_ms(
+                                                            attempt,
+                                                        );
+                                                    warn!(
                                                 "Goal continuation submit failed; retrying: session_id={}, attempt={}/{}, delay_ms={}, error={}",
                                                 session_id,
                                                 attempt,
@@ -1094,29 +1465,30 @@ impl DialogScheduler {
                                                 delay_ms,
                                                 last_error.as_ref().unwrap()
                                             );
-                                                tokio::time::sleep(
-                                                    std::time::Duration::from_millis(delay_ms),
-                                                )
-                                                .await;
+                                                    tokio::time::sleep(
+                                                        std::time::Duration::from_millis(delay_ms),
+                                                    )
+                                                    .await;
+                                                }
                                             }
                                         }
                                     }
-                                }
-                                if let Some(error) = last_error {
-                                    if !self.goal_continuation_abort.contains(&session_id) {
-                                        warn!(
+                                    if let Some(error) = last_error {
+                                        if !self.goal_continuation_abort.contains(&session_id) {
+                                            warn!(
                                         "Failed to submit goal continuation turn after retries: session_id={}, error={}",
                                         session_id, error
                                     );
+                                        }
                                     }
                                 }
-                            }
-                            Ok(None) => {}
-                            Err(error) => {
-                                warn!(
+                                Ok(None) => {}
+                                Err(error) => {
+                                    warn!(
                                 "Goal verification failed after turn stopped: session_id={}, status={}, error={}",
                                 session_id, status, error
                             );
+                                }
                             }
                         }
                     }
@@ -1482,6 +1854,26 @@ mod tests {
             resolve_agent_session_reply_action("session_b", &active_turn, &completed, true),
             AgentSessionReplyAction::Forward(_)
         ));
+    }
+
+    #[test]
+    fn cancelled_hidden_subagent_outcome_dispatches_next_queued_turn() {
+        let cancelled = TurnOutcome::Cancelled {
+            turn_id: "subagent-turn-1".to_string(),
+        };
+        let failed = TurnOutcome::Failed {
+            turn_id: "subagent-turn-1".to_string(),
+            error: "provider error".to_string(),
+        };
+
+        let cancelled_plan = resolve_turn_outcome_lifecycle_plan(&cancelled, true);
+        assert_eq!(
+            cancelled_plan.queue_action,
+            TurnOutcomeQueueAction::DispatchNext
+        );
+
+        let failed_plan = resolve_turn_outcome_lifecycle_plan(&failed, true);
+        assert_eq!(failed_plan.queue_action, TurnOutcomeQueueAction::ClearQueue);
     }
 
     #[test]

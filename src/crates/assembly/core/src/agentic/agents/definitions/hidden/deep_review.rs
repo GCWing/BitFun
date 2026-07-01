@@ -15,7 +15,7 @@ impl DeepReviewAgent {
     pub fn new() -> Self {
         Self {
             default_tools: vec![
-                "Task".to_string(),
+                "LaunchReviewAgent".to_string(),
                 "Read".to_string(),
                 "Grep".to_string(),
                 "Glob".to_string(),
@@ -82,7 +82,8 @@ mod tests {
         let agent = DeepReviewAgent::new();
         let tools = agent.default_tools();
 
-        assert!(tools.contains(&"Task".to_string()));
+        assert!(tools.contains(&"LaunchReviewAgent".to_string()));
+        assert!(!tools.contains(&"Task".to_string()));
         assert!(tools.contains(&"submit_code_review".to_string()));
         assert!(tools.contains(&"AskUserQuestion".to_string()));
         assert!(tools.contains(&"Edit".to_string()));
