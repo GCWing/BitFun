@@ -22,9 +22,9 @@ slices that are outside pure product logic but still platform-neutral.
   owner move proves behavior equivalence.
 - Remote-connect platform-neutral primitives belong here: device identity,
   pairing/encryption, QR payload generation, relay client protocol, dialog/cancel
-  orchestration ports, LAN/ngrok provider helpers, mobile-web relay upload,
-  image-context adapter contracts, remote workspace helpers, and command/response
-  assembly.
+  orchestration ports, LAN/ngrok provider helpers, IM bot provider clients,
+  mobile-web relay upload, image-context adapter contracts, remote workspace
+  helpers, and command/response assembly.
 - Remote workspace facts, session metadata, file projection DTOs, and
   workspace/projection host traits belong in `bitfun-runtime-ports`.
 - Workspace-root source selection, persistence/workspace service reads,

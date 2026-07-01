@@ -87,7 +87,7 @@
 当前大型 PR 批次：
 
 - Platform Provider Closure 先收口 remote-connect 与 announcement 中已具备服务层 owner 的 concrete provider：LAN IP/URL 探测、ngrok 进程/tunnel lifecycle、mobile-web relay 上传、announcement remote fetch/cache。core 保留兼容 facade、配置读取和产品编排。
-- IM bot 平台 HTTP adapter、browser automation、terminal tool execution 和 Computer Use OS action 仍属于高影响路径；必须在具备等价测试与清晰 host port 后再迁移，不与本批次混合。
+- IM bot 中的 Telegram / Feishu provider client 已迁入 services-integrations；剩余 Weixin 平台 adapter、browser automation、terminal tool execution 和 Computer Use OS action 仍属于高影响路径；必须在具备等价测试与清晰 host port 后再迁移。
 
 保护：
 

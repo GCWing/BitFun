@@ -5,8 +5,11 @@
 //! API (long polling) and routes messages through the shared command router.
 
 use anyhow::{anyhow, Result};
-use log::{debug, error, info, warn};
-use serde::{Deserialize, Serialize};
+use bitfun_services_integrations::remote_connect::bot::telegram::TelegramBotApi;
+pub use bitfun_services_integrations::remote_connect::bot::telegram::{
+    TelegramConfig, MAX_TELEGRAM_FILE_BYTES,
+};
+use log::{error, info, warn};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -19,13 +22,8 @@ use super::command_router::{
 use super::{load_bot_persistence, save_bot_persistence, BotConfig, SavedBotConnection};
 use crate::service::remote_connect::remote_server::ImageAttachment;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TelegramConfig {
-    pub bot_token: String,
-}
-
 pub struct TelegramBot {
-    config: TelegramConfig,
+    api: TelegramBotApi,
     pending_pairings: Arc<RwLock<HashMap<String, PendingPairing>>>,
     last_update_id: Arc<RwLock<i64>>,
     chat_states: Arc<RwLock<HashMap<i64, BotChatState>>>,
@@ -34,39 +32,6 @@ pub struct TelegramBot {
 #[derive(Debug, Clone)]
 struct PendingPairing {
     created_at: i64,
-}
-
-/// Telegram Bot API hard limit for `sendDocument` uploads (50 MB), aligned
-/// across all IM platforms by capping at 30 MB to match Feishu / WeChat.
-const MAX_TELEGRAM_FILE_BYTES: u64 = 30 * 1024 * 1024;
-
-/// Telegram caps `sendMessage.text` at 4096 UTF-16 code units. We chunk on
-/// char boundaries and stay slightly under the limit to leave headroom for
-/// any client-side counting differences.
-const MAX_TELEGRAM_TEXT_CHUNK: usize = 4000;
-
-fn chunk_text_for_telegram(text: &str) -> Vec<String> {
-    if text.len() <= MAX_TELEGRAM_TEXT_CHUNK {
-        return vec![text.to_string()];
-    }
-    let mut out = Vec::new();
-    let mut rest = text;
-    while !rest.is_empty() {
-        if rest.len() <= MAX_TELEGRAM_TEXT_CHUNK {
-            out.push(rest.to_string());
-            break;
-        }
-        let mut cut = MAX_TELEGRAM_TEXT_CHUNK;
-        while cut > 0 && !rest.is_char_boundary(cut) {
-            cut -= 1;
-        }
-        if cut == 0 {
-            cut = rest.chars().next().map(|c| c.len_utf8()).unwrap_or(1);
-        }
-        out.push(rest[..cut].to_string());
-        rest = &rest[cut..];
-    }
-    out
 }
 
 impl TelegramBot {
@@ -88,7 +53,7 @@ impl TelegramBot {
 
     pub fn new(config: TelegramConfig) -> Self {
         Self {
-            config,
+            api: TelegramBotApi::new(config),
             pending_pairings: Arc::new(RwLock::new(HashMap::new())),
             last_update_id: Arc::new(RwLock::new(0)),
             chat_states: Arc::new(RwLock::new(HashMap::new())),
@@ -100,36 +65,8 @@ impl TelegramBot {
         self.chat_states.write().await.insert(chat_id, state);
     }
 
-    fn api_url(&self, method: &str) -> String {
-        format!(
-            "https://api.telegram.org/bot{}/{}",
-            self.config.bot_token, method
-        )
-    }
-
     pub async fn send_message(&self, chat_id: i64, text: &str) -> Result<()> {
-        let client = reqwest::Client::new();
-        // Telegram caps a single sendMessage at 4096 UTF-16 code units. We
-        // conservatively chunk on byte/char boundaries so long agent
-        // replies are delivered as multiple messages instead of being
-        // rejected or silently dropped.
-        for chunk in chunk_text_for_telegram(text) {
-            let resp = client
-                .post(self.api_url("sendMessage"))
-                .json(&serde_json::json!({
-                    "chat_id": chat_id,
-                    "text": chunk,
-                }))
-                .send()
-                .await?;
-
-            if !resp.status().is_success() {
-                let body = resp.text().await.unwrap_or_default();
-                return Err(anyhow!("telegram sendMessage failed: {body}"));
-            }
-        }
-        debug!("Telegram message sent to chat {chat_id}");
-        Ok(())
+        self.api.send_message(chat_id, text).await
     }
 
     /// Send a message with Telegram inline keyboard buttons.
@@ -146,64 +83,15 @@ impl TelegramBot {
         text: &str,
         actions: &[BotAction],
     ) -> Result<()> {
-        // Build inline keyboard: one button per row for clarity.
-        let keyboard: Vec<Vec<serde_json::Value>> = actions
-            .iter()
-            .map(|action| {
-                vec![serde_json::json!({
-                    "text": action.label,
-                    "callback_data": action.command,
-                })]
-            })
-            .collect();
-
-        let client = reqwest::Client::new();
-        let resp = client
-            .post(self.api_url("sendMessage"))
-            .json(&serde_json::json!({
-                "chat_id": chat_id,
-                "text": text,
-                "reply_markup": {
-                    "inline_keyboard": keyboard,
-                },
-            }))
-            .send()
-            .await?;
-
-        if !resp.status().is_success() {
-            let body = resp.text().await.unwrap_or_default();
-            return Err(anyhow!("telegram sendMessage (keyboard) failed: {body}"));
-        }
-        debug!("Telegram keyboard message sent to chat {chat_id}");
-        Ok(())
+        self.api
+            .send_message_with_keyboard(chat_id, text, actions)
+            .await
     }
 
     /// Send a local file to a Telegram chat as a document attachment.
     /// Caller is expected to pre-check the size against `MAX_TELEGRAM_FILE_BYTES`.
     async fn send_file_as_document(&self, chat_id: i64, file_path: &str) -> Result<()> {
-        let content = super::read_workspace_file(file_path, MAX_TELEGRAM_FILE_BYTES, None).await?;
-
-        let part = reqwest::multipart::Part::bytes(content.bytes)
-            .file_name(content.name.clone())
-            .mime_str("application/octet-stream")?;
-
-        let form = reqwest::multipart::Form::new()
-            .text("chat_id", chat_id.to_string())
-            .part("document", part);
-
-        let client = reqwest::Client::new();
-        let resp = client
-            .post(self.api_url("sendDocument"))
-            .multipart(form)
-            .send()
-            .await?;
-
-        if !resp.status().is_success() {
-            let body = resp.text().await.unwrap_or_default();
-            return Err(anyhow!("telegram sendDocument failed: {body}"));
-        }
-        debug!("Telegram document sent to chat {chat_id}: {}", content.name);
-        Ok(())
+        self.api.send_file_as_document(chat_id, file_path).await
     }
 
     /// Scan `text` for downloadable file references and push every matching
@@ -256,16 +144,6 @@ impl TelegramBot {
         }
     }
 
-    /// Acknowledge a callback query so Telegram removes the button loading state.
-    async fn answer_callback_query(&self, callback_query_id: &str) {
-        let client = reqwest::Client::new();
-        let _ = client
-            .post(self.api_url("answerCallbackQuery"))
-            .json(&serde_json::json!({ "callback_query_id": callback_query_id }))
-            .send()
-            .await;
-    }
-
     /// Send a `HandleResult`, using an inline keyboard when actions are present.
     ///
     /// For the "Processing your message…" reply the cancel command line in the
@@ -300,31 +178,7 @@ impl TelegramBot {
 
     /// Register the bot command menu visible in Telegram's "/" menu.
     pub async fn set_bot_commands(&self) -> Result<()> {
-        let client = reqwest::Client::new();
-        let commands = serde_json::json!({
-            "commands": [
-                { "command": "menu", "description": "Show the main menu" },
-                { "command": "new", "description": "Create a new session" },
-                { "command": "resume", "description": "Resume an existing session" },
-                { "command": "switch", "description": "Switch assistant or workspace" },
-                { "command": "model", "description": "Switch the session model" },
-                { "command": "cancel", "description": "Cancel the current task" },
-                { "command": "expert", "description": "Switch to Expert mode" },
-                { "command": "assistant", "description": "Switch to Assistant mode" },
-                { "command": "settings", "description": "Open settings" },
-                { "command": "help", "description": "Show help" },
-            ]
-        });
-        let resp = client
-            .post(self.api_url("setMyCommands"))
-            .json(&commands)
-            .send()
-            .await?;
-        if !resp.status().is_success() {
-            let body = resp.text().await.unwrap_or_default();
-            warn!("Failed to set Telegram bot commands: {body}");
-        }
-        Ok(())
+        self.api.set_bot_commands().await
     }
 
     pub async fn register_pairing(&self, pairing_code: &str) -> Result<()> {
@@ -346,149 +200,17 @@ impl TelegramBot {
         false
     }
 
-    /// Download a Telegram photo by file_id and return it as an `ImageAttachment`.
-    ///
-    /// Telegram photo updates contain multiple `PhotoSize` entries; callers should
-    /// pass the `file_id` of the last (largest) entry.
-    async fn download_photo(&self, file_id: &str) -> Result<ImageAttachment> {
-        let client = reqwest::Client::new();
-
-        // Step 1: resolve file_path via getFile
-        let get_file_url = self.api_url("getFile");
-        let resp = client
-            .post(&get_file_url)
-            .json(&serde_json::json!({ "file_id": file_id }))
-            .send()
-            .await?;
-        let body: serde_json::Value = resp.json().await?;
-        let file_path = body
-            .pointer("/result/file_path")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| anyhow!("Telegram getFile: missing file_path for file_id={file_id}"))?
-            .to_string();
-
-        // Step 2: download the actual bytes
-        let download_url = format!(
-            "https://api.telegram.org/file/bot{}/{}",
-            self.config.bot_token, file_path
-        );
-        let bytes = client.get(&download_url).send().await?.bytes().await?;
-
-        // Step 3: encode as base64 data-URL
-        use base64::Engine as _;
-        let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
-        let mime_type = if file_path.ends_with(".jpg") || file_path.ends_with(".jpeg") {
-            "image/jpeg"
-        } else if file_path.ends_with(".png") {
-            "image/png"
-        } else if file_path.ends_with(".gif") {
-            "image/gif"
-        } else if file_path.ends_with(".webp") {
-            "image/webp"
-        } else {
-            "image/jpeg"
-        };
-        let data_url = format!("data:{mime_type};base64,{b64}");
-        let name = file_path
-            .rsplit('/')
-            .next()
-            .unwrap_or("photo.jpg")
-            .to_string();
-
-        debug!(
-            "Telegram photo downloaded: file_id={file_id}, size={}B",
-            bytes.len()
-        );
-        Ok(ImageAttachment { name, data_url })
-    }
-
     /// Returns `(chat_id, text, images)` tuples for each incoming message.
-    ///
-    /// Handles both plain-text messages and photo messages with an optional
-    /// caption.  For photo messages the highest-resolution variant is downloaded
-    /// and returned as an `ImageAttachment`.
     pub async fn poll_updates(&self) -> Result<Vec<(i64, String, Vec<ImageAttachment>)>> {
-        let offset = *self.last_update_id.read().await;
-        let client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(35))
-            .build()?;
-
-        let resp = client
-            .get(self.api_url("getUpdates"))
-            .query(&[
-                ("offset", (offset + 1).to_string()),
-                ("timeout", "30".to_string()),
-            ])
-            .send()
-            .await?;
-
-        let body: serde_json::Value = resp.json().await?;
-        let results = body["result"].as_array().cloned().unwrap_or_default();
-
-        let mut messages = Vec::new();
-        for update in results {
-            if let Some(update_id) = update["update_id"].as_i64() {
-                let mut last = self.last_update_id.write().await;
-                if update_id > *last {
-                    *last = update_id;
-                }
-            }
-
-            // Inline keyboard button press – treat callback_data as a message.
-            if let Some(cq) = update.get("callback_query") {
-                let cq_id = cq["id"].as_str().unwrap_or("").to_string();
-                let chat_id = cq.pointer("/message/chat/id").and_then(|v| v.as_i64());
-                let data = cq["data"].as_str().map(|s| s.trim().to_string());
-                if let (Some(chat_id), Some(data)) = (chat_id, data) {
-                    // Answer the callback query to dismiss the button spinner.
-                    self.answer_callback_query(&cq_id).await;
-                    messages.push((chat_id, data, vec![]));
-                }
-                continue;
-            }
-
-            let Some(chat_id) = update.pointer("/message/chat/id").and_then(|v| v.as_i64()) else {
-                continue;
-            };
-
-            // Plain-text message
-            if let Some(text) = update.pointer("/message/text").and_then(|v| v.as_str()) {
-                messages.push((chat_id, text.trim().to_string(), vec![]));
-                continue;
-            }
-
-            // Photo message (caption is optional)
-            if let Some(photo_array) = update.pointer("/message/photo").and_then(|v| v.as_array()) {
-                // The last PhotoSize entry has the highest resolution
-                let file_id = photo_array
-                    .last()
-                    .and_then(|p| p["file_id"].as_str())
-                    .map(|s| s.to_string());
-
-                let caption = update
-                    .pointer("/message/caption")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("")
-                    .trim()
-                    .to_string();
-
-                let images = if let Some(fid) = file_id {
-                    match self.download_photo(&fid).await {
-                        Ok(attachment) => vec![attachment],
-                        Err(e) => {
-                            warn!("Failed to download Telegram photo file_id={fid}: {e}");
-                            vec![]
-                        }
-                    }
-                } else {
-                    vec![]
-                };
-
-                messages.push((chat_id, caption, images));
-            }
+        let last_update_id = *self.last_update_id.read().await;
+        let (new_last_update_id, messages) = self.api.poll_updates(last_update_id).await?;
+        if new_last_update_id > last_update_id {
+            *self.last_update_id.write().await = new_last_update_id;
         }
-
-        Ok(messages)
+        Ok(messages
+            .into_iter()
+            .map(|message| (message.chat_id, message.text, message.images))
+            .collect())
     }
 
     /// Start a polling loop that checks for pairing codes.
@@ -704,7 +426,7 @@ impl TelegramBot {
             bot_type: "telegram".to_string(),
             chat_id: chat_id.to_string(),
             config: BotConfig::Telegram {
-                bot_token: self.config.bot_token.clone(),
+                bot_token: self.api.config().bot_token.clone(),
             },
             chat_state: state.clone(),
             connected_at: chrono::Utc::now().timestamp(),
