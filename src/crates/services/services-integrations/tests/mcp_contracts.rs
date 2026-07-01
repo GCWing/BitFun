@@ -23,9 +23,10 @@ use bitfun_services_integrations::mcp::protocol::{
 };
 use bitfun_services_integrations::mcp::server::{
     compute_mcp_backoff_delay, detect_mcp_list_changed_kind, is_mcp_auth_error_message,
+    mcp_reconnect_runtime_decision, mcp_server_is_running, mcp_should_start_after_config_update,
     merge_mcp_remote_headers, MCPCatalogCache, MCPConnectionPool, MCPListChangedKind,
-    MCPRuntimeErrorKind, MCPRuntimeResult, MCPServerConfig, MCPServerProcess, MCPServerStatus,
-    MCPServerTransport, MCPServerType,
+    MCPReconnectRuntimeDecision, MCPRuntimeErrorKind, MCPRuntimeResult, MCPServerConfig,
+    MCPServerProcess, MCPServerRuntimeState, MCPServerStatus, MCPServerTransport, MCPServerType,
 };
 use bitfun_services_integrations::mcp::{
     build_mcp_tool_descriptor, build_mcp_tool_name, normalize_name_for_mcp,
@@ -1395,6 +1396,119 @@ fn mcp_server_type_and_status_preserve_lowercase_wire_contract() {
     assert_eq!(
         serde_json::from_value::<MCPServerStatus>(serde_json::json!("reconnecting")).unwrap(),
         MCPServerStatus::Reconnecting
+    );
+}
+
+#[tokio::test]
+async fn mcp_runtime_state_owns_registry_runtime_config_and_reconnect_state() {
+    let runtime = MCPServerRuntimeState::new();
+    let mut config = make_mcp_config(
+        "runtime-only",
+        ConfigLocation::User,
+        MCPServerType::Local,
+        Some("node"),
+        None,
+    );
+    config.auto_start = false;
+
+    assert!(runtime.is_empty().await);
+
+    runtime
+        .insert_runtime_config(config.clone())
+        .await
+        .expect("insert runtime config");
+    runtime
+        .register(&config)
+        .await
+        .expect("register runtime process");
+
+    assert!(runtime.contains("runtime-only").await);
+    assert_eq!(runtime.get_all_server_ids().await, vec!["runtime-only"]);
+    assert!(runtime.get_process("runtime-only").await.is_some());
+    assert_eq!(
+        runtime.get_all_statuses().await,
+        vec![("runtime-only".to_string(), MCPServerStatus::Uninitialized)]
+    );
+    assert_eq!(
+        runtime
+            .get_runtime_config("runtime-only")
+            .await
+            .expect("runtime config")
+            .command
+            .as_deref(),
+        Some("node")
+    );
+
+    runtime.clear_reconnect_state("runtime-only").await;
+    runtime.remove_catalog("runtime-only").await;
+    runtime
+        .unregister("runtime-only")
+        .await
+        .expect("unregister");
+    runtime.remove_runtime_config("runtime-only").await;
+
+    assert!(runtime.is_empty().await);
+    assert!(runtime.get_runtime_config("runtime-only").await.is_none());
+}
+
+#[test]
+fn mcp_runtime_policy_preserves_status_transition_contract() {
+    let mut config = make_mcp_config(
+        "local",
+        ConfigLocation::User,
+        MCPServerType::Local,
+        Some("node"),
+        None,
+    );
+
+    assert!(mcp_server_is_running(MCPServerStatus::Connected));
+    assert!(mcp_server_is_running(MCPServerStatus::Healthy));
+    assert!(!mcp_server_is_running(MCPServerStatus::Starting));
+
+    assert!(mcp_should_start_after_config_update(
+        &config,
+        MCPServerStatus::Failed
+    ));
+    assert!(mcp_should_start_after_config_update(
+        &config,
+        MCPServerStatus::NeedsAuth
+    ));
+    assert!(!mcp_should_start_after_config_update(
+        &config,
+        MCPServerStatus::Connected
+    ));
+
+    assert_eq!(
+        mcp_reconnect_runtime_decision(&config, MCPServerStatus::Failed),
+        MCPReconnectRuntimeDecision::Retry
+    );
+    assert_eq!(
+        mcp_reconnect_runtime_decision(&config, MCPServerStatus::NeedsAuth),
+        MCPReconnectRuntimeDecision::Clear
+    );
+    assert_eq!(
+        mcp_reconnect_runtime_decision(&config, MCPServerStatus::Starting),
+        MCPReconnectRuntimeDecision::Clear
+    );
+    assert_eq!(
+        mcp_reconnect_runtime_decision(&config, MCPServerStatus::Stopped),
+        MCPReconnectRuntimeDecision::Skip
+    );
+    assert_eq!(
+        mcp_reconnect_runtime_decision(&config, MCPServerStatus::Uninitialized),
+        MCPReconnectRuntimeDecision::Skip
+    );
+
+    config.auto_start = false;
+    assert_eq!(
+        mcp_reconnect_runtime_decision(&config, MCPServerStatus::Failed),
+        MCPReconnectRuntimeDecision::Clear
+    );
+    config.auto_start = true;
+    config.enabled = false;
+    assert_eq!(
+        mcp_reconnect_runtime_decision(&config, MCPServerStatus::Failed),
+        MCPReconnectRuntimeDecision::Clear
     );
 }
 

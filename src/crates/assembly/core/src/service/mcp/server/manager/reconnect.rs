@@ -1,5 +1,7 @@
 use super::*;
-use bitfun_services_integrations::mcp::server::compute_mcp_backoff_delay;
+use bitfun_services_integrations::mcp::server::{
+    mcp_reconnect_runtime_decision, MCPReconnectRuntimeDecision,
+};
 
 impl MCPServerManager {
     pub(super) fn start_reconnect_monitor_if_needed(&self) {
@@ -15,7 +17,7 @@ impl MCPServerManager {
     }
 
     async fn run_reconnect_monitor(self) {
-        let mut interval = tokio::time::interval(self.reconnect_policy.poll_interval);
+        let mut interval = tokio::time::interval(self.runtime.reconnect_poll_interval());
         loop {
             interval.tick().await;
             if let Err(e) = self.reconnect_once().await {
@@ -25,8 +27,8 @@ impl MCPServerManager {
     }
 
     async fn reconnect_once(&self) -> BitFunResult<()> {
-        let has_registered_servers = !self.registry.get_all_server_ids().await.is_empty();
-        let has_pending_reconnects = !self.reconnect_states.read().await.is_empty();
+        let has_registered_servers = !self.runtime.is_empty().await;
+        let has_pending_reconnects = self.runtime.has_pending_reconnects().await;
         if !has_registered_servers && !has_pending_reconnects {
             return Ok(());
         }
@@ -44,28 +46,16 @@ impl MCPServerManager {
                 .await
                 .unwrap_or(MCPServerStatus::Uninitialized);
 
-            if matches!(
-                status,
-                MCPServerStatus::Connected | MCPServerStatus::Healthy | MCPServerStatus::Starting
-            ) {
-                self.clear_reconnect_state(&config.id).await;
-                continue;
+            match mcp_reconnect_runtime_decision(&config, status) {
+                MCPReconnectRuntimeDecision::Clear => {
+                    self.clear_reconnect_state(&config.id).await;
+                }
+                MCPReconnectRuntimeDecision::Retry => {
+                    self.try_reconnect_server(&config.id, &config.name, status)
+                        .await;
+                }
+                MCPReconnectRuntimeDecision::Skip => {}
             }
-
-            if matches!(status, MCPServerStatus::NeedsAuth) {
-                self.clear_reconnect_state(&config.id).await;
-                continue;
-            }
-
-            if !matches!(
-                status,
-                MCPServerStatus::Reconnecting | MCPServerStatus::Failed
-            ) {
-                continue;
-            }
-
-            self.try_reconnect_server(&config.id, &config.name, status)
-                .await;
         }
 
         Ok(())
@@ -77,26 +67,10 @@ impl MCPServerManager {
         server_name: &str,
         status: MCPServerStatus,
     ) {
-        let now = Instant::now();
-
-        let (attempt_number, next_delay) = {
-            let mut reconnect_states = self.reconnect_states.write().await;
-            let state = reconnect_states
-                .entry(server_id.to_string())
-                .or_insert_with(|| ReconnectAttemptState::new(now));
-
-            if now < state.next_retry_at {
-                return;
-            }
-
-            state.attempts += 1;
-            let delay = compute_mcp_backoff_delay(
-                self.reconnect_policy.base_delay,
-                self.reconnect_policy.max_delay,
-                state.attempts,
-            );
-            state.next_retry_at = now + delay;
-            (state.attempts, delay)
+        let Some((attempt_number, next_delay)) =
+            self.runtime.next_due_reconnect_attempt(server_id).await
+        else {
+            return;
         };
 
         info!(
@@ -127,7 +101,6 @@ impl MCPServerManager {
     }
 
     pub(super) async fn clear_reconnect_state(&self, server_id: &str) {
-        let mut reconnect_states = self.reconnect_states.write().await;
-        reconnect_states.remove(server_id);
+        self.runtime.clear_reconnect_state(server_id).await;
     }
 }
