@@ -58,7 +58,62 @@ pub(crate) fn image_test_response_matches_expected(response: &str) -> bool {
     color_letter_stream.contains(AIClient::TEST_IMAGE_EXPECTED_CODE)
 }
 
-pub(crate) async fn test_connection(client: &AIClient) -> Result<ConnectionTestResult> {
+fn connection_error_message_code(error_msg: &str) -> Option<ConnectionTestMessageCode> {
+    let msg = error_msg.to_ascii_lowercase();
+
+    let tls_keywords = [
+        "certificate",
+        "cert",
+        "tls",
+        "ssl",
+        "rustls",
+        "native-tls",
+        "handshake",
+        "unknownissuer",
+        "unknown issuer",
+        "invalid peer certificate",
+        "peer certificate",
+        "certificate verify",
+        "certificate verification",
+        "invalid certificate",
+        "self signed",
+        "self-signed",
+        "webpki",
+    ];
+    if tls_keywords.iter().any(|keyword| msg.contains(keyword)) {
+        return Some(ConnectionTestMessageCode::TlsOrCertificateIssue);
+    }
+
+    let proxy_keywords = ["proxy", "tunnel", "connect tunnel", "http connect"];
+    if proxy_keywords.iter().any(|keyword| msg.contains(keyword)) {
+        return Some(ConnectionTestMessageCode::ProxyIssue);
+    }
+
+    let network_keywords = [
+        "connection failed",
+        "error sending request",
+        "dns",
+        "network",
+        "connection refused",
+        "connection reset",
+        "connection closed",
+        "timed out",
+        "timeout",
+        "econnreset",
+        "econnrefused",
+        "etimedout",
+    ];
+    if network_keywords.iter().any(|keyword| msg.contains(keyword)) {
+        return Some(ConnectionTestMessageCode::NetworkIssue);
+    }
+
+    None
+}
+
+pub(crate) async fn test_connection(
+    client: &AIClient,
+    max_attempts: usize,
+) -> Result<ConnectionTestResult> {
     let start_time = std::time::Instant::now();
 
     let test_messages = vec![Message::user(
@@ -77,7 +132,10 @@ pub(crate) async fn test_connection(client: &AIClient) -> Result<ConnectionTestR
         }),
     }]);
 
-    match client.send_message(test_messages, tools).await {
+    match client
+        .send_test_message(test_messages, tools, max_attempts)
+        .await
+    {
         Ok(response) => {
             let response_time_ms = elapsed_ms_u64(start_time);
             if response.tool_calls.is_some() {
@@ -106,14 +164,17 @@ pub(crate) async fn test_connection(client: &AIClient) -> Result<ConnectionTestR
                 success: false,
                 response_time_ms,
                 model_response: None,
-                message_code: None,
+                message_code: connection_error_message_code(&error_msg),
                 error_details: Some(error_msg),
             })
         }
     }
 }
 
-pub(crate) async fn test_image_input_connection(client: &AIClient) -> Result<ConnectionTestResult> {
+pub(crate) async fn test_image_input_connection(
+    client: &AIClient,
+    max_attempts: usize,
+) -> Result<ConnectionTestResult> {
     let start_time = std::time::Instant::now();
     let provider = client.config.format.to_ascii_lowercase();
     let prompt = "Inspect the attached image and reply with exactly one 4-letter code for quadrant colors in TL,TR,BL,BR order using letters R,G,B,Y (R=red, G=green, B=blue, Y=yellow).";
@@ -160,7 +221,10 @@ pub(crate) async fn test_image_input_connection(client: &AIClient) -> Result<Con
         tool_image_attachments: None,
     }];
 
-    match client.send_message(test_messages, None).await {
+    match client
+        .send_test_message(test_messages, None, max_attempts)
+        .await
+    {
         Ok(response) => {
             if image_test_response_matches_expected(&response.text) {
                 Ok(ConnectionTestResult {
@@ -193,7 +257,7 @@ pub(crate) async fn test_image_input_connection(client: &AIClient) -> Result<Con
                 success: false,
                 response_time_ms: elapsed_ms_u64(start_time),
                 model_response: None,
-                message_code: None,
+                message_code: connection_error_message_code(&error_msg),
                 error_details: Some(error_msg),
             })
         }

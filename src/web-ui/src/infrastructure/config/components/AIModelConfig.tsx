@@ -277,6 +277,90 @@ function previewRequestUrl(baseUrl: string, provider: string): string {
   return resolveRequestUrl(baseUrl, provider);
 }
 
+function hasHttpUrlScheme(value: string): boolean {
+  return /^https?:\/\//i.test(value.trim());
+}
+
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map(stableJson).join(',')}]`;
+  }
+  if (value && typeof value === 'object') {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, entryValue]) => `${JSON.stringify(key)}:${stableJson(entryValue)}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function normalizeComparableString(value: string | undefined): string {
+  return (value || '').trim();
+}
+
+function providerConnectionChanged(
+  previous: AIModelConfigType | undefined,
+  next: AIModelConfigType
+): boolean {
+  if (!previous) return true;
+
+  return (
+    normalizeComparableString(previous.provider) !== normalizeComparableString(next.provider) ||
+    normalizeComparableString(previous.base_url) !== normalizeComparableString(next.base_url) ||
+    normalizeComparableString(previous.api_key) !== normalizeComparableString(next.api_key) ||
+    stableJson(previous.auth || { type: 'api_key' }) !== stableJson(next.auth || { type: 'api_key' }) ||
+    stableJson(previous.custom_headers || {}) !== stableJson(next.custom_headers || {}) ||
+    normalizeComparableString(previous.custom_headers_mode) !== normalizeComparableString(next.custom_headers_mode) ||
+    normalizeComparableString(previous.custom_request_body) !== normalizeComparableString(next.custom_request_body) ||
+    normalizeComparableString(previous.custom_request_body_mode) !== normalizeComparableString(next.custom_request_body_mode) ||
+    (previous.skip_ssl_verify ?? false) !== (next.skip_ssl_verify ?? false)
+  );
+}
+
+function modelRequestBehaviorChanged(
+  previous: AIModelConfigType | undefined,
+  next: AIModelConfigType
+): boolean {
+  if (!previous) return true;
+
+  return (
+    normalizeComparableString(previous.model_name) !== normalizeComparableString(next.model_name) ||
+    normalizeComparableString(previous.request_url) !== normalizeComparableString(next.request_url) ||
+    previous.context_window !== next.context_window ||
+    previous.max_tokens !== next.max_tokens ||
+    previous.category !== next.category ||
+    stableJson(previous.capabilities || []) !== stableJson(next.capabilities || []) ||
+    normalizeComparableString(previous.reasoning_mode) !== normalizeComparableString(next.reasoning_mode) ||
+    normalizeComparableString(previous.reasoning_effort) !== normalizeComparableString(next.reasoning_effort) ||
+    previous.thinking_budget_tokens !== next.thinking_budget_tokens ||
+    (previous.inline_think_in_text ?? true) !== (next.inline_think_in_text ?? true)
+  );
+}
+
+function configsNeedingAutoTest(
+  previousModels: AIModelConfigType[],
+  nextConfigs: AIModelConfigType[],
+  isProviderGroupEdit: boolean
+): AIModelConfigType[] {
+  const previousById = new Map(previousModels.map(model => [model.id, model]));
+  const providerConnectionWasChanged = isProviderGroupEdit && nextConfigs.some(config =>
+    providerConnectionChanged(previousById.get(config.id), config)
+  );
+
+  if (providerConnectionWasChanged) {
+    return nextConfigs;
+  }
+
+  return nextConfigs.filter(config => {
+    const previous = previousById.get(config.id);
+    return (
+      !previous ||
+      providerConnectionChanged(previous, config) ||
+      modelRequestBehaviorChanged(previous, config)
+    );
+  });
+}
+
 const AIModelConfig: React.FC = () => {
   const { t } = useTranslation('settings/ai-model');
   const { t: tDefault } = useTranslation('settings/default-model');
@@ -1010,9 +1094,13 @@ const AIModelConfig: React.FC = () => {
 
     try {
       const providerName = editingConfig.name.trim();
-      const baseUrl = editingConfig.base_url;
+      const baseUrl = editingConfig.base_url.trim();
       if (!providerName || !baseUrl) {
         notification.warning(t('messages.fillRequired'));
+        return;
+      }
+      if (!hasHttpUrlScheme(baseUrl)) {
+        notification.warning(t('messages.invalidBaseUrlScheme'));
         return;
       }
       const draftsToSave = dedupeSelectedModelDraftsByModelName(selectedModelDrafts);
@@ -1067,6 +1155,11 @@ const AIModelConfig: React.FC = () => {
           auth: editingConfig.auth || { type: 'api_key' },
         };
       });
+      const configsToAutoTest = configsNeedingAutoTest(
+        aiModels,
+        configsToSave,
+        isProviderGroupEdit
+      );
 
       let updatedModels: AIModelConfigType[];
       if (editingConfig.id) {
@@ -1106,17 +1199,6 @@ const AIModelConfig: React.FC = () => {
       }
       
       
-      const createdConfigIds = configsToSave.map(config => config.id).filter((id): id is string => !!id);
-      if (createdConfigIds.length === 0) {
-        
-        setIsEditing(false);
-        setEditingConfig(null);
-        setCreationMode(null);
-        setSelectedProviderId(null);
-        setEditingProviderModelIds(new Set());
-        return;
-      }
-      
       setIsEditing(false);
       setEditingConfig(null);
       setCreationMode(null);
@@ -1124,11 +1206,14 @@ const AIModelConfig: React.FC = () => {
       setEditingProviderModelIds(new Set());
       
       
-      setExpandedIds(prev => new Set([...prev, ...createdConfigIds]));
+      const autoTestConfigIds = configsToAutoTest.map(config => config.id).filter((id): id is string => !!id);
+      if (autoTestConfigIds.length > 0) {
+        setExpandedIds(prev => new Set([...prev, ...autoTestConfigIds]));
+      }
       
       
       
-      configsToSave.forEach(config => {
+      configsToAutoTest.forEach(config => {
         const configId = config.id;
         if (!configId) return;
 

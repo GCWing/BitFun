@@ -10,6 +10,7 @@ use reqwest::{
     header::{HeaderMap, RETRY_AFTER},
     StatusCode,
 };
+use std::error::Error as StdError;
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
@@ -75,7 +76,17 @@ fn remaining_ttft_timeout(
 }
 
 fn format_transport_error(label: &str, error: &reqwest::Error) -> String {
-    format!("{} connection failed: {}", label, error)
+    let mut message = format!("{} connection failed: {}", label, error);
+    let mut source = error.source();
+    let mut index = 1;
+
+    while let Some(cause) = source {
+        message.push_str(&format!("; cause {}: {}", index, cause));
+        source = cause.source();
+        index += 1;
+    }
+
+    message
 }
 
 fn is_retryable_http_status(status: StatusCode) -> bool {

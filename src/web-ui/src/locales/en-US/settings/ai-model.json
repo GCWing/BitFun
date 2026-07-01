@@ -271,6 +271,7 @@
     "fillRequired": "Please fill in required fields",
     "fillModelName": "Please fill in model name",
     "duplicateModelNameUnderProvider": "This provider already has a model with this name. Use a different name or edit the existing entry.",
+    "invalidBaseUrlScheme": "API URL must start with http:// or https://",
     "saveFailed": "Save failed",
     "deleteFailed": "Failed to delete configuration",
     "loadFailed": "Failed to load AI configuration",
@@ -279,7 +280,10 @@
     "errorDetails": "Error details",
     "connectionTestMessages": {
       "toolCallsNotDetected": "This test did not detect any tool calls, so tool calling could not be verified this time.",
-      "imageInputCheckFailed": "The connection succeeded, but the image input check failed."
+      "imageInputCheckFailed": "The connection succeeded, but the image input check failed.",
+      "tlsOrCertificateIssue": "The connection failure may be related to SSL/TLS certificate verification. Check corporate proxies, self-signed certificates, system root certificates, or network interception. If you trust this network environment, you can enable \"Skip SSL Certificate Verification\" in this model's Advanced Settings, but it reduces HTTPS security.",
+      "proxyIssue": "The connection failure may be related to proxy or tunnel configuration. Check global proxy settings, proxy authentication, HTTPS CONNECT support, and whether the current network can reach this model API endpoint.",
+      "networkIssue": "The request failed while being sent, before any HTTP response was received. Check network connectivity, DNS, proxy, firewall, and certificate settings. In corporate proxy or self-signed certificate environments, you may also need to review \"Skip SSL Certificate Verification\" in Advanced Settings."
     },
     "autoSetPrimary": "Automatically set as primary model",
     "defaultDescription": "{{name}} model configuration",

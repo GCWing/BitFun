@@ -26,6 +26,7 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 
 const SEND_MESSAGE_STREAM_ATTEMPTS: usize = 10;
+const TEST_CONNECTION_STREAM_ATTEMPTS: usize = 5;
 const SEND_MESSAGE_RETRY_BASE_DELAY_MS: u64 = 500;
 
 /// Streamed response result with the parsed stream and optional raw SSE receiver.
@@ -208,12 +209,31 @@ impl AIClient {
         extra_body: Option<serde_json::Value>,
         trace: Option<ModelExchangeTraceConfig>,
     ) -> Result<GeminiResponse> {
-        for attempt in 0..SEND_MESSAGE_STREAM_ATTEMPTS {
+        self.send_message_with_extra_body_trace_and_max_attempts(
+            messages,
+            tools,
+            extra_body,
+            trace,
+            SEND_MESSAGE_STREAM_ATTEMPTS,
+        )
+        .await
+    }
+
+    async fn send_message_with_extra_body_trace_and_max_attempts(
+        &self,
+        messages: Vec<Message>,
+        tools: Option<Vec<ToolDefinition>>,
+        extra_body: Option<serde_json::Value>,
+        trace: Option<ModelExchangeTraceConfig>,
+        max_attempts: usize,
+    ) -> Result<GeminiResponse> {
+        for attempt in 0..max_attempts {
             let stream_response = self
-                .send_message_stream_with_extra_body(
+                .send_message_stream_with_extra_body_and_max_attempts(
                     messages.clone(),
                     tools.clone(),
                     extra_body.clone(),
+                    max_attempts,
                     trace.clone(),
                 )
                 .await?;
@@ -226,7 +246,7 @@ impl AIClient {
                     return Ok(response);
                 }
                 Err(error)
-                    if attempt < SEND_MESSAGE_STREAM_ATTEMPTS - 1
+                    if attempt < max_attempts - 1
                         && is_transient_stream_error(&error.to_string()) =>
                 {
                     fail_aggregated_trace(
@@ -239,7 +259,7 @@ impl AIClient {
                     warn!(
                         "Retrying aggregated AI stream after transient error: attempt={}/{}, delay_ms={}, error={}",
                         attempt + 1,
-                        SEND_MESSAGE_STREAM_ATTEMPTS,
+                        max_attempts,
                         delay_ms,
                         error
                     );
@@ -260,12 +280,62 @@ impl AIClient {
         unreachable!("send_message retry loop always returns")
     }
 
+    async fn send_message_stream_with_extra_body_and_max_attempts(
+        &self,
+        messages: Vec<Message>,
+        tools: Option<Vec<ToolDefinition>>,
+        extra_body: Option<serde_json::Value>,
+        max_tries: usize,
+        trace: Option<ModelExchangeTraceConfig>,
+    ) -> Result<StreamResponse> {
+        match ApiFormat::parse(&self.config.format)? {
+            ApiFormat::OpenAIChat => {
+                openai::chat::send_stream(self, messages, tools, extra_body, max_tries, trace).await
+            }
+            ApiFormat::OpenAIResponses => {
+                openai::responses::send_stream(self, messages, tools, extra_body, max_tries, trace)
+                    .await
+            }
+            ApiFormat::Anthropic => {
+                anthropic::request::send_stream(self, messages, tools, extra_body, max_tries, trace)
+                    .await
+            }
+            ApiFormat::Gemini => {
+                gemini::request::send_stream(self, messages, tools, extra_body, max_tries, trace)
+                    .await
+            }
+            ApiFormat::GeminiCodeAssist => {
+                gemini::code_assist::send_stream(
+                    self, messages, tools, extra_body, max_tries, trace,
+                )
+                .await
+            }
+        }
+    }
+
     pub async fn test_connection(&self) -> Result<ConnectionTestResult> {
-        healthcheck::test_connection(self).await
+        healthcheck::test_connection(self, TEST_CONNECTION_STREAM_ATTEMPTS).await
     }
 
     pub async fn test_image_input_connection(&self) -> Result<ConnectionTestResult> {
-        healthcheck::test_image_input_connection(self).await
+        healthcheck::test_image_input_connection(self, TEST_CONNECTION_STREAM_ATTEMPTS).await
+    }
+
+    pub(crate) async fn send_test_message(
+        &self,
+        messages: Vec<Message>,
+        tools: Option<Vec<ToolDefinition>>,
+        max_attempts: usize,
+    ) -> Result<GeminiResponse> {
+        let custom_body = self.config.custom_request_body.clone();
+        self.send_message_with_extra_body_trace_and_max_attempts(
+            messages,
+            tools,
+            custom_body,
+            None,
+            max_attempts,
+        )
+        .await
     }
 
     pub async fn list_models(&self) -> Result<Vec<RemoteModelInfo>> {

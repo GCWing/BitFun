@@ -271,6 +271,7 @@
     "fillRequired": "请填写必要字段",
     "fillModelName": "请填写模型名称",
     "duplicateModelNameUnderProvider": "该服务商下已有同名模型，请改用其他名称或编辑已有条目",
+    "invalidBaseUrlScheme": "API地址必须以 http:// 或 https:// 开头",
     "saveFailed": "保存失败",
     "deleteFailed": "删除配置失败",
     "loadFailed": "加载AI配置失败",
@@ -279,7 +280,10 @@
     "errorDetails": "详细错误",
     "connectionTestMessages": {
       "toolCallsNotDetected": "本次测试未检测到工具调用，因此暂时无法验证工具调用能力。",
-      "imageInputCheckFailed": "连接已成功，但图片输入测试未通过。"
+      "imageInputCheckFailed": "连接已成功，但图片输入测试未通过。",
+      "tlsOrCertificateIssue": "连接失败可能与 SSL/TLS 证书校验有关。请检查公司代理、自签证书、系统根证书或网络拦截设置；如果确认网络环境可信，可在该模型的高级设置中开启“跳过SSL证书验证”，但这会降低 HTTPS 安全性。",
+      "proxyIssue": "连接失败可能与代理或隧道配置有关。请检查全局代理设置、代理认证、代理是否支持 HTTPS CONNECT，以及当前网络是否允许访问该模型 API 地址。",
+      "networkIssue": "连接失败发生在发送请求阶段，尚未收到服务端 HTTP 响应。请检查网络连通性、DNS、代理、防火墙和证书环境；如果处在公司代理或自签证书环境，也可能需要检查高级设置中的“跳过SSL证书验证”。"
     },
     "autoSetPrimary": "已自动设为主力模型",
     "defaultDescription": "{{name}} 模型配置",
