@@ -67,7 +67,7 @@ export const bitfunSlateTheme: ThemeConfig = {
     text: {
       primary: SLATE_TEXT_PRIMARY,
       secondary: '#c8ccd2',
-      muted: '#9ea4ab',
+      muted: '#a1a1aa',
       disabled: '#65696f',
     },
 
@@ -121,7 +121,7 @@ export const bitfunSlateTheme: ThemeConfig = {
     element: createDarkNeutralElement(),
 
     git: createGitColors({
-      branch: '#9ca6b8',
+      branch: SLATE_ACCENT,
       branchBg: overlayWhite(0.06),
       changes: rgbFromHex(SLATE_WARNING),
       changesBg: slateWarning(0.1),

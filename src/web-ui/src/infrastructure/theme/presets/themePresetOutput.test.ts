@@ -72,7 +72,7 @@ describe('builtin theme preset output', () => {
           "type": "light",
         },
         {
-          "hash": "b629c2e63fa570ea4e43fbe5cf3878eca55111fca31715545be8d04ca07aeb56",
+          "hash": "e6310cfa9ee13263e955a4abaabbbba63713c1210ec981bc49c5b5f786c880e8",
           "id": "bitfun-slate",
           "type": "dark",
         },
@@ -82,7 +82,7 @@ describe('builtin theme preset output', () => {
           "type": "dark",
         },
         {
-          "hash": "17c6a0cec1878808c88b87b8a09e3bbc0d536ceb87de4d5b745cd4409e859101",
+          "hash": "f0a96ff2f8dc2a63c37ab413e49ec0e9f7987f12bc510d36d7c52f9bfc7eb8bc",
           "id": "bitfun-midnight",
           "type": "dark",
         },
@@ -97,7 +97,7 @@ describe('builtin theme preset output', () => {
           "type": "dark",
         },
         {
-          "hash": "c40b87616669c17552c46e158dc6a6e245c3f450daf9c00c4b5c4b1fcf0801c2",
+          "hash": "101a1ee5c4a14ac03deca443f5496fac521b49ada31554a90eb1375738b2afe4",
           "id": "bitfun-cyber",
           "type": "dark",
         },

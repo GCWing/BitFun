@@ -14,7 +14,7 @@ import {
   STATIC_WHITE,
 } from './shared';
 
-const CYBER_BACKGROUND = '#101010';
+const CYBER_BACKGROUND = '#0e0e10';
 const CYBER_TEXT_PRIMARY = '#e0f2ff';
 const CYBER_TEXT_SECONDARY = '#c7e7ff';
 const CYBER_TEXT_MUTED = '#7fadcc';
@@ -51,10 +51,10 @@ export const bitfunCyberTheme: ThemeConfig = {
       secondary: CYBER_SURFACE_SECONDARY,
       tertiary: '#1a1a1a',
       quaternary: '#1f1f1f',
-      elevated: '#0d0d0d',
+      elevated: CYBER_BACKGROUND,
       workbench: CYBER_BACKGROUND,
       scene: CYBER_SURFACE_SECONDARY,
-      tooltip: 'rgba(16, 16, 16, 0.95)',
+      tooltip: rgbaFromHex(CYBER_BACKGROUND, 0.95),
     },
 
     text: {

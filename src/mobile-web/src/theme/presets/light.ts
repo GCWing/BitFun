@@ -20,11 +20,11 @@ const ERROR = '255, 59, 48';
 
 const BG_PRIMARY = '#f3f3f5';
 const BG_SECONDARY = '#ffffff';
-const BG_QUATERNARY = '#e5e5ea';
-const TEXT_PRIMARY = '#1c1c1e';
+const BG_QUATERNARY = '#e8e8e8';
+const TEXT_PRIMARY = '#18181a';
 const TEXT_SECONDARY = '#48484a';
 const TEXT_MUTED = '#8e8e93';
-const TEXT_DISABLED = '#aeaeb2';
+const TEXT_DISABLED = '#b0b0b0';
 const ACCENT_500 = '#007aff';
 const ACCENT_600 = '#0066cc';
 const PURPLE_500 = '#af52de';

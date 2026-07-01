@@ -60,7 +60,7 @@ export const bitfunMidnightTheme: ThemeConfig = {
 
     text: {
       primary: MIDNIGHT_TEXT_PRIMARY,
-      secondary: '#9da0a8',
+      secondary: '#a1a1aa',
       muted: '#6f737a',
       disabled: '#4e5157',
     },

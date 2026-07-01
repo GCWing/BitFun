@@ -19,7 +19,7 @@ const INFO = '225, 171, 128';
 
 const BG_PRIMARY = '#121214';
 const BG_SECONDARY = '#18181a';
-const BG_SCENE = '#16161a';
+const BG_SCENE = BG_SECONDARY;
 const BG_QUATERNARY = '#202024';
 const TEXT_PRIMARY = '#e8e8e8';
 const TEXT_SECONDARY = '#b0b0b0';

@@ -110,11 +110,11 @@ export const THEMES: InstallerTheme[] = [
     name: 'Dark',
     type: 'dark',
     colors: {
-      background: { primary: '#121214', secondary: '#18181a', tertiary: '#121214', quaternary: '#202024', elevated: '#18181a', workbench: '#121214', flowchat: '#121214', tooltip: alpha('30, 30, 32', '0.92') },
+      background: { primary: '#121214', secondary: '#1a1c1e', tertiary: '#121214', quaternary: '#202024', elevated: '#1a1c1e', workbench: '#121214', flowchat: '#121214', tooltip: alpha('30, 30, 32', '0.92') },
       text: { primary: '#e8e8e8', secondary: '#b0b0b0', muted: '#858585', disabled: '#555555' },
       accent: createAccentRamp('96, 165, 250', '#60a5fa', '#3b82f6'),
       purple: createSecondaryRamp('139, 92, 246', '#8b5cf6', '#7c3aed', '124, 58, 237'),
-      semantic: { success: '#34d399', warning: '#f59e0b', error: '#ef4444', info: '#E1AB80', highlight: '#d4a574', highlightBg: alpha('212, 165, 116', '0.15') },
+      semantic: { success: '#34d399', warning: '#f59e0b', error: '#ef4444', info: '#e1ab80', highlight: '#d4a574', highlightBg: alpha('212, 165, 116', '0.15') },
       border: { subtle: alpha('255, 255, 255', '0.12'), base: alpha('255, 255, 255', '0.18'), medium: alpha('255, 255, 255', '0.24'), strong: alpha('255, 255, 255', '0.32'), prominent: alpha('225, 171, 128', '0.50') },
       element: { subtle: alpha('255, 255, 255', '0.06'), soft: alpha('255, 255, 255', '0.10'), base: alpha('255, 255, 255', '0.13'), medium: alpha('255, 255, 255', '0.17'), strong: alpha('255, 255, 255', '0.21'), elevated: alpha('255, 255, 255', '0.25') },
     },
@@ -139,7 +139,7 @@ export const THEMES: InstallerTheme[] = [
     type: 'dark',
     colors: {
       background: { primary: '#2b2d30', secondary: '#1e1f22', tertiary: '#313335', quaternary: '#3c3f41', elevated: '#2b2d30', workbench: '#212121', flowchat: '#2b2d30', tooltip: alpha('43, 45, 48', '0.94') },
-      text: { primary: '#bcbec4', secondary: '#9da0a8', muted: '#6f737a', disabled: '#4e5157' },
+      text: { primary: '#bcbec4', secondary: '#a1a1aa', muted: '#6f737a', disabled: '#4e5157' },
       accent: createAccentRamp('88, 166, 255', '#58a6ff', '#3b82f6'),
       purple: createSecondaryRamp('156, 120, 255', '#9c78ff', '#8b5cf6', '139, 92, 246'),
       semantic: { success: '#6aab73', warning: '#e0a055', error: '#cc7f7a', info: '#58a6ff', highlight: '#d4a574', highlightBg: alpha('212, 165, 116', '0.15') },
@@ -180,7 +180,7 @@ export const THEMES: InstallerTheme[] = [
     name: 'Cyber',
     type: 'dark',
     colors: {
-      background: { primary: '#101010', secondary: '#151515', tertiary: '#1a1a1a', quaternary: '#1f1f1f', elevated: '#0d0d0d', workbench: '#101010', flowchat: '#101010', tooltip: alpha('16, 16, 16', '0.95') },
+      background: { primary: '#0e0e10', secondary: '#151515', tertiary: '#1a1a1a', quaternary: '#1f1f1f', elevated: '#0e0e10', workbench: '#0e0e10', flowchat: '#0e0e10', tooltip: alpha('14, 14, 16', '0.95') },
       text: { primary: '#e0f2ff', secondary: '#c7e7ff', muted: '#7fadcc', disabled: '#4a5a66' },
       accent: createAccentRamp('0, 230, 255', '#00e6ff', '#00ccff', CYBER_RAMP_ALPHAS),
       purple: createSecondaryRamp('138, 43, 226', '#8a2be2', '#7928ca', '121, 40, 202', CYBER_RAMP_ALPHAS, PURPLE_800_ALPHA.cyber),
@@ -209,7 +209,7 @@ export const THEMES: InstallerTheme[] = [
     type: 'dark',
     colors: {
       background: { primary: '#1a1c1e', secondary: '#1a1c1e', tertiary: '#1a1c1e', quaternary: '#32363a', elevated: '#1a1c1e', workbench: '#1a1c1e', flowchat: '#1a1c1e', tooltip: alpha('42, 45, 48', '0.96') },
-      text: { primary: '#eef0f3', secondary: '#c8ccd2', muted: '#9ea4ab', disabled: '#65696f' },
+      text: { primary: '#eef0f3', secondary: '#c8ccd2', muted: '#a1a1aa', disabled: '#65696f' },
       accent: createAccentRamp('122, 176, 238', '#7ab0ee', '#689ad8'),
       purple: createSecondaryRamp('184, 198, 255', '#b8c4ff', '#9dacf5', '157, 172, 245'),
       semantic: { success: '#7fb899', warning: '#d4a574', error: '#c9878d', info: '#7ab0ee', highlight: '#e2e4e7', highlightBg: alpha('212, 214, 216', '0.12') },

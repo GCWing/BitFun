@@ -27,7 +27,7 @@
       "bgSecondary": "#22262c",
       "bgScene": "#22262c",
       "textPrimary": "#eef0f3",
-      "textMuted": "#9ea4ab",
+      "textMuted": "#a1a1aa",
       "accent500": "#94a3b8",
       "accent600": "#64748b",
       "borderBase": "rgba(255, 255, 255, 0.18)",
@@ -108,7 +108,7 @@
     {
       "id": "bitfun-cyber",
       "themeType": "dark",
-      "bgPrimary": "#101010",
+      "bgPrimary": "#0e0e10",
       "bgSecondary": "#151515",
       "bgScene": "#151515",
       "textPrimary": "#e0f2ff",
