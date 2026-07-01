@@ -283,7 +283,7 @@ impl Theme {
             diff_removed_bg: Color::Rgb(50, 20, 20),
 
             block_bg: Color::Rgb(24, 32, 48),
-            block_bg_hover: Color::Rgb(32, 42, 62),
+            block_bg_hover: Color::Rgb(30, 38, 55),
             block_border_active: Color::Rgb(59, 130, 246),
 
             inline_icon: Color::Rgb(100, 140, 220),
@@ -339,7 +339,7 @@ impl Theme {
             background: Color::Rgb(249, 250, 251),
             border: Color::Rgb(209, 213, 219),
 
-            background_panel: Color::Rgb(243, 244, 246),
+            background_panel: Color::Rgb(240, 242, 245),
             background_element: Color::Rgb(229, 231, 235),
             input_background: Color::Rgb(229, 231, 235),
 
@@ -349,7 +349,7 @@ impl Theme {
             diff_removed_bg: Color::Rgb(254, 226, 226),
 
             block_bg: Color::Rgb(240, 242, 245),
-            block_bg_hover: Color::Rgb(232, 235, 240),
+            block_bg_hover: Color::Rgb(229, 231, 235),
             block_border_active: Color::Rgb(37, 99, 235),
 
             inline_icon: Color::Rgb(60, 100, 200),
