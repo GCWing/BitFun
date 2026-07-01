@@ -355,6 +355,13 @@ function addGenerationEvent(event, detail = '', kind = 'info') {
  * renderGeneration's agent-stream section.
  */
 function pushAgentStreamEntry(entry) {
+  // Skip noisy internal tool calls that don't help users understand progress.
+  const toolName = String(entry.toolName || '').toLowerCase();
+  if (toolName && STREAM_HIDDEN_TOOLS.has(toolName)) return;
+  // Skip lifecycle system messages — they're implementation details, not
+  // user-facing progress. The event log already covers phase transitions.
+  if (entry.kind === 'system') return;
+
   state.generation = normalizeGeneration(state.generation || {});
   const stream = Array.isArray(state.generation.agentStream)
     ? state.generation.agentStream
@@ -1334,12 +1341,11 @@ async function runCoworkDeckGeneration(operation, instruction) {
               setGenerationStep('brief', 'running', t('generationReadingBrief'));
             } else if (kind === 'completed') {
               setGenerationStep('brief', 'done');
-              setGenerationStep('spine', 'running', t('generationWritingClaims'));
             } else if (kind === 'research') {
               setGenerationStep('proof', 'running', t('generationChoosingProof'));
-            } else if (kind === 'round') {
-              setGenerationStep('spine', 'running', t('generationWritingClaims'));
             }
+            // 'round' = new model round; don't override the current phase —
+            // the stream entries already show what the agent is doing.
           },
           onTextProgress: (buffer) => noteTextStreamProgress(buffer, progressShim, lastStreamPhase),
           // Progressive preview: when the agent writes a slide file during the
@@ -1595,6 +1601,27 @@ const SILENT_COMPLETED_TOOL_NAMES = new Set([
   'search_replace',
 ]);
 
+/** Tools whose raw calls are too noisy for the user-facing timeline. */
+const STREAM_HIDDEN_TOOLS = new Set([
+  'todowrite',
+  'todo_write',
+  'grep',
+  'glob',
+  'ls',
+  'list',
+  'execcommand',
+  'bash',
+  'shell',
+]);
+
+/** Shorten an absolute file path to its last two segments (e.g. slides/slide-01.html). */
+function shortFilePath(path) {
+  if (!path) return '';
+  const parts = String(path).replace(/\\/g, '/').split('/').filter(Boolean);
+  if (parts.length <= 2) return parts.join('/');
+  return parts.slice(-2).join('/');
+}
+
 function friendlyToolName(name) {
   const raw = String(name || '').trim();
   if (!raw) return t('eventUnknownTool');
@@ -1661,8 +1688,8 @@ function summarizeToolParams(toolName, params = {}) {
   const p = params && typeof params === 'object' ? params : {};
   if (name === 'websearch') return compactText(String(p.query || p.prompt || ''), 160);
   if (name === 'webfetch' || name === 'mcp__web_reader__webreader') return compactText(String(p.url || ''), 160);
-  if (name === 'read') return compactText(String(p.file_path || p.path || ''), 160);
-  if (name === 'write' || name === 'edit') return compactText(String(p.file_path || p.path || ''), 160);
+  if (name === 'read') return shortFilePath(String(p.file_path || p.path || ''));
+  if (name === 'write' || name === 'edit') return shortFilePath(String(p.file_path || p.path || ''));
   if (name === 'grep' || name === 'glob') return compactText(String(p.pattern || ''), 120);
   if (name === 'skill') return compactText(String(p.command || p.skill || p.key || ''), 120);
   if (name === 'task') return compactText(String(p.description || p.prompt || ''), 200);
@@ -1682,22 +1709,21 @@ function summarizeToolResult(toolName, result = {}) {
   const r = result && typeof result === 'object' ? result : {};
   if (name === 'websearch') {
     const results = Array.isArray(r.results) ? r.results : [];
-    return results.length ? `${results.length} results` : '';
+    return results.length ? `${results.length} 条结果` : '';
   }
   if (name === 'webfetch' || name === 'mcp__web_reader__webreader') {
     const len = String(r.content || r.text || r.markdown || '').length;
-    return len ? `${len} chars` : '';
+    return len ? `${len > 1000 ? Math.round(len / 1000) + 'k' : len} 字符` : '';
   }
   if (name === 'read') {
     const lines = Number(r.lineCount || (Array.isArray(r.lines) ? r.lines.length : 0));
-    return lines ? `${lines} lines` : '';
+    return lines ? `${lines} 行` : '';
   }
-  if (name === 'write' || name === 'edit') return compactText(String(r.message || 'written'), 80);
-  if (name === 'grep' || name === 'glob') {
-    const count = Array.isArray(r.matches) ? r.matches.length : (Array.isArray(r.files) ? r.files.length : 0);
-    return count ? `${count} matches` : 'no matches';
-  }
-  if (name === 'skill') return compactText(String(r.skill_key || r.message || 'loaded'), 80);
+  // write/edit completion is signaled by the slide-ready event; skip the
+  // raw "written" message to keep the timeline clean.
+  if (name === 'write' || name === 'edit') return '';
+  if (name === 'grep' || name === 'glob') return '';
+  if (name === 'skill') return '';
   if (name === 'task') return compactText(String(r.result || r.message || ''), 160);
   return '';
 }
@@ -1821,10 +1847,10 @@ function estimateGenerationDetail(buffer, phase) {
 }
 
 function noteTextStreamProgress(buffer, progressTracker, lastPhaseRef) {
-  const phase = inferGenerationPhaseFromBuffer(buffer);
-  const title = generationPhaseMessage(phase);
-  setGenerationStep(phase, 'running', title);
-  updateGenerationSlideProgress(buffer, phase);
+  // The file-protocol agent writes slides via tool calls (Write/Edit), not
+  // inline JSON text. Inferring a phase from the text buffer was unreliable
+  // and produced mismatched labels (e.g. "生成大纲" during slide editing).
+  // Only touch the progress tracker; let tool events drive the phase labels.
   progressTracker.touch();
   void lastPhaseRef;
 }

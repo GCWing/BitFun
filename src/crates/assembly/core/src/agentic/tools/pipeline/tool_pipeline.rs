@@ -28,8 +28,7 @@ use bitfun_agent_tools::{
     build_user_steering_interrupted_presentation, render_tool_result_for_assistant,
     truncate_raw_tool_arguments_preview, truncate_tool_arguments_preview,
     validate_tool_execution_admission, ToolExecutionAdmissionRejection,
-    ToolExecutionAdmissionRequest, GET_TOOL_SPEC_TOOL_NAME,
-    USER_STEERING_INTERRUPTED_MESSAGE,
+    ToolExecutionAdmissionRequest, GET_TOOL_SPEC_TOOL_NAME, USER_STEERING_INTERRUPTED_MESSAGE,
 };
 use bitfun_runtime_ports::RoundInjectionToolPreemption;
 use futures::future::join_all;

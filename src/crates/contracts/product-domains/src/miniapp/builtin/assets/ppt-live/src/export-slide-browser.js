@@ -4,55 +4,36 @@ import { extractSlideDataFromDocument, measureBodyDimensions } from './html2pptx
 
 export const EXPORT_VIEWPORT = { width: 1280, height: 720 };
 
-const RASTER_TEXT_SELECTOR_BY_TYPE = {
-  p: ['p'],
-  h1: ['h1'],
-  h2: ['h2'],
-  h3: ['h3'],
-  h4: ['h4'],
-  h5: ['h5'],
-  h6: ['h6'],
-  text: ['div', 'section', 'article', 'aside', 'td', 'th', 'span', 'small', 'label', 'a', 'code', 'button'],
-  list: ['li'],
-  'merged-text': ['span', 'em', 'strong', 'b', 'i', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'],
-};
+const RASTER_TEXT_TYPES = new Set(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'text', 'list', 'merged-text']);
 
 export function countVectorTextElements(slideData) {
   return (slideData?.elements || []).filter((el) => RASTER_TEXT_TYPES.has(el.type)).length;
 }
 
-function buildRasterTextHideStyle(slideData) {
-  const selectors = new Set();
-  for (const el of slideData?.elements || []) {
-    if (!RASTER_TEXT_TYPES.has(el.type)) continue;
-    for (const tag of RASTER_TEXT_SELECTOR_BY_TYPE[el.type] || [el.type]) {
-      selectors.add(tag);
-    }
-  }
-  if (!selectors.size) return '';
-  const rules = [...selectors]
-    .map((tag) => (
-      `body[data-pptx-raster="1"] ${tag} {
-  color: transparent !important;
-  -webkit-text-fill-color: transparent !important;
-  text-shadow: none !important;
-}`
-    ))
-    .join('\n');
-  return rules;
-}
-
-/** HTML for host WebView raster capture: hide only text that will be re-added as editable PPTX text. */
-export function slideHtmlForRasterBackdrop(html, slideData = null) {
+/**
+ * HTML for host WebView raster capture. Hides ALL text via universal CSS so
+ * the raster contains only visual elements (backgrounds, borders, images).
+ * The vector layer overlays editable text extracted from the slide.
+ *
+ * Previously used tag-based selective hiding which caused text overlap
+ * (missed inline tags like b/strong/i/em) and text loss (over-broad
+ * div/td selectors hid unextracted text). Universal hiding eliminates
+ * both classes of bugs.
+ */
+export function slideHtmlForRasterBackdrop(html) {
   const markup = normalizeSlideDocument(html);
-  if (!slideData || countVectorTextElements(slideData) === 0) {
-    return markup;
-  }
-  const hideCss = buildRasterTextHideStyle(slideData);
-  if (!hideCss) return markup;
   if (markup.includes('data-pptx-raster="1"') && markup.includes('pptx-raster-hide-text')) {
     return markup;
   }
+  const hideCss = `body[data-pptx-raster="1"], body[data-pptx-raster="1"] * {
+  color: transparent !important;
+  -webkit-text-fill-color: transparent !important;
+  text-shadow: none !important;
+}
+body[data-pptx-raster="1"] ::marker {
+  color: transparent !important;
+  -webkit-text-fill-color: transparent !important;
+}`;
   const styleTag = `<style id="pptx-raster-hide-text">${hideCss}</style>`;
   if (/<\/head>/i.test(markup)) {
     return markup
@@ -60,15 +41,6 @@ export function slideHtmlForRasterBackdrop(html, slideData = null) {
       .replace(/<body\b/i, '<body data-pptx-raster="1"');
   }
   return `${styleTag}${markup.replace(/<body\b/i, '<body data-pptx-raster="1"')}`;
-}
-
-const RASTER_TEXT_TYPES = new Set(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'text', 'list', 'merged-text']);
-
-export function filterSlideDataForRasterBackdrop(slideData) {
-  return {
-    ...slideData,
-    elements: (slideData.elements || []).filter((el) => RASTER_TEXT_TYPES.has(el.type)),
-  };
 }
 
 let exportSessionHost = null;
@@ -393,12 +365,19 @@ export async function prepareSlidesForPptxExport(slides, options = {}) {
       let rasterBase64 = null;
       const vectorTextCount = countVectorTextElements(item.slideData);
       const rasterOnly = vectorTextCount === 0;
-      if (rasterOnly && typeof options.renderRaster === 'function') {
+      // Always render a raster background when the host WebView is available.
+      // For slides with vector text, slideHtmlForRasterBackdrop hides ALL text
+      // via universal CSS — the raster contains only visual elements (backgrounds,
+      // borders, images) and the vector layer overlays editable text. This
+      // avoids text-overlap from tag-based selective hiding.
+      if (typeof options.renderRaster === 'function') {
         try {
           if (typeof options.onRasterProgress === 'function') {
             options.onRasterProgress(index, slide);
           }
-          const rasterHtml = slideExportHtml(slide);
+          const rasterHtml = rasterOnly
+            ? slideExportHtml(slide)
+            : slideHtmlForRasterBackdrop(slide.html);
           rasterBase64 = await options.renderRaster(rasterHtml, index);
         } catch {
           rasterBase64 = null;

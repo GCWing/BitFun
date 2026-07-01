@@ -40,9 +40,16 @@ export interface RemoteConnectStatus {
   bot_verbose_mode: boolean;
 }
 
+export interface LanNetworkInterface {
+  interface_name: string;
+  ip: string;
+  gateway_ip: string | null;
+}
+
 export interface LanNetworkInfo {
   local_ip: string;
   gateway_ip: string | null;
+  available_ips: LanNetworkInterface[];
 }
 
 export interface RemoteConnectFormState {
@@ -116,10 +123,10 @@ class RemoteConnectAPIService {
     }
   }
 
-  async startConnection(method: string, customServerUrl?: string): Promise<ConnectionResult> {
+  async startConnection(method: string, customServerUrl?: string, lanIp?: string): Promise<ConnectionResult> {
     try {
       return await this.adapter.request<ConnectionResult>('remote_connect_start', {
-        request: { method, custom_server_url: customServerUrl ?? null },
+        request: { method, custom_server_url: customServerUrl ?? null, lan_ip: lanIp ?? null },
       });
     } catch (e) {
       log.error('startConnection failed', e);

@@ -161,7 +161,10 @@ impl ToolStateManager {
                 chunks_received: *chunks_received,
             },
             ToolExecutionState::AwaitingConfirmation { params, timeout_at } => {
-                let confirmation_timeout_secs = task.options.confirmation_timeout_secs.filter(|seconds| *seconds > 0);
+                let confirmation_timeout_secs = task
+                    .options
+                    .confirmation_timeout_secs
+                    .filter(|seconds| *seconds > 0);
                 ToolStateEventKind::AwaitingConfirmation {
                     params: params.clone(),
                     timeout_at: confirmation_timeout_secs.map(|_| {

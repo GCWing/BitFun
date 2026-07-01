@@ -289,6 +289,23 @@
   border-bottom: 1px solid var(--border-subtle);
 }
 
+.bitfun-remote-connect__lan-ip-select {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bitfun-remote-connect__info-meta-label {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.bitfun-remote-connect__lan-ip-dropdown {
+  flex: 1;
+  min-width: 0;
+}
+
 .bitfun-remote-connect__description-link,
 .bitfun-remote-connect__step-link {
   color: var(--color-text-secondary);

@@ -9,12 +9,13 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { useI18n } from '@/infrastructure/i18n';
 import { getLocaleFallbackChain, type LocaleId } from '@/infrastructure/i18n/presets';
-import { Modal, Badge, Input } from '@/component-library';
+import { Modal, Badge, Input, Select } from '@/component-library';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import {
   remoteConnectAPI,
   type ConnectionResult,
   type RemoteConnectStatus,
+  type LanNetworkInterface,
 } from '@/infrastructure/api/service-api/RemoteConnectAPI';
 import {
   RemoteConnectDisclaimerContent,
@@ -115,7 +116,12 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
   const [status, setStatus] = useState<RemoteConnectStatus | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [lanNetworkInfo, setLanNetworkInfo] = useState<{ localIp: string; gatewayIp: string | null } | null>(null);
+  const [lanNetworkInfo, setLanNetworkInfo] = useState<{
+    localIp: string;
+    gatewayIp: string | null;
+    availableIps: LanNetworkInterface[];
+  } | null>(null);
+  const [selectedLanIp, setSelectedLanIp] = useState<string>('');
   const [showDisclaimer, setShowDisclaimer] = useState(false);
   const [hasAgreedDisclaimer, setHasAgreedDisclaimer] = useState<boolean>(() => getRemoteConnectDisclaimerAgreed());
   const [botVerboseMode, setBotVerboseMode] = useState<boolean>(false);
@@ -223,12 +229,19 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
     let cancelled = false;
     const loadLanNetworkInfo = async () => {
       const info = await remoteConnectAPI.getLanNetworkInfo();
-      if (!cancelled) {
-        setLanNetworkInfo(
-          info
-            ? { localIp: info.local_ip, gatewayIp: info.gateway_ip ?? null }
-            : null,
-        );
+      if (!cancelled && info) {
+        const availableIps = info.available_ips ?? [];
+        setLanNetworkInfo({
+          localIp: info.local_ip,
+          gatewayIp: info.gateway_ip ?? null,
+          availableIps,
+        });
+        // Auto-select the first (highest-priority) IP if nothing is selected yet
+        // or the previous selection is no longer in the list.
+        setSelectedLanIp(prev => {
+          if (prev && availableIps.some(e => e.ip === prev)) return prev;
+          return availableIps[0]?.ip ?? info.local_ip ?? '';
+        });
       }
     };
     void loadLanNetworkInfo();
@@ -418,7 +431,8 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
         method = networkTab;
         if (networkTab === 'custom_server') serverUrl = customUrl || undefined;
       }
-      const result = await remoteConnectAPI.startConnection(method, serverUrl);
+      const lanIp = networkTab === 'lan' ? (selectedLanIp || undefined) : undefined;
+      const result = await remoteConnectAPI.startConnection(method, serverUrl, lanIp);
       setConnectionResult(result);
       startPolling(activeGroup === 'bot' ? 'bot' : 'relay');
     } catch (e: any) {
@@ -426,7 +440,7 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [activeGroup, networkTab, botTab, customUrl, tgToken, feishuAppId, feishuAppSecret, weixinIlinkToken, weixinBaseUrl, weixinBotAccountId, startPolling]);
+  }, [activeGroup, networkTab, botTab, customUrl, tgToken, feishuAppId, feishuAppSecret, weixinIlinkToken, weixinBaseUrl, weixinBotAccountId, selectedLanIp, startPolling]);
 
   const handleStartWeixinQr = useCallback(async () => {
     setError(null);
@@ -634,18 +648,36 @@ export const RemoteConnectDialog: React.FC<RemoteConnectDialogProps> = ({
       <div className="bitfun-remote-connect__body">
         {renderInfoCard(
           <>
-            {networkTab === 'lan' && (lanNetworkInfo?.localIp || lanNetworkInfo?.gatewayIp) && (
+            {networkTab === 'lan' && (lanNetworkInfo?.availableIps.length || lanNetworkInfo?.gatewayIp) && (
               <div className="bitfun-remote-connect__info-meta-group">
-                {lanNetworkInfo?.localIp && (
-                  <p className="bitfun-remote-connect__info-meta">
-                    {t('remoteConnect.currentIp')}: {lanNetworkInfo.localIp}
-                  </p>
+                {lanNetworkInfo && lanNetworkInfo.availableIps.length > 0 && (
+                  <div className="bitfun-remote-connect__lan-ip-select">
+                    <span className="bitfun-remote-connect__info-meta-label">
+                      {t('remoteConnect.currentIp')}
+                    </span>
+                    <Select
+                      className="bitfun-remote-connect__lan-ip-dropdown"
+                      size="small"
+                      value={selectedLanIp}
+                      onChange={(v) => setSelectedLanIp(String(v))}
+                      options={lanNetworkInfo.availableIps.map(e => ({
+                        label: e.ip,
+                        value: e.ip,
+                        description: e.interface_name,
+                      }))}
+                    />
+                  </div>
                 )}
-                {lanNetworkInfo?.gatewayIp && (
-                  <p className="bitfun-remote-connect__info-meta">
-                    {t('remoteConnect.gatewayIp')}: {lanNetworkInfo.gatewayIp}
-                  </p>
-                )}
+                {(() => {
+                  const selectedIntf = lanNetworkInfo?.availableIps.find(e => e.ip === selectedLanIp);
+                  const gw = selectedIntf?.gateway_ip ?? null;
+                  if (!gw) return null;
+                  return (
+                    <p className="bitfun-remote-connect__info-meta">
+                      {t('remoteConnect.gatewayIp')}: {gw}
+                    </p>
+                  );
+                })()}
               </div>
             )}
             <p className="bitfun-remote-connect__info-text">

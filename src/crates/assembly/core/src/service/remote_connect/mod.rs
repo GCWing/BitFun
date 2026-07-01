@@ -52,7 +52,7 @@ use tokio::sync::RwLock;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ConnectionMethod {
-    Lan,
+    Lan { ip: Option<String> },
     Ngrok,
     BitfunServer,
     CustomServer { url: String },
@@ -259,7 +259,7 @@ impl RemoteConnectService {
 
     pub async fn available_methods(&self) -> Vec<ConnectionMethod> {
         vec![
-            ConnectionMethod::Lan,
+            ConnectionMethod::Lan { ip: None },
             ConnectionMethod::Ngrok,
             ConnectionMethod::BitfunServer,
             ConnectionMethod::CustomServer {
@@ -295,11 +295,15 @@ impl RemoteConnectService {
         let static_dir = self.config.mobile_web_dir.as_deref();
 
         let relay_url = match &method {
-            ConnectionMethod::Lan => {
+            ConnectionMethod::Lan { ip } => {
                 let handle =
                     embedded_relay::start_embedded_relay(self.config.lan_port, static_dir).await?;
                 *self.embedded_relay.write().await = Some(handle);
-                match lan::build_lan_relay_url(self.config.lan_port) {
+                let url_result = match ip {
+                    Some(ip) => lan::build_lan_relay_url_with_ip(self.config.lan_port, ip),
+                    None => lan::build_lan_relay_url(self.config.lan_port),
+                };
+                match url_result {
                     Ok(url) => url,
                     Err(e) => {
                         if let Some(ref mut relay) = *self.embedded_relay.write().await {
@@ -339,7 +343,7 @@ impl RemoteConnectService {
         let qr_payload = pairing.initiate(&relay_url).await?;
 
         let ws_url = match &method {
-            ConnectionMethod::Lan | ConnectionMethod::Ngrok => {
+            ConnectionMethod::Lan { .. } | ConnectionMethod::Ngrok => {
                 format!("ws://127.0.0.1:{}/ws", self.config.lan_port)
             }
             _ => {
@@ -363,7 +367,7 @@ impl RemoteConnectService {
             .await?;
 
         let web_app_url: String = match &method {
-            ConnectionMethod::Lan | ConnectionMethod::Ngrok => relay_url.clone(),
+            ConnectionMethod::Lan { .. } | ConnectionMethod::Ngrok => relay_url.clone(),
             ConnectionMethod::BitfunServer => {
                 if let Some(web_dir) = static_dir {
                     match upload_mobile_web(&relay_url, &qr_payload.room_id, web_dir).await {
