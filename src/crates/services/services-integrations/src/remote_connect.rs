@@ -10,6 +10,9 @@
 pub mod bot;
 pub mod device;
 pub mod encryption;
+mod lan;
+mod mobile_web_upload;
+mod ngrok;
 pub mod pairing;
 pub mod qr_generator;
 pub mod relay_client;
@@ -28,7 +31,15 @@ pub use bitfun_runtime_ports::{
 };
 pub use device::DeviceIdentity;
 pub use encryption::{decrypt_from_base64, encrypt_to_base64, KeyPair};
+pub use lan::{
+    build_lan_relay_url, build_lan_relay_url_with_ip, get_local_ip, list_local_ips,
+    LocalNetworkInterface,
+};
 use log::info;
+pub use mobile_web_upload::upload_mobile_web_to_relay;
+pub use ngrok::{
+    cleanup_all_ngrok, detect_running_ngrok, is_ngrok_available, start_ngrok_tunnel, NgrokTunnel,
+};
 pub use pairing::{PairingChallenge, PairingProtocol, PairingResponse, PairingState, QrPayload};
 pub use qr_generator::QrGenerator;
 pub use relay_client::{

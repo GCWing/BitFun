@@ -555,7 +555,13 @@ export function runManifestParserSelfTest({
   const coreOptionalOwnerDeps = new Set(
     coreOptionalOwnerRule?.dependencies.map((dependency) => dependency.depName) ?? [],
   );
-  const coreFullyMigratedDeps = new Set(['hostname', 'mac_address', 'qrcode', 'x25519-dalek']);
+  const coreFullyMigratedDeps = new Set([
+    'hostname',
+    'local-ip-address',
+    'mac_address',
+    'qrcode',
+    'x25519-dalek',
+  ]);
   for (const dep of coreProfile?.forbiddenNonOptionalDeps ?? []) {
     if (coreFullyMigratedDeps.has(dep)) {
       continue;
@@ -579,14 +585,18 @@ export function runManifestParserSelfTest({
     (rule) => rule.crateName === 'services-integrations',
   );
   for (const dep of [
+    'bitfun-services-core',
     'bitfun-runtime-ports',
     'git2',
     'hostname',
+    'local-ip-address',
     'mac_address',
     'notify',
     'qrcode',
+    'reqwest',
     'rmcp',
     'tokio-tungstenite',
+    'which',
     'x25519-dalek',
   ]) {
     if (!servicesOptionalOwnerRule?.dependencies.some((dependency) => dependency.depName === dep)) {
@@ -3666,7 +3676,7 @@ export function runManifestParserSelfTest({
   const servicesIntegrationsProfile = dependencyProfileRules.find(
     (rule) => rule.crateName === 'services-integrations',
   );
-  for (const dep of ['dunce', 'futures', 'reqwest', 'sse-stream']) {
+  for (const dep of ['dunce', 'futures', 'local-ip-address', 'reqwest', 'sse-stream', 'which']) {
     if (!servicesIntegrationsProfile?.forbiddenNonOptionalDeps.includes(dep)) {
       throw new Error(`services-integrations default profile must forbid non-optional ${dep}`);
     }

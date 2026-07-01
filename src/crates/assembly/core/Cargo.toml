@@ -60,7 +60,6 @@ include_dir = { workspace = true, optional = true }
 git2 = { workspace = true, optional = true }
 
 # Command detection (cross-platform)
-which = { workspace = true }
 similar = { workspace = true, optional = true }
 urlencoding = { workspace = true }
 
@@ -118,9 +117,6 @@ unic-langid = { workspace = true }
 aes-gcm = { workspace = true, optional = true }
 sha2 = { workspace = true }
 rand = { workspace = true, optional = true }
-
-# Device/Network info (Remote Connect)
-local-ip-address = { workspace = true, optional = true }
 
 # QR code generation
 
@@ -203,7 +199,6 @@ service-integrations = [
     "dep:bitfun-relay-server",
     "dep:git2",
     "dep:image",
-    "dep:local-ip-address",
     "dep:md5",
     "dep:rand",
     "dep:reqwest",

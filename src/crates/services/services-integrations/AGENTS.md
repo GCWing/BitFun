@@ -22,8 +22,9 @@ slices that are outside pure product logic but still platform-neutral.
   owner move proves behavior equivalence.
 - Remote-connect platform-neutral primitives belong here: device identity,
   pairing/encryption, QR payload generation, relay client protocol, dialog/cancel
-  orchestration ports, image-context adapter contracts, remote workspace helpers,
-  and command/response assembly.
+  orchestration ports, LAN/ngrok provider helpers, mobile-web relay upload,
+  image-context adapter contracts, remote workspace helpers, and command/response
+  assembly.
 - Remote workspace facts, session metadata, file projection DTOs, and
   workspace/projection host traits belong in `bitfun-runtime-ports`.
 - Workspace-root source selection, persistence/workspace service reads,
@@ -43,6 +44,8 @@ slices that are outside pure product logic but still platform-neutral.
   writes, marker IO, storage/import bundle filesystem IO, and JS worker process/pool
   lifecycle. Manager workflow orchestration remains outside this crate until
   reviewed owner migration.
+- Announcement remote fetch/cache lives here; product assembly supplies config
+  values such as endpoint, locale, version, platform, and cache path.
 - DeepResearch report IO here may own report/citation sidecar filesystem work;
   provider-neutral citation numbering stays in `bitfun-agent-runtime`.
 

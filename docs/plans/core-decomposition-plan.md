@@ -84,6 +84,11 @@
 - 建立 Desktop、CLI、Web、ACP、Remote、SDK 的最小能力矩阵和验证口径。
 - 确认 Kernel、Execution、Extension、Product Feature 不直接依赖 platform concrete；具体 provider 只由 Product Assembly 注册。
 
+当前大型 PR 批次：
+
+- Platform Provider Closure 先收口 remote-connect 与 announcement 中已具备服务层 owner 的 concrete provider：LAN IP/URL 探测、ngrok 进程/tunnel lifecycle、mobile-web relay 上传、announcement remote fetch/cache。core 保留兼容 facade、配置读取和产品编排。
+- IM bot 平台 HTTP adapter、browser automation、terminal tool execution 和 Computer Use OS action 仍属于高影响路径；必须在具备等价测试与清晰 host port 后再迁移，不与本批次混合。
+
 保护：
 
 - 不同操作系统、远程/本地、desktop/CLI/web/SDK 构建形态能力不漂移。

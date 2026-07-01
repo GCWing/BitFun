@@ -5,8 +5,8 @@ use bitfun_runtime_ports::{
     AgentSubmissionSource, RemoteControlSessionState, RemoteControlStateSnapshot,
 };
 use bitfun_services_integrations::remote_connect::{
-    build_remote_chat_messages, build_remote_image_attachment, build_remote_image_contexts,
-    build_remote_image_submission_request, build_remote_model_catalog,
+    build_lan_relay_url_with_ip, build_remote_chat_messages, build_remote_image_attachment,
+    build_remote_image_contexts, build_remote_image_submission_request, build_remote_model_catalog,
     build_remote_session_create_request, build_remote_submission_request, cancel_remote_task,
     handle_remote_command, handle_remote_workspace_file_command, make_slim_tool_params,
     normalize_remote_model_selection, normalize_remote_session_model_id,
@@ -108,6 +108,13 @@ fn remote_connect_qr_and_relay_primitives_live_in_services_owner() {
     let json = serde_json::to_value(message).expect("serialize relay message");
     assert_eq!(json["type"], "create_room");
     assert_eq!(json["device_type"], "desktop");
+}
+
+#[test]
+fn remote_connect_lan_url_builder_lives_in_services_owner() {
+    let url = build_lan_relay_url_with_ip(9700, "192.168.1.8").unwrap();
+
+    assert_eq!(url, "http://192.168.1.8:9700");
 }
 
 #[test]

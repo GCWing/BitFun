@@ -30,6 +30,7 @@ futures = { workspace = true, optional = true }
 git2 = { workspace = true, optional = true }
 hostname = { workspace = true, optional = true }
 image = { workspace = true, optional = true }
+local-ip-address = { workspace = true, optional = true }
 mac_address = { workspace = true, optional = true }
 notify = { workspace = true, optional = true }
 qrcode = { workspace = true, optional = true }
@@ -63,7 +64,7 @@ schannel = { version = "0.1", optional = true }
 
 [features]
 default = []
-announcement = []
+announcement = ["reqwest"]
 deep-research = ["bitfun-agent-runtime"]
 git = ["bitfun-services-core", "chrono", "git2", "thiserror"]
 file-watch = ["notify"]
@@ -101,15 +102,18 @@ remote-connect = [
     "aes-gcm",
     "async-trait",
     "base64",
+    "bitfun-services-core",
     "bitfun-runtime-ports",
     "chrono",
     "dirs",
     "futures",
     "hostname",
     "image",
+    "local-ip-address",
     "mac_address",
     "qrcode",
     "rand",
+    "reqwest",
     "rustls",
     "rustls-native-certs",
     "schannel",
@@ -117,6 +121,7 @@ remote-connect = [
     "tokio-tungstenite",
     "urlencoding",
     "uuid",
+    "which",
     "x25519-dalek",
 ]
 remote-ssh = ["anyhow", "dunce", "sha2", "terminal-core", "thiserror", "tokio-util"]
