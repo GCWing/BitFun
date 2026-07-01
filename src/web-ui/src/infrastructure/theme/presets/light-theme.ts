@@ -85,11 +85,9 @@ export const bitfunLightTheme: ThemeConfig = {
       50: lightPurpleBase(0.04),
       100: lightPurpleBase(0.08),
       200: lightPurpleBase(0.14),
-      300: lightPurpleBase(0.22),
       400: lightPurpleBase(0.36),
       500: LIGHT_PURPLE,
       600: LIGHT_PURPLE_HOVER,
-      700: lightPurpleHover(0.8),
       800: lightPurpleHover(0.9),
     },
 
@@ -155,22 +153,12 @@ export const bitfunLightTheme: ThemeConfig = {
       base: `0 4px 8px ${lightAccentHover(0.1)}`,
       lg: `0 8px 16px ${lightAccentHover(0.12)}`,
       xl: `0 12px 24px ${lightAccentHover(0.14)}`,
-      '2xl': `0 16px 32px ${lightAccentHover(0.16)}`,
     },
 
-
-    glow: {
-      blue: `0 8px 24px ${lightInk(0.08)}, 0 4px 12px ${lightInk(0.05)}, 0 2px 6px ${lightAccentHover(0.04)}`,
-      purple: `0 8px 24px ${lightInk(0.07)}, 0 4px 12px ${lightAccent(0.06)}, 0 2px 6px ${lightAccentHover(0.04)}`,
-      mixed: `0 8px 24px ${lightInk(0.07)}, 0 4px 12px ${lightInk(0.05)}, 0 2px 6px ${lightAccentHover(0.04)}`,
-    },
 
     blur: {
       subtle: 'blur(4px) saturate(1.02)',
       base: 'blur(8px) saturate(1.05)',
-      medium: 'blur(12px) saturate(1.08)',
-      strong: 'blur(16px) saturate(1.10) brightness(1.02)',
-      intense: 'blur(20px) saturate(1.12) brightness(1.03)',
     },
 
     radius: createStandardRadius(),
@@ -181,7 +169,6 @@ export const bitfunLightTheme: ThemeConfig = {
       disabled: 0.55,
       hover: 0.75,
       focus: 0.9,
-      overlay: 0.35,
     },
   },
 
@@ -192,7 +179,6 @@ export const bitfunLightTheme: ThemeConfig = {
       fast: '0.15s',
       base: '0.3s',
       slow: '0.6s',
-      lazy: '1s',
     },
 
     easing: createStandardEasing(),

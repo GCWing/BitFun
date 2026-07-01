@@ -79,11 +79,9 @@ export const bitfunChinaNightTheme: ThemeConfig = {
       50: chinaNightGreen(0.04),
       100: chinaNightGreen(0.08),
       200: chinaNightGreen(0.15),
-      300: chinaNightGreen(0.25),
       400: chinaNightGreen(0.4),
       500: CHINA_NIGHT_GREEN,
       600: CHINA_NIGHT_GREEN_HOVER,
-      700: chinaNightGreenHover(0.8),
       800: chinaNightGreenHover(0.9),
     },
 
@@ -144,21 +142,11 @@ export const bitfunChinaNightTheme: ThemeConfig = {
       base: `0 4px 8px ${overlayBlack(0.65)}`,
       lg: `0 8px 16px ${overlayBlack(0.7)}`,
       xl: `0 12px 24px ${overlayBlack(0.75)}`,
-      '2xl': `0 16px 32px ${overlayBlack(0.8)}`,
-    },
-
-    glow: {
-      blue: `0 8px 24px ${chinaNightAccent(0.25)}, 0 4px 12px ${chinaNightAccent(0.18)}, 0 2px 6px ${overlayBlack(0.3)}`,
-      purple: `0 8px 24px ${chinaNightGreen(0.25)}, 0 4px 12px ${chinaNightGreen(0.18)}, 0 2px 6px ${overlayBlack(0.3)}`,
-      mixed: `0 8px 24px ${chinaNightAccent(0.2)}, 0 4px 12px ${chinaNightGreen(0.18)}, 0 2px 6px ${overlayBlack(0.3)}`,
     },
 
     blur: {
       subtle: 'blur(4px) saturate(1.1)',
       base: 'blur(8px) saturate(1.15)',
-      medium: 'blur(12px) saturate(1.2)',
-      strong: 'blur(16px) saturate(1.25) brightness(1.05)',
-      intense: 'blur(20px) saturate(1.3) brightness(1.08)',
     },
 
     radius: createCompactRadius(),
@@ -169,7 +157,6 @@ export const bitfunChinaNightTheme: ThemeConfig = {
       disabled: 0.45,
       hover: 0.75,
       focus: 0.9,
-      overlay: 0.5,
     },
   },
 
@@ -180,7 +167,6 @@ export const bitfunChinaNightTheme: ThemeConfig = {
       fast: '0.2s',
       base: '0.35s',
       slow: '0.7s',
-      lazy: '1.2s',
     },
 
     easing: createStandardEasing('cubic-bezier(0.25, 0.1, 0.25, 1)'),

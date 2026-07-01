@@ -32,7 +32,6 @@ const SLATE_SUCCESS = '#7fb899';
 const SLATE_WARNING = '#f59e0b';
 const SLATE_ERROR = '#c9878d';
 
-const slateAccent = (alpha: number | string) => rgbaFromHex(SLATE_ACCENT, alpha);
 const slateAccentHover = (alpha: number | string) => rgbaFromHex(SLATE_ACCENT_HOVER, alpha);
 const slatePurple = (alpha: number | string) => rgbaFromHex(SLATE_PURPLE, alpha);
 const slatePurpleHover = (alpha: number | string) => rgbaFromHex(SLATE_PURPLE_HOVER, alpha);
@@ -91,11 +90,9 @@ export const bitfunSlateTheme: ThemeConfig = {
       50: slatePurple(0.04),
       100: slatePurple(0.08),
       200: slatePurple(0.15),
-      300: slatePurple(0.25),
       400: slatePurple(0.4),
       500: SLATE_PURPLE,
       600: SLATE_PURPLE_HOVER,
-      700: slatePurpleHover(0.8),
       800: slatePurpleHover(0.9),
     },
 
@@ -145,21 +142,11 @@ export const bitfunSlateTheme: ThemeConfig = {
       base: `0 4px 8px ${overlayBlack(0.75)}`,
       lg: `0 8px 16px ${overlayBlack(0.7)}`,
       xl: `0 12px 24px ${overlayBlack(0.85)}`,
-      '2xl': `0 16px 32px ${overlayBlack(0.9)}`,
-    },
-
-    glow: {
-      blue: `0 12px 32px ${slateAccent(0.14)}, 0 6px 16px ${slateAccent(0.1)}, 0 3px 8px ${overlayBlack(0.2)}`,
-      purple: `0 12px 32px ${slatePurple(0.2)}, 0 6px 16px ${slatePurple(0.12)}, 0 3px 8px ${overlayBlack(0.2)}`,
-      mixed: `0 12px 32px ${overlayWhite(0.05)}, 0 6px 16px ${slatePurple(0.1)}, 0 3px 8px ${overlayBlack(0.18)}`,
     },
 
     blur: {
       subtle: 'blur(4px) saturate(1.05) brightness(0.98)',
       base: 'blur(8px) saturate(1.08) brightness(0.98)',
-      medium: 'blur(12px) saturate(1.12) brightness(0.97)',
-      strong: 'blur(16px) saturate(1.15) brightness(0.97)',
-      intense: 'blur(20px) saturate(1.18) brightness(0.96)',
     },
 
     radius: createSlateRadius(),
@@ -170,7 +157,6 @@ export const bitfunSlateTheme: ThemeConfig = {
       disabled: 0.5,
       hover: 0.75,
       focus: 0.85,
-      overlay: 0.5,
     },
   },
 
@@ -181,7 +167,6 @@ export const bitfunSlateTheme: ThemeConfig = {
       fast: '0.12s',
       base: '0.25s',
       slow: '0.5s',
-      lazy: '0.8s',
     },
 
     easing: createStandardEasing(),

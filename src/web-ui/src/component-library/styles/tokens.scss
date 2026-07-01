@@ -108,7 +108,6 @@ $color-purple-300: $color-purple-500-a25;
 $color-purple-400: $color-purple-500-a40;
 $color-purple-500: #8b5cf6;
 $color-purple-600: #7c3aed;
-$color-purple-700: rgba(124, 58, 237, 0.8);
 $color-purple-800: rgba(124, 58, 237, 0.9);
 
 // ==================== Semantic colors ====================
@@ -174,9 +173,6 @@ $border-accent-soft: $color-blue-600-a30;
 $border-accent-subtle: $color-blue-600-a15;
 $border-accent: $color-blue-600-a40;
 $border-accent-strong: rgba(59, 130, 246, 0.6);
-
-$border-purple-subtle: $color-purple-500-a15;
-$border-purple: $color-purple-500-a40;
 
 // ==================== Shadow system ====================
 $shadow-xs: 0 1px 2px $overlay-black-90;
@@ -360,7 +356,6 @@ $font-size-xl: 16px;
 $font-size-2xl: 18px;
 $font-size-3xl: 22px;
 $font-size-4xl: 26px;
-$font-size-5xl: 32px;
 
 $line-height-tight: 1.2;
 $line-height-base: 1.5;
@@ -384,7 +379,6 @@ $sidebar-width: 240px;
 $opacity-disabled: 0.6;
 $opacity-hover: 0.8;
 $opacity-focus: 0.9;
-$opacity-overlay: 0.4;
 
 // ==================== Component-specific tokens ====================
 
@@ -865,11 +859,9 @@ $badge-info-text: $color-info;
   --color-purple-50: #{$color-purple-50};
   --color-purple-100: #{$color-purple-100};
   --color-purple-200: #{$color-purple-200};
-  --color-purple-300: #{$color-purple-300};
   --color-purple-400: #{$color-purple-400};
   --color-purple-500: #{$color-purple-500};
   --color-purple-600: #{$color-purple-600};
-  --color-purple-700: #{$color-purple-700};
   --color-purple-800: #{$color-purple-800};
   --color-purple-soft: #a78bfa;
   --color-indigo-500: #6366f1;
@@ -913,8 +905,6 @@ $badge-info-text: $color-info;
   --border-accent-subtle: #{$border-accent-subtle};
   --border-accent: #{$border-accent};
   --border-accent-strong: #{$border-accent-strong};
-  --border-purple-subtle: #{$border-purple-subtle};
-  --border-purple: #{$border-purple};
 
   --z-base: #{$z-base};
   --z-decoration: #{$z-decoration};
@@ -1201,9 +1191,6 @@ $badge-info-text: $color-info;
 
   --blur-subtle: #{$blur-subtle};
   --blur-base: #{$blur-base};
-  --blur-medium: #{$blur-medium};
-  --blur-strong: #{$blur-strong};
-  --blur-intense: #{$blur-intense};
 
   --size-radius-sm: #{$size-radius-sm};
   --size-radius-base: #{$size-radius-base};
@@ -1212,13 +1199,6 @@ $badge-info-text: $color-info;
   --size-radius-xl: #{$size-radius-xl};
   --size-radius-2xl: #{$size-radius-2xl};
   --size-radius-full: #{$size-radius-full};
-  --radius-sm: var(--size-radius-sm);
-  --radius-base: var(--size-radius-base);
-  --radius-md: var(--size-radius-base);
-  --radius-lg: var(--size-radius-lg);
-  --radius-xl: var(--size-radius-xl);
-  --radius-2xl: var(--size-radius-2xl);
-  --radius-full: var(--size-radius-full);
 
   --size-gap-1: #{$size-gap-1};
   --size-gap-2: #{$size-gap-2};
@@ -1230,16 +1210,6 @@ $badge-info-text: $color-info;
   --size-gap-10: #{$size-gap-10};
   --size-gap-12: #{$size-gap-12};
   --size-gap-16: #{$size-gap-16};
-  --spacing-1: var(--size-gap-1);
-  --spacing-2: var(--size-gap-2);
-  --spacing-3: var(--size-gap-3);
-  --spacing-4: var(--size-gap-4);
-  --spacing-5: var(--size-gap-5);
-  --spacing-6: var(--size-gap-6);
-  --spacing-8: var(--size-gap-8);
-  --spacing-10: var(--size-gap-10);
-  --spacing-12: var(--size-gap-12);
-  --spacing-16: var(--size-gap-16);
 
   --motion-instant: #{$motion-instant};
   --motion-fast: #{$motion-fast};
@@ -1278,7 +1248,6 @@ $badge-info-text: $color-info;
   --font-size-2xl: #{$font-size-2xl};
   --font-size-3xl: #{$font-size-3xl};
   --font-size-4xl: #{$font-size-4xl};
-  --font-size-5xl: #{$font-size-5xl};
 
   /* Flow chat: mirrors UI scale until font preference overwrites (independent mode). */
   --flowchat-font-size-xxs: var(--font-size-xxs);
@@ -1356,7 +1325,6 @@ $badge-info-text: $color-info;
   --nav-font-size-2xl: var(--font-size-2xl);
   --nav-font-size-3xl: var(--font-size-3xl);
   --nav-font-size-4xl: var(--font-size-4xl);
-  --nav-font-size-5xl: var(--font-size-5xl);
   --bitfun-nav-row-action-size: 20px;
   --bitfun-nav-row-action-icon-size: 13px;
   --bitfun-nav-row-action-offset: 4px;
@@ -1372,7 +1340,6 @@ $badge-info-text: $color-info;
   --opacity-disabled: #{$opacity-disabled};
   --opacity-hover: #{$opacity-hover};
   --opacity-focus: #{$opacity-focus};
-  --opacity-overlay: #{$opacity-overlay};
 
   --badge-font-size: #{$badge-font-size};
 

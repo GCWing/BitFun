@@ -36,7 +36,6 @@ export interface FontSizeTokens {
   '2xl': string;
   '3xl': string;
   '4xl': string;
-  '5xl': string;
 }
 
 export type FontSizeLevelPresets = Record<Exclude<FontSizeLevel, 'custom'>, FontSizeTokens>;
@@ -65,7 +64,6 @@ export function deriveFontSizeTokens(basePx: number): FontSizeTokens {
     '2xl': `${b + 4}px`,
     '3xl': `${b + 8}px`,
     '4xl': `${b + 12}px`,
-    '5xl': `${b + 18}px`,
   };
 }
 

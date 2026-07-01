@@ -212,16 +212,16 @@ export const TOKEN_COMPATIBILITY_ALIAS_FAMILY_CONTRACTS = [
   {
     prefix: '--radius-',
     canonicalPrefix: '--size-radius-',
-    owner: 'src/web-ui/src/component-library/styles/tokens.scss; src/web-ui/src/infrastructure/theme/core/ThemeService.ts',
-    reason: 'Radius aliases keep older selectors and generated widget iframe fallback working while size-radius is the canonical shape scale.',
-    removal: 'Retire after all source and generated widget iframe consumers migrate to --size-radius-*.',
+    owner: 'src/web-ui/src/tools/generative-widget/themePayloadCompatibility.ts',
+    reason: 'Radius aliases are retired from root/runtime but remain recognized so old generated widget iframe content maps to the canonical shape scale.',
+    removal: 'Retire after generated widget iframe compatibility no longer needs --radius-* fallbacks.',
   },
   {
     prefix: '--spacing-',
     canonicalPrefix: '--size-gap-',
-    owner: 'src/web-ui/src/component-library/styles/tokens.scss; src/web-ui/src/infrastructure/theme/core/ThemeService.ts',
-    reason: 'Spacing aliases keep older selectors and generated widget iframe fallback working while size-gap is the canonical spacing scale.',
-    removal: 'Retire after all source and generated widget iframe consumers migrate to --size-gap-*.',
+    owner: 'src/web-ui/src/tools/generative-widget/themePayloadCompatibility.ts',
+    reason: 'Spacing aliases are retired from root/runtime but remain recognized so old generated widget iframe content maps to the canonical spacing scale.',
+    removal: 'Retire after generated widget iframe compatibility no longer needs --spacing-* fallbacks.',
   },
 ];
 
@@ -336,12 +336,6 @@ export const DYNAMIC_VAR_FAMILY_CONTRACTS = [
     reason: 'Font preference runtime exports navigation font-size aliases from the adjusted typography scale.',
   },
   {
-    prefix: '--radius-',
-    owner: 'src/web-ui/src/infrastructure/theme/core/ThemeService.ts',
-    canonicalPrefix: '--size-radius-',
-    reason: 'Theme runtime exports configurable radius entries.',
-  },
-  {
     prefix: '--shadow-',
     owner: 'src/web-ui/src/infrastructure/theme/core/ThemeService.ts',
     reason: 'Theme runtime exports configurable shadow entries.',
@@ -355,12 +349,6 @@ export const DYNAMIC_VAR_FAMILY_CONTRACTS = [
     prefix: '--size-radius-',
     owner: 'src/web-ui/src/infrastructure/theme/core/ThemeService.ts',
     reason: 'Size radius aliases are derived from theme radius entries.',
-  },
-  {
-    prefix: '--spacing-',
-    owner: 'src/web-ui/src/infrastructure/theme/core/ThemeService.ts',
-    canonicalPrefix: '--size-gap-',
-    reason: 'Theme runtime exports configurable spacing entries.',
   },
 ];
 

@@ -1154,7 +1154,7 @@ function audit(options) {
     : [];
   const staleCompatibilityAliasFamilyEntries = checksFullThemeSourceRoot
     ? compatibilityAliasFamilyEntries
-      .filter(entry => !entry.defined || !entry.canonicalDefined)
+      .filter(entry => !entry.canonicalDefined)
       .map(entry => ({ key: entry.key, canonical: entry.canonical }))
     : [];
   const uncontractedFallbackVars = fallbackVars

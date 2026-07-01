@@ -81,11 +81,9 @@ export const bitfunChinaStyleTheme: ThemeConfig = {
       50: chinaStyleGreen(0.04),
       100: chinaStyleGreen(0.08),
       200: chinaStyleGreen(0.15),
-      300: chinaStyleGreen(0.25),
       400: chinaStyleGreen(0.4),
       500: CHINA_STYLE_GREEN,
       600: CHINA_STYLE_GREEN_HOVER,
-      700: chinaStyleGreenHover(0.8),
       800: chinaStyleGreenHover(0.9),
     },
 
@@ -144,21 +142,11 @@ export const bitfunChinaStyleTheme: ThemeConfig = {
       base: `0 4px 8px ${chinaStyleBorder(0.1)}`,
       lg: `0 8px 16px ${chinaStyleBorder(0.12)}`,
       xl: `0 12px 24px ${chinaStyleBorder(0.15)}`,
-      '2xl': `0 16px 32px ${chinaStyleBorder(0.18)}`,
-    },
-
-    glow: {
-      blue: `0 8px 24px ${chinaStyleBlue(0.18)}, 0 4px 12px ${chinaStyleBlue(0.12)}, 0 2px 6px ${chinaStyleBorder(0.05)}`,
-      purple: `0 8px 24px ${chinaStyleGreen(0.18)}, 0 4px 12px ${chinaStyleGreen(0.12)}, 0 2px 6px ${chinaStyleBorder(0.05)}`,
-      mixed: `0 8px 24px ${chinaStyleBlue(0.12)}, 0 4px 12px ${chinaStyleGreen(0.1)}, 0 2px 6px ${chinaStyleBorder(0.05)}`,
     },
 
     blur: {
       subtle: 'blur(4px) saturate(1.03)',
       base: 'blur(8px) saturate(1.05)',
-      medium: 'blur(12px) saturate(1.08)',
-      strong: 'blur(16px) saturate(1.1) brightness(1.02)',
-      intense: 'blur(20px) saturate(1.12) brightness(1.03)',
     },
 
     radius: createCompactRadius(),
@@ -169,7 +157,6 @@ export const bitfunChinaStyleTheme: ThemeConfig = {
       disabled: 0.5,
       hover: 0.75,
       focus: 0.9,
-      overlay: 0.35,
     },
   },
 
@@ -180,7 +167,6 @@ export const bitfunChinaStyleTheme: ThemeConfig = {
       fast: '0.2s',
       base: '0.35s',
       slow: '0.7s',
-      lazy: '1.2s',
     },
 
     easing: createStandardEasing('cubic-bezier(0.25, 0.1, 0.25, 1)'),

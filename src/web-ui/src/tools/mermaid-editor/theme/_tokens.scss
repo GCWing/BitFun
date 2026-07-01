@@ -32,13 +32,11 @@ $mermaid-light-highlight-stroke: #334155;
   --mermaid-node-stroke-hover: #{$border-strong};
   --mermaid-node-stroke-width: 1.5px;
   --mermaid-node-text: #{$color-text-primary};
-  --mermaid-node-radius: #{$size-radius-sm};
   --mermaid-node-dash-array: 4 2;
 
   // ==================== Edge styles ====================
   --mermaid-edge-stroke: #{$border-medium};
   --mermaid-edge-stroke-hover: #{$border-strong};
-  --mermaid-edge-stroke-width: 1.5px;
   --mermaid-edge-label-bg: #{$color-bg-secondary};
   --mermaid-edge-label-border: #{$border-subtle};
   --mermaid-edge-label-text: #{$color-text-secondary};
@@ -54,18 +52,14 @@ $mermaid-light-highlight-stroke: #334155;
 
   // ==================== Status colors ====================
   --mermaid-success: #{$color-success};
-  --mermaid-success-bg: #{$color-success-bg};
   --mermaid-error: #{$color-error};
   --mermaid-error-bg: #{$color-error-bg};
   --mermaid-warning: #{$color-warning};
-  --mermaid-warning-bg: #{$color-warning-bg};
   --mermaid-info: #{$color-info};
-  --mermaid-info-bg: #{$color-info-bg};
 
   // ==================== Highlight styles ====================
   --mermaid-highlight-stroke: #{$color-accent-500};
   --mermaid-highlight-glow: #{$glow-shadow-blue};
-  --mermaid-selected-stroke: #{$color-accent-600};
 
   // ==================== Interaction effects ====================
   --mermaid-transition-duration: #{$motion-base};
@@ -111,18 +105,7 @@ $mermaid-light-highlight-stroke: #334155;
   --mermaid-pie-8: #a8d868;
 
   // ==================== Class/ER diagram ====================
-  --mermaid-class-fill: #{$element-bg-base};
-  --mermaid-class-stroke: #{$border-medium};
   --mermaid-class-text: #{$color-text-primary};
-  --mermaid-class-divider: #{$border-subtle};
-
-  // ==================== Git diagram ====================
-  --mermaid-commit-text: #{$color-text-primary};
-  --mermaid-branch-label: #{$color-text-primary};
-
-  // ==================== Background and container ====================
-  --mermaid-bg: var(--color-bg-scene);
-  --mermaid-container-border: #{$border-subtle};
 }
 
 // ==================== Light theme overrides ====================
@@ -153,7 +136,6 @@ $mermaid-light-highlight-stroke: #334155;
   // Highlight - slate (matches light theme focus / accent)
   --mermaid-highlight-stroke: #{$mermaid-light-highlight-stroke};
   --mermaid-highlight-glow: drop-shadow(0 0 6px rgba(15, 23, 42, 0.18));
-  --mermaid-selected-stroke: #{$mermaid-light-text-primary};
 
   // Interaction effects
   --mermaid-hover-filter: brightness(0.97);
@@ -189,18 +171,7 @@ $mermaid-light-highlight-stroke: #334155;
   --mermaid-pie-1: #{$mermaid-light-text-secondary};
 
   // Class diagram
-  --mermaid-class-fill: #{$mermaid-light-node-fill};
-  --mermaid-class-stroke: #{$mermaid-light-node-stroke};
   --mermaid-class-text: #{$mermaid-light-text-primary};
-  --mermaid-class-divider: rgba(100, 116, 139, 0.2);
-
-  // Git diagram
-  --mermaid-commit-text: #{$mermaid-light-text-primary};
-  --mermaid-branch-label: #{$mermaid-light-text-primary};
-
-  // Background
-  --mermaid-bg: var(--color-bg-scene);
-  --mermaid-container-border: rgba(100, 116, 139, 0.2);
 }
 
 // ==================== Mixins ====================

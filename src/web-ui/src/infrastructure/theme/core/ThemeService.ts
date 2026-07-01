@@ -37,6 +37,18 @@ const THEME_STATIC_COLORS = {
   black: '#000000',
 } as const;
 
+const ACCENT_STOPS = [50, 100, 200, 300, 400, 500, 600, 700, 800] as const;
+const SECONDARY_ACCENT_STOPS = [50, 100, 200, 400, 500, 600, 800] as const;
+const SHADOW_TOKENS = ['xs', 'sm', 'base', 'lg', 'xl'] as const;
+const BLUR_TOKENS = ['subtle', 'base'] as const;
+const RADIUS_TOKENS = ['sm', 'base', 'lg', 'xl', '2xl', 'full'] as const;
+const SPACING_TOKENS = [1, 2, 3, 4, 5, 6, 8, 10, 12, 16] as const;
+const MOTION_DURATION_TOKENS = ['instant', 'fast', 'base', 'slow'] as const;
+const EASING_TOKENS = ['standard', 'decelerate', 'smooth'] as const;
+const FONT_WEIGHT_TOKENS = ['normal', 'medium', 'semibold', 'bold'] as const;
+const FONT_SIZE_TOKENS = ['xs', 'sm', 'base', 'lg', 'xl', '2xl', '3xl', '4xl'] as const;
+const LINE_HEIGHT_TOKENS = ['tight', 'base', 'relaxed'] as const;
+
 const THEME_OVERLAYS = {
   white02: 'rgba(255, 255, 255, 0.02)',
   white04: 'rgba(255, 255, 255, 0.04)',
@@ -556,16 +568,14 @@ export class ThemeService {
       root.style.setProperty('--color-bg-tooltip', colors.background.tooltip);
     }
 
-    root.style.setProperty('--color-overlay', theme.type === 'dark' ? THEME_OVERLAYS.black50 : THEME_OVERLAYS.black30);
-
-
     root.style.setProperty('--color-text-primary', colors.text.primary);
     root.style.setProperty('--color-text-secondary', colors.text.secondary);
     root.style.setProperty('--color-text-muted', colors.text.muted);
     root.style.setProperty('--color-text-disabled', colors.text.disabled);
 
 
-    Object.entries(colors.accent).forEach(([key, value]) => {
+    ACCENT_STOPS.forEach((key) => {
+      const value = colors.accent[key];
       root.style.setProperty(`--color-accent-${key}`, value);
     });
 
@@ -581,8 +591,10 @@ export class ThemeService {
     }
 
 
-    if (colors.purple) {
-      Object.entries(colors.purple).forEach(([key, value]) => {
+    const secondaryAccent = colors.purple;
+    if (secondaryAccent) {
+      SECONDARY_ACCENT_STOPS.forEach((key) => {
+        const value = secondaryAccent[key];
         root.style.setProperty(`--color-purple-${key}`, value);
       });
     }
@@ -649,48 +661,46 @@ export class ThemeService {
     root.style.setProperty('--color-scrollbar', scrollbarThumb);
 
 
-    if (effects?.shadow) {
-      Object.entries(effects.shadow).forEach(([key, value]) => {
+    const shadows = effects?.shadow;
+    if (shadows) {
+      SHADOW_TOKENS.forEach((key) => {
+        const value = shadows[key];
         root.style.setProperty(`--shadow-${key}`, value);
       });
-      root.style.setProperty('--glass-shadow-sm', effects.shadow.sm);
-      root.style.setProperty('--glass-shadow-base', effects.shadow.base);
-      root.style.setProperty('--glass-shadow-lg', effects.shadow.lg);
-      root.style.setProperty('--glass-shadow-xl', effects.shadow.xl);
+      root.style.setProperty('--glass-shadow-sm', shadows.sm);
+      root.style.setProperty('--glass-shadow-base', shadows.base);
+      root.style.setProperty('--glass-shadow-lg', shadows.lg);
+      root.style.setProperty('--glass-shadow-xl', shadows.xl);
     }
 
 
-    if (effects?.glow) {
-      root.style.setProperty('--glow-blue', effects.glow.blue);
-      root.style.setProperty('--glow-purple', effects.glow.purple);
-      root.style.setProperty('--glow-mixed', effects.glow.mixed);
-    }
-
-
-    if (effects?.blur) {
-      Object.entries(effects.blur).forEach(([key, value]) => {
+    const blurs = effects?.blur;
+    if (blurs) {
+      BLUR_TOKENS.forEach((key) => {
+        const value = blurs[key];
         root.style.setProperty(`--blur-${key}`, value);
       });
-      root.style.setProperty('--glass-blur-sm', effects.blur.subtle);
-      root.style.setProperty('--glass-blur-base', effects.blur.base);
+      root.style.setProperty('--glass-blur-sm', blurs.subtle);
+      root.style.setProperty('--glass-blur-base', blurs.base);
     }
 
 
-    if (effects?.radius) {
-      Object.entries(effects.radius).forEach(([key, value]) => {
-        root.style.setProperty(`--radius-${key}`, value);
+    const radii = effects?.radius;
+    if (radii) {
+      RADIUS_TOKENS.forEach((key) => {
+        const value = radii[key];
         root.style.setProperty(`--size-radius-${key}`, value);
       });
-      if (effects.radius.base) {
-        root.style.setProperty('--radius-md', effects.radius.base);
-        root.style.setProperty('--size-radius-md', effects.radius.base);
+      if (radii.base) {
+        root.style.setProperty('--size-radius-md', radii.base);
       }
     }
 
 
-    if (effects?.spacing) {
-      Object.entries(effects.spacing).forEach(([key, value]) => {
-        root.style.setProperty(`--spacing-${key}`, value);
+    const spacing = effects?.spacing;
+    if (spacing) {
+      SPACING_TOKENS.forEach((key) => {
+        const value = spacing[key];
         root.style.setProperty(`--size-gap-${key}`, value);
       });
     }
@@ -700,19 +710,22 @@ export class ThemeService {
       root.style.setProperty('--opacity-disabled', String(effects.opacity.disabled));
       root.style.setProperty('--opacity-hover', String(effects.opacity.hover));
       root.style.setProperty('--opacity-focus', String(effects.opacity.focus));
-      root.style.setProperty('--opacity-overlay', String(effects.opacity.overlay));
     }
 
 
-    if (motion?.duration) {
-      Object.entries(motion.duration).forEach(([key, value]) => {
+    const motionDuration = motion?.duration;
+    if (motionDuration) {
+      MOTION_DURATION_TOKENS.forEach((key) => {
+        const value = motionDuration[key];
         root.style.setProperty(`--motion-${key}`, value);
       });
     }
 
 
-    if (motion?.easing) {
-      Object.entries(motion.easing).forEach(([key, value]) => {
+    const motionEasing = motion?.easing;
+    if (motionEasing) {
+      EASING_TOKENS.forEach((key) => {
+        const value = motionEasing[key];
         root.style.setProperty(`--easing-${key}`, value);
       });
     }
@@ -724,22 +737,28 @@ export class ThemeService {
     }
 
 
-    if (typography?.weight) {
-      Object.entries(typography.weight).forEach(([key, value]) => {
+    const fontWeights = typography?.weight;
+    if (fontWeights) {
+      FONT_WEIGHT_TOKENS.forEach((key) => {
+        const value = fontWeights[key];
         root.style.setProperty(`--font-weight-${key}`, String(value));
       });
     }
 
 
-    if (typography?.size) {
-      Object.entries(typography.size).forEach(([key, value]) => {
+    const typographySize = typography?.size;
+    if (typographySize) {
+      FONT_SIZE_TOKENS.forEach((key) => {
+        const value = typographySize[key];
         root.style.setProperty(`--font-size-${key}`, value);
       });
     }
 
 
-    if (typography?.lineHeight) {
-      Object.entries(typography.lineHeight).forEach(([key, value]) => {
+    const lineHeights = typography?.lineHeight;
+    if (lineHeights) {
+      LINE_HEIGHT_TOKENS.forEach((key) => {
+        const value = lineHeights[key];
         root.style.setProperty(`--line-height-${key}`, String(value));
       });
     }
@@ -837,26 +856,7 @@ export class ThemeService {
     }
 
 
-    root.style.setProperty('--modal-bg', colors.background.elevated);
-    root.style.setProperty('--modal-border', colors.border.base);
-    root.style.setProperty('--modal-overlay', theme.type === 'dark' ? THEME_OVERLAYS.black70 : THEME_OVERLAYS.black50);
-
-
-    root.style.setProperty('--nav-bg', colors.background.secondary);
-    root.style.setProperty('--nav-item-bg-hover', colors.element.base);
-    root.style.setProperty('--nav-item-bg-active', colors.element.medium);
-    root.style.setProperty('--nav-item-text', colors.text.secondary);
-    root.style.setProperty('--nav-item-text-active', colors.text.primary);
-
-
     root.style.setProperty('--panel-bg', colors.background.primary);
-    root.style.setProperty('--panel-header-bg', colors.background.secondary);
-    root.style.setProperty('--panel-border', colors.border.base);
-
-
-    root.style.setProperty('--tooltip-bg', colors.background.elevated);
-    root.style.setProperty('--tooltip-border', colors.border.medium);
-    root.style.setProperty('--tooltip-text', colors.text.primary);
 
 
     root.setAttribute('data-theme', theme.id);

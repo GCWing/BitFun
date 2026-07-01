@@ -80,11 +80,9 @@ export const bitfunCyberTheme: ThemeConfig = {
       50: cyberPurple(0.05),
       100: cyberPurple(0.1),
       200: cyberPurple(0.18),
-      300: cyberPurple(0.3),
       400: cyberPurple(0.45),
       500: CYBER_PURPLE,
       600: CYBER_PURPLE_HOVER,
-      700: cyberPurpleHover(0.85),
       800: cyberPurpleHover(0.95),
     },
 
@@ -145,24 +143,11 @@ export const bitfunCyberTheme: ThemeConfig = {
       base: '0 4px 12px rgba(0, 0, 0, 0.8)',
       lg: '0 8px 20px rgba(0, 0, 0, 0.75)',
       xl: '0 12px 28px rgba(0, 0, 0, 0.7)',
-      '2xl': '0 16px 36px rgba(0, 0, 0, 0.65)',
-    },
-
-    glow: {
-
-      blue: `0 0 12px ${cyberAccent(0.4)}, 0 0 24px ${cyberAccent(0.25)}, 0 0 36px ${cyberAccent(0.15)}, 0 4px 16px ${overlayBlack(0.3)}`,
-
-      purple: `0 0 12px ${cyberPurple(0.4)}, 0 0 24px ${cyberPurple(0.25)}, 0 0 36px ${cyberPurple(0.15)}, 0 4px 16px ${overlayBlack(0.3)}`,
-
-      mixed: `0 0 16px ${cyberAccent(0.35)}, 0 0 28px ${cyberPurple(0.25)}, 0 0 40px ${cyberAccent(0.12)}, 0 4px 20px ${overlayBlack(0.35)}`,
     },
 
     blur: {
       subtle: 'blur(4px) saturate(1.2)',
       base: 'blur(8px) saturate(1.3)',
-      medium: 'blur(12px) saturate(1.4)',
-      strong: 'blur(16px) saturate(1.5) brightness(1.15)',
-      intense: 'blur(20px) saturate(1.6) brightness(1.2)',
     },
 
     radius: createCompactRadius(),
@@ -173,7 +158,6 @@ export const bitfunCyberTheme: ThemeConfig = {
       disabled: 0.5,
       hover: 0.85,
       focus: 0.95,
-      overlay: 0.5,
     },
   },
 
@@ -184,7 +168,6 @@ export const bitfunCyberTheme: ThemeConfig = {
       fast: '0.12s',
       base: '0.25s',
       slow: '0.5s',
-      lazy: '0.8s',
     },
 
     easing: createStandardEasing('cubic-bezier(0.25, 0.46, 0.45, 0.94)'),

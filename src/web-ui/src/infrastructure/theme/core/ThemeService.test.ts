@@ -343,6 +343,87 @@ describe('ThemeService runtime theme tokens', () => {
     expect(configAPI.setConfig).not.toHaveBeenCalledWith('themes.custom', expect.anything());
   });
 
+  it('does not export non-contract dynamic keys from custom themes', () => {
+    const service = new ThemeService();
+    const customTheme = {
+      ...bitfunLightTheme,
+      id: 'custom-extra-keys',
+      colors: {
+        ...bitfunLightTheme.colors,
+        accent: {
+          ...bitfunLightTheme.colors.accent,
+          950: '#111111',
+        },
+        purple: {
+          ...bitfunLightTheme.colors.purple,
+          300: '#222222',
+          700: '#333333',
+        },
+      },
+      effects: {
+        ...bitfunLightTheme.effects,
+        shadow: {
+          ...bitfunLightTheme.effects.shadow,
+          '2xl': '0 0 0 #111111',
+        },
+        blur: {
+          ...bitfunLightTheme.effects.blur,
+          intense: 'blur(99px)',
+        },
+        radius: {
+          ...bitfunLightTheme.effects.radius,
+          huge: '99px',
+        },
+        spacing: {
+          ...bitfunLightTheme.effects.spacing,
+          99: '99px',
+        },
+      },
+      motion: {
+        ...bitfunLightTheme.motion,
+        duration: {
+          ...bitfunLightTheme.motion.duration,
+          lazy: '99s',
+        },
+        easing: {
+          ...bitfunLightTheme.motion.easing,
+          bounce: 'cubic-bezier(0.68, -0.55, 0.265, 1.55)',
+        },
+      },
+      typography: {
+        ...bitfunLightTheme.typography,
+        weight: {
+          ...bitfunLightTheme.typography.weight,
+          black: 900,
+        },
+        size: {
+          ...bitfunLightTheme.typography.size,
+          '5xl': '99px',
+        },
+        lineHeight: {
+          ...bitfunLightTheme.typography.lineHeight,
+          loose: 2,
+        },
+      },
+    } as unknown as ThemeConfig;
+
+    (service as unknown as { injectCSSVariables(theme: ThemeConfig): void }).injectCSSVariables(customTheme);
+
+    const rootStyle = document.documentElement.style;
+    expect(rootStyle.getPropertyValue('--color-accent-950')).toBe('');
+    expect(rootStyle.getPropertyValue('--color-purple-300')).toBe('');
+    expect(rootStyle.getPropertyValue('--color-purple-700')).toBe('');
+    expect(rootStyle.getPropertyValue('--shadow-2xl')).toBe('');
+    expect(rootStyle.getPropertyValue('--blur-intense')).toBe('');
+    expect(rootStyle.getPropertyValue('--size-radius-huge')).toBe('');
+    expect(rootStyle.getPropertyValue('--size-gap-99')).toBe('');
+    expect(rootStyle.getPropertyValue('--motion-lazy')).toBe('');
+    expect(rootStyle.getPropertyValue('--easing-bounce')).toBe('');
+    expect(rootStyle.getPropertyValue('--font-weight-black')).toBe('');
+    expect(rootStyle.getPropertyValue('--font-size-5xl')).toBe('');
+    expect(rootStyle.getPropertyValue('--line-height-loose')).toBe('');
+  });
+
   it('skips invalid persisted custom themes before they reach preview or runtime injection', async () => {
     const invalidCustomTheme = {
       ...bitfunLightTheme,

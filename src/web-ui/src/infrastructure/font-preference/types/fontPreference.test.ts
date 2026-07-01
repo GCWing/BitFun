@@ -16,6 +16,7 @@ describe('deriveFontSizeTokens', () => {
     expect(tokens.lg).toBe('15px');
     expect(tokens.xl).toBe('16px');
     expect(tokens['2xl']).toBe('18px');
+    expect('5xl' in tokens).toBe(false);
   });
 
   it('clamps below minimum (12px)', () => {

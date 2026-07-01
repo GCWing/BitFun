@@ -72,7 +72,6 @@ export function createStandardTypography(): ThemeConfig['typography'] {
       '2xl': '18px',
       '3xl': '22px',
       '4xl': '26px',
-      '5xl': '32px',
     },
     lineHeight: {
       tight: 1.2,
@@ -114,7 +113,6 @@ export function createChinaTypography(): ThemeConfig['typography'] {
       '2xl': '18px',
       '3xl': '22px',
       '4xl': '26px',
-      '5xl': '32px',
     },
     lineHeight: {
       tight: 1.3,
@@ -176,8 +174,6 @@ export function createStandardEasing(smooth = 'cubic-bezier(0.4, 0, 0.2, 1)'): T
   return {
     standard: 'cubic-bezier(0.4, 0, 0.2, 1)',
     decelerate: 'cubic-bezier(0, 0, 0.2, 1)',
-    accelerate: 'cubic-bezier(0.4, 0, 1, 1)',
-    bounce: 'cubic-bezier(0.68, -0.55, 0.265, 1.55)',
     smooth,
   };
 }

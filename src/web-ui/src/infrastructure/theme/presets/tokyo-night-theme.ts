@@ -90,11 +90,9 @@ export const bitfunTokyoNightTheme: ThemeConfig = {
       50: tokyoPurple(0.05),
       100: tokyoPurple(0.08),
       200: tokyoPurple(0.15),
-      300: tokyoPurple(0.25),
       400: tokyoPurple(0.4),
       500: TOKYO_PURPLE,
       600: TOKYO_PURPLE_HOVER,
-      700: tokyoPurpleHover(0.85),
       800: tokyoPurpleHover(0.95),
     },
 
@@ -160,24 +158,11 @@ export const bitfunTokyoNightTheme: ThemeConfig = {
       base: `0 4px 12px ${overlayBlack(0.48)}`,
       lg: `0 8px 20px ${overlayBlack(0.45)}`,
       xl: `0 12px 28px ${overlayBlack(0.42)}`,
-      '2xl': `0 16px 36px ${overlayBlack(0.38)}`,
-    },
-
-    glow: {
-      blue:
-        `0 0 12px ${tokyoAccent(0.35)}, 0 0 24px ${tokyoAccent(0.2)}, 0 4px 16px ${overlayBlack(0.35)}`,
-      purple:
-        `0 0 12px ${tokyoPurple(0.32)}, 0 0 24px ${tokyoPurple(0.18)}, 0 4px 16px ${overlayBlack(0.35)}`,
-      mixed:
-        `0 0 16px ${tokyoAccent(0.3)}, 0 0 28px ${tokyoPurple(0.2)}, 0 4px 20px ${overlayBlack(0.35)}`,
     },
 
     blur: {
       subtle: 'blur(4px) saturate(1.15)',
       base: 'blur(8px) saturate(1.2)',
-      medium: 'blur(12px) saturate(1.25)',
-      strong: 'blur(16px) saturate(1.3) brightness(1.08)',
-      intense: 'blur(20px) saturate(1.35) brightness(1.1)',
     },
 
     radius: createCompactRadius(),
@@ -188,7 +173,6 @@ export const bitfunTokyoNightTheme: ThemeConfig = {
       disabled: 0.5,
       hover: 0.88,
       focus: 0.96,
-      overlay: 0.52,
     },
   },
 
@@ -198,7 +182,6 @@ export const bitfunTokyoNightTheme: ThemeConfig = {
       fast: '0.12s',
       base: '0.25s',
       slow: '0.5s',
-      lazy: '0.8s',
     },
 
     easing: createStandardEasing('cubic-bezier(0.25, 0.46, 0.45, 0.94)'),

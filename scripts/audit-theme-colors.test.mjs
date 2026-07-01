@@ -891,8 +891,8 @@ test('theme color audit requires dynamic CSS var families to be registered', (t)
 test('theme color audit accepts registered dynamic CSS var families', (t) => {
   const { dir, sourceRoot } = createFixture({
     'infrastructure/theme/core/ThemeService.ts': [
-      "for (const [key, value] of Object.entries(theme.effects.spacing)) {",
-      "  document.documentElement.style.setProperty(`--spacing-${key}`, value);",
+      "for (const [key, value] of Object.entries(theme.motion.duration)) {",
+      "  document.documentElement.style.setProperty(`--motion-${key}`, value);",
       '}',
       '',
     ].join('\n'),
