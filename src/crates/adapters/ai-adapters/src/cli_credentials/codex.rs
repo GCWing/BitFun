@@ -154,10 +154,10 @@ fn parse_codex_cli_version(output: &str) -> Option<String> {
 }
 
 async fn resolve_codex_cli_version() -> Option<String> {
-    let check = crate::service::system::check_command("codex");
+    let check = bitfun_services_core::system::check_command("codex");
     let command = check.path.as_deref()?;
     let args = vec!["--version".to_string()];
-    let output = crate::service::system::run_command(command, &args, None, None)
+    let output = bitfun_services_core::system::run_command(command, &args, None, None)
         .await
         .ok()?;
     if !output.success {

@@ -1,5 +1,7 @@
 #![doc = include_str!("../README.md")]
 
+#[cfg(feature = "cli-credentials")]
+pub mod cli_credentials;
 pub mod client;
 pub mod diagnostics;
 pub mod model_selector;

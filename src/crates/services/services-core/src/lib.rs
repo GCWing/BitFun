@@ -7,6 +7,7 @@ pub mod diagnostics;
 pub mod diff;
 pub mod filesystem;
 pub mod json_store;
+#[cfg(feature = "lsp")]
 pub mod lsp;
 pub mod managed_runtime;
 pub mod process_manager;

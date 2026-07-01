@@ -10,7 +10,8 @@ use std::sync::{Arc, OnceLock};
 use tokio::sync::RwLock;
 
 use super::file_sync::{FileSyncConfig, LspFileSync};
-use super::{LspManager, WorkspaceLspManager};
+use super::WorkspaceLspManager;
+use bitfun_services_core::lsp::manager::LspManager;
 
 type WorkspaceManagerMap = HashMap<String, Arc<WorkspaceLspManager>>;
 type GlobalWorkspaceManagers = Arc<RwLock<WorkspaceManagerMap>>;

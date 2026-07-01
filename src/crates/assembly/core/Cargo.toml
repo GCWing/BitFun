@@ -54,7 +54,6 @@ dirs = { workspace = true }
 dunce = { workspace = true }
 filetime = { workspace = true, optional = true }
 fs2 = { workspace = true, optional = true }
-zip = { workspace = true }
 flate2 = { workspace = true, optional = true }
 include_dir = { workspace = true, optional = true }
 
@@ -97,7 +96,7 @@ bitfun-agent-tools = { path = "../../execution/tool-contracts" }
 bitfun-tool-packs = { path = "../../execution/tool-provider-groups", default-features = false, optional = true }
 
 # Core service owner crate
-bitfun-services-core = { path = "../../services/services-core" }
+bitfun-services-core = { path = "../../services/services-core", default-features = false, features = ["lsp"] }
 
 # Integration service owner crate
 bitfun-services-integrations = { path = "../../services/services-integrations", default-features = false, features = ["remote-ssh"] }
@@ -183,7 +182,11 @@ product-full = [
     "service-integrations",
     "tool-packs",
 ]
-ai-adapter-runtime = ["dep:bitfun-ai-adapters", "dep:reqwest"]
+ai-adapter-runtime = [
+    "dep:bitfun-ai-adapters",
+    "bitfun-ai-adapters/cli-credentials",
+    "dep:reqwest",
+]
 product-capabilities = ["dep:bitfun-product-capabilities"]
 product-domains = [
     "ai-adapter-runtime",

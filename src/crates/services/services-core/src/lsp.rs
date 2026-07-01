@@ -1,7 +1,18 @@
-//! Platform-neutral LSP plugin service rules.
+//! Cross-platform reusable LSP service rules.
 //!
-//! This module owns pure plugin registry and command-target mapping rules. It
-//! does not load plugin packages, touch the filesystem, or spawn LSP processes.
+//! This module owns pure plugin registry, command-target mapping rules,
+//! reusable plugin package filesystem loading, protocol helpers, project
+//! detection, request debounce, configuration file watching, and LSP server
+//! process/manager primitives. It does not own product workspace state,
+//! frontend event emission, or global singleton wiring.
+
+pub mod config_watcher;
+pub mod debouncer;
+pub mod manager;
+pub mod plugin_loader;
+pub mod process;
+pub mod project_detector;
+pub mod protocol;
 
 use bitfun_core_types::lsp::LspPlugin;
 use log::{info, warn};

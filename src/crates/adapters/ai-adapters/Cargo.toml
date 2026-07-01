@@ -12,9 +12,12 @@ crate-type = ["rlib"]
 [dependencies]
 anyhow = { workspace = true }
 async-trait = { workspace = true }
+base64 = { workspace = true, optional = true }
 bitfun-agent-stream = { path = "../../execution/agent-stream" }
 bitfun-core-types = { path = "../../contracts/core-types" }
+bitfun-services-core = { path = "../../services/services-core", default-features = false, optional = true }
 chrono = { workspace = true }
+dirs = { workspace = true, optional = true }
 eventsource-stream = { workspace = true }
 futures = { workspace = true }
 log = { workspace = true }
@@ -25,6 +28,10 @@ tokio = { workspace = true }
 tokio-stream = { workspace = true }
 tokio-util = { workspace = true }
 urlencoding = { workspace = true }
+uuid = { workspace = true, optional = true }
+
+[features]
+cli-credentials = ["dep:base64", "dep:bitfun-services-core", "dep:dirs", "dep:uuid"]
 
 [dev-dependencies]
 axum = { workspace = true }
