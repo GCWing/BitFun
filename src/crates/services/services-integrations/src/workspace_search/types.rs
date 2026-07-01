@@ -373,6 +373,9 @@ pub struct ContentSearchResult {
 #[serde(rename_all = "camelCase")]
 pub struct GlobSearchResult {
     pub paths: Vec<String>,
+    pub matches_relative_to: String,
+    pub total_matches: Option<usize>,
+    pub truncated: bool,
     pub repo_status: WorkspaceSearchRepoStatus,
 }
 

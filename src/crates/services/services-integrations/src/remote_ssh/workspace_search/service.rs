@@ -23,7 +23,7 @@ use async_trait::async_trait;
 use bitfun_services_core::filesystem::FileSearchOutcome;
 use std::collections::HashMap;
 use std::ops::Deref;
-use std::path::PathBuf;
+use std::path::{Component, Path, PathBuf};
 use std::sync::{
     atomic::{AtomicU64, Ordering},
     Arc, LazyLock,
@@ -669,16 +669,29 @@ impl RemoteWorkspaceSearchService {
     pub async fn glob(&self, request: GlobSearchRequest) -> Result<GlobSearchResult, String> {
         let repo_root = normalize_remote_workspace_path(&request.repo_root.to_string_lossy());
         let session = self.get_or_open_stdio_session(&repo_root).await?;
+        let search_path = request
+            .search_path
+            .as_deref()
+            .map(|path| path.to_string_lossy().to_string())
+            .unwrap_or_else(|| repo_root.clone());
+        let normalized_search_path = normalize_remote_glob_search_path(&repo_root, &search_path)?;
+        let (walk_root, pattern) =
+            derive_remote_glob_walk_root(&normalized_search_path, &request.pattern);
         let scope = build_remote_scope(
             &repo_root,
-            request.search_path.as_deref(),
-            vec![request.pattern],
+            Some(Path::new(&walk_root)),
+            vec![pattern],
             Vec::new(),
             Vec::new(),
         )?;
         let (repo_status, mut paths) = session.glob(scope).await?;
 
+        paths = paths
+            .into_iter()
+            .map(|path| relativize_remote_glob_result_path(&repo_root, &walk_root, &path))
+            .collect();
         paths.sort();
+        let total_matches = paths.len();
         if request.limit > 0 {
             paths.truncate(request.limit);
         } else {
@@ -687,6 +700,9 @@ impl RemoteWorkspaceSearchService {
 
         Ok(GlobSearchResult {
             paths,
+            matches_relative_to: walk_root,
+            total_matches: Some(total_matches),
+            truncated: total_matches > request.limit,
             repo_status: repo_status.into(),
         })
     }
@@ -994,6 +1010,123 @@ impl RemoteWorkspaceSearchService {
     }
 }
 
+fn extract_remote_glob_base_directory(pattern: &str) -> (String, String) {
+    let glob_start = pattern.find(['*', '?', '[', '{']);
+
+    match glob_start {
+        Some(index) => {
+            let static_prefix = &pattern[..index];
+            let last_separator = static_prefix
+                .char_indices()
+                .rev()
+                .find(|(_, ch)| *ch == '/' || *ch == '\\')
+                .map(|(idx, _)| idx);
+
+            if let Some(separator_index) = last_separator {
+                (
+                    static_prefix[..separator_index].to_string(),
+                    pattern[separator_index + 1..].to_string(),
+                )
+            } else {
+                (String::new(), pattern.to_string())
+            }
+        }
+        None => {
+            let trimmed = pattern.trim_end_matches(['/', '\\']);
+            let literal_path = Path::new(trimmed);
+            let base_dir = literal_path
+                .parent()
+                .filter(|parent| !parent.as_os_str().is_empty() && *parent != Path::new("."))
+                .map(|parent| parent.to_string_lossy().to_string())
+                .unwrap_or_default();
+            let file_name = literal_path
+                .file_name()
+                .map(|name| name.to_string_lossy().to_string())
+                .unwrap_or_else(|| trimmed.to_string());
+
+            let relative_pattern = if pattern.ends_with('/') || pattern.ends_with('\\') {
+                format!("{}/", file_name)
+            } else {
+                file_name
+            };
+
+            (base_dir, relative_pattern)
+        }
+    }
+}
+
+fn is_safe_remote_relative_subpath(path: &Path) -> bool {
+    !path.is_absolute()
+        && path
+            .components()
+            .all(|component| matches!(component, Component::Normal(_) | Component::CurDir))
+}
+
+fn normalize_remote_glob_search_path(repo_root: &str, search_path: &str) -> Result<String, String> {
+    let normalized = if search_path.starts_with('/') {
+        normalize_remote_workspace_path(search_path)
+    } else {
+        join_remote_path(repo_root, search_path)
+    };
+    let repo_root_with_slash = format!("{}/", repo_root.trim_end_matches('/'));
+    if normalized != repo_root && !normalized.starts_with(&repo_root_with_slash) {
+        return Err(format!(
+            "Remote search path is outside workspace root: {normalized}"
+        ));
+    }
+    Ok(normalized)
+}
+
+fn derive_remote_glob_walk_root(search_path_abs: &str, pattern: &str) -> (String, String) {
+    let (base_dir, relative_pattern) = extract_remote_glob_base_directory(pattern);
+    let base_path = Path::new(&base_dir);
+
+    if base_dir.is_empty() || !is_safe_remote_relative_subpath(base_path) {
+        return (search_path_abs.to_string(), pattern.to_string());
+    }
+
+    let walk_root = join_remote_path(search_path_abs, &base_dir);
+    let search_path_with_slash = format!("{}/", search_path_abs.trim_end_matches('/'));
+    if walk_root == search_path_abs || walk_root.starts_with(&search_path_with_slash) {
+        (walk_root, relative_pattern)
+    } else {
+        (search_path_abs.to_string(), pattern.to_string())
+    }
+}
+
+fn relativize_remote_glob_result_path(repo_root: &str, walk_root: &str, path: &str) -> String {
+    let path = path.replace('\\', "/");
+    let normalized_path = if path.starts_with('/') {
+        normalize_remote_workspace_path(&path)
+    } else {
+        path.trim_start_matches("./").to_string()
+    };
+
+    let walk_root_with_slash = format!("{}/", walk_root.trim_end_matches('/'));
+    if let Some(relative) = normalized_path.strip_prefix(&walk_root_with_slash) {
+        return relative.to_string();
+    }
+    if normalized_path == walk_root {
+        return String::new();
+    }
+
+    let repo_root_with_slash = format!("{}/", repo_root.trim_end_matches('/'));
+    let walk_root_relative_to_repo = walk_root.strip_prefix(&repo_root_with_slash);
+    if let Some(base) = walk_root_relative_to_repo {
+        if !base.is_empty() {
+            let base_with_slash = format!("{}/", base.trim_end_matches('/'));
+            if normalized_path == base {
+                return String::new();
+            }
+            if let Some(relative) = normalized_path.strip_prefix(&base_with_slash) {
+                return relative.to_string();
+            }
+        }
+    }
+
+    normalized_path
+}
+
 fn remote_stdio_session_key(connection_id: &str, repo_root: &str) -> String {
     format!(
         "{connection_id}\0{}",
@@ -1119,6 +1252,48 @@ mod tests {
         assert_eq!(
             test_remote_search_context_key("conn-1", "/home/user/repo/"),
             "conn-1\0/home/user/repo"
+        );
+    }
+
+    #[test]
+    fn remote_glob_scope_preprocessing_extracts_static_pattern_prefix() {
+        let (walk_root, pattern) = derive_remote_glob_walk_root("/home/user/repo", "src/*.rs");
+
+        assert_eq!(walk_root, "/home/user/repo/src");
+        assert_eq!(pattern, "*.rs");
+
+        let (unsafe_walk_root, unsafe_pattern) =
+            derive_remote_glob_walk_root("/home/user/repo", "../*.rs");
+        assert_eq!(unsafe_walk_root, "/home/user/repo");
+        assert_eq!(unsafe_pattern, "../*.rs");
+    }
+
+    #[test]
+    fn remote_glob_results_are_relative_to_effective_walk_root() {
+        assert_eq!(
+            relativize_remote_glob_result_path(
+                "/home/user/repo",
+                "/home/user/repo/src",
+                "src/lib.rs",
+            ),
+            "lib.rs"
+        );
+        assert_eq!(
+            relativize_remote_glob_result_path(
+                "/home/user/repo",
+                "/home/user/repo/src",
+                "/home/user/repo/src/deep/mod.rs",
+            ),
+            "deep/mod.rs"
+        );
+        assert_eq!(
+            normalize_remote_glob_search_path("/home/user/repo", "src").unwrap(),
+            "/home/user/repo/src"
+        );
+        assert!(
+            normalize_remote_glob_search_path("/home/user/repo", "/home/user/other")
+                .unwrap_err()
+                .contains("outside workspace root")
         );
     }
 

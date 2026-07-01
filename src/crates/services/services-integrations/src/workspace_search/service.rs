@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use bitfun_services_core::filesystem::FileSearchOutcome;
 use std::collections::{HashMap, HashSet};
 use std::ffi::OsString;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::sync::{
     atomic::{AtomicU64, Ordering},
     Arc,
@@ -291,27 +291,47 @@ impl WorkspaceSearchService {
         request: GlobSearchRequest,
     ) -> WorkspaceSearchResult<GlobSearchResult> {
         let repo_root = normalize_repo_root(&request.repo_root)?;
-        let scope = build_scope(
-            &repo_root,
-            request.search_path.as_deref(),
-            vec![request.pattern],
-            vec![],
-            vec![],
-        )?;
+        let search_path = request.search_path.as_deref().unwrap_or(&repo_root);
+        let normalized_search_path = normalize_scope_path(&repo_root, search_path)?;
+        let (walk_root, pattern) = derive_glob_walk_root(&normalized_search_path, &request.pattern);
+        if !walk_root.is_dir() {
+            let session = self.get_or_open_session(&repo_root).await?;
+            let repo_status = session
+                .status()
+                .await
+                .map_err(map_flashgrep_error("Glob status failed"))?;
+            return Ok(GlobSearchResult {
+                paths: Vec::new(),
+                matches_relative_to: path_to_string(&walk_root),
+                total_matches: Some(0),
+                truncated: false,
+                repo_status: repo_status.into(),
+            });
+        }
+        let scope = build_scope(&repo_root, Some(&walk_root), vec![pattern], vec![], vec![])?;
         let session = self.get_or_open_session(&repo_root).await?;
-        let mut outcome =
+        let outcome =
             FlashgrepRepoSession::glob(session.as_ref(), GlobRequest::new().with_scope(scope))
                 .await
                 .map_err(map_flashgrep_error("Glob search failed"))?;
-        outcome.paths.sort();
+        let mut paths = outcome
+            .paths
+            .into_iter()
+            .map(|path| relativize_glob_result_path(&repo_root, &walk_root, &path))
+            .collect::<Vec<_>>();
+        paths.sort();
+        let total_matches = paths.len();
         if request.limit > 0 {
-            outcome.paths.truncate(request.limit);
+            paths.truncate(request.limit);
         } else {
-            outcome.paths.clear();
+            paths.clear();
         }
 
         Ok(GlobSearchResult {
-            paths: outcome.paths,
+            paths,
+            matches_relative_to: path_to_string(&walk_root),
+            total_matches: Some(total_matches),
+            truncated: total_matches > request.limit,
             repo_status: outcome.status.into(),
         })
     }
@@ -782,6 +802,105 @@ fn build_scope(
     })
 }
 
+fn extract_glob_base_directory(pattern: &str) -> (String, String) {
+    let glob_start = pattern.find(['*', '?', '[', '{']);
+
+    match glob_start {
+        Some(index) => {
+            let static_prefix = &pattern[..index];
+            let last_separator = static_prefix
+                .char_indices()
+                .rev()
+                .find(|(_, ch)| *ch == '/' || *ch == '\\')
+                .map(|(idx, _)| idx);
+
+            if let Some(separator_index) = last_separator {
+                (
+                    static_prefix[..separator_index].to_string(),
+                    pattern[separator_index + 1..].to_string(),
+                )
+            } else {
+                (String::new(), pattern.to_string())
+            }
+        }
+        None => {
+            let trimmed = pattern.trim_end_matches(['/', '\\']);
+            let literal_path = Path::new(trimmed);
+            let base_dir = literal_path
+                .parent()
+                .filter(|parent| !parent.as_os_str().is_empty() && *parent != Path::new("."))
+                .map(|parent| parent.to_string_lossy().to_string())
+                .unwrap_or_default();
+            let file_name = literal_path
+                .file_name()
+                .map(|name| name.to_string_lossy().to_string())
+                .unwrap_or_else(|| trimmed.to_string());
+
+            let relative_pattern = if pattern.ends_with('/') || pattern.ends_with('\\') {
+                format!("{}/", file_name)
+            } else {
+                file_name
+            };
+
+            (base_dir, relative_pattern)
+        }
+    }
+}
+
+fn is_safe_relative_subpath(path: &Path) -> bool {
+    !path.is_absolute()
+        && path
+            .components()
+            .all(|component| matches!(component, Component::Normal(_) | Component::CurDir))
+}
+
+fn derive_glob_walk_root(search_path_abs: &Path, pattern: &str) -> (PathBuf, String) {
+    let (base_dir, relative_pattern) = extract_glob_base_directory(pattern);
+    let base_path = Path::new(&base_dir);
+
+    if base_dir.is_empty() || !is_safe_relative_subpath(base_path) {
+        return (search_path_abs.to_path_buf(), pattern.to_string());
+    }
+
+    let walk_root = search_path_abs.join(base_path);
+    if walk_root.starts_with(search_path_abs) {
+        (walk_root, relative_pattern)
+    } else {
+        (search_path_abs.to_path_buf(), pattern.to_string())
+    }
+}
+
+fn path_to_string(path: &Path) -> String {
+    dunce::simplified(path).to_string_lossy().replace('\\', "/")
+}
+
+fn relativize_glob_result_path(repo_root: &Path, walk_root: &Path, path: &str) -> String {
+    let path = path.replace('\\', "/");
+    let path_buf = PathBuf::from(&path);
+    if path_buf.is_absolute() {
+        return path_buf
+            .strip_prefix(walk_root)
+            .map(path_to_string)
+            .unwrap_or(path);
+    }
+
+    let walk_root_relative_to_repo = walk_root.strip_prefix(repo_root).ok();
+    if let Some(base) = walk_root_relative_to_repo {
+        if !base.as_os_str().is_empty() {
+            let base = path_to_string(base);
+            let base_with_slash = format!("{}/", base.trim_end_matches('/'));
+            if path == base {
+                return String::new();
+            }
+            if let Some(relative) = path.strip_prefix(&base_with_slash) {
+                return relative.to_string();
+            }
+        }
+    }
+
+    path
+}
+
 fn normalize_scope_path(repo_root: &Path, search_path: &Path) -> WorkspaceSearchResult<PathBuf> {
     let normalized = dunce::canonicalize(search_path).map_err(|error| {
         format!(
@@ -846,6 +965,40 @@ mod tests {
             ContentSearchOutputMode::FilesWithMatches.search_mode(),
             crate::workspace_search::flashgrep::SearchModeConfig::FilesWithMatches
         );
+    }
+
+    #[test]
+    fn glob_scope_preprocessing_extracts_static_pattern_prefix() {
+        let repo_root = std::env::temp_dir().join("bitfun-workspace-search-test-repo");
+        let search_path = repo_root.join("workspace");
+        let (walk_root, pattern) = derive_glob_walk_root(&search_path, "src/*.rs");
+
+        assert_eq!(walk_root, search_path.join("src"));
+        assert_eq!(pattern, "*.rs");
+
+        let (unsafe_walk_root, unsafe_pattern) = derive_glob_walk_root(&search_path, "../*.rs");
+        assert_eq!(unsafe_walk_root, search_path);
+        assert_eq!(unsafe_pattern, "../*.rs");
+    }
+
+    #[test]
+    fn glob_results_are_relative_to_effective_walk_root() {
+        let repo_root = std::env::temp_dir().join("bitfun-workspace-search-test-repo");
+        let walk_root = repo_root.join("src");
+
+        assert_eq!(
+            relativize_glob_result_path(&repo_root, &walk_root, "src/lib.rs"),
+            "lib.rs"
+        );
+        assert_eq!(
+            relativize_glob_result_path(
+                &repo_root,
+                &walk_root,
+                &path_to_string(&walk_root.join("deep/mod.rs")),
+            ),
+            "deep/mod.rs"
+        );
+        assert!(path_to_string(&walk_root).ends_with("/src"));
     }
 
     #[test]
