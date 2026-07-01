@@ -10,12 +10,18 @@ import {
   collectRustFallbackEntriesFromText,
   findNearPairs,
   normalizeHexColor,
+  writeReportJson,
 } from './audit-cli-theme-colors.mjs';
 
-test('normalizeHexColor accepts only six-digit hex colors', () => {
+test('normalizeHexColor accepts supported CLI hex colors only', () => {
   assert.equal(normalizeHexColor('#AABBCC'), '#aabbcc');
   assert.equal(normalizeHexColor('#abc'), null);
   assert.equal(normalizeHexColor('rgba(0, 0, 0, 0.5)'), null);
+});
+
+test('normalizeHexColor blends eight-digit hex colors like the CLI parser', () => {
+  assert.equal(normalizeHexColor('#ffffff80'), '#808080');
+  assert.equal(normalizeHexColor('#00000080', { mode: 'light' }), '#7f7f7f');
 });
 
 test('collectPresetColorEntriesFromJson reads opencode theme colors', () => {
@@ -30,6 +36,24 @@ test('collectPresetColorEntriesFromJson reads opencode theme colors', () => {
   assert.deepEqual(entries, [
     { file: 'theme.json', key: 'background', color: '#101010' },
     { file: 'theme.json', key: 'primary', color: '#60a5fa' },
+  ]);
+});
+
+test('collectPresetColorEntriesFromJson resolves defs and light/dark variants', () => {
+  const entries = collectPresetColorEntriesFromJson('bitfun-light.json', JSON.stringify({
+    defs: {
+      neutral: '#00000080',
+    },
+    theme: {
+      background: 'neutral',
+      primary: { dark: '#ffffff80', light: '#00000080' },
+    },
+  }));
+
+  assert.deepEqual(entries, [
+    { file: 'bitfun-light.json', key: 'background', color: '#7f7f7f' },
+    { file: 'bitfun-light.json', key: 'primary.dark', color: '#808080' },
+    { file: 'bitfun-light.json', key: 'primary.light', color: '#7f7f7f' },
   ]);
 });
 
@@ -97,6 +121,18 @@ test('checkBaseline validates CLI baseline budget shape', () => {
 
     assert.match(failures.join('\n'), /presetUniqueColors budget must be an object/);
     assert.match(failures.join('\n'), /totalUniqueColors\.max must be a number/);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('writeReportJson creates parent directories for report output', () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'bitfun-cli-theme-audit-'));
+  try {
+    const reportPath = path.join(tempDir, 'nested', 'report.json');
+    writeReportJson({ totalUniqueColors: 1 }, reportPath);
+
+    assert.deepEqual(JSON.parse(fs.readFileSync(reportPath, 'utf8')), { totalUniqueColors: 1 });
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }

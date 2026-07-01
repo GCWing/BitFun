@@ -177,11 +177,11 @@ CLI/TUI 使用独立审计，不参与 CSS var root 计数：
 | --- | ---: |
 | preset 文件数 | 6 |
 | preset 颜色出现次数 | 306 |
-| preset 唯一色数 | 134 |
+| preset 唯一色数 | 126 |
 | Rust fallback `Color::Rgb` 出现次数 | 44 |
 | Rust fallback 唯一色数 | 32 |
-| CLI/TUI 总唯一色数 | 164 |
-| preset 需证据复核 near pair | 20 |
+| CLI/TUI 总唯一色数 | 156 |
+| preset 需证据复核 near pair | 8 |
 | Rust fallback near pair | 0 |
 
 当前审计未发现 CSS 变量契约层面的硬错误：
@@ -345,6 +345,7 @@ Phase 5 决策记录：
 | web dark/slate/tokyo tooltip literals | derive from preset background | `src/web-ui/src/infrastructure/theme/presets/*-theme.ts` | tooltip 仍输出相同 rgba 值，但改为由对应 `BACKGROUND_SECONDARY` 常量派生，降低源字面量数量并避免相同 surface 重复手写 |
 | CLI Rust fallback near surfaces | merge within fallback palette | `src/apps/cli/src/ui/theme.rs` | fallback dark hover 复用 panel，light panel/block 复用同一浅灰，light hover 复用 element；fallback near pair 降为 0，preset 主路径和语义 key 不变 |
 | CLI color audit baseline | guardrail | `scripts/audit-cli-theme-colors.mjs`、`scripts/theme-color-governance-baseline.cli.json` | CLI/TUI preset 与 Rust fallback palette 单独计数，避免被 web-ui CSS var 审计误归类；后续只能在债务减少时下调预算 |
+| CLI preset non-adjacent near surfaces | merge within preset namespace | `src/apps/cli/themes/presets/bitfun-dark.json`、`bitfun-midnight.json`、`bitfun-tokyo-night.json` | Midnight 深色 background/panel/context、input、subtle border 和 diff gutter、dark removed diff、Tokyo added diff 复用已有终端 surface stop；preset 唯一色数 134 -> 126，总唯一色数 164 -> 156，preset near pair 20 -> 8；语法 function/variable、Cyber 相邻 element/border、diff body/gutter 仍保留，不按数值相近强合并 |
 | web/installer dark/slate/midnight neutral text | merge | `src/web-ui/src/infrastructure/theme/presets/slate-theme.ts`、`midnight-theme.ts`、`BitFun-Installer/src/theme/installerThemesData.ts` | `#9da0a8`、`#9ea4ab` 收敛到 `#a1a1aa`，Slate branch 复用 `SLATE_ACCENT`；均为跨主题 neutral text/branch 语义，不合并 error/warning/status 色，同名安装器预览同步 |
 | remaining near pairs | none in ordinary components | 无 | 审计口径下普通组件 near pair 已清零；后续只在专用 palette 自身重设计时处理 Monaco/terminal/Mermaid/syntax 内部近似色 |
 | Monaco theme palette | classify as exception | `tools/editor/themes/bitfun-dark.theme.ts` | 该文件是 Monaco theme 完整色板，不是普通 app UI；归入 editor/exception 后不再被误计为 component raw color |
@@ -384,8 +385,8 @@ Phase 6 防回退约束：
 | `mobile-web` dynamic families | 3 | 3 | `--color-accent-*`、`--color-purple-*`、`--color-pink-*` 由 mobile preset 拥有 |
 | `installer` app UI raw color | 0 | 0 | 安装器组件不得携带 raw app color |
 | `installer` dynamic families | 2 | 2 | 安装器只导出实际消费的 accent/purple family，不保留未使用高阶 key |
-| `cli` total unique colors | 164 | 164 | 控制 CLI/TUI preset 和 Rust fallback palette 不继续膨胀 |
-| `cli` preset near pairs | 20 | 20 | 记录 CLI preset 内仍需证据复核的近似色，避免无依据回涨 |
+| `cli` total unique colors | 156 | 156 | 控制 CLI/TUI preset 和 Rust fallback palette 不继续膨胀 |
+| `cli` preset near pairs | 8 | 8 | 记录 CLI preset 内仍需证据复核的近似色，避免无依据回涨 |
 | `cli` Rust fallback near pairs | 0 | 0 | fallback palette 不再允许新增近似重复色 |
 | `fallbackContracts.uncontractedUnique` | 0 | 0 | 防止新增未说明边界的 `var(--token, fallback)` |
 | `fallbackContracts.staleRegisteredUnique` | 0 | 0 | 防止已删除 fallback 继续留在 registry 中 |
@@ -1024,7 +1025,7 @@ alpha 差异经常承担 elevation 和交互状态，不应全部压成一个值
 
 1. 专用域近似色复核：mobile-web theme preset near pair 已清零；web-ui/installer 已先处理不可感知的跨主题 neutral、tooltip 派生和 runtime/static panel 值。
    后续继续处理 theme preset 时必须避开按钮 hover/active、背景 quaternary/elevated、Monaco、Mermaid、terminal、syntax 等相邻状态色，除非有截图证据证明不会损害层级。
-2. CLI/TUI palette 压缩：CLI/TUI 已纳入 `theme:color-audit:cli`，Rust fallback near pair 归零；后续只处理 preset 内能证明同一终端 surface 语义的近似色，
+2. CLI/TUI palette 压缩：CLI/TUI 已纳入 `theme:color-audit:cli`，Rust fallback near pair 归零，preset near pair 已降到 8；后续只处理 preset 内能证明同一终端 surface 语义的近似色，
    不能让 Rust/CLI 复制 web-ui palette。若要跨 surface 共享，只能先定义共享语义投影或生成链路。
 3. 自定义主题扩展后续体验优化：custom theme 校验、加载、注册、导出和 preview 输入已绑定到 TS schema；
    如需继续改善首屏体验，只允许由 TS schema 生成最小 bootstrap cache，不允许 Rust 直接拥有 custom theme schema。

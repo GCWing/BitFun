@@ -7,12 +7,30 @@ const DEFAULT_ROOT = 'src/apps/cli';
 const DEFAULT_BASELINE = 'scripts/theme-color-governance-baseline.cli.json';
 const DEFAULT_NEAR_THRESHOLD = 10;
 
-export function normalizeHexColor(value) {
+function blendAlphaChannel(channel, alpha, base) {
+  return Math.round((channel * alpha + base * (255 - alpha)) / 255);
+}
+
+export function normalizeHexColor(value, options = {}) {
   if (typeof value !== 'string') {
     return null;
   }
-  const match = /^#([0-9a-f]{6})$/i.exec(value.trim());
-  return match ? `#${match[1].toLowerCase()}` : null;
+  const match = /^#([0-9a-f]{6}|[0-9a-f]{8})$/i.exec(value.trim());
+  if (!match) {
+    return null;
+  }
+  const raw = match[1].toLowerCase();
+  if (raw.length === 6) {
+    return `#${raw}`;
+  }
+
+  const base = options.mode === 'light' ? 255 : 0;
+  const alpha = Number.parseInt(raw.slice(6, 8), 16);
+  return rgbToHex(
+    blendAlphaChannel(Number.parseInt(raw.slice(0, 2), 16), alpha, base),
+    blendAlphaChannel(Number.parseInt(raw.slice(2, 4), 16), alpha, base),
+    blendAlphaChannel(Number.parseInt(raw.slice(4, 6), 16), alpha, base),
+  );
 }
 
 function hexToRgb(hex) {
@@ -51,11 +69,88 @@ export function collectPresetColorEntriesFromJson(file, jsonText) {
   if (!theme || typeof theme !== 'object' || Array.isArray(theme)) {
     throw new Error(`${file} must contain a theme object`);
   }
+  const defs = parsed.defs && typeof parsed.defs === 'object' && !Array.isArray(parsed.defs)
+    ? parsed.defs
+    : {};
+  const defaultMode = /(?:^|[-_/])light(?:[-_.]|$)/i.test(file) ? 'light' : 'dark';
 
   return Object.entries(theme).flatMap(([key, value]) => {
-    const color = normalizeHexColor(value);
-    return color ? [{ file, key, color }] : [];
+    return collectColorValueEntries({
+      file,
+      key,
+      value,
+      theme,
+      defs,
+      mode: defaultMode,
+      seen: new Set(),
+    });
   });
+}
+
+function collectColorValueEntries({ file, key, value, theme, defs, mode, seen }) {
+  if (typeof value === 'number') {
+    return [];
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (trimmed === '' || trimmed.toLowerCase() === 'none' || trimmed.toLowerCase() === 'transparent') {
+      return [];
+    }
+    const color = normalizeHexColor(trimmed, { mode });
+    if (color) {
+      return [{ file, key, color }];
+    }
+
+    const referenced = Object.prototype.hasOwnProperty.call(defs, trimmed)
+      ? defs[trimmed]
+      : Object.prototype.hasOwnProperty.call(theme, trimmed)
+        ? theme[trimmed]
+        : undefined;
+    if (referenced === undefined) {
+      return [];
+    }
+    if (seen.has(trimmed)) {
+      throw new Error(`${file} theme color reference cycle detected at "${trimmed}"`);
+    }
+    const nextSeen = new Set(seen);
+    nextSeen.add(trimmed);
+    return collectColorValueEntries({
+      file,
+      key,
+      value: referenced,
+      theme,
+      defs,
+      mode,
+      seen: nextSeen,
+    });
+  }
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return [];
+  }
+  if (Object.prototype.hasOwnProperty.call(value, 'dark') && Object.prototype.hasOwnProperty.call(value, 'light')) {
+    return [
+      ...collectColorValueEntries({
+        file,
+        key: `${key}.dark`,
+        value: value.dark,
+        theme,
+        defs,
+        mode: 'dark',
+        seen: new Set(seen),
+      }),
+      ...collectColorValueEntries({
+        file,
+        key: `${key}.light`,
+        value: value.light,
+        theme,
+        defs,
+        mode: 'light',
+        seen: new Set(seen),
+      }),
+    ];
+  }
+
+  return [];
 }
 
 export function collectRustFallbackEntriesFromText(file, sourceText) {
@@ -194,12 +289,38 @@ function parseArgs(argv) {
     const arg = argv[i];
     if (arg === '--root') {
       options.root = argv[++i];
+      if (!options.root) {
+        throw new Error('--root requires a path');
+      }
+    } else if (arg.startsWith('--root=')) {
+      options.root = arg.slice('--root='.length);
+      if (!options.root) {
+        throw new Error('--root requires a path');
+      }
     } else if (arg === '--baseline') {
       options.baseline = argv[++i];
+      if (!options.baseline) {
+        throw new Error('--baseline requires a baseline path');
+      }
+    } else if (arg.startsWith('--baseline=')) {
+      options.baseline = arg.slice('--baseline='.length);
+      if (!options.baseline) {
+        throw new Error('--baseline requires a baseline path');
+      }
     } else if (arg === '--report-json') {
       options.reportJson = argv[++i];
+      if (!options.reportJson) {
+        throw new Error('--report-json requires an output path');
+      }
+    } else if (arg.startsWith('--report-json=')) {
+      options.reportJson = arg.slice('--report-json='.length);
+      if (!options.reportJson) {
+        throw new Error('--report-json requires an output path');
+      }
     } else if (arg === '--top') {
       options.top = Number.parseInt(argv[++i], 10);
+    } else if (arg.startsWith('--top=')) {
+      options.top = Number.parseInt(arg.slice('--top='.length), 10);
     } else if (arg === '--no-baseline') {
       options.baseline = null;
     } else {
@@ -256,6 +377,12 @@ export function checkBaseline(report, baselinePath) {
   return failures;
 }
 
+export function writeReportJson(report, reportJsonPath) {
+  const outputPath = path.resolve(reportJsonPath);
+  fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+  fs.writeFileSync(outputPath, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
+}
+
 function printRows(title, rows, top) {
   console.log(title);
   if (rows.length === 0) {
@@ -297,7 +424,7 @@ function main() {
   printReport(report, options.top);
 
   if (options.reportJson) {
-    fs.writeFileSync(options.reportJson, `${JSON.stringify(report, null, 2)}\n`);
+    writeReportJson(report, options.reportJson);
   }
 
   const failures = checkBaseline(report, options.baseline);
