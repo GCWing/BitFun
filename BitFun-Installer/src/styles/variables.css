@@ -1,11 +1,11 @@
 :root {
   --color-bg-primary: #121214;
   --color-bg-secondary: #1a1c1e;
-  --color-bg-tertiary: #121214;
-  --color-bg-quaternary: #202024;
-  --color-bg-elevated: #1a1c1e;
-  --color-bg-workbench: #121214;
-  --color-bg-flowchat: #121214;
+  --color-bg-tertiary: var(--color-bg-primary);
+  --color-bg-quaternary: var(--color-bg-secondary);
+  --color-bg-elevated: var(--color-bg-secondary);
+  --color-bg-workbench: var(--color-bg-primary);
+  --color-bg-flowchat: var(--color-bg-primary);
   --color-bg-tooltip: rgba(30, 30, 32, 0.92);
 
   --color-text-primary: #e8e8e8;
@@ -21,33 +21,33 @@
   --color-accent-500: #60a5fa;
   --color-accent-600: #3b82f6;
 
-  --color-purple-50: rgba(139, 92, 246, 0.04);
-  --color-purple-100: rgba(139, 92, 246, 0.08);
-  --color-purple-200: rgba(139, 92, 246, 0.15);
-  --color-purple-400: rgba(139, 92, 246, 0.4);
-  --color-purple-500: #8b5cf6;
-  --color-purple-600: #7c3aed;
-  --color-purple-800: rgba(124, 58, 237, 0.9);
+  --color-purple-50: var(--color-accent-50);
+  --color-purple-100: var(--color-accent-100);
+  --color-purple-200: var(--color-accent-200);
+  --color-purple-400: var(--color-accent-400);
+  --color-purple-500: var(--color-accent-500);
+  --color-purple-600: var(--color-accent-600);
+  --color-purple-800: var(--color-accent-600);
 
   --color-success: #34d399;
   --color-warning: #f59e0b;
   --color-error: #ef4444;
-  --color-info: #e1ab80;
-  --color-highlight: #d4a574;
-  --color-highlight-bg: rgba(212, 165, 116, 0.15);
+  --color-info: var(--color-accent-500);
+  --color-highlight: var(--color-warning);
+  --color-highlight-bg: rgba(245, 158, 11, 0.15);
 
   --element-bg-subtle: rgba(255, 255, 255, 0.06);
   --element-bg-soft: rgba(255, 255, 255, 0.12);
-  --element-bg-base: rgba(255, 255, 255, 0.12);
+  --element-bg-base: var(--element-bg-soft);
   --element-bg-medium: rgba(255, 255, 255, 0.18);
   --element-bg-strong: rgba(255, 255, 255, 0.24);
-  --element-bg-elevated: rgba(255, 255, 255, 0.24);
+  --element-bg-elevated: var(--element-bg-strong);
 
   --border-subtle: rgba(255, 255, 255, 0.12);
   --border-base: rgba(255, 255, 255, 0.18);
   --border-medium: rgba(255, 255, 255, 0.24);
   --border-strong: rgba(255, 255, 255, 0.32);
-  --border-prominent: rgba(225, 171, 128, 0.50);
+  --border-prominent: rgba(255, 255, 255, 0.45);
 
   --size-radius-sm: 6px;
   --size-radius-base: 8px;

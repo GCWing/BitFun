@@ -431,7 +431,7 @@
   position: fixed;
   inset: 0;
   z-index: tokens.$z-fullscreen;
-  background: tokens.$modal-backdrop;
+  background: var(--color-overlay-black-80);
   display: flex;
   align-items: center;
   justify-content: center;

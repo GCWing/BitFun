@@ -3,6 +3,7 @@ import morphdomRuntime from 'morphdom/dist/morphdom-umd.js?raw';
 import { themeService } from '@/infrastructure/theme';
 import {
   createWidgetThemeFallbackCss,
+  createWidgetThemeStaticShellCss,
   readWidgetThemePayload,
   type WidgetThemePayload,
 } from './themePayload';
@@ -95,6 +96,7 @@ export const GENERATIVE_WIDGET_SHELL_HTML = `<!DOCTYPE html>
 ${createWidgetThemeFallbackCss()}
       --font-family-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       --font-family-mono: "SF Mono", Consolas, monospace;
+${createWidgetThemeStaticShellCss()}
 ${createWidgetThemeCompatibilityAliasCss()}
       --font-size-xs: 12px;
       --font-size-sm: 14px;

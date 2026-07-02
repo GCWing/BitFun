@@ -132,9 +132,9 @@
 
     .retry-button {
       padding: $size-gap-2 $size-gap-4;
-      background: $button-bg-default;
+      background: var(--element-bg-subtle);
       color: var(--color-text-secondary);
-      border: 1px solid $button-border-default;
+      border: 1px solid var(--border-subtle);
       border-radius: $size-radius-base;
       cursor: pointer;
       font-size: var(--font-size-sm);
@@ -144,7 +144,7 @@
 
       &:hover {
         background: $button-bg-hover;
-        border-color: $button-border-hover;
+        border-color: var(--border-accent);
         color: var(--color-text-primary);
         transform: translateY(-1px);
         box-shadow: $shadow-sm;

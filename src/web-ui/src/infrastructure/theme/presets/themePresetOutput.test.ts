@@ -154,7 +154,7 @@ describe('builtin theme preset output', () => {
           "type": "light",
         },
         {
-          "hash": "927454d5f286f50a52da537faa319dbf6cf8ef9b0b8165a1d785074ca237db72",
+          "hash": "c1f6fb0895d7e08ab1b5b035ea2db83690ba5eb490ed28ea59d731e9524aaa73",
           "id": "bitfun-slate",
           "type": "dark",
         },

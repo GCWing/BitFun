@@ -54,10 +54,10 @@
       "max": 0
     },
     "generatedWidgetPayload.varUnique": {
-      "max": 153
+      "max": 98
     },
     "generatedWidgetPayload.occurrences": {
-      "max": 153
+      "max": 98
     },
     "generatedWidgetPayload.undefinedUnique": {
       "max": 0
@@ -105,7 +105,7 @@
       "max": 0
     },
     "colorScopes.token.uniqueColors": {
-      "max": 209
+      "max": 205
     },
     "colorScopes.exception.uniqueColors": {
       "max": 245
@@ -153,13 +153,13 @@
       "max": 0
     },
     "colorDomainNearPairs.nearTotal": {
-      "max": 27
+      "max": 26
     },
     "colorDomainNearPairs.themePreset.indistinguishableTotal": {
       "max": 0
     },
     "colorDomainNearPairs.themePreset.nearTotal": {
-      "max": 11
+      "max": 10
     },
     "colorDomainNearPairs.themeRuntime.indistinguishableTotal": {
       "max": 0
@@ -243,13 +243,13 @@
       "max": 171
     },
     "colorDomainScopes.themePreset.uniqueColors": {
-      "max": 121
+      "max": 120
     },
     "colorDomainScopes.themeRuntime.occurrences": {
       "max": 30
     },
     "colorDomainScopes.tokenContract.occurrences": {
-      "max": 118
+      "max": 115
     },
     "colorDomainScopes.generatedWidget.occurrences": {
       "max": 0

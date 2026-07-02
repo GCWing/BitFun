@@ -488,6 +488,73 @@ test('theme color audit budgets generated widget payload compatibility families 
   assert.match(report.generatedWidgetPayload.externalOnlyCompatibility[0].removal, /Retire/);
 });
 
+test('theme color audit counts only generated widget payload groups', (t) => {
+  const { dir, sourceRoot } = createFixture({
+    'component-library/styles/tokens.scss': [
+      ':root {',
+      '  --color-bg-primary: #121214;',
+      '  --color-bg-secondary: #1c1c1f;',
+      '  --font-family-mono: monospace;',
+      '}',
+      '',
+    ].join('\n'),
+    'tools/generative-widget/themePayload.ts': [
+      'const FALLBACK_VAR = {',
+      "  bgPrimary: '--color-bg-primary',",
+      "  bgSecondary: '--color-bg-secondary',",
+      '} as const;',
+      '',
+      'const WIDGET_THEME_STATIC_SHELL_VARS = {',
+      "  '--btn-primary-bg': 'var(--color-bg-primary)',",
+      '} as const;',
+      '',
+      'const WIDGET_THEME_VAR_GROUPS = {',
+      '  background: [',
+      '    FALLBACK_VAR.bgPrimary,',
+      '    FALLBACK_VAR.bgSecondary,',
+      "    '--font-family-mono',",
+      '  ],',
+      '} as const;',
+      '',
+    ].join('\n'),
+  });
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  const result = runAudit(['--root', sourceRoot, '--json', '--no-baseline']);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+
+  const report = JSON.parse(result.stdout);
+  assert.equal(report.generatedWidgetPayload.varUnique, 3);
+  assert.equal(report.generatedWidgetPayload.undefinedUnique, 0);
+  assert.equal(report.generatedWidgetPayload.externalOnlyCompatibilityUnique, 0);
+});
+
+test('theme color audit fails closed when generated widget payload groups are not parseable', (t) => {
+  const { dir, sourceRoot } = createFixture({
+    'component-library/styles/tokens.scss': [
+      ':root {',
+      '  --color-bg-primary: #121214;',
+      '}',
+      '',
+    ].join('\n'),
+    'tools/generative-widget/themePayload.ts': [
+      'const FALLBACK_VAR = {',
+      "  bgPrimary: '--color-bg-primary',",
+      '} as const;',
+      '',
+      'const WIDGET_THEME_VAR_GROUPS = Object.freeze({',
+      '  background: [FALLBACK_VAR.bgPrimary],',
+      '});',
+      '',
+    ].join('\n'),
+  });
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  const result = runAudit(['--root', sourceRoot, '--json', '--no-baseline']);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /Unable to parse generated widget WIDGET_THEME_VAR_GROUPS/);
+});
+
 test('theme color audit reports generated widget payload compatibility aliases without canonicals', (t) => {
   const { dir, sourceRoot } = createFixture({
     'component-library/styles/tokens.scss': [

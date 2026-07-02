@@ -33,8 +33,8 @@ This directory defines BitFun component design tokens to unify colors, typograph
 
 .card {
   background: $card-bg;
-  border: 1px solid $card-border;
-  box-shadow: $card-shadow;
+  border: 1px solid var(--border-base);
+  box-shadow: var(--shadow-sm);
 }
 ```
 
