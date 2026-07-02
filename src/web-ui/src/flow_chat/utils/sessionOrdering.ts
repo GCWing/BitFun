@@ -90,15 +90,15 @@ export function compareSessionsForDisplay(
 }
 
 export function getSessionMetadataSortTimestamp(
-  session: Pick<SessionMetadata, 'createdAt' | 'customMetadata'>
+  session: Pick<SessionMetadata, 'createdAt' | 'lastFinishedAt' | 'customMetadata'>
 ): number {
-  const lastFinishedAt = session.customMetadata?.lastFinishedAt;
+  const lastFinishedAt = session.lastFinishedAt ?? session.customMetadata?.lastFinishedAt;
   return typeof lastFinishedAt === 'number' ? lastFinishedAt : session.createdAt;
 }
 
 export function compareSessionMetadataForDisplay(
-  a: Pick<SessionMetadata, 'sessionId' | 'createdAt' | 'customMetadata'>,
-  b: Pick<SessionMetadata, 'sessionId' | 'createdAt' | 'customMetadata'>
+  a: Pick<SessionMetadata, 'sessionId' | 'createdAt' | 'lastFinishedAt' | 'customMetadata'>,
+  b: Pick<SessionMetadata, 'sessionId' | 'createdAt' | 'lastFinishedAt' | 'customMetadata'>
 ): number {
   const timestampDiff = getSessionMetadataSortTimestamp(b) - getSessionMetadataSortTimestamp(a);
   if (timestampDiff !== 0) {

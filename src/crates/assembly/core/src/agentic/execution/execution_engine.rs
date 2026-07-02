@@ -3073,15 +3073,16 @@ impl ExecutionEngine {
                     dialog_turn_id
                 );
 
-                // Emit cancellation event
-                self.emit_event(
-                    AgenticEvent::DialogTurnCancelled {
-                        session_id: context.session_id.clone(),
-                        turn_id: context.dialog_turn_id.clone(),
-                    },
-                    EventPriority::High,
-                )
-                .await;
+                if context.emit_lifecycle_events {
+                    self.emit_event(
+                        AgenticEvent::DialogTurnCancelled {
+                            session_id: context.session_id.clone(),
+                            turn_id: context.dialog_turn_id.clone(),
+                        },
+                        EventPriority::High,
+                    )
+                    .await;
+                }
 
                 // Note: Token will be cleaned up when outer function exits
                 return Err(BitFunError::cancelled("Dialog cancelled"));
@@ -3271,28 +3272,29 @@ impl ExecutionEngine {
             }
         }
 
-        // Emit dialog turn completed event
-        debug!("Preparing to send DialogTurnCompleted event");
+        if context.emit_lifecycle_events {
+            debug!("Preparing to send DialogTurnCompleted event");
 
-        let _ = self
-            .event_queue
-            .enqueue(
-                AgenticEvent::DialogTurnCompleted {
-                    session_id: context.session_id.clone(),
-                    turn_id: context.dialog_turn_id.clone(),
-                    total_rounds: completed_rounds,
-                    total_tools,
-                    duration_ms,
-                    partial_recovery_reason: last_partial_recovery_reason,
-                    success: Some(success),
-                    finish_reason: Some(effective_finish_reason.to_string()),
-                    has_final_response: Some(has_final_response),
-                },
-                None,
-            )
-            .await;
+            let _ = self
+                .event_queue
+                .enqueue(
+                    AgenticEvent::DialogTurnCompleted {
+                        session_id: context.session_id.clone(),
+                        turn_id: context.dialog_turn_id.clone(),
+                        total_rounds: completed_rounds,
+                        total_tools,
+                        duration_ms,
+                        partial_recovery_reason: last_partial_recovery_reason,
+                        success: Some(success),
+                        finish_reason: Some(effective_finish_reason.to_string()),
+                        has_final_response: Some(has_final_response),
+                    },
+                    None,
+                )
+                .await;
 
-        debug!("DialogTurnCompleted event sent");
+            debug!("DialogTurnCompleted event sent");
+        }
 
         // Print dialog turn token statistics (from model's last returned usage)
         if let Some(usage) = last_usage {
@@ -3619,6 +3621,7 @@ mod tests {
             terminal_port: None,
             remote_exec_port: None,
             round_injection: None,
+            emit_lifecycle_events: true,
             recover_partial_on_cancel: false,
         };
 

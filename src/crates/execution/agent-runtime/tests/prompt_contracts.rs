@@ -13,6 +13,7 @@ fn user_context_policy_preserves_order_and_deduplicates_sections() {
         .with_workspace_instructions()
         .with_workspace_context()
         .with_project_layout()
+        .with_memory_summary()
         .without_section(UserContextSection::ProjectLayout);
 
     assert_eq!(
@@ -20,11 +21,12 @@ fn user_context_policy_preserves_order_and_deduplicates_sections() {
         vec![
             UserContextSection::WorkspaceContext,
             UserContextSection::WorkspaceInstructions,
+            UserContextSection::MemorySummary,
         ]
     );
     assert_eq!(
         policy.cache_scope_key(),
-        "workspace_context|workspace_instructions"
+        "workspace_context|workspace_instructions|memory_summary"
     );
 }
 

@@ -668,6 +668,7 @@ fn metadata_user_context_policy(metadata: &Value) -> Result<Option<UserContextPo
             "workspace_context" => UserContextSection::WorkspaceContext,
             "workspace_instructions" => UserContextSection::WorkspaceInstructions,
             "project_layout" => UserContextSection::ProjectLayout,
+            "memory_summary" => UserContextSection::MemorySummary,
             _ => {
                 return Err(CustomAgentDefinitionError::InvalidUserContextPolicy
                     .message()
@@ -753,6 +754,7 @@ fn custom_agent_markdown_metadata(definition: &CustomAgentDefinition) -> Value {
                                     "workspace_instructions"
                                 }
                                 UserContextSection::ProjectLayout => "project_layout",
+                                UserContextSection::MemorySummary => "memory_summary",
                             }
                             .to_string(),
                         )
@@ -763,4 +765,64 @@ fn custom_agent_markdown_metadata(definition: &CustomAgentDefinition) -> Value {
     }
 
     Value::Mapping(metadata)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn custom_agent_user_context_policy_round_trips_memory_summary() {
+        let definition = CustomAgentDefinition {
+            id: "memory-mode".to_string(),
+            name: "Memory Mode".to_string(),
+            description: "Test".to_string(),
+            kind: CustomAgentKind::Mode,
+            tools: vec!["Read".to_string()],
+            prompt: "Prompt".to_string(),
+            readonly: false,
+            review: false,
+            level: CustomAgentLevel::User,
+            model: "auto".to_string(),
+            user_context_policy: UserContextPolicy::empty()
+                .with_workspace_context()
+                .with_workspace_instructions()
+                .with_project_layout()
+                .with_memory_summary(),
+        };
+
+        let stamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("time should move forward")
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!("custom-agent-{stamp}.md"));
+
+        custom_agent_save_markdown_file(&path, &definition).expect("markdown should save");
+        let contents = std::fs::read_to_string(&path).expect("markdown should read");
+        let parsed = custom_agent_read_markdown_str(&contents, CustomAgentLevel::User)
+            .expect("markdown should parse");
+        let _ = std::fs::remove_file(&path);
+
+        assert!(parsed
+            .definition
+            .user_context_policy
+            .includes(UserContextSection::MemorySummary));
+    }
+
+    #[test]
+    fn metadata_user_context_policy_accepts_memory_summary() {
+        let mut yaml = serde_yaml::Mapping::new();
+        yaml.insert(
+            serde_yaml::Value::String("user_context_policy".to_string()),
+            serde_yaml::to_value(vec!["workspace_context", "memory_summary"])
+                .expect("yaml should serialize"),
+        );
+        let policy = metadata_user_context_policy(&serde_yaml::Value::Mapping(yaml))
+            .expect("policy should parse")
+            .expect("policy should exist");
+
+        assert!(policy.includes(UserContextSection::WorkspaceContext));
+        assert!(policy.includes(UserContextSection::MemorySummary));
+    }
 }

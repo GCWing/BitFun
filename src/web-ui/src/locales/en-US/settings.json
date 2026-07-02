@@ -11,7 +11,8 @@
       "sessionPersonalization": [],
       "sessionPermissions": [],
       "quickActions": [],
-      "review": []
+      "review": [],
+      "memories": []
     },
     "tabDescriptions": {
       "basics": "Logging, terminal shell, notifications, and launch at login.",
@@ -21,6 +22,7 @@
       "sessionPermissions": "Accelerated workspace search, tool confirmation, Computer use, browser, and debug.",
       "quickActions": "One-click AI actions after coding. Built-in and customizable prompts.",
       "review": "Deep Review strategy, reviewer models, and extra Review Sub-Agents.",
+      "memories": "Automatic memory generation, injection, retention windows, and memory models.",
       "mcpTools": "MCP servers and tool integrations.",
       "acpAgents": "External ACP agents such as opencode, Claude Code, and Codex.",
       "editor": "Editor font, display, and formatting.",
@@ -41,6 +43,7 @@
       "sessionPermissions": "Permissions",
       "quickActions": "Quick Actions",
       "review": "Review",
+      "memories": "Memory",
       "skills": "Skills",
       "mcpTools": "MCP",
       "acpAgents": "ACP Agents",

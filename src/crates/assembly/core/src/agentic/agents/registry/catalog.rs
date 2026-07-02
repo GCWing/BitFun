@@ -7,6 +7,7 @@ use crate::agentic::agents::{
     MultitaskMode, PerformanceReviewerAgent, PlanMode, ResearchSpecialistAgent, ReviewFixerAgent,
     ReviewJudgeAgent, SecurityReviewerAgent, TeamMode,
 };
+use crate::agentic::memories::MemoryPhase2Agent;
 use bitfun_agent_runtime::agents as runtime_agents;
 use std::sync::Arc;
 
@@ -53,6 +54,7 @@ fn builtin_agent_factory(id: &str) -> fn() -> Arc<dyn Agent> {
         "CodeReview" => || Arc::new(CodeReviewAgent::new()),
         "DeepReview" => || Arc::new(DeepReviewAgent::new()),
         "GenerateDoc" => || Arc::new(GenerateDocAgent::new()),
+        "MemoryPhase2" => || Arc::new(MemoryPhase2Agent::new()),
         _ => panic!("missing legacy Agent factory for builtin agent {id}"),
     }
 }

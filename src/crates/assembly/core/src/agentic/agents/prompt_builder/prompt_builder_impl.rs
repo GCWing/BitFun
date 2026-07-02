@@ -1,11 +1,13 @@
 //! System prompts module providing main dialogue and agent dialogue prompts
+use crate::agentic::memories::build_memory_read_path_reminder;
+use crate::agentic::memories::workspace::memory_root_dir;
 use crate::agentic::tools::implementations::ExecCommandTool;
 use crate::agentic::util::remote_workspace_layout::build_remote_workspace_layout_preview;
 use crate::agentic::workspace::WorkspaceBackend;
 use crate::agentic::WorkspaceBinding;
 use crate::service::bootstrap::build_workspace_persona_prompt;
-use crate::service::config::get_app_language_code;
 use crate::service::config::global::GlobalConfigManager;
+use crate::service::config::{get_app_language_code, get_global_config_service};
 use crate::service::filesystem::get_formatted_directory_listing;
 use crate::service::i18n::LocaleId;
 use crate::service::instruction_context::build_workspace_instruction_files_context;
@@ -20,7 +22,7 @@ use bitfun_agent_runtime::prompt::{
     ToolListingSections, UserContextPolicy, UserContextSection, WorkspaceContextFacts,
 };
 use bitfun_agent_runtime::remote_file_delivery::user_workspace_relative_file_link;
-use log::{debug, warn};
+use log::{debug, info, warn};
 use std::path::Path;
 
 /// Placeholder constants
@@ -30,6 +32,7 @@ const PLACEHOLDER_CLAW_WORKSPACE: &str = "{CLAW_WORKSPACE}";
 const PLACEHOLDER_VISUAL_MODE: &str = "{VISUAL_MODE}";
 const PLACEHOLDER_SESSION_ID: &str = "{SESSION_ID}";
 const PLACEHOLDER_DEEP_RESEARCH_REPORT_LINK: &str = "{DEEP_RESEARCH_REPORT_LINK}";
+const PLACEHOLDER_MEMORY_ROOT: &str = "{MEMORY_ROOT}";
 
 #[derive(Debug, Clone)]
 pub struct PromptBuilderContext {
@@ -326,6 +329,45 @@ impl PromptBuilder {
             }
         }
 
+        let memory_section_allowed = self.context.remote_execution.is_none()
+            && policy.includes(UserContextSection::MemorySummary);
+        if memory_section_allowed {
+            let enabled = memory_summary_enabled().await;
+            info!(
+                "Memory prompt injection evaluated: session_id={:?}, workspace_path={}, use_memories={}, remote_execution=false",
+                self.context.session_id,
+                self.context.workspace_path,
+                enabled
+            );
+            if enabled {
+                let memory_root = memory_root_dir();
+                if let Some(memory_read_path) = build_memory_read_path_reminder(&memory_root).await
+                {
+                    info!(
+                        "Memory prompt injection added: session_id={:?}, memory_root={}, reminder_bytes={}",
+                        self.context.session_id,
+                        memory_root.display(),
+                        memory_read_path.len()
+                    );
+                    additional_sections.push(memory_read_path);
+                } else {
+                    info!(
+                        "Memory prompt injection skipped because no reminder was available: session_id={:?}, memory_root={}",
+                        self.context.session_id,
+                        memory_root.display()
+                    );
+                }
+            }
+        } else {
+            debug!(
+                "Memory prompt injection not eligible: session_id={:?}, workspace_path={}, remote_execution={}, policy_includes_memory={}",
+                self.context.session_id,
+                self.context.workspace_path,
+                self.context.remote_execution.is_some(),
+                policy.includes(UserContextSection::MemorySummary)
+            );
+        }
+
         if policy.includes(UserContextSection::ProjectLayout) {
             additional_sections.push(self.get_project_layout());
         }
@@ -411,6 +453,7 @@ Do not read from, modify, create, move, or delete files outside this workspace u
     /// - `{LANGUAGE_PREFERENCE}` - User language preference (read from global config)
     /// - `{CLAW_WORKSPACE}` - Claw-specific workspace ownership and boundary rules
     /// - `{VISUAL_MODE}` - Visual mode instruction (Mermaid diagrams, read from global config)
+    /// - `{MEMORY_ROOT}` - BitFun memory workspace root, used by internal memory agents
     ///
     /// If a placeholder is not in the template, corresponding content will not be added
     pub async fn build_prompt_from_template(&self, template: &str) -> BitFunResult<String> {
@@ -483,7 +526,26 @@ Do not read from, modify, create, move, or delete files outside this workspace u
             result = result.replace(PLACEHOLDER_DEEP_RESEARCH_REPORT_LINK, &report_link);
         }
 
+        if result.contains(PLACEHOLDER_MEMORY_ROOT) {
+            let memory_root = memory_root_dir();
+            result = result.replace(
+                PLACEHOLDER_MEMORY_ROOT,
+                &memory_root.to_string_lossy().replace('\\', "/"),
+            );
+        }
+
         Ok(result.trim().to_string())
+    }
+}
+
+async fn memory_summary_enabled() -> bool {
+    match get_global_config_service().await {
+        Ok(service) => service
+            .get_config(None)
+            .await
+            .map(|config: crate::service::config::types::GlobalConfig| config.memories.use_memories)
+            .unwrap_or(true),
+        Err(_) => true,
     }
 }
 
@@ -770,6 +832,24 @@ mod tests {
             prompt,
             "[View full report](computer://.bitfun/sessions/session-1/research/report.md)"
         );
+    }
+
+    #[tokio::test]
+    async fn memory_summary_is_skipped_for_remote_workspace() {
+        let context = PromptBuilderContext::new("/workspace/project", None, None)
+            .with_remote_prompt_overlay(
+                RemoteExecutionHints {
+                    connection_display_name: "dev-server".to_string(),
+                    kernel_name: "Linux".to_string(),
+                    hostname: "devbox".to_string(),
+                },
+                None,
+            );
+        let reminder = PromptBuilder::new(context)
+            .build_user_context_reminder(&UserContextPolicy::empty().with_memory_summary())
+            .await;
+
+        assert!(reminder.is_none());
     }
 
     #[test]

@@ -99,6 +99,29 @@ export interface SessionInfo {
   createdAt: number;
 }
 
+export type SessionMemoryMode = 'enabled' | 'disabled' | 'polluted';
+
+export interface SetSessionMemoryModeRequest {
+  sessionId: string;
+  mode: Exclude<SessionMemoryMode, 'polluted'>;
+  workspacePath?: string;
+  remoteConnectionId?: string;
+  remoteSshHost?: string;
+}
+
+export interface SetSessionMemoryModeResponse {
+  success: boolean;
+  mode: SessionMemoryMode;
+}
+
+export interface ResetMemoryResponse {
+  success: boolean;
+}
+
+export interface MemoryPathsResponse {
+  memoriesRootDir: string;
+}
+
 export interface RestoreSessionWithTurnsResponse {
   session: SessionInfo;
   turns: DialogTurnData[];
@@ -712,6 +735,34 @@ export class AgentAPI {
       });
     } catch (error) {
       throw createTauriCommandError('restore_session_view', error, { sessionId, workspacePath });
+    }
+  }
+
+  async setSessionMemoryMode(
+    request: SetSessionMemoryModeRequest
+  ): Promise<SetSessionMemoryModeResponse> {
+    try {
+      return await api.invoke<SetSessionMemoryModeResponse>('set_session_memory_mode', {
+        request,
+      });
+    } catch (error) {
+      throw createTauriCommandError('set_session_memory_mode', error, request);
+    }
+  }
+
+  async resetMemory(): Promise<ResetMemoryResponse> {
+    try {
+      return await api.invoke<ResetMemoryResponse>('reset_memory');
+    } catch (error) {
+      throw createTauriCommandError('reset_memory', error);
+    }
+  }
+
+  async getMemoryPaths(): Promise<MemoryPathsResponse> {
+    try {
+      return await api.invoke<MemoryPathsResponse>('get_memory_paths');
+    } catch (error) {
+      throw createTauriCommandError('get_memory_paths', error);
     }
   }
 

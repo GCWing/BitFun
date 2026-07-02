@@ -14,6 +14,7 @@ export type ConfigTab =
   | 'session-permissions'
   | 'quick-actions'
   | 'review'
+  | 'memories'
   | 'mcp-tools'
   | 'acp-agents'
   // | 'lsp' // temporarily hidden from config center
@@ -191,6 +192,21 @@ export const SETTINGS_CATEGORIES: ConfigCategoryDef[] = [
           'subagent',
           'readonly',
           'audit',
+        ],
+      },
+      {
+        id: 'memories',
+        labelKey: 'configCenter.tabs.memories',
+        descriptionKey: 'configCenter.tabDescriptions.memories',
+        keywords: [
+          'memory',
+          'memories',
+          'remember',
+          'recall',
+          'consolidation',
+          'rollout',
+          'learning',
+          'knowledge',
         ],
       },
       {

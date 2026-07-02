@@ -76,6 +76,7 @@ impl Agent for ClawMode {
         UserContextPolicy::empty()
             .with_workspace_context()
             .with_workspace_instructions()
+            .with_memory_summary()
     }
 
     fn is_readonly(&self) -> bool {
@@ -87,10 +88,18 @@ impl Agent for ClawMode {
 mod tests {
     use super::ClawMode;
     use crate::agentic::agents::Agent;
+    use bitfun_agent_runtime::prompt::UserContextSection;
 
     #[test]
     fn claw_mode_includes_init_miniapp_in_default_tools() {
         let tools = ClawMode::new().default_tools();
         assert!(tools.contains(&"InitMiniApp".to_string()));
+    }
+
+    #[test]
+    fn claw_mode_user_context_policy_includes_memory_summary() {
+        assert!(ClawMode::new()
+            .user_context_policy()
+            .includes(UserContextSection::MemorySummary));
     }
 }

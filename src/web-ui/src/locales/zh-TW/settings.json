@@ -11,7 +11,8 @@
       "sessionPersonalization": ["夥伴", "個性化"],
       "sessionPermissions": ["權限"],
       "quickActions": ["快捷動作", "提交"],
-      "review": ["審核", "程式碼審核"]
+      "review": ["審核", "程式碼審核"],
+      "memories": ["記憶", "長期記憶", "學習"]
     },
     "tabDescriptions": {
       "basics": "日誌、終端 Shell、通知與開機啟動。",
@@ -20,6 +21,7 @@
       "sessionPersonalization": "會話標題與 Agent 夥伴。",
       "sessionPermissions": "加速工作區搜尋、工具確認與逾時、Computer use、瀏覽器與偵錯。",
       "review": "深度審核策略、審核員模型與額外審核 Sub-Agent。",
+      "memories": "自動記憶生成、注入、整理窗口與記憶模型。",
       "mcpTools": "MCP 伺服器與工具集成。",
       "acpAgents": "opencode、Claude Code、Codex 等外部 ACP Agent。",
       "editor": "編輯器字體、顯示與格式化。",
@@ -40,6 +42,7 @@
       "sessionPersonalization": "個性化",
       "sessionPermissions": "權限管理",
       "review": "審核",
+      "memories": "記憶",
       "skills": "技能",
       "mcpTools": "MCP",
       "acpAgents": "ACP Agent",

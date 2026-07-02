@@ -451,6 +451,7 @@ pub enum UserContextSection {
     WorkspaceContext,
     WorkspaceInstructions,
     ProjectLayout,
+    MemorySummary,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -489,6 +490,10 @@ impl UserContextPolicy {
         self.with_section(UserContextSection::ProjectLayout)
     }
 
+    pub fn with_memory_summary(self) -> Self {
+        self.with_section(UserContextSection::MemorySummary)
+    }
+
     pub fn includes(&self, section: UserContextSection) -> bool {
         self.sections.contains(&section)
     }
@@ -518,6 +523,7 @@ impl UserContextSection {
             Self::WorkspaceContext => "workspace_context",
             Self::WorkspaceInstructions => "workspace_instructions",
             Self::ProjectLayout => "project_layout",
+            Self::MemorySummary => "memory_summary",
         }
     }
 }

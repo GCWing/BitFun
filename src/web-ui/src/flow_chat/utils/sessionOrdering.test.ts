@@ -81,13 +81,22 @@ describe('sessionOrdering', () => {
   it('sorts persisted metadata by lastFinishedAt before createdAt without using lastActiveAt', () => {
     const metadata = [
       { sessionId: 'older-new', createdAt: 1000, lastActiveAt: 9000 },
-      { sessionId: 'completed', createdAt: 500, lastActiveAt: 600, customMetadata: { lastFinishedAt: 3000 } },
+      { sessionId: 'completed', createdAt: 500, lastActiveAt: 600, lastFinishedAt: 3000 },
       { sessionId: 'newest-new', createdAt: 2000, lastActiveAt: 2500 },
     ];
 
     expect(getSessionMetadataSortTimestamp(metadata[0])).toBe(1000);
     const orderedIds = [...metadata].sort(compareSessionMetadataForDisplay).map(session => session.sessionId);
     expect(orderedIds).toEqual(['completed', 'newest-new', 'older-new']);
+  });
+
+  it('falls back to legacy customMetadata lastFinishedAt for persisted metadata sorting', () => {
+    expect(getSessionMetadataSortTimestamp({
+      sessionId: 'legacy-completed',
+      createdAt: 500,
+      lastActiveAt: 600,
+      customMetadata: { lastFinishedAt: 3000 },
+    })).toBe(3000);
   });
 
   it('remote SSH: same host but different remote root does not share nav row', () => {

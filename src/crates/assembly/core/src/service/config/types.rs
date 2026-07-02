@@ -54,6 +54,8 @@ pub struct GlobalConfig {
     pub terminal: TerminalConfig,
     pub workspace: WorkspaceConfig,
     pub ai: AIConfig,
+    #[serde(default)]
+    pub memories: MemoriesConfig,
     /// Project-scoped overlays stored in the shared config document.
     #[serde(default, skip_serializing_if = "ProjectConfig::is_empty")]
     pub project: ProjectConfig,
@@ -571,6 +573,58 @@ pub enum SubagentBatchExecutionPolicy {
     Serial,
 }
 
+/// Automatic memory subsystem configuration.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum MemoryExternalContextPolicy {
+    /// Keep sessions that used external context tools, but clear those tool results in Phase 1.
+    #[default]
+    ClearToolResults,
+    /// Keep sessions and tool results as-is.
+    Allow,
+    /// Mark sessions that used external context tools as polluted and skip extraction.
+    SkipSession,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(default)]
+pub struct MemoriesConfig {
+    /// Enables automatic Phase 1 extraction and Phase 2 consolidation.
+    pub generate_memories: bool,
+    /// Enables prompt injection of the consolidated memory summary.
+    pub use_memories: bool,
+    /// Controls how sessions that used external context tools are handled.
+    pub external_context_policy: MemoryExternalContextPolicy,
+    /// Maximum number of stage-1 outputs selected for phase-2 consolidation.
+    pub max_raw_memories_for_consolidation: usize,
+    /// Maximum age in days for a stage-1 output to stay eligible for phase-2 reuse.
+    pub max_unused_days: i64,
+    /// Maximum age in days for a source session to be considered by Phase 1.
+    pub max_rollout_age_days: i64,
+    /// Maximum source sessions claimed for extraction per memory startup pass.
+    pub max_rollouts_per_startup: usize,
+    /// Maximum source sessions scanned while looking for extraction candidates per memory startup pass.
+    pub max_rollouts_scan_limit: usize,
+    /// Minimum idle time in hours before a source session can be extracted.
+    pub min_rollout_idle_hours: i64,
+    /// Maximum number of concurrent Phase 1 extraction jobs.
+    pub phase1_max_concurrency: usize,
+    /// Retry backoff after a failed Phase 1 extraction.
+    pub phase1_retry_backoff_minutes: i64,
+    /// Lease duration for claimed Phase 1 jobs.
+    pub phase1_lease_seconds: i64,
+    /// Lease duration for the global Phase 2 consolidation job.
+    pub phase2_lease_seconds: i64,
+    /// Phase-2 consolidation cooldown in seconds after a successful run.
+    pub phase2_success_cooldown_seconds: i64,
+    /// Phase-2 retry delay in seconds after a failed run.
+    pub phase2_retry_delay_seconds: i64,
+    /// Optional model selector for Phase 1 extraction.
+    pub extract_model: Option<String>,
+    /// Optional model selector for Phase 2 consolidation.
+    pub consolidation_model: Option<String>,
+}
+
 impl AIConfig {
     /// Resolves a configured model reference by `id`, `name`, or `model_name`.
     ///
@@ -714,6 +768,54 @@ fn default_skip_tool_confirmation() -> bool {
 
 fn default_subagent_max_concurrency() -> usize {
     5
+}
+
+fn default_memory_max_raw_memories_for_consolidation() -> usize {
+    64
+}
+
+fn default_memory_max_unused_days() -> i64 {
+    30
+}
+
+fn default_memory_max_rollout_age_days() -> i64 {
+    10
+}
+
+fn default_memory_max_rollouts_per_startup() -> usize {
+    5
+}
+
+fn default_memory_max_rollouts_scan_limit() -> usize {
+    2_000
+}
+
+fn default_memory_min_rollout_idle_hours() -> i64 {
+    6
+}
+
+fn default_memory_phase1_max_concurrency() -> usize {
+    1
+}
+
+fn default_memory_phase1_retry_backoff_minutes() -> i64 {
+    60
+}
+
+fn default_memory_phase1_lease_seconds() -> i64 {
+    60 * 60
+}
+
+fn default_memory_phase2_lease_seconds() -> i64 {
+    60 * 60
+}
+
+fn default_memory_phase2_success_cooldown_seconds() -> i64 {
+    6 * 60 * 60
+}
+
+fn default_memory_phase2_retry_delay_seconds() -> i64 {
+    60 * 60
 }
 
 fn default_subagent_batch_execution_policy() -> SubagentBatchExecutionPolicy {
@@ -1250,6 +1352,7 @@ impl Default for GlobalConfig {
             terminal: TerminalConfig::default(),
             workspace: WorkspaceConfig::default(),
             ai: AIConfig::default(),
+            memories: MemoriesConfig::default(),
             project: ProjectConfig::default(),
             mcp_servers: None,
             acp_clients: None,
@@ -1444,6 +1547,30 @@ impl Default for AIConfig {
             computer_use_enabled: false,
             browser_control_preferred_browser: String::new(),
             max_rounds: default_max_rounds(),
+        }
+    }
+}
+
+impl Default for MemoriesConfig {
+    fn default() -> Self {
+        Self {
+            generate_memories: true,
+            use_memories: true,
+            external_context_policy: MemoryExternalContextPolicy::ClearToolResults,
+            max_raw_memories_for_consolidation: default_memory_max_raw_memories_for_consolidation(),
+            max_unused_days: default_memory_max_unused_days(),
+            max_rollout_age_days: default_memory_max_rollout_age_days(),
+            max_rollouts_per_startup: default_memory_max_rollouts_per_startup(),
+            max_rollouts_scan_limit: default_memory_max_rollouts_scan_limit(),
+            min_rollout_idle_hours: default_memory_min_rollout_idle_hours(),
+            phase1_max_concurrency: default_memory_phase1_max_concurrency(),
+            phase1_retry_backoff_minutes: default_memory_phase1_retry_backoff_minutes(),
+            phase1_lease_seconds: default_memory_phase1_lease_seconds(),
+            phase2_lease_seconds: default_memory_phase2_lease_seconds(),
+            phase2_success_cooldown_seconds: default_memory_phase2_success_cooldown_seconds(),
+            phase2_retry_delay_seconds: default_memory_phase2_retry_delay_seconds(),
+            extract_model: None,
+            consolidation_model: None,
         }
     }
 }
@@ -1657,7 +1784,8 @@ impl AIModelConfig {
 mod tests {
     use super::{
         AIConfig, AIExperienceConfig, AIModelConfig, AppLoggingConfig, GlobalConfig,
-        ModelExchangeTracingMode, ReasoningMode, SubagentBatchExecutionPolicy,
+        MemoryExternalContextPolicy, ModelExchangeTracingMode, ReasoningMode,
+        SubagentBatchExecutionPolicy,
     };
 
     #[test]
@@ -1972,6 +2100,82 @@ mod tests {
         assert!(review_team.member_strategy_overrides.is_empty());
         assert_eq!(config.review_team_rate_limit_status, serde_json::json!({}));
         assert!(config.review_team_project_strategy_overrides.is_empty());
+    }
+
+    #[test]
+    fn default_global_config_includes_enabled_memories_config() {
+        let config = GlobalConfig::default();
+
+        assert!(config.memories.generate_memories);
+        assert!(config.memories.use_memories);
+        assert_eq!(
+            config.memories.external_context_policy,
+            MemoryExternalContextPolicy::ClearToolResults
+        );
+        assert_eq!(config.memories.max_raw_memories_for_consolidation, 64);
+        assert_eq!(config.memories.max_unused_days, 30);
+        assert_eq!(config.memories.max_rollout_age_days, 10);
+        assert_eq!(config.memories.max_rollouts_per_startup, 5);
+        assert_eq!(config.memories.max_rollouts_scan_limit, 2_000);
+        assert_eq!(config.memories.min_rollout_idle_hours, 6);
+        assert_eq!(config.memories.phase1_max_concurrency, 1);
+        assert_eq!(config.memories.phase1_retry_backoff_minutes, 60);
+        assert_eq!(config.memories.phase1_lease_seconds, 60 * 60);
+        assert_eq!(config.memories.phase2_lease_seconds, 60 * 60);
+        assert_eq!(config.memories.phase2_success_cooldown_seconds, 6 * 60 * 60);
+        assert_eq!(config.memories.phase2_retry_delay_seconds, 60 * 60);
+        assert_eq!(config.memories.extract_model, None);
+        assert_eq!(config.memories.consolidation_model, None);
+    }
+
+    #[test]
+    fn deserializes_explicit_memories_config() {
+        let config: GlobalConfig = serde_json::from_value(serde_json::json!({
+            "memories": {
+                "generate_memories": false,
+                "use_memories": false,
+                "external_context_policy": "skip_session",
+                "max_raw_memories_for_consolidation": 12,
+                "max_unused_days": 7,
+                "max_rollout_age_days": 14,
+                "max_rollouts_per_startup": 8,
+                "max_rollouts_scan_limit": 200,
+                "min_rollout_idle_hours": 12,
+                "phase1_max_concurrency": 3,
+                "phase1_retry_backoff_minutes": 45,
+                "phase1_lease_seconds": 600,
+                "phase2_lease_seconds": 1200,
+                "phase2_success_cooldown_seconds": 7200,
+                "phase2_retry_delay_seconds": 300,
+                "extract_model": "extractor",
+                "consolidation_model": "consolidator"
+            }
+        }))
+        .expect("global config with memories section should deserialize");
+
+        assert!(!config.memories.generate_memories);
+        assert!(!config.memories.use_memories);
+        assert_eq!(
+            config.memories.external_context_policy,
+            MemoryExternalContextPolicy::SkipSession
+        );
+        assert_eq!(config.memories.max_raw_memories_for_consolidation, 12);
+        assert_eq!(config.memories.max_unused_days, 7);
+        assert_eq!(config.memories.max_rollout_age_days, 14);
+        assert_eq!(config.memories.max_rollouts_per_startup, 8);
+        assert_eq!(config.memories.max_rollouts_scan_limit, 200);
+        assert_eq!(config.memories.min_rollout_idle_hours, 12);
+        assert_eq!(config.memories.phase1_max_concurrency, 3);
+        assert_eq!(config.memories.phase1_retry_backoff_minutes, 45);
+        assert_eq!(config.memories.phase1_lease_seconds, 600);
+        assert_eq!(config.memories.phase2_lease_seconds, 1200);
+        assert_eq!(config.memories.phase2_success_cooldown_seconds, 7200);
+        assert_eq!(config.memories.phase2_retry_delay_seconds, 300);
+        assert_eq!(config.memories.extract_model.as_deref(), Some("extractor"));
+        assert_eq!(
+            config.memories.consolidation_model.as_deref(),
+            Some("consolidator")
+        );
     }
 
     #[test]

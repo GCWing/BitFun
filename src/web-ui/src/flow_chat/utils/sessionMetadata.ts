@@ -23,6 +23,9 @@ const TITLE_METADATA_KEYS = new Set([
   'titleKey',
   'titleParams',
 ]);
+const TOP_LEVEL_METADATA_KEYS = new Set([
+  'lastFinishedAt',
+]);
 
 type SessionRelationshipInput = Pick<
   Session,
@@ -199,9 +202,9 @@ export function isLegacyPersistedBtwSession(
 }
 
 export function deriveLastFinishedAtFromMetadata(
-  metadata?: Pick<SessionMetadata, 'customMetadata'> | null
+  metadata?: Pick<SessionMetadata, 'lastFinishedAt' | 'customMetadata'> | null
 ): number | undefined {
-  const value = metadata?.customMetadata?.lastFinishedAt;
+  const value = metadata?.lastFinishedAt ?? metadata?.customMetadata?.lastFinishedAt;
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
@@ -240,12 +243,14 @@ function buildSessionCustomMetadata(
   const nextCustomMetadata: SessionCustomMetadata = {};
 
   for (const [key, value] of Object.entries(existingCustomMetadata || {})) {
-    if (!RELATIONSHIP_METADATA_KEYS.has(key) && !TITLE_METADATA_KEYS.has(key)) {
+    if (
+      !RELATIONSHIP_METADATA_KEYS.has(key) &&
+      !TITLE_METADATA_KEYS.has(key) &&
+      !TOP_LEVEL_METADATA_KEYS.has(key)
+    ) {
       nextCustomMetadata[key] = value;
     }
   }
-
-  nextCustomMetadata.lastFinishedAt = session.lastFinishedAt ?? null;
 
   // Default untitled sessions persist their title template so locale changes can
   // re-render them until the first real title is generated or the user renames it.
@@ -381,6 +386,7 @@ export function buildSessionMetadata(
       session.config.modelName || existingMetadata?.modelName || 'auto',
     createdAt: existingMetadata?.createdAt ?? session.createdAt,
     lastActiveAt: Date.now(),
+    lastFinishedAt: session.lastFinishedAt ?? null,
     turnCount: Math.max(stats.turnCount, existingMetadata?.turnCount ?? 0),
     messageCount: Math.max(
       stats.messageCount,

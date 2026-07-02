@@ -29,6 +29,7 @@ use crate::agentic::goal_mode::{
     ThreadGoalStore,
 };
 use crate::agentic::image_analysis::ImageContextData;
+use crate::agentic::memories::{start_memory_startup_task, MemoryStartupRequest};
 use crate::agentic::round_preempt::DialogRoundInjectionSource;
 use crate::agentic::session::session_store_port::CoreSessionStorePort;
 use crate::agentic::session::SessionManager;
@@ -49,7 +50,7 @@ use crate::service::bootstrap::{
 };
 use crate::service::config::global::GlobalConfigManager;
 use crate::service::remote_ssh::normalize_remote_workspace_path;
-use crate::service::session::{SessionRelationship, SessionRelationshipKind};
+use crate::service::session::{SessionMemoryMode, SessionRelationship, SessionRelationshipKind};
 use crate::service::workspace::{
     get_global_workspace_service, WorkspaceCreateOptions, WorkspaceKind,
 };
@@ -111,6 +112,21 @@ pub(crate) struct SubagentExecutionRequest {
     pub(crate) context: HashMap<String, String>,
     /// Execution policy for the child subagent session being launched.
     pub(crate) delegation_policy: DelegationPolicy,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct InternalAgentExecutionRequest {
+    pub(crate) task_description: String,
+    pub(crate) agent_type: String,
+    pub(crate) session_name: String,
+    pub(crate) workspace_path: String,
+    pub(crate) model_id: Option<String>,
+    pub(crate) created_by: Option<String>,
+    pub(crate) context: HashMap<String, String>,
+    pub(crate) delegation_policy: DelegationPolicy,
+    pub(crate) runtime_tool_restrictions: ToolRuntimeRestrictions,
+    pub(crate) session_kind: SessionKind,
+    pub(crate) emit_lifecycle_events: bool,
 }
 
 struct WrappedUserInputPayload {
@@ -239,6 +255,8 @@ struct HiddenSubagentExecutionRequest {
     delegation_policy: DelegationPolicy,
     runtime_tool_restrictions: ToolRuntimeRestrictions,
     prompt_cache_source_session_id: Option<String>,
+    session_kind: SessionKind,
+    emit_lifecycle_events: bool,
 }
 
 pub use bitfun_runtime_ports::DialogTriggerSource;
@@ -1349,6 +1367,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .load_session_metadata(&workspace_path_buf, session_id)
             .await
         {
+            let memory_mode = new_session_memory_mode_from_global_config().await;
             let metadata = SessionMetadata {
                 session_id: session_id.to_string(),
                 session_name: "Recovered Session".to_string(),
@@ -1357,9 +1376,11 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 last_submitted_agent_type: None,
                 created_by: None,
                 session_kind: SessionKind::Standard,
+                memory_mode,
                 model_name: "default".to_string(),
                 created_at: now_ms,
                 last_active_at: now_ms,
+                last_finished_at: None,
                 turn_count: 0,
                 message_count: 0,
                 tool_call_count: 0,
@@ -1502,29 +1523,32 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         scheduler_notify_tx: Option<&mpsc::Sender<(String, TurnOutcome)>>,
         session_id: &str,
         turn_id: &str,
+        emit_lifecycle_events: bool,
     ) -> crate::service::session::TurnStatus {
         info!(
             "Dialog turn cancelled: session={}, turn={}",
             session_id, turn_id
         );
 
-        // The execution engine only emits DialogTurnCancelled when cancellation is
-        // detected between rounds. If cancellation interrupted streaming mid-round,
-        // no event was emitted. Emit it here unconditionally; duplicates are harmless.
-        if let Err(error) = event_queue
-            .enqueue(
-                AgenticEvent::DialogTurnCancelled {
-                    session_id: session_id.to_string(),
-                    turn_id: turn_id.to_string(),
-                },
-                Some(EventPriority::Critical),
-            )
-            .await
-        {
-            error!(
-                "Failed to emit DialogTurnCancelled event: session_id={}, turn_id={}, error={}",
-                session_id, turn_id, error
-            );
+        if emit_lifecycle_events {
+            // The execution engine only emits DialogTurnCancelled when cancellation is
+            // detected between rounds. If cancellation interrupted streaming mid-round,
+            // no event was emitted. Emit it here unconditionally; duplicates are harmless.
+            if let Err(error) = event_queue
+                .enqueue(
+                    AgenticEvent::DialogTurnCancelled {
+                        session_id: session_id.to_string(),
+                        turn_id: turn_id.to_string(),
+                    },
+                    Some(EventPriority::Critical),
+                )
+                .await
+            {
+                error!(
+                    "Failed to emit DialogTurnCancelled event: session_id={}, turn_id={}, error={}",
+                    session_id, turn_id, error
+                );
+            }
         }
 
         if let Err(error) = session_manager
@@ -1580,29 +1604,32 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         session_id: &str,
         turn_id: &str,
         error: &BitFunError,
+        emit_lifecycle_events: bool,
     ) -> crate::service::session::TurnStatus {
         let error_text = error.to_string();
         let recoverable = !matches!(error, BitFunError::AIClient(_) | BitFunError::Timeout(_));
 
         error!("Dialog turn execution failed: {}", error_text);
 
-        if let Err(queue_error) = event_queue
-            .enqueue(
-                AgenticEvent::DialogTurnFailed {
-                    session_id: session_id.to_string(),
-                    turn_id: turn_id.to_string(),
-                    error: error_text.clone(),
-                    error_category: Some(error.error_category()),
-                    error_detail: Some(error.error_detail()),
-                },
-                Some(EventPriority::Critical),
-            )
-            .await
-        {
-            error!(
-                "Failed to emit DialogTurnFailed event: session_id={}, turn_id={}, error={}",
-                session_id, turn_id, queue_error
-            );
+        if emit_lifecycle_events {
+            if let Err(queue_error) = event_queue
+                .enqueue(
+                    AgenticEvent::DialogTurnFailed {
+                        session_id: session_id.to_string(),
+                        turn_id: turn_id.to_string(),
+                        error: error_text.clone(),
+                        error_category: Some(error.error_category()),
+                        error_detail: Some(error.error_detail()),
+                    },
+                    Some(EventPriority::Critical),
+                )
+                .await
+            {
+                error!(
+                    "Failed to emit DialogTurnFailed event: session_id={}, turn_id={}, error={}",
+                    session_id, turn_id, queue_error
+                );
+            }
         }
 
         if let Err(persist_error) = session_manager
@@ -1709,6 +1736,26 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         config: SessionConfig,
         created_by: Option<String>,
     ) -> BitFunResult<Session> {
+        self.create_hidden_agent_session(
+            session_id,
+            session_name,
+            agent_type,
+            config,
+            created_by,
+            SessionKind::Subagent,
+        )
+        .await
+    }
+
+    async fn create_hidden_agent_session(
+        &self,
+        session_id: Option<String>,
+        session_name: String,
+        agent_type: String,
+        config: SessionConfig,
+        created_by: Option<String>,
+        kind: SessionKind,
+    ) -> BitFunResult<Session> {
         self.session_manager
             .create_session_with_id_and_details(
                 session_id,
@@ -1716,7 +1763,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 agent_type,
                 config,
                 created_by,
-                SessionKind::Subagent,
+                kind,
             )
             .await
     }
@@ -2769,6 +2816,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             terminal_port: self.terminal_port(),
             remote_exec_port: self.remote_exec_port(),
             round_injection: None,
+            emit_lifecycle_events: true,
             recover_partial_on_cancel: false,
         };
         let session_max_tokens = session.config.max_context_tokens;
@@ -3098,6 +3146,10 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         }
 
         let original_user_input = original_user_input.unwrap_or_else(|| user_input.clone());
+        let has_user_input = !original_user_input.trim().is_empty()
+            || image_contexts
+                .as_ref()
+                .is_some_and(|images| !images.is_empty());
 
         let mut user_message_metadata = extra_user_message_metadata;
 
@@ -3221,6 +3273,22 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 user_message_metadata.clone(),
             )
             .await?;
+        start_memory_startup_task(MemoryStartupRequest {
+            session_id: session_id.clone(),
+            session_kind: session.kind,
+            agent_type: effective_agent_type.clone(),
+            workspace_path: session
+                .config
+                .workspace_path
+                .clone()
+                .or(workspace_path.clone()),
+            is_remote_workspace: session_workspace
+                .as_ref()
+                .map(|workspace| workspace.is_remote())
+                .unwrap_or(false),
+            has_user_input,
+        })
+        .await;
         if let Ok(Some(goal)) = self.load_active_thread_goal(&session_id).await {
             if !should_skip_goal_for_turn(&original_user_input, user_message_metadata.as_ref()) {
                 self.thread_goal_runtime
@@ -3394,6 +3462,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             terminal_port: self.terminal_port(),
             remote_exec_port: self.remote_exec_port(),
             round_injection: self.round_injection_source.get().cloned(),
+            emit_lifecycle_events: true,
             recover_partial_on_cancel: false,
         };
 
@@ -3555,6 +3624,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                                 scheduler_notify_tx.as_ref(),
                                 &session_id_clone,
                                 &turn_id_clone,
+                                true,
                             )
                             .await,
                         )
@@ -3567,6 +3637,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                                 &session_id_clone,
                                 &turn_id_clone,
                                 &e,
+                                true,
                             )
                             .await,
                         )
@@ -3690,6 +3761,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             None,
             &active.subagent_session_id,
             &active.subagent_dialog_turn_id,
+            true,
         )
         .await;
 
@@ -4532,6 +4604,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             delegation_policy,
             runtime_tool_restrictions,
             prompt_cache_source_session_id,
+            session_kind,
+            emit_lifecycle_events,
         } = request;
 
         let requested_timeout_seconds = timeout_seconds.filter(|seconds| *seconds > 0);
@@ -4639,12 +4713,13 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         }
 
         let session = self
-            .create_hidden_subagent_session(
+            .create_hidden_agent_session(
                 None,
                 session_name,
                 agent_type.clone(),
                 session_config,
                 created_by,
+                session_kind,
             )
             .await?;
         let session_id = session.session_id.clone();
@@ -4677,14 +4752,16 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .await?;
 
         if let Some(parent_info) = subagent_parent_info.as_ref() {
-            self.emit_event(AgenticEvent::SubagentSessionLinked {
-                session_id: session_id.clone(),
-                parent_session_id: parent_info.session_id.clone(),
-                parent_dialog_turn_id: parent_info.dialog_turn_id.clone(),
-                parent_tool_call_id: parent_info.tool_call_id.clone(),
-                agent_type: Some(agent_type.clone()),
-            })
-            .await;
+            if emit_lifecycle_events {
+                self.emit_event(AgenticEvent::SubagentSessionLinked {
+                    session_id: session_id.clone(),
+                    parent_session_id: parent_info.session_id.clone(),
+                    parent_dialog_turn_id: parent_info.dialog_turn_id.clone(),
+                    parent_tool_call_id: parent_info.tool_call_id.clone(),
+                    agent_type: Some(agent_type.clone()),
+                })
+                .await;
+            }
         }
 
         // Register timeout handle so it can be adjusted at runtime.
@@ -4768,16 +4845,18 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             )
             .await?;
 
-        // Emit DialogTurnStarted after the dedicated linking event.
-        self.emit_event(AgenticEvent::DialogTurnStarted {
-            session_id: session_id.clone(),
-            turn_id: dialog_turn_id.clone(),
-            turn_index,
-            user_input: user_input_text.clone(),
-            original_user_input: None,
-            user_message_metadata: None,
-        })
-        .await;
+        if emit_lifecycle_events {
+            // Emit DialogTurnStarted after the dedicated linking event.
+            self.emit_event(AgenticEvent::DialogTurnStarted {
+                session_id: session_id.clone(),
+                turn_id: dialog_turn_id.clone(),
+                turn_index,
+                user_input: user_input_text.clone(),
+                original_user_input: None,
+                user_message_metadata: None,
+            })
+            .await;
+        }
 
         let subagent_workspace = Self::build_workspace_binding(&session.config).await;
         let subagent_workspace_path = subagent_workspace
@@ -4808,6 +4887,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             // dialog turns only. Leave None so we don't intercept buffer entries
             // that belong to a different (parent) session/turn.
             round_injection: None,
+            emit_lifecycle_events,
             recover_partial_on_cancel: true,
         };
 
@@ -4949,6 +5029,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                         &session_id,
                         &dialog_turn_id,
                         &join_error,
+                        emit_lifecycle_events,
                     )
                     .await;
                     Self::finalize_persisted_turn_in_workspace_if_needed(
@@ -5035,6 +5116,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     None,
                     &session_id,
                     &dialog_turn_id,
+                    emit_lifecycle_events,
                 )
                 .await;
                 Self::finalize_persisted_turn_in_workspace_if_needed(
@@ -5193,6 +5275,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     &session_id,
                     &dialog_turn_id,
                     &timeout_error,
+                    emit_lifecycle_events,
                 )
                 .await;
                 Self::finalize_persisted_turn_in_workspace_if_needed(
@@ -5245,6 +5328,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                         None,
                         &session_id,
                         &dialog_turn_id,
+                        emit_lifecycle_events,
                     )
                     .await
                 } else {
@@ -5255,6 +5339,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                         &session_id,
                         &dialog_turn_id,
                         &e,
+                        emit_lifecycle_events,
                     )
                     .await
                 };
@@ -5559,6 +5644,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                         request.delegation_policy,
                     ),
                     prompt_cache_source_session_id: None,
+                    session_kind: SessionKind::Subagent,
+                    emit_lifecycle_events: true,
                 })
             }
             SubagentContextMode::Fork => {
@@ -5602,6 +5689,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                         request.delegation_policy,
                     ),
                     prompt_cache_source_session_id: Some(snapshot.parent_session_id),
+                    session_kind: SessionKind::Subagent,
+                    emit_lifecycle_events: true,
                 })
             }
         }
@@ -5624,6 +5713,48 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             timeout_seconds,
         )
         .await
+    }
+
+    /// Execute a hidden internal agent without requiring a parent Task/session.
+    ///
+    /// This is used by background product workers such as memory consolidation,
+    /// where the agent must run through the normal tool/model loop but must not
+    /// appear as a user-facing session or require a parent subagent relationship.
+    pub(crate) async fn execute_internal_agent(
+        &self,
+        request: InternalAgentExecutionRequest,
+        cancel_token: Option<&CancellationToken>,
+        timeout_seconds: Option<u64>,
+    ) -> BitFunResult<SubagentResult> {
+        let task_description = request.task_description.trim().to_string();
+        if task_description.is_empty() {
+            return Err(BitFunError::Validation(
+                "task_description is required when creating an internal agent session".to_string(),
+            ));
+        }
+
+        let hidden_request = HiddenSubagentExecutionRequest {
+            session_name: request.session_name,
+            agent_type: request.agent_type,
+            session_config: Self::build_session_config_for_workspace(
+                request.workspace_path,
+                request.model_id,
+            )
+            .await,
+            initial_messages: vec![Message::user(task_description.clone())],
+            user_input_text: task_description,
+            created_by: request.created_by,
+            subagent_parent_info: None,
+            context: request.context,
+            delegation_policy: request.delegation_policy,
+            runtime_tool_restrictions: request.runtime_tool_restrictions,
+            prompt_cache_source_session_id: None,
+            session_kind: request.session_kind,
+            emit_lifecycle_events: request.emit_lifecycle_events,
+        };
+
+        self.execute_hidden_subagent_internal(hidden_request, cancel_token, timeout_seconds)
+            .await
     }
 
     pub(crate) async fn start_background_subagent(
@@ -6427,6 +6558,26 @@ async fn is_ai_session_title_generation_enabled() -> bool {
     }
 }
 
+async fn new_session_memory_mode_from_global_config() -> SessionMemoryMode {
+    match crate::service::config::get_global_config_service().await {
+        Ok(service) => {
+            if service
+                .get_config(None)
+                .await
+                .map(|config: crate::service::config::types::GlobalConfig| {
+                    config.memories.generate_memories
+                })
+                .unwrap_or(true)
+            {
+                SessionMemoryMode::Enabled
+            } else {
+                SessionMemoryMode::Disabled
+            }
+        }
+        Err(_) => SessionMemoryMode::Enabled,
+    }
+}
+
 // Global coordinator singleton
 static GLOBAL_COORDINATOR: OnceLock<Arc<ConversationCoordinator>> = OnceLock::new();
 
@@ -6477,7 +6628,7 @@ mod tests {
         resolve_agent_session_create_created_by, resolve_agent_submission_turn_id,
         ConversationCoordinator,
     };
-    use crate::agentic::core::{InternalReminderKind, Message, SessionConfig};
+    use crate::agentic::core::{InternalReminderKind, Message, SessionConfig, SessionKind};
     use crate::agentic::events::{EventQueue, EventQueueConfig, EventRouter};
     use crate::agentic::execution::{
         ExecutionEngine, ExecutionEngineConfig, RoundExecutor, StreamProcessor,
@@ -6795,6 +6946,47 @@ mod tests {
         );
         assert_eq!(config.remote_ssh_host.as_deref(), Some("remote-host"));
         assert_eq!(config.model_id.as_deref(), Some("model-fast"));
+    }
+
+    #[tokio::test]
+    async fn hidden_agent_session_uses_requested_ephemeral_kind() {
+        let (coordinator, session_manager) = test_coordinator();
+        let workspace_path = std::env::temp_dir().join(format!(
+            "bitfun-hidden-agent-kind-test-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&workspace_path).expect("workspace dir should exist");
+        struct TempWorkspaceGuard(std::path::PathBuf);
+        impl Drop for TempWorkspaceGuard {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_dir_all(&self.0);
+            }
+        }
+        let _workspace_guard = TempWorkspaceGuard(workspace_path.clone());
+
+        let session = coordinator
+            .create_hidden_agent_session(
+                None,
+                "Internal worker".to_string(),
+                "MemoryPhase2".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace_path.to_string_lossy().into_owned()),
+                    ..Default::default()
+                },
+                Some("memory-phase2".to_string()),
+                SessionKind::EphemeralChild,
+            )
+            .await
+            .expect("hidden agent session should be created");
+
+        assert_eq!(session.kind, SessionKind::EphemeralChild);
+        assert_eq!(
+            session_manager
+                .get_session(&session.session_id)
+                .expect("session should remain in memory")
+                .kind,
+            SessionKind::EphemeralChild
+        );
     }
 
     #[tokio::test]

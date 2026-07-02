@@ -52,6 +52,7 @@ pub fn shared_coding_mode_user_context_policy() -> UserContextPolicy {
         .with_workspace_context()
         .with_workspace_instructions()
         .with_project_layout()
+        .with_memory_summary()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -106,7 +107,7 @@ pub fn builtin_agent_definition_specs() -> Vec<BuiltinAgentDefinitionSpec> {
         builtin_agent_spec(
             "GeneralPurpose",
             SubAgent,
-            "fast",
+            "primary",
             SubagentVisibilityPolicy::public(),
         ),
         builtin_agent_spec(
@@ -178,6 +179,12 @@ pub fn builtin_agent_definition_specs() -> Vec<BuiltinAgentDefinitionSpec> {
         builtin_agent_spec(
             "GenerateDoc",
             Hidden,
+            "fast",
+            SubagentVisibilityPolicy::default(),
+        ),
+        builtin_agent_spec(
+            "MemoryPhase2",
+            Hidden,
             "primary",
             SubagentVisibilityPolicy::default(),
         ),
@@ -188,8 +195,8 @@ pub fn default_model_id_for_builtin_agent(agent_type: &str) -> &'static str {
     match agent_type {
         "agentic" | "Cowork" | "ComputerUse" | "Plan" | "debug" | "Claw" | "DeepResearch"
         | "Team" | "Multitask" => "auto",
-        "Explore" | "FileFinder" | "CodeReview" | "GenerateDoc" => "primary",
-        "GeneralPurpose"
+        "Explore" | "FileFinder" | "CodeReview" | "GeneralPurpose" | "MemoryPhase2" => "primary",
+        "GenerateDoc"
         | "ResearchSpecialist"
         | "DeepReview"
         | "ReviewBusinessLogic"

@@ -1,0 +1,102 @@
+{
+  "title": "Memory",
+  "subtitle": "Control automatic memory generation, usage, and consolidation scope.",
+  "sections": {
+    "basic": {
+      "title": "Basics",
+      "description": "Control whether new memories are generated and whether consolidated memories are used in sessions."
+    },
+    "extraction": {
+      "title": "Extraction",
+      "description": "Control which completed sessions are eligible for memory extraction."
+    },
+    "consolidation": {
+      "title": "Consolidation",
+      "description": "Control how extracted results are prepared before becoming long-term memory."
+    }
+  },
+  "fields": {
+    "generateMemories": {
+      "label": "Generate memories automatically",
+      "description": "Extract and consolidate reusable memory from completed local sessions in the background."
+    },
+    "useMemories": {
+      "label": "Use memories in sessions",
+      "description": "New sessions can read the consolidated memory summary as context."
+    },
+    "externalContextPolicy": {
+      "label": "External context handling",
+      "description": "Choose how memory extraction handles sessions that used web search, web page reading, or similar tools."
+    },
+    "minRolloutIdleHours": {
+      "label": "Minimum idle time",
+      "description": "How long a completed session must sit idle before extraction."
+    },
+    "maxRolloutAgeDays": {
+      "label": "Maximum session age",
+      "description": "Sessions older than this many days are no longer considered for extraction. This cannot exceed candidate retention."
+    },
+    "maxRolloutsPerStartup": {
+      "label": "Extraction limit per run",
+      "description": "Maximum number of sessions claimed for memory extraction each time the memory task starts."
+    },
+    "maxRolloutsScanLimit": {
+      "label": "Scan limit per run",
+      "description": "Maximum number of completed sessions checked while looking for extraction candidates."
+    },
+    "phase1MaxConcurrency": {
+      "label": "Extraction concurrency",
+      "description": "Maximum number of eligible sessions extracted at the same time."
+    },
+    "extractModel": {
+      "label": "Extraction model",
+      "description": "Model used to distill candidate memories from session transcripts."
+    },
+    "maxRawMemories": {
+      "label": "Consolidation candidate limit",
+      "description": "Maximum extracted results used in each long-term memory consolidation pass."
+    },
+    "maxUnusedDays": {
+      "label": "Candidate retention",
+      "description": "Unused extracted results older than this many days are no longer consolidated. This must be at least the maximum session age."
+    },
+    "consolidationModel": {
+      "label": "Consolidation model",
+      "description": "Model used to merge candidates and update long-term memory files."
+    }
+  },
+  "models": {
+    "primary": "Primary model",
+    "fast": "Fast model",
+    "followPrimary": "Follow primary model",
+    "followExtraction": "Follow extraction model"
+  },
+  "externalContextPolicy": {
+    "clearToolResults": "Clear external tool results",
+    "allow": "Allow external tool results",
+    "skipSession": "Skip the session"
+  },
+  "actions": {
+    "resetSettings": "Reset Memory Settings",
+    "openDirectory": "Open Memory Folder",
+    "resetMemory": "Reset Memory",
+    "resetMemoryConfirm": "Clear all memory data and memory workspace files? This cannot be undone.",
+    "resetMemoryConfirmAction": "Reset"
+  },
+  "units": {
+    "hours": "h",
+    "days": "d"
+  },
+  "messages": {
+    "loading": "Loading memory settings…",
+    "loadFailed": "Failed to load memory settings",
+    "saved": "Memory settings saved",
+    "saveFailed": "Failed to save memory settings",
+    "rolloutAgeExceedsRetention": "Maximum session age cannot exceed candidate retention",
+    "settingsReset": "Memory settings reset",
+    "settingsResetFailed": "Failed to reset memory settings",
+    "openDirectoryFailed": "Failed to open memory folder",
+    "memoryReset": "Memory reset",
+    "memoryResetFailed": "Failed to reset memory"
+  }
+}

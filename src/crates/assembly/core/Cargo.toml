@@ -35,6 +35,7 @@ base64 = { workspace = true }
 image = { workspace = true, optional = true }
 md5 = { workspace = true, optional = true }
 hex = { workspace = true }
+rusqlite = { version = "0.32", features = ["bundled"] }
 dashmap = { workspace = true, optional = true }
 indexmap = { workspace = true, optional = true }
 htmd = "0.5.4"

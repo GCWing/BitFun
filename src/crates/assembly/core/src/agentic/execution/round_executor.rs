@@ -7,6 +7,10 @@ use super::stream_processor::{StreamProcessOptions, StreamProcessor, StreamResul
 use super::types::{FinishReason, RoundContext, RoundResult};
 use crate::agentic::core::{Message, ToolCall};
 use crate::agentic::events::{AgenticEvent, EventPriority, EventQueue, ToolEventData};
+use crate::agentic::memories::{
+    parse_bitfun_memory_citation, parse_bitfun_memory_citation_payloads,
+    strip_bitfun_memory_citations,
+};
 use crate::agentic::tools::computer_use_host::ComputerUseHostRef;
 use crate::agentic::tools::pipeline::{
     SubagentBatchExecutionPolicy as PipelineSubagentBatchExecutionPolicy, ToolExecutionContext,
@@ -49,6 +53,21 @@ impl RoundExecutor {
 
     fn has_user_visible_assistant_text(text: &str) -> bool {
         !text.trim().is_empty()
+    }
+
+    fn parsed_memory_citation_from_stream_result(
+        stream_result: &StreamResult,
+    ) -> Option<crate::agentic::core::message::MemoryCitation> {
+        let payloads = stream_result
+            .hidden_text_blocks
+            .iter()
+            .filter(|block| block.name == "memory_citation")
+            .map(|block| block.payload.as_str())
+            .collect::<Vec<_>>();
+
+        parse_bitfun_memory_citation_payloads(payloads)
+            .or_else(|| parse_bitfun_memory_citation(&stream_result.full_text))
+            .map(Into::into)
     }
 
     fn map_subagent_batch_execution_policy(
@@ -273,6 +292,7 @@ impl RoundExecutor {
                     &cancel_token,
                     StreamProcessOptions {
                         recover_partial_on_cancel: context.recover_partial_on_cancel,
+                        ..Default::default()
                     },
                 )
                 .await
@@ -656,14 +676,15 @@ impl RoundExecutor {
             } else {
                 Some(stream_result.full_thinking.clone())
             };
-            let assistant_message = Message::assistant_with_reasoning(
-                reasoning,
-                stream_result.full_text.clone(),
-                vec![],
-            )
-            .with_turn_id(context.dialog_turn_id.clone())
-            .with_round_id(round_id.clone())
-            .with_thinking_signature(stream_result.thinking_signature.clone());
+            let parsed_memory_citation =
+                Self::parsed_memory_citation_from_stream_result(&stream_result);
+            let (clean_text, _) = strip_bitfun_memory_citations(&stream_result.full_text);
+            let assistant_message =
+                Message::assistant_with_reasoning(reasoning, clean_text, vec![])
+                    .with_turn_id(context.dialog_turn_id.clone())
+                    .with_round_id(round_id.clone())
+                    .with_thinking_signature(stream_result.thinking_signature.clone())
+                    .with_memory_citation(parsed_memory_citation);
 
             debug!("Returning RoundResult: has_more_rounds=false");
             debug!(
@@ -874,14 +895,15 @@ impl RoundExecutor {
         } else {
             Some(stream_result.full_thinking.clone())
         };
-        let assistant_message = Message::assistant_with_reasoning(
-            reasoning,
-            stream_result.full_text.clone(),
-            tool_calls.clone(),
-        )
-        .with_turn_id(context.dialog_turn_id.clone())
-        .with_round_id(round_id.clone())
-        .with_thinking_signature(stream_result.thinking_signature.clone());
+        let parsed_memory_citation =
+            Self::parsed_memory_citation_from_stream_result(&stream_result);
+        let (clean_text, _) = strip_bitfun_memory_citations(&stream_result.full_text);
+        let assistant_message =
+            Message::assistant_with_reasoning(reasoning, clean_text, tool_calls.clone())
+                .with_turn_id(context.dialog_turn_id.clone())
+                .with_round_id(round_id.clone())
+                .with_thinking_signature(stream_result.thinking_signature.clone())
+                .with_memory_citation(parsed_memory_citation);
 
         debug!(
             "Tool execution completed, creating message: assistant_msg_len={}, tool_results={}",
@@ -1521,6 +1543,7 @@ mod tests {
             reasoning_content_present: true,
             thinking_signature: Some("sig".to_string()),
             full_text: String::new(),
+            hidden_text_blocks: Vec::new(),
             tool_calls: vec![ToolCall {
                 tool_id: "tool-1".to_string(),
                 tool_name: "Bash".to_string(),

@@ -8,6 +8,7 @@ use crate::agentic::core::{
     SessionKind, SessionState, SessionSummary, TurnStats,
 };
 use crate::agentic::image_analysis::ImageContextData;
+use crate::agentic::memories::db::{MemoryDatabase, MEMORY_PHASE2_GLOBAL_JOB_KEY};
 use crate::agentic::persistence::PersistenceManager;
 use crate::agentic::session::session_store_port::CoreSessionStorePort;
 use crate::agentic::session::{
@@ -29,9 +30,9 @@ use crate::service::config::{
 };
 use crate::service::remote_ssh::workspace_state::LOCAL_WORKSPACE_SSH_HOST;
 use crate::service::session::{
-    DialogTurnData, DialogTurnKind, ModelRoundData, SessionMetadata, SessionRelationship,
-    TextItemData, ThinkingItemData, ToolCallData, ToolItemData, ToolResultData, TurnStatus,
-    UserMessageData,
+    DialogTurnData, DialogTurnKind, ModelRoundData, SessionMemoryMode, SessionMetadata,
+    SessionRelationship, TextItemData, ThinkingItemData, ToolCallData, ToolItemData,
+    ToolResultData, TurnStatus, UserMessageData,
 };
 use crate::service::snapshot::ensure_snapshot_manager_for_workspace;
 use crate::service::workspace::{get_global_workspace_service, WorkspaceInfo, WorkspaceKind};
@@ -104,6 +105,13 @@ pub struct ResolvedSessionTitle {
 // older snapshots lazily based on this persisted cutoff.
 const LISTING_BASELINE_REBUILD_TURN_INDEX_METADATA_KEY: &str = "listingBaselineRebuildTurnIndex";
 
+fn current_unix_secs() -> i64 {
+    SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_secs() as i64)
+        .unwrap_or_default()
+}
+
 /// Session manager
 pub struct SessionManager {
     /// Active sessions in memory
@@ -124,6 +132,7 @@ pub struct SessionManager {
     file_read_state_store: Arc<FileReadStateStore>,
     evidence_ledger: Arc<SessionEvidenceLedger>,
     persistence_manager: Arc<PersistenceManager>,
+    memory_database: Arc<MemoryDatabase>,
 
     /// Configuration
     config: SessionManagerConfig,
@@ -1018,6 +1027,9 @@ impl SessionManager {
         config: SessionManagerConfig,
     ) -> Self {
         let enable_persistence = config.enable_persistence;
+        let memory_database = Arc::new(MemoryDatabase::new(
+            persistence_manager.path_manager().clone(),
+        ));
 
         let manager = Self {
             sessions: Arc::new(DashMap::new()),
@@ -1029,6 +1041,7 @@ impl SessionManager {
             file_read_state_store: Arc::new(FileReadStateStore::new()),
             evidence_ledger: Arc::new(SessionEvidenceLedger::new()),
             persistence_manager,
+            memory_database,
             config,
         };
 
@@ -1219,6 +1232,7 @@ impl SessionManager {
         let file_read_state_store = self.file_read_state_store.clone();
         let evidence_ledger = self.evidence_ledger.clone();
         let persistence_manager = self.persistence_manager.clone();
+        let memory_database = self.memory_database.clone();
         let manager_config = self.config.clone();
 
         tokio::spawn(async move {
@@ -1242,6 +1256,7 @@ impl SessionManager {
                 file_read_state_store,
                 evidence_ledger,
                 persistence_manager,
+                memory_database,
                 config: manager_config,
             };
 
@@ -3542,6 +3557,53 @@ impl SessionManager {
             .await
     }
 
+    pub async fn set_session_memory_mode(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+        mode: SessionMemoryMode,
+    ) -> BitFunResult<()> {
+        self.update_session_metadata_at_workspace(workspace_path, session_id, |metadata| {
+            metadata.memory_mode = mode;
+        })
+        .await
+    }
+
+    pub async fn mark_session_memory_mode_polluted(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<()> {
+        let mut should_enqueue_phase2 = false;
+        self.update_session_metadata_at_workspace(workspace_path, session_id, |metadata| {
+            should_enqueue_phase2 = matches!(
+                metadata.memory_mode,
+                SessionMemoryMode::Enabled | SessionMemoryMode::Polluted
+            );
+            if metadata.memory_mode == SessionMemoryMode::Enabled {
+                metadata.memory_mode = SessionMemoryMode::Polluted;
+            }
+        })
+        .await?;
+        if should_enqueue_phase2 {
+            self.enqueue_phase2_if_session_selected(session_id).await?;
+        }
+        Ok(())
+    }
+
+    async fn enqueue_phase2_if_session_selected(&self, session_id: &str) -> BitFunResult<()> {
+        if self
+            .memory_database
+            .phase2_selected_for_session(session_id)
+            .await?
+        {
+            self.memory_database
+                .enqueue_phase2_job(MEMORY_PHASE2_GLOBAL_JOB_KEY, current_unix_secs())
+                .await?;
+        }
+        Ok(())
+    }
+
     async fn metadata_workspace_path_for_update(&self, session_id: &str) -> BitFunResult<PathBuf> {
         if !self.should_persist_session_id(session_id) {
             return Err(BitFunError::Validation(format!(
@@ -4650,7 +4712,29 @@ impl SessionManager {
     /// Add a semantic message to the runtime context cache and immediately refresh the current
     /// turn snapshot so crashes do not lose the latest in-memory context change.
     pub async fn add_message(&self, session_id: &str, message: Message) -> BitFunResult<()> {
+        let memory_citation = message.metadata.memory_citation.clone();
+        let turn_id = message.metadata.turn_id.clone();
+        let round_id = message.metadata.round_id.clone();
+        let message_id = message.id.clone();
         self.context_store.add_message(session_id, message);
+        if let Some(citation) = memory_citation.as_ref() {
+            if let Err(error) = self
+                .memory_database
+                .record_memory_citation(
+                    session_id,
+                    turn_id.as_deref(),
+                    round_id.as_deref(),
+                    &message_id,
+                    citation,
+                )
+                .await
+            {
+                warn!(
+                    "Failed to record memory citation: session_id={}, message_id={}, error={}",
+                    session_id, message_id, error
+                );
+            }
+        }
         self.persist_current_turn_context_snapshot_best_effort(session_id, "context_message_added")
             .await;
         Ok(())

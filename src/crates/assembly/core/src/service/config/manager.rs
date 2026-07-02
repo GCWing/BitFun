@@ -83,6 +83,43 @@ pub(crate) fn normalize_legacy_theme_config_value(mut config: Value) -> Value {
     config
 }
 
+fn config_value_for_persistence(config: &GlobalConfig) -> BitFunResult<Value> {
+    let mut value = serde_json::to_value(config)
+        .map_err(|e| BitFunError::config(format!("Failed to serialize config: {}", e)))?;
+    prune_default_memories_config(&mut value)?;
+    Ok(value)
+}
+
+fn prune_default_memories_config(config_value: &mut Value) -> BitFunResult<()> {
+    let Some(config_object) = config_value.as_object_mut() else {
+        return Ok(());
+    };
+    let Some(memories_value) = config_object.get_mut("memories") else {
+        return Ok(());
+    };
+
+    let default_memories = serde_json::to_value(MemoriesConfig::default()).map_err(|e| {
+        BitFunError::config(format!(
+            "Failed to serialize default memories config: {}",
+            e
+        ))
+    })?;
+    let Some(default_memories_object) = default_memories.as_object() else {
+        return Ok(());
+    };
+    let Some(memories_object) = memories_value.as_object_mut() else {
+        return Ok(());
+    };
+
+    memories_object.retain(|key, value| default_memories_object.get(key) != Some(value));
+
+    if memories_object.is_empty() {
+        config_object.remove("memories");
+    }
+
+    Ok(())
+}
+
 /// Configuration manager.
 pub struct ConfigManager {
     config_dir: PathBuf,
@@ -330,7 +367,7 @@ impl ConfigManager {
 
     /// Saves the configuration file.
     async fn save_config(&self) -> BitFunResult<()> {
-        let content = serde_json::to_string_pretty(&self.config)
+        let content = serde_json::to_string_pretty(&config_value_for_persistence(&self.config)?)
             .map_err(|e| BitFunError::config(format!("Config serialization failed: {}", e)))?;
 
         if let Some(parent) = self.config_file.parent() {
@@ -491,7 +528,7 @@ impl ConfigManager {
 
         let backup_file = backup_dir.join(format!("config_backup_{}.json", timestamp));
 
-        let content = serde_json::to_string_pretty(&self.config)
+        let content = serde_json::to_string_pretty(&config_value_for_persistence(&self.config)?)
             .map_err(|e| BitFunError::config(format!("Failed to serialize backup: {}", e)))?;
 
         fs::write(&backup_file, content)
@@ -696,7 +733,10 @@ pub struct ConfigStatistics {
 
 #[cfg(test)]
 mod tests {
-    use super::{canonical_config_path, normalize_legacy_theme_config_value};
+    use super::{
+        canonical_config_path, config_value_for_persistence, normalize_legacy_theme_config_value,
+    };
+    use crate::service::config::types::GlobalConfig;
 
     #[test]
     fn canonicalizes_legacy_review_team_auxiliary_paths() {
@@ -761,6 +801,33 @@ mod tests {
 
         assert_eq!(normalized["themes"]["current"], "bitfun-light");
         assert!(normalized.get("theme").is_none());
+    }
+
+    #[test]
+    fn persistence_omits_default_memories_config() {
+        let config = GlobalConfig::default();
+        let value =
+            config_value_for_persistence(&config).expect("config should serialize for persistence");
+
+        assert!(value.get("memories").is_none());
+    }
+
+    #[test]
+    fn persistence_keeps_only_non_default_memories_fields() {
+        let mut config = GlobalConfig::default();
+        config.memories.generate_memories = false;
+        config.memories.max_rollouts_per_startup = 12;
+
+        let value =
+            config_value_for_persistence(&config).expect("config should serialize for persistence");
+
+        assert_eq!(
+            value.get("memories"),
+            Some(&serde_json::json!({
+                "generate_memories": false,
+                "max_rollouts_per_startup": 12
+            }))
+        );
     }
 }
 

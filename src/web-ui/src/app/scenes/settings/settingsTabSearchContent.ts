@@ -104,6 +104,21 @@ export const SETTINGS_TAB_SEARCH_CONTENT: Record<ConfigTab, readonly SettingsTab
     { ns: 'settings/review', key: 'extra.title' },
   ],
 
+  memories: [
+    { ns: 'settings/memories', key: 'title' },
+    { ns: 'settings/memories', key: 'subtitle' },
+    { ns: 'settings/memories', key: 'sections.basic.title' },
+    { ns: 'settings/memories', key: 'sections.basic.description' },
+    { ns: 'settings/memories', key: 'sections.extraction.title' },
+    { ns: 'settings/memories', key: 'sections.consolidation.title' },
+    { ns: 'settings/memories', key: 'fields.generateMemories.label' },
+    { ns: 'settings/memories', key: 'fields.useMemories.label' },
+    { ns: 'settings/memories', key: 'fields.externalContextPolicy.label' },
+    { ns: 'settings/memories', key: 'fields.maxRolloutsPerStartup.label' },
+    { ns: 'settings/memories', key: 'fields.maxRolloutsScanLimit.label' },
+    { ns: 'settings/memories', key: 'fields.phase1MaxConcurrency.label' },
+  ],
+
   'mcp-tools': [
     { ns: 'settings/mcp-tools', key: 'title' },
     { ns: 'settings/mcp-tools', key: 'subtitle' },

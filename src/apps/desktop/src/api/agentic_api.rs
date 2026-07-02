@@ -23,6 +23,7 @@ use bitfun_core::agentic::deep_review_policy::{
 };
 use bitfun_core::agentic::goal_mode::{ThreadGoal, ThreadGoalStatus};
 use bitfun_core::agentic::image_analysis::ImageContextData;
+use bitfun_core::agentic::memories::{db::MemoryDatabase, workspace::reset_memory_workspace};
 use bitfun_core::agentic::session::SessionViewRestoreTiming;
 use bitfun_core::agentic::tools::image_context::get_image_context;
 use bitfun_core::agentic::tools::implementations::exec_command::{
@@ -33,7 +34,7 @@ use bitfun_core::agentic::tools::implementations::exec_command::{
     ReadBackgroundCommandOutputRequest as CoreReadBackgroundCommandOutputRequest,
     ReadBackgroundCommandOutputResponse,
 };
-use bitfun_core::service::session::{DialogTurnData, SessionRelationship};
+use bitfun_core::service::session::{DialogTurnData, SessionMemoryMode, SessionRelationship};
 
 const SESSION_VIEW_TOOL_RESULT_TOTAL_CHAR_BUDGET: usize = 512 * 1024;
 const SESSION_VIEW_TOOL_RESULT_STRING_CHAR_LIMIT: usize = 16 * 1024;
@@ -176,6 +177,37 @@ pub struct GetSessionThreadGoalRequest {
 #[serde(rename_all = "camelCase")]
 pub struct GetSessionThreadGoalResponse {
     pub goal: Option<ThreadGoal>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResetMemoryResponse {
+    pub success: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MemoryPathsResponse {
+    pub memories_root_dir: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetSessionMemoryModeRequest {
+    pub session_id: String,
+    pub mode: String,
+    pub workspace_path: Option<String>,
+    #[serde(default)]
+    pub remote_connection_id: Option<String>,
+    #[serde(default)]
+    pub remote_ssh_host: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetSessionMemoryModeResponse {
+    pub success: bool,
+    pub mode: SessionMemoryMode,
 }
 
 #[derive(Debug, Deserialize)]
@@ -1086,6 +1118,73 @@ pub async fn get_session_thread_goal(
     .await;
     startup_trace.record_tauri_command_elapsed("get_session_thread_goal", None, trace_started);
     result
+}
+
+#[tauri::command]
+pub async fn reset_memory(state: State<'_, AppState>) -> Result<ResetMemoryResponse, String> {
+    let path_manager = state.workspace_service.path_manager().clone();
+    let db = MemoryDatabase::new(path_manager.clone());
+
+    db.reset_memory_state()
+        .await
+        .map_err(|error| format!("Failed to reset memory database: {}", error))?;
+    reset_memory_workspace(&path_manager.memories_root_dir())
+        .await
+        .map_err(|error| format!("Failed to reset memory workspace: {}", error))?;
+
+    Ok(ResetMemoryResponse { success: true })
+}
+
+#[tauri::command]
+pub async fn get_memory_paths(state: State<'_, AppState>) -> Result<MemoryPathsResponse, String> {
+    let path_manager = state.workspace_service.path_manager().clone();
+    let memories_root_dir = path_manager.memories_root_dir();
+    tokio::fs::create_dir_all(&memories_root_dir)
+        .await
+        .map_err(|error| format!("Failed to create memory directory: {}", error))?;
+    Ok(MemoryPathsResponse {
+        memories_root_dir: memories_root_dir.to_string_lossy().to_string(),
+    })
+}
+
+#[tauri::command]
+pub async fn set_session_memory_mode(
+    coordinator: State<'_, Arc<ConversationCoordinator>>,
+    app_state: State<'_, AppState>,
+    request: SetSessionMemoryModeRequest,
+) -> Result<SetSessionMemoryModeResponse, String> {
+    let session_id = request.session_id.trim();
+    if session_id.is_empty() {
+        return Err("session_id is required".to_string());
+    }
+    let mode = match request.mode.trim().to_ascii_lowercase().as_str() {
+        "enabled" => SessionMemoryMode::Enabled,
+        "disabled" => SessionMemoryMode::Disabled,
+        "polluted" => {
+            return Err("polluted memory mode is internal and cannot be set directly".to_string())
+        }
+        other => return Err(format!("unsupported memory mode: {other}")),
+    };
+    let storage_path = resolve_thread_goal_storage_path(
+        coordinator.inner(),
+        app_state.inner(),
+        session_id,
+        request.workspace_path.as_deref(),
+        request.remote_connection_id.as_deref(),
+        request.remote_ssh_host.as_deref(),
+    )
+    .await?;
+
+    coordinator
+        .get_session_manager()
+        .set_session_memory_mode(&storage_path, session_id, mode)
+        .await
+        .map_err(|error| error.to_string())?;
+
+    Ok(SetSessionMemoryModeResponse {
+        success: true,
+        mode,
+    })
 }
 
 #[tauri::command]

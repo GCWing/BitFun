@@ -35,6 +35,8 @@ pub struct ExecutionContext {
     /// When set, engine drains pending round injections at each round boundary
     /// and injects them into the dialog history without ending the turn.
     pub round_injection: Option<Arc<dyn DialogRoundInjectionSource>>,
+    /// When false, the execution loop suppresses user-facing turn lifecycle events.
+    pub emit_lifecycle_events: bool,
     /// When true, stream cancellation may be converted into a partial assistant
     /// result if text/tool output has already been produced.
     pub recover_partial_on_cancel: bool,

@@ -17,6 +17,7 @@ const EditorConfig = lazy(() => import('../../../infrastructure/config/component
 const BasicsConfig = lazy(() => import('../../../infrastructure/config/components/BasicsConfig'));
 const AppearanceConfig = lazy(() => import('../../../infrastructure/config/components/AppearanceConfig'));
 const ReviewConfig = lazy(() => import('../../../infrastructure/config/components/ReviewConfig'));
+const MemoriesConfig = lazy(() => import('../../../infrastructure/config/components/MemoriesConfig'));
 const QuickActionsConfig = lazy(() => import('../../../infrastructure/config/components/QuickActionsConfig'));
 const ArchivedSessionsConfig = lazy(() => import('./components/ArchivedSessionsConfig'));
 const KeyboardShortcutsTab = lazy(() => import('./components/KeyboardShortcutsTab'));
@@ -67,6 +68,7 @@ const SettingsScene: React.FC = () => {
     case 'session-permissions':     Content = SessionPermissionsConfig;     break;
     case 'quick-actions':    Content = QuickActionsConfig;   break;
     case 'review':           Content = ReviewConfig;         break;
+    case 'memories':         Content = MemoriesConfig;       break;
     case 'mcp-tools':        Content = McpToolsConfig;      break;
     case 'acp-agents':       Content = AcpAgentsConfig;     break;
     case 'editor':           Content = EditorConfig;         break;
