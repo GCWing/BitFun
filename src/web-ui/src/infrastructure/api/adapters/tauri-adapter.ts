@@ -32,6 +32,7 @@ export class TauriTransportAdapter implements ITransportAdapter {
   private connected: boolean = false;
   private invokeFn: ((action: string, params?: any) => Promise<any>) | null = null;
   private initPromise: Promise<void> | null = null;
+  private listenerRegistrationPromises = new Set<Promise<void>>();
 
   // Lazy initialize Tauri API
   private async ensureInitialized() {
@@ -120,7 +121,7 @@ export class TauriTransportAdapter implements ITransportAdapter {
     let unlistenFn: UnlistenFn | null = null;
     let isUnlistened = false;
 
-    listen<T>(event, (e) => {
+    const registration = listen<T>(event, (e) => {
       if (!isUnlistened) {
         try {
           callback(e.payload);
@@ -137,7 +138,10 @@ export class TauriTransportAdapter implements ITransportAdapter {
       }
     }).catch(error => {
       log.error('Failed to listen event', { event, error: sanitizeErrorForLog(error) });
+    }).finally(() => {
+      this.listenerRegistrationPromises.delete(registration);
     });
+    this.listenerRegistrationPromises.add(registration);
 
     return () => {
       isUnlistened = true;
@@ -166,6 +170,12 @@ export class TauriTransportAdapter implements ITransportAdapter {
   isConnected(): boolean {
     return this.connected;
   }
+
+  async waitForListenerRegistrations(): Promise<void> {
+    while (this.listenerRegistrationPromises.size > 0) {
+      // Listener registration is async, and settling one registration can reveal
+      // another registration issued in the same initialization wave.
+      await Promise.allSettled(Array.from(this.listenerRegistrationPromises));
+    }
+  }
 }
-
-

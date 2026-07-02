@@ -348,6 +348,13 @@ export class FlowChatManager {
 
       this.eventListenerCleanup = cleanup;
       this.eventListenerInitialized = true;
+      // Cron startup is gated on FlowChat listener readiness so startup-time
+      // scheduled runs do not emit into an unregistered desktop event bridge.
+      void import('@/infrastructure/api/service-api/CronAPI')
+        .then(({ cronAPI }) => cronAPI.notifyHostReady())
+        .catch(error => {
+          log.warn('Failed to notify cron host readiness', error);
+        });
     })();
 
     try {

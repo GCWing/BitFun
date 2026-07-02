@@ -10,6 +10,12 @@ export interface ITransportAdapter {
   
    
   listen<T>(event: string, callback: (data: T) => void): () => void;
+
+  /**
+   * Resolves after listener registration requests already issued to the
+   * transport have settled. Synchronous transports can keep the default no-op.
+   */
+  waitForListenerRegistrations?(): Promise<void>;
   
    
   disconnect(): Promise<void>;
