@@ -6,7 +6,7 @@
       "max": 306
     },
     "presetUniqueColors": {
-      "max": 125
+      "max": 123
     },
     "rustFallbackColorOccurrences": {
       "max": 44
@@ -15,10 +15,10 @@
       "max": 32
     },
     "totalUniqueColors": {
-      "max": 155
+      "max": 153
     },
     "presetNearPairs.nearTotal": {
-      "max": 7
+      "max": 5
     },
     "rustFallbackNearPairs.nearTotal": {
       "max": 0

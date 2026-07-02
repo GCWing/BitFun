@@ -18,7 +18,7 @@ import {
 } from './shared';
 
 const TOKYO_BACKGROUND_PRIMARY = '#1a1b26';
-const TOKYO_BACKGROUND_SECONDARY = '#16161e';
+const TOKYO_BACKGROUND_SECONDARY = '#1e202e';
 const TOKYO_TEXT_PRIMARY = '#c0caf5';
 const TOKYO_TEXT_SECONDARY = '#a9b1d6';
 const TOKYO_TEXT_MUTED = '#787c99';
@@ -59,8 +59,8 @@ export const bitfunTokyoNightTheme: ThemeConfig = {
       primary: TOKYO_BACKGROUND_PRIMARY,
       secondary: TOKYO_BACKGROUND_SECONDARY,
       tertiary: TOKYO_BACKGROUND_SECONDARY,
-      quaternary: '#1e202e',
-      elevated: '#1e202e',
+      quaternary: TOKYO_BACKGROUND_SECONDARY,
+      elevated: TOKYO_BACKGROUND_SECONDARY,
       workbench: TOKYO_BACKGROUND_SECONDARY,
       scene: TOKYO_BACKGROUND_PRIMARY,
       tooltip: rgbaFromHex(TOKYO_BACKGROUND_SECONDARY, 0.94),
@@ -217,7 +217,7 @@ export const bitfunTokyoNightTheme: ThemeConfig = {
     colors: {
       background: TOKYO_BACKGROUND_PRIMARY,
       foreground: TOKYO_TEXT_SECONDARY,
-      lineHighlight: '#1e202e',
+      lineHighlight: TOKYO_BACKGROUND_SECONDARY,
       selection: 'rgba(81, 92, 126, 0.35)',
       cursor: TOKYO_TEXT_PRIMARY,
     },

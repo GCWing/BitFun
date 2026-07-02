@@ -56,7 +56,7 @@ export const bitfunLightTheme: ThemeConfig = {
       tertiary: '#e8eaee',
       quaternary: '#e0e3e8',
       elevated: STATIC_WHITE,
-      workbench: '#eceef1',
+      workbench: '#e8eaee',
       scene: STATIC_WHITE,
       tooltip: rgbaFromHex(STATIC_WHITE, 0.98),
     },
@@ -206,7 +206,7 @@ export const bitfunLightTheme: ThemeConfig = {
           transform: 'none',
         },
         active: {
-          background: '#1a1a1a',
+          background: '#1c1c1f',
           color: STATIC_WHITE,
           border: 'transparent',
           shadow: 'none',

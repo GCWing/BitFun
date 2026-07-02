@@ -28,7 +28,7 @@ const CYBER_PURPLE_HOVER = '#7928ca';
 const CYBER_SUCCESS = '#00ff9f';
 const CYBER_WARNING = '#ffcc00';
 const CYBER_ERROR = '#ff0055';
-const CYBER_SURFACE_SECONDARY = '#1a1a1a';
+const CYBER_SURFACE_SECONDARY = '#1c1c1f';
 
 const cyberAccent = (alpha: number | string) => rgbaFromHex(CYBER_ACCENT, alpha);
 const cyberSuccess = (alpha: number | string) => rgbaFromHex(CYBER_SUCCESS, alpha);
@@ -50,7 +50,7 @@ export const bitfunCyberTheme: ThemeConfig = {
       primary: CYBER_BACKGROUND,
       secondary: CYBER_SURFACE_SECONDARY,
       tertiary: CYBER_SURFACE_SECONDARY,
-      quaternary: '#1c1c1f',
+      quaternary: CYBER_SURFACE_SECONDARY,
       elevated: CYBER_BACKGROUND,
       workbench: CYBER_BACKGROUND,
       scene: CYBER_SURFACE_SECONDARY,
@@ -61,7 +61,7 @@ export const bitfunCyberTheme: ThemeConfig = {
       primary: CYBER_TEXT_PRIMARY,
       secondary: CYBER_TEXT_SECONDARY,
       muted: CYBER_TEXT_MUTED,
-      disabled: '#4a5a66',
+      disabled: '#475569',
     },
 
     accent: createAccentScale({

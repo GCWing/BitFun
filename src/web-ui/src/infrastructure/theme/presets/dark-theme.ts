@@ -193,11 +193,11 @@ export const bitfunDarkTheme: ThemeConfig = {
     inherit: true,
     rules: [],
     colors: {
-      background: '#121214',
+      background: DARK_BACKGROUND_PRIMARY,
       foreground: DARK_TEXT_PRIMARY,
       lineHighlight: DARK_BACKGROUND_SECONDARY,
       selection: overlayWhite(0.12),
-      cursor: '#c4c4c4',
+      cursor: DARK_BUTTON_TEXT,
     },
   },
 };

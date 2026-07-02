@@ -16,13 +16,14 @@ import {
   rgbaFromHex,
 } from './shared';
 
-const CHINA_NIGHT_BACKGROUND = '#1a1a1a';
-const CHINA_NIGHT_TEXT_PRIMARY = '#e8e6e1';
-const CHINA_NIGHT_BUTTON_TEXT = '#ccc9c4';
+const CHINA_NIGHT_BACKGROUND = '#1c1c1f';
+const CHINA_NIGHT_BACKGROUND_SECONDARY = '#212019';
+const CHINA_NIGHT_TEXT_PRIMARY = '#e8e8e8';
+const CHINA_NIGHT_BUTTON_TEXT = '#c5c3be';
 const CHINA_NIGHT_ACCENT = '#73a5cc';
 const CHINA_NIGHT_ACCENT_HOVER = '#5a8bb3';
 const CHINA_NIGHT_GREEN = '#96c6b4';
-const CHINA_NIGHT_GREEN_HOVER = '#7aab98';
+const CHINA_NIGHT_GREEN_HOVER = '#7eb09b';
 const CHINA_NIGHT_SUCCESS = '#6bc072';
 const CHINA_NIGHT_WARNING = '#f5b555';
 const CHINA_NIGHT_ERROR = '#e85555';
@@ -47,7 +48,7 @@ export const bitfunChinaNightTheme: ThemeConfig = {
   colors: {
     background: {
       primary: CHINA_NIGHT_BACKGROUND,
-      secondary: '#212019',
+      secondary: CHINA_NIGHT_BACKGROUND_SECONDARY,
       tertiary: '#262626',
       quaternary: '#262626',
       elevated: '#262626',
@@ -60,7 +61,7 @@ export const bitfunChinaNightTheme: ThemeConfig = {
       primary: CHINA_NIGHT_TEXT_PRIMARY,
       secondary: '#c5c3be',
       muted: '#928f89',
-      disabled: '#5f5d59',
+      disabled: '#555555',
     },
 
     accent: createAccentScale({ base: CHINA_NIGHT_ACCENT, hover: CHINA_NIGHT_ACCENT_HOVER }),
@@ -213,7 +214,7 @@ export const bitfunChinaNightTheme: ThemeConfig = {
     colors: {
       background: CHINA_NIGHT_BACKGROUND,
       foreground: CHINA_NIGHT_TEXT_PRIMARY,
-      lineHighlight: '#212019',
+      lineHighlight: CHINA_NIGHT_BACKGROUND_SECONDARY,
       selection: chinaNightAccent(0.25),
       cursor: CHINA_NIGHT_ACCENT,
       'editor.selectionBackground': chinaNightAccent(0.25),

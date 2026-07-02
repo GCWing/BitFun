@@ -18,9 +18,10 @@ import {
 } from './shared';
 
 const MIDNIGHT_BACKGROUND = '#2b2d30';
-const MIDNIGHT_TEXT_PRIMARY = '#bcbec4';
-const MIDNIGHT_BUTTON_TEXT = '#afb1b5';
-const MIDNIGHT_ACCENT = '#58a6ff';
+const MIDNIGHT_BACKGROUND_SECONDARY = '#1c1c1f';
+const MIDNIGHT_TEXT_PRIMARY = '#c8c8c8';
+const MIDNIGHT_BUTTON_TEXT = '#b0b0b0';
+const MIDNIGHT_ACCENT = '#60a5fa';
 const MIDNIGHT_ACCENT_HOVER = '#3b82f6';
 const MIDNIGHT_PURPLE = '#9c78ff';
 const MIDNIGHT_PURPLE_HOVER = '#8b5cf6';
@@ -49,11 +50,11 @@ export const bitfunMidnightTheme: ThemeConfig = {
   colors: {
     background: {
       primary: MIDNIGHT_BACKGROUND,
-      secondary: '#1e1f22',
+      secondary: MIDNIGHT_BACKGROUND_SECONDARY,
       tertiary: '#313335',
-      quaternary: '#3c3f41',
+      quaternary: '#3d3d3d',
       elevated: MIDNIGHT_BACKGROUND,
-      workbench: '#1e1f22',
+      workbench: MIDNIGHT_BACKGROUND_SECONDARY,
       scene: MIDNIGHT_BACKGROUND,
       tooltip: midnightBackground(0.94),
     },
@@ -62,7 +63,7 @@ export const bitfunMidnightTheme: ThemeConfig = {
       primary: MIDNIGHT_TEXT_PRIMARY,
       secondary: '#a1a1aa',
       muted: '#6f737a',
-      disabled: '#4e5157',
+      disabled: '#555555',
     },
 
     accent: createAccentScale({ base: MIDNIGHT_ACCENT, hover: MIDNIGHT_ACCENT_HOVER }),

@@ -21,12 +21,12 @@ import {
   STATIC_WHITE,
 } from './shared';
 
-const SLATE_BACKGROUND_PRIMARY = '#14161a';
-const SLATE_BACKGROUND_SECONDARY = '#22262c';
-const SLATE_TEXT_PRIMARY = '#eef0f3';
+const SLATE_BACKGROUND_PRIMARY = '#1c1c1f';
+const SLATE_BACKGROUND_SECONDARY = '#262626';
+const SLATE_TEXT_PRIMARY = '#e8e8e8';
 const SLATE_TEXT_MUTED = '#a8b0bd';
-const SLATE_BUTTON_TEXT = '#dce0e6';
-const SLATE_ACCENT_SOFT = '#e2e8f0';
+const SLATE_BUTTON_TEXT = '#e0e3e8';
+const SLATE_ACCENT_SOFT = '#e8e8e8';
 const SLATE_ACCENT = '#94a3b8';
 const SLATE_ACCENT_HOVER = '#64748b';
 const SLATE_PURPLE = '#b8c4ff';
@@ -57,7 +57,7 @@ export const bitfunSlateTheme: ThemeConfig = {
       primary: SLATE_BACKGROUND_PRIMARY,
       secondary: SLATE_BACKGROUND_SECONDARY,
       tertiary: SLATE_BACKGROUND_PRIMARY,
-      quaternary: '#2c3038',
+      quaternary: '#313335',
       elevated: SLATE_BACKGROUND_SECONDARY,
       workbench: SLATE_BACKGROUND_PRIMARY,
       scene: SLATE_BACKGROUND_SECONDARY,
@@ -68,7 +68,7 @@ export const bitfunSlateTheme: ThemeConfig = {
       primary: SLATE_TEXT_PRIMARY,
       secondary: '#c8ccd2',
       muted: '#a1a1aa',
-      disabled: '#65696f',
+      disabled: '#6a6a6a',
     },
 
 
@@ -226,7 +226,7 @@ export const bitfunSlateTheme: ThemeConfig = {
       { token: 'attribute.value', foreground: '8fc8a9' },
     ],
     colors: {
-      background: '#1a1a1a',
+      background: SLATE_BACKGROUND_PRIMARY,
       foreground: SLATE_TEXT_PRIMARY,
       lineHighlight: SLATE_BACKGROUND_SECONDARY,
       selection: overlayWhite(0.12),

@@ -18,8 +18,8 @@ import {
 } from './shared';
 
 const CHINA_STYLE_PAPER = '#faf8f0';
-const CHINA_STYLE_INK = '#1a1a1a';
-const CHINA_STYLE_BUTTON_TEXT = '#3a3a3a';
+const CHINA_STYLE_INK = '#1c1c1f';
+const CHINA_STYLE_BUTTON_TEXT = '#3d3d3d';
 const CHINA_STYLE_BLUE = '#2e5e8a';
 const CHINA_STYLE_BLUE_HOVER = '#234a6d';
 const CHINA_STYLE_GREEN = '#7eb09b';
@@ -54,7 +54,7 @@ export const bitfunChinaStyleTheme: ThemeConfig = {
       quaternary: '#ebe8d8',
       elevated: '#ebe9e3',
       workbench: CHINA_STYLE_PAPER,
-      scene: '#fdfcf6',
+      scene: CHINA_STYLE_PAPER,
       tooltip: chinaStylePaper(0.96),
     },
 
@@ -183,7 +183,7 @@ export const bitfunChinaStyleTheme: ThemeConfig = {
 
       ghost: {
         default: {
-          color: '#5a5a5a',
+          color: '#555555',
         },
         hover: {
           background: chinaStyleBlue(0.11),
