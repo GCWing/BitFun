@@ -10,7 +10,7 @@ import {
 } from './themePayload';
 import { createWidgetThemeCompatibilityAliasCss } from './themePayloadCompatibility';
 
-const WIDGET_THEME_VAR_NAMES_HASH = '042885b7c1aa63653f958d823180019aef491049c448e4964a07d1f12c73f94e';
+const WIDGET_THEME_VAR_NAMES_HASH = 'fa725e4c7099958cc37c5e54214d3a07579d1f5dbf0e19dda129e77c57e7d16e';
 const WIDGET_THEME_STATIC_SHELL_VAR_NAMES_HASH = '2ba8869e0611a03f360347f93d39fc6427fe8006f9ae6513b7cd67472febd8e7';
 const RETIRED_WIDGET_THEME_COMPAT_KEYS = [
   '--background-primary',
@@ -195,7 +195,7 @@ describe('generated widget theme payload contract', () => {
       first: requestedNames[0],
       last: requestedNames[requestedNames.length - 1],
     }).toEqual({
-      count: 98,
+      count: 94,
       hash: WIDGET_THEME_VAR_NAMES_HASH,
       first: '--color-bg-primary',
       last: '--btn-ghost-hover-border',

@@ -45,10 +45,10 @@
       "max": 0
     },
     "colorScopes.appUi.occurrences": {
-      "max": 1
+      "max": 0
     },
     "colorScopes.appUi.uniqueColors": {
-      "max": 1
+      "max": 0
     },
     "cssVarDefinitions.unresolvedRequiredUnique": {
       "max": 0
@@ -96,10 +96,10 @@
       "max": 30
     },
     "colorDomainScopes.appUi.occurrences": {
-      "max": 1
+      "max": 0
     },
     "colorDomainScopes.appUi.uniqueColors": {
-      "max": 1
+      "max": 0
     }
   }
 }

@@ -61,6 +61,9 @@ export type InstallerTheme = {
 };
 
 const DEFAULT_RAMP_ALPHAS: RampAlphas = ['0.04', '0.08', '0.15', '0.25', '0.4'];
+const DEFAULT_BLUE_RGB = '96, 165, 250';
+const DEFAULT_BLUE_500 = '#60a5fa';
+const DEFAULT_BLUE_600 = '#3b82f6';
 
 function alpha(rgb: string, opacity: string): string {
   return `rgba(${rgb}, ${opacity})`;
@@ -210,10 +213,15 @@ export const THEMES: InstallerTheme[] = [
     id: 'bitfun-dark',
     name: 'Dark',
     type: 'dark',
-    background: { primary: '#121214', secondary: '#1a1c1e', tooltipRgb: '30, 30, 32', tooltipAlpha: '0.92' },
-    accentRgb: '96, 165, 250',
-    accent500: '#60a5fa',
-    accent600: '#3b82f6',
+    background: {
+      primary: '#121214',
+      secondary: '#1a1c1e',
+      tooltipRgb: '30, 30, 32',
+      tooltipAlpha: '0.92',
+    },
+    accentRgb: DEFAULT_BLUE_RGB,
+    accent500: DEFAULT_BLUE_500,
+    accent600: DEFAULT_BLUE_600,
   }),
   createInstallerTheme({
     id: 'bitfun-light',
@@ -229,9 +237,9 @@ export const THEMES: InstallerTheme[] = [
     name: 'Midnight',
     type: 'dark',
     background: { primary: '#2b2d30', secondary: '#1e1f22', tooltipRgb: '43, 45, 48', tooltipAlpha: '0.94' },
-    accentRgb: '88, 166, 255',
-    accent500: '#58a6ff',
-    accent600: '#3b82f6',
+    accentRgb: DEFAULT_BLUE_RGB,
+    accent500: DEFAULT_BLUE_500,
+    accent600: DEFAULT_BLUE_600,
     semantic: {
       success: '#6aab73',
       warning: '#e0a055',

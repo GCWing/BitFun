@@ -29,6 +29,8 @@ export function colorRamp(
 }
 
 export const commonMobileThemeVars: MobileThemeVars = {
+  '--color-static-white': '#ffffff',
+
   '--size-radius-sm': '6px',
   '--size-radius-base': '8px',
   '--size-radius-lg': '12px',

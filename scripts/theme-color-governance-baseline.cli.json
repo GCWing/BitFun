@@ -8,6 +8,18 @@
     "presetUniqueColors": {
       "max": 122
     },
+    "runtimePresetColorOccurrences": {
+      "max": 114
+    },
+    "runtimePresetUniqueColors": {
+      "max": 79
+    },
+    "compatibilityPresetColorOccurrences": {
+      "max": 192
+    },
+    "compatibilityPresetUniqueColors": {
+      "max": 89
+    },
     "rustFallbackColorOccurrences": {
       "max": 44
     },
@@ -17,8 +29,17 @@
     "totalUniqueColors": {
       "max": 152
     },
+    "runtimeTotalUniqueColors": {
+      "max": 109
+    },
     "presetNearPairs.nearTotal": {
       "max": 4
+    },
+    "runtimePresetNearPairs.nearTotal": {
+      "max": 2
+    },
+    "compatibilityPresetNearPairs.nearTotal": {
+      "max": 0
     },
     "rustFallbackNearPairs.nearTotal": {
       "max": 0

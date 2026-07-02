@@ -6,10 +6,12 @@ import path from 'node:path';
 import test from 'node:test';
 
 import {
+  CLI_RUNTIME_THEME_KEYS,
   checkBaseline,
   collectPresetColorEntriesFromJson,
   collectRustFallbackEntriesFromText,
   findNearPairs,
+  isRuntimePresetEntry,
   normalizeHexColor,
   writeReportJson,
 } from './audit-cli-theme-colors.mjs';
@@ -56,6 +58,31 @@ test('collectPresetColorEntriesFromJson resolves defs and light/dark variants', 
     { file: 'bitfun-light.json', key: 'primary.dark', color: '#808080' },
     { file: 'bitfun-light.json', key: 'primary.light', color: '#7f7f7f' },
   ]);
+});
+
+test('isRuntimePresetEntry separates consumed CLI keys from OpenCode compatibility declarations', () => {
+  assert.equal(CLI_RUNTIME_THEME_KEYS.has('diffLineNumber'), true);
+  assert.equal(CLI_RUNTIME_THEME_KEYS.has('markdownText'), false);
+
+  assert.equal(isRuntimePresetEntry({
+    file: 'bitfun-light.json',
+    key: 'primary.light',
+    color: '#7f7f7f',
+  }), true);
+  assert.equal(isRuntimePresetEntry({
+    file: 'bitfun-light.json',
+    key: 'syntaxKeyword',
+    color: '#7c6b99',
+  }), false);
+});
+
+test('CLI runtime key audit stays aligned with the Rust theme resolver', () => {
+  const themeSource = fs.readFileSync('src/apps/cli/src/ui/theme.rs', 'utf8');
+  const rustRuntimeKeys = Array.from(
+    new Set(Array.from(themeSource.matchAll(/resolve_key\(json, &defs, "([^"]+)"/g), match => match[1])),
+  ).sort();
+
+  assert.deepEqual(Array.from(CLI_RUNTIME_THEME_KEYS).sort(), rustRuntimeKeys);
 });
 
 test('collectRustFallbackEntriesFromText reads Theme struct RGB fields only', () => {
@@ -153,5 +180,9 @@ test('CLI audit can print a machine-readable JSON report', () => {
 
   assert.equal(report.root, 'src/apps/cli');
   assert.equal(typeof report.totalUniqueColors, 'number');
+  assert.equal(typeof report.runtimeTotalUniqueColors, 'number');
+  assert.equal(typeof report.compatibilityPresetUniqueColors, 'number');
   assert.equal(Array.isArray(report.presetNearPairs.near), true);
+  assert.equal(Array.isArray(report.runtimePresetNearPairs.near), true);
+  assert.equal(Array.isArray(report.compatibilityPresetNearPairs.near), true);
 });

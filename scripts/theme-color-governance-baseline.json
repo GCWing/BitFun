@@ -54,10 +54,10 @@
       "max": 0
     },
     "generatedWidgetPayload.varUnique": {
-      "max": 98
+      "max": 94
     },
     "generatedWidgetPayload.occurrences": {
-      "max": 98
+      "max": 94
     },
     "generatedWidgetPayload.undefinedUnique": {
       "max": 0
@@ -108,7 +108,7 @@
       "max": 205
     },
     "colorScopes.exception.uniqueColors": {
-      "max": 245
+      "max": 229
     },
     "cssVarDefinitions.unresolvedRequiredUnique": {
       "max": 0
@@ -258,7 +258,7 @@
       "max": 0
     },
     "colorDomainScopes.boundaryFallback.occurrences": {
-      "max": 23
+      "max": 18
     },
     "colorDomainScopes.boundaryFallback.uniqueColors": {
       "max": 18
@@ -276,10 +276,10 @@
       "max": 0
     },
     "colorDomainScopes.uiException.occurrences": {
-      "max": 38
+      "max": 17
     },
     "colorDomainScopes.uiException.uniqueColors": {
-      "max": 34
+      "max": 17
     },
     "colorDomainScopes.languageIdentity.occurrences": {
       "max": 52

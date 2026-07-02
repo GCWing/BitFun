@@ -242,10 +242,6 @@ const WIDGET_THEME_VAR_GROUPS = {
     FALLBACK_VAR.bgPrimary,
     FALLBACK_VAR.staticWhite,
     FALLBACK_VAR.staticBlack,
-    FALLBACK_VAR.overlayWhite04,
-    FALLBACK_VAR.overlayWhite06,
-    FALLBACK_VAR.overlayBlack08,
-    FALLBACK_VAR.overlayBlack30,
   ],
   backgroundSurface: [
     FALLBACK_VAR.bgSecondary,

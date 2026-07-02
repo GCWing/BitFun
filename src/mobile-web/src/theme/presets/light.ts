@@ -19,7 +19,7 @@ const SUCCESS = '52, 199, 89';
 const ERROR = '255, 59, 48';
 
 const BG_PRIMARY = '#f3f3f5';
-const BG_SECONDARY = '#ffffff';
+const BG_SECONDARY = 'var(--color-static-white)';
 const BG_QUATERNARY = '#e8e8e8';
 const TEXT_PRIMARY = '#18181a';
 const TEXT_SECONDARY = '#48484a';

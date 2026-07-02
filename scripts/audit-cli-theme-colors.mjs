@@ -16,6 +16,36 @@ const DEFAULT_NEAR_THRESHOLD = 10;
 
 export { normalizeCliHexColor as normalizeHexColor, writeReportJson } from './theme-color-audit-utils.mjs';
 
+export const CLI_RUNTIME_THEME_KEYS = new Set([
+  'primary',
+  'success',
+  'warning',
+  'error',
+  'info',
+  'textMuted',
+  'background',
+  'border',
+  'backgroundPanel',
+  'backgroundElement',
+  'inputBackground',
+  'diffAdded',
+  'diffRemoved',
+  'diffAddedBg',
+  'diffRemovedBg',
+  'borderActive',
+  'accent',
+  'diffHunkHeader',
+  'diffLineNumber',
+]);
+
+function baseThemeKey(key) {
+  return key.replace(/\.(dark|light)$/, '');
+}
+
+export function isRuntimePresetEntry(entry) {
+  return CLI_RUNTIME_THEME_KEYS.has(baseThemeKey(entry.key));
+}
+
 export function collectPresetColorEntriesFromJson(file, jsonText) {
   const parsed = JSON.parse(jsonText);
   const theme = parsed.theme;
@@ -203,9 +233,14 @@ export function createCliThemeColorReport(options = {}) {
   const threshold = options.nearThreshold ?? DEFAULT_NEAR_THRESHOLD;
   const presetFiles = listPresetFiles(root);
   const presetEntries = readPresetEntries(presetFiles);
+  const runtimePresetEntries = presetEntries.filter(isRuntimePresetEntry);
+  const compatibilityPresetEntries = presetEntries.filter(entry => !isRuntimePresetEntry(entry));
   const rustFallbackEntries = readRustFallbackEntries(root);
   const allEntries = [...presetEntries, ...rustFallbackEntries];
+  const runtimeEntries = [...runtimePresetEntries, ...rustFallbackEntries];
   const presetNearPairs = findNearPairs(presetEntries, threshold);
+  const runtimePresetNearPairs = findNearPairs(runtimePresetEntries, threshold);
+  const compatibilityPresetNearPairs = findNearPairs(compatibilityPresetEntries, threshold);
   const rustFallbackNearPairs = findNearPairs(rustFallbackEntries, threshold);
 
   return {
@@ -213,19 +248,35 @@ export function createCliThemeColorReport(options = {}) {
     presetFiles: presetFiles.length,
     presetColorOccurrences: presetEntries.length,
     presetUniqueColors: new Set(presetEntries.map(entry => entry.color)).size,
+    runtimePresetColorOccurrences: runtimePresetEntries.length,
+    runtimePresetUniqueColors: new Set(runtimePresetEntries.map(entry => entry.color)).size,
+    compatibilityPresetColorOccurrences: compatibilityPresetEntries.length,
+    compatibilityPresetUniqueColors: new Set(compatibilityPresetEntries.map(entry => entry.color)).size,
     rustFallbackColorOccurrences: rustFallbackEntries.length,
     rustFallbackUniqueColors: new Set(rustFallbackEntries.map(entry => entry.color)).size,
     totalUniqueColors: new Set(allEntries.map(entry => entry.color)).size,
+    runtimeTotalUniqueColors: new Set(runtimeEntries.map(entry => entry.color)).size,
     nearThreshold: threshold,
+    runtimeThemeKeys: Array.from(CLI_RUNTIME_THEME_KEYS).sort(),
     presetNearPairs: {
       nearTotal: presetNearPairs.length,
       near: presetNearPairs,
+    },
+    runtimePresetNearPairs: {
+      nearTotal: runtimePresetNearPairs.length,
+      near: runtimePresetNearPairs,
+    },
+    compatibilityPresetNearPairs: {
+      nearTotal: compatibilityPresetNearPairs.length,
+      near: compatibilityPresetNearPairs,
     },
     rustFallbackNearPairs: {
       nearTotal: rustFallbackNearPairs.length,
       near: rustFallbackNearPairs,
     },
     topPresetColors: countByColor(presetEntries),
+    topRuntimePresetColors: countByColor(runtimePresetEntries),
+    topCompatibilityPresetColors: countByColor(compatibilityPresetEntries),
     topRustFallbackColors: countByColor(rustFallbackEntries),
   };
 }
@@ -311,17 +362,32 @@ function printReport(report, top) {
   console.log(`Preset files: ${report.presetFiles}`);
   console.log(`Preset color occurrences: ${report.presetColorOccurrences}`);
   console.log(`Preset unique colors: ${report.presetUniqueColors}`);
+  console.log(`Runtime-consumed preset color occurrences: ${report.runtimePresetColorOccurrences}`);
+  console.log(`Runtime-consumed preset unique colors: ${report.runtimePresetUniqueColors}`);
+  console.log(`Compatibility-declared preset color occurrences: ${report.compatibilityPresetColorOccurrences}`);
+  console.log(`Compatibility-declared preset unique colors: ${report.compatibilityPresetUniqueColors}`);
   console.log(`Rust fallback Color::Rgb occurrences: ${report.rustFallbackColorOccurrences}`);
   console.log(`Rust fallback unique colors: ${report.rustFallbackUniqueColors}`);
   console.log(`Total CLI unique colors: ${report.totalUniqueColors}`);
+  console.log(`Runtime CLI unique colors: ${report.runtimeTotalUniqueColors}`);
   console.log(`Preset near pairs: ${report.presetNearPairs.nearTotal}`);
+  console.log(`Runtime-consumed preset near pairs: ${report.runtimePresetNearPairs.nearTotal}`);
+  console.log(`Compatibility-declared preset near pairs: ${report.compatibilityPresetNearPairs.nearTotal}`);
   console.log(`Rust fallback near pairs: ${report.rustFallbackNearPairs.nearTotal}`);
   console.log('');
   printRows('Top preset colors:', report.topPresetColors, top);
   console.log('');
+  printRows('Top runtime-consumed preset colors:', report.topRuntimePresetColors, top);
+  console.log('');
+  printRows('Top compatibility-declared preset colors:', report.topCompatibilityPresetColors, top);
+  console.log('');
   printRows('Top Rust fallback colors:', report.topRustFallbackColors, top);
   console.log('');
   printRows('Preset near pairs:', report.presetNearPairs.near, Math.min(top, 20));
+  console.log('');
+  printRows('Runtime-consumed preset near pairs:', report.runtimePresetNearPairs.near, Math.min(top, 20));
+  console.log('');
+  printRows('Compatibility-declared preset near pairs:', report.compatibilityPresetNearPairs.near, Math.min(top, 20));
   console.log('');
   printRows('Rust fallback near pairs:', report.rustFallbackNearPairs.near, Math.min(top, 20));
 }
