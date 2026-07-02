@@ -5410,6 +5410,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         child_session_name: Option<&str>,
         question: &str,
         model_id: Option<&str>,
+        image_contexts: Option<Vec<ImageContextData>>,
     ) -> BitFunResult<String> {
         if request_id.trim().is_empty() {
             return Err(BitFunError::Validation(
@@ -5455,7 +5456,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             child_session_id.to_string(),
             user_input,
             Some(question.trim().to_string()),
-            None,
+            image_contexts,
             Some(turn_id.clone()),
             child_session.agent_type.clone(),
             child_session.config.workspace_path.clone(),

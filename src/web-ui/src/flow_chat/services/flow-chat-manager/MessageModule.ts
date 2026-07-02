@@ -219,10 +219,6 @@ export async function sendMessage(
     }
 
     if (isTransientBtwSession(refreshedSession)) {
-      if ((options?.imageContexts?.length ?? 0) > 0) {
-        throw new Error('Transient /btw sessions do not support image attachments yet');
-      }
-
       const parentSessionId = refreshedSession.parentSessionId?.trim();
       if (!parentSessionId) {
         throw new Error(`Transient /btw session is missing parentSessionId: ${sessionId}`);
@@ -234,6 +230,12 @@ export async function sendMessage(
         question: message,
         childSessionName: refreshedSession.title,
         modelId: refreshedSession.config.modelName,
+        imagePayload: options?.imageContexts
+          ? {
+              imageContexts: options.imageContexts,
+              imageDisplayData: options.imageDisplayData ?? [],
+            }
+          : undefined,
       });
       return;
     }
