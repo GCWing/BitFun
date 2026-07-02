@@ -39,7 +39,7 @@
         
         > span[style] {
           &:hover {
-            background-color: var(--color-overlay-white-05) !important;
+            background-color: var(--color-overlay-white-06) !important;
           }
         }
         
@@ -94,7 +94,7 @@
     transition: background-color 0.15s ease, border-color 0.15s ease;
 
     &:hover {
-      background-color: var(--color-overlay-white-05);
+      background-color: var(--color-overlay-white-06);
     }
 
     &--highlighted {
@@ -179,7 +179,7 @@
     }
 
     pre code > span[style]:hover {
-      background-color: var(--color-overlay-black-06) !important;
+      background-color: var(--color-overlay-black-08) !important;
     }
   }
 
@@ -188,6 +188,6 @@
   }
 
   .code-preview__plain-line:hover {
-    background-color: var(--color-overlay-black-06);
+    background-color: var(--color-overlay-black-08);
   }
 }

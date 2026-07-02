@@ -59,9 +59,9 @@
   align-items: center;
   justify-content: center;
   padding: 32px;
-  background: var(--color-overlay-white-02);
+  background: var(--color-overlay-white-04);
   border-radius: 12px;
-  border: 1px solid var(--color-overlay-white-05);
+  border: 1px solid var(--color-overlay-white-06);
   transition: all 0.3s ease;
   min-height: 150px;
 }

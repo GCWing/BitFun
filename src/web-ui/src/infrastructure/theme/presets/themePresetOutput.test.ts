@@ -3,6 +3,10 @@ import { describe, expect, it } from 'vitest';
 
 import { builtinThemes } from './index';
 import {
+  PLUGIN_THEME_COLOR_KEYS,
+  createPluginThemeColorProjection,
+} from '../pluginThemeProjection';
+import {
   createAccentScale,
   createGitColors,
   createSemanticColors,
@@ -112,6 +116,31 @@ describe('builtin theme preset output', () => {
     expect(serializedThemes).not.toContain('#f0f2f5');
   });
 
+  it('projects builtin themes to a compact OpenCode-compatible plugin color key set', () => {
+    expect(PLUGIN_THEME_COLOR_KEYS).toEqual([
+      'primary',
+      'secondary',
+      'accent',
+      'success',
+      'warning',
+      'error',
+      'info',
+    ]);
+
+    for (const theme of builtinThemes) {
+      const projection = createPluginThemeColorProjection(theme);
+
+      expect(Object.keys(projection).sort()).toEqual([...PLUGIN_THEME_COLOR_KEYS].sort());
+      expect(projection.primary).toBe(theme.colors.accent[500]);
+      expect(projection.secondary).toBe(theme.colors.purple?.[500] ?? theme.colors.accent[600]);
+      expect(projection.accent).toBe(theme.colors.accent[600]);
+      expect(projection.success).toBe(theme.colors.semantic.success);
+      expect(projection.warning).toBe(theme.colors.semantic.warning);
+      expect(projection.error).toBe(theme.colors.semantic.error);
+      expect(projection.info).toBe(theme.colors.semantic.info);
+    }
+  });
+
   it('keeps resolved preset objects stable across helper refactors', () => {
     expect(builtinThemes.map(theme => ({
       id: theme.id,
@@ -135,7 +164,7 @@ describe('builtin theme preset output', () => {
           "type": "dark",
         },
         {
-          "hash": "f0a96ff2f8dc2a63c37ab413e49ec0e9f7987f12bc510d36d7c52f9bfc7eb8bc",
+          "hash": "737a002520289773d793a8af0f86d59951e79edf413fe406ae6a7f49437a9553",
           "id": "bitfun-midnight",
           "type": "dark",
         },
@@ -150,12 +179,12 @@ describe('builtin theme preset output', () => {
           "type": "dark",
         },
         {
-          "hash": "101a1ee5c4a14ac03deca443f5496fac521b49ada31554a90eb1375738b2afe4",
+          "hash": "683856e15d61742132227c99d1abb92ea08ffc29259e7b64d5e4389d4aa214ed",
           "id": "bitfun-cyber",
           "type": "dark",
         },
         {
-          "hash": "c276008fcdbac289f0893cbcb3cdc4227e6dade9870b923d7b606f4eb8701873",
+          "hash": "d8777258e8c141a0225606d83ce931d8b35b4231bfa036155016e1766b78ed23",
           "id": "bitfun-tokyo-night",
           "type": "dark",
         },

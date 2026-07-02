@@ -74,7 +74,7 @@
   gap: 12px;
   margin-top: 8px;
   padding-top: 8px;
-  border-top: 1px solid var(--color-overlay-black-06);
+  border-top: 1px solid var(--color-overlay-black-08);
 }
 
 .message-timestamp {

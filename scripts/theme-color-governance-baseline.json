@@ -54,10 +54,10 @@
       "max": 0
     },
     "generatedWidgetPayload.varUnique": {
-      "max": 157
+      "max": 153
     },
     "generatedWidgetPayload.occurrences": {
-      "max": 157
+      "max": 153
     },
     "generatedWidgetPayload.undefinedUnique": {
       "max": 0
@@ -105,7 +105,7 @@
       "max": 0
     },
     "colorScopes.token.uniqueColors": {
-      "max": 246
+      "max": 235
     },
     "colorScopes.exception.uniqueColors": {
       "max": 245
@@ -153,25 +153,25 @@
       "max": 0
     },
     "colorDomainNearPairs.nearTotal": {
-      "max": 102
+      "max": 73
     },
     "colorDomainNearPairs.themePreset.indistinguishableTotal": {
       "max": 0
     },
     "colorDomainNearPairs.themePreset.nearTotal": {
-      "max": 79
+      "max": 57
     },
     "colorDomainNearPairs.themeRuntime.indistinguishableTotal": {
       "max": 0
     },
     "colorDomainNearPairs.themeRuntime.nearTotal": {
-      "max": 10
+      "max": 8
     },
     "colorDomainNearPairs.tokenContract.indistinguishableTotal": {
       "max": 0
     },
     "colorDomainNearPairs.tokenContract.nearTotal": {
-      "max": 13
+      "max": 8
     },
     "colorDomainNearPairs.generatedWidget.indistinguishableTotal": {
       "max": 0
@@ -240,16 +240,16 @@
       "max": 0
     },
     "colorDomainScopes.themePreset.occurrences": {
-      "max": 183
+      "max": 181
     },
     "colorDomainScopes.themePreset.uniqueColors": {
-      "max": 152
+      "max": 147
     },
     "colorDomainScopes.themeRuntime.occurrences": {
-      "max": 35
+      "max": 30
     },
     "colorDomainScopes.tokenContract.occurrences": {
-      "max": 126
+      "max": 118
     },
     "colorDomainScopes.generatedWidget.occurrences": {
       "max": 0
@@ -258,10 +258,10 @@
       "max": 0
     },
     "colorDomainScopes.boundaryFallback.occurrences": {
-      "max": 22
+      "max": 23
     },
     "colorDomainScopes.boundaryFallback.uniqueColors": {
-      "max": 17
+      "max": 18
     },
     "colorDomainScopes.editor.occurrences": {
       "max": 52

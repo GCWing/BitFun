@@ -464,7 +464,7 @@ $_section-header-height: 24px;
     background: var(--color-bg-elevated);
     border: 1px solid var(--border-subtle);
     border-radius: $size-radius-base;
-    box-shadow: 0 4px 12px var(--color-overlay-black-25);
+    box-shadow: 0 4px 12px var(--color-overlay-black-30);
     z-index: 9999;
     transform-origin: top left;
     animation: bitfun-footer-menu-in $motion-fast $easing-decelerate forwards;
@@ -648,7 +648,7 @@ $_section-header-height: 24px;
     &:hover {
       color: var(--color-text-primary);
       background: color-mix(in srgb, var(--element-bg-soft) 94%, transparent);
-      box-shadow: 0 2px 8px var(--color-overlay-black-06);
+      box-shadow: 0 2px 8px var(--color-overlay-black-08);
     }
 
     &:active {
@@ -663,7 +663,7 @@ $_section-header-height: 24px;
     &.is-active {
       color: var(--color-text-primary);
       background: color-mix(in srgb, var(--element-bg-soft) 94%, transparent);
-      box-shadow: 0 2px 8px var(--color-overlay-black-06);
+      box-shadow: 0 2px 8px var(--color-overlay-black-08);
     }
   }
 
@@ -703,7 +703,7 @@ $_section-header-height: 24px;
     &:hover {
       color: var(--color-text-primary);
       background: color-mix(in srgb, var(--element-bg-soft) 94%, transparent);
-      box-shadow: 0 2px 8px var(--color-overlay-black-06);
+      box-shadow: 0 2px 8px var(--color-overlay-black-08);
     }
 
     &:active {
@@ -720,7 +720,7 @@ $_section-header-height: 24px;
       color: var(--color-text-primary);
       background: color-mix(in srgb, var(--element-bg-soft) 94%, transparent);
       border: 1px solid var(--border-subtle);
-      box-shadow: 0 2px 8px var(--color-overlay-black-06);
+      box-shadow: 0 2px 8px var(--color-overlay-black-08);
     }
 
     &.has-customizing-apps {
@@ -943,7 +943,7 @@ $_section-header-height: 24px;
     background: var(--color-bg-elevated);
     border: 1px solid var(--border-subtle);
     border-radius: $size-radius-base;
-    box-shadow: 0 4px 12px var(--color-overlay-black-25);
+    box-shadow: 0 4px 12px var(--color-overlay-black-30);
     z-index: 9999;
     transform-origin: top left;
     animation: bitfun-footer-menu-in $motion-fast $easing-decelerate forwards;
@@ -1700,7 +1700,7 @@ $_section-header-height: 24px;
   background: var(--color-bg-elevated);
   border: 1px solid var(--border-subtle);
   border-radius: $size-radius-base;
-  box-shadow: 0 4px 12px var(--color-overlay-black-25);
+  box-shadow: 0 4px 12px var(--color-overlay-black-30);
   z-index: 9999;
   transform-origin: bottom left;
   animation: bitfun-footer-menu-in $motion-fast $easing-decelerate forwards;

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -136,4 +137,21 @@ test('writeReportJson creates parent directories for report output', () => {
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
+});
+
+test('CLI audit can print a machine-readable JSON report', () => {
+  const stdout = execFileSync(process.execPath, [
+    'scripts/audit-cli-theme-colors.mjs',
+    '--json',
+    '--no-baseline',
+    '--top=0',
+  ], {
+    cwd: process.cwd(),
+    encoding: 'utf8',
+  });
+  const report = JSON.parse(stdout);
+
+  assert.equal(report.root, 'src/apps/cli');
+  assert.equal(typeof report.totalUniqueColors, 'number');
+  assert.equal(Array.isArray(report.presetNearPairs.near), true);
 });

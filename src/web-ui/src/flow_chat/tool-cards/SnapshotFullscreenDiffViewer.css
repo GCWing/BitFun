@@ -133,7 +133,7 @@
 }
 
 .header-btn.close-btn {
-  background: var(--color-overlay-white-05);
+  background: var(--color-overlay-white-06);
   color: var(--color-overlay-white-70);
   border: 1px solid var(--color-overlay-white-10);
 }
@@ -157,7 +157,7 @@
   gap: 8px;
   padding: 12px 20px;
   background: var(--diff-fullscreen-nav-bg);
-  border-bottom: 1px solid var(--color-overlay-white-05);
+  border-bottom: 1px solid var(--color-overlay-white-06);
   flex-shrink: 0;
   overflow: hidden;
 }
@@ -170,7 +170,7 @@
   height: 28px;
   border: none;
   border-radius: 4px;
-  background: var(--color-overlay-white-05);
+  background: var(--color-overlay-white-06);
   color: var(--color-overlay-white-70);
   cursor: pointer;
   transition: all 0.2s ease;
@@ -219,7 +219,7 @@
 }
 
 .file-tab:hover {
-  background: var(--color-overlay-white-05);
+  background: var(--color-overlay-white-06);
   color: var(--color-overlay-white-80);
 }
 
@@ -261,7 +261,7 @@
   justify-content: space-between;
   padding: 12px 20px;
   background: var(--diff-fullscreen-surface-bg);
-  border-bottom: 1px solid var(--color-overlay-white-05);
+  border-bottom: 1px solid var(--color-overlay-white-06);
   flex-shrink: 0;
 }
 

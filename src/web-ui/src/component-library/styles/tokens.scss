@@ -7,17 +7,12 @@ $color-static-black: #000000;
 $color-static-emerald: #10b981;
 $color-static-orange: #f97316;
 
-$overlay-white-02: rgba(255, 255, 255, 0.02);
-$overlay-white-01: $overlay-white-02;
 $overlay-white-04: rgba(255, 255, 255, 0.04);
 $overlay-white-06: rgba(255, 255, 255, 0.06);
-$overlay-white-05: $overlay-white-06;
 $overlay-white-08: rgba(255, 255, 255, 0.08);
 $overlay-white-10: rgba(255, 255, 255, 0.1);
-$overlay-white-09: $overlay-white-10;
 $overlay-white-12: rgba(255, 255, 255, 0.12);
 $overlay-white-15: rgba(255, 255, 255, 0.15);
-$overlay-white-18: rgba(255, 255, 255, 0.18);
 $overlay-white-20: rgba(255, 255, 255, 0.2);
 $overlay-white-24: rgba(255, 255, 255, 0.24);
 $overlay-white-25: $overlay-white-24;
@@ -26,21 +21,19 @@ $overlay-white-32: $overlay-white-30;
 $overlay-white-40: rgba(255, 255, 255, 0.4);
 $overlay-white-60: rgba(255, 255, 255, 0.6);
 
-$overlay-black-06: rgba(0, 0, 0, 0.06);
 $overlay-black-08: rgba(0, 0, 0, 0.08);
 $overlay-black-10: rgba(0, 0, 0, 0.1);
 $overlay-black-12: rgba(0, 0, 0, 0.12);
 $overlay-black-15: rgba(0, 0, 0, 0.15);
 $overlay-black-20: rgba(0, 0, 0, 0.2);
-$overlay-black-25: rgba(0, 0, 0, 0.25);
 $overlay-black-30: rgba(0, 0, 0, 0.3);
 $overlay-black-40: rgba(0, 0, 0, 0.4);
 $overlay-black-50: rgba(0, 0, 0, 0.5);
 $overlay-black-60: rgba(0, 0, 0, 0.6);
 $overlay-black-70: rgba(0, 0, 0, 0.7);
 $overlay-black-80: rgba(0, 0, 0, 0.8);
-$overlay-black-85: rgba(0, 0, 0, 0.85);
-$overlay-black-90: rgba(0, 0, 0, 0.9);
+$overlay-black-85: $overlay-black-80;
+$overlay-black-90: $overlay-black-80;
 
 $color-blue-500-a08: rgba(96, 165, 250, 0.08);
 $color-blue-500-a06: $color-blue-500-a08;
@@ -48,11 +41,11 @@ $color-blue-500-a15: rgba(96, 165, 250, 0.15);
 $color-blue-500-a12: $color-blue-500-a15;
 $color-blue-500-a18: $color-blue-500-a15;
 $color-blue-600-a08: rgba(59, 130, 246, 0.08);
-$color-blue-600-a12: rgba(59, 130, 246, 0.12);
 $color-blue-600-a15: rgba(59, 130, 246, 0.15);
+$color-blue-600-a12: $color-blue-600-a15;
 $color-blue-600-a18: $color-blue-600-a15;
-$color-blue-600-a25: rgba(59, 130, 246, 0.25);
 $color-blue-600-a30: rgba(59, 130, 246, 0.3);
+$color-blue-600-a25: $color-blue-600-a30;
 $color-blue-600-a40: rgba(59, 130, 246, 0.4);
 
 $color-purple-500-a08: rgba(139, 92, 246, 0.08);
@@ -82,7 +75,7 @@ $color-text-muted: #858585;
 $color-text-disabled: #555555;
 
 // ==================== Neutral surface system ====================
-$element-bg-subtle: $overlay-white-05;
+$element-bg-subtle: $overlay-white-06;
 $element-bg-soft: $overlay-white-06;
 $element-bg-base: $overlay-white-10;
 $element-bg-medium: $overlay-white-12;
@@ -131,7 +124,7 @@ $color-info-border: $overlay-white-24;
 $git-color-branch: #a1a1aa;
 $git-color-branch-bg: $overlay-white-06;
 $git-color-branch-bg-hover: $overlay-white-12;
-$git-color-branch-border: $overlay-white-18;
+$git-color-branch-border: $overlay-white-20;
 
 $git-color-changes: $color-warning;
 $git-color-changes-bg: rgba(245, 158, 11, 0.1);
@@ -163,7 +156,7 @@ $git-color-push-bg-hover: $git-color-staged-bg-hover;
 
 // ==================== Border system ====================
 $border-subtle: $overlay-white-12;
-$border-base: $overlay-white-18;
+$border-base: $overlay-white-20;
 $border-medium: $overlay-white-24;
 $border-strong: $overlay-white-32;
 $border-prominent: $overlay-white-40;
@@ -227,11 +220,11 @@ $blur-intense: blur(20px) saturate(1.4) brightness(1.15);
 
 // ==================== Glass background system ====================
 $glass-base: linear-gradient(135deg,
-  $overlay-white-02 0%,
-  $overlay-white-01 50%,
+  $overlay-white-04 0%,
+  $overlay-white-04 50%,
   $overlay-white-04 100%);
 
-$glass-disabled: $overlay-white-02;
+$glass-disabled: $overlay-white-04;
 
 $glass-blue-subtle: $color-blue-600-a08;
 $glass-blue-base: linear-gradient(135deg,
@@ -403,7 +396,7 @@ $button-transform-hover: translateY(-3px) scale(1.03);
 $button-bg-primary: linear-gradient(135deg,
   $overlay-white-10 0%,
   $overlay-white-08 30%,
-  $overlay-white-09 60%,
+  $overlay-white-10 60%,
   $overlay-white-12 100%
 );
 $button-bg-primary-hover: $button-bg-hover;
@@ -420,7 +413,7 @@ $panel-shadow: $shadow-sm;
 
 $card-bg-default: $overlay-white-04;
 $card-bg-elevated: $overlay-white-06;
-$card-bg-subtle: $overlay-white-02;
+$card-bg-subtle: $overlay-white-04;
 $card-bg-hover: $overlay-white-06;
 $card-bg-active: $overlay-white-08;
 $card-bg-accent: $color-blue-500-a08;
@@ -552,9 +545,9 @@ $badge-info-text: $color-info;
     @if $color == 'white' {
       background: linear-gradient(90deg,
         transparent,
-        $overlay-white-05,
+        $overlay-white-06,
         $overlay-white-08,
-        $overlay-white-05,
+        $overlay-white-06,
         transparent
       );
     } @else if $color == 'blue' {
@@ -789,9 +782,7 @@ $badge-info-text: $color-info;
   --color-static-black: #{$color-static-black};
   --color-static-white-rgb: 255, 255, 255;
   --color-static-black-rgb: 0, 0, 0;
-  --color-overlay-white-02: #{$overlay-white-02};
   --color-overlay-white-04: #{$overlay-white-04};
-  --color-overlay-white-05: #{$overlay-white-05};
   --color-overlay-white-06: #{$overlay-white-06};
   --color-overlay-white-08: #{$overlay-white-08};
   --color-overlay-white-10: #{$overlay-white-10};
@@ -803,25 +794,19 @@ $badge-info-text: $color-info;
   --color-overlay-white-80: color-mix(in srgb, var(--color-static-white) 80%, transparent);
   --color-overlay-white-90: color-mix(in srgb, var(--color-static-white) 90%, transparent);
   --color-overlay-white-95: color-mix(in srgb, var(--color-static-white) 95%, transparent);
-  --color-overlay-black-06: #{$overlay-black-06};
   --color-overlay-black-08: #{$overlay-black-08};
   --color-overlay-black-10: #{$overlay-black-10};
   --color-overlay-black-12: #{$overlay-black-12};
   --color-overlay-black-15: #{$overlay-black-15};
   --color-overlay-black-20: #{$overlay-black-20};
-  --color-overlay-black-25: #{$overlay-black-25};
   --color-overlay-black-30: #{$overlay-black-30};
   --color-overlay-black-40: #{$overlay-black-40};
   --color-overlay-black-50: #{$overlay-black-50};
   --color-overlay-black-80: #{$overlay-black-80};
   --color-overlay-slate-rgb: 15, 23, 42;
-  --color-overlay-slate-03: rgba(var(--color-overlay-slate-rgb), 0.03);
   --color-overlay-slate-04: rgba(var(--color-overlay-slate-rgb), 0.04);
-  --color-overlay-slate-06: rgba(var(--color-overlay-slate-rgb), 0.06);
   --color-overlay-slate-08: rgba(var(--color-overlay-slate-rgb), 0.08);
-  --color-overlay-slate-10: rgba(var(--color-overlay-slate-rgb), 0.1);
   --color-overlay-slate-12: rgba(var(--color-overlay-slate-rgb), 0.12);
-  --color-overlay-slate-14: rgba(var(--color-overlay-slate-rgb), 0.14);
   --color-overlay-slate-22: rgba(var(--color-overlay-slate-rgb), 0.22);
   --color-bg-secondary: #{$color-bg-secondary};
   --color-bg-tertiary: #{$color-bg-tertiary};

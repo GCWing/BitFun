@@ -613,7 +613,7 @@
 
   .code-block-toolbar {
     background: var(--markdown-code-toolbar-bg-light);
-    border-bottom-color: var(--color-overlay-slate-10);
+    border-bottom-color: var(--color-overlay-slate-12);
   }
 
   .copy-button {
@@ -621,7 +621,7 @@
   }
 
   .copy-button:hover {
-    background: var(--color-overlay-slate-06);
+    background: var(--color-overlay-slate-08);
     color: var(--flowchat-link-color);
   }
 

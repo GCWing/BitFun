@@ -116,7 +116,7 @@
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
-  background: var(--color-overlay-white-05);
+  background: var(--color-overlay-white-06);
   color: var(--color-overlay-white-80);
   border: 1px solid var(--color-overlay-white-10);
 }

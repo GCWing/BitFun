@@ -58,9 +58,9 @@ export const bitfunTokyoNightTheme: ThemeConfig = {
     background: {
       primary: TOKYO_BACKGROUND_PRIMARY,
       secondary: TOKYO_BACKGROUND_SECONDARY,
-      tertiary: '#14141b',
+      tertiary: TOKYO_BACKGROUND_SECONDARY,
       quaternary: '#1e202e',
-      elevated: '#20222c',
+      elevated: '#1e202e',
       workbench: TOKYO_BACKGROUND_SECONDARY,
       scene: TOKYO_BACKGROUND_PRIMARY,
       tooltip: rgbaFromHex(TOKYO_BACKGROUND_SECONDARY, 0.94),

@@ -23,7 +23,7 @@
     0 8px 32px rgba(var(--color-static-black-rgb), 0.35),
     0 4px 16px var(--color-overlay-black-20),
     0 0 1px color-mix(in srgb, var(--color-accent-500) 30%, transparent),
-    inset 0 1px 0 var(--color-overlay-white-05);
+    inset 0 1px 0 var(--color-overlay-white-06);
   overflow: hidden;
   z-index: 1100;
   display: flex;
@@ -230,7 +230,7 @@
     border-color: var(--border-subtle);
     box-shadow:
       0 4px 18px var(--color-overlay-slate-04),
-      0 1px 3px var(--color-overlay-slate-03),
+      0 1px 3px var(--color-overlay-slate-04),
       inset 0 1px 0 var(--color-overlay-white-95);
 
     &__back-btn {
@@ -238,7 +238,7 @@
       border-color: var(--color-overlay-slate-08);
 
       &:hover {
-        background: var(--color-overlay-slate-06);
+        background: var(--color-overlay-slate-08);
       }
     }
 

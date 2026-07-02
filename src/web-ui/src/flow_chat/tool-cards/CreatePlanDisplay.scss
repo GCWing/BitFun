@@ -55,7 +55,7 @@
       90deg,
       color-mix(in srgb, var(--color-warning) 7%, transparent) 0%,
       color-mix(in srgb, var(--color-warning) 4%, transparent) 50%,
-      var(--color-overlay-white-02) 100%
+      var(--color-overlay-white-04) 100%
     );
     border-bottom: 1px solid var(--border-base);
 
@@ -338,7 +338,7 @@
     justify-content: space-between;
     padding: var(--flowchat-card-pad-y) var(--flowchat-card-pad-x);
     border-top: 1px solid var(--border-base);
-    background: var(--color-overlay-white-02);
+    background: var(--color-overlay-white-04);
 
     &--generating-only {
       justify-content: flex-end;

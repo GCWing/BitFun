@@ -53,7 +53,7 @@ export const bitfunMidnightTheme: ThemeConfig = {
       tertiary: '#313335',
       quaternary: '#3c3f41',
       elevated: MIDNIGHT_BACKGROUND,
-      workbench: '#212121',
+      workbench: '#1e1f22',
       scene: MIDNIGHT_BACKGROUND,
       tooltip: midnightBackground(0.94),
     },

@@ -310,7 +310,7 @@
       -webkit-backdrop-filter: none;
       box-shadow:
         0 4px 18px var(--color-overlay-slate-04),
-        0 1px 3px var(--color-overlay-slate-03),
+        0 1px 3px var(--color-overlay-slate-04),
         inset 0 1px 0 var(--color-overlay-white-95);
     }
 
@@ -322,7 +322,7 @@
       background: var(--color-overlay-slate-08);
 
       &:hover {
-        background: var(--color-overlay-slate-14);
+        background: var(--color-overlay-slate-12);
       }
     }
   }

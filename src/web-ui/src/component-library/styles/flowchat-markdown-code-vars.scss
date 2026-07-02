@@ -6,7 +6,7 @@
 :root {
   --flowchat-md-code-font-mono: 'Fira Code', 'JetBrains Mono', Consolas, 'Courier New', monospace;
 
-  --flowchat-md-inline-code-bg: var(--color-overlay-white-05);
+  --flowchat-md-inline-code-bg: var(--color-overlay-white-06);
   --flowchat-md-inline-code-border: var(--color-overlay-white-10);
   --flowchat-md-inline-code-fg: #a8b4c8;
   --flowchat-md-inline-code-hover-bg: var(--color-overlay-white-08);
@@ -24,10 +24,10 @@
   --flowchat-md-pre-hover-shadow:
     0 8px 24px var(--color-overlay-black-40),
     inset 0 1px 0 var(--color-overlay-white-10),
-    inset 0 -1px 0 var(--color-overlay-white-05);
+    inset 0 -1px 0 var(--color-overlay-white-06);
   --flowchat-md-pre-code-fg: var(--color-text-secondary);
 
-  --flowchat-md-bq-bg: var(--color-overlay-white-02);
+  --flowchat-md-bq-bg: var(--color-overlay-white-04);
   --flowchat-md-bq-border: var(--color-overlay-white-15);
   --flowchat-md-bq-radius: 0 6px 6px 0;
   --flowchat-md-bq-fg: var(--color-overlay-white-70);
@@ -36,7 +36,7 @@
 }
 
 :root[data-theme-type="light"] {
-  --flowchat-md-inline-code-bg: var(--color-overlay-black-06);
+  --flowchat-md-inline-code-bg: var(--color-overlay-black-08);
   --flowchat-md-inline-code-border: var(--color-overlay-black-12);
   --flowchat-md-inline-code-fg: var(--color-text-primary);
   --flowchat-md-inline-code-hover-bg: var(--color-overlay-black-08);

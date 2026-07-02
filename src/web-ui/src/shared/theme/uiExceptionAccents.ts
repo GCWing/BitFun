@@ -43,7 +43,7 @@ export const UI_EXCEPTION_ACCENTS = {
   ],
   inspectorOverlay: {
     activeBorder: '#3b82f6',
-    activeBackground: 'rgba(59, 130, 246, 0.12)',
+    activeBackground: 'rgba(59, 130, 246, 0.15)',
     activeBorderSubtle: 'rgba(59, 130, 246, 0.4)',
     selectedBorder: '#22c55e',
     selectedBackground: 'rgba(34, 197, 94, 0.18)',

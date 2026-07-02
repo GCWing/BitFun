@@ -234,6 +234,7 @@ function parseArgs(argv) {
   const options = {
     root: DEFAULT_ROOT,
     baseline: DEFAULT_BASELINE,
+    json: false,
     reportJson: null,
     top: 20,
   };
@@ -270,6 +271,8 @@ function parseArgs(argv) {
       if (!options.reportJson) {
         throw new Error('--report-json requires an output path');
       }
+    } else if (arg === '--json') {
+      options.json = true;
     } else if (arg === '--top') {
       options.top = Number.parseInt(argv[++i], 10);
     } else if (arg.startsWith('--top=')) {
@@ -326,7 +329,11 @@ function printReport(report, top) {
 function main() {
   const options = parseArgs(process.argv.slice(2));
   const report = createCliThemeColorReport({ root: options.root });
-  printReport(report, options.top);
+  if (options.json) {
+    console.log(JSON.stringify(report, null, 2));
+  } else {
+    printReport(report, options.top);
+  }
 
   if (options.reportJson) {
     writeReportJson(report, options.reportJson);

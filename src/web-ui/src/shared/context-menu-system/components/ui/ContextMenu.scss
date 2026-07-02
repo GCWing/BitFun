@@ -14,7 +14,7 @@
   background: var(--color-bg-elevated);
   border: 1px solid var(--border-subtle);
   border-radius: $size-radius-base;
-  box-shadow: 0 4px 12px var(--color-overlay-black-25);
+  box-shadow: 0 4px 12px var(--color-overlay-black-30);
 
   padding: $size-gap-1 0;
   box-sizing: border-box;
@@ -33,7 +33,7 @@
 
   :root[data-theme-type='light'] & {
     box-shadow:
-      0 1px 2px var(--color-overlay-slate-06),
+      0 1px 2px var(--color-overlay-slate-08),
       0 10px 28px -8px var(--color-overlay-slate-12);
   }
 

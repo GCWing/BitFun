@@ -96,18 +96,24 @@ describe('ThemeService runtime theme tokens', () => {
     expect(document.documentElement.style.getPropertyValue('--scrollbar-thumb-hover')).toBe('rgba(0, 0, 0, 0.3)');
   });
 
-  it('keeps card subtle variants visually below the default card background', async () => {
+  it('keeps card surfaces on the compact canonical overlay ramp', async () => {
     const service = new ThemeService();
 
     await service.applyTheme('bitfun-dark');
 
     expect(document.documentElement.style.getPropertyValue('--card-bg-default')).toBe('rgba(255, 255, 255, 0.04)');
-    expect(document.documentElement.style.getPropertyValue('--card-bg-subtle')).toBe('rgba(255, 255, 255, 0.02)');
+    expect(document.documentElement.style.getPropertyValue('--card-bg-subtle')).toBe('transparent');
+    expect(document.documentElement.style.getPropertyValue('--card-bg-elevated')).toBe('rgba(255, 255, 255, 0.06)');
+    expect(document.documentElement.style.getPropertyValue('--card-bg-hover')).toBe('rgba(255, 255, 255, 0.08)');
+    expect(document.documentElement.style.getPropertyValue('--card-bg-active')).toBe('rgba(255, 255, 255, 0.1)');
 
     await service.applyTheme('bitfun-light');
 
-    expect(document.documentElement.style.getPropertyValue('--card-bg-default')).toBe('rgba(0, 0, 0, 0.06)');
+    expect(document.documentElement.style.getPropertyValue('--card-bg-default')).toBe('rgba(0, 0, 0, 0.08)');
+    expect(document.documentElement.style.getPropertyValue('--card-bg-elevated')).toBe('rgba(0, 0, 0, 0.1)');
     expect(document.documentElement.style.getPropertyValue('--card-bg-subtle')).toBe('transparent');
+    expect(document.documentElement.style.getPropertyValue('--card-bg-hover')).toBe('rgba(0, 0, 0, 0.1)');
+    expect(document.documentElement.style.getPropertyValue('--card-bg-active')).toBe('rgba(0, 0, 0, 0.12)');
   });
 
   it('keeps dark info border aligned with the canonical medium overlay stop', async () => {
@@ -161,6 +167,16 @@ describe('ThemeService runtime theme tokens', () => {
     (service as unknown as { injectCSSVariables(theme: ThemeConfig): void }).injectCSSVariables(fallbackTheme);
 
     expect(document.documentElement.style.getPropertyValue('--scrollbar-thumb-hover')).toBe('rgba(255, 255, 255, 0.24)');
+  });
+
+  it('exports canonical low-risk shadow overlay stops', async () => {
+    const service = new ThemeService();
+
+    await service.applyTheme('bitfun-dark');
+
+    const rootStyle = document.documentElement.style;
+    expect(rootStyle.getPropertyValue('--color-overlay-white-06')).toBe('rgba(255, 255, 255, 0.06)');
+    expect(rootStyle.getPropertyValue('--color-overlay-black-30')).toBe('rgba(0, 0, 0, 0.3)');
   });
 
   it('initializes from bootstrap theme selection without reading or writing themes.current', async () => {

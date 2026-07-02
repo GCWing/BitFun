@@ -8,7 +8,7 @@ import {
 } from './themePayload';
 import { createWidgetThemeCompatibilityAliasCss } from './themePayloadCompatibility';
 
-const WIDGET_THEME_VAR_NAMES_HASH = '6fa7fa2763c01ddceff5da14094ac84c1a7eae21dd3f015559fd78b3bf34b482';
+const WIDGET_THEME_VAR_NAMES_HASH = 'db206ee7339eafb5d58e16df81119e07573649897c40ac9907fa1ed38df6a451';
 const RETIRED_WIDGET_THEME_COMPAT_KEYS = [
   '--background-primary',
   '--background-secondary',
@@ -43,7 +43,11 @@ const RETIRED_WIDGET_THEME_COMPAT_KEYS = [
   '--color-warning-100',
   '--color-warning-500',
   '--color-warning-700',
+  '--color-overlay-white-02',
   '--color-overlay-white-03',
+  '--color-overlay-white-05',
+  '--color-overlay-black-06',
+  '--color-overlay-black-25',
   '--color-accent',
   '--color-accent-primary',
   '--color-accent-alpha',
@@ -175,7 +179,7 @@ describe('generated widget theme payload contract', () => {
       first: requestedNames[0],
       last: requestedNames[requestedNames.length - 1],
     }).toEqual({
-      count: 157,
+      count: 153,
       hash: WIDGET_THEME_VAR_NAMES_HASH,
       first: '--color-bg-primary',
       last: '--tool-card-action-font-weight',

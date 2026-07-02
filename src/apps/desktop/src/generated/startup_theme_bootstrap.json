@@ -66,8 +66,8 @@
     {
       "id": "bitfun-cyber",
       "bgPrimary": "#0e0e10",
-      "bgSecondary": "#151515",
-      "bgScene": "#151515",
+      "bgSecondary": "#1a1a1a",
+      "bgScene": "#1a1a1a",
       "isLight": false,
       "textPrimary": "#e0f2ff",
       "textMuted": "#7fadcc",

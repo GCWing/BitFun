@@ -11,6 +11,7 @@ export const WIDGET_IFRAME_FALLBACK_COLOR = {
   warning: '#f59e0b',
   error: '#ef4444',
   staticWhite: '#ffffff',
+  staticBlack: '#000000',
   borderSubtle: 'rgba(255, 255, 255, 0.12)',
   borderBase: 'rgba(255, 255, 255, 0.12)',
   borderMedium: 'rgba(255, 255, 255, 0.24)',

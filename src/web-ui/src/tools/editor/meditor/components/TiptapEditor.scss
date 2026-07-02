@@ -472,7 +472,7 @@
     box-shadow:
       0 8px 24px color-mix(in srgb, var(--color-static-black) 35%, transparent),
       inset 0 1px 0 var(--color-overlay-white-08),
-      inset 0 -1px 0 var(--color-overlay-white-02);
+      inset 0 -1px 0 var(--color-overlay-white-04);
     transition:
       transform 0.28s cubic-bezier(0.4, 0, 0.2, 1),
       box-shadow 0.28s cubic-bezier(0.4, 0, 0.2, 1);
@@ -529,7 +529,7 @@
   .light & {
     .m-editor-inline-ai__composer-input .bitfun-input-container {
       background: var(--color-overlay-slate-04);
-      border-color: var(--color-overlay-slate-10);
+      border-color: var(--color-overlay-slate-12);
     }
   }
 

@@ -362,7 +362,7 @@ $_diff-error-max-width: 400px;
       transition: all 0.2s ease;
       
       &:hover {
-        background-color: var(--color-overlay-white-05) !important;
+        background-color: var(--color-overlay-white-06) !important;
         border-left-style: solid !important;
         border-right-style: solid !important;
       }
@@ -374,8 +374,8 @@ $_diff-error-max-width: 400px;
         45deg,
         transparent,
         transparent 4px,
-        var(--color-overlay-white-02) 4px,
-        var(--color-overlay-white-02) 8px
+        var(--color-overlay-white-04) 4px,
+        var(--color-overlay-white-04) 8px
       ) !important;
     }
 

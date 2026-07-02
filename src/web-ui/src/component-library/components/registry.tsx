@@ -360,7 +360,7 @@ export const componentRegistry: ComponentCategory[] = [
                 lineHeight: '1.8',
                 minHeight: '120px',
                 padding: '20px',
-                background: 'var(--color-overlay-white-02)',
+                background: 'var(--color-overlay-white-04)',
                 borderRadius: '8px',
                 border: '1px solid var(--color-overlay-white-10)',
                 maxWidth: '700px'
