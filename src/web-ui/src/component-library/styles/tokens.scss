@@ -32,7 +32,6 @@ $overlay-black-50: rgba(0, 0, 0, 0.5);
 $overlay-black-60: rgba(0, 0, 0, 0.6);
 $overlay-black-70: rgba(0, 0, 0, 0.7);
 $overlay-black-80: rgba(0, 0, 0, 0.8);
-$overlay-black-85: $overlay-black-80;
 $overlay-black-90: $overlay-black-80;
 
 $color-blue-500-a08: rgba(96, 165, 250, 0.08);
@@ -54,7 +53,6 @@ $color-purple-500-a10: $color-purple-500-a08;
 $color-purple-500-a15: rgba(139, 92, 246, 0.15);
 $color-purple-500-a12: $color-purple-500-a15;
 $color-purple-500-a25: rgba(139, 92, 246, 0.25);
-$color-purple-500-a30: rgba(139, 92, 246, 0.3);
 $color-purple-500-a40: rgba(139, 92, 246, 0.4);
 
 // ==================== Base color system ====================
@@ -65,7 +63,6 @@ $color-bg-tertiary: $color-bg-primary;
 $color-bg-quaternary: #252528;
 $color-bg-elevated: $color-bg-secondary;
 $color-bg-workbench: $color-bg-primary;
-$color-bg-flowchat: $color-bg-primary;
 $color-bg-scene: $color-bg-secondary;
 $color-bg-tooltip: rgba(28, 28, 31, 0.96);
 
@@ -97,7 +94,6 @@ $color-accent-800: rgba(59, 130, 246, 0.9);
 $color-purple-50: $color-purple-500-a05;
 $color-purple-100: $color-purple-500-a08;
 $color-purple-200: $color-purple-500-a15;
-$color-purple-300: $color-purple-500-a25;
 $color-purple-400: $color-purple-500-a40;
 $color-purple-500: #8b5cf6;
 $color-purple-600: #7c3aed;
@@ -161,7 +157,6 @@ $border-medium: $overlay-white-24;
 $border-strong: $overlay-white-32;
 $border-prominent: $overlay-white-40;
 
-$border-hover: $border-medium;
 $border-focus: $border-strong;
 $border-accent-soft: $color-blue-600-a30;
 $border-accent-subtle: $color-blue-600-a15;
@@ -174,11 +169,6 @@ $shadow-sm: 0 2px 4px $overlay-black-80;
 $shadow-base: 0 4px 8px $overlay-black-70;
 $shadow-lg: 0 8px 16px $overlay-black-60;
 $shadow-xl: 0 12px 24px $overlay-black-50;
-$shadow-2xl: 0 16px 32px $overlay-black-40;
-
-$button-shadow-base: 0 2px 8px $color-blue-500-a08;
-$button-shadow-hover: 0 4px 12px $color-blue-500-a12;
-$button-shadow-active: 0 1px 4px $color-blue-500-a06;
 
 $glow-shadow-blue:
   0 12px 32px $color-blue-600-a25,
@@ -189,16 +179,6 @@ $glow-shadow-purple:
   0 12px 32px $color-purple-500-a25,
   0 6px 16px $color-purple-500-a15,
   0 3px 8px $overlay-black-10;
-
-$glow-shadow-red:
-  0 8px 20px rgba(239, 68, 68, 0.2),
-  0 4px 10px $overlay-black-08,
-  inset 0 1px 0 $overlay-white-10;
-
-$glow-shadow-green:
-  0 8px 20px rgba(52, 211, 153, 0.2),
-  0 4px 10px $overlay-black-08,
-  inset 0 1px 0 $overlay-white-10;
 
 $glow-shadow-mixed:
   0 12px 32px rgba(96, 165, 250, 0.2),
@@ -216,7 +196,6 @@ $blur-subtle: blur(4px) saturate(1.05);
 $blur-base: blur(8px) saturate(1.1);
 $blur-medium: blur(12px) saturate(1.2);
 $blur-strong: blur(16px) saturate(1.3) brightness(1.1);
-$blur-intense: blur(20px) saturate(1.4) brightness(1.15);
 
 // ==================== Glass background system ====================
 $glass-base: linear-gradient(135deg,
@@ -227,27 +206,6 @@ $glass-base: linear-gradient(135deg,
 $glass-disabled: $overlay-white-04;
 
 $glass-blue-subtle: $color-blue-600-a08;
-$glass-blue-base: linear-gradient(135deg,
-  $color-blue-600-a12 0%,
-  $color-blue-600-a08 30%,
-  $color-blue-600-a08 60%,
-  $color-blue-600-a15 100%);
-$glass-blue-hover: linear-gradient(135deg,
-  $color-blue-600-a15 0%,
-  $color-blue-600-a12 30%,
-  $color-blue-600-a08 60%,
-  $color-blue-600-a18 100%);
-
-$glass-purple-base: linear-gradient(135deg,
-  $color-purple-500-a08 0%,
-  $color-purple-500-a05 30%,
-  $color-purple-500-a05 60%,
-  $color-purple-500-a10 100%);
-$glass-purple-hover: linear-gradient(135deg,
-  $color-purple-500-a25 0%,
-  $color-purple-500-a15 30%,
-  $color-purple-500-a15 60%,
-  $color-purple-500-a30 100%);
 
 $glass-red-subtle: rgba(239, 68, 68, 0.05);
 $glass-red-base: $color-error-bg;
@@ -287,10 +245,7 @@ $motion-lazy: 1s;
 $easing-standard: cubic-bezier(0.4, 0, 0.2, 1);
 $easing-decelerate: cubic-bezier(0, 0, 0.2, 1);
 $easing-accelerate: cubic-bezier(0.4, 0, 1, 1);
-$easing-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
 $easing-smooth: cubic-bezier(0.4, 0, 0.2, 1);
-$easing-ease-in: cubic-bezier(0.4, 0, 1, 1);
-$easing-ease-out: cubic-bezier(0, 0, 0.2, 1);
 
 // ==================== Z-index layers ====================
 // Unified z-index scale to avoid ad-hoc hardcoded values
@@ -308,26 +263,22 @@ $z-decoration: 1;
 $z-content: 2;
 $z-header: 10;
 $z-sticky: 15;
-$z-bottom-bar: 20;
 
 $z-floating: 50;
 $z-dropdown: 60;
 
 $z-overlay: 100;
-$z-drawer: 150;
 
 $z-modal: 200;
 $z-modal-active: 250;
 $z-fullscreen: 280;
 
-$z-toast: 300;
 $z-tooltip: 350;
 $z-popover: 360;
 
 $z-notification: 400;
 
 $z-context-menu: 500;
-$z-extreme: 999;
 
 // ==================== Typography system ====================
 
@@ -361,13 +312,6 @@ $button-height-sm: 32px;
 $button-height-base: 40px;
 $button-height-lg: 48px;
 
-$input-height-sm: 32px;
-$input-height-base: 40px;
-$input-height-lg: 48px;
-
-$header-height: 36px;
-$sidebar-width: 240px;
-
 // ==================== Opacity levels ====================
 
 $opacity-disabled: 0.6;
@@ -376,40 +320,15 @@ $opacity-focus: 0.9;
 
 // ==================== Component-specific tokens ====================
 
-$button-bg-default: linear-gradient(135deg,
-  $overlay-white-08 0%,
-  $overlay-white-06 50%,
-  $overlay-white-10 100%
-);
-$button-border-default: $overlay-white-08;
-
 $button-bg-hover: linear-gradient(135deg,
   $color-blue-600-a15 0%,
   $color-blue-500-a12 30%,
   $color-blue-600-a08 60%,
   $color-blue-600-a18 100%
 );
-$button-border-hover: $color-blue-600-a40;
 $button-text-hover: $color-static-white;
-$button-transform-hover: translateY(-3px) scale(1.03);
-
-$button-bg-primary: linear-gradient(135deg,
-  $overlay-white-10 0%,
-  $overlay-white-08 30%,
-  $overlay-white-10 60%,
-  $overlay-white-12 100%
-);
-$button-bg-primary-hover: $button-bg-hover;
-$button-bg-primary-active: $color-accent-700;
-
-$surface-bg-base: $element-bg-base;
-$surface-bg-hover: $element-bg-medium;
-$surface-bg-active: $element-bg-strong;
-$surface-bg-elevated: $element-bg-elevated;
 
 $panel-bg: $color-bg-secondary;
-$panel-border: $border-base;
-$panel-shadow: $shadow-sm;
 
 $card-bg-default: $overlay-white-04;
 $card-bg-elevated: $overlay-white-06;
@@ -421,21 +340,6 @@ $card-bg-accent-hover: $color-blue-500-a15;
 $card-bg-purple: $color-purple-500-a10;
 $card-bg-purple-hover: $color-purple-500-a15;
 $card-bg: $card-bg-default;  // Legacy alias
-$card-border: $border-base;
-$card-border-style: solid;
-$card-shadow: none;
-
-$input-bg: $color-bg-tertiary;
-$input-border: $border-base;
-$input-border-focus: $border-focus;
-
-$nav-bg: $color-bg-primary;
-$nav-border: $border-base;
-
-$modal-bg: $color-bg-elevated;
-$modal-border: $border-medium;
-$modal-shadow: $shadow-xl;
-$modal-backdrop: $overlay-black-85;
 
 // ==================== Badge/label tokens ====================
 // Badges/labels are borderless by default and use background color to differentiate

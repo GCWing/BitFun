@@ -233,7 +233,7 @@ $_diff-padding-desktop: 32px;
     left: 0;
     right: 0;
     bottom: 0;
-    background: $modal-backdrop;
+    background: var(--color-overlay-black-80);
     backdrop-filter: blur(8px);
     display: flex;
     flex-direction: column;

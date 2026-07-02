@@ -2,13 +2,16 @@ import { createHash } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  WIDGET_THEME_STATIC_SHELL_VAR_NAMES,
   WIDGET_THEME_FALLBACK_VARS,
   createWidgetThemeFallbackCss,
+  createWidgetThemeStaticShellCss,
   readWidgetThemePayload,
 } from './themePayload';
 import { createWidgetThemeCompatibilityAliasCss } from './themePayloadCompatibility';
 
-const WIDGET_THEME_VAR_NAMES_HASH = 'db206ee7339eafb5d58e16df81119e07573649897c40ac9907fa1ed38df6a451';
+const WIDGET_THEME_VAR_NAMES_HASH = '042885b7c1aa63653f958d823180019aef491049c448e4964a07d1f12c73f94e';
+const WIDGET_THEME_STATIC_SHELL_VAR_NAMES_HASH = '2ba8869e0611a03f360347f93d39fc6427fe8006f9ae6513b7cd67472febd8e7';
 const RETIRED_WIDGET_THEME_COMPAT_KEYS = [
   '--background-primary',
   '--background-secondary',
@@ -119,9 +122,22 @@ const RETIRED_WIDGET_THEME_INTERNAL_KEYS = [
   '--btn-ghost-active-transform',
 ] as const;
 const STATIC_WIDGET_SHELL_THEME_VARS = new Set([
+  ...WIDGET_THEME_STATIC_SHELL_VAR_NAMES,
   '--font-family-mono',
   '--font-family-sans',
 ]);
+const LOCAL_ONLY_WIDGET_SHELL_KEYS = [
+  '--color-bg-workbench',
+  '--color-overlay-white-08',
+  '--color-overlay-black-10',
+  '--glass-base',
+  '--tool-card-header-pad-y',
+  '--tool-card-action-line-height',
+] as const;
+const IFRAME_ROOT_BASE_KEYS = [
+  '--font-family-sans',
+  '--font-family-mono',
+] as const;
 
 function readPayloadWithHostValues(hostValues: Record<string, string> = {}) {
   const requestedNames: string[] = [];
@@ -179,17 +195,20 @@ describe('generated widget theme payload contract', () => {
       first: requestedNames[0],
       last: requestedNames[requestedNames.length - 1],
     }).toEqual({
-      count: 153,
+      count: 98,
       hash: WIDGET_THEME_VAR_NAMES_HASH,
       first: '--color-bg-primary',
-      last: '--tool-card-action-font-weight',
+      last: '--btn-ghost-hover-border',
     });
   });
 
-  it('includes every static iframe fallback key in the host payload allowlist', () => {
-    const { payload } = readPayloadWithHostValues();
+  it('uses reviewed iframe fallback values for requested host payload keys', () => {
+    const { payload, requestedNames } = readPayloadWithHostValues();
+    const requestedFallbackVars = Object.fromEntries(
+      Object.entries(WIDGET_THEME_FALLBACK_VARS).filter(([name]) => requestedNames.includes(name)),
+    );
 
-    expect(payload?.vars).toEqual(WIDGET_THEME_FALLBACK_VARS);
+    expect(payload?.vars).toEqual(requestedFallbackVars);
   });
 
   it('does not export retired low-risk compatibility keys', () => {
@@ -201,15 +220,58 @@ describe('generated widget theme payload contract', () => {
       expect.arrayContaining([
         '--color-accent-50',
         '--color-accent-100',
+        '--color-accent-200',
+        '--color-accent-300',
         '--color-accent-400',
         '--color-accent-500',
         '--color-accent-500-rgb',
         '--color-accent-600',
+        '--color-accent-700',
+        '--color-accent-800',
         '--color-error',
         '--color-error-bg',
         '--color-error-border',
+        '--color-info',
+        '--color-info-bg',
+        '--color-info-border',
+        '--color-success-border',
+        '--color-warning-border',
+        '--border-strong',
+        '--border-prominent',
+        '--size-radius-xl',
+        '--size-gap-16',
+        '--btn-primary-bg',
+        '--btn-primary-hover-bg',
+        '--btn-primary-hover-transform',
+        '--btn-ghost-hover-bg',
       ])
     );
+  });
+
+  it('exports button component tokens from the host theme payload', () => {
+    const hostValues = {
+      '--btn-primary-bg': 'linear-gradient(test-primary)',
+      '--btn-primary-color': '#101010',
+      '--btn-primary-border': '1px solid #202020',
+      '--btn-primary-shadow': '0 1px 2px #303030',
+      '--btn-primary-hover-bg': 'linear-gradient(test-hover)',
+      '--btn-primary-hover-color': '#404040',
+      '--btn-primary-hover-border': '1px solid #505050',
+      '--btn-primary-hover-shadow': '0 2px 4px #606060',
+      '--btn-primary-hover-transform': 'translateY(-1px)',
+      '--btn-primary-active-bg': 'linear-gradient(test-active)',
+      '--btn-primary-active-color': '#707070',
+      '--btn-primary-active-border': '1px solid #808080',
+      '--btn-primary-active-shadow': 'none',
+      '--btn-primary-active-transform': 'none',
+      '--btn-ghost-color': '#909090',
+      '--btn-ghost-hover-bg': 'rgba(144, 144, 144, 0.1)',
+      '--btn-ghost-hover-color': '#a0a0a0',
+      '--btn-ghost-hover-border': '1px solid #b0b0b0',
+    };
+    const { payload } = readPayloadWithHostValues(hostValues);
+
+    expect(payload?.vars).toMatchObject(hostValues);
   });
 
   it('keeps retired payload keys available as iframe aliases', () => {
@@ -220,9 +282,10 @@ describe('generated widget theme payload contract', () => {
     expect(aliasEntries.map(([name]) => name).sort()).toEqual([...RETIRED_WIDGET_THEME_COMPAT_KEYS].sort());
     for (const [key, canonical] of aliasEntries) {
       expect(RETIRED_WIDGET_THEME_COMPAT_KEYS).toContain(key);
-      expect(requestedNames).toContain(canonical);
       expect(
-        canonical in WIDGET_THEME_FALLBACK_VARS || STATIC_WIDGET_SHELL_THEME_VARS.has(canonical),
+        requestedNames.includes(canonical)
+        || canonical in WIDGET_THEME_FALLBACK_VARS
+        || STATIC_WIDGET_SHELL_THEME_VARS.has(canonical),
       ).toBe(true);
     }
   });
@@ -233,5 +296,34 @@ describe('generated widget theme payload contract', () => {
     for (const [name, value] of Object.entries(WIDGET_THEME_FALLBACK_VARS)) {
       expect(css).toContain(`      ${name}: ${value};`);
     }
+  });
+
+  it('keeps host-internal shell vars available without exporting them from the host payload', () => {
+    const { requestedNames } = readPayloadWithHostValues();
+    const css = createWidgetThemeStaticShellCss();
+    const resolvableVars = new Set([
+      ...Object.keys(WIDGET_THEME_FALLBACK_VARS),
+      ...requestedNames,
+      ...WIDGET_THEME_STATIC_SHELL_VAR_NAMES,
+      ...IFRAME_ROOT_BASE_KEYS,
+    ]);
+
+    for (const name of WIDGET_THEME_STATIC_SHELL_VAR_NAMES) {
+      expect(css).toContain(`      ${name}: `);
+    }
+    expect({
+      count: WIDGET_THEME_STATIC_SHELL_VAR_NAMES.length,
+      hash: hashNames(WIDGET_THEME_STATIC_SHELL_VAR_NAMES),
+      first: WIDGET_THEME_STATIC_SHELL_VAR_NAMES[0],
+      last: WIDGET_THEME_STATIC_SHELL_VAR_NAMES[WIDGET_THEME_STATIC_SHELL_VAR_NAMES.length - 1],
+    }).toEqual({
+      count: 85,
+      hash: WIDGET_THEME_STATIC_SHELL_VAR_NAMES_HASH,
+      first: '--color-bg-quaternary',
+      last: '--tool-card-action-font-weight',
+    });
+    const referencedVars = [...css.matchAll(/var\((--[a-zA-Z0-9_-]+)/g)].map((match) => match[1]);
+    expect(referencedVars.filter((name) => !resolvableVars.has(name))).toEqual([]);
+    expect(requestedNames).not.toEqual(expect.arrayContaining(LOCAL_ONLY_WIDGET_SHELL_KEYS));
   });
 });

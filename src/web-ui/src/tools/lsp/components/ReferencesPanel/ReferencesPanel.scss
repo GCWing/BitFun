@@ -29,7 +29,7 @@
   border-radius: $size-radius-base;
   
   box-shadow: 
-    $shadow-2xl,
+    var(--shadow-xl),
     0 0 0 1px var(--color-overlay-black-80),
     $inner-glow-top;
   
@@ -289,7 +289,7 @@
     border-width: 2px;
     border-color: rgba(var(--color-static-white-rgb), 0.5);
     box-shadow: 
-      $shadow-2xl,
+      var(--shadow-xl),
       0 0 0 2px rgba(var(--color-static-black-rgb), 0.9);
   }
   

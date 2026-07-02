@@ -31,7 +31,7 @@ const SLATE_ACCENT = '#94a3b8';
 const SLATE_ACCENT_HOVER = '#64748b';
 const SLATE_PURPLE = '#b8c4ff';
 const SLATE_PURPLE_HOVER = '#9dacf5';
-const SLATE_SUCCESS = '#7fb899';
+const SLATE_SUCCESS = '#7eb09b';
 const SLATE_WARNING = '#f59e0b';
 const SLATE_ERROR = '#c9878d';
 

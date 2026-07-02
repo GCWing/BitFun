@@ -211,6 +211,50 @@ function isGeneratedWidgetThemePayloadFile(relativePath) {
   return relativePath.endsWith(GENERATED_WIDGET_THEME_PAYLOAD_PATH);
 }
 
+function collectGeneratedWidgetPayloadVarNames(content) {
+  const fallbackVars = new Map();
+  const fallbackBlock = /const FALLBACK_VAR = \{([\s\S]*?)\} as const;/.exec(content)?.[1];
+  if (fallbackBlock) {
+    for (const match of collectMatches(fallbackBlock, /\s+(\w+): ['"`](--[a-zA-Z0-9_-]+)['"`]/g)) {
+      fallbackVars.set(match[1], match[2]);
+    }
+  }
+
+  const hasGroupsDeclaration = content.includes('WIDGET_THEME_VAR_GROUPS');
+  const groupsBlock = /const WIDGET_THEME_VAR_GROUPS = \{([\s\S]*?)\n\} as const;/.exec(content)?.[1];
+  if (!groupsBlock) {
+    if (hasGroupsDeclaration) {
+      throw new Error('Unable to parse generated widget WIDGET_THEME_VAR_GROUPS; refusing to audit a partial payload contract.');
+    }
+    return collectMatches(content, CSS_VAR_LITERAL_PATTERN).map(match => match[1]);
+  }
+
+  const names = [];
+  const groups = collectMatches(groupsBlock, /\n\s+\w+: \[([\s\S]*?)\n\s+\]/g);
+  if (groups.length === 0) {
+    throw new Error('Unable to parse generated widget WIDGET_THEME_VAR_GROUPS entries; refusing to audit a partial payload contract.');
+  }
+  for (const group of groups) {
+    for (const line of group[1].split(/\r?\n/)) {
+      const fallbackRef = /FALLBACK_VAR\.(\w+)/.exec(line);
+      if (fallbackRef) {
+        const name = fallbackVars.get(fallbackRef[1]);
+        if (name) {
+          names.push(name);
+        } else {
+          throw new Error(`Unable to resolve generated widget payload fallback var ${fallbackRef[1]}.`);
+        }
+        continue;
+      }
+      const literal = /['"`](--[a-zA-Z0-9_-]+)['"`]/.exec(line);
+      if (literal) {
+        names.push(literal[1]);
+      }
+    }
+  }
+  return names;
+}
+
 function pathMatchesPart(relativePath, pathPart) {
   const normalizedPath = relativePath.toLowerCase();
   const normalizedPart = pathPart.toLowerCase();
@@ -890,9 +934,9 @@ function audit(options) {
     }
 
     if (isGeneratedWidgetThemePayloadFile(relativePath)) {
-      for (const match of collectMatches(content, CSS_VAR_LITERAL_PATTERN)) {
-        incrementMap(generatedWidgetPayloadVarCounts, match[1]);
-        addToSetMap(generatedWidgetPayloadVarFiles, match[1], relativePath);
+      for (const name of collectGeneratedWidgetPayloadVarNames(content)) {
+        incrementMap(generatedWidgetPayloadVarCounts, name);
+        addToSetMap(generatedWidgetPayloadVarFiles, name, relativePath);
       }
     }
 
