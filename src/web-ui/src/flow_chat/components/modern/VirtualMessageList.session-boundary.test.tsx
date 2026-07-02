@@ -4,7 +4,7 @@ import React from 'react';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { VirtualMessageList } from './VirtualMessageList';
+import { VirtualMessageList, type VirtualMessageListRef } from './VirtualMessageList';
 import { activeSessionHistoryProjectionHandoff } from './historyProjectionHandoff';
 import type { Session } from '../../types/flow-chat';
 import type { VirtualItem } from '../../store/modernFlowChatStore';
@@ -23,6 +23,11 @@ const flowStoreMocks = vi.hoisted(() => ({
   requestSessionFullHistoryProjection: vi.fn(),
   revealPreviousSessionHistoryWindow: vi.fn(() => false),
   releaseSessionHistoryCompletionAfterInitialPaint: vi.fn(() => false),
+}));
+const inputStateMocks = vi.hoisted(() => ({
+  isActive: false,
+  isExpanded: false,
+  inputHeight: 0,
 }));
 
 vi.mock('react-i18next', () => ({
@@ -106,11 +111,7 @@ vi.mock('../../hooks/useActiveSessionState', () => ({
 }));
 
 vi.mock('../../store/chatInputStateStore', () => ({
-  useChatInputState: (selector: (state: any) => unknown) => selector({
-    isActive: false,
-    isExpanded: false,
-    inputHeight: 0,
-  }),
+  useChatInputState: (selector: (state: any) => unknown) => selector(inputStateMocks),
 }));
 
 vi.mock('../../store/FlowChatStore', () => ({
@@ -136,8 +137,8 @@ vi.mock('./VirtualItemRenderer', () => ({
 }));
 
 vi.mock('../ScrollToLatestBar', () => ({
-  ScrollToLatestBar: ({ visible }: { visible: boolean }) => (
-    <div data-testid="scroll-to-latest" data-visible={visible ? 'true' : 'false'} />
+  ScrollToLatestBar: ({ visible, onClick }: { visible: boolean; onClick?: () => void }) => (
+    <button type="button" data-testid="scroll-to-latest" data-visible={visible ? 'true' : 'false'} onClick={onClick} />
   ),
 }));
 
@@ -213,6 +214,80 @@ function createItem(turnId: string): VirtualItem {
   } as VirtualItem;
 }
 
+function createModelItem(turnId: string): VirtualItem {
+  return {
+    type: 'model-round',
+    turnId,
+    isLastRound: true,
+    isTurnComplete: true,
+    data: {
+      id: `round-${turnId}`,
+      status: 'completed',
+      isStreaming: false,
+      items: [{
+        id: `text-${turnId}`,
+        type: 'text',
+        content: 'x'.repeat(2_000),
+        status: 'completed',
+        timestamp: 1,
+      }],
+    },
+  } as VirtualItem;
+}
+
+function createSessionWithTurns(sessionId: string, turnIds: string[], overrides: Partial<Session> = {}): Session {
+  return createSession(sessionId, turnIds[0] ?? 'turn-a', {
+    dialogTurns: turnIds.map((turnId, index) => ({
+      id: turnId,
+      sessionId,
+      userMessage: { id: `user-${turnId}`, content: turnId, timestamp: index + 1 },
+      modelRounds: [],
+      status: 'completed',
+      startTime: index + 1,
+    })),
+    ...overrides,
+  });
+}
+
+function setScrollerGeometry(scroller: HTMLElement, metrics: {
+  scrollHeight: number;
+  clientHeight: number;
+  scrollTop?: number;
+}): void {
+  Object.defineProperty(scroller, 'scrollHeight', {
+    configurable: true,
+    value: metrics.scrollHeight,
+  });
+  Object.defineProperty(scroller, 'clientHeight', {
+    configurable: true,
+    value: metrics.clientHeight,
+  });
+  if (metrics.scrollTop !== undefined) {
+    scroller.scrollTop = metrics.scrollTop;
+  }
+}
+
+function createRect(overrides: Partial<DOMRect>): DOMRect {
+  const left = overrides.left ?? 0;
+  const top = overrides.top ?? 0;
+  const width = overrides.width ?? 0;
+  const height = overrides.height ?? 0;
+  const right = overrides.right ?? left + width;
+  const bottom = overrides.bottom ?? top + height;
+
+  return {
+    x: overrides.x ?? left,
+    y: overrides.y ?? top,
+    left,
+    top,
+    width,
+    height,
+    right,
+    bottom,
+    toJSON: () => ({}),
+  } as DOMRect;
+}
+
 describe('VirtualMessageList session boundary', () => {
   let container: HTMLDivElement;
   let root: Root;
@@ -252,6 +327,9 @@ describe('VirtualMessageList session boundary', () => {
     flowStoreMocks.revealPreviousSessionHistoryWindow.mockReturnValue(false);
     flowStoreMocks.releaseSessionHistoryCompletionAfterInitialPaint.mockReset();
     flowStoreMocks.releaseSessionHistoryCompletionAfterInitialPaint.mockReturnValue(false);
+    inputStateMocks.isActive = false;
+    inputStateMocks.isExpanded = false;
+    inputStateMocks.inputHeight = 0;
   });
 
   afterEach(() => {
@@ -278,6 +356,363 @@ describe('VirtualMessageList session boundary', () => {
     });
 
     expect(container.querySelector('[data-testid="scroll-to-latest"]')?.getAttribute('data-visible')).toBe('false');
+  });
+
+  it('keeps static initial history position when background updates arrive after an upward scroll', () => {
+    let nowMs = 1_000;
+    const nowSpy = vi.spyOn(performance, 'now').mockImplementation(() => nowMs);
+
+    try {
+      stateMocks.activeSession = createSessionWithTurns('session-a', ['turn-a', 'turn-b'], {
+        isHistorical: false,
+        historyState: 'ready',
+        contextRestoreState: 'pending',
+        isPartial: true,
+      });
+      stateMocks.virtualItems = [createItem('turn-a'), createItem('turn-b')];
+
+      act(() => {
+        root.render(<VirtualMessageList />);
+      });
+
+      const scroller = container.querySelector<HTMLElement>('[data-virtuoso-scroller="true"]');
+      expect(scroller).not.toBeNull();
+      if (!scroller) {
+        return;
+      }
+
+      setScrollerGeometry(scroller, {
+        scrollHeight: 5_000,
+        clientHeight: 1_000,
+        scrollTop: 4_000,
+      });
+
+      act(() => {
+        scroller.dispatchEvent(new Event('scroll', { bubbles: true }));
+      });
+
+      act(() => {
+        scroller.dispatchEvent(new WheelEvent('wheel', {
+          deltaY: -720,
+          bubbles: true,
+        }));
+        scroller.scrollTop = 1_800;
+        scroller.dispatchEvent(new Event('scroll', { bubbles: true }));
+      });
+      flushAnimationFrame();
+      expect(scroller.scrollTop).toBe(1_800);
+
+      nowMs = 2_000;
+      stateMocks.activeSession = createSessionWithTurns('session-a', ['turn-a', 'turn-b', 'turn-c'], {
+        isHistorical: false,
+        historyState: 'ready',
+        contextRestoreState: 'pending',
+        isPartial: true,
+      });
+      stateMocks.virtualItems = [createItem('turn-a'), createItem('turn-b'), createItem('turn-c')];
+
+      act(() => {
+        root.render(<VirtualMessageList />);
+      });
+
+      expect(scroller.scrollTop).toBe(1_800);
+    } finally {
+      nowSpy.mockRestore();
+    }
+  });
+
+  it('keeps a static initial history turn pin from being pulled back to bottom by the initial guard', () => {
+    let nowMs = 1_000;
+    const nowSpy = vi.spyOn(performance, 'now').mockImplementation(() => nowMs);
+    const listRef = React.createRef<VirtualMessageListRef>();
+
+    try {
+      stateMocks.activeSession = createSessionWithTurns('session-a', ['turn-a', 'turn-b'], {
+        isHistorical: false,
+        historyState: 'ready',
+        contextRestoreState: 'pending',
+        isPartial: true,
+      });
+      stateMocks.virtualItems = [createItem('turn-a'), createItem('turn-b')];
+
+      act(() => {
+        root.render(<VirtualMessageList ref={listRef} />);
+      });
+
+      const scroller = container.querySelector<HTMLElement>('[data-virtuoso-scroller="true"]');
+      const target = container.querySelector<HTMLElement>('[data-turn-id="turn-a"][data-item-type="user-message"]');
+      expect(scroller).not.toBeNull();
+      expect(target).not.toBeNull();
+      if (!scroller || !target) {
+        return;
+      }
+
+      setScrollerGeometry(scroller, {
+        scrollHeight: 5_000,
+        clientHeight: 1_000,
+        scrollTop: 4_000,
+      });
+      Object.defineProperty(scroller, 'scrollTo', {
+        configurable: true,
+        value: vi.fn((options?: ScrollToOptions) => {
+          if (typeof options?.top === 'number') {
+            scroller.scrollTop = options.top;
+          }
+        }),
+      });
+      vi.spyOn(scroller, 'getBoundingClientRect').mockReturnValue(createRect({
+        top: 40,
+        bottom: 1_040,
+        height: 1_000,
+      }));
+      vi.spyOn(target, 'getBoundingClientRect').mockReturnValue(createRect({
+        top: -1_200,
+        bottom: -1_160,
+        height: 40,
+      }));
+
+      act(() => {
+        scroller.dispatchEvent(new Event('scroll', { bubbles: true }));
+      });
+
+      stateMocks.activeSession = createSessionWithTurns('session-a', ['turn-a', 'turn-b', 'turn-c'], {
+        isHistorical: false,
+        historyState: 'ready',
+        contextRestoreState: 'pending',
+        isPartial: true,
+      });
+      stateMocks.virtualItems = [createItem('turn-a'), createItem('turn-b'), createItem('turn-c')];
+      setScrollerGeometry(scroller, {
+        scrollHeight: 5_200,
+        clientHeight: 1_000,
+      });
+
+      act(() => {
+        root.render(<VirtualMessageList ref={listRef} />);
+      });
+
+      expect(scroller.scrollTop).toBe(4_200);
+
+      let didPin = false;
+      act(() => {
+        didPin = listRef.current?.pinTurnToTop('turn-a', { behavior: 'auto' }) ?? false;
+      });
+
+      expect(didPin).toBe(true);
+      const pinnedScrollTop = scroller.scrollTop;
+      expect(pinnedScrollTop).toBeLessThan(4_200);
+
+      expect(rafCallbacks.length).toBeGreaterThan(0);
+      for (let frame = 0; frame < 4; frame += 1) {
+        nowMs += 16;
+        flushAnimationFrame();
+        expect(scroller.scrollTop).toBe(pinnedScrollTop);
+      }
+    } finally {
+      nowSpy.mockRestore();
+    }
+  });
+
+  it('keeps latest reachable after pinning an older turn outside the static initial tail', () => {
+    const listRef = React.createRef<VirtualMessageListRef>();
+    const onUserScrollIntent = vi.fn();
+    const turnIds = Array.from({ length: 8 }, (_, index) => `turn-${index}`);
+    const targetTurnId = 'turn-1';
+    const latestTurnId = 'turn-7';
+
+    stateMocks.activeSession = createSessionWithTurns('session-a', turnIds, {
+      isHistorical: false,
+      historyState: 'ready',
+      contextRestoreState: 'pending',
+      isPartial: true,
+    });
+    stateMocks.virtualItems = turnIds.flatMap(turnId => [
+      createItem(turnId),
+      createModelItem(turnId),
+    ]);
+
+    act(() => {
+      root.render(<VirtualMessageList ref={listRef} onUserScrollIntent={onUserScrollIntent} />);
+    });
+
+    const scroller = container.querySelector<HTMLElement>('[data-virtuoso-scroller="true"]');
+    expect(scroller).not.toBeNull();
+    if (!scroller) {
+      return;
+    }
+
+    Object.defineProperty(scroller, 'clientHeight', {
+      configurable: true,
+      value: 1_000,
+    });
+    Object.defineProperty(scroller, 'scrollHeight', {
+      configurable: true,
+      get: () => (
+        container.querySelector(`[data-turn-id="${latestTurnId}"][data-item-type="user-message"]`)
+          ? 12_000
+          : 9_000
+      ),
+    });
+    scroller.scrollTop = 11_000;
+    Object.defineProperty(scroller, 'scrollTo', {
+      configurable: true,
+      value: vi.fn((options?: ScrollToOptions) => {
+        if (typeof options?.top === 'number') {
+          scroller.scrollTop = options.top;
+        }
+      }),
+    });
+
+    expect(container.querySelector(`[data-turn-id="${targetTurnId}"][data-item-type="user-message"]`)).toBeNull();
+    expect(container.querySelector(`[data-turn-id="${latestTurnId}"][data-item-type="user-message"]`)).not.toBeNull();
+
+    let didPin = false;
+    act(() => {
+      didPin = listRef.current?.pinTurnToTop(targetTurnId, { behavior: 'auto' }) ?? false;
+    });
+
+    expect(didPin).toBe(true);
+    expect(container.querySelector(`[data-turn-id="${targetTurnId}"][data-item-type="user-message"]`)).not.toBeNull();
+    expect(container.querySelector(`[data-turn-id="${latestTurnId}"][data-item-type="user-message"]`)).toBeNull();
+    expect(container.querySelector('[data-history-initial-render-tail-spacer="true"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="scroll-to-latest"]')?.getAttribute('data-visible')).toBe('true');
+
+    act(() => {
+      container.querySelector<HTMLElement>('[data-testid="scroll-to-latest"]')?.dispatchEvent(
+        new MouseEvent('click', { bubbles: true }),
+      );
+    });
+
+    expect(onUserScrollIntent).toHaveBeenCalledTimes(1);
+    expect(container.querySelector(`[data-turn-id="${latestTurnId}"][data-item-type="user-message"]`)).not.toBeNull();
+    expect(scroller.scrollTop).toBe(11_000);
+  });
+
+  it('keeps static initial history position when footer height changes after an upward scroll', () => {
+    let nowMs = 1_000;
+    const nowSpy = vi.spyOn(performance, 'now').mockImplementation(() => nowMs);
+
+    try {
+      stateMocks.activeSession = createSessionWithTurns('session-a', ['turn-a', 'turn-b'], {
+        isHistorical: false,
+        historyState: 'ready',
+        contextRestoreState: 'pending',
+        isPartial: true,
+      });
+      stateMocks.virtualItems = [createItem('turn-a'), createItem('turn-b')];
+
+      act(() => {
+        root.render(<VirtualMessageList />);
+      });
+
+      const scroller = container.querySelector<HTMLElement>('[data-virtuoso-scroller="true"]');
+      expect(scroller).not.toBeNull();
+      if (!scroller) {
+        return;
+      }
+
+      setScrollerGeometry(scroller, {
+        scrollHeight: 5_000,
+        clientHeight: 1_000,
+        scrollTop: 4_000,
+      });
+
+      act(() => {
+        scroller.dispatchEvent(new Event('scroll', { bubbles: true }));
+      });
+
+      act(() => {
+        scroller.dispatchEvent(new WheelEvent('wheel', {
+          deltaY: -720,
+          bubbles: true,
+        }));
+        scroller.scrollTop = 1_800;
+        scroller.dispatchEvent(new Event('scroll', { bubbles: true }));
+      });
+      flushAnimationFrame();
+      expect(scroller.scrollTop).toBe(1_800);
+
+      nowMs = 2_000;
+      inputStateMocks.isActive = true;
+      inputStateMocks.inputHeight = 320;
+      setScrollerGeometry(scroller, {
+        scrollHeight: 5_320,
+        clientHeight: 1_000,
+      });
+
+      act(() => {
+        root.render(<VirtualMessageList />);
+      });
+
+      expect(scroller.scrollTop).toBe(1_800);
+    } finally {
+      nowSpy.mockRestore();
+    }
+  });
+
+  it('does not treat a collapse-compensated bottom as user-left-bottom', () => {
+    stateMocks.activeSession = createSessionWithTurns('session-a', ['turn-a', 'turn-b'], {
+      isHistorical: false,
+      historyState: 'ready',
+      contextRestoreState: 'pending',
+      isPartial: true,
+    });
+    stateMocks.virtualItems = [createItem('turn-a'), createItem('turn-b')];
+
+    act(() => {
+      root.render(<VirtualMessageList />);
+    });
+
+    const scroller = container.querySelector<HTMLElement>('[data-virtuoso-scroller="true"]');
+    expect(scroller).not.toBeNull();
+    if (!scroller) {
+      return;
+    }
+
+    setScrollerGeometry(scroller, {
+      scrollHeight: 5_000,
+      clientHeight: 1_000,
+      scrollTop: 4_000,
+    });
+
+    act(() => {
+      scroller.dispatchEvent(new Event('scroll', { bubbles: true }));
+      window.dispatchEvent(new CustomEvent('flowchat:tool-card-collapse-intent', {
+        detail: {
+          toolId: 'tool-a',
+          cardHeight: 300,
+          reason: 'test-collapse',
+        },
+      }));
+    });
+    setScrollerGeometry(scroller, {
+      scrollHeight: 5_300,
+      clientHeight: 1_000,
+      scrollTop: 4_000,
+    });
+
+    act(() => {
+      scroller.dispatchEvent(new Event('scroll', { bubbles: true }));
+    });
+
+    stateMocks.activeSession = createSessionWithTurns('session-a', ['turn-a', 'turn-b', 'turn-c'], {
+      isHistorical: false,
+      historyState: 'ready',
+      contextRestoreState: 'pending',
+      isPartial: true,
+    });
+    stateMocks.virtualItems = [createItem('turn-a'), createItem('turn-b'), createItem('turn-c')];
+    setScrollerGeometry(scroller, {
+      scrollHeight: 5_600,
+      clientHeight: 1_000,
+    });
+
+    act(() => {
+      root.render(<VirtualMessageList />);
+    });
+
+    expect(scroller.scrollTop).toBeGreaterThan(4_000);
+    expect(scroller.scrollTop).toBeLessThanOrEqual(4_600);
   });
 
   it('does not expose stale history projection handoff snapshots across sessions', () => {
