@@ -7,6 +7,7 @@ use crate::agentic::tools::framework::{
 };
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
+use bitfun_services_integrations::web_tools::WebToolNetworkProvider;
 use serde_json::{json, Value};
 
 /// WebFetch tool
@@ -143,39 +144,11 @@ Example usage:
         let requested_format =
             normalize_requested_format(input.get("format").and_then(|v| v.as_str()))?;
 
-        let client = reqwest::Client::builder()
-            .user_agent("BitFun/1.0")
-            .timeout(std::time::Duration::from_secs(30))
-            .build()
-            .map_err(|e| BitFunError::tool(format!("Failed to create HTTP client: {}", e)))?;
-
-        let response = client
-            .get(url)
-            .send()
+        let response = WebToolNetworkProvider::fetch_text(url)
             .await
-            .map_err(|e| BitFunError::tool(format!("Failed to fetch URL: {}", e)))?;
-
-        if !response.status().is_success() {
-            return Err(BitFunError::tool(format!(
-                "HTTP error {}: {}",
-                response.status(),
-                response
-                    .status()
-                    .canonical_reason()
-                    .unwrap_or("Unknown error")
-            )));
-        }
-
-        let content_type = response
-            .headers()
-            .get(reqwest::header::CONTENT_TYPE)
-            .and_then(|v| v.to_str().ok())
-            .map(|s| s.to_string());
-
-        let content = response
-            .text()
-            .await
-            .map_err(|e| BitFunError::tool(format!("Failed to read response: {}", e)))?;
+            .map_err(|error| BitFunError::tool(error.to_string()))?;
+        let content_type = response.content_type;
+        let content = response.content;
 
         let is_html_response = is_html(content_type.as_deref(), &content);
         let fallback_title = if is_html_response {

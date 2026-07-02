@@ -4,7 +4,6 @@ use htmd::HtmlToMarkdown;
 use legible::{parse as parse_legible, Error as LegibleError, Options as LegibleOptions};
 use readability_js::{Readability, ReadabilityOptions};
 use regex::{Captures, Regex};
-use reqwest::Url;
 
 const MIN_MARKDOWN_CHARS: usize = 40;
 const MIN_PLAIN_TEXT_CHARS: usize = 40;
@@ -206,14 +205,20 @@ fn absolutize_root_relative_markdown(markdown: &str, base_url: &str) -> String {
 }
 
 fn origin_for(base_url: &str) -> Option<String> {
-    let url = Url::parse(base_url).ok()?;
-    let host = url.host_str()?;
-    let mut origin = format!("{}://{}", url.scheme(), host);
-    if let Some(port) = url.port() {
-        origin.push(':');
-        origin.push_str(&port.to_string());
+    let (scheme, rest) = base_url.split_once("://")?;
+    if scheme != "http" && scheme != "https" {
+        return None;
     }
-    Some(origin)
+    let authority = rest
+        .split(['/', '?', '#'])
+        .next()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())?;
+    let host_port = authority.rsplit('@').next().unwrap_or(authority);
+    if host_port.is_empty() {
+        return None;
+    }
+    Some(format!("{}://{}", scheme, host_port))
 }
 
 fn wrap_html_in_body(html: &str) -> String {
@@ -344,5 +349,36 @@ fn non_empty_string(value: String) -> Option<String> {
         None
     } else {
         Some(trimmed.to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{absolutize_root_relative_markdown, origin_for};
+
+    #[test]
+    fn origin_for_preserves_http_authority() {
+        assert_eq!(
+            origin_for("https://example.com:8443/docs/page?view=full#top"),
+            Some("https://example.com:8443".to_string())
+        );
+    }
+
+    #[test]
+    fn origin_for_strips_userinfo_from_authority() {
+        assert_eq!(
+            origin_for("https://user:token@example.com/docs"),
+            Some("https://example.com".to_string())
+        );
+    }
+
+    #[test]
+    fn absolutize_root_relative_markdown_uses_base_origin() {
+        let markdown = "[Docs](/guide/start) [External](https://example.org)";
+
+        assert_eq!(
+            absolutize_root_relative_markdown(markdown, "https://bitfun.dev/docs/page"),
+            "[Docs](https://bitfun.dev/guide/start) [External](https://example.org)"
+        );
     }
 }

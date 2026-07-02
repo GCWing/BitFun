@@ -24,7 +24,7 @@
 - Desktop / CLI / ACP 仍通过 `bitfun-core/product-full` 获取完整能力；Server / Remote / Web / Mobile Web 不直接依赖 core。
 - Product Assembly 已按入口矩阵裁剪能力计划：完整兼容入口保留 product-full 能力，无直接 core 入口不再 materialize product-full capability packs、feature groups、runtime services、tool groups 或 harness routes。
 - Runtime Services、Agent Runtime、Tool Contracts、Tool Execution、Harness、Product Domains、Services Core、Services Integrations 等 owner crate 已建立；部分 concrete 生命周期仍由 core concrete manager 或产品命令路径持有。
-- Custom agent / mode / skill、Agent lifecycle、tool side-effect、Computer Use、file tool、MiniApp、DeepReview、DeepResearch、remote-connect、workspace search、remote SSH/SFTP/PTY、Remote SSH disabled surface、remote workspace identity 和 remote search disabled surface 等多批 provider-neutral 或 concrete owner 已迁出。
+- Custom agent / mode / skill、Agent lifecycle、tool side-effect、Computer Use、file tool、MiniApp、DeepReview、DeepResearch、remote-connect、workspace search、remote SSH/SFTP/PTY、Remote SSH disabled surface、remote workspace identity、remote search disabled surface、browser CDP endpoint、built-in web tool HTTP provider、debug-log HTTP ingest 和 review-platform HTTP transport 等多批 provider-neutral 或 concrete owner 已迁出。
 - Root boundary scripts 已覆盖核心 owner 防回流、six-layer path 解析、facade-only 文件、custom agent owner / custom subagent wrapper 保护和重点 feature gate。
 - Agent Runtime session workspace resolution、Cron / SessionControl / SessionMessage / SessionHistory 的 target session/workspace owner routing、`/goal` tool management runtime-port routing、session/config/context/lifecycle fact owner 收口，以及 `services-integrations` workspace search preview/result conversion 已纳入已完成摘要；后续计划只保留仍需迁移的 feature/kernel、security/control-plane、execution、extension 和 cross-platform adapter 主体工作。
 - MiniApp built-in seed orchestration 已进入 `product-domains`，core 只保留 concrete host adapter；session state manager 已进入 `agent-runtime`，core 只保留兼容 re-export。
@@ -86,8 +86,8 @@
 
 当前大型 PR 批次：
 
-- Platform Provider Closure 先收口 remote-connect 与 announcement 中已具备服务层 owner 的 concrete provider：LAN IP/URL 探测、ngrok 进程/tunnel lifecycle、mobile-web relay 上传、announcement remote fetch/cache。core 保留兼容 facade、配置读取和产品编排。
-- IM bot 中的 Telegram / Feishu provider client 已迁入 services-integrations；剩余 Weixin 平台 adapter、browser automation、terminal tool execution 和 Computer Use OS action 仍属于高影响路径；必须在具备等价测试与清晰 host port 后再迁移。
+- Platform Provider Closure 已继续收口具备服务层 owner 的 concrete provider：remote-connect LAN IP/URL 探测、ngrok 进程/tunnel lifecycle、mobile-web relay 上传、announcement remote fetch/cache、browser CDP endpoint HTTP probing / page creation、WebFetch / WebSearch concrete HTTP provider、debug-log HTTP ingest posting 和 review-platform HTTP transport。core 保留兼容 facade、配置读取、产品编排、provider DTO 映射和工具结果 envelope。
+- 后续仍需迁移 terminal tool execution、Computer Use OS action、部分 Git/process/session host adapter、MCP auth URL helper、remote/product 命令路径和 OpenCode/UI extension 的真实消费路径；这些路径必须在具备等价测试、host port 和交付形态矩阵后再迁移。
 
 保护：
 
@@ -115,6 +115,7 @@
 | Runtime Services / backend events | `cargo test -p bitfun-runtime-services`，backend event delivery focused tests |
 | Services Core session migration | `cargo test -p bitfun-services-core merge_legacy_session_store`，core workspace-runtime focused tests |
 | Remote Connect / IM bot support | `cargo test -p bitfun-services-integrations --features remote-connect --lib remote_connect::bot::`，`cargo test -p bitfun-core --features product-full remote_connect::bot::command_router` |
+| Provider HTTP / browser CDP / review platform | `cargo test -p bitfun-services-integrations --features browser-control,web-tools,debug-log,review-platform --lib`，`cargo test -p bitfun-core --features product-full readable::tests`，`cargo check -p bitfun-core --features product-full` |
 | Tool / MCP / terminal / sandbox | `cargo test -p bitfun-agent-tools`，`cargo test -p tool-runtime`，terminal / exec-command / MCP focused tests |
 | Harness / Product Domains | `cargo test -p bitfun-harness`，`cargo test -p bitfun-product-domains`，DeepReview / MiniApp focused tests |
 | Extension / OpenCode / ACP | extension host focused tests，ACP permission / external tool focused tests |

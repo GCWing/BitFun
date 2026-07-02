@@ -1,20 +1,27 @@
 //! Platform-neutral pull request review data service.
 //!
-//! This module owns provider detection, token handling, and provider-specific
-//! HTTP calls. UI and desktop adapters consume only the common DTOs below.
+//! This module owns provider detection, token handling, provider DTO mapping,
+//! and review-platform product semantics. Concrete HTTP transport lives in
+//! `bitfun-services-integrations`.
 
 use crate::infrastructure::try_get_path_manager_arc;
 use crate::service::git::{execute_git_command, get_repository_root};
+use bitfun_services_integrations::review_platform_http::{
+    send_json as send_review_json, send_json_response as send_review_json_response,
+    send_text as send_review_text, ReviewHttpClient, ReviewHttpError, ReviewHttpHeaders,
+    ReviewHttpRequest, ReviewJsonResponse,
+};
 use futures::{stream, StreamExt};
-use reqwest::header::{HeaderMap, ACCEPT, AUTHORIZATION, USER_AGENT};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
-use std::time::Duration;
 use tokio::fs;
 
 const USER_AGENT_VALUE: &str = "ReviewPlatform";
+const ACCEPT_HEADER: &str = "accept";
+const AUTHORIZATION_HEADER: &str = "authorization";
+const USER_AGENT_HEADER: &str = "user-agent";
 const DEFAULT_PR_PAGE: u32 = 1;
 const DEFAULT_PR_PAGE_SIZE: u32 = 10;
 const MAX_PR_PAGE_SIZE: u32 = 50;
@@ -2345,75 +2352,44 @@ impl ReviewProvider for UnsupportedProvider {
     }
 }
 
-fn http_client() -> Result<reqwest::Client, ReviewPlatformError> {
-    reqwest::Client::builder()
-        .use_native_tls()
-        .timeout(Duration::from_secs(25))
-        .build()
-        .map_err(|error| ReviewPlatformError::Network(error.to_string()))
+fn http_client() -> Result<ReviewHttpClient, ReviewPlatformError> {
+    ReviewHttpClient::new_review_platform().map_err(review_http_error)
 }
 
-struct JsonResponse {
-    value: Value,
-    headers: HeaderMap,
+type JsonResponse = ReviewJsonResponse;
+
+fn review_http_error(error: ReviewHttpError) -> ReviewPlatformError {
+    match error {
+        ReviewHttpError::BuildClient(message) | ReviewHttpError::Network(message) => {
+            ReviewPlatformError::Network(message)
+        }
+        ReviewHttpError::Http { status, message } => ReviewPlatformError::Http { status, message },
+        ReviewHttpError::Parse(message) => ReviewPlatformError::Parse(message),
+    }
 }
 
-async fn send_json(request: reqwest::RequestBuilder) -> Result<Value, ReviewPlatformError> {
-    send_json_response(request)
-        .await
-        .map(|response| response.value)
+async fn send_json(request: ReviewHttpRequest) -> Result<Value, ReviewPlatformError> {
+    send_review_json(request).await.map_err(review_http_error)
 }
 
 async fn send_json_response(
-    request: reqwest::RequestBuilder,
+    request: ReviewHttpRequest,
 ) -> Result<JsonResponse, ReviewPlatformError> {
-    let response = request
-        .send()
+    send_review_json_response(request)
         .await
-        .map_err(|error| ReviewPlatformError::Network(error.to_string()))?;
-    let status = response.status();
-    if !status.is_success() {
-        let body = response.text().await.unwrap_or_default();
-        let preview = body.chars().take(280).collect::<String>();
-        return Err(ReviewPlatformError::Http {
-            status: status.as_u16(),
-            message: preview,
-        });
-    }
-    let headers = response.headers().clone();
-    let value = response
-        .json::<Value>()
-        .await
-        .map_err(|error| ReviewPlatformError::Parse(error.to_string()))?;
-    Ok(JsonResponse { value, headers })
+        .map_err(review_http_error)
 }
 
-async fn send_text(request: reqwest::RequestBuilder) -> Result<String, ReviewPlatformError> {
-    let response = request
-        .send()
-        .await
-        .map_err(|error| ReviewPlatformError::Network(error.to_string()))?;
-    let status = response.status();
-    let text = response
-        .text()
-        .await
-        .map_err(|error| ReviewPlatformError::Network(error.to_string()))?;
-    if !status.is_success() {
-        let preview = text.chars().take(280).collect::<String>();
-        return Err(ReviewPlatformError::Http {
-            status: status.as_u16(),
-            message: preview,
-        });
-    }
-    Ok(text)
+async fn send_text(request: ReviewHttpRequest) -> Result<String, ReviewPlatformError> {
+    send_review_text(request).await.map_err(review_http_error)
 }
 
 async fn fetch_paginated_array<F>(
     mut build_request: F,
-    next_page: fn(&HeaderMap, u32) -> Option<u32>,
+    next_page: fn(&ReviewHttpHeaders, u32) -> Option<u32>,
 ) -> Result<Value, ReviewPlatformError>
 where
-    F: FnMut(u32) -> reqwest::RequestBuilder,
+    F: FnMut(u32) -> ReviewHttpRequest,
 {
     let mut page = 1;
     let mut values = Vec::new();
@@ -2435,7 +2411,7 @@ where
 }
 
 async fn fetch_array_page(
-    request: reqwest::RequestBuilder,
+    request: ReviewHttpRequest,
     pagination: PullRequestPagination,
 ) -> Result<JsonResponse, ReviewPlatformError> {
     let page = pagination.page.to_string();
@@ -2489,18 +2465,15 @@ fn combine_page_pagination(
     }
 }
 
-fn header_string(headers: &HeaderMap, name: &str) -> Option<String> {
-    headers
-        .get(name)
-        .and_then(|value| value.to_str().ok())
-        .map(str::to_string)
+fn header_string(headers: &ReviewHttpHeaders, name: &str) -> Option<String> {
+    headers.get(name).map(str::to_string)
 }
 
-fn header_u64(headers: &HeaderMap, name: &str) -> Option<u64> {
+fn header_u64(headers: &ReviewHttpHeaders, name: &str) -> Option<u64> {
     header_string(headers, name).and_then(|value| value.parse::<u64>().ok())
 }
 
-fn link_header_has_rel(headers: &HeaderMap, rel: &str) -> bool {
+fn link_header_has_rel(headers: &ReviewHttpHeaders, rel: &str) -> bool {
     header_string(headers, "link")
         .as_deref()
         .is_some_and(|value| {
@@ -2510,7 +2483,7 @@ fn link_header_has_rel(headers: &HeaderMap, rel: &str) -> bool {
         })
 }
 
-fn link_header_last_page(headers: &HeaderMap) -> Option<u32> {
+fn link_header_last_page(headers: &ReviewHttpHeaders) -> Option<u32> {
     let link = header_string(headers, "link")?;
     for part in link.split(',') {
         if !part.contains("rel=\"last\"") {
@@ -2528,7 +2501,7 @@ fn link_header_last_page(headers: &HeaderMap) -> Option<u32> {
 }
 
 fn pagination_total_from_links(
-    headers: &HeaderMap,
+    headers: &ReviewHttpHeaders,
     pagination: PullRequestPagination,
     item_count: usize,
 ) -> Option<u64> {
@@ -2593,7 +2566,7 @@ fn empty_detail_pagination(
     }
 }
 
-fn github_next_page(headers: &HeaderMap, current_page: u32) -> Option<u32> {
+fn github_next_page(headers: &ReviewHttpHeaders, current_page: u32) -> Option<u32> {
     if link_header_has_rel(headers, "next") {
         Some(current_page.saturating_add(1))
     } else {
@@ -2601,7 +2574,7 @@ fn github_next_page(headers: &HeaderMap, current_page: u32) -> Option<u32> {
     }
 }
 
-fn gitlab_next_page(headers: &HeaderMap, _current_page: u32) -> Option<u32> {
+fn gitlab_next_page(headers: &ReviewHttpHeaders, _current_page: u32) -> Option<u32> {
     header_string(headers, "x-next-page").and_then(|value| {
         let trimmed = value.trim();
         if trimmed.is_empty() {
@@ -2715,47 +2688,39 @@ async fn enrich_gitcode_pull_request_counts(
         .await
 }
 
-fn github_request(
-    client: reqwest::Client,
-    url: &str,
-    token: Option<&str>,
-) -> reqwest::RequestBuilder {
+fn github_request(client: ReviewHttpClient, url: &str, token: Option<&str>) -> ReviewHttpRequest {
     let mut request = client
         .get(url)
-        .header(USER_AGENT, USER_AGENT_VALUE)
-        .header(ACCEPT, "application/vnd.github+json")
+        .header(USER_AGENT_HEADER, USER_AGENT_VALUE)
+        .header(ACCEPT_HEADER, "application/vnd.github+json")
         .header("X-GitHub-Api-Version", "2022-11-28");
     if let Some(token) = token {
-        request = request.header(AUTHORIZATION, format!("Bearer {}", token));
+        request = request.header(AUTHORIZATION_HEADER, format!("Bearer {}", token));
     }
     request
 }
 
 fn github_post_request(
-    client: reqwest::Client,
+    client: ReviewHttpClient,
     url: &str,
     token: Option<&str>,
-) -> reqwest::RequestBuilder {
+) -> ReviewHttpRequest {
     let mut request = client
         .post(url)
-        .header(USER_AGENT, USER_AGENT_VALUE)
-        .header(ACCEPT, "application/vnd.github+json")
+        .header(USER_AGENT_HEADER, USER_AGENT_VALUE)
+        .header(ACCEPT_HEADER, "application/vnd.github+json")
         .header("X-GitHub-Api-Version", "2022-11-28");
     if let Some(token) = token {
-        request = request.header(AUTHORIZATION, format!("Bearer {}", token));
+        request = request.header(AUTHORIZATION_HEADER, format!("Bearer {}", token));
     }
     request
 }
 
-fn gitlab_request(
-    client: reqwest::Client,
-    url: &str,
-    token: Option<&str>,
-) -> reqwest::RequestBuilder {
+fn gitlab_request(client: ReviewHttpClient, url: &str, token: Option<&str>) -> ReviewHttpRequest {
     let mut request = client
         .get(url)
-        .header(USER_AGENT, USER_AGENT_VALUE)
-        .header(ACCEPT, "application/json");
+        .header(USER_AGENT_HEADER, USER_AGENT_VALUE)
+        .header(ACCEPT_HEADER, "application/json");
     if let Some(token) = token {
         request = request.header("PRIVATE-TOKEN", token);
     }
@@ -2763,14 +2728,14 @@ fn gitlab_request(
 }
 
 fn gitlab_post_request(
-    client: reqwest::Client,
+    client: ReviewHttpClient,
     url: &str,
     token: Option<&str>,
-) -> reqwest::RequestBuilder {
+) -> ReviewHttpRequest {
     let mut request = client
         .post(url)
-        .header(USER_AGENT, USER_AGENT_VALUE)
-        .header(ACCEPT, "application/json");
+        .header(USER_AGENT_HEADER, USER_AGENT_VALUE)
+        .header(ACCEPT_HEADER, "application/json");
     if let Some(token) = token {
         request = request.header("PRIVATE-TOKEN", token);
     }
@@ -2778,51 +2743,47 @@ fn gitlab_post_request(
 }
 
 fn gitlab_put_request(
-    client: reqwest::Client,
+    client: ReviewHttpClient,
     url: &str,
     token: Option<&str>,
-) -> reqwest::RequestBuilder {
+) -> ReviewHttpRequest {
     let mut request = client
         .put(url)
-        .header(USER_AGENT, USER_AGENT_VALUE)
-        .header(ACCEPT, "application/json");
+        .header(USER_AGENT_HEADER, USER_AGENT_VALUE)
+        .header(ACCEPT_HEADER, "application/json");
     if let Some(token) = token {
         request = request.header("PRIVATE-TOKEN", token);
     }
     request
 }
 
-fn gitcode_request(
-    client: reqwest::Client,
-    url: &str,
-    token: Option<&str>,
-) -> reqwest::RequestBuilder {
+fn gitcode_request(client: ReviewHttpClient, url: &str, token: Option<&str>) -> ReviewHttpRequest {
     let mut request = client
         .get(url)
-        .header(USER_AGENT, USER_AGENT_VALUE)
-        .header(ACCEPT, "application/json");
+        .header(USER_AGENT_HEADER, USER_AGENT_VALUE)
+        .header(ACCEPT_HEADER, "application/json");
     if let Some(token) = token {
         request = request
             .header("PRIVATE-TOKEN", token)
-            .header(AUTHORIZATION, format!("Bearer {}", token))
+            .header(AUTHORIZATION_HEADER, format!("Bearer {}", token))
             .query(&[("access_token", token)]);
     }
     request
 }
 
 fn gitcode_post_request(
-    client: reqwest::Client,
+    client: ReviewHttpClient,
     url: &str,
     token: Option<&str>,
-) -> reqwest::RequestBuilder {
+) -> ReviewHttpRequest {
     let mut request = client
         .post(url)
-        .header(USER_AGENT, USER_AGENT_VALUE)
-        .header(ACCEPT, "application/json");
+        .header(USER_AGENT_HEADER, USER_AGENT_VALUE)
+        .header(ACCEPT_HEADER, "application/json");
     if let Some(token) = token {
         request = request
             .header("PRIVATE-TOKEN", token)
-            .header(AUTHORIZATION, format!("Bearer {}", token))
+            .header(AUTHORIZATION_HEADER, format!("Bearer {}", token))
             .query(&[("access_token", token)]);
     }
     request
@@ -3428,7 +3389,7 @@ fn is_ci_error_line(line: &str) -> bool {
 
 async fn github_checks_and_ci(
     ctx: &ProviderContext,
-    client: &reqwest::Client,
+    client: &ReviewHttpClient,
     pull_detail: &Value,
 ) -> (ReviewChecks, Vec<ReviewPlatformCiItem>) {
     let sha = nested_string(pull_detail, &["head", "sha"]);
@@ -3523,7 +3484,7 @@ async fn github_checks_and_ci(
 
 async fn github_actions_jobs_for_head_sha(
     ctx: &ProviderContext,
-    client: &reqwest::Client,
+    client: &ReviewHttpClient,
     sha: &str,
 ) -> Vec<Value> {
     let runs_url = format!(
@@ -3578,7 +3539,7 @@ async fn github_actions_jobs_for_head_sha(
 
 async fn github_actions_log_for_check_run_item(
     ctx: &ProviderContext,
-    client: &reqwest::Client,
+    client: &ReviewHttpClient,
     check_run_id: &str,
     check_run_name: &str,
     head_sha: &str,
@@ -3665,7 +3626,7 @@ fn gitlab_pipeline_summary_item(detail: &Value) -> Option<ReviewPlatformCiItem> 
 
 async fn gitlab_pipeline_jobs(
     ctx: &ProviderContext,
-    client: reqwest::Client,
+    client: ReviewHttpClient,
     project: &str,
     pipeline_id: &str,
 ) -> Vec<ReviewPlatformCiItem> {
@@ -3708,7 +3669,7 @@ async fn gitlab_pipeline_jobs(
 
 async fn gitlab_job_trace(
     ctx: &ProviderContext,
-    client: reqwest::Client,
+    client: ReviewHttpClient,
     project: &str,
     job_id: &str,
 ) -> (Option<String>, bool) {

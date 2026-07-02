@@ -68,7 +68,8 @@ schannel = { version = "0.1", optional = true }
 [features]
 default = []
 announcement = ["reqwest"]
-browser-control = ["anyhow", "bitfun-services-core", "dirs", "reqwest"]
+browser-control = ["anyhow", "bitfun-services-core", "dirs", "reqwest", "thiserror"]
+debug-log = ["reqwest"]
 deep-research = ["bitfun-agent-runtime"]
 git = ["bitfun-services-core", "chrono", "git2", "thiserror"]
 file-watch = ["notify"]
@@ -150,6 +151,7 @@ remote-ssh-concrete = [
     "thiserror",
     "uuid",
 ]
+review-platform = ["reqwest", "thiserror"]
 workspace-search = [
     "async-trait",
     "bitfun-services-core",
@@ -157,9 +159,11 @@ workspace-search = [
     "thiserror",
     "which",
 ]
+web-tools = ["reqwest", "thiserror"]
 product-full = [
     "announcement",
     "browser-control",
+    "debug-log",
     "deep-research",
     "file-watch",
     "function-agents",
@@ -169,6 +173,8 @@ product-full = [
     "remote-connect",
     "remote-ssh",
     "remote-ssh-concrete",
+    "review-platform",
+    "web-tools",
     "workspace-search",
 ]
 ssh_config = ["dep:ssh_config"]

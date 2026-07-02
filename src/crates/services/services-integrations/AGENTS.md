@@ -40,9 +40,18 @@ slices that are outside pure product logic but still platform-neutral.
 - Remote SSH workspace-search owns the disabled surface, path/scope/probe,
   bundle/retry strategy, and flashgrep session/context lifecycle behind a
   provider boundary.
-- Browser-control owns provider-neutral browser detection and CDP launch process
-  handling behind `browser-control`; product profile paths and tool envelopes
-  stay in higher layers.
+- Browser-control owns provider-neutral browser detection, CDP endpoint HTTP
+  probing/page creation, and CDP launch process handling behind
+  `browser-control`; product profile paths and tool envelopes stay in higher
+  layers.
+- Web tool network providers own concrete HTTP/Exa requests behind `web-tools`;
+  product validation, readable extraction, and tool result envelopes stay in
+  higher layers.
+- Debug log HTTP ingest posting lives behind `debug-log`; callers own log
+  shaping and dispatch policy.
+- Review-platform HTTP transport lives behind `review-platform`; provider DTOs,
+  repository detection, pagination policy, and UI-facing envelopes stay in
+  higher layers.
 - MiniApp runtime here may own host primitive dispatch, built-in seed file
   writes, marker IO, storage/import bundle filesystem IO, and JS worker process/pool
   lifecycle. Manager workflow orchestration remains outside this crate until

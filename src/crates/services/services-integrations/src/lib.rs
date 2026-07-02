@@ -9,6 +9,9 @@ pub mod announcement;
 #[cfg(feature = "browser-control")]
 pub mod browser_control;
 
+#[cfg(feature = "debug-log")]
+pub mod debug_log;
+
 #[cfg(feature = "deep-research")]
 pub mod deep_research;
 
@@ -33,8 +36,14 @@ pub mod remote_connect;
 #[cfg(feature = "remote-ssh")]
 pub mod remote_ssh;
 
+#[cfg(feature = "review-platform")]
+pub mod review_platform_http;
+
 #[cfg(feature = "workspace-search")]
 pub mod workspace_search;
+
+#[cfg(feature = "web-tools")]
+pub mod web_tools;
 
 #[cfg(all(windows, feature = "git"))]
 #[link(name = "advapi32")]

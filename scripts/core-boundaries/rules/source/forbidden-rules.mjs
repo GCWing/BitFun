@@ -109,6 +109,56 @@ export const forbiddenContentRules = [
     ],
   },
   {
+    path: 'src/crates/assembly/core/src/agentic/tools/browser_control/cdp_client.rs',
+    patterns: [
+      {
+        regex: /\breqwest::/,
+        message:
+          'core CDP client facade must not own HTTP endpoint probing; use bitfun-services-integrations browser_control CDP provider',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/web/fetch.rs',
+    patterns: [
+      {
+        regex: /\breqwest::/,
+        message:
+          'core WebFetch tool must not own HTTP clients; use bitfun-services-integrations web provider',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/web/search.rs',
+    patterns: [
+      {
+        regex: /\breqwest::/,
+        message:
+          'core WebSearch tool must not own provider HTTP clients; use bitfun-services-integrations web provider',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/infrastructure/debug_log/mod.rs',
+    patterns: [
+      {
+        regex: /\breqwest::/,
+        message:
+          'core debug log facade must not own HTTP ingest posting; use bitfun-services-integrations debug log network provider',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/service/review_platform/mod.rs',
+    patterns: [
+      {
+        regex: /\breqwest::/,
+        message:
+          'core review platform service must not own concrete HTTP clients; use bitfun-services-integrations review platform HTTP transport',
+      },
+    ],
+  },
+  {
     path: 'src/crates/assembly/core/src/agentic/tools/implementations/computer_use_actions.rs',
     patterns: [
       {

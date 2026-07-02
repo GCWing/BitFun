@@ -1,10 +1,11 @@
 //! Lightweight CDP (Chrome DevTools Protocol) client over WebSocket.
 
 use crate::util::errors::{BitFunError, BitFunResult};
+use bitfun_services_integrations::browser_control::CdpEndpointProvider;
+pub use bitfun_services_integrations::browser_control::{CdpPageInfo, CdpVersionInfo};
 use futures::stream::{SplitSink, SplitStream};
 use futures::{SinkExt, StreamExt};
 use log::{debug, info, warn};
-use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicI64, Ordering};
@@ -16,29 +17,6 @@ use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream};
 
 type WsSink = SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>;
 type WsStream = SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>;
-
-/// Information about a single browser page/tab from the CDP `/json` endpoint.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CdpPageInfo {
-    pub id: String,
-    pub title: String,
-    pub url: String,
-    #[serde(rename = "webSocketDebuggerUrl")]
-    pub web_socket_debugger_url: Option<String>,
-    #[serde(rename = "type")]
-    pub page_type: Option<String>,
-}
-
-/// Version info returned by `/json/version`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CdpVersionInfo {
-    #[serde(rename = "Browser")]
-    pub browser: Option<String>,
-    #[serde(rename = "Protocol-Version")]
-    pub protocol_version: Option<String>,
-    #[serde(rename = "webSocketDebuggerUrl")]
-    pub web_socket_debugger_url: Option<String>,
-}
 
 /// A single CDP event emitted by the browser (no `id`, has `method` + `params`).
 #[derive(Debug, Clone)]
@@ -61,50 +39,23 @@ pub struct CdpClient {
 impl CdpClient {
     /// Discover browser version on the given debug port.
     pub async fn get_version(port: u16) -> BitFunResult<CdpVersionInfo> {
-        let url = format!("http://127.0.0.1:{}/json/version", port);
-        let resp = reqwest::get(&url).await.map_err(|e| {
-            BitFunError::tool(format!("Cannot reach browser CDP on port {}: {}", port, e))
-        })?;
-        let info: CdpVersionInfo = resp
-            .json()
+        CdpEndpointProvider::get_version(port)
             .await
-            .map_err(|e| BitFunError::tool(format!("Invalid CDP version response: {}", e)))?;
-        Ok(info)
+            .map_err(|error| BitFunError::tool(error.to_string()))
     }
 
     /// List all pages/tabs on the given debug port.
     pub async fn list_pages(port: u16) -> BitFunResult<Vec<CdpPageInfo>> {
-        let url = format!("http://127.0.0.1:{}/json", port);
-        let resp = reqwest::get(&url).await.map_err(|e| {
-            BitFunError::tool(format!("Cannot list CDP pages on port {}: {}", port, e))
-        })?;
-        let pages: Vec<CdpPageInfo> = resp
-            .json()
+        CdpEndpointProvider::list_pages(port)
             .await
-            .map_err(|e| BitFunError::tool(format!("Invalid CDP pages response: {}", e)))?;
-        Ok(pages)
+            .map_err(|error| BitFunError::tool(error.to_string()))
     }
 
     /// Create a new page/tab on the given debug port.
     pub async fn create_page(port: u16, url: Option<&str>) -> BitFunResult<CdpPageInfo> {
-        let endpoint = if let Some(url) = url {
-            let encoded = url.replace(' ', "%20");
-            format!("http://127.0.0.1:{}/json/new?{}", port, encoded)
-        } else {
-            format!("http://127.0.0.1:{}/json/new", port)
-        };
-        let resp = reqwest::Client::new()
-            .put(&endpoint)
-            .send()
+        CdpEndpointProvider::create_page(port, url)
             .await
-            .map_err(|e| {
-                BitFunError::tool(format!("Cannot create CDP page on port {}: {}", port, e))
-            })?;
-        let page: CdpPageInfo = resp
-            .json()
-            .await
-            .map_err(|e| BitFunError::tool(format!("Invalid CDP new page response: {}", e)))?;
-        Ok(page)
+            .map_err(|error| BitFunError::tool(error.to_string()))
     }
 
     /// Connect to a specific page by its WebSocket debugger URL.
