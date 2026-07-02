@@ -5,8 +5,10 @@
 //! on concrete managers, platform adapters, `bitfun-core`, or app crates.
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
 pub type PortResult<T> = Result<T, PortError>;
@@ -335,6 +337,106 @@ impl std::fmt::Debug for WorkspaceServices {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct TerminalExecCommandRequest {
+    pub argv: Vec<String>,
+    pub cwd: PathBuf,
+    pub env: HashMap<String, String>,
+    pub tty: bool,
+    pub yield_time_ms: Option<u64>,
+    pub max_output_chars: Option<usize>,
+    pub lifecycle_sink: Option<TerminalExecLifecycleSink>,
+    pub output_sink: Option<TerminalExecOutputSink>,
+}
+
+#[derive(Debug, Clone)]
+pub struct TerminalWriteStdinRequest {
+    pub session_id: i32,
+    pub chars: String,
+    pub append_enter: bool,
+    pub yield_time_ms: Option<u64>,
+    pub max_output_chars: Option<usize>,
+}
+
+#[derive(Debug, Clone)]
+pub struct TerminalSendStdinRequest {
+    pub session_id: i32,
+    pub chars: String,
+    pub append_enter: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TerminalExecControlAction {
+    Interrupt,
+    Kill,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TerminalExecControlOrigin {
+    ModelTool,
+    OutOfBand,
+}
+
+#[derive(Debug, Clone)]
+pub struct TerminalExecControlRequest {
+    pub session_id: i32,
+    pub action: TerminalExecControlAction,
+    pub origin: TerminalExecControlOrigin,
+    pub yield_time_ms: Option<u64>,
+    pub max_output_chars: Option<usize>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TerminalExecSessionCompletionStatus {
+    Exited,
+    Interrupted,
+    Killed,
+    Pruned,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TerminalExecSessionCompletionSource {
+    Process,
+    OutOfBandControl,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TerminalExecSessionCompletion {
+    pub status: TerminalExecSessionCompletionStatus,
+    pub source: TerminalExecSessionCompletionSource,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TerminalExecCommandResponse {
+    pub chunk_id: String,
+    pub wall_time_seconds: f64,
+    pub output: String,
+    pub session_id: Option<i32>,
+    pub exit_code: Option<i32>,
+    pub original_output_chars: usize,
+    pub completion: Option<TerminalExecSessionCompletion>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TerminalExecProcessLifecycleStatus {
+    Running,
+    Exited,
+    Interrupted,
+    Killed,
+    Pruned,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TerminalExecProcessLifecycleEvent {
+    pub session_id: i32,
+    pub status: TerminalExecProcessLifecycleStatus,
+    pub exit_code: Option<i32>,
+}
+
+pub type TerminalExecLifecycleSink = mpsc::UnboundedSender<TerminalExecProcessLifecycleEvent>;
+pub type TerminalExecOutputSink = mpsc::UnboundedSender<String>;
+pub type TerminalExecStreamingOutputSink = mpsc::Sender<String>;
+
 /// Runtime handles injected into tool execution contexts.
 ///
 /// This bundle is intentionally handle-only. Concrete local or remote
@@ -344,6 +446,7 @@ impl std::fmt::Debug for WorkspaceServices {
 pub struct ToolRuntimeHandles {
     workspace_services: Option<WorkspaceServices>,
     cancellation_token: Option<CancellationToken>,
+    terminal_port: Option<Arc<dyn TerminalPort>>,
 }
 
 impl ToolRuntimeHandles {
@@ -354,7 +457,13 @@ impl ToolRuntimeHandles {
         Self {
             workspace_services,
             cancellation_token,
+            terminal_port: None,
         }
+    }
+
+    pub fn with_terminal_port(mut self, terminal_port: Option<Arc<dyn TerminalPort>>) -> Self {
+        self.terminal_port = terminal_port;
+        self
     }
 
     pub fn workspace_services(&self) -> Option<&WorkspaceServices> {
@@ -363,6 +472,10 @@ impl ToolRuntimeHandles {
 
     pub fn cancellation_token(&self) -> Option<&CancellationToken> {
         self.cancellation_token.as_ref()
+    }
+
+    pub fn terminal_port(&self) -> Option<&Arc<dyn TerminalPort>> {
+        self.terminal_port.as_ref()
     }
 }
 
@@ -382,6 +495,10 @@ impl std::fmt::Debug for ToolRuntimeHandles {
                     .cancellation_token
                     .as_ref()
                     .map(|_| "<CancellationToken>"),
+            )
+            .field(
+                "terminal_port",
+                &self.terminal_port.as_ref().map(|_| "<dyn TerminalPort>"),
             )
             .finish()
     }
@@ -415,7 +532,37 @@ pub trait ClockPort: RuntimeServicePort {
     fn now_unix_millis(&self) -> i64;
 }
 
-pub trait TerminalPort: RuntimeServicePort {}
+#[async_trait::async_trait]
+pub trait TerminalPort: RuntimeServicePort + std::fmt::Debug {
+    async fn exec_command(
+        &self,
+        request: TerminalExecCommandRequest,
+    ) -> PortResult<TerminalExecCommandResponse>;
+
+    async fn exec_command_streaming(
+        &self,
+        request: TerminalExecCommandRequest,
+        output_sink: TerminalExecStreamingOutputSink,
+    ) -> PortResult<TerminalExecCommandResponse>;
+
+    async fn write_stdin(
+        &self,
+        request: TerminalWriteStdinRequest,
+    ) -> PortResult<TerminalExecCommandResponse>;
+
+    async fn write_stdin_streaming(
+        &self,
+        request: TerminalWriteStdinRequest,
+        output_sink: TerminalExecStreamingOutputSink,
+    ) -> PortResult<TerminalExecCommandResponse>;
+
+    async fn send_stdin(&self, request: TerminalSendStdinRequest) -> PortResult<()>;
+
+    async fn control_session(
+        &self,
+        request: TerminalExecControlRequest,
+    ) -> PortResult<TerminalExecCommandResponse>;
+}
 
 pub trait NetworkPort: RuntimeServicePort {}
 
@@ -2458,7 +2605,7 @@ mod tests {
         ));
         assert_eq!(
             format!("{:?}", handles),
-            "ToolRuntimeHandles { workspace_services: Some(\"<WorkspaceServices>\"), cancellation_token: Some(\"<CancellationToken>\") }"
+            "ToolRuntimeHandles { workspace_services: Some(\"<WorkspaceServices>\"), cancellation_token: Some(\"<CancellationToken>\"), terminal_port: None }"
         );
     }
 }

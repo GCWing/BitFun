@@ -1523,19 +1523,28 @@ impl From<BackgroundCommandControlActionDTO> for ExecCommandControlAction {
 
 #[tauri::command]
 pub async fn control_background_command(
+    coordinator: State<'_, Arc<ConversationCoordinator>>,
     request: ControlBackgroundCommandRequest,
 ) -> Result<(), String> {
     let session_id = request.exec_session_id;
     let remote = request.remote;
     let action: ExecCommandControlAction = request.action.into();
+    let terminal_port = if remote {
+        None
+    } else {
+        coordinator.inner().terminal_port()
+    };
 
-    control_exec_command_session(ExecCommandControlRequest {
-        session_id,
-        action,
-        origin: ExecCommandControlOrigin::OutOfBand,
-        remote,
-        yield_time_ms: Some(250),
-    })
+    control_exec_command_session(
+        ExecCommandControlRequest {
+            session_id,
+            action,
+            origin: ExecCommandControlOrigin::OutOfBand,
+            remote,
+            yield_time_ms: Some(250),
+        },
+        terminal_port.as_ref(),
+    )
     .await
     .map(|response| {
         if response.session_id.is_none() {
@@ -1581,24 +1590,37 @@ pub struct SendBackgroundCommandInputRequest {
 
 #[tauri::command]
 pub async fn send_background_command_input(
+    coordinator: State<'_, Arc<ConversationCoordinator>>,
     request: SendBackgroundCommandInputRequest,
 ) -> Result<(), String> {
     if request.chars.is_empty() && !request.append_enter {
         return Err("chars or append_enter is required".to_string());
     }
 
-    send_exec_command_input(ExecCommandInputRequest {
-        session_id: request.exec_session_id,
-        chars: request.chars,
-        append_enter: request.append_enter,
-        remote: request.remote,
-    })
+    let session_id = request.exec_session_id;
+    let remote = request.remote;
+    let chars = request.chars;
+    let append_enter = request.append_enter;
+    let terminal_port = if remote {
+        None
+    } else {
+        coordinator.inner().terminal_port()
+    };
+    send_exec_command_input(
+        ExecCommandInputRequest {
+            session_id,
+            chars,
+            append_enter,
+            remote,
+        },
+        terminal_port.as_ref(),
+    )
     .await
     .map_err(|e| {
         log::error!(
             "Failed to send input to background command: exec_session_id={}, remote={}, error={}",
-            request.exec_session_id,
-            request.remote,
+            session_id,
+            remote,
             e
         );
         format!("Failed to send input to background command: {}", e)

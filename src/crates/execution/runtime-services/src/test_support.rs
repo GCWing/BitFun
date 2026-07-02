@@ -2,12 +2,15 @@ use std::sync::Arc;
 
 use bitfun_runtime_ports::{
     ClockPort, FileSystemPort, GitPort, McpCatalogPort, NetworkPort, PermissionDecision,
-    PermissionPort, PermissionRequest, PortResult, RemoteAssistantWorkspaceFacts,
-    RemoteCapabilityPort, RemoteConnectionPort, RemoteProjectionPort, RemoteRecentWorkspaceFacts,
-    RemoteWorkspaceFacts, RemoteWorkspaceFileRuntimeHost, RemoteWorkspaceKind, RemoteWorkspacePort,
+    PermissionPort, PermissionRequest, PortError, PortErrorKind, PortResult,
+    RemoteAssistantWorkspaceFacts, RemoteCapabilityPort, RemoteConnectionPort,
+    RemoteProjectionPort, RemoteRecentWorkspaceFacts, RemoteWorkspaceFacts,
+    RemoteWorkspaceFileRuntimeHost, RemoteWorkspaceKind, RemoteWorkspacePort,
     RemoteWorkspaceRuntimeHost, RemoteWorkspaceUpdate, RuntimeEventEnvelope, RuntimeEventSink,
     RuntimeServiceCapability, RuntimeServicePort, SessionStorageKind, SessionStoragePathRequest,
-    SessionStoragePathResolution, SessionStorePort, TerminalPort, WorkspacePort,
+    SessionStoragePathResolution, SessionStorePort, TerminalExecCommandRequest,
+    TerminalExecCommandResponse, TerminalExecControlRequest, TerminalExecStreamingOutputSink,
+    TerminalPort, TerminalSendStdinRequest, TerminalWriteStdinRequest, WorkspacePort,
 };
 
 use crate::{
@@ -48,7 +51,60 @@ impl SessionStorePort for FakeRuntimePort {
         ))
     }
 }
-impl TerminalPort for FakeRuntimePort {}
+#[async_trait::async_trait]
+impl TerminalPort for FakeRuntimePort {
+    async fn exec_command(
+        &self,
+        _request: TerminalExecCommandRequest,
+    ) -> PortResult<TerminalExecCommandResponse> {
+        fake_terminal_not_available()
+    }
+
+    async fn exec_command_streaming(
+        &self,
+        _request: TerminalExecCommandRequest,
+        _output_sink: TerminalExecStreamingOutputSink,
+    ) -> PortResult<TerminalExecCommandResponse> {
+        fake_terminal_not_available()
+    }
+
+    async fn write_stdin(
+        &self,
+        _request: TerminalWriteStdinRequest,
+    ) -> PortResult<TerminalExecCommandResponse> {
+        fake_terminal_not_available()
+    }
+
+    async fn write_stdin_streaming(
+        &self,
+        _request: TerminalWriteStdinRequest,
+        _output_sink: TerminalExecStreamingOutputSink,
+    ) -> PortResult<TerminalExecCommandResponse> {
+        fake_terminal_not_available()
+    }
+
+    async fn send_stdin(&self, _request: TerminalSendStdinRequest) -> PortResult<()> {
+        Err(fake_terminal_error())
+    }
+
+    async fn control_session(
+        &self,
+        _request: TerminalExecControlRequest,
+    ) -> PortResult<TerminalExecCommandResponse> {
+        fake_terminal_not_available()
+    }
+}
+
+fn fake_terminal_not_available<T>() -> PortResult<T> {
+    Err(fake_terminal_error())
+}
+
+fn fake_terminal_error() -> PortError {
+    PortError::new(
+        PortErrorKind::NotAvailable,
+        "fake terminal port does not implement terminal execution",
+    )
+}
 impl NetworkPort for FakeRuntimePort {}
 impl GitPort for FakeRuntimePort {}
 impl McpCatalogPort for FakeRuntimePort {}
@@ -138,6 +194,10 @@ impl FakeRuntimeServicesProvider {
         Self {
             include_remote: false,
         }
+    }
+
+    pub fn terminal_port() -> Arc<dyn TerminalPort> {
+        Arc::new(FakeRuntimePort::new(RuntimeServiceCapability::Terminal))
     }
 
     pub fn with_all_remote(mut self) -> Self {

@@ -19,13 +19,14 @@ use crate::service::remote_ssh::{
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::types::event::BackgroundCommandLifecycleInfo;
 use async_trait::async_trait;
+use bitfun_runtime_ports::{
+    TerminalExecCommandRequest, TerminalExecProcessLifecycleEvent,
+    TerminalExecProcessLifecycleStatus,
+};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use terminal_core::{
-    get_global_exec_process_manager, ExecProcessLifecycleEvent, ExecProcessLifecycleStatus,
-    LocalExecCommandRequest, ShellType,
-};
+use terminal_core::ShellType;
 use tokio::sync::mpsc;
 use tool_runtime::exec_command::{
     exec_command_argv_for_shell, exec_command_background_output_status,
@@ -250,13 +251,17 @@ impl ExecCommandTool {
         render_exec_command_response_for_assistant(data)
     }
 
-    fn local_lifecycle_status(status: ExecProcessLifecycleStatus) -> ExecCommandLifecycleStatus {
+    fn local_lifecycle_status(
+        status: TerminalExecProcessLifecycleStatus,
+    ) -> ExecCommandLifecycleStatus {
         match status {
-            ExecProcessLifecycleStatus::Running => ExecCommandLifecycleStatus::Running,
-            ExecProcessLifecycleStatus::Exited => ExecCommandLifecycleStatus::Exited,
-            ExecProcessLifecycleStatus::Interrupted => ExecCommandLifecycleStatus::Interrupted,
-            ExecProcessLifecycleStatus::Killed => ExecCommandLifecycleStatus::Killed,
-            ExecProcessLifecycleStatus::Pruned => ExecCommandLifecycleStatus::Pruned,
+            TerminalExecProcessLifecycleStatus::Running => ExecCommandLifecycleStatus::Running,
+            TerminalExecProcessLifecycleStatus::Exited => ExecCommandLifecycleStatus::Exited,
+            TerminalExecProcessLifecycleStatus::Interrupted => {
+                ExecCommandLifecycleStatus::Interrupted
+            }
+            TerminalExecProcessLifecycleStatus::Killed => ExecCommandLifecycleStatus::Killed,
+            TerminalExecProcessLifecycleStatus::Pruned => ExecCommandLifecycleStatus::Pruned,
         }
     }
 
@@ -284,10 +289,10 @@ impl ExecCommandTool {
     fn start_local_lifecycle_bridge(
         context: &ToolUseContext,
         _tool_name: &str,
-    ) -> Option<mpsc::UnboundedSender<ExecProcessLifecycleEvent>> {
+    ) -> Option<mpsc::UnboundedSender<TerminalExecProcessLifecycleEvent>> {
         let capture_id = context.tool_call_id.clone()?;
         let agent_session_id = context.session_id.clone();
-        let (tx, mut rx) = mpsc::unbounded_channel::<ExecProcessLifecycleEvent>();
+        let (tx, mut rx) = mpsc::unbounded_channel::<TerminalExecProcessLifecycleEvent>();
         tokio::spawn(async move {
             let event_system = get_global_event_system();
             let output_capture = background_command_output_capture();
@@ -652,6 +657,9 @@ Output:
         let tty = parsed_input.tty;
         let shell = resolve_local_exec_shell().await;
         let yield_time_ms = parsed_input.yield_time_ms;
+        let terminal_port = context.terminal_port().ok_or_else(|| {
+            BitFunError::tool("terminal runtime service is required for ExecCommand".to_string())
+        })?;
         let output_capture_tx = if let Some(capture_id) = context.tool_call_id.as_ref() {
             Some(
                 background_command_output_capture()
@@ -669,25 +677,23 @@ Output:
             None
         };
 
-        let request = LocalExecCommandRequest {
+        let request = TerminalExecCommandRequest {
             argv: Self::argv_for_shell(&shell.path, &shell.shell_type, cmd),
             cwd: workdir.clone(),
             env: Self::command_env(),
             tty,
             yield_time_ms: Some(yield_time_ms),
             max_output_chars: None,
-            lifecycle_tx: Self::start_local_lifecycle_bridge(context, self.name()),
-            output_capture_tx,
+            lifecycle_sink: Self::start_local_lifecycle_bridge(context, self.name()),
+            output_sink: output_capture_tx,
         };
         let progress_bridge = ExecOutputProgressBridge::start(context, self.name());
         let response_result = if let Some(bridge) = progress_bridge.as_ref() {
-            get_global_exec_process_manager()
+            terminal_port
                 .exec_command_streaming(request, bridge.sender())
                 .await
         } else {
-            get_global_exec_process_manager()
-                .exec_command(request)
-                .await
+            terminal_port.exec_command(request).await
         };
         if let Some(bridge) = progress_bridge {
             bridge.finish().await;
@@ -700,7 +706,10 @@ Output:
                         .finish(capture_id, BackgroundCommandOutputStatus::Failed, None)
                         .await;
                 }
-                return Err(BitFunError::tool(format!("ExecCommand failed: {error}")));
+                return Err(BitFunError::tool(format!(
+                    "ExecCommand failed: {}",
+                    error.message
+                )));
             }
         };
         let completion = response.completion.map(exec_command_local_completion);
@@ -956,5 +965,39 @@ mod tests {
         assert!(remote_desc.contains("**Remote workspace:**"));
         assert!(remote_desc.contains("SSH server"));
         assert!(remote_desc.contains("POSIX"));
+    }
+
+    #[tokio::test]
+    async fn local_exec_requires_injected_terminal_provider() {
+        let tool = ExecCommandTool::new();
+        let context = ToolUseContext {
+            tool_call_id: None,
+            agent_type: Some("agentic".to_string()),
+            session_id: None,
+            dialog_turn_id: None,
+            workspace: None,
+            unlocked_collapsed_tools: Vec::new(),
+            custom_data: HashMap::new(),
+            computer_use_host: None,
+            runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
+            runtime_handles: bitfun_runtime_ports::ToolRuntimeHandles::default(),
+        };
+        let workdir = std::env::current_dir().expect("test workdir should exist");
+
+        let error = tool
+            .call_impl(
+                &json!({
+                    "cmd": "echo should-not-run",
+                    "workdir": workdir.to_string_lossy().to_string(),
+                    "yield_time_ms": 0,
+                }),
+                &context,
+            )
+            .await
+            .expect_err("local ExecCommand must require an injected terminal provider");
+
+        assert!(error
+            .to_string()
+            .contains("terminal runtime service is required for ExecCommand"));
     }
 }

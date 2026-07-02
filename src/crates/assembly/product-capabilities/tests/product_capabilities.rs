@@ -435,11 +435,11 @@ fn product_runtime_assembly_reports_runtime_service_capability_gaps() {
 
     let complete_services = FakeRuntimeServicesProvider::with_all_required()
         .register(RuntimeServicesBuilder::new())
-        .with_optional_terminal(Some(RuntimeServiceMarkerPort::terminal_port()))
+        .with_optional_terminal(Some(FakeRuntimeServicesProvider::terminal_port()))
         .with_optional_git(Some(RuntimeServiceMarkerPort::git_port()))
         .with_optional_network(Some(RuntimeServiceMarkerPort::network_port()))
         .build()
-        .expect("runtime service marker ports should satisfy product requirements");
+        .expect("runtime services should satisfy product requirements");
 
     assert!(assembly
         .missing_service_requirements(&complete_services)
@@ -451,11 +451,11 @@ fn product_runtime_assembly_reports_runtime_service_capability_gaps() {
 fn product_assembler_builds_runtime_parts_from_explicit_profile_input() {
     let services = FakeRuntimeServicesProvider::with_all_required()
         .register(RuntimeServicesBuilder::new())
-        .with_optional_terminal(Some(RuntimeServiceMarkerPort::terminal_port()))
+        .with_optional_terminal(Some(FakeRuntimeServicesProvider::terminal_port()))
         .with_optional_git(Some(RuntimeServiceMarkerPort::git_port()))
         .with_optional_network(Some(RuntimeServiceMarkerPort::network_port()))
         .build()
-        .expect("runtime service marker ports should satisfy product requirements");
+        .expect("runtime services should satisfy product requirements");
 
     let parts = ProductAssembler::new()
         .assemble(ProductAssemblyInput::new(DeliveryProfile::Cli, services))

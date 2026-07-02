@@ -885,9 +885,22 @@ export function runManifestParserSelfTest({
   if (
     !coordinatorRuleText.includes('scheduler') ||
     !coordinatorRuleText.includes('deliver_thread_goal_') ||
-    !coordinatorRuleText.includes('deliver_background_result')
+    !coordinatorRuleText.includes('deliver_background_result') ||
+    !coordinatorRuleText.includes('CoreRuntimeServicesProvider::terminal_port') ||
+    !coordinatorRuleText.includes('TerminalRuntimePort')
   ) {
-    throw new Error('Coordinator boundary rule must forbid direct scheduler lifecycle delivery');
+    throw new Error(
+      'Coordinator boundary rule must forbid direct scheduler delivery and terminal provider construction',
+    );
+  }
+  const agenticSystemRuleText = forbiddenRuleTextForPath(
+    'src/crates/assembly/core/src/agentic/system.rs',
+  );
+  if (
+    !agenticSystemRuleText.includes('CoreRuntimeServicesProvider::terminal_port') ||
+    !agenticSystemRuleText.includes('TerminalRuntimePort')
+  ) {
+    throw new Error('agentic system boundary rule must forbid terminal provider construction');
   }
   const coreFileReadStateRuleText = forbiddenRuleTextForPath(
     'src/crates/assembly/core/src/agentic/session/file_read_state.rs',
@@ -915,10 +928,10 @@ export function runManifestParserSelfTest({
   const coreToolContextRuntimeRuleText = forbiddenRuleTextForPath(
     'src/crates/assembly/core/src/agentic/tools/tool_context_runtime.rs',
   );
-  if (!coreToolContextRuntimeRuleText.includes('LightCheckpoint')) {
-    throw new Error(
-      'core tool_context_runtime boundary rule must forbid checkpoint evidence projection',
-    );
+  for (const contract of ['LightCheckpoint', 'TerminalRuntimePort']) {
+    if (!coreToolContextRuntimeRuleText.includes(contract)) {
+      throw new Error(`core tool_context_runtime boundary rule must forbid ${contract}`);
+    }
   }
   const coreUserInputManagerRuleText = forbiddenRuleTextForPath(
     'src/crates/assembly/core/src/agentic/tools/user_input_manager.rs',
@@ -974,12 +987,16 @@ export function runManifestParserSelfTest({
     'is_plausible_remote_shell_path',
     'getent\\s+passwd',
     'command\\s+-v\\s+bash',
-    'REMOTE_SHELL_PROBE_TIMEOUT_MS',
-  ]) {
-    if (!coreExecCommandRuleText.includes(contract)) {
-      throw new Error(`core exec_command boundary rule must forbid ${contract}`);
+      'REMOTE_SHELL_PROBE_TIMEOUT_MS',
+      'get_global_exec_process_manager',
+      'LocalExecCommandRequest',
+      'CoreRuntimeServicesProvider::terminal_port',
+      'TerminalRuntimePort',
+    ]) {
+      if (!coreExecCommandRuleText.includes(contract)) {
+        throw new Error(`core exec_command boundary rule must forbid ${contract}`);
+      }
     }
-  }
   const coreWriteStdinRuleText = forbiddenRuleTextForPath(
     'src/crates/assembly/core/src/agentic/tools/implementations/exec_command/stdin.rs',
   );
@@ -988,12 +1005,16 @@ export function runManifestParserSelfTest({
     '(?:local|remote)_completion_value',
     '(?:local|remote)_completion',
     '"status"\\s*:\\s*"session_not_found"',
-    'No input was sent',
-  ]) {
-    if (!coreWriteStdinRuleText.includes(contract)) {
-      throw new Error(`core WriteStdin boundary rule must forbid ${contract}`);
+      'No input was sent',
+      'get_global_exec_process_manager',
+      'LocalWriteStdinRequest',
+      'CoreRuntimeServicesProvider::terminal_port',
+      'TerminalRuntimePort',
+    ]) {
+      if (!coreWriteStdinRuleText.includes(contract)) {
+        throw new Error(`core WriteStdin boundary rule must forbid ${contract}`);
+      }
     }
-  }
   const coreExecControlRuleText = forbiddenRuleTextForPath(
     'src/crates/assembly/core/src/agentic/tools/implementations/exec_command/control.rs',
   );
@@ -1003,6 +1024,29 @@ export function runManifestParserSelfTest({
   if (!coreExecControlRuleText.includes('(?:local|remote)_completion')) {
     throw new Error('core ExecControl boundary rule must forbid duplicated completion mapping');
   }
+    for (const contract of [
+      'get_global_exec_process_manager',
+      'LocalExecControlRequest',
+      'CoreRuntimeServicesProvider::terminal_port',
+      'TerminalRuntimePort',
+    ]) {
+      if (!coreExecControlRuleText.includes(contract)) {
+        throw new Error(`core ExecControl boundary rule must forbid ${contract}`);
+      }
+    }
+  const coreExecCommandInputRuleText = forbiddenRuleTextForPath(
+    'src/crates/assembly/core/src/agentic/tools/implementations/exec_command/input.rs',
+  );
+    for (const contract of [
+      'get_global_exec_process_manager',
+      'LocalSendStdinRequest',
+      'CoreRuntimeServicesProvider::terminal_port',
+      'TerminalRuntimePort',
+    ]) {
+      if (!coreExecCommandInputRuleText.includes(contract)) {
+        throw new Error(`core ExecCommand input boundary rule must forbid ${contract}`);
+      }
+    }
   const coreExecCommandEnvSnapshotRuleText = forbiddenRuleTextForPath(
     'src/crates/assembly/core/src/agentic/tools/implementations/exec_command/env_snapshot.rs',
   );

@@ -37,13 +37,14 @@ use bitfun_agent_runtime::checkpoint::{
 };
 use bitfun_agent_runtime::remote_file_delivery::TOOL_CONTEXT_REMOTE_FILE_DELIVERY_KEY;
 use bitfun_agent_tools::{PortableToolContextProvider, ToolContextFacts, ToolWorkspaceKind};
-use bitfun_runtime_ports::{DelegationPolicy, ToolRuntimeHandles};
+use bitfun_runtime_ports::{DelegationPolicy, TerminalPort, ToolRuntimeHandles};
 use log::warn;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::future::Future;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 use tool_runtime::context::{
     build_tool_runtime_custom_data, delegation_policy_from_custom_data,
@@ -124,6 +125,10 @@ impl ToolUseContext {
         self.runtime_handles.workspace_services()
     }
 
+    pub fn terminal_port(&self) -> Option<&Arc<dyn TerminalPort>> {
+        self.runtime_handles.terminal_port()
+    }
+
     pub fn for_tool_listing(
         workspace: Option<WorkspaceBinding>,
         workspace_services: Option<WorkspaceServices>,
@@ -138,7 +143,7 @@ impl ToolUseContext {
             custom_data: HashMap::new(),
             computer_use_host: None,
             runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
-            runtime_handles: ToolRuntimeHandles::new(workspace_services, None),
+            runtime_handles: core_tool_runtime_handles(workspace_services, None, None),
         }
     }
 }
@@ -212,9 +217,10 @@ pub(crate) fn build_tool_use_context_for_execution_context(
         unlocked_collapsed_tools: context.unlocked_collapsed_tools.clone(),
         custom_data: build_tool_context_custom_data(context),
         computer_use_host,
-        runtime_handles: ToolRuntimeHandles::new(
+        runtime_handles: core_tool_runtime_handles(
             context.workspace_services.clone(),
             Some(cancellation_token),
+            context.terminal_port.clone(),
         ),
         runtime_tool_restrictions: context.runtime_tool_restrictions.clone(),
     }
@@ -267,8 +273,17 @@ pub(crate) fn build_tool_description_context(
         custom_data,
         computer_use_host: None,
         runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
-        runtime_handles: ToolRuntimeHandles::new(workspace_services.cloned(), None),
+        runtime_handles: core_tool_runtime_handles(workspace_services.cloned(), None, None),
     }
+}
+
+fn core_tool_runtime_handles(
+    workspace_services: Option<WorkspaceServices>,
+    cancellation_token: Option<CancellationToken>,
+    terminal_port: Option<Arc<dyn TerminalPort>>,
+) -> ToolRuntimeHandles {
+    ToolRuntimeHandles::new(workspace_services, cancellation_token)
+        .with_terminal_port(terminal_port)
 }
 
 fn build_tool_context_custom_data(context: &ToolExecutionContext) -> HashMap<String, Value> {
@@ -1334,6 +1349,7 @@ mod task_context_tests {
                 },
                 steering_interrupt: None,
                 workspace_services: None,
+                terminal_port: None,
             },
             ToolExecutionOptions::default(),
         )

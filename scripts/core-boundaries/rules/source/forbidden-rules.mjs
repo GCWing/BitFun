@@ -606,6 +606,31 @@ export const forbiddenContentRules = [
         message:
           'Coordinator background result delivery must flow through AgentRuntime lifecycle delivery port, not direct DialogScheduler',
       },
+      {
+        regex: /\bCoreRuntimeServicesProvider::terminal_port\b/,
+        message:
+          'Coordinator must consume an injected TerminalPort; product runtime owns concrete terminal provider construction',
+      },
+      {
+        regex: /\bTerminalRuntimePort\b/,
+        message:
+          'Coordinator must not construct concrete terminal providers; use injected TerminalPort',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/system.rs',
+    patterns: [
+      {
+        regex: /\bCoreRuntimeServicesProvider::terminal_port\b/,
+        message:
+          'shared agentic system init must not construct concrete terminal providers; product entrypoints inject TerminalPort',
+      },
+      {
+        regex: /\bTerminalRuntimePort\b/,
+        message:
+          'shared agentic system init must not construct concrete terminal providers; product entrypoints inject TerminalPort',
+      },
     ],
   },
   {
@@ -1380,6 +1405,11 @@ export const forbiddenContentRules = [
         message:
           'core tool context runtime must not own checkpoint evidence projection; use bitfun-agent-runtime evidence_ledger',
       },
+      {
+        regex: /\bTerminalRuntimePort\b/,
+        message:
+          'core tool context runtime must consume injected terminal ports, not construct the concrete terminal provider',
+      },
     ],
   },
   {
@@ -1535,6 +1565,26 @@ export const forbiddenContentRules = [
         message:
           'core exec_command adapter must not own remote shell probe timeout; use tool-runtime exec_command',
       },
+      {
+        regex: /\bget_global_exec_process_manager\b/,
+        message:
+          'core local ExecCommand adapter must not call the global local process manager; use injected TerminalPort',
+      },
+      {
+        regex: /\bLocalExecCommandRequest\b/,
+        message:
+          'core local ExecCommand adapter must not construct local process-manager requests; use TerminalExecCommandRequest',
+      },
+      {
+        regex: /\bCoreRuntimeServicesProvider::terminal_port\b/,
+        message:
+          'core local ExecCommand adapter must not construct concrete terminal providers; use injected TerminalPort',
+      },
+      {
+        regex: /\bTerminalRuntimePort\b/,
+        message:
+          'core local ExecCommand adapter must not construct concrete terminal providers; use injected TerminalPort',
+      },
     ],
   },
   {
@@ -1565,6 +1615,26 @@ export const forbiddenContentRules = [
         message:
           'core WriteStdin adapter must not own session-not-found assistant text; use tool-runtime exec_command',
       },
+      {
+        regex: /\bget_global_exec_process_manager\b/,
+        message:
+          'core local WriteStdin adapter must not call the global local process manager; use injected TerminalPort',
+      },
+      {
+        regex: /\bLocalWriteStdinRequest\b/,
+        message:
+          'core local WriteStdin adapter must not construct local process-manager requests; use TerminalWriteStdinRequest',
+      },
+      {
+        regex: /\bCoreRuntimeServicesProvider::terminal_port\b/,
+        message:
+          'core local WriteStdin adapter must not construct concrete terminal providers; use injected TerminalPort',
+      },
+      {
+        regex: /\bTerminalRuntimePort\b/,
+        message:
+          'core local WriteStdin adapter must not construct concrete terminal providers; use injected TerminalPort',
+      },
     ],
   },
   {
@@ -1579,6 +1649,51 @@ export const forbiddenContentRules = [
         regex: /\bfn\s+(?:local|remote)_completion\b/,
         message:
           'core ExecControl adapter must not duplicate concrete completion mapping; use exec_command completion adapter',
+      },
+      {
+        regex: /\bget_global_exec_process_manager\b/,
+        message:
+          'core local ExecControl adapter must not call the global local process manager; use injected TerminalPort',
+      },
+      {
+        regex: /\bLocalExecControlRequest\b/,
+        message:
+          'core local ExecControl adapter must not construct local process-manager requests; use TerminalExecControlRequest',
+      },
+      {
+        regex: /\bCoreRuntimeServicesProvider::terminal_port\b/,
+        message:
+          'core local ExecControl adapter must not construct concrete terminal providers; use injected TerminalPort',
+      },
+      {
+        regex: /\bTerminalRuntimePort\b/,
+        message:
+          'core local ExecControl adapter must not construct concrete terminal providers; use injected TerminalPort',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/exec_command/input.rs',
+    patterns: [
+      {
+        regex: /\bget_global_exec_process_manager\b/,
+        message:
+          'core local ExecCommand input adapter must not call the global local process manager; use injected TerminalPort',
+      },
+      {
+        regex: /\bLocalSendStdinRequest\b/,
+        message:
+          'core local ExecCommand input adapter must not construct local process-manager requests; use TerminalSendStdinRequest',
+      },
+      {
+        regex: /\bCoreRuntimeServicesProvider::terminal_port\b/,
+        message:
+          'core local ExecCommand input adapter must not construct concrete terminal providers; use injected TerminalPort',
+      },
+      {
+        regex: /\bTerminalRuntimePort\b/,
+        message:
+          'core local ExecCommand input adapter must not construct concrete terminal providers; use injected TerminalPort',
       },
     ],
   },

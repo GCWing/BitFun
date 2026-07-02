@@ -19,6 +19,7 @@ pub mod events;
 pub mod exec;
 pub mod exec_shell;
 pub mod pty;
+pub mod runtime_port;
 pub mod session;
 pub mod shell;
 
@@ -61,6 +62,7 @@ pub use pty::{
     PtyWriter,
     SpawnResult,
 };
+pub use runtime_port::TerminalRuntimePort;
 pub use session::{
     CommandCompletionReason, CommandExecuteResult, CommandStream, CommandStreamEvent,
     ExecuteOptions, SessionManager, SessionSource, SessionStatus, TerminalBindingOptions,

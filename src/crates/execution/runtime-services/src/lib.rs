@@ -45,10 +45,6 @@ impl RuntimeServiceMarkerPort {
         Self { capability }
     }
 
-    pub fn terminal_port() -> Arc<dyn TerminalPort> {
-        Arc::new(Self::new(RuntimeServiceCapability::Terminal))
-    }
-
     pub fn network_port() -> Arc<dyn NetworkPort> {
         Arc::new(Self::new(RuntimeServiceCapability::Network))
     }
@@ -68,7 +64,6 @@ impl RuntimeServicePort for RuntimeServiceMarkerPort {
     }
 }
 
-impl TerminalPort for RuntimeServiceMarkerPort {}
 impl NetworkPort for RuntimeServiceMarkerPort {}
 impl GitPort for RuntimeServiceMarkerPort {}
 impl McpCatalogPort for RuntimeServiceMarkerPort {}

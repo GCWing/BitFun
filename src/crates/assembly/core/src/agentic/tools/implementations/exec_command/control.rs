@@ -6,11 +6,12 @@ use crate::service::remote_ssh::{
 };
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
-use serde_json::{json, Value};
-use terminal_core::{
-    get_global_exec_process_manager, LocalExecControlAction, LocalExecControlOrigin,
-    LocalExecControlRequest, TerminalError,
+use bitfun_runtime_ports::{
+    PortErrorKind, TerminalExecControlAction, TerminalExecControlOrigin,
+    TerminalExecControlRequest, TerminalPort,
 };
+use serde_json::{json, Value};
+use std::sync::Arc;
 use tool_runtime::exec_command::{
     exec_command_control_tool_input_from_input, exec_command_control_tool_input_validation_message,
     exec_control_result_value, exec_control_session_not_found_result,
@@ -51,6 +52,7 @@ pub enum ExecCommandControlError {
 
 pub async fn control_exec_command_session(
     request: ExecCommandControlRequest,
+    terminal_port: Option<&Arc<dyn TerminalPort>>,
 ) -> Result<ExecCommandControlResponse, ExecCommandControlError> {
     if request.remote {
         let response = get_global_remote_exec_process_manager()
@@ -84,8 +86,13 @@ pub async fn control_exec_command_session(
         });
     }
 
-    let response = get_global_exec_process_manager()
-        .control_session(LocalExecControlRequest {
+    let terminal_port = terminal_port.ok_or_else(|| {
+        ExecCommandControlError::Tool(BitFunError::tool(
+            "terminal runtime service is required for ExecControl".to_string(),
+        ))
+    })?;
+    let response = terminal_port
+        .control_session(TerminalExecControlRequest {
             session_id: request.session_id,
             action: ExecControlTool::local_action(request.action),
             origin: ExecControlTool::local_origin(request.origin),
@@ -94,11 +101,12 @@ pub async fn control_exec_command_session(
         })
         .await
         .map_err(|error| match error {
-            TerminalError::SessionNotFound(_) => {
+            error if error.kind == PortErrorKind::NotFound => {
                 ExecCommandControlError::SessionNotFound(request.session_id)
             }
             error => ExecCommandControlError::Tool(BitFunError::tool(format!(
-                "ExecControl failed: {error}"
+                "ExecControl failed: {}",
+                error.message
             ))),
         })?;
 
@@ -144,17 +152,17 @@ impl ExecControlTool {
         }]
     }
 
-    fn local_action(action: ExecCommandControlAction) -> LocalExecControlAction {
+    fn local_action(action: ExecCommandControlAction) -> TerminalExecControlAction {
         match action {
-            ExecCommandControlAction::Interrupt => LocalExecControlAction::Interrupt,
-            ExecCommandControlAction::Kill => LocalExecControlAction::Kill,
+            ExecCommandControlAction::Interrupt => TerminalExecControlAction::Interrupt,
+            ExecCommandControlAction::Kill => TerminalExecControlAction::Kill,
         }
     }
 
-    fn local_origin(origin: ExecCommandControlOrigin) -> LocalExecControlOrigin {
+    fn local_origin(origin: ExecCommandControlOrigin) -> TerminalExecControlOrigin {
         match origin {
-            ExecCommandControlOrigin::ModelTool => LocalExecControlOrigin::ModelTool,
-            ExecCommandControlOrigin::OutOfBand => LocalExecControlOrigin::OutOfBand,
+            ExecCommandControlOrigin::ModelTool => TerminalExecControlOrigin::ModelTool,
+            ExecCommandControlOrigin::OutOfBand => TerminalExecControlOrigin::OutOfBand,
         }
     }
 
@@ -180,13 +188,16 @@ impl ExecControlTool {
             .expect("validated ExecControl input should parse");
         let session_id = parsed_input.session_id;
         let action = parsed_input.action;
-        let response = match control_exec_command_session(ExecCommandControlRequest {
-            session_id,
-            action,
-            origin: ExecCommandControlOrigin::ModelTool,
-            remote: true,
-            yield_time_ms: parsed_input.yield_time_ms,
-        })
+        let response = match control_exec_command_session(
+            ExecCommandControlRequest {
+                session_id,
+                action,
+                origin: ExecCommandControlOrigin::ModelTool,
+                remote: true,
+                yield_time_ms: parsed_input.yield_time_ms,
+            },
+            None,
+        )
         .await
         {
             Ok(response) => response,
@@ -311,13 +322,17 @@ Output is only what was produced during this tool call's wait window."#
             .expect("validated ExecControl input should parse");
         let session_id = parsed_input.session_id;
         let action = parsed_input.action;
-        let response = match control_exec_command_session(ExecCommandControlRequest {
-            session_id,
-            action,
-            origin: ExecCommandControlOrigin::ModelTool,
-            remote: false,
-            yield_time_ms: parsed_input.yield_time_ms,
-        })
+        let terminal_port = context.terminal_port();
+        let response = match control_exec_command_session(
+            ExecCommandControlRequest {
+                session_id,
+                action,
+                origin: ExecCommandControlOrigin::ModelTool,
+                remote: false,
+                yield_time_ms: parsed_input.yield_time_ms,
+            },
+            terminal_port,
+        )
         .await
         {
             Ok(response) => response,
@@ -357,6 +372,75 @@ mod tests {
         ExecCommandControlOrigin, ExecCommandControlRequest, ExecControlTool,
     };
     use crate::agentic::tools::framework::ToolResult;
+    use bitfun_runtime_ports::{
+        PortError, PortErrorKind, PortResult, RuntimeServiceCapability, RuntimeServicePort,
+        TerminalExecCommandRequest, TerminalExecCommandResponse, TerminalExecControlRequest,
+        TerminalExecStreamingOutputSink, TerminalPort, TerminalSendStdinRequest,
+        TerminalWriteStdinRequest,
+    };
+
+    #[derive(Debug)]
+    struct MissingSessionTerminalPort;
+
+    impl RuntimeServicePort for MissingSessionTerminalPort {
+        fn capability(&self) -> RuntimeServiceCapability {
+            RuntimeServiceCapability::Terminal
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl TerminalPort for MissingSessionTerminalPort {
+        async fn exec_command(
+            &self,
+            _request: TerminalExecCommandRequest,
+        ) -> PortResult<TerminalExecCommandResponse> {
+            unused_terminal_response()
+        }
+
+        async fn exec_command_streaming(
+            &self,
+            _request: TerminalExecCommandRequest,
+            _output_sink: TerminalExecStreamingOutputSink,
+        ) -> PortResult<TerminalExecCommandResponse> {
+            unused_terminal_response()
+        }
+
+        async fn write_stdin(
+            &self,
+            _request: TerminalWriteStdinRequest,
+        ) -> PortResult<TerminalExecCommandResponse> {
+            unused_terminal_response()
+        }
+
+        async fn write_stdin_streaming(
+            &self,
+            _request: TerminalWriteStdinRequest,
+            _output_sink: TerminalExecStreamingOutputSink,
+        ) -> PortResult<TerminalExecCommandResponse> {
+            unused_terminal_response()
+        }
+
+        async fn send_stdin(&self, _request: TerminalSendStdinRequest) -> PortResult<()> {
+            Err(PortError::new(
+                PortErrorKind::Backend,
+                "unused terminal test method",
+            ))
+        }
+
+        async fn control_session(
+            &self,
+            _request: TerminalExecControlRequest,
+        ) -> PortResult<TerminalExecCommandResponse> {
+            Err(PortError::new(PortErrorKind::NotFound, "session not found"))
+        }
+    }
+
+    fn unused_terminal_response() -> PortResult<TerminalExecCommandResponse> {
+        Err(PortError::new(
+            PortErrorKind::Backend,
+            "unused terminal test method",
+        ))
+    }
 
     #[test]
     fn session_not_found_result_uses_plain_assistant_message() {
@@ -392,13 +476,18 @@ mod tests {
 
     #[tokio::test]
     async fn control_exec_command_session_returns_structured_session_not_found() {
-        let error = control_exec_command_session(ExecCommandControlRequest {
-            session_id: 987_654,
-            action: ExecCommandControlAction::Kill,
-            origin: ExecCommandControlOrigin::ModelTool,
-            remote: false,
-            yield_time_ms: Some(0),
-        })
+        let terminal_port: std::sync::Arc<dyn bitfun_runtime_ports::TerminalPort> =
+            std::sync::Arc::new(MissingSessionTerminalPort);
+        let error = control_exec_command_session(
+            ExecCommandControlRequest {
+                session_id: 987_654,
+                action: ExecCommandControlAction::Kill,
+                origin: ExecCommandControlOrigin::ModelTool,
+                remote: false,
+                yield_time_ms: Some(0),
+            },
+            Some(&terminal_port),
+        )
         .await
         .expect_err("missing session should be structured");
 

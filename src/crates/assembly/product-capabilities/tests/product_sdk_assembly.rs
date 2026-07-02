@@ -60,7 +60,7 @@ fn baseline_sdk_services() -> RuntimeServices {
 fn product_full_compatible_services() -> RuntimeServices {
     FakeRuntimeServicesProvider::with_all_required()
         .register(RuntimeServicesBuilder::new())
-        .with_optional_terminal(Some(RuntimeServiceMarkerPort::terminal_port()))
+        .with_optional_terminal(Some(FakeRuntimeServicesProvider::terminal_port()))
         .with_optional_git(Some(RuntimeServiceMarkerPort::git_port()))
         .with_optional_network(Some(RuntimeServiceMarkerPort::network_port()))
         .build()

@@ -6,8 +6,8 @@ use crate::service::remote_ssh::{
 };
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
+use bitfun_runtime_ports::{PortErrorKind, TerminalWriteStdinRequest};
 use serde_json::{json, Value};
-use terminal_core::{get_global_exec_process_manager, LocalWriteStdinRequest, TerminalError};
 use tool_runtime::exec_command::{
     render_write_stdin_response_for_assistant, write_stdin_input_from_input,
     write_stdin_input_validation_message, write_stdin_result_value,
@@ -190,30 +190,38 @@ Output is only what was produced during this tool call's wait window."#
             BitFunError::tool("session_id is required for WriteStdin".to_string())
         })?;
         let session_id = parsed_input.session_id;
-        let request = LocalWriteStdinRequest {
+        let request = TerminalWriteStdinRequest {
             session_id,
             chars: parsed_input.chars,
             append_enter: parsed_input.append_enter,
             yield_time_ms: Some(parsed_input.yield_time_ms),
             max_output_chars: None,
         };
+        let terminal_port = context.terminal_port().ok_or_else(|| {
+            BitFunError::tool("terminal runtime service is required for WriteStdin".to_string())
+        })?;
         let progress_bridge = ExecOutputProgressBridge::start(context, self.name());
         let response_result = if let Some(bridge) = progress_bridge.as_ref() {
-            get_global_exec_process_manager()
+            terminal_port
                 .write_stdin_streaming(request, bridge.sender())
                 .await
         } else {
-            get_global_exec_process_manager().write_stdin(request).await
+            terminal_port.write_stdin(request).await
         };
         if let Some(bridge) = progress_bridge {
             bridge.finish().await;
         }
         let response = match response_result {
             Ok(response) => response,
-            Err(TerminalError::SessionNotFound(_)) => {
+            Err(error) if error.kind == PortErrorKind::NotFound => {
                 return Ok(Self::session_not_found_result(session_id, false));
             }
-            Err(error) => return Err(BitFunError::tool(format!("WriteStdin failed: {error}"))),
+            Err(error) => {
+                return Err(BitFunError::tool(format!(
+                    "WriteStdin failed: {}",
+                    error.message
+                )));
+            }
         };
 
         let data = write_stdin_result_value(ExecCommandResultFields {

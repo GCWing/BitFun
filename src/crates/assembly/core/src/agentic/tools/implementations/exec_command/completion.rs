@@ -2,28 +2,29 @@ use crate::service::remote_ssh::{
     RemoteExecSessionCompletion, RemoteExecSessionCompletionSource,
     RemoteExecSessionCompletionStatus,
 };
-use terminal_core::{
-    LocalExecSessionCompletion, LocalExecSessionCompletionSource, LocalExecSessionCompletionStatus,
+use bitfun_runtime_ports::{
+    TerminalExecSessionCompletion, TerminalExecSessionCompletionSource,
+    TerminalExecSessionCompletionStatus,
 };
 use tool_runtime::exec_command::{
     ExecCommandCompletion, ExecCommandCompletionSource, ExecCommandCompletionStatus,
 };
 
 pub(super) fn exec_command_local_completion(
-    completion: LocalExecSessionCompletion,
+    completion: TerminalExecSessionCompletion,
 ) -> ExecCommandCompletion {
     ExecCommandCompletion {
         status: match completion.status {
-            LocalExecSessionCompletionStatus::Exited => ExecCommandCompletionStatus::Exited,
-            LocalExecSessionCompletionStatus::Interrupted => {
+            TerminalExecSessionCompletionStatus::Exited => ExecCommandCompletionStatus::Exited,
+            TerminalExecSessionCompletionStatus::Interrupted => {
                 ExecCommandCompletionStatus::Interrupted
             }
-            LocalExecSessionCompletionStatus::Killed => ExecCommandCompletionStatus::Killed,
-            LocalExecSessionCompletionStatus::Pruned => ExecCommandCompletionStatus::Pruned,
+            TerminalExecSessionCompletionStatus::Killed => ExecCommandCompletionStatus::Killed,
+            TerminalExecSessionCompletionStatus::Pruned => ExecCommandCompletionStatus::Pruned,
         },
         source: match completion.source {
-            LocalExecSessionCompletionSource::Process => ExecCommandCompletionSource::Process,
-            LocalExecSessionCompletionSource::OutOfBandControl => {
+            TerminalExecSessionCompletionSource::Process => ExecCommandCompletionSource::Process,
+            TerminalExecSessionCompletionSource::OutOfBandControl => {
                 ExecCommandCompletionSource::OutOfBandControl
             }
         },
