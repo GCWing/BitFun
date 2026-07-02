@@ -1,5 +1,6 @@
 import { api } from './ApiClient';
 import { createTauriCommandError } from '../errors/TauriCommandError';
+import { isTauriRuntime } from '@/infrastructure/runtime';
 
 export type CronJobRunStatus = 'queued' | 'running' | 'ok' | 'error' | 'cancelled';
 export type CronJobTargetKind = 'session' | 'workspace';
@@ -102,6 +103,21 @@ export interface UpdateCronJobRequest {
 }
 
 export class CronAPI {
+  async notifyHostReady(): Promise<void> {
+    if (!isTauriRuntime()) {
+      return;
+    }
+
+    try {
+      // Tauri listener registration is async. Wait for listeners already issued
+      // by FlowChat before allowing cron to emit startup events.
+      await api.waitForListenerRegistrations();
+      await api.invoke<void>('notify_cron_host_ready');
+    } catch (error) {
+      throw createTauriCommandError('notify_cron_host_ready', error);
+    }
+  }
+
   async listJobs(request: ListCronJobsRequest = {}): Promise<CronJob[]> {
     try {
       return await api.invoke<CronJob[]>('list_cron_jobs', { request });

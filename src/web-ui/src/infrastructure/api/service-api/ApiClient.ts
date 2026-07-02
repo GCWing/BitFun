@@ -197,6 +197,10 @@ export class ApiClient implements IApiClient {
     return this.adapter;
   }
 
+  async waitForListenerRegistrations(): Promise<void> {
+    await this.adapter.waitForListenerRegistrations?.();
+  }
+
   private createRequest(type: 'tauri' | 'http', config: TauriCommandConfig | HttpRequestConfig): ApiRequest {
     return {
       id: `${type}-${Date.now()}-${Math.random()}`,
@@ -576,6 +580,9 @@ export const api = {
 
   
   getStats: (): ApiStats => apiClient.getStats(),
+
+  waitForListenerRegistrations: (): Promise<void> =>
+    apiClient.waitForListenerRegistrations(),
   
   
   getAdapter: (): ITransportAdapter => apiClient.getAdapter()
