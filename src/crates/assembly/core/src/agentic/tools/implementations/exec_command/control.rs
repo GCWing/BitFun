@@ -1,26 +1,21 @@
+use super::completion::{exec_command_local_completion, exec_command_remote_completion};
 use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext, ValidationResult};
 use crate::service::remote_ssh::{
     get_global_remote_exec_process_manager, RemoteExecControlAction, RemoteExecControlOrigin,
-    RemoteExecControlRequest, RemoteExecError, RemoteExecSessionCompletion,
-    RemoteExecSessionCompletionSource, RemoteExecSessionCompletionStatus,
+    RemoteExecControlRequest, RemoteExecError,
 };
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use serde_json::{json, Value};
 use terminal_core::{
     get_global_exec_process_manager, LocalExecControlAction, LocalExecControlOrigin,
-    LocalExecControlRequest, LocalExecSessionCompletion, LocalExecSessionCompletionSource,
-    LocalExecSessionCompletionStatus, TerminalError,
+    LocalExecControlRequest, TerminalError,
 };
 use tool_runtime::exec_command::{
-    exec_command_control_action_from_input, exec_command_control_action_name,
-    exec_command_session_id_from_input, exec_control_session_not_found_result,
-    render_exec_control_response_for_assistant,
-};
-pub use tool_runtime::exec_command::{
-    ExecCommandCompletion, ExecCommandCompletionSource, ExecCommandCompletionStatus,
-    ExecCommandControlAction, ExecCommandControlOrigin, ExecCommandControlRequest,
-    ExecCommandControlResponse,
+    exec_command_control_tool_input_from_input, exec_command_control_tool_input_validation_message,
+    exec_control_result_value, exec_control_session_not_found_result,
+    render_exec_control_response_for_assistant, ExecCommandControlAction, ExecCommandControlOrigin,
+    ExecCommandControlRequest, ExecCommandControlResponse, ExecCommandResultFields,
 };
 
 // ExecControl termination semantics by execution surface:
@@ -85,7 +80,7 @@ pub async fn control_exec_command_session(
             original_output_chars: response.original_output_chars,
             action: request.action,
             remote: true,
-            completion: response.completion.map(ExecControlTool::remote_completion),
+            completion: response.completion.map(exec_command_remote_completion),
         });
     }
 
@@ -116,7 +111,7 @@ pub async fn control_exec_command_session(
         original_output_chars: response.original_output_chars,
         action: request.action,
         remote: false,
-        completion: response.completion.map(ExecControlTool::local_completion),
+        completion: response.completion.map(exec_command_local_completion),
     })
 }
 
@@ -129,14 +124,6 @@ impl Default for ExecControlTool {
 impl ExecControlTool {
     pub fn new() -> Self {
         Self
-    }
-
-    fn session_id_from_input(input: &Value) -> Option<i32> {
-        exec_command_session_id_from_input(input)
-    }
-
-    fn action_from_input(input: &Value) -> Option<ExecCommandControlAction> {
-        exec_command_control_action_from_input(input)
     }
 
     fn response_for_assistant(data: &Value, action: ExecCommandControlAction) -> String {
@@ -185,58 +172,20 @@ impl ExecControlTool {
         }
     }
 
-    fn local_completion(completion: LocalExecSessionCompletion) -> ExecCommandCompletion {
-        ExecCommandCompletion {
-            status: match completion.status {
-                LocalExecSessionCompletionStatus::Exited => ExecCommandCompletionStatus::Exited,
-                LocalExecSessionCompletionStatus::Interrupted => {
-                    ExecCommandCompletionStatus::Interrupted
-                }
-                LocalExecSessionCompletionStatus::Killed => ExecCommandCompletionStatus::Killed,
-                LocalExecSessionCompletionStatus::Pruned => ExecCommandCompletionStatus::Pruned,
-            },
-            source: match completion.source {
-                LocalExecSessionCompletionSource::Process => ExecCommandCompletionSource::Process,
-                LocalExecSessionCompletionSource::OutOfBandControl => {
-                    ExecCommandCompletionSource::OutOfBandControl
-                }
-            },
-        }
-    }
-
-    fn remote_completion(completion: RemoteExecSessionCompletion) -> ExecCommandCompletion {
-        ExecCommandCompletion {
-            status: match completion.status {
-                RemoteExecSessionCompletionStatus::Exited => ExecCommandCompletionStatus::Exited,
-                RemoteExecSessionCompletionStatus::Interrupted => {
-                    ExecCommandCompletionStatus::Interrupted
-                }
-                RemoteExecSessionCompletionStatus::Killed => ExecCommandCompletionStatus::Killed,
-                RemoteExecSessionCompletionStatus::Pruned => ExecCommandCompletionStatus::Pruned,
-            },
-            source: match completion.source {
-                RemoteExecSessionCompletionSource::Process => ExecCommandCompletionSource::Process,
-                RemoteExecSessionCompletionSource::OutOfBandControl => {
-                    ExecCommandCompletionSource::OutOfBandControl
-                }
-            },
-        }
-    }
-
     async fn call_remote_pipe(&self, input: &Value) -> BitFunResult<Vec<ToolResult>> {
-        let session_id = Self::session_id_from_input(input).ok_or_else(|| {
-            BitFunError::tool("session_id is required for ExecControl".to_string())
-        })?;
-        let action = Self::action_from_input(input).ok_or_else(|| {
-            BitFunError::tool("action must be either 'interrupt' or 'kill'".to_string())
-        })?;
-        let yield_time_ms = input.get("yield_time_ms").and_then(Value::as_u64);
+        if let Some(message) = exec_command_control_tool_input_validation_message(input) {
+            return Err(BitFunError::tool(message.to_string()));
+        }
+        let parsed_input = exec_command_control_tool_input_from_input(input)
+            .expect("validated ExecControl input should parse");
+        let session_id = parsed_input.session_id;
+        let action = parsed_input.action;
         let response = match control_exec_command_session(ExecCommandControlRequest {
             session_id,
             action,
             origin: ExecCommandControlOrigin::ModelTool,
             remote: true,
-            yield_time_ms,
+            yield_time_ms: parsed_input.yield_time_ms,
         })
         .await
         {
@@ -247,17 +196,19 @@ impl ExecControlTool {
             Err(ExecCommandControlError::Tool(error)) => return Err(error),
         };
 
-        let action_name = exec_command_control_action_name(action);
-        let data = json!({
-            "chunk_id": response.chunk_id,
-            "wall_time_seconds": response.wall_time_seconds,
-            "output": response.output,
-            "session_id": response.session_id,
-            "exit_code": response.exit_code,
-            "original_output_chars": response.original_output_chars,
-            "action": action_name,
-            "remote": response.remote,
-        });
+        let data = exec_control_result_value(
+            ExecCommandResultFields {
+                chunk_id: response.chunk_id,
+                wall_time_seconds: response.wall_time_seconds,
+                output: response.output,
+                session_id: response.session_id,
+                exit_code: response.exit_code,
+                original_output_chars: response.original_output_chars,
+                completion: None,
+                remote: response.remote,
+            },
+            action,
+        );
         let result_for_assistant = Self::response_for_assistant(&data, action);
 
         Ok(vec![ToolResult::Result {
@@ -328,18 +279,10 @@ Output is only what was produced during this tool call's wait window."#
         input: &Value,
         _context: Option<&ToolUseContext>,
     ) -> ValidationResult {
-        if Self::session_id_from_input(input).is_none() {
+        if let Some(message) = exec_command_control_tool_input_validation_message(input) {
             return ValidationResult {
                 result: false,
-                message: Some("session_id is required for ExecControl".to_string()),
-                error_code: Some(400),
-                meta: None,
-            };
-        }
-        if Self::action_from_input(input).is_none() {
-            return ValidationResult {
-                result: false,
-                message: Some("action must be either 'interrupt' or 'kill'".to_string()),
+                message: Some(message.to_string()),
                 error_code: Some(400),
                 meta: None,
             };
@@ -361,19 +304,19 @@ Output is only what was produced during this tool call's wait window."#
             return self.call_remote_pipe(input).await;
         }
 
-        let session_id = Self::session_id_from_input(input).ok_or_else(|| {
-            BitFunError::tool("session_id is required for ExecControl".to_string())
-        })?;
-        let action = Self::action_from_input(input).ok_or_else(|| {
-            BitFunError::tool("action must be either 'interrupt' or 'kill'".to_string())
-        })?;
-        let yield_time_ms = input.get("yield_time_ms").and_then(Value::as_u64);
+        if let Some(message) = exec_command_control_tool_input_validation_message(input) {
+            return Err(BitFunError::tool(message.to_string()));
+        }
+        let parsed_input = exec_command_control_tool_input_from_input(input)
+            .expect("validated ExecControl input should parse");
+        let session_id = parsed_input.session_id;
+        let action = parsed_input.action;
         let response = match control_exec_command_session(ExecCommandControlRequest {
             session_id,
             action,
             origin: ExecCommandControlOrigin::ModelTool,
             remote: false,
-            yield_time_ms,
+            yield_time_ms: parsed_input.yield_time_ms,
         })
         .await
         {
@@ -384,16 +327,19 @@ Output is only what was produced during this tool call's wait window."#
             Err(ExecCommandControlError::Tool(error)) => return Err(error),
         };
 
-        let action_name = exec_command_control_action_name(action);
-        let data = json!({
-            "chunk_id": response.chunk_id,
-            "wall_time_seconds": response.wall_time_seconds,
-            "output": response.output,
-            "session_id": response.session_id,
-            "exit_code": response.exit_code,
-            "original_output_chars": response.original_output_chars,
-            "action": action_name,
-        });
+        let data = exec_control_result_value(
+            ExecCommandResultFields {
+                chunk_id: response.chunk_id,
+                wall_time_seconds: response.wall_time_seconds,
+                output: response.output,
+                session_id: response.session_id,
+                exit_code: response.exit_code,
+                original_output_chars: response.original_output_chars,
+                completion: None,
+                remote: false,
+            },
+            action,
+        );
         let result_for_assistant = Self::response_for_assistant(&data, action);
 
         Ok(vec![ToolResult::Result {

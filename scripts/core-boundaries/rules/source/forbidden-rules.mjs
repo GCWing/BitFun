@@ -1468,6 +1468,171 @@ export const forbiddenContentRules = [
     ],
   },
   {
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/exec_command/command.rs',
+    patterns: [
+      {
+        regex: /\bconst\s+POWERSHELL_UTF8_OUTPUT_PREFIX\b/,
+        message:
+          'core exec_command adapter must not own PowerShell shell policy; use tool-runtime exec_command',
+      },
+      {
+        regex: /\bconst\s+REMOTE_NON_TTY_INTERRUPT_GRACE_SECONDS\b/,
+        message:
+          'core exec_command adapter must not own remote non-TTY lifecycle policy; use tool-runtime exec_command',
+      },
+      {
+        regex: /\bconst\s+DEFAULT_TOOL_YIELD_TIME_MS\b/,
+        message:
+          'core exec_command adapter must not own ExecCommand default wait policy; use tool-runtime exec_command',
+      },
+      {
+        regex: /\bfn\s+(?:local|remote)_completion_value\b/,
+        message:
+          'core exec_command adapter must not own ExecCommand completion value shaping; use tool-runtime exec_command',
+      },
+      {
+        regex: /\bfn\s+(?:local|remote)_completion\b/,
+        message:
+          'core exec_command adapter must not duplicate concrete completion mapping; use exec_command completion adapter',
+      },
+      {
+        regex: /\bfn\s+(?:local|remote)_background_output_status_for_completion\b/,
+        message:
+          'core exec_command adapter must not own ExecCommand background status shaping; use tool-runtime exec_command',
+      },
+      {
+        regex: /\bfn\s+merged_remote_env\b/,
+        message:
+          'core exec_command adapter must not own remote env merge policy; use tool-runtime exec_command',
+      },
+      {
+        regex: /\bfn\s+remote_command_env_words\b/,
+        message:
+          'core exec_command adapter must not own remote env rendering; use tool-runtime exec_command',
+      },
+      {
+        regex: /\bfn\s+shell_escape\b/,
+        message:
+          'core exec_command adapter must not own shell escaping policy; use tool-runtime exec_command',
+      },
+      {
+        regex: /\bfn\s+is_plausible_remote_shell_path\b/,
+        message:
+          'core exec_command adapter must not own remote shell probe validation; use tool-runtime exec_command',
+      },
+      {
+        regex: /\bgetent\s+passwd\b/,
+        message:
+          'core exec_command adapter must not own remote shell probe command text; use tool-runtime exec_command',
+      },
+      {
+        regex: /\bcommand\s+-v\s+bash\b/,
+        message:
+          'core exec_command adapter must not own remote shell fallback probe text; use tool-runtime exec_command',
+      },
+      {
+        regex: /\bconst\s+REMOTE_SHELL_PROBE_TIMEOUT_MS\b/,
+        message:
+          'core exec_command adapter must not own remote shell probe timeout; use tool-runtime exec_command',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/exec_command/stdin.rs',
+    patterns: [
+      {
+        regex: /\bconst\s+DEFAULT_TOOL_YIELD_TIME_MS\b/,
+        message:
+          'core WriteStdin adapter must not own default wait policy; use tool-runtime exec_command',
+      },
+      {
+        regex: /\bfn\s+(?:local|remote)_completion_value\b/,
+        message:
+          'core WriteStdin adapter must not own completion value shaping; use tool-runtime exec_command',
+      },
+      {
+        regex: /\bfn\s+(?:local|remote)_completion\b/,
+        message:
+          'core WriteStdin adapter must not duplicate concrete completion mapping; use exec_command completion adapter',
+      },
+      {
+        regex: /"status"\s*:\s*"session_not_found"/,
+        message:
+          'core WriteStdin adapter must not own session-not-found result shape; use tool-runtime exec_command',
+      },
+      {
+        regex: /\bNo input was sent\b/,
+        message:
+          'core WriteStdin adapter must not own session-not-found assistant text; use tool-runtime exec_command',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/exec_command/control.rs',
+    patterns: [
+      {
+        regex: /\bexec_command_control_action_name\b/,
+        message:
+          'core ExecControl adapter must not own action result value shaping; use tool-runtime exec_command',
+      },
+      {
+        regex: /\bfn\s+(?:local|remote)_completion\b/,
+        message:
+          'core ExecControl adapter must not duplicate concrete completion mapping; use exec_command completion adapter',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/exec_command/env_snapshot.rs',
+    patterns: [
+      {
+        regex: /\bconst\s+ENV_SNAPSHOT_BEGIN\b/,
+        message:
+          'core exec_command env snapshot adapter must not own snapshot framing; use tool-runtime exec_command',
+      },
+      {
+        regex: /\bconst\s+ENV_SNAPSHOT_END\b/,
+        message:
+          'core exec_command env snapshot adapter must not own snapshot framing; use tool-runtime exec_command',
+      },
+      {
+        regex: /\bfn\s+should_import_env_var\b/,
+        message:
+          'core exec_command env snapshot adapter must not own env import policy; use tool-runtime exec_command',
+      },
+      {
+        regex: /\bfn\s+is_valid_env_var_name\b/,
+        message:
+          'core exec_command env snapshot adapter must not own env name validation; use tool-runtime exec_command',
+      },
+      {
+        regex: /\bfn\s+is_volatile_env_var\b/,
+        message:
+          'core exec_command env snapshot adapter must not own volatile env filtering; use tool-runtime exec_command',
+      },
+      {
+        regex: /\bfn\s+shell_escape\b/,
+        message:
+          'core exec_command env snapshot adapter must not own shell escaping policy; use tool-runtime exec_command',
+      },
+      {
+        regex: /\bconst\s+ENV_SNAPSHOT_TIMEOUT_MS\b/,
+        message:
+          'core exec_command env snapshot adapter must not own snapshot capture timeout; use tool-runtime exec_command',
+      },
+      {
+        regex: /\bconst\s+ENV_SNAPSHOT_MAX_OUTPUT_CHARS\b/,
+        message:
+          'core exec_command env snapshot adapter must not own snapshot capture output bounds; use tool-runtime exec_command',
+      },
+      {
+        regex: /\bconst\s+ENV_SNAPSHOT_TTL\b/,
+        message:
+          'core exec_command env snapshot adapter must not own snapshot cache ttl; use tool-runtime exec_command',
+      },
+    ],
+  },
+  {
     path: 'src/crates/assembly/core/src/agentic/tools/computer_use_optimizer.rs',
     patterns: [
       {

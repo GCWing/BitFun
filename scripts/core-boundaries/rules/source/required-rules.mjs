@@ -3766,8 +3766,84 @@ export const requiredContentRules = [
   {
     path: 'src/crates/execution/tool-execution/src/exec_command.rs',
     reason:
-      'tool-runtime must own provider-neutral ExecCommand presentation, control facts, completion shape, and session-not-found result builders while core keeps concrete process managers',
+      'tool-runtime must own provider-neutral ExecCommand presentation, shell/env policy, lifecycle facts, control facts, completion shape, and session-not-found result builders while core keeps concrete process managers',
     patterns: [
+      {
+        regex: /\bpub const EXEC_COMMAND_POWERSHELL_UTF8_OUTPUT_PREFIX\b/,
+        message: 'missing ExecCommand PowerShell UTF-8 shell policy owner',
+      },
+      {
+        regex: /\bpub const EXEC_COMMAND_DEFAULT_YIELD_TIME_MS\b/,
+        message: 'missing ExecCommand default wait policy owner',
+      },
+      {
+        regex: /\bpub enum ExecCommandShellKind\b/,
+        message: 'missing provider-neutral ExecCommand shell kind owner',
+      },
+      {
+        regex: /\bCustom\(String\)/,
+        message: 'missing ExecCommand custom shell name preservation',
+      },
+      {
+        regex: /\bpub struct ExecCommandRemoteShell\b/,
+        message: 'missing provider-neutral ExecCommand remote shell probe owner',
+      },
+      {
+        regex: /\bpub const REMOTE_EXEC_SHELL_PROBE_TIMEOUT_MS\b/,
+        message: 'missing provider-neutral ExecCommand remote shell probe timeout owner',
+      },
+      {
+        regex: /\bpub fn remote_exec_shell_probe_command\b/,
+        message: 'missing provider-neutral ExecCommand remote shell probe command owner',
+      },
+      {
+        regex: /\bpub fn fallback_remote_exec_shell\b/,
+        message: 'missing provider-neutral ExecCommand remote shell fallback owner',
+      },
+      {
+        regex: /\bpub struct ExecCommandRemoteEnvSnapshot\b/,
+        message: 'missing provider-neutral ExecCommand remote env snapshot owner',
+      },
+      {
+        regex: /\bpub struct ExecCommandRemoteEnvSnapshotCapturePolicy\b/,
+        message: 'missing provider-neutral ExecCommand remote env capture policy owner',
+      },
+      {
+        regex: /\bpub struct ExecCommandRemoteEnvSnapshotCacheKey\b/,
+        message: 'missing provider-neutral ExecCommand remote env snapshot cache key owner',
+      },
+      {
+        regex: /\bpub struct ExecCommandRemoteEnvSnapshotCache\b/,
+        message: 'missing provider-neutral ExecCommand remote env snapshot cache owner',
+      },
+      {
+        regex: /\bpub fn remote_exec_env_snapshot_capture_policy\b/,
+        message: 'missing provider-neutral ExecCommand remote env capture policy builder',
+      },
+      {
+        regex: /\bpub fn exec_command_argv_for_shell\b/,
+        message: 'missing provider-neutral ExecCommand shell argv owner',
+      },
+      {
+        regex: /\bpub fn remote_exec_login_shell_command\b/,
+        message: 'missing provider-neutral ExecCommand remote login command owner',
+      },
+      {
+        regex: /\bpub fn remote_exec_non_tty_control_wrapper\b/,
+        message: 'missing provider-neutral ExecCommand remote control wrapper owner',
+      },
+      {
+        regex: /\bpub fn parse_remote_exec_env_snapshot_output\b/,
+        message: 'missing provider-neutral ExecCommand remote env parser owner',
+      },
+      {
+        regex: /\bpub enum ExecCommandLifecycleStatus\b/,
+        message: 'missing provider-neutral ExecCommand lifecycle status owner',
+      },
+      {
+        regex: /\bpub fn exec_command_lifecycle_background_output_status\b/,
+        message: 'missing provider-neutral ExecCommand lifecycle background status owner',
+      },
       {
         regex: /\bpub enum ExecCommandControlAction\b/,
         message: 'missing provider-neutral exec control action contract',
@@ -3775,6 +3851,42 @@ export const requiredContentRules = [
       {
         regex: /\bpub struct ExecCommandControlRequest\b/,
         message: 'missing provider-neutral exec control request contract',
+      },
+      {
+        regex: /\bpub struct ExecCommandRunInput\b/,
+        message: 'missing provider-neutral ExecCommand input parser contract',
+      },
+      {
+        regex: /\bpub struct WriteStdinInput\b/,
+        message: 'missing provider-neutral WriteStdin input parser contract',
+      },
+      {
+        regex: /\bpub struct ExecCommandControlToolInput\b/,
+        message: 'missing provider-neutral ExecControl input parser contract',
+      },
+      {
+        regex: /\bpub struct ExecCommandResultFields\b/,
+        message: 'missing provider-neutral ExecCommand result fields contract',
+      },
+      {
+        regex: /\bpub struct ExecCommandShellMetadata\b/,
+        message: 'missing provider-neutral ExecCommand shell metadata contract',
+      },
+      {
+        regex: /\bpub fn exec_command_result_value\b/,
+        message: 'missing ExecCommand result value owner',
+      },
+      {
+        regex: /\bpub fn write_stdin_result_value\b/,
+        message: 'missing WriteStdin result value owner',
+      },
+      {
+        regex: /\bpub fn write_stdin_session_not_found_result\b/,
+        message: 'missing WriteStdin session-not-found result owner',
+      },
+      {
+        regex: /\bpub fn exec_control_result_value\b/,
+        message: 'missing ExecControl result value owner',
       },
       {
         regex: /\bpub fn render_exec_command_response_for_assistant\b/,
@@ -3799,6 +3911,252 @@ export const requiredContentRules = [
       {
         regex: /\bbackground_output_status_maps_terminal_completion_without_core_types\b/,
         message: 'missing ExecCommand background status regression',
+      },
+      {
+        regex: /\bremote_login_shell_command_applies_snapshot_then_tool_env\b/,
+        message: 'missing ExecCommand remote env merge regression',
+      },
+      {
+        regex: /\bremote_shell_probe_and_env_snapshot_are_provider_neutral\b/,
+        message: 'missing ExecCommand remote shell/env parser regression',
+      },
+      {
+        regex: /\bremote_env_snapshot_capture_policy_keeps_existing_bounds\b/,
+        message: 'missing ExecCommand remote env capture policy regression',
+      },
+      {
+        regex: /\bremote_env_snapshot_cache_owns_key_and_ttl_policy\b/,
+        message: 'missing ExecCommand remote env snapshot cache regression',
+      },
+      {
+        regex: /\bremote_shell_probe_skips_non_posix_shells\b/,
+        message: 'missing ExecCommand remote shell POSIX compatibility regression',
+      },
+      {
+        regex: /\bremote_shell_probe_preserves_unknown_shell_name_as_posix_compatible\b/,
+        message: 'missing ExecCommand custom remote shell metadata regression',
+      },
+      {
+        regex: /\bexec_command_input_policy_applies_defaults_without_trimming_command\b/,
+        message: 'missing ExecCommand input/default wait regression',
+      },
+      {
+        regex: /\bwrite_stdin_input_policy_applies_poll_defaults\b/,
+        message: 'missing WriteStdin input/default wait regression',
+      },
+      {
+        regex: /\bexec_control_input_policy_keeps_wait_optional\b/,
+        message: 'missing ExecControl input/default wait regression',
+      },
+      {
+        regex: /\bexec_command_result_builder_preserves_existing_wire_shape\b/,
+        message: 'missing ExecCommand result shape regression',
+      },
+      {
+        regex: /\bwrite_stdin_and_control_result_builders_preserve_remote_shape\b/,
+        message: 'missing WriteStdin/ExecControl result shape regression',
+      },
+      {
+        regex: /\blifecycle_status_has_provider_neutral_names_and_background_statuses\b/,
+        message: 'missing ExecCommand lifecycle status regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/exec_command/completion.rs',
+    reason:
+      'core exec_command adapter must keep concrete local/remote completion mapping centralized while result shape stays in tool-runtime',
+    patterns: [
+      {
+        regex: /\bpub\(super\) fn exec_command_local_completion\b/,
+        message: 'missing centralized local completion mapping adapter',
+      },
+      {
+        regex: /\bpub\(super\) fn exec_command_remote_completion\b/,
+        message: 'missing centralized remote completion mapping adapter',
+      },
+      {
+        regex: /\bExecCommandCompletionStatus::Interrupted\b/,
+        message: 'missing completion status mapping coverage',
+      },
+      {
+        regex: /\bExecCommandCompletionSource::OutOfBandControl\b/,
+        message: 'missing completion source mapping coverage',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/exec_command/command.rs',
+    reason:
+      'core exec_command adapter must delegate provider-neutral shell/env/lifecycle policy to tool-runtime and keep only concrete process/remote wiring',
+    patterns: [
+      {
+        regex: /\bexec_command_argv_for_shell\b/,
+        message: 'missing tool-runtime shell argv delegation in core exec_command adapter',
+      },
+      {
+        regex: /\bparse_remote_exec_shell_probe_output\b/,
+        message: 'missing tool-runtime remote shell probe delegation in core exec_command adapter',
+      },
+      {
+        regex: /\bremote_exec_shell_probe_command\b/,
+        message: 'missing tool-runtime remote shell probe command delegation in core exec_command adapter',
+      },
+      {
+        regex: /\bfallback_remote_exec_shell\b/,
+        message: 'missing tool-runtime remote shell fallback delegation in core exec_command adapter',
+      },
+      {
+        regex: /\bremote_exec_login_shell_command\b/,
+        message: 'missing tool-runtime remote login command delegation in core exec_command adapter',
+      },
+      {
+        regex: /\bremote_exec_non_tty_control_wrapper\b/,
+        message: 'missing tool-runtime remote non-TTY wrapper delegation in core exec_command adapter',
+      },
+      {
+        regex: /\bexec_command_lifecycle_status_name\b/,
+        message: 'missing tool-runtime lifecycle status-name delegation in core exec_command adapter',
+      },
+      {
+        regex: /\bexec_command_lifecycle_background_output_status\b/,
+        message: 'missing tool-runtime lifecycle output-status delegation in core exec_command adapter',
+      },
+      {
+        regex: /\bexec_command_run_input_from_input\b/,
+        message: 'missing tool-runtime ExecCommand input delegation in core exec_command adapter',
+      },
+      {
+        regex: /\bexec_command_result_value\b/,
+        message: 'missing tool-runtime ExecCommand result builder delegation in core exec_command adapter',
+      },
+      {
+        regex: /\bexec_command_local_completion\b/,
+        message: 'missing shared completion mapping in core exec_command adapter',
+      },
+      {
+        regex: /\bexec_command_remote_completion\b/,
+        message: 'missing shared remote completion mapping in core exec_command adapter',
+      },
+      {
+        regex: /\bExecCommandShellMetadata\b/,
+        message: 'missing tool-runtime ExecCommand shell metadata delegation in core exec_command adapter',
+      },
+      {
+        regex: /\bremote_shell_probe_preserves_unknown_shell_metadata\b/,
+        message: 'missing core custom remote shell metadata regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/exec_command/stdin.rs',
+    reason:
+      'core WriteStdin adapter must delegate provider-neutral input/default wait and result shape policy to tool-runtime',
+    patterns: [
+      {
+        regex: /\bwrite_stdin_input_from_input\b/,
+        message: 'missing tool-runtime WriteStdin input delegation in core adapter',
+      },
+      {
+        regex: /\bwrite_stdin_input_validation_message\b/,
+        message: 'missing tool-runtime WriteStdin validation delegation in core adapter',
+      },
+      {
+        regex: /\bwrite_stdin_result_value\b/,
+        message: 'missing tool-runtime WriteStdin result builder delegation in core adapter',
+      },
+      {
+        regex: /\bwrite_stdin_session_not_found_result\b/,
+        message: 'missing tool-runtime WriteStdin session-not-found delegation in core adapter',
+      },
+      {
+        regex: /\bexec_command_local_completion\b/,
+        message: 'missing shared local completion mapping in core WriteStdin adapter',
+      },
+      {
+        regex: /\bexec_command_remote_completion\b/,
+        message: 'missing shared remote completion mapping in core WriteStdin adapter',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/exec_command/control.rs',
+    reason:
+      'core ExecControl adapter must delegate provider-neutral input/default wait and result shape policy to tool-runtime',
+    patterns: [
+      {
+        regex: /\bexec_command_control_tool_input_from_input\b/,
+        message: 'missing tool-runtime ExecControl input delegation in core adapter',
+      },
+      {
+        regex: /\bexec_command_control_tool_input_validation_message\b/,
+        message: 'missing tool-runtime ExecControl validation delegation in core adapter',
+      },
+      {
+        regex: /\bexec_control_result_value\b/,
+        message: 'missing tool-runtime ExecControl result builder delegation in core adapter',
+      },
+      {
+        regex: /\bexec_command_local_completion\b/,
+        message: 'missing shared local completion mapping in core ExecControl adapter',
+      },
+      {
+        regex: /\bexec_command_remote_completion\b/,
+        message: 'missing shared remote completion mapping in core ExecControl adapter',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/exec_command/env_snapshot.rs',
+    reason:
+      'core exec_command env snapshot adapter must delegate snapshot command and parsing policy to tool-runtime',
+    patterns: [
+      {
+        regex: /\bremote_exec_env_snapshot_command\b/,
+        message: 'missing tool-runtime remote env snapshot command delegation in core adapter',
+      },
+      {
+        regex: /\bparse_remote_exec_env_snapshot_output\b/,
+        message: 'missing tool-runtime remote env snapshot parsing delegation in core adapter',
+      },
+      {
+        regex: /\bremote_exec_env_snapshot_capture_policy\b/,
+        message: 'missing tool-runtime remote env snapshot capture policy delegation in core adapter',
+      },
+      {
+        regex: /\bExecCommandRemoteEnvSnapshotCache\b/,
+        message: 'missing tool-runtime remote env snapshot cache owner in core adapter',
+      },
+      {
+        regex: /\bExecCommandRemoteEnvSnapshotCacheKey\b/,
+        message: 'missing tool-runtime remote env snapshot cache key owner in core adapter',
+      },
+      {
+        regex: /\bexec_command_shell_kind\b/,
+        message: 'missing shared shell kind mapping for core env snapshot adapter',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/exec_command/shell_kind.rs',
+    reason:
+      'core exec_command adapter must keep ShellType/tool-runtime shell-kind mapping centralized and preserve custom shell metadata',
+    patterns: [
+      {
+        regex: /\bpub\(super\) fn exec_command_shell_kind\b/,
+        message: 'missing centralized ShellType to ExecCommandShellKind adapter',
+      },
+      {
+        regex: /\bpub\(super\) fn terminal_shell_type\b/,
+        message: 'missing centralized ExecCommandShellKind to ShellType adapter',
+      },
+      {
+        regex: /\bExecCommandShellKind::Custom\(name\.clone\(\)\)/,
+        message: 'missing custom shell name preservation in core shell-kind adapter',
+      },
+      {
+        regex: /\bShellType::Custom\(name\)/,
+        message: 'missing custom shell metadata restoration in core shell-kind adapter',
       },
     ],
   },

@@ -87,7 +87,8 @@
 当前大型 PR 批次：
 
 - Platform Provider Closure 已继续收口具备服务层 owner 的 concrete provider：remote-connect LAN IP/URL 探测、ngrok 进程/tunnel lifecycle、mobile-web relay 上传、announcement remote fetch/cache、browser CDP endpoint HTTP probing / page creation、WebFetch / WebSearch concrete HTTP provider、debug-log HTTP ingest posting 和 review-platform HTTP transport。core 保留兼容 facade、配置读取、产品编排、provider DTO 映射和工具结果 envelope。
-- 后续仍需迁移 terminal tool execution、Computer Use OS action、部分 Git/process/session host adapter、MCP auth URL helper、remote/product 命令路径和 OpenCode/UI extension 的真实消费路径；这些路径必须在具备等价测试、host port 和交付形态矩阵后再迁移。
+- Terminal / ExecCommand 路径已迁出 provider-neutral 输入默认值、结果 shape、shell metadata、shell argv、PowerShell UTF-8 policy、remote shell probe、remote env snapshot 解析/cache/capture policy、remote non-TTY control wrapper 和 lifecycle status facts；core 只保留 concrete process manager、remote command 调用、权限/checkpoint 和工具入口适配。
+- 后续仍需迁移 terminal concrete execution provider、Computer Use OS action、部分 Git/process/session host adapter、MCP auth URL helper、remote/product 命令路径和 OpenCode/UI extension 的真实消费路径；这些路径必须在具备等价测试、host port 和交付形态矩阵后再迁移。
 
 保护：
 

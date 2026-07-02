@@ -2,17 +2,18 @@ use super::background_command_output::{
     background_command_output_capture, BackgroundCommandOutputStatus,
     StartBackgroundCommandOutputCapture,
 };
+use super::completion::{exec_command_local_completion, exec_command_remote_completion};
 use super::env_snapshot::{remote_env_snapshot_for, RemoteEnvSnapshot};
 use super::local_shell::{resolve_local_exec_shell, ResolvedLocalExecShell};
 use super::progress::ExecOutputProgressBridge;
+use super::shell_kind::{exec_command_shell_kind, terminal_shell_type};
 use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext, ValidationResult};
 use crate::infrastructure::events::event_system::{
     get_global_event_system, BackendEvent::BackgroundCommandLifecycle,
 };
 use crate::service::remote_ssh::{
     get_global_remote_exec_process_manager, get_remote_workspace_manager, RemoteExecCommandRequest,
-    RemoteExecProcessLifecycleEvent, RemoteExecProcessLifecycleStatus, RemoteExecSessionCompletion,
-    RemoteExecSessionCompletionSource, RemoteExecSessionCompletionStatus, SSHCommandOptions,
+    RemoteExecProcessLifecycleEvent, RemoteExecProcessLifecycleStatus, SSHCommandOptions,
     SSHConnectionManager,
 };
 use crate::util::errors::{BitFunError, BitFunResult};
@@ -23,21 +24,21 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use terminal_core::{
     get_global_exec_process_manager, ExecProcessLifecycleEvent, ExecProcessLifecycleStatus,
-    LocalExecCommandRequest, LocalExecSessionCompletion, LocalExecSessionCompletionSource,
-    LocalExecSessionCompletionStatus, ShellType,
+    LocalExecCommandRequest, ShellType,
 };
 use tokio::sync::mpsc;
 use tool_runtime::exec_command::{
-    exec_command_background_output_status, exec_command_completion_value,
-    render_exec_command_response_for_assistant, ExecCommandCompletion, ExecCommandCompletionSource,
-    ExecCommandCompletionStatus,
+    exec_command_argv_for_shell, exec_command_background_output_status,
+    exec_command_lifecycle_background_output_status, exec_command_lifecycle_status_name,
+    exec_command_noninteractive_env, exec_command_result_value, exec_command_run_input_from_input,
+    exec_command_run_input_validation_message, exec_command_shell_escape,
+    exec_command_shell_invocation_for_model, fallback_remote_exec_shell,
+    parse_remote_exec_shell_probe_output, remote_exec_login_shell_command,
+    remote_exec_non_tty_control_wrapper, remote_exec_shell_login_args,
+    remote_exec_shell_probe_command, render_exec_command_response_for_assistant,
+    ExecCommandLifecycleStatus, ExecCommandResultData, ExecCommandResultFields,
+    ExecCommandShellMetadata, REMOTE_EXEC_SHELL_PROBE_TIMEOUT_MS,
 };
-
-const REMOTE_SHELL_PROBE_TIMEOUT_MS: u64 = 3_000;
-const REMOTE_NON_TTY_INTERRUPT_GRACE_SECONDS: u64 = 2;
-const DEFAULT_TOOL_YIELD_TIME_MS: u64 = 30_000;
-const POWERSHELL_UTF8_OUTPUT_PREFIX: &str =
-    "[Console]::OutputEncoding=[System.Text.Encoding]::UTF8;\n";
 
 #[derive(Debug, Clone)]
 struct RemoteShell {
@@ -77,20 +78,7 @@ impl ExecCommandTool {
     }
 
     fn command_env() -> HashMap<String, String> {
-        HashMap::from([
-            ("NO_COLOR".to_string(), "1".to_string()),
-            ("TERM".to_string(), "dumb".to_string()),
-            ("LANG".to_string(), "C.UTF-8".to_string()),
-            ("LC_CTYPE".to_string(), "C.UTF-8".to_string()),
-            ("COLORTERM".to_string(), String::new()),
-            ("CLICOLOR".to_string(), "0".to_string()),
-            ("PAGER".to_string(), "cat".to_string()),
-            ("GIT_PAGER".to_string(), "cat".to_string()),
-            ("GH_PAGER".to_string(), "cat".to_string()),
-            ("GIT_TERMINAL_PROMPT".to_string(), "0".to_string()),
-            ("GIT_EDITOR".to_string(), "true".to_string()),
-            ("BITFUN_NONINTERACTIVE".to_string(), "1".to_string()),
-        ])
+        exec_command_noninteractive_env()
     }
 
     fn resolve_workdir(input: &Value, context: &ToolUseContext) -> BitFunResult<PathBuf> {
@@ -172,52 +160,23 @@ impl ExecCommandTool {
     }
 
     fn argv_for_shell(path: &Path, shell_type: &ShellType, cmd: &str) -> Vec<String> {
-        let shell = path.to_string_lossy().to_string();
-        match shell_type {
-            ShellType::Bash
-            | ShellType::Zsh
-            | ShellType::Fish
-            | ShellType::Sh
-            | ShellType::Ksh
-            | ShellType::Csh
-            | ShellType::Custom(_) => vec![shell, "-lc".to_string(), cmd.to_string()],
-            ShellType::PowerShell | ShellType::PowerShellCore => {
-                vec![
-                    shell,
-                    "-Command".to_string(),
-                    Self::powershell_command_with_utf8_output(cmd),
-                ]
-            }
-            ShellType::Cmd => vec![shell, "/c".to_string(), cmd.to_string()],
-        }
-    }
-
-    fn powershell_command_with_utf8_output(cmd: &str) -> String {
-        let trimmed = cmd.trim_start();
-        if trimmed.starts_with(POWERSHELL_UTF8_OUTPUT_PREFIX) {
-            cmd.to_string()
-        } else {
-            format!("{POWERSHELL_UTF8_OUTPUT_PREFIX}{cmd}")
-        }
+        exec_command_argv_for_shell(
+            path.to_string_lossy().to_string(),
+            exec_command_shell_kind(shell_type),
+            cmd,
+        )
     }
 
     async fn resolve_remote_shell(
         ssh_manager: &SSHConnectionManager,
         connection_id: &str,
     ) -> RemoteShell {
-        let probe_command = concat!(
-            "printf '%s\\n' \"${SHELL:-}\"; ",
-            "getent passwd \"$(id -un)\" 2>/dev/null | cut -d: -f7; ",
-            "command -v bash 2>/dev/null; ",
-            "command -v zsh 2>/dev/null; ",
-            "command -v sh 2>/dev/null"
-        );
         let result = ssh_manager
             .execute_command_with_options(
                 connection_id,
-                probe_command,
+                remote_exec_shell_probe_command(),
                 SSHCommandOptions {
-                    timeout_ms: Some(REMOTE_SHELL_PROBE_TIMEOUT_MS),
+                    timeout_ms: Some(REMOTE_EXEC_SHELL_PROBE_TIMEOUT_MS),
                     cancellation_token: None,
                 },
             )
@@ -231,9 +190,10 @@ impl ExecCommandTool {
             }
         }
 
+        let fallback = fallback_remote_exec_shell();
         RemoteShell {
-            path: "/bin/bash".to_string(),
-            shell_type: ShellType::Bash,
+            path: fallback.path,
+            shell_type: terminal_shell_type(fallback.kind),
         }
     }
 
@@ -243,212 +203,74 @@ impl ExecCommandTool {
         shell: &RemoteShell,
         env_snapshot: Option<&RemoteEnvSnapshot>,
     ) -> String {
-        let env_words = remote_command_env_words(Self::merged_remote_env(env_snapshot));
-        let shell_args = remote_shell_login_args().join(" ");
-
-        format!(
-            "cd {} && env {} {} {} {}",
-            shell_escape(workdir),
-            env_words,
-            shell_escape(&shell.path),
-            shell_args,
-            shell_escape(cmd)
-        )
+        remote_exec_login_shell_command(workdir, cmd, &shell.path, env_snapshot)
     }
 
     fn remote_non_tty_control_wrapper(cmd: &str, shell_path: &str) -> String {
-        let escaped_shell = shell_escape(shell_path);
-        let escaped_cmd = shell_escape(cmd);
-        format!(
-            r#"__bitfun_shell={escaped_shell}
-__bitfun_cmd={escaped_cmd}
-if command -v setsid >/dev/null 2>&1; then
-  setsid "$__bitfun_shell" -lc "$__bitfun_cmd" &
-else
-  "$__bitfun_shell" -lc "$__bitfun_cmd" &
-fi
-__bitfun_child=$!
-__bitfun_pgid=$__bitfun_child
-__bitfun_stop() {{
-  __bitfun_signal=${{1:-INT}}
-  __bitfun_exit=${{2:-130}}
-  __bitfun_grace=${{3:-{REMOTE_NON_TTY_INTERRUPT_GRACE_SECONDS}}}
-  trap - INT TERM
-  kill -"$__bitfun_signal" "-$__bitfun_pgid" 2>/dev/null || kill -"$__bitfun_signal" "$__bitfun_child" 2>/dev/null || true
-  if [ "$__bitfun_grace" -gt 0 ]; then
-    sleep "$__bitfun_grace"
-  fi
-  kill -KILL "-$__bitfun_pgid" 2>/dev/null || kill -KILL "$__bitfun_child" 2>/dev/null || true
-  wait "$__bitfun_child" 2>/dev/null || true
-  exit "$__bitfun_exit"
-}}
-trap '__bitfun_stop INT 130 {REMOTE_NON_TTY_INTERRUPT_GRACE_SECONDS}' INT
-trap '__bitfun_stop KILL 137 0' TERM
-wait "$__bitfun_child"
-__bitfun_status=$?
-trap - INT TERM
-exit "$__bitfun_status""#
-        )
-    }
-
-    fn merged_remote_env(env_snapshot: Option<&RemoteEnvSnapshot>) -> HashMap<String, String> {
-        let mut env = env_snapshot
-            .map(|snapshot| snapshot.env.clone())
-            .unwrap_or_default();
-        env.extend(Self::command_env());
-        env
+        remote_exec_non_tty_control_wrapper(cmd, shell_path)
     }
 
     fn remote_shell_metadata(
         workdir: &str,
         shell: &RemoteShell,
         env_snapshot_applied: bool,
-    ) -> Value {
-        json!({
-            "name": shell.shell_type.name(),
-            "type": shell.shell_type.to_string(),
-            "path": shell.path,
-            "invocation": format!(
+    ) -> ExecCommandShellMetadata {
+        ExecCommandShellMetadata {
+            name: shell.shell_type.name().to_string(),
+            kind: shell.shell_type.to_string(),
+            path: shell.path.clone(),
+            invocation: format!(
                 "`cd {} && env ... {} {} <cmd>`",
-                shell_escape(workdir),
-                shell_escape(&shell.path),
-                remote_shell_login_args().join(" ")
+                exec_command_shell_escape(workdir),
+                exec_command_shell_escape(&shell.path),
+                remote_exec_shell_login_args().join(" ")
             ),
-            "remote_env_snapshot_applied": env_snapshot_applied,
-        })
-    }
-
-    fn shell_invocation_for_model(path: &Path, shell_type: &ShellType) -> String {
-        let shell = path.to_string_lossy();
-        match shell_type {
-            ShellType::Bash
-            | ShellType::Zsh
-            | ShellType::Fish
-            | ShellType::Sh
-            | ShellType::Ksh
-            | ShellType::Csh
-            | ShellType::Custom(_) => format!("`{shell} -lc <cmd>`"),
-            ShellType::PowerShell | ShellType::PowerShellCore => {
-                format!("`{shell} -Command <cmd>`")
-            }
-            ShellType::Cmd => format!("`{shell} /c <cmd>`"),
+            remote_env_snapshot_applied: Some(env_snapshot_applied),
         }
     }
 
-    fn shell_metadata_value(shell: &ResolvedLocalExecShell) -> Value {
-        json!({
-            "name": shell.display_name,
-            "type": shell.shell_type.to_string(),
-            "path": shell.path.to_string_lossy(),
-            "invocation": Self::shell_invocation_for_model(&shell.path, &shell.shell_type),
-        })
+    fn shell_invocation_for_model(path: &Path, shell_type: &ShellType) -> String {
+        exec_command_shell_invocation_for_model(
+            &path.to_string_lossy(),
+            exec_command_shell_kind(shell_type),
+        )
+    }
+
+    fn shell_metadata_value(shell: &ResolvedLocalExecShell) -> ExecCommandShellMetadata {
+        ExecCommandShellMetadata {
+            name: shell.display_name.clone(),
+            kind: shell.shell_type.to_string(),
+            path: shell.path.to_string_lossy().to_string(),
+            invocation: Self::shell_invocation_for_model(&shell.path, &shell.shell_type),
+            remote_env_snapshot_applied: None,
+        }
     }
 
     fn response_for_assistant(data: &Value) -> String {
         render_exec_command_response_for_assistant(data)
     }
 
-    fn local_completion_value(completion: LocalExecSessionCompletion) -> Value {
-        exec_command_completion_value(Self::local_completion(completion))
-    }
-
-    fn remote_completion_value(completion: RemoteExecSessionCompletion) -> Value {
-        exec_command_completion_value(Self::remote_completion(completion))
-    }
-
-    fn local_completion(completion: LocalExecSessionCompletion) -> ExecCommandCompletion {
-        ExecCommandCompletion {
-            status: match completion.status {
-                LocalExecSessionCompletionStatus::Exited => ExecCommandCompletionStatus::Exited,
-                LocalExecSessionCompletionStatus::Interrupted => {
-                    ExecCommandCompletionStatus::Interrupted
-                }
-                LocalExecSessionCompletionStatus::Killed => ExecCommandCompletionStatus::Killed,
-                LocalExecSessionCompletionStatus::Pruned => ExecCommandCompletionStatus::Pruned,
-            },
-            source: match completion.source {
-                LocalExecSessionCompletionSource::Process => ExecCommandCompletionSource::Process,
-                LocalExecSessionCompletionSource::OutOfBandControl => {
-                    ExecCommandCompletionSource::OutOfBandControl
-                }
-            },
-        }
-    }
-
-    fn remote_completion(completion: RemoteExecSessionCompletion) -> ExecCommandCompletion {
-        ExecCommandCompletion {
-            status: match completion.status {
-                RemoteExecSessionCompletionStatus::Exited => ExecCommandCompletionStatus::Exited,
-                RemoteExecSessionCompletionStatus::Interrupted => {
-                    ExecCommandCompletionStatus::Interrupted
-                }
-                RemoteExecSessionCompletionStatus::Killed => ExecCommandCompletionStatus::Killed,
-                RemoteExecSessionCompletionStatus::Pruned => ExecCommandCompletionStatus::Pruned,
-            },
-            source: match completion.source {
-                RemoteExecSessionCompletionSource::Process => ExecCommandCompletionSource::Process,
-                RemoteExecSessionCompletionSource::OutOfBandControl => {
-                    ExecCommandCompletionSource::OutOfBandControl
-                }
-            },
-        }
-    }
-
-    fn local_background_output_status_for_completion(
-        completion: Option<LocalExecSessionCompletion>,
-    ) -> BackgroundCommandOutputStatus {
-        exec_command_background_output_status(completion.map(Self::local_completion))
-    }
-
-    fn remote_background_output_status_for_completion(
-        completion: Option<RemoteExecSessionCompletion>,
-    ) -> BackgroundCommandOutputStatus {
-        exec_command_background_output_status(completion.map(Self::remote_completion))
-    }
-
-    fn local_lifecycle_status(status: ExecProcessLifecycleStatus) -> &'static str {
+    fn local_lifecycle_status(status: ExecProcessLifecycleStatus) -> ExecCommandLifecycleStatus {
         match status {
-            ExecProcessLifecycleStatus::Running => "running",
-            ExecProcessLifecycleStatus::Exited => "exited",
-            ExecProcessLifecycleStatus::Interrupted => "interrupted",
-            ExecProcessLifecycleStatus::Killed => "killed",
-            ExecProcessLifecycleStatus::Pruned => "pruned",
+            ExecProcessLifecycleStatus::Running => ExecCommandLifecycleStatus::Running,
+            ExecProcessLifecycleStatus::Exited => ExecCommandLifecycleStatus::Exited,
+            ExecProcessLifecycleStatus::Interrupted => ExecCommandLifecycleStatus::Interrupted,
+            ExecProcessLifecycleStatus::Killed => ExecCommandLifecycleStatus::Killed,
+            ExecProcessLifecycleStatus::Pruned => ExecCommandLifecycleStatus::Pruned,
         }
     }
 
-    fn local_background_output_status(
-        status: ExecProcessLifecycleStatus,
-    ) -> BackgroundCommandOutputStatus {
-        match status {
-            ExecProcessLifecycleStatus::Running => BackgroundCommandOutputStatus::Running,
-            ExecProcessLifecycleStatus::Exited => BackgroundCommandOutputStatus::Exited,
-            ExecProcessLifecycleStatus::Interrupted => BackgroundCommandOutputStatus::Interrupted,
-            ExecProcessLifecycleStatus::Killed => BackgroundCommandOutputStatus::Killed,
-            ExecProcessLifecycleStatus::Pruned => BackgroundCommandOutputStatus::Pruned,
-        }
-    }
-
-    fn remote_lifecycle_status(status: RemoteExecProcessLifecycleStatus) -> &'static str {
-        match status {
-            RemoteExecProcessLifecycleStatus::Running => "running",
-            RemoteExecProcessLifecycleStatus::Exited => "exited",
-            RemoteExecProcessLifecycleStatus::Interrupted => "interrupted",
-            RemoteExecProcessLifecycleStatus::Killed => "killed",
-            RemoteExecProcessLifecycleStatus::Pruned => "pruned",
-        }
-    }
-
-    fn remote_background_output_status(
+    fn remote_lifecycle_status(
         status: RemoteExecProcessLifecycleStatus,
-    ) -> BackgroundCommandOutputStatus {
+    ) -> ExecCommandLifecycleStatus {
         match status {
-            RemoteExecProcessLifecycleStatus::Running => BackgroundCommandOutputStatus::Running,
-            RemoteExecProcessLifecycleStatus::Exited => BackgroundCommandOutputStatus::Exited,
+            RemoteExecProcessLifecycleStatus::Running => ExecCommandLifecycleStatus::Running,
+            RemoteExecProcessLifecycleStatus::Exited => ExecCommandLifecycleStatus::Exited,
             RemoteExecProcessLifecycleStatus::Interrupted => {
-                BackgroundCommandOutputStatus::Interrupted
+                ExecCommandLifecycleStatus::Interrupted
             }
-            RemoteExecProcessLifecycleStatus::Killed => BackgroundCommandOutputStatus::Killed,
-            RemoteExecProcessLifecycleStatus::Pruned => BackgroundCommandOutputStatus::Pruned,
+            RemoteExecProcessLifecycleStatus::Killed => ExecCommandLifecycleStatus::Killed,
+            RemoteExecProcessLifecycleStatus::Pruned => ExecCommandLifecycleStatus::Pruned,
         }
     }
 
@@ -470,7 +292,8 @@ exit "$__bitfun_status""#
             let event_system = get_global_event_system();
             let output_capture = background_command_output_capture();
             while let Some(event) = rx.recv().await {
-                let capture_status = Self::local_background_output_status(event.status);
+                let status = Self::local_lifecycle_status(event.status);
+                let capture_status = exec_command_lifecycle_background_output_status(status);
                 if let Some(metadata) = output_capture
                     .update_lifecycle(
                         &capture_id,
@@ -491,7 +314,7 @@ exit "$__bitfun_status""#
                             workdir: metadata.workdir,
                             remote: false,
                             tty: metadata.tty,
-                            status: Self::local_lifecycle_status(event.status).to_string(),
+                            status: exec_command_lifecycle_status_name(status).to_string(),
                             exit_code: event.exit_code,
                             started_at: metadata.started_at,
                             ended_at: metadata.ended_at,
@@ -515,7 +338,8 @@ exit "$__bitfun_status""#
             let event_system = get_global_event_system();
             let output_capture = background_command_output_capture();
             while let Some(event) = rx.recv().await {
-                let capture_status = Self::remote_background_output_status(event.status);
+                let status = Self::remote_lifecycle_status(event.status);
+                let capture_status = exec_command_lifecycle_background_output_status(status);
                 if let Some(metadata) = output_capture
                     .update_lifecycle(
                         &capture_id,
@@ -536,7 +360,7 @@ exit "$__bitfun_status""#
                             workdir: metadata.workdir,
                             remote: true,
                             tty: metadata.tty,
-                            status: Self::remote_lifecycle_status(event.status).to_string(),
+                            status: exec_command_lifecycle_status_name(status).to_string(),
                             exit_code: event.exit_code,
                             started_at: metadata.started_at,
                             ended_at: metadata.ended_at,
@@ -554,11 +378,10 @@ exit "$__bitfun_status""#
         input: &Value,
         context: &ToolUseContext,
     ) -> BitFunResult<Vec<ToolResult>> {
-        let cmd = input
-            .get("cmd")
-            .and_then(Value::as_str)
+        let parsed_input = exec_command_run_input_from_input(input)
             .ok_or_else(|| BitFunError::tool("cmd is required for ExecCommand".to_string()))?;
-        let tty = input.get("tty").and_then(Value::as_bool).unwrap_or(false);
+        let cmd = parsed_input.cmd;
+        let tty = parsed_input.tty;
 
         let workdir = Self::resolve_remote_workdir(input, context).await?;
         let connection_id = context
@@ -582,10 +405,7 @@ exit "$__bitfun_status""#
                     "remote SSH manager is not initialized for ExecCommand".to_string(),
                 )
             })?;
-        let yield_time_ms = input
-            .get("yield_time_ms")
-            .and_then(Value::as_u64)
-            .unwrap_or(DEFAULT_TOOL_YIELD_TIME_MS);
+        let yield_time_ms = parsed_input.yield_time_ms;
         let shell = Self::resolve_remote_shell(&ssh_manager, &connection_id).await;
         let env_snapshot = remote_env_snapshot_for(
             ssh_manager.clone(),
@@ -656,6 +476,7 @@ exit "$__bitfun_status""#
                 return Err(BitFunError::tool(format!("ExecCommand failed: {error}")));
             }
         };
+        let completion = response.completion.map(exec_command_remote_completion);
         if let Some(capture_id) = context.tool_call_id.as_ref() {
             if let Some(session_id) = response.session_id {
                 background_command_output_capture()
@@ -666,25 +487,27 @@ exit "$__bitfun_status""#
                 background_command_output_capture()
                     .finish(
                         capture_id,
-                        Self::remote_background_output_status_for_completion(response.completion),
+                        exec_command_background_output_status(completion),
                         response.exit_code,
                     )
                     .await;
             }
         }
 
-        let data = json!({
-            "chunk_id": response.chunk_id,
-            "wall_time_seconds": response.wall_time_seconds,
-            "output": response.output,
-            "session_id": response.session_id,
-            "exit_code": response.exit_code,
-            "original_output_chars": response.original_output_chars,
-            "completion": response.completion.map(Self::remote_completion_value),
-            "workdir": workdir.clone(),
-            "tty": tty,
-            "remote": true,
-            "shell": Self::remote_shell_metadata(&workdir, &shell, env_snapshot.is_some()),
+        let data = exec_command_result_value(ExecCommandResultData {
+            fields: ExecCommandResultFields {
+                chunk_id: response.chunk_id,
+                wall_time_seconds: response.wall_time_seconds,
+                output: response.output,
+                session_id: response.session_id,
+                exit_code: response.exit_code,
+                original_output_chars: response.original_output_chars,
+                completion,
+                remote: true,
+            },
+            workdir: workdir.clone(),
+            tty,
+            shell: Self::remote_shell_metadata(&workdir, &shell, env_snapshot.is_some()),
         });
         let result_for_assistant = Self::response_for_assistant(&data);
 
@@ -696,38 +519,11 @@ exit "$__bitfun_status""#
     }
 }
 
-fn shell_escape(s: &str) -> String {
-    format!("'{}'", s.replace('\'', "'\\''"))
-}
-
 fn parse_remote_shell_probe_output(stdout: &str) -> Option<RemoteShell> {
-    stdout
-        .lines()
-        .map(str::trim)
-        .find(|line| is_plausible_remote_shell_path(line))
-        .map(|path| RemoteShell {
-            path: path.to_string(),
-            shell_type: ShellType::from_executable(path),
-        })
-}
-
-fn is_plausible_remote_shell_path(path: &str) -> bool {
-    path.starts_with('/')
-        && !path.contains('\0')
-        && path.chars().all(|ch| !ch.is_control() || ch == '\t')
-}
-
-fn remote_command_env_words(env: HashMap<String, String>) -> String {
-    let mut env: Vec<_> = env.into_iter().collect();
-    env.sort_by(|(left, _), (right, _)| left.cmp(right));
-    env.into_iter()
-        .map(|(key, value)| shell_escape(&format!("{key}={value}")))
-        .collect::<Vec<_>>()
-        .join(" ")
-}
-
-fn remote_shell_login_args() -> &'static [&'static str] {
-    &["-lc"]
+    parse_remote_exec_shell_probe_output(stdout).map(|shell| RemoteShell {
+        path: shell.path,
+        shell_type: terminal_shell_type(shell.kind),
+    })
 }
 
 #[async_trait]
@@ -824,11 +620,10 @@ Output:
         input: &Value,
         _context: Option<&ToolUseContext>,
     ) -> ValidationResult {
-        let cmd = input.get("cmd").and_then(Value::as_str).unwrap_or_default();
-        if cmd.trim().is_empty() {
+        if let Some(message) = exec_command_run_input_validation_message(input) {
             return ValidationResult {
                 result: false,
-                message: Some("cmd is required for ExecCommand".to_string()),
+                message: Some(message.to_string()),
                 error_code: Some(400),
                 meta: None,
             };
@@ -850,17 +645,13 @@ Output:
             return self.call_remote_pipe(input, context).await;
         }
 
-        let cmd = input
-            .get("cmd")
-            .and_then(Value::as_str)
+        let parsed_input = exec_command_run_input_from_input(input)
             .ok_or_else(|| BitFunError::tool("cmd is required for ExecCommand".to_string()))?;
+        let cmd = parsed_input.cmd;
         let workdir = Self::resolve_workdir(input, context)?;
-        let tty = input.get("tty").and_then(Value::as_bool).unwrap_or(false);
+        let tty = parsed_input.tty;
         let shell = resolve_local_exec_shell().await;
-        let yield_time_ms = input
-            .get("yield_time_ms")
-            .and_then(Value::as_u64)
-            .unwrap_or(DEFAULT_TOOL_YIELD_TIME_MS);
+        let yield_time_ms = parsed_input.yield_time_ms;
         let output_capture_tx = if let Some(capture_id) = context.tool_call_id.as_ref() {
             Some(
                 background_command_output_capture()
@@ -912,6 +703,7 @@ Output:
                 return Err(BitFunError::tool(format!("ExecCommand failed: {error}")));
             }
         };
+        let completion = response.completion.map(exec_command_local_completion);
         if let Some(capture_id) = context.tool_call_id.as_ref() {
             if let Some(session_id) = response.session_id {
                 background_command_output_capture()
@@ -922,24 +714,27 @@ Output:
                 background_command_output_capture()
                     .finish(
                         capture_id,
-                        Self::local_background_output_status_for_completion(response.completion),
+                        exec_command_background_output_status(completion),
                         response.exit_code,
                     )
                     .await;
             }
         }
 
-        let data = json!({
-            "chunk_id": response.chunk_id,
-            "wall_time_seconds": response.wall_time_seconds,
-            "output": response.output,
-            "session_id": response.session_id,
-            "exit_code": response.exit_code,
-            "original_output_chars": response.original_output_chars,
-            "completion": response.completion.map(Self::local_completion_value),
-            "workdir": workdir.to_string_lossy(),
-            "tty": tty,
-            "shell": Self::shell_metadata_value(&shell),
+        let data = exec_command_result_value(ExecCommandResultData {
+            fields: ExecCommandResultFields {
+                chunk_id: response.chunk_id,
+                wall_time_seconds: response.wall_time_seconds,
+                output: response.output,
+                session_id: response.session_id,
+                exit_code: response.exit_code,
+                original_output_chars: response.original_output_chars,
+                completion,
+                remote: false,
+            },
+            workdir: workdir.to_string_lossy().to_string(),
+            tty,
+            shell: Self::shell_metadata_value(&shell),
         });
         let result_for_assistant = Self::response_for_assistant(&data);
 
@@ -954,8 +749,8 @@ Output:
 #[cfg(test)]
 mod tests {
     use super::super::env_snapshot::RemoteEnvSnapshot;
+    use super::ExecCommandTool;
     use super::{parse_remote_shell_probe_output, RemoteShell};
-    use super::{ExecCommandTool, POWERSHELL_UTF8_OUTPUT_PREFIX};
     use crate::agentic::tools::framework::{Tool, ToolUseContext};
     use crate::agentic::tools::ToolRuntimeRestrictions;
     use crate::agentic::workspace::WorkspaceBinding;
@@ -965,6 +760,9 @@ mod tests {
     use std::path::Path;
     use std::path::PathBuf;
     use terminal_core::ShellType;
+    use tool_runtime::exec_command::{
+        remote_exec_shell_login_args, EXEC_COMMAND_POWERSHELL_UTF8_OUTPUT_PREFIX,
+    };
 
     #[test]
     fn powershell_commands_force_utf8_output() {
@@ -975,13 +773,13 @@ mod tests {
         );
 
         assert_eq!(argv[1], "-Command");
-        assert!(argv[2].starts_with(POWERSHELL_UTF8_OUTPUT_PREFIX));
+        assert!(argv[2].starts_with(EXEC_COMMAND_POWERSHELL_UTF8_OUTPUT_PREFIX));
         assert!(argv[2].contains("Get-Content README.md"));
     }
 
     #[test]
     fn powershell_utf8_output_prefix_is_not_duplicated() {
-        let script = format!("{POWERSHELL_UTF8_OUTPUT_PREFIX}Write-Output ok");
+        let script = format!("{EXEC_COMMAND_POWERSHELL_UTF8_OUTPUT_PREFIX}Write-Output ok");
         let argv =
             ExecCommandTool::argv_for_shell(Path::new("pwsh"), &ShellType::PowerShellCore, &script);
 
@@ -1106,8 +904,21 @@ mod tests {
     }
 
     #[test]
+    fn remote_shell_probe_preserves_unknown_shell_metadata() {
+        let shell = parse_remote_shell_probe_output("\n/usr/local/bin/xonsh\n")
+            .expect("shell should parse");
+        let metadata = ExecCommandTool::remote_shell_metadata("/home/me/project", &shell, false);
+
+        assert_eq!(shell.path, "/usr/local/bin/xonsh");
+        assert_eq!(shell.shell_type, ShellType::Custom("xonsh".to_string()));
+        assert_eq!(metadata.name, "xonsh");
+        assert_eq!(metadata.kind, "xonsh");
+        assert_eq!(metadata.path, "/usr/local/bin/xonsh");
+    }
+
+    #[test]
     fn remote_shell_login_args_use_login_without_interactive_startup() {
-        assert_eq!(super::remote_shell_login_args(), &["-lc"]);
+        assert_eq!(remote_exec_shell_login_args(), &["-lc"]);
     }
 
     #[tokio::test]

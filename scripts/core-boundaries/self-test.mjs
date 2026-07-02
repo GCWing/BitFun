@@ -958,6 +958,69 @@ export function runManifestParserSelfTest({
       throw new Error(`core background_command_output boundary rule must forbid ${contract}`);
     }
   }
+  const coreExecCommandRuleText = forbiddenRuleTextForPath(
+    'src/crates/assembly/core/src/agentic/tools/implementations/exec_command/command.rs',
+  );
+  for (const contract of [
+    'POWERSHELL_UTF8_OUTPUT_PREFIX',
+    'REMOTE_NON_TTY_INTERRUPT_GRACE_SECONDS',
+    'DEFAULT_TOOL_YIELD_TIME_MS',
+    '(?:local|remote)_completion_value',
+    '(?:local|remote)_completion',
+    '(?:local|remote)_background_output_status_for_completion',
+    'merged_remote_env',
+    'remote_command_env_words',
+    'shell_escape',
+    'is_plausible_remote_shell_path',
+    'getent\\s+passwd',
+    'command\\s+-v\\s+bash',
+    'REMOTE_SHELL_PROBE_TIMEOUT_MS',
+  ]) {
+    if (!coreExecCommandRuleText.includes(contract)) {
+      throw new Error(`core exec_command boundary rule must forbid ${contract}`);
+    }
+  }
+  const coreWriteStdinRuleText = forbiddenRuleTextForPath(
+    'src/crates/assembly/core/src/agentic/tools/implementations/exec_command/stdin.rs',
+  );
+  for (const contract of [
+    'DEFAULT_TOOL_YIELD_TIME_MS',
+    '(?:local|remote)_completion_value',
+    '(?:local|remote)_completion',
+    '"status"\\s*:\\s*"session_not_found"',
+    'No input was sent',
+  ]) {
+    if (!coreWriteStdinRuleText.includes(contract)) {
+      throw new Error(`core WriteStdin boundary rule must forbid ${contract}`);
+    }
+  }
+  const coreExecControlRuleText = forbiddenRuleTextForPath(
+    'src/crates/assembly/core/src/agentic/tools/implementations/exec_command/control.rs',
+  );
+  if (!coreExecControlRuleText.includes('exec_command_control_action_name')) {
+    throw new Error('core ExecControl boundary rule must forbid action result shaping');
+  }
+  if (!coreExecControlRuleText.includes('(?:local|remote)_completion')) {
+    throw new Error('core ExecControl boundary rule must forbid duplicated completion mapping');
+  }
+  const coreExecCommandEnvSnapshotRuleText = forbiddenRuleTextForPath(
+    'src/crates/assembly/core/src/agentic/tools/implementations/exec_command/env_snapshot.rs',
+  );
+  for (const contract of [
+    'ENV_SNAPSHOT_BEGIN',
+    'ENV_SNAPSHOT_END',
+    'should_import_env_var',
+    'is_valid_env_var_name',
+    'is_volatile_env_var',
+    'shell_escape',
+    'ENV_SNAPSHOT_TIMEOUT_MS',
+    'ENV_SNAPSHOT_MAX_OUTPUT_CHARS',
+    'ENV_SNAPSHOT_TTL',
+  ]) {
+    if (!coreExecCommandEnvSnapshotRuleText.includes(contract)) {
+      throw new Error(`core exec_command env_snapshot boundary rule must forbid ${contract}`);
+    }
+  }
   const coreSkillAgentSnapshotRuleText = forbiddenRuleTextForPath(
     'src/crates/assembly/core/src/agentic/skill_agent_snapshot.rs',
   );
@@ -1395,6 +1458,119 @@ export function runManifestParserSelfTest({
         'background_command_output_capture',
         'BACKGROUND_COMMAND_OUTPUT_CAPTURE_LIMIT_BYTES',
         'background_command_output_reads_snapshot_then_incremental_chunks',
+      ],
+    },
+    {
+      path: 'src/crates/execution/tool-execution/src/exec_command.rs',
+      contracts: [
+        'EXEC_COMMAND_POWERSHELL_UTF8_OUTPUT_PREFIX',
+        'EXEC_COMMAND_DEFAULT_YIELD_TIME_MS',
+        'ExecCommandShellKind',
+        'Custom',
+        'ExecCommandRemoteShell',
+        'REMOTE_EXEC_SHELL_PROBE_TIMEOUT_MS',
+        'remote_exec_shell_probe_command',
+        'fallback_remote_exec_shell',
+        'ExecCommandRemoteEnvSnapshot',
+        'ExecCommandRemoteEnvSnapshotCapturePolicy',
+        'ExecCommandRemoteEnvSnapshotCacheKey',
+        'ExecCommandRemoteEnvSnapshotCache',
+        'remote_exec_env_snapshot_capture_policy',
+        'ExecCommandRunInput',
+        'WriteStdinInput',
+        'ExecCommandControlToolInput',
+        'ExecCommandResultFields',
+        'ExecCommandShellMetadata',
+        'exec_command_argv_for_shell',
+        'exec_command_result_value',
+        'write_stdin_result_value',
+        'write_stdin_session_not_found_result',
+        'exec_control_result_value',
+        'remote_exec_login_shell_command',
+        'remote_exec_non_tty_control_wrapper',
+        'parse_remote_exec_env_snapshot_output',
+        'ExecCommandLifecycleStatus',
+        'exec_command_lifecycle_background_output_status',
+        'remote_login_shell_command_applies_snapshot_then_tool_env',
+        'remote_shell_probe_and_env_snapshot_are_provider_neutral',
+        'exec_command_input_policy_applies_defaults_without_trimming_command',
+        'write_stdin_input_policy_applies_poll_defaults',
+        'exec_control_input_policy_keeps_wait_optional',
+        'exec_command_result_builder_preserves_existing_wire_shape',
+        'write_stdin_and_control_result_builders_preserve_remote_shape',
+        'remote_env_snapshot_capture_policy_keeps_existing_bounds',
+        'remote_env_snapshot_cache_owns_key_and_ttl_policy',
+        'remote_shell_probe_skips_non_posix_shells',
+        'lifecycle_status_has_provider_neutral_names_and_background_statuses',
+      ],
+    },
+    {
+      path: 'src/crates/assembly/core/src/agentic/tools/implementations/exec_command/completion.rs',
+      contracts: [
+        'exec_command_local_completion',
+        'exec_command_remote_completion',
+        'ExecCommandCompletionStatus::Interrupted',
+        'ExecCommandCompletionSource::OutOfBandControl',
+      ],
+    },
+    {
+      path: 'src/crates/assembly/core/src/agentic/tools/implementations/exec_command/command.rs',
+      contracts: [
+        'exec_command_argv_for_shell',
+        'parse_remote_exec_shell_probe_output',
+        'remote_exec_shell_probe_command',
+        'fallback_remote_exec_shell',
+        'remote_exec_login_shell_command',
+        'remote_exec_non_tty_control_wrapper',
+        'exec_command_lifecycle_status_name',
+        'exec_command_lifecycle_background_output_status',
+        'exec_command_run_input_from_input',
+        'exec_command_result_value',
+        'exec_command_local_completion',
+        'exec_command_remote_completion',
+        'ExecCommandShellMetadata',
+        'remote_shell_probe_preserves_unknown_shell_metadata',
+      ],
+    },
+    {
+      path: 'src/crates/assembly/core/src/agentic/tools/implementations/exec_command/stdin.rs',
+      contracts: [
+        'write_stdin_input_from_input',
+        'write_stdin_input_validation_message',
+        'write_stdin_result_value',
+        'write_stdin_session_not_found_result',
+        'exec_command_local_completion',
+        'exec_command_remote_completion',
+      ],
+    },
+    {
+      path: 'src/crates/assembly/core/src/agentic/tools/implementations/exec_command/control.rs',
+      contracts: [
+        'exec_command_control_tool_input_from_input',
+        'exec_command_control_tool_input_validation_message',
+        'exec_control_result_value',
+        'exec_command_local_completion',
+        'exec_command_remote_completion',
+      ],
+    },
+    {
+      path: 'src/crates/assembly/core/src/agentic/tools/implementations/exec_command/env_snapshot.rs',
+      contracts: [
+        'remote_exec_env_snapshot_command',
+        'parse_remote_exec_env_snapshot_output',
+        'remote_exec_env_snapshot_capture_policy',
+        'ExecCommandRemoteEnvSnapshotCache',
+        'ExecCommandRemoteEnvSnapshotCacheKey',
+        'exec_command_shell_kind',
+      ],
+    },
+    {
+      path: 'src/crates/assembly/core/src/agentic/tools/implementations/exec_command/shell_kind.rs',
+      contracts: [
+        'exec_command_shell_kind',
+        'terminal_shell_type',
+        'ExecCommandShellKind::Custom(name.clone())',
+        'ShellType::Custom(name)',
       ],
     },
     {
