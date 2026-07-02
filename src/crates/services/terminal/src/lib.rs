@@ -17,6 +17,7 @@ pub mod api;
 pub mod config;
 pub mod events;
 pub mod exec;
+pub mod exec_shell;
 pub mod pty;
 pub mod session;
 pub mod shell;
@@ -38,6 +39,10 @@ pub use exec::{
     ExecSessionCompletionSource as LocalExecSessionCompletionSource,
     ExecSessionCompletionStatus as LocalExecSessionCompletionStatus,
     SendStdinRequest as LocalSendStdinRequest, WriteStdinRequest as LocalWriteStdinRequest,
+};
+pub use exec_shell::{
+    parse_configured_shell_preference, resolve_local_exec_shell, ConfiguredShellPreference,
+    ResolvedLocalExecShell,
 };
 pub use pty::{
     // New component-based types

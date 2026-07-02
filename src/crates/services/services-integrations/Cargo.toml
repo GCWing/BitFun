@@ -20,6 +20,7 @@ bitfun-events = { path = "../../contracts/events" }
 bitfun-product-domains = { path = "../../contracts/product-domains", default-features = false, optional = true }
 bitfun-runtime-ports = { path = "../../contracts/runtime-ports", optional = true }
 aes-gcm = { workspace = true, optional = true }
+aes = { workspace = true, optional = true }
 anyhow = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }
 base64 = { workspace = true, optional = true }
@@ -30,8 +31,10 @@ futures = { workspace = true, optional = true }
 git2 = { workspace = true, optional = true }
 hostname = { workspace = true, optional = true }
 image = { workspace = true, optional = true }
+hex = { workspace = true, optional = true }
 local-ip-address = { workspace = true, optional = true }
 mac_address = { workspace = true, optional = true }
+md5 = { workspace = true, optional = true }
 notify = { workspace = true, optional = true }
 qrcode = { workspace = true, optional = true }
 rand = { workspace = true, optional = true }
@@ -65,6 +68,7 @@ schannel = { version = "0.1", optional = true }
 [features]
 default = []
 announcement = ["reqwest"]
+browser-control = ["anyhow", "bitfun-services-core", "dirs", "reqwest"]
 deep-research = ["bitfun-agent-runtime"]
 git = ["bitfun-services-core", "chrono", "git2", "thiserror"]
 file-watch = ["notify"]
@@ -99,6 +103,7 @@ miniapp-runtime = [
 ]
 remote-connect = [
     "anyhow",
+    "aes",
     "aes-gcm",
     "async-trait",
     "base64",
@@ -108,9 +113,11 @@ remote-connect = [
     "dirs",
     "futures",
     "hostname",
+    "hex",
     "image",
     "local-ip-address",
     "mac_address",
+    "md5",
     "qrcode",
     "rand",
     "reqwest",
@@ -152,6 +159,7 @@ workspace-search = [
 ]
 product-full = [
     "announcement",
+    "browser-control",
     "deep-research",
     "file-watch",
     "function-agents",

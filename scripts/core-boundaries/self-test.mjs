@@ -556,6 +556,7 @@ export function runManifestParserSelfTest({
     coreOptionalOwnerRule?.dependencies.map((dependency) => dependency.depName) ?? [],
   );
   const coreFullyMigratedDeps = new Set([
+    'aes',
     'hostname',
     'local-ip-address',
     'mac_address',
@@ -584,13 +585,30 @@ export function runManifestParserSelfTest({
   const servicesOptionalOwnerRule = optionalDependencyFeatureOwnerRules.find(
     (rule) => rule.crateName === 'services-integrations',
   );
+  const servicesOptionalOwnerDeps = new Set(
+    servicesOptionalOwnerRule?.dependencies.map((dependency) => dependency.depName) ?? [],
+  );
+  const servicesIntegrationsDefaultOnlyGuardDeps = new Set(['bitfun-relay-server']);
+  for (const dep of servicesIntegrationsDefaultProfile?.forbiddenNonOptionalDeps ?? []) {
+    if (servicesIntegrationsDefaultOnlyGuardDeps.has(dep)) {
+      continue;
+    }
+    if (!servicesOptionalOwnerDeps.has(dep)) {
+      throw new Error(
+        `services-integrations optional dependency owner rule must cover forbidden dependency ${dep}`,
+      );
+    }
+  }
   for (const dep of [
+    'aes',
     'bitfun-services-core',
     'bitfun-runtime-ports',
     'git2',
+    'hex',
     'hostname',
     'local-ip-address',
     'mac_address',
+    'md5',
     'notify',
     'qrcode',
     'reqwest',
@@ -609,6 +627,43 @@ export function runManifestParserSelfTest({
   for (const dep of ['dirs', 'log', 'sha2']) {
     if (!productDomainsOptionalOwnerRule?.dependencies.some((dependency) => dependency.depName === dep)) {
       throw new Error(`product-domains optional dependency owner rule must cover ${dep}`);
+    }
+  }
+  const coreBrowserLauncherFacadeRuleText = forbiddenRuleTextForPath(
+    'src/crates/assembly/core/src/agentic/tools/browser_control/browser_launcher.rs',
+  );
+  for (const contract of ['process_manager::', 'Command::new', 'reqwest::']) {
+    if (!coreBrowserLauncherFacadeRuleText.includes(contract)) {
+      throw new Error(`core browser launcher facade boundary rule must forbid: ${contract}`);
+    }
+  }
+  const coreComputerUseSystemFacadeRuleText = forbiddenRuleTextForPath(
+    'src/crates/assembly/core/src/agentic/tools/implementations/computer_use_actions.rs',
+  );
+  for (const contract of [
+    'process_manager::',
+    'tokio::process::',
+    'script_invocation',
+    'platform_open_attempts',
+  ]) {
+    if (!coreComputerUseSystemFacadeRuleText.includes(contract)) {
+      throw new Error(`core computer-use system facade boundary rule must forbid: ${contract}`);
+    }
+  }
+  const coreLocalShellFacadeRuleText = forbiddenRuleTextForPath(
+    'src/crates/assembly/core/src/agentic/tools/implementations/exec_command/local_shell.rs',
+  );
+  for (const contract of ['process_manager::', 'Command::new', 'std::env::var', 'target_os']) {
+    if (!coreLocalShellFacadeRuleText.includes(contract)) {
+      throw new Error(`core local shell facade boundary rule must forbid: ${contract}`);
+    }
+  }
+  const coreWeixinFacadeRuleText = forbiddenRuleTextForPath(
+    'src/crates/assembly/core/src/service/remote_connect/bot/weixin.rs',
+  );
+  for (const contract of ['reqwest::', 'aes::', 'hex::', 'md5::', 'sync_buf_path']) {
+    if (!coreWeixinFacadeRuleText.includes(contract)) {
+      throw new Error(`core Weixin bot facade boundary rule must forbid: ${contract}`);
     }
   }
   const productDomainRuntimeRule = forbiddenContentUnderRules.find(
@@ -3676,7 +3731,17 @@ export function runManifestParserSelfTest({
   const servicesIntegrationsProfile = dependencyProfileRules.find(
     (rule) => rule.crateName === 'services-integrations',
   );
-  for (const dep of ['dunce', 'futures', 'local-ip-address', 'reqwest', 'sse-stream', 'which']) {
+  for (const dep of [
+    'aes',
+    'dunce',
+    'futures',
+    'hex',
+    'local-ip-address',
+    'md5',
+    'reqwest',
+    'sse-stream',
+    'which',
+  ]) {
     if (!servicesIntegrationsProfile?.forbiddenNonOptionalDeps.includes(dep)) {
       throw new Error(`services-integrations default profile must forbid non-optional ${dep}`);
     }

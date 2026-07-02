@@ -449,6 +449,7 @@ export const dependencyProfileRules = [
     profileName: 'default integrations profile',
     reason: 'services-integrations default profile must not compile feature-gated integrations',
     forbiddenNonOptionalDeps: [
+      'aes',
       'aes-gcm',
       'anyhow',
       'async-trait',
@@ -460,7 +461,9 @@ export const dependencyProfileRules = [
       'dunce',
       'futures',
       'git2',
+      'hex',
       'local-ip-address',
+      'md5',
       'notify',
       'rand',
       'reqwest',

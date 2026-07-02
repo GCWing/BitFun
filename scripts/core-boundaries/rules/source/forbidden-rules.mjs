@@ -89,6 +89,116 @@ export const forbiddenContentRules = [
     ],
   },
   {
+    path: 'src/crates/assembly/core/src/agentic/tools/browser_control/browser_launcher.rs',
+    patterns: [
+      {
+        regex: /\bprocess_manager::/,
+        message:
+          'core browser launcher facade must not own browser process execution; use bitfun-services-integrations browser_control launcher',
+      },
+      {
+        regex: /\b(?:std::process::Command|Command::new\()/,
+        message:
+          'core browser launcher facade must not construct browser launch commands; use bitfun-services-integrations browser_control launcher',
+      },
+      {
+        regex: /\breqwest::/,
+        message:
+          'core browser launcher facade must not own CDP network probing; use bitfun-services-integrations browser_control launcher',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/computer_use_actions.rs',
+    patterns: [
+      {
+        regex: /\bprocess_manager::/,
+        message:
+          'core computer-use system facade must not spawn local system processes directly; use bitfun-services-core local system provider',
+      },
+      {
+        regex: /\btokio::process::/,
+        message:
+          'core computer-use system facade must not own async process execution; use bitfun-services-core local system provider',
+      },
+      {
+        regex: /\b(?:std::process::Command|Command::new\()/,
+        message:
+          'core computer-use system facade must not construct local system commands directly; use bitfun-services-core local system provider',
+      },
+      {
+        regex: /\bfn\s+script_invocation\b/,
+        message:
+          'core computer-use system facade must not own script invocation selection; use bitfun-services-core local system provider',
+      },
+      {
+        regex: /\bfn\s+platform_open_attempts\b/,
+        message:
+          'core computer-use system facade must not own platform open-app command selection; use bitfun-services-core local system provider',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/exec_command/local_shell.rs',
+    patterns: [
+      {
+        regex: /\bprocess_manager::/,
+        message:
+          'core local shell facade must not probe shells through process execution; use terminal-core shell resolution',
+      },
+      {
+        regex: /\b(?:std::process::Command|Command::new\()/,
+        message:
+          'core local shell facade must not construct shell probe commands; use terminal-core shell resolution',
+      },
+      {
+        regex: /\bstd::env::var\b/,
+        message:
+          'core local shell facade must not own environment-based shell selection; use terminal-core shell resolution',
+      },
+      {
+        regex: /\bcfg!\(target_os\b/,
+        message:
+          'core local shell facade must not own platform shell fallback rules; use terminal-core shell resolution',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/service/remote_connect/bot/weixin.rs',
+    patterns: [
+      {
+        regex: /\breqwest::/,
+        message:
+          'core Weixin bot facade must not own provider HTTP clients; use bitfun-services-integrations Weixin provider',
+      },
+      {
+        regex: /\baes::/,
+        message:
+          'core Weixin bot facade must not own provider AES/CDN crypto; use bitfun-services-integrations Weixin provider',
+      },
+      {
+        regex: /\bhex::/,
+        message:
+          'core Weixin bot facade must not own provider hex encoding; use bitfun-services-integrations Weixin provider',
+      },
+      {
+        regex: /\bmd5::/,
+        message:
+          'core Weixin bot facade must not own provider MD5 signing; use bitfun-services-integrations Weixin provider',
+      },
+      {
+        regex: /\bfn\s+sync_buf_path\b/,
+        message:
+          'core Weixin bot facade must not own provider sync-buffer storage layout; use bitfun-services-integrations Weixin provider',
+      },
+      {
+        regex: /\bfn\s+parse_weixin_cdn_aes_key\b/,
+        message:
+          'core Weixin bot facade must not own provider CDN AES key parsing; use bitfun-services-integrations Weixin provider',
+      },
+    ],
+  },
+  {
     path: 'src/crates/contracts/core-types/src/ai.rs',
     patterns: [
       {

@@ -6,7 +6,6 @@ export const optionalDependencyFeatureOwnerRules = [
     reason:
       'bitfun-core product/runtime optional dependencies must stay owned by explicit feature gates',
     dependencies: [
-      { depName: 'aes', ownerFeatures: ['service-integrations'] },
       { depName: 'aes-gcm', ownerFeatures: ['service-integrations'] },
       { depName: 'axum', ownerFeatures: ['service-integrations'] },
       { depName: 'bitfun-ai-adapters', ownerFeatures: ['ai-adapter-runtime'] },
@@ -44,8 +43,9 @@ export const optionalDependencyFeatureOwnerRules = [
     reason:
       'services-integrations optional runtime dependencies must stay owned by explicit integration features',
     dependencies: [
+      { depName: 'aes', ownerFeatures: ['remote-connect'] },
       { depName: 'aes-gcm', ownerFeatures: ['mcp', 'remote-connect', 'remote-ssh-concrete'] },
-      { depName: 'anyhow', ownerFeatures: ['mcp', 'remote-connect', 'remote-ssh-concrete'] },
+      { depName: 'anyhow', ownerFeatures: ['browser-control', 'mcp', 'remote-connect', 'remote-ssh-concrete'] },
       {
         depName: 'async-trait',
         ownerFeatures: ['mcp', 'remote-connect', 'remote-ssh-concrete', 'workspace-search'],
@@ -59,21 +59,23 @@ export const optionalDependencyFeatureOwnerRules = [
       { depName: 'bitfun-runtime-ports', ownerFeatures: ['remote-connect'] },
       {
         depName: 'bitfun-services-core',
-        ownerFeatures: ['git', 'mcp', 'miniapp-runtime', 'remote-connect', 'workspace-search'],
+        ownerFeatures: ['browser-control', 'git', 'mcp', 'miniapp-runtime', 'remote-connect', 'workspace-search'],
       },
       { depName: 'chrono', ownerFeatures: ['git', 'remote-connect', 'remote-ssh-concrete'] },
-      { depName: 'dirs', ownerFeatures: ['miniapp-runtime', 'remote-connect', 'remote-ssh-concrete'] },
+      { depName: 'dirs', ownerFeatures: ['browser-control', 'miniapp-runtime', 'remote-connect', 'remote-ssh-concrete'] },
       { depName: 'dunce', ownerFeatures: ['remote-ssh', 'workspace-search'] },
       { depName: 'futures', ownerFeatures: ['mcp', 'remote-connect'] },
       { depName: 'git2', ownerFeatures: ['git'] },
+      { depName: 'hex', ownerFeatures: ['remote-connect'] },
       { depName: 'hostname', ownerFeatures: ['remote-connect'] },
       { depName: 'image', ownerFeatures: ['remote-connect'] },
       { depName: 'local-ip-address', ownerFeatures: ['remote-connect'] },
       { depName: 'mac_address', ownerFeatures: ['remote-connect'] },
+      { depName: 'md5', ownerFeatures: ['remote-connect'] },
       { depName: 'notify', ownerFeatures: ['file-watch'] },
       { depName: 'qrcode', ownerFeatures: ['remote-connect'] },
       { depName: 'rand', ownerFeatures: ['mcp', 'remote-connect', 'remote-ssh-concrete'] },
-      { depName: 'reqwest', ownerFeatures: ['announcement', 'mcp', 'miniapp-runtime', 'remote-connect'] },
+      { depName: 'reqwest', ownerFeatures: ['announcement', 'browser-control', 'mcp', 'miniapp-runtime', 'remote-connect'] },
       { depName: 'rmcp', ownerFeatures: ['mcp'] },
       { depName: 'russh', ownerFeatures: ['remote-ssh-concrete'] },
       { depName: 'russh-keys', ownerFeatures: ['remote-ssh-concrete'] },
@@ -167,6 +169,7 @@ export const ownerCrateFeatureAssemblyRules = [
     reason: 'services-integrations must keep integration feature groups explicit and default-light',
     requiredProductFullFeatures: [
       'announcement',
+      'browser-control',
       'deep-research',
       'file-watch',
       'function-agents',

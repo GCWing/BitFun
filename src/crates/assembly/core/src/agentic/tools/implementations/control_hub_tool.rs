@@ -22,12 +22,10 @@ use crate::agentic::tools::framework::{
 use crate::service::config::{get_global_config_service, GlobalConfig};
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
+use bitfun_services_core::system::{truncate_with_marker, LocalSystemProvider};
 use serde_json::{json, Value};
 use std::sync::Arc;
 
-#[cfg(target_os = "linux")]
-use super::computer_use_actions::linux_session_info;
-use super::computer_use_actions::{truncate_with_marker, which_exists};
 use super::control_hub::{err_response, ControlHubError, ErrorCode};
 
 /// Process-wide registry of CDP sessions. Replaces the previous single
@@ -219,30 +217,11 @@ Branch on `ok` and `error.code`, not on English messages.
                         Err(_) => (None, false),
                     };
 
-                // Same script_types probe as get_os_info — duplicated here
-                // because callers often hit `meta.capabilities` first and we
-                // don't want to force an extra system round-trip.
-                let mut _script_types: Vec<&'static str> = vec!["shell"];
-                if cfg!(target_os = "macos") {
-                    _script_types.push("applescript");
-                }
-                if which_exists("bash") {
-                    _script_types.push("bash");
-                }
-                if which_exists("pwsh") || which_exists("powershell") {
-                    _script_types.push("powershell");
-                }
-                if cfg!(target_os = "windows") {
-                    _script_types.push("cmd");
-                }
-
-                #[cfg(target_os = "linux")]
-                let (display_server, desktop_env) = linux_session_info();
-                #[cfg(not(target_os = "linux"))]
-                let (display_server, desktop_env): (
-                    Option<String>,
-                    Option<String>,
-                ) = (None, None);
+                let local_system = LocalSystemProvider::new().system_info();
+                let (display_server, desktop_env) = (
+                    local_system.display_server,
+                    local_system.desktop_environment,
+                );
 
                 let is_remote = context.is_remote();
                 let workspace_execution = if is_remote {
@@ -2054,9 +2033,7 @@ fn map_dispatch_error(domain: &str, _action: &str, err: BitFunError) -> ControlH
 #[cfg(test)]
 mod control_hub_tests {
     use super::*;
-    use crate::agentic::tools::implementations::computer_use_actions::{
-        linux_clipboard_install_hints, ComputerUseActions,
-    };
+    use crate::agentic::tools::implementations::computer_use_actions::ComputerUseActions;
 
     fn empty_context() -> ToolUseContext {
         ToolUseContext {
@@ -2392,7 +2369,7 @@ mod control_hub_tests {
     }
 
     #[tokio::test]
-    async fn meta_capabilities_includes_script_types_and_default_browser() {
+    async fn meta_capabilities_includes_browser_surface_facts() {
         let tool = ControlHubTool::new();
         let ctx = empty_context();
         let results = tool
@@ -2487,25 +2464,6 @@ mod control_hub_tests {
                 "valid script_type `{must_have}` missing from error message: {msg}"
             );
         }
-    }
-
-    #[test]
-    fn which_exists_finds_a_universally_present_binary() {
-        // `sh` is always on Unix; `cmd` is always on Windows.
-        #[cfg(unix)]
-        assert!(which_exists("sh"), "sh must be on PATH on Unix hosts");
-        #[cfg(windows)]
-        assert!(which_exists("cmd"), "cmd must be on PATH on Windows hosts");
-        // A clearly bogus name must NOT resolve.
-        assert!(!which_exists("definitely-not-a-real-binary-bitfun-xyz"));
-    }
-
-    #[test]
-    fn linux_clipboard_install_hints_match_session_type() {
-        // Just sanity-check that the helper returns SOMETHING non-empty on
-        // every platform; the message content is OS-specific.
-        let hints = linux_clipboard_install_hints();
-        assert!(!hints.is_empty(), "hints must never be empty");
     }
 
     #[tokio::test]

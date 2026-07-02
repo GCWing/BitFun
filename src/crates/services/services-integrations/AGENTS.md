@@ -23,8 +23,8 @@ slices that are outside pure product logic but still platform-neutral.
 - Remote-connect platform-neutral primitives belong here: device identity,
   pairing/encryption, QR payload generation, relay client protocol, dialog/cancel
   orchestration ports, LAN/ngrok provider helpers, IM bot provider clients,
-  mobile-web relay upload, image-context adapter contracts, remote workspace
-  helpers, and command/response assembly.
+  provider-private cursor caches, mobile-web relay upload, image-context adapter
+  contracts, remote workspace helpers, and command/response assembly.
 - Remote workspace facts, session metadata, file projection DTOs, and
   workspace/projection host traits belong in `bitfun-runtime-ports`.
 - Workspace-root source selection, persistence/workspace service reads,
@@ -40,6 +40,9 @@ slices that are outside pure product logic but still platform-neutral.
 - Remote SSH workspace-search owns the disabled surface, path/scope/probe,
   bundle/retry strategy, and flashgrep session/context lifecycle behind a
   provider boundary.
+- Browser-control owns provider-neutral browser detection and CDP launch process
+  handling behind `browser-control`; product profile paths and tool envelopes
+  stay in higher layers.
 - MiniApp runtime here may own host primitive dispatch, built-in seed file
   writes, marker IO, storage/import bundle filesystem IO, and JS worker process/pool
   lifecycle. Manager workflow orchestration remains outside this crate until

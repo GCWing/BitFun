@@ -34,7 +34,6 @@ regex = { workspace = true }
 base64 = { workspace = true }
 image = { workspace = true, optional = true }
 md5 = { workspace = true, optional = true }
-aes = { workspace = true, optional = true }
 hex = { workspace = true }
 dashmap = { workspace = true, optional = true }
 indexmap = { workspace = true, optional = true }
@@ -193,7 +192,6 @@ product-domains = [
 ]
 runtime-services = []
 service-integrations = [
-    "dep:aes",
     "dep:aes-gcm",
     "dep:axum",
     "dep:bitfun-relay-server",

@@ -9,6 +9,7 @@ mod locale;
 mod menu;
 mod state;
 pub mod telegram;
+pub mod weixin;
 
 use serde::{Deserialize, Serialize};
 
@@ -21,6 +22,7 @@ pub use state::{
     BotInteractiveRequest, BotMessageSender, BotQuestion, BotQuestionOption, PendingAction,
 };
 pub use telegram::{TelegramBotApi, TelegramConfig};
+pub use weixin::{WeixinConfig, WeixinProviderClient};
 
 /// Configuration for a bot-based connection.
 #[derive(Debug, Clone, Serialize, Deserialize)]

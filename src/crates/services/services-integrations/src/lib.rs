@@ -6,6 +6,9 @@
 #[cfg(feature = "announcement")]
 pub mod announcement;
 
+#[cfg(feature = "browser-control")]
+pub mod browser_control;
+
 #[cfg(feature = "deep-research")]
 pub mod deep_research;
 

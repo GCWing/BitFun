@@ -2,15 +2,13 @@
 
 Scope: this guide applies to `src/crates/services/services-core`.
 
-`bitfun-services-core` owns cross-platform service DTOs and helpers that can
-compile without the full product runtime. It also owns generic local filesystem
-operations/tree/search/listing primitives, reusable LSP registry/package
-loading/protocol/project detection/config watching/debounce/process-manager
-helpers, session storage layout helpers, turn file indexing/deletion, metadata
-store CRUD/index rebuild, metadata construction/counter/index/field mutation
-rules, lineage/branch metadata shaping, and reusable JSON file IO; product
-crates may layer remote workspace routing or legacy error mapping outside this
-crate.
+`bitfun-services-core` owns cross-platform service DTOs and helpers that compile
+without the full product runtime. This includes generic filesystem/search/JSON
+IO helpers, LSP package/protocol/watch/process primitives, session metadata
+storage helpers, and local OS action primitives such as command lookup,
+clipboard, file/url opening, script execution, and system facts. Product crates
+may layer routing, policy, capability selection, event emission, or legacy error
+mapping outside this crate.
 
 ## Guardrails
 
