@@ -25,6 +25,14 @@
   cursor: text;
   box-shadow: none !important;
 
+  // Hide scrollbars while keeping scroll functionality
+  scrollbar-width: none; // Firefox
+  -ms-overflow-style: none; // IE/Edge legacy
+
+  &::-webkit-scrollbar {
+    display: none; // Chrome, Safari, Edge
+  }
+
   // Fallback placeholder via CSS :empty (may not work after browser inserts a <br>)
   &:empty::before {
     content: attr(data-placeholder);

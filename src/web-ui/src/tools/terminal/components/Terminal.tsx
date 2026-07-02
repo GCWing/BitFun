@@ -243,6 +243,12 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(({
   const onPasteRef = useRef(onPaste);
   const resizeSuspendedRef = useRef(resizeSuspended);
   const pendingFitAfterSuspendRef = useRef(false);
+  // Track key-pressed state to mirror xterm's internal _keyDownSeen flag.
+  // Used by the input-event safety net (see below).
+  const keyDownSeenRef = useRef(false);
+  // Track whether keypress already handled the character, mirroring xterm's
+  // _keyPressHandled, to avoid duplicates in the safety net.
+  const keyPressHandledRef = useRef(false);
   const [isReady, setIsReady] = useState(false);
   const currentTheme = themeService.getCurrentTheme();
   const initialFontWeights = getXtermFontWeights(currentTheme.type);
@@ -656,7 +662,16 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(({
 
     // Intercept paste (Ctrl+V / Ctrl+Shift+V) so callers can apply the same
     // policy as context-menu paste before xterm normalizes/sends the data.
+    // Also track key-pressed state and bypass keyCode 229 for the input-event
+    // safety net below.
     terminal.attachCustomKeyEventHandler((event: KeyboardEvent) => {
+      if (event.type === 'keydown') {
+        keyDownSeenRef.current = true;
+      } else if (event.type === 'keyup') {
+        keyDownSeenRef.current = false;
+        keyPressHandledRef.current = false;
+      }
+
       if (event.type === 'keydown' && event.ctrlKey && (event.key === 'v' || event.key === 'V')) {
         event.preventDefault();
         
@@ -684,9 +699,61 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(({
         
         return false;
       }
-      
+
+      // When an IME is active (even in ASCII mode), keydown events may carry
+      // keyCode 229. xterm.js delegates these to _handleAnyTextareaChanges
+      // (setTimeout(0) — racy during key rollover) and _inputEvent (skipped
+      // when _keyDownSeen is true). Both paths can lose the character.
+      //
+      // Bypass xterm entirely for keyCode 229: return false without
+      // preventDefault(), so the browser inserts the character into the
+      // textarea and fires an input event. The safety-net listener below
+      // catches that event synchronously — no setTimeout race, no duplicates.
+      // During active IME composition, compositionstart/compositionend events
+      // still fire and xterm handles them normally; this only affects the
+      // non-composition passthrough path.
+      if (event.type === 'keydown' && event.keyCode === 229) {
+        return false;
+      }
+
       return true;
     });
+
+    // Input-event safety net for key rollover with an active IME.
+    //
+    // Because we bypass keyCode 229 in the custom key handler above, xterm's
+    // _handleAnyTextareaChanges (setTimeout(0)) is never called for those keys.
+    // Instead, the browser inserts the character and fires an input event.
+    //
+    // xterm's own _inputEvent handler skips events where (composed && keyDownSeen)
+    // — exactly the key-rollover case. This listener catches those skipped
+    // insertText events and forwards them via onData, preventing character loss.
+    // It only fires when xterm would skip (composed + keyDownSeen) and keypress
+    // didn't already handle the character, so it never causes duplicates.
+    const textareaEl = container.querySelector<HTMLTextAreaElement>('.xterm-helper-textarea');
+    let textareaKeyPressHandler: (() => void) | null = null;
+    let textareaInputHandler: ((ev: Event) => void) | null = null;
+    if (textareaEl) {
+      textareaKeyPressHandler = () => {
+        keyPressHandledRef.current = true;
+      };
+      textareaInputHandler = (ev: Event) => {
+        const inputEvent = ev as InputEvent;
+        if (
+          inputEvent.data &&
+          inputEvent.inputType === 'insertText' &&
+          inputEvent.composed === true &&
+          keyDownSeenRef.current &&
+          !keyPressHandledRef.current
+        ) {
+          // xterm's _inputEvent will skip this (composed + keyDownSeen).
+          // Forward the character to prevent loss during key rollover.
+          onDataRef.current?.(inputEvent.data);
+        }
+      };
+      textareaEl.addEventListener('keypress', textareaKeyPressHandler);
+      textareaEl.addEventListener('input', textareaInputHandler, true);
+    }
 
     const resizeObserver = new ResizeObserver(() => {
       requestAnimationFrame(() => {
@@ -746,6 +813,12 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(({
       binaryDisposable.dispose();
       titleDisposable.dispose();
       container.removeEventListener('paste', handleNativePaste, true);
+      if (textareaEl && textareaKeyPressHandler) {
+        textareaEl.removeEventListener('keypress', textareaKeyPressHandler);
+      }
+      if (textareaEl && textareaInputHandler) {
+        textareaEl.removeEventListener('input', textareaInputHandler, true);
+      }
       resizeObserver.disconnect();
       intersectionObserver.disconnect();
       fontLoadCancelled = true;

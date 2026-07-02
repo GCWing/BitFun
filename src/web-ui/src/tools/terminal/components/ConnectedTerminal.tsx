@@ -11,6 +11,7 @@ import { registerTerminalActions, unregisterTerminalActions } from '../services/
 import {
   POWERSHELL_READLINE_PASTE_SEQUENCE,
   ResizeRepaintGuard,
+  TerminalInputQueue,
   createResizeRepaintScreenSnapshot,
   resolveTerminalPaste,
   shouldUsePowerShellReadlinePaste,
@@ -279,14 +280,31 @@ const ConnectedTerminal: React.FC<ConnectedTerminalProps> = memo(({
     onReplay: handleReplay,
   });
 
+  // Keep latest write in a ref so the input queue closure stays stable without
+  // recreating the queue on every render.
+  const writeRef = useRef(write);
+  writeRef.current = write;
+
+  // Coalesce rapid keystrokes into batched, sequentially-ordered IPC writes.
+  // Without this, each keystroke fires a separate fire-and-forget
+  // `invoke('terminal_write')`, which on macOS can lose characters due to IPC
+  // latency and lack of ordering guarantees for concurrent async command
+  // handlers. The queue buffers input and flushes it as a single batched write,
+  // with only one flush in flight at a time.
+  const inputQueueRef = useRef<TerminalInputQueue | null>(null);
+  if (!inputQueueRef.current) {
+    inputQueueRef.current = new TerminalInputQueue(
+      (data) => writeRef.current(data),
+      (err) => log.error('Write failed', { sessionId, error: err }),
+    );
+  }
+
   const handleData = useCallback((data: string) => {
     if (!isExited) {
       resizeRepaintGuardRef.current.clear();
-      write(data).catch(err => {
-        log.error('Write failed', { sessionId, error: err });
-      });
+      inputQueueRef.current?.enqueue(data);
     }
-  }, [write, isExited, sessionId]);
+  }, [isExited]);
 
   const handleResize = useCallback((cols: number, rows: number) => {
     const lastSize = lastSentSizeRef.current;
@@ -349,9 +367,9 @@ const ConnectedTerminal: React.FC<ConnectedTerminalProps> = memo(({
       return false;
     }
 
-    await write(POWERSHELL_READLINE_PASTE_SEQUENCE);
+    inputQueueRef.current?.enqueue(POWERSHELL_READLINE_PASTE_SEQUENCE);
     return true;
-  }, [initialSession?.shellType, isExited, session?.shellType, write]);
+  }, [initialSession?.shellType, isExited, session?.shellType]);
 
   // Handle paste with VS Code-style multi-line safety policy.
   const handlePaste = useCallback(async (
@@ -394,6 +412,13 @@ const ConnectedTerminal: React.FC<ConnectedTerminalProps> = memo(({
       }
     }
   }, [session]);
+
+  // Discard pending input when the terminal exits to avoid cascading write errors.
+  useEffect(() => {
+    if (isExited) {
+      inputQueueRef.current?.clear();
+    }
+  }, [isExited]);
 
   const terminalId = `terminal-${sessionId}`;
 
