@@ -17,26 +17,8 @@
       "key": "#1c1c1f <-> #212019",
       "decision": "keep",
       "owner": "src/web-ui/src/infrastructure/theme/presets",
-      "reason": "China Night secondary background keeps a warmer ink tint next to the shared dark neutral; it is a theme-identity surface, not a stray duplicate.",
-      "reevaluateWhen": "Only if China Night background surfaces are redesigned around the shared neutral scale."
-    },
-    {
-      "root": "src/web-ui/src",
-      "domain": "themePreset",
-      "key": "#e0e3e8 <-> #e8e8e8",
-      "decision": "keep",
-      "owner": "src/web-ui/src/infrastructure/theme/presets",
-      "reason": "Light quaternary surface and slate button text sit near primary text/background stops; they can appear as adjacent surface/text roles and should not be collapsed without focused screenshots.",
-      "reevaluateWhen": "Only after button text and light surface-ramp screenshots show no loss of hierarchy."
-    },
-    {
-      "root": "src/web-ui/src",
-      "domain": "themePreset",
-      "key": "#e8e8e8 <-> #ebe9e3",
-      "decision": "keep",
-      "owner": "src/web-ui/src/infrastructure/theme/presets",
-      "reason": "China Style elevated paper keeps a warm paper tint while #e8e8e8 is a shared cool neutral/text stop. The distinction is a theme personality cue.",
-      "reevaluateWhen": "Only if China Style paper surfaces are intentionally moved to the shared neutral ramp."
+      "reason": "China Night secondary background also feeds Monaco lineHighlight through the theme projection. Merging it into the primary background removes the visible current-line cue and flattens adjacent ink surfaces.",
+      "reevaluateWhen": "Only if China Night gets a separate editor lineHighlight token or visual review proves the current-line cue remains visible."
     },
     {
       "root": "src/web-ui/src",
@@ -64,24 +46,6 @@
       "owner": "src/web-ui/src/infrastructure/theme/presets",
       "reason": "China Style paper uses a warm first-paint surface while #f3f3f5 is a cool light neutral and button state stop. This is cross-theme identity, not a duplicate role.",
       "reevaluateWhen": "Only after China Style paper identity is intentionally neutralized."
-    },
-    {
-      "root": "src/web-ui/src",
-      "domain": "themePreset",
-      "key": "#334155 <-> #363b54",
-      "decision": "keep",
-      "owner": "src/web-ui/src/infrastructure/theme/presets",
-      "reason": "Light strong text and Tokyo border encode different theme-local roles. They are not the same semantic token even though their RGB distance is low.",
-      "reevaluateWhen": "Only if both roles are remapped through a shared semantic border/text projection."
-    },
-    {
-      "root": "src/web-ui/src",
-      "domain": "themePreset",
-      "key": "#ebe9e3 <-> #f0ede0",
-      "decision": "keep",
-      "owner": "src/web-ui/src/infrastructure/theme/presets",
-      "reason": "China Style tertiary and elevated paper surfaces are adjacent paper-ramp stops. Collapsing them would reduce section/elevation separation.",
-      "reevaluateWhen": "Only after China Style paper-ramp screenshots prove the two stops are not adjacent in product UI."
     },
     {
       "root": "src/web-ui/src",
@@ -125,8 +89,8 @@
       "key": "#0e0e10 <-> #121214",
       "decision": "keep",
       "owner": "BitFun-Installer/src/theme/installerThemesData.ts",
-      "reason": "Cyber and default dark installer cards keep distinct theme preview backgrounds; the values appear as separate theme cards rather than adjacent layers inside one installer surface.",
-      "reevaluateWhen": "Only after installer theme preview screenshots show Cyber and default dark cards no longer need separate preview identity."
+      "reason": "ThemeSetup renders dark theme cards side by side with primary and secondary preview backgrounds. Cyber needs its own darker primary preview seed so the named theme is not distinguishable only by label and accent.",
+      "reevaluateWhen": "Only if installer theme selection adds a separate identity swatch or screenshots prove the primary preview no longer carries theme identity."
     },
     {
       "root": "BitFun-Installer/src",
@@ -134,8 +98,8 @@
       "key": "#1a1b26 <-> #1a1c1e",
       "decision": "keep",
       "owner": "BitFun-Installer/src/theme/installerThemesData.ts",
-      "reason": "Tokyo Night primary background intentionally remains close to the web Tokyo hue while the shared installer card surface stays neutral for preview contrast.",
-      "reevaluateWhen": "Only if the installer Tokyo Night preview is redesigned to inherit the shared dark card surface."
+      "reason": "Tokyo Night appears as an adjacent installer preview card, and its primary background should preserve the Tokyo base hue while the shared installer card surface stays neutral.",
+      "reevaluateWhen": "Only after installer preview cards are redesigned to use a dedicated non-background theme identity affordance."
     },
     {
       "root": "BitFun-Installer/src",
@@ -143,8 +107,8 @@
       "key": "#121214 <-> #1a1814",
       "decision": "keep",
       "owner": "BitFun-Installer/src/theme/installerThemesData.ts",
-      "reason": "Ink Night keeps a warm dark preview background near the default dark installer card background; this communicates theme identity across separate theme cards.",
-      "reevaluateWhen": "Only after installer preview screenshots prove the warm Ink Night identity is no longer visually meaningful."
+      "reason": "Ink Night uses a warmer dark primary background in adjacent installer preview cards. Collapsing it into the canonical dark seed makes multiple dark choices visually flatter before the app is installed.",
+      "reevaluateWhen": "Only if visual review shows installer dark theme cards no longer rely on primary background identity."
     }
   ]
 }

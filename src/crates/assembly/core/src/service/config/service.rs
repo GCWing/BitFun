@@ -170,11 +170,19 @@ impl ConfigService {
     /// imported config that references missing / disabled models is brought
     /// back into a self-consistent state.
     pub async fn import_config(&self, export: ConfigExport) -> BitFunResult<ConfigImportResult> {
+        self.import_config_data(serde_json::to_value(export.config)?)
+            .await
+    }
+
+    /// Imports raw configuration JSON. Keeping this boundary raw preserves
+    /// legacy fields that are intentionally normalized before deserialization.
+    pub async fn import_config_data(
+        &self,
+        config_data: serde_json::Value,
+    ) -> BitFunResult<ConfigImportResult> {
         let import_result = {
             let mut manager = self.manager.write().await;
-            manager
-                .import_config(serde_json::to_value(export.config)?)
-                .await
+            manager.import_config(config_data).await
         };
 
         match import_result {
@@ -701,6 +709,73 @@ mod tests {
             defaults.image_understanding.as_deref(),
             Some("active-vision"),
             "vision default must not fall back to a text-only model"
+        );
+    }
+
+    #[tokio::test]
+    async fn legacy_theme_id_path_writes_themes_current_only() {
+        let (service, _dir) = test_service("legacy-theme-id-path").await;
+
+        service
+            .set_config("theme.id", "dark")
+            .await
+            .expect("legacy theme path should remain a thin compatibility alias");
+
+        let current: String = service
+            .get_config(Some("themes.current"))
+            .await
+            .expect("theme selection should be readable from the TS-owned path");
+        assert_eq!(current, "bitfun-dark");
+
+        let export: GlobalConfig = service
+            .get_config(None)
+            .await
+            .expect("full config should load");
+        let serialized = serde_json::to_value(export).expect("config should serialize");
+        assert!(
+            serialized.get("theme").is_none(),
+            "legacy path must not recreate the removed Rust GUI theme schema"
+        );
+    }
+
+    #[tokio::test]
+    async fn raw_import_preserves_legacy_theme_id_before_deserialization() {
+        let (service, _dir) = test_service("legacy-theme-raw-import").await;
+        let mut raw_config =
+            serde_json::to_value(GlobalConfig::default()).expect("default config should serialize");
+        let raw_object = raw_config
+            .as_object_mut()
+            .expect("default config should serialize as an object");
+        raw_object.remove("themes");
+        raw_object.insert(
+            "theme".to_string(),
+            serde_json::json!({
+                "id": "dark",
+                "colors": {
+                    "background": "#1e1e1e"
+                }
+            }),
+        );
+
+        service
+            .import_config_data(raw_config)
+            .await
+            .expect("raw legacy config should import before old fields are dropped");
+
+        let current: String = service
+            .get_config(Some("themes.current"))
+            .await
+            .expect("legacy theme id should migrate into themes.current");
+        assert_eq!(current, "bitfun-dark");
+
+        let export: GlobalConfig = service
+            .get_config(None)
+            .await
+            .expect("full config should load after import");
+        let serialized = serde_json::to_value(export).expect("config should serialize");
+        assert!(
+            serialized.get("theme").is_none(),
+            "legacy theme payload should not be exported after import"
         );
     }
 }

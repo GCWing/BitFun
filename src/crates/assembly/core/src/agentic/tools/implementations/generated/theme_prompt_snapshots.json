@@ -132,7 +132,7 @@
       "textMuted": "#787c99",
       "accent500": "#7aa2f7",
       "accent600": "#6183bb",
-      "borderBase": "rgba(54, 59, 84, 0.6)",
+      "borderBase": "rgba(51, 65, 85, 0.6)",
       "elementBase": "rgba(122, 162, 247, 0.11)",
       "radiusBase": "6px",
       "spacing4": "16px",

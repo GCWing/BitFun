@@ -149,12 +149,12 @@ describe('builtin theme preset output', () => {
     }))).toMatchInlineSnapshot(`
       [
         {
-          "hash": "44f230d2565fcdfed0e47fc5ea7d3253fc0bdcf0550c6bdcde16fb18f580467a",
+          "hash": "146da4fe962477dfef3ebcf275aec128019dee60dd1fde16b22e995b7264e377",
           "id": "bitfun-light",
           "type": "light",
         },
         {
-          "hash": "c1f6fb0895d7e08ab1b5b035ea2db83690ba5eb490ed28ea59d731e9524aaa73",
+          "hash": "9272e35f09967ad85bf5ad48eeabed079a0d8025f13342a1480aaa6a4d256dc3",
           "id": "bitfun-slate",
           "type": "dark",
         },
@@ -169,7 +169,7 @@ describe('builtin theme preset output', () => {
           "type": "dark",
         },
         {
-          "hash": "53d25127d6bcb4c2ef2cbf2246b6a7d37e57cb17df7a3f517d5aedddaf73d6e4",
+          "hash": "a00254950833b446f6547c3753da862c3818e6801028dab905ec6939f078f86e",
           "id": "bitfun-china-style",
           "type": "light",
         },
@@ -184,7 +184,7 @@ describe('builtin theme preset output', () => {
           "type": "dark",
         },
         {
-          "hash": "e79f3ef7f271262755657175f5f4f005d0a3c5e4f0c999b0e5e207b6a3bec6be",
+          "hash": "5b2b2064a339c59e93d0a3b4f6d29a1e2c0096f1828063bbb2e258e2d48f4cb3",
           "id": "bitfun-tokyo-night",
           "type": "dark",
         },
