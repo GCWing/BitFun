@@ -263,36 +263,7 @@ fn parse_osc_color(s: &str) -> Option<(u8, u8, u8)> {
 
 impl Theme {
     pub fn dark() -> Self {
-        Self {
-            primary: Color::Rgb(59, 130, 246),  // blue
-            success: Color::Rgb(34, 197, 94),   // green
-            warning: Color::Rgb(251, 191, 36),  // yellow
-            error: Color::Rgb(239, 68, 68),     // red
-            info: Color::Rgb(147, 197, 253),    // light blue
-            muted: Color::Rgb(156, 163, 175),   // gray
-            background: Color::Rgb(17, 24, 39), // dark gray background
-            border: Color::Rgb(55, 65, 81),     // border gray
-
-            background_panel: Color::Rgb(30, 38, 55),
-            background_element: Color::Rgb(40, 50, 70),
-            input_background: Color::Rgb(40, 50, 70),
-
-            diff_added_fg: Color::Rgb(34, 197, 94),
-            diff_removed_fg: Color::Rgb(239, 68, 68),
-            diff_added_bg: Color::Rgb(20, 50, 20),
-            diff_removed_bg: Color::Rgb(50, 20, 20),
-
-            block_bg: Color::Rgb(24, 32, 48),
-            block_bg_hover: Color::Rgb(30, 38, 55),
-            block_border_active: Color::Rgb(59, 130, 246),
-
-            inline_icon: Color::Rgb(100, 140, 220),
-
-            command_text: Color::Rgb(180, 210, 255),
-
-            diff_hunk_header: Color::Rgb(100, 120, 180),
-            diff_line_number: Color::Rgb(80, 90, 110),
-        }
+        Self::from_builtin_preset("bitfun-dark", Appearance::Dark)
     }
 
     pub fn dark_ansi16() -> Self {
@@ -329,36 +300,7 @@ impl Theme {
     }
 
     pub fn light() -> Self {
-        Self {
-            primary: Color::Rgb(37, 99, 235),
-            success: Color::Rgb(22, 163, 74),
-            warning: Color::Rgb(245, 158, 11),
-            error: Color::Rgb(220, 38, 38),
-            info: Color::Rgb(59, 130, 246),
-            muted: Color::Rgb(107, 114, 128),
-            background: Color::Rgb(249, 250, 251),
-            border: Color::Rgb(209, 213, 219),
-
-            background_panel: Color::Rgb(240, 242, 245),
-            background_element: Color::Rgb(229, 231, 235),
-            input_background: Color::Rgb(229, 231, 235),
-
-            diff_added_fg: Color::Rgb(22, 163, 74),
-            diff_removed_fg: Color::Rgb(220, 38, 38),
-            diff_added_bg: Color::Rgb(220, 252, 231),
-            diff_removed_bg: Color::Rgb(254, 226, 226),
-
-            block_bg: Color::Rgb(240, 242, 245),
-            block_bg_hover: Color::Rgb(229, 231, 235),
-            block_border_active: Color::Rgb(37, 99, 235),
-
-            inline_icon: Color::Rgb(60, 100, 200),
-
-            command_text: Color::Rgb(30, 60, 120),
-
-            diff_hunk_header: Color::Rgb(80, 100, 160),
-            diff_line_number: Color::Rgb(140, 150, 170),
-        }
+        Self::from_builtin_preset("bitfun-light", Appearance::Light)
     }
 
     pub fn light_ansi16() -> Self {
@@ -467,44 +409,7 @@ impl Theme {
     ) -> anyhow::Result<Self> {
         let fallback = self.clone();
         let resolved = resolve_opencode_theme(json, appearance)?;
-        Ok(Theme {
-            primary: resolved.primary.unwrap_or(fallback.primary),
-            success: resolved.success.unwrap_or(fallback.success),
-            warning: resolved.warning.unwrap_or(fallback.warning),
-            error: resolved.error.unwrap_or(fallback.error),
-            info: resolved.info.unwrap_or(fallback.info),
-            muted: resolved.muted.unwrap_or(fallback.muted),
-            background: resolved.background.unwrap_or(fallback.background),
-            border: resolved.border.unwrap_or(fallback.border),
-            background_panel: resolved
-                .background_panel
-                .unwrap_or(fallback.background_panel),
-            background_element: resolved
-                .background_element
-                .unwrap_or(fallback.background_element),
-            input_background: resolved.input_background.unwrap_or(
-                resolved
-                    .background_element
-                    .unwrap_or(fallback.input_background),
-            ),
-            diff_added_fg: resolved.diff_added_fg.unwrap_or(fallback.diff_added_fg),
-            diff_removed_fg: resolved.diff_removed_fg.unwrap_or(fallback.diff_removed_fg),
-            diff_added_bg: resolved.diff_added_bg.unwrap_or(fallback.diff_added_bg),
-            diff_removed_bg: resolved.diff_removed_bg.unwrap_or(fallback.diff_removed_bg),
-            block_bg: resolved.block_bg.unwrap_or(fallback.block_bg),
-            block_bg_hover: resolved.block_bg_hover.unwrap_or(fallback.block_bg_hover),
-            block_border_active: resolved
-                .block_border_active
-                .unwrap_or(fallback.block_border_active),
-            inline_icon: resolved.inline_icon.unwrap_or(fallback.inline_icon),
-            command_text: resolved.command_text.unwrap_or(fallback.command_text),
-            diff_hunk_header: resolved
-                .diff_hunk_header
-                .unwrap_or(fallback.diff_hunk_header),
-            diff_line_number: resolved
-                .diff_line_number
-                .unwrap_or(fallback.diff_line_number),
-        })
+        build_theme_from_resolved_tokens(resolved, Some(&fallback))
     }
 
     pub fn style(&self, kind: StyleKind) -> Style {
@@ -540,6 +445,68 @@ impl Theme {
     pub fn selection_foreground(&self) -> Color {
         readable_foreground_for(self.primary)
     }
+
+    fn from_builtin_preset(id: &'static str, appearance: Appearance) -> Self {
+        let json = builtin_theme_json(id)
+            .unwrap_or_else(|| panic!("Built-in CLI theme {id} must be registered"));
+        Self::from_complete_opencode_theme_json(json, appearance)
+            .unwrap_or_else(|err| panic!("Built-in CLI theme {id} must be complete: {err}"))
+    }
+
+    fn from_complete_opencode_theme_json(
+        json: &OpencodeThemeJson,
+        appearance: Appearance,
+    ) -> anyhow::Result<Self> {
+        let resolved = resolve_opencode_theme(json, appearance)?;
+        build_theme_from_resolved_tokens(resolved, None)
+    }
+}
+
+fn build_theme_from_resolved_tokens(
+    resolved: ResolvedTokens,
+    fallback: Option<&Theme>,
+) -> anyhow::Result<Theme> {
+    fn pick(name: &str, value: Option<Color>, fallback: Option<Color>) -> anyhow::Result<Color> {
+        value
+            .or(fallback)
+            .ok_or_else(|| anyhow::anyhow!("CLI theme missing required color \"{}\"", name))
+    }
+
+    let fallback_color = |select: fn(&Theme) -> Color| fallback.map(select);
+    macro_rules! pick_field {
+        ($field:ident, $name:literal) => {
+            pick($name, resolved.$field, fallback_color(|theme| theme.$field))?
+        };
+    }
+
+    Ok(Theme {
+        primary: pick_field!(primary, "primary"),
+        success: pick_field!(success, "success"),
+        warning: pick_field!(warning, "warning"),
+        error: pick_field!(error, "error"),
+        info: pick_field!(info, "info"),
+        muted: pick_field!(muted, "textMuted"),
+        background: pick_field!(background, "background"),
+        border: pick_field!(border, "border"),
+        background_panel: pick_field!(background_panel, "backgroundPanel"),
+        background_element: pick_field!(background_element, "backgroundElement"),
+        input_background: pick(
+            "inputBackground",
+            resolved.input_background.or(resolved.background_element),
+            fallback_color(|theme| theme.input_background),
+        )?,
+        diff_added_fg: pick_field!(diff_added_fg, "diffAdded"),
+        diff_removed_fg: pick_field!(diff_removed_fg, "diffRemoved"),
+        diff_added_bg: pick_field!(diff_added_bg, "diffAddedBg"),
+        diff_removed_bg: pick_field!(diff_removed_bg, "diffRemovedBg"),
+        block_bg: pick_field!(block_bg, "backgroundPanel"),
+        block_bg_hover: pick_field!(block_bg_hover, "backgroundElement"),
+        block_border_active: pick_field!(block_border_active, "borderActive"),
+        inline_icon: pick_field!(inline_icon, "accent"),
+        command_text: pick_field!(command_text, "primary"),
+        diff_hunk_header: pick_field!(diff_hunk_header, "diffHunkHeader"),
+        diff_line_number: pick_field!(diff_line_number, "diffLineNumber"),
+    })
 }
 
 fn readable_foreground_for(background: Color) -> Color {
@@ -886,7 +853,7 @@ fn resolve_opencode_theme(
     tokens.block_border_active =
         resolve_key(json, &defs, "borderActive", mode)?.or(tokens.primary.clone());
     tokens.inline_icon = resolve_key(json, &defs, "accent", mode)?.or(tokens.primary.clone());
-    tokens.command_text = resolve_key(json, &defs, "accent", mode)?.or(tokens.info.clone());
+    tokens.command_text = tokens.primary.clone();
     tokens.diff_hunk_header = resolve_key(json, &defs, "diffHunkHeader", mode)?;
     tokens.diff_line_number = resolve_key(json, &defs, "diffLineNumber", mode)?;
 
@@ -998,6 +965,125 @@ mod tests {
     }
 
     #[test]
+    fn truecolor_defaults_are_backed_by_builtin_presets() {
+        let dark = Theme::dark();
+        let light = Theme::light();
+
+        assert_eq!(dark.primary, Color::Rgb(96, 165, 250));
+        assert_eq!(dark.command_text, dark.primary);
+        assert_eq!(dark.background, Color::Rgb(14, 14, 16));
+        assert_eq!(dark.background_panel, Color::Rgb(28, 28, 31));
+        assert_eq!(dark.diff_line_number, Color::Rgb(133, 133, 133));
+        assert_eq!(light.primary, Color::Rgb(71, 85, 105));
+        assert_eq!(light.command_text, light.primary);
+        assert_eq!(light.background, Color::Rgb(243, 243, 245));
+        assert_eq!(light.background_panel, Color::Rgb(255, 255, 255));
+        assert_eq!(light.warning, Color::Rgb(154, 101, 31));
+        assert_eq!(light.diff_added_fg, Color::Rgb(63, 125, 84));
+        assert_eq!(light.diff_removed_fg, Color::Rgb(159, 68, 68));
+        assert_eq!(light.diff_line_number, Color::Rgb(100, 116, 139));
+    }
+
+    #[test]
+    fn truecolor_defaults_keep_cli_surface_contrast() {
+        let dark = Theme::dark();
+        let light = Theme::light();
+
+        for (label, fg, bg, min_ratio) in [
+            ("dark primary", dark.primary, dark.background, 4.5),
+            ("dark success", dark.success, dark.background, 4.5),
+            ("dark warning", dark.warning, dark.background, 4.5),
+            ("dark error", dark.error, dark.background, 4.5),
+            ("dark muted", dark.muted, dark.background, 4.5),
+            ("dark command", dark.command_text, dark.background, 4.5),
+            ("dark command block", dark.command_text, dark.block_bg, 4.5),
+            (
+                "dark command block hover",
+                dark.command_text,
+                dark.block_bg_hover,
+                4.5,
+            ),
+            (
+                "dark diff line number",
+                dark.diff_line_number,
+                dark.background_panel,
+                3.0,
+            ),
+            (
+                "dark diff added",
+                dark.diff_added_fg,
+                dark.diff_added_bg,
+                3.0,
+            ),
+            (
+                "dark diff removed",
+                dark.diff_removed_fg,
+                dark.diff_removed_bg,
+                3.0,
+            ),
+            ("light primary", light.primary, light.background, 4.5),
+            ("light warning", light.warning, light.background, 4.0),
+            ("light error", light.error, light.background, 3.0),
+            ("light muted", light.muted, light.background, 4.0),
+            ("light command", light.command_text, light.background, 4.0),
+            (
+                "light command block",
+                light.command_text,
+                light.block_bg,
+                4.5,
+            ),
+            (
+                "light command block hover",
+                light.command_text,
+                light.block_bg_hover,
+                4.5,
+            ),
+            (
+                "light diff line number",
+                light.diff_line_number,
+                light.background_panel,
+                4.5,
+            ),
+            (
+                "light diff added",
+                light.diff_added_fg,
+                light.diff_added_bg,
+                4.0,
+            ),
+            (
+                "light diff removed",
+                light.diff_removed_fg,
+                light.diff_removed_bg,
+                4.0,
+            ),
+        ] {
+            assert_contrast_at_least(label, fg, bg, min_ratio);
+        }
+    }
+
+    #[test]
+    fn partial_opencode_theme_json_keeps_base_theme_fallbacks() {
+        let json = serde_json::from_str::<OpencodeThemeJson>(
+            r##"{
+                "theme": {
+                    "primary": "#14b8a6"
+                }
+            }"##,
+        )
+        .unwrap();
+        let base = Theme::dark();
+        let resolved = base
+            .apply_opencode_theme_json(&json, Appearance::Dark)
+            .unwrap();
+
+        assert_eq!(resolved.primary, Color::Rgb(20, 184, 166));
+        assert_eq!(resolved.command_text, resolved.primary);
+        assert_eq!(resolved.success, base.success);
+        assert_eq!(resolved.background, base.background);
+        assert_eq!(resolved.input_background, base.input_background);
+    }
+
+    #[test]
     fn eight_digit_hex_colors_are_supported() {
         let json = serde_json::from_str::<OpencodeThemeJson>(
             r##"{
@@ -1017,5 +1103,38 @@ mod tests {
 
         assert_eq!(dark.primary, Color::Rgb(128, 128, 128));
         assert_eq!(light.primary, Color::Rgb(127, 127, 127));
+    }
+
+    fn assert_contrast_at_least(label: &str, fg: Color, bg: Color, min_ratio: f64) {
+        let ratio = contrast_ratio(fg, bg);
+        assert!(
+            ratio >= min_ratio,
+            "{label} contrast {ratio:.2} is below {min_ratio:.2}"
+        );
+    }
+
+    fn contrast_ratio(fg: Color, bg: Color) -> f64 {
+        let fg = relative_luminance(fg);
+        let bg = relative_luminance(bg);
+        let lighter = fg.max(bg);
+        let darker = fg.min(bg);
+        (lighter + 0.05) / (darker + 0.05)
+    }
+
+    fn relative_luminance(color: Color) -> f64 {
+        let (r, g, b) = match color {
+            Color::Rgb(r, g, b) => (r, g, b),
+            other => panic!("contrast test requires RGB color, got {other:?}"),
+        };
+        0.2126 * linear_rgb(r) + 0.7152 * linear_rgb(g) + 0.0722 * linear_rgb(b)
+    }
+
+    fn linear_rgb(channel: u8) -> f64 {
+        let channel = f64::from(channel) / 255.0;
+        if channel <= 0.04045 {
+            channel / 12.92
+        } else {
+            ((channel + 0.055) / 1.055).powf(2.4)
+        }
     }
 }

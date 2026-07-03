@@ -18,7 +18,7 @@
 - `src/web-ui/src/component-library/styles` 下的 token 定义。
 - `src/mobile-web` 中的独立 mobile theme preset、运行时 CSS 变量和移动端组件样式。
 - `BitFun-Installer/src` 中的安装器主题数据、运行时变量注入、静态变量和安装流程组件样式。
-- `src/apps/cli` 中的 CLI/TUI 主题 preset JSON 和 terminal fallback palette。
+- `src/apps/cli` 中的 CLI/TUI 主题 preset JSON、terminal ANSI 适配和外部主题兼容 fallback。
 - 组件 SCSS/CSS/TSX 中的硬编码颜色、fallback 色值和局部 token。
 - Rust/desktop 侧由 TS 主题预设生成的最小投影 manifest。
 - 旧 token 名称到新规范名称的兼容别名。
@@ -102,7 +102,7 @@ installer 互相误报或重复定义。
 
 CLI/TUI 是独立终端产品 surface，不属于 web-ui 主题源，也不是 desktop/backend 主题 owner。
 `src/apps/cli/themes/presets/*.json` 拥有 CLI preset 数据，`src/apps/cli/src/ui/theme.rs`
-只负责 terminal fallback palette、ANSI 转换逻辑，以及 OpenCode-compatible preset JSON 的最小解析和运行时投影，
+只负责 ANSI/monochrome 降级适配、OpenCode-compatible preset JSON 的最小解析和运行时投影，
 不拥有 web-ui `ThemeConfig`。跨 web-ui、installer、CLI 的近似色可以在语义一致且不会影响相邻状态区分时手动收敛，
 但不能通过让 Rust/CLI 复制 web-ui `ThemeConfig` 来解决；若后续需要共享，只能新增明确的 TS 生成投影或 CLI schema
 contract，并纳入审计基线。
@@ -210,15 +210,15 @@ CLI/TUI 使用独立审计，不参与 CSS var root 计数：
 | --- | ---: |
 | preset 文件数 | 6 |
 | preset 颜色出现次数 | 306 |
-| preset 唯一色数 | 118 |
+| preset 唯一色数 | 114 |
 | runtime-consumed preset 颜色出现次数 | 114 |
-| runtime-consumed preset 唯一色数 | 77 |
+| runtime-consumed preset 唯一色数 | 75 |
 | OpenCode compatibility-declared preset 颜色出现次数 | 192 |
 | OpenCode compatibility-declared preset 唯一色数 | 87 |
-| Rust fallback `Color::Rgb` 出现次数 | 44 |
-| Rust fallback 唯一色数 | 32 |
-| CLI/TUI 总唯一色数 | 148 |
-| CLI/TUI runtime 唯一色数 | 107 |
+| Rust fallback `Color::Rgb` 出现次数 | 0 |
+| Rust fallback 唯一色数 | 0 |
+| CLI/TUI 总唯一色数 | 114 |
+| CLI/TUI runtime 唯一色数 | 75 |
 | preset 需证据复核 near pair | 0 |
 | runtime-consumed preset 需证据复核 near pair | 0 |
 | OpenCode compatibility-declared preset near pair | 0 |
@@ -255,7 +255,7 @@ CLI/TUI 使用独立审计，不参与 CSS var root 计数：
 | active surface token rename occurrences | 0 | 防止旧 key 在 SCSS、CSS 或 TSX inline style 中被重新定义或读取 |
 | surface token rename missing canonical | 0 | 防止 rename registry 指向不存在的 canonical key |
 | generated widget payload key | 80 | widget iframe 对外主题变量 allowlist，作为外部边界单独预算，不计入内部 alias 读取；payload 只保留需要随宿主主题变化的 canonical 颜色、文本、surface、形状、间距、字体、动效和 button component token 子集，host 内部、静态黑白 overlay、派生 accent/status/border/radius key 或历史兼容 key 由 iframe fallback/static shell 派生 |
-| generated widget button payload | 18 | Cyber/Tokyo 等主题把 button border、shadow、transform 作为主题身份的一部分；这些 key 不能仅因 iframe static shell 存在默认值就移除，否则会让生成式 widget 内按钮失去宿主主题的高对比/发光状态。后续只有证明所有内置主题 resolved button 输出等价时才可继续缩减 |
+| generated widget button payload | 18 | Cyber/Tokyo/light 等主题把 button bg、border、shadow、transform 和 hover/active 作为主题身份与交互反馈的一部分；这些 key 不能仅因 iframe static shell 存在默认值就移除，否则会让生成式 widget 内按钮失去宿主主题视觉层级。后续只有证明所有内置主题 resolved button 输出等价时才可继续缩减 |
 | generated widget payload compatibility alias | 0 | payload 不再直接暴露 legacy alias；历史生成内容通过 iframe 内 alias fallback 读取 canonical key |
 | generated widget payload compatibility family key | 0 | payload 不直接暴露旧 `--radius-*`、`--spacing-*`；必要的 canonical 尺寸值由 payload 子集或 iframe fallback 保留 |
 | generated widget payload external-only compatibility key | 0 | payload 中已清空仅因外部兼容保留且内部产品代码不再读取的 legacy key |
@@ -271,7 +271,7 @@ CLI/TUI 使用独立审计，不参与 CSS var root 计数：
 跨 root 审计必须使用 `pnpm run theme:color-audit:all`。`theme:color-audit` 只覆盖
 `src/web-ui/src`；mobile-web 和 installer 的 raw color、fallback、dynamic family、
 unresolved key 和专用域 near pair 需要分别由 `theme:color-audit:mobile` 与
-`theme:color-audit:installer` 校验；CLI/TUI preset 与 Rust fallback palette 由
+`theme:color-audit:installer` 校验；CLI/TUI preset 与 Rust fallback contract 由
 `theme:color-audit:cli` 校验。新增 baseline 只能在债务减少时下调；不得为了让
 PR 通过而放宽 `appUi`、fallback、unresolved、non-contract 或 dynamic family 上限。
 
@@ -401,7 +401,7 @@ Phase 5 决策记录：
 | web/installer/CLI cyber deep blacks | merge | `src/web-ui/src/infrastructure/theme/presets/cyber-theme.ts`、`BitFun-Installer/src/theme/installerThemesData.ts`、`src/apps/cli/themes/presets/bitfun-cyber.json` | `#101010`、`#0d0d0d` 和旧 tooltip `rgba(16, 16, 16, 0.95)` 收敛到既有 dark primary `#0e0e10` 派生值；RGB distance <= 3.32，主题识别仍由 neon accent、surface 和 typography 表达；安装器和 CLI 同名主题同步避免跨 surface 漂移 |
 | web dark/slate/tokyo tooltip literals | derive from preset background | `src/web-ui/src/infrastructure/theme/presets/*-theme.ts` | tooltip 仍输出相同 rgba 值，但改为由对应 `BACKGROUND_SECONDARY` 常量派生，降低源字面量数量并避免相同 surface 重复手写 |
 | CLI Rust fallback near surfaces | merge within fallback palette | `src/apps/cli/src/ui/theme.rs` | fallback dark hover 复用 panel，light panel/block 复用同一浅灰，light hover 复用 element；fallback near pair 降为 0，preset 主路径和语义 key 不变 |
-| CLI color audit baseline | guardrail | `scripts/audit-cli-theme-colors.mjs`、`scripts/theme-color-governance-baseline.cli.json` | CLI/TUI preset 与 Rust fallback palette 单独计数，避免被 web-ui CSS var 审计误归类；后续只能在债务减少时下调预算 |
+| CLI color audit baseline | guardrail | `scripts/audit-cli-theme-colors.mjs`、`scripts/theme-color-governance-baseline.cli.json` | CLI/TUI preset 与 Rust fallback contract 单独计数，避免被 web-ui CSS var 审计误归类；后续只能在债务减少时下调预算 |
 | CLI preset non-adjacent near surfaces | merge within preset namespace | `src/apps/cli/themes/presets/bitfun-dark.json`、`bitfun-midnight.json`、`bitfun-tokyo-night.json` | Midnight 深色 background/panel/context、input、subtle border 和 diff gutter、dark removed diff、Tokyo added diff 复用已有终端 surface stop；preset 唯一色数 134 -> 125，总唯一色数 164 -> 155，preset near pair 20 -> 7；Cyber 相邻 element/border、diff body/gutter 和跨主题 text/background 仍保留，不按数值相近强合并 |
 | CLI dark syntax variable `#80d4ff` -> `#7dcfff` | merge | `src/apps/cli/themes/presets/bitfun-dark.json` | 同一 dark CLI syntax palette 内 function/variable 均为 cyan 高亮，RGB distance 5.83，终端语法类别仍可通过 token role 保留；合并后不影响 diff、warning/error 或背景边界 |
 | web theme preset neutral compression | merge within preset namespace | `src/web-ui/src/infrastructure/theme/presets/{china-night,china-style,cyber,dark,light,midnight,slate,tokyo-night}-theme.ts` | 跨主题深色 neutral、弱文本、非状态 scene/workbench 和低透明 accent seed 收敛到已有 stops；复审后保留 Ink Night secondary/lineHighlight、Tokyo Night primary、Slate success、light surface ramp、China paper elevated ramp、Monaco lineHighlight 和 error/warning/status 色。Theme preset 唯一色数 147 -> 121，theme preset near pair 57 -> 11 |
@@ -419,11 +419,13 @@ Phase 5 决策记录：
 | Monaco diff background strength | preserve per-layer strength | `bitfun-dark.theme.ts` | 复审后保留 inserted/removed/modified 的 text、line、gutter 背景强度阶梯；代码审查场景需要同时识别整行变更、行内片段和 gutter 定位锚点，不能只按同 change type 合并 |
 | generated widget derived payload keys | move derived keys to iframe fallback/static shell | `themePayload.ts`、`themePayloadCompatibility.ts`、`themePayload.test.ts` | accent 细分 stop、status border、strong/prominent border、strong element 和 `--size-radius-md` 不再从 host payload 读取；iframe fallback/static shell 继续解析这些派生 key，payload allowlist 94 -> 80 |
 | CLI preset/runtime near cleanup | merge non-semantic close surfaces | `src/apps/cli/themes/presets/*.json` | Dark/Ink/Midnight/Cyber 的非状态 surface、input、border 和极近前景值复用已有 preset stops；CLI preset unique 122 -> 118、total unique 152 -> 148，preset/runtime near pair 均降为 0。OpenCode compatibility 字段单独计数，不冒充 runtime 收益 |
+| generated widget button payload | preserve after adversarial review | `src/web-ui/src/tools/generative-widget/themePayload.ts`、`themePayload.test.ts` | 曾评估将 button component token 移入 iframe shell 派生，但 Cyber/Tokyo/light 等主题的 button bg、border、shadow、transform 和 hover/active 不是稳定可派生值；因此 payload 保持 80，button payload 保持 18，避免牺牲 generated widget 的主题识别和交互反馈来换取表面 key 数下降 |
+| CLI truecolor fallback palette | derive from built-in preset JSON | `src/apps/cli/src/ui/theme.rs`、`scripts/theme-color-governance-baseline.cli.json` | `Theme::dark()` / `Theme::light()` 不再手写第二套 `Color::Rgb` palette，而是解析内置 OpenCode-compatible preset；不完整外部 theme 仍回退到 base。用户可见 truecolor 默认值会跟随内置 preset：dark primary/background/panel 从 `#3b82f6/#111827/#1e2637` 到 `#60a5fa/#0e0e10/#1c1c1f`，light 从 `#2563eb/#f9fafb/#f0f2f5` 到 `#475569/#f3f3f5/#ffffff`；ANSI16/monochrome 不变。复审后补充 role 级对比 guard，并将 command prompt 改为跟随 primary，以覆盖 command card block/hover 背景；light diff added/removed、light diff line number、light warning 以及 dark diff line number 收敛到更可读的同主题既有/同义色。Rust fallback RGB 44 -> 0，fallback unique 32 -> 0，CLI total unique 148 -> 114，runtime unique 107 -> 75 |
 | mobile static overlay foreground | tokenized static color | `src/mobile-web/src/theme/presets/shared.ts`、`chat-input.scss`、`light.ts` | 图片缩略图关闭按钮必须在黑色 overlay 上保持白色前景；新增 mobile `--color-static-white` 后组件 raw `#fff` 归零，light secondary 改读该静态 token，mobile 总颜色出现次数不增加且唯一色 31 -> 30 |
 | Rust GUI theme config fallback | retire legacy schema | `src/crates/assembly/core/src/service/config/{types,manager,providers,global,service}.rs` | 删除旧顶层 GUI `theme` struct/provider/default 导出，只保留 `theme.id` -> `themes.current` 的加载、导入和旧调用路径 fallback；导入路径保留 raw config JSON 到 manager 归一化后再反序列化，避免旧 `theme.id` 被提前丢弃。Rust 不再拥有完整 UI theme schema，终端 `terminal.theme` 仍作为 ANSI palette 历史字段保留 |
 | web theme preset near cleanup | merge non-critical preset surfaces | `src/web-ui/src/infrastructure/theme/presets/{china-style,light,slate,tokyo-night}-theme.ts` | Light quaternary 复用浅灰背景、Slate button text 复用 primary text、China Style elevated 复用 tertiary、Tokyo border 复用既有深 slate；产品复审后保留 Ink Night secondary，因为它也承担 Monaco lineHighlight 和相邻 ink surface 层级。Theme preset unique 119 -> 116，near pair 9 -> 5 |
 | installer dark preview background cleanup | preserve adjacent theme-card identity | `BitFun-Installer/src/theme/installerThemesData.ts` | 产品复审确认 ThemeSetup 会相邻展示主题卡并直接渲染 primary/secondary background，因此 Ink Night/Cyber/Tokyo Night primary 属于用户可见主题识别，不再合并。Installer theme preset unique 保持 53，near pair 保持 3；后续若要继续压缩，需要先新增非背景 identity swatch 或截图证明不会削弱选择识别。 |
-| CLI warm removed surface | defer | `src/apps/cli/themes/presets/*.json`、`src/apps/cli/src/ui/theme.rs` | 复审发现 `diffRemovedLineNumberBg` 当前未被 CLI renderer 消费，因此不把该类 preset 字段当作真实渲染收益压 baseline；本轮撤回 CLI preset 改动，后续应先明确 schema 消费边界再压缩 |
+| CLI truecolor readable role cleanup | merge consumed visible roles | `src/apps/cli/themes/presets/bitfun-{dark,light}.json`、`src/apps/cli/src/ui/theme.rs` | 只处理 CLI renderer 当前消费的 foreground role：light diff added/removed 复用同主题 highlight 色，light diff line number 复用 textMuted，light warning/markdownEmph/syntaxNumber 共用更深 amber seed，dark diff line number 复用 textMuted；不处理未消费的 `diff*LineNumberBg` 兼容字段。preset unique 118 -> 114，runtime preset unique 77 -> 75，并用 role contrast 单测覆盖 diff、warning、muted、command 和 line-number 表面 |
 | remaining near pairs | none in ordinary components | 无 | 审计口径下普通组件 near pair 已清零；后续只在专用 palette 自身重设计时处理 Monaco/terminal/Mermaid/syntax 内部近似色 |
 | Monaco theme palette | classify as exception | `tools/editor/themes/bitfun-dark.theme.ts` | 该文件是 Monaco theme 完整色板，不是普通 app UI；归入 editor/exception 后不再被误计为 component raw color |
 | Flow Chat capture fallback | boundary fallback | `ExportImageButton.tsx`、`captureElementToDownloadsPng.tsx` -> `themeBoundaryFallbacks.ts` | `#121214` 只在 root theme 变量不可用时兜底截图背景，集中 owner 后避免截图工具重复携带 raw fallback |
@@ -458,7 +460,7 @@ Phase 6 防回退约束：
 | `surfaceTokenRenames.activeOccurrences` | 0 | 0 | 防止旧 key 在定义和读取两侧回流 |
 | `surfaceTokenRenames.missingCanonicalUnique` | 0 | 0 | 防止 surface rename contract 指向不存在的 canonical key |
 | `generatedWidgetPayload.varUnique` | 80 | 80 | 控制 widget 对外主题 payload allowlist 不继续膨胀；该预算只覆盖主题敏感 canonical 子集和 button component 投影，宿主内部、静态 overlay、派生 key 和历史兼容 key 不计入 payload API |
-| generated widget button payload | 18 | 18 | Cyber/Tokyo 按钮 border/shadow/transform 不是低风险静态 key；除非 resolved button 输出等价，否则不从 host payload 移入 iframe shell |
+| generated widget button payload | 18 | 18 | Cyber/Tokyo/light 的 button bg、border、shadow、transform 和交互态不是低风险静态 key；除非 resolved button 输出等价，否则不从 host payload 移入 iframe shell |
 | `generatedWidgetPayload.compatibilityAliasUnique` | 0 | 0 | 防止 payload 重新直接导出显式 legacy alias |
 | `generatedWidgetPayload.compatibilityAliasFamilyUnique` | 0 | 0 | 防止 payload 重新直接导出 legacy size family 具体 key |
 | `generatedWidgetPayload.externalOnlyCompatibilityUnique` | 0 | 0 | 防止 payload 重新保留仅因外部兼容存在的 legacy key |
@@ -469,9 +471,9 @@ Phase 6 防回退约束：
 | `mobile-web` dynamic families | 3 | 3 | `--color-accent-*`、`--color-purple-*`、`--color-pink-*` 由 mobile preset 拥有 |
 | `installer` app UI raw color | 0 | 0 | 安装器组件不得携带 raw app color |
 | `installer` dynamic families | 1 | 1 | 安装器只导出实际消费的 accent family；secondary purple family 不再作为安装器扩展面 |
-| `cli` total unique colors | 148 | 148 | 控制 CLI/TUI preset 和 Rust fallback palette 不继续膨胀 |
-| `cli` runtime unique colors | 107 | 107 | 只统计 BitFun CLI renderer 当前消费的 preset key 加 Rust fallback palette，避免 OpenCode 兼容声明误导实际运行时预算 |
-| `cli` runtime preset unique colors | 77 | 77 | 控制 CLI 当前消费的 preset key，不包含 markdown/syntax/diff line-number background 等未消费兼容字段 |
+| `cli` total unique colors | 114 | 114 | 控制 CLI/TUI preset 不继续膨胀；truecolor fallback 已由内置 preset JSON 派生，不再维护独立 Rust RGB palette |
+| `cli` runtime unique colors | 75 | 75 | 只统计 BitFun CLI renderer 当前消费的 preset key；OpenCode 兼容声明和 legacy fallback 不冒充实际运行时预算 |
+| `cli` runtime preset unique colors | 75 | 75 | 控制 CLI 当前消费的 preset key，不包含 markdown/syntax/diff line-number background 等未消费兼容字段 |
 | `cli` compatibility preset unique colors | 87 | 87 | 单独约束 OpenCode schema 兼容声明；该口径不能冒充 BitFun CLI 运行时收益 |
 | `cli` preset near pairs | 0 | 0 | 阻止 CLI preset 重新引入未解释的近似色；OpenCode compatibility 字段仍单独审计 |
 | `cli` runtime preset near pairs | 0 | 0 | 阻止当前 renderer 消费路径重新引入近似色；后续压缩需先确认终端相邻状态和 diff 语义不会被削弱 |
@@ -1120,12 +1122,12 @@ alpha 差异经常承担 elevation 和交互状态，不应全部压成一个值
    或完整 runtime CSS var 表作为插件主题 schema。
 3. 专用域近似色复核：mobile-web theme preset near pair 已清零；installer 保留 3 个相邻主题卡可见的 named dark primary preview pair；web-ui 已先处理不可感知的跨主题 neutral、tooltip 派生、runtime/static panel 值、极近 overlay fallback，以及 theme preset 的非状态 neutral/弱文本/scene/workbench 值。
    后续继续处理 theme preset 时必须避开按钮 hover/active、Tokyo Night 主题识别主背景、Ink Night secondary/lineHighlight、Monaco lineHighlight、Midnight lineHighlight/elevation、Mermaid、terminal、syntax 等相邻状态色，除非有截图证据证明不会损害层级。
-4. CLI/TUI palette 压缩：CLI/TUI 已纳入 `theme:color-audit:cli`，Rust fallback、preset 和 runtime-consumed preset near pair 均为 0；后续只处理 preset 内能证明同一终端 surface 语义且已被 CLI renderer 消费的近似色，
+4. CLI/TUI palette 压缩：CLI/TUI 已纳入 `theme:color-audit:cli`，truecolor fallback 由内置 preset JSON 派生，Rust 不再手写独立 RGB palette；Rust fallback、preset 和 runtime-consumed preset near pair 均为 0。后续只处理 preset 内能证明同一终端 surface 语义且已被 CLI renderer 消费的近似色，
    不能让 Rust/CLI 复制 web-ui palette。若要跨 surface 共享，只能先定义共享语义投影或生成链路。
 5. 自定义主题扩展后续体验优化：custom theme 校验、加载、注册、导出和 preview 输入已绑定到 TS schema；
    如需继续改善首屏体验，只允许由 TS schema 生成最小 bootstrap cache，不允许 Rust 直接拥有 custom theme schema。
 6. generated widget 兼容面维护：payload 已停止导出 `background/bg/text/radius/spacing` legacy key、静态黑白 overlay 转发、派生 accent/status/border/radius key 和已归并的
-   `--color-overlay-white-02`、`--color-overlay-white-05`、`--color-overlay-white-06`、`--color-overlay-white-10`、`--color-overlay-black-06`、`--color-overlay-black-10`、`--color-overlay-black-25`；历史内容兼容通过 iframe alias fallback 保留。后续新增 widget token 必须先导出 canonical，
+   `--color-overlay-white-02`、`--color-overlay-white-05`、`--color-overlay-white-06`、`--color-overlay-white-10`、`--color-overlay-black-06`、`--color-overlay-black-10`、`--color-overlay-black-25`；resolved button component token 因承载主题身份和交互反馈继续保留。历史内容兼容通过 iframe alias fallback 保留。后续新增 widget token 必须先导出 canonical，
    再评估是否需要 iframe-only alias。
 
 每个 PR 应包含范围、影响 surface、before/after 指标、命中的 visual governance surface、

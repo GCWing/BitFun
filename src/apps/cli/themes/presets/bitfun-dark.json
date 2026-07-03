@@ -26,7 +26,7 @@
     "diffAddedBg": "#12352d",
     "diffRemovedBg": "#3e221c",
     "diffContextBg": "#1c1c1f",
-    "diffLineNumber": "#66666d",
+    "diffLineNumber": "#858585",
     "diffAddedLineNumberBg": "#1b3328",
     "diffRemovedLineNumberBg": "#432329",
     "markdownText": "#e7ecf3",
