@@ -14,6 +14,7 @@ pub mod input_validator;
 pub mod mcp_tool_bridge;
 pub mod tool_execution_presentation;
 pub mod tool_result_storage;
+pub mod tool_snapshot;
 
 pub use acp_tool_bridge::{
     acp_external_agent_tool_input_schema, build_acp_external_agent_tool_definition,
@@ -106,4 +107,9 @@ pub use tool_result_storage::{
     tool_result_is_persisted_output, PersistedToolOutput, ToolResultPersistenceCandidate,
     ToolResultStoragePolicy, DEFAULT_MAX_TOOL_RESULT_CHARS, MAX_TOOL_RESULTS_PER_ROUND_CHARS,
     PERSISTED_OUTPUT_CLOSING_TAG, PERSISTED_OUTPUT_TAG, TOOL_RESULT_PREVIEW_CHARS,
+};
+pub use tool_snapshot::{
+    materialize_tool_snapshot, MaterializedToolSnapshot, ToolCallSnapshotGuard,
+    ToolCancellationContract, ToolEffectFacts, ToolEffectFactsSource, ToolEffectFilter,
+    ToolProviderIdentity, ToolSnapshotCallError, ToolSnapshotItem,
 };

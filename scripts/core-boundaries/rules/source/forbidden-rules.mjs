@@ -19,6 +19,11 @@ export const forbiddenContentRules = [
         message:
           'WebSocket transport adapter must not match agentic event variants directly; use bitfun-events frontend projection',
       },
+      {
+        regex: /\bfn\s+is_legacy_websocket_agentic_event_type\b/,
+        message:
+          'WebSocket transport adapter must not own the agentic event allowlist; use bitfun-events event manifest',
+      },
     ],
   },
   {

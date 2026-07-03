@@ -65,9 +65,9 @@ use bitfun_agent_tools::{
     materialize_static_tool_provider_groups, ContextualToolManifestItem, DynamicToolDescriptor,
     DynamicToolProvider, GetToolSpecCatalogProvider, PortResult, PortableToolContextProvider,
     StaticToolMaterializationError, StaticToolProvider, StaticToolProviderFactory,
-    StaticToolProviderGroup, StaticToolProviderPlan, ToolCatalogRuntime,
-    ToolCatalogSnapshotProvider, ToolDecorator, ToolDecoratorRef, ToolRegistry, ToolRegistryItem,
-    ToolRuntimeAssembly,
+    StaticToolProviderGroup, StaticToolProviderPlan, ToolCallSnapshotGuard, ToolCatalogRuntime,
+    ToolCatalogSnapshotProvider, ToolDecorator, ToolDecoratorRef, ToolEffectFactsSource,
+    ToolEffectFilter, ToolRegistry, ToolRegistryItem, ToolRuntimeAssembly, ToolSnapshotCallError,
 };
 use serde_json::json;
 use std::path::PathBuf;
@@ -1825,6 +1825,10 @@ struct RegistryMarkerTool {
     enabled: bool,
 }
 
+struct StaticToolWithFailingDescription;
+
+struct InputSensitiveEffectTool;
+
 #[async_trait::async_trait]
 impl ToolRegistryItem for RegistryMarkerTool {
     fn name(&self) -> &str {
@@ -1863,6 +1867,65 @@ impl ToolRegistryItem for RegistryMarkerTool {
                 provider_kind: None,
                 mcp: None,
             })
+    }
+}
+
+#[async_trait::async_trait]
+impl ToolRegistryItem for StaticToolWithFailingDescription {
+    fn name(&self) -> &str {
+        "static_failing_description"
+    }
+
+    async fn description(&self) -> Result<String, String> {
+        Err("static description should not be materialized".to_string())
+    }
+
+    fn input_schema(&self) -> serde_json::Value {
+        json!({ "type": "object" })
+    }
+}
+
+#[async_trait::async_trait]
+impl ToolRegistryItem for InputSensitiveEffectTool {
+    fn name(&self) -> &str {
+        "input_sensitive"
+    }
+
+    async fn description(&self) -> Result<String, String> {
+        Ok("input-sensitive effect tool".to_string())
+    }
+
+    fn input_schema(&self) -> serde_json::Value {
+        json!({
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string"
+                }
+            }
+        })
+    }
+
+    fn is_readonly(&self) -> bool {
+        false
+    }
+
+    fn needs_permissions(&self, input: Option<&serde_json::Value>) -> bool {
+        !matches!(
+            input
+                .and_then(|value| value.get("action"))
+                .and_then(serde_json::Value::as_str),
+            Some("status")
+        )
+    }
+
+    fn is_concurrency_safe(&self, input: Option<&serde_json::Value>) -> bool {
+        matches!(
+            input
+                .and_then(|value| value.get("action"))
+                .and_then(serde_json::Value::as_str),
+            Some("status")
+        )
     }
 }
 
@@ -2985,6 +3048,170 @@ async fn generic_tool_registry_preserves_dynamic_descriptor_contract() {
     );
     assert_eq!(descriptors[0].description, "marker tool");
     assert_eq!(descriptors[0].input_schema, json!({ "type": "object" }));
+}
+
+#[tokio::test]
+async fn generic_tool_registry_dynamic_listing_does_not_materialize_static_tools() {
+    let mut registry: ToolRegistry<dyn ToolRegistryItem> = ToolRegistry::new();
+    registry.register_tool(registry_marker_tool("external_search", Some("provider-a")));
+    registry.register_tool(Arc::new(StaticToolWithFailingDescription));
+
+    let descriptors = registry
+        .list_dynamic_tools()
+        .await
+        .expect("list dynamic tools");
+
+    assert_eq!(descriptors.len(), 1);
+    assert_eq!(descriptors[0].name, "external_search");
+}
+
+#[tokio::test]
+async fn generic_tool_registry_materializes_provider_effect_and_stale_call_contract() {
+    let mut registry = ToolRegistry::new();
+    registry.register_tool(registry_marker_tool_with_access(
+        "external_search",
+        Some("provider-a"),
+        ToolExposure::Collapsed,
+        true,
+        true,
+    ));
+    registry.register_tool(registry_marker_tool_with_access(
+        "write_file",
+        None,
+        ToolExposure::Expanded,
+        false,
+        true,
+    ));
+
+    let snapshot = registry
+        .materialized_tool_snapshot()
+        .await
+        .expect("materialize registry snapshot");
+
+    assert_eq!(snapshot.generation, registry.current_snapshot_generation());
+    assert_eq!(
+        snapshot
+            .tool("external_search")
+            .expect("external tool")
+            .provider
+            .provider_id
+            .as_deref(),
+        Some("provider-a")
+    );
+    assert_eq!(
+        snapshot
+            .tool("external_search")
+            .expect("external tool")
+            .exposure,
+        ToolExposure::Collapsed
+    );
+    assert!(
+        snapshot
+            .tool("external_search")
+            .expect("external tool")
+            .effects
+            .readonly_by_default
+    );
+    assert!(
+        !snapshot
+            .tool("write_file")
+            .expect("write tool")
+            .effects
+            .readonly_by_default
+    );
+
+    let readonly_names = snapshot
+        .filter_tools_by_default_effects(ToolEffectFilter::readonly_only())
+        .into_iter()
+        .map(|tool| tool.name.as_str())
+        .collect::<Vec<_>>();
+    assert_eq!(readonly_names, vec!["external_search"]);
+
+    let guard = ToolCallSnapshotGuard::new("external_search", snapshot.generation);
+    assert!(snapshot.validate_call(&guard).is_ok());
+
+    registry.unregister_tools_by_prefix("external_");
+    let current_snapshot = registry
+        .materialized_tool_snapshot()
+        .await
+        .expect("materialize current snapshot");
+    assert_eq!(
+        current_snapshot.validate_call(&guard),
+        Err(ToolSnapshotCallError::StaleSnapshot {
+            tool_name: "external_search".to_string(),
+            expected_generation: current_snapshot.generation,
+            actual_generation: snapshot.generation,
+        })
+    );
+}
+
+#[tokio::test]
+async fn generic_tool_registry_snapshot_preserves_static_provider_identity_after_decoration() {
+    let mut registry = ToolRegistry::with_tool_decorator(Arc::new(RegistryMarkerDecorator));
+    let provider = RegistryMarkerProvider {
+        provider_id: "core.basic",
+        tools: vec![registry_marker_tool("Read", None)],
+    };
+
+    registry.install_static_provider(&provider);
+
+    let snapshot = registry
+        .materialized_tool_snapshot()
+        .await
+        .expect("materialize registry snapshot");
+    let tool = snapshot.tool("decorated_Read").expect("decorated tool");
+
+    assert_eq!(tool.provider.provider_id.as_deref(), Some("core.basic"));
+    assert_eq!(tool.provider.provider_kind.as_deref(), Some("static"));
+    assert!(tool.provider.is_static());
+    assert!(snapshot.dynamic_tools().is_empty());
+}
+
+#[tokio::test]
+async fn generic_tool_registry_snapshot_labels_effects_as_no_input_defaults() {
+    let mut registry: ToolRegistry<dyn ToolRegistryItem> = ToolRegistry::new();
+    let tool = Arc::new(InputSensitiveEffectTool);
+    assert!(!tool.needs_permissions(Some(&json!({ "action": "status" }))));
+    assert!(tool.is_concurrency_safe(Some(&json!({ "action": "status" }))));
+
+    registry.register_tool(tool);
+
+    let snapshot = registry
+        .materialized_tool_snapshot()
+        .await
+        .expect("materialize registry snapshot");
+    let tool = snapshot
+        .tool("input_sensitive")
+        .expect("input-sensitive tool");
+
+    assert_eq!(tool.effects.source, ToolEffectFactsSource::NoInputDefault);
+    assert!(!tool.effects.readonly_by_default);
+    assert!(tool.effects.needs_permissions_by_default);
+    assert!(!tool.effects.concurrency_safe_by_default);
+}
+
+#[tokio::test]
+async fn generic_tool_registry_snapshot_treats_blank_provider_id_as_builtin() {
+    let mut registry = ToolRegistry::new();
+    registry.register_tool(registry_marker_tool("blank_provider", Some(" ")));
+
+    let snapshot = registry
+        .materialized_tool_snapshot()
+        .await
+        .expect("materialize registry snapshot");
+    let tool = snapshot
+        .tool("blank_provider")
+        .expect("blank provider tool");
+
+    assert_eq!(tool.provider.provider_id, None);
+    assert_eq!(tool.provider.provider_kind.as_deref(), Some("builtin"));
+    assert_eq!(tool.dynamic_info, None);
+    assert!(snapshot.dynamic_tools().is_empty());
+    assert!(registry
+        .list_dynamic_tools()
+        .await
+        .expect("list dynamic tools")
+        .is_empty());
 }
 
 #[tokio::test]

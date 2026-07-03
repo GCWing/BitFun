@@ -33,6 +33,29 @@ export const requiredContentRules = [
     ],
   },
   {
+    path: 'src/crates/contracts/events/src/agentic_projection_manifest.rs',
+    reason:
+      'events contract must own the public AgenticEvent projection manifest, event versions, aggregate classification, and legacy transport allowlist',
+    patterns: [
+      {
+        regex: /\bpub const AGENTIC_EVENT_PROJECTION_MANIFEST\b/,
+        message: 'missing public AgenticEvent projection manifest',
+      },
+      {
+        regex: /\bpub fn public_agentic_event_projection_manifest\b/,
+        message: 'missing public AgenticEvent projection manifest accessor',
+      },
+      {
+        regex: /\bpub fn is_legacy_websocket_agentic_event_type\b/,
+        message: 'missing manifest-owned legacy WebSocket event allowlist helper',
+      },
+      {
+        regex: /\bpublic_event_projection_manifest_describes_projected_events_and_websocket_allowlist\b/,
+        message: 'missing public projection manifest regression test',
+      },
+    ],
+  },
+  {
     path: 'src/crates/adapters/transport/src/adapters/tauri.rs',
     reason:
       'Tauri transport adapter must only deliver projected events and must not own agentic event field mapping',
@@ -6707,6 +6730,10 @@ export const requiredContentRules = [
         message: 'missing generic runtime assembly contract',
       },
       {
+        regex: /\bpub async fn materialized_tool_snapshot\b/,
+        message: 'missing registry materialized snapshot accessor',
+      },
+      {
         regex: /\bpub type ToolDecoratorRef\b/,
         message: 'missing generic decorator ref contract',
       },
@@ -6765,6 +6792,45 @@ export const requiredContentRules = [
       {
         regex: /\bpub struct GetToolSpecRuntime\b/,
         message: 'missing provider-backed GetToolSpec runtime facade',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/execution/tool-contracts/src/tool_snapshot.rs',
+    reason:
+      'agent-tools must own materialized tool snapshots, provider identity, effect facts, cancellation facts, and stale-call guards',
+    patterns: [
+      {
+        regex: /\bpub struct MaterializedToolSnapshot\b/,
+        message: 'missing materialized tool snapshot contract',
+      },
+      {
+        regex: /\bpub struct ToolProviderIdentity\b/,
+        message: 'missing provider-neutral tool identity contract',
+      },
+      {
+        regex: /\bpub struct ToolEffectFacts\b/,
+        message: 'missing provider-neutral tool effect facts contract',
+      },
+      {
+        regex: /\bpub enum ToolEffectFactsSource\b/,
+        message: 'missing tool effect facts source contract',
+      },
+      {
+        regex: /\bpub struct ToolEffectFilter\b/,
+        message: 'missing provider-neutral tool effect filter contract',
+      },
+      {
+        regex: /\bpub struct ToolCallSnapshotGuard\b/,
+        message: 'missing stale-call snapshot guard contract',
+      },
+      {
+        regex: /\bpub enum ToolSnapshotCallError\b/,
+        message: 'missing stale-call snapshot error contract',
+      },
+      {
+        regex: /\bpub async fn materialize_tool_snapshot\b/,
+        message: 'missing materialized tool snapshot builder',
       },
     ],
   },

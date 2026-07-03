@@ -5,7 +5,9 @@
 /// event set to text messages.
 use crate::traits::{TextChunk, ToolEventPayload, TransportAdapter};
 use async_trait::async_trait;
-use bitfun_events::{project_agentic_frontend_event, AgenticEvent};
+use bitfun_events::{
+    is_legacy_websocket_agentic_event_type, project_agentic_frontend_event, AgenticEvent,
+};
 use serde_json::json;
 use std::fmt;
 use tokio::sync::mpsc;
@@ -42,24 +44,6 @@ impl fmt::Debug for WebSocketTransportAdapter {
             .field("adapter_type", &"websocket")
             .finish()
     }
-}
-
-fn is_legacy_websocket_agentic_event_type(event_type: &str) -> bool {
-    matches!(
-        event_type,
-        "image-analysis-started"
-            | "image-analysis-completed"
-            | "dialog-turn-started"
-            | "subagent-session-linked"
-            | "model-round-started"
-            | "text-chunk"
-            | "tool-event"
-            | "token-usage-updated"
-            | "model-round-completed"
-            | "dialog-turn-completed"
-            | "deep-review-queue-state-changed"
-            | "thread-goal-updated"
-    )
 }
 
 #[async_trait]

@@ -1221,6 +1221,15 @@ export function runManifestParserSelfTest({
       ],
     },
     {
+      path: 'src/crates/contracts/events/src/agentic_projection_manifest.rs',
+      contracts: [
+        'AGENTIC_EVENT_PROJECTION_MANIFEST',
+        'public_agentic_event_projection_manifest',
+        'is_legacy_websocket_agentic_event_type',
+        'public_event_projection_manifest_describes_projected_events_and_websocket_allowlist',
+      ],
+    },
+    {
       path: 'src/crates/adapters/transport/src/adapters/tauri.rs',
       contracts: ['project_agentic_frontend_event', 'projected.event_name.as_str()'],
     },
@@ -2630,6 +2639,7 @@ export function runManifestParserSelfTest({
         'StaticToolMaterializationError',
         'materialize_static_tool_provider_groups',
         'ToolRuntimeAssembly',
+        'materialized_tool_snapshot',
         'create_registry_from_static_provider_plans',
         'create_registry_from_static_provider_entries',
         'ToolCatalogRuntime',
@@ -2648,6 +2658,19 @@ export function runManifestParserSelfTest({
         'resolve_get_tool_spec_execution_result_from_provider',
         'GetToolSpecRuntime',
         'call_results',
+      ],
+    },
+    {
+      path: 'src/crates/execution/tool-contracts/src/tool_snapshot.rs',
+      contracts: [
+        'MaterializedToolSnapshot',
+        'ToolProviderIdentity',
+        'ToolEffectFacts',
+        'ToolEffectFactsSource',
+        'ToolEffectFilter',
+        'ToolCallSnapshotGuard',
+        'ToolSnapshotCallError',
+        'materialize_tool_snapshot',
       ],
     },
     {

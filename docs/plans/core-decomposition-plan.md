@@ -22,7 +22,8 @@
 - workspace 已按六层物理目录展开：`interfaces -> assembly -> adapters -> services -> execution -> contracts`。
 - Runtime Services、Agent Runtime、Tool Contracts、Tool Execution、Harness、Product Domains、Services Core、Services Integrations 等 owner crate 已建立。
 - `bitfun-core --no-default-features` 已裁掉多批 concrete provider 和 direct provider 依赖；Desktop、CLI、ACP 仍通过 `bitfun-core/product-full` 获取完整产品能力。
-- Agentic frontend event projection 已进入 `bitfun-events`；Tauri/WebSocket transport 不再内联事件字段映射。
+- Agentic frontend event projection 和 AgenticEvent projection manifest 已进入 `bitfun-events`；Tauri/WebSocket transport 不再内联事件字段映射或 legacy event allowlist。
+- Tool ABI 基础合同已进入 `tool-contracts`：materialized snapshot、provider identity、default permission/effect filter、cancellation contract 和 stale-call guard 由 owner crate 提供，core 只投射现有产品 Tool 元数据。
 - Terminal / ExecCommand、remote SSH concrete execution、workspace search、debug ingest、AI provider adapter runtime、browser CDP、WebFetch/WebSearch、review platform transport 等多批 owner 已迁出或收口到 port/provider。
 - Boundary scripts 已覆盖核心 owner 防回流、six-layer path 解析、facade-only 文件、custom agent owner / custom subagent wrapper 保护和重点 feature gate。
 
@@ -30,8 +31,6 @@
 
 | 差距 | 影响 | 收敛要求 |
 |---|---|---|
-| Public API 面仍有 preview、compatibility 和内部导出混用 | SDK、插件和产品入口可能误依赖旧路径 | 标记 stable/workspace-internal/compatibility，删除或封闭旧 core public path |
-| Tool ABI、Event Manifest、Permission/Effect 仍未完全成为插件可消费合同 | built-in、MCP、ACP、plugin tool 语义可能分裂 | 建立 materialized snapshot、provider identity、stale guard、public event manifest |
 | Plugin Runtime Host 仍是设计合同，未形成主进程窄接口和 disabled/projection stub | 主体进程可能继续感知具体 adapter 或运行单元 | 落地 `PluginRuntimeClient`、binding、capability matrix 和 Host facade 白名单 |
 | UI Extension Contract 与产品形态矩阵仍需实现 | Desktop/Web/CLI/SDK/ACP 的插件 UI 行为可能不一致 | 建立 descriptor round-trip、fallback、unsupported/unavailable 和只读 state view |
 | OpenCode compatibility adapter 仍缺少真实消费路径 | OpenCode 插件能力无法受控进入 BitFun | 先支持 discovery/read-only，再逐步开放 tool provider 和 UI contribution |
@@ -39,39 +38,6 @@
 | SDK readiness 仍未闭环 | 独立 Agent Runtime SDK 可能牵引 product-full 或 concrete provider | fake-provider smoke、minimal feature、cargo tree/metadata 对比和 API version 保护 |
 
 ## 4. 后续大型阶段
-
-### Stage A：Public API Closure 与 Core Facade 缩面
-
-目标：冻结可对外承诺的 API 面，阻止新功能继续绑定旧 core 路径。
-
-范围：
-
-- 梳理 `bitfun-core`、`bitfun-agent-runtime`、`bitfun-runtime-ports`、`bitfun-agent-tools`、`bitfun-runtime-services` 的 public surface。
-- 将导出标为 stable external、workspace-internal、compatibility 三类。
-- 收敛 `bitfun-core::agentic::*`、`bitfun-core::service::*` 等新调用方路径。
-- 将 Agent Runtime SDK-facing facade 与内部模块导出分开。
-- 对仍需保留的 compatibility re-export 增加 owner 注释和 boundary guard。
-
-准出：
-
-- 至少删除、迁移或显著简化一组旧 core public path。
-- `cargo check -p bitfun-core --no-default-features`、`cargo test -p bitfun-agent-runtime`、boundary self-test 和 `git diff --check` 通过。
-
-### Stage B：Tool ABI、Event Manifest 与 Security Control Plane
-
-目标：让 built-in tool、MCP tool、ACP external tool、plugin tool 和 hook 使用同一能力/效果语义。
-
-范围：
-
-- 建立 materialized tool snapshot、provider identity、permission/effect filter、stale call guard 和 cancellation contract。
-- 建立 public event manifest、event version、aggregate identity、replay/retention 和 UI projection contract。
-- 将 collapsed tool、MiniApp headless restriction、delegation restriction 等产品策略改为 decorator / policy provider。
-- 收敛 core 中的 tool manifest、tool result presentation 和部分产品文案旧路径。
-
-准出：
-
-- prompt-visible manifest、`GetToolSpec`、expanded/collapsed exposure、MCP/ACP catalog、remote/local path containment 和 public event projection 行为等价。
-- tool、MCP/ACP、event manifest、product-full 和 boundary focused checks 通过。
 
 ### Stage C：Plugin Runtime Host Foundation
 
