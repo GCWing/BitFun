@@ -108,7 +108,7 @@
       "max": 205
     },
     "colorScopes.exception.uniqueColors": {
-      "max": 229
+      "max": 190
     },
     "cssVarDefinitions.unresolvedRequiredUnique": {
       "max": 0
@@ -267,7 +267,7 @@
       "max": 52
     },
     "colorDomainScopes.syntax.occurrences": {
-      "max": 18
+      "max": 16
     },
     "colorDomainScopes.terminal.occurrences": {
       "max": 37
@@ -282,10 +282,10 @@
       "max": 17
     },
     "colorDomainScopes.languageIdentity.occurrences": {
-      "max": 52
+      "max": 8
     },
     "colorDomainScopes.languageIdentity.uniqueColors": {
-      "max": 50
+      "max": 8
     },
     "colorDomainScopes.visualEffect.occurrences": {
       "max": 0
