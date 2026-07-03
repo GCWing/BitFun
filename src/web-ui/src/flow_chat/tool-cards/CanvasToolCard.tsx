@@ -2,6 +2,7 @@ import React, { useCallback, useMemo } from 'react';
 import { AlertTriangle, Paintbrush, PanelRightOpen } from 'lucide-react';
 import type { ToolCardProps } from '../types/flow-chat';
 import { BaseToolCard, ToolCardHeader } from './BaseToolCard';
+import { getToolCardConfig } from './toolCardMetadata';
 import { flowChatStore } from '../store/FlowChatStore';
 import { createTab } from '@/shared/utils/tabUtils';
 import { createLogger } from '@/shared/utils/logger';
@@ -66,6 +67,7 @@ function canvasTitle(result: CanvasToolResult | null, fallback: unknown): string
 
 export const CanvasToolCard: React.FC<ToolCardProps> = ({ toolItem, sessionId }) => {
   const { status, toolCall, toolResult } = toolItem;
+  const toolDisplayName = getToolCardConfig(toolItem.toolName).displayName;
   const resultData = useMemo(() => parseCanvasResult(toolResult?.result), [toolResult?.result]);
   const title = useMemo(() => canvasTitle(resultData, toolCall?.input), [resultData, toolCall?.input]);
   const diagnostics = useMemo(
@@ -156,7 +158,7 @@ export const CanvasToolCard: React.FC<ToolCardProps> = ({ toolItem, sessionId })
     <ToolCardHeader
       icon={<Paintbrush size={16} />}
       iconClassName="canvas-tool-card__icon"
-      action="Canvas"
+      action={toolDisplayName}
       content={<span className="canvas-tool-card__title">{title}</span>}
       extra={(
         <div className="canvas-tool-card__extra">
