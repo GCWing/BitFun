@@ -21,6 +21,7 @@ serde_json = { workspace = true }
 # Internal crates
 bitfun-core = { path = "../../crates/assembly/core", default-features = false, features = ["product-full"] }
 bitfun-product-domains = { path = "../../crates/contracts/product-domains", default-features = false }
+bitfun-services-integrations = { path = "../../crates/services/services-integrations", default-features = false, features = ["canvas-runtime"] }
 bitfun-agent-tools = { path = "../../crates/execution/tool-contracts" }
 bitfun-transport = { path = "../../crates/adapters/transport", features = ["tauri-adapter"] }
 bitfun-webdriver = { path = "../../crates/adapters/webdriver" }

@@ -1,6 +1,9 @@
-use crate::canvas::types::{
-    CanvasArtifact, CanvasCompiledPayload, CanvasDiagnostic, CanvasId, CanvasSessionId,
-    CanvasSnapshot, CanvasSource, CanvasState,
+use crate::canvas::{
+    runtime::CanvasCompileResult,
+    types::{
+        CanvasArtifact, CanvasCompiledPayload, CanvasDiagnostic, CanvasId, CanvasSessionId,
+        CanvasSnapshot, CanvasSource, CanvasState,
+    },
 };
 use serde::{Deserialize, Serialize};
 use std::future::Future;
@@ -62,6 +65,13 @@ pub trait CanvasStoragePort: Send + Sync {
         &self,
         session_id: CanvasSessionId,
     ) -> CanvasPortFuture<'_, Vec<CanvasArtifact>>;
+
+    fn compile_latest(
+        &self,
+        session_id: CanvasSessionId,
+        canvas_id: CanvasId,
+        compiled_at: i64,
+    ) -> CanvasPortFuture<'_, CanvasCompileResult>;
 
     fn save_compiled_payload(
         &self,

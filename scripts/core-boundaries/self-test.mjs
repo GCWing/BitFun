@@ -3014,6 +3014,8 @@ export function runManifestParserSelfTest({
         'bitfun-product-domains = \\{ path = "\\.\\.\\/\\.\\.\\/contracts\\/product-domains", default-features = false, optional = true \\}',
         'dep:bitfun-ai-adapters',
         'ai-adapter-runtime',
+        'canvas-runtime',
+        'bitfun-services-integrations\\/canvas-runtime',
         'bitfun-services-integrations\\/function-agents',
         'bitfun-services-integrations\\/miniapp-runtime',
         'dep:bitfun-product-capabilities',

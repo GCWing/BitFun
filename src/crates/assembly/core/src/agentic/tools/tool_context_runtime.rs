@@ -37,7 +37,11 @@ use bitfun_agent_runtime::checkpoint::{
 };
 use bitfun_agent_runtime::remote_file_delivery::TOOL_CONTEXT_REMOTE_FILE_DELIVERY_KEY;
 use bitfun_agent_tools::{PortableToolContextProvider, ToolContextFacts, ToolWorkspaceKind};
+#[cfg(feature = "canvas-runtime")]
+use bitfun_product_domains::canvas::CanvasStoragePort;
 use bitfun_runtime_ports::{DelegationPolicy, RemoteExecPort, TerminalPort, ToolRuntimeHandles};
+#[cfg(feature = "canvas-runtime")]
+use bitfun_services_integrations::canvas::CanvasService;
 use log::warn;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -131,6 +135,11 @@ impl ToolUseContext {
 
     pub fn remote_exec_port(&self) -> Option<&Arc<dyn RemoteExecPort>> {
         self.runtime_handles.remote_exec_port()
+    }
+
+    #[cfg(feature = "canvas-runtime")]
+    pub fn canvas_storage(&self) -> Option<Arc<dyn CanvasStoragePort>> {
+        canvas_storage_for_workspace(self.workspace.as_ref())
     }
 
     pub fn for_tool_listing(
@@ -293,6 +302,14 @@ pub(crate) fn build_tool_description_context(
         runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
         runtime_handles: core_tool_runtime_handles(workspace_services.cloned(), None, None, None),
     }
+}
+
+#[cfg(feature = "canvas-runtime")]
+fn canvas_storage_for_workspace(
+    workspace: Option<&WorkspaceBinding>,
+) -> Option<Arc<dyn CanvasStoragePort>> {
+    workspace
+        .map(|workspace| Arc::new(CanvasService::persistent(workspace.session_storage_dir())) as _)
 }
 
 fn core_tool_runtime_handles(

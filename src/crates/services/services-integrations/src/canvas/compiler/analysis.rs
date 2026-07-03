@@ -2,28 +2,28 @@ use bitfun_product_domains::canvas::types::{
     CanvasDiagnostic, CanvasDiagnosticCategory, CanvasDiagnosticSeverity,
 };
 
-#[cfg(feature = "canvas-compiler")]
+#[cfg(feature = "canvas-runtime")]
 use oxc::allocator::Allocator;
-#[cfg(feature = "canvas-compiler")]
+#[cfg(feature = "canvas-runtime")]
 use oxc::ast::ast::{
     BindingIdentifier, BindingPattern, Class, ExportDefaultDeclarationKind, Function,
     ImportDeclaration, ImportDeclarationSpecifier, ImportOrExportKind, JSXMemberExpression,
     ModuleExportName, Statement,
 };
-#[cfg(feature = "canvas-compiler")]
+#[cfg(feature = "canvas-runtime")]
 use oxc::parser::Parser;
-#[cfg(feature = "canvas-compiler")]
+#[cfg(feature = "canvas-runtime")]
 use oxc::span::{GetSpan, SourceType};
-#[cfg(feature = "canvas-compiler")]
+#[cfg(feature = "canvas-runtime")]
 use std::collections::{BTreeMap, BTreeSet};
-#[cfg(feature = "canvas-compiler")]
+#[cfg(feature = "canvas-runtime")]
 use std::path::Path;
 
-#[cfg(feature = "canvas-compiler")]
+#[cfg(feature = "canvas-runtime")]
 use super::diagnostics::oxc_diagnostics_to_canvas;
 use super::{compile_error, line_column};
 
-#[cfg(feature = "canvas-compiler")]
+#[cfg(feature = "canvas-runtime")]
 pub(super) fn validate_canvas_import_shadowing(
     source: &str,
     analysis: &CanvasModuleAnalysis,
@@ -54,7 +54,7 @@ pub(super) fn validate_canvas_import_shadowing(
         .collect()
 }
 
-#[cfg(feature = "canvas-compiler")]
+#[cfg(feature = "canvas-runtime")]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct CanvasModuleAnalysis {
     pub(super) import_bindings: CanvasSdkImportBindings,
@@ -63,7 +63,7 @@ pub(super) struct CanvasModuleAnalysis {
     pub(super) local_binding_offsets: BTreeMap<String, usize>,
 }
 
-#[cfg(feature = "canvas-compiler")]
+#[cfg(feature = "canvas-runtime")]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum CanvasDefaultExport {
     Declaration {
@@ -78,14 +78,14 @@ pub(super) enum CanvasDefaultExport {
     },
 }
 
-#[cfg(feature = "canvas-compiler")]
+#[cfg(feature = "canvas-runtime")]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum CanvasSdkImportSource {
     Canvas,
     React,
 }
 
-#[cfg(feature = "canvas-compiler")]
+#[cfg(feature = "canvas-runtime")]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct CanvasSdkNamedImport {
     pub(super) local: String,
@@ -93,21 +93,21 @@ pub(super) struct CanvasSdkNamedImport {
     target_expression: String,
 }
 
-#[cfg(feature = "canvas-compiler")]
+#[cfg(feature = "canvas-runtime")]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct CanvasSdkNamespaceImport {
     pub(super) local: String,
     pub(super) source: CanvasSdkImportSource,
 }
 
-#[cfg(feature = "canvas-compiler")]
+#[cfg(feature = "canvas-runtime")]
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(super) struct CanvasSdkImportBindings {
     named: Vec<CanvasSdkNamedImport>,
     pub(super) namespaces: Vec<CanvasSdkNamespaceImport>,
 }
 
-#[cfg(feature = "canvas-compiler")]
+#[cfg(feature = "canvas-runtime")]
 impl CanvasSdkImportBindings {
     pub(super) fn local_names(&self) -> Vec<String> {
         let mut names = self
@@ -181,7 +181,7 @@ impl CanvasSdkImportBindings {
     }
 }
 
-#[cfg(feature = "canvas-compiler")]
+#[cfg(feature = "canvas-runtime")]
 pub(super) fn analyze_canvas_module(
     source: &str,
 ) -> Result<CanvasModuleAnalysis, Vec<CanvasDiagnostic>> {
@@ -272,7 +272,7 @@ pub(super) fn analyze_canvas_module(
     }
 }
 
-#[cfg(feature = "canvas-compiler")]
+#[cfg(feature = "canvas-runtime")]
 fn collect_canvas_import_bindings(
     source: &str,
     declaration: &ImportDeclaration<'_>,
@@ -350,7 +350,7 @@ fn collect_canvas_import_bindings(
     }
 }
 
-#[cfg(feature = "canvas-compiler")]
+#[cfg(feature = "canvas-runtime")]
 fn collect_default_exportable_statement_binding(
     statement: &Statement<'_>,
     local_binding_offsets: &mut BTreeMap<String, usize>,
@@ -375,7 +375,7 @@ fn collect_default_exportable_statement_binding(
     }
 }
 
-#[cfg(feature = "canvas-compiler")]
+#[cfg(feature = "canvas-runtime")]
 fn collect_function_binding(
     function: &Function<'_>,
     local_binding_offsets: &mut BTreeMap<String, usize>,
@@ -385,14 +385,14 @@ fn collect_function_binding(
     }
 }
 
-#[cfg(feature = "canvas-compiler")]
+#[cfg(feature = "canvas-runtime")]
 fn collect_class_binding(class: &Class<'_>, local_binding_offsets: &mut BTreeMap<String, usize>) {
     if let Some(id) = class.id.as_ref() {
         collect_binding_identifier(id, local_binding_offsets);
     }
 }
 
-#[cfg(feature = "canvas-compiler")]
+#[cfg(feature = "canvas-runtime")]
 fn collect_binding_pattern_offsets(
     pattern: &BindingPattern<'_>,
     local_binding_offsets: &mut BTreeMap<String, usize>,
@@ -423,7 +423,7 @@ fn collect_binding_pattern_offsets(
     }
 }
 
-#[cfg(feature = "canvas-compiler")]
+#[cfg(feature = "canvas-runtime")]
 fn collect_binding_identifier(
     identifier: &BindingIdentifier<'_>,
     local_binding_offsets: &mut BTreeMap<String, usize>,
@@ -433,7 +433,7 @@ fn collect_binding_identifier(
         .or_insert(identifier.span.start as usize);
 }
 
-#[cfg(feature = "canvas-compiler")]
+#[cfg(feature = "canvas-runtime")]
 pub(super) fn canvas_runtime_binding_prelude(import_bindings: &CanvasSdkImportBindings) -> String {
     let mut local_bindings = sdk_runtime_exports()
         .iter()
@@ -481,7 +481,7 @@ const Fragment = __BitfunCanvasRuntime.Fragment;\n",
     prelude
 }
 
-#[cfg(feature = "canvas-compiler")]
+#[cfg(feature = "canvas-runtime")]
 fn canvas_sdk_import_source(source: &str) -> Option<CanvasSdkImportSource> {
     match source {
         "bitfun/canvas" | "cursor/canvas" => Some(CanvasSdkImportSource::Canvas),
@@ -490,13 +490,13 @@ fn canvas_sdk_import_source(source: &str) -> Option<CanvasSdkImportSource> {
     }
 }
 
-#[cfg(feature = "canvas-compiler")]
+#[cfg(feature = "canvas-runtime")]
 struct NamedImportTarget {
     canonical: String,
     expression: String,
 }
 
-#[cfg(feature = "canvas-compiler")]
+#[cfg(feature = "canvas-runtime")]
 fn named_import_target(source: CanvasSdkImportSource, imported: &str) -> Option<NamedImportTarget> {
     match source {
         CanvasSdkImportSource::Canvas => {
@@ -527,7 +527,7 @@ fn named_import_target(source: CanvasSdkImportSource, imported: &str) -> Option<
     }
 }
 
-#[cfg(feature = "canvas-compiler")]
+#[cfg(feature = "canvas-runtime")]
 fn module_export_name(name: &ModuleExportName<'_>) -> String {
     match name {
         ModuleExportName::IdentifierName(identifier) => identifier.name.to_string(),
@@ -536,7 +536,7 @@ fn module_export_name(name: &ModuleExportName<'_>) -> String {
     }
 }
 
-#[cfg(feature = "canvas-compiler")]
+#[cfg(feature = "canvas-runtime")]
 fn unsupported_sdk_import_diagnostic(
     source: &str,
     offset: usize,
@@ -561,7 +561,7 @@ fn unsupported_sdk_import_diagnostic(
     }
 }
 
-#[cfg(feature = "canvas-compiler")]
+#[cfg(feature = "canvas-runtime")]
 fn reserved_sdk_import_binding_diagnostic(
     source: &str,
     offset: usize,
@@ -579,7 +579,7 @@ fn reserved_sdk_import_binding_diagnostic(
     }
 }
 
-#[cfg(feature = "canvas-compiler")]
+#[cfg(feature = "canvas-runtime")]
 fn is_reserved_canvas_runtime_binding(name: &str) -> bool {
     matches!(
         name,
@@ -590,7 +590,7 @@ fn is_reserved_canvas_runtime_binding(name: &str) -> bool {
     )
 }
 
-#[cfg(feature = "canvas-compiler")]
+#[cfg(feature = "canvas-runtime")]
 pub(super) fn property_access(name: &str) -> String {
     if is_identifier(name) {
         name.to_string()
@@ -599,7 +599,7 @@ pub(super) fn property_access(name: &str) -> String {
     }
 }
 
-#[cfg(feature = "canvas-compiler")]
+#[cfg(feature = "canvas-runtime")]
 fn is_identifier(value: &str) -> bool {
     let mut chars = value.chars();
     let Some(first) = chars.next() else {
@@ -611,7 +611,7 @@ fn is_identifier(value: &str) -> bool {
     chars.all(|ch| ch == '_' || ch == '$' || ch.is_ascii_alphanumeric())
 }
 
-#[cfg(feature = "canvas-compiler")]
+#[cfg(feature = "canvas-runtime")]
 pub(super) fn sdk_runtime_exports() -> &'static [&'static str] {
     &[
         "Stack",
@@ -681,7 +681,7 @@ pub(super) fn sdk_runtime_exports() -> &'static [&'static str] {
     ]
 }
 
-#[cfg(feature = "canvas-compiler")]
+#[cfg(feature = "canvas-runtime")]
 pub(super) fn rewrite_canvas_module_for_runtime(
     source: &str,
     analysis: &CanvasModuleAnalysis,
@@ -729,7 +729,7 @@ pub(super) fn rewrite_canvas_module_for_runtime(
     Ok(rewritten)
 }
 
-#[cfg(feature = "canvas-compiler")]
+#[cfg(feature = "canvas-runtime")]
 fn default_export_replacement(
     source: &str,
     default_export: &CanvasDefaultExport,

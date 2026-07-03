@@ -2,24 +2,24 @@ use bitfun_product_domains::canvas::types::{
     CanvasDiagnostic, CanvasDiagnosticCategory, CanvasDiagnosticSeverity,
 };
 
-#[cfg(feature = "canvas-compiler")]
+#[cfg(feature = "canvas-runtime")]
 use oxc::ast::ast::{
     BindingPattern, CallExpression, Expression, JSXAttributeItem, JSXAttributeName, JSXElementName,
     JSXOpeningElement, Program, StaticMemberExpression, VariableDeclarator,
 };
-#[cfg(feature = "canvas-compiler")]
+#[cfg(feature = "canvas-runtime")]
 use oxc::ast_visit::{
     walk::{walk_jsx_opening_element, walk_static_member_expression, walk_variable_declarator},
     Visit,
 };
-#[cfg(feature = "canvas-compiler")]
+#[cfg(feature = "canvas-runtime")]
 use std::collections::BTreeSet;
 
-#[cfg(feature = "canvas-compiler")]
+#[cfg(feature = "canvas-runtime")]
 use super::analysis::{CanvasSdkImportBindings, CanvasSdkImportSource};
 use super::line_column;
 
-#[cfg(feature = "canvas-compiler")]
+#[cfg(feature = "canvas-runtime")]
 pub(super) fn validate_canvas_sdk_contracts(
     source: &str,
     program: &Program<'_>,
@@ -35,7 +35,7 @@ pub(super) fn validate_canvas_sdk_contracts(
     visitor.diagnostics
 }
 
-#[cfg(feature = "canvas-compiler")]
+#[cfg(feature = "canvas-runtime")]
 struct CanvasSdkContractVisitor<'a> {
     source: &'a str,
     import_bindings: &'a CanvasSdkImportBindings,
@@ -43,7 +43,7 @@ struct CanvasSdkContractVisitor<'a> {
     host_theme_locals: BTreeSet<String>,
 }
 
-#[cfg(feature = "canvas-compiler")]
+#[cfg(feature = "canvas-runtime")]
 impl<'a> Visit<'a> for CanvasSdkContractVisitor<'_> {
     fn visit_jsx_opening_element(&mut self, element: &JSXOpeningElement<'a>) {
         self.validate_opening_element(element);
@@ -61,7 +61,7 @@ impl<'a> Visit<'a> for CanvasSdkContractVisitor<'_> {
     }
 }
 
-#[cfg(feature = "canvas-compiler")]
+#[cfg(feature = "canvas-runtime")]
 impl CanvasSdkContractVisitor<'_> {
     fn validate_opening_element(&mut self, element: &JSXOpeningElement<'_>) {
         let Some(component) = self.jsx_component_name(&element.name) else {
@@ -183,7 +183,7 @@ impl CanvasSdkContractVisitor<'_> {
     }
 }
 
-#[cfg(feature = "canvas-compiler")]
+#[cfg(feature = "canvas-runtime")]
 fn jsx_attribute_name(name: &JSXAttributeName<'_>) -> Option<String> {
     match name {
         JSXAttributeName::Identifier(identifier) => Some(identifier.name.to_string()),
@@ -191,7 +191,7 @@ fn jsx_attribute_name(name: &JSXAttributeName<'_>) -> Option<String> {
     }
 }
 
-#[cfg(feature = "canvas-compiler")]
+#[cfg(feature = "canvas-runtime")]
 fn sdk_component_allowed_props(component: &str) -> Option<&'static [&'static str]> {
     match component {
         "Stack" => Some(&["children", "gap", "style"]),
@@ -409,7 +409,7 @@ fn sdk_component_allowed_props(component: &str) -> Option<&'static [&'static str
     }
 }
 
-#[cfg(feature = "canvas-compiler")]
+#[cfg(feature = "canvas-runtime")]
 fn common_canvas_style_prop(prop: &str) -> bool {
     matches!(
         prop,
@@ -434,7 +434,7 @@ fn common_canvas_style_prop(prop: &str) -> bool {
     )
 }
 
-#[cfg(feature = "canvas-compiler")]
+#[cfg(feature = "canvas-runtime")]
 fn canvas_theme_token_group_allows(group: &str, token: &str) -> bool {
     match group {
         "bg" => matches!(token, "editor" | "chrome" | "elevated" | "canvas"),
@@ -462,7 +462,7 @@ fn canvas_theme_token_group_allows(group: &str, token: &str) -> bool {
     }
 }
 
-#[cfg(feature = "canvas-compiler")]
+#[cfg(feature = "canvas-runtime")]
 fn canvas_theme_token_fix(group: &str, token: &str) -> &'static str {
     match (group, token) {
         ("surface", "primary") => {
@@ -482,7 +482,7 @@ fn canvas_theme_token_fix(group: &str, token: &str) -> &'static str {
     }
 }
 
-#[cfg(feature = "canvas-compiler")]
+#[cfg(feature = "canvas-runtime")]
 fn sdk_invalid_prop_fix(component: &str, prop: &str) -> &'static str {
     match (component, prop) {
         ("Pill", "label") => "Put the label inside the Pill children, e.g. <Pill>Label</Pill>.",

@@ -23,6 +23,7 @@ pub enum ProductCapabilityId {
     DeepReview,
     DeepResearch,
     MiniApp,
+    Canvas,
 }
 
 impl ProductCapabilityId {
@@ -32,6 +33,7 @@ impl ProductCapabilityId {
             Self::DeepReview => "deep-review",
             Self::DeepResearch => "deep-research",
             Self::MiniApp => "miniapp",
+            Self::Canvas => "canvas",
         }
     }
 }
@@ -52,6 +54,7 @@ pub enum ProductFeatureGroup {
     ComputerUse,
     ImageAnalysis,
     MiniApp,
+    Canvas,
     AgentControl,
 }
 
@@ -65,6 +68,7 @@ impl ProductFeatureGroup {
             Self::ComputerUse => "computer-use",
             Self::ImageAnalysis => "image-analysis",
             Self::MiniApp => "miniapp",
+            Self::Canvas => "canvas",
             Self::AgentControl => "agent-control",
         }
     }
@@ -86,6 +90,7 @@ impl From<ToolPackFeatureGroup> for ProductFeatureGroup {
             ToolPackFeatureGroup::ComputerUse => Self::ComputerUse,
             ToolPackFeatureGroup::ImageAnalysis => Self::ImageAnalysis,
             ToolPackFeatureGroup::MiniApp => Self::MiniApp,
+            ToolPackFeatureGroup::Canvas => Self::Canvas,
             ToolPackFeatureGroup::AgentControl => Self::AgentControl,
         }
     }
@@ -830,9 +835,16 @@ const MINIAPP_SERVICES: &[RuntimeServiceCapability] = &[
     RuntimeServiceCapability::Permission,
     RuntimeServiceCapability::Events,
 ];
+const CANVAS_SERVICES: &[RuntimeServiceCapability] = &[
+    RuntimeServiceCapability::FileSystem,
+    RuntimeServiceCapability::Workspace,
+    RuntimeServiceCapability::SessionStore,
+    RuntimeServiceCapability::Events,
+];
 
 const CODE_AGENT_TOOL_GROUPS: &[&str] = &["core.basic", "core.agent", "core.session"];
 const INTEGRATION_TOOL_GROUPS: &[&str] = &["core.integration"];
+const CANVAS_TOOL_GROUPS: &[&str] = &["core.canvas"];
 
 const DEEP_REVIEW_HARNESS_CAPABILITIES: &[HarnessCapability] = &[
     HarnessCapability::Plan,
@@ -900,6 +912,12 @@ const DEFAULT_PRODUCT_CAPABILITY_PACKS: &[ProductCapabilityPack] = &[
         MINIAPP_SERVICES,
         INTEGRATION_TOOL_GROUPS,
         MINIAPP_HARNESS_PROVIDERS,
+    ),
+    ProductCapabilityPack::new(
+        ProductCapabilityId::Canvas,
+        CANVAS_SERVICES,
+        CANVAS_TOOL_GROUPS,
+        NO_HARNESS_PROVIDERS,
     ),
 ];
 const EMPTY_PRODUCT_CAPABILITY_PACKS: &[ProductCapabilityPack] = &[];

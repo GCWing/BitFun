@@ -9,6 +9,9 @@ pub mod announcement;
 #[cfg(feature = "browser-control")]
 pub mod browser_control;
 
+#[cfg(feature = "canvas-runtime")]
+pub mod canvas;
+
 #[cfg(feature = "debug-log")]
 pub mod debug_log;
 

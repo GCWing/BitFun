@@ -1,7 +1,6 @@
 //! Canvas artifact tools.
 
 use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext};
-use crate::service::canvas::{get_global_canvas_service_arc, CanvasService};
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use bitfun_product_domains::canvas::{
@@ -167,7 +166,7 @@ Returns a stable `bitfun-canvas://...` artifact reference. Use ReadCanvas to ins
             now,
         );
 
-        let service = canvas_service_for_context(context);
+        let service = canvas_storage_for_context(context)?;
         service
             .save_source(artifact, source, Vec::new())
             .await
@@ -241,7 +240,7 @@ Provide either `artifact_reference` returned by CreateCanvas/PatchCanvas/UpdateC
         context: &ToolUseContext,
     ) -> BitFunResult<Vec<ToolResult>> {
         let (session_id, canvas_id) = resolve_canvas_target(input, context)?;
-        let snapshot = canvas_service_for_context(context)
+        let snapshot = canvas_storage_for_context(context)?
             .load_snapshot(session_id, canvas_id)
             .await
             .map_err(canvas_port_error)?;
@@ -331,7 +330,7 @@ Provide either `artifact_reference` or `canvas_id`, plus one complete replacemen
         let source_text =
             normalize_canvas_source_input(required_non_empty_string(input, "source")?);
         let (session_id, canvas_id) = resolve_canvas_target(input, context)?;
-        let service = canvas_service_for_context(context);
+        let service = canvas_storage_for_context(context)?;
         let existing = service
             .load_snapshot(session_id.clone(), canvas_id.clone())
             .await
@@ -428,7 +427,7 @@ Use this for small, targeted edits such as changing a label, number, style prop,
     ) -> BitFunResult<Vec<ToolResult>> {
         let replacements = parse_canvas_replacements(input)?;
         let (session_id, canvas_id) = resolve_canvas_target(input, context)?;
-        let service = canvas_service_for_context(context);
+        let service = canvas_storage_for_context(context)?;
         let existing = service
             .load_snapshot(session_id.clone(), canvas_id.clone())
             .await
@@ -449,7 +448,7 @@ Use this for small, targeted edits such as changing a label, number, style prop,
 }
 
 async fn save_canvas_source_revision(
-    service: &CanvasService,
+    service: &Arc<dyn CanvasStoragePort>,
     session_id: CanvasSessionId,
     canvas_id: CanvasId,
     existing: CanvasSnapshot,
@@ -683,12 +682,14 @@ fn canvas_source_preview(source: &str) -> String {
         .to_string()
 }
 
-fn canvas_service_for_context(context: &ToolUseContext) -> Arc<CanvasService> {
-    context
-        .workspace
-        .as_ref()
-        .map(|workspace| Arc::new(CanvasService::persistent(workspace.session_storage_dir())))
-        .unwrap_or_else(get_global_canvas_service_arc)
+fn canvas_storage_for_context(
+    context: &ToolUseContext,
+) -> BitFunResult<Arc<dyn CanvasStoragePort>> {
+    context.canvas_storage().ok_or_else(|| {
+        BitFunError::tool(
+            "Canvas storage is unavailable for this execution context; use a workspace-backed session",
+        )
+    })
 }
 
 fn snapshot_data(snapshot: &CanvasSnapshot, include_source: bool) -> Value {
@@ -816,6 +817,7 @@ mod tests {
     use super::*;
     use crate::agentic::tools::framework::Tool;
     use crate::agentic::tools::ToolRuntimeRestrictions;
+    use crate::agentic::WorkspaceBinding;
     use bitfun_runtime_ports::ToolRuntimeHandles;
     use std::collections::HashMap;
 
@@ -825,13 +827,22 @@ mod tests {
             agent_type: Some("Agent".to_string()),
             session_id: Some(session_id.to_string()),
             dialog_turn_id: Some("turn_1".to_string()),
-            workspace: None,
+            workspace: Some(WorkspaceBinding::new(
+                Some(format!("workspace_{session_id}")),
+                std::env::temp_dir().join(format!("bitfun-canvas-tool-test-{}", uuid_short())),
+            )),
             unlocked_collapsed_tools: Vec::new(),
             custom_data: HashMap::new(),
             computer_use_host: None,
             runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
             runtime_handles: ToolRuntimeHandles::new(None, None),
         }
+    }
+
+    fn test_context_without_workspace(session_id: &str) -> ToolUseContext {
+        let mut context = test_context(session_id);
+        context.workspace = None;
+        context
     }
 
     fn valid_source() -> &'static str {
@@ -860,7 +871,8 @@ mod tests {
             .expect("reference should be returned");
         assert!(reference.starts_with("bitfun-canvas://session/"));
         assert_eq!(
-            data["compiledPayload"]["html"], Value::Null,
+            data["compiledPayload"]["html"],
+            Value::Null,
             "write tool results should not persist full compiled HTML"
         );
         assert!(data["compiledPayload"]["contentHash"].is_string());
@@ -882,7 +894,10 @@ mod tests {
         assert_eq!(data["source"]["filename"], "build-health.tsx");
         let assistant = result_for_assistant.as_deref().unwrap_or_default();
         assert!(assistant.contains("Source revision:"), "{assistant}");
-        assert!(assistant.contains("Filename: build-health.tsx"), "{assistant}");
+        assert!(
+            assistant.contains("Filename: build-health.tsx"),
+            "{assistant}"
+        );
         assert!(assistant.contains("```tsx"), "{assistant}");
         assert!(assistant.contains(valid_source()), "{assistant}");
 
@@ -905,6 +920,28 @@ mod tests {
         assert_eq!(
             data["canvas"]["lastKnownGoodRevision"],
             data["canvas"]["latestCompiledRevision"]
+        );
+    }
+
+    #[tokio::test]
+    async fn create_canvas_requires_workspace_backed_storage() {
+        let context = test_context_without_workspace(&format!("session_{}", uuid_short()));
+        let create = CreateCanvasTool::new();
+
+        let error = create
+            .call_impl(
+                &json!({
+                    "title": "No Workspace",
+                    "source": valid_source(),
+                }),
+                &context,
+            )
+            .await
+            .expect_err("canvas tool must require injected storage");
+
+        assert!(
+            error.to_string().contains("Canvas storage is unavailable"),
+            "{error}"
         );
     }
 

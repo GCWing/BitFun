@@ -41,14 +41,6 @@ impl ClawMode {
                 // agent/tool instead of being surfaced as a ControlHub domain.
                 "ControlHub".to_string(),
                 "InitMiniApp".to_string(),
-                #[cfg(feature = "product-domains")]
-                "CreateCanvas".to_string(),
-                #[cfg(feature = "product-domains")]
-                "ReadCanvas".to_string(),
-                #[cfg(feature = "product-domains")]
-                "UpdateCanvas".to_string(),
-                #[cfg(feature = "product-domains")]
-                "PatchCanvas".to_string(),
             ],
         }
     }
@@ -101,13 +93,5 @@ mod tests {
     fn claw_mode_includes_init_miniapp_in_default_tools() {
         let tools = ClawMode::new().default_tools();
         assert!(tools.contains(&"InitMiniApp".to_string()));
-        #[cfg(feature = "product-domains")]
-        assert!(tools.contains(&"CreateCanvas".to_string()));
-        #[cfg(feature = "product-domains")]
-        assert!(tools.contains(&"ReadCanvas".to_string()));
-        #[cfg(feature = "product-domains")]
-        assert!(tools.contains(&"UpdateCanvas".to_string()));
-        #[cfg(feature = "product-domains")]
-        assert!(tools.contains(&"PatchCanvas".to_string()));
     }
 }

@@ -2,11 +2,11 @@
 
 use crate::api::app_state::AppState;
 use crate::api::session_storage_path::desktop_effective_session_storage_path;
-use bitfun_core::service::canvas::CanvasService;
 use bitfun_product_domains::canvas::{
     parse_canvas_artifact_ref, CanvasDiagnostic, CanvasDiagnosticCategory,
     CanvasDiagnosticSeverity, CanvasRevision, CanvasSnapshot, CanvasState, CanvasStoragePort,
 };
+use bitfun_services_integrations::canvas::CanvasService;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;

@@ -1,33 +1,33 @@
 use bitfun_product_domains::canvas::types::CanvasDiagnostic;
 
-#[cfg(feature = "canvas-compiler")]
+#[cfg(feature = "canvas-runtime")]
 use oxc::allocator::Allocator;
-#[cfg(feature = "canvas-compiler")]
+#[cfg(feature = "canvas-runtime")]
 use oxc::codegen::{Codegen, CodegenOptions, CodegenReturn};
-#[cfg(feature = "canvas-compiler")]
+#[cfg(feature = "canvas-runtime")]
 use oxc::parser::Parser;
-#[cfg(feature = "canvas-compiler")]
+#[cfg(feature = "canvas-runtime")]
 use oxc::semantic::SemanticBuilder;
-#[cfg(feature = "canvas-compiler")]
+#[cfg(feature = "canvas-runtime")]
 use oxc::span::SourceType;
-#[cfg(feature = "canvas-compiler")]
+#[cfg(feature = "canvas-runtime")]
 use oxc::transformer::{HelperLoaderMode, JsxOptions, JsxRuntime, TransformOptions, Transformer};
-#[cfg(feature = "canvas-compiler")]
+#[cfg(feature = "canvas-runtime")]
 use std::path::Path;
 
-#[cfg(feature = "canvas-compiler")]
+#[cfg(feature = "canvas-runtime")]
 use super::analysis::{
     analyze_canvas_module, canvas_runtime_binding_prelude, rewrite_canvas_module_for_runtime,
     validate_canvas_import_shadowing,
 };
-#[cfg(not(feature = "canvas-compiler"))]
+#[cfg(not(feature = "canvas-runtime"))]
 use super::compile_error;
-#[cfg(feature = "canvas-compiler")]
+#[cfg(feature = "canvas-runtime")]
 use super::diagnostics::oxc_diagnostics_to_canvas;
-#[cfg(feature = "canvas-compiler")]
+#[cfg(feature = "canvas-runtime")]
 use super::sdk_contract::validate_canvas_sdk_contracts;
 
-#[cfg(feature = "canvas-compiler")]
+#[cfg(feature = "canvas-runtime")]
 pub(super) fn compile_canvas_component_js_with_oxc(
     source: &str,
 ) -> Result<String, Vec<CanvasDiagnostic>> {
@@ -102,12 +102,12 @@ pub(super) fn compile_canvas_component_js_with_oxc(
     ))
 }
 
-#[cfg(not(feature = "canvas-compiler"))]
+#[cfg(not(feature = "canvas-runtime"))]
 pub(super) fn compile_canvas_component_js_with_oxc(
     _source: &str,
 ) -> Result<String, Vec<CanvasDiagnostic>> {
     Err(vec![compile_error(
-        "Canvas TSX compilation requires the `canvas` feature",
+        "Canvas TSX compilation requires the `canvas-runtime` feature",
         "canvas.compile.feature_disabled",
     )])
 }

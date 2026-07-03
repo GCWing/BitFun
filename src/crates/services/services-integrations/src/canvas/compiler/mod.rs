@@ -4,13 +4,13 @@
 //! JSX/TypeScript lowering. Unsupported Canvas policy still returns compile
 //! diagnostics so callers can retain the last-known-good payload.
 
-#[cfg(feature = "canvas-compiler")]
+#[cfg(feature = "canvas-runtime")]
 mod analysis;
-#[cfg(feature = "canvas-compiler")]
+#[cfg(feature = "canvas-runtime")]
 mod diagnostics;
 mod html;
 mod oxc;
-#[cfg(feature = "canvas-compiler")]
+#[cfg(feature = "canvas-runtime")]
 mod sdk_contract;
 
 #[cfg(test)]
@@ -94,7 +94,7 @@ fn compile_error(message: impl Into<String>, code: impl Into<String>) -> CanvasD
     }
 }
 
-#[cfg(feature = "canvas-compiler")]
+#[cfg(feature = "canvas-runtime")]
 pub(super) fn line_column(source: &str, offset: usize) -> (u32, u32) {
     let mut line = 1u32;
     let mut column = 1u32;

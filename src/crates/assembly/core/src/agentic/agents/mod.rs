@@ -91,14 +91,6 @@ pub fn shared_coding_mode_tools() -> Vec<String> {
         "get_goal".to_string(),
         "create_goal".to_string(),
         "update_goal".to_string(),
-        #[cfg(feature = "product-domains")]
-        "CreateCanvas".to_string(),
-        #[cfg(feature = "product-domains")]
-        "ReadCanvas".to_string(),
-        #[cfg(feature = "product-domains")]
-        "UpdateCanvas".to_string(),
-        #[cfg(feature = "product-domains")]
-        "PatchCanvas".to_string(),
         "GenerativeUI".to_string(),
         "Skill".to_string(),
         "AskUserQuestion".to_string(),
@@ -267,14 +259,6 @@ mod tests {
         assert!(tools.contains(&"Log".to_string()));
         assert!(tools.contains(&"get_goal".to_string()));
         assert!(tools.contains(&"update_goal".to_string()));
-        #[cfg(feature = "product-domains")]
-        assert!(tools.contains(&"CreateCanvas".to_string()));
-        #[cfg(feature = "product-domains")]
-        assert!(tools.contains(&"ReadCanvas".to_string()));
-        #[cfg(feature = "product-domains")]
-        assert!(tools.contains(&"UpdateCanvas".to_string()));
-        #[cfg(feature = "product-domains")]
-        assert!(tools.contains(&"PatchCanvas".to_string()));
     }
 
     #[test]
