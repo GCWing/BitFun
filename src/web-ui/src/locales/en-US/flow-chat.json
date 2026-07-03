@@ -627,6 +627,7 @@
     "noMatchingCommand": "No matching command",
     "selectHint": "↑↓ Select · Enter Confirm · Esc Cancel",
     "current": "Current",
+    "computerUseDisabled": "Computer Use is disabled in Settings → Session permissions",
     "professionalMode": "Expert Mode",
     "designMode": "Design Mode",
     "wip": "WIP",
@@ -1470,6 +1471,20 @@
       "clickToOpenLink": "Click to open link",
       "noTitle": "No title",
       "summaryAvailable": "summary available"
+    },
+    "computerUse": {
+      "running": "Controlling the desktop...",
+      "runningOnApp": "Controlling {{app}}...",
+      "controllingApp": "Controlling {{app}}",
+      "done": "Action completed",
+      "actionFailed": "Action failed",
+      "actionLabel": "Action",
+      "appLabel": "Application",
+      "targetLabel": "Target",
+      "permissionDenied": "Permission required for desktop control",
+      "permissionDeniedHint": "BitFun needs macOS Accessibility and Screen Recording permissions before it can control other apps. Open System Settings, grant access to BitFun, then retry.",
+      "openSettings": "Open System Settings",
+      "openSettingsFailed": "Could not open System Settings"
     },
     "webFetch": {
       "parsingUrl": "Parsing URL...",

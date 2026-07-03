@@ -8,6 +8,8 @@ mod linux_ax_ui;
 #[cfg(target_os = "macos")]
 mod macos_ax_dump;
 #[cfg(target_os = "macos")]
+mod macos_ax_shortcuts;
+#[cfg(target_os = "macos")]
 mod macos_ax_ui;
 #[cfg(target_os = "macos")]
 mod macos_ax_write;
@@ -22,6 +24,8 @@ mod som_overlay;
 mod terminal_detect;
 mod ui_locate_common;
 #[cfg(target_os = "windows")]
+mod windows_ax_shortcuts;
+#[cfg(target_os = "windows")]
 mod windows_ax_ui;
 #[cfg(target_os = "windows")]
 mod windows_bg_input;
@@ -31,6 +35,8 @@ mod windows_capture;
 mod windows_list_apps;
 #[cfg(target_os = "windows")]
 mod windows_msaa;
+#[cfg(target_os = "windows")]
+mod windows_wgc_capture;
 
 pub use desktop_host::DesktopComputerUseHost;
 

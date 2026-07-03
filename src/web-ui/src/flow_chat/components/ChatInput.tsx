@@ -73,6 +73,7 @@ import { useSceneStore } from '@/app/stores/sceneStore';
 import type { SceneTabId } from '@/app/components/SceneBar/types';
 import { useAgentsStore } from '@/app/scenes/agents/agentsStore';
 import { configAPI } from '@/infrastructure/api/service-api/ConfigAPI';
+import { configManager } from '@/infrastructure/config';
 import type { ModeSkillInfo } from '@/infrastructure/config/types';
 import MCPAPI, { type MCPPrompt, type MCPPromptMessage, type MCPServerInfo } from '@/infrastructure/api/service-api/MCPAPI';
 import { ChatInputWorkspaceStrip } from './ChatInputWorkspaceStrip';
@@ -699,6 +700,24 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const [resolvedModeSkillsLoading, setResolvedModeSkillsLoading] = useState(false);
   const [userDefaultModeId, setUserDefaultModeId] = useState<string | null>(null);
   const [defaultModeSavingId, setDefaultModeSavingId] = useState<string | null>(null);
+  const [computerUseEnabled, setComputerUseEnabled] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadComputerUseEnabled = () => {
+      void configManager.getConfig<boolean>('ai.computer_use_enabled').then((enabled) => {
+        if (!cancelled) setComputerUseEnabled(enabled ?? false);
+      });
+    };
+    loadComputerUseEnabled();
+    const unsubscribe = configManager.onConfigChange((path) => {
+      if (path === 'ai.computer_use_enabled' || path === 'ai') loadComputerUseEnabled();
+    });
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, []);
 
   const [skillsFlyoutOpen, setSkillsFlyoutOpen] = useState(false);
   const [skillsFlyoutLeft, setSkillsFlyoutLeft] = useState(false);
@@ -3801,10 +3820,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                           <div className="bitfun-chat-input__boost-section">
                             {incrementalCodeModes.length > 0 && (
                               incrementalCodeModes.map(modeOption => {
+                                const modeDisabled = modeOption.id === 'ComputerUse' && !computerUseEnabled;
                                 const modeDescription =
-                                  t(`chatInput.modeDescriptions.${modeOption.id}`, { defaultValue: '' }) ||
-                                  modeOption.description ||
-                                  modeOption.name;
+                                  modeDisabled
+                                    ? t('chatInput.computerUseDisabled')
+                                    : t(`chatInput.modeDescriptions.${modeOption.id}`, { defaultValue: '' }) ||
+                                      modeOption.description ||
+                                      modeOption.name;
                                 const modeName =
                                   t(`chatInput.modeNames.${modeOption.id}`, { defaultValue: '' }) || modeOption.name;
                                 const isDefaultMode = userDefaultModeId === modeOption.id;
@@ -3814,9 +3836,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                                 return (
                                   <Tooltip key={modeOption.id} content={modeDescription} placement="left">
                                     <div
-                                      className={`bitfun-chat-input__mode-option ${modeState.current === modeOption.id ? 'bitfun-chat-input__mode-option--active' : ''}`}
+                                      className={`bitfun-chat-input__mode-option ${modeState.current === modeOption.id ? 'bitfun-chat-input__mode-option--active' : ''}${modeDisabled ? ' bitfun-chat-input__mode-option--disabled' : ''}`}
                                       onClick={e => {
                                         e.stopPropagation();
+                                        if (modeDisabled) return;
                                         requestModeChange(modeOption.id);
                                       }}
                                     >

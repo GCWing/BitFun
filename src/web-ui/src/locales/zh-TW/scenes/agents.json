@@ -32,6 +32,7 @@
     "subtitle": "平臺內置的核心 Agent，覆蓋主流 AI 工作流，開箱即用。",
     "empty": "暫未檢測到核心智能體",
     "roleLabel": "主要應用 · ",
+    "computerUseDisabledBadge": "已在設定中停用",
     "modes": {
       "agentic": {
         "role": "編碼專業智能體"

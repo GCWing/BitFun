@@ -191,7 +191,7 @@ unsafe fn build_cache_request(
 /// error (commonly `E_FAIL` / `0x80004005` from a control rebuilding its
 /// automation subtree mid-walk) must not take down the whole snapshot — the
 /// same call usually succeeds a beat later. See cua #1881.
-unsafe fn build_updated_cache_with_retry(
+pub(crate) unsafe fn build_updated_cache_with_retry(
     uncached: &IUIAutomationElement,
     cache_req: &IUIAutomationCacheRequest,
 ) -> BitFunResult<IUIAutomationElement> {
@@ -879,14 +879,26 @@ pub fn accessibility_hit_at_global_point(
 /// computes a SHA1 digest, and returns the snapshot.
 pub fn get_app_state_snapshot(
     max_depth: u32,
-    _focus_window_only: bool,
+    focus_window_only: bool,
 ) -> BitFunResult<AppStateSnapshot> {
     let hwnd = unsafe { GetForegroundWindow() };
+    get_app_state_snapshot_for_window(hwnd, max_depth, focus_window_only)
+}
+
+/// Same as [`get_app_state_snapshot`] but targets an explicit top-level HWND
+/// (used when the caller resolved an `AppSelector` to a pid/window).
+pub fn get_app_state_snapshot_for_window(
+    hwnd: windows::Win32::Foundation::HWND,
+    max_depth: u32,
+    focus_window_only: bool,
+) -> BitFunResult<AppStateSnapshot> {
     if hwnd.is_invalid() {
         return Err(BitFunError::tool(
-            "No foreground window (GetForegroundWindow returned null).".to_string(),
+            "No target window (invalid HWND).".to_string(),
         ));
     }
+    let _ = focus_window_only; // Windows UIA walk is always rooted at the given HWND.
+
     let hwnd_raw = hwnd.0 as isize;
 
     // Primary: UIA control-view walk. Fallback: MSAA for SAL/VCL windows
@@ -930,12 +942,8 @@ pub fn get_app_state_snapshot(
     // Compute digest — same algorithm as macOS `compute_digest`.
     let digest = compute_digest(&nodes);
 
-    // Best-effort app info from the foreground window. The owning pid is
-    // resolved so the element-token registry keys, interactive/visual caches,
-    // and screenshot pointer maps all share a stable id (mirrors how macOS
-    // keys these by pid).
-    let window_title = foreground_app_name();
-    let pid = foreground_window_pid().map(|p| p as i32);
+    let window_title = window_title_for(hwnd);
+    let pid = window_pid_for(hwnd).map(|p| p as i32);
     let app = AppInfo {
         name: window_title
             .clone()
@@ -999,19 +1007,38 @@ fn compute_digest(nodes: &[AxNode]) -> String {
 }
 
 fn foreground_app_name() -> Option<String> {
-    use windows::Win32::Foundation::HWND;
+    let hwnd = unsafe { GetForegroundWindow() };
+    window_title_for(hwnd)
+}
+
+fn window_title_for(hwnd: windows::Win32::Foundation::HWND) -> Option<String> {
     use windows::Win32::UI::WindowsAndMessaging::GetWindowTextW;
+    if hwnd.is_invalid() {
+        return None;
+    }
     unsafe {
-        let hwnd: HWND = GetForegroundWindow();
-        if hwnd.is_invalid() {
-            return None;
-        }
         let mut buf = [0u16; 256];
         let len = GetWindowTextW(hwnd, &mut buf);
         if len == 0 {
             return None;
         }
         Some(String::from_utf16_lossy(&buf[..len as usize]))
+    }
+}
+
+fn window_pid_for(hwnd: windows::Win32::Foundation::HWND) -> Option<u32> {
+    use windows::Win32::UI::WindowsAndMessaging::GetWindowThreadProcessId;
+    if hwnd.is_invalid() {
+        return None;
+    }
+    unsafe {
+        let mut pid: u32 = 0;
+        GetWindowThreadProcessId(hwnd, Some(&mut pid));
+        if pid == 0 {
+            None
+        } else {
+            Some(pid)
+        }
     }
 }
 
@@ -1025,18 +1052,6 @@ pub fn foreground_window_handle() -> isize {
 
 /// Owning process id of the current foreground window, if any.
 pub fn foreground_window_pid() -> Option<u32> {
-    use windows::Win32::UI::WindowsAndMessaging::GetWindowThreadProcessId;
-    unsafe {
-        let hwnd = GetForegroundWindow();
-        if hwnd.is_invalid() {
-            return None;
-        }
-        let mut pid: u32 = 0;
-        GetWindowThreadProcessId(hwnd, Some(&mut pid));
-        if pid == 0 {
-            None
-        } else {
-            Some(pid)
-        }
-    }
+    let hwnd = unsafe { GetForegroundWindow() };
+    window_pid_for(hwnd)
 }

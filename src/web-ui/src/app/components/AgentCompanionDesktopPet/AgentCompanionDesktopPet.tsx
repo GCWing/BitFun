@@ -494,6 +494,7 @@ export const AgentCompanionDesktopPet: React.FC = () => {
     '--bitfun-agent-companion-gap': `${WINDOW_HORIZONTAL_GAP}px`,
   } as React.CSSProperties;
   const isSingleTask = tasks.length === 1;
+  const hasAttentionTask = tasks.some(task => task.state === 'attention');
 
   return (
     <main
@@ -552,7 +553,7 @@ export const AgentCompanionDesktopPet: React.FC = () => {
           </div>
         )}
         <div
-          className="bitfun-agent-companion-window__pet-hitbox"
+          className={`bitfun-agent-companion-window__pet-hitbox${hasAttentionTask ? ' bitfun-agent-companion-window__pet-hitbox--needs-attention' : ''}`}
           onPointerEnter={() => setIsHoveringPet(true)}
           onPointerLeave={() => setIsHoveringPet(false)}
           onPointerDown={onPetPointerDown}

@@ -330,6 +330,18 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     displayMode: 'detailed',
     primaryColor: UI_EXCEPTION_ACCENTS.generativeUi
   },
+
+  // Computer use (desktop automation)
+  'ComputerUse': {
+    toolName: 'ComputerUse',
+    displayName: 'Computer Use',
+    icon: 'CU',
+    requiresConfirmation: false,
+    resultDisplayType: 'summary',
+    description: 'Screen capture, mouse/keyboard, and accessibility control of the desktop',
+    displayMode: 'compact',
+    primaryColor: 'var(--color-accent-600)'
+  },
 };
 
 /**

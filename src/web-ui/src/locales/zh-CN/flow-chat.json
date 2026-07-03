@@ -621,6 +621,7 @@
     "noMatchingCommand": "没有匹配的命令",
     "selectHint": "↑↓ 选择 · Enter 确认 · Esc 取消",
     "current": "当前",
+    "computerUseDisabled": "已在「设置 → 会话权限」中禁用 Computer Use",
     "professionalMode": "专业模式",
     "designMode": "设计模式",
     "wip": "开发中",
@@ -1470,6 +1471,20 @@
       "clickToOpenLink": "点击打开链接",
       "noTitle": "无标题",
       "summaryAvailable": "有搜索摘要"
+    },
+    "computerUse": {
+      "running": "正在控制桌面...",
+      "runningOnApp": "正在控制 {{app}}...",
+      "controllingApp": "正在控制 {{app}}",
+      "done": "操作已完成",
+      "actionFailed": "操作失败",
+      "actionLabel": "动作",
+      "appLabel": "应用",
+      "targetLabel": "目标",
+      "permissionDenied": "需要桌面控制权限",
+      "permissionDeniedHint": "BitFun 需要 macOS「辅助功能」和「屏幕录制」权限才能控制其他应用。请打开系统设置，为 BitFun 授权后重试。",
+      "openSettings": "打开系统设置",
+      "openSettingsFailed": "无法打开系统设置"
     },
     "webFetch": {
       "parsingUrl": "解析链接中...",

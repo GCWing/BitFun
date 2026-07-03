@@ -765,38 +765,129 @@
   }
 }
 
-/* ---------- Reduced motion ---------- */
+/* ---------- Reduced motion: pet always animates ----------
+   The companion pet is a functional notification surface, not decoration.
+   It must always animate so users never miss attention-required states
+   (e.g. AskUserQuestion waiting for input). These !important longhand
+   overrides counteract the global prefers-reduced-motion * rule (which
+   clamps animation-duration to 0.01ms and iteration-count to 1).
+   Longhand properties are used instead of the animation shorthand to
+   preserve animation-delay set by nth-child rules. */
 
 @media (prefers-reduced-motion: reduce) {
-  .bitfun-chat-input-pixel-pet__stage,
-  .bitfun-chat-input-pixel-pet__stage--transition,
-  .bitfun-chat-input-pixel-pet__stage[class*='--idle-'],
-  .bitfun-chat-input-pixel-pet__petdex {
-    animation: none !important;
-    transition: none;
-  }
-
+  .bitfun-chat-input-pixel-pet__petdex,
+  .bitfun-chat-input-pixel-pet__petdex--rest,
+  .bitfun-chat-input-pixel-pet__petdex--working,
+  .bitfun-chat-input-pixel-pet__petdex--hover,
+  .bitfun-chat-input-pixel-pet__petdex--dragging,
   .bitfun-panda-head,
-  .bitfun-panda-head--rest,
   .bitfun-panda-head--analyzing,
   .bitfun-panda-head--waiting,
   .bitfun-panda-head--working,
   .bitfun-panda-head--hover,
   .bitfun-panda-head--dragging,
-  .bitfun-panda-head__zzz-glyph,
+  .bitfun-panda-head__zzz-glyph--a,
+  .bitfun-panda-head__zzz-glyph--b,
+  .bitfun-panda-head__zzz-glyph--c,
   .bitfun-panda-head--analyzing .bitfun-panda-head__ear--left,
   .bitfun-panda-head--analyzing .bitfun-panda-head__ear--right,
+  .bitfun-panda-head__think-pip,
+  .bitfun-panda-head--waiting .bitfun-panda-head__paw--front,
+  .bitfun-panda-head__wait-pip,
+  .bitfun-panda-head__sweat-drop,
   .bitfun-panda-head--working .bitfun-panda-head__ear--right,
   .bitfun-panda-head--hover .bitfun-panda-head__ear--left,
   .bitfun-panda-head--hover .bitfun-panda-head__ear--right,
+  .bitfun-panda-head__sparkle,
   .bitfun-panda-head--dragging .bitfun-panda-head__paw--front,
   .bitfun-panda-head--dragging .bitfun-panda-head__paw--rear,
-  .bitfun-panda-head--waiting .bitfun-panda-head__paw--front,
-  .bitfun-panda-head__think-pip,
-  .bitfun-panda-head__wait-pip,
-  .bitfun-panda-head__sweat-drop,
-  .bitfun-panda-head__sparkle,
   .bitfun-panda-head__drag-line {
-    animation: none !important;
+    animation-iteration-count: infinite !important;
+  }
+
+  /* Single-animation elements grouped by duration */
+  .bitfun-panda-head,
+  .bitfun-panda-head__zzz-glyph--a,
+  .bitfun-panda-head__zzz-glyph--b,
+  .bitfun-panda-head__zzz-glyph--c {
+    animation-duration: 6.8s !important;
+  }
+
+  .bitfun-panda-head__think-pip,
+  .bitfun-panda-head__sweat-drop,
+  .bitfun-panda-head--working .bitfun-panda-head__ear--right {
+    animation-duration: 3.2s !important;
+  }
+
+  .bitfun-panda-head--analyzing .bitfun-panda-head__ear--left,
+  .bitfun-panda-head--analyzing .bitfun-panda-head__ear--right {
+    animation-duration: 2.8s !important;
+  }
+
+  .bitfun-panda-head__sparkle {
+    animation-duration: 2.4s !important;
+  }
+
+  .bitfun-panda-head__wait-pip {
+    animation-duration: 2.2s !important;
+  }
+
+  .bitfun-panda-head--hover .bitfun-panda-head__ear--left,
+  .bitfun-panda-head--hover .bitfun-panda-head__ear--right {
+    animation-duration: 1.9s !important;
+  }
+
+  .bitfun-panda-head--waiting .bitfun-panda-head__paw--front {
+    animation-duration: 1.8s !important;
+  }
+
+  .bitfun-panda-head__drag-line {
+    animation-duration: 1.44s !important;
+  }
+
+  .bitfun-panda-head--dragging .bitfun-panda-head__paw--front,
+  .bitfun-panda-head--dragging .bitfun-panda-head__paw--rear {
+    animation-duration: 0.96s !important;
+  }
+
+  /* Two-animation elements (comma-separated durations) */
+  .bitfun-chat-input-pixel-pet__petdex {
+    animation-duration: 1.8s, 6s !important;
+  }
+
+  .bitfun-chat-input-pixel-pet__petdex--rest {
+    animation-duration: 2.4s, 6.4s !important;
+  }
+
+  .bitfun-chat-input-pixel-pet__petdex--working {
+    animation-duration: 1.16s, 0.56s !important;
+  }
+
+  .bitfun-chat-input-pixel-pet__petdex--hover {
+    animation-duration: 1.44s, 1.9s !important;
+  }
+
+  .bitfun-chat-input-pixel-pet__petdex--dragging {
+    animation-duration: 0.96s, 0.48s !important;
+  }
+
+  .bitfun-panda-head--analyzing {
+    animation-duration: 5.2s, 4.8s !important;
+  }
+
+  .bitfun-panda-head--waiting {
+    animation-duration: 5.2s, 6s !important;
+  }
+
+  .bitfun-panda-head--working {
+    animation-duration: 5.2s, 0.36s !important;
+  }
+
+  .bitfun-panda-head--hover {
+    animation-duration: 4.2s, 1.9s !important;
+  }
+
+  .bitfun-panda-head--dragging {
+    animation-duration: 4.8s, 0.48s !important;
   }
 }

@@ -50,6 +50,7 @@ import { GenerativeWidgetToolCard } from './GenerativeWidgetToolCard';
 import { ReviewSessionSummaryCard } from './ReviewSessionSummaryCard';
 import { SessionControlToolCard } from './SessionControlToolCard';
 import { SessionMessageToolCard } from './SessionMessageToolCard';
+import { ComputerUseToolCard } from './ComputerUseToolCard';
 
 // Tool card component map - uses backend tool names
 export const TOOL_CARD_COMPONENTS = {
@@ -115,6 +116,9 @@ export const TOOL_CARD_COMPONENTS = {
 
   // Generative widget tool
   'GenerativeUI': GenerativeWidgetToolCard,
+
+  // Computer use (desktop automation)
+  'ComputerUse': ComputerUseToolCard,
 };
 
 /**

@@ -1,10 +1,11 @@
 //! Desktop automation (Computer use).
 
 use super::computer_use_locate::execute_computer_use_locate;
+use super::control_hub::{coded_tool_error, ErrorCode};
 use crate::agentic::tools::computer_use_capability::computer_use_desktop_available;
 use crate::agentic::tools::computer_use_host::{
-    AppSelector, ComputerScreenshot, ComputerUseHost, ComputerUseNavigateQuadrant,
-    ComputerUseScreenshotRefinement, OcrRegionNative, ScreenshotCropCenter, UiElementLocateQuery,
+    AppSelector, ComputerScreenshot, ComputerUseHost, ComputerUseNavigateQuadrant, OcrRegionNative,
+    ScreenshotCropCenter, UiElementLocateQuery,
 };
 use crate::agentic::tools::computer_use_optimizer::hash_screenshot_bytes;
 use crate::agentic::tools::framework::{Tool, ToolExposure, ToolResult, ToolUseContext};
@@ -106,7 +107,7 @@ The **primary model cannot consume images** in tool results — **do not** use *
 **OBSERVE & VERIFY (text-only):** Use **`describe_screen`** as your eyes — it returns a text snapshot (frontmost app + AX tree `ax_tree_text` with `node_idx`s + `ui_tree_text` + pointer) with NO image. Call it before acting when UI state is unknown, and after an action to verify the `ax_state_digest` changed. This replaces the `screenshot` observe→act→verify loop for text-only models.\n\
 **ACTION PRIORITY (CRITICAL):** Always think in this order:\n\
 1. **Terminal/CLI/System commands first** — Use Bash tool for terminal commands, system scripts (e.g., macOS `osascript`), shell automation. Most efficient.\n\
-2. **Keyboard shortcuts second** — Use **`key_chord`** / **`type_text`** for system/app shortcuts, navigation keys.\n\
+2. **Keyboard shortcuts second** — Use **`key_chord`** / **`type_text`** for system/app shortcuts, navigation keys. Unsure what shortcut a target app registers for a function (e.g. \"Save\")? Call **`get_app_shortcuts`** first instead of guessing or clicking through menus.\n\
 3. **Precise UI control last** — Only when above fail: **`click_target`** / **`move_to_target`** (AX → OCR → screen coords in one call) → lower-level **`click_element`** / **`move_to_text`** → **`mouse_move`** + **`click`**.\n\
 **Rhythm:** one action at a time; use **`wait`** when UI animates. Observe **`interaction_state`** and **`computer_use_context`** in tool JSON.\n\
 **`click_target` / `move_to_target`:** Unified resolver: AX filters or `target_text` first, OCR second, explicit global x/y last. **`click_element` / `locate`:** Accessibility (AX/UIA/AT-SPI). **`move_to_text`:** OCR match + move pointer only. **`click`:** at current pointer only — use **`mouse_move`** or **`move_to_text`** / **`click_element`** first.\n\
@@ -116,7 +117,10 @@ The **primary model cannot consume images** in tool results — **do not** use *
         )
     }
 
-    fn is_controlhub_migrated_desktop_action(action: &str) -> bool {
+    /// Whether `action` is implemented by the shared `ComputerUseActions::handle_desktop`
+    /// dispatcher instead of inline in [`Self::call_impl`]. These actions used to live on
+    /// the (now-removed) `ControlHub` desktop domain before it was folded into `ComputerUse`.
+    fn routes_to_desktop_action_dispatcher(action: &str) -> bool {
         matches!(
             action,
             "list_displays"
@@ -124,6 +128,7 @@ The **primary model cannot consume images** in tool results — **do not** use *
                 | "paste"
                 | "list_apps"
                 | "get_app_state"
+                | "get_app_shortcuts"
                 | "app_click"
                 | "app_type_text"
                 | "app_scroll"
@@ -138,83 +143,111 @@ The **primary model cannot consume images** in tool results — **do not** use *
         )
     }
 
+    /// Property definitions that are byte-identical between the full
+    /// (`input_schema`) and text-only (`input_schema_text_only`) variants.
+    /// Kept in one place so fields that are NOT model-capability-specific
+    /// cannot silently drift between the two hand-authored schemas.
+    ///
+    /// Fields that differ by design (richer guidance for the multimodal
+    /// model, or `screenshot`-only fields) stay inline in each schema.
+    fn shared_action_properties() -> Value {
+        json!({
+            "x": { "type": "integer", "description": "For `mouse_move` and `drag`: X in **global display** units when **`use_screen_coordinates`: true** (required). **Not** for `click`." },
+            "y": { "type": "integer", "description": "For `mouse_move` and `drag`: Y in **global display** units when **`use_screen_coordinates`: true** (required). **Not** for `click`." },
+            "coordinate_mode": { "type": "string", "enum": ["image", "normalized"], "description": "Ignored for `mouse_move` / `drag` — host rejects image/normalized positioning; always set **`use_screen_coordinates`: true**." },
+            "button": { "type": "string", "enum": ["left", "right", "middle"], "description": "For `click`, `click_element`, `drag`: mouse button (default left)." },
+            "num_clicks": { "type": "integer", "minimum": 1, "maximum": 3, "description": "For `click`, `click_element`: 1=single (default), 2=double, 3=triple click." },
+            "start_x": { "type": "integer", "description": "For `drag`: start X coordinate." },
+            "start_y": { "type": "integer", "description": "For `drag`: start Y coordinate." },
+            "end_x": { "type": "integer", "description": "For `drag`: end X coordinate." },
+            "end_y": { "type": "integer", "description": "For `drag`: end Y coordinate." },
+            "text": { "type": "string", "description": "For `type_text`: text to type. Prefer clipboard paste (key_chord) for long content." },
+            "ms": { "type": "integer", "description": "For `wait`: duration in milliseconds." },
+            "text_query": { "type": "string", "description": "For `move_to_text`, `move_to_target`, `click_target`: visible text to OCR-match on screen (case-insensitive substring)." },
+            "identifier_contains": { "type": "string", "description": "For `locate`, `click_element`: case-insensitive substring on AXIdentifier." },
+            "node_idx": { "type": "integer", "minimum": 0, "description": "For `locate`, `click_element`, `app_click`: jump straight to a node returned by the most recent `get_app_state` (field `idx`). Bypasses BFS. macOS only; other platforms return AX_IDX_NOT_SUPPORTED." },
+            "app_state_digest": { "type": "string", "description": "For `locate`, `click_element`: optional `state_digest` from the same `get_app_state` call that produced `node_idx`. Stale digest yields AX_IDX_STALE so you re-snapshot." },
+            "max_depth": { "type": "integer", "minimum": 1, "maximum": 200, "description": "For `locate`, `click_element`: max BFS depth (default 48). Ignored when `node_idx` is supplied." },
+            "filter_combine": { "type": "string", "enum": ["all", "any"], "description": "For `locate`, `click_element`: `all` (default, AND) or `any` (OR) for filter combination. Priority: `node_idx` > `text_contains` > `title_contains`+`role_substring`." },
+            "url": { "type": "string", "description": "For `open_url`: URL to open with the system/default browser." },
+            "path": { "type": "string", "description": "For `open_file`: local file path to open with its default handler." },
+            "app": { "type": ["string", "object"], "description": "For `open_file`: optional app name. For app-scoped actions (including `get_app_shortcuts`): selector object such as `{ \"name\": \"Safari\" }`, `{ \"bundle_id\": \"...\" }`, or `{ \"pid\": 123 }`." },
+            "script_type": { "type": "string", "enum": ["applescript", "shell", "bash", "powershell", "cmd"], "description": "For `run_script`: script interpreter/type." },
+            "timeout_ms": { "type": "integer", "description": "For `run_script`: timeout in milliseconds." },
+            "max_output_bytes": { "type": "integer", "description": "For `run_script` / `clipboard_get`: maximum bytes to return." },
+            "clear_first": { "type": "boolean", "description": "For `paste`: select all before pasting." },
+            "submit": { "type": "boolean", "description": "For `paste`: press submit keys after pasting." },
+            "submit_keys": { "type": "array", "items": { "type": "string" }, "description": "For `paste`: key chord to submit, default `[\"return\"]`." },
+            "display_id": { "type": ["integer", "null"], "description": "For `focus_display` or display-pinned desktop actions: display id, or null to clear the pin." },
+            "include_hidden": { "type": "boolean", "description": "For `list_apps`: include hidden/background apps." },
+            "only_visible": { "type": "boolean", "description": "For `list_apps`: list only visible apps when true." },
+            "target": { "type": "object", "description": "For `app_click`: click target such as `{ \"node_idx\": 3 }`, image/screen coordinates, or OCR text." },
+            "focus": { "type": ["object", "null"], "description": "For app-scoped text/scroll actions: optional focus target." },
+            "predicate": { "type": "object", "description": "For `app_wait_for`: wait predicate." },
+            "opts": { "type": "object", "description": "For `build_interactive_view` / `build_visual_mark_view`: optional view options." },
+            "i": { "type": ["integer", "null"], "description": "For interactive/visual actions: element or mark index from the latest view." },
+            "dx": { "type": "integer", "description": "For app/interactive scroll actions: horizontal delta." },
+            "dy": { "type": "integer", "description": "For app/interactive scroll actions: vertical delta." },
+            "mouse_button": { "type": "string", "enum": ["left", "right", "middle"], "description": "For app/interactive/visual click actions." },
+            "click_count": { "type": "integer", "minimum": 1, "maximum": 3, "description": "For app click actions." },
+            "modifier_keys": { "type": "array", "items": { "type": "string" }, "description": "For app click actions: modifier keys to hold." },
+            "wait_ms_after": { "type": "integer", "description": "For app click actions: post-click wait in milliseconds." },
+            "focus_idx": { "type": "integer", "minimum": 0, "description": "For `app_key_chord`: optional node index to focus first." },
+            "poll_ms": { "type": "integer", "description": "For `app_wait_for`: polling interval." }
+        })
+    }
+
+    /// Builds a schema's `properties` object from action-specific overrides plus
+    /// the fields shared with the other model-capability variant (see
+    /// [`Self::shared_action_properties`]). The two sets never overlap.
+    fn merge_with_shared_properties(specific: Value) -> Value {
+        let mut properties = match Self::shared_action_properties() {
+            Value::Object(map) => map,
+            other => unreachable!("shared_action_properties must return an object, got {other:?}"),
+        };
+        match specific {
+            Value::Object(specific_map) => properties.extend(specific_map),
+            other => unreachable!("schema-specific properties must be an object, got {other:?}"),
+        }
+        Value::Object(properties)
+    }
+
     /// JSON Schema without `screenshot` or screenshot-only fields.
     fn input_schema_text_only() -> Value {
+        let properties = Self::merge_with_shared_properties(json!({
+            "action": {
+                "type": "string",
+                "enum": ["click_target", "move_to_target", "click_element", "move_to_text", "click", "mouse_move", "scroll", "drag", "locate", "key_chord", "type_text", "pointer_move_rel", "wait", "list_displays", "focus_display", "paste", "list_apps", "get_app_state", "get_app_shortcuts", "describe_screen", "app_click", "app_type_text", "app_scroll", "app_key_chord", "app_wait_for", "build_interactive_view", "interactive_click", "interactive_type_text", "interactive_scroll", "build_visual_mark_view", "visual_click", "open_app", "open_url", "open_file", "clipboard_get", "clipboard_set", "run_script", "run_apple_script", "get_os_info"],
+                "description": "The action to perform. **Primary model is text-only — no `screenshot`.** **ACTION PRIORITY:** 1) Use Bash tool for CLI/terminal/system commands first. 2) **`open_app`** to launch apps. **`run_apple_script`** for AppleScript (macOS). 3) Prefer `key_chord` for shortcuts/navigation. Before guessing a shortcut, call **`get_app_shortcuts`** to look up what a target app actually has registered (e.g. \"what triggers Save in this app?\"), then fire it with `key_chord` / `app_key_chord` — avoids trial-and-error mouse clicks. 4) Only when above fail: `click_target` / `move_to_target` (AX → OCR → screen coords in one call), then lower-level `click_element`, `move_to_text`, or `mouse_move` + `click`. Never guess coordinates. **`describe_screen`** is the text-only equivalent of `screenshot`: it returns a structured text snapshot (frontmost app + AX tree + UI tree text + pointer + window geometry) with NO image — use it to observe and verify state when the primary model cannot view screenshots."
+            },
+            "use_screen_coordinates": { "type": "boolean", "description": "For `mouse_move`, `drag`: **must be true** — global display coordinates from `move_to_text`, `locate`, AX, or `pointer_global`. **Not** for `click`." },
+            "delta_x": { "type": "integer", "description": "For `pointer_move_rel`: horizontal delta (negative=left); also accepted as `dx`. For `scroll`: horizontal wheel delta." },
+            "delta_y": { "type": "integer", "description": "For `pointer_move_rel`: vertical delta (negative=up); also accepted as `dy`. For `scroll`: vertical wheel delta." },
+            "keys": { "type": "array", "items": { "type": "string" }, "description": "For `key_chord`: keys in order — modifiers first, then the main key. Desktop host waits after pressing modifiers so shortcuts register (important on macOS with IME)." },
+            "target_text": { "type": "string", "description": "For `move_to_target` / `click_target`: visible or accessible text. The resolver tries AX first, then OCR." },
+            "target_match_index": { "type": "integer", "minimum": 1, "description": "For `move_to_target` / `click_target`: optional 1-based OCR match index when you want a specific candidate." },
+            "move_to_text_match_index": { "type": "integer", "minimum": 1, "description": "For `move_to_text` and unified target actions: **1-based** OCR match index." },
+            "ocr_region_native": {
+                "type": "object",
+                "description": "For `move_to_text`: optional global native rectangle for OCR. If omitted, macOS uses the frontmost window bounds from Accessibility; other OSes use the primary display.",
+                "properties": {
+                    "x0": { "type": "integer", "description": "Top-left X in global screen coordinates." },
+                    "y0": { "type": "integer", "description": "Top-left Y in global screen coordinates." },
+                    "width": { "type": "integer", "minimum": 1, "description": "Width in the same coordinate unit as x0/y0." },
+                    "height": { "type": "integer", "minimum": 1, "description": "Height in the same coordinate unit as x0/y0." }
+                }
+            },
+            "title_contains": { "type": "string", "description": "For `locate`, `click_element`: case-insensitive substring on AXTitle ONLY. Prefer `text_contains` (also covers AXValue/AXDescription/AXHelp)." },
+            "role_substring": { "type": "string", "description": "For `locate`, `click_element`: case-insensitive substring on AXRole **or AXSubrole** (e.g. \"Button\", \"SearchField\")." },
+            "text_contains": { "type": "string", "description": "For `locate`, `click_element`: case-insensitive substring matched against ANY of AXTitle / AXValue / AXDescription / AXHelp. Prefer this when the visible text is shown via value/description (e.g. AXStaticText cards) instead of title." },
+            "app_name": { "type": "string", "description": "For `open_app`: the application name to launch." },
+            "script": { "type": "string", "description": "For `run_apple_script`: the AppleScript code to execute. macOS only." },
+            "scroll_x": { "type": "integer", "description": "For `scroll`: optional global X coordinate to scroll at. Use with `scroll_y`." },
+            "scroll_y": { "type": "integer", "description": "For `scroll`: optional global Y coordinate to scroll at. Use with `scroll_x`." }
+        }));
         json!({
             "type": "object",
-            "properties": {
-                "action": {
-                    "type": "string",
-                    "enum": ["click_target", "move_to_target", "click_element", "move_to_text", "click", "mouse_move", "scroll", "drag", "locate", "key_chord", "type_text", "pointer_move_rel", "wait", "list_displays", "focus_display", "paste", "list_apps", "get_app_state", "describe_screen", "app_click", "app_type_text", "app_scroll", "app_key_chord", "app_wait_for", "build_interactive_view", "interactive_click", "interactive_type_text", "interactive_scroll", "build_visual_mark_view", "visual_click", "open_app", "open_url", "open_file", "clipboard_get", "clipboard_set", "run_script", "run_apple_script", "get_os_info"],
-                    "description": "The action to perform. **Primary model is text-only — no `screenshot`.** **ACTION PRIORITY:** 1) Use Bash tool for CLI/terminal/system commands first. 2) **`open_app`** to launch apps. **`run_apple_script`** for AppleScript (macOS). 3) Prefer `key_chord` for shortcuts/navigation. 4) Only when above fail: `click_target` / `move_to_target` (AX → OCR → screen coords in one call), then lower-level `click_element`, `move_to_text`, or `mouse_move` + `click`. Never guess coordinates. **`describe_screen`** is the text-only equivalent of `screenshot`: it returns a structured text snapshot (frontmost app + AX tree + UI tree text + pointer + window geometry) with NO image — use it to observe and verify state when the primary model cannot view screenshots."
-                },
-                "x": { "type": "integer", "description": "For `mouse_move` and `drag`: X in **global display** units when **`use_screen_coordinates`: true** (required). **Not** for `click`." },
-                "y": { "type": "integer", "description": "For `mouse_move` and `drag`: Y in **global display** units when **`use_screen_coordinates`: true** (required). **Not** for `click`." },
-                "coordinate_mode": { "type": "string", "enum": ["image", "normalized"], "description": "Ignored for `mouse_move` / `drag` — host rejects image/normalized positioning; always set **`use_screen_coordinates`: true**." },
-                "use_screen_coordinates": { "type": "boolean", "description": "For `mouse_move`, `drag`: **must be true** — global display coordinates from `move_to_text`, `locate`, AX, or `pointer_global`. **Not** for `click`." },
-                "button": { "type": "string", "enum": ["left", "right", "middle"], "description": "For `click`, `click_element`, `drag`: mouse button (default left)." },
-                "num_clicks": { "type": "integer", "minimum": 1, "maximum": 3, "description": "For `click`, `click_element`: 1=single (default), 2=double, 3=triple click." },
-                "delta_x": { "type": "integer", "description": "For `pointer_move_rel`: horizontal delta (negative=left); also accepted as `dx`. For `scroll`: horizontal wheel delta." },
-                "delta_y": { "type": "integer", "description": "For `pointer_move_rel`: vertical delta (negative=up); also accepted as `dy`. For `scroll`: vertical wheel delta." },
-                "start_x": { "type": "integer", "description": "For `drag`: start X coordinate." },
-                "start_y": { "type": "integer", "description": "For `drag`: start Y coordinate." },
-                "end_x": { "type": "integer", "description": "For `drag`: end X coordinate." },
-                "end_y": { "type": "integer", "description": "For `drag`: end Y coordinate." },
-                "keys": { "type": "array", "items": { "type": "string" }, "description": "For `key_chord`: keys in order — modifiers first, then the main key. Desktop host waits after pressing modifiers so shortcuts register (important on macOS with IME)." },
-                "text": { "type": "string", "description": "For `type_text`: text to type. Prefer clipboard paste (key_chord) for long content." },
-                "ms": { "type": "integer", "description": "For `wait`: duration in milliseconds." },
-                "target_text": { "type": "string", "description": "For `move_to_target` / `click_target`: visible or accessible text. The resolver tries AX first, then OCR." },
-                "target_match_index": { "type": "integer", "minimum": 1, "description": "For `move_to_target` / `click_target`: optional 1-based OCR match index when you want a specific candidate." },
-                "text_query": { "type": "string", "description": "For `move_to_text`, `move_to_target`, `click_target`: visible text to OCR-match on screen (case-insensitive substring)." },
-                "move_to_text_match_index": { "type": "integer", "minimum": 1, "description": "For `move_to_text` and unified target actions: **1-based** OCR match index." },
-                "ocr_region_native": {
-                    "type": "object",
-                    "description": "For `move_to_text`: optional global native rectangle for OCR. If omitted, macOS uses the frontmost window bounds from Accessibility; other OSes use the primary display.",
-                    "properties": {
-                        "x0": { "type": "integer", "description": "Top-left X in global screen coordinates." },
-                        "y0": { "type": "integer", "description": "Top-left Y in global screen coordinates." },
-                        "width": { "type": "integer", "minimum": 1, "description": "Width in the same coordinate unit as x0/y0." },
-                        "height": { "type": "integer", "minimum": 1, "description": "Height in the same coordinate unit as x0/y0." }
-                    }
-                },
-                "title_contains": { "type": "string", "description": "For `locate`, `click_element`: case-insensitive substring on AXTitle ONLY. Prefer `text_contains` (also covers AXValue/AXDescription/AXHelp)." },
-                "role_substring": { "type": "string", "description": "For `locate`, `click_element`: case-insensitive substring on AXRole **or AXSubrole** (e.g. \"Button\", \"SearchField\")." },
-                "identifier_contains": { "type": "string", "description": "For `locate`, `click_element`: case-insensitive substring on AXIdentifier." },
-                "text_contains": { "type": "string", "description": "For `locate`, `click_element`: case-insensitive substring matched against ANY of AXTitle / AXValue / AXDescription / AXHelp. Prefer this when the visible text is shown via value/description (e.g. AXStaticText cards) instead of title." },
-                "node_idx": { "type": "integer", "minimum": 0, "description": "For `locate`, `click_element`, `app_click`: jump straight to a node returned by the most recent `get_app_state` (field `idx`). Bypasses BFS. macOS only; other platforms return AX_IDX_NOT_SUPPORTED." },
-                "app_state_digest": { "type": "string", "description": "For `locate`, `click_element`: optional `state_digest` from the same `get_app_state` call that produced `node_idx`. Stale digest yields AX_IDX_STALE so you re-snapshot." },
-                "max_depth": { "type": "integer", "minimum": 1, "maximum": 200, "description": "For `locate`, `click_element`: max BFS depth (default 48). Ignored when `node_idx` is supplied." },
-                "filter_combine": { "type": "string", "enum": ["all", "any"], "description": "For `locate`, `click_element`: `all` (default, AND) or `any` (OR) for filter combination. Priority: `node_idx` > `text_contains` > `title_contains`+`role_substring`." },
-                "app_name": { "type": "string", "description": "For `open_app`: the application name to launch." },
-                "url": { "type": "string", "description": "For `open_url`: URL to open with the system/default browser." },
-                "path": { "type": "string", "description": "For `open_file`: local file path to open with its default handler." },
-                "app": { "type": ["string", "object"], "description": "For `open_file`: optional app name. For app-scoped actions: selector object such as `{ \"name\": \"Safari\" }`, `{ \"bundle_id\": \"...\" }`, or `{ \"pid\": 123 }`." },
-                "script": { "type": "string", "description": "For `run_apple_script`: the AppleScript code to execute. macOS only." },
-                "script_type": { "type": "string", "enum": ["applescript", "shell", "bash", "powershell", "cmd"], "description": "For `run_script`: script interpreter/type." },
-                "timeout_ms": { "type": "integer", "description": "For `run_script`: timeout in milliseconds." },
-                "max_output_bytes": { "type": "integer", "description": "For `run_script` / `clipboard_get`: maximum bytes to return." },
-                "clear_first": { "type": "boolean", "description": "For `paste`: select all before pasting." },
-                "submit": { "type": "boolean", "description": "For `paste`: press submit keys after pasting." },
-                "submit_keys": { "type": "array", "items": { "type": "string" }, "description": "For `paste`: key chord to submit, default `[\"return\"]`." },
-                "display_id": { "type": ["integer", "null"], "description": "For `focus_display` or display-pinned desktop actions: display id, or null to clear the pin." },
-                "include_hidden": { "type": "boolean", "description": "For `list_apps`: include hidden/background apps." },
-                "only_visible": { "type": "boolean", "description": "For `list_apps`: list only visible apps when true." },
-                "target": { "type": "object", "description": "For `app_click`: click target such as `{ \"node_idx\": 3 }`, image/screen coordinates, or OCR text." },
-                "focus": { "type": ["object", "null"], "description": "For app-scoped text/scroll actions: optional focus target." },
-                "predicate": { "type": "object", "description": "For `app_wait_for`: wait predicate." },
-                "opts": { "type": "object", "description": "For `build_interactive_view` / `build_visual_mark_view`: optional view options." },
-                "i": { "type": ["integer", "null"], "description": "For interactive/visual actions: element or mark index from the latest view." },
-                "dx": { "type": "integer", "description": "For app/interactive scroll actions: horizontal delta." },
-                "dy": { "type": "integer", "description": "For app/interactive scroll actions: vertical delta." },
-                "mouse_button": { "type": "string", "enum": ["left", "right", "middle"], "description": "For app/interactive/visual click actions." },
-                "click_count": { "type": "integer", "minimum": 1, "maximum": 3, "description": "For app click actions." },
-                "modifier_keys": { "type": "array", "items": { "type": "string" }, "description": "For app click actions: modifier keys to hold." },
-                "wait_ms_after": { "type": "integer", "description": "For app click actions: post-click wait in milliseconds." },
-                "focus_idx": { "type": "integer", "minimum": 0, "description": "For `app_key_chord`: optional node index to focus first." },
-                "poll_ms": { "type": "integer", "description": "For `app_wait_for`: polling interval." },
-                "scroll_x": { "type": "integer", "description": "For `scroll`: optional global X coordinate to scroll at. Use with `scroll_y`." },
-                "scroll_y": { "type": "integer", "description": "For `scroll`: optional global Y coordinate to scroll at. Use with `scroll_x`." }
-            },
+            "properties": properties,
             "required": ["action"],
             "additionalProperties": false
         })
@@ -787,34 +820,6 @@ The **primary model cannot consume images** in tool results — **do not** use *
     }
 }
 
-/// JSON for `snapshot_coordinate_basis` in mouse tool results (last screenshot refinement).
-fn computer_use_snapshot_coordinate_basis(
-    host_ref: &dyn crate::agentic::tools::computer_use_host::ComputerUseHost,
-) -> serde_json::Value {
-    let last_ref = host_ref.last_screenshot_refinement();
-    match last_ref {
-        None => serde_json::Value::Null,
-        Some(ComputerUseScreenshotRefinement::FullDisplay) => json!("full_display"),
-        Some(ComputerUseScreenshotRefinement::RegionAroundPoint { center_x, center_y }) => {
-            json!({
-                "region_crop_center_full_display_native": { "x": center_x, "y": center_y }
-            })
-        }
-        Some(ComputerUseScreenshotRefinement::QuadrantNavigation {
-            x0,
-            y0,
-            width,
-            height,
-            click_ready,
-        }) => {
-            json!({
-                "quadrant_native_rect": { "x0": x0, "y0": y0, "w": width, "h": height },
-                "quadrant_navigation_click_ready": click_ready,
-            })
-        }
-    }
-}
-
 /// Verify a global (gx, gy) coordinate falls within at least one display reported by
 /// the host. Returns a structured `DESKTOP_COORD_OUT_OF_DISPLAY` error otherwise.
 ///
@@ -854,203 +859,12 @@ pub(crate) async fn ensure_global_xy_on_display(
             )
         })
         .collect();
-    Err(BitFunError::tool(format!(
-        "[DESKTOP_COORD_OUT_OF_DISPLAY] global=({:.1},{:.1}) does not lie on any visible display. \
+    Err(coded_tool_error(ErrorCode::DesktopCoordOutOfDisplay, format!("global=({:.1},{:.1}) does not lie on any visible display. \
          Visible displays: [{}]. Hint: image-pixel coordinates are NOT screen coordinates. \
          Use screenshot.pointer_global, click_element/locate result.global_center_x/y, or move_to_text. \
-         To convert image→global, use the screenshot's display_id + scale_factor.",
-        gx,
+         To convert image→global, use the screenshot's display_id + scale_factor.", gx,
         gy,
-        bounds.join("; ")
-    )))
-}
-
-/// Absolute pointer move (`ComputerUseMousePrecise` tool).
-pub(crate) async fn computer_use_execute_mouse_precise(
-    host_ref: &dyn crate::agentic::tools::computer_use_host::ComputerUseHost,
-    input: &Value,
-) -> BitFunResult<Vec<ToolResult>> {
-    ensure_pointer_move_uses_screen_coordinates_only(input)?;
-    let snapshot_basis = computer_use_snapshot_coordinate_basis(host_ref);
-    let x = req_i32(input, "x")?;
-    let y = req_i32(input, "y")?;
-    let mode = coordinate_mode(input);
-    let use_screen = use_screen_coordinates(input);
-    let (sx64, sy64) = ComputerUseTool::resolve_xy_f64(host_ref, input, x, y)?;
-    if use_screen {
-        ensure_global_xy_on_display(host_ref, sx64, sy64).await?;
-    }
-    host_ref.mouse_move_global_f64(sx64, sy64).await?;
-    let sx = sx64.round() as i32;
-    let sy = sy64.round() as i32;
-    let input_coords = json!({
-        "kind": "mouse_precise",
-        "raw": { "x": x, "y": y, "coordinate_mode": mode, "use_screen_coordinates": use_screen },
-        "resolved_global": { "x": sx64, "y": sy64 }
-    });
-    let body = computer_use_augment_result_json(
-        host_ref,
-        json!({
-            "success": true,
-            "tool": "ComputerUseMousePrecise",
-            "positioning": "absolute",
-            "x": x,
-            "y": y,
-            "pointer_x": sx,
-            "pointer_y": sy,
-            "coordinate_mode": mode,
-            "use_screen_coordinates": use_screen,
-            "snapshot_coordinate_basis": snapshot_basis,
-        }),
-        Some(input_coords),
-    )
-    .await;
-    let summary = format!(
-        "Moved pointer to global screen (~{}, ~{}, sub-point on macOS) (input {:?} {}, {}).",
-        sx, sy, mode, x, y
-    );
-    Ok(vec![ToolResult::ok(body, Some(summary))])
-}
-
-/// Cardinal step move (`ComputerUseMouseStep` tool). Same pixel space as `pointer_move_rel`.
-pub(crate) async fn computer_use_execute_mouse_step(
-    host_ref: &dyn crate::agentic::tools::computer_use_host::ComputerUseHost,
-    input: &Value,
-) -> BitFunResult<Vec<ToolResult>> {
-    let dir = input
-        .get("direction")
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| {
-            BitFunError::tool(
-                "direction is required for ComputerUseMouseStep (up|down|left|right)".to_string(),
-            )
-        })?;
-    let px = input
-        .get("pixels")
-        .and_then(|v| v.as_i64())
-        .map(|v| v as i32)
-        .unwrap_or(32)
-        .clamp(1, 400);
-    let (dx, dy) = match dir.to_lowercase().as_str() {
-        "up" => (0, -px),
-        "down" => (0, px),
-        "left" => (-px, 0),
-        "right" => (px, 0),
-        _ => {
-            return Err(BitFunError::tool(
-                "direction must be up, down, left, or right".to_string(),
-            ));
-        }
-    };
-    host_ref.pointer_move_relative(dx, dy).await?;
-    let input_coords = json!({
-        "kind": "mouse_step",
-        "direction": dir,
-        "pixels": px,
-        "delta_x": dx,
-        "delta_y": dy
-    });
-    let body = computer_use_augment_result_json(
-        host_ref,
-        json!({
-            "success": true,
-            "tool": "ComputerUseMouseStep",
-            "direction": dir,
-            "pixels": px,
-            "delta_x": dx,
-            "delta_y": dy,
-        }),
-        Some(input_coords),
-    )
-    .await;
-    let summary = format!(
-        "Stepped pointer by ({}, {}) px (direction {}, {} px).",
-        dx, dy, dir, px
-    );
-    Ok(vec![ToolResult::ok(body, Some(summary))])
-}
-
-/// Click and mouse-wheel at the **current** pointer (`ComputerUseMouseClick` tool).
-pub(crate) async fn computer_use_execute_mouse_click_tool(
-    host_ref: &dyn crate::agentic::tools::computer_use_host::ComputerUseHost,
-    input: &Value,
-) -> BitFunResult<Vec<ToolResult>> {
-    let act = input
-        .get("action")
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| BitFunError::tool("action is required (click or wheel)".to_string()))?;
-    match act {
-        "click" => {
-            let button = input
-                .get("button")
-                .and_then(|v| v.as_str())
-                .unwrap_or("left");
-            let num_clicks = input
-                .get("num_clicks")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(1)
-                .clamp(1, 3) as u32;
-            for _ in 0..num_clicks {
-                host_ref.mouse_click(button).await?;
-            }
-            let click_label = match num_clicks {
-                2 => "double",
-                3 => "triple",
-                _ => "single",
-            };
-            let input_coords = json!({ "kind": "mouse_click", "action": "click", "button": button, "num_clicks": num_clicks });
-            let body = computer_use_augment_result_json(
-                host_ref,
-                json!({
-                    "success": true,
-                    "tool": "ComputerUseMouseClick",
-                    "action": "click",
-                    "button": button,
-                    "num_clicks": num_clicks,
-                }),
-                Some(input_coords),
-            )
-            .await;
-            let summary = format!(
-                "{} {} click at current pointer (does not move).",
-                button, click_label
-            );
-            Ok(vec![ToolResult::ok(body, Some(summary))])
-        }
-        "wheel" => {
-            let dx = input.get("delta_x").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-            let dy = input.get("delta_y").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-            if dx == 0 && dy == 0 {
-                return Err(BitFunError::tool(
-                    "wheel requires non-zero delta_x and/or delta_y".to_string(),
-                ));
-            }
-            host_ref.scroll(dx, dy).await?;
-            let input_coords = json!({
-                "kind": "mouse_click",
-                "action": "wheel",
-                "delta_x": dx,
-                "delta_y": dy
-            });
-            let body = computer_use_augment_result_json(
-                host_ref,
-                json!({
-                    "success": true,
-                    "tool": "ComputerUseMouseClick",
-                    "action": "wheel",
-                    "delta_x": dx,
-                    "delta_y": dy,
-                }),
-                Some(input_coords),
-            )
-            .await;
-            let summary = format!("Mouse wheel at pointer: delta ({}, {}).", dx, dy);
-            Ok(vec![ToolResult::ok(body, Some(summary))])
-        }
-        _ => Err(BitFunError::tool(
-            "ComputerUseMouseClick action must be \"click\" or \"wheel\"".to_string(),
-        )),
-    }
+        bounds.join("; "))))
 }
 
 /// Helper: build `UiElementLocateQuery` from tool input JSON.
@@ -1149,7 +963,7 @@ impl Tool for ComputerUseTool {
             "Desktop automation (host OS: {}). {} All actions in one tool. Send only parameters that apply to the chosen `action`. \
 **ACTION PRIORITY (CRITICAL):** Always think in this order before choosing an action:\n\
 1. **Terminal/CLI/System commands first** — Use Bash tool for terminal commands, system scripts (e.g., macOS `osascript`, AppleScript), shell automation. This is the MOST EFFICIENT approach.\n\
-2. **Keyboard shortcuts second** — Use **`key_chord`** for system shortcuts, app shortcuts, navigation keys (Enter, Escape, Tab, Space, Arrow keys). Prefer over mouse when equivalent.\n\
+2. **Keyboard shortcuts second** — Use **`key_chord`** for system shortcuts, app shortcuts, navigation keys (Enter, Escape, Tab, Space, Arrow keys). Prefer over mouse when equivalent. Don't know the shortcut for a target app's function? Call **`get_app_shortcuts`** to read its registered menu shortcuts (macOS `AXMenuBar`, Windows UIA menu tree), then fire it with `key_chord` / `app_key_chord` instead of clicking through menus.\n\
 3. **Precise UI control last** — Only when above methods fail: prefer **`click_target`** / **`move_to_target`** (AX → OCR → screen coords in one call). Use lower-level **`click_element`**, **`move_to_text`**, or **`mouse_move`** + **`click`** only when you need manual disambiguation.\n\
 **Screenshot usage:** **`screenshot`** is ONLY for observing/confirming UI state and extracting text/information — NEVER use screenshot coordinates to control mouse movement. Always use precise methods (AX, OCR, system coordinates) for targeting.\n\
 **Cowork-style loop:** **`screenshot`** (observe) → **one** action → **`screenshot`** (verify). Use **`wait`** if UI animates. When **`interaction_state.recommend_screenshot_to_verify_last_action`** is true, call **`screenshot`** next. \
@@ -1189,87 +1003,46 @@ impl Tool for ComputerUseTool {
     }
 
     fn input_schema(&self) -> Value {
+        let properties = Self::merge_with_shared_properties(json!({
+            "action": {
+                "type": "string",
+                "enum": ["screenshot", "describe_screen", "click_target", "move_to_target", "click_element", "move_to_text", "click", "mouse_move", "scroll", "drag", "locate", "key_chord", "type_text", "pointer_move_rel", "wait", "list_displays", "focus_display", "paste", "list_apps", "get_app_state", "get_app_shortcuts", "app_click", "app_type_text", "app_scroll", "app_key_chord", "app_wait_for", "build_interactive_view", "interactive_click", "interactive_type_text", "interactive_scroll", "build_visual_mark_view", "visual_click", "open_app", "open_url", "open_file", "clipboard_get", "clipboard_set", "run_script", "run_apple_script", "get_os_info"],
+                "description": "The action to perform. **ACTION PRIORITY:** 1) Use Bash tool for CLI/terminal/system commands (most efficient). 2) **`open_app`** to launch apps by name. **`run_apple_script`** to run AppleScript (macOS). 3) Prefer **`key_chord`** for shortcuts/navigation keys over mouse. Not sure what shortcut a target app uses? Call **`get_app_shortcuts`** first to read its registered menu shortcuts, then fire the winner with `key_chord` / `app_key_chord` instead of clicking through menus. 4) Only when above fail: `click_target` / `move_to_target` (AX → OCR → screen coords in one call) before lower-level `click_element`, `move_to_text`, or `mouse_move` + `click`. **`screenshot`** is for observation/confirmation ONLY — never derive mouse coordinates from screenshots. `click` = press at **current pointer only** (no x/y params). `scroll` supports optional position (`scroll_x`/`scroll_y`). `type_text`, `drag`, `pointer_move_rel`, `wait`, `locate` = standard actions."
+            },
+            "use_screen_coordinates": { "type": "boolean", "description": "For `mouse_move`, `drag`: **must be true** — global display coordinates (e.g. macOS points) from `move_to_text`, `locate`, AX, or `pointer_global`. **Not** for `click`." },
+            "delta_x": { "type": "integer", "description": "For `pointer_move_rel`: horizontal delta (negative=left); also accepted as `dx`. **Not** allowed as the first move after `screenshot` (host). For `scroll`: horizontal wheel delta." },
+            "delta_y": { "type": "integer", "description": "For `pointer_move_rel`: vertical delta (negative=up); also accepted as `dy`. **Not** allowed as the first move after `screenshot` (host). For `scroll`: vertical wheel delta." },
+            "keys": { "type": "array", "items": { "type": "string" }, "description": "For `key_chord`: keys in order — **modifiers first**, then the main key (e.g. `[\"command\",\"f\"]`). Desktop host waits after pressing modifiers so shortcuts register (important on macOS with IME). Modifiers: command, control, shift, alt/option. Arrows: `up`, `down`, … Host may require a fresh screenshot before Return/Enter when the pointer is stale." },
+            "target_text": { "type": "string", "description": "For `move_to_target` / `click_target`: visible or accessible text. The resolver tries AX text first, then OCR text, without requiring a prior screenshot." },
+            "target_match_index": { "type": "integer", "minimum": 1, "description": "For `move_to_target` / `click_target`: optional 1-based OCR match index when you want a specific candidate. Alias of `move_to_text_match_index` for the unified target actions." },
+            "move_to_text_match_index": { "type": "integer", "minimum": 1, "description": "For `move_to_text` and unified target actions: **1-based** OCR match index. For `move_to_text`, use after a disambiguation response; for `click_target`, use to pin a candidate." },
+            "ocr_region_native": {
+                "type": "object",
+                "description": "For `move_to_text`: optional global native rectangle for OCR. If omitted, macOS uses the frontmost window bounds from Accessibility; other OSes use the primary display. Overrides the automatic region when set. Requires x0, y0, width, height.",
+                "properties": {
+                    "x0": { "type": "integer", "description": "Top-left X in global screen coordinates (macOS: same logical space as CGDisplayBounds / pointer; not physical Retina pixels)." },
+                    "y0": { "type": "integer", "description": "Top-left Y in global screen coordinates (macOS: logical, Y-down)." },
+                    "width": { "type": "integer", "minimum": 1, "description": "Width in the same coordinate unit as x0/y0 (logical on macOS)." },
+                    "height": { "type": "integer", "minimum": 1, "description": "Height in the same coordinate unit as x0/y0 (logical on macOS)." }
+                }
+            },
+            "title_contains": { "type": "string", "description": "For `locate`, `click_element`: case-insensitive substring on AXTitle ONLY. Use same language as the app UI. Prefer `text_contains` (also covers AXValue/AXDescription/AXHelp) when in doubt." },
+            "role_substring": { "type": "string", "description": "For `locate`, `click_element`: case-insensitive substring on AXRole **or AXSubrole** (e.g. \"Button\", \"TextField\", \"SearchField\")." },
+            "text_contains": { "type": "string", "description": "For `locate`, `click_element`: case-insensitive substring matched against ANY of AXTitle / AXValue / AXDescription / AXHelp. Best default when the visible label lives in value/description (e.g. AXStaticText cards)." },
+            "screenshot_crop_center_x": { "type": "integer", "minimum": 0, "description": "For `screenshot`: point crop X center in full-capture native pixels." },
+            "screenshot_crop_center_y": { "type": "integer", "minimum": 0, "description": "For `screenshot`: point crop Y center in full-capture native pixels." },
+            "screenshot_crop_half_extent_native": { "type": "integer", "minimum": 0, "description": "For `screenshot`: half-size of point crop in native pixels (default 250)." },
+            "screenshot_navigate_quadrant": { "type": "string", "enum": ["top_left", "top_right", "bottom_left", "bottom_right"], "description": "For `screenshot`: zoom into quadrant. Repeat until `quadrant_navigation_click_ready` is true." },
+            "screenshot_reset_navigation": { "type": "boolean", "description": "For `screenshot`: reset to full display before this capture." },
+            "screenshot_implicit_center": { "type": "string", "enum": ["mouse", "text_caret"], "description": "For `screenshot` when `requires_fresh_screenshot_before_click` / `requires_fresh_screenshot_before_enter` is true: center the implicit ~500×500 on the mouse (`mouse`, default) or on the focused text control (`text_caret`, macOS AX; falls back to mouse). Applies to the **first** confirmation capture too. Ignored when you set `screenshot_crop_center_*` / `screenshot_navigate_quadrant` / `screenshot_reset_navigation`." },
+            "app_name": { "type": "string", "description": "For `open_app`: the application name to launch (e.g. \"Safari\", \"WeChat\", \"Visual Studio Code\")." },
+            "script": { "type": "string", "description": "For `run_apple_script`: the AppleScript code to execute via `osascript`. macOS only." },
+            "scroll_x": { "type": "integer", "description": "For `scroll`: optional global X coordinate to move pointer before scrolling. Use with `scroll_y`. Requires `use_screen_coordinates`: true." },
+            "scroll_y": { "type": "integer", "description": "For `scroll`: optional global Y coordinate to move pointer before scrolling. Use with `scroll_x`. Requires `use_screen_coordinates`: true." }
+        }));
         json!({
             "type": "object",
-            "properties": {
-                "action": {
-                    "type": "string",
-                    "enum": ["screenshot", "describe_screen", "click_target", "move_to_target", "click_element", "move_to_text", "click", "mouse_move", "scroll", "drag", "locate", "key_chord", "type_text", "pointer_move_rel", "wait", "list_displays", "focus_display", "paste", "list_apps", "get_app_state", "app_click", "app_type_text", "app_scroll", "app_key_chord", "app_wait_for", "build_interactive_view", "interactive_click", "interactive_type_text", "interactive_scroll", "build_visual_mark_view", "visual_click", "open_app", "open_url", "open_file", "clipboard_get", "clipboard_set", "run_script", "run_apple_script", "get_os_info"],
-                    "description": "The action to perform. **ACTION PRIORITY:** 1) Use Bash tool for CLI/terminal/system commands (most efficient). 2) **`open_app`** to launch apps by name. **`run_apple_script`** to run AppleScript (macOS). 3) Prefer **`key_chord`** for shortcuts/navigation keys over mouse. 4) Only when above fail: `click_target` / `move_to_target` (AX → OCR → screen coords in one call) before lower-level `click_element`, `move_to_text`, or `mouse_move` + `click`. **`screenshot`** is for observation/confirmation ONLY — never derive mouse coordinates from screenshots. `click` = press at **current pointer only** (no x/y params). `scroll` supports optional position (`scroll_x`/`scroll_y`). `type_text`, `drag`, `pointer_move_rel`, `wait`, `locate` = standard actions."
-                },
-                "x": { "type": "integer", "description": "For `mouse_move` and `drag`: X in **global display** units when **`use_screen_coordinates`: true** (required). **Not** for `click`." },
-                "y": { "type": "integer", "description": "For `mouse_move` and `drag`: Y in **global display** units when **`use_screen_coordinates`: true** (required). **Not** for `click`." },
-                "coordinate_mode": { "type": "string", "enum": ["image", "normalized"], "description": "Ignored for `mouse_move` / `drag` — host rejects image/normalized positioning; always set **`use_screen_coordinates`: true**." },
-                "use_screen_coordinates": { "type": "boolean", "description": "For `mouse_move`, `drag`: **must be true** — global display coordinates (e.g. macOS points) from `move_to_text`, `locate`, AX, or `pointer_global`. **Not** for `click`." },
-                "button": { "type": "string", "enum": ["left", "right", "middle"], "description": "For `click`, `click_element`, `drag`: mouse button (default left)." },
-                "num_clicks": { "type": "integer", "minimum": 1, "maximum": 3, "description": "For `click`, `click_element`: 1=single (default), 2=double, 3=triple click." },
-                "delta_x": { "type": "integer", "description": "For `pointer_move_rel`: horizontal delta (negative=left); also accepted as `dx`. **Not** allowed as the first move after `screenshot` (host). For `scroll`: horizontal wheel delta." },
-                "delta_y": { "type": "integer", "description": "For `pointer_move_rel`: vertical delta (negative=up); also accepted as `dy`. **Not** allowed as the first move after `screenshot` (host). For `scroll`: vertical wheel delta." },
-                "start_x": { "type": "integer", "description": "For `drag`: start X coordinate." },
-                "start_y": { "type": "integer", "description": "For `drag`: start Y coordinate." },
-                "end_x": { "type": "integer", "description": "For `drag`: end X coordinate." },
-                "end_y": { "type": "integer", "description": "For `drag`: end Y coordinate." },
-                "keys": { "type": "array", "items": { "type": "string" }, "description": "For `key_chord`: keys in order — **modifiers first**, then the main key (e.g. `[\"command\",\"f\"]`). Desktop host waits after pressing modifiers so shortcuts register (important on macOS with IME). Modifiers: command, control, shift, alt/option. Arrows: `up`, `down`, … Host may require a fresh screenshot before Return/Enter when the pointer is stale." },
-                "text": { "type": "string", "description": "For `type_text`: text to type. Prefer clipboard paste (key_chord) for long content." },
-                "ms": { "type": "integer", "description": "For `wait`: duration in milliseconds." },
-                "target_text": { "type": "string", "description": "For `move_to_target` / `click_target`: visible or accessible text. The resolver tries AX text first, then OCR text, without requiring a prior screenshot." },
-                "target_match_index": { "type": "integer", "minimum": 1, "description": "For `move_to_target` / `click_target`: optional 1-based OCR match index when you want a specific candidate. Alias of `move_to_text_match_index` for the unified target actions." },
-                "text_query": { "type": "string", "description": "For `move_to_text`, `move_to_target`, `click_target`: visible text to OCR-match on screen (case-insensitive substring)." },
-                "move_to_text_match_index": { "type": "integer", "minimum": 1, "description": "For `move_to_text` and unified target actions: **1-based** OCR match index. For `move_to_text`, use after a disambiguation response; for `click_target`, use to pin a candidate." },
-                "ocr_region_native": {
-                    "type": "object",
-                    "description": "For `move_to_text`: optional global native rectangle for OCR. If omitted, macOS uses the frontmost window bounds from Accessibility; other OSes use the primary display. Overrides the automatic region when set. Requires x0, y0, width, height.",
-                    "properties": {
-                        "x0": { "type": "integer", "description": "Top-left X in global screen coordinates (macOS: same logical space as CGDisplayBounds / pointer; not physical Retina pixels)." },
-                        "y0": { "type": "integer", "description": "Top-left Y in global screen coordinates (macOS: logical, Y-down)." },
-                        "width": { "type": "integer", "minimum": 1, "description": "Width in the same coordinate unit as x0/y0 (logical on macOS)." },
-                        "height": { "type": "integer", "minimum": 1, "description": "Height in the same coordinate unit as x0/y0 (logical on macOS)." }
-                    }
-                },
-                "title_contains": { "type": "string", "description": "For `locate`, `click_element`: case-insensitive substring on AXTitle ONLY. Use same language as the app UI. Prefer `text_contains` (also covers AXValue/AXDescription/AXHelp) when in doubt." },
-                "role_substring": { "type": "string", "description": "For `locate`, `click_element`: case-insensitive substring on AXRole **or AXSubrole** (e.g. \"Button\", \"TextField\", \"SearchField\")." },
-                "identifier_contains": { "type": "string", "description": "For `locate`, `click_element`: case-insensitive substring on AXIdentifier." },
-                "text_contains": { "type": "string", "description": "For `locate`, `click_element`: case-insensitive substring matched against ANY of AXTitle / AXValue / AXDescription / AXHelp. Best default when the visible label lives in value/description (e.g. AXStaticText cards)." },
-                "node_idx": { "type": "integer", "minimum": 0, "description": "For `locate`, `click_element`, `app_click`: jump straight to a node returned by the most recent `get_app_state` (field `idx`). Bypasses BFS. macOS only; other platforms return AX_IDX_NOT_SUPPORTED." },
-                "app_state_digest": { "type": "string", "description": "For `locate`, `click_element`: optional `state_digest` from the same `get_app_state` call that produced `node_idx`. Stale digest yields AX_IDX_STALE so you re-snapshot." },
-                "max_depth": { "type": "integer", "minimum": 1, "maximum": 200, "description": "For `locate`, `click_element`: max BFS depth (default 48). Ignored when `node_idx` is supplied." },
-                "filter_combine": { "type": "string", "enum": ["all", "any"], "description": "For `locate`, `click_element`: `all` (default, AND) or `any` (OR) for filter combination. Priority: `node_idx` > `text_contains` > `title_contains`+`role_substring`." },
-                "screenshot_crop_center_x": { "type": "integer", "minimum": 0, "description": "For `screenshot`: point crop X center in full-capture native pixels." },
-                "screenshot_crop_center_y": { "type": "integer", "minimum": 0, "description": "For `screenshot`: point crop Y center in full-capture native pixels." },
-                "screenshot_crop_half_extent_native": { "type": "integer", "minimum": 0, "description": "For `screenshot`: half-size of point crop in native pixels (default 250)." },
-                "screenshot_navigate_quadrant": { "type": "string", "enum": ["top_left", "top_right", "bottom_left", "bottom_right"], "description": "For `screenshot`: zoom into quadrant. Repeat until `quadrant_navigation_click_ready` is true." },
-                "screenshot_reset_navigation": { "type": "boolean", "description": "For `screenshot`: reset to full display before this capture." },
-                "screenshot_implicit_center": { "type": "string", "enum": ["mouse", "text_caret"], "description": "For `screenshot` when `requires_fresh_screenshot_before_click` / `requires_fresh_screenshot_before_enter` is true: center the implicit ~500×500 on the mouse (`mouse`, default) or on the focused text control (`text_caret`, macOS AX; falls back to mouse). Applies to the **first** confirmation capture too. Ignored when you set `screenshot_crop_center_*` / `screenshot_navigate_quadrant` / `screenshot_reset_navigation`." },
-                "app_name": { "type": "string", "description": "For `open_app`: the application name to launch (e.g. \"Safari\", \"WeChat\", \"Visual Studio Code\")." },
-                "url": { "type": "string", "description": "For `open_url`: URL to open with the system/default browser." },
-                "path": { "type": "string", "description": "For `open_file`: local file path to open with its default handler." },
-                "app": { "type": ["string", "object"], "description": "For `open_file`: optional app name. For app-scoped actions: selector object such as `{ \"name\": \"Safari\" }`, `{ \"bundle_id\": \"...\" }`, or `{ \"pid\": 123 }`." },
-                "script": { "type": "string", "description": "For `run_apple_script`: the AppleScript code to execute via `osascript`. macOS only." },
-                "script_type": { "type": "string", "enum": ["applescript", "shell", "bash", "powershell", "cmd"], "description": "For `run_script`: script interpreter/type." },
-                "timeout_ms": { "type": "integer", "description": "For `run_script`: timeout in milliseconds." },
-                "max_output_bytes": { "type": "integer", "description": "For `run_script` / `clipboard_get`: maximum bytes to return." },
-                "clear_first": { "type": "boolean", "description": "For `paste`: select all before pasting." },
-                "submit": { "type": "boolean", "description": "For `paste`: press submit keys after pasting." },
-                "submit_keys": { "type": "array", "items": { "type": "string" }, "description": "For `paste`: key chord to submit, default `[\"return\"]`." },
-                "display_id": { "type": ["integer", "null"], "description": "For `focus_display` or display-pinned desktop actions: display id, or null to clear the pin." },
-                "include_hidden": { "type": "boolean", "description": "For `list_apps`: include hidden/background apps." },
-                "only_visible": { "type": "boolean", "description": "For `list_apps`: list only visible apps when true." },
-                "target": { "type": "object", "description": "For `app_click`: click target such as `{ \"node_idx\": 3 }`, image/screen coordinates, or OCR text." },
-                "focus": { "type": ["object", "null"], "description": "For app-scoped text/scroll actions: optional focus target." },
-                "predicate": { "type": "object", "description": "For `app_wait_for`: wait predicate." },
-                "opts": { "type": "object", "description": "For `build_interactive_view` / `build_visual_mark_view`: optional view options." },
-                "i": { "type": ["integer", "null"], "description": "For interactive/visual actions: element or mark index from the latest view." },
-                "dx": { "type": "integer", "description": "For app/interactive scroll actions: horizontal delta." },
-                "dy": { "type": "integer", "description": "For app/interactive scroll actions: vertical delta." },
-                "mouse_button": { "type": "string", "enum": ["left", "right", "middle"], "description": "For app/interactive/visual click actions." },
-                "click_count": { "type": "integer", "minimum": 1, "maximum": 3, "description": "For app click actions." },
-                "modifier_keys": { "type": "array", "items": { "type": "string" }, "description": "For app click actions: modifier keys to hold." },
-                "wait_ms_after": { "type": "integer", "description": "For app click actions: post-click wait in milliseconds." },
-                "focus_idx": { "type": "integer", "minimum": 0, "description": "For `app_key_chord`: optional node index to focus first." },
-                "poll_ms": { "type": "integer", "description": "For `app_wait_for`: polling interval." },
-                "scroll_x": { "type": "integer", "description": "For `scroll`: optional global X coordinate to move pointer before scrolling. Use with `scroll_y`. Requires `use_screen_coordinates`: true." },
-                "scroll_y": { "type": "integer", "description": "For `scroll`: optional global Y coordinate to move pointer before scrolling. Use with `scroll_x`. Requires `use_screen_coordinates`: true." }
-            },
+            "properties": properties,
             "required": ["action"],
             "additionalProperties": false
         })
@@ -1343,7 +1116,7 @@ impl Tool for ComputerUseTool {
             _ => {}
         }
 
-        if Self::is_controlhub_migrated_desktop_action(action) {
+        if Self::routes_to_desktop_action_dispatcher(action) {
             return super::computer_use_actions::ComputerUseActions::new()
                 .handle_desktop(action, input, context)
                 .await;
@@ -2017,22 +1790,15 @@ impl Tool for ComputerUseTool {
                     None => match input.get("key").and_then(|v| v.as_str()) {
                         Some(s) => vec![s.to_string()],
                         None => {
-                            return Err(BitFunError::tool(
-                                "[INVALID_PARAMS] key_chord requires `keys` as a JSON array of key names\nHints: example { \"keys\": [\"command\", \"v\"] } | for a single key { \"keys\": [\"return\"] } | use lowercase canonical names: command, control, option, shift, return, escape, tab, space, delete, arrow_up/down/left/right, f1..f12"
-                                    .to_string(),
-                            ));
+                            return Err(coded_tool_error(ErrorCode::InvalidParams, "key_chord requires `keys` as a JSON array of key names\nHints: example { \"keys\": [\"command\", \"v\"] } | for a single key { \"keys\": [\"return\"] } | use lowercase canonical names: command, control, option, shift, return, escape, tab, space, delete, arrow_up/down/left/right, f1..f12"));
                         }
                     },
                     _ => {
-                        return Err(BitFunError::tool(
-                            "[INVALID_PARAMS] key_chord `keys` must be a string or array of strings\nHints: example { \"keys\": [\"command\", \"v\"] }".to_string(),
-                        ));
+                        return Err(coded_tool_error(ErrorCode::InvalidParams, "key_chord `keys` must be a string or array of strings\nHints: example { \"keys\": [\"command\", \"v\"] }"));
                     }
                 };
                 if keys.is_empty() {
-                    return Err(BitFunError::tool(
-                        "[INVALID_PARAMS] key_chord `keys` must not be empty\nHints: example { \"keys\": [\"return\"] }".to_string(),
-                    ));
+                    return Err(coded_tool_error(ErrorCode::InvalidParams, "key_chord `keys` must not be empty\nHints: example { \"keys\": [\"return\"] }"));
                 }
                 host_ref.key_chord(keys.clone()).await?;
                 let input_coords = json!({ "kind": "key_chord", "keys": keys });
@@ -2279,5 +2045,88 @@ mod tests {
         let desc = ComputerUseTool::description_text_only();
         assert!(desc.contains("describe_screen"));
         assert!(desc.to_lowercase().contains("do not"));
+    }
+
+    fn property_keys(schema: &Value) -> std::collections::BTreeSet<String> {
+        schema
+            .get("properties")
+            .and_then(|p| p.as_object())
+            .map(|m| m.keys().cloned().collect())
+            .unwrap_or_default()
+    }
+
+    /// Every field in [`ComputerUseTool::shared_action_properties`] must appear,
+    /// byte-identical, in both the full and text-only schemas. This is the
+    /// invariant the shared-properties extraction exists to protect: if someone
+    /// edits a "shared" field only in one schema override block, it stops being
+    /// shared and this test should fail loudly instead of the drift going
+    /// unnoticed.
+    #[test]
+    fn shared_action_properties_are_identical_in_both_schemas() {
+        let shared = ComputerUseTool::shared_action_properties();
+        let shared_map = shared.as_object().expect("shared properties is an object");
+        assert!(
+            !shared_map.is_empty(),
+            "shared_action_properties should not be empty"
+        );
+
+        let full = ComputerUseTool::new().input_schema();
+        let text_only = ComputerUseTool::input_schema_text_only();
+
+        for (key, expected) in shared_map {
+            assert_eq!(
+                full.get("properties").and_then(|p| p.get(key)),
+                Some(expected),
+                "shared property `{key}` diverged in the full schema"
+            );
+            assert_eq!(
+                text_only.get("properties").and_then(|p| p.get(key)),
+                Some(expected),
+                "shared property `{key}` diverged in the text-only schema"
+            );
+        }
+    }
+
+    /// Screenshot-only fields must exist solely in the full (multimodal) schema:
+    /// text-only models never receive a `screenshot` action, so these params
+    /// would be dead/misleading in that schema.
+    #[test]
+    fn screenshot_only_fields_are_absent_from_text_only_schema() {
+        let full_keys = property_keys(&ComputerUseTool::new().input_schema());
+        let text_only_keys = property_keys(&ComputerUseTool::input_schema_text_only());
+
+        let screenshot_only_fields = [
+            "screenshot_crop_center_x",
+            "screenshot_crop_center_y",
+            "screenshot_crop_half_extent_native",
+            "screenshot_navigate_quadrant",
+            "screenshot_reset_navigation",
+            "screenshot_implicit_center",
+        ];
+        for field in screenshot_only_fields {
+            assert!(
+                full_keys.contains(field),
+                "full schema should contain `{field}`"
+            );
+            assert!(
+                !text_only_keys.contains(field),
+                "text-only schema should NOT contain `{field}`"
+            );
+        }
+    }
+
+    /// The `action` enum, description, and a handful of other fields are
+    /// deliberately different (richer guidance) between the two schemas. This
+    /// test documents that the shared/override split does not silently
+    /// collapse them into one shared copy.
+    #[test]
+    fn capability_specific_fields_may_differ_between_schemas() {
+        let full = ComputerUseTool::new().input_schema();
+        let text_only = ComputerUseTool::input_schema_text_only();
+        assert_ne!(
+            full.get("properties").and_then(|p| p.get("action")),
+            text_only.get("properties").and_then(|p| p.get("action")),
+            "`action` is expected to differ (screenshot presence, tailored guidance)"
+        );
     }
 }

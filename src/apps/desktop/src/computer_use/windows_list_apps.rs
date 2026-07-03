@@ -82,6 +82,39 @@ pub fn list_running_apps(_include_hidden: bool) -> BitFunResult<Vec<AppInfo>> {
     Ok(apps)
 }
 
+/// Find a visible top-level window owned by `pid`, for callers (e.g.
+/// `get_app_shortcuts`) that need an `HWND` to hand to UI Automation but
+/// only have a pid. Returns the first visible, non-minimized window found
+/// by `EnumWindows` order; does not require the window to be foreground.
+pub fn find_top_window_for_pid(pid: u32) -> Option<HWND> {
+    struct FindState {
+        target_pid: u32,
+        found: Option<isize>,
+    }
+    unsafe extern "system" fn cb(hwnd: HWND, lparam: LPARAM) -> BOOL {
+        let state = &mut *(lparam.0 as *mut FindState);
+        if IsWindowVisible(hwnd).0 == 0 || IsIconic(hwnd).0 != 0 {
+            return TRUE;
+        }
+        let mut pid: u32 = 0;
+        GetWindowThreadProcessId(hwnd, Some(&mut pid));
+        if pid == state.target_pid {
+            state.found = Some(hwnd.0 as isize);
+            return windows::Win32::Foundation::FALSE;
+        }
+        TRUE
+    }
+    let mut state = FindState {
+        target_pid: pid,
+        found: None,
+    };
+    let state_ptr = &mut state as *mut FindState as isize;
+    unsafe {
+        let _ = EnumWindows(Some(cb), LPARAM(state_ptr));
+    }
+    state.found.map(|raw| HWND(raw as *mut c_void))
+}
+
 fn enumerate_windows() -> Vec<WindowEntry> {
     let state = Mutex::new(EnumState {
         windows: Vec::new(),

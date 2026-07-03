@@ -9,15 +9,11 @@
 //!      even when occluded or off-screen, for GDI-backed surfaces. Sized to the
 //!      whole window (`GetWindowRect`), not just the client area, so non-client
 //!      chrome (title bar, VCL button strips) is captured.
-//!   2. **Screen-region `BitBlt` fallback** — when `PrintWindow` returns an
-//!      all-black bitmap (DirectComposition / UWP / WinUI3 targets have no GDI
-//!      back buffer), `BitBlt` the matching pixels off the desktop DC. Works
-//!      when the target is on-screen and not occluded — the common case for a
-//!      daemon-driven agent in the user's interactive session.
-//!   3. **WGC (Windows.Graphics.Capture)** — the only API that returns a UWP
-//!      target's own composited pixels even when occluded. Requires Direct3D11
-//!      and additional `Cargo.toml` features; see
-//!      [`screenshot_window_via_wgc`] (stub — returns `Err` for now).
+//!   2. **WGC (Windows.Graphics.Capture)** — occlusion-immune UWP /
+//!      DirectComposition capture via [`screenshot_window_via_wgc`].
+//!   3. **Screen-region `BitBlt` fallback** — when WGC is unavailable or fails,
+//!      `BitBlt` the matching pixels off the desktop DC. Works when the target is
+//!      on-screen and not occluded.
 //!
 //! ## DWM extended-frame crop
 //!
@@ -190,29 +186,13 @@ pub fn is_iconic(hwnd: HWND) -> bool {
     unsafe { IsIconic(hwnd).as_bool() }
 }
 
-// TODO: WGC fallback for UWP/DirectComposition. Windows.Graphics.Capture is the
-// only API that returns a UWP target's own composited pixels even when occluded,
-// but it requires Direct3D11 + the `Win32_Graphics_Direct3D11`,
-// `Win32_Graphics_Dxgi`, `Graphics_Capture`, and `Win32_System_WinRT`
-// Cargo.toml features (not currently enabled). See the cua-driver-rs reference
-// at `external/cua-cua-driver-rs-v0.6.8/.../wgc.rs` for the D3D11 device + WinRT
-// frame-pool implementation. The stub below returns `Err` so callers fall
-// through to the screen-region `BitBlt` path.
-
 /// Capture a window via Windows.Graphics.Capture (WGC), returning BGRA pixels +
 /// `(width, height)`.
 ///
 /// WGC is the only API that returns a UWP target's own composited pixels even
-/// when occluded by another window. **Stub**: returns `Err` for now — see the
-/// `TODO: WGC` note above. When implemented, [`screenshot_window_bytes`] will
-/// call this before the screen-region `BitBlt` fallback in the mostly-black
-/// path so occluded UWP targets are captured correctly.
+/// when occluded by another window.
 pub fn screenshot_window_via_wgc(hwnd: HWND) -> BitFunResult<(Vec<u8>, u32, u32)> {
-    let _ = hwnd;
-    Err(BitFunError::service(
-        "WGC capture is not implemented yet: requires Direct3D11 + additional \
-         Cargo.toml features. Falling back to screen-region BitBlt.",
-    ))
+    crate::computer_use::windows_wgc_capture::capture_window_bgra(hwnd)
 }
 
 /// Fallback capture path: `BitBlt` the desktop DC over the rectangle covered by
@@ -324,13 +304,11 @@ pub fn screenshot_window_bytes(hwnd: HWND) -> BitFunResult<(Vec<u8>, bool)> {
 /// Tiered fallback chain:
 /// - **Primary**: `PrintWindow(PW_RENDERFULLCONTENT)` — captures occluded /
 ///   off-screen GDI windows.
-/// - **Fallback**: screen-region `BitBlt` off the desktop DC when `PrintWindow`
-///   returns an all-black bitmap (DirectComposition / UWP / WinUI3 targets have
-///   no GDI back buffer). The `occluded` flag is `true` when this path is taken
-///   AND [`target_is_obscured`] reports another window covering the target — in
-///   that case the bitmap shows the *covering* window's pixels.
-/// - **WGC**: [`screenshot_window_via_wgc`] (stub — returns `Err` for now; see
-///   the `TODO: WGC` note).
+/// - **WGC**: [`screenshot_window_via_wgc`] when PrintWindow is mostly black.
+/// - **Fallback**: screen-region `BitBlt` when WGC fails. The `occluded` flag
+///   is `true` when this path is taken AND [`target_is_obscured`] reports another
+///   window covering the target — in that case the bitmap shows the *covering*
+///   window's pixels.
 ///
 /// Minimized windows are rejected up front via [`is_iconic`]. The DWM
 /// extended-frame bounds are used to crop the invisible drop-shadow margin; the
@@ -456,11 +434,10 @@ unsafe fn screenshot_window_bytes_unsafe(hwnd: HWND) -> BitFunResult<WindowCaptu
 
     // Detect the all-black bitmap PrintWindow returns for DirectComposition-
     // backed surfaces. Recovery order:
-    //   1. WGC (occlusion-immune; works for UWP) — stub, returns Err for now.
+    //   1. WGC (occlusion-immune; works for UWP / DirectComposition).
     //   2. Screen-region BitBlt (works when target is on-screen & visible),
     //      flagged occluded via target_is_obscured when another window covers it.
     if is_mostly_black_bgra(&pixels, w as u32, h as u32) {
-        // TODO: WGC fallback for UWP/DirectComposition.
         if let Ok((alt_pixels, alt_w, alt_h)) = screenshot_window_via_wgc(hwnd) {
             return Ok(WindowCapture {
                 png: encode_bgra_to_png(&alt_pixels, alt_w, alt_h)?,

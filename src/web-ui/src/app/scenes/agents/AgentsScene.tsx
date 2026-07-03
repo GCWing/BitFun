@@ -42,6 +42,7 @@ import './AgentsScene.scss';
 import { useGallerySceneAutoRefresh } from '@/app/hooks/useGallerySceneAutoRefresh';
 import { CORE_AGENT_IDS, isAgentInOverviewZone } from './agentVisibility';
 import { CustomAgentAPI } from '@/infrastructure/api/service-api/CustomAgentAPI';
+import { configManager } from '@/infrastructure/config/services/ConfigManager';
 import type { ModeSkillInfo } from '@/infrastructure/config/types';
 import type { SubagentInfo } from '@/infrastructure/api/service-api/SubagentAPI';
 import { useNotification } from '@/shared/notification-system';
@@ -206,6 +207,7 @@ const AgentsHomeView: React.FC = () => {
   const [savingSkills, setSavingSkills] = React.useState(false);
   const [savingSubagents, setSavingSubagents] = React.useState(false);
   const [reviewTeam, setReviewTeam] = useState<ReviewTeam | null>(null);
+  const [computerUseEnabled, setComputerUseEnabled] = useState(true);
 
   const {
     allAgents,
@@ -261,6 +263,23 @@ const AgentsHomeView: React.FC = () => {
       cancelled = true;
     };
   }, [workspacePath]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadComputerUseEnabled = () => {
+      void configManager.getConfig<boolean>('ai.computer_use_enabled').then((enabled) => {
+        if (!cancelled) setComputerUseEnabled(enabled ?? false);
+      });
+    };
+    loadComputerUseEnabled();
+    const unsubscribe = configManager.onConfigChange((path) => {
+      if (path === 'ai.computer_use_enabled' || path === 'ai') loadComputerUseEnabled();
+    });
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, []);
 
   const coreAgentMeta = useMemo((): Record<string, CoreAgentMeta> => ({
     agentic: {
@@ -646,6 +665,11 @@ const AgentsHomeView: React.FC = () => {
                     ? (agent.visibleSubagentCount ?? 0)
                     : 0}
                   onOpenDetails={openAgentDetails}
+                  disabledReason={
+                    agent.id === 'ComputerUse' && !computerUseEnabled
+                      ? t('coreAgentsZone.computerUseDisabledBadge')
+                      : undefined
+                  }
                 />
               ))}
             </div>

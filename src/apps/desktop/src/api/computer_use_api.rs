@@ -77,8 +77,16 @@ pub async fn computer_use_open_system_settings(
     }
     #[cfg(target_os = "windows")]
     {
-        let _ = request;
-        Err("Open system settings is not wired for Windows yet.".to_string())
+        let uri = match request.pane.as_str() {
+            "accessibility" => "ms-settings:easeofaccess",
+            "screen_capture" => "ms-settings:privacy",
+            _ => return Err(format!("Unknown settings pane: {}", request.pane)),
+        };
+        std::process::Command::new("cmd")
+            .args(["/C", "start", "", uri])
+            .status()
+            .map_err(|e| e.to_string())?;
+        return Ok(());
     }
     #[cfg(target_os = "linux")]
     {

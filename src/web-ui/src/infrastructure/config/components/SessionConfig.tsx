@@ -118,6 +118,7 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
   const [computerUseScreen, setComputerUseScreen] = useState(false);
   const [computerUseBusy, setComputerUseBusy] = useState(false);
   const [computerUseStatusLoading, setComputerUseStatusLoading] = useState(false);
+  const [computerUsePlatformNote, setComputerUsePlatformNote] = useState<string | null>(null);
 
   // ── Browser control state ───────────────────────────────────────────────
   const [browserCdpAvailable, setBrowserCdpAvailable] = useState(false);
@@ -147,6 +148,7 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
       setComputerUseEnabled(s.computerUseEnabled);
       setComputerUseAccess(s.accessibilityGranted);
       setComputerUseScreen(s.screenCaptureGranted);
+      setComputerUsePlatformNote(s.platformNote);
       return true;
     } catch (error) {
       log.error('computer_use_get_status failed', error);
@@ -520,6 +522,17 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
         checked ? t('messages.saveSuccess') : t('messages.saveSuccess'),
         { duration: 2000 }
       );
+      if (checked) {
+        // Proactively surface the OS permission prompt (macOS Accessibility /
+        // Screen Recording) the moment the user opts in, instead of waiting
+        // for the first agent tool call to fail with a permission error.
+        try {
+          const { invoke } = await import('@tauri-apps/api/core');
+          await invoke('computer_use_request_permissions');
+        } catch (permError) {
+          log.warn('computer_use_request_permissions failed', permError);
+        }
+      }
       await refreshComputerUseStatus();
     } catch (error) {
       log.error('Failed to save computer_use_enabled', error);
@@ -1227,15 +1240,17 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
                       <RefreshCw size={14} />
                     </IconButton>
                   </span>
-                  <Button
-                    className="bitfun-func-agent-config__row-action-btn"
-                    size="small"
-                    variant="secondary"
-                    disabled={computerUseBusy || computerUseStatusLoading}
-                    onClick={() => void handleComputerUseOpenSettings('accessibility')}
-                  >
-                    {t('computerUse.openSettings')}
-                  </Button>
+                  {platform === 'macos' && (
+                    <Button
+                      className="bitfun-func-agent-config__row-action-btn"
+                      size="small"
+                      variant="secondary"
+                      disabled={computerUseBusy || computerUseStatusLoading}
+                      onClick={() => void handleComputerUseOpenSettings('accessibility')}
+                    >
+                      {t('computerUse.openSettings')}
+                    </Button>
+                  )}
                 </div>
               </ConfigPageRow>
               <ConfigPageRow
@@ -1271,17 +1286,36 @@ const SessionSettingsPanels: React.FC<SessionSettingsPanelsProps> = ({ variant }
                       <RefreshCw size={14} />
                     </IconButton>
                   </span>
-                  <Button
-                    className="bitfun-func-agent-config__row-action-btn"
-                    size="small"
-                    variant="secondary"
-                    disabled={computerUseBusy || computerUseStatusLoading}
-                    onClick={() => void handleComputerUseOpenSettings('screen_capture')}
-                  >
-                    {t('computerUse.openSettings')}
-                  </Button>
+                  {platform === 'macos' && (
+                    <Button
+                      className="bitfun-func-agent-config__row-action-btn"
+                      size="small"
+                      variant="secondary"
+                      disabled={computerUseBusy || computerUseStatusLoading}
+                      onClick={() => void handleComputerUseOpenSettings('screen_capture')}
+                    >
+                      {t('computerUse.openSettings')}
+                    </Button>
+                  )}
                 </div>
               </ConfigPageRow>
+              {computerUsePlatformNote && (
+                <div
+                  className="bitfun-func-agent-config__platform-note"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: 6,
+                    padding: '8px 0 4px',
+                  }}
+                >
+                  <Info size={14} style={{ flexShrink: 0, marginTop: 2, opacity: 0.7 }} />
+                  <p className="bitfun-config-page-row__description" style={{ margin: 0 }}>
+                    <strong>{t('computerUse.platformNote')}: </strong>
+                    {computerUsePlatformNote}
+                  </p>
+                </div>
+              )}
             </>
           ) : null}
         </ConfigPageSection>

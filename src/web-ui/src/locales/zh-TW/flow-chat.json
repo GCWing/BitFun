@@ -621,6 +621,7 @@
     "noMatchingCommand": "沒有匹配的命令",
     "selectHint": "↑↓ 選擇 · Enter 確認 · Esc 取消",
     "current": "目前",
+    "computerUseDisabled": "已在「設定 → 工作階段權限」中停用 Computer Use",
     "professionalMode": "專業模式",
     "designMode": "設計模式",
     "wip": "開發中",
@@ -1470,6 +1471,20 @@
       "clickToOpenLink": "點擊開啟鏈接",
       "noTitle": "無標題",
       "summaryAvailable": "有搜尋摘要"
+    },
+    "computerUse": {
+      "running": "正在控制桌面...",
+      "runningOnApp": "正在控制 {{app}}...",
+      "controllingApp": "正在控制 {{app}}",
+      "done": "操作已完成",
+      "actionFailed": "操作失敗",
+      "actionLabel": "動作",
+      "appLabel": "應用",
+      "targetLabel": "目標",
+      "permissionDenied": "需要桌面控制權限",
+      "permissionDeniedHint": "BitFun 需要 macOS「輔助使用」和「螢幕錄製」權限才能控制其他應用。請打開系統設定，為 BitFun 授權後重試。",
+      "openSettings": "打開系統設定",
+      "openSettingsFailed": "無法打開系統設定"
     },
     "webFetch": {
       "parsingUrl": "解析連結中...",

@@ -3,8 +3,9 @@
 // Re-export optimizer types so downstream crates can import from computer_use_host.
 pub use crate::agentic::tools::computer_use_optimizer::{ActionRecord, LoopDetectionResult};
 pub use bitfun_agent_tools::computer_use::{
-    clamp_point_crop_half_extent, suggested_point_crop_half_extent_from_native_bounds,
-    AppClickParams, AppInfo, AppSelector, AppStateSnapshot, AppWaitPredicate, AxNode,
+    clamp_point_crop_half_extent, parse_windows_accelerator_display,
+    suggested_point_crop_half_extent_from_native_bounds, AppClickParams, AppInfo, AppMenuShortcut,
+    AppSelector, AppShortcutsSnapshot, AppStateSnapshot, AppWaitPredicate, AxNode,
     ClickIndexTarget, ClickTarget, ComputerScreenshot, ComputerUseDisplayInfo,
     ComputerUseForegroundApplication, ComputerUseImageContentRect, ComputerUseImageGlobalBounds,
     ComputerUseImplicitScreenshotCenter, ComputerUseInteractionScreenshotKind,
@@ -361,6 +362,29 @@ pub trait ComputerUseHost: Send + Sync + std::fmt::Debug {
     ) -> BitFunResult<AppStateSnapshot> {
         Err(BitFunError::tool(
             "get_app_state is not available on this host.".to_string(),
+        ))
+    }
+
+    /// Whether this host can enumerate a target application's menu-bar
+    /// keyboard shortcuts (Codex-adjacent `get_app_shortcuts`). This is the
+    /// **read** counterpart to [`Self::key_chord`] / [`Self::app_key_chord`]
+    /// (which only **send** keys): macOS reads `AXMenuBar` /
+    /// `AXMenuItemCmd*`, Windows reads the UIA menu tree's
+    /// `AcceleratorKey` property. Hosts without a menu-introspection
+    /// backend stay `false`.
+    fn supports_app_shortcuts(&self) -> bool {
+        false
+    }
+
+    /// Enumerate the keyboard shortcuts registered in a target
+    /// application's menu bar. Unlike [`Self::get_app_state`], this does
+    /// **not** require the app to be frontmost on macOS (menu structure is
+    /// queryable from any running app's AX element); on Windows it
+    /// resolves a top-level window owned by the target app. Default:
+    /// unsupported.
+    async fn get_app_shortcuts(&self, _app: AppSelector) -> BitFunResult<AppShortcutsSnapshot> {
+        Err(BitFunError::tool(
+            "get_app_shortcuts is not available on this host.".to_string(),
         ))
     }
 
