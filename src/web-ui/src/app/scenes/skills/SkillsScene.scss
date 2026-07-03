@@ -960,7 +960,7 @@
   }
 
   &.search--focused:not(.search--disabled) .search__wrapper {
-    box-shadow: 0 4px 20px var(--color-overlay-black-10), 0 0 0 3px color-mix(in srgb, var(--color-accent-500) 15%, transparent);
+    box-shadow: 0 4px 20px var(--color-overlay-black-12), 0 0 0 3px color-mix(in srgb, var(--color-accent-500) 15%, transparent);
     border-color: var(--color-accent-500);
   }
 }

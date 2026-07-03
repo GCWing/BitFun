@@ -29,4 +29,15 @@ describe('BitFunDarkTheme color roles', () => {
     expect(colors['editorWarning.foreground']).toBe(colors['minimap.warningHighlight']);
     expect(colors['editorLink.activeForeground']).toBe('#7DCFFF');
   });
+
+  it('keeps diff text, line, and gutter strengths visually ordered', () => {
+    expect(colors['diffEditor.insertedTextBackground']).toBe('#23863625');
+    expect(colors['diffEditor.insertedLineBackground']).toBe('#23863630');
+    expect(colors['diffEditorGutter.insertedLineBackground']).toBe('#23863638');
+    expect(colors['diffEditor.removedTextBackground']).toBe('#DA363325');
+    expect(colors['diffEditor.removedLineBackground']).toBe('#DA363330');
+    expect(colors['diffEditorGutter.removedLineBackground']).toBe('#DA363338');
+    expect(colors['diffEditor.modifiedTextBackground']).toBe('#1F6FEB20');
+    expect(colors['diffEditor.modifiedLineBackground']).toBe('#1F6FEB28');
+  });
 });

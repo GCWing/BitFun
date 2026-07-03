@@ -149,7 +149,7 @@ describe('builtin theme preset output', () => {
     }))).toMatchInlineSnapshot(`
       [
         {
-          "hash": "816125c276e4ab9882815ddf1f79156418b426569c89737db39085054789041e",
+          "hash": "44f230d2565fcdfed0e47fc5ea7d3253fc0bdcf0550c6bdcde16fb18f580467a",
           "id": "bitfun-light",
           "type": "light",
         },

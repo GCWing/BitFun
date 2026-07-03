@@ -54,10 +54,10 @@
       "max": 0
     },
     "generatedWidgetPayload.varUnique": {
-      "max": 94
+      "max": 80
     },
     "generatedWidgetPayload.occurrences": {
-      "max": 94
+      "max": 80
     },
     "generatedWidgetPayload.undefinedUnique": {
       "max": 0
@@ -105,10 +105,10 @@
       "max": 0
     },
     "colorScopes.token.uniqueColors": {
-      "max": 205
+      "max": 201
     },
     "colorScopes.exception.uniqueColors": {
-      "max": 190
+      "max": 182
     },
     "cssVarDefinitions.unresolvedRequiredUnique": {
       "max": 0
@@ -153,25 +153,25 @@
       "max": 0
     },
     "colorDomainNearPairs.nearTotal": {
-      "max": 26
+      "max": 13
     },
     "colorDomainNearPairs.themePreset.indistinguishableTotal": {
       "max": 0
     },
     "colorDomainNearPairs.themePreset.nearTotal": {
-      "max": 10
+      "max": 9
     },
     "colorDomainNearPairs.themeRuntime.indistinguishableTotal": {
       "max": 0
     },
     "colorDomainNearPairs.themeRuntime.nearTotal": {
-      "max": 8
+      "max": 2
     },
     "colorDomainNearPairs.tokenContract.indistinguishableTotal": {
       "max": 0
     },
     "colorDomainNearPairs.tokenContract.nearTotal": {
-      "max": 8
+      "max": 2
     },
     "colorDomainNearPairs.generatedWidget.indistinguishableTotal": {
       "max": 0
@@ -243,13 +243,13 @@
       "max": 171
     },
     "colorDomainScopes.themePreset.uniqueColors": {
-      "max": 120
+      "max": 119
     },
     "colorDomainScopes.themeRuntime.occurrences": {
-      "max": 30
+      "max": 27
     },
     "colorDomainScopes.tokenContract.occurrences": {
-      "max": 113
+      "max": 110
     },
     "colorDomainScopes.generatedWidget.occurrences": {
       "max": 0
@@ -297,10 +297,10 @@
       "max": 0
     },
     "colorDomainScopes.mermaid.occurrences": {
-      "max": 91
+      "max": 82
     },
     "colorDomainScopes.mermaid.uniqueColors": {
-      "max": 73
+      "max": 65
     }
   }
 }

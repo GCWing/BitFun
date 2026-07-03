@@ -386,7 +386,7 @@
       border-radius: 4px;
       cursor: pointer;
       transition: all 0.15s ease;
-      box-shadow: 0 1px 2px var(--color-overlay-black-10);
+      box-shadow: 0 1px 2px var(--color-overlay-black-12);
 
       &:hover:not(:disabled) {
         background: linear-gradient(
@@ -434,7 +434,7 @@
             var(--color-success) 0%,
             color-mix(in srgb, var(--color-success) 82%, var(--color-text-primary)) 100%
           );
-          box-shadow: 0 1px 2px var(--color-overlay-black-10);
+          box-shadow: 0 1px 2px var(--color-overlay-black-12);
         }
       }
     }

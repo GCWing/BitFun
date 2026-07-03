@@ -260,7 +260,7 @@
         border-color: var(--border-base);
         box-shadow: 
           0 12px 32px rgba(var(--color-static-black-rgb), 0.45),
-          inset 0 1px 0 var(--color-overlay-white-10),
+          inset 0 1px 0 var(--color-overlay-white-12),
           inset 0 -1px 0 var(--color-overlay-white-04);
       }
     }
@@ -329,7 +329,7 @@
     flex-direction: column;
     gap: 0;
     pointer-events: auto;
-    border: 1px solid var(--color-overlay-white-10);
+    border: 1px solid var(--color-overlay-white-12);
     border-radius: calc(var(--flowchat-card-radius) + 4px);
     padding: var(--flowchat-card-expanded-pad-x) var(--flowchat-card-expanded-pad-y) 0;
     background: var(--color-bg-scene);
@@ -364,7 +364,7 @@
       -webkit-backdrop-filter: blur(8px);
       box-shadow:
         0 8px 24px rgba(var(--color-static-black-rgb), 0.18),
-        inset 0 1px 0 var(--color-overlay-white-06);
+        inset 0 1px 0 var(--color-overlay-white-08);
 
       &:hover {
         background: rgba(var(--chat-input-capsule-hover-rgb), 0.38);
@@ -381,7 +381,7 @@
         border-color: var(--color-overlay-white-20);
         box-shadow:
           0 12px 30px rgba(var(--color-static-black-rgb), 0.28),
-          inset 0 1px 0 var(--color-overlay-white-10);
+          inset 0 1px 0 var(--color-overlay-white-12);
       }
     }
 
@@ -400,7 +400,7 @@
         background: rgba(var(--color-static-white-rgb), 0.45);
         border-color: rgba(var(--color-static-black-rgb), 0.14);
         box-shadow:
-          0 12px 24px var(--color-overlay-black-10),
+          0 12px 24px var(--color-overlay-black-12),
           inset 0 1px 0 var(--color-overlay-white-90);
       }
     }
@@ -420,7 +420,7 @@
       border-color: var(--border-base);
       box-shadow: 
         0 12px 32px rgba(var(--color-static-black-rgb), 0.45),
-        inset 0 1px 0 var(--color-overlay-white-10),
+        inset 0 1px 0 var(--color-overlay-white-12),
         inset 0 -1px 0 var(--color-overlay-white-04);
     }
     
@@ -435,7 +435,7 @@
     gap: 0.125rem;
     padding-bottom: 7px;
     margin-bottom: 0.06rem;
-    border-bottom: 1px solid var(--color-overlay-white-06);
+    border-bottom: 1px solid var(--color-overlay-white-08);
     animation: bitfun-chat-input-fade-in 0.1s ease-out;
   }
 
@@ -837,7 +837,7 @@
       0 8px 32px rgba(var(--color-static-black-rgb), 0.35),
       0 4px 16px var(--color-overlay-black-20),
       0 0 1px var(--color-accent-300),
-      inset 0 1px 0 var(--color-overlay-white-06);
+      inset 0 1px 0 var(--color-overlay-white-08);
     backdrop-filter: blur(20px) saturate(1.2);
     -webkit-backdrop-filter: blur(20px) saturate(1.2);
     overflow: hidden;
@@ -961,15 +961,15 @@
     left: 0;
     min-width: 200px;
     background: var(--color-bg-elevated);
-    border: 1px solid var(--color-overlay-white-10);
+    border: 1px solid var(--color-overlay-white-12);
     border-radius: 6px;
     overflow: hidden;
     backdrop-filter: blur(20px) saturate(1.2);
     -webkit-backdrop-filter: blur(20px) saturate(1.2);
     box-shadow: 
       0 8px 32px var(--color-overlay-black-50),
-      0 0 1px var(--color-overlay-white-10),
-      inset 0 1px 0 var(--color-overlay-white-06);
+      0 0 1px var(--color-overlay-white-12),
+      inset 0 1px 0 var(--color-overlay-white-08);
     z-index: $z-dropdown;
     animation: mode-dropdown-fade-in 0.15s ease-out;
 
@@ -1046,7 +1046,7 @@
   &__mode-divider-line {
     flex: 1;
     height: 1px;
-    background: var(--color-overlay-white-06);
+    background: var(--color-overlay-white-08);
   }
   
   &__mode-divider-text {
@@ -1229,8 +1229,8 @@
     -webkit-backdrop-filter: blur(20px) saturate(1.2);
     box-shadow: 
       0 8px 32px var(--color-overlay-black-50),
-      0 0 1px var(--color-overlay-white-10),
-      inset 0 1px 0 var(--color-overlay-white-06);
+      0 0 1px var(--color-overlay-white-12),
+      inset 0 1px 0 var(--color-overlay-white-08);
     z-index: $z-dropdown;
     animation: mode-dropdown-fade-in 0.15s ease-out;
   }
@@ -1462,7 +1462,7 @@
     height: 20px;
     border-radius: 50%;
     border: none;
-    background: var(--color-overlay-white-06);
+    background: var(--color-overlay-white-08);
     color: rgba(var(--chat-input-send-dark-icon-rgb), 0.55);
     display: inline-flex;
     align-items: center;

@@ -51,16 +51,13 @@ const LINE_HEIGHT_TOKENS = ['tight', 'base', 'relaxed'] as const;
 
 const THEME_OVERLAYS = {
   white04: 'rgba(255, 255, 255, 0.04)',
-  white06: 'rgba(255, 255, 255, 0.06)',
   white08: 'rgba(255, 255, 255, 0.08)',
-  white10: 'rgba(255, 255, 255, 0.1)',
   white12: 'rgba(255, 255, 255, 0.12)',
   white15: 'rgba(255, 255, 255, 0.15)',
   white20: 'rgba(255, 255, 255, 0.2)',
   white24: 'rgba(255, 255, 255, 0.24)',
   white60: 'rgba(255, 255, 255, 0.6)',
   black08: 'rgba(0, 0, 0, 0.08)',
-  black10: 'rgba(0, 0, 0, 0.1)',
   black12: 'rgba(0, 0, 0, 0.12)',
   black15: 'rgba(0, 0, 0, 0.15)',
   black20: 'rgba(0, 0, 0, 0.2)',
@@ -72,15 +69,12 @@ const THEME_OVERLAYS = {
 
 const THEME_OVERLAY_TOKEN_VALUES = [
   ['--color-overlay-white-04', THEME_OVERLAYS.white04],
-  ['--color-overlay-white-06', THEME_OVERLAYS.white06],
   ['--color-overlay-white-08', THEME_OVERLAYS.white08],
-  ['--color-overlay-white-10', THEME_OVERLAYS.white10],
   ['--color-overlay-white-12', THEME_OVERLAYS.white12],
   ['--color-overlay-white-15', THEME_OVERLAYS.white15],
   ['--color-overlay-white-20', THEME_OVERLAYS.white20],
   ['--color-overlay-white-60', THEME_OVERLAYS.white60],
   ['--color-overlay-black-08', THEME_OVERLAYS.black08],
-  ['--color-overlay-black-10', THEME_OVERLAYS.black10],
   ['--color-overlay-black-12', THEME_OVERLAYS.black12],
   ['--color-overlay-black-15', THEME_OVERLAYS.black15],
   ['--color-overlay-black-20', THEME_OVERLAYS.black20],
@@ -842,10 +836,10 @@ export class ThemeService {
     if (theme.type === 'dark') {
 
       root.style.setProperty('--card-bg-default', THEME_OVERLAYS.white04);
-      root.style.setProperty('--card-bg-elevated', THEME_OVERLAYS.white06);
+      root.style.setProperty('--card-bg-elevated', THEME_OVERLAYS.white08);
       root.style.setProperty('--card-bg-subtle', 'transparent');
       root.style.setProperty('--card-bg-hover', THEME_OVERLAYS.white08);
-      root.style.setProperty('--card-bg-active', THEME_OVERLAYS.white10);
+      root.style.setProperty('--card-bg-active', THEME_OVERLAYS.white12);
       root.style.setProperty('--card-bg-accent', THEME_OVERLAYS.white08);
       root.style.setProperty('--card-bg-accent-hover', THEME_OVERLAYS.white12);
       root.style.setProperty('--card-bg-purple', 'rgba(139, 92, 246, 0.08)');
@@ -853,10 +847,10 @@ export class ThemeService {
     } else {
 
       root.style.setProperty('--card-bg-default', THEME_OVERLAYS.black08);
-      root.style.setProperty('--card-bg-elevated', THEME_OVERLAYS.black10);
+      root.style.setProperty('--card-bg-elevated', THEME_OVERLAYS.black12);
       root.style.setProperty('--card-bg-subtle', 'transparent');
-      root.style.setProperty('--card-bg-hover', THEME_OVERLAYS.black10);
-      root.style.setProperty('--card-bg-active', THEME_OVERLAYS.black12);
+      root.style.setProperty('--card-bg-hover', THEME_OVERLAYS.black12);
+      root.style.setProperty('--card-bg-active', THEME_OVERLAYS.black15);
       root.style.setProperty('--card-bg-accent', 'rgba(15, 23, 42, 0.08)');
       root.style.setProperty('--card-bg-accent-hover', 'rgba(15, 23, 42, 0.12)');
       root.style.setProperty('--card-bg-purple', 'rgba(124, 58, 237, 0.12)');

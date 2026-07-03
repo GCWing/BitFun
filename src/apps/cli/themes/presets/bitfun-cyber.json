@@ -16,7 +16,7 @@
     "inputBackground": "#003f46",
     "border": "#16404a",
     "borderActive": "#00e6ff",
-    "borderSubtle": "#102b32",
+    "borderSubtle": "#16404a",
     "diffAdded": "#00ff9f",
     "diffRemoved": "#ff0055",
     "diffContext": "#7fadcc",

@@ -44,14 +44,14 @@
   box-shadow:
     0 0 12px color-mix(in srgb, var(--color-accent-500) 20%, transparent),
     0 0 24px var(--color-purple-200),
-    inset 0 0 6px var(--color-overlay-white-06);
+    inset 0 0 6px var(--color-overlay-white-08);
   transform: scaleY(1.15);
 }
 
 .u-resizer-line {
   width: 1px;
   height: 20px;
-  background: var(--color-overlay-white-10);
+  background: var(--color-overlay-white-12);
   border-radius: var(--size-radius-sm);
   transition: all var(--motion-base);
   opacity: 0.2;

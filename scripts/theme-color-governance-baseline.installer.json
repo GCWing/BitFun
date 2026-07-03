@@ -81,7 +81,7 @@
       "max": 0
     },
     "colorDomainNearPairs.themePreset.nearTotal": {
-      "max": 11
+      "max": 3
     },
     "colorDomainNearPairs.tokenContract.indistinguishableTotal": {
       "max": 0
@@ -96,10 +96,10 @@
       "max": 0
     },
     "colorDomainScopes.themePreset.occurrences": {
-      "max": 59
+      "max": 54
     },
     "colorDomainScopes.themePreset.uniqueColors": {
-      "max": 57
+      "max": 53
     },
     "colorDomainScopes.tokenContract.occurrences": {
       "max": 22

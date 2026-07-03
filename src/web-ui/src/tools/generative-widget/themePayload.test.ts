@@ -10,8 +10,8 @@ import {
 } from './themePayload';
 import { createWidgetThemeCompatibilityAliasCss } from './themePayloadCompatibility';
 
-const WIDGET_THEME_VAR_NAMES_HASH = 'fa725e4c7099958cc37c5e54214d3a07579d1f5dbf0e19dda129e77c57e7d16e';
-const WIDGET_THEME_STATIC_SHELL_VAR_NAMES_HASH = '2ba8869e0611a03f360347f93d39fc6427fe8006f9ae6513b7cd67472febd8e7';
+const WIDGET_THEME_VAR_NAMES_HASH = '3c69b6767d5c5aa2752af7eab4c68596f1ab6014397dac02fa2b70343c771981';
+const WIDGET_THEME_STATIC_SHELL_VAR_NAMES_HASH = '7c53d90b3bc30c9d1c8494bb3865f42108e10e747841bae493ad26bcb30bf9b8';
 const RETIRED_WIDGET_THEME_COMPAT_KEYS = [
   '--background-primary',
   '--background-secondary',
@@ -49,7 +49,10 @@ const RETIRED_WIDGET_THEME_COMPAT_KEYS = [
   '--color-overlay-white-02',
   '--color-overlay-white-03',
   '--color-overlay-white-05',
+  '--color-overlay-white-06',
+  '--color-overlay-white-10',
   '--color-overlay-black-06',
+  '--color-overlay-black-10',
   '--color-overlay-black-25',
   '--color-accent',
   '--color-accent-primary',
@@ -121,6 +124,22 @@ const RETIRED_WIDGET_THEME_INTERNAL_KEYS = [
   '--btn-ghost-active-shadow',
   '--btn-ghost-active-transform',
 ] as const;
+const DERIVED_WIDGET_THEME_PAYLOAD_KEYS = [
+  '--color-accent-50',
+  '--color-accent-100',
+  '--color-accent-200',
+  '--color-accent-300',
+  '--color-accent-400',
+  '--color-accent-700',
+  '--color-accent-800',
+  '--color-success-border',
+  '--color-warning-border',
+  '--color-error-border',
+  '--border-strong',
+  '--border-prominent',
+  '--element-bg-strong',
+  '--size-radius-md',
+] as const;
 const STATIC_WIDGET_SHELL_THEME_VARS = new Set([
   ...WIDGET_THEME_STATIC_SHELL_VAR_NAMES,
   '--font-family-mono',
@@ -129,7 +148,7 @@ const STATIC_WIDGET_SHELL_THEME_VARS = new Set([
 const LOCAL_ONLY_WIDGET_SHELL_KEYS = [
   '--color-bg-workbench',
   '--color-overlay-white-08',
-  '--color-overlay-black-10',
+  '--color-overlay-black-12',
   '--glass-base',
   '--tool-card-header-pad-y',
   '--tool-card-action-line-height',
@@ -195,7 +214,7 @@ describe('generated widget theme payload contract', () => {
       first: requestedNames[0],
       last: requestedNames[requestedNames.length - 1],
     }).toEqual({
-      count: 94,
+      count: 80,
       hash: WIDGET_THEME_VAR_NAMES_HASH,
       first: '--color-bg-primary',
       last: '--btn-ghost-hover-border',
@@ -216,28 +235,17 @@ describe('generated widget theme payload contract', () => {
 
     expect(requestedNames).not.toEqual(expect.arrayContaining(RETIRED_WIDGET_THEME_COMPAT_KEYS));
     expect(requestedNames).not.toEqual(expect.arrayContaining(RETIRED_WIDGET_THEME_INTERNAL_KEYS));
+    expect(requestedNames).not.toEqual(expect.arrayContaining(DERIVED_WIDGET_THEME_PAYLOAD_KEYS));
     expect(requestedNames).toEqual(
       expect.arrayContaining([
-        '--color-accent-50',
-        '--color-accent-100',
-        '--color-accent-200',
-        '--color-accent-300',
-        '--color-accent-400',
         '--color-accent-500',
         '--color-accent-500-rgb',
         '--color-accent-600',
-        '--color-accent-700',
-        '--color-accent-800',
         '--color-error',
         '--color-error-bg',
-        '--color-error-border',
         '--color-info',
         '--color-info-bg',
         '--color-info-border',
-        '--color-success-border',
-        '--color-warning-border',
-        '--border-strong',
-        '--border-prominent',
         '--size-radius-xl',
         '--size-gap-16',
         '--btn-primary-bg',
@@ -290,6 +298,15 @@ describe('generated widget theme payload contract', () => {
     }
   });
 
+  it('keeps derived widget keys resolvable without host payload reads', () => {
+    const { requestedNames } = readPayloadWithHostValues();
+
+    for (const name of DERIVED_WIDGET_THEME_PAYLOAD_KEYS) {
+      expect(requestedNames).not.toContain(name);
+      expect(name in WIDGET_THEME_FALLBACK_VARS || STATIC_WIDGET_SHELL_THEME_VARS.has(name)).toBe(true);
+    }
+  });
+
   it('renders fallback CSS from the same reviewed fallback map', () => {
     const css = createWidgetThemeFallbackCss();
 
@@ -317,7 +334,7 @@ describe('generated widget theme payload contract', () => {
       first: WIDGET_THEME_STATIC_SHELL_VAR_NAMES[0],
       last: WIDGET_THEME_STATIC_SHELL_VAR_NAMES[WIDGET_THEME_STATIC_SHELL_VAR_NAMES.length - 1],
     }).toEqual({
-      count: 85,
+      count: 83,
       hash: WIDGET_THEME_STATIC_SHELL_VAR_NAMES_HASH,
       first: '--color-bg-quaternary',
       last: '--tool-card-action-font-weight',

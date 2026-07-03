@@ -27,12 +27,12 @@
     background: var(--color-accent-100);
     color: var(--color-accent-500);
     transform: translateY(-1px);
-    box-shadow: 0 2px 4px var(--color-overlay-black-10);
+    box-shadow: 0 2px 4px var(--color-overlay-black-12);
   }
   
   &:active:not(:disabled) {
     transform: translateY(0);
-    box-shadow: 0 1px 2px var(--color-overlay-black-10);
+    box-shadow: 0 1px 2px var(--color-overlay-black-12);
   }
   
   &:disabled {

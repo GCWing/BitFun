@@ -47,6 +47,9 @@ const DEFAULT_RAMP_ALPHAS: RampAlphas = ['0.04', '0.08', '0.15', '0.25', '0.4'];
 const DEFAULT_BLUE_RGB = '96, 165, 250';
 const DEFAULT_BLUE_500 = '#60a5fa';
 const DEFAULT_BLUE_600 = '#3b82f6';
+const DARK_CARD_BACKGROUND = '#121214';
+const DARK_CARD_SURFACE = '#1a1c1e';
+const MIDNIGHT_CARD_BACKGROUND = '#2b2d30';
 
 function alpha(rgb: string, opacity: string): string {
   return `rgba(${rgb}, ${opacity})`;
@@ -167,8 +170,8 @@ export const THEMES: InstallerTheme[] = [
     name: 'Dark',
     type: 'dark',
     background: {
-      primary: '#121214',
-      secondary: '#1a1c1e',
+      primary: DARK_CARD_BACKGROUND,
+      secondary: DARK_CARD_SURFACE,
     },
     accentRgb: DEFAULT_BLUE_RGB,
     accent500: DEFAULT_BLUE_500,
@@ -187,7 +190,7 @@ export const THEMES: InstallerTheme[] = [
     id: 'bitfun-midnight',
     name: 'Midnight',
     type: 'dark',
-    background: { primary: '#2b2d30', secondary: '#1e1f22' },
+    background: { primary: MIDNIGHT_CARD_BACKGROUND, secondary: DARK_CARD_SURFACE },
     accentRgb: DEFAULT_BLUE_RGB,
     accent500: DEFAULT_BLUE_500,
     accent600: DEFAULT_BLUE_600,
@@ -215,7 +218,7 @@ export const THEMES: InstallerTheme[] = [
     id: 'bitfun-china-night',
     name: 'Ink Night',
     type: 'dark',
-    background: { primary: '#1a1814', secondary: '#212019' },
+    background: { primary: '#1a1814', secondary: DARK_CARD_SURFACE },
     accentRgb: '115, 165, 204',
     accent500: '#73a5cc',
     accent600: '#5a8bb3',
@@ -229,7 +232,7 @@ export const THEMES: InstallerTheme[] = [
     id: 'bitfun-cyber',
     name: 'Cyber',
     type: 'dark',
-    background: { primary: '#0e0e10', secondary: '#151515' },
+    background: { primary: '#0e0e10', secondary: DARK_CARD_SURFACE },
     accentRgb: '0, 230, 255',
     accent500: '#00e6ff',
     accent600: '#00ccff',
@@ -243,7 +246,7 @@ export const THEMES: InstallerTheme[] = [
     id: 'bitfun-tokyo-night',
     name: 'Tokyo Night',
     type: 'dark',
-    background: { primary: '#1a1b26', secondary: '#16161e' },
+    background: { primary: '#1a1b26', secondary: DARK_CARD_SURFACE },
     accentRgb: '122, 162, 247',
     accent500: '#7aa2f7',
     accent600: '#6183bb',
@@ -257,7 +260,7 @@ export const THEMES: InstallerTheme[] = [
     id: 'bitfun-slate',
     name: 'Slate',
     type: 'dark',
-    background: { primary: '#1a1c1e' },
+    background: { primary: DARK_CARD_SURFACE },
     accentRgb: '122, 176, 238',
     accent500: '#7ab0ee',
     accent600: '#689ad8',

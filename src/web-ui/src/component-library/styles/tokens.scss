@@ -8,9 +8,7 @@ $color-static-emerald: #10b981;
 $color-static-orange: #f97316;
 
 $overlay-white-04: rgba(255, 255, 255, 0.04);
-$overlay-white-06: rgba(255, 255, 255, 0.06);
 $overlay-white-08: rgba(255, 255, 255, 0.08);
-$overlay-white-10: rgba(255, 255, 255, 0.1);
 $overlay-white-12: rgba(255, 255, 255, 0.12);
 $overlay-white-15: rgba(255, 255, 255, 0.15);
 $overlay-white-20: rgba(255, 255, 255, 0.2);
@@ -22,7 +20,6 @@ $overlay-white-40: rgba(255, 255, 255, 0.4);
 $overlay-white-60: rgba(255, 255, 255, 0.6);
 
 $overlay-black-08: rgba(0, 0, 0, 0.08);
-$overlay-black-10: rgba(0, 0, 0, 0.1);
 $overlay-black-12: rgba(0, 0, 0, 0.12);
 $overlay-black-15: rgba(0, 0, 0, 0.15);
 $overlay-black-20: rgba(0, 0, 0, 0.2);
@@ -72,9 +69,9 @@ $color-text-muted: #858585;
 $color-text-disabled: #555555;
 
 // ==================== Neutral surface system ====================
-$element-bg-subtle: $overlay-white-06;
-$element-bg-soft: $overlay-white-06;
-$element-bg-base: $overlay-white-10;
+$element-bg-subtle: $overlay-white-08;
+$element-bg-soft: $overlay-white-08;
+$element-bg-base: $overlay-white-12;
 $element-bg-medium: $overlay-white-12;
 $element-bg-strong: $overlay-white-15;
 $element-bg-elevated: $overlay-white-20;
@@ -118,7 +115,7 @@ $color-info-border: $overlay-white-24;
 
 // ==================== Git-specific color system ====================
 $git-color-branch: #a1a1aa;
-$git-color-branch-bg: $overlay-white-06;
+$git-color-branch-bg: $overlay-white-08;
 $git-color-branch-bg-hover: $overlay-white-12;
 
 $git-color-changes: $color-warning;
@@ -161,17 +158,17 @@ $shadow-xl: 0 12px 24px $overlay-black-50;
 $glow-shadow-blue:
   0 12px 32px $color-blue-600-a25,
   0 6px 16px $color-blue-500-a18,
-  0 3px 8px $overlay-black-10;
+  0 3px 8px $overlay-black-12;
 
 $glow-shadow-purple:
   0 12px 32px $color-purple-500-a25,
   0 6px 16px $color-purple-500-a15,
-  0 3px 8px $overlay-black-10;
+  0 3px 8px $overlay-black-12;
 
 $glow-shadow-mixed:
   0 12px 32px rgba(96, 165, 250, 0.2),
   0 6px 16px $color-purple-500-a15,
-  0 3px 8px $overlay-black-10;
+  0 3px 8px $overlay-black-12;
 
 $inner-glow-top: inset 0 1px 0 $overlay-white-08;
 $inner-glow-top-hover: inset 0 1px 0 $overlay-white-25;
@@ -319,9 +316,9 @@ $button-text-hover: $color-static-white;
 $panel-bg: $color-bg-secondary;
 
 $card-bg-default: $overlay-white-04;
-$card-bg-elevated: $overlay-white-06;
+$card-bg-elevated: $overlay-white-08;
 $card-bg-subtle: $overlay-white-04;
-$card-bg-hover: $overlay-white-06;
+$card-bg-hover: $overlay-white-08;
 $card-bg-active: $overlay-white-08;
 $card-bg-accent: $color-blue-500-a08;
 $card-bg-accent-hover: $color-blue-500-a15;
@@ -364,15 +361,15 @@ $badge-info-text: $color-info;
 @mixin liquid-glass-base {
   background: linear-gradient(135deg,
     $overlay-white-08 0%,
-    $overlay-white-06 50%,
-    $overlay-white-10 100%
+    $overlay-white-08 50%,
+    $overlay-white-12 100%
   );
   border: 1px solid $overlay-white-08;
   color: $color-text-secondary;
   backdrop-filter: $blur-base;
   -webkit-backdrop-filter: $blur-base;
   box-shadow:
-    0 2px 4px $overlay-black-10,
+    0 2px 4px $overlay-black-12,
     $inner-glow-top;
   transition: all $motion-base $easing-standard;
   position: relative;
@@ -437,9 +434,9 @@ $badge-info-text: $color-info;
     @if $color == 'white' {
       background: linear-gradient(90deg,
         transparent,
-        $overlay-white-06,
         $overlay-white-08,
-        $overlay-white-06,
+        $overlay-white-08,
+        $overlay-white-08,
         transparent
       );
     } @else if $color == 'blue' {
@@ -576,7 +573,7 @@ $badge-info-text: $color-info;
     box-shadow:
       0 12px 32px $color-blue-500-a15,
       0 6px 16px $color-purple-500-a10,
-      0 2px 8px $overlay-black-10;
+      0 2px 8px $overlay-black-12;
     backdrop-filter: blur(12px) saturate(1.2);
     -webkit-backdrop-filter: blur(12px) saturate(1.2);
   }
@@ -675,9 +672,7 @@ $badge-info-text: $color-info;
   --color-static-white-rgb: 255, 255, 255;
   --color-static-black-rgb: 0, 0, 0;
   --color-overlay-white-04: #{$overlay-white-04};
-  --color-overlay-white-06: #{$overlay-white-06};
   --color-overlay-white-08: #{$overlay-white-08};
-  --color-overlay-white-10: #{$overlay-white-10};
   --color-overlay-white-12: #{$overlay-white-12};
   --color-overlay-white-15: #{$overlay-white-15};
   --color-overlay-white-20: #{$overlay-white-20};
@@ -687,7 +682,6 @@ $badge-info-text: $color-info;
   --color-overlay-white-90: color-mix(in srgb, var(--color-static-white) 90%, transparent);
   --color-overlay-white-95: color-mix(in srgb, var(--color-static-white) 95%, transparent);
   --color-overlay-black-08: #{$overlay-black-08};
-  --color-overlay-black-10: #{$overlay-black-10};
   --color-overlay-black-12: #{$overlay-black-12};
   --color-overlay-black-15: #{$overlay-black-15};
   --color-overlay-black-20: #{$overlay-black-20};
@@ -819,7 +813,7 @@ $badge-info-text: $color-info;
   --btn-primary-active-shadow: none;
   --btn-primary-active-transform: none;
   --btn-ghost-color: var(--color-text-muted);
-  --btn-ghost-hover-bg: var(--color-overlay-white-06);
+  --btn-ghost-hover-bg: var(--color-overlay-white-08);
   --btn-ghost-hover-color: #b8b8b8;
   --btn-ghost-hover-border: transparent;
   --window-control-close-hover-color: var(--color-error);

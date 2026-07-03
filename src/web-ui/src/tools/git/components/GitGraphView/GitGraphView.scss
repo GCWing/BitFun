@@ -45,7 +45,7 @@
   &__spinner {
     width: 32px;
     height: 32px;
-    border: 3px solid var(--color-overlay-white-10);
+    border: 3px solid var(--color-overlay-white-12);
     border-top-color: var(--color-accent-500);
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
@@ -224,7 +224,7 @@
 
     &:hover {
       background: var(--element-bg-hover);
-      box-shadow: 0 1px 3px var(--color-overlay-black-10);
+      box-shadow: 0 1px 3px var(--color-overlay-black-12);
       z-index: 1;
     }
 

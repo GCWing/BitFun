@@ -23,7 +23,7 @@
     0 8px 32px rgba(var(--color-static-black-rgb), 0.35),
     0 4px 16px var(--color-overlay-black-20),
     0 0 1px color-mix(in srgb, var(--color-accent-500) 30%, transparent),
-    inset 0 1px 0 var(--color-overlay-white-06);
+    inset 0 1px 0 var(--color-overlay-white-08);
   overflow: hidden;
   z-index: 1100;
   display: flex;
@@ -69,7 +69,7 @@
     height: 18px;
     padding: 0;
     background: var(--color-overlay-white-08);
-    border: 1px solid var(--color-overlay-white-10);
+    border: 1px solid var(--color-overlay-white-12);
     border-radius: 4px;
     cursor: pointer;
     transition: all 0.15s ease;
@@ -137,7 +137,7 @@
     transition: all 0.12s ease;
     
     &:hover {
-      background: var(--color-overlay-white-06);
+      background: var(--color-overlay-white-08);
       
       .file-mention-picker__expand-icon {
         opacity: 1;

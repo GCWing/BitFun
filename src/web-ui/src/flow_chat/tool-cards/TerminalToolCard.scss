@@ -319,14 +319,14 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: linear-gradient(135deg, var(--color-overlay-white-10), transparent);
+    background: linear-gradient(135deg, var(--color-overlay-white-12), transparent);
     opacity: 0;
     transition: opacity 0.2s ease;
     z-index: 0;
   }
 
   &:hover:not(:disabled) {
-    background: var(--color-overlay-white-10);
+    background: var(--color-overlay-white-12);
     transform: scale(1.05);
   }
 
@@ -379,7 +379,7 @@
   color: var(--color-text-muted);
 
   &:hover:not(:disabled) {
-    background: var(--color-overlay-white-10);
+    background: var(--color-overlay-white-12);
     color: var(--color-text-secondary);
     box-shadow: none;
   }

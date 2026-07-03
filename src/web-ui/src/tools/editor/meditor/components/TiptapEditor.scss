@@ -464,7 +464,7 @@
   .m-editor-inline-ai__panel {
     width: min(26rem, calc(100vw - #{$size-gap-8}));
     padding: 10px 10px 8px;
-    border: 1px solid var(--color-overlay-white-10);
+    border: 1px solid var(--color-overlay-white-12);
     border-radius: 12px;
     background: var(--color-bg-tertiary);
     backdrop-filter: blur(16px) saturate(1.2);

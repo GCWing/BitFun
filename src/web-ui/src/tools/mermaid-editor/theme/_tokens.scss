@@ -20,6 +20,7 @@ $mermaid-light-text-secondary: #475569;
 $mermaid-light-surface: #f3f4f6;
 $mermaid-light-section-alt-fill: #e8eaef;
 $mermaid-light-highlight-stroke: #334155;
+$mermaid-light-note-text: #92400e;
 
 // ==================== Mermaid CSS variables ====================
 // Define dark theme defaults in :root
@@ -146,23 +147,23 @@ $mermaid-light-highlight-stroke: #334155;
   --mermaid-actor-text: #{$mermaid-light-text-primary};
   --mermaid-signal-stroke: #{$mermaid-light-node-stroke};
   --mermaid-signal-text: #{$mermaid-light-text-primary};
-  --mermaid-note-fill: rgba(184, 134, 58, 0.12);
-  --mermaid-note-stroke: rgba(192, 140, 66, 0.4);
-  --mermaid-note-text: #92400e;
+  --mermaid-note-fill: color-mix(in srgb, var(--color-warning) 12%, transparent);
+  --mermaid-note-stroke: color-mix(in srgb, var(--color-warning) 40%, transparent);
+  --mermaid-note-text: #{$mermaid-light-note-text};
   --mermaid-activation-fill: #{$mermaid-light-node-fill-hover};
   --mermaid-activation-stroke: rgba(51, 65, 85, 0.35);
 
   // Gantt chart
   --mermaid-section-fill: #{$mermaid-light-surface};
   --mermaid-section-alt-fill: #{$mermaid-light-section-alt-fill};
-  --mermaid-grid-stroke: rgba(100, 116, 139, 0.15);
+  --mermaid-grid-stroke: color-mix(in srgb, var(--color-text-muted) 15%, transparent);
   --mermaid-task-text: #{$mermaid-light-text-primary};
-  --mermaid-done-fill: rgba(91, 154, 111, 0.15);
-  --mermaid-done-stroke: #5b9a6f;
+  --mermaid-done-fill: var(--color-success-bg);
+  --mermaid-done-stroke: var(--color-success);
   --mermaid-active-fill: #{$mermaid-light-node-fill-hover};
   --mermaid-active-stroke: #{$mermaid-light-highlight-stroke};
-  --mermaid-crit-fill: rgba(194, 101, 101, 0.15);
-  --mermaid-crit-stroke: #c26565;
+  --mermaid-crit-fill: var(--color-error-bg);
+  --mermaid-crit-stroke: var(--color-error);
 
   // Pie chart - cohesive colors.
   --mermaid-pie-stroke: #{$mermaid-light-surface};

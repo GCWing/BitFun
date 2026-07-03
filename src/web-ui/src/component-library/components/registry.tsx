@@ -362,7 +362,7 @@ export const componentRegistry: ComponentCategory[] = [
                 padding: '20px',
                 background: 'var(--color-overlay-white-04)',
                 borderRadius: '8px',
-                border: '1px solid var(--color-overlay-white-10)',
+                border: '1px solid var(--color-overlay-white-12)',
                 maxWidth: '700px'
               }}>
                 <StreamText
@@ -459,7 +459,7 @@ name: 'Search - Demo',
                       style={{
                         padding: '4px 6px',
                         background: searchOptions.caseSensitive ? 'color-mix(in srgb, var(--color-accent-500) 20%, transparent)' : 'transparent',
-                        border: '1px solid var(--color-overlay-white-10)',
+                        border: '1px solid var(--color-overlay-white-12)',
                         borderRadius: '4px',
                         color: searchOptions.caseSensitive ? 'var(--color-accent-500)' : 'var(--color-text-muted)',
                         cursor: 'pointer',
@@ -474,7 +474,7 @@ name: 'Search - Demo',
                       style={{
                         padding: '4px 6px',
                         background: searchOptions.useRegex ? 'color-mix(in srgb, var(--color-accent-500) 20%, transparent)' : 'transparent',
-                        border: '1px solid var(--color-overlay-white-10)',
+                        border: '1px solid var(--color-overlay-white-12)',
                         borderRadius: '4px',
                         color: searchOptions.useRegex ? 'var(--color-accent-500)' : 'var(--color-text-muted)',
                         cursor: 'pointer',

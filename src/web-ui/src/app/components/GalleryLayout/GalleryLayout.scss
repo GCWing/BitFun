@@ -159,7 +159,7 @@ $content-max: 1480px;
 
   &--skeleton {
     --skeleton-shimmer-0: rgba(var(--color-static-white-rgb), 0);
-    --skeleton-shimmer-peak: var(--color-overlay-white-10);
+    --skeleton-shimmer-peak: var(--color-overlay-white-12);
     pointer-events: none;
   }
 }

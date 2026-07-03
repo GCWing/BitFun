@@ -12,6 +12,7 @@ const DARK_NODE_STROKE_HOVER = '#6a6e7a';
 const DARK_CLUSTER_TEXT = '#9ca3af';
 const DARK_INFO = '#78a8d8';
 const DARK_ERROR = '#e87878';
+const DARK_ERROR_FILL = 'rgba(232, 120, 120, 0.15)';
 
 const LIGHT_NODE_FILL = '#e8eaef';
 const LIGHT_NODE_FILL_HOVER = '#e0e2e8';
@@ -26,6 +27,7 @@ const LIGHT_HIGHLIGHT_STROKE = '#334155';
 const LIGHT_ERROR = '#dc2626';
 const LIGHT_WARNING = '#f59e0b';
 const LIGHT_CLUSTER_FILL = 'rgba(229, 231, 235, 0.7)';
+const LIGHT_ERROR_FILL = 'rgba(239, 68, 68, 0.15)';
 
 export const MERMAID_THEME_FALLBACKS = {
   dark: {
@@ -65,7 +67,7 @@ export const MERMAID_THEME_FALLBACKS = {
     doneStroke: '#6dd4a0',
     activeFill: 'rgba(120, 168, 216, 0.15)',
     activeStroke: DARK_INFO,
-    critFill: 'rgba(232, 120, 120, 0.15)',
+    critFill: DARK_ERROR_FILL,
     critStroke: DARK_ERROR,
     warning: '#e8b060',
     info: DARK_INFO,
@@ -77,7 +79,7 @@ export const MERMAID_THEME_FALLBACKS = {
     pieTitleText: DARK_NODE_TEXT,
     pieLegendText: DARK_CLUSTER_TEXT,
     pieStroke: DARK_NODE_FILL,
-    errorFill: 'rgba(232, 120, 120, 0.15)',
+    errorFill: DARK_ERROR_FILL,
     error: DARK_ERROR,
     highlightStroke: '#a8acb8',
     highlightGlow: 'drop-shadow(0 0 6px rgba(168, 172, 184, 0.4))',
@@ -120,7 +122,7 @@ export const MERMAID_THEME_FALLBACKS = {
     doneStroke: '#16a34a',
     activeFill: 'rgba(15, 23, 42, 0.1)',
     activeStroke: LIGHT_HIGHLIGHT_STROKE,
-    critFill: 'rgba(239, 68, 68, 0.2)',
+    critFill: LIGHT_ERROR_FILL,
     critStroke: LIGHT_ERROR,
     warning: LIGHT_WARNING,
     info: '#64748b',
@@ -132,7 +134,7 @@ export const MERMAID_THEME_FALLBACKS = {
     pieTitleText: LIGHT_TITLE_TEXT,
     pieLegendText: LIGHT_HIGHLIGHT_STROKE,
     pieStroke: MERMAID_SOFT_LIGHT_SURFACE,
-    errorFill: 'rgba(239, 68, 68, 0.15)',
+    errorFill: LIGHT_ERROR_FILL,
     error: LIGHT_ERROR,
     highlightStroke: LIGHT_HIGHLIGHT_STROKE,
     highlightGlow: 'drop-shadow(0 0 6px rgba(15, 23, 42, 0.18))',

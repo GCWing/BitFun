@@ -21,7 +21,7 @@
   box-shadow: 
     0 8px 32px color-mix(in srgb, var(--color-error) 12%, transparent),
     0 4px 16px var(--color-overlay-black-08),
-    inset 0 1px 0 var(--color-overlay-white-10);
+    inset 0 1px 0 var(--color-overlay-white-12);
 }
 
 /* Section headings */
@@ -50,8 +50,8 @@
   box-shadow: 
     0 8px 32px color-mix(in srgb, var(--color-accent-500) 12%, transparent),
     0 4px 16px var(--color-overlay-black-08),
-    inset 0 1px 0 var(--color-overlay-white-10),
-    inset 0 -1px 0 var(--color-overlay-white-06);
+    inset 0 1px 0 var(--color-overlay-white-12),
+    inset 0 -1px 0 var(--color-overlay-white-08);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   animation: slideInUp 0.4s ease-out;
 }

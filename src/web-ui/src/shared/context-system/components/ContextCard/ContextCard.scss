@@ -13,8 +13,8 @@
   
   background: linear-gradient(135deg,
     var(--color-overlay-white-08) 0%,
-    var(--color-overlay-white-06) 50%,
-    var(--color-overlay-white-10) 100%
+    var(--color-overlay-white-08) 50%,
+    var(--color-overlay-white-12) 100%
   );
   border: 1px solid var(--border-base);
   border-radius: $size-radius-base;
@@ -305,7 +305,7 @@
       transform: translateY(-2px);
       box-shadow: 
         0 8px 24px var(--color-accent-200),
-        0 4px 12px var(--color-overlay-black-10);
+        0 4px 12px var(--color-overlay-black-12);
     }
     
     &:active {

@@ -39,7 +39,7 @@
         
         > span[style] {
           &:hover {
-            background-color: var(--color-overlay-white-06) !important;
+            background-color: var(--color-overlay-white-08) !important;
           }
         }
         
@@ -94,7 +94,7 @@
     transition: background-color 0.15s ease, border-color 0.15s ease;
 
     &:hover {
-      background-color: var(--color-overlay-white-06);
+      background-color: var(--color-overlay-white-08);
     }
 
     &--highlighted {
