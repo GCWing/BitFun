@@ -105,7 +105,7 @@
       "max": 0
     },
     "colorScopes.token.uniqueColors": {
-      "max": 201
+      "max": 200
     },
     "colorScopes.exception.uniqueColors": {
       "max": 182
@@ -249,7 +249,7 @@
       "max": 27
     },
     "colorDomainScopes.tokenContract.occurrences": {
-      "max": 110
+      "max": 108
     },
     "colorDomainScopes.generatedWidget.occurrences": {
       "max": 0

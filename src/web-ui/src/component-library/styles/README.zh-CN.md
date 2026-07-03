@@ -32,7 +32,7 @@
 @import '../../styles/tokens.scss';
 
 .card {
-  background: $card-bg;
+  background: $card-bg-default;
   border: 1px solid var(--border-base);
   box-shadow: var(--shadow-sm);
 }

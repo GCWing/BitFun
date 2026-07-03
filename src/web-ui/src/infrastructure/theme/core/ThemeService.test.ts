@@ -3,6 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { configAPI } from '@/infrastructure/api';
 import { bitfunDarkTheme, bitfunLightTheme } from '../presets';
+import {
+  PLUGIN_THEME_COLOR_KEYS,
+  createPluginThemeColorProjection,
+} from '../pluginThemeProjection';
 import { SYSTEM_THEME_ID, type ThemeConfig } from '../types';
 import { ThemeService } from './ThemeService';
 
@@ -566,5 +570,44 @@ describe('ThemeService runtime theme tokens', () => {
         name: 'Builtin Override',
       }),
     ).rejects.toThrow(/reserved for a built-in theme/);
+  });
+
+  it('projects normalized custom themes through the compact plugin color boundary', async () => {
+    const service = new ThemeService();
+    const partialCustomTheme = {
+      id: 'custom-plugin-projection',
+      name: 'Plugin Projection',
+      type: 'dark',
+      colors: {
+        accent: {
+          500: '#14b8a6',
+          600: '#0f766e',
+        },
+        purple: {
+          500: '#a855f7',
+        },
+        semantic: {
+          success: '#22c55e',
+          warning: '#f59e0b',
+          error: '#ef4444',
+          info: '#38bdf8',
+        },
+      },
+    } as unknown as ThemeConfig;
+
+    await service.registerTheme(partialCustomTheme);
+
+    const normalized = service.getTheme('custom-plugin-projection');
+    expect(normalized).toBeDefined();
+    const projection = createPluginThemeColorProjection(normalized!);
+
+    expect(Object.keys(projection).sort()).toEqual([...PLUGIN_THEME_COLOR_KEYS].sort());
+    expect(projection.primary).toBe('#14b8a6');
+    expect(projection.secondary).toBe('#a855f7');
+    expect(projection.accent).toBe('#0f766e');
+    expect(projection.success).toBe('#22c55e');
+    expect(projection.warning).toBe('#f59e0b');
+    expect(projection.error).toBe('#ef4444');
+    expect(projection.info).toBe('#38bdf8');
   });
 });

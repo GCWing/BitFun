@@ -22,6 +22,11 @@ const SOURCE_OWNER_ROOTS = [
   'src/mobile-web/src',
   'src/web-ui/src',
 ];
+const NEAR_PAIR_DECISION_AUDIT_ROOTS = [
+  { root: 'src/web-ui/src', args: ['--json', '--no-baseline', '--top', '0'] },
+  { root: 'src/mobile-web/src', args: ['--root', 'src/mobile-web/src', '--json', '--no-baseline', '--top', '0'] },
+  { root: 'BitFun-Installer/src', args: ['--root', 'BitFun-Installer/src', '--json', '--no-baseline', '--top', '0'] },
+];
 
 function contractOwnerHasKnownSource(owner) {
   return String(owner ?? '')
@@ -57,6 +62,31 @@ function readJson(filePath) {
 
 function readText(filePath) {
   return fs.readFileSync(filePath, 'utf8');
+}
+
+function collectRepositoryNearPairRows(sourceRoot, report) {
+  return COLOR_DOMAIN_KEYS.flatMap((domain) => {
+    const pairs = report.colorDomainNearPairs?.[domain];
+    if (!pairs) {
+      return [];
+    }
+    return [
+      ...(pairs.indistinguishable ?? []),
+      ...(pairs.near ?? []),
+    ].map(pair => ({
+      root: sourceRoot,
+      domain,
+      key: pair.key,
+    }));
+  }).sort((left, right) => (
+    left.root.localeCompare(right.root)
+    || left.domain.localeCompare(right.domain)
+    || left.key.localeCompare(right.key)
+  ));
+}
+
+function formatNearPairDecisionKey(row) {
+  return `${row.root}:${row.domain}:${row.key}`;
 }
 
 function createFixture(files) {
@@ -198,6 +228,72 @@ test('repository dynamic CSS var families match the registered contract', () => 
     assert.equal(report.surfaceTokenRenames.activeUnique, 0);
     assert.equal(report.surfaceTokenRenames.activeOccurrences, 0);
     assert.equal(report.surfaceTokenRenames.missingCanonicalUnique, 0);
+  }
+});
+
+test('plugin theme projection stays compact and isolated from runtime/widget contracts', () => {
+  const projectionSource = readText(path.join(root, 'src/web-ui/src/infrastructure/theme/pluginThemeProjection.ts'));
+  const publicIndexSource = readText(path.join(root, 'src/web-ui/src/infrastructure/theme/index.ts'));
+  const keyListMatch = projectionSource.match(/PLUGIN_THEME_COLOR_KEYS\s*=\s*\[([\s\S]*?)\]\s+as const;/);
+  assert.ok(keyListMatch, 'plugin projection must declare PLUGIN_THEME_COLOR_KEYS');
+  const keyMatches = Array.from(
+    keyListMatch[1].matchAll(/'([a-z]+)'/g),
+    match => match[1],
+  );
+
+  assert.deepEqual(keyMatches, [
+    'primary',
+    'secondary',
+    'accent',
+    'success',
+    'warning',
+    'error',
+    'info',
+  ]);
+  assert.equal(keyMatches.length, 7, 'plugin projection must stay within the documented key cap');
+  assert.doesNotMatch(
+    projectionSource,
+    /ThemeService|themePayload|WIDGET_THEME|getComputedStyle|setProperty|--[a-z0-9-]+/i,
+    'plugin projection must not become a runtime CSS var or generated widget schema',
+  );
+  assert.match(publicIndexSource, /createPluginThemeColorProjection/);
+  assert.doesNotMatch(
+    publicIndexSource,
+    /themePayload|WIDGET_THEME/i,
+    'theme public index must not expose generated widget payload as plugin theme API',
+  );
+});
+
+test('repository specialized near color pairs have explicit decisions', () => {
+  const reportedRows = NEAR_PAIR_DECISION_AUDIT_ROOTS.flatMap(({ root: sourceRoot, args }) => {
+    const result = runAudit(args);
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+
+    return collectRepositoryNearPairRows(sourceRoot, JSON.parse(result.stdout));
+  });
+  const decisions = readJson(path.join(root, 'scripts/theme-color-near-pair-decisions.json'));
+  assert.equal(decisions.version, 1);
+  assert.ok(Array.isArray(decisions.decisions));
+
+  const reportedKeys = new Set(reportedRows.map(formatNearPairDecisionKey));
+  const decisionKeys = new Set(decisions.decisions.map(formatNearPairDecisionKey));
+  assert.equal(decisionKeys.size, decisions.decisions.length, 'near-pair decisions must be unique by root, domain, and key');
+  const missing = reportedRows
+    .filter(row => !decisionKeys.has(formatNearPairDecisionKey(row)))
+    .map(formatNearPairDecisionKey);
+  const stale = decisions.decisions
+    .filter(row => !reportedKeys.has(formatNearPairDecisionKey(row)))
+    .map(formatNearPairDecisionKey);
+
+  assert.deepEqual(missing, [], 'new specialized near pairs require an explicit merge/keep/defer decision');
+  assert.deepEqual(stale, [], 'retired specialized near-pair decisions must be removed with the lowered baseline');
+  for (const decision of decisions.decisions) {
+    assert.ok(SOURCE_OWNER_ROOTS.includes(decision.root), `${decision.key} must name a scanned root`);
+    assert.ok(['merge', 'keep', 'defer'].includes(decision.decision), `${decision.key} has an invalid decision`);
+    assert.ok(String(decision.owner).trim().length > 10, `${decision.key} must name an owner`);
+    assert.ok(fs.existsSync(path.join(root, decision.owner)), `${decision.key} owner must exist in the repository`);
+    assert.ok(String(decision.reason).trim().length >= 60, `${decision.key} must explain the product/design reason`);
+    assert.ok(String(decision.reevaluateWhen).trim().length >= 30, `${decision.key} must define reevaluation criteria`);
   }
 });
 

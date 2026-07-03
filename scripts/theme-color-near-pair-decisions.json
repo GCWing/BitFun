@@ -1,0 +1,150 @@
+{
+  "version": 1,
+  "description": "Explicit decisions for specialized theme near-color pairs. Keep this file in sync with scripts/audit-theme-colors.mjs output; lower the audit baseline when a pair is merged.",
+  "decisions": [
+    {
+      "root": "src/web-ui/src",
+      "domain": "themePreset",
+      "key": "#1a1b26 <-> #1c1c1f",
+      "decision": "keep",
+      "owner": "src/web-ui/src/infrastructure/theme/presets",
+      "reason": "Tokyo Night primary background uses the canonical Tokyo base hue; #1c1c1f is the default dark/china/slate neutral surface. Merging would flatten cross-theme identity rather than remove an app-level duplicate.",
+      "reevaluateWhen": "Only after a visual review proves Tokyo Night no longer needs a distinct primary background identity."
+    },
+    {
+      "root": "src/web-ui/src",
+      "domain": "themePreset",
+      "key": "#1c1c1f <-> #212019",
+      "decision": "keep",
+      "owner": "src/web-ui/src/infrastructure/theme/presets",
+      "reason": "China Night secondary background keeps a warmer ink tint next to the shared dark neutral; it is a theme-identity surface, not a stray duplicate.",
+      "reevaluateWhen": "Only if China Night background surfaces are redesigned around the shared neutral scale."
+    },
+    {
+      "root": "src/web-ui/src",
+      "domain": "themePreset",
+      "key": "#e0e3e8 <-> #e8e8e8",
+      "decision": "keep",
+      "owner": "src/web-ui/src/infrastructure/theme/presets",
+      "reason": "Light quaternary surface and slate button text sit near primary text/background stops; they can appear as adjacent surface/text roles and should not be collapsed without focused screenshots.",
+      "reevaluateWhen": "Only after button text and light surface-ramp screenshots show no loss of hierarchy."
+    },
+    {
+      "root": "src/web-ui/src",
+      "domain": "themePreset",
+      "key": "#e8e8e8 <-> #ebe9e3",
+      "decision": "keep",
+      "owner": "src/web-ui/src/infrastructure/theme/presets",
+      "reason": "China Style elevated paper keeps a warm paper tint while #e8e8e8 is a shared cool neutral/text stop. The distinction is a theme personality cue.",
+      "reevaluateWhen": "Only if China Style paper surfaces are intentionally moved to the shared neutral ramp."
+    },
+    {
+      "root": "src/web-ui/src",
+      "domain": "themePreset",
+      "key": "#f0f4f8 <-> #f3f3f5",
+      "decision": "keep",
+      "owner": "src/web-ui/src/infrastructure/theme/presets",
+      "reason": "The pair crosses light primary background and Monaco lineHighlight / button state values. Editor line highlight must remain visibly distinct from base surface roles.",
+      "reevaluateWhen": "Only after Monaco-focused light-theme screenshots confirm the line highlight remains readable."
+    },
+    {
+      "root": "src/web-ui/src",
+      "domain": "themePreset",
+      "key": "#2b2d30 <-> #313335",
+      "decision": "keep",
+      "owner": "src/web-ui/src/infrastructure/theme/presets",
+      "reason": "Midnight background, tertiary surface, and editor lineHighlight are adjacent in the same dark theme. Merging would weaken surface and editor-row separation.",
+      "reevaluateWhen": "Only after a Midnight surface-ramp redesign removes the adjacent role split."
+    },
+    {
+      "root": "src/web-ui/src",
+      "domain": "themePreset",
+      "key": "#f3f3f5 <-> #faf8f0",
+      "decision": "keep",
+      "owner": "src/web-ui/src/infrastructure/theme/presets",
+      "reason": "China Style paper uses a warm first-paint surface while #f3f3f5 is a cool light neutral and button state stop. This is cross-theme identity, not a duplicate role.",
+      "reevaluateWhen": "Only after China Style paper identity is intentionally neutralized."
+    },
+    {
+      "root": "src/web-ui/src",
+      "domain": "themePreset",
+      "key": "#334155 <-> #363b54",
+      "decision": "keep",
+      "owner": "src/web-ui/src/infrastructure/theme/presets",
+      "reason": "Light strong text and Tokyo border encode different theme-local roles. They are not the same semantic token even though their RGB distance is low.",
+      "reevaluateWhen": "Only if both roles are remapped through a shared semantic border/text projection."
+    },
+    {
+      "root": "src/web-ui/src",
+      "domain": "themePreset",
+      "key": "#ebe9e3 <-> #f0ede0",
+      "decision": "keep",
+      "owner": "src/web-ui/src/infrastructure/theme/presets",
+      "reason": "China Style tertiary and elevated paper surfaces are adjacent paper-ramp stops. Collapsing them would reduce section/elevation separation.",
+      "reevaluateWhen": "Only after China Style paper-ramp screenshots prove the two stops are not adjacent in product UI."
+    },
+    {
+      "root": "src/web-ui/src",
+      "domain": "themeRuntime",
+      "key": "rgba(255, 255, 255, 0.12) <-> rgba(255, 255, 255, 0.15)",
+      "decision": "keep",
+      "owner": "src/web-ui/src/infrastructure/theme/core/ThemeService.ts",
+      "reason": "The 0.12 and 0.15 white overlay stops separate hover/active/elevated states and must stay aligned with static tokens.",
+      "reevaluateWhen": "Only after the runtime and static overlay ladder are simplified together with visual coverage for affected card, markdown, and shadow states."
+    },
+    {
+      "root": "src/web-ui/src",
+      "domain": "themeRuntime",
+      "key": "rgba(0, 0, 0, 0.12) <-> rgba(0, 0, 0, 0.15)",
+      "decision": "keep",
+      "owner": "src/web-ui/src/infrastructure/theme/core/ThemeService.ts",
+      "reason": "The 0.12 and 0.15 black overlay stops separate light-theme card/elevated/active states and must stay aligned with static tokens.",
+      "reevaluateWhen": "Only after light-theme surface-state screenshots show no hierarchy loss."
+    },
+    {
+      "root": "src/web-ui/src",
+      "domain": "tokenContract",
+      "key": "rgba(255, 255, 255, 0.12) <-> rgba(255, 255, 255, 0.15)",
+      "decision": "keep",
+      "owner": "src/web-ui/src/component-library/styles/tokens.scss",
+      "reason": "Static token stops mirror runtime overlay state levels for first paint. Removing one side without runtime alignment would create early-render drift.",
+      "reevaluateWhen": "Only when the matching runtime overlay pair is also retired."
+    },
+    {
+      "root": "src/web-ui/src",
+      "domain": "tokenContract",
+      "key": "rgba(0, 0, 0, 0.12) <-> rgba(0, 0, 0, 0.15)",
+      "decision": "keep",
+      "owner": "src/web-ui/src/component-library/styles/tokens.scss",
+      "reason": "Static black overlay stops mirror runtime light-theme state levels for first paint. The pair is a state ramp, not an unowned duplicate.",
+      "reevaluateWhen": "Only when the matching runtime overlay pair is also retired."
+    },
+    {
+      "root": "BitFun-Installer/src",
+      "domain": "themePreset",
+      "key": "#0e0e10 <-> #121214",
+      "decision": "keep",
+      "owner": "BitFun-Installer/src/theme/installerThemesData.ts",
+      "reason": "Cyber and default dark installer cards keep distinct theme preview backgrounds; the values appear as separate theme cards rather than adjacent layers inside one installer surface.",
+      "reevaluateWhen": "Only after installer theme preview screenshots show Cyber and default dark cards no longer need separate preview identity."
+    },
+    {
+      "root": "BitFun-Installer/src",
+      "domain": "themePreset",
+      "key": "#1a1b26 <-> #1a1c1e",
+      "decision": "keep",
+      "owner": "BitFun-Installer/src/theme/installerThemesData.ts",
+      "reason": "Tokyo Night primary background intentionally remains close to the web Tokyo hue while the shared installer card surface stays neutral for preview contrast.",
+      "reevaluateWhen": "Only if the installer Tokyo Night preview is redesigned to inherit the shared dark card surface."
+    },
+    {
+      "root": "BitFun-Installer/src",
+      "domain": "themePreset",
+      "key": "#121214 <-> #1a1814",
+      "decision": "keep",
+      "owner": "BitFun-Installer/src/theme/installerThemesData.ts",
+      "reason": "Ink Night keeps a warm dark preview background near the default dark installer card background; this communicates theme identity across separate theme cards.",
+      "reevaluateWhen": "Only after installer preview screenshots prove the warm Ink Night identity is no longer visually meaningful."
+    }
+  ]
+}

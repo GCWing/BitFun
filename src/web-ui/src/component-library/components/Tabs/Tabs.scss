@@ -145,8 +145,18 @@
       border-radius: tokens.$size-radius-sm;
 
       &--active {
-        @include tokens.liquid-glass-base;
+        background: linear-gradient(135deg,
+          var(--element-bg-soft) 0%,
+          var(--element-bg-soft) 50%,
+          var(--element-bg-base) 100%);
+        border: 1px solid var(--color-overlay-white-08);
+        backdrop-filter: tokens.$blur-base;
+        -webkit-backdrop-filter: tokens.$blur-base;
+        box-shadow:
+          0 2px 4px var(--color-overlay-black-12),
+          inset 0 1px 0 var(--color-overlay-white-08);
         color: var(--color-text-primary);
+        overflow: hidden;
       }
 
       &:hover:not(&--disabled):not(&--active) {

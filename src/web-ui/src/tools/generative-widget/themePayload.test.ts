@@ -286,10 +286,12 @@ describe('generated widget theme payload contract', () => {
     const { requestedNames } = readPayloadWithHostValues();
     const compatibilityAliasCss = createWidgetThemeCompatibilityAliasCss();
     const aliasEntries = readCompatibilityAliasEntries(compatibilityAliasCss);
+    const aliasNames = new Set(aliasEntries.map(([name]) => name));
 
     expect(aliasEntries.map(([name]) => name).sort()).toEqual([...RETIRED_WIDGET_THEME_COMPAT_KEYS].sort());
     for (const [key, canonical] of aliasEntries) {
       expect(RETIRED_WIDGET_THEME_COMPAT_KEYS).toContain(key);
+      expect(aliasNames.has(canonical)).toBe(false);
       expect(
         requestedNames.includes(canonical)
         || canonical in WIDGET_THEME_FALLBACK_VARS

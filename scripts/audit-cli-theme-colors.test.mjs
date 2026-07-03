@@ -10,11 +10,14 @@ import {
   checkBaseline,
   collectPresetColorEntriesFromJson,
   collectRustFallbackEntriesFromText,
+  createCliThemeColorReport,
   findNearPairs,
   isRuntimePresetEntry,
   normalizeHexColor,
   writeReportJson,
 } from './audit-cli-theme-colors.mjs';
+
+const root = process.cwd();
 
 test('normalizeHexColor accepts supported CLI hex colors only', () => {
   assert.equal(normalizeHexColor('#AABBCC'), '#aabbcc');
@@ -83,6 +86,23 @@ test('CLI runtime key audit stays aligned with the Rust theme resolver', () => {
   ).sort();
 
   assert.deepEqual(Array.from(CLI_RUNTIME_THEME_KEYS).sort(), rustRuntimeKeys);
+});
+
+test('CLI OpenCode presets keep compatibility declarations outside the runtime projection', () => {
+  const report = createCliThemeColorReport();
+  const presetDir = path.join(root, 'src/apps/cli/themes/presets');
+  const presetFiles = fs.readdirSync(presetDir).filter(file => file.endsWith('.json')).sort();
+
+  assert.ok(report.compatibilityPresetColorOccurrences > report.runtimePresetColorOccurrences);
+  assert.ok(report.runtimePresetColorOccurrences < report.presetColorOccurrences);
+  assert.deepEqual(report.runtimeThemeKeys, Array.from(CLI_RUNTIME_THEME_KEYS).sort());
+  assert.equal(report.runtimePresetNearPairs.nearTotal, 0);
+  assert.equal(report.compatibilityPresetNearPairs.nearTotal, 0);
+
+  for (const file of presetFiles) {
+    const json = JSON.parse(fs.readFileSync(path.join(presetDir, file), 'utf8'));
+    assert.equal(json.$schema, 'https://opencode.ai/theme.json', `${file} must remain OpenCode-compatible`);
+  }
 });
 
 test('collectRustFallbackEntriesFromText reads Theme struct RGB fields only', () => {
