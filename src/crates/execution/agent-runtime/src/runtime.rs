@@ -18,7 +18,8 @@ use bitfun_runtime_ports::{
     AgentSubmissionResult, AgentSubmissionSource, AgentThreadGoalCreateRequest,
     AgentThreadGoalDeliveryRequest, AgentThreadGoalGetRequest, AgentThreadGoalManagementPort,
     AgentThreadGoalUpdateStatusRequest, AgentTurnCancellationPort, AgentTurnCancellationRequest,
-    AgentTurnCancellationResult, DialogSubmitOutcome, PortError, RuntimeEventEnvelope, ThreadGoal,
+    AgentTurnCancellationResult, DialogSubmitOutcome, PluginRuntimeBinding, PortError,
+    RuntimeEventEnvelope, ThreadGoal,
 };
 use bitfun_runtime_services::RuntimeServices;
 
@@ -28,6 +29,8 @@ use crate::post_call_hooks::RuntimeHookRegistry;
 pub enum RuntimeBuildError {
     #[error("agent submission port is required")]
     MissingSubmissionPort,
+    #[error("plugin runtime host binding is not supported before host gates are registered")]
+    UnsupportedPluginRuntimeHostBinding,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -110,6 +113,7 @@ pub struct AgentRuntime {
     harness_registry: Option<Arc<HarnessRegistry>>,
     hook_registry: RuntimeHookRegistry,
     agent_registry: Option<Arc<dyn RuntimeAgentRegistry>>,
+    plugin_runtime: PluginRuntimeBinding,
 }
 
 impl std::fmt::Debug for AgentRuntime {
@@ -175,6 +179,7 @@ impl std::fmt::Debug for AgentRuntime {
                     .as_ref()
                     .map(|_| "<dyn RuntimeAgentRegistry>"),
             )
+            .field("plugin_runtime", &self.plugin_runtime.availability())
             .finish()
     }
 }
@@ -206,6 +211,7 @@ pub struct AgentRuntimeBuilder {
     harness_registry: Option<Arc<HarnessRegistry>>,
     hook_registry: RuntimeHookRegistry,
     agent_registry: Option<Arc<dyn RuntimeAgentRegistry>>,
+    plugin_runtime: PluginRuntimeBinding,
 }
 
 impl AgentRuntimeBuilder {
@@ -282,22 +288,48 @@ impl AgentRuntimeBuilder {
         self
     }
 
+    pub fn with_plugin_runtime(mut self, binding: PluginRuntimeBinding) -> Self {
+        self.plugin_runtime = binding;
+        self
+    }
+
     pub fn build(self) -> Result<AgentRuntime, RuntimeBuildError> {
+        let Self {
+            submission,
+            session_management,
+            thread_goal_management,
+            dialog_turn,
+            lifecycle_delivery,
+            cancellation,
+            services,
+            event_stream,
+            tool_registry,
+            harness_registry,
+            hook_registry,
+            agent_registry,
+            plugin_runtime,
+        } = self;
+
+        if matches!(plugin_runtime, PluginRuntimeBinding::Client(_))
+            || plugin_runtime.availability().is_executable()
+        {
+            return Err(RuntimeBuildError::UnsupportedPluginRuntimeHostBinding);
+        }
+
         Ok(AgentRuntime {
-            submission: self
-                .submission
-                .ok_or(RuntimeBuildError::MissingSubmissionPort)?,
-            session_management: self.session_management,
-            thread_goal_management: self.thread_goal_management,
-            dialog_turn: self.dialog_turn,
-            lifecycle_delivery: self.lifecycle_delivery,
-            cancellation: self.cancellation,
-            services: self.services,
-            event_stream: self.event_stream,
-            tool_registry: self.tool_registry,
-            harness_registry: self.harness_registry,
-            hook_registry: self.hook_registry,
-            agent_registry: self.agent_registry,
+            submission: submission.ok_or(RuntimeBuildError::MissingSubmissionPort)?,
+            session_management,
+            thread_goal_management,
+            dialog_turn,
+            lifecycle_delivery,
+            cancellation,
+            services,
+            event_stream,
+            tool_registry,
+            harness_registry,
+            hook_registry,
+            agent_registry,
+            plugin_runtime,
         })
     }
 }
@@ -419,6 +451,10 @@ impl AgentRuntime {
 
     pub fn hook_registry(&self) -> &RuntimeHookRegistry {
         &self.hook_registry
+    }
+
+    pub fn plugin_runtime(&self) -> &PluginRuntimeBinding {
+        &self.plugin_runtime
     }
 
     pub fn registered_agent_ids(&self, query: RuntimeAgentRegistryQuery<'_>) -> Vec<String> {
@@ -673,9 +709,11 @@ mod tests {
         AgentSessionManagementPort, AgentSessionSummary, AgentSessionWorkspaceRequest,
         AgentSubmissionResult, AgentThreadGoalDeliveryKind, AgentThreadGoalDeliveryRequest,
         AgentThreadGoalManagementPort, AgentTurnCancellationResult, ClockPort, DialogQueuePriority,
-        DialogSubmissionPolicy, DialogSubmitOutcome, FileSystemPort, PermissionPort, PortErrorKind,
-        PortResult, RuntimeEventSink, RuntimeEventType, RuntimeServiceCapability, SessionStorePort,
-        ThreadGoal, ThreadGoalStatus, WorkspacePort,
+        DialogSubmissionPolicy, DialogSubmitOutcome, FileSystemPort, PermissionPort,
+        PluginDispatchEnvelope, PluginResponseEnvelope, PluginRuntimeAvailability,
+        PluginRuntimeClient, PluginRuntimeUnavailableReason, PortErrorKind, PortResult,
+        RuntimeEventSink, RuntimeEventType, RuntimeServiceCapability, SessionStorePort, ThreadGoal,
+        ThreadGoalStatus, WorkspacePort,
     };
     use bitfun_runtime_services::{test_support::FakeRuntimePort, RuntimeServicesBuilder};
 
@@ -691,6 +729,27 @@ mod tests {
         thread_goal_creates: Mutex<Vec<AgentThreadGoalCreateRequest>>,
         thread_goal_updates: Mutex<Vec<AgentThreadGoalUpdateStatusRequest>>,
         resolved_agent_type: Option<String>,
+    }
+
+    struct MisreportedPluginRuntimeClient;
+
+    #[async_trait::async_trait]
+    impl PluginRuntimeClient for MisreportedPluginRuntimeClient {
+        fn availability(&self) -> PluginRuntimeAvailability {
+            PluginRuntimeAvailability::ProjectionOnly {
+                reason: PluginRuntimeUnavailableReason::NotBuilt,
+            }
+        }
+
+        async fn dispatch(
+            &self,
+            envelope: PluginDispatchEnvelope,
+        ) -> PortResult<PluginResponseEnvelope> {
+            Ok(PluginResponseEnvelope {
+                envelope_id: envelope.envelope_id,
+                accepted: true,
+            })
+        }
     }
 
     fn fake_thread_goal(status: ThreadGoalStatus) -> ThreadGoal {
@@ -873,6 +932,54 @@ mod tests {
     async fn builder_requires_submission_port() {
         let err = AgentRuntimeBuilder::new().build().unwrap_err();
         assert_eq!(err, RuntimeBuildError::MissingSubmissionPort);
+    }
+
+    #[tokio::test]
+    async fn builder_keeps_plugin_runtime_disabled_by_default() {
+        let ports = Arc::new(FakeAgentRuntimePorts::default());
+        let runtime = AgentRuntimeBuilder::new()
+            .with_submission_port(ports)
+            .build()
+            .expect("runtime");
+
+        assert_eq!(
+            runtime.plugin_runtime().availability(),
+            PluginRuntimeBinding::disabled(PluginRuntimeUnavailableReason::NotBuilt).availability()
+        );
+    }
+
+    #[tokio::test]
+    async fn builder_accepts_explicit_plugin_runtime_binding() {
+        let ports = Arc::new(FakeAgentRuntimePorts::default());
+        let runtime = AgentRuntimeBuilder::new()
+            .with_submission_port(ports)
+            .with_plugin_runtime(PluginRuntimeBinding::projection_only(
+                PluginRuntimeUnavailableReason::UnsupportedProfile,
+            ))
+            .build()
+            .expect("runtime");
+
+        assert_eq!(
+            runtime.plugin_runtime().availability(),
+            PluginRuntimeBinding::projection_only(
+                PluginRuntimeUnavailableReason::UnsupportedProfile
+            )
+            .availability()
+        );
+    }
+
+    #[tokio::test]
+    async fn builder_rejects_plugin_runtime_client_until_host_boundary_exists() {
+        let ports = Arc::new(FakeAgentRuntimePorts::default());
+        let err = AgentRuntimeBuilder::new()
+            .with_submission_port(ports)
+            .with_plugin_runtime(PluginRuntimeBinding::client(Arc::new(
+                MisreportedPluginRuntimeClient,
+            )))
+            .build()
+            .unwrap_err();
+
+        assert_eq!(err, RuntimeBuildError::UnsupportedPluginRuntimeHostBinding);
     }
 
     #[tokio::test]

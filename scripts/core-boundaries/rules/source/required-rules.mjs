@@ -92,7 +92,7 @@ export const requiredContentRules = [
   {
     path: 'src/crates/contracts/core-types/src/lsp.rs',
     reason:
-      'core-types must own shared LSP protocol DTOs and plugin manifest wire contracts',
+      'core-types must own shared LSP protocol DTOs, plugin manifest wire contracts, and plugin runtime target DTOs',
     patterns: [
       {
         regex: /\bpub struct LspPlugin\b/,
@@ -110,12 +110,20 @@ export const requiredContentRules = [
         regex: /\bpub enum PluginSource\b/,
         message: 'missing LSP plugin source contract',
       },
+      {
+        regex: /\bpub struct LspPluginRuntimeTarget\b/,
+        message: 'missing LSP plugin runtime target contract',
+      },
+      {
+        regex: /\bpub fn resolve_lsp_plugin_command_for_target\b/,
+        message: 'missing pure LSP plugin command placeholder resolver',
+      },
     ],
   },
   {
     path: 'src/crates/services/services-core/src/lsp.rs',
     reason:
-      'services-core must own pure LSP plugin registry and command-target mapping rules',
+      'services-core must own pure LSP plugin registry and current-target mapping rules',
     patterns: [
       {
         regex: /\bpub struct PluginRegistry\b/,
@@ -124,14 +132,6 @@ export const requiredContentRules = [
       {
         regex: /\bpub struct LspSupportedExtensions\b/,
         message: 'missing supported extension summary owner',
-      },
-      {
-        regex: /\bpub struct LspPluginRuntimeTarget\b/,
-        message: 'missing LSP plugin runtime target contract',
-      },
-      {
-        regex: /\bpub fn resolve_plugin_command_for_target\b/,
-        message: 'missing pure LSP plugin command placeholder resolver',
       },
       {
         regex: /\bpub fn resolve_plugin_command_for_current_target\b/,
@@ -164,7 +164,7 @@ export const requiredContentRules = [
   {
     path: 'src/crates/contracts/core-types/tests/lsp_contracts.rs',
     reason:
-      'core-types must keep LSP manifest serialization and default-value regressions',
+      'core-types must keep LSP manifest serialization, default-value, and placeholder regressions',
     patterns: [
       {
         regex: /\blsp_plugin_manifest_defaults_preserve_legacy_shape\b/,
@@ -173,6 +173,10 @@ export const requiredContentRules = [
       {
         regex: /\blsp_capability_config_missing_fields_default_to_false\b/,
         message: 'missing LSP capability default regression',
+      },
+      {
+        regex: /\blsp_plugin_command_placeholder_resolution_is_contract_owned\b/,
+        message: 'missing LSP command placeholder contract regression',
       },
     ],
   },
@@ -4391,6 +4395,18 @@ export const requiredContentRules = [
       {
         regex: /\bpub trait RuntimeEventSink\b/,
         message: 'missing runtime event sink contract',
+      },
+      {
+        regex: /\bpub trait PluginRuntimeClient\b/,
+        message: 'missing plugin runtime client boundary contract',
+      },
+      {
+        regex: /\bpub enum PluginRuntimeBinding\b/,
+        message: 'missing plugin runtime binding boundary contract',
+      },
+      {
+        regex: /\bpub struct DisabledPluginRuntimeClient\b/,
+        message: 'missing disabled plugin runtime client contract',
       },
       {
         regex: /\bpub struct AgentSessionCreateResult\b[\s\S]*\bpub session_name: String\b/,

@@ -14,7 +14,7 @@
 - Product Assembly 是 composition root；除它以外，普通层级只能依赖稳定 contract、port、descriptor 或被注入的 typed part。
 - 产品特性和内核能力分开：长程任务、调度、权限、上下文、session/workspace、memory、DFX、hook/event 属于 Agent Kernel；
   `/goal`、UI、settings、命令和默认策略属于 Product Feature。
-- 主体进程插件 API 只暴露 `PluginRuntimeClient`、binding、envelope、candidate、trust 和 descriptor；不得感知具体生态 adapter。
+- 主体进程插件 API 分阶段开放：当前只落地 `PluginRuntimeClient`、binding、availability 和 dispatch/response envelope；effect candidate、trust policy、descriptor 与 lifecycle 语义必须在后续 Host / UI Extension 阶段成组落地。任何阶段都不得让主体进程感知具体生态 adapter。
 - 任何会改变权限、工具 schema、事件语义、session 生命周期、remote 行为、MiniApp 行为、UI extension contract 或交付形态的变更必须暂停并单独评审。
 
 ## 2. 当前基线
@@ -31,30 +31,13 @@
 
 | 差距 | 影响 | 收敛要求 |
 |---|---|---|
-| Plugin Runtime Host 仍是设计合同，未形成主进程窄接口和 disabled/projection stub | 主体进程可能继续感知具体 adapter 或运行单元 | 落地 `PluginRuntimeClient`、binding、capability matrix 和 Host facade 白名单 |
+| Plugin Runtime Host 仍缺少真实执行 Host 和生态 adapter | 插件能力只能表达 disabled / projection-only，不能加载或执行外部插件 | 在 UI Extension Contract 后落地受控 Host facade、effect / trust / diagnostics / deadline / epoch；生态 adapter 在 Host 边界稳定后接入 |
 | UI Extension Contract 与产品形态矩阵仍需实现 | Desktop/Web/CLI/SDK/ACP 的插件 UI 行为可能不一致 | 建立 descriptor round-trip、fallback、unsupported/unavailable 和只读 state view |
-| OpenCode compatibility adapter 仍缺少真实消费路径 | OpenCode 插件能力无法受控进入 BitFun | 先支持 discovery/read-only，再逐步开放 tool provider 和 UI contribution |
+| OpenCode compatibility adapter 仍缺少真实消费路径 | OpenCode 插件能力无法受控进入 BitFun | 插件 Host 边界稳定后再接入；具体生态 adapter、JS/TS runtime 和可写插件能力后置 |
 | 部分 concrete owner 仍在 core 或产品命令路径 | 层级依赖和平台差异仍可能回流 | 继续迁移 Computer Use OS action、Git/process/session host adapter、MCP auth URL helper 等 |
 | SDK readiness 仍未闭环 | 独立 Agent Runtime SDK 可能牵引 product-full 或 concrete provider | fake-provider smoke、minimal feature、cargo tree/metadata 对比和 API version 保护 |
 
 ## 4. 后续大型阶段
-
-### Stage C：Plugin Runtime Host Foundation
-
-目标：建立主体进程的插件运行时窄接口，并将 OpenCode 等生态适配器限制在 Host 内部。
-
-范围：
-
-- 定义 `PluginRuntimeClient`、`PluginRuntimeBinding`、`PluginRuntimeAvailability`、disabled/projection-only stub。
-- 定义 plugin dispatch/response envelope、effect candidate、trust policy、adapter manifest 和 diagnostics。
-- 建立 Host facade 白名单、project execution domain、deadline、epoch、idempotency 和 failure quarantine。
-- ACP bridge 保持 integration owner，只通过稳定 capability/effect 与插件运行时互操作。
-
-准出：
-
-- 主体进程不暴露 `OpenCodeCompatibilityAdapter` 等具体 adapter 类型。
-- 插件、ACP、external skills 不得直接写 kernel 权威状态、permission decision、audit event 或 UI implementation。
-- lifecycle / failure / dispose、permission candidate、event/audit 和 boundary focused checks 通过。
 
 ### Stage D：UI Extension Contract 与产品形态矩阵
 
@@ -65,14 +48,38 @@
 - 定义 slot、route、command/keymap、prompt augmentation、dialog/toast、settings entry、state view descriptor。
 - UI state view 只读；descriptor 不包含 React component、Tauri window、DOM node、renderer handle 或可执行代码。
 - Product Assembly 维护 UI contribution registry、capability matrix 和 unsupported/unavailable fallback。
-- 建立 Desktop、Web、CLI、Remote、ACP、SDK、Mobile Web 的插件能力矩阵。
+- 建立 Desktop、Web、CLI、Server、Remote、ACP、SDK、Mobile Web 的插件能力矩阵。
+
+当前 UI Extension 形态矩阵：
+
+| 形态 | UI Extension 状态 | 降级要求 |
+|---|---|---|
+| ProductFull / Desktop / Web / Mobile Web | disabled: NotBuilt | 可声明 UI 扩展能力缺口，但不能执行、渲染或加载外部 UI |
+| CLI / Server / Remote / ACP / SDK | disabled: UnsupportedProfile | 必须返回 typed unsupported，不得隐式复用桌面或 Web UI 实现 |
 
 准出：
 
 - UI descriptor round-trip、host fallback、unsupported/unavailable 和 product-shape focused tests 通过。
 - Web、Desktop、CLI 不因 UI Extension Contract 引入互相依赖。
 
-### Stage E：OpenCode Compatibility Adapter
+### Stage E：Plugin Runtime Host 执行边界
+
+目标：在 disabled/projection-only 边界和 UI Extension Contract 之后，建立真实插件 Host 的受控执行边界，但仍不直接绑定 OpenCode、Claude Code 或 Codex 等具体生态实现。
+
+范围：
+
+- 定义插件 lifecycle、deadline、epoch、idempotency、failure quarantine、diagnostics 和 dispose 语义。
+- 定义 effect candidate、trust policy、permission/audit 只读投射和拒绝路径；插件 Host 不直接写 kernel 权威状态、permission decision、audit event 或 UI implementation。
+- Product Assembly 只注册 Host facade 和 typed capability；具体 runtime、worker、subprocess、package discovery 由上层组装器选择并注入。
+- 建立 Desktop、CLI、Server、Remote、ACP、Web、Mobile Web、SDK 的 Host availability / unavailable / unsupported 行为矩阵。
+
+准出：
+
+- Host facade 不暴露具体生态 adapter 类型、UI implementation handle、Tauri handle、full `RuntimeServices` bundle 或 `bitfun-core/product-full`。
+- disabled、projection-only、unavailable、host failure、dispose 和 permission/effect focused tests 通过。
+- 默认不开放可写 transform 或外部 JS/TS plugin runtime；这些能力需要单独安全评审。
+
+### Stage F：OpenCode Compatibility Adapter
 
 目标：在 Plugin Runtime Host、Tool ABI、Event Manifest 和 UI Extension Contract 可用后，实现受控 OpenCode 兼容适配。
 
@@ -88,7 +95,7 @@
 - OpenCode adapter 不依赖 `bitfun-core/product-full`、full `RuntimeServices` bundle、UI implementation 或 concrete provider handle。
 - adapter、permission/effect、event manifest、UI contribution 和 Desktop/CLI/Server/Remote/ACP/Web/Mobile Web/SDK product shape checks 通过。
 
-### Stage F：剩余 Concrete Owner 与 SDK Readiness
+### Stage G：剩余 Concrete Owner 与 SDK Readiness
 
 目标：完成剩余 concrete owner 收口，并验证独立 Agent Runtime SDK 边界。
 

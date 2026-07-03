@@ -1,4 +1,7 @@
-use bitfun_core_types::lsp::{CapabilitiesConfig, LspPlugin};
+use bitfun_core_types::lsp::{
+    resolve_lsp_plugin_command_for_target, CapabilitiesConfig, LspPlugin, LspPluginRuntimeArch,
+    LspPluginRuntimePlatform, LspPluginRuntimeTarget,
+};
 
 #[test]
 fn lsp_plugin_manifest_defaults_preserve_legacy_shape() {
@@ -44,4 +47,16 @@ fn lsp_capability_config_missing_fields_default_to_false() {
     assert!(!config.formatting);
     assert!(!config.diagnostics);
     assert!(!config.inlay_hints);
+}
+
+#[test]
+fn lsp_plugin_command_placeholder_resolution_is_contract_owned() {
+    let command = "bin/${platform}/${os}/${arch}/server";
+    let target =
+        LspPluginRuntimeTarget::new(LspPluginRuntimePlatform::Macos, LspPluginRuntimeArch::Arm64);
+
+    assert_eq!(
+        resolve_lsp_plugin_command_for_target(command, target),
+        "bin/darwin/darwin/arm64/server"
+    );
 }

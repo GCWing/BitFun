@@ -101,6 +101,215 @@ pub trait RuntimeServicePort: Send + Sync {
     fn capability(&self) -> RuntimeServiceCapability;
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PluginRuntimeUnavailableReason {
+    NotBuilt,
+    UnsupportedProfile,
+    DisabledByPolicy,
+    HostUnavailable,
+}
+
+impl PluginRuntimeUnavailableReason {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::NotBuilt => "not_built",
+            Self::UnsupportedProfile => "unsupported_profile",
+            Self::DisabledByPolicy => "disabled_by_policy",
+            Self::HostUnavailable => "host_unavailable",
+        }
+    }
+}
+
+impl std::fmt::Display for PluginRuntimeUnavailableReason {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", tag = "status")]
+pub enum ExtensionCapabilityAvailability {
+    Disabled {
+        reason: PluginRuntimeUnavailableReason,
+    },
+    ProjectionOnly {
+        reason: PluginRuntimeUnavailableReason,
+    },
+    Available,
+    Unavailable {
+        reason: PluginRuntimeUnavailableReason,
+    },
+}
+
+impl ExtensionCapabilityAvailability {
+    pub const fn disabled(reason: PluginRuntimeUnavailableReason) -> Self {
+        Self::Disabled { reason }
+    }
+
+    pub const fn projection_only(reason: PluginRuntimeUnavailableReason) -> Self {
+        Self::ProjectionOnly { reason }
+    }
+
+    pub const fn is_executable(self) -> bool {
+        matches!(self, Self::Available)
+    }
+}
+
+pub type PluginRuntimeAvailability = ExtensionCapabilityAvailability;
+pub type UiExtensionAvailability = ExtensionCapabilityAvailability;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginDispatchEnvelope {
+    pub envelope_id: String,
+    pub event_name: String,
+    #[serde(default)]
+    pub payload: serde_json::Value,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginResponseEnvelope {
+    pub envelope_id: String,
+    pub accepted: bool,
+}
+
+#[async_trait::async_trait]
+pub trait PluginRuntimeClient: Send + Sync {
+    fn availability(&self) -> PluginRuntimeAvailability;
+
+    async fn dispatch(
+        &self,
+        envelope: PluginDispatchEnvelope,
+    ) -> PortResult<PluginResponseEnvelope>;
+}
+
+#[derive(Debug, Clone)]
+pub struct DisabledPluginRuntimeClient {
+    reason: PluginRuntimeUnavailableReason,
+}
+
+impl DisabledPluginRuntimeClient {
+    pub const fn new(reason: PluginRuntimeUnavailableReason) -> Self {
+        Self { reason }
+    }
+
+    fn not_available(&self) -> PortError {
+        PortError::new(
+            PortErrorKind::NotAvailable,
+            format!("plugin runtime is disabled: {}", self.reason),
+        )
+    }
+}
+
+impl Default for DisabledPluginRuntimeClient {
+    fn default() -> Self {
+        Self::new(PluginRuntimeUnavailableReason::NotBuilt)
+    }
+}
+
+#[async_trait::async_trait]
+impl PluginRuntimeClient for DisabledPluginRuntimeClient {
+    fn availability(&self) -> PluginRuntimeAvailability {
+        PluginRuntimeAvailability::Disabled {
+            reason: self.reason,
+        }
+    }
+
+    async fn dispatch(
+        &self,
+        _envelope: PluginDispatchEnvelope,
+    ) -> PortResult<PluginResponseEnvelope> {
+        Err(self.not_available())
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ProjectionOnlyPluginRuntimeClient {
+    reason: PluginRuntimeUnavailableReason,
+}
+
+impl ProjectionOnlyPluginRuntimeClient {
+    pub const fn new(reason: PluginRuntimeUnavailableReason) -> Self {
+        Self { reason }
+    }
+
+    fn not_available(&self) -> PortError {
+        PortError::new(
+            PortErrorKind::NotAvailable,
+            format!("plugin runtime is projection-only: {}", self.reason),
+        )
+    }
+}
+
+#[async_trait::async_trait]
+impl PluginRuntimeClient for ProjectionOnlyPluginRuntimeClient {
+    fn availability(&self) -> PluginRuntimeAvailability {
+        PluginRuntimeAvailability::ProjectionOnly {
+            reason: self.reason,
+        }
+    }
+
+    async fn dispatch(
+        &self,
+        _envelope: PluginDispatchEnvelope,
+    ) -> PortResult<PluginResponseEnvelope> {
+        Err(self.not_available())
+    }
+}
+
+#[derive(Clone)]
+pub enum PluginRuntimeBinding {
+    Disabled(DisabledPluginRuntimeClient),
+    ProjectionOnly(ProjectionOnlyPluginRuntimeClient),
+    Client(Arc<dyn PluginRuntimeClient>),
+}
+
+impl PluginRuntimeBinding {
+    pub const fn disabled(reason: PluginRuntimeUnavailableReason) -> Self {
+        Self::Disabled(DisabledPluginRuntimeClient::new(reason))
+    }
+
+    pub const fn projection_only(reason: PluginRuntimeUnavailableReason) -> Self {
+        Self::ProjectionOnly(ProjectionOnlyPluginRuntimeClient::new(reason))
+    }
+
+    pub fn client(client: Arc<dyn PluginRuntimeClient>) -> Self {
+        Self::Client(client)
+    }
+
+    pub fn availability(&self) -> PluginRuntimeAvailability {
+        match self {
+            Self::Disabled(client) => client.availability(),
+            Self::ProjectionOnly(client) => client.availability(),
+            Self::Client(client) => client.availability(),
+        }
+    }
+
+    pub fn as_client(&self) -> Arc<dyn PluginRuntimeClient> {
+        match self {
+            Self::Disabled(client) => Arc::new(client.clone()),
+            Self::ProjectionOnly(client) => Arc::new(client.clone()),
+            Self::Client(client) => Arc::clone(client),
+        }
+    }
+}
+
+impl Default for PluginRuntimeBinding {
+    fn default() -> Self {
+        Self::disabled(PluginRuntimeUnavailableReason::NotBuilt)
+    }
+}
+
+impl std::fmt::Debug for PluginRuntimeBinding {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PluginRuntimeBinding")
+            .field("availability", &self.availability())
+            .finish()
+    }
+}
+
 pub trait FileSystemPort: RuntimeServicePort {}
 
 pub trait WorkspacePort: RuntimeServicePort {}

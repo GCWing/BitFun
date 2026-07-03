@@ -91,12 +91,13 @@ async fn sdk_delivery_profile_builds_minimal_agent_runtime_without_product_full_
         .services()
         .has_capability(RuntimeServiceCapability::Network));
 
-    let (services, harness_registry) = parts.into_runtime_parts();
+    let (services, harness_registry, plugin_runtime) = parts.into_runtime_parts();
     let provider = Arc::new(ProductSdkAgentProvider::default());
     let runtime = AgentRuntimeBuilder::new()
         .with_submission_port(provider)
         .with_services(services)
         .with_harness_registry(Arc::new(harness_registry))
+        .with_plugin_runtime(plugin_runtime)
         .build()
         .expect("SDK profile parts should build a minimal runtime");
 
@@ -126,13 +127,14 @@ async fn product_runtime_parts_can_build_agent_runtime_sdk_without_core() {
     assert_eq!(parts.plan().profile(), DeliveryProfile::Cli);
     assert!(parts.missing_service_requirements().is_empty());
 
-    let (services, harness_registry) = parts.into_runtime_parts();
+    let (services, harness_registry, plugin_runtime) = parts.into_runtime_parts();
     let provider = Arc::new(ProductSdkAgentProvider::default());
     let events = AgentEventStream::new();
     let runtime = AgentRuntimeBuilder::new()
         .with_submission_port(provider.clone())
         .with_services(services)
         .with_harness_registry(Arc::new(harness_registry))
+        .with_plugin_runtime(plugin_runtime)
         .with_event_stream(events.clone())
         .build()
         .expect("product assembly parts should build an SDK runtime");

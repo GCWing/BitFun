@@ -2,7 +2,8 @@
 //!
 //! This module is the stable entrypoint for embedding the portable agent
 //! runtime with caller-provided ports. Concrete product assembly remains
-//! outside this crate.
+//! outside this crate. Plugin runtime facts are exposed as non-executable
+//! availability only until host gates land.
 
 pub const AGENT_RUNTIME_SDK_API_VERSION: u32 = 1;
 
@@ -55,14 +56,15 @@ pub use bitfun_runtime_ports::{
     AgentThreadGoalDeliveryRequest, AgentThreadGoalGetRequest, AgentThreadGoalManagementPort,
     AgentThreadGoalUpdateStatusRequest, AgentTurnCancellationPort, AgentTurnCancellationRequest,
     AgentTurnCancellationResult, ClockPort, DialogSubmitOutcome, FileSystemPort, GitPort,
-    McpCatalogPort, NetworkPort, PermissionDecision, PermissionPort, PermissionRequest, PortError,
-    PortResult, RemoteAssistantWorkspaceFacts, RemoteCapabilityPort, RemoteConnectionPort,
+    McpCatalogPort, NetworkPort, PermissionDecision, PermissionPort, PermissionRequest,
+    PluginRuntimeAvailability, PluginRuntimeUnavailableReason, PortError, PortResult,
+    RemoteAssistantWorkspaceFacts, RemoteCapabilityPort, RemoteConnectionPort,
     RemoteProjectionPort, RemoteRecentWorkspaceFacts, RemoteWorkspaceFacts,
     RemoteWorkspaceFileRuntimeHost, RemoteWorkspaceKind, RemoteWorkspacePort,
     RemoteWorkspaceRuntimeHost, RemoteWorkspaceUpdate, RuntimeEventEnvelope, RuntimeEventSink,
     RuntimeEventType, RuntimeServiceCapability, RuntimeServicePort, SessionStorageKind,
     SessionStoragePathRequest, SessionStoragePathResolution, SessionStorePort, TerminalPort,
-    ThreadGoal, ThreadGoalStatus, WorkspacePort,
+    ThreadGoal, ThreadGoalStatus, UiExtensionAvailability, WorkspacePort,
 };
 pub use bitfun_runtime_services::{
     CapabilityAvailability, RuntimeServices, RuntimeServicesBuilder, RuntimeServicesError,

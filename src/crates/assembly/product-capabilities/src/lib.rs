@@ -10,7 +10,10 @@ use bitfun_harness::{
     build_descriptor_harness_registry, HarnessCapability, HarnessProviderDescriptor,
     HarnessRegistry, HarnessRegistryBuildError, HarnessWorkflow,
 };
-use bitfun_runtime_ports::RuntimeServiceCapability;
+use bitfun_runtime_ports::{
+    PluginRuntimeAvailability, PluginRuntimeBinding, PluginRuntimeUnavailableReason,
+    RuntimeServiceCapability, UiExtensionAvailability,
+};
 use bitfun_runtime_services::RuntimeServices;
 pub use bitfun_tool_packs::ToolProviderGroupPlanSelectionError as ProductCapabilityBuildError;
 use bitfun_tool_packs::{
@@ -355,6 +358,7 @@ pub struct ProductAssemblyPlan {
     profile: DeliveryProfile,
     capability_set: ProductCapabilitySet,
     capability_assembly: ProductCapabilityAssembly,
+    extension_capabilities: ProductExtensionCapabilitySet,
 }
 
 impl ProductAssemblyPlan {
@@ -362,11 +366,13 @@ impl ProductAssemblyPlan {
         profile: DeliveryProfile,
         capability_set: ProductCapabilitySet,
         capability_assembly: ProductCapabilityAssembly,
+        extension_capabilities: ProductExtensionCapabilitySet,
     ) -> Self {
         Self {
             profile,
             capability_set,
             capability_assembly,
+            extension_capabilities,
         }
     }
 
@@ -380,6 +386,18 @@ impl ProductAssemblyPlan {
 
     pub fn capability_assembly(&self) -> &ProductCapabilityAssembly {
         &self.capability_assembly
+    }
+
+    pub fn extension_capabilities(&self) -> &ProductExtensionCapabilitySet {
+        &self.extension_capabilities
+    }
+
+    fn with_extension_capabilities(
+        mut self,
+        extension_capabilities: ProductExtensionCapabilitySet,
+    ) -> Self {
+        self.extension_capabilities = extension_capabilities;
+        self
     }
 
     pub fn feature_groups(&self) -> &[ProductFeatureGroup] {
@@ -459,15 +477,25 @@ impl ProductRuntimeAssembly {
 pub struct ProductAssemblyInput {
     profile: DeliveryProfile,
     services: RuntimeServices,
+    plugin_runtime: Option<PluginRuntimeBinding>,
 }
 
 impl ProductAssemblyInput {
     pub const fn new(profile: DeliveryProfile, services: RuntimeServices) -> Self {
-        Self { profile, services }
+        Self {
+            profile,
+            services,
+            plugin_runtime: None,
+        }
     }
 
     pub const fn profile(&self) -> DeliveryProfile {
         self.profile
+    }
+
+    pub fn with_plugin_runtime(mut self, binding: PluginRuntimeBinding) -> Self {
+        self.plugin_runtime = Some(binding);
+        self
     }
 }
 
@@ -476,6 +504,7 @@ pub struct ProductRuntimeParts {
     plan: ProductAssemblyPlan,
     services: RuntimeServices,
     harness_registry: HarnessRegistry,
+    plugin_runtime: PluginRuntimeBinding,
     service_availability: Vec<ProductServiceCapabilityAvailability>,
     missing_service_requirements: Vec<ProductServiceCapabilityRequirement>,
 }
@@ -493,6 +522,10 @@ impl ProductRuntimeParts {
         &self.harness_registry
     }
 
+    pub fn plugin_runtime(&self) -> &PluginRuntimeBinding {
+        &self.plugin_runtime
+    }
+
     pub fn service_availability(&self) -> &[ProductServiceCapabilityAvailability] {
         &self.service_availability
     }
@@ -502,8 +535,8 @@ impl ProductRuntimeParts {
     }
 
     /// Consume the assembled product output into runtime-builder inputs.
-    pub fn into_runtime_parts(self) -> (RuntimeServices, HarnessRegistry) {
-        (self.services, self.harness_registry)
+    pub fn into_runtime_parts(self) -> (RuntimeServices, HarnessRegistry, PluginRuntimeBinding) {
+        (self.services, self.harness_registry, self.plugin_runtime)
     }
 }
 
@@ -516,6 +549,10 @@ pub enum ProductAssemblyError {
     HarnessRegistry {
         profile: DeliveryProfile,
         source: HarnessRegistryBuildError,
+    },
+    UnsupportedPluginRuntime {
+        profile: DeliveryProfile,
+        availability: PluginRuntimeAvailability,
     },
 }
 
@@ -533,6 +570,15 @@ impl fmt::Display for ProductAssemblyError {
                 write!(
                     f,
                     "delivery profile {profile} failed to build harness registry: {source}"
+                )
+            }
+            Self::UnsupportedPluginRuntime {
+                profile,
+                availability,
+            } => {
+                write!(
+                    f,
+                    "delivery profile {profile} does not support plugin runtime host binding before host gates: {availability:?}"
                 )
             }
         }
@@ -570,10 +616,31 @@ impl ProductAssembler {
             }
         })?;
 
+        let plugin_runtime = input.plugin_runtime.unwrap_or_else(|| {
+            PluginRuntimeBinding::disabled(PluginRuntimeUnavailableReason::NotBuilt)
+        });
+        let plugin_runtime_availability = plugin_runtime.availability();
+        if matches!(plugin_runtime, PluginRuntimeBinding::Client(_))
+            || plugin_runtime_availability.is_executable()
+        {
+            return Err(ProductAssemblyError::UnsupportedPluginRuntime {
+                profile: input.profile,
+                availability: plugin_runtime_availability,
+            });
+        }
+
+        let plan = assembly.plan().clone().with_extension_capabilities(
+            ProductExtensionCapabilitySet::new(
+                plugin_runtime_availability,
+                assembly.plan().extension_capabilities().ui_extensions(),
+            ),
+        );
+
         Ok(ProductRuntimeParts {
-            plan: assembly.plan().clone(),
+            plan,
             services: input.services,
             harness_registry,
+            plugin_runtime,
             service_availability,
             missing_service_requirements,
         })
@@ -783,8 +850,73 @@ impl ProductCapabilityRegistry {
     pub fn build_assembly_plan(self, profile: DeliveryProfile) -> ProductAssemblyPlan {
         let capability_set = self.capability_set();
         let capability_assembly = self.build_assembly();
-        ProductAssemblyPlan::new(profile, capability_set, capability_assembly)
+        ProductAssemblyPlan::new(
+            profile,
+            capability_set,
+            capability_assembly,
+            product_extension_capabilities_for_profile(profile),
+        )
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProductExtensionCapabilitySet {
+    plugin_runtime: PluginRuntimeAvailability,
+    ui_extensions: UiExtensionAvailability,
+}
+
+impl ProductExtensionCapabilitySet {
+    pub fn new(
+        plugin_runtime: PluginRuntimeAvailability,
+        ui_extensions: UiExtensionAvailability,
+    ) -> Self {
+        Self {
+            plugin_runtime,
+            ui_extensions,
+        }
+    }
+
+    pub const fn plugin_runtime(&self) -> PluginRuntimeAvailability {
+        self.plugin_runtime
+    }
+
+    pub const fn ui_extensions(&self) -> UiExtensionAvailability {
+        self.ui_extensions
+    }
+}
+
+pub fn product_extension_capabilities_for_profile(
+    profile: DeliveryProfile,
+) -> ProductExtensionCapabilitySet {
+    let plugin_runtime_reason = match profile {
+        DeliveryProfile::ProductFull
+        | DeliveryProfile::Desktop
+        | DeliveryProfile::Cli
+        | DeliveryProfile::Server
+        | DeliveryProfile::Remote
+        | DeliveryProfile::Acp
+        | DeliveryProfile::Sdk => PluginRuntimeUnavailableReason::NotBuilt,
+        DeliveryProfile::Web | DeliveryProfile::MobileWeb => {
+            PluginRuntimeUnavailableReason::UnsupportedProfile
+        }
+    };
+
+    let ui_extension_reason = match profile {
+        DeliveryProfile::ProductFull
+        | DeliveryProfile::Desktop
+        | DeliveryProfile::Web
+        | DeliveryProfile::MobileWeb => PluginRuntimeUnavailableReason::NotBuilt,
+        DeliveryProfile::Cli
+        | DeliveryProfile::Server
+        | DeliveryProfile::Remote
+        | DeliveryProfile::Acp
+        | DeliveryProfile::Sdk => PluginRuntimeUnavailableReason::UnsupportedProfile,
+    };
+
+    ProductExtensionCapabilitySet::new(
+        PluginRuntimeAvailability::disabled(plugin_runtime_reason),
+        UiExtensionAvailability::disabled(ui_extension_reason),
+    )
 }
 
 fn feature_groups_from_tool_provider_group_plan(

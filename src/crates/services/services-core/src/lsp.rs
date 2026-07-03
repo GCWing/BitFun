@@ -1,7 +1,7 @@
 //! Cross-platform reusable LSP service rules.
 //!
-//! This module owns pure plugin registry, command-target mapping rules,
-//! reusable plugin package filesystem loading, protocol helpers, project
+//! This module owns the reusable plugin registry,
+//! plugin package filesystem loading, protocol helpers, project
 //! detection, request debounce, configuration file watching, and LSP server
 //! process/manager primitives. It does not own product workspace state,
 //! frontend event emission, or global singleton wiring.
@@ -15,6 +15,10 @@ pub mod project_detector;
 pub mod protocol;
 
 use bitfun_core_types::lsp::LspPlugin;
+pub use bitfun_core_types::lsp::{
+    resolve_lsp_plugin_command_for_target as resolve_plugin_command_for_target,
+    LspPluginRuntimeArch, LspPluginRuntimePlatform, LspPluginRuntimeTarget,
+};
 use log::{info, warn};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -32,63 +36,6 @@ pub enum LspPluginRegistryError {
     UnsupportedPlatform,
     #[error("Unsupported architecture")]
     UnsupportedArchitecture,
-}
-
-/// Current or simulated platform for plugin command placeholder expansion.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum LspPluginRuntimePlatform {
-    Windows,
-    Macos,
-    Linux,
-}
-
-impl LspPluginRuntimePlatform {
-    pub const fn manifest_token(self) -> &'static str {
-        match self {
-            Self::Windows => "win",
-            Self::Macos => "darwin",
-            Self::Linux => "linux",
-        }
-    }
-}
-
-/// Current or simulated CPU architecture for plugin command placeholder
-/// expansion.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum LspPluginRuntimeArch {
-    X64,
-    Arm64,
-}
-
-impl LspPluginRuntimeArch {
-    pub const fn manifest_token(self) -> &'static str {
-        match self {
-            Self::X64 => "x64",
-            Self::Arm64 => "arm64",
-        }
-    }
-}
-
-/// Runtime target facts used by LSP plugin manifests.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct LspPluginRuntimeTarget {
-    pub platform: LspPluginRuntimePlatform,
-    pub arch: LspPluginRuntimeArch,
-}
-
-impl LspPluginRuntimeTarget {
-    pub const fn new(platform: LspPluginRuntimePlatform, arch: LspPluginRuntimeArch) -> Self {
-        Self { platform, arch }
-    }
-}
-
-/// Resolves `${platform}`, `${os}`, and `${arch}` placeholders in an LSP plugin
-/// command without touching the filesystem.
-pub fn resolve_plugin_command_for_target(command: &str, target: LspPluginRuntimeTarget) -> String {
-    command
-        .replace("${platform}", target.platform.manifest_token())
-        .replace("${os}", target.platform.manifest_token())
-        .replace("${arch}", target.arch.manifest_token())
 }
 
 /// Returns the current runtime target supported by LSP plugin manifests.

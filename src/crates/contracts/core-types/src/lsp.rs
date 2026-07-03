@@ -56,6 +56,65 @@ pub struct ServerConfig {
     pub runtime: Option<String>,
 }
 
+/// Platform token used by LSP plugin manifest command expansion.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LspPluginRuntimePlatform {
+    Windows,
+    Macos,
+    Linux,
+}
+
+impl LspPluginRuntimePlatform {
+    pub const fn manifest_token(self) -> &'static str {
+        match self {
+            Self::Windows => "win",
+            Self::Macos => "darwin",
+            Self::Linux => "linux",
+        }
+    }
+}
+
+/// CPU architecture token used by LSP plugin manifest command expansion.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LspPluginRuntimeArch {
+    X64,
+    Arm64,
+}
+
+impl LspPluginRuntimeArch {
+    pub const fn manifest_token(self) -> &'static str {
+        match self {
+            Self::X64 => "x64",
+            Self::Arm64 => "arm64",
+        }
+    }
+}
+
+/// Runtime target facts used by LSP plugin manifests.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LspPluginRuntimeTarget {
+    pub platform: LspPluginRuntimePlatform,
+    pub arch: LspPluginRuntimeArch,
+}
+
+impl LspPluginRuntimeTarget {
+    pub const fn new(platform: LspPluginRuntimePlatform, arch: LspPluginRuntimeArch) -> Self {
+        Self { platform, arch }
+    }
+}
+
+/// Resolves `${platform}`, `${os}`, and `${arch}` placeholders in an LSP plugin
+/// command without touching the filesystem.
+pub fn resolve_lsp_plugin_command_for_target(
+    command: &str,
+    target: LspPluginRuntimeTarget,
+) -> String {
+    command
+        .replace("${platform}", target.platform.manifest_token())
+        .replace("${os}", target.platform.manifest_token())
+        .replace("${arch}", target.arch.manifest_token())
+}
+
 /// Runtime type enum.
 #[derive(Debug, Clone, PartialEq)]
 pub enum RuntimeType {
