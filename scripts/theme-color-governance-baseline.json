@@ -249,7 +249,7 @@
       "max": 30
     },
     "colorDomainScopes.tokenContract.occurrences": {
-      "max": 115
+      "max": 113
     },
     "colorDomainScopes.generatedWidget.occurrences": {
       "max": 0

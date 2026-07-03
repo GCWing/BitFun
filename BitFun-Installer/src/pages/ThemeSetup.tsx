@@ -106,7 +106,7 @@ export function ThemeSetup({ options, setOptions, onLaunch, onClose }: ThemeSetu
                 <div style={{ ...previewBaseStyle, background: theme.colors.background.primary }}>
                   <div style={{ height: 16, background: theme.colors.background.secondary, opacity: 0.9 }} />
                   <div style={{ display: 'flex', gap: 6, padding: 8 }}>
-                    <div style={{ width: 22, height: 22, borderRadius: 5, background: theme.colors.element.base, opacity: 0.9 }} />
+                    <div style={{ width: 22, height: 22, borderRadius: 5, background: theme.colors.element.soft, opacity: 0.9 }} />
                     <div style={{ flex: 1 }}>
                       <div style={{ height: 5, width: '62%', background: theme.colors.text.muted, opacity: 0.5, borderRadius: 3, marginBottom: 5 }} />
                       <div style={{ height: 5, width: '78%', background: theme.colors.accent['500'], borderRadius: 3 }} />

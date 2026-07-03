@@ -304,8 +304,8 @@ export const DYNAMIC_VAR_FAMILY_CONTRACTS = [
   },
   {
     prefix: '--color-purple-',
-    owner: 'src/web-ui/src/infrastructure/theme/core/ThemeService.ts; src/mobile-web/src/theme/presets; BitFun-Installer/src/theme',
-    reason: 'Theme runtime, mobile presets, and installer theme data export the secondary purple palette scale by numeric stop.',
+    owner: 'src/web-ui/src/infrastructure/theme/core/ThemeService.ts; src/mobile-web/src/theme/presets',
+    reason: 'Theme runtime and mobile presets export the secondary purple palette scale by numeric stop; installer keeps only the accent family it renders.',
   },
   {
     prefix: '--color-pink-',

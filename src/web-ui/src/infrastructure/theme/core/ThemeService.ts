@@ -638,29 +638,18 @@ export class ThemeService {
     root.style.setProperty('--git-color-branch', colors.git.branch);
     root.style.setProperty('--git-color-branch-bg', colors.git.branchBg);
     root.style.setProperty('--git-color-branch-bg-hover', colors.element.medium);
-    root.style.setProperty('--git-color-branch-border', colors.border.base);
     root.style.setProperty('--git-color-changes', colors.git.changes);
     root.style.setProperty('--git-color-changes-bg', colors.git.changesBg);
-    root.style.setProperty('--git-color-changes-bg-hover', colorWithAlpha(colors.git.changes, 0.15));
-    root.style.setProperty('--git-color-changes-border', colorWithAlpha(colors.git.changes, 0.3));
     root.style.setProperty('--git-color-added', colors.git.added);
     root.style.setProperty('--git-color-added-bg', colors.git.addedBg);
     root.style.setProperty('--git-color-added-bg-hover', colorWithAlpha(colors.git.added, 0.15));
-    root.style.setProperty('--git-color-added-border', colorWithAlpha(colors.git.added, 0.3));
     root.style.setProperty('--git-color-deleted', colors.git.deleted);
     root.style.setProperty('--git-color-deleted-bg', colors.git.deletedBg);
     root.style.setProperty('--git-color-deleted-bg-hover', colorWithAlpha(colors.git.deleted, 0.15));
-    root.style.setProperty('--git-color-deleted-border', colorWithAlpha(colors.git.deleted, 0.3));
     root.style.setProperty('--git-color-staged', colors.git.staged);
     root.style.setProperty('--git-color-staged-bg', colors.git.stagedBg);
     root.style.setProperty('--git-color-staged-bg-hover', colorWithAlpha(colors.git.staged, 0.15));
     root.style.setProperty('--git-color-staged-border', colorWithAlpha(colors.git.staged, 0.3));
-    root.style.setProperty('--git-color-pull', colors.git.branch);
-    root.style.setProperty('--git-color-pull-bg', colors.git.branchBg);
-    root.style.setProperty('--git-color-pull-bg-hover', colors.element.medium);
-    root.style.setProperty('--git-color-push', colors.git.staged);
-    root.style.setProperty('--git-color-push-bg', colors.git.stagedBg);
-    root.style.setProperty('--git-color-push-bg-hover', colorWithAlpha(colors.git.staged, 0.15));
 
 
 

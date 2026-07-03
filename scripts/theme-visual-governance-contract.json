@@ -213,6 +213,30 @@
         "Mobile web is a separate build target and may not exercise desktop-only theme runtime paths.",
         "Narrow form factor can surface contrast and spacing regressions that desktop screenshots miss."
       ]
+    },
+    {
+      "key": "installer-shell",
+      "owner": "BitFun-Installer/src/theme; BitFun-Installer/src/pages; BitFun-Installer/src/styles",
+      "platforms": ["installer"],
+      "formFactors": ["desktop", "narrow"],
+      "themes": ["dark", "light", "system"],
+      "states": ["theme-setup", "language", "options", "loading", "progress", "error", "completed", "hover", "focus"],
+      "tokenFamilies": ["--color-bg-*", "--color-text-*", "--element-bg-*", "--border-*", "--color-accent-*", "--color-success", "--color-warning", "--color-error"],
+      "evidence": [
+        {
+          "type": "theme-color-audit",
+          "command": "pnpm run theme:color-audit:installer",
+          "requirement": "Installer theme changes must keep app UI raw colors, unresolved vars, fallback vars, and unregistered dynamic families at zero."
+        },
+        {
+          "type": "focused-visual-review",
+          "requirement": "Review ThemeSetup cards plus language, options, progress, completed, and error states across light, dark, system, and named themes when installer tokens change."
+        }
+      ],
+      "risks": [
+        "Installer is a separate React/Tauri surface with its own TS theme root; Rust must not copy or extend the installer palette.",
+        "Theme cards use adjacent primary and secondary backgrounds for identity, so near colors cannot be merged without focused visual evidence."
+      ]
     }
   ]
 }

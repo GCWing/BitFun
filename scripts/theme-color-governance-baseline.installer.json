@@ -96,16 +96,16 @@
       "max": 0
     },
     "colorDomainScopes.themePreset.occurrences": {
-      "max": 61
-    },
-    "colorDomainScopes.themePreset.uniqueColors": {
       "max": 59
     },
+    "colorDomainScopes.themePreset.uniqueColors": {
+      "max": 57
+    },
     "colorDomainScopes.tokenContract.occurrences": {
-      "max": 27
+      "max": 22
     },
     "colorDomainScopes.tokenContract.uniqueColors": {
-      "max": 24
+      "max": 19
     },
     "colorDomainScopes.appUi.occurrences": {
       "max": 0
