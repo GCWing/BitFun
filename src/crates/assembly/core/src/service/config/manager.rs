@@ -21,8 +21,66 @@ fn canonical_config_path(path: &str) -> &str {
     match path {
         "ai.review_teams.rate_limit_status" => "ai.review_team_rate_limit_status",
         "ai.review_teams.project_strategy_overrides" => "ai.review_team_project_strategy_overrides",
+        "theme.id" => "themes.current",
         _ => path,
     }
+}
+
+fn normalize_legacy_theme_id(theme_id: &str) -> String {
+    match theme_id.trim() {
+        "dark" => "bitfun-dark".to_string(),
+        "light" => "bitfun-light".to_string(),
+        normalized => normalized.to_string(),
+    }
+}
+
+fn normalize_legacy_theme_value(value: Value) -> Value {
+    match value {
+        Value::String(theme_id) => Value::String(normalize_legacy_theme_id(&theme_id)),
+        value => value,
+    }
+}
+
+pub(crate) fn normalize_legacy_theme_config_value(mut config: Value) -> Value {
+    let legacy_theme_id = config
+        .get("theme")
+        .and_then(|theme| theme.get("id"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|theme_id| !theme_id.is_empty())
+        .map(normalize_legacy_theme_id);
+
+    let Some(config_object) = config.as_object_mut() else {
+        return config;
+    };
+
+    config_object.remove("theme");
+
+    let Some(legacy_theme_id) = legacy_theme_id else {
+        return config;
+    };
+
+    let themes_value = config_object
+        .entry("themes".to_string())
+        .or_insert_with(|| serde_json::json!({}));
+
+    if !themes_value.is_object() {
+        *themes_value = serde_json::json!({});
+    }
+
+    if let Some(themes_object) = themes_value.as_object_mut() {
+        let has_current = themes_object
+            .get("current")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .is_some_and(|current| !current.is_empty());
+
+        if !has_current {
+            themes_object.insert("current".to_string(), Value::String(legacy_theme_id));
+        }
+    }
+
+    config
 }
 
 /// Configuration manager.
@@ -122,6 +180,9 @@ impl ConfigManager {
         let mut config_value: Value = serde_json::from_str(&content).map_err(|e| {
             BitFunError::config(format!("Failed to parse config file as JSON: {}", e))
         })?;
+        let normalized_config_value = normalize_legacy_theme_config_value(config_value.clone());
+        let legacy_theme_normalized = normalized_config_value != config_value;
+        config_value = normalized_config_value;
 
         let file_version = config_value
             .get("version")
@@ -157,10 +218,10 @@ impl ConfigManager {
 
                 self.config = config;
 
-                if needs_migration {
+                if needs_migration || legacy_theme_normalized {
                     self.config.version = current_version;
                     self.save_config().await?;
-                    info!("Config migrated and saved");
+                    info!("Config normalized and saved");
                 } else {
                     debug!("Loaded config from file");
                 }
@@ -180,6 +241,7 @@ impl ConfigManager {
 
     /// Performs a smart merge from a JSON value.
     async fn smart_merge_config_from_value(&mut self, user_value: Value) -> BitFunResult<()> {
+        let user_value = normalize_legacy_theme_config_value(user_value);
         let base_config = self.providers.get_default_config();
 
         let base_value = serde_json::to_value(&base_config).map_err(|e| {
@@ -312,10 +374,14 @@ impl ConfigManager {
         T: serde::Serialize,
     {
         let old_config = self.config.clone();
-        let json_value = serde_json::to_value(value)
+        let mut json_value = serde_json::to_value(value)
             .map_err(|e| BitFunError::config(format!("Failed to serialize config value: {}", e)))?;
 
+        let original_path = path;
         let path = canonical_config_path(path);
+        if original_path == "theme.id" {
+            json_value = normalize_legacy_theme_value(json_value);
+        }
         self.set_value_by_path(path, json_value)?;
         self.config.last_modified = chrono::Utc::now();
 
@@ -336,6 +402,7 @@ impl ConfigManager {
         let old_config = self.config.clone();
 
         if let Some(path) = path {
+            let path = canonical_config_path(path);
             let default_config = self.providers.get_default_config();
             let default_value = self.get_value_by_path_from_config(&default_config, path)?;
             self.set_value_by_path(path, default_value)?;
@@ -346,6 +413,7 @@ impl ConfigManager {
         self.config.last_modified = chrono::Utc::now();
 
         if let Some(path) = path {
+            let path = canonical_config_path(path);
             self.notify_config_changed(path, &old_config).await?;
         } else {
             for provider_name in self.providers.get_provider_names() {
@@ -378,6 +446,7 @@ impl ConfigManager {
     /// Imports configuration.
     pub async fn import_config(&mut self, config_data: serde_json::Value) -> BitFunResult<()> {
         let old_config = self.config.clone();
+        let config_data = normalize_legacy_theme_config_value(config_data);
 
         let imported_config: GlobalConfig = serde_json::from_value(config_data)
             .map_err(|e| BitFunError::config(format!("Failed to parse imported config: {}", e)))?;
@@ -627,7 +696,7 @@ pub struct ConfigStatistics {
 
 #[cfg(test)]
 mod tests {
-    use super::canonical_config_path;
+    use super::{canonical_config_path, normalize_legacy_theme_config_value};
 
     #[test]
     fn canonicalizes_legacy_review_team_auxiliary_paths() {
@@ -643,6 +712,55 @@ mod tests {
             canonical_config_path("ai.review_teams.default"),
             "ai.review_teams.default"
         );
+        assert_eq!(canonical_config_path("theme.id"), "themes.current");
+    }
+
+    #[test]
+    fn legacy_theme_id_moves_to_themes_current_when_missing() {
+        let normalized = normalize_legacy_theme_config_value(serde_json::json!({
+            "theme": {
+                "id": "dark",
+                "colors": {
+                    "background": "#1e1e1e"
+                }
+            }
+        }));
+
+        assert_eq!(normalized["themes"]["current"], "bitfun-dark");
+        assert!(
+            normalized.get("theme").is_none(),
+            "legacy GUI theme payload should not survive normalization"
+        );
+    }
+
+    #[test]
+    fn legacy_theme_id_does_not_override_existing_theme_selection() {
+        let normalized = normalize_legacy_theme_config_value(serde_json::json!({
+            "theme": {
+                "id": "bitfun-dark"
+            },
+            "themes": {
+                "current": "bitfun-cyber"
+            }
+        }));
+
+        assert_eq!(normalized["themes"]["current"], "bitfun-cyber");
+        assert!(normalized.get("theme").is_none());
+    }
+
+    #[test]
+    fn legacy_theme_id_fills_empty_existing_theme_selection() {
+        let normalized = normalize_legacy_theme_config_value(serde_json::json!({
+            "theme": {
+                "id": "light"
+            },
+            "themes": {
+                "current": ""
+            }
+        }));
+
+        assert_eq!(normalized["themes"]["current"], "bitfun-light");
+        assert!(normalized.get("theme").is_none());
     }
 }
 

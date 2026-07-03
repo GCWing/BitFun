@@ -52,7 +52,7 @@ export const bitfunChinaStyleTheme: ThemeConfig = {
       secondary: '#f5f3e8',
       tertiary: '#f0ede0',
       quaternary: '#ebe8d8',
-      elevated: '#ebe9e3',
+      elevated: '#f0ede0',
       workbench: CHINA_STYLE_PAPER,
       scene: CHINA_STYLE_PAPER,
       tooltip: chinaStylePaper(0.96),

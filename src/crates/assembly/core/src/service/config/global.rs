@@ -211,9 +211,10 @@ impl GlobalConfigManager {
     pub async fn update_theme(&self, theme_id: &str) -> BitFunResult<()> {
         let service = Self::get_service().await?;
         service.set_config("theme.id", theme_id).await?;
+        let stored_theme_id: String = service.get_config(Some("themes.current")).await?;
 
         Self::broadcast_update(ConfigUpdateEvent::ThemeUpdated {
-            theme_id: theme_id.to_string(),
+            theme_id: stored_theme_id,
         })
         .await;
 

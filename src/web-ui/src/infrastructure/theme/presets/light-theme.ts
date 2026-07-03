@@ -54,7 +54,7 @@ export const bitfunLightTheme: ThemeConfig = {
       primary: '#f3f3f5',
       secondary: STATIC_WHITE,
       tertiary: '#e8e8e8',
-      quaternary: '#e0e3e8',
+      quaternary: '#e8e8e8',
       elevated: STATIC_WHITE,
       workbench: '#e8e8e8',
       scene: STATIC_WHITE,
