@@ -989,6 +989,9 @@ export function runManifestParserSelfTest({
     'command\\s+-v\\s+bash',
       'REMOTE_SHELL_PROBE_TIMEOUT_MS',
       'get_global_exec_process_manager',
+      'get_global_remote_exec_process_manager',
+      'SSHConnectionManager',
+      'SSHCommandOptions',
       'LocalExecCommandRequest',
       'CoreRuntimeServicesProvider::terminal_port',
       'TerminalRuntimePort',
@@ -1007,6 +1010,8 @@ export function runManifestParserSelfTest({
     '"status"\\s*:\\s*"session_not_found"',
       'No input was sent',
       'get_global_exec_process_manager',
+      'get_global_remote_exec_process_manager',
+      'RemoteExecError',
       'LocalWriteStdinRequest',
       'CoreRuntimeServicesProvider::terminal_port',
       'TerminalRuntimePort',
@@ -1026,6 +1031,8 @@ export function runManifestParserSelfTest({
   }
     for (const contract of [
       'get_global_exec_process_manager',
+      'get_global_remote_exec_process_manager',
+      'RemoteExecError',
       'LocalExecControlRequest',
       'CoreRuntimeServicesProvider::terminal_port',
       'TerminalRuntimePort',
@@ -1039,6 +1046,7 @@ export function runManifestParserSelfTest({
   );
     for (const contract of [
       'get_global_exec_process_manager',
+      'get_global_remote_exec_process_manager',
       'LocalSendStdinRequest',
       'CoreRuntimeServicesProvider::terminal_port',
       'TerminalRuntimePort',
@@ -1060,6 +1068,8 @@ export function runManifestParserSelfTest({
     'ENV_SNAPSHOT_TIMEOUT_MS',
     'ENV_SNAPSHOT_MAX_OUTPUT_CHARS',
     'ENV_SNAPSHOT_TTL',
+    'get_global_remote_exec_process_manager',
+    'SSHConnectionManager',
   ]) {
     if (!coreExecCommandEnvSnapshotRuleText.includes(contract)) {
       throw new Error(`core exec_command env_snapshot boundary rule must forbid ${contract}`);

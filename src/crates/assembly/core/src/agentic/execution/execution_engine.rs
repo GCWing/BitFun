@@ -1167,6 +1167,7 @@ impl ExecutionEngine {
             cancellation_token: CancellationToken::new(),
             workspace_services: context.workspace_services.clone(),
             terminal_port: context.terminal_port.clone(),
+            remote_exec_port: context.remote_exec_port.clone(),
             recover_partial_on_cancel: context.recover_partial_on_cancel,
         };
 
@@ -2659,6 +2660,7 @@ impl ExecutionEngine {
                 cancellation_token: CancellationToken::new(),
                 workspace_services: context.workspace_services.clone(),
                 terminal_port: context.terminal_port.clone(),
+                remote_exec_port: context.remote_exec_port.clone(),
                 recover_partial_on_cancel: context.recover_partial_on_cancel,
             };
 
@@ -3615,6 +3617,7 @@ mod tests {
             runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
             workspace_services: None,
             terminal_port: None,
+            remote_exec_port: None,
             round_injection: None,
             recover_partial_on_cancel: false,
         };

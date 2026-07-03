@@ -11,21 +11,18 @@ use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext, Validat
 use crate::infrastructure::events::event_system::{
     get_global_event_system, BackendEvent::BackgroundCommandLifecycle,
 };
-use crate::service::remote_ssh::{
-    get_global_remote_exec_process_manager, get_remote_workspace_manager, RemoteExecCommandRequest,
-    RemoteExecProcessLifecycleEvent, RemoteExecProcessLifecycleStatus, SSHCommandOptions,
-    SSHConnectionManager,
-};
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::types::event::BackgroundCommandLifecycleInfo;
 use async_trait::async_trait;
 use bitfun_runtime_ports::{
-    TerminalExecCommandRequest, TerminalExecProcessLifecycleEvent,
-    TerminalExecProcessLifecycleStatus,
+    RemoteExecCommandRequest, RemoteExecOneShotCommandRequest, RemoteExecPort,
+    RemoteExecProcessLifecycleEvent, RemoteExecProcessLifecycleStatus, TerminalExecCommandRequest,
+    TerminalExecProcessLifecycleEvent, TerminalExecProcessLifecycleStatus,
 };
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use terminal_core::ShellType;
 use tokio::sync::mpsc;
 use tool_runtime::exec_command::{
@@ -169,18 +166,15 @@ impl ExecCommandTool {
     }
 
     async fn resolve_remote_shell(
-        ssh_manager: &SSHConnectionManager,
+        remote_exec_port: &Arc<dyn RemoteExecPort>,
         connection_id: &str,
     ) -> RemoteShell {
-        let result = ssh_manager
-            .execute_command_with_options(
-                connection_id,
-                remote_exec_shell_probe_command(),
-                SSHCommandOptions {
-                    timeout_ms: Some(REMOTE_EXEC_SHELL_PROBE_TIMEOUT_MS),
-                    cancellation_token: None,
-                },
-            )
+        let result = remote_exec_port
+            .exec_command_once(RemoteExecOneShotCommandRequest {
+                connection_id: connection_id.to_string(),
+                command: remote_exec_shell_probe_command().to_string(),
+                timeout_ms: Some(REMOTE_EXEC_SHELL_PROBE_TIMEOUT_MS),
+            })
             .await;
 
         if let Ok(result) = result {
@@ -397,23 +391,13 @@ impl ExecCommandTool {
                 BitFunError::tool("remote connection id is required for ExecCommand".to_string())
             })?
             .to_string();
-        let ssh_manager = get_remote_workspace_manager()
-            .ok_or_else(|| {
-                BitFunError::tool(
-                    "remote workspace manager is not initialized for ExecCommand".to_string(),
-                )
-            })?
-            .get_ssh_manager()
-            .await
-            .ok_or_else(|| {
-                BitFunError::tool(
-                    "remote SSH manager is not initialized for ExecCommand".to_string(),
-                )
-            })?;
+        let remote_exec_port = context.remote_exec_port().ok_or_else(|| {
+            BitFunError::tool("remote exec runtime service is required for ExecCommand".to_string())
+        })?;
         let yield_time_ms = parsed_input.yield_time_ms;
-        let shell = Self::resolve_remote_shell(&ssh_manager, &connection_id).await;
+        let shell = Self::resolve_remote_shell(remote_exec_port, &connection_id).await;
         let env_snapshot = remote_env_snapshot_for(
-            ssh_manager.clone(),
+            remote_exec_port,
             &connection_id,
             &shell.path,
             &shell.shell_type,
@@ -448,24 +432,21 @@ impl ExecCommandTool {
         };
 
         let request = RemoteExecCommandRequest {
-            ssh_manager,
             connection_id,
             command,
             tty,
             yield_time_ms: Some(yield_time_ms),
             max_output_chars: None,
-            lifecycle_tx: Self::start_remote_lifecycle_bridge(context, self.name()),
-            output_capture_tx,
+            lifecycle_sink: Self::start_remote_lifecycle_bridge(context, self.name()),
+            output_sink: output_capture_tx,
         };
         let progress_bridge = ExecOutputProgressBridge::start(context, self.name());
         let response_result = if let Some(bridge) = progress_bridge.as_ref() {
-            get_global_remote_exec_process_manager()
+            remote_exec_port
                 .exec_command_streaming(request, bridge.sender())
                 .await
         } else {
-            get_global_remote_exec_process_manager()
-                .exec_command(request)
-                .await
+            remote_exec_port.exec_command(request).await
         };
         if let Some(bridge) = progress_bridge {
             bridge.finish().await;
@@ -478,7 +459,10 @@ impl ExecCommandTool {
                         .finish(capture_id, BackgroundCommandOutputStatus::Failed, None)
                         .await;
                 }
-                return Err(BitFunError::tool(format!("ExecCommand failed: {error}")));
+                return Err(BitFunError::tool(format!(
+                    "ExecCommand failed: {}",
+                    error.message
+                )));
             }
         };
         let completion = response.completion.map(exec_command_remote_completion);
@@ -768,10 +752,82 @@ mod tests {
     use std::collections::HashMap;
     use std::path::Path;
     use std::path::PathBuf;
+    use std::sync::Arc;
     use terminal_core::ShellType;
     use tool_runtime::exec_command::{
         remote_exec_shell_login_args, EXEC_COMMAND_POWERSHELL_UTF8_OUTPUT_PREFIX,
     };
+
+    #[derive(Debug)]
+    struct ShellProbeRemoteExecPort {
+        response: bitfun_runtime_ports::RemoteExecOneShotCommandResponse,
+    }
+
+    impl bitfun_runtime_ports::RuntimeServicePort for ShellProbeRemoteExecPort {
+        fn capability(&self) -> bitfun_runtime_ports::RuntimeServiceCapability {
+            bitfun_runtime_ports::RuntimeServiceCapability::RemoteExec
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl bitfun_runtime_ports::RemoteExecPort for ShellProbeRemoteExecPort {
+        async fn exec_command_once(
+            &self,
+            _request: bitfun_runtime_ports::RemoteExecOneShotCommandRequest,
+        ) -> bitfun_runtime_ports::PortResult<bitfun_runtime_ports::RemoteExecOneShotCommandResponse>
+        {
+            Ok(self.response.clone())
+        }
+
+        async fn exec_command(
+            &self,
+            _request: bitfun_runtime_ports::RemoteExecCommandRequest,
+        ) -> bitfun_runtime_ports::PortResult<bitfun_runtime_ports::RemoteExecCommandResponse>
+        {
+            panic!("shell probe must not use managed remote exec sessions");
+        }
+
+        async fn exec_command_streaming(
+            &self,
+            _request: bitfun_runtime_ports::RemoteExecCommandRequest,
+            _output_sink: bitfun_runtime_ports::RemoteExecStreamingOutputSink,
+        ) -> bitfun_runtime_ports::PortResult<bitfun_runtime_ports::RemoteExecCommandResponse>
+        {
+            panic!("shell probe must not use managed remote exec sessions");
+        }
+
+        async fn write_stdin(
+            &self,
+            _request: bitfun_runtime_ports::RemoteWriteStdinRequest,
+        ) -> bitfun_runtime_ports::PortResult<bitfun_runtime_ports::RemoteExecCommandResponse>
+        {
+            panic!("shell probe must not write stdin");
+        }
+
+        async fn write_stdin_streaming(
+            &self,
+            _request: bitfun_runtime_ports::RemoteWriteStdinRequest,
+            _output_sink: bitfun_runtime_ports::RemoteExecStreamingOutputSink,
+        ) -> bitfun_runtime_ports::PortResult<bitfun_runtime_ports::RemoteExecCommandResponse>
+        {
+            panic!("shell probe must not write stdin");
+        }
+
+        async fn send_stdin(
+            &self,
+            _request: bitfun_runtime_ports::RemoteSendStdinRequest,
+        ) -> bitfun_runtime_ports::PortResult<()> {
+            panic!("shell probe must not send stdin");
+        }
+
+        async fn control_session(
+            &self,
+            _request: bitfun_runtime_ports::RemoteExecControlRequest,
+        ) -> bitfun_runtime_ports::PortResult<bitfun_runtime_ports::RemoteExecCommandResponse>
+        {
+            panic!("shell probe must not control managed sessions");
+        }
+    }
 
     #[test]
     fn powershell_commands_force_utf8_output() {
@@ -923,6 +979,25 @@ mod tests {
         assert_eq!(metadata.name, "xonsh");
         assert_eq!(metadata.kind, "xonsh");
         assert_eq!(metadata.path, "/usr/local/bin/xonsh");
+    }
+
+    #[tokio::test]
+    async fn remote_shell_probe_uses_stdout_only() {
+        let remote_exec_port: Arc<dyn bitfun_runtime_ports::RemoteExecPort> =
+            Arc::new(ShellProbeRemoteExecPort {
+                response: bitfun_runtime_ports::RemoteExecOneShotCommandResponse {
+                    stdout: "/bin/bash\n".to_string(),
+                    stderr: "/tmp/not-a-shell-from-stderr\n".to_string(),
+                    exit_code: 0,
+                    interrupted: false,
+                    timed_out: false,
+                },
+            });
+
+        let shell = ExecCommandTool::resolve_remote_shell(&remote_exec_port, "conn-1").await;
+
+        assert_eq!(shell.path, "/bin/bash");
+        assert_eq!(shell.shell_type, ShellType::Bash);
     }
 
     #[test]

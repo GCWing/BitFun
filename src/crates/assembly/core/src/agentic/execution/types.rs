@@ -7,7 +7,7 @@ use crate::agentic::tools::ToolRuntimeRestrictions;
 use crate::agentic::workspace::WorkspaceServices;
 use crate::agentic::WorkspaceBinding;
 pub use bitfun_agent_runtime::events::FinishReason;
-use bitfun_runtime_ports::{DelegationPolicy, TerminalPort};
+use bitfun_runtime_ports::{DelegationPolicy, RemoteExecPort, TerminalPort};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -30,6 +30,8 @@ pub struct ExecutionContext {
     pub workspace_services: Option<WorkspaceServices>,
     /// Terminal execution provider injected by product assembly.
     pub terminal_port: Option<Arc<dyn TerminalPort>>,
+    /// Remote execution provider injected by product assembly.
+    pub remote_exec_port: Option<Arc<dyn RemoteExecPort>>,
     /// When set, engine drains pending round injections at each round boundary
     /// and injects them into the dialog history without ending the turn.
     pub round_injection: Option<Arc<dyn DialogRoundInjectionSource>>,
@@ -63,6 +65,7 @@ pub struct RoundContext {
     pub cancellation_token: CancellationToken,
     pub workspace_services: Option<WorkspaceServices>,
     pub terminal_port: Option<Arc<dyn TerminalPort>>,
+    pub remote_exec_port: Option<Arc<dyn RemoteExecPort>>,
     pub recover_partial_on_cancel: bool,
 }
 

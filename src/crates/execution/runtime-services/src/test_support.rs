@@ -4,10 +4,13 @@ use bitfun_runtime_ports::{
     ClockPort, FileSystemPort, GitPort, McpCatalogPort, NetworkPort, PermissionDecision,
     PermissionPort, PermissionRequest, PortError, PortErrorKind, PortResult,
     RemoteAssistantWorkspaceFacts, RemoteCapabilityPort, RemoteConnectionPort,
-    RemoteProjectionPort, RemoteRecentWorkspaceFacts, RemoteWorkspaceFacts,
-    RemoteWorkspaceFileRuntimeHost, RemoteWorkspaceKind, RemoteWorkspacePort,
-    RemoteWorkspaceRuntimeHost, RemoteWorkspaceUpdate, RuntimeEventEnvelope, RuntimeEventSink,
-    RuntimeServiceCapability, RuntimeServicePort, SessionStorageKind, SessionStoragePathRequest,
+    RemoteExecCommandRequest, RemoteExecCommandResponse, RemoteExecControlRequest,
+    RemoteExecOneShotCommandRequest, RemoteExecOneShotCommandResponse, RemoteExecPort,
+    RemoteExecStreamingOutputSink, RemoteProjectionPort, RemoteRecentWorkspaceFacts,
+    RemoteSendStdinRequest, RemoteWorkspaceFacts, RemoteWorkspaceFileRuntimeHost,
+    RemoteWorkspaceKind, RemoteWorkspacePort, RemoteWorkspaceRuntimeHost, RemoteWorkspaceUpdate,
+    RemoteWriteStdinRequest, RuntimeEventEnvelope, RuntimeEventSink, RuntimeServiceCapability,
+    RuntimeServicePort, SessionStorageKind, SessionStoragePathRequest,
     SessionStoragePathResolution, SessionStorePort, TerminalExecCommandRequest,
     TerminalExecCommandResponse, TerminalExecControlRequest, TerminalExecStreamingOutputSink,
     TerminalPort, TerminalSendStdinRequest, TerminalWriteStdinRequest, WorkspacePort,
@@ -112,6 +115,68 @@ impl RemoteConnectionPort for FakeRuntimePort {}
 impl RemoteCapabilityPort for FakeRuntimePort {}
 
 #[async_trait::async_trait]
+impl RemoteExecPort for FakeRuntimePort {
+    async fn exec_command_once(
+        &self,
+        _request: RemoteExecOneShotCommandRequest,
+    ) -> PortResult<RemoteExecOneShotCommandResponse> {
+        fake_remote_exec_not_available()
+    }
+
+    async fn exec_command(
+        &self,
+        _request: RemoteExecCommandRequest,
+    ) -> PortResult<RemoteExecCommandResponse> {
+        fake_remote_exec_not_available()
+    }
+
+    async fn exec_command_streaming(
+        &self,
+        _request: RemoteExecCommandRequest,
+        _output_sink: RemoteExecStreamingOutputSink,
+    ) -> PortResult<RemoteExecCommandResponse> {
+        fake_remote_exec_not_available()
+    }
+
+    async fn write_stdin(
+        &self,
+        _request: RemoteWriteStdinRequest,
+    ) -> PortResult<RemoteExecCommandResponse> {
+        fake_remote_exec_not_available()
+    }
+
+    async fn write_stdin_streaming(
+        &self,
+        _request: RemoteWriteStdinRequest,
+        _output_sink: RemoteExecStreamingOutputSink,
+    ) -> PortResult<RemoteExecCommandResponse> {
+        fake_remote_exec_not_available()
+    }
+
+    async fn send_stdin(&self, _request: RemoteSendStdinRequest) -> PortResult<()> {
+        Err(fake_remote_exec_error())
+    }
+
+    async fn control_session(
+        &self,
+        _request: RemoteExecControlRequest,
+    ) -> PortResult<RemoteExecCommandResponse> {
+        fake_remote_exec_not_available()
+    }
+}
+
+fn fake_remote_exec_not_available<T>() -> PortResult<T> {
+    Err(fake_remote_exec_error())
+}
+
+fn fake_remote_exec_error() -> PortError {
+    PortError::new(
+        PortErrorKind::NotAvailable,
+        "fake remote exec port does not implement remote execution",
+    )
+}
+
+#[async_trait::async_trait]
 impl RemoteWorkspaceRuntimeHost for FakeRuntimePort {
     async fn current_workspace(&self) -> Option<RemoteWorkspaceFacts> {
         Some(RemoteWorkspaceFacts {
@@ -200,6 +265,10 @@ impl FakeRuntimeServicesProvider {
         Arc::new(FakeRuntimePort::new(RuntimeServiceCapability::Terminal))
     }
 
+    pub fn remote_exec_port() -> Arc<dyn RemoteExecPort> {
+        Arc::new(FakeRuntimePort::new(RuntimeServiceCapability::RemoteExec))
+    }
+
     pub fn with_all_remote(mut self) -> Self {
         self.include_remote = true;
         self
@@ -239,6 +308,8 @@ impl RuntimeServicesProvider for FakeRuntimeServicesProvider {
         let remote_connection: Arc<dyn RemoteConnectionPort> = Arc::new(FakeRuntimePort::new(
             RuntimeServiceCapability::RemoteConnection,
         ));
+        let remote_exec: Arc<dyn RemoteExecPort> =
+            Arc::new(FakeRuntimePort::new(RuntimeServiceCapability::RemoteExec));
         let remote_workspace: Arc<dyn RemoteWorkspacePort> = Arc::new(FakeRuntimePort::new(
             RuntimeServiceCapability::RemoteWorkspace,
         ));
@@ -251,6 +322,7 @@ impl RuntimeServicesProvider for FakeRuntimeServicesProvider {
 
         builder
             .with_optional_remote_connection(Some(remote_connection))
+            .with_optional_remote_exec(Some(remote_exec))
             .with_optional_remote_workspace(Some(remote_workspace))
             .with_optional_remote_projection(Some(remote_projection))
             .with_optional_remote_capabilities(Some(remote_capabilities))

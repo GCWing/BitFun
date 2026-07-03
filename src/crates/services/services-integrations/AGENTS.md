@@ -32,8 +32,8 @@ slices that are outside pure product logic but still platform-neutral.
   execution remain core-owned unless a reviewed port/provider moves them with
   equivalence tests.
 - Remote-SSH path/session identity helpers, disabled surfaces, SSH channels,
-  SFTP, remote FS, remote terminal, and manager assembly live here behind
-  explicit remote SSH features.
+  SFTP, remote FS, remote terminal, remote ExecCommand runtime-port adapter, and
+  manager assembly live here behind explicit remote SSH features.
 - Workspace search owns the local flashgrep daemon/session lifecycle and
   indexed-search result conversion behind `workspace-search`; product config
   and workspace bootstrap stay in the core facade as injected hooks.

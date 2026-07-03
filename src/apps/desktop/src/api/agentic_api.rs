@@ -1534,6 +1534,11 @@ pub async fn control_background_command(
     } else {
         coordinator.inner().terminal_port()
     };
+    let remote_exec_port = if remote {
+        coordinator.inner().remote_exec_port()
+    } else {
+        None
+    };
 
     control_exec_command_session(
         ExecCommandControlRequest {
@@ -1544,6 +1549,7 @@ pub async fn control_background_command(
             yield_time_ms: Some(250),
         },
         terminal_port.as_ref(),
+        remote_exec_port.as_ref(),
     )
     .await
     .map(|response| {
@@ -1606,6 +1612,11 @@ pub async fn send_background_command_input(
     } else {
         coordinator.inner().terminal_port()
     };
+    let remote_exec_port = if remote {
+        coordinator.inner().remote_exec_port()
+    } else {
+        None
+    };
     send_exec_command_input(
         ExecCommandInputRequest {
             session_id,
@@ -1614,6 +1625,7 @@ pub async fn send_background_command_input(
             remote,
         },
         terminal_port.as_ref(),
+        remote_exec_port.as_ref(),
     )
     .await
     .map_err(|e| {

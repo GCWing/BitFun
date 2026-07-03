@@ -1,10 +1,7 @@
-use crate::service::remote_ssh::{
-    RemoteExecSessionCompletion, RemoteExecSessionCompletionSource,
-    RemoteExecSessionCompletionStatus,
-};
 use bitfun_runtime_ports::{
-    TerminalExecSessionCompletion, TerminalExecSessionCompletionSource,
-    TerminalExecSessionCompletionStatus,
+    RemoteExecSessionCompletion, RemoteExecSessionCompletionSource,
+    RemoteExecSessionCompletionStatus, TerminalExecSessionCompletion,
+    TerminalExecSessionCompletionSource, TerminalExecSessionCompletionStatus,
 };
 use tool_runtime::exec_command::{
     ExecCommandCompletion, ExecCommandCompletionSource, ExecCommandCompletionStatus,

@@ -1,13 +1,10 @@
 use super::completion::{exec_command_local_completion, exec_command_remote_completion};
 use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext, ValidationResult};
-use crate::service::remote_ssh::{
-    get_global_remote_exec_process_manager, RemoteExecControlAction, RemoteExecControlOrigin,
-    RemoteExecControlRequest, RemoteExecError,
-};
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use bitfun_runtime_ports::{
-    PortErrorKind, TerminalExecControlAction, TerminalExecControlOrigin,
+    PortErrorKind, RemoteExecControlAction, RemoteExecControlOrigin, RemoteExecControlRequest,
+    RemoteExecPort, TerminalExecControlAction, TerminalExecControlOrigin,
     TerminalExecControlRequest, TerminalPort,
 };
 use serde_json::{json, Value};
@@ -53,9 +50,15 @@ pub enum ExecCommandControlError {
 pub async fn control_exec_command_session(
     request: ExecCommandControlRequest,
     terminal_port: Option<&Arc<dyn TerminalPort>>,
+    remote_exec_port: Option<&Arc<dyn RemoteExecPort>>,
 ) -> Result<ExecCommandControlResponse, ExecCommandControlError> {
     if request.remote {
-        let response = get_global_remote_exec_process_manager()
+        let remote_exec_port = remote_exec_port.ok_or_else(|| {
+            ExecCommandControlError::Tool(BitFunError::tool(
+                "remote exec runtime service is required for ExecControl".to_string(),
+            ))
+        })?;
+        let response = remote_exec_port
             .control_session(RemoteExecControlRequest {
                 session_id: request.session_id,
                 action: ExecControlTool::remote_action(request.action),
@@ -65,11 +68,12 @@ pub async fn control_exec_command_session(
             })
             .await
             .map_err(|error| match error {
-                RemoteExecError::SessionNotFound(session_id) => {
-                    ExecCommandControlError::SessionNotFound(session_id)
+                error if error.kind == PortErrorKind::NotFound => {
+                    ExecCommandControlError::SessionNotFound(request.session_id)
                 }
                 error => ExecCommandControlError::Tool(BitFunError::tool(format!(
-                    "ExecControl failed: {error}"
+                    "ExecControl failed: {}",
+                    error.message
                 ))),
             })?;
 
@@ -180,7 +184,11 @@ impl ExecControlTool {
         }
     }
 
-    async fn call_remote_pipe(&self, input: &Value) -> BitFunResult<Vec<ToolResult>> {
+    async fn call_remote_pipe(
+        &self,
+        input: &Value,
+        context: &ToolUseContext,
+    ) -> BitFunResult<Vec<ToolResult>> {
         if let Some(message) = exec_command_control_tool_input_validation_message(input) {
             return Err(BitFunError::tool(message.to_string()));
         }
@@ -197,6 +205,7 @@ impl ExecControlTool {
                 yield_time_ms: parsed_input.yield_time_ms,
             },
             None,
+            context.remote_exec_port(),
         )
         .await
         {
@@ -312,7 +321,7 @@ Output is only what was produced during this tool call's wait window."#
         context: &ToolUseContext,
     ) -> BitFunResult<Vec<ToolResult>> {
         if context.is_remote() {
-            return self.call_remote_pipe(input).await;
+            return self.call_remote_pipe(input, context).await;
         }
 
         if let Some(message) = exec_command_control_tool_input_validation_message(input) {
@@ -332,6 +341,7 @@ Output is only what was produced during this tool call's wait window."#
                 yield_time_ms: parsed_input.yield_time_ms,
             },
             terminal_port,
+            None,
         )
         .await
         {
@@ -373,14 +383,20 @@ mod tests {
     };
     use crate::agentic::tools::framework::ToolResult;
     use bitfun_runtime_ports::{
-        PortError, PortErrorKind, PortResult, RuntimeServiceCapability, RuntimeServicePort,
-        TerminalExecCommandRequest, TerminalExecCommandResponse, TerminalExecControlRequest,
-        TerminalExecStreamingOutputSink, TerminalPort, TerminalSendStdinRequest,
-        TerminalWriteStdinRequest,
+        PortError, PortErrorKind, PortResult, RemoteExecCommandRequest, RemoteExecCommandResponse,
+        RemoteExecControlRequest, RemoteExecOneShotCommandRequest,
+        RemoteExecOneShotCommandResponse, RemoteExecPort, RemoteExecStreamingOutputSink,
+        RemoteSendStdinRequest, RemoteWriteStdinRequest, RuntimeServiceCapability,
+        RuntimeServicePort, TerminalExecCommandRequest, TerminalExecCommandResponse,
+        TerminalExecControlRequest, TerminalExecStreamingOutputSink, TerminalPort,
+        TerminalSendStdinRequest, TerminalWriteStdinRequest,
     };
 
     #[derive(Debug)]
     struct MissingSessionTerminalPort;
+
+    #[derive(Debug)]
+    struct MissingSessionRemoteExecPort;
 
     impl RuntimeServicePort for MissingSessionTerminalPort {
         fn capability(&self) -> RuntimeServiceCapability {
@@ -435,10 +451,77 @@ mod tests {
         }
     }
 
+    impl RuntimeServicePort for MissingSessionRemoteExecPort {
+        fn capability(&self) -> RuntimeServiceCapability {
+            RuntimeServiceCapability::RemoteExec
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl RemoteExecPort for MissingSessionRemoteExecPort {
+        async fn exec_command_once(
+            &self,
+            _request: RemoteExecOneShotCommandRequest,
+        ) -> PortResult<RemoteExecOneShotCommandResponse> {
+            unused_remote_exec_response()
+        }
+
+        async fn exec_command(
+            &self,
+            _request: RemoteExecCommandRequest,
+        ) -> PortResult<RemoteExecCommandResponse> {
+            unused_remote_exec_response()
+        }
+
+        async fn exec_command_streaming(
+            &self,
+            _request: RemoteExecCommandRequest,
+            _output_sink: RemoteExecStreamingOutputSink,
+        ) -> PortResult<RemoteExecCommandResponse> {
+            unused_remote_exec_response()
+        }
+
+        async fn write_stdin(
+            &self,
+            _request: RemoteWriteStdinRequest,
+        ) -> PortResult<RemoteExecCommandResponse> {
+            unused_remote_exec_response()
+        }
+
+        async fn write_stdin_streaming(
+            &self,
+            _request: RemoteWriteStdinRequest,
+            _output_sink: RemoteExecStreamingOutputSink,
+        ) -> PortResult<RemoteExecCommandResponse> {
+            unused_remote_exec_response()
+        }
+
+        async fn send_stdin(&self, _request: RemoteSendStdinRequest) -> PortResult<()> {
+            Err(PortError::new(
+                PortErrorKind::Backend,
+                "unused remote exec test method",
+            ))
+        }
+
+        async fn control_session(
+            &self,
+            _request: RemoteExecControlRequest,
+        ) -> PortResult<RemoteExecCommandResponse> {
+            Err(PortError::new(PortErrorKind::NotFound, "session not found"))
+        }
+    }
+
     fn unused_terminal_response() -> PortResult<TerminalExecCommandResponse> {
         Err(PortError::new(
             PortErrorKind::Backend,
             "unused terminal test method",
+        ))
+    }
+
+    fn unused_remote_exec_response<T>() -> PortResult<T> {
+        Err(PortError::new(
+            PortErrorKind::Backend,
+            "unused remote exec test method",
         ))
     }
 
@@ -487,6 +570,7 @@ mod tests {
                 yield_time_ms: Some(0),
             },
             Some(&terminal_port),
+            None,
         )
         .await
         .expect_err("missing session should be structured");
@@ -494,6 +578,30 @@ mod tests {
         assert!(matches!(
             error,
             ExecCommandControlError::SessionNotFound(987_654)
+        ));
+    }
+
+    #[tokio::test]
+    async fn control_exec_command_session_returns_structured_remote_session_not_found() {
+        let remote_exec_port: std::sync::Arc<dyn bitfun_runtime_ports::RemoteExecPort> =
+            std::sync::Arc::new(MissingSessionRemoteExecPort);
+        let error = control_exec_command_session(
+            ExecCommandControlRequest {
+                session_id: 987_655,
+                action: ExecCommandControlAction::Kill,
+                origin: ExecCommandControlOrigin::ModelTool,
+                remote: true,
+                yield_time_ms: Some(0),
+            },
+            None,
+            Some(&remote_exec_port),
+        )
+        .await
+        .expect_err("missing remote session should be structured");
+
+        assert!(matches!(
+            error,
+            ExecCommandControlError::SessionNotFound(987_655)
         ));
     }
 }

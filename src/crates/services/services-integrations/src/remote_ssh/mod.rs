@@ -18,6 +18,8 @@ mod password_vault;
 #[cfg(feature = "remote-ssh-concrete")]
 mod remote_exec;
 #[cfg(feature = "remote-ssh-concrete")]
+mod remote_exec_runtime_port;
+#[cfg(feature = "remote-ssh-concrete")]
 pub mod remote_fs;
 #[cfg(feature = "remote-ssh-concrete")]
 pub mod remote_terminal;
@@ -50,6 +52,8 @@ pub use remote_exec::{
     RemoteExecResult, RemoteExecSessionCompletion, RemoteExecSessionCompletionSource,
     RemoteExecSessionCompletionStatus, RemoteSendStdinRequest, RemoteWriteStdinRequest,
 };
+#[cfg(feature = "remote-ssh-concrete")]
+pub use remote_exec_runtime_port::{RemoteExecRuntimePort, RemoteExecSshManagerProvider};
 #[cfg(feature = "remote-ssh-concrete")]
 pub use remote_fs::RemoteFileService;
 #[cfg(feature = "remote-ssh-concrete")]

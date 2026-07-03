@@ -61,8 +61,9 @@ use bitfun_agent_runtime::remote_file_delivery::{
 };
 use bitfun_runtime_ports::{
     AgentBackgroundResultRequest, AgentSessionWorkspaceBinding, AgentThreadGoalDeliveryKind,
-    AgentThreadGoalDeliveryRequest, DelegationPolicy, SessionStoragePathRequest, SessionStorePort,
-    SubagentContextMode, TerminalPort, ThreadGoal, ThreadGoalContinuationPlan, ThreadGoalStatus,
+    AgentThreadGoalDeliveryRequest, DelegationPolicy, RemoteExecPort, SessionStoragePathRequest,
+    SessionStorePort, SubagentContextMode, TerminalPort, ThreadGoal, ThreadGoalContinuationPlan,
+    ThreadGoalStatus,
 };
 use dashmap::DashMap;
 use log::{debug, error, info, warn};
@@ -514,6 +515,7 @@ pub struct ConversationCoordinator {
     active_turns_per_session: Arc<DashMap<String, Arc<AtomicUsize>>>,
     thread_goal_runtime: Arc<ThreadGoalRuntime>,
     terminal_port: OnceLock<Arc<dyn TerminalPort>>,
+    remote_exec_port: OnceLock<Arc<dyn RemoteExecPort>>,
 }
 
 impl ConversationCoordinator {
@@ -1063,6 +1065,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             active_turns_per_session: Arc::new(DashMap::new()),
             thread_goal_runtime: Arc::new(ThreadGoalRuntime::new()),
             terminal_port: OnceLock::new(),
+            remote_exec_port: OnceLock::new(),
         }
     }
 
@@ -1078,6 +1081,16 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
 
     pub fn terminal_port(&self) -> Option<Arc<dyn TerminalPort>> {
         self.terminal_port.get().map(Arc::clone)
+    }
+
+    pub fn set_remote_exec_port(&self, remote_exec_port: Arc<dyn RemoteExecPort>) {
+        if self.remote_exec_port.set(remote_exec_port).is_err() {
+            log::warn!("Remote exec port is already configured; ignoring duplicate injection");
+        }
+    }
+
+    pub fn remote_exec_port(&self) -> Option<Arc<dyn RemoteExecPort>> {
+        self.remote_exec_port.get().map(Arc::clone)
     }
 
     /// Inject the DialogScheduler notification channel after construction.
@@ -2753,6 +2766,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
             workspace_services: manual_workspace_services,
             terminal_port: self.terminal_port(),
+            remote_exec_port: self.remote_exec_port(),
             round_injection: None,
             recover_partial_on_cancel: false,
         };
@@ -3377,6 +3391,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             runtime_tool_restrictions,
             workspace_services,
             terminal_port: self.terminal_port(),
+            remote_exec_port: self.remote_exec_port(),
             round_injection: self.round_injection_source.get().cloned(),
             recover_partial_on_cancel: false,
         };
@@ -4787,6 +4802,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             runtime_tool_restrictions,
             workspace_services: subagent_services,
             terminal_port: self.terminal_port(),
+            remote_exec_port: self.remote_exec_port(),
             // Subagents are autonomous; user steering is targeted at top-level
             // dialog turns only. Leave None so we don't intercept buffer entries
             // that belong to a different (parent) session/turn.
@@ -6528,6 +6544,9 @@ mod tests {
         coordinator.set_terminal_port(
             bitfun_runtime_services::test_support::FakeRuntimeServicesProvider::terminal_port(),
         );
+        coordinator.set_remote_exec_port(
+            bitfun_runtime_services::test_support::FakeRuntimeServicesProvider::remote_exec_port(),
+        );
 
         (coordinator, session_manager)
     }
@@ -6546,6 +6565,7 @@ mod tests {
         let (coordinator, _) = test_coordinator();
 
         assert!(coordinator.terminal_port().is_some());
+        assert!(coordinator.remote_exec_port().is_some());
     }
 
     #[test]

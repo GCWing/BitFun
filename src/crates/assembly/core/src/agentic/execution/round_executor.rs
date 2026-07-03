@@ -734,6 +734,7 @@ impl RoundExecutor {
                 steering_interrupt: context.steering_interrupt.clone(),
                 workspace_services: context.workspace_services.clone(),
                 terminal_port: context.terminal_port.clone(),
+                remote_exec_port: context.remote_exec_port.clone(),
             };
 
             // Read tool execution related configuration from global config
@@ -1357,6 +1358,7 @@ mod tests {
             cancellation_token: CancellationToken::new(),
             workspace_services: None,
             terminal_port: None,
+            remote_exec_port: None,
             recover_partial_on_cancel: false,
         }
     }

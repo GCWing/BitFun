@@ -1571,6 +1571,21 @@ export const forbiddenContentRules = [
           'core local ExecCommand adapter must not call the global local process manager; use injected TerminalPort',
       },
       {
+        regex: /\bget_global_remote_exec_process_manager\b/,
+        message:
+          'core remote ExecCommand adapter must not call the global remote process manager; use injected RemoteExecPort',
+      },
+      {
+        regex: /\bSSHConnectionManager\b/,
+        message:
+          'core remote ExecCommand adapter must not depend on concrete SSH managers; use injected RemoteExecPort',
+      },
+      {
+        regex: /\bSSHCommandOptions\b/,
+        message:
+          'core remote ExecCommand adapter must not depend on concrete SSH command options; use injected RemoteExecPort',
+      },
+      {
         regex: /\bLocalExecCommandRequest\b/,
         message:
           'core local ExecCommand adapter must not construct local process-manager requests; use TerminalExecCommandRequest',
@@ -1621,6 +1636,16 @@ export const forbiddenContentRules = [
           'core local WriteStdin adapter must not call the global local process manager; use injected TerminalPort',
       },
       {
+        regex: /\bget_global_remote_exec_process_manager\b/,
+        message:
+          'core remote WriteStdin adapter must not call the global remote process manager; use injected RemoteExecPort',
+      },
+      {
+        regex: /\bRemoteExecError\b/,
+        message:
+          'core remote WriteStdin adapter must not match concrete remote exec errors; use PortErrorKind',
+      },
+      {
         regex: /\bLocalWriteStdinRequest\b/,
         message:
           'core local WriteStdin adapter must not construct local process-manager requests; use TerminalWriteStdinRequest',
@@ -1656,6 +1681,16 @@ export const forbiddenContentRules = [
           'core local ExecControl adapter must not call the global local process manager; use injected TerminalPort',
       },
       {
+        regex: /\bget_global_remote_exec_process_manager\b/,
+        message:
+          'core remote ExecControl adapter must not call the global remote process manager; use injected RemoteExecPort',
+      },
+      {
+        regex: /\bRemoteExecError\b/,
+        message:
+          'core remote ExecControl adapter must not match concrete remote exec errors; use PortErrorKind',
+      },
+      {
         regex: /\bLocalExecControlRequest\b/,
         message:
           'core local ExecControl adapter must not construct local process-manager requests; use TerminalExecControlRequest',
@@ -1679,6 +1714,11 @@ export const forbiddenContentRules = [
         regex: /\bget_global_exec_process_manager\b/,
         message:
           'core local ExecCommand input adapter must not call the global local process manager; use injected TerminalPort',
+      },
+      {
+        regex: /\bget_global_remote_exec_process_manager\b/,
+        message:
+          'core remote ExecCommand input adapter must not call the global remote process manager; use injected RemoteExecPort',
       },
       {
         regex: /\bLocalSendStdinRequest\b/,
@@ -1744,6 +1784,16 @@ export const forbiddenContentRules = [
         regex: /\bconst\s+ENV_SNAPSHOT_TTL\b/,
         message:
           'core exec_command env snapshot adapter must not own snapshot cache ttl; use tool-runtime exec_command',
+      },
+      {
+        regex: /\bget_global_remote_exec_process_manager\b/,
+        message:
+          'core exec_command env snapshot adapter must not call the global remote process manager; use injected RemoteExecPort',
+      },
+      {
+        regex: /\bSSHConnectionManager\b/,
+        message:
+          'core exec_command env snapshot adapter must not depend on concrete SSH managers; use injected RemoteExecPort',
       },
     ],
   },

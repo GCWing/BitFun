@@ -12,6 +12,7 @@ use bitfun_core::agentic::{
     workspace::{local_workspace_services, remote_workspace_services},
     WorkspaceBinding,
 };
+use bitfun_core::product_runtime::CoreRuntimeServicesProvider;
 use bitfun_core::service::remote_ssh::workspace_state::{
     get_remote_workspace_manager, lookup_remote_connection, workspace_session_identity,
 };
@@ -172,7 +173,16 @@ async fn build_tool_context(workspace_path: Option<&str>) -> ToolUseContext {
         None => None,
     };
 
-    ToolUseContext::for_tool_listing(workspace, workspace_services)
+    let remote_exec_port = workspace
+        .as_ref()
+        .is_some_and(WorkspaceBinding::is_remote)
+        .then(CoreRuntimeServicesProvider::remote_exec_port);
+
+    ToolUseContext::for_tool_listing_with_remote_exec_port(
+        workspace,
+        workspace_services,
+        remote_exec_port,
+    )
 }
 
 fn to_dynamic_mcp_tool_info(

@@ -59,6 +59,7 @@ pub enum RuntimeServiceCapability {
     Events,
     Clock,
     Terminal,
+    RemoteExec,
     Network,
     Git,
     McpCatalog,
@@ -78,6 +79,7 @@ impl RuntimeServiceCapability {
             Self::Events => "events",
             Self::Clock => "clock",
             Self::Terminal => "terminal",
+            Self::RemoteExec => "remote_exec",
             Self::Network => "network",
             Self::Git => "git",
             Self::McpCatalog => "mcp_catalog",
@@ -437,6 +439,121 @@ pub type TerminalExecLifecycleSink = mpsc::UnboundedSender<TerminalExecProcessLi
 pub type TerminalExecOutputSink = mpsc::UnboundedSender<String>;
 pub type TerminalExecStreamingOutputSink = mpsc::Sender<String>;
 
+#[derive(Debug, Clone)]
+pub struct RemoteExecCommandRequest {
+    pub connection_id: String,
+    pub command: String,
+    pub tty: bool,
+    pub yield_time_ms: Option<u64>,
+    pub max_output_chars: Option<usize>,
+    pub lifecycle_sink: Option<RemoteExecLifecycleSink>,
+    pub output_sink: Option<RemoteExecOutputSink>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemoteExecOneShotCommandRequest {
+    pub connection_id: String,
+    pub command: String,
+    pub timeout_ms: Option<u64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemoteExecOneShotCommandResponse {
+    pub stdout: String,
+    pub stderr: String,
+    pub exit_code: i32,
+    pub interrupted: bool,
+    pub timed_out: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct RemoteWriteStdinRequest {
+    pub session_id: i32,
+    pub chars: String,
+    pub append_enter: bool,
+    pub yield_time_ms: Option<u64>,
+    pub max_output_chars: Option<usize>,
+}
+
+#[derive(Debug, Clone)]
+pub struct RemoteSendStdinRequest {
+    pub session_id: i32,
+    pub chars: String,
+    pub append_enter: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RemoteExecControlAction {
+    Interrupt,
+    Kill,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RemoteExecControlOrigin {
+    ModelTool,
+    OutOfBand,
+}
+
+#[derive(Debug, Clone)]
+pub struct RemoteExecControlRequest {
+    pub session_id: i32,
+    pub action: RemoteExecControlAction,
+    pub origin: RemoteExecControlOrigin,
+    pub yield_time_ms: Option<u64>,
+    pub max_output_chars: Option<usize>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RemoteExecSessionCompletionStatus {
+    Exited,
+    Interrupted,
+    Killed,
+    Pruned,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RemoteExecSessionCompletionSource {
+    Process,
+    OutOfBandControl,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RemoteExecSessionCompletion {
+    pub status: RemoteExecSessionCompletionStatus,
+    pub source: RemoteExecSessionCompletionSource,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct RemoteExecCommandResponse {
+    pub chunk_id: String,
+    pub wall_time_seconds: f64,
+    pub output: String,
+    pub session_id: Option<i32>,
+    pub exit_code: Option<i32>,
+    pub original_output_chars: usize,
+    pub completion: Option<RemoteExecSessionCompletion>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RemoteExecProcessLifecycleStatus {
+    Running,
+    Exited,
+    Interrupted,
+    Killed,
+    Pruned,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemoteExecProcessLifecycleEvent {
+    pub session_id: i32,
+    pub status: RemoteExecProcessLifecycleStatus,
+    pub exit_code: Option<i32>,
+}
+
+pub type RemoteExecLifecycleSink = mpsc::UnboundedSender<RemoteExecProcessLifecycleEvent>;
+pub type RemoteExecOutputSink = mpsc::UnboundedSender<String>;
+pub type RemoteExecStreamingOutputSink = mpsc::Sender<String>;
+
 /// Runtime handles injected into tool execution contexts.
 ///
 /// This bundle is intentionally handle-only. Concrete local or remote
@@ -447,6 +564,7 @@ pub struct ToolRuntimeHandles {
     workspace_services: Option<WorkspaceServices>,
     cancellation_token: Option<CancellationToken>,
     terminal_port: Option<Arc<dyn TerminalPort>>,
+    remote_exec_port: Option<Arc<dyn RemoteExecPort>>,
 }
 
 impl ToolRuntimeHandles {
@@ -458,11 +576,20 @@ impl ToolRuntimeHandles {
             workspace_services,
             cancellation_token,
             terminal_port: None,
+            remote_exec_port: None,
         }
     }
 
     pub fn with_terminal_port(mut self, terminal_port: Option<Arc<dyn TerminalPort>>) -> Self {
         self.terminal_port = terminal_port;
+        self
+    }
+
+    pub fn with_remote_exec_port(
+        mut self,
+        remote_exec_port: Option<Arc<dyn RemoteExecPort>>,
+    ) -> Self {
+        self.remote_exec_port = remote_exec_port;
         self
     }
 
@@ -476,6 +603,10 @@ impl ToolRuntimeHandles {
 
     pub fn terminal_port(&self) -> Option<&Arc<dyn TerminalPort>> {
         self.terminal_port.as_ref()
+    }
+
+    pub fn remote_exec_port(&self) -> Option<&Arc<dyn RemoteExecPort>> {
+        self.remote_exec_port.as_ref()
     }
 }
 
@@ -499,6 +630,13 @@ impl std::fmt::Debug for ToolRuntimeHandles {
             .field(
                 "terminal_port",
                 &self.terminal_port.as_ref().map(|_| "<dyn TerminalPort>"),
+            )
+            .field(
+                "remote_exec_port",
+                &self
+                    .remote_exec_port
+                    .as_ref()
+                    .map(|_| "<dyn RemoteExecPort>"),
             )
             .finish()
     }
@@ -562,6 +700,43 @@ pub trait TerminalPort: RuntimeServicePort + std::fmt::Debug {
         &self,
         request: TerminalExecControlRequest,
     ) -> PortResult<TerminalExecCommandResponse>;
+}
+
+#[async_trait::async_trait]
+pub trait RemoteExecPort: RuntimeServicePort + std::fmt::Debug {
+    async fn exec_command_once(
+        &self,
+        request: RemoteExecOneShotCommandRequest,
+    ) -> PortResult<RemoteExecOneShotCommandResponse>;
+
+    async fn exec_command(
+        &self,
+        request: RemoteExecCommandRequest,
+    ) -> PortResult<RemoteExecCommandResponse>;
+
+    async fn exec_command_streaming(
+        &self,
+        request: RemoteExecCommandRequest,
+        output_sink: RemoteExecStreamingOutputSink,
+    ) -> PortResult<RemoteExecCommandResponse>;
+
+    async fn write_stdin(
+        &self,
+        request: RemoteWriteStdinRequest,
+    ) -> PortResult<RemoteExecCommandResponse>;
+
+    async fn write_stdin_streaming(
+        &self,
+        request: RemoteWriteStdinRequest,
+        output_sink: RemoteExecStreamingOutputSink,
+    ) -> PortResult<RemoteExecCommandResponse>;
+
+    async fn send_stdin(&self, request: RemoteSendStdinRequest) -> PortResult<()>;
+
+    async fn control_session(
+        &self,
+        request: RemoteExecControlRequest,
+    ) -> PortResult<RemoteExecCommandResponse>;
 }
 
 pub trait NetworkPort: RuntimeServicePort {}
@@ -2605,7 +2780,7 @@ mod tests {
         ));
         assert_eq!(
             format!("{:?}", handles),
-            "ToolRuntimeHandles { workspace_services: Some(\"<WorkspaceServices>\"), cancellation_token: Some(\"<CancellationToken>\"), terminal_port: None }"
+            "ToolRuntimeHandles { workspace_services: Some(\"<WorkspaceServices>\"), cancellation_token: Some(\"<CancellationToken>\"), terminal_port: None, remote_exec_port: None }"
         );
     }
 }

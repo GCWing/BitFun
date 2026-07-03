@@ -5,6 +5,8 @@
 
 use std::sync::Arc;
 
+#[cfg(feature = "ssh-remote")]
+use bitfun_runtime_ports::{PortError, PortErrorKind, PortResult, RemoteExecPort};
 use bitfun_runtime_ports::{
     RemoteProjectionPort, RemoteWorkspacePort, SessionStorePort, TerminalPort,
 };
@@ -20,6 +22,35 @@ use crate::service_agent_runtime::{
     CoreRemoteWorkspaceFileRuntimeHost, CoreRemoteWorkspaceRuntimeHost,
 };
 
+#[cfg(feature = "ssh-remote")]
+#[derive(Debug, Clone, Copy, Default)]
+struct CoreRemoteExecSshManagerProvider;
+
+#[cfg(feature = "ssh-remote")]
+#[async_trait::async_trait]
+impl bitfun_services_integrations::remote_ssh::RemoteExecSshManagerProvider
+    for CoreRemoteExecSshManagerProvider
+{
+    async fn ssh_manager(
+        &self,
+    ) -> PortResult<bitfun_services_integrations::remote_ssh::SSHConnectionManager> {
+        let manager =
+            crate::service::remote_ssh::get_remote_workspace_manager().ok_or_else(|| {
+                PortError::new(
+                    PortErrorKind::NotAvailable,
+                    "remote workspace manager is not initialized",
+                )
+            })?;
+
+        manager.get_ssh_manager().await.ok_or_else(|| {
+            PortError::new(
+                PortErrorKind::NotAvailable,
+                "remote SSH manager is not initialized",
+            )
+        })
+    }
+}
+
 #[derive(Debug, Clone, Copy, Default)]
 pub struct CoreRuntimeServicesProvider;
 
@@ -30,6 +61,15 @@ impl CoreRuntimeServicesProvider {
 
     pub fn terminal_port() -> Arc<dyn TerminalPort> {
         Arc::new(TerminalRuntimePort::default())
+    }
+
+    #[cfg(feature = "ssh-remote")]
+    pub fn remote_exec_port() -> Arc<dyn RemoteExecPort> {
+        Arc::new(
+            bitfun_services_integrations::remote_ssh::RemoteExecRuntimePort::new(Arc::new(
+                CoreRemoteExecSshManagerProvider,
+            )),
+        )
     }
 }
 
@@ -43,6 +83,9 @@ impl RuntimeServicesProvider for CoreRuntimeServicesProvider {
             .with_optional_network(Some(RuntimeServiceMarkerPort::network_port()))
             .with_optional_git(Some(RuntimeServiceMarkerPort::git_port()))
             .with_optional_mcp_catalog(Some(RuntimeServiceMarkerPort::mcp_catalog_port()));
+
+        #[cfg(feature = "ssh-remote")]
+        let builder = builder.with_optional_remote_exec(Some(Self::remote_exec_port()));
 
         #[cfg(feature = "service-integrations")]
         {

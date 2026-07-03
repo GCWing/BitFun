@@ -13,6 +13,9 @@ pub async fn init_agentic_system() -> Result<AgenticSystem> {
     system
         .coordinator
         .set_terminal_port(CoreRuntimeServicesProvider::terminal_port());
+    system
+        .coordinator
+        .set_remote_exec_port(CoreRuntimeServicesProvider::remote_exec_port());
     Ok(system)
 }
 

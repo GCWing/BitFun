@@ -37,6 +37,7 @@ fn fake_provider_registers_required_and_remote_services_through_registry() {
     assert!(services.has_capability(RuntimeServiceCapability::Events));
     assert!(services.has_capability(RuntimeServiceCapability::Clock));
     assert!(services.has_capability(RuntimeServiceCapability::RemoteConnection));
+    assert!(services.has_capability(RuntimeServiceCapability::RemoteExec));
     assert!(services.has_capability(RuntimeServiceCapability::RemoteWorkspace));
     assert!(services.has_capability(RuntimeServiceCapability::RemoteProjection));
     assert!(services.has_capability(RuntimeServiceCapability::RemoteCapabilities));
@@ -94,6 +95,7 @@ fn marker_ports_register_optional_service_availability_without_core_dependency()
         .expect("optional ports should satisfy matching capabilities");
 
     assert!(services.has_capability(RuntimeServiceCapability::Terminal));
+    assert!(!services.has_capability(RuntimeServiceCapability::RemoteExec));
     assert!(services.has_capability(RuntimeServiceCapability::Network));
     assert!(services.has_capability(RuntimeServiceCapability::Git));
     assert!(services.has_capability(RuntimeServiceCapability::McpCatalog));

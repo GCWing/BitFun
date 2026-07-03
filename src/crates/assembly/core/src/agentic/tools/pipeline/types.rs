@@ -6,7 +6,7 @@ use crate::agentic::round_preempt::DialogRoundInjectionInterrupt;
 use crate::agentic::tools::ToolRuntimeRestrictions;
 use crate::agentic::workspace::WorkspaceServices;
 use crate::agentic::WorkspaceBinding;
-use bitfun_runtime_ports::{DelegationPolicy, TerminalPort};
+use bitfun_runtime_ports::{DelegationPolicy, RemoteExecPort, TerminalPort};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -80,6 +80,7 @@ pub struct ToolExecutionContext {
     pub steering_interrupt: Option<DialogRoundInjectionInterrupt>,
     pub workspace_services: Option<WorkspaceServices>,
     pub terminal_port: Option<Arc<dyn TerminalPort>>,
+    pub remote_exec_port: Option<Arc<dyn RemoteExecPort>>,
 }
 
 /// Tool execution task

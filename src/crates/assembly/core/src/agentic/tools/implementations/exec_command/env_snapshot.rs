@@ -1,8 +1,9 @@
 use super::shell_kind::exec_command_shell_kind;
-use crate::service::remote_ssh::{
-    get_global_remote_exec_process_manager, RemoteExecCommandRequest, RemoteExecControlAction,
-    RemoteExecControlOrigin, RemoteExecControlRequest, SSHConnectionManager,
+use bitfun_runtime_ports::{
+    RemoteExecCommandRequest, RemoteExecControlAction, RemoteExecControlOrigin,
+    RemoteExecControlRequest, RemoteExecPort,
 };
+use std::sync::Arc;
 use std::sync::OnceLock;
 use terminal_core::ShellType;
 use tool_runtime::exec_command::{
@@ -16,7 +17,7 @@ static REMOTE_ENV_SNAPSHOT_CACHE: OnceLock<ExecCommandRemoteEnvSnapshotCache> = 
 pub(super) type RemoteEnvSnapshot = ExecCommandRemoteEnvSnapshot;
 
 pub(super) async fn remote_env_snapshot_for(
-    ssh_manager: SSHConnectionManager,
+    remote_exec_port: &Arc<dyn RemoteExecPort>,
     connection_id: &str,
     shell_path: &str,
     shell_type: &ShellType,
@@ -33,7 +34,8 @@ pub(super) async fn remote_env_snapshot_for(
     }
 
     let snapshot =
-        match capture_remote_env_snapshot(ssh_manager, connection_id, shell_path, shell_type).await
+        match capture_remote_env_snapshot(remote_exec_port, connection_id, shell_path, shell_type)
+            .await
         {
             Ok(snapshot) => snapshot,
             Err(_) => return None,
@@ -43,29 +45,27 @@ pub(super) async fn remote_env_snapshot_for(
 }
 
 async fn capture_remote_env_snapshot(
-    ssh_manager: SSHConnectionManager,
+    remote_exec_port: &Arc<dyn RemoteExecPort>,
     connection_id: &str,
     shell_path: &str,
     shell_type: &ShellType,
 ) -> anyhow::Result<RemoteEnvSnapshot> {
     let command = remote_env_snapshot_command(shell_path, shell_type);
-    let manager = get_global_remote_exec_process_manager();
     let policy = remote_exec_env_snapshot_capture_policy();
-    let response = manager
+    let response = remote_exec_port
         .exec_command(RemoteExecCommandRequest {
-            ssh_manager,
             connection_id: connection_id.to_string(),
             command,
             tty: true,
             yield_time_ms: Some(policy.timeout_ms),
             max_output_chars: Some(policy.max_output_chars),
-            lifecycle_tx: None,
-            output_capture_tx: None,
+            lifecycle_sink: None,
+            output_sink: None,
         })
         .await?;
 
     if let Some(session_id) = response.session_id {
-        let _ = manager
+        let _ = remote_exec_port
             .control_session(RemoteExecControlRequest {
                 session_id,
                 action: RemoteExecControlAction::Kill,

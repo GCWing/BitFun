@@ -1387,6 +1387,9 @@ async fn init_agentic_system() -> anyhow::Result<(
     coordinator.set_terminal_port(
         bitfun_core::product_runtime::CoreRuntimeServicesProvider::terminal_port(),
     );
+    coordinator.set_remote_exec_port(
+        bitfun_core::product_runtime::CoreRuntimeServicesProvider::remote_exec_port(),
+    );
 
     coordination::ConversationCoordinator::set_global(coordinator.clone());
 

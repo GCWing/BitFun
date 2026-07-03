@@ -1572,6 +1572,7 @@ mod tests {
             steering_interrupt: None,
             workspace_services: None,
             terminal_port: None,
+            remote_exec_port: None,
         }
     }
 

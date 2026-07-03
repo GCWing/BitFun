@@ -13,6 +13,9 @@ facts. It is an interface crate, not a runtime implementation crate.
   or catch-all context structs.
 - This crate may define portable request/response DTOs, runtime handles,
   capability facts, cancellation surfaces, and service traits.
+- `RemoteExecPort` owns only remote command/stdin/control DTOs, bounded
+  one-shot command results, and lifecycle event shapes; SSH managers, channels,
+  process storage, and workspace lookup do not belong here.
 - `SessionStorePort` owns typed session storage-path resolution plus restore /
   load request and timing facts only. Concrete session persistence, file IO,
   session lifecycle, context restore, and prompt assembly do not belong here.

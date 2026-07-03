@@ -1,12 +1,9 @@
 use super::completion::{exec_command_local_completion, exec_command_remote_completion};
 use super::progress::ExecOutputProgressBridge;
 use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext, ValidationResult};
-use crate::service::remote_ssh::{
-    get_global_remote_exec_process_manager, RemoteExecError, RemoteWriteStdinRequest,
-};
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
-use bitfun_runtime_ports::{PortErrorKind, TerminalWriteStdinRequest};
+use bitfun_runtime_ports::{PortErrorKind, RemoteWriteStdinRequest, TerminalWriteStdinRequest};
 use serde_json::{json, Value};
 use tool_runtime::exec_command::{
     render_write_stdin_response_for_assistant, write_stdin_input_from_input,
@@ -57,25 +54,31 @@ impl WriteStdinTool {
             yield_time_ms: Some(parsed_input.yield_time_ms),
             max_output_chars: None,
         };
+        let remote_exec_port = context.remote_exec_port().ok_or_else(|| {
+            BitFunError::tool("remote exec runtime service is required for WriteStdin".to_string())
+        })?;
         let progress_bridge = ExecOutputProgressBridge::start(context, self.name());
         let response_result = if let Some(bridge) = progress_bridge.as_ref() {
-            get_global_remote_exec_process_manager()
+            remote_exec_port
                 .write_stdin_streaming(request, bridge.sender())
                 .await
         } else {
-            get_global_remote_exec_process_manager()
-                .write_stdin(request)
-                .await
+            remote_exec_port.write_stdin(request).await
         };
         if let Some(bridge) = progress_bridge {
             bridge.finish().await;
         }
         let response = match response_result {
             Ok(response) => response,
-            Err(RemoteExecError::SessionNotFound(session_id)) => {
+            Err(error) if error.kind == PortErrorKind::NotFound => {
                 return Ok(Self::session_not_found_result(session_id, true));
             }
-            Err(error) => return Err(BitFunError::tool(format!("WriteStdin failed: {error}"))),
+            Err(error) => {
+                return Err(BitFunError::tool(format!(
+                    "WriteStdin failed: {}",
+                    error.message
+                )));
+            }
         };
 
         let data = write_stdin_result_value(ExecCommandResultFields {
