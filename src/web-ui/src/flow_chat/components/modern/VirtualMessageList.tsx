@@ -93,6 +93,8 @@ type InitialHistoryTransitionState = {
 /**
  * Methods exposed by VirtualMessageList.
  */
+export type FlowChatTurnPinRequestStatus = 'rejected' | 'pending' | 'settled';
+
 export interface VirtualMessageListRef {
   scrollToTurn: (turnIndex: number) => void;
   scrollToIndex: (index: number) => void;
@@ -108,6 +110,8 @@ export interface VirtualMessageListRef {
   scrollToLatestEndPosition: () => void;
   // Aligns the target turn's user message to the viewport top.
   pinTurnToTop: (turnId: string, options?: { behavior?: ScrollBehavior; pinMode?: FlowChatPinTurnToTopMode }) => boolean;
+  // Detailed status for callers that must distinguish immediate feedback from deferred virtual-list settling.
+  pinTurnToTopWithStatus: (turnId: string, options?: { behavior?: ScrollBehavior; pinMode?: FlowChatPinTurnToTopMode }) => FlowChatTurnPinRequestStatus;
 }
 
 export interface VirtualMessageListProps {
@@ -3195,21 +3199,21 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     useStaticInitialHistoryList,
   ]);
 
-  const requestTurnPinToTop = useCallback((turnId: string, options?: { behavior?: ScrollBehavior; pinMode?: FlowChatPinTurnToTopMode }) => {
+  const requestTurnPinToTop = useCallback((turnId: string, options?: { behavior?: ScrollBehavior; pinMode?: FlowChatPinTurnToTopMode }): FlowChatTurnPinRequestStatus => {
     const requestedPinMode = options?.pinMode ?? 'transient';
     const requestedBehavior = options?.behavior ?? 'auto';
     const targetTurn = findDialogTurn(activeSession?.dialogTurns, turnId);
     if (requestedPinMode === 'sticky-latest' && !shouldUseStickyLatestPin(targetTurn)) {
-      return false;
+      return 'rejected';
     }
     const targetItem = userMessageItems.find(({ item }) => item.turnId === turnId);
     if (!targetItem) {
-      return false;
+      return 'rejected';
     }
 
     if (!virtuosoRef.current) {
       if (!useStaticInitialHistoryList) {
-        return false;
+        return 'rejected';
       }
 
       pendingStaticTurnPinRef.current = {
@@ -3226,11 +3230,11 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
 
       if (scrollStaticTurnToTop(turnId, requestedBehavior)) {
         pendingStaticTurnPinRef.current = null;
-        return true;
+        return 'settled';
       }
 
       setStaticAnchorWindowTurnId(turnId);
-      return true;
+      return 'pending';
     }
 
     if (targetItem.index === 0 && requestedPinMode === 'transient') {
@@ -3239,7 +3243,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
       clearTurnPinRequest();
       virtuosoRef.current.scrollTo({ top: 0, behavior: 'auto' });
 
-      return true;
+      return 'settled';
     }
 
     const request: PendingTurnPinState = {
@@ -3265,11 +3269,11 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
         clearTurnPinRequest();
       }
       scheduleVisibleTurnMeasure(2);
-      return true;
+      return 'settled';
     }
 
     setPendingTurnPin(request);
-    return true;
+    return 'pending';
   }, [
     activeSession?.dialogTurns,
     activateTransientTurnPinStabilization,
@@ -3566,7 +3570,7 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     }
   }, [clearPinReservationForUserNavigation, exitFollowOutput, toVirtuosoIndex, virtualItems.length]);
 
-  const pinTurnToTop = useCallback((turnId: string, options?: { behavior?: ScrollBehavior; pinMode?: FlowChatPinTurnToTopMode }) => {
+  const pinTurnToTopWithStatus = useCallback((turnId: string, options?: { behavior?: ScrollBehavior; pinMode?: FlowChatPinTurnToTopMode }): FlowChatTurnPinRequestStatus => {
     const shouldExitFollowOutput = !(
       options?.pinMode === 'sticky-latest' &&
       turnId === latestTurnId
@@ -3580,6 +3584,10 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
 
     return requestTurnPinToTop(turnId, options);
   }, [clearPinReservationForUserNavigation, exitFollowOutput, latestTurnId, requestTurnPinToTop]);
+
+  const pinTurnToTop = useCallback((turnId: string, options?: { behavior?: ScrollBehavior; pinMode?: FlowChatPinTurnToTopMode }) => {
+    return pinTurnToTopWithStatus(turnId, options) !== 'rejected';
+  }, [pinTurnToTopWithStatus]);
 
   const visibleTurnInfo = useModernFlowChatStore(state => state.visibleTurnInfo);
 
@@ -3805,10 +3813,12 @@ const VirtualMessageListSession = forwardRef<VirtualMessageListRef, VirtualMessa
     isTurnTextRenderedInViewport,
     scrollToLatestEndPosition,
     pinTurnToTop,
+    pinTurnToTopWithStatus,
   }), [
     isTurnRenderedInViewport,
     isTurnTextRenderedInViewport,
     pinTurnToTop,
+    pinTurnToTopWithStatus,
     scrollToTurn,
     scrollToIndex,
     scrollToPhysicalBottomAndClearPin,

@@ -52,6 +52,14 @@ const scenarios = {
       BITFUN_E2E_PERF_POST_VISIBLE_INTERACTION: 'scroll-down',
     },
   },
+  'turn-navigation': {
+    spec: './specs/l1-chat-turn-navigation-release.spec.ts',
+    reportPrefix: null,
+    env: {
+      BITFUN_E2E_TURN_NAV_SESSION_ID: DEFAULT_LONG_SESSION_TARGET_ID,
+      BITFUN_E2E_TURN_NAV_TARGET_INDEX: '20',
+    },
+  },
   'resize-window': {
     spec: './specs/performance/startup-session-perf.spec.ts',
     grep: 'collects first-open timing for a generated long session',
@@ -75,8 +83,8 @@ const scenarios = {
 };
 
 const profiles = {
-  core: ['first-open', 'rapid-switch-zero-delay', 'first-scroll', 'resize-window-width'],
-  scroll: ['first-scroll', 'scroll-down'],
+  core: ['first-open', 'rapid-switch-zero-delay', 'first-scroll', 'turn-navigation', 'resize-window-width'],
+  scroll: ['first-scroll', 'scroll-down', 'turn-navigation'],
   resize: ['resize-window', 'resize-window-width'],
   full: [
     'first-open',
@@ -84,6 +92,7 @@ const profiles = {
     'rapid-switch-zero-delay',
     'first-scroll',
     'scroll-down',
+    'turn-navigation',
     'resize-window',
     'resize-window-width',
     'input-layout',

@@ -298,7 +298,11 @@ export function useFlowChatFollowOutput({
         ? getDistanceFromBottom(scroller) > AUTO_FOLLOW_BOTTOM_THRESHOLD_PX
         : false;
 
-      if (!alreadyAwayFromBottom) {
+      if (
+        !alreadyAwayFromBottom &&
+        !isFollowingOutputRef.current &&
+        armedAutoFollowTurnIdRef.current === null
+      ) {
         return;
       }
 
@@ -308,7 +312,15 @@ export function useFlowChatFollowOutput({
       );
     }
     explicitUserScrollIntentUntilMsRef.current = now + USER_SCROLL_INTENT_WINDOW_MS;
-  }, [scrollerRef]);
+
+    if (isFollowingOutputRef.current) {
+      // Input handlers see the upward intent before scrollTop necessarily moves.
+      exitFollowOutput('user-scroll-up');
+      return;
+    }
+
+    cancelPendingAutoFollowArm();
+  }, [cancelPendingAutoFollowArm, exitFollowOutput, scrollerRef]);
 
   const scheduleFollowToLatest = useCallback((_reason: string) => {
     if (
