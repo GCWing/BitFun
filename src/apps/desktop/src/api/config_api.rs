@@ -37,6 +37,12 @@ pub struct ResetConfigRequest {
     pub path: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportConfigRequest {
+    pub config_data: Value,
+}
+
 #[derive(Debug, Deserialize, Default)]
 pub struct GetRuntimeLoggingInfoRequest {}
 
@@ -262,13 +268,18 @@ pub async fn export_config(state: State<'_, AppState>) -> Result<Value, String> 
 }
 
 #[tauri::command]
-pub async fn import_config(state: State<'_, AppState>, config: Value) -> Result<Value, String> {
+pub async fn import_config(
+    state: State<'_, AppState>,
+    request: ImportConfigRequest,
+) -> Result<Value, String> {
     let config_service = &state.config_service;
+    let config_data = request
+        .config_data
+        .get("config")
+        .cloned()
+        .unwrap_or(request.config_data);
 
-    let export_data: bitfun_core::service::config::ConfigExport =
-        serde_json::from_value(config).map_err(|e| format!("Invalid config format: {}", e))?;
-
-    match config_service.import_config(export_data).await {
+    match config_service.import_config_data(config_data).await {
         Ok(result) => {
             state.ai_client_factory.invalidate_cache();
             info!("Config imported, AI client cache invalidated");

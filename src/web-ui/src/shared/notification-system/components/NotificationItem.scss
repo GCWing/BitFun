@@ -89,14 +89,14 @@
     border: none;
     background: none;
     font: inherit;
-    color: var(--color-primary);
+    color: var(--color-accent-500);
     text-decoration: underline;
     text-align: left;
     cursor: pointer;
     word-break: break-all;
 
     &:hover {
-      color: var(--color-accent);
+      color: var(--color-accent-500);
     }
   }
 
@@ -130,11 +130,11 @@
     }
 
     &--secondary {
-      background: $element-bg-base;
+      background: var(--element-bg-base);
       color: var(--color-text-secondary);
 
       &:hover {
-        background: $element-bg-medium;
+        background: var(--element-bg-medium);
         color: var(--color-text-primary);
       }
       
@@ -148,7 +148,7 @@
       color: var(--color-text-primary);
 
       &:hover {
-        background: $git-color-deleted;
+        background: var(--git-color-deleted);
       }
       
       &:active {
@@ -173,7 +173,7 @@
     transition: all $motion-base $easing-standard;
 
     &:hover {
-      background: $element-bg-base;
+      background: var(--element-bg-base);
       color: var(--color-text-primary);
     }
     

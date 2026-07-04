@@ -33,20 +33,41 @@
     padding: 0 16px;
   }
 
+  &__section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+
   &__section-title {
     font-size: 11px;
     font-weight: 600;
     font-family: inherit;
     color: var(--color-text-muted);
-    margin: 0 0 6px 0;
+    margin: 0;
     text-transform: uppercase;
     letter-spacing: 0.5px;
+    white-space: nowrap;
+  }
+
+  &__search {
+    max-width: 160px;
+    flex-shrink: 0;
   }
 
   &__saved-list {
     display: flex;
     flex-direction: column;
     gap: 4px;
+    max-height: 132px;
+    overflow-y: auto;
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
   }
 
   &__saved-item {
@@ -54,7 +75,6 @@
     align-items: center;
     gap: 8px;
     padding: 5px 10px;
-    border: 1px solid var(--border-subtle);
     border-radius: 6px;
     background: var(--card-bg-default);
     transition: all var(--motion-fast) var(--easing-standard);
@@ -62,7 +82,6 @@
     position: relative;
 
     &:hover {
-      border-color: var(--border-accent);
       background: var(--card-bg-hover);
     }
 
@@ -72,8 +91,12 @@
 
     &--config {
       .ssh-connection-dialog__saved-icon {
-        background: var(--color-success-100);
-        color: var(--color-success-500);
+        background: var(--color-success-bg);
+        color: var(--color-success);
+      }
+
+      .ssh-connection-dialog__saved-actions {
+        opacity: 1;
       }
     }
   }

@@ -16,7 +16,7 @@
   line-height: var(--flowchat-support-line-height);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
-  box-shadow: 0 4px 24px var(--color-overlay-black-15), 0 0 0 1px var(--color-overlay-white-06);
+  box-shadow: 0 4px 24px var(--color-overlay-black-15), 0 0 0 1px var(--color-overlay-white-08);
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -1014,8 +1014,8 @@
       height: 6px;
       margin-top: 6px;
       border-radius: 999px;
-      background: var(--color-text-tertiary);
-      box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-text-tertiary) 10%, transparent);
+      background: var(--color-text-muted);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-text-muted) 10%, transparent);
     }
 
     &--warning {

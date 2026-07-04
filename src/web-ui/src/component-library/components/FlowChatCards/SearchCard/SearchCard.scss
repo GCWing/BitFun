@@ -48,14 +48,14 @@
 }
 
 .search-card__action {
-  color: tokens.$color-text-secondary;
+  color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
   font-weight: tokens.$font-weight-medium;
   flex-shrink: 0;
 }
 
 .search-card__pattern {
-  color: tokens.$color-text-primary;
+  color: var(--color-text-primary);
   font-size: var(--font-size-xs);
   font-weight: tokens.$font-weight-medium;
   font-family: tokens.$font-family-mono;
@@ -67,7 +67,7 @@
 }
 
 .search-card__result {
-  color: tokens.$color-text-muted;
+  color: var(--color-text-muted);
   font-size: 10px;
   font-weight: tokens.$font-weight-semibold;
   margin-left: auto;
@@ -79,24 +79,24 @@
   align-items: center;
   flex-shrink: 0;
   margin-left: tokens.$size-gap-2;
-  color: tokens.$color-text-muted;
+  color: var(--color-text-muted);
 }
 
 .search-card__status-spinner {
   animation: spin 1s linear infinite;
-  color: tokens.$color-info;
+  color: var(--color-info);
 }
 
 .search-card__status-success {
-  color: tokens.$color-success;
+  color: var(--color-success);
 }
 
 .search-card__status-error {
-  color: tokens.$color-error;
+  color: var(--color-error);
 }
 
 .search-card__status-pending {
-  color: tokens.$color-warning;
+  color: var(--color-warning);
 }
 
 @keyframes spin {
@@ -126,14 +126,14 @@
 }
 
 .search-card__label {
-  color: tokens.$color-text-secondary;
+  color: var(--color-text-secondary);
   font-weight: tokens.$font-weight-medium;
   flex-shrink: 0;
   min-width: 70px;
 }
 
 .search-card__value {
-  color: tokens.$color-text-primary;
+  color: var(--color-text-primary);
   font-family: tokens.$font-family-mono;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -144,8 +144,8 @@
   display: flex;
   gap: tokens.$size-gap-4;
   padding: tokens.$size-gap-3;
-  background: tokens.$element-bg-soft;
-  border: 1px solid tokens.$border-base;
+  background: var(--element-bg-soft);
+  border: 1px solid var(--border-base);
   border-radius: tokens.$size-radius-base;
 }
 
@@ -161,12 +161,12 @@
   font-size: var(--font-size-xl);
   font-weight: tokens.$font-weight-bold;
   font-family: tokens.$font-family-mono;
-  color: tokens.$color-text-primary;
+  color: var(--color-text-primary);
 }
 
 .search-card__stat-label {
   font-size: var(--font-size-xs);
-  color: tokens.$color-text-muted;
+  color: var(--color-text-muted);
 }
 
 .search-card__top-files {
@@ -179,19 +179,19 @@
   gap: tokens.$size-gap-2;
   width: 100%;
   padding: tokens.$size-gap-2 tokens.$size-gap-3;
-  background: tokens.$element-bg-base;
-  border: 1px solid tokens.$border-base;
+  background: var(--element-bg-base);
+  border: 1px solid var(--border-base);
   border-radius: tokens.$size-radius-base;
-  color: tokens.$color-text-secondary;
+  color: var(--color-text-secondary);
   font-size: var(--font-size-sm);
   font-weight: tokens.$font-weight-medium;
   cursor: pointer;
   transition: all tokens.$motion-base tokens.$easing-standard;
 
   &:hover {
-    background: tokens.$element-bg-soft;
-    border-color: tokens.$border-medium;
-    color: tokens.$color-text-primary;
+    background: var(--element-bg-soft);
+    border-color: var(--border-medium);
+    color: var(--color-text-primary);
   }
 
   svg:first-child {
@@ -204,7 +204,7 @@
   }
 
   svg:last-child {
-    color: tokens.$color-text-muted;
+    color: var(--color-text-muted);
     flex-shrink: 0;
   }
 }
@@ -212,8 +212,8 @@
 .search-card__file-list {
   margin-top: tokens.$size-gap-2;
   padding: tokens.$size-gap-2;
-  background: tokens.$element-bg-base;
-  border: 1px solid tokens.$border-base;
+  background: var(--element-bg-base);
+  border: 1px solid var(--border-base);
   border-radius: tokens.$size-radius-base;
 }
 
@@ -226,11 +226,11 @@
   transition: all tokens.$motion-base;
 
   &:hover {
-    background: tokens.$element-bg-soft;
+    background: var(--element-bg-soft);
   }
 
   svg {
-    color: tokens.$color-text-muted;
+    color: var(--color-text-muted);
     flex-shrink: 0;
   }
 }
@@ -238,7 +238,7 @@
 .search-card__file-name {
   flex: 1;
   font-size: var(--font-size-sm);
-  color: tokens.$color-text-primary;
+  color: var(--color-text-primary);
   font-family: tokens.$font-family-mono;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -247,8 +247,8 @@
 
 .search-card__file-count {
   font-size: var(--font-size-xs);
-  color: tokens.$color-text-muted;
-  background: tokens.$element-bg-soft;
+  color: var(--color-text-muted);
+  background: var(--element-bg-soft);
   padding: 2px 6px;
   border-radius: tokens.$size-radius-sm;
   flex-shrink: 0;
@@ -258,10 +258,10 @@
   margin-top: tokens.$size-gap-4;
   padding: tokens.$size-gap-4;
   text-align: center;
-  color: tokens.$color-text-muted;
+  color: var(--color-text-muted);
   font-size: var(--font-size-sm);
-  background: tokens.$element-bg-base;
-  border: 1px solid tokens.$border-base;
+  background: var(--element-bg-base);
+  border: 1px solid var(--border-base);
   border-radius: tokens.$size-radius-base;
 }
 

@@ -1,4 +1,5 @@
 use crate::service::remote_ssh::workspace_state::WorkspaceSessionIdentity;
+use crate::service::workspace_runtime::WorkspaceRuntimeService;
 use async_trait::async_trait;
 pub use bitfun_runtime_ports::{
     WorkspaceCommandOptions, WorkspaceCommandResult, WorkspaceDirEntry, WorkspaceFileSystem,
@@ -79,6 +80,18 @@ impl WorkspaceBinding {
         self.root_path.to_string_lossy().to_string()
     }
 
+    /// Logical workspace root used by tools, display, and workspace-bound IO.
+    ///
+    /// For local workspaces this is the local project root. For remote SSH
+    /// workspaces this is the root path on the remote host.
+    pub fn logical_workspace_path(&self) -> &Path {
+        &self.root_path
+    }
+
+    pub fn logical_workspace_path_string(&self) -> String {
+        self.logical_workspace_path().to_string_lossy().to_string()
+    }
+
     pub fn is_remote(&self) -> bool {
         matches!(self.backend, WorkspaceBackend::Remote { .. })
     }
@@ -90,9 +103,30 @@ impl WorkspaceBinding {
         }
     }
 
-    /// The path to use for session persistence.
-    pub fn session_storage_path(&self) -> PathBuf {
-        self.session_identity.session_storage_path()
+    /// Final on-disk sessions directory for this workspace binding.
+    pub fn session_storage_dir(&self) -> PathBuf {
+        let runtime_service =
+            WorkspaceRuntimeService::new(crate::infrastructure::get_path_manager_arc());
+        if self.is_remote() {
+            if self.session_identity.hostname == "_unresolved" {
+                if let Some(connection_id) = self.session_identity.remote_connection_id.as_deref() {
+                    return crate::service::remote_ssh::workspace_state::unresolved_remote_session_storage_dir(
+                        connection_id,
+                        self.session_identity.logical_workspace_path(),
+                    );
+                }
+            }
+            return runtime_service
+                .context_for_remote_workspace(
+                    &self.session_identity.hostname,
+                    self.session_identity.logical_workspace_path(),
+                )
+                .sessions_dir;
+        }
+
+        runtime_service
+            .context_for_local_workspace(self.logical_workspace_path())
+            .sessions_dir
     }
 }
 
@@ -105,7 +139,7 @@ mod tests {
     use std::path::PathBuf;
 
     #[test]
-    fn remote_workspace_binding_uses_session_identity_storage_path() {
+    fn remote_workspace_binding_uses_session_identity_storage_dir() {
         let session_identity = workspace_session_identity(
             "/home/wsp/projects/test",
             Some("conn-1"),
@@ -122,7 +156,7 @@ mod tests {
 
         assert!(matches!(binding.backend, WorkspaceBackend::Remote { .. }));
         assert_eq!(
-            binding.session_storage_path(),
+            binding.session_storage_dir(),
             remote_workspace_session_mirror_dir("127.0.0.1", "/home/wsp/projects/test")
         );
     }

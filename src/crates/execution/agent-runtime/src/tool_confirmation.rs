@@ -16,6 +16,26 @@ pub struct ToolConfirmationRequestFacts {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ToolConfirmationGateFacts {
+    pub global_skip_tool_confirmation: bool,
+    pub context_skip_tool_confirmation: bool,
+    pub any_tool_needs_permission: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ToolConfirmationGatePlan {
+    SkipByPolicy,
+    SkipNoPermissionedTool,
+    AwaitPermissionedTool,
+}
+
+impl ToolConfirmationGatePlan {
+    pub const fn confirm_before_run(self) -> bool {
+        matches!(self, Self::AwaitPermissionedTool)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ToolConfirmationPlan {
     Skip,
     Await {
@@ -58,6 +78,7 @@ pub struct ToolConfirmationFailure {
     pub kind: ConfirmationFailureKind,
     pub state_reason: String,
     pub error_message: String,
+    pub rejection_instruction: Option<String>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -101,6 +122,20 @@ impl ToolConfirmationChannelStore {
     }
 }
 
+pub fn resolve_tool_confirmation_gate(
+    facts: ToolConfirmationGateFacts,
+) -> ToolConfirmationGatePlan {
+    if facts.global_skip_tool_confirmation || facts.context_skip_tool_confirmation {
+        return ToolConfirmationGatePlan::SkipByPolicy;
+    }
+
+    if facts.any_tool_needs_permission {
+        ToolConfirmationGatePlan::AwaitPermissionedTool
+    } else {
+        ToolConfirmationGatePlan::SkipNoPermissionedTool
+    }
+}
+
 pub fn resolve_tool_confirmation_plan(
     request: ToolConfirmationRequestFacts,
 ) -> ToolConfirmationPlan {
@@ -123,21 +158,36 @@ pub fn resolve_confirmation_failure(
 ) -> Option<ToolConfirmationFailure> {
     match outcome {
         ToolConfirmationOutcome::Confirmed => None,
-        ToolConfirmationOutcome::Rejected { reason } => Some(ToolConfirmationFailure {
-            kind: ConfirmationFailureKind::Rejected,
-            state_reason: format!("User rejected: {reason}"),
-            error_message: format!("Tool was rejected by user: {reason}"),
-        }),
+        ToolConfirmationOutcome::Rejected { reason } => {
+            let rejection_instruction = normalize_rejection_instruction(&reason);
+            Some(ToolConfirmationFailure {
+                kind: ConfirmationFailureKind::Rejected,
+                state_reason: format!("User rejected: {reason}"),
+                error_message: format!("Tool was rejected by user: {reason}"),
+                rejection_instruction,
+            })
+        }
         ToolConfirmationOutcome::ChannelClosed => Some(ToolConfirmationFailure {
             kind: ConfirmationFailureKind::ChannelClosed,
             state_reason: "Confirmation channel closed".to_string(),
             error_message: "Confirmation channel closed".to_string(),
+            rejection_instruction: None,
         }),
         ToolConfirmationOutcome::Timeout { tool_name } => Some(ToolConfirmationFailure {
             kind: ConfirmationFailureKind::Timeout,
             state_reason: "Confirmation timeout".to_string(),
             error_message: format!("Confirmation timeout: {tool_name}"),
+            rejection_instruction: None,
         }),
+    }
+}
+
+fn normalize_rejection_instruction(reason: &str) -> Option<String> {
+    let trimmed = reason.trim();
+    if trimmed.is_empty() || trimmed.eq_ignore_ascii_case("User rejected") {
+        None
+    } else {
+        Some(trimmed.to_string())
     }
 }
 

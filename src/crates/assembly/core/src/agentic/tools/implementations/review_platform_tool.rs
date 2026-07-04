@@ -1,7 +1,7 @@
 //! Pull request / review platform tool.
 //!
 //! This tool exposes hosted review-platform operations to the agent while
-//! keeping provider-specific HTTP behavior inside `ReviewPlatformService`.
+//! keeping provider-specific product semantics inside `ReviewPlatformService`.
 
 use crate::agentic::tools::framework::{
     Tool, ToolExposure, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,

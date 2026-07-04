@@ -102,8 +102,8 @@ $panel-height: 620px;
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
   box-shadow:
-    0 4px 12px var(--color-overlay-black-25),
-    0 0 1px var(--color-overlay-white-06);
+    0 4px 12px var(--color-overlay-black-30),
+    0 0 1px var(--color-overlay-white-08);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -168,11 +168,11 @@ $panel-height: 620px;
 
 @keyframes fmc-pulse {
   0%, 100% {
-    box-shadow: 0 4px 12px var(--color-overlay-black-25),
+    box-shadow: 0 4px 12px var(--color-overlay-black-30),
       0 0 0 1px var(--color-warning-border);
   }
   50% {
-    box-shadow: 0 4px 12px var(--color-overlay-black-25),
+    box-shadow: 0 4px 12px var(--color-overlay-black-30),
       0 0 0 2px var(--color-warning);
   }
 }

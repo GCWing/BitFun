@@ -13,8 +13,8 @@ pub struct ToolBatch {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SubagentBatchExecutionPolicy {
-    #[default]
     SafeOnly,
+    #[default]
     ForceParallel,
     Serial,
 }
@@ -41,12 +41,16 @@ pub enum ToolTaskStateKind {
     AwaitingConfirmation,
     Completed,
     Failed,
+    Rejected,
     Cancelled,
 }
 
 impl ToolTaskStateKind {
     pub fn is_terminal(self) -> bool {
-        matches!(self, Self::Completed | Self::Failed | Self::Cancelled)
+        matches!(
+            self,
+            Self::Completed | Self::Failed | Self::Rejected | Self::Cancelled
+        )
     }
 
     pub fn is_cancellable(self) -> bool {
@@ -75,6 +79,7 @@ pub struct ToolStateCounts {
     pub awaiting_confirmation: usize,
     pub completed: usize,
     pub failed: usize,
+    pub rejected: usize,
     pub cancelled: usize,
 }
 
@@ -102,6 +107,7 @@ pub enum ToolStateEventKind {
     },
     AwaitingConfirmation {
         params: serde_json::Value,
+        timeout_at: Option<u64>,
     },
     Completed {
         result: serde_json::Value,
@@ -120,6 +126,7 @@ pub enum ToolStateEventKind {
         confirmation_wait_ms: Option<u64>,
         execution_ms: Option<u64>,
     },
+    Rejected,
     Cancelled {
         reason: String,
         duration_ms: Option<u64>,
@@ -254,6 +261,7 @@ pub fn count_tool_states(states: impl IntoIterator<Item = ToolTaskStateKind>) ->
             ToolTaskStateKind::AwaitingConfirmation => counts.awaiting_confirmation += 1,
             ToolTaskStateKind::Completed => counts.completed += 1,
             ToolTaskStateKind::Failed => counts.failed += 1,
+            ToolTaskStateKind::Rejected => counts.rejected += 1,
             ToolTaskStateKind::Cancelled => counts.cancelled += 1,
         }
     }
@@ -299,11 +307,14 @@ pub fn tool_state_event_data(facts: ToolStateEventFacts) -> ToolEventData {
             tool_name,
             chunks_received,
         },
-        ToolStateEventKind::AwaitingConfirmation { params } => ToolEventData::ConfirmationNeeded {
-            tool_id,
-            tool_name,
-            params,
-        },
+        ToolStateEventKind::AwaitingConfirmation { params, timeout_at } => {
+            ToolEventData::ConfirmationNeeded {
+                tool_id,
+                tool_name,
+                params,
+                timeout_at,
+            }
+        }
         ToolStateEventKind::Completed {
             result,
             result_for_assistant,
@@ -340,6 +351,7 @@ pub fn tool_state_event_data(facts: ToolStateEventFacts) -> ToolEventData {
             confirmation_wait_ms,
             execution_ms,
         },
+        ToolStateEventKind::Rejected => ToolEventData::Rejected { tool_id, tool_name },
         ToolStateEventKind::Cancelled {
             reason,
             duration_ms,
@@ -413,6 +425,22 @@ mod tests {
         assert!(result.get("data_url").is_none());
         assert_eq!(result["nested"][0]["has_data_url"], true);
         assert!(result["nested"][0].get("data_url").is_none());
+    }
+
+    #[test]
+    fn rejected_state_maps_to_rejected_event() {
+        let data = tool_state_event_data(ToolStateEventFacts {
+            tool_id: "tool-1".to_string(),
+            tool_name: "ExecCommand".to_string(),
+            state: ToolStateEventKind::Rejected,
+        });
+
+        let ToolEventData::Rejected { tool_id, tool_name } = data else {
+            panic!("expected rejected event");
+        };
+
+        assert_eq!(tool_id, "tool-1");
+        assert_eq!(tool_name, "ExecCommand");
     }
 
     #[test]

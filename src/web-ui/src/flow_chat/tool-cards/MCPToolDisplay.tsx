@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useCallback, useEffect, useLayoutEffect, useRef } from 'react';
-import { ChevronDown, ChevronUp, Package, Check, X } from 'lucide-react';
+import { ChevronDown, ChevronUp, Package } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { CubeLoading, IconButton } from '../../component-library';
 import type { ToolCardProps } from '../types/flow-chat';
@@ -17,8 +17,6 @@ import { isMcpToolName } from '@/infrastructure/mcp/toolName';
 import { getCachedToolInfo } from '@/infrastructure/mcp/toolInfoCache';
 import type { ToolInfo } from '@/shared/types/agent-api';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
-import { hasAcpPermissionOptions } from './AcpPermissionActions.utils';
-import { AcpPermissionActions } from './AcpPermissionActions';
 import './MCPToolDisplay.scss';
 
 const log = createLogger('MCPToolDisplay');
@@ -150,8 +148,6 @@ const injectPreamble = (html: string, csp?: McpUiResourceCsp): string => {
 export const MCPToolDisplay: React.FC<ToolCardProps> = ({
   toolItem,
   config,
-  onConfirm,
-  onReject
 }) => {
   const { t } = useTranslation('flow-chat');
   const { status, toolCall, toolResult, requiresConfirmation, userConfirmed } = toolItem;
@@ -586,6 +582,8 @@ export const MCPToolDisplay: React.FC<ToolCardProps> = ({
     status === 'completed' &&
     (!!uiResourceUri || (resultData?.content && resultData.content.length > 0));
   const isLoading = status === 'preparing' || status === 'streaming' || status === 'running';
+  const needsConfirmation =
+    requiresConfirmation && !userConfirmed && status !== 'completed' && status !== 'cancelled' && status !== 'rejected' && status !== 'error';
 
   const toggleExpanded = useCallback(() => {
     applyExpandedState(isExpanded, !isExpanded, setIsExpanded);
@@ -640,50 +638,6 @@ export const MCPToolDisplay: React.FC<ToolCardProps> = ({
             <span className="content-summary">
               {contentSummary}
             </span>
-          )}
-          
-          {requiresConfirmation && !userConfirmed && status !== 'completed' && (
-            <div className="mcp-action-buttons">
-              {hasAcpPermissionOptions(toolItem) ? (
-                <AcpPermissionActions
-                  toolItem={toolItem}
-                  input={toolCall?.input}
-                  disabled={status === 'streaming'}
-                  buttonClassName="mcp-icon-button"
-                  onConfirm={onConfirm}
-                  onReject={onReject}
-                />
-              ) : (
-                <>
-                  <IconButton
-                    className="mcp-icon-button mcp-confirm-btn"
-                    variant="success"
-                    size="xs"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onConfirm?.(toolCall?.input);
-                    }}
-                    disabled={status === 'streaming'}
-                    tooltip={t('toolCards.mcp.confirmExecute')}
-                  >
-                    <Check size={14} />
-                  </IconButton>
-                  <IconButton
-                    className="mcp-icon-button mcp-reject-btn"
-                    variant="danger"
-                    size="xs"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onReject?.();
-                    }}
-                    disabled={status === 'streaming'}
-                    tooltip={t('toolCards.mcp.cancel')}
-                  >
-                    <X size={14} />
-                  </IconButton>
-                </>
-              )}
-            </div>
           )}
           
           {!isFailed && hasContent && (
@@ -797,7 +751,7 @@ export const MCPToolDisplay: React.FC<ToolCardProps> = ({
         expandedContent={renderExpandedContent()}
         errorContent={renderErrorContent()}
         isFailed={isFailed}
-        requiresConfirmation={requiresConfirmation && !userConfirmed}
+        requiresConfirmation={needsConfirmation}
       />
     </div>
   );

@@ -29,6 +29,8 @@ type ModelSelectOption = SelectOption & {
   enableThinking?: boolean;
 };
 
+type DefaultModelSlot = 'primary' | 'fast' | 'image_understanding';
+
 export const DefaultModelConfig: React.FC = () => {
   const { t } = useTranslation('settings/default-model');
   const renderOptionalLabel = (text: string) => (
@@ -41,7 +43,11 @@ export const DefaultModelConfig: React.FC = () => {
   
   const [loading, setLoading] = useState(true);
   const [models, setModels] = useState<AIModelConfig[]>([]);
-  const [defaultModels, setDefaultModels] = useState<DefaultModels>({ primary: null, fast: null });
+  const [defaultModels, setDefaultModels] = useState<DefaultModels>({
+    primary: null,
+    fast: null,
+    image_understanding: null,
+  });
 
   const loadData = useCallback(async () => {
     try {
@@ -57,6 +63,7 @@ export const DefaultModelConfig: React.FC = () => {
       setDefaultModels({
         primary: defaultModelsConfig?.primary || null,
         fast: defaultModelsConfig?.fast || null,
+        image_understanding: defaultModelsConfig?.image_understanding || null,
       });
     } catch (error) {
       log.error('Failed to load data', error);
@@ -157,7 +164,22 @@ export const DefaultModelConfig: React.FC = () => {
   }, []);
 
   
-  const handleDefaultModelChange = async (slot: 'primary' | 'fast', modelId: string | number) => {
+  const slotLabel = useCallback((slot: DefaultModelSlot): string => {
+    switch (slot) {
+      case 'primary':
+        return t('core.primary.label');
+      case 'fast':
+        return t('core.fast.label');
+      case 'image_understanding':
+        return t('optional.capabilities.image_understanding.label');
+      default: {
+        const exhaustive: never = slot;
+        return exhaustive;
+      }
+    }
+  }, [t]);
+
+  const handleDefaultModelChange = async (slot: DefaultModelSlot, modelId: string | number) => {
     const modelIdStr = modelId ? String(modelId) : null;
     try {
       const currentConfig = await configManager.getConfig<any>('ai.default_models') || {};
@@ -176,7 +198,7 @@ export const DefaultModelConfig: React.FC = () => {
       const modelName = getModelName(modelIdStr);
       notificationService.success(
         t('messages.modelUpdated', {
-          slot: slot === 'primary' ? t('core.primary.label') : t('core.fast.label'),
+          slot: slotLabel(slot),
           name: modelName || modelIdStr,
         }),
         { duration: 2000 }
@@ -189,6 +211,10 @@ export const DefaultModelConfig: React.FC = () => {
 
   
   const enabledModels = models.filter(m => m.enabled);
+  const imageUnderstandingModels = enabledModels.filter(model => {
+    const capabilities = Array.isArray(model.capabilities) ? model.capabilities : [];
+    return model.category === 'multimodal' || capabilities.includes('image_understanding');
+  });
 
   if (loading) {
     return (
@@ -240,6 +266,26 @@ export const DefaultModelConfig: React.FC = () => {
           options={[
             { label: t('core.fast.notSet'), value: '' },
             ...enabledModels.map(buildModelOption),
+          ]}
+          renderOption={renderModelOption}
+          renderValue={renderModelValue}
+          className="default-model-config__model-select"
+          size="small"
+        />
+      </ConfigPageRow>
+
+      <ConfigPageRow
+        label={renderOptionalLabel(t('optional.capabilities.image_understanding.label'))}
+        description={t('optional.capabilities.image_understanding.description')}
+        align="center"
+      >
+        <Select
+          value={defaultModels.image_understanding || ''}
+          onChange={(value) => handleDefaultModelChange('image_understanding', normalizeSelectValue(value))}
+          placeholder={t('optional.selectModel')}
+          options={[
+            { label: t('optional.notSet'), value: '' },
+            ...imageUnderstandingModels.map(buildModelOption),
           ]}
           renderOption={renderModelOption}
           renderValue={renderModelValue}

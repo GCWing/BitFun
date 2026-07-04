@@ -168,6 +168,28 @@ describeWithJsdom('RichTextInput external sync', () => {
     expect(editor.firstChild).toBe(originalTextNode);
   });
 
+  it('preserves trailing spaces emitted by user input', async () => {
+    const onChange = vi.fn();
+
+    await act(async () => {
+      root.render(
+        <RichTextInput
+          value=""
+          onChange={onChange}
+          contexts={emptyContexts}
+          onRemoveContext={() => {}}
+        />
+      );
+    });
+
+    const editor = container.querySelector('.rich-text-input');
+    expect(editor).toBeInstanceOf(HTMLDivElement);
+
+    await updateEditorText(editor as HTMLDivElement, '/b ');
+
+    expect(onChange).toHaveBeenLastCalledWith('/b ', emptyContexts);
+  });
+
   it('replaces the DOM node when value changes externally', async () => {
     const harnessRef = createRef<HarnessHandle>();
     const editor = await renderHarness(harnessRef);

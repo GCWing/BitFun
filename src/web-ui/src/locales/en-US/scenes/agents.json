@@ -37,6 +37,7 @@
     "subtitle": "Built-in core agents covering mainstream AI workflows, ready to use out of the box.",
     "empty": "No core agents detected",
     "roleLabel": "Primary Use · ",
+    "computerUseDisabledBadge": "Disabled in Settings",
     "modes": {
       "agentic": {
         "role": "Coding specialist agent"

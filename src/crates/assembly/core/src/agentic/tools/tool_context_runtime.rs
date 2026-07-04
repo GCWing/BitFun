@@ -37,13 +37,14 @@ use bitfun_agent_runtime::checkpoint::{
 };
 use bitfun_agent_runtime::remote_file_delivery::TOOL_CONTEXT_REMOTE_FILE_DELIVERY_KEY;
 use bitfun_agent_tools::{PortableToolContextProvider, ToolContextFacts, ToolWorkspaceKind};
-use bitfun_runtime_ports::{DelegationPolicy, ToolRuntimeHandles};
+use bitfun_runtime_ports::{DelegationPolicy, RemoteExecPort, TerminalPort, ToolRuntimeHandles};
 use log::warn;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::future::Future;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
 use tool_runtime::context::{
     build_tool_runtime_custom_data, delegation_policy_from_custom_data,
@@ -124,9 +125,25 @@ impl ToolUseContext {
         self.runtime_handles.workspace_services()
     }
 
+    pub fn terminal_port(&self) -> Option<&Arc<dyn TerminalPort>> {
+        self.runtime_handles.terminal_port()
+    }
+
+    pub fn remote_exec_port(&self) -> Option<&Arc<dyn RemoteExecPort>> {
+        self.runtime_handles.remote_exec_port()
+    }
+
     pub fn for_tool_listing(
         workspace: Option<WorkspaceBinding>,
         workspace_services: Option<WorkspaceServices>,
+    ) -> Self {
+        Self::for_tool_listing_with_remote_exec_port(workspace, workspace_services, None)
+    }
+
+    pub fn for_tool_listing_with_remote_exec_port(
+        workspace: Option<WorkspaceBinding>,
+        workspace_services: Option<WorkspaceServices>,
+        remote_exec_port: Option<Arc<dyn RemoteExecPort>>,
     ) -> Self {
         Self {
             tool_call_id: None,
@@ -138,7 +155,12 @@ impl ToolUseContext {
             custom_data: HashMap::new(),
             computer_use_host: None,
             runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
-            runtime_handles: ToolRuntimeHandles::new(workspace_services, None),
+            runtime_handles: core_tool_runtime_handles(
+                workspace_services,
+                None,
+                None,
+                remote_exec_port,
+            ),
         }
     }
 }
@@ -212,9 +234,11 @@ pub(crate) fn build_tool_use_context_for_execution_context(
         unlocked_collapsed_tools: context.unlocked_collapsed_tools.clone(),
         custom_data: build_tool_context_custom_data(context),
         computer_use_host,
-        runtime_handles: ToolRuntimeHandles::new(
+        runtime_handles: core_tool_runtime_handles(
             context.workspace_services.clone(),
             Some(cancellation_token),
+            context.terminal_port.clone(),
+            context.remote_exec_port.clone(),
         ),
         runtime_tool_restrictions: context.runtime_tool_restrictions.clone(),
     }
@@ -224,10 +248,31 @@ pub(crate) fn build_tool_description_context(
     agent_type: &str,
     workspace: Option<&WorkspaceBinding>,
     workspace_services: Option<&WorkspaceServices>,
+    primary_model_id: Option<&str>,
+    primary_model_name: Option<&str>,
+    primary_model_provider: Option<&str>,
     primary_supports_image_understanding: bool,
     context_vars: &HashMap<String, String>,
 ) -> ToolUseContext {
     let mut custom_data = HashMap::new();
+    if let Some(primary_model_id) = primary_model_id {
+        custom_data.insert(
+            "primary_model_id".to_string(),
+            Value::String(primary_model_id.to_string()),
+        );
+    }
+    if let Some(primary_model_name) = primary_model_name {
+        custom_data.insert(
+            "primary_model_name".to_string(),
+            Value::String(primary_model_name.to_string()),
+        );
+    }
+    if let Some(primary_model_provider) = primary_model_provider {
+        custom_data.insert(
+            "primary_model_provider".to_string(),
+            Value::String(primary_model_provider.to_string()),
+        );
+    }
     custom_data.insert(
         "primary_model_supports_image_understanding".to_string(),
         Value::Bool(primary_supports_image_understanding),
@@ -246,8 +291,19 @@ pub(crate) fn build_tool_description_context(
         custom_data,
         computer_use_host: None,
         runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
-        runtime_handles: ToolRuntimeHandles::new(workspace_services.cloned(), None),
+        runtime_handles: core_tool_runtime_handles(workspace_services.cloned(), None, None, None),
     }
+}
+
+fn core_tool_runtime_handles(
+    workspace_services: Option<WorkspaceServices>,
+    cancellation_token: Option<CancellationToken>,
+    terminal_port: Option<Arc<dyn TerminalPort>>,
+    remote_exec_port: Option<Arc<dyn RemoteExecPort>>,
+) -> ToolRuntimeHandles {
+    ToolRuntimeHandles::new(workspace_services, cancellation_token)
+        .with_terminal_port(terminal_port)
+        .with_remote_exec_port(remote_exec_port)
 }
 
 fn build_tool_context_custom_data(context: &ToolExecutionContext) -> HashMap<String, Value> {
@@ -471,6 +527,16 @@ impl ToolUseContext {
     }
 
     pub fn current_workspace_runtime_root(&self) -> BitFunResult<PathBuf> {
+        #[cfg(test)]
+        if let Some(path) = self
+            .custom_data
+            .get("__bitfun_test_runtime_root")
+            .and_then(|value| value.as_str())
+            .filter(|path| !path.trim().is_empty())
+        {
+            return Ok(PathBuf::from(path));
+        }
+
         let workspace = self.workspace.as_ref().ok_or_else(|| {
             BitFunError::tool("A workspace is required to resolve runtime artifacts".to_string())
         })?;
@@ -1197,7 +1263,16 @@ mod context_builder_tests {
             "false".to_string(),
         );
 
-        let context = build_tool_description_context("coding", None, None, true, &context_vars);
+        let context = build_tool_description_context(
+            "coding",
+            None,
+            None,
+            Some("model_1"),
+            Some("vision-model"),
+            Some("anthropic"),
+            true,
+            &context_vars,
+        );
 
         assert_eq!(context.agent_type.as_deref(), Some("coding"));
         assert!(context.tool_call_id.is_none());
@@ -1211,6 +1286,15 @@ mod context_builder_tests {
         assert_eq!(
             context.custom_data["primary_model_supports_image_understanding"],
             json!("false")
+        );
+        assert_eq!(context.custom_data["primary_model_id"], json!("model_1"));
+        assert_eq!(
+            context.custom_data["primary_model_name"],
+            json!("vision-model")
+        );
+        assert_eq!(
+            context.custom_data["primary_model_provider"],
+            json!("anthropic")
         );
     }
 }
@@ -1285,6 +1369,8 @@ mod task_context_tests {
                 },
                 steering_interrupt: None,
                 workspace_services: None,
+                terminal_port: None,
+                remote_exec_port: None,
             },
             ToolExecutionOptions::default(),
         )

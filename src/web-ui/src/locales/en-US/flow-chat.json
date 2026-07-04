@@ -44,6 +44,8 @@
     "loadingDescription": "Preparing the conversation history.",
     "failedTitle": "Session history did not load",
     "failedDescription": "Retry loading the saved conversation.",
+    "preparingOlderHistory": "Preparing older history...",
+    "olderHistoryNotReady": "Older history is not ready yet.",
     "remoteSessionMissing": "The backend session data was not found. If you just reconnected an SSH remote workspace, close and reopen the remote project, or create a new session and try again.",
     "retry": "Retry"
   },
@@ -553,6 +555,7 @@
     "boostSectionAgent": "Agent",
     "boostSectionContext": "Context",
     "boostStartBtw": "Start side question",
+    "boostNewSession": "New session",
     "boostAddContext": "Reference file or folder",
     "boostSkills": "Skills",
     "modeSection": "Modes",
@@ -624,6 +627,7 @@
     "noMatchingCommand": "No matching command",
     "selectHint": "↑↓ Select · Enter Confirm · Esc Cancel",
     "current": "Current",
+    "computerUseDisabled": "Computer Use is disabled in Settings → Session permissions",
     "professionalMode": "Expert Mode",
     "designMode": "Design Mode",
     "wip": "WIP",
@@ -1357,6 +1361,25 @@
       "commandInterrupted": "Command interrupted",
       "executionFailed": "Command execution failed"
     },
+    "approval": {
+      "waiting": "Waiting for confirmation",
+      "confirm": "Allow",
+      "reject": "Reject",
+      "rejectWithInstruction": "Reject with instruction",
+      "enableAutoExecute": "Enable tool auto execute",
+      "confirmTooltip": "Allow this tool run",
+      "enableAutoExecuteTooltip": "Enable tool auto execute",
+      "autoExecuteEnabled": "Tool auto execute enabled",
+      "autoExecuteEnableFailed": "Failed to enable tool auto execute",
+      "rejectTooltip": "Reject this tool run",
+      "rejectWithInstructionTooltip": "Reject and tell the assistant what to do next",
+      "rejectInstructionLabel": "Rejection instruction",
+      "rejectInstructionPlaceholder": "Tell the assistant what to do instead...",
+      "rejectWithInstructionSubmit": "Reject",
+      "emptyInputTooltip": "This tool has no executable input",
+      "remaining": "remaining {{time}}",
+      "ariaLabel": "Tool approval"
+    },
     "execProcess": {
       "executeCommand": "Run command:",
       "writeStdin": "Write stdin:",
@@ -1449,6 +1472,20 @@
       "clickToOpenLink": "Click to open link",
       "noTitle": "No title",
       "summaryAvailable": "summary available"
+    },
+    "computerUse": {
+      "running": "Controlling the desktop...",
+      "runningOnApp": "Controlling {{app}}...",
+      "controllingApp": "Controlling {{app}}",
+      "done": "Action completed",
+      "actionFailed": "Action failed",
+      "actionLabel": "Action",
+      "appLabel": "Application",
+      "targetLabel": "Target",
+      "permissionDenied": "Permission required for desktop control",
+      "permissionDeniedHint": "BitFun needs macOS Accessibility and Screen Recording permissions before it can control other apps. Open System Settings, grant access to BitFun, then retry.",
+      "openSettings": "Open System Settings",
+      "openSettingsFailed": "Could not open System Settings"
     },
     "webFetch": {
       "parsingUrl": "Parsing URL...",
@@ -1580,6 +1617,7 @@
       "executing": "Executing...",
       "completed": "Completed",
       "cancelled": "Cancelled",
+      "rejected": "Rejected",
       "failed": "Execution failed",
       "preparing": "Preparing"
     },

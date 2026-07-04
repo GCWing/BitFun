@@ -548,31 +548,33 @@ export async function createChatSession(
       return pendingCreation;
     }
 
-    const sameModeCount = getNextDefaultSessionTitleCount(
-      context.flowChatStore.getState().sessions.values(),
-      {
-        mode: sessionMode,
-        workspaceId: workspace?.id,
-        workspacePath,
-        remoteConnectionId,
-        remoteSshHost,
-      },
-    );
-    const titleDescriptor = createDefaultSessionTitleDescriptor(
-      sessionMode,
-      sameModeCount,
-      (key, options) => i18nService.t(key, options),
-    );
-    const sessionName = titleDescriptor.text;
-    
-    const maxContextTokens = await getModelMaxTokens(config.modelName, agentType);
+    // Register the pending promise before any async work below. Remote workspace
+    // activation can rerun initialization while model config is still loading.
+    const createPromise = Promise.resolve().then(async () => {
+      const sameModeCount = getNextDefaultSessionTitleCount(
+        context.flowChatStore.getState().sessions.values(),
+        {
+          mode: sessionMode,
+          workspaceId: workspace?.id,
+          workspacePath,
+          remoteConnectionId,
+          remoteSshHost,
+        },
+      );
+      const titleDescriptor = createDefaultSessionTitleDescriptor(
+        sessionMode,
+        sameModeCount,
+        (key, options) => i18nService.t(key, options),
+      );
+      const sessionName = titleDescriptor.text;
+      
+      const maxContextTokens = await getModelMaxTokens(config.modelName, agentType);
 
-    const mergedConfig: SessionConfig = {
-      ...config,
-      workspaceId: workspace?.id ?? config.workspaceId,
-    };
+      const mergedConfig: SessionConfig = {
+        ...config,
+        workspaceId: workspace?.id ?? config.workspaceId,
+      };
 
-    const createPromise = (async () => {
       const response = await agentAPI.createSession({
         sessionName,
         agentType,
@@ -606,7 +608,7 @@ export async function createChatSession(
       );
 
       return response.sessionId;
-    })();
+    });
 
     pendingSessionCreations.set(creationKey, createPromise);
     try {

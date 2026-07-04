@@ -7,6 +7,7 @@ use bitfun_core::service::remote_connect::{
 };
 use regex::Regex;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
 use tokio::sync::RwLock;
@@ -197,6 +198,7 @@ fn is_valid_mobile_web_dir(dir: &std::path::Path) -> bool {
 pub struct StartRemoteConnectRequest {
     pub method: String,
     pub custom_server_url: Option<String>,
+    pub lan_ip: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -229,9 +231,17 @@ pub struct DeviceInfo {
 }
 
 #[derive(Debug, Serialize)]
+pub struct LanNetworkInterface {
+    pub interface_name: String,
+    pub ip: String,
+    pub gateway_ip: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
 pub struct LanNetworkInfo {
     pub local_ip: String,
     pub gateway_ip: Option<String>,
+    pub available_ips: Vec<LanNetworkInterface>,
 }
 
 fn detect_default_gateway_ip() -> Option<String> {
@@ -289,7 +299,100 @@ fn detect_default_gateway_ip() -> Option<String> {
     None
 }
 
-// ── Tauri Commands ─────────────────────────────────────────────────
+/// Detect per-interface gateway IPs by parsing the system routing table.
+///
+/// Returns a map keyed by interface identifier (interface name on macOS/Linux,
+/// interface IP on Windows) → gateway IP.  Only interfaces that have a default
+/// route entry appear in the map.
+fn detect_interface_gateways() -> HashMap<String, String> {
+    let mut map = HashMap::new();
+
+    #[cfg(target_os = "macos")]
+    {
+        if let Ok(output) = bitfun_core::util::process_manager::create_command("netstat")
+            .args(["-rn", "-f", "inet"])
+            .output()
+        {
+            if output.status.success() {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                // Lines look like:
+                //   default            192.168.1.1       UGScg    en0
+                for line in stdout.lines() {
+                    let parts: Vec<&str> = line.split_whitespace().collect();
+                    if parts.len() >= 4 && parts[0] == "default" {
+                        let gateway = parts[1];
+                        let netif = parts[3];
+                        if is_ipv4(gateway) {
+                            map.insert(netif.to_string(), gateway.to_string());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        if let Ok(output) = bitfun_core::util::process_manager::create_command("ip")
+            .args(["route", "show", "default"])
+            .output()
+        {
+            if output.status.success() {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                // Lines look like:
+                //   default via 192.168.1.1 dev eth0 proto dhcp metric 100
+                for line in stdout.lines() {
+                    let parts: Vec<&str> = line.split_whitespace().collect();
+                    let mut via = None;
+                    let mut dev = None;
+                    for i in 0..parts.len() {
+                        match parts[i] {
+                            "via" if i + 1 < parts.len() => via = Some(parts[i + 1]),
+                            "dev" if i + 1 < parts.len() => dev = Some(parts[i + 1]),
+                            _ => {}
+                        }
+                    }
+                    if let (Some(gw), Some(iface)) = (via, dev) {
+                        if is_ipv4(gw) {
+                            map.insert(iface.to_string(), gw.to_string());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        if let Ok(output) = bitfun_core::util::process_manager::create_command("route")
+            .args(["print", "-4"])
+            .output()
+        {
+            if output.status.success() {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                // Lines look like:
+                //   0.0.0.0  0.0.0.0  192.168.1.1  192.168.1.2  25
+                // Column 3 = gateway, column 4 = interface IP
+                for line in stdout.lines() {
+                    let parts: Vec<&str> = line.split_whitespace().collect();
+                    if parts.len() >= 4 && parts[0] == "0.0.0.0" && parts[1] == "0.0.0.0" {
+                        if is_ipv4(parts[2]) && is_ipv4(parts[3]) {
+                            // Key by interface IP so it can be matched later
+                            map.insert(parts[3].to_string(), parts[2].to_string());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    map
+}
+
+/// Quick check whether a string looks like an IPv4 address.
+fn is_ipv4(s: &str) -> bool {
+    s.split('.').count() == 4 && s.split('.').all(|p| p.parse::<u8>().is_ok())
+}
 
 #[tauri::command]
 pub async fn remote_connect_get_device_info() -> Result<DeviceInfo, String> {
@@ -312,11 +415,33 @@ pub async fn remote_connect_get_lan_ip() -> Result<String, String> {
 
 #[tauri::command]
 pub async fn remote_connect_get_lan_network_info() -> Result<LanNetworkInfo, String> {
-    let local_ip = lan::get_local_ip().map_err(|e| format!("get local ip: {e}"))?;
+    let interfaces = lan::list_local_ips().map_err(|e| format!("list local ips: {e}"))?;
+    let local_ip = interfaces
+        .first()
+        .map(|e| e.ip.clone())
+        .ok_or_else(|| "no local IPv4 addresses found".to_string())?;
     let gateway_ip = detect_default_gateway_ip();
+    // Build per-interface gateway map once from the routing table.
+    let gateway_map = detect_interface_gateways();
+    let available_ips = interfaces
+        .into_iter()
+        .map(|e| {
+            // Look up by interface name (macOS/Linux) or by IP (Windows).
+            let gw = gateway_map
+                .get(&e.interface_name)
+                .or_else(|| gateway_map.get(&e.ip))
+                .cloned();
+            LanNetworkInterface {
+                gateway_ip: gw,
+                interface_name: e.interface_name,
+                ip: e.ip,
+            }
+        })
+        .collect();
     Ok(LanNetworkInfo {
         local_ip,
         gateway_ip,
+        available_ips,
     })
 }
 
@@ -331,7 +456,7 @@ pub async fn remote_connect_get_methods() -> Result<Vec<ConnectionMethodInfo>, S
     let infos = methods
         .into_iter()
         .map(|m| match m {
-            ConnectionMethod::Lan => ConnectionMethodInfo {
+            ConnectionMethod::Lan { .. } => ConnectionMethodInfo {
                 id: "lan".into(),
                 name: "LAN".into(),
                 available: true,
@@ -382,9 +507,12 @@ pub async fn remote_connect_get_methods() -> Result<Vec<ConnectionMethodInfo>, S
 fn parse_connection_method(
     method: &str,
     custom_url: Option<String>,
+    lan_ip: Option<String>,
 ) -> Result<ConnectionMethod, String> {
     match method {
-        "lan" => Ok(ConnectionMethod::Lan),
+        "lan" => Ok(ConnectionMethod::Lan {
+            ip: lan_ip.filter(|s| !s.is_empty()),
+        }),
         "ngrok" => Ok(ConnectionMethod::Ngrok),
         "bitfun_server" => Ok(ConnectionMethod::BitfunServer),
         "custom_server" => Ok(ConnectionMethod::CustomServer {
@@ -402,7 +530,8 @@ pub async fn remote_connect_start(
     request: StartRemoteConnectRequest,
 ) -> Result<ConnectionResult, String> {
     ensure_service().await?;
-    let method = parse_connection_method(&request.method, request.custom_server_url)?;
+    let method =
+        parse_connection_method(&request.method, request.custom_server_url, request.lan_ip)?;
 
     let holder = get_service_holder();
     let guard = holder.read().await;

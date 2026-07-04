@@ -107,7 +107,7 @@ export function Options({
                 </div>
               ) : null}
               {!existingInstall.mainBinaryPresent ? (
-                <div style={{ marginBottom: 8, color: 'var(--color-warning, #c9a227)' }}>
+                <div style={{ marginBottom: 8, color: 'var(--color-warning)' }}>
                   {t('options.existingInstallBinaryMissing')}
                 </div>
               ) : null}

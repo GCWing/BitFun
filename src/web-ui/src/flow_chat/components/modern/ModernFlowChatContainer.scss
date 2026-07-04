@@ -3,7 +3,7 @@
  */
 
 .modern-flowchat-container.flow-chat-typography {
-  font-family: var(--font-sans);
+  font-family: var(--font-family-sans);
   font-size: var(--flowchat-font-size-base);
   line-height: var(--flowchat-text-line-height);
 }
@@ -49,7 +49,7 @@
     flex-shrink: 0;
     padding: var(--flowchat-card-expanded-pad-x);
     background: var(--modern-flowchat-input-bg);
-    border-top: 1px solid var(--color-border);
+    border-top: 1px solid var(--border-base);
   }
 }
 
@@ -73,7 +73,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--color-accent);
+  color: var(--color-accent-500);
 
   svg {
     animation: history-placeholder-spin 1.1s linear infinite;
@@ -115,17 +115,17 @@
   justify-content: center;
   gap: var(--flowchat-inline-gap);
   padding: 0 var(--size-gap-3);
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--border-base);
   border-radius: 6px;
   color: var(--color-text-primary);
-  background: var(--color-surface-hover);
+  background: var(--element-bg-hover);
   font: inherit;
   font-size: var(--flowchat-font-size-sm);
   cursor: pointer;
 }
 
 .history-session-placeholder__retry:hover {
-  background: var(--color-overlay-white-10);
+  background: var(--color-overlay-white-12);
 }
 
 .modern-flowchat-container__history-overlay {
@@ -161,10 +161,10 @@
   border-radius: 8px;
   opacity: 0.72;
   background:
-    linear-gradient(90deg, transparent 0 4%, var(--color-surface-hover) 4% 62%, transparent 62% 100%) 0 0 / 100% 24px no-repeat,
-    linear-gradient(90deg, transparent 0 9%, var(--color-surface-hover) 9% 86%, transparent 86% 100%) 0 48px / 100% 24px no-repeat,
-    linear-gradient(90deg, transparent 0 6%, var(--color-surface-hover) 6% 74%, transparent 74% 100%) 0 96px / 100% 24px no-repeat,
-    linear-gradient(90deg, transparent 0 12%, var(--color-surface-hover) 12% 68%, transparent 68% 100%) 0 144px / 100% 24px no-repeat;
+    linear-gradient(90deg, transparent 0 4%, var(--element-bg-hover) 4% 62%, transparent 62% 100%) 0 0 / 100% 24px no-repeat,
+    linear-gradient(90deg, transparent 0 9%, var(--element-bg-hover) 9% 86%, transparent 86% 100%) 0 48px / 100% 24px no-repeat,
+    linear-gradient(90deg, transparent 0 6%, var(--element-bg-hover) 6% 74%, transparent 74% 100%) 0 96px / 100% 24px no-repeat,
+    linear-gradient(90deg, transparent 0 12%, var(--element-bg-hover) 12% 68%, transparent 68% 100%) 0 144px / 100% 24px no-repeat;
 }
 
 .modern-flowchat-container__history-open-intent-spinner {
@@ -172,8 +172,8 @@
   z-index: 1;
   width: 18px;
   height: 18px;
-  border: 2px solid var(--color-border);
-  border-top-color: var(--color-accent);
+  border: 2px solid var(--border-base);
+  border-top-color: var(--color-accent-500);
   border-radius: 50%;
   background: var(--color-bg-scene);
   box-shadow: 0 0 0 6px var(--color-bg-scene);

@@ -15,7 +15,7 @@ export interface FlowItem {
   id: string;
   type: 'text' | 'tool' | 'image-analysis' | 'thinking' | 'user-steering';
   timestamp: number;
-  status: 'pending' | 'queued' | 'waiting' | 'preparing' | 'running' | 'streaming' | 'receiving' | 'completed' | 'cancelled' | 'error' | 'analyzing' | 'pending_confirmation' | 'confirmed'; // Includes error, analyzing, and confirmation states.
+  status: 'pending' | 'queued' | 'waiting' | 'preparing' | 'running' | 'streaming' | 'receiving' | 'completed' | 'cancelled' | 'rejected' | 'error' | 'analyzing' | 'pending_confirmation' | 'confirmed'; // Includes error, analyzing, and confirmation states.
   attemptId?: string;
   attemptIndex?: number;
 
@@ -87,6 +87,7 @@ export interface FlowToolItem extends FlowItem {
   };
   aiIntent?: string; // AI rationale for calling the tool.
   startTime?: number;  // Tool start time.
+  confirmationTimeoutAt?: number;
   endTime?: number;    // Tool end time.
   durationMs?: number;
   queueWaitMs?: number;
@@ -102,6 +103,11 @@ export interface FlowToolItem extends FlowItem {
   isParamsStreaming?: boolean;  // Params are streaming in.
   partialParams?: Record<string, any>;  // Partial params during streaming.
   _paramsBuffer?: string;  // Internal buffer for accumulated params.
+}
+
+export interface ToolRejectOptions {
+  permissionOptionId?: string;
+  instruction?: string;
 }
 
 export interface FlowImageAnalysisItem extends FlowItem {
@@ -165,7 +171,7 @@ export interface ModelRound {
   historyRounds?: ModelRound[];
   isStreaming: boolean;
   isComplete: boolean;
-  status: 'pending' | 'streaming' | 'completed' | 'cancelled' | 'error' | 'pending_confirmation';
+  status: 'pending' | 'streaming' | 'completed' | 'cancelled' | 'rejected' | 'error' | 'pending_confirmation';
   startTime: number;
   endTime?: number;
   durationMs?: number;
@@ -535,8 +541,6 @@ export interface ToolCardProps {
   toolItem: FlowToolItem;
   config: ToolCardConfig;
   interruptionNote?: string | null;
-  onConfirm?: (updatedInput?: any, permissionOptionId?: string, approve?: boolean) => void;  // toolId is known within the card.
-  onReject?: (permissionOptionId?: string) => void;
   onOpenInEditor?: (filePath: string) => void;
   onOpenInPanel?: (panelType: string, data: any) => void;
   onExpand?: () => void;

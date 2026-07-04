@@ -1395,93 +1395,79 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .generation-event p { margin: 0; color: var(--studio-text); }
 .generation-empty { color: var(--studio-muted); font-size: 10px; }
 
-/* ─── Live Agent stream (raw Cowork transcript) ─────────────────────────── */
+/* ─── Merged generation timeline (events + agent stream) ────────────────── */
 
-.agent-stream-head {
-  margin: 10px 0 4px;
-  padding: 0 2px;
-  color: var(--studio-muted);
+/* Compact stream entries interleaved with phase events in the unified list. */
+.generation-event.is-stream {
+  padding: 4px 7px;
   font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
-
-.agent-stream-list {
-  margin: 0;
-  padding: 6px;
-  list-style: none;
-  display: grid;
-  align-content: start;
-  gap: 3px;
-  min-height: 80px;
-  max-height: 320px;
-  overflow: auto;
-  border: 1px solid var(--studio-line);
-  border-radius: 8px;
-  background: var(--studio-log-bg);
-  scrollbar-width: thin;
+.generation-event.is-stream .generation-copy strong {
+  font-weight: 500;
 }
-.agent-stream-list.is-empty { opacity: 0.6; }
-
-.agent-stream-entry {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 3px;
-  padding: 4px 4px;
-  border-radius: 4px;
-  font-size: 10px;
-  line-height: 1.35;
-  color: var(--studio-text);
-  word-break: break-word;
-}
-.agent-stream-entry.is-text {
+.generation-event.is-stream-text {
   background: color-mix(in srgb, var(--studio-accent) 6%, transparent);
 }
-.agent-stream-entry.is-tool-done { opacity: 0.8; }
-.agent-stream-entry.is-tool-error {
+.generation-event.is-stream-tool-done { opacity: 0.75; }
+.generation-event.is-stream-tool-error {
   background: color-mix(in srgb, var(--studio-error, #c84b31) 8%, transparent);
 }
-.agent-stream-entry.is-empty {
-  color: var(--studio-muted);
+.generation-event.is-stream-system {
+  border-style: dashed;
+  opacity: 0.7;
+}
+.generation-event.is-stream-system .generation-copy small {
   font-style: italic;
-  display: block;
 }
 
-.agent-stream-label,
-.agent-stream-tool {
-  flex-shrink: 0;
-  max-width: 100%;
-  padding: 1px 5px;
-  border-radius: 3px;
+/* Label-style index badge for stream entries (tool name / "Assistant"). */
+.generation-index--label {
+  width: auto;
+  max-width: 80px;
+  height: auto;
+  min-height: 20px;
+  padding: 2px 5px;
+  border-radius: 4px;
   font-size: 9px;
-  font-weight: 700;
-  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  color: var(--studio-soft);
-  background: var(--studio-control-subtle);
+  white-space: nowrap;
 }
-.agent-stream-entry.is-text .agent-stream-label {
+.generation-event.is-stream-text .generation-index--label {
   color: var(--studio-accent);
   background: color-mix(in srgb, var(--studio-accent) 14%, transparent);
 }
-.agent-stream-entry.is-tool-error .agent-stream-tool {
+.generation-event.is-stream-tool-error .generation-index--label {
   color: var(--studio-error, #c84b31);
   background: color-mix(in srgb, var(--studio-error, #c84b31) 14%, transparent);
 }
-.agent-stream-system {
-  width: 100%;
+.generation-index--dot {
+  background: transparent;
   color: var(--studio-muted);
-  font-size: 9px;
-  font-style: italic;
+  font-size: 14px;
 }
-.agent-stream-text {
-  width: 100%;
-  color: var(--studio-text);
-  white-space: pre-wrap;
-  word-break: break-word;
+
+/* Live activity indicator — pulsing dot showing the agent is still working. */
+.generation-event.is-live {
+  border-color: var(--studio-chip-active-border);
+  border-style: dashed;
+  background: color-mix(in srgb, var(--studio-accent) 6%, transparent);
+}
+.generation-index--live {
+  background: var(--studio-accent);
+  border: none;
+}
+.live-dot {
+  display: block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #fff;
+  animation: live-pulse 1.2s ease-in-out infinite;
+}
+@keyframes live-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.7); }
 }
 
 .outline-row {
@@ -2968,11 +2954,6 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   .onebox-input {
     min-height: 88px;
     max-height: 18vh;
-  }
-
-  .agent-stream-list {
-    min-height: 0;
-    max-height: none;
   }
 
   .canvas-zoom-bar { display: none; }

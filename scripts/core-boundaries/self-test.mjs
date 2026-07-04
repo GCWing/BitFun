@@ -445,6 +445,17 @@ export function runManifestParserSelfTest({
       throw new Error(`core scheduler boundary rule must forbid contract: ${contract}`);
     }
   }
+  const coreSessionStateManagerRuleText = forbiddenRuleTextForPath(
+    'src/crates/assembly/core/src/agentic/coordination/state_manager.rs',
+  );
+  if (!coreSessionStateManagerRuleText) {
+    throw new Error('missing core session state manager boundary rule');
+  }
+  for (const contract of ['SessionStateManager', 'DashMap', 'AgenticEvent::SessionStateChanged']) {
+    if (!coreSessionStateManagerRuleText.includes(contract)) {
+      throw new Error(`core session state manager boundary rule must forbid contract: ${contract}`);
+    }
+  }
   const coreRoundPreemptRuleText = forbiddenRuleTextForPath(
     'src/crates/assembly/core/src/agentic/round_preempt.rs',
   );
@@ -544,7 +555,14 @@ export function runManifestParserSelfTest({
   const coreOptionalOwnerDeps = new Set(
     coreOptionalOwnerRule?.dependencies.map((dependency) => dependency.depName) ?? [],
   );
-  const coreFullyMigratedDeps = new Set(['hostname', 'mac_address', 'qrcode', 'x25519-dalek']);
+  const coreFullyMigratedDeps = new Set([
+    'aes',
+    'hostname',
+    'local-ip-address',
+    'mac_address',
+    'qrcode',
+    'x25519-dalek',
+  ]);
   for (const dep of coreProfile?.forbiddenNonOptionalDeps ?? []) {
     if (coreFullyMigratedDeps.has(dep)) {
       continue;
@@ -567,15 +585,36 @@ export function runManifestParserSelfTest({
   const servicesOptionalOwnerRule = optionalDependencyFeatureOwnerRules.find(
     (rule) => rule.crateName === 'services-integrations',
   );
+  const servicesOptionalOwnerDeps = new Set(
+    servicesOptionalOwnerRule?.dependencies.map((dependency) => dependency.depName) ?? [],
+  );
+  const servicesIntegrationsDefaultOnlyGuardDeps = new Set(['bitfun-relay-server']);
+  for (const dep of servicesIntegrationsDefaultProfile?.forbiddenNonOptionalDeps ?? []) {
+    if (servicesIntegrationsDefaultOnlyGuardDeps.has(dep)) {
+      continue;
+    }
+    if (!servicesOptionalOwnerDeps.has(dep)) {
+      throw new Error(
+        `services-integrations optional dependency owner rule must cover forbidden dependency ${dep}`,
+      );
+    }
+  }
   for (const dep of [
+    'aes',
+    'bitfun-services-core',
     'bitfun-runtime-ports',
     'git2',
+    'hex',
     'hostname',
+    'local-ip-address',
     'mac_address',
+    'md5',
     'notify',
     'qrcode',
+    'reqwest',
     'rmcp',
     'tokio-tungstenite',
+    'which',
     'x25519-dalek',
   ]) {
     if (!servicesOptionalOwnerRule?.dependencies.some((dependency) => dependency.depName === dep)) {
@@ -588,6 +627,43 @@ export function runManifestParserSelfTest({
   for (const dep of ['dirs', 'log', 'sha2']) {
     if (!productDomainsOptionalOwnerRule?.dependencies.some((dependency) => dependency.depName === dep)) {
       throw new Error(`product-domains optional dependency owner rule must cover ${dep}`);
+    }
+  }
+  const coreBrowserLauncherFacadeRuleText = forbiddenRuleTextForPath(
+    'src/crates/assembly/core/src/agentic/tools/browser_control/browser_launcher.rs',
+  );
+  for (const contract of ['process_manager::', 'Command::new', 'reqwest::']) {
+    if (!coreBrowserLauncherFacadeRuleText.includes(contract)) {
+      throw new Error(`core browser launcher facade boundary rule must forbid: ${contract}`);
+    }
+  }
+  const coreComputerUseSystemFacadeRuleText = forbiddenRuleTextForPath(
+    'src/crates/assembly/core/src/agentic/tools/implementations/computer_use_actions.rs',
+  );
+  for (const contract of [
+    'process_manager::',
+    'tokio::process::',
+    'script_invocation',
+    'platform_open_attempts',
+  ]) {
+    if (!coreComputerUseSystemFacadeRuleText.includes(contract)) {
+      throw new Error(`core computer-use system facade boundary rule must forbid: ${contract}`);
+    }
+  }
+  const coreLocalShellFacadeRuleText = forbiddenRuleTextForPath(
+    'src/crates/assembly/core/src/agentic/tools/implementations/exec_command/local_shell.rs',
+  );
+  for (const contract of ['process_manager::', 'Command::new', 'std::env::var', 'target_os']) {
+    if (!coreLocalShellFacadeRuleText.includes(contract)) {
+      throw new Error(`core local shell facade boundary rule must forbid: ${contract}`);
+    }
+  }
+  const coreWeixinFacadeRuleText = forbiddenRuleTextForPath(
+    'src/crates/assembly/core/src/service/remote_connect/bot/weixin.rs',
+  );
+  for (const contract of ['reqwest::', 'aes::', 'hex::', 'md5::', 'sync_buf_path']) {
+    if (!coreWeixinFacadeRuleText.includes(contract)) {
+      throw new Error(`core Weixin bot facade boundary rule must forbid: ${contract}`);
     }
   }
   const productDomainRuntimeRule = forbiddenContentUnderRules.find(
@@ -663,11 +739,23 @@ export function runManifestParserSelfTest({
   if (!agentRuntimeRule?.forbiddenDeps.includes('bitfun-services-integrations')) {
     throw new Error('agent-runtime lightweight boundary must forbid concrete service integrations');
   }
+  if (!agentRuntimeRule?.forbiddenDeps.includes('bitfun-product-capabilities')) {
+    throw new Error('agent-runtime lightweight boundary must forbid product assembly facts');
+  }
+  if (!agentRuntimeRule?.forbiddenDeps.includes('tool-runtime')) {
+    throw new Error('agent-runtime lightweight boundary must forbid concrete tool runtime');
+  }
   const agentRuntimeProfile = dependencyProfileRules.find(
     (rule) => rule.crateName === 'agent-runtime',
   );
   if (!agentRuntimeProfile?.forbiddenNonOptionalDeps.includes('tauri')) {
     throw new Error('agent-runtime dependency profile must forbid product surface dependencies');
+  }
+  if (!agentRuntimeProfile?.forbiddenNonOptionalDeps.includes('bitfun-product-capabilities')) {
+    throw new Error('agent-runtime dependency profile must forbid product assembly facts');
+  }
+  if (!agentRuntimeProfile?.forbiddenNonOptionalDeps.includes('tool-runtime')) {
+    throw new Error('agent-runtime dependency profile must forbid concrete tool runtime');
   }
   const productCapabilitiesRule = lightweightBoundaryRules.find(
     (rule) => rule.crateName === 'product-capabilities',
@@ -743,7 +831,7 @@ export function runManifestParserSelfTest({
     throw new Error('SessionMessage boundary rule must forbid direct scheduler submit');
   }
   const sessionMessageLegacySessionAccessContracts = [
-    'resolve_session_workspace_path',
+    'resolve_session_workspace_binding',
     'list_sessions',
   ];
   for (const contract of sessionMessageLegacySessionAccessContracts) {
@@ -758,7 +846,7 @@ export function runManifestParserSelfTest({
     throw new Error('SessionControl boundary rule must forbid direct scheduler cancellation');
   }
   const sessionControlLegacySessionAccessContracts = [
-    'resolve_session_workspace_path',
+    'resolve_session_workspace_binding',
     'list_sessions',
     'delete_session',
   ];
@@ -777,7 +865,7 @@ export function runManifestParserSelfTest({
     'src/crates/assembly/core/src/agentic/tools/implementations/cron_tool.rs',
   );
   const cronToolLegacySessionAccessContracts = [
-    'resolve_session_workspace_path',
+    'resolve_session_workspace_binding',
     'list_sessions',
   ];
   for (const contract of cronToolLegacySessionAccessContracts) {
@@ -797,9 +885,22 @@ export function runManifestParserSelfTest({
   if (
     !coordinatorRuleText.includes('scheduler') ||
     !coordinatorRuleText.includes('deliver_thread_goal_') ||
-    !coordinatorRuleText.includes('deliver_background_result')
+    !coordinatorRuleText.includes('deliver_background_result') ||
+    !coordinatorRuleText.includes('CoreRuntimeServicesProvider::terminal_port') ||
+    !coordinatorRuleText.includes('TerminalRuntimePort')
   ) {
-    throw new Error('Coordinator boundary rule must forbid direct scheduler lifecycle delivery');
+    throw new Error(
+      'Coordinator boundary rule must forbid direct scheduler delivery and terminal provider construction',
+    );
+  }
+  const agenticSystemRuleText = forbiddenRuleTextForPath(
+    'src/crates/assembly/core/src/agentic/system.rs',
+  );
+  if (
+    !agenticSystemRuleText.includes('CoreRuntimeServicesProvider::terminal_port') ||
+    !agenticSystemRuleText.includes('TerminalRuntimePort')
+  ) {
+    throw new Error('agentic system boundary rule must forbid terminal provider construction');
   }
   const coreFileReadStateRuleText = forbiddenRuleTextForPath(
     'src/crates/assembly/core/src/agentic/session/file_read_state.rs',
@@ -827,10 +928,10 @@ export function runManifestParserSelfTest({
   const coreToolContextRuntimeRuleText = forbiddenRuleTextForPath(
     'src/crates/assembly/core/src/agentic/tools/tool_context_runtime.rs',
   );
-  if (!coreToolContextRuntimeRuleText.includes('LightCheckpoint')) {
-    throw new Error(
-      'core tool_context_runtime boundary rule must forbid checkpoint evidence projection',
-    );
+  for (const contract of ['LightCheckpoint', 'TerminalRuntimePort']) {
+    if (!coreToolContextRuntimeRuleText.includes(contract)) {
+      throw new Error(`core tool_context_runtime boundary rule must forbid ${contract}`);
+    }
   }
   const coreUserInputManagerRuleText = forbiddenRuleTextForPath(
     'src/crates/assembly/core/src/agentic/tools/user_input_manager.rs',
@@ -868,6 +969,110 @@ export function runManifestParserSelfTest({
   ]) {
     if (!coreBackgroundCommandOutputRuleText.includes(contract)) {
       throw new Error(`core background_command_output boundary rule must forbid ${contract}`);
+    }
+  }
+  const coreExecCommandRuleText = forbiddenRuleTextForPath(
+    'src/crates/assembly/core/src/agentic/tools/implementations/exec_command/command.rs',
+  );
+  for (const contract of [
+    'POWERSHELL_UTF8_OUTPUT_PREFIX',
+    'REMOTE_NON_TTY_INTERRUPT_GRACE_SECONDS',
+    'DEFAULT_TOOL_YIELD_TIME_MS',
+    '(?:local|remote)_completion_value',
+    '(?:local|remote)_completion',
+    '(?:local|remote)_background_output_status_for_completion',
+    'merged_remote_env',
+    'remote_command_env_words',
+    'shell_escape',
+    'is_plausible_remote_shell_path',
+    'getent\\s+passwd',
+    'command\\s+-v\\s+bash',
+      'REMOTE_SHELL_PROBE_TIMEOUT_MS',
+      'get_global_exec_process_manager',
+      'get_global_remote_exec_process_manager',
+      'SSHConnectionManager',
+      'SSHCommandOptions',
+      'LocalExecCommandRequest',
+      'CoreRuntimeServicesProvider::terminal_port',
+      'TerminalRuntimePort',
+    ]) {
+      if (!coreExecCommandRuleText.includes(contract)) {
+        throw new Error(`core exec_command boundary rule must forbid ${contract}`);
+      }
+    }
+  const coreWriteStdinRuleText = forbiddenRuleTextForPath(
+    'src/crates/assembly/core/src/agentic/tools/implementations/exec_command/stdin.rs',
+  );
+  for (const contract of [
+    'DEFAULT_TOOL_YIELD_TIME_MS',
+    '(?:local|remote)_completion_value',
+    '(?:local|remote)_completion',
+    '"status"\\s*:\\s*"session_not_found"',
+      'No input was sent',
+      'get_global_exec_process_manager',
+      'get_global_remote_exec_process_manager',
+      'RemoteExecError',
+      'LocalWriteStdinRequest',
+      'CoreRuntimeServicesProvider::terminal_port',
+      'TerminalRuntimePort',
+    ]) {
+      if (!coreWriteStdinRuleText.includes(contract)) {
+        throw new Error(`core WriteStdin boundary rule must forbid ${contract}`);
+      }
+    }
+  const coreExecControlRuleText = forbiddenRuleTextForPath(
+    'src/crates/assembly/core/src/agentic/tools/implementations/exec_command/control.rs',
+  );
+  if (!coreExecControlRuleText.includes('exec_command_control_action_name')) {
+    throw new Error('core ExecControl boundary rule must forbid action result shaping');
+  }
+  if (!coreExecControlRuleText.includes('(?:local|remote)_completion')) {
+    throw new Error('core ExecControl boundary rule must forbid duplicated completion mapping');
+  }
+    for (const contract of [
+      'get_global_exec_process_manager',
+      'get_global_remote_exec_process_manager',
+      'RemoteExecError',
+      'LocalExecControlRequest',
+      'CoreRuntimeServicesProvider::terminal_port',
+      'TerminalRuntimePort',
+    ]) {
+      if (!coreExecControlRuleText.includes(contract)) {
+        throw new Error(`core ExecControl boundary rule must forbid ${contract}`);
+      }
+    }
+  const coreExecCommandInputRuleText = forbiddenRuleTextForPath(
+    'src/crates/assembly/core/src/agentic/tools/implementations/exec_command/input.rs',
+  );
+    for (const contract of [
+      'get_global_exec_process_manager',
+      'get_global_remote_exec_process_manager',
+      'LocalSendStdinRequest',
+      'CoreRuntimeServicesProvider::terminal_port',
+      'TerminalRuntimePort',
+    ]) {
+      if (!coreExecCommandInputRuleText.includes(contract)) {
+        throw new Error(`core ExecCommand input boundary rule must forbid ${contract}`);
+      }
+    }
+  const coreExecCommandEnvSnapshotRuleText = forbiddenRuleTextForPath(
+    'src/crates/assembly/core/src/agentic/tools/implementations/exec_command/env_snapshot.rs',
+  );
+  for (const contract of [
+    'ENV_SNAPSHOT_BEGIN',
+    'ENV_SNAPSHOT_END',
+    'should_import_env_var',
+    'is_valid_env_var_name',
+    'is_volatile_env_var',
+    'shell_escape',
+    'ENV_SNAPSHOT_TIMEOUT_MS',
+    'ENV_SNAPSHOT_MAX_OUTPUT_CHARS',
+    'ENV_SNAPSHOT_TTL',
+    'get_global_remote_exec_process_manager',
+    'SSHConnectionManager',
+  ]) {
+    if (!coreExecCommandEnvSnapshotRuleText.includes(contract)) {
+      throw new Error(`core exec_command env_snapshot boundary rule must forbid ${contract}`);
     }
   }
   const coreSkillAgentSnapshotRuleText = forbiddenRuleTextForPath(
@@ -1005,6 +1210,38 @@ export function runManifestParserSelfTest({
       ],
     },
     {
+      path: 'src/crates/contracts/events/src/frontend_projection.rs',
+      contracts: [
+        'AgenticFrontendEvent',
+        'project_agentic_frontend_event',
+        'legacy_flat_message',
+        'deep_review_queue_projection_preserves_camel_case_contract',
+        'legacy_flat_message_keeps_projection_type_authoritative',
+        'legacy_flat_dialog_turn_started_preserves_existing_shape',
+      ],
+    },
+    {
+      path: 'src/crates/contracts/events/src/agentic_projection_manifest.rs',
+      contracts: [
+        'AGENTIC_EVENT_PROJECTION_MANIFEST',
+        'public_agentic_event_projection_manifest',
+        'is_legacy_websocket_agentic_event_type',
+        'public_event_projection_manifest_describes_projected_events_and_websocket_allowlist',
+      ],
+    },
+    {
+      path: 'src/crates/adapters/transport/src/adapters/tauri.rs',
+      contracts: ['project_agentic_frontend_event', 'projected.event_name.as_str()'],
+    },
+    {
+      path: 'src/crates/adapters/transport/src/adapters/websocket.rs',
+      contracts: [
+        'project_agentic_frontend_event',
+        'is_legacy_websocket_agentic_event_type',
+        'websocket_keeps_legacy_agentic_event_allowlist',
+      ],
+    },
+    {
       path: 'src/crates/execution/runtime-services/tests/runtime_services_contracts.rs',
       contracts: [
         'builder_requires_mandatory_runtime_services',
@@ -1035,7 +1272,7 @@ export function runManifestParserSelfTest({
         'MissingSessionManagementPort',
         'list_sessions',
         'delete_session',
-        'resolve_session_workspace_path',
+        'resolve_session_workspace_binding',
         'session_management_delegates_to_registered_port',
         'RuntimeServices',
         'RuntimeEventEnvelope',
@@ -1071,6 +1308,51 @@ export function runManifestParserSelfTest({
     {
       path: 'src/crates/execution/agent-runtime/Cargo.toml',
       contracts: ['[features]', 'default = []'],
+    },
+    {
+      path: 'src/crates/execution/agent-runtime/src/context_profile.rs',
+      contracts: [
+        'ContextProfile',
+        'ModelCapabilityProfile',
+        'ContextProfilePolicy',
+        'for_subagent_context_and_models',
+        'model_capability_weak_for_mini',
+      ],
+    },
+    {
+      path: 'src/crates/execution/agent-runtime/src/session_state.rs',
+      contracts: [
+        'SessionState',
+        'ProcessingPhase',
+        'dialog_state_fact',
+        'session_state_label_for_state',
+        'processing_state_serialization_stays_compatible',
+      ],
+    },
+    {
+      path: 'src/crates/execution/agent-runtime/src/session.rs',
+      contracts: [
+        'Session',
+        'SessionConfig',
+        'SessionSummary',
+        'SessionKind',
+        'PersistedSessionStateFile',
+        'sanitize_persisted_session_state',
+        'persisted_session_state_file_shape_stays_compatible',
+      ],
+    },
+    {
+      path: 'src/crates/execution/agent-runtime/src/dialog_turn.rs',
+      contracts: ['new_turn_id', 'TurnStats'],
+    },
+    {
+      path: 'src/crates/execution/agent-runtime/src/side_question.rs',
+      contracts: [
+        'SideQuestionRuntime',
+        'ActiveBtwTurn',
+        'register_btw_turn',
+        'registering_same_request_cancels_previous_token',
+      ],
     },
     {
       path: 'src/crates/execution/agent-runtime/tests/sdk_smoke.rs',
@@ -1203,12 +1485,15 @@ export function runManifestParserSelfTest({
       path: 'src/crates/execution/agent-runtime/src/tool_confirmation.rs',
       contracts: [
         'ToolConfirmationRequestFacts',
+        'ToolConfirmationGateFacts',
+        'ToolConfirmationGatePlan',
         'ToolConfirmationPlan',
         'ToolConfirmationOutcome',
         'ToolConfirmationWaitResult',
         'ToolConfirmationResponse',
         'ToolConfirmationChannelStore',
         'ConfirmationFailureKind',
+        'resolve_tool_confirmation_gate',
         'resolve_tool_confirmation_plan',
         'resolve_confirmation_failure',
         'resolve_confirmation_wait_result',
@@ -1239,8 +1524,123 @@ export function runManifestParserSelfTest({
       ],
     },
     {
+      path: 'src/crates/execution/tool-execution/src/exec_command.rs',
+      contracts: [
+        'EXEC_COMMAND_POWERSHELL_UTF8_OUTPUT_PREFIX',
+        'EXEC_COMMAND_DEFAULT_YIELD_TIME_MS',
+        'ExecCommandShellKind',
+        'Custom',
+        'ExecCommandRemoteShell',
+        'REMOTE_EXEC_SHELL_PROBE_TIMEOUT_MS',
+        'remote_exec_shell_probe_command',
+        'fallback_remote_exec_shell',
+        'ExecCommandRemoteEnvSnapshot',
+        'ExecCommandRemoteEnvSnapshotCapturePolicy',
+        'ExecCommandRemoteEnvSnapshotCacheKey',
+        'ExecCommandRemoteEnvSnapshotCache',
+        'remote_exec_env_snapshot_capture_policy',
+        'ExecCommandRunInput',
+        'WriteStdinInput',
+        'ExecCommandControlToolInput',
+        'ExecCommandResultFields',
+        'ExecCommandShellMetadata',
+        'exec_command_argv_for_shell',
+        'exec_command_result_value',
+        'write_stdin_result_value',
+        'write_stdin_session_not_found_result',
+        'exec_control_result_value',
+        'remote_exec_login_shell_command',
+        'remote_exec_non_tty_control_wrapper',
+        'parse_remote_exec_env_snapshot_output',
+        'ExecCommandLifecycleStatus',
+        'exec_command_lifecycle_background_output_status',
+        'remote_login_shell_command_applies_snapshot_then_tool_env',
+        'remote_shell_probe_and_env_snapshot_are_provider_neutral',
+        'exec_command_input_policy_applies_defaults_without_trimming_command',
+        'write_stdin_input_policy_applies_poll_defaults',
+        'exec_control_input_policy_keeps_wait_optional',
+        'exec_command_result_builder_preserves_existing_wire_shape',
+        'write_stdin_and_control_result_builders_preserve_remote_shape',
+        'remote_env_snapshot_capture_policy_keeps_existing_bounds',
+        'remote_env_snapshot_cache_owns_key_and_ttl_policy',
+        'remote_shell_probe_skips_non_posix_shells',
+        'lifecycle_status_has_provider_neutral_names_and_background_statuses',
+      ],
+    },
+    {
+      path: 'src/crates/assembly/core/src/agentic/tools/implementations/exec_command/completion.rs',
+      contracts: [
+        'exec_command_local_completion',
+        'exec_command_remote_completion',
+        'ExecCommandCompletionStatus::Interrupted',
+        'ExecCommandCompletionSource::OutOfBandControl',
+      ],
+    },
+    {
+      path: 'src/crates/assembly/core/src/agentic/tools/implementations/exec_command/command.rs',
+      contracts: [
+        'exec_command_argv_for_shell',
+        'parse_remote_exec_shell_probe_output',
+        'remote_exec_shell_probe_command',
+        'fallback_remote_exec_shell',
+        'remote_exec_login_shell_command',
+        'remote_exec_non_tty_control_wrapper',
+        'exec_command_lifecycle_status_name',
+        'exec_command_lifecycle_background_output_status',
+        'exec_command_run_input_from_input',
+        'exec_command_result_value',
+        'exec_command_local_completion',
+        'exec_command_remote_completion',
+        'ExecCommandShellMetadata',
+        'remote_shell_probe_preserves_unknown_shell_metadata',
+      ],
+    },
+    {
+      path: 'src/crates/assembly/core/src/agentic/tools/implementations/exec_command/stdin.rs',
+      contracts: [
+        'write_stdin_input_from_input',
+        'write_stdin_input_validation_message',
+        'write_stdin_result_value',
+        'write_stdin_session_not_found_result',
+        'exec_command_local_completion',
+        'exec_command_remote_completion',
+      ],
+    },
+    {
+      path: 'src/crates/assembly/core/src/agentic/tools/implementations/exec_command/control.rs',
+      contracts: [
+        'exec_command_control_tool_input_from_input',
+        'exec_command_control_tool_input_validation_message',
+        'exec_control_result_value',
+        'exec_command_local_completion',
+        'exec_command_remote_completion',
+      ],
+    },
+    {
+      path: 'src/crates/assembly/core/src/agentic/tools/implementations/exec_command/env_snapshot.rs',
+      contracts: [
+        'remote_exec_env_snapshot_command',
+        'parse_remote_exec_env_snapshot_output',
+        'remote_exec_env_snapshot_capture_policy',
+        'ExecCommandRemoteEnvSnapshotCache',
+        'ExecCommandRemoteEnvSnapshotCacheKey',
+        'exec_command_shell_kind',
+      ],
+    },
+    {
+      path: 'src/crates/assembly/core/src/agentic/tools/implementations/exec_command/shell_kind.rs',
+      contracts: [
+        'exec_command_shell_kind',
+        'terminal_shell_type',
+        'ExecCommandShellKind::Custom(name.clone())',
+        'ShellType::Custom(name)',
+      ],
+    },
+    {
       path: 'src/crates/execution/agent-runtime/tests/tool_confirmation_contracts.rs',
       contracts: [
+        'confirmation_gate_preserves_skip_policy_precedence',
+        'confirmation_gate_requires_confirmation_only_for_permissioned_tools',
         'confirmation_plan_requires_permission_only_when_both_flags_are_true',
         'confirmation_plan_preserves_legacy_no_timeout_one_year_deadline',
         'confirmation_failure_mapping_preserves_legacy_reasons_and_errors',
@@ -1436,6 +1836,23 @@ export function runManifestParserSelfTest({
       contracts: ['EventQueue', 'impl StreamEventSink for EventQueue', 'clear_session'],
     },
     {
+      path: 'src/crates/execution/agent-runtime/src/session_state_manager.rs',
+      contracts: [
+        'pub struct SessionStateManager',
+        'DashMap<String, SessionState>',
+        'EventQueue',
+        'AgenticEvent::SessionStateChanged',
+        'session_state_label_for_state',
+        'can_start_new_turn',
+        'session_state_manager_emits_compatible_state_change_events',
+        'session_state_manager_keeps_turn_start_guard_semantics',
+      ],
+    },
+    {
+      path: 'src/crates/assembly/core/src/agentic/coordination/state_manager.rs',
+      contracts: ['pub use bitfun_agent_runtime::session_state_manager::SessionStateManager'],
+    },
+    {
       path: 'src/crates/execution/agent-runtime/src/event_router.rs',
       contracts: ['EventSubscriber', 'EventRouter', 'route_batch'],
     },
@@ -1518,7 +1935,7 @@ export function runManifestParserSelfTest({
         'AgentSessionListRequest',
         'AgentSessionWorkspaceRequest',
         'list_sessions',
-        'resolve_session_workspace_path',
+        'resolve_session_workspace_binding',
       ],
     },
     {
@@ -1527,7 +1944,9 @@ export function runManifestParserSelfTest({
     },
     {
       path: 'src/crates/assembly/core/src/agentic/events/types.rs',
-      contracts: ['bitfun_agent_runtime::events::session_state_label'],
+      contracts: [
+        'bitfun_agent_runtime::session_state::session_state_label_for_state',
+      ],
     },
     {
       path: 'src/crates/assembly/core/src/agentic/agents/prompt_builder/user_context.rs',
@@ -1628,6 +2047,8 @@ export function runManifestParserSelfTest({
         'ProductCapabilityAssembly',
         'ProductFeatureGroup',
         'ProductRuntimeAssembly',
+        'DeliveryProfile::Sdk',
+        'into_runtime_parts',
         'feature_groups_from_tool_provider_group_plan',
       ],
     },
@@ -1637,6 +2058,15 @@ export function runManifestParserSelfTest({
         'product_assembly_plan_exposes_build_feature_groups_explicitly',
         'product_runtime_assembly_reports_runtime_service_capability_gaps',
         'product_harness_provider_plans_legacy_facade_without_execution',
+      ],
+    },
+    {
+      path: 'src/crates/assembly/product-capabilities/tests/product_sdk_assembly.rs',
+      contracts: [
+        'product_runtime_parts_can_build_agent_runtime_sdk_without_core',
+        'sdk_delivery_profile_builds_minimal_agent_runtime_without_product_full_capabilities',
+        'DeliveryProfile::Cli',
+        'DeliveryProfile::Sdk',
       ],
     },
     {
@@ -1962,7 +2392,7 @@ export function runManifestParserSelfTest({
         'AgentSessionWorkspaceRequest',
         'list_sessions',
         'delete_session',
-        'resolve_session_workspace_path',
+        'resolve_session_workspace_binding',
         '"createdBy"',
         'AgentTurnCancellationRequest',
         'requester_session_id',
@@ -1976,7 +2406,7 @@ export function runManifestParserSelfTest({
         'AgentSessionListRequest',
         'AgentSessionWorkspaceRequest',
         'list_sessions',
-        'resolve_session_workspace_path',
+        'resolve_session_workspace_binding',
         '"createdBy"',
         'AgentDialogTurnRequest',
         'AgentDialogPrependedReminder',
@@ -2152,6 +2582,8 @@ export function runManifestParserSelfTest({
         'product_assembly_plan_for_profile',
         'product_tool_runtime_owner_preserves_registry_contract',
         'product_tool_runtime_registry_preserves_provider_plan_order',
+        'product_tool_runtime_keeps_no_direct_core_profiles_empty',
+        'DeliveryProfile::Sdk',
       ],
     },
     {
@@ -2207,6 +2639,7 @@ export function runManifestParserSelfTest({
         'StaticToolMaterializationError',
         'materialize_static_tool_provider_groups',
         'ToolRuntimeAssembly',
+        'materialized_tool_snapshot',
         'create_registry_from_static_provider_plans',
         'create_registry_from_static_provider_entries',
         'ToolCatalogRuntime',
@@ -2225,6 +2658,49 @@ export function runManifestParserSelfTest({
         'resolve_get_tool_spec_execution_result_from_provider',
         'GetToolSpecRuntime',
         'call_results',
+      ],
+    },
+    {
+      path: 'src/crates/execution/tool-contracts/src/tool_snapshot.rs',
+      contracts: [
+        'MaterializedToolSnapshot',
+        'ToolProviderIdentity',
+        'ToolEffectFacts',
+        'ToolEffectFactsSource',
+        'ToolEffectFilter',
+        'ToolCallSnapshotGuard',
+        'ToolSnapshotCallError',
+        'materialize_tool_snapshot',
+      ],
+    },
+    {
+      path: 'src/crates/execution/tool-contracts/src/mcp_tool_bridge.rs',
+      contracts: [
+        'build_mcp_tool_bridge_name',
+        'McpToolBridgeDefinition',
+        'McpToolBridgeBehaviorHints',
+        'build_mcp_tool_bridge_definition',
+        'mcp_tool_bridge_dynamic_tool_info',
+        'validate_mcp_tool_bridge_input',
+        'render_mcp_tool_bridge_use_message',
+        'render_mcp_tool_bridge_rejected_message',
+        'render_mcp_tool_bridge_result_message',
+        'build_mcp_tool_bridge_result',
+      ],
+    },
+    {
+      path: 'src/crates/execution/tool-contracts/src/acp_tool_bridge.rs',
+      contracts: [
+        'build_acp_external_agent_tool_name',
+        'AcpExternalAgentToolDefinition',
+        'build_acp_external_agent_tool_definition',
+        'acp_external_agent_tool_input_schema',
+        'validate_acp_external_agent_tool_input',
+        'render_acp_external_agent_use_message',
+        'render_acp_external_agent_rejected_message',
+        'render_acp_external_agent_result_message',
+        'render_acp_external_agent_result_for_assistant',
+        'build_acp_external_agent_tool_result',
       ],
     },
     {
@@ -2504,6 +2980,8 @@ export function runManifestParserSelfTest({
     {
       path: 'src/crates/services/services-integrations/src/remote_ssh/workspace_search/mod.rs',
       contracts: [
+        'not(feature = "remote-ssh-concrete")',
+        'pub mod disabled',
         'build_remote_scope',
         'shell_escape',
         'should_retry_remote_scan_fallback_as_files_with_matches',
@@ -2517,10 +2995,13 @@ export function runManifestParserSelfTest({
     },
     {
       path: 'src/crates/assembly/core/src/service/search/mod.rs',
-      contracts: ['mod remote_disabled', 'feature = "ssh-remote"', 'pub use remote_disabled'],
+      contracts: [
+        'feature = "ssh-remote"',
+        'bitfun_services_integrations::remote_ssh::workspace_search::disabled',
+      ],
     },
     {
-      path: 'src/crates/assembly/core/src/service/search/remote_disabled.rs',
+      path: 'src/crates/services/services-integrations/src/remote_ssh/workspace_search/disabled.rs',
       contracts: ['Remote SSH search is disabled', 'RemoteWorkspaceSearchService', 'remote_workspace_search_service_for_path'],
     },
     {
@@ -2682,10 +3163,10 @@ export function runManifestParserSelfTest({
       path: 'src/crates/assembly/core/src/miniapp/builtin/mod.rs',
       contracts: [
         'BUILTIN_APPS',
-        'builtin_content_hash',
-        'should_seed_builtin_app',
-        'resolve_builtin_seed_check',
-        'resolve_builtin_seed_action',
+        'seed_builtin_miniapps_with_host',
+        'BuiltinMiniAppSeedHost',
+        'CoreBuiltinMiniAppSeedHost',
+        'mark_builtin_update_available',
         'miniapp_builtin_io::prepare_builtin_seed_bundle_files',
         'read_builtin_install_marker',
         'miniapp_builtin_io::read_builtin_install_marker',
@@ -2724,6 +3205,10 @@ export function runManifestParserSelfTest({
         'BuiltinSeedArtifacts',
         'BuiltinSeedCheck',
         'BuiltinSeedAction',
+        'BuiltinMiniAppSeedHost',
+        'seed_builtin_miniapps_with_host',
+        'seed_builtin_miniapp_with_host',
+        'BuiltinMiniAppSeedOutcome',
         'resolve_builtin_seed_check',
         'resolve_builtin_seed_action',
         'serialize_builtin_install_marker',
@@ -2840,15 +3325,15 @@ export function runManifestParserSelfTest({
     },
     {
       path: 'src/crates/assembly/core/src/service/remote_ssh/mod.rs',
-      contracts: ['mod disabled', 'pub mod manager', 'pub mod remote_fs', 'pub mod remote_terminal', 'pub mod workspace_state'],
-    },
-    {
-      path: 'src/crates/assembly/core/src/service/remote_ssh/disabled.rs',
-      contracts: ['Remote SSH support is disabled', 'SSHConnectionManager', 'RemoteFileService', 'RemoteTerminalManager'],
+      contracts: ['bitfun_services_integrations::remote_ssh', 'pub mod manager', 'pub mod remote_fs', 'pub mod remote_terminal', 'pub mod workspace_state'],
     },
     {
       path: 'src/crates/services/services-integrations/src/remote_ssh/mod.rs',
-      contracts: ['remote-ssh-concrete', 'pub mod manager', 'mod remote_exec', 'pub mod remote_fs', 'pub mod remote_terminal'],
+      contracts: ['mod disabled', 'pub use disabled', 'remote-ssh-concrete', 'pub mod manager', 'mod remote_exec', 'pub mod remote_fs', 'pub mod remote_terminal'],
+    },
+    {
+      path: 'src/crates/services/services-integrations/src/remote_ssh/disabled.rs',
+      contracts: ['Remote SSH support is disabled', 'SSHConnectionManager', 'RemoteFileService', 'RemoteTerminalManager'],
     },
     {
       path: 'src/crates/services/services-integrations/src/remote_ssh/manager.rs',
@@ -2869,6 +3354,8 @@ export function runManifestParserSelfTest({
     {
       path: 'src/crates/services/services-integrations/src/remote_ssh/paths.rs',
       contracts: [
+        'WorkspaceSessionIdentity',
+        'workspace_session_identity',
         'remote_workspace_runtime_root',
         'remote_workspace_session_mirror_dir',
         'canonicalize_local_workspace_root',
@@ -3314,6 +3801,11 @@ export function runManifestParserSelfTest({
     'truncate_for_assistant',
     'MCPToolResultContent',
     'Tool',
+    'DynamicMcpToolInfo',
+    'Input must be an object',
+    'Using MCP tool',
+    'was rejected by user',
+    'completed\\. Result:',
   ];
   const mcpToolAdapterRuleText = mcpToolAdapterRule.patterns
     .map((pattern) => pattern.regex.source)
@@ -3492,7 +3984,17 @@ export function runManifestParserSelfTest({
   const servicesIntegrationsProfile = dependencyProfileRules.find(
     (rule) => rule.crateName === 'services-integrations',
   );
-  for (const dep of ['dunce', 'futures', 'reqwest', 'sse-stream']) {
+  for (const dep of [
+    'aes',
+    'dunce',
+    'futures',
+    'hex',
+    'local-ip-address',
+    'md5',
+    'reqwest',
+    'sse-stream',
+    'which',
+  ]) {
     if (!servicesIntegrationsProfile?.forbiddenNonOptionalDeps.includes(dep)) {
       throw new Error(`services-integrations default profile must forbid non-optional ${dep}`);
     }

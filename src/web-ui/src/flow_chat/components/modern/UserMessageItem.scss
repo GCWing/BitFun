@@ -6,8 +6,8 @@
 
 .user-message-item {
   padding: var(--flowchat-user-message-pad-y) var(--flowchat-user-message-pad-x);
-  background: color-mix(in srgb, var(--element-bg-medium) 86%, var(--color-bg-flowchat));
-  border: 1px solid color-mix(in srgb, var(--border-muted) 38%, transparent);
+  background: color-mix(in srgb, var(--element-bg-medium) 86%, var(--color-bg-scene));
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 38%, transparent);
   border-radius: var(--flowchat-card-radius);
   margin:
     0.06rem
@@ -20,8 +20,8 @@
   position: relative;
   
   &:hover {
-    background: color-mix(in srgb, var(--element-bg-medium) 92%, var(--color-bg-flowchat));
-    border-color: color-mix(in srgb, var(--border-muted) 56%, transparent);
+    background: color-mix(in srgb, var(--element-bg-medium) 92%, var(--color-bg-scene));
+    border-color: color-mix(in srgb, var(--border-subtle) 56%, transparent);
 
     .user-message-item__copy-btn {
       opacity: 1;
@@ -123,9 +123,11 @@
 // Failed state: no bubble. Icons/actions align to the first text line (not flex baseline:
 // `-webkit-box` line-clamp does not expose a reliable baseline for `align-items: baseline`).
 .user-message-item--failed {
-  --um-failed-fs: calc(var(--flowchat-font-size-base) * 0.86);
-  --um-failed-lh: 1.55;
-  --um-failed-line-box: calc(var(--um-failed-fs) * var(--um-failed-lh));
+  --user-message-failed-font-size: calc(var(--flowchat-font-size-base) * 0.86);
+  --user-message-failed-line-height: 1.55;
+  --user-message-failed-line-box: calc(
+    var(--user-message-failed-font-size) * var(--user-message-failed-line-height)
+  );
 
   background: transparent;
   border: none;
@@ -164,8 +166,8 @@
     align-items: center;
     justify-content: center;
     box-sizing: border-box;
-    height: var(--um-failed-line-box);
-    min-height: var(--um-failed-line-box);
+    height: var(--user-message-failed-line-box);
+    min-height: var(--user-message-failed-line-box);
     color: var(--color-text-muted);
     opacity: 0.9;
 
@@ -181,10 +183,10 @@
     width: max-content;
     max-width: 100%;
     color: var(--color-text-muted);
-    font-size: var(--um-failed-fs);
+    font-size: var(--user-message-failed-font-size);
     font-weight: 400;
     font-style: italic;
-    line-height: var(--um-failed-lh);
+    line-height: var(--user-message-failed-line-height);
     text-decoration: line-through;
     text-decoration-color: color-mix(in srgb, var(--color-text-muted) 72%, transparent);
   }
@@ -193,7 +195,7 @@
     flex: 0 0 auto;
     align-items: center;
     /* Match `.user-message-item__copy-btn` height (28px) to first-line box. */
-    margin-top: calc((var(--um-failed-line-box) - 28px) / 2);
+    margin-top: calc((var(--user-message-failed-line-box) - 28px) / 2);
   }
 
   .user-message-item__failed-body .user-message-item__steering-tag {
@@ -413,7 +415,7 @@
 
   &:hover {
     transform: scale(1.03);
-    box-shadow: 0 4px 12px var(--color-overlay-black-25);
+    box-shadow: 0 4px 12px var(--color-overlay-black-30);
   }
 
   img {
@@ -428,8 +430,8 @@
 .user-message-item__lightbox {
   position: fixed;
   inset: 0;
-  z-index: 9999;
-  background: tokens.$modal-backdrop;
+  z-index: tokens.$z-fullscreen;
+  background: var(--color-overlay-black-80);
   display: flex;
   align-items: center;
   justify-content: center;

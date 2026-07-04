@@ -170,8 +170,8 @@ pub(crate) async fn send_stream(
         ttft_timeout,
         trace,
         || common::apply_headers(client, client.client.post(&url)),
-        move |response, tx, tx_raw| {
-            tokio::spawn(handle_responses_stream(response, tx, tx_raw, idle_timeout));
+        move |response, tx, tx_raw, remaining_ttft_timeout| {
+            handle_responses_stream(response, tx, tx_raw, remaining_ttft_timeout, idle_timeout)
         },
     )
     .await

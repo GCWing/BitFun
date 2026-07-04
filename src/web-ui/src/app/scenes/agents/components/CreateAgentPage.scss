@@ -125,8 +125,8 @@
   }
 
   &.is-active {
-    border-color: var(--color-primary);
-    background: rgba(var(--color-primary-rgb) / 0.08);
+    border-color: var(--color-accent-500);
+    background: rgba(var(--color-accent-500-rgb) / 0.08);
     color: var(--color-text-primary);
     font-weight: $font-weight-semibold;
   }
@@ -165,8 +165,8 @@
   }
 
   &.is-on {
-    border: 1px solid var(--color-primary);
-    background: rgba(var(--color-primary-rgb) / 0.08);
+    border: 1px solid var(--color-accent-500);
+    background: rgba(var(--color-accent-500-rgb) / 0.08);
     color: var(--color-text-primary);
   }
 }

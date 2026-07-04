@@ -4,6 +4,7 @@ use crate::agentic::tools::framework::{
     Tool, ToolExposure, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
 use crate::agentic::tools::workspace_paths::posix_style_path_is_absolute;
+use crate::agentic::workspace::WorkspaceBinding;
 use crate::service::{
     cron::{
         CreateCronJobRequest, CronJob, CronJobPayload, CronJobRunStatus, CronJobTarget,
@@ -15,7 +16,9 @@ use crate::service_agent_runtime::CoreServiceAgentRuntime;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use bitfun_agent_runtime::sdk::AgentRuntime;
-use bitfun_runtime_ports::{AgentSessionListRequest, AgentSessionWorkspaceRequest};
+use bitfun_runtime_ports::{
+    AgentSessionListRequest, AgentSessionWorkspaceBinding, AgentSessionWorkspaceRequest,
+};
 use chrono::{DateTime, Local, SecondsFormat, TimeZone};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -120,7 +123,47 @@ impl CronTool {
         self.resolve_workspace(workspace.to_string_lossy().as_ref(), Some(context))
     }
 
-    fn agent_runtime_if_available(&self) -> BitFunResult<Option<AgentRuntime>> {
+    async fn resolve_effective_workspace_for_session(
+        &self,
+        session_id: &str,
+        context: &ToolUseContext,
+    ) -> BitFunResult<CronWorkspaceRef> {
+        if let Some(runtime) = Self::agent_runtime()? {
+            if let Some(binding) = runtime
+                .resolve_session_workspace_binding(AgentSessionWorkspaceRequest {
+                    session_id: session_id.to_string(),
+                })
+                .await
+                .map_err(|error| {
+                    BitFunError::tool(CoreServiceAgentRuntime::runtime_error_message(error))
+                })?
+            {
+                let workspace_ref = Self::workspace_ref_from_agent_binding(binding);
+                Self::ensure_target_session_visible(&runtime, &workspace_ref, session_id).await?;
+                return Ok(workspace_ref);
+            }
+        }
+
+        if context.session_id.as_deref() == Some(session_id) {
+            if let Some(binding) = context.workspace.as_ref() {
+                return Ok(Self::workspace_ref_from_context_binding(binding));
+            }
+            let resolved = self.resolve_workspace_from_context(context)?;
+            return Ok(CronWorkspaceRef {
+                workspace_id: None,
+                workspace_path: resolved,
+                remote_connection_id: None,
+                remote_ssh_host: None,
+            });
+        }
+
+        Err(BitFunError::tool(format!(
+            "Unable to resolve workspace for session '{}'",
+            session_id
+        )))
+    }
+
+    fn agent_runtime() -> BitFunResult<Option<AgentRuntime>> {
         let Some(coordinator) = get_global_coordinator() else {
             return Ok(None);
         };
@@ -129,37 +172,45 @@ impl CronTool {
             .map_err(BitFunError::tool)
     }
 
-    fn require_agent_runtime(&self) -> BitFunResult<AgentRuntime> {
-        self.agent_runtime_if_available()?
-            .ok_or_else(|| BitFunError::tool("coordinator not initialized".to_string()))
-    }
-
-    async fn resolve_effective_workspace_for_session(
-        &self,
+    async fn ensure_target_session_visible(
+        runtime: &AgentRuntime,
+        workspace_ref: &CronWorkspaceRef,
         session_id: &str,
-        context: &ToolUseContext,
-    ) -> BitFunResult<String> {
-        if let Some(runtime) = self.agent_runtime_if_available()? {
-            if let Some(resolved) = runtime
-                .resolve_session_workspace_path(AgentSessionWorkspaceRequest {
-                    session_id: session_id.to_string(),
-                })
-                .await
-                .map_err(|error| {
-                    BitFunError::tool(CoreServiceAgentRuntime::runtime_error_message(error))
-                })?
-            {
-                return Ok(resolved);
-            }
+    ) -> BitFunResult<()> {
+        let sessions = runtime
+            .list_sessions(AgentSessionListRequest {
+                workspace_path: workspace_ref.workspace_path.clone(),
+                remote_connection_id: workspace_ref.remote_connection_id.clone(),
+                remote_ssh_host: workspace_ref.remote_ssh_host.clone(),
+            })
+            .await
+            .map_err(|error| {
+                BitFunError::tool(CoreServiceAgentRuntime::runtime_error_message(error))
+            })?;
+        if sessions
+            .iter()
+            .any(|session| session.session_id == session_id)
+        {
+            return Ok(());
         }
 
-        if context.session_id.as_deref() == Some(session_id) {
-            return self.resolve_workspace_from_context(context);
+        let resolved_agent_type = runtime
+            .resolve_session_agent_type(session_id)
+            .await
+            .map_err(|error| {
+                BitFunError::tool(CoreServiceAgentRuntime::runtime_error_message(error))
+            })?;
+        if resolved_agent_type
+            .as_deref()
+            .map(|value| !value.trim().is_empty())
+            .unwrap_or(false)
+        {
+            return Ok(());
         }
 
-        Err(BitFunError::tool(format!(
-            "Unable to resolve workspace for session '{}'",
-            session_id
+        Err(BitFunError::NotFound(format!(
+            "Session '{}' not found in workspace '{}'",
+            session_id, workspace_ref.workspace_path
         )))
     }
 
@@ -182,33 +233,33 @@ impl CronTool {
         Ok(resolved)
     }
 
-    async fn ensure_session_exists(&self, workspace: &str, session_id: &str) -> BitFunResult<()> {
-        let runtime = self.require_agent_runtime()?;
-        let sessions = runtime
-            .list_sessions(AgentSessionListRequest {
-                workspace_path: workspace.to_string(),
-            })
-            .await
-            .map_err(|error| {
-                BitFunError::tool(CoreServiceAgentRuntime::runtime_error_message(error))
-            })?;
-        if sessions
-            .iter()
-            .any(|session| session.session_id == session_id)
-        {
-            return Ok(());
-        }
-
-        Err(BitFunError::NotFound(format!(
-            "Session '{}' not found in workspace '{}'",
-            session_id, workspace
-        )))
-    }
-
     fn normalize_add_name(name: Option<String>) -> String {
         match name {
             Some(name) if !name.trim().is_empty() => name.trim().to_string(),
             _ => DEFAULT_JOB_NAME.to_string(),
+        }
+    }
+
+    fn workspace_ref_from_context_binding(binding: &WorkspaceBinding) -> CronWorkspaceRef {
+        CronWorkspaceRef {
+            workspace_id: binding.workspace_id.clone(),
+            workspace_path: binding.root_path_string(),
+            remote_connection_id: binding.connection_id().map(ToOwned::to_owned),
+            remote_ssh_host: if binding.is_remote() {
+                Some(binding.session_identity.hostname.clone())
+                    .filter(|value| !value.trim().is_empty())
+            } else {
+                None
+            },
+        }
+    }
+
+    fn workspace_ref_from_agent_binding(binding: AgentSessionWorkspaceBinding) -> CronWorkspaceRef {
+        CronWorkspaceRef {
+            workspace_id: binding.workspace_id,
+            workspace_path: binding.workspace_path,
+            remote_connection_id: binding.remote_connection_id,
+            remote_ssh_host: binding.remote_ssh_host,
         }
     }
 
@@ -588,7 +639,7 @@ impl Tool for CronTool {
     }
 
     async fn description(&self) -> BitFunResult<String> {
-        Ok(r#"Manage scheduled jobs for agent sessions.
+        Ok(r#"Manage scheduled jobs.
 
 Defaults:
 - "session_id": defaults to the current session for "list" and "add".
@@ -626,7 +677,7 @@ Patch schema for "update":
     }
 
     fn short_description(&self) -> String {
-        "Manage scheduled jobs for agent sessions.".to_string()
+        "Manage scheduled jobs.".to_string()
     }
 
     fn default_exposure(&self) -> ToolExposure {
@@ -998,14 +1049,15 @@ Patch schema for "update":
                     .ok_or_else(|| BitFunError::tool("cron service not initialized".to_string()))?;
                 let session_id =
                     self.resolve_effective_session_id(params.session_id.as_deref(), context)?;
-                let workspace = self
+                let workspace_ref = self
                     .resolve_effective_workspace_for_session(&session_id, context)
                     .await?;
+                let workspace = workspace_ref.workspace_path.clone();
                 let mut jobs = cron_service
                     .list_jobs_filtered(
-                        Some(&workspace),
-                        None,
-                        None,
+                        Some(&workspace_ref.workspace_path),
+                        workspace_ref.workspace_id.as_deref(),
+                        workspace_ref.remote_connection_id.as_deref(),
                         Some(&session_id),
                         Some(CronJobTargetKind::Session),
                     )
@@ -1038,15 +1090,15 @@ Patch schema for "update":
                     .ok_or_else(|| BitFunError::tool("cron service not initialized".to_string()))?;
                 let session_id =
                     self.resolve_effective_session_id(params.session_id.as_deref(), context)?;
-                let workspace = self
+                let workspace_ref = self
                     .resolve_effective_workspace_for_session(&session_id, context)
                     .await?;
+                let workspace = workspace_ref.workspace_path.clone();
                 let job = params
                     .job
                     .ok_or_else(|| BitFunError::tool("job is required for add".to_string()))?;
 
                 Self::validate_payload(&job.payload, "job")?;
-                self.ensure_session_exists(&workspace, &session_id).await?;
 
                 let created = cron_service
                     .create_job(CreateCronJobRequest {
@@ -1056,12 +1108,7 @@ Patch schema for "update":
                         enabled: job.enabled.unwrap_or(true),
                         target: CronJobTarget::Session {
                             session_id: session_id.clone(),
-                            workspace: CronWorkspaceRef {
-                                workspace_id: None,
-                                workspace_path: workspace.clone(),
-                                remote_connection_id: None,
-                                remote_ssh_host: None,
-                            },
+                            workspace: workspace_ref,
                         },
                     })
                     .await?;
@@ -1196,8 +1243,11 @@ Patch schema for "update":
 mod tests {
     use super::*;
     use crate::agentic::tools::framework::ToolUseContext;
+    use crate::agentic::workspace::WorkspaceBinding;
+    use crate::service::remote_ssh::workspace_state::workspace_session_identity;
     use serde_json::json;
     use std::collections::HashMap;
+    use std::path::PathBuf;
 
     fn empty_context() -> ToolUseContext {
         ToolUseContext {
@@ -1206,6 +1256,33 @@ mod tests {
             session_id: None,
             dialog_turn_id: None,
             workspace: None,
+            unlocked_collapsed_tools: Vec::new(),
+            custom_data: HashMap::new(),
+            computer_use_host: None,
+            runtime_tool_restrictions: Default::default(),
+            runtime_handles: bitfun_runtime_ports::ToolRuntimeHandles::default(),
+        }
+    }
+
+    fn remote_context(
+        root: &str,
+        workspace_id: Option<String>,
+        session_id: Option<&str>,
+    ) -> ToolUseContext {
+        let session_identity = workspace_session_identity(root, Some("conn-1"), Some("ssh.dev"))
+            .expect("remote identity");
+        ToolUseContext {
+            tool_call_id: None,
+            agent_type: None,
+            session_id: session_id.map(ToOwned::to_owned),
+            dialog_turn_id: None,
+            workspace: Some(WorkspaceBinding::new_remote(
+                workspace_id,
+                PathBuf::from(root),
+                "conn-1".to_string(),
+                "Dev SSH".to_string(),
+                session_identity,
+            )),
             unlocked_collapsed_tools: Vec::new(),
             custom_data: HashMap::new(),
             computer_use_host: None,
@@ -1276,5 +1353,48 @@ mod tests {
             .as_deref()
             .unwrap_or_default()
             .contains("unknown field"));
+    }
+
+    #[test]
+    fn workspace_ref_from_context_binding_uses_remote_context_identity() {
+        let context = remote_context(
+            "/home/wsp/projects/test",
+            Some("remote_workspace_1".to_string()),
+            Some("session-1"),
+        );
+
+        let workspace_ref = CronTool::workspace_ref_from_context_binding(
+            context.workspace.as_ref().expect("workspace binding"),
+        );
+
+        assert_eq!(
+            workspace_ref.workspace_id.as_deref(),
+            Some("remote_workspace_1")
+        );
+        assert_eq!(workspace_ref.workspace_path, "/home/wsp/projects/test");
+        assert_eq!(
+            workspace_ref.remote_connection_id.as_deref(),
+            Some("conn-1")
+        );
+        assert_eq!(workspace_ref.remote_ssh_host.as_deref(), Some("ssh.dev"));
+    }
+
+    #[test]
+    fn workspace_ref_from_agent_binding_preserves_full_workspace_identity() {
+        let workspace_ref =
+            CronTool::workspace_ref_from_agent_binding(AgentSessionWorkspaceBinding {
+                workspace_id: Some("workspace-1".to_string()),
+                workspace_path: "/home/wsp/projects/test".to_string(),
+                remote_connection_id: Some("conn-1".to_string()),
+                remote_ssh_host: Some("ssh.dev".to_string()),
+            });
+
+        assert_eq!(workspace_ref.workspace_id.as_deref(), Some("workspace-1"));
+        assert_eq!(workspace_ref.workspace_path, "/home/wsp/projects/test");
+        assert_eq!(
+            workspace_ref.remote_connection_id.as_deref(),
+            Some("conn-1")
+        );
+        assert_eq!(workspace_ref.remote_ssh_host.as_deref(), Some("ssh.dev"));
     }
 }

@@ -4,8 +4,6 @@
 //! This allows BitFun to work with files on remote servers via SSH,
 //! similar to VSCode's Remote SSH extension.
 
-#[cfg(not(feature = "ssh-remote"))]
-mod disabled;
 #[cfg(feature = "ssh-remote")]
 pub mod manager;
 #[cfg(feature = "ssh-remote")]
@@ -15,6 +13,17 @@ pub mod remote_terminal;
 pub mod types;
 pub mod workspace_state;
 
+#[cfg(not(feature = "ssh-remote"))]
+pub use bitfun_services_integrations::remote_ssh::{
+    get_global_remote_exec_process_manager, KnownHostEntry, PTYSession, PortForward,
+    PortForwardDirection, PortForwardManager, RemoteExecCommandRequest, RemoteExecCommandResponse,
+    RemoteExecControlAction, RemoteExecControlOrigin, RemoteExecControlRequest, RemoteExecError,
+    RemoteExecProcessLifecycleEvent, RemoteExecProcessLifecycleStatus, RemoteExecProcessManager,
+    RemoteExecResult, RemoteExecSessionCompletion, RemoteExecSessionCompletionSource,
+    RemoteExecSessionCompletionStatus, RemoteFileService, RemoteSendStdinRequest,
+    RemoteTerminalManager, RemoteTerminalSession, RemoteWriteStdinRequest, SSHConnectionManager,
+    SessionStatus,
+};
 #[cfg(feature = "ssh-remote")]
 pub use bitfun_services_integrations::remote_ssh::{
     get_global_remote_exec_process_manager, RemoteExecCommandRequest, RemoteExecCommandResponse,
@@ -27,17 +36,6 @@ pub use bitfun_services_integrations::remote_ssh::{
 pub use bitfun_services_integrations::remote_ssh::{
     KnownHostEntry, PTYSession, PortForward, PortForwardDirection, PortForwardManager,
     SSHConnectionManager,
-};
-#[cfg(not(feature = "ssh-remote"))]
-pub use disabled::{
-    get_global_remote_exec_process_manager, KnownHostEntry, PTYSession, PortForward,
-    PortForwardDirection, PortForwardManager, RemoteExecCommandRequest, RemoteExecCommandResponse,
-    RemoteExecControlAction, RemoteExecControlOrigin, RemoteExecControlRequest, RemoteExecError,
-    RemoteExecProcessLifecycleEvent, RemoteExecProcessLifecycleStatus, RemoteExecProcessManager,
-    RemoteExecResult, RemoteExecSessionCompletion, RemoteExecSessionCompletionSource,
-    RemoteExecSessionCompletionStatus, RemoteFileService, RemoteSendStdinRequest,
-    RemoteTerminalManager, RemoteTerminalSession, RemoteWriteStdinRequest, SSHConnectionManager,
-    SessionStatus,
 };
 #[cfg(feature = "ssh-remote")]
 pub use remote_fs::RemoteFileService;

@@ -4,12 +4,10 @@
  */
 
 .inline-diff-preview {
-  --markdown-font-mono: var(--font-family-mono);
-
   position: relative;
   width: 100%;
   background: transparent;
-  font-family: var(--markdown-font-mono);
+  font-family: var(--font-family-mono);
   font-size: var(--flowchat-font-size-sm);
   font-weight: 400;
   
@@ -57,7 +55,7 @@
     font-size: var(--flowchat-font-size-xs);
     color: var(--color-text-muted);
     background: var(--color-bg-tertiary);
-    border-bottom: 1px solid var(--color-border-subtle);
+    border-bottom: 1px solid var(--border-subtle);
     font-style: italic;
   }
 }
@@ -151,7 +149,7 @@
     gap: 0.125rem;
     background: var(--color-bg-secondary);
     user-select: none;
-    border-right: 1px solid var(--color-border-subtle);
+    border-right: 1px solid var(--border-subtle);
 
     &--single {
       padding: 0 4px;
@@ -173,7 +171,7 @@
     font-size: var(--flowchat-font-size-xs);
 
     &--original {
-      border-right: 1px solid var(--color-border-subtle);
+      border-right: 1px solid var(--border-subtle);
       padding-right: 8px;
     }
 
@@ -194,9 +192,12 @@
   
   &__content {
     flex: 1;
+    min-width: 0;
     padding: 0 8px;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
+    word-break: break-word;
+    overflow: hidden;
     
     // Strip global and SyntaxHighlighter borders/backgrounds.
     pre, code, span {

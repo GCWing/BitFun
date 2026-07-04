@@ -10,7 +10,7 @@
   margin: var(--flowchat-card-gap) 0;
   border-radius: var(--flowchat-card-radius);
   border: 1px solid var(--color-warning);
-  background: var(--color-bg-flowchat);
+  background: var(--color-bg-scene);
   backdrop-filter: blur(10px);
   transition: all 0.2s ease;
   overflow: hidden;
@@ -61,7 +61,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--color-text-tertiary);
+  color: var(--color-text-muted);
   flex-shrink: 0;
 }
 
@@ -153,7 +153,7 @@
     padding: 0 4px;
     background: color-mix(in srgb, var(--color-warning) 12%, transparent);
     color: var(--color-warning);
-    border-radius: var(--radius-sm);
+    border-radius: var(--size-radius-sm);
     font-size: var(--flowchat-font-size-xxs);
     font-weight: 600;
     flex-shrink: 0;

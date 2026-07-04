@@ -5,7 +5,7 @@
   flex-direction: column;
   width: 100%;
   height: 100%;
-  background: var(--color-bg-flowchat);
+  background: var(--color-bg-scene);
   color: var(--color-text-primary);
   overflow: hidden;
 }
@@ -16,7 +16,7 @@
   gap: $size-gap-3;
   padding: $size-gap-3 $size-gap-4;
   border-bottom: 1px solid color-mix(in srgb, var(--color-warning) 22%, transparent);
-  background: color-mix(in srgb, var(--color-warning) 8%, var(--color-bg-flowchat));
+  background: color-mix(in srgb, var(--color-warning) 8%, var(--color-bg-scene));
   color: var(--color-text-secondary);
   flex-shrink: 0;
 }
@@ -49,7 +49,7 @@
   min-height: 34px;
   padding: 4px $size-gap-3;
   border-bottom: 1px solid var(--border-subtle);
-  background: color-mix(in srgb, var(--color-bg-flowchat) 92%, var(--color-bg-elevated));
+  background: color-mix(in srgb, var(--color-bg-scene) 92%, var(--color-bg-elevated));
   flex-shrink: 0;
 }
 
@@ -93,7 +93,7 @@
   justify-content: center;
   width: 100%;
   height: 100%;
-  background: var(--color-bg-flowchat);
+  background: var(--color-bg-scene);
   color: var(--color-text-primary);
 }
 
@@ -103,7 +103,7 @@
   justify-content: center;
   width: 100%;
   height: 100%;
-  background: var(--color-bg-flowchat);
+  background: var(--color-bg-scene);
   color: var(--color-text-primary);
 
   .error-content {
@@ -113,9 +113,9 @@
     gap: $size-gap-4;
     padding: $size-gap-8;
     text-align: center;
-    background: $element-bg-base;
+    background: var(--element-bg-base);
     border-radius: $size-radius-lg;
-    border: 1px solid $border-base;
+    border: 1px solid var(--border-base);
     backdrop-filter: blur(8px);
 
     .error-icon {
@@ -132,9 +132,9 @@
 
     .retry-button {
       padding: $size-gap-2 $size-gap-4;
-      background: $button-bg-default;
+      background: var(--element-bg-subtle);
       color: var(--color-text-secondary);
-      border: 1px solid $button-border-default;
+      border: 1px solid var(--border-subtle);
       border-radius: $size-radius-base;
       cursor: pointer;
       font-size: var(--font-size-sm);
@@ -144,7 +144,7 @@
 
       &:hover {
         background: $button-bg-hover;
-        border-color: $button-border-hover;
+        border-color: var(--border-accent);
         color: var(--color-text-primary);
         transform: translateY(-1px);
         box-shadow: $shadow-sm;

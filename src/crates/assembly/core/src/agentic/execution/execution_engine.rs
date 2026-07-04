@@ -258,6 +258,7 @@ pub struct ExecutionEngine {
 }
 
 impl ExecutionEngine {
+    const COMPRESSION_MAX_TOKENS: u32 = 8192;
     const FINALIZE_AFTER_REPEATED_TOOL_FAILURES_REMINDER: &'static str = "This turn must end now because repeated tool failures have prevented further progress. Ignore any unfinished work. Your task now is to give the user a final answer. Do not call any more tools; any tool call will fail. Respond in plain text only. Summarize what was completed, what failed, the evidence available from the tool results, and the single best next step for the user.";
     const FINALIZE_AFTER_MAX_ROUNDS_REMINDER: &'static str = "This turn must end now because it has reached the round limit. Ignore any unfinished work. Your task now is to give the user a final answer. Do not call any more tools; any tool call will fail. Respond in plain text only. Summarize the most useful completed work and evidence collected so far, and clearly distinguish resolved items from anything still unresolved.";
     const FINALIZE_TOOL_DENIED_MESSAGE: &'static str =
@@ -379,6 +380,19 @@ impl ExecutionEngine {
     fn should_continue_after_partial_response(reason: &str) -> bool {
         let lower = reason.to_ascii_lowercase();
         !lower.contains("cancelled")
+    }
+
+    fn compression_request_max_tokens(configured_max_tokens: Option<u32>, cap: u32) -> Option<u32> {
+        Some(configured_max_tokens.unwrap_or(cap).min(cap))
+    }
+
+    fn build_compression_ai_client(
+        ai_client: &crate::infrastructure::ai::AIClient,
+    ) -> crate::infrastructure::ai::AIClient {
+        ai_client.with_max_tokens(Self::compression_request_max_tokens(
+            ai_client.config.max_tokens,
+            Self::COMPRESSION_MAX_TOKENS,
+        ))
     }
 
     /// Detect periodic tool-signature loops in the trailing window.
@@ -639,6 +653,49 @@ impl ExecutionEngine {
         ai_config
             .resolve_model_selection(trimmed)
             .unwrap_or_else(|| "auto".to_string())
+    }
+
+    async fn resolve_primary_model_context(
+        model_id: &str,
+        ai_client_model: &str,
+        ai_client_provider: &str,
+        unavailable_log_message: &str,
+    ) -> (String, bool) {
+        let config_service = get_global_config_service().await.ok();
+        if let Some(service) = config_service {
+            let ai_config: crate::service::config::types::AIConfig =
+                service.get_config(Some("ai")).await.unwrap_or_default();
+
+            let resolved_id = Self::resolve_configured_model_id(&ai_config, model_id);
+            let model_cfg = ai_config
+                .models
+                .iter()
+                .find(|m| m.id == resolved_id)
+                .or_else(|| ai_config.models.iter().find(|m| m.name == resolved_id))
+                .or_else(|| {
+                    ai_config
+                        .models
+                        .iter()
+                        .find(|m| m.model_name == resolved_id)
+                })
+                .or_else(|| {
+                    ai_config.models.iter().find(|m| {
+                        m.model_name == ai_client_model && m.provider == ai_client_provider
+                    })
+                });
+
+            let supports = model_cfg.is_some_and(|m| {
+                m.capabilities
+                    .iter()
+                    .any(|cap| matches!(cap, ModelCapability::ImageUnderstanding))
+                    || matches!(m.category, ModelCategory::Multimodal)
+            });
+
+            (resolved_id, supports)
+        } else {
+            warn!("{}", unavailable_log_message);
+            (model_id.to_string(), false)
+        }
     }
 
     async fn build_tool_listing_sections(
@@ -1109,6 +1166,8 @@ impl ExecutionEngine {
             steering_interrupt: None,
             cancellation_token: CancellationToken::new(),
             workspace_services: context.workspace_services.clone(),
+            terminal_port: context.terminal_port.clone(),
+            remote_exec_port: context.remote_exec_port.clone(),
             recover_partial_on_cancel: context.recover_partial_on_cancel,
         };
 
@@ -1308,17 +1367,29 @@ impl ExecutionEngine {
                 .and_then(|v| v.as_str())
                 .filter(|s| !s.is_empty())
                 .map(str::to_string)
-                .or_else(|| image.image_path.as_ref().filter(|s| !s.is_empty()).cloned())
                 .unwrap_or_else(|| image.id.clone());
 
-            content.push_str(&format!(
-                "- {} ({}, image_id={})\n",
-                name, image.mime_type, image.id
-            ));
+            let path = image
+                .image_path
+                .as_ref()
+                .map(String::as_str)
+                .filter(|s| !s.trim().is_empty());
+
+            if let Some(path) = path {
+                content.push_str(&format!(
+                    "- {} ({}, image_id={}, path={})\n",
+                    name, image.mime_type, image.id, path
+                ));
+            } else {
+                content.push_str(&format!(
+                    "- {} ({}, image_id={})\n",
+                    name, image.mime_type, image.id
+                ));
+            }
         }
         content.push_str("]\n");
 
-        content.push_str("Note: image inspection is not available for this session.\n");
+        content.push_str("Note: the primary model cannot inspect image pixels directly. If an image path is available, use analyze_image to inspect it, or use a user-provided image skill with that path.\n");
 
         content
     }
@@ -1331,7 +1402,6 @@ impl ExecutionEngine {
         provider: &str,
         attach_images: bool,
         prepended_prompt_reminders: &PrependedPromptReminders,
-        contract: Option<&crate::agentic::core::CompressionContract>,
     ) -> BitFunResult<Vec<AIMessage>> {
         let prepended_reminders = prepended_prompt_reminders.ordered_reminders();
         let mut compression_messages = Self::build_ai_messages_for_send(
@@ -1344,7 +1414,7 @@ impl ExecutionEngine {
         )
         .await?;
         compression_messages.push(AIMessage::user(
-            self.context_compressor.build_compact_prompt(contract),
+            self.context_compressor.build_compact_prompt(),
         ));
         Ok(compression_messages)
     }
@@ -1359,9 +1429,10 @@ impl ExecutionEngine {
     ) -> BitFunResult<String> {
         let mut last_error = None;
         let base_wait_time_ms = 500;
+        let compression_ai_client = Arc::new(Self::build_compression_ai_client(ai_client.as_ref()));
 
         for attempt in 0..max_tries {
-            let result = ai_client
+            let result = compression_ai_client
                 .send_message_with_trace(
                     request_messages.clone(),
                     tool_definitions.clone(),
@@ -1426,7 +1497,6 @@ impl ExecutionEngine {
         tool_definitions: &Option<Vec<ToolDefinition>>,
         prepended_prompt_reminders: &PrependedPromptReminders,
         primary_supports_image_understanding: bool,
-        contract: Option<&crate::agentic::core::CompressionContract>,
         trace_config: Option<ModelExchangeTraceConfig>,
     ) -> BitFunResult<Option<String>> {
         let request_messages = self
@@ -1437,7 +1507,6 @@ impl ExecutionEngine {
                 &ai_client.config.format,
                 primary_supports_image_understanding,
                 prepended_prompt_reminders,
-                contract,
             )
             .await?;
 
@@ -1515,46 +1584,14 @@ impl ExecutionEngine {
                 ))
             })?;
 
-        let (resolved_primary_model_id, primary_supports_image_understanding) = {
-            let config_service = get_global_config_service().await.ok();
-            if let Some(service) = config_service {
-                let ai_config: crate::service::config::types::AIConfig =
-                    service.get_config(Some("ai")).await.unwrap_or_default();
-
-                let resolved_id = Self::resolve_configured_model_id(&ai_config, &model_id);
-                let model_cfg = ai_config
-                    .models
-                    .iter()
-                    .find(|m| m.id == resolved_id)
-                    .or_else(|| ai_config.models.iter().find(|m| m.name == resolved_id))
-                    .or_else(|| {
-                        ai_config
-                            .models
-                            .iter()
-                            .find(|m| m.model_name == resolved_id)
-                    })
-                    .or_else(|| {
-                        ai_config.models.iter().find(|m| {
-                            m.model_name == ai_client.config.model
-                                && m.provider == ai_client.config.format
-                        })
-                    });
-
-                let supports = model_cfg.is_some_and(|m| {
-                    m.capabilities
-                        .iter()
-                        .any(|cap| matches!(cap, ModelCapability::ImageUnderstanding))
-                        || matches!(m.category, ModelCategory::Multimodal)
-                });
-
-                (resolved_id, supports)
-            } else {
-                warn!(
-                    "Config service unavailable, assuming compression model is text-only for image input gating"
-                );
-                (model_id.clone(), false)
-            }
-        };
+        let (resolved_primary_model_id, primary_supports_image_understanding) =
+            Self::resolve_primary_model_context(
+                &model_id,
+                &ai_client.config.model,
+                &ai_client.config.format,
+                "Config service unavailable, assuming compression model is text-only for image input gating",
+            )
+            .await;
 
         let model_capability_profile = ModelCapabilityProfile::from_resolved_model(
             &resolved_primary_model_id,
@@ -1590,6 +1627,9 @@ impl ExecutionEngine {
             &context.agent_type,
             context.workspace.as_ref(),
             context.workspace_services.as_ref(),
+            Some(&resolved_primary_model_id),
+            Some(&ai_client.config.model),
+            Some(&ai_client.config.format),
             primary_supports_image_understanding,
             &tool_manifest_context_vars,
         );
@@ -1721,7 +1761,6 @@ impl ExecutionEngine {
                 tool_definitions,
                 prepended_prompt_reminders,
                 primary_supports_image_understanding,
-                compression_contract.as_ref(),
                 trace_config,
             )
             .await
@@ -1947,7 +1986,6 @@ impl ExecutionEngine {
                 &scaffold.tool_definitions,
                 &scaffold.prepended_prompt_reminders,
                 scaffold.primary_supports_image_understanding,
-                compression_contract.as_ref(),
                 trace_config,
             )
             .await
@@ -2188,47 +2226,14 @@ impl ExecutionEngine {
             })?;
 
         // Primary model vision capability (tools + system prompt appendix; also used below for API message stripping).
-        let (resolved_primary_model_id, primary_supports_image_understanding) = {
-            let config_service = get_global_config_service().await.ok();
-            if let Some(service) = config_service {
-                let ai_config: crate::service::config::types::AIConfig =
-                    service.get_config(Some("ai")).await.unwrap_or_default();
-
-                let resolved_id = Self::resolve_configured_model_id(&ai_config, &model_id);
-
-                let model_cfg = ai_config
-                    .models
-                    .iter()
-                    .find(|m| m.id == resolved_id)
-                    .or_else(|| ai_config.models.iter().find(|m| m.name == resolved_id))
-                    .or_else(|| {
-                        ai_config
-                            .models
-                            .iter()
-                            .find(|m| m.model_name == resolved_id)
-                    })
-                    .or_else(|| {
-                        ai_config.models.iter().find(|m| {
-                            m.model_name == ai_client.config.model
-                                && m.provider == ai_client.config.format
-                        })
-                    });
-
-                let supports = model_cfg.is_some_and(|m| {
-                    m.capabilities
-                        .iter()
-                        .any(|cap| matches!(cap, ModelCapability::ImageUnderstanding))
-                        || matches!(m.category, ModelCategory::Multimodal)
-                });
-
-                (resolved_id, supports)
-            } else {
-                warn!(
-                    "Config service unavailable, assuming primary model is text-only for image input gating"
-                );
-                (model_id.clone(), false)
-            }
-        };
+        let (resolved_primary_model_id, primary_supports_image_understanding) =
+            Self::resolve_primary_model_context(
+                &model_id,
+                &ai_client.config.model,
+                &ai_client.config.format,
+                "Config service unavailable, assuming primary model is text-only for image input gating",
+            )
+            .await;
 
         let model_context_window = ai_client.config.context_window as usize;
         let session_max_tokens = session.config.max_context_tokens;
@@ -2286,6 +2291,9 @@ impl ExecutionEngine {
             &agent_type,
             context.workspace.as_ref(),
             context.workspace_services.as_ref(),
+            Some(&resolved_primary_model_id),
+            Some(&ai_client.config.model),
+            Some(&ai_client.config.format),
             primary_supports_image_understanding,
             &tool_manifest_context_vars,
         );
@@ -2651,6 +2659,8 @@ impl ExecutionEngine {
                 }),
                 cancellation_token: CancellationToken::new(),
                 workspace_services: context.workspace_services.clone(),
+                terminal_port: context.terminal_port.clone(),
+                remote_exec_port: context.remote_exec_port.clone(),
                 recover_partial_on_cancel: context.recover_partial_on_cancel,
             };
 
@@ -3383,6 +3393,7 @@ mod tests {
     use crate::agentic::tools::ToolRuntimeRestrictions;
     use crate::service::config::types::AIConfig;
     use crate::service::config::types::AIModelConfig;
+    use crate::util::types::config as ai_config_types;
     use crate::util::types::ToolDefinition;
     use serde_json::json;
     use sha2::{Digest, Sha256};
@@ -3497,6 +3508,60 @@ mod tests {
     }
 
     #[test]
+    fn compression_request_max_tokens_clamps_to_global_cap() {
+        assert_eq!(
+            ExecutionEngine::compression_request_max_tokens(Some(16_000), 8192),
+            Some(8192)
+        );
+        assert_eq!(
+            ExecutionEngine::compression_request_max_tokens(Some(4096), 8192),
+            Some(4096)
+        );
+        assert_eq!(
+            ExecutionEngine::compression_request_max_tokens(None, 8192),
+            Some(8192)
+        );
+    }
+
+    #[test]
+    fn build_compression_ai_client_overrides_only_max_tokens() {
+        let client = crate::infrastructure::ai::AIClient::new(ai_config_types::AIConfig {
+            name: "test".to_string(),
+            base_url: "https://example.com/v1".to_string(),
+            request_url: "https://example.com/v1/responses".to_string(),
+            api_key: "key".to_string(),
+            model: "test-model".to_string(),
+            format: "responses".to_string(),
+            context_window: 128_000,
+            max_tokens: None,
+            temperature: None,
+            top_p: None,
+            reasoning_mode: Default::default(),
+            inline_think_in_text: true,
+            custom_headers: None,
+            custom_headers_mode: None,
+            skip_ssl_verify: false,
+            reasoning_effort: None,
+            thinking_budget_tokens: None,
+            custom_request_body: None,
+            custom_request_body_mode: None,
+        });
+
+        let compression_client = ExecutionEngine::build_compression_ai_client(&client);
+
+        assert_eq!(client.config.max_tokens, None);
+        assert_eq!(
+            compression_client.config.max_tokens,
+            Some(ExecutionEngine::COMPRESSION_MAX_TOKENS)
+        );
+        assert_eq!(compression_client.config.model, client.config.model);
+        assert_eq!(
+            compression_client.config.request_url,
+            client.config.request_url
+        );
+    }
+
+    #[test]
     fn partial_continuation_allowed_for_stream_stall_reasons() {
         assert!(ExecutionEngine::should_continue_after_partial_response(
             "Stream processor watchdog timeout (no data received for 45 seconds)"
@@ -3551,6 +3616,8 @@ mod tests {
             skip_tool_confirmation: false,
             runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
             workspace_services: None,
+            terminal_port: None,
+            remote_exec_port: None,
             round_injection: None,
             recover_partial_on_cancel: false,
         };

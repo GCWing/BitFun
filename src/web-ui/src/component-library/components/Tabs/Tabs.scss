@@ -40,7 +40,7 @@
 
     &:hover:not(&--disabled):not(&--active) {
       color: var(--color-text-primary);
-      background: tokens.$element-bg-subtle;
+      background: var(--element-bg-subtle);
     }
 
     &--active {
@@ -132,8 +132,8 @@
   &--card {
     .bitfun-tabs__nav {
       background: linear-gradient(135deg,
-        tokens.$element-bg-base 0%,
-        tokens.$element-bg-soft 100%);
+        var(--element-bg-base) 0%,
+        var(--element-bg-soft) 100%);
       border: 1px solid var(--border-base);
       border-radius: tokens.$size-radius-base;
       padding: tokens.$size-gap-1;
@@ -145,12 +145,22 @@
       border-radius: tokens.$size-radius-sm;
 
       &--active {
-        @include tokens.liquid-glass-base;
-        color: tokens.$color-text-primary;
+        background: linear-gradient(135deg,
+          var(--element-bg-soft) 0%,
+          var(--element-bg-soft) 50%,
+          var(--element-bg-base) 100%);
+        border: 1px solid var(--color-overlay-white-08);
+        backdrop-filter: tokens.$blur-base;
+        -webkit-backdrop-filter: tokens.$blur-base;
+        box-shadow:
+          0 2px 4px var(--color-overlay-black-12),
+          inset 0 1px 0 var(--color-overlay-white-08);
+        color: var(--color-text-primary);
+        overflow: hidden;
       }
 
       &:hover:not(&--disabled):not(&--active) {
-        background: tokens.$element-bg-medium;
+        background: var(--element-bg-medium);
       }
     }
   }
@@ -187,20 +197,20 @@
   &--variant-purple {
     &.bitfun-tabs--line {
       .bitfun-tabs__nav {
-        border-bottom-color: tokens.$color-purple-300;
+        border-bottom-color: var(--color-purple-200);
       }
 
       .bitfun-tabs__tab--active {
-        color: tokens.$color-purple-500;
-        border-bottom-color: tokens.$color-purple-500;
+        color: var(--color-purple-500);
+        border-bottom-color: var(--color-purple-500);
       }
     }
 
     &.bitfun-tabs--card {
       .bitfun-tabs__tab--active {
         background: linear-gradient(135deg,
-          tokens.$color-purple-200 0%,
-          tokens.$color-purple-300 100%);
+          var(--color-purple-200) 0%,
+          var(--color-purple-400) 100%);
         box-shadow: 0 2px 8px color-mix(in srgb, var(--color-purple-500) 20%, transparent);
       }
     }
@@ -220,26 +230,26 @@
       .bitfun-tabs__nav {
         border-bottom: 1px solid transparent;
         background: linear-gradient(90deg,
-          tokens.$color-accent-200 0%,
-          tokens.$color-purple-200 100%);
+          var(--color-accent-200) 0%,
+          var(--color-purple-200) 100%);
       }
 
       .bitfun-tabs__tab--active {
         background: linear-gradient(135deg,
-          tokens.$color-accent-200 0%,
-          tokens.$color-purple-200 100%);
+          var(--color-accent-200) 0%,
+          var(--color-purple-200) 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         background-clip: text;
-        border-bottom-color: tokens.$color-purple-400;
+        border-bottom-color: var(--color-purple-400);
       }
     }
 
     &.bitfun-tabs--card {
       .bitfun-tabs__tab--active {
         background: linear-gradient(135deg,
-          tokens.$color-accent-200 0%,
-          tokens.$color-purple-200 100%);
+          var(--color-accent-200) 0%,
+          var(--color-purple-200) 100%);
         box-shadow:
           0 2px 8px var(--color-accent-200),
           0 2px 8px var(--color-purple-200);
@@ -249,8 +259,8 @@
     &.bitfun-tabs--pill {
       .bitfun-tabs__tab--active {
         background: linear-gradient(135deg,
-          tokens.$color-accent-600 0%,
-          tokens.$color-purple-600 100%);
+          var(--color-accent-600) 0%,
+          var(--color-purple-600) 100%);
         box-shadow:
           0 4px 12px color-mix(in srgb, var(--color-accent-500) 20%, transparent),
           0 4px 12px color-mix(in srgb, var(--color-purple-500) 20%, transparent);

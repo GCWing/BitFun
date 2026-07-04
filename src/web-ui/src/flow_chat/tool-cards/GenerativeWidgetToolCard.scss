@@ -1,8 +1,4 @@
 .generative-widget-card {
-  --generative-widget-card-icon-rgb: 125, 207, 255;
-  --generative-widget-card-error-rgb: 253, 164, 175;
-  --generative-widget-card-error-soft-rgb: 252, 165, 165;
-
   overflow: hidden;
 }
 
@@ -105,5 +101,5 @@
 
 .generative-widget-card__export-stage-inner {
   padding: var(--size-gap-5);
-  background: var(--color-bg-flowchat);
+  background: var(--color-bg-scene);
 }

@@ -296,6 +296,7 @@ export interface StreamChunkToolEvent extends BaseToolEvent<'StreamChunk'> {
 
 export interface ConfirmationNeededToolEvent extends BaseToolEvent<'ConfirmationNeeded'> {
   params: unknown;
+  timeout_at?: number;
 }
 
 export type ConfirmedToolEvent = BaseToolEvent<'Confirmed'>;
@@ -402,7 +403,7 @@ export function generateToolEventKey(data: ToolEventData): { key: string; strate
   const eventType = toolEvent.event_type;
   const attemptToken = resolveAttemptMergeToken(data);
 
-  const isolatedEvents: ToolEventType[] = ['EarlyDetected', 'Started', 'Completed', 'Failed', 'Cancelled', 'ConfirmationNeeded'];
+  const isolatedEvents: ToolEventType[] = ['EarlyDetected', 'Started', 'Completed', 'Failed', 'Cancelled', 'Rejected', 'ConfirmationNeeded'];
   if (isolatedEvents.includes(eventType)) {
     return null;
   }

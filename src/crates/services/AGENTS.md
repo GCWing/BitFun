@@ -3,21 +3,21 @@
 # Service Layer
 
 This layer owns reusable concrete implementations that touch local systems or
-runtime infrastructure: filesystem, git, file watch, terminal, MCP, remote
-connectivity, process lifecycle, session persistence primitives, MiniApp concrete runtime IO, and similar
+runtime infrastructure: filesystem, git, file watch, terminal, MCP, LSP plugin
+registry, remote connectivity, process lifecycle, session persistence primitives, MiniApp concrete runtime IO, and similar
 OS/network capabilities.
 
 ## Modules
 
 | Crate | Responsibility | Local doc |
 |---|---|---|
-| `services-core` | Reusable local service primitives, filesystem helpers, session storage layout/indexing/deletion, metadata store CRUD/index rebuild, metadata construction/counter/index/field mutation/lineage rules, and JSON file IO without product assembly decisions | [AGENTS.md](services-core/AGENTS.md) |
+| `services-core` | Reusable local service primitives, filesystem helpers, LSP plugin registry rules, session storage layout/indexing/deletion, metadata store CRUD/index rebuild, metadata construction/counter/index/field mutation/lineage rules, and JSON file IO without product assembly decisions | [AGENTS.md](services-core/AGENTS.md) |
 | `services-integrations` | Concrete MCP, git, remote, file-watch, MiniApp runtime, product-domain port implementations, and platform-neutral Remote Connect primitives | [AGENTS.md](services-integrations/AGENTS.md) |
 | `terminal` | PTY, shell integration, and terminal session infrastructure | [AGENTS.md](terminal/AGENTS.md) |
 
 ## Placement Rules
 
-- Put concrete OS, process, filesystem, git, terminal, MCP, remote SSH,
+- Put concrete OS, process, filesystem, git, terminal, MCP, LSP registry, remote SSH,
   file-watch, MiniApp runtime IO, and network service implementations here.
 - Implement `contracts`, `execution`, or `contracts/product-domains` ports here
   when the implementation needs concrete dependencies.

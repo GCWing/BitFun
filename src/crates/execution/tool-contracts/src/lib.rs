@@ -3,15 +3,28 @@
 //! Pure tool DTOs and helpers live here before the concrete tool framework and
 //! tool packs are moved out of the core facade.
 
+pub mod acp_tool_bridge;
 pub mod computer_use;
+pub mod element_token;
 pub mod execution_gate;
 pub mod file_guidance;
 pub mod file_read_freshness;
 pub mod framework;
 pub mod input_validator;
+pub mod mcp_tool_bridge;
 pub mod tool_execution_presentation;
 pub mod tool_result_storage;
+pub mod tool_snapshot;
 
+pub use acp_tool_bridge::{
+    acp_external_agent_tool_input_schema, build_acp_external_agent_tool_definition,
+    build_acp_external_agent_tool_name, build_acp_external_agent_tool_result,
+    normalize_name_for_acp_tool_part, render_acp_external_agent_rejected_message,
+    render_acp_external_agent_result_for_assistant, render_acp_external_agent_result_message,
+    render_acp_external_agent_use_message, validate_acp_external_agent_tool_input,
+    AcpExternalAgentToolDefinition, AcpExternalAgentToolDefinitionInput, ACP_TOOL_PREFIX,
+    ACP_TOOL_SUFFIX,
+};
 pub use bitfun_core_types::ToolImageAttachment;
 pub use bitfun_runtime_ports::{
     DynamicToolDescriptor, DynamicToolProvider, PortError, PortErrorKind, PortResult, ToolDecorator,
@@ -68,12 +81,24 @@ pub use framework::{
     BITFUN_RUNTIME_URI_PREFIX, GET_TOOL_SPEC_TOOL_NAME,
 };
 pub use input_validator::InputValidator;
+pub use mcp_tool_bridge::{
+    build_mcp_tool_bridge_definition, build_mcp_tool_bridge_name, build_mcp_tool_bridge_result,
+    mcp_tool_bridge_dynamic_tool_info, mcp_tool_bridge_short_description, normalize_name_for_mcp,
+    render_mcp_tool_bridge_rejected_message, render_mcp_tool_bridge_result_message,
+    render_mcp_tool_bridge_use_message, validate_mcp_tool_bridge_input, McpToolBridgeBehaviorHints,
+    McpToolBridgeDefinition, McpToolBridgeDefinitionInput, McpToolBridgeToolInfo,
+    MCP_TOOL_DELIMITER, MCP_TOOL_PREFIX,
+};
 pub use tool_execution_presentation::{
     build_invalid_tool_call_error_message, build_tool_call_truncation_recovery_notice,
-    build_tool_execution_error_presentation, build_user_steering_interrupted_presentation,
-    is_write_like_tool_name, render_tool_result_for_assistant, truncate_raw_tool_arguments_preview,
+    build_tool_confirmation_timeout_presentation, build_tool_execution_error_presentation,
+    build_tool_execution_timeout_presentation, build_user_rejected_tool_presentation,
+    build_user_rejected_tool_presentation_with_instruction,
+    build_user_steering_interrupted_presentation, is_write_like_tool_name,
+    render_tool_result_for_assistant, truncate_raw_tool_arguments_preview,
     truncate_raw_tool_arguments_preview_to, truncate_tool_arguments_preview,
-    ToolExecutionErrorPresentation, TOOL_ERROR_ARGUMENTS_PREVIEW_BYTES,
+    ToolExecutionErrorPresentation, TOOL_CONFIRMATION_TIMEOUT_MESSAGE,
+    TOOL_ERROR_ARGUMENTS_PREVIEW_BYTES, USER_REJECTED_TOOL_MESSAGE,
     USER_STEERING_INTERRUPTED_MESSAGE,
 };
 pub use tool_result_storage::{
@@ -82,4 +107,9 @@ pub use tool_result_storage::{
     tool_result_is_persisted_output, PersistedToolOutput, ToolResultPersistenceCandidate,
     ToolResultStoragePolicy, DEFAULT_MAX_TOOL_RESULT_CHARS, MAX_TOOL_RESULTS_PER_ROUND_CHARS,
     PERSISTED_OUTPUT_CLOSING_TAG, PERSISTED_OUTPUT_TAG, TOOL_RESULT_PREVIEW_CHARS,
+};
+pub use tool_snapshot::{
+    materialize_tool_snapshot, MaterializedToolSnapshot, ToolCallSnapshotGuard,
+    ToolCancellationContract, ToolEffectFacts, ToolEffectFactsSource, ToolEffectFilter,
+    ToolProviderIdentity, ToolSnapshotCallError, ToolSnapshotItem,
 };

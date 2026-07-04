@@ -127,7 +127,7 @@ function hasActiveStreamingNarrative(round: ModelRound): boolean {
 function hasActiveTool(round: ModelRound): boolean {
   return round.items.some(item => {
     if (item.type !== 'tool') return false;
-    return item.status !== 'completed' && item.status !== 'cancelled' && item.status !== 'error';
+    return item.status !== 'completed' && item.status !== 'cancelled' && item.status !== 'rejected' && item.status !== 'error';
   });
 }
 
@@ -300,7 +300,7 @@ function isTerminalTurnStatus(status: DialogTurn['status']): boolean {
 }
 
 function isTerminalRoundStatus(status: ModelRound['status']): boolean {
-  return status === 'completed' || status === 'cancelled' || status === 'error';
+  return status === 'completed' || status === 'cancelled' || status === 'rejected' || status === 'error';
 }
 
 function isActiveFlowItem(item: AnyFlowItem): boolean {

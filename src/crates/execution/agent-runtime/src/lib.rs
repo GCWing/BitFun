@@ -5,10 +5,12 @@
 
 pub mod agents;
 pub mod checkpoint;
+pub mod context_profile;
 pub mod custom_agent;
 pub mod custom_subagent;
 pub mod deep_research;
 pub mod deep_review;
+pub mod dialog_turn;
 pub mod event_bus;
 pub mod event_queue;
 pub mod event_router;
@@ -24,7 +26,11 @@ pub mod runtime;
 pub mod scheduled_job;
 pub mod scheduler;
 pub mod sdk;
+pub mod session;
 pub mod session_control;
+pub mod session_state;
+pub mod session_state_manager;
+pub mod side_question;
 pub mod skill_agent_snapshot;
 pub mod skills;
 pub mod thread_goal;

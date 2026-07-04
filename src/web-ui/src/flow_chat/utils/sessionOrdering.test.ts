@@ -131,4 +131,22 @@ describe('sessionOrdering', () => {
       )
     ).toBe(true);
   });
+
+  it('remote SSH: matches persisted metadata that only has workspaceHostname', () => {
+    const session = {
+      workspacePath: '/home/u/project-a',
+      remoteConnectionId: undefined,
+      remoteSshHost: undefined,
+      workspaceHostname: 'myserver.example.com',
+    };
+
+    expect(
+      sessionBelongsToWorkspaceNavRow(
+        session,
+        '/home/u/project-a',
+        'ssh-user@myserver.example.com:22',
+        undefined
+      )
+    ).toBe(true);
+  });
 });

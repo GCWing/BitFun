@@ -1,6 +1,6 @@
 use super::inline_think::InlineThinkParser;
 use super::stream_stats::StreamStats;
-use super::{next_stream_item, TimedStreamItem};
+use super::{next_stream_item, StreamTimeoutController, StreamTimeoutStage, TimedStreamItem};
 use crate::stream::types::openai::OpenAISSEData;
 use crate::stream::types::unified::UnifiedResponse;
 use anyhow::{anyhow, Result};
@@ -73,10 +73,12 @@ pub async fn handle_openai_stream(
     tx_event: mpsc::UnboundedSender<Result<UnifiedResponse>>,
     tx_raw_sse: Option<mpsc::UnboundedSender<String>>,
     inline_think_in_text: bool,
+    ttft_timeout: Option<Duration>,
     idle_timeout: Option<Duration>,
 ) {
     let mut stream = response.bytes_stream().eventsource();
     let mut stats = StreamStats::new("OpenAI");
+    let mut timeout_controller = StreamTimeoutController::new(ttft_timeout, idle_timeout);
     // Track whether a chunk with `finish_reason` was received.
     // Some providers (e.g. MiniMax) close the stream after the final chunk
     // without sending `[DONE]`, so we treat `Ok(None)` as a normal termination
@@ -85,7 +87,7 @@ pub async fn handle_openai_stream(
     let mut normalizer = OpenAIResponseNormalizer::new(inline_think_in_text);
 
     loop {
-        let sse = match next_stream_item(&mut stream, idle_timeout).await {
+        let sse = match next_stream_item(&mut stream, &timeout_controller).await {
             TimedStreamItem::Item(Ok(sse)) => sse,
             TimedStreamItem::End => {
                 if received_finish_reason {
@@ -109,7 +111,18 @@ pub async fn handle_openai_stream(
                 let _ = tx_event.send(Err(anyhow!(error_msg)));
                 return;
             }
-            TimedStreamItem::TimedOut => {
+            TimedStreamItem::TimedOut(StreamTimeoutStage::Ttft) => {
+                let timeout_secs = ttft_timeout.map(|timeout| timeout.as_secs()).unwrap_or(0);
+                let error_msg = format!(
+                    "OpenAI stream TTFT timeout after {}s waiting for first effective output",
+                    timeout_secs
+                );
+                stats.log_summary("ttft_timeout");
+                error!("{}", error_msg);
+                let _ = tx_event.send(Err(anyhow!(error_msg)));
+                return;
+            }
+            TimedStreamItem::TimedOut(StreamTimeoutStage::Idle) => {
                 let timeout_secs = idle_timeout.map(|timeout| timeout.as_secs()).unwrap_or(0);
                 let error_msg = format!("SSE stream timeout after {}s", timeout_secs);
                 stats.log_summary("sse_stream_timeout");
@@ -224,6 +237,7 @@ pub async fn handle_openai_stream(
             }
 
             for normalized_response in normalized_responses {
+                timeout_controller.observe_unified_response(&normalized_response);
                 if normalized_response.finish_reason.is_some() {
                     received_finish_reason = true;
                 }

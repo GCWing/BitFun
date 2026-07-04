@@ -23,6 +23,9 @@ use crate::util::elapsed_ms_u64;
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::types::Message as AIMessage;
 use crate::util::types::ToolDefinition;
+use bitfun_agent_runtime::tool_confirmation::{
+    resolve_tool_confirmation_gate, ToolConfirmationGateFacts,
+};
 use bitfun_agent_runtime::turn_cancellation::DialogTurnCancellationTokenStore;
 use bitfun_ai_adapters::{
     ModelExchangeRequestTraceHandle, ModelExchangeResponseTrace, ModelExchangeTraceConfig,
@@ -730,6 +733,8 @@ impl RoundExecutor {
                 runtime_tool_restrictions: context.runtime_tool_restrictions.clone(),
                 steering_interrupt: context.steering_interrupt.clone(),
                 workspace_services: context.workspace_services.clone(),
+                terminal_port: context.terminal_port.clone(),
+                remote_exec_port: context.remote_exec_port.clone(),
             };
 
             // Read tool execution related configuration from global config
@@ -774,25 +779,25 @@ impl RoundExecutor {
                     .map(|v| v == "true")
                     .unwrap_or(false);
 
-                let needs_confirm = if skip_confirmation || skip_from_context {
+                let any_tool_needs_permission = if skip_confirmation || skip_from_context {
                     false
                 } else {
-                    // Otherwise judge based on tool's needs_permissions()
                     let registry = get_global_tool_registry();
                     let tool_registry = registry.read().await;
-                    let mut requires_permission = false;
 
-                    for tool_call in &stream_result.tool_calls {
-                        if let Some(tool) = tool_registry.get_tool(&tool_call.tool_name) {
-                            if tool.needs_permissions(Some(&tool_call.arguments)) {
-                                requires_permission = true;
-                                break;
-                            }
-                        }
-                    }
-
-                    requires_permission
+                    stream_result.tool_calls.iter().any(|tool_call| {
+                        tool_registry
+                            .get_tool(&tool_call.tool_name)
+                            .map(|tool| tool.needs_permissions(Some(&tool_call.arguments)))
+                            .unwrap_or(false)
+                    })
                 };
+                let needs_confirm = resolve_tool_confirmation_gate(ToolConfirmationGateFacts {
+                    global_skip_tool_confirmation: skip_confirmation,
+                    context_skip_tool_confirmation: skip_from_context,
+                    any_tool_needs_permission,
+                })
+                .confirm_before_run();
 
                 (needs_confirm, exec_timeout, confirm_timeout, task_policy)
             };
@@ -1352,6 +1357,8 @@ mod tests {
             steering_interrupt: None,
             cancellation_token: CancellationToken::new(),
             workspace_services: None,
+            terminal_port: None,
+            remote_exec_port: None,
             recover_partial_on_cancel: false,
         }
     }

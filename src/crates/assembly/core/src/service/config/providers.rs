@@ -172,73 +172,6 @@ impl ConfigProvider for AIConfigProvider {
     }
 }
 
-/// Theme configuration provider (legacy, for a single theme).
-pub struct ThemeConfigProvider;
-
-#[async_trait]
-impl ConfigProvider for ThemeConfigProvider {
-    fn name(&self) -> &str {
-        "theme"
-    }
-
-    fn get_default_config(&self) -> serde_json::Value {
-        serialize_default_config("theme", ThemeConfig::default())
-    }
-
-    async fn validate_config(&self, config: &serde_json::Value) -> BitFunResult<Vec<String>> {
-        let warnings = Vec::new();
-
-        if let Ok(theme_config) = serde_json::from_value::<ThemeConfig>(config.clone()) {
-            let colors = [
-                &theme_config.colors.primary,
-                &theme_config.colors.secondary,
-                &theme_config.colors.background,
-                &theme_config.colors.surface,
-                &theme_config.colors.text,
-                &theme_config.colors.accent,
-                &theme_config.colors.success,
-                &theme_config.colors.warning,
-                &theme_config.colors.error,
-            ];
-
-            for color in colors {
-                if !color.starts_with("#") && !color.starts_with("rgb") && !color.starts_with("hsl")
-                {
-                    return Err(BitFunError::validation(format!(
-                        "Invalid color format: {}",
-                        color
-                    )));
-                }
-            }
-        } else {
-            return Err(BitFunError::validation(
-                "Invalid theme config format".to_string(),
-            ));
-        }
-
-        Ok(warnings)
-    }
-
-    async fn on_config_changed(
-        &self,
-        _old_config: &serde_json::Value,
-        new_config: &serde_json::Value,
-    ) -> BitFunResult<()> {
-        if let Ok(theme_config) = serde_json::from_value::<ThemeConfig>(new_config.clone()) {
-            info!("Theme config changed to: {}", theme_config.display_name);
-        }
-        Ok(())
-    }
-
-    async fn migrate_config(
-        &self,
-        _version: &str,
-        config: serde_json::Value,
-    ) -> BitFunResult<serde_json::Value> {
-        Ok(config)
-    }
-}
-
 /// Theme system configuration provider (new, supports theme management).
 pub struct ThemesConfigProvider;
 
@@ -550,7 +483,6 @@ impl ConfigProviderRegistry {
         };
 
         registry.register(Box::new(AIConfigProvider));
-        registry.register(Box::new(ThemeConfigProvider));
         registry.register(Box::new(ThemesConfigProvider));
         registry.register(Box::new(EditorConfigProvider));
         registry.register(Box::new(TerminalConfigProvider));
@@ -645,7 +577,6 @@ impl ConfigProviderRegistry {
     ) -> BitFunResult<serde_json::Value> {
         match section {
             "app" => Ok(serde_json::to_value(&config.app)?),
-            "theme" => Ok(serde_json::to_value(&config.theme)?),
             "themes" => Ok(serde_json::to_value(&config.themes)?),
             "editor" => Ok(serde_json::to_value(&config.editor)?),
             "terminal" => Ok(serde_json::to_value(&config.terminal)?),

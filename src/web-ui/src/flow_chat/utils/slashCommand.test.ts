@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  getSlashCommandPickerQuery,
+  isSlashCommandPickerQuery,
   isSlashCommand,
   matchesSlashCommand,
   stripSlashCommand,
@@ -45,6 +47,34 @@ describe('isSlashCommand', () => {
   it('rejects invalid command definitions and non-string text', () => {
     expect(isSlashCommand('/btw', 'btw' as unknown as `/${string}`)).toBe(false);
     expect(isSlashCommand(null as unknown as string, '/btw')).toBe(false);
+  });
+});
+
+describe('isSlashCommandPickerQuery', () => {
+  it('allows single-token command picker queries', () => {
+    expect(isSlashCommandPickerQuery('')).toBe(true);
+    expect(isSlashCommandPickerQuery('goal')).toBe(true);
+    expect(isSlashCommandPickerQuery('mcp:foo-bar')).toBe(true);
+  });
+
+  it('rejects path-like queries with another slash', () => {
+    expect(isSlashCommandPickerQuery('users/alice')).toBe(false);
+    expect(isSlashCommandPickerQuery('foo/bar/baz')).toBe(false);
+  });
+});
+
+describe('getSlashCommandPickerQuery', () => {
+  it('returns a lowercase query for active picker text', () => {
+    expect(getSlashCommandPickerQuery('/')).toBe('');
+    expect(getSlashCommandPickerQuery('/Goal')).toBe('goal');
+    expect(getSlashCommandPickerQuery('/mcp:foo-bar')).toBe('mcp:foo-bar');
+  });
+
+  it('closes the picker once the slash token is no longer active', () => {
+    expect(getSlashCommandPickerQuery('/goal ')).toBeNull();
+    expect(getSlashCommandPickerQuery('/goal focus')).toBeNull();
+    expect(getSlashCommandPickerQuery('/users/alice')).toBeNull();
+    expect(getSlashCommandPickerQuery('hello /goal')).toBeNull();
   });
 });
 

@@ -13,16 +13,19 @@ import {
   CONTRACT_VAR_DEFINITION_PATH_PARTS,
   DEFAULT_BASELINE_PATH,
   DEFAULT_ROOT,
+  DYNAMIC_VAR_FAMILY_CONTRACTS,
   EXCEPTION_PATH_PARTS,
   FALLBACK_VAR_CONTRACTS,
   REGISTERED_DYNAMIC_VAR_PREFIXES,
   RUNTIME_CONTRACT_VAR_DEFINITION_PATH_PARTS,
   STATIC_CONTRACT_VAR_DEFINITION_PATH_PARTS,
+  SURFACE_TOKEN_RENAME_CONTRACTS,
   TOKEN_COMPATIBILITY_ALIAS_CONTRACTS,
   TOKEN_COMPATIBILITY_ALIAS_FAMILY_CONTRACTS,
   TOKEN_ALIAS_SOURCE_PATH_PARTS,
   TOKEN_PATH_PARTS,
 } from './theme-css-var-contract.mjs';
+import { writeReportJson } from './theme-color-audit-utils.mjs';
 
 const COLOR_PATTERN =
   /#[0-9a-fA-F]{3,8}\b|rgba?\(\s*[-+]?\d*\.?\d+\s*,\s*[-+]?\d*\.?\d+\s*,\s*[-+]?\d*\.?\d+(?:\s*,\s*(?:[-+]?\d*\.?\d+|var\([^)]+\)))?\s*\)|hsla?\(\s*[-+]?\d*\.?\d+(?:deg|rad|turn)?\s*,\s*[-+]?\d*\.?\d+%\s*,\s*[-+]?\d*\.?\d+%(?:\s*,\s*(?:[-+]?\d*\.?\d+|var\([^)]+\)))?\s*\)/g;
@@ -34,6 +37,9 @@ const VAR_FALLBACK_PATTERN = /var\(\s*(--[a-zA-Z0-9_-]+)\s*,/g;
 const CSS_VAR_SET_PROPERTY_PATTERN = /\.setProperty\(\s*['"`](--[a-zA-Z0-9_-]+)/g;
 const CSS_VAR_INLINE_STYLE_PATTERN = /['"`](--[a-zA-Z0-9_-]+)['"`]\s*:/g;
 const CSS_VAR_DYNAMIC_SET_PATTERN = /\.setProperty\(\s*`(--[a-zA-Z0-9_-]*)\$\{/g;
+const CSS_VAR_COLOR_RAMP_PATTERN = /colorRamp\(\s*['"`](--[a-zA-Z0-9_-]+)['"`]/g;
+const CSS_VAR_LITERAL_PATTERN = /['"`](--[a-zA-Z0-9_-]+)['"`]/g;
+const GENERATED_WIDGET_THEME_PAYLOAD_PATH = 'tools/generative-widget/themePayload.ts';
 const REPORT_ROW_LIMIT = 100;
 const COLOR_DOMAIN_CONTRACT_BY_KEY = new Map(COLOR_DOMAIN_CONTRACTS.map(contract => [contract.key, contract]));
 const FALLBACK_VAR_CONTRACT_BY_KEY = new Map(FALLBACK_VAR_CONTRACTS.map(contract => [contract.key, contract]));
@@ -170,6 +176,13 @@ function isAuditTestFile(relativePath) {
   );
 }
 
+function isGeneratedBuildArtifact(rootRelativePath) {
+  return (
+    rootRelativePath === 'generated/version.ts'
+    || rootRelativePath === 'generated/version-injection.html'
+  );
+}
+
 function isTokenFile(relativePath) {
   return TOKEN_PATH_PARTS.some(part => relativePath.includes(part));
 }
@@ -192,6 +205,54 @@ function isRuntimeContractVarDefinitionFile(relativePath) {
 
 function isExceptionFile(relativePath) {
   return EXCEPTION_PATH_PARTS.some(part => relativePath.toLowerCase().includes(part.toLowerCase()));
+}
+
+function isGeneratedWidgetThemePayloadFile(relativePath) {
+  return relativePath.endsWith(GENERATED_WIDGET_THEME_PAYLOAD_PATH);
+}
+
+function collectGeneratedWidgetPayloadVarNames(content) {
+  const fallbackVars = new Map();
+  const fallbackBlock = /const FALLBACK_VAR = \{([\s\S]*?)\} as const;/.exec(content)?.[1];
+  if (fallbackBlock) {
+    for (const match of collectMatches(fallbackBlock, /\s+(\w+): ['"`](--[a-zA-Z0-9_-]+)['"`]/g)) {
+      fallbackVars.set(match[1], match[2]);
+    }
+  }
+
+  const hasGroupsDeclaration = content.includes('WIDGET_THEME_VAR_GROUPS');
+  const groupsBlock = /const WIDGET_THEME_VAR_GROUPS = \{([\s\S]*?)\n\} as const;/.exec(content)?.[1];
+  if (!groupsBlock) {
+    if (hasGroupsDeclaration) {
+      throw new Error('Unable to parse generated widget WIDGET_THEME_VAR_GROUPS; refusing to audit a partial payload contract.');
+    }
+    return collectMatches(content, CSS_VAR_LITERAL_PATTERN).map(match => match[1]);
+  }
+
+  const names = [];
+  const groups = collectMatches(groupsBlock, /\n\s+\w+: \[([\s\S]*?)\n\s+\]/g);
+  if (groups.length === 0) {
+    throw new Error('Unable to parse generated widget WIDGET_THEME_VAR_GROUPS entries; refusing to audit a partial payload contract.');
+  }
+  for (const group of groups) {
+    for (const line of group[1].split(/\r?\n/)) {
+      const fallbackRef = /FALLBACK_VAR\.(\w+)/.exec(line);
+      if (fallbackRef) {
+        const name = fallbackVars.get(fallbackRef[1]);
+        if (name) {
+          names.push(name);
+        } else {
+          throw new Error(`Unable to resolve generated widget payload fallback var ${fallbackRef[1]}.`);
+        }
+        continue;
+      }
+      const literal = /['"`](--[a-zA-Z0-9_-]+)['"`]/.exec(line);
+      if (literal) {
+        names.push(literal[1]);
+      }
+    }
+  }
+  return names;
 }
 
 function pathMatchesPart(relativePath, pathPart) {
@@ -226,6 +287,22 @@ function addToSetMap(map, key, value) {
 function collectMatches(content, pattern) {
   pattern.lastIndex = 0;
   return Array.from(content.matchAll(pattern));
+}
+
+function contractOwnerMatchesRoot(contract, rootRelativePath) {
+  return String(contract.owner ?? '')
+    .split(';')
+    .map(owner => owner.trim())
+    .filter(Boolean)
+    .some(owner => (
+      owner === rootRelativePath
+      || owner.startsWith(`${rootRelativePath}/`)
+      || rootRelativePath.startsWith(`${owner}/`)
+    ));
+}
+
+function colorRampPrefix(name) {
+  return name.endsWith('-') ? name : `${name}-`;
 }
 
 function previousNonWhitespace(chars) {
@@ -713,9 +790,25 @@ function applyBaseline(report, options) {
 function audit(options) {
   const root = path.resolve(options.root);
   const checksFullThemeSourceRoot = root === path.resolve(DEFAULT_ROOT);
+  const rootRelativePath = normalizePath(path.relative(process.cwd(), root));
   const files = walkFiles(root);
   const cwd = process.cwd();
-  const auditedFiles = files.filter(file => !isAuditTestFile(normalizePath(path.relative(cwd, file))));
+  const fileEntries = files.map(file => ({
+    file,
+    relativePath: normalizePath(path.relative(cwd, file)),
+    rootRelativePath: normalizePath(path.relative(root, file)),
+  }));
+  const ignoredTestFiles = fileEntries.filter(entry => isAuditTestFile(entry.relativePath));
+  const ignoredGeneratedFiles = fileEntries.filter(entry => (
+    !isAuditTestFile(entry.relativePath)
+    && isGeneratedBuildArtifact(entry.rootRelativePath)
+  ));
+  const auditedFiles = fileEntries
+    .filter(entry => (
+      !isAuditTestFile(entry.relativePath)
+      && !isGeneratedBuildArtifact(entry.rootRelativePath)
+    ))
+    .map(entry => entry.file);
   const tokenAliasDefinitionsByColorKey = collectTokenAliasDefinitions(auditedFiles, cwd);
 
   const colorCounts = new Map();
@@ -739,9 +832,12 @@ function audit(options) {
   const tokenColorCounts = new Map();
   const colorDomainCounts = new Map();
   const colorDomainFiles = new Map();
+  const colorDomainColorFiles = new Map();
   const tokenAliasLiteralCounts = new Map();
   const tokenAliasLiteralFiles = new Map();
   const tokenAliasLiteralExamples = new Map();
+  const generatedWidgetPayloadVarCounts = new Map();
+  const generatedWidgetPayloadVarFiles = new Map();
 
   let colorOccurrences = 0;
   let componentColorOccurrences = 0;
@@ -766,6 +862,9 @@ function audit(options) {
       const domainCounts = colorDomainCounts.get(colorDomain) ?? new Map();
       incrementMap(domainCounts, color);
       colorDomainCounts.set(colorDomain, domainCounts);
+      const domainColorFiles = colorDomainColorFiles.get(colorDomain) ?? new Map();
+      addToSetMap(domainColorFiles, color, relativePath);
+      colorDomainColorFiles.set(colorDomain, domainColorFiles);
       if (tokenFile) {
         incrementMap(tokenColorCounts, color);
       } else if (exceptionFile) {
@@ -828,6 +927,19 @@ function audit(options) {
       addToSetMap(dynamicDefinitionFiles, match[1], relativePath);
     }
 
+    for (const match of collectMatches(content, CSS_VAR_COLOR_RAMP_PATTERN)) {
+      const prefix = colorRampPrefix(match[1]);
+      dynamicDefinitionPrefixes.add(prefix);
+      addToSetMap(dynamicDefinitionFiles, prefix, relativePath);
+    }
+
+    if (isGeneratedWidgetThemePayloadFile(relativePath)) {
+      for (const name of collectGeneratedWidgetPayloadVarNames(content)) {
+        incrementMap(generatedWidgetPayloadVarCounts, name);
+        addToSetMap(generatedWidgetPayloadVarFiles, name, relativePath);
+      }
+    }
+
     for (const match of collectMatches(content, VAR_FALLBACK_PATTERN)) {
       fallbackOccurrences += 1;
       incrementMap(fallbackTokenCounts, match[1]);
@@ -837,11 +949,17 @@ function audit(options) {
 
   const definedVars = new Set(varDefinitionCounts.keys());
   const getDefinitionKinds = name => Array.from(varDefinitionKinds.get(name) ?? ['unknown']).sort();
+  const getExplicitDefinitionKind = name => (
+    definedVars.has(name) ? getDefinitionKinds(name).join('+') : null
+  );
+  const getDynamicDefinitionPrefix = name => (
+    Array.from(dynamicDefinitionPrefixes).find(prefix => name.startsWith(prefix)) ?? null
+  );
   const getDefinitionKind = name => {
     if (definedVars.has(name)) {
       return getDefinitionKinds(name).join('+');
     }
-    const dynamicPrefix = Array.from(dynamicDefinitionPrefixes).find(prefix => name.startsWith(prefix));
+    const dynamicPrefix = getDynamicDefinitionPrefix(name);
     return dynamicPrefix ? `dynamic-family:${dynamicPrefix}*` : null;
   };
   const unresolvedVarEntries = Array.from(varUsageCounts.entries())
@@ -869,6 +987,23 @@ function audit(options) {
     .filter(entry => entry.kind && entry.kind !== 'css')
     .sort((a, b) => b.count - a.count || a.key.localeCompare(b.key))
     .slice(0, REPORT_ROW_LIMIT);
+  const requiresExactDynamicFamilyDefinitions = staticContractVarDefinitions.size > 0;
+  const dynamicFamilyUnexportedEntries = requiresExactDynamicFamilyDefinitions
+    ? Array.from(varUsageCounts.entries())
+      .map(([key, count]) => {
+        const prefix = getDynamicDefinitionPrefix(key);
+        return {
+          key,
+          count,
+          prefix,
+          files: Array.from(varUsageFiles.get(key) ?? []).sort().slice(0, 5),
+        };
+      })
+      .filter(entry => entry.prefix && !definedVars.has(entry.key))
+      .sort((a, b) => b.count - a.count || a.key.localeCompare(b.key))
+    : [];
+  const dynamicFamilyUnexportedVars = dynamicFamilyUnexportedEntries
+    .slice(0, REPORT_ROW_LIMIT);
   const unregisteredDynamicFamilyEntries = Array.from(dynamicDefinitionPrefixes)
     .filter(prefix => !REGISTERED_DYNAMIC_VAR_PREFIXES.has(prefix))
     .sort((a, b) => a.localeCompare(b))
@@ -877,7 +1012,9 @@ function audit(options) {
       files: Array.from(dynamicDefinitionFiles.get(prefix) ?? []).sort().slice(0, 5),
     }));
   const staleRegisteredDynamicFamilyEntries = checksFullThemeSourceRoot
-    ? Array.from(REGISTERED_DYNAMIC_VAR_PREFIXES)
+    ? DYNAMIC_VAR_FAMILY_CONTRACTS
+      .filter(contract => contractOwnerMatchesRoot(contract, rootRelativePath))
+      .map(contract => contract.prefix)
       .filter(prefix => !dynamicDefinitionPrefixes.has(prefix))
       .sort((a, b) => a.localeCompare(b))
       .map(prefix => ({ key: prefix }))
@@ -940,6 +1077,23 @@ function audit(options) {
       topColors: topEntries(counts, options.top),
     }];
   }));
+  const colorDomainNearPairEntries = Object.fromEntries(COLOR_DOMAIN_KEYS.map(key => {
+    const counts = colorDomainCounts.get(key) ?? new Map();
+    const filesByColor = colorDomainColorFiles.get(key) ?? new Map();
+    return [key, buildNearColorPairs(counts, filesByColor)];
+  }));
+  const specializedColorDomainKeys = COLOR_DOMAIN_KEYS.filter(key => key !== 'appUi');
+  const colorDomainNearPairs = {
+    indistinguishableTotal: specializedColorDomainKeys.reduce(
+      (total, key) => total + colorDomainNearPairEntries[key].indistinguishableTotal,
+      0,
+    ),
+    nearTotal: specializedColorDomainKeys.reduce(
+      (total, key) => total + colorDomainNearPairEntries[key].nearTotal,
+      0,
+    ),
+    ...colorDomainNearPairEntries,
+  };
   const fallbackVars = Array.from(fallbackTokenCounts.entries())
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
     .map(([key, count]) => ({
@@ -996,6 +1150,89 @@ function audit(options) {
       files: entry.files,
     }))
     .sort((a, b) => a.key.localeCompare(b.key));
+  const generatedWidgetPayloadVars = Array.from(generatedWidgetPayloadVarCounts.entries())
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([key, count]) => ({
+      key,
+      count,
+      definitionKind: getExplicitDefinitionKind(key),
+      files: Array.from(generatedWidgetPayloadVarFiles.get(key) ?? []).sort().slice(0, 5),
+    }));
+  const generatedWidgetPayloadCompatibilityAliases = generatedWidgetPayloadVars
+    .map(entry => {
+      const contract = resolveCompatibilityAliasContract(entry.key);
+      if (!contract || contract.familyPrefix) {
+        return null;
+      }
+      return {
+        ...entry,
+        canonical: contract.canonical,
+        canonicalDefinitionKind: getExplicitDefinitionKind(contract.canonical),
+        familyPrefix: null,
+        canonicalPrefix: null,
+        owner: contract.owner,
+        reason: contract.reason,
+        removal: contract.removal,
+        internalUsageCount: varUsageCounts.get(entry.key) ?? 0,
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.count - a.count || a.key.localeCompare(b.key));
+  const generatedWidgetPayloadCompatibilityFamilies = generatedWidgetPayloadVars
+    .map(entry => {
+      const contract = resolveCompatibilityAliasContract(entry.key);
+      if (!contract?.familyPrefix) {
+        return null;
+      }
+      return {
+        ...entry,
+        canonical: contract.canonical,
+        familyPrefix: contract.familyPrefix,
+        canonicalPrefix: contract.canonicalPrefix,
+        canonicalDefinitionKind: getExplicitDefinitionKind(contract.canonical),
+        owner: contract.owner,
+        reason: contract.reason,
+        removal: contract.removal,
+        internalUsageCount: varUsageCounts.get(entry.key) ?? 0,
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.count - a.count || a.key.localeCompare(b.key));
+  const generatedWidgetPayloadExternalOnlyCompatibility = [
+    ...generatedWidgetPayloadCompatibilityAliases,
+    ...generatedWidgetPayloadCompatibilityFamilies,
+  ]
+    .filter(entry => entry.internalUsageCount === 0)
+    .map(entry => ({
+      key: entry.key,
+      canonical: entry.canonical,
+      familyPrefix: entry.familyPrefix,
+      canonicalPrefix: entry.canonicalPrefix,
+      count: entry.count,
+      owner: entry.owner,
+      reason: entry.reason,
+      removal: entry.removal,
+      canonicalDefinitionKind: entry.canonicalDefinitionKind,
+    }))
+    .sort((a, b) => a.key.localeCompare(b.key));
+  const generatedWidgetPayloadUndefinedVars = generatedWidgetPayloadVars
+    .filter(entry => !entry.definitionKind)
+    .sort((a, b) => a.key.localeCompare(b.key));
+  const generatedWidgetPayloadVarNames = new Set(generatedWidgetPayloadVars.map(entry => entry.key));
+  const generatedWidgetPayloadMissingCompatibilityCanonicals = [
+    ...generatedWidgetPayloadCompatibilityAliases,
+    ...generatedWidgetPayloadCompatibilityFamilies,
+  ]
+    .filter(entry => !entry.canonicalDefinitionKind)
+    .map(({ key, canonical, count, files }) => ({ key, canonical, count, files }))
+    .sort((a, b) => a.key.localeCompare(b.key));
+  const generatedWidgetPayloadUnexportedCompatibilityCanonicals = [
+    ...generatedWidgetPayloadCompatibilityAliases,
+    ...generatedWidgetPayloadCompatibilityFamilies,
+  ]
+    .filter(entry => entry.canonicalDefinitionKind && !generatedWidgetPayloadVarNames.has(entry.canonical))
+    .map(({ key, canonical, count, files }) => ({ key, canonical, count, files }))
+    .sort((a, b) => a.key.localeCompare(b.key));
   const staleCompatibilityAliasEntries = checksFullThemeSourceRoot
     ? TOKEN_COMPATIBILITY_ALIAS_CONTRACTS
       .map(contract => ({
@@ -1009,7 +1246,7 @@ function audit(options) {
     : [];
   const staleCompatibilityAliasFamilyEntries = checksFullThemeSourceRoot
     ? compatibilityAliasFamilyEntries
-      .filter(entry => !entry.defined || !entry.canonicalDefined)
+      .filter(entry => !entry.canonicalDefined)
       .map(entry => ({ key: entry.key, canonical: entry.canonical }))
     : [];
   const uncontractedFallbackVars = fallbackVars
@@ -1041,11 +1278,41 @@ function audit(options) {
     ))
     .map(([key, scope]) => ({ key, count: scope.occurrences }))
     .sort((a, b) => a.key.localeCompare(b.key));
+  const surfaceTokenRenameEntries = SURFACE_TOKEN_RENAME_CONTRACTS
+    .map(contract => {
+      const usageCount = varUsageCounts.get(contract.key) ?? 0;
+      const definitionCount = varDefinitionCounts.get(contract.key) ?? 0;
+      const files = new Set([
+        ...Array.from(varUsageFiles.get(contract.key) ?? []),
+        ...Array.from(varDefinitionFiles.get(contract.key) ?? []),
+      ]);
+      return {
+        key: contract.key,
+        canonical: contract.canonical,
+        usageCount,
+        definitionCount,
+        count: usageCount + definitionCount,
+        files: Array.from(files).sort().slice(0, 5),
+      };
+    })
+    .filter(entry => entry.count > 0)
+    .sort((a, b) => b.count - a.count || a.key.localeCompare(b.key));
+  const missingSurfaceTokenRenameCanonicalEntries = checksFullThemeSourceRoot
+    ? SURFACE_TOKEN_RENAME_CONTRACTS
+      .map(contract => ({
+        key: contract.key,
+        canonical: contract.canonical,
+        canonicalDefinitionKind: getDefinitionKind(contract.canonical),
+      }))
+      .filter(entry => !entry.canonicalDefinitionKind)
+      .sort((a, b) => a.key.localeCompare(b.key))
+    : [];
 
   return {
     root: normalizePath(path.relative(cwd, root)) || '.',
     filesScanned: auditedFiles.length,
-    ignoredTestFiles: files.length - auditedFiles.length,
+    ignoredTestFiles: ignoredTestFiles.length,
+    ignoredGeneratedFiles: ignoredGeneratedFiles.length,
     filesWithColors: fileColorCounts.size,
     colorOccurrences,
     uniqueColors: colorCounts.size,
@@ -1065,6 +1332,7 @@ function audit(options) {
       },
     },
     colorDomainScopes,
+    colorDomainNearPairs,
     componentColorOccurrences,
     componentFilesWithColors: componentFileColorCounts.size,
     uniqueComponentColors,
@@ -1102,6 +1370,37 @@ function audit(options) {
       top: compatibilityAliasEntries.slice(0, options.top),
       families: compatibilityAliasFamilyEntries,
     },
+    generatedWidgetPayload: {
+      varUnique: generatedWidgetPayloadVars.length,
+      occurrences: generatedWidgetPayloadVars.reduce((total, entry) => total + entry.count, 0),
+      undefinedUnique: generatedWidgetPayloadUndefinedVars.length,
+      compatibilityAliasUnique: generatedWidgetPayloadCompatibilityAliases.length,
+      compatibilityAliasOccurrences: generatedWidgetPayloadCompatibilityAliases.reduce(
+        (total, entry) => total + entry.count,
+        0,
+      ),
+      compatibilityAliasFamilyUnique: generatedWidgetPayloadCompatibilityFamilies.length,
+      compatibilityAliasFamilyOccurrences: generatedWidgetPayloadCompatibilityFamilies.reduce(
+        (total, entry) => total + entry.count,
+        0,
+      ),
+      externalOnlyCompatibilityUnique: generatedWidgetPayloadExternalOnlyCompatibility.length,
+      externalOnlyCompatibilityOccurrences: generatedWidgetPayloadExternalOnlyCompatibility.reduce(
+        (total, entry) => total + entry.count,
+        0,
+      ),
+      missingCompatibilityCanonicalUnique: generatedWidgetPayloadMissingCompatibilityCanonicals.length,
+      unexportedCompatibilityCanonicalUnique: generatedWidgetPayloadUnexportedCompatibilityCanonicals.length,
+      topCompatibilityAliases: generatedWidgetPayloadCompatibilityAliases.slice(0, options.top),
+      topCompatibilityFamilies: generatedWidgetPayloadCompatibilityFamilies.slice(0, options.top),
+      externalOnlyCompatibility: generatedWidgetPayloadExternalOnlyCompatibility.slice(0, REPORT_ROW_LIMIT),
+      undefinedVars: generatedWidgetPayloadUndefinedVars.slice(0, REPORT_ROW_LIMIT),
+      missingCompatibilityCanonicals: generatedWidgetPayloadMissingCompatibilityCanonicals.slice(0, REPORT_ROW_LIMIT),
+      unexportedCompatibilityCanonicals: generatedWidgetPayloadUnexportedCompatibilityCanonicals.slice(
+        0,
+        REPORT_ROW_LIMIT,
+      ),
+    },
     staleCompatibilityAliases: staleCompatibilityAliasEntries,
     staleCompatibilityAliasFamilies: staleCompatibilityAliasFamilyEntries,
     missingCompatibilityAliasCanonicals: missingCompatibilityAliasCanonicalEntries,
@@ -1114,6 +1413,14 @@ function audit(options) {
     missingColorDomainContracts: missingColorDomainContractEntries,
     staleColorDomainContracts: staleColorDomainContractEntries,
     activeUncontractedColorDomains: activeUncontractedColorDomainEntries,
+    surfaceTokenRenames: {
+      registeredUnique: SURFACE_TOKEN_RENAME_CONTRACTS.length,
+      activeUnique: surfaceTokenRenameEntries.length,
+      activeOccurrences: surfaceTokenRenameEntries.reduce((total, entry) => total + entry.count, 0),
+      missingCanonicalUnique: missingSurfaceTokenRenameCanonicalEntries.length,
+      active: surfaceTokenRenameEntries.slice(0, REPORT_ROW_LIMIT),
+      missingCanonicals: missingSurfaceTokenRenameCanonicalEntries.slice(0, REPORT_ROW_LIMIT),
+    },
     tokenAliasLiterals: {
       occurrences: sumMapValues(tokenAliasLiteralCounts),
       uniqueColors: tokenAliasLiteralCounts.size,
@@ -1126,6 +1433,7 @@ function audit(options) {
       staticContractDefinedUnique: staticContractVarDefinitions.size,
       runtimeContractDefinedUnique: runtimeContractVarDefinitions.size,
       dynamicFamilyPrefixes: Array.from(dynamicDefinitionPrefixes).sort(),
+      dynamicFamilyUnexportedUnique: dynamicFamilyUnexportedEntries.length,
       unregisteredDynamicFamilyUnique: unregisteredDynamicFamilyEntries.length,
       staleRegisteredDynamicFamilyUnique: staleRegisteredDynamicFamilyEntries.length,
       unresolvedUnique: unresolvedVarEntries.length,
@@ -1137,6 +1445,7 @@ function audit(options) {
       nonContractCssPrivateUnique: nonContractCssPrivateEntries.length,
     },
     dynamicDefinedVars,
+    dynamicFamilyUnexportedVars,
     unregisteredDynamicFamilies: unregisteredDynamicFamilyEntries,
     staleRegisteredDynamicFamilies: staleRegisteredDynamicFamilyEntries,
     nonContractDefinedVars,
@@ -1162,6 +1471,7 @@ function printText(report) {
   console.log(`Theme color audit: ${report.root}`);
   console.log(`Files scanned: ${report.filesScanned}`);
   console.log(`Ignored test files: ${report.ignoredTestFiles}`);
+  console.log(`Ignored generated files: ${report.ignoredGeneratedFiles}`);
   console.log(`Files with colors: ${report.filesWithColors}`);
   console.log(`Color occurrences: ${report.colorOccurrences}`);
   console.log(`Unique colors: ${report.uniqueColors}`);
@@ -1184,6 +1494,15 @@ function printText(report) {
     `missingCanonicals=${report.compatibilityAliases.missingCanonicalUnique}`
   );
   console.log(
+    `Generated widget payload: vars=${report.generatedWidgetPayload.varUnique}, ` +
+    `undefined=${report.generatedWidgetPayload.undefinedUnique}, ` +
+    `compatAliases=${report.generatedWidgetPayload.compatibilityAliasUnique}, ` +
+    `compatAliasFamilies=${report.generatedWidgetPayload.compatibilityAliasFamilyUnique}, ` +
+    `externalOnlyCompat=${report.generatedWidgetPayload.externalOnlyCompatibilityUnique}, ` +
+    `missingCompatCanonicals=${report.generatedWidgetPayload.missingCompatibilityCanonicalUnique}, ` +
+    `unexportedCompatCanonicals=${report.generatedWidgetPayload.unexportedCompatibilityCanonicalUnique}`
+  );
+  console.log(
     `Fallback contracts: registered=${report.fallbackContracts.registeredUnique}, ` +
     `uncontracted=${report.fallbackContracts.uncontractedUnique}, ` +
     `stale=${report.fallbackContracts.staleRegisteredUnique}`
@@ -1193,6 +1512,12 @@ function printText(report) {
     `missing=${report.colorDomainContracts.missingRegisteredUnique}, ` +
     `stale=${report.colorDomainContracts.staleRegisteredUnique}, ` +
     `activeUncontracted=${report.colorDomainContracts.activeUncontractedUnique}`
+  );
+  console.log(
+    `Surface token renames: registered=${report.surfaceTokenRenames.registeredUnique}, ` +
+    `active=${report.surfaceTokenRenames.activeUnique}, ` +
+    `occurrences=${report.surfaceTokenRenames.activeOccurrences}, ` +
+    `missingCanonicals=${report.surfaceTokenRenames.missingCanonicalUnique}`
   );
 
   console.log('\nTop colors:');
@@ -1213,6 +1538,38 @@ function printText(report) {
       `unique=${scope.uniqueColors.toString().padStart(4)}  ` +
       `files=${scope.filesWithColors.toString().padStart(3)}`
     );
+  }
+
+  console.log('\nSpecialized color-domain near pairs:');
+  let printedDomainNearPairs = false;
+  for (const key of COLOR_DOMAIN_KEYS.filter(domainKey => domainKey !== 'appUi')) {
+    const pairs = report.colorDomainNearPairs[key];
+    if (!pairs || (pairs.indistinguishableTotal === 0 && pairs.nearTotal === 0)) {
+      continue;
+    }
+    printedDomainNearPairs = true;
+    console.log(
+      `  ${COLOR_DOMAIN_LABELS[key].padEnd(18)} ` +
+      `indistinguishable=${pairs.indistinguishableTotal.toString().padStart(4)}  ` +
+      `near=${pairs.nearTotal.toString().padStart(4)}`
+    );
+    for (const pair of pairs.indistinguishable.slice(0, 3)) {
+      console.log(
+        `    indistinguishable ${pair.a} <-> ${pair.b}  ` +
+        `distance=${pair.distance.toFixed(2)}  alphaDiff=${pair.alphaDiff.toFixed(3)}  ` +
+        `combined=${pair.count}`
+      );
+    }
+    for (const pair of pairs.near.slice(0, 3)) {
+      console.log(
+        `    near ${pair.a} <-> ${pair.b}  ` +
+        `distance=${pair.distance.toFixed(2)}  alphaDiff=${pair.alphaDiff.toFixed(3)}  ` +
+        `combined=${pair.count}`
+      );
+    }
+  }
+  if (!printedDomainNearPairs) {
+    console.log('  none');
   }
 
   console.log('\nTop files:');
@@ -1280,6 +1637,70 @@ function printText(report) {
     }
   }
 
+  console.log('\nGenerated widget payload compatibility aliases:');
+  if (report.generatedWidgetPayload.topCompatibilityAliases.length === 0) {
+    console.log('  none');
+  } else {
+    for (const row of report.generatedWidgetPayload.topCompatibilityAliases.slice(0, 10)) {
+      console.log(
+        `  ${row.count.toString().padStart(5)}  ${row.key} -> ${row.canonical}  ` +
+        `canonicalDefined=${Boolean(row.canonicalDefinitionKind)}`
+      );
+    }
+  }
+
+  console.log('\nGenerated widget payload compatibility families:');
+  if (report.generatedWidgetPayload.topCompatibilityFamilies.length === 0) {
+    console.log('  none');
+  } else {
+    for (const row of report.generatedWidgetPayload.topCompatibilityFamilies.slice(0, 10)) {
+      console.log(
+        `  ${row.count.toString().padStart(5)}  ${row.key} -> ${row.canonical}  ` +
+        `canonicalDefined=${Boolean(row.canonicalDefinitionKind)}`
+      );
+    }
+  }
+
+  console.log('\nGenerated widget payload external-only compatibility:');
+  if (report.generatedWidgetPayload.externalOnlyCompatibility.length === 0) {
+    console.log('  none');
+  } else {
+    for (const row of report.generatedWidgetPayload.externalOnlyCompatibility.slice(0, 10)) {
+      const family = row.familyPrefix ? `  family=${row.familyPrefix}*` : '';
+      console.log(
+        `  ${row.count.toString().padStart(5)}  ${row.key} -> ${row.canonical}${family}  ` +
+        `canonicalDefined=${Boolean(row.canonicalDefinitionKind)}`
+      );
+    }
+  }
+
+  console.log('\nGenerated widget payload undefined vars:');
+  console.log(printRows(report.generatedWidgetPayload.undefinedVars.slice(0, 10)));
+
+  console.log('\nGenerated widget payload missing compatibility canonicals:');
+  if (report.generatedWidgetPayload.missingCompatibilityCanonicals.length === 0) {
+    console.log('  none');
+  } else {
+    for (const row of report.generatedWidgetPayload.missingCompatibilityCanonicals.slice(0, 10)) {
+      console.log(
+        `  ${row.key} -> ${row.canonical}  ` +
+        `count=${row.count}  files=${row.files.join(', ')}`
+      );
+    }
+  }
+
+  console.log('\nGenerated widget payload unexported compatibility canonicals:');
+  if (report.generatedWidgetPayload.unexportedCompatibilityCanonicals.length === 0) {
+    console.log('  none');
+  } else {
+    for (const row of report.generatedWidgetPayload.unexportedCompatibilityCanonicals.slice(0, 10)) {
+      console.log(
+        `  ${row.key} -> ${row.canonical}  ` +
+        `count=${row.count}  files=${row.files.join(', ')}`
+      );
+    }
+  }
+
   console.log('\nColor domain contract gaps:');
   const colorDomainGapRows = [
     ...report.missingColorDomainContracts.map(row => ({ ...row, count: 1 })),
@@ -1287,6 +1708,28 @@ function printText(report) {
     ...report.activeUncontractedColorDomains,
   ];
   console.log(printRows(colorDomainGapRows.slice(0, 10)));
+
+  console.log('\nSurface token rename debt:');
+  if (report.surfaceTokenRenames.active.length === 0) {
+    console.log('  none');
+  } else {
+    for (const row of report.surfaceTokenRenames.active.slice(0, 10)) {
+      console.log(
+        `  ${row.key} -> ${row.canonical}  ` +
+        `count=${row.count}  definitions=${row.definitionCount}  usages=${row.usageCount}  ` +
+        `files=${row.files.join(', ')}`
+      );
+    }
+  }
+
+  console.log('\nSurface token rename missing canonicals:');
+  if (report.surfaceTokenRenames.missingCanonicals.length === 0) {
+    console.log('  none');
+  } else {
+    for (const row of report.surfaceTokenRenames.missingCanonicals.slice(0, 10)) {
+      console.log(`  ${row.key} -> ${row.canonical}`);
+    }
+  }
 
   console.log('\nTop token-equivalent app literals:');
   if (report.tokenAliasLiterals.top.length === 0) {
@@ -1314,6 +1757,7 @@ function printText(report) {
     `fallbackOnly=${report.cssVarDefinitions.fallbackOnlyUnique}, ` +
     `requiredMissing=${report.cssVarDefinitions.unresolvedRequiredUnique}, ` +
     `runtimeOnlyRequired=${report.cssVarDefinitions.runtimeOnlyRequiredContractUnique}, ` +
+    `dynamicFamilyUnexported=${report.cssVarDefinitions.dynamicFamilyUnexportedUnique}, ` +
     `nonContractCrossFile=${report.cssVarDefinitions.nonContractCrossFileUnique}, ` +
     `nonContractDynamicInputs=${report.cssVarDefinitions.nonContractDynamicInputUnique}, ` +
     `nonContractCssPrivate=${report.cssVarDefinitions.nonContractCssPrivateUnique}`
@@ -1338,6 +1782,18 @@ function printText(report) {
 
   console.log('\nStale registered dynamic CSS var families:');
   console.log(printRows(report.staleRegisteredDynamicFamilies.slice(0, 10).map(row => ({ ...row, count: 1 }))));
+
+  console.log('\nDynamic-family CSS vars without exact export (top):');
+  if (report.dynamicFamilyUnexportedVars.length === 0) {
+    console.log('  none');
+  } else {
+    for (const row of report.dynamicFamilyUnexportedVars.slice(0, 10)) {
+      console.log(
+        `  ${row.count.toString().padStart(5)}  ${row.key}  ` +
+        `prefix=${row.prefix}  files=${row.files.join(', ')}`
+      );
+    }
+  }
 
   console.log('\nFallback-only unresolved CSS vars (top):');
   console.log(printRows(report.fallbackOnlyVars.slice(0, 10)));
@@ -1424,9 +1880,7 @@ try {
   const report = audit(options);
   const baselineSummary = applyBaseline(report, options);
   if (options.reportJson) {
-    const reportJsonPath = path.resolve(options.reportJson);
-    fs.mkdirSync(path.dirname(reportJsonPath), { recursive: true });
-    fs.writeFileSync(reportJsonPath, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
+    writeReportJson(report, options.reportJson);
   }
   if (options.json) {
     console.log(JSON.stringify(report, null, 2));

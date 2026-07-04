@@ -133,6 +133,17 @@ pub fn err_response(domain: &str, action: &str, err: ControlHubError) -> Vec<Too
     vec![ToolResult::ok(body, Some(summary))]
 }
 
+/// Builds a `BitFunError` whose message is prefixed with `[CODE]` using the
+/// canonical [`ErrorCode`] instead of a hand-typed string literal (e.g.
+/// `"[INVALID_PARAMS] ..."`). Callers that cannot return the full
+/// `ControlHubError` envelope (e.g. `?`-propagated parameter validation) use
+/// this so the bracket prefix can never drift from the enum that
+/// [`super::errors::ErrorCode::from_str`] / `map_dispatch_error` parse it
+/// back into.
+pub fn coded_tool_error(code: ErrorCode, message: impl std::fmt::Display) -> BitFunError {
+    BitFunError::tool(format!("[{}] {}", code.as_str(), message))
+}
+
 /// Convenience: lift a `BitFunError` into the structured envelope using the
 /// supplied default error code. Used as a fallback when an underlying domain
 /// implementation still returns `Err` instead of a structured envelope.

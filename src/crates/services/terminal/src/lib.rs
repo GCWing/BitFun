@@ -17,7 +17,9 @@ pub mod api;
 pub mod config;
 pub mod events;
 pub mod exec;
+pub mod exec_shell;
 pub mod pty;
+pub mod runtime_port;
 pub mod session;
 pub mod shell;
 
@@ -39,6 +41,10 @@ pub use exec::{
     ExecSessionCompletionStatus as LocalExecSessionCompletionStatus,
     SendStdinRequest as LocalSendStdinRequest, WriteStdinRequest as LocalWriteStdinRequest,
 };
+pub use exec_shell::{
+    parse_configured_shell_preference, resolve_local_exec_shell, ConfiguredShellPreference,
+    ResolvedLocalExecShell,
+};
 pub use pty::{
     // New component-based types
     spawn_pty,
@@ -56,6 +62,7 @@ pub use pty::{
     PtyWriter,
     SpawnResult,
 };
+pub use runtime_port::TerminalRuntimePort;
 pub use session::{
     CommandCompletionReason, CommandExecuteResult, CommandStream, CommandStreamEvent,
     ExecuteOptions, SessionManager, SessionSource, SessionStatus, TerminalBindingOptions,

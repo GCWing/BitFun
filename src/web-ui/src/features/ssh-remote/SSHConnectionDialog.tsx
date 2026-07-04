@@ -13,7 +13,7 @@ import { Input } from '@/component-library';
 import { Select } from '@/component-library';
 import { Alert } from '@/component-library';
 import { IconButton } from '@/component-library';
-import { FolderOpen, Loader2, Server, User, Key, Lock, Trash2, Plus, Pencil, Play } from 'lucide-react';
+import { FolderOpen, Loader2, Server, User, Key, Lock, Trash2, Plus, Pencil, Play, ArrowDownToLine, Search } from 'lucide-react';
 import type {
   SSHConnectionConfig,
   SSHAuthMethod,
@@ -23,15 +23,6 @@ import type {
 import { sshApi } from './sshApi';
 import { pickSshPrivateKeyPath } from './pickSshPrivateKeyPath';
 import './SSHConnectionDialog.scss';
-
-type CredentialsPromptState =
-  | { kind: 'saved'; connection: SavedConnection }
-  | {
-      kind: 'sshConfig';
-      entry: SSHConfigEntry;
-      connectHost: string;
-      port: number;
-    };
 
 interface SSHConnectionDialogProps {
   open: boolean;
@@ -48,7 +39,9 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
   const [sshConfigHosts, setSSHConfigHosts] = useState<SSHConfigEntry[]>([]);
   const [localError, setLocalError] = useState<string | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
-  const [credentialsPrompt, setCredentialsPrompt] = useState<CredentialsPromptState | null>(null);
+  const [credentialsPrompt, setCredentialsPrompt] = useState<SavedConnection | null>(null);
+  const [savedSearch, setSavedSearch] = useState('');
+  const [configSearch, setConfigSearch] = useState('');
 
   const error = localError || connectionError;
 
@@ -78,7 +71,8 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
     try {
       const hosts = await sshApi.listSSHConfigHosts();
       setSSHConfigHosts(hosts);
-    } catch (_error) {
+    } catch (error) {
+      console.error('Failed to load SSH config hosts:', error);
       setSSHConfigHosts([]);
     }
   }
@@ -88,6 +82,8 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
     if (open) {
       clearError();
       setLocalError(null);
+      setSavedSearch('');
+      setConfigSearch('');
       void loadSavedConnections();
       void loadSSHConfigHosts();
     }
@@ -233,7 +229,7 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
           { browseAfterConnect: true }
         );
       } catch {
-        setCredentialsPrompt({ kind: 'saved', connection: conn });
+        setCredentialsPrompt(conn);
       } finally {
         setIsConnecting(false);
       }
@@ -265,95 +261,42 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
     }
   };
 
-  // Handle connecting to a host from ~/.ssh/config
-  const handleSSHConfigConnect = async (configHost: SSHConfigEntry) => {
-    setLocalError(null);
-
-    // Build hostname - if hostname is set in config, use it; otherwise use the host alias
-    const hostname = configHost.hostname || configHost.host;
+  // Fill the manual connection form from an ~/.ssh/config host entry
+  const handleFillFromConfig = (configHost: SSHConfigEntry) => {
+    const port = configHost.port ? String(configHost.port) : '22';
     const username = configHost.user || '';
-    const port = configHost.port || 22;
+    const keyPath = configHost.identityFile?.trim() || '~/.ssh/id_rsa';
+    const hasKey = !!configHost.identityFile?.trim();
 
-    const hasValidIdentityFile = configHost.identityFile && configHost.identityFile.trim() !== '';
-
-    if (!hasValidIdentityFile) {
-      setCredentialsPrompt({
-        kind: 'sshConfig',
-        entry: configHost,
-        connectHost: hostname,
-        port,
-      });
-      return;
-    }
-
-    const connectionId = generateConnectionId(hostname, port, username);
-    const name = configHost.host;
-
-    const authConfig: SSHConnectionConfig = {
-      id: connectionId,
-      name,
-      host: hostname,
+    setFormData({
+      name: configHost.host,
+      host: configHost.host,
       port,
       username,
-      auth: { type: 'PrivateKey', keyPath: configHost.identityFile! },
-    };
-
-    setIsConnecting(true);
-    try {
-      await connect(connectionId, authConfig, { browseAfterConnect: true });
-    } catch (e) {
-      setLocalError(e instanceof Error ? e.message : 'Authentication failed');
-    } finally {
-      setIsConnecting(false);
-    }
-  };
-
-  const credentialsTargetDescription = (state: CredentialsPromptState): string => {
-    if (state.kind === 'saved') {
-      const c = state.connection;
-      return `${c.username}@${c.host}:${c.port}`;
-    }
-    const { entry, connectHost, port } = state;
-    const u = entry.user?.trim();
-    const base = u ? `${u}@${connectHost}:${port}` : `${connectHost}:${port}`;
-    if (entry.host && entry.host !== connectHost) {
-      return `${base} (${entry.host})`;
-    }
-    return base;
+      authType: hasKey ? 'privateKey' : 'password',
+      password: '',
+      keyPath,
+      passphrase: '',
+    });
   };
 
   const handleCredentialsPromptSubmit = async (payload: SSHAuthPromptSubmitPayload) => {
     if (!credentialsPrompt) return;
 
     const { auth, username: resolvedUsername } = payload;
+    const conn = credentialsPrompt;
     setIsConnecting(true);
     setLocalError(null);
     try {
-      if (credentialsPrompt.kind === 'saved') {
-        const conn = credentialsPrompt.connection;
-        const full: SSHConnectionConfig = {
-          id: conn.id,
-          name: conn.name,
-          host: conn.host,
-          port: conn.port,
-          username: resolvedUsername,
-          auth,
-        };
-        await connect(conn.id, full, { browseAfterConnect: true });
-      } else {
-        const { entry, connectHost, port } = credentialsPrompt;
-        const connectionId = generateConnectionId(connectHost, port, resolvedUsername);
-        const full: SSHConnectionConfig = {
-          id: connectionId,
-          name: entry.host,
-          host: connectHost,
-          port,
-          username: resolvedUsername,
-          auth,
-        };
-        await connect(connectionId, full, { browseAfterConnect: true });
-        await loadSavedConnections();
-      }
+      const full: SSHConnectionConfig = {
+        id: conn.id,
+        name: conn.name,
+        host: conn.host,
+        port: conn.port,
+        username: resolvedUsername,
+        auth,
+      };
+      await connect(conn.id, full, { browseAfterConnect: true });
       setCredentialsPrompt(null);
     } catch (e) {
       setLocalError(e instanceof Error ? e.message : 'Connection failed');
@@ -397,6 +340,33 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
     { label: t('ssh.remote.privateKey') || 'Private Key', value: 'privateKey', icon: <Key size={14} /> },
   ];
 
+  const filteredSavedConnections = savedConnections.filter((conn) => {
+    if (!savedSearch.trim()) return true;
+    const q = savedSearch.toLowerCase();
+    return (
+      conn.name.toLowerCase().includes(q) ||
+      conn.host.toLowerCase().includes(q) ||
+      conn.username.toLowerCase().includes(q)
+    );
+  });
+
+  const filteredSSHConfigHosts = sshConfigHosts.filter((configHost) => {
+    // Hide SSH config hosts that already have a saved connection
+    const hostname = configHost.hostname || configHost.host;
+    const port = configHost.port || 22;
+    const user = configHost.user || '';
+    if (savedConnections.some((c) => c.host === hostname && c.port === port && c.username === user)) {
+      return false;
+    }
+    if (!configSearch.trim()) return true;
+    const q = configSearch.toLowerCase();
+    return (
+      configHost.host.toLowerCase().includes(q) ||
+      hostname.toLowerCase().includes(q) ||
+      (configHost.user || '').toLowerCase().includes(q)
+    );
+  });
+
   const dismissError = () => {
     setLocalError(null);
     clearError();
@@ -433,11 +403,21 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
           {/* Saved connections section */}
           {savedConnections.length > 0 && (
             <div className="ssh-connection-dialog__section">
-              <h3 className="ssh-connection-dialog__section-title">
-                {t('ssh.remote.savedConnections')}
-              </h3>
+              <div className="ssh-connection-dialog__section-header">
+                <h3 className="ssh-connection-dialog__section-title">
+                  {t('ssh.remote.savedConnections')}
+                </h3>
+                <Input
+                  className="ssh-connection-dialog__search"
+                  value={savedSearch}
+                  onChange={(e) => setSavedSearch(e.target.value)}
+                  placeholder={t('actions.search')}
+                  prefix={<Search size={14} />}
+                  size="small"
+                />
+              </div>
               <div className="ssh-connection-dialog__saved-list">
-                {savedConnections.map((conn) => (
+                {filteredSavedConnections.map((conn) => (
                   <div
                     key={conn.id}
                     className="ssh-connection-dialog__saved-item"
@@ -496,28 +476,28 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
           {/* SSH Config hosts section */}
           {sshConfigHosts.length > 0 && (
             <div className="ssh-connection-dialog__section">
-              <h3 className="ssh-connection-dialog__section-title">
-                {t('ssh.remote.sshConfigHosts') || 'SSH Config'}
-              </h3>
+              <div className="ssh-connection-dialog__section-header">
+                <h3 className="ssh-connection-dialog__section-title">
+                  {t('ssh.remote.sshConfigHosts') || 'SSH Config'}
+                </h3>
+                <Input
+                  className="ssh-connection-dialog__search"
+                  value={configSearch}
+                  onChange={(e) => setConfigSearch(e.target.value)}
+                  placeholder={t('actions.search')}
+                  prefix={<Search size={14} />}
+                  size="small"
+                />
+              </div>
               <div className="ssh-connection-dialog__saved-list">
-                {sshConfigHosts
-                  .filter((configHost) => {
-                    // Hide SSH config hosts that already have a saved connection
-                    const hostname = configHost.hostname || configHost.host;
-                    const port = configHost.port || 22;
-                    const user = configHost.user || '';
-                    return !savedConnections.some(
-                      (c) => c.host === hostname && c.port === port && c.username === user
-                    );
-                  })
-                  .map((configHost) => (
+                {filteredSSHConfigHosts.map((configHost) => (
                   <div
                     key={configHost.host}
                     className="ssh-connection-dialog__saved-item ssh-connection-dialog__saved-item--config"
-                    onClick={() => !isConnecting && handleSSHConfigConnect(configHost)}
+                    onClick={() => !isConnecting && handleFillFromConfig(configHost)}
                     role="button"
                     tabIndex={0}
-                    onKeyDown={(e) => e.key === 'Enter' && !isConnecting && handleSSHConfigConnect(configHost)}
+                    onKeyDown={(e) => e.key === 'Enter' && !isConnecting && handleFillFromConfig(configHost)}
                   >
                     <div className="ssh-connection-dialog__saved-icon">
                       <Server size={16} />
@@ -531,15 +511,16 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
                     <div className="ssh-connection-dialog__saved-actions">
                       <Button
                         size="small"
-                        variant="primary"
+                        variant="ghost"
                         onClick={(e) => {
                           e.stopPropagation();
-                          void handleSSHConfigConnect(configHost);
+                          handleFillFromConfig(configHost);
                         }}
                         disabled={isConnecting || status === 'connecting'}
-                        title={t('ssh.remote.connect')}
+                        title={t('ssh.remote.fillForm')}
                       >
-                        <Play size={12} />
+                        <ArrowDownToLine size={12} />
+                        {t('ssh.remote.fillForm')}
                       </Button>
                     </div>
                   </div>
@@ -708,23 +689,11 @@ export const SSHConnectionDialog: React.FC<SSHConnectionDialogProps> = ({
       {credentialsPrompt && (
         <SSHAuthPromptDialog
           open
-          targetDescription={credentialsTargetDescription(credentialsPrompt)}
+          targetDescription={`${credentialsPrompt.username}@${credentialsPrompt.host}:${credentialsPrompt.port}`}
           defaultAuthMethod="password"
-          defaultKeyPath={
-            credentialsPrompt.kind === 'sshConfig' && credentialsPrompt.entry.identityFile?.trim()
-              ? credentialsPrompt.entry.identityFile.trim()
-              : '~/.ssh/id_rsa'
-          }
-          initialUsername={
-            credentialsPrompt.kind === 'saved'
-              ? credentialsPrompt.connection.username
-              : credentialsPrompt.entry.user || ''
-          }
-          lockUsername={
-            credentialsPrompt.kind === 'saved'
-              ? true
-              : !!(credentialsPrompt.entry.user && credentialsPrompt.entry.user.trim())
-          }
+          defaultKeyPath="~/.ssh/id_rsa"
+          initialUsername={credentialsPrompt.username}
+          lockUsername
           onSubmit={handleCredentialsPromptSubmit}
           onCancel={handleCredentialsPromptCancel}
           isConnecting={isConnecting}

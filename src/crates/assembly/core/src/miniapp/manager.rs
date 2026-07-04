@@ -710,14 +710,36 @@ mod tests {
         STORAGE_JSON, STYLE_CSS, UI_JS, WORKER_JS,
     };
 
-    fn test_manager() -> MiniAppManager {
+    struct TestMiniAppManager {
+        manager: MiniAppManager,
+        root: std::path::PathBuf,
+    }
+
+    impl std::ops::Deref for TestMiniAppManager {
+        type Target = MiniAppManager;
+
+        fn deref(&self) -> &Self::Target {
+            &self.manager
+        }
+    }
+
+    impl Drop for TestMiniAppManager {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.root);
+        }
+    }
+
+    fn test_manager() -> TestMiniAppManager {
         let root = std::env::temp_dir().join(format!(
             "bitfun-miniapp-manager-draft-{}",
             uuid::Uuid::new_v4()
         ));
         let path_manager =
-            Arc::new(crate::infrastructure::PathManager::with_user_root_for_tests(root));
-        MiniAppManager::new(path_manager)
+            Arc::new(crate::infrastructure::PathManager::with_user_root_for_tests(root.clone()));
+        TestMiniAppManager {
+            manager: MiniAppManager::new(path_manager),
+            root,
+        }
     }
 
     fn sample_source(css: &str) -> MiniAppSource {

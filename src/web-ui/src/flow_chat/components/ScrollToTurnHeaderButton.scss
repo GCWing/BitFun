@@ -31,9 +31,9 @@
 
     background: linear-gradient(
       to bottom,
-      var(--color-bg-flowchat) 0%,
-      color-mix(in srgb, var(--color-bg-flowchat) 80%, transparent) 40%,
-      color-mix(in srgb, var(--color-bg-flowchat) 40%, transparent) 70%,
+      var(--color-bg-scene) 0%,
+      color-mix(in srgb, var(--color-bg-scene) 80%, transparent) 40%,
+      color-mix(in srgb, var(--color-bg-scene) 40%, transparent) 70%,
       transparent 100%
     );
   }

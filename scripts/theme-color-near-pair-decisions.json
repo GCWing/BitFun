@@ -1,0 +1,114 @@
+{
+  "version": 1,
+  "description": "Explicit decisions for specialized theme near-color pairs. Keep this file in sync with scripts/audit-theme-colors.mjs output; lower the audit baseline when a pair is merged.",
+  "decisions": [
+    {
+      "root": "src/web-ui/src",
+      "domain": "themePreset",
+      "key": "#1a1b26 <-> #1c1c1f",
+      "decision": "keep",
+      "owner": "src/web-ui/src/infrastructure/theme/presets",
+      "reason": "Tokyo Night primary background uses the canonical Tokyo base hue; #1c1c1f is the default dark/china/slate neutral surface. Merging would flatten cross-theme identity rather than remove an app-level duplicate.",
+      "reevaluateWhen": "Only after a visual review proves Tokyo Night no longer needs a distinct primary background identity."
+    },
+    {
+      "root": "src/web-ui/src",
+      "domain": "themePreset",
+      "key": "#1c1c1f <-> #212019",
+      "decision": "keep",
+      "owner": "src/web-ui/src/infrastructure/theme/presets",
+      "reason": "China Night secondary background also feeds Monaco lineHighlight through the theme projection. Merging it into the primary background removes the visible current-line cue and flattens adjacent ink surfaces.",
+      "reevaluateWhen": "Only if China Night gets a separate editor lineHighlight token or visual review proves the current-line cue remains visible."
+    },
+    {
+      "root": "src/web-ui/src",
+      "domain": "themePreset",
+      "key": "#f0f4f8 <-> #f3f3f5",
+      "decision": "keep",
+      "owner": "src/web-ui/src/infrastructure/theme/presets",
+      "reason": "The pair crosses light primary background and Monaco lineHighlight / button state values. Editor line highlight must remain visibly distinct from base surface roles.",
+      "reevaluateWhen": "Only after Monaco-focused light-theme screenshots confirm the line highlight remains readable."
+    },
+    {
+      "root": "src/web-ui/src",
+      "domain": "themePreset",
+      "key": "#2b2d30 <-> #313335",
+      "decision": "keep",
+      "owner": "src/web-ui/src/infrastructure/theme/presets",
+      "reason": "Midnight background, tertiary surface, and editor lineHighlight are adjacent in the same dark theme. Merging would weaken surface and editor-row separation.",
+      "reevaluateWhen": "Only after a Midnight surface-ramp redesign removes the adjacent role split."
+    },
+    {
+      "root": "src/web-ui/src",
+      "domain": "themePreset",
+      "key": "#f3f3f5 <-> #faf8f0",
+      "decision": "keep",
+      "owner": "src/web-ui/src/infrastructure/theme/presets",
+      "reason": "China Style paper uses a warm first-paint surface while #f3f3f5 is a cool light neutral and button state stop. This is cross-theme identity, not a duplicate role.",
+      "reevaluateWhen": "Only after China Style paper identity is intentionally neutralized."
+    },
+    {
+      "root": "src/web-ui/src",
+      "domain": "themeRuntime",
+      "key": "rgba(255, 255, 255, 0.12) <-> rgba(255, 255, 255, 0.15)",
+      "decision": "keep",
+      "owner": "src/web-ui/src/infrastructure/theme/core/ThemeService.ts",
+      "reason": "The 0.12 and 0.15 white overlay stops separate hover/active/elevated states and must stay aligned with static tokens.",
+      "reevaluateWhen": "Only after the runtime and static overlay ladder are simplified together with visual coverage for affected card, markdown, and shadow states."
+    },
+    {
+      "root": "src/web-ui/src",
+      "domain": "themeRuntime",
+      "key": "rgba(0, 0, 0, 0.12) <-> rgba(0, 0, 0, 0.15)",
+      "decision": "keep",
+      "owner": "src/web-ui/src/infrastructure/theme/core/ThemeService.ts",
+      "reason": "The 0.12 and 0.15 black overlay stops separate light-theme card/elevated/active states and must stay aligned with static tokens.",
+      "reevaluateWhen": "Only after light-theme surface-state screenshots show no hierarchy loss."
+    },
+    {
+      "root": "src/web-ui/src",
+      "domain": "tokenContract",
+      "key": "rgba(255, 255, 255, 0.12) <-> rgba(255, 255, 255, 0.15)",
+      "decision": "keep",
+      "owner": "src/web-ui/src/component-library/styles/tokens.scss",
+      "reason": "Static token stops mirror runtime overlay state levels for first paint. Removing one side without runtime alignment would create early-render drift.",
+      "reevaluateWhen": "Only when the matching runtime overlay pair is also retired."
+    },
+    {
+      "root": "src/web-ui/src",
+      "domain": "tokenContract",
+      "key": "rgba(0, 0, 0, 0.12) <-> rgba(0, 0, 0, 0.15)",
+      "decision": "keep",
+      "owner": "src/web-ui/src/component-library/styles/tokens.scss",
+      "reason": "Static black overlay stops mirror runtime light-theme state levels for first paint. The pair is a state ramp, not an unowned duplicate.",
+      "reevaluateWhen": "Only when the matching runtime overlay pair is also retired."
+    },
+    {
+      "root": "BitFun-Installer/src",
+      "domain": "themePreset",
+      "key": "#0e0e10 <-> #121214",
+      "decision": "keep",
+      "owner": "BitFun-Installer/src/theme/installerThemesData.ts",
+      "reason": "ThemeSetup renders dark theme cards side by side with primary and secondary preview backgrounds. Cyber needs its own darker primary preview seed so the named theme is not distinguishable only by label and accent.",
+      "reevaluateWhen": "Only if installer theme selection adds a separate identity swatch or screenshots prove the primary preview no longer carries theme identity."
+    },
+    {
+      "root": "BitFun-Installer/src",
+      "domain": "themePreset",
+      "key": "#1a1b26 <-> #1a1c1e",
+      "decision": "keep",
+      "owner": "BitFun-Installer/src/theme/installerThemesData.ts",
+      "reason": "Tokyo Night appears as an adjacent installer preview card, and its primary background should preserve the Tokyo base hue while the shared installer card surface stays neutral.",
+      "reevaluateWhen": "Only after installer preview cards are redesigned to use a dedicated non-background theme identity affordance."
+    },
+    {
+      "root": "BitFun-Installer/src",
+      "domain": "themePreset",
+      "key": "#121214 <-> #1a1814",
+      "decision": "keep",
+      "owner": "BitFun-Installer/src/theme/installerThemesData.ts",
+      "reason": "Ink Night uses a warmer dark primary background in adjacent installer preview cards. Collapsing it into the canonical dark seed makes multiple dark choices visually flatter before the app is installed.",
+      "reevaluateWhen": "Only if visual review shows installer dark theme cards no longer rely on primary background identity."
+    }
+  ]
+}

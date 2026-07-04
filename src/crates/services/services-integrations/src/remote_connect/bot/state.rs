@@ -98,6 +98,9 @@ pub enum PendingAction {
         page: usize,
         has_more: bool,
     },
+    SelectModel {
+        options: Vec<(String, String)>,
+    },
     AskUserQuestion {
         tool_id: String,
         questions: Vec<BotQuestion>,

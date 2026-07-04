@@ -3,8 +3,8 @@
 Scope: this guide applies to `src/crates/services/terminal`.
 
 `terminal-core` owns standalone terminal sessions, PTY process handling, shell
-integration, and terminal event/config contracts. It is reusable infrastructure,
-not a product command or UI layer.
+integration and resolution, and terminal event/config contracts. It is reusable
+infrastructure, not a product command or UI layer.
 
 ## Guardrails
 

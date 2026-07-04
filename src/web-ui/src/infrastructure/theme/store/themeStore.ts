@@ -109,7 +109,7 @@ export const useThemeStore = create<ThemeState>((set) => ({
     set({ loading: true, error: null });
     
     try {
-      themeService.registerTheme(theme);
+      await themeService.registerTheme(theme);
       const themes = themeService.getThemeList();
       
       set({

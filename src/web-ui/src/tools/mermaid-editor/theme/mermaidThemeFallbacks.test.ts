@@ -12,7 +12,7 @@ describe('mermaid theme fallback palette', () => {
     expect(getMermaidThemeFallback('dark', 'nodeFill')).toBe('#1c1e23');
     expect(getMermaidThemeFallback('light', 'nodeFill')).toBe('#e8eaef');
     expect(getMermaidThemeFallback('dark', 'nodeText')).toBe('#e0e2e8');
-    expect(getMermaidThemeFallback('light', 'nodeText')).toBe('#1f2937');
+    expect(getMermaidThemeFallback('light', 'nodeText')).toBe('#1e293b');
   });
 
   it('returns paired fallbacks for CSS variable resolution without duplicating call-site literals', () => {
@@ -31,6 +31,16 @@ describe('mermaid theme fallback palette', () => {
       dark: '#1c1e23',
       light: '#f3f4f6',
     });
+  });
+
+  it('merges indistinguishable Mermaid fallback colors without removing semantic roles', () => {
+    expect(getMermaidThemeFallback('light', 'nodeFillHover')).toBe('#e0e2e8');
+    expect(getMermaidThemeFallback('dark', 'edgeLabelBorderHover')).toBe(
+      getMermaidThemeFallback('dark', 'nodeStroke')
+    );
+    expect(getMermaidThemeFallback('dark', 'textMuted')).toBe(
+      getMermaidThemeFallback('dark', 'nodeStrokeHover')
+    );
   });
 
   it('keeps every theme mode on the same fallback key contract', () => {

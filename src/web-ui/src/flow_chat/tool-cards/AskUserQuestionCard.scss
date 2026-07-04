@@ -11,9 +11,9 @@
   display: flex;
   flex-direction: column;
   margin: 6px 0;
-  border-radius: var(--radius-md);
+  border-radius: var(--size-radius-md);
   border: 1px solid var(--border-base);
-  background: var(--color-bg-flowchat);
+  background: var(--color-bg-scene);
   backdrop-filter: blur(10px);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   overflow: hidden;
@@ -159,7 +159,7 @@
   background: var(--element-bg-soft);
   color: var(--color-text-secondary);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
+  border-radius: var(--size-radius-sm);
   font-size: var(--flowchat-font-size-xxs);
   font-weight: 600;
   text-transform: uppercase;
@@ -192,7 +192,7 @@
   padding: 8px 12px;
   background: transparent;
   border: 1px solid var(--border-base);
-  border-radius: var(--radius-md);
+  border-radius: var(--size-radius-md);
   cursor: pointer;
   transition: all 0.15s ease;
 
@@ -378,7 +378,7 @@
   padding: 8px 12px;
   background: var(--element-bg-subtle);
   border: 1px solid var(--border-medium);
-  border-radius: var(--radius-md);
+  border-radius: var(--size-radius-md);
 
   input[type="radio"],
   input[type="checkbox"] {
@@ -415,7 +415,7 @@
   flex: 1;
   padding: 6px 10px;
   border: 1px solid var(--border-base);
-  border-radius: var(--radius-sm);
+  border-radius: var(--size-radius-sm);
   font-size: var(--tool-card-action-font-size);
   color: var(--color-text-primary);
   background: var(--color-bg-tertiary);
@@ -448,7 +448,7 @@
   background: var(--element-bg-base);
   color: var(--color-text-primary);
   border: 1px solid var(--border-base);
-  border-radius: var(--radius-sm);
+  border-radius: var(--size-radius-sm);
   font-size: var(--tool-card-action-font-size);
   font-weight: 500;
   cursor: pointer;
@@ -549,7 +549,7 @@
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  border-radius: var(--radius-md);
+  border-radius: var(--size-radius-md);
   font-size: var(--flowchat-font-size-xs);
   font-weight: 500;
   margin: 0 14px 12px;

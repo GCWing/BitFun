@@ -41,13 +41,13 @@
 
   &__icon {
     @include shared.liquid-icon;
-    color: tokens.$color-purple-500;
+    color: var(--color-purple-500);
   }
 
 
   &__action {
     font-weight: 500;
-    color: var(--tool-card-text-primary);
+    color: var(--color-text-primary);
   }
 
 
@@ -69,7 +69,7 @@
     align-items: flex-start;
     gap: 8px;
     padding: 6px 0;
-    border-bottom: 1px solid var(--tool-card-border-subtle);
+    border-bottom: 1px solid var(--border-subtle);
 
     &:last-child {
       border-bottom: none;
@@ -79,13 +79,13 @@
   &__label {
     font-size: 12px;
     font-weight: 600;
-    color: var(--tool-card-text-muted);
+    color: var(--color-text-muted);
     min-width: 80px;
   }
 
   &__value {
     font-size: 13px;
-    color: var(--tool-card-text-primary);
+    color: var(--color-text-primary);
     flex: 1;
   }
 
@@ -101,9 +101,9 @@
     width: 100%;
     padding: 10px 12px;
     background: var(--color-bg-primary);
-    border: 1px solid var(--tool-card-border-subtle);
+    border: 1px solid var(--border-subtle);
     border-radius: 4px;
-    color: var(--tool-card-text-primary);
+    color: var(--color-text-primary);
     font-size: 13px;
     font-weight: 500;
     cursor: pointer;
@@ -124,7 +124,7 @@
     }
 
     svg:last-child {
-      color: var(--tool-card-text-muted);
+      color: var(--color-text-muted);
     }
   }
 
@@ -132,7 +132,7 @@
     margin-top: 8px;
     padding: 12px;
     background: var(--color-bg-primary);
-    border: 1px solid var(--tool-card-border-subtle);
+    border: 1px solid var(--border-subtle);
     border-radius: 4px;
     max-height: 400px;
     overflow-y: auto;
@@ -143,7 +143,7 @@
     margin: 0;
     font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
     font-size: 12px;
-    color: var(--tool-card-text-primary);
+    color: var(--color-text-primary);
     line-height: 1.5;
     white-space: pre-wrap;
     word-break: break-word;

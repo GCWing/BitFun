@@ -273,7 +273,6 @@ impl RepoSession {
                     repo_id: self.repo_id.clone(),
                     query: request.query,
                     scope: request.scope,
-                    consistency: request.consistency,
                     allow_scan_fallback: request.allow_scan_fallback,
                 },
             },

@@ -154,7 +154,9 @@ impl ExecMode {
                         if parent_session_id.map(String::as_str) == Some(session_id.as_str()) {
                             use bitfun_events::ToolEventData;
                             match tool_event {
-                                ToolEventData::Started { tool_name, tool_id, .. } => {
+                                ToolEventData::Started {
+                                    tool_name, tool_id, ..
+                                } => {
                                     self.emit(json!({
                                         "type": "subagent_tool_start",
                                         "session_id": session_id,
@@ -184,11 +186,17 @@ impl ExecMode {
                                         "summary": summary,
                                     }))?;
                                     self.print_text(|| {
-                                        println!("   [subagent] {} completed: {}", tool_name, summary)
+                                        println!(
+                                            "   [subagent] {} completed: {}",
+                                            tool_name, summary
+                                        )
                                     });
                                 }
                                 ToolEventData::Failed {
-                                    tool_name, tool_id, error, ..
+                                    tool_name,
+                                    tool_id,
+                                    error,
+                                    ..
                                 } => {
                                     self.emit(json!({
                                         "type": "subagent_tool_error",
@@ -197,7 +205,9 @@ impl ExecMode {
                                         "tool_name": tool_name,
                                         "error": error,
                                     }))?;
-                                    self.print_text(|| println!("   [subagent] {} failed: {}", tool_name, error));
+                                    self.print_text(|| {
+                                        println!("   [subagent] {} failed: {}", tool_name, error)
+                                    });
                                 }
                                 _ => {}
                             }
@@ -289,7 +299,10 @@ impl ExecMode {
                                     "summary": summary,
                                 }))?;
                                 self.print_text(|| {
-                                    println!("   [+] {} ({}ms): {}", tool_name, duration_ms, summary)
+                                    println!(
+                                        "   [+] {} ({}ms): {}",
+                                        tool_name, duration_ms, summary
+                                    )
                                 });
                             }
                             ToolEventData::Failed {
@@ -322,7 +335,10 @@ impl ExecMode {
                             println!("\n");
                             println!("Execution complete");
                             if total_tool_calls > 0 {
-                                println!("\nTool call statistics: {} tools invoked", total_tool_calls);
+                                println!(
+                                    "\nTool call statistics: {} tools invoked",
+                                    total_tool_calls
+                                );
                             }
                         });
                         self.output_patch_if_needed();
@@ -407,10 +423,9 @@ impl ExecMode {
                 .ok_or_else(|| anyhow::anyhow!("Session has no persisted turns to fork"))?;
             let path_manager = bitfun_core::infrastructure::try_get_path_manager_arc()
                 .map_err(|error| anyhow::anyhow!(error.to_string()))?;
-            let persistence_manager = bitfun_core::agentic::persistence::PersistenceManager::new(
-                path_manager,
-            )
-            .map_err(|error| anyhow::anyhow!(error.to_string()))?;
+            let persistence_manager =
+                bitfun_core::agentic::persistence::PersistenceManager::new(path_manager)
+                    .map_err(|error| anyhow::anyhow!(error.to_string()))?;
             let result = persistence_manager
                 .branch_session(
                     &workspace,

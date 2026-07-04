@@ -5,7 +5,7 @@
 
 import { createContext, useContext } from 'react';
 import type React from 'react';
-import type { FlowChatConfig, Session } from '../../types/flow-chat';
+import type { FlowChatConfig, Session, ToolRejectOptions } from '../../types/flow-chat';
 import type { LineRange } from '@/component-library';
 
 export interface FlowChatContextValue {
@@ -18,7 +18,7 @@ export interface FlowChatContextValue {
 
   // Tool actions
   onToolConfirm?: (toolId: string, updatedInput?: any, permissionOptionId?: string, approve?: boolean) => Promise<void>;
-  onToolReject?: (toolId: string, permissionOptionId?: string) => Promise<void>;
+  onToolReject?: (toolId: string, options?: ToolRejectOptions) => Promise<void>;
 
   // Session info
   sessionId?: string;

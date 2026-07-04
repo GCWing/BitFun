@@ -24,7 +24,7 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
 };
-use std::time::{Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::Emitter;
 use tauri::Manager;
 
@@ -92,6 +92,7 @@ static MAIN_WINDOW_HIDDEN_ON_MACOS: AtomicBool = AtomicBool::new(false);
 static MAIN_WINDOW_CLOSE_PENDING_ON_MACOS: AtomicBool = AtomicBool::new(false);
 
 const MAIN_WINDOW_CLOSE_REQUESTED_EVENT: &str = "bitfun_main_window_close_requested";
+const CRON_DESKTOP_START_FALLBACK_DELAY: Duration = Duration::from_secs(120);
 
 #[cfg(target_os = "macos")]
 const MAIN_WINDOW_CLOSE_FALLBACK_HIDE_MS: u64 = 2_500;
@@ -1116,6 +1117,7 @@ pub async fn _run() {
             create_cron_job,
             update_cron_job,
             delete_cron_job,
+            notify_cron_host_ready,
             api::config_api::canonicalize_agent_profile_configs,
             api::terminal_api::terminal_get_shells,
             api::terminal_api::terminal_create,
@@ -1388,6 +1390,12 @@ async fn init_agentic_system() -> anyhow::Result<(
         event_queue.clone(),
         event_router.clone(),
     ));
+    coordinator.set_terminal_port(
+        bitfun_core::product_runtime::CoreRuntimeServicesProvider::terminal_port(),
+    );
+    coordinator.set_remote_exec_port(
+        bitfun_core::product_runtime::CoreRuntimeServicesProvider::remote_exec_port(),
+    );
 
     coordination::ConversationCoordinator::set_global(coordinator.clone());
 
@@ -1427,9 +1435,22 @@ async fn init_agentic_system() -> anyhow::Result<(
         cron_service.clone(),
     ));
     event_router.subscribe_internal("cron_jobs".to_string(), cron_subscriber);
-    cron_service.start();
+    {
+        let cron_service_for_fallback = cron_service.clone();
+        // Desktop cron runs can emit FlowChat events immediately. Prefer the
+        // frontend readiness handshake, but keep a fallback so cron is not left
+        // disabled if the web host never reaches the ready path.
+        tokio::spawn(async move {
+            tokio::time::sleep(CRON_DESKTOP_START_FALLBACK_DELAY).await;
+            log::info!(
+                "Ensuring cron service is started after desktop fallback delay: delay_seconds={}",
+                CRON_DESKTOP_START_FALLBACK_DELAY.as_secs()
+            );
+            cron_service_for_fallback.start();
+        });
+    }
 
-    log::info!("Cron service initialized and subscriber registered");
+    log::info!("Cron service initialized and waiting for desktop host readiness");
     log::info!("Agentic system initialized");
     Ok((
         coordinator,

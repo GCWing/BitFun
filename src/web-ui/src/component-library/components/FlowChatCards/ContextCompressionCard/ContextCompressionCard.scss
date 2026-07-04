@@ -41,7 +41,7 @@
     background: linear-gradient(
       90deg,
       transparent 0%,
-      var(--color-overlay-white-10) 50%,
+      var(--color-overlay-white-12) 50%,
       transparent 100%
     );
     transition: left 0.5s ease;
@@ -57,7 +57,7 @@
     border-color: color-mix(in srgb, var(--context-compression-accent) 90%, transparent);
     box-shadow: 0 4px 16px color-mix(in srgb, var(--context-compression-accent) 30%, transparent),
                 0 2px 8px color-mix(in srgb, var(--context-compression-accent) 20%, transparent),
-                inset 0 1px 0 var(--color-overlay-white-10);
+                inset 0 1px 0 var(--color-overlay-white-12);
     background: linear-gradient(
       135deg,
       rgba(var(--context-compression-hover-bg-start-rgb), 0.98),
@@ -82,14 +82,14 @@
 
 
 .context-compression-card__action {
-  color: tokens.$color-text-secondary;
+  color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
   font-weight: tokens.$font-weight-medium;
   flex-shrink: 0;
 }
 
 .context-compression-card__tokens {
-  color: tokens.$color-text-primary;
+  color: var(--color-text-primary);
   font-size: var(--font-size-xs);
   font-weight: tokens.$font-weight-medium;
   font-family: tokens.$font-family-mono;
@@ -101,7 +101,7 @@
 }
 
 .context-compression-card__result {
-  color: tokens.$color-success;
+  color: var(--color-success);
   font-size: 10px;
   font-weight: tokens.$font-weight-semibold;
   margin-left: auto;
@@ -120,11 +120,11 @@
 }
 
 .context-compression-card__status-success {
-  color: tokens.$color-success;
+  color: var(--color-success);
 }
 
 .context-compression-card__status-error {
-  color: tokens.$color-error;
+  color: var(--color-error);
 }
 
 .context-compression-card__status-pending {
@@ -153,7 +153,7 @@
   justify-content: space-between;
   padding: tokens.$size-gap-2 0;
   font-size: var(--font-size-sm);
-  color: tokens.$color-text-secondary;
+  color: var(--color-text-secondary);
 
   &:first-child {
     padding-top: 0;
@@ -161,7 +161,7 @@
 
   &--stats {
     padding-top: tokens.$size-gap-2;
-    border-top: 1px solid tokens.$border-base;
+    border-top: 1px solid var(--border-base);
     margin-top: tokens.$size-gap-2;
   }
 }
@@ -171,18 +171,18 @@
 }
 
 .context-compression-card__simple-duration {
-  color: tokens.$color-text-muted;
+  color: var(--color-text-muted);
   font-size: var(--font-size-xs);
   font-family: tokens.$font-family-mono;
 }
 
 .context-compression-card__simple-tokens {
   font-family: tokens.$font-family-mono;
-  color: tokens.$color-text-primary;
+  color: var(--color-text-primary);
 }
 
 .context-compression-card__simple-savings {
-  color: tokens.$color-success;
+  color: var(--color-success);
   font-weight: tokens.$font-weight-semibold;
   font-size: var(--font-size-xs);
 }
@@ -201,7 +201,7 @@
   span {
     font-size: var(--font-size-sm);
     font-weight: tokens.$font-weight-medium;
-    color: tokens.$color-text-primary;
+    color: var(--color-text-primary);
   }
 }
 

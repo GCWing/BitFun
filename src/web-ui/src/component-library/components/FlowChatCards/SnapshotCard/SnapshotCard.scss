@@ -6,7 +6,7 @@
 
 
 .snapshot-card {
-  --operation-color: #{tokens.$color-accent-500};
+  --snapshot-card-operation-color: var(--color-accent-500);
 
   @include shared.liquid-card-base;
   font-family: tokens.$font-family-mono;
@@ -83,19 +83,19 @@
 
 .snapshot-card__icon {
   flex-shrink: 0;
-  color: var(--operation-color);
+  color: var(--snapshot-card-operation-color);
   transition: all tokens.$motion-base;
 }
 
 .snapshot-card__action {
-  color: tokens.$color-text-secondary;
+  color: var(--color-text-secondary);
   font-size: var(--font-size-xs);
   font-weight: tokens.$font-weight-medium;
   flex-shrink: 0;
 }
 
 .snapshot-card__filename {
-  color: tokens.$color-text-primary;
+  color: var(--color-text-primary);
   font-size: var(--font-size-xs);
   font-weight: tokens.$font-weight-medium;
   flex-shrink: 1;
@@ -116,18 +116,18 @@
 
   .file-count {
     background: color-mix(in srgb, var(--color-accent-600) 10%, transparent);
-    color: tokens.$color-info;
+    color: var(--color-info);
     padding: 2px 6px;
     border-radius: 10px;
     border: 1px solid var(--border-accent-soft);
   }
 
   .additions {
-    color: tokens.$color-success;
+    color: var(--color-success);
   }
 
   .deletions {
-    color: tokens.$color-error;
+    color: var(--color-error);
   }
 }
 
@@ -136,24 +136,24 @@
   align-items: center;
   flex-shrink: 0;
   margin-left: tokens.$size-gap-2;
-  color: tokens.$color-text-muted;
+  color: var(--color-text-muted);
 }
 
 .snapshot-card__status-spinner {
   animation: spin 1s linear infinite;
-  color: tokens.$color-info;
+  color: var(--color-info);
 }
 
 .snapshot-card__status-success {
-  color: tokens.$color-success;
+  color: var(--color-success);
 }
 
 .snapshot-card__status-error {
-  color: tokens.$color-error;
+  color: var(--color-error);
 }
 
 .snapshot-card__status-pending {
-  color: tokens.$color-warning;
+  color: var(--color-warning);
 }
 
 @keyframes spin {
@@ -194,12 +194,12 @@
   }
 
   &:hover:not(:disabled) {
-    background: var(--color-overlay-white-10);
+    background: var(--color-overlay-white-12);
   }
 }
 
 .snapshot-card__action-btn--accept {
-  color: tokens.$color-success;
+  color: var(--color-success);
   border: 1px solid var(--git-color-staged-border);
 
   &:hover:not(:disabled) {
@@ -209,7 +209,7 @@
 }
 
 .snapshot-card__action-btn--reject {
-  color: tokens.$color-error;
+  color: var(--color-error);
   border: 1px solid var(--color-error-border);
 
   &:hover:not(:disabled) {
@@ -219,13 +219,13 @@
 }
 
 .snapshot-card__action-btn--fullscreen {
-  color: tokens.$color-text-secondary;
+  color: var(--color-text-secondary);
   border: 1px solid rgba(var(--snapshot-card-neutral-rgb), 0.3);
 
   &:hover:not(:disabled) {
     background: rgba(var(--snapshot-card-neutral-rgb), 0.15);
     border-color: rgba(var(--snapshot-card-neutral-rgb), 0.5);
-    color: tokens.$color-text-primary;
+    color: var(--color-text-primary);
   }
 }
 
@@ -251,13 +251,13 @@
 }
 
 .snapshot-card__label {
-  color: tokens.$color-text-secondary;
+  color: var(--color-text-secondary);
   font-weight: tokens.$font-weight-medium;
   flex-shrink: 0;
 }
 
 .snapshot-card__value {
-  color: tokens.$color-text-primary;
+  color: var(--color-text-primary);
   font-family: tokens.$font-family-mono;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -268,8 +268,8 @@
   display: flex;
   gap: tokens.$size-gap-4;
   padding: tokens.$size-gap-3;
-  background: tokens.$element-bg-soft;
-  border: 1px solid tokens.$border-base;
+  background: var(--element-bg-soft);
+  border: 1px solid var(--border-base);
   border-radius: tokens.$size-radius-base;
 }
 
@@ -288,15 +288,15 @@
 
 .snapshot-card__stat-label {
   font-size: var(--font-size-xs);
-  color: tokens.$color-text-muted;
+  color: var(--color-text-muted);
 }
 
 .snapshot-card__stat-item--add .snapshot-card__stat-value {
-  color: tokens.$color-success;
+  color: var(--color-success);
 }
 
 .snapshot-card__stat-item--del .snapshot-card__stat-value {
-  color: tokens.$color-error;
+  color: var(--color-error);
 }
 
 .snapshot-card__button-group {
@@ -339,7 +339,7 @@
   background: color-mix(in srgb, var(--color-accent-600) 10%, transparent);
   border: 1px solid var(--border-accent-soft);
   border-radius: tokens.$size-radius-base;
-  color: tokens.$color-info;
+  color: var(--color-info);
   font-size: var(--font-size-sm);
 }
 
@@ -355,7 +355,7 @@
   background: var(--color-error-bg);
   border: 1px solid var(--color-error-border);
   border-radius: tokens.$size-radius-base;
-  color: tokens.$color-error;
+  color: var(--color-error);
   font-size: var(--font-size-sm);
 }
 

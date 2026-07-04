@@ -87,7 +87,7 @@
     gap: $size-gap-3;
     padding: $size-gap-2 $size-gap-3;
     border-bottom: 1px solid var(--border-subtle);
-    background: var(--color-bg-surface);
+    background: var(--color-bg-secondary);
 
     span,
     small {
@@ -177,7 +177,7 @@
     padding: $size-gap-2 $size-gap-3;
     border: 1px solid var(--color-success-border);
     border-radius: $size-radius-base;
-    background: var(--color-bg-surface);
+    background: var(--color-bg-secondary);
     color: var(--color-text-primary);
     box-shadow: var(--shadow-base);
     font-size: var(--font-size-sm);
@@ -278,7 +278,7 @@
 
     &--update {
       border-bottom-color: color-mix(in srgb, var(--color-warning) 28%, var(--border-subtle));
-      background: color-mix(in srgb, var(--color-warning) 12%, var(--color-bg-subtle));
+      background: color-mix(in srgb, var(--color-warning) 12%, var(--element-bg-subtle));
     }
   }
 
@@ -301,14 +301,14 @@
       border: 1px solid var(--border-subtle);
       border-radius: $size-radius-base;
       padding: $size-gap-2;
-      background: var(--color-bg-subtle);
+      background: var(--element-bg-subtle);
       color: var(--color-text-primary);
       font: inherit;
       font-size: var(--font-size-sm);
       line-height: $line-height-relaxed;
 
       &:focus {
-        outline: 2px solid var(--color-primary);
+        outline: 2px solid var(--color-accent-500);
         outline-offset: 1px;
       }
     }
@@ -335,9 +335,9 @@
   }
 
   &__error {
-    border: 1px solid var(--color-danger-border);
-    background: var(--color-danger-bg);
-    color: var(--color-danger);
+    border: 1px solid var(--color-error-border);
+    background: var(--color-error-bg);
+    color: var(--color-error);
   }
 
   &__status {
@@ -359,12 +359,12 @@
     overflow: hidden;
     border: 1px solid var(--border-subtle);
     border-radius: $size-radius-base;
-    background: var(--color-bg-flowchat);
+    background: var(--color-bg-scene);
 
     .btw-session-panel {
       min-height: 0;
       width: 100%;
-      background: var(--color-bg-flowchat);
+      background: var(--color-bg-scene);
     }
 
     .btw-session-panel__header-right {
@@ -412,7 +412,7 @@
     overflow: hidden;
     border: 1px solid var(--border-subtle);
     border-radius: $size-radius-base;
-    background: var(--color-bg-base);
+    background: var(--color-bg-primary);
   }
 
   &__footer {
@@ -480,7 +480,7 @@
       overflow: auto;
       border: 1px solid var(--border-subtle);
       border-radius: $size-radius-base;
-      background: var(--color-bg-subtle);
+      background: var(--element-bg-subtle);
       font-family: var(--font-family-mono);
       font-size: var(--font-size-xs);
     }

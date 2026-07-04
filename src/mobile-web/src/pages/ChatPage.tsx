@@ -250,7 +250,6 @@ interface FileCardProps {
 }
 
 const FileCard: React.FC<FileCardProps> = ({ path, onGetFileInfo, onDownload }) => {
-  const { isDark } = useTheme();
   const { t } = useI18n();
   const [state, setState] = useState<FileCardState>({ status: 'loading' });
   const onGetFileInfoRef = useRef(onGetFileInfo);
@@ -291,16 +290,16 @@ const FileCard: React.FC<FileCardProps> = ({ path, onGetFileInfo, onDownload }) 
     alignItems: 'center',
     gap: '10px',
     padding: '10px 14px',
-    border: `1px solid ${isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)'}`,
+    border: '1px solid var(--border-subtle)',
     borderRadius: '10px',
-    background: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
+    background: 'var(--element-bg-subtle)',
     cursor: state.status === 'ready' || state.status === 'done' ? 'pointer' : 'default',
     maxWidth: '300px',
     verticalAlign: 'middle',
     transition: 'background 0.15s',
   };
 
-  const iconColor = isDark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.5)';
+  const iconColor = 'var(--color-text-muted)';
 
   if (state.status === 'loading') {
     return (
@@ -342,14 +341,14 @@ const FileCard: React.FC<FileCardProps> = ({ path, onGetFileInfo, onDownload }) 
           overflow: 'hidden',
           textOverflow: 'ellipsis',
           whiteSpace: 'nowrap',
-          color: isDark ? 'rgba(255,255,255,0.9)' : 'rgba(0,0,0,0.85)',
+          color: 'var(--color-text-primary)',
         }}>
           {name}
         </span>
         <span style={{
           display: 'block',
           fontSize: '0.75rem',
-          color: isDark ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.45)',
+          color: 'var(--color-text-muted)',
           marginTop: '2px',
         }}>
           {formatFileSize(size)}
@@ -358,9 +357,7 @@ const FileCard: React.FC<FileCardProps> = ({ path, onGetFileInfo, onDownload }) 
       <span style={{
         flexShrink: 0,
         fontSize: '0.75rem',
-        color: isDone
-          ? (isDark ? '#4ade80' : '#16a34a')
-          : (isDark ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.45)'),
+        color: isDone ? 'var(--color-success)' : 'var(--color-text-muted)',
       }}>
         {isDownloading ? `${Math.round((state as any).progress * 100)}%` : isDone ? '✓' : '↓'}
       </span>
@@ -412,7 +409,7 @@ const MarkdownContent: React.FC<MarkdownContentProps> = ({ content, onFileDownlo
               },
             }}
             lineNumberStyle={{
-              color: isDark ? '#666' : '#999',
+              color: 'var(--color-text-muted)',
               paddingRight: '1em',
               textAlign: 'right' as const,
               userSelect: 'none' as const,
@@ -449,7 +446,7 @@ const MarkdownContent: React.FC<MarkdownContentProps> = ({ content, onFileDownlo
             type="button"
             style={{
               cursor: 'pointer',
-              color: 'var(--color-accent, #3b82f6)',
+              color: 'var(--color-accent-500)',
               textDecoration: 'underline',
               background: 'none',
               border: 'none',
@@ -487,7 +484,7 @@ const MarkdownContent: React.FC<MarkdownContentProps> = ({ content, onFileDownlo
               href={href}
               target="_blank"
               rel="noopener noreferrer"
-              style={{ color: 'var(--color-accent, #3b82f6)', textDecoration: 'underline' }}
+              style={{ color: 'var(--color-accent-500)', textDecoration: 'underline' }}
             >
               {children}
             </a>

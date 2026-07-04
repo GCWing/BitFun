@@ -27,31 +27,51 @@ export const useI18nStore = create<I18nState & I18nActions>()(
 
       // Actions
       setCurrentLanguage: (locale: LocaleId) => {
-        set({ currentLanguage: locale });
+        set((state) => (
+          state.currentLanguage === locale
+            ? state
+            : { currentLanguage: locale }
+        ));
       },
 
       setFallbackLanguage: (locale: LocaleId) => {
-        set({ fallbackLanguage: locale });
+        set((state) => (
+          state.fallbackLanguage === locale
+            ? state
+            : { fallbackLanguage: locale }
+        ));
       },
 
       addLoadedNamespace: (namespace: I18nNamespace) => {
-        set((state) => ({
-          loadedNamespaces: state.loadedNamespaces.includes(namespace)
-            ? state.loadedNamespaces
-            : [...state.loadedNamespaces, namespace],
-        }));
+        set((state) => (
+          state.loadedNamespaces.includes(namespace)
+            ? state
+            : { loadedNamespaces: [...state.loadedNamespaces, namespace] }
+        ));
       },
 
       setInitialized: (initialized: boolean) => {
-        set({ isInitialized: initialized });
+        set((state) => (
+          state.isInitialized === initialized
+            ? state
+            : { isInitialized: initialized }
+        ));
       },
 
       setChanging: (changing: boolean) => {
-        set({ isChanging: changing });
+        set((state) => (
+          state.isChanging === changing
+            ? state
+            : { isChanging: changing }
+        ));
       },
 
       setAutoDetect: (autoDetect: boolean) => {
-        set({ autoDetect });
+        set((state) => (
+          state.autoDetect === autoDetect
+            ? state
+            : { autoDetect }
+        ));
       },
 
       reset: () => {

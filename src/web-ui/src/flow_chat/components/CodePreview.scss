@@ -6,8 +6,6 @@
 @use '../../component-library/styles/_extended-mixins' as mixins;
 
 .code-preview {
-  --markdown-font-mono: var(--font-family-mono);
-
   position: relative;
   width: 100%;
   background: transparent;
@@ -31,7 +29,7 @@
         white-space: pre-wrap !important;
         word-break: break-word !important;
         cursor: text;
-        font-family: var(--markdown-font-mono) !important;
+        font-family: var(--font-family-mono) !important;
         font-weight: 400 !important;
 
         // Prism themes mark many tokens bold; match markdown body / code blocks (regular weight).
@@ -41,7 +39,7 @@
         
         > span[style] {
           &:hover {
-            background-color: var(--color-overlay-white-05) !important;
+            background-color: var(--color-overlay-white-08) !important;
           }
         }
         
@@ -75,7 +73,7 @@
     overflow: visible;
     white-space: pre-wrap;
     word-break: break-word;
-    font-family: var(--markdown-font-mono);
+    font-family: var(--font-family-mono);
     font-size: var(--flowchat-font-size-sm);
     line-height: var(--flowchat-code-line-height);
 
@@ -96,7 +94,7 @@
     transition: background-color 0.15s ease, border-color 0.15s ease;
 
     &:hover {
-      background-color: var(--color-overlay-white-05);
+      background-color: var(--color-overlay-white-08);
     }
 
     &--highlighted {
@@ -181,7 +179,7 @@
     }
 
     pre code > span[style]:hover {
-      background-color: var(--color-overlay-black-06) !important;
+      background-color: var(--color-overlay-black-08) !important;
     }
   }
 
@@ -190,6 +188,6 @@
   }
 
   .code-preview__plain-line:hover {
-    background-color: var(--color-overlay-black-06);
+    background-color: var(--color-overlay-black-08);
   }
 }

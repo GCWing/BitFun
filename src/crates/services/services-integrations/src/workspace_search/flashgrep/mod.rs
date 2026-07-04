@@ -2,10 +2,10 @@
 
 mod client;
 pub mod error;
-mod protocol;
+pub(crate) mod protocol;
 mod repo_session;
 mod rpc_client;
-mod types;
+pub(crate) mod types;
 
 pub const FLASHGREP_LOG_TARGET: &str = "flashgrep";
 
@@ -47,14 +47,14 @@ pub fn log_flashgrep_stderr_line_with_context(context: Option<&str>, line: &str)
 
 pub use client::{ManagedClient, RepoSession};
 pub use protocol::{
-    ClientCapabilities, ClientInfo, FileMatch, GlobParams, InitializeParams, MatchLocation,
-    RepoRef, Request, Response, SearchHit, SearchLine, SearchParams, TaskRef,
+    ClientCapabilities, ClientInfo, GlobParams, InitializeParams, RepoRef, Request, Response,
+    SearchParams, TaskRef,
 };
 pub use repo_session::FlashgrepRepoSession;
 pub use rpc_client::{drain_content_length_messages, ProtocolClient};
 pub use types::{
-    ConsistencyMode, DirtyFileStats, FileCount, GlobOutcome, GlobRequest, OpenRepoParams,
-    PathScope, QuerySpec, RefreshPolicyConfig, RepoConfig, RepoPhase, RepoStatus, SearchBackend,
-    SearchModeConfig, SearchOutcome, SearchRequest, SearchResults, TaskKind, TaskPhase, TaskState,
-    TaskStatus, WorkspaceOverlayStatus,
+    DirtyFileStats, FileCount, GlobOutcome, GlobRequest, OpenRepoParams, PathScope, QuerySpec,
+    RefreshPolicyConfig, RepoConfig, RepoPhase, RepoStatus, SearchBackend, SearchModeConfig,
+    SearchOutcome, SearchRequest, SearchResults, TaskKind, TaskPhase, TaskState, TaskStatus,
+    WorkspaceOverlayStatus,
 };

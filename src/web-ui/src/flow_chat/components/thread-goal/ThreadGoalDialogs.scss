@@ -37,9 +37,9 @@
   &--active,
   &--paused,
   &--blocked {
-    color: var(--color-warning-500);
-    background: color-mix(in srgb, var(--color-warning-500) 12%, transparent);
-    border-color: color-mix(in srgb, var(--color-warning-500) 32%, transparent);
+    color: var(--color-warning);
+    background: color-mix(in srgb, var(--color-warning) 12%, transparent);
+    border-color: color-mix(in srgb, var(--color-warning) 32%, transparent);
   }
 
   &--usageLimited,
@@ -50,9 +50,9 @@
   }
 
   &--complete {
-    color: var(--color-success-500);
-    background: color-mix(in srgb, var(--color-success-500) 12%, transparent);
-    border-color: color-mix(in srgb, var(--color-success-500) 32%, transparent);
+    color: var(--color-success);
+    background: color-mix(in srgb, var(--color-success) 12%, transparent);
+    border-color: color-mix(in srgb, var(--color-success) 32%, transparent);
   }
 }
 
@@ -123,13 +123,13 @@
   box-sizing: border-box;
 
   &--done {
-    background: var(--color-success-500);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-success-500) 20%, transparent);
+    background: var(--color-success);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-success) 20%, transparent);
   }
 
   &--current {
-    background: var(--color-primary-500);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary-500) 22%, transparent);
+    background: var(--color-accent-500);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent-500) 22%, transparent);
   }
 
   &--pending {

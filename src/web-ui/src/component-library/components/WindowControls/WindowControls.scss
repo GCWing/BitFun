@@ -54,7 +54,7 @@
     }
 
     &:focus-visible {
-      outline: 2px solid tokens.$color-accent-400;
+      outline: 2px solid var(--color-accent-400);
       outline-offset: 2px;
     }
 
@@ -66,7 +66,7 @@
       }
 
       &:focus-visible {
-        outline-color: tokens.$color-accent-400;
+        outline-color: var(--color-accent-400);
       }
     }
 
@@ -78,7 +78,7 @@
       }
 
       &:focus-visible {
-        outline-color: tokens.$color-accent-400;
+        outline-color: var(--color-accent-400);
       }
     }
 

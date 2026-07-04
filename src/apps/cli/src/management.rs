@@ -10,10 +10,8 @@ use bitfun_core::service::session_usage::{
     generate_session_usage_report, render_usage_report_markdown, SessionUsageReportRequest,
 };
 
-
-async fn ensure_global_config_service() -> Result<
-    std::sync::Arc<bitfun_core::service::config::ConfigService>,
-> {
+async fn ensure_global_config_service(
+) -> Result<std::sync::Arc<bitfun_core::service::config::ConfigService>> {
     initialize_global_config()
         .await
         .context("Failed to initialize global config service")?;
@@ -144,9 +142,10 @@ pub async fn print_mcp_servers() -> Result<()> {
                 .as_ref()
                 .map(|cmd| format!("{} {}", cmd, config.args.join(" ")))
                 .unwrap_or_else(|| "<missing command>".to_string()),
-            bitfun_core::service::mcp::server::MCPServerType::Remote => {
-                config.url.clone().unwrap_or_else(|| "<missing url>".to_string())
-            }
+            bitfun_core::service::mcp::server::MCPServerType::Remote => config
+                .url
+                .clone()
+                .unwrap_or_else(|| "<missing url>".to_string()),
         };
 
         println!("- {} ({:?})", config.id, config.server_type);
@@ -186,7 +185,10 @@ pub async fn set_mcp_server_enabled(server_id: &str, enabled: bool) -> Result<()
         .await?
         .ok_or_else(|| anyhow!("MCP server not found: {}", server_id))?;
     config.enabled = enabled;
-    mcp_service.config_service().save_server_config(&config).await?;
+    mcp_service
+        .config_service()
+        .save_server_config(&config)
+        .await?;
 
     println!(
         "MCP server {} {}.",
@@ -200,10 +202,7 @@ pub async fn print_mcp_json_config() -> Result<()> {
     let config_service = ensure_global_config_service().await?;
     let mcp_service = bitfun_core::service::mcp::MCPService::new(config_service.clone())
         .map_err(|error| anyhow!(error.to_string()))?;
-    let json = mcp_service
-        .config_service()
-        .load_mcp_json_config()
-        .await?;
+    let json = mcp_service.config_service().load_mcp_json_config().await?;
     println!("{}", json);
     Ok(())
 }
@@ -211,8 +210,8 @@ pub async fn print_mcp_json_config() -> Result<()> {
 pub async fn print_usage_report(session_id: Option<&str>) -> Result<()> {
     let agentic_system = crate::agent::agentic_system::init_agentic_system_for_cli().await?;
     let path_manager = try_get_path_manager_arc().map_err(|error| anyhow!(error.to_string()))?;
-    let persistence_manager = PersistenceManager::new(path_manager)
-        .map_err(|error| anyhow!(error.to_string()))?;
+    let persistence_manager =
+        PersistenceManager::new(path_manager).map_err(|error| anyhow!(error.to_string()))?;
     let workspace_path = std::env::current_dir().context("Failed to resolve current directory")?;
     let coordinator = agentic_system.coordinator.clone();
     let resolved_session_id = match session_id {
@@ -250,7 +249,9 @@ pub async fn print_doctor() -> Result<bool> {
     let models = config_service.get_ai_models().await?;
     let agent_registry = get_agent_registry();
     let modes = agent_registry.get_modes_info().await;
-    let subagents = agent_registry.get_subagents_info(Some(workspace.as_path())).await;
+    let subagents = agent_registry
+        .get_subagents_info(Some(workspace.as_path()))
+        .await;
     let mcp_service = bitfun_core::service::mcp::MCPService::new(config_service.clone())
         .map_err(|error| anyhow!(error.to_string()))?;
     let mcp_configs = mcp_service.config_service().load_all_configs().await?;
@@ -261,7 +262,11 @@ pub async fn print_doctor() -> Result<bool> {
     println!("[ok] Config directory: {}", config_dir.display());
     println!("[ok] Agent modes: {}", modes.len());
     println!("[ok] Subagents: {}", subagents.len());
-    println!("[ok] AI models: {} total, {} enabled", models.len(), models.iter().filter(|m| m.enabled).count());
+    println!(
+        "[ok] AI models: {} total, {} enabled",
+        models.len(),
+        models.iter().filter(|m| m.enabled).count()
+    );
     println!("[ok] MCP servers: {}", mcp_configs.len());
     println!();
     println!("Doctor checks passed.");

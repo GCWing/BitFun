@@ -11,7 +11,7 @@
       appearance: none;
       background: var(--input-bg);
       border: 1px solid var(--input-border);
-      border-radius: var(--radius-sm);
+      border-radius: var(--size-radius-sm);
       padding: 6px 28px 6px 10px;
       font-size: 13px;
       color: var(--input-text);
@@ -54,7 +54,7 @@
     .language-selector__inline-button {
       padding: 4px 10px;
       border: 1px solid transparent;
-      border-radius: var(--radius-sm);
+      border-radius: var(--size-radius-sm);
       background: transparent;
       color: var(--color-text-secondary);
       font-size: 13px;
@@ -91,7 +91,7 @@
       gap: 4px;
       padding: 6px 10px;
       border: 1px solid transparent;
-      border-radius: var(--radius-sm);
+      border-radius: var(--size-radius-sm);
       background: transparent;
       color: var(--color-text-secondary);
       font-size: 13px;
@@ -127,7 +127,7 @@
       padding: 4px;
       background: var(--color-bg-elevated);
       border: 1px solid var(--border-base);
-      border-radius: var(--radius-md);
+      border-radius: var(--size-radius-md);
       box-shadow: var(--shadow-lg);
       opacity: 0;
       visibility: hidden;
@@ -150,7 +150,7 @@
       width: 100%;
       padding: 8px 12px;
       border: none;
-      border-radius: var(--radius-sm);
+      border-radius: var(--size-radius-sm);
       background: transparent;
       color: var(--color-text-secondary);
       font-size: 13px;

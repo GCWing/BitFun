@@ -80,7 +80,7 @@ export class ToolAPI {
         const rejectRequest = {
           sessionId: request.sessionId,
           toolId: request.toolId,
-          reason: 'User rejected'
+          reason: request.rejectReason || 'User rejected'
         };
         
         const result = await api.invoke('reject_tool_execution', { request: rejectRequest });

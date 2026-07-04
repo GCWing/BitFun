@@ -4,6 +4,7 @@
 //! that is at least the bundled version. Do not hardcode bundle version numbers in
 //! tests — bumping a MiniApp version should not require shotgun edits across tests.
 
+use crate::miniapp::ports::{MiniAppPortFuture, MiniAppPortResult};
 use crate::miniapp::storage::{
     build_package_json, ESM_DEPS_JSON, INDEX_HTML, STYLE_CSS, UI_JS, WORKER_JS,
 };
@@ -39,6 +40,54 @@ pub enum BuiltinSeedCheck {
 pub enum BuiltinSeedAction {
     PreserveLocalOverride(BuiltinSeedArtifacts),
     SeedBundle(BuiltinSeedArtifacts),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BuiltinMiniAppSeedBundleRequest {
+    pub app: &'static BuiltinMiniAppBundle,
+    pub seeded_at_ms: i64,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum BuiltinMiniAppSeedOutcome {
+    Skipped,
+    Seeded {
+        version: u32,
+        content_hash: String,
+    },
+    PreservedLocalOverride {
+        version: u32,
+        content_hash: String,
+        recorded_update: bool,
+    },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BuiltinMiniAppSeedReport {
+    pub app_id: &'static str,
+    pub outcome: MiniAppPortResult<BuiltinMiniAppSeedOutcome>,
+}
+
+pub trait BuiltinMiniAppSeedHost: Send + Sync {
+    fn now_ms(&self) -> i64;
+    fn installed_marker(
+        &self,
+        app_id: &'static str,
+    ) -> MiniAppPortFuture<'_, Option<BuiltinInstallMarker>>;
+    fn has_local_override(&self, app_id: &'static str) -> MiniAppPortFuture<'_, bool>;
+    fn record_available_update(
+        &self,
+        app_id: &'static str,
+        version: u32,
+        content_hash: String,
+        now_ms: i64,
+    ) -> MiniAppPortFuture<'_, bool>;
+    fn seed_bundle(&self, request: BuiltinMiniAppSeedBundleRequest) -> MiniAppPortFuture<'_, ()>;
+    fn write_seed_markers(
+        &self,
+        app_id: &'static str,
+        artifacts: BuiltinSeedArtifacts,
+    ) -> MiniAppPortFuture<'_, ()>;
 }
 
 /// Pure built-in MiniApp asset bundle shape. The owning runtime still decides
@@ -112,7 +161,7 @@ pub const BUILTIN_APPS: &[BuiltinMiniAppBundle] = &[
     },
     BuiltinMiniAppBundle {
         id: "builtin-ppt-live",
-        version: 184,
+        version: 193,
         meta_json: include_str!("builtin/assets/ppt-live/meta.json"),
         html: include_str!("builtin/assets/ppt-live/index.html"),
         css: include_str!("builtin/assets/ppt-live/style.css"),
@@ -201,6 +250,56 @@ pub fn resolve_builtin_seed_action(
     }
 }
 
+pub async fn seed_builtin_miniapps_with_host(
+    host: &dyn BuiltinMiniAppSeedHost,
+) -> Vec<BuiltinMiniAppSeedReport> {
+    let mut reports = Vec::with_capacity(BUILTIN_APPS.len());
+    for app in BUILTIN_APPS {
+        reports.push(BuiltinMiniAppSeedReport {
+            app_id: app.id,
+            outcome: seed_builtin_miniapp_with_host(host, app).await,
+        });
+    }
+    reports
+}
+
+pub async fn seed_builtin_miniapp_with_host(
+    host: &dyn BuiltinMiniAppSeedHost,
+    app: &'static BuiltinMiniAppBundle,
+) -> MiniAppPortResult<BuiltinMiniAppSeedOutcome> {
+    let installed = host.installed_marker(app.id).await?;
+    let artifacts = match resolve_builtin_seed_check(app, installed.as_ref()) {
+        BuiltinSeedCheck::Skip => return Ok(BuiltinMiniAppSeedOutcome::Skipped),
+        BuiltinSeedCheck::NeedsSeed(artifacts) => artifacts,
+    };
+
+    let now_ms = host.now_ms();
+    if host.has_local_override(app.id).await? {
+        let content_hash = artifacts.content_hash.clone();
+        let recorded_update = host
+            .record_available_update(app.id, app.version, content_hash.clone(), now_ms)
+            .await?;
+        host.write_seed_markers(app.id, artifacts).await?;
+        return Ok(BuiltinMiniAppSeedOutcome::PreservedLocalOverride {
+            version: app.version,
+            content_hash,
+            recorded_update,
+        });
+    }
+
+    let content_hash = artifacts.content_hash.clone();
+    host.seed_bundle(BuiltinMiniAppSeedBundleRequest {
+        app,
+        seeded_at_ms: now_ms,
+    })
+    .await?;
+    host.write_seed_markers(app.id, artifacts).await?;
+    Ok(BuiltinMiniAppSeedOutcome::Seeded {
+        version: app.version,
+        content_hash,
+    })
+}
+
 pub fn serialize_builtin_install_marker(
     marker: &BuiltinInstallMarker,
 ) -> serde_json::Result<String> {
@@ -259,7 +358,13 @@ mod tests {
     // Do not assert hardcoded BUILTIN_APPS[i].version or meta["version"] values here.
     // Version bumps should only touch bundle registration and seed runtime, not tests.
 
-    use super::{builtin_content_hash, BUILTIN_APPS};
+    use super::{
+        build_builtin_seed_artifacts, builtin_content_hash, seed_builtin_miniapp_with_host,
+        BuiltinInstallMarker, BuiltinMiniAppSeedBundleRequest, BuiltinMiniAppSeedHost,
+        BuiltinMiniAppSeedOutcome, BuiltinSeedArtifacts, BUILTIN_APPS,
+    };
+    use crate::miniapp::ports::{MiniAppPortFuture, MiniAppPortResult};
+    use std::sync::{Arc, Mutex};
 
     #[test]
     fn builtin_miniapp_bundles_keep_product_domain_asset_owner_contract() {
@@ -285,6 +390,159 @@ mod tests {
             assert!(!app.worker_js.trim().is_empty());
             assert!(builtin_content_hash(app).starts_with("sha256:"));
         }
+    }
+
+    #[derive(Default)]
+    struct FakeSeedHost {
+        now_ms: i64,
+        installed_marker: Mutex<Option<BuiltinInstallMarker>>,
+        has_override: Mutex<bool>,
+        recorded_updates: Mutex<Vec<(&'static str, u32, String, i64)>>,
+        seeded_bundles: Mutex<Vec<(&'static str, i64)>>,
+        written_markers: Mutex<Vec<(&'static str, BuiltinSeedArtifacts)>>,
+    }
+
+    impl FakeSeedHost {
+        fn new() -> Arc<Self> {
+            Arc::new(Self {
+                now_ms: 12345,
+                ..Self::default()
+            })
+        }
+    }
+
+    impl BuiltinMiniAppSeedHost for FakeSeedHost {
+        fn now_ms(&self) -> i64 {
+            self.now_ms
+        }
+
+        fn installed_marker(
+            &self,
+            _app_id: &'static str,
+        ) -> MiniAppPortFuture<'_, Option<BuiltinInstallMarker>> {
+            Box::pin(async move { Ok(self.installed_marker.lock().unwrap().clone()) })
+        }
+
+        fn has_local_override(&self, _app_id: &'static str) -> MiniAppPortFuture<'_, bool> {
+            Box::pin(async move { Ok(*self.has_override.lock().unwrap()) })
+        }
+
+        fn record_available_update(
+            &self,
+            app_id: &'static str,
+            version: u32,
+            content_hash: String,
+            now_ms: i64,
+        ) -> MiniAppPortFuture<'_, bool> {
+            Box::pin(async move {
+                self.recorded_updates
+                    .lock()
+                    .unwrap()
+                    .push((app_id, version, content_hash, now_ms));
+                Ok(true)
+            })
+        }
+
+        fn seed_bundle(
+            &self,
+            request: BuiltinMiniAppSeedBundleRequest,
+        ) -> MiniAppPortFuture<'_, ()> {
+            Box::pin(async move {
+                self.seeded_bundles
+                    .lock()
+                    .unwrap()
+                    .push((request.app.id, request.seeded_at_ms));
+                Ok(())
+            })
+        }
+
+        fn write_seed_markers(
+            &self,
+            app_id: &'static str,
+            artifacts: BuiltinSeedArtifacts,
+        ) -> MiniAppPortFuture<'_, ()> {
+            Box::pin(async move {
+                self.written_markers
+                    .lock()
+                    .unwrap()
+                    .push((app_id, artifacts));
+                Ok(())
+            })
+        }
+    }
+
+    fn port_ok<T>(result: MiniAppPortResult<T>) -> T {
+        result.expect("seed host should succeed")
+    }
+
+    #[tokio::test]
+    async fn builtin_seed_host_orchestrator_skips_current_bundle() {
+        let app = &BUILTIN_APPS[0];
+        let host = FakeSeedHost::new();
+        let artifacts = build_builtin_seed_artifacts(app);
+        *host.installed_marker.lock().unwrap() = Some(artifacts.marker.clone());
+
+        let outcome = port_ok(seed_builtin_miniapp_with_host(host.as_ref(), app).await);
+
+        assert_eq!(outcome, BuiltinMiniAppSeedOutcome::Skipped);
+        assert!(host.seeded_bundles.lock().unwrap().is_empty());
+        assert!(host.written_markers.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn builtin_seed_host_orchestrator_preserves_local_override() {
+        let app = &BUILTIN_APPS[0];
+        let host = FakeSeedHost::new();
+        *host.installed_marker.lock().unwrap() = Some(BuiltinInstallMarker {
+            version: 0,
+            hash: "sha256:old".to_string(),
+        });
+        *host.has_override.lock().unwrap() = true;
+
+        let outcome = port_ok(seed_builtin_miniapp_with_host(host.as_ref(), app).await);
+
+        let BuiltinMiniAppSeedOutcome::PreservedLocalOverride {
+            version,
+            content_hash,
+            recorded_update,
+        } = outcome
+        else {
+            panic!("expected preserved local override");
+        };
+        assert_eq!(version, app.version);
+        assert!(content_hash.starts_with("sha256:"));
+        assert!(recorded_update);
+        assert_eq!(host.recorded_updates.lock().unwrap().len(), 1);
+        assert!(host.seeded_bundles.lock().unwrap().is_empty());
+        assert_eq!(host.written_markers.lock().unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn builtin_seed_host_orchestrator_seeds_bundle_without_override() {
+        let app = &BUILTIN_APPS[0];
+        let host = FakeSeedHost::new();
+        *host.installed_marker.lock().unwrap() = Some(BuiltinInstallMarker {
+            version: 0,
+            hash: "sha256:old".to_string(),
+        });
+
+        let outcome = port_ok(seed_builtin_miniapp_with_host(host.as_ref(), app).await);
+
+        let BuiltinMiniAppSeedOutcome::Seeded {
+            version,
+            content_hash,
+        } = outcome
+        else {
+            panic!("expected seeded bundle");
+        };
+        assert_eq!(version, app.version);
+        assert!(content_hash.starts_with("sha256:"));
+        assert_eq!(
+            host.seeded_bundles.lock().unwrap().as_slice(),
+            &[(app.id, host.now_ms)]
+        );
+        assert!(host.recorded_updates.lock().unwrap().is_empty());
+        assert_eq!(host.written_markers.lock().unwrap().len(), 1);
     }
 
     #[test]

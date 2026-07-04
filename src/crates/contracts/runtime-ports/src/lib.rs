@@ -5,8 +5,10 @@
 //! on concrete managers, platform adapters, `bitfun-core`, or app crates.
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
 pub type PortResult<T> = Result<T, PortError>;
@@ -57,6 +59,7 @@ pub enum RuntimeServiceCapability {
     Events,
     Clock,
     Terminal,
+    RemoteExec,
     Network,
     Git,
     McpCatalog,
@@ -76,6 +79,7 @@ impl RuntimeServiceCapability {
             Self::Events => "events",
             Self::Clock => "clock",
             Self::Terminal => "terminal",
+            Self::RemoteExec => "remote_exec",
             Self::Network => "network",
             Self::Git => "git",
             Self::McpCatalog => "mcp_catalog",
@@ -95,6 +99,215 @@ impl std::fmt::Display for RuntimeServiceCapability {
 
 pub trait RuntimeServicePort: Send + Sync {
     fn capability(&self) -> RuntimeServiceCapability;
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PluginRuntimeUnavailableReason {
+    NotBuilt,
+    UnsupportedProfile,
+    DisabledByPolicy,
+    HostUnavailable,
+}
+
+impl PluginRuntimeUnavailableReason {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::NotBuilt => "not_built",
+            Self::UnsupportedProfile => "unsupported_profile",
+            Self::DisabledByPolicy => "disabled_by_policy",
+            Self::HostUnavailable => "host_unavailable",
+        }
+    }
+}
+
+impl std::fmt::Display for PluginRuntimeUnavailableReason {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", tag = "status")]
+pub enum ExtensionCapabilityAvailability {
+    Disabled {
+        reason: PluginRuntimeUnavailableReason,
+    },
+    ProjectionOnly {
+        reason: PluginRuntimeUnavailableReason,
+    },
+    Available,
+    Unavailable {
+        reason: PluginRuntimeUnavailableReason,
+    },
+}
+
+impl ExtensionCapabilityAvailability {
+    pub const fn disabled(reason: PluginRuntimeUnavailableReason) -> Self {
+        Self::Disabled { reason }
+    }
+
+    pub const fn projection_only(reason: PluginRuntimeUnavailableReason) -> Self {
+        Self::ProjectionOnly { reason }
+    }
+
+    pub const fn is_executable(self) -> bool {
+        matches!(self, Self::Available)
+    }
+}
+
+pub type PluginRuntimeAvailability = ExtensionCapabilityAvailability;
+pub type UiExtensionAvailability = ExtensionCapabilityAvailability;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginDispatchEnvelope {
+    pub envelope_id: String,
+    pub event_name: String,
+    #[serde(default)]
+    pub payload: serde_json::Value,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginResponseEnvelope {
+    pub envelope_id: String,
+    pub accepted: bool,
+}
+
+#[async_trait::async_trait]
+pub trait PluginRuntimeClient: Send + Sync {
+    fn availability(&self) -> PluginRuntimeAvailability;
+
+    async fn dispatch(
+        &self,
+        envelope: PluginDispatchEnvelope,
+    ) -> PortResult<PluginResponseEnvelope>;
+}
+
+#[derive(Debug, Clone)]
+pub struct DisabledPluginRuntimeClient {
+    reason: PluginRuntimeUnavailableReason,
+}
+
+impl DisabledPluginRuntimeClient {
+    pub const fn new(reason: PluginRuntimeUnavailableReason) -> Self {
+        Self { reason }
+    }
+
+    fn not_available(&self) -> PortError {
+        PortError::new(
+            PortErrorKind::NotAvailable,
+            format!("plugin runtime is disabled: {}", self.reason),
+        )
+    }
+}
+
+impl Default for DisabledPluginRuntimeClient {
+    fn default() -> Self {
+        Self::new(PluginRuntimeUnavailableReason::NotBuilt)
+    }
+}
+
+#[async_trait::async_trait]
+impl PluginRuntimeClient for DisabledPluginRuntimeClient {
+    fn availability(&self) -> PluginRuntimeAvailability {
+        PluginRuntimeAvailability::Disabled {
+            reason: self.reason,
+        }
+    }
+
+    async fn dispatch(
+        &self,
+        _envelope: PluginDispatchEnvelope,
+    ) -> PortResult<PluginResponseEnvelope> {
+        Err(self.not_available())
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ProjectionOnlyPluginRuntimeClient {
+    reason: PluginRuntimeUnavailableReason,
+}
+
+impl ProjectionOnlyPluginRuntimeClient {
+    pub const fn new(reason: PluginRuntimeUnavailableReason) -> Self {
+        Self { reason }
+    }
+
+    fn not_available(&self) -> PortError {
+        PortError::new(
+            PortErrorKind::NotAvailable,
+            format!("plugin runtime is projection-only: {}", self.reason),
+        )
+    }
+}
+
+#[async_trait::async_trait]
+impl PluginRuntimeClient for ProjectionOnlyPluginRuntimeClient {
+    fn availability(&self) -> PluginRuntimeAvailability {
+        PluginRuntimeAvailability::ProjectionOnly {
+            reason: self.reason,
+        }
+    }
+
+    async fn dispatch(
+        &self,
+        _envelope: PluginDispatchEnvelope,
+    ) -> PortResult<PluginResponseEnvelope> {
+        Err(self.not_available())
+    }
+}
+
+#[derive(Clone)]
+pub enum PluginRuntimeBinding {
+    Disabled(DisabledPluginRuntimeClient),
+    ProjectionOnly(ProjectionOnlyPluginRuntimeClient),
+    Client(Arc<dyn PluginRuntimeClient>),
+}
+
+impl PluginRuntimeBinding {
+    pub const fn disabled(reason: PluginRuntimeUnavailableReason) -> Self {
+        Self::Disabled(DisabledPluginRuntimeClient::new(reason))
+    }
+
+    pub const fn projection_only(reason: PluginRuntimeUnavailableReason) -> Self {
+        Self::ProjectionOnly(ProjectionOnlyPluginRuntimeClient::new(reason))
+    }
+
+    pub fn client(client: Arc<dyn PluginRuntimeClient>) -> Self {
+        Self::Client(client)
+    }
+
+    pub fn availability(&self) -> PluginRuntimeAvailability {
+        match self {
+            Self::Disabled(client) => client.availability(),
+            Self::ProjectionOnly(client) => client.availability(),
+            Self::Client(client) => client.availability(),
+        }
+    }
+
+    pub fn as_client(&self) -> Arc<dyn PluginRuntimeClient> {
+        match self {
+            Self::Disabled(client) => Arc::new(client.clone()),
+            Self::ProjectionOnly(client) => Arc::new(client.clone()),
+            Self::Client(client) => Arc::clone(client),
+        }
+    }
+}
+
+impl Default for PluginRuntimeBinding {
+    fn default() -> Self {
+        Self::disabled(PluginRuntimeUnavailableReason::NotBuilt)
+    }
+}
+
+impl std::fmt::Debug for PluginRuntimeBinding {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PluginRuntimeBinding")
+            .field("availability", &self.availability())
+            .finish()
+    }
 }
 
 pub trait FileSystemPort: RuntimeServicePort {}
@@ -335,6 +548,221 @@ impl std::fmt::Debug for WorkspaceServices {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct TerminalExecCommandRequest {
+    pub argv: Vec<String>,
+    pub cwd: PathBuf,
+    pub env: HashMap<String, String>,
+    pub tty: bool,
+    pub yield_time_ms: Option<u64>,
+    pub max_output_chars: Option<usize>,
+    pub lifecycle_sink: Option<TerminalExecLifecycleSink>,
+    pub output_sink: Option<TerminalExecOutputSink>,
+}
+
+#[derive(Debug, Clone)]
+pub struct TerminalWriteStdinRequest {
+    pub session_id: i32,
+    pub chars: String,
+    pub append_enter: bool,
+    pub yield_time_ms: Option<u64>,
+    pub max_output_chars: Option<usize>,
+}
+
+#[derive(Debug, Clone)]
+pub struct TerminalSendStdinRequest {
+    pub session_id: i32,
+    pub chars: String,
+    pub append_enter: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TerminalExecControlAction {
+    Interrupt,
+    Kill,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TerminalExecControlOrigin {
+    ModelTool,
+    OutOfBand,
+}
+
+#[derive(Debug, Clone)]
+pub struct TerminalExecControlRequest {
+    pub session_id: i32,
+    pub action: TerminalExecControlAction,
+    pub origin: TerminalExecControlOrigin,
+    pub yield_time_ms: Option<u64>,
+    pub max_output_chars: Option<usize>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TerminalExecSessionCompletionStatus {
+    Exited,
+    Interrupted,
+    Killed,
+    Pruned,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TerminalExecSessionCompletionSource {
+    Process,
+    OutOfBandControl,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TerminalExecSessionCompletion {
+    pub status: TerminalExecSessionCompletionStatus,
+    pub source: TerminalExecSessionCompletionSource,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TerminalExecCommandResponse {
+    pub chunk_id: String,
+    pub wall_time_seconds: f64,
+    pub output: String,
+    pub session_id: Option<i32>,
+    pub exit_code: Option<i32>,
+    pub original_output_chars: usize,
+    pub completion: Option<TerminalExecSessionCompletion>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TerminalExecProcessLifecycleStatus {
+    Running,
+    Exited,
+    Interrupted,
+    Killed,
+    Pruned,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TerminalExecProcessLifecycleEvent {
+    pub session_id: i32,
+    pub status: TerminalExecProcessLifecycleStatus,
+    pub exit_code: Option<i32>,
+}
+
+pub type TerminalExecLifecycleSink = mpsc::UnboundedSender<TerminalExecProcessLifecycleEvent>;
+pub type TerminalExecOutputSink = mpsc::UnboundedSender<String>;
+pub type TerminalExecStreamingOutputSink = mpsc::Sender<String>;
+
+#[derive(Debug, Clone)]
+pub struct RemoteExecCommandRequest {
+    pub connection_id: String,
+    pub command: String,
+    pub tty: bool,
+    pub yield_time_ms: Option<u64>,
+    pub max_output_chars: Option<usize>,
+    pub lifecycle_sink: Option<RemoteExecLifecycleSink>,
+    pub output_sink: Option<RemoteExecOutputSink>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemoteExecOneShotCommandRequest {
+    pub connection_id: String,
+    pub command: String,
+    pub timeout_ms: Option<u64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemoteExecOneShotCommandResponse {
+    pub stdout: String,
+    pub stderr: String,
+    pub exit_code: i32,
+    pub interrupted: bool,
+    pub timed_out: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct RemoteWriteStdinRequest {
+    pub session_id: i32,
+    pub chars: String,
+    pub append_enter: bool,
+    pub yield_time_ms: Option<u64>,
+    pub max_output_chars: Option<usize>,
+}
+
+#[derive(Debug, Clone)]
+pub struct RemoteSendStdinRequest {
+    pub session_id: i32,
+    pub chars: String,
+    pub append_enter: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RemoteExecControlAction {
+    Interrupt,
+    Kill,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RemoteExecControlOrigin {
+    ModelTool,
+    OutOfBand,
+}
+
+#[derive(Debug, Clone)]
+pub struct RemoteExecControlRequest {
+    pub session_id: i32,
+    pub action: RemoteExecControlAction,
+    pub origin: RemoteExecControlOrigin,
+    pub yield_time_ms: Option<u64>,
+    pub max_output_chars: Option<usize>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RemoteExecSessionCompletionStatus {
+    Exited,
+    Interrupted,
+    Killed,
+    Pruned,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RemoteExecSessionCompletionSource {
+    Process,
+    OutOfBandControl,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RemoteExecSessionCompletion {
+    pub status: RemoteExecSessionCompletionStatus,
+    pub source: RemoteExecSessionCompletionSource,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct RemoteExecCommandResponse {
+    pub chunk_id: String,
+    pub wall_time_seconds: f64,
+    pub output: String,
+    pub session_id: Option<i32>,
+    pub exit_code: Option<i32>,
+    pub original_output_chars: usize,
+    pub completion: Option<RemoteExecSessionCompletion>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RemoteExecProcessLifecycleStatus {
+    Running,
+    Exited,
+    Interrupted,
+    Killed,
+    Pruned,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RemoteExecProcessLifecycleEvent {
+    pub session_id: i32,
+    pub status: RemoteExecProcessLifecycleStatus,
+    pub exit_code: Option<i32>,
+}
+
+pub type RemoteExecLifecycleSink = mpsc::UnboundedSender<RemoteExecProcessLifecycleEvent>;
+pub type RemoteExecOutputSink = mpsc::UnboundedSender<String>;
+pub type RemoteExecStreamingOutputSink = mpsc::Sender<String>;
+
 /// Runtime handles injected into tool execution contexts.
 ///
 /// This bundle is intentionally handle-only. Concrete local or remote
@@ -344,6 +772,8 @@ impl std::fmt::Debug for WorkspaceServices {
 pub struct ToolRuntimeHandles {
     workspace_services: Option<WorkspaceServices>,
     cancellation_token: Option<CancellationToken>,
+    terminal_port: Option<Arc<dyn TerminalPort>>,
+    remote_exec_port: Option<Arc<dyn RemoteExecPort>>,
 }
 
 impl ToolRuntimeHandles {
@@ -354,7 +784,22 @@ impl ToolRuntimeHandles {
         Self {
             workspace_services,
             cancellation_token,
+            terminal_port: None,
+            remote_exec_port: None,
         }
+    }
+
+    pub fn with_terminal_port(mut self, terminal_port: Option<Arc<dyn TerminalPort>>) -> Self {
+        self.terminal_port = terminal_port;
+        self
+    }
+
+    pub fn with_remote_exec_port(
+        mut self,
+        remote_exec_port: Option<Arc<dyn RemoteExecPort>>,
+    ) -> Self {
+        self.remote_exec_port = remote_exec_port;
+        self
     }
 
     pub fn workspace_services(&self) -> Option<&WorkspaceServices> {
@@ -363,6 +808,14 @@ impl ToolRuntimeHandles {
 
     pub fn cancellation_token(&self) -> Option<&CancellationToken> {
         self.cancellation_token.as_ref()
+    }
+
+    pub fn terminal_port(&self) -> Option<&Arc<dyn TerminalPort>> {
+        self.terminal_port.as_ref()
+    }
+
+    pub fn remote_exec_port(&self) -> Option<&Arc<dyn RemoteExecPort>> {
+        self.remote_exec_port.as_ref()
     }
 }
 
@@ -382,6 +835,17 @@ impl std::fmt::Debug for ToolRuntimeHandles {
                     .cancellation_token
                     .as_ref()
                     .map(|_| "<CancellationToken>"),
+            )
+            .field(
+                "terminal_port",
+                &self.terminal_port.as_ref().map(|_| "<dyn TerminalPort>"),
+            )
+            .field(
+                "remote_exec_port",
+                &self
+                    .remote_exec_port
+                    .as_ref()
+                    .map(|_| "<dyn RemoteExecPort>"),
             )
             .finish()
     }
@@ -415,7 +879,74 @@ pub trait ClockPort: RuntimeServicePort {
     fn now_unix_millis(&self) -> i64;
 }
 
-pub trait TerminalPort: RuntimeServicePort {}
+#[async_trait::async_trait]
+pub trait TerminalPort: RuntimeServicePort + std::fmt::Debug {
+    async fn exec_command(
+        &self,
+        request: TerminalExecCommandRequest,
+    ) -> PortResult<TerminalExecCommandResponse>;
+
+    async fn exec_command_streaming(
+        &self,
+        request: TerminalExecCommandRequest,
+        output_sink: TerminalExecStreamingOutputSink,
+    ) -> PortResult<TerminalExecCommandResponse>;
+
+    async fn write_stdin(
+        &self,
+        request: TerminalWriteStdinRequest,
+    ) -> PortResult<TerminalExecCommandResponse>;
+
+    async fn write_stdin_streaming(
+        &self,
+        request: TerminalWriteStdinRequest,
+        output_sink: TerminalExecStreamingOutputSink,
+    ) -> PortResult<TerminalExecCommandResponse>;
+
+    async fn send_stdin(&self, request: TerminalSendStdinRequest) -> PortResult<()>;
+
+    async fn control_session(
+        &self,
+        request: TerminalExecControlRequest,
+    ) -> PortResult<TerminalExecCommandResponse>;
+}
+
+#[async_trait::async_trait]
+pub trait RemoteExecPort: RuntimeServicePort + std::fmt::Debug {
+    async fn exec_command_once(
+        &self,
+        request: RemoteExecOneShotCommandRequest,
+    ) -> PortResult<RemoteExecOneShotCommandResponse>;
+
+    async fn exec_command(
+        &self,
+        request: RemoteExecCommandRequest,
+    ) -> PortResult<RemoteExecCommandResponse>;
+
+    async fn exec_command_streaming(
+        &self,
+        request: RemoteExecCommandRequest,
+        output_sink: RemoteExecStreamingOutputSink,
+    ) -> PortResult<RemoteExecCommandResponse>;
+
+    async fn write_stdin(
+        &self,
+        request: RemoteWriteStdinRequest,
+    ) -> PortResult<RemoteExecCommandResponse>;
+
+    async fn write_stdin_streaming(
+        &self,
+        request: RemoteWriteStdinRequest,
+        output_sink: RemoteExecStreamingOutputSink,
+    ) -> PortResult<RemoteExecCommandResponse>;
+
+    async fn send_stdin(&self, request: RemoteSendStdinRequest) -> PortResult<()>;
+
+    async fn control_session(
+        &self,
+        request: RemoteExecControlRequest,
+    ) -> PortResult<RemoteExecCommandResponse>;
+}
 
 pub trait NetworkPort: RuntimeServicePort {}
 
@@ -457,6 +988,36 @@ pub struct RemoteWorkspaceFacts {
     pub kind: RemoteWorkspaceKind,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub assistant_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_ssh_host: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RemoteSessionWorkspaceIdentity {
+    pub remote_connection_id: Option<String>,
+    pub remote_ssh_host: Option<String>,
+}
+
+impl RemoteSessionWorkspaceIdentity {
+    pub fn new(remote_connection_id: Option<String>, remote_ssh_host: Option<String>) -> Self {
+        Self {
+            remote_connection_id,
+            remote_ssh_host,
+        }
+    }
+
+    pub fn from_workspace(workspace: &RemoteWorkspaceFacts) -> Self {
+        Self::new(
+            workspace.remote_connection_id.clone(),
+            workspace.remote_ssh_host.clone(),
+        )
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.remote_connection_id.is_none() && self.remote_ssh_host.is_none()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -549,6 +1110,7 @@ pub trait RemoteInitialSyncRuntimeHost: Send + Sync {
     async fn list_session_metadata(
         &self,
         workspace_path: &Path,
+        workspace_identity: RemoteSessionWorkspaceIdentity,
     ) -> Result<Vec<RemoteSessionMetadata>, String>;
 }
 
@@ -577,6 +1139,10 @@ pub struct AgentSessionCreateRequest {
     pub agent_type: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub workspace_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_ssh_host: Option<String>,
     #[serde(default, skip_serializing_if = "serde_json::Map::is_empty")]
     pub metadata: serde_json::Map<String, serde_json::Value>,
 }
@@ -594,6 +1160,10 @@ pub struct AgentSessionCreateResult {
 #[serde(rename_all = "camelCase")]
 pub struct AgentSessionListRequest {
     pub workspace_path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_ssh_host: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -611,12 +1181,28 @@ pub struct AgentSessionSummary {
 pub struct AgentSessionDeleteRequest {
     pub workspace_path: String,
     pub session_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_ssh_host: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentSessionWorkspaceRequest {
     pub session_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSessionWorkspaceBinding {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace_id: Option<String>,
+    pub workspace_path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_ssh_host: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -646,6 +1232,10 @@ pub struct AgentDialogTurnRequest {
     pub agent_type: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub workspace_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_ssh_host: Option<String>,
     pub policy: DialogSubmissionPolicy,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reply_route: Option<AgentSessionReplyRoute>,
@@ -671,6 +1261,10 @@ pub struct AgentBackgroundResultRequest {
     pub agent_type: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub workspace_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_ssh_host: Option<String>,
     pub content: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub display_content: Option<String>,
@@ -692,6 +1286,10 @@ pub struct AgentThreadGoalDeliveryRequest {
     pub agent_type: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub workspace_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_connection_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_ssh_host: Option<String>,
     pub kind: AgentThreadGoalDeliveryKind,
     pub goal: ThreadGoal,
 }
@@ -841,6 +1439,10 @@ pub const fn should_skip_agent_session_reply(
 pub struct AgentSessionReplyRoute {
     pub source_session_id: String,
     pub source_workspace_path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_remote_connection_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_remote_ssh_host: Option<String>,
 }
 
 /// Outcome for steering a message into an already-running dialog turn.
@@ -1055,6 +1657,33 @@ pub struct ThreadGoalToolResponse {
     pub completion_budget_report: Option<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentThreadGoalGetRequest {
+    pub session_id: String,
+    pub workspace_path: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentThreadGoalCreateRequest {
+    pub session_id: String,
+    pub workspace_path: String,
+    pub objective: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub token_budget: Option<i64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentThreadGoalUpdateStatusRequest {
+    pub session_id: String,
+    pub workspace_path: String,
+    pub status: ThreadGoalStatus,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub turn_id: Option<String>,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CompressionContract {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -1086,7 +1715,7 @@ impl CompressionContract {
 
     pub fn render_for_model(&self) -> String {
         let mut lines = vec![
-            "Compaction contract: preserve these factual fields when continuing the task."
+            "The following facts were retained during compression. Use them as authoritative context when continuing the task."
                 .to_string(),
         ];
 
@@ -1195,10 +1824,10 @@ pub trait AgentSessionManagementPort: Send + Sync {
 
     async fn delete_session(&self, request: AgentSessionDeleteRequest) -> PortResult<()>;
 
-    async fn resolve_session_workspace_path(
+    async fn resolve_session_workspace_binding(
         &self,
         request: AgentSessionWorkspaceRequest,
-    ) -> PortResult<Option<String>>;
+    ) -> PortResult<Option<AgentSessionWorkspaceBinding>>;
 }
 
 #[async_trait::async_trait]
@@ -1217,6 +1846,24 @@ pub trait AgentLifecycleDeliveryPort: Send + Sync {
     ) -> PortResult<()>;
 
     async fn deliver_thread_goal(&self, request: AgentThreadGoalDeliveryRequest) -> PortResult<()>;
+}
+
+#[async_trait::async_trait]
+pub trait AgentThreadGoalManagementPort: Send + Sync {
+    async fn get_thread_goal(
+        &self,
+        request: AgentThreadGoalGetRequest,
+    ) -> PortResult<Option<ThreadGoal>>;
+
+    async fn create_thread_goal(
+        &self,
+        request: AgentThreadGoalCreateRequest,
+    ) -> PortResult<ThreadGoal>;
+
+    async fn update_thread_goal_status(
+        &self,
+        request: AgentThreadGoalUpdateStatusRequest,
+    ) -> PortResult<ThreadGoal>;
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -1619,10 +2266,14 @@ mod tests {
         let route = AgentSessionReplyRoute {
             source_session_id: "requester_session".to_string(),
             source_workspace_path: "/workspace/requester".to_string(),
+            source_remote_connection_id: Some("conn-1".to_string()),
+            source_remote_ssh_host: Some("host-1".to_string()),
         };
 
         assert_eq!(route.source_session_id, "requester_session");
         assert_eq!(route.source_workspace_path, "/workspace/requester");
+        assert_eq!(route.source_remote_connection_id.as_deref(), Some("conn-1"));
+        assert_eq!(route.source_remote_ssh_host.as_deref(), Some("host-1"));
     }
 
     #[test]
@@ -1633,6 +2284,8 @@ mod tests {
             git_branch: Some("main".to_string()),
             kind: RemoteWorkspaceKind::Remote,
             assistant_id: Some("assistant_1".to_string()),
+            remote_connection_id: Some("conn-1".to_string()),
+            remote_ssh_host: Some("host-1".to_string()),
         };
         let session = RemoteSessionMetadata {
             session_id: "session_1".to_string(),
@@ -1645,6 +2298,8 @@ mod tests {
 
         assert_eq!(workspace.kind.as_wire_str(), "remote");
         assert_eq!(workspace.assistant_id.as_deref(), Some("assistant_1"));
+        assert_eq!(workspace.remote_connection_id.as_deref(), Some("conn-1"));
+        assert_eq!(workspace.remote_ssh_host.as_deref(), Some("host-1"));
         assert_eq!(session.turn_count, 3);
     }
 
@@ -1833,7 +2488,7 @@ mod tests {
 
         let rendered = contract.render_for_model();
 
-        assert!(rendered.contains("Compaction contract"));
+        assert!(rendered.contains("The following facts were retained during compression."));
         assert!(rendered.contains("Touched files:"));
         assert!(rendered.contains("- src/lib.rs"));
         assert!(rendered.contains(
@@ -1902,6 +2557,8 @@ mod tests {
             turn_id: Some("turn_1".to_string()),
             agent_type: "agentic".to_string(),
             workspace_path: Some("/workspace/project".to_string()),
+            remote_connection_id: Some("conn-1".to_string()),
+            remote_ssh_host: Some("host-1".to_string()),
             policy: DialogSubmissionPolicy::new(
                 AgentSubmissionSource::RemoteRelay,
                 DialogQueuePriority::High,
@@ -1910,6 +2567,8 @@ mod tests {
             reply_route: Some(AgentSessionReplyRoute {
                 source_session_id: "source_session".to_string(),
                 source_workspace_path: "/workspace/source".to_string(),
+                source_remote_connection_id: Some("conn-1".to_string()),
+                source_remote_ssh_host: Some("host-1".to_string()),
             }),
             prepended_reminders: vec![AgentDialogPrependedReminder {
                 kind: "session_message_request".to_string(),
@@ -1931,10 +2590,14 @@ mod tests {
         assert_eq!(json["turnId"], "turn_1");
         assert_eq!(json["agentType"], "agentic");
         assert_eq!(json["workspacePath"], "/workspace/project");
+        assert_eq!(json["remoteConnectionId"], "conn-1");
+        assert_eq!(json["remoteSshHost"], "host-1");
         assert_eq!(json["policy"]["triggerSource"], "remote_relay");
         assert_eq!(json["policy"]["queuePriority"], "high");
         assert_eq!(json["policy"]["skipToolConfirmation"], true);
         assert_eq!(json["replyRoute"]["sourceSessionId"], "source_session");
+        assert_eq!(json["replyRoute"]["sourceRemoteConnectionId"], "conn-1");
+        assert_eq!(json["replyRoute"]["sourceRemoteSshHost"], "host-1");
         assert_eq!(
             json["prependedReminders"][0]["kind"],
             "session_message_request"
@@ -1953,6 +2616,8 @@ mod tests {
             session_id: "session_1".to_string(),
             agent_type: "agentic".to_string(),
             workspace_path: Some("/workspace/project".to_string()),
+            remote_connection_id: Some("conn-1".to_string()),
+            remote_ssh_host: Some("host-1".to_string()),
             content: "full result".to_string(),
             display_content: Some("short result".to_string()),
             metadata,
@@ -1963,6 +2628,8 @@ mod tests {
         assert_eq!(json["sessionId"], "session_1");
         assert_eq!(json["agentType"], "agentic");
         assert_eq!(json["workspacePath"], "/workspace/project");
+        assert_eq!(json["remoteConnectionId"], "conn-1");
+        assert_eq!(json["remoteSshHost"], "host-1");
         assert_eq!(json["content"], "full result");
         assert_eq!(json["displayContent"], "short result");
         assert_eq!(json["metadata"]["kind"], "background_result");
@@ -1974,6 +2641,8 @@ mod tests {
             session_id: "session_1".to_string(),
             agent_type: "agentic".to_string(),
             workspace_path: Some("/workspace/project".to_string()),
+            remote_connection_id: Some("conn-1".to_string()),
+            remote_ssh_host: Some("host-1".to_string()),
             kind: AgentThreadGoalDeliveryKind::ObjectiveUpdated,
             goal: ThreadGoal {
                 goal_id: "goal_1".to_string(),
@@ -1994,8 +2663,41 @@ mod tests {
         assert_eq!(json["sessionId"], "session_1");
         assert_eq!(json["agentType"], "agentic");
         assert_eq!(json["workspacePath"], "/workspace/project");
+        assert_eq!(json["remoteConnectionId"], "conn-1");
+        assert_eq!(json["remoteSshHost"], "host-1");
         assert_eq!(json["kind"], "objective_updated");
         assert_eq!(json["goal"]["goalId"], "goal_1");
+    }
+
+    #[test]
+    fn agent_thread_goal_management_requests_serialize_stable_shape() {
+        let get_request = AgentThreadGoalGetRequest {
+            session_id: "session_1".to_string(),
+            workspace_path: "/workspace/project".to_string(),
+        };
+        let create_request = AgentThreadGoalCreateRequest {
+            session_id: "session_1".to_string(),
+            workspace_path: "/workspace/project".to_string(),
+            objective: "Ship the refactor".to_string(),
+            token_budget: Some(1000),
+        };
+        let update_request = AgentThreadGoalUpdateStatusRequest {
+            session_id: "session_1".to_string(),
+            workspace_path: "/workspace/project".to_string(),
+            status: ThreadGoalStatus::Complete,
+            turn_id: Some("turn_1".to_string()),
+        };
+
+        let get_json = serde_json::to_value(get_request).expect("serialize get request");
+        let create_json = serde_json::to_value(create_request).expect("serialize create request");
+        let update_json = serde_json::to_value(update_request).expect("serialize update request");
+
+        assert_eq!(get_json["sessionId"], "session_1");
+        assert_eq!(get_json["workspacePath"], "/workspace/project");
+        assert_eq!(create_json["objective"], "Ship the refactor");
+        assert_eq!(create_json["tokenBudget"], 1000);
+        assert_eq!(update_json["status"], "complete");
+        assert_eq!(update_json["turnId"], "turn_1");
     }
 
     #[test]
@@ -2023,6 +2725,8 @@ mod tests {
     fn agent_session_management_contracts_serialize_stable_shape() {
         let list_request = AgentSessionListRequest {
             workspace_path: "/workspace/project".to_string(),
+            remote_connection_id: Some("conn-1".to_string()),
+            remote_ssh_host: Some("host-1".to_string()),
         };
         let summary = AgentSessionSummary {
             session_id: "session_1".to_string(),
@@ -2034,9 +2738,17 @@ mod tests {
         let delete_request = AgentSessionDeleteRequest {
             workspace_path: "/workspace/project".to_string(),
             session_id: "session_1".to_string(),
+            remote_connection_id: Some("conn-1".to_string()),
+            remote_ssh_host: Some("host-1".to_string()),
         };
         let workspace_request = AgentSessionWorkspaceRequest {
             session_id: "session_1".to_string(),
+        };
+        let workspace_binding = AgentSessionWorkspaceBinding {
+            workspace_id: Some("workspace_1".to_string()),
+            workspace_path: "/workspace/project".to_string(),
+            remote_connection_id: Some("conn-1".to_string()),
+            remote_ssh_host: Some("host-1".to_string()),
         };
 
         let list_json = serde_json::to_value(list_request).expect("serialize list request");
@@ -2044,13 +2756,23 @@ mod tests {
         let delete_json = serde_json::to_value(delete_request).expect("serialize delete request");
         let workspace_json =
             serde_json::to_value(workspace_request).expect("serialize workspace request");
+        let binding_json =
+            serde_json::to_value(workspace_binding).expect("serialize workspace binding");
 
         assert_eq!(list_json["workspacePath"], "/workspace/project");
+        assert_eq!(list_json["remoteConnectionId"], "conn-1");
+        assert_eq!(list_json["remoteSshHost"], "host-1");
         assert_eq!(summary_json["sessionId"], "session_1");
         assert_eq!(summary_json["createdAtMs"], 1000);
         assert_eq!(summary_json["lastActiveAtMs"], 2000);
         assert_eq!(delete_json["sessionId"], "session_1");
+        assert_eq!(delete_json["remoteConnectionId"], "conn-1");
+        assert_eq!(delete_json["remoteSshHost"], "host-1");
         assert_eq!(workspace_json["sessionId"], "session_1");
+        assert_eq!(binding_json["workspaceId"], "workspace_1");
+        assert_eq!(binding_json["workspacePath"], "/workspace/project");
+        assert_eq!(binding_json["remoteConnectionId"], "conn-1");
+        assert_eq!(binding_json["remoteSshHost"], "host-1");
     }
 
     #[test]
@@ -2267,7 +2989,7 @@ mod tests {
         ));
         assert_eq!(
             format!("{:?}", handles),
-            "ToolRuntimeHandles { workspace_services: Some(\"<WorkspaceServices>\"), cancellation_token: Some(\"<CancellationToken>\") }"
+            "ToolRuntimeHandles { workspace_services: Some(\"<WorkspaceServices>\"), cancellation_token: Some(\"<CancellationToken>\"), terminal_port: None, remote_exec_port: None }"
         );
     }
 }

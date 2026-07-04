@@ -300,7 +300,7 @@
     justify-content: flex-end;
     gap: 8px;
     padding: 8px 0 0;
-    background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--color-bg-base) 92%, transparent) 36%);
+    background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--color-bg-primary) 92%, transparent) 36%);
   }
 
   .btn {

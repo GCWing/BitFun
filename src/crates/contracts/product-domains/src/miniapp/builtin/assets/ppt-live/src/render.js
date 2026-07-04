@@ -547,7 +547,6 @@ function scrollGenerationListToLatest(list) {
 
 export function renderGeneration(state) {
   const list = byId('generationSteps');
-  const streamContainer = byId('agentStreamList');
   const steps = state.generation?.steps || [];
   const events = Array.isArray(state.generation?.events) ? state.generation.events : [];
   const stream = Array.isArray(state.generation?.agentStream) ? state.generation.agentStream : [];
@@ -558,8 +557,14 @@ export function renderGeneration(state) {
   document.querySelector('.ppt-live')?.classList.toggle('has-generation-error', hasError);
 
   if (!list) return;
+
+  // Merge high-level phase events and granular agent-stream entries into a
+  // single chronological timeline so users see exactly what the agent is
+  // doing — no separate "Agent stream" panel, no frozen-looking status.
+  const merged = mergeTimeline(events, stream);
+
   list.innerHTML = '';
-  if (!events.length) {
+  if (!merged.length) {
     const row = document.createElement('li');
     row.className = 'generation-event is-empty';
     row.innerHTML = `
@@ -571,78 +576,145 @@ export function renderGeneration(state) {
     `;
     list.append(row);
   } else {
-    events.forEach((event, index) => {
-      const detail = userFacingEventDetail(event);
-      const row = document.createElement('li');
-      row.className = `generation-event is-${event.kind || 'info'}`;
-      row.innerHTML = `
-        <span class="generation-index">${Number(event.seq) || index + 1}</span>
-        <span class="generation-copy">
-          <strong>${escapeHtml(event.title || t('processEventUnknown'))}</strong>
-          ${detail ? `<small>${escapeHtml(detail)}</small>` : ''}
-        </span>
-      `;
-      list.append(row);
-    });
+    for (const item of merged) {
+      const row = item.source === 'event'
+        ? renderTimelineEvent(item)
+        : renderTimelineStreamEntry(item);
+      if (row) list.append(row);
+    }
+    // Live activity indicator — shows the agent is still working and what
+    // it is currently doing, so the panel never looks frozen.
+    if (isActive && !hasError) {
+      const liveRow = renderLiveIndicator(state, merged);
+      if (liveRow) list.append(liveRow);
+    }
   }
   scrollGenerationListToLatest(list);
-
-  // Live agent stream — raw Cowork session transcript (tool calls, model
-  // text output, turn lifecycle). Gives full transparency into what the
-  // model is actually doing, so users never wonder whether it's stuck.
-  if (streamContainer) {
-    renderAgentStream(streamContainer, stream, isActive);
-  }
 }
 
-function renderAgentStream(container, stream, isActive) {
-  container.innerHTML = '';
-  if (!stream.length) {
-    container.classList.toggle('is-empty', true);
-    container.innerHTML = `<li class="agent-stream-entry is-empty">${escapeHtml(t('processWaitingForEvents'))}</li>`;
-    return;
-  }
-  container.classList.toggle('is-empty', false);
-  for (const entry of stream) {
-    const row = renderAgentStreamEntry(entry);
-    if (row) container.append(row);
-  }
-  scrollGenerationListToLatest(container);
+function mergeTimeline(events, stream) {
+  const eventItems = events.map((e) => ({ ...e, source: 'event' }));
+  const streamItems = stream.map((s) => ({ ...s, source: 'stream' }));
+  return [...eventItems, ...streamItems]
+    .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0))
+    .slice(-120);
 }
 
-function renderAgentStreamEntry(entry) {
+function renderTimelineEvent(event) {
+  const detail = userFacingEventDetail(event);
+  const li = document.createElement('li');
+  li.className = `generation-event is-${event.kind || 'info'}`;
+  li.innerHTML = `
+    <span class="generation-index">${Number(event.seq) || '·'}</span>
+    <span class="generation-copy">
+      <strong>${escapeHtml(event.title || t('processEventUnknown'))}</strong>
+      ${detail ? `<small>${escapeHtml(detail)}</small>` : ''}
+    </span>
+  `;
+  return li;
+}
+
+function renderTimelineStreamEntry(entry) {
   const li = document.createElement('li');
   const kind = String(entry.kind || 'system');
-  li.className = `agent-stream-entry is-${kind}`;
+  li.className = `generation-event is-stream is-stream-${kind}`;
   const prefix = entry.isSubagent ? '↳ ' : '';
+
   if (kind === 'text') {
-    const text = String(entry.text || '').trim();
+    const text = truncateText(String(entry.text || '').trim(), 120);
     if (!text) return null;
-    li.innerHTML = `<span class="agent-stream-label">${escapeHtml(t('agentStreamAssistant'))}</span><span class="agent-stream-text">${escapeHtml(prefix + text)}</span>`;
+    li.innerHTML = `
+      <span class="generation-index generation-index--label">${escapeHtml(t('agentStreamAssistant'))}</span>
+      <span class="generation-copy">
+        <strong>${escapeHtml(prefix + text)}</strong>
+      </span>
+    `;
     return li;
   }
   if (kind === 'tool-start') {
     const label = friendlyStreamToolName(entry.toolName);
-    li.innerHTML = `<span class="agent-stream-tool">${escapeHtml(label)}</span><span class="agent-stream-text">${escapeHtml(prefix + String(entry.text || ''))}</span>`;
+    li.innerHTML = `
+      <span class="generation-index generation-index--label">${escapeHtml(label)}</span>
+      <span class="generation-copy">
+        <strong>${escapeHtml(prefix + truncateText(String(entry.text || ''), 120))}</strong>
+      </span>
+    `;
     return li;
   }
   if (kind === 'tool-done') {
     const label = friendlyStreamToolName(entry.toolName);
-    const text = String(entry.text || '').trim();
-    li.className = 'agent-stream-entry is-tool-done';
-    li.innerHTML = `<span class="agent-stream-tool">${escapeHtml(label)} ✓</span>${text ? `<span class="agent-stream-text">${escapeHtml(prefix + text)}</span>` : ''}`;
+    const text = truncateText(String(entry.text || '').trim(), 120);
+    li.innerHTML = `
+      <span class="generation-index generation-index--label">${escapeHtml(label)} ✓</span>
+      <span class="generation-copy">
+        ${text ? `<strong>${escapeHtml(prefix + text)}</strong>` : '<small>✓</small>'}
+      </span>
+    `;
     return li;
   }
   if (kind === 'tool-error') {
     const label = friendlyStreamToolName(entry.toolName);
-    li.innerHTML = `<span class="agent-stream-tool">${escapeHtml(label)} ✗</span><span class="agent-stream-text">${escapeHtml(prefix + String(entry.text || ''))}</span>`;
+    li.innerHTML = `
+      <span class="generation-index generation-index--label">${escapeHtml(label)} ✗</span>
+      <span class="generation-copy">
+        <strong>${escapeHtml(prefix + truncateText(String(entry.text || ''), 120))}</strong>
+      </span>
+    `;
     return li;
   }
   // system
-  const text = String(entry.text || '').trim();
+  const text = truncateText(String(entry.text || '').trim(), 200);
   if (!text) return null;
-  li.innerHTML = `<span class="agent-stream-system">${escapeHtml(prefix + text)}</span>`;
+  li.className = 'generation-event is-stream is-stream-system';
+  li.innerHTML = `
+    <span class="generation-index generation-index--dot">·</span>
+    <span class="generation-copy">
+      <small>${escapeHtml(prefix + text)}</small>
+    </span>
+  `;
   return li;
+}
+
+function renderLiveIndicator(state, merged) {
+  const label = currentActivityLabel(state, merged);
+  const li = document.createElement('li');
+  li.className = 'generation-event is-live';
+  li.innerHTML = `
+    <span class="generation-index generation-index--live">
+      <span class="live-dot" aria-hidden="true"></span>
+    </span>
+    <span class="generation-copy">
+      <strong>${escapeHtml(label)}</strong>
+    </span>
+  `;
+  return li;
+}
+
+function currentActivityLabel(state, merged) {
+  // Derive the most specific "what is happening right now" label.
+  for (let i = merged.length - 1; i >= 0; i--) {
+    const item = merged[i];
+    if (item.source === 'stream') {
+      if (item.kind === 'tool-start') {
+        return `${friendlyStreamToolName(item.toolName)}…`;
+      }
+      if (item.kind === 'text') {
+        return t('processEventText');
+      }
+    }
+    if (item.source === 'event' && item.title) {
+      return item.title;
+    }
+  }
+  const currentStep = (state.generation?.steps || []).find((s) => s.status === 'running');
+  if (currentStep?.label) return `${currentStep.label}…`;
+  return t('generationProgressPulse');
+}
+
+function truncateText(value, limit = 200) {
+  const text = String(value || '').replace(/\s+/g, ' ').trim();
+  if (!text) return '';
+  return text.length > limit ? `${text.slice(0, limit - 1)}…` : text;
 }
 
 function friendlyStreamToolName(name) {
@@ -652,12 +724,12 @@ function friendlyStreamToolName(name) {
   if (lower === 'websearch') return t('eventToolWebSearchName');
   if (lower === 'webfetch' || lower === 'mcp__web_reader__webreader') return t('eventToolWebFetchName');
   if (lower === 'skill') return t('eventToolSkillName');
-  if (lower === 'read') return 'Read';
-  if (lower === 'write') return 'Write';
-  if (lower === 'edit') return 'Edit';
+  if (lower === 'read') return t('eventToolReadName');
+  if (lower === 'write') return t('eventToolWriteName');
+  if (lower === 'edit') return t('eventToolEditName');
   if (lower === 'grep') return 'Grep';
   if (lower === 'glob') return 'Glob';
-  if (lower === 'task') return 'Task';
+  if (lower === 'task') return t('eventToolTaskName');
   if (lower === 'todowrite' || lower === 'todo_write') return 'TodoWrite';
   return raw;
 }

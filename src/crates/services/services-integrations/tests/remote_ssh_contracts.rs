@@ -7,9 +7,9 @@ use bitfun_services_integrations::remote_ssh::{
     remote_workspace_session_mirror_dir, remote_workspace_stable_id,
     sanitize_remote_mirror_path_component, sanitize_ssh_connection_id_for_local_dir,
     sanitize_ssh_hostname_for_mirror, unresolved_remote_session_storage_dir,
-    unresolved_remote_session_storage_key, workspace_logical_key, RemoteWorkspace,
-    RemoteWorkspaceRegistry, SSHAuthMethod, SSHConnectionConfig, SavedAuthType, SavedConnection,
-    LOCAL_WORKSPACE_SSH_HOST,
+    unresolved_remote_session_storage_key, workspace_logical_key, workspace_session_identity,
+    RemoteWorkspace, RemoteWorkspaceRegistry, SSHAuthMethod, SSHConnectionConfig, SavedAuthType,
+    SavedConnection, LOCAL_WORKSPACE_SSH_HOST,
 };
 
 #[test]
@@ -172,6 +172,39 @@ fn local_workspace_identity_helpers_preserve_canonical_root_contract() {
         &workspace_root
     ));
     assert!(!local_workspace_roots_equal(&workspace_root, &nested));
+
+    let _ = std::fs::remove_dir_all(workspace_root);
+}
+
+#[test]
+fn workspace_session_identity_preserves_local_and_remote_contracts() {
+    let workspace_root = std::env::temp_dir().join(format!(
+        "bitfun-services-workspace-identity-{}",
+        std::process::id()
+    ));
+    std::fs::create_dir_all(&workspace_root).expect("workspace root should exist");
+
+    let local =
+        workspace_session_identity(&workspace_root.to_string_lossy(), None, None).expect("local");
+    assert_eq!(local.hostname, LOCAL_WORKSPACE_SSH_HOST);
+    assert!(!local.is_remote());
+    assert_eq!(local.remote_connection_id, None);
+
+    let remote = workspace_session_identity(
+        r"\\home\\wsp\\project//",
+        Some(" conn-1 "),
+        Some(" ssh.dev "),
+    )
+    .expect("remote");
+    assert_eq!(remote.hostname, "ssh.dev");
+    assert_eq!(remote.logical_workspace_path(), "/home/wsp/project");
+    assert_eq!(remote.remote_connection_id.as_deref(), Some("conn-1"));
+    assert!(remote.is_remote());
+
+    assert!(
+        workspace_session_identity("/home/wsp/project", Some("conn-1"), None).is_none(),
+        "remote identity requires a resolvable SSH host"
+    );
 
     let _ = std::fs::remove_dir_all(workspace_root);
 }

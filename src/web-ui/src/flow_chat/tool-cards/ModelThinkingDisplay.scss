@@ -43,7 +43,7 @@
 
   &:hover {
     .thinking-label {
-      color: var(--text-secondary);
+      color: var(--color-text-secondary);
       opacity: 1;
     }
 
@@ -54,7 +54,7 @@
 
   .thinking-chevron {
     flex-shrink: 0;
-    color: var(--text-tertiary);
+    color: var(--color-text-muted);
     opacity: 0.6;
     display: block;
     transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.15s ease;
@@ -64,7 +64,7 @@
   .thinking-label {
     font-size: var(--flowchat-font-size-sm);
     font-weight: normal;
-    color: var(--text-tertiary);
+    color: var(--color-text-muted);
     opacity: 0.8;
     line-height: var(--flowchat-support-line-height);
   }
@@ -96,7 +96,7 @@
   /* Match FlowChat body text (sans); mono stack + generic monospace yields Songti-like CJK on Windows. */
   font-family: var(--font-family-sans);
   word-break: break-word;
-  color: var(--tool-card-text-muted);
+  color: var(--color-text-muted);
   padding: var(--flowchat-card-expanded-pad-y) var(--flowchat-card-expanded-pad-x);
   background: transparent;
   border: none;
@@ -121,11 +121,11 @@
   position: relative;
   min-height: 0; /* Required for the 0fr grid trick */
   /*
-   * Match FlowChat list surface (--color-bg-flowchat === scene), not app chrome primary.
+   * Match FlowChat list surface, not app chrome primary.
    * Use a solid fill + mask fade so we never interpolate theme colors with `transparent` in sRGB
    * (that pulls toward black and looks wrong on near-black themes).
    */
-  --thinking-scroll-fade-base: var(--color-bg-flowchat);
+  --thinking-scroll-fade-base: var(--color-bg-scene);
 
   /* Top fade */
   &::before {
@@ -190,9 +190,9 @@
   }
 }
 
-/* Markdown body: same sans as rest of chat; code stays mono via --markdown-font-mono */
+/* Markdown body: same sans as rest of chat; code stays mono via the tool-card font token. */
 .thinking-content .markdown-renderer.thinking-markdown {
-  --markdown-font-mono: var(--tool-card-font-mono);
+  --font-family-mono: var(--tool-card-font-mono);
   --markdown-font-heading: var(--font-family-sans);
   --markdown-font-size: var(--flowchat-font-size-base);
   --markdown-font-size-sm: var(--flowchat-font-size-sm);
@@ -204,12 +204,12 @@
   font-family: var(--font-family-sans);
   font-size: var(--flowchat-font-size-base);
   line-height: var(--flowchat-text-line-height);
-  color: var(--tool-card-text-muted);
+  color: var(--color-text-muted);
   animation: none;
 
   h1, h2, h3, h4, h5, h6,
   strong {
-    color: var(--tool-card-text-secondary);
+    color: var(--color-text-secondary);
   }
 
   p,
@@ -218,20 +218,20 @@
   li,
   blockquote,
   .custom-blockquote {
-    color: var(--tool-card-text-muted);
+    color: var(--color-text-muted);
   }
 
   em {
-    color: var(--tool-card-text-muted);
+    color: var(--color-text-muted);
   }
 
   hr {
-    background: color-mix(in srgb, var(--tool-card-text-muted) 25%, transparent);
+    background: color-mix(in srgb, var(--color-text-muted) 25%, transparent);
   }
 
   blockquote,
   .custom-blockquote {
-    border-left: 2px solid color-mix(in srgb, var(--tool-card-text-muted) 35%, transparent);
+    border-left: 2px solid color-mix(in srgb, var(--color-text-muted) 35%, transparent);
     background: transparent;
   }
 
@@ -240,13 +240,13 @@
     border-radius: 0;
     background: transparent;
     border: none;
-    color: var(--tool-card-text-secondary);
+    color: var(--color-text-secondary);
   }
 
   .code-block-wrapper {
     border-radius: 6px;
-    border: 1px solid color-mix(in srgb, var(--tool-card-text-muted) 18%, transparent);
-    background: color-mix(in srgb, var(--tool-card-text-muted) 8%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-text-muted) 18%, transparent);
+    background: color-mix(in srgb, var(--color-text-muted) 8%, transparent);
   }
 
   .code-block-toolbar {
@@ -286,7 +286,7 @@
   }
 
   .code-block-wrapper .copy-button.copy-success:hover {
-    color: var(--markdown-copy-success-color);
+    color: var(--color-success);
     transform: scale(0.93);
   }
 
@@ -296,16 +296,16 @@
 
   .table-wrapper th,
   .table-wrapper td {
-    color: var(--tool-card-text-muted);
-    border-color: color-mix(in srgb, var(--tool-card-text-muted) 22%, transparent);
+    color: var(--color-text-muted);
+    border-color: color-mix(in srgb, var(--color-text-muted) 22%, transparent);
   }
 
   .table-wrapper th {
-    color: var(--tool-card-text-secondary);
-    background: color-mix(in srgb, var(--tool-card-text-muted) 6%, transparent);
+    color: var(--color-text-secondary);
+    background: color-mix(in srgb, var(--color-text-muted) 6%, transparent);
   }
 
   .table-wrapper tbody tr:nth-child(2n) {
-    background: color-mix(in srgb, var(--tool-card-text-muted) 5%, transparent);
+    background: color-mix(in srgb, var(--color-text-muted) 5%, transparent);
   }
 }

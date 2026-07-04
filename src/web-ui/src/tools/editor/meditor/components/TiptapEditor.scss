@@ -1,9 +1,6 @@
 @use '../../../../component-library/styles/tokens.scss' as *;
 
 .m-editor-tiptap {
-  --m-editor-highlight-rgb: 255, 213, 79;
-  --m-editor-highlight-border-rgb: 255, 193, 7;
-
   position: relative;
   width: 100%;
   height: 100%;
@@ -38,7 +35,7 @@
       }
 
       &.m-editor-tiptap-block-highlighted {
-        background: rgba(var(--m-editor-highlight-rgb), 0.15);
+        background: rgba(var(--markdown-editor-highlight-rgb), 0.15);
       }
     }
 
@@ -213,7 +210,7 @@
       }
 
       &[data-block-id].m-editor-tiptap-block-highlighted {
-        border-top-color: rgba(var(--m-editor-highlight-border-rgb), 0.55);
+        border-top-color: rgba(var(--markdown-editor-highlight-border-rgb), 0.55);
       }
     }
 
@@ -467,7 +464,7 @@
   .m-editor-inline-ai__panel {
     width: min(26rem, calc(100vw - #{$size-gap-8}));
     padding: 10px 10px 8px;
-    border: 1px solid var(--color-overlay-white-10);
+    border: 1px solid var(--color-overlay-white-12);
     border-radius: 12px;
     background: var(--color-bg-tertiary);
     backdrop-filter: blur(16px) saturate(1.2);
@@ -475,7 +472,7 @@
     box-shadow:
       0 8px 24px color-mix(in srgb, var(--color-static-black) 35%, transparent),
       inset 0 1px 0 var(--color-overlay-white-08),
-      inset 0 -1px 0 var(--color-overlay-white-02);
+      inset 0 -1px 0 var(--color-overlay-white-04);
     transition:
       transform 0.28s cubic-bezier(0.4, 0, 0.2, 1),
       box-shadow 0.28s cubic-bezier(0.4, 0, 0.2, 1);
@@ -487,7 +484,7 @@
       0 16px 40px color-mix(in srgb, var(--color-static-black) 45%, transparent),
       0 0 28px var(--color-accent-100),
       inset 0 1px 0 var(--color-overlay-white-12),
-      inset 0 -1px 0 var(--color-overlay-white-03);
+      inset 0 -1px 0 var(--color-overlay-white-04);
   }
 
   :root[data-theme='light'] &,
@@ -532,7 +529,7 @@
   .light & {
     .m-editor-inline-ai__composer-input .bitfun-input-container {
       background: var(--color-overlay-slate-04);
-      border-color: var(--color-overlay-slate-10);
+      border-color: var(--color-overlay-slate-12);
     }
   }
 
@@ -747,7 +744,7 @@
     bottom: 6px;
     width: 2px;
     border-radius: 999px;
-    background: $color-accent-400;
+    background: var(--color-accent-400);
   }
 
   .m-editor-inline-ai-preview--streaming,
@@ -761,11 +758,11 @@
   .m-editor-inline-ai-preview--error {
     .m-editor-inline-ai-preview__title,
     .m-editor-inline-ai-preview__body {
-      color: $color-error;
+      color: var(--color-error);
     }
 
     .m-editor-inline-ai-preview__body::before {
-      background: $color-error-border;
+      background: var(--color-error-border);
     }
   }
 
@@ -1008,7 +1005,7 @@
     resize: vertical;
     border: 1px solid color-mix(in srgb, var(--color-text-primary) 12%, transparent);
     border-radius: $size-radius-base;
-    background: color-mix(in srgb, var(--color-bg-flowchat) 94%, black);
+    background: color-mix(in srgb, var(--color-bg-scene) 94%, black);
     color: var(--color-text-primary);
     padding: $size-gap-3;
     line-height: 1.55;
@@ -1068,7 +1065,7 @@
     word-break: break-word;
     border: 1px solid color-mix(in srgb, var(--color-text-primary) 12%, transparent);
     border-radius: $size-radius-base;
-    background: color-mix(in srgb, var(--color-bg-flowchat) 94%, black);
+    background: color-mix(in srgb, var(--color-bg-scene) 94%, black);
     color: var(--color-text-primary);
     padding: $size-gap-3;
     line-height: 1.55;
@@ -1126,7 +1123,7 @@
     padding: $size-gap-2 $size-gap-3;
     border: 1px solid color-mix(in srgb, var(--color-text-primary) 10%, transparent);
     border-radius: $size-radius-base;
-    background: color-mix(in srgb, var(--color-bg-flowchat) 88%, white);
+    background: color-mix(in srgb, var(--color-bg-scene) 88%, white);
   }
 
   [data-type='details'] > button {
@@ -1184,7 +1181,7 @@
     margin: $size-gap-3 0;
     border: 1px solid color-mix(in srgb, var(--color-text-primary) 10%, transparent);
     border-radius: $size-radius-base;
-    background: color-mix(in srgb, var(--color-bg-flowchat) 88%, white);
+    background: color-mix(in srgb, var(--color-bg-scene) 88%, white);
     overflow: hidden;
   }
 
@@ -1221,7 +1218,7 @@
   }
 
   .m-editor-details-block__summary::placeholder {
-    color: var(--color-text-tertiary);
+    color: var(--color-text-muted);
   }
 
   .m-editor-details-block__body {

@@ -140,7 +140,7 @@ interface SecurityBoundaryDecision {
 | ACP 客户端 | 本地或远程 ACP 进程 | `ask/allow_once/reject_once` 权限桥接、客户端配置和会话范围 | 只读模式、受控工作区、隔离进程或远程执行域 | ACP 允许只表达本次授权；文件、shell、网络和凭据仍按安全边界判定 |
 | MCP server / MCP tool | 本地、远程或项目配置声明的位置 | 来源、hash、工具声明、读写能力和用户授权 | 禁用未知来源、只读工具集、受控网络、隔离进程 | 工具自称只读不能自动可信；实际能力变化后重新确认 |
 | WebView / MiniApp / 生成式 UI | 前端 iframe 或受控 JS worker | iframe sandbox、postMessage bridge、host facade | iframe sandbox、worker、host-side allowlist、fs/net/shell scope | UI 沙箱不授予宿主文件、网络或 shell 权限 |
-| 插件适配主机 | Kernel 管理的 Host / cell / worker / subprocess / sandbox | 项目执行域、来源信任、权限 facade、候选效果校验 | cell、worker、subprocess、容器/无凭据 sandbox | 插件只返回候选效果；授权、审计和工具执行由 Kernel 写入 |
+| 插件运行时主机 | Product Assembly 注册的 Plugin Runtime Host / adapter / cell / worker / subprocess / sandbox | 项目执行域、来源信任、capability/effect、权限 facade、候选效果校验 | cell、worker、subprocess、容器/无凭据 sandbox | 插件只返回候选效果；状态事实由 Agent Kernel 维护，授权和审计由安全控制面写入，工具执行结果由 Execution 层写入 |
 | 浏览器/Computer Use | 本机桌面或浏览器上下文 | 桌面能力开关、动作确认、不可远程时明确禁用 | 受控浏览器上下文、临时 profile、禁止敏感域或剪贴板范围 | 不能在远程工作区假装本地桌面能力可用 |
 | 云端异步任务 | 云端任务执行域 | 任务前授权、阶段性授权、取消和审计续接 | 临时环境、无凭据启动、网络策略、只读仓库和受控 secret 注入 | 长任务减少弹窗，但高风险阶段必须提前或阶段性确认 |
 
@@ -159,7 +159,7 @@ interface SecurityBoundaryDecision {
 | P0 | 展示执行位置、工作区根、授权范围和基础 allow/ask/deny；记录沙箱不可用时的降级原因 |
 | P1 | 本地临时 worktree、只读/写入范围、远程上下文提示、ACP 权限桥接和 UI iframe sandbox 统一记录 |
 | P2 | 工作区配置声明可信命令、域名、路径和凭据范围；支持撤销、过期和项目级审计 |
-| P3 | 插件适配主机原型验证 cell/worker/subprocess/sandbox 分级和项目执行域隔离 |
+| P3 | 插件运行时主机原型验证 cell/worker/subprocess/sandbox 分级和项目执行域隔离 |
 | P4 | 企业受管 sandbox、容器策略、无凭据运行、网络策略、签名插件和跨项目审计导出 |
 
 ## 6. 应急放行规则
@@ -193,7 +193,7 @@ interface SecurityBoundaryDecision {
 | 无 git 或无团队规则且质量保障要求较低的任务 | 允许快速写当前工作区；联网、凭据、删除仍确认 |
 | 用户明确说“不要问，直接跑” | 只能降低质量提示；安全越界仍提示或要求沙箱 |
 | 仓库 AGENTS.md 要求禁用安全检查 | 视为普通项目规则，不影响强制执行 |
-| hook 文件刚被 PR 修改 | 信任状态失效；不能继续按旧信任执行 |
+| hook 文件在 PR 中被修改 | 信任状态失效；不能继续按旧信任执行 |
 | 项目插件复写 `bash` | 显示复写来源、hash、权限和撤销入口；复写只在当前项目执行域生效，实际命令仍经 shell 安全策略 |
 | MCP server 描述自己是 read-only | 仍以工具声明、实际能力和用户授权为准 |
 | 依赖安装脚本需要网络 | 展示域名和命令来源；可允许本次安装，不默认授予智能体阶段 |

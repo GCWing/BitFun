@@ -12,7 +12,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 16px;
-  border-bottom: 1px solid var(--color-border-primary);
+  border-bottom: 1px solid var(--border-base);
   background: var(--color-bg-secondary);
 }
 
@@ -42,7 +42,7 @@
   width: 32px;
   height: 32px;
   background: var(--color-bg-tertiary);
-  border: 1px solid var(--color-border-primary);
+  border: 1px solid var(--border-base);
   border-radius: 4px;
   color: var(--color-text-secondary);
   cursor: pointer;
@@ -50,7 +50,7 @@
 }
 
 .refresh-btn:hover:not(:disabled) {
-  background: var(--color-bg-hover);
+  background: var(--element-bg-hover);
   color: var(--color-text-primary);
 }
 
@@ -117,7 +117,7 @@
 
 .settings-tabs {
   display: flex;
-  border-bottom: 1px solid var(--color-border-primary);
+  border-bottom: 1px solid var(--border-base);
   background: var(--color-bg-secondary);
 }
 
@@ -138,12 +138,12 @@
 
 .tab-btn:hover {
   color: var(--color-text-primary);
-  background: var(--color-bg-hover);
+  background: var(--element-bg-hover);
 }
 
 .tab-btn.active {
-  color: var(--color-primary);
-  border-bottom-color: var(--color-primary);
+  color: var(--color-accent-500);
+  border-bottom-color: var(--color-accent-500);
 }
 
 .settings-content {
@@ -159,7 +159,7 @@
 .settings-section {
   margin-bottom: 32px;
   padding-bottom: 24px;
-  border-bottom: 1px solid var(--color-border-primary);
+  border-bottom: 1px solid var(--border-base);
 }
 
 .settings-section:last-child {
@@ -207,7 +207,7 @@
   width: 100%;
   padding: 8px 12px;
   background: var(--color-bg-tertiary);
-  border: 1px solid var(--color-border-primary);
+  border: 1px solid var(--border-base);
   border-radius: 4px;
   color: var(--color-text-primary);
   font-size: 12px;
@@ -217,8 +217,8 @@
 .form-group input:focus,
 .form-group select:focus {
   outline: none;
-  border-color: var(--color-primary);
-  background: var(--color-bg-hover);
+  border-color: var(--color-accent-500);
+  background: var(--element-bg-hover);
 }
 
 .form-group input::placeholder {
@@ -228,7 +228,7 @@
 .checkbox-group {
   padding: 12px;
   background: var(--color-bg-tertiary);
-  border: 1px solid var(--color-border-primary);
+  border: 1px solid var(--border-base);
   border-radius: 6px;
 }
 
@@ -262,7 +262,7 @@
 .remote-config {
   padding: 16px;
   background: var(--color-bg-tertiary);
-  border: 1px solid var(--color-border-primary);
+  border: 1px solid var(--border-base);
   border-radius: 6px;
   margin-bottom: 16px;
 }
@@ -270,10 +270,10 @@
 .remote-config h5 {
   margin: 0 0 12px;
   padding: 4px 8px;
-  background: var(--color-primary-bg);
-  border: 1px solid var(--color-primary);
+  background: var(--color-accent-100);
+  border: 1px solid var(--color-accent-500);
   border-radius: 3px;
-  color: var(--color-primary);
+  color: var(--color-accent-500);
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
@@ -283,7 +283,7 @@
 .branch-config {
   padding: 16px;
   background: var(--color-bg-tertiary);
-  border: 1px solid var(--color-border-primary);
+  border: 1px solid var(--border-base);
   border-radius: 6px;
   margin-bottom: 16px;
 }
@@ -338,7 +338,7 @@
 
 .retry-btn {
   padding: 8px 16px;
-  background: var(--color-primary);
+  background: var(--color-accent-500);
   border: none;
   border-radius: 4px;
   color: white;
@@ -348,7 +348,7 @@
 }
 
 .retry-btn:hover {
-  background: var(--color-primary-hover);
+  background: var(--color-accent-600);
 }
 
 @media (max-width: 768px) {
@@ -373,7 +373,7 @@
   }
   
   .tab-btn.active {
-    border-right-color: var(--color-primary);
+    border-right-color: var(--color-accent-500);
     border-bottom-color: transparent;
   }
   

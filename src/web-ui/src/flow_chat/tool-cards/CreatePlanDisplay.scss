@@ -7,7 +7,7 @@
 .create-plan-display {
   display: flex;
   flex-direction: column;
-  background: var(--color-bg-flowchat);
+  background: var(--color-bg-scene);
   border: 1px solid var(--border-base);
   border-radius: 8px;
   margin: var(--flowchat-card-gap) 0;
@@ -29,13 +29,13 @@
     /* Same chrome as the filled card when params are not ready yet (streaming start). */
     border: 1px solid var(--border-base);
     border-radius: 8px;
-    background: var(--color-bg-flowchat);
+    background: var(--color-bg-scene);
     box-sizing: border-box;
 
     .create-plan-header {
       justify-content: flex-start;
       gap: var(--flowchat-inline-gap);
-      color: var(--tool-card-text-muted);
+      color: var(--color-text-muted);
       font-size: var(--tool-card-action-font-size);
       border-bottom: none;
     }
@@ -55,7 +55,7 @@
       90deg,
       color-mix(in srgb, var(--color-warning) 7%, transparent) 0%,
       color-mix(in srgb, var(--color-warning) 4%, transparent) 50%,
-      var(--color-overlay-white-02) 100%
+      var(--color-overlay-white-04) 100%
     );
     border-bottom: 1px solid var(--border-base);
 
@@ -85,7 +85,7 @@
 
       &:hover {
         .file-name {
-          color: var(--tool-card-text-primary);
+          color: var(--color-text-primary);
         }
       }
     }
@@ -116,7 +116,7 @@
     .file-name {
       font-size: var(--flowchat-font-size-xs);
       font-family: var(--tool-card-font-mono);
-      color: var(--tool-card-text-secondary);
+      color: var(--color-text-secondary);
       min-width: 0;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -139,7 +139,7 @@
       border: 1px solid transparent;
       border-radius: 6px;
       background: transparent;
-      color: var(--tool-card-text-muted);
+      color: var(--color-text-muted);
       cursor: pointer;
       transition: all 0.15s ease;
 
@@ -177,14 +177,14 @@
       margin: 0 0 var(--flowchat-inline-gap) 0;
       font-size: var(--flowchat-font-size-base);
       font-weight: 600;
-      color: var(--tool-card-text-primary);
+      color: var(--color-text-primary);
       line-height: var(--flowchat-support-line-height);
     }
 
     .plan-overview {
       margin: 0;
       font-size: var(--tool-card-action-font-size);
-      color: var(--tool-card-text-secondary);
+      color: var(--color-text-secondary);
       line-height: var(--flowchat-support-line-height);
     }
 
@@ -200,7 +200,7 @@
       border: 1px solid transparent;
       border-radius: 6px;
       background: transparent;
-      color: var(--tool-card-text-muted);
+      color: var(--color-text-muted);
       cursor: pointer;
       transition: all 0.15s ease;
 
@@ -249,7 +249,7 @@
         height: 12px;
 
         &--pending {
-          color: var(--tool-card-text-muted);
+          color: var(--color-text-muted);
           opacity: 0.5;
         }
 
@@ -270,12 +270,12 @@
       .todo-content {
         font-size: var(--tool-card-action-font-size);
         line-height: var(--flowchat-support-line-height);
-        color: var(--tool-card-text-secondary);
+        color: var(--color-text-secondary);
       }
 
       &.status-pending {
         .todo-content {
-          color: var(--tool-card-text-secondary);
+          color: var(--color-text-secondary);
         }
       }
 
@@ -283,7 +283,7 @@
         background: var(--glass-blue-subtle);
         
         .todo-content {
-          color: var(--tool-card-text-primary);
+          color: var(--color-text-primary);
           font-weight: 500;
         }
       }
@@ -291,7 +291,7 @@
       &.status-completed {
         .todo-content {
           text-decoration: line-through;
-          color: var(--tool-card-text-muted);
+          color: var(--color-text-muted);
           opacity: 0.6;
         }
       }
@@ -301,7 +301,7 @@
         
         .todo-content {
           text-decoration: line-through;
-          color: var(--tool-card-text-muted);
+          color: var(--color-text-muted);
         }
       }
     }
@@ -310,12 +310,12 @@
   /* Plan params still streaming: footer actions read as disabled / grayed. */
   &--plan-generating {
     .create-plan-footer {
-      background: color-mix(in srgb, var(--color-bg-flowchat) 92%, var(--tool-card-text-muted));
+      background: color-mix(in srgb, var(--color-bg-scene) 92%, var(--color-text-muted));
 
       .build-btn:disabled {
         opacity: 1;
         cursor: not-allowed;
-        color: var(--tool-card-text-muted);
+        color: var(--color-text-muted);
         background: color-mix(in srgb, var(--element-bg-soft) 80%, transparent);
         border: 1px solid var(--border-base);
         box-shadow: none;
@@ -326,7 +326,7 @@
         }
 
         svg {
-          color: var(--tool-card-text-muted);
+          color: var(--color-text-muted);
         }
       }
     }
@@ -338,7 +338,7 @@
     justify-content: space-between;
     padding: var(--flowchat-card-pad-y) var(--flowchat-card-pad-x);
     border-top: 1px solid var(--border-base);
-    background: var(--color-overlay-white-02);
+    background: var(--color-overlay-white-04);
 
     &--generating-only {
       justify-content: flex-end;
@@ -351,7 +351,7 @@
       padding: var(--flowchat-control-pad-y) var(--flowchat-control-pad-x);
       font-size: var(--tool-card-action-font-size);
       font-weight: 500;
-      color: var(--tool-card-text-secondary);
+      color: var(--color-text-secondary);
       background: transparent;
       border: none;
       border-radius: 4px;
@@ -359,7 +359,7 @@
       transition: all 0.15s ease;
 
       &:hover:not(:disabled) {
-        color: var(--tool-card-text-primary);
+        color: var(--color-text-primary);
         background: var(--color-overlay-white-08);
       }
 
@@ -386,7 +386,7 @@
       border-radius: 4px;
       cursor: pointer;
       transition: all 0.15s ease;
-      box-shadow: 0 1px 2px var(--color-overlay-black-10);
+      box-shadow: 0 1px 2px var(--color-overlay-black-12);
 
       &:hover:not(:disabled) {
         background: linear-gradient(
@@ -434,7 +434,7 @@
             var(--color-success) 0%,
             color-mix(in srgb, var(--color-success) 82%, var(--color-text-primary)) 100%
           );
-          box-shadow: 0 1px 2px var(--color-overlay-black-10);
+          box-shadow: 0 1px 2px var(--color-overlay-black-12);
         }
       }
     }

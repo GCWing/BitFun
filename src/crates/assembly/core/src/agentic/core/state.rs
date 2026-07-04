@@ -1,37 +1,11 @@
-//! State definitions
+//! State definitions.
 //!
-//! Defines session state, tool execution state, etc.
+//! Keeps core-owned tool execution state and re-exports runtime-owned session state facts.
 
 use crate::agentic::tools::framework::ToolResult;
+pub use bitfun_agent_runtime::session_state::{ProcessingPhase, SessionState};
 use serde::{Deserialize, Serialize};
 use std::time::SystemTime;
-
-// ============ Session State (aligned with frontend) ============
-
-/// Session state
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum SessionState {
-    Idle,
-    Processing {
-        current_turn_id: String,
-        phase: ProcessingPhase,
-    },
-    Error {
-        error: String,
-        recoverable: bool,
-    },
-}
-
-/// Processing phase
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum ProcessingPhase {
-    Starting,       // Starting
-    Compacting,     // Context compaction
-    Thinking,       // AI thinking
-    Streaming,      // Streaming output
-    ToolCalling,    // Tool calling
-    ToolConfirming, // Waiting for tool confirmation
-}
 
 // ============ Tool Execution State ============
 
@@ -92,6 +66,21 @@ pub enum ToolExecutionState {
         execution_ms: Option<u64>,
     },
 
+    /// Rejected by user before execution
+    Rejected {
+        reason: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        duration_ms: Option<u64>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        queue_wait_ms: Option<u64>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        preflight_ms: Option<u64>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        confirmation_wait_ms: Option<u64>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        execution_ms: Option<u64>,
+    },
+
     /// Cancelled
     Cancelled {
         reason: String,
@@ -119,6 +108,7 @@ pub struct ToolStats {
     pub awaiting_confirmation: usize,
     pub completed: usize,
     pub failed: usize,
+    pub rejected: usize,
     pub cancelled: usize,
 }
 

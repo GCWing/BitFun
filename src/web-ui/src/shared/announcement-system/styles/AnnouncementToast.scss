@@ -158,7 +158,7 @@ $toast-width: 320px;
 
   &__ring-fill {
     fill: none;
-    stroke: var(--color-primary);
+    stroke: var(--color-accent-500);
     stroke-width: 1.5;
     stroke-linecap: round;
     stroke-dasharray: $ring-circumference;
@@ -229,7 +229,7 @@ $toast-width: 320px;
     white-space: nowrap;
 
     &--primary {
-      background: var(--color-primary);
+      background: var(--color-accent-500);
       color: var(--color-static-white);
 
       &:hover { opacity: 0.9; }

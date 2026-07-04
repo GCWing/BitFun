@@ -7,10 +7,10 @@ use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use log::{info, warn};
 use serde_json::{json, Value};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tool_runtime::search::glob_search::{
-    build_remote_find_command, build_remote_rg_command, collect_remote_glob_matches,
-    execute_local_glob, normalize_path, LocalGlobRequest,
+    build_remote_find_command, build_remote_rg_command, collect_remote_glob_result,
+    derive_walk_root, execute_local_glob, normalize_path, LocalGlobRequest,
 };
 
 pub struct GlobTool;
@@ -27,6 +27,69 @@ impl GlobTool {
     }
 }
 
+const GLOB_RESULT_LIMIT: usize = 100;
+
+fn render_glob_result_text(
+    pattern: &str,
+    matches: &[String],
+    total_matches: Option<usize>,
+    truncated: bool,
+    matches_relative_to: Option<&str>,
+) -> String {
+    let relative_note = matches_relative_to
+        .map(|base| format!(" relative to {base}"))
+        .unwrap_or_default();
+
+    if matches.is_empty() {
+        return format!("No files found matching pattern '{pattern}'{relative_note}");
+    }
+
+    let result_text = matches.join("\n");
+    if !truncated {
+        return format!(
+            "Found {} matches{relative_note}\n<matches>\n{result_text}\n</matches>",
+            matches.len()
+        );
+    }
+
+    let count_text = match total_matches {
+        Some(total) => format!(
+            "Showing {} of {} matches{relative_note}",
+            matches.len(),
+            total
+        ),
+        None => format!("Showing {} matches{relative_note}", matches.len()),
+    };
+
+    format!(
+        "{count_text} (This list is truncated and not complete. Narrow the pattern or search a more specific path to see the rest.)\n<matches>\n{result_text}\n</matches>"
+    )
+}
+
+fn display_path(path: &Path) -> String {
+    normalize_path(path)
+}
+
+fn resolve_effective_glob_scope(search_path: &Path, pattern: &str) -> (PathBuf, String) {
+    derive_walk_root(search_path, pattern)
+}
+
+fn relative_base_note(original_search_path: &Path, walk_root: &Path) -> Option<String> {
+    (walk_root != original_search_path).then(|| display_path(walk_root))
+}
+
+fn relative_json_field(base_note: Option<&str>) -> Value {
+    base_note.map_or(Value::Null, |base| json!(base))
+}
+
+fn result_relative_base_note(
+    matches_relative_to: &str,
+    original_search_path: &Path,
+) -> Option<String> {
+    let original = display_path(original_search_path);
+    (matches_relative_to != original).then(|| matches_relative_to.to_string())
+}
+
 #[async_trait]
 impl Tool for GlobTool {
     fn name(&self) -> &str {
@@ -40,11 +103,8 @@ impl Tool for GlobTool {
 - Use this tool when you need to find files by name patterns
 - The path parameter may be workspace-relative, an absolute path inside the current workspace, or an exact `bitfun://runtime/...` URI returned by another tool
 - Omit path to search the current workspace. Do not use host roots or placeholder paths such as `/workspace`.
+- Returns up to 100 matching paths. Narrow the pattern or search a more specific path if the result is truncated.
 - You can call multiple tools in a single response. It is always better to speculatively perform multiple searches in parallel if they are potentially useful.
-<example>
-- List files in current workspace: pattern = "*"
-- Search all markdown files in src recursively: path = "src", pattern = "**/*.md"
-</example>
 "#.to_string())
     }
 
@@ -63,10 +123,6 @@ impl Tool for GlobTool {
                 "path": {
                     "type": "string",
                     "description": "The directory to search in. Omit this field to search the current workspace. If provided, use a workspace-relative path, an absolute path inside the current workspace, or an exact bitfun://runtime URI. Do not enter \"undefined\", \"null\", host roots, or placeholder paths such as /workspace."
-                },
-                "limit": {
-                    "type": "number",
-                    "description": "The maximum number of entries to return. Defaults to 100."
                 }
             },
             "required": ["pattern"]
@@ -121,11 +177,7 @@ impl Tool for GlobTool {
                 }
             }
         };
-        let limit = input
-            .get("limit")
-            .and_then(|v| v.as_u64())
-            .map(|v| v as usize)
-            .unwrap_or(100);
+        let limit = GLOB_RESULT_LIMIT;
 
         if resolved.uses_remote_workspace_backend() {
             if workspace_search_feature_enabled().await {
@@ -140,6 +192,8 @@ impl Tool for GlobTool {
                             )
                         })?;
                     let resolved_path = PathBuf::from(&resolved.resolved_path);
+                    let (_walk_root, effective_pattern) =
+                        resolve_effective_glob_scope(&resolved_path, pattern);
                     let repo_root = workspace_root.to_string_lossy().to_string();
                     let preferred_connection_id = context
                         .workspace
@@ -163,18 +217,30 @@ impl Tool for GlobTool {
                         .map_err(BitFunError::tool)?;
 
                     let match_count = glob_result.paths.len();
-                    let result_text = if glob_result.paths.is_empty() {
-                        format!("No files found matching pattern '{}'", pattern)
-                    } else {
-                        glob_result.paths.join("\n")
-                    };
+                    let total_matches = glob_result.total_matches;
+                    let truncated = glob_result.truncated;
+                    let result_relative_base = result_relative_base_note(
+                        &glob_result.matches_relative_to,
+                        &PathBuf::from(&resolved.resolved_path),
+                    );
+                    let result_text = render_glob_result_text(
+                        pattern,
+                        &glob_result.paths,
+                        total_matches,
+                        truncated,
+                        result_relative_base.as_deref(),
+                    );
 
                     Ok::<Vec<ToolResult>, BitFunError>(vec![ToolResult::Result {
                         data: json!({
                             "pattern": pattern,
                             "path": resolved.logical_path,
+                            "effective_pattern": effective_pattern,
+                            "matches_relative_to": relative_json_field(result_relative_base.as_deref()),
                             "matches": glob_result.paths,
                             "match_count": match_count,
+                            "total_matches": total_matches,
+                            "truncated": truncated,
                             "repo_phase": glob_result.repo_status.phase,
                             "rebuild_recommended": glob_result.repo_status.rebuild_recommended
                         }),
@@ -201,23 +267,30 @@ impl Tool for GlobTool {
                 .ok_or_else(|| BitFunError::tool("Workspace shell not available".to_string()))?;
 
             let search_dir = resolved.resolved_path.clone();
+            let search_dir_path = PathBuf::from(&search_dir);
+            let (remote_walk_root, _remote_pattern) =
+                resolve_effective_glob_scope(&search_dir_path, pattern);
+            let relative_base = relative_base_note(&search_dir_path, &remote_walk_root);
             let (_stdout, _stderr, exit_code) = ws_shell
                 .exec("command -v rg >/dev/null 2>&1", Some(5_000))
                 .await
                 .map_err(|e| BitFunError::tool(format!("Failed to detect rg on remote: {}", e)))?;
 
-            let remote_cmd = if exit_code == 0 {
+            let (remote_cmd, exact_total) = if exit_code == 0 {
                 info!(
                     "Glob backend selected: backend=remote_rg, search_path={}, pattern={}",
                     search_dir, pattern
                 );
-                build_remote_rg_command(&search_dir, pattern)
+                (build_remote_rg_command(&search_dir, pattern), true)
             } else {
                 info!(
                     "Glob backend selected: backend=remote_find, reason=rg_not_found, search_path={}, pattern={}",
                     search_dir, pattern
                 );
-                build_remote_find_command(&search_dir, pattern, limit)
+                (
+                    build_remote_find_command(&search_dir, pattern, limit),
+                    false,
+                )
             };
 
             let (stdout, _stderr, _exit_code) = ws_shell
@@ -227,26 +300,34 @@ impl Tool for GlobTool {
                     BitFunError::tool(format!("Failed to glob on remote with rg: {}", e))
                 })?;
 
-            let limited = collect_remote_glob_matches(&search_dir, &stdout, limit)
+            let remote_walk_root_str = remote_walk_root.to_string_lossy().to_string();
+            let glob_result =
+                collect_remote_glob_result(&remote_walk_root_str, &stdout, limit, exact_total);
+            let total_matches = glob_result.total_matches;
+            let truncated = glob_result.truncated;
+            let matches = glob_result
+                .matches
                 .into_iter()
-                .map(|path| {
-                    resolved
-                        .logical_child_path(&path)
-                        .unwrap_or_else(|| normalize_path(&path))
-                })
+                .map(|path| normalize_path(&path))
                 .collect::<Vec<_>>();
-            let result_text = if limited.is_empty() {
-                format!("No files found matching pattern '{}'", pattern)
-            } else {
-                limited.join("\n")
-            };
+            let match_count = matches.len();
+            let result_text = render_glob_result_text(
+                pattern,
+                &matches,
+                total_matches,
+                truncated,
+                relative_base.as_deref(),
+            );
 
             return Ok(vec![ToolResult::Result {
                 data: json!({
                     "pattern": pattern,
                     "path": resolved.logical_path,
-                    "matches": limited,
-                    "match_count": limited.len()
+                    "matches_relative_to": relative_json_field(relative_base.as_deref()),
+                    "matches": matches,
+                    "match_count": match_count,
+                    "total_matches": total_matches,
+                    "truncated": truncated
                 }),
                 result_for_assistant: Some(result_text),
                 image_attachments: None,
@@ -267,6 +348,8 @@ impl Tool for GlobTool {
                         )
                     })?;
                 let resolved_path = PathBuf::from(&resolved_str);
+                let (_walk_root, effective_pattern) =
+                    resolve_effective_glob_scope(&resolved_path, pattern);
                 let glob_result = search_service
                     .glob(GlobSearchRequest {
                         repo_root: workspace_root.clone(),
@@ -276,18 +359,31 @@ impl Tool for GlobTool {
                     })
                     .await?;
 
-                let result_text = if glob_result.paths.is_empty() {
-                    format!("No files found matching pattern '{}'", pattern)
-                } else {
-                    glob_result.paths.join("\n")
-                };
+                let match_count = glob_result.paths.len();
+                let total_matches = glob_result.total_matches;
+                let truncated = glob_result.truncated;
+                let result_relative_base = result_relative_base_note(
+                    &glob_result.matches_relative_to,
+                    &PathBuf::from(&resolved_str),
+                );
+                let result_text = render_glob_result_text(
+                    pattern,
+                    &glob_result.paths,
+                    total_matches,
+                    truncated,
+                    result_relative_base.as_deref(),
+                );
 
                 return Ok(vec![ToolResult::Result {
                     data: json!({
                         "pattern": pattern,
                         "path": resolved_str,
+                        "effective_pattern": effective_pattern,
+                        "matches_relative_to": relative_json_field(result_relative_base.as_deref()),
                         "matches": glob_result.paths,
-                        "match_count": glob_result.paths.len(),
+                        "match_count": match_count,
+                        "total_matches": total_matches,
+                        "truncated": truncated,
                         "repo_phase": glob_result.repo_status.phase,
                         "rebuild_recommended": glob_result.repo_status.rebuild_recommended
                     }),
@@ -312,25 +408,31 @@ impl Tool for GlobTool {
         let matches = glob_result
             .matches
             .into_iter()
-            .map(|path| {
-                resolved
-                    .logical_child_path(&path)
-                    .unwrap_or_else(|| normalize_path(&path))
-            })
+            .map(|path| normalize_path(&path))
             .collect::<Vec<_>>();
 
-        let result_text = if matches.is_empty() {
-            format!("No files found matching pattern '{}'", pattern)
-        } else {
-            matches.join("\n")
-        };
+        let total_matches = glob_result.total_matches;
+        let truncated = glob_result.truncated;
+        let match_count = matches.len();
+        let original_search_path = PathBuf::from(&resolved_str);
+        let relative_base = relative_base_note(&original_search_path, &glob_result.walk_root);
+        let result_text = render_glob_result_text(
+            pattern,
+            &matches,
+            total_matches,
+            truncated,
+            relative_base.as_deref(),
+        );
 
         let result = ToolResult::Result {
             data: json!({
                 "pattern": pattern,
                 "path": resolved.logical_path,
+                "matches_relative_to": relative_json_field(relative_base.as_deref()),
                 "matches": matches,
-                "match_count": matches.len()
+                "match_count": match_count,
+                "total_matches": total_matches,
+                "truncated": truncated
             }),
             result_for_assistant: Some(result_text),
             image_attachments: None,
@@ -342,6 +444,8 @@ impl Tool for GlobTool {
 
 #[cfg(test)]
 mod tests {
+    use super::{render_glob_result_text, GlobTool};
+    use crate::agentic::tools::framework::Tool;
     use std::fs;
     use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -358,6 +462,39 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("bitfun-glob-tool-{name}-{unique}"));
         fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    #[test]
+    fn input_schema_does_not_expose_model_controlled_limit() {
+        let schema = GlobTool::new().input_schema();
+        assert!(schema["properties"].get("pattern").is_some());
+        assert!(schema["properties"].get("path").is_some());
+        assert!(schema["properties"].get("limit").is_none());
+    }
+
+    #[test]
+    fn renders_truncation_note_from_backend_metadata_only() {
+        let matches = (0..100)
+            .map(|idx| format!("file{idx}.txt"))
+            .collect::<Vec<_>>();
+
+        let exact_limit_complete =
+            render_glob_result_text("*.txt", &matches, Some(100), false, None);
+        assert!(!exact_limit_complete.contains("[truncated:"));
+        assert!(exact_limit_complete.starts_with("Found 100 matches\n<matches>\n"));
+
+        let exact_truncated = render_glob_result_text("*.txt", &matches, Some(101), true, None);
+        assert!(exact_truncated.starts_with("Showing 100 of 101 matches (This list is truncated"));
+        assert!(exact_truncated.contains("not complete"));
+        assert!(exact_truncated.contains("\n<matches>\nfile0.txt"));
+        assert!(exact_truncated.ends_with("</matches>"));
+
+        let unknown_total = render_glob_result_text("*.txt", &matches, None, true, None);
+        assert!(unknown_total.starts_with("Showing 100 matches (This list is truncated"));
+
+        let relative_to =
+            render_glob_result_text("*.txt", &matches[..1], Some(1), false, Some("/repo/src"));
+        assert!(relative_to.starts_with("Found 1 matches relative to /repo/src\n<matches>\n"));
     }
 
     #[test]
@@ -407,11 +544,40 @@ mod tests {
         .collect::<Vec<_>>();
 
         assert_eq!(matches.len(), 2);
-        assert!(matches.iter().any(|path| path.ends_with("/src/lib.rs")));
-        assert!(matches.iter().any(|path| path.ends_with("/tests/mod.rs")));
-        assert!(!matches
-            .iter()
-            .any(|path| path.ends_with("/src/deep/mod.rs")));
+        assert!(matches.iter().any(|path| path == "src/lib.rs"));
+        assert!(matches.iter().any(|path| path == "tests/mod.rs"));
+        assert!(!matches.iter().any(|path| path == "src/deep/mod.rs"));
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn static_glob_prefix_results_are_relative_to_walk_root() {
+        let root = make_temp_dir("relative-walk-root");
+        fs::create_dir_all(root.join("src/deep")).unwrap();
+        fs::write(root.join("src/lib.rs"), "").unwrap();
+        fs::write(root.join("src/deep/mod.rs"), "").unwrap();
+
+        let result = execute_local_glob(LocalGlobRequest {
+            search_path: root.clone(),
+            pattern: "src/*.rs".to_string(),
+            limit: 10,
+        })
+        .unwrap();
+        let matches = result
+            .matches
+            .into_iter()
+            .map(|path| normalize_path(&path))
+            .collect::<Vec<_>>();
+        let expected_walk_root = fs::canonicalize(&root).unwrap().join("src");
+
+        assert_eq!(
+            normalize_path(&result.walk_root),
+            normalize_path(&expected_walk_root)
+        );
+        assert!(matches.iter().any(|path| path == "lib.rs"));
+        assert!(matches.iter().any(|path| path == "deep/mod.rs"));
+        assert!(matches.iter().all(|path| !path.starts_with("src/")));
 
         let _ = fs::remove_dir_all(root);
     }

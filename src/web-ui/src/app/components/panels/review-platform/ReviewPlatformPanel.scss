@@ -64,10 +64,10 @@
     justify-content: center;
     width: 26px;
     height: 26px;
-    border: 1px solid color-mix(in srgb, var(--accent-primary) 25%, var(--border-base));
+    border: 1px solid color-mix(in srgb, var(--color-accent-500) 25%, var(--border-base));
     border-radius: 6px;
-    color: var(--accent-primary);
-    background: color-mix(in srgb, var(--accent-primary) 10%, transparent);
+    color: var(--color-accent-500);
+    background: color-mix(in srgb, var(--color-accent-500) 10%, transparent);
   }
 
   &__brand-copy,
@@ -268,7 +268,7 @@
   }
 
   &__loading-inline {
-    color: var(--accent-primary);
+    color: var(--color-accent-500);
     display: inline-block;
     transform-origin: center;
   }
@@ -334,14 +334,14 @@
     transition: border-color $motion-base $easing-standard, background $motion-base $easing-standard, color $motion-base $easing-standard;
 
     &:hover {
-      border-color: color-mix(in srgb, var(--accent-primary) 32%, var(--border-base));
+      border-color: color-mix(in srgb, var(--color-accent-500) 32%, var(--border-base));
       color: var(--color-text-primary);
     }
 
     &.is-active {
-      border-color: color-mix(in srgb, var(--accent-primary) 40%, var(--border-base));
-      color: var(--accent-primary);
-      background: color-mix(in srgb, var(--accent-primary) 11%, transparent);
+      border-color: color-mix(in srgb, var(--color-accent-500) 40%, var(--border-base));
+      color: var(--color-accent-500);
+      background: color-mix(in srgb, var(--color-accent-500) 11%, transparent);
     }
   }
 
@@ -425,8 +425,8 @@
     }
 
     &.is-selected {
-      border-color: color-mix(in srgb, var(--accent-primary) 28%, var(--border-base));
-      background: linear-gradient(90deg, color-mix(in srgb, var(--accent-primary) 11%, transparent), color-mix(in srgb, var(--element-bg-soft) 86%, transparent));
+      border-color: color-mix(in srgb, var(--color-accent-500) 28%, var(--border-base));
+      background: linear-gradient(90deg, color-mix(in srgb, var(--color-accent-500) 11%, transparent), color-mix(in srgb, var(--element-bg-soft) 86%, transparent));
     }
   }
 
@@ -580,8 +580,8 @@
     box-shadow: none;
 
     &:hover:not(:disabled) {
-      border-color: color-mix(in srgb, var(--accent-primary) 34%, var(--border-base));
-      background: color-mix(in srgb, var(--accent-primary) 9%, var(--element-bg-soft));
+      border-color: color-mix(in srgb, var(--color-accent-500) 34%, var(--border-base));
+      background: color-mix(in srgb, var(--color-accent-500) 9%, var(--element-bg-soft));
       color: var(--color-text-primary);
     }
 
@@ -604,10 +604,10 @@
     gap: 12px;
     margin: 10px 14px 0;
     padding: 10px 12px;
-    border: 1px solid color-mix(in srgb, var(--accent-primary) 20%, var(--border-base));
+    border: 1px solid color-mix(in srgb, var(--color-accent-500) 20%, var(--border-base));
     border-radius: 7px;
     background:
-      linear-gradient(180deg, color-mix(in srgb, var(--accent-primary) 8%, transparent), transparent),
+      linear-gradient(180deg, color-mix(in srgb, var(--color-accent-500) 8%, transparent), transparent),
       color-mix(in srgb, var(--color-bg-elevated) 70%, transparent);
   }
 
@@ -638,7 +638,7 @@
   }
 
   &__agent-link-label {
-    color: var(--accent-primary) !important;
+    color: var(--color-accent-500) !important;
     font-weight: 650;
     text-transform: uppercase;
     letter-spacing: 0;
@@ -786,7 +786,7 @@
         background: transparent;
 
         &::after {
-          background: color-mix(in srgb, var(--accent-primary) 72%, var(--color-text-primary));
+          background: color-mix(in srgb, var(--color-accent-500) 72%, var(--color-text-primary));
         }
       }
     }
@@ -874,7 +874,7 @@
   }
 
   &__review-session--running &__review-session-icon {
-    color: var(--accent-primary);
+    color: var(--color-accent-500);
   }
 
   &__review-session--completed &__review-session-icon {
@@ -1246,10 +1246,10 @@
     align-items: center;
     width: fit-content;
     padding: 2px 6px;
-    border: 1px solid color-mix(in srgb, var(--accent-primary) 26%, var(--border-base));
+    border: 1px solid color-mix(in srgb, var(--color-accent-500) 26%, var(--border-base));
     border-radius: 5px;
-    color: var(--accent-primary);
-    background: color-mix(in srgb, var(--accent-primary) 9%, transparent);
+    color: var(--color-accent-500);
+    background: color-mix(in srgb, var(--color-accent-500) 9%, transparent);
     font-size: 10px;
     font-weight: 650;
     line-height: 1.2;
@@ -1321,7 +1321,7 @@
     span {
       display: block;
       margin-bottom: 3px;
-      color: var(--color-text-tertiary);
+      color: var(--color-text-muted);
       font-size: 10px;
       font-weight: 650;
       text-transform: uppercase;
@@ -1406,11 +1406,11 @@
   &__thread--reply {
     margin-left: 18px;
     border-left-width: 3px;
-    border-left-color: color-mix(in srgb, var(--accent-primary) 42%, var(--border-base));
+    border-left-color: color-mix(in srgb, var(--color-accent-500) 42%, var(--border-base));
   }
 
   &__thread--review {
-    background: color-mix(in srgb, var(--accent-primary) 7%, var(--color-bg-elevated));
+    background: color-mix(in srgb, var(--color-accent-500) 7%, var(--color-bg-elevated));
   }
 
   &__thread--comment {
@@ -1446,9 +1446,9 @@
   }
 
   &__thread-tag--review {
-    color: color-mix(in srgb, var(--accent-primary) 92%, var(--color-text-primary));
-    border-color: color-mix(in srgb, var(--accent-primary) 20%, var(--border-base));
-    background: color-mix(in srgb, var(--accent-primary) 10%, transparent);
+    color: color-mix(in srgb, var(--color-accent-500) 92%, var(--color-text-primary));
+    border-color: color-mix(in srgb, var(--color-accent-500) 20%, var(--border-base));
+    background: color-mix(in srgb, var(--color-accent-500) 10%, transparent);
   }
 
   &__thread-tag--comment {

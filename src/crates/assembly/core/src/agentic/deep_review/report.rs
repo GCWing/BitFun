@@ -149,10 +149,10 @@ pub(crate) async fn persist_deep_review_cache(
     let Some(coordinator) = get_global_coordinator() else {
         return Ok(());
     };
-    let session_storage_path = workspace.session_storage_path();
+    let session_storage_dir = workspace.session_storage_dir();
     let session_manager = coordinator.get_session_manager();
     let Some(mut metadata) = session_manager
-        .load_session_metadata(&session_storage_path, session_id)
+        .load_session_metadata(&session_storage_dir, session_id)
         .await?
     else {
         return Ok(());
@@ -160,6 +160,6 @@ pub(crate) async fn persist_deep_review_cache(
 
     set_deep_review_cache(&mut metadata, cache_value);
     session_manager
-        .save_session_metadata(&session_storage_path, &metadata)
+        .save_session_metadata(&session_storage_dir, &metadata)
         .await
 }

@@ -4,19 +4,25 @@
 //! concrete session/runtime dependencies are reduced to service ports.
 
 mod command;
+pub mod feishu;
 mod locale;
 mod menu;
 mod state;
+pub mod telegram;
+pub mod weixin;
 
 use serde::{Deserialize, Serialize};
 
 pub use command::{parse_command, BotCommand};
+pub use feishu::{FeishuBotApi, FeishuConfig};
 pub use locale::{fmt_count, strings_for, BotLanguage, BotStrings};
 pub use menu::{MenuItem, MenuItemStyle, MenuView};
 pub use state::{
     BotAction, BotActionStyle, BotChatState, BotDisplayMode, BotInteractionHandler,
     BotInteractiveRequest, BotMessageSender, BotQuestion, BotQuestionOption, PendingAction,
 };
+pub use telegram::{TelegramBotApi, TelegramConfig};
+pub use weixin::{WeixinConfig, WeixinProviderClient};
 
 /// Configuration for a bot-based connection.
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -148,14 +148,14 @@
     white-space: nowrap;
 
     &.is-ok {
-      border-color: rgba($color-success, 0.24);
-      background: rgba($color-success, 0.08);
+      border-color: color-mix(in srgb, var(--color-success) 24%, transparent);
+      background: color-mix(in srgb, var(--color-success) 8%, transparent);
       color: var(--color-success);
     }
 
     &.is-error {
-      border-color: rgba($color-error, 0.24);
-      background: rgba($color-error, 0.08);
+      border-color: color-mix(in srgb, var(--color-error) 24%, transparent);
+      background: color-mix(in srgb, var(--color-error) 8%, transparent);
       color: var(--color-error);
     }
 
@@ -188,20 +188,20 @@
     white-space: nowrap;
 
     &.is-enabled {
-      border-color: rgba($color-success, 0.24);
-      background: rgba($color-success, 0.08);
+      border-color: color-mix(in srgb, var(--color-success) 24%, transparent);
+      background: color-mix(in srgb, var(--color-success) 8%, transparent);
       color: var(--color-success);
     }
 
     &.is-ready {
-      border-color: rgba($color-success, 0.24);
-      background: rgba($color-success, 0.08);
+      border-color: color-mix(in srgb, var(--color-success) 24%, transparent);
+      background: color-mix(in srgb, var(--color-success) 8%, transparent);
       color: var(--color-success);
     }
 
     &.is-partial {
-      border-color: rgba($color-warning, 0.24);
-      background: rgba($color-warning, 0.1);
+      border-color: color-mix(in srgb, var(--color-warning) 24%, transparent);
+      background: color-mix(in srgb, var(--color-warning) 10%, transparent);
       color: var(--color-warning);
     }
 
@@ -212,8 +212,8 @@
     }
 
     &.is-invalid {
-      border-color: rgba($color-error, 0.24);
-      background: rgba($color-error, 0.08);
+      border-color: color-mix(in srgb, var(--color-error) 24%, transparent);
+      background: color-mix(in srgb, var(--color-error) 8%, transparent);
       color: var(--color-error);
     }
 
@@ -234,7 +234,7 @@
     .select__trigger {
       min-height: 30px;
       padding: 3px $size-gap-2;
-      background: var(--element-bg);
+      background: var(--element-bg-base);
     }
 
     .select__value {
@@ -308,14 +308,14 @@
     white-space: nowrap;
 
     &.is-success {
-      border-color: rgba($color-success, 0.24);
-      background: rgba($color-success, 0.08);
+      border-color: color-mix(in srgb, var(--color-success) 24%, transparent);
+      background: color-mix(in srgb, var(--color-success) 8%, transparent);
       color: var(--color-success);
     }
 
     &.is-warning {
-      border-color: rgba($color-warning, 0.24);
-      background: rgba($color-warning, 0.08);
+      border-color: color-mix(in srgb, var(--color-warning) 24%, transparent);
+      background: color-mix(in srgb, var(--color-warning) 8%, transparent);
       color: var(--color-warning);
     }
   }

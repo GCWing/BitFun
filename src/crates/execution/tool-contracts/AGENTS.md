@@ -13,7 +13,9 @@ the product tool runtime.
 - This crate may own provider-neutral tool DTOs, validation/restriction facts,
   path and artifact contracts, pure manifest/catalog/exposure helpers, result
   presentation policy, deterministic admission policy, portable tool context
-  facts, and runtime restriction policy shaping.
+  facts, runtime restriction policy shaping, and provider-neutral MCP / ACP
+  external-agent tool bridge naming, validation, result, and presentation
+  contracts.
 - This crate may own generic provider contracts, containers, materialization,
   and registry assembly. Concrete tool construction and product runtime
   registration stay outside this crate until a reviewed owner move proves
@@ -25,6 +27,10 @@ the product tool runtime.
   here without an owner design and equivalence tests.
 - Provider-specific wire serialization belongs in AI adapters, not in these
   provider-neutral contracts.
+- MCP transport/client lifecycle and protocol result-content rendering stay in
+  `services-integrations`; this crate owns only the model/tool bridge contract.
+- ACP protocol/client lifecycle stays in `bitfun-acp`; this crate owns only the
+  external-agent tool bridge contract.
 
 ## Verification
 

@@ -170,11 +170,19 @@ impl ConfigService {
     /// imported config that references missing / disabled models is brought
     /// back into a self-consistent state.
     pub async fn import_config(&self, export: ConfigExport) -> BitFunResult<ConfigImportResult> {
+        self.import_config_data(serde_json::to_value(export.config)?)
+            .await
+    }
+
+    /// Imports raw configuration JSON. Keeping this boundary raw preserves
+    /// legacy fields that are intentionally normalized before deserialization.
+    pub async fn import_config_data(
+        &self,
+        config_data: serde_json::Value,
+    ) -> BitFunResult<ConfigImportResult> {
         let import_result = {
             let mut manager = self.manager.write().await;
-            manager
-                .import_config(serde_json::to_value(export.config)?)
-                .await
+            manager.import_config(config_data).await
         };
 
         match import_result {
@@ -338,6 +346,9 @@ impl ConfigService {
     /// - `default_models.primary` / `.fast` are repointed to the first enabled
     ///   model when their current target is missing or disabled (or cleared
     ///   when no enabled model exists at all);
+    /// - optional capability slots such as `default_models.image_understanding`
+    ///   are kept pointed at an enabled model with the matching capability, or
+    ///   cleared when no matching model is available;
     /// - on every change, a [`ConfigUpdateEvent::ModelsReconciled`] is
     ///   broadcast so [`SessionManager`](crate::agentic::session::SessionManager)
     ///   and the AI client cache can react in lockstep.
@@ -445,8 +456,14 @@ impl ConfigService {
             agent_models_changed = true;
         }
 
-        // 3. default_models.primary / .fast
+        // 3. default model slots
         let fallback_id = config.ai.first_enabled_model_id();
+        let image_understanding_fallback_id = config
+            .ai
+            .models
+            .iter()
+            .find(|model| model.enabled && model.supports_image_understanding())
+            .map(|model| model.id.clone());
         let mut repoint_default_slot = |slot: &mut Option<String>, slot_name: &str| {
             let needs_fix = match slot.as_deref() {
                 Some("") => true,
@@ -482,6 +499,48 @@ impl ConfigService {
 
         repoint_default_slot(&mut config.ai.default_models.primary, "primary");
         repoint_default_slot(&mut config.ai.default_models.fast, "fast");
+
+        let image_understanding_needs_fix =
+            match config.ai.default_models.image_understanding.as_deref() {
+                Some("") => true,
+                Some(value) => {
+                    let canonical = any_ref_to_id
+                        .get(value)
+                        .map(String::as_str)
+                        .unwrap_or(value);
+                    !config.ai.models.iter().any(|model| {
+                        model.enabled
+                            && model.supports_image_understanding()
+                            && (model.id == canonical
+                                || model.name == value
+                                || model.model_name == value)
+                    })
+                }
+                None => false,
+            };
+        if image_understanding_needs_fix {
+            if let Some(current) = config.ai.default_models.image_understanding.as_deref() {
+                classify_invalid(current, &mut invalidated);
+            }
+
+            match image_understanding_fallback_id.as_ref() {
+                Some(new_id) => {
+                    info!(
+                        "Reconcile ({caller}): default_models.image_understanding repointed: {:?} -> {}",
+                        config.ai.default_models.image_understanding, new_id
+                    );
+                    config.ai.default_models.image_understanding = Some(new_id.clone());
+                }
+                None => {
+                    info!(
+                        "Reconcile ({caller}): default_models.image_understanding cleared (no enabled capable model available); previous={:?}",
+                        config.ai.default_models.image_understanding
+                    );
+                    config.ai.default_models.image_understanding = None;
+                }
+            }
+            default_models_changed = true;
+        }
 
         // Ensure `invalidated` doesn't contain a still-existing-and-enabled id
         // (defensive: classify_invalid only inserts for inactive refs, but a
@@ -568,5 +627,155 @@ impl ReconcileModelsReport {
         self.invalidated_model_ids.is_empty()
             && !self.default_models_changed
             && !self.agent_models_changed
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::infrastructure::PathManager;
+    use std::sync::Arc;
+
+    fn model(id: &str, enabled: bool, category: ModelCategory) -> AIModelConfig {
+        let capabilities = if matches!(category, ModelCategory::Multimodal) {
+            vec![
+                ModelCapability::TextChat,
+                ModelCapability::ImageUnderstanding,
+            ]
+        } else {
+            vec![ModelCapability::TextChat]
+        };
+
+        AIModelConfig {
+            id: id.to_string(),
+            name: format!("Provider {id}"),
+            provider: "openai".to_string(),
+            model_name: id.to_string(),
+            base_url: "https://example.com/v1".to_string(),
+            enabled,
+            category,
+            capabilities,
+            ..Default::default()
+        }
+    }
+
+    async fn test_service(name: &str) -> (ConfigService, tempfile::TempDir) {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let user_root = dir.path().join(name);
+        let path_manager = Arc::new(PathManager::with_user_root_for_tests(user_root));
+
+        let service = ConfigService::with_settings(ConfigManagerSettings {
+            path_manager: Some(path_manager),
+            auto_save: true,
+            backup_count: 0,
+        })
+        .await
+        .expect("config service");
+
+        (service, dir)
+    }
+
+    #[tokio::test]
+    async fn reconcile_models_repairs_image_understanding_default_to_capable_model() {
+        let (service, _dir) = test_service("vision-default-repair").await;
+        let models = vec![
+            model("text-model", true, ModelCategory::GeneralChat),
+            model("disabled-vision", false, ModelCategory::Multimodal),
+            model("active-vision", true, ModelCategory::Multimodal),
+        ];
+
+        service
+            .set_config("ai.models", &models)
+            .await
+            .expect("models should save");
+        service
+            .set_config(
+                "ai.default_models",
+                &DefaultModelsConfig {
+                    primary: Some("text-model".to_string()),
+                    image_understanding: Some("disabled-vision".to_string()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("defaults should save");
+
+        let defaults: DefaultModelsConfig = service
+            .get_config(Some("ai.default_models"))
+            .await
+            .expect("defaults should load");
+        assert_eq!(defaults.primary.as_deref(), Some("text-model"));
+        assert_eq!(
+            defaults.image_understanding.as_deref(),
+            Some("active-vision"),
+            "vision default must not fall back to a text-only model"
+        );
+    }
+
+    #[tokio::test]
+    async fn legacy_theme_id_path_writes_themes_current_only() {
+        let (service, _dir) = test_service("legacy-theme-id-path").await;
+
+        service
+            .set_config("theme.id", "dark")
+            .await
+            .expect("legacy theme path should remain a thin compatibility alias");
+
+        let current: String = service
+            .get_config(Some("themes.current"))
+            .await
+            .expect("theme selection should be readable from the TS-owned path");
+        assert_eq!(current, "bitfun-dark");
+
+        let export: GlobalConfig = service
+            .get_config(None)
+            .await
+            .expect("full config should load");
+        let serialized = serde_json::to_value(export).expect("config should serialize");
+        assert!(
+            serialized.get("theme").is_none(),
+            "legacy path must not recreate the removed Rust GUI theme schema"
+        );
+    }
+
+    #[tokio::test]
+    async fn raw_import_preserves_legacy_theme_id_before_deserialization() {
+        let (service, _dir) = test_service("legacy-theme-raw-import").await;
+        let mut raw_config =
+            serde_json::to_value(GlobalConfig::default()).expect("default config should serialize");
+        let raw_object = raw_config
+            .as_object_mut()
+            .expect("default config should serialize as an object");
+        raw_object.remove("themes");
+        raw_object.insert(
+            "theme".to_string(),
+            serde_json::json!({
+                "id": "dark",
+                "colors": {
+                    "background": "#1e1e1e"
+                }
+            }),
+        );
+
+        service
+            .import_config_data(raw_config)
+            .await
+            .expect("raw legacy config should import before old fields are dropped");
+
+        let current: String = service
+            .get_config(Some("themes.current"))
+            .await
+            .expect("legacy theme id should migrate into themes.current");
+        assert_eq!(current, "bitfun-dark");
+
+        let export: GlobalConfig = service
+            .get_config(None)
+            .await
+            .expect("full config should load after import");
+        let serialized = serde_json::to_value(export).expect("config should serialize");
+        assert!(
+            serialized.get("theme").is_none(),
+            "legacy theme payload should not be exported after import"
+        );
     }
 }

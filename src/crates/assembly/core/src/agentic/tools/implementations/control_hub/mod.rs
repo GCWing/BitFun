@@ -10,4 +10,4 @@ pub mod errors;
 pub mod result;
 
 pub use errors::ErrorCode;
-pub use result::{err_response, ok_response, ControlHubError};
+pub use result::{coded_tool_error, err_response, ok_response, ControlHubError};

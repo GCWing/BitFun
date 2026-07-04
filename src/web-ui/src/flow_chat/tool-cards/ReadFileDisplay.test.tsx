@@ -25,23 +25,6 @@ vi.mock('react-i18next', async () => {
 
 vi.mock('../../component-library', () => ({
   ToolProcessingDots: () => <span data-testid="tool-processing-dots" />,
-  IconButton: ({
-    children,
-    tooltip,
-    ...props
-  }: React.ButtonHTMLAttributes<HTMLButtonElement> & { tooltip?: React.ReactNode }) => (
-    <button
-      type="button"
-      aria-label={typeof tooltip === 'string' ? tooltip : undefined}
-      {...props}
-    >
-      {children}
-    </button>
-  ),
-}));
-
-vi.mock('./ToolCardHeaderActions', () => ({
-  ToolCardHeaderActions: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
 }));
 
 describe('ReadFileDisplay', () => {
@@ -69,10 +52,7 @@ describe('ReadFileDisplay', () => {
     vi.unstubAllGlobals();
   });
 
-  it('renders ACP permission actions for pending read confirmation', () => {
-    const onConfirm = vi.fn();
-    const onReject = vi.fn();
-
+  it('renders pending read confirmation copy without inline approval actions', () => {
     const toolItem: FlowToolItem = {
       id: 'tool-read-1',
       type: 'tool',
@@ -120,27 +100,13 @@ describe('ReadFileDisplay', () => {
         <ReadFileDisplay
           toolItem={toolItem}
           config={config}
-          onConfirm={onConfirm}
-          onReject={onReject}
         />
       );
     });
 
     expect(container.textContent).toContain('Requesting read permission:');
     expect(container.textContent).toContain('/');
-
-    const actionButtons = container.querySelectorAll('button');
-    expect(actionButtons).toHaveLength(2);
-
-    act(() => {
-      actionButtons[0]?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
-    });
-    expect(onConfirm).toHaveBeenCalledWith(toolItem.toolCall.input, 'once', true);
-
-    act(() => {
-      actionButtons[1]?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
-    });
-    expect(onReject).toHaveBeenCalledWith('reject');
+    expect(container.querySelectorAll('button')).toHaveLength(0);
   });
 
   it('does not report a file size for session preview truncation markers', () => {

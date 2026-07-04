@@ -12,7 +12,7 @@ delivery form.
 
 | Crate | Responsibility | Local doc |
 |---|---|---|
-| `agent-runtime` | Agent registry, scheduler, prompt cache, hooks, goals, prompt facts, port-backed `AgentRuntime` facade, DeepReview provider-neutral state, DeepResearch citation renumbering, and runtime control contracts | [AGENTS.md](agent-runtime/AGENTS.md) |
+| `agent-runtime` | Agent registry, scheduler, session/config/context facts, prompt cache, hooks, goals, prompt facts, port-backed `AgentRuntime` facade, DeepReview provider-neutral state, DeepResearch citation renumbering, and runtime control / confirmation contracts | [AGENTS.md](agent-runtime/AGENTS.md) |
 | `agent-stream` | Provider-neutral stream DTOs, tool-call accumulation, and replay contracts | [AGENTS.md](agent-stream/AGENTS.md) |
 | `tool-contracts` | Tool contracts, execution gates, input validation, and result presentation contracts. Cargo package remains `bitfun-agent-tools`. | [AGENTS.md](tool-contracts/AGENTS.md) |
 | `harness` | Harness workflow contracts and registry primitives | [AGENTS.md](harness/AGENTS.md) |

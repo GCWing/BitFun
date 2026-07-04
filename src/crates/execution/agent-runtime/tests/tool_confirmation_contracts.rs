@@ -1,9 +1,54 @@
 use bitfun_agent_runtime::tool_confirmation::{
-    resolve_confirmation_failure, resolve_confirmation_wait_result, resolve_tool_confirmation_plan,
-    ConfirmationFailureKind, ToolConfirmationOutcome, ToolConfirmationPlan,
+    resolve_confirmation_failure, resolve_confirmation_wait_result, resolve_tool_confirmation_gate,
+    resolve_tool_confirmation_plan, ConfirmationFailureKind, ToolConfirmationGateFacts,
+    ToolConfirmationGatePlan, ToolConfirmationOutcome, ToolConfirmationPlan,
     ToolConfirmationRequestFacts, ToolConfirmationWaitResult,
 };
 use std::time::{Duration, UNIX_EPOCH};
+
+#[test]
+fn confirmation_gate_preserves_skip_policy_precedence() {
+    assert_eq!(
+        resolve_tool_confirmation_gate(ToolConfirmationGateFacts {
+            global_skip_tool_confirmation: true,
+            context_skip_tool_confirmation: false,
+            any_tool_needs_permission: true,
+        }),
+        ToolConfirmationGatePlan::SkipByPolicy
+    );
+    assert_eq!(
+        resolve_tool_confirmation_gate(ToolConfirmationGateFacts {
+            global_skip_tool_confirmation: false,
+            context_skip_tool_confirmation: true,
+            any_tool_needs_permission: true,
+        }),
+        ToolConfirmationGatePlan::SkipByPolicy
+    );
+}
+
+#[test]
+fn confirmation_gate_requires_confirmation_only_for_permissioned_tools() {
+    let permissioned = resolve_tool_confirmation_gate(ToolConfirmationGateFacts {
+        global_skip_tool_confirmation: false,
+        context_skip_tool_confirmation: false,
+        any_tool_needs_permission: true,
+    });
+
+    assert_eq!(
+        permissioned,
+        ToolConfirmationGatePlan::AwaitPermissionedTool
+    );
+    assert!(permissioned.confirm_before_run());
+
+    let readonly = resolve_tool_confirmation_gate(ToolConfirmationGateFacts {
+        global_skip_tool_confirmation: false,
+        context_skip_tool_confirmation: false,
+        any_tool_needs_permission: false,
+    });
+
+    assert_eq!(readonly, ToolConfirmationGatePlan::SkipNoPermissionedTool);
+    assert!(!readonly.confirm_before_run());
+}
 
 #[test]
 fn confirmation_plan_requires_permission_only_when_both_flags_are_true() {
@@ -72,6 +117,14 @@ fn confirmation_failure_mapping_preserves_legacy_reasons_and_errors() {
     assert_eq!(rejected.kind, ConfirmationFailureKind::Rejected);
     assert_eq!(rejected.state_reason, "User rejected: unsafe");
     assert_eq!(rejected.error_message, "Tool was rejected by user: unsafe");
+    assert_eq!(rejected.rejection_instruction.as_deref(), Some("unsafe"));
+
+    let default_rejected = resolve_confirmation_failure(ToolConfirmationOutcome::Rejected {
+        reason: "User rejected".to_string(),
+    })
+    .expect("rejection should produce failure");
+    assert_eq!(default_rejected.kind, ConfirmationFailureKind::Rejected);
+    assert_eq!(default_rejected.rejection_instruction, None);
 
     let closed = resolve_confirmation_failure(ToolConfirmationOutcome::ChannelClosed)
         .expect("closed channel should produce failure");
@@ -86,6 +139,7 @@ fn confirmation_failure_mapping_preserves_legacy_reasons_and_errors() {
     assert_eq!(timeout.kind, ConfirmationFailureKind::Timeout);
     assert_eq!(timeout.state_reason, "Confirmation timeout");
     assert_eq!(timeout.error_message, "Confirmation timeout: Bash");
+    assert_eq!(timeout.rejection_instruction, None);
 }
 
 #[test]

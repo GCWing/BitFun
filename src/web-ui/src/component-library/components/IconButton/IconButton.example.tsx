@@ -119,7 +119,7 @@ export const IconButtonExample: React.FC = () => {
         </div>
       </div>
 
-      <div style={{ marginTop: '48px', padding: '16px', background: 'var(--color-overlay-white-05)', borderRadius: '8px' }}>
+      <div style={{ marginTop: '48px', padding: '16px', background: 'var(--color-overlay-white-08)', borderRadius: '8px' }}>
         <h3 style={{ color: 'var(--color-static-white)', marginBottom: '12px' }}>
           {t('componentLibrary.iconButtonExample.sections.usage')}
         </h3>

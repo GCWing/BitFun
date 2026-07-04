@@ -2914,14 +2914,8 @@ impl ChatMode {
         });
 
         let count = outcome.len();
-        chat_state.add_system_message(format!(
-            "Reloaded {} skill(s) from disk.",
-            count
-        ));
-        chat_view.set_status(Some(format!(
-            "Skills reloaded ({} available)",
-            count
-        )));
+        chat_state.add_system_message(format!("Reloaded {} skill(s) from disk.", count));
+        chat_view.set_status(Some(format!("Skills reloaded ({} available)", count)));
     }
 
     fn show_available_skill_list(

@@ -24,7 +24,7 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
   box-sizing: border-box;
   cursor: grab;
   
-  font-family: var(--font-sans);
+  font-family: var(--font-family-sans);
   font-size: var(--flowchat-font-size-sm);
   color: var(--color-text-primary);
   
@@ -134,7 +134,7 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
   border: none;
   background: transparent;
   color: var(--color-text-muted);
-  border-radius: var(--radius-sm);
+  border-radius: var(--size-radius-sm);
   cursor: pointer;
   transition: all 0.2s $transition-timing;
   
@@ -188,7 +188,7 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
   color: var(--color-text-primary);
   font-size: var(--flowchat-font-size-xs);
   font-weight: var(--font-weight-medium);
-  border-radius: var(--radius-sm);
+  border-radius: var(--size-radius-sm);
 }
 
 .bitfun-toolbar-mode__title-text {
@@ -252,7 +252,7 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
   overflow: hidden;
   background: var(--color-bg-primary);
   border: 1px solid var(--border-medium);
-  border-radius: var(--radius-base);
+  border-radius: var(--size-radius-base);
   box-shadow: var(--shadow-xl);
   z-index: 100;
   animation: dropdown-appear 0.2s $transition-timing;
@@ -373,7 +373,7 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
   padding: 4px;
   background: var(--color-bg-primary);
   border: 1px solid var(--border-medium);
-  border-radius: var(--radius-base);
+  border-radius: var(--size-radius-base);
   box-shadow: var(--shadow-xl);
   z-index: 120;
   animation: dropdown-appear 0.2s $transition-timing;
@@ -386,7 +386,7 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
   width: 100%;
   padding: 8px 10px;
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: var(--size-radius-sm);
   background: transparent;
   color: var(--color-text-primary);
   font-size: var(--flowchat-font-size-sm);
@@ -469,7 +469,7 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
   &-name {
     flex-shrink: 0;
     padding: 2px 8px;
-    border-radius: var(--radius-sm);
+    border-radius: var(--size-radius-sm);
     background: var(--color-purple-200);
     color: var(--color-purple-500);
     font-size: var(--flowchat-font-size-2xs);
@@ -495,7 +495,7 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
   &-progress {
     flex-shrink: 0;
     padding: 2px 8px;
-    border-radius: var(--radius-sm);
+    border-radius: var(--size-radius-sm);
     background: var(--color-accent-200);
     color: var(--color-accent-500);
     font-size: var(--flowchat-font-size-2xs);
@@ -553,7 +553,7 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
   border: none !important;
   outline: none !important;
   box-shadow: none;
-  border-radius: var(--radius-base);
+  border-radius: var(--size-radius-base);
   background: var(--element-bg-base);
   color: var(--color-text-secondary);
   cursor: pointer !important;
@@ -626,7 +626,7 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
     // Compact-mode stop button.
     width: 22px;
     height: 22px;
-    border-radius: var(--radius-sm) !important;
+    border-radius: var(--size-radius-sm) !important;
     background: var(--color-error-bg) !important;
     border: none !important;
     color: var(--color-error) !important;
@@ -797,7 +797,7 @@ $transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
     height: 36px;
     padding: 0 12px;
     border: 1px solid var(--border-base);
-    border-radius: var(--radius-base);
+    border-radius: var(--size-radius-base);
     background: var(--color-bg-primary);
     color: var(--color-text-primary);
     font-size: var(--flowchat-font-size-sm);

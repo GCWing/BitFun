@@ -59,6 +59,102 @@ fn ssh_cfg_has(settings: &std::collections::HashMap<&str, &str>, canonical_key: 
         .any(|k| k.eq_ignore_ascii_case(canonical_key))
 }
 
+/// Extract the first value from an SSH config directive line, handling double-quoted strings.
+///
+/// SSH config values may be enclosed in double quotes when they contain whitespace
+/// (e.g. `IdentityFile "~/.ssh/my key"`). This function correctly extracts the full
+/// quoted value or the first whitespace-delimited token for unquoted values.
+fn parse_ssh_config_value(value: &str) -> Option<&str> {
+    let value = value.trim();
+    if value.starts_with('"') {
+        if let Some(end) = value[1..].find('"') {
+            let inner = &value[1..1 + end];
+            return if inner.is_empty() { None } else { Some(inner) };
+        }
+    }
+    value.split_whitespace().next()
+}
+
+/// Manually parse `~/.ssh/config` content into Host blocks with their direct settings.
+///
+/// This is a fallback for when `SSHConfig::parse_str` fails — which happens when the
+/// config contains directives (e.g. `Include`, `Match`) before the first `Host` block,
+/// because `ssh_config` 0.1's `EntryParser` returns `InvalidHostEntry` for any key-value
+/// pair without a preceding `Host` directive, and `parse_str` fails the entire operation
+/// on the first parser error.
+///
+/// Only direct settings within each `Host` block are captured; pattern-matched settings
+/// from wildcard blocks (e.g. `Host *`) are not applied. Use `SSHConfig::query()` as a
+/// supplementary source when `parse_str` succeeds.
+#[cfg(feature = "ssh_config")]
+fn parse_ssh_config_manually(content: &str) -> Vec<SSHConfigEntry> {
+    let mut hosts = Vec::new();
+    let mut current_host: Option<String> = None;
+    let mut block_hostname: Option<String> = None;
+    let mut block_port: Option<u16> = None;
+    let mut block_user: Option<String> = None;
+    let mut block_identity_file: Option<String> = None;
+
+    for line in content.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+
+        let (keyword, value) = match line.split_once(char::is_whitespace) {
+            Some((k, v)) => (k, v.trim()),
+            None => continue,
+        };
+
+        if keyword.eq_ignore_ascii_case("Host") {
+            // Save previous host block
+            if let Some(host) = current_host.take() {
+                hosts.push(SSHConfigEntry {
+                    host,
+                    hostname: block_hostname.take(),
+                    port: block_port.take(),
+                    user: block_user.take(),
+                    identity_file: block_identity_file.take(),
+                    agent: None,
+                });
+            }
+
+            // Start new host block — take the first alias
+            current_host = value.split_whitespace().next().map(|s| s.to_string());
+            block_hostname = None;
+            block_port = None;
+            block_user = None;
+            block_identity_file = None;
+        } else if current_host.is_some() {
+            // Track details within the current Host block
+            if keyword.eq_ignore_ascii_case("HostName") {
+                block_hostname = parse_ssh_config_value(value).map(|s| s.to_string());
+            } else if keyword.eq_ignore_ascii_case("Port") {
+                block_port = parse_ssh_config_value(value).and_then(|s| s.parse().ok());
+            } else if keyword.eq_ignore_ascii_case("User") {
+                block_user = parse_ssh_config_value(value).map(|s| s.to_string());
+            } else if keyword.eq_ignore_ascii_case("IdentityFile") {
+                block_identity_file =
+                    parse_ssh_config_value(value).map(|s| shellexpand::tilde(s).to_string());
+            }
+        }
+    }
+
+    // Save last host block
+    if let Some(host) = current_host {
+        hosts.push(SSHConfigEntry {
+            host,
+            hostname: block_hostname,
+            port: block_port,
+            user: block_user,
+            identity_file: block_identity_file,
+            agent: None,
+        });
+    }
+
+    hosts
+}
+
 /// Known hosts entry
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct KnownHostEntry {
@@ -613,53 +709,58 @@ impl SSHConnectionManager {
             }
         };
 
-        let config = match SSHConfig::parse_str(&config_content) {
-            Ok(c) => c,
-            Err(e) => {
-                log::warn!("Failed to parse SSH config: {:?}", e);
+        // Try to parse with the ssh_config crate for pattern-matching query support.
+        // If parsing fails, fall back to manual parsing.
+        let parsed_config = SSHConfig::parse_str(&config_content).ok();
+        if parsed_config.is_none() {
+            log::debug!("SSHConfig::parse_str failed, using manual fallback");
+        }
+
+        // Try pattern-matched query first (handles Host wildcards like `Host *.example.com`)
+        if let Some(ref config) = parsed_config {
+            let host_settings = config.query(host);
+            if !host_settings.is_empty() {
+                log::debug!(
+                    "Found SSH config for host: {} with {} settings",
+                    host,
+                    host_settings.len()
+                );
+
+                let hostname = ssh_cfg_get(&host_settings, "HostName").map(|s| s.to_string());
+                let user = ssh_cfg_get(&host_settings, "User").map(|s| s.to_string());
+                let port = ssh_cfg_get(&host_settings, "Port").and_then(|s| s.parse::<u16>().ok());
+                let identity_file = ssh_cfg_get(&host_settings, "IdentityFile")
+                    .map(|f| shellexpand::tilde(f).to_string());
+                let has_proxy_command = ssh_cfg_has(&host_settings, "ProxyCommand");
+
                 return SSHConfigLookupResult {
-                    found: false,
-                    config: None,
+                    found: true,
+                    config: Some(SSHConfigEntry {
+                        host: host.to_string(),
+                        hostname,
+                        port,
+                        user,
+                        identity_file,
+                        agent: if has_proxy_command { None } else { Some(true) },
+                    }),
                 };
             }
-        };
+        }
 
-        // Use query() to get host configuration - this handles Host pattern matching
-        let host_settings = config.query(host);
-
-        if host_settings.is_empty() {
-            log::debug!("No SSH config found for host: {}", host);
+        // Fallback: manual lookup for exact host name match
+        let hosts = parse_ssh_config_manually(&config_content);
+        if let Some(entry) = hosts.into_iter().find(|e| e.host == host) {
+            log::debug!("Found SSH config for host: {} (manual fallback)", host);
             return SSHConfigLookupResult {
-                found: false,
-                config: None,
+                found: true,
+                config: Some(entry),
             };
         }
 
-        log::debug!(
-            "Found SSH config for host: {} with {} settings",
-            host,
-            host_settings.len()
-        );
-
-        // Canonical OpenSSH names; lookup is case-insensitive (see ssh_cfg_get).
-        let hostname = ssh_cfg_get(&host_settings, "HostName").map(|s| s.to_string());
-        let user = ssh_cfg_get(&host_settings, "User").map(|s| s.to_string());
-        let port = ssh_cfg_get(&host_settings, "Port").and_then(|s| s.parse::<u16>().ok());
-        let identity_file =
-            ssh_cfg_get(&host_settings, "IdentityFile").map(|f| shellexpand::tilde(f).to_string());
-
-        let has_proxy_command = ssh_cfg_has(&host_settings, "ProxyCommand");
-
+        log::debug!("No SSH config found for host: {}", host);
         SSHConfigLookupResult {
-            found: true,
-            config: Some(SSHConfigEntry {
-                host: host.to_string(),
-                hostname,
-                port,
-                user,
-                identity_file,
-                agent: if has_proxy_command { None } else { Some(true) },
-            }),
+            found: false,
+            config: None,
         }
     }
 
@@ -691,52 +792,39 @@ impl SSHConnectionManager {
             }
         };
 
-        let config = match SSHConfig::parse_str(&config_content) {
-            Ok(c) => c,
-            Err(e) => {
-                log::warn!("Failed to parse SSH config: {:?}", e);
-                return Vec::new();
-            }
-        };
+        // Try to parse with the ssh_config crate for pattern-matching query support.
+        // If parsing fails (e.g. `Include`/`Match` directives before the first `Host`
+        // block cause ssh_config 0.1 to return InvalidHostEntry), fall back to manual
+        // line-by-line parsing.
+        let parsed_config = SSHConfig::parse_str(&config_content).ok();
+        if parsed_config.is_none() {
+            log::debug!("SSHConfig::parse_str failed, using manual fallback");
+        }
 
-        let mut hosts = Vec::new();
+        // Always do manual parsing to get the host list (SSHConfig doesn't expose all hosts).
+        let mut hosts = parse_ssh_config_manually(&config_content);
 
-        // SSHConfig library doesn't expose listing all hosts, so we parse the raw config
-        // to extract Host entries. This is a simple but effective approach.
-        for line in config_content.lines() {
-            let line = line.trim();
-            // Match "Host alias1 alias2 ..." lines (but not "HostName")
-            if line.starts_with("Host ") && !line.starts_with("HostName") {
-                // Extract everything after "Host "
-                let host_part = line.strip_prefix("Host ").unwrap_or("").trim();
-                if host_part.is_empty() {
-                    continue;
+        // When the ssh_config crate parsed successfully, override with pattern-matched
+        // details (e.g. settings from `Host *` blocks that apply to all hosts).
+        if let Some(ref config) = parsed_config {
+            for entry in &mut hosts {
+                let settings = config.query(&entry.host);
+                if !settings.is_empty() {
+                    if let Some(h) = ssh_cfg_get(&settings, "HostName") {
+                        entry.hostname = Some(h.to_string());
+                    }
+                    if let Some(p) =
+                        ssh_cfg_get(&settings, "Port").and_then(|s| s.parse::<u16>().ok())
+                    {
+                        entry.port = Some(p);
+                    }
+                    if let Some(u) = ssh_cfg_get(&settings, "User") {
+                        entry.user = Some(u.to_string());
+                    }
+                    if let Some(f) = ssh_cfg_get(&settings, "IdentityFile") {
+                        entry.identity_file = Some(shellexpand::tilde(f).to_string());
+                    }
                 }
-                // Host can be "alias1 alias2 ..." - we want the first one (main alias)
-                let aliases: Vec<&str> = host_part.split_whitespace().collect();
-                if aliases.is_empty() {
-                    continue;
-                }
-
-                let alias = aliases[0];
-                // Query config for this host to get details
-                let settings = config.query(alias);
-
-                let identity_file = ssh_cfg_get(&settings, "IdentityFile")
-                    .map(|f| shellexpand::tilde(f).to_string());
-
-                let hostname = ssh_cfg_get(&settings, "HostName").map(|s| s.to_string());
-                let user = ssh_cfg_get(&settings, "User").map(|s| s.to_string());
-                let port = ssh_cfg_get(&settings, "Port").and_then(|s| s.parse::<u16>().ok());
-
-                hosts.push(SSHConfigEntry {
-                    host: alias.to_string(),
-                    hostname,
-                    port,
-                    user,
-                    identity_file,
-                    agent: None, // Can't easily determine agent setting from raw parsing
-                });
             }
         }
 

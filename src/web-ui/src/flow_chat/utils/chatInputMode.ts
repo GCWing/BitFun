@@ -1,4 +1,126 @@
+import { WorkspaceKind, type WorkspaceInfo } from '@/shared/types';
+
 export const DEFAULT_CHAT_INPUT_MODE_CONFIG_PATH = 'app.flow_chat.default_mode_id';
+
+const FIXED_CHAT_INPUT_MODE_IDS = new Set(['cowork', 'claw']);
+
+type WorkspaceResolutionInfo = Pick<
+  WorkspaceInfo,
+  'id' | 'rootPath' | 'workspaceKind' | 'connectionId'
+>;
+
+export type ChatInputFixedModeReason =
+  | 'assistant-workspace'
+  | 'acp-session'
+  | 'current-mode'
+  | 'session-mode';
+
+export interface ChatInputModePolicy {
+  canSwitchModes: boolean;
+  fixedModeId: string | null;
+  fixedReason: ChatInputFixedModeReason | null;
+}
+
+function normalizeOptionalString(value: string | null | undefined): string | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}
+
+function normalizeWorkspacePath(value: string | null | undefined): string | null {
+  const trimmed = normalizeOptionalString(value);
+  if (!trimmed) {
+    return null;
+  }
+
+  return trimmed.replace(/[\\/]+$/, '');
+}
+
+function isWorkspaceConnectionCompatible(
+  workspaceConnectionId: string | null | undefined,
+  sessionRemoteConnectionId: string | null | undefined,
+): boolean {
+  const normalizedWorkspaceConnectionId = normalizeOptionalString(workspaceConnectionId);
+  const normalizedSessionRemoteConnectionId = normalizeOptionalString(sessionRemoteConnectionId);
+
+  if (normalizedSessionRemoteConnectionId && normalizedWorkspaceConnectionId) {
+    return normalizedWorkspaceConnectionId === normalizedSessionRemoteConnectionId;
+  }
+
+  if (normalizedSessionRemoteConnectionId && !normalizedWorkspaceConnectionId) {
+    return false;
+  }
+
+  return true;
+}
+
+function resolveSessionWorkspaceMatch(params: {
+  currentWorkspace?: WorkspaceResolutionInfo | null;
+  sessionWorkspaceId?: string | null;
+  sessionWorkspacePath?: string | null;
+  sessionRemoteConnectionId?: string | null;
+  openedWorkspaces?: Iterable<WorkspaceResolutionInfo>;
+}): WorkspaceResolutionInfo | null {
+  const normalizedSessionWorkspaceId = normalizeOptionalString(params.sessionWorkspaceId);
+  const normalizedSessionWorkspacePath = normalizeWorkspacePath(params.sessionWorkspacePath);
+  const normalizedSessionRemoteConnectionId = normalizeOptionalString(params.sessionRemoteConnectionId);
+  const currentWorkspace = params.currentWorkspace ?? null;
+  const openedWorkspaces = params.openedWorkspaces ?? [];
+
+  if (normalizedSessionWorkspaceId) {
+    if (currentWorkspace?.id === normalizedSessionWorkspaceId) {
+      return currentWorkspace;
+    }
+
+    for (const workspace of openedWorkspaces) {
+      if (workspace.id === normalizedSessionWorkspaceId) {
+        return workspace;
+      }
+    }
+  }
+
+  if (!normalizedSessionWorkspacePath) {
+    return null;
+  }
+
+  const matchingWorkspaces: WorkspaceResolutionInfo[] = [];
+  const pushIfMatching = (workspace: WorkspaceResolutionInfo | null | undefined) => {
+    if (!workspace) {
+      return;
+    }
+
+    if (normalizeWorkspacePath(workspace.rootPath) !== normalizedSessionWorkspacePath) {
+      return;
+    }
+
+    if (!isWorkspaceConnectionCompatible(workspace.connectionId, normalizedSessionRemoteConnectionId)) {
+      return;
+    }
+
+    if (!matchingWorkspaces.some(candidate => candidate.id === workspace.id)) {
+      matchingWorkspaces.push(workspace);
+    }
+  };
+
+  pushIfMatching(currentWorkspace);
+  for (const workspace of openedWorkspaces) {
+    pushIfMatching(workspace);
+  }
+
+  if (normalizedSessionRemoteConnectionId) {
+    const exactConnectionMatch = matchingWorkspaces.find(
+      (workspace) => normalizeOptionalString(workspace.connectionId) === normalizedSessionRemoteConnectionId,
+    );
+    if (exactConnectionMatch) {
+      return exactConnectionMatch;
+    }
+  }
+
+  return matchingWorkspaces[0] ?? null;
+}
 
 export function normalizeUserDefaultChatInputModeId(value: unknown): string | null {
   if (typeof value !== 'string') {
@@ -7,6 +129,98 @@ export function normalizeUserDefaultChatInputModeId(value: unknown): string | nu
 
   const trimmed = value.trim();
   return trimmed ? trimmed : null;
+}
+
+export function resolveSessionAssistantWorkspace(params: {
+  currentWorkspace?: WorkspaceResolutionInfo | null;
+  sessionWorkspaceId?: string | null;
+  sessionWorkspacePath?: string | null;
+  sessionRemoteConnectionId?: string | null;
+  openedWorkspaces?: Iterable<WorkspaceResolutionInfo>;
+}): boolean {
+  const matchedWorkspace = resolveSessionWorkspaceMatch(params);
+  if (matchedWorkspace) {
+    return matchedWorkspace.workspaceKind === WorkspaceKind.Assistant;
+  }
+
+  const hasExplicitSessionWorkspace =
+    normalizeOptionalString(params.sessionWorkspaceId) !== null
+    || normalizeWorkspacePath(params.sessionWorkspacePath) !== null;
+  if (hasExplicitSessionWorkspace) {
+    return false;
+  }
+
+  return params.currentWorkspace?.workspaceKind === WorkspaceKind.Assistant;
+}
+
+function normalizeModeLookupId(value: string | null | undefined): string | null {
+  return normalizeOptionalString(value)?.toLowerCase() ?? null;
+}
+
+function canonicalFixedModeId(value: string | null | undefined): string | null {
+  switch (normalizeModeLookupId(value)) {
+    case 'cowork':
+      return 'Cowork';
+    case 'claw':
+      return 'Claw';
+    default:
+      return null;
+  }
+}
+
+export function resolveChatInputModePolicy(params: {
+  currentMode: string;
+  isAssistantWorkspace: boolean;
+  sessionMode?: string | null;
+  isAcpTargetSession?: boolean;
+}): ChatInputModePolicy {
+  if (params.isAcpTargetSession) {
+    return {
+      canSwitchModes: false,
+      fixedModeId: null,
+      fixedReason: 'acp-session',
+    };
+  }
+
+  if (params.isAssistantWorkspace) {
+    return {
+      canSwitchModes: false,
+      fixedModeId: 'Claw',
+      fixedReason: 'assistant-workspace',
+    };
+  }
+
+  const fixedSessionModeId = canonicalFixedModeId(params.sessionMode);
+  if (fixedSessionModeId) {
+    return {
+      canSwitchModes: false,
+      fixedModeId: fixedSessionModeId,
+      fixedReason: 'session-mode',
+    };
+  }
+
+  const fixedCurrentModeId = canonicalFixedModeId(params.currentMode);
+  if (fixedCurrentModeId) {
+    return {
+      canSwitchModes: false,
+      fixedModeId: fixedCurrentModeId,
+      fixedReason: 'current-mode',
+    };
+  }
+
+  return {
+    canSwitchModes: true,
+    fixedModeId: null,
+    fixedReason: null,
+  };
+}
+
+export function resolveSwitchableChatInputModes<TMode extends { id: string }>(
+  availableModes: Iterable<TMode>,
+): TMode[] {
+  return Array.from(availableModes).filter(
+    mode => !FIXED_CHAT_INPUT_MODE_IDS.has(normalizeModeLookupId(mode.id) ?? ''),
+  );
 }
 
 export function resolveWorkspaceChatInputMode(params: {
@@ -21,7 +235,7 @@ export function resolveWorkspaceChatInputMode(params: {
   }
 
   if (normalizedSessionMode?.toLowerCase() === 'claw') {
-    return null;
+    return params.currentMode === 'Claw' ? null : 'Claw';
   }
 
   if (normalizedSessionMode && normalizedSessionMode !== params.currentMode) {

@@ -51,7 +51,7 @@
         transition: all 0.15s ease;
 
         &:hover {
-          background: var(--color-bg-hover);
+          background: var(--element-bg-hover);
           border-color: var(--border-medium);
         }
       }
@@ -95,7 +95,7 @@
         height: 18px;
         color: var(--color-text-muted);
         border-radius: 4px;
-        background: var(--color-overlay-white-03);
+        background: var(--color-overlay-white-04);
         transition: all 0.15s ease;
 
         svg {
@@ -120,7 +120,7 @@
         font-size: 14px;
         font-weight: 500;
         color: var(--color-text-primary);
-        font-family: var(--font-mono);
+        font-family: var(--font-family-mono);
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -201,7 +201,7 @@
     border-radius: 4px;
     cursor: pointer;
     transition: all 0.15s ease;
-    box-shadow: 0 1px 2px var(--color-overlay-black-10);
+    box-shadow: 0 1px 2px var(--color-overlay-black-12);
 
     &:hover:not(:disabled) {
       background: linear-gradient(135deg, var(--color-warning) 0%, var(--color-warning) 100%);
@@ -233,7 +233,7 @@
 
       &:hover {
         background: linear-gradient(135deg, var(--color-success) 0%, var(--color-success) 100%);
-        box-shadow: 0 1px 2px var(--color-overlay-black-10);
+        box-shadow: 0 1px 2px var(--color-overlay-black-12);
       }
     }
   }

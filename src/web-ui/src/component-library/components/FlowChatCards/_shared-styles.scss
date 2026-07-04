@@ -12,7 +12,6 @@
   position: relative;
 }
 
-
 @mixin status-indicator($r, $g, $b, $opacity: 0.8) {
   border-color: rgba($r, $g, $b, 0.5);
 }
@@ -57,7 +56,7 @@
   }
 
   &:hover {
-    background: var(--color-overlay-white-10);
+    background: var(--color-overlay-white-12);
     border-color: color-mix(in srgb, var(--color-static-white) 35%, transparent);
 
     svg {
@@ -69,7 +68,7 @@
 
 @mixin liquid-button($variant: 'default') {
   padding: tokens.$size-gap-2 tokens.$size-gap-4;
-  border: 1px solid tokens.$border-base;
+  border: 1px solid var(--border-base);
   border-radius: tokens.$size-radius-base;
   font-size: var(--font-size-sm);
   font-weight: tokens.$font-weight-medium;
@@ -78,8 +77,8 @@
 
   @if $variant == 'success' {
     background: var(--color-success-bg);
-    color: tokens.$color-success;
-    border-color: tokens.$color-success-border;
+    color: var(--color-success);
+    border-color: var(--color-success-border);
 
     &:hover:not(:disabled) {
       background: color-mix(in srgb, var(--color-success) 18%, transparent);
@@ -87,8 +86,8 @@
     }
   } @else if $variant == 'error' {
     background: var(--color-error-bg);
-    color: tokens.$color-error;
-    border-color: tokens.$color-error-border;
+    color: var(--color-error);
+    border-color: var(--color-error-border);
 
     &:hover:not(:disabled) {
       background: color-mix(in srgb, var(--color-error) 18%, transparent);
@@ -96,22 +95,22 @@
     }
   } @else if $variant == 'primary' {
     background: var(--card-bg-accent);
-    color: tokens.$color-accent-500;
-    border-color: tokens.$color-info-border;
+    color: var(--color-accent-500);
+    border-color: var(--color-info-border);
 
     &:hover:not(:disabled) {
       background: color-mix(in srgb, var(--color-accent-500) 18%, transparent);
       border-color: var(--color-accent-400);
     }
   } @else {
-    background: tokens.$element-bg-base;
-    color: tokens.$color-text-secondary;
-    border-color: tokens.$border-base;
+    background: var(--element-bg-base);
+    color: var(--color-text-secondary);
+    border-color: var(--border-base);
 
     &:hover:not(:disabled) {
-      background: tokens.$element-bg-soft;
-      border-color: tokens.$border-medium;
-      color: tokens.$color-text-primary;
+      background: var(--element-bg-soft);
+      border-color: var(--border-medium);
+      color: var(--color-text-primary);
     }
   }
 
@@ -120,10 +119,3 @@
     cursor: default;
   }
 }
-
-
-$color-success: tokens.$color-success;
-$color-error: tokens.$color-error;
-$color-warning: tokens.$color-warning;
-$color-info: tokens.$color-info;
-$color-purple: tokens.$color-purple-500;

@@ -1055,7 +1055,7 @@ export const Markdown = React.memo<MarkdownProps>(({
         lineHeight: '1.55',
       };
       const codeTagStyle: React.CSSProperties = {
-        fontFamily: 'var(--markdown-font-mono)',
+        fontFamily: 'var(--font-family-mono)',
       };
       const gutterColor = isLight
         ? 'rgb(var(--markdown-code-gutter-light-rgb))'

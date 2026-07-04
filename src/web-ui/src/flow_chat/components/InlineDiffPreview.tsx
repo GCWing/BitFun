@@ -11,7 +11,7 @@
  * 5. Row virtualization via @tanstack/react-virtual: only visible rows are in the DOM
  */
 
-import React, { useMemo, memo, useRef, useCallback, useState, useEffect, CSSProperties } from 'react';
+import React, { useMemo, memo, useRef, useCallback, useState, useLayoutEffect, CSSProperties } from 'react';
 import Prism from 'prismjs';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { diffLines, Change } from 'diff';
@@ -426,24 +426,29 @@ export const InlineDiffPreview: React.FC<InlineDiffPreviewProps> = memo(({
   });
 
   // Re-measure all rows when the container width changes (wrapping may differ).
-  const [containerWidth, setContainerWidth] = useState(0);
-  useEffect(() => {
+  // We use a generation counter to force re-renders WITHOUT calling
+  // virtualizer.measure() — measure() resets the measurements cache and
+  // would discard heights already captured by measureElement refs.
+  const [measureGeneration, setMeasureGeneration] = useState(0);
+  useLayoutEffect(() => {
     const el = containerRef.current;
     if (!el) return;
-    const ro = new ResizeObserver((entries) => {
-      const entry = entries[0];
-      if (entry) {
-        const w = Math.round(entry.contentRect.width);
-        setContainerWidth((prev) => (prev === w ? prev : w));
-      }
+
+    // On mount, after measureElement refs have stored actual heights,
+    // force a synchronous re-render so getVirtualItems() uses those
+    // measurements instead of the 22 px estimates.  Without this,
+    // wrapped long lines (common in .md files) cause rows to overlap
+    // because their translateY positions are based on wrong estimates.
+    setMeasureGeneration((g) => g + 1);
+
+    const ro = new ResizeObserver(() => {
+      // Container width changed — wrapping may differ; re-render so the
+      // virtualizer picks up the new measureElement heights.
+      setMeasureGeneration((g) => g + 1);
     });
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  // When width changes, invalidate cached measurements so rows re-measure.
-  useEffect(() => {
-    virtualizer.measure();
-  }, [containerWidth]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleLineClick = useCallback(
     (index: number, line: DiffLine) => {
@@ -468,6 +473,13 @@ export const InlineDiffPreview: React.FC<InlineDiffPreviewProps> = memo(({
 
   const totalHeight = virtualizer.getTotalSize();
   const virtualItems = virtualizer.getVirtualItems();
+
+  // measureGeneration is a render-trigger counter (bumped by useLayoutEffect
+  // and ResizeObserver).  Referencing it here proves to TypeScript that the
+  // state is consumed; the virtualizer's getTotalSize / getVirtualItems are
+  // called unconditionally above and naturally pick up the measurements that
+  // measureElement refs store before the first paint.
+  void measureGeneration;
 
   return (
     <div className={`inline-diff-preview ${className}`}>

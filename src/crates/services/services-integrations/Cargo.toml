@@ -15,21 +15,26 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 log = { workspace = true }
 bitfun-agent-runtime = { path = "../../execution/agent-runtime", optional = true }
+bitfun-agent-tools = { path = "../../execution/tool-contracts", optional = true }
 bitfun-events = { path = "../../contracts/events" }
 bitfun-product-domains = { path = "../../contracts/product-domains", default-features = false, optional = true }
 bitfun-runtime-ports = { path = "../../contracts/runtime-ports", optional = true }
 aes-gcm = { workspace = true, optional = true }
+aes = { workspace = true, optional = true }
 anyhow = { workspace = true, optional = true }
 async-trait = { workspace = true, optional = true }
 base64 = { workspace = true, optional = true }
-bitfun-services-core = { path = "../services-core", optional = true }
+bitfun-services-core = { path = "../services-core", default-features = false, optional = true }
 chrono = { workspace = true, optional = true }
 dunce = { workspace = true, optional = true }
 futures = { workspace = true, optional = true }
 git2 = { workspace = true, optional = true }
 hostname = { workspace = true, optional = true }
 image = { workspace = true, optional = true }
+hex = { workspace = true, optional = true }
+local-ip-address = { workspace = true, optional = true }
 mac_address = { workspace = true, optional = true }
+md5 = { workspace = true, optional = true }
 notify = { workspace = true, optional = true }
 qrcode = { workspace = true, optional = true }
 rand = { workspace = true, optional = true }
@@ -63,7 +68,9 @@ schannel = { version = "0.1", optional = true }
 
 [features]
 default = []
-announcement = []
+announcement = ["reqwest"]
+browser-control = ["anyhow", "bitfun-services-core", "dirs", "reqwest", "thiserror"]
+debug-log = ["reqwest"]
 deep-research = ["bitfun-agent-runtime"]
 git = ["bitfun-services-core", "chrono", "git2", "thiserror"]
 file-watch = ["notify"]
@@ -77,6 +84,7 @@ mcp = [
     "anyhow",
     "async-trait",
     "base64",
+    "bitfun-agent-tools",
     "bitfun-services-core",
     "futures",
     "rand",
@@ -97,18 +105,24 @@ miniapp-runtime = [
 ]
 remote-connect = [
     "anyhow",
+    "aes",
     "aes-gcm",
     "async-trait",
     "base64",
+    "bitfun-services-core",
     "bitfun-runtime-ports",
     "chrono",
     "dirs",
     "futures",
     "hostname",
+    "hex",
     "image",
+    "local-ip-address",
     "mac_address",
+    "md5",
     "qrcode",
     "rand",
+    "reqwest",
     "rustls",
     "rustls-native-certs",
     "schannel",
@@ -116,15 +130,17 @@ remote-connect = [
     "tokio-tungstenite",
     "urlencoding",
     "uuid",
+    "which",
     "x25519-dalek",
 ]
-remote-ssh = ["dunce", "sha2", "tokio-util"]
+remote-ssh = ["anyhow", "dunce", "sha2", "terminal-core", "thiserror", "tokio-util"]
 remote-ssh-concrete = [
     "remote-ssh",
     "aes-gcm",
     "anyhow",
     "async-trait",
     "base64",
+    "bitfun-runtime-ports",
     "chrono",
     "dirs",
     "rand",
@@ -137,6 +153,7 @@ remote-ssh-concrete = [
     "thiserror",
     "uuid",
 ]
+review-platform = ["reqwest", "thiserror"]
 workspace-search = [
     "async-trait",
     "bitfun-services-core",
@@ -144,8 +161,11 @@ workspace-search = [
     "thiserror",
     "which",
 ]
+web-tools = ["reqwest", "thiserror"]
 product-full = [
     "announcement",
+    "browser-control",
+    "debug-log",
     "deep-research",
     "file-watch",
     "function-agents",
@@ -155,6 +175,8 @@ product-full = [
     "remote-connect",
     "remote-ssh",
     "remote-ssh-concrete",
+    "review-platform",
+    "web-tools",
     "workspace-search",
 ]
 ssh_config = ["dep:ssh_config"]

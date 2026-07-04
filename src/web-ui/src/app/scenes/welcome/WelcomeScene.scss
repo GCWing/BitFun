@@ -227,7 +227,7 @@
 
     &:focus-visible {
       color: var(--color-text-primary);
-      outline: 2px solid var(--color-accent);
+      outline: 2px solid var(--color-accent-500);
       outline-offset: -2px;
       z-index: 1;
     }

@@ -16,6 +16,7 @@ pub use types::{
 pub use http_server::IngestServerManager;
 
 use anyhow::Result;
+use bitfun_services_integrations::debug_log::post_debug_log;
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -192,8 +193,7 @@ pub async fn append_log_async(
     .map_err(|e| anyhow::anyhow!("Join error: {}", e))??;
 
     if let Some(url) = ingest_url {
-        let client = reqwest::Client::new();
-        let _ = client.post(url).json(&log_line).send().await;
+        let _ = post_debug_log(&url, &log_line).await;
     }
 
     Ok(())

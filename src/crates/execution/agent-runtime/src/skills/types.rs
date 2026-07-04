@@ -51,7 +51,10 @@ pub struct SkillInfo {
 
 impl SkillInfo {
     pub fn to_xml_desc(&self) -> String {
-        format!(r#"<skill name="{}">{}</skill>"#, self.name, self.description)
+        format!(
+            r#"<skill name="{}">{}</skill>"#,
+            self.name, self.description
+        )
     }
 }
 

@@ -15,7 +15,7 @@
 
     .tool-name {
       font-weight: 600;
-      color: var(--tool-card-text-primary);
+      color: var(--color-text-primary);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -24,7 +24,7 @@
 
   .content-summary {
     font-size: var(--tool-card-action-font-size);
-    color: var(--tool-card-text-secondary);
+    color: var(--color-text-secondary);
     white-space: nowrap;
   }
 
@@ -36,11 +36,11 @@
     border: none;
     background: transparent;
     cursor: pointer;
-    color: var(--tool-card-text-secondary);
+    color: var(--color-text-secondary);
     transition: color 0.2s ease;
 
     &:hover {
-      color: var(--tool-card-text-primary);
+      color: var(--color-text-primary);
     }
 
     svg {
@@ -64,7 +64,7 @@
       &:not(:last-child) {
         margin-bottom: var(--flowchat-card-gap);
         padding-bottom: var(--flowchat-card-gap);
-        border-bottom: 1px solid var(--color-overlay-white-05);
+        border-bottom: 1px solid var(--color-overlay-white-08);
       }
     }
 
@@ -76,7 +76,7 @@
         border-radius: 4px;
         font-size: var(--flowchat-font-size-sm);
         line-height: var(--flowchat-support-line-height);
-        color: var(--tool-card-text-primary);
+        color: var(--color-text-primary);
         white-space: pre-wrap;
         word-wrap: break-word;
       }
@@ -93,7 +93,7 @@
       justify-content: center;
       gap: var(--flowchat-control-gap);
       padding: var(--size-gap-6);
-      color: var(--tool-card-text-secondary);
+      color: var(--color-text-secondary);
       font-size: var(--flowchat-font-size-sm);
     }
 
@@ -106,7 +106,7 @@
       min-height: 320px;
       border: 1px solid color-mix(in srgb, var(--color-purple-500) 20%, transparent);
       border-radius: 6px;
-      background: var(--tool-card-bg-primary);
+      background: var(--element-bg-base);
     }
 
     .resource-content {
@@ -117,7 +117,7 @@
 
       .resource-name {
         font-weight: 600;
-        color: var(--tool-card-text-primary);
+        color: var(--color-text-primary);
         margin-bottom: var(--flowchat-inline-gap);
       }
 
@@ -130,7 +130,7 @@
 
       .resource-description {
         font-size: var(--flowchat-font-size-sm);
-        color: var(--tool-card-text-secondary);
+        color: var(--color-text-secondary);
       }
     }
   }
@@ -146,7 +146,7 @@
   }
 
   .icon-completed {
-    color: var(--tool-card-positive-icon);
+    color: color-mix(in srgb, var(--color-success) 90%, transparent);
   }
 
   .mcp-action-buttons {
@@ -177,15 +177,15 @@
   }
 
   .mcp-confirm-btn {
-    color: color-mix(in srgb, var(--tool-card-positive-color) 80%, transparent);
+    color: color-mix(in srgb, var(--color-success) 80%, transparent);
     
     &:hover:not(:disabled) {
-      background: var(--tool-card-positive-bg-hover);
-      color: var(--tool-card-positive-color);
+      background: var(--color-success-bg);
+      color: var(--color-success);
     }
 
     &:active:not(:disabled) {
-      background: color-mix(in srgb, var(--tool-card-positive-color) 25%, transparent);
+      background: color-mix(in srgb, var(--color-success) 25%, transparent);
     }
   }
 

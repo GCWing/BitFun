@@ -24,7 +24,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid var(--color-overlay-white-10);
+  border: 1px solid var(--color-overlay-white-12);
   box-shadow: 0 20px 60px var(--color-overlay-black-80);
 }
 
@@ -35,7 +35,7 @@
   justify-content: space-between;
   padding: 16px 20px;
   background: var(--color-bg-primary);
-  border-bottom: 1px solid var(--color-overlay-white-10);
+  border-bottom: 1px solid var(--color-overlay-white-12);
   flex-shrink: 0;
 }
 
@@ -133,20 +133,20 @@
 }
 
 .header-btn.close-btn {
-  background: var(--color-overlay-white-05);
+  background: var(--color-overlay-white-08);
   color: var(--color-overlay-white-70);
-  border: 1px solid var(--color-overlay-white-10);
+  border: 1px solid var(--color-overlay-white-12);
 }
 
 .header-btn.close-btn:hover {
-  background: var(--color-overlay-white-10);
+  background: var(--color-overlay-white-12);
   color: var(--color-overlay-white-90);
 }
 
 .header-divider {
   width: 1px;
   height: 24px;
-  background: var(--color-overlay-white-10);
+  background: var(--color-overlay-white-12);
   margin: 0 4px;
 }
 
@@ -157,7 +157,7 @@
   gap: 8px;
   padding: 12px 20px;
   background: var(--diff-fullscreen-nav-bg);
-  border-bottom: 1px solid var(--color-overlay-white-05);
+  border-bottom: 1px solid var(--color-overlay-white-08);
   flex-shrink: 0;
   overflow: hidden;
 }
@@ -170,7 +170,7 @@
   height: 28px;
   border: none;
   border-radius: 4px;
-  background: var(--color-overlay-white-05);
+  background: var(--color-overlay-white-08);
   color: var(--color-overlay-white-70);
   cursor: pointer;
   transition: all 0.2s ease;
@@ -178,7 +178,7 @@
 }
 
 .nav-btn:hover:not(:disabled) {
-  background: var(--color-overlay-white-10);
+  background: var(--color-overlay-white-12);
   color: var(--color-overlay-white-90);
 }
 
@@ -219,7 +219,7 @@
 }
 
 .file-tab:hover {
-  background: var(--color-overlay-white-05);
+  background: var(--color-overlay-white-08);
   color: var(--color-overlay-white-80);
 }
 
@@ -261,7 +261,7 @@
   justify-content: space-between;
   padding: 12px 20px;
   background: var(--diff-fullscreen-surface-bg);
-  border-bottom: 1px solid var(--color-overlay-white-05);
+  border-bottom: 1px solid var(--color-overlay-white-08);
   flex-shrink: 0;
 }
 

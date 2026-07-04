@@ -3,7 +3,7 @@
  */
 
 .scroll-anchor {
-  --delay: 0s;
+  --flowchat-scroll-anchor-delay: 0s;
 
   position: absolute;
   right: 0;
@@ -56,7 +56,7 @@
     transition: all 0.15s ease;
 
     animation: anchorFade 0.3s ease backwards;
-    animation-delay: var(--delay);
+    animation-delay: var(--flowchat-scroll-anchor-delay);
 
     &::before {
       content: '';
@@ -96,9 +96,9 @@
     width: 280px;
     background: var(--color-bg-elevated);
     backdrop-filter: blur(16px);
-    border: 1px solid var(--color-border);
+    border: 1px solid var(--border-base);
     border-radius: 8px;
-    box-shadow: 0 4px 20px var(--color-overlay-black-25);
+    box-shadow: 0 4px 20px var(--color-overlay-black-30);
     pointer-events: none;
     z-index: 10000;
     transform: translateX(-100%) translateY(-50%);
@@ -114,15 +114,15 @@
       width: 8px;
       height: 8px;
       background: var(--color-bg-elevated);
-      border-right: 1px solid var(--color-border);
-      border-top: 1px solid var(--color-border);
+      border-right: 1px solid var(--border-base);
+      border-top: 1px solid var(--border-base);
     }
   }
 
   &__preview-indicator {
     padding: var(--flowchat-card-expanded-pad-y) var(--flowchat-card-expanded-pad-x);
     background: var(--color-accent-50);
-    border-bottom: 1px solid var(--color-border);
+    border-bottom: 1px solid var(--border-base);
     text-align: center;
   }
 

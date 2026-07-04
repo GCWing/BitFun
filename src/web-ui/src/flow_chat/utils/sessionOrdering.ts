@@ -25,7 +25,9 @@ function effectiveWorkspaceSshHost(
  * We must never treat "same host" as sufficient: two tabs to the same server at `/a` vs `/b` are distinct.
  */
 export function sessionBelongsToWorkspaceNavRow(
-  session: Pick<Session, 'workspacePath' | 'remoteConnectionId' | 'remoteSshHost'>,
+  session: Pick<Session, 'workspacePath' | 'remoteConnectionId' | 'remoteSshHost'> & {
+    workspaceHostname?: string | null;
+  },
   workspacePath: string,
   remoteConnectionId?: string | null,
   remoteSshHost?: string | null
@@ -38,7 +40,10 @@ export function sessionBelongsToWorkspaceNavRow(
   const wsConn = remoteConnectionId?.trim() ?? '';
   const sessConn = session.remoteConnectionId?.trim() ?? '';
   const wsHostEff = effectiveWorkspaceSshHost(remoteSshHost, remoteConnectionId);
-  const sessHost = session.remoteSshHost?.trim().toLowerCase() ?? '';
+  const sessHost =
+    session.remoteSshHost?.trim().toLowerCase() ||
+    session.workspaceHostname?.trim().toLowerCase() ||
+    '';
   const sessConnHost = hostFromSshConnectionId(sessConn);
   const wsConnHost = hostFromSshConnectionId(wsConn);
 

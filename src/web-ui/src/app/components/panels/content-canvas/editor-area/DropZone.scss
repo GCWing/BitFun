@@ -52,7 +52,7 @@
     content: '';
     position: absolute;
     inset: 4px;
-    border: 1px dashed var(--color-primary);
+    border: 1px dashed var(--color-accent-500);
     border-radius: 4px;
     opacity: 0.4;
     transition: all 0.15s ease;
@@ -68,8 +68,8 @@
       opacity: 1;
       border-style: solid;
       border-width: 2px;
-      border-color: var(--color-primary);
-      background: var(--color-primary-alpha);
+      border-color: var(--color-accent-500);
+      background: var(--color-accent-100);
     }
   }
 
@@ -79,7 +79,7 @@
     justify-content: center;
     gap: 6px;
     padding: 6px 14px;
-    background: var(--color-primary);
+    background: var(--color-accent-500);
     border: none;
     border-radius: 4px;
     box-shadow: 0 2px 8px var(--color-accent-400);

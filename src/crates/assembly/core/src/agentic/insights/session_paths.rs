@@ -1,22 +1,13 @@
 //! Resolve on-disk session roots for insights (local + remote SSH mirror).
 
-use crate::infrastructure::get_path_manager_arc;
-use crate::service::remote_ssh::workspace_state::get_effective_session_path;
+use crate::agentic::session::session_store_port::CoreSessionStorePort;
 use crate::service::workspace::{get_global_workspace_service, WorkspaceInfo};
+use bitfun_runtime_ports::{SessionStoragePathRequest, SessionStorePort};
 use std::collections::HashSet;
 use std::path::PathBuf;
 
-/// Resolve the workspace path to pass to [`PersistenceManager`] for session lookups.
-///
-/// For local workspaces this is the workspace root path itself — the persistence layer
-/// derives the actual sessions directory via [`PathManager::project_sessions_dir`].
-/// For remote workspaces this is the local SSH mirror directory, which the persistence
-/// layer treats as the storage root directly.
-pub async fn effective_session_storage_path_for_workspace(ws: &WorkspaceInfo) -> PathBuf {
-    if ws.remote_ssh_connection_id().is_none() {
-        return ws.root_path.clone();
-    }
-
+/// Resolve the final sessions directory for a tracked workspace.
+pub async fn effective_session_storage_dir_for_workspace(ws: &WorkspaceInfo) -> PathBuf {
     let path_str = ws.root_path.to_string_lossy().to_string();
     let conn = ws.remote_ssh_connection_id().map(|s| s.to_string());
     let mut host = ws
@@ -34,7 +25,15 @@ pub async fn effective_session_storage_path_for_workspace(ws: &WorkspaceInfo) ->
         }
     }
 
-    get_effective_session_path(&path_str, conn.as_deref(), host.as_deref()).await
+    CoreSessionStorePort::default()
+        .resolve_session_storage_path(SessionStoragePathRequest {
+            workspace_path: ws.root_path.clone(),
+            remote_connection_id: conn,
+            remote_ssh_host: host,
+        })
+        .await
+        .map(|resolution| resolution.effective_storage_path)
+        .unwrap_or_else(|_| PathBuf::from(path_str))
 }
 
 /// Unique workspace paths whose persisted session directories exist on disk.
@@ -48,22 +47,11 @@ pub async fn collect_effective_session_storage_roots() -> Vec<PathBuf> {
         return paths;
     };
 
-    let path_manager = get_path_manager_arc();
-
     for ws in ws_service.list_workspace_infos().await {
-        let workspace_path = effective_session_storage_path_for_workspace(&ws).await;
+        let sessions_dir = effective_session_storage_dir_for_workspace(&ws).await;
 
-        // For local workspaces the actual sessions directory is derived from the
-        // workspace root via the path manager. For remote workspaces the mirror
-        // directory itself is the sessions root.
-        let sessions_dir = if ws.remote_ssh_connection_id().is_none() {
-            path_manager.project_sessions_dir(&workspace_path)
-        } else {
-            workspace_path.clone()
-        };
-
-        if sessions_dir.exists() && seen.insert(workspace_path.clone()) {
-            paths.push(workspace_path);
+        if sessions_dir.exists() && seen.insert(sessions_dir.clone()) {
+            paths.push(sessions_dir);
         }
     }
 

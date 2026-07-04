@@ -34,7 +34,7 @@
     animation: new-project-icon-enter 0.4s ease-out;
 
     svg {
-      color: var(--color-primary);
+      color: var(--color-accent-500);
     }
   }
 
@@ -132,7 +132,7 @@
       user-select: none;
       font-size: 12px;
       padding: 10px 12px;
-      background: var(--color-overlay-white-02);
+      background: var(--color-overlay-white-04);
       border: 1px dashed var(--border-subtle);
       border-radius: 8px;
       color: var(--color-text-primary);
@@ -198,7 +198,7 @@
       width: 100%;
       font-size: 12px;
       padding: 10px 12px;
-      background: var(--color-overlay-white-02);
+      background: var(--color-overlay-white-04);
       border: 1px solid var(--border-subtle);
       border-radius: 8px;
       color: var(--color-text-primary);
@@ -229,8 +229,8 @@
     align-items: center;
     gap: 8px;
     padding: 10px 12px;
-    background: color-mix(in srgb, var(--color-primary) 8%, transparent);
-    border: 1px solid color-mix(in srgb, var(--color-primary) 16%, transparent);
+    background: color-mix(in srgb, var(--color-accent-500) 8%, transparent);
+    border: 1px solid color-mix(in srgb, var(--color-accent-500) 16%, transparent);
     border-radius: 8px;
     animation: new-project-preview-enter 0.3s ease-out;
   }

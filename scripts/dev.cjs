@@ -558,10 +558,16 @@ function flashgrepBinaryNames() {
     return ['flashgrep-aarch64-apple-darwin'];
   }
   if (process.platform === 'linux' && process.arch === 'x64') {
-    return ['flashgrep-x86_64-unknown-linux-gnu'];
+    return [
+      'flashgrep-x86_64-unknown-linux-musl',
+      'flashgrep-x86_64-unknown-linux-gnu',
+    ];
   }
   if (process.platform === 'linux' && process.arch === 'arm64') {
-    return ['flashgrep-aarch64-unknown-linux-gnu'];
+    return [
+      'flashgrep-aarch64-unknown-linux-musl',
+      'flashgrep-aarch64-unknown-linux-gnu',
+    ];
   }
   return [process.platform === 'win32' ? 'flashgrep.exe' : 'flashgrep'];
 }

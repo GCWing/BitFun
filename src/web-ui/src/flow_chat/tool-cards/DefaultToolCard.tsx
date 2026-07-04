@@ -10,8 +10,6 @@ import type { ToolCardProps } from '../types/flow-chat';
 import { CompactToolCard, CompactToolCardHeader } from './CompactToolCard';
 import { ToolCardStatusSlot } from './ToolCardStatusSlot';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
-import { hasAcpPermissionOptions } from './AcpPermissionActions.utils';
-import { AcpPermissionActions } from './AcpPermissionActions';
 import {
   formatSessionViewPreviewText,
   isOnlySessionViewPreviewText,
@@ -98,14 +96,11 @@ function getInlinePreview(value: any): string | null {
 export const DefaultToolCard: React.FC<ToolCardProps> = ({
   toolItem,
   config,
-  onConfirm,
-  onReject,
-  onExpand
+  onExpand,
 }) => {
   const { t } = useTranslation('flow-chat');
   const { toolCall, toolResult, status, requiresConfirmation, userConfirmed } = toolItem;
   const [isExpanded, setIsExpanded] = useState(false);
-  const [shouldExpand, setShouldExpand] = useState(true);
   const toolId = toolItem.id ?? toolCall?.id;
   const { cardRootRef, applyExpandedState } = useToolCardHeightContract({
     toolId,
@@ -117,11 +112,12 @@ export const DefaultToolCard: React.FC<ToolCardProps> = ({
   const hasResult = toolResult !== undefined && toolResult !== null && config.resultDisplayType !== 'hidden';
   const errorMessage = toolResult?.success === false ? toolResult.error || t('toolCards.default.failed') : null;
   const hasError = Boolean(errorMessage);
-  const showConfirmationActions = requiresConfirmation && !userConfirmed &&
+  const needsConfirmation = requiresConfirmation && !userConfirmed &&
     status !== 'completed' &&
     status !== 'cancelled' &&
+    status !== 'rejected' &&
     status !== 'error';
-  const canExpand = hasInput || hasResult || hasError || showConfirmationActions;
+  const canExpand = hasInput || hasResult || hasError;
 
   const inputPreview = useMemo(() => {
     if (!isExpanded || !hasInput) return null;
@@ -133,36 +129,17 @@ export const DefaultToolCard: React.FC<ToolCardProps> = ({
     return truncatePreview(stringifyValue(toolResult?.result));
   }, [hasResult, isExpanded, toolResult?.result]);
 
-  const handleConfirm = () => {
-    onConfirm?.(toolCall?.input);
-  };
-
-  const handleReject = () => {
-    onReject?.();
-  };
-
-  const handleMouseDown = useCallback(() => {
-    setShouldExpand(true);
-  }, [applyExpandedState, canExpand, isExpanded, onExpand,shouldExpand, setShouldExpand]);
-
-  const handleMouseMove = useCallback(() => {
-    setShouldExpand(false);
-  }, [applyExpandedState, canExpand, isExpanded, onExpand,shouldExpand, setShouldExpand]);
-
   const handleToggleExpand = useCallback(() => {
     if (!canExpand) return;
 
     const nextExpanded = !isExpanded;
-    if (shouldExpand) {
-      applyExpandedState(isExpanded, nextExpanded, setIsExpanded, {
-        onExpand,
+    applyExpandedState(isExpanded, nextExpanded, setIsExpanded, {
+      onExpand,
     });
-    }
-    setShouldExpand(true);
-  }, [applyExpandedState, canExpand, isExpanded, onExpand, shouldExpand, setShouldExpand]);
+  }, [applyExpandedState, canExpand, isExpanded, onExpand]);
 
   const getStatusText = () => {
-    if (requiresConfirmation && !userConfirmed) {
+    if (needsConfirmation) {
       return t('toolCards.default.waitingConfirm');
     }
 
@@ -183,6 +160,8 @@ export const DefaultToolCard: React.FC<ToolCardProps> = ({
         return t('toolCards.default.completed');
       case 'cancelled':
         return t('toolCards.default.cancelled');
+      case 'rejected':
+        return t('toolCards.default.rejected');
       case 'error':
         return t('toolCards.default.failed');
       default:
@@ -191,7 +170,7 @@ export const DefaultToolCard: React.FC<ToolCardProps> = ({
   };
 
   const getSummaryText = () => {
-    if (requiresConfirmation && !userConfirmed) {
+    if (needsConfirmation) {
       const preview = getInlinePreview(filteredInput);
       return preview
         ? `${t('toolCards.default.waitingConfirm')} - ${preview}`
@@ -228,6 +207,10 @@ export const DefaultToolCard: React.FC<ToolCardProps> = ({
       return errorMessage || t('toolCards.default.failed');
     }
 
+    if (status === 'rejected') {
+      return errorMessage || t('toolCards.default.rejected');
+    }
+
     if (status === 'running' || status === 'streaming') {
       const preview = getInlinePreview(filteredInput);
       return preview
@@ -245,19 +228,14 @@ export const DefaultToolCard: React.FC<ToolCardProps> = ({
     return getStatusText();
   };
 
-  const showConfirmationHighlight = requiresConfirmation && !userConfirmed &&
-    status !== 'completed' &&
-    status !== 'cancelled' &&
-    status !== 'error';
+  const showConfirmationHighlight = needsConfirmation;
 
   return (
     <div ref={cardRootRef} data-tool-card-id={toolId ?? ''}>
       <CompactToolCard
         status={status}
         isExpanded={isExpanded}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleToggleExpand}
+        onClick={handleToggleExpand}
         className={`default-tool-card ${showConfirmationHighlight ? 'requires-confirmation' : ''}`}
         clickable={canExpand}
         header={
@@ -281,40 +259,6 @@ export const DefaultToolCard: React.FC<ToolCardProps> = ({
               <div className="default-tool-card__section">
                 <div className="default-tool-card__section-label">{t('toolCards.common.inputParams')}</div>
                 <pre className="default-tool-card__code-block">{inputPreview}</pre>
-              </div>
-            )}
-
-            {showConfirmationActions && (
-              <div className="default-tool-card__actions">
-                {hasAcpPermissionOptions(toolItem) ? (
-                  <AcpPermissionActions
-                    toolItem={toolItem}
-                    input={toolCall?.input}
-                    presentation="text"
-                    disabled={status === 'streaming'}
-                    onConfirm={onConfirm}
-                    onReject={onReject}
-                  />
-                ) : (
-                  <>
-                    <button
-                      type="button"
-                      className="default-tool-card__button default-tool-card__button--confirm"
-                      onClick={handleConfirm}
-                      disabled={status === 'streaming'}
-                    >
-                      {t('toolCards.mcp.confirmExecute')}
-                    </button>
-                    <button
-                      type="button"
-                      className="default-tool-card__button default-tool-card__button--reject"
-                      onClick={handleReject}
-                      disabled={status === 'streaming'}
-                    >
-                      {t('toolCards.mcp.cancel')}
-                    </button>
-                  </>
-                )}
               </div>
             )}
 

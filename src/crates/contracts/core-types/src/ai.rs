@@ -186,6 +186,9 @@ impl Message {
 pub enum ConnectionTestMessageCode {
     ToolCallsNotDetected,
     ImageInputCheckFailed,
+    TlsOrCertificateIssue,
+    ProxyIssue,
+    NetworkIssue,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

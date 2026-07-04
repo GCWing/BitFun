@@ -46,7 +46,7 @@ export const SnapshotCard: React.FC<SnapshotCardProps> = ({
 
   const getOperationInfo = () => {
     const operationMap = {
-      'write': { name: t('flowChatCards.snapshotCard.writeFile'), color: 'var(--tool-card-write-color)' },
+      'write': { name: t('flowChatCards.snapshotCard.writeFile'), color: 'var(--color-success)' },
       'edit': { name: t('flowChatCards.snapshotCard.editFile'), color: 'var(--color-warning)' },
       'delete': { name: t('flowChatCards.snapshotCard.deleteFile'), color: 'var(--color-error)' },
       'multi-edit': { name: t('flowChatCards.snapshotCard.multiEdit'), color: 'var(--color-warning)' }
@@ -80,7 +80,7 @@ export const SnapshotCard: React.FC<SnapshotCardProps> = ({
     return (
       <div 
         className={`snapshot-card snapshot-card--compact snapshot-card--${snapshotStatus} status-${status}`}
-        style={{ '--operation-color': operationInfo.color } as React.CSSProperties}
+        style={{ '--snapshot-card-operation-color': operationInfo.color } as React.CSSProperties}
         onClick={onViewDetails}
       >
         <FileText className="snapshot-card__icon" size={14} />

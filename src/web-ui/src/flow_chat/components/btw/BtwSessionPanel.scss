@@ -8,7 +8,7 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: var(--color-bg-flowchat);
+  background: var(--color-bg-scene);
   color: var(--color-text-primary);
 
   &--empty {
@@ -207,7 +207,7 @@
     font-size: var(--tool-card-action-font-size);
     font-weight: 500;
     cursor: pointer;
-    box-shadow: 0 2px 12px var(--color-overlay-black-10);
+    box-shadow: 0 2px 12px var(--color-overlay-black-12);
     transition: transform 0.2s ease, box-shadow 0.2s ease;
 
     &:hover {

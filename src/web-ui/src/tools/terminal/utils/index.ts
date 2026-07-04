@@ -2,6 +2,7 @@
  * Terminal utilities.
  */
 
+export { TerminalInputQueue } from './TerminalInputQueue';
 export { TerminalResizeDebouncer } from './TerminalResizeDebouncer';
 export type { ResizeCallback, ResizeDebounceOptions } from './TerminalResizeDebouncer';
 export { ResizeRepaintGuard, createResizeRepaintScreenSnapshot } from './resizeRepaintGuard';

@@ -6,15 +6,15 @@
 :root {
   --flowchat-md-code-font-mono: 'Fira Code', 'JetBrains Mono', Consolas, 'Courier New', monospace;
 
-  --flowchat-md-inline-code-bg: var(--color-overlay-white-05);
-  --flowchat-md-inline-code-border: var(--color-overlay-white-10);
+  --flowchat-md-inline-code-bg: var(--color-overlay-white-08);
+  --flowchat-md-inline-code-border: var(--color-overlay-white-12);
   --flowchat-md-inline-code-fg: #a8b4c8;
   --flowchat-md-inline-code-hover-bg: var(--color-overlay-white-08);
   --flowchat-md-inline-code-hover-border: var(--color-overlay-white-15);
   --flowchat-md-inline-code-hover-fg: #c5d0e2;
 
   --flowchat-md-pre-bg: var(--color-bg-primary);
-  --flowchat-md-pre-border: var(--color-overlay-white-10);
+  --flowchat-md-pre-border: var(--color-overlay-white-12);
   --flowchat-md-pre-border-style: dashed;
   --flowchat-md-pre-radius: var(--flowchat-card-radius);
   --flowchat-md-pre-shadow: none;
@@ -23,11 +23,11 @@
   --flowchat-md-pre-hover-border: var(--color-overlay-white-15);
   --flowchat-md-pre-hover-shadow:
     0 8px 24px var(--color-overlay-black-40),
-    inset 0 1px 0 var(--color-overlay-white-10),
-    inset 0 -1px 0 var(--color-overlay-white-05);
+    inset 0 1px 0 var(--color-overlay-white-12),
+    inset 0 -1px 0 var(--color-overlay-white-08);
   --flowchat-md-pre-code-fg: var(--color-text-secondary);
 
-  --flowchat-md-bq-bg: var(--color-overlay-white-02);
+  --flowchat-md-bq-bg: var(--color-overlay-white-04);
   --flowchat-md-bq-border: var(--color-overlay-white-15);
   --flowchat-md-bq-radius: 0 6px 6px 0;
   --flowchat-md-bq-fg: var(--color-overlay-white-70);
@@ -36,23 +36,21 @@
 }
 
 :root[data-theme-type="light"] {
-  --flowchat-md-inline-code-bg: rgba(0, 0, 0, 0.05);
+  --flowchat-md-inline-code-bg: var(--color-overlay-black-08);
   --flowchat-md-inline-code-border: var(--color-overlay-black-12);
-  --flowchat-md-inline-code-fg: #24292f;
+  --flowchat-md-inline-code-fg: var(--color-text-primary);
   --flowchat-md-inline-code-hover-bg: var(--color-overlay-black-08);
-  --flowchat-md-inline-code-hover-border: rgba(0, 0, 0, 0.18);
-  --flowchat-md-inline-code-hover-fg: #1f2328;
+  --flowchat-md-inline-code-hover-border: var(--color-overlay-black-20);
+  --flowchat-md-inline-code-hover-fg: var(--flowchat-md-inline-code-fg);
 
   --flowchat-md-pre-bg: #f6f8fa;
-  --flowchat-md-pre-border: var(--color-overlay-black-10);
+  --flowchat-md-pre-border: var(--color-overlay-black-12);
   --flowchat-md-pre-shadow: none;
   --flowchat-md-pre-hover-border: var(--color-overlay-black-15);
   --flowchat-md-pre-hover-shadow: 0 6px 20px var(--color-overlay-slate-08);
   --flowchat-md-pre-code-fg: var(--color-text-primary);
 
-  --flowchat-md-bq-bg: rgba(15, 23, 42, 0.07);
+  --flowchat-md-bq-bg: var(--color-overlay-slate-08);
   --flowchat-md-bq-border: rgba(15, 23, 42, 0.24);
   --flowchat-md-bq-fg: var(--color-text-secondary);
-  --flowchat-md-bq-hover-bg: var(--color-overlay-slate-10);
-  --flowchat-md-bq-hover-border: rgba(15, 23, 42, 0.34);
 }

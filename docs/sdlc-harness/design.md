@@ -15,7 +15,7 @@
 | 配置可组合 | 用户、任务、工作区、路径、团队和组织策略按稳定优先级合成 |
 | 证据可追溯 | PR、发布、事故和合规场景可以引用证据包、质量事件和交付物图谱 |
 | 评估可回放 | 策略、工具、模型、上下文和安全版本能进入评测与指标分析 |
-| 生态可扩展 | 先在 Rust 内核预留 hook、事件、打点和工具复写候选契约；外部插件生态后续通过适配器接入 |
+| 生态可扩展 | 先稳定 Plugin Runtime Host contract、binding、envelope、disabled stub、Event Manifest、Tool ABI、Permission/Effect 和 UI descriptor；外部插件生态后续通过 Product Assembly 注册的适配器接入 |
 
 ## 2. 复杂来源
 
@@ -38,7 +38,7 @@
 | 阶段收益 | 用户可见收益、必要技术前置、延期边界、降级解释、质量一致性检查 | 约束阶段交付必须产生可解释体验变化 |
 | 体验投影 | 内部策略画像、用户可见状态、提示层级、确认策略、设置项 | 降低用户学习成本和提示噪音 |
 | 执行安全 | 权限、执行位置、沙箱等级、网络域名、凭据访问、主动配置信任、应急放行 | 防止 prompt、配置或工具越权 |
-| 内核扩展点 | 生命周期 hook、规范事件、打点、工具复写候选、插件效果候选 | 为后续多插件生态适配预留稳定契约 |
+| 扩展契约与生态适配 | Plugin Runtime Host contract、生命周期 envelope、Event Manifest、Tool ABI、Permission/Effect、UI descriptor、插件效果候选 | 为后续多插件生态适配预留稳定契约 |
 | 变更信心 | 变更摘要、验证摘要、风险提示、未验证项、跳过检查 | 给用户可理解的信心和下一步行动 |
 | 团队治理 | 路径规则、审查强度、强制检查、风险接受、审计策略 | 统一团队和高可靠场景体验 |
 | 生命周期上下文 | issue、spec、计划、PR、发布、事故、学习资产 | 支撑复杂项目追溯和复盘 |
@@ -62,11 +62,11 @@
 安全边界
   执行位置 / 沙箱等级 / 权限 / 网络 / 凭据 / 主动配置信任 / 应急放行
 
-内核扩展点
-  生命周期 hooks / 规范事件 / 打点 / 工具复写候选 / 插件效果候选
+扩展契约与生态适配
+  Plugin Runtime Host contract / Event Manifest / Tool ABI / Permission/Effect / UI descriptor / 插件效果候选
 
-未来插件适配主机（按需启用）
-  适配器注册表 / 项目执行域 / 插件单元 / 工具门面 / 事件路由 / 候选效果输出
+Plugin Runtime Host（按需启用）
+  adapter registry / project domain / plugin cell / tool facade / event router / candidate effect output
 
 交付物与证据面
   证据包 / 交付物图谱 / 问题生命周期 / 风险接受
@@ -78,7 +78,7 @@
   Git / CI / Issue / 文档 / 发布 / 观测 / 知识库
 
 智能体与工具运行时
-  会话 / 智能体 / 终端 / 文件系统 / MCP-LSP / Hooks / 适配器
+  会话 / 智能体 / 终端 / 文件系统 / MCP-LSP / Tool ABI / 适配器
 ```
 
 关键边界：
@@ -88,7 +88,7 @@
 - 阶段收益编排约束每次落地必须说明用户可见收益、后台前置、延期边界和质量一致性。
 - 配置化策略面决定内部体验强度、检查建议、证据展示层级和用户覆盖选项。
 - 安全边界负责权限、执行位置、沙箱等级、网络、凭据和高风险动作隔离；权限确认、快照/回滚隔离和运行时沙箱必须分开表达。
-- Kernel 扩展点先提供空实现和稳定契约；未来插件适配主机由 Rust 内核管理生命周期，只返回建议、证据候选、工具参数补丁或工具结果候选。内核仍是状态、安全、工具执行和审计的唯一事实源。
+- 扩展契约先定义 Plugin Runtime Host contract、Event Manifest、Tool ABI、Permission/Effect 和 UI descriptor；插件运行时主机由 Product Assembly 注册，通过安全控制面约束，只返回建议、证据候选、UI contribution、工具输入补丁或工具后置证据候选。内核事实、安全控制面和执行层共同写入状态、安全、工具执行结果和审计事实。
 - 交付物、证据和质量数据面支撑解释、审查、发布和复盘。
 - 项目集成面适配外部系统，并把外部语义映射为内部稳定事件和契约。
 - 智能体运行时执行任务，并通过策略面和安全边界获取质量结论与授权状态。
@@ -108,7 +108,7 @@
 | 变更就绪度 / PR 门禁 | [pr-quality-gate.md](features/pr-quality-gate.md) | 生成 PR 信心摘要；强策略下成为门禁 | 仅准备 PR 或配置启用 |
 | 需求影响分析 | [requirement-impact-analysis.md](features/requirement-impact-analysis.md) | 高风险需求/API/设计变更的影响候选 | 按需 |
 | 智能体评测 | [agent-evaluation.md](features/agent-evaluation.md) | 评估智能体、上下文、策略和治理策略 | 否 |
-| OpenCode 兼容层 | [opencode-compatibility.md](features/opencode-compatibility.md) | 先提供主动配置发现和扩展点契约，后续作为生态适配器接入 | 受安全边界管控 |
+| Plugin Runtime Host 与 OpenCode 兼容适配 | [opencode-compatibility.md](features/opencode-compatibility.md) | 发现主动配置，约束插件候选效果，并把 OpenCode 能力映射到 BitFun 稳定契约 | 受安全边界管控 |
 
 ## 6. 配置层级
 
@@ -148,7 +148,7 @@
 | 能力/效果模型统一 | tool、MCP、skills、插件、hook 和内置能力必须映射为能力声明、目标对象、数据类别、信任来源和副作用候选 |
 | 未声明能力受限 | 新增扩展未声明能力、声明不完整或运行时行为超出声明时，只能进入受限模式或安全确认，不能按低风险静默执行 |
 | 策略不写死工具名 | 策略引擎以能力、效果、数据、来源、执行域和配置上下文判定；工具名只用于展示、审计、兼容和调试 |
-| 外部适配不写权威状态 | 外部插件和适配器只能返回候选效果；通过、失败、阻断、审计和权限状态由内核写入 |
+| 外部适配不写权威状态 | 外部插件和适配器只能返回候选效果；通过、失败、阻断、审计和权限状态由内核、安全边界和执行层写入 |
 | 工具复写显式授权 | 用户确认复写哪个工具和能力范围；复写表按项目执行域生效，不能静默覆盖全局工具 |
 
 ## 8. 架构风险

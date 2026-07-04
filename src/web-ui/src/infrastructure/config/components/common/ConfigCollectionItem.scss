@@ -143,7 +143,7 @@
   }
 
   &--danger:hover {
-    background: rgba($color-error, 0.08);
+    background: color-mix(in srgb, var(--color-error) 8%, transparent);
     color: var(--color-error);
   }
 }

@@ -12,11 +12,15 @@ function readFlag(name) {
   return process.argv.includes(name);
 }
 
-function readNumberEnv(name, fallback) {
-  const raw = process.env[name];
-  if (raw === undefined || raw === '') {
-    return fallback;
+function readArgValue(name) {
+  const index = process.argv.indexOf(name);
+  if (index < 0) {
+    return undefined;
   }
+  return process.argv[index + 1];
+}
+
+function parseNonNegativeNumber(name, raw) {
   const value = Number(raw);
   if (!Number.isFinite(value) || value < 0) {
     throw new Error(`${name} must be a non-negative number, got ${raw}`);
@@ -24,8 +28,26 @@ function readNumberEnv(name, fallback) {
   return value;
 }
 
-function readIntegerEnv(name, fallback) {
-  return Math.max(1, Math.trunc(readNumberEnv(name, fallback)));
+function readNumberEnv(name, fallback) {
+  const raw = process.env[name];
+  if (raw === undefined || raw === '') {
+    return fallback;
+  }
+  return parseNonNegativeNumber(name, raw);
+}
+
+function readNumberArgOrEnv(argNames, envName, fallback) {
+  for (const argName of argNames) {
+    const raw = readArgValue(argName);
+    if (raw !== undefined && raw !== '') {
+      return parseNonNegativeNumber(argName, raw);
+    }
+  }
+  return readNumberEnv(envName, fallback);
+}
+
+function readIntegerArgOrEnv(argNames, envName, fallback) {
+  return Math.max(1, Math.trunc(readNumberArgOrEnv(argNames, envName, fallback)));
 }
 
 function shellQuote(value) {
@@ -204,7 +226,11 @@ function runStartupIteration(index, total, env, thresholds, seenTraceIds) {
   };
 }
 
-const iterations = readIntegerEnv('BITFUN_E2E_PERF_STARTUP_ITERATIONS', 5);
+const iterations = readIntegerArgOrEnv(
+  ['--samples', '--iterations'],
+  'BITFUN_E2E_PERF_STARTUP_ITERATIONS',
+  5,
+);
 const thresholds = {
   interactiveShellReadyMs: readNumberEnv('BITFUN_E2E_PERF_STARTUP_MAX_INTERACTIVE_MS', 5000),
   firstScriptEvalMs: readNumberEnv('BITFUN_E2E_PERF_STARTUP_MAX_FIRST_SCRIPT_MS', 3000),

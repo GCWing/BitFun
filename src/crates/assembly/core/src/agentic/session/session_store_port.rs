@@ -1,4 +1,5 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use bitfun_runtime_ports::{
     PortError, PortErrorKind, PortResult, RuntimeServiceCapability, RuntimeServicePort,
@@ -6,15 +7,36 @@ use bitfun_runtime_ports::{
 };
 
 use crate::agentic::core::SessionConfig;
+use crate::infrastructure::{get_path_manager_arc, PathManager};
 use crate::service::remote_ssh::workspace_state::{
     resolve_workspace_session_identity, unresolved_remote_session_storage_dir,
     LOCAL_WORKSPACE_SSH_HOST,
 };
+use crate::service::WorkspaceRuntimeService;
 
-#[derive(Debug, Clone, Copy, Default)]
-pub struct CoreSessionStorePort;
+#[derive(Debug, Clone, Default)]
+pub struct CoreSessionStorePort {
+    path_manager: Option<Arc<PathManager>>,
+}
 
 impl CoreSessionStorePort {
+    pub(crate) fn with_path_manager(path_manager: Arc<PathManager>) -> Self {
+        Self {
+            path_manager: Some(path_manager),
+        }
+    }
+
+    #[cfg(test)]
+    pub fn with_path_manager_for_tests(path_manager: Arc<PathManager>) -> Self {
+        Self::with_path_manager(path_manager)
+    }
+
+    fn path_manager(&self) -> Arc<PathManager> {
+        self.path_manager
+            .clone()
+            .unwrap_or_else(get_path_manager_arc)
+    }
+
     pub async fn resolve_storage_path_for_config(
         config: &SessionConfig,
     ) -> Option<SessionStoragePathResolution> {
@@ -28,6 +50,35 @@ impl CoreSessionStorePort {
             .resolve_session_storage_path(request)
             .await
             .ok()
+    }
+
+    fn resolved_sessions_dir_kind(
+        path_manager: &PathManager,
+        path: &std::path::Path,
+    ) -> Option<SessionStorageKind> {
+        if path.file_name().and_then(|value| value.to_str()) != Some("sessions") {
+            return None;
+        }
+
+        let remote_mirror_root = path_manager.remote_ssh_mirror_root_dir();
+        if path.starts_with(&remote_mirror_root) {
+            return Some(
+                if path
+                    .components()
+                    .any(|component| component.as_os_str() == std::ffi::OsStr::new("_unresolved"))
+                {
+                    SessionStorageKind::UnresolvedRemote
+                } else {
+                    SessionStorageKind::Remote
+                },
+            );
+        }
+
+        let projects_root = path_manager.projects_root();
+        path.parent()
+            .and_then(|runtime_root| runtime_root.parent())
+            .is_some_and(|candidate| candidate == projects_root.as_path())
+            .then_some(SessionStorageKind::Local)
     }
 }
 
@@ -43,6 +94,19 @@ impl SessionStorePort for CoreSessionStorePort {
         &self,
         request: SessionStoragePathRequest,
     ) -> PortResult<SessionStoragePathResolution> {
+        let path_manager = self.path_manager();
+        if let Some(storage_kind) =
+            Self::resolved_sessions_dir_kind(&path_manager, &request.workspace_path)
+        {
+            return Ok(SessionStoragePathResolution::new(
+                request.workspace_path.clone(),
+                request.workspace_path,
+                storage_kind,
+                request.remote_connection_id,
+                request.remote_ssh_host,
+            ));
+        }
+
         let workspace_path = request.workspace_path.to_string_lossy().to_string();
         let identity = resolve_workspace_session_identity(
             &workspace_path,
@@ -58,10 +122,13 @@ impl SessionStorePort for CoreSessionStorePort {
         })?;
 
         let requested_workspace_path = request.workspace_path;
+        let runtime_service = WorkspaceRuntimeService::new(path_manager);
         let (effective_storage_path, storage_kind, remote_ssh_host) =
             if identity.hostname == LOCAL_WORKSPACE_SSH_HOST {
                 (
-                    PathBuf::from(identity.logical_workspace_path()),
+                    runtime_service
+                        .context_for_local_workspace(Path::new(identity.logical_workspace_path()))
+                        .sessions_dir,
                     SessionStorageKind::Local,
                     None,
                 )
@@ -76,7 +143,12 @@ impl SessionStorePort for CoreSessionStorePort {
                 )
             } else {
                 (
-                    identity.session_storage_path(),
+                    runtime_service
+                        .context_for_remote_workspace(
+                            &identity.hostname,
+                            identity.logical_workspace_path(),
+                        )
+                        .sessions_dir,
                     SessionStorageKind::Remote,
                     Some(identity.hostname.clone()),
                 )

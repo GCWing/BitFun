@@ -22,7 +22,7 @@
         }
       ],
       "risks": [
-        "Short legacy aliases such as --color-primary and --text-secondary are still used by shell-adjacent components.",
+        "Legacy aliases remain exported for compatibility but must not reappear as internal component reads.",
         "System theme resolution must not assume desktop-only media query behavior."
       ]
     },
@@ -33,7 +33,7 @@
       "formFactors": ["desktop", "narrow"],
       "themes": ["dark", "light", "system"],
       "states": ["default", "streaming", "hover", "focus", "selected", "error", "empty"],
-      "tokenFamilies": ["--flowchat-*", "--tool-card-*", "--color-bg-flowchat", "--color-text-*", "--accent-primary"],
+      "tokenFamilies": ["--flowchat-*", "--tool-card-*", "--color-bg-scene", "--color-text-*", "--color-accent-*"],
       "evidence": [
         {
           "type": "theme-color-audit",
@@ -47,7 +47,7 @@
       ],
       "risks": [
         "Streaming and virtualized items can hide token regressions until historical turns are rendered.",
-        "Several high-use compatibility aliases are still visible in Flow Chat surfaces."
+        "Flow Chat has many historical alias call sites; the audit baseline must keep internal alias reads at zero."
       ]
     },
     {
@@ -57,7 +57,7 @@
       "formFactors": ["desktop", "narrow"],
       "themes": ["dark", "light", "system"],
       "states": ["default", "expanded", "collapsed", "hover", "focus", "success", "warning", "error"],
-      "tokenFamilies": ["--tool-card-*", "--color-success*", "--color-warning*", "--color-error*", "--color-danger*"],
+      "tokenFamilies": ["--tool-card-*", "--color-success*", "--color-warning*", "--color-error*"],
       "evidence": [
         {
           "type": "theme-color-audit",
@@ -129,7 +129,7 @@
       "formFactors": ["desktop", "narrow"],
       "themes": ["dark", "light", "system"],
       "states": ["default", "code", "table", "link", "diagram", "error"],
-      "tokenFamilies": ["--markdown-*", "--primary-color", "Mermaid palette", "Prism palette"],
+      "tokenFamilies": ["--markdown-*", "--markdown-primary-color", "Mermaid palette", "Prism palette"],
       "evidence": [
         {
           "type": "theme-color-audit",
@@ -142,7 +142,7 @@
         }
       ],
       "risks": [
-        "--primary-color is an embedded-content override and must not be removed as a normal fallback.",
+        "--markdown-primary-color is the embedded-content accent override and must remain distinct from generic app primary aliases.",
         "Mermaid graph roles do not map directly to app status colors."
       ]
     },
@@ -177,7 +177,7 @@
       "formFactors": ["desktop", "narrow"],
       "themes": ["dark", "light", "system"],
       "states": ["default", "selected", "hover", "focus", "custom-theme", "system-theme"],
-      "tokenFamilies": ["--color-accent-*", "--color-primary*", "--color-bg-*", "--color-text-*"],
+      "tokenFamilies": ["--color-accent-*", "--color-bg-*", "--color-text-*"],
       "evidence": [
         {
           "type": "theme-color-audit",
@@ -212,6 +212,30 @@
       "risks": [
         "Mobile web is a separate build target and may not exercise desktop-only theme runtime paths.",
         "Narrow form factor can surface contrast and spacing regressions that desktop screenshots miss."
+      ]
+    },
+    {
+      "key": "installer-shell",
+      "owner": "BitFun-Installer/src/theme; BitFun-Installer/src/pages; BitFun-Installer/src/styles",
+      "platforms": ["installer"],
+      "formFactors": ["desktop", "narrow"],
+      "themes": ["dark", "light", "system"],
+      "states": ["theme-setup", "language", "options", "loading", "progress", "error", "completed", "hover", "focus"],
+      "tokenFamilies": ["--color-bg-*", "--color-text-*", "--element-bg-*", "--border-*", "--color-accent-*", "--color-success", "--color-warning", "--color-error"],
+      "evidence": [
+        {
+          "type": "theme-color-audit",
+          "command": "pnpm run theme:color-audit:installer",
+          "requirement": "Installer theme changes must keep app UI raw colors, unresolved vars, fallback vars, and unregistered dynamic families at zero."
+        },
+        {
+          "type": "focused-visual-review",
+          "requirement": "Review ThemeSetup cards plus language, options, progress, completed, and error states across light, dark, system, and named themes when installer tokens change."
+        }
+      ],
+      "risks": [
+        "Installer is a separate React/Tauri surface with its own TS theme root; Rust must not copy or extend the installer palette.",
+        "Theme cards use adjacent primary and secondary backgrounds for identity, so near colors cannot be merged without focused visual evidence."
       ]
     }
   ]

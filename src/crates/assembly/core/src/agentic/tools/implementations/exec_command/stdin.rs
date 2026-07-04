@@ -1,23 +1,15 @@
+use super::completion::{exec_command_local_completion, exec_command_remote_completion};
 use super::progress::ExecOutputProgressBridge;
 use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext, ValidationResult};
-use crate::service::remote_ssh::{
-    get_global_remote_exec_process_manager, RemoteExecError, RemoteExecSessionCompletion,
-    RemoteExecSessionCompletionSource, RemoteExecSessionCompletionStatus, RemoteWriteStdinRequest,
-};
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
+use bitfun_runtime_ports::{PortErrorKind, RemoteWriteStdinRequest, TerminalWriteStdinRequest};
 use serde_json::{json, Value};
-use terminal_core::{
-    get_global_exec_process_manager, LocalExecSessionCompletion, LocalExecSessionCompletionSource,
-    LocalExecSessionCompletionStatus, LocalWriteStdinRequest, TerminalError,
-};
 use tool_runtime::exec_command::{
-    exec_command_completion_value, exec_command_session_id_from_input,
-    render_write_stdin_response_for_assistant, write_stdin_session_not_found_result,
-    ExecCommandCompletion, ExecCommandCompletionSource, ExecCommandCompletionStatus,
+    render_write_stdin_response_for_assistant, write_stdin_input_from_input,
+    write_stdin_input_validation_message, write_stdin_result_value,
+    write_stdin_session_not_found_result, ExecCommandResultFields,
 };
-
-const DEFAULT_TOOL_YIELD_TIME_MS: u64 = 30_000;
 
 pub struct WriteStdinTool;
 
@@ -30,10 +22,6 @@ impl Default for WriteStdinTool {
 impl WriteStdinTool {
     pub fn new() -> Self {
         Self
-    }
-
-    pub(crate) fn session_id_from_input(input: &Value) -> Option<i32> {
-        exec_command_session_id_from_input(input)
     }
 
     fn response_for_assistant(data: &Value) -> String {
@@ -50,102 +38,58 @@ impl WriteStdinTool {
         }]
     }
 
-    fn local_completion_value(completion: LocalExecSessionCompletion) -> Value {
-        exec_command_completion_value(ExecCommandCompletion {
-            status: match completion.status {
-                LocalExecSessionCompletionStatus::Exited => ExecCommandCompletionStatus::Exited,
-                LocalExecSessionCompletionStatus::Interrupted => {
-                    ExecCommandCompletionStatus::Interrupted
-                }
-                LocalExecSessionCompletionStatus::Killed => ExecCommandCompletionStatus::Killed,
-                LocalExecSessionCompletionStatus::Pruned => ExecCommandCompletionStatus::Pruned,
-            },
-            source: match completion.source {
-                LocalExecSessionCompletionSource::Process => ExecCommandCompletionSource::Process,
-                LocalExecSessionCompletionSource::OutOfBandControl => {
-                    ExecCommandCompletionSource::OutOfBandControl
-                }
-            },
-        })
-    }
-
-    fn remote_completion_value(completion: RemoteExecSessionCompletion) -> Value {
-        exec_command_completion_value(ExecCommandCompletion {
-            status: match completion.status {
-                RemoteExecSessionCompletionStatus::Exited => ExecCommandCompletionStatus::Exited,
-                RemoteExecSessionCompletionStatus::Interrupted => {
-                    ExecCommandCompletionStatus::Interrupted
-                }
-                RemoteExecSessionCompletionStatus::Killed => ExecCommandCompletionStatus::Killed,
-                RemoteExecSessionCompletionStatus::Pruned => ExecCommandCompletionStatus::Pruned,
-            },
-            source: match completion.source {
-                RemoteExecSessionCompletionSource::Process => ExecCommandCompletionSource::Process,
-                RemoteExecSessionCompletionSource::OutOfBandControl => {
-                    ExecCommandCompletionSource::OutOfBandControl
-                }
-            },
-        })
-    }
-
     async fn call_remote_pipe(
         &self,
         input: &Value,
         context: &ToolUseContext,
     ) -> BitFunResult<Vec<ToolResult>> {
-        let session_id = Self::session_id_from_input(input).ok_or_else(|| {
+        let parsed_input = write_stdin_input_from_input(input).ok_or_else(|| {
             BitFunError::tool("session_id is required for WriteStdin".to_string())
         })?;
-        let chars = input
-            .get("chars")
-            .and_then(Value::as_str)
-            .unwrap_or_default()
-            .to_string();
-        let append_enter = input
-            .get("append_enter")
-            .and_then(Value::as_bool)
-            .unwrap_or(false);
-        let yield_time_ms = input
-            .get("yield_time_ms")
-            .and_then(Value::as_u64)
-            .unwrap_or(DEFAULT_TOOL_YIELD_TIME_MS);
+        let session_id = parsed_input.session_id;
         let request = RemoteWriteStdinRequest {
             session_id,
-            chars,
-            append_enter,
-            yield_time_ms: Some(yield_time_ms),
+            chars: parsed_input.chars,
+            append_enter: parsed_input.append_enter,
+            yield_time_ms: Some(parsed_input.yield_time_ms),
             max_output_chars: None,
         };
+        let remote_exec_port = context.remote_exec_port().ok_or_else(|| {
+            BitFunError::tool("remote exec runtime service is required for WriteStdin".to_string())
+        })?;
         let progress_bridge = ExecOutputProgressBridge::start(context, self.name());
         let response_result = if let Some(bridge) = progress_bridge.as_ref() {
-            get_global_remote_exec_process_manager()
+            remote_exec_port
                 .write_stdin_streaming(request, bridge.sender())
                 .await
         } else {
-            get_global_remote_exec_process_manager()
-                .write_stdin(request)
-                .await
+            remote_exec_port.write_stdin(request).await
         };
         if let Some(bridge) = progress_bridge {
             bridge.finish().await;
         }
         let response = match response_result {
             Ok(response) => response,
-            Err(RemoteExecError::SessionNotFound(session_id)) => {
+            Err(error) if error.kind == PortErrorKind::NotFound => {
                 return Ok(Self::session_not_found_result(session_id, true));
             }
-            Err(error) => return Err(BitFunError::tool(format!("WriteStdin failed: {error}"))),
+            Err(error) => {
+                return Err(BitFunError::tool(format!(
+                    "WriteStdin failed: {}",
+                    error.message
+                )));
+            }
         };
 
-        let data = json!({
-            "chunk_id": response.chunk_id,
-            "wall_time_seconds": response.wall_time_seconds,
-            "output": response.output,
-            "session_id": response.session_id,
-            "exit_code": response.exit_code,
-            "original_output_chars": response.original_output_chars,
-            "completion": response.completion.map(Self::remote_completion_value),
-            "remote": true,
+        let data = write_stdin_result_value(ExecCommandResultFields {
+            chunk_id: response.chunk_id,
+            wall_time_seconds: response.wall_time_seconds,
+            output: response.output,
+            session_id: response.session_id,
+            exit_code: response.exit_code,
+            original_output_chars: response.original_output_chars,
+            completion: response.completion.map(exec_command_remote_completion),
+            remote: true,
         });
         let result_for_assistant = Self::response_for_assistant(&data);
 
@@ -220,10 +164,10 @@ Output is only what was produced during this tool call's wait window."#
         input: &Value,
         _context: Option<&ToolUseContext>,
     ) -> ValidationResult {
-        if Self::session_id_from_input(input).is_none() {
+        if let Some(message) = write_stdin_input_validation_message(input) {
             return ValidationResult {
                 result: false,
-                message: Some("session_id is required for WriteStdin".to_string()),
+                message: Some(message.to_string()),
                 error_code: Some(400),
                 meta: None,
             };
@@ -245,56 +189,53 @@ Output is only what was produced during this tool call's wait window."#
             return self.call_remote_pipe(input, context).await;
         }
 
-        let session_id = Self::session_id_from_input(input).ok_or_else(|| {
+        let parsed_input = write_stdin_input_from_input(input).ok_or_else(|| {
             BitFunError::tool("session_id is required for WriteStdin".to_string())
         })?;
-        let chars = input
-            .get("chars")
-            .and_then(Value::as_str)
-            .unwrap_or_default()
-            .to_string();
-        let append_enter = input
-            .get("append_enter")
-            .and_then(Value::as_bool)
-            .unwrap_or(false);
-        let yield_time_ms = input
-            .get("yield_time_ms")
-            .and_then(Value::as_u64)
-            .unwrap_or(DEFAULT_TOOL_YIELD_TIME_MS);
-        let request = LocalWriteStdinRequest {
+        let session_id = parsed_input.session_id;
+        let request = TerminalWriteStdinRequest {
             session_id,
-            chars,
-            append_enter,
-            yield_time_ms: Some(yield_time_ms),
+            chars: parsed_input.chars,
+            append_enter: parsed_input.append_enter,
+            yield_time_ms: Some(parsed_input.yield_time_ms),
             max_output_chars: None,
         };
+        let terminal_port = context.terminal_port().ok_or_else(|| {
+            BitFunError::tool("terminal runtime service is required for WriteStdin".to_string())
+        })?;
         let progress_bridge = ExecOutputProgressBridge::start(context, self.name());
         let response_result = if let Some(bridge) = progress_bridge.as_ref() {
-            get_global_exec_process_manager()
+            terminal_port
                 .write_stdin_streaming(request, bridge.sender())
                 .await
         } else {
-            get_global_exec_process_manager().write_stdin(request).await
+            terminal_port.write_stdin(request).await
         };
         if let Some(bridge) = progress_bridge {
             bridge.finish().await;
         }
         let response = match response_result {
             Ok(response) => response,
-            Err(TerminalError::SessionNotFound(_)) => {
+            Err(error) if error.kind == PortErrorKind::NotFound => {
                 return Ok(Self::session_not_found_result(session_id, false));
             }
-            Err(error) => return Err(BitFunError::tool(format!("WriteStdin failed: {error}"))),
+            Err(error) => {
+                return Err(BitFunError::tool(format!(
+                    "WriteStdin failed: {}",
+                    error.message
+                )));
+            }
         };
 
-        let data = json!({
-            "chunk_id": response.chunk_id,
-            "wall_time_seconds": response.wall_time_seconds,
-            "output": response.output,
-            "session_id": response.session_id,
-            "exit_code": response.exit_code,
-            "original_output_chars": response.original_output_chars,
-            "completion": response.completion.map(Self::local_completion_value),
+        let data = write_stdin_result_value(ExecCommandResultFields {
+            chunk_id: response.chunk_id,
+            wall_time_seconds: response.wall_time_seconds,
+            output: response.output,
+            session_id: response.session_id,
+            exit_code: response.exit_code,
+            original_output_chars: response.original_output_chars,
+            completion: response.completion.map(exec_command_local_completion),
+            remote: false,
         });
         let result_for_assistant = Self::response_for_assistant(&data);
 

@@ -298,6 +298,7 @@ mod tests {
     use bitfun_services_integrations::remote_connect::{
         remote_session_restore_target, resolve_remote_cancel_decision,
         resolve_remote_execution_image_contexts, RemoteCancelDecision,
+        RemoteDialogWorkspaceBinding,
     };
 
     #[test]
@@ -464,14 +465,13 @@ mod tests {
 
     #[test]
     fn remote_restore_target_only_restores_cold_sessions_with_workspace_binding() {
+        let binding = RemoteDialogWorkspaceBinding::local("/workspace/project");
+
         assert_eq!(
-            remote_session_restore_target(false, Some("/workspace/project")),
-            Some("/workspace/project")
+            remote_session_restore_target(false, Some(&binding)),
+            Some(binding.clone())
         );
-        assert_eq!(
-            remote_session_restore_target(true, Some("/workspace/project")),
-            None
-        );
+        assert_eq!(remote_session_restore_target(true, Some(&binding)), None);
         assert_eq!(remote_session_restore_target(false, None), None);
     }
 
@@ -505,6 +505,8 @@ mod tests {
 
         let list = serde_json::to_value(RemoteCommand::ListSessions {
             workspace_path: Some("/workspace/project".to_string()),
+            remote_connection_id: None,
+            remote_ssh_host: None,
             limit: Some(30),
             offset: Some(0),
             query: Some("alpha".to_string()),

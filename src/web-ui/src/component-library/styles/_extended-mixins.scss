@@ -199,7 +199,7 @@
 
 // ==================== Visual effects mixins ====================
 
-@mixin glass-effect($bg: var(--color-overlay-white-10), $blur: 10px, $opacity: 0.8) {
+@mixin glass-effect($bg: var(--color-overlay-white-12), $blur: 10px, $opacity: 0.8) {
   background: $bg;
   backdrop-filter: blur($blur) saturate(1.2);
   -webkit-backdrop-filter: blur($blur) saturate(1.2);
@@ -295,9 +295,9 @@
 
 @mixin custom-scrollbar(
   $width: 8px,
-  $track-color: var(--color-overlay-white-05),
+  $track-color: var(--color-overlay-white-08),
   $thumb-color: var(--color-overlay-white-12),
-  $thumb-hover-color: rgba(255, 255, 255, 0.22)
+  $thumb-hover-color: $overlay-white-24
 ) {
   &::-webkit-scrollbar {
     width: $width;
@@ -334,7 +334,7 @@
 @mixin hover-scrollbar(
   $width: 6px,
   $thumb-color: var(--color-overlay-white-12),
-  $thumb-hover-color: rgba(255, 255, 255, 0.22)
+  $thumb-hover-color: $overlay-white-24
 ) {
   &::-webkit-scrollbar {
     width: $width;
@@ -370,7 +370,7 @@
 @mixin hover-scrollbar-with-activity(
   $width: 6px,
   $thumb-color: var(--color-overlay-white-12),
-  $thumb-hover-color: rgba(255, 255, 255, 0.22)
+  $thumb-hover-color: $overlay-white-24
 ) {
   @include hover-scrollbar($width, $thumb-color, $thumb-hover-color);
   

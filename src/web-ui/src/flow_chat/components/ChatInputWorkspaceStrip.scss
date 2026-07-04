@@ -27,7 +27,7 @@
   /* Room for descenders (g, y, p) */
   /* Collapsed capsule uses 18px horizontal padding on `.bitfun-chat-input__box`; match so strip text lines up with pill content */
   padding: 3px 18px 4px;
-  font-family: var(--font-sans);
+  font-family: var(--font-family-sans);
   font-size: var(--flowchat-font-size-xxs);
   line-height: var(--flowchat-support-line-height);
   font-weight: 400;
@@ -92,25 +92,25 @@
   }
 
   &__goal-btn--active.icon-btn {
-    color: var(--color-warning-500);
+    color: var(--color-warning);
 
     &:hover:not(:disabled) {
       transform: none;
       border-radius: 50%;
-      background: color-mix(in srgb, var(--color-warning-500) 12%, var(--element-bg-medium));
-      color: var(--color-warning-500);
+      background: color-mix(in srgb, var(--color-warning) 12%, var(--element-bg-medium));
+      color: var(--color-warning);
       opacity: 1;
     }
   }
 
   &__goal-btn--complete.icon-btn {
-    color: var(--color-success-500);
+    color: var(--color-success);
 
     &:hover:not(:disabled) {
       transform: none;
       border-radius: 50%;
-      background: color-mix(in srgb, var(--color-success-500) 12%, var(--element-bg-medium));
-      color: var(--color-success-500);
+      background: color-mix(in srgb, var(--color-success) 12%, var(--element-bg-medium));
+      color: var(--color-success);
       opacity: 1;
     }
   }

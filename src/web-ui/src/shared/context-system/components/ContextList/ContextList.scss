@@ -38,8 +38,8 @@
     font-size: 11px;
     font-weight: $font-weight-semibold;
     color: var(--color-text-primary);
-    background: $element-bg-medium;
-    border: 1px solid $border-subtle;
+    background: var(--element-bg-medium);
+    border: 1px solid var(--border-subtle);
     border-radius: $size-radius-full;
   }
   
@@ -52,7 +52,7 @@
     font-weight: $font-weight-medium;
     color: var(--color-text-muted);
     background: transparent;
-    border: 1px solid $border-subtle;
+    border: 1px solid var(--border-subtle);
     border-radius: $size-radius-sm;
     cursor: pointer;
     transition: all $motion-fast $easing-standard;

@@ -1,3 +1,6 @@
+use crate::tool_snapshot::{
+    materialize_tool_snapshot, MaterializedToolSnapshot, ToolProviderIdentity,
+};
 use crate::{
     DynamicToolDescriptor, DynamicToolProvider, PortError, PortErrorKind, PortResult, ToolDecorator,
 };
@@ -623,6 +626,18 @@ pub trait ToolRegistryItem: Send + Sync {
         false
     }
 
+    fn is_concurrency_safe(&self, _input: Option<&Value>) -> bool {
+        self.is_readonly()
+    }
+
+    fn needs_permissions(&self, _input: Option<&Value>) -> bool {
+        !self.is_readonly()
+    }
+
+    fn manages_own_execution_timeout(&self) -> bool {
+        false
+    }
+
     async fn is_enabled(&self) -> bool {
         true
     }
@@ -1117,7 +1132,6 @@ where
 
 #[derive(Debug, Clone)]
 struct DynamicToolMetadata {
-    provider_id: String,
     info: DynamicToolInfo,
 }
 
@@ -1327,7 +1341,9 @@ impl<Tool: ToolRegistryItem + ?Sized> ToolRuntimeAssembly<Tool> {
 pub struct ToolRegistry<Tool: ToolRegistryItem + ?Sized> {
     tools: IndexMap<String, ToolRef<Tool>>,
     dynamic_tools: IndexMap<String, DynamicToolMetadata>,
+    static_tool_providers: IndexMap<String, String>,
     tool_decorator: ToolDecoratorRef<Tool>,
+    snapshot_generation: u64,
 }
 
 impl<Tool: ToolRegistryItem + ?Sized> Default for ToolRegistry<Tool> {
@@ -1345,11 +1361,21 @@ impl<Tool: ToolRegistryItem + ?Sized> ToolRegistry<Tool> {
         Self {
             tools: IndexMap::new(),
             dynamic_tools: IndexMap::new(),
+            static_tool_providers: IndexMap::new(),
             tool_decorator,
+            snapshot_generation: 0,
         }
     }
 
     pub fn register_tool(&mut self, tool: ToolRef<Tool>) {
+        self.register_tool_with_static_provider(tool, None);
+    }
+
+    fn register_tool_with_static_provider(
+        &mut self,
+        tool: ToolRef<Tool>,
+        static_provider_id: Option<&str>,
+    ) {
         let tool = self.tool_decorator.decorate(tool);
         let name = tool.name().to_string();
         let dynamic_info = tool.dynamic_tool_info().and_then(|info| {
@@ -1361,25 +1387,32 @@ impl<Tool: ToolRegistryItem + ?Sized> ToolRegistry<Tool> {
         });
 
         if let Some(info) = dynamic_info {
-            self.dynamic_tools.insert(
-                name.clone(),
-                DynamicToolMetadata {
-                    provider_id: info.provider_id.clone(),
-                    info,
-                },
-            );
+            self.dynamic_tools
+                .insert(name.clone(), DynamicToolMetadata { info });
+            self.static_tool_providers.shift_remove(&name);
         } else {
             self.dynamic_tools.shift_remove(&name);
+            match static_provider_id.filter(|provider_id| !provider_id.trim().is_empty()) {
+                Some(provider_id) => {
+                    self.static_tool_providers
+                        .insert(name.clone(), provider_id.to_string());
+                }
+                None => {
+                    self.static_tool_providers.shift_remove(&name);
+                }
+            }
         }
         self.tools.insert(name, tool);
+        self.snapshot_generation = self.snapshot_generation.saturating_add(1);
     }
 
     pub fn install_static_provider<Provider>(&mut self, provider: &Provider)
     where
         Provider: StaticToolProvider<Tool> + ?Sized,
     {
+        let provider_id = provider.provider_id();
         for tool in provider.tools() {
-            self.register_tool(tool);
+            self.register_tool_with_static_provider(tool, Some(provider_id));
         }
     }
 
@@ -1396,10 +1429,15 @@ impl<Tool: ToolRegistryItem + ?Sized> ToolRegistry<Tool> {
             })
             .map(|(tool_name, _)| tool_name.clone())
             .collect::<Vec<_>>();
+        let removed_count = to_remove.len();
 
         for key in to_remove {
             self.tools.shift_remove(&key);
             self.dynamic_tools.shift_remove(&key);
+            self.static_tool_providers.shift_remove(&key);
+        }
+        if removed_count > 0 {
+            self.snapshot_generation = self.snapshot_generation.saturating_add(1);
         }
     }
 
@@ -1415,6 +1453,10 @@ impl<Tool: ToolRegistryItem + ?Sized> ToolRegistry<Tool> {
         for key in to_remove {
             self.tools.shift_remove(&key);
             self.dynamic_tools.shift_remove(&key);
+            self.static_tool_providers.shift_remove(&key);
+        }
+        if count > 0 {
+            self.snapshot_generation = self.snapshot_generation.saturating_add(1);
         }
 
         count
@@ -1452,31 +1494,48 @@ impl<Tool: ToolRegistryItem + ?Sized> ToolRegistry<Tool> {
     pub fn get_all_tools(&self) -> Vec<ToolRef<Tool>> {
         self.tools.values().cloned().collect()
     }
+
+    pub fn current_snapshot_generation(&self) -> u64 {
+        self.snapshot_generation
+    }
+
+    pub async fn materialized_tool_snapshot(&self) -> Result<MaterializedToolSnapshot, String> {
+        materialize_tool_snapshot(
+            &self.get_all_tools(),
+            self.snapshot_generation,
+            |tool_name| {
+                self.static_tool_providers
+                    .get(tool_name)
+                    .map(|provider_id| ToolProviderIdentity::static_provider(provider_id.clone()))
+            },
+        )
+        .await
+    }
 }
 
 #[async_trait]
 impl<Tool: ToolRegistryItem + ?Sized> DynamicToolProvider for ToolRegistry<Tool> {
     async fn list_dynamic_tools(&self) -> PortResult<Vec<DynamicToolDescriptor>> {
-        let mut descriptors = Vec::new();
-
-        for (name, tool) in self.tools.iter() {
-            let Some(metadata) = self.dynamic_tools.get(name) else {
-                continue;
-            };
-            let description = tool
-                .description()
+        let dynamic_tools = self
+            .tools
+            .iter()
+            .filter_map(|(name, tool)| self.dynamic_tools.contains_key(name).then(|| tool.clone()))
+            .collect::<Vec<_>>();
+        let snapshot =
+            materialize_tool_snapshot(&dynamic_tools, self.snapshot_generation, |_| None)
                 .await
                 .map_err(|error| PortError::new(PortErrorKind::Backend, error))?;
 
-            descriptors.push(DynamicToolDescriptor {
-                name: tool.name().to_string(),
-                description,
-                input_schema: tool.input_schema_for_model().await,
-                provider_id: Some(metadata.provider_id.clone()),
-            });
-        }
-
-        Ok(descriptors)
+        Ok(snapshot
+            .dynamic_tools()
+            .into_iter()
+            .map(|tool| DynamicToolDescriptor {
+                name: tool.name.clone(),
+                description: tool.description.clone(),
+                input_schema: tool.input_schema.clone(),
+                provider_id: tool.provider.provider_id.clone(),
+            })
+            .collect())
     }
 }
 

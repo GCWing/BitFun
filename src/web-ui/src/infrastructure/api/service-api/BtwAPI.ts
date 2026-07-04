@@ -1,5 +1,6 @@
 import { api } from './ApiClient';
 import { createTauriCommandError } from '../errors/TauriCommandError';
+import type { ImageContextData as ImageInputContextData } from './ImageContextTypes';
 
 export interface BtwAskStreamRequest {
   requestId: string;
@@ -8,6 +9,7 @@ export interface BtwAskStreamRequest {
   modelId?: string;
   childSessionId: string;
   childSessionName?: string;
+  imageContexts?: ImageInputContextData[];
 }
 
 export interface BtwAskStreamResponse {

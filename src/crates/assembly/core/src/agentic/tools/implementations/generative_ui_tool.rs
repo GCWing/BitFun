@@ -6,29 +6,44 @@ use crate::agentic::tools::framework::{
 use crate::service::config::get_global_config_service;
 use crate::util::errors::BitFunResult;
 use async_trait::async_trait;
+use serde::Deserialize;
 use serde_json::{json, Value};
+use std::sync::OnceLock;
 
 pub struct GenerativeUITool;
 
 const LARGE_WIDGET_CODE_SOFT_LINE_LIMIT: usize = 260;
 const LARGE_WIDGET_CODE_SOFT_BYTE_LIMIT: usize = 28 * 1024;
+const THEME_PROMPT_SNAPSHOT_VERSION: u8 = 1;
+const THEME_PROMPT_SNAPSHOTS_JSON: &str = include_str!("generated/theme_prompt_snapshots.json");
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ThemePromptSnapshotManifest {
+    version: u8,
+    default_light_theme_id: String,
+    default_dark_theme_id: String,
+    themes: Vec<ThemePromptSnapshot>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct ThemePromptSnapshot {
-    id: &'static str,
-    theme_type: &'static str,
-    bg_primary: &'static str,
-    bg_secondary: &'static str,
-    bg_scene: &'static str,
-    text_primary: &'static str,
-    text_muted: &'static str,
-    accent_500: &'static str,
-    accent_600: &'static str,
-    border_base: &'static str,
-    element_base: &'static str,
-    radius_base: &'static str,
-    spacing_4: &'static str,
-    shadow_base: &'static str,
-    style_notes: &'static str,
+    id: String,
+    theme_type: String,
+    bg_primary: String,
+    bg_secondary: String,
+    bg_scene: String,
+    text_primary: String,
+    text_muted: String,
+    accent_500: String,
+    accent_600: String,
+    border_base: String,
+    element_base: String,
+    radius_base: String,
+    spacing_4: String,
+    shadow_base: String,
+    style_notes: String,
 }
 
 impl GenerativeUITool {
@@ -57,146 +72,25 @@ impl GenerativeUITool {
         )
     }
 
-    fn builtin_theme_snapshot(theme_id: &str) -> Option<ThemePromptSnapshot> {
-        match theme_id {
-            "bitfun-dark" => Some(ThemePromptSnapshot {
-                id: "bitfun-dark",
-                theme_type: "dark",
-                bg_primary: "#0e0e10",
-                bg_secondary: "#1c1c1f",
-                bg_scene: "#1c1c1f",
-                text_primary: "#e8e8e8",
-                text_muted: "#858585",
-                accent_500: "#60a5fa",
-                accent_600: "#3b82f6",
-                border_base: "rgba(255, 255, 255, 0.18)",
-                element_base: "rgba(255, 255, 255, 0.095)",
-                radius_base: "8px",
-                spacing_4: "16px",
-                shadow_base: "0 4px 8px rgba(0, 0, 0, 0.7)",
-                style_notes: "neutral dark workbench, low-chroma surfaces, blue accent used sparingly",
-            }),
-            "bitfun-light" => Some(ThemePromptSnapshot {
-                id: "bitfun-light",
-                theme_type: "light",
-                bg_primary: "#f3f3f5",
-                bg_secondary: "#ffffff",
-                bg_scene: "#ffffff",
-                text_primary: "#1e293b",
-                text_muted: "#64748b",
-                accent_500: "#64748b",
-                accent_600: "#475569",
-                border_base: "rgba(100, 116, 139, 0.22)",
-                element_base: "rgba(15, 23, 42, 0.09)",
-                radius_base: "8px",
-                spacing_4: "16px",
-                shadow_base: "0 4px 8px rgba(71, 85, 105, 0.10)",
-                style_notes: "neutral light workbench, soft gray chrome, restrained contrast, no glossy marketing feel",
-            }),
-            "bitfun-slate" => Some(ThemePromptSnapshot {
-                id: "bitfun-slate",
-                theme_type: "dark",
-                bg_primary: "#14161a",
-                bg_secondary: "#22262c",
-                bg_scene: "#22262c",
-                text_primary: "#eef0f3",
-                text_muted: "#9ea4ab",
-                accent_500: "#94a3b8",
-                accent_600: "#64748b",
-                border_base: "rgba(255, 255, 255, 0.18)",
-                element_base: "rgba(255, 255, 255, 0.095)",
-                radius_base: "6px",
-                spacing_4: "16px",
-                shadow_base: "0 4px 8px rgba(0, 0, 0, 0.75)",
-                style_notes: "cool gray geometric chrome, crisp edges, restrained accent, dense desktop mood",
-            }),
-            "bitfun-midnight" => Some(ThemePromptSnapshot {
-                id: "bitfun-midnight",
-                theme_type: "dark",
-                bg_primary: "#2b2d30",
-                bg_secondary: "#1e1f22",
-                bg_scene: "#27292c",
-                text_primary: "#bcbec4",
-                text_muted: "#6f737a",
-                accent_500: "#58a6ff",
-                accent_600: "#3b82f6",
-                border_base: "rgba(255, 255, 255, 0.14)",
-                element_base: "rgba(255, 255, 255, 0.09)",
-                radius_base: "8px",
-                spacing_4: "16px",
-                shadow_base: "0 4px 8px rgba(0, 0, 0, 0.7)",
-                style_notes: "IDE-like dark gray theme, professional, sober, subtle blue focus accents",
-            }),
-            "bitfun-cyber" => Some(ThemePromptSnapshot {
-                id: "bitfun-cyber",
-                theme_type: "dark",
-                bg_primary: "#101010",
-                bg_secondary: "#151515",
-                bg_scene: "#141414",
-                text_primary: "#e0f2ff",
-                text_muted: "#7fadcc",
-                accent_500: "#00e6ff",
-                accent_600: "#00ccff",
-                border_base: "rgba(0, 230, 255, 0.20)",
-                element_base: "rgba(0, 230, 255, 0.13)",
-                radius_base: "6px",
-                spacing_4: "16px",
-                shadow_base: "0 4px 12px rgba(0, 0, 0, 0.8)",
-                style_notes: "neon cyber tooling, black surfaces, glowing cyan accents, still compact and workbench-first",
-            }),
-            "bitfun-tokyo-night" => Some(ThemePromptSnapshot {
-                id: "bitfun-tokyo-night",
-                theme_type: "dark",
-                bg_primary: "#1a1b26",
-                bg_secondary: "#16161e",
-                bg_scene: "#1a1b26",
-                text_primary: "#c0caf5",
-                text_muted: "#787c99",
-                accent_500: "#7aa2f7",
-                accent_600: "#6183bb",
-                border_base: "rgba(54, 59, 84, 0.60)",
-                element_base: "rgba(122, 162, 247, 0.11)",
-                radius_base: "6px",
-                spacing_4: "16px",
-                shadow_base: "0 4px 12px rgba(0, 0, 0, 0.48)",
-                style_notes: "Tokyo Night indigo night, soft blue accent and violet secondary highlights, calm IDE mood",
-            }),
-            "bitfun-china-style" => Some(ThemePromptSnapshot {
-                id: "bitfun-china-style",
-                theme_type: "light",
-                bg_primary: "#faf8f0",
-                bg_secondary: "#f5f3e8",
-                bg_scene: "#fdfcf6",
-                text_primary: "#1a1a1a",
-                text_muted: "#6a6a6a",
-                accent_500: "#2e5e8a",
-                accent_600: "#234a6d",
-                border_base: "rgba(106, 92, 70, 0.20)",
-                element_base: "rgba(46, 94, 138, 0.10)",
-                radius_base: "6px",
-                spacing_4: "16px",
-                shadow_base: "0 4px 8px rgba(106, 92, 70, 0.1)",
-                style_notes: "warm rice-paper surfaces, ink-and-blue accenting, elegant and restrained",
-            }),
-            "bitfun-china-night" => Some(ThemePromptSnapshot {
-                id: "bitfun-china-night",
-                theme_type: "dark",
-                bg_primary: "#1a1814",
-                bg_secondary: "#212019",
-                bg_scene: "#1e1c17",
-                text_primary: "#e8e6e1",
-                text_muted: "#928f89",
-                accent_500: "#73a5cc",
-                accent_600: "#5a8bb3",
-                border_base: "rgba(232, 230, 225, 0.16)",
-                element_base: "rgba(115, 165, 204, 0.12)",
-                radius_base: "6px",
-                spacing_4: "16px",
-                shadow_base: "0 4px 8px rgba(0, 0, 0, 0.65)",
-                style_notes: "warm ink-night dark palette, calm contrast, blue-green highlights, elegant not flashy",
-            }),
-            _ => None,
-        }
+    fn theme_prompt_snapshot_manifest() -> &'static ThemePromptSnapshotManifest {
+        static MANIFEST: OnceLock<ThemePromptSnapshotManifest> = OnceLock::new();
+        MANIFEST.get_or_init(|| {
+            let manifest: ThemePromptSnapshotManifest =
+                serde_json::from_str(THEME_PROMPT_SNAPSHOTS_JSON)
+                    .expect("generated theme prompt snapshot manifest must be valid JSON");
+            assert_eq!(
+                manifest.version, THEME_PROMPT_SNAPSHOT_VERSION,
+                "generated theme prompt snapshot manifest version mismatch"
+            );
+            manifest
+        })
+    }
+
+    fn builtin_theme_snapshot(theme_id: &str) -> Option<&'static ThemePromptSnapshot> {
+        Self::theme_prompt_snapshot_manifest()
+            .themes
+            .iter()
+            .find(|snapshot| snapshot.id == theme_id)
     }
 
     fn format_theme_snapshot(snapshot: &ThemePromptSnapshot) -> String {
@@ -221,11 +115,12 @@ impl GenerativeUITool {
     }
 
     fn baseline_theme_context() -> String {
-        let dark = Self::builtin_theme_snapshot("bitfun-dark")
-            .map(|snapshot| Self::format_theme_snapshot(&snapshot))
+        let manifest = Self::theme_prompt_snapshot_manifest();
+        let dark = Self::builtin_theme_snapshot(&manifest.default_dark_theme_id)
+            .map(Self::format_theme_snapshot)
             .unwrap_or_default();
-        let light = Self::builtin_theme_snapshot("bitfun-light")
-            .map(|snapshot| Self::format_theme_snapshot(&snapshot))
+        let light = Self::builtin_theme_snapshot(&manifest.default_light_theme_id)
+            .map(Self::format_theme_snapshot)
             .unwrap_or_default();
         format!(
             "Cross-theme baseline: {}. {}. Widgets must remain correct in both themes by default.",
@@ -252,7 +147,7 @@ impl GenerativeUITool {
         if let Some(snapshot) = Self::builtin_theme_snapshot(&selected_theme_id) {
             return Some(format!(
                 "BitFun active theme snapshot: {}. {}",
-                Self::format_theme_snapshot(&snapshot),
+                Self::format_theme_snapshot(snapshot),
                 Self::baseline_theme_context()
             ));
         }
@@ -268,6 +163,50 @@ impl GenerativeUITool {
 impl Default for GenerativeUITool {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashSet;
+
+    #[test]
+    fn generated_theme_prompt_manifest_covers_default_themes() {
+        let manifest = GenerativeUITool::theme_prompt_snapshot_manifest();
+
+        assert_eq!(manifest.version, THEME_PROMPT_SNAPSHOT_VERSION);
+        assert!(manifest.themes.len() >= 2);
+
+        let unique_ids = manifest
+            .themes
+            .iter()
+            .map(|theme| theme.id.as_str())
+            .collect::<HashSet<_>>();
+        assert_eq!(unique_ids.len(), manifest.themes.len());
+        assert!(unique_ids.contains(manifest.default_light_theme_id.as_str()));
+        assert!(unique_ids.contains(manifest.default_dark_theme_id.as_str()));
+    }
+
+    #[test]
+    fn generated_theme_prompt_snapshots_have_required_prompt_fields() {
+        for snapshot in &GenerativeUITool::theme_prompt_snapshot_manifest().themes {
+            assert!(!snapshot.id.trim().is_empty());
+            assert!(!snapshot.theme_type.trim().is_empty());
+            assert!(!snapshot.bg_primary.trim().is_empty());
+            assert!(!snapshot.bg_secondary.trim().is_empty());
+            assert!(!snapshot.bg_scene.trim().is_empty());
+            assert!(!snapshot.text_primary.trim().is_empty());
+            assert!(!snapshot.text_muted.trim().is_empty());
+            assert!(!snapshot.accent_500.trim().is_empty());
+            assert!(!snapshot.accent_600.trim().is_empty());
+            assert!(!snapshot.border_base.trim().is_empty());
+            assert!(!snapshot.element_base.trim().is_empty());
+            assert!(!snapshot.radius_base.trim().is_empty());
+            assert!(!snapshot.spacing_4.trim().is_empty());
+            assert!(!snapshot.shadow_base.trim().is_empty());
+            assert!(!snapshot.style_notes.trim().is_empty());
+        }
     }
 }
 

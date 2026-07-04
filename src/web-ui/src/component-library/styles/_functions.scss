@@ -59,13 +59,13 @@
 
 @function elevation-shadow($depth) {
   @if $depth == 1 {
-    @return 0 1px 3px var(--color-overlay-black-12), 0 1px 2px rgba(0, 0, 0, 0.24);
+    @return 0 1px 3px var(--color-overlay-black-12), 0 1px 2px var(--color-overlay-black-30);
   } @else if $depth == 2 {
     @return 0 3px 6px var(--color-overlay-black-15), 0 2px 4px var(--color-overlay-black-12);
   } @else if $depth == 3 {
-    @return 0 10px 20px var(--color-overlay-black-15), 0 3px 6px var(--color-overlay-black-10);
+    @return 0 10px 20px var(--color-overlay-black-15), 0 3px 6px var(--color-overlay-black-12);
   } @else if $depth == 4 {
-    @return 0 15px 25px var(--color-overlay-black-15), 0 5px 10px rgba(0, 0, 0, 0.05);
+    @return 0 15px 25px var(--color-overlay-black-15), 0 5px 10px var(--color-overlay-black-08);
   } @else if $depth == 5 {
     @return 0 20px 40px var(--color-overlay-black-20);
   }
@@ -76,7 +76,7 @@
   @return 
     0 12px 32px rgba($color, $opacity),
     0 6px 16px rgba($color, $opacity * 0.7),
-    0 3px 8px var(--color-overlay-black-10);
+    0 3px 8px var(--color-overlay-black-12);
 }
 
 // ==================== String functions ====================

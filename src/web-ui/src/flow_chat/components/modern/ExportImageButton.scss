@@ -11,7 +11,7 @@
      Padding matches ModelRoundItem (3rem ≈ 48px each side) so the
      effective content width is identical to the live chat. */
   padding: 24px 48px;
-  background: var(--color-bg-flowchat);
+  background: var(--color-bg-scene);
   box-sizing: border-box;
   font-family: var(--font-family-sans);
   /* Use a fixed 800px layout context so text wraps at exactly the same

@@ -501,6 +501,113 @@ pub struct AxNode {
     pub expanded: Option<bool>,
 }
 
+/// One keyboard shortcut extracted from a target application's menu
+/// structure. Returned by `ComputerUseHost::get_app_shortcuts` — this is
+/// the **read** counterpart to `ComputerUseHost::key_chord` /
+/// `app_key_chord` (which only **send** keys); this DTO reports what the
+/// app itself has registered.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct AppMenuShortcut {
+    /// Full breadcrumb from the top-level menu to this item, e.g.
+    /// `["File", "Save"]` or `["File", "Export As...", "PDF"]`.
+    pub menu_path: Vec<String>,
+    /// Menu item title (same as `menu_path.last()`).
+    pub title: String,
+    /// Human-readable rendering of the shortcut, e.g. `"⌘S"` (macOS) or
+    /// `"Ctrl+S"` (Windows, as reported by the OS). `None` when the item
+    /// has no shortcut (should not normally appear — callers filter these
+    /// out before pushing into `AppShortcutsSnapshot::shortcuts`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shortcut_display: Option<String>,
+    /// Lowercase modifier key names in canonical order, e.g.
+    /// `["control", "option", "shift", "command"]` on macOS or
+    /// `["control", "alt", "shift"]` on Windows. Empty when no shortcut.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub modifiers: Vec<String>,
+    /// Lowercase main key name, e.g. `"s"`, `"left"`, `"f5"`, `"delete"`.
+    /// `None` when no shortcut.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub key: Option<String>,
+    pub enabled: bool,
+    /// `Some(true/false)` for checkable/radio menu items whose checked
+    /// state the host could resolve; `None` when not applicable or the
+    /// host could not determine it (best-effort).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub checked: Option<bool>,
+}
+
+/// Result of `ComputerUseHost::get_app_shortcuts`.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct AppShortcutsSnapshot {
+    /// Identity of the target application.
+    pub app: AppInfo,
+    /// Menu items that carry a resolvable keyboard shortcut. Items without
+    /// a shortcut are **not** included here (see
+    /// `menu_items_without_shortcut` for a diagnostic count).
+    pub shortcuts: Vec<AppMenuShortcut>,
+    /// Count of menu items walked that had no resolvable keyboard
+    /// shortcut (e.g. plain "File" / "Edit" submenu openers, or items
+    /// whose shortcut glyph the host could not decode). Diagnostic only.
+    #[serde(default)]
+    pub menu_items_without_shortcut: u32,
+    /// Unix-epoch milliseconds when the snapshot was captured.
+    pub captured_at_ms: u64,
+}
+
+/// Parse a Windows UI Automation `AcceleratorKey` display string (e.g.
+/// `"Ctrl+Shift+S"`, `"Alt+F4"`, `"F5"`, `"Del"`) into
+/// `(modifiers, key)`. Windows already renders this as a human-readable
+/// string (unlike macOS's raw `AXMenuItemCmdModifiers` bitmask), so this
+/// is a plain tokenizer — no guessing involved. Platform-agnostic so it
+/// can be unit-tested without any `windows-rs` dependency.
+///
+/// Returns `(vec![], None)` for an empty/whitespace-only input.
+pub fn parse_windows_accelerator_display(s: &str) -> (Vec<String>, Option<String>) {
+    let trimmed = s.trim();
+    if trimmed.is_empty() {
+        return (Vec::new(), None);
+    }
+    let tokens: Vec<&str> = trimmed
+        .split('+')
+        .map(str::trim)
+        .filter(|t| !t.is_empty())
+        .collect();
+    if tokens.is_empty() {
+        return (Vec::new(), None);
+    }
+    let (key_token, modifier_tokens) = tokens.split_last().expect("tokens is non-empty");
+    let modifiers = modifier_tokens
+        .iter()
+        .map(|t| normalize_windows_modifier(t))
+        .collect();
+    let key = normalize_windows_key(key_token);
+    (modifiers, Some(key))
+}
+
+fn normalize_windows_modifier(token: &str) -> String {
+    match token.to_ascii_lowercase().as_str() {
+        "ctrl" | "control" => "control".to_string(),
+        "alt" => "alt".to_string(),
+        "shift" => "shift".to_string(),
+        "win" | "windows" => "windows".to_string(),
+        other => other.to_string(),
+    }
+}
+
+fn normalize_windows_key(token: &str) -> String {
+    match token.to_ascii_lowercase().as_str() {
+        "del" => "delete".to_string(),
+        "esc" => "escape".to_string(),
+        "ins" => "insert".to_string(),
+        "pgup" => "page_up".to_string(),
+        "pgdn" | "pgdown" => "page_down".to_string(),
+        "spacebar" | "space" => "space".to_string(),
+        "enter" | "return" => "return".to_string(),
+        "backspace" => "backspace".to_string(),
+        other => other.to_string(),
+    }
+}
+
 /// Snapshot of an application's AX tree. Returned by
 /// `ComputerUseHost::get_app_state` and as the after-state of every
 /// `app_*` mutation so the model can verify changes in one round-trip.
@@ -1515,6 +1622,68 @@ pub fn screenshot_covers_full_display(shot: &ComputerScreenshot) -> bool {
         Some(n) => {
             n.x0 == 0 && n.y0 == 0 && n.width == shot.native_width && n.height == shot.native_height
         }
+    }
+}
+
+#[cfg(test)]
+mod windows_accelerator_parsing_tests {
+    use super::*;
+
+    #[test]
+    fn parses_single_modifier() {
+        let (mods, key) = parse_windows_accelerator_display("Ctrl+S");
+        assert_eq!(mods, vec!["control".to_string()]);
+        assert_eq!(key, Some("s".to_string()));
+    }
+
+    #[test]
+    fn parses_multiple_modifiers_in_order() {
+        let (mods, key) = parse_windows_accelerator_display("Ctrl+Shift+S");
+        assert_eq!(mods, vec!["control".to_string(), "shift".to_string()]);
+        assert_eq!(key, Some("s".to_string()));
+    }
+
+    #[test]
+    fn parses_alt_function_key() {
+        let (mods, key) = parse_windows_accelerator_display("Alt+F4");
+        assert_eq!(mods, vec!["alt".to_string()]);
+        assert_eq!(key, Some("f4".to_string()));
+    }
+
+    #[test]
+    fn parses_bare_function_key_with_no_modifiers() {
+        let (mods, key) = parse_windows_accelerator_display("F5");
+        assert!(mods.is_empty());
+        assert_eq!(key, Some("f5".to_string()));
+    }
+
+    #[test]
+    fn normalizes_special_key_aliases() {
+        assert_eq!(
+            parse_windows_accelerator_display("Ctrl+Del").1,
+            Some("delete".to_string())
+        );
+        assert_eq!(
+            parse_windows_accelerator_display("Esc").1,
+            Some("escape".to_string())
+        );
+        assert_eq!(
+            parse_windows_accelerator_display("Ctrl+PgUp").1,
+            Some("page_up".to_string())
+        );
+    }
+
+    #[test]
+    fn normalizes_windows_key_modifier_alias() {
+        let (mods, key) = parse_windows_accelerator_display("Win+E");
+        assert_eq!(mods, vec!["windows".to_string()]);
+        assert_eq!(key, Some("e".to_string()));
+    }
+
+    #[test]
+    fn empty_input_yields_no_shortcut() {
+        assert_eq!(parse_windows_accelerator_display(""), (vec![], None));
+        assert_eq!(parse_windows_accelerator_display("   "), (vec![], None));
     }
 }
 

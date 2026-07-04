@@ -11,7 +11,7 @@
   min-height: 0;
   border-radius: $size-radius-base;
   border-style: solid;
-  border-width: var(--scene-viewport-border-width, 1px);
+  border-width: var(--scene-viewport-border-width);
   border-color: var(--border-subtle);
   background: var(--color-bg-scene);
   // Soft lift off workbench — layered shadow, kept subtle

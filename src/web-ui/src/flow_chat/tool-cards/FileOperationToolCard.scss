@@ -20,7 +20,7 @@
 
   &.non-clickable {
     cursor: default;
-    border-color: var(--color-overlay-white-06);
+    border-color: var(--color-overlay-white-08);
     opacity: 0.85;
 
     &:hover {
@@ -161,7 +161,7 @@
     color 0.15s ease;
 
   &:hover:not(.file-op-diff-pill--disabled) {
-    background-color: var(--tool-card-bg-hover);
+    background-color: var(--element-bg-hover);
     color: var(--color-text-primary);
   }
 
@@ -220,7 +220,7 @@
   }
 
   &:hover::before {
-    background-color: var(--tool-card-bg-hover);
+    background-color: var(--element-bg-hover);
   }
 
   &:hover {
@@ -369,7 +369,7 @@
 .file-operation-card--guidance {
   .base-tool-card.status-error {
     border-color: var(--border-medium);
-    background: var(--color-surface-elevated);
+    background: var(--element-bg-elevated);
   }
 }
 

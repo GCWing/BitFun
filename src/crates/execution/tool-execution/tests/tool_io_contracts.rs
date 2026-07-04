@@ -10,7 +10,8 @@ use tool_runtime::fs::{
     WriteLocalFileRequest, WriteLocalFileStatus,
 };
 use tool_runtime::search::glob_search::{
-    collect_remote_glob_matches, execute_local_glob, LocalGlobRequest,
+    build_remote_find_command, build_remote_rg_command, collect_remote_glob_matches,
+    collect_remote_glob_result, execute_local_glob, LocalGlobRequest,
 };
 use tool_runtime::search::grep_search::{
     apply_offset_and_limit, build_remote_grep_command, count_remote_grep_matches,
@@ -215,11 +216,60 @@ fn execute_local_glob_keeps_shallowest_matches() {
         .map(|path| normalized(path))
         .collect::<Vec<_>>();
     assert_eq!(matches.len(), 2);
-    assert!(matches.iter().any(|path| path.ends_with("/src/lib.rs")));
-    assert!(matches.iter().any(|path| path.ends_with("/tests/mod.rs")));
-    assert!(!matches
+    assert_eq!(normalized(&result.walk_root), normalized(&root));
+    assert_eq!(result.total_matches, Some(3));
+    assert!(result.truncated);
+    assert!(matches.iter().any(|path| path == "src/lib.rs"));
+    assert!(matches.iter().any(|path| path == "tests/mod.rs"));
+    assert!(!matches.iter().any(|path| path == "src/deep/mod.rs"));
+
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn execute_local_glob_returns_matches_relative_to_derived_walk_root() {
+    let root = make_temp_dir("glob-relative");
+    fs::create_dir_all(root.join("src").join("deep")).expect("dirs should be created");
+    fs::write(root.join("src").join("lib.rs"), "").expect("file should be written");
+    fs::write(root.join("src").join("deep").join("mod.rs"), "").expect("file should be written");
+
+    let result = execute_local_glob(LocalGlobRequest {
+        search_path: root.clone(),
+        pattern: "src/*.rs".to_string(),
+        limit: 10,
+    })
+    .expect("glob should succeed");
+
+    let matches = result
+        .matches
         .iter()
-        .any(|path| path.ends_with("/src/deep/mod.rs")));
+        .map(|path| normalized(path))
+        .collect::<Vec<_>>();
+    assert_eq!(normalized(&result.walk_root), normalized(&root.join("src")));
+    assert!(matches.iter().any(|path| path == "lib.rs"));
+    assert!(matches.iter().any(|path| path == "deep/mod.rs"));
+    assert!(matches.iter().all(|path| !path.starts_with("src/")));
+    assert_eq!(result.total_matches, Some(2));
+    assert!(!result.truncated);
+
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn execute_local_glob_treats_rg_no_match_as_empty_result() {
+    let root = make_temp_dir("glob-empty");
+    fs::create_dir_all(root.join("empty-dir")).expect("empty dir should be created");
+
+    let result = execute_local_glob(LocalGlobRequest {
+        search_path: root.clone(),
+        pattern: "empty-dir/**/*".to_string(),
+        limit: 10,
+    })
+    .expect("empty glob should not fail");
+
+    assert!(result.matches.is_empty());
+    assert_eq!(result.total_matches, Some(0));
+    assert!(!result.truncated);
 
     let _ = fs::remove_dir_all(root);
 }
@@ -232,7 +282,97 @@ fn remote_glob_stdout_is_normalized_and_limited_by_tool_runtime() {
             .map(|path| normalized(&path))
             .collect::<Vec<_>>();
 
-    assert_eq!(matches, vec!["C:/repo/README.md", "C:/repo/src/lib.rs"]);
+    assert_eq!(matches, vec!["README.md", "src/lib.rs"]);
+}
+
+#[test]
+fn remote_glob_result_reports_exact_or_unknown_truncation() {
+    let exact = collect_remote_glob_result(
+        "C:/repo",
+        "./src/deep/mod.rs\nsrc/lib.rs\nREADME.md\n",
+        2,
+        true,
+    );
+    let exact_matches = exact
+        .matches
+        .iter()
+        .map(|path| normalized(path))
+        .collect::<Vec<_>>();
+    assert_eq!(exact_matches, vec!["README.md", "src/lib.rs"]);
+    assert_eq!(normalized(&exact.walk_root), "C:/repo");
+    assert_eq!(exact.total_matches, Some(3));
+    assert!(exact.truncated);
+
+    let unknown = collect_remote_glob_result(
+        "C:/repo",
+        "./src/deep/mod.rs\nsrc/lib.rs\nREADME.md\n",
+        2,
+        false,
+    );
+    assert_eq!(unknown.total_matches, None);
+    assert!(unknown.truncated);
+
+    let unknown_complete =
+        collect_remote_glob_result("C:/repo", "src/lib.rs\nREADME.md\n", 2, false);
+    assert_eq!(unknown_complete.total_matches, Some(2));
+    assert!(!unknown_complete.truncated);
+
+    let remote_find = collect_remote_glob_result(
+        "/home/user/repo/src",
+        "/home/user/repo/src/deep/mod.rs\n/home/user/repo/src/lib.rs\n",
+        10,
+        false,
+    );
+    let remote_find_matches = remote_find
+        .matches
+        .iter()
+        .map(|path| normalized(path))
+        .collect::<Vec<_>>();
+    assert_eq!(remote_find_matches, vec!["deep/mod.rs", "lib.rs"]);
+    assert_eq!(remote_find.total_matches, Some(2));
+    assert!(!remote_find.truncated);
+}
+
+#[test]
+fn remote_glob_result_ignores_walk_root_self_match() {
+    let result = collect_remote_glob_result(
+        "/home/user/repo/empty",
+        "/home/user/repo/empty\n",
+        10,
+        false,
+    );
+
+    assert!(result.matches.is_empty());
+    assert_eq!(result.total_matches, Some(0));
+    assert!(!result.truncated);
+
+    let matches =
+        collect_remote_glob_matches("/home/user/repo/empty", "/home/user/repo/empty\n", 10);
+    assert!(matches.is_empty());
+}
+
+#[test]
+fn remote_glob_commands_preprocess_static_pattern_prefix() {
+    let rg_command = build_remote_rg_command("/home/user/repo", "src/*.rs");
+    assert!(
+        rg_command.starts_with("cd '/home/user/repo/src' && rg --files --glob '*.rs'"),
+        "{rg_command}"
+    );
+    assert!(!rg_command.contains("--no-ignore"));
+    assert!(!rg_command.contains("--hidden"));
+    assert!(!rg_command.contains("--sort"));
+
+    let bitfun_rg_command = build_remote_rg_command("/home/user/repo", ".bitfun/**/*.json");
+    assert!(bitfun_rg_command.contains("--no-ignore"));
+    assert!(bitfun_rg_command.contains("--hidden"));
+    assert!(!bitfun_rg_command.contains("--sort"));
+
+    let find_command = build_remote_find_command("/home/user/repo", "src/*.rs", 100);
+    assert!(
+        find_command.starts_with("find '/home/user/repo/src' -maxdepth 10 -type f -name '*.rs'"),
+        "{find_command}"
+    );
+    assert!(find_command.ends_with("head -n 101"));
 }
 
 #[test]

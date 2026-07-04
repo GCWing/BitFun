@@ -1443,6 +1443,107 @@ describe('FlowChatStore historical session hydration state', () => {
     }
   });
 
+  it('reveals a bounded previous history window from deferred cache without applying the full projection', async () => {
+    vi.useFakeTimers();
+    const turnData = (turnIndex: number) => ({
+      turnId: `turn-${turnIndex}`,
+      turnIndex: turnIndex - 1,
+      sessionId: 'history-1',
+      timestamp: turnIndex,
+      userMessage: { id: `user-${turnIndex}`, content: `prompt ${turnIndex}`, timestamp: turnIndex },
+      modelRounds: [],
+      startTime: turnIndex,
+      status: 'completed',
+    });
+    apiMocks.restoreSessionView
+      .mockResolvedValueOnce({
+        session: {
+          sessionId: 'history-1',
+          sessionName: 'History 1',
+          agentType: 'agentic',
+          state: 'Idle',
+          turnCount: 5,
+          createdAt: 1,
+        },
+        turns: [turnData(5)],
+        contextRestoreState: 'pending',
+        isPartial: true,
+        loadedTurnCount: 1,
+        totalTurnCount: 5,
+      })
+      .mockResolvedValueOnce({
+        session: {
+          sessionId: 'history-1',
+          sessionName: 'History 1',
+          agentType: 'agentic',
+          state: 'Idle',
+          turnCount: 5,
+          createdAt: 1,
+        },
+        turns: [turnData(1), turnData(2), turnData(3), turnData(4), turnData(5)],
+        contextRestoreState: 'pending',
+        isPartial: false,
+        loadedTurnCount: 5,
+        totalTurnCount: 5,
+      });
+    flowChatStore.setState(() => ({
+      sessions: new Map([
+        ['history-1', createSession({
+          sessionId: 'history-1',
+          isHistorical: true,
+          historyState: 'metadata-only',
+        })],
+      ]),
+      activeSessionId: 'history-1',
+    }));
+
+    try {
+      await flowChatStore.loadSessionHistory('history-1', 'D:/workspace/BitFun');
+      flowChatStore.releaseSessionHistoryCompletionAfterInitialPaint('history-1');
+      await advanceReleasedLocalFullHistoryCompletion();
+
+      expect(flowChatStore.hasDeferredSessionHistoryProjection('history-1')).toBe(true);
+      expect(
+        flowChatStore.getState().sessions.get('history-1')?.dialogTurns.map(turn => turn.id)
+      ).toEqual(['turn-5']);
+
+      expect(flowChatStore.revealPreviousSessionHistoryWindow('history-1', 'wheel-up', 2)).toBe(true);
+
+      const session = flowChatStore.getState().sessions.get('history-1');
+      expect(session?.dialogTurns.map(turn => turn.id)).toEqual(['turn-3', 'turn-4', 'turn-5']);
+      expect(session).toMatchObject({
+        isPartial: true,
+        loadedTurnCount: 3,
+        totalTurnCount: 5,
+      });
+      expect(flowChatStore.hasDeferredSessionHistoryProjection('history-1')).toBe(true);
+
+      const newTurn = {
+        id: 'turn-6',
+        sessionId: 'history-1',
+        userMessage: { id: 'user-6', content: 'new prompt', timestamp: 6 },
+        modelRounds: [],
+        status: 'processing',
+        startTime: 6,
+      } as any;
+      flowChatStore.addDialogTurn('history-1', newTurn);
+
+      expect(flowChatStore.requestSessionFullHistoryProjection('history-1', 'search')).toBe(true);
+      expect(
+        flowChatStore.getState().sessions.get('history-1')?.dialogTurns.map(turn => turn.id)
+      ).toEqual(['turn-1', 'turn-2', 'turn-3', 'turn-4', 'turn-5', 'turn-6']);
+      expect(flowChatStore.getState().sessions.get('history-1')?.dialogTurns[5]).toBe(newTurn);
+      expect(flowChatStore.getState().sessions.get('history-1')).toMatchObject({
+        isPartial: false,
+        loadedTurnCount: 6,
+        totalTurnCount: 6,
+      });
+      expect(flowChatStore.hasDeferredSessionHistoryProjection('history-1')).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('skips committing stale local history hydrate when switching away before restore finishes', async () => {
     vi.useFakeTimers();
     const latestTurn = {
@@ -1889,6 +1990,125 @@ describe('FlowChatStore historical session hydration state', () => {
       undefined,
       3,
     );
+  });
+
+  it('defers remote idle full history completion instead of replacing the visible tail', async () => {
+    vi.useFakeTimers();
+    let idleCallback: (() => void) | null = null;
+    const originalRequestIdleCallback = (globalThis as any).requestIdleCallback;
+    const originalCancelIdleCallback = (globalThis as any).cancelIdleCallback;
+    (globalThis as any).requestIdleCallback = vi.fn((callback: () => void) => {
+      idleCallback = callback;
+      return 1;
+    });
+    (globalThis as any).cancelIdleCallback = vi.fn();
+
+    const olderTurn = {
+      turnId: 'turn-1',
+      turnIndex: 0,
+      sessionId: 'history-remote',
+      timestamp: 1,
+      userMessage: { id: 'user-1', content: 'older prompt', timestamp: 1 },
+      modelRounds: [],
+      startTime: 1,
+      status: 'completed',
+    };
+    const latestTurn = {
+      turnId: 'turn-2',
+      turnIndex: 1,
+      sessionId: 'history-remote',
+      timestamp: 2,
+      userMessage: { id: 'user-2', content: 'latest prompt', timestamp: 2 },
+      modelRounds: [],
+      startTime: 2,
+      status: 'completed',
+    };
+    apiMocks.restoreSessionView
+      .mockResolvedValueOnce({
+        session: {
+          sessionId: 'history-remote',
+          sessionName: 'Remote History',
+          agentType: 'agentic',
+          state: 'Idle',
+          turnCount: 2,
+          createdAt: 1,
+        },
+        turns: [latestTurn],
+        contextRestoreState: 'pending',
+        isPartial: true,
+        loadedTurnCount: 1,
+        totalTurnCount: 2,
+      })
+      .mockResolvedValueOnce({
+        session: {
+          sessionId: 'history-remote',
+          sessionName: 'Remote History',
+          agentType: 'agentic',
+          state: 'Idle',
+          turnCount: 2,
+          createdAt: 1,
+        },
+        turns: [olderTurn, latestTurn],
+        contextRestoreState: 'pending',
+        isPartial: false,
+        loadedTurnCount: 2,
+        totalTurnCount: 2,
+      });
+    flowChatStore.setState(() => ({
+      sessions: new Map([
+        ['history-remote', createSession({
+          sessionId: 'history-remote',
+          isHistorical: true,
+          historyState: 'metadata-only',
+        })],
+      ]),
+      activeSessionId: 'history-remote',
+    }));
+
+    try {
+      await flowChatStore.loadSessionHistory(
+        'history-remote',
+        '/remote/workspace',
+        undefined,
+        'remote-1',
+        'remote.example'
+      );
+
+      expect(apiMocks.restoreSessionView).toHaveBeenCalledTimes(1);
+      expect(idleCallback).toBeTypeOf('function');
+      const hydrationPromise = Array.from(
+        ((flowChatStore as any).fullHistoryHydrationRequests as Map<string, { promise: Promise<void> }>).values()
+      )[0]?.promise;
+      expect(hydrationPromise).toBeInstanceOf(Promise);
+
+      expect(flowChatStore.releaseSessionHistoryCompletionAfterInitialPaint('history-remote', {
+        immediate: true,
+        reason: 'test',
+      })).toBe(false);
+      expect(flowChatStore.requestSessionFullHistoryProjection('history-remote', 'search-before-idle')).toBe(false);
+      expect(
+        ((flowChatStore as any).fullHistoryProjectionApplyRequests as Set<string>).has('history-remote')
+      ).toBe(false);
+
+      idleCallback?.();
+      await hydrationPromise;
+
+      expect(apiMocks.restoreSessionView).toHaveBeenCalledTimes(2);
+      expect(flowChatStore.hasDeferredSessionHistoryProjection('history-remote')).toBe(true);
+      expect(
+        flowChatStore.getState().sessions.get('history-remote')?.dialogTurns.map(turn => turn.userMessage.content)
+      ).toEqual(['latest prompt']);
+
+      expect(flowChatStore.requestSessionFullHistoryProjection('history-remote', 'search')).toBe(false);
+      expect(flowChatStore.hasDeferredSessionHistoryProjection('history-remote')).toBe(true);
+      expect(
+        flowChatStore.getState().sessions.get('history-remote')?.dialogTurns.map(turn => turn.userMessage.content)
+      ).toEqual(['latest prompt']);
+    } finally {
+      (globalThis as any).requestIdleCallback = originalRequestIdleCallback;
+      (globalThis as any).cancelIdleCallback = originalCancelIdleCallback;
+      vi.useRealTimers();
+    }
   });
 
   it('waits for initial paint and browser idle before completing partial history in background', async () => {
