@@ -74,13 +74,13 @@
   &__label {
     font-size: var(--font-size-sm);
     font-weight: tokens.$font-weight-medium;
-    color: tokens.$color-text-primary;
+    color: var(--color-text-primary);
     line-height: tokens.$line-height-base;
   }
 
   &__description {
     font-size: var(--font-size-xs);
-    color: tokens.$color-text-muted;
+    color: var(--color-text-muted);
     line-height: tokens.$line-height-base;
   }
 
@@ -107,7 +107,7 @@
   }
 
   &__input:focus-visible + &__box {
-    outline: 2px solid tokens.$color-accent-400;
+    outline: 2px solid var(--color-accent-400);
     outline-offset: 2px;
   }
 

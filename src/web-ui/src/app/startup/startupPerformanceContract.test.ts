@@ -6,7 +6,7 @@ import { shouldScheduleDeferredStartupSystems } from './deferredStartupGate';
 import { STARTUP_OVERLAY_HIDDEN_EVENT } from './startupSignals';
 
 function readSource(relativePath: string): string {
-  return readFileSync(fileURLToPath(new URL(relativePath, import.meta.url)), 'utf8');
+  return readFileSync(fileURLToPath(new URL(relativePath, import.meta.url)), 'utf8').replace(/\r\n?/g, '\n');
 }
 
 function dynamicImportSpecifiers(source: string): string[] {
@@ -57,8 +57,10 @@ describe('startup performance contract', () => {
 
   it('keeps the startup overlay exit short enough for a fast visual handoff', () => {
     const source = readSource('../../../index.html');
+    const appSource = readSource('../App.tsx');
 
-    expect(source).toContain('animation: bitfun-startup-overlay-exit 0.32s ease-in-out both;');
+    expect(appSource).toContain('const MIN_SPLASH_MS = 650;');
+    expect(source).toContain('animation: bitfun-startup-overlay-exit 0.24s ease-in-out both;');
   });
 
   it('keeps editor and tool infrastructure out of the first startup module', () => {
@@ -153,6 +155,8 @@ describe('startup performance contract', () => {
 
     expect(desktopThemeSource).toContain('__BITFUN_BOOTSTRAP_THEME_ID__');
     expect(desktopThemeSource).toContain('__BITFUN_BOOTSTRAP_THEME_SELECTION__');
+    expect(desktopThemeSource).toContain('include_str!("generated/startup_theme_bootstrap.json")');
+    expect(desktopThemeSource).not.toContain('"bitfun-slate" => Some(Self');
     expect(mainSource).toContain("before_render_step', 'theme_service_initialize'");
     expect(themeServiceSource).toContain('getBootstrapThemeSelection');
     expect(themeServiceSource).toContain('applyThemeSelection(bootstrapSelection, { persist: false })');
@@ -471,7 +475,7 @@ describe('startup performance contract', () => {
 
     expect(getStart).toBeGreaterThan(-1);
     expect(clearStart).toBeGreaterThan(getStart);
-    expect(getSource).toContain('resolve_session_workspace_path_for_thread_goal_read');
+    expect(getSource).toContain('resolve_thread_goal_storage_path');
     expect(getSource).not.toContain('ensure_session_for_thread_goal');
     expect(getSource).not.toContain('restore_session');
   });
@@ -702,8 +706,10 @@ describe('startup performance contract', () => {
     }
   });
 
-  it('keeps Agent companion implementation modules out of the root startup bundle', () => {
+  it('keeps Agent companion startup bridge imports lazy in App', () => {
     const source = readSource('../App.tsx');
+    const mainSource = readSource('../../main.tsx');
+    const petSource = readSource('../components/AgentCompanionDesktopPet/AgentCompanionDesktopPet.tsx');
 
     expect(source).not.toMatch(/from\s+['"]@\/flow_chat\/utils\/agentCompanionActivity['"]/);
     expect(source).not.toMatch(/from\s+['"]@\/flow_chat\/services\/AgentCompanionActivityBridge['"]/);
@@ -712,5 +718,31 @@ describe('startup performance contract', () => {
     expect(source).toContain("import('@/flow_chat/utils/agentCompanionActivity')");
     expect(source).toContain("import('@/flow_chat/services/AgentCompanionActivityBridge')");
     expect(source).toContain("import('./services/openAgentCompanionSession')");
+    expect(staticImportSpecifiers(mainSource)).toContain(
+      './app/components/AgentCompanionDesktopPet/AgentCompanionDesktopPet'
+    );
+    expect(dynamicImportSpecifiers(mainSource)).not.toContain(
+      './app/components/AgentCompanionDesktopPet/AgentCompanionDesktopPet'
+    );
+    expect(source).toContain("listen(\n        'agent-companion://ready'");
+    expect(source).toContain("emit('agent-companion://settings-updated', settings)");
+    expect(source).toContain('emitAgentCompanionActivity(buildAgentCompanionActivity())');
+    expect(petSource).toContain("listen<AIExperienceSettings>('agent-companion://settings-updated'");
+    expect(petSource).toContain("listen<AgentCompanionActivityPayload>('agent-companion://activity-updated'");
+    expect(petSource).toContain("emit('agent-companion://ready')");
+    expect(petSource).toContain("getCurrentWindow().hide()");
+  });
+
+  it('cancels stale Agent companion startup sync when settings change', () => {
+    const source = readSource('../App.tsx');
+    const changeListenerIndex = source.indexOf('removeSettingsListener = aiExperienceConfigService.addChangeListener');
+
+    expect(source).toContain('const cancelPendingAgentCompanionStartupSync = () => {');
+    expect(source).toContain('startupSyncHandle?.cancel();');
+    expect(source).toContain('version !== syncVersion');
+    expect(source).toContain("syncAgentCompanionSettings(null, 'startup_idle')");
+    expect(source).toContain("getSettingsAsync({ forceRefresh: true })");
+    expect(changeListenerIndex).toBeGreaterThan(-1);
+    expect(source.slice(changeListenerIndex)).toContain("syncAgentCompanionSettings(settings, 'settings_change')");
   });
 });

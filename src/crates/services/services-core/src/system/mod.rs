@@ -4,6 +4,8 @@
 
 mod command;
 mod info;
+mod local_actions;
 
 pub use command::*;
 pub use info::*;
+pub use local_actions::*;

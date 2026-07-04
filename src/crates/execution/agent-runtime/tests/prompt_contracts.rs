@@ -49,7 +49,7 @@ fn tool_listing_sections_render_only_present_sections() {
     assert!(sections
         .render_skill_listing_reminder()
         .expect("skill listing should render")
-        .starts_with("# Skill Listing\nThe following skills are available"));
+        .starts_with("# Skill Listing\nA skill is a set of instructions"));
     assert!(sections.render_agent_listing_reminder().is_none());
     assert!(sections
         .render_collapsed_tool_listing_reminder()

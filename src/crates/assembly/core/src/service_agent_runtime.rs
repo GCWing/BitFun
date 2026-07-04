@@ -9,9 +9,10 @@ use bitfun_agent_runtime::sdk::{AgentRuntime, AgentRuntimeBuilder, RuntimeError}
 use bitfun_runtime_ports::{
     AgentDialogTurnPort, AgentDialogTurnRequest, AgentInputAttachment, AgentLifecycleDeliveryPort,
     AgentSessionCreateRequest, AgentSessionManagementPort, AgentSubmissionPort,
-    AgentSubmissionSource, AgentTurnCancellationPort, AgentTurnCancellationRequest,
-    RemoteControlStatePort, RemoteControlStateRequest, RemoteControlStateSnapshot,
-    RuntimeServiceCapability, RuntimeServicePort,
+    AgentSubmissionSource, AgentThreadGoalManagementPort, AgentTurnCancellationPort,
+    AgentTurnCancellationRequest, RemoteControlStatePort, RemoteControlStateRequest,
+    RemoteControlStateSnapshot, RemoteSessionWorkspaceIdentity, RuntimeServiceCapability,
+    RuntimeServicePort, SessionStoragePathRequest, SessionStorePort,
 };
 use bitfun_services_integrations::remote_connect::{
     build_remote_chat_messages, build_remote_model_catalog,
@@ -24,14 +25,15 @@ use bitfun_services_integrations::remote_connect::{
     RemoteChatHistoryToolCall, RemoteChatHistoryToolItem, RemoteChatHistoryTurn,
     RemoteConnectSubmissionSource, RemoteDefaultModelsConfig, RemoteDialogQueuePriority,
     RemoteDialogResolvedSubmission, RemoteDialogRuntimeHost, RemoteDialogSchedulerOutcomeFact,
-    RemoteDialogSubmissionPolicy, RemoteDialogSubmitOutcome, RemoteImageContext,
-    RemoteImageContextAdapter, RemoteInitialSyncRuntimeHost, RemoteInteractionRuntimeHost,
-    RemoteModelCapabilityFact, RemoteModelCatalog, RemoteModelCatalogFacts, RemoteModelFacts,
-    RemotePollRuntimeHost, RemoteReasoningModeFact, RemoteRecentWorkspaceFacts,
-    RemoteSessionMetadata, RemoteSessionRuntimeHost, RemoteSessionStateTracker,
-    RemoteSessionTrackerHost, RemoteTerminalPrewarmRequest, RemoteWorkspaceFacts,
-    RemoteWorkspaceFileRuntimeHost, RemoteWorkspaceKind as RemoteConnectWorkspaceKind,
-    RemoteWorkspaceRuntimeHost, RemoteWorkspaceUpdate,
+    RemoteDialogSubmissionPolicy, RemoteDialogSubmitOutcome, RemoteDialogWorkspaceBinding,
+    RemoteImageContext, RemoteImageContextAdapter, RemoteInitialSyncRuntimeHost,
+    RemoteInteractionRuntimeHost, RemoteModelCapabilityFact, RemoteModelCatalog,
+    RemoteModelCatalogFacts, RemoteModelFacts, RemotePollRuntimeHost, RemoteReasoningModeFact,
+    RemoteRecentWorkspaceFacts, RemoteSessionMetadata, RemoteSessionRuntimeHost,
+    RemoteSessionStateTracker, RemoteSessionTrackerHost, RemoteTerminalPrewarmRequest,
+    RemoteWorkspaceFacts, RemoteWorkspaceFileRuntimeHost,
+    RemoteWorkspaceKind as RemoteConnectWorkspaceKind, RemoteWorkspaceRuntimeHost,
+    RemoteWorkspaceUpdate,
 };
 use log::{debug, error, info};
 use std::sync::Arc;
@@ -41,6 +43,8 @@ use crate::agentic::coordination::{
     DialogScheduler, DialogSubmissionPolicy, DialogSubmitOutcome, DialogTriggerSource,
 };
 use crate::agentic::image_analysis::ImageContextData;
+use crate::agentic::session::session_store_port::CoreSessionStorePort;
+use crate::agentic::workspace::WorkspaceBinding;
 use crate::service::remote_connect::remote_server::RemoteExecutionDispatcher;
 
 use crate::service::config::types::{AIConfig, GlobalConfig, ModelCapability, ReasoningMode};
@@ -77,6 +81,18 @@ fn git_branch_for_workspace_path(path: &std::path::Path) -> Option<String> {
     .filter(|s| !s.is_empty() && s != "HEAD")
 }
 
+fn workspace_metadata_string(
+    metadata: &std::collections::HashMap<String, serde_json::Value>,
+    key: &str,
+) -> Option<String> {
+    metadata
+        .get(key)
+        .and_then(|value| value.as_str())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+}
+
 async fn current_remote_workspace_facts() -> Option<RemoteWorkspaceFacts> {
     let workspace_service = crate::service::workspace::get_global_workspace_service()?;
     workspace_service
@@ -90,6 +106,11 @@ async fn current_remote_workspace_facts() -> Option<RemoteWorkspaceFacts> {
                 git_branch: git_branch_for_workspace_path(&root_path),
                 kind: remote_workspace_kind(workspace.workspace_kind),
                 assistant_id: workspace.assistant_id,
+                remote_connection_id: workspace_metadata_string(
+                    &workspace.metadata,
+                    "connectionId",
+                ),
+                remote_ssh_host: workspace_metadata_string(&workspace.metadata, "sshHost"),
             }
         })
 }
@@ -121,8 +142,21 @@ async fn open_workspace_with_snapshot(
 
 async fn load_remote_session_metadata_for_workspace(
     workspace_path: &std::path::Path,
+    workspace_identity: RemoteSessionWorkspaceIdentity,
 ) -> Result<Vec<RemoteSessionMetadata>, String> {
     let workspace_path_display = workspace_path.to_string_lossy().to_string();
+    let session_storage_dir = CoreSessionStorePort::default()
+        .resolve_session_storage_path(SessionStoragePathRequest {
+            workspace_path: workspace_path.to_path_buf(),
+            remote_connection_id: workspace_identity.remote_connection_id,
+            remote_ssh_host: workspace_identity.remote_ssh_host,
+        })
+        .await
+        .map(|resolution| resolution.effective_storage_path)
+        .map_err(|error| {
+            debug!("Session storage path resolution failed for {workspace_path_display}: {error}");
+            format!("Failed to resolve session storage for workspace: {error}")
+        })?;
     let path_manager = crate::infrastructure::PathManager::new()
         .map_err(|_| "Failed to initialize path manager".to_string())?;
     let path_manager = std::sync::Arc::new(path_manager);
@@ -132,7 +166,7 @@ async fn load_remote_session_metadata_for_workspace(
             format!("Failed to initialize session storage: {error}")
         })?;
     let metadata = store
-        .list_session_metadata(workspace_path)
+        .list_session_metadata(&session_storage_dir)
         .await
         .map_err(|error| {
             debug!("Session list read failed for {workspace_path_display}: {error}");
@@ -363,10 +397,10 @@ async fn resolve_session_model_id(session_id: &str) -> Option<String> {
         return normalize_remote_session_model_id(session.config.model_id.clone());
     }
 
-    let workspace_path =
-        CoreServiceAgentRuntime::resolve_session_workspace_path(session_id).await?;
+    let session_storage_dir =
+        CoreServiceAgentRuntime::resolve_session_storage_dir(session_id).await?;
     coordinator
-        .restore_session(&workspace_path, session_id)
+        .restore_session_from_storage_path(&session_storage_dir, session_id)
         .await
         .ok()
         .and_then(|session| normalize_remote_session_model_id(session.config.model_id.clone()))
@@ -440,6 +474,7 @@ fn agent_input_attachment_from_image_context(context: ImageContextData) -> Agent
 fn core_agent_runtime_builder(
     submission: Arc<dyn AgentSubmissionPort>,
     session_management: Arc<dyn AgentSessionManagementPort>,
+    thread_goal_management: Arc<dyn AgentThreadGoalManagementPort>,
     cancellation: Arc<dyn AgentTurnCancellationPort>,
 ) -> AgentRuntimeBuilder {
     let agent_registry: Arc<dyn bitfun_agent_runtime::sdk::RuntimeAgentRegistry> =
@@ -447,6 +482,7 @@ fn core_agent_runtime_builder(
     AgentRuntimeBuilder::new()
         .with_submission_port(submission)
         .with_session_management_port(session_management)
+        .with_thread_goal_management_port(thread_goal_management)
         .with_cancellation_port(cancellation)
         .with_agent_registry(agent_registry)
 }
@@ -466,18 +502,50 @@ impl RemoteImageContextAdapter for ImageContextData {
 pub(crate) struct CoreServiceAgentRuntime;
 
 impl CoreServiceAgentRuntime {
-    pub(crate) async fn resolve_session_workspace_path(
+    async fn resolve_session_workspace_binding(session_id: &str) -> Option<WorkspaceBinding> {
+        let coordinator = get_global_coordinator()?;
+        coordinator
+            .get_session_manager()
+            .resolve_session_workspace_binding(session_id)
+            .await
+    }
+
+    pub(crate) async fn resolve_session_workspace_paths(
+        session_id: &str,
+    ) -> Option<(std::path::PathBuf, std::path::PathBuf)> {
+        Self::resolve_session_workspace_binding(session_id)
+            .await
+            .map(|binding| {
+                (
+                    binding.logical_workspace_path().to_path_buf(),
+                    binding.session_storage_dir(),
+                )
+            })
+    }
+
+    pub(crate) async fn resolve_session_storage_dir(
         session_id: &str,
     ) -> Option<std::path::PathBuf> {
-        let coordinator = get_global_coordinator()?;
-        coordinator.resolve_session_workspace_path(session_id).await
+        Self::resolve_session_workspace_paths(session_id)
+            .await
+            .map(|(_, storage_dir)| storage_dir)
+    }
+
+    pub(crate) async fn resolve_session_logical_workspace_path(
+        session_id: &str,
+    ) -> Option<std::path::PathBuf> {
+        Self::resolve_session_workspace_paths(session_id)
+            .await
+            .map(|(workspace_path, _)| workspace_path)
     }
 
     pub(crate) async fn resolve_remote_file_workspace_root(
         session_id: Option<&str>,
     ) -> Option<std::path::PathBuf> {
         if let Some(session_id) = session_id {
-            if let Some(workspace_path) = Self::resolve_session_workspace_path(session_id).await {
+            if let Some(workspace_path) =
+                Self::resolve_session_logical_workspace_path(session_id).await
+            {
                 return Some(workspace_path);
             }
         }
@@ -526,7 +594,7 @@ impl CoreServiceAgentRuntime {
     }
 
     pub(crate) async fn load_remote_chat_messages(
-        workspace_path: &std::path::Path,
+        session_storage_dir: &std::path::Path,
         session_id: &str,
     ) -> (Vec<ChatMessage>, bool) {
         let Ok(pm) = crate::infrastructure::PathManager::new() else {
@@ -536,7 +604,10 @@ impl CoreServiceAgentRuntime {
         let Ok(store) = crate::agentic::persistence::PersistenceManager::new(pm) else {
             return (vec![], false);
         };
-        let Ok(turns) = store.load_session_turns(workspace_path, session_id).await else {
+        let Ok(turns) = store
+            .load_session_turns(session_storage_dir, session_id)
+            .await
+        else {
             return (vec![], false);
         };
         (remote_chat_messages_from_turns(&turns), false)
@@ -626,14 +697,14 @@ impl CoreServiceAgentRuntime {
             .get_session(session_id)
             .is_none()
         {
-            let Some(workspace_path) = Self::resolve_session_workspace_path(session_id).await
+            let Some(session_storage_dir) = Self::resolve_session_storage_dir(session_id).await
             else {
                 return Err(format!(
-                    "Workspace path not available for session: {session_id}"
+                    "Session storage directory not available for session: {session_id}"
                 ));
             };
             coordinator
-                .restore_session(&workspace_path, session_id)
+                .restore_session_from_storage_path(&session_storage_dir, session_id)
                 .await
                 .map_err(|e| format!("Failed to restore session: {e}"))?;
         }
@@ -643,7 +714,46 @@ impl CoreServiceAgentRuntime {
             .update_session_model_id(session_id, &normalized_model_id)
             .await
             .map_err(|e| e.to_string())?;
+
+        // Propagate the model choice to every agent type already present in
+        // `ai.agent_models` so that newly created sessions of any type
+        // (including different agent types like Cowork/Claw) inherit it.
+        // Also ensure the current session's agent type is present.  This
+        // covers mobile-web and IM-bot paths; the desktop client handles
+        // its own `ai.agent_models` writing in the frontend.
+        Self::persist_model_for_all_agents(&normalized_model_id, || {
+            coordinator
+                .get_session_manager()
+                .get_session(session_id)
+                .map(|s| s.agent_type.clone())
+        })
+        .await;
+
         Ok(normalized_model_id)
+    }
+
+    /// Write `model_id` to `ai.agent_models` for **every** agent type already
+    /// present in the config, plus the current session's agent type if it is
+    /// not yet listed.  This ensures newly created sessions of any type pick
+    /// up the same model without hardcoding a fixed list of agent types.
+    async fn persist_model_for_all_agents<F>(model_id: &str, current_agent_type: F)
+    where
+        F: FnOnce() -> Option<String>,
+    {
+        let Ok(config_service) = crate::service::config::get_global_config_service().await else {
+            return;
+        };
+        let mut current: std::collections::HashMap<String, String> = config_service
+            .get_config(Some("ai.agent_models"))
+            .await
+            .unwrap_or_default();
+        for value in current.values_mut() {
+            *value = model_id.to_string();
+        }
+        if let Some(agent_type) = current_agent_type() {
+            current.insert(agent_type, model_id.to_string());
+        }
+        let _ = config_service.set_config("ai.agent_models", &current).await;
     }
 
     pub(crate) fn remote_control_state_port(
@@ -657,10 +767,16 @@ impl CoreServiceAgentRuntime {
     ) -> Result<AgentRuntime, String> {
         let submission: Arc<dyn AgentSubmissionPort> = coordinator.clone();
         let session_management: Arc<dyn AgentSessionManagementPort> = coordinator.clone();
+        let thread_goal_management: Arc<dyn AgentThreadGoalManagementPort> = coordinator.clone();
         let cancellation: Arc<dyn AgentTurnCancellationPort> = coordinator;
-        core_agent_runtime_builder(submission, session_management, cancellation)
-            .build()
-            .map_err(|error| error.to_string())
+        core_agent_runtime_builder(
+            submission,
+            session_management,
+            thread_goal_management,
+            cancellation,
+        )
+        .build()
+        .map_err(|error| error.to_string())
     }
 
     pub(crate) fn agent_runtime_with_dialog_turns(
@@ -669,14 +785,20 @@ impl CoreServiceAgentRuntime {
     ) -> Result<AgentRuntime, String> {
         let submission: Arc<dyn AgentSubmissionPort> = coordinator.clone();
         let session_management: Arc<dyn AgentSessionManagementPort> = coordinator.clone();
+        let thread_goal_management: Arc<dyn AgentThreadGoalManagementPort> = coordinator.clone();
         let cancellation: Arc<dyn AgentTurnCancellationPort> = coordinator;
         let dialog_turn: Arc<dyn AgentDialogTurnPort> = scheduler.clone();
         let lifecycle_delivery: Arc<dyn AgentLifecycleDeliveryPort> = scheduler;
-        core_agent_runtime_builder(submission, session_management, cancellation)
-            .with_dialog_turn_port(dialog_turn)
-            .with_lifecycle_delivery_port(lifecycle_delivery)
-            .build()
-            .map_err(|error| error.to_string())
+        core_agent_runtime_builder(
+            submission,
+            session_management,
+            thread_goal_management,
+            cancellation,
+        )
+        .with_dialog_turn_port(dialog_turn)
+        .with_lifecycle_delivery_port(lifecycle_delivery)
+        .build()
+        .map_err(|error| error.to_string())
     }
 
     pub(crate) fn agent_runtime_with_lifecycle_delivery(
@@ -685,12 +807,18 @@ impl CoreServiceAgentRuntime {
     ) -> Result<AgentRuntime, String> {
         let submission: Arc<dyn AgentSubmissionPort> = coordinator.clone();
         let session_management: Arc<dyn AgentSessionManagementPort> = coordinator.clone();
+        let thread_goal_management: Arc<dyn AgentThreadGoalManagementPort> = coordinator.clone();
         let cancellation: Arc<dyn AgentTurnCancellationPort> = coordinator;
         let lifecycle_delivery: Arc<dyn AgentLifecycleDeliveryPort> = scheduler;
-        core_agent_runtime_builder(submission, session_management, cancellation)
-            .with_lifecycle_delivery_port(lifecycle_delivery)
-            .build()
-            .map_err(|error| error.to_string())
+        core_agent_runtime_builder(
+            submission,
+            session_management,
+            thread_goal_management,
+            cancellation,
+        )
+        .with_lifecycle_delivery_port(lifecycle_delivery)
+        .build()
+        .map_err(|error| error.to_string())
     }
 
     pub(crate) fn agent_runtime_with_scheduler_ports(
@@ -698,15 +826,21 @@ impl CoreServiceAgentRuntime {
         scheduler: Arc<DialogScheduler>,
     ) -> Result<AgentRuntime, String> {
         let submission: Arc<dyn AgentSubmissionPort> = coordinator.clone();
-        let session_management: Arc<dyn AgentSessionManagementPort> = coordinator;
+        let session_management: Arc<dyn AgentSessionManagementPort> = coordinator.clone();
+        let thread_goal_management: Arc<dyn AgentThreadGoalManagementPort> = coordinator;
         let cancellation: Arc<dyn AgentTurnCancellationPort> = scheduler.clone();
         let dialog_turn: Arc<dyn AgentDialogTurnPort> = scheduler.clone();
         let lifecycle_delivery: Arc<dyn AgentLifecycleDeliveryPort> = scheduler;
-        core_agent_runtime_builder(submission, session_management, cancellation)
-            .with_dialog_turn_port(dialog_turn)
-            .with_lifecycle_delivery_port(lifecycle_delivery)
-            .build()
-            .map_err(|error| error.to_string())
+        core_agent_runtime_builder(
+            submission,
+            session_management,
+            thread_goal_management,
+            cancellation,
+        )
+        .with_dialog_turn_port(dialog_turn)
+        .with_lifecycle_delivery_port(lifecycle_delivery)
+        .build()
+        .map_err(|error| error.to_string())
     }
 
     pub(crate) fn global_agent_runtime_with_lifecycle_delivery() -> Result<AgentRuntime, String> {
@@ -899,11 +1033,24 @@ impl RemoteDialogRuntimeHost for CoreRemoteDialogRuntimeHost<'_> {
         self.dispatcher.ensure_tracker(session_id);
     }
 
-    async fn resolve_binding_workspace(&self, session_id: &str) -> Option<String> {
+    async fn resolve_binding_workspace(
+        &self,
+        session_id: &str,
+    ) -> Option<RemoteDialogWorkspaceBinding> {
         self.coordinator
-            .resolve_session_workspace_path(session_id)
+            .get_session_manager()
+            .resolve_session_workspace_binding(session_id)
             .await
-            .map(|path| path.to_string_lossy().into_owned())
+            .map(|binding| RemoteDialogWorkspaceBinding {
+                workspace_path: binding.logical_workspace_path_string(),
+                remote_connection_id: binding.connection_id().map(ToOwned::to_owned),
+                remote_ssh_host: if binding.is_remote() {
+                    Some(binding.session_identity.hostname.clone())
+                        .filter(|value| !value.trim().is_empty())
+                } else {
+                    None
+                },
+            })
     }
 
     async fn remote_session_exists(&self, session_id: &str) -> Result<bool, String> {
@@ -917,13 +1064,28 @@ impl RemoteDialogRuntimeHost for CoreRemoteDialogRuntimeHost<'_> {
     async fn restore_remote_session(
         &self,
         session_id: &str,
-        workspace_path: &str,
+        workspace: RemoteDialogWorkspaceBinding,
     ) -> Result<(), String> {
-        self.coordinator
-            .restore_session(std::path::Path::new(workspace_path), session_id)
-            .await
-            .map(|_| ())
-            .map_err(|e| e.to_string())
+        if let Some(session_storage_dir) =
+            CoreServiceAgentRuntime::resolve_session_storage_dir(session_id).await
+        {
+            self.coordinator
+                .restore_session_from_storage_path(&session_storage_dir, session_id)
+                .await
+        } else {
+            self.coordinator
+                .restore_session_for_workspace(
+                    SessionStoragePathRequest {
+                        workspace_path: std::path::PathBuf::from(workspace.workspace_path),
+                        remote_connection_id: workspace.remote_connection_id,
+                        remote_ssh_host: workspace.remote_ssh_host,
+                    },
+                    session_id,
+                )
+                .await
+        }
+        .map(|_| ())
+        .map_err(|e| e.to_string())
     }
 
     fn prewarm_remote_terminal(&self, request: RemoteTerminalPrewarmRequest) {
@@ -979,6 +1141,17 @@ impl RemoteDialogRuntimeHost for CoreRemoteDialogRuntimeHost<'_> {
             .map(agent_input_attachment_from_image_context)
             .collect();
 
+        let binding_workspace = submission.binding_workspace;
+        let workspace_path = binding_workspace
+            .as_ref()
+            .map(|binding| binding.workspace_path.clone());
+        let remote_connection_id = binding_workspace
+            .as_ref()
+            .and_then(|binding| binding.remote_connection_id.clone());
+        let remote_ssh_host = binding_workspace
+            .as_ref()
+            .and_then(|binding| binding.remote_ssh_host.clone());
+
         self.runtime
             .submit_dialog_turn(AgentDialogTurnRequest {
                 session_id: submission.session_id,
@@ -986,7 +1159,9 @@ impl RemoteDialogRuntimeHost for CoreRemoteDialogRuntimeHost<'_> {
                 original_message: None,
                 turn_id: Some(submission.turn_id),
                 agent_type: submission.resolved_agent_type,
-                workspace_path: submission.binding_workspace,
+                workspace_path,
+                remote_connection_id,
+                remote_ssh_host,
                 policy,
                 reply_route: None,
                 prepended_reminders: Vec::new(),
@@ -1069,8 +1244,9 @@ impl RemoteInitialSyncRuntimeHost for CoreRemoteWorkspaceRuntimeHost {
     async fn list_session_metadata(
         &self,
         workspace_path: &std::path::Path,
+        workspace_identity: RemoteSessionWorkspaceIdentity,
     ) -> Result<Vec<RemoteSessionMetadata>, String> {
-        load_remote_session_metadata_for_workspace(workspace_path).await
+        load_remote_session_metadata_for_workspace(workspace_path, workspace_identity).await
     }
 }
 
@@ -1079,8 +1255,9 @@ impl RemoteSessionRuntimeHost for CoreRemoteSessionRuntimeHost {
     async fn list_session_metadata(
         &self,
         workspace_path: &std::path::Path,
+        workspace_identity: RemoteSessionWorkspaceIdentity,
     ) -> Result<Vec<RemoteSessionMetadata>, String> {
-        load_remote_session_metadata_for_workspace(workspace_path).await
+        load_remote_session_metadata_for_workspace(workspace_path, workspace_identity).await
     }
 
     async fn resolve_default_assistant_workspace_path(&self) -> Result<String, String> {
@@ -1139,16 +1316,16 @@ impl RemoteSessionRuntimeHost for CoreRemoteSessionRuntimeHost {
             return Ok(());
         }
 
-        let Some(workspace_path) =
-            CoreServiceAgentRuntime::resolve_session_workspace_path(session_id).await
+        let Some(session_storage_dir) =
+            CoreServiceAgentRuntime::resolve_session_storage_dir(session_id).await
         else {
             return Err(format!(
-                "Workspace path not available for session: {}",
+                "Session storage directory not available for session: {}",
                 session_id
             ));
         };
         self.coordinator
-            .restore_session(&workspace_path, session_id)
+            .restore_session_from_storage_path(&session_storage_dir, session_id)
             .await
             .map(|_| ())
             .map_err(|error| format!("Failed to restore session: {error}"))
@@ -1161,25 +1338,25 @@ impl RemoteSessionRuntimeHost for CoreRemoteSessionRuntimeHost {
             .map_err(|error| error.to_string())
     }
 
-    async fn resolve_session_workspace_path(&self, session_id: &str) -> Option<std::path::PathBuf> {
-        CoreServiceAgentRuntime::resolve_session_workspace_path(session_id).await
+    async fn resolve_session_storage_dir(&self, session_id: &str) -> Option<std::path::PathBuf> {
+        CoreServiceAgentRuntime::resolve_session_storage_dir(session_id).await
     }
 
     async fn load_remote_chat_messages(
         &self,
-        workspace_path: &std::path::Path,
+        session_storage_dir: &std::path::Path,
         session_id: &str,
     ) -> (Vec<ChatMessage>, bool) {
-        CoreServiceAgentRuntime::load_remote_chat_messages(workspace_path, session_id).await
+        CoreServiceAgentRuntime::load_remote_chat_messages(session_storage_dir, session_id).await
     }
 
     async fn delete_session(
         &self,
-        workspace_path: &std::path::Path,
+        session_storage_dir: &std::path::Path,
         session_id: &str,
     ) -> Result<(), String> {
         self.coordinator
-            .delete_session(workspace_path, session_id)
+            .delete_session(session_storage_dir, session_id)
             .await
             .map(|_| ())
             .map_err(|error| error.to_string())
@@ -1203,16 +1380,16 @@ impl RemotePollRuntimeHost for CoreRemotePollRuntimeHost<'_> {
             .ok()
     }
 
-    async fn resolve_session_workspace_path(&self, session_id: &str) -> Option<std::path::PathBuf> {
-        CoreServiceAgentRuntime::resolve_session_workspace_path(session_id).await
+    async fn resolve_session_storage_dir(&self, session_id: &str) -> Option<std::path::PathBuf> {
+        CoreServiceAgentRuntime::resolve_session_storage_dir(session_id).await
     }
 
     async fn load_remote_chat_messages(
         &self,
-        workspace_path: &std::path::Path,
+        session_storage_dir: &std::path::Path,
         session_id: &str,
     ) -> (Vec<ChatMessage>, bool) {
-        CoreServiceAgentRuntime::load_remote_chat_messages(workspace_path, session_id).await
+        CoreServiceAgentRuntime::load_remote_chat_messages(session_storage_dir, session_id).await
     }
 }
 
@@ -1254,9 +1431,8 @@ impl RemoteInteractionRuntimeHost for CoreRemoteInteractionRuntimeHost {
 
 #[async_trait::async_trait]
 impl RemoteCancelRuntimeHost for CoreRemoteCancelRuntimeHost {
-    async fn resolve_restore_workspace(&self, session_id: &str) -> Option<String> {
-        self.coordinator
-            .resolve_session_workspace_path(session_id)
+    async fn resolve_session_storage_dir(&self, session_id: &str) -> Option<String> {
+        CoreServiceAgentRuntime::resolve_session_storage_dir(session_id)
             .await
             .map(|path| path.to_string_lossy().into_owned())
     }
@@ -1278,10 +1454,13 @@ impl RemoteCancelRuntimeHost for CoreRemoteCancelRuntimeHost {
     async fn restore_remote_session(
         &self,
         session_id: &str,
-        workspace_path: &str,
+        restore_path_hint: &str,
     ) -> Result<(), String> {
+        let restore_path = CoreServiceAgentRuntime::resolve_session_storage_dir(session_id)
+            .await
+            .unwrap_or_else(|| std::path::PathBuf::from(restore_path_hint));
         self.coordinator
-            .restore_session(std::path::Path::new(workspace_path), session_id)
+            .restore_session_from_storage_path(&restore_path, session_id)
             .await
             .map(|_| ())
             .map_err(|error| error.to_string())
@@ -1319,6 +1498,7 @@ mod tests {
         where
             T: AgentSubmissionPort
                 + AgentSessionManagementPort
+                + AgentThreadGoalManagementPort
                 + AgentTurnCancellationPort
                 + RemoteControlStatePort
                 + SessionTranscriptReader,

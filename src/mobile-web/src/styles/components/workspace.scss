@@ -20,8 +20,8 @@
   min-height: 56px;
   border-bottom: 1px solid var(--border-subtle);
   background: var(--color-bg-elevated);
-  backdrop-filter: var(--blur-medium);
-  -webkit-backdrop-filter: var(--blur-medium);
+  backdrop-filter: var(--blur-base);
+  -webkit-backdrop-filter: var(--blur-base);
   flex-shrink: 0;
 
   h1 {
@@ -117,7 +117,7 @@
 
   &--primary {
     background: var(--color-accent-500);
-    color: #fff;
+    color: var(--btn-primary-color);
 
     &:active {
       background: var(--color-accent-600);

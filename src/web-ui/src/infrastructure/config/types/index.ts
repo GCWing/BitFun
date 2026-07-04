@@ -95,7 +95,8 @@ export interface AIExperienceConfig {
 
 export type ModelCapability =
   | 'text_chat'
-  | 'function_calling';
+  | 'function_calling'
+  | 'image_understanding';
 
 export type ModelCategory =
   | 'general_chat'
@@ -179,6 +180,7 @@ export interface ProxyConfig {
 export interface DefaultModelsConfig {
   primary?: string | null;
   fast?: string | null;
+  image_understanding?: string | null;
 }
 
 export interface AIConfig {
@@ -592,6 +594,7 @@ export interface DiagnosticsBundleInfo {
 export interface DefaultModels {
   primary: string | null;
   fast: string | null;
+  image_understanding?: string | null;
 }
 
 export type OptionalCapabilityModels = Record<string, never>;

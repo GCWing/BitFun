@@ -18,10 +18,11 @@ use std::time::{Duration, SystemTime};
 use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
 
-use super::config_watcher::ConfigWatcher;
-use super::manager::LspManager;
-use super::project_detector::{ProjectDetector, ProjectInfo};
 use crate::infrastructure::events::EventEmitter;
+use bitfun_core_types::lsp::{CompletionItem, InlayHint};
+use bitfun_services_core::lsp::config_watcher::ConfigWatcher;
+use bitfun_services_core::lsp::manager::LspManager;
+use bitfun_services_core::lsp::project_detector::{ProjectDetector, ProjectInfo};
 
 /// LSP event types (pushed to the frontend).
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1101,7 +1102,7 @@ impl WorkspaceLspManager {
         uri: &str,
         line: u32,
         character: u32,
-    ) -> Result<Vec<super::types::CompletionItem>> {
+    ) -> Result<Vec<CompletionItem>> {
         let server_language = self
             .get_running_server_for_language(language)
             .await
@@ -1205,7 +1206,7 @@ impl WorkspaceLspManager {
         start_character: u32,
         end_line: u32,
         end_character: u32,
-    ) -> Result<Vec<super::types::InlayHint>> {
+    ) -> Result<Vec<InlayHint>> {
         let server_language = self
             .get_running_server_for_language(language)
             .await

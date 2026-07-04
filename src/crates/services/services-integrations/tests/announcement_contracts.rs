@@ -1,9 +1,9 @@
 #![cfg(feature = "announcement")]
 
 use bitfun_services_integrations::announcement::{
-    AnnouncementCard, AnnouncementState, AnnouncementStateStore, CardSource, CardType,
-    CompletionAction, ModalConfig, ModalPage, ModalSize, PageLayout, ToastConfig, TriggerCondition,
-    TriggerRule,
+    AnnouncementCard, AnnouncementRemoteFetchRequest, AnnouncementState, AnnouncementStateStore,
+    CardSource, CardType, CompletionAction, ModalConfig, ModalPage, ModalSize, PageLayout,
+    RemoteAnnouncementFetcher, ToastConfig, TriggerCondition, TriggerRule,
 };
 
 #[test]
@@ -134,5 +134,65 @@ async fn announcement_state_store_round_trips_state_and_defaults_missing_file() 
     assert!(loaded.seen_ids.contains("feature-a"));
     assert!(loaded.dismissed_ids.contains("tip-b"));
 
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn announcement_remote_fetch_request_preserves_legacy_query_shape() {
+    let request = AnnouncementRemoteFetchRequest {
+        endpoint_url: "https://announcements.example.com/cards".to_string(),
+        app_version: "0.2.12".to_string(),
+        locale: "zh-CN".to_string(),
+        platform: "desktop".to_string(),
+    };
+
+    assert_eq!(
+        request.request_url(),
+        "https://announcements.example.com/cards?app_version=0.2.12&locale=zh-CN&platform=desktop"
+    );
+}
+
+#[tokio::test]
+async fn announcement_remote_fetcher_loads_disk_cache_before_network_fetch() {
+    let root = std::env::temp_dir().join(format!(
+        "bitfun-announcement-remote-cache-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(&root).unwrap();
+    let cache_file = root.join("announcement-remote-cache.json");
+    std::fs::write(
+        &cache_file,
+        serde_json::to_string(&vec![AnnouncementCard {
+            id: "remote-tip".to_string(),
+            card_type: CardType::Tip,
+            source: CardSource::Remote,
+            app_version: None,
+            priority: 3,
+            trigger: TriggerRule::default(),
+            toast: ToastConfig {
+                icon: "tip".to_string(),
+                title: "Remote".to_string(),
+                description: "Cached".to_string(),
+                action_label: String::new(),
+                dismissible: true,
+                auto_dismiss_ms: None,
+            },
+            modal: None,
+            expires_at: None,
+        }])
+        .unwrap(),
+    )
+    .unwrap();
+
+    let fetcher = RemoteAnnouncementFetcher::new(cache_file);
+    let cards = fetcher.cached_cards().await;
+
+    assert_eq!(cards.len(), 1);
+    assert_eq!(cards[0].id, "remote-tip");
+    assert_eq!(cards[0].source, CardSource::Remote);
     let _ = std::fs::remove_dir_all(root);
 }

@@ -1,25 +1,34 @@
 use bitfun_agent_tools::{
+    acp_external_agent_tool_input_schema, build_acp_external_agent_tool_definition,
+    build_acp_external_agent_tool_name, build_acp_external_agent_tool_result,
+    normalize_name_for_acp_tool_part, render_acp_external_agent_rejected_message,
+    render_acp_external_agent_result_for_assistant, render_acp_external_agent_result_message,
+    render_acp_external_agent_use_message, validate_acp_external_agent_tool_input,
+    AcpExternalAgentToolDefinitionInput, ACP_TOOL_PREFIX, ACP_TOOL_SUFFIX,
+};
+use bitfun_agent_tools::{
     build_bitfun_runtime_uri, build_collapsed_tool_stub_definition,
     build_get_tool_spec_assistant_detail, build_get_tool_spec_detail_result,
     build_get_tool_spec_duplicate_load_hint, build_get_tool_spec_duplicate_load_result,
-    build_prompt_visible_tool_manifest_definitions, build_tool_path_policy_denial_message,
-    build_tool_runtime_artifact_reference, build_tool_session_runtime_artifact_reference,
-    collect_loaded_collapsed_tool_names, get_tool_spec_input_schema,
-    get_tool_spec_is_concurrency_safe, get_tool_spec_is_readonly, get_tool_spec_needs_permissions,
-    get_tool_spec_short_description, is_bitfun_runtime_uri, is_remote_posix_path_within_root,
-    is_tool_path_allowed_by_resolved_roots, normalize_host_path, normalize_runtime_relative_path,
-    parse_bitfun_runtime_uri, posix_resolve_path_with_workspace, posix_style_path_is_absolute,
-    render_get_tool_spec_tool_use_message, resolve_contextual_tool_manifest,
-    resolve_contextual_tool_manifest_from_provider, resolve_get_tool_spec_detail,
-    resolve_get_tool_spec_detail_from_provider,
+    build_prompt_visible_tool_manifest_definitions, build_tool_execution_timeout_presentation,
+    build_tool_path_policy_denial_message, build_tool_runtime_artifact_reference,
+    build_tool_session_runtime_artifact_reference, collect_loaded_collapsed_tool_names,
+    get_tool_spec_input_schema, get_tool_spec_is_concurrency_safe, get_tool_spec_is_readonly,
+    get_tool_spec_needs_permissions, get_tool_spec_short_description, is_bitfun_runtime_uri,
+    is_remote_posix_path_within_root, is_tool_path_allowed_by_resolved_roots, normalize_host_path,
+    normalize_runtime_relative_path, parse_bitfun_runtime_uri, posix_resolve_path_with_workspace,
+    posix_style_path_is_absolute, render_get_tool_spec_tool_use_message,
+    resolve_contextual_tool_manifest, resolve_contextual_tool_manifest_from_provider,
+    resolve_get_tool_spec_detail, resolve_get_tool_spec_detail_from_provider,
     resolve_get_tool_spec_execution_result_from_provider, resolve_host_path_with_workspace,
     resolve_readonly_enabled_tools, resolve_tool_manifest_policy, resolve_tool_path_with_context,
     resolve_workspace_tool_path, sort_tool_manifest_definitions,
     summarize_get_tool_spec_collapsed_tools, tool_path_is_effectively_absolute,
-    validate_collapsed_tool_usage, validate_get_tool_spec_input, validate_tool_allowed_by_list,
-    validate_tool_execution_admission, DynamicMcpToolInfo, DynamicToolInfo,
-    GetToolSpecCollapsedToolSummary, GetToolSpecExecutionError, GetToolSpecExecutionPlan,
-    GetToolSpecLoadObservation, GetToolSpecRuntime, InputValidator, PromptVisibleToolManifestItem,
+    validate_collapsed_tool_usage, validate_get_tool_spec_input, validate_mcp_tool_bridge_input,
+    validate_tool_allowed_by_list, validate_tool_execution_admission, DynamicMcpToolInfo,
+    DynamicToolInfo, GetToolSpecCollapsedToolSummary, GetToolSpecExecutionError,
+    GetToolSpecExecutionPlan, GetToolSpecLoadObservation, GetToolSpecRuntime, InputValidator,
+    McpToolBridgeBehaviorHints, McpToolBridgeDefinitionInput, PromptVisibleToolManifestItem,
     ToolContextFacts, ToolExecutionAdmissionRejection, ToolExecutionAdmissionRequest, ToolExposure,
     ToolImageAttachment, ToolManifestDefinition, ToolManifestPolicyTool, ToolPathBackend,
     ToolPathOperation, ToolPathResolution, ToolRenderOptions, ToolResult, ToolRuntimeRestrictions,
@@ -27,10 +36,19 @@ use bitfun_agent_tools::{
 };
 use bitfun_agent_tools::{
     build_invalid_tool_call_error_message, build_tool_call_truncation_recovery_notice,
-    build_tool_execution_error_presentation, build_user_steering_interrupted_presentation,
-    is_write_like_tool_name, render_tool_result_for_assistant,
-    truncate_raw_tool_arguments_preview_to, truncate_tool_arguments_preview,
-    TOOL_ERROR_ARGUMENTS_PREVIEW_BYTES, USER_STEERING_INTERRUPTED_MESSAGE,
+    build_tool_confirmation_timeout_presentation, build_tool_execution_error_presentation,
+    build_user_rejected_tool_presentation, build_user_rejected_tool_presentation_with_instruction,
+    build_user_steering_interrupted_presentation, is_write_like_tool_name,
+    render_tool_result_for_assistant, truncate_raw_tool_arguments_preview_to,
+    truncate_tool_arguments_preview, TOOL_CONFIRMATION_TIMEOUT_MESSAGE,
+    TOOL_ERROR_ARGUMENTS_PREVIEW_BYTES, USER_REJECTED_TOOL_MESSAGE,
+    USER_STEERING_INTERRUPTED_MESSAGE,
+};
+use bitfun_agent_tools::{
+    build_mcp_tool_bridge_definition, build_mcp_tool_bridge_name, build_mcp_tool_bridge_result,
+    mcp_tool_bridge_dynamic_tool_info, mcp_tool_bridge_short_description, normalize_name_for_mcp,
+    render_mcp_tool_bridge_rejected_message, render_mcp_tool_bridge_result_message,
+    render_mcp_tool_bridge_use_message, MCP_TOOL_DELIMITER, MCP_TOOL_PREFIX,
 };
 use bitfun_agent_tools::{
     build_persisted_tool_output_message, count_tool_result_lines, file_tool_guidance_message,
@@ -47,9 +65,9 @@ use bitfun_agent_tools::{
     materialize_static_tool_provider_groups, ContextualToolManifestItem, DynamicToolDescriptor,
     DynamicToolProvider, GetToolSpecCatalogProvider, PortResult, PortableToolContextProvider,
     StaticToolMaterializationError, StaticToolProvider, StaticToolProviderFactory,
-    StaticToolProviderGroup, StaticToolProviderPlan, ToolCatalogRuntime,
-    ToolCatalogSnapshotProvider, ToolDecorator, ToolDecoratorRef, ToolRegistry, ToolRegistryItem,
-    ToolRuntimeAssembly,
+    StaticToolProviderGroup, StaticToolProviderPlan, ToolCallSnapshotGuard, ToolCatalogRuntime,
+    ToolCatalogSnapshotProvider, ToolDecorator, ToolDecoratorRef, ToolEffectFactsSource,
+    ToolEffectFilter, ToolRegistry, ToolRegistryItem, ToolRuntimeAssembly, ToolSnapshotCallError,
 };
 use serde_json::json;
 use std::path::PathBuf;
@@ -68,6 +86,238 @@ impl StaticToolProviderPlan for TestProviderPlan {
     fn tool_names(&self) -> &'static [&'static str] {
         self.tool_names
     }
+}
+
+#[test]
+fn mcp_tool_bridge_preserves_prompt_visible_name_and_descriptor_contract() {
+    assert_eq!(MCP_TOOL_PREFIX, "mcp__");
+    assert_eq!(MCP_TOOL_DELIMITER, "__");
+    assert_eq!(
+        normalize_name_for_mcp("Acme Search / Primary"),
+        "Acme_Search___Primary"
+    );
+    assert_eq!(
+        build_mcp_tool_bridge_name("Claude Code", "search repos"),
+        "mcp__Claude_Code__search_repos"
+    );
+
+    let definition = build_mcp_tool_bridge_definition(McpToolBridgeDefinitionInput {
+        server_id: "github",
+        server_name: "GitHub",
+        tool_name: "search",
+        title: "Search Docs",
+        description: Some("Find docs"),
+        behavior_hints: McpToolBridgeBehaviorHints {
+            read_only: true,
+            destructive: false,
+            open_world: true,
+        },
+    });
+
+    assert_eq!(definition.full_name, "mcp__github__search");
+    assert_eq!(definition.user_facing_name, "Search Docs (GitHub)");
+    assert_eq!(
+        definition.description,
+        "Tool 'Search Docs' from MCP server 'GitHub': Find docs [Hints: read-only, open-world]"
+    );
+    assert_eq!(definition.provider_id, "github");
+    assert_eq!(definition.provider_kind, "mcp");
+    assert!(definition.read_only);
+    assert_eq!(
+        serde_json::to_value(definition.tool_info.clone()).unwrap(),
+        json!({
+            "server_id": "github",
+            "server_name": "GitHub",
+            "tool_name": "search"
+        })
+    );
+
+    assert_eq!(
+        mcp_tool_bridge_short_description(Some("Find docs"), "GitHub"),
+        "Find docs (GitHub)"
+    );
+    assert_eq!(
+        mcp_tool_bridge_short_description(Some("   "), "GitHub"),
+        "MCP tool (GitHub)"
+    );
+}
+
+#[test]
+fn mcp_tool_bridge_preserves_dynamic_info_validation_and_rendering_contract() {
+    let definition = build_mcp_tool_bridge_definition(McpToolBridgeDefinitionInput {
+        server_id: "github",
+        server_name: "GitHub",
+        tool_name: "search",
+        title: "Search Docs",
+        description: Some("Find docs"),
+        behavior_hints: McpToolBridgeBehaviorHints {
+            read_only: false,
+            destructive: true,
+            open_world: false,
+        },
+    });
+
+    assert_eq!(
+        mcp_tool_bridge_dynamic_tool_info(&definition),
+        DynamicToolInfo {
+            provider_id: "github".to_string(),
+            provider_kind: Some("mcp".to_string()),
+            mcp: Some(DynamicMcpToolInfo {
+                server_id: "github".to_string(),
+                server_name: "GitHub".to_string(),
+                tool_name: "search".to_string(),
+            }),
+        }
+    );
+
+    assert!(validate_mcp_tool_bridge_input(&json!({ "q": "rust" }), "GitHub", false).result);
+    let non_object = validate_mcp_tool_bridge_input(&json!("rust"), "GitHub", false);
+    assert!(!non_object.result);
+    assert_eq!(non_object.error_code, Some(400));
+    assert_eq!(
+        non_object.message.as_deref(),
+        Some("Input must be an object")
+    );
+
+    let remote_blocked = validate_mcp_tool_bridge_input(&json!({}), "GitHub", true);
+    assert!(!remote_blocked.result);
+    assert_eq!(
+        remote_blocked.message.as_deref(),
+        Some("MCP server 'GitHub' runs locally and is unavailable in remote workspace sessions")
+    );
+
+    assert_eq!(
+        render_mcp_tool_bridge_use_message("Search Docs", "GitHub", &json!({ "q": "rust" })),
+        "Using MCP tool 'Search Docs' from 'GitHub' with input: {\"q\":\"rust\"}"
+    );
+    assert_eq!(
+        render_mcp_tool_bridge_rejected_message("Search Docs", "GitHub"),
+        "MCP tool 'Search Docs' from 'GitHub' was rejected by user"
+    );
+    assert_eq!(
+        render_mcp_tool_bridge_result_message("Search Docs", "done"),
+        "MCP tool 'Search Docs' completed. Result: done"
+    );
+
+    let ToolResult::Result {
+        data,
+        result_for_assistant,
+        image_attachments,
+    } = build_mcp_tool_bridge_result(json!({ "ok": true }), "done".to_string())
+    else {
+        panic!("MCP bridge result must use standard result shape");
+    };
+    assert_eq!(data, json!({ "ok": true }));
+    assert_eq!(result_for_assistant.as_deref(), Some("done"));
+    assert!(image_attachments.is_none());
+}
+
+#[test]
+fn acp_external_agent_bridge_preserves_tool_contract() {
+    assert_eq!(ACP_TOOL_PREFIX, "acp__");
+    assert_eq!(ACP_TOOL_SUFFIX, "__prompt");
+    assert_eq!(
+        normalize_name_for_acp_tool_part("Claude Code"),
+        "Claude_Code"
+    );
+    assert_eq!(
+        build_acp_external_agent_tool_name("Claude Code"),
+        "acp__Claude_Code__prompt"
+    );
+
+    let definition =
+        build_acp_external_agent_tool_definition(AcpExternalAgentToolDefinitionInput {
+            client_id: "codex",
+            display_name: Some("Codex"),
+            read_only: false,
+        });
+
+    assert_eq!(definition.tool_name, "acp__codex__prompt");
+    assert_eq!(definition.display_name, "Codex");
+    assert_eq!(definition.user_facing_name, "Codex (ACP)");
+    assert_eq!(
+        definition.description,
+        "Send a prompt to the external ACP agent 'Codex'. Use this when another local ACP-compatible agent is better suited for a delegated task."
+    );
+    assert_eq!(
+        definition.short_description,
+        "Delegate a task to the external ACP agent 'Codex'."
+    );
+    assert!(!definition.read_only);
+
+    assert_eq!(
+        acp_external_agent_tool_input_schema(),
+        json!({
+            "type": "object",
+            "properties": {
+                "prompt": {
+                    "type": "string",
+                    "description": "The task or question to send to the external ACP agent."
+                },
+                "workspace_path": {
+                    "type": "string",
+                    "description": "Optional absolute workspace path. Defaults to the current BitFun workspace."
+                },
+                "timeout_seconds": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Optional timeout in seconds. Use 0 or omit it to wait without a fixed timeout."
+                }
+            },
+            "required": ["prompt"],
+            "additionalProperties": false
+        })
+    );
+
+    let missing_prompt = validate_acp_external_agent_tool_input(&json!({}));
+    assert!(!missing_prompt.result);
+    assert_eq!(missing_prompt.error_code, Some(400));
+    assert_eq!(
+        missing_prompt.message.as_deref(),
+        Some("prompt is required")
+    );
+
+    let empty_prompt = validate_acp_external_agent_tool_input(&json!({ "prompt": "  " }));
+    assert!(!empty_prompt.result);
+    assert_eq!(
+        empty_prompt.message.as_deref(),
+        Some("prompt cannot be empty")
+    );
+    assert!(validate_acp_external_agent_tool_input(&json!({ "prompt": "hello" })).result);
+
+    let long_prompt = "a".repeat(161);
+    assert_eq!(
+        render_acp_external_agent_use_message("Codex", &json!({ "prompt": long_prompt })),
+        format!("Sending ACP prompt to 'Codex': {}...", "a".repeat(160))
+    );
+    assert_eq!(
+        render_acp_external_agent_rejected_message("Codex"),
+        "ACP prompt to 'Codex' was rejected"
+    );
+    assert_eq!(
+        render_acp_external_agent_result_message("Codex", &json!({ "response": "done" })),
+        "ACP agent 'Codex' responded:\ndone"
+    );
+    assert_eq!(
+        render_acp_external_agent_result_message("Codex", &json!({})),
+        "ACP agent 'Codex' completed"
+    );
+    assert_eq!(
+        render_acp_external_agent_result_for_assistant(&json!({})),
+        "ACP agent completed without text output"
+    );
+
+    let ToolResult::Result {
+        data,
+        result_for_assistant,
+        image_attachments,
+    } = build_acp_external_agent_tool_result("codex", "done")
+    else {
+        panic!("ACP bridge result must use standard result shape");
+    };
+    assert_eq!(data, json!({ "client_id": "codex", "response": "done" }));
+    assert_eq!(result_for_assistant.as_deref(), Some("done"));
+    assert!(image_attachments.is_none());
 }
 
 #[test]
@@ -154,6 +404,84 @@ fn steering_interrupted_presentation_preserves_current_contract() {
     assert_eq!(
         presentation.result_for_assistant,
         USER_STEERING_INTERRUPTED_MESSAGE
+    );
+}
+
+#[test]
+fn tool_confirmation_timeout_presentation_is_not_an_execution_failure() {
+    let presentation = build_tool_confirmation_timeout_presentation("ExecCommand");
+
+    assert_eq!(presentation.result_json["status"], "cancelled");
+    assert_eq!(presentation.result_json["category"], "confirmation_timeout");
+    assert_eq!(presentation.result_json["tool_name"], "ExecCommand");
+    assert_eq!(
+        presentation.result_json["message"],
+        TOOL_CONFIRMATION_TIMEOUT_MESSAGE
+    );
+    assert!(presentation.result_json["provided_arguments"].is_null());
+    assert_eq!(
+        presentation.result_for_assistant,
+        TOOL_CONFIRMATION_TIMEOUT_MESSAGE
+    );
+    assert!(!presentation.result_for_assistant.contains("failed"));
+    assert!(!presentation
+        .result_for_assistant
+        .contains("Provided arguments"));
+}
+
+#[test]
+fn tool_execution_timeout_presentation_includes_timeout_seconds() {
+    let presentation = build_tool_execution_timeout_presentation("ExecCommand", Some(120));
+
+    assert_eq!(presentation.result_json["status"], "timeout");
+    assert_eq!(presentation.result_json["category"], "execution_timeout");
+    assert_eq!(presentation.result_json["tool_name"], "ExecCommand");
+    assert_eq!(presentation.result_json["timeout_seconds"], 120);
+    assert!(presentation.result_for_assistant.contains(
+        "This tool call was cancelled because the global tool execution time limit (120 seconds)"
+    ));
+    assert!(!presentation
+        .result_for_assistant
+        .contains("Provided arguments"));
+    assert!(!presentation.result_for_assistant.contains("failed"));
+}
+
+#[test]
+fn user_rejected_tool_presentation_is_not_an_argument_error() {
+    let presentation = build_user_rejected_tool_presentation("ExecCommand");
+
+    assert_eq!(presentation.result_json["status"], "rejected");
+    assert_eq!(presentation.result_json["category"], "user_rejected");
+    assert_eq!(presentation.result_json["tool_name"], "ExecCommand");
+    assert_eq!(
+        presentation.result_json["message"],
+        USER_REJECTED_TOOL_MESSAGE
+    );
+    assert!(presentation.result_json["provided_arguments"].is_null());
+    assert_eq!(
+        presentation.result_for_assistant,
+        USER_REJECTED_TOOL_MESSAGE
+    );
+    assert!(!presentation
+        .result_for_assistant
+        .contains("invalid_arguments"));
+    assert!(!presentation.result_for_assistant.contains("failed"));
+    assert!(!presentation
+        .result_for_assistant
+        .contains("Provided arguments"));
+
+    let presentation = build_user_rejected_tool_presentation_with_instruction(
+        "ExecCommand",
+        Some("Use the built-in status view instead."),
+    );
+    assert_eq!(
+        presentation.result_json["instruction"],
+        "Use the built-in status view instead."
+    );
+    assert!(presentation.result_json["provided_arguments"].is_null());
+    assert_eq!(
+        presentation.result_for_assistant,
+        "The user rejected this tool call with the following instruction: \"Use the built-in status view instead.\". Do not retry it unless the user explicitly asks you to. If you cannot complete the task without running this tool call, stop and ask the user how to proceed."
     );
 }
 
@@ -1497,6 +1825,10 @@ struct RegistryMarkerTool {
     enabled: bool,
 }
 
+struct StaticToolWithFailingDescription;
+
+struct InputSensitiveEffectTool;
+
 #[async_trait::async_trait]
 impl ToolRegistryItem for RegistryMarkerTool {
     fn name(&self) -> &str {
@@ -1535,6 +1867,65 @@ impl ToolRegistryItem for RegistryMarkerTool {
                 provider_kind: None,
                 mcp: None,
             })
+    }
+}
+
+#[async_trait::async_trait]
+impl ToolRegistryItem for StaticToolWithFailingDescription {
+    fn name(&self) -> &str {
+        "static_failing_description"
+    }
+
+    async fn description(&self) -> Result<String, String> {
+        Err("static description should not be materialized".to_string())
+    }
+
+    fn input_schema(&self) -> serde_json::Value {
+        json!({ "type": "object" })
+    }
+}
+
+#[async_trait::async_trait]
+impl ToolRegistryItem for InputSensitiveEffectTool {
+    fn name(&self) -> &str {
+        "input_sensitive"
+    }
+
+    async fn description(&self) -> Result<String, String> {
+        Ok("input-sensitive effect tool".to_string())
+    }
+
+    fn input_schema(&self) -> serde_json::Value {
+        json!({
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string"
+                }
+            }
+        })
+    }
+
+    fn is_readonly(&self) -> bool {
+        false
+    }
+
+    fn needs_permissions(&self, input: Option<&serde_json::Value>) -> bool {
+        !matches!(
+            input
+                .and_then(|value| value.get("action"))
+                .and_then(serde_json::Value::as_str),
+            Some("status")
+        )
+    }
+
+    fn is_concurrency_safe(&self, input: Option<&serde_json::Value>) -> bool {
+        matches!(
+            input
+                .and_then(|value| value.get("action"))
+                .and_then(serde_json::Value::as_str),
+            Some("status")
+        )
     }
 }
 
@@ -2657,6 +3048,170 @@ async fn generic_tool_registry_preserves_dynamic_descriptor_contract() {
     );
     assert_eq!(descriptors[0].description, "marker tool");
     assert_eq!(descriptors[0].input_schema, json!({ "type": "object" }));
+}
+
+#[tokio::test]
+async fn generic_tool_registry_dynamic_listing_does_not_materialize_static_tools() {
+    let mut registry: ToolRegistry<dyn ToolRegistryItem> = ToolRegistry::new();
+    registry.register_tool(registry_marker_tool("external_search", Some("provider-a")));
+    registry.register_tool(Arc::new(StaticToolWithFailingDescription));
+
+    let descriptors = registry
+        .list_dynamic_tools()
+        .await
+        .expect("list dynamic tools");
+
+    assert_eq!(descriptors.len(), 1);
+    assert_eq!(descriptors[0].name, "external_search");
+}
+
+#[tokio::test]
+async fn generic_tool_registry_materializes_provider_effect_and_stale_call_contract() {
+    let mut registry = ToolRegistry::new();
+    registry.register_tool(registry_marker_tool_with_access(
+        "external_search",
+        Some("provider-a"),
+        ToolExposure::Collapsed,
+        true,
+        true,
+    ));
+    registry.register_tool(registry_marker_tool_with_access(
+        "write_file",
+        None,
+        ToolExposure::Expanded,
+        false,
+        true,
+    ));
+
+    let snapshot = registry
+        .materialized_tool_snapshot()
+        .await
+        .expect("materialize registry snapshot");
+
+    assert_eq!(snapshot.generation, registry.current_snapshot_generation());
+    assert_eq!(
+        snapshot
+            .tool("external_search")
+            .expect("external tool")
+            .provider
+            .provider_id
+            .as_deref(),
+        Some("provider-a")
+    );
+    assert_eq!(
+        snapshot
+            .tool("external_search")
+            .expect("external tool")
+            .exposure,
+        ToolExposure::Collapsed
+    );
+    assert!(
+        snapshot
+            .tool("external_search")
+            .expect("external tool")
+            .effects
+            .readonly_by_default
+    );
+    assert!(
+        !snapshot
+            .tool("write_file")
+            .expect("write tool")
+            .effects
+            .readonly_by_default
+    );
+
+    let readonly_names = snapshot
+        .filter_tools_by_default_effects(ToolEffectFilter::readonly_only())
+        .into_iter()
+        .map(|tool| tool.name.as_str())
+        .collect::<Vec<_>>();
+    assert_eq!(readonly_names, vec!["external_search"]);
+
+    let guard = ToolCallSnapshotGuard::new("external_search", snapshot.generation);
+    assert!(snapshot.validate_call(&guard).is_ok());
+
+    registry.unregister_tools_by_prefix("external_");
+    let current_snapshot = registry
+        .materialized_tool_snapshot()
+        .await
+        .expect("materialize current snapshot");
+    assert_eq!(
+        current_snapshot.validate_call(&guard),
+        Err(ToolSnapshotCallError::StaleSnapshot {
+            tool_name: "external_search".to_string(),
+            expected_generation: current_snapshot.generation,
+            actual_generation: snapshot.generation,
+        })
+    );
+}
+
+#[tokio::test]
+async fn generic_tool_registry_snapshot_preserves_static_provider_identity_after_decoration() {
+    let mut registry = ToolRegistry::with_tool_decorator(Arc::new(RegistryMarkerDecorator));
+    let provider = RegistryMarkerProvider {
+        provider_id: "core.basic",
+        tools: vec![registry_marker_tool("Read", None)],
+    };
+
+    registry.install_static_provider(&provider);
+
+    let snapshot = registry
+        .materialized_tool_snapshot()
+        .await
+        .expect("materialize registry snapshot");
+    let tool = snapshot.tool("decorated_Read").expect("decorated tool");
+
+    assert_eq!(tool.provider.provider_id.as_deref(), Some("core.basic"));
+    assert_eq!(tool.provider.provider_kind.as_deref(), Some("static"));
+    assert!(tool.provider.is_static());
+    assert!(snapshot.dynamic_tools().is_empty());
+}
+
+#[tokio::test]
+async fn generic_tool_registry_snapshot_labels_effects_as_no_input_defaults() {
+    let mut registry: ToolRegistry<dyn ToolRegistryItem> = ToolRegistry::new();
+    let tool = Arc::new(InputSensitiveEffectTool);
+    assert!(!tool.needs_permissions(Some(&json!({ "action": "status" }))));
+    assert!(tool.is_concurrency_safe(Some(&json!({ "action": "status" }))));
+
+    registry.register_tool(tool);
+
+    let snapshot = registry
+        .materialized_tool_snapshot()
+        .await
+        .expect("materialize registry snapshot");
+    let tool = snapshot
+        .tool("input_sensitive")
+        .expect("input-sensitive tool");
+
+    assert_eq!(tool.effects.source, ToolEffectFactsSource::NoInputDefault);
+    assert!(!tool.effects.readonly_by_default);
+    assert!(tool.effects.needs_permissions_by_default);
+    assert!(!tool.effects.concurrency_safe_by_default);
+}
+
+#[tokio::test]
+async fn generic_tool_registry_snapshot_treats_blank_provider_id_as_builtin() {
+    let mut registry = ToolRegistry::new();
+    registry.register_tool(registry_marker_tool("blank_provider", Some(" ")));
+
+    let snapshot = registry
+        .materialized_tool_snapshot()
+        .await
+        .expect("materialize registry snapshot");
+    let tool = snapshot
+        .tool("blank_provider")
+        .expect("blank provider tool");
+
+    assert_eq!(tool.provider.provider_id, None);
+    assert_eq!(tool.provider.provider_kind.as_deref(), Some("builtin"));
+    assert_eq!(tool.dynamic_info, None);
+    assert!(snapshot.dynamic_tools().is_empty());
+    assert!(registry
+        .list_dynamic_tools()
+        .await
+        .expect("list dynamic tools")
+        .is_empty());
 }
 
 #[tokio::test]

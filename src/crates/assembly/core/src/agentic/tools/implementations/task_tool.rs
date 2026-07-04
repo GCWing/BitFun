@@ -906,10 +906,10 @@ impl Tool for TaskTool {
             })?;
             let mut run_manifest = context.custom_data.get("deep_review_run_manifest").cloned();
             if let Some(workspace) = context.workspace.as_ref() {
-                let session_storage_path = workspace.session_storage_path();
+                let session_storage_dir = workspace.session_storage_dir();
                 match coordinator
                     .get_session_manager()
-                    .load_session_metadata(&session_storage_path, &session_id)
+                    .load_session_metadata(&session_storage_dir, &session_id)
                     .await
                 {
                     Ok(Some(metadata)) => {

@@ -100,14 +100,15 @@ pub(crate) async fn send_stream(
         ttft_timeout,
         trace,
         || common::apply_headers(client, client.client.post(&url)),
-        move |response, tx, tx_raw| {
-            tokio::spawn(handle_openai_stream(
+        move |response, tx, tx_raw, remaining_ttft_timeout| {
+            handle_openai_stream(
                 response,
                 tx,
                 tx_raw,
                 inline_think_in_text,
+                remaining_ttft_timeout,
                 idle_timeout,
-            ));
+            )
         },
     )
     .await

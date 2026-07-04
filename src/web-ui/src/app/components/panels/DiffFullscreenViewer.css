@@ -56,7 +56,7 @@
   justify-content: space-between;
   padding: 12px 20px;
   background: var(--diff-fullscreen-overlay-bg);
-  border-bottom: 1px solid var(--color-overlay-white-10);
+  border-bottom: 1px solid var(--color-overlay-white-12);
   backdrop-filter: blur(8px);
   flex-shrink: 0;
   z-index: 2;
@@ -116,9 +116,9 @@
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
-  background: var(--color-overlay-white-05);
+  background: var(--color-overlay-white-08);
   color: var(--color-overlay-white-80);
-  border: 1px solid var(--color-overlay-white-10);
+  border: 1px solid var(--color-overlay-white-12);
 }
 
 .header-btn:hover:not(:disabled) {
@@ -165,7 +165,7 @@
 .header-divider {
   width: 1px;
   height: 20px;
-  background: var(--color-overlay-white-10);
+  background: var(--color-overlay-white-12);
   margin: 0 4px;
 }
 

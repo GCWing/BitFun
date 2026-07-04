@@ -1,20 +1,14 @@
 //! MCP dynamic tool metadata and result rendering helpers.
 
 use crate::mcp::protocol::{MCPTool, MCPToolResult, MCPToolResultContent};
-use crate::mcp::{build_mcp_tool_name, MCPRuntimeResult, McpToolInfo};
+use crate::mcp::MCPRuntimeResult;
 use async_trait::async_trait;
+use bitfun_agent_tools::{
+    build_mcp_tool_bridge_definition, McpToolBridgeBehaviorHints, McpToolBridgeDefinition,
+    McpToolBridgeDefinitionInput,
+};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct McpDynamicToolDescriptor {
-    pub full_name: String,
-    pub title: String,
-    pub user_facing_name: String,
-    pub description: String,
-    pub provider_id: String,
-    pub provider_kind: String,
-    pub tool_info: McpToolInfo,
-    pub read_only: bool,
-}
+pub type McpDynamicToolDescriptor = McpToolBridgeDefinition;
 
 #[derive(Debug, Clone)]
 pub struct MCPDynamicToolDefinition {
@@ -69,57 +63,31 @@ fn tool_title(tool: &MCPTool) -> String {
         .unwrap_or_else(|| tool.name.clone())
 }
 
-fn behavior_hints(tool: &MCPTool) -> Vec<&'static str> {
-    let annotations = tool.annotations.clone().unwrap_or_default();
-    let mut hints = Vec::new();
-    if annotations.read_only_hint.unwrap_or(false) {
-        hints.push("read-only");
-    }
-    if annotations.destructive_hint.unwrap_or(false) {
-        hints.push("destructive");
-    }
-    if annotations.open_world_hint.unwrap_or(false) {
-        hints.push("open-world");
-    }
-    hints
-}
-
 pub fn build_mcp_tool_descriptor(
     server_id: &str,
     server_name: &str,
     tool: &MCPTool,
 ) -> McpDynamicToolDescriptor {
     let title = tool_title(tool);
-    let mut description = format!(
-        "Tool '{}' from MCP server '{}': {}",
-        title,
+    let annotations = tool.annotations.as_ref();
+    build_mcp_tool_bridge_definition(McpToolBridgeDefinitionInput {
+        server_id,
         server_name,
-        tool.description.as_deref().unwrap_or("")
-    );
-
-    let hints = behavior_hints(tool);
-    if !hints.is_empty() {
-        description.push_str(&format!(" [Hints: {}]", hints.join(", ")));
-    }
-
-    McpDynamicToolDescriptor {
-        full_name: build_mcp_tool_name(server_id, &tool.name),
-        title: title.clone(),
-        user_facing_name: format!("{} ({})", title, server_name),
-        description,
-        provider_id: server_id.to_string(),
-        provider_kind: "mcp".to_string(),
-        tool_info: McpToolInfo {
-            server_id: server_id.to_string(),
-            server_name: server_name.to_string(),
-            tool_name: tool.name.clone(),
+        tool_name: &tool.name,
+        title: &title,
+        description: tool.description.as_deref(),
+        behavior_hints: McpToolBridgeBehaviorHints {
+            read_only: annotations
+                .and_then(|annotations| annotations.read_only_hint)
+                .unwrap_or(false),
+            destructive: annotations
+                .and_then(|annotations| annotations.destructive_hint)
+                .unwrap_or(false),
+            open_world: annotations
+                .and_then(|annotations| annotations.open_world_hint)
+                .unwrap_or(false),
         },
-        read_only: tool
-            .annotations
-            .as_ref()
-            .and_then(|annotations| annotations.read_only_hint)
-            .unwrap_or(false),
-    }
+    })
 }
 
 fn truncate_for_assistant(text: String, max_result_text_chars: usize) -> String {
@@ -172,4 +140,25 @@ pub fn render_mcp_tool_result_for_assistant(
     }
 
     "MCP tool execution completed".to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{render_mcp_tool_result_for_assistant, MCPToolResult, MCPToolResultContent};
+
+    #[test]
+    fn mcp_tool_result_rendering_does_not_pretruncate_before_storage_policy() {
+        let text = "x".repeat(12_001);
+        let result = MCPToolResult {
+            content: Some(vec![MCPToolResultContent::Text { text: text.clone() }]),
+            is_error: false,
+            structured_content: None,
+            meta: None,
+        };
+
+        let rendered = render_mcp_tool_result_for_assistant("large_output", &result, usize::MAX);
+
+        assert_eq!(rendered, text);
+        assert!(!rendered.contains("[Result truncated:"));
+    }
 }

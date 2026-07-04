@@ -90,7 +90,7 @@
     padding: 0;
     background: none;
     border: none;
-    color: var(--color-text-tertiary);
+    color: var(--color-text-muted);
     cursor: pointer;
     border-radius: 3px;
     transition: all 0.15s ease;
@@ -141,7 +141,7 @@
     padding: 0;
     background: transparent;
     border: none;
-    color: var(--color-text-tertiary);
+    color: var(--color-text-muted);
     cursor: pointer;
     border-radius: 3px;
     font-size: 11px;
@@ -154,7 +154,7 @@
     }
 
     &.is-active {
-      background: var(--mission-control-group-color, var(--color-accent-500));
+      background: var(--mission-control-group-color);
       color: var(--color-text-primary);
       box-shadow: 0 1px 3px var(--color-overlay-black-20);
 
@@ -170,7 +170,7 @@
       width: 6px;
       height: 6px;
       border-radius: 50%;
-      background: var(--mission-control-group-color, var(--color-accent-500));
+      background: var(--mission-control-group-color);
       opacity: 0.6;
       transition: opacity 0.15s ease;
     }
@@ -218,7 +218,7 @@
     align-items: center;
     justify-content: center;
     padding: 40px 30px;
-    color: var(--color-text-tertiary);
+    color: var(--color-text-muted);
     font-size: 12px;
     border: 1px dashed var(--border-base);
     border-radius: 6px;
@@ -232,7 +232,7 @@
     gap: 12px;
     padding: 6px 16px;
     font-size: 10px;
-    color: var(--color-text-tertiary);
+    color: var(--color-text-muted);
     border-top: 1px dashed var(--border-base);
     flex-shrink: 0;
 

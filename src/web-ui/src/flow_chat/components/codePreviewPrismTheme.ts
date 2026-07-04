@@ -4,9 +4,9 @@
 import type { CSSProperties } from 'react';
 import { buildSharedPrismStyle } from '@/shared/prism/prismTheme';
 
-/** Match `.markdown-renderer` code blocks (`Markdown.scss` --markdown-font-mono). */
+/** Match `.markdown-renderer` code blocks. */
 export const CODE_PREVIEW_FONT_FAMILY =
-  'var(--markdown-font-mono)';
+  'var(--font-family-mono)';
 
 export function buildCodePreviewPrismStyle(isLight: boolean): Record<string, CSSProperties> {
   return buildSharedPrismStyle(isLight, {

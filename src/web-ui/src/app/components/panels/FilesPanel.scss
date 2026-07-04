@@ -79,7 +79,7 @@
     flex-direction: column;
     gap: $size-gap-2;
     padding: $size-gap-2;
-    border-bottom: 1px solid $border-base;
+    border-bottom: 1px solid var(--border-base);
     flex-shrink: 0;
   }
 
@@ -97,7 +97,7 @@
     justify-content: space-between;
     gap: $size-gap-2;
     padding: $size-gap-2 $size-gap-3;
-    border: 1px solid $border-base;
+    border: 1px solid var(--border-base);
     border-radius: $size-radius-base;
     background:
       linear-gradient(180deg, color-mix(in srgb, var(--element-bg-subtle) 84%, transparent), transparent),
@@ -168,7 +168,7 @@
     flex-direction: column;
     gap: $size-gap-1;
     padding: $size-gap-2 $size-gap-3;
-    border-bottom: 1px solid $border-base;
+    border-bottom: 1px solid var(--border-base);
     background: color-mix(in srgb, var(--element-bg-subtle) 82%, var(--color-bg-secondary) 18%);
     flex-shrink: 0;
   }
@@ -192,15 +192,15 @@
     gap: $size-gap-2;
     padding: $size-gap-2 $size-gap-3;
     background: var(--element-bg-subtle);
-    border-bottom: 1px solid $border-base;
+    border-bottom: 1px solid var(--border-base);
     font-size: var(--font-size-xs);
-    color: $color-accent-600;
+    color: var(--color-accent-600);
     flex-shrink: 0;
   }
 
   &__search-limit-notice {
     padding: $size-gap-2 $size-gap-3;
-    border-bottom: 1px solid $border-base;
+    border-bottom: 1px solid var(--border-base);
     background: color-mix(in srgb, var(--element-bg-subtle) 72%, var(--color-accent-100) 28%);
     color: var(--color-text-secondary);
     font-size: var(--font-size-xs);
@@ -209,8 +209,8 @@
   }
 
   &__search-limit-notice--warning {
-    background: color-mix(in srgb, var(--element-bg-subtle) 64%, var(--color-warning-100) 36%);
-    color: var(--color-warning-700);
+    background: color-mix(in srgb, var(--element-bg-subtle) 64%, var(--color-warning-bg) 36%);
+    color: var(--color-warning);
   }
 
   &__search-spinner {
@@ -325,7 +325,7 @@
     transition: box-shadow $motion-base $easing-standard, background $motion-base $easing-standard;
 
     &--drop-target {
-      box-shadow: inset 0 0 0 2px $color-accent-500;
+      box-shadow: inset 0 0 0 2px var(--color-accent-500);
       background: var(--element-bg-subtle);
     }
   }
@@ -333,7 +333,7 @@
   &__transfer {
     flex-shrink: 0;
     padding: $size-gap-2 $size-gap-3;
-    border-top: 1px solid $border-base;
+    border-top: 1px solid var(--border-base);
     background: var(--color-bg-secondary);
   }
 
@@ -361,7 +361,7 @@
   &__transfer-fill {
     height: 100%;
     border-radius: $size-radius-full;
-    background: $color-accent-500;
+    background: var(--color-accent-500);
     transition: width $motion-base $easing-standard;
   }
 
@@ -400,7 +400,7 @@
     width: 20px;
     height: 20px;
     border: 2px solid var(--element-bg-base);
-    border-top: 2px solid $color-accent-600;
+    border-top: 2px solid var(--color-accent-600);
     border-radius: $size-radius-full;
     animation: bitfun-files-panel-spin 1s linear infinite;
     margin-bottom: $size-gap-3;
@@ -425,7 +425,7 @@
 
   &__retry-button {
     padding: $size-gap-1 $size-gap-3;
-    border: 1px solid $border-base;
+    border: 1px solid var(--border-base);
     border-radius: $size-radius-sm;
     background: transparent;
     color: var(--color-text-muted);
@@ -435,7 +435,7 @@
 
     &:hover {
       background: var(--element-bg-soft);
-      border-color: $border-medium;
+      border-color: var(--border-medium);
       color: var(--color-text-secondary);
     }
   }

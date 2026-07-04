@@ -172,7 +172,7 @@
   transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.15s ease;
 
   &:hover {
-    box-shadow: 0 2px 8px var(--color-overlay-black-10);
+    box-shadow: 0 2px 8px var(--color-overlay-black-12);
   }
 
   &:active {
@@ -289,6 +289,23 @@
   border-bottom: 1px solid var(--border-subtle);
 }
 
+.bitfun-remote-connect__lan-ip-select {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bitfun-remote-connect__info-meta-label {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.bitfun-remote-connect__lan-ip-dropdown {
+  flex: 1;
+  min-width: 0;
+}
+
 .bitfun-remote-connect__description-link,
 .bitfun-remote-connect__step-link {
   color: var(--color-text-secondary);
@@ -310,7 +327,7 @@
 
 .bitfun-remote-connect__error {
   font-size: 12px;
-  color: var(--color-danger);
+  color: var(--color-error);
   text-align: center;
   margin: 0;
 }
@@ -327,7 +344,7 @@
   border: none;
   padding: 0;
   font-size: 12px;
-  color: var(--color-accent);
+  color: var(--color-accent-500);
   text-decoration: underline;
   cursor: pointer;
 
@@ -461,8 +478,8 @@
   display: inline-flex;
   align-items: center;
   padding: 3px;
-  background: $element-bg-base;
-  border: 1px solid $border-subtle;
+  background: var(--element-bg-base);
+  border: 1px solid var(--border-subtle);
   border-radius: 20px;
 }
 
@@ -470,7 +487,7 @@
   padding: 5px 14px;
   font-size: var(--font-size-xs);
   font-weight: $font-weight-medium;
-  color: $color-text-muted;
+  color: var(--color-text-muted);
   background: transparent;
   border: none;
   border-radius: 17px;
@@ -478,20 +495,20 @@
   transition: all $motion-fast $easing-standard;
 
   &:hover:not(.is-active) {
-    color: $color-text-primary;
-    background: $element-bg-subtle;
+    color: var(--color-text-primary);
+    background: var(--element-bg-subtle);
   }
 
   &.is-active {
     color: var(--color-static-white);
-    background: $color-success;
+    background: var(--color-success);
     font-weight: $font-weight-semibold;
     box-shadow: 0 1px 4px rgba(var(--component-action-success-rgb), 0.35);
     cursor: default;
   }
 
   &:focus-visible {
-    outline: 2px solid rgba($color-success, 0.5);
+    outline: 2px solid color-mix(in srgb, var(--color-success) 50%, transparent);
     outline-offset: 1px;
   }
 }

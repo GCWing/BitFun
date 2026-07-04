@@ -1,306 +1,233 @@
- 
+
 
 import { ThemeConfig } from '../types';
 import {
   createChinaTypography,
+  createAccentScale,
   createCompactRadius,
+  createGitColors,
+  createSemanticColors,
+  createSecondaryAccentScale,
   createStandardEasing,
   createStandardSpacing,
   createWindowControls,
+  rgbFromHex,
+  rgbaFromHex,
+  STATIC_BLACK,
+  STATIC_WHITE,
 } from './shared';
 
+const CHINA_STYLE_PAPER = '#faf8f0';
+const CHINA_STYLE_INK = '#1c1c1f';
+const CHINA_STYLE_BUTTON_TEXT = '#3d3d3d';
+const CHINA_STYLE_BLUE = '#2e5e8a';
+const CHINA_STYLE_BLUE_HOVER = '#234a6d';
+const CHINA_STYLE_GREEN = '#7eb09b';
+const CHINA_STYLE_GREEN_HOVER = '#5a9078';
+const CHINA_STYLE_SUCCESS = '#52ad5a';
+const CHINA_STYLE_WARNING = '#f0a020';
+const CHINA_STYLE_ERROR = '#c8102e';
+const CHINA_STYLE_BORDER = '#6a5c46';
+
+const chinaStylePaper = (alpha: number | string) => rgbaFromHex(CHINA_STYLE_PAPER, alpha);
+const chinaStyleBlue = (alpha: number | string) => rgbaFromHex(CHINA_STYLE_BLUE, alpha);
+const chinaStyleSuccess = (alpha: number | string) => rgbaFromHex(CHINA_STYLE_SUCCESS, alpha);
+const chinaStyleWarning = (alpha: number | string) => rgbaFromHex(CHINA_STYLE_WARNING, alpha);
+const chinaStyleError = (alpha: number | string) => rgbaFromHex(CHINA_STYLE_ERROR, alpha);
+const chinaStyleBorder = (alpha: number | string) => rgbaFromHex(CHINA_STYLE_BORDER, alpha);
+
 export const bitfunChinaStyleTheme: ThemeConfig = {
-  
+
   id: 'bitfun-china-style',
   name: 'Ink Charm',
   type: 'light',
   description: 'Chinese style theme - Rice paper and ink, blue and vermilion, warm and elegant',
   author: 'BitFun Team',
   version: '1.0.0',
-  
-  
+
+
   colors: {
     background: {
-      primary: '#faf8f0',          
-      secondary: '#f5f3e8',        
-      tertiary: '#f0ede0',         
-      quaternary: '#ebe8d8',       
-      elevated: '#ebe9e3',         
-      workbench: '#faf8f0',        
-      scene: '#fdfcf6',
-      tooltip: 'rgba(250, 248, 240, 0.96)',
+      primary: CHINA_STYLE_PAPER,
+      secondary: '#f5f3e8',
+      tertiary: '#f0ede0',
+      quaternary: '#ebe8d8',
+      elevated: '#f0ede0',
+      workbench: CHINA_STYLE_PAPER,
+      scene: CHINA_STYLE_PAPER,
+      tooltip: chinaStylePaper(0.96),
     },
-    
+
     text: {
-      primary: '#1a1a1a',          
-      secondary: '#3d3d3d',        
-      muted: '#6a6a6a',            
-      disabled: '#9a9a9a',         
+      primary: CHINA_STYLE_INK,
+      secondary: '#3d3d3d',
+      muted: '#6a6a6a',
+      disabled: '#9a9a9a',
     },
-    
-    accent: {
-      50: 'rgba(46, 94, 138, 0.04)',
-      100: 'rgba(46, 94, 138, 0.08)',
-      200: 'rgba(46, 94, 138, 0.15)',
-      300: 'rgba(46, 94, 138, 0.25)',
-      400: 'rgba(46, 94, 138, 0.4)',
-      500: '#2e5e8a',              
-      600: '#234a6d',              
-      700: 'rgba(35, 74, 109, 0.8)',
-      800: 'rgba(35, 74, 109, 0.9)',
-    },
-    
-    purple: {
-      50: 'rgba(126, 176, 155, 0.04)',
-      100: 'rgba(126, 176, 155, 0.08)',
-      200: 'rgba(126, 176, 155, 0.15)',
-      300: 'rgba(126, 176, 155, 0.25)',
-      400: 'rgba(126, 176, 155, 0.4)',
-      500: '#7eb09b',              
-      600: '#5a9078',              
-      700: 'rgba(90, 144, 120, 0.8)',
-      800: 'rgba(90, 144, 120, 0.9)',
-    },
-    
-    semantic: {
-      success: '#52ad5a',          
-      successBg: 'rgba(82, 173, 90, 0.08)',
-      successBorder: 'rgba(82, 173, 90, 0.25)',
-      
-      warning: '#f0a020',          
-      warningBg: 'rgba(240, 160, 32, 0.08)',
-      warningBorder: 'rgba(240, 160, 32, 0.25)',
-      
-      error: '#c8102e',            
-      errorBg: 'rgba(200, 16, 46, 0.08)',
-      errorBorder: 'rgba(200, 16, 46, 0.25)',
-      
-      info: '#2e5e8a',             
-      infoBg: 'rgba(46, 94, 138, 0.08)',
-      infoBorder: 'rgba(46, 94, 138, 0.25)',
-      highlight: '#2e5e8a',
-      highlightBg: 'rgba(46, 94, 138, 0.12)',
-    },
-    
+
+    accent: createAccentScale({ base: CHINA_STYLE_BLUE, hover: CHINA_STYLE_BLUE_HOVER }),
+
+    purple: createSecondaryAccentScale({ base: CHINA_STYLE_GREEN, hover: CHINA_STYLE_GREEN_HOVER }),
+
+    semantic: createSemanticColors({
+      success: CHINA_STYLE_SUCCESS,
+      warning: CHINA_STYLE_WARNING,
+      error: CHINA_STYLE_ERROR,
+      info: CHINA_STYLE_BLUE,
+      bgAlpha: 0.08,
+      borderAlpha: 0.25,
+    }),
+
     border: {
-      subtle: 'rgba(106, 92, 70, 0.12)',      
-      base: 'rgba(106, 92, 70, 0.2)',
-      medium: 'rgba(106, 92, 70, 0.28)',      
-      strong: 'rgba(106, 92, 70, 0.36)',      
-      prominent: 'rgba(106, 92, 70, 0.48)',   
+      subtle: chinaStyleBorder(0.12),
+      base: chinaStyleBorder(0.2),
+      medium: chinaStyleBorder(0.28),
+      strong: chinaStyleBorder(0.36),
+      prominent: chinaStyleBorder(0.48),
     },
-    
+
     element: {
-      subtle: 'rgba(46, 94, 138, 0.03)',      
-      soft: 'rgba(46, 94, 138, 0.06)',        
-      base: 'rgba(46, 94, 138, 0.1)',
-      medium: 'rgba(46, 94, 138, 0.14)',      
-      strong: 'rgba(46, 94, 138, 0.18)',      
-      elevated: 'rgba(255, 255, 255, 0.85)',  
+      subtle: chinaStyleBlue(0.03),
+      soft: chinaStyleBlue(0.06),
+      base: chinaStyleBlue(0.1),
+      medium: chinaStyleBlue(0.14),
+      strong: chinaStyleBlue(0.18),
+      elevated: rgbaFromHex(STATIC_WHITE, 0.85),
     },
-    
-    git: {
-      branch: 'rgb(46, 94, 138)',              
-      branchBg: 'rgba(46, 94, 138, 0.08)',
-      changes: 'rgb(240, 160, 32)',            
-      changesBg: 'rgba(240, 160, 32, 0.08)',
-      added: 'rgb(82, 173, 90)',               
-      addedBg: 'rgba(82, 173, 90, 0.08)',
-      deleted: 'rgb(200, 16, 46)',             
-      deletedBg: 'rgba(200, 16, 46, 0.08)',
-      staged: 'rgb(82, 173, 90)',              
-      stagedBg: 'rgba(82, 173, 90, 0.08)',
-    },
+
+    git: createGitColors({
+      branch: rgbFromHex(CHINA_STYLE_BLUE),
+      branchBg: chinaStyleBlue(0.08),
+      changes: rgbFromHex(CHINA_STYLE_WARNING),
+      changesBg: chinaStyleWarning(0.08),
+      added: rgbFromHex(CHINA_STYLE_SUCCESS),
+      addedBg: chinaStyleSuccess(0.08),
+      deleted: rgbFromHex(CHINA_STYLE_ERROR),
+      deletedBg: chinaStyleError(0.08),
+    }),
   },
-  
-  
+
+
   effects: {
     shadow: {
-      xs: '0 1px 2px rgba(106, 92, 70, 0.06)',
-      sm: '0 2px 4px rgba(106, 92, 70, 0.08)',
-      base: '0 4px 8px rgba(106, 92, 70, 0.1)',
-      lg: '0 8px 16px rgba(106, 92, 70, 0.12)',
-      xl: '0 12px 24px rgba(106, 92, 70, 0.15)',
-      '2xl': '0 16px 32px rgba(106, 92, 70, 0.18)',
+      xs: `0 1px 2px ${chinaStyleBorder(0.06)}`,
+      sm: `0 2px 4px ${chinaStyleBorder(0.08)}`,
+      base: `0 4px 8px ${chinaStyleBorder(0.1)}`,
+      lg: `0 8px 16px ${chinaStyleBorder(0.12)}`,
+      xl: `0 12px 24px ${chinaStyleBorder(0.15)}`,
     },
-    
-    glow: {
-      blue: '0 8px 24px rgba(46, 94, 138, 0.18), 0 4px 12px rgba(46, 94, 138, 0.12), 0 2px 6px rgba(106, 92, 70, 0.05)',
-      purple: '0 8px 24px rgba(126, 176, 155, 0.18), 0 4px 12px rgba(126, 176, 155, 0.12), 0 2px 6px rgba(106, 92, 70, 0.05)',
-      mixed: '0 8px 24px rgba(46, 94, 138, 0.12), 0 4px 12px rgba(126, 176, 155, 0.1), 0 2px 6px rgba(106, 92, 70, 0.05)',
-    },
-    
+
     blur: {
       subtle: 'blur(4px) saturate(1.03)',
       base: 'blur(8px) saturate(1.05)',
-      medium: 'blur(12px) saturate(1.08)',
-      strong: 'blur(16px) saturate(1.1) brightness(1.02)',
-      intense: 'blur(20px) saturate(1.12) brightness(1.03)',
     },
-    
+
     radius: createCompactRadius(),
-    
+
     spacing: createStandardSpacing(),
-    
+
     opacity: {
       disabled: 0.5,
       hover: 0.75,
       focus: 0.9,
-      overlay: 0.35,
     },
   },
-  
-  
+
+
   motion: {
     duration: {
       instant: '0.1s',
-      fast: '0.2s',                 
-      base: '0.35s',                
+      fast: '0.2s',
+      base: '0.35s',
       slow: '0.7s',
-      lazy: '1.2s',                 
     },
-    
+
     easing: createStandardEasing('cubic-bezier(0.25, 0.1, 0.25, 1)'),
   },
-  
-  
+
+
   typography: createChinaTypography(),
-  
-  
+
+
   components: {
-    
-    windowControls: createWindowControls({
-      standard: {
-        dot: 'rgba(46, 94, 138, 0.45)',
-        dotShadow: '0 0 4px rgba(46, 94, 138, 0.2)',
-        hoverBg: 'rgba(46, 94, 138, 0.12)',
-        hoverColor: '#2e5e8a',
-        hoverBorder: 'rgba(46, 94, 138, 0.2)',
-        hoverShadow: '0 2px 8px rgba(46, 94, 138, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.5)',
-      },
-      close: {
-        dot: 'rgba(200, 16, 46, 0.45)',
-        dotShadow: '0 0 4px rgba(200, 16, 46, 0.2)',
-        hoverBg: 'rgba(200, 16, 46, 0.12)',
-        hoverColor: '#c8102e',
-        hoverBorder: 'rgba(200, 16, 46, 0.2)',
-        hoverShadow: '0 2px 8px rgba(200, 16, 46, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.5)',
-      },
-      common: {
-        defaultColor: 'rgba(26, 26, 26, 0.9)',
-        defaultDot: 'rgba(106, 92, 70, 0.2)',
-        disabledDot: 'rgba(106, 92, 70, 0.1)',
-        flowGradient: 'linear-gradient(90deg, transparent, rgba(106, 92, 70, 0.05), rgba(106, 92, 70, 0.08), rgba(106, 92, 70, 0.05), transparent)',
-      },
-    }),
-    
+
+    windowControls: createWindowControls(CHINA_STYLE_ERROR),
+
     button: {
-      
-      default: {
-        background: 'rgba(46, 94, 138, 0.09)',
-        color: '#5a5a5a',
-        border: 'transparent',
-        shadow: 'none',
-      },
-      hover: {
-        background: 'rgba(46, 94, 138, 0.16)',
-        color: '#3a3a3a',
-        border: 'transparent',
-        shadow: 'none',
-        transform: 'none',
-      },
-      active: {
-        background: 'rgba(46, 94, 138, 0.12)',
-        color: '#3a3a3a',
-        border: 'transparent',
-        shadow: 'none',
-        transform: 'none',
-      },
-      
-      
+
+
+
       primary: {
         default: {
-          background: '#000000',
-          color: '#ffffff',
+          background: STATIC_BLACK,
+          color: STATIC_WHITE,
           border: 'transparent',
           shadow: 'none',
         },
         hover: {
           background: '#262626',
-          color: '#ffffff',
+          color: STATIC_WHITE,
           border: 'transparent',
           shadow: 'none',
           transform: 'none',
         },
         active: {
-          background: '#1a1a1a',
-          color: '#ffffff',
+          background: CHINA_STYLE_INK,
+          color: STATIC_WHITE,
           border: 'transparent',
           shadow: 'none',
           transform: 'none',
         },
       },
-      
-      
+
+
       ghost: {
         default: {
-          background: 'transparent',
-          color: '#5a5a5a',
-          border: 'transparent',
-          shadow: 'none',
+          color: '#555555',
         },
         hover: {
-          background: 'rgba(46, 94, 138, 0.11)',
-          color: '#3a3a3a',
+          background: chinaStyleBlue(0.11),
+          color: CHINA_STYLE_BUTTON_TEXT,
           border: 'transparent',
-          shadow: 'none',
-          transform: 'none',
-        },
-        active: {
-          background: 'rgba(46, 94, 138, 0.08)',
-          color: '#3a3a3a',
-          border: 'transparent',
-          shadow: 'none',
-          transform: 'none',
         },
       },
     },
   },
-  
-  
+
+
   monaco: {
     base: 'vs',
     inherit: true,
     rules: [
-      { token: 'comment', foreground: '6a6a6a', fontStyle: 'italic' },      
-      { token: 'keyword', foreground: 'c8102e' },                           
-      { token: 'string', foreground: '52ad5a' },                            
-      { token: 'number', foreground: 'f0a020' },                            
-      { token: 'type', foreground: '2e5e8a' },                              
-      { token: 'class', foreground: '2e5e8a' },                             
-      { token: 'function', foreground: '7eb09b' },                          
-      { token: 'variable', foreground: '3d3d3d' },                          
-      { token: 'constant', foreground: 'a0522d' },                          
-      { token: 'operator', foreground: 'c8102e' },                          
-      { token: 'tag', foreground: '2e5e8a' },                               
-      { token: 'attribute.name', foreground: '7eb09b' },                    
-      { token: 'attribute.value', foreground: '52ad5a' },                   
+      { token: 'comment', foreground: '6a6a6a', fontStyle: 'italic' },
+      { token: 'keyword', foreground: 'c8102e' },
+      { token: 'string', foreground: '52ad5a' },
+      { token: 'number', foreground: 'f0a020' },
+      { token: 'type', foreground: '2e5e8a' },
+      { token: 'class', foreground: '2e5e8a' },
+      { token: 'function', foreground: '7eb09b' },
+      { token: 'variable', foreground: '3d3d3d' },
+      { token: 'constant', foreground: 'a0522d' },
+      { token: 'operator', foreground: 'c8102e' },
+      { token: 'tag', foreground: '2e5e8a' },
+      { token: 'attribute.name', foreground: '7eb09b' },
+      { token: 'attribute.value', foreground: '52ad5a' },
     ],
     colors: {
-      background: '#faf8f0',                      
-      foreground: '#1a1a1a',                      
-      lineHighlight: '#f5f3e8',                   
-      selection: 'rgba(46, 94, 138, 0.28)',       
-      cursor: '#2e5e8a',                          
-      
-      'editor.selectionBackground': 'rgba(46, 94, 138, 0.28)',   
-      'editor.selectionForeground': '#1a1a1a',                   
-      'editor.inactiveSelectionBackground': 'rgba(46, 94, 138, 0.18)',  
-      'editor.selectionHighlightBackground': 'rgba(46, 94, 138, 0.2)',
-      'editor.selectionHighlightBorder': 'rgba(46, 94, 138, 0.35)',      
-      'editorCursor.foreground': '#2e5e8a',       
-      'editor.wordHighlightBackground': 'rgba(46, 94, 138, 0.12)',  
-      'editor.wordHighlightStrongBackground': 'rgba(46, 94, 138, 0.22)',  
+      background: CHINA_STYLE_PAPER,
+      foreground: CHINA_STYLE_INK,
+      lineHighlight: '#f5f3e8',
+      selection: chinaStyleBlue(0.28),
+      cursor: CHINA_STYLE_BLUE,
+
+      'editor.selectionBackground': chinaStyleBlue(0.28),
+      'editor.selectionForeground': CHINA_STYLE_INK,
+      'editor.inactiveSelectionBackground': chinaStyleBlue(0.18),
+      'editor.selectionHighlightBackground': chinaStyleBlue(0.2),
+      'editor.selectionHighlightBorder': chinaStyleBlue(0.35),
+      'editorCursor.foreground': CHINA_STYLE_BLUE,
+      'editor.wordHighlightBackground': chinaStyleBlue(0.12),
+      'editor.wordHighlightStrongBackground': chinaStyleBlue(0.22),
     },
   },
 };

@@ -163,17 +163,17 @@ $_indent-width: 8px;
   }
 
   &--selected {
-    background: $git-color-branch-bg;
-    color: $git-color-branch;
+    background: var(--git-color-branch-bg);
+    color: var(--git-color-branch);
 
     .bitfun-file-explorer__node-name {
-      color: $git-color-branch;
+      color: var(--git-color-branch);
       font-weight: $font-weight-medium;
     }
 
     &:hover {
-      background: $git-color-branch-bg-hover;
-      color: $git-color-branch;
+      background: var(--git-color-branch-bg-hover);
+      color: var(--git-color-branch);
     }
   }
 
@@ -186,11 +186,11 @@ $_indent-width: 8px;
   }
 
   &--highlighted {
-    background: $git-color-branch-bg !important;
+    background: var(--git-color-branch-bg) !important;
     animation: file-node-highlight-fade 2s ease-out forwards;
     
     .bitfun-file-explorer__node-name {
-      color: $git-color-branch;
+      color: var(--git-color-branch);
       font-weight: $font-weight-medium;
     }
   }
@@ -198,10 +198,10 @@ $_indent-width: 8px;
 
 @keyframes file-node-highlight-fade {
   0% {
-    background: rgba(var(--color-primary-rgb) / 0.2);
+    background: rgba(var(--color-accent-500-rgb) / 0.2);
   }
   30% {
-    background: $git-color-branch-bg;
+    background: var(--git-color-branch-bg);
   }
   100% {
     background: transparent;
@@ -224,7 +224,7 @@ $_indent-width: 8px;
   min-width: $_icon-size;
 
   &--folder {
-    color: $git-color-branch;
+    color: var(--git-color-branch);
   }
 
   &--folder-open {

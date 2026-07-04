@@ -3,6 +3,7 @@ import type { DialogTurn } from '../types/flow-chat';
 import {
   isDialogTurnInFlight,
   isThreadGoalContinuationTurn,
+  shouldUseLatestTurnFollowOutput,
   shouldUseStickyLatestPin,
 } from './flowChatTurnScrollPolicy';
 
@@ -39,11 +40,29 @@ describe('flowChatTurnScrollPolicy', () => {
       },
     });
     expect(isThreadGoalContinuationTurn(turn)).toBe(true);
+    expect(shouldUseLatestTurnFollowOutput(turn)).toBe(false);
     expect(shouldUseStickyLatestPin(turn)).toBe(false);
   });
 
   it('allows sticky pin for in-flight user turns', () => {
-    const turn = makeTurn({ status: 'processing' });
+    const turn = makeTurn({
+      status: 'processing',
+      modelRounds: [{
+        id: 'round-1',
+        turnId: 'turn-1',
+        items: [],
+        isStreaming: true,
+        createdAt: 1,
+      }],
+    } as Partial<DialogTurn>);
+    expect(shouldUseLatestTurnFollowOutput(turn)).toBe(true);
     expect(shouldUseStickyLatestPin(turn)).toBe(true);
+  });
+
+  it('lets follow-output own a newly submitted user-only turn before sticky pin starts', () => {
+    const turn = makeTurn({ status: 'processing', modelRounds: [] });
+    expect(isDialogTurnInFlight(turn)).toBe(true);
+    expect(shouldUseLatestTurnFollowOutput(turn)).toBe(true);
+    expect(shouldUseStickyLatestPin(turn)).toBe(false);
   });
 });

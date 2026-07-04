@@ -8,11 +8,13 @@ const log = createLogger('AgentCompanionWindowService');
  * Serialized `invoke`/`emit` so rapid settings toggles cannot interleave show/hide on the backend.
  */
 let companionDesktopWindowSyncChain: Promise<void> = Promise.resolve();
+let companionDesktopWindowSyncRequestId = 0;
 
 export async function syncAgentCompanionDesktopWindow(
   settings: AIExperienceSettings,
 ): Promise<void> {
   if (!isTauriRuntime()) return;
+  const requestId = companionDesktopWindowSyncRequestId += 1;
 
   const run = async (): Promise<void> => {
     const startedAt = performance.now();
@@ -21,6 +23,14 @@ export async function syncAgentCompanionDesktopWindow(
       ? 'show_agent_companion_desktop_pet'
       : 'hide_agent_companion_desktop_pet';
 
+    if (requestId !== companionDesktopWindowSyncRequestId) {
+      log.debug('Skipped stale Agent companion desktop window sync', {
+        command,
+        displayMode: settings.agent_companion_display_mode,
+      });
+      return;
+    }
+
     try {
       log.debug('Agent companion desktop window sync started', {
         command,
@@ -28,6 +38,9 @@ export async function syncAgentCompanionDesktopWindow(
       });
       const { invoke } = await import('@tauri-apps/api/core');
       await invoke(command);
+      if (requestId !== companionDesktopWindowSyncRequestId) {
+        return;
+      }
       if (command === 'show_agent_companion_desktop_pet') {
         const { emit } = await import('@tauri-apps/api/event');
         await emit('agent-companion://settings-updated', settings);

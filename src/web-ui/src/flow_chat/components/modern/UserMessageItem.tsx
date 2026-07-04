@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { Copy, Check, RotateCcw, Loader2, ArrowDownToLine, X, CircleUser, Pencil } from 'lucide-react';
 import type { DialogTurn, FlowUserSteeringItem } from '../../types/flow-chat';
 import { flowChatManager } from '../../services/FlowChatManager';
@@ -540,13 +541,14 @@ export const UserMessageItem = React.memo<UserMessageItemProps>(
           </div>
         )}
 
-        {lightboxImage && (
+        {lightboxImage && createPortal(
           <div className="user-message-item__lightbox" onClick={() => setLightboxImage(null)}>
             <button className="user-message-item__lightbox-close" onClick={() => setLightboxImage(null)}>
               <X size={20} />
             </button>
             <img src={lightboxImage} alt="Preview" onClick={(e) => e.stopPropagation()} />
-          </div>
+          </div>,
+          document.body,
         )}
       </div>
     );

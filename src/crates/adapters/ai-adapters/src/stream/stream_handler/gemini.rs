@@ -1,5 +1,5 @@
 use super::stream_stats::StreamStats;
-use super::{next_stream_item, TimedStreamItem};
+use super::{next_stream_item, StreamTimeoutController, StreamTimeoutStage, TimedStreamItem};
 use crate::stream::types::gemini::GeminiSSEData;
 use crate::stream::types::unified::UnifiedResponse;
 use anyhow::{anyhow, Result};
@@ -80,15 +80,17 @@ pub async fn handle_gemini_stream(
     response: Response,
     tx_event: mpsc::UnboundedSender<Result<UnifiedResponse>>,
     tx_raw_sse: Option<mpsc::UnboundedSender<String>>,
+    ttft_timeout: Option<Duration>,
     idle_timeout: Option<Duration>,
 ) {
     let mut stream = response.bytes_stream().eventsource();
     let mut received_finish_reason = false;
     let mut tool_call_state = GeminiToolCallState::new();
     let mut stats = StreamStats::new("Gemini");
+    let mut timeout_controller = StreamTimeoutController::new(ttft_timeout, idle_timeout);
 
     loop {
-        let sse = match next_stream_item(&mut stream, idle_timeout).await {
+        let sse = match next_stream_item(&mut stream, &timeout_controller).await {
             TimedStreamItem::Item(Ok(sse)) => sse,
             TimedStreamItem::End => {
                 if received_finish_reason {
@@ -108,7 +110,18 @@ pub async fn handle_gemini_stream(
                 let _ = tx_event.send(Err(anyhow!(error_msg)));
                 return;
             }
-            TimedStreamItem::TimedOut => {
+            TimedStreamItem::TimedOut(StreamTimeoutStage::Ttft) => {
+                let timeout_secs = ttft_timeout.map(|timeout| timeout.as_secs()).unwrap_or(0);
+                let error_msg = format!(
+                    "Gemini stream TTFT timeout after {}s waiting for first effective output",
+                    timeout_secs
+                );
+                stats.log_summary("ttft_timeout");
+                error!("{}", error_msg);
+                let _ = tx_event.send(Err(anyhow!(error_msg)));
+                return;
+            }
+            TimedStreamItem::TimedOut(StreamTimeoutStage::Idle) => {
                 let timeout_secs = idle_timeout.map(|timeout| timeout.as_secs()).unwrap_or(0);
                 let error_msg = format!("Gemini SSE stream timeout after {}s", timeout_secs);
                 stats.log_summary("sse_stream_timeout");
@@ -189,6 +202,7 @@ pub async fn handle_gemini_stream(
         );
 
         for unified_response in unified_responses {
+            timeout_controller.observe_unified_response(&unified_response);
             stats.record_unified_response(&unified_response);
             let _ = tx_event.send(Ok(unified_response));
         }

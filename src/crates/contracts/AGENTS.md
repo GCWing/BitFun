@@ -10,7 +10,7 @@ implementation details upward.
 
 | Crate | Responsibility | Local doc |
 |---|---|---|
-| `core-types` | Shared DTOs, errors, session/surface data, and small value types | [AGENTS.md](core-types/AGENTS.md) |
+| `core-types` | Shared DTOs, errors, session/surface data, LSP protocol/plugin DTOs, and small value types | [AGENTS.md](core-types/AGENTS.md) |
 | `events` | Event payloads and emitter contracts | [AGENTS.md](events/AGENTS.md) |
 | `product-domains` | Product domain DTOs, rules, policies, and narrow ports | [AGENTS.md](product-domains/AGENTS.md) |
 | `runtime-ports` | Runtime-facing traits and ports used by owner crates | [AGENTS.md](runtime-ports/AGENTS.md) |

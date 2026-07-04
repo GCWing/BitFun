@@ -68,7 +68,7 @@
   }
   
   &__thinking-icon {
-    color: var(--color-text-tertiary);
+    color: var(--color-text-muted);
     flex-shrink: 0;
   }
   
@@ -123,7 +123,7 @@
   }
 
   &__chevron {
-    color: var(--color-text-tertiary);
+    color: var(--color-text-muted);
     flex-shrink: 0;
     transition: transform 0.2s ease;
     
@@ -141,15 +141,15 @@
     min-width: 220px;
     max-width: 280px;
     background: var(--color-bg-elevated);
-    border: 1px solid var(--color-overlay-white-10);
+    border: 1px solid var(--color-overlay-white-12);
     border-radius: 6px;
     overflow: hidden;
     backdrop-filter: blur(20px) saturate(1.2);
     -webkit-backdrop-filter: blur(20px) saturate(1.2);
     box-shadow: 
       0 8px 32px var(--color-overlay-black-50),
-      0 0 1px var(--color-overlay-white-10),
-      inset 0 1px 0 var(--color-overlay-white-06);
+      0 0 1px var(--color-overlay-white-12),
+      inset 0 1px 0 var(--color-overlay-white-08);
     z-index: $z-dropdown;
     animation: bitfun-model-dropdown-fade-in 0.15s ease-out;
   }
@@ -159,7 +159,7 @@
     align-items: center;
     justify-content: space-between;
     padding: 8px 12px;
-    border-bottom: 1px solid var(--color-overlay-white-06);
+    border-bottom: 1px solid var(--color-overlay-white-08);
     font-size: var(--flowchat-font-size-xxs);
     font-weight: 500;
     color: var(--color-text-muted);
@@ -169,7 +169,7 @@
   
   &__dropdown-hint {
     font-size: var(--flowchat-font-size-2xs);
-    color: var(--color-text-tertiary);
+    color: var(--color-text-muted);
     font-weight: 400;
     text-transform: none;
     letter-spacing: 0;
@@ -265,7 +265,7 @@
   
   &__option-desc {
     font-size: var(--flowchat-font-size-2xs);
-    color: var(--color-text-tertiary);
+    color: var(--color-text-muted);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -291,7 +291,7 @@
   }
   
   &__option-thinking {
-    color: var(--color-text-tertiary);
+    color: var(--color-text-muted);
     flex-shrink: 0;
   }
   
@@ -310,7 +310,7 @@
       -webkit-backdrop-filter: none;
       box-shadow:
         0 4px 18px var(--color-overlay-slate-04),
-        0 1px 3px var(--color-overlay-slate-03),
+        0 1px 3px var(--color-overlay-slate-04),
         inset 0 1px 0 var(--color-overlay-white-95);
     }
 
@@ -322,7 +322,7 @@
       background: var(--color-overlay-slate-08);
 
       &:hover {
-        background: var(--color-overlay-slate-14);
+        background: var(--color-overlay-slate-12);
       }
     }
   }

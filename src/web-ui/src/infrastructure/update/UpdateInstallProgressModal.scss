@@ -8,7 +8,7 @@
 .bitfun-update-progress__bar {
   height: 8px;
   border-radius: 4px;
-  background: var(--color-bg-subtle);
+  background: var(--element-bg-subtle);
   overflow: hidden;
   position: relative;
 }
@@ -16,7 +16,7 @@
 .bitfun-update-progress__fill {
   height: 100%;
   border-radius: 4px;
-  background: var(--color-accent);
+  background: var(--color-accent-500);
   transition: width 0.15s ease-out;
 }
 

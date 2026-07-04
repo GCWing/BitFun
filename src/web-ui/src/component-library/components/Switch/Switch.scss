@@ -70,7 +70,7 @@
     position: absolute;
     font-size: 9px;
     font-weight: tokens.$font-weight-semibold;
-    color: tokens.$color-text-muted;
+    color: var(--color-text-muted);
     text-transform: uppercase;
     letter-spacing: 0.5px;
     transition: opacity 0.2s ease;
@@ -143,7 +143,7 @@
   }
 
   &__input:checked + &__track &__loading {
-    color: var(--color-overlay-white-92);
+    color: var(--color-overlay-white-95);
   }
 
   &__input:active:not(:disabled) + &__track {

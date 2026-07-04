@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { listen } from '@tauri-apps/api/event';
+import { emit, listen } from '@tauri-apps/api/event';
 import { cursorPosition, getCurrentWindow } from '@tauri-apps/api/window';
 import { aiExperienceConfigService, type AgentCompanionPetSelection, type AIExperienceSettings } from '@/infrastructure/config/services/AIExperienceConfigService';
 import { ChatInputPixelPet, type ChatInputPixelPetMood } from '@/flow_chat/components/ChatInputPixelPet';
@@ -83,29 +83,53 @@ export const AgentCompanionDesktopPet: React.FC = () => {
       : { width: DEFAULT_PET_SIZE, height: DEFAULT_PET_SIZE };
 
   useEffect(() => {
+    let disposed = false;
     document.documentElement.classList.add('bitfun-agent-companion-window-root');
     document.body.classList.add('bitfun-agent-companion-window-body');
+
+    const hidePetWindowForInactiveSettings = () => {
+      void getCurrentWindow().hide().catch(error => {
+        log.warn('Failed to hide inactive Agent companion window', error);
+      });
+    };
 
     const applySettings = (settings: AIExperienceSettings) => {
       setPet(settings.agent_companion_pet ?? null);
       setPetFrameSize(null);
+      if (!settings.enable_agent_companion || settings.agent_companion_display_mode !== 'desktop') {
+        hidePetWindowForInactiveSettings();
+      }
     };
 
-    void aiExperienceConfigService.getSettingsAsync().then(settings => {
-      applySettings(settings);
-    });
+    void aiExperienceConfigService.getSettingsAsync()
+      .then(settings => {
+        if (!disposed) {
+          applySettings(settings);
+        }
+      })
+      .catch(error => {
+        if (!disposed) {
+          log.warn('Failed to load Agent companion settings', error);
+        }
+      });
 
     let removeTauriListener: (() => void) | null = null;
-    void listen<AIExperienceSettings>('agent-companion://settings-updated', event => {
+    const settingsListenerReady = listen<AIExperienceSettings>('agent-companion://settings-updated', event => {
       applySettings(event.payload);
     }).then(unlisten => {
+      if (disposed) {
+        unlisten();
+        return false;
+      }
       removeTauriListener = unlisten;
+      return true;
     }).catch(error => {
       log.warn('Failed to listen for Agent companion settings updates', error);
+      return false;
     });
 
     let removeActivityListener: (() => void) | null = null;
-    void listen<AgentCompanionActivityPayload>('agent-companion://activity-updated', event => {
+    const activityListenerReady = listen<AgentCompanionActivityPayload>('agent-companion://activity-updated', event => {
       const emittedAt = event.payload.emittedAt ?? 0;
       const sequence = event.payload.sequence ?? 0;
       if (
@@ -119,12 +143,31 @@ export const AgentCompanionDesktopPet: React.FC = () => {
       setMood(event.payload.mood);
       setTasks(event.payload.tasks);
     }).then(unlisten => {
+      if (disposed) {
+        unlisten();
+        return false;
+      }
       removeActivityListener = unlisten;
+      return true;
     }).catch(error => {
       log.warn('Failed to listen for Agent companion activity updates', error);
+      return false;
     });
 
+    void Promise.all([settingsListenerReady, activityListenerReady])
+      .then(([settingsReady, activityReady]) => {
+        if (!disposed && settingsReady && activityReady) {
+          void emit('agent-companion://ready');
+        }
+      })
+      .catch(error => {
+        if (!disposed) {
+          log.warn('Failed to request Agent companion startup sync', error);
+        }
+      });
+
     return () => {
+      disposed = true;
       removeTauriListener?.();
       removeActivityListener?.();
       document.documentElement.classList.remove('bitfun-agent-companion-window-root');
@@ -451,6 +494,7 @@ export const AgentCompanionDesktopPet: React.FC = () => {
     '--bitfun-agent-companion-gap': `${WINDOW_HORIZONTAL_GAP}px`,
   } as React.CSSProperties;
   const isSingleTask = tasks.length === 1;
+  const hasAttentionTask = tasks.some(task => task.state === 'attention');
 
   return (
     <main
@@ -509,7 +553,7 @@ export const AgentCompanionDesktopPet: React.FC = () => {
           </div>
         )}
         <div
-          className="bitfun-agent-companion-window__pet-hitbox"
+          className={`bitfun-agent-companion-window__pet-hitbox${hasAttentionTask ? ' bitfun-agent-companion-window__pet-hitbox--needs-attention' : ''}`}
           onPointerEnter={() => setIsHoveringPet(true)}
           onPointerLeave={() => setIsHoveringPet(false)}
           onPointerDown={onPetPointerDown}

@@ -293,12 +293,10 @@ impl GitService {
 
             for branch in &mut branches {
                 if !branch.remote {
-                    branch.stats =
-                        GitService::calculate_branch_stats(&repo, &branch.name).ok();
+                    branch.stats = GitService::calculate_branch_stats(&repo, &branch.name).ok();
                     branch.is_stale = Some(GitService::is_branch_stale(branch));
                     if branch.name != current_branch {
-                        branch.can_merge =
-                            GitService::can_merge_safely(&repo, &branch.name).ok();
+                        branch.can_merge = GitService::can_merge_safely(&repo, &branch.name).ok();
                         branch.has_conflicts = branch.can_merge.map(|can| !can);
                     }
                 }
@@ -423,7 +421,8 @@ impl GitService {
                 // format_timestamp produces "YYYY-MM-DD HH:MM:SS UTC"
                 chrono::NaiveDateTime::parse_from_str(date_str, "%Y-%m-%d %H:%M:%S UTC")
                     .map(|dt| {
-                        (chrono::Utc::now().naive_utc() - dt).num_days() > Self::STALE_DAYS_THRESHOLD
+                        (chrono::Utc::now().naive_utc() - dt).num_days()
+                            > Self::STALE_DAYS_THRESHOLD
                     })
                     .unwrap_or(false)
             }
@@ -451,9 +450,9 @@ impl GitService {
         let base_oid = repo
             .merge_base(head_commit.id(), branch_commit.id())
             .map_err(|e| GitError::CommandFailed(format!("Failed to find merge base: {e}")))?;
-        let base_commit = repo
-            .find_commit(base_oid)
-            .map_err(|e| GitError::CommandFailed(format!("Failed to find merge base commit: {e}")))?;
+        let base_commit = repo.find_commit(base_oid).map_err(|e| {
+            GitError::CommandFailed(format!("Failed to find merge base commit: {e}"))
+        })?;
 
         let base_tree = base_commit
             .tree()
@@ -545,8 +544,7 @@ impl GitService {
                     break;
                 }
 
-                let oid =
-                    oid_result.map_err(|e| GitError::CommandFailed(e.to_string()))?;
+                let oid = oid_result.map_err(|e| GitError::CommandFailed(e.to_string()))?;
 
                 let commit = repo
                     .find_commit(oid)
@@ -569,13 +567,10 @@ impl GitService {
                     }
                 }
 
-                let parents: Vec<String> =
-                    commit.parent_ids().map(|id| id.to_string()).collect();
+                let parents: Vec<String> = commit.parent_ids().map(|id| id.to_string()).collect();
 
-                let (additions, deletions, files_changed) = if params.stat.unwrap_or(false)
-                {
-                    GitService::get_commit_stats(&repo, &commit)
-                        .unwrap_or((None, None, None))
+                let (additions, deletions, files_changed) = if params.stat.unwrap_or(false) {
+                    GitService::get_commit_stats(&repo, &commit).unwrap_or((None, None, None))
                 } else {
                     (None, None, None)
                 };
@@ -1045,8 +1040,7 @@ impl GitService {
         task::spawn_blocking(move || {
             let repo = Repository::open(&path_buf)
                 .map_err(|e| GitError::RepositoryNotFound(e.to_string()))?;
-            build_git_graph(&repo, max_count)
-                .map_err(|e| GitError::CommandFailed(e.to_string()))
+            build_git_graph(&repo, max_count).map_err(|e| GitError::CommandFailed(e.to_string()))
         })
         .await
         .map_err(|e| GitError::CommandFailed(format!("spawn_blocking join: {e}")))?

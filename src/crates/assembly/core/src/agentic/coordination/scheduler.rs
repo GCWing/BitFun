@@ -20,10 +20,11 @@ use crate::agentic::goal_mode::{
 use crate::agentic::image_analysis::ImageContextData;
 use crate::agentic::init_agents_md::build_init_agents_md_user_input;
 use crate::agentic::round_preempt::{DialogRoundInjectionSource, SessionRoundInjectionBuffer};
+use crate::agentic::session::session_store_port::CoreSessionStorePort;
 use crate::agentic::session::SessionManager;
 use bitfun_runtime_ports::{ThreadGoal, MAX_THREAD_GOAL_AUTO_CONTINUATIONS};
 use log::{debug, info, warn};
-use std::path::Path;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::OnceLock;
 use std::time::{Duration, SystemTime};
@@ -48,6 +49,7 @@ use bitfun_runtime_ports::{
     AgentThreadGoalDeliveryKind, AgentThreadGoalDeliveryRequest, AgentTurnCancellationPort,
     AgentTurnCancellationRequest, AgentTurnCancellationResult, DialogSessionStateFact,
     DialogSubmitQueueAction, DialogSubmitQueueFacts, PortError, PortErrorKind, PortResult,
+    SessionStoragePathRequest, SessionStorePort,
 };
 pub use bitfun_runtime_ports::{
     AgentSessionReplyRoute, DialogQueuePriority, DialogSteerOutcome, DialogSubmissionPolicy,
@@ -63,6 +65,8 @@ pub struct QueuedTurn {
     pub turn_id: Option<String>,
     pub agent_type: String,
     pub workspace_path: Option<String>,
+    pub remote_connection_id: Option<String>,
+    pub remote_ssh_host: Option<String>,
     pub policy: DialogSubmissionPolicy,
     pub reply_route: Option<AgentSessionReplyRoute>,
     pub user_message_metadata: Option<serde_json::Value>,
@@ -201,6 +205,8 @@ impl DialogScheduler {
         session_id: String,
         agent_type: String,
         workspace_path: Option<String>,
+        remote_connection_id: Option<String>,
+        remote_ssh_host: Option<String>,
         goal: ThreadGoal,
     ) -> Result<(), String> {
         let plan = build_thread_goal_resumed_delivery_plan(&goal);
@@ -237,6 +243,8 @@ impl DialogScheduler {
                     None,
                     agent_type,
                     workspace_path,
+                    remote_connection_id,
+                    remote_ssh_host,
                     DialogSubmissionPolicy::new(
                         DialogTriggerSource::AgentSession,
                         queue_priority,
@@ -259,6 +267,8 @@ impl DialogScheduler {
         session_id: String,
         agent_type: String,
         workspace_path: Option<String>,
+        remote_connection_id: Option<String>,
+        remote_ssh_host: Option<String>,
         goal: ThreadGoal,
     ) -> Result<(), String> {
         let plan = build_thread_goal_objective_updated_delivery_plan(&goal);
@@ -295,6 +305,8 @@ impl DialogScheduler {
                     None,
                     agent_type,
                     workspace_path,
+                    remote_connection_id,
+                    remote_ssh_host,
                     DialogSubmissionPolicy::new(
                         DialogTriggerSource::AgentSession,
                         queue_priority,
@@ -321,6 +333,8 @@ impl DialogScheduler {
         session_id: String,
         agent_type: String,
         workspace_path: Option<String>,
+        remote_connection_id: Option<String>,
+        remote_ssh_host: Option<String>,
         content: String,
         display_content: Option<String>,
         user_message_metadata: Option<serde_json::Value>,
@@ -358,6 +372,8 @@ impl DialogScheduler {
                     None,
                     agent_type,
                     workspace_path,
+                    remote_connection_id,
+                    remote_ssh_host,
                     DialogSubmissionPolicy::new(
                         DialogTriggerSource::AgentSession,
                         queue_priority,
@@ -376,10 +392,17 @@ impl DialogScheduler {
         &self,
         session_id: String,
         workspace_path: Option<String>,
+        remote_connection_id: Option<String>,
+        remote_ssh_host: Option<String>,
         policy: DialogSubmissionPolicy,
     ) -> Result<DialogSubmitOutcome, String> {
         let agent_type = self
-            .resolve_session_agent_type(&session_id, workspace_path.as_deref())
+            .resolve_session_agent_type(
+                &session_id,
+                workspace_path.as_deref(),
+                remote_connection_id.as_deref(),
+                remote_ssh_host.as_deref(),
+            )
             .await?;
         let (user_input, prepended_messages) = build_init_agents_md_user_input()
             .await
@@ -392,6 +415,8 @@ impl DialogScheduler {
             None,
             agent_type,
             workspace_path,
+            remote_connection_id,
+            remote_ssh_host,
             policy,
             None,
             None,
@@ -404,9 +429,7 @@ impl DialogScheduler {
     fn session_state_fact(state: Option<&SessionState>) -> DialogSessionStateFact {
         match state {
             None => DialogSessionStateFact::Missing,
-            Some(SessionState::Idle) => DialogSessionStateFact::Idle,
-            Some(SessionState::Processing { .. }) => DialogSessionStateFact::Processing,
-            Some(SessionState::Error { .. }) => DialogSessionStateFact::Error,
+            Some(state) => state.dialog_state_fact(),
         }
     }
 
@@ -428,6 +451,8 @@ impl DialogScheduler {
         turn_id: Option<String>,
         agent_type: String,
         workspace_path: Option<String>,
+        remote_connection_id: Option<String>,
+        remote_ssh_host: Option<String>,
         policy: DialogSubmissionPolicy,
         reply_route: Option<AgentSessionReplyRoute>,
         user_message_metadata: Option<serde_json::Value>,
@@ -440,6 +465,8 @@ impl DialogScheduler {
             turn_id,
             agent_type,
             workspace_path,
+            remote_connection_id,
+            remote_ssh_host,
             policy,
             reply_route,
             user_message_metadata,
@@ -458,6 +485,8 @@ impl DialogScheduler {
         turn_id: Option<String>,
         agent_type: String,
         workspace_path: Option<String>,
+        remote_connection_id: Option<String>,
+        remote_ssh_host: Option<String>,
         policy: DialogSubmissionPolicy,
         reply_route: Option<AgentSessionReplyRoute>,
         user_message_metadata: Option<serde_json::Value>,
@@ -472,6 +501,8 @@ impl DialogScheduler {
             turn_id: Some(resolved_turn_id.clone()),
             agent_type,
             workspace_path,
+            remote_connection_id,
+            remote_ssh_host,
             policy,
             reply_route,
             user_message_metadata,
@@ -486,6 +517,8 @@ impl DialogScheduler {
         &self,
         session_id: &str,
         workspace_path: Option<&str>,
+        remote_connection_id: Option<&str>,
+        remote_ssh_host: Option<&str>,
     ) -> Result<String, String> {
         let session = match self.session_manager.get_session(session_id) {
             Some(session) => session,
@@ -496,8 +529,14 @@ impl DialogScheduler {
                         session_id
                     )
                 })?;
+                let restore_path = Self::resolve_session_restore_path(
+                    workspace_path,
+                    remote_connection_id,
+                    remote_ssh_host,
+                )
+                .await?;
                 self.session_manager
-                    .restore_session(Path::new(workspace_path), session_id)
+                    .restore_session_from_storage_path(&restore_path, session_id)
                     .await
                     .map_err(|error| error.to_string())?
             }
@@ -508,6 +547,24 @@ impl DialogScheduler {
         } else {
             Ok(agent_type.to_string())
         }
+    }
+
+    async fn resolve_session_restore_path(
+        workspace_path: &str,
+        remote_connection_id: Option<&str>,
+        remote_ssh_host: Option<&str>,
+    ) -> Result<PathBuf, String> {
+        let request = SessionStoragePathRequest {
+            workspace_path: PathBuf::from(workspace_path),
+            remote_connection_id: remote_connection_id.map(ToOwned::to_owned),
+            remote_ssh_host: remote_ssh_host.map(ToOwned::to_owned),
+        };
+
+        CoreSessionStorePort::default()
+            .resolve_session_storage_path(request)
+            .await
+            .map(|resolution| resolution.effective_storage_path)
+            .map_err(|error| error.to_string())
     }
 
     async fn submit_queued_turn(
@@ -742,6 +799,8 @@ impl DialogScheduler {
                         queued_turn.turn_id.clone(),
                         queued_turn.agent_type.clone(),
                         queued_turn.workspace_path.clone(),
+                        queued_turn.remote_connection_id.clone(),
+                        queued_turn.remote_ssh_host.clone(),
                         queued_turn.policy,
                         queued_turn.user_message_metadata.clone(),
                     )
@@ -756,6 +815,8 @@ impl DialogScheduler {
                         queued_turn.turn_id.clone(),
                         queued_turn.agent_type.clone(),
                         queued_turn.workspace_path.clone(),
+                        queued_turn.remote_connection_id.clone(),
+                        queued_turn.remote_ssh_host.clone(),
                         queued_turn.policy,
                         queued_turn.user_message_metadata.clone(),
                         queued_turn.prepended_messages.clone(),
@@ -774,6 +835,8 @@ impl DialogScheduler {
                         queued_turn.turn_id.clone(),
                         queued_turn.agent_type.clone(),
                         queued_turn.workspace_path.clone(),
+                        queued_turn.remote_connection_id.clone(),
+                        queued_turn.remote_ssh_host.clone(),
                         queued_turn.policy,
                         queued_turn.user_message_metadata.clone(),
                     )
@@ -791,6 +854,8 @@ impl DialogScheduler {
                         queued_turn.turn_id.clone(),
                         queued_turn.agent_type.clone(),
                         queued_turn.workspace_path.clone(),
+                        queued_turn.remote_connection_id.clone(),
+                        queued_turn.remote_ssh_host.clone(),
                         queued_turn.policy,
                         queued_turn.user_message_metadata.clone(),
                         queued_turn.prepended_messages.clone(),
@@ -822,6 +887,8 @@ impl DialogScheduler {
             ActiveDialogTurn::new(
                 resolved.clone(),
                 queued_turn.workspace_path.clone(),
+                queued_turn.remote_connection_id.clone(),
+                queued_turn.remote_ssh_host.clone(),
                 queued_turn.agent_type.clone(),
                 queued_turn
                     .original_user_input
@@ -844,6 +911,8 @@ impl DialogScheduler {
         let reply_user_input = plan.user_input;
         let target_session_id = plan.target_session_id;
         let target_workspace_path = plan.target_workspace_path;
+        let target_remote_connection_id = plan.target_remote_connection_id;
+        let target_remote_ssh_host = plan.target_remote_ssh_host;
         let prepended_messages = vec![Message::internal_reminder(
             InternalReminderKind::SessionMessageReply,
             plan.reminder_text,
@@ -857,6 +926,8 @@ impl DialogScheduler {
                 None,
                 String::new(),
                 Some(target_workspace_path),
+                target_remote_connection_id,
+                target_remote_ssh_host,
                 DialogSubmissionPolicy::for_source(DialogTriggerSource::AgentSession),
                 None,
                 None,
@@ -985,6 +1056,8 @@ impl DialogScheduler {
                                             None,
                                             active_turn.agent_type_owned(),
                                             active_turn.workspace_path_owned(),
+                                            active_turn.remote_connection_id_owned(),
+                                            active_turn.remote_ssh_host_owned(),
                                             DialogSubmissionPolicy::for_source(
                                                 DialogTriggerSource::AgentSession,
                                             ),
@@ -1205,6 +1278,8 @@ impl AgentDialogTurnPort for DialogScheduler {
             request.turn_id,
             request.agent_type,
             request.workspace_path,
+            request.remote_connection_id,
+            request.remote_ssh_host,
             request.policy,
             request.reply_route,
             user_message_metadata,
@@ -1233,6 +1308,8 @@ impl AgentLifecycleDeliveryPort for DialogScheduler {
             request.session_id,
             request.agent_type,
             request.workspace_path,
+            request.remote_connection_id,
+            request.remote_ssh_host,
             request.content,
             request.display_content,
             metadata,
@@ -1249,6 +1326,8 @@ impl AgentLifecycleDeliveryPort for DialogScheduler {
                     request.session_id,
                     request.agent_type,
                     request.workspace_path,
+                    request.remote_connection_id,
+                    request.remote_ssh_host,
                     request.goal,
                 )
                 .await
@@ -1259,6 +1338,8 @@ impl AgentLifecycleDeliveryPort for DialogScheduler {
                     request.session_id,
                     request.agent_type,
                     request.workspace_path,
+                    request.remote_connection_id,
+                    request.remote_ssh_host,
                     request.goal,
                 )
                 .await
@@ -1356,6 +1437,8 @@ mod tests {
         ActiveDialogTurn::new(
             "turn_1".to_string(),
             Some("/workspace".to_string()),
+            None,
+            None,
             "agentic".to_string(),
             "hello".to_string(),
             None,
@@ -1363,6 +1446,8 @@ mod tests {
             Some(AgentSessionReplyRoute {
                 source_session_id: source_session_id.to_string(),
                 source_workspace_path: "/source".to_string(),
+                source_remote_connection_id: None,
+                source_remote_ssh_host: None,
             }),
         )
     }

@@ -1,5 +1,6 @@
 //! Tool implementation module
 
+pub mod analyze_image_tool;
 pub mod ask_user_question_tool;
 pub mod bash_tool;
 pub mod calendar_tool;
@@ -8,9 +9,6 @@ pub mod code_review_tool;
 pub mod computer_use_actions;
 pub mod computer_use_input;
 pub mod computer_use_locate;
-pub mod computer_use_mouse_click_tool;
-pub mod computer_use_mouse_precise_tool;
-pub mod computer_use_mouse_step_tool;
 pub mod computer_use_result;
 pub mod computer_use_tool;
 pub mod control_hub;
@@ -44,18 +42,17 @@ pub mod terminal_control_tool;
 pub mod thread_goal_tools;
 pub mod todo_write_tool;
 pub mod util;
+pub mod view_image_tool;
 pub mod web;
 
 #[deprecated(note = "GetToolSpecTool is owned by the product tool runtime boundary")]
 pub use crate::agentic::tools::product_runtime::GetToolSpecTool;
 pub mod harmony_build_tool;
+pub use analyze_image_tool::AnalyzeImageTool;
 pub use ask_user_question_tool::AskUserQuestionTool;
 pub use bash_tool::BashTool;
 pub use calendar_tool::CalendarTool;
 pub use code_review_tool::CodeReviewTool;
-pub use computer_use_mouse_click_tool::ComputerUseMouseClickTool;
-pub use computer_use_mouse_precise_tool::ComputerUseMousePreciseTool;
-pub use computer_use_mouse_step_tool::ComputerUseMouseStepTool;
 pub use computer_use_tool::ComputerUseTool;
 pub use control_hub_tool::ControlHubTool;
 pub use create_plan_tool::CreatePlanTool;
@@ -87,4 +84,5 @@ pub use task_tool::TaskTool;
 pub use terminal_control_tool::TerminalControlTool;
 pub use thread_goal_tools::{CreateGoalTool, GetGoalTool, UpdateGoalTool};
 pub use todo_write_tool::TodoWriteTool;
+pub use view_image_tool::ViewImageTool;
 pub use web::{WebFetchTool, WebSearchTool};

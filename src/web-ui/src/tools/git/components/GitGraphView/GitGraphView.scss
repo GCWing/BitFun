@@ -29,7 +29,7 @@
 
     button {
       padding: 8px 16px;
-      background: var(--color-primary);
+      background: var(--color-accent-500);
       color: var(--color-static-white);
       border: none;
       border-radius: 4px;
@@ -45,8 +45,8 @@
   &__spinner {
     width: 32px;
     height: 32px;
-    border: 3px solid var(--color-overlay-white-10);
-    border-top-color: var(--color-primary);
+    border: 3px solid var(--color-overlay-white-12);
+    border-top-color: var(--color-accent-500);
     border-radius: 50%;
     animation: spin 0.8s linear infinite;
   }
@@ -56,8 +56,8 @@
     align-items: center;
     justify-content: space-between;
     padding: 12px 16px;
-    border-bottom: 1px solid var(--color-border);
-    background: var(--color-background-secondary);
+    border-bottom: 1px solid var(--border-base);
+    background: var(--color-bg-secondary);
     flex-shrink: 0;
   }
 
@@ -78,7 +78,7 @@
     align-items: center;
     gap: 4px;
     padding: 4px 8px;
-    background: var(--color-primary);
+    background: var(--color-accent-500);
     color: var(--color-static-white);
     border-radius: 4px;
     font-size: 12px;
@@ -105,7 +105,7 @@
     font-family: 'SF Mono', 'Monaco', 'Courier New', monospace;
 
     &--no-results {
-      color: var(--color-text-tertiary);
+      color: var(--color-text-muted);
     }
   }
 
@@ -124,7 +124,7 @@
     transition: all 0.15s ease;
 
     &:hover:not(:disabled) {
-      background: var(--color-hover);
+      background: var(--element-bg-hover);
       color: var(--color-text-primary);
     }
 
@@ -218,13 +218,13 @@
     gap: 12px;
     padding: 0 16px;
     cursor: pointer;
-    border-bottom: 1px solid var(--color-border);
+    border-bottom: 1px solid var(--border-base);
     transition: background 0.15s, box-shadow 0.15s;
     background: var(--color-bg-primary);
 
     &:hover {
-      background: var(--color-hover);
-      box-shadow: 0 1px 3px var(--color-overlay-black-10);
+      background: var(--element-bg-hover);
+      box-shadow: 0 1px 3px var(--color-overlay-black-12);
       z-index: 1;
     }
 
@@ -326,7 +326,7 @@
   &__commit-hash {
     font-family: 'Courier New', monospace;
     padding: 2px 6px;
-    background: var(--color-background-tertiary);
+    background: var(--color-bg-tertiary);
     border-radius: 4px;
     white-space: nowrap;
   }
@@ -353,7 +353,7 @@
       border-radius: 4px;
 
       &:hover {
-        background: var(--color-hover);
+        background: var(--element-bg-hover);
         color: var(--color-text-primary);
       }
     }

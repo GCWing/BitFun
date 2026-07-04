@@ -409,45 +409,28 @@ impl ContextCompressor {
         Some(trimmed.to_string())
     }
 
-    pub(crate) fn build_compact_prompt(&self, contract: Option<&CompressionContract>) -> String {
-        let contract_instruction = contract
-            .filter(|contract| !contract.is_empty())
-            .map(|contract| {
-                format!(
-                    "\n\nThe following compaction contract is authoritative factual context from tool observations. Preserve every field from it in the final <summary>:\n{}\n",
-                    contract.render_for_model()
-                )
-            })
-            .unwrap_or_default();
-
+    pub(crate) fn build_compact_prompt(&self) -> String {
         format!(
             r#"Your current task is to create a detailed summary of the conversation so far, paying close attention to the user's explicit requests and your previous actions.
 This summary should be thorough in capturing technical details, code patterns, and architectural decisions that would be essential for continuing development work without losing context.
-{contract_instruction}
 
 CRITICAL: Respond with TEXT ONLY. Do NOT call any tools.
 
 - Do NOT use Read, Bash, Grep, Glob, Edit, Write, or ANY other tool.
 - You already have all the context you need in the conversation above.
 - Tool calls will be REJECTED and will waste your only turn — you will fail the task.
-- Your entire response must be plain text: an <analysis> block followed by a <summary> block.
+- Your entire response must be plain text inside a single <summary> block.
 
-Before providing your final summary, wrap your analysis in <analysis> tags to organize your thoughts and ensure you've covered all necessary points. Then output the final retained summary in <summary> tags.
-Important: only the content inside <summary> will be kept as compressed history. The <analysis> section is transient and will be discarded, so do not put any required final information only in <analysis>.
-In your analysis process:
+Output exactly one <summary>...</summary> block containing all retained context.
+Important: only the content inside <summary> will be kept as compressed history, so include every required detail there.
 
-1. Chronologically analyze each message and section of the conversation. For each section thoroughly identify:
-   - The user's explicit requests and intents
-   - Your approach to addressing the user's requests
-   - Key decisions, technical concepts and code patterns
-   - Specific details like:
-     - file names
-     - full code snippets
-     - function signatures
-     - file edits
-   - Errors that you ran into and how you fixed them
-   - Pay special attention to specific user feedback that you received, especially if the user told you to do something differently.
-2. Double-check for technical accuracy and completeness, addressing each required element thoroughly.
+Before you answer, carefully review the conversation chronologically and make sure the final <summary> captures:
+- The user's explicit requests and intents
+- Your approach to addressing the user's requests
+- Key decisions, technical concepts, and code patterns
+- Specific details like file names, function signatures, file edits, and important code snippets where they materially matter
+- Errors that you ran into and how you fixed them
+- Specific user feedback, especially when the user asked for a different approach or corrected direction
 
 Your summary should include the following sections:
 
@@ -464,10 +447,6 @@ Your summary should include the following sections:
 Here's an example of how your output should be structured:
 
 <example>
-<analysis>
-[Your thought process, ensuring all points are covered thoroughly and accurately]
-</analysis>
-
 <summary>
 1. Primary Request and Intent:
    [Detailed description]
@@ -514,7 +493,7 @@ Here's an example of how your output should be structured:
 </example>
 
 Please provide your summary based on the conversation so far, following this structure and ensuring precision and thoroughness in your response.
-REMINDER: Do NOT call any tools. Respond with plain text only — an <analysis> block followed by a <summary> block. Tool calls will be rejected and you will fail the task.
+REMINDER: Do NOT call any tools. Respond with plain text only inside a single <summary> block. Tool calls will be rejected and you will fail the task.
 "#
         )
     }
@@ -533,8 +512,7 @@ fn extract_tag_content<'a>(text: &'a str, tag: &str) -> Option<&'a str> {
 mod tests {
     use super::{CompressionMode, ContextCompressor, TurnWithTokens};
     use crate::agentic::core::{
-        render_system_reminder, CompressionContract, CompressionContractItem, CompressionEntry,
-        CompressionPayload, Message, MessageSemanticKind,
+        render_system_reminder, CompressionEntry, CompressionPayload, Message, MessageSemanticKind,
     };
 
     fn make_turn(messages: Vec<Message>) -> TurnWithTokens {
@@ -652,25 +630,24 @@ mod tests {
     }
 
     #[test]
-    fn model_summary_prompt_includes_compaction_contract() {
+    fn model_summary_prompt_does_not_inline_compaction_contract() {
         let compressor = ContextCompressor::new(Default::default());
-        let contract = CompressionContract {
-            touched_files: vec!["src/lib.rs".to_string()],
-            verification_commands: vec![CompressionContractItem {
-                target: "cargo test".to_string(),
-                status: "succeeded".to_string(),
-                summary: "Tests passed.".to_string(),
-                error_kind: None,
-            }],
-            blocking_failures: Vec::new(),
-            subagent_statuses: Vec::new(),
-        };
 
-        let prompt = compressor.build_compact_prompt(Some(&contract));
+        let prompt = compressor.build_compact_prompt();
 
-        assert!(prompt.contains("authoritative factual context"));
-        assert!(prompt.contains("src/lib.rs"));
-        assert!(prompt.contains("cargo test"));
+        assert!(!prompt.contains("authoritative factual context"));
+        assert!(!prompt.contains("src/lib.rs"));
+        assert!(!prompt.contains("cargo test"));
+    }
+
+    #[test]
+    fn model_summary_prompt_requires_summary_only() {
+        let compressor = ContextCompressor::new(Default::default());
+
+        let prompt = compressor.build_compact_prompt();
+
+        assert!(prompt.contains("single <summary> block"));
+        assert!(!prompt.contains("<analysis> block followed by a <summary> block"));
     }
 
     #[test]

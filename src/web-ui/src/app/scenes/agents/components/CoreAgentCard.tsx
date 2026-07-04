@@ -27,6 +27,8 @@ interface CoreAgentCardProps {
   skillCount?: number;
   subagentCount?: number;
   onOpenDetails: (agent: AgentWithCapabilities) => void;
+  /** Shown as a small footer tag when the agent's capability is toggled off in Settings (e.g. Computer Use). */
+  disabledReason?: string;
 }
 
 const CoreAgentCard: React.FC<CoreAgentCardProps> = ({
@@ -37,6 +39,7 @@ const CoreAgentCard: React.FC<CoreAgentCardProps> = ({
   skillCount = 0,
   subagentCount = 0,
   onOpenDetails,
+  disabledReason,
 }) => {
   const { t } = useTranslation('scenes/agents');
   const Icon = AGENT_ICON_MAP[(agent.iconKey ?? 'bot') as keyof typeof AGENT_ICON_MAP] ?? Bot;
@@ -86,10 +89,17 @@ const CoreAgentCard: React.FC<CoreAgentCardProps> = ({
       </div>
 
       <div className="core-agent-card__footer">
-        <span className="core-agent-card__tag">
-          {t('coreAgentsZone.roleLabel')}
-          <strong>{meta.role}</strong>
-        </span>
+        <div className="core-agent-card__tags">
+          <span className="core-agent-card__tag">
+            {t('coreAgentsZone.roleLabel')}
+            <strong>{meta.role}</strong>
+          </span>
+          {disabledReason ? (
+            <span className="core-agent-card__tag core-agent-card__tag--disabled" title={disabledReason}>
+              {disabledReason}
+            </span>
+          ) : null}
+        </div>
         <div className="core-agent-card__meta">
           <span className="core-agent-card__meta-item">
             <Wrench size={11} />

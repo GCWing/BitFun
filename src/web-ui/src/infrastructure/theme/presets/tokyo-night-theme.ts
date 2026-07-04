@@ -2,12 +2,47 @@
 
 import { ThemeConfig } from '../types';
 import {
+  createAccentScale,
   createCompactRadius,
   createExpressiveTypography,
+  createGitColors,
+  createSemanticColors,
+  createSecondaryAccentScale,
   createStandardEasing,
   createStandardSpacing,
   createWindowControls,
+  overlayBlack,
+  rgbFromHex,
+  rgbaFromHex,
+  STATIC_WHITE,
 } from './shared';
+
+const TOKYO_BACKGROUND_PRIMARY = '#1a1b26';
+const TOKYO_BACKGROUND_SECONDARY = '#1e202e';
+const TOKYO_TEXT_PRIMARY = '#c0caf5';
+const TOKYO_TEXT_SECONDARY = '#a9b1d6';
+const TOKYO_TEXT_MUTED = '#787c99';
+const TOKYO_ACCENT = '#7aa2f7';
+const TOKYO_ACCENT_HOVER = '#6183bb';
+const TOKYO_PURPLE = '#bb9af7';
+const TOKYO_PURPLE_HOVER = '#9d7cd8';
+const TOKYO_SUCCESS = '#9ece6a';
+const TOKYO_WARNING = '#e0af68';
+const TOKYO_ERROR = '#f7768e';
+const TOKYO_INFO = '#7dcfff';
+const TOKYO_BORDER = '#334155';
+const TOKYO_SCROLLBAR = '#868bc4';
+const TOKYO_GIT_ADDED = '#41a6b5';
+const TOKYO_PRIMARY_BUTTON = '#3d59a1';
+
+const tokyoAccent = (alpha: number | string) => rgbaFromHex(TOKYO_ACCENT, alpha);
+const tokyoSuccess = (alpha: number | string) => rgbaFromHex(TOKYO_SUCCESS, alpha);
+const tokyoWarning = (alpha: number | string) => rgbaFromHex(TOKYO_WARNING, alpha);
+const tokyoError = (alpha: number | string) => rgbaFromHex(TOKYO_ERROR, alpha);
+const tokyoBorder = (alpha: number | string) => rgbaFromHex(TOKYO_BORDER, alpha);
+const tokyoScrollbar = (alpha: number | string) => rgbaFromHex(TOKYO_SCROLLBAR, alpha);
+const tokyoGitAdded = (alpha: number | string) => rgbaFromHex(TOKYO_GIT_ADDED, alpha);
+const tokyoPrimaryButton = (alpha: number | string) => rgbaFromHex(TOKYO_PRIMARY_BUTTON, alpha);
 
 /** Colors aligned with the Tokyo Night palette (Enkia / VS Code Tokyo Night). */
 export const bitfunTokyoNightTheme: ThemeConfig = {
@@ -21,129 +56,92 @@ export const bitfunTokyoNightTheme: ThemeConfig = {
 
   colors: {
     background: {
-      primary: '#1a1b26',
-      secondary: '#16161e',
-      tertiary: '#14141b',
-      quaternary: '#1e202e',
-      elevated: '#20222c',
-      workbench: '#16161e',
-      scene: '#1a1b26',
-      tooltip: 'rgba(22, 22, 30, 0.94)',
+      primary: TOKYO_BACKGROUND_PRIMARY,
+      secondary: TOKYO_BACKGROUND_SECONDARY,
+      tertiary: TOKYO_BACKGROUND_SECONDARY,
+      quaternary: TOKYO_BACKGROUND_SECONDARY,
+      elevated: TOKYO_BACKGROUND_SECONDARY,
+      workbench: TOKYO_BACKGROUND_SECONDARY,
+      scene: TOKYO_BACKGROUND_PRIMARY,
+      tooltip: rgbaFromHex(TOKYO_BACKGROUND_SECONDARY, 0.94),
     },
 
     text: {
-      primary: '#c0caf5',
-      secondary: '#a9b1d6',
-      muted: '#787c99',
+      primary: TOKYO_TEXT_PRIMARY,
+      secondary: TOKYO_TEXT_SECONDARY,
+      muted: TOKYO_TEXT_MUTED,
       disabled: '#545c7e',
     },
 
-    accent: {
-      50: 'rgba(122, 162, 247, 0.05)',
-      100: 'rgba(122, 162, 247, 0.08)',
-      200: 'rgba(122, 162, 247, 0.15)',
-      300: 'rgba(122, 162, 247, 0.25)',
-      400: 'rgba(122, 162, 247, 0.4)',
-      500: '#7aa2f7',
-      600: '#6183bb',
-      700: 'rgba(97, 131, 187, 0.85)',
-      800: 'rgba(97, 131, 187, 0.95)',
-    },
+    accent: createAccentScale({
+      base: TOKYO_ACCENT,
+      hover: TOKYO_ACCENT_HOVER,
+      alpha: { 50: 0.05, 700: 0.85, 800: 0.95 },
+    }),
 
-    purple: {
-      50: 'rgba(187, 154, 247, 0.05)',
-      100: 'rgba(187, 154, 247, 0.08)',
-      200: 'rgba(187, 154, 247, 0.15)',
-      300: 'rgba(187, 154, 247, 0.25)',
-      400: 'rgba(187, 154, 247, 0.4)',
-      500: '#bb9af7',
-      600: '#9d7cd8',
-      700: 'rgba(157, 124, 216, 0.85)',
-      800: 'rgba(157, 124, 216, 0.95)',
-    },
+    purple: createSecondaryAccentScale({
+      base: TOKYO_PURPLE,
+      hover: TOKYO_PURPLE_HOVER,
+      alpha: { 50: 0.05, 800: 0.95 },
+    }),
 
-    semantic: {
-      success: '#9ece6a',
-      successBg: 'rgba(158, 206, 106, 0.12)',
-      successBorder: 'rgba(158, 206, 106, 0.35)',
-
-      warning: '#e0af68',
-      warningBg: 'rgba(224, 175, 104, 0.12)',
-      warningBorder: 'rgba(224, 175, 104, 0.35)',
-
-      error: '#f7768e',
-      errorBg: 'rgba(247, 118, 142, 0.12)',
-      errorBorder: 'rgba(247, 118, 142, 0.35)',
-
-      info: '#7dcfff',
-      infoBg: 'rgba(125, 207, 255, 0.12)',
-      infoBorder: 'rgba(125, 207, 255, 0.35)',
-
-      highlight: '#e0af68',
-      highlightBg: 'rgba(224, 175, 104, 0.15)',
-    },
+    semantic: createSemanticColors({
+      success: TOKYO_SUCCESS,
+      warning: TOKYO_WARNING,
+      error: TOKYO_ERROR,
+      info: TOKYO_INFO,
+      bgAlpha: 0.12,
+      borderAlpha: 0.35,
+    }),
 
     border: {
-      subtle: 'rgba(54, 59, 84, 0.45)',
-      base: 'rgba(54, 59, 84, 0.6)',
-      medium: 'rgba(54, 59, 84, 0.72)',
-      strong: 'rgba(54, 59, 84, 0.85)',
-      prominent: 'rgba(122, 162, 247, 0.45)',
+      subtle: tokyoBorder(0.45),
+      base: tokyoBorder(0.6),
+      medium: tokyoBorder(0.72),
+      strong: tokyoBorder(0.85),
+      prominent: tokyoAccent(0.45),
     },
 
     element: {
-      subtle: 'rgba(122, 162, 247, 0.06)',
-      soft: 'rgba(122, 162, 247, 0.08)',
-      base: 'rgba(122, 162, 247, 0.11)',
-      medium: 'rgba(122, 162, 247, 0.14)',
-      strong: 'rgba(122, 162, 247, 0.18)',
-      elevated: 'rgba(122, 162, 247, 0.22)',
+      subtle: tokyoAccent(0.06),
+      soft: tokyoAccent(0.08),
+      base: tokyoAccent(0.11),
+      medium: tokyoAccent(0.14),
+      strong: tokyoAccent(0.18),
+      elevated: tokyoAccent(0.22),
     },
 
-    git: {
-      branch: 'rgb(122, 162, 247)',
-      branchBg: 'rgba(122, 162, 247, 0.12)',
-      changes: 'rgb(224, 175, 104)',
-      changesBg: 'rgba(224, 175, 104, 0.12)',
-      added: 'rgb(65, 166, 181)',
-      addedBg: 'rgba(65, 166, 181, 0.12)',
-      deleted: 'rgb(247, 118, 142)',
-      deletedBg: 'rgba(247, 118, 142, 0.12)',
-      staged: 'rgb(158, 206, 106)',
-      stagedBg: 'rgba(158, 206, 106, 0.12)',
-    },
+    git: createGitColors({
+      branch: rgbFromHex(TOKYO_ACCENT),
+      branchBg: tokyoAccent(0.12),
+      changes: rgbFromHex(TOKYO_WARNING),
+      changesBg: tokyoWarning(0.12),
+      added: rgbFromHex(TOKYO_GIT_ADDED),
+      addedBg: tokyoGitAdded(0.12),
+      deleted: rgbFromHex(TOKYO_ERROR),
+      deletedBg: tokyoError(0.12),
+      staged: rgbFromHex(TOKYO_SUCCESS),
+      stagedBg: tokyoSuccess(0.12),
+    }),
 
     scrollbar: {
-      thumb: 'rgba(134, 139, 196, 0.15)',
-      thumbHover: 'rgba(134, 139, 196, 0.28)',
+      thumb: tokyoScrollbar(0.15),
+      thumbHover: tokyoScrollbar(0.28),
     },
   },
 
   effects: {
     shadow: {
-      xs: '0 1px 3px rgba(0, 0, 0, 0.55)',
-      sm: '0 2px 6px rgba(0, 0, 0, 0.5)',
-      base: '0 4px 12px rgba(0, 0, 0, 0.48)',
-      lg: '0 8px 20px rgba(0, 0, 0, 0.45)',
-      xl: '0 12px 28px rgba(0, 0, 0, 0.42)',
-      '2xl': '0 16px 36px rgba(0, 0, 0, 0.38)',
-    },
-
-    glow: {
-      blue:
-        '0 0 12px rgba(122, 162, 247, 0.35), 0 0 24px rgba(122, 162, 247, 0.2), 0 4px 16px rgba(0, 0, 0, 0.35)',
-      purple:
-        '0 0 12px rgba(187, 154, 247, 0.32), 0 0 24px rgba(187, 154, 247, 0.18), 0 4px 16px rgba(0, 0, 0, 0.35)',
-      mixed:
-        '0 0 16px rgba(122, 162, 247, 0.3), 0 0 28px rgba(187, 154, 247, 0.2), 0 4px 20px rgba(0, 0, 0, 0.35)',
+      xs: `0 1px 3px ${overlayBlack(0.55)}`,
+      sm: `0 2px 6px ${overlayBlack(0.5)}`,
+      base: `0 4px 12px ${overlayBlack(0.48)}`,
+      lg: `0 8px 20px ${overlayBlack(0.45)}`,
+      xl: `0 12px 28px ${overlayBlack(0.42)}`,
     },
 
     blur: {
       subtle: 'blur(4px) saturate(1.15)',
       base: 'blur(8px) saturate(1.2)',
-      medium: 'blur(12px) saturate(1.25)',
-      strong: 'blur(16px) saturate(1.3) brightness(1.08)',
-      intense: 'blur(20px) saturate(1.35) brightness(1.1)',
     },
 
     radius: createCompactRadius(),
@@ -154,7 +152,6 @@ export const bitfunTokyoNightTheme: ThemeConfig = {
       disabled: 0.5,
       hover: 0.88,
       focus: 0.96,
-      overlay: 0.52,
     },
   },
 
@@ -164,7 +161,6 @@ export const bitfunTokyoNightTheme: ThemeConfig = {
       fast: '0.12s',
       base: '0.25s',
       slow: '0.5s',
-      lazy: '0.8s',
     },
 
     easing: createStandardEasing('cubic-bezier(0.25, 0.46, 0.45, 0.94)'),
@@ -173,100 +169,42 @@ export const bitfunTokyoNightTheme: ThemeConfig = {
   typography: createExpressiveTypography(),
 
   components: {
-    windowControls: createWindowControls({
-      standard: {
-        dot: 'rgba(122, 162, 247, 0.55)',
-        dotShadow: '0 0 6px rgba(122, 162, 247, 0.35)',
-        hoverBg: 'rgba(122, 162, 247, 0.14)',
-        hoverColor: '#7aa2f7',
-        hoverBorder: 'rgba(122, 162, 247, 0.35)',
-        hoverShadow:
-          '0 0 12px rgba(122, 162, 247, 0.28), 0 2px 8px rgba(122, 162, 247, 0.15), inset 0 1px 0 rgba(122, 162, 247, 0.18)',
-      },
-      close: {
-        dot: 'rgba(247, 118, 142, 0.55)',
-        dotShadow: '0 0 6px rgba(247, 118, 142, 0.35)',
-        hoverBg: 'rgba(247, 118, 142, 0.14)',
-        hoverColor: '#f7768e',
-        hoverBorder: 'rgba(247, 118, 142, 0.35)',
-        hoverShadow:
-          '0 0 12px rgba(247, 118, 142, 0.28), 0 2px 8px rgba(247, 118, 142, 0.15), inset 0 1px 0 rgba(247, 118, 142, 0.18)',
-      },
-      common: {
-        defaultColor: 'rgba(192, 202, 245, 0.92)',
-        defaultDot: 'rgba(122, 162, 247, 0.22)',
-        disabledDot: 'rgba(122, 162, 247, 0.12)',
-        flowGradient:
-          'linear-gradient(90deg, transparent, rgba(122, 162, 247, 0.08), rgba(187, 154, 247, 0.1), rgba(122, 162, 247, 0.08), transparent)',
-      },
-    }),
+    windowControls: createWindowControls(TOKYO_ERROR),
 
     button: {
-      default: {
-        background: 'rgba(122, 162, 247, 0.1)',
-        color: '#a9b1d6',
-        border: 'rgba(122, 162, 247, 0.22)',
-        shadow: '0 0 8px rgba(122, 162, 247, 0.12)',
-      },
-      hover: {
-        background: 'rgba(122, 162, 247, 0.16)',
-        color: '#c0caf5',
-        border: 'rgba(122, 162, 247, 0.38)',
-        shadow: '0 0 16px rgba(122, 162, 247, 0.22), 0 2px 8px rgba(0, 0, 0, 0.35)',
-        transform: 'translateY(-1px)',
-      },
-      active: {
-        background: 'rgba(122, 162, 247, 0.13)',
-        color: '#c0caf5',
-        border: 'rgba(122, 162, 247, 0.42)',
-        shadow: '0 0 12px rgba(122, 162, 247, 0.18)',
-        transform: 'translateY(0)',
-      },
 
       primary: {
         default: {
-          background: 'rgba(61, 89, 161, 0.55)',
-          color: '#c0caf5',
-          border: 'rgba(122, 162, 247, 0.45)',
-          shadow: '0 0 14px rgba(61, 89, 161, 0.35)',
+          background: tokyoPrimaryButton(0.55),
+          color: TOKYO_TEXT_PRIMARY,
+          border: tokyoAccent(0.45),
+          shadow: `0 0 14px ${tokyoPrimaryButton(0.35)}`,
         },
         hover: {
-          background: 'rgba(61, 89, 161, 0.72)',
-          color: '#ffffff',
-          border: 'rgba(122, 162, 247, 0.55)',
+          background: tokyoPrimaryButton(0.72),
+          color: STATIC_WHITE,
+          border: tokyoAccent(0.55),
           shadow:
-            '0 0 22px rgba(122, 162, 247, 0.35), 0 4px 12px rgba(0, 0, 0, 0.35)',
+            `0 0 22px ${tokyoAccent(0.35)}, 0 4px 12px ${overlayBlack(0.35)}`,
           transform: 'translateY(-2px)',
         },
         active: {
-          background: 'rgba(61, 89, 161, 0.62)',
-          color: '#ffffff',
-          border: 'rgba(122, 162, 247, 0.48)',
-          shadow: '0 0 18px rgba(122, 162, 247, 0.28)',
+          background: tokyoPrimaryButton(0.62),
+          color: STATIC_WHITE,
+          border: tokyoAccent(0.48),
+          shadow: `0 0 18px ${tokyoAccent(0.28)}`,
           transform: 'translateY(-1px)',
         },
       },
 
       ghost: {
         default: {
-          background: 'transparent',
-          color: '#787c99',
-          border: 'rgba(54, 59, 84, 0.55)',
-          shadow: 'none',
+          color: TOKYO_TEXT_MUTED,
         },
         hover: {
-          background: 'rgba(122, 162, 247, 0.1)',
-          color: '#c0caf5',
-          border: 'rgba(122, 162, 247, 0.35)',
-          shadow: '0 0 12px rgba(122, 162, 247, 0.15)',
-          transform: 'translateY(-1px)',
-        },
-        active: {
-          background: 'rgba(122, 162, 247, 0.08)',
-          color: '#a9b1d6',
-          border: 'rgba(122, 162, 247, 0.3)',
-          shadow: '0 0 8px rgba(122, 162, 247, 0.12)',
-          transform: 'translateY(0)',
+          background: tokyoAccent(0.1),
+          color: TOKYO_TEXT_PRIMARY,
+          border: tokyoAccent(0.35),
         },
       },
     },
@@ -277,11 +215,11 @@ export const bitfunTokyoNightTheme: ThemeConfig = {
     inherit: true,
     rules: [],
     colors: {
-      background: '#1a1b26',
-      foreground: '#a9b1d6',
-      lineHighlight: '#1e202e',
+      background: TOKYO_BACKGROUND_PRIMARY,
+      foreground: TOKYO_TEXT_SECONDARY,
+      lineHighlight: TOKYO_BACKGROUND_SECONDARY,
       selection: 'rgba(81, 92, 126, 0.35)',
-      cursor: '#c0caf5',
+      cursor: TOKYO_TEXT_PRIMARY,
     },
   },
 };

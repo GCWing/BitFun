@@ -71,6 +71,7 @@ pub struct BotStrings {
     pub item_confirm_switch: &'static str,
     pub item_next_page: &'static str,
     pub item_other: &'static str,
+    pub item_switch_model: &'static str,
 
     // ── Auxiliary labels ─────────────────────────────────────────
     pub question_title: &'static str,
@@ -83,6 +84,7 @@ pub struct BotStrings {
     pub footer_reply_assistant: &'static str,
     pub footer_reply_session_or_next: &'static str,
     pub footer_reply_session: &'static str,
+    pub footer_reply_model: &'static str,
     pub footer_question_single: &'static str,
     pub footer_question_multi: &'static str,
     pub footer_question_custom: &'static str,
@@ -109,6 +111,14 @@ pub struct BotStrings {
     pub resume_you_label: &'static str,
     pub resume_continue_hint: &'static str,
     pub resume_first_message_hint: &'static str,
+
+    pub switch_model_title: &'static str,
+    pub switch_model_pick: &'static str,
+    pub switch_model_no_models: &'static str,
+    pub switch_model_auto: &'static str,
+    pub switch_model_applied_prefix: &'static str,
+    pub switch_model_failed_prefix: &'static str,
+    pub switch_model_no_session: &'static str,
 
     pub processing: &'static str,
     pub queued: &'static str,
@@ -204,6 +214,7 @@ const STRINGS_ZH: BotStrings = BotStrings {
     item_confirm_switch: "切换并继续",
     item_next_page: "下一页",
     item_other: "其他",
+    item_switch_model: "切换模型",
 
     question_title: "问题",
     verbose_label: "执行细节",
@@ -214,6 +225,7 @@ const STRINGS_ZH: BotStrings = BotStrings {
     footer_reply_assistant: "回复助理编号，或发送 0 返回",
     footer_reply_session_or_next: "回复会话编号；发送 0 查看下一页或返回",
     footer_reply_session: "回复会话编号，或发送 0 返回",
+    footer_reply_model: "回复模型编号，或发送 0 返回",
     footer_question_single: "回复单个选项编号；发送 /menu 退出",
     footer_question_multi: "回复一个或多个选项编号（如 1,3）；发送 /menu 退出",
     footer_question_custom: "请输入你的自定义答案；发送 /menu 退出",
@@ -221,16 +233,7 @@ const STRINGS_ZH: BotStrings = BotStrings {
 
     welcome_body: "当前未配对。",
     paired_body_intro: "可以直接发送消息开始对话。",
-    help_body: "\
-常用命令：
-/menu  返回主菜单
-/new   新建会话
-/resume  恢复历史会话
-/switch  切换助理或工作区
-/cancel  取消当前任务
-/expert  /assistant  切换模式
-/verbose /concise  开关执行细节
-/help  显示本帮助",
+    help_body: "回复编号执行对应操作，或直接发送消息开始对话。\n执行任务时可发送 /cancel 取消。",
 
     switch_pick_workspace: "请选择要切换的工作区：",
     switch_pick_assistant: "请选择要切换的助理：",
@@ -248,6 +251,14 @@ const STRINGS_ZH: BotStrings = BotStrings {
     resume_you_label: "你",
     resume_continue_hint: "可以继续对话。",
     resume_first_message_hint: "发送一条消息即可开始。",
+
+    switch_model_title: "选择模型",
+    switch_model_pick: "请选择要使用的模型：",
+    switch_model_no_models: "没有可用的模型，请先在 BitFun 桌面端配置 AI 模型。",
+    switch_model_auto: "自动（默认）",
+    switch_model_applied_prefix: "已切换模型：",
+    switch_model_failed_prefix: "切换模型失败：",
+    switch_model_no_session: "当前没有活跃会话，请先新建或恢复会话。",
 
     processing: "正在处理你的消息……",
     queued: "消息已加入队列，等当前步骤结束会自动接续。",
@@ -343,6 +354,7 @@ const STRINGS_ZH_TW: BotStrings = BotStrings {
     item_confirm_switch: "切換並繼續",
     item_next_page: "下一頁",
     item_other: "其他",
+    item_switch_model: "切換模型",
 
     question_title: "問題",
     verbose_label: "執行細節",
@@ -353,6 +365,7 @@ const STRINGS_ZH_TW: BotStrings = BotStrings {
     footer_reply_assistant: "回覆助理編號，或發送 0 返回",
     footer_reply_session_or_next: "回覆會話編號；發送 0 查看下一頁或返回",
     footer_reply_session: "回覆會話編號，或發送 0 返回",
+    footer_reply_model: "回覆模型編號，或發送 0 返回",
     footer_question_single: "回覆單個選項編號；發送 /menu 退出",
     footer_question_multi: "回覆一個或多個選項編號（如 1,3）；發送 /menu 退出",
     footer_question_custom: "請輸入你的自定義答案；發送 /menu 退出",
@@ -360,16 +373,7 @@ const STRINGS_ZH_TW: BotStrings = BotStrings {
 
     welcome_body: "當前未配對。",
     paired_body_intro: "可以直接發送消息開始對話。",
-    help_body: "\
-常用命令：
-/menu  返回主菜單
-/new   新建會話
-/resume  恢復歷史會話
-/switch  切換助理或工作區
-/cancel  取消當前任務
-/expert  /assistant  切換模式
-/verbose /concise  開關執行細節
-/help  顯示本幫助",
+    help_body: "回覆編號執行對應操作，或直接發送消息開始對話。\n執行任務時可發送 /cancel 取消。",
 
     switch_pick_workspace: "請選擇要切換的工作區：",
     switch_pick_assistant: "請選擇要切換的助理：",
@@ -387,6 +391,14 @@ const STRINGS_ZH_TW: BotStrings = BotStrings {
     resume_you_label: "你",
     resume_continue_hint: "可以繼續對話。",
     resume_first_message_hint: "發送一條消息即可開始。",
+
+    switch_model_title: "選擇模型",
+    switch_model_pick: "請選擇要使用的模型：",
+    switch_model_no_models: "沒有可用的模型，請先在 BitFun 桌面端配置 AI 模型。",
+    switch_model_auto: "自動（默認）",
+    switch_model_applied_prefix: "已切換模型：",
+    switch_model_failed_prefix: "切換模型失敗：",
+    switch_model_no_session: "當前沒有活躍會話，請先新建或恢復會話。",
 
     processing: "正在處理你的消息……",
     queued: "消息已加入隊列，等當前步驟結束會自動接續。",
@@ -482,6 +494,7 @@ Open Remote Connect in BitFun Desktop and send the 6-digit pairing code here to 
     item_confirm_switch: "Switch & Continue",
     item_next_page: "Next Page",
     item_other: "Other",
+    item_switch_model: "Switch Model",
 
     question_title: "Question",
     verbose_label: "Execution details",
@@ -492,6 +505,7 @@ Open Remote Connect in BitFun Desktop and send the 6-digit pairing code here to 
     footer_reply_assistant: "Reply with an assistant number, or 0 to go back.",
     footer_reply_session_or_next: "Reply with a session number; send 0 for next page or to go back.",
     footer_reply_session: "Reply with a session number, or 0 to go back.",
+    footer_reply_model: "Reply with a model number, or 0 to go back.",
     footer_question_single: "Reply with one option number; send /menu to exit.",
     footer_question_multi: "Reply with one or more option numbers (e.g. 1,3); send /menu to exit.",
     footer_question_custom: "Type your custom answer; send /menu to exit.",
@@ -499,16 +513,7 @@ Open Remote Connect in BitFun Desktop and send the 6-digit pairing code here to 
 
     welcome_body: "Not paired yet.",
     paired_body_intro: "Send a message to start the conversation.",
-    help_body: "\
-Common commands:
-/menu  Return to the main menu
-/new   Create a new session
-/resume  Resume an existing session
-/switch  Switch assistant or workspace
-/cancel  Cancel the current task
-/expert  /assistant  Switch modes
-/verbose /concise  Toggle execution details
-/help  Show this help",
+    help_body: "Reply with a number to perform the action, or send a message to start chatting.\nSend /cancel to abort a running task.",
 
     switch_pick_workspace: "Pick a workspace to switch to:",
     switch_pick_assistant: "Pick an assistant to switch to:",
@@ -526,6 +531,14 @@ Common commands:
     resume_you_label: "You",
     resume_continue_hint: "You can continue the conversation.",
     resume_first_message_hint: "Send a message to start.",
+
+    switch_model_title: "Select Model",
+    switch_model_pick: "Pick a model to use:",
+    switch_model_no_models: "No models available. Please configure AI models in BitFun Desktop first.",
+    switch_model_auto: "Auto (Default)",
+    switch_model_applied_prefix: "Switched model: ",
+    switch_model_failed_prefix: "Failed to switch model: ",
+    switch_model_no_session: "No active session. Create or resume a session first.",
 
     processing: "Processing your message…",
     queued: "Message queued. It will run when the current step finishes.",

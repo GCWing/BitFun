@@ -1,0 +1,122 @@
+.tool-approval-bar {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 6px;
+  margin: 0 0 var(--flowchat-card-gap);
+  padding: 7px var(--tool-card-expanded-pad-x);
+  border: 1px solid var(--color-warning);
+  border-radius: var(--flowchat-card-radius);
+  background: color-mix(in srgb, var(--color-warning) 7%, var(--color-bg-scene));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-warning) 12%, transparent);
+  box-sizing: border-box;
+}
+
+.tool-approval-bar__main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--flowchat-inline-gap);
+}
+
+.tool-approval-bar__message {
+  min-width: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--flowchat-font-size-sm);
+  line-height: var(--flowchat-support-line-height);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tool-approval-bar__countdown {
+  color: var(--color-text-muted);
+}
+
+.tool-approval-bar__actions,
+.tool-approval-bar__permission-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--flowchat-inline-gap);
+  flex-shrink: 0;
+}
+
+.tool-approval-bar__icon-button {
+  flex-shrink: 0;
+}
+
+.tool-approval-bar__divider {
+  width: 1px;
+  height: 16px;
+  margin: 0 2px;
+  flex-shrink: 0;
+  background: color-mix(in srgb, var(--border-subtle) 80%, transparent);
+}
+
+.tool-approval-bar__auto-execute-button {
+  color: var(--color-text-secondary);
+}
+
+.tool-approval-bar__auto-execute-button:hover:not(:disabled) {
+  background: rgba(var(--component-action-success-rgb), 0.18);
+  color: var(--color-success);
+}
+
+.tool-approval-bar__auto-execute-button:active:not(:disabled) {
+  background: rgba(var(--component-action-success-rgb), 0.24);
+  color: var(--color-success);
+}
+
+.tool-approval-bar__instruction {
+  display: flex;
+  align-items: center;
+  gap: var(--flowchat-inline-gap);
+  min-width: 0;
+}
+
+.tool-approval-bar .tool-approval-bar__instruction-input,
+.tool-approval-bar .tool-approval-bar__instruction-input:focus,
+.tool-approval-bar .tool-approval-bar__instruction-input:focus-visible {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-size: var(--flowchat-font-size-sm);
+  outline: none;
+  box-shadow: none;
+}
+
+.tool-approval-bar__instruction-submit {
+  flex-shrink: 0;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid color-mix(in srgb, var(--color-error) 45%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--color-error) 10%, transparent);
+  color: var(--color-error);
+  font-size: var(--flowchat-font-size-sm);
+  cursor: pointer;
+}
+
+.tool-approval-bar__instruction-submit:hover {
+  background: color-mix(in srgb, var(--color-error) 16%, transparent);
+}
+
+@media (max-width: 640px) {
+  .tool-approval-bar__main,
+  .tool-approval-bar__instruction {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .tool-approval-bar__actions,
+  .tool-approval-bar__permission-actions {
+    justify-content: flex-start;
+  }
+}

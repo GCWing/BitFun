@@ -20,12 +20,20 @@ export function isThreadGoalContinuationTurn(turn: DialogTurn | undefined): bool
   return Boolean(turn?.userMessage?.metadata?.threadGoalContinuation);
 }
 
-/** Sticky-latest pin is for active user turns; auto goal checks stay at the natural tail. */
-export function shouldUseStickyLatestPin(turn: DialogTurn | undefined): boolean {
+/** Follow-output owns active user turns; auto goal checks stay at the natural tail. */
+export function shouldUseLatestTurnFollowOutput(turn: DialogTurn | undefined): boolean {
   if (!turn || isThreadGoalContinuationTurn(turn)) {
     return false;
   }
   return isDialogTurnInFlight(turn);
+}
+
+/** Sticky-latest pin starts only after model output exists. */
+export function shouldUseStickyLatestPin(turn: DialogTurn | undefined): boolean {
+  if (!turn || !shouldUseLatestTurnFollowOutput(turn)) {
+    return false;
+  }
+  return turn.modelRounds.length > 0;
 }
 
 export function findDialogTurn(

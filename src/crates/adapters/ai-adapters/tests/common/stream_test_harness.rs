@@ -52,6 +52,8 @@ pub struct StreamFixtureRunOptions {
     pub server_options: FixtureSseServerOptions,
     pub request_timeout: Duration,
     pub process_timeout: Duration,
+    pub ttft_timeout: Option<Duration>,
+    pub idle_timeout: Option<Duration>,
     pub openai_inline_think_in_text: bool,
     pub anthropic_inline_think_in_text: bool,
     pub log_raw_sse: bool,
@@ -63,6 +65,8 @@ impl Default for StreamFixtureRunOptions {
             server_options: FixtureSseServerOptions::default(),
             request_timeout: Duration::from_secs(5),
             process_timeout: Duration::from_secs(5),
+            ttft_timeout: None,
+            idle_timeout: None,
             openai_inline_think_in_text: false,
             anthropic_inline_think_in_text: false,
             log_raw_sse: false,
@@ -137,7 +141,8 @@ pub async fn run_stream_fixture_with_options(
                 tx_event,
                 Some(tx_raw_sse),
                 options.openai_inline_think_in_text,
-                None,
+                options.ttft_timeout,
+                options.idle_timeout,
             ));
         }
         StreamFixtureProvider::Anthropic => {
@@ -146,7 +151,8 @@ pub async fn run_stream_fixture_with_options(
                 tx_event,
                 Some(tx_raw_sse),
                 options.anthropic_inline_think_in_text,
-                None,
+                options.ttft_timeout,
+                options.idle_timeout,
             ));
         }
         StreamFixtureProvider::Gemini => {
@@ -154,7 +160,8 @@ pub async fn run_stream_fixture_with_options(
                 response,
                 tx_event,
                 Some(tx_raw_sse),
-                None,
+                options.ttft_timeout,
+                options.idle_timeout,
             ));
         }
         StreamFixtureProvider::Responses => {
@@ -162,7 +169,8 @@ pub async fn run_stream_fixture_with_options(
                 response,
                 tx_event,
                 Some(tx_raw_sse),
-                None,
+                options.ttft_timeout,
+                options.idle_timeout,
             ));
         }
     }

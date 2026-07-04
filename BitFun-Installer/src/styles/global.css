@@ -27,7 +27,7 @@ html, body, #root {
   display: flex; align-items: center; justify-content: space-between;
   padding: 0 16px;
   background: var(--color-bg-primary);
-  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+  border-bottom: 1px solid var(--border-subtle);
   -webkit-app-region: drag;
   flex-shrink: 0; position: relative; z-index: 10;
 }
@@ -58,20 +58,20 @@ html, body, #root {
   width: 32px; height: 32px; padding: 0;
   background: transparent;
   border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  color: #8a8a8a;
+  border-radius: var(--size-radius-sm);
+  color: var(--color-text-muted);
   cursor: pointer; outline: none;
   transition: background var(--motion-fast) ease,
               color var(--motion-fast) ease;
 }
 .window-controls__btn:hover {
-  background: rgba(255, 255, 255, 0.06);
-  color: #b8b8b8;
+  background: var(--element-bg-subtle);
+  color: var(--color-text-secondary);
 }
 .window-controls__btn:active { opacity: 0.8; }
 .window-controls__btn--close:hover {
-  background: rgba(255, 255, 255, 0.06);
-  color: #ef4444;
+  background: var(--element-bg-subtle);
+  color: var(--color-error);
 }
 
 .installer-content {
@@ -115,7 +115,7 @@ html, body, #root {
   gap: 10px;
   flex-wrap: wrap;
   padding: 10px 22px 12px;
-  border-top: 1px solid rgba(148, 163, 184, 0.12);
+  border-top: 1px solid var(--border-subtle);
   background: var(--color-bg-primary);
   flex-shrink: 0;
 }
@@ -135,7 +135,7 @@ html, body, #root {
   min-height: 28px;
   background: transparent;
   border: 1px dashed var(--border-base);
-  border-radius: var(--radius-sm);
+  border-radius: var(--size-radius-sm);
   font-family: var(--font-sans);
   font-size: 13px; font-weight: 500;
   color: var(--color-text-muted);
@@ -204,14 +204,14 @@ html, body, #root {
   width: 100%;
   background: transparent;
   border: 1px dashed var(--border-base);
-  border-radius: var(--radius-sm);
+  border-radius: var(--size-radius-sm);
   cursor: pointer; text-align: left;
   box-shadow: none;
   transition: background 0.25s ease, transform 0.2s ease, border-color 0.25s ease, border-style 0.25s ease;
   position: relative; overflow: hidden;
 }
 .card-btn:hover {
-  background: rgba(148, 163, 184, 0.08);
+  background: var(--element-bg-subtle);
   border-style: solid;
   border-color: var(--border-medium);
   transform: translateY(-1px);
@@ -220,17 +220,17 @@ html, body, #root {
 .card-btn:active { transform: translateY(0); }
 .card-btn:focus-visible {
   outline: none;
-  background: rgba(148, 163, 184, 0.14);
+  background: var(--element-bg-soft);
   box-shadow: none;
 }
-.card-btn:hover .card-btn__icon { background: rgba(148, 163, 184, 0.16); }
+.card-btn:hover .card-btn__icon { background: var(--element-bg-soft); }
 .card-btn:hover .card-btn__icon svg { color: var(--color-accent-600); }
 .card-btn:hover .card-btn__arrow { opacity: 0.8; transform: translateX(0); }
 
 .card-btn__icon {
   flex-shrink: 0; width: 40px; height: 40px;
   display: flex; align-items: center; justify-content: center;
-  background: rgba(148, 163, 184, 0.1);
+  background: var(--element-bg-subtle);
   border-radius: 10px;
   transition: all 0.25s ease;
 }
@@ -252,7 +252,7 @@ html, body, #root {
   flex: 1; padding: 10px 14px;
   background: var(--element-bg-subtle);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
+  border-radius: var(--size-radius-sm);
   color: var(--color-text-primary);
   font-size: 12px; font-family: var(--font-mono);
   outline: none; transition: all 0.25s ease;
@@ -275,7 +275,7 @@ html, body, #root {
   gap: 8px;
   background: var(--element-bg-subtle);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
+  border-radius: var(--size-radius-sm);
   color: var(--color-text-primary);
   cursor: pointer;
   text-align: left;
@@ -326,8 +326,8 @@ html, body, #root {
   padding: 4px;
   background: var(--color-bg-secondary);
   border: 1px solid var(--border-medium);
-  border-radius: var(--radius-sm);
-  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.25);
+  border-radius: var(--size-radius-sm);
+  box-shadow: none;
 }
 
 .bf-select-search {
@@ -343,7 +343,7 @@ html, body, #root {
   min-height: 30px;
   padding: 6px 8px;
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
+  border-radius: var(--size-radius-sm);
   background: var(--element-bg-subtle);
   color: var(--color-text-primary);
   font-size: 12px;
@@ -366,7 +366,7 @@ html, body, #root {
   background: transparent;
   color: var(--color-text-primary);
   padding: 8px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--size-radius-sm);
   text-align: left;
   display: flex;
   flex-direction: column;
@@ -538,7 +538,7 @@ html, body, #root {
   gap: 10px;
   flex-wrap: wrap;
   padding: 10px 22px 12px;
-  border-top: 1px solid rgba(148, 163, 184, 0.12);
+  border-top: 1px solid var(--border-subtle);
   background: var(--color-bg-primary);
   flex-shrink: 0;
 }
@@ -558,7 +558,7 @@ html, body, #root {
 .checkbox-item {
   display: flex; align-items: center; gap: 10px;
   cursor: pointer; padding: 8px 10px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--size-radius-sm);
   transition: background var(--motion-fast) ease;
 }
 .checkbox-item:hover { background: var(--element-bg-subtle); }
@@ -571,7 +571,7 @@ html, body, #root {
   transition: all var(--motion-fast) ease; flex-shrink: 0;
 }
 .checkbox-box.checked { background: var(--color-accent-500); border-color: var(--color-accent-500); }
-.checkbox-box svg { width: 10px; height: 10px; color: white; opacity: 0; transition: opacity var(--motion-fast) ease; }
+.checkbox-box svg { width: 10px; height: 10px; color: var(--color-bg-secondary); opacity: 0; transition: opacity var(--motion-fast) ease; }
 .checkbox-box.checked svg { opacity: 1; }
 
 .checkbox-label { font-size: 13px; color: var(--color-text-secondary); transition: color var(--motion-fast) ease; }
@@ -590,7 +590,7 @@ html, body, #root {
 }
 .progress-bar-fill::after {
   content: ''; position: absolute; inset: 0;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+  background: linear-gradient(90deg, transparent, var(--color-accent-200), transparent);
   background-size: 200% 100%;
   animation: shimmer 2s linear infinite;
 }

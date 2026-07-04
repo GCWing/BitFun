@@ -6,6 +6,7 @@ const mockAddExternalSession = vi.fn();
 const mockUpdateSessionRelationship = vi.fn();
 const mockUpdateSessionBtwOrigin = vi.fn();
 const mockAddBtwThreadMarker = vi.fn();
+const mockUpdateSessionModelName = vi.fn();
 
 const sessions = new Map<string, any>();
 
@@ -25,7 +26,7 @@ vi.mock('../store/FlowChatStore', () => ({
     updateSessionRelationship: (...args: any[]) => mockUpdateSessionRelationship(...args),
     updateSessionBtwOrigin: (...args: any[]) => mockUpdateSessionBtwOrigin(...args),
     addBtwThreadMarker: (...args: any[]) => mockAddBtwThreadMarker(...args),
-    updateSessionModelName: vi.fn(),
+    updateSessionModelName: (...args: any[]) => mockUpdateSessionModelName(...args),
   },
 }));
 
@@ -51,7 +52,7 @@ vi.mock('@/shared/notification-system', () => ({
   },
 }));
 
-import { createBtwChildSession } from './BtwThreadService';
+import { createBtwChildSession, sendMessageToTransientBtwSession } from './BtwThreadService';
 
 describe('BtwThreadService', () => {
   beforeEach(() => {
@@ -72,6 +73,7 @@ describe('BtwThreadService', () => {
         },
       ],
     });
+    mockAskStream.mockResolvedValue({ ok: true });
     mockCreateSession.mockResolvedValue({
       sessionId: 'child-1',
     });
@@ -106,6 +108,56 @@ describe('BtwThreadService', () => {
           parentTurnIndex: 1,
         },
         deepReviewRunManifest,
+      }),
+    );
+  });
+
+  it('passes image contexts through to the desktop /btw API', async () => {
+    sessions.set('btw-child', {
+      sessionId: 'btw-child',
+      title: 'Side question',
+      isTransient: true,
+      sessionKind: 'btw',
+      agentBackedTransient: false,
+      config: { modelName: 'fast' },
+    });
+
+    await sendMessageToTransientBtwSession({
+      parentSessionId: 'parent-1',
+      childSessionId: 'btw-child',
+      question: 'What is in this image?',
+      imagePayload: {
+        imageContexts: [
+          {
+            id: 'img-1',
+            image_path: 'C:/tmp/clip.png',
+            mime_type: 'image/png',
+            metadata: { name: 'clip.png' },
+          },
+        ],
+        imageDisplayData: [
+          {
+            id: 'img-1',
+            name: 'clip.png',
+            imagePath: 'C:/tmp/clip.png',
+            mimeType: 'image/png',
+          },
+        ],
+      },
+    });
+
+    expect(mockAskStream).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: 'parent-1',
+        childSessionId: 'btw-child',
+        question: 'What is in this image?',
+        imageContexts: [
+          expect.objectContaining({
+            id: 'img-1',
+            image_path: 'C:/tmp/clip.png',
+            mime_type: 'image/png',
+          }),
+        ],
       }),
     );
   });

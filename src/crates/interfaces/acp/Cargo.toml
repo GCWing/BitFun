@@ -10,6 +10,7 @@ name = "bitfun_acp"
 
 [dependencies]
 bitfun-core = { path = "../../assembly/core", default-features = false, features = ["product-full"] }
+bitfun-agent-tools = { path = "../../execution/tool-contracts" }
 bitfun-events = { path = "../../contracts/events" }
 
 agent-client-protocol = { workspace = true }

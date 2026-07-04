@@ -234,7 +234,7 @@
 
   &__item-error {
     font-size: var(--font-size-xs);
-    color: var(--color-danger-500);
+    color: var(--color-error);
     line-height: $line-height-relaxed;
     word-break: break-word;
   }
@@ -265,7 +265,7 @@
     background:
       linear-gradient(180deg, color-mix(in srgb, var(--element-bg-soft) 82%, transparent), var(--element-bg-subtle));
     box-shadow:
-      inset 0 1px 0 var(--color-overlay-white-03),
+      inset 0 1px 0 var(--color-overlay-white-04),
       0 10px 24px var(--color-overlay-black-08);
     overflow: hidden;
   }
@@ -416,7 +416,7 @@
 
   &__warning {
     font-size: var(--font-size-xs);
-    color: var(--color-danger-500);
+    color: var(--color-error);
     line-height: $line-height-relaxed;
     padding: $size-gap-2 $size-gap-3;
     border-radius: $size-radius-base;

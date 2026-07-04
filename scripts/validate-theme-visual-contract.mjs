@@ -11,8 +11,9 @@ const REQUIRED_SURFACE_KEYS = [
   'generated-widget',
   'theme-settings',
   'mobile-web-shell',
+  'installer-shell',
 ];
-const ALLOWED_PLATFORMS = new Set(['desktop-webview', 'web', 'mobile-web', 'generated-widget']);
+const ALLOWED_PLATFORMS = new Set(['desktop-webview', 'web', 'mobile-web', 'generated-widget', 'installer']);
 const ALLOWED_FORM_FACTORS = new Set(['desktop', 'narrow', 'mobile', 'iframe']);
 const ALLOWED_THEMES = new Set(['dark', 'light', 'system']);
 const ALLOWED_EVIDENCE_TYPES = new Set([

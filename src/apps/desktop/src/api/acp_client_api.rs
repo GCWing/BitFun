@@ -89,6 +89,26 @@ pub struct ProbeAcpClientRequirementsRequest {
     pub force_refresh: bool,
 }
 
+fn emit_acp_model_round_completed(
+    app_handle: &AppHandle,
+    session_id: &str,
+    turn_id: &str,
+    round_id: String,
+    has_tool_calls: bool,
+) -> Result<(), bitfun_core::util::errors::BitFunError> {
+    app_handle
+        .emit(
+            "agentic://model-round-completed",
+            serde_json::json!({
+                "sessionId": session_id,
+                "turnId": turn_id,
+                "roundId": round_id,
+                "hasToolCalls": has_tool_calls,
+            }),
+        )
+        .map_err(|e| bitfun_core::util::errors::BitFunError::service(e.to_string()))
+}
+
 #[tauri::command]
 pub async fn initialize_acp_clients(
     state: State<'_, AppState>,
@@ -287,6 +307,7 @@ pub async fn start_acp_dialog_turn(
         .map_err(|e| e.to_string())?;
     tokio::spawn(async move {
         let mut current_round_id: Option<String> = None;
+        let mut current_round_has_tool_calls = false;
         let result = service
             .prompt_agent_stream(
                 &request.client_id,
@@ -303,7 +324,17 @@ pub async fn start_acp_dialog_turn(
                             round_index,
                             disable_explore_grouping,
                         } => {
+                            if let Some(previous_round_id) = current_round_id.take() {
+                                emit_acp_model_round_completed(
+                                    &app_handle,
+                                    &request.session_id,
+                                    &request.turn_id,
+                                    previous_round_id,
+                                    current_round_has_tool_calls,
+                                )?;
+                            }
                             current_round_id = Some(round_id.clone());
+                            current_round_has_tool_calls = false;
                             app_handle
                                 .emit(
                                     "agentic://model-round-started",
@@ -367,12 +398,19 @@ pub async fn start_acp_dialog_turn(
                                 })?;
                         }
                         AcpClientStreamEvent::ToolEvent(tool_event) => {
+                            let round_id = current_round_id.clone().ok_or_else(|| {
+                                bitfun_core::util::errors::BitFunError::service(
+                                    "ACP tool event arrived before model round start".to_string(),
+                                )
+                            })?;
+                            current_round_has_tool_calls = true;
                             app_handle
                                 .emit(
                                     "agentic://tool-event",
                                     serde_json::json!({
                                         "sessionId": request.session_id,
                                         "turnId": request.turn_id,
+                                        "roundId": round_id,
                                         "toolEvent": tool_event,
                                         "subagentParentInfo": null,
                                     }),
@@ -442,6 +480,15 @@ pub async fn start_acp_dialog_turn(
                                 })?;
                         }
                         AcpClientStreamEvent::Completed => {
+                            if let Some(round_id) = current_round_id.take() {
+                                emit_acp_model_round_completed(
+                                    &app_handle,
+                                    &request.session_id,
+                                    &request.turn_id,
+                                    round_id,
+                                    current_round_has_tool_calls,
+                                )?;
+                            }
                             app_handle
                                 .emit(
                                     "agentic://dialog-turn-completed",
@@ -457,6 +504,15 @@ pub async fn start_acp_dialog_turn(
                                 })?;
                         }
                         AcpClientStreamEvent::Cancelled => {
+                            if let Some(round_id) = current_round_id.take() {
+                                emit_acp_model_round_completed(
+                                    &app_handle,
+                                    &request.session_id,
+                                    &request.turn_id,
+                                    round_id,
+                                    current_round_has_tool_calls,
+                                )?;
+                            }
                             app_handle
                                 .emit(
                                     "agentic://dialog-turn-cancelled",

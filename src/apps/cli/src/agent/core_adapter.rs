@@ -230,6 +230,8 @@ impl Agent for CoreAgentAdapter {
                 Some(turn_id.clone()),
                 agent_type.to_string(),
                 Some(self.workspace_path_string()),
+                None,
+                None,
                 DialogSubmissionPolicy::for_source(DialogTriggerSource::Cli),
                 None,
             )
@@ -252,6 +254,8 @@ impl Agent for CoreAgentAdapter {
                         Some(turn_id.clone()),
                         agent_type.to_string(),
                         Some(self.workspace_path_string()),
+                        None,
+                        None,
                         DialogSubmissionPolicy::for_source(DialogTriggerSource::Cli),
                         None,
                     )

@@ -27,10 +27,9 @@ import { AcpPlanPanel } from './AcpPlanPanel';
 import type { FlowChatState } from '../types/flow-chat';
 import type { FileContext, DirectoryContext, ImageContext } from '@/types/context.ts';
 import { SmartRecommendations } from './smart-recommendations';
-import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
-import { WorkspaceKind } from '@/shared/types';
+import { useCurrentWorkspace, useWorkspaceContext } from '@/infrastructure/contexts/WorkspaceContext';
 import { createImageContextFromFile, createImageContextFromClipboard } from '../utils/imageUtils';
-import { isSlashCommand, stripSlashCommand } from '../utils/slashCommand';
+import { getSlashCommandPickerQuery, isSlashCommand, stripSlashCommand } from '../utils/slashCommand';
 import { notificationService } from '@/shared/notification-system';
 import { inputReducer, initialInputState } from '../reducers/inputReducer';
 import { modeReducer, initialModeState } from '../reducers/modeReducer';
@@ -40,6 +39,7 @@ import { useChatInputState } from '../store/chatInputStateStore';
 import { useInputHistoryStore } from '../store/inputHistoryStore';
 import { startBtwThread } from '../services/BtwThreadService';
 import { runUsageReportCommand } from '../services/usageReportService';
+import { buildImagePayload } from '../utils/imagePayload';
 import { isGoalSlashCommand, parseGoalCommand } from '../services/goalService';
 import {
   getHistorySessionOpenTransitionSnapshot,
@@ -66,11 +66,15 @@ import {
   DEFAULT_CHAT_INPUT_MODE_CONFIG_PATH,
   normalizeUserDefaultChatInputModeId,
   resolveAvailableChatInputMode,
+  resolveChatInputModePolicy,
+  resolveSessionAssistantWorkspace,
+  resolveSwitchableChatInputModes,
 } from '../utils/chatInputMode';
 import { useSceneStore } from '@/app/stores/sceneStore';
 import type { SceneTabId } from '@/app/components/SceneBar/types';
 import { useAgentsStore } from '@/app/scenes/agents/agentsStore';
 import { configAPI } from '@/infrastructure/api/service-api/ConfigAPI';
+import { configManager } from '@/infrastructure/config';
 import type { ModeSkillInfo } from '@/infrastructure/config/types';
 import MCPAPI, { type MCPPrompt, type MCPPromptMessage, type MCPServerInfo } from '@/infrastructure/api/service-api/MCPAPI';
 import { ChatInputWorkspaceStrip } from './ChatInputWorkspaceStrip';
@@ -619,6 +623,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const { transition, setQueuedInput } = useSessionStateMachineActions(effectiveTargetSessionId);
 
   const { workspace, workspacePath, workspaceName } = useCurrentWorkspace();
+  const { openedWorkspaces } = useWorkspaceContext();
 
   const chatStripRepositoryPath = useMemo(() => {
     const fromContext = (workspacePath || '').trim();
@@ -636,7 +641,17 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const [tokenUsage, setTokenUsage] = React.useState<ContextUsageDisplay>(
     getSessionContextUsageDisplay()
   );
-  const isAssistantWorkspace = workspace?.workspaceKind === WorkspaceKind.Assistant;
+  const [isModelSwitching, setIsModelSwitching] = useState(false);
+  const isAssistantWorkspace = useMemo(
+    () => resolveSessionAssistantWorkspace({
+      currentWorkspace: workspace,
+      sessionWorkspaceId: effectiveTargetSession?.workspaceId,
+      sessionWorkspacePath: effectiveTargetSession?.workspacePath,
+      sessionRemoteConnectionId: effectiveTargetSession?.remoteConnectionId,
+      openedWorkspaces: openedWorkspaces.values(),
+    }),
+    [effectiveTargetSession, openedWorkspaces, workspace],
+  );
   const currentMode = modeState.current;
   const isModeDropdownOpen = modeState.dropdownOpen;
   const acpTargetAgentType = useMemo(
@@ -647,16 +662,21 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const activeSessionMode = effectiveTargetSessionId
     ? acpTargetAgentType || flowChatState.sessions.get(effectiveTargetSessionId)?.mode
     : undefined;
-  const canSwitchModes = !isAssistantWorkspace && currentMode !== 'Cowork' && !isAcpTargetSession;
+  const chatInputModePolicy = useMemo(
+    () => resolveChatInputModePolicy({
+      currentMode,
+      isAssistantWorkspace,
+      sessionMode: activeSessionMode,
+      isAcpTargetSession,
+    }),
+    [activeSessionMode, currentMode, isAcpTargetSession, isAssistantWorkspace],
+  );
+  const canSwitchModes = chatInputModePolicy.canSwitchModes;
 
-  // Session-level mode policy: Cowork sessions are fixed; code sessions should not switch into Cowork.
+  // Session-level mode policy: fixed collaboration modes are not selectable boosts.
   const switchableModes = useMemo(
-    () =>
-      modeState.available.filter(mode =>
-        mode.id !== 'Cowork' &&
-        (isAssistantWorkspace || mode.id !== 'Claw')
-      ),
-    [isAssistantWorkspace, modeState.available]
+    () => resolveSwitchableChatInputModes(modeState.available),
+    [modeState.available]
   );
 
   // Stable refs for Shift+Tab mode cycling (avoids adding deps to handleKeyDown)
@@ -682,6 +702,24 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const [resolvedModeSkillsLoading, setResolvedModeSkillsLoading] = useState(false);
   const [userDefaultModeId, setUserDefaultModeId] = useState<string | null>(null);
   const [defaultModeSavingId, setDefaultModeSavingId] = useState<string | null>(null);
+  const [computerUseEnabled, setComputerUseEnabled] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadComputerUseEnabled = () => {
+      void configManager.getConfig<boolean>('ai.computer_use_enabled').then((enabled) => {
+        if (!cancelled) setComputerUseEnabled(enabled ?? false);
+      });
+    };
+    loadComputerUseEnabled();
+    const unsubscribe = configManager.onConfigChange((path) => {
+      if (path === 'ai.computer_use_enabled' || path === 'ai') loadComputerUseEnabled();
+    });
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, []);
 
   const [skillsFlyoutOpen, setSkillsFlyoutOpen] = useState(false);
   const [skillsFlyoutLeft, setSkillsFlyoutLeft] = useState(false);
@@ -1818,7 +1856,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     if (text.startsWith('/')) {
       const afterSlash = text.slice(1);
       const hasWhitespace = /\s/.test(afterSlash);
-      const query = afterSlash.trimStart().split(/\s+/, 1)[0]?.toLowerCase?.() ?? '';
+      const pickerQuery = getSlashCommandPickerQuery(text);
+      const query = pickerQuery ?? afterSlash.trimStart().split(/\s+/, 1)[0]?.toLowerCase?.() ?? '';
       const matchedMcpPrompt = localSlashCommandsEnabled
         ? resolveTypedMcpPromptCommand(text)
         : null;
@@ -1842,7 +1881,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         // Only show the picker for "/..." patterns that are plausibly a command (/ or /b... /d...).
         // Once the user types a space (starts composing the real question), stop showing the picker
         // so Enter can submit "/btw ..." or "/DeepReview ..." instead of selecting from the picker.
-        if (!hasWhitespace && (query === '' || query.startsWith('b') || query.startsWith('d') || query.startsWith('g') || query.startsWith('u'))) {
+        if (pickerQuery !== null && (query === '' || query.startsWith('b') || query.startsWith('d') || query.startsWith('g') || query.startsWith('u'))) {
           setSlashCommandState({
             isActive: true,
             kind: 'actions',
@@ -1856,7 +1895,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       }
 
       // When idle, keep the picker for mode switching, but don't interfere with executable slash commands.
-      if (!isBtwCommand && !isGoalCommand && !isCompactCommand && !isUsageCommand && !isDeepReviewCommand && !matchedMcpPrompt) {
+      if (pickerQuery !== null && !isBtwCommand && !isGoalCommand && !isCompactCommand && !isUsageCommand && !isDeepReviewCommand && !matchedMcpPrompt) {
         setSlashCommandState({
           isActive: true,
           kind: 'all',
@@ -1896,6 +1935,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     const message = expandComposerSpecialTokens(originalMessage);
     const messageCharCount = getCharacterCount(message);
     const question = stripSlashCommand(message, '/btw').trim();
+    const imagesForBtw = [...imageContexts];
 
     // Clear input without adding to main history.
     dispatchInput({ type: 'CLEAR_VALUE' });
@@ -1923,12 +1963,26 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
 
     try {
+      let imagePayload: Awaited<ReturnType<typeof buildImagePayload>>;
+      try {
+        imagePayload = await buildImagePayload(imagesForBtw);
+      } catch (error) {
+        log.error('Failed to upload images for /btw thread', {
+          imageCount: imagesForBtw.length,
+          error,
+        });
+        notificationService.error('Image upload failed. Please try again.', { duration: 3000 });
+        throw error;
+      }
+
       const { childSessionId } = await startBtwThread({
         parentSessionId: currentSessionId,
         workspacePath,
         question,
         modelId: 'fast',
+        imagePayload,
       });
+      imagesForBtw.forEach(image => removeContext(image.id));
       openBtwSessionInAuxPane({
         childSessionId,
         parentSessionId: currentSessionId,
@@ -1943,7 +1997,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       pendingLargePastesRef.current = originalPendingLargePastes;
       dispatchInput({ type: 'SET_VALUE', payload: originalMessage });
     }
-  }, [clearPendingLargePastes, currentSessionId, derivedState, expandComposerSpecialTokens, inputState.value, isBtwSession, setQueuedInput, t, workspacePath]);
+  }, [clearPendingLargePastes, currentSessionId, derivedState, expandComposerSpecialTokens, imageContexts, inputState.value, isBtwSession, removeContext, setQueuedInput, t, workspacePath]);
 
   const submitCompactFromInput = useCallback(async () => {
     if (!effectiveTargetSessionId || !effectiveTargetSession) {
@@ -2433,6 +2487,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const handleCancelCurrentTask = useCallback(async () => {
     await FlowChatManager.getInstance().cancelCurrentTask();
   }, []);
+
+  const handleModelLoadingChange = useCallback((loading: boolean) => {
+    setIsModelSwitching(loading);
+  }, []);
   
   const handleSendOrCancel = useCallback(async () => {
     if (!derivedState) return;
@@ -2446,6 +2504,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       await handleCancelCurrentTask();
       return;
     }
+
+    // Block sending while model switch IPC is in-flight — the backend session may
+    // not yet reflect the newly selected model.
+    if (isModelSwitching) return;
     
     if (sendButtonMode === 'retry') {
       await transition(SessionExecutionEvent.RESET);
@@ -2574,6 +2636,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       }
     }
   }, [
+    isModelSwitching,
     inputState.value,
     derivedState,
     handleCancelCurrentTask,
@@ -2818,7 +2881,23 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     },
     [currentSessionId, isBtwSession, selectSlashCommandAction, t]
   );
-  
+
+  const handleBoostNewSession = useCallback(
+    async (e: React.SyntheticEvent) => {
+      e.stopPropagation();
+      dispatchMode({ type: 'CLOSE_DROPDOWN' });
+      try {
+        const sessionMode = currentSessionId
+          ? FlowChatStore.getInstance().getState().sessions.get(currentSessionId)?.mode
+          : undefined;
+        await FlowChatManager.getInstance().createChatSession({}, sessionMode);
+      } catch (error) {
+        log.error('Failed to create new session from boost menu', { error });
+      }
+    },
+    [currentSessionId]
+  );
+
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     // Local /btw shortcut (Ctrl/Cmd+Alt+B) should work even when ChatInput is focused.
     if ((e.ctrlKey || e.metaKey) && e.altKey && !e.shiftKey && e.key.toLowerCase() === 'b') {
@@ -2966,11 +3045,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             getRichTextInlineTriggerController()?.closeInlineTrigger?.();
           }
           setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
-
-          // For mode switching picker, "/" is just a trigger and should be cleared on cancel.
-          if (kind !== 'actions' && kind !== 'skills') {
-            dispatchInput({ type: 'CLEAR_VALUE' });
-          }
           return;
         }
         
@@ -3285,6 +3359,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         <IconButton
           className="bitfun-chat-input__send-button bitfun-chat-input__send-button--retry"
           onClick={handleSendOrCancel}
+          disabled={isModelSwitching}
           tooltip={t('input.retry')}
           size="small"
         >
@@ -3310,7 +3385,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           <IconButton
             className="bitfun-chat-input__send-button"
             onClick={handleSendOrCancel}
-            disabled={!inputState.value.trim()}
+            disabled={!inputState.value.trim() || isModelSwitching}
             data-testid="chat-input-send-btn"
             tooltip={t('input.sendShortcut')}
             size="small"
@@ -3325,7 +3400,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       <IconButton
         className="bitfun-chat-input__send-button"
         onClick={handleSendOrCancel}
-        disabled={!inputState.value.trim()}
+        disabled={!inputState.value.trim() || isModelSwitching}
         data-testid="chat-input-send-btn"
         tooltip={t('input.sendShortcut')}
         size="small"
@@ -3762,10 +3837,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                           <div className="bitfun-chat-input__boost-section">
                             {incrementalCodeModes.length > 0 && (
                               incrementalCodeModes.map(modeOption => {
+                                const modeDisabled = modeOption.id === 'ComputerUse' && !computerUseEnabled;
                                 const modeDescription =
-                                  t(`chatInput.modeDescriptions.${modeOption.id}`, { defaultValue: '' }) ||
-                                  modeOption.description ||
-                                  modeOption.name;
+                                  modeDisabled
+                                    ? t('chatInput.computerUseDisabled')
+                                    : t(`chatInput.modeDescriptions.${modeOption.id}`, { defaultValue: '' }) ||
+                                      modeOption.description ||
+                                      modeOption.name;
                                 const modeName =
                                   t(`chatInput.modeNames.${modeOption.id}`, { defaultValue: '' }) || modeOption.name;
                                 const isDefaultMode = userDefaultModeId === modeOption.id;
@@ -3775,9 +3853,10 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                                 return (
                                   <Tooltip key={modeOption.id} content={modeDescription} placement="left">
                                     <div
-                                      className={`bitfun-chat-input__mode-option ${modeState.current === modeOption.id ? 'bitfun-chat-input__mode-option--active' : ''}`}
+                                      className={`bitfun-chat-input__mode-option ${modeState.current === modeOption.id ? 'bitfun-chat-input__mode-option--active' : ''}${modeDisabled ? ' bitfun-chat-input__mode-option--disabled' : ''}`}
                                       onClick={e => {
                                         e.stopPropagation();
+                                        if (modeDisabled) return;
                                         requestModeChange(modeOption.id);
                                       }}
                                     >
@@ -3933,6 +4012,21 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                             </div>
                           </>
                         )}
+
+                        {(!currentSessionId || isBtwSession) && (
+                          <div className="bitfun-chat-input__boost-section-divider" aria-hidden />
+                        )}
+                        <div
+                          role="button"
+                          tabIndex={0}
+                          className="bitfun-chat-input__boost-context-row"
+                          data-testid="chat-input-boost-new-session"
+                          onClick={handleBoostNewSession}
+                          onKeyDown={e => e.key === 'Enter' && handleBoostNewSession(e)}
+                        >
+                          <Plus size={14} className="bitfun-chat-input__boost-context-icon" aria-hidden />
+                          <span>{t('chatInput.boostNewSession')}</span>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -3946,6 +4040,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
                     currentTokens={tokenUsage.current}
                     maxTokens={tokenUsage.max}
                     contextUsageSource={tokenUsage.source}
+                    onLoadingChange={handleModelLoadingChange}
                   />
                 </div>
 

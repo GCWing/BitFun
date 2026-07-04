@@ -10,12 +10,14 @@ use crate::agentic::tools::computer_use_host::{
     InteractiveViewOpts, VisualClickParams, VisualMarkViewOpts,
 };
 use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext};
-use crate::util::elapsed_ms_u64;
 use crate::util::errors::{BitFunError, BitFunResult};
-use crate::util::process_manager;
+use bitfun_services_core::system::{
+    truncate_with_marker, LocalSystemActionError, LocalSystemActionErrorKind, LocalSystemProvider,
+    RunScriptRequest,
+};
 use serde_json::{json, Value};
 
-use super::control_hub::{err_response, ControlHubError, ErrorCode};
+use super::control_hub::{coded_tool_error, err_response, ControlHubError, ErrorCode};
 
 /// Per-PID consecutive-failure tracker for the AX-first `app_*` actions.
 /// Key = target PID, value = `(target_signature, before_digest, count)`.
@@ -238,10 +240,7 @@ impl ComputerUseActions {
                     .get("text")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| {
-                        BitFunError::tool(
-                            "[INVALID_PARAMS] desktop.paste requires 'text'\nHints: example { \"action\":\"paste\", \"text\":\"hello\", \"submit\":true }"
-                                .to_string(),
-                        )
+                        coded_tool_error(ErrorCode::InvalidParams, "desktop.paste requires 'text'\nHints: example { \"action\":\"paste\", \"text\":\"hello\", \"submit\":true }")
                     })?;
                 let clear_first = params
                     .get("clear_first")
@@ -260,18 +259,8 @@ impl ComputerUseActions {
                     _ => vec!["return".to_string()],
                 };
 
-                if let Err(e) = clipboard_write(text).await {
-                    return Ok(err_response(
-                        "desktop",
-                        "paste",
-                        ControlHubError::new(
-                            ErrorCode::NotAvailable,
-                            format!("Clipboard write failed: {}", e),
-                        )
-                        .with_hint(
-                            "Fall back to type_text or check that wl-clipboard / xclip is installed (Linux only)",
-                        ),
-                    ));
+                if let Err(e) = LocalSystemProvider::new().clipboard_write_text(text).await {
+                    return Ok(local_system_error_response("desktop", "paste", e));
                 }
 
                 let paste_chord = match std::env::consts::OS {
@@ -320,6 +309,7 @@ impl ComputerUseActions {
             // These operate on the typed AppSelector / AxNode envelope.
             "list_apps"
             | "get_app_state"
+            | "get_app_shortcuts"
             | "app_click"
             | "app_type_text"
             | "app_scroll"
@@ -419,20 +409,21 @@ impl ComputerUseActions {
         // ── Helpers ─────────────────────────────────────────────────
         fn parse_selector(v: &Value) -> BitFunResult<AppSelector> {
             let obj = v.get("app").ok_or_else(|| {
-                BitFunError::tool(
-                    "[INVALID_PARAMS] missing 'app' selector (pid|bundle_id|name)".to_string(),
+                coded_tool_error(
+                    ErrorCode::InvalidParams,
+                    "missing 'app' selector (pid|bundle_id|name)",
                 )
             })?;
             let sel: AppSelector = serde_json::from_value(obj.clone()).map_err(|e| {
-                BitFunError::tool(format!(
-                    "[INVALID_PARAMS] bad 'app' selector: {} (expect {{pid|bundle_id|name}})",
-                    e
-                ))
+                coded_tool_error(
+                    ErrorCode::InvalidParams,
+                    format!("bad 'app' selector: {} (expect {{pid|bundle_id|name}})", e),
+                )
             })?;
             if sel.pid.is_none() && sel.bundle_id.is_none() && sel.name.is_none() {
-                return Err(BitFunError::tool(
-                    "[INVALID_PARAMS] 'app' must include at least one of pid|bundle_id|name"
-                        .to_string(),
+                return Err(coded_tool_error(
+                    ErrorCode::InvalidParams,
+                    "'app' must include at least one of pid|bundle_id|name",
                 ));
             }
             Ok(sel)
@@ -441,10 +432,8 @@ impl ComputerUseActions {
         fn parse_click_target(v: &Value) -> BitFunResult<ClickTarget> {
             if v.get("kind").is_some() {
                 return serde_json::from_value(v.clone()).map_err(|e| {
-                    BitFunError::tool(format!(
-                        "[INVALID_PARAMS] bad ClickTarget: {} (expected {{\"kind\":\"node_idx\",\"idx\":N}}, {{\"kind\":\"image_xy\",\"x\":0,\"y\":0}}, {{\"kind\":\"image_grid\",\"x0\":0,\"y0\":0,\"width\":300,\"height\":300,\"rows\":15,\"cols\":15,\"row\":7,\"col\":7,\"intersections\":true}}, {{\"kind\":\"visual_grid\",\"rows\":15,\"cols\":15,\"row\":7,\"col\":7,\"intersections\":true}}, {{\"kind\":\"screen_xy\",\"x\":0,\"y\":0}}, or {{\"kind\":\"ocr_text\",\"needle\":\"...\"}})",
-                        e
-                    ))
+                    coded_tool_error(ErrorCode::InvalidParams, format!("bad ClickTarget: {} (expected {{\"kind\":\"node_idx\", \"idx\":N}}, {{\"kind\":\"image_xy\",\"x\":0,\"y\":0}}, {{\"kind\":\"image_grid\",\"x0\":0,\"y0\":0,\"width\":300,\"height\":300,\"rows\":15,\"cols\":15,\"row\":7,\"col\":7,\"intersections\":true}}, {{\"kind\":\"visual_grid\",\"rows\":15,\"cols\":15,\"row\":7,\"col\":7,\"intersections\":true}}, {{\"kind\":\"screen_xy\",\"x\":0,\"y\":0}}, or {{\"kind\":\"ocr_text\",\"needle\":\"...\"}})",
+                        e))
                 });
             }
             if let Some(idx) = v.get("node_idx").and_then(|x| x.as_u64()) {
@@ -452,26 +441,30 @@ impl ComputerUseActions {
             }
             if let Some(obj) = v.get("screen_xy") {
                 let x = obj.get("x").and_then(|x| x.as_f64()).ok_or_else(|| {
-                    BitFunError::tool(
-                        "[INVALID_PARAMS] screen_xy target requires numeric x".to_string(),
+                    coded_tool_error(
+                        ErrorCode::InvalidParams,
+                        "screen_xy target requires numeric x",
                     )
                 })?;
                 let y = obj.get("y").and_then(|y| y.as_f64()).ok_or_else(|| {
-                    BitFunError::tool(
-                        "[INVALID_PARAMS] screen_xy target requires numeric y".to_string(),
+                    coded_tool_error(
+                        ErrorCode::InvalidParams,
+                        "screen_xy target requires numeric y",
                     )
                 })?;
                 return Ok(ClickTarget::ScreenXy { x, y });
             }
             if let Some(obj) = v.get("image_xy") {
                 let x = obj.get("x").and_then(|x| x.as_i64()).ok_or_else(|| {
-                    BitFunError::tool(
-                        "[INVALID_PARAMS] image_xy target requires integer x".to_string(),
+                    coded_tool_error(
+                        ErrorCode::InvalidParams,
+                        "image_xy target requires integer x",
                     )
                 })?;
                 let y = obj.get("y").and_then(|y| y.as_i64()).ok_or_else(|| {
-                    BitFunError::tool(
-                        "[INVALID_PARAMS] image_xy target requires integer y".to_string(),
+                    coded_tool_error(
+                        ErrorCode::InvalidParams,
+                        "image_xy target requires integer y",
                     )
                 })?;
                 return Ok(ClickTarget::ImageXy {
@@ -498,10 +491,7 @@ impl ComputerUseActions {
                     "screenshot_id": obj.get("screenshot_id").cloned().unwrap_or(Value::Null),
                 });
                 return serde_json::from_value(target).map_err(|e| {
-                    BitFunError::tool(format!(
-                        "[INVALID_PARAMS] bad image_grid target: {} (need x0,y0,width,height,rows,cols,row,col; optional intersections)",
-                        e
-                    ))
+                    coded_tool_error(ErrorCode::InvalidParams, format!("bad image_grid target: {} (need x0,y0,width,height,rows,cols,row,col; optional intersections)", e))
                 });
             }
             if let Some(obj) = v.get("visual_grid") {
@@ -515,22 +505,15 @@ impl ComputerUseActions {
                     "wait_ms_after_detection": obj.get("wait_ms_after_detection").cloned().unwrap_or(Value::Null),
                 });
                 return serde_json::from_value(target).map_err(|e| {
-                    BitFunError::tool(format!(
-                        "[INVALID_PARAMS] bad visual_grid target: {} (need rows,cols,row,col; optional intersections)",
-                        e
-                    ))
+                    coded_tool_error(ErrorCode::InvalidParams, format!("bad visual_grid target: {} (need rows,cols,row,col; optional intersections)", e))
                 });
             }
             if v.get("x").is_some() || v.get("y").is_some() {
                 let x = v.get("x").and_then(|x| x.as_f64()).ok_or_else(|| {
-                    BitFunError::tool(
-                        "[INVALID_PARAMS] screen target requires numeric x".to_string(),
-                    )
+                    coded_tool_error(ErrorCode::InvalidParams, "screen target requires numeric x")
                 })?;
                 let y = v.get("y").and_then(|y| y.as_f64()).ok_or_else(|| {
-                    BitFunError::tool(
-                        "[INVALID_PARAMS] screen target requires numeric y".to_string(),
-                    )
+                    coded_tool_error(ErrorCode::InvalidParams, "screen target requires numeric y")
                 })?;
                 return Ok(ClickTarget::ScreenXy { x, y });
             }
@@ -540,26 +523,25 @@ impl ComputerUseActions {
                     .or_else(|| ocr.get("text"))
                     .and_then(|x| x.as_str())
                     .ok_or_else(|| {
-                        BitFunError::tool(
-                            "[INVALID_PARAMS] ocr_text target requires needle".to_string(),
+                        coded_tool_error(
+                            ErrorCode::InvalidParams,
+                            "ocr_text target requires needle",
                         )
                     })?;
                 return Ok(ClickTarget::OcrText {
                     needle: needle.to_string(),
                 });
             }
-            Err(BitFunError::tool(
-                "[INVALID_PARAMS] unsupported ClickTarget. Use {\"kind\":\"node_idx\",\"idx\":N}, {\"node_idx\":N}, {\"kind\":\"image_xy\",\"x\":0,\"y\":0}, {\"image_xy\":{\"x\":0,\"y\":0}}, {\"kind\":\"image_grid\",\"x0\":0,\"y0\":0,\"width\":300,\"height\":300,\"rows\":15,\"cols\":15,\"row\":7,\"col\":7,\"intersections\":true}, {\"kind\":\"visual_grid\",\"rows\":15,\"cols\":15,\"row\":7,\"col\":7,\"intersections\":true}, {\"kind\":\"screen_xy\",\"x\":0,\"y\":0}, or {\"ocr_text\":{\"needle\":\"...\"}}.".to_string(),
-            ))
+            Err(coded_tool_error(ErrorCode::InvalidParams, "unsupported ClickTarget. Use {\"kind\":\"node_idx\",\"idx\":N}, {\"node_idx\":N}, {\"kind\":\"image_xy\",\"x\":0,\"y\":0}, {\"image_xy\":{\"x\":0,\"y\":0}}, {\"kind\":\"image_grid\",\"x0\":0,\"y0\":0,\"width\":300,\"height\":300,\"rows\":15,\"cols\":15,\"row\":7,\"col\":7,\"intersections\":true}, {\"kind\":\"visual_grid\",\"rows\":15,\"cols\":15,\"row\":7,\"col\":7,\"intersections\":true}, {\"kind\":\"screen_xy\",\"x\":0,\"y\":0}, or {\"ocr_text\":{\"needle\":\"...\"}}."))
         }
 
         fn parse_wait_predicate(v: &Value) -> BitFunResult<AppWaitPredicate> {
             if v.get("kind").is_some() {
                 return serde_json::from_value(v.clone()).map_err(|e| {
-                    BitFunError::tool(format!(
-                        "[INVALID_PARAMS] bad app_wait_for predicate: {}",
-                        e
-                    ))
+                    coded_tool_error(
+                        ErrorCode::InvalidParams,
+                        format!("bad app_wait_for predicate: {}", e),
+                    )
                 });
             }
             if let Some(obj) = v.get("digest_changed") {
@@ -568,8 +550,9 @@ impl ComputerUseActions {
                     .or_else(|| obj.get("from"))
                     .and_then(|x| x.as_str())
                     .ok_or_else(|| {
-                        BitFunError::tool(
-                            "[INVALID_PARAMS] digest_changed requires prev_digest".to_string(),
+                        coded_tool_error(
+                            ErrorCode::InvalidParams,
+                            "digest_changed requires prev_digest",
                         )
                     })?;
                 return Ok(AppWaitPredicate::DigestChanged {
@@ -583,9 +566,7 @@ impl ComputerUseActions {
                     .and_then(|x| x.as_str())
                     .or_else(|| obj.as_str())
                     .ok_or_else(|| {
-                        BitFunError::tool(
-                            "[INVALID_PARAMS] title_contains requires needle".to_string(),
-                        )
+                        coded_tool_error(ErrorCode::InvalidParams, "title_contains requires needle")
                     })?;
                 return Ok(AppWaitPredicate::TitleContains {
                     needle: needle.to_string(),
@@ -593,7 +574,7 @@ impl ComputerUseActions {
             }
             if let Some(obj) = v.get("role_enabled") {
                 let role = obj.get("role").and_then(|x| x.as_str()).ok_or_else(|| {
-                    BitFunError::tool("[INVALID_PARAMS] role_enabled requires role".to_string())
+                    coded_tool_error(ErrorCode::InvalidParams, "role_enabled requires role")
                 })?;
                 return Ok(AppWaitPredicate::RoleEnabled {
                     role: role.to_string(),
@@ -605,13 +586,11 @@ impl ComputerUseActions {
                     .and_then(|x| x.as_u64())
                     .or_else(|| obj.as_u64())
                     .ok_or_else(|| {
-                        BitFunError::tool("[INVALID_PARAMS] node_enabled requires idx".to_string())
+                        coded_tool_error(ErrorCode::InvalidParams, "node_enabled requires idx")
                     })?;
                 return Ok(AppWaitPredicate::NodeEnabled { idx: idx as u32 });
             }
-            Err(BitFunError::tool(
-                "[INVALID_PARAMS] unsupported app_wait_for predicate. Use {\"kind\":\"digest_changed\",\"prev_digest\":\"...\"} or shorthand {\"digest_changed\":{\"prev_digest\":\"...\"}}.".to_string(),
-            ))
+            Err(coded_tool_error(ErrorCode::InvalidParams, "unsupported app_wait_for predicate. Use {\"kind\":\"digest_changed\",\"prev_digest\":\"...\"} or shorthand {\"digest_changed\":{\"prev_digest\":\"...\"}}."))
         }
 
         fn parse_keys(v: &Value) -> Vec<String> {
@@ -660,6 +639,30 @@ impl ComputerUseActions {
             v
         }
 
+        // Every ComputerUse action result that may carry a screenshot follows the same
+        // shape: attach it as a multimodal image when present, otherwise fall back to a
+        // text-only `ToolResult::ok`. `snap_result` / `interactive_view_result` /
+        // `visual_mark_view_result` / `interactive_action_result` / `visual_action_result`
+        // below all delegate to this single helper instead of re-implementing the
+        // base64-encode-and-attach dance for each result type.
+        fn result_with_optional_screenshot(
+            data: serde_json::Value,
+            summary: Option<String>,
+            screenshot: Option<&crate::agentic::tools::computer_use_host::ComputerScreenshot>,
+        ) -> ToolResult {
+            use base64::Engine as _;
+            match screenshot {
+                Some(shot) => {
+                    let attach = crate::util::types::ToolImageAttachment {
+                        mime_type: shot.mime_type.clone(),
+                        data_base64: base64::engine::general_purpose::STANDARD.encode(&shot.bytes),
+                    };
+                    ToolResult::ok_with_images(data, summary, vec![attach])
+                }
+                None => ToolResult::ok(data, summary),
+            }
+        }
+
         // Helper: build a `ToolResult` that *also* carries the focused-window
         // screenshot as an Anthropic-style multimodal image attachment. When
         // the host couldn't (or chose not to) capture, fall back to a regular
@@ -669,16 +672,7 @@ impl ComputerUseActions {
             summary: Option<String>,
             snap: &crate::agentic::tools::computer_use_host::AppStateSnapshot,
         ) -> ToolResult {
-            use base64::Engine as _;
-            if let Some(shot) = snap.screenshot.as_ref() {
-                let attach = crate::util::types::ToolImageAttachment {
-                    mime_type: shot.mime_type.clone(),
-                    data_base64: base64::engine::general_purpose::STANDARD.encode(&shot.bytes),
-                };
-                ToolResult::ok_with_images(data, summary, vec![attach])
-            } else {
-                ToolResult::ok(data, summary)
-            }
+            result_with_optional_screenshot(data, summary, snap.screenshot.as_ref())
         }
 
         // Build a JSON view of an InteractiveView that excludes the heavy
@@ -804,16 +798,7 @@ impl ComputerUseActions {
             summary: Option<String>,
             view: &crate::agentic::tools::computer_use_host::InteractiveView,
         ) -> ToolResult {
-            use base64::Engine as _;
-            if let Some(shot) = view.screenshot.as_ref() {
-                let attach = crate::util::types::ToolImageAttachment {
-                    mime_type: shot.mime_type.clone(),
-                    data_base64: base64::engine::general_purpose::STANDARD.encode(&shot.bytes),
-                };
-                ToolResult::ok_with_images(data, summary, vec![attach])
-            } else {
-                ToolResult::ok(data, summary)
-            }
+            result_with_optional_screenshot(data, summary, view.screenshot.as_ref())
         }
 
         fn visual_mark_view_result(
@@ -821,16 +806,7 @@ impl ComputerUseActions {
             summary: Option<String>,
             view: &crate::agentic::tools::computer_use_host::VisualMarkView,
         ) -> ToolResult {
-            use base64::Engine as _;
-            if let Some(shot) = view.screenshot.as_ref() {
-                let attach = crate::util::types::ToolImageAttachment {
-                    mime_type: shot.mime_type.clone(),
-                    data_base64: base64::engine::general_purpose::STANDARD.encode(&shot.bytes),
-                };
-                ToolResult::ok_with_images(data, summary, vec![attach])
-            } else {
-                ToolResult::ok(data, summary)
-            }
+            result_with_optional_screenshot(data, summary, view.screenshot.as_ref())
         }
 
         // Prefer attaching the rebuilt interactive view's screenshot when
@@ -840,21 +816,12 @@ impl ComputerUseActions {
             summary: Option<String>,
             res: &crate::agentic::tools::computer_use_host::InteractiveActionResult,
         ) -> ToolResult {
-            use base64::Engine as _;
             let shot_opt = res
                 .view
                 .as_ref()
                 .and_then(|v| v.screenshot.as_ref())
                 .or(res.snapshot.screenshot.as_ref());
-            if let Some(shot) = shot_opt {
-                let attach = crate::util::types::ToolImageAttachment {
-                    mime_type: shot.mime_type.clone(),
-                    data_base64: base64::engine::general_purpose::STANDARD.encode(&shot.bytes),
-                };
-                ToolResult::ok_with_images(data, summary, vec![attach])
-            } else {
-                ToolResult::ok(data, summary)
-            }
+            result_with_optional_screenshot(data, summary, shot_opt)
         }
 
         fn visual_action_result(
@@ -862,21 +829,12 @@ impl ComputerUseActions {
             summary: Option<String>,
             res: &crate::agentic::tools::computer_use_host::VisualActionResult,
         ) -> ToolResult {
-            use base64::Engine as _;
             let shot_opt = res
                 .view
                 .as_ref()
                 .and_then(|v| v.screenshot.as_ref())
                 .or(res.snapshot.screenshot.as_ref());
-            if let Some(shot) = shot_opt {
-                let attach = crate::util::types::ToolImageAttachment {
-                    mime_type: shot.mime_type.clone(),
-                    data_base64: base64::engine::general_purpose::STANDARD.encode(&shot.bytes),
-                };
-                ToolResult::ok_with_images(data, summary, vec![attach])
-            } else {
-                ToolResult::ok(data, summary)
-            }
+            result_with_optional_screenshot(data, summary, shot_opt)
         }
 
         let bg = host.supports_background_input();
@@ -935,12 +893,33 @@ impl ComputerUseActions {
                 });
                 Ok(vec![snap_result(data, Some(summary), &snap)])
             }
+            "get_app_shortcuts" => {
+                let app = parse_selector(params)?;
+                let snap = host.get_app_shortcuts(app.clone()).await?;
+                let summary = format!(
+                    "{} keyboard shortcut(s) found for {}",
+                    snap.shortcuts.len(),
+                    snap.app.name
+                );
+                Ok(vec![ToolResult::ok(
+                    json!({
+                        "target_app": app,
+                        "app": snap.app,
+                        "shortcuts": snap.shortcuts,
+                        "shortcuts_without_key_count": snap.menu_items_without_shortcut,
+                        "captured_at_ms": snap.captured_at_ms,
+                        "background_input": bg,
+                        "ax_tree": ax,
+                    }),
+                    Some(summary),
+                )])
+            }
             "app_click" => {
                 let app = parse_selector(params)?;
                 let target_v = params.get("target").cloned().ok_or_else(|| {
-                    BitFunError::tool(
-                        "[INVALID_PARAMS] app_click requires 'target' ({node_idx|image_xy|screen_xy|ocr_text})"
-                            .to_string(),
+                    coded_tool_error(
+                        ErrorCode::InvalidParams,
+                        "app_click requires 'target' ({node_idx|image_xy|screen_xy|ocr_text})",
                     )
                 })?;
                 let target = parse_click_target(&target_v)?;
@@ -1014,9 +993,7 @@ impl ComputerUseActions {
                     .get("text")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| {
-                        BitFunError::tool(
-                            "[INVALID_PARAMS] app_type_text requires 'text'".to_string(),
-                        )
+                        coded_tool_error(ErrorCode::InvalidParams, "app_type_text requires 'text'")
                     })?
                     .to_string();
                 let focus: Option<ClickTarget> = match params.get("focus") {
@@ -1091,8 +1068,9 @@ impl ComputerUseActions {
                 let app = parse_selector(params)?;
                 let keys = parse_keys(params);
                 if keys.is_empty() {
-                    return Err(BitFunError::tool(
-                        "[INVALID_PARAMS] app_key_chord requires non-empty 'keys'".to_string(),
+                    return Err(coded_tool_error(
+                        ErrorCode::InvalidParams,
+                        "app_key_chord requires non-empty 'keys'",
                     ));
                 }
                 let focus_idx: Option<u32> = params
@@ -1120,8 +1098,9 @@ impl ComputerUseActions {
             "app_wait_for" => {
                 let app = parse_selector(params)?;
                 let predicate_v = params.get("predicate").cloned().ok_or_else(|| {
-                    BitFunError::tool(
-                        "[INVALID_PARAMS] app_wait_for requires 'predicate'".to_string(),
+                    coded_tool_error(
+                        ErrorCode::InvalidParams,
+                        "app_wait_for requires 'predicate'",
                     )
                 })?;
                 let predicate = parse_wait_predicate(&predicate_v)?;
@@ -1154,10 +1133,10 @@ impl ComputerUseActions {
                 let app = parse_selector(params)?;
                 let opts: InteractiveViewOpts = match params.get("opts") {
                     Some(v) if !v.is_null() => serde_json::from_value(v.clone()).map_err(|e| {
-                        BitFunError::tool(format!(
-                            "[INVALID_PARAMS] build_interactive_view 'opts' invalid: {}",
-                            e
-                        ))
+                        coded_tool_error(
+                            ErrorCode::InvalidParams,
+                            format!("build_interactive_view 'opts' invalid: {}", e),
+                        )
                     })?,
                     _ => InteractiveViewOpts::default(),
                 };
@@ -1179,10 +1158,10 @@ impl ComputerUseActions {
                 let app = parse_selector(params)?;
                 let p: InteractiveClickParams =
                     serde_json::from_value(params.clone()).map_err(|e| {
-                        BitFunError::tool(format!(
-                            "[INVALID_PARAMS] interactive_click params invalid: {}",
-                            e
-                        ))
+                        coded_tool_error(
+                            ErrorCode::InvalidParams,
+                            format!("interactive_click params invalid: {}", e),
+                        )
                     })?;
                 let i = p.i;
                 let res = host.interactive_click(app.clone(), p).await?;
@@ -1198,10 +1177,10 @@ impl ComputerUseActions {
                 let app = parse_selector(params)?;
                 let opts: VisualMarkViewOpts = match params.get("opts") {
                     Some(v) if !v.is_null() => serde_json::from_value(v.clone()).map_err(|e| {
-                        BitFunError::tool(format!(
-                            "[INVALID_PARAMS] build_visual_mark_view 'opts' invalid: {}",
-                            e
-                        ))
+                        coded_tool_error(
+                            ErrorCode::InvalidParams,
+                            format!("build_visual_mark_view 'opts' invalid: {}", e),
+                        )
                     })?,
                     _ => VisualMarkViewOpts::default(),
                 };
@@ -1222,10 +1201,10 @@ impl ComputerUseActions {
             "visual_click" => {
                 let app = parse_selector(params)?;
                 let p: VisualClickParams = serde_json::from_value(params.clone()).map_err(|e| {
-                    BitFunError::tool(format!(
-                        "[INVALID_PARAMS] visual_click params invalid: {}",
-                        e
-                    ))
+                    coded_tool_error(
+                        ErrorCode::InvalidParams,
+                        format!("visual_click params invalid: {}", e),
+                    )
                 })?;
                 let i = p.i;
                 let res = host.visual_click(app.clone(), p).await?;
@@ -1241,10 +1220,10 @@ impl ComputerUseActions {
                 let app = parse_selector(params)?;
                 let p: InteractiveTypeTextParams =
                     serde_json::from_value(params.clone()).map_err(|e| {
-                        BitFunError::tool(format!(
-                            "[INVALID_PARAMS] interactive_type_text params invalid: {}",
-                            e
-                        ))
+                        coded_tool_error(
+                            ErrorCode::InvalidParams,
+                            format!("interactive_type_text params invalid: {}", e),
+                        )
                     })?;
                 let i = p.i;
                 let text_len = p.text.chars().count();
@@ -1268,10 +1247,10 @@ impl ComputerUseActions {
                 let app = parse_selector(params)?;
                 let p: InteractiveScrollParams =
                     serde_json::from_value(params.clone()).map_err(|e| {
-                        BitFunError::tool(format!(
-                            "[INVALID_PARAMS] interactive_scroll params invalid: {}",
-                            e
-                        ))
+                        coded_tool_error(
+                            ErrorCode::InvalidParams,
+                            format!("interactive_scroll params invalid: {}", e),
+                        )
                     })?;
                 let (i, dx, dy) = (p.i, p.dx, p.dy);
                 let res = host.interactive_scroll(app.clone(), p).await?;
@@ -1288,56 +1267,14 @@ impl ComputerUseActions {
                 let summary = format!("interactive_scroll i={:?} dx={} dy={}", i, dx, dy);
                 Ok(vec![interactive_action_result(data, Some(summary), &res)])
             }
-            other => Err(BitFunError::tool(format!(
-                "[INTERNAL] handle_desktop_ax called with unknown action: {}",
-                other
-            ))),
+            other => Err(coded_tool_error(
+                ErrorCode::Internal,
+                format!("handle_desktop_ax called with unknown action: {}", other),
+            )),
         }
     }
 
     // ── Browser domain ─────────────────────────────────────────────────
-
-    ///   try in order: `gtk-launch <name>` (uses `.desktop` files), then a
-    ///   direct exec of the lower-cased name (handles `firefox`, `code`, etc.),
-    ///   and finally fall back to `xdg-open` so callers passing a URL/path by
-    ///   accident still work. The dispatcher in `handle_system` is aware of
-    ///   this fallback chain.
-    fn platform_open_command(app_name: &str) -> (String, Vec<String>) {
-        #[cfg(target_os = "macos")]
-        {
-            (
-                "open".to_string(),
-                vec!["-a".to_string(), app_name.to_string()],
-            )
-        }
-        #[cfg(target_os = "windows")]
-        {
-            (
-                "cmd".to_string(),
-                vec![
-                    "/C".to_string(),
-                    "start".to_string(),
-                    "".to_string(),
-                    app_name.to_string(),
-                ],
-            )
-        }
-        #[cfg(target_os = "linux")]
-        {
-            // Probe in order of correctness; the first executable on PATH wins.
-            // `gtk-launch` is the canonical way to start a desktop application
-            // by its .desktop id; if not present we fall back to a direct exec.
-            if which_exists("gtk-launch") {
-                ("gtk-launch".to_string(), vec![app_name.to_string()])
-            } else {
-                (app_name.to_string(), vec![])
-            }
-        }
-        #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
-        {
-            ("open".to_string(), vec![app_name.to_string()])
-        }
-    }
 
     // ── System domain ──────────────────────────────────────────────────
 
@@ -1402,91 +1339,24 @@ impl ComputerUseActions {
                     }
                 }
 
-                // Build the platform-specific launch attempt list. On Linux
-                // we try multiple strategies in order so the model doesn't
-                // need to know whether the user has gtk-launch installed.
-                let attempts: Vec<(String, Vec<String>)> = {
-                    let primary = Self::platform_open_command(app_name);
-                    #[cfg(target_os = "linux")]
-                    {
-                        let mut v = vec![primary];
-                        // Fallback 1: direct exec of the lowercase name (handles
-                        // `firefox`, `code`, `gnome-terminal`, etc. when the
-                        // exec name matches the app name).
-                        let lower = app_name.to_lowercase();
-                        if v.iter().all(|(c, _)| c != &lower) {
-                            v.push((lower, vec![]));
-                        }
-                        // Fallback 2: xdg-open — last-ditch, mostly for paths/URLs
-                        // erroneously passed as app_name.
-                        v.push(("xdg-open".to_string(), vec![app_name.to_string()]));
-                        v
-                    }
-                    #[cfg(not(target_os = "linux"))]
-                    {
-                        vec![primary]
-                    }
-                };
-
-                let mut last_err: Option<String> = None;
-                let mut output_opt = None;
-                let mut chosen_cmd = String::new();
-                let mut chosen_args: Vec<String> = vec![];
-                for (cmd, args) in &attempts {
-                    match crate::util::process_manager::create_command(cmd).args(args).output() {
-                        Ok(out) => {
-                            if out.status.success() {
-                                chosen_cmd = cmd.clone();
-                                chosen_args = args.clone();
-                                output_opt = Some(out);
-                                break;
-                            } else {
-                                last_err = Some(format!(
-                                    "{} exit={:?} stderr={}",
-                                    cmd,
-                                    out.status.code(),
-                                    String::from_utf8_lossy(&out.stderr).trim()
-                                ));
-                            }
-                        }
-                        Err(e) => {
-                            last_err = Some(format!("spawn {}: {}", cmd, e));
-                        }
-                    }
-                }
-                let _ = chosen_args;
-                let output = output_opt.ok_or_else(|| {
-                    BitFunError::tool(format!(
-                        "open_app failed for '{}' across {} strategies: {} (host_error: {:?})",
-                        app_name,
-                        attempts.len(),
-                        last_err.as_deref().unwrap_or("(no error)"),
-                        host_error
-                    ))
+                let provider = LocalSystemProvider::new();
+                let outcome = provider.open_app_shell(app_name).map_err(|e| {
+                    BitFunError::tool(format!("{} (host_error: {:?})", e.message(), host_error))
                 })?;
-
-                if output.status.success() {
-                    let warning = host_error.map(|e| {
-                        format!("computer_use_host open_app failed; shell fallback succeeded: {}", e)
-                    });
-                    Ok(vec![ToolResult::ok(
-                        json!({
-                            "launched": true,
-                            "app": app_name,
-                            "method": method,
-                            "via_command": chosen_cmd,
-                            "host_attempted": host_attempted,
-                            "warning": warning,
-                        }),
-                        Some(format!("Opened {} via {}", app_name, chosen_cmd)),
-                    )])
-                } else {
-                    let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-                    Err(BitFunError::tool(format!(
-                        "open_app failed for '{}'. host_attempted={}, host_error={:?}, last_command='{}', stderr='{}'",
-                        app_name, host_attempted, host_error, chosen_cmd, stderr
-                    )))
-                }
+                let warning = host_error.map(|e| {
+                    format!("computer_use_host open_app failed; shell fallback succeeded: {}", e)
+                });
+                Ok(vec![ToolResult::ok(
+                    json!({
+                        "launched": true,
+                        "app": app_name,
+                        "method": method,
+                        "via_command": outcome.via_command,
+                        "host_attempted": host_attempted,
+                        "warning": warning,
+                    }),
+                    Some(format!("Opened {} via {}", app_name, outcome.via_command)),
+                )])
             }
             "run_script" => {
                 let script = params
@@ -1503,236 +1373,37 @@ impl ComputerUseActions {
                     .get("timeout_ms")
                     .and_then(|v| v.as_u64())
                     .filter(|value| *value > 0);
-                // Phase 4: keep output payloads bounded — model context is
-                // expensive and most scripts are happy with the head + tail.
-                let max_output_bytes = params
-                    .get("max_output_bytes")
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(16 * 1024)
-                    .clamp(1024, 256 * 1024) as usize;
-
-                let (program, args) = match script_type {
-                    "applescript" => {
-                        #[cfg(target_os = "macos")]
-                        {
-                            (
-                                "/usr/bin/osascript".to_string(),
-                                vec!["-e".to_string(), script.to_string()],
-                            )
-                        }
-                        #[cfg(not(target_os = "macos"))]
-                        {
-                            let _ = script;
-                            return Ok(err_response(
-                                "system",
-                                "run_script",
-                                ControlHubError::new(
-                                    ErrorCode::NotAvailable,
-                                    "AppleScript is only available on macOS",
-                                )
-                                .with_hint("Use script_type='shell' (sh on Unix, PowerShell on Windows) or script_type='powershell'/'bash'"),
-                            ));
-                        }
-                    }
-                    // The "shell" alias picks the OS's *default* shell so the
-                    // model can stay platform-agnostic. On Windows we now
-                    // route to PowerShell rather than cmd.exe to avoid the
-                    // GBK/CP936 stdout encoding nightmare and to give the
-                    // model a consistent surface area.
-                    "shell" => {
-                        #[cfg(target_os = "windows")]
-                        {
-                            powershell_invocation(script)
-                        }
-                        #[cfg(not(target_os = "windows"))]
-                        {
-                            (
-                                "sh".to_string(),
-                                vec!["-c".to_string(), script.to_string()],
-                            )
-                        }
-                    }
-                    "bash" => {
-                        // Bash is universally requested but not always on
-                        // PATH (Windows without WSL/git-bash). Detect and
-                        // surface a structured NotAvailable instead of a
-                        // confusing spawn-failure error.
-                        if !which_exists("bash") {
-                            return Ok(err_response(
-                                "system",
-                                "run_script",
-                                ControlHubError::new(
-                                    ErrorCode::NotAvailable,
-                                    "bash is not on PATH",
-                                )
-                                .with_hint("Install Git for Windows / WSL, or use script_type='shell' / 'powershell' / 'cmd'"),
-                            ));
-                        }
-                        (
-                            "bash".to_string(),
-                            vec!["-c".to_string(), script.to_string()],
-                        )
-                    }
-                    "powershell" => {
-                        // Prefer pwsh (PowerShell 7+, cross-platform) when
-                        // available; fall back to legacy Windows powershell.
-                        let prog = if which_exists("pwsh") {
-                            "pwsh"
-                        } else if which_exists("powershell") {
-                            "powershell"
-                        } else {
-                            return Ok(err_response(
-                                "system",
-                                "run_script",
-                                ControlHubError::new(
-                                    ErrorCode::NotAvailable,
-                                    "Neither pwsh nor powershell are on PATH",
-                                )
-                                .with_hint("Install PowerShell, or use script_type='shell' / 'bash'"),
-                            ));
-                        };
-                        (
-                            prog.to_string(),
-                            vec![
-                                "-NoProfile".to_string(),
-                                "-NonInteractive".to_string(),
-                                // -OutputEncoding utf8 is set inside the script
-                                // wrapper below for consistent stdout handling.
-                                "-Command".to_string(),
-                                format!(
-                                    "[Console]::OutputEncoding=[Text.Encoding]::UTF8; {}",
-                                    script
-                                ),
-                            ],
-                        )
-                    }
-                    "cmd" => {
-                        #[cfg(target_os = "windows")]
-                        {
-                            // Force code-page 65001 (UTF-8) before running the
-                            // user's script so stdout matches what we decode.
-                            (
-                                "cmd".to_string(),
-                                vec![
-                                    "/U".to_string(),
-                                    "/C".to_string(),
-                                    format!("chcp 65001>nul && {}", script),
-                                ],
-                            )
-                        }
-                        #[cfg(not(target_os = "windows"))]
-                        {
-                            return Ok(err_response(
-                                "system",
-                                "run_script",
-                                ControlHubError::new(
-                                    ErrorCode::NotAvailable,
-                                    "script_type='cmd' is only available on Windows",
-                                )
-                                .with_hint("Use script_type='shell' / 'bash' / 'powershell'"),
-                            ));
-                        }
-                    }
-                    other => {
-                        return Err(BitFunError::tool(format!(
-                            "Unknown script_type: '{}'. Valid: applescript (macOS), shell (OS default), bash, powershell, cmd (Windows)",
-                            other
-                        )))
-                    }
+                let max_output_bytes = params.get("max_output_bytes").and_then(|v| v.as_u64());
+                let provider = LocalSystemProvider::new();
+                let output = match provider
+                    .run_script(RunScriptRequest {
+                        script,
+                        script_type,
+                        timeout_ms,
+                        max_output_bytes,
+                    })
+                    .await
+                {
+                    Ok(output) => output,
+                    Err(error) => return map_run_script_error(error),
                 };
 
-                // Use tokio::process so that on timeout we can actually KILL
-                // the child process. The previous implementation wrapped
-                // `std::process::Command::output()` in `spawn_blocking` +
-                // `tokio::time::timeout`; on timeout the `timeout` future
-                // returned, but the spawn_blocking thread kept blocking on
-                // the still-running child, leaking a thread + process per
-                // hung script.
-                let started = std::time::Instant::now();
-                let child = process_manager::create_tokio_command(&program)
-                    .args(&args)
-                    .stdout(std::process::Stdio::piped())
-                    .stderr(std::process::Stdio::piped())
-                    .kill_on_drop(true)
-                    .spawn()
-                    .map_err(|e| {
-                        BitFunError::tool(format!(
-                            "Failed to spawn run_script ({}): {}",
-                            script_type, e
-                        ))
-                    })?;
-
-                let wait = child.wait_with_output();
-                let output = if let Some(timeout_ms) = timeout_ms {
-                    match tokio::time::timeout(std::time::Duration::from_millis(timeout_ms), wait)
-                        .await
-                    {
-                        Err(_) => {
-                            // Best-effort kill. `kill_on_drop(true)` above also
-                            // ensures the OS reaps the process when `child`
-                            // drops, but we issue an explicit SIGKILL first so
-                            // it terminates immediately rather than after the
-                            // tokio task tear-down race.
-                            // NOTE: `wait_with_output` consumed `child`, so we
-                            // can no longer call `child.kill()` directly here;
-                            // the `kill_on_drop` flag handles it for us.
-                            return Ok(err_response(
-                                "system",
-                                "run_script",
-                                ControlHubError::new(
-                                    ErrorCode::Timeout,
-                                    format!(
-                                        "run_script timed out after {} ms (script_type={}); child process killed",
-                                        timeout_ms, script_type
-                                    ),
-                                )
-                                .with_hint(
-                                    "Increase 'timeout_ms', set it to 0, or omit it to wait without a timeout",
-                                ),
-                            ));
-                        }
-                        Ok(Err(e)) => {
-                            return Err(BitFunError::tool(format!(
-                                "Failed to wait for run_script ({}): {}",
-                                script_type, e
-                            )));
-                        }
-                        Ok(Ok(o)) => o,
-                    }
-                } else {
-                    match wait.await {
-                        Ok(o) => o,
-                        Err(e) => {
-                            return Err(BitFunError::tool(format!(
-                                "Failed to wait for run_script ({}): {}",
-                                script_type, e
-                            )));
-                        }
-                    }
-                };
-
-                let elapsed_ms = elapsed_ms_u64(started);
-                let stdout_full = String::from_utf8_lossy(&output.stdout).to_string();
-                let stderr_full = String::from_utf8_lossy(&output.stderr).to_string();
-                let (stdout, stdout_truncated) = truncate_with_marker(&stdout_full, max_output_bytes);
-                let (stderr, stderr_truncated) = truncate_with_marker(&stderr_full, max_output_bytes);
-
-                if output.status.success() {
+                if output.success {
                     Ok(vec![ToolResult::ok(
                         json!({
                             "success": true,
-                            "output": stdout,
-                            "stderr": stderr,
-                            "stdout_truncated": stdout_truncated,
-                            "stderr_truncated": stderr_truncated,
-                            "exit_code": output.status.code(),
-                            "elapsed_ms": elapsed_ms,
+                            "output": output.stdout,
+                            "stderr": output.stderr,
+                            "stdout_truncated": output.stdout_truncated,
+                            "stderr_truncated": output.stderr_truncated,
+                            "exit_code": output.exit_code,
+                            "elapsed_ms": output.elapsed_ms,
                             "script_type": script_type,
                         }),
-                        Some(if stdout.is_empty() {
-                            format!("Script executed in {} ms", elapsed_ms)
+                        Some(if output.stdout.is_empty() {
+                            format!("Script executed in {} ms", output.elapsed_ms)
                         } else {
-                            stdout.lines().take(1).collect::<String>()
+                            output.stdout.lines().take(1).collect::<String>()
                         }),
                     )])
                 } else {
@@ -1743,71 +1414,44 @@ impl ComputerUseActions {
                             ErrorCode::Internal,
                             format!(
                                 "Script exited with {:?}: {}",
-                                output.status.code(),
-                                stderr.lines().next().unwrap_or("(no stderr)")
+                                output.exit_code,
+                                output.stderr.lines().next().unwrap_or("(no stderr)")
                             ),
                         )
                         .with_hints([
-                            format!("stderr={}", stderr),
-                            format!("elapsed_ms={}", elapsed_ms),
+                            format!("stderr={}", output.stderr),
+                            format!("elapsed_ms={}", output.elapsed_ms),
                         ]),
                     ))
                 }
             }
             "get_os_info" => {
-                let os = std::env::consts::OS;
-                let arch = std::env::consts::ARCH;
-                // Phase 4: include OS version + hostname when available so
-                // the model can adapt platform-specific paths / commands.
+                let local = LocalSystemProvider::new().system_info();
                 let mut info = json!({
-                    "os": os,
-                    "arch": arch,
-                    "rust_target_family": std::env::consts::FAMILY,
+                    "os": local.os,
+                    "arch": local.arch,
+                    "rust_target_family": local.rust_target_family,
                 });
-                if let Some(v) = read_os_version() {
+                if let Some(v) = local.os_version {
                     info["os_version"] = json!(v);
                 }
-                if let Ok(host) = hostname() {
+                if let Some(host) = local.hostname {
                     info["hostname"] = json!(host);
                 }
-                // Linux-only: surface display server (X11 / Wayland) and the
-                // current desktop environment so the model can pick the right
-                // clipboard helper / window manipulation strategy without a
-                // separate `run_script` round-trip.
-                #[cfg(target_os = "linux")]
-                {
-                    let (display_server, desktop_env) = linux_session_info();
-                    if let Some(s) = display_server {
-                        info["display_server"] = json!(s);
-                    }
-                    if let Some(d) = desktop_env {
-                        info["desktop_environment"] = json!(d);
-                    }
+                if let Some(s) = local.display_server {
+                    info["display_server"] = json!(s);
                 }
-                // The set of `script_type` values the host can actually run.
-                // Discoverability win: model no longer has to spawn a doomed
-                // run_script call to learn that bash is missing on Windows.
-                let mut script_types = vec!["shell"];
-                if cfg!(target_os = "macos") {
-                    script_types.push("applescript");
+                if let Some(d) = local.desktop_environment {
+                    info["desktop_environment"] = json!(d);
                 }
-                if which_exists("bash") {
-                    script_types.push("bash");
-                }
-                if which_exists("pwsh") || which_exists("powershell") {
-                    script_types.push("powershell");
-                }
-                if cfg!(target_os = "windows") {
-                    script_types.push("cmd");
-                }
-                info["script_types"] = json!(script_types);
+                info["script_types"] = json!(local.script_types);
                 Ok(vec![ToolResult::ok(
                     info.clone(),
                     Some(format!(
                         "{} {} ({})",
-                        os,
+                        local.os,
                         info.get("os_version").and_then(|v| v.as_str()).unwrap_or(""),
-                        arch
+                        local.arch
                     )),
                 )])
             }
@@ -1824,7 +1468,7 @@ impl ComputerUseActions {
                     .unwrap_or(64 * 1024)
                     .clamp(64, 1024 * 1024);
 
-                match clipboard_read().await {
+                match LocalSystemProvider::new().clipboard_read_text().await {
                     Ok(text) => {
                         let (truncated, was_truncated) = truncate_with_marker(&text, max_bytes);
                         let len = text.len();
@@ -1837,15 +1481,7 @@ impl ComputerUseActions {
                             Some(format!("{} bytes on clipboard", len)),
                         )])
                     }
-                    Err(e) => Ok(err_response(
-                        "system",
-                        "clipboard_get",
-                        ControlHubError::new(
-                            ErrorCode::NotAvailable,
-                            format!("Clipboard read failed: {}", e),
-                        )
-                        .with_hints(linux_clipboard_install_hints()),
-                    )),
+                    Err(e) => Ok(local_system_error_response("system", "clipboard_get", e)),
                 }
             }
 
@@ -1856,7 +1492,7 @@ impl ComputerUseActions {
                 let text = params.get("text").and_then(|v| v.as_str()).ok_or_else(|| {
                     BitFunError::tool("clipboard_set requires 'text'".to_string())
                 })?;
-                match clipboard_write(text).await {
+                match LocalSystemProvider::new().clipboard_write_text(text).await {
                     Ok(()) => Ok(vec![ToolResult::ok(
                         json!({
                             "success": true,
@@ -1864,15 +1500,7 @@ impl ComputerUseActions {
                         }),
                         Some(format!("Wrote {} bytes to clipboard", text.len())),
                     )]),
-                    Err(e) => Ok(err_response(
-                        "system",
-                        "clipboard_set",
-                        ControlHubError::new(
-                            ErrorCode::NotAvailable,
-                            format!("Clipboard write failed: {}", e),
-                        )
-                        .with_hints(linux_clipboard_install_hints()),
-                    )),
+                    Err(e) => Ok(local_system_error_response("system", "clipboard_set", e)),
                 }
             }
 
@@ -1886,65 +1514,12 @@ impl ComputerUseActions {
                     .get("url")
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| BitFunError::tool("open_url requires 'url'".to_string()))?;
-                if !(url.starts_with("http://")
-                    || url.starts_with("https://")
-                    || url.starts_with("file://")
-                    || url.starts_with("mailto:"))
-                {
-                    return Ok(err_response(
-                        "system",
-                        "open_url",
-                        ControlHubError::new(
-                            ErrorCode::InvalidParams,
-                            format!("Refusing to open URL with unsupported scheme: {}", url),
-                        )
-                        .with_hint(
-                            "Pass an http(s)://, file://, or mailto: URL. Use 'open_file' for local paths without a scheme.",
-                        ),
-                    ));
-                }
-                // NOTE: do NOT reuse platform_open_command — that helper
-                // is for *apps* (uses `open -a` on macOS) and would treat
-                // the URL as an application name, failing immediately.
-                //
-                // Windows: must NOT route through `cmd /C start "" <url>`.
-                // `cmd` interprets `&`, `^`, `%`, `|` in the URL — so a query
-                // string like `?a=1&b=2` gets the second arg dropped, and
-                // long URLs may be silently truncated. Use rundll32 with the
-                // URL protocol handler so the URL is passed verbatim and
-                // routed through the same default-handler resolution Windows
-                // uses for "Open in Browser" shell verbs.
-                let (program, args) = match std::env::consts::OS {
-                    "macos" => ("open".to_string(), vec![url.to_string()]),
-                    "windows" => (
-                        "rundll32".to_string(),
-                        vec![
-                            "url.dll,FileProtocolHandler".to_string(),
-                            url.to_string(),
-                        ],
-                    ),
-                    _ => ("xdg-open".to_string(), vec![url.to_string()]),
-                };
-                let status = process_manager::create_command(&program)
-                    .args(&args)
-                    .status()
-                    .map_err(|e| {
-                        BitFunError::tool(format!("Failed to spawn '{}': {}", program, e))
-                    })?;
-                if status.success() {
-                    Ok(vec![ToolResult::ok(
-                        json!({ "opened": true, "url": url, "method": program }),
+                match LocalSystemProvider::new().open_url(url) {
+                    Ok(outcome) => Ok(vec![ToolResult::ok(
+                        json!({ "opened": true, "url": url, "method": outcome.method }),
                         Some(format!("Opened {} in default handler", url)),
-                    )])
-                } else {
-                    Ok(err_response(
-                        "system",
-                        "open_url",
-                        ControlHubError::new(
-                            ErrorCode::Internal,
-                            format!("'{}' exited with {:?}", program, status.code()),
-                        ),
-                    ))
+                    )]),
+                    Err(e) => Ok(local_system_error_response("system", "open_url", e)),
                 }
             }
 
@@ -1957,65 +1532,20 @@ impl ComputerUseActions {
                 })?;
                 let app_name = params.get("app").and_then(|v| v.as_str());
 
-                let path = std::path::Path::new(path_str);
-                if !path.exists() {
-                    return Ok(err_response(
-                        "system",
-                        "open_file",
-                        ControlHubError::new(
-                            ErrorCode::NotFound,
-                            format!("File does not exist: {}", path_str),
-                        )
-                        .with_hint("Check the absolute path; ~ is not expanded"),
-                    ));
-                }
-
-                let (program, args) = match (std::env::consts::OS, app_name) {
-                    ("macos", Some(app)) => (
-                        "open".to_string(),
-                        vec!["-a".to_string(), app.to_string(), path_str.to_string()],
-                    ),
-                    ("macos", None) => ("open".to_string(), vec![path_str.to_string()]),
-                    // Windows file open: same rundll32 dance as open_url so
-                    // paths with `&` / `%` survive intact when cmd would have
-                    // mangled them. ShellExec_RunDLL also accepts file paths.
-                    ("windows", _) => (
-                        "rundll32".to_string(),
-                        vec![
-                            "url.dll,FileProtocolHandler".to_string(),
-                            path_str.to_string(),
-                        ],
-                    ),
-                    _ => ("xdg-open".to_string(), vec![path_str.to_string()]),
-                };
-                let status = process_manager::create_command(&program)
-                    .args(&args)
-                    .status()
-                    .map_err(|e| {
-                        BitFunError::tool(format!("Failed to spawn '{}': {}", program, e))
-                    })?;
-                if status.success() {
-                    Ok(vec![ToolResult::ok(
+                match LocalSystemProvider::new().open_file(path_str, app_name) {
+                    Ok(outcome) => Ok(vec![ToolResult::ok(
                         json!({
                             "opened": true,
                             "path": path_str,
                             "with_app": app_name,
-                            "method": program,
+                            "method": outcome.method,
                         }),
                         Some(match app_name {
                             Some(a) => format!("Opened {} with {}", path_str, a),
                             None => format!("Opened {} with default handler", path_str),
                         }),
-                    )])
-                } else {
-                    Ok(err_response(
-                        "system",
-                        "open_file",
-                        ControlHubError::new(
-                            ErrorCode::Internal,
-                            format!("'{}' exited with {:?}", program, status.code()),
-                        ),
-                    ))
+                    )]),
+                    Err(e) => Ok(local_system_error_response("system", "open_file", e)),
                 }
             }
 
@@ -2026,361 +1556,44 @@ impl ComputerUseActions {
         }
     }
 }
-/// Truncate `s` to at most `max_bytes`, appending an explicit marker so the
-/// model can see that data was dropped (and how much). Returns
-/// `(truncated_string, was_truncated)`.
-pub(crate) fn truncate_with_marker(s: &str, max_bytes: usize) -> (String, bool) {
-    if s.len() <= max_bytes {
-        return (s.to_string(), false);
+fn local_system_error_response(
+    domain: &'static str,
+    action: &'static str,
+    error: LocalSystemActionError,
+) -> Vec<ToolResult> {
+    let mut control_error =
+        ControlHubError::new(error_code_from_local(error.kind()), error.message());
+    if !error.hints().is_empty() {
+        control_error = control_error.with_hints(error.hints().to_vec());
     }
-    let head_n = max_bytes.saturating_sub(64);
-    let head = safe_str_slice(s, head_n);
-    let omitted = s.len().saturating_sub(head_n);
-    (
-        format!("{}\n... [{} bytes omitted] ...\n", head, omitted),
-        true,
-    )
-}
-/// Slice `s` to ≤ `n` bytes without splitting a UTF-8 codepoint.
-fn safe_str_slice(s: &str, n: usize) -> &str {
-    if n >= s.len() {
-        return s;
-    }
-    let mut cut = n;
-    while cut > 0 && !s.is_char_boundary(cut) {
-        cut -= 1;
-    }
-    &s[..cut]
+    err_response(domain, action, control_error)
 }
 
-/// Read a short OS version string. Best-effort: returns `None` on platforms
-/// where we can't determine it cheaply.
-fn read_os_version() -> Option<String> {
-    #[cfg(target_os = "macos")]
-    {
-        let out = std::process::Command::new("sw_vers")
-            .arg("-productVersion")
-            .output()
-            .ok()?;
-        let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
-        if s.is_empty() {
-            None
-        } else {
-            Some(format!("macOS {}", s))
+fn map_run_script_error(error: LocalSystemActionError) -> BitFunResult<Vec<ToolResult>> {
+    match error.kind() {
+        LocalSystemActionErrorKind::NotAvailable | LocalSystemActionErrorKind::Timeout => {
+            Ok(local_system_error_response("system", "run_script", error))
         }
-    }
-    #[cfg(target_os = "windows")]
-    {
-        let out = crate::util::process_manager::create_command("cmd")
-            .args(["/C", "ver"])
-            .output()
-            .ok()?;
-        let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
-        if s.is_empty() {
-            None
-        } else {
-            Some(s)
+        LocalSystemActionErrorKind::UnknownScriptType => {
+            Err(BitFunError::tool(error.message().to_string()))
         }
-    }
-    #[cfg(target_os = "linux")]
-    {
-        // /etc/os-release is the canonical lookup.
-        let txt = std::fs::read_to_string("/etc/os-release").ok()?;
-        for line in txt.lines() {
-            if let Some(rest) = line.strip_prefix("PRETTY_NAME=") {
-                return Some(rest.trim_matches('"').to_string());
-            }
+        LocalSystemActionErrorKind::InvalidParams
+        | LocalSystemActionErrorKind::NotFound
+        | LocalSystemActionErrorKind::Internal => {
+            Err(BitFunError::tool(error.message().to_string()))
         }
-        None
-    }
-    #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
-    {
-        None
     }
 }
 
-fn hostname() -> std::io::Result<String> {
-    // Prefer environment variables on each OS so we never have to spawn a
-    // subprocess for a value that's already in our address space, and so we
-    // never ingest a non-UTF-8 byte stream from `hostname.exe` on Windows
-    // running a CJK code page.
-    #[cfg(target_os = "windows")]
-    {
-        if let Ok(name) = std::env::var("COMPUTERNAME") {
-            if !name.is_empty() {
-                return Ok(name);
-            }
+fn error_code_from_local(kind: LocalSystemActionErrorKind) -> ErrorCode {
+    match kind {
+        LocalSystemActionErrorKind::InvalidParams => ErrorCode::InvalidParams,
+        LocalSystemActionErrorKind::NotAvailable => ErrorCode::NotAvailable,
+        LocalSystemActionErrorKind::NotFound => ErrorCode::NotFound,
+        LocalSystemActionErrorKind::Timeout => ErrorCode::Timeout,
+        LocalSystemActionErrorKind::Internal | LocalSystemActionErrorKind::UnknownScriptType => {
+            ErrorCode::Internal
         }
-    }
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
-    {
-        if let Ok(name) = std::env::var("HOSTNAME") {
-            if !name.is_empty() {
-                return Ok(name);
-            }
-        }
-        if let Ok(bytes) = std::fs::read("/etc/hostname") {
-            let s = String::from_utf8_lossy(&bytes).trim().to_string();
-            if !s.is_empty() {
-                return Ok(s);
-            }
-        }
-    }
-    let out = process_manager::create_command("hostname").output()?;
-    Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
-}
-
-/// Cheap PATH lookup for an executable name. Used to decide between e.g.
-/// `pwsh` and `powershell`, or to surface a structured `NOT_AVAILABLE`
-/// error when the requested interpreter isn't installed.
-pub(crate) fn which_exists(name: &str) -> bool {
-    let paths = match std::env::var_os("PATH") {
-        Some(p) => p,
-        None => return false,
-    };
-    let exts: Vec<String> = if cfg!(target_os = "windows") {
-        std::env::var("PATHEXT")
-            .unwrap_or_else(|_| ".EXE;.BAT;.CMD;.COM".to_string())
-            .split(';')
-            .map(|s| s.to_string())
-            .collect()
-    } else {
-        vec![String::new()]
-    };
-    for dir in std::env::split_paths(&paths) {
-        for ext in &exts {
-            let mut candidate = dir.join(name);
-            if !ext.is_empty() {
-                let stem = candidate.file_name().map(|n| n.to_os_string());
-                if let Some(mut stem) = stem {
-                    stem.push(ext);
-                    candidate.set_file_name(stem);
-                }
-            }
-            if candidate.exists() {
-                return true;
-            }
-        }
-    }
-    false
-}
-
-/// Build a `(program, args)` pair for invoking a PowerShell snippet on Windows
-/// with UTF-8 output forced. Centralised so the "shell" alias and an explicit
-/// `script_type='powershell'` produce the same encoding.
-#[cfg(target_os = "windows")]
-fn powershell_invocation(script: &str) -> (String, Vec<String>) {
-    let prog = if which_exists("pwsh") {
-        "pwsh"
-    } else {
-        "powershell"
-    };
-    (
-        prog.to_string(),
-        vec![
-            "-NoProfile".to_string(),
-            "-NonInteractive".to_string(),
-            "-Command".to_string(),
-            format!(
-                "[Console]::OutputEncoding=[Text.Encoding]::UTF8; {}",
-                script
-            ),
-        ],
-    )
-}
-
-/// Build OS-specific install hints for the clipboard helper. On Linux we
-/// inspect the session type so the suggestion matches what the user actually
-/// needs (Wayland users wasting time installing xclip is a real failure mode).
-pub(crate) fn linux_clipboard_install_hints() -> Vec<String> {
-    match std::env::consts::OS {
-        "linux" => {
-            #[cfg(target_os = "linux")]
-            {
-                let (server, _) = linux_session_info();
-                match server.as_deref() {
-                    Some("wayland") => vec![
-                        "Wayland session detected — install wl-clipboard (e.g. `sudo apt install wl-clipboard` / `sudo dnf install wl-clipboard`)".to_string(),
-                        "Fallback for XWayland apps: also install xclip or xsel".to_string(),
-                    ],
-                    Some("x11") | Some("tty") => vec![
-                        "X11 session detected — install xclip (`sudo apt install xclip`) or xsel (`sudo apt install xsel`)".to_string(),
-                    ],
-                    _ => vec![
-                        "Install wl-clipboard (Wayland) OR xclip/xsel (X11). Run `echo $XDG_SESSION_TYPE` to know which one applies.".to_string(),
-                    ],
-                }
-            }
-            #[cfg(not(target_os = "linux"))]
-            {
-                vec!["Install wl-clipboard (Wayland) or xclip/xsel (X11)".to_string()]
-            }
-        }
-        _ => vec!["Make sure the system clipboard helper is available on this host".to_string()],
-    }
-}
-/// Best-effort detection of the Linux desktop session metadata (display
-/// server + desktop environment). Returns `(display_server, desktop_env)`,
-/// either of which may be `None` if the environment doesn't expose it.
-#[cfg(target_os = "linux")]
-pub(crate) fn linux_session_info() -> (Option<String>, Option<String>) {
-    let server = std::env::var("XDG_SESSION_TYPE")
-        .ok()
-        .filter(|s| !s.is_empty());
-    let de = std::env::var("XDG_CURRENT_DESKTOP")
-        .ok()
-        .or_else(|| std::env::var("DESKTOP_SESSION").ok())
-        .filter(|s| !s.is_empty());
-    (server, de)
-}
-
-/// Cross-platform clipboard read. Shells out to the canonical helper for
-/// the current OS so we don't pull in a heavyweight dependency for what is
-/// fundamentally a 1-line operation. Linux auto-detects Wayland → X11.
-async fn clipboard_read() -> Result<String, String> {
-    #[cfg(target_os = "macos")]
-    {
-        let out = process_manager::create_tokio_command("pbpaste")
-            .output()
-            .await
-            .map_err(|e| format!("spawn pbpaste: {}", e))?;
-        if !out.status.success() {
-            return Err(format!("pbpaste exit={:?}", out.status.code()));
-        }
-        Ok(String::from_utf8_lossy(&out.stdout).to_string())
-    }
-    #[cfg(target_os = "windows")]
-    {
-        let (program, args) = powershell_invocation("Get-Clipboard -Raw");
-        let out = process_manager::create_tokio_command(&program)
-            .args(&args)
-            .output()
-            .await
-            .map_err(|e| format!("spawn {}: {}", program, e))?;
-        if !out.status.success() {
-            return Err(format!("Get-Clipboard exit={:?}", out.status.code()));
-        }
-        // PowerShell appends CRLF; trim a single trailing newline so the
-        // returned text matches what the user actually copied.
-        let mut s = String::from_utf8_lossy(&out.stdout).to_string();
-        if s.ends_with("\r\n") {
-            s.truncate(s.len() - 2);
-        } else if s.ends_with('\n') {
-            s.truncate(s.len() - 1);
-        }
-        Ok(s)
-    }
-    #[cfg(target_os = "linux")]
-    {
-        // Wayland first (modern session), then X11 fallbacks.
-        let candidates: &[(&str, &[&str])] = if std::env::var("WAYLAND_DISPLAY").is_ok() {
-            &[
-                ("wl-paste", &["--no-newline"]),
-                ("xclip", &["-selection", "clipboard", "-o"]),
-                ("xsel", &["--clipboard", "--output"]),
-            ]
-        } else {
-            &[
-                ("xclip", &["-selection", "clipboard", "-o"]),
-                ("xsel", &["--clipboard", "--output"]),
-                ("wl-paste", &["--no-newline"]),
-            ]
-        };
-        for (bin, args) in candidates {
-            if let Ok(out) = process_manager::create_tokio_command(bin)
-                .args(*args)
-                .output()
-                .await
-            {
-                if out.status.success() {
-                    return Ok(String::from_utf8_lossy(&out.stdout).to_string());
-                }
-            }
-        }
-        Err("no clipboard helper found (install wl-clipboard, xclip, or xsel)".to_string())
-    }
-    #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
-    {
-        Err("clipboard not implemented for this OS".to_string())
-    }
-}
-
-/// Cross-platform clipboard write. Streams `text` into the helper's stdin
-/// rather than embedding it in argv so newlines / quotes / shell metachars
-/// are preserved verbatim.
-async fn clipboard_write(text: &str) -> Result<(), String> {
-    use tokio::io::AsyncWriteExt;
-
-    async fn pipe(bin: &str, args: &[&str], text: &str) -> Result<(), String> {
-        let mut child = process_manager::create_tokio_command(bin)
-            .args(args)
-            .stdin(std::process::Stdio::piped())
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::piped())
-            .spawn()
-            .map_err(|e| format!("spawn {}: {}", bin, e))?;
-        if let Some(mut stdin) = child.stdin.take() {
-            stdin
-                .write_all(text.as_bytes())
-                .await
-                .map_err(|e| format!("write {} stdin: {}", bin, e))?;
-        }
-        let out = child
-            .wait_with_output()
-            .await
-            .map_err(|e| format!("wait {}: {}", bin, e))?;
-        if !out.status.success() {
-            return Err(format!("{} exit={:?}", bin, out.status.code()));
-        }
-        Ok(())
-    }
-
-    #[cfg(target_os = "macos")]
-    {
-        pipe("pbcopy", &[], text).await
-    }
-    #[cfg(target_os = "windows")]
-    {
-        // PowerShell's Set-Clipboard reads from the pipeline; pipe text in
-        // via stdin to preserve binary fidelity.
-        pipe(
-            "powershell",
-            &["-NoProfile", "-Command", "$input | Set-Clipboard"],
-            text,
-        )
-        .await
-    }
-    #[cfg(target_os = "linux")]
-    {
-        let candidates: &[(&str, &[&str])] = if std::env::var("WAYLAND_DISPLAY").is_ok() {
-            &[
-                ("wl-copy", &[]),
-                ("xclip", &["-selection", "clipboard"]),
-                ("xsel", &["--clipboard", "--input"]),
-            ]
-        } else {
-            &[
-                ("xclip", &["-selection", "clipboard"]),
-                ("xsel", &["--clipboard", "--input"]),
-                ("wl-copy", &[]),
-            ]
-        };
-        let mut last_err = String::new();
-        for (bin, args) in candidates {
-            match pipe(bin, args, text).await {
-                Ok(()) => return Ok(()),
-                Err(e) => last_err = e,
-            }
-        }
-        Err(format!(
-            "no clipboard helper succeeded (install wl-clipboard, xclip, or xsel): {}",
-            last_err
-        ))
-    }
-    #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
-    {
-        let _ = text;
-        Err("clipboard not implemented for this OS".to_string())
     }
 }
 

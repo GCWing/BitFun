@@ -12,7 +12,7 @@
     color: var(--color-text-secondary);
 
     &.is-running {
-      color: var(--color-primary);
+      color: var(--color-accent-500);
     }
   }
 
@@ -87,7 +87,7 @@
     }
 
     &:hover::before {
-      background-color: var(--tool-card-bg-hover);
+      background-color: var(--element-bg-hover);
     }
 
     &:hover .task-header-rail__visual {
@@ -248,7 +248,7 @@
     font-weight: 500;
     flex-shrink: 0;
     color: var(--color-text-secondary);
-    background: var(--color-overlay-white-10);
+    background: var(--color-overlay-white-12);
     letter-spacing: 0.02em;
   }
 
@@ -331,7 +331,7 @@
     display: flex;
     align-items: center;
     gap: var(--flowchat-inline-gap);
-    color: var(--tool-card-text-secondary);
+    color: var(--color-text-secondary);
     font-size: var(--flowchat-font-size-xs);
     font-weight: 600;
     letter-spacing: 0.01em;
@@ -359,7 +359,7 @@
     margin-bottom: var(--flowchat-card-gap);
     font-size: var(--flowchat-font-size-xs);
     font-weight: 600;
-    color: var(--tool-card-text-secondary);
+    color: var(--color-text-secondary);
     text-transform: uppercase;
     letter-spacing: 0.5px;
     opacity: 0.8;
@@ -398,7 +398,7 @@
     align-items: center;
     gap: var(--flowchat-inline-gap);
     font-size: var(--flowchat-font-size-xs);
-    color: var(--tool-card-text-muted);
+    color: var(--color-text-muted);
   }
 
   .error-task,
@@ -407,7 +407,7 @@
   }
 
   .error-separator {
-    color: var(--tool-card-border);
+    color: var(--border-base);
   }
 
   .tool-actions {
@@ -433,21 +433,21 @@
   }
 
   .confirm-button {
-    background: var(--color-primary);
+    background: var(--color-accent-500);
     color: var(--color-static-white);
 
     &:hover:not(:disabled) {
-      background: var(--color-primary-hover);
+      background: var(--color-accent-600);
     }
   }
 
   .reject-button {
-    background: var(--tool-card-bg-secondary);
-    color: var(--tool-card-text-primary);
-    border: 1px solid var(--tool-card-border);
+    background: var(--element-bg-soft);
+    color: var(--color-text-primary);
+    border: 1px solid var(--border-base);
 
     &:hover:not(:disabled) {
-      background: var(--tool-card-bg-hover);
+      background: var(--element-bg-hover);
       border-color: var(--color-error);
       color: var(--color-error);
     }
@@ -501,13 +501,13 @@
   // Expanded state: the wrapper becomes the unified visual container.
   &.task-with-subagent-wrapper--expanded {
     // The wrapper itself provides the unified card appearance.
-    background: var(--color-bg-flowchat);
+    background: var(--color-bg-scene);
     border: 1px solid var(--border-base);
     backdrop-filter: blur(10px);
     overflow: hidden;
     box-shadow:
       0 2px 6px var(--color-overlay-black-15),
-      0 1px 3px var(--color-overlay-black-10);
+      0 1px 3px var(--color-overlay-black-12);
 
     // Strip the BaseToolCard's own border/background/shadow so it merges
     // into the wrapper; the wrapper provides the unified card chrome.

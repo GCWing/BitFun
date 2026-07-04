@@ -27,7 +27,7 @@
 .compact-tool-card-wrapper.git-tool-display {
   .compact-card-action,
   .compact-card-content .tool-command-preview.tool-command-preview--compact {
-    font-family: var(--tool-compact-summary-font);
+    font-family: var(--font-family-sans);
     font-size: var(--flowchat-font-size-sm);
     line-height: var(--flowchat-support-line-height);
     font-weight: normal;
@@ -40,11 +40,11 @@
   }
 
   .output-summary {
-    font-family: var(--tool-compact-summary-font);
+    font-family: var(--font-family-sans);
     font-size: var(--flowchat-font-size-sm);
     line-height: var(--flowchat-support-line-height);
     font-weight: normal;
-    color: var(--tool-card-text-secondary);
+    color: var(--color-text-secondary);
   }
 }
 
@@ -110,7 +110,7 @@
 
   .git-output-summary-inline {
     font-size: var(--flowchat-font-size-xs);
-    color: var(--tool-card-text-secondary);
+    color: var(--color-text-secondary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -148,7 +148,7 @@
 
   .output-summary {
     font-size: var(--flowchat-font-size-xs);
-    color: var(--tool-card-text-secondary);
+    color: var(--color-text-secondary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -306,7 +306,7 @@
       align-items: center;
       gap: var(--flowchat-inline-gap);
       font-size: var(--flowchat-font-size-xs);
-      color: var(--tool-card-text-secondary);
+      color: var(--color-text-secondary);
 
       .error-separator {
         color: rgba(var(--color-static-white-rgb), 0.3);
@@ -321,7 +321,7 @@
   }
 
   .icon-completed {
-    color: var(--tool-card-positive-icon);
+    color: color-mix(in srgb, var(--color-success) 90%, transparent);
   }
 
   .icon-warning {
@@ -329,7 +329,7 @@
   }
 
   .git-confirm-btn {
-    color: color-mix(in srgb, var(--tool-card-positive-color) 80%, transparent);
+    color: color-mix(in srgb, var(--color-success) 80%, transparent);
     
     &:hover:not(:disabled) {
       background: var(--git-color-staged-bg-hover);
@@ -337,7 +337,7 @@
     }
 
     &:active:not(:disabled) {
-      background: color-mix(in srgb, var(--tool-card-positive-color) 25%, transparent);
+      background: color-mix(in srgb, var(--color-success) 25%, transparent);
     }
   }
 

@@ -29,7 +29,7 @@
   
   &.bitfun-context-drop-zone--can-accept {
     .bitfun-chat-input__box {
-      border-color: var(--color-overlay-white-22);
+      border-color: var(--border-medium);
       box-shadow: 
         0 12px 32px rgba(var(--color-static-black-rgb), 0.45),
         inset 0 1px 0 var(--color-overlay-white-12);
@@ -251,7 +251,7 @@
 
       &:hover {
         background: var(--color-bg-tertiary);
-        border-color: var(--color-overlay-white-22);
+        border-color: var(--border-medium);
         box-shadow: 0 4px 16px var(--color-overlay-black-20);
       }
 
@@ -260,8 +260,8 @@
         border-color: var(--border-base);
         box-shadow: 
           0 12px 32px rgba(var(--color-static-black-rgb), 0.45),
-          inset 0 1px 0 var(--color-overlay-white-10),
-          inset 0 -1px 0 var(--color-overlay-white-02);
+          inset 0 1px 0 var(--color-overlay-white-12),
+          inset 0 -1px 0 var(--color-overlay-white-04);
       }
     }
 
@@ -329,7 +329,7 @@
     flex-direction: column;
     gap: 0;
     pointer-events: auto;
-    border: 1px solid var(--color-overlay-white-10);
+    border: 1px solid var(--color-overlay-white-12);
     border-radius: calc(var(--flowchat-card-radius) + 4px);
     padding: var(--flowchat-card-expanded-pad-x) var(--flowchat-card-expanded-pad-y) 0;
     background: var(--color-bg-scene);
@@ -345,7 +345,7 @@
     box-shadow: 
       0 8px 24px rgba(var(--color-static-black-rgb), 0.35),
       inset 0 1px 0 var(--color-overlay-white-08),
-      inset 0 -1px 0 var(--color-overlay-white-02);
+      inset 0 -1px 0 var(--color-overlay-white-04);
     cursor: default;
     
     &::before {
@@ -364,7 +364,7 @@
       -webkit-backdrop-filter: blur(8px);
       box-shadow:
         0 8px 24px rgba(var(--color-static-black-rgb), 0.18),
-        inset 0 1px 0 var(--color-overlay-white-06);
+        inset 0 1px 0 var(--color-overlay-white-08);
 
       &:hover {
         background: rgba(var(--chat-input-capsule-hover-rgb), 0.38);
@@ -381,7 +381,7 @@
         border-color: var(--color-overlay-white-20);
         box-shadow:
           0 12px 30px rgba(var(--color-static-black-rgb), 0.28),
-          inset 0 1px 0 var(--color-overlay-white-10);
+          inset 0 1px 0 var(--color-overlay-white-12);
       }
     }
 
@@ -393,14 +393,14 @@
       backdrop-filter: blur(8px);
       -webkit-backdrop-filter: blur(8px);
       box-shadow:
-        0 2px 8px var(--color-overlay-black-06),
+        0 2px 8px var(--color-overlay-black-08),
         inset 0 1px 0 var(--color-overlay-white-80);
 
       &:hover {
         background: rgba(var(--color-static-white-rgb), 0.45);
         border-color: rgba(var(--color-static-black-rgb), 0.14);
         box-shadow:
-          0 12px 24px var(--color-overlay-black-10),
+          0 12px 24px var(--color-overlay-black-12),
           inset 0 1px 0 var(--color-overlay-white-90);
       }
     }
@@ -420,8 +420,8 @@
       border-color: var(--border-base);
       box-shadow: 
         0 12px 32px rgba(var(--color-static-black-rgb), 0.45),
-        inset 0 1px 0 var(--color-overlay-white-10),
-        inset 0 -1px 0 var(--color-overlay-white-02);
+        inset 0 1px 0 var(--color-overlay-white-12),
+        inset 0 -1px 0 var(--color-overlay-white-04);
     }
     
     & > * {
@@ -435,7 +435,7 @@
     gap: 0.125rem;
     padding-bottom: 7px;
     margin-bottom: 0.06rem;
-    border-bottom: 1px solid var(--color-overlay-white-05);
+    border-bottom: 1px solid var(--color-overlay-white-08);
     animation: bitfun-chat-input-fade-in 0.1s ease-out;
   }
 
@@ -521,7 +521,7 @@
     border-radius: 6px;
     overflow: visible;
     background: var(--element-bg-medium);
-    border: 1px solid var(--color-border-subtle);
+    border: 1px solid var(--border-subtle);
     flex-shrink: 0;
 
     &:hover .bitfun-chat-input__image-chip-remove {
@@ -566,12 +566,12 @@
     transition: opacity 0.15s ease, transform 0.15s ease, background 0.15s ease;
 
     &:hover {
-      background: var(--color-bg-elevated-hover);
+      background: var(--element-bg-hover);
     }
 
     &:focus-visible {
       opacity: 1;
-      outline: 2px solid var(--color-accent);
+      outline: 2px solid var(--color-accent-500);
       outline-offset: 1px;
     }
   }
@@ -694,7 +694,7 @@
   &__agent-boost-empty {
     padding: var(--flowchat-card-expanded-pad-x) var(--flowchat-card-expanded-pad-x);
     font-size: var(--flowchat-font-size-2xs);
-    color: var(--color-text-tertiary);
+    color: var(--color-text-muted);
     text-align: center;
     line-height: var(--flowchat-support-line-height);
 
@@ -837,7 +837,7 @@
       0 8px 32px rgba(var(--color-static-black-rgb), 0.35),
       0 4px 16px var(--color-overlay-black-20),
       0 0 1px var(--color-accent-300),
-      inset 0 1px 0 var(--color-overlay-white-05);
+      inset 0 1px 0 var(--color-overlay-white-08);
     backdrop-filter: blur(20px) saturate(1.2);
     -webkit-backdrop-filter: blur(20px) saturate(1.2);
     overflow: hidden;
@@ -858,7 +858,7 @@
 
   &__boost-submenu-spinner {
     animation: spin 0.8s linear infinite;
-    color: var(--color-accent-primary);
+    color: var(--color-accent-500);
   }
 
   &__boost-submenu-list {
@@ -961,15 +961,15 @@
     left: 0;
     min-width: 200px;
     background: var(--color-bg-elevated);
-    border: 1px solid var(--color-overlay-white-10);
+    border: 1px solid var(--color-overlay-white-12);
     border-radius: 6px;
     overflow: hidden;
     backdrop-filter: blur(20px) saturate(1.2);
     -webkit-backdrop-filter: blur(20px) saturate(1.2);
     box-shadow: 
       0 8px 32px var(--color-overlay-black-50),
-      0 0 1px var(--color-overlay-white-10),
-      inset 0 1px 0 var(--color-overlay-white-06);
+      0 0 1px var(--color-overlay-white-12),
+      inset 0 1px 0 var(--color-overlay-white-08);
     z-index: $z-dropdown;
     animation: mode-dropdown-fade-in 0.15s ease-out;
 
@@ -1046,7 +1046,7 @@
   &__mode-divider-line {
     flex: 1;
     height: 1px;
-    background: var(--color-overlay-white-06);
+    background: var(--color-overlay-white-08);
   }
   
   &__mode-divider-text {
@@ -1109,7 +1109,7 @@
   
   &__mode-submenu-dots {
     font-size: var(--flowchat-font-size-xxs);
-    color: var(--color-text-tertiary);
+    color: var(--color-text-muted);
     margin-left: auto;
     letter-spacing: 1px;
   }
@@ -1154,7 +1154,7 @@
     border: none;
     border-radius: 50%;
     background: transparent;
-    color: var(--color-text-tertiary);
+    color: var(--color-text-muted);
     cursor: pointer;
     opacity: 0;
     pointer-events: none;
@@ -1229,8 +1229,8 @@
     -webkit-backdrop-filter: blur(20px) saturate(1.2);
     box-shadow: 
       0 8px 32px var(--color-overlay-black-50),
-      0 0 1px var(--color-overlay-white-10),
-      inset 0 1px 0 var(--color-overlay-white-06);
+      0 0 1px var(--color-overlay-white-12),
+      inset 0 1px 0 var(--color-overlay-white-08);
     z-index: $z-dropdown;
     animation: mode-dropdown-fade-in 0.15s ease-out;
   }
@@ -1250,7 +1250,7 @@
   
   &__slash-command-hint {
     font-size: var(--flowchat-font-size-xxs);
-    color: var(--color-text-tertiary);
+    color: var(--color-text-muted);
     font-weight: 400;
     text-transform: none;
     letter-spacing: 0;
@@ -1330,7 +1330,7 @@
     font-size: var(--flowchat-font-size-2xs);
     font-weight: 500;
     color: color-mix(in srgb, var(--color-accent-500) 90%, var(--color-text-primary));
-    font-family: var(--font-mono);
+    font-family: var(--font-family-mono);
     flex: 0 0 112px;
     min-width: 0;
     overflow: hidden;
@@ -1371,7 +1371,7 @@
     padding: var(--size-gap-4) var(--flowchat-card-expanded-pad-x);
     text-align: center;
     font-size: var(--flowchat-font-size-2xs);
-    color: var(--color-text-tertiary);
+    color: var(--color-text-muted);
   }
 
   // Popovers: heavy blur + dark shadows read as gray/black on light theme
@@ -1386,7 +1386,7 @@
       -webkit-backdrop-filter: none;
       box-shadow:
         0 4px 18px var(--color-overlay-slate-04),
-        0 1px 3px var(--color-overlay-slate-03),
+        0 1px 3px var(--color-overlay-slate-04),
         inset 0 1px 0 var(--color-overlay-white-95);
     }
 
@@ -1395,7 +1395,7 @@
     }
 
     &__mode-submenu-content {
-      background: var(--color-overlay-slate-03);
+      background: var(--color-overlay-slate-04);
 
       .bitfun-chat-input__mode-option:hover:not(.bitfun-chat-input__mode-option--disabled) {
         background: var(--element-bg-soft);
@@ -1410,7 +1410,7 @@
       background: var(--color-overlay-slate-08);
 
       &:hover {
-        background: var(--color-overlay-slate-14);
+        background: var(--color-overlay-slate-12);
       }
     }
   }
@@ -1462,7 +1462,7 @@
     height: 20px;
     border-radius: 50%;
     border: none;
-    background: var(--color-overlay-white-06);
+    background: var(--color-overlay-white-08);
     color: rgba(var(--chat-input-send-dark-icon-rgb), 0.55);
     display: inline-flex;
     align-items: center;

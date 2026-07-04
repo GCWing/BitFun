@@ -11,7 +11,8 @@ use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use bitfun_runtime_ports::{
     AgentDialogPrependedReminder, AgentDialogTurnRequest, AgentSessionCreateRequest,
-    AgentSessionListRequest, AgentSessionReplyRoute, AgentSessionWorkspaceRequest,
+    AgentSessionListRequest, AgentSessionReplyRoute, AgentSessionSummary,
+    AgentSessionWorkspaceBinding, AgentSessionWorkspaceRequest,
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -19,6 +20,13 @@ use std::path::Path;
 
 /// SessionMessage tool - send a message to another session via the dialog scheduler
 pub struct SessionMessageTool;
+
+#[derive(Debug, Clone)]
+struct SessionMessageWorkspaceTarget {
+    workspace_path: String,
+    remote_connection_id: Option<String>,
+    remote_ssh_host: Option<String>,
+}
 
 impl Default for SessionMessageTool {
     fn default() -> Self {
@@ -159,6 +167,64 @@ impl SessionMessageTool {
             BitFunError::tool("SessionMessage requires a source session".to_string())
         })?;
         Ok(format!("session-{}", creator_session_id))
+    }
+
+    fn workspace_target_from_context(
+        &self,
+        workspace_path: String,
+        context: &ToolUseContext,
+    ) -> SessionMessageWorkspaceTarget {
+        let remote_connection_id = context
+            .workspace
+            .as_ref()
+            .and_then(|workspace| workspace.connection_id().map(ToOwned::to_owned));
+        let remote_ssh_host = context
+            .workspace
+            .as_ref()
+            .filter(|workspace| workspace.is_remote())
+            .map(|workspace| workspace.session_identity.hostname.clone())
+            .filter(|value| !value.trim().is_empty());
+        SessionMessageWorkspaceTarget {
+            workspace_path,
+            remote_connection_id,
+            remote_ssh_host,
+        }
+    }
+
+    fn workspace_target_from_binding(
+        &self,
+        binding: AgentSessionWorkspaceBinding,
+    ) -> SessionMessageWorkspaceTarget {
+        SessionMessageWorkspaceTarget {
+            workspace_path: binding.workspace_path,
+            remote_connection_id: binding.remote_connection_id,
+            remote_ssh_host: binding.remote_ssh_host,
+        }
+    }
+
+    fn same_workspace_identity(
+        left: &SessionMessageWorkspaceTarget,
+        right: &SessionMessageWorkspaceTarget,
+    ) -> bool {
+        left.workspace_path == right.workspace_path
+            && left.remote_connection_id == right.remote_connection_id
+            && left.remote_ssh_host == right.remote_ssh_host
+    }
+
+    fn target_agent_type_from_resolution(agent_type: Option<String>) -> Option<String> {
+        agent_type.filter(|value| !value.trim().is_empty())
+    }
+
+    fn target_agent_type_from_sessions(
+        sessions: &[AgentSessionSummary],
+        target_session_id: &str,
+    ) -> Option<String> {
+        sessions
+            .iter()
+            .find(|session| {
+                session.session_id == target_session_id && !session.agent_type.trim().is_empty()
+            })
+            .map(|session| session.agent_type.clone())
     }
 
     fn format_forwarded_message(
@@ -445,6 +511,16 @@ Allowed agent types when creating a session:
             .map_err(|e| BitFunError::tool(format!("Invalid input: {}", e)))?;
         let source_session_id = self.sender_session_id(context)?.to_string();
         let source_workspace = self.sender_workspace(context)?;
+        let source_remote_connection_id = context
+            .workspace
+            .as_ref()
+            .and_then(|workspace| workspace.connection_id().map(ToOwned::to_owned));
+        let source_remote_ssh_host = context
+            .workspace
+            .as_ref()
+            .filter(|workspace| workspace.is_remote())
+            .map(|workspace| workspace.session_identity.hostname.clone())
+            .filter(|value| !value.trim().is_empty());
 
         let coordinator = get_global_coordinator()
             .ok_or_else(|| BitFunError::tool("coordinator not initialized".to_string()))?;
@@ -456,7 +532,7 @@ Allowed agent types when creating a session:
         )
         .map_err(BitFunError::tool)?;
 
-        let (target_session_id, target_agent_type, created_session_id, workspace) =
+        let (target_session_id, target_agent_type, created_session_id, workspace_target) =
             if let Some(target_session_id) = params.session_id.clone() {
                 if source_session_id == target_session_id {
                     return Err(BitFunError::tool(
@@ -464,50 +540,66 @@ Allowed agent types when creating a session:
                     ));
                 }
 
-                let workspace = if let Some(workspace) = params.workspace.as_deref() {
-                    self.resolve_workspace(workspace, context)?
-                } else {
-                    runtime
-                        .resolve_session_workspace_path(AgentSessionWorkspaceRequest {
-                            session_id: target_session_id.clone(),
-                        })
-                        .await
-                        .map_err(|error| {
-                            BitFunError::tool(CoreServiceAgentRuntime::runtime_error_message(error))
-                        })?
-                        .ok_or_else(|| {
-                            BitFunError::NotFound(format!(
-                                "Workspace for session '{}' could not be resolved",
-                                target_session_id
-                            ))
-                        })?
-                };
-                let existing_sessions = runtime
-                    .list_sessions(AgentSessionListRequest {
-                        workspace_path: workspace.clone(),
+                let workspace_target = runtime
+                    .resolve_session_workspace_binding(AgentSessionWorkspaceRequest {
+                        session_id: target_session_id.clone(),
                     })
                     .await
                     .map_err(|error| {
                         BitFunError::tool(CoreServiceAgentRuntime::runtime_error_message(error))
                     })?;
-                let target_session = existing_sessions
-                    .iter()
-                    .find(|session| session.session_id == target_session_id.as_str())
-                    .ok_or_else(|| {
-                        BitFunError::NotFound(format!(
+                let workspace_target = workspace_target.ok_or_else(|| {
+                    BitFunError::NotFound(format!(
+                        "Workspace for session '{}' could not be resolved",
+                        target_session_id
+                    ))
+                })?;
+                let workspace_target = self.workspace_target_from_binding(workspace_target);
+
+                if let Some(workspace) = params.workspace.as_deref() {
+                    let requested_workspace = self.resolve_workspace(workspace, context)?;
+                    let requested_target =
+                        self.workspace_target_from_context(requested_workspace.clone(), context);
+                    if !Self::same_workspace_identity(&requested_target, &workspace_target) {
+                        return Err(BitFunError::NotFound(format!(
                             "Session '{}' not found in workspace '{}'",
-                            target_session_id, workspace
-                        ))
+                            target_session_id, requested_target.workspace_path
+                        )));
+                    }
+                }
+
+                let visible_sessions = runtime
+                    .list_sessions(AgentSessionListRequest {
+                        workspace_path: workspace_target.workspace_path.clone(),
+                        remote_connection_id: workspace_target.remote_connection_id.clone(),
+                        remote_ssh_host: workspace_target.remote_ssh_host.clone(),
+                    })
+                    .await
+                    .map_err(|error| {
+                        BitFunError::tool(CoreServiceAgentRuntime::runtime_error_message(error))
+                    })?;
+                let listed_agent_type =
+                    Self::target_agent_type_from_sessions(&visible_sessions, &target_session_id);
+                let resolved_agent_type = if listed_agent_type.is_none() {
+                    Self::target_agent_type_from_resolution(
+                        runtime
+                            .resolve_session_agent_type(&target_session_id)
+                            .await
+                            .map_err(|error| {
+                                BitFunError::tool(CoreServiceAgentRuntime::runtime_error_message(
+                                    error,
+                                ))
+                            })?,
+                    )
+                } else {
+                    None
+                };
+                let target_agent_type =
+                    listed_agent_type.or(resolved_agent_type).ok_or_else(|| {
+                        BitFunError::NotFound(format!("Session '{}' not found", target_session_id))
                     })?;
 
-                let persisted_agent_type = target_session.agent_type.trim();
-                let target_agent_type = if persisted_agent_type.is_empty() {
-                    "agentic".to_string()
-                } else {
-                    persisted_agent_type.to_string()
-                };
-
-                (target_session_id, target_agent_type, None, workspace)
+                (target_session_id, target_agent_type, None, workspace_target)
             } else {
                 let workspace = self.resolve_workspace(
                     params.workspace.as_deref().ok_or_else(|| {
@@ -517,6 +609,7 @@ Allowed agent types when creating a session:
                     })?,
                     context,
                 )?;
+                let workspace_target = self.workspace_target_from_context(workspace, context);
                 let session_name = params
                     .session_name
                     .clone()
@@ -543,7 +636,9 @@ Allowed agent types when creating a session:
                     .create_session(AgentSessionCreateRequest {
                         session_name,
                         agent_type: agent_type.clone(),
-                        workspace_path: Some(workspace.clone()),
+                        workspace_path: Some(workspace_target.workspace_path.clone()),
+                        remote_connection_id: workspace_target.remote_connection_id.clone(),
+                        remote_ssh_host: workspace_target.remote_ssh_host.clone(),
                         metadata,
                     })
                     .await
@@ -555,7 +650,7 @@ Allowed agent types when creating a session:
                     session.session_id.clone(),
                     session.agent_type.clone(),
                     Some(session.session_id),
-                    workspace,
+                    workspace_target,
                 )
             };
 
@@ -569,11 +664,15 @@ Allowed agent types when creating a session:
                 original_message: Some(params.message.clone()),
                 turn_id: None,
                 agent_type: target_agent_type.clone(),
-                workspace_path: Some(workspace.clone()),
+                workspace_path: Some(workspace_target.workspace_path.clone()),
+                remote_connection_id: workspace_target.remote_connection_id.clone(),
+                remote_ssh_host: workspace_target.remote_ssh_host.clone(),
                 policy: DialogSubmissionPolicy::for_source(DialogTriggerSource::AgentSession),
                 reply_route: Some(AgentSessionReplyRoute {
                     source_session_id,
                     source_workspace_path: source_workspace,
+                    source_remote_connection_id,
+                    source_remote_ssh_host,
                 }),
                 prepended_reminders: prepended_messages,
                 attachments: Vec::new(),
@@ -587,7 +686,7 @@ Allowed agent types when creating a session:
         Ok(vec![ToolResult::Result {
             data: json!({
                 "success": true,
-                "target_workspace": workspace.clone(),
+                "target_workspace": workspace_target.workspace_path.clone(),
                 "target_session_id": target_session_id.clone(),
                 "target_agent_type": target_agent_type.clone(),
                 "created_session_id": created_session_id.clone(),
@@ -595,12 +694,12 @@ Allowed agent types when creating a session:
             result_for_assistant: Some(if let Some(created_session_id) = created_session_id {
                 format!(
                     "Created session '{}' and accepted the message in workspace '{}' using agent type '{}'.",
-                    created_session_id, workspace, target_agent_type
+                    created_session_id, workspace_target.workspace_path, target_agent_type
                 )
             } else {
                 format!(
                     "Message accepted for session '{}' in workspace '{}' using agent type '{}'.",
-                    target_session_id, workspace, target_agent_type
+                    target_session_id, workspace_target.workspace_path, target_agent_type
                 )
             }),
             image_attachments: None,
@@ -660,6 +759,95 @@ mod tests {
         fn drop(&mut self) {
             let _ = fs::remove_dir_all(&self.path);
         }
+    }
+
+    fn workspace_target(
+        workspace_path: &str,
+        remote_connection_id: Option<&str>,
+        remote_ssh_host: Option<&str>,
+    ) -> SessionMessageWorkspaceTarget {
+        SessionMessageWorkspaceTarget {
+            workspace_path: workspace_path.to_string(),
+            remote_connection_id: remote_connection_id.map(ToOwned::to_owned),
+            remote_ssh_host: remote_ssh_host.map(ToOwned::to_owned),
+        }
+    }
+
+    #[test]
+    fn workspace_identity_matches_full_remote_tuple() {
+        let left = workspace_target("/root/repo", Some("conn-1"), Some("host-a"));
+        let right = workspace_target("/root/repo", Some("conn-1"), Some("host-a"));
+
+        assert!(SessionMessageTool::same_workspace_identity(&left, &right));
+    }
+
+    #[test]
+    fn workspace_identity_rejects_remote_local_parity_mismatch() {
+        let requested = workspace_target("/root/repo", None, None);
+        let target = workspace_target("/root/repo", Some("conn-1"), Some("host-a"));
+
+        assert!(!SessionMessageTool::same_workspace_identity(
+            &requested, &target
+        ));
+    }
+
+    #[test]
+    fn workspace_identity_rejects_remote_host_mismatch() {
+        let requested = workspace_target("/root/repo", Some("conn-1"), Some("host-a"));
+        let target = workspace_target("/root/repo", Some("conn-1"), Some("host-b"));
+
+        assert!(!SessionMessageTool::same_workspace_identity(
+            &requested, &target
+        ));
+    }
+
+    #[test]
+    fn target_agent_type_rejects_empty_agent_type_resolution() {
+        assert_eq!(
+            SessionMessageTool::target_agent_type_from_resolution(Some(" ".to_string())),
+            None
+        );
+    }
+
+    #[test]
+    fn target_agent_type_uses_resolved_agent_type() {
+        assert_eq!(
+            SessionMessageTool::target_agent_type_from_resolution(Some("agentic".to_string()))
+                .as_deref(),
+            Some("agentic")
+        );
+    }
+
+    #[test]
+    fn target_agent_type_uses_matching_session_agent_type() {
+        let sessions = vec![AgentSessionSummary {
+            session_id: "worker_1".to_string(),
+            session_name: "Worker".to_string(),
+            agent_type: "agentic".to_string(),
+            created_at_ms: 1,
+            last_active_at_ms: 2,
+        }];
+
+        assert_eq!(
+            SessionMessageTool::target_agent_type_from_sessions(&sessions, "worker_1").as_deref(),
+            Some("agentic")
+        );
+    }
+
+    #[test]
+    fn target_agent_type_rejects_empty_session_agent_type() {
+        let sessions = vec![AgentSessionSummary {
+            session_id: "worker_1".to_string(),
+            session_name: "Worker".to_string(),
+            agent_type: " ".to_string(),
+            created_at_ms: 1,
+            last_active_at_ms: 2,
+        }];
+
+        assert_eq!(
+            SessionMessageTool::target_agent_type_from_sessions(&sessions, "worker_1"),
+            None
+        );
     }
 
     #[tokio::test]

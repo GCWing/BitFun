@@ -2,7 +2,7 @@ Place the prebuilt `flashgrep` daemon binary in this directory.
 
 Pinned release:
 
-- `v0.2.6` from `wgqqqqq/flashgrep`
+- `v0.2.10` from `wgqqqqq/flashgrep`
 
 Expected filenames:
 

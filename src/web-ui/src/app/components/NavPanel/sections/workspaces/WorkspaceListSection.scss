@@ -497,7 +497,7 @@
     }
 
     &.is-unknown {
-      background: var(--color-text-tertiary);
+      background: var(--color-text-muted);
     }
 
     &.is-connecting {
@@ -891,7 +891,7 @@
     border-radius: $size-radius-base;
     background: var(--color-bg-elevated);
     border: 1px solid var(--border-subtle);
-    box-shadow: 0 4px 12px var(--color-overlay-black-25);
+    box-shadow: 0 4px 12px var(--color-overlay-black-30);
     z-index: 10000;
     transform-origin: top left;
     animation: bitfun-footer-menu-in $motion-fast $easing-decelerate forwards;

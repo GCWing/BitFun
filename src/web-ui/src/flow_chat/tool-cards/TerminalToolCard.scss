@@ -22,7 +22,7 @@
    */
   .compact-card-action,
   .compact-card-content .tool-command-preview.tool-command-preview--compact {
-    font-family: var(--tool-compact-summary-font);
+    font-family: var(--font-family-sans);
     font-size: var(--flowchat-font-size-sm);
     line-height: var(--flowchat-support-line-height);
     font-weight: normal;
@@ -35,7 +35,7 @@
 
   .terminal-header-duration .duration-text {
     gap: 0.18rem;
-    font-family: var(--tool-compact-summary-font);
+    font-family: var(--font-family-sans);
     font-size: var(--flowchat-font-size-sm);
     line-height: var(--flowchat-support-line-height);
     font-weight: normal;
@@ -100,7 +100,7 @@
   font-family: var(--tool-card-font-mono);
   font-size: var(--flowchat-font-size-sm);
   font-weight: 500;
-  color: var(--tool-card-text-muted);
+  color: var(--color-text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -128,7 +128,7 @@
       border: none !important;
       outline: none !important;
       box-shadow: none !important;
-      color: var(--text-secondary);
+      color: var(--color-text-secondary);
     }
   }
 
@@ -142,7 +142,7 @@
   }
   
   .command-empty {
-    color: #e06c75;
+    color: rgb(var(--tool-command-empty-rgb));
     font-style: italic;
   }
 }
@@ -286,16 +286,6 @@
   flex-shrink: 0;
 }
 
-/* ========== Confirmation action button group ========== */
-.terminal-confirm-actions {
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 0.125rem;
-  flex-shrink: 0;
-  width: auto;
-}
-
 /* ========== Common action button styles ========== */
 .terminal-action-btn {
   display: flex;
@@ -329,14 +319,14 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: linear-gradient(135deg, var(--color-overlay-white-10), transparent);
+    background: linear-gradient(135deg, var(--color-overlay-white-12), transparent);
     opacity: 0;
     transition: opacity 0.2s ease;
     z-index: 0;
   }
 
   &:hover:not(:disabled) {
-    background: var(--color-overlay-white-10);
+    background: var(--color-overlay-white-12);
     transform: scale(1.05);
   }
 
@@ -389,7 +379,7 @@
   color: var(--color-text-muted);
 
   &:hover:not(:disabled) {
-    background: var(--color-overlay-white-10);
+    background: var(--color-overlay-white-12);
     color: var(--color-text-secondary);
     box-shadow: none;
   }
@@ -613,12 +603,6 @@
     .terminal-action-btn {
       width: 16px;
       height: 16px;
-    }
-
-    .terminal-confirm-actions {
-      gap: 1px;
-      width: auto !important;
-      justify-content: flex-start !important;
     }
 
     .terminal-command,

@@ -25,6 +25,12 @@ Scale the workflow to the user's request. Use the full specialist/debate/fact-ch
 
 ---
 
+## Autonomy Policy
+
+This pipeline has exactly **two** designated interaction points: the Phase 0 plan confirmation and the Phase 5 GAP check. Outside of those two points, do not ask the user anything and do not wait for feedback. Resolve all ambiguity yourself and write your reasoning to `research_plan.md`. If you hit an unexpected obstacle — a blocked source, empty search results, a specialist returning no usable findings — work around it, log it, and continue. Pausing the pipeline to report an obstacle is not acceptable.
+
+---
+
 ## Research Standards (Non-Negotiable)
 
 Every factual claim must meet at least one of these standards:
@@ -87,6 +93,7 @@ REPORT_PATH  = <WORK_DIR>/report.md
 
 - `research_plan.md`, `citations.md`, `debate.md`, `fact_check.md`, `verdict.md` — phase outputs
 - `specialists/{primary,news,expert,counter}.md` — per-specialist findings
+- `directions_tried.json` — search directions already attempted; written only if Phase 1 coverage is thin, read by any supplementary specialists to prevent repeating the same angles
 - `report.md` — the final report
 
 This per-session layout means each chat has its own isolated audit trail and report. `TODAY` is used inside the report text (date stamps, source dates) but does **not** appear in any file path.
@@ -217,6 +224,19 @@ Output language for prose (notes if any, role headings): <USER_LANG>. Claim and 
 After all four Task calls return, **you** must:
 1. `Write` each specialist's returned markdown to its destination file under `<WORK_DIR>/specialists/`.
 2. Verify each file exists and is non-empty before proceeding to Phase 2. If a specialist returned nothing useful, note it in the citation registry as a coverage gap rather than blocking the pipeline.
+
+### Coverage Check
+
+Before proceeding to Phase 2, count the total accepted claims across all four specialist files and assess quality:
+
+- **Thin evidence**: fewer than 12 total claims, or more than half are `authority=low`.
+
+If thin, do **not** proceed to Phase 2 yet:
+
+1. Write `<WORK_DIR>/directions_tried.json` — a list of every search angle already used by the four specialists (role names + representative query strings extracted from the Task prompts you sent).
+2. Dispatch 1–2 supplementary specialists in parallel (`subagent_type: "ResearchSpecialist"`). Each supplementary specialist brief **must** include the `directions_tried.json` contents and the instruction: "Your search angles must differ structurally from all tried directions listed above — do not paraphrase the same query in different words." Prefer angles such as: primary-source archives if news was thin; grey literature or forum discussions if academic was thin; case studies or failure postmortems if expert opinion was thin.
+3. Append new findings to the relevant specialist files.
+4. If coverage is still thin after one supplementary round, proceed anyway — surface the gap prominently in Phase 5 and Phase 6.
 
 ---
 

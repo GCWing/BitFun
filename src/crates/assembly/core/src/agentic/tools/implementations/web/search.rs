@@ -1,31 +1,12 @@
 use crate::agentic::tools::framework::{Tool, ToolExposure, ToolResult, ToolUseContext};
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
+use bitfun_services_integrations::web_tools::{ExaSearchRequest, WebToolNetworkProvider};
 use log::{error, info};
-use serde::Deserialize;
 use serde_json::{json, Value};
-use std::time::Duration;
 
-const EXA_URL: &str = "https://mcp.exa.ai/mcp";
 const EXA_RESULTS: u64 = 5;
 const EXA_CONTEXT: u64 = 8_000;
-
-#[derive(Debug, Deserialize)]
-struct ExaRes {
-    result: Option<ExaData>,
-}
-
-#[derive(Debug, Deserialize)]
-struct ExaData {
-    content: Vec<ExaContent>,
-}
-
-#[derive(Debug, Deserialize)]
-struct ExaContent {
-    #[serde(rename = "type")]
-    kind: String,
-    text: Option<String>,
-}
 
 pub struct WebSearchTool;
 
@@ -48,77 +29,18 @@ impl WebSearchTool {
         crawl: &str,
         ctx: u64,
     ) -> BitFunResult<String> {
-        let cli = reqwest::Client::builder()
-            .timeout(Duration::from_secs(25))
-            .build()
-            .map_err(|err| BitFunError::tool(format!("Failed to create HTTP client: {}", err)))?;
-
-        let body = json!({
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "tools/call",
-            "params": {
-                "name": "web_search_exa",
-                "arguments": {
-                    "query": query,
-                    "type": kind,
-                    "numResults": num,
-                    "livecrawl": crawl,
-                    "contextMaxCharacters": ctx,
-                }
-            }
-        });
-
-        let res = cli
-            .post(EXA_URL)
-            .header("accept", "application/json, text/event-stream")
-            .header("content-type", "application/json")
-            .json(&body)
-            .send()
-            .await
-            .map_err(|err| BitFunError::tool(format!("Failed to send request: {}", err)))?;
-
-        let status = res.status();
-        if !status.is_success() {
-            let err = res
-                .text()
-                .await
-                .unwrap_or_else(|_| String::from("Unknown error"));
-            error!("WebSearch Exa error: status={}, error={}", status, err);
-            return Err(BitFunError::tool(format!(
-                "Web search error {}: {}",
-                status, err
-            )));
-        }
-
-        let text = res
-            .text()
-            .await
-            .map_err(|err| BitFunError::tool(format!("Failed to read response: {}", err)))?;
-
-        self.parse_sse(&text)
-    }
-
-    fn parse_sse(&self, text: &str) -> BitFunResult<String> {
-        let out = text
-            .lines()
-            .filter_map(|line| line.strip_prefix("data: "))
-            .find_map(|line| {
-                serde_json::from_str::<ExaRes>(line)
-                    .ok()
-                    .and_then(|res| res.result)
-                    .map(|res| {
-                        res.content
-                            .into_iter()
-                            .filter(|item| item.kind == "text")
-                            .filter_map(|item| item.text)
-                            .collect::<Vec<_>>()
-                            .join("\n")
-                    })
-                    .filter(|item| !item.trim().is_empty())
-            });
-
-        out.ok_or_else(|| BitFunError::tool("Web search returned no content".to_string()))
+        WebToolNetworkProvider::search_exa(ExaSearchRequest {
+            query,
+            num_results: num,
+            kind,
+            livecrawl: crawl,
+            context_max_characters: ctx,
+        })
+        .await
+        .map_err(|error| {
+            error!("WebSearch Exa error: {}", error);
+            BitFunError::tool(error.to_string())
+        })
     }
 
     pub(crate) fn results(&self, text: &str) -> Vec<Value> {

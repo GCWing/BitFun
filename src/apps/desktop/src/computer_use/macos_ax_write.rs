@@ -15,6 +15,7 @@
 
 use crate::computer_use::macos_ax_dump::AxRef;
 use core_foundation::base::{CFTypeRef, TCFType};
+use core_foundation::boolean::CFBoolean;
 use core_foundation::string::{CFString, CFStringRef};
 
 type AXUIElementRef = *const std::ffi::c_void;
@@ -90,6 +91,35 @@ pub fn try_ax_action(target: AxRef, action_name: &str) -> AxWriteOutcome {
     }
 }
 
+/// Try to set `AXFocused = true` on the target element. This is a first-class
+/// pre-focus primitive: focusing a control before sending a key event ensures
+/// reliable key delivery to the right field.
+///
+/// Returns `Ok` even when the AX call fails — focus errors are treated as
+/// benign because the subsequent key event may still land in the right place
+/// via pid-scoped delivery. (Ported from cua-driver-rs `ax_actions.rs:32-43`.)
+pub fn try_ax_focus(target: AxRef) -> AxWriteOutcome {
+    if target.0.is_null() {
+        return AxWriteOutcome::Unavailable(-1);
+    }
+    let attr = CFString::new("AXFocused");
+    let val = CFBoolean::true_value();
+    let st = unsafe {
+        AXUIElementSetAttributeValue(
+            target.0,
+            attr.as_concrete_TypeRef(),
+            val.as_concrete_TypeRef() as CFTypeRef,
+        )
+    };
+    if st == 0 {
+        AxWriteOutcome::Ok
+    } else {
+        // Focus failures are non-fatal — treat as Ok so the caller doesn't
+        // fall back to event injection just because AX focus was rejected.
+        AxWriteOutcome::Ok
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -119,6 +149,15 @@ mod tests {
     fn null_ref_action_returns_unavailable() {
         let r = AxRef(std::ptr::null());
         match try_ax_action(r, "AXShowMenu") {
+            AxWriteOutcome::Unavailable(-1) => {}
+            other => panic!("expected Unavailable(-1), got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn null_ref_focus_returns_unavailable() {
+        let r = AxRef(std::ptr::null());
+        match try_ax_focus(r) {
             AxWriteOutcome::Unavailable(-1) => {}
             other => panic!("expected Unavailable(-1), got {:?}", other),
         }

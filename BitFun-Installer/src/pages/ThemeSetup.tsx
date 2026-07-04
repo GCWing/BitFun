@@ -29,7 +29,7 @@ export function ThemeSetup({ options, setOptions, onLaunch, onClose }: ThemeSetu
     width: '100%',
     borderRadius: 12,
     padding: 8,
-    background: active ? 'rgba(96, 165, 250, 0.14)' : 'rgba(148, 163, 184, 0.08)',
+    background: active ? 'var(--color-accent-100)' : 'var(--element-bg-subtle)',
     border: 'none',
     cursor: 'pointer',
     transition: 'background 0.2s ease',
@@ -106,7 +106,7 @@ export function ThemeSetup({ options, setOptions, onLaunch, onClose }: ThemeSetu
                 <div style={{ ...previewBaseStyle, background: theme.colors.background.primary }}>
                   <div style={{ height: 16, background: theme.colors.background.secondary, opacity: 0.9 }} />
                   <div style={{ display: 'flex', gap: 6, padding: 8 }}>
-                    <div style={{ width: 22, height: 22, borderRadius: 5, background: theme.colors.element.base, opacity: 0.9 }} />
+                    <div style={{ width: 22, height: 22, borderRadius: 5, background: theme.colors.element.soft, opacity: 0.9 }} />
                     <div style={{ flex: 1 }}>
                       <div style={{ height: 5, width: '62%', background: theme.colors.text.muted, opacity: 0.5, borderRadius: 3, marginBottom: 5 }} />
                       <div style={{ height: 5, width: '78%', background: theme.colors.accent['500'], borderRadius: 3 }} />

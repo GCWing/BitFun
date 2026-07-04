@@ -13,7 +13,7 @@
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  background: var(--color-bg-base);
+  background: var(--color-bg-primary);
   color: var(--color-text-primary);
 }
 
@@ -26,7 +26,7 @@
   display: flex;
   align-items: center;
   padding: 8px 12px;
-  background: var(--color-bg-base);
+  background: var(--color-bg-primary);
 }
 
 .skills-tabs-bar__tabs {
@@ -654,7 +654,7 @@
   background: var(--color-bg-secondary);
   cursor: pointer;
   animation: skills-card-in 0.18s $easing-decelerate both;
-  animation-delay: calc(var(--surface-stagger-index, 0) * 30ms);
+  animation-delay: calc(var(--surface-stagger-index) * 30ms);
   transition:
     border-color $motion-fast $easing-standard,
     box-shadow $motion-fast $easing-standard,
@@ -819,7 +819,7 @@
   background: var(--element-bg-subtle);
   border: 1px solid var(--border-subtle);
   animation: skills-card-in 0.2s $easing-decelerate both;
-  animation-delay: calc(var(--surface-stagger-index, 0) * 40ms);
+  animation-delay: calc(var(--surface-stagger-index) * 40ms);
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -918,7 +918,7 @@
   align-items: center;
   justify-content: center;
   padding: 40px 24px 32px;
-  background: linear-gradient(180deg, var(--color-bg-secondary) 0%, var(--color-bg-base) 100%);
+  background: linear-gradient(180deg, var(--color-bg-secondary) 0%, var(--color-bg-primary) 100%);
   border-bottom: 1px solid var(--border-subtle);
 }
 
@@ -955,12 +955,12 @@
     min-height: 46px;
     background: var(--element-bg-soft);
     border-color: var(--border-medium);
-    box-shadow: 0 2px 12px var(--color-overlay-black-06);
+    box-shadow: 0 2px 12px var(--color-overlay-black-08);
     transition: border-color $motion-fast $easing-standard, box-shadow $motion-fast $easing-standard;
   }
 
   &.search--focused:not(.search--disabled) .search__wrapper {
-    box-shadow: 0 4px 20px var(--color-overlay-black-10), 0 0 0 3px color-mix(in srgb, var(--color-accent-500) 15%, transparent);
+    box-shadow: 0 4px 20px var(--color-overlay-black-12), 0 0 0 3px color-mix(in srgb, var(--color-accent-500) 15%, transparent);
     border-color: var(--color-accent-500);
   }
 }
@@ -998,7 +998,7 @@
   background: var(--element-bg-subtle);
   border: 1px solid var(--border-subtle);
   animation: skills-card-in 0.18s $easing-decelerate both;
-  animation-delay: calc(var(--surface-stagger-index, 0) * 40ms);
+  animation-delay: calc(var(--surface-stagger-index) * 40ms);
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -1096,14 +1096,14 @@
     font-size: var(--font-size-sm);
 
     &.is-valid {
-      background: rgba($color-success, 0.08);
-      border: 1px solid rgba($color-success, 0.3);
+      background: color-mix(in srgb, var(--color-success) 8%, transparent);
+      border: 1px solid color-mix(in srgb, var(--color-success) 30%, transparent);
       color: var(--color-success);
     }
 
     &.is-invalid {
-      background: rgba($color-error, 0.08);
-      border: 1px solid rgba($color-error, 0.3);
+      background: color-mix(in srgb, var(--color-error) 8%, transparent);
+      border: 1px solid color-mix(in srgb, var(--color-error) 30%, transparent);
       color: var(--color-error);
     }
   }

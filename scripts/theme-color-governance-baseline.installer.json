@@ -1,0 +1,117 @@
+{
+  "version": 1,
+  "description": "Baseline for installer theme color governance. Lower values when debt is removed; do not raise without a documented review reason.",
+  "budgets": {
+    "fallbackOccurrences": {
+      "max": 0
+    },
+    "fallbackUniqueTokens": {
+      "max": 0
+    },
+    "fallbackContracts.uncontractedUnique": {
+      "max": 0
+    },
+    "compatibilityAliases.usedUnique": {
+      "max": 0
+    },
+    "compatibilityAliases.occurrences": {
+      "max": 0
+    },
+    "compatibilityAliases.familyUsedUnique": {
+      "max": 0
+    },
+    "compatibilityAliases.familyOccurrences": {
+      "max": 0
+    },
+    "compatibilityAliases.missingCanonicalUnique": {
+      "max": 0
+    },
+    "surfaceTokenRenames.activeUnique": {
+      "max": 0
+    },
+    "surfaceTokenRenames.activeOccurrences": {
+      "max": 0
+    },
+    "surfaceTokenRenames.missingCanonicalUnique": {
+      "max": 0
+    },
+    "colorDomainContracts.missingRegisteredUnique": {
+      "max": 0
+    },
+    "colorDomainContracts.staleRegisteredUnique": {
+      "max": 0
+    },
+    "colorDomainContracts.activeUncontractedUnique": {
+      "max": 0
+    },
+    "colorScopes.appUi.occurrences": {
+      "max": 0
+    },
+    "colorScopes.appUi.uniqueColors": {
+      "max": 0
+    },
+    "cssVarDefinitions.unresolvedRequiredUnique": {
+      "max": 0
+    },
+    "cssVarDefinitions.fallbackOnlyUnique": {
+      "max": 0
+    },
+    "cssVarDefinitions.nonContractCrossFileUnique": {
+      "max": 0
+    },
+    "cssVarDefinitions.nonContractDynamicInputUnique": {
+      "max": 0
+    },
+    "cssVarDefinitions.nonContractCssPrivateUnique": {
+      "max": 0
+    },
+    "cssVarDefinitions.unregisteredDynamicFamilyUnique": {
+      "max": 0
+    },
+    "tokenAliasLiterals.occurrences": {
+      "max": 0
+    },
+    "nearPairs.indistinguishableTotal": {
+      "max": 0
+    },
+    "nearPairs.nearTotal": {
+      "max": 0
+    },
+    "colorDomainNearPairs.themePreset.indistinguishableTotal": {
+      "max": 0
+    },
+    "colorDomainNearPairs.themePreset.nearTotal": {
+      "max": 3
+    },
+    "colorDomainNearPairs.tokenContract.indistinguishableTotal": {
+      "max": 0
+    },
+    "colorDomainNearPairs.tokenContract.nearTotal": {
+      "max": 0
+    },
+    "colorDomainNearPairs.appUi.indistinguishableTotal": {
+      "max": 0
+    },
+    "colorDomainNearPairs.appUi.nearTotal": {
+      "max": 0
+    },
+    "colorDomainScopes.themePreset.occurrences": {
+      "max": 54
+    },
+    "colorDomainScopes.themePreset.uniqueColors": {
+      "max": 53
+    },
+    "colorDomainScopes.tokenContract.occurrences": {
+      "max": 22
+    },
+    "colorDomainScopes.tokenContract.uniqueColors": {
+      "max": 19
+    },
+    "colorDomainScopes.appUi.occurrences": {
+      "max": 0
+    },
+    "colorDomainScopes.appUi.uniqueColors": {
+      "max": 0
+    }
+  }
+}

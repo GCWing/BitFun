@@ -433,7 +433,9 @@ fn copy_directory_recursive(source: &Path, target: &Path) -> Result<(), String> 
 
 #[cfg(test)]
 mod tests {
-    use super::{decode_file_uri, generate_unique_path, parse_clipboard_path_segments, parse_uri_list};
+    use super::{
+        decode_file_uri, generate_unique_path, parse_clipboard_path_segments, parse_uri_list,
+    };
     use std::path::Path;
 
     #[test]
@@ -495,14 +497,19 @@ mod tests {
     #[test]
     fn generate_unique_path_uses_current_dir_when_parent_missing() {
         let unique = generate_unique_path(Path::new("example.txt"));
-        assert_eq!(unique.file_name(), Some(std::ffi::OsStr::new("example (1).txt")));
+        assert_eq!(
+            unique.file_name(),
+            Some(std::ffi::OsStr::new("example (1).txt"))
+        );
     }
 
     #[test]
     fn parse_uri_list_ignores_comments_and_blank_lines() {
-        let files = parse_uri_list(
-            "# comment\n\nfile:///tmp/a.txt\r\nfile://localhost/tmp/b.txt\n",
+        let files =
+            parse_uri_list("# comment\n\nfile:///tmp/a.txt\r\nfile://localhost/tmp/b.txt\n");
+        assert_eq!(
+            files,
+            vec!["/tmp/a.txt".to_string(), "/tmp/b.txt".to_string()]
         );
-        assert_eq!(files, vec!["/tmp/a.txt".to_string(), "/tmp/b.txt".to_string()]);
     }
 }

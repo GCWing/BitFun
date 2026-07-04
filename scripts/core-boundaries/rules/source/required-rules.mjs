@@ -2,6 +2,217 @@
 
 export const requiredContentRules = [
   {
+    path: 'src/crates/contracts/events/src/frontend_projection.rs',
+    reason:
+      'events contract must own framework-neutral agentic frontend event projection for Tauri, WebSocket, and future extension hosts',
+    patterns: [
+      {
+        regex: /\bpub struct AgenticFrontendEvent\b/,
+        message: 'missing framework-neutral frontend event projection DTO',
+      },
+      {
+        regex: /\bpub fn project_agentic_frontend_event\b/,
+        message: 'missing shared agentic frontend event projection function',
+      },
+      {
+        regex: /\bpub fn legacy_flat_message\b/,
+        message: 'missing legacy flat payload projection helper',
+      },
+      {
+        regex: /\bdeep_review_queue_projection_preserves_camel_case_contract\b/,
+        message: 'missing camelCase queue projection regression test',
+      },
+      {
+        regex: /\blegacy_flat_message_keeps_projection_type_authoritative\b/,
+        message: 'missing WebSocket type precedence regression test',
+      },
+      {
+        regex: /\blegacy_flat_dialog_turn_started_preserves_existing_shape\b/,
+        message: 'missing WebSocket dialog-turn-started shape regression test',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/contracts/events/src/agentic_projection_manifest.rs',
+    reason:
+      'events contract must own the public AgenticEvent projection manifest, event versions, aggregate classification, and legacy transport allowlist',
+    patterns: [
+      {
+        regex: /\bpub const AGENTIC_EVENT_PROJECTION_MANIFEST\b/,
+        message: 'missing public AgenticEvent projection manifest',
+      },
+      {
+        regex: /\bpub fn public_agentic_event_projection_manifest\b/,
+        message: 'missing public AgenticEvent projection manifest accessor',
+      },
+      {
+        regex: /\bpub fn is_legacy_websocket_agentic_event_type\b/,
+        message: 'missing manifest-owned legacy WebSocket event allowlist helper',
+      },
+      {
+        regex: /\bpublic_event_projection_manifest_describes_projected_events_and_websocket_allowlist\b/,
+        message: 'missing public projection manifest regression test',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/adapters/transport/src/adapters/tauri.rs',
+    reason:
+      'Tauri transport adapter must only deliver projected events and must not own agentic event field mapping',
+    patterns: [
+      {
+        regex: /\bproject_agentic_frontend_event\b/,
+        message: 'missing shared frontend projection usage in Tauri transport',
+      },
+      {
+        regex: /\.emit\(projected\.event_name\.as_str\(\), projected\.payload\)/,
+        message: 'Tauri transport must emit projected event name and payload',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/adapters/transport/src/adapters/websocket.rs',
+    reason:
+      'WebSocket transport adapter must consume shared event projection while preserving the legacy WebSocket event allowlist',
+    patterns: [
+      {
+        regex: /\bproject_agentic_frontend_event\b/,
+        message: 'missing shared frontend projection usage in WebSocket transport',
+      },
+      {
+        regex: /\bis_legacy_websocket_agentic_event_type\b/,
+        message: 'missing legacy WebSocket agentic event allowlist',
+      },
+      {
+        regex: /\bwebsocket_keeps_legacy_agentic_event_allowlist\b/,
+        message: 'missing WebSocket legacy event allowlist regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/contracts/core-types/src/lsp.rs',
+    reason:
+      'core-types must own shared LSP protocol DTOs, plugin manifest wire contracts, and plugin runtime target DTOs',
+    patterns: [
+      {
+        regex: /\bpub struct LspPlugin\b/,
+        message: 'missing LSP plugin manifest contract owner',
+      },
+      {
+        regex: /\bpub struct ServerConfig\b/,
+        message: 'missing LSP plugin server config contract',
+      },
+      {
+        regex: /\bpub enum JsonRpcMessage\b/,
+        message: 'missing LSP JSON-RPC wire DTO contract',
+      },
+      {
+        regex: /\bpub enum PluginSource\b/,
+        message: 'missing LSP plugin source contract',
+      },
+      {
+        regex: /\bpub struct LspPluginRuntimeTarget\b/,
+        message: 'missing LSP plugin runtime target contract',
+      },
+      {
+        regex: /\bpub fn resolve_lsp_plugin_command_for_target\b/,
+        message: 'missing pure LSP plugin command placeholder resolver',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/services/services-core/src/lsp.rs',
+    reason:
+      'services-core must own pure LSP plugin registry and current-target mapping rules',
+    patterns: [
+      {
+        regex: /\bpub struct PluginRegistry\b/,
+        message: 'missing services-owned LSP plugin registry',
+      },
+      {
+        regex: /\bpub struct LspSupportedExtensions\b/,
+        message: 'missing supported extension summary owner',
+      },
+      {
+        regex: /\bpub fn resolve_plugin_command_for_current_target\b/,
+        message: 'missing current-target LSP plugin command resolver',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/service/lsp/types.rs',
+    reason:
+      'core LSP types path must remain a compatibility facade over core-types',
+    patterns: [
+      {
+        regex: /\bpub use bitfun_core_types::lsp::\*/,
+        message: 'core LSP types must re-export bitfun-core-types contracts',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/service/lsp/registry.rs',
+    reason:
+      'core LSP registry path must remain a compatibility facade over services-core',
+    patterns: [
+      {
+        regex: /\bpub use bitfun_services_core::lsp::\{/,
+        message: 'core LSP registry must re-export services-core registry',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/contracts/core-types/tests/lsp_contracts.rs',
+    reason:
+      'core-types must keep LSP manifest serialization, default-value, and placeholder regressions',
+    patterns: [
+      {
+        regex: /\blsp_plugin_manifest_defaults_preserve_legacy_shape\b/,
+        message: 'missing LSP manifest default regression',
+      },
+      {
+        regex: /\blsp_capability_config_missing_fields_default_to_false\b/,
+        message: 'missing LSP capability default regression',
+      },
+      {
+        regex: /\blsp_plugin_command_placeholder_resolution_is_contract_owned\b/,
+        message: 'missing LSP command placeholder contract regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/services/services-core/tests/lsp_plugin_registry_contracts.rs',
+    reason:
+      'services-core must keep behavior-equivalence contracts for LSP plugin registry and command mapping',
+    patterns: [
+      {
+        regex: /\bregistry_preserves_language_extension_and_file_path_lookup\b/,
+        message: 'missing LSP registry lookup regression',
+      },
+      {
+        regex: /\bregistry_unregister_removes_plugin_indexes\b/,
+        message: 'missing LSP registry unregister regression',
+      },
+      {
+        regex: /\bregistry_unregister_preserves_indexes_owned_by_newer_plugin\b/,
+        message:
+          'missing LSP registry overlapping-plugin unregister regression',
+      },
+      {
+        regex: /\bregistry_duplicate_and_missing_errors_keep_legacy_messages\b/,
+        message: 'missing LSP registry error-message regression',
+      },
+      {
+        regex: /\bregistry_supported_extensions_matches_desktop_api_shape\b/,
+        message: 'missing LSP supported extension summary regression',
+      },
+      {
+        regex: /\bplugin_command_placeholder_resolution_is_target_driven\b/,
+        message: 'missing LSP plugin command placeholder regression',
+      },
+    ],
+  },
+  {
     path: 'src/crates/execution/runtime-services/src/lib.rs',
     reason:
       'runtime-services must own typed runtime service assembly and capability validation contracts',
@@ -179,7 +390,7 @@ export const requiredContentRules = [
         message: 'missing agent session delete entrypoint',
       },
       {
-        regex: /\bresolve_session_workspace_path\b/,
+        regex: /\bresolve_session_workspace_binding\b/,
         message: 'missing agent session workspace resolution entrypoint',
       },
       {
@@ -342,6 +553,133 @@ export const requiredContentRules = [
       {
         regex: /default = \[\]/,
         message: 'agent-runtime default feature set must stay empty',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/execution/agent-runtime/src/context_profile.rs',
+    reason:
+      'agent-runtime must own provider-neutral context profile and model capability policy facts',
+    patterns: [
+      {
+        regex: /\bpub enum ContextProfile\b/,
+        message: 'missing context profile fact',
+      },
+      {
+        regex: /\bpub enum ModelCapabilityProfile\b/,
+        message: 'missing model capability profile fact',
+      },
+      {
+        regex: /\bpub struct ContextProfilePolicy\b/,
+        message: 'missing context profile policy fact',
+      },
+      {
+        regex: /\bfor_subagent_context_and_models\b/,
+        message: 'missing subagent context/model policy helper',
+      },
+      {
+        regex: /\bmodel_capability_weak_for_mini\b/,
+        message: 'missing weak-model regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/execution/agent-runtime/src/session_state.rs',
+    reason:
+      'agent-runtime must own provider-neutral session state facts and event-label projection',
+    patterns: [
+      {
+        regex: /\bpub enum SessionState\b/,
+        message: 'missing session state fact',
+      },
+      {
+        regex: /\bpub enum ProcessingPhase\b/,
+        message: 'missing processing phase fact',
+      },
+      {
+        regex: /\bdialog_state_fact\b/,
+        message: 'missing session state fact projection',
+      },
+      {
+        regex: /\bsession_state_label_for_state\b/,
+        message: 'missing session state label projection',
+      },
+      {
+        regex: /\bprocessing_state_serialization_stays_compatible\b/,
+        message: 'missing session state serialization regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/execution/agent-runtime/src/session.rs',
+    reason:
+      'agent-runtime must own provider-neutral session config, summary, and persisted state facts',
+    patterns: [
+      {
+        regex: /\bpub struct Session\b/,
+        message: 'missing session fact',
+      },
+      {
+        regex: /\bpub struct SessionConfig\b/,
+        message: 'missing session config fact',
+      },
+      {
+        regex: /\bpub struct SessionSummary\b/,
+        message: 'missing session summary fact',
+      },
+      {
+        regex: /\bpub use bitfun_core_types::SessionKind\b/,
+        message: 'missing session kind compatibility export',
+      },
+      {
+        regex: /\bpub struct PersistedSessionStateFile\b/,
+        message: 'missing persisted session state sidecar fact',
+      },
+      {
+        regex: /\bsanitize_persisted_session_state\b/,
+        message: 'missing persisted session state sanitization owner',
+      },
+      {
+        regex: /\bpersisted_session_state_file_shape_stays_compatible\b/,
+        message: 'missing persisted session state wire-shape regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/execution/agent-runtime/src/dialog_turn.rs',
+    reason:
+      'agent-runtime must own provider-neutral dialog-turn id and statistics facts',
+    patterns: [
+      {
+        regex: /\bpub fn new_turn_id\b/,
+        message: 'missing dialog-turn id helper',
+      },
+      {
+        regex: /\bpub struct TurnStats\b/,
+        message: 'missing dialog-turn statistics fact',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/execution/agent-runtime/src/side_question.rs',
+    reason:
+      'agent-runtime must own runtime-only side-question cancellation and active-turn tracking',
+    patterns: [
+      {
+        regex: /\bpub struct SideQuestionRuntime\b/,
+        message: 'missing side-question runtime owner',
+      },
+      {
+        regex: /\bpub struct ActiveBtwTurn\b/,
+        message: 'missing active /btw turn fact',
+      },
+      {
+        regex: /\bregister_btw_turn\b/,
+        message: 'missing active /btw turn registration',
+      },
+      {
+        regex: /\bregistering_same_request_cancels_previous_token\b/,
+        message: 'missing side-question cancellation regression',
       },
     ],
   },
@@ -837,6 +1175,10 @@ export const requiredContentRules = [
         message: 'missing mobile web delivery profile coverage',
       },
       {
+        regex: /\bDeliveryProfile::Sdk\b/,
+        message: 'missing SDK delivery profile coverage',
+      },
+      {
         regex: /\bProductAssembler\b/,
         message: 'missing typed product assembler',
       },
@@ -847,6 +1189,10 @@ export const requiredContentRules = [
       {
         regex: /\bProductRuntimeParts\b/,
         message: 'missing product runtime parts output',
+      },
+      {
+        regex: /\binto_runtime_parts\b/,
+        message: 'missing owned runtime-parts handoff for SDK/product assembly consumers',
       },
       {
         regex: /\bfeature_groups_from_tool_provider_group_plan\b/,
@@ -882,6 +1228,42 @@ export const requiredContentRules = [
       {
         regex: /\bproduct_harness_provider_plans_legacy_facade_without_execution\b/,
         message: 'missing legacy harness route non-execution regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/product-capabilities/tests/product_sdk_assembly.rs',
+    reason:
+      'product-capabilities must prove product runtime parts can feed the SDK runtime without bitfun-core',
+    patterns: [
+      {
+        regex: /\bproduct_runtime_parts_can_build_agent_runtime_sdk_without_core\b/,
+        message: 'missing product assembly to SDK runtime smoke',
+      },
+      {
+        regex:
+          /\bsdk_delivery_profile_builds_minimal_agent_runtime_without_product_full_capabilities\b/,
+        message: 'missing SDK delivery profile minimal runtime smoke',
+      },
+      {
+        regex: /\bProductAssembler::new\(\)/,
+        message: 'product SDK smoke must assemble through ProductAssembler',
+      },
+      {
+        regex: /\binto_runtime_parts\b/,
+        message: 'product SDK smoke must consume owned ProductRuntimeParts',
+      },
+      {
+        regex: /\bAgentRuntimeBuilder::new\(\)/,
+        message: 'product SDK smoke must build through the Agent Runtime SDK facade',
+      },
+      {
+        regex: /\bDeliveryProfile::Cli\b/,
+        message: 'product SDK smoke must cover a product-full compatibility delivery profile',
+      },
+      {
+        regex: /\bDeliveryProfile::Sdk\b/,
+        message: 'product SDK smoke must cover the no-direct-core SDK delivery profile',
       },
     ],
   },
@@ -1241,6 +1623,14 @@ export const requiredContentRules = [
         message: 'missing tool confirmation request facts',
       },
       {
+        regex: /\bpub struct ToolConfirmationGateFacts\b/,
+        message: 'missing tool confirmation gate facts',
+      },
+      {
+        regex: /\bpub enum ToolConfirmationGatePlan\b/,
+        message: 'missing tool confirmation gate plan',
+      },
+      {
         regex: /\bpub enum ToolConfirmationPlan\b/,
         message: 'missing tool confirmation plan contract',
       },
@@ -1267,6 +1657,10 @@ export const requiredContentRules = [
       {
         regex: /\bpub fn resolve_tool_confirmation_plan\b/,
         message: 'missing tool confirmation plan resolver',
+      },
+      {
+        regex: /\bpub fn resolve_tool_confirmation_gate\b/,
+        message: 'missing tool confirmation gate resolver',
       },
       {
         regex: /\bpub fn resolve_confirmation_failure\b/,
@@ -1313,6 +1707,14 @@ export const requiredContentRules = [
       {
         regex: /\bconfirmation_plan_requires_permission_only_when_both_flags_are_true\b/,
         message: 'missing tool confirmation gate regression',
+      },
+      {
+        regex: /\bconfirmation_gate_preserves_skip_policy_precedence\b/,
+        message: 'missing tool confirmation skip-policy regression',
+      },
+      {
+        regex: /\bconfirmation_gate_requires_confirmation_only_for_permissioned_tools\b/,
+        message: 'missing tool confirmation permissioned-tool regression',
       },
       {
         regex: /\bconfirmation_plan_preserves_legacy_no_timeout_one_year_deadline\b/,
@@ -1914,8 +2316,8 @@ export const requiredContentRules = [
         message: 'missing port-backed cron target session list call',
       },
       {
-        regex: /\bresolve_session_workspace_path\b/,
-        message: 'missing port-backed cron target workspace resolution call',
+        regex: /\bresolve_session_workspace_binding\b/,
+        message: 'missing port-backed cron target workspace binding resolution call',
       },
     ],
   },
@@ -2226,8 +2628,58 @@ export const requiredContentRules = [
       'core event types must preserve legacy import path while agent-runtime owns session-state labels',
     patterns: [
       {
-        regex: /bitfun_agent_runtime::events::session_state_label/,
+        regex: /bitfun_agent_runtime::session_state::session_state_label_for_state/,
         message: 'missing session-state label owner delegation',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/execution/agent-runtime/src/session_state_manager.rs',
+    reason:
+      'agent-runtime owns provider-neutral session state storage, transition helpers, and SessionStateChanged event projection',
+    patterns: [
+      {
+        regex: /\bpub struct SessionStateManager\b/,
+        message: 'missing agent-runtime session state manager owner',
+      },
+      {
+        regex: /\bDashMap<String, SessionState>/,
+        message: 'missing session state storage owner',
+      },
+      {
+        regex: /\bEventQueue\b/,
+        message: 'missing runtime event queue integration',
+      },
+      {
+        regex: /\bAgenticEvent::SessionStateChanged\b/,
+        message: 'missing SessionStateChanged event projection',
+      },
+      {
+        regex: /\bsession_state_label_for_state\b/,
+        message: 'missing stable session-state label projection',
+      },
+      {
+        regex: /\bcan_start_new_turn\b/,
+        message: 'missing turn-start guard owner',
+      },
+      {
+        regex: /\bsession_state_manager_emits_compatible_state_change_events\b/,
+        message: 'missing session state event compatibility test',
+      },
+      {
+        regex: /\bsession_state_manager_keeps_turn_start_guard_semantics\b/,
+        message: 'missing session state guard compatibility test',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/coordination/state_manager.rs',
+    reason:
+      'core session state manager path must preserve legacy imports while agent-runtime owns the implementation',
+    patterns: [
+      {
+        regex: /pub use bitfun_agent_runtime::session_state_manager::SessionStateManager;/,
+        message: 'missing SessionStateManager compatibility re-export',
       },
     ],
   },
@@ -3341,8 +3793,84 @@ export const requiredContentRules = [
   {
     path: 'src/crates/execution/tool-execution/src/exec_command.rs',
     reason:
-      'tool-runtime must own provider-neutral ExecCommand presentation, control facts, completion shape, and session-not-found result builders while core keeps concrete process managers',
+      'tool-runtime must own provider-neutral ExecCommand presentation, shell/env policy, lifecycle facts, control facts, completion shape, and session-not-found result builders while core keeps concrete process managers',
     patterns: [
+      {
+        regex: /\bpub const EXEC_COMMAND_POWERSHELL_UTF8_OUTPUT_PREFIX\b/,
+        message: 'missing ExecCommand PowerShell UTF-8 shell policy owner',
+      },
+      {
+        regex: /\bpub const EXEC_COMMAND_DEFAULT_YIELD_TIME_MS\b/,
+        message: 'missing ExecCommand default wait policy owner',
+      },
+      {
+        regex: /\bpub enum ExecCommandShellKind\b/,
+        message: 'missing provider-neutral ExecCommand shell kind owner',
+      },
+      {
+        regex: /\bCustom\(String\)/,
+        message: 'missing ExecCommand custom shell name preservation',
+      },
+      {
+        regex: /\bpub struct ExecCommandRemoteShell\b/,
+        message: 'missing provider-neutral ExecCommand remote shell probe owner',
+      },
+      {
+        regex: /\bpub const REMOTE_EXEC_SHELL_PROBE_TIMEOUT_MS\b/,
+        message: 'missing provider-neutral ExecCommand remote shell probe timeout owner',
+      },
+      {
+        regex: /\bpub fn remote_exec_shell_probe_command\b/,
+        message: 'missing provider-neutral ExecCommand remote shell probe command owner',
+      },
+      {
+        regex: /\bpub fn fallback_remote_exec_shell\b/,
+        message: 'missing provider-neutral ExecCommand remote shell fallback owner',
+      },
+      {
+        regex: /\bpub struct ExecCommandRemoteEnvSnapshot\b/,
+        message: 'missing provider-neutral ExecCommand remote env snapshot owner',
+      },
+      {
+        regex: /\bpub struct ExecCommandRemoteEnvSnapshotCapturePolicy\b/,
+        message: 'missing provider-neutral ExecCommand remote env capture policy owner',
+      },
+      {
+        regex: /\bpub struct ExecCommandRemoteEnvSnapshotCacheKey\b/,
+        message: 'missing provider-neutral ExecCommand remote env snapshot cache key owner',
+      },
+      {
+        regex: /\bpub struct ExecCommandRemoteEnvSnapshotCache\b/,
+        message: 'missing provider-neutral ExecCommand remote env snapshot cache owner',
+      },
+      {
+        regex: /\bpub fn remote_exec_env_snapshot_capture_policy\b/,
+        message: 'missing provider-neutral ExecCommand remote env capture policy builder',
+      },
+      {
+        regex: /\bpub fn exec_command_argv_for_shell\b/,
+        message: 'missing provider-neutral ExecCommand shell argv owner',
+      },
+      {
+        regex: /\bpub fn remote_exec_login_shell_command\b/,
+        message: 'missing provider-neutral ExecCommand remote login command owner',
+      },
+      {
+        regex: /\bpub fn remote_exec_non_tty_control_wrapper\b/,
+        message: 'missing provider-neutral ExecCommand remote control wrapper owner',
+      },
+      {
+        regex: /\bpub fn parse_remote_exec_env_snapshot_output\b/,
+        message: 'missing provider-neutral ExecCommand remote env parser owner',
+      },
+      {
+        regex: /\bpub enum ExecCommandLifecycleStatus\b/,
+        message: 'missing provider-neutral ExecCommand lifecycle status owner',
+      },
+      {
+        regex: /\bpub fn exec_command_lifecycle_background_output_status\b/,
+        message: 'missing provider-neutral ExecCommand lifecycle background status owner',
+      },
       {
         regex: /\bpub enum ExecCommandControlAction\b/,
         message: 'missing provider-neutral exec control action contract',
@@ -3350,6 +3878,42 @@ export const requiredContentRules = [
       {
         regex: /\bpub struct ExecCommandControlRequest\b/,
         message: 'missing provider-neutral exec control request contract',
+      },
+      {
+        regex: /\bpub struct ExecCommandRunInput\b/,
+        message: 'missing provider-neutral ExecCommand input parser contract',
+      },
+      {
+        regex: /\bpub struct WriteStdinInput\b/,
+        message: 'missing provider-neutral WriteStdin input parser contract',
+      },
+      {
+        regex: /\bpub struct ExecCommandControlToolInput\b/,
+        message: 'missing provider-neutral ExecControl input parser contract',
+      },
+      {
+        regex: /\bpub struct ExecCommandResultFields\b/,
+        message: 'missing provider-neutral ExecCommand result fields contract',
+      },
+      {
+        regex: /\bpub struct ExecCommandShellMetadata\b/,
+        message: 'missing provider-neutral ExecCommand shell metadata contract',
+      },
+      {
+        regex: /\bpub fn exec_command_result_value\b/,
+        message: 'missing ExecCommand result value owner',
+      },
+      {
+        regex: /\bpub fn write_stdin_result_value\b/,
+        message: 'missing WriteStdin result value owner',
+      },
+      {
+        regex: /\bpub fn write_stdin_session_not_found_result\b/,
+        message: 'missing WriteStdin session-not-found result owner',
+      },
+      {
+        regex: /\bpub fn exec_control_result_value\b/,
+        message: 'missing ExecControl result value owner',
       },
       {
         regex: /\bpub fn render_exec_command_response_for_assistant\b/,
@@ -3374,6 +3938,252 @@ export const requiredContentRules = [
       {
         regex: /\bbackground_output_status_maps_terminal_completion_without_core_types\b/,
         message: 'missing ExecCommand background status regression',
+      },
+      {
+        regex: /\bremote_login_shell_command_applies_snapshot_then_tool_env\b/,
+        message: 'missing ExecCommand remote env merge regression',
+      },
+      {
+        regex: /\bremote_shell_probe_and_env_snapshot_are_provider_neutral\b/,
+        message: 'missing ExecCommand remote shell/env parser regression',
+      },
+      {
+        regex: /\bremote_env_snapshot_capture_policy_keeps_existing_bounds\b/,
+        message: 'missing ExecCommand remote env capture policy regression',
+      },
+      {
+        regex: /\bremote_env_snapshot_cache_owns_key_and_ttl_policy\b/,
+        message: 'missing ExecCommand remote env snapshot cache regression',
+      },
+      {
+        regex: /\bremote_shell_probe_skips_non_posix_shells\b/,
+        message: 'missing ExecCommand remote shell POSIX compatibility regression',
+      },
+      {
+        regex: /\bremote_shell_probe_preserves_unknown_shell_name_as_posix_compatible\b/,
+        message: 'missing ExecCommand custom remote shell metadata regression',
+      },
+      {
+        regex: /\bexec_command_input_policy_applies_defaults_without_trimming_command\b/,
+        message: 'missing ExecCommand input/default wait regression',
+      },
+      {
+        regex: /\bwrite_stdin_input_policy_applies_poll_defaults\b/,
+        message: 'missing WriteStdin input/default wait regression',
+      },
+      {
+        regex: /\bexec_control_input_policy_keeps_wait_optional\b/,
+        message: 'missing ExecControl input/default wait regression',
+      },
+      {
+        regex: /\bexec_command_result_builder_preserves_existing_wire_shape\b/,
+        message: 'missing ExecCommand result shape regression',
+      },
+      {
+        regex: /\bwrite_stdin_and_control_result_builders_preserve_remote_shape\b/,
+        message: 'missing WriteStdin/ExecControl result shape regression',
+      },
+      {
+        regex: /\blifecycle_status_has_provider_neutral_names_and_background_statuses\b/,
+        message: 'missing ExecCommand lifecycle status regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/exec_command/completion.rs',
+    reason:
+      'core exec_command adapter must keep concrete local/remote completion mapping centralized while result shape stays in tool-runtime',
+    patterns: [
+      {
+        regex: /\bpub\(super\) fn exec_command_local_completion\b/,
+        message: 'missing centralized local completion mapping adapter',
+      },
+      {
+        regex: /\bpub\(super\) fn exec_command_remote_completion\b/,
+        message: 'missing centralized remote completion mapping adapter',
+      },
+      {
+        regex: /\bExecCommandCompletionStatus::Interrupted\b/,
+        message: 'missing completion status mapping coverage',
+      },
+      {
+        regex: /\bExecCommandCompletionSource::OutOfBandControl\b/,
+        message: 'missing completion source mapping coverage',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/exec_command/command.rs',
+    reason:
+      'core exec_command adapter must delegate provider-neutral shell/env/lifecycle policy to tool-runtime and keep only concrete process/remote wiring',
+    patterns: [
+      {
+        regex: /\bexec_command_argv_for_shell\b/,
+        message: 'missing tool-runtime shell argv delegation in core exec_command adapter',
+      },
+      {
+        regex: /\bparse_remote_exec_shell_probe_output\b/,
+        message: 'missing tool-runtime remote shell probe delegation in core exec_command adapter',
+      },
+      {
+        regex: /\bremote_exec_shell_probe_command\b/,
+        message: 'missing tool-runtime remote shell probe command delegation in core exec_command adapter',
+      },
+      {
+        regex: /\bfallback_remote_exec_shell\b/,
+        message: 'missing tool-runtime remote shell fallback delegation in core exec_command adapter',
+      },
+      {
+        regex: /\bremote_exec_login_shell_command\b/,
+        message: 'missing tool-runtime remote login command delegation in core exec_command adapter',
+      },
+      {
+        regex: /\bremote_exec_non_tty_control_wrapper\b/,
+        message: 'missing tool-runtime remote non-TTY wrapper delegation in core exec_command adapter',
+      },
+      {
+        regex: /\bexec_command_lifecycle_status_name\b/,
+        message: 'missing tool-runtime lifecycle status-name delegation in core exec_command adapter',
+      },
+      {
+        regex: /\bexec_command_lifecycle_background_output_status\b/,
+        message: 'missing tool-runtime lifecycle output-status delegation in core exec_command adapter',
+      },
+      {
+        regex: /\bexec_command_run_input_from_input\b/,
+        message: 'missing tool-runtime ExecCommand input delegation in core exec_command adapter',
+      },
+      {
+        regex: /\bexec_command_result_value\b/,
+        message: 'missing tool-runtime ExecCommand result builder delegation in core exec_command adapter',
+      },
+      {
+        regex: /\bexec_command_local_completion\b/,
+        message: 'missing shared completion mapping in core exec_command adapter',
+      },
+      {
+        regex: /\bexec_command_remote_completion\b/,
+        message: 'missing shared remote completion mapping in core exec_command adapter',
+      },
+      {
+        regex: /\bExecCommandShellMetadata\b/,
+        message: 'missing tool-runtime ExecCommand shell metadata delegation in core exec_command adapter',
+      },
+      {
+        regex: /\bremote_shell_probe_preserves_unknown_shell_metadata\b/,
+        message: 'missing core custom remote shell metadata regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/exec_command/stdin.rs',
+    reason:
+      'core WriteStdin adapter must delegate provider-neutral input/default wait and result shape policy to tool-runtime',
+    patterns: [
+      {
+        regex: /\bwrite_stdin_input_from_input\b/,
+        message: 'missing tool-runtime WriteStdin input delegation in core adapter',
+      },
+      {
+        regex: /\bwrite_stdin_input_validation_message\b/,
+        message: 'missing tool-runtime WriteStdin validation delegation in core adapter',
+      },
+      {
+        regex: /\bwrite_stdin_result_value\b/,
+        message: 'missing tool-runtime WriteStdin result builder delegation in core adapter',
+      },
+      {
+        regex: /\bwrite_stdin_session_not_found_result\b/,
+        message: 'missing tool-runtime WriteStdin session-not-found delegation in core adapter',
+      },
+      {
+        regex: /\bexec_command_local_completion\b/,
+        message: 'missing shared local completion mapping in core WriteStdin adapter',
+      },
+      {
+        regex: /\bexec_command_remote_completion\b/,
+        message: 'missing shared remote completion mapping in core WriteStdin adapter',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/exec_command/control.rs',
+    reason:
+      'core ExecControl adapter must delegate provider-neutral input/default wait and result shape policy to tool-runtime',
+    patterns: [
+      {
+        regex: /\bexec_command_control_tool_input_from_input\b/,
+        message: 'missing tool-runtime ExecControl input delegation in core adapter',
+      },
+      {
+        regex: /\bexec_command_control_tool_input_validation_message\b/,
+        message: 'missing tool-runtime ExecControl validation delegation in core adapter',
+      },
+      {
+        regex: /\bexec_control_result_value\b/,
+        message: 'missing tool-runtime ExecControl result builder delegation in core adapter',
+      },
+      {
+        regex: /\bexec_command_local_completion\b/,
+        message: 'missing shared local completion mapping in core ExecControl adapter',
+      },
+      {
+        regex: /\bexec_command_remote_completion\b/,
+        message: 'missing shared remote completion mapping in core ExecControl adapter',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/exec_command/env_snapshot.rs',
+    reason:
+      'core exec_command env snapshot adapter must delegate snapshot command and parsing policy to tool-runtime',
+    patterns: [
+      {
+        regex: /\bremote_exec_env_snapshot_command\b/,
+        message: 'missing tool-runtime remote env snapshot command delegation in core adapter',
+      },
+      {
+        regex: /\bparse_remote_exec_env_snapshot_output\b/,
+        message: 'missing tool-runtime remote env snapshot parsing delegation in core adapter',
+      },
+      {
+        regex: /\bremote_exec_env_snapshot_capture_policy\b/,
+        message: 'missing tool-runtime remote env snapshot capture policy delegation in core adapter',
+      },
+      {
+        regex: /\bExecCommandRemoteEnvSnapshotCache\b/,
+        message: 'missing tool-runtime remote env snapshot cache owner in core adapter',
+      },
+      {
+        regex: /\bExecCommandRemoteEnvSnapshotCacheKey\b/,
+        message: 'missing tool-runtime remote env snapshot cache key owner in core adapter',
+      },
+      {
+        regex: /\bexec_command_shell_kind\b/,
+        message: 'missing shared shell kind mapping for core env snapshot adapter',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/exec_command/shell_kind.rs',
+    reason:
+      'core exec_command adapter must keep ShellType/tool-runtime shell-kind mapping centralized and preserve custom shell metadata',
+    patterns: [
+      {
+        regex: /\bpub\(super\) fn exec_command_shell_kind\b/,
+        message: 'missing centralized ShellType to ExecCommandShellKind adapter',
+      },
+      {
+        regex: /\bpub\(super\) fn terminal_shell_type\b/,
+        message: 'missing centralized ExecCommandShellKind to ShellType adapter',
+      },
+      {
+        regex: /\bExecCommandShellKind::Custom\(name\.clone\(\)\)/,
+        message: 'missing custom shell name preservation in core shell-kind adapter',
+      },
+      {
+        regex: /\bShellType::Custom\(name\)/,
+        message: 'missing custom shell metadata restoration in core shell-kind adapter',
       },
     ],
   },
@@ -3411,11 +4221,11 @@ export const requiredContentRules = [
   {
     path: 'src/crates/assembly/core/src/service/remote_ssh/mod.rs',
     reason:
-      'core remote SSH compatibility facade must keep service-backed SSH surfaces behind the ssh-remote feature while preserving lightweight workspace identity helpers',
+      'core remote SSH compatibility facade must keep concrete SSH surfaces behind the ssh-remote feature and re-export services-owned disabled stubs for lightweight builds',
     patterns: [
       {
-        regex: /#\[cfg\(not\(feature = "ssh-remote"\)\)\]\s*mod disabled\b/s,
-        message: 'missing disabled remote SSH runtime surface for no-default builds',
+        regex: /#\[cfg\(not\(feature = "ssh-remote"\)\)\]\s*pub use bitfun_services_integrations::remote_ssh::\{/s,
+        message: 'missing services-owned disabled remote SSH re-export for no-default builds',
       },
       {
         regex: /#\[cfg\(feature = "ssh-remote"\)\]\s*pub mod manager\b/s,
@@ -3436,9 +4246,9 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/assembly/core/src/service/remote_ssh/disabled.rs',
+    path: 'src/crates/services/services-integrations/src/remote_ssh/disabled.rs',
     reason:
-      'no-default core builds must expose explicit unsupported remote SSH stubs instead of compiling russh-backed runtime code',
+      'services-integrations must own explicit unsupported remote SSH stubs for lightweight builds',
     patterns: [
       {
         regex: /Remote SSH support is disabled; enable the `ssh-remote` feature/,
@@ -3463,6 +4273,14 @@ export const requiredContentRules = [
     reason:
       'services-integrations remote_ssh must own concrete SSH/SFTP/PTY runtime behind the remote-ssh-concrete feature while keeping lightweight path/type contracts separate',
     patterns: [
+      {
+        regex: /#\[cfg\(not\(feature = "remote-ssh-concrete"\)\)\]\s*mod disabled\b/s,
+        message: 'missing disabled remote SSH owner module',
+      },
+      {
+        regex: /#\[cfg\(not\(feature = "remote-ssh-concrete"\)\)\]\s*pub use disabled::\{/s,
+        message: 'missing disabled remote SSH owner exports',
+      },
       {
         regex: /#\[cfg\(feature = "remote-ssh-concrete"\)\]\s*pub mod manager\b/s,
         message: 'missing concrete SSH manager owner module',
@@ -3577,6 +4395,18 @@ export const requiredContentRules = [
       {
         regex: /\bpub trait RuntimeEventSink\b/,
         message: 'missing runtime event sink contract',
+      },
+      {
+        regex: /\bpub trait PluginRuntimeClient\b/,
+        message: 'missing plugin runtime client boundary contract',
+      },
+      {
+        regex: /\bpub enum PluginRuntimeBinding\b/,
+        message: 'missing plugin runtime binding boundary contract',
+      },
+      {
+        regex: /\bpub struct DisabledPluginRuntimeClient\b/,
+        message: 'missing disabled plugin runtime client contract',
       },
       {
         regex: /\bpub struct AgentSessionCreateResult\b[\s\S]*\bpub session_name: String\b/,
@@ -4183,6 +5013,100 @@ export const requiredContentRules = [
     ],
   },
   {
+    path: 'src/crates/execution/tool-contracts/src/mcp_tool_bridge.rs',
+    reason:
+      'agent-tools owns MCP tool bridge naming, descriptor, validation, presentation, and ToolResult shape contracts without depending on MCP transport concrete',
+    patterns: [
+      {
+        regex: /\bpub fn build_mcp_tool_bridge_name\b/,
+        message: 'missing MCP tool bridge prompt-visible name builder',
+      },
+      {
+        regex: /\bpub struct McpToolBridgeDefinition\b/,
+        message: 'missing MCP tool bridge descriptor contract',
+      },
+      {
+        regex: /\bpub struct McpToolBridgeBehaviorHints\b/,
+        message: 'missing MCP tool bridge behavior hint contract',
+      },
+      {
+        regex: /\bpub fn build_mcp_tool_bridge_definition\b/,
+        message: 'missing MCP tool bridge descriptor builder',
+      },
+      {
+        regex: /\bpub fn mcp_tool_bridge_dynamic_tool_info\b/,
+        message: 'missing MCP dynamic tool info bridge',
+      },
+      {
+        regex: /\bpub fn validate_mcp_tool_bridge_input\b/,
+        message: 'missing MCP tool bridge input validation contract',
+      },
+      {
+        regex: /\bpub fn render_mcp_tool_bridge_use_message\b/,
+        message: 'missing MCP tool bridge use-message renderer',
+      },
+      {
+        regex: /\bpub fn render_mcp_tool_bridge_rejected_message\b/,
+        message: 'missing MCP tool bridge rejection-message renderer',
+      },
+      {
+        regex: /\bpub fn render_mcp_tool_bridge_result_message\b/,
+        message: 'missing MCP tool bridge result-message renderer',
+      },
+      {
+        regex: /\bpub fn build_mcp_tool_bridge_result\b/,
+        message: 'missing MCP tool bridge ToolResult builder',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/execution/tool-contracts/src/acp_tool_bridge.rs',
+    reason:
+      'agent-tools owns ACP external-agent tool bridge naming, schema, validation, presentation, and ToolResult contracts without depending on ACP protocol concrete',
+    patterns: [
+      {
+        regex: /\bpub fn build_acp_external_agent_tool_name\b/,
+        message: 'missing ACP external-agent prompt-visible name builder',
+      },
+      {
+        regex: /\bpub struct AcpExternalAgentToolDefinition\b/,
+        message: 'missing ACP external-agent tool definition contract',
+      },
+      {
+        regex: /\bpub fn build_acp_external_agent_tool_definition\b/,
+        message: 'missing ACP external-agent tool definition builder',
+      },
+      {
+        regex: /\bpub fn acp_external_agent_tool_input_schema\b/,
+        message: 'missing ACP external-agent input schema contract',
+      },
+      {
+        regex: /\bpub fn validate_acp_external_agent_tool_input\b/,
+        message: 'missing ACP external-agent input validation contract',
+      },
+      {
+        regex: /\bpub fn render_acp_external_agent_use_message\b/,
+        message: 'missing ACP external-agent use-message renderer',
+      },
+      {
+        regex: /\bpub fn render_acp_external_agent_rejected_message\b/,
+        message: 'missing ACP external-agent rejection-message renderer',
+      },
+      {
+        regex: /\bpub fn render_acp_external_agent_result_message\b/,
+        message: 'missing ACP external-agent result-message renderer',
+      },
+      {
+        regex: /\bpub fn render_acp_external_agent_result_for_assistant\b/,
+        message: 'missing ACP external-agent assistant-result renderer',
+      },
+      {
+        regex: /\bpub fn build_acp_external_agent_tool_result\b/,
+        message: 'missing ACP external-agent ToolResult builder',
+      },
+    ],
+  },
+  {
     path: 'src/crates/execution/tool-contracts/src/file_guidance.rs',
     reason: 'agent-tools owns provider-neutral file tool guidance marker contracts',
     patterns: [
@@ -4746,8 +5670,8 @@ export const requiredContentRules = [
         message: 'missing port-backed agent session delete call',
       },
       {
-        regex: /\bresolve_session_workspace_path\b/,
-        message: 'missing port-backed session workspace resolution call',
+        regex: /\bresolve_session_workspace_binding\b/,
+        message: 'missing port-backed session workspace binding resolution call',
       },
       {
         regex: /"createdBy"/,
@@ -4789,8 +5713,8 @@ export const requiredContentRules = [
         message: 'missing port-backed target session list call',
       },
       {
-        regex: /\bresolve_session_workspace_path\b/,
-        message: 'missing port-backed target session workspace resolution call',
+        regex: /\bresolve_session_workspace_binding\b/,
+        message: 'missing port-backed target session workspace binding resolution call',
       },
       {
         regex: /"createdBy"/,
@@ -5623,6 +6547,14 @@ export const requiredContentRules = [
         regex: /\bproduct_tool_runtime_registry_preserves_provider_plan_order\b/,
         message: 'missing product tool provider plan-to-registry order regression',
       },
+      {
+        regex: /\bproduct_tool_runtime_keeps_no_direct_core_profiles_empty\b/,
+        message: 'missing no-direct-core product tool runtime regression',
+      },
+      {
+        regex: /\bDeliveryProfile::Sdk\b/,
+        message: 'product tool runtime no-direct-core regression must cover SDK profile',
+      },
     ],
   },
   {
@@ -5814,6 +6746,10 @@ export const requiredContentRules = [
         message: 'missing generic runtime assembly contract',
       },
       {
+        regex: /\bpub async fn materialized_tool_snapshot\b/,
+        message: 'missing registry materialized snapshot accessor',
+      },
+      {
         regex: /\bpub type ToolDecoratorRef\b/,
         message: 'missing generic decorator ref contract',
       },
@@ -5872,6 +6808,45 @@ export const requiredContentRules = [
       {
         regex: /\bpub struct GetToolSpecRuntime\b/,
         message: 'missing provider-backed GetToolSpec runtime facade',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/execution/tool-contracts/src/tool_snapshot.rs',
+    reason:
+      'agent-tools must own materialized tool snapshots, provider identity, effect facts, cancellation facts, and stale-call guards',
+    patterns: [
+      {
+        regex: /\bpub struct MaterializedToolSnapshot\b/,
+        message: 'missing materialized tool snapshot contract',
+      },
+      {
+        regex: /\bpub struct ToolProviderIdentity\b/,
+        message: 'missing provider-neutral tool identity contract',
+      },
+      {
+        regex: /\bpub struct ToolEffectFacts\b/,
+        message: 'missing provider-neutral tool effect facts contract',
+      },
+      {
+        regex: /\bpub enum ToolEffectFactsSource\b/,
+        message: 'missing tool effect facts source contract',
+      },
+      {
+        regex: /\bpub struct ToolEffectFilter\b/,
+        message: 'missing provider-neutral tool effect filter contract',
+      },
+      {
+        regex: /\bpub struct ToolCallSnapshotGuard\b/,
+        message: 'missing stale-call snapshot guard contract',
+      },
+      {
+        regex: /\bpub enum ToolSnapshotCallError\b/,
+        message: 'missing stale-call snapshot error contract',
+      },
+      {
+        regex: /\bpub async fn materialize_tool_snapshot\b/,
+        message: 'missing materialized tool snapshot builder',
       },
     ],
   },
@@ -6601,6 +7576,10 @@ export const requiredContentRules = [
       'remote SSH workspace_search strategy helpers must stay crate-internal and keep behavior-equivalence tests near the owner',
     patterns: [
       {
+        regex: /#\[cfg\(not\(feature = "remote-ssh-concrete"\)\)\]\s*pub mod disabled\b/s,
+        message: 'missing gated service-owned disabled remote workspace search surface',
+      },
+      {
         regex: /\bpub\(crate\)\s+fn\s+build_remote_scope\b/,
         message: 'remote scope helper must stay crate-internal',
       },
@@ -6698,19 +7677,15 @@ export const requiredContentRules = [
         message: 'missing ssh-remote gate for real remote search implementation',
       },
       {
-        regex: /#\[cfg\(not\(feature = "ssh-remote"\)\)\]\s*mod remote_disabled\b/s,
-        message: 'missing disabled remote search implementation for no-default builds',
-      },
-      {
-        regex: /#\[cfg\(not\(feature = "ssh-remote"\)\)\]\s*pub use remote_disabled/s,
-        message: 'missing disabled remote search export',
+        regex: /#\[cfg\(not\(feature = "ssh-remote"\)\)\]\s*pub use bitfun_services_integrations::remote_ssh::workspace_search::disabled/s,
+        message: 'missing service-owned disabled remote search export',
       },
     ],
   },
   {
-    path: 'src/crates/assembly/core/src/service/search/remote_disabled.rs',
+    path: 'src/crates/services/services-integrations/src/remote_ssh/workspace_search/disabled.rs',
     reason:
-      'no-default core builds must keep remote search unavailable with an explicit diagnostic',
+      'services-integrations must own disabled remote workspace search diagnostics for lightweight SSH builds',
     patterns: [
       {
         regex: /Remote SSH search is disabled; enable the `ssh-remote` feature/,
@@ -6995,27 +7970,23 @@ export const requiredContentRules = [
   {
     path: 'src/crates/assembly/core/src/miniapp/builtin/mod.rs',
     reason:
-      'core must coordinate built-in MiniApp seed decisions and recompilation while services-integrations owns seed filesystem IO',
+      'core must adapt built-in MiniApp seed host operations while product-domains owns seed orchestration and services-integrations owns seed filesystem IO',
     patterns: [
       {
         regex: /\bBUILTIN_APPS\b/,
         message: 'missing product-domain built-in MiniApp bundle re-export/use',
       },
       {
-        regex: /\bbuiltin_content_hash\b/,
-        message: 'missing product-domain built-in MiniApp content hash use',
+        regex: /\bseed_builtin_miniapps_with_host\b/,
+        message: 'missing product-domain built-in MiniApp seed orchestrator use',
       },
       {
-        regex: /\bshould_seed_builtin_app\b/,
-        message: 'missing product-domain built-in MiniApp seed decision use',
+        regex: /\bimpl BuiltinMiniAppSeedHost for CoreBuiltinMiniAppSeedHost\b/,
+        message: 'missing core built-in MiniApp seed host adapter',
       },
       {
-        regex: /\bresolve_builtin_seed_check\b/,
-        message: 'missing product-domain built-in MiniApp seed check use',
-      },
-      {
-        regex: /\bresolve_builtin_seed_action\b/,
-        message: 'missing product-domain built-in MiniApp seed action use',
+        regex: /\bmark_builtin_update_available\b/,
+        message: 'missing built-in MiniApp local-override update-record host delegation',
       },
       {
         regex: /\bminiapp_builtin_io::prepare_builtin_seed_bundle_files\b/,
@@ -7189,6 +8160,14 @@ export const requiredContentRules = [
     reason:
       'services-integrations remote-ssh owns workspace path/session identity helpers that do not require concrete SSH runtime handles',
     patterns: [
+      {
+        regex: /\bpub struct WorkspaceSessionIdentity\b/,
+        message: 'missing workspace session identity contract',
+      },
+      {
+        regex: /\bpub fn workspace_session_identity\b/,
+        message: 'missing workspace session identity builder',
+      },
       {
         regex: /\bpub fn remote_workspace_runtime_root\b/,
         message: 'missing remote workspace runtime root helper',
@@ -8007,7 +8986,7 @@ export const requiredContentRules = [
   {
     path: 'src/crates/contracts/product-domains/src/miniapp/builtin.rs',
     reason:
-      'product-domains owns built-in MiniApp bundle assets, marker, hash, and seed-decision contracts while core keeps asset seeding IO and recompilation',
+      'product-domains owns built-in MiniApp bundle assets, marker, hash, seed orchestration, and host adapter contract while core keeps concrete IO and recompilation',
     patterns: [
       {
         regex: /id: "builtin-pr-review"/,
@@ -8048,6 +9027,22 @@ export const requiredContentRules = [
       {
         regex: /\bpub enum BuiltinSeedAction\b/,
         message: 'missing built-in MiniApp seed action contract',
+      },
+      {
+        regex: /\bpub trait BuiltinMiniAppSeedHost\b/,
+        message: 'missing built-in MiniApp seed host adapter contract',
+      },
+      {
+        regex: /\bpub async fn seed_builtin_miniapps_with_host\b/,
+        message: 'missing built-in MiniApp seed orchestrator',
+      },
+      {
+        regex: /\bpub async fn seed_builtin_miniapp_with_host\b/,
+        message: 'missing built-in MiniApp single-bundle seed orchestrator',
+      },
+      {
+        regex: /\bpub enum BuiltinMiniAppSeedOutcome\b/,
+        message: 'missing built-in MiniApp seed outcome contract',
       },
       {
         regex: /\bpub fn resolve_builtin_seed_check\b/,

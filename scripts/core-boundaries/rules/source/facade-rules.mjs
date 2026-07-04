@@ -2,6 +2,21 @@
 
 export const facadeOnlyFiles = [
   {
+    path: 'src/crates/assembly/core/src/agentic/context_profile.rs',
+    importPrefix: 'bitfun_agent_runtime::context_profile',
+    reason: 'core context profile path must only re-export the agent-runtime owner crate',
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/core/dialog_turn.rs',
+    importPrefix: 'bitfun_agent_runtime::dialog_turn',
+    reason: 'core dialog-turn facts path must only re-export the agent-runtime owner crate',
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/core/session.rs',
+    importPrefix: 'bitfun_agent_runtime::session',
+    reason: 'core session facts path must only re-export the agent-runtime owner crate',
+  },
+  {
     path: 'src/crates/assembly/core/src/infrastructure/filesystem/mod.rs',
     importPrefix: 'bitfun_services_core::filesystem',
     reason: 'core filesystem infrastructure facade must only re-export the services-core owner crate',

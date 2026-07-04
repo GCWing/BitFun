@@ -166,23 +166,23 @@
   }
 
   .default-tool-card__button--confirm {
-    background: color-mix(in srgb, var(--tool-card-positive-color) 12%, transparent);
-    border-color: color-mix(in srgb, var(--tool-card-positive-color) 26%, transparent);
+    background: color-mix(in srgb, var(--color-success) 12%, transparent);
+    border-color: color-mix(in srgb, var(--color-success) 26%, transparent);
     color: rgb(var(--default-tool-card-confirm-text-rgb));
   }
 
   .default-tool-card__button--confirm:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--tool-card-positive-color) 18%, transparent);
-    border-color: color-mix(in srgb, var(--tool-card-positive-color) 40%, transparent);
+    background: color-mix(in srgb, var(--color-success) 18%, transparent);
+    border-color: color-mix(in srgb, var(--color-success) 40%, transparent);
   }
 
   .default-tool-card__button--reject {
-    background: var(--color-overlay-white-03);
+    background: var(--color-overlay-white-04);
     color: var(--color-text-secondary);
   }
 
   .default-tool-card__button--reject:hover:not(:disabled) {
-    background: var(--color-overlay-white-06);
+    background: var(--color-overlay-white-08);
     color: var(--color-text-primary);
   }
 

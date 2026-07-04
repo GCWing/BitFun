@@ -10,6 +10,7 @@ const log = createLogger('MonacoThemeSync');
 
 const SEMANTIC_HIGHLIGHTING_RULES = BitFunDarkTheme.rules;
 const TRANSPARENT_MONACO_BORDER = '#00000000';
+const LIGHT_MONACO_PASSIVE_SELECTION = 'rgba(15, 23, 42, 0.1)';
 const TRANSPARENT_MONACO_BORDER_COLORS = {
   'focusBorder': TRANSPARENT_MONACO_BORDER,
   'contrastBorder': TRANSPARENT_MONACO_BORDER,
@@ -27,11 +28,11 @@ function getBitfunLightMonacoTheme(): Monaco.editor.IStandaloneThemeData {
 
       'editor.selectionBackground': 'rgba(15, 23, 42, 0.14)',
       'editor.selectionForeground': '#1e293b',
-      'editor.inactiveSelectionBackground': 'rgba(15, 23, 42, 0.09)',
-      'editor.selectionHighlightBackground': 'rgba(15, 23, 42, 0.1)',
+      'editor.inactiveSelectionBackground': LIGHT_MONACO_PASSIVE_SELECTION,
+      'editor.selectionHighlightBackground': LIGHT_MONACO_PASSIVE_SELECTION,
       'editor.selectionHighlightBorder': 'rgba(15, 23, 42, 0.22)',
-      'editor.wordHighlightBackground': 'rgba(15, 23, 42, 0.07)',
-      'editor.wordHighlightStrongBackground': 'rgba(15, 23, 42, 0.11)',
+      'editor.wordHighlightBackground': LIGHT_MONACO_PASSIVE_SELECTION,
+      'editor.wordHighlightStrongBackground': LIGHT_MONACO_PASSIVE_SELECTION,
     }),
   };
 }

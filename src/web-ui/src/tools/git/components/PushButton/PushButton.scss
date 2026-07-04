@@ -16,7 +16,7 @@
   &__main {
     border-top-right-radius: 0 !important;
     border-bottom-right-radius: 0 !important;
-    border-right: 1px solid var(--color-overlay-white-10) !important;
+    border-right: 1px solid var(--color-overlay-white-12) !important;
     padding-right: 8px !important;
     
     display: flex;
@@ -58,8 +58,8 @@
 
   &__menu {
     min-width: 120px;
-    background: $element-bg-subtle;
-    border: 1px solid $border-base;
+    background: var(--element-bg-subtle);
+    border: 1px solid var(--border-base);
     border-radius: $size-radius-base;
     box-shadow: 0 8px 20px var(--color-overlay-black-80);
     z-index: $z-dropdown;
@@ -76,8 +76,8 @@
     white-space: nowrap;
     background: linear-gradient(135deg,
       var(--color-overlay-white-08) 0%,
-      var(--color-overlay-white-06) 50%,
-      var(--color-overlay-white-10) 100%);
+      var(--color-overlay-white-08) 50%,
+      var(--color-overlay-white-12) 100%);
     border: 1px solid var(--color-overlay-white-15);
     border-radius: 6px;
     cursor: pointer;
@@ -93,7 +93,7 @@
     box-shadow: 
       0 2px 8px var(--color-overlay-black-20),
       inset 0 1px 0 var(--color-overlay-white-15),
-      inset 0 -1px 0 var(--color-overlay-white-05);
+      inset 0 -1px 0 var(--color-overlay-white-08);
 
     &:last-child {
       margin-bottom: 0;
@@ -182,7 +182,7 @@
 
   &__menu-divider {
     height: 1px;
-    background: var(--color-overlay-white-10);
+    background: var(--color-overlay-white-12);
     margin: 4px 0;
   }
 }

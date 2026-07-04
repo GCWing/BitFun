@@ -1,4 +1,3 @@
-@use 'sass:color';
 @use '../../../../component-library/styles/tokens' as *;
 
 $_diff-spinner-size: 40px;
@@ -49,7 +48,7 @@ $_diff-padding-desktop: 32px;
     
     box-shadow: 
       inset 0 1px 3px var(--color-overlay-black-20),
-      0 0 0 1px var(--color-overlay-white-03);
+      0 0 0 1px var(--color-overlay-white-04);
     
     background: linear-gradient(
       180deg,
@@ -195,7 +194,7 @@ $_diff-padding-desktop: 32px;
       }
       
       .monaco-diff-editor .diffViewport {
-        background: var(--color-overlay-white-02) !important;
+        background: var(--color-overlay-white-04) !important;
       }
       
       .monaco-diff-editor .diagonal-fill {
@@ -217,7 +216,7 @@ $_diff-padding-desktop: 32px;
     right: $size-gap-3;
     padding: $size-gap-2 $size-gap-4;
     background: var(--color-overlay-black-80);
-    border: 1px solid var(--color-overlay-white-10);
+    border: 1px solid var(--color-overlay-white-12);
     border-radius: $size-radius-base;
     color: var(--color-text-secondary);
     font-size: var(--font-size-sm);
@@ -234,7 +233,7 @@ $_diff-padding-desktop: 32px;
     left: 0;
     right: 0;
     bottom: 0;
-    background: $modal-backdrop;
+    background: var(--color-overlay-black-80);
     backdrop-filter: blur(8px);
     display: flex;
     flex-direction: column;
@@ -256,7 +255,7 @@ $_diff-padding-desktop: 32px;
   &__spinner {
     width: $_diff-spinner-size;
     height: $_diff-spinner-size;
-    border: $_diff-spinner-border solid $color-accent-200;
+    border: $_diff-spinner-border solid var(--color-accent-200);
     border-top-color: var(--color-accent-500);
     border-radius: $size-radius-full;
     animation: git-diff-editor-spin $motion-lazy $easing-standard infinite;
@@ -289,8 +288,8 @@ $_diff-padding-desktop: 32px;
 
     &--accepted {
       background: linear-gradient(135deg, 
-        color.adjust($color-success, $lightness: 10%) 0%, 
-        $color-success 100%
+        color-mix(in srgb, var(--color-success) 85%, var(--color-static-white)) 0%,
+        var(--color-success) 100%
       );
       color: var(--color-static-white);
       box-shadow: 
@@ -300,8 +299,8 @@ $_diff-padding-desktop: 32px;
 
     &--rejected {
       background: linear-gradient(135deg, 
-        color.adjust($color-error, $lightness: 10%) 0%, 
-        $color-error 100%
+        color-mix(in srgb, var(--color-error) 85%, var(--color-static-white)) 0%,
+        var(--color-error) 100%
       );
       color: var(--color-static-white);
       box-shadow: 

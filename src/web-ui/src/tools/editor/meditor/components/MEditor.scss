@@ -8,8 +8,8 @@
   
   &-toolbar {
     padding: $size-gap-2;
-    border-bottom: 1px solid $border-base;
-    background: $element-bg-soft;
+    border-bottom: 1px solid var(--border-base);
+    background: var(--element-bg-soft);
     backdrop-filter: blur(8px);
   }
   
@@ -31,13 +31,13 @@
   &-mode-split {
     .m-editor-content {
       > .m-editor-edit-panel {
-        border-right: 1px solid $border-base;
+        border-right: 1px solid var(--border-base);
       }
     }
   }
   
   &-dark {
-    background: var(--color-bg-flowchat);
+    background: var(--color-bg-scene);
     color: var(--color-text-primary);
     
     .m-editor-textarea {
@@ -45,17 +45,17 @@
     }
     
     .m-editor-toolbar {
-      background: $element-bg-soft;
-      border-bottom-color: $border-base;
+      background: var(--element-bg-soft);
+      border-bottom-color: var(--border-base);
     }
     
     .m-editor-edit-panel {
-      border-right-color: $border-base !important;
+      border-right-color: var(--border-base) !important;
     }
   }
   
   &-light {
-    background: var(--color-bg-flowchat);
+    background: var(--color-bg-scene);
     color: var(--color-text-primary);
     border: 1px solid var(--border-base);
     

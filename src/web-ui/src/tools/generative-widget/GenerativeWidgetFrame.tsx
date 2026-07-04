@@ -3,9 +3,11 @@ import morphdomRuntime from 'morphdom/dist/morphdom-umd.js?raw';
 import { themeService } from '@/infrastructure/theme';
 import {
   createWidgetThemeFallbackCss,
+  createWidgetThemeStaticShellCss,
   readWidgetThemePayload,
   type WidgetThemePayload,
 } from './themePayload';
+import { createWidgetThemeCompatibilityAliasCss } from './themePayloadCompatibility';
 import './GenerativeWidgetFrame.scss';
 
 export type WidgetMessage =
@@ -92,8 +94,10 @@ export const GENERATIVE_WIDGET_SHELL_HTML = `<!DOCTYPE html>
     * { box-sizing: border-box; }
     :root {
 ${createWidgetThemeFallbackCss()}
-      --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      --font-mono: "SF Mono", Consolas, monospace;
+      --font-family-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --font-family-mono: "SF Mono", Consolas, monospace;
+${createWidgetThemeStaticShellCss()}
+${createWidgetThemeCompatibilityAliasCss()}
       --font-size-xs: 12px;
       --font-size-sm: 14px;
       --font-size-base: 14px;
@@ -101,12 +105,6 @@ ${createWidgetThemeFallbackCss()}
       --font-size-2xl: 18px;
       --font-weight-medium: 500;
       --font-weight-semibold: 600;
-      --spacing-3: 12px;
-      --spacing-4: 16px;
-      --spacing-5: 20px;
-      --radius-sm: 6px;
-      --radius-base: 8px;
-      --radius-lg: 12px;
       --motion-fast: 0.15s;
       --easing-standard: ease;
     }
@@ -117,7 +115,7 @@ ${createWidgetThemeFallbackCss()}
       min-height: 0;
       background: transparent;
       color: var(--color-text-primary);
-      font-family: var(--font-sans);
+      font-family: var(--font-family-sans);
       overflow-x: hidden;
       overflow-y: hidden;
     }
@@ -149,7 +147,7 @@ ${createWidgetThemeFallbackCss()}
       line-height: 1.5;
     }
     body, button, input, textarea, select {
-      font-family: var(--font-sans);
+      font-family: var(--font-family-sans);
     }
     button, input, textarea, select {
       font: inherit;
@@ -180,25 +178,25 @@ ${createWidgetThemeFallbackCss()}
       max-width: 100%;
       display: flex;
       flex-direction: column;
-      gap: var(--spacing-4);
+      gap: var(--size-gap-4);
       color: var(--color-text-primary);
     }
     .bf-stack {
       display: flex;
       flex-direction: column;
-      gap: var(--spacing-3);
+      gap: var(--size-gap-3);
     }
     .bf-row {
       display: flex;
       align-items: center;
-      gap: var(--spacing-3);
+      gap: var(--size-gap-3);
       min-width: 0;
     }
     .bf-row-wrap {
       display: flex;
       flex-wrap: wrap;
       align-items: center;
-      gap: var(--spacing-3);
+      gap: var(--size-gap-3);
       min-width: 0;
     }
     .bf-toolbar {
@@ -206,9 +204,9 @@ ${createWidgetThemeFallbackCss()}
       flex-wrap: wrap;
       align-items: center;
       justify-content: space-between;
-      gap: var(--spacing-3);
-      padding: var(--spacing-3) var(--spacing-4);
-      border-radius: var(--radius-lg);
+      gap: var(--size-gap-3);
+      padding: var(--size-gap-3) var(--size-gap-4);
+      border-radius: var(--size-radius-lg);
       background: color-mix(in srgb, var(--color-bg-secondary) 82%, transparent);
       border: 1px solid var(--border-subtle);
       box-shadow: var(--shadow-xs);
@@ -216,14 +214,14 @@ ${createWidgetThemeFallbackCss()}
     .bf-section {
       display: flex;
       flex-direction: column;
-      gap: var(--spacing-3);
+      gap: var(--size-gap-3);
     }
     .bf-section-header {
       display: flex;
       flex-wrap: wrap;
       align-items: flex-start;
       justify-content: space-between;
-      gap: var(--spacing-3);
+      gap: var(--size-gap-3);
     }
     .bf-title {
       margin: 0;
@@ -252,10 +250,10 @@ ${createWidgetThemeFallbackCss()}
       position: relative;
       display: flex;
       flex-direction: column;
-      gap: var(--spacing-3);
+      gap: var(--size-gap-3);
       width: 100%;
-      padding: var(--spacing-4);
-      border-radius: var(--radius-lg);
+      padding: var(--size-gap-4);
+      border-radius: var(--size-radius-lg);
       background: var(--color-bg-secondary);
       border: 1px solid var(--border-subtle);
       box-shadow: var(--shadow-sm);
@@ -272,7 +270,7 @@ ${createWidgetThemeFallbackCss()}
       box-shadow:
         0 0 0 4px color-mix(in srgb, var(--color-accent-500) 18%, transparent),
         0 10px 24px color-mix(in srgb, var(--color-accent-500) 14%, transparent);
-      border-radius: min(var(--radius-base), 12px);
+      border-radius: min(var(--size-radius-base), 12px);
       transition: outline-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
       transform: translateY(-1px);
     }
@@ -283,7 +281,7 @@ ${createWidgetThemeFallbackCss()}
     .bf-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));
-      gap: var(--spacing-3);
+      gap: var(--size-gap-3);
       width: 100%;
       min-width: 0;
     }
@@ -292,8 +290,8 @@ ${createWidgetThemeFallbackCss()}
       flex-direction: column;
       gap: 6px;
       min-width: 0;
-      padding: var(--spacing-3);
-      border-radius: var(--radius-base);
+      padding: var(--size-gap-3);
+      border-radius: var(--size-radius-base);
       background: var(--element-bg-base);
       border: 1px solid var(--border-subtle);
     }
@@ -358,7 +356,7 @@ ${createWidgetThemeFallbackCss()}
       max-width: 100%;
       padding: 0 12px;
       border: 1px solid var(--border-base);
-      border-radius: var(--radius-sm);
+      border-radius: var(--size-radius-sm);
       background: var(--element-bg-base);
       color: var(--color-text-secondary);
       text-decoration: none;
@@ -388,7 +386,7 @@ ${createWidgetThemeFallbackCss()}
       max-width: 100%;
       min-width: 0;
       padding: 0 12px;
-      border-radius: var(--radius-sm);
+      border-radius: var(--size-radius-sm);
       border: 1px solid var(--border-base);
       background: var(--element-bg-subtle);
       color: var(--color-text-primary);
@@ -425,9 +423,9 @@ ${createWidgetThemeFallbackCss()}
       display: flex;
       align-items: flex-start;
       justify-content: space-between;
-      gap: var(--spacing-3);
-      padding: var(--spacing-3);
-      border-radius: var(--radius-base);
+      gap: var(--size-gap-3);
+      padding: var(--size-gap-3);
+      border-radius: var(--size-radius-base);
       background: var(--element-bg-subtle);
       border: 1px solid transparent;
     }
@@ -442,7 +440,7 @@ ${createWidgetThemeFallbackCss()}
       width: 100%;
       overflow-x: auto;
       border: 1px solid var(--border-subtle);
-      border-radius: var(--radius-base);
+      border-radius: var(--size-radius-base);
       background: var(--color-bg-secondary);
     }
     .bf-table {
@@ -474,8 +472,8 @@ ${createWidgetThemeFallbackCss()}
       justify-content: center;
       gap: 8px;
       min-height: 140px;
-      padding: var(--spacing-5);
-      border-radius: var(--radius-lg);
+      padding: var(--size-gap-5);
+      border-radius: var(--size-radius-lg);
       border: 1px dashed var(--border-base);
       background: color-mix(in srgb, var(--element-bg-subtle) 80%, transparent);
       color: var(--color-text-muted);
@@ -493,17 +491,17 @@ ${createWidgetThemeFallbackCss()}
       border-radius: 6px;
       background: var(--element-bg-base);
       color: var(--color-text-primary);
-      font-family: var(--font-mono);
+      font-family: var(--font-family-mono);
       font-size: 12px;
     }
     .bf-mono {
-      font-family: var(--font-mono);
+      font-family: var(--font-family-mono);
     }
     @media (max-width: 560px) {
       .bf-card,
       .bf-panel,
       .bf-toolbar {
-        padding: var(--spacing-3);
+        padding: var(--size-gap-3);
       }
       .bf-grid {
         grid-template-columns: 1fr;
@@ -755,7 +753,10 @@ ${createWidgetThemeFallbackCss()}
             vars['--color-text-primary'] ||
             getComputedStyle(root).getPropertyValue('--color-text-primary') ||
             body.style.color;
-          body.style.fontFamily = vars['--font-sans'] || body.style.fontFamily;
+          body.style.fontFamily =
+            vars['--font-family-sans'] ||
+            getComputedStyle(root).getPropertyValue('--font-family-sans') ||
+            body.style.fontFamily;
         }
       }
 

@@ -1,10 +1,10 @@
-use crate::agentic::coordination::get_global_coordinator;
 use crate::agentic::persistence::PersistenceManager;
 use crate::agentic::tools::framework::{
     Tool, ToolExposure, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
 use crate::infrastructure::PathManager;
 use crate::service::session::SessionTranscriptExportOptions;
+use crate::service_agent_runtime::CoreServiceAgentRuntime;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use serde::Deserialize;
@@ -248,22 +248,20 @@ Examples:
             .map_err(|e| BitFunError::tool(format!("Invalid input: {}", e)))?;
 
         let session_id = self.resolve_session_id(&params.session_id)?;
-        let coordinator = get_global_coordinator()
-            .ok_or_else(|| BitFunError::tool("coordinator not initialized".to_string()))?;
-        let workspace = coordinator
-            .resolve_session_workspace_path(&session_id)
-            .await
-            .map(|path| path.to_string_lossy().to_string())
-            .ok_or_else(|| {
-                BitFunError::NotFound(format!(
-                    "Workspace for session '{}' could not be resolved",
-                    session_id
-                ))
-            })?;
+        let (display_workspace, session_storage_dir) =
+            CoreServiceAgentRuntime::resolve_session_workspace_paths(&session_id)
+                .await
+                .ok_or_else(|| {
+                    BitFunError::NotFound(format!(
+                        "Workspace for session '{}' could not be resolved",
+                        session_id
+                    ))
+                })?;
+        let display_workspace = display_workspace.to_string_lossy().into_owned();
         let manager = PersistenceManager::new(Arc::new(PathManager::new()?))?;
         let transcript = manager
             .export_session_transcript(
-                std::path::Path::new(&workspace),
+                &session_storage_dir,
                 &session_id,
                 &SessionTranscriptExportOptions {
                     tools: params.tools.unwrap_or(false),
@@ -277,7 +275,7 @@ Examples:
         Ok(vec![ToolResult::Result {
             data: json!({
                 "success": true,
-                "workspace": workspace,
+                "workspace": display_workspace,
                 "transcript": transcript,
             }),
             result_for_assistant: Some(format!(

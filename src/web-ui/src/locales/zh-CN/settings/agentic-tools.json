@@ -14,10 +14,14 @@
   "config": {
     "autoExecute": "自动执行",
     "autoExecuteDesc": "跳过工具执行前的用户确认步骤。",
+    "subagentMaxConcurrency": "子智能体并发上限",
+    "subagentMaxConcurrencyDesc": "同一时间允许并行运行的子智能体数量。",
     "confirmTimeout": "确认超时",
     "confirmTimeoutDesc": "等待用户确认工具调用的最长时间（秒）。",
+    "confirmTimeoutHint": "设置为 0 可关闭确认超时。",
     "executionTimeout": "执行超时",
-    "executionTimeoutDesc": "工具执行的最长时间（秒），包含 Task 子智能体运行时长。",
+    "executionTimeoutDesc": "工具执行的最长时间（秒）。",
+    "executionTimeoutHint": "设置为 0 可关闭执行超时。子智能体和命令执行工具有各自的执行限制，不受此项约束。",
     "subagentBatchPolicy": {
       "label": "子智能体批量调度",
       "desc": "选择同一模型回复中多个子智能体启动请求的调度方式。",

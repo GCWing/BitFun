@@ -14,8 +14,8 @@
   border-bottom: 1px solid var(--border-subtle);
   flex-shrink: 0;
   background: var(--color-bg-elevated);
-  backdrop-filter: var(--blur-medium);
-  -webkit-backdrop-filter: var(--blur-medium);
+  backdrop-filter: var(--blur-base);
+  -webkit-backdrop-filter: var(--blur-base);
   position: relative;
   z-index: 10;
 }
@@ -154,7 +154,7 @@
   border: 1px solid var(--border-subtle);
   background: var(--color-bg-elevated);
   color: var(--color-text-primary);
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--shadow-base);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -288,7 +288,7 @@
   padding: 10px 14px;
   font-size: var(--font-size-sm);
   color: var(--color-text-secondary);
-  background: var(--color-bg-subtle);
+  background: var(--element-bg-subtle);
   border-radius: 10px;
   animation: analyzeGlow 2s ease-in-out infinite;
 
@@ -300,7 +300,7 @@
 .chat-msg__image-analyzing-icon {
   display: flex;
   align-items: center;
-  color: var(--color-primary);
+  color: var(--color-accent-500);
   animation: analyzeSpin 3s linear infinite;
 }
 
@@ -321,8 +321,8 @@
   right: 16px;
   padding: 12px 16px;
   border-radius: 10px;
-  background: rgba(220, 50, 50, 0.92);
-  color: #fff;
+  background: var(--color-error);
+  color: var(--btn-primary-color);
   font-size: 13px;
   line-height: 1.4;
   z-index: 9999;
@@ -331,7 +331,7 @@
   backdrop-filter: blur(8px);
 
   &--info {
-    background: rgba(22, 110, 75, 0.94);
+    background: var(--color-success);
   }
 }
 
@@ -351,7 +351,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.4);
+  background: var(--color-overlay);
   display: flex;
   align-items: flex-end;
   justify-content: center;

@@ -3,8 +3,11 @@
 mod catalog_cache;
 mod connection;
 mod process;
+mod reconnect;
+mod registry;
 mod runtime_helpers;
 mod runtime_policy;
+mod runtime_state;
 
 use crate::mcp::config::ConfigLocation;
 use serde::{Deserialize, Serialize};
@@ -16,10 +19,18 @@ pub use crate::mcp::{MCPRuntimeError, MCPRuntimeErrorKind, MCPRuntimeResult};
 pub use catalog_cache::MCPCatalogCache;
 pub use connection::{MCPConnection, MCPConnectionEvent, MCPConnectionPool};
 pub use process::MCPServerProcess;
-pub use runtime_helpers::{is_mcp_auth_error_message, merge_mcp_remote_headers};
-pub use runtime_policy::{
-    compute_mcp_backoff_delay, detect_mcp_list_changed_kind, MCPListChangedKind,
+pub use reconnect::MCPReconnectTracker;
+pub use registry::MCPServerRegistry;
+pub use runtime_helpers::{
+    is_mcp_auth_error_message, merge_mcp_remote_headers, resolve_mcp_local_command,
+    MCPLocalCommandResolution,
 };
+pub use runtime_policy::{
+    compute_mcp_backoff_delay, detect_mcp_list_changed_kind, mcp_reconnect_runtime_decision,
+    mcp_server_is_running, mcp_server_is_starting_or_running, mcp_should_start_after_config_update,
+    MCPListChangedKind, MCPReconnectRuntimeDecision,
+};
+pub use runtime_state::MCPServerRuntimeState;
 
 /// MCP server type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

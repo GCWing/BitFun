@@ -14,10 +14,10 @@ describe('CodeSnippetContextImpl language metadata', () => {
 
   it('keeps code snippet language accents centralized', () => {
     expect(getLanguageColor('typescript')).toBe('#3178c6');
-    expect(getLanguageColor('rust')).toBe('var(--color-bg-primary)');
-    expect(getLanguageColor('java')).toBe('#007396');
-    expect(getLanguageColor('unknown-lang')).toBe('#858585');
-    expect(getLanguageColor()).toBe('#858585');
+    expect(getLanguageColor('rust')).toBe('#e38c00');
+    expect(getLanguageColor('java')).toBe('#e38c00');
+    expect(getLanguageColor('unknown-lang')).toBe('#64748b');
+    expect(getLanguageColor()).toBe('#64748b');
   });
 
   it('keeps mermaid diagram context color in the UI exception registry', () => {

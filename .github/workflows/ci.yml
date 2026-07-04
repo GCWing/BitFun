@@ -97,6 +97,9 @@ jobs:
       - name: Run core Rust tests
         run: cargo test --locked -p bitfun-core
 
+      - name: Run desktop Rust tests
+        run: cargo test --locked -p bitfun-desktop
+
   # ── Frontend: build ────────────────────────────────────────────────
   frontend-build:
     name: Frontend Build

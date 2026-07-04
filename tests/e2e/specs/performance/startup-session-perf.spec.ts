@@ -36,6 +36,10 @@ const LONG_SESSION_RESIZE_BOTTOM_SETTLE_MAX_MS = 120;
 const LONG_SESSION_INPUT_MIN_TOP_RATIO = 0.65;
 const LONG_SESSION_INPUT_BOTTOM_TOLERANCE_PX = 96;
 const LONG_SESSION_MAX_LATEST_TEXT_DELAY_AFTER_VISIBLE_MS = 120;
+const SESSION_NAV_ITEM_SELECTOR =
+  '[data-testid="session-nav-item"], [data-testid="nav-session-item"]';
+const SESSION_NAV_TOGGLE_SELECTOR =
+  '[data-testid="session-nav-show-more"], [data-testid="nav-session-list-toggle"]';
 
 type LongSessionPostVisibleInteraction =
   | 'first-scroll'
@@ -685,21 +689,28 @@ async function waitForOptionalTracePhaseForSessionSince(
   }
 }
 
+function escapeCssAttributeValue(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
+
 async function findSessionItem(sessionId: string): Promise<ReturnType<typeof $> | null> {
+  const targetSelector =
+    `[data-testid="session-nav-item"][data-session-id="${escapeCssAttributeValue(sessionId)}"], ` +
+    `[data-testid="nav-session-item"][data-session-id="${escapeCssAttributeValue(sessionId)}"]`;
   const readVisibleSessionIds = async (): Promise<string[]> =>
-    browser.execute(() =>
-      Array.from(document.querySelectorAll('[data-testid="session-nav-item"]'))
+    browser.execute((selector) =>
+      Array.from(document.querySelectorAll(selector))
         .map(element => element.getAttribute('data-session-id') || '')
-        .filter(Boolean)
-    );
+        .filter(Boolean),
+    SESSION_NAV_ITEM_SELECTOR);
 
   const findTarget = async (): Promise<ReturnType<typeof $> | null> => {
-    const item = await $(`[data-testid="session-nav-item"][data-session-id="${sessionId}"]`);
+    const item = await $(targetSelector);
     return await item.isExisting() ? item : null;
   };
 
   const findExpandableToggles = async (): Promise<Array<ReturnType<typeof $>>> => {
-    const toggles = await browser.$$('[data-testid="session-nav-show-more"]');
+    const toggles = await browser.$$(SESSION_NAV_TOGGLE_SELECTOR);
     const expandable: Array<ReturnType<typeof $>> = [];
     for (const toggle of toggles) {
       if (
@@ -3611,6 +3622,42 @@ type LongSessionOpenMeasurementOptions = {
   postVisibleInteraction?: LongSessionPostVisibleInteraction;
 };
 
+type LongSessionSendAfterOpenMeasurement = {
+  appMode: string;
+  sessionId: string;
+  fixtureScenario: string | null;
+  previousLatestTurnId: string;
+  message: string;
+  clickedAtMs: number;
+  postSendObserveMs: number;
+  beforeState: LongSessionActiveMessageState;
+  afterSendState: LongSessionActiveMessageState;
+  finalState: LongSessionActiveMessageState;
+  observedLatestTurnId: string;
+  viewport: LongSessionViewportState;
+  viewportTimelineSummary: LongSessionViewportTimelineSummary;
+  visualStateSummary: LongSessionVisualStateSummary;
+  visualStateEvents: LongSessionVisualStateEvent[];
+  mutationEvents: LongSessionDomMutationEvent[];
+  layoutShiftEvents: LongSessionLayoutShiftEvent[];
+  screenshotPath: string | null;
+  events: StartupTraceSnapshot['phases']['events'];
+  apiSegments: ReturnType<typeof summarizeApiCommandSegments>;
+  api: StartupTraceSnapshot['api'];
+  native: StartupTraceSnapshot['native'];
+};
+
+type LongSessionActiveMessageState = {
+  activeSessionId: string | null;
+  latestTurnId: string | null;
+  dialogTurnCount: number;
+  virtualItemCount: number;
+  visibleTextLength: number;
+  showHistoryLoadingLayer: string | null;
+  showHistoryOpenIntentOverlay: string | null;
+  showHistoryTransitionOverlay: string | null;
+};
+
 type RapidLongSessionSwitchMeasurement = {
   appMode: string;
   requestedSessionIds: string[];
@@ -3898,6 +3945,7 @@ async function readActiveSessionNavId(): Promise<string | null> {
   return browser.execute(() => {
     const active = document.querySelector<HTMLElement>(
       '[data-testid="session-nav-item"].is-active, ' +
+      '[data-testid="nav-session-item"].is-active, ' +
       '.bitfun-nav-panel__inline-item.is-active[data-session-id]',
     );
     return active?.getAttribute('data-session-id') ?? null;
@@ -4385,6 +4433,261 @@ async function collectLongSessionOpenMeasurement(
   return measurement;
 }
 
+async function readLongSessionActiveMessageState(): Promise<LongSessionActiveMessageState> {
+  return browser.execute(() => {
+    const messages = document.querySelector<HTMLElement>('.modern-flowchat-container__messages');
+    const virtualItems = Array.from(
+      document.querySelectorAll<HTMLElement>('.modern-flowchat-container__messages .virtual-item-wrapper'),
+    );
+    const visibleTextLength = virtualItems.reduce((total, item) => {
+      const rect = item.getBoundingClientRect();
+      const style = window.getComputedStyle(item);
+      if (
+        rect.width <= 0 ||
+        rect.height <= 0 ||
+        style.display === 'none' ||
+        style.visibility === 'hidden' ||
+        Number(style.opacity || '1') <= 0.01
+      ) {
+        return total;
+      }
+      return total + (item.innerText?.length ?? 0);
+    }, 0);
+    const numeric = (value: string | undefined): number => {
+      const parsed = Number(value ?? 0);
+      return Number.isFinite(parsed) ? parsed : 0;
+    };
+
+    return {
+      activeSessionId: messages?.dataset.activeSessionId || null,
+      latestTurnId: messages?.dataset.latestTurnId || null,
+      dialogTurnCount: numeric(messages?.dataset.dialogTurnCount),
+      virtualItemCount: numeric(messages?.dataset.virtualItemCount),
+      visibleTextLength,
+      showHistoryLoadingLayer: messages?.dataset.showHistoryLoadingLayer || null,
+      showHistoryOpenIntentOverlay: messages?.dataset.showHistoryOpenIntentOverlay || null,
+      showHistoryTransitionOverlay: messages?.dataset.showHistoryTransitionOverlay || null,
+    };
+  });
+}
+
+async function ensureLongSessionOpenForSend(
+  sessionId: string,
+  expectedLatestTurnId: string,
+): Promise<boolean> {
+  await switchAwayFromSession(sessionId);
+
+  const activeSessionId = await readActiveSessionNavId();
+  if (activeSessionId !== sessionId) {
+    const item = await findSessionItem(sessionId);
+    if (!item) {
+      return false;
+    }
+    await item.click();
+  }
+
+  const fixtureScenario = await readLongSessionFixtureScenario(sessionId);
+  await waitForLatestLongSessionTurnVisible(5000, expectedLatestTurnId);
+  await waitForLatestLongSessionViewportUsable(
+    5000,
+    expectedLatestTurnId,
+    { requireLatestModelRound: requiresLatestModelRoundForFixture(fixtureScenario) },
+  );
+  await waitForBrowserAnimationFrames(2);
+  return true;
+}
+
+async function clearLongSessionPendingQueue(sessionId: string): Promise<void> {
+  await browser.execute(async (targetSessionId) => {
+    try {
+      const { pendingQueueManager } = await import(
+        '/src/flow_chat/services/flow-chat-manager/PendingQueueModule.ts'
+      );
+      pendingQueueManager.clear(targetSessionId);
+    } catch {
+      // Keep the localStorage fallback below for bundled/runtime import differences.
+    }
+    try {
+      window.localStorage.removeItem(`flowChat.pendingQueue.${targetSessionId}`);
+    } catch {
+      // localStorage may be unavailable in unusual WebView states.
+    }
+  }, sessionId);
+
+  await browser.waitUntil(async () => {
+    const pendingQueueCount = await browser.execute(() =>
+      document.querySelectorAll('[data-testid="pending-queue-panel"] .bitfun-pending-queue-panel__item').length
+    );
+    return pendingQueueCount === 0;
+  }, {
+    timeout: 1000,
+    interval: 50,
+    timeoutMsg: 'Pending queue did not clear before send-after-open measurement',
+  }).catch(() => undefined);
+}
+
+async function setLongSessionChatInputValue(message: string): Promise<void> {
+  await browser.execute((value) => {
+    const input = document.querySelector<HTMLElement>(
+      '.rich-text-input[contenteditable="true"], ' +
+      '[data-testid="chat-input-textarea"], ' +
+      '.bitfun-chat-input [contenteditable="true"]',
+    );
+    if (!input) {
+      throw new Error('Chat input was not found');
+    }
+
+    input.focus();
+    if (input.isContentEditable) {
+      input.textContent = value;
+    } else if ('value' in input) {
+      (input as HTMLInputElement | HTMLTextAreaElement).value = value;
+    } else {
+      input.textContent = value;
+    }
+
+    const inputEvent = typeof InputEvent !== 'undefined'
+      ? new InputEvent('input', { bubbles: true, inputType: 'insertText', data: value })
+      : new Event('input', { bubbles: true });
+    input.dispatchEvent(inputEvent);
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  }, message);
+
+  await browser.waitUntil(async () => {
+    const button = await $('[data-testid="chat-input-send-btn"], button.bitfun-chat-input__send-button');
+    if (!await button.isExisting()) {
+      return false;
+    }
+    const disabled = await button.getAttribute('disabled');
+    const ariaDisabled = await button.getAttribute('aria-disabled');
+    return await button.isEnabled() && disabled === null && ariaDisabled !== 'true';
+  }, {
+    timeout: 3000,
+    interval: 50,
+    timeoutMsg: 'Chat send button did not become enabled',
+  });
+}
+
+async function clickLongSessionSendButton(): Promise<void> {
+  const button = await $('[data-testid="chat-input-send-btn"], button.bitfun-chat-input__send-button');
+  await button.waitForExist({ timeout: 3000 });
+  await button.click();
+  await browser.execute(() => {
+    window.dispatchEvent(new CustomEvent('bitfun:e2e-long-session-user-interaction', {
+      detail: { type: 'send-message' },
+    }));
+  });
+}
+
+async function collectLongSessionSendAfterOpenMeasurement(
+  sessionId: string,
+  previousLatestTurnId: string,
+): Promise<LongSessionSendAfterOpenMeasurement> {
+  const fixtureScenario = await readLongSessionFixtureScenario(sessionId);
+  const message = `E2E history send blank probe ${Date.now()}`;
+
+  await clearLongSessionPendingQueue(sessionId);
+  await setLongSessionChatInputValue(message);
+  const beforeState = await readLongSessionActiveMessageState();
+  if (beforeState.activeSessionId !== sessionId) {
+    throw new Error(
+      `Expected active session ${sessionId} before send, got ${beforeState.activeSessionId ?? 'none'}`,
+    );
+  }
+
+  const clickedAtMs = await readPerformanceNow();
+  await startLongSessionViewportTimelineRecorder(
+    previousLatestTurnId,
+    clickedAtMs,
+    process.env.BITFUN_E2E_RENDER_PROFILE === '1',
+  );
+
+  await clickLongSessionSendButton();
+
+  let afterSendState = await readLongSessionActiveMessageState();
+  await browser.waitUntil(async () => {
+    const state = await readLongSessionActiveMessageState();
+    const changed =
+      state.dialogTurnCount !== beforeState.dialogTurnCount ||
+      state.latestTurnId !== beforeState.latestTurnId ||
+      state.virtualItemCount !== beforeState.virtualItemCount;
+    if (changed) {
+      afterSendState = state;
+    }
+    return changed;
+  }, {
+    timeout: 1500,
+    interval: 25,
+    timeoutMsg: 'Send did not change the active session message state',
+  }).catch(() => undefined);
+
+  const postSendObserveMs = numericEnv('BITFUN_E2E_PERF_SEND_AFTER_OPEN_OBSERVE_MS') ?? 2000;
+  if (postSendObserveMs > 0) {
+    await browser.pause(postSendObserveMs);
+  }
+
+  const finalState = await readLongSessionActiveMessageState();
+  const observedLatestTurnId =
+    finalState.latestTurnId ||
+    afterSendState.latestTurnId ||
+    beforeState.latestTurnId ||
+    previousLatestTurnId;
+  const viewport = await readLongSessionViewportState(observedLatestTurnId);
+  const viewportTimeline = await stopLongSessionViewportTimelineRecorder();
+  const viewportTimelineSummary = summarizeLongSessionViewportTimeline(
+    viewportTimeline.samples,
+    sessionId,
+  );
+  const visualStateSummary = summarizeLongSessionVisualStateEvents(
+    viewportTimeline.visualStateEvents,
+    viewportTimeline.mutationEvents,
+    viewportTimeline.layoutShiftEvents,
+    viewportTimelineSummary,
+    sessionId,
+  );
+  const verboseTimelineReport = process.env.BITFUN_E2E_PERF_VERBOSE_REPORT === '1';
+  const finalSnapshot = await readStartupTraceSnapshot();
+  const events = finalSnapshot.phases.events.filter(event =>
+    event.atMs >= clickedAtMs &&
+    (
+      (
+        event.phase.startsWith('historical_session') &&
+        traceEventSessionId(event) === sessionId
+      ) ||
+      event.phase.startsWith('flowchat') ||
+      event.phase === 'react_render_profile' ||
+      event.phase === 'git_status_request' ||
+      event.phase === 'git_state_refresh'
+    )
+  );
+  const screenshotPath = await maybeSavePerfScreenshot(`long-session-send-${sessionId}`);
+
+  return {
+    appMode: process.env.BITFUN_E2E_APP_MODE ?? 'auto',
+    sessionId,
+    fixtureScenario,
+    previousLatestTurnId,
+    message,
+    clickedAtMs,
+    postSendObserveMs,
+    beforeState,
+    afterSendState,
+    finalState,
+    observedLatestTurnId,
+    viewport,
+    viewportTimelineSummary,
+    visualStateSummary,
+    visualStateEvents: verboseTimelineReport ? viewportTimeline.visualStateEvents : [],
+    mutationEvents: verboseTimelineReport ? viewportTimeline.mutationEvents : [],
+    layoutShiftEvents: verboseTimelineReport ? viewportTimeline.layoutShiftEvents : [],
+    screenshotPath,
+    events,
+    apiSegments: summarizeApiCommandSegments(finalSnapshot),
+    api: finalSnapshot.api,
+    native: finalSnapshot.native,
+  };
+}
+
 function expectLongSessionMeasurementUsable(
   measurement: LongSessionOpenMeasurement,
   maxLatestFrameMs?: number,
@@ -4569,6 +4872,30 @@ function expectLongSessionMeasurementUsable(
   }
 }
 
+function expectLongSessionSendAfterOpenStable(
+  measurement: LongSessionSendAfterOpenMeasurement,
+): void {
+  expect(measurement.beforeState.activeSessionId).toBe(measurement.sessionId);
+  expect(measurement.afterSendState.activeSessionId).toBe(measurement.sessionId);
+  expect(measurement.finalState.activeSessionId).toBe(measurement.sessionId);
+  expect(measurement.beforeState.dialogTurnCount).toBeGreaterThan(0);
+  expect(measurement.afterSendState.dialogTurnCount).toBeGreaterThan(measurement.beforeState.dialogTurnCount);
+  expect(measurement.afterSendState.latestTurnId).not.toBe(measurement.beforeState.latestTurnId);
+  expect(measurement.afterSendState.virtualItemCount).toBeGreaterThan(measurement.beforeState.virtualItemCount);
+  expect(measurement.viewport.hasScroller).toBe(true);
+  expect(measurement.viewport.visibleItemCount).toBeGreaterThan(0);
+  expect(measurement.viewport.visibleTextLength).toBeGreaterThan(0);
+  expect(measurement.visualStateSummary.firstLoadingLayerAtMs).toBeNull();
+  expect(measurement.visualStateSummary.loadingLayerToggleCount).toBe(0);
+  expect(measurement.visualStateSummary.overlayCountToggleCount).toBe(0);
+  expect(measurement.visualStateSummary.placeholderCountToggleCount).toBe(0);
+  expect(measurement.visualStateSummary.postUserInteractionBlankSurfacePointEventCount).toBe(0);
+  expect(measurement.visualStateSummary.postLatestTextVisibleBlankSurfacePointEventCount).toBe(0);
+  expect(measurement.visualStateSummary.postLatestTextVisibleLoadingSurfacePointEventCount).toBe(0);
+  expect(measurement.visualStateSummary.postLatestTextVisibleTransparentSurfacePointEventCount).toBe(0);
+  expect(measurement.visualStateSummary.loadingTransitions).toHaveLength(0);
+}
+
 describe('Performance telemetry', () => {
   const startupPage = new StartupPage();
 
@@ -4683,6 +5010,52 @@ describe('Performance telemetry', () => {
       requireFrameTrace: false,
       expectNoHistoryLoadingAfterClick: true,
     });
+  });
+
+  it('keeps a generated long session visible after sending a new message', async function () {
+    await ensurePerformanceWorkspace(startupPage);
+
+    const sessionId = process.env.BITFUN_E2E_PERF_SESSION_ID || DEFAULT_PERF_SESSION_ID;
+    const expectedLatestTurnId = await readExpectedLatestTurnId(sessionId);
+    if (!expectedLatestTurnId) {
+      console.log(`[Perf] Session ${sessionId} not found; generate it before running this spec.`);
+      this.skip();
+      return;
+    }
+
+    const opened = await ensureLongSessionOpenForSend(sessionId, expectedLatestTurnId);
+    if (!opened) {
+      console.log(`[Perf] Session ${sessionId} not reachable from the session navigation.`);
+      this.skip();
+      return;
+    }
+
+    const measurement = await collectLongSessionSendAfterOpenMeasurement(
+      sessionId,
+      expectedLatestTurnId,
+    );
+
+    console.log('[Perf] long-session-send-after-open', JSON.stringify({
+      appMode: measurement.appMode,
+      sessionId,
+      fixtureScenario: measurement.fixtureScenario,
+      beforeState: measurement.beforeState,
+      afterSendState: measurement.afterSendState,
+      finalState: measurement.finalState,
+      visualStateSummary: {
+        firstLoadingLayerAtMs: measurement.visualStateSummary.firstLoadingLayerAtMs,
+        loadingLayerToggleCount: measurement.visualStateSummary.loadingLayerToggleCount,
+        postUserInteractionBlankSurfacePointEventCount:
+          measurement.visualStateSummary.postUserInteractionBlankSurfacePointEventCount,
+        postLatestTextVisibleBlankSurfacePointEventCount:
+          measurement.visualStateSummary.postLatestTextVisibleBlankSurfacePointEventCount,
+        virtualItemElementChangeCount:
+          measurement.visualStateSummary.postLatestTextVisibleVirtualItemElementChangeCount,
+      },
+    }));
+
+    await writeReport('long-session-send-after-open', measurement);
+    expectLongSessionSendAfterOpenStable(measurement);
   });
 
   it('collects rapid-switch timing across generated long sessions', async function () {

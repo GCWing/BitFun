@@ -13,7 +13,7 @@
 
   .diff-file-name {
     color: var(--color-text-primary);
-    font-family: var(--font-mono);
+    font-family: var(--font-family-mono);
     font-size: var(--tool-card-action-font-size);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -40,7 +40,7 @@
     gap: var(--flowchat-inline-gap);
     margin-right: var(--flowchat-control-gap);
     font-size: var(--flowchat-font-size-xs);
-    font-family: var(--font-mono);
+    font-family: var(--font-family-mono);
     flex-shrink: 0;
 
     .additions {
@@ -68,7 +68,7 @@
     background: var(--color-bg-secondary);
     border: 1px solid var(--border-subtle);
     border-radius: 4px;
-    font-family: var(--font-mono);
+    font-family: var(--font-family-mono);
     font-size: var(--flowchat-font-size-sm);
     line-height: var(--flowchat-support-line-height);
     color: var(--color-text-primary);

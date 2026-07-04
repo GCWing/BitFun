@@ -191,7 +191,7 @@
     gap: 0;
     padding-left: 2px;
     margin-left: 2px;
-    border-left: 1px solid var(--color-border-subtle);
+    border-left: 1px solid var(--border-subtle);
   }
 
   &__search-count {
@@ -334,7 +334,7 @@
     justify-content: space-between;
     gap: $size-gap-1;
     padding: 2px 2px 2px $size-gap-2;
-      color: var(--color-text-tertiary);
+      color: var(--color-text-muted);
     font-size: var(--flowchat-font-size-xs);
   }
 
@@ -360,11 +360,11 @@
     }
 
     &--danger:not(:disabled):hover {
-      color: var(--color-danger);
-      background: color-mix(in srgb, var(--color-danger) 12%, transparent);
+      color: var(--color-error);
+      background: color-mix(in srgb, var(--color-error) 12%, transparent);
 
       svg {
-        color: var(--color-danger);
+        color: var(--color-error);
       }
     }
   }
@@ -389,7 +389,7 @@
     }
 
     &--active {
-      background: color-mix(in srgb, var(--accent-primary) 12%, var(--element-bg-soft));
+      background: color-mix(in srgb, var(--color-accent-500) 12%, var(--element-bg-soft));
     }
   }
 
@@ -537,11 +537,11 @@
     }
 
     &--danger:hover:not(:disabled) {
-      color: var(--color-danger);
-      background: color-mix(in srgb, var(--color-danger) 12%, transparent);
+      color: var(--color-error);
+      background: color-mix(in srgb, var(--color-error) 12%, transparent);
 
       svg {
-        color: var(--color-danger);
+        color: var(--color-error);
       }
     }
   }

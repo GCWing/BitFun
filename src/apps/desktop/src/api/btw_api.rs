@@ -13,6 +13,7 @@ use tauri::State;
 use crate::api::app_state::AppState;
 
 use bitfun_core::agentic::coordination::ConversationCoordinator;
+use bitfun_core::agentic::image_analysis::ImageContextData;
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -24,6 +25,8 @@ pub struct BtwAskStreamRequest {
     pub child_session_name: Option<String>,
     /// Optional model id override. Supports "fast"/"primary" aliases.
     pub model_id: Option<String>,
+    #[serde(default)]
+    pub image_contexts: Option<Vec<ImageContextData>>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -88,15 +91,20 @@ pub async fn btw_ask_stream(
     if child_session_id.is_empty() {
         return Err("childSessionId is required".to_string());
     }
+    let child_session_id = child_session_id.to_string();
+    let child_session_name = request.child_session_name.clone();
+    let model_id = request.model_id.clone();
+    let image_contexts = request.image_contexts;
 
     let turn_id = coordinator
         .start_hidden_btw_turn(
             &request.request_id,
             &request.session_id,
-            child_session_id,
-            request.child_session_name.as_deref(),
+            &child_session_id,
+            child_session_name.as_deref(),
             &request.question,
-            request.model_id.as_deref(),
+            model_id.as_deref(),
+            image_contexts,
         )
         .await
         .map_err(|e| e.to_string())?;
@@ -105,13 +113,13 @@ pub async fn btw_ask_stream(
         .side_question_runtime
         .register_btw_turn(
             request.request_id.clone(),
-            child_session_id.to_string(),
+            child_session_id.clone(),
             turn_id.clone(),
         )
         .await;
     let runtime = state.side_question_runtime.clone();
     let request_id = request.request_id.clone();
-    let child_session_id = child_session_id.to_string();
+    let child_session_id = child_session_id;
     let turn_id = turn_id;
     let coordinator = coordinator.inner().clone();
     tokio::spawn(async move {

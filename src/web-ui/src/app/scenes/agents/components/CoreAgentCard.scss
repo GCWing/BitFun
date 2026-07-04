@@ -101,6 +101,13 @@
     opacity: 1;
   }
 
+  &__tags {
+    display: inline-flex;
+    align-items: center;
+    gap: $size-gap-2;
+    min-width: 0;
+  }
+
   &__tag {
     display: inline-flex;
     align-items: center;
@@ -114,6 +121,17 @@
       font-weight: $font-weight-semibold;
       color: var(--core-accent);
       opacity: 0.9;
+    }
+
+    &--disabled {
+      padding: 1px 6px;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--color-warning) 15%, transparent);
+      color: var(--color-warning);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 140px;
     }
   }
 

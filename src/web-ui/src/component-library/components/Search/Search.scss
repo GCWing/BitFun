@@ -168,7 +168,7 @@
     white-space: nowrap;
 
     &:hover:not(:disabled) {
-      background: $color-accent-100;
+      background: var(--color-accent-100);
       color: var(--color-accent-400);
     }
 

@@ -4,8 +4,8 @@
 
 use crate::agentic::core::{
     new_turn_id, CompressionContract, CompressionState, InternalReminderKind, Message,
-    MessageSemanticKind, ProcessingPhase, Session, SessionConfig, SessionKind, SessionState,
-    SessionSummary, TurnStats,
+    MessageContent, MessageRole, MessageSemanticKind, ProcessingPhase, Session, SessionConfig,
+    SessionKind, SessionState, SessionSummary, TurnStats,
 };
 use crate::agentic::image_analysis::ImageContextData;
 use crate::agentic::persistence::PersistenceManager;
@@ -20,24 +20,26 @@ use crate::agentic::session::{
     TurnSkillAgentSnapshotStore, UserContextCacheIdentity,
 };
 use crate::agentic::skill_agent_snapshot::TurnSkillAgentSnapshot;
+use crate::agentic::workspace::WorkspaceBinding;
+use crate::agentic::ConversationCoordinator;
 use crate::infrastructure::ai::get_global_ai_client_factory;
 use crate::service::config::{
     get_app_language_code, get_global_config_service, short_model_user_language_instruction,
     subscribe_config_updates, ConfigUpdateEvent,
 };
+use crate::service::remote_ssh::workspace_state::LOCAL_WORKSPACE_SSH_HOST;
 use crate::service::session::{
     DialogTurnData, DialogTurnKind, ModelRoundData, SessionMetadata, SessionRelationship,
-    TextItemData, TurnStatus, UserMessageData,
+    TextItemData, ThinkingItemData, ToolCallData, ToolItemData, ToolResultData, TurnStatus,
+    UserMessageData,
 };
 use crate::service::snapshot::ensure_snapshot_manager_for_workspace;
-use crate::service::workspace::get_global_workspace_service;
+use crate::service::workspace::{get_global_workspace_service, WorkspaceInfo, WorkspaceKind};
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::sanitize_plain_model_output;
 use crate::util::timing::elapsed_ms_u64;
 pub use bitfun_runtime_ports::SessionViewRestoreTiming;
-use bitfun_runtime_ports::{
-    SessionStoragePathRequest, SessionStorePort, SessionViewRestoreRequest,
-};
+use bitfun_runtime_ports::{SessionStoragePathRequest, SessionStorePort};
 use bitfun_services_core::session::{
     apply_session_lineage, collect_hidden_subagent_cascade as collect_hidden_subagent_cascade_ids,
     merge_session_custom_metadata as merge_session_custom_metadata_value,
@@ -107,12 +109,12 @@ pub struct SessionManager {
     /// Active sessions in memory
     sessions: Arc<DashMap<String, Session>>,
 
-    /// Runtime cache of session_id -> effective workspace path.
+    /// Runtime cache of session_id -> effective session storage path.
     /// Populated on session create/restore and used to restore evicted sessions
     /// or resolve workspace-bound operations that only receive a session_id.
     /// This cache is intentionally retained across memory eviction, but should
     /// be cleared when a session is explicitly deleted.
-    session_workspace_index: Arc<DashMap<String, PathBuf>>,
+    session_storage_path_index: Arc<DashMap<String, PathBuf>>,
 
     /// Sub-components
     context_store: Arc<SessionContextStore>,
@@ -412,11 +414,89 @@ impl SessionManager {
                 .unwrap_or(true)
     }
 
-    /// Resolve the effective storage path for a session's workspace.
-    async fn effective_workspace_path_from_config(config: &SessionConfig) -> Option<PathBuf> {
-        CoreSessionStorePort::resolve_storage_path_for_config(config)
+    async fn effective_storage_path_for_config_with_persistence(
+        persistence_manager: &PersistenceManager,
+        config: &SessionConfig,
+    ) -> Option<PathBuf> {
+        let workspace_path = config.workspace_path.as_ref()?;
+        let identity =
+            crate::service::remote_ssh::workspace_state::resolve_workspace_session_identity(
+                workspace_path,
+                config.remote_connection_id.as_deref(),
+                config.remote_ssh_host.as_deref(),
+            )
+            .await?;
+
+        let runtime_service = persistence_manager.runtime_service();
+        Some(if identity.hostname == LOCAL_WORKSPACE_SSH_HOST {
+            runtime_service
+                .context_for_local_workspace(Path::new(identity.logical_workspace_path()))
+                .sessions_dir
+        } else if identity.hostname == "_unresolved" {
+            bitfun_services_integrations::remote_ssh::unresolved_remote_session_storage_dir(
+                runtime_service.path_manager().remote_ssh_mirror_root_dir(),
+                identity.remote_connection_id.as_deref().unwrap_or_default(),
+                identity.logical_workspace_path(),
+            )
+        } else {
+            runtime_service
+                .context_for_remote_workspace(&identity.hostname, identity.logical_workspace_path())
+                .sessions_dir
+        })
+    }
+
+    async fn effective_storage_path_for_config(&self, config: &SessionConfig) -> Option<PathBuf> {
+        Self::effective_storage_path_for_config_with_persistence(
+            self.persistence_manager.as_ref(),
+            config,
+        )
+        .await
+    }
+
+    async fn effective_storage_path_for_workspace_path(&self, workspace_path: &Path) -> PathBuf {
+        let tmp_config = SessionConfig {
+            workspace_path: Some(workspace_path.to_string_lossy().to_string()),
+            ..Default::default()
+        };
+        self.effective_storage_path_for_config(&tmp_config)
             .await
-            .map(|resolution| resolution.effective_storage_path)
+            .unwrap_or_else(|| workspace_path.to_path_buf())
+    }
+
+    async fn resolve_storage_path_for_workspace_path(&self, workspace_path: &Path) -> PathBuf {
+        let storage_path_started_at = Instant::now();
+        let session_storage_path = self
+            .effective_storage_path_for_workspace_path(workspace_path)
+            .await;
+        debug!(
+            "Session storage path resolved from workspace: workspace_path={}, session_storage_path={}, duration_ms={}",
+            workspace_path.display(),
+            session_storage_path.display(),
+            elapsed_ms_u64(storage_path_started_at)
+        );
+        session_storage_path
+    }
+
+    async fn resolve_storage_path_for_request(
+        &self,
+        request: SessionStoragePathRequest,
+    ) -> BitFunResult<PathBuf> {
+        let storage_path_started_at = Instant::now();
+        let requested_workspace_path = request.workspace_path.clone();
+        let session_storage_path = CoreSessionStorePort::with_path_manager(
+            self.persistence_manager.path_manager().clone(),
+        )
+        .resolve_session_storage_path(request)
+        .await
+        .map(|resolution| resolution.effective_storage_path)
+        .map_err(|error| BitFunError::Session(error.to_string()))?;
+        debug!(
+            "Session storage path resolved from workspace request: workspace_path={}, session_storage_path={}, duration_ms={}",
+            requested_workspace_path.display(),
+            session_storage_path.display(),
+            elapsed_ms_u64(storage_path_started_at)
+        );
+        Ok(session_storage_path)
     }
 
     #[allow(dead_code)]
@@ -428,90 +508,219 @@ impl SessionManager {
 
     /// Resolve the effective storage path for a session by ID.
     /// For remote workspaces, maps the remote path to a local session storage path.
-    async fn effective_session_workspace_path(&self, session_id: &str) -> Option<PathBuf> {
+    async fn effective_session_storage_path(&self, session_id: &str) -> Option<PathBuf> {
         let config = self.sessions.get(session_id)?.config.clone();
-        Self::effective_workspace_path_from_config(&config).await
+        self.effective_storage_path_for_config(&config).await
     }
 
-    /// Resolve the logical workspace path bound to a session.
-    ///
-    /// This prefers the in-memory session config, then the persisted metadata
-    /// reachable via the session workspace index, and finally scans tracked
-    /// workspaces known to the global workspace service ordered by recent access.
-    pub async fn resolve_session_workspace_path(&self, session_id: &str) -> Option<PathBuf> {
-        if let Some(workspace_path) = self
+    pub async fn resolve_session_workspace_binding(
+        &self,
+        session_id: &str,
+    ) -> Option<WorkspaceBinding> {
+        if let Some(config) = self
             .get_session(session_id)
-            .and_then(|session| session.config.workspace_path)
-            .filter(|path| !path.is_empty())
+            .map(|session| session.config.clone())
         {
-            return Some(PathBuf::from(workspace_path));
-        }
-
-        let indexed_workspace_path = self
-            .session_workspace_index
-            .get(session_id)
-            .map(|entry| entry.clone());
-        if let Some(workspace_path) = indexed_workspace_path {
-            match self
-                .persistence_manager
-                .load_session_metadata(&workspace_path, session_id)
-                .await
-            {
-                Ok(Some(metadata)) => {
-                    if let Some(bound_workspace) =
-                        metadata.workspace_path.filter(|path| !path.is_empty())
-                    {
-                        return Some(PathBuf::from(bound_workspace));
-                    }
-                    return Some(workspace_path);
-                }
-                Ok(None) => {}
-                Err(err) => {
-                    debug!(
-                        "Failed to load indexed session metadata while resolving workspace: session_id={} workspace={} error={}",
-                        session_id,
-                        workspace_path.display(),
-                        err
-                    );
-                }
+            if let Some(binding) = ConversationCoordinator::build_workspace_binding(&config).await {
+                return Some(binding);
             }
         }
 
-        let workspace_service = get_global_workspace_service()?;
-        let mut workspaces = workspace_service.list_workspace_infos().await;
-        workspaces.sort_by(|left, right| right.last_accessed.cmp(&left.last_accessed));
-        let candidates: Vec<PathBuf> = workspaces
-            .into_iter()
-            .map(|workspace| workspace.root_path)
-            .collect();
-
-        for workspace_path in candidates {
-            match self
-                .persistence_manager
-                .load_session_metadata(&workspace_path, session_id)
+        let indexed_storage_path = self
+            .session_storage_path_index
+            .get(session_id)
+            .map(|entry| entry.clone());
+        if let Some(session_storage_path) = indexed_storage_path {
+            if let Some(binding) = self
+                .resolve_persisted_session_workspace_binding(
+                    session_id,
+                    &session_storage_path,
+                    None,
+                )
                 .await
             {
-                Ok(Some(metadata)) => {
-                    if let Some(bound_workspace) =
-                        metadata.workspace_path.filter(|path| !path.is_empty())
-                    {
-                        return Some(PathBuf::from(bound_workspace));
-                    }
-                    return Some(workspace_path);
-                }
-                Ok(None) => {}
-                Err(err) => {
-                    debug!(
-                        "Failed to load session metadata while resolving workspace: session_id={} workspace={} error={}",
-                        session_id,
-                        workspace_path.display(),
-                        err
-                    );
-                }
+                return Some(binding);
+            }
+        }
+
+        for workspace in self.tracked_workspace_candidates().await? {
+            let Some(session_storage_path) =
+                Self::session_storage_path_for_workspace_info(&workspace).await
+            else {
+                continue;
+            };
+
+            if let Some(binding) = self
+                .resolve_persisted_session_workspace_binding(
+                    session_id,
+                    &session_storage_path,
+                    Some(&workspace),
+                )
+                .await
+            {
+                self.session_storage_path_index
+                    .insert(session_id.to_string(), session_storage_path);
+                return Some(binding);
             }
         }
 
         None
+    }
+
+    async fn resolve_persisted_session_workspace_binding(
+        &self,
+        session_id: &str,
+        session_storage_path: &Path,
+        workspace_hint: Option<&WorkspaceInfo>,
+    ) -> Option<WorkspaceBinding> {
+        let metadata = match self
+            .persistence_manager
+            .load_session_metadata(session_storage_path, session_id)
+            .await
+        {
+            Ok(Some(metadata)) => metadata,
+            Ok(None) => return None,
+            Err(err) => {
+                debug!(
+                    "Failed to load session metadata while resolving workspace binding: session_id={} storage_path={} error={}",
+                    session_id,
+                    session_storage_path.display(),
+                    err
+                );
+                return None;
+            }
+        };
+
+        let config = self
+            .session_config_from_persisted_metadata(&metadata, workspace_hint)
+            .await?;
+
+        ConversationCoordinator::build_workspace_binding(&config).await
+    }
+
+    async fn session_config_from_persisted_metadata(
+        &self,
+        metadata: &SessionMetadata,
+        workspace_hint: Option<&WorkspaceInfo>,
+    ) -> Option<SessionConfig> {
+        let workspace_path = metadata
+            .workspace_path
+            .as_deref()
+            .map(str::trim)
+            .filter(|path| !path.is_empty())
+            .map(str::to_string)
+            .or_else(|| {
+                workspace_hint.map(|workspace| workspace.root_path.to_string_lossy().to_string())
+            })?;
+
+        let mut config = SessionConfig {
+            workspace_path: Some(workspace_path.clone()),
+            ..SessionConfig::default()
+        };
+
+        let remote_hostname = metadata
+            .workspace_hostname
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty() && *value != LOCAL_WORKSPACE_SSH_HOST)
+            .map(str::to_string);
+
+        let matched_workspace = match workspace_hint {
+            Some(workspace) => Some(workspace.clone()),
+            None if remote_hostname.is_some() => {
+                self.match_tracked_remote_workspace(&workspace_path, remote_hostname.as_deref())
+                    .await
+            }
+            None => None,
+        };
+
+        if let Some(workspace) = matched_workspace.as_ref() {
+            config.workspace_id = Some(workspace.id.clone());
+            if workspace.workspace_kind == WorkspaceKind::Remote {
+                config.remote_connection_id =
+                    workspace.remote_ssh_connection_id().map(ToOwned::to_owned);
+                config.remote_ssh_host = workspace
+                    .metadata
+                    .get("sshHost")
+                    .and_then(|value| value.as_str())
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                    .map(str::to_string);
+                if config.remote_connection_id.is_none() {
+                    return None;
+                }
+            }
+        } else if remote_hostname.is_some() {
+            return None;
+        }
+
+        Some(config)
+    }
+
+    async fn match_tracked_remote_workspace(
+        &self,
+        workspace_path: &str,
+        ssh_host: Option<&str>,
+    ) -> Option<WorkspaceInfo> {
+        let Some(ssh_host) = ssh_host.map(str::trim).filter(|value| !value.is_empty()) else {
+            return None;
+        };
+
+        let normalized_workspace_path =
+            crate::service::remote_ssh::normalize_remote_workspace_path(workspace_path);
+
+        self.tracked_workspace_candidates()
+            .await?
+            .into_iter()
+            .find(|workspace| {
+                if workspace.workspace_kind != WorkspaceKind::Remote {
+                    return false;
+                }
+
+                if crate::service::remote_ssh::normalize_remote_workspace_path(
+                    &workspace.root_path.to_string_lossy(),
+                ) != normalized_workspace_path
+                {
+                    return false;
+                }
+
+                let workspace_host = workspace
+                    .metadata
+                    .get("sshHost")
+                    .and_then(|value| value.as_str())
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty());
+
+                workspace_host == Some(ssh_host)
+            })
+    }
+
+    async fn tracked_workspace_candidates(&self) -> Option<Vec<WorkspaceInfo>> {
+        let workspace_service = get_global_workspace_service()?;
+        let mut workspaces = workspace_service.list_workspace_infos().await;
+        workspaces.sort_by(|left, right| right.last_accessed.cmp(&left.last_accessed));
+        Some(workspaces)
+    }
+
+    async fn session_storage_path_for_workspace_info(workspace: &WorkspaceInfo) -> Option<PathBuf> {
+        let remote_connection_id = workspace.remote_ssh_connection_id().map(ToOwned::to_owned);
+        let remote_ssh_host = workspace
+            .metadata
+            .get("sshHost")
+            .and_then(|value| value.as_str())
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_string);
+
+        CoreSessionStorePort::default()
+            .resolve_session_storage_path(SessionStoragePathRequest {
+                workspace_path: workspace.root_path.clone(),
+                remote_connection_id,
+                remote_ssh_host,
+            })
+            .await
+            .ok()
+            .map(|resolution| resolution.effective_storage_path)
     }
 
     fn build_messages_from_turns(turns: &[DialogTurnData]) -> Vec<Message> {
@@ -642,7 +851,7 @@ impl SessionManager {
             return;
         }
 
-        let Some(workspace_path) = self.effective_session_workspace_path(session_id).await else {
+        let Some(workspace_path) = self.effective_session_storage_path(session_id).await else {
             debug!(
                 "Skipping context snapshot persistence because workspace path is unavailable: session_id={}, turn_index={}, reason={}",
                 session_id, turn_index, reason
@@ -690,7 +899,7 @@ impl SessionManager {
         }
 
         let cache = if self.should_persist_session_id(session_id) {
-            match self.effective_session_workspace_path(session_id).await {
+            match self.effective_session_storage_path(session_id).await {
                 Some(workspace_path) => {
                     match self
                         .load_prompt_cache_from_persistence(&workspace_path, session_id)
@@ -766,7 +975,7 @@ impl SessionManager {
             return;
         }
 
-        let Some(workspace_path) = self.effective_session_workspace_path(session_id).await else {
+        let Some(workspace_path) = self.effective_session_storage_path(session_id).await else {
             debug!(
                 "Skipping prompt cache persistence because workspace path is unavailable: session_id={}, reason={}",
                 session_id, reason
@@ -812,7 +1021,7 @@ impl SessionManager {
 
         let manager = Self {
             sessions: Arc::new(DashMap::new()),
-            session_workspace_index: Arc::new(DashMap::new()),
+            session_storage_path_index: Arc::new(DashMap::new()),
             context_store,
             prompt_cache_store: Arc::new(SessionPromptCacheStore::new()),
             turn_skill_agent_snapshot_store: Arc::new(TurnSkillAgentSnapshotStore::new()),
@@ -1001,7 +1210,7 @@ impl SessionManager {
 
     fn spawn_model_reconciliation_listener(&self) {
         let sessions = self.sessions.clone();
-        let session_workspace_index = self.session_workspace_index.clone();
+        let session_storage_path_index = self.session_storage_path_index.clone();
         let context_store = self.context_store.clone();
         let prompt_cache_store = self.prompt_cache_store.clone();
         let turn_skill_agent_snapshot_store = self.turn_skill_agent_snapshot_store.clone();
@@ -1025,7 +1234,7 @@ impl SessionManager {
             // surface area we need from the cloned shared fields above.
             let manager = Self {
                 sessions,
-                session_workspace_index,
+                session_storage_path_index,
                 context_store,
                 prompt_cache_store,
                 turn_skill_agent_snapshot_store,
@@ -1139,7 +1348,8 @@ impl SessionManager {
             BitFunError::Validation("Session workspace_path is required".to_string())
         })?;
 
-        let session_storage_path = Self::effective_workspace_path_from_config(&config)
+        let session_storage_path = self
+            .effective_storage_path_for_config(&config)
             .await
             .ok_or_else(|| {
                 BitFunError::Validation("Session workspace_path is required".to_string())
@@ -1164,7 +1374,7 @@ impl SessionManager {
 
         // 1. Add to memory
         self.sessions.insert(session_id.clone(), session.clone());
-        self.session_workspace_index
+        self.session_storage_path_index
             .insert(session_id.clone(), session_storage_path.clone());
 
         // 2. Initialize the in-memory context cache.
@@ -1302,7 +1512,7 @@ impl SessionManager {
             return None;
         }
 
-        let workspace_path = self.effective_session_workspace_path(session_id).await?;
+        let workspace_path = self.effective_session_storage_path(session_id).await?;
         match self
             .load_turn_skill_agent_snapshot_from_persistence(
                 &workspace_path,
@@ -1351,7 +1561,7 @@ impl SessionManager {
             return cached_snapshot;
         }
 
-        let workspace_path = self.effective_session_workspace_path(session_id).await?;
+        let workspace_path = self.effective_session_storage_path(session_id).await?;
         let scan_floor_exclusive = cached_snapshot.as_ref().map(|snapshot| snapshot.0);
         for index in (0..=turn_index).rev() {
             if scan_floor_exclusive.is_some_and(|floor| index <= floor) {
@@ -1398,7 +1608,7 @@ impl SessionManager {
             return;
         }
 
-        let Some(workspace_path) = self.effective_session_workspace_path(session_id).await else {
+        let Some(workspace_path) = self.effective_session_storage_path(session_id).await else {
             debug!(
                 "Skipping turn skill-agent snapshot persistence because workspace path is unavailable: session_id={}, turn_index={}",
                 session_id, turn_index
@@ -1435,7 +1645,7 @@ impl SessionManager {
             return;
         }
 
-        let Some(workspace_path) = self.effective_session_workspace_path(session_id).await else {
+        let Some(workspace_path) = self.effective_session_storage_path(session_id).await else {
             debug!(
                 "Skipping first-turn skill-agent baseline recovery persistence because workspace path is unavailable: session_id={}",
                 session_id
@@ -1482,7 +1692,7 @@ impl SessionManager {
             return;
         }
 
-        let Some(workspace_path) = self.effective_session_workspace_path(session_id).await else {
+        let Some(workspace_path) = self.effective_session_storage_path(session_id).await else {
             debug!(
                 "Skipping listing reminder baseline override persistence because workspace path is unavailable: session_id={}",
                 session_id
@@ -1523,7 +1733,7 @@ impl SessionManager {
             return None;
         }
 
-        let workspace_path = self.effective_session_workspace_path(session_id).await?;
+        let workspace_path = self.effective_session_storage_path(session_id).await?;
         let snapshot = match self
             .persistence_manager
             .load_skill_agent_baseline_override_snapshot(&workspace_path, session_id)
@@ -1840,7 +2050,7 @@ impl SessionManager {
         session_id: &str,
         new_state: SessionState,
     ) -> BitFunResult<()> {
-        let effective_path = self.effective_session_workspace_path(session_id).await;
+        let effective_path = self.effective_session_storage_path(session_id).await;
 
         // IMPORTANT: keep the DashMap guard scope short -- do NOT hold it across .await.
         // Collect the data needed for persistence, then release the guard before doing I/O.
@@ -1884,7 +2094,7 @@ impl SessionManager {
         expected_turn_id: &str,
         new_state: SessionState,
     ) -> BitFunResult<bool> {
-        let effective_path = self.effective_session_workspace_path(session_id).await;
+        let effective_path = self.effective_session_storage_path(session_id).await;
 
         let should_persist = if let Some(mut session) = self.sessions.get_mut(session_id) {
             let owns_processing_turn = matches!(
@@ -1934,7 +2144,7 @@ impl SessionManager {
     /// Update session title (in-memory + persistence)
     pub async fn update_session_title(&self, session_id: &str, title: &str) -> BitFunResult<()> {
         let normalized_title = Self::normalize_session_title_input(title)?;
-        let workspace_path = self.effective_session_workspace_path(session_id).await;
+        let workspace_path = self.effective_session_storage_path(session_id).await;
 
         {
             let Some(mut session) = self.sessions.get_mut(session_id) else {
@@ -1995,9 +2205,7 @@ impl SessionManager {
         if session.session_name != expected_current_title {
             debug!(
                 "Skipping auto-generated title because current title changed: session_id={}, expected_title={}, current_title={}",
-                session_id,
-                expected_current_title,
-                session.session_name
+                session_id, expected_current_title, session.session_name
             );
             return Ok(false);
         }
@@ -2025,7 +2233,7 @@ impl SessionManager {
         }
 
         if self.should_persist_session_id(session_id) {
-            let effective_path = self.effective_session_workspace_path(session_id).await;
+            let effective_path = self.effective_session_storage_path(session_id).await;
             let session_snapshot = self.sessions.get(session_id).map(|s| s.clone());
             // Ref guard released -- DashMap shard lock is free.
             if let (Some(workspace_path), Some(session)) = (effective_path, session_snapshot) {
@@ -2065,7 +2273,7 @@ impl SessionManager {
         }
 
         if self.should_persist_session_id(session_id) {
-            let effective_path = self.effective_session_workspace_path(session_id).await;
+            let effective_path = self.effective_session_storage_path(session_id).await;
             let session_snapshot = self.sessions.get(session_id).map(|s| s.clone());
             if let (Some(workspace_path), Some(session)) = (effective_path, session_snapshot) {
                 self.persistence_manager
@@ -2125,18 +2333,20 @@ impl SessionManager {
         let mut resolved_context_window = None;
 
         // If the session was evicted from memory (idle > 1h), try to restore it
-        // using the workspace path recorded when it was first created/restored.
+        // using the storage path recorded when it was first created/restored.
         if !self.sessions.contains_key(session_id) && self.config.enable_persistence {
-            let workspace_path = self
-                .session_workspace_index
+            let session_storage_path = self
+                .session_storage_path_index
                 .get(session_id)
                 .map(|entry| entry.clone());
-            if let Some(workspace_path) = workspace_path {
+            if let Some(session_storage_path) = session_storage_path {
                 debug!(
                     "Session evicted from memory, restoring for model update: session_id={}",
                     session_id
                 );
-                let _ = self.restore_session(&workspace_path, session_id).await;
+                let _ = self
+                    .restore_session_from_storage_path(&session_storage_path, session_id)
+                    .await;
             }
         }
 
@@ -2156,7 +2366,7 @@ impl SessionManager {
         }
 
         if self.should_persist_session_id(session_id) {
-            let effective_path = self.effective_session_workspace_path(session_id).await;
+            let effective_path = self.effective_session_storage_path(session_id).await;
             let session_snapshot = self.sessions.get(session_id).map(|s| s.clone());
             // Ref guard released -- DashMap shard lock is free.
             if let (Some(workspace_path), Some(session)) = (effective_path, session_snapshot) {
@@ -2345,7 +2555,7 @@ impl SessionManager {
             session_id,
             elapsed_ms_u64(memory_stage_started_at)
         );
-        self.session_workspace_index.remove(session_id);
+        self.session_storage_path_index.remove(session_id);
 
         info!(
             "Session deletion completed: session_id={}, workspace_path={}, duration_ms={}",
@@ -2357,13 +2567,30 @@ impl SessionManager {
         Ok(())
     }
 
-    /// Restore session (from persistent storage)
+    /// Restore session from a local or legacy workspace path.
+    ///
+    /// Callers that know remote identity must use [`Self::restore_session_for_workspace`].
+    /// Callers that already resolved a `sessions` directory must use
+    /// [`Self::restore_session_from_storage_path`].
     pub async fn restore_session(
         &self,
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<Session> {
-        self.restore_session_internal(workspace_path, session_id, false)
+        let session_storage_path = self
+            .resolve_storage_path_for_workspace_path(workspace_path)
+            .await;
+        self.restore_session_from_storage_path(&session_storage_path, session_id)
+            .await
+    }
+
+    pub async fn restore_session_for_workspace(
+        &self,
+        request: SessionStoragePathRequest,
+        session_id: &str,
+    ) -> BitFunResult<Session> {
+        let session_storage_path = self.resolve_storage_path_for_request(request).await?;
+        self.restore_session_from_storage_path(&session_storage_path, session_id)
             .await
     }
 
@@ -2372,18 +2599,53 @@ impl SessionManager {
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<Session> {
-        self.restore_session_internal(workspace_path, session_id, true)
+        let session_storage_path = self
+            .resolve_storage_path_for_workspace_path(workspace_path)
+            .await;
+        self.restore_internal_session_from_storage_path(&session_storage_path, session_id)
             .await
     }
 
-    async fn restore_session_internal(
+    pub async fn restore_internal_session_for_workspace(
         &self,
-        workspace_path: &Path,
+        request: SessionStoragePathRequest,
+        session_id: &str,
+    ) -> BitFunResult<Session> {
+        let session_storage_path = self.resolve_storage_path_for_request(request).await?;
+        self.restore_internal_session_from_storage_path(&session_storage_path, session_id)
+            .await
+    }
+
+    pub async fn restore_session_from_storage_path(
+        &self,
+        session_storage_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<Session> {
+        self.restore_session_from_storage_path_internal(session_storage_path, session_id, false)
+            .await
+    }
+
+    pub async fn restore_internal_session_from_storage_path(
+        &self,
+        session_storage_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<Session> {
+        self.restore_session_from_storage_path_internal(session_storage_path, session_id, true)
+            .await
+    }
+
+    async fn restore_session_from_storage_path_internal(
+        &self,
+        session_storage_path: &Path,
         session_id: &str,
         include_internal: bool,
     ) -> BitFunResult<Session> {
         let (session, _) = self
-            .restore_session_with_turns_internal(workspace_path, session_id, include_internal)
+            .restore_session_with_turns_from_storage_path_internal(
+                session_storage_path,
+                session_id,
+                include_internal,
+            )
             .await?;
         Ok(session)
     }
@@ -2391,6 +2653,10 @@ impl SessionManager {
     /// Restore the persisted session header and turns needed by the UI view
     /// without loading runtime context snapshots or inserting the session into
     /// the in-memory coordinator state.
+    ///
+    /// This workspace-path overload is for local or legacy callers. Remote
+    /// callers must use [`Self::restore_session_view_for_workspace_timed`] or a
+    /// storage-path restore method so remote identity is preserved.
     pub async fn restore_session_view(
         &self,
         workspace_path: &Path,
@@ -2406,9 +2672,31 @@ impl SessionManager {
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<(Session, Vec<DialogTurnData>, SessionViewRestoreTiming)> {
-        self.restore_session_view_internal(workspace_path, session_id, false, None)
-            .await
-            .map(|(session, turns, _, timing)| (session, turns, timing))
+        let storage_path_started_at = Instant::now();
+        let session_storage_path = self
+            .resolve_storage_path_for_workspace_path(workspace_path)
+            .await;
+        let resolve_storage_path_duration_ms = elapsed_ms_u64(storage_path_started_at);
+        let (session, turns, mut timing) = self
+            .restore_session_view_from_storage_path_timed(&session_storage_path, session_id)
+            .await?;
+        timing.resolve_storage_path_duration_ms = resolve_storage_path_duration_ms;
+        Ok((session, turns, timing))
+    }
+
+    pub async fn restore_session_view_for_workspace_timed(
+        &self,
+        request: SessionStoragePathRequest,
+        session_id: &str,
+    ) -> BitFunResult<(Session, Vec<DialogTurnData>, SessionViewRestoreTiming)> {
+        let storage_path_started_at = Instant::now();
+        let session_storage_path = self.resolve_storage_path_for_request(request).await?;
+        let resolve_storage_path_duration_ms = elapsed_ms_u64(storage_path_started_at);
+        let (session, turns, mut timing) = self
+            .restore_session_view_from_storage_path_timed(&session_storage_path, session_id)
+            .await?;
+        timing.resolve_storage_path_duration_ms = resolve_storage_path_duration_ms;
+        Ok((session, turns, timing))
     }
 
     pub async fn restore_internal_session_view(
@@ -2426,9 +2714,37 @@ impl SessionManager {
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<(Session, Vec<DialogTurnData>, SessionViewRestoreTiming)> {
-        self.restore_session_view_internal(workspace_path, session_id, true, None)
-            .await
-            .map(|(session, turns, _, timing)| (session, turns, timing))
+        let storage_path_started_at = Instant::now();
+        let session_storage_path = self
+            .resolve_storage_path_for_workspace_path(workspace_path)
+            .await;
+        let resolve_storage_path_duration_ms = elapsed_ms_u64(storage_path_started_at);
+        let (session, turns, mut timing) = self
+            .restore_internal_session_view_from_storage_path_timed(
+                &session_storage_path,
+                session_id,
+            )
+            .await?;
+        timing.resolve_storage_path_duration_ms = resolve_storage_path_duration_ms;
+        Ok((session, turns, timing))
+    }
+
+    pub async fn restore_internal_session_view_for_workspace_timed(
+        &self,
+        request: SessionStoragePathRequest,
+        session_id: &str,
+    ) -> BitFunResult<(Session, Vec<DialogTurnData>, SessionViewRestoreTiming)> {
+        let storage_path_started_at = Instant::now();
+        let session_storage_path = self.resolve_storage_path_for_request(request).await?;
+        let resolve_storage_path_duration_ms = elapsed_ms_u64(storage_path_started_at);
+        let (session, turns, mut timing) = self
+            .restore_internal_session_view_from_storage_path_timed(
+                &session_storage_path,
+                session_id,
+            )
+            .await?;
+        timing.resolve_storage_path_duration_ms = resolve_storage_path_duration_ms;
+        Ok((session, turns, timing))
     }
 
     pub async fn restore_session_view_tail(
@@ -2453,8 +2769,20 @@ impl SessionManager {
         usize,
         SessionViewRestoreTiming,
     )> {
-        self.restore_session_view_internal(workspace_path, session_id, false, Some(tail_turn_count))
-            .await
+        let storage_path_started_at = Instant::now();
+        let session_storage_path = self
+            .resolve_storage_path_for_workspace_path(workspace_path)
+            .await;
+        let resolve_storage_path_duration_ms = elapsed_ms_u64(storage_path_started_at);
+        let (session, turns, total_turn_count, mut timing) = self
+            .restore_session_view_from_storage_path_tail_timed(
+                &session_storage_path,
+                session_id,
+                tail_turn_count,
+            )
+            .await?;
+        timing.resolve_storage_path_duration_ms = resolve_storage_path_duration_ms;
+        Ok((session, turns, total_turn_count, timing))
     }
 
     pub async fn restore_internal_session_view_tail(
@@ -2479,13 +2807,95 @@ impl SessionManager {
         usize,
         SessionViewRestoreTiming,
     )> {
-        self.restore_session_view_internal(workspace_path, session_id, true, Some(tail_turn_count))
-            .await
+        let storage_path_started_at = Instant::now();
+        let session_storage_path = self
+            .resolve_storage_path_for_workspace_path(workspace_path)
+            .await;
+        let resolve_storage_path_duration_ms = elapsed_ms_u64(storage_path_started_at);
+        let (session, turns, total_turn_count, mut timing) = self
+            .restore_internal_session_view_from_storage_path_tail_timed(
+                &session_storage_path,
+                session_id,
+                tail_turn_count,
+            )
+            .await?;
+        timing.resolve_storage_path_duration_ms = resolve_storage_path_duration_ms;
+        Ok((session, turns, total_turn_count, timing))
     }
 
-    async fn restore_session_view_internal(
+    pub async fn restore_session_view_from_storage_path_timed(
         &self,
-        workspace_path: &Path,
+        session_storage_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<(Session, Vec<DialogTurnData>, SessionViewRestoreTiming)> {
+        self.restore_session_view_from_storage_path_internal(
+            session_storage_path,
+            session_id,
+            false,
+            None,
+        )
+        .await
+        .map(|(session, turns, _, timing)| (session, turns, timing))
+    }
+
+    pub async fn restore_internal_session_view_from_storage_path_timed(
+        &self,
+        session_storage_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<(Session, Vec<DialogTurnData>, SessionViewRestoreTiming)> {
+        self.restore_session_view_from_storage_path_internal(
+            session_storage_path,
+            session_id,
+            true,
+            None,
+        )
+        .await
+        .map(|(session, turns, _, timing)| (session, turns, timing))
+    }
+
+    pub async fn restore_session_view_from_storage_path_tail_timed(
+        &self,
+        session_storage_path: &Path,
+        session_id: &str,
+        tail_turn_count: usize,
+    ) -> BitFunResult<(
+        Session,
+        Vec<DialogTurnData>,
+        usize,
+        SessionViewRestoreTiming,
+    )> {
+        self.restore_session_view_from_storage_path_internal(
+            session_storage_path,
+            session_id,
+            false,
+            Some(tail_turn_count),
+        )
+        .await
+    }
+
+    pub async fn restore_internal_session_view_from_storage_path_tail_timed(
+        &self,
+        session_storage_path: &Path,
+        session_id: &str,
+        tail_turn_count: usize,
+    ) -> BitFunResult<(
+        Session,
+        Vec<DialogTurnData>,
+        usize,
+        SessionViewRestoreTiming,
+    )> {
+        self.restore_session_view_from_storage_path_internal(
+            session_storage_path,
+            session_id,
+            true,
+            Some(tail_turn_count),
+        )
+        .await
+    }
+
+    async fn restore_session_view_from_storage_path_internal(
+        &self,
+        session_storage_path: &Path,
         session_id: &str,
         include_internal: bool,
         tail_turn_count: Option<usize>,
@@ -2495,28 +2905,11 @@ impl SessionManager {
         usize,
         SessionViewRestoreTiming,
     )> {
-        let restore_request = SessionViewRestoreRequest {
-            workspace_path: workspace_path.to_path_buf(),
-            session_id: session_id.to_string(),
-            include_internal,
-            tail_turn_count,
-        };
         let restore_started_at = Instant::now();
-        let storage_path_started_at = Instant::now();
-        let session_storage_path = CoreSessionStorePort
-            .resolve_session_storage_path(SessionStoragePathRequest {
-                workspace_path: restore_request.workspace_path.clone(),
-                remote_connection_id: None,
-                remote_ssh_host: None,
-            })
-            .await
-            .map(|resolution| resolution.effective_storage_path)
-            .unwrap_or_else(|_| restore_request.workspace_path.clone());
-        let resolve_storage_path_duration_ms = elapsed_ms_u64(storage_path_started_at);
+        let resolve_storage_path_duration_ms = 0;
         debug!(
-            "Session view restore phase completed: session_id={}, phase=resolve_storage_path, duration_ms={}",
-            restore_request.session_id,
-            resolve_storage_path_duration_ms
+            "Session view restore phase completed: session_id={}, phase=use_storage_path, duration_ms={}",
+            session_id, resolve_storage_path_duration_ms
         );
 
         let metadata_started_at = Instant::now();
@@ -2524,39 +2917,33 @@ impl SessionManager {
             .persistence_manager
             .load_session_metadata(&session_storage_path, session_id)
             .await?
-            .is_some_and(|metadata| {
-                !restore_request.include_internal && metadata.should_hide_from_user_lists()
-            })
+            .is_some_and(|metadata| !include_internal && metadata.should_hide_from_user_lists())
         {
             return Err(BitFunError::NotFound(format!(
                 "Session not found: {}",
-                restore_request.session_id
+                session_id
             )));
         }
         let visibility_metadata_duration_ms = elapsed_ms_u64(metadata_started_at);
         debug!(
             "Session view restore phase completed: session_id={}, phase=load_metadata, duration_ms={}",
-            restore_request.session_id,
-            visibility_metadata_duration_ms
+            session_id, visibility_metadata_duration_ms
         );
 
         let session_started_at = Instant::now();
         let (mut session, persisted_turns, total_turn_count, turn_load) =
-            if let Some(tail_turn_count) = restore_request.tail_turn_count {
+            if let Some(tail_turn_count) = tail_turn_count {
                 self.persistence_manager
                     .load_session_with_tail_turns_timed(
                         &session_storage_path,
-                        &restore_request.session_id,
+                        session_id,
                         tail_turn_count,
                     )
                     .await?
             } else {
                 let (session, turns, timing) = self
                     .persistence_manager
-                    .load_session_with_turns_timed(
-                        &session_storage_path,
-                        &restore_request.session_id,
-                    )
+                    .load_session_with_turns_timed(&session_storage_path, session_id)
                     .await?;
                 let total_turn_count = turns.len();
                 (session, turns, total_turn_count, timing)
@@ -2567,7 +2954,7 @@ impl SessionManager {
             session_id,
             persisted_turns.len(),
             total_turn_count,
-            restore_request.tail_turn_count,
+            tail_turn_count,
             load_session_with_turns_duration_ms
         );
 
@@ -2618,12 +3005,29 @@ impl SessionManager {
     }
 
     /// Restore session and return the persisted turns read during restore.
+    ///
+    /// This workspace-path overload is for local or legacy callers. Remote
+    /// callers must use [`Self::restore_session_with_turns_for_workspace`] or a
+    /// storage-path restore method so remote identity is preserved.
     pub async fn restore_session_with_turns(
         &self,
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<(Session, Vec<DialogTurnData>)> {
-        self.restore_session_with_turns_internal(workspace_path, session_id, false)
+        let session_storage_path = self
+            .resolve_storage_path_for_workspace_path(workspace_path)
+            .await;
+        self.restore_session_with_turns_from_storage_path(&session_storage_path, session_id)
+            .await
+    }
+
+    pub async fn restore_session_with_turns_for_workspace(
+        &self,
+        request: SessionStoragePathRequest,
+        session_id: &str,
+    ) -> BitFunResult<(Session, Vec<DialogTurnData>)> {
+        let session_storage_path = self.resolve_storage_path_for_request(request).await?;
+        self.restore_session_with_turns_from_storage_path(&session_storage_path, session_id)
             .await
     }
 
@@ -2632,13 +3036,58 @@ impl SessionManager {
         workspace_path: &Path,
         session_id: &str,
     ) -> BitFunResult<(Session, Vec<DialogTurnData>)> {
-        self.restore_session_with_turns_internal(workspace_path, session_id, true)
-            .await
+        let session_storage_path = self
+            .resolve_storage_path_for_workspace_path(workspace_path)
+            .await;
+        self.restore_internal_session_with_turns_from_storage_path(
+            &session_storage_path,
+            session_id,
+        )
+        .await
     }
 
-    async fn restore_session_with_turns_internal(
+    pub async fn restore_internal_session_with_turns_for_workspace(
         &self,
-        workspace_path: &Path,
+        request: SessionStoragePathRequest,
+        session_id: &str,
+    ) -> BitFunResult<(Session, Vec<DialogTurnData>)> {
+        let session_storage_path = self.resolve_storage_path_for_request(request).await?;
+        self.restore_internal_session_with_turns_from_storage_path(
+            &session_storage_path,
+            session_id,
+        )
+        .await
+    }
+
+    pub async fn restore_session_with_turns_from_storage_path(
+        &self,
+        session_storage_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<(Session, Vec<DialogTurnData>)> {
+        self.restore_session_with_turns_from_storage_path_internal(
+            session_storage_path,
+            session_id,
+            false,
+        )
+        .await
+    }
+
+    pub async fn restore_internal_session_with_turns_from_storage_path(
+        &self,
+        session_storage_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<(Session, Vec<DialogTurnData>)> {
+        self.restore_session_with_turns_from_storage_path_internal(
+            session_storage_path,
+            session_id,
+            true,
+        )
+        .await
+    }
+
+    async fn restore_session_with_turns_from_storage_path_internal(
+        &self,
+        session_storage_path: &Path,
         session_id: &str,
         include_internal: bool,
     ) -> BitFunResult<(Session, Vec<DialogTurnData>)> {
@@ -2646,21 +3095,9 @@ impl SessionManager {
         // Check if session is already in memory
         let session_already_in_memory = self.sessions.contains_key(session_id);
 
-        let storage_path_started_at = Instant::now();
-        let session_storage_path = {
-            let ws = workspace_path.to_string_lossy().to_string();
-            let tmp_config = SessionConfig {
-                workspace_path: Some(ws),
-                ..Default::default()
-            };
-            Self::effective_workspace_path_from_config(&tmp_config)
-                .await
-                .unwrap_or_else(|| workspace_path.to_path_buf())
-        };
         debug!(
-            "Session restore phase completed: session_id={}, phase=resolve_storage_path, duration_ms={}",
-            session_id,
-            elapsed_ms_u64(storage_path_started_at)
+            "Session restore phase completed: session_id={}, phase=use_storage_path, duration_ms=0",
+            session_id
         );
 
         let metadata_started_at = Instant::now();
@@ -2917,8 +3354,8 @@ impl SessionManager {
         // 4. Add to memory (will overwrite if already exists)
         self.sessions
             .insert(session_id.to_string(), session.clone());
-        self.session_workspace_index
-            .insert(session_id.to_string(), session_storage_path.clone());
+        self.session_storage_path_index
+            .insert(session_id.to_string(), session_storage_path.to_path_buf());
 
         Ok((session, persisted_turns))
     }
@@ -3113,7 +3550,7 @@ impl SessionManager {
             )));
         }
 
-        self.effective_session_workspace_path(session_id)
+        self.effective_session_storage_path(session_id)
             .await
             .ok_or_else(|| {
                 BitFunError::Validation(format!(
@@ -3266,7 +3703,8 @@ impl SessionManager {
         let session = self
             .get_session(session_id)
             .ok_or_else(|| BitFunError::NotFound(format!("Session not found: {}", session_id)))?;
-        let workspace_path = Self::effective_workspace_path_from_config(&session.config)
+        let workspace_path = self
+            .effective_storage_path_for_config(&session.config)
             .await
             .ok_or_else(|| {
                 BitFunError::Validation(format!(
@@ -3495,7 +3933,8 @@ impl SessionManager {
         let session = self
             .get_session(session_id)
             .ok_or_else(|| BitFunError::NotFound(format!("Session not found: {}", session_id)))?;
-        let workspace_path = Self::effective_workspace_path_from_config(&session.config)
+        let workspace_path = self
+            .effective_storage_path_for_config(&session.config)
             .await
             .ok_or_else(|| {
                 BitFunError::Validation(format!(
@@ -3578,12 +4017,217 @@ impl SessionManager {
         Ok(turn)
     }
 
+    /// Build model rounds from execution messages.
+    ///
+    /// Used by `complete_dialog_turn` to populate `model_rounds` when the
+    /// host surface (e.g. CLI) does not persist rounds itself. This ensures
+    /// turn files contain rich conversation data (text, tools, thinking) that
+    /// other surfaces (e.g. Desktop) can render.
+    fn build_model_rounds_from_messages(
+        messages: &[Message],
+        turn_id: &str,
+        timestamp: u64,
+    ) -> Vec<ModelRoundData> {
+        let mut rounds: Vec<ModelRoundData> = Vec::new();
+
+        for msg in messages {
+            match msg.role {
+                MessageRole::Assistant => {
+                    let round_index = rounds.len();
+                    let round_id = format!("{}-round-{}", turn_id, round_index);
+
+                    let mut text_items = Vec::new();
+                    let mut thinking_items = Vec::new();
+                    let mut tool_items = Vec::new();
+                    let mut order_index = 0usize;
+
+                    match &msg.content {
+                        MessageContent::Text(text) => {
+                            if !text.trim().is_empty() {
+                                text_items.push(Self::make_text_item(
+                                    &format!("{}-text-{}", round_id, order_index),
+                                    text,
+                                    timestamp,
+                                    order_index,
+                                ));
+                            }
+                        }
+                        MessageContent::Mixed {
+                            reasoning_content,
+                            text,
+                            tool_calls,
+                        } => {
+                            // Thinking / reasoning content
+                            if let Some(reasoning) = reasoning_content {
+                                if !reasoning.trim().is_empty() {
+                                    thinking_items.push(ThinkingItemData {
+                                        id: format!("{}-think-{}", round_id, order_index),
+                                        content: reasoning.clone(),
+                                        is_streaming: false,
+                                        is_collapsed: true,
+                                        timestamp,
+                                        order_index: Some(order_index),
+                                        status: Some("completed".to_string()),
+                                        is_subagent_item: None,
+                                        parent_task_tool_id: None,
+                                        subagent_session_id: None,
+                                        attempt_id: None,
+                                        attempt_index: None,
+                                    });
+                                    order_index += 1;
+                                }
+                            }
+                            // Text content
+                            if !text.trim().is_empty() {
+                                text_items.push(Self::make_text_item(
+                                    &format!("{}-text-{}", round_id, order_index),
+                                    text,
+                                    timestamp,
+                                    order_index,
+                                ));
+                                order_index += 1;
+                            }
+                            // Tool calls
+                            for tc in tool_calls {
+                                tool_items.push(ToolItemData {
+                                    id: tc.tool_id.clone(),
+                                    tool_name: tc.tool_name.clone(),
+                                    tool_call: ToolCallData {
+                                        input: tc.arguments.clone(),
+                                        id: tc.tool_id.clone(),
+                                    },
+                                    tool_result: None,
+                                    ai_intent: None,
+                                    start_time: timestamp,
+                                    end_time: None,
+                                    duration_ms: None,
+                                    queue_wait_ms: None,
+                                    preflight_ms: None,
+                                    confirmation_wait_ms: None,
+                                    execution_ms: None,
+                                    order_index: Some(order_index),
+                                    is_subagent_item: None,
+                                    parent_task_tool_id: None,
+                                    subagent_session_id: None,
+                                    attempt_id: None,
+                                    attempt_index: None,
+                                    subagent_model_id: None,
+                                    subagent_model_alias: None,
+                                    status: Some("completed".to_string()),
+                                    interruption_reason: None,
+                                });
+                                order_index += 1;
+                            }
+                        }
+                        MessageContent::Multimodal { text, .. } => {
+                            if !text.trim().is_empty() {
+                                text_items.push(Self::make_text_item(
+                                    &format!("{}-text-{}", round_id, order_index),
+                                    text,
+                                    timestamp,
+                                    order_index,
+                                ));
+                            }
+                        }
+                        _ => {}
+                    }
+
+                    // Only add the round if it has any content
+                    if !text_items.is_empty()
+                        || !tool_items.is_empty()
+                        || !thinking_items.is_empty()
+                    {
+                        rounds.push(ModelRoundData {
+                            id: round_id,
+                            turn_id: turn_id.to_string(),
+                            round_index,
+                            round_group_id: None,
+                            timestamp,
+                            text_items,
+                            tool_items,
+                            thinking_items,
+                            start_time: timestamp,
+                            end_time: Some(timestamp),
+                            duration_ms: Some(0),
+                            provider_id: None,
+                            model_id: None,
+                            model_alias: None,
+                            first_chunk_ms: None,
+                            first_visible_output_ms: None,
+                            stream_duration_ms: None,
+                            attempt_count: None,
+                            failure_category: None,
+                            token_details: None,
+                            status: "completed".to_string(),
+                        });
+                    }
+                }
+                MessageRole::Tool => {
+                    // Attach tool result to the matching tool item in the last round
+                    if let MessageContent::ToolResult {
+                        tool_id,
+                        result,
+                        result_for_assistant,
+                        is_error,
+                        ..
+                    } = &msg.content
+                    {
+                        if let Some(last_round) = rounds.last_mut() {
+                            for tool_item in &mut last_round.tool_items {
+                                if tool_item.id == *tool_id {
+                                    let assistant_text = result_for_assistant
+                                        .clone()
+                                        .or_else(|| serde_json::to_string(result).ok());
+                                    tool_item.tool_result = Some(ToolResultData {
+                                        result: result.clone(),
+                                        success: !is_error,
+                                        result_for_assistant: assistant_text,
+                                        error: if *is_error {
+                                            serde_json::to_string(result).ok()
+                                        } else {
+                                            None
+                                        },
+                                        duration_ms: None,
+                                    });
+                                    tool_item.end_time = Some(timestamp);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        rounds
+    }
+
+    /// Helper to create a `TextItemData` with common defaults.
+    fn make_text_item(id: &str, content: &str, timestamp: u64, order_index: usize) -> TextItemData {
+        TextItemData {
+            id: id.to_string(),
+            content: content.to_string(),
+            is_streaming: false,
+            timestamp,
+            is_markdown: true,
+            order_index: Some(order_index),
+            is_subagent_item: None,
+            parent_task_tool_id: None,
+            subagent_session_id: None,
+            status: Some("completed".to_string()),
+            attempt_id: None,
+            attempt_index: None,
+        }
+    }
+
     /// Complete dialog turn
     pub async fn complete_dialog_turn(
         &self,
         session_id: &str,
         turn_id: &str,
         final_response: String,
+        new_messages: &[Message],
         stats: TurnStats,
     ) -> BitFunResult<()> {
         if !self.should_persist_session_id(session_id) {
@@ -3598,7 +4242,7 @@ impl SessionManager {
         }
 
         let workspace_path = self
-            .effective_session_workspace_path(session_id)
+            .effective_session_storage_path(session_id)
             .await
             .ok_or_else(|| {
                 BitFunError::Validation(format!(
@@ -3628,44 +4272,58 @@ impl SessionManager {
                 .iter()
                 .any(|item| !item.content.trim().is_empty())
         });
-        if !has_assistant_text && !final_response.trim().is_empty() {
-            let round_index = turn.model_rounds.len();
-            turn.model_rounds.push(ModelRoundData {
-                id: format!("{}-final-round", turn.turn_id),
-                turn_id: turn.turn_id.clone(),
-                round_index,
-                round_group_id: None,
-                timestamp: completion_timestamp,
-                text_items: vec![TextItemData {
-                    id: format!("{}-final-text", turn.turn_id),
-                    content: final_response.clone(),
-                    is_streaming: false,
+        if !has_assistant_text {
+            // Hosts that do not persist model rounds themselves (e.g. CLI)
+            // still need rich turn data on disk so other surfaces (e.g.
+            // Desktop) can render the conversation history. Build model
+            // rounds from the execution's new_messages.
+            let built_rounds = Self::build_model_rounds_from_messages(
+                new_messages,
+                &turn.turn_id,
+                completion_timestamp,
+            );
+            if !built_rounds.is_empty() {
+                turn.model_rounds = built_rounds;
+            } else if !final_response.trim().is_empty() {
+                // Fallback: append a single text-only round
+                let round_index = turn.model_rounds.len();
+                turn.model_rounds.push(ModelRoundData {
+                    id: format!("{}-final-round", turn.turn_id),
+                    turn_id: turn.turn_id.clone(),
+                    round_index,
+                    round_group_id: None,
                     timestamp: completion_timestamp,
-                    is_markdown: true,
-                    order_index: Some(0),
-                    is_subagent_item: None,
-                    parent_task_tool_id: None,
-                    subagent_session_id: None,
-                    status: Some("completed".to_string()),
-                    attempt_id: None,
-                    attempt_index: None,
-                }],
-                tool_items: Vec::new(),
-                thinking_items: Vec::new(),
-                start_time: completion_timestamp,
-                end_time: Some(completion_timestamp),
-                duration_ms: Some(0),
-                provider_id: None,
-                model_id: None,
-                model_alias: None,
-                first_chunk_ms: None,
-                first_visible_output_ms: None,
-                stream_duration_ms: None,
-                attempt_count: None,
-                failure_category: None,
-                token_details: None,
-                status: "completed".to_string(),
-            });
+                    text_items: vec![TextItemData {
+                        id: format!("{}-final-text", turn.turn_id),
+                        content: final_response.clone(),
+                        is_streaming: false,
+                        timestamp: completion_timestamp,
+                        is_markdown: true,
+                        order_index: Some(0),
+                        is_subagent_item: None,
+                        parent_task_tool_id: None,
+                        subagent_session_id: None,
+                        status: Some("completed".to_string()),
+                        attempt_id: None,
+                        attempt_index: None,
+                    }],
+                    tool_items: Vec::new(),
+                    thinking_items: Vec::new(),
+                    start_time: completion_timestamp,
+                    end_time: Some(completion_timestamp),
+                    duration_ms: Some(0),
+                    provider_id: None,
+                    model_id: None,
+                    model_alias: None,
+                    first_chunk_ms: None,
+                    first_visible_output_ms: None,
+                    stream_duration_ms: None,
+                    attempt_count: None,
+                    failure_category: None,
+                    token_details: None,
+                    status: "completed".to_string(),
+                });
+            }
         }
         turn.status = TurnStatus::Completed;
         turn.duration_ms = Some(stats.duration_ms);
@@ -3710,7 +4368,7 @@ impl SessionManager {
         }
 
         let workspace_path = self
-            .effective_session_workspace_path(session_id)
+            .effective_session_storage_path(session_id)
             .await
             .ok_or_else(|| {
                 BitFunError::Validation(format!(
@@ -3772,7 +4430,7 @@ impl SessionManager {
         }
 
         let workspace_path = self
-            .effective_session_workspace_path(session_id)
+            .effective_session_storage_path(session_id)
             .await
             .ok_or_else(|| {
                 BitFunError::Validation(format!(
@@ -3838,7 +4496,7 @@ impl SessionManager {
         }
 
         let workspace_path = self
-            .effective_session_workspace_path(session_id)
+            .effective_session_storage_path(session_id)
             .await
             .ok_or_else(|| {
                 BitFunError::Validation(format!(
@@ -3902,7 +4560,7 @@ impl SessionManager {
         }
 
         let workspace_path = self
-            .effective_session_workspace_path(session_id)
+            .effective_session_storage_path(session_id)
             .await
             .ok_or_else(|| {
                 BitFunError::Validation(format!(
@@ -3958,7 +4616,7 @@ impl SessionManager {
     /// canonical turn history instead of the runtime context cache.
     pub async fn get_messages(&self, session_id: &str) -> BitFunResult<Vec<Message>> {
         if self.config.enable_persistence {
-            if let Some(workspace_path) = self.effective_session_workspace_path(session_id).await {
+            if let Some(workspace_path) = self.effective_session_storage_path(session_id).await {
                 let messages = self
                     .rebuild_messages_from_turns(&workspace_path, session_id)
                     .await?;
@@ -4041,7 +4699,7 @@ impl SessionManager {
         session_id: &str,
         compression_state: CompressionState,
     ) -> BitFunResult<()> {
-        let effective_path = self.effective_session_workspace_path(session_id).await;
+        let effective_path = self.effective_session_storage_path(session_id).await;
 
         // IMPORTANT: keep the DashMap guard scope short -- do NOT hold it across .await.
         let session_snapshot = if let Some(mut session) = self.sessions.get_mut(session_id) {
@@ -4086,8 +4744,7 @@ impl SessionManager {
         // Construct system prompt
         let system_prompt = format!(
             "You are a professional session title generation assistant. Based on the user's message content, generate a concise and accurate session title.\n\nRequirements:\n- Title should not exceed {} characters\n- {}\n- Concise and accurate, reflecting the conversation topic\n- Do not add quotes or other decorative symbols\n- Return only the title text, no other content",
-            max_length,
-            language_instruction
+            max_length, language_instruction
         );
 
         // Truncate message to save tokens (max 200 characters)
@@ -4226,7 +4883,11 @@ impl SessionManager {
                         continue;
                     }
                     if let Some(workspace_path) =
-                        Self::effective_workspace_path_from_config(&snapshot.session.config).await
+                        Self::effective_storage_path_for_config_with_persistence(
+                            persistence.as_ref(),
+                            &snapshot.session.config,
+                        )
+                        .await
                     {
                         if !Self::auto_save_snapshot_is_current(&sessions, &snapshot) {
                             continue;
@@ -4288,7 +4949,11 @@ impl SessionManager {
 
                     if enable_persistence && Self::should_persist_session(&session) {
                         if let Some(workspace_path) =
-                            Self::effective_workspace_path_from_config(&session.config).await
+                            Self::effective_storage_path_for_config_with_persistence(
+                                persistence.as_ref(),
+                                &session.config,
+                            )
+                            .await
                         {
                             if Self::cleanup_snapshot_for_candidate(
                                 &sessions,
@@ -4345,12 +5010,12 @@ mod tests {
     use crate::service::config::types::{
         AIConfig as ServiceAIConfig, AIModelConfig as ServiceAIModelConfig,
     };
-    use crate::service::remote_ssh::workspace_state::local_workspace_roots_equal;
     use crate::service::session::{
         DialogTurnData, DialogTurnKind, ModelRoundData, SessionKind, SessionMetadata,
         SessionRelationship, SessionRelationshipKind, ToolCallData, ToolItemData, ToolResultData,
         TurnStatus, UserMessageData,
     };
+    use bitfun_runtime_ports::SessionStoragePathRequest;
     use dashmap::try_result::TryResult;
     use serde_json::json;
     use std::collections::HashSet;
@@ -4413,11 +5078,17 @@ mod tests {
         )
     }
 
+    fn test_path_manager() -> Arc<PathManager> {
+        let root =
+            std::env::temp_dir().join(format!("bitfun-session-manager-test-{}", Uuid::new_v4()));
+        Arc::new(PathManager::with_user_root_for_tests(
+            root.join("user-root"),
+        ))
+    }
+
     fn in_memory_test_manager() -> SessionManager {
-        let persistence_manager = Arc::new(
-            PersistenceManager::new(Arc::new(PathManager::new().expect("path manager")))
-                .expect("persistence manager"),
-        );
+        let persistence_manager =
+            Arc::new(PersistenceManager::new(test_path_manager()).expect("persistence manager"));
         SessionManager::new(
             Arc::new(SessionContextStore::new()),
             persistence_manager,
@@ -4992,12 +5663,52 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn core_session_store_port_resolves_local_storage_to_sessions_dir() {
+        use bitfun_runtime_ports::{
+            SessionStorageKind, SessionStoragePathRequest, SessionStorePort,
+        };
+
+        let workspace = TestWorkspace::new();
+        let path_manager = workspace.path_manager();
+        let port = CoreSessionStorePort::with_path_manager_for_tests(path_manager.clone());
+        let resolution = port
+            .resolve_session_storage_path(SessionStoragePathRequest {
+                workspace_path: workspace.path().to_path_buf(),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+            })
+            .await
+            .expect("storage path should resolve");
+
+        assert_eq!(resolution.storage_kind, SessionStorageKind::Local);
+        assert_eq!(
+            resolution.effective_storage_path,
+            path_manager.project_sessions_dir(workspace.path())
+        );
+        assert_ne!(resolution.effective_storage_path, workspace.path());
+
+        let resolved_again = port
+            .resolve_session_storage_path(SessionStoragePathRequest {
+                workspace_path: resolution.effective_storage_path.clone(),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+            })
+            .await
+            .expect("resolved sessions dir should pass through");
+        assert_eq!(
+            resolved_again.effective_storage_path,
+            resolution.effective_storage_path
+        );
+    }
+
+    #[tokio::test]
     async fn core_session_store_port_resolves_unresolved_remote_storage_path() {
         use bitfun_runtime_ports::{
             SessionStorageKind, SessionStoragePathRequest, SessionStorePort,
         };
 
-        let port = CoreSessionStorePort;
+        let workspace = TestWorkspace::new();
+        let port = CoreSessionStorePort::with_path_manager_for_tests(workspace.path_manager());
         let resolution = port
             .resolve_session_storage_path(SessionStoragePathRequest {
                 workspace_path: PathBuf::from("/remote/project"),
@@ -5020,11 +5731,164 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn core_session_store_port_resolved_remote_sessions_dir_passes_through_only_sessions_root(
+    ) {
+        use bitfun_runtime_ports::{
+            SessionStorageKind, SessionStoragePathRequest, SessionStorePort,
+        };
+
+        let workspace = TestWorkspace::new();
+        let path_manager = workspace.path_manager();
+        let port = CoreSessionStorePort::with_path_manager_for_tests(path_manager.clone());
+        let sessions_dir =
+            bitfun_services_integrations::remote_ssh::remote_workspace_session_mirror_dir(
+                path_manager.remote_ssh_mirror_root_dir(),
+                "example-host",
+                "/root/repo",
+            );
+        let resolved = port
+            .resolve_session_storage_path(SessionStoragePathRequest {
+                workspace_path: sessions_dir.clone(),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+            })
+            .await
+            .expect("resolved remote sessions dir should pass through");
+
+        assert_eq!(resolved.storage_kind, SessionStorageKind::Remote);
+        assert_eq!(resolved.effective_storage_path, sessions_dir);
+
+        let runtime_root = bitfun_services_integrations::remote_ssh::remote_workspace_runtime_root(
+            path_manager.remote_ssh_mirror_root_dir(),
+            "example-host",
+            "/root/repo",
+        );
+        let runtime_root_resolution = port
+            .resolve_session_storage_path(SessionStoragePathRequest {
+                workspace_path: runtime_root.clone(),
+                remote_connection_id: None,
+                remote_ssh_host: None,
+            })
+            .await;
+
+        assert!(
+            runtime_root_resolution.is_err(),
+            "remote runtime root must not pass as a resolved sessions dir"
+        );
+    }
+
+    #[tokio::test]
+    async fn restore_session_from_storage_path_accepts_resolved_sessions_dir() {
+        let workspace = TestWorkspace::new();
+        let path_manager = workspace.path_manager();
+        let persistence_manager =
+            Arc::new(PersistenceManager::new(path_manager.clone()).expect("persistence manager"));
+        let manager = test_manager(persistence_manager.clone());
+        let sessions_dir = path_manager.project_sessions_dir(workspace.path());
+        let session_id = Uuid::new_v4().to_string();
+        let session = Session::new_with_id(
+            session_id.clone(),
+            "Resolved sessions restore".to_string(),
+            "agentic".to_string(),
+            SessionConfig {
+                workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                ..Default::default()
+            },
+        );
+
+        persistence_manager
+            .save_session(&sessions_dir, &session)
+            .await
+            .expect("session should save to resolved sessions dir");
+
+        let restored = manager
+            .restore_session_from_storage_path(&sessions_dir, &session_id)
+            .await
+            .expect("storage restore should read the resolved sessions dir directly");
+
+        assert_eq!(restored.session_id, session_id);
+    }
+
+    #[tokio::test]
+    async fn restore_session_workspace_api_does_not_accept_resolved_sessions_dir() {
+        let workspace = TestWorkspace::new();
+        let path_manager = workspace.path_manager();
+        let persistence_manager =
+            Arc::new(PersistenceManager::new(path_manager.clone()).expect("persistence manager"));
+        let manager = test_manager(persistence_manager.clone());
+        let sessions_dir = path_manager.project_sessions_dir(workspace.path());
+        let session_id = Uuid::new_v4().to_string();
+        let session = Session::new_with_id(
+            session_id.clone(),
+            "Resolved sessions restore".to_string(),
+            "agentic".to_string(),
+            SessionConfig {
+                workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                ..Default::default()
+            },
+        );
+
+        persistence_manager
+            .save_session(&sessions_dir, &session)
+            .await
+            .expect("session should save to resolved sessions dir");
+
+        let result = manager.restore_session(&sessions_dir, &session_id).await;
+
+        assert!(
+            result.is_err(),
+            "workspace restore should not accept an already-resolved sessions dir"
+        );
+    }
+
+    #[tokio::test]
+    async fn restore_session_for_workspace_uses_remote_identity() {
+        let workspace = TestWorkspace::new();
+        let path_manager = workspace.path_manager();
+        let persistence_manager =
+            Arc::new(PersistenceManager::new(path_manager.clone()).expect("persistence manager"));
+        let manager = test_manager(persistence_manager.clone());
+        let sessions_dir = crate::service::WorkspaceRuntimeService::new(path_manager.clone())
+            .context_for_remote_workspace("dev-host", "/home/wsp/project")
+            .sessions_dir;
+        let session_id = Uuid::new_v4().to_string();
+        let session = Session::new_with_id(
+            session_id.clone(),
+            "Remote identity restore".to_string(),
+            "agentic".to_string(),
+            SessionConfig {
+                workspace_path: Some("/home/wsp/project".to_string()),
+                remote_connection_id: Some("ssh-1".to_string()),
+                remote_ssh_host: Some("dev-host".to_string()),
+                ..Default::default()
+            },
+        );
+
+        persistence_manager
+            .save_session(&sessions_dir, &session)
+            .await
+            .expect("session should save to remote sessions dir");
+
+        let restored = manager
+            .restore_session_for_workspace(
+                SessionStoragePathRequest {
+                    workspace_path: PathBuf::from("/home/wsp/project"),
+                    remote_connection_id: Some("ssh-1".to_string()),
+                    remote_ssh_host: Some("dev-host".to_string()),
+                },
+                &session_id,
+            )
+            .await
+            .expect("workspace restore should use remote identity");
+
+        assert_eq!(restored.session_id, session_id);
+    }
+
+    #[tokio::test]
     async fn restore_session_view_loads_turns_without_restoring_runtime_context() {
         let workspace = TestWorkspace::new();
         let persistence_manager = Arc::new(
-            PersistenceManager::new(Arc::new(PathManager::new().expect("path manager")))
-                .expect("persistence manager"),
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
         );
         let manager = test_manager(persistence_manager.clone());
         let session_id = Uuid::new_v4().to_string();
@@ -5164,8 +6028,7 @@ mod tests {
     async fn restore_session_view_preserves_full_visible_tool_result_payload() {
         let workspace = TestWorkspace::new();
         let persistence_manager = Arc::new(
-            PersistenceManager::new(Arc::new(PathManager::new().expect("path manager")))
-                .expect("persistence manager"),
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
         );
         let manager = test_manager(persistence_manager.clone());
         let session_id = Uuid::new_v4().to_string();
@@ -5906,7 +6769,13 @@ mod tests {
     #[tokio::test]
     async fn delete_session_removes_workspace_cache_entry() {
         let workspace = TestWorkspace::new();
-        let manager = in_memory_test_manager();
+        let persistence_manager = Arc::new(
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager"),
+        );
+        let expected_storage_path = persistence_manager
+            .path_manager()
+            .project_sessions_dir(workspace.path());
+        let manager = test_manager(persistence_manager);
         let session = manager
             .create_session(
                 "Cached session".to_string(),
@@ -5921,11 +6790,11 @@ mod tests {
 
         assert_eq!(
             manager
-                .session_workspace_index
+                .session_storage_path_index
                 .get(&session.session_id)
                 .as_deref()
-                .map(|entry| local_workspace_roots_equal(entry, workspace.path())),
-            Some(true)
+                .map(|entry| entry.to_path_buf()),
+            Some(expected_storage_path)
         );
 
         manager
@@ -5934,7 +6803,7 @@ mod tests {
             .expect("session should delete");
 
         assert!(manager
-            .session_workspace_index
+            .session_storage_path_index
             .get(&session.session_id)
             .is_none());
     }
@@ -6021,10 +6890,8 @@ mod tests {
 
     #[tokio::test]
     async fn records_subagent_partial_timeout_in_evidence_ledger() {
-        let persistence_manager = Arc::new(
-            PersistenceManager::new(Arc::new(PathManager::new().expect("path manager")))
-                .expect("persistence manager"),
-        );
+        let persistence_manager =
+            Arc::new(PersistenceManager::new(test_path_manager()).expect("persistence manager"));
         let manager = test_manager(persistence_manager);
 
         let event = manager.record_subagent_partial_timeout(

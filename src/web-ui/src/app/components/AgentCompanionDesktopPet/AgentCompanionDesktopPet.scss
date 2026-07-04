@@ -67,6 +67,27 @@
     &:active {
       cursor: grabbing;
     }
+
+    &--needs-attention::before {
+      content: "";
+      position: absolute;
+      inset: -6px;
+      border-radius: 50%;
+      background: radial-gradient(
+        circle,
+        rgba(var(--bitfun-agent-companion-warning-rgb), 0.28) 0%,
+        rgba(var(--bitfun-agent-companion-warning-rgb), 0.08) 50%,
+        transparent 75%
+      );
+      animation: bitfun-agent-companion-pet-attention-glow 1.6s ease-in-out infinite !important;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    & > * {
+      position: relative;
+      z-index: 1;
+    }
   }
 
   &__bubbles {
@@ -108,9 +129,9 @@
     max-width: 100%;
     box-sizing: border-box;
     padding: 7px 10px;
-    border: 1px solid var(--color-overlay-slate-10);
+    border: 1px solid var(--color-overlay-slate-12);
     border-radius: 10px 10px 2px 10px;
-    background: var(--color-overlay-white-92);
+    background: var(--color-overlay-white-95);
     color: var(--bitfun-agent-companion-bubble-fg);
     backdrop-filter: blur(10px);
     cursor: pointer;
@@ -189,7 +210,13 @@
     }
   }
 
-  &__bubble--attention,
+  &__bubble--attention {
+    border-color: rgba(var(--bitfun-agent-companion-warning-rgb), 0.55);
+    background: rgba(var(--bitfun-agent-companion-warning-bg-rgb), 0.97);
+    box-shadow: 0 0 0 0 rgba(var(--bitfun-agent-companion-warning-rgb), 0.5);
+    animation: bitfun-agent-companion-attention-pulse 1.6s ease-in-out infinite !important;
+  }
+
   &__bubble--waiting {
     border-color: rgba(var(--bitfun-agent-companion-warning-rgb), 0.22);
     background: rgba(var(--bitfun-agent-companion-warning-bg-rgb), 0.94);
@@ -224,5 +251,31 @@
   46%,
   100% {
     opacity: 0;
+  }
+}
+
+@keyframes bitfun-agent-companion-attention-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(var(--bitfun-agent-companion-warning-rgb), 0.5);
+    transform: translateY(0);
+  }
+
+  50% {
+    box-shadow: 0 0 0 6px rgba(var(--bitfun-agent-companion-warning-rgb), 0);
+    transform: translateY(-2px);
+  }
+}
+
+@keyframes bitfun-agent-companion-pet-attention-glow {
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.08);
   }
 }

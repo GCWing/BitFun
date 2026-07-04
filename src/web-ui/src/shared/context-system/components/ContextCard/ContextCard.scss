@@ -13,10 +13,10 @@
   
   background: linear-gradient(135deg,
     var(--color-overlay-white-08) 0%,
-    var(--color-overlay-white-06) 50%,
-    var(--color-overlay-white-10) 100%
+    var(--color-overlay-white-08) 50%,
+    var(--color-overlay-white-12) 100%
   );
-  border: 1px solid $border-base;
+  border: 1px solid var(--border-base);
   border-radius: $size-radius-base;
   padding: $size-gap-3;
   
@@ -73,7 +73,7 @@
     width: 32px;
     height: 32px;
     border-radius: $size-radius-sm;
-    background: $element-bg-soft;
+    background: var(--element-bg-soft);
     color: var(--color-text-secondary);
     
     svg {
@@ -142,9 +142,9 @@
     font-size: 11px;
     font-weight: $font-weight-medium;
     color: var(--color-text-secondary);
-    background: $element-bg-medium;
+    background: var(--element-bg-medium);
     border-radius: $size-radius-sm;
-    border: 1px solid $border-subtle;
+    border: 1px solid var(--border-subtle);
   }
   
   
@@ -153,7 +153,7 @@
     margin-top: $size-gap-2;
     padding: $size-gap-2;
     background: var(--color-bg-tertiary);
-    border: 1px solid $border-subtle;
+    border: 1px solid var(--border-subtle);
     border-radius: $size-radius-sm;
     max-height: 100px;
     overflow: auto;
@@ -193,7 +193,7 @@
     transition: all $motion-fast $easing-standard;
     
     &:hover {
-      background: $element-bg-medium;
+      background: var(--element-bg-medium);
       color: var(--color-text-secondary);
     }
     
@@ -235,7 +235,7 @@
   
   &__error {
     background: var(--color-error-bg);
-    border: 1px solid $color-error-border;
+    border: 1px solid var(--color-error-border);
     color: var(--color-error);
   }
   
@@ -247,7 +247,7 @@
   
   &__warning {
     background: var(--color-warning-bg);
-    border: 1px solid $color-warning-border;
+    border: 1px solid var(--color-warning-border);
     color: var(--color-warning);
   }
   
@@ -305,7 +305,7 @@
       transform: translateY(-2px);
       box-shadow: 
         0 8px 24px var(--color-accent-200),
-        0 4px 12px var(--color-overlay-black-10);
+        0 4px 12px var(--color-overlay-black-12);
     }
     
     &:active {

@@ -10,6 +10,8 @@ name = "terminal_core"
 path = "src/lib.rs"
 
 [dependencies]
+bitfun-runtime-ports = { path = "../../contracts/runtime-ports" }
+
 # PTY support
 portable-pty = { workspace = true }
 
@@ -25,6 +27,7 @@ serde_json = { workspace = true }
 # Error handling
 thiserror = { workspace = true }
 anyhow = { workspace = true }
+async-trait = { workspace = true }
 
 # Logging
 log = { workspace = true }

@@ -47,12 +47,12 @@ describe('buildMiniAppThemeVars', () => {
   it('keeps dark and light scrollbar fallbacks output-equivalent', () => {
     expect(buildMiniAppThemeVars(createTheme('dark'))?.vars).toMatchObject({
       '--bitfun-scrollbar-thumb': 'rgba(255, 255, 255, 0.12)',
-      '--bitfun-scrollbar-thumb-hover': 'rgba(255, 255, 255, 0.22)',
+      '--bitfun-scrollbar-thumb-hover': 'rgba(255, 255, 255, 0.24)',
     });
 
     expect(buildMiniAppThemeVars(createTheme('light'))?.vars).toMatchObject({
       '--bitfun-scrollbar-thumb': 'rgba(0, 0, 0, 0.15)',
-      '--bitfun-scrollbar-thumb-hover': 'rgba(0, 0, 0, 0.28)',
+      '--bitfun-scrollbar-thumb-hover': 'rgba(0, 0, 0, 0.3)',
     });
   });
 

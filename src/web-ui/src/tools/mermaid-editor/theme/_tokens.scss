@@ -12,11 +12,15 @@
 @use '../../../component-library/styles/tokens' as *;
 
 $mermaid-light-node-fill: rgba(15, 23, 42, 0.06);
+$mermaid-light-node-fill-hover: rgba(15, 23, 42, 0.1);
 $mermaid-light-node-stroke: rgba(100, 116, 139, 0.35);
+$mermaid-light-edge-label-border: rgba(100, 116, 139, 0.25);
 $mermaid-light-text-primary: #1e293b;
 $mermaid-light-text-secondary: #475569;
-$mermaid-light-surface: #f7f8fa;
+$mermaid-light-surface: #f3f4f6;
+$mermaid-light-section-alt-fill: #e8eaef;
 $mermaid-light-highlight-stroke: #334155;
+$mermaid-light-note-text: #92400e;
 
 // ==================== Mermaid CSS variables ====================
 // Define dark theme defaults in :root
@@ -29,18 +33,16 @@ $mermaid-light-highlight-stroke: #334155;
   --mermaid-node-stroke-hover: #{$border-strong};
   --mermaid-node-stroke-width: 1.5px;
   --mermaid-node-text: #{$color-text-primary};
-  --mermaid-node-radius: #{$size-radius-sm};
   --mermaid-node-dash-array: 4 2;
-  
+
   // ==================== Edge styles ====================
   --mermaid-edge-stroke: #{$border-medium};
   --mermaid-edge-stroke-hover: #{$border-strong};
-  --mermaid-edge-stroke-width: 1.5px;
   --mermaid-edge-label-bg: #{$color-bg-secondary};
   --mermaid-edge-label-border: #{$border-subtle};
   --mermaid-edge-label-text: #{$color-text-secondary};
   --mermaid-arrow-color: #{$color-text-muted};
-  
+
   // ==================== Subgraph/cluster styles ====================
   --mermaid-cluster-fill: #{$element-bg-subtle};
   --mermaid-cluster-stroke: #{$border-subtle};
@@ -48,27 +50,23 @@ $mermaid-light-highlight-stroke: #334155;
   --mermaid-cluster-radius: #{$size-radius-base};
   --mermaid-cluster-text: #{$color-text-secondary};
   --mermaid-cluster-dash-array: 5 3;
-  
+
   // ==================== Status colors ====================
   --mermaid-success: #{$color-success};
-  --mermaid-success-bg: #{$color-success-bg};
   --mermaid-error: #{$color-error};
   --mermaid-error-bg: #{$color-error-bg};
   --mermaid-warning: #{$color-warning};
-  --mermaid-warning-bg: #{$color-warning-bg};
   --mermaid-info: #{$color-info};
-  --mermaid-info-bg: #{$color-info-bg};
-  
+
   // ==================== Highlight styles ====================
   --mermaid-highlight-stroke: #{$color-accent-500};
   --mermaid-highlight-glow: #{$glow-shadow-blue};
-  --mermaid-selected-stroke: #{$color-accent-600};
-  
+
   // ==================== Interaction effects ====================
   --mermaid-transition-duration: #{$motion-base};
   --mermaid-transition-easing: #{$easing-standard};
   --mermaid-hover-filter: brightness(1.08);
-  
+
   // ==================== Sequence diagram ====================
   --mermaid-actor-fill: #{$element-bg-base};
   --mermaid-actor-stroke: #{$border-medium};
@@ -80,7 +78,7 @@ $mermaid-light-highlight-stroke: #334155;
   --mermaid-note-text: #{$color-text-secondary};
   --mermaid-activation-fill: rgba(74, 144, 217, 0.15);
   --mermaid-activation-stroke: #{$border-medium};
-  
+
   // ==================== Gantt chart ====================
   --mermaid-section-fill: #{$color-bg-primary};
   --mermaid-section-alt-fill: #{$color-bg-secondary};
@@ -92,7 +90,7 @@ $mermaid-light-highlight-stroke: #334155;
   --mermaid-active-stroke: #{$color-info};
   --mermaid-crit-fill: #{$color-error-bg};
   --mermaid-crit-stroke: #{$color-error};
-  
+
   // ==================== Pie chart ====================
   --mermaid-pie-stroke: #{$color-bg-primary};
   --mermaid-pie-stroke-width: 2px;
@@ -106,20 +104,9 @@ $mermaid-light-highlight-stroke: #334155;
   --mermaid-pie-6: #d890b8;
   --mermaid-pie-7: #68c8d8;
   --mermaid-pie-8: #a8d868;
-  
+
   // ==================== Class/ER diagram ====================
-  --mermaid-class-fill: #{$element-bg-base};
-  --mermaid-class-stroke: #{$border-medium};
   --mermaid-class-text: #{$color-text-primary};
-  --mermaid-class-divider: #{$border-subtle};
-  
-  // ==================== Git diagram ====================
-  --mermaid-commit-text: #{$color-text-primary};
-  --mermaid-branch-label: #{$color-text-primary};
-  
-  // ==================== Background and container ====================
-  --mermaid-bg: var(--color-bg-scene);
-  --mermaid-container-border: #{$border-subtle};
 }
 
 // ==================== Light theme overrides ====================
@@ -129,75 +116,63 @@ $mermaid-light-highlight-stroke: #334155;
 .light {
   // Node styles
   --mermaid-node-fill: #{$mermaid-light-node-fill};
-  --mermaid-node-fill-hover: rgba(15, 23, 42, 0.1);
+  --mermaid-node-fill-hover: #{$mermaid-light-node-fill-hover};
   --mermaid-node-stroke: #{$mermaid-light-node-stroke};
   --mermaid-node-stroke-hover: rgba(51, 65, 85, 0.55);
   --mermaid-node-text: #{$mermaid-light-text-primary};
-  
+
   // Edges
   --mermaid-edge-stroke: #{$mermaid-light-node-stroke};
   --mermaid-edge-stroke-hover: rgba(51, 65, 85, 0.5);
   --mermaid-edge-label-bg: #{$mermaid-light-surface};
-  --mermaid-edge-label-border: rgba(100, 116, 139, 0.25);
+  --mermaid-edge-label-border: #{$mermaid-light-edge-label-border};
   --mermaid-edge-label-text: #{$mermaid-light-text-secondary};
   --mermaid-arrow-color: #64748b;
-  
+
   // Subgraph/cluster
-  --mermaid-cluster-fill: rgba(15, 23, 42, 0.04);
-  --mermaid-cluster-stroke: rgba(100, 116, 139, 0.25);
+  --mermaid-cluster-fill: #{$mermaid-light-node-fill};
+  --mermaid-cluster-stroke: #{$mermaid-light-edge-label-border};
   --mermaid-cluster-text: #{$mermaid-light-text-secondary};
-  
+
   // Highlight - slate (matches light theme focus / accent)
   --mermaid-highlight-stroke: #{$mermaid-light-highlight-stroke};
   --mermaid-highlight-glow: drop-shadow(0 0 6px rgba(15, 23, 42, 0.18));
-  --mermaid-selected-stroke: #{$mermaid-light-text-primary};
-  
+
   // Interaction effects
   --mermaid-hover-filter: brightness(0.97);
-  
+
   // Sequence diagram
   --mermaid-actor-fill: #{$mermaid-light-node-fill};
   --mermaid-actor-stroke: #{$mermaid-light-node-stroke};
   --mermaid-actor-text: #{$mermaid-light-text-primary};
   --mermaid-signal-stroke: #{$mermaid-light-node-stroke};
   --mermaid-signal-text: #{$mermaid-light-text-primary};
-  --mermaid-note-fill: rgba(184, 134, 58, 0.12);
-  --mermaid-note-stroke: rgba(192, 140, 66, 0.4);
-  --mermaid-note-text: #92400e;
-  --mermaid-activation-fill: rgba(15, 23, 42, 0.1);
+  --mermaid-note-fill: color-mix(in srgb, var(--color-warning) 12%, transparent);
+  --mermaid-note-stroke: color-mix(in srgb, var(--color-warning) 40%, transparent);
+  --mermaid-note-text: #{$mermaid-light-note-text};
+  --mermaid-activation-fill: #{$mermaid-light-node-fill-hover};
   --mermaid-activation-stroke: rgba(51, 65, 85, 0.35);
-  
+
   // Gantt chart
   --mermaid-section-fill: #{$mermaid-light-surface};
-  --mermaid-section-alt-fill: #f0f1f3;
-  --mermaid-grid-stroke: rgba(100, 116, 139, 0.15);
+  --mermaid-section-alt-fill: #{$mermaid-light-section-alt-fill};
+  --mermaid-grid-stroke: color-mix(in srgb, var(--color-text-muted) 15%, transparent);
   --mermaid-task-text: #{$mermaid-light-text-primary};
-  --mermaid-done-fill: rgba(91, 154, 111, 0.15);
-  --mermaid-done-stroke: #5b9a6f;
-  --mermaid-active-fill: rgba(15, 23, 42, 0.08);
+  --mermaid-done-fill: var(--color-success-bg);
+  --mermaid-done-stroke: var(--color-success);
+  --mermaid-active-fill: #{$mermaid-light-node-fill-hover};
   --mermaid-active-stroke: #{$mermaid-light-highlight-stroke};
-  --mermaid-crit-fill: rgba(194, 101, 101, 0.15);
-  --mermaid-crit-stroke: #c26565;
-  
+  --mermaid-crit-fill: var(--color-error-bg);
+  --mermaid-crit-stroke: var(--color-error);
+
   // Pie chart - cohesive colors.
   --mermaid-pie-stroke: #{$mermaid-light-surface};
   --mermaid-pie-title-text: #{$mermaid-light-text-primary};
   --mermaid-pie-legend-text: #{$mermaid-light-text-secondary};
   --mermaid-pie-1: #{$mermaid-light-text-secondary};
-  
+
   // Class diagram
-  --mermaid-class-fill: #{$mermaid-light-node-fill};
-  --mermaid-class-stroke: #{$mermaid-light-node-stroke};
   --mermaid-class-text: #{$mermaid-light-text-primary};
-  --mermaid-class-divider: rgba(100, 116, 139, 0.2);
-  
-  // Git diagram
-  --mermaid-commit-text: #{$mermaid-light-text-primary};
-  --mermaid-branch-label: #{$mermaid-light-text-primary};
-  
-  // Background
-  --mermaid-bg: var(--color-bg-scene);
-  --mermaid-container-border: rgba(100, 116, 139, 0.18);
 }
 
 // ==================== Mixins ====================

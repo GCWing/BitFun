@@ -1,6 +1,6 @@
 const STARTUP_OVERLAY_ID = 'bitfun-startup-overlay';
 const EXIT_CLASS = 'bitfun-startup-overlay--exiting';
-const EXIT_FALLBACK_MS = 450;
+const EXIT_FALLBACK_MS = 350;
 
 declare global {
   interface Window {

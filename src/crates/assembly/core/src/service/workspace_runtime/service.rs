@@ -480,6 +480,11 @@ fn init_global_workspace_runtime_service() -> Arc<WorkspaceRuntimeService> {
 }
 
 pub fn get_workspace_runtime_service_arc() -> Arc<WorkspaceRuntimeService> {
+    #[cfg(test)]
+    if let Some(service) = test_workspace_runtime_service_override() {
+        return service;
+    }
+
     GLOBAL_WORKSPACE_RUNTIME_SERVICE
         .get_or_init(init_global_workspace_runtime_service)
         .clone()
@@ -487,6 +492,42 @@ pub fn get_workspace_runtime_service_arc() -> Arc<WorkspaceRuntimeService> {
 
 pub fn try_get_workspace_runtime_service_arc() -> BitFunResult<Arc<WorkspaceRuntimeService>> {
     Ok(get_workspace_runtime_service_arc())
+}
+
+#[cfg(test)]
+thread_local! {
+    static TEST_WORKSPACE_RUNTIME_SERVICE: std::cell::RefCell<Option<Arc<WorkspaceRuntimeService>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+#[cfg(test)]
+fn test_workspace_runtime_service_override() -> Option<Arc<WorkspaceRuntimeService>> {
+    TEST_WORKSPACE_RUNTIME_SERVICE.with(|slot| slot.borrow().clone())
+}
+
+#[cfg(test)]
+pub struct WorkspaceRuntimeServiceOverrideGuard {
+    previous: Option<Arc<WorkspaceRuntimeService>>,
+}
+
+#[cfg(test)]
+impl Drop for WorkspaceRuntimeServiceOverrideGuard {
+    fn drop(&mut self) {
+        TEST_WORKSPACE_RUNTIME_SERVICE.with(|slot| {
+            *slot.borrow_mut() = self.previous.take();
+        });
+    }
+}
+
+#[cfg(test)]
+pub fn set_workspace_runtime_service_for_current_test(
+    service: Arc<WorkspaceRuntimeService>,
+) -> WorkspaceRuntimeServiceOverrideGuard {
+    let previous = TEST_WORKSPACE_RUNTIME_SERVICE.with(|slot| {
+        let mut slot = slot.borrow_mut();
+        slot.replace(service)
+    });
+    WorkspaceRuntimeServiceOverrideGuard { previous }
 }
 
 #[cfg(test)]

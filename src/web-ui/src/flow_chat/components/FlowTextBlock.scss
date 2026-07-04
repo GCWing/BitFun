@@ -108,7 +108,7 @@
   }
 
   .markdown-renderer .code-block-wrapper .copy-button.copy-success:hover {
-    color: var(--markdown-copy-success-color);
+    color: var(--color-success);
     transform: scale(1.08);
   }
 
@@ -162,7 +162,7 @@
 :root[data-theme-type='light'] .flow-text-block .markdown-renderer .code-block-wrapper .copy-button.copy-success:hover,
 [data-theme-type='light'] .flow-text-block .markdown-renderer .code-block-wrapper .copy-button.copy-success:hover,
 .light .flow-text-block .markdown-renderer .code-block-wrapper .copy-button.copy-success:hover {
-  color: var(--markdown-copy-success-color-light);
+  color: var(--color-success);
 }
 
 :root[data-theme='light'] .flow-text-block .markdown-renderer .inline-code,

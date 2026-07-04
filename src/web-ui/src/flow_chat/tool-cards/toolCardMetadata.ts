@@ -30,7 +30,7 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'summary',
     description: 'Write or create a file',
     displayMode: 'standard',
-    primaryColor: 'var(--tool-card-write-color)'
+    primaryColor: 'var(--color-success)'
   },
   'Edit': {
     toolName: 'Edit',
@@ -329,6 +329,18 @@ export const TOOL_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     description: 'Render interactive widget previews inline in FlowChat',
     displayMode: 'detailed',
     primaryColor: UI_EXCEPTION_ACCENTS.generativeUi
+  },
+
+  // Computer use (desktop automation)
+  'ComputerUse': {
+    toolName: 'ComputerUse',
+    displayName: 'Computer Use',
+    icon: 'CU',
+    requiresConfirmation: false,
+    resultDisplayType: 'summary',
+    description: 'Screen capture, mouse/keyboard, and accessibility control of the desktop',
+    displayMode: 'compact',
+    primaryColor: 'var(--color-accent-600)'
   },
 };
 

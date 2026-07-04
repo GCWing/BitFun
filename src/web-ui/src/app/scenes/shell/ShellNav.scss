@@ -52,7 +52,7 @@
     border: none;
     border-radius: 6px;
     background: transparent;
-    color: var(--color-text-tertiary);
+    color: var(--color-text-muted);
     cursor: default;
     transition:
       color $motion-fast $easing-standard,
@@ -134,7 +134,7 @@
     width: 14px;
     height: 14px;
     flex-shrink: 0;
-    color: var(--color-primary);
+    color: var(--color-accent-500);
   }
 
   &__workspace-menu-text {
@@ -338,7 +338,7 @@
 
     &.is-active {
       color: var(--color-text-primary);
-      background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+      background: color-mix(in srgb, var(--color-accent-500) 10%, transparent);
       font-weight: 500;
 
       &::before {
@@ -349,14 +349,14 @@
         transform: translateY(-50%);
         width: 2px;
         height: 16px;
-        background: var(--color-primary);
+        background: var(--color-accent-500);
         border-radius: 0 2px 2px 0;
       }
 
       &:hover {
         background: color-mix(
           in srgb,
-          var(--color-primary) 14%,
+          var(--color-accent-500) 14%,
           var(--element-bg-medium)
         );
       }
@@ -397,7 +397,7 @@
     opacity: 0.75;
 
     &--saved {
-      color: var(--color-primary);
+      color: var(--color-accent-500);
       opacity: 0.9;
     }
   }
@@ -455,8 +455,8 @@
     border-radius: 999px;
     font-size: var(--font-size-xxs);
     line-height: 1;
-    color: var(--color-primary);
-    background: color-mix(in srgb, var(--color-primary) 14%, transparent);
+    color: var(--color-accent-500);
+    background: color-mix(in srgb, var(--color-accent-500) 14%, transparent);
   }
 
   &__empty {

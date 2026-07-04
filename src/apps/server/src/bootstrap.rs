@@ -101,6 +101,12 @@ pub async fn initialize(workspace: Option<String>) -> anyhow::Result<Arc<ServerA
         event_queue.clone(),
         event_router.clone(),
     ));
+    coordinator.set_terminal_port(
+        bitfun_core::product_runtime::CoreRuntimeServicesProvider::terminal_port(),
+    );
+    coordinator.set_remote_exec_port(
+        bitfun_core::product_runtime::CoreRuntimeServicesProvider::remote_exec_port(),
+    );
 
     coordination::ConversationCoordinator::set_global(coordinator.clone());
 

@@ -5,13 +5,8 @@ export interface HistoryProjectionHandoffSnapshot {
   reason: string;
   createdAtMs: number;
   items: VirtualItem[];
-  mode: 'scroll-position' | 'bottom-tail';
+  mode: 'bottom-tail';
   targetTurnId: string | null;
-  anchorKey: string | null;
-  anchorOffsetTopPx: number;
-  scrollTop: number;
-  scrollHeight: number;
-  clientHeight: number;
   footerHeightPx: number;
 }
 

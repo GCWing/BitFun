@@ -160,6 +160,9 @@ Avoid adding IDs to these surfaces unless there is a clear automated workflow.
 | Session menu button | `nav-session-menu-btn` | Opens row action menu. Pair with `data-session-id`. |
 | Session menu | `nav-session-menu` | Portal menu for one session. Pair with `data-session-id`. |
 | Session rename item | `nav-session-menu-rename` | Starts session rename. |
+| Session copy ID item | `nav-session-menu-copy-id` | Copies the session ID. Pair with `data-session-id`. |
+| Session scheduled jobs item | `nav-session-menu-scheduled-jobs` | Opens scheduled jobs for the session. Pair with `data-session-id`. |
+| Session archive item | `nav-session-menu-archive` | Archives the session. Pair with `data-session-id`. |
 | Session delete item | `nav-session-menu-delete` | Deletes session. |
 | Session list toggle | `nav-session-list-toggle` | Expands/collapses long session lists. |
 

@@ -393,32 +393,14 @@ pub struct SupportedExtensionsResponse {
 
 #[tauri::command]
 pub async fn lsp_get_supported_extensions() -> Result<SupportedExtensionsResponse, String> {
-    use std::collections::HashMap;
-
     let manager = get_global_lsp_manager().map_err(|e| format!("LSP not initialized: {}", e))?;
 
     let guard = manager.read().await;
-    let plugins = guard.list_plugins().await;
-
-    let mut extension_to_language: HashMap<String, String> = HashMap::new();
-    let mut supported_languages: std::collections::HashSet<String> =
-        std::collections::HashSet::new();
-
-    for plugin in plugins {
-        for lang in &plugin.languages {
-            supported_languages.insert(lang.clone());
-        }
-
-        for ext in &plugin.file_extensions {
-            if !plugin.languages.is_empty() {
-                extension_to_language.insert(ext.clone(), plugin.languages[0].clone());
-            }
-        }
-    }
+    let summary = guard.supported_extensions().await;
 
     Ok(SupportedExtensionsResponse {
-        extension_to_language,
-        supported_languages: supported_languages.into_iter().collect(),
+        extension_to_language: summary.extension_to_language,
+        supported_languages: summary.supported_languages,
     })
 }
 

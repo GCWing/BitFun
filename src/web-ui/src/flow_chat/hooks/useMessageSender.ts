@@ -14,6 +14,7 @@ import { notificationService } from '@/shared/notification-system';
 import type { ContextItem, ImageContext } from '@/shared/types/context';
 import { createLogger } from '@/shared/utils/logger';
 import { formatContextForPrompt } from '@/shared/utils/contextPrompt';
+import { buildImagePayload } from '../utils/imagePayload';
 
 const log = createLogger('FlowChat');
 
@@ -103,40 +104,21 @@ export function useMessageSender(props: UseMessageSenderProps): UseMessageSender
       }
 
       const imageContexts = contexts.filter(ctx => ctx.type === 'image') as ImageContext[];
-      const clipboardImages = imageContexts.filter(ctx => !ctx.isLocal && ctx.dataUrl);
-
-      if (clipboardImages.length > 0) {
-        try {
-          const { api } = await import('@/infrastructure/api/service-api/ApiClient');
-          const uploadData = {
-            request: {
-              images: clipboardImages.map(ctx => ({
-                id: ctx.id,
-                image_path: ctx.imagePath || null,
-                data_url: ctx.dataUrl || null,
-                mime_type: ctx.mimeType,
-                image_name: ctx.imageName,
-                file_size: ctx.fileSize,
-                width: ctx.width || null,
-                height: ctx.height || null,
-                source: ctx.source,
-              }))
-            }
-          };
-
-          await api.invoke('upload_image_contexts', uploadData);
-          log.debug('Clipboard images uploaded', {
-            imageCount: clipboardImages.length,
-            ids: clipboardImages.map(img => img.id),
-          });
-        } catch (error) {
-          log.error('Failed to upload clipboard images', {
-            imageCount: clipboardImages.length,
-            error: (error as Error)?.message ?? 'unknown',
-          });
-          notificationService.error('Image upload failed. Please try again.', { duration: 3000 });
-          throw error;
-        }
+      let imagePayload: Awaited<ReturnType<typeof buildImagePayload>>;
+      try {
+        imagePayload = await buildImagePayload(imageContexts);
+        log.debug('Image payload prepared', {
+          imageCount: imageContexts.length,
+          ids: imageContexts.map(img => img.id),
+          pathCount: imagePayload?.imageContexts.filter(img => img.image_path).length ?? 0,
+        });
+      } catch (error) {
+        log.error('Failed to upload clipboard images', {
+          imageCount: imageContexts.filter(ctx => !ctx.isLocal && ctx.dataUrl).length,
+          error: (error as Error)?.message ?? 'unknown',
+        });
+        notificationService.error('Image upload failed. Please try again.', { duration: 3000 });
+        throw error;
       }
 
       let fullMessage = aiTrimmedMessage;
@@ -150,38 +132,13 @@ export function useMessageSender(props: UseMessageSenderProps): UseMessageSender
 
       // Always pass imageContexts to the backend; the coordinator decides
       // whether to pre-analyse via a vision model or attach directly.
-      const imageContextsForBackend = imageContexts.length > 0
-        ? {
-            imageContexts: imageContexts.map(ctx => ({
-              id: ctx.id,
-              image_path: ctx.isLocal ? ctx.imagePath : undefined,
-              data_url: undefined,
-              mime_type: ctx.mimeType,
-              metadata: {
-                name: ctx.imageName,
-                width: ctx.width,
-                height: ctx.height,
-                file_size: ctx.fileSize,
-                source: ctx.source,
-              },
-            })),
-            imageDisplayData: imageContexts.map(ctx => ({
-              id: ctx.id,
-              name: ctx.imageName || 'Image',
-              dataUrl: ctx.dataUrl,
-              imagePath: ctx.isLocal ? ctx.imagePath : undefined,
-              mimeType: ctx.mimeType,
-            })),
-          }
-        : undefined;
-
       await flowChatManager.sendMessage(
         fullMessage,
         sessionId || undefined,
         displayMessage,
         agentTypeForSend,
         undefined,
-        imageContextsForBackend
+        imagePayload
       );
 
       onClearContexts();

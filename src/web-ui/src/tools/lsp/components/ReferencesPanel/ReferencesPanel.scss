@@ -25,11 +25,11 @@
   min-width: 300px;
   
   background: var(--color-bg-primary);
-  border: 1px solid $border-prominent;
+  border: 1px solid var(--border-prominent);
   border-radius: $size-radius-base;
   
   box-shadow: 
-    $shadow-2xl,
+    var(--shadow-xl),
     0 0 0 1px var(--color-overlay-black-80),
     $inner-glow-top;
   
@@ -65,8 +65,8 @@
   align-items: center;
   justify-content: space-between;
   padding: $size-gap-3 $size-gap-4;
-  background: $element-bg-soft;
-  border-bottom: 1px solid $border-base;
+  background: var(--element-bg-soft);
+  border-bottom: 1px solid var(--border-base);
 }
 
 .references-panel__title {
@@ -104,13 +104,13 @@
   transition: all $motion-fast ease;
 
   &:hover {
-    background: $element-bg-base;
+    background: var(--element-bg-base);
     color: var(--color-text-secondary);
   }
 
   &:active {
     transform: scale(0.95);
-    background: $element-bg-medium;
+    background: var(--element-bg-medium);
   }
 }
 
@@ -136,7 +136,7 @@
   margin-bottom: $size-gap-2;
   border-radius: $size-radius-sm;
   overflow: hidden;
-  background: $element-bg-subtle;
+  background: var(--element-bg-subtle);
 
   &:last-child {
     margin-bottom: 0;
@@ -148,8 +148,8 @@
   align-items: center;
   gap: $size-gap-2;
   padding: $size-gap-2 $size-gap-3;
-  background: $element-bg-soft;
-  border-bottom: 1px solid $border-subtle;
+  background: var(--element-bg-soft);
+  border-bottom: 1px solid var(--border-subtle);
   cursor: default;
   
   svg {
@@ -203,9 +203,9 @@
 
   &:hover {
     background: linear-gradient(135deg,
-      $color-accent-200 0%,
-      $color-accent-100 50%,
-      $color-accent-200 100%
+      var(--color-accent-200) 0%,
+      var(--color-accent-100) 50%,
+      var(--color-accent-200) 100%
     );
     color: var(--color-text-primary);
     
@@ -289,7 +289,7 @@
     border-width: 2px;
     border-color: rgba(var(--color-static-white-rgb), 0.5);
     box-shadow: 
-      $shadow-2xl,
+      var(--shadow-xl),
       0 0 0 2px rgba(var(--color-static-black-rgb), 0.9);
   }
   
@@ -316,7 +316,7 @@
 }
 
 .references-panel__reference-item:focus-visible {
-  outline: 2px solid $color-accent-500;
+  outline: 2px solid var(--color-accent-500);
   outline-offset: -2px;
   border-radius: $size-radius-sm;
 }

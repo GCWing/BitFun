@@ -34,6 +34,26 @@
     color: var(--color-text-secondary);
   }
 
+  &__inline-label {
+    display: inline-flex;
+    align-items: center;
+    gap: $size-gap-1;
+    min-width: 0;
+  }
+
+  &__inline-info {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-text-muted);
+    cursor: help;
+    flex-shrink: 0;
+  }
+
+  &__inline-info:hover {
+    color: var(--color-text-secondary);
+  }
+
   &__policy-tooltip {
     max-width: min(320px, calc(100vw - 32px));
     display: grid;
@@ -176,7 +196,7 @@
   }
 
   &__pet-expand-button:focus-visible {
-    outline: 2px solid var(--color-primary);
+    outline: 2px solid var(--color-accent-500);
     outline-offset: 2px;
   }
 
@@ -247,12 +267,12 @@
   }
 
   &__pet-select-option:focus-visible {
-    box-shadow: 0 0 0 2px var(--color-primary);
+    box-shadow: 0 0 0 2px var(--color-accent-500);
   }
 
   &__pet-select-option--selected {
-    border-color: color-mix(in srgb, var(--color-primary) 58%, var(--border-subtle));
-    background: color-mix(in srgb, var(--color-primary) 10%, var(--element-bg-base));
+    border-color: color-mix(in srgb, var(--color-accent-500) 58%, var(--border-subtle));
+    background: color-mix(in srgb, var(--color-accent-500) 10%, var(--element-bg-base));
   }
 
   &__pet-select-option-main {
@@ -278,7 +298,7 @@
 
   &__pet-select-check {
     flex-shrink: 0;
-    color: var(--color-primary);
+    color: var(--color-accent-500);
     transition: opacity 0.14s ease;
   }
 

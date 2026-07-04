@@ -1,5 +1,21 @@
 use crate::background_command_output::BackgroundCommandOutputStatus;
 use serde_json::{json, Value};
+use std::collections::HashMap;
+use std::time::Duration;
+
+pub const EXEC_COMMAND_POWERSHELL_UTF8_OUTPUT_PREFIX: &str =
+    "[Console]::OutputEncoding=[System.Text.Encoding]::UTF8;\n";
+pub const EXEC_COMMAND_DEFAULT_YIELD_TIME_MS: u64 = 30_000;
+pub const REMOTE_EXEC_SHELL_PROBE_TIMEOUT_MS: u64 = 3_000;
+
+const REMOTE_NON_TTY_INTERRUPT_GRACE_SECONDS: u64 = 2;
+const REMOTE_EXEC_ENV_SNAPSHOT_TIMEOUT_MS: u64 = 3_000;
+const REMOTE_EXEC_ENV_SNAPSHOT_MAX_OUTPUT_CHARS: usize = 128 * 1024;
+const REMOTE_EXEC_ENV_SNAPSHOT_CONTROL_YIELD_TIME_MS: u64 = 500;
+const REMOTE_EXEC_ENV_SNAPSHOT_CONTROL_MAX_OUTPUT_CHARS: usize = 2_000;
+const REMOTE_EXEC_ENV_SNAPSHOT_TTL: Duration = Duration::from_secs(10 * 60);
+const REMOTE_ENV_SNAPSHOT_BEGIN: &str = "__BITFUN_REMOTE_ENV_SNAPSHOT_BEGIN__";
+const REMOTE_ENV_SNAPSHOT_END: &str = "__BITFUN_REMOTE_ENV_SNAPSHOT_END__";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExecCommandControlAction {
@@ -55,10 +71,474 @@ pub struct ExecCommandControlResponse {
     pub completion: Option<ExecCommandCompletion>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExecCommandRunInput<'a> {
+    pub cmd: &'a str,
+    pub tty: bool,
+    pub yield_time_ms: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WriteStdinInput {
+    pub session_id: i32,
+    pub chars: String,
+    pub append_enter: bool,
+    pub yield_time_ms: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExecCommandControlToolInput {
+    pub session_id: i32,
+    pub action: ExecCommandControlAction,
+    pub yield_time_ms: Option<u64>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ExecCommandResultFields {
+    pub chunk_id: String,
+    pub wall_time_seconds: f64,
+    pub output: String,
+    pub session_id: Option<i32>,
+    pub exit_code: Option<i32>,
+    pub original_output_chars: usize,
+    pub completion: Option<ExecCommandCompletion>,
+    pub remote: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExecCommandShellMetadata {
+    pub name: String,
+    pub kind: String,
+    pub path: String,
+    pub invocation: String,
+    pub remote_env_snapshot_applied: Option<bool>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ExecCommandResultData {
+    pub fields: ExecCommandResultFields,
+    pub workdir: String,
+    pub tty: bool,
+    pub shell: ExecCommandShellMetadata,
+}
+
 #[derive(Debug, Clone)]
 pub struct ExecCommandSessionNotFoundResult {
     pub data: Value,
     pub assistant_message: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ExecCommandLifecycleStatus {
+    Running,
+    Exited,
+    Interrupted,
+    Killed,
+    Pruned,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum ExecCommandShellKind {
+    Bash,
+    Zsh,
+    Fish,
+    PowerShell,
+    PowerShellCore,
+    Cmd,
+    Sh,
+    Ksh,
+    Csh,
+    Custom(String),
+}
+
+impl ExecCommandShellKind {
+    pub fn from_executable(path: &str) -> Self {
+        let name = std::path::Path::new(path)
+            .file_stem()
+            .and_then(|name| name.to_str())
+            .unwrap_or(path)
+            .to_lowercase();
+
+        match name.as_str() {
+            "bash" => Self::Bash,
+            "zsh" => Self::Zsh,
+            "fish" => Self::Fish,
+            "powershell" => Self::PowerShell,
+            "pwsh" => Self::PowerShellCore,
+            "cmd" => Self::Cmd,
+            "sh" => Self::Sh,
+            "ksh" => Self::Ksh,
+            "csh" | "tcsh" => Self::Csh,
+            _ => Self::Custom(name),
+        }
+    }
+
+    fn uses_posix_invocation(&self) -> bool {
+        matches!(
+            self,
+            Self::Bash
+                | Self::Zsh
+                | Self::Fish
+                | Self::Sh
+                | Self::Ksh
+                | Self::Csh
+                | Self::Custom(_)
+        )
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExecCommandRemoteShell {
+    pub path: String,
+    pub kind: ExecCommandShellKind,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ExecCommandRemoteEnvSnapshotCapturePolicy {
+    pub timeout_ms: u64,
+    pub max_output_chars: usize,
+    pub stale_session_control_yield_time_ms: u64,
+    pub stale_session_control_max_output_chars: usize,
+    pub ttl: Duration,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExecCommandRemoteEnvSnapshot {
+    pub env: HashMap<String, String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ExecCommandRemoteEnvSnapshotCacheKey {
+    connection_id: String,
+    shell_path: String,
+    shell_kind: String,
+}
+
+impl ExecCommandRemoteEnvSnapshotCacheKey {
+    pub fn new(
+        connection_id: impl Into<String>,
+        shell_path: impl Into<String>,
+        shell_kind: impl Into<String>,
+    ) -> Self {
+        Self {
+            connection_id: connection_id.into(),
+            shell_path: shell_path.into(),
+            shell_kind: shell_kind.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+struct CachedRemoteEnvSnapshot {
+    captured_at: std::time::Instant,
+    snapshot: ExecCommandRemoteEnvSnapshot,
+}
+
+#[derive(Debug, Default)]
+pub struct ExecCommandRemoteEnvSnapshotCache {
+    snapshots:
+        tokio::sync::Mutex<HashMap<ExecCommandRemoteEnvSnapshotCacheKey, CachedRemoteEnvSnapshot>>,
+}
+
+impl ExecCommandRemoteEnvSnapshotCache {
+    pub async fn get(
+        &self,
+        key: &ExecCommandRemoteEnvSnapshotCacheKey,
+    ) -> Option<ExecCommandRemoteEnvSnapshot> {
+        let policy = remote_exec_env_snapshot_capture_policy();
+        self.snapshots
+            .lock()
+            .await
+            .get(key)
+            .filter(|entry| entry.captured_at.elapsed() <= policy.ttl)
+            .map(|entry| entry.snapshot.clone())
+    }
+
+    pub async fn insert(
+        &self,
+        key: ExecCommandRemoteEnvSnapshotCacheKey,
+        snapshot: ExecCommandRemoteEnvSnapshot,
+    ) {
+        self.snapshots.lock().await.insert(
+            key,
+            CachedRemoteEnvSnapshot {
+                captured_at: std::time::Instant::now(),
+                snapshot,
+            },
+        );
+    }
+}
+
+pub fn exec_command_noninteractive_env() -> HashMap<String, String> {
+    HashMap::from([
+        ("NO_COLOR".to_string(), "1".to_string()),
+        ("TERM".to_string(), "dumb".to_string()),
+        ("LANG".to_string(), "C.UTF-8".to_string()),
+        ("LC_CTYPE".to_string(), "C.UTF-8".to_string()),
+        ("COLORTERM".to_string(), String::new()),
+        ("CLICOLOR".to_string(), "0".to_string()),
+        ("PAGER".to_string(), "cat".to_string()),
+        ("GIT_PAGER".to_string(), "cat".to_string()),
+        ("GH_PAGER".to_string(), "cat".to_string()),
+        ("GIT_TERMINAL_PROMPT".to_string(), "0".to_string()),
+        ("GIT_EDITOR".to_string(), "true".to_string()),
+        ("BITFUN_NONINTERACTIVE".to_string(), "1".to_string()),
+    ])
+}
+
+pub fn exec_command_argv_for_shell(
+    shell_path: impl Into<String>,
+    shell_kind: ExecCommandShellKind,
+    cmd: &str,
+) -> Vec<String> {
+    let shell = shell_path.into();
+    if shell_kind.uses_posix_invocation() {
+        return vec![shell, "-lc".to_string(), cmd.to_string()];
+    }
+
+    match shell_kind {
+        ExecCommandShellKind::PowerShell | ExecCommandShellKind::PowerShellCore => vec![
+            shell,
+            "-Command".to_string(),
+            exec_command_powershell_command_with_utf8_output(cmd),
+        ],
+        ExecCommandShellKind::Cmd => vec![shell, "/c".to_string(), cmd.to_string()],
+        _ => unreachable!("POSIX shell kinds returned earlier"),
+    }
+}
+
+pub fn exec_command_powershell_command_with_utf8_output(cmd: &str) -> String {
+    let trimmed = cmd.trim_start();
+    if trimmed.starts_with(EXEC_COMMAND_POWERSHELL_UTF8_OUTPUT_PREFIX) {
+        cmd.to_string()
+    } else {
+        format!("{EXEC_COMMAND_POWERSHELL_UTF8_OUTPUT_PREFIX}{cmd}")
+    }
+}
+
+pub fn exec_command_shell_invocation_for_model(
+    shell_path: &str,
+    shell_kind: ExecCommandShellKind,
+) -> String {
+    if shell_kind.uses_posix_invocation() {
+        return format!("`{shell_path} -lc <cmd>`");
+    }
+
+    match shell_kind {
+        ExecCommandShellKind::PowerShell | ExecCommandShellKind::PowerShellCore => {
+            format!("`{shell_path} -Command <cmd>`")
+        }
+        ExecCommandShellKind::Cmd => format!("`{shell_path} /c <cmd>`"),
+        _ => unreachable!("POSIX shell kinds returned earlier"),
+    }
+}
+
+pub fn remote_exec_login_shell_command(
+    workdir: &str,
+    cmd: &str,
+    shell_path: &str,
+    env_snapshot: Option<&ExecCommandRemoteEnvSnapshot>,
+) -> String {
+    let env_words = remote_command_env_words(merged_remote_exec_env(env_snapshot));
+    let shell_args = remote_exec_shell_login_args().join(" ");
+
+    format!(
+        "cd {} && env {} {} {} {}",
+        exec_command_shell_escape(workdir),
+        env_words,
+        exec_command_shell_escape(shell_path),
+        shell_args,
+        exec_command_shell_escape(cmd)
+    )
+}
+
+pub fn remote_exec_non_tty_control_wrapper(cmd: &str, shell_path: &str) -> String {
+    let escaped_shell = exec_command_shell_escape(shell_path);
+    let escaped_cmd = exec_command_shell_escape(cmd);
+    format!(
+        r#"__bitfun_shell={escaped_shell}
+__bitfun_cmd={escaped_cmd}
+if command -v setsid >/dev/null 2>&1; then
+  setsid "$__bitfun_shell" -lc "$__bitfun_cmd" &
+else
+  "$__bitfun_shell" -lc "$__bitfun_cmd" &
+fi
+__bitfun_child=$!
+__bitfun_pgid=$__bitfun_child
+__bitfun_stop() {{
+  __bitfun_signal=${{1:-INT}}
+  __bitfun_exit=${{2:-130}}
+  __bitfun_grace=${{3:-{REMOTE_NON_TTY_INTERRUPT_GRACE_SECONDS}}}
+  trap - INT TERM
+  kill -"$__bitfun_signal" "-$__bitfun_pgid" 2>/dev/null || kill -"$__bitfun_signal" "$__bitfun_child" 2>/dev/null || true
+  if [ "$__bitfun_grace" -gt 0 ]; then
+    sleep "$__bitfun_grace"
+  fi
+  kill -KILL "-$__bitfun_pgid" 2>/dev/null || kill -KILL "$__bitfun_child" 2>/dev/null || true
+  wait "$__bitfun_child" 2>/dev/null || true
+  exit "$__bitfun_exit"
+}}
+trap '__bitfun_stop INT 130 {REMOTE_NON_TTY_INTERRUPT_GRACE_SECONDS}' INT
+trap '__bitfun_stop KILL 137 0' TERM
+wait "$__bitfun_child"
+__bitfun_status=$?
+trap - INT TERM
+exit "$__bitfun_status""#
+    )
+}
+
+pub fn parse_remote_exec_shell_probe_output(stdout: &str) -> Option<ExecCommandRemoteShell> {
+    stdout
+        .lines()
+        .map(str::trim)
+        .find(|path| is_posix_compatible_remote_shell_path(path))
+        .map(|path| ExecCommandRemoteShell {
+            path: path.to_string(),
+            kind: ExecCommandShellKind::from_executable(path),
+        })
+}
+
+pub fn remote_exec_shell_probe_command() -> &'static str {
+    concat!(
+        "printf '%s\\n' \"${SHELL:-}\"; ",
+        "getent passwd \"$(id -un)\" 2>/dev/null | cut -d: -f7; ",
+        "command -v bash 2>/dev/null; ",
+        "command -v zsh 2>/dev/null; ",
+        "command -v sh 2>/dev/null"
+    )
+}
+
+pub fn fallback_remote_exec_shell() -> ExecCommandRemoteShell {
+    ExecCommandRemoteShell {
+        path: "/bin/bash".to_string(),
+        kind: ExecCommandShellKind::Bash,
+    }
+}
+
+pub fn remote_exec_shell_login_args() -> &'static [&'static str] {
+    &["-lc"]
+}
+
+pub fn remote_exec_env_snapshot_capture_policy() -> ExecCommandRemoteEnvSnapshotCapturePolicy {
+    ExecCommandRemoteEnvSnapshotCapturePolicy {
+        timeout_ms: REMOTE_EXEC_ENV_SNAPSHOT_TIMEOUT_MS,
+        max_output_chars: REMOTE_EXEC_ENV_SNAPSHOT_MAX_OUTPUT_CHARS,
+        stale_session_control_yield_time_ms: REMOTE_EXEC_ENV_SNAPSHOT_CONTROL_YIELD_TIME_MS,
+        stale_session_control_max_output_chars: REMOTE_EXEC_ENV_SNAPSHOT_CONTROL_MAX_OUTPUT_CHARS,
+        ttl: REMOTE_EXEC_ENV_SNAPSHOT_TTL,
+    }
+}
+
+pub fn remote_exec_env_snapshot_command(
+    shell_path: &str,
+    shell_kind: ExecCommandShellKind,
+) -> String {
+    let script = format!(
+        "printf '%s\\n' {begin}; env; printf '%s\\n' {end}",
+        begin = exec_command_shell_escape(REMOTE_ENV_SNAPSHOT_BEGIN),
+        end = exec_command_shell_escape(REMOTE_ENV_SNAPSHOT_END)
+    );
+    format!(
+        "{} {} {}",
+        exec_command_shell_escape(shell_path),
+        remote_exec_env_snapshot_shell_args(shell_kind).join(" "),
+        exec_command_shell_escape(&script)
+    )
+}
+
+pub fn remote_exec_env_snapshot_shell_args(
+    shell_kind: ExecCommandShellKind,
+) -> &'static [&'static str] {
+    match shell_kind {
+        ExecCommandShellKind::Bash | ExecCommandShellKind::Zsh => &["-lic"],
+        _ => &["-lc"],
+    }
+}
+
+pub fn parse_remote_exec_env_snapshot_output(output: &str) -> Option<ExecCommandRemoteEnvSnapshot> {
+    let mut env = HashMap::new();
+    let mut inside = false;
+    let mut saw_end = false;
+
+    for raw_line in output.lines() {
+        let line = raw_line.trim_end_matches('\r');
+        if !inside {
+            if line == REMOTE_ENV_SNAPSHOT_BEGIN {
+                inside = true;
+            }
+            continue;
+        }
+
+        if line == REMOTE_ENV_SNAPSHOT_END {
+            saw_end = true;
+            break;
+        }
+
+        let Some((key, value)) = line.split_once('=') else {
+            continue;
+        };
+        if should_import_remote_exec_env_var(key, value) {
+            env.insert(key.to_string(), value.to_string());
+        }
+    }
+
+    (inside && saw_end).then_some(ExecCommandRemoteEnvSnapshot { env })
+}
+
+pub fn exec_command_shell_escape(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "'\\''"))
+}
+
+fn merged_remote_exec_env(
+    env_snapshot: Option<&ExecCommandRemoteEnvSnapshot>,
+) -> HashMap<String, String> {
+    let mut env = env_snapshot
+        .map(|snapshot| snapshot.env.clone())
+        .unwrap_or_default();
+    env.extend(exec_command_noninteractive_env());
+    env
+}
+
+fn remote_command_env_words(env: HashMap<String, String>) -> String {
+    let mut env: Vec<_> = env.into_iter().collect();
+    env.sort_by(|(left, _), (right, _)| left.cmp(right));
+    env.into_iter()
+        .map(|(key, value)| exec_command_shell_escape(&format!("{key}={value}")))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn is_plausible_remote_shell_path(path: &str) -> bool {
+    path.starts_with('/')
+        && !path.contains('\0')
+        && path.chars().all(|ch| !ch.is_control() || ch == '\t')
+}
+
+fn is_posix_compatible_remote_shell_path(path: &str) -> bool {
+    is_plausible_remote_shell_path(path)
+        && ExecCommandShellKind::from_executable(path).uses_posix_invocation()
+}
+
+fn should_import_remote_exec_env_var(key: &str, value: &str) -> bool {
+    is_valid_remote_exec_env_var_name(key)
+        && !is_volatile_remote_exec_env_var(key)
+        && !value.contains('\0')
+}
+
+fn is_valid_remote_exec_env_var_name(key: &str) -> bool {
+    let mut chars = key.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    (first == '_' || first.is_ascii_alphabetic())
+        && chars.all(|ch| ch == '_' || ch.is_ascii_alphanumeric())
+}
+
+fn is_volatile_remote_exec_env_var(key: &str) -> bool {
+    matches!(
+        key,
+        "_" | "PWD" | "OLDPWD" | "SHLVL" | "TERM" | "COLUMNS" | "LINES"
+    )
 }
 
 pub fn exec_command_session_id_from_input(input: &Value) -> Option<i32> {
@@ -68,6 +548,63 @@ pub fn exec_command_session_id_from_input(input: &Value) -> Option<i32> {
             .and_then(|id| i32::try_from(id).ok())
             .or_else(|| value.as_u64().and_then(|id| i32::try_from(id).ok()))
     })
+}
+
+pub fn exec_command_run_input_from_input(input: &Value) -> Option<ExecCommandRunInput<'_>> {
+    Some(ExecCommandRunInput {
+        cmd: input.get("cmd").and_then(Value::as_str)?,
+        tty: input.get("tty").and_then(Value::as_bool).unwrap_or(false),
+        yield_time_ms: exec_command_yield_time_ms_from_input(input),
+    })
+}
+
+pub fn exec_command_run_input_validation_message(input: &Value) -> Option<&'static str> {
+    let cmd = input.get("cmd").and_then(Value::as_str).unwrap_or_default();
+    cmd.trim()
+        .is_empty()
+        .then_some("cmd is required for ExecCommand")
+}
+
+pub fn write_stdin_input_from_input(input: &Value) -> Option<WriteStdinInput> {
+    Some(WriteStdinInput {
+        session_id: exec_command_session_id_from_input(input)?,
+        chars: input
+            .get("chars")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string(),
+        append_enter: input
+            .get("append_enter")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+        yield_time_ms: exec_command_yield_time_ms_from_input(input),
+    })
+}
+
+pub fn write_stdin_input_validation_message(input: &Value) -> Option<&'static str> {
+    exec_command_session_id_from_input(input)
+        .is_none()
+        .then_some("session_id is required for WriteStdin")
+}
+
+pub fn exec_command_control_tool_input_from_input(
+    input: &Value,
+) -> Option<ExecCommandControlToolInput> {
+    Some(ExecCommandControlToolInput {
+        session_id: exec_command_session_id_from_input(input)?,
+        action: exec_command_control_action_from_input(input)?,
+        yield_time_ms: input.get("yield_time_ms").and_then(Value::as_u64),
+    })
+}
+
+pub fn exec_command_control_tool_input_validation_message(input: &Value) -> Option<&'static str> {
+    if exec_command_session_id_from_input(input).is_none() {
+        return Some("session_id is required for ExecControl");
+    }
+    if exec_command_control_action_from_input(input).is_none() {
+        return Some("action must be either 'interrupt' or 'kill'");
+    }
+    None
 }
 
 pub fn exec_command_control_action_from_input(input: &Value) -> Option<ExecCommandControlAction> {
@@ -92,6 +629,40 @@ pub fn exec_command_completion_value(completion: ExecCommandCompletion) -> Value
     })
 }
 
+pub fn exec_command_shell_metadata_value(metadata: ExecCommandShellMetadata) -> Value {
+    let mut value = json!({
+        "name": metadata.name,
+        "type": metadata.kind,
+        "path": metadata.path,
+        "invocation": metadata.invocation,
+    });
+    if let Some(remote_env_snapshot_applied) = metadata.remote_env_snapshot_applied {
+        value["remote_env_snapshot_applied"] = json!(remote_env_snapshot_applied);
+    }
+    value
+}
+
+pub fn exec_command_result_value(result: ExecCommandResultData) -> Value {
+    let mut data = exec_command_result_fields_value(result.fields, true);
+    data["workdir"] = json!(result.workdir);
+    data["tty"] = json!(result.tty);
+    data["shell"] = exec_command_shell_metadata_value(result.shell);
+    data
+}
+
+pub fn write_stdin_result_value(fields: ExecCommandResultFields) -> Value {
+    exec_command_result_fields_value(fields, true)
+}
+
+pub fn exec_control_result_value(
+    fields: ExecCommandResultFields,
+    action: ExecCommandControlAction,
+) -> Value {
+    let mut data = exec_command_result_fields_value(fields, false);
+    data["action"] = json!(exec_command_control_action_name(action));
+    data
+}
+
 pub fn exec_command_background_output_status(
     completion: Option<ExecCommandCompletion>,
 ) -> BackgroundCommandOutputStatus {
@@ -103,6 +674,59 @@ pub fn exec_command_background_output_status(
         Some(ExecCommandCompletionStatus::Pruned) => BackgroundCommandOutputStatus::Pruned,
         Some(ExecCommandCompletionStatus::Exited) | None => BackgroundCommandOutputStatus::Exited,
     }
+}
+
+pub fn exec_command_lifecycle_status_name(status: ExecCommandLifecycleStatus) -> &'static str {
+    match status {
+        ExecCommandLifecycleStatus::Running => "running",
+        ExecCommandLifecycleStatus::Exited => "exited",
+        ExecCommandLifecycleStatus::Interrupted => "interrupted",
+        ExecCommandLifecycleStatus::Killed => "killed",
+        ExecCommandLifecycleStatus::Pruned => "pruned",
+    }
+}
+
+pub fn exec_command_lifecycle_background_output_status(
+    status: ExecCommandLifecycleStatus,
+) -> BackgroundCommandOutputStatus {
+    match status {
+        ExecCommandLifecycleStatus::Running => BackgroundCommandOutputStatus::Running,
+        ExecCommandLifecycleStatus::Exited => BackgroundCommandOutputStatus::Exited,
+        ExecCommandLifecycleStatus::Interrupted => BackgroundCommandOutputStatus::Interrupted,
+        ExecCommandLifecycleStatus::Killed => BackgroundCommandOutputStatus::Killed,
+        ExecCommandLifecycleStatus::Pruned => BackgroundCommandOutputStatus::Pruned,
+    }
+}
+
+fn exec_command_yield_time_ms_from_input(input: &Value) -> u64 {
+    input
+        .get("yield_time_ms")
+        .and_then(Value::as_u64)
+        .unwrap_or(EXEC_COMMAND_DEFAULT_YIELD_TIME_MS)
+}
+
+fn exec_command_result_fields_value(
+    fields: ExecCommandResultFields,
+    include_completion: bool,
+) -> Value {
+    let mut data = json!({
+        "chunk_id": fields.chunk_id,
+        "wall_time_seconds": fields.wall_time_seconds,
+        "output": fields.output,
+        "session_id": fields.session_id,
+        "exit_code": fields.exit_code,
+        "original_output_chars": fields.original_output_chars,
+    });
+    if include_completion {
+        data["completion"] = fields
+            .completion
+            .map(exec_command_completion_value)
+            .unwrap_or(Value::Null);
+    }
+    if fields.remote {
+        data["remote"] = json!(true);
+    }
+    data
 }
 
 pub fn render_exec_response_for_assistant(
@@ -438,6 +1062,329 @@ mod tests {
         assert_eq!(
             exec_command_background_output_status(None),
             BackgroundCommandOutputStatus::Exited
+        );
+    }
+
+    #[test]
+    fn shell_policy_builds_powershell_argv_with_single_utf8_prefix() {
+        let argv = exec_command_argv_for_shell(
+            "pwsh",
+            ExecCommandShellKind::PowerShellCore,
+            "Get-Content README.md",
+        );
+
+        assert_eq!(argv[1], "-Command");
+        assert!(argv[2].starts_with(EXEC_COMMAND_POWERSHELL_UTF8_OUTPUT_PREFIX));
+
+        let script = format!("{EXEC_COMMAND_POWERSHELL_UTF8_OUTPUT_PREFIX}Write-Output ok");
+        let prefixed =
+            exec_command_argv_for_shell("pwsh", ExecCommandShellKind::PowerShellCore, &script);
+
+        assert_eq!(prefixed[2], script);
+    }
+
+    #[test]
+    fn remote_login_shell_command_applies_snapshot_then_tool_env() {
+        let snapshot = ExecCommandRemoteEnvSnapshot {
+            env: HashMap::from([
+                ("PATH".to_string(), "/home/me/.nvm/bin:/usr/bin".to_string()),
+                ("TERM".to_string(), "xterm-256color".to_string()),
+            ]),
+        };
+
+        let command = remote_exec_login_shell_command(
+            "/home/me/project",
+            "node --version",
+            "/bin/bash",
+            Some(&snapshot),
+        );
+
+        assert!(command.starts_with("cd '/home/me/project' && env "));
+        assert!(command.contains("'PATH=/home/me/.nvm/bin:/usr/bin'"));
+        assert!(command.contains("'TERM=dumb'"));
+        assert!(!command.contains("'TERM=xterm-256color'"));
+        assert!(command.ends_with(" '/bin/bash' -lc 'node --version'"));
+    }
+
+    #[test]
+    fn remote_non_tty_control_wrapper_preserves_interrupt_cleanup_contract() {
+        let wrapper = remote_exec_non_tty_control_wrapper("python3 -c 'print(1)'", "/bin/bash");
+
+        assert!(wrapper.contains("setsid \"$__bitfun_shell\" -lc \"$__bitfun_cmd\" &"));
+        assert!(wrapper.contains("trap '__bitfun_stop INT 130 2' INT"));
+        assert!(wrapper.contains("trap '__bitfun_stop KILL 137 0' TERM"));
+        assert!(wrapper.contains("__bitfun_grace=${3:-2}"));
+        assert!(wrapper.contains("kill -KILL \"-$__bitfun_pgid\""));
+        assert!(wrapper.contains("__bitfun_cmd='python3 -c '\\''print(1)'\\'''"));
+    }
+
+    #[test]
+    fn remote_shell_probe_and_env_snapshot_are_provider_neutral() {
+        let shell = parse_remote_exec_shell_probe_output("\n/bin/zsh\n/usr/bin/bash\n")
+            .expect("shell should parse");
+
+        assert!(remote_exec_shell_probe_command().contains("${SHELL:-}"));
+        assert!(remote_exec_shell_probe_command().contains("getent passwd"));
+        assert!(remote_exec_shell_probe_command().contains("command -v bash"));
+        assert_eq!(fallback_remote_exec_shell().path, "/bin/bash");
+        assert_eq!(
+            fallback_remote_exec_shell().kind,
+            ExecCommandShellKind::Bash
+        );
+        assert_eq!(shell.path, "/bin/zsh");
+        assert_eq!(shell.kind, ExecCommandShellKind::Zsh);
+        assert_eq!(
+            remote_exec_env_snapshot_shell_args(ExecCommandShellKind::Bash),
+            &["-lic"]
+        );
+        assert_eq!(
+            remote_exec_env_snapshot_shell_args(ExecCommandShellKind::Sh),
+            &["-lc"]
+        );
+
+        let snapshot = parse_remote_exec_env_snapshot_output(
+            "noise\r\n__BITFUN_REMOTE_ENV_SNAPSHOT_BEGIN__\r\nPATH=/home/me/.nvm/bin:/usr/bin\r\nNVM_DIR=/home/me/.nvm\r\nPWD=/tmp\r\nBAD-NAME=value\r\n__BITFUN_REMOTE_ENV_SNAPSHOT_END__\r\nmore noise",
+        )
+        .expect("snapshot should parse");
+
+        assert_eq!(
+            snapshot.env.get("PATH").map(String::as_str),
+            Some("/home/me/.nvm/bin:/usr/bin")
+        );
+        assert_eq!(
+            snapshot.env.get("NVM_DIR").map(String::as_str),
+            Some("/home/me/.nvm")
+        );
+        assert!(!snapshot.env.contains_key("PWD"));
+        assert!(!snapshot.env.contains_key("BAD-NAME"));
+    }
+
+    #[test]
+    fn remote_env_snapshot_capture_policy_keeps_existing_bounds() {
+        let policy = remote_exec_env_snapshot_capture_policy();
+
+        assert_eq!(policy.timeout_ms, 3_000);
+        assert_eq!(policy.max_output_chars, 128 * 1024);
+        assert_eq!(policy.stale_session_control_yield_time_ms, 500);
+        assert_eq!(policy.stale_session_control_max_output_chars, 2_000);
+        assert_eq!(policy.ttl, Duration::from_secs(10 * 60));
+    }
+
+    #[tokio::test]
+    async fn remote_env_snapshot_cache_owns_key_and_ttl_policy() {
+        let cache = ExecCommandRemoteEnvSnapshotCache::default();
+        let key = ExecCommandRemoteEnvSnapshotCacheKey::new("conn-1", "/bin/bash", "bash");
+        let snapshot = ExecCommandRemoteEnvSnapshot {
+            env: HashMap::from([("PATH".to_string(), "/usr/bin".to_string())]),
+        };
+
+        assert_eq!(cache.get(&key).await, None);
+
+        cache.insert(key.clone(), snapshot.clone()).await;
+
+        assert_eq!(cache.get(&key).await, Some(snapshot));
+    }
+
+    #[test]
+    fn remote_shell_probe_preserves_unknown_shell_name_as_posix_compatible() {
+        let shell = parse_remote_exec_shell_probe_output("\n/usr/local/bin/xonsh\n")
+            .expect("shell should parse");
+
+        assert_eq!(shell.path, "/usr/local/bin/xonsh");
+        assert_eq!(
+            shell.kind,
+            ExecCommandShellKind::Custom("xonsh".to_string())
+        );
+
+        let argv = exec_command_argv_for_shell(shell.path, shell.kind, "echo ok");
+
+        assert_eq!(argv, vec!["/usr/local/bin/xonsh", "-lc", "echo ok"]);
+    }
+
+    #[test]
+    fn remote_shell_probe_skips_non_posix_shells() {
+        let shell =
+            parse_remote_exec_shell_probe_output("\n/usr/bin/pwsh\n/usr/bin/cmd\n/bin/sh\n")
+                .expect("shell should parse");
+
+        assert_eq!(shell.path, "/bin/sh");
+        assert_eq!(shell.kind, ExecCommandShellKind::Sh);
+        assert!(parse_remote_exec_shell_probe_output("\n/usr/bin/pwsh\n/usr/bin/cmd\n").is_none());
+    }
+
+    #[test]
+    fn exec_command_input_policy_applies_defaults_without_trimming_command() {
+        let input = json!({
+            "cmd": "  echo ok  ",
+        });
+
+        let parsed = exec_command_run_input_from_input(&input).expect("cmd should parse");
+
+        assert_eq!(parsed.cmd, "  echo ok  ");
+        assert!(!parsed.tty);
+        assert_eq!(parsed.yield_time_ms, EXEC_COMMAND_DEFAULT_YIELD_TIME_MS);
+        assert_eq!(exec_command_run_input_validation_message(&input), None);
+
+        let blank = json!({
+            "cmd": "   ",
+        });
+        assert_eq!(
+            exec_command_run_input_validation_message(&blank),
+            Some("cmd is required for ExecCommand")
+        );
+    }
+
+    #[test]
+    fn write_stdin_input_policy_applies_poll_defaults() {
+        let input = json!({
+            "session_id": 7,
+        });
+
+        let parsed = write_stdin_input_from_input(&input).expect("stdin input should parse");
+
+        assert_eq!(parsed.session_id, 7);
+        assert_eq!(parsed.chars, "");
+        assert!(!parsed.append_enter);
+        assert_eq!(parsed.yield_time_ms, EXEC_COMMAND_DEFAULT_YIELD_TIME_MS);
+        assert_eq!(write_stdin_input_validation_message(&input), None);
+
+        let out_of_range = json!({
+            "session_id": i64::from(i32::MAX) + 1,
+        });
+        assert!(write_stdin_input_from_input(&out_of_range).is_none());
+        assert_eq!(
+            write_stdin_input_validation_message(&out_of_range),
+            Some("session_id is required for WriteStdin")
+        );
+    }
+
+    #[test]
+    fn exec_control_input_policy_keeps_wait_optional() {
+        let input = json!({
+            "session_id": 8,
+            "action": "interrupt",
+        });
+
+        let parsed =
+            exec_command_control_tool_input_from_input(&input).expect("control input should parse");
+
+        assert_eq!(parsed.session_id, 8);
+        assert_eq!(parsed.action, ExecCommandControlAction::Interrupt);
+        assert_eq!(parsed.yield_time_ms, None);
+
+        let with_wait = json!({
+            "session_id": 8,
+            "action": "kill",
+            "yield_time_ms": 12,
+        });
+        let parsed = exec_command_control_tool_input_from_input(&with_wait)
+            .expect("control input should parse");
+
+        assert_eq!(parsed.action, ExecCommandControlAction::Kill);
+        assert_eq!(parsed.yield_time_ms, Some(12));
+
+        let invalid_action = json!({
+            "session_id": 8,
+            "action": "pause",
+        });
+        assert_eq!(
+            exec_command_control_tool_input_validation_message(&invalid_action),
+            Some("action must be either 'interrupt' or 'kill'")
+        );
+    }
+
+    #[test]
+    fn exec_command_result_builder_preserves_existing_wire_shape() {
+        let data = exec_command_result_value(ExecCommandResultData {
+            fields: ExecCommandResultFields {
+                chunk_id: "chunk-1".to_string(),
+                wall_time_seconds: 1.25,
+                output: "done".to_string(),
+                session_id: Some(42),
+                exit_code: None,
+                original_output_chars: 4,
+                completion: Some(ExecCommandCompletion {
+                    status: ExecCommandCompletionStatus::Interrupted,
+                    source: ExecCommandCompletionSource::OutOfBandControl,
+                }),
+                remote: false,
+            },
+            workdir: "D:\\repo".to_string(),
+            tty: false,
+            shell: ExecCommandShellMetadata {
+                name: "PowerShell Core".to_string(),
+                kind: "powershell_core".to_string(),
+                path: "pwsh".to_string(),
+                invocation: "`pwsh -Command <cmd>`".to_string(),
+                remote_env_snapshot_applied: None,
+            },
+        });
+
+        assert_eq!(
+            data,
+            json!({
+                "chunk_id": "chunk-1",
+                "wall_time_seconds": 1.25,
+                "output": "done",
+                "session_id": 42,
+                "exit_code": null,
+                "original_output_chars": 4,
+                "completion": {
+                    "status": "interrupted",
+                    "source": "out_of_band_control"
+                },
+                "workdir": "D:\\repo",
+                "tty": false,
+                "shell": {
+                    "name": "PowerShell Core",
+                    "type": "powershell_core",
+                    "path": "pwsh",
+                    "invocation": "`pwsh -Command <cmd>`"
+                }
+            })
+        );
+    }
+
+    #[test]
+    fn write_stdin_and_control_result_builders_preserve_remote_shape() {
+        let fields = ExecCommandResultFields {
+            chunk_id: "chunk-2".to_string(),
+            wall_time_seconds: 0.5,
+            output: "".to_string(),
+            session_id: None,
+            exit_code: Some(0),
+            original_output_chars: 0,
+            completion: None,
+            remote: true,
+        };
+
+        let stdin_data = write_stdin_result_value(fields.clone());
+        let control_data = exec_control_result_value(fields, ExecCommandControlAction::Kill);
+
+        assert_eq!(
+            stdin_data.get("remote").and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            control_data.get("action").and_then(Value::as_str),
+            Some("kill")
+        );
+        assert!(control_data.get("completion").is_none());
+    }
+
+    #[test]
+    fn lifecycle_status_has_provider_neutral_names_and_background_statuses() {
+        assert_eq!(
+            exec_command_lifecycle_status_name(ExecCommandLifecycleStatus::Interrupted),
+            "interrupted"
+        );
+        assert_eq!(
+            exec_command_lifecycle_background_output_status(ExecCommandLifecycleStatus::Running),
+            BackgroundCommandOutputStatus::Running
+        );
+        assert_eq!(
+            exec_command_lifecycle_background_output_status(ExecCommandLifecycleStatus::Killed),
+            BackgroundCommandOutputStatus::Killed
         );
     }
 }

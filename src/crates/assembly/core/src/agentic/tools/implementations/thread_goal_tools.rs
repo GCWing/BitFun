@@ -3,19 +3,24 @@
 use crate::agentic::coordination::get_global_coordinator;
 use crate::agentic::goal_mode::user_facing_thread_goal_error;
 use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext};
+use crate::service_agent_runtime::CoreServiceAgentRuntime;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
+use bitfun_agent_runtime::sdk::RuntimeError;
 use bitfun_agent_runtime::thread_goal_tools::{
     build_goal_tool_result, parse_create_goal_args, parse_update_goal_args,
     parse_update_goal_status, CREATE_GOAL_TOOL_NAME, GET_GOAL_TOOL_NAME, UPDATE_GOAL_TOOL_NAME,
 };
-use bitfun_runtime_ports::ThreadGoalStatus;
+use bitfun_runtime_ports::{
+    AgentThreadGoalCreateRequest, AgentThreadGoalGetRequest, AgentThreadGoalUpdateStatusRequest,
+    PortError, PortErrorKind, ThreadGoalStatus,
+};
 use serde_json::{json, Value};
 
-fn require_coordinator(
-) -> BitFunResult<std::sync::Arc<crate::agentic::coordination::ConversationCoordinator>> {
-    get_global_coordinator()
-        .ok_or_else(|| BitFunError::Validation("coordinator is unavailable".to_string()))
+fn require_agent_runtime() -> BitFunResult<bitfun_agent_runtime::sdk::AgentRuntime> {
+    let coordinator = get_global_coordinator()
+        .ok_or_else(|| BitFunError::Validation("coordinator is unavailable".to_string()))?;
+    CoreServiceAgentRuntime::agent_runtime(coordinator).map_err(BitFunError::tool)
 }
 
 fn require_session_context(context: &ToolUseContext) -> BitFunResult<(String, std::path::PathBuf)> {
@@ -30,11 +35,71 @@ fn require_session_context(context: &ToolUseContext) -> BitFunResult<(String, st
     Ok((session_id, workspace_path))
 }
 
+fn thread_goal_runtime_error(error: RuntimeError) -> BitFunError {
+    match error {
+        RuntimeError::Port(port_error) => thread_goal_port_error(port_error),
+        other => user_facing_thread_goal_error(BitFunError::Tool(
+            CoreServiceAgentRuntime::runtime_error_message(other),
+        )),
+    }
+}
+
+fn thread_goal_port_error(port_error: PortError) -> BitFunError {
+    match port_error.kind {
+        PortErrorKind::InvalidRequest => BitFunError::Validation(port_error.message),
+        PortErrorKind::NotFound => BitFunError::NotFound(port_error.message),
+        PortErrorKind::Cancelled => {
+            user_facing_thread_goal_error(BitFunError::Cancelled(port_error.message))
+        }
+        PortErrorKind::Timeout => {
+            user_facing_thread_goal_error(BitFunError::Timeout(port_error.message))
+        }
+        PortErrorKind::NotAvailable => {
+            user_facing_thread_goal_error(BitFunError::NotImplemented(port_error.message))
+        }
+        PortErrorKind::PermissionDenied | PortErrorKind::Backend => {
+            user_facing_thread_goal_error(BitFunError::Tool(port_error.message))
+        }
+    }
+}
+
 pub struct GetGoalTool;
 
 impl GetGoalTool {
     pub fn new() -> Self {
         Self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn thread_goal_port_error_preserves_user_facing_policy() {
+        let invalid = thread_goal_port_error(PortError::new(
+            PortErrorKind::InvalidRequest,
+            "missing objective",
+        ));
+        let not_found = thread_goal_port_error(PortError::new(
+            PortErrorKind::NotFound,
+            "thread goal not found",
+        ));
+        let timeout = thread_goal_port_error(PortError::new(PortErrorKind::Timeout, "store lag"));
+
+        assert!(matches!(
+            invalid,
+            BitFunError::Validation(message) if message == "missing objective"
+        ));
+        assert!(matches!(
+            not_found,
+            BitFunError::NotFound(message) if message == "thread goal not found"
+        ));
+        assert!(matches!(
+            timeout,
+            BitFunError::Validation(message)
+                if message == "Thread goal operation failed. Check session state and try again."
+        ));
     }
 }
 
@@ -75,12 +140,15 @@ impl Tool for GetGoalTool {
         _input: &Value,
         context: &ToolUseContext,
     ) -> BitFunResult<Vec<ToolResult>> {
-        let coordinator = require_coordinator()?;
+        let runtime = require_agent_runtime()?;
         let (session_id, workspace_path) = require_session_context(context)?;
-        let goal = coordinator
-            .get_thread_goal(&session_id, workspace_path.as_path())
+        let goal = runtime
+            .get_thread_goal(AgentThreadGoalGetRequest {
+                session_id,
+                workspace_path: workspace_path.to_string_lossy().into_owned(),
+            })
             .await
-            .map_err(user_facing_thread_goal_error)?;
+            .map_err(thread_goal_runtime_error)?;
         let result = build_goal_tool_result(goal, false)
             .map_err(|error| BitFunError::Validation(error.to_string()))?;
         Ok(vec![ToolResult::Result {
@@ -147,17 +215,17 @@ Set token_budget only when an explicit token budget is requested. Fails if a goa
     ) -> BitFunResult<Vec<ToolResult>> {
         let parsed = parse_create_goal_args(input.clone())
             .map_err(|error| BitFunError::Validation(error.to_string()))?;
-        let coordinator = require_coordinator()?;
+        let runtime = require_agent_runtime()?;
         let (session_id, workspace_path) = require_session_context(context)?;
-        let goal = coordinator
-            .create_thread_goal(
-                &session_id,
-                workspace_path.as_path(),
-                parsed.objective,
-                parsed.token_budget,
-            )
+        let goal = runtime
+            .create_thread_goal(AgentThreadGoalCreateRequest {
+                session_id,
+                workspace_path: workspace_path.to_string_lossy().into_owned(),
+                objective: parsed.objective,
+                token_budget: parsed.token_budget,
+            })
             .await
-            .map_err(user_facing_thread_goal_error)?;
+            .map_err(thread_goal_runtime_error)?;
         let result = build_goal_tool_result(Some(goal), false)
             .map_err(|error| BitFunError::Validation(error.to_string()))?;
         Ok(vec![ToolResult::Result {
@@ -226,17 +294,17 @@ You cannot use this tool to pause, resume, budget-limit, or usage-limit a goal."
             .map_err(|error| BitFunError::Validation(error.to_string()))?;
         let status = parse_update_goal_status(&parsed.status)
             .map_err(|error| BitFunError::Validation(error.to_string()))?;
-        let coordinator = require_coordinator()?;
+        let runtime = require_agent_runtime()?;
         let (session_id, workspace_path) = require_session_context(context)?;
-        let goal = coordinator
-            .update_thread_goal_status(
-                &session_id,
-                workspace_path.as_path(),
+        let goal = runtime
+            .update_thread_goal_status(AgentThreadGoalUpdateStatusRequest {
+                session_id,
+                workspace_path: workspace_path.to_string_lossy().into_owned(),
                 status,
-                context.dialog_turn_id.as_deref(),
-            )
+                turn_id: context.dialog_turn_id.clone(),
+            })
             .await
-            .map_err(user_facing_thread_goal_error)?;
+            .map_err(thread_goal_runtime_error)?;
         let include_report = status == ThreadGoalStatus::Complete;
         let result = build_goal_tool_result(Some(goal), include_report)
             .map_err(|error| BitFunError::Validation(error.to_string()))?;

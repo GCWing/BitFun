@@ -2,8 +2,8 @@
 
 Scope: this guide applies to `src/crates/contracts/core-types`.
 
-`bitfun-core-types` owns low-level shared DTOs and error/session/surface
-contracts. Keep it dependency-light and stable for cross-crate reuse.
+`bitfun-core-types` owns low-level shared DTOs and error/session/surface/LSP
+protocol contracts. Keep it dependency-light and stable for cross-crate reuse.
 
 ## Guardrails
 
@@ -12,6 +12,8 @@ contracts. Keep it dependency-light and stable for cross-crate reuse.
   tool-runtime implementations.
 - Keep additions limited to portable data shapes, serialization contracts, and
   small pure helpers.
+- LSP protocol and plugin manifest DTOs may live here; plugin loading,
+  registry rules, process lifecycle, and host integration belong above.
 - Preserve persisted and cross-process wire compatibility. Any field rename,
   enum variant change, or default change must be treated as a contract change.
 - Product policy, runtime behavior, IO, process execution, and platform

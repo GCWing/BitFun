@@ -4,9 +4,9 @@ use std::sync::Arc;
 
 use bitfun_runtime_ports::{
     ClockPort, FileSystemPort, GitPort, McpCatalogPort, NetworkPort, PermissionPort,
-    RemoteCapabilityPort, RemoteConnectionPort, RemoteProjectionPort, RemoteWorkspacePort,
-    RuntimeEventSink, RuntimeServiceCapability, RuntimeServicePort, SessionStorePort, TerminalPort,
-    WorkspacePort,
+    RemoteCapabilityPort, RemoteConnectionPort, RemoteExecPort, RemoteProjectionPort,
+    RemoteWorkspacePort, RuntimeEventSink, RuntimeServiceCapability, RuntimeServicePort,
+    SessionStorePort, TerminalPort, WorkspacePort,
 };
 
 pub mod backend_events;
@@ -45,10 +45,6 @@ impl RuntimeServiceMarkerPort {
         Self { capability }
     }
 
-    pub fn terminal_port() -> Arc<dyn TerminalPort> {
-        Arc::new(Self::new(RuntimeServiceCapability::Terminal))
-    }
-
     pub fn network_port() -> Arc<dyn NetworkPort> {
         Arc::new(Self::new(RuntimeServiceCapability::Network))
     }
@@ -68,7 +64,6 @@ impl RuntimeServicePort for RuntimeServiceMarkerPort {
     }
 }
 
-impl TerminalPort for RuntimeServiceMarkerPort {}
 impl NetworkPort for RuntimeServiceMarkerPort {}
 impl GitPort for RuntimeServiceMarkerPort {}
 impl McpCatalogPort for RuntimeServiceMarkerPort {}
@@ -82,6 +77,7 @@ pub struct RuntimeServices {
     pub events: Arc<dyn RuntimeEventSink>,
     pub clock: Arc<dyn ClockPort>,
     pub terminal: Option<Arc<dyn TerminalPort>>,
+    pub remote_exec: Option<Arc<dyn RemoteExecPort>>,
     pub network: Option<Arc<dyn NetworkPort>>,
     pub git: Option<Arc<dyn GitPort>>,
     pub mcp_catalog: Option<Arc<dyn McpCatalogPort>>,
@@ -103,6 +99,10 @@ impl std::fmt::Debug for RuntimeServices {
             .field(
                 "terminal",
                 &self.terminal.as_ref().map(|port| port.capability()),
+            )
+            .field(
+                "remote_exec",
+                &self.remote_exec.as_ref().map(|port| port.capability()),
             )
             .field(
                 "network",
@@ -152,6 +152,7 @@ impl RuntimeServices {
             | RuntimeServiceCapability::Events
             | RuntimeServiceCapability::Clock => true,
             RuntimeServiceCapability::Terminal => self.terminal.is_some(),
+            RuntimeServiceCapability::RemoteExec => self.remote_exec.is_some(),
             RuntimeServiceCapability::Network => self.network.is_some(),
             RuntimeServiceCapability::Git => self.git.is_some(),
             RuntimeServiceCapability::McpCatalog => self.mcp_catalog.is_some(),
@@ -193,6 +194,7 @@ pub struct RuntimeServicesBuilder {
     events: Option<Arc<dyn RuntimeEventSink>>,
     clock: Option<Arc<dyn ClockPort>>,
     terminal: Option<Arc<dyn TerminalPort>>,
+    remote_exec: Option<Arc<dyn RemoteExecPort>>,
     network: Option<Arc<dyn NetworkPort>>,
     git: Option<Arc<dyn GitPort>>,
     mcp_catalog: Option<Arc<dyn McpCatalogPort>>,
@@ -239,6 +241,11 @@ impl RuntimeServicesBuilder {
 
     pub fn with_optional_terminal(mut self, port: Option<Arc<dyn TerminalPort>>) -> Self {
         self.terminal = port;
+        self
+    }
+
+    pub fn with_optional_remote_exec(mut self, port: Option<Arc<dyn RemoteExecPort>>) -> Self {
+        self.remote_exec = port;
         self
     }
 
@@ -307,6 +314,10 @@ impl RuntimeServicesBuilder {
             events: Self::required(self.events, RuntimeServiceCapability::Events)?,
             clock: Self::required_service(self.clock, RuntimeServiceCapability::Clock)?,
             terminal: Self::optional_service(self.terminal, RuntimeServiceCapability::Terminal)?,
+            remote_exec: Self::optional_service(
+                self.remote_exec,
+                RuntimeServiceCapability::RemoteExec,
+            )?,
             network: Self::optional_service(self.network, RuntimeServiceCapability::Network)?,
             git: Self::optional_service(self.git, RuntimeServiceCapability::Git)?,
             mcp_catalog: Self::optional_service(

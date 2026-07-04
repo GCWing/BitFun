@@ -300,10 +300,14 @@ fn active_dialog_turn_owns_agent_session_reply_suppression_facts() {
     let route = AgentSessionReplyRoute {
         source_session_id: "source-session".to_string(),
         source_workspace_path: "workspace".to_string(),
+        source_remote_connection_id: Some("conn-1".to_string()),
+        source_remote_ssh_host: Some("host-1".to_string()),
     };
     let turn = ActiveDialogTurn::new(
         "turn-1".to_string(),
         Some("workspace".to_string()),
+        Some("target-conn".to_string()),
+        Some("target-host".to_string()),
         "agentic".to_string(),
         "run task".to_string(),
         Some(serde_json::json!({"kind": "session_message"})),
@@ -314,6 +318,8 @@ fn active_dialog_turn_owns_agent_session_reply_suppression_facts() {
     assert!(turn.is_agent_session_request());
     assert_eq!(turn.turn_id(), "turn-1");
     assert_eq!(turn.workspace_path(), Some("workspace"));
+    assert_eq!(turn.remote_connection_id(), Some("target-conn"));
+    assert_eq!(turn.remote_ssh_host(), Some("target-host"));
     assert_eq!(turn.agent_type(), "agentic");
     assert_eq!(turn.user_input(), "run task");
     assert!(turn.user_message_metadata().is_some());
@@ -326,6 +332,8 @@ fn active_dialog_turn_owns_agent_session_reply_suppression_facts() {
 fn active_dialog_turn_does_not_suppress_non_agent_session_turns() {
     let turn = ActiveDialogTurn::new(
         "turn-1".to_string(),
+        None,
+        None,
         None,
         "agentic".to_string(),
         "user task".to_string(),
@@ -400,6 +408,8 @@ fn agent_session_reply_action_forwards_completed_outcome_with_legacy_reminder_te
     };
     assert_eq!(plan.target_session_id, "source-session");
     assert_eq!(plan.target_workspace_path, "workspace");
+    assert_eq!(plan.target_remote_connection_id.as_deref(), Some("conn-1"));
+    assert_eq!(plan.target_remote_ssh_host.as_deref(), Some("host-1"));
     assert_eq!(plan.user_input, "done");
     assert_eq!(
         plan.reminder_text,
@@ -430,6 +440,8 @@ fn agent_session_reply_action_ignores_non_agent_session_turns() {
     let turn = ActiveDialogTurn::new(
         "turn-1".to_string(),
         Some("workspace".to_string()),
+        None,
+        None,
         "agentic".to_string(),
         "user task".to_string(),
         None,
@@ -602,6 +614,8 @@ fn agent_session_turn(source_session_id: &str) -> ActiveDialogTurn {
     ActiveDialogTurn::new(
         "turn-1".to_string(),
         Some("workspace".to_string()),
+        Some("target-conn".to_string()),
+        Some("target-host".to_string()),
         "agentic".to_string(),
         "run task".to_string(),
         Some(serde_json::json!({"kind": "session_message"})),
@@ -609,6 +623,8 @@ fn agent_session_turn(source_session_id: &str) -> ActiveDialogTurn {
         Some(AgentSessionReplyRoute {
             source_session_id: source_session_id.to_string(),
             source_workspace_path: "workspace".to_string(),
+            source_remote_connection_id: Some("conn-1".to_string()),
+            source_remote_ssh_host: Some("host-1".to_string()),
         }),
     )
 }

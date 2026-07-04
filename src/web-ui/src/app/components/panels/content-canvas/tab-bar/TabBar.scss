@@ -56,7 +56,7 @@
     transition: background-color 0.15s ease, color 0.15s ease;
 
     &:hover {
-      background: var(--color-bg-hover);
+      background: var(--element-bg-hover);
       color: var(--color-text-primary);
     }
 
@@ -74,7 +74,7 @@
   top: 4px;
   bottom: 4px;
   width: 2px;
-  background: var(--color-primary);
+  background: var(--color-accent-500);
   border-radius: 1px;
   z-index: 10;
   pointer-events: none;

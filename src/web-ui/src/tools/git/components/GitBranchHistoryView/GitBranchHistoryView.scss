@@ -33,7 +33,7 @@
 
     button {
       padding: 8px 20px;
-      background: var(--color-primary);
+      background: var(--color-accent-500);
       color: var(--color-static-white);
       border: none;
       border-radius: 6px;
@@ -56,8 +56,8 @@
   &__spinner {
     width: 36px;
     height: 36px;
-    border: 3px solid var(--color-border);
-    border-top-color: var(--color-primary);
+    border: 3px solid var(--border-base);
+    border-top-color: var(--color-accent-500);
     border-radius: 50%;
     animation: git-branch-history-spin 0.8s linear infinite;
   }
@@ -67,8 +67,8 @@
     align-items: center;
     justify-content: space-between;
     padding: 10px 12px;
-    border-bottom: 1px solid var(--color-border);
-    background: var(--color-background-secondary);
+    border-bottom: 1px solid var(--border-base);
+    background: var(--color-bg-secondary);
     flex-shrink: 0;
     gap: 12px;
   }
@@ -99,7 +99,7 @@
     flex-shrink: 0;
 
     &:hover {
-      background: var(--color-hover);
+      background: var(--element-bg-hover);
     }
   }
 
@@ -131,7 +131,7 @@
 
     &--expanded {
       .git-branch-history-view__commit-main {
-        background: var(--color-background-secondary);
+        background: var(--color-bg-secondary);
       }
     }
 
@@ -185,17 +185,17 @@
     transition: background 0.15s ease;
 
     &:hover {
-      background: var(--color-hover);
+      background: var(--element-bg-hover);
     }
   }
 
   &__checkbox {
-    color: var(--color-text-tertiary);
+    color: var(--color-text-muted);
     transition: color 0.15s ease;
   }
 
   &__checkbox--checked {
-    color: var(--color-primary);
+    color: var(--color-accent-500);
   }
 
   &__checkbox--partial {
@@ -203,14 +203,14 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    color: var(--color-text-tertiary);
+    color: var(--color-text-muted);
   }
 
   &__checkbox-partial-mark {
     position: absolute;
     width: 8px;
     height: 2px;
-    background: var(--color-primary);
+    background: var(--color-accent-500);
     border-radius: 1px;
   }
 
@@ -243,7 +243,7 @@
     width: 2px;
     flex: 1;
     min-height: 16px;
-    background: var(--color-border);
+    background: var(--border-base);
     margin-top: 4px;
   }
 
@@ -271,7 +271,7 @@
     align-items: center;
     gap: 8px;
     font-size: 11px;
-    color: var(--color-text-tertiary);
+    color: var(--color-text-muted);
   }
 
   &__commit-author {
@@ -291,14 +291,14 @@
     gap: 3px;
     font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
     padding: 1px 4px;
-    background: var(--color-background-tertiary);
+    background: var(--color-bg-tertiary);
     border-radius: 3px;
     cursor: pointer;
     transition: all 0.15s ease;
     font-size: 10px;
 
     &:hover {
-      background: var(--color-hover);
+      background: var(--element-bg-hover);
       color: var(--color-text-secondary);
     }
 
@@ -330,7 +330,7 @@
     padding: 0;
     background: transparent;
     border: none;
-    color: var(--color-text-tertiary);
+    color: var(--color-text-muted);
     cursor: pointer;
     border-radius: 4px;
     transition: all 0.15s ease;
@@ -339,14 +339,14 @@
 
     &:hover {
       color: var(--color-text-primary);
-      background: var(--color-background-tertiary);
+      background: var(--color-bg-tertiary);
     }
   }
 
   &__commit-details {
     margin-left: 36px;
     padding: 10px 12px;
-    background: var(--color-background-secondary);
+    background: var(--color-bg-secondary);
     border-radius: 6px;
     margin-bottom: 4px;
   }
@@ -364,7 +364,7 @@
   }
 
   &__detail-label {
-    color: var(--color-text-tertiary);
+    color: var(--color-text-muted);
     min-width: 60px;
     flex-shrink: 0;
   }
@@ -377,7 +377,7 @@
     &--mono {
       font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
       font-size: 10px;
-      background: var(--color-background-tertiary);
+      background: var(--color-bg-tertiary);
       padding: 2px 6px;
       border-radius: 3px;
     }

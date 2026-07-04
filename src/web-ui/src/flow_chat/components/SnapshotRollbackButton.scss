@@ -11,7 +11,7 @@
   font-weight: 500;
   line-height: var(--flowchat-support-line-height);
   border-radius: 6px;
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--border-base);
   background: var(--color-bg-elevated);
   color: var(--color-text-secondary);
   cursor: pointer;
@@ -23,16 +23,16 @@
   }
   
   &:hover:not(:disabled) {
-    border-color: var(--color-primary);
-    background: var(--color-primary-bg);
-    color: var(--color-primary);
+    border-color: var(--color-accent-500);
+    background: var(--color-accent-100);
+    color: var(--color-accent-500);
     transform: translateY(-1px);
-    box-shadow: 0 2px 4px var(--color-overlay-black-10);
+    box-shadow: 0 2px 4px var(--color-overlay-black-12);
   }
   
   &:active:not(:disabled) {
     transform: translateY(0);
-    box-shadow: 0 1px 2px var(--color-overlay-black-10);
+    box-shadow: 0 1px 2px var(--color-overlay-black-12);
   }
   
   &:disabled {
@@ -42,9 +42,9 @@
   
   // Loading state
   &--loading {
-    border-color: var(--color-primary);
-    background: var(--color-primary-bg);
-    color: var(--color-primary);
+    border-color: var(--color-accent-500);
+    background: var(--color-accent-100);
+    color: var(--color-accent-500);
     cursor: wait;
   }
   
@@ -107,11 +107,10 @@
 @media (prefers-color-scheme: dark) {
   .snapshot-rollback-button {
     --snapshot-rollback-dark-secondary-rgb: 156, 163, 175;
-    --color-border: color-mix(in srgb, rgb(var(--color-overlay-slate-rgb)) 82%, var(--color-static-white));
+    --border-base: color-mix(in srgb, rgb(var(--color-overlay-slate-rgb)) 82%, var(--color-static-white));
     --color-bg-elevated: color-mix(in srgb, rgb(var(--color-overlay-slate-rgb)) 94%, var(--color-static-white));
     --color-text-secondary: rgb(var(--snapshot-rollback-dark-secondary-rgb));
-    --color-primary: var(--color-accent-500);
-    --color-primary-bg: var(--card-bg-accent);
+    --color-accent-100: var(--card-bg-accent);
     --color-error: var(--color-error-soft);
     --color-error-bg: color-mix(in srgb, var(--color-error-soft) 10%, transparent);
   }

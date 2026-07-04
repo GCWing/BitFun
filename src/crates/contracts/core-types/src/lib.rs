@@ -5,6 +5,7 @@
 
 pub mod ai;
 pub mod errors;
+pub mod lsp;
 pub mod session;
 pub mod surface;
 pub mod tool_image_attachment;

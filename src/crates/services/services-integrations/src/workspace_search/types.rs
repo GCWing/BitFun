@@ -2,10 +2,8 @@ use bitfun_services_core::filesystem::FileSearchOutcome;
 
 use super::flashgrep::{
     DirtyFileStats as FlashgrepDirtyFileStats, FileCount as FlashgrepFileCount,
-    FileMatch as FlashgrepFileMatch, MatchLocation as FlashgrepMatchLocation,
     RepoPhase as FlashgrepRepoPhase, RepoStatus as FlashgrepRepoStatus,
-    SearchBackend as FlashgrepSearchBackend, SearchHit as FlashgrepSearchHit,
-    SearchLine as FlashgrepSearchLine, SearchModeConfig, TaskKind as FlashgrepTaskKind,
+    SearchBackend as FlashgrepSearchBackend, SearchModeConfig, TaskKind as FlashgrepTaskKind,
     TaskPhase as FlashgrepTaskPhase, TaskState as FlashgrepTaskState,
     TaskStatus as FlashgrepTaskStatus, WorkspaceOverlayStatus as FlashgrepWorkspaceOverlayStatus,
 };
@@ -67,9 +65,7 @@ pub enum WorkspaceSearchBackend {
 impl From<FlashgrepSearchBackend> for WorkspaceSearchBackend {
     fn from(value: FlashgrepSearchBackend) -> Self {
         match value {
-            FlashgrepSearchBackend::IndexedSnapshot | FlashgrepSearchBackend::IndexedClean => {
-                Self::Indexed
-            }
+            FlashgrepSearchBackend::IndexedClean => Self::Indexed,
             FlashgrepSearchBackend::IndexedWorkspaceView => Self::IndexedWorkspace,
             FlashgrepSearchBackend::RgFallback => Self::TextFallback,
             FlashgrepSearchBackend::ScanFallback => Self::ScanFallback,
@@ -322,31 +318,12 @@ pub struct WorkspaceSearchMatchLocation {
     pub column: usize,
 }
 
-impl From<FlashgrepMatchLocation> for WorkspaceSearchMatchLocation {
-    fn from(value: FlashgrepMatchLocation) -> Self {
-        Self {
-            line: value.line,
-            column: value.column,
-        }
-    }
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceSearchMatch {
     pub location: WorkspaceSearchMatchLocation,
     pub snippet: String,
     pub matched_text: String,
-}
-
-impl From<FlashgrepFileMatch> for WorkspaceSearchMatch {
-    fn from(value: FlashgrepFileMatch) -> Self {
-        Self {
-            location: value.location.into(),
-            snippet: value.snippet,
-            matched_text: value.matched_text,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -364,42 +341,12 @@ pub enum WorkspaceSearchLine {
     ContextBreak,
 }
 
-impl From<FlashgrepSearchLine> for WorkspaceSearchLine {
-    fn from(value: FlashgrepSearchLine) -> Self {
-        match value {
-            FlashgrepSearchLine::Match { value } => Self::Match {
-                value: value.into(),
-            },
-            FlashgrepSearchLine::Context {
-                line_number,
-                snippet,
-            } => Self::Context {
-                value: WorkspaceSearchContextLine {
-                    line_number,
-                    snippet,
-                },
-            },
-            FlashgrepSearchLine::ContextBreak => Self::ContextBreak,
-        }
-    }
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceSearchHit {
     pub path: String,
     pub matches: Vec<WorkspaceSearchMatch>,
     pub lines: Vec<WorkspaceSearchLine>,
-}
-
-impl From<FlashgrepSearchHit> for WorkspaceSearchHit {
-    fn from(value: FlashgrepSearchHit) -> Self {
-        Self {
-            path: value.path,
-            matches: value.matches.into_iter().map(Into::into).collect(),
-            lines: value.lines.into_iter().map(Into::into).collect(),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -426,6 +373,9 @@ pub struct ContentSearchResult {
 #[serde(rename_all = "camelCase")]
 pub struct GlobSearchResult {
     pub paths: Vec<String>,
+    pub matches_relative_to: String,
+    pub total_matches: Option<usize>,
+    pub truncated: bool,
     pub repo_status: WorkspaceSearchRepoStatus,
 }
 

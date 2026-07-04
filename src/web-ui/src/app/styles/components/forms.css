@@ -105,13 +105,13 @@
 .form-input:focus,
 .form-select:focus,
 .form-textarea:focus {
-  border-color: var(--color-primary-400);
+  border-color: var(--color-accent-400);
   background: var(--glass-bg-active);
   box-shadow: 
     0 4px 16px var(--color-accent-200),
     0 2px 8px var(--color-overlay-black-08),
     0 0 0 2px var(--color-accent-300),
-    inset 0 1px 0 var(--color-overlay-white-10);
+    inset 0 1px 0 var(--color-overlay-white-12);
   transform: translateY(-1px);
 }
 
@@ -223,7 +223,7 @@
   height: 16px;
   margin: 0;
   cursor: pointer;
-  accent-color: var(--color-primary-500);
+  accent-color: var(--color-accent-500);
 }
 
 .form-checkbox input[type="checkbox"] {
@@ -379,7 +379,7 @@
   appearance: none;
   width: 20px;
   height: 20px;
-  background: var(--color-primary-500);
+  background: var(--color-accent-500);
   border-radius: 50%;
   cursor: pointer;
   box-shadow: 0 2px 8px var(--border-accent-soft);
@@ -394,7 +394,7 @@
 .form-range::-moz-range-thumb {
   width: 20px;
   height: 20px;
-  background: var(--color-primary-500);
+  background: var(--color-accent-500);
   border-radius: 50%;
   border: none;
   cursor: pointer;

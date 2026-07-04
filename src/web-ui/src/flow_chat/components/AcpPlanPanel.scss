@@ -24,7 +24,7 @@
   }
 
   &__progress {
-    color: var(--color-text-tertiary);
+    color: var(--color-text-muted);
     font-variant-numeric: tabular-nums;
   }
 
@@ -45,7 +45,7 @@
     color: var(--color-text-primary);
 
     &--completed {
-      color: var(--color-text-tertiary);
+      color: var(--color-text-muted);
 
       .bitfun-acp-plan__content {
         text-decoration: line-through;
@@ -66,7 +66,7 @@
     }
 
     &--active {
-      color: var(--color-primary);
+      color: var(--color-accent-500);
       animation: bitfun-acp-plan-spin 1.2s linear infinite;
     }
 

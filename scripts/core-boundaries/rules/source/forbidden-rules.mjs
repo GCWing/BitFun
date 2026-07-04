@@ -2,6 +2,31 @@
 
 export const forbiddenContentRules = [
   {
+    path: 'src/crates/adapters/transport/src/adapters/tauri.rs',
+    patterns: [
+      {
+        regex: /\bAgenticEvent::[A-Z]/,
+        message:
+          'Tauri transport adapter must not match agentic event variants directly; use bitfun-events frontend projection',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/adapters/transport/src/adapters/websocket.rs',
+    patterns: [
+      {
+        regex: /\bAgenticEvent::[A-Z]/,
+        message:
+          'WebSocket transport adapter must not match agentic event variants directly; use bitfun-events frontend projection',
+      },
+      {
+        regex: /\bfn\s+is_legacy_websocket_agentic_event_type\b/,
+        message:
+          'WebSocket transport adapter must not own the agentic event allowlist; use bitfun-events event manifest',
+      },
+    ],
+  },
+  {
     path: 'src/crates/execution/agent-runtime/tests/sdk_smoke.rs',
     patterns: [
       {
@@ -17,6 +42,218 @@ export const forbiddenContentRules = [
     ],
   },
   {
+    path: 'src/crates/execution/agent-runtime/src/sdk.rs',
+    patterns: [
+      {
+        regex: /\bbitfun_core\b/,
+        message: 'SDK facade must not expose bitfun-core',
+      },
+      {
+        regex: /\bbitfun_product_capabilities\b/,
+        message: 'SDK facade must not expose product assembly facts',
+      },
+      {
+        regex: /\btauri\b/,
+        message: 'SDK facade must not expose Tauri APIs',
+      },
+      {
+        regex: /\bAppHandle\b/,
+        message: 'SDK facade must not expose desktop app handles',
+      },
+      {
+        regex: /\breqwest\b/,
+        message: 'SDK facade must not expose concrete HTTP clients',
+      },
+      {
+        regex: /\bgit2\b/,
+        message: 'SDK facade must not expose concrete Git providers',
+      },
+      {
+        regex: /\brmcp\b/,
+        message: 'SDK facade must not expose concrete MCP clients',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/product-capabilities/tests/product_sdk_assembly.rs',
+    patterns: [
+      {
+        regex: /\bbitfun_core\b/,
+        message:
+          'product assembly to SDK smoke must not depend on bitfun-core',
+      },
+      {
+        regex: /\bCoreRuntimeServicesProvider\b/,
+        message:
+          'product assembly to SDK smoke must not use core concrete service adapters',
+      },
+      {
+        regex: /\btauri\b/,
+        message: 'product assembly to SDK smoke must not depend on Tauri',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/browser_control/browser_launcher.rs',
+    patterns: [
+      {
+        regex: /\bprocess_manager::/,
+        message:
+          'core browser launcher facade must not own browser process execution; use bitfun-services-integrations browser_control launcher',
+      },
+      {
+        regex: /\b(?:std::process::Command|Command::new\()/,
+        message:
+          'core browser launcher facade must not construct browser launch commands; use bitfun-services-integrations browser_control launcher',
+      },
+      {
+        regex: /\breqwest::/,
+        message:
+          'core browser launcher facade must not own CDP network probing; use bitfun-services-integrations browser_control launcher',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/browser_control/cdp_client.rs',
+    patterns: [
+      {
+        regex: /\breqwest::/,
+        message:
+          'core CDP client facade must not own HTTP endpoint probing; use bitfun-services-integrations browser_control CDP provider',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/web/fetch.rs',
+    patterns: [
+      {
+        regex: /\breqwest::/,
+        message:
+          'core WebFetch tool must not own HTTP clients; use bitfun-services-integrations web provider',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/web/search.rs',
+    patterns: [
+      {
+        regex: /\breqwest::/,
+        message:
+          'core WebSearch tool must not own provider HTTP clients; use bitfun-services-integrations web provider',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/infrastructure/debug_log/mod.rs',
+    patterns: [
+      {
+        regex: /\breqwest::/,
+        message:
+          'core debug log facade must not own HTTP ingest posting; use bitfun-services-integrations debug log network provider',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/service/review_platform/mod.rs',
+    patterns: [
+      {
+        regex: /\breqwest::/,
+        message:
+          'core review platform service must not own concrete HTTP clients; use bitfun-services-integrations review platform HTTP transport',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/computer_use_actions.rs',
+    patterns: [
+      {
+        regex: /\bprocess_manager::/,
+        message:
+          'core computer-use system facade must not spawn local system processes directly; use bitfun-services-core local system provider',
+      },
+      {
+        regex: /\btokio::process::/,
+        message:
+          'core computer-use system facade must not own async process execution; use bitfun-services-core local system provider',
+      },
+      {
+        regex: /\b(?:std::process::Command|Command::new\()/,
+        message:
+          'core computer-use system facade must not construct local system commands directly; use bitfun-services-core local system provider',
+      },
+      {
+        regex: /\bfn\s+script_invocation\b/,
+        message:
+          'core computer-use system facade must not own script invocation selection; use bitfun-services-core local system provider',
+      },
+      {
+        regex: /\bfn\s+platform_open_attempts\b/,
+        message:
+          'core computer-use system facade must not own platform open-app command selection; use bitfun-services-core local system provider',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/exec_command/local_shell.rs',
+    patterns: [
+      {
+        regex: /\bprocess_manager::/,
+        message:
+          'core local shell facade must not probe shells through process execution; use terminal-core shell resolution',
+      },
+      {
+        regex: /\b(?:std::process::Command|Command::new\()/,
+        message:
+          'core local shell facade must not construct shell probe commands; use terminal-core shell resolution',
+      },
+      {
+        regex: /\bstd::env::var\b/,
+        message:
+          'core local shell facade must not own environment-based shell selection; use terminal-core shell resolution',
+      },
+      {
+        regex: /\bcfg!\(target_os\b/,
+        message:
+          'core local shell facade must not own platform shell fallback rules; use terminal-core shell resolution',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/service/remote_connect/bot/weixin.rs',
+    patterns: [
+      {
+        regex: /\breqwest::/,
+        message:
+          'core Weixin bot facade must not own provider HTTP clients; use bitfun-services-integrations Weixin provider',
+      },
+      {
+        regex: /\baes::/,
+        message:
+          'core Weixin bot facade must not own provider AES/CDN crypto; use bitfun-services-integrations Weixin provider',
+      },
+      {
+        regex: /\bhex::/,
+        message:
+          'core Weixin bot facade must not own provider hex encoding; use bitfun-services-integrations Weixin provider',
+      },
+      {
+        regex: /\bmd5::/,
+        message:
+          'core Weixin bot facade must not own provider MD5 signing; use bitfun-services-integrations Weixin provider',
+      },
+      {
+        regex: /\bfn\s+sync_buf_path\b/,
+        message:
+          'core Weixin bot facade must not own provider sync-buffer storage layout; use bitfun-services-integrations Weixin provider',
+      },
+      {
+        regex: /\bfn\s+parse_weixin_cdn_aes_key\b/,
+        message:
+          'core Weixin bot facade must not own provider CDN AES key parsing; use bitfun-services-integrations Weixin provider',
+      },
+    ],
+  },
+  {
     path: 'src/crates/contracts/core-types/src/ai.rs',
     patterns: [
       {
@@ -28,6 +265,46 @@ export const forbiddenContentRules = [
         regex: /\b(?:chat\/completions|v1\/messages|streamGenerateContent)\b/,
         message:
           'core-types must not encode provider endpoint paths; keep protocol URL behavior above contracts',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/service/lsp/types.rs',
+    patterns: [
+      {
+        regex: /\bpub struct LspPlugin\b/,
+        message:
+          'LSP plugin manifest DTO belongs in bitfun-core-types; keep core LSP types as a compatibility facade',
+      },
+      {
+        regex: /\bpub enum JsonRpcMessage\b/,
+        message:
+          'LSP JSON-RPC DTOs belong in bitfun-core-types; keep core LSP types as a compatibility facade',
+      },
+      {
+        regex: /\buse serde::\{Deserialize,\s*Serialize\}/,
+        message:
+          'core LSP types should not own serialization DTOs after migration to bitfun-core-types',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/service/lsp/registry.rs',
+    patterns: [
+      {
+        regex: /\bpub struct PluginRegistry\b/,
+        message:
+          'LSP plugin registry belongs in bitfun-services-core; keep core registry as a compatibility facade',
+      },
+      {
+        regex: /\bHashMap<String,\s*LspPlugin>\b/,
+        message:
+          'core LSP registry must not own plugin index maps after migration to bitfun-services-core',
+      },
+      {
+        regex: /\bPathBuf::from\(file_path\)/,
+        message:
+          'LSP file-extension lookup belongs in bitfun-services-core registry rules',
       },
     ],
   },
@@ -215,12 +492,12 @@ export const forbiddenContentRules = [
           'SessionMessage must submit through AgentRuntime dialog lifecycle port, not direct DialogScheduler',
       },
       {
-        regex: /\bcoordinator\s*\.\s*resolve_session_workspace_path\b/,
+        regex: /\bcoordinator\s*\.\s*resolve_session_workspace_binding\b/,
         message:
           'SessionMessage target workspace resolution must flow through AgentRuntime session-management port, not direct coordinator access',
       },
       {
-        regex: /\bresolve_session_workspace_path\s*\(\s*&?target_session_id\b/,
+        regex: /\bresolve_session_workspace_binding\s*\(\s*&?target_session_id\b/,
         message:
           'SessionMessage target workspace resolution must use AgentSessionWorkspaceRequest, not legacy direct session id calls',
       },
@@ -245,12 +522,12 @@ export const forbiddenContentRules = [
           'SessionControl requester-aware cancellation must flow through AgentRuntime cancellation port, not direct DialogScheduler',
       },
       {
-        regex: /\bcoordinator\s*\.\s*resolve_session_workspace_path\b/,
+        regex: /\bcoordinator\s*\.\s*resolve_session_workspace_binding\b/,
         message:
           'SessionControl workspace resolution must flow through AgentRuntime session-management port, not direct coordinator access',
       },
       {
-        regex: /\bresolve_session_workspace_path\s*\(\s*session_id\b/,
+        regex: /\bresolve_session_workspace_binding\s*\(\s*session_id\b/,
         message:
           'SessionControl workspace resolution must use AgentSessionWorkspaceRequest, not legacy direct session id calls',
       },
@@ -290,12 +567,12 @@ export const forbiddenContentRules = [
     path: 'src/crates/assembly/core/src/agentic/tools/implementations/cron_tool.rs',
     patterns: [
       {
-        regex: /\bcoordinator\s*\.\s*resolve_session_workspace_path\b/,
+        regex: /\bcoordinator\s*\.\s*resolve_session_workspace_binding\b/,
         message:
           'CronTool target workspace resolution must flow through AgentRuntime session-management port, not direct coordinator access',
       },
       {
-        regex: /\bresolve_session_workspace_path\s*\(\s*&?session_id\b/,
+        regex: /\bresolve_session_workspace_binding\s*\(\s*&?session_id\b/,
         message:
           'CronTool target workspace resolution must use AgentSessionWorkspaceRequest, not legacy direct session id calls',
       },
@@ -333,6 +610,31 @@ export const forbiddenContentRules = [
         regex: /\bscheduler\s*\.\s*deliver_background_result\b/,
         message:
           'Coordinator background result delivery must flow through AgentRuntime lifecycle delivery port, not direct DialogScheduler',
+      },
+      {
+        regex: /\bCoreRuntimeServicesProvider::terminal_port\b/,
+        message:
+          'Coordinator must consume an injected TerminalPort; product runtime owns concrete terminal provider construction',
+      },
+      {
+        regex: /\bTerminalRuntimePort\b/,
+        message:
+          'Coordinator must not construct concrete terminal providers; use injected TerminalPort',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/system.rs',
+    patterns: [
+      {
+        regex: /\bCoreRuntimeServicesProvider::terminal_port\b/,
+        message:
+          'shared agentic system init must not construct concrete terminal providers; product entrypoints inject TerminalPort',
+      },
+      {
+        regex: /\bTerminalRuntimePort\b/,
+        message:
+          'shared agentic system init must not construct concrete terminal providers; product entrypoints inject TerminalPort',
       },
     ],
   },
@@ -820,6 +1122,11 @@ export const forbiddenContentRules = [
     path: 'src/crates/assembly/core/src/service/search/mod.rs',
     patterns: [
       {
+        regex: /#\[cfg\(not\(feature = "ssh-remote"\)\)\]\s*mod remote_disabled\b/s,
+        message:
+          'core workspace search facade must not own disabled remote search stubs; re-export services-integrations remote_ssh workspace_search disabled surface',
+      },
+      {
         regex: /\bbitfun_services_integrations::workspace_search::flashgrep\b/,
         message:
           'core must not import flashgrep internals; use the remote workspace-search stdio facade instead',
@@ -1103,6 +1410,11 @@ export const forbiddenContentRules = [
         message:
           'core tool context runtime must not own checkpoint evidence projection; use bitfun-agent-runtime evidence_ledger',
       },
+      {
+        regex: /\bTerminalRuntimePort\b/,
+        message:
+          'core tool context runtime must consume injected terminal ports, not construct the concrete terminal provider',
+      },
     ],
   },
   {
@@ -1187,6 +1499,306 @@ export const forbiddenContentRules = [
         regex: /\btokio::spawn\b/,
         message:
           'core exec_command output path must not own background output capture tasks; use tool-runtime background_command_output',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/exec_command/command.rs',
+    patterns: [
+      {
+        regex: /\bconst\s+POWERSHELL_UTF8_OUTPUT_PREFIX\b/,
+        message:
+          'core exec_command adapter must not own PowerShell shell policy; use tool-runtime exec_command',
+      },
+      {
+        regex: /\bconst\s+REMOTE_NON_TTY_INTERRUPT_GRACE_SECONDS\b/,
+        message:
+          'core exec_command adapter must not own remote non-TTY lifecycle policy; use tool-runtime exec_command',
+      },
+      {
+        regex: /\bconst\s+DEFAULT_TOOL_YIELD_TIME_MS\b/,
+        message:
+          'core exec_command adapter must not own ExecCommand default wait policy; use tool-runtime exec_command',
+      },
+      {
+        regex: /\bfn\s+(?:local|remote)_completion_value\b/,
+        message:
+          'core exec_command adapter must not own ExecCommand completion value shaping; use tool-runtime exec_command',
+      },
+      {
+        regex: /\bfn\s+(?:local|remote)_completion\b/,
+        message:
+          'core exec_command adapter must not duplicate concrete completion mapping; use exec_command completion adapter',
+      },
+      {
+        regex: /\bfn\s+(?:local|remote)_background_output_status_for_completion\b/,
+        message:
+          'core exec_command adapter must not own ExecCommand background status shaping; use tool-runtime exec_command',
+      },
+      {
+        regex: /\bfn\s+merged_remote_env\b/,
+        message:
+          'core exec_command adapter must not own remote env merge policy; use tool-runtime exec_command',
+      },
+      {
+        regex: /\bfn\s+remote_command_env_words\b/,
+        message:
+          'core exec_command adapter must not own remote env rendering; use tool-runtime exec_command',
+      },
+      {
+        regex: /\bfn\s+shell_escape\b/,
+        message:
+          'core exec_command adapter must not own shell escaping policy; use tool-runtime exec_command',
+      },
+      {
+        regex: /\bfn\s+is_plausible_remote_shell_path\b/,
+        message:
+          'core exec_command adapter must not own remote shell probe validation; use tool-runtime exec_command',
+      },
+      {
+        regex: /\bgetent\s+passwd\b/,
+        message:
+          'core exec_command adapter must not own remote shell probe command text; use tool-runtime exec_command',
+      },
+      {
+        regex: /\bcommand\s+-v\s+bash\b/,
+        message:
+          'core exec_command adapter must not own remote shell fallback probe text; use tool-runtime exec_command',
+      },
+      {
+        regex: /\bconst\s+REMOTE_SHELL_PROBE_TIMEOUT_MS\b/,
+        message:
+          'core exec_command adapter must not own remote shell probe timeout; use tool-runtime exec_command',
+      },
+      {
+        regex: /\bget_global_exec_process_manager\b/,
+        message:
+          'core local ExecCommand adapter must not call the global local process manager; use injected TerminalPort',
+      },
+      {
+        regex: /\bget_global_remote_exec_process_manager\b/,
+        message:
+          'core remote ExecCommand adapter must not call the global remote process manager; use injected RemoteExecPort',
+      },
+      {
+        regex: /\bSSHConnectionManager\b/,
+        message:
+          'core remote ExecCommand adapter must not depend on concrete SSH managers; use injected RemoteExecPort',
+      },
+      {
+        regex: /\bSSHCommandOptions\b/,
+        message:
+          'core remote ExecCommand adapter must not depend on concrete SSH command options; use injected RemoteExecPort',
+      },
+      {
+        regex: /\bLocalExecCommandRequest\b/,
+        message:
+          'core local ExecCommand adapter must not construct local process-manager requests; use TerminalExecCommandRequest',
+      },
+      {
+        regex: /\bCoreRuntimeServicesProvider::terminal_port\b/,
+        message:
+          'core local ExecCommand adapter must not construct concrete terminal providers; use injected TerminalPort',
+      },
+      {
+        regex: /\bTerminalRuntimePort\b/,
+        message:
+          'core local ExecCommand adapter must not construct concrete terminal providers; use injected TerminalPort',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/exec_command/stdin.rs',
+    patterns: [
+      {
+        regex: /\bconst\s+DEFAULT_TOOL_YIELD_TIME_MS\b/,
+        message:
+          'core WriteStdin adapter must not own default wait policy; use tool-runtime exec_command',
+      },
+      {
+        regex: /\bfn\s+(?:local|remote)_completion_value\b/,
+        message:
+          'core WriteStdin adapter must not own completion value shaping; use tool-runtime exec_command',
+      },
+      {
+        regex: /\bfn\s+(?:local|remote)_completion\b/,
+        message:
+          'core WriteStdin adapter must not duplicate concrete completion mapping; use exec_command completion adapter',
+      },
+      {
+        regex: /"status"\s*:\s*"session_not_found"/,
+        message:
+          'core WriteStdin adapter must not own session-not-found result shape; use tool-runtime exec_command',
+      },
+      {
+        regex: /\bNo input was sent\b/,
+        message:
+          'core WriteStdin adapter must not own session-not-found assistant text; use tool-runtime exec_command',
+      },
+      {
+        regex: /\bget_global_exec_process_manager\b/,
+        message:
+          'core local WriteStdin adapter must not call the global local process manager; use injected TerminalPort',
+      },
+      {
+        regex: /\bget_global_remote_exec_process_manager\b/,
+        message:
+          'core remote WriteStdin adapter must not call the global remote process manager; use injected RemoteExecPort',
+      },
+      {
+        regex: /\bRemoteExecError\b/,
+        message:
+          'core remote WriteStdin adapter must not match concrete remote exec errors; use PortErrorKind',
+      },
+      {
+        regex: /\bLocalWriteStdinRequest\b/,
+        message:
+          'core local WriteStdin adapter must not construct local process-manager requests; use TerminalWriteStdinRequest',
+      },
+      {
+        regex: /\bCoreRuntimeServicesProvider::terminal_port\b/,
+        message:
+          'core local WriteStdin adapter must not construct concrete terminal providers; use injected TerminalPort',
+      },
+      {
+        regex: /\bTerminalRuntimePort\b/,
+        message:
+          'core local WriteStdin adapter must not construct concrete terminal providers; use injected TerminalPort',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/exec_command/control.rs',
+    patterns: [
+      {
+        regex: /\bexec_command_control_action_name\b/,
+        message:
+          'core ExecControl adapter must not own action result value shaping; use tool-runtime exec_command',
+      },
+      {
+        regex: /\bfn\s+(?:local|remote)_completion\b/,
+        message:
+          'core ExecControl adapter must not duplicate concrete completion mapping; use exec_command completion adapter',
+      },
+      {
+        regex: /\bget_global_exec_process_manager\b/,
+        message:
+          'core local ExecControl adapter must not call the global local process manager; use injected TerminalPort',
+      },
+      {
+        regex: /\bget_global_remote_exec_process_manager\b/,
+        message:
+          'core remote ExecControl adapter must not call the global remote process manager; use injected RemoteExecPort',
+      },
+      {
+        regex: /\bRemoteExecError\b/,
+        message:
+          'core remote ExecControl adapter must not match concrete remote exec errors; use PortErrorKind',
+      },
+      {
+        regex: /\bLocalExecControlRequest\b/,
+        message:
+          'core local ExecControl adapter must not construct local process-manager requests; use TerminalExecControlRequest',
+      },
+      {
+        regex: /\bCoreRuntimeServicesProvider::terminal_port\b/,
+        message:
+          'core local ExecControl adapter must not construct concrete terminal providers; use injected TerminalPort',
+      },
+      {
+        regex: /\bTerminalRuntimePort\b/,
+        message:
+          'core local ExecControl adapter must not construct concrete terminal providers; use injected TerminalPort',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/exec_command/input.rs',
+    patterns: [
+      {
+        regex: /\bget_global_exec_process_manager\b/,
+        message:
+          'core local ExecCommand input adapter must not call the global local process manager; use injected TerminalPort',
+      },
+      {
+        regex: /\bget_global_remote_exec_process_manager\b/,
+        message:
+          'core remote ExecCommand input adapter must not call the global remote process manager; use injected RemoteExecPort',
+      },
+      {
+        regex: /\bLocalSendStdinRequest\b/,
+        message:
+          'core local ExecCommand input adapter must not construct local process-manager requests; use TerminalSendStdinRequest',
+      },
+      {
+        regex: /\bCoreRuntimeServicesProvider::terminal_port\b/,
+        message:
+          'core local ExecCommand input adapter must not construct concrete terminal providers; use injected TerminalPort',
+      },
+      {
+        regex: /\bTerminalRuntimePort\b/,
+        message:
+          'core local ExecCommand input adapter must not construct concrete terminal providers; use injected TerminalPort',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/exec_command/env_snapshot.rs',
+    patterns: [
+      {
+        regex: /\bconst\s+ENV_SNAPSHOT_BEGIN\b/,
+        message:
+          'core exec_command env snapshot adapter must not own snapshot framing; use tool-runtime exec_command',
+      },
+      {
+        regex: /\bconst\s+ENV_SNAPSHOT_END\b/,
+        message:
+          'core exec_command env snapshot adapter must not own snapshot framing; use tool-runtime exec_command',
+      },
+      {
+        regex: /\bfn\s+should_import_env_var\b/,
+        message:
+          'core exec_command env snapshot adapter must not own env import policy; use tool-runtime exec_command',
+      },
+      {
+        regex: /\bfn\s+is_valid_env_var_name\b/,
+        message:
+          'core exec_command env snapshot adapter must not own env name validation; use tool-runtime exec_command',
+      },
+      {
+        regex: /\bfn\s+is_volatile_env_var\b/,
+        message:
+          'core exec_command env snapshot adapter must not own volatile env filtering; use tool-runtime exec_command',
+      },
+      {
+        regex: /\bfn\s+shell_escape\b/,
+        message:
+          'core exec_command env snapshot adapter must not own shell escaping policy; use tool-runtime exec_command',
+      },
+      {
+        regex: /\bconst\s+ENV_SNAPSHOT_TIMEOUT_MS\b/,
+        message:
+          'core exec_command env snapshot adapter must not own snapshot capture timeout; use tool-runtime exec_command',
+      },
+      {
+        regex: /\bconst\s+ENV_SNAPSHOT_MAX_OUTPUT_CHARS\b/,
+        message:
+          'core exec_command env snapshot adapter must not own snapshot capture output bounds; use tool-runtime exec_command',
+      },
+      {
+        regex: /\bconst\s+ENV_SNAPSHOT_TTL\b/,
+        message:
+          'core exec_command env snapshot adapter must not own snapshot cache ttl; use tool-runtime exec_command',
+      },
+      {
+        regex: /\bget_global_remote_exec_process_manager\b/,
+        message:
+          'core exec_command env snapshot adapter must not call the global remote process manager; use injected RemoteExecPort',
+      },
+      {
+        regex: /\bSSHConnectionManager\b/,
+        message:
+          'core exec_command env snapshot adapter must not depend on concrete SSH managers; use injected RemoteExecPort',
       },
     ],
   },
@@ -1332,6 +1944,31 @@ export const forbiddenContentRules = [
         regex: /SessionState::Error\s*\{[^}]*\}\s*=>\s*"error"/,
         message:
           'core event types must not own session-state wire labels; use bitfun-agent-runtime events',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/coordination/state_manager.rs',
+    patterns: [
+      {
+        regex: /\bpub\s+struct\s+SessionStateManager\b/,
+        message:
+          'core session state manager path must remain a compatibility facade; use bitfun-agent-runtime session_state_manager',
+      },
+      {
+        regex: /\bDashMap\b/,
+        message:
+          'core session state manager path must not own session state storage; use bitfun-agent-runtime session_state_manager',
+      },
+      {
+        regex: /\bAgenticEvent::SessionStateChanged\b/,
+        message:
+          'core session state manager path must not emit session-state events directly; use bitfun-agent-runtime session_state_manager',
+      },
+      {
+        regex: /\bimpl\s+SessionStateManager\b/,
+        message:
+          'core session state manager path must not reimplement session state transitions; use bitfun-agent-runtime session_state_manager',
       },
     ],
   },
@@ -2225,7 +2862,7 @@ export const forbiddenContentRules = [
     patterns: [
       {
         regex: /\bfn behavior_hints\b/,
-        message: 'core MCP tool adapter must not own dynamic tool behavior hint rendering; use the integrations helper',
+        message: 'core MCP tool adapter must not own dynamic tool behavior hint rendering; use the execution MCP tool bridge contract',
       },
       {
         regex: /\bfn truncate_for_assistant\b/,
@@ -2237,7 +2874,27 @@ export const forbiddenContentRules = [
       },
       {
         regex: /Tool '\{\}' from MCP server/,
-        message: 'core MCP tool adapter must not own dynamic descriptor text; use the integrations helper',
+        message: 'core MCP tool adapter must not own dynamic descriptor text; use the execution MCP tool bridge contract',
+      },
+      {
+        regex: /\bDynamicMcpToolInfo\b/,
+        message: 'core MCP tool adapter must not own dynamic MCP metadata assembly; use the execution MCP tool bridge contract',
+      },
+      {
+        regex: /Input must be an object/,
+        message: 'core MCP tool adapter must not own bridge input validation text; use the execution MCP tool bridge contract',
+      },
+      {
+        regex: /Using MCP tool/,
+        message: 'core MCP tool adapter must not own bridge tool-use presentation; use the execution MCP tool bridge contract',
+      },
+      {
+        regex: /was rejected by user/,
+        message: 'core MCP tool adapter must not own bridge rejection presentation; use the execution MCP tool bridge contract',
+      },
+      {
+        regex: /completed\. Result:/,
+        message: 'core MCP tool adapter must not own bridge result presentation; use the execution MCP tool bridge contract',
       },
     ],
   },
@@ -2521,6 +3178,15 @@ export const forbiddenContentRules = [
     ],
   },
   {
+    path: 'src/crates/assembly/core/src/service/remote_ssh/mod.rs',
+    patterns: [
+      {
+        regex: /#\[cfg\(not\(feature = "ssh-remote"\)\)\]\s*mod disabled\b/s,
+        message: 'core remote SSH facade must not own disabled runtime stubs; re-export services-integrations remote_ssh',
+      },
+    ],
+  },
+  {
     path: 'src/crates/assembly/core/src/service/remote_ssh/workspace_state.rs',
     patterns: [
       {
@@ -2562,6 +3228,14 @@ export const forbiddenContentRules = [
       {
         regex: /\bpub fn unresolved_remote_session_storage_key\b/,
         message: 'core remote SSH workspace runtime must not redefine unresolved session keys; use the integrations contract',
+      },
+      {
+        regex: /\bpub struct WorkspaceSessionIdentity\b/,
+        message: 'core remote SSH workspace runtime must not redefine workspace session identity; use the integrations path helper',
+      },
+      {
+        regex: /\bpub fn workspace_session_identity\b/,
+        message: 'core remote SSH workspace runtime must not redefine workspace session identity construction; use the integrations path helper',
       },
       {
         regex: /\bstruct RegisteredRemoteWorkspace\b/,

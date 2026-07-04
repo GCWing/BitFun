@@ -3,16 +3,20 @@
 //! Wraps MCP tools as implementations of BitFun's `Tool` trait.
 
 use crate::agentic::tools::framework::{
-    DynamicMcpToolInfo, DynamicToolInfo, Tool, ToolRenderOptions, ToolResult, ToolUseContext,
-    ValidationResult,
+    DynamicToolInfo, Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
 use crate::service::mcp::protocol::{MCPTool, MCPToolResult};
 use crate::service::mcp::server::MCPConnection;
 use crate::util::errors::BitFunResult;
 use async_trait::async_trait;
+use bitfun_agent_tools::{
+    build_mcp_tool_bridge_result, mcp_tool_bridge_dynamic_tool_info,
+    mcp_tool_bridge_short_description, render_mcp_tool_bridge_rejected_message,
+    render_mcp_tool_bridge_result_message, render_mcp_tool_bridge_use_message,
+    validate_mcp_tool_bridge_input,
+};
 use bitfun_services_integrations::mcp::adapter::{
-    build_mcp_tool_descriptor, render_mcp_tool_result_for_assistant, MCPDynamicToolProvider,
-    McpDynamicToolDescriptor,
+    render_mcp_tool_result_for_assistant, MCPDynamicToolProvider, McpDynamicToolDescriptor,
 };
 use log::{debug, error, info, warn};
 use serde_json::Value;
@@ -22,27 +26,18 @@ use std::sync::Arc;
 pub struct MCPToolWrapper {
     mcp_tool: MCPTool,
     connection: Arc<MCPConnection>,
-    server_id: String,
-    server_name: String,
     descriptor: McpDynamicToolDescriptor,
 }
 
 impl MCPToolWrapper {
-    const MAX_RESULT_TEXT_CHARS: usize = 12_000;
-
-    /// Creates a new MCP tool wrapper.
-    pub fn new(
+    fn from_descriptor(
         mcp_tool: MCPTool,
         connection: Arc<MCPConnection>,
-        server_id: String,
-        server_name: String,
+        descriptor: McpDynamicToolDescriptor,
     ) -> Self {
-        let descriptor = build_mcp_tool_descriptor(&server_id, &server_name, &mcp_tool);
         Self {
             mcp_tool,
             connection,
-            server_id,
-            server_name,
             descriptor,
         }
     }
@@ -53,6 +48,12 @@ impl MCPToolWrapper {
 
     fn is_blocked_in_context(&self, _context: Option<&ToolUseContext>) -> bool {
         false
+    }
+
+    // Do not pre-truncate MCP output here. The shared tool-result storage policy
+    // owns the model-visible budget and persists oversized results with a preview.
+    fn render_mcp_result_for_assistant(tool_name: &str, result: &MCPToolResult) -> String {
+        render_mcp_tool_result_for_assistant(tool_name, result, usize::MAX)
     }
 }
 
@@ -69,13 +70,10 @@ impl Tool for MCPToolWrapper {
     }
 
     fn short_description(&self) -> String {
-        let summary = self
-            .mcp_tool
-            .description
-            .as_deref()
-            .filter(|value| !value.trim().is_empty())
-            .unwrap_or("MCP tool");
-        format!("{} ({})", summary, self.server_name)
+        mcp_tool_bridge_short_description(
+            self.mcp_tool.description.as_deref(),
+            &self.descriptor.tool_info.server_name,
+        )
     }
 
     fn input_schema(&self) -> Value {
@@ -91,7 +89,7 @@ impl Tool for MCPToolWrapper {
     }
 
     fn dynamic_provider_id(&self) -> Option<&str> {
-        Some(&self.server_id)
+        Some(&self.descriptor.provider_id)
     }
 
     fn user_facing_name(&self) -> String {
@@ -99,15 +97,7 @@ impl Tool for MCPToolWrapper {
     }
 
     fn dynamic_tool_info(&self) -> Option<DynamicToolInfo> {
-        Some(DynamicToolInfo {
-            provider_id: self.descriptor.provider_id.clone(),
-            provider_kind: Some(self.descriptor.provider_kind.clone()),
-            mcp: Some(DynamicMcpToolInfo {
-                server_id: self.descriptor.tool_info.server_id.clone(),
-                server_name: self.descriptor.tool_info.server_name.clone(),
-                tool_name: self.descriptor.tool_info.tool_name.clone(),
-            }),
-        })
+        Some(mcp_tool_bridge_dynamic_tool_info(&self.descriptor))
     }
 
     async fn is_enabled(&self) -> bool {
@@ -135,69 +125,40 @@ impl Tool for MCPToolWrapper {
         input: &Value,
         context: Option<&ToolUseContext>,
     ) -> ValidationResult {
-        if self.is_blocked_in_context(context) {
-            return ValidationResult {
-                result: false,
-                message: Some(format!(
-                    "MCP server '{}' runs locally and is unavailable in remote workspace sessions",
-                    self.server_name
-                )),
-                error_code: Some(400),
-                meta: None,
-            };
-        }
-
-        if !input.is_object() {
-            return ValidationResult {
-                result: false,
-                message: Some("Input must be an object".to_string()),
-                error_code: Some(400),
-                meta: None,
-            };
-        }
-
-        ValidationResult {
-            result: true,
-            message: None,
-            error_code: None,
-            meta: None,
-        }
+        validate_mcp_tool_bridge_input(
+            input,
+            &self.descriptor.tool_info.server_name,
+            self.is_blocked_in_context(context),
+        )
     }
 
     fn render_result_for_assistant(&self, output: &Value) -> String {
         if let Ok(result) = serde_json::from_value::<MCPToolResult>(output.clone()) {
-            return render_mcp_tool_result_for_assistant(
-                &self.mcp_tool.name,
-                &result,
-                Self::MAX_RESULT_TEXT_CHARS,
-            );
+            return Self::render_mcp_result_for_assistant(&self.mcp_tool.name, &result);
         }
 
         "MCP tool execution completed".to_string()
     }
 
     fn render_tool_use_message(&self, input: &Value, _options: &ToolRenderOptions) -> String {
-        format!(
-            "Using MCP tool '{}' from '{}' with input: {}",
-            self.tool_title(),
-            self.server_name,
-            input
+        render_mcp_tool_bridge_use_message(
+            &self.descriptor.title,
+            &self.descriptor.tool_info.server_name,
+            input,
         )
     }
 
     fn render_tool_use_rejected_message(&self) -> String {
-        format!(
-            "MCP tool '{}' from '{}' was rejected by user",
-            self.tool_title(),
-            self.server_name
+        render_mcp_tool_bridge_rejected_message(
+            &self.descriptor.title,
+            &self.descriptor.tool_info.server_name,
         )
     }
 
     fn render_tool_result_message(&self, output: &Value) -> String {
-        format!(
-            "MCP tool '{}' completed. Result: {}",
-            self.tool_title(),
-            self.render_result_for_assistant(output)
+        render_mcp_tool_bridge_result_message(
+            &self.descriptor.title,
+            &self.render_result_for_assistant(output),
         )
     }
 
@@ -211,7 +172,7 @@ impl Tool for MCPToolWrapper {
         info!(
             "Calling MCP tool: {} from server: {}",
             self.tool_title(),
-            self.server_name
+            self.descriptor.tool_info.server_name
         );
         debug!(
             "Input: {}",
@@ -231,11 +192,10 @@ impl Tool for MCPToolWrapper {
         let result_value = serde_json::to_value(&result)?;
 
         let result_for_assistant = self.render_result_for_assistant(&result_value);
-        Ok(vec![ToolResult::Result {
-            data: result_value,
-            result_for_assistant: Some(result_for_assistant),
-            image_attachments: None,
-        }])
+        Ok(vec![build_mcp_tool_bridge_result(
+            result_value,
+            result_for_assistant,
+        )])
     }
 }
 
@@ -283,11 +243,10 @@ impl MCPToolAdapter {
         }
 
         for definition in definitions.into_iter() {
-            let wrapper = Arc::new(MCPToolWrapper::new(
+            let wrapper = Arc::new(MCPToolWrapper::from_descriptor(
                 definition.mcp_tool,
                 connection.clone(),
-                server_id.to_string(),
-                server_name.to_string(),
+                definition.descriptor,
             ));
             self.tools.push(wrapper);
         }

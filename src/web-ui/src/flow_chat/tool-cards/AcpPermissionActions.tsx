@@ -3,7 +3,7 @@ import { Check, ShieldCheck, ShieldX, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { IconButton } from '../../component-library';
-import type { FlowToolItem, ToolCardProps } from '../types/flow-chat';
+import type { FlowToolItem, ToolRejectOptions } from '../types/flow-chat';
 import type { AcpPermissionOption } from '@/infrastructure/api/service-api/ACPClientAPI';
 import './AcpPermissionActions.scss';
 
@@ -21,8 +21,8 @@ interface AcpPermissionActionsProps {
   presentation?: 'icon' | 'text';
   className?: string;
   buttonClassName?: string;
-  onConfirm?: ToolCardProps['onConfirm'];
-  onReject?: ToolCardProps['onReject'];
+  onConfirm?: (updatedInput?: any, permissionOptionId?: string, approve?: boolean) => void;
+  onReject?: (options?: ToolRejectOptions) => void;
 }
 
 function isApprovalKind(kind: AcpPermissionOption['kind']): boolean {
@@ -96,7 +96,7 @@ export const AcpPermissionActions: React.FC<AcpPermissionActionsProps> = ({
           if (approve) {
             onConfirm?.(input, option.optionId, true);
           } else {
-            onReject?.(option.optionId);
+            onReject?.({ permissionOptionId: option.optionId });
           }
         };
 

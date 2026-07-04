@@ -19,19 +19,16 @@ const themeMap: Record<ThemeId, Record<string, string>> = {
   light: lightTheme,
 };
 
-const themeColors: Record<ThemeId, string> = {
-  dark: '#121214',
-  light: '#f2f2f7',
-};
+const BACKGROUND_KEY = '--color-bg-primary';
+const TEXT_KEY = '--color-text-primary';
 
-const textColors: Record<ThemeId, string> = {
-  dark: '#e8e8e8',
-  light: '#1c1c1e',
-};
+function getThemeValue(id: ThemeId, key: string): string {
+  return themeMap[id][key];
+}
 
 function buildThemeCSS(id: ThemeId, vars: Record<string, string>): string {
-  const bg = themeColors[id];
-  const fg = textColors[id];
+  const bg = getThemeValue(id, BACKGROUND_KEY);
+  const fg = getThemeValue(id, TEXT_KEY);
   const parts: string[] = [':root {'];
   for (const [key, value] of Object.entries(vars)) {
     parts.push(`  ${key}: ${value};`);
@@ -79,13 +76,13 @@ function commitThemeDOM(id: ThemeId) {
   body.setAttribute('data-theme', id);
 
   // 4. Inline style fallbacks (highest specificity)
-  body.style.backgroundColor = themeColors[id];
-  body.style.color = textColors[id];
+  body.style.backgroundColor = getThemeValue(id, BACKGROUND_KEY);
+  body.style.color = getThemeValue(id, TEXT_KEY);
 
   // 5. Update <meta name="theme-color">
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) {
-    meta.setAttribute('content', themeColors[id]);
+    meta.setAttribute('content', getThemeValue(id, BACKGROUND_KEY));
     meta.removeAttribute('media');
   }
 }

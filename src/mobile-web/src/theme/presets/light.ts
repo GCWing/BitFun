@@ -1,172 +1,128 @@
-export const lightTheme: Record<string, string> = {
-  '--color-bg-primary': '#f2f2f7',
-  '--color-bg-secondary': '#ffffff',
-  '--color-bg-tertiary': '#f2f2f7',
-  '--color-bg-quaternary': '#e5e5ea',
-  '--color-bg-elevated': '#ffffff',
-  '--color-bg-workbench': '#f2f2f7',
-  '--color-bg-scene': '#ffffff',
-  '--color-bg-flowchat': '#ffffff',
-  '--color-bg-tooltip': 'rgba(255, 255, 255, 0.98)',
+import {
+  alpha,
+  colorRamp,
+  commonMobileThemeVars,
+  shadow,
+  TRANSPARENT,
+  type MobileThemeVars,
+} from './shared';
 
-  '--color-text-primary': '#1c1c1e',
-  '--color-text-secondary': '#48484a',
-  '--color-text-muted': '#8e8e93',
-  '--color-text-disabled': '#aeaeb2',
+const BLACK = '0, 0, 0';
+const WHITE = '255, 255, 255';
+const IOS_NEUTRAL = '120, 120, 128';
+const BORDER = '60, 60, 67';
+const ACCENT = '0, 122, 255';
+const PURPLE = '175, 82, 222';
+const PINK = '236, 72, 153';
+const ORANGE = '255, 149, 0';
+const SUCCESS = '52, 199, 89';
+const ERROR = '255, 59, 48';
 
-  '--element-bg-subtle': 'rgba(120, 120, 128, 0.04)',
-  '--element-bg-soft': 'rgba(120, 120, 128, 0.08)',
-  '--element-bg-base': 'rgba(120, 120, 128, 0.10)',
-  '--element-bg-medium': 'rgba(120, 120, 128, 0.14)',
-  '--element-bg-strong': 'rgba(120, 120, 128, 0.20)',
-  '--element-bg-elevated': 'rgba(255, 255, 255, 0.94)',
+const BG_PRIMARY = '#f3f3f5';
+const BG_SECONDARY = 'var(--color-static-white)';
+const BG_QUATERNARY = '#e8e8e8';
+const TEXT_PRIMARY = '#18181a';
+const TEXT_SECONDARY = '#48484a';
+const TEXT_MUTED = '#8e8e93';
+const TEXT_DISABLED = '#b0b0b0';
+const ACCENT_500 = '#007aff';
+const ACCENT_600 = '#0066cc';
+const PURPLE_500 = '#af52de';
+const PURPLE_600 = '#9536cc';
+const PINK_500 = '#ec4899';
+const PINK_600 = '#db2777';
+const ORANGE_500 = '#ff9500';
+const SUCCESS_500 = '#34c759';
+const ERROR_500 = '#ff3b30';
 
-  '--color-accent-50': 'rgba(0, 122, 255, 0.04)',
-  '--color-accent-100': 'rgba(0, 122, 255, 0.08)',
-  '--color-accent-200': 'rgba(0, 122, 255, 0.14)',
-  '--color-accent-300': 'rgba(0, 122, 255, 0.22)',
-  '--color-accent-400': 'rgba(0, 122, 255, 0.36)',
-  '--color-accent-500': '#007AFF',
-  '--color-accent-600': '#0066CC',
-  '--color-accent-700': 'rgba(0, 102, 204, 0.8)',
-  '--color-accent-800': 'rgba(0, 102, 204, 0.9)',
+export const lightTheme: MobileThemeVars = {
+  '--color-bg-primary': BG_PRIMARY,
+  '--color-bg-secondary': BG_SECONDARY,
+  '--color-bg-tertiary': BG_PRIMARY,
+  '--color-bg-quaternary': BG_QUATERNARY,
+  '--color-bg-elevated': BG_SECONDARY,
+  '--color-bg-workbench': BG_PRIMARY,
+  '--color-bg-scene': BG_SECONDARY,
+  '--color-bg-flowchat': BG_SECONDARY,
+  '--color-bg-tooltip': alpha(WHITE, '0.98'),
 
-  '--color-purple-50': 'rgba(175, 82, 222, 0.04)',
-  '--color-purple-100': 'rgba(175, 82, 222, 0.08)',
-  '--color-purple-200': 'rgba(175, 82, 222, 0.14)',
-  '--color-purple-300': 'rgba(175, 82, 222, 0.22)',
-  '--color-purple-400': 'rgba(175, 82, 222, 0.36)',
-  '--color-purple-500': '#AF52DE',
-  '--color-purple-600': '#9536CC',
-  '--color-purple-700': 'rgba(149, 54, 204, 0.8)',
-  '--color-purple-800': 'rgba(149, 54, 204, 0.9)',
+  '--color-text-primary': TEXT_PRIMARY,
+  '--color-text-secondary': TEXT_SECONDARY,
+  '--color-text-muted': TEXT_MUTED,
+  '--color-text-disabled': TEXT_DISABLED,
 
-  '--color-pink-50': 'rgba(236, 72, 153, 0.04)',
-  '--color-pink-100': 'rgba(236, 72, 153, 0.08)',
-  '--color-pink-200': 'rgba(236, 72, 153, 0.14)',
-  '--color-pink-300': 'rgba(236, 72, 153, 0.22)',
-  '--color-pink-400': 'rgba(236, 72, 153, 0.36)',
-  '--color-pink-500': '#EC4899',
-  '--color-pink-600': '#DB2777',
-  '--color-pink-700': 'rgba(219, 39, 119, 0.8)',
-  '--color-pink-800': 'rgba(219, 39, 119, 0.9)',
+  '--element-bg-subtle': alpha(IOS_NEUTRAL, '0.04'),
+  '--element-bg-soft': alpha(IOS_NEUTRAL, '0.08'),
+  '--element-bg-base': alpha(IOS_NEUTRAL, '0.1'),
+  '--element-bg-medium': alpha(IOS_NEUTRAL, '0.14'),
+  '--element-bg-strong': alpha(IOS_NEUTRAL, '0.2'),
+  '--element-bg-elevated': alpha(WHITE, '0.94'),
 
-  '--color-orange-50': 'rgba(255, 149, 0, 0.04)',
-  '--color-orange-100': 'rgba(255, 149, 0, 0.08)',
-  '--color-orange-200': 'rgba(255, 149, 0, 0.14)',
-  '--color-orange-300': 'rgba(255, 149, 0, 0.22)',
-  '--color-orange-400': 'rgba(255, 149, 0, 0.36)',
-  '--color-orange-500': '#FF9500',
-  '--color-orange-600': '#CC7A00',
-  '--color-orange-700': 'rgba(204, 122, 0, 0.8)',
-  '--color-orange-800': 'rgba(204, 122, 0, 0.9)',
+  ...colorRamp('--color-accent', ACCENT, ACCENT_500, ACCENT_600, ['0.04', '0.08', '0.14', '0.22', '0.36']),
+  ...colorRamp('--color-purple', PURPLE, PURPLE_500, PURPLE_600, ['0.04', '0.08', '0.14', '0.22', '0.36']),
+  ...colorRamp('--color-pink', PINK, PINK_500, PINK_600, ['0.04', '0.08', '0.14', '0.22', '0.36']),
 
-  '--color-success': '#34C759',
-  '--color-success-bg': 'rgba(52, 199, 89, 0.08)',
-  '--color-success-border': 'rgba(52, 199, 89, 0.25)',
-  '--color-warning': '#FF9500',
-  '--color-warning-bg': 'rgba(255, 149, 0, 0.08)',
-  '--color-warning-border': 'rgba(255, 149, 0, 0.25)',
-  '--color-error': '#FF3B30',
-  '--color-error-bg': 'rgba(255, 59, 48, 0.08)',
-  '--color-error-border': 'rgba(255, 59, 48, 0.25)',
-  '--color-info': '#007AFF',
-  '--color-info-bg': 'rgba(0, 122, 255, 0.08)',
-  '--color-info-border': 'rgba(0, 122, 255, 0.25)',
+  '--color-success': SUCCESS_500,
+  '--color-success-bg': alpha(SUCCESS, '0.08'),
+  '--color-success-border': alpha(SUCCESS, '0.25'),
+  '--color-warning': ORANGE_500,
+  '--color-warning-bg': alpha(ORANGE, '0.08'),
+  '--color-warning-border': alpha(ORANGE, '0.25'),
+  '--color-error': ERROR_500,
+  '--color-error-bg': alpha(ERROR, '0.08'),
+  '--color-error-border': alpha(ERROR, '0.25'),
+  '--color-info': ACCENT_500,
+  '--color-info-bg': alpha(ACCENT, '0.08'),
+  '--color-info-border': alpha(ACCENT, '0.25'),
 
-  '--color-highlight': '#FF9500',
-  '--color-highlight-bg': 'rgba(255, 149, 0, 0.10)',
-  '--color-overlay': 'rgba(0, 0, 0, 0.3)',
+  '--color-highlight': ORANGE_500,
+  '--color-highlight-bg': alpha(ORANGE, '0.1'),
+  '--color-overlay': alpha(BLACK, '0.3'),
 
-  '--border-subtle': 'rgba(60, 60, 67, 0.08)',
-  '--border-base': 'rgba(60, 60, 67, 0.14)',
-  '--border-medium': 'rgba(60, 60, 67, 0.22)',
-  '--border-strong': 'rgba(60, 60, 67, 0.30)',
-  '--border-prominent': 'rgba(60, 60, 67, 0.40)',
+  '--border-subtle': alpha(BORDER, '0.08'),
+  '--border-base': alpha(BORDER, '0.14'),
+  '--border-medium': alpha(BORDER, '0.22'),
+  '--border-strong': alpha(BORDER, '0.3'),
+  '--border-prominent': alpha(BORDER, '0.4'),
 
-  '--glow-blue': '0 2px 8px rgba(0, 122, 255, 0.08)',
-  '--glow-purple': '0 2px 8px rgba(175, 82, 222, 0.08)',
-  '--glow-orange': '0 2px 8px rgba(255, 149, 0, 0.08)',
-  '--glow-mixed': '0 2px 8px rgba(0, 122, 255, 0.06), 0 2px 8px rgba(175, 82, 222, 0.04)',
-
-  '--shadow-xs': '0 1px 2px rgba(0, 0, 0, 0.04)',
-  '--shadow-sm': '0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04)',
-  '--shadow-base': '0 2px 8px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04)',
-  '--shadow-lg': '0 4px 16px rgba(0, 0, 0, 0.08), 0 2px 6px rgba(0, 0, 0, 0.04)',
-  '--shadow-xl': '0 8px 24px rgba(0, 0, 0, 0.10), 0 4px 8px rgba(0, 0, 0, 0.04)',
-  '--shadow-2xl': '0 12px 32px rgba(0, 0, 0, 0.12), 0 4px 12px rgba(0, 0, 0, 0.06)',
+  '--shadow-xs': `0 1px 2px ${alpha(BLACK, '0.04')}`,
+  '--shadow-sm': shadow(
+    `0 1px 3px ${alpha(BLACK, '0.06')}`,
+    `0 1px 2px ${alpha(BLACK, '0.04')}`,
+  ),
+  '--shadow-base': shadow(
+    `0 2px 8px ${alpha(BLACK, '0.06')}`,
+    `0 1px 3px ${alpha(BLACK, '0.04')}`,
+  ),
+  '--shadow-lg': shadow(
+    `0 4px 16px ${alpha(BLACK, '0.08')}`,
+    `0 2px 6px ${alpha(BLACK, '0.04')}`,
+  ),
+  '--shadow-xl': shadow(
+    `0 8px 24px ${alpha(BLACK, '0.1')}`,
+    `0 4px 8px ${alpha(BLACK, '0.04')}`,
+  ),
 
   '--blur-subtle': 'blur(4px) saturate(1.2)',
   '--blur-base': 'blur(8px) saturate(1.4)',
-  '--blur-medium': 'blur(12px) saturate(1.6)',
-  '--blur-strong': 'blur(16px) saturate(1.8)',
-  '--blur-intense': 'blur(20px) saturate(2.0)',
 
-  '--size-radius-sm': '6px',
-  '--size-radius-base': '8px',
-  '--size-radius-lg': '12px',
-  '--size-radius-xl': '16px',
-  '--size-radius-2xl': '20px',
-  '--size-radius-full': '9999px',
-
-  '--size-gap-1': '4px',
-  '--size-gap-2': '8px',
-  '--size-gap-3': '12px',
-  '--size-gap-4': '16px',
-  '--size-gap-5': '20px',
-  '--size-gap-6': '24px',
-  '--size-gap-8': '32px',
-  '--size-gap-10': '40px',
-  '--size-gap-12': '48px',
-  '--size-gap-16': '64px',
-
-  '--motion-instant': '0.1s',
-  '--motion-fast': '0.15s',
-  '--motion-base': '0.3s',
-  '--motion-slow': '0.6s',
-  '--motion-lazy': '1s',
-
-  '--easing-standard': 'cubic-bezier(0.4, 0, 0.2, 1)',
-  '--easing-decelerate': 'cubic-bezier(0, 0, 0.2, 1)',
-  '--easing-accelerate': 'cubic-bezier(0.4, 0, 1, 1)',
-  '--easing-bounce': 'cubic-bezier(0.68, -0.55, 0.265, 1.55)',
-  '--easing-smooth': 'cubic-bezier(0.4, 0, 0.2, 1)',
-
-  '--font-family-sans': "'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'SF Pro Display', Roboto, sans-serif",
-  '--font-family-mono': "'Menlo', 'SF Mono', 'Cascadia Code', 'Consolas', 'Liberation Mono', 'Courier New', 'Noto Sans Mono CJK SC', 'Noto Sans Mono', monospace",
-  '--font-weight-normal': '400',
-  '--font-weight-medium': '500',
-  '--font-weight-semibold': '600',
-  '--font-weight-bold': '700',
-
-  '--font-size-xs': '12px',
-  '--font-size-sm': '14px',
-  '--font-size-base': '15px',
-  '--font-size-lg': '16px',
-  '--font-size-xl': '18px',
-  '--font-size-2xl': '20px',
-  '--font-size-3xl': '24px',
-
-  '--line-height-tight': '1.2',
-  '--line-height-base': '1.5',
-  '--line-height-relaxed': '1.6',
+  ...commonMobileThemeVars,
 
   '--opacity-disabled': '0.55',
   '--opacity-hover': '0.75',
   '--opacity-focus': '0.9',
-  '--opacity-overlay': '0.35',
 
-  '--scrollbar-thumb': 'rgba(0, 0, 0, 0.15)',
-  '--scrollbar-thumb-hover': 'rgba(0, 0, 0, 0.25)',
+  '--scrollbar-thumb': alpha(BLACK, '0.15'),
+  '--scrollbar-thumb-hover': alpha(BLACK, '0.25'),
 
-  '--btn-default-bg': 'rgba(120, 120, 128, 0.08)',
-  '--btn-default-color': '#48484a',
-  '--btn-hover-bg': 'rgba(120, 120, 128, 0.14)',
-  '--btn-hover-color': '#1c1c1e',
-  '--btn-primary-bg': '#007AFF',
-  '--btn-primary-color': '#ffffff',
-  '--btn-primary-hover-bg': '#0066CC',
-  '--btn-ghost-bg': 'transparent',
-  '--btn-ghost-color': '#48484a',
-  '--btn-ghost-hover-bg': 'rgba(120, 120, 128, 0.08)',
+  '--btn-default-bg': alpha(IOS_NEUTRAL, '0.08'),
+  '--btn-default-color': TEXT_SECONDARY,
+  '--btn-hover-bg': alpha(IOS_NEUTRAL, '0.14'),
+  '--btn-hover-color': TEXT_PRIMARY,
+  '--btn-primary-bg': ACCENT_500,
+  '--btn-primary-color': BG_SECONDARY,
+  '--btn-primary-hover-bg': ACCENT_600,
+  '--btn-ghost-bg': TRANSPARENT,
+  '--btn-ghost-color': TEXT_SECONDARY,
+  '--btn-ghost-hover-bg': alpha(IOS_NEUTRAL, '0.08'),
 };

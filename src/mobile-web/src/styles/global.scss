@@ -188,7 +188,7 @@ html.theme-switching {
   gap: 8px;
   padding: 8px 16px;
   background: var(--color-warning);
-  color: #fff;
+  color: var(--btn-primary-color);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
   animation: slideDown var(--motion-fast) var(--easing-standard);
@@ -198,8 +198,8 @@ html.theme-switching {
   display: inline-block;
   width: 14px;
   height: 14px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-top-color: #fff;
+  border: 2px solid color-mix(in srgb, currentColor 30%, transparent);
+  border-top-color: currentColor;
   border-radius: 50%;
   animation: reconnect-spin 0.8s linear infinite;
 }

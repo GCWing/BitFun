@@ -37,6 +37,7 @@ fn fake_provider_registers_required_and_remote_services_through_registry() {
     assert!(services.has_capability(RuntimeServiceCapability::Events));
     assert!(services.has_capability(RuntimeServiceCapability::Clock));
     assert!(services.has_capability(RuntimeServiceCapability::RemoteConnection));
+    assert!(services.has_capability(RuntimeServiceCapability::RemoteExec));
     assert!(services.has_capability(RuntimeServiceCapability::RemoteWorkspace));
     assert!(services.has_capability(RuntimeServiceCapability::RemoteProjection));
     assert!(services.has_capability(RuntimeServiceCapability::RemoteCapabilities));
@@ -86,14 +87,15 @@ fn capability_availability_reports_optional_service_status_without_side_effects(
 fn marker_ports_register_optional_service_availability_without_core_dependency() {
     let services = FakeRuntimeServicesProvider::with_all_required()
         .register(RuntimeServicesBuilder::new())
-        .with_optional_terminal(Some(RuntimeServiceMarkerPort::terminal_port()))
+        .with_optional_terminal(Some(FakeRuntimeServicesProvider::terminal_port()))
         .with_optional_network(Some(RuntimeServiceMarkerPort::network_port()))
         .with_optional_git(Some(RuntimeServiceMarkerPort::git_port()))
         .with_optional_mcp_catalog(Some(RuntimeServiceMarkerPort::mcp_catalog_port()))
         .build()
-        .expect("marker ports should satisfy matching optional capabilities");
+        .expect("optional ports should satisfy matching capabilities");
 
     assert!(services.has_capability(RuntimeServiceCapability::Terminal));
+    assert!(!services.has_capability(RuntimeServiceCapability::RemoteExec));
     assert!(services.has_capability(RuntimeServiceCapability::Network));
     assert!(services.has_capability(RuntimeServiceCapability::Git));
     assert!(services.has_capability(RuntimeServiceCapability::McpCatalog));

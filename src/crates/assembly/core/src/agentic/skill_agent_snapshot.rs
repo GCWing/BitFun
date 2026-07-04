@@ -51,6 +51,9 @@ pub async fn resolve_skill_agent_snapshot(
         agent_type,
         workspace,
         workspace_services,
+        None,
+        None,
+        None,
         true,
         context_vars,
     );

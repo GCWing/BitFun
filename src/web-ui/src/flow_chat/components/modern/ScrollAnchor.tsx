@@ -167,7 +167,7 @@ export const ScrollAnchor: React.FC<ScrollAnchorProps> = ({
               className={`scroll-anchor__point ${hoveredAnchor?.id === anchor.id ? 'active' : ''}`}
               style={{ 
                 top: `${anchor.position}%`,
-                '--delay': `${idx * 0.03}s`
+                '--flowchat-scroll-anchor-delay': `${idx * 0.03}s`
               } as React.CSSProperties}
               onClick={(e) => {
                 e.stopPropagation();

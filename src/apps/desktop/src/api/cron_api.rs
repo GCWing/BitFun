@@ -101,3 +101,14 @@ pub async fn delete_cron_job(request: DeleteCronJobRequest) -> Result<bool, Stri
         format!("Failed to delete scheduled job: {}", error)
     })
 }
+
+#[tauri::command]
+pub async fn notify_cron_host_ready() -> Result<(), String> {
+    debug!("Received scheduled job host ready signal");
+
+    let service = cron_service()?;
+    // `start` is idempotent, so the frontend readiness signal can safely race
+    // with the desktop fallback timer.
+    service.start();
+    Ok(())
+}

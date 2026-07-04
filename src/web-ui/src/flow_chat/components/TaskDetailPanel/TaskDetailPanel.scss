@@ -7,7 +7,7 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: var(--color-bg-flowchat);
+  background: var(--color-bg-scene);
   color: var(--color-text-primary);
 
   &--empty {
@@ -136,7 +136,7 @@
       cursor: pointer;
       user-select: none;
       transition: all 0.15s ease;
-      border: 1px dashed var(--tool-card-border);
+      border: 1px dashed var(--border-base);
       border-radius: 6px;
 
       &:hover {
@@ -161,13 +161,13 @@
     font-size: var(--tool-card-action-font-size);
     font-weight: 500;
     line-height: var(--flowchat-support-line-height);
-    color: var(--tool-card-text-secondary);
+    color: var(--color-text-secondary);
     background: transparent;
     white-space: pre-wrap;
     word-break: break-word;
     max-height: 300px;
     overflow-y: auto;
-    border: 1px dashed var(--tool-card-border);
+    border: 1px dashed var(--border-base);
     border-top: none;
     border-radius: 0 0 6px 6px;
 
@@ -179,7 +179,7 @@
       background: transparent;
     }
     &::-webkit-scrollbar-thumb {
-      background: var(--color-overlay-white-10);
+      background: var(--color-overlay-white-12);
       border-radius: 2px;
       
       &:hover {
@@ -201,7 +201,7 @@
       cursor: pointer;
       user-select: none;
       transition: all 0.15s ease;
-      border: 1px dashed var(--tool-card-border);
+      border: 1px dashed var(--border-base);
       border-radius: 6px;
 
       &:hover {
@@ -224,7 +224,7 @@
     flex-direction: column;
     gap: 6px;
     padding: 10px 12px;
-    border: 1px dashed var(--tool-card-border);
+    border: 1px dashed var(--border-base);
     border-top: none;
     border-radius: 0 0 6px 6px;
     font-size: var(--tool-card-action-font-size);
@@ -272,8 +272,8 @@
     gap: 8px;
     padding: 12px;
     border-radius: 8px;
-    border: 1px solid var(--tool-card-border);
-    background: var(--color-overlay-white-03);
+    border: 1px solid var(--border-base);
+    background: var(--color-overlay-white-04);
     flex-shrink: 0;
   }
 

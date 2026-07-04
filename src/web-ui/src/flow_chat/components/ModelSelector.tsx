@@ -3,7 +3,9 @@
  * Shows the active model and allows quick switching.
  *
  * Config linkage:
- * - Unified logic: all modes use ai.agent_models[mode_id]
+ * - Model selection is shared across all agent types via ai.agent_models
+ *   — switching in one session refreshes every existing agent mapping plus
+ *   the current session's agent type, so new sessions of any type inherit it.
  * - Supports 'auto' | 'primary' | 'fast' | specific model IDs
  */
 
@@ -47,6 +49,8 @@ interface ModelSelectorProps {
   maxTokens?: number;
   /** Semantic source for the context usage number. */
   contextUsageSource?: ContextUsageSource;
+  /** Called when model switching starts or completes, so the parent can gate sending. */
+  onLoadingChange?: (loading: boolean) => void;
 }
 
 interface ModelInfo {
@@ -174,6 +178,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
   currentTokens = 0,
   maxTokens = 0,
   contextUsageSource,
+  onLoadingChange,
 }) => {
   const { t } = useTranslation('flow-chat');
   const [allModels, setAllModels] = useState<AIModelConfig[]>([]);
@@ -187,6 +192,11 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
 
   const dropdownRef = useRef<HTMLDivElement>(null);
   const portalDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    onLoadingChange?.(loading);
+  }, [loading, onLoadingChange]);
+
   const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({
     position: 'fixed',
     visibility: 'hidden',
@@ -506,16 +516,24 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
 
       const currentAgentModels = await configManager.getConfig<Record<string, string>>('ai.agent_models') || {};
 
-      const updatedAgentModels = {
-        ...currentAgentModels,
-        [currentMode]: modelId,
-      };
+      // Refresh **every** agent mapping already present in the config so
+      // all configured agents pick up the new model.  Also ensure the
+      // current session's agent type is included.  No hardcoded list —
+      // any agent type added to the config in the future is covered
+      // automatically.
+      const updatedAgentModels = { ...currentAgentModels };
+      for (const agentType of Object.keys(updatedAgentModels)) {
+        updatedAgentModels[agentType] = modelId;
+      }
+      updatedAgentModels[currentMode] = modelId;
 
       await configManager.setConfig('ai.agent_models', updatedAgentModels);
       setAgentModels(updatedAgentModels);
 
       if (sessionId) {
         const store = FlowChatStore.getInstance();
+        // Update the frontend session model immediately so the UI reflects the
+        // switch without waiting for the backend IPC round-trip.
         store.updateSessionModelName(sessionId, modelId);
         const maxContextTokens = await getModelMaxTokens(modelId, currentMode);
         store.updateSessionMaxContextTokens(sessionId, maxContextTokens);

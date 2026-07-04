@@ -1,14 +1,17 @@
-/// WebSocket transport adapter
+/// WebSocket transport adapter.
 ///
-/// Used for Web Server version, pushes events to browser via WebSocket
+/// Used for Web Server delivery. Agentic event payload projection is owned by
+/// `bitfun-events`; this adapter only serializes the allowed legacy WebSocket
+/// event set to text messages.
 use crate::traits::{TextChunk, ToolEventPayload, TransportAdapter};
 use async_trait::async_trait;
-use bitfun_events::AgenticEvent;
+use bitfun_events::{
+    is_legacy_websocket_agentic_event_type, project_agentic_frontend_event, AgenticEvent,
+};
 use serde_json::json;
 use std::fmt;
 use tokio::sync::mpsc;
 
-/// WebSocket message type
 #[derive(Debug, Clone)]
 pub enum WsMessage {
     Text(String),
@@ -16,19 +19,16 @@ pub enum WsMessage {
     Close,
 }
 
-/// WebSocket transport adapter
 #[derive(Clone)]
 pub struct WebSocketTransportAdapter {
     tx: mpsc::UnboundedSender<WsMessage>,
 }
 
 impl WebSocketTransportAdapter {
-    /// Create a new WebSocket adapter
     pub fn new(tx: mpsc::UnboundedSender<WsMessage>) -> Self {
         Self { tx }
     }
 
-    /// Send JSON message
     fn send_json(&self, value: serde_json::Value) -> anyhow::Result<()> {
         let json_str = serde_json::to_string(&value)?;
         self.tx
@@ -49,256 +49,13 @@ impl fmt::Debug for WebSocketTransportAdapter {
 #[async_trait]
 impl TransportAdapter for WebSocketTransportAdapter {
     async fn emit_event(&self, _session_id: &str, event: AgenticEvent) -> anyhow::Result<()> {
-        let message = match event {
-            AgenticEvent::ImageAnalysisStarted {
-                session_id,
-                image_count,
-                user_input,
-                image_metadata,
-            } => {
-                json!({
-                    "type": "image-analysis-started",
-                    "sessionId": session_id,
-                    "imageCount": image_count,
-                    "userInput": user_input,
-                    "imageMetadata": image_metadata,
-                })
-            }
-            AgenticEvent::ImageAnalysisCompleted {
-                session_id,
-                success,
-                duration_ms,
-            } => {
-                json!({
-                    "type": "image-analysis-completed",
-                    "sessionId": session_id,
-                    "success": success,
-                    "durationMs": duration_ms,
-                })
-            }
-            AgenticEvent::DialogTurnStarted {
-                session_id,
-                turn_id,
-                turn_index,
-                original_user_input,
-                user_message_metadata,
-                ..
-            } => {
-                json!({
-                    "type": "dialog-turn-started",
-                    "sessionId": session_id,
-                    "turnId": turn_id,
-                    "turnIndex": turn_index,
-                    "originalUserInput": original_user_input,
-                    "userMessageMetadata": user_message_metadata,
-                })
-            }
-            AgenticEvent::SubagentSessionLinked {
-                session_id,
-                parent_session_id,
-                parent_dialog_turn_id,
-                parent_tool_call_id,
-                agent_type,
-            } => {
-                json!({
-                    "type": "subagent-session-linked",
-                    "sessionId": session_id,
-                    "parentSessionId": parent_session_id,
-                    "parentDialogTurnId": parent_dialog_turn_id,
-                    "parentToolCallId": parent_tool_call_id,
-                    "agentType": agent_type,
-                })
-            }
-            AgenticEvent::ModelRoundStarted {
-                session_id,
-                turn_id,
-                round_id,
-                round_group_id,
-                round_index,
-                model_id,
-            } => {
-                json!({
-                    "type": "model-round-started",
-                    "sessionId": session_id,
-                    "turnId": turn_id,
-                    "roundId": round_id,
-                    "roundGroupId": round_group_id,
-                    "roundIndex": round_index,
-                    "modelId": model_id,
-                })
-            }
-            AgenticEvent::TextChunk {
-                session_id,
-                turn_id,
-                round_id,
-                attempt_id,
-                attempt_index,
-                text,
-            } => {
-                json!({
-                    "type": "text-chunk",
-                    "sessionId": session_id,
-                    "turnId": turn_id,
-                    "roundId": round_id,
-                    "attemptId": attempt_id,
-                    "attemptIndex": attempt_index,
-                    "text": text,
-                })
-            }
-            AgenticEvent::ThinkingChunk {
-                session_id,
-                turn_id,
-                round_id,
-                attempt_id,
-                attempt_index,
-                content,
-                is_end,
-            } => {
-                json!({
-                    "type": "text-chunk",
-                    "sessionId": session_id,
-                    "turnId": turn_id,
-                    "roundId": round_id,
-                    "attemptId": attempt_id,
-                    "attemptIndex": attempt_index,
-                    "text": content,
-                    "contentType": "thinking",
-                    "isThinkingEnd": is_end,
-                })
-            }
-            AgenticEvent::ToolEvent {
-                session_id,
-                turn_id,
-                round_id,
-                attempt_id,
-                attempt_index,
-                tool_event,
-            } => {
-                json!({
-                    "type": "tool-event",
-                    "sessionId": session_id,
-                    "turnId": turn_id,
-                    "roundId": round_id,
-                    "attemptId": attempt_id,
-                    "attemptIndex": attempt_index,
-                    "toolEvent": tool_event,
-                })
-            }
-            AgenticEvent::TokenUsageUpdated {
-                session_id,
-                turn_id,
-                model_id,
-                input_tokens,
-                output_tokens,
-                total_tokens,
-                max_context_tokens,
-                is_subagent,
-                cached_tokens,
-                token_details,
-            } => {
-                json!({
-                    "type": "token-usage-updated",
-                    "sessionId": session_id,
-                    "turnId": turn_id,
-                    "modelId": model_id,
-                    "inputTokens": input_tokens,
-                    "outputTokens": output_tokens,
-                    "totalTokens": total_tokens,
-                    "maxContextTokens": max_context_tokens,
-                    "isSubagent": is_subagent,
-                    "cachedTokens": cached_tokens,
-                    "tokenDetails": token_details,
-                })
-            }
-            AgenticEvent::ModelRoundCompleted {
-                session_id,
-                turn_id,
-                round_id,
-                has_tool_calls,
-                duration_ms,
-                provider_id,
-                model_id,
-                model_alias,
-                first_chunk_ms,
-                first_visible_output_ms,
-                stream_duration_ms,
-                attempt_count,
-                failure_category,
-                token_details,
-            } => {
-                json!({
-                    "type": "model-round-completed",
-                    "sessionId": session_id,
-                    "turnId": turn_id,
-                    "roundId": round_id,
-                    "hasToolCalls": has_tool_calls,
-                    "durationMs": duration_ms,
-                    "providerId": provider_id,
-                    "modelId": model_id,
-                    "modelAlias": model_alias,
-                    "firstChunkMs": first_chunk_ms,
-                    "firstVisibleOutputMs": first_visible_output_ms,
-                    "streamDurationMs": stream_duration_ms,
-                    "attemptCount": attempt_count,
-                    "failureCategory": failure_category,
-                    "tokenDetails": token_details,
-                })
-            }
-            AgenticEvent::DialogTurnCompleted {
-                session_id,
-                turn_id,
-                partial_recovery_reason,
-                success,
-                finish_reason,
-                has_final_response,
-                ..
-            } => {
-                json!({
-                    "type": "dialog-turn-completed",
-                    "sessionId": session_id,
-                    "turnId": turn_id,
-                    "partialRecoveryReason": partial_recovery_reason,
-                    "success": success,
-                    "finishReason": finish_reason,
-                    "hasFinalResponse": has_final_response,
-                })
-            }
-            AgenticEvent::DeepReviewQueueStateChanged {
-                session_id,
-                turn_id,
-                queue_state,
-            } => {
-                json!({
-                    "type": "deep-review-queue-state-changed",
-                    "sessionId": session_id,
-                    "turnId": turn_id,
-                    "queueState": {
-                        "toolId": queue_state.tool_id,
-                        "subagentType": queue_state.subagent_type,
-                        "status": queue_state.status,
-                            "reason": queue_state.reason,
-                            "queuedReviewerCount": queue_state.queued_reviewer_count,
-                            "activeReviewerCount": queue_state.active_reviewer_count,
-                            "effectiveParallelInstances": queue_state.effective_parallel_instances,
-                            "optionalReviewerCount": queue_state.optional_reviewer_count,
-                            "queueElapsedMs": queue_state.queue_elapsed_ms,
-                        "runElapsedMs": queue_state.run_elapsed_ms,
-                        "maxQueueWaitSeconds": queue_state.max_queue_wait_seconds,
-                        "sessionConcurrencyHigh": queue_state.session_concurrency_high,
-                    },
-                })
-            }
-            AgenticEvent::ThreadGoalUpdated { session_id, goal } => {
-                json!({
-                    "type": "thread-goal-updated",
-                    "sessionId": session_id,
-                    "goal": goal,
-                })
-            }
-            _ => return Ok(()),
+        let Some(projected) = project_agentic_frontend_event(event) else {
+            return Ok(());
         };
-
-        self.send_json(message)?;
+        if !is_legacy_websocket_agentic_event_type(&projected.event_type) {
+            return Ok(());
+        }
+        self.send_json(projected.legacy_flat_message())?;
         Ok(())
     }
 
@@ -380,5 +137,59 @@ impl TransportAdapter for WebSocketTransportAdapter {
 
     fn adapter_type(&self) -> &str {
         "websocket"
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bitfun_events::AgenticEvent as Event;
+
+    #[tokio::test]
+    async fn websocket_uses_shared_agentic_frontend_projection() {
+        let (tx, mut rx) = mpsc::unbounded_channel();
+        let adapter = WebSocketTransportAdapter::new(tx);
+
+        adapter
+            .emit_event(
+                "session-1",
+                Event::TextChunk {
+                    session_id: "session-1".to_string(),
+                    turn_id: "turn-1".to_string(),
+                    round_id: "round-1".to_string(),
+                    attempt_id: Some("attempt-1".to_string()),
+                    attempt_index: Some(1),
+                    text: "hello".to_string(),
+                },
+            )
+            .await
+            .expect("emit");
+
+        let WsMessage::Text(message) = rx.recv().await.expect("message") else {
+            panic!("expected text message");
+        };
+        let value: serde_json::Value = serde_json::from_str(&message).expect("json");
+        assert_eq!(value["type"], "text-chunk");
+        assert_eq!(value["sessionId"], "session-1");
+        assert_eq!(value["attemptId"], "attempt-1");
+        assert_eq!(value["text"], "hello");
+    }
+
+    #[tokio::test]
+    async fn websocket_keeps_legacy_agentic_event_allowlist() {
+        let (tx, mut rx) = mpsc::unbounded_channel();
+        let adapter = WebSocketTransportAdapter::new(tx);
+
+        adapter
+            .emit_event(
+                "session-1",
+                Event::SessionDeleted {
+                    session_id: "session-1".to_string(),
+                },
+            )
+            .await
+            .expect("emit");
+
+        assert!(rx.try_recv().is_err());
     }
 }

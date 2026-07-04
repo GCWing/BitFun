@@ -39,7 +39,7 @@ $_icon-size: 16px;
 
 .bitfun-search-results__header {
   padding: $size-gap-2 $size-gap-3;
-  border-bottom: 1px solid $border-base;
+  border-bottom: 1px solid var(--border-base);
   background: var(--color-bg-primary);
   flex-shrink: 0;
 }
@@ -111,8 +111,8 @@ $_icon-size: 16px;
     color: var(--color-text-muted);
 
     &--directory {
-      background: $color-warning-bg;
-      color: $color-warning;
+      background: var(--color-warning-bg);
+      color: var(--color-warning);
     }
   }
 
@@ -153,7 +153,7 @@ $_icon-size: 16px;
     appearance: none;
 
     &:hover {
-      background: $git-color-branch-bg-hover;
+      background: var(--git-color-branch-bg-hover);
     }
 
     &:active {
@@ -230,7 +230,7 @@ $_icon-size: 16px;
 }
 
 .bitfun-search-results__highlight {
-  background: rgba($color-accent-500, 0.25);
+  background: color-mix(in srgb, var(--color-accent-500) 25%, transparent);
   color: var(--color-accent-500);
   padding: 1px 2px;
   border-radius: 2px;
@@ -247,7 +247,7 @@ $_icon-size: 16px;
   @include mixins.flex-layout(row, center, center, $size-gap-1);
   padding: $size-gap-1 $size-gap-2;
   flex-shrink: 0;
-  border-top: 1px solid $border-base;
+  border-top: 1px solid var(--border-base);
   background: var(--element-bg-subtle);
   color: var(--color-text-muted);
   font-size: var(--font-size-xs);

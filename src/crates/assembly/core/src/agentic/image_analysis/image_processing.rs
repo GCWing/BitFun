@@ -2,9 +2,7 @@
 
 use super::types::{ImageContextData, ImageLimits};
 use crate::service::config::get_global_config_service;
-use crate::service::config::types::{
-    AIConfig as ServiceAIConfig, AIModelConfig, ModelCapability, ModelCategory,
-};
+use crate::service::config::types::{AIConfig as ServiceAIConfig, AIModelConfig};
 use crate::util::errors::{BitFunError, BitFunResult};
 use crate::util::types::Message;
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
@@ -55,12 +53,7 @@ pub fn resolve_vision_model_from_ai_config(
         return Err(BitFunError::service(format!("Model is disabled: {}", id)));
     }
 
-    let supports_image_understanding = model
-        .capabilities
-        .iter()
-        .any(|cap| matches!(cap, ModelCapability::ImageUnderstanding))
-        || matches!(model.category, ModelCategory::Multimodal);
-    if !supports_image_understanding {
+    if !model.supports_image_understanding() {
         return Err(BitFunError::service(format!(
             "Model does not support image understanding: {}",
             id

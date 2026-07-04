@@ -239,6 +239,18 @@ mod tests {
         }
     }
 
+    fn multimodal_anthropic_tool_context(agent_type: Option<&str>) -> ToolUseContext {
+        let mut context = tool_context(agent_type);
+        context.custom_data.insert(
+            "primary_model_supports_image_understanding".to_string(),
+            json!(true),
+        );
+        context
+            .custom_data
+            .insert("primary_model_provider".to_string(), json!("anthropic"));
+        context
+    }
+
     fn context_without_agent_type() -> ToolUseContext {
         tool_context(None)
     }
@@ -481,6 +493,24 @@ mod tests {
             .tool_definitions
             .iter()
             .any(|tool| tool.name == GET_TOOL_SPEC_TOOL_NAME));
+    }
+
+    #[tokio::test]
+    async fn product_manifest_keeps_view_image_for_multimodal_anthropic_context() {
+        let allowed_tools = vec!["Read".to_string(), "view_image".to_string()];
+
+        let manifest = resolve_product_resolved_tool_manifest(
+            &allowed_tools,
+            &AgentToolPolicyOverrides::default(),
+            &multimodal_anthropic_tool_context(Some("test-agent")),
+        )
+        .await;
+
+        assert_eq!(manifest.allowed_tool_names, allowed_tools);
+        assert!(manifest
+            .tool_definitions
+            .iter()
+            .any(|tool| tool.name == "view_image"));
     }
 
     #[tokio::test]

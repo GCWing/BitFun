@@ -207,6 +207,7 @@ fn settings_menu_view(verbose: bool, state: &BotChatState, s: &'static BotString
     } else {
         items.push(MenuItem::default(s.item_verbose_on, "/verbose"));
     }
+    items.push(MenuItem::default(s.item_switch_model, "/model"));
     items.push(MenuItem::default(s.item_help, "/help"));
     items.push(MenuItem::default(s.item_back, "/menu"));
     let body = format!(
@@ -260,6 +261,144 @@ fn confirm_mode_switch_view(target_mode: BotDisplayMode, s: &'static BotStrings)
             MenuItem::primary(s.item_confirm_switch, "1"),
             MenuItem::default(s.item_back, "/menu"),
         ])
+}
+
+// ── Model switching ────────────────────────────────────────────────
+
+fn model_selection_view(
+    current_model_id: &Option<String>,
+    options: &[(String, String)],
+    s: &'static BotStrings,
+) -> MenuView {
+    let mut items = Vec::new();
+    let mut body = String::new();
+
+    // Option 1: Auto (default).
+    let auto_is_current = current_model_id
+        .as_deref()
+        .map(|m| m.is_empty() || m == "auto")
+        .unwrap_or(true);
+    let auto_marker = if auto_is_current {
+        s.current_marker
+    } else {
+        ""
+    };
+    body.push_str(&format!("1. {}{}\n", s.switch_model_auto, auto_marker));
+    items.push(MenuItem::default(s.switch_model_auto, "auto"));
+
+    // Remaining options: each enabled model.
+    for (i, (model_id, model_name)) in options.iter().enumerate() {
+        let is_current = current_model_id
+            .as_deref()
+            .is_some_and(|m| m == model_id.as_str());
+        let marker = if is_current { s.current_marker } else { "" };
+        body.push_str(&format!("{}. {}{}\n", i + 2, model_name, marker));
+        items.push(MenuItem::default(
+            truncate_label(model_name, 24),
+            model_id.clone(),
+        ));
+    }
+
+    items.push(MenuItem::default(s.item_back, "/menu"));
+    MenuView::plain(s.switch_model_title)
+        .with_body(body.trim_end().to_string())
+        .with_items(items)
+        .with_footer(s.footer_reply_model)
+        .without_plain_text_items()
+}
+
+async fn start_switch_model(state: &mut BotChatState, s: &'static BotStrings) -> HandleResult {
+    use crate::service_agent_runtime::CoreServiceAgentRuntime;
+    let session_id = match state.current_session_id.clone() {
+        Some(id) => id,
+        None => {
+            return result_from_menu(
+                state,
+                MenuView::plain(s.switch_model_no_session)
+                    .with_items(vec![MenuItem::default(s.item_back, "/menu")]),
+            );
+        }
+    };
+
+    let catalog = match CoreServiceAgentRuntime::load_remote_model_catalog(Some(&session_id)).await
+    {
+        Ok(c) => c,
+        Err(e) => {
+            return result_from_menu(
+                state,
+                MenuView::plain(format!("{}{e}", s.switch_model_failed_prefix))
+                    .with_items(vec![MenuItem::default(s.item_back, "/menu")]),
+            );
+        }
+    };
+
+    // Collect enabled models as (id, "name · provider") for the selection list.
+    let options: Vec<(String, String)> = catalog
+        .models
+        .iter()
+        .filter(|m| m.enabled)
+        .map(|m| (m.id.clone(), format!("{} · {}", m.model_name, m.name)))
+        .collect();
+
+    if options.is_empty() {
+        return result_from_menu(
+            state,
+            MenuView::plain(s.switch_model_no_models)
+                .with_items(vec![MenuItem::default(s.item_back, "/menu")]),
+        );
+    }
+
+    let view = model_selection_view(&catalog.session_model_id, &options, s);
+    state.set_pending(PendingAction::SelectModel { options });
+    result_from_menu(state, view)
+}
+
+async fn select_model(
+    state: &mut BotChatState,
+    model_id: &str,
+    model_name: &str,
+    s: &'static BotStrings,
+) -> HandleResult {
+    use crate::service_agent_runtime::CoreServiceAgentRuntime;
+    let session_id = match state.current_session_id.clone() {
+        Some(id) => id,
+        None => {
+            return result_from_menu(state, MenuView::plain(s.switch_model_no_session));
+        }
+    };
+
+    let coordinator = match crate::agentic::coordination::get_global_coordinator() {
+        Some(c) => c,
+        None => {
+            return result_from_menu(
+                state,
+                MenuView::plain(format!(
+                    "{}{}",
+                    s.switch_model_failed_prefix, s.session_system_unavailable,
+                )),
+            );
+        }
+    };
+
+    match CoreServiceAgentRuntime::update_remote_session_model(
+        coordinator.as_ref(),
+        &session_id,
+        model_id,
+    )
+    .await
+    {
+        Ok(_) => {
+            let body = format!("{}{}", s.switch_model_applied_prefix, model_name);
+            let mut view = main_menu_view(state, s);
+            view = view.with_body(body);
+            result_from_menu(state, view)
+        }
+        Err(e) => result_from_menu(
+            state,
+            MenuView::plain(format!("{}{e}", s.switch_model_failed_prefix))
+                .with_items(vec![MenuItem::default(s.item_back, "/menu")]),
+        ),
+    }
 }
 
 // ── Public entry points ────────────────────────────────────────────
@@ -415,12 +554,32 @@ async fn dispatch(
     }
 
     match cmd {
-        BotCommand::Help => result_from_menu(
-            state,
-            MenuView::plain(s.welcome_title)
-                .with_body(s.help_body)
-                .with_items(vec![MenuItem::default(s.item_back, "/menu")]),
-        ),
+        BotCommand::Help => {
+            let mut items: Vec<MenuItem> = Vec::new();
+            if state.display_mode == BotDisplayMode::Pro {
+                items.push(MenuItem::primary(
+                    s.item_new_code_session,
+                    "/new_code_session",
+                ));
+                items.push(MenuItem::default(
+                    s.item_new_cowork_session,
+                    "/new_cowork_session",
+                ));
+                items.push(MenuItem::default(s.item_switch_workspace, "/switch"));
+            } else {
+                items.push(MenuItem::primary(s.item_new_session, "/new"));
+                items.push(MenuItem::default(s.item_switch_assistant, "/switch"));
+            }
+            items.push(MenuItem::default(s.item_resume_session, "/resume"));
+            items.push(MenuItem::default(s.item_switch_model, "/model"));
+            items.push(MenuItem::default(s.item_settings, "/settings"));
+            result_from_menu(
+                state,
+                MenuView::plain(s.welcome_title)
+                    .with_body(s.help_body)
+                    .with_items(items),
+            )
+        }
         BotCommand::Settings => {
             let verbose = super::load_bot_persistence().verbose_mode;
             result_from_menu(state, settings_menu_view(verbose, state, s))
@@ -433,6 +592,7 @@ async fn dispatch(
         BotCommand::NewCoworkSession => guarded_new(state, "Cowork", s).await,
         BotCommand::NewClawSession => guarded_new(state, "Claw", s).await,
         BotCommand::ResumeSession => start_resume(state, 0, s).await,
+        BotCommand::SwitchModel => start_switch_model(state, s).await,
         BotCommand::ChatMessage(msg) => handle_chat(state, &msg, image_contexts, s).await,
         BotCommand::Menu
         | BotCommand::CancelTask(_)
@@ -1133,6 +1293,7 @@ async fn create_session(state: &mut BotChatState, agent_type: &str) -> HandleRes
         session_name,
         agent_type,
         Some(workspace_path.clone()),
+        Default::default(),
         RemoteConnectSubmissionSource::Bot,
     );
     let runtime = match CoreServiceAgentRuntime::agent_runtime(coordinator.clone()) {
@@ -1309,6 +1470,28 @@ async fn route_pending(
             )
             .await
         }
+        PendingAction::SelectModel { options } => {
+            let parsed: Option<usize> = raw_input.parse().ok();
+            match parsed {
+                Some(0) => {
+                    state.clear_pending();
+                    menu_or_welcome(state, s)
+                }
+                Some(1) => {
+                    state.clear_pending();
+                    select_model(state, "auto", s.switch_model_auto, s).await
+                }
+                Some(n) if n >= 2 && n <= options.len() + 1 => {
+                    state.clear_pending();
+                    let (model_id, model_name) = options[n - 2].clone();
+                    select_model(state, &model_id, &model_name, s).await
+                }
+                _ => {
+                    state.set_pending(PendingAction::SelectModel { options });
+                    Box::pin(pending_invalid(state, s)).await
+                }
+            }
+        }
         PendingAction::ConfirmModeSwitch {
             target_mode,
             target_cmd,
@@ -1371,6 +1554,7 @@ async fn pending_invalid(state: &mut BotChatState, s: &'static BotStrings) -> Ha
             awaiting_custom_text,
             ..
         } => build_question_view(s, questions, *current_index, *awaiting_custom_text),
+        PendingAction::SelectModel { options } => model_selection_view(&None, options, s),
         PendingAction::ConfirmModeSwitch { target_mode, .. } => {
             confirm_mode_switch_view(*target_mode, s)
         }

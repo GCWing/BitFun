@@ -4,7 +4,6 @@ $size-gap-1-5: 6px !default;
 $size-radius-xs: 4px !default;
 $opacity-secondary: 0.7 !default;
 $opacity-high: 0.8 !default;
-$border-subtle: var(--color-overlay-white-06) !default;
 
 .bitfun-git-settings-view {
   display: flex;
@@ -19,8 +18,8 @@ $border-subtle: var(--color-overlay-white-06) !default;
     align-items: center;
     justify-content: space-between;
     padding: $size-gap-4;
-    border-bottom: 1px solid $border-base;
-    background: $element-bg-soft;
+    border-bottom: 1px solid var(--border-base);
+    background: var(--element-bg-soft);
   }
 
   &__header-left {
@@ -52,13 +51,13 @@ $border-subtle: var(--color-overlay-white-06) !default;
 
     &--success {
       background: var(--color-success-bg);
-      border-bottom: 1px solid $color-success;
+      border-bottom: 1px solid var(--color-success);
       color: var(--color-success);
     }
 
     &--error {
       background: var(--color-error-bg);
-      border-bottom: 1px solid $color-error;
+      border-bottom: 1px solid var(--color-error);
       color: var(--color-error);
     }
   }
@@ -121,8 +120,8 @@ $border-subtle: var(--color-overlay-white-06) !default;
 
   &__form-input {
     padding: $size-gap-2 $size-gap-3;
-    background: $element-bg-base;
-    border: 1px solid $border-base;
+    background: var(--element-bg-base);
+    border: 1px solid var(--border-base);
     border-radius: $size-radius-base;
     color: var(--color-text-primary);
     font-size: var(--font-size-sm);
@@ -132,7 +131,7 @@ $border-subtle: var(--color-overlay-white-06) !default;
     &:focus {
       outline: none;
       border-color: var(--color-accent-500);
-      background: $element-bg-medium;
+      background: var(--element-bg-medium);
     }
 
     &::placeholder {
@@ -147,8 +146,8 @@ $border-subtle: var(--color-overlay-white-06) !default;
 
   &__form-select {
     padding: $size-gap-2 $size-gap-3;
-    background: $element-bg-base;
-    border: 1px solid $border-base;
+    background: var(--element-bg-base);
+    border: 1px solid var(--border-base);
     border-radius: $size-radius-base;
     color: var(--color-text-primary);
     font-size: var(--font-size-sm);
@@ -158,7 +157,7 @@ $border-subtle: var(--color-overlay-white-06) !default;
     &:focus {
       outline: none;
       border-color: var(--color-accent-500);
-      background: $element-bg-medium;
+      background: var(--element-bg-medium);
     }
 
     &:disabled {
@@ -202,7 +201,7 @@ $border-subtle: var(--color-overlay-white-06) !default;
     gap: $size-gap-2;
     margin-bottom: $size-gap-4;
     padding-bottom: $size-gap-2;
-    border-bottom: 1px solid $border-subtle;
+    border-bottom: 1px solid var(--color-overlay-white-08);
   }
 
   &__section-title {
@@ -220,15 +219,15 @@ $border-subtle: var(--color-overlay-white-06) !default;
 
   &__config-item {
     padding: $size-gap-4;
-    background: $element-bg-soft;
-    border: 1px solid $border-base;
+    background: var(--element-bg-soft);
+    border: 1px solid var(--border-base);
     border-radius: $size-radius-base;
     margin-bottom: $size-gap-3;
     transition: all $motion-base $easing-standard;
 
     &:hover {
-      background: $element-bg-base;
-      border-color: $border-medium;
+      background: var(--element-bg-base);
+      border-color: var(--border-medium);
     }
 
     &:last-child {
@@ -303,23 +302,23 @@ $border-subtle: var(--color-overlay-white-06) !default;
     align-items: center;
     gap: $size-gap-2;
     padding: $size-gap-3;
-    background: $element-bg-base;
-    border: 1px solid $border-base;
+    background: var(--element-bg-base);
+    border: 1px solid var(--border-base);
     border-radius: $size-radius-base;
     cursor: pointer;
     transition: all $motion-base $easing-standard;
     margin-top: $size-gap-4;
 
     &:hover {
-      background: $element-bg-medium;
-      border-color: $border-medium;
+      background: var(--element-bg-medium);
+      border-color: var(--border-medium);
     }
   }
 
   &__advanced-content {
     margin-top: $size-gap-3;
     padding: $size-gap-4;
-    background: $element-bg-subtle;
+    background: var(--element-bg-subtle);
     border-radius: $size-radius-base;
   }
 }

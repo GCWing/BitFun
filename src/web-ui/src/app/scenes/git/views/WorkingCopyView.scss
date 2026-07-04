@@ -140,7 +140,7 @@
 
     &.wcv-status--modified { color: var(--color-warning); }
     &.wcv-status--added { color: var(--color-success); }
-    &.wcv-status--deleted { color: var(--color-danger); }
+    &.wcv-status--deleted { color: var(--color-error); }
     &.wcv-status--renamed { color: var(--color-info); }
   }
 
@@ -184,7 +184,7 @@
 }
 
 .wcv-file--selected {
-  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+  background: color-mix(in srgb, var(--color-accent-500) 12%, transparent);
 }
 
 .wcv-file--loading {

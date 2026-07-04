@@ -18,6 +18,7 @@ use agent_client_protocol::schema::{
 use agent_client_protocol::{
     ActiveSession, Agent, ByteStreams, Client, ConnectionTo, Error, SessionMessage,
 };
+use bitfun_agent_tools::ACP_TOOL_PREFIX;
 use bitfun_core::agentic::tools::registry::get_global_tool_registry;
 use bitfun_core::infrastructure::events::{emit_global_event, BackendEvent};
 use bitfun_core::infrastructure::PathManager;
@@ -1492,7 +1493,7 @@ impl AcpClientService {
     ) {
         let registry = get_global_tool_registry();
         let mut registry = registry.write().await;
-        registry.unregister_tools_by_prefix("acp__");
+        registry.unregister_tools_by_prefix(ACP_TOOL_PREFIX);
 
         let tools = configs
             .iter()

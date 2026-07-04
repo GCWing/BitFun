@@ -33,8 +33,8 @@
 
   &.is-open {
     border-style: solid;
-    border-color: var(--color-primary);
-    color: var(--color-primary);
+    border-color: var(--color-accent-500);
+    color: var(--color-accent-500);
   }
 
   // Styles when overflow exists
@@ -59,19 +59,19 @@
   &__badge {
     font-size: 10px;
     font-weight: 600;
-    color: var(--color-primary);
+    color: var(--color-accent-500);
     margin-left: 2px;
     transition: color 0.15s ease;
   }
 
   // Keep badge color on hover
   &:hover &__badge {
-    color: var(--color-primary);
+    color: var(--color-accent-500);
   }
 
   // Badge color when open
   &.is-open &__badge {
-    color: var(--color-primary);
+    color: var(--color-accent-500);
   }
 }
 
@@ -126,12 +126,12 @@
       background: var(--color-bg-secondary);
       border: 1px solid var(--border-base);
       border-radius: 3px;
-      color: var(--color-text-tertiary);
+      color: var(--color-text-muted);
       font-family: inherit;
     }
 
     svg {
-      color: var(--color-primary);
+      color: var(--color-accent-500);
     }
   }
 
@@ -186,7 +186,7 @@
       background: var(--color-accent-100);
 
       .canvas-tab-overflow-menu__item-title {
-        color: var(--color-primary);
+        color: var(--color-accent-500);
       }
     }
 
@@ -220,7 +220,7 @@
       padding: 0;
       background: none;
       border: none;
-      color: var(--color-text-tertiary);
+      color: var(--color-text-muted);
       cursor: pointer;
       border-radius: 3px;
       flex-shrink: 0;

@@ -1,5 +1,6 @@
 import { ModelConfig, ProviderTemplate, ApiFormat } from '../../../shared/types';
 import { configManager } from './ConfigManager';
+import { getCapabilitiesByCategory, resolveModelCategory } from './modelCategory';
 import { i18nService } from '@/infrastructure/i18n';
 import { createLogger } from '@/shared/utils/logger';
 import { extractProviderSegmentFromBaseUrl, matchProviderCatalogItemByBaseUrl } from './providerCatalog';
@@ -281,7 +282,21 @@ class ModelConfigManager {
           description: model.description || t('settings/ai-model:messages.defaultDescription', { name: model.name }),
           isBuiltIn: false,
           contextWindow: model.context_window,
-          maxTokens: model.max_tokens
+          maxTokens: model.max_tokens,
+          category: resolveModelCategory(
+            model.model_name || '',
+            model.category,
+            model.provider
+          ),
+          capabilities: Array.isArray(model.capabilities) && model.capabilities.length > 0
+            ? model.capabilities
+            : getCapabilitiesByCategory(
+                resolveModelCategory(
+                  model.model_name || '',
+                  model.category,
+                  model.provider
+                )
+              ),
         }));
       } else {
         // No config available from backend.
@@ -310,7 +325,21 @@ class ModelConfigManager {
         enabled: true,
         description: config.description,
         context_window: config.contextWindow,
-        max_tokens: config.maxTokens
+        max_tokens: config.maxTokens,
+        category: resolveModelCategory(
+          config.modelName,
+          config.category,
+          config.format
+        ),
+        capabilities: config.capabilities && config.capabilities.length > 0
+          ? config.capabilities
+          : getCapabilitiesByCategory(
+              resolveModelCategory(
+                config.modelName,
+                config.category,
+                config.format
+              )
+            ),
       }));
       
       // Save to the unified config system.
@@ -402,13 +431,17 @@ class ModelConfigManager {
     const template = PROVIDER_TEMPLATES[providerId];
     if (!template) return null;
 
+    const category = resolveModelCategory(modelName, undefined, template.format);
+
     return this.addConfig({
       name: template.name,
       baseUrl: template.baseUrl,
       modelName,
       format: template.format,
       description: t('settings/ai-model:messages.templateDescription', { description: template.description, modelName }),
-      isBuiltIn: false
+      isBuiltIn: false,
+      category,
+      capabilities: getCapabilitiesByCategory(category),
     });
   }
 

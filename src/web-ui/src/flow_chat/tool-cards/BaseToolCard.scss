@@ -14,7 +14,7 @@
   margin: var(--flowchat-card-gap) 0;
   border-radius: var(--flowchat-card-radius);
   border: 1px solid var(--border-base);
-  background: var(--color-bg-flowchat);
+  background: var(--color-bg-scene);
   backdrop-filter: blur(10px);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   overflow: hidden;
@@ -25,8 +25,8 @@
     border-color: var(--border-medium);
     box-shadow: 
       0 2px 8px var(--color-overlay-black-15),
-      0 1px 4px var(--color-overlay-black-10),
-      inset 0 1px 0 var(--color-overlay-white-03);
+      0 1px 4px var(--color-overlay-black-12),
+      inset 0 1px 0 var(--color-overlay-white-04);
   }
   
   &:active {

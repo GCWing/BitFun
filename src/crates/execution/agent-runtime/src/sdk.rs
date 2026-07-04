@@ -2,7 +2,8 @@
 //!
 //! This module is the stable entrypoint for embedding the portable agent
 //! runtime with caller-provided ports. Concrete product assembly remains
-//! outside this crate.
+//! outside this crate. Plugin runtime facts are exposed as non-executable
+//! availability only until host gates land.
 
 pub const AGENT_RUNTIME_SDK_API_VERSION: u32 = 1;
 
@@ -30,6 +31,7 @@ impl AgentRuntimeSdkCompatibility {
     }
 }
 
+pub use crate::context_profile::{ContextProfile, ContextProfilePolicy, ModelCapabilityProfile};
 pub use crate::post_call_hooks::{
     RuntimeHookErrorPolicy, RuntimeHookKind, RuntimeHookPlan, RuntimeHookRegistry,
     RuntimeHookRegistryBuildError,
@@ -39,6 +41,7 @@ pub use crate::runtime::{
     RuntimeAgentRegistry, RuntimeAgentRegistryQuery, RuntimeBuildError, RuntimeError,
     RuntimeToolRegistry, SessionSelector,
 };
+pub use crate::session_state::{session_state_label_for_state, ProcessingPhase, SessionState};
 pub use bitfun_agent_tools::{ToolRegistry, ToolRegistryItem};
 pub use bitfun_harness::{
     build_descriptor_harness_registry, HarnessCapability, HarnessProviderDescriptor,
@@ -49,17 +52,19 @@ pub use bitfun_runtime_ports::{
     AgentSessionCreateRequest, AgentSessionCreateResult, AgentSessionDeleteRequest,
     AgentSessionListRequest, AgentSessionManagementPort, AgentSessionSummary,
     AgentSessionWorkspaceRequest, AgentSubmissionPort, AgentSubmissionRequest,
-    AgentSubmissionResult, AgentSubmissionSource, AgentThreadGoalDeliveryRequest,
-    AgentTurnCancellationPort, AgentTurnCancellationRequest, AgentTurnCancellationResult,
-    ClockPort, DialogSubmitOutcome, FileSystemPort, GitPort, McpCatalogPort, NetworkPort,
-    PermissionDecision, PermissionPort, PermissionRequest, PortError, PortResult,
+    AgentSubmissionResult, AgentSubmissionSource, AgentThreadGoalCreateRequest,
+    AgentThreadGoalDeliveryRequest, AgentThreadGoalGetRequest, AgentThreadGoalManagementPort,
+    AgentThreadGoalUpdateStatusRequest, AgentTurnCancellationPort, AgentTurnCancellationRequest,
+    AgentTurnCancellationResult, ClockPort, DialogSubmitOutcome, FileSystemPort, GitPort,
+    McpCatalogPort, NetworkPort, PermissionDecision, PermissionPort, PermissionRequest,
+    PluginRuntimeAvailability, PluginRuntimeUnavailableReason, PortError, PortResult,
     RemoteAssistantWorkspaceFacts, RemoteCapabilityPort, RemoteConnectionPort,
     RemoteProjectionPort, RemoteRecentWorkspaceFacts, RemoteWorkspaceFacts,
     RemoteWorkspaceFileRuntimeHost, RemoteWorkspaceKind, RemoteWorkspacePort,
     RemoteWorkspaceRuntimeHost, RemoteWorkspaceUpdate, RuntimeEventEnvelope, RuntimeEventSink,
     RuntimeEventType, RuntimeServiceCapability, RuntimeServicePort, SessionStorageKind,
     SessionStoragePathRequest, SessionStoragePathResolution, SessionStorePort, TerminalPort,
-    WorkspacePort,
+    ThreadGoal, ThreadGoalStatus, UiExtensionAvailability, WorkspacePort,
 };
 pub use bitfun_runtime_services::{
     CapabilityAvailability, RuntimeServices, RuntimeServicesBuilder, RuntimeServicesError,

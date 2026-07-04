@@ -7,12 +7,12 @@ export function buildMarkdownPrismStyle(isLight: boolean): Record<string, CSSPro
       margin: 0,
       fontSize: '0.875rem',
       lineHeight: '1.55',
-      fontFamily: 'var(--markdown-font-mono)',
+      fontFamily: 'var(--font-family-mono)',
     },
     code: {
       fontSize: '0.875rem',
       lineHeight: '1.55',
-      fontFamily: 'var(--markdown-font-mono)',
+      fontFamily: 'var(--font-family-mono)',
     },
   });
 }

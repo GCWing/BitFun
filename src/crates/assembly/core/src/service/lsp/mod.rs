@@ -1,10 +1,9 @@
-//! LSP (Language Server Protocol) service module
+//! Product-facing LSP workspace bridge and compatibility re-exports.
 //!
-//! Provides full LSP support, including:
-//! - Plugin management (install/uninstall/load)
-//! - Server process lifecycle management
-//! - LSP protocol communication
-//! - Code completion, navigation, diagnostics, and more
+//! Reusable LSP package loading, protocol, process, manager, detection, watch,
+//! and debounce helpers live in `bitfun-services-core`. This core module keeps
+//! workspace/global/file-sync orchestration, frontend event bridging, and legacy
+//! import paths.
 
 pub mod config_watcher;
 pub mod debouncer;

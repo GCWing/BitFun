@@ -274,7 +274,7 @@
   transition: border-color $motion-fast $easing-standard;
 
   &:focus {
-    border-color: $border-accent;
+    border-color: var(--border-accent);
   }
 
   &::placeholder {

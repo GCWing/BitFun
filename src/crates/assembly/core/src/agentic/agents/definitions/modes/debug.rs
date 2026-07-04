@@ -13,9 +13,9 @@ use crate::agentic::agents::{
 };
 use crate::service::config::global::GlobalConfigManager;
 use crate::service::config::types::{DebugModeConfig, LanguageDebugTemplate};
-use crate::service::lsp::project_detector::{ProjectDetector, ProjectInfo};
 use crate::util::errors::BitFunResult;
 use async_trait::async_trait;
+use bitfun_services_core::lsp::project_detector::{ProjectDetector, ProjectInfo};
 use log::debug;
 use std::path::Path;
 

@@ -5,7 +5,7 @@
  */
 
 import React from 'react';
-import { FlowItem, FlowTextItem, FlowToolItem, FlowThinkingItem, FlowUserSteeringItem } from '../types/flow-chat';
+import { FlowItem, FlowTextItem, FlowToolItem, FlowThinkingItem, FlowUserSteeringItem, type ToolRejectOptions } from '../types/flow-chat';
 import { FlowTextBlock } from './FlowTextBlock';
 import { FlowToolCard } from './FlowToolCard';
 import { ModelThinkingDisplay } from '../tool-cards/ModelThinkingDisplay';
@@ -16,7 +16,7 @@ interface FlowItemRendererProps {
   onFileViewRequest?: (filePath: string) => void;
   onTabOpen?: (tabInfo: any) => void;
   onConfirm?: (toolId: string, updatedInput?: any, permissionOptionId?: string, approve?: boolean) => void;
-  onReject?: (toolId: string, permissionOptionId?: string) => void;
+  onReject?: (toolId: string, options?: ToolRejectOptions) => void;
   sessionId?: string;
 }
 

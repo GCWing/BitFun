@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   archiveChatSession,
+  createChatSession,
   deleteChatSession,
   ensureBackendSession,
   preloadHistoricalSessionForOpen,
@@ -151,6 +152,36 @@ function createContext(
   };
   const flowChatStore = {
     getState: () => state,
+    createSession: vi.fn((
+      sessionId: string,
+      config?: Record<string, unknown>,
+      _unused?: unknown,
+      title?: string,
+      _maxContextTokens?: number,
+      agentType?: string,
+      workspacePath?: string,
+      remoteConnectionId?: string,
+      remoteSshHost?: string,
+    ) => {
+      const nextSession = createSession({
+        sessionId,
+        title: title ?? sessionId,
+        isHistorical: false,
+        historyState: 'ready',
+        config: {
+          agentType: agentType ?? (config?.agentType as string | undefined) ?? 'agentic',
+        },
+        mode: agentType ?? 'agentic',
+        workspacePath: workspacePath ?? (config?.workspacePath as string | undefined) ?? session.workspacePath,
+        remoteConnectionId,
+        remoteSshHost,
+      });
+      state = {
+        ...state,
+        sessions: new Map(state.sessions).set(sessionId, nextSession),
+        activeSessionId: sessionId,
+      };
+    }),
     switchSession: vi.fn((sessionId: string) => {
       state = { ...state, activeSessionId: sessionId };
     }),
@@ -244,6 +275,45 @@ describe('resolveAgentTypeForSessionCreation', () => {
     agentApiMocks.getAvailableModes.mockResolvedValue([{ id: 'agentic' }]);
 
     await expect(resolveAgentTypeForSessionCreation('agentic', null)).resolves.toBe('agentic');
+  });
+});
+
+describe('createChatSession', () => {
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('dedupes concurrent creates before model config loading resolves', async () => {
+    // This keeps the first create suspended in the model config path while the
+    // second create enters with the same creation key.
+    const modelConfig = createDeferred<Record<string, unknown>>();
+    configApiMocks.getConfig.mockImplementation(async (key: string) => {
+      if (key === 'chat.default_mode') {
+        return null;
+      }
+      await modelConfig.promise;
+      return key === 'ai.models' ? [] : {};
+    });
+    agentApiMocks.getAvailableModes.mockResolvedValue([{ id: 'agentic' }]);
+    agentApiMocks.createSession.mockResolvedValue({ sessionId: 'created-1' });
+
+    const { context } = createContext(createSession({
+      workspacePath: '/home/wsp/projects/Test',
+    }));
+
+    const firstCreate = createChatSession(context, { workspacePath: '/home/wsp/projects/Test' }, 'agentic');
+    const secondCreate = createChatSession(context, { workspacePath: '/home/wsp/projects/Test' }, 'agentic');
+
+    await Promise.resolve();
+    expect(agentApiMocks.createSession).not.toHaveBeenCalled();
+
+    modelConfig.resolve({});
+    await expect(Promise.all([firstCreate, secondCreate])).resolves.toEqual([
+      'created-1',
+      'created-1',
+    ]);
+
+    expect(agentApiMocks.createSession).toHaveBeenCalledTimes(1);
   });
 });
 

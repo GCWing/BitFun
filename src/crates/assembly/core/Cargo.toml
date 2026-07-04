@@ -36,7 +36,6 @@ regex = { workspace = true }
 base64 = { workspace = true }
 image = { workspace = true, optional = true }
 md5 = { workspace = true, optional = true }
-aes = { workspace = true, optional = true }
 hex = { workspace = true }
 dashmap = { workspace = true, optional = true }
 indexmap = { workspace = true, optional = true }
@@ -58,14 +57,12 @@ dirs = { workspace = true }
 dunce = { workspace = true }
 filetime = { workspace = true, optional = true }
 fs2 = { workspace = true, optional = true }
-zip = { workspace = true }
 flate2 = { workspace = true, optional = true }
 include_dir = { workspace = true, optional = true }
 
 git2 = { workspace = true, optional = true }
 
 # Command detection (cross-platform)
-which = { workspace = true }
 similar = { workspace = true, optional = true }
 urlencoding = { workspace = true }
 
@@ -101,7 +98,7 @@ bitfun-agent-tools = { path = "../../execution/tool-contracts" }
 bitfun-tool-packs = { path = "../../execution/tool-provider-groups", default-features = false, optional = true }
 
 # Core service owner crate
-bitfun-services-core = { path = "../../services/services-core" }
+bitfun-services-core = { path = "../../services/services-core", default-features = false, features = ["lsp"] }
 
 # Integration service owner crate
 bitfun-services-integrations = { path = "../../services/services-integrations", default-features = false, features = ["remote-ssh"] }
@@ -123,9 +120,6 @@ unic-langid = { workspace = true }
 aes-gcm = { workspace = true, optional = true }
 sha2 = { workspace = true }
 rand = { workspace = true, optional = true }
-
-# Device/Network info (Remote Connect)
-local-ip-address = { workspace = true, optional = true }
 
 # QR code generation
 
@@ -190,7 +184,11 @@ product-full = [
     "service-integrations",
     "tool-packs",
 ]
-ai-adapter-runtime = ["dep:bitfun-ai-adapters", "dep:reqwest"]
+ai-adapter-runtime = [
+    "dep:bitfun-ai-adapters",
+    "bitfun-ai-adapters/cli-credentials",
+    "dep:reqwest",
+]
 product-capabilities = ["dep:bitfun-product-capabilities"]
 product-domains = [
     "ai-adapter-runtime",
@@ -201,13 +199,11 @@ product-domains = [
 ]
 runtime-services = []
 service-integrations = [
-    "dep:aes",
     "dep:aes-gcm",
     "dep:axum",
     "dep:bitfun-relay-server",
     "dep:git2",
     "dep:image",
-    "dep:local-ip-address",
     "dep:md5",
     "dep:rand",
     "dep:reqwest",
@@ -217,12 +213,15 @@ service-integrations = [
     "dep:tower-http",
     "bitfun-services-integrations/product-full",
 ]
-tool-packs = ["dep:bitfun-tool-packs", "bitfun-tool-packs/product-full"]
-tauri-support = []  # Optional tauri support
+tool-packs = ["dep:bitfun-tool-packs", "bitfun-tool-packs/product-full", "dep:image"]
+tauri-support = []
 ssh-remote = [
     "bitfun-services-integrations/remote-ssh-concrete",
     "russh",
 ]
+
+[dev-dependencies]
+tempfile = { workspace = true }
 
 [build-dependencies]
 sha2 = { workspace = true }

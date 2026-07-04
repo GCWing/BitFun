@@ -108,8 +108,6 @@ pub struct SearchParams {
     #[serde(default)]
     pub scope: PathScope,
     #[serde(default)]
-    pub consistency: ConsistencyMode,
-    #[serde(default)]
     pub allow_scan_fallback: bool,
 }
 
@@ -241,21 +239,11 @@ pub enum CorpusModeConfig {
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum SearchModeConfig {
+    FilesWithMatches,
+    #[default]
+    LineMatches,
     CountOnly,
     CountMatches,
-    #[default]
-    MaterializeMatches,
-    FilesWithMatches,
-    LineMatches,
-}
-
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default)]
-#[serde(rename_all = "snake_case")]
-pub enum ConsistencyMode {
-    SnapshotOnly,
-    #[default]
-    WorkspaceEventual,
-    WorkspaceStrict,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -324,8 +312,6 @@ pub enum Response {
     SearchCompleted {
         repo_id: String,
         backend: SearchBackend,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        consistency_applied: Option<ConsistencyMode>,
         status: RepoStatus,
         results: SearchResults,
     },
@@ -364,8 +350,6 @@ pub struct ServerCapabilities {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SearchProtocolCapabilities {
-    #[serde(default)]
-    pub consistency_modes: Vec<ConsistencyMode>,
     pub search_modes: Vec<SearchModeConfig>,
 }
 
@@ -473,7 +457,6 @@ pub enum TaskPhase {
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SearchBackend {
-    IndexedSnapshot,
     IndexedClean,
     IndexedWorkspaceView,
     RgFallback,
@@ -497,8 +480,6 @@ pub struct SearchResults {
     pub file_match_counts: Vec<FileMatchCount>,
     #[serde(default)]
     pub line_matches: Vec<LineMatch>,
-    #[serde(default)]
-    pub hits: Vec<SearchHit>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -517,35 +498,8 @@ pub struct FileMatchCount {
 pub struct LineMatch {
     pub path: String,
     pub line_number: usize,
-    pub line_text: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SearchHit {
-    pub path: String,
-    pub matches: Vec<FileMatch>,
-    pub lines: Vec<SearchLine>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FileMatch {
-    pub location: MatchLocation,
-    pub snippet: String,
-    pub matched_text: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MatchLocation {
-    pub line: usize,
-    pub column: usize,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-pub enum SearchLine {
-    Match { value: FileMatch },
-    Context { line_number: usize, snippet: String },
-    ContextBreak,
+    #[serde(default)]
+    pub line_text: Option<String>,
 }
 
 fn default_top_k_tokens() -> usize {

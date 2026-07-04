@@ -44,7 +44,7 @@ $_editor-padding-desktop: 32px;
   &__loading-spinner {
     width: $_editor-loading-spinner-size;
     height: $_editor-loading-spinner-size;
-    border: $_editor-loading-spinner-border solid $color-accent-200;
+    border: $_editor-loading-spinner-border solid var(--color-accent-200);
     border-top-color: var(--color-accent-500);
     border-radius: $size-radius-full;
     animation: code-editor-spin $motion-lazy $easing-standard infinite;

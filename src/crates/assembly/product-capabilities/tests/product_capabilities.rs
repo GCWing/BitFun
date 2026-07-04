@@ -8,11 +8,56 @@ use bitfun_product_capabilities::{
     ProductCapabilityRegistry, ProductCoreDependencyMode, ProductFeatureGroup,
     ProductRuntimeAssembly, ProductServiceCapabilityRequirement, ProductServiceCapabilityStatus,
 };
-use bitfun_runtime_ports::RuntimeServiceCapability;
+use bitfun_runtime_ports::{
+    PluginDispatchEnvelope, PluginResponseEnvelope, PluginRuntimeAvailability,
+    PluginRuntimeBinding, PluginRuntimeClient, PluginRuntimeUnavailableReason, PortResult,
+    RuntimeServiceCapability, UiExtensionAvailability,
+};
 use bitfun_runtime_services::test_support::FakeRuntimeServicesProvider;
 use bitfun_runtime_services::{
     RuntimeServiceMarkerPort, RuntimeServicesBuilder, RuntimeServicesProvider,
 };
+use std::sync::Arc;
+
+struct AvailablePluginRuntimeClient;
+
+#[async_trait::async_trait]
+impl PluginRuntimeClient for AvailablePluginRuntimeClient {
+    fn availability(&self) -> PluginRuntimeAvailability {
+        PluginRuntimeAvailability::Available
+    }
+
+    async fn dispatch(
+        &self,
+        envelope: PluginDispatchEnvelope,
+    ) -> PortResult<PluginResponseEnvelope> {
+        Ok(PluginResponseEnvelope {
+            envelope_id: envelope.envelope_id,
+            accepted: true,
+        })
+    }
+}
+
+struct MisreportedPluginRuntimeClient;
+
+#[async_trait::async_trait]
+impl PluginRuntimeClient for MisreportedPluginRuntimeClient {
+    fn availability(&self) -> PluginRuntimeAvailability {
+        PluginRuntimeAvailability::ProjectionOnly {
+            reason: PluginRuntimeUnavailableReason::NotBuilt,
+        }
+    }
+
+    async fn dispatch(
+        &self,
+        envelope: PluginDispatchEnvelope,
+    ) -> PortResult<PluginResponseEnvelope> {
+        Ok(PluginResponseEnvelope {
+            envelope_id: envelope.envelope_id,
+            accepted: true,
+        })
+    }
+}
 
 #[test]
 fn default_capability_registry_preserves_product_tool_provider_order() {
@@ -196,6 +241,7 @@ fn no_direct_core_profiles_do_not_select_product_full_runtime_capabilities() {
         DeliveryProfile::Remote,
         DeliveryProfile::Web,
         DeliveryProfile::MobileWeb,
+        DeliveryProfile::Sdk,
     ] {
         let plan = product_assembly_plan_for_profile(profile);
 
@@ -277,6 +323,10 @@ fn product_delivery_profile_matrix_documents_current_core_dependency_shape() {
                 DeliveryProfile::MobileWeb,
                 ProductCoreDependencyMode::NoDirectCoreDependency,
             ),
+            (
+                DeliveryProfile::Sdk,
+                ProductCoreDependencyMode::NoDirectCoreDependency,
+            ),
         ]
     );
     assert_eq!(
@@ -337,6 +387,62 @@ fn product_assembly_plan_follows_core_dependency_matrix() {
             ),
         }
     }
+}
+
+#[test]
+fn product_assembly_plan_keeps_plugin_runtime_disabled_until_host_exists() {
+    for profile in DeliveryProfile::all_current_product_profiles() {
+        let extension_capabilities = product_assembly_plan_for_profile(*profile)
+            .extension_capabilities()
+            .clone();
+
+        assert_eq!(
+            extension_capabilities.plugin_runtime().is_executable(),
+            false,
+            "{profile} must not imply executable plugin runtime support"
+        );
+        assert_eq!(
+            extension_capabilities.ui_extensions().is_executable(),
+            false,
+            "{profile} must not imply UI extension rendering support"
+        );
+    }
+}
+
+#[test]
+fn product_assembly_plan_distinguishes_extension_unavailable_reasons_by_profile() {
+    assert_eq!(
+        product_assembly_plan_for_profile(DeliveryProfile::Desktop)
+            .extension_capabilities()
+            .plugin_runtime(),
+        PluginRuntimeAvailability::Disabled {
+            reason: PluginRuntimeUnavailableReason::NotBuilt
+        }
+    );
+    assert_eq!(
+        product_assembly_plan_for_profile(DeliveryProfile::Web)
+            .extension_capabilities()
+            .plugin_runtime(),
+        PluginRuntimeAvailability::Disabled {
+            reason: PluginRuntimeUnavailableReason::UnsupportedProfile
+        }
+    );
+    assert_eq!(
+        product_assembly_plan_for_profile(DeliveryProfile::Desktop)
+            .extension_capabilities()
+            .ui_extensions(),
+        UiExtensionAvailability::Disabled {
+            reason: PluginRuntimeUnavailableReason::NotBuilt
+        }
+    );
+    assert_eq!(
+        product_assembly_plan_for_profile(DeliveryProfile::Cli)
+            .extension_capabilities()
+            .ui_extensions(),
+        UiExtensionAvailability::Disabled {
+            reason: PluginRuntimeUnavailableReason::UnsupportedProfile
+        }
+    );
 }
 
 #[test]
@@ -430,11 +536,11 @@ fn product_runtime_assembly_reports_runtime_service_capability_gaps() {
 
     let complete_services = FakeRuntimeServicesProvider::with_all_required()
         .register(RuntimeServicesBuilder::new())
-        .with_optional_terminal(Some(RuntimeServiceMarkerPort::terminal_port()))
+        .with_optional_terminal(Some(FakeRuntimeServicesProvider::terminal_port()))
         .with_optional_git(Some(RuntimeServiceMarkerPort::git_port()))
         .with_optional_network(Some(RuntimeServiceMarkerPort::network_port()))
         .build()
-        .expect("runtime service marker ports should satisfy product requirements");
+        .expect("runtime services should satisfy product requirements");
 
     assert!(assembly
         .missing_service_requirements(&complete_services)
@@ -446,11 +552,11 @@ fn product_runtime_assembly_reports_runtime_service_capability_gaps() {
 fn product_assembler_builds_runtime_parts_from_explicit_profile_input() {
     let services = FakeRuntimeServicesProvider::with_all_required()
         .register(RuntimeServicesBuilder::new())
-        .with_optional_terminal(Some(RuntimeServiceMarkerPort::terminal_port()))
+        .with_optional_terminal(Some(FakeRuntimeServicesProvider::terminal_port()))
         .with_optional_git(Some(RuntimeServiceMarkerPort::git_port()))
         .with_optional_network(Some(RuntimeServiceMarkerPort::network_port()))
         .build()
-        .expect("runtime service marker ports should satisfy product requirements");
+        .expect("runtime services should satisfy product requirements");
 
     let parts = ProductAssembler::new()
         .assemble(ProductAssemblyInput::new(DeliveryProfile::Cli, services))
@@ -465,6 +571,102 @@ fn product_assembler_builds_runtime_parts_from_explicit_profile_input() {
     assert!(parts
         .services()
         .has_capability(RuntimeServiceCapability::Terminal));
+    assert_eq!(
+        parts.plugin_runtime().availability(),
+        PluginRuntimeAvailability::Disabled {
+            reason: PluginRuntimeUnavailableReason::NotBuilt
+        }
+    );
+}
+
+#[test]
+fn product_assembler_preserves_explicit_plugin_runtime_binding() {
+    let services = FakeRuntimeServicesProvider::with_all_required()
+        .register(RuntimeServicesBuilder::new())
+        .with_optional_terminal(Some(FakeRuntimeServicesProvider::terminal_port()))
+        .with_optional_git(Some(RuntimeServiceMarkerPort::git_port()))
+        .with_optional_network(Some(RuntimeServiceMarkerPort::network_port()))
+        .build()
+        .expect("runtime services should satisfy product requirements");
+
+    let parts = ProductAssembler::new()
+        .assemble(
+            ProductAssemblyInput::new(DeliveryProfile::Desktop, services).with_plugin_runtime(
+                PluginRuntimeBinding::projection_only(
+                    PluginRuntimeUnavailableReason::UnsupportedProfile,
+                ),
+            ),
+        )
+        .expect("explicit plugin runtime binding should be carried by runtime parts");
+
+    assert_eq!(
+        parts.plugin_runtime().availability(),
+        PluginRuntimeAvailability::ProjectionOnly {
+            reason: PluginRuntimeUnavailableReason::UnsupportedProfile
+        }
+    );
+    assert_eq!(
+        parts.plan().extension_capabilities().plugin_runtime(),
+        PluginRuntimeAvailability::ProjectionOnly {
+            reason: PluginRuntimeUnavailableReason::UnsupportedProfile
+        }
+    );
+}
+
+#[test]
+fn product_assembler_rejects_executable_plugin_runtime_binding() {
+    let services = FakeRuntimeServicesProvider::with_all_required()
+        .register(RuntimeServicesBuilder::new())
+        .with_optional_terminal(Some(FakeRuntimeServicesProvider::terminal_port()))
+        .with_optional_git(Some(RuntimeServiceMarkerPort::git_port()))
+        .with_optional_network(Some(RuntimeServiceMarkerPort::network_port()))
+        .build()
+        .expect("runtime services should satisfy product requirements");
+
+    let error = ProductAssembler::new()
+        .assemble(
+            ProductAssemblyInput::new(DeliveryProfile::Desktop, services).with_plugin_runtime(
+                PluginRuntimeBinding::client(Arc::new(AvailablePluginRuntimeClient)),
+            ),
+        )
+        .expect_err("executable plugin runtime binding must wait for host-stage gates");
+
+    assert_eq!(
+        error,
+        ProductAssemblyError::UnsupportedPluginRuntime {
+            profile: DeliveryProfile::Desktop,
+            availability: PluginRuntimeAvailability::Available
+        }
+    );
+}
+
+#[test]
+fn product_assembler_rejects_client_plugin_runtime_binding_even_when_reported_projection_only() {
+    let services = FakeRuntimeServicesProvider::with_all_required()
+        .register(RuntimeServicesBuilder::new())
+        .with_optional_terminal(Some(FakeRuntimeServicesProvider::terminal_port()))
+        .with_optional_git(Some(RuntimeServiceMarkerPort::git_port()))
+        .with_optional_network(Some(RuntimeServiceMarkerPort::network_port()))
+        .build()
+        .expect("runtime services should satisfy product requirements");
+
+    let error = ProductAssembler::new()
+        .assemble(
+            ProductAssemblyInput::new(DeliveryProfile::Desktop, services).with_plugin_runtime(
+                PluginRuntimeBinding::client(Arc::new(MisreportedPluginRuntimeClient)),
+            ),
+        )
+        .expect_err("client plugin runtime binding must wait for host-stage gates");
+
+    assert_eq!(
+        error,
+        ProductAssemblyError::UnsupportedPluginRuntime {
+            profile: DeliveryProfile::Desktop,
+            availability: PluginRuntimeAvailability::ProjectionOnly {
+                reason: PluginRuntimeUnavailableReason::NotBuilt
+            }
+        }
+    );
 }
 
 #[test]
@@ -509,6 +711,7 @@ fn product_assembler_allows_no_direct_core_profiles_without_product_services() {
         DeliveryProfile::Remote,
         DeliveryProfile::Web,
         DeliveryProfile::MobileWeb,
+        DeliveryProfile::Sdk,
     ] {
         let services = FakeRuntimeServicesProvider::with_all_required()
             .build_services()

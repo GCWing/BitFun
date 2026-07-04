@@ -123,8 +123,8 @@ interface LifecycleEvent {
 | `sandbox.capability.evaluated` | 记录当前执行面可用的快照、worktree、只读、网络限制、进程隔离或容器能力 |
 | `user.override.recorded` | 记录跳过、风险接受或临时放行 |
 | `active_config.discovered` | 固化 hook、plugin、自定义工具、MCP、智能体规则的来源、hash、权限声明和未信任状态 |
-| `extension.hook.dispatched` | 记录 Kernel 扩展点被触发、适用范围、deadline 和空实现/候选处理结果 |
-| `extension.effect.candidate` | 记录外部适配器或空实现返回的建议、证据、复写候选或阻断建议 |
+| `extension.hook.dispatched` | 记录 Plugin Runtime Host 通过 Event Manifest 投递事件、适用范围、deadline 和空实现/候选处理结果 |
+| `extension.effect.candidate` | 记录外部适配器或空实现返回的建议、证据、工具输入补丁、UI contribution 或 permission candidate |
 | `tool.override.candidate` | 记录工具复写候选的来源、hash、目标工具、能力范围和信任状态 |
 | `telemetry.point.recorded` | 记录可采样的扩展点打点，用于成本、超时、失败和降级分析 |
 | `file.changed` | 更新 diff 摘要和风险候选 |

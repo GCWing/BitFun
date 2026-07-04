@@ -4,7 +4,7 @@
   width: 2px;
   background: linear-gradient(180deg,
     color-mix(in srgb, var(--color-static-white) 1%, transparent) 0%,
-    var(--color-overlay-white-02) 50%,
+    var(--color-overlay-white-04) 50%,
     color-mix(in srgb, var(--color-static-white) 1%, transparent) 100%);
   cursor: col-resize;
   position: relative;
@@ -12,7 +12,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all var(--motion-normal) var(--easing-standard);
+  transition: all var(--motion-base) var(--easing-standard);
   border: none;
   flex-shrink: 0;
   opacity: 0.2;
@@ -30,7 +30,7 @@
   box-shadow:
     0 0 6px color-mix(in srgb, var(--color-accent-500) 5%, transparent),
     0 0 12px var(--color-purple-50),
-    inset 0 0 3px var(--color-overlay-white-02);
+    inset 0 0 3px var(--color-overlay-white-04);
   transform: scaleY(1.02);
 }
 
@@ -44,16 +44,16 @@
   box-shadow:
     0 0 12px color-mix(in srgb, var(--color-accent-500) 20%, transparent),
     0 0 24px var(--color-purple-200),
-    inset 0 0 6px var(--color-overlay-white-05);
+    inset 0 0 6px var(--color-overlay-white-08);
   transform: scaleY(1.15);
 }
 
 .u-resizer-line {
   width: 1px;
   height: 20px;
-  background: var(--color-overlay-white-10);
+  background: var(--color-overlay-white-12);
   border-radius: var(--size-radius-sm);
-  transition: all var(--motion-normal);
+  transition: all var(--motion-base);
   opacity: 0.2;
 }
 

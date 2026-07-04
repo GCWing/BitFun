@@ -8,11 +8,15 @@
 use crate::miniapp::manager::MiniAppManager;
 use crate::util::errors::{BitFunError, BitFunResult};
 use bitfun_product_domains::miniapp::builtin::{
-    resolve_builtin_seed_action, resolve_builtin_seed_check, BuiltinInstallMarker,
-    BuiltinSeedAction, BuiltinSeedCheck, BUILTIN_INSTALL_MARKER,
+    seed_builtin_miniapps_with_host, BuiltinInstallMarker, BuiltinMiniAppSeedBundleRequest,
+    BuiltinMiniAppSeedHost, BuiltinMiniAppSeedOutcome, BuiltinMiniAppSeedReport,
+    BuiltinSeedArtifacts, BUILTIN_INSTALL_MARKER,
 };
 pub use bitfun_product_domains::miniapp::builtin::{
     BuiltinMiniAppBundle as BuiltinApp, BUILTIN_APPS,
+};
+use bitfun_product_domains::miniapp::ports::{
+    MiniAppPortError, MiniAppPortErrorKind, MiniAppPortFuture,
 };
 use bitfun_services_integrations::miniapp::builtin_io as miniapp_builtin_io;
 use chrono::Utc;
@@ -24,89 +28,152 @@ use std::sync::Arc;
 /// is preserved across reseeds; source files & meta.json (without timestamps) are
 /// overwritten.
 pub async fn seed_builtin_miniapps(manager: &Arc<MiniAppManager>) -> BitFunResult<()> {
-    for app in BUILTIN_APPS {
-        if let Err(e) = seed_one(manager, app).await {
-            log::warn!("seed builtin miniapp '{}' failed: {}", app.id, e);
-        }
+    let host = CoreBuiltinMiniAppSeedHost {
+        manager: Arc::clone(manager),
+    };
+    for report in seed_builtin_miniapps_with_host(&host).await {
+        log_builtin_seed_report(report);
     }
     Ok(())
 }
 
-async fn seed_one(manager: &Arc<MiniAppManager>, app: &BuiltinApp) -> BitFunResult<()> {
-    let app_dir = manager.path_manager().miniapp_dir(app.id);
-    let marker_path = app_dir.join(BUILTIN_INSTALL_MARKER);
-    let installed_marker = read_builtin_install_marker(&marker_path).await?;
-    let seed_artifacts = match resolve_builtin_seed_check(app, installed_marker.as_ref()) {
-        BuiltinSeedCheck::Skip => return Ok(()),
-        BuiltinSeedCheck::NeedsSeed(artifacts) => artifacts,
-    };
+struct CoreBuiltinMiniAppSeedHost {
+    manager: Arc<MiniAppManager>,
+}
 
-    let now = Utc::now().timestamp_millis();
-    let has_local_override = match manager.load_customization_metadata(app.id).await {
-        Ok(Some(metadata)) => metadata.local_override,
-        Ok(None) => false,
-        Err(e) => {
-            log::warn!(
-                "read customization metadata for builtin miniapp '{}' failed: {}",
-                app.id,
-                e
+impl BuiltinMiniAppSeedHost for CoreBuiltinMiniAppSeedHost {
+    fn now_ms(&self) -> i64 {
+        Utc::now().timestamp_millis()
+    }
+
+    fn installed_marker(
+        &self,
+        app_id: &'static str,
+    ) -> MiniAppPortFuture<'_, Option<BuiltinInstallMarker>> {
+        Box::pin(async move {
+            let marker_path = self
+                .manager
+                .path_manager()
+                .miniapp_dir(app_id)
+                .join(BUILTIN_INSTALL_MARKER);
+            read_builtin_install_marker(&marker_path)
+                .await
+                .map_err(map_bitfun_error_to_miniapp_port_error)
+        })
+    }
+
+    fn has_local_override(&self, app_id: &'static str) -> MiniAppPortFuture<'_, bool> {
+        Box::pin(async move {
+            match self.manager.load_customization_metadata(app_id).await {
+                Ok(Some(metadata)) => Ok(metadata.local_override),
+                Ok(None) => Ok(false),
+                Err(e) => {
+                    log::warn!(
+                        "read customization metadata for builtin miniapp '{}' failed: {}",
+                        app_id,
+                        e
+                    );
+                    Ok(false)
+                }
+            }
+        })
+    }
+
+    fn record_available_update(
+        &self,
+        app_id: &'static str,
+        version: u32,
+        content_hash: String,
+        now_ms: i64,
+    ) -> MiniAppPortFuture<'_, bool> {
+        Box::pin(async move {
+            self.manager
+                .mark_builtin_update_available(app_id, version, &content_hash, now_ms)
+                .await
+                .map_err(map_bitfun_error_to_miniapp_port_error)
+        })
+    }
+
+    fn seed_bundle(&self, request: BuiltinMiniAppSeedBundleRequest) -> MiniAppPortFuture<'_, ()> {
+        Box::pin(async move {
+            prepare_builtin_seed_bundle(&self.manager, request)
+                .await
+                .map_err(map_bitfun_error_to_miniapp_port_error)
+        })
+    }
+
+    fn write_seed_markers(
+        &self,
+        app_id: &'static str,
+        artifacts: BuiltinSeedArtifacts,
+    ) -> MiniAppPortFuture<'_, ()> {
+        Box::pin(async move {
+            let app_dir = self.manager.path_manager().miniapp_dir(app_id);
+            write_builtin_install_marker(&app_dir.join(BUILTIN_INSTALL_MARKER), &artifacts.marker)
+                .await
+                .map_err(map_bitfun_error_to_miniapp_port_error)?;
+            write_legacy_builtin_version_marker(&app_dir, &artifacts.legacy_version)
+                .await
+                .map_err(map_bitfun_error_to_miniapp_port_error)
+        })
+    }
+}
+
+async fn prepare_builtin_seed_bundle(
+    manager: &Arc<MiniAppManager>,
+    request: BuiltinMiniAppSeedBundleRequest,
+) -> BitFunResult<()> {
+    let app_dir = manager.path_manager().miniapp_dir(request.app.id);
+    miniapp_builtin_io::prepare_builtin_seed_bundle_files(
+        &app_dir,
+        request.app,
+        request.seeded_at_ms,
+    )
+    .await
+    .map_err(map_builtin_io_error)?;
+
+    // Recompile to assemble the final compiled.html with bridge + theme + import map.
+    manager.recompile(request.app.id, "dark", None).await?;
+    Ok(())
+}
+
+fn log_builtin_seed_report(report: BuiltinMiniAppSeedReport) {
+    match report.outcome {
+        Ok(BuiltinMiniAppSeedOutcome::Skipped) => {}
+        Ok(BuiltinMiniAppSeedOutcome::Seeded {
+            version,
+            content_hash,
+        }) => {
+            log::info!(
+                "seeded builtin miniapp '{}' (v{}, {})",
+                report.app_id,
+                version,
+                content_hash
             );
-            false
         }
-    };
-
-    match resolve_builtin_seed_action(seed_artifacts, has_local_override) {
-        BuiltinSeedAction::PreserveLocalOverride(artifacts) => {
-            let recorded = manager
-                .mark_builtin_update_available(app.id, app.version, &artifacts.content_hash, now)
-                .await?;
-            write_builtin_install_marker(&marker_path, &artifacts.marker).await?;
-            write_legacy_builtin_version_marker(&app_dir, &artifacts.legacy_version).await?;
-            if recorded {
+        Ok(BuiltinMiniAppSeedOutcome::PreservedLocalOverride {
+            version,
+            recorded_update,
+            ..
+        }) => {
+            if recorded_update {
                 log::info!(
                     "preserved customized builtin miniapp '{}' and recorded bundled update v{}",
-                    app.id,
-                    app.version
+                    report.app_id,
+                    version
                 );
             } else {
                 log::info!(
                     "preserved customized builtin miniapp '{}' and skipped previously declined bundled update v{}",
-                    app.id,
-                    app.version
+                    report.app_id,
+                    version
                 );
             }
-            return Ok(());
         }
-        BuiltinSeedAction::SeedBundle(artifacts) => {
-            seed_builtin_bundle(manager, app, artifacts, now).await
+        Err(error) => {
+            log::warn!("seed builtin miniapp '{}' failed: {}", report.app_id, error);
         }
     }
-}
-
-async fn seed_builtin_bundle(
-    manager: &Arc<MiniAppManager>,
-    app: &BuiltinApp,
-    artifacts: bitfun_product_domains::miniapp::builtin::BuiltinSeedArtifacts,
-    now: i64,
-) -> BitFunResult<()> {
-    let app_dir = manager.path_manager().miniapp_dir(app.id);
-    miniapp_builtin_io::prepare_builtin_seed_bundle_files(&app_dir, app, now)
-        .await
-        .map_err(map_builtin_io_error)?;
-
-    // Recompile to assemble the final compiled.html with bridge + theme + import map.
-    manager.recompile(app.id, "dark", None).await?;
-
-    let marker_path = app_dir.join(BUILTIN_INSTALL_MARKER);
-    write_builtin_install_marker(&marker_path, &artifacts.marker).await?;
-    write_legacy_builtin_version_marker(&app_dir, &artifacts.legacy_version).await?;
-    log::info!(
-        "seeded builtin miniapp '{}' (v{}, {})",
-        app.id,
-        app.version,
-        artifacts.marker.hash
-    );
-    Ok(())
 }
 
 async fn read_builtin_install_marker(path: &Path) -> BitFunResult<Option<BuiltinInstallMarker>> {
@@ -146,6 +213,25 @@ fn map_builtin_io_error(err: miniapp_builtin_io::MiniAppBuiltinIoError) -> BitFu
     }
 }
 
+fn map_bitfun_error_to_miniapp_port_error(error: BitFunError) -> MiniAppPortError {
+    let kind = match &error {
+        BitFunError::NotFound(_) => MiniAppPortErrorKind::NotFound,
+        BitFunError::Validation(_) => MiniAppPortErrorKind::InvalidInput,
+        BitFunError::Deserialization(_) | BitFunError::Serialization(_) => {
+            MiniAppPortErrorKind::Deserialization
+        }
+        BitFunError::Io(io_error) if io_error.kind() == std::io::ErrorKind::PermissionDenied => {
+            MiniAppPortErrorKind::PermissionDenied
+        }
+        BitFunError::Io(_) => MiniAppPortErrorKind::Io,
+        BitFunError::ProcessError(_) | BitFunError::Timeout(_) => {
+            MiniAppPortErrorKind::RuntimeUnavailable
+        }
+        _ => MiniAppPortErrorKind::Backend,
+    };
+    MiniAppPortError::new(kind, error.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -154,14 +240,36 @@ mod tests {
         MiniAppCustomizationMetadata, MiniAppCustomizationOrigin, MiniAppCustomizationOriginKind,
     };
 
-    fn test_manager() -> Arc<MiniAppManager> {
+    struct TestMiniAppManager {
+        manager: Arc<MiniAppManager>,
+        root: std::path::PathBuf,
+    }
+
+    impl std::ops::Deref for TestMiniAppManager {
+        type Target = Arc<MiniAppManager>;
+
+        fn deref(&self) -> &Self::Target {
+            &self.manager
+        }
+    }
+
+    impl Drop for TestMiniAppManager {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.root);
+        }
+    }
+
+    fn test_manager() -> TestMiniAppManager {
         let root = std::env::temp_dir().join(format!(
             "bitfun-miniapp-builtin-customization-{}",
             uuid::Uuid::new_v4()
         ));
         let path_manager =
-            Arc::new(crate::infrastructure::PathManager::with_user_root_for_tests(root));
-        Arc::new(MiniAppManager::new(path_manager))
+            Arc::new(crate::infrastructure::PathManager::with_user_root_for_tests(root.clone()));
+        TestMiniAppManager {
+            manager: Arc::new(MiniAppManager::new(path_manager)),
+            root,
+        }
     }
 
     async fn write_outdated_builtin_marker(app_dir: &std::path::Path) {

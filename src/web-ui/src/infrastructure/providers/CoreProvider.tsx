@@ -92,7 +92,7 @@ export const CoreProvider: React.FC<CoreProviderProps> = ({ children }) => {
           onClick={() => window.location.reload()}
           style={{
             padding: '8px 16px',
-            background: 'var(--color-primary)',
+            background: 'var(--color-accent-500)',
             color: 'var(--color-static-white)',
             border: 'none',
             borderRadius: '4px',

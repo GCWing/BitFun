@@ -13,6 +13,7 @@ use crate::agentic::coordination::{
     DialogTriggerSource,
 };
 use crate::agentic::core::SessionConfig;
+use crate::agentic::workspace::WorkspaceBinding;
 use crate::infrastructure::PathManager;
 use crate::service_agent_runtime::CoreServiceAgentRuntime;
 use crate::util::errors::{BitFunError, BitFunResult};
@@ -119,17 +120,21 @@ impl CronService {
         let jobs = self.jobs.read().await;
         jobs.values()
             .filter(|job| {
-                matches_workspace_filter(
+                let workspace_matches = matches_workspace_filter(
                     job.workspace(),
                     workspace_path,
                     workspace_id,
                     remote_connection_id,
-                ) && session_id
+                );
+                let session_matches = session_id
                     .map(|session_id| job.session_id() == Some(session_id))
-                    .unwrap_or(true)
-                    && target_kind
-                        .map(|target_kind| job.target_kind() == target_kind)
-                        .unwrap_or(true)
+                    .unwrap_or(true);
+                let target_matches = target_kind
+                    .map(|target_kind| job.target_kind() == target_kind)
+                    .unwrap_or(true);
+                let included = workspace_matches && session_matches && target_matches;
+
+                included
             })
             .cloned()
             .collect::<Vec<_>>()
@@ -140,16 +145,17 @@ impl CronService {
     }
 
     pub async fn create_job(&self, request: CreateCronJobRequest) -> BitFunResult<CronJob> {
+        let target = self.canonicalize_target(request.target).await?;
         let _guard = self.mutation_lock.lock().await;
         let mut jobs = self.jobs.write().await;
         let current_ms = now_ms();
         let schedule = materialize_schedule(request.schedule, current_ms);
-        let target = materialize_target(request.target);
+
         validate_request_fields(&request.name, &request.payload, &target)?;
         validate_schedule(&schedule, current_ms)?;
 
         let mut job = CronJob {
-            id: format!("cron_{}", Uuid::new_v4().simple()),
+            id: generate_cron_job_id(&jobs),
             name: request.name.trim().to_string(),
             schedule,
             payload: request.payload,
@@ -166,6 +172,7 @@ impl CronService {
         }
 
         jobs.insert(job.id.clone(), job.clone());
+
         self.persist_jobs_locked(&jobs).await?;
         drop(jobs);
         self.wakeup.notify_one();
@@ -178,6 +185,11 @@ impl CronService {
         job_id: &str,
         request: UpdateCronJobRequest,
     ) -> BitFunResult<CronJob> {
+        let canonicalized_target = match request.target {
+            Some(target) => Some(self.canonicalize_target(target).await?),
+            None => None,
+        };
+
         let _guard = self.mutation_lock.lock().await;
         let mut jobs = self.jobs.write().await;
         let current_ms = now_ms();
@@ -191,8 +203,8 @@ impl CronService {
         if let Some(payload) = request.payload {
             job.payload = payload;
         }
-        if let Some(target) = request.target {
-            job.target = materialize_target(target);
+        if let Some(target) = canonicalized_target {
+            job.target = target;
         }
         if let Some(enabled) = request.enabled {
             job.enabled = enabled;
@@ -560,6 +572,8 @@ impl CronService {
                 turn_id: Some(enqueue_input.turn_id.clone()),
                 agent_type: resolved.agent_type,
                 workspace_path: Some(resolved.workspace_path),
+                remote_connection_id: resolved.remote_connection_id,
+                remote_ssh_host: resolved.remote_ssh_host,
                 policy: scheduled_job_policy(),
                 reply_route: None,
                 prepended_reminders: enqueue_input.prepended_messages.clone(),
@@ -589,6 +603,8 @@ impl CronService {
                 Ok(ResolvedEnqueueSubmission {
                     session_id: session_id.clone(),
                     workspace_path: workspace.workspace_path.clone(),
+                    remote_connection_id: workspace.remote_connection_id.clone(),
+                    remote_ssh_host: workspace.remote_ssh_host.clone(),
                     agent_type,
                 })
             }
@@ -620,10 +636,45 @@ impl CronService {
                 Ok(ResolvedEnqueueSubmission {
                     session_id: created.session_id,
                     workspace_path: workspace.workspace_path.clone(),
+                    remote_connection_id: workspace.remote_connection_id.clone(),
+                    remote_ssh_host: workspace.remote_ssh_host.clone(),
                     agent_type: created.agent_type,
                 })
             }
         }
+    }
+
+    async fn canonicalize_target(&self, target: CronJobTarget) -> BitFunResult<CronJobTarget> {
+        let mut target = materialize_target(target);
+
+        if let CronJobTarget::Session {
+            session_id,
+            workspace,
+        } = &mut target
+        {
+            *workspace =
+                Self::resolve_session_target_workspace_ref(&self.coordinator, session_id).await?;
+        }
+
+        Ok(target)
+    }
+
+    async fn resolve_session_target_workspace_ref(
+        coordinator: &ConversationCoordinator,
+        session_id: &str,
+    ) -> BitFunResult<CronWorkspaceRef> {
+        let binding = coordinator
+            .get_session_manager()
+            .resolve_session_workspace_binding(session_id)
+            .await
+            .ok_or_else(|| {
+                BitFunError::validation(format!(
+                    "Unable to resolve workspace for session '{}'",
+                    session_id
+                ))
+            })?;
+
+        Ok(workspace_ref_from_binding(&binding))
     }
 
     async fn persist_jobs_locked(&self, jobs: &HashMap<String, CronJob>) -> BitFunResult<()> {
@@ -732,7 +783,7 @@ fn materialize_workspace_ref(workspace: CronWorkspaceRef) -> CronWorkspaceRef {
             .workspace_id
             .map(|value| value.trim().to_string())
             .filter(|value| !value.is_empty()),
-        workspace_path: workspace.workspace_path.trim().to_string(),
+        workspace_path: normalize_workspace_path_for_matching(&workspace.workspace_path),
         remote_connection_id: workspace
             .remote_connection_id
             .map(|value| value.trim().to_string())
@@ -741,6 +792,19 @@ fn materialize_workspace_ref(workspace: CronWorkspaceRef) -> CronWorkspaceRef {
             .remote_ssh_host
             .map(|value| value.trim().to_string())
             .filter(|value| !value.is_empty()),
+    }
+}
+
+fn workspace_ref_from_binding(binding: &WorkspaceBinding) -> CronWorkspaceRef {
+    CronWorkspaceRef {
+        workspace_id: binding.workspace_id.clone(),
+        workspace_path: normalize_workspace_path_for_matching(&binding.root_path_string()),
+        remote_connection_id: binding.connection_id().map(ToOwned::to_owned),
+        remote_ssh_host: if binding.is_remote() {
+            Some(binding.session_identity.hostname.clone()).filter(|value| !value.trim().is_empty())
+        } else {
+            None
+        },
     }
 }
 
@@ -800,8 +864,10 @@ fn matches_workspace_filter(
     workspace_id: Option<&str>,
     remote_connection_id: Option<&str>,
 ) -> bool {
+    let normalized_job_workspace_path =
+        normalize_workspace_path_for_matching(&workspace.workspace_path);
     let workspace_path_matches = workspace_path
-        .map(|value| workspace.workspace_path == value)
+        .map(|value| normalized_job_workspace_path == normalize_workspace_path_for_matching(value))
         .unwrap_or(true);
     let workspace_id_matches = workspace_id
         .map(|value| {
@@ -813,6 +879,50 @@ fn matches_workspace_filter(
         .unwrap_or(true);
 
     workspace_path_matches && workspace_id_matches && remote_connection_matches
+}
+
+fn normalize_workspace_path_for_matching(path: &str) -> String {
+    let mut normalized = path.trim().replace('\\', "/");
+
+    if normalized.starts_with("file://") {
+        normalized = normalized.trim_start_matches("file://").to_string();
+    }
+
+    if normalized.len() >= 4
+        && normalized.starts_with('/')
+        && normalized.as_bytes()[2] == b':'
+        && normalized.as_bytes()[1].is_ascii_alphabetic()
+    {
+        normalized = normalized.trim_start_matches('/').to_string();
+    }
+
+    while normalized.contains("//") {
+        normalized = normalized.replace("//", "/");
+    }
+
+    if normalized.len() >= 2
+        && normalized.as_bytes()[1] == b':'
+        && normalized.as_bytes()[0].is_ascii_alphabetic()
+    {
+        normalized = format!(
+            "{}{}",
+            normalized[..1].to_ascii_uppercase(),
+            &normalized[1..]
+        );
+    }
+
+    if normalized != "/" && !is_windows_drive_root(&normalized) {
+        normalized = normalized.trim_end_matches('/').to_string();
+    }
+
+    normalized
+}
+
+fn is_windows_drive_root(path: &str) -> bool {
+    path.len() == 3
+        && path.as_bytes()[1] == b':'
+        && path.as_bytes()[2] == b'/'
+        && path.as_bytes()[0].is_ascii_alphabetic()
 }
 
 fn next_wakeup_for_job(job: &CronJob) -> Option<i64> {
@@ -853,6 +963,16 @@ fn now_ms() -> i64 {
     Utc::now().timestamp_millis()
 }
 
+fn generate_cron_job_id(jobs: &HashMap<String, CronJob>) -> String {
+    loop {
+        let uuid = Uuid::new_v4().simple().to_string();
+        let id = format!("cron_{}", &uuid[..8]);
+        if !jobs.contains_key(&id) {
+            return id;
+        }
+    }
+}
+
 struct EnqueueInput {
     job_id: String,
     job_name: String,
@@ -865,6 +985,8 @@ struct EnqueueInput {
 struct ResolvedEnqueueSubmission {
     session_id: String,
     workspace_path: String,
+    remote_connection_id: Option<String>,
+    remote_ssh_host: Option<String>,
     agent_type: String,
 }
 
@@ -878,4 +1000,70 @@ fn submit_target_session_id(enqueue_input: &EnqueueInput) -> &str {
 /// Permanent failure: coordinator cannot load session metadata (session deleted from disk).
 fn cron_enqueue_error_is_missing_session(error: &str) -> bool {
     error.contains("Session metadata not found")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn generate_cron_job_id_uses_short_hex_suffix() {
+        let jobs = HashMap::new();
+        let id = generate_cron_job_id(&jobs);
+
+        assert_eq!(id.len(), "cron_".len() + 8);
+        assert!(id.starts_with("cron_"));
+        assert!(id["cron_".len()..]
+            .chars()
+            .all(|ch| ch.is_ascii_hexdigit() && !ch.is_ascii_uppercase()));
+    }
+
+    #[test]
+    fn materialize_workspace_ref_normalizes_windows_style_paths() {
+        let workspace = materialize_workspace_ref(CronWorkspaceRef {
+            workspace_id: None,
+            workspace_path: r"c:\Users\wsp\.bitfun\personal_assistant\workspace\".to_string(),
+            remote_connection_id: None,
+            remote_ssh_host: None,
+        });
+
+        assert_eq!(
+            workspace.workspace_path,
+            "C:/Users/wsp/.bitfun/personal_assistant/workspace"
+        );
+    }
+
+    #[test]
+    fn matches_workspace_filter_tolerates_separator_differences() {
+        let workspace = CronWorkspaceRef {
+            workspace_id: Some("local_workspace".to_string()),
+            workspace_path: r"C:\Users\wsp\.bitfun\personal_assistant\workspace".to_string(),
+            remote_connection_id: None,
+            remote_ssh_host: None,
+        };
+
+        assert!(matches_workspace_filter(
+            &workspace,
+            Some("C:/Users/wsp/.bitfun/personal_assistant/workspace"),
+            Some("local_workspace"),
+            None,
+        ));
+    }
+
+    #[test]
+    fn matches_workspace_filter_normalizes_remote_like_paths() {
+        let workspace = CronWorkspaceRef {
+            workspace_id: None,
+            workspace_path: "/home/wsp/projects/test/".to_string(),
+            remote_connection_id: Some("ssh-1".to_string()),
+            remote_ssh_host: Some("host-1".to_string()),
+        };
+
+        assert!(matches_workspace_filter(
+            &workspace,
+            Some(r"\home\wsp\projects\test"),
+            None,
+            Some("ssh-1"),
+        ));
+    }
 }

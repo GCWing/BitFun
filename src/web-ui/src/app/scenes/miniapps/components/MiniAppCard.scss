@@ -11,7 +11,7 @@
   overflow: hidden;
   cursor: pointer;
   animation: miniapp-card-in 0.22s $easing-decelerate both;
-  animation-delay: calc(var(--surface-stagger-index, 0) * 35ms);
+  animation-delay: calc(var(--surface-stagger-index) * 35ms);
   transition:
     transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
     box-shadow 0.35s ease;
@@ -92,7 +92,7 @@
   &__icon {
     color: var(--color-text-primary);
     animation: miniapp-icon-pop 0.5s $easing-decelerate both;
-    animation-delay: calc(var(--surface-stagger-index, 0) * 35ms + 60ms);
+    animation-delay: calc(var(--surface-stagger-index) * 35ms + 60ms);
     transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
   }
 
@@ -189,7 +189,7 @@
     border-radius: $size-radius-full;
     font-size: 10px;
     color: var(--color-text-secondary);
-    background: var(--color-overlay-white-06);
+    background: var(--color-overlay-white-08);
     border: 1px solid var(--color-overlay-white-08);
     white-space: nowrap;
   }

@@ -23,7 +23,7 @@ use bitfun_core::agentic::deep_review_policy::{
 };
 use bitfun_core::agentic::goal_mode::{ThreadGoal, ThreadGoalStatus};
 use bitfun_core::agentic::image_analysis::ImageContextData;
-use bitfun_core::agentic::session::{SessionViewRestoreRequest, SessionViewRestoreTiming};
+use bitfun_core::agentic::session::SessionViewRestoreTiming;
 use bitfun_core::agentic::tools::image_context::get_image_context;
 use bitfun_core::agentic::tools::implementations::exec_command::{
     background_command_output_capture, control_exec_command_session, send_exec_command_input,
@@ -114,6 +114,8 @@ pub struct StartDialogTurnRequest {
     pub original_user_input: Option<String>,
     pub agent_type: String,
     pub workspace_path: Option<String>,
+    pub remote_connection_id: Option<String>,
+    pub remote_ssh_host: Option<String>,
     pub turn_id: Option<String>,
     #[serde(default)]
     pub image_contexts: Option<Vec<ImageContextData>>,
@@ -761,7 +763,7 @@ pub async fn update_session_title(
         .await;
 
         coordinator
-            .restore_session(&effective, session_id)
+            .restore_session_from_storage_path(&effective, session_id)
             .await
             .map_err(|e| format!("Failed to restore session before renaming: {}", e))?;
     }
@@ -806,10 +808,12 @@ pub async fn ensure_coordinator_session(
     .await;
     let restore_result = if request.include_internal {
         coordinator
-            .restore_internal_session(&effective, session_id)
+            .restore_internal_session_from_storage_path(&effective, session_id)
             .await
     } else {
-        coordinator.restore_session(&effective, session_id).await
+        coordinator
+            .restore_session_from_storage_path(&effective, session_id)
+            .await
     };
     restore_result.map(|_| ()).map_err(|e| e.to_string())
 }
@@ -827,6 +831,8 @@ pub async fn start_dialog_turn(
         original_user_input,
         agent_type,
         workspace_path,
+        remote_connection_id,
+        remote_ssh_host,
         turn_id,
         image_contexts,
         user_message_metadata,
@@ -851,6 +857,8 @@ pub async fn start_dialog_turn(
             turn_id,
             agent_type,
             workspace_path,
+            remote_connection_id,
+            remote_ssh_host,
             policy,
             None,
             user_message_metadata,
@@ -897,7 +905,7 @@ pub async fn compact_session(
         )
         .await;
         coordinator
-            .restore_session(&effective, session_id)
+            .restore_session_from_storage_path(&effective, session_id)
             .await
             .map_err(|e| format!("Failed to restore session before compacting: {}", e))?;
     }
@@ -945,7 +953,7 @@ pub async fn activate_session_goal(
         )
         .await;
         coordinator
-            .restore_session(&effective, session_id)
+            .restore_session_from_storage_path(&effective, session_id)
             .await
             .map_err(|e| format!("Failed to restore session before activating goal mode: {e}"))?;
     }
@@ -995,7 +1003,7 @@ async fn ensure_session_for_thread_goal(
         )
         .await;
         coordinator
-            .restore_session(&effective, session_id)
+            .restore_session_from_storage_path(&effective, session_id)
             .await
             .map_err(|e| format!("Failed to restore session before thread goal access: {e}"))?;
     }
@@ -1008,7 +1016,7 @@ async fn ensure_session_for_thread_goal(
         .ok_or_else(|| format!("Session workspace_path is missing: {session_id}"))
 }
 
-async fn resolve_session_workspace_path_for_thread_goal_read(
+async fn resolve_thread_goal_storage_path(
     coordinator: &Arc<ConversationCoordinator>,
     app_state: &AppState,
     session_id: &str,
@@ -1016,6 +1024,15 @@ async fn resolve_session_workspace_path_for_thread_goal_read(
     remote_connection_id: Option<&str>,
     remote_ssh_host: Option<&str>,
 ) -> Result<PathBuf, String> {
+    if let Some(storage_path) = coordinator
+        .get_session_manager()
+        .resolve_session_workspace_binding(session_id)
+        .await
+        .map(|binding| binding.session_storage_dir())
+    {
+        return Ok(storage_path);
+    }
+
     if let Some(workspace_path) = coordinator
         .get_session_manager()
         .get_session(session_id)
@@ -1051,7 +1068,7 @@ pub async fn get_session_thread_goal(
         if session_id.is_empty() {
             return Err("session_id is required".to_string());
         }
-        let workspace_path = resolve_session_workspace_path_for_thread_goal_read(
+        let storage_path = resolve_thread_goal_storage_path(
             coordinator.inner(),
             app_state.inner(),
             session_id,
@@ -1061,7 +1078,7 @@ pub async fn get_session_thread_goal(
         )
         .await?;
         let goal = coordinator
-            .get_thread_goal(session_id, workspace_path.as_path())
+            .get_thread_goal(session_id, storage_path.as_path())
             .await
             .map_err(|error| error.to_string())?;
         Ok(GetSessionThreadGoalResponse { goal })
@@ -1205,7 +1222,7 @@ pub async fn run_init_agents_md(
         )
         .await;
         coordinator
-            .restore_session(&effective, session_id)
+            .restore_session_from_storage_path(&effective, session_id)
             .await
             .map_err(|e| format!("Failed to restore session before running /init: {e}"))?;
     }
@@ -1221,6 +1238,8 @@ pub async fn run_init_agents_md(
         .submit_init_agents_md(
             session_id.to_string(),
             workspace_path,
+            request.remote_connection_id.clone(),
+            request.remote_ssh_host.clone(),
             DialogSubmissionPolicy::for_source(DialogTriggerSource::DesktopUi),
         )
         .await
@@ -1504,19 +1523,34 @@ impl From<BackgroundCommandControlActionDTO> for ExecCommandControlAction {
 
 #[tauri::command]
 pub async fn control_background_command(
+    coordinator: State<'_, Arc<ConversationCoordinator>>,
     request: ControlBackgroundCommandRequest,
 ) -> Result<(), String> {
     let session_id = request.exec_session_id;
     let remote = request.remote;
     let action: ExecCommandControlAction = request.action.into();
+    let terminal_port = if remote {
+        None
+    } else {
+        coordinator.inner().terminal_port()
+    };
+    let remote_exec_port = if remote {
+        coordinator.inner().remote_exec_port()
+    } else {
+        None
+    };
 
-    control_exec_command_session(ExecCommandControlRequest {
-        session_id,
-        action,
-        origin: ExecCommandControlOrigin::OutOfBand,
-        remote,
-        yield_time_ms: Some(250),
-    })
+    control_exec_command_session(
+        ExecCommandControlRequest {
+            session_id,
+            action,
+            origin: ExecCommandControlOrigin::OutOfBand,
+            remote,
+            yield_time_ms: Some(250),
+        },
+        terminal_port.as_ref(),
+        remote_exec_port.as_ref(),
+    )
     .await
     .map(|response| {
         if response.session_id.is_none() {
@@ -1562,24 +1596,43 @@ pub struct SendBackgroundCommandInputRequest {
 
 #[tauri::command]
 pub async fn send_background_command_input(
+    coordinator: State<'_, Arc<ConversationCoordinator>>,
     request: SendBackgroundCommandInputRequest,
 ) -> Result<(), String> {
     if request.chars.is_empty() && !request.append_enter {
         return Err("chars or append_enter is required".to_string());
     }
 
-    send_exec_command_input(ExecCommandInputRequest {
-        session_id: request.exec_session_id,
-        chars: request.chars,
-        append_enter: request.append_enter,
-        remote: request.remote,
-    })
+    let session_id = request.exec_session_id;
+    let remote = request.remote;
+    let chars = request.chars;
+    let append_enter = request.append_enter;
+    let terminal_port = if remote {
+        None
+    } else {
+        coordinator.inner().terminal_port()
+    };
+    let remote_exec_port = if remote {
+        coordinator.inner().remote_exec_port()
+    } else {
+        None
+    };
+    send_exec_command_input(
+        ExecCommandInputRequest {
+            session_id,
+            chars,
+            append_enter,
+            remote,
+        },
+        terminal_port.as_ref(),
+        remote_exec_port.as_ref(),
+    )
     .await
     .map_err(|e| {
         log::error!(
             "Failed to send input to background command: exec_session_id={}, remote={}, error={}",
-            request.exec_session_id,
-            request.remote,
+            session_id,
+            remote,
             e
         );
         format!("Failed to send input to background command: {}", e)
@@ -1694,11 +1747,11 @@ pub async fn restore_session(
     .await;
     let session = if request.include_internal {
         coordinator
-            .restore_internal_session(&effective_path, &request.session_id)
+            .restore_internal_session_from_storage_path(&effective_path, &request.session_id)
             .await
     } else {
         coordinator
-            .restore_session(&effective_path, &request.session_id)
+            .restore_session_from_storage_path(&effective_path, &request.session_id)
             .await
     }
     .map_err(|e| format!("Failed to restore session: {}", e))?;
@@ -1727,48 +1780,45 @@ pub async fn restore_session_view(
             request.remote_connection_id.as_deref(),
             request.remote_ssh_host.as_deref(),
         )
-    .await;
+        .await;
+        let resolve_storage_path_duration_ms =
+            path_started_at.elapsed().as_millis().min(u64::MAX as u128) as u64;
         debug!(
             "restore_session_view storage path resolved: trace_id={}, session_id={}, duration_ms={}",
             trace_id,
             request.session_id,
-            path_started_at.elapsed().as_millis()
+            resolve_storage_path_duration_ms
         );
 
-        let view_request = SessionViewRestoreRequest {
-            workspace_path: effective_path,
-            session_id: request.session_id.clone(),
-            include_internal: request.include_internal,
-            tail_turn_count: request.tail_turn_count,
-        };
-        let tail_turn_count = view_request
+        let session_storage_path = effective_path;
+        let tail_turn_count = request
             .tail_turn_count
             .filter(|count| *count > 0)
             .map(|count| count.min(16));
-        let (session, mut turns, total_turn_count, timings) =
+        let (session, mut turns, total_turn_count, mut timings) =
             if let Some(tail_turn_count) = tail_turn_count {
-                if view_request.include_internal {
+                if request.include_internal {
                     coordinator
-                        .restore_internal_session_view_tail_timed(
-                            &view_request.workspace_path,
-                            &view_request.session_id,
+                        .restore_internal_session_view_from_storage_path_tail_timed(
+                            &session_storage_path,
+                            &request.session_id,
                             tail_turn_count,
                         )
                         .await
                 } else {
                     coordinator
-                        .restore_session_view_tail_timed(
-                            &view_request.workspace_path,
-                            &view_request.session_id,
+                        .restore_session_view_from_storage_path_tail_timed(
+                            &session_storage_path,
+                            &request.session_id,
                             tail_turn_count,
                         )
                         .await
                 }
-            } else if view_request.include_internal {
+            } else if request.include_internal {
                 coordinator
-                    .restore_internal_session_view_timed(
-                        &view_request.workspace_path,
-                        &view_request.session_id,
+                    .restore_internal_session_view_from_storage_path_timed(
+                        &session_storage_path,
+                        &request.session_id,
                     )
                     .await
                     .map(|(session, turns, timings)| {
@@ -1777,7 +1827,10 @@ pub async fn restore_session_view(
                     })
             } else {
                 coordinator
-                    .restore_session_view_timed(&view_request.workspace_path, &view_request.session_id)
+                    .restore_session_view_from_storage_path_timed(
+                        &session_storage_path,
+                        &request.session_id,
+                    )
                     .await
                     .map(|(session, turns, timings)| {
                         let total_turn_count = turns.len();
@@ -1785,6 +1838,7 @@ pub async fn restore_session_view(
                     })
             }
             .map_err(|e| format!("Failed to restore session view: {}", e))?;
+        timings.resolve_storage_path_duration_ms = resolve_storage_path_duration_ms;
         let loaded_turn_count = turns.len();
         let is_partial = loaded_turn_count < total_turn_count;
 
@@ -1865,11 +1919,14 @@ pub async fn restore_session_with_turns(
     );
     let (session, turns) = if request.include_internal {
         coordinator
-            .restore_internal_session_with_turns(&effective_path, &request.session_id)
+            .restore_internal_session_with_turns_from_storage_path(
+                &effective_path,
+                &request.session_id,
+            )
             .await
     } else {
         coordinator
-            .restore_session_with_turns(&effective_path, &request.session_id)
+            .restore_session_with_turns_from_storage_path(&effective_path, &request.session_id)
             .await
     }
     .map_err(|e| format!("Failed to restore session: {}", e))?;

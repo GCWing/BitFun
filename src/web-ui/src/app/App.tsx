@@ -67,8 +67,8 @@ const LazyAppLayout = lazy(async () => {
  * - With a workspace: show workspace panels
  * - Header is always present; elements toggle by state
  */
-// Minimum time (ms) the splash is shown, so the animation is never a flash.
-const MIN_SPLASH_MS = 900;
+// Minimum time (ms) the splash is shown, so the handoff remains intentional without delaying a ready shell.
+const MIN_SPLASH_MS = 650;
 // Keep hidden tray setup out of the first post-handoff interaction window.
 // Close-to-tray initializes it on demand if the user closes earlier.
 const DEFERRED_TRAY_INIT_DELAY_MS = 1500;
@@ -160,9 +160,14 @@ function App() {
   useEffect(() => {
     if (workspaceLoading || !appLayoutReady) return;
     const elapsed = getStartupOverlayElapsedMs();
-    const remaining = Math.max(0, MIN_SPLASH_MS - elapsed);
+    const scheduledDelayMs = Math.max(0, MIN_SPLASH_MS - elapsed);
     let cancelled = false;
     const timer = window.setTimeout(() => {
+      startupTrace.markPhase('startup_overlay_hide_start', {
+        elapsedMs: getStartupOverlayElapsedMs(),
+        minSplashMs: MIN_SPLASH_MS,
+        scheduledDelayMs,
+      });
       void hideStartupOverlay().then(() => {
         if (!cancelled) {
           setStartupOverlayVisible(false);
@@ -170,7 +175,7 @@ function App() {
           window.dispatchEvent(new CustomEvent(STARTUP_OVERLAY_HIDDEN_EVENT));
         }
       });
-    }, remaining);
+    }, scheduledDelayMs);
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
@@ -420,6 +425,7 @@ function App() {
     let disposed = false;
     let startupSyncHandle: { promise: Promise<void>; cancel: () => void } | null = null;
     let removeSettingsListener: (() => void) | null = null;
+    let pendingActivityTimer: number | null = null;
 
     void (async () => {
       const [
@@ -440,54 +446,102 @@ function App() {
         return;
       }
 
-      const emitCurrentAgentCompanionActivity = () => {
-        if (disposed) {
+      let syncVersion = 0;
+      const cancelPendingAgentCompanionStartupSync = () => {
+        startupSyncHandle?.cancel();
+        startupSyncHandle = null;
+        if (pendingActivityTimer !== null) {
+          window.clearTimeout(pendingActivityTimer);
+          pendingActivityTimer = null;
+        }
+      };
+      const emitCurrentAgentCompanionActivity = (version: number) => {
+        if (disposed || version !== syncVersion) {
           return;
         }
         void emitAgentCompanionActivity(buildAgentCompanionActivity());
       };
+      const scheduleFollowUpAgentCompanionActivity = (version: number) => {
+        if (pendingActivityTimer !== null) {
+          window.clearTimeout(pendingActivityTimer);
+        }
+        pendingActivityTimer = window.setTimeout(() => {
+          pendingActivityTimer = null;
+          emitCurrentAgentCompanionActivity(version);
+        }, 250);
+      };
+      type AgentCompanionSettings = Awaited<ReturnType<typeof aiExperienceConfigService.getSettingsAsync>>;
 
-      const settings = await aiExperienceConfigService.getSettingsAsync();
-      if (disposed) {
-        return;
-      }
-
-      startupTrace.markPhase('agent_companion_sync_scheduled', {
-        source: 'startup_idle',
-      });
-      startupSyncHandle = backgroundTaskScheduler.schedule(async signal => {
-        if (signal.aborted || disposed) {
+      const runAgentCompanionSync = async (
+        settings: AgentCompanionSettings,
+        version: number,
+        source: 'startup_idle' | 'settings_change',
+        signal?: AbortSignal,
+      ) => {
+        if (signal?.aborted || disposed || version !== syncVersion) {
           return;
         }
-        startupTrace.markPhase('agent_companion_sync_start', {
-          source: 'startup_idle',
-        });
+        if (source === 'startup_idle') {
+          startupTrace.markPhase('agent_companion_sync_start', {
+            source,
+          });
+        }
         await syncAgentCompanionDesktopWindow(settings);
-        if (signal.aborted || disposed) {
+        if (signal?.aborted || disposed || version !== syncVersion) {
           return;
         }
-        emitCurrentAgentCompanionActivity();
-        window.setTimeout(emitCurrentAgentCompanionActivity, 250);
-        startupTrace.markPhase('agent_companion_sync_end', {
-          source: 'startup_idle',
-        });
-      }, {
-        idle: true,
-        inFlightKey: 'agent-companion:startup-sync',
-        priority: 'low',
-      });
-
-      startupSyncHandle.promise.catch(error => {
-        if (!disposed && !isBackgroundTaskCancelledError(error)) {
-          log.warn('Initial Agent companion sync task failed', error);
+        emitCurrentAgentCompanionActivity(version);
+        scheduleFollowUpAgentCompanionActivity(version);
+        if (source === 'startup_idle') {
+          startupTrace.markPhase('agent_companion_sync_end', {
+            source,
+          });
         }
-      });
+      };
+      const syncAgentCompanionSettings = (
+        settings: AgentCompanionSettings | null,
+        source: 'startup_idle' | 'settings_change',
+      ) => {
+        const version = syncVersion += 1;
+        cancelPendingAgentCompanionStartupSync();
+        if (source === 'startup_idle') {
+          startupTrace.markPhase('agent_companion_sync_scheduled', {
+            source,
+          });
+          startupSyncHandle = backgroundTaskScheduler.schedule(
+            async signal => {
+              const latestSettings = await aiExperienceConfigService.getSettingsAsync({ forceRefresh: true });
+              await runAgentCompanionSync(latestSettings, version, source, signal);
+            },
+            {
+              idle: true,
+              inFlightKey: 'agent-companion:startup-sync',
+              priority: 'low',
+            },
+          );
+
+          startupSyncHandle.promise.catch(error => {
+            if (!disposed && !isBackgroundTaskCancelledError(error)) {
+              log.warn('Initial Agent companion sync task failed', error);
+            }
+          });
+          return;
+        }
+
+        if (!settings) {
+          return;
+        }
+        void runAgentCompanionSync(settings, version, source).catch(error => {
+          if (!disposed) {
+            log.warn('Agent companion settings sync failed', error);
+          }
+        });
+      };
+
+      syncAgentCompanionSettings(null, 'startup_idle');
 
       removeSettingsListener = aiExperienceConfigService.addChangeListener(settings => {
-        void syncAgentCompanionDesktopWindow(settings).then(() => {
-          emitCurrentAgentCompanionActivity();
-          window.setTimeout(emitCurrentAgentCompanionActivity, 250);
-        });
+        syncAgentCompanionSettings(settings, 'settings_change');
       });
     })().catch(error => {
       if (!disposed) {
@@ -498,9 +552,69 @@ function App() {
     return () => {
       disposed = true;
       startupSyncHandle?.cancel();
+      if (pendingActivityTimer !== null) {
+        window.clearTimeout(pendingActivityTimer);
+      }
       removeSettingsListener?.();
     };
   }, [interactiveShellReady]);
+
+  useEffect(() => {
+    if (!isTauriRuntime()) {
+      return;
+    }
+
+    let disposed = false;
+    let unlisten: (() => void) | null = null;
+
+    void import('@tauri-apps/api/event')
+      .then(({ emit, listen }) => listen(
+        'agent-companion://ready',
+        async () => {
+          try {
+            const [
+              { aiExperienceConfigService },
+              { buildAgentCompanionActivity },
+              { emitAgentCompanionActivity },
+            ] = await Promise.all([
+              import('@/infrastructure/config/services/AIExperienceConfigService'),
+              import('@/flow_chat/utils/agentCompanionActivity'),
+              import('@/flow_chat/services/AgentCompanionActivityBridge'),
+            ]);
+            const settings = await aiExperienceConfigService.getSettingsAsync({ forceRefresh: true });
+            if (disposed) {
+              return;
+            }
+            await emit('agent-companion://settings-updated', settings);
+            if (disposed) {
+              return;
+            }
+            await emitAgentCompanionActivity(buildAgentCompanionActivity());
+          } catch (error) {
+            if (!disposed) {
+              log.warn('Failed to synchronize Agent companion after ready event', error);
+            }
+          }
+        },
+      ))
+      .then(removeListener => {
+        if (disposed) {
+          removeListener();
+          return;
+        }
+        unlisten = removeListener;
+      })
+      .catch(error => {
+        if (!disposed) {
+          log.warn('Failed to listen for Agent companion ready events', error);
+        }
+      });
+
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, []);
 
   useEffect(() => {
     let disposed = false;

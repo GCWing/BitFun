@@ -1,14 +1,13 @@
 pub use super::protocol::{
-    ConsistencyMode, DirtyFileStats, FileCount, OpenRepoParams, PathScope, QuerySpec,
-    RefreshPolicyConfig, RepoConfig, RepoPhase, RepoStatus, SearchBackend, SearchModeConfig,
-    SearchResults, TaskKind, TaskPhase, TaskState, TaskStatus, WorkspaceOverlayStatus,
+    DirtyFileStats, FileCount, OpenRepoParams, PathScope, QuerySpec, RefreshPolicyConfig,
+    RepoConfig, RepoPhase, RepoStatus, SearchBackend, SearchModeConfig, SearchResults, TaskKind,
+    TaskPhase, TaskState, TaskStatus, WorkspaceOverlayStatus,
 };
 
 #[derive(Debug, Clone)]
 pub struct SearchRequest {
     pub query: QuerySpec,
     pub scope: PathScope,
-    pub consistency: ConsistencyMode,
     pub allow_scan_fallback: bool,
 }
 
@@ -35,18 +34,12 @@ impl SearchRequest {
         Self {
             query,
             scope: PathScope::default(),
-            consistency: ConsistencyMode::WorkspaceEventual,
             allow_scan_fallback: false,
         }
     }
 
     pub fn with_scope(mut self, scope: PathScope) -> Self {
         self.scope = scope;
-        self
-    }
-
-    pub fn with_consistency(mut self, consistency: ConsistencyMode) -> Self {
-        self.consistency = consistency;
         self
     }
 

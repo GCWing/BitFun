@@ -22,3 +22,6 @@ default = []
 miniapp = ["dirs", "sha2", "which"]
 function-agents = ["log"]
 product-full = ["miniapp", "function-agents"]
+
+[dev-dependencies]
+tokio = { workspace = true }

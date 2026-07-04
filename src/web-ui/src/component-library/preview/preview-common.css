@@ -35,7 +35,7 @@
 .preview-section {
   margin-bottom: 60px;
   padding: 30px;
-  background: var(--color-overlay-white-03);
+  background: var(--color-overlay-white-04);
   border-radius: 16px;
   border: 1px solid var(--color-overlay-white-08);
 }
@@ -59,16 +59,16 @@
   align-items: center;
   justify-content: center;
   padding: 32px;
-  background: var(--color-overlay-white-02);
+  background: var(--color-overlay-white-04);
   border-radius: 12px;
-  border: 1px solid var(--color-overlay-white-05);
+  border: 1px solid var(--color-overlay-white-08);
   transition: all 0.3s ease;
   min-height: 150px;
 }
 
 .preview-item:hover {
   background: var(--color-overlay-white-04);
-  border-color: var(--color-overlay-white-10);
+  border-color: var(--color-overlay-white-12);
   transform: translateY(-2px);
 }
 

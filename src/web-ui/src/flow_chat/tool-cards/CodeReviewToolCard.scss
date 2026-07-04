@@ -40,7 +40,7 @@
       color 160ms ease;
 
     &:hover:not(:disabled) {
-      background: var(--color-bg-hover);
+      background: var(--element-bg-hover);
       color: var(--color-text-primary);
     }
 
@@ -68,7 +68,7 @@
   flex-shrink: 0;
 
   &:hover {
-    background: var(--color-bg-hover);
+    background: var(--element-bg-hover);
     color: var(--color-text-primary);
   }
 }
@@ -239,7 +239,7 @@
     text-align: left;
 
     &:hover {
-      background: var(--color-bg-hover);
+      background: var(--element-bg-hover);
     }
   }
 
@@ -549,7 +549,7 @@
     overflow: hidden;
 
     &:hover {
-      background: var(--color-bg-hover);
+      background: var(--element-bg-hover);
       border-color: var(--border-medium);
     }
 
@@ -558,7 +558,7 @@
     }
 
     &.severity-high {
-      border-left: 3px solid var(--color-warning);
+      border-left: 3px solid color-mix(in srgb, var(--color-warning) 55%, var(--color-error));
     }
 
     &.severity-medium {
@@ -655,8 +655,8 @@
     }
 
     .issue-suggestion {
-      background: color-mix(in srgb, var(--tool-card-positive-color) 6%, transparent);
-      border: 1px solid var(--tool-card-positive-bg-hover);
+      background: color-mix(in srgb, var(--color-success) 6%, transparent);
+      border: 1px solid var(--color-success-bg);
       border-radius: 4px;
       padding: 8px;
       display: flex;
@@ -773,7 +773,7 @@
         overflow: hidden;
 
         &:hover {
-          background: var(--color-bg-hover);
+          background: var(--element-bg-hover);
           border-color: var(--border-medium);
         }
 
@@ -783,7 +783,7 @@
         }
 
         &.severity-high {
-          border-left: 3px solid var(--color-warning);
+          border-left: 3px solid color-mix(in srgb, var(--color-warning) 55%, var(--color-error));
         }
 
         &.severity-medium {
@@ -880,8 +880,8 @@
         }
 
         .issue-suggestion {
-          background: color-mix(in srgb, var(--tool-card-positive-color) 6%, transparent);
-          border: 1px solid var(--tool-card-positive-bg-hover);
+          background: color-mix(in srgb, var(--color-success) 6%, transparent);
+          border: 1px solid var(--color-success-bg);
           border-radius: 4px;
           padding: 8px;
           display: flex;

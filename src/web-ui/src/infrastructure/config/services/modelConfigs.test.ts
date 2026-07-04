@@ -74,4 +74,52 @@ describe('modelConfigs', () => {
       }),
     ]);
   });
+
+  it('preserves multimodal model metadata when loading and saving ai.models', async () => {
+    configManagerMock.getConfig.mockResolvedValueOnce([
+      {
+        id: 'kimi-1',
+        name: 'Moonshot',
+        base_url: 'https://api.moonshot.cn/v1',
+        api_key: '',
+        model_name: 'kimi-k2.7',
+        provider: 'openai',
+        category: 'multimodal',
+        capabilities: ['text_chat', 'image_understanding', 'function_calling'],
+      },
+    ]);
+
+    const { modelConfigManager } = await import('./modelConfigs');
+    const listener = vi.fn();
+
+    modelConfigManager.addListener(listener);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(listener).toHaveBeenCalledWith([
+      expect.objectContaining({
+        id: 'kimi-1',
+        category: 'multimodal',
+        capabilities: expect.arrayContaining(['image_understanding']),
+      }),
+    ]);
+
+    modelConfigManager.updateConfig('kimi-1', {
+      category: 'multimodal',
+      capabilities: ['text_chat', 'image_understanding', 'function_calling'],
+    });
+
+    await Promise.resolve();
+
+    expect(configManagerMock.setConfig).toHaveBeenCalledWith(
+      'ai.models',
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'kimi-1',
+          category: 'multimodal',
+          capabilities: expect.arrayContaining(['image_understanding']),
+        }),
+      ])
+    );
+  });
 });

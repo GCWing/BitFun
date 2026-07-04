@@ -51,7 +51,10 @@ export interface AccentColors {
   800: ColorValue;
 }
 
- 
+export type SecondaryAccentStop = 50 | 100 | 200 | 400 | 500 | 600 | 800;
+export type SecondaryAccentColors = Pick<AccentColors, SecondaryAccentStop>;
+
+
 export interface SemanticColors {
   success: ColorValue;
   successBg: ColorValue;
@@ -68,10 +71,6 @@ export interface SemanticColors {
   info: ColorValue;
   infoBg: ColorValue;
   infoBorder: ColorValue;
-  
-  
-  highlight: ColorValue;
-  highlightBg: ColorValue;
 }
 
  
@@ -122,23 +121,12 @@ export interface ShadowConfig {
   base: string;
   lg: string;
   xl: string;
-  '2xl': string;
-}
-
- 
-export interface GlowConfig {
-  blue: string;
-  purple: string;
-  mixed: string;
 }
 
  
 export interface BlurConfig {
   subtle: string;
   base: string;
-  medium: string;
-  strong: string;
-  intense: string;
 }
 
  
@@ -170,40 +158,12 @@ export interface OpacityConfig {
   disabled: number;
   hover: number;
   focus: number;
-  overlay: number;
 }
 
 
 
  
 export interface ButtonConfig {
-  
-  default: {
-    background: ColorValue;
-    color: ColorValue;
-    border: ColorValue;
-    shadow?: string;
-  };
-  
-  
-  hover: {
-    background: ColorValue;
-    color: ColorValue;
-    border: ColorValue;
-    shadow?: string;
-    transform?: string;
-  };
-  
-  
-  active: {
-    background: ColorValue;
-    color: ColorValue;
-    border: ColorValue;
-    shadow?: string;
-    transform?: string;
-  };
-  
-  
   primary: {
     default: {
       background: ColorValue;
@@ -230,66 +190,20 @@ export interface ButtonConfig {
   
   ghost: {
     default: {
-      background: ColorValue;
       color: ColorValue;
-      border: ColorValue;
-      shadow?: string;
     };
     hover: {
       background: ColorValue;
       color: ColorValue;
       border: ColorValue;
-      shadow?: string;
-      transform?: string;
-    };
-    active: {
-      background: ColorValue;
-      color: ColorValue;
-      border: ColorValue;
-      shadow?: string;
-      transform?: string;
     };
   };
 }
 
  
 export interface WindowControlsConfig {
-  
-  minimize: {
-    dot: ColorValue;           
-    dotShadow?: string;        
-    hoverBg: ColorValue;       
-    hoverColor: ColorValue;    
-    hoverBorder: ColorValue;   
-    hoverShadow?: string;      
-  };
-  
-  
-  maximize: {
-    dot: ColorValue;           
-    dotShadow?: string;        
-    hoverBg: ColorValue;       
-    hoverColor: ColorValue;    
-    hoverBorder: ColorValue;   
-    hoverShadow?: string;      
-  };
-  
-  
   close: {
-    dot: ColorValue;           
-    dotShadow?: string;        
-    hoverBg: ColorValue;       
-    hoverColor: ColorValue;    
-    hoverBorder: ColorValue;   
-    hoverShadow?: string;      
-  };
-  
-  
-  common: {
-    defaultColor: ColorValue;          
-    defaultDot: ColorValue;            
-    disabledDot: ColorValue;           
-    flowGradient?: string;             
+    hoverColor: ColorValue;
   };
 }
 
@@ -301,15 +215,12 @@ export interface MotionConfig {
   fast: string;
   base: string;
   slow: string;
-  lazy: string;
 }
 
  
 export interface EasingConfig {
   standard: string;
   decelerate: string;
-  accelerate: string;
-  bounce: string;
   smooth: string;
 }
 
@@ -339,7 +250,6 @@ export interface FontSizeConfig {
   '2xl': string;
   '3xl': string;
   '4xl': string;
-  '5xl': string;
 }
 
  
@@ -394,7 +304,7 @@ export interface ThemeConfig {
     background: BackgroundColors;
     text: TextColors;
     accent: AccentColors;
-    purple?: AccentColors; 
+    purple?: SecondaryAccentColors;
     semantic: SemanticColors;
     border: BorderColors;
     element: ElementBackgrounds;
@@ -405,7 +315,6 @@ export interface ThemeConfig {
   
   effects: {
     shadow: ShadowConfig;
-    glow: GlowConfig;
     blur: BlurConfig;
     radius: RadiusConfig;
     spacing: SpacingConfig;

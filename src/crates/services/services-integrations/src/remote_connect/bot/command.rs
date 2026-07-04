@@ -22,6 +22,8 @@ pub enum BotCommand {
     NewClawSession,
     /// Resume an existing session (workspace or assistant by mode).
     ResumeSession,
+    /// Switch the model used by the current session.
+    SwitchModel,
     /// Cancel currently running task.
     CancelTask(Option<String>),
     /// Pairing code submitted before pairing.
@@ -113,6 +115,9 @@ pub fn parse_command(text: &str) -> BotCommand {
         "/resume" | "/r" | "/resume_session" | "恢复" | "恢复会话" => {
             return BotCommand::ResumeSession;
         }
+
+        // Switch model for the current session.
+        "/model" | "/switch_model" | "切换模型" => return BotCommand::SwitchModel,
         _ => {}
     }
 

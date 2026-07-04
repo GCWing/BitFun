@@ -141,7 +141,7 @@
 
 .model-round-item__retry-attempt {
   padding: 0.35rem 0 0.15rem;
-  border-top: 1px solid color-mix(in srgb, var(--color-border) 62%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--border-base) 62%, transparent);
 }
 
 .model-round-item__retry-attempt-label {
@@ -192,7 +192,7 @@
 // Copy button
 .model-round-item__copy-btn {
   &.copied {
-    color: var(--flowchat-copy-success-color);
+    color: var(--color-success);
     background: var(--color-success-bg);
   }
 }

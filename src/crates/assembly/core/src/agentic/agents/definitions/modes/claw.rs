@@ -18,6 +18,8 @@ impl ClawMode {
             default_tools: vec![
                 "Task".to_string(),
                 "Read".to_string(),
+                "view_image".to_string(),
+                "analyze_image".to_string(),
                 "Write".to_string(),
                 "Edit".to_string(),
                 "Delete".to_string(),
@@ -27,6 +29,7 @@ impl ClawMode {
                 "Grep".to_string(),
                 "Glob".to_string(),
                 "WebSearch".to_string(),
+                "WebFetch".to_string(),
                 "Skill".to_string(),
                 "Git".to_string(),
                 "SessionControl".to_string(),

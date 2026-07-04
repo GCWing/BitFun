@@ -20,6 +20,7 @@ serde_json = { workspace = true }
 [dependencies]
 # Internal crates
 bitfun-core = { path = "../../crates/assembly/core", default-features = false, features = ["product-full"] }
+bitfun-agent-tools = { path = "../../crates/execution/tool-contracts" }
 bitfun-transport = { path = "../../crates/adapters/transport", features = ["tauri-adapter"] }
 bitfun-webdriver = { path = "../../crates/adapters/webdriver" }
 bitfun-acp = { path = "../../crates/interfaces/acp" }
@@ -45,6 +46,7 @@ tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }
+base64 = { workspace = true }
 log = { workspace = true }
 chrono = { workspace = true }
 uuid = { workspace = true }
@@ -67,6 +69,8 @@ bitflags = { workspace = true }
 core-foundation = { workspace = true }
 core-graphics = { workspace = true }
 dispatch = { workspace = true }
+foreign-types = { workspace = true }
+libc = { workspace = true }
 objc2 = { workspace = true, features = ["exception"] }
 objc2-foundation = { workspace = true }
 objc2-app-kit = { workspace = true }
@@ -77,11 +81,27 @@ win32job = { workspace = true }
 windows = { workspace = true, features = [
   "Foundation",
   "Globalization",
+  "Graphics_Capture",
+  "Graphics_DirectX",
+  "Graphics_DirectX_Direct3D11",
   "Graphics_Imaging",
   "Media_Ocr",
   "Storage_Streams",
   "Win32_Foundation",
+  "Win32_Graphics_Direct3D",
+  "Win32_Graphics_Direct3D11",
+  "Win32_Graphics_Dwm",
+  "Win32_Graphics_Dxgi",
+  "Win32_Graphics_Dxgi_Common",
+  "Win32_Graphics_Gdi",
+  "Win32_Storage_Xps",
   "Win32_System_Com",
+  "Win32_System_Ole",
+  "Win32_System_Variant",
+  "Win32_System_WinRT",
+  "Win32_System_WinRT_Direct3D11",
+  "Win32_System_WinRT_Graphics",
+  "Win32_System_WinRT_Graphics_Capture",
   "Win32_UI_Accessibility",
   "Win32_UI_WindowsAndMessaging",
 ] }

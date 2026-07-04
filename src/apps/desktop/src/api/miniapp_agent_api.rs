@@ -258,6 +258,8 @@ pub async fn miniapp_agent_run(
             Some(submission_plan.run_id.clone()),
             MINIAPP_AGENT_KIND.to_string(),
             Some(submission_plan.workspace_path.clone()),
+            None,
+            None,
             policy,
             None,
             Some(submission_plan.metadata.clone()),

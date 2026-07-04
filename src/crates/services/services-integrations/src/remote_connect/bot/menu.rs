@@ -143,7 +143,11 @@ impl MenuView {
                 if i > 0 {
                     out.push('\n');
                 }
-                out.push_str(&format!("{} {}", i + 1, item.label));
+                if item.command.starts_with('/') {
+                    out.push_str(&format!("{}. {}  {}", i + 1, item.label, item.command));
+                } else {
+                    out.push_str(&format!("{}. {}", i + 1, item.label));
+                }
             }
         }
         let hint = self

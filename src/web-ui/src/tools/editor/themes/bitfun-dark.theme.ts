@@ -19,7 +19,7 @@ const MONACO_DARK_SURFACE = {
   background: '#121214',
   elevated: '#18181a',
   borderSubtle: '#202024',
-  diffDeep: '#0D0D0F',
+  diffDeep: '#121214',
 } as const;
 
 const MONACO_EDITOR_TEXT = {
@@ -46,6 +46,17 @@ const MONACO_STATUS_COLOR = {
   info: '#82AAFF',
   success: '#ADDB67',
   link: '#7DCFFF',
+} as const;
+
+const MONACO_DIFF_COLOR = {
+  insertedTextBackground: '#23863625',
+  insertedLineBackground: '#23863630',
+  insertedGutterBackground: '#23863638',
+  removedTextBackground: '#DA363325',
+  removedLineBackground: '#DA363330',
+  removedGutterBackground: '#DA363338',
+  modifiedTextBackground: '#1F6FEB20',
+  modifiedLineBackground: '#1F6FEB28',
 } as const;
 
 /**
@@ -392,21 +403,21 @@ export const BitFunDarkTheme: editor.IStandaloneThemeData = {
     'editorOverviewRuler.infoForeground': MONACO_BRAND_ACCENT.base,
 
     // Diff Editor (GitHub Dark style)
-    'diffEditor.insertedTextBackground': '#23863625',
-    'diffEditor.insertedLineBackground': '#23863630',
+    'diffEditor.insertedTextBackground': MONACO_DIFF_COLOR.insertedTextBackground,
+    'diffEditor.insertedLineBackground': MONACO_DIFF_COLOR.insertedLineBackground,
     'diffEditor.insertedTextBorder': TRANSPARENT_MONACO_BORDER,
-    'diffEditorGutter.insertedLineBackground': '#23863638',
+    'diffEditorGutter.insertedLineBackground': MONACO_DIFF_COLOR.insertedGutterBackground,
 
-    'diffEditor.removedTextBackground': '#DA363325',
-    'diffEditor.removedLineBackground': '#DA363330',
+    'diffEditor.removedTextBackground': MONACO_DIFF_COLOR.removedTextBackground,
+    'diffEditor.removedLineBackground': MONACO_DIFF_COLOR.removedLineBackground,
     'diffEditor.removedTextBorder': TRANSPARENT_MONACO_BORDER,
-    'diffEditorGutter.removedLineBackground': '#DA363338',
+    'diffEditorGutter.removedLineBackground': MONACO_DIFF_COLOR.removedGutterBackground,
 
-    'diffEditor.modifiedTextBackground': '#1F6FEB20',
-    'diffEditor.modifiedLineBackground': '#1F6FEB28',
+    'diffEditor.modifiedTextBackground': MONACO_DIFF_COLOR.modifiedTextBackground,
+    'diffEditor.modifiedLineBackground': MONACO_DIFF_COLOR.modifiedLineBackground,
 
     'diffEditor.border': '#2A2D35',
-    'diffEditor.diagonalFill': '#16181D',
+    'diffEditor.diagonalFill': MONACO_DARK_SURFACE.elevated,
     'diffEditor.unchangedRegionBackground': MONACO_DARK_SURFACE.diffDeep,
     'diffEditor.unchangedCodeBackground': MONACO_DARK_SURFACE.diffDeep,
 

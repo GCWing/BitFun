@@ -801,6 +801,10 @@ mod tests {
         reset_snapshot_manager_new_count_for_test, set_snapshot_manager_new_delay_for_test,
         snapshot_manager_new_count_for_test,
     };
+    use crate::infrastructure::PathManager;
+    use crate::service::workspace_runtime::{
+        set_workspace_runtime_service_for_current_test, WorkspaceRuntimeService,
+    };
     use std::path::{Path, PathBuf};
     use std::sync::Arc;
     use std::time::Duration;
@@ -833,6 +837,11 @@ mod tests {
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn concurrent_get_or_create_initializes_snapshot_manager_once_per_workspace() {
         let workspace = TestWorkspace::new();
+        let _runtime_guard = set_workspace_runtime_service_for_current_test(Arc::new(
+            WorkspaceRuntimeService::new(Arc::new(PathManager::with_user_root_for_tests(
+                workspace.path().join("user-root"),
+            ))),
+        ));
         clear_snapshot_manager_for_test(workspace.path());
         reset_snapshot_manager_new_count_for_test();
         set_snapshot_manager_new_delay_for_test(Duration::from_millis(80));

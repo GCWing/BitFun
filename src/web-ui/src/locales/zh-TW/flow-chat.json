@@ -44,6 +44,8 @@
     "loadingDescription": "正在準備該會話的歷史內容。",
     "failedTitle": "歷史會話載入失敗",
     "failedDescription": "可以重新載入已儲存的會話內容。",
+    "preparingOlderHistory": "正在準備更早的歷史記錄...",
+    "olderHistoryNotReady": "更早的歷史記錄暫未準備好。",
     "remoteSessionMissing": "在後端找不到該會話資料。若剛重新連接過 SSH 遠端工作區，請關閉並重新開啟該遠端項目，或新增會話後再試。",
     "retry": "重試"
   },
@@ -553,6 +555,7 @@
     "boostSectionAgent": "智能體",
     "boostSectionContext": "上下文",
     "boostStartBtw": "發起側問",
+    "boostNewSession": "新建會話",
     "boostAddContext": "引用檔案或資料夾",
     "boostSkills": "Skills",
     "modeSection": "模式",
@@ -618,6 +621,7 @@
     "noMatchingCommand": "沒有匹配的命令",
     "selectHint": "↑↓ 選擇 · Enter 確認 · Esc 取消",
     "current": "目前",
+    "computerUseDisabled": "已在「設定 → 工作階段權限」中停用 Computer Use",
     "professionalMode": "專業模式",
     "designMode": "設計模式",
     "wip": "開發中",
@@ -1357,6 +1361,25 @@
       "commandInterrupted": "命令已被中斷",
       "executionFailed": "命令執行失敗"
     },
+    "approval": {
+      "waiting": "等待確認",
+      "confirm": "允許",
+      "reject": "拒絕",
+      "rejectWithInstruction": "說明後拒絕",
+      "enableAutoExecute": "開啟工具自動執行",
+      "confirmTooltip": "允許執行這個工具",
+      "enableAutoExecuteTooltip": "開啟工具自動執行",
+      "autoExecuteEnabled": "已開啟工具自動執行",
+      "autoExecuteEnableFailed": "開啟工具自動執行失敗",
+      "rejectTooltip": "拒絕執行這個工具",
+      "rejectWithInstructionTooltip": "拒絕並告訴助手下一步怎麼做",
+      "rejectInstructionLabel": "拒絕說明",
+      "rejectInstructionPlaceholder": "告訴助手改怎麼做...",
+      "rejectWithInstructionSubmit": "拒絕",
+      "emptyInputTooltip": "這個工具沒有可執行輸入",
+      "remaining": "剩餘 {{time}}",
+      "ariaLabel": "工具執行確認"
+    },
     "execProcess": {
       "executeCommand": "執行命令:",
       "writeStdin": "寫入標準輸入:",
@@ -1449,6 +1472,20 @@
       "clickToOpenLink": "點擊開啟鏈接",
       "noTitle": "無標題",
       "summaryAvailable": "有搜尋摘要"
+    },
+    "computerUse": {
+      "running": "正在控制桌面...",
+      "runningOnApp": "正在控制 {{app}}...",
+      "controllingApp": "正在控制 {{app}}",
+      "done": "操作已完成",
+      "actionFailed": "操作失敗",
+      "actionLabel": "動作",
+      "appLabel": "應用",
+      "targetLabel": "目標",
+      "permissionDenied": "需要桌面控制權限",
+      "permissionDeniedHint": "BitFun 需要 macOS「輔助使用」和「螢幕錄製」權限才能控制其他應用。請打開系統設定，為 BitFun 授權後重試。",
+      "openSettings": "打開系統設定",
+      "openSettingsFailed": "無法打開系統設定"
     },
     "webFetch": {
       "parsingUrl": "解析連結中...",
@@ -1580,6 +1617,7 @@
       "executing": "執行中...",
       "completed": "已完成",
       "cancelled": "已取消",
+      "rejected": "已拒絕",
       "failed": "執行失敗",
       "preparing": "準備中"
     },

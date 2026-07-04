@@ -264,7 +264,7 @@
 
   &__tag {
     padding: 4px $size-gap-2;
-    background: $element-bg-soft;
+    background: var(--element-bg-soft);
     border: none;
     border-radius: $size-radius-sm;
     font-size: var(--font-size-xs);
@@ -273,7 +273,7 @@
     transition: all $motion-fast $easing-standard;
 
     &:hover {
-      background: $element-bg-medium;
+      background: var(--element-bg-medium);
     }
   }
 

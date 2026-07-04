@@ -23,6 +23,9 @@ pub struct LocalGlobRequest {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LocalGlobResult {
     pub matches: Vec<PathBuf>,
+    pub walk_root: PathBuf,
+    pub total_matches: Option<usize>,
+    pub truncated: bool,
 }
 
 pub fn extract_glob_base_directory(pattern: &str) -> (String, String) {
@@ -136,8 +139,6 @@ fn build_rg_args(
         "--files".to_string(),
         "--glob".to_string(),
         relative_pattern.to_string(),
-        "--sort".to_string(),
-        "path".to_string(),
     ];
 
     if !apply_gitignore {
@@ -188,13 +189,34 @@ fn match_relative_path(matcher: &GlobMatcher, relative_pattern: &str, relative_p
     matcher.is_match(relative_path)
 }
 
+fn strip_current_dir_prefix(path: &str) -> &str {
+    path.strip_prefix("./")
+        .or_else(|| path.strip_prefix(".\\"))
+        .unwrap_or(path)
+}
+
+fn relativize_remote_stdout_path(search_dir: &str, path: &str) -> String {
+    let normalized_path = strip_current_dir_prefix(path).replace('\\', "/");
+    let normalized_search_dir = search_dir.replace('\\', "/");
+    let search_dir_with_slash = format!("{}/", normalized_search_dir.trim_end_matches('/'));
+
+    if let Some(relative_path) = normalized_path.strip_prefix(&search_dir_with_slash) {
+        return relative_path.to_string();
+    }
+    if normalized_path == normalized_search_dir {
+        return String::new();
+    }
+
+    normalized_path
+}
+
 fn collect_with_walk_fallback(
     walk_root: &Path,
     relative_pattern: &str,
     apply_gitignore: bool,
     ignore_hidden_files: bool,
     limit: usize,
-) -> Result<Vec<PathBuf>, String> {
+) -> Result<LocalGlobResult, String> {
     let matcher = build_fallback_matcher(relative_pattern)?;
     let walker = WalkBuilder::new(walk_root)
         .ignore(apply_gitignore)
@@ -205,6 +227,7 @@ fn collect_with_walk_fallback(
         .build();
 
     let mut best_matches = BinaryHeap::with_capacity(limit.saturating_add(1));
+    let mut total_matches = 0usize;
     for entry in walker {
         let entry = match entry {
             Ok(entry) => entry,
@@ -230,10 +253,10 @@ fn collect_with_walk_fallback(
         let relative_path = normalize_path(relative_path);
 
         if match_relative_path(&matcher, relative_pattern, &relative_path) {
-            let normalized_path = normalize_path(&path);
+            total_matches += 1;
             let candidate = GlobCandidate {
-                depth: normalized_path.split('/').count(),
-                path: normalized_path,
+                depth: relative_path.split('/').count(),
+                path: relative_path,
             };
 
             if best_matches.len() < limit {
@@ -247,11 +270,16 @@ fn collect_with_walk_fallback(
         }
     }
 
-    Ok(best_matches
-        .into_sorted_vec()
-        .into_iter()
-        .map(|candidate| PathBuf::from(candidate.path))
-        .collect())
+    Ok(LocalGlobResult {
+        matches: best_matches
+            .into_sorted_vec()
+            .into_iter()
+            .map(|candidate| PathBuf::from(candidate.path))
+            .collect(),
+        walk_root: walk_root.to_path_buf(),
+        total_matches: Some(total_matches),
+        truncated: total_matches > limit,
+    })
 }
 
 pub fn limit_paths(paths: &[PathBuf], limit: usize) -> Vec<PathBuf> {
@@ -278,13 +306,43 @@ pub fn collect_remote_glob_matches(search_dir: &str, stdout: &str, limit: usize)
     let matches = stdout
         .lines()
         .filter(|line| !line.is_empty())
-        .map(|line| {
-            let relative_path = line.strip_prefix("./").unwrap_or(line);
-            Path::new(search_dir).join(relative_path)
+        .filter_map(|line| {
+            let relative_path = relativize_remote_stdout_path(search_dir, line);
+            (!relative_path.is_empty()).then(|| PathBuf::from(relative_path))
         })
         .collect::<Vec<_>>();
 
     limit_paths(&matches, limit)
+}
+
+pub fn collect_remote_glob_result(
+    search_dir: &str,
+    stdout: &str,
+    limit: usize,
+    exact_total: bool,
+) -> LocalGlobResult {
+    let matches = stdout
+        .lines()
+        .filter(|line| !line.is_empty())
+        .filter_map(|line| {
+            let relative_path = relativize_remote_stdout_path(search_dir, line);
+            (!relative_path.is_empty()).then(|| PathBuf::from(relative_path))
+        })
+        .collect::<Vec<_>>();
+    let observed_matches = matches.len();
+    let truncated = observed_matches > limit;
+    let total_matches = if exact_total || !truncated {
+        Some(observed_matches)
+    } else {
+        None
+    };
+
+    LocalGlobResult {
+        matches: limit_paths(&matches, limit),
+        walk_root: PathBuf::from(search_dir),
+        total_matches,
+        truncated,
+    }
 }
 
 pub fn execute_local_glob(request: LocalGlobRequest) -> Result<LocalGlobResult, String> {
@@ -309,6 +367,9 @@ pub fn execute_local_glob(request: LocalGlobRequest) -> Result<LocalGlobResult, 
     if !walk_root.exists() || !walk_root.is_dir() || request.limit == 0 {
         return Ok(LocalGlobResult {
             matches: Vec::new(),
+            walk_root,
+            total_matches: Some(0),
+            truncated: false,
         });
     }
 
@@ -347,13 +408,21 @@ pub fn execute_local_glob(request: LocalGlobRequest) -> Result<LocalGlobResult, 
                 apply_gitignore,
                 ignore_hidden_files,
                 request.limit,
-            )
-            .map(|matches| LocalGlobResult { matches });
+            );
         }
         Err(error) => return Err(error),
     };
 
     if !output.status.success() {
+        if output.status.code() == Some(1) {
+            return Ok(LocalGlobResult {
+                matches: Vec::new(),
+                walk_root,
+                total_matches: Some(0),
+                truncated: false,
+            });
+        }
+
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
         let message = if stderr.is_empty() {
             format!("rg --files failed with status {}", output.status)
@@ -372,8 +441,7 @@ pub fn execute_local_glob(request: LocalGlobRequest) -> Result<LocalGlobResult, 
                 apply_gitignore,
                 ignore_hidden_files,
                 request.limit,
-            )
-            .map(|matches| LocalGlobResult { matches });
+            );
         }
         return Err(message);
     }
@@ -382,13 +450,17 @@ pub fn execute_local_glob(request: LocalGlobRequest) -> Result<LocalGlobResult, 
         .lines()
         .filter(|line| !line.is_empty())
         .map(|line| {
-            let relative_path = line.strip_prefix("./").unwrap_or(line);
-            walk_root.join(relative_path)
+            let relative_path = strip_current_dir_prefix(line);
+            PathBuf::from(relative_path)
         })
         .collect::<Vec<_>>();
 
+    let total_matches = all_paths.len();
     Ok(LocalGlobResult {
         matches: limit_paths(&all_paths, request.limit),
+        walk_root,
+        total_matches: Some(total_matches),
+        truncated: total_matches > request.limit,
     })
 }
 
@@ -401,16 +473,15 @@ pub fn build_remote_rg_command(search_dir: &str, pattern: &str) -> String {
     let (remote_walk_root, remote_pattern) = derive_walk_root(search_dir_path, pattern);
     let (apply_gitignore, ignore_hidden_files) = resolve_glob_config(pattern);
 
+    let remote_walk_root = normalize_path(&remote_walk_root);
     let mut parts = vec![
         "cd".to_string(),
-        shell_single_quote(remote_walk_root.to_string_lossy().as_ref()),
+        shell_single_quote(&remote_walk_root),
         "&&".to_string(),
         "rg".to_string(),
         "--files".to_string(),
         "--glob".to_string(),
         shell_single_quote(&remote_pattern),
-        "--sort".to_string(),
-        "path".to_string(),
     ];
 
     if !apply_gitignore {
@@ -438,12 +509,14 @@ pub fn build_remote_find_command(search_dir: &str, pattern: &str, limit: usize) 
         remote_pattern
     };
 
-    let escaped_dir = shell_single_quote(remote_walk_root.to_string_lossy().as_ref());
+    let escaped_dir = shell_single_quote(&normalize_path(&remote_walk_root));
     let escaped_pattern = shell_single_quote(&name_pattern);
 
     format!(
-        "find {} -maxdepth 10 -name {} -not -path '*/.git/*' -not -path '*/node_modules/*' 2>/dev/null | head -n {}",
-        escaped_dir, escaped_pattern, limit
+        "find {} -maxdepth 10 -type f -name {} -not -path '*/.git/*' -not -path '*/node_modules/*' 2>/dev/null | head -n {}",
+        escaped_dir,
+        escaped_pattern,
+        limit.saturating_add(1)
     )
 }
 
@@ -494,6 +567,7 @@ mod tests {
 
         let wildcard_matches = collect_with_walk_fallback(root, "*", false, false, 10)
             .expect("fallback glob should succeed")
+            .matches
             .into_iter()
             .map(|path| normalized(&path))
             .collect::<Vec<_>>();
@@ -503,18 +577,21 @@ mod tests {
             .all(|path| !path.ends_with("/src") && !path.ends_with("/src/nested")));
         assert!(wildcard_matches
             .iter()
-            .any(|path| path.ends_with("/src/nested/lib.rs")));
+            .any(|path| path == "src/nested/lib.rs"));
 
         let rust_matches = collect_with_walk_fallback(root, "*.rs", false, false, 10)
             .expect("fallback rust glob should succeed")
+            .matches
             .into_iter()
             .map(|path| normalized(&path))
             .collect::<Vec<_>>();
         assert_eq!(rust_matches.len(), 1);
-        assert!(rust_matches[0].ends_with("/src/nested/lib.rs"));
+        assert_eq!(rust_matches[0], "src/nested/lib.rs");
 
         let directory_name_matches = collect_with_walk_fallback(root, "src", false, false, 10)
             .expect("fallback directory-name glob should succeed");
-        assert!(directory_name_matches.is_empty());
+        assert!(directory_name_matches.matches.is_empty());
+        assert_eq!(directory_name_matches.total_matches, Some(0));
+        assert!(!directory_name_matches.truncated);
     }
 }

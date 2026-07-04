@@ -15,6 +15,7 @@ import {
 } from '../types';
 import { builtinThemes, getSystemPreferredDefaultThemeId } from '../presets';
 import { configAPI, workspaceAPI } from '@/infrastructure/api';
+import { themeValidator } from '../utils/ThemeValidator';
 import { monacoThemeSync } from '../integrations/MonacoThemeSync';
 import { createLogger } from '@/shared/utils/logger';
 
@@ -31,6 +32,58 @@ const FLOW_CHAT_LINK_COLORS = {
   },
 } as const;
 
+const THEME_STATIC_COLORS = {
+  white: '#ffffff',
+  black: '#000000',
+} as const;
+
+const ACCENT_STOPS = [50, 100, 200, 300, 400, 500, 600, 700, 800] as const;
+const SECONDARY_ACCENT_STOPS = [50, 100, 200, 400, 500, 600, 800] as const;
+const SHADOW_TOKENS = ['xs', 'sm', 'base', 'lg', 'xl'] as const;
+const BLUR_TOKENS = ['subtle', 'base'] as const;
+const RADIUS_TOKENS = ['sm', 'base', 'lg', 'xl', '2xl', 'full'] as const;
+const SPACING_TOKENS = [1, 2, 3, 4, 5, 6, 8, 10, 12, 16] as const;
+const MOTION_DURATION_TOKENS = ['instant', 'fast', 'base', 'slow'] as const;
+const EASING_TOKENS = ['standard', 'decelerate', 'smooth'] as const;
+const FONT_WEIGHT_TOKENS = ['normal', 'medium', 'semibold', 'bold'] as const;
+const FONT_SIZE_TOKENS = ['xs', 'sm', 'base', 'lg', 'xl', '2xl', '3xl', '4xl'] as const;
+const LINE_HEIGHT_TOKENS = ['tight', 'base', 'relaxed'] as const;
+
+const THEME_OVERLAYS = {
+  white04: 'rgba(255, 255, 255, 0.04)',
+  white08: 'rgba(255, 255, 255, 0.08)',
+  white12: 'rgba(255, 255, 255, 0.12)',
+  white15: 'rgba(255, 255, 255, 0.15)',
+  white20: 'rgba(255, 255, 255, 0.2)',
+  white24: 'rgba(255, 255, 255, 0.24)',
+  white60: 'rgba(255, 255, 255, 0.6)',
+  black08: 'rgba(0, 0, 0, 0.08)',
+  black12: 'rgba(0, 0, 0, 0.12)',
+  black15: 'rgba(0, 0, 0, 0.15)',
+  black20: 'rgba(0, 0, 0, 0.2)',
+  black30: 'rgba(0, 0, 0, 0.3)',
+  black40: 'rgba(0, 0, 0, 0.4)',
+  black50: 'rgba(0, 0, 0, 0.5)',
+  black80: 'rgba(0, 0, 0, 0.8)',
+} as const;
+
+const THEME_OVERLAY_TOKEN_VALUES = [
+  ['--color-overlay-white-04', THEME_OVERLAYS.white04],
+  ['--color-overlay-white-08', THEME_OVERLAYS.white08],
+  ['--color-overlay-white-12', THEME_OVERLAYS.white12],
+  ['--color-overlay-white-15', THEME_OVERLAYS.white15],
+  ['--color-overlay-white-20', THEME_OVERLAYS.white20],
+  ['--color-overlay-white-60', THEME_OVERLAYS.white60],
+  ['--color-overlay-black-08', THEME_OVERLAYS.black08],
+  ['--color-overlay-black-12', THEME_OVERLAYS.black12],
+  ['--color-overlay-black-15', THEME_OVERLAYS.black15],
+  ['--color-overlay-black-20', THEME_OVERLAYS.black20],
+  ['--color-overlay-black-30', THEME_OVERLAYS.black30],
+  ['--color-overlay-black-40', THEME_OVERLAYS.black40],
+  ['--color-overlay-black-50', THEME_OVERLAYS.black50],
+  ['--color-overlay-black-80', THEME_OVERLAYS.black80],
+] as const;
+
 declare global {
   // Injected by the desktop webview initialization script. These values let the
   // first renderer pass apply the persisted built-in theme without waiting on a
@@ -39,7 +92,7 @@ declare global {
   var __BITFUN_BOOTSTRAP_THEME_SELECTION__: string | undefined;
 }
 
-/** Space-separated R G B for `rgba(var(--color-primary-rgb) / alpha)` in component styles. */
+/** Space-separated R G B channels for accent alpha composition in component styles. */
 function accentColorToRgbChannels(accent: string): string | null {
   const trimmed = accent.trim();
   const hex6 = /^#([0-9a-f]{6})$/i.exec(trimmed);
@@ -52,6 +105,43 @@ function accentColorToRgbChannels(accent: string): string | null {
     return `${rgb[1]} ${rgb[2]} ${rgb[3]}`;
   }
   return null;
+}
+
+function colorWithAlpha(color: string, alpha: number): string {
+  const channels = accentColorToRgbChannels(color);
+  if (channels) {
+    return `rgba(${channels.replace(/\s+/g, ', ')}, ${alpha})`;
+  }
+  const percent = `${Math.round(alpha * 1000) / 10}%`;
+  return `color-mix(in srgb, ${color} ${percent}, transparent)`;
+}
+
+function cloneThemeConfig(theme: ThemeConfig): ThemeConfig {
+  return JSON.parse(JSON.stringify(theme)) as ThemeConfig;
+}
+
+function mergeThemeConfig(base: ThemeConfig, override: Partial<ThemeConfig>): ThemeConfig {
+  const mergeValue = (baseValue: unknown, overrideValue: unknown): unknown => {
+    if (overrideValue === undefined || overrideValue === null) {
+      return baseValue;
+    }
+    if (Array.isArray(baseValue) || Array.isArray(overrideValue)) {
+      return overrideValue;
+    }
+    if (
+      typeof baseValue === 'object' && baseValue !== null &&
+      typeof overrideValue === 'object' && overrideValue !== null
+    ) {
+      const merged: Record<string, unknown> = { ...(baseValue as Record<string, unknown>) };
+      Object.entries(overrideValue as Record<string, unknown>).forEach(([key, value]) => {
+        merged[key] = mergeValue(merged[key], value);
+      });
+      return merged;
+    }
+    return overrideValue;
+  };
+
+  return mergeValue(cloneThemeConfig(base), override) as ThemeConfig;
 }
 
 
@@ -187,10 +277,20 @@ export class ThemeService {
       const themes = themesConfig?.custom;
 
       if (Array.isArray(themes) && themes.length > 0) {
+        let loadedCount = 0;
         themes.forEach(theme => {
-          this.themes.set(theme.id, theme);
+          try {
+            const normalizedTheme = this.normalizeCustomTheme(theme);
+            this.themes.set(normalizedTheme.id, normalizedTheme);
+            loadedCount += 1;
+          } catch (error) {
+            log.warn('Skipped invalid user theme', {
+              id: theme?.id,
+              error: error instanceof Error ? error.message : String(error),
+            });
+          }
         });
-        log.info('Loaded user themes', { count: themes.length });
+        log.info('Loaded user themes', { count: loadedCount, skipped: themes.length - loadedCount });
       }
     } catch (_error) {
 
@@ -217,18 +317,56 @@ export class ThemeService {
 
 
 
-  registerTheme(theme: ThemeConfig): void {
+  private normalizeCustomTheme(theme: ThemeConfig): ThemeConfig {
+    if (!theme || typeof theme !== 'object') {
+      throw new Error('Invalid theme: expected object');
+    }
+    if (!theme.id || theme.id.trim() === '') {
+      throw new Error('Theme id cannot be empty');
+    }
+    if (!theme.name || theme.name.trim() === '') {
+      throw new Error(`Invalid theme ${theme.id}: theme name cannot be empty`);
+    }
     if (theme.id === SYSTEM_THEME_ID) {
       log.error('Reserved theme id', { id: theme.id });
       throw new Error(`Theme id "${SYSTEM_THEME_ID}" is reserved`);
     }
+    if (builtinThemes.some(item => item.id === theme.id)) {
+      log.error('Reserved builtin theme id', { id: theme.id });
+      throw new Error(`Theme id "${theme.id}" is reserved for a built-in theme`);
+    }
+    if (!theme.type || !['dark', 'light'].includes(theme.type)) {
+      throw new Error(`Invalid theme ${theme.id || '<missing>'}: theme type must be "dark" or "light"`);
+    }
+
+    const baseTheme = theme.type === 'light'
+      ? builtinThemes.find(item => item.type === 'light') || builtinThemes[0]
+      : builtinThemes.find(item => item.id === 'bitfun-dark') || builtinThemes.find(item => item.type === 'dark') || builtinThemes[0];
+    const normalized = mergeThemeConfig(baseTheme, theme);
+    const validation = this.validateTheme(normalized);
+
+    if (!validation.valid) {
+      const detail = validation.errors
+        .slice(0, 3)
+        .map(error => `${error.path}: ${error.message}`)
+        .join('; ');
+      throw new Error(`Invalid theme ${theme.id || '<missing>'}: ${detail}`);
+    }
+
+    return normalized;
+  }
+
+
+  async registerTheme(theme: ThemeConfig): Promise<void> {
+    const normalizedTheme = this.normalizeCustomTheme(theme);
     if (this.themes.has(theme.id)) {
       log.warn('Theme already exists, will override', { id: theme.id });
     }
 
-    this.themes.set(theme.id, theme);
-    this.emitEvent('theme:register', theme.id, theme);
-    log.info('Theme registered', { id: theme.id, name: theme.name });
+    this.themes.set(normalizedTheme.id, normalizedTheme);
+    this.emitEvent('theme:register', normalizedTheme.id, normalizedTheme);
+    log.info('Theme registered', { id: normalizedTheme.id, name: normalizedTheme.name });
+    await this.saveUserThemes();
   }
 
 
@@ -409,34 +547,11 @@ export class ThemeService {
 
 
     root.style.setProperty('--color-bg-primary', colors.background.primary);
-    root.style.setProperty('--color-static-white', '#ffffff');
-    root.style.setProperty('--color-static-black', '#000000');
+    root.style.setProperty('--color-static-white', THEME_STATIC_COLORS.white);
+    root.style.setProperty('--color-static-black', THEME_STATIC_COLORS.black);
     root.style.setProperty('--color-static-white-rgb', '255, 255, 255');
     root.style.setProperty('--color-static-black-rgb', '0, 0, 0');
-    [
-      ['--color-overlay-white-02', 'rgba(255, 255, 255, 0.02)'],
-      ['--color-overlay-white-03', 'rgba(255, 255, 255, 0.03)'],
-      ['--color-overlay-white-04', 'rgba(255, 255, 255, 0.04)'],
-      ['--color-overlay-white-05', 'rgba(255, 255, 255, 0.05)'],
-      ['--color-overlay-white-06', 'rgba(255, 255, 255, 0.06)'],
-      ['--color-overlay-white-08', 'rgba(255, 255, 255, 0.08)'],
-      ['--color-overlay-white-10', 'rgba(255, 255, 255, 0.1)'],
-      ['--color-overlay-white-12', 'rgba(255, 255, 255, 0.12)'],
-      ['--color-overlay-white-15', 'rgba(255, 255, 255, 0.15)'],
-      ['--color-overlay-white-20', 'rgba(255, 255, 255, 0.2)'],
-      ['--color-overlay-white-60', 'rgba(255, 255, 255, 0.6)'],
-      ['--color-overlay-black-06', 'rgba(0, 0, 0, 0.06)'],
-      ['--color-overlay-black-08', 'rgba(0, 0, 0, 0.08)'],
-      ['--color-overlay-black-10', 'rgba(0, 0, 0, 0.1)'],
-      ['--color-overlay-black-12', 'rgba(0, 0, 0, 0.12)'],
-      ['--color-overlay-black-15', 'rgba(0, 0, 0, 0.15)'],
-      ['--color-overlay-black-20', 'rgba(0, 0, 0, 0.2)'],
-      ['--color-overlay-black-25', 'rgba(0, 0, 0, 0.25)'],
-      ['--color-overlay-black-30', 'rgba(0, 0, 0, 0.3)'],
-      ['--color-overlay-black-40', 'rgba(0, 0, 0, 0.4)'],
-      ['--color-overlay-black-50', 'rgba(0, 0, 0, 0.5)'],
-      ['--color-overlay-black-80', 'rgba(0, 0, 0, 0.8)'],
-    ].forEach(([name, value]) => {
+    THEME_OVERLAY_TOKEN_VALUES.forEach(([name, value]) => {
       root.style.setProperty(name, value);
     });
     root.style.setProperty('--color-bg-secondary', colors.background.secondary);
@@ -445,74 +560,37 @@ export class ThemeService {
     root.style.setProperty('--color-bg-elevated', colors.background.elevated);
     root.style.setProperty('--color-bg-workbench', colors.background.workbench);
     root.style.setProperty('--color-bg-scene', colors.background.scene);
-    root.style.setProperty('--color-bg-flowchat', colors.background.scene);
-    root.style.setProperty('--color-bg-surface', colors.background.secondary);
-    root.style.setProperty('--color-bg-base', colors.background.primary);
-    root.style.setProperty('--color-bg-elevated-hover', colors.element.medium);
-    root.style.setProperty('--color-surface-elevated', colors.element.elevated);
-    root.style.setProperty('--color-surface-hover', colors.element.medium);
-    root.style.setProperty('--color-hover', colors.element.medium);
-    root.style.setProperty('--bg-primary', colors.background.primary);
-    root.style.setProperty('--bg-secondary', colors.background.secondary);
-    root.style.setProperty('--bg-tertiary', colors.background.tertiary);
-    root.style.setProperty('--bg-elevated', colors.background.elevated);
-    root.style.setProperty('--bg-hover', colors.element.medium);
-    root.style.setProperty('--secondary-bg', colors.background.secondary);
-    root.style.setProperty('--background-primary', colors.background.primary);
-    root.style.setProperty('--background-secondary', colors.background.secondary);
-    root.style.setProperty('--background-tertiary', colors.background.tertiary);
-    root.style.setProperty('--color-background-secondary', colors.background.secondary);
-    root.style.setProperty('--color-background-tertiary', colors.background.tertiary);
     if (colors.background.tooltip) {
       root.style.setProperty('--color-bg-tooltip', colors.background.tooltip);
     }
 
-    root.style.setProperty('--color-overlay', theme.type === 'dark' ? 'rgba(0, 0, 0, 0.5)' : 'rgba(0, 0, 0, 0.3)');
-
-
     root.style.setProperty('--color-text-primary', colors.text.primary);
     root.style.setProperty('--color-text-secondary', colors.text.secondary);
-    root.style.setProperty('--color-text-tertiary', colors.text.muted);
     root.style.setProperty('--color-text-muted', colors.text.muted);
     root.style.setProperty('--color-text-disabled', colors.text.disabled);
-    root.style.setProperty('--text-primary', colors.text.primary);
-    root.style.setProperty('--text-secondary', colors.text.secondary);
-    root.style.setProperty('--text-tertiary', colors.text.muted);
-    root.style.setProperty('--text-muted', colors.text.muted);
-    root.style.setProperty('--text-disabled', colors.text.disabled);
 
 
-    Object.entries(colors.accent).forEach(([key, value]) => {
+    ACCENT_STOPS.forEach((key) => {
+      const value = colors.accent[key];
       root.style.setProperty(`--color-accent-${key}`, value);
     });
 
     const primaryAccent = colors.accent[500];
-    const primaryHover = colors.accent[600];
-    root.style.setProperty('--color-primary', primaryAccent);
-    root.style.setProperty('--color-primary-hover', primaryHover);
-    root.style.setProperty('--color-accent', primaryAccent);
-    root.style.setProperty('--color-accent-primary', primaryAccent);
-    root.style.setProperty('--accent-primary', primaryAccent);
-    root.style.setProperty('--accent-primary-hover', primaryHover);
-    root.style.setProperty('--color-primary-400', colors.accent[400]);
-    root.style.setProperty('--color-primary-500', primaryAccent);
-    root.style.setProperty('--color-primary-alpha', colors.accent[100]);
-    root.style.setProperty('--color-primary-bg', colors.accent[100]);
-    root.style.setProperty('--color-primary-bg-subtle', colors.accent[50]);
-    root.style.setProperty('--color-accent-alpha', colors.accent[100]);
     const flowChatLinkColors = theme.type === 'light'
       ? FLOW_CHAT_LINK_COLORS.light
       : FLOW_CHAT_LINK_COLORS.dark;
     root.style.setProperty('--flowchat-link-color', flowChatLinkColors.default);
     root.style.setProperty('--flowchat-link-hover-color', flowChatLinkColors.hover);
-    const primaryRgb = accentColorToRgbChannels(primaryAccent);
-    if (primaryRgb) {
-      root.style.setProperty('--color-primary-rgb', primaryRgb);
+    const accentRgb = accentColorToRgbChannels(primaryAccent);
+    if (accentRgb) {
+      root.style.setProperty('--color-accent-500-rgb', accentRgb);
     }
 
 
-    if (colors.purple) {
-      Object.entries(colors.purple).forEach(([key, value]) => {
+    const secondaryAccent = colors.purple;
+    if (secondaryAccent) {
+      SECONDARY_ACCENT_STOPS.forEach((key) => {
+        const value = secondaryAccent[key];
         root.style.setProperty(`--color-purple-${key}`, value);
       });
     }
@@ -521,43 +599,22 @@ export class ThemeService {
     root.style.setProperty('--color-success', colors.semantic.success);
     root.style.setProperty('--color-success-bg', colors.semantic.successBg);
     root.style.setProperty('--color-success-border', colors.semantic.successBorder);
-    root.style.setProperty('--color-success-100', colors.semantic.successBg);
-    root.style.setProperty('--color-success-500', colors.semantic.success);
     root.style.setProperty('--color-warning', colors.semantic.warning);
     root.style.setProperty('--color-warning-bg', colors.semantic.warningBg);
     root.style.setProperty('--color-warning-border', colors.semantic.warningBorder);
-    root.style.setProperty('--color-warning-100', colors.semantic.warningBg);
-    root.style.setProperty('--color-warning-500', colors.semantic.warning);
-    root.style.setProperty('--color-warning-700', colors.semantic.warning);
     root.style.setProperty('--color-error', colors.semantic.error);
     root.style.setProperty('--color-error-bg', colors.semantic.errorBg);
     root.style.setProperty('--color-error-border', colors.semantic.errorBorder);
-    root.style.setProperty('--color-semantic-error', colors.semantic.error);
-    root.style.setProperty('--color-danger', colors.semantic.error);
-    root.style.setProperty('--color-danger-500', colors.semantic.error);
-    root.style.setProperty('--color-danger-text', colors.semantic.error);
-    root.style.setProperty('--color-danger-bg', colors.semantic.errorBg);
-    root.style.setProperty('--color-danger-border', colors.semantic.errorBorder);
-    root.style.setProperty('--color-danger-hover', colors.semantic.error);
     root.style.setProperty('--color-info', colors.semantic.info);
     root.style.setProperty('--color-info-bg', colors.semantic.infoBg);
     root.style.setProperty('--color-info-border', colors.semantic.infoBorder);
-    root.style.setProperty('--color-highlight', colors.semantic.highlight);
-    root.style.setProperty('--color-highlight-bg', colors.semantic.highlightBg);
 
 
     root.style.setProperty('--border-subtle', colors.border.subtle);
-    root.style.setProperty('--border-color', colors.border.subtle);
     root.style.setProperty('--border-base', colors.border.base);
     root.style.setProperty('--border-medium', colors.border.medium);
-    root.style.setProperty('--border-hover', colors.border.medium);
     root.style.setProperty('--border-strong', colors.border.strong);
     root.style.setProperty('--border-prominent', colors.border.prominent);
-    root.style.setProperty('--border-muted', colors.border.subtle);
-    root.style.setProperty('--border-primary', colors.border.base);
-    root.style.setProperty('--color-border', colors.border.base);
-    root.style.setProperty('--color-border-primary', colors.border.base);
-    root.style.setProperty('--color-border-subtle', colors.border.subtle);
 
     const sceneViewportBorder = theme.layout?.sceneViewportBorder ?? true;
     root.style.setProperty(
@@ -571,83 +628,83 @@ export class ThemeService {
     root.style.setProperty('--element-bg-medium', colors.element.medium);
     root.style.setProperty('--element-bg-strong', colors.element.strong);
     root.style.setProperty('--element-bg-elevated', colors.element.elevated);
-    root.style.setProperty('--element-bg', colors.element.base);
     root.style.setProperty('--element-bg-hover', colors.element.medium);
-    root.style.setProperty('--color-bg-hover', colors.element.medium);
-    root.style.setProperty('--color-bg-subtle', colors.element.subtle);
 
 
     root.style.setProperty('--git-color-branch', colors.git.branch);
     root.style.setProperty('--git-color-branch-bg', colors.git.branchBg);
+    root.style.setProperty('--git-color-branch-bg-hover', colors.element.medium);
     root.style.setProperty('--git-color-changes', colors.git.changes);
     root.style.setProperty('--git-color-changes-bg', colors.git.changesBg);
     root.style.setProperty('--git-color-added', colors.git.added);
     root.style.setProperty('--git-color-added-bg', colors.git.addedBg);
+    root.style.setProperty('--git-color-added-bg-hover', colorWithAlpha(colors.git.added, 0.15));
     root.style.setProperty('--git-color-deleted', colors.git.deleted);
     root.style.setProperty('--git-color-deleted-bg', colors.git.deletedBg);
+    root.style.setProperty('--git-color-deleted-bg-hover', colorWithAlpha(colors.git.deleted, 0.15));
     root.style.setProperty('--git-color-staged', colors.git.staged);
     root.style.setProperty('--git-color-staged-bg', colors.git.stagedBg);
+    root.style.setProperty('--git-color-staged-bg-hover', colorWithAlpha(colors.git.staged, 0.15));
+    root.style.setProperty('--git-color-staged-border', colorWithAlpha(colors.git.staged, 0.3));
 
 
 
 
     const scrollbarThumb = colors.scrollbar?.thumb ?? (
         theme.type === 'dark'
-            ? 'rgba(255, 255, 255, 0.12)'
-            : 'rgba(0, 0, 0, 0.15)'
+            ? THEME_OVERLAYS.white12
+            : THEME_OVERLAYS.black15
     );
     const scrollbarThumbHover = colors.scrollbar?.thumbHover ?? (
         theme.type === 'dark'
-            ? 'rgba(255, 255, 255, 0.22)'
-            : 'rgba(0, 0, 0, 0.28)'
+            ? THEME_OVERLAYS.white24
+            : THEME_OVERLAYS.black30
     );
     root.style.setProperty('--scrollbar-thumb', scrollbarThumb);
     root.style.setProperty('--scrollbar-thumb-hover', scrollbarThumbHover);
     root.style.setProperty('--color-scrollbar', scrollbarThumb);
 
 
-    if (effects?.shadow) {
-      Object.entries(effects.shadow).forEach(([key, value]) => {
+    const shadows = effects?.shadow;
+    if (shadows) {
+      SHADOW_TOKENS.forEach((key) => {
+        const value = shadows[key];
         root.style.setProperty(`--shadow-${key}`, value);
       });
-      root.style.setProperty('--glass-shadow-sm', effects.shadow.sm);
-      root.style.setProperty('--glass-shadow-base', effects.shadow.base);
-      root.style.setProperty('--glass-shadow-lg', effects.shadow.lg);
-      root.style.setProperty('--glass-shadow-xl', effects.shadow.xl);
+      root.style.setProperty('--glass-shadow-sm', shadows.sm);
+      root.style.setProperty('--glass-shadow-base', shadows.base);
+      root.style.setProperty('--glass-shadow-lg', shadows.lg);
+      root.style.setProperty('--glass-shadow-xl', shadows.xl);
     }
 
 
-    if (effects?.glow) {
-      root.style.setProperty('--glow-blue', effects.glow.blue);
-      root.style.setProperty('--glow-purple', effects.glow.purple);
-      root.style.setProperty('--glow-mixed', effects.glow.mixed);
-    }
-
-
-    if (effects?.blur) {
-      Object.entries(effects.blur).forEach(([key, value]) => {
+    const blurs = effects?.blur;
+    if (blurs) {
+      BLUR_TOKENS.forEach((key) => {
+        const value = blurs[key];
         root.style.setProperty(`--blur-${key}`, value);
       });
-      root.style.setProperty('--glass-blur-sm', effects.blur.subtle);
-      root.style.setProperty('--glass-blur-base', effects.blur.base);
+      root.style.setProperty('--glass-blur-sm', blurs.subtle);
+      root.style.setProperty('--glass-blur-base', blurs.base);
     }
 
 
-    if (effects?.radius) {
-      Object.entries(effects.radius).forEach(([key, value]) => {
-        root.style.setProperty(`--radius-${key}`, value);
+    const radii = effects?.radius;
+    if (radii) {
+      RADIUS_TOKENS.forEach((key) => {
+        const value = radii[key];
         root.style.setProperty(`--size-radius-${key}`, value);
       });
-      if (effects.radius.base) {
-        root.style.setProperty('--radius-md', effects.radius.base);
-        root.style.setProperty('--size-radius-md', effects.radius.base);
+      if (radii.base) {
+        root.style.setProperty('--size-radius-md', radii.base);
       }
     }
 
 
-    if (effects?.spacing) {
-      Object.entries(effects.spacing).forEach(([key, value]) => {
-        root.style.setProperty(`--spacing-${key}`, value);
+    const spacing = effects?.spacing;
+    if (spacing) {
+      SPACING_TOKENS.forEach((key) => {
+        const value = spacing[key];
         root.style.setProperty(`--size-gap-${key}`, value);
       });
     }
@@ -657,48 +714,55 @@ export class ThemeService {
       root.style.setProperty('--opacity-disabled', String(effects.opacity.disabled));
       root.style.setProperty('--opacity-hover', String(effects.opacity.hover));
       root.style.setProperty('--opacity-focus', String(effects.opacity.focus));
-      root.style.setProperty('--opacity-overlay', String(effects.opacity.overlay));
     }
 
 
-    if (motion?.duration) {
-      Object.entries(motion.duration).forEach(([key, value]) => {
+    const motionDuration = motion?.duration;
+    if (motionDuration) {
+      MOTION_DURATION_TOKENS.forEach((key) => {
+        const value = motionDuration[key];
         root.style.setProperty(`--motion-${key}`, value);
       });
-      root.style.setProperty('--motion-normal', motion.duration.base);
     }
 
 
-    if (motion?.easing) {
-      Object.entries(motion.easing).forEach(([key, value]) => {
+    const motionEasing = motion?.easing;
+    if (motionEasing) {
+      EASING_TOKENS.forEach((key) => {
+        const value = motionEasing[key];
         root.style.setProperty(`--easing-${key}`, value);
       });
     }
 
 
     if (typography?.font) {
-      root.style.setProperty('--font-sans', typography.font.sans);
-      root.style.setProperty('--font-mono', typography.font.mono);
-      root.style.setProperty('--markdown-font-mono', typography.font.mono);
+      root.style.setProperty('--font-family-sans', typography.font.sans);
+      root.style.setProperty('--font-family-mono', typography.font.mono);
     }
 
 
-    if (typography?.weight) {
-      Object.entries(typography.weight).forEach(([key, value]) => {
+    const fontWeights = typography?.weight;
+    if (fontWeights) {
+      FONT_WEIGHT_TOKENS.forEach((key) => {
+        const value = fontWeights[key];
         root.style.setProperty(`--font-weight-${key}`, String(value));
       });
     }
 
 
-    if (typography?.size) {
-      Object.entries(typography.size).forEach(([key, value]) => {
+    const typographySize = typography?.size;
+    if (typographySize) {
+      FONT_SIZE_TOKENS.forEach((key) => {
+        const value = typographySize[key];
         root.style.setProperty(`--font-size-${key}`, value);
       });
     }
 
 
-    if (typography?.lineHeight) {
-      Object.entries(typography.lineHeight).forEach(([key, value]) => {
+    const lineHeights = typography?.lineHeight;
+    if (lineHeights) {
+      LINE_HEIGHT_TOKENS.forEach((key) => {
+        const value = lineHeights[key];
         root.style.setProperty(`--line-height-${key}`, String(value));
       });
     }
@@ -709,24 +773,6 @@ export class ThemeService {
 
     const buttonConfig = theme.components?.button;
     if (buttonConfig) {
-
-      root.style.setProperty('--btn-default-bg', buttonConfig.default.background);
-      root.style.setProperty('--btn-default-color', buttonConfig.default.color);
-      root.style.setProperty('--btn-default-border', buttonConfig.default.border);
-      root.style.setProperty('--btn-default-shadow', buttonConfig.default.shadow || 'none');
-
-      root.style.setProperty('--btn-default-hover-bg', buttonConfig.hover.background);
-      root.style.setProperty('--btn-default-hover-color', buttonConfig.hover.color);
-      root.style.setProperty('--btn-default-hover-border', buttonConfig.hover.border);
-      root.style.setProperty('--btn-default-hover-shadow', buttonConfig.hover.shadow || 'none');
-      root.style.setProperty('--btn-default-hover-transform', buttonConfig.hover.transform || 'none');
-
-      root.style.setProperty('--btn-default-active-bg', buttonConfig.active.background);
-      root.style.setProperty('--btn-default-active-color', buttonConfig.active.color);
-      root.style.setProperty('--btn-default-active-border', buttonConfig.active.border);
-      root.style.setProperty('--btn-default-active-shadow', buttonConfig.active.shadow || 'none');
-      root.style.setProperty('--btn-default-active-transform', buttonConfig.active.transform || 'none');
-
 
       root.style.setProperty('--btn-primary-bg', buttonConfig.primary.default.background);
       root.style.setProperty('--btn-primary-color', buttonConfig.primary.default.color);
@@ -746,33 +792,12 @@ export class ThemeService {
       root.style.setProperty('--btn-primary-active-transform', buttonConfig.primary.active.transform || 'none');
 
 
-      root.style.setProperty('--btn-ghost-bg', buttonConfig.ghost.default.background);
       root.style.setProperty('--btn-ghost-color', buttonConfig.ghost.default.color);
-      root.style.setProperty('--btn-ghost-border', buttonConfig.ghost.default.border);
-      root.style.setProperty('--btn-ghost-shadow', buttonConfig.ghost.default.shadow || 'none');
 
       root.style.setProperty('--btn-ghost-hover-bg', buttonConfig.ghost.hover.background);
       root.style.setProperty('--btn-ghost-hover-color', buttonConfig.ghost.hover.color);
       root.style.setProperty('--btn-ghost-hover-border', buttonConfig.ghost.hover.border);
-      root.style.setProperty('--btn-ghost-hover-shadow', buttonConfig.ghost.hover.shadow || 'none');
-      root.style.setProperty('--btn-ghost-hover-transform', buttonConfig.ghost.hover.transform || 'none');
-
-      root.style.setProperty('--btn-ghost-active-bg', buttonConfig.ghost.active.background);
-      root.style.setProperty('--btn-ghost-active-color', buttonConfig.ghost.active.color);
-      root.style.setProperty('--btn-ghost-active-border', buttonConfig.ghost.active.border);
-      root.style.setProperty('--btn-ghost-active-shadow', buttonConfig.ghost.active.shadow || 'none');
-      root.style.setProperty('--btn-ghost-active-transform', buttonConfig.ghost.active.transform || 'none');
     } else {
-
-      root.style.setProperty('--btn-default-bg', colors.element.base);
-      root.style.setProperty('--btn-default-color', colors.text.secondary);
-      root.style.setProperty('--btn-default-border', colors.border.base);
-      root.style.setProperty('--btn-default-shadow', 'none');
-      root.style.setProperty('--btn-default-hover-bg', colors.element.medium);
-      root.style.setProperty('--btn-default-hover-color', colors.text.primary);
-      root.style.setProperty('--btn-default-hover-border', colors.border.medium);
-      root.style.setProperty('--btn-default-hover-shadow', 'none');
-      root.style.setProperty('--btn-default-hover-transform', 'none');
 
       const a = colors.accent;
       root.style.setProperty('--btn-primary-bg', a[200]);
@@ -789,163 +814,53 @@ export class ThemeService {
       root.style.setProperty('--btn-primary-active-border', 'transparent');
       root.style.setProperty('--btn-primary-active-shadow', 'none');
       root.style.setProperty('--btn-primary-active-transform', 'none');
-      root.style.setProperty('--btn-ghost-bg', 'transparent');
       root.style.setProperty('--btn-ghost-color', colors.text.muted);
-      root.style.setProperty('--btn-ghost-border', 'transparent');
-      root.style.setProperty('--btn-ghost-shadow', 'none');
       root.style.setProperty('--btn-ghost-hover-bg', colors.element.subtle);
       root.style.setProperty('--btn-ghost-hover-color', colors.text.primary);
       root.style.setProperty('--btn-ghost-hover-border', 'transparent');
-      root.style.setProperty('--btn-ghost-hover-shadow', 'none');
-      root.style.setProperty('--btn-ghost-hover-transform', 'none');
-      root.style.setProperty('--btn-ghost-active-bg', colors.element.medium);
-      root.style.setProperty('--btn-ghost-active-color', colors.text.primary);
-      root.style.setProperty('--btn-ghost-active-border', 'transparent');
-      root.style.setProperty('--btn-ghost-active-shadow', 'none');
-      root.style.setProperty('--btn-ghost-active-transform', 'none');
     }
 
 
-    const windowControlsConfig = theme.components?.windowControls;
-    if (windowControlsConfig) {
-
-      root.style.setProperty('--window-control-minimize-dot', windowControlsConfig.minimize.dot);
-      root.style.setProperty('--window-control-minimize-dot-shadow', windowControlsConfig.minimize.dotShadow || 'none');
-      root.style.setProperty('--window-control-minimize-hover-bg', windowControlsConfig.minimize.hoverBg);
-      root.style.setProperty('--window-control-minimize-hover-color', windowControlsConfig.minimize.hoverColor);
-      root.style.setProperty('--window-control-minimize-hover-border', windowControlsConfig.minimize.hoverBorder);
-      root.style.setProperty('--window-control-minimize-hover-shadow', windowControlsConfig.minimize.hoverShadow || 'none');
-
-
-      root.style.setProperty('--window-control-maximize-dot', windowControlsConfig.maximize.dot);
-      root.style.setProperty('--window-control-maximize-dot-shadow', windowControlsConfig.maximize.dotShadow || 'none');
-      root.style.setProperty('--window-control-maximize-hover-bg', windowControlsConfig.maximize.hoverBg);
-      root.style.setProperty('--window-control-maximize-hover-color', windowControlsConfig.maximize.hoverColor);
-      root.style.setProperty('--window-control-maximize-hover-border', windowControlsConfig.maximize.hoverBorder);
-      root.style.setProperty('--window-control-maximize-hover-shadow', windowControlsConfig.maximize.hoverShadow || 'none');
-
-
-      root.style.setProperty('--window-control-close-dot', windowControlsConfig.close.dot);
-      root.style.setProperty('--window-control-close-dot-shadow', windowControlsConfig.close.dotShadow || 'none');
-      root.style.setProperty('--window-control-close-hover-bg', windowControlsConfig.close.hoverBg);
-      root.style.setProperty('--window-control-close-hover-color', windowControlsConfig.close.hoverColor);
-      root.style.setProperty('--window-control-close-hover-border', windowControlsConfig.close.hoverBorder);
-      root.style.setProperty('--window-control-close-hover-shadow', windowControlsConfig.close.hoverShadow || 'none');
-
-
-      root.style.setProperty('--window-control-default-color', windowControlsConfig.common.defaultColor);
-      root.style.setProperty('--window-control-default-dot', windowControlsConfig.common.defaultDot);
-      root.style.setProperty('--window-control-disabled-dot', windowControlsConfig.common.disabledDot);
-      root.style.setProperty('--window-control-flow-gradient', windowControlsConfig.common.flowGradient || 'none');
-    } else {
-
-      root.style.setProperty('--window-control-minimize-dot', colors.accent[400]);
-      root.style.setProperty('--window-control-minimize-dot-shadow', 'none');
-      root.style.setProperty('--window-control-minimize-hover-bg', colors.accent[100]);
-      root.style.setProperty('--window-control-minimize-hover-color', colors.accent[500]);
-      root.style.setProperty('--window-control-minimize-hover-border', colors.accent[200]);
-      root.style.setProperty('--window-control-minimize-hover-shadow', 'none');
-
-      root.style.setProperty('--window-control-maximize-dot', colors.accent[400]);
-      root.style.setProperty('--window-control-maximize-dot-shadow', 'none');
-      root.style.setProperty('--window-control-maximize-hover-bg', colors.accent[100]);
-      root.style.setProperty('--window-control-maximize-hover-color', colors.accent[500]);
-      root.style.setProperty('--window-control-maximize-hover-border', colors.accent[200]);
-      root.style.setProperty('--window-control-maximize-hover-shadow', 'none');
-
-      root.style.setProperty('--window-control-close-dot', colors.semantic.error);
-      root.style.setProperty('--window-control-close-dot-shadow', 'none');
-      root.style.setProperty('--window-control-close-hover-bg', colors.semantic.errorBg);
-      root.style.setProperty('--window-control-close-hover-color', colors.semantic.error);
-      root.style.setProperty('--window-control-close-hover-border', colors.semantic.errorBorder);
-      root.style.setProperty('--window-control-close-hover-shadow', 'none');
-
-      root.style.setProperty('--window-control-default-color', colors.text.primary);
-      root.style.setProperty('--window-control-default-dot', colors.text.muted);
-      root.style.setProperty('--window-control-disabled-dot', colors.text.disabled);
-      root.style.setProperty('--window-control-flow-gradient', 'none');
-    }
+    root.style.setProperty(
+      '--window-control-close-hover-color',
+      theme.components?.windowControls?.close.hoverColor ?? colors.semantic.error,
+    );
 
 
     root.style.setProperty('--input-bg', colors.element.base);
     root.style.setProperty('--input-bg-hover', colors.element.medium);
-    root.style.setProperty('--input-bg-focus', colors.element.soft);
-    root.style.setProperty('--input-bg-disabled', colors.element.subtle);
     root.style.setProperty('--input-border', colors.border.base);
     root.style.setProperty('--input-border-hover', colors.border.medium);
     root.style.setProperty('--input-border-focus', colors.accent[400]);
-    root.style.setProperty('--input-border-error', colors.semantic.error);
     root.style.setProperty('--input-text', colors.text.primary);
-    root.style.setProperty(
-        '--input-placeholder',
-        'color-mix(in srgb, var(--color-text-muted) 40%, var(--color-bg-primary))'
-    );
-
-
-    root.style.setProperty('--card-bg', colors.element.base);
-    root.style.setProperty('--card-bg-hover', colors.element.medium);
-    root.style.setProperty('--card-bg-active', colors.element.elevated);
-    root.style.setProperty('--card-border', colors.border.base);
-    root.style.setProperty('--card-border-hover', colors.border.medium);
-    root.style.setProperty('--card-border-active', colors.accent[300]);
 
 
     if (theme.type === 'dark') {
 
-      root.style.setProperty('--card-bg-default', 'rgba(255, 255, 255, 0.025)');
-      root.style.setProperty('--card-bg-elevated', 'rgba(255, 255, 255, 0.035)');
-      root.style.setProperty('--card-bg-subtle', 'rgba(255, 255, 255, 0.015)');
-      root.style.setProperty('--card-bg-hover', 'rgba(255, 255, 255, 0.04)');
-      root.style.setProperty('--card-bg-active', 'rgba(255, 255, 255, 0.05)');
-      root.style.setProperty('--card-bg-accent', 'rgba(255, 255, 255, 0.09)');
-      root.style.setProperty('--card-bg-accent-hover', 'rgba(255, 255, 255, 0.13)');
+      root.style.setProperty('--card-bg-default', THEME_OVERLAYS.white04);
+      root.style.setProperty('--card-bg-elevated', THEME_OVERLAYS.white08);
+      root.style.setProperty('--card-bg-subtle', 'transparent');
+      root.style.setProperty('--card-bg-hover', THEME_OVERLAYS.white08);
+      root.style.setProperty('--card-bg-active', THEME_OVERLAYS.white12);
+      root.style.setProperty('--card-bg-accent', THEME_OVERLAYS.white08);
+      root.style.setProperty('--card-bg-accent-hover', THEME_OVERLAYS.white12);
       root.style.setProperty('--card-bg-purple', 'rgba(139, 92, 246, 0.08)');
-      root.style.setProperty('--card-bg-purple-hover', 'rgba(139, 92, 246, 0.12)');
+      root.style.setProperty('--card-bg-purple-hover', 'rgba(139, 92, 246, 0.15)');
     } else {
 
-      root.style.setProperty('--card-bg-default', 'rgba(0, 0, 0, 0.06)');
-      root.style.setProperty('--card-bg-elevated', 'rgba(0, 0, 0, 0.08)');
-      root.style.setProperty('--card-bg-subtle', 'rgba(0, 0, 0, 0.04)');
-      root.style.setProperty('--card-bg-hover', 'rgba(0, 0, 0, 0.065)');
-      root.style.setProperty('--card-bg-active', 'rgba(0, 0, 0, 0.09)');
+      root.style.setProperty('--card-bg-default', THEME_OVERLAYS.black08);
+      root.style.setProperty('--card-bg-elevated', THEME_OVERLAYS.black12);
+      root.style.setProperty('--card-bg-subtle', 'transparent');
+      root.style.setProperty('--card-bg-hover', THEME_OVERLAYS.black12);
+      root.style.setProperty('--card-bg-active', THEME_OVERLAYS.black15);
       root.style.setProperty('--card-bg-accent', 'rgba(15, 23, 42, 0.08)');
       root.style.setProperty('--card-bg-accent-hover', 'rgba(15, 23, 42, 0.12)');
       root.style.setProperty('--card-bg-purple', 'rgba(124, 58, 237, 0.12)');
-      root.style.setProperty('--card-bg-purple-hover', 'rgba(124, 58, 237, 0.18)');
+      root.style.setProperty('--card-bg-purple-hover', 'rgba(139, 92, 246, 0.15)');
     }
 
 
-    root.style.setProperty('--modal-bg', colors.background.elevated);
-    root.style.setProperty('--modal-border', colors.border.base);
-    root.style.setProperty('--modal-overlay', theme.type === 'dark' ? 'rgba(0, 0, 0, 0.7)' : 'rgba(0, 0, 0, 0.5)');
-
-
-    root.style.setProperty('--nav-bg', colors.background.secondary);
-    root.style.setProperty('--nav-item-bg-hover', colors.element.base);
-    root.style.setProperty('--nav-item-bg-active', colors.element.medium);
-    root.style.setProperty('--nav-item-text', colors.text.secondary);
-    root.style.setProperty('--nav-item-text-active', colors.text.primary);
-
-
     root.style.setProperty('--panel-bg', colors.background.primary);
-    root.style.setProperty('--panel-header-bg', colors.background.secondary);
-    root.style.setProperty('--panel-border', colors.border.base);
-
-
-    root.style.setProperty('--tooltip-bg', colors.background.elevated);
-    root.style.setProperty('--tooltip-border', colors.border.medium);
-    root.style.setProperty('--tooltip-text', colors.text.primary);
-
-
-    root.style.setProperty('--tool-card-bg-primary', colors.element.base);
-    root.style.setProperty('--tool-card-bg-secondary', colors.element.soft);
-    root.style.setProperty('--tool-card-bg-hover', colors.element.medium);
-    root.style.setProperty('--tool-card-bg-elevated', colors.element.elevated);
-    root.style.setProperty('--tool-card-border', colors.border.base);
-    root.style.setProperty('--tool-card-border-subtle', colors.border.subtle);
-    root.style.setProperty('--tool-card-text-primary', colors.text.primary);
-    root.style.setProperty('--tool-card-text-secondary', colors.text.secondary);
-    root.style.setProperty('--tool-card-text-muted', colors.text.muted);
 
 
     root.setAttribute('data-theme', theme.id);
@@ -995,6 +910,15 @@ export class ThemeService {
       return null;
     }
 
+    const validation = this.validateTheme(theme);
+    if (!validation.valid) {
+      log.error('Cannot export invalid theme', {
+        id: themeId,
+        errors: validation.errors.slice(0, 3),
+      });
+      return null;
+    }
+
     const metadata: ThemeMetadata = {
       id: theme.id,
       name: theme.name,
@@ -1007,7 +931,7 @@ export class ThemeService {
 
     return {
       schema: '2.0.0',
-      theme,
+      theme: cloneThemeConfig(theme),
       metadata,
       exportedAt: new Date().toISOString(),
     };
@@ -1017,30 +941,7 @@ export class ThemeService {
 
 
   validateTheme(theme: ThemeConfig): ThemeValidationResult {
-    const errors: ThemeValidationResult['errors'] = [];
-    const warnings: ThemeValidationResult['warnings'] = [];
-
-
-    if (!theme.id) {
-      errors.push({ path: 'id', message: 'Missing theme id', code: 'MISSING_ID' });
-    }
-    if (!theme.name) {
-      errors.push({ path: 'name', message: 'Missing theme name', code: 'MISSING_NAME' });
-    }
-    if (!theme.type || !['dark', 'light'].includes(theme.type)) {
-      errors.push({ path: 'type', message: 'Invalid theme type', code: 'INVALID_TYPE' });
-    }
-
-
-    if (!theme.colors) {
-      errors.push({ path: 'colors', message: 'Missing color configuration', code: 'MISSING_COLORS' });
-    }
-
-    return {
-      valid: errors.length === 0,
-      errors,
-      warnings,
-    };
+    return themeValidator.validate(theme);
   }
 
 

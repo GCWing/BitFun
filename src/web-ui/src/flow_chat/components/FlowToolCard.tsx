@@ -6,18 +6,19 @@
 import React from 'react';
 import { getToolCardComponent } from '../tool-cards';
 import { getToolCardConfig } from '../tool-cards/toolCardMetadata';
-import type { FlowToolItem, ToolCardDisplayContext } from '../types/flow-chat';
+import type { FlowToolItem, ToolCardDisplayContext, ToolRejectOptions } from '../types/flow-chat';
 import { createLogger } from '@/shared/utils/logger';
 import { FlowToolCardErrorBoundary } from './FlowToolCardErrorBoundary';
 import { useTranslation } from 'react-i18next';
 import { getToolInterruptionNote } from '../utils/toolInterruption';
+import { ToolApprovalBar } from './ToolApprovalBar';
 
 const log = createLogger('FlowToolCard');
 
 interface FlowToolCardProps {
   toolItem: FlowToolItem;
   onConfirm?: (toolId: string, updatedInput?: any, permissionOptionId?: string, approve?: boolean) => void;
-  onReject?: (toolId: string, permissionOptionId?: string) => void;
+  onReject?: (toolId: string, options?: ToolRejectOptions) => void;
   onOpenInEditor?: (filePath: string) => void;
   onOpenInPanel?: (panelType: string, data: any) => void;
   onExpand?: (toolId: string) => void;
@@ -62,8 +63,8 @@ export const FlowToolCard: React.FC<FlowToolCardProps> = React.memo(({
     onConfirm?.(toolItem.id, updatedInput, permissionOptionId, approve);
   }, [toolItem.id, toolItem.toolName, onConfirm]);
 
-  const handleReject = React.useCallback((permissionOptionId?: string) => {
-    onReject?.(toolItem.id, permissionOptionId);
+  const handleReject = React.useCallback((options?: ToolRejectOptions) => {
+    onReject?.(toolItem.id, options);
   }, [toolItem.id, onReject]);
 
   const handleExpand = React.useCallback(() => {
@@ -86,8 +87,6 @@ export const FlowToolCard: React.FC<FlowToolCardProps> = React.memo(({
           toolItem={toolItem}
           config={config}
           interruptionNote={interruptionNote}
-          onConfirm={handleConfirm}
-          onReject={handleReject}
           onOpenInEditor={onOpenInEditor}
           onOpenInPanel={onOpenInPanel}
           onExpand={handleExpand}
@@ -95,6 +94,11 @@ export const FlowToolCard: React.FC<FlowToolCardProps> = React.memo(({
           displayContext={displayContext}
         />
       </FlowToolCardErrorBoundary>
+      <ToolApprovalBar
+        toolItem={toolItem}
+        onConfirm={handleConfirm}
+        onReject={handleReject}
+      />
       {interruptionNote && !cardHandlesInterruptionNote && (
         <div className="flow-tool-card-note" role="note">
           {interruptionNote}

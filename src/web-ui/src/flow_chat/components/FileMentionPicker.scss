@@ -23,7 +23,7 @@
     0 8px 32px rgba(var(--color-static-black-rgb), 0.35),
     0 4px 16px var(--color-overlay-black-20),
     0 0 1px color-mix(in srgb, var(--color-accent-500) 30%, transparent),
-    inset 0 1px 0 var(--color-overlay-white-05);
+    inset 0 1px 0 var(--color-overlay-white-08);
   overflow: hidden;
   z-index: 1100;
   display: flex;
@@ -50,7 +50,7 @@
     align-items: center;
     gap: var(--flowchat-inline-gap);
     padding: var(--flowchat-inline-gap) var(--flowchat-card-expanded-pad-x);
-    border-bottom: 1px solid var(--color-border-subtle);
+    border-bottom: 1px solid var(--border-subtle);
     color: var(--color-text-muted);
     font-size: var(--flowchat-font-size-xs);
     font-weight: 500;
@@ -69,7 +69,7 @@
     height: 18px;
     padding: 0;
     background: var(--color-overlay-white-08);
-    border: 1px solid var(--color-overlay-white-10);
+    border: 1px solid var(--color-overlay-white-12);
     border-radius: 4px;
     cursor: pointer;
     transition: all 0.15s ease;
@@ -115,7 +115,7 @@
   
   &__spinner {
     animation: spin 1s linear infinite;
-    color: var(--color-accent-primary);
+    color: var(--color-accent-500);
     
     @keyframes spin {
       from { transform: rotate(0deg); }
@@ -137,7 +137,7 @@
     transition: all 0.12s ease;
     
     &:hover {
-      background: var(--color-overlay-white-06);
+      background: var(--color-overlay-white-08);
       
       .file-mention-picker__expand-icon {
         opacity: 1;
@@ -193,7 +193,7 @@
     justify-content: center;
     gap: var(--flowchat-control-gap);
     padding: var(--flowchat-inline-gap) var(--flowchat-card-expanded-pad-x);
-    border-top: 1px solid var(--color-border-subtle);
+    border-top: 1px solid var(--border-subtle);
     font-size: var(--flowchat-font-size-xxs);
     color: var(--color-text-muted);
     
@@ -230,7 +230,7 @@
     border-color: var(--border-subtle);
     box-shadow:
       0 4px 18px var(--color-overlay-slate-04),
-      0 1px 3px var(--color-overlay-slate-03),
+      0 1px 3px var(--color-overlay-slate-04),
       inset 0 1px 0 var(--color-overlay-white-95);
 
     &__back-btn {
@@ -238,7 +238,7 @@
       border-color: var(--color-overlay-slate-08);
 
       &:hover {
-        background: var(--color-overlay-slate-06);
+        background: var(--color-overlay-slate-08);
       }
     }
 
@@ -251,14 +251,14 @@
       background: var(--element-bg-medium);
       background: color-mix(
         in srgb,
-        var(--color-accent-primary) 22%,
+        var(--color-accent-500) 22%,
         var(--color-bg-elevated) 78%
       );
 
       .file-mention-picker__item-name {
         color: color-mix(
           in srgb,
-          var(--color-accent-primary) 72%,
+          var(--color-accent-500) 72%,
           var(--color-text-primary)
         );
       }
@@ -267,7 +267,7 @@
       .file-mention-picker__expand-icon {
         color: color-mix(
           in srgb,
-          var(--color-accent-primary) 65%,
+          var(--color-accent-500) 65%,
           var(--color-text-primary)
         );
         opacity: 0.92;

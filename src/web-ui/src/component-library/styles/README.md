@@ -32,9 +32,9 @@ This directory defines BitFun component design tokens to unify colors, typograph
 @import '../../styles/tokens.scss';
 
 .card {
-  background: $card-bg;
-  border: 1px solid $card-border;
-  box-shadow: $card-shadow;
+  background: $card-bg-default;
+  border: 1px solid var(--border-base);
+  box-shadow: var(--shadow-sm);
 }
 ```
 

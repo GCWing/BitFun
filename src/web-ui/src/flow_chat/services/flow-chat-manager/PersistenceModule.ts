@@ -328,7 +328,6 @@ export async function saveAllInProgressTurns(context: FlowChatContext): Promise<
         const settledAt = Date.now();
         context.flowChatStore.updateDialogTurn(sessionId, lastTurn.id, turn =>
           settleInterruptedDialogTurn(turn, settledAt, {
-            preservePendingConfirmation: true,
             interruptionReason: 'app_restart',
           })
         );

@@ -119,7 +119,7 @@ html, body {
   width: 100%;
   overflow: hidden;
   position: relative;
-  background: var(--color-bg-flowchat);
+  background: var(--color-bg-scene);
 }
 
 .bitfun-app-acp-session-loading {
@@ -231,17 +231,7 @@ html, body {
 // Moved to global scrollbar.css for shared management.
 
 // ==================== Responsive ====================
-@media (max-width: 1024px) {
-  .bitfun-app-layout {
-    --header-height: 34px;
-  }
-}
-
 @media (max-width: 768px) {
-  .bitfun-app-layout {
-    --header-height: 32px;
-  }
-
   .bitfun-window-mode-hint {
     align-items: flex-start;
     flex-direction: column;
@@ -259,14 +249,14 @@ html, body {
 // ==================== Dark theme tweaks ====================
 @media (prefers-color-scheme: dark) {
   .bitfun-app-layout {
-    background: var(--color-bg-flowchat);
+    background: var(--color-bg-scene);
   }
 }
 
 // ==================== High-contrast mode ====================
 @media (prefers-contrast: high) {
   .bitfun-app-layout {
-    background: var(--color-bg-flowchat);
+    background: var(--color-bg-scene);
   }
 }
 

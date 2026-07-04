@@ -86,7 +86,7 @@ function RenderFallback({
           >
             <div
               style={{
-                color: 'var(--tool-card-text-secondary)',
+                color: 'var(--color-text-secondary)',
                 fontSize: 12,
                 lineHeight: 1.5,
               }}
@@ -103,9 +103,9 @@ function RenderFallback({
                   gap: 6,
                   padding: '6px 10px',
                   borderRadius: 8,
-                  border: '1px solid var(--tool-card-border)',
-                  background: 'var(--tool-card-bg-secondary)',
-                  color: 'var(--tool-card-text-primary)',
+                  border: '1px solid var(--border-base)',
+                  background: 'var(--element-bg-soft)',
+                  color: 'var(--color-text-primary)',
                   cursor: 'pointer',
                 }}
                 type="button"
