@@ -15,6 +15,7 @@ use super::events::send_update;
 use super::model::{
     build_session_config_options, build_session_model_state, normalize_session_model_id,
 };
+use super::replay::replay_session_history;
 use super::{AcpSessionState, BitfunAcpRuntime};
 
 impl BitfunAcpRuntime {
@@ -78,10 +79,15 @@ impl BitfunAcpRuntime {
         let cwd = request.cwd.to_string_lossy().to_string();
         let session_id = request.session_id.to_string();
         let mcp_servers = request.mcp_servers;
-        let session = self
+        // Restore the runtime session *and* the persisted turns in one pass.
+        // The turns are needed to stream the conversation history back to the
+        // client via `session/update` notifications, which the ACP `loadSession`
+        // contract requires of any agent advertising the `loadSession`
+        // capability.
+        let (session, turns) = self
             .agentic_system
             .coordinator
-            .restore_session(Path::new(&cwd), &session_id)
+            .restore_session_with_turns(Path::new(&cwd), &session_id)
             .await
             .map_err(Self::internal_error)?;
 
@@ -98,7 +104,20 @@ impl BitfunAcpRuntime {
         self.sessions
             .insert(acp_session.acp_session_id.clone(), acp_session.clone());
         self.connections
-            .insert(acp_session.acp_session_id.clone(), connection);
+            .insert(acp_session.acp_session_id.clone(), connection.clone());
+
+        // Replay the restored transcript so the client can rebuild its UI.
+        // Failures to send individual notifications shouldn't abort the load;
+        // the runtime context is already restored and the client can still
+        // issue prompts against the session.
+        if let Err(error) = replay_session_history(&connection, &acp_session.acp_session_id, &turns)
+        {
+            log::warn!(
+                "ACP session history replay interrupted: session_id={}, error={}",
+                acp_session.acp_session_id,
+                error
+            );
+        }
 
         let modes = build_session_modes(Some(session.agent_type.as_str())).await;
         let models = build_session_model_state(Some(&acp_session.model_id)).await?;

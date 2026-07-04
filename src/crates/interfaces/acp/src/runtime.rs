@@ -20,6 +20,7 @@ mod events;
 mod mcp;
 mod model;
 mod prompt;
+mod replay;
 mod session;
 mod thinking;
 

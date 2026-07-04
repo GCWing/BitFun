@@ -2,11 +2,12 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 
 use agent_client_protocol::schema::{
-    PermissionOption, PermissionOptionKind, RequestPermissionRequest, SessionId,
+    ContentBlock, PermissionOption, PermissionOptionKind, RequestPermissionRequest, SessionId,
     SessionNotification, SessionUpdate, ToolCall, ToolCallContent, ToolCallLocation,
     ToolCallStatus, ToolCallUpdate, ToolCallUpdateFields, ToolKind,
 };
 use agent_client_protocol::{Client, ConnectionTo, Result};
+use bitfun_core::service::session::{ToolCallData, ToolItemData};
 use bitfun_events::ToolEventData;
 
 pub(super) const PERMISSION_ALLOW_ONCE: &str = "allow_once";
@@ -41,6 +42,119 @@ pub(super) fn tool_event_updates(
     }
 
     updates
+}
+
+/// Build the `session/update` notifications needed to replay a persisted tool
+/// call back to a client during `session/load`.
+///
+/// Mirrors the streaming shape produced by [`tool_event_updates`] for live
+/// turns: an initial [`SessionUpdate::ToolCall`] that announces the tool call
+/// (with its raw input), followed by a [`SessionUpdate::ToolCallUpdate`] that
+/// carries the final status and raw output. Reusing the same shape lets clients
+/// render restored history through the same code path they use for live turns.
+///
+/// When a persisted tool has no `tool_result` (it was interrupted, cancelled,
+/// or still running when the turn was persisted), the replayed status is
+/// derived from `ToolItemData.status` / `interruption_reason` instead of
+/// defaulting to `InProgress`. Otherwise a tool that was cancelled or failed
+/// without ever producing a result would be restored as perpetually
+/// "in progress", leaving a stuck tool card in the client transcript.
+pub(super) fn tool_call_replay_updates(tool_item: &ToolItemData) -> Vec<SessionUpdate> {
+    let tool_id = tool_item.id.clone();
+    let tool_name = tool_item.tool_name.as_str();
+    let raw_input = sanitize_tool_input(tool_name, tool_item.tool_call.input.clone());
+
+    let initial = ToolCall::new(tool_id.clone(), tool_title(tool_name))
+        .kind(tool_kind(tool_name))
+        .status(ToolCallStatus::InProgress)
+        .locations(tool_locations(&raw_input))
+        .raw_input(raw_input);
+
+    let mut fields = ToolCallUpdateFields::new()
+        .title(tool_title(tool_name))
+        .kind(tool_kind(tool_name));
+
+    let (status, raw_output, display) = match tool_item.tool_result.as_ref() {
+        Some(result) if result.success => {
+            let raw_output = sanitize_tool_payload(tool_name, result.result.clone());
+            let display = result
+                .result_for_assistant
+                .clone()
+                .unwrap_or_else(|| value_to_display_text(&raw_output));
+            (ToolCallStatus::Completed, Some(raw_output), Some(display))
+        }
+        Some(result) => {
+            let error = result
+                .error
+                .clone()
+                .unwrap_or_else(|| value_to_display_text(&result.result));
+            (
+                ToolCallStatus::Failed,
+                Some(serde_json::json!({ "error": error })),
+                Some(format!("Error: {}", error)),
+            )
+        }
+        None => match replayed_terminal_status(tool_item) {
+            None => (ToolCallStatus::InProgress, None, None),
+            Some(TerminalReplayStatus::Failed(reason)) => {
+                let display = format!("Cancelled: {}", reason);
+                (
+                    ToolCallStatus::Failed,
+                    Some(serde_json::json!({ "reason": reason })),
+                    Some(display),
+                )
+            }
+        },
+    };
+
+    fields = fields.status(status);
+    if let Some(display) = display {
+        fields = fields.content(vec![text_content(display)]);
+    }
+    if let Some(raw_output) = raw_output {
+        fields = fields.raw_output(raw_output);
+    }
+
+    vec![
+        SessionUpdate::ToolCall(initial),
+        SessionUpdate::ToolCallUpdate(ToolCallUpdate::new(tool_id, fields)),
+    ]
+}
+
+/// The terminal status to replay for a persisted tool that never produced a
+/// `tool_result`.
+///
+/// Returns `None` when the stored state is genuinely indeterminate (no status
+/// recorded, or a status that implies the tool may still be running) — in that
+/// case the caller leaves the tool as `InProgress`, which matches the live
+/// streaming shape for a tool whose result has not landed yet. Returns
+/// `Failed(reason)` when the stored state proves the tool will never produce a
+/// result (it was cancelled, interrupted, or errored), so the replayed card
+/// settles on a terminal state instead of spinning forever.
+enum TerminalReplayStatus {
+    Failed(String),
+}
+
+fn replayed_terminal_status(tool_item: &ToolItemData) -> Option<TerminalReplayStatus> {
+    // An explicit interruption reason is the strongest signal: the tool was
+    // cancelled or aborted before it could produce output.
+    if let Some(reason) = tool_item.interruption_reason.as_ref() {
+        let reason = reason.trim();
+        if !reason.is_empty() {
+            return Some(TerminalReplayStatus::Failed(reason.to_string()));
+        }
+    }
+
+    // Fall back to the coarse-grained `status` field the persistence layer
+    // stamps on tool items. Only treat it as terminal when it names a
+    // non-recoverable outcome; "running"/"in_progress" stay `InProgress`.
+    let status = tool_item.status.as_deref()?.trim().to_ascii_lowercase();
+    let reason = match status.as_str() {
+        "cancelled" | "canceled" | "aborted" | "interrupted" => "cancelled".to_string(),
+        "failed" | "error" | "errored" => "failed".to_string(),
+        _ => return None,
+    };
+    Some(TerminalReplayStatus::Failed(reason))
 }
 
 pub(super) fn permission_request(
@@ -704,5 +818,142 @@ mod tests {
             PERMISSION_REJECT_ONCE
         );
         assert_eq!(request.options[1].kind, PermissionOptionKind::RejectOnce);
+    }
+
+    fn replay_tool_item(
+        id: &str,
+        tool_name: &str,
+        status: Option<&str>,
+        interruption_reason: Option<&str>,
+    ) -> ToolItemData {
+        ToolItemData {
+            id: id.to_string(),
+            tool_name: tool_name.to_string(),
+            tool_call: ToolCallData {
+                input: serde_json::json!({ "path": "a.txt" }),
+                id: id.to_string(),
+            },
+            tool_result: None,
+            ai_intent: None,
+            start_time: 0,
+            end_time: None,
+            duration_ms: None,
+            queue_wait_ms: None,
+            preflight_ms: None,
+            confirmation_wait_ms: None,
+            execution_ms: None,
+            order_index: None,
+            is_subagent_item: None,
+            parent_task_tool_id: None,
+            subagent_session_id: None,
+            attempt_id: None,
+            attempt_index: None,
+            subagent_model_id: None,
+            subagent_model_alias: None,
+            status: status.map(|s| s.to_string()),
+            interruption_reason: interruption_reason.map(|s| s.to_string()),
+        }
+    }
+
+    fn replay_update(tool_item: &ToolItemData) -> ToolCallUpdate {
+        let updates = tool_call_replay_updates(tool_item);
+        let mut iter = updates.into_iter();
+        let _ = iter.next();
+        let Some(SessionUpdate::ToolCallUpdate(update)) = iter.next() else {
+            panic!("expected tool call update");
+        };
+        update
+    }
+
+    #[test]
+    fn replay_without_result_defaults_to_in_progress() {
+        // No status, no interruption reason: the stored state is indeterminate,
+        // so the replayed card stays InProgress (matches live streaming shape).
+        let item = replay_tool_item("tool-1", "Bash", None, None);
+        let update = replay_update(&item);
+        assert_eq!(update.fields.status, Some(ToolCallStatus::InProgress));
+        assert!(update.fields.raw_output.is_none());
+        assert!(update.fields.content.is_none());
+    }
+
+    #[test]
+    fn replay_with_running_status_stays_in_progress() {
+        let item = replay_tool_item("tool-1", "Bash", Some("running"), None);
+        let update = replay_update(&item);
+        assert_eq!(update.fields.status, Some(ToolCallStatus::InProgress));
+    }
+
+    #[test]
+    fn replay_with_completed_status_but_no_result_stays_in_progress() {
+        // `build_model_rounds_from_messages` stamps `completed` on tool items
+        // whose results live in separate tool_result messages; that is not a
+        // terminal-without-result signal, so we must not flip it to Failed.
+        let item = replay_tool_item("tool-1", "Bash", Some("completed"), None);
+        let update = replay_update(&item);
+        assert_eq!(update.fields.status, Some(ToolCallStatus::InProgress));
+    }
+
+    #[test]
+    fn replay_with_interruption_reason_settles_to_failed() {
+        let item = replay_tool_item("tool-1", "Bash", None, Some("cancelled"));
+        let update = replay_update(&item);
+        assert_eq!(update.fields.status, Some(ToolCallStatus::Failed));
+        assert_eq!(
+            update.fields.raw_output.as_ref().unwrap()["reason"],
+            "cancelled"
+        );
+        let content = update.fields.content.as_ref().expect("content present");
+        assert_eq!(content.len(), 1);
+        let ToolCallContent::Content(block) = &content[0] else {
+            panic!("expected content block");
+        };
+        let ContentBlock::Text(text) = &block.content else {
+            panic!("expected text content block");
+        };
+        assert!(text.text.contains("Cancelled: cancelled"));
+    }
+
+    #[test]
+    fn replay_with_cancelled_status_settles_to_failed() {
+        let item = replay_tool_item("tool-1", "Bash", Some("cancelled"), None);
+        let update = replay_update(&item);
+        assert_eq!(update.fields.status, Some(ToolCallStatus::Failed));
+        assert_eq!(
+            update.fields.raw_output.as_ref().unwrap()["reason"],
+            "cancelled"
+        );
+    }
+
+    #[test]
+    fn replay_with_error_status_settles_to_failed() {
+        let item = replay_tool_item("tool-1", "Bash", Some("error"), None);
+        let update = replay_update(&item);
+        assert_eq!(update.fields.status, Some(ToolCallStatus::Failed));
+        assert_eq!(
+            update.fields.raw_output.as_ref().unwrap()["reason"],
+            "failed"
+        );
+    }
+
+    #[test]
+    fn replay_interruption_reason_takes_precedence_over_running_status() {
+        let item = replay_tool_item("tool-1", "Bash", Some("running"), Some("aborted"));
+        let update = replay_update(&item);
+        assert_eq!(update.fields.status, Some(ToolCallStatus::Failed));
+        assert_eq!(
+            update.fields.raw_output.as_ref().unwrap()["reason"],
+            "aborted"
+        );
+    }
+
+    #[test]
+    fn replay_with_blank_interruption_reason_falls_back_to_status() {
+        let item = replay_tool_item("tool-1", "Bash", Some("cancelled"), Some("   "));
+        let update = replay_update(&item);
+        assert_eq!(update.fields.status, Some(ToolCallStatus::Failed));
+        assert_eq!(
+            update.fields.raw_output.as_ref().unwrap()["reason"],
+            "cancelled"
+        );
     }
 }
