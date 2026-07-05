@@ -132,6 +132,59 @@ async function putStateMachineInStreaming(): Promise<void> {
   await stateMachineManager.transition('session-1', SessionExecutionEvent.TEXT_CHUNK_RECEIVED);
 }
 
+function createAskUserQuestionSession(): Session {
+  const turn = createTurn('processing');
+  turn.modelRounds = [{
+    id: 'round-1',
+    index: 0,
+    items: [{
+      id: 'tool-1',
+      type: 'tool',
+      toolName: 'AskUserQuestion',
+      timestamp: 1500,
+      status: 'running',
+      toolCall: {
+        id: 'tool-call-1',
+        input: {
+          questions: [{
+            header: 'Auth method',
+            question: 'Which library should we use for date formatting?',
+            options: [
+              { label: 'date-fns', description: 'Lightweight modular utilities' },
+              { label: 'moment', description: 'Legacy but well-known' },
+            ],
+          }],
+        },
+      },
+      requiresConfirmation: false,
+      isParamsStreaming: false,
+    }],
+    isStreaming: false,
+    isComplete: false,
+    status: 'running',
+    startTime: 1500,
+  }];
+
+  return {
+    ...createSession('processing'),
+    dialogTurns: [turn],
+  };
+}
+
+function createAskUserQuestionSessionWithTrailingText(): Session {
+  const session = createAskUserQuestionSession();
+  const turn = session.dialogTurns[0];
+  turn.modelRounds[0].items.push({
+    id: 'text-1',
+    type: 'text',
+    timestamp: 1600,
+    status: 'streaming',
+    content: '让我用 AskUserQuestion 工具问几个有用的问题，了解用户的需求和意图。',
+    isStreaming: true,
+  });
+  return session;
+}
+
 describe('buildAgentCompanionActivity', () => {
   afterEach(() => {
     resetState();
@@ -241,5 +294,94 @@ describe('buildAgentCompanionActivity', () => {
 
     expect(activity.tasks).toHaveLength(1);
     expect(activity.tasks[0]?.sessionId).toBe('session-1');
+  });
+
+  it('shows attention state when the active turn is waiting on AskUserQuestion', async () => {
+    flowChatStore.setState(() => ({
+      sessions: new Map([['session-1', createAskUserQuestionSession()]]),
+      activeSessionId: 'session-1',
+    }));
+    await putStateMachineInStreaming();
+
+    const activity = buildAgentCompanionActivity();
+
+    expect(activity.tasks).toHaveLength(1);
+    expect(activity.tasks[0]).toMatchObject({
+      sessionId: 'session-1',
+      state: 'attention',
+      labelKey: 'agentCompanion.activity.needsInput',
+      latestOutput: 'Which library should we use for date formatting?',
+    });
+  });
+
+  it('shows attention state even when trailing assistant text is still streaming', async () => {
+    flowChatStore.setState(() => ({
+      sessions: new Map([['session-1', createAskUserQuestionSessionWithTrailingText()]]),
+      activeSessionId: 'session-1',
+    }));
+    await putStateMachineInStreaming();
+
+    const activity = buildAgentCompanionActivity();
+
+    expect(activity.tasks).toHaveLength(1);
+    expect(activity.tasks[0]).toMatchObject({
+      sessionId: 'session-1',
+      state: 'attention',
+      labelKey: 'agentCompanion.activity.needsInput',
+      latestOutput: 'Which library should we use for date formatting?',
+    });
+  });
+
+  it('gives needsUserAttention priority over an active running task', async () => {
+    flowChatStore.setState(() => ({
+      sessions: new Map([['session-1', createStreamingSessionWithText('Still thinking...')]]),
+      activeSessionId: 'session-1',
+    }));
+    await putStateMachineInStreaming();
+
+    flowChatStore.setSessionNeedsAttention('session-1', 'ask_user');
+
+    const activity = buildAgentCompanionActivity();
+
+    expect(activity.tasks).toHaveLength(1);
+    expect(activity.tasks[0]).toMatchObject({
+      sessionId: 'session-1',
+      state: 'attention',
+      labelKey: 'agentCompanion.activity.needsInput',
+    });
+  });
+
+  it('does not show attention for a completed AskUserQuestion tool', async () => {
+    const session = createAskUserQuestionSession();
+    session.dialogTurns[0].modelRounds[0].items[0].status = 'completed';
+
+    flowChatStore.setState(() => ({
+      sessions: new Map([['session-1', session]]),
+      activeSessionId: 'session-1',
+    }));
+    await putStateMachineInStreaming();
+
+    const activity = buildAgentCompanionActivity();
+
+    expect(activity.tasks).toHaveLength(1);
+    expect(activity.tasks[0].state).not.toBe('attention');
+  });
+
+  it('does not show attention while AskUserQuestion params are still streaming', async () => {
+    const session = createAskUserQuestionSession();
+    const tool = session.dialogTurns[0].modelRounds[0].items[0];
+    tool.status = 'streaming';
+    tool.isParamsStreaming = true;
+
+    flowChatStore.setState(() => ({
+      sessions: new Map([['session-1', session]]),
+      activeSessionId: 'session-1',
+    }));
+    await putStateMachineInStreaming();
+
+    const activity = buildAgentCompanionActivity();
+
+    expect(activity.tasks).toHaveLength(1);
+    expect(activity.tasks[0].state).not.toBe('attention');
   });
 });
