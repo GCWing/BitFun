@@ -112,7 +112,7 @@
 
 .markdown-editor:focus {
   border-color: var(--border-accent);
-  box-shadow: 0 0 0 3px rgba(var(--app-card-gradient-blue-rgb), 0.1);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent-600) 10%, transparent);
 }
 
 .markdown-editor::placeholder {

@@ -798,6 +798,9 @@ function audit(options) {
     relativePath: normalizePath(path.relative(cwd, file)),
     rootRelativePath: normalizePath(path.relative(root, file)),
   }));
+  const rootRelativePathByRelativePath = new Map(
+    fileEntries.map(entry => [entry.relativePath, entry.rootRelativePath]),
+  );
   const ignoredTestFiles = fileEntries.filter(entry => isAuditTestFile(entry.relativePath));
   const ignoredGeneratedFiles = fileEntries.filter(entry => (
     !isAuditTestFile(entry.relativePath)
@@ -820,6 +823,7 @@ function audit(options) {
   const varDefinitionCounts = new Map();
   const varDefinitionKinds = new Map();
   const varDefinitionFiles = new Map();
+  const varUsageFileCounts = new Map();
   const contractVarDefinitions = new Set();
   const staticContractVarDefinitions = new Set();
   const runtimeContractVarDefinitions = new Set();
@@ -887,6 +891,9 @@ function audit(options) {
     for (const match of collectMatches(content, CSS_VAR_USAGE_PATTERN)) {
       incrementMap(varUsageCounts, match[1]);
       addToSetMap(varUsageFiles, match[1], relativePath);
+      const fileCounts = varUsageFileCounts.get(match[1]) ?? new Map();
+      incrementMap(fileCounts, relativePath);
+      varUsageFileCounts.set(match[1], fileCounts);
     }
 
     for (const match of collectMatches(content, CSS_VAR_DEFINITION_PATTERN)) {
@@ -1057,6 +1064,55 @@ function audit(options) {
     .sort((a, b) => b.count - a.count || a.key.localeCompare(b.key));
   const runtimeOnlyRequiredContractVars = runtimeOnlyRequiredContractEntries
     .slice(0, REPORT_ROW_LIMIT);
+  const getRootRelativeFiles = files => Array.from(files)
+    .map(file => rootRelativePathByRelativePath.get(file) ?? file)
+    .sort()
+    .slice(0, 5);
+  const getUsageCountByPredicate = (name, predicate) => {
+    const fileCounts = varUsageFileCounts.get(name) ?? new Map();
+    return Array.from(fileCounts.entries())
+      .filter(([file]) => predicate(file))
+      .reduce((total, [, count]) => total + count, 0);
+  };
+  const staticContractUsageEntries = Array.from(staticContractVarDefinitions)
+    .map(key => {
+      const usageFiles = varUsageFiles.get(key) ?? new Set();
+      const payloadFiles = generatedWidgetPayloadVarFiles.get(key) ?? new Set();
+      const externalUsageFiles = new Set(
+        Array.from(usageFiles).filter(file => !isStaticContractVarDefinitionFile(file)),
+      );
+      for (const file of payloadFiles) {
+        externalUsageFiles.add(file);
+      }
+      return {
+        key,
+        count: (
+          getUsageCountByPredicate(key, file => !isStaticContractVarDefinitionFile(file))
+          + (generatedWidgetPayloadVarCounts.get(key) ?? 0)
+        ),
+        internalUsageCount: getUsageCountByPredicate(key, file => isStaticContractVarDefinitionFile(file)),
+        definitionFiles: getRootRelativeFiles(varDefinitionFiles.get(key) ?? new Set()),
+        usageFiles: getRootRelativeFiles(externalUsageFiles),
+        externalUsageFileCount: externalUsageFiles.size,
+      };
+    })
+    .sort((a, b) => (
+      b.externalUsageFileCount - a.externalUsageFileCount
+      || b.count - a.count
+      || a.key.localeCompare(b.key)
+    ));
+  const staticContractExternalUsageVars = staticContractUsageEntries
+    .filter(entry => entry.externalUsageFileCount > 0);
+  const staticContractInternalOnlyVars = staticContractUsageEntries
+    .filter(entry => entry.externalUsageFileCount === 0)
+    .sort((a, b) => b.internalUsageCount - a.internalUsageCount || a.key.localeCompare(b.key));
+  const staticContractLowExternalUsageVars = staticContractExternalUsageVars
+    .filter(entry => entry.externalUsageFileCount <= 2)
+    .sort((a, b) => (
+      a.externalUsageFileCount - b.externalUsageFileCount
+      || b.count - a.count
+      || a.key.localeCompare(b.key)
+    ));
 
   const nearPairs = buildNearColorPairs(componentColorCounts, componentColorFiles);
   const uniqueComponentColors = componentColorCounts.size;
@@ -1440,10 +1496,15 @@ function audit(options) {
       fallbackOnlyUnique: fallbackOnlyEntries.length,
       unresolvedRequiredUnique: unresolvedRequiredEntries.length,
       runtimeOnlyRequiredContractUnique: runtimeOnlyRequiredContractEntries.length,
+      staticContractExternalUsageUnique: staticContractExternalUsageVars.length,
+      staticContractInternalOnlyUnique: staticContractInternalOnlyVars.length,
+      staticContractLowExternalUsageUnique: staticContractLowExternalUsageVars.length,
       nonContractCrossFileUnique: nonContractDefinedEntries.length,
       nonContractDynamicInputUnique: nonContractDynamicInputEntries.length,
       nonContractCssPrivateUnique: nonContractCssPrivateEntries.length,
     },
+    staticContractInternalOnlyVars: staticContractInternalOnlyVars.slice(0, REPORT_ROW_LIMIT),
+    staticContractLowExternalUsageVars: staticContractLowExternalUsageVars.slice(0, REPORT_ROW_LIMIT),
     dynamicDefinedVars,
     dynamicFamilyUnexportedVars,
     unregisteredDynamicFamilies: unregisteredDynamicFamilyEntries,
@@ -1757,6 +1818,9 @@ function printText(report) {
     `fallbackOnly=${report.cssVarDefinitions.fallbackOnlyUnique}, ` +
     `requiredMissing=${report.cssVarDefinitions.unresolvedRequiredUnique}, ` +
     `runtimeOnlyRequired=${report.cssVarDefinitions.runtimeOnlyRequiredContractUnique}, ` +
+    `staticContractExternal=${report.cssVarDefinitions.staticContractExternalUsageUnique}, ` +
+    `staticContractInternalOnly=${report.cssVarDefinitions.staticContractInternalOnlyUnique}, ` +
+    `staticContractLowExternal=${report.cssVarDefinitions.staticContractLowExternalUsageUnique}, ` +
     `dynamicFamilyUnexported=${report.cssVarDefinitions.dynamicFamilyUnexportedUnique}, ` +
     `nonContractCrossFile=${report.cssVarDefinitions.nonContractCrossFileUnique}, ` +
     `nonContractDynamicInputs=${report.cssVarDefinitions.nonContractDynamicInputUnique}, ` +
@@ -1852,6 +1916,18 @@ function printText(report) {
       console.log(
         `  ${row.count.toString().padStart(5)}  ${row.key}  ` +
         `usageFiles=${row.usageFileCount}  definitions=${row.definitionFiles.join(', ')}`
+      );
+    }
+  }
+
+  console.log('\nStatic contract internal-only CSS vars (top):');
+  if (report.staticContractInternalOnlyVars.length === 0) {
+    console.log('  none');
+  } else {
+    for (const row of report.staticContractInternalOnlyVars.slice(0, 10)) {
+      console.log(
+        `  ${row.internalUsageCount.toString().padStart(5)}  ${row.key}  ` +
+        `definitions=${row.definitionFiles.join(', ')}`
       );
     }
   }

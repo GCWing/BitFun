@@ -104,11 +104,17 @@
     "colorScopes.appUi.occurrences": {
       "max": 0
     },
+    "colorScopes.token.occurrences": {
+      "max": 305
+    },
     "colorScopes.token.uniqueColors": {
-      "max": 197
+      "max": 192
     },
     "colorScopes.exception.uniqueColors": {
       "max": 182
+    },
+    "cssVarDefinitions.unresolvedUnique": {
+      "max": 0
     },
     "cssVarDefinitions.unresolvedRequiredUnique": {
       "max": 0
@@ -136,6 +142,18 @@
     },
     "cssVarDefinitions.staleRegisteredDynamicFamilyUnique": {
       "max": 0
+    },
+    "cssVarDefinitions.staticContractDefinedUnique": {
+      "max": 508
+    },
+    "cssVarDefinitions.staticContractExternalUsageUnique": {
+      "max": 493
+    },
+    "cssVarDefinitions.staticContractInternalOnlyUnique": {
+      "max": 15
+    },
+    "cssVarDefinitions.staticContractLowExternalUsageUnique": {
+      "max": 286
     },
     "tokenAliasLiterals.occurrences": {
       "max": 0
@@ -255,7 +273,10 @@
       "max": 27
     },
     "colorDomainScopes.tokenContract.occurrences": {
-      "max": 108
+      "max": 102
+    },
+    "colorDomainScopes.tokenContract.uniqueColors": {
+      "max": 91
     },
     "colorDomainScopes.generatedWidget.occurrences": {
       "max": 0

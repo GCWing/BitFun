@@ -3,6 +3,9 @@
  */
 
 .snapshot-rollback-button {
+  --snapshot-rollback-error-color: var(--color-error);
+  --snapshot-rollback-error-bg: var(--color-error-bg);
+
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -63,9 +66,9 @@
   
   // Error state
   &--error {
-    border-color: var(--color-error);
-    background: var(--color-error-bg);
-    color: var(--color-error);
+    border-color: var(--snapshot-rollback-error-color);
+    background: var(--snapshot-rollback-error-bg);
+    color: var(--snapshot-rollback-error-color);
     cursor: default;
     
     &:hover {
@@ -111,8 +114,7 @@
     --color-bg-elevated: color-mix(in srgb, rgb(var(--color-overlay-slate-rgb)) 94%, var(--color-static-white));
     --color-text-secondary: rgb(var(--snapshot-rollback-dark-secondary-rgb));
     --color-accent-100: var(--card-bg-accent);
-    --color-error: var(--color-error-soft);
-    --color-error-bg: color-mix(in srgb, var(--color-error-soft) 10%, transparent);
+    --snapshot-rollback-error-color: color-mix(in srgb, var(--color-error) 72%, var(--color-static-white));
+    --snapshot-rollback-error-bg: color-mix(in srgb, var(--snapshot-rollback-error-color) 10%, transparent);
   }
 }
-

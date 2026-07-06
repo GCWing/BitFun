@@ -460,6 +460,57 @@ test('theme color audit emits scoped machine-readable reports', (t) => {
   assert.equal(report.summary.baseline.enforced, false);
 });
 
+test('theme color audit reports static contract token external consumption', (t) => {
+  const { dir, sourceRoot } = createFixture({
+    'component-library/styles/tokens.scss': [
+      ':root {',
+      '  --color-text-primary: #111111;',
+      '  --private-helper-rgb: 17, 17, 17;',
+      '  --derived-from-helper: rgb(var(--private-helper-rgb));',
+      '  --payload-export: #333333;',
+      '  --unused-export: #222222;',
+      '}',
+      '',
+    ].join('\n'),
+    'app/App.scss': [
+      '.app {',
+      '  color: var(--color-text-primary);',
+      '  background: var(--derived-from-helper);',
+      '}',
+      '',
+    ].join('\n'),
+    'tools/generative-widget/themePayload.ts': [
+      'const WIDGET_THEME_VAR_GROUPS = {',
+      '  core: [',
+      "    '--payload-export',",
+      '  ],',
+      '} as const;',
+      '',
+    ].join('\n'),
+  });
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  const result = runAudit(['--root', sourceRoot, '--json', '--no-baseline']);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+
+  const report = JSON.parse(result.stdout);
+  assert.equal(report.cssVarDefinitions.staticContractExternalUsageUnique, 3);
+  assert.equal(report.cssVarDefinitions.staticContractInternalOnlyUnique, 2);
+  assert.deepEqual(
+    report.staticContractLowExternalUsageVars
+      .filter(row => row.key === '--payload-export')
+      .map(row => [row.key, row.count, row.externalUsageFileCount, row.usageFiles]),
+    [['--payload-export', 1, 1, ['tools/generative-widget/themePayload.ts']]],
+  );
+  assert.deepEqual(
+    report.staticContractInternalOnlyVars.map(row => [row.key, row.definitionFiles, row.internalUsageCount]),
+    [
+      ['--private-helper-rgb', ['component-library/styles/tokens.scss'], 1],
+      ['--unused-export', ['component-library/styles/tokens.scss'], 0],
+    ],
+  );
+});
+
 test('theme color audit reports deprecated surface-local token names', (t) => {
   const { dir, sourceRoot } = createFixture({
     'component-library/styles/tokens.scss': [
