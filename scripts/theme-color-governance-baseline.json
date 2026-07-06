@@ -111,7 +111,7 @@
       "max": 184
     },
     "colorScopes.exception.uniqueColors": {
-      "max": 182
+      "max": 162
     },
     "cssVarDefinitions.unresolvedUnique": {
       "max": 0
@@ -330,10 +330,10 @@
       "max": 0
     },
     "colorDomainScopes.mermaid.occurrences": {
-      "max": 82
+      "max": 53
     },
     "colorDomainScopes.mermaid.uniqueColors": {
-      "max": 65
+      "max": 48
     }
   },
   "allowlists": {

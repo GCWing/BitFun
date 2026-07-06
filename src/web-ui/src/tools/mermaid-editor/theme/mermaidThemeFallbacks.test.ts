@@ -6,6 +6,7 @@ import {
   getMermaidThemeFallback,
   getMermaidThemeFallbackPair,
 } from './mermaidThemeFallbacks';
+import { getMermaidConfig } from './mermaidTheme';
 
 describe('mermaid theme fallback palette', () => {
   it('keeps shared node and text fallback roles stable across dark and light themes', () => {
@@ -41,6 +42,57 @@ describe('mermaid theme fallback palette', () => {
     expect(getMermaidThemeFallback('dark', 'textMuted')).toBe(
       getMermaidThemeFallback('dark', 'nodeStrokeHover')
     );
+  });
+
+  it('reuses compact status and pie fallback colors across theme modes', () => {
+    expect(getMermaidThemeFallbackPair('doneStroke')).toEqual({
+      dark: '#34d399',
+      light: '#34d399',
+    });
+    expect(getMermaidThemeFallbackPair('critStroke')).toEqual({
+      dark: '#ef4444',
+      light: '#ef4444',
+    });
+    expect(getMermaidThemeFallbackPair('pie6')).toEqual({
+      dark: '#ec4899',
+      light: '#ec4899',
+    });
+    expect(getMermaidThemeFallbackPair('pie7')).toEqual({
+      dark: '#06b6d4',
+      light: '#06b6d4',
+    });
+    expect(getMermaidThemeFallbackPair('pie8')).toEqual({
+      dark: '#84cc16',
+      light: '#84cc16',
+    });
+  });
+
+  it('keeps dark info and activation fallbacks visually distinct from neutral notes', () => {
+    expect(getMermaidThemeFallback('dark', 'activeStroke')).toBe('#60a5fa');
+    expect(getMermaidThemeFallback('dark', 'info')).toBe('#60a5fa');
+    expect(getMermaidThemeFallback('dark', 'taskClickableInfo')).toBe('#60a5fa');
+    expect(getMermaidThemeFallback('dark', 'activationFill')).toBe(
+      'rgba(96, 165, 250, 0.15)'
+    );
+    expect(getMermaidThemeFallback('dark', 'activationFill')).not.toBe(
+      getMermaidThemeFallback('dark', 'noteFill')
+    );
+  });
+
+  it('feeds compact but distinct fallbacks into Mermaid config without CSS variables', () => {
+    const config = getMermaidConfig();
+    const themeVariables = config.themeVariables;
+
+    expect(themeVariables.doneTaskBorderColor).toBe('#34d399');
+    expect(themeVariables.critBorderColor).toBe('#ef4444');
+    expect(themeVariables.activeTaskBorderColor).toBe('#60a5fa');
+    expect(themeVariables.taskTextClickableColor).toBe('#60a5fa');
+    expect(themeVariables.pie1).toBe('#60a5fa');
+    expect(themeVariables.pie6).toBe('#ec4899');
+    expect(themeVariables.pie7).toBe('#06b6d4');
+    expect(themeVariables.pie8).toBe('#84cc16');
+    expect(themeVariables.activationBkgColor).toBe('rgba(96, 165, 250, 0.15)');
+    expect(themeVariables.activationBkgColor).not.toBe(themeVariables.noteBkgColor);
   });
 
   it('keeps every theme mode on the same fallback key contract', () => {
