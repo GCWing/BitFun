@@ -11,7 +11,6 @@ import {
   FontSizeTokens,
   UiFontSizePreference,
   DEFAULT_FONT_PREFERENCE,
-  deriveFontSizeTokens,
   resolveFontSizeTokens,
   resolveFlowChatFontSizeTokens,
 } from '../types';
@@ -122,7 +121,6 @@ export class FontPreferenceService {
       root.style.setProperty(`--flowchat-font-size-${key}`, value);
     });
     this.applyFlowChatExtraFontSizeTokens(root, flowTokens);
-    this.applyNavPanelFontSizeTokens(root, flowTokens);
 
     // Drive body font-size so elements using `inherit` cascade to the new base size.
     // This is the broadest single-point fix for SCSS components that compiled their
@@ -167,30 +165,6 @@ export class FontPreferenceService {
       const xxs = Math.max(7, xsPx - 2);
       root.style.setProperty('--flowchat-font-size-2xs', `${twoXs}px`);
       root.style.setProperty('--flowchat-font-size-xxs', `${xxs}px`);
-    }
-  }
-
-  /**
-   * Sidebar nav uses the same token names as global UI (`--font-size-*`) but should stay
-   * slightly below the flow-chat panel scale; derive from flow baseline minus 1px.
-   */
-  private applyNavPanelFontSizeTokens(root: HTMLElement, flowTokens: FontSizeTokens): void {
-    const flowBasePx = parseInt(flowTokens.base, 10);
-    const navBasePx = Number.isNaN(flowBasePx) ? 14 : Math.max(12, flowBasePx - 1);
-    const navTokens = deriveFontSizeTokens(navBasePx);
-    (Object.entries(navTokens) as [string, string][]).forEach(([key, value]) => {
-      root.style.setProperty(`--nav-font-size-${key}`, value);
-    });
-    this.applyNavPanelExtraFontSizeTokens(root, navTokens);
-  }
-
-  private applyNavPanelExtraFontSizeTokens(root: HTMLElement, tokens: FontSizeTokens): void {
-    const xsPx = parseInt(tokens.xs, 10);
-    if (!Number.isNaN(xsPx)) {
-      const twoXs = Math.max(8, xsPx - 1);
-      const xxs = Math.max(7, xsPx - 2);
-      root.style.setProperty('--nav-font-size-2xs', `${twoXs}px`);
-      root.style.setProperty('--nav-font-size-xxs', `${xxs}px`);
     }
   }
 

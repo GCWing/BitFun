@@ -7,7 +7,7 @@
  */
 
 @use '../../../component-library/styles/tokens.scss' as *;
-@use '../../../component-library/styles/nav-panel-font-scope.scss' as nav-font;
+@use '../../styles/nav-panel-font-scope.scss' as nav-font;
 @use '../../../component-library/styles/btn-primary-tokens.scss' as btn-primary;
 
 $_nav-width: 240px;

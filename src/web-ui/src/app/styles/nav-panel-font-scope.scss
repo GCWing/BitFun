@@ -1,0 +1,17 @@
+/**
+ * Remaps `--font-size-*` inside nav UI to the flow-chat typographic scale minus one
+ * baseline step, keeping the old minimums without a separate root `--nav-font-size-*` family.
+ */
+
+@mixin nav-panel-font-token-scope {
+  --font-size-xxs: max(8px, calc(var(--flowchat-font-size-xs) - 3px));
+  --font-size-2xs: max(9px, calc(var(--flowchat-font-size-xs) - 2px));
+  --font-size-xs: max(10px, calc(var(--flowchat-font-size-xs) - 1px));
+  --font-size-sm: max(11px, calc(var(--flowchat-font-size-sm) - 1px));
+  --font-size-base: max(12px, calc(var(--flowchat-font-size-base) - 1px));
+  --font-size-lg: max(13px, calc(var(--flowchat-font-size-lg) - 1px));
+  --font-size-xl: max(14px, calc(var(--flowchat-font-size-xl) - 1px));
+  --font-size-2xl: max(16px, calc(var(--flowchat-font-size-2xl) - 1px));
+  --font-size-3xl: max(20px, calc(var(--flowchat-font-size-3xl) - 1px));
+  --font-size-4xl: max(24px, calc(var(--flowchat-font-size-4xl) - 1px));
+}

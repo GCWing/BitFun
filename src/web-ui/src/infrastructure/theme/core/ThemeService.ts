@@ -721,6 +721,7 @@ export class ThemeService {
         const value = motionDuration[key];
         root.style.setProperty(`--motion-${key}`, value);
       });
+      root.style.setProperty('--smooth-height-collapse-duration', motionDuration.slow);
     }
 
 

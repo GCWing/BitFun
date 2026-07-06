@@ -360,11 +360,6 @@ export const DYNAMIC_VAR_FAMILY_CONTRACTS = [
     reason: 'Theme runtime exports motion duration entries from active theme motion tokens.',
   },
   {
-    prefix: '--nav-font-size-',
-    owner: 'src/web-ui/src/infrastructure/font-preference/core/FontPreferenceService.ts',
-    reason: 'Font preference runtime exports navigation font-size aliases from the adjusted typography scale.',
-  },
-  {
     prefix: '--shadow-',
     owner: 'src/web-ui/src/infrastructure/theme/core/ThemeService.ts',
     reason: 'Theme runtime exports configurable shadow entries.',

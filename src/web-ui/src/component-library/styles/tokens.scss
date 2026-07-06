@@ -675,7 +675,6 @@ $badge-info-text: $color-info;
 
   --glow-shadow-blue: #{$glow-shadow-blue};
 
-  --glass-base: #{$glass-base};
   --glass-disabled: #{$glass-disabled};
   --glass-blue-subtle: #{$glass-blue-subtle};
   --glass-red-subtle: #{$glass-red-subtle};
@@ -683,21 +682,18 @@ $badge-info-text: $color-info;
   --glass-red-hover: #{$glass-red-hover};
   --glass-green-base: #{$glass-green-base};
   --glass-green-hover: #{$glass-green-hover};
-  --glass-bg-base: var(--glass-base);
+  --glass-bg-base: #{$glass-base};
   --glass-bg-hover: var(--element-bg-medium);
   --glass-bg-active: var(--element-bg-strong);
   --glass-border-base: var(--border-base);
   --glass-border-hover: var(--border-medium);
   --glass-border-focus: var(--border-focus);
-  --glass-blur-sm: var(--blur-subtle);
-  --glass-blur-base: var(--blur-base);
+  --glass-blur-sm: #{$blur-subtle};
+  --glass-blur-base: #{$blur-base};
   --glass-shadow-sm: var(--shadow-sm);
   --glass-shadow-base: var(--shadow-base);
   --glass-shadow-lg: var(--shadow-lg);
   --glass-shadow-xl: var(--shadow-xl);
-
-  --blur-subtle: #{$blur-subtle};
-  --blur-base: #{$blur-base};
 
   --size-radius-sm: #{$size-radius-sm};
   --size-radius-base: #{$size-radius-base};
@@ -721,8 +717,7 @@ $badge-info-text: $color-info;
   --motion-instant: #{$motion-instant};
   --motion-fast: #{$motion-fast};
   --motion-base: #{$motion-base};
-  --motion-slow: #{$motion-slow};
-  --smooth-height-collapse-duration: var(--motion-slow);
+  --smooth-height-collapse-duration: #{$motion-slow};
 
   --easing-standard: #{$easing-standard};
   --easing-decelerate: #{$easing-decelerate};
@@ -754,7 +749,6 @@ $badge-info-text: $color-info;
   --font-size-xl: #{$font-size-xl};
   --font-size-2xl: #{$font-size-2xl};
   --font-size-3xl: #{$font-size-3xl};
-  --font-size-4xl: #{$font-size-4xl};
 
   /* Flow chat: mirrors UI scale until font preference overwrites (independent mode). */
   --flowchat-font-size-xxs: var(--font-size-xxs);
@@ -821,17 +815,6 @@ $badge-info-text: $color-info;
   --flowchat-link-hover-color: #93c5fd;
   --markdown-primary-color: var(--color-accent-600);
 
-  /* Left nav: one baseline step below flow-chat scale (overwritten by FontPreferenceService). */
-  --nav-font-size-xxs: var(--font-size-xxs);
-  --nav-font-size-2xs: var(--font-size-2xs);
-  --nav-font-size-xs: var(--font-size-xs);
-  --nav-font-size-sm: var(--font-size-sm);
-  --nav-font-size-base: var(--font-size-base);
-  --nav-font-size-lg: var(--font-size-lg);
-  --nav-font-size-xl: var(--font-size-xl);
-  --nav-font-size-2xl: var(--font-size-2xl);
-  --nav-font-size-3xl: var(--font-size-3xl);
-  --nav-font-size-4xl: var(--font-size-4xl);
   --bitfun-nav-row-action-size: 20px;
   --bitfun-nav-row-action-icon-size: 13px;
   --bitfun-nav-row-action-offset: 4px;

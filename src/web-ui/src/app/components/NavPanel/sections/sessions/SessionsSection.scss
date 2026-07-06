@@ -6,7 +6,7 @@
  */
 
 @use '../../../../../component-library/styles/tokens.scss' as *;
-@use '../../../../../component-library/styles/nav-panel-font-scope.scss' as nav-font;
+@use '../../../../styles/nav-panel-font-scope.scss' as nav-font;
 
 .bitfun-nav-panel {
   &__inline-list {

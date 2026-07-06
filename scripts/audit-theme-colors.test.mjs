@@ -201,6 +201,21 @@ test('theme CSS var contract registry is explicit and non-overlapping', () => {
   }
 });
 
+test('FlowChat 4xl alias mirrors runtime typography without static root 4xl fallback', () => {
+  const tokens = readText(path.join(root, 'src/web-ui/src/component-library/styles/tokens.scss'));
+
+  assert.match(
+    tokens,
+    /^\s*--flowchat-font-size-4xl:\s*var\(--font-size-4xl\);$/m,
+    'FlowChat 4xl should mirror the runtime typography owner',
+  );
+  assert.doesNotMatch(
+    tokens,
+    /^\s*--font-size-4xl:/m,
+    'static root --font-size-4xl should not be reintroduced',
+  );
+});
+
 test('repository dynamic CSS var families match the registered contract', () => {
   for (const sourceRoot of SOURCE_OWNER_ROOTS) {
     const result = runAudit(['--root', sourceRoot, '--json', '--no-baseline']);

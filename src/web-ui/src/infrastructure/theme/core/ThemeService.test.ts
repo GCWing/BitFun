@@ -469,6 +469,27 @@ describe('ThemeService runtime theme tokens', () => {
     expect(rootStyle.getPropertyValue('--line-height-loose')).toBe('');
   });
 
+  it('projects theme motion slow into the SmoothHeightCollapse public alias', () => {
+    const service = new ThemeService();
+    const customTheme = {
+      ...bitfunLightTheme,
+      id: 'custom-motion-alias',
+      motion: {
+        ...bitfunLightTheme.motion,
+        duration: {
+          ...bitfunLightTheme.motion.duration,
+          slow: '0.7s',
+        },
+      },
+    } as unknown as ThemeConfig;
+
+    (service as unknown as { injectCSSVariables(theme: ThemeConfig): void }).injectCSSVariables(customTheme);
+
+    const rootStyle = document.documentElement.style;
+    expect(rootStyle.getPropertyValue('--motion-slow')).toBe('0.7s');
+    expect(rootStyle.getPropertyValue('--smooth-height-collapse-duration')).toBe('0.7s');
+  });
+
   it('skips invalid persisted custom themes before they reach preview or runtime injection', async () => {
     const invalidCustomTheme = {
       ...bitfunLightTheme,
