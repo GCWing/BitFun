@@ -122,7 +122,6 @@ pub fn shared_coding_mode_tools() -> Vec<String> {
         "AskUserQuestion".to_string(),
         "CreatePlan".to_string(),
         "Git".to_string(),
-        "Log".to_string(),
         "ControlHub".to_string(),
         "InitMiniApp".to_string(),
     ];
@@ -284,7 +283,6 @@ mod tests {
         let tools = shared_coding_mode_tools();
 
         assert!(tools.contains(&"CreatePlan".to_string()));
-        assert!(tools.contains(&"Log".to_string()));
         assert!(tools.contains(&"get_goal".to_string()));
         assert!(tools.contains(&"update_goal".to_string()));
     }

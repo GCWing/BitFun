@@ -47,7 +47,6 @@ impl StaticToolProviderFactory<dyn Tool> for ProductConcreteToolFactory {
             "submit_code_review" => Some(Arc::new(CodeReviewTool::new())),
             "GetToolSpec" => Some(Arc::new(GetToolSpecTool::new())),
             "GetFileDiff" => Some(Arc::new(GetFileDiffTool::new())),
-            "Log" => Some(Arc::new(LogTool::new())),
             "SessionControl" => Some(Arc::new(SessionControlTool::new())),
             "SessionMessage" => Some(Arc::new(SessionMessageTool::new())),
             "SessionHistory" => Some(Arc::new(SessionHistoryTool::new())),

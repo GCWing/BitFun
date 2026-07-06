@@ -150,7 +150,6 @@ const PRODUCT_TOOL_PROVIDER_GROUP_PLAN: &[ToolProviderGroupPlan] = &[
             "submit_code_review",
             "GetToolSpec",
             "GetFileDiff",
-            "Log",
         ],
     },
     ToolProviderGroupPlan {
@@ -369,7 +368,6 @@ mod tests {
                 "submit_code_review",
                 "GetToolSpec",
                 "GetFileDiff",
-                "Log",
                 "CreateCanvas",
                 "ReadCanvas",
                 "UpdateCanvas",

@@ -360,7 +360,6 @@ mod tests {
             "submit_code_review",
             "GetToolSpec",
             "GetFileDiff",
-            "Log",
             "CreateCanvas",
             "ReadCanvas",
             "UpdateCanvas",
@@ -541,7 +540,6 @@ mod tests {
             vec![
                 "CreatePlan",
                 "GetFileDiff",
-                "Log",
                 "SessionControl",
                 "SessionMessage",
                 "SessionHistory",
@@ -590,7 +588,6 @@ mod tests {
                 "submit_code_review",
                 "GetToolSpec",
                 "GetFileDiff",
-                "Log",
                 "ReadCanvas",
                 "SessionHistory",
                 "WebSearch",

@@ -26,7 +26,6 @@ pub mod get_time_tool;
 pub mod git_tool;
 pub mod glob_tool;
 pub mod grep_tool;
-pub mod log_tool;
 pub mod ls_tool;
 pub mod mcp_tools;
 pub mod miniapp_init_tool;
@@ -68,7 +67,6 @@ pub use get_time_tool::GetTimeTool;
 pub use git_tool::GitTool;
 pub use glob_tool::GlobTool;
 pub use grep_tool::GrepTool;
-pub use log_tool::LogTool;
 pub use ls_tool::LSTool;
 pub use mcp_tools::{
     GetMCPPromptTool, ListMCPPromptsTool, ListMCPResourcesTool, ReadMCPResourceTool,
