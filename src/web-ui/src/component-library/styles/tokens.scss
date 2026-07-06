@@ -292,10 +292,6 @@ $line-height-relaxed: 1.6;
 
 // ==================== Component-specific sizes ====================
 
-$button-height-sm: 32px;
-$button-height-base: 40px;
-$button-height-lg: 48px;
-
 // ==================== Opacity levels ====================
 
 $opacity-disabled: 0.6;
@@ -312,7 +308,6 @@ $button-bg-hover: linear-gradient(135deg,
 );
 $button-text-hover: $color-static-white;
 
-$panel-bg: $color-bg-secondary;
 
 $card-bg-default: $overlay-white-04;
 $card-bg-elevated: $overlay-white-08;
@@ -329,7 +324,6 @@ $card-bg-purple-hover: $color-purple-500-a15;
 $badge-border-radius: $size-radius-sm;
 $badge-padding-x: $size-gap-2;
 $badge-padding-y: 2px;
-$badge-font-size: var(--font-size-xs);
 $badge-font-weight: $font-weight-medium;
 
 $badge-neutral-bg: $element-bg-base;
@@ -392,7 +386,6 @@ $badge-info-text: $color-info;
   --bitfun-startup-bg: var(--color-bg-primary);
   --color-bg-scene: #{$color-bg-scene};
   --color-bg-tooltip: #{$color-bg-tooltip};
-  --panel-bg: #{$panel-bg};
 
   --color-text-primary: #{$color-text-primary};
   --color-text-secondary: #{$color-text-secondary};
@@ -575,7 +568,6 @@ $badge-info-text: $color-info;
   --motion-instant: #{$motion-instant};
   --motion-fast: #{$motion-fast};
   --motion-base: #{$motion-base};
-  --smooth-height-collapse-duration: #{$motion-slow};
 
   --easing-standard: #{$easing-standard};
   --easing-decelerate: #{$easing-decelerate};
@@ -587,12 +579,6 @@ $badge-info-text: $color-info;
     'SF Mono', 'Monaco', 'Cascadia Code', 'Cascadia Mono', Consolas, 'Inconsolata', 'Fira Code', 'Fira Mono',
     'Droid Sans Mono', 'Source Code Pro', 'Lucida Console', 'Courier New', monospace;
 
-  --input-bg: var(--element-bg-base);
-  --input-bg-hover: var(--element-bg-medium);
-  --input-border: var(--border-base);
-  --input-border-hover: var(--border-medium);
-  --input-border-focus: var(--color-accent-400);
-  --input-text: var(--color-text-primary);
   --font-weight-normal: #{$font-weight-normal};
   --font-weight-medium: #{$font-weight-medium};
   --font-weight-semibold: #{$font-weight-semibold};
@@ -630,14 +616,10 @@ $badge-info-text: $color-info;
   --flowchat-control-pad-x: 0.75rem;
   --flowchat-content-inline-pad: 3rem;
   --flowchat-content-inline-pad-mobile: 1.5rem;
-  --flowchat-user-message-pad-y: 0.32rem;
-  --flowchat-user-message-pad-x: 0.75rem;
   --flowchat-card-gap: 0.42rem;
   --flowchat-card-radius: 8px;
   --flowchat-card-pad-y: 0.625rem;
   --flowchat-card-pad-x: 0.75rem;
-  --flowchat-card-tight-pad-y: 0.375rem;
-  --flowchat-card-tight-pad-x: 0.5rem;
   --flowchat-card-header-pad-y: 0.44rem;
   --flowchat-card-header-pad-x: 0;
   --flowchat-card-header-pad-right: 0.625rem;
@@ -658,38 +640,16 @@ $badge-info-text: $color-info;
   --flowchat-code-line-height: 1.52;
   --flowchat-code-block-pad-y: 0.55rem;
   --flowchat-code-block-pad-x: 0.75rem;
-  --flowchat-markdown-block-gap: 0.58em;
-  --flowchat-markdown-paragraph-gap: 0.28em;
-  --flowchat-markdown-list-item-gap: 0.28em;
-  --flowchat-markdown-list-nested-gap: 0.22em;
-  --flowchat-markdown-heading-gap-before: 0.86em;
-  --flowchat-markdown-heading-gap-after: 0.36em;
-  --flowchat-markdown-code-block-gap: 0.72em;
-  --flowchat-markdown-code-block-pad-y: 0.78rem;
-  --flowchat-markdown-code-block-pad-x: 0.86rem;
-  --flowchat-markdown-table-cell-pad-y: 0.52rem;
-  --flowchat-markdown-table-cell-pad-x: 0.72rem;
   --flowchat-link-color: #60a5fa;
   --flowchat-link-hover-color: #93c5fd;
-  --markdown-primary-color: var(--color-accent-600);
-
-  --bitfun-nav-row-action-size: 20px;
-  --bitfun-nav-row-action-icon-size: 13px;
-  --bitfun-nav-row-action-offset: 4px;
-  --bitfun-nav-row-action-gap: 4px;
 
   --line-height-tight: #{$line-height-tight};
   --line-height-base: #{$line-height-base};
   --line-height-relaxed: #{$line-height-relaxed};
 
-  --button-height-sm: #{$button-height-sm};
-  --button-height-base: #{$button-height-base};
-  --button-height-lg: #{$button-height-lg};
   --opacity-disabled: #{$opacity-disabled};
   --opacity-hover: #{$opacity-hover};
   --opacity-focus: #{$opacity-focus};
-
-  --badge-font-size: #{$badge-font-size};
 
   --card-bg-default: #{$card-bg-default};
   --card-bg-elevated: #{$card-bg-elevated};

@@ -292,23 +292,13 @@
   }
 
   &__workspace-item.is-active &__workspace-item-name-stack {
-    padding-right: calc(
-      4px +
-      var(--bitfun-nav-row-action-size) +
-      var(--bitfun-nav-row-action-offset)
-    );
+    padding-right: 28px;
   }
 
   &__workspace-item:hover &__workspace-item-name-stack,
   &__workspace-item.is-menu-open &__workspace-item-name-stack,
   &__workspace-item:focus-within &__workspace-item-name-stack {
-    padding-right: calc(
-      4px +
-      var(--bitfun-nav-row-action-size) +
-      var(--bitfun-nav-row-action-gap) +
-      var(--bitfun-nav-row-action-size) +
-      var(--bitfun-nav-row-action-offset)
-    );
+    padding-right: 52px;
   }
 
   &__workspace-item-active-icon {
@@ -841,17 +831,17 @@
   &__workspace-item-actions {
     position: absolute;
     top: 50%;
-    right: var(--bitfun-nav-row-action-offset);
+    right: 4px;
     transform: translateY(-50%);
     display: inline-flex;
     align-items: center;
-    gap: var(--bitfun-nav-row-action-gap);
+    gap: 4px;
   }
 
   &__workspace-item-menu {
     display: inline-flex;
     align-items: center;
-    gap: var(--bitfun-nav-row-action-gap);
+    gap: 4px;
     transition: opacity $motion-fast $easing-standard,
                 visibility $motion-fast $easing-standard;
   }
@@ -860,8 +850,8 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: var(--bitfun-nav-row-action-size);
-    height: var(--bitfun-nav-row-action-size);
+    width: 20px;
+    height: 20px;
     border: none;
     border-radius: 6px;
     background: transparent;
@@ -1208,13 +1198,7 @@
   &__assistant-item:hover &__assistant-item-name-btn,
   &__assistant-item.is-menu-open &__assistant-item-name-btn,
   &__assistant-item:focus-within &__assistant-item-name-btn {
-    padding-right: calc(
-      var(--bitfun-nav-row-action-size) +
-      var(--bitfun-nav-row-action-size) +
-      var(--bitfun-nav-row-action-gap) +
-      var(--bitfun-nav-row-action-offset) +
-      4px
-    );
+    padding-right: 52px;
   }
 
   &__assistant-item-label {
@@ -1254,11 +1238,11 @@
   &__assistant-item-menu {
     position: absolute;
     top: 50%;
-    right: var(--bitfun-nav-row-action-offset);
+    right: 4px;
     transform: translateY(-50%);
     display: inline-flex;
     align-items: center;
-    gap: var(--bitfun-nav-row-action-gap);
+    gap: 4px;
     transition: opacity $motion-fast $easing-standard,
                 visibility $motion-fast $easing-standard;
   }
@@ -1267,8 +1251,8 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: var(--bitfun-nav-row-action-size);
-    height: var(--bitfun-nav-row-action-size);
+    width: 20px;
+    height: 20px;
     border: none;
     border-radius: 6px;
     background: transparent;

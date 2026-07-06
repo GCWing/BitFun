@@ -144,16 +144,16 @@
       "max": 0
     },
     "cssVarDefinitions.staticContractDefinedUnique": {
-      "max": 352
+      "max": 320
     },
     "cssVarDefinitions.staticContractExternalUsageUnique": {
-      "max": 352
+      "max": 320
     },
     "cssVarDefinitions.staticContractInternalOnlyUnique": {
       "max": 0
     },
     "cssVarDefinitions.staticContractLowExternalUsageUnique": {
-      "max": 144
+      "max": 116
     },
     "tokenAliasLiterals.occurrences": {
       "max": 0

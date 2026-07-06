@@ -86,7 +86,7 @@ export const SmoothHeightCollapse: React.FC<SmoothHeightCollapseProps> = ({
       className={`smooth-height-collapse smooth-height-collapse--${phase} ${className}`.trim()}
       style={{
         height,
-        ['--smooth-height-collapse-duration' as string]: `${durationMs}ms`,
+        transitionDuration: `${durationMs}ms, 180ms, ${durationMs}ms`,
       }}
       aria-hidden={!isOpen && phase === 'closed'}
     >

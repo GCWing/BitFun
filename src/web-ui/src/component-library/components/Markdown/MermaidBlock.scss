@@ -2,10 +2,12 @@
  * MermaidBlock styles
  * Styles for rendering Mermaid diagrams during streaming output
  */
+@use '../../styles/markdown-layout' as markdown;
+
 .mermaid-block {
   --mermaid-block-shadow-color: var(--color-overlay-black-40);
 
-  margin: var(--flowchat-markdown-block-gap) 0;
+  margin: markdown.$block-gap 0;
   border-radius: 6px;
   overflow: hidden;
   background: var(--color-bg-primary);

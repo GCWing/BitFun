@@ -469,7 +469,7 @@ describe('ThemeService runtime theme tokens', () => {
     expect(rootStyle.getPropertyValue('--line-height-loose')).toBe('');
   });
 
-  it('projects theme motion slow into the SmoothHeightCollapse public alias', () => {
+  it('projects theme motion duration tokens', () => {
     const service = new ThemeService();
     const customTheme = {
       ...bitfunLightTheme,
@@ -487,7 +487,6 @@ describe('ThemeService runtime theme tokens', () => {
 
     const rootStyle = document.documentElement.style;
     expect(rootStyle.getPropertyValue('--motion-slow')).toBe('0.7s');
-    expect(rootStyle.getPropertyValue('--smooth-height-collapse-duration')).toBe('0.7s');
   });
 
   it('keeps legacy window control close hover isolated from the static theme contract', () => {

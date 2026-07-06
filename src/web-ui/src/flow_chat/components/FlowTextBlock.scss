@@ -1,6 +1,7 @@
 /**
  * FlowTextBlock styles
  */
+@use '../../component-library/styles/markdown-layout' as markdown;
 
 .flow-text-block {
   width: 100%;
@@ -17,8 +18,8 @@
     --markdown-font-size-sm: var(--flowchat-font-size-sm);
     --markdown-code-font-size: var(--flowchat-code-font-size);
     --markdown-line-height: var(--flowchat-text-line-height);
-    --markdown-block-gap: var(--flowchat-markdown-block-gap);
-    --markdown-paragraph-gap: var(--flowchat-markdown-paragraph-gap);
+    --markdown-block-gap: #{markdown.$block-gap};
+    --markdown-paragraph-gap: #{markdown.$paragraph-gap};
 
     font-size: var(--flowchat-font-size-base);
     line-height: var(--flowchat-text-line-height);

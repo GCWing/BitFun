@@ -657,7 +657,7 @@ const MainNav: React.FC<MainNavProps> = ({
                     onClick={toggleWorkspaceMenu}
                     data-testid="nav-workspace-add-btn"
                   >
-                    <Plus size="var(--bitfun-nav-row-action-icon-size)" />
+                    <Plus size={13} />
                   </button>
                 </Tooltip>
               </div>

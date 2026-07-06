@@ -68,6 +68,7 @@ const WIDGET_THEME_COMPAT_ALIAS_FALLBACKS = {
   '--font-sans': '--font-family-sans',
   '--markdown-font-mono': '--font-family-mono',
   '--motion-normal': '--motion-base',
+  '--smooth-height-collapse-duration': '--motion-slow',
   '--radius-sm': '--size-radius-sm',
   '--radius-base': '--size-radius-base',
   '--radius-md': '--size-radius-md',

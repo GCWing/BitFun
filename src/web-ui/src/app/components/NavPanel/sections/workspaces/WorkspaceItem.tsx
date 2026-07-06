@@ -833,7 +833,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                 data-testid="nav-workspace-files-btn"
                 data-workspace-id={workspace.id}
               >
-                <Folder size="var(--bitfun-nav-row-action-icon-size)" />
+                <Folder size={13} />
               </button>
             </Tooltip>
             <div ref={menuAnchorRef}>
@@ -844,7 +844,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                 data-testid="nav-workspace-menu-btn"
                 data-workspace-id={workspace.id}
               >
-                <MoreHorizontal size="var(--bitfun-nav-row-action-icon-size)" />
+                <MoreHorizontal size={13} />
               </button>
             </div>
 
@@ -1196,7 +1196,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                 data-testid="nav-workspace-files-btn"
                 data-workspace-id={workspace.id}
               >
-                <Folder size="var(--bitfun-nav-row-action-icon-size)" />
+                <Folder size={13} />
               </button>
             </Tooltip>
             <div ref={menuAnchorRef}>
@@ -1207,7 +1207,7 @@ const WorkspaceItem: React.FC<WorkspaceItemProps> = ({
                 data-testid="nav-workspace-menu-btn"
                 data-workspace-id={workspace.id}
               >
-                <MoreHorizontal size="var(--bitfun-nav-row-action-icon-size)" />
+                <MoreHorizontal size={13} />
               </button>
             </div>
 

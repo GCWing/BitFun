@@ -1,5 +1,7 @@
 /* Markdown renderer styles */
 
+@use '../../styles/markdown-layout' as markdown;
+
 .markdown-renderer {
   --markdown-font-sans: var(--font-family-sans);
   --markdown-font-heading: var(--markdown-font-sans);
@@ -9,17 +11,18 @@
   --markdown-line-height: var(--flowchat-text-line-height);
   --markdown-support-line-height: var(--flowchat-support-line-height);
   --markdown-code-line-height: var(--flowchat-code-line-height);
-  --markdown-block-gap: var(--flowchat-markdown-block-gap);
-  --markdown-paragraph-gap: var(--flowchat-markdown-paragraph-gap);
-  --markdown-list-item-gap: var(--flowchat-markdown-list-item-gap);
-  --markdown-list-nested-gap: var(--flowchat-markdown-list-nested-gap);
-  --markdown-heading-gap-before: var(--flowchat-markdown-heading-gap-before);
-  --markdown-heading-gap-after: var(--flowchat-markdown-heading-gap-after);
-  --markdown-code-block-gap: var(--flowchat-markdown-code-block-gap);
-  --markdown-code-block-pad-y: var(--flowchat-markdown-code-block-pad-y);
-  --markdown-code-block-pad-x: var(--flowchat-markdown-code-block-pad-x);
-  --markdown-table-cell-pad-y: var(--flowchat-markdown-table-cell-pad-y);
-  --markdown-table-cell-pad-x: var(--flowchat-markdown-table-cell-pad-x);
+  --markdown-block-gap: #{markdown.$block-gap};
+  --markdown-paragraph-gap: #{markdown.$paragraph-gap};
+  --markdown-list-item-gap: #{markdown.$list-item-gap};
+  --markdown-list-nested-gap: #{markdown.$list-nested-gap};
+  --markdown-heading-gap-before: #{markdown.$heading-gap-before};
+  --markdown-heading-gap-after: #{markdown.$heading-gap-after};
+  --markdown-code-block-gap: #{markdown.$code-block-gap};
+  --markdown-code-block-pad-y: #{markdown.$code-block-pad-y};
+  --markdown-code-block-pad-x: #{markdown.$code-block-pad-x};
+  --markdown-table-cell-pad-y: #{markdown.$table-cell-pad-y};
+  --markdown-table-cell-pad-x: #{markdown.$table-cell-pad-x};
+  --markdown-primary-color: var(--color-accent-600);
   --private-markdown-inline-code-tint-rgb: 168, 180, 200;
   --private-markdown-inline-code-hover-tint-rgb: 197, 208, 226;
   --private-markdown-inline-code-text-light: var(--color-text-primary);

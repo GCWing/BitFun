@@ -238,10 +238,10 @@ CLI/TUI 使用独立审计，不参与 CSS var root 计数：
 | non-contract dynamic inputs | 0 |
 | non-contract component-private vars | 0 |
 | runtime-only legacy required vars | 1 |
-| static root contract key | 352 |
-| static root contract external usage key | 352 |
+| static root contract key | 320 |
+| static root contract external usage key | 320 |
 | static root contract internal-only key | 0 |
-| static root contract low external usage key | 144 |
+| static root contract low external usage key | 116 |
 
 审计补充了机器可校验的治理契约，用于把“可删除债务”和“必须保留的兼容/边界”
 分开：
@@ -443,6 +443,8 @@ Phase 5 决策记录：
 | single-surface static root helper cleanup | localize component-private helpers | `tokens.scss`、`ChatInput.scss`、`CubeLogo.scss`、`SessionScene.scss`、`SnapshotFullscreenDiffViewer.css`、`Markdown.scss`、`RichTextInput.scss` 等 | 将只被单个组件或单个 surface 消费、且不属于插件/runtime/generated widget 扩展入口的 RGB/helper key 下沉到组件局部作用域：ChatInput send/stop/capsule、CubeLogo face/particle（保留 light override）、session pane resizer、snapshot card neutral、snapshot fullscreen 独有 diff 状态、workspace batch、Markdown inline code、RichText context tag 和 Tiptap highlight。下沉后的 helper 使用 `--private-` 私有前缀，旧 root 名称不再作为 custom CSS/plugin theme 覆写入口；如果未来需要让插件或自定义主题配置这些角色，必须新增明确的 TS projection 或公开 theme contract，而不是复活单组件 root helper。computed value 保持不变，普通 app UI raw color、unresolved、fallback-only、non-contract 仍为 0。static root contract 493 -> 412，low external usage key 283 -> 202。剩余低使用量 key 不能仅因使用次数低继续删除；必须先证明它不是设计系统/runtime/payload/多文件共享语义，或提供更小的 TS projection owner。 |
 | low-usage root contract compression | retire local surface and same-concept helper keys | `tokens.scss`、`ThemeService.ts`、theme presets、`GitGraphView.tsx`、`cardGradients.ts`、`miniAppIcons.tsx`、`MiniAppCard.tsx`、`UserMessage.tsx`、`DeepReviewConsentDialog.scss`、`markdown-preview.css`、Button/IconButton、tool-card/search/fullscreen diff styles | 将 app/miniapp gradients、FlowChat inline tag、DeepReview consent、Markdown preview、fullscreen diff surface、action RGB 和 windowControls close hover 从全局 root contract 移出；GitGraph lane 与 tool search/Git/terminal/MCP identity 改由小型 `UI_EXCEPTION_ACCENTS` 身份 palette 维护，避免 custom theme 下 accent/status token 合并导致 lane 或工具身份不可辨；GitGraph canvas 绘制时基于当前背景做最小对比度调整，避免浅色/custom light 主题下 lane 过淡。snapshot accept/reject/selected 保留私有状态 RGB，避免用户可见状态被合并。内置主题不再维护 windowControls 空扩展面；close hover 默认直接使用 `colors.semantic.error` 对应 token，旧 custom theme 的 `components.windowControls.close.hoverColor` 仅通过 runtime attribute 激活 deprecated 覆盖兼容，不恢复 static root token，也不作为新主题扩展入口。static root contract 412 -> 352，low external usage key 202 -> 144，token unique 192 -> 184，web unique colors 337 -> 331；普通 app raw、unresolved、fallback-only、non-contract 仍为 0。删除 windowControls 后暴露的未使用 midnight close-hover 色同步移除，使 web color occurrences 进一步降到 519。 |
 
+| component layout contract compression | retire implementation/layout aliases | `tokens.scss`、`ThemeService.ts`、`Button.scss`、`Badge.scss`、`Markdown.scss`、`BaseToolCard.scss`、`SmoothHeightCollapse.*`、NavPanel workspace/session styles、`themePayload.ts`、`themePayloadCompatibility.ts` | 删除不承担主题语义的全局布局或实现 key：`--input-*` 改读 canonical element/border/text/accent token，`--panel-bg` 改读 `--color-bg-primary`，button height、badge font size、user message padding、Git tight card padding 和 nav row action size/offset/gap 改为组件局部尺寸；Markdown spacing 不回到 root theme key，改由本地 Sass partial 作为 Markdown surface owner，供 renderer、FlowChat thinking、Mermaid/code-vars 复用；`SmoothHeightCollapse` 的 duration prop 改为 inline transition duration，不再投影到 Web root；generated widget static shell 同步移除该实现 key，但 iframe compatibility alias 保留 `--smooth-height-collapse-duration -> --motion-slow`，避免历史 widget CSS 失去动画时长。Markdown accent 不再是 root theme key，但保留 renderer 局部默认和 BaseToolCard 嵌入覆盖，避免工具卡片语义 accent 被默认值吞掉。该轮不合并相邻可见 surface/status 颜色，也不触碰 card/tool-card 跨组件布局 key，避免相邻区域语义被误合并。普通 app raw、unresolved、fallback-only、non-contract 仍为 0。static root contract 352 -> 320，low external usage key 144 -> 116。 |
+
 Phase 6 防回退约束：
 
 | 约束 | 当前值 | baseline | 作用 |
@@ -456,10 +458,10 @@ Phase 6 防回退约束：
 | `colorScopes.token.occurrences` | 295 | 295 | 阻止 token 层重新写回已归并的派生色、扩展名色或 preview RGB 字面量 |
 | `colorScopes.token.uniqueColors` | 184 | 184 | 控制 root/token 层唯一色数量，后续只允许在债务减少时下调 |
 | `colorScopes.exception.uniqueColors` | 162 | 162 | 控制专用域/例外域总体规模；UI exception、syntax 和 language identity 已收敛，Mermaid status/pie fallback 已压缩且未接入 SCSS token 路径已退役，editor/terminal 仍按各自 owner 单独治理 |
-| `cssVarDefinitions.staticContractDefinedUnique` | 352 | 352 | 控制静态 root contract key 总量，避免新增主题时需要维护不可扩展的大型 CSS var 表 |
-| `cssVarDefinitions.staticContractExternalUsageUnique` | 352 | 352 | 跟踪真正被 root 外消费的 static contract key，防止删除 key 后遗漏调用点；generated widget payload 暴露给 iframe 的 key 也按外部消费计数 |
+| `cssVarDefinitions.staticContractDefinedUnique` | 320 | 320 | 控制静态 root contract key 总量，避免新增主题时需要维护不可扩展的大型 CSS var 表 |
+| `cssVarDefinitions.staticContractExternalUsageUnique` | 320 | 320 | 跟踪真正被 root 外消费的 static contract key，防止删除 key 后遗漏调用点；generated widget payload 暴露给 iframe 的 key 也按外部消费计数 |
 | `cssVarDefinitions.staticContractInternalOnlyUnique` | 0 | 0 | 暴露仅定义或内部派生的 root key；新增项必须删除、局部派生或证明是外部消费 contract |
-| `cssVarDefinitions.staticContractLowExternalUsageUnique` | 144 | 144 | 暴露低外部消费 key，作为后续继续压缩 root contract 的候选队列 |
+| `cssVarDefinitions.staticContractLowExternalUsageUnique` | 116 | 116 | 暴露低外部消费 key，作为后续继续压缩 root contract 的候选队列 |
 | `cssVarDefinitions.runtimeOnlyRequiredContractUnique` | 1 | 1 | 仅允许 `--window-control-close-hover-color` 作为 deprecated window close hover 覆盖，且由 baseline allowlist 锁定名称；默认路径不读取该 var，旧 custom theme 通过 `components.windowControls.close.hoverColor` 和 runtime attribute 激活 |
 | `colorDomainScopes.syntax.occurrences` | 16 | 16 | 阻止 Prism syntax palette 回到一 token class 一色的不可扩展模式，同时保留相邻 token 可读性边界 |
 | `colorDomainScopes.languageIdentity.uniqueColors` | 8 | 8 | 阻止 language/file identity 回到一语言一色或一扩展一色的不可扩展模式 |

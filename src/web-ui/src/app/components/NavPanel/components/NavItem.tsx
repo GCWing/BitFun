@@ -104,7 +104,7 @@ const NavItem: React.FC<NavItemProps> = ({
               tabIndex={-1}
               aria-label={actionTitle}
             >
-              <ActionIcon size="var(--bitfun-nav-row-action-icon-size)" />
+              <ActionIcon size={13} />
             </span>
           </Tooltip>
         ) : (
@@ -115,7 +115,7 @@ const NavItem: React.FC<NavItemProps> = ({
             role="button"
             tabIndex={-1}
           >
-            <ActionIcon size="var(--bitfun-nav-row-action-icon-size)" />
+            <ActionIcon size={13} />
           </span>
         )
       )}

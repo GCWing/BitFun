@@ -27,19 +27,19 @@
   }
 
   &-sm {
-    height: var(--button-height-sm);
+    height: 32px;
     padding: 0 var(--size-gap-3);
     font-size: var(--font-size-sm);
   }
 
   &-base {
-    height: var(--button-height-base);
+    height: 40px;
     padding: 0 var(--size-gap-4);
     font-size: var(--font-size-base);
   }
 
   &-lg {
-    height: var(--button-height-lg);
+    height: 48px;
     padding: 0 var(--size-gap-6);
     font-size: var(--font-size-lg);
   }
@@ -128,15 +128,15 @@
 
   &-icon-only {
     padding: 0;
-    width: var(--button-height-base);
+    width: 40px;
     aspect-ratio: 1;
 
     &.btn-sm {
-      width: var(--button-height-sm);
+      width: 32px;
     }
 
     &.btn-lg {
-      width: var(--button-height-lg);
+      width: 48px;
     }
   }
 

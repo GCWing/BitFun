@@ -721,7 +721,6 @@ export class ThemeService {
         const value = motionDuration[key];
         root.style.setProperty(`--motion-${key}`, value);
       });
-      root.style.setProperty('--smooth-height-collapse-duration', motionDuration.slow);
     }
 
 
@@ -828,14 +827,6 @@ export class ThemeService {
       root.style.removeProperty('--window-control-close-hover-color');
     }
 
-    root.style.setProperty('--input-bg', colors.element.base);
-    root.style.setProperty('--input-bg-hover', colors.element.medium);
-    root.style.setProperty('--input-border', colors.border.base);
-    root.style.setProperty('--input-border-hover', colors.border.medium);
-    root.style.setProperty('--input-border-focus', colors.accent[400]);
-    root.style.setProperty('--input-text', colors.text.primary);
-
-
     if (theme.type === 'dark') {
 
       root.style.setProperty('--card-bg-default', THEME_OVERLAYS.white04);
@@ -859,9 +850,6 @@ export class ThemeService {
       root.style.setProperty('--card-bg-purple', 'rgba(124, 58, 237, 0.12)');
       root.style.setProperty('--card-bg-purple-hover', 'rgba(139, 92, 246, 0.15)');
     }
-
-
-    root.style.setProperty('--panel-bg', colors.background.primary);
 
 
     root.setAttribute('data-theme', theme.id);

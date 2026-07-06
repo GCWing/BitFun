@@ -223,7 +223,7 @@
   &__inline-item:hover &__inline-item-main,
   &__inline-item.is-menu-open &__inline-item-main,
   &__inline-item:focus-within &__inline-item-main {
-    padding-right: calc(var(--bitfun-nav-row-action-size) + var(--bitfun-nav-row-action-offset));
+    padding-right: 24px;
   }
 
   &__inline-item-label {
@@ -408,11 +408,11 @@
   &__inline-item-actions {
     position: absolute;
     top: 50%;
-    right: var(--bitfun-nav-row-action-offset);
+    right: 4px;
     transform: translateY(-50%);
     display: flex;
     align-items: center;
-    gap: var(--bitfun-nav-row-action-gap);
+    gap: 4px;
     visibility: hidden;
     opacity: 0;
     pointer-events: none;
@@ -431,8 +431,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: var(--bitfun-nav-row-action-size);
-    height: var(--bitfun-nav-row-action-size);
+    width: 20px;
+    height: 20px;
     padding: 0;
     border: none;
     border-radius: 4px;

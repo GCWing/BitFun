@@ -146,7 +146,7 @@ export class FontPreferenceService {
     this.listeners.get(type)?.delete(listener);
   }
 
-  /** Smaller steps used by some SCSS (xxs / 2xs); badge uses xs scale. */
+  /** Smaller steps used by some SCSS (xxs / 2xs). */
   private applyExtraFontSizeTokens(root: HTMLElement, tokens: FontSizeTokens): void {
     const xsPx = parseInt(tokens.xs, 10);
     if (!Number.isNaN(xsPx)) {
@@ -155,7 +155,6 @@ export class FontPreferenceService {
       root.style.setProperty('--font-size-2xs', `${twoXs}px`);
       root.style.setProperty('--font-size-xxs', `${xxs}px`);
     }
-    root.style.setProperty('--badge-font-size', tokens.xs);
   }
 
   private applyFlowChatExtraFontSizeTokens(root: HTMLElement, tokens: FontSizeTokens): void {
