@@ -6,6 +6,7 @@
 import React, { useState, useMemo } from 'react';
 import { Search, File, FolderOpen, ChevronDown, ChevronUp, Loader2, CheckCircle, XCircle } from 'lucide-react';
 import { useI18n } from '@/infrastructure/i18n';
+import { UI_EXCEPTION_ACCENTS } from '@/shared/theme/uiExceptionAccents';
 import { BaseToolCard, BaseToolCardProps } from '../BaseToolCard';
 import { ToolProcessingDots } from '../ToolProcessingDots';
 import './SearchCard.scss';
@@ -87,7 +88,7 @@ export const SearchCard: React.FC<SearchCardProps> = ({
   const isGrepSearch = searchType === 'grep';
   const cardTitle = isGrepSearch ? t('flowChatCards.searchCard.grepTitle') : t('flowChatCards.searchCard.globTitle');
   const cardIcon = isGrepSearch ? <Search size={18} /> : <FolderOpen size={18} />;
-  const cardColor = isGrepSearch ? 'var(--color-purple-500)' : 'var(--tool-card-file-search-color)';
+  const cardColor = UI_EXCEPTION_ACCENTS.toolIdentity.search;
 
   const getStatusIcon = () => {
     switch (status) {
@@ -105,7 +106,10 @@ export const SearchCard: React.FC<SearchCardProps> = ({
 
   if (displayMode === 'compact') {
     return (
-      <div className={`search-card search-card--compact search-card--${searchType} status-${status}`}>
+      <div
+        className={`search-card search-card--compact search-card--${searchType} status-${status}`}
+        style={{ '--private-search-card-identity-color': cardColor } as React.CSSProperties}
+      >
         {isGrepSearch ? (
           <Search className="search-card__icon" size={14} />
         ) : (

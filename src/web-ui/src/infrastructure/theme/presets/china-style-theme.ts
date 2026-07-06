@@ -10,7 +10,6 @@ import {
   createSecondaryAccentScale,
   createStandardEasing,
   createStandardSpacing,
-  createWindowControls,
   rgbFromHex,
   rgbaFromHex,
   STATIC_BLACK,
@@ -150,9 +149,6 @@ export const bitfunChinaStyleTheme: ThemeConfig = {
 
 
   components: {
-
-    windowControls: createWindowControls(CHINA_STYLE_ERROR),
-
     button: {
 
 

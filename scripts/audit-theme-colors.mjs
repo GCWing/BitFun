@@ -784,6 +784,13 @@ function applyBaseline(report, options) {
     category: 'nonContractCssPrivate',
     reportField: 'nonContractCssPrivateVars',
   }));
+  baselineSummary.failures.push(...evaluateAllowlistCategory({
+    report,
+    baseline,
+    baselineLabel,
+    category: 'runtimeOnlyRequiredContract',
+    reportField: 'runtimeOnlyRequiredContractVars',
+  }));
   return baselineSummary;
 }
 

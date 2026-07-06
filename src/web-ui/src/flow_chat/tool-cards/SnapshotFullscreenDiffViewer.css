@@ -16,7 +16,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: var(--diff-fullscreen-overlay-bg);
+  background: color-mix(in srgb, var(--color-static-black) 90%, transparent);
   z-index: 9999;
   display: flex;
   align-items: center;
@@ -164,7 +164,7 @@
   align-items: center;
   gap: 8px;
   padding: 12px 20px;
-  background: var(--diff-fullscreen-nav-bg);
+  background: color-mix(in srgb, var(--color-static-black) 93%, var(--color-static-white));
   border-bottom: 1px solid var(--color-overlay-white-08);
   flex-shrink: 0;
   overflow: hidden;
@@ -268,7 +268,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 12px 20px;
-  background: var(--diff-fullscreen-surface-bg);
+  background: color-mix(in srgb, var(--color-static-black) 96%, var(--color-static-white));
   border-bottom: 1px solid var(--color-overlay-white-08);
   flex-shrink: 0;
 }
@@ -368,7 +368,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: var(--diff-fullscreen-content-bg);
+  background: color-mix(in srgb, var(--color-static-black) 88%, var(--color-static-white));
 }
 
 /* Override WebDiffViewer for fullscreen layout */

@@ -13,7 +13,6 @@ import {
   createStandardEasing,
   createStandardSpacing,
   createStandardTypography,
-  createWindowControls,
   overlayBlack,
   overlayWhite,
   rgbFromHex,
@@ -162,9 +161,6 @@ export const bitfunSlateTheme: ThemeConfig = {
 
 
   components: {
-
-    windowControls: createWindowControls(SLATE_ERROR),
-
     button: {
 
 

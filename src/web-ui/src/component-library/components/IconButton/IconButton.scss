@@ -102,41 +102,41 @@
     color: var(--color-text-secondary);
 
     &:hover:not(:disabled) {
-      background: rgba(var(--component-action-danger-rgb), 0.28);
+      background: color-mix(in srgb, var(--color-error) 28%, transparent);
       color: var(--color-error);
     }
 
     &:active:not(:disabled) {
-      background: rgba(var(--component-action-danger-rgb), 0.22);
+      background: color-mix(in srgb, var(--color-error) 22%, transparent);
       color: var(--color-error);
     }
   }
 
   &--success {
-    background: rgba(var(--component-action-success-rgb), 0.18);
+    background: color-mix(in srgb, var(--color-success) 18%, transparent);
     color: var(--color-success);
 
     &:hover:not(:disabled) {
-      background: rgba(var(--component-action-success-rgb), 0.28);
+      background: color-mix(in srgb, var(--color-success) 28%, transparent);
       color: var(--color-static-white);
     }
 
     &:active:not(:disabled) {
-      background: rgba(var(--component-action-success-rgb), 0.22);
+      background: color-mix(in srgb, var(--color-success) 22%, transparent);
     }
   }
 
   &--warning {
-    background: rgba(var(--component-action-warning-rgb), 0.18);
+    background: color-mix(in srgb, var(--color-warning) 18%, transparent);
     color: var(--color-warning);
 
     &:hover:not(:disabled) {
-      background: rgba(var(--component-action-warning-rgb), 0.28);
+      background: color-mix(in srgb, var(--color-warning) 28%, transparent);
       color: var(--color-static-white);
     }
 
     &:active:not(:disabled) {
-      background: rgba(var(--component-action-warning-rgb), 0.22);
+      background: color-mix(in srgb, var(--color-warning) 22%, transparent);
     }
   }
 

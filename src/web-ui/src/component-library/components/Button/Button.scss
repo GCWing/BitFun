@@ -202,30 +202,30 @@
   }
 
   &-danger {
-    background: rgba(var(--component-action-danger-rgb), 0.18);
+    background: color-mix(in srgb, var(--color-error) 18%, transparent);
     color: var(--color-error);
 
     &:hover {
-      background: rgba(var(--component-action-danger-rgb), 0.28);
+      background: color-mix(in srgb, var(--color-error) 28%, transparent);
       color: var(--color-static-white);
     }
 
     &:active {
-      background: rgba(var(--component-action-danger-rgb), 0.22);
+      background: color-mix(in srgb, var(--color-error) 22%, transparent);
     }
   }
 
   &-success {
-    background: rgba(var(--component-action-success-rgb), 0.18);
+    background: color-mix(in srgb, var(--color-success) 18%, transparent);
     color: var(--color-success);
 
     &:hover {
-      background: rgba(var(--component-action-success-rgb), 0.28);
+      background: color-mix(in srgb, var(--color-success) 28%, transparent);
       color: var(--color-static-white);
     }
 
     &:active {
-      background: rgba(var(--component-action-success-rgb), 0.22);
+      background: color-mix(in srgb, var(--color-success) 22%, transparent);
     }
   }
 

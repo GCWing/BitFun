@@ -9,7 +9,7 @@
   right: 0;
   bottom: 0;
   z-index: 999999;
-  background: var(--diff-fullscreen-overlay-strong-bg);
+  background: color-mix(in srgb, var(--color-static-black) 95%, transparent);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -29,7 +29,7 @@
 .diff-fullscreen-container {
   width: 100vw;
   height: 100vh;
-  background: var(--diff-fullscreen-surface-bg);
+  background: color-mix(in srgb, var(--color-static-black) 96%, var(--color-static-white));
   display: flex;
   flex-direction: column;
   position: relative;
@@ -55,7 +55,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 12px 20px;
-  background: var(--diff-fullscreen-overlay-bg);
+  background: color-mix(in srgb, var(--color-static-black) 90%, transparent);
   border-bottom: 1px solid var(--color-overlay-white-12);
   backdrop-filter: blur(8px);
   flex-shrink: 0;
@@ -174,7 +174,7 @@
   flex: 1;
   min-height: 0;
   position: relative;
-  background: var(--diff-fullscreen-surface-bg);
+  background: color-mix(in srgb, var(--color-static-black) 96%, var(--color-static-white));
   pointer-events: auto;
   z-index: 1;
 }
@@ -286,7 +286,7 @@
   }
   
   .diff-fullscreen-header {
-    background: var(--diff-fullscreen-overlay-strong-bg);
+    background: color-mix(in srgb, var(--color-static-black) 95%, transparent);
     border-bottom-color: var(--color-overlay-white-15);
   }
   

@@ -28,7 +28,7 @@
 
 
   &__icon {
-    color: var(--tool-card-web-search-color);
+    color: var(--private-web-search-card-identity-color);
     flex-shrink: 0;
   }
 
@@ -113,7 +113,7 @@
     }
 
     svg:first-child {
-      color: var(--tool-card-web-search-color);
+      color: var(--private-web-search-card-identity-color);
     }
 
     span {
@@ -172,11 +172,11 @@
     justify-content: center;
     padding: 4px;
     border-radius: 3px;
-    color: var(--tool-card-web-search-color);
+    color: var(--private-web-search-card-identity-color);
     transition: all 0.2s ease;
 
     &:hover {
-      background: color-mix(in srgb, var(--tool-card-web-search-color) 10%, transparent);
+      background: color-mix(in srgb, var(--private-web-search-card-identity-color) 10%, transparent);
     }
   }
 
@@ -215,10 +215,10 @@
     gap: 8px;
     margin-top: 12px;
     padding: 12px;
-    background: color-mix(in srgb, var(--tool-card-web-search-color) 5%, transparent);
-    border: 1px solid color-mix(in srgb, var(--tool-card-web-search-color) 20%, transparent);
+    background: color-mix(in srgb, var(--private-web-search-card-identity-color) 5%, transparent);
+    border: 1px solid color-mix(in srgb, var(--private-web-search-card-identity-color) 20%, transparent);
     border-radius: 4px;
-    color: var(--tool-card-web-search-color);
+    color: var(--private-web-search-card-identity-color);
     font-size: 13px;
   }
 
