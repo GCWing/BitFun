@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 pub const USER_SKILL_KEY_PREFIX: &str = "user";
 pub const PROJECT_SKILL_KEY_PREFIX: &str = "project";
@@ -63,24 +63,36 @@ pub const USER_HOME_SKILL_ROOTS: &[SkillRootSpec] = &[
         slot: "home.cursor",
     },
     SkillRootSpec {
+        parent: ".opencode",
+        subdir: "skills",
+        slot: "home.opencode",
+    },
+    SkillRootSpec {
         parent: ".agents",
         subdir: "skills",
         slot: "home.agents",
     },
 ];
 
-pub const USER_CONFIG_SKILL_ROOTS: &[SkillRootSpec] = &[
-    SkillRootSpec {
-        parent: "opencode",
-        subdir: "skills",
-        slot: "config.opencode",
-    },
-    SkillRootSpec {
-        parent: "agents",
-        subdir: "skills",
-        slot: "config.agents",
-    },
-];
+pub const USER_CONFIG_SKILL_ROOTS: &[SkillRootSpec] = &[SkillRootSpec {
+    parent: "opencode",
+    subdir: "skills",
+    slot: "config.opencode",
+}];
+
+pub fn resolve_user_config_skill_root(
+    spec: &SkillRootSpec,
+    config_dir: &Path,
+    home_dir: Option<&Path>,
+) -> PathBuf {
+    if cfg!(target_os = "windows") && spec.parent == "opencode" {
+        if let Some(home_dir) = home_dir {
+            return home_dir.join(".config").join(spec.parent).join(spec.subdir);
+        }
+    }
+
+    config_dir.join(spec.parent).join(spec.subdir)
+}
 
 pub fn normalize_local_skill_dir_name(path: &Path) -> Option<String> {
     path.file_name()
