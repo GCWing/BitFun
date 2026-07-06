@@ -1,7 +1,7 @@
 # OpenCode 插件兼容暴露面审计
 
 本文独立审视 BitFun 当前核心迁移、公共 API 暴露面和未来受控接入 OpenCode
-插件生态的风险。本文不替代 `core-decomposition.md` 和
+插件生态的风险。本文不替代 `product-architecture.md` 和
 `agent-runtime-services-design.md`，也不记录单次 PR 进度或维护独立执行路线图。
 
 ## 1. 复核方式
@@ -210,10 +210,10 @@ BitFun 产品策略仍有混合。
 |---|---|---|
 | 旧 public surface 过宽 | Stage A：Public API Closure | stable external、workspace-internal、compatibility API 明确分层，并阻断旧 core 路径回流 |
 | Tool ABI / runtime context 混合 | Stage B：Tool ABI、Event Manifest 与 Security Control Plane | materialized snapshot、provider identity、permission/effect filter、stale call guard、public event manifest、version、aggregate identity、replay/retention 具备测试 |
-| Plugin Runtime Host 生命周期和安全桥接 | Stage C：Plugin Runtime Host Foundation | contribution 以 descriptor 暴露，Product Assembly 内部 materialize provider；注册可撤销，候选效果不能写权威状态 |
-| UI 扩展合同缺口 | Stage D：UI Extension Contract 与产品形态矩阵 | descriptor-only、只读 state view、入口 fallback 和 unsupported/unavailable 行为具备 round-trip 测试 |
-| OpenCode 分级适配 | Stage E：OpenCode Compatibility Adapter | support matrix、typed unsupported、permission/effect、event manifest、UI contribution 和远程/workspace 映射全部可验证 |
-| 剩余 concrete owner | Stage F：剩余 Concrete Owner 与 SDK Readiness | Product Assembly 选择 concrete provider；普通层级只依赖 port、descriptor 或 stable contract |
+| 剩余 concrete owner | Stage D：剩余 Concrete Owner 与 SDK Readiness | Product Assembly 选择 concrete provider；普通层级只依赖 port、descriptor 或 stable contract |
+| UI 扩展合同缺口 | Stage E：UI Extension Contract 与产品形态矩阵 | descriptor-only、只读 state view、入口 fallback 和 unsupported/unavailable 行为具备 round-trip 测试 |
+| Plugin Runtime Host 生命周期和安全桥接 | Stage F：Plugin Runtime Host 执行边界 | contribution 以 descriptor 暴露，Product Assembly 内部 materialize provider；注册可撤销，候选效果不能写权威状态 |
+| OpenCode 分级适配 | Stage G：OpenCode Compatibility Adapter | support matrix、typed unsupported、permission/effect、event manifest、UI contribution 和远程/workspace 映射全部可验证 |
 
 ## 7. 执行准则
 

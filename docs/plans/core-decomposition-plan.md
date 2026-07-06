@@ -26,6 +26,7 @@
 - workspace 已按六层物理目录展开：`interfaces -> assembly -> adapters -> services -> execution -> contracts`。
 - Runtime Services、Agent Runtime、Tool Contracts、Tool Execution、Harness、Product Domains、Services Core、Services Integrations 等 owner crate 已建立。
 - `bitfun-core --no-default-features` 已裁掉多批 concrete provider 和 direct provider 依赖；Desktop、CLI、ACP 仍通过 `bitfun-core/product-full` 获取完整产品能力。
+- Computer Use 系统动作错误码、memory workspace Git baseline / diff / render、MCP OAuth credential store 已继续收口到 services owner；core 只保留既有工具 envelope、产品路径注入、授权入口和 deprecated 兼容 wrapper。
 - Agentic frontend event projection 和 AgenticEvent projection manifest 已进入 `bitfun-events`；Tauri/WebSocket transport 不再内联事件字段映射或 legacy event allowlist。
 - Tool ABI 基础合同已进入 `tool-contracts`：materialized snapshot、provider identity、default permission/effect filter、cancellation contract 和 stale-call guard 由 owner crate 提供，core 只投射现有产品 Tool 元数据。
 - Terminal / ExecCommand、remote SSH concrete execution、workspace search、debug ingest、AI provider adapter runtime、browser CDP、WebFetch/WebSearch、review platform transport 等多批 owner 已迁出或收口到 port/provider。
@@ -35,15 +36,30 @@
 
 | 差距 | 影响 | 收敛要求 |
 |---|---|---|
-| Plugin Runtime Host 仍缺少真实执行 Host 和生态 adapter | 插件能力只能表达 disabled / projection-only，不能加载或执行外部插件 | 在 UI Extension Contract 后落地受控 Host facade、effect / trust / diagnostics / deadline / epoch；生态 adapter 在 Host 边界稳定后接入 |
-| UI Extension Contract 与产品形态矩阵仍需实现 | Desktop/Web/CLI/SDK/ACP 的插件 UI 行为可能不一致 | 建立 descriptor round-trip、fallback、unsupported/unavailable 和只读 state view |
-| OpenCode compatibility adapter 仍缺少真实消费路径 | OpenCode 插件能力无法受控进入 BitFun | 插件 Host 边界稳定后再接入；具体生态 adapter、JS/TS runtime 和可写插件能力后置 |
-| 部分 concrete owner 仍在 core 或产品命令路径 | 层级依赖和平台差异仍可能回流 | 继续迁移 Computer Use OS action、Git/process/session host adapter、MCP auth URL helper 等 |
+| 部分 concrete owner 仍在 core 或产品命令路径 | 层级依赖和平台差异仍可能回流 | 继续迁移剩余 process/session host adapter、SDK-facing concrete provider 选择和其他仍由 core 持有的 I/O owner |
 | SDK readiness 仍未闭环 | 独立 Agent Runtime SDK 可能牵引 product-full 或 concrete provider | fake-provider smoke、minimal feature、cargo tree/metadata 对比和 API version 保护 |
+| UI Extension Contract 与产品形态矩阵仍需实现 | Desktop/Web/CLI/SDK/ACP 的插件 UI 行为可能不一致 | 建立 descriptor round-trip、fallback、unsupported/unavailable 和只读 state view |
+| Plugin Runtime Host 仍缺少真实执行 Host 和生态 adapter | 插件能力只能表达 disabled / projection-only，不能加载或执行外部插件 | 在 UI Extension Contract 后落地受控 Host facade、effect / trust / diagnostics / deadline / epoch；生态 adapter 在 Host 边界稳定后接入 |
+| OpenCode compatibility adapter 仍缺少真实消费路径 | OpenCode 插件能力无法受控进入 BitFun | 插件 Host 边界稳定后再接入；具体生态 adapter、JS/TS runtime 和可写插件能力后置 |
 
 ## 4. 后续大型阶段
 
-### Stage D：UI Extension Contract 与产品形态矩阵
+### Stage D：剩余 Concrete Owner 与 SDK Readiness
+
+目标：继续把 concrete owner 从 `bitfun-core` / 产品命令路径收口到对应 owner crate，并验证独立 Agent Runtime SDK 边界不会牵引完整产品实现。
+
+范围：
+
+- 继续迁移剩余 process/session host adapter、SDK-facing concrete provider 选择和其他仍由 core 持有的 I/O owner。
+- Product Assembly 负责选择 provider；Kernel、Execution、Extension、Product Feature 不直接依赖 platform concrete。
+- 建立 SDK minimal fake-provider smoke，确认 minimal feature 不牵引 Desktop、Tauri、Git provider、MCP client、AI HTTP client、remote SSH 或产品 UI。
+
+准出：
+
+- 至少完成 2-3 个 concrete owner 的实际迁移，并同步删除或简化 core 旧主体路径。
+- `cargo check --workspace`、`cargo check -p bitfun-core --no-default-features`、SDK minimal smoke、cargo metadata/tree 对比和必要 product checks 通过。
+
+### Stage E：UI Extension Contract 与产品形态矩阵
 
 目标：为插件 UI contribution 提供声明式 descriptor，并明确不同交付形态的支持、禁用和降级行为。
 
@@ -58,7 +74,7 @@
 - Product Assembly 维护 UI contribution registry、capability matrix 和 unsupported/unavailable fallback。
 - 建立 Desktop、Web、CLI、Server、Remote、ACP、SDK、Mobile Web 的插件能力矩阵。
 
-Stage D 目标 UI Extension 形态矩阵：
+Stage E 目标 UI Extension 形态矩阵：
 
 | 形态 | UI Extension 状态 | 降级要求 |
 |---|---|---|
@@ -70,7 +86,7 @@ Stage D 目标 UI Extension 形态矩阵：
 - UI descriptor round-trip、host fallback、unsupported/unavailable 和 product-shape focused tests 通过。
 - Web、Desktop、CLI 不因 UI Extension Contract 引入互相依赖。
 
-### Stage E：Plugin Runtime Host 执行边界
+### Stage F：Plugin Runtime Host 执行边界
 
 目标：在 disabled/projection-only 边界和 UI Extension Contract 之后，建立真实插件 Host 的受控执行边界，但仍不直接绑定 OpenCode、Claude Code 或 Codex 等具体生态实现。
 
@@ -87,7 +103,7 @@ Stage D 目标 UI Extension 形态矩阵：
 - disabled、projection-only、unavailable、host failure、dispose 和 permission/effect focused tests 通过。
 - 默认不开放可写 transform 或外部 JS/TS plugin runtime；这些能力需要单独安全评审。
 
-### Stage F：OpenCode Compatibility Adapter
+### Stage G：OpenCode Compatibility Adapter
 
 目标：在 Plugin Runtime Host、Tool ABI、Event Manifest 和 UI Extension Contract 可用后，实现受控 OpenCode 兼容适配。
 
@@ -102,21 +118,6 @@ Stage D 目标 UI Extension 形态矩阵：
 
 - OpenCode adapter 不依赖 `bitfun-core/product-full`、full `RuntimeServices` bundle、UI implementation 或 concrete provider handle。
 - adapter、permission/effect、event manifest、UI contribution 和 Desktop/CLI/Server/Remote/ACP/Web/Mobile Web/SDK product shape checks 通过。
-
-### Stage G：剩余 Concrete Owner 与 SDK Readiness
-
-目标：完成剩余 concrete owner 收口，并验证独立 Agent Runtime SDK 边界。
-
-范围：
-
-- 继续迁移 Computer Use OS action、部分 Git/process/session host adapter、MCP auth URL helper 等剩余 concrete owner。
-- Product Assembly 负责选择 provider；Kernel、Execution、Extension、Product Feature 不直接依赖 platform concrete。
-- 建立 SDK minimal fake-provider smoke，确认 minimal feature 不牵引 Desktop、Tauri、Git provider、MCP client、AI HTTP client、remote SSH 或产品 UI。
-
-准出：
-
-- 至少完成 2-3 个 concrete owner 的实际迁移，并同步删除或简化 core 旧主体路径。
-- `cargo check --workspace`、`cargo check -p bitfun-core --no-default-features`、SDK minimal smoke、cargo metadata/tree 对比和必要 product checks 通过。
 
 ## 5. 固定执行流程
 

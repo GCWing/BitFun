@@ -17,6 +17,18 @@ pub enum LocalSystemActionErrorKind {
     UnknownScriptType,
 }
 
+impl LocalSystemActionErrorKind {
+    pub const fn stable_code(self) -> &'static str {
+        match self {
+            Self::InvalidParams => "INVALID_PARAMS",
+            Self::NotAvailable => "NOT_AVAILABLE",
+            Self::NotFound => "NOT_FOUND",
+            Self::Timeout => "TIMEOUT",
+            Self::Internal | Self::UnknownScriptType => "INTERNAL",
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LocalSystemActionError {
     kind: LocalSystemActionErrorKind,
@@ -31,6 +43,10 @@ impl LocalSystemActionError {
 
     pub fn message(&self) -> &str {
         &self.message
+    }
+
+    pub const fn stable_code(&self) -> &'static str {
+        self.kind.stable_code()
     }
 
     pub fn hints(&self) -> &[String] {
@@ -875,7 +891,7 @@ async fn clipboard_write(text: &str) -> Result<(), String> {
 mod tests {
     use super::{
         clipboard_install_hints, path_command_exists, script_invocation, truncate_with_marker,
-        LocalSystemActionErrorKind, LocalSystemProvider, RunScriptRequest,
+        LocalSystemActionError, LocalSystemActionErrorKind, LocalSystemProvider, RunScriptRequest,
     };
 
     #[test]
@@ -907,6 +923,26 @@ mod tests {
     #[test]
     fn clipboard_hints_are_never_empty() {
         assert!(!clipboard_install_hints().is_empty());
+    }
+
+    #[test]
+    fn local_system_error_kind_exposes_stable_tool_codes() {
+        let cases = [
+            (LocalSystemActionErrorKind::InvalidParams, "INVALID_PARAMS"),
+            (LocalSystemActionErrorKind::NotAvailable, "NOT_AVAILABLE"),
+            (LocalSystemActionErrorKind::NotFound, "NOT_FOUND"),
+            (LocalSystemActionErrorKind::Timeout, "TIMEOUT"),
+            (LocalSystemActionErrorKind::Internal, "INTERNAL"),
+            (LocalSystemActionErrorKind::UnknownScriptType, "INTERNAL"),
+        ];
+
+        for (kind, expected_code) in cases {
+            assert_eq!(kind.stable_code(), expected_code);
+            assert_eq!(
+                LocalSystemActionError::new(kind, "test").stable_code(),
+                expected_code
+            );
+        }
     }
 
     #[test]

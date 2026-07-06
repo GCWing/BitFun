@@ -1,5 +1,6 @@
 pub mod layout;
 mod lineage;
+mod memory_workspace;
 mod metadata;
 mod metadata_store;
 mod migration;
@@ -11,6 +12,11 @@ pub use layout::SessionStorageLayout;
 pub use lineage::{
     apply_session_lineage, build_branched_session_metadata, collect_hidden_subagent_cascade,
     BranchSessionMetadataFacts, SessionBranchRequest, SessionBranchResult,
+};
+pub use memory_workspace::{
+    ensure_memory_workspace_git_baseline, memory_workspace_diff, render_memory_workspace_diff_file,
+    reset_memory_workspace_git_baseline, MemoryWorkspaceChange, MemoryWorkspaceChangeStatus,
+    MemoryWorkspaceDiff, MemoryWorkspaceGitError,
 };
 pub use metadata::{
     build_session_index_snapshot, build_session_metadata, merge_session_custom_metadata,
