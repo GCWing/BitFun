@@ -1,6 +1,6 @@
 # 插件运行时主机与生态兼容适配层设计
 
-本文补充 [`core-decomposition.md`](core-decomposition.md)、
+本文补充 [`product-architecture.md`](product-architecture.md)、
 [`agent-runtime-services-design.md`](agent-runtime-services-design.md) 和
 [`../sdlc-harness/features/opencode-compatibility.md`](../sdlc-harness/features/opencode-compatibility.md)。
 本文只描述目标架构、合同和风险边界，不记录实施进度。

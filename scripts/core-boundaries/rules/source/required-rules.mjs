@@ -3578,6 +3578,11 @@ export const requiredContentRules = [
         message: 'core product-domain facade must enable the MiniApp service owner feature it imports',
       },
       {
+        regex: /canvas-runtime = \[[^\]]*"bitfun-services-integrations\/canvas-runtime"[^\]]*\]/,
+        message:
+          'core canvas-runtime facade must enable the Canvas service owner feature it imports',
+      },
+      {
         regex:
           /bitfun-product-domains = \{ path = "\.\.\/\.\.\/contracts\/product-domains", default-features = false, optional = true \}/,
         message:
@@ -7315,7 +7320,7 @@ export const requiredContentRules = [
         message: 'missing Multitask runtime default model mapping',
       },
       {
-        regex: /builtin_agent_spec\(\s*"GeneralPurpose",\s*SubAgent,\s*"fast"/,
+        regex: /builtin_agent_spec\(\s*"GeneralPurpose",\s*SubAgent,\s*"primary"/,
         message: 'missing GeneralPurpose runtime default model mapping',
       },
       {

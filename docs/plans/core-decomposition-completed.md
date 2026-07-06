@@ -2,13 +2,13 @@
 
 本文只记录已完成事实摘要。后续执行路径以
 [`core-decomposition-plan.md`](core-decomposition-plan.md) 为准；稳定架构目标以
-[`core-decomposition.md`](../architecture/core-decomposition.md) 和
+[`product-architecture.md`](../architecture/product-architecture.md) 和
 [`agent-runtime-services-design.md`](../architecture/agent-runtime-services-design.md)
 为准。
 
 ## 1. 基础边界
 
-- 已建立 `product-full` 作为完整产品能力保护开关，产品入口显式启用完整能力。
+- 已建立 `product-full` 作为兼容入口的完整产品能力保护开关，产品入口显式启用当前兼容能力集合；它不是未来按产品形态拆分能力的唯一 source of truth。
 - 已抽取 `bitfun-core-types`、`bitfun-events`、`bitfun-runtime-ports`、`bitfun-agent-stream` 等基础契约；LSP protocol DTO 和 plugin manifest DTO 已进入 `bitfun-core-types`。
 - 已建立 `bitfun-services-core`、`bitfun-services-integrations`、`bitfun-agent-tools`、`tool-runtime`、`bitfun-tool-packs`、`bitfun-agent-runtime`、`bitfun-runtime-services`、`bitfun-harness`、`bitfun-product-domains`、`bitfun-product-capabilities` 等 owner crate。
 - `src/crates` 已按 `interfaces / assembly / adapters / services / execution / contracts` 六层布局整理，DeepReview path classifier、boundary rules、Cargo workspace path 和根/层级 AGENTS 已同步。
@@ -38,7 +38,7 @@
 ## 3. 已建立保护
 
 - owner crate 不得依赖回 `bitfun-core`。
-- `product-full` 保持完整产品能力集合。
+- `product-full` 保持兼容入口的完整产品能力集合，产品形态差异仍以 Product Assembly 的 capability plan 表达。
 - boundary check 覆盖 owner crate 禁止依赖、旧路径 facade-only、feature gate、six-layer path 解析、Product Assembly 收口、session/config/context fact owner、tool confirmation gate owner 和高风险 owner 回流。
 - focused tests 覆盖当前 delivery profile 能力裁剪、ProductAssembler 缺失 service 报告、无直接 core 入口的空 capability plan、SDK fake provider / services / tool / harness / hook / workspace-scoped agent registry 闭环，以及 runtime hook 顺序、timeout、错误策略和重复 id 拦截。
 - focused baseline 覆盖 tool manifest、GetToolSpec、execution admission、workspace search、remote workspace fallback、MCP config/catalog、prompt cache、custom agent / mode / subagent、thread-goal tools、AskUserQuestion、DeepReview policy、tool confirmation、session restore、MiniApp storage/builtin/import、function-agent Git、scheduled-job state 等路径。

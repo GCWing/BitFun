@@ -1,15 +1,19 @@
 # BitFun Core 拆解与运行时迁移计划
 
 本文只维护后续执行计划。稳定目标以
-[`core-decomposition.md`](../architecture/core-decomposition.md)、
+[`product-architecture.md`](../architecture/product-architecture.md)、
 [`agent-runtime-services-design.md`](../architecture/agent-runtime-services-design.md) 和
 [`plugin-runtime-host-design.md`](../architecture/plugin-runtime-host-design.md)
 为准；已完成事实归档在 [`core-decomposition-completed.md`](core-decomposition-completed.md)。
 设计文档默认保持稳定，只有目标架构本身需要修正时才修改。
+本计划文件名继续保留 `core-decomposition`，因为它记录的是 `bitfun-core` 收敛和 owner 迁移的执行路径。
 
 ## 1. 执行原则
 
 - `bitfun-core` 最终收敛为 compatibility facade、`product-full` 组装边界和少量迁移期 adapter。
+- 迁移按概念 owner 判断：Product Surface、Product Assembly、Product Feature、Agent Kernel、Execution、Extension、Cross-platform Adapter、Stable Contracts。
+- 外部系统不是 owner 层级；OS、Git、MCP server、AI provider、remote host、browser runtime 和 plugin package 只在
+  adapter I/O 边界出现。除 Product Assembly 外，调用方应依赖 port、descriptor 或 stable contract，而不是 concrete provider。
 - 新抽象必须同步删除、迁移或显著简化旧 core 主体路径；纯 facade、纯 guard、纯文档或空接口不算完成。
 - Product Assembly 是 composition root；除它以外，普通层级只能依赖稳定 contract、port、descriptor 或被注入的 typed part。
 - 产品特性和内核能力分开：长程任务、调度、权限、上下文、session/workspace、memory、DFX、hook/event 属于 Agent Kernel；
@@ -130,8 +134,9 @@
 | Agent Kernel / permission / event | `cargo test -p bitfun-agent-runtime`，`cargo check -p bitfun-core --no-default-features` |
 | Runtime Services / backend events | `cargo test -p bitfun-runtime-services`，backend event delivery focused tests |
 | Tool / MCP / terminal / sandbox | `cargo test -p bitfun-agent-tools`，`cargo test -p tool-runtime`，terminal / exec-command / MCP focused tests |
-| Extension / OpenCode / ACP | plugin runtime host focused tests，OpenCode adapter focused tests，ACP permission / external tool focused tests |
-| Product shape / SDK | SDK fake-provider smoke，Desktop / CLI / Server / Remote / ACP / Web / Mobile Web capability matrix checks，cargo tree / metadata 对比 |
+| Harness / Product Domains | `cargo test -p bitfun-harness`，`cargo test -p bitfun-product-domains`，DeepReview / MiniApp focused tests |
+| Extension / OpenCode / ACP | plugin runtime host focused tests，UI contribution descriptor tests，OpenCode adapter focused tests，ACP permission / external tool focused tests |
+| Product shape / SDK | SDK fake-provider smoke，Desktop / CLI / Web / Server / Remote / ACP / SDK / Mobile Web capability matrix checks，cargo tree / metadata 对比 |
 | 大范围 owner 迁移 | `cargo check --workspace`，必要时补 `cargo test --workspace` |
 
 ## 7. 暂停条件
