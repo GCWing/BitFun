@@ -1,6 +1,6 @@
 # Agent Kernel、Runtime Services 与 Extension API 设计
 
-本文是 [`core-decomposition.md`](core-decomposition.md) 的开发设计文档，描述目标模块、接口、
+本文是 [`product-architecture.md`](product-architecture.md) 的开发设计文档，描述目标模块、接口、
 crate 内部结构和行为保护。本文只记录设计约束，不记录实现过程或验证记录。插件运行时主机、
 生态兼容适配层、IPC 和候选效果契约见
 [`plugin-runtime-host-design.md`](plugin-runtime-host-design.md)。
