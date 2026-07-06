@@ -107,16 +107,16 @@
 // Matches mode badges with soft fill and no border.
 
 .rich-text-tag-pill {
-  --rich-text-context-directory-bg-rgb: 168, 85, 247;
-  --rich-text-context-directory-fg-rgb: 192, 132, 252;
-  --rich-text-context-code-bg-rgb: 74, 222, 128;
-  --rich-text-context-code-fg-rgb: 74, 222, 128;
-  --rich-text-context-mermaid-diagram-bg-rgb: 34, 197, 94;
-  --rich-text-context-mermaid-diagram-fg-rgb: 52, 211, 153;
-  --rich-text-context-mermaid-node-bg-rgb: 6, 182, 212;
-  --rich-text-context-mermaid-node-fg-rgb: 34, 211, 238;
-  --rich-text-context-image-bg-rgb: 251, 146, 60;
-  --rich-text-context-image-fg-rgb: 251, 146, 60;
+  --private-rich-text-context-directory-bg-rgb: 168, 85, 247;
+  --private-rich-text-context-directory-fg-rgb: 192, 132, 252;
+  --private-rich-text-context-code-bg-rgb: 74, 222, 128;
+  --private-rich-text-context-code-fg-rgb: 74, 222, 128;
+  --private-rich-text-context-mermaid-diagram-bg-rgb: 34, 197, 94;
+  --private-rich-text-context-mermaid-diagram-fg-rgb: 52, 211, 153;
+  --private-rich-text-context-mermaid-node-bg-rgb: 6, 182, 212;
+  --private-rich-text-context-mermaid-node-fg-rgb: 34, 211, 238;
+  --private-rich-text-context-image-bg-rgb: 251, 146, 60;
+  --private-rich-text-context-image-fg-rgb: 251, 146, 60;
 
   display: inline-flex;
   align-items: center;
@@ -150,47 +150,47 @@
   }
   
   &[data-context-type="directory"] {
-    background: rgba(var(--rich-text-context-directory-bg-rgb), 0.12);
-    color: rgba(var(--rich-text-context-directory-fg-rgb), 0.95);
+    background: rgba(var(--private-rich-text-context-directory-bg-rgb), 0.12);
+    color: rgba(var(--private-rich-text-context-directory-fg-rgb), 0.95);
     
     &:hover {
-      background: rgba(var(--rich-text-context-directory-bg-rgb), 0.18);
+      background: rgba(var(--private-rich-text-context-directory-bg-rgb), 0.18);
     }
   }
   
   &[data-context-type="code-snippet"] {
-    background: rgba(var(--rich-text-context-code-bg-rgb), 0.12);
-    color: rgba(var(--rich-text-context-code-fg-rgb), 0.95);
+    background: rgba(var(--private-rich-text-context-code-bg-rgb), 0.12);
+    color: rgba(var(--private-rich-text-context-code-fg-rgb), 0.95);
     
     &:hover {
-      background: rgba(var(--rich-text-context-code-bg-rgb), 0.18);
+      background: rgba(var(--private-rich-text-context-code-bg-rgb), 0.18);
     }
   }
   
   &[data-context-type="mermaid-diagram"] {
-    background: rgba(var(--rich-text-context-mermaid-diagram-bg-rgb), 0.12);
-    color: rgba(var(--rich-text-context-mermaid-diagram-fg-rgb), 0.95);
+    background: rgba(var(--private-rich-text-context-mermaid-diagram-bg-rgb), 0.12);
+    color: rgba(var(--private-rich-text-context-mermaid-diagram-fg-rgb), 0.95);
     
     &:hover {
-      background: rgba(var(--rich-text-context-mermaid-diagram-bg-rgb), 0.18);
+      background: rgba(var(--private-rich-text-context-mermaid-diagram-bg-rgb), 0.18);
     }
   }
   
   &[data-context-type="mermaid-node"] {
-    background: rgba(var(--rich-text-context-mermaid-node-bg-rgb), 0.12);
-    color: rgba(var(--rich-text-context-mermaid-node-fg-rgb), 0.95);
+    background: rgba(var(--private-rich-text-context-mermaid-node-bg-rgb), 0.12);
+    color: rgba(var(--private-rich-text-context-mermaid-node-fg-rgb), 0.95);
     
     &:hover {
-      background: rgba(var(--rich-text-context-mermaid-node-bg-rgb), 0.18);
+      background: rgba(var(--private-rich-text-context-mermaid-node-bg-rgb), 0.18);
     }
   }
   
   &[data-context-type="image"] {
-    background: rgba(var(--rich-text-context-image-bg-rgb), 0.12);
-    color: rgba(var(--rich-text-context-image-fg-rgb), 0.95);
+    background: rgba(var(--private-rich-text-context-image-bg-rgb), 0.12);
+    color: rgba(var(--private-rich-text-context-image-fg-rgb), 0.95);
     
     &:hover {
-      background: rgba(var(--rich-text-context-image-bg-rgb), 0.18);
+      background: rgba(var(--private-rich-text-context-image-bg-rgb), 0.18);
     }
   }
 }

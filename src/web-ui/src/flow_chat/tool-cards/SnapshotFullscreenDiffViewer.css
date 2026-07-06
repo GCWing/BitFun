@@ -3,13 +3,13 @@
  */
 
 .snapshot-fullscreen-overlay {
-  --diff-fullscreen-accept-rgb: 110, 184, 140;
-  --diff-fullscreen-reject-rgb: 199, 112, 112;
-  --diff-fullscreen-selected-rgb: 112, 150, 196;
-  --diff-fullscreen-accept-color: rgb(var(--diff-fullscreen-accept-rgb));
-  --diff-fullscreen-reject-color: rgb(var(--diff-fullscreen-reject-rgb));
-  --diff-fullscreen-selected-color: rgb(var(--diff-fullscreen-selected-rgb));
-  --diff-fullscreen-pending-color: var(--color-warning);
+  --private-diff-fullscreen-accept-rgb: 110, 184, 140;
+  --private-diff-fullscreen-reject-rgb: 199, 112, 112;
+  --private-diff-fullscreen-selected-rgb: 112, 150, 196;
+  --private-diff-fullscreen-accept-color: rgb(var(--private-diff-fullscreen-accept-rgb));
+  --private-diff-fullscreen-reject-color: rgb(var(--private-diff-fullscreen-reject-rgb));
+  --private-diff-fullscreen-selected-color: rgb(var(--private-diff-fullscreen-selected-rgb));
+  --private-diff-fullscreen-pending-color: var(--color-warning);
 
   position: fixed;
   top: 0;
@@ -85,12 +85,12 @@
 }
 
 .session-stats .additions {
-  color: var(--diff-fullscreen-accept-color);
+  color: var(--private-diff-fullscreen-accept-color);
   font-weight: 600;
 }
 
 .session-stats .deletions {
-  color: var(--diff-fullscreen-reject-color);
+  color: var(--private-diff-fullscreen-reject-color);
   font-weight: 600;
 }
 
@@ -119,25 +119,25 @@
 }
 
 .header-btn.batch-accept-btn {
-  background: rgba(var(--diff-fullscreen-accept-rgb), 0.1);
-  color: var(--diff-fullscreen-accept-color);
-  border: 1px solid rgba(var(--diff-fullscreen-accept-rgb), 0.3);
+  background: rgba(var(--private-diff-fullscreen-accept-rgb), 0.1);
+  color: var(--private-diff-fullscreen-accept-color);
+  border: 1px solid rgba(var(--private-diff-fullscreen-accept-rgb), 0.3);
 }
 
 .header-btn.batch-accept-btn:hover:not(:disabled) {
-  background: rgba(var(--diff-fullscreen-accept-rgb), 0.2);
-  border-color: rgba(var(--diff-fullscreen-accept-rgb), 0.5);
+  background: rgba(var(--private-diff-fullscreen-accept-rgb), 0.2);
+  border-color: rgba(var(--private-diff-fullscreen-accept-rgb), 0.5);
 }
 
 .header-btn.batch-reject-btn {
-  background: rgba(var(--diff-fullscreen-reject-rgb), 0.1);
-  color: var(--diff-fullscreen-reject-color);
-  border: 1px solid rgba(var(--diff-fullscreen-reject-rgb), 0.3);
+  background: rgba(var(--private-diff-fullscreen-reject-rgb), 0.1);
+  color: var(--private-diff-fullscreen-reject-color);
+  border: 1px solid rgba(var(--private-diff-fullscreen-reject-rgb), 0.3);
 }
 
 .header-btn.batch-reject-btn:hover:not(:disabled) {
-  background: rgba(var(--diff-fullscreen-reject-rgb), 0.2);
-  border-color: rgba(var(--diff-fullscreen-reject-rgb), 0.5);
+  background: rgba(var(--private-diff-fullscreen-reject-rgb), 0.2);
+  border-color: rgba(var(--private-diff-fullscreen-reject-rgb), 0.5);
 }
 
 .header-btn.close-btn {
@@ -232,9 +232,9 @@
 }
 
 .file-tab.active {
-  background: rgba(var(--diff-fullscreen-selected-rgb), 0.1);
-  color: var(--diff-fullscreen-selected-color);
-  border-color: rgba(var(--diff-fullscreen-selected-rgb), 0.3);
+  background: rgba(var(--private-diff-fullscreen-selected-rgb), 0.1);
+  color: var(--private-diff-fullscreen-selected-color);
+  border-color: rgba(var(--private-diff-fullscreen-selected-rgb), 0.3);
 }
 
 .file-tab .file-name {
@@ -247,15 +247,15 @@
 }
 
 .file-tab .file-status[data-status="pending"] {
-  color: var(--diff-fullscreen-pending-color);
+  color: var(--private-diff-fullscreen-pending-color);
 }
 
 .file-tab .file-status[data-status="accepted"] {
-  color: var(--diff-fullscreen-accept-color);
+  color: var(--private-diff-fullscreen-accept-color);
 }
 
 .file-tab .file-status[data-status="rejected"] {
-  color: var(--diff-fullscreen-reject-color);
+  color: var(--private-diff-fullscreen-reject-color);
 }
 
 .file-tab .file-status[data-status="partial"] {
@@ -341,25 +341,25 @@
 }
 
 .file-action-btn.accept-btn {
-  background: rgba(var(--diff-fullscreen-accept-rgb), 0.1);
-  color: var(--diff-fullscreen-accept-color);
-  border: 1px solid rgba(var(--diff-fullscreen-accept-rgb), 0.3);
+  background: rgba(var(--private-diff-fullscreen-accept-rgb), 0.1);
+  color: var(--private-diff-fullscreen-accept-color);
+  border: 1px solid rgba(var(--private-diff-fullscreen-accept-rgb), 0.3);
 }
 
 .file-action-btn.accept-btn:hover:not(:disabled) {
-  background: rgba(var(--diff-fullscreen-accept-rgb), 0.2);
-  border-color: rgba(var(--diff-fullscreen-accept-rgb), 0.5);
+  background: rgba(var(--private-diff-fullscreen-accept-rgb), 0.2);
+  border-color: rgba(var(--private-diff-fullscreen-accept-rgb), 0.5);
 }
 
 .file-action-btn.reject-btn {
-  background: rgba(var(--diff-fullscreen-reject-rgb), 0.1);
-  color: var(--diff-fullscreen-reject-color);
-  border: 1px solid rgba(var(--diff-fullscreen-reject-rgb), 0.3);
+  background: rgba(var(--private-diff-fullscreen-reject-rgb), 0.1);
+  color: var(--private-diff-fullscreen-reject-color);
+  border: 1px solid rgba(var(--private-diff-fullscreen-reject-rgb), 0.3);
 }
 
 .file-action-btn.reject-btn:hover:not(:disabled) {
-  background: rgba(var(--diff-fullscreen-reject-rgb), 0.2);
-  border-color: rgba(var(--diff-fullscreen-reject-rgb), 0.5);
+  background: rgba(var(--private-diff-fullscreen-reject-rgb), 0.2);
+  border-color: rgba(var(--private-diff-fullscreen-reject-rgb), 0.5);
 }
 
 /* Diff content area */
@@ -411,7 +411,7 @@
   width: 24px;
   height: 24px;
   border: 2px solid var(--color-overlay-white-20);
-  border-top: 2px solid var(--diff-fullscreen-selected-color);
+  border-top: 2px solid var(--private-diff-fullscreen-selected-color);
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -504,13 +504,13 @@
 
 /* File count badge */
 .diff-stats .file-count {
-  background: rgba(var(--diff-fullscreen-selected-rgb), 0.1);
-  color: var(--diff-fullscreen-selected-color);
+  background: rgba(var(--private-diff-fullscreen-selected-rgb), 0.1);
+  color: var(--private-diff-fullscreen-selected-color);
   padding: 2px 6px;
   border-radius: 10px;
   font-size: var(--flowchat-font-size-xxs);
   font-weight: 600;
-  border: 1px solid rgba(var(--diff-fullscreen-selected-rgb), 0.3);
+  border: 1px solid rgba(var(--private-diff-fullscreen-selected-rgb), 0.3);
 }
 
 /* Ensure icons render correctly */

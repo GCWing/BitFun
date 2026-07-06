@@ -1,10 +1,10 @@
 @use '../../../../component-library/styles/tokens' as *;
 
 .bitfun-push-button {
-  --git-push-menu-text-rgb: 229, 229, 229;
-  --git-push-danger-rgb: 244, 71, 71;
-  --git-push-danger-text-rgb: 255, 135, 135;
-  --git-push-danger-title-rgb: 255, 107, 107;
+  --private-git-push-menu-text-rgb: 229, 229, 229;
+  --private-git-push-danger-rgb: 244, 71, 71;
+  --private-git-push-danger-text-rgb: 255, 135, 135;
+  --private-git-push-danger-title-rgb: 255, 107, 107;
 
   position: relative;
   display: inline-flex;
@@ -87,7 +87,7 @@
     border-radius: 6px;
     cursor: pointer;
     transition: all 0.2s ease;
-    color: rgb(var(--git-push-menu-text-rgb));
+    color: rgb(var(--private-git-push-menu-text-rgb));
     text-align: left;
     outline: none;
     font-family: inherit;
@@ -140,38 +140,38 @@
 
     &--danger {
       background: linear-gradient(135deg,
-        rgba(var(--git-push-danger-rgb), 0.2) 0%,
-        rgba(var(--git-push-danger-rgb), 0.16) 50%,
-        rgba(var(--git-push-danger-rgb), 0.24) 100%);
-      border-color: rgba(var(--git-push-danger-rgb), 0.5);
-      color: rgb(var(--git-push-danger-text-rgb));
+        rgba(var(--private-git-push-danger-rgb), 0.2) 0%,
+        rgba(var(--private-git-push-danger-rgb), 0.16) 50%,
+        rgba(var(--private-git-push-danger-rgb), 0.24) 100%);
+      border-color: rgba(var(--private-git-push-danger-rgb), 0.5);
+      color: rgb(var(--private-git-push-danger-text-rgb));
 
       svg {
-        color: rgb(var(--git-push-danger-title-rgb));
+        color: rgb(var(--private-git-push-danger-title-rgb));
       }
 
       .bitfun-push-button__menu-item-title {
-        color: rgb(var(--git-push-danger-title-rgb));
+        color: rgb(var(--private-git-push-danger-title-rgb));
       }
 
       &:hover {
         background: linear-gradient(135deg,
-          rgba(var(--git-push-danger-rgb), 0.25) 0%,
-          rgba(var(--git-push-danger-rgb), 0.22) 30%,
-          rgba(var(--git-push-danger-rgb), 0.18) 60%,
-          rgba(var(--git-push-danger-rgb), 0.3) 100%);
-        border-color: rgba(var(--git-push-danger-rgb), 0.6);
+          rgba(var(--private-git-push-danger-rgb), 0.25) 0%,
+          rgba(var(--private-git-push-danger-rgb), 0.22) 30%,
+          rgba(var(--private-git-push-danger-rgb), 0.18) 60%,
+          rgba(var(--private-git-push-danger-rgb), 0.3) 100%);
+        border-color: rgba(var(--private-git-push-danger-rgb), 0.6);
         box-shadow: 
-          0 4px 12px rgba(var(--git-push-danger-rgb), 0.3),
-          0 2px 6px rgba(var(--git-push-danger-rgb), 0.2),
+          0 4px 12px rgba(var(--private-git-push-danger-rgb), 0.3),
+          0 2px 6px rgba(var(--private-git-push-danger-rgb), 0.2),
           inset 0 1px 0 var(--color-overlay-white-15);
       }
 
       &:active {
         background: linear-gradient(135deg,
-          rgba(var(--git-push-danger-rgb), 0.35) 0%,
-          rgba(var(--git-push-danger-rgb), 0.32) 50%,
-          rgba(var(--git-push-danger-rgb), 0.28) 100%);
+          rgba(var(--private-git-push-danger-rgb), 0.35) 0%,
+          rgba(var(--private-git-push-danger-rgb), 0.32) 50%,
+          rgba(var(--private-git-push-danger-rgb), 0.28) 100%);
         transform: scale(0.98);
       }
     }

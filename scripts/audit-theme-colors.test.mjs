@@ -548,7 +548,7 @@ test('theme color audit reports deprecated surface-local token names', (t) => {
     ].join('\n'),
     'tools/editor/meditor/components/TiptapEditor.scss': [
       '.m-editor-tiptap {',
-      '  --m-editor-highlight-rgb: var(--markdown-editor-highlight-rgb);',
+      '  --m-editor-highlight-rgb: var(--private-markdown-editor-highlight-rgb);',
       '  background: rgba(var(--m-editor-highlight-rgb), 0.15);',
       '}',
       '',
@@ -565,7 +565,7 @@ test('theme color audit reports deprecated surface-local token names', (t) => {
   assert.deepEqual(
     report.surfaceTokenRenames.active.map(row => [row.key, row.canonical, row.definitionCount, row.usageCount]),
     [
-      ['--m-editor-highlight-rgb', '--markdown-editor-highlight-rgb', 1, 1],
+      ['--m-editor-highlight-rgb', '--private-markdown-editor-highlight-rgb', 1, 1],
       ['--primary-color', '--base-tool-card-accent-color', 1, 1],
       ['--operation-color', '--snapshot-card-operation-color', 1, 0],
     ],

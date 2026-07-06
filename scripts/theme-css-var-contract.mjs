@@ -291,15 +291,15 @@ export const SURFACE_TOKEN_RENAME_CONTRACTS = [
   },
   {
     key: '--m-editor-highlight-rgb',
-    canonical: '--markdown-editor-highlight-rgb',
+    canonical: '--private-markdown-editor-highlight-rgb',
     owner: 'src/web-ui/src/tools/editor/meditor/components/TiptapEditor.scss',
-    reason: 'Markdown editor highlight color should use the shared markdown-editor namespace instead of the abbreviated meditor local key.',
+    reason: 'Markdown editor highlight color should use the component-private markdown-editor helper instead of the abbreviated meditor local key.',
   },
   {
     key: '--m-editor-highlight-border-rgb',
-    canonical: '--markdown-editor-highlight-border-rgb',
+    canonical: '--private-markdown-editor-highlight-border-rgb',
     owner: 'src/web-ui/src/tools/editor/meditor/components/TiptapEditor.scss',
-    reason: 'Markdown editor highlight border color should use the shared markdown-editor namespace instead of the abbreviated meditor local key.',
+    reason: 'Markdown editor highlight border color should use the component-private markdown-editor helper instead of the abbreviated meditor local key.',
   },
 ];
 

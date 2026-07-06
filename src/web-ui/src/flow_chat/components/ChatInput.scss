@@ -48,37 +48,37 @@
 }
 
 .bitfun-chat-input {
-  --chat-input-capsule-bg-rgb: 18, 18, 28;
-  --chat-input-capsule-hover-rgb: 25, 25, 40;
-  --chat-input-agent-plan-text-rgb: 180, 110, 0;
-  --chat-input-agent-debug-bg-rgb: 249, 115, 22;
-  --chat-input-agent-debug-text-rgb: 180, 83, 9;
-  --chat-input-send-dark-icon-rgb: 17, 17, 22;
-  --chat-input-send-dark-icon-strong-rgb: 5, 5, 8;
-  --chat-input-send-surface-rgb: 239, 241, 248;
-  --chat-input-send-surface-hover-rgb: 236, 239, 248;
-  --chat-input-send-surface-focus-start-rgb: 252, 253, 255;
-  --chat-input-send-surface-focus-end-rgb: 232, 235, 244;
-  --chat-input-send-surface-disabled-rgb: 246, 247, 250;
-  --chat-input-send-breathing-hover-glyph-rgb: 12, 13, 18;
-  --chat-input-send-inverse-surface-start-rgb: 21, 21, 28;
-  --chat-input-send-inverse-surface-end-rgb: 10, 10, 15;
-  --chat-input-send-inverse-text-rgb: 232, 234, 241;
-  --chat-input-send-inverse-hover-start-rgb: 41, 41, 52;
-  --chat-input-send-inverse-hover-end-rgb: 22, 22, 31;
-  --chat-input-send-inverse-hover-text-rgb: 250, 251, 255;
-  --chat-input-send-inverse-focus-start-rgb: 30, 30, 40;
-  --chat-input-send-inverse-focus-end-rgb: 18, 18, 25;
-  --chat-input-send-inverse-focus-text-rgb: 240, 242, 248;
-  --chat-input-send-inverse-disabled-bg-rgb: 10, 10, 14;
-  --chat-input-send-inverse-disabled-text-rgb: 24, 24, 34;
-  --chat-input-stop-inverse-glyph-start-rgb: 237, 237, 242;
-  --chat-input-stop-inverse-glyph-end-rgb: 200, 202, 212;
-  --chat-input-stop-inverse-hover-start-rgb: 36, 36, 47;
-  --chat-input-stop-inverse-hover-end-rgb: 20, 20, 30;
-  --chat-input-stop-inverse-hover-glyph-start-rgb: 244, 245, 250;
-  --chat-input-stop-inverse-hover-glyph-end-rgb: 216, 218, 228;
-  --chat-input-queued-badge-ring-rgb: 18, 18, 28;
+  --private-chat-input-capsule-bg-rgb: 18, 18, 28;
+  --private-chat-input-capsule-hover-rgb: 25, 25, 40;
+  --private-chat-input-agent-plan-text-rgb: 180, 110, 0;
+  --private-chat-input-agent-debug-bg-rgb: 249, 115, 22;
+  --private-chat-input-agent-debug-text-rgb: 180, 83, 9;
+  --private-chat-input-send-dark-icon-rgb: 17, 17, 22;
+  --private-chat-input-send-dark-icon-strong-rgb: 5, 5, 8;
+  --private-chat-input-send-surface-rgb: 239, 241, 248;
+  --private-chat-input-send-surface-hover-rgb: 236, 239, 248;
+  --private-chat-input-send-surface-focus-start-rgb: 252, 253, 255;
+  --private-chat-input-send-surface-focus-end-rgb: 232, 235, 244;
+  --private-chat-input-send-surface-disabled-rgb: 246, 247, 250;
+  --private-chat-input-send-breathing-hover-glyph-rgb: 12, 13, 18;
+  --private-chat-input-send-inverse-surface-start-rgb: 21, 21, 28;
+  --private-chat-input-send-inverse-surface-end-rgb: 10, 10, 15;
+  --private-chat-input-send-inverse-text-rgb: 232, 234, 241;
+  --private-chat-input-send-inverse-hover-start-rgb: 41, 41, 52;
+  --private-chat-input-send-inverse-hover-end-rgb: 22, 22, 31;
+  --private-chat-input-send-inverse-hover-text-rgb: 250, 251, 255;
+  --private-chat-input-send-inverse-focus-start-rgb: 30, 30, 40;
+  --private-chat-input-send-inverse-focus-end-rgb: 18, 18, 25;
+  --private-chat-input-send-inverse-focus-text-rgb: 240, 242, 248;
+  --private-chat-input-send-inverse-disabled-bg-rgb: 10, 10, 14;
+  --private-chat-input-send-inverse-disabled-text-rgb: 24, 24, 34;
+  --private-chat-input-stop-inverse-glyph-start-rgb: 237, 237, 242;
+  --private-chat-input-stop-inverse-glyph-end-rgb: 200, 202, 212;
+  --private-chat-input-stop-inverse-hover-start-rgb: 36, 36, 47;
+  --private-chat-input-stop-inverse-hover-end-rgb: 20, 20, 30;
+  --private-chat-input-stop-inverse-hover-glyph-start-rgb: 244, 245, 250;
+  --private-chat-input-stop-inverse-hover-glyph-end-rgb: 216, 218, 228;
+  --private-chat-input-queued-badge-ring-rgb: 18, 18, 28;
 
   width: 100%;
   display: flex;
@@ -390,7 +390,7 @@
       min-height: 44px;
       max-height: 44px;
       padding: 0 6px 0 2px;
-      background: rgba(var(--chat-input-capsule-bg-rgb), 0.22);
+      background: rgba(var(--private-chat-input-capsule-bg-rgb), 0.22);
       border: 1px solid var(--color-overlay-white-08);
       backdrop-filter: blur(8px);
       -webkit-backdrop-filter: blur(8px);
@@ -399,7 +399,7 @@
         inset 0 1px 0 var(--color-overlay-white-08);
 
       &:hover {
-        background: rgba(var(--chat-input-capsule-hover-rgb), 0.38);
+        background: rgba(var(--private-chat-input-capsule-hover-rgb), 0.38);
         border-color: rgba(var(--color-static-white-rgb), 0.16);
         backdrop-filter: blur(12px);
         -webkit-backdrop-filter: blur(12px);
@@ -409,7 +409,7 @@
       }
 
       &:focus-within {
-        background: rgba(var(--chat-input-capsule-hover-rgb), 0.42);
+        background: rgba(var(--private-chat-input-capsule-hover-rgb), 0.42);
         border-color: var(--color-overlay-white-20);
         box-shadow:
           0 12px 30px rgba(var(--color-static-black-rgb), 0.28),
@@ -684,12 +684,12 @@
 
     &--Plan {
       background: color-mix(in srgb, var(--color-warning) 15%, transparent);
-      color: rgba(var(--chat-input-agent-plan-text-rgb), 0.98);
+      color: rgba(var(--private-chat-input-agent-plan-text-rgb), 0.98);
     }
 
     &--debug {
-      background: rgba(var(--chat-input-agent-debug-bg-rgb), 0.2);
-      color: rgba(var(--chat-input-agent-debug-text-rgb), 0.98);
+      background: rgba(var(--private-chat-input-agent-debug-bg-rgb), 0.2);
+      color: rgba(var(--private-chat-input-agent-debug-text-rgb), 0.98);
     }
   }
 
@@ -1495,7 +1495,7 @@
     border-radius: 50%;
     border: none;
     background: var(--color-overlay-white-08);
-    color: rgba(var(--chat-input-send-dark-icon-rgb), 0.55);
+    color: rgba(var(--private-chat-input-send-dark-icon-rgb), 0.55);
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -1510,9 +1510,9 @@
     flex-shrink: 0;
     
     &:not(:disabled) {
-      background: rgba(var(--chat-input-send-surface-rgb), 0.96);
+      background: rgba(var(--private-chat-input-send-surface-rgb), 0.96);
       border: 1px solid transparent;
-      color: rgb(var(--chat-input-send-dark-icon-rgb));
+      color: rgb(var(--private-chat-input-send-dark-icon-rgb));
       box-shadow: none;
     }
 
@@ -1522,10 +1522,10 @@
       background: linear-gradient(
         165deg,
         var(--color-static-white) 0%,
-        rgba(var(--chat-input-send-surface-hover-rgb), 0.99) 100%
+        rgba(var(--private-chat-input-send-surface-hover-rgb), 0.99) 100%
       );
       border-color: rgba(var(--color-static-white-rgb), 0.52);
-      color: rgb(var(--chat-input-send-dark-icon-strong-rgb));
+      color: rgb(var(--private-chat-input-send-dark-icon-strong-rgb));
       box-shadow:
         0 0 0 1px rgba(var(--color-static-black-rgb), 0.32),
         0 8px 18px rgba(var(--color-static-black-rgb), 0.32);
@@ -1536,8 +1536,8 @@
       transform: scale(1.05);
       background: linear-gradient(
         165deg,
-        rgba(var(--chat-input-send-surface-focus-start-rgb), 0.99) 0%,
-        rgba(var(--chat-input-send-surface-focus-end-rgb), 0.97) 100%
+        rgba(var(--private-chat-input-send-surface-focus-start-rgb), 0.99) 0%,
+        rgba(var(--private-chat-input-send-surface-focus-end-rgb), 0.97) 100%
       );
       border-color: var(--border-prominent);
       box-shadow:
@@ -1555,9 +1555,9 @@
     
     &:disabled {
       cursor: default;
-      background: rgba(var(--chat-input-send-surface-disabled-rgb), 0.18);
+      background: rgba(var(--private-chat-input-send-surface-disabled-rgb), 0.18);
       border: none;
-      color: rgba(var(--chat-input-send-dark-icon-rgb), 0.38);
+      color: rgba(var(--private-chat-input-send-dark-icon-rgb), 0.38);
       opacity: 1;
       box-shadow: none;
       filter: saturate(0.65);
@@ -1597,7 +1597,7 @@
         background: linear-gradient(
           165deg,
           var(--color-static-white) 0%,
-          rgba(var(--chat-input-send-surface-hover-rgb), 0.99) 100%
+          rgba(var(--private-chat-input-send-surface-hover-rgb), 0.99) 100%
         );
         border-color: rgba(var(--color-static-white-rgb), 0.52);
         box-shadow:
@@ -1605,7 +1605,7 @@
           0 8px 18px rgba(var(--color-static-black-rgb), 0.32);
 
         &::after {
-          background: rgb(var(--chat-input-send-breathing-hover-glyph-rgb));
+          background: rgb(var(--private-chat-input-send-breathing-hover-glyph-rgb));
           box-shadow: none;
         }
       }
@@ -1639,7 +1639,7 @@
       box-shadow 0.18s ease,
       background 0.18s ease,
       border-color 0.18s ease;
-    background: rgba(var(--chat-input-send-surface-rgb), 0.96);
+    background: rgba(var(--private-chat-input-send-surface-rgb), 0.96);
     border: 1px solid transparent;
     box-shadow: none;
 
@@ -1648,7 +1648,7 @@
       width: 9px;
       height: 9px;
       border-radius: 2px;
-      background: rgb(var(--chat-input-send-dark-icon-rgb));
+      background: rgb(var(--private-chat-input-send-dark-icon-rgb));
       box-shadow: none;
       transition:
         background 0.18s ease,
@@ -1663,11 +1663,11 @@
       &:not(:disabled) {
         background: linear-gradient(
           165deg,
-          rgb(var(--chat-input-send-inverse-surface-start-rgb)) 0%,
-          rgb(var(--chat-input-send-inverse-surface-end-rgb)) 100%
+          rgb(var(--private-chat-input-send-inverse-surface-start-rgb)) 0%,
+          rgb(var(--private-chat-input-send-inverse-surface-end-rgb)) 100%
         );
         border: 1px solid transparent;
-        color: rgb(var(--chat-input-send-inverse-text-rgb));
+        color: rgb(var(--private-chat-input-send-inverse-text-rgb));
         box-shadow: none;
       }
 
@@ -1676,11 +1676,11 @@
         transform: scale(1.07);
         background: linear-gradient(
           165deg,
-          rgb(var(--chat-input-send-inverse-hover-start-rgb)) 0%,
-          rgb(var(--chat-input-send-inverse-hover-end-rgb)) 100%
+          rgb(var(--private-chat-input-send-inverse-hover-start-rgb)) 0%,
+          rgb(var(--private-chat-input-send-inverse-hover-end-rgb)) 100%
         );
         border-color: rgba(var(--color-static-black-rgb), 0.58);
-        color: rgb(var(--chat-input-send-inverse-hover-text-rgb));
+        color: rgb(var(--private-chat-input-send-inverse-hover-text-rgb));
         box-shadow:
           0 0 0 1px rgba(var(--color-static-black-rgb), 0.16),
           0 8px 20px rgba(var(--color-static-black-rgb), 0.22);
@@ -1691,20 +1691,20 @@
         transform: scale(1.05);
         background: linear-gradient(
           165deg,
-          rgb(var(--chat-input-send-inverse-focus-start-rgb)) 0%,
-          rgb(var(--chat-input-send-inverse-focus-end-rgb)) 100%
+          rgb(var(--private-chat-input-send-inverse-focus-start-rgb)) 0%,
+          rgb(var(--private-chat-input-send-inverse-focus-end-rgb)) 100%
         );
         border-color: rgba(var(--color-static-black-rgb), 0.52);
-        color: rgb(var(--chat-input-send-inverse-focus-text-rgb));
+        color: rgb(var(--private-chat-input-send-inverse-focus-text-rgb));
         box-shadow:
           0 0 0 1px rgba(var(--color-static-black-rgb), 0.13),
           0 4px 14px var(--color-overlay-black-20);
       }
 
       &:disabled {
-        background: rgba(var(--chat-input-send-inverse-disabled-bg-rgb), 0.12);
+        background: rgba(var(--private-chat-input-send-inverse-disabled-bg-rgb), 0.12);
         border: none;
-        color: rgba(var(--chat-input-send-inverse-disabled-text-rgb), 0.28);
+        color: rgba(var(--private-chat-input-send-inverse-disabled-text-rgb), 0.28);
         box-shadow: none;
         filter: none;
       }
@@ -1713,8 +1713,8 @@
     .bitfun-chat-input__breathing-circle {
       background: linear-gradient(
         165deg,
-        rgb(var(--chat-input-send-inverse-surface-start-rgb)) 0%,
-        rgb(var(--chat-input-send-inverse-surface-end-rgb)) 100%
+        rgb(var(--private-chat-input-send-inverse-surface-start-rgb)) 0%,
+        rgb(var(--private-chat-input-send-inverse-surface-end-rgb)) 100%
       );
       border: 1px solid transparent;
       box-shadow: none;
@@ -1722,8 +1722,8 @@
       &::after {
         background: linear-gradient(
           165deg,
-          rgb(var(--chat-input-stop-inverse-glyph-start-rgb)) 0%,
-          rgb(var(--chat-input-stop-inverse-glyph-end-rgb)) 100%
+          rgb(var(--private-chat-input-stop-inverse-glyph-start-rgb)) 0%,
+          rgb(var(--private-chat-input-stop-inverse-glyph-end-rgb)) 100%
         );
         box-shadow: none;
         transition:
@@ -1736,8 +1736,8 @@
       transform: scale(1.07);
       background: linear-gradient(
         165deg,
-        rgb(var(--chat-input-stop-inverse-hover-start-rgb)) 0%,
-        rgb(var(--chat-input-stop-inverse-hover-end-rgb)) 100%
+        rgb(var(--private-chat-input-stop-inverse-hover-start-rgb)) 0%,
+        rgb(var(--private-chat-input-stop-inverse-hover-end-rgb)) 100%
       );
       border-color: rgba(var(--color-static-black-rgb), 0.55);
       box-shadow:
@@ -1747,8 +1747,8 @@
       &::after {
         background: linear-gradient(
           165deg,
-          rgb(var(--chat-input-stop-inverse-hover-glyph-start-rgb)) 0%,
-          rgb(var(--chat-input-stop-inverse-hover-glyph-end-rgb)) 100%
+          rgb(var(--private-chat-input-stop-inverse-hover-glyph-start-rgb)) 0%,
+          rgb(var(--private-chat-input-stop-inverse-hover-glyph-end-rgb)) 100%
         );
         box-shadow: none;
       }
@@ -1771,7 +1771,7 @@
     font-size: var(--flowchat-font-size-xxs);
     font-weight: 700;
     line-height: 1;
-    box-shadow: 0 0 0 1px rgba(var(--chat-input-queued-badge-ring-rgb), 0.85);
+    box-shadow: 0 0 0 1px rgba(var(--private-chat-input-queued-badge-ring-rgb), 0.85);
     pointer-events: none;
   }
 }

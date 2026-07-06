@@ -7,7 +7,7 @@
 
 .snapshot-card {
   --snapshot-card-operation-color: var(--color-accent-500);
-  --snapshot-card-neutral-rgb: 107, 114, 128;
+  --private-snapshot-card-neutral-rgb: 107, 114, 128;
 
   @include shared.liquid-card-base;
   font-family: tokens.$font-family-mono;
@@ -49,16 +49,16 @@
 }
 
 .snapshot-card--compact.snapshot-card--rejected {
-  border-color: rgba(var(--snapshot-card-neutral-rgb), 0.5);
+  border-color: rgba(var(--private-snapshot-card-neutral-rgb), 0.5);
   background: linear-gradient(
     135deg,
-    rgba(var(--snapshot-card-neutral-rgb), 0.02),
-    rgba(var(--snapshot-card-neutral-rgb), 0.01)
+    rgba(var(--private-snapshot-card-neutral-rgb), 0.02),
+    rgba(var(--private-snapshot-card-neutral-rgb), 0.01)
   );
   opacity: 0.7;
 
   &:hover {
-    border-color: rgba(var(--snapshot-card-neutral-rgb), 0.7);
+    border-color: rgba(var(--private-snapshot-card-neutral-rgb), 0.7);
   }
 }
 
@@ -221,11 +221,11 @@
 
 .snapshot-card__action-btn--fullscreen {
   color: var(--color-text-secondary);
-  border: 1px solid rgba(var(--snapshot-card-neutral-rgb), 0.3);
+  border: 1px solid rgba(var(--private-snapshot-card-neutral-rgb), 0.3);
 
   &:hover:not(:disabled) {
-    background: rgba(var(--snapshot-card-neutral-rgb), 0.15);
-    border-color: rgba(var(--snapshot-card-neutral-rgb), 0.5);
+    background: rgba(var(--private-snapshot-card-neutral-rgb), 0.15);
+    border-color: rgba(var(--private-snapshot-card-neutral-rgb), 0.5);
     color: var(--color-text-primary);
   }
 }

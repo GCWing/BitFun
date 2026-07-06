@@ -20,12 +20,12 @@
   --markdown-code-block-pad-x: var(--flowchat-markdown-code-block-pad-x);
   --markdown-table-cell-pad-y: var(--flowchat-markdown-table-cell-pad-y);
   --markdown-table-cell-pad-x: var(--flowchat-markdown-table-cell-pad-x);
-  --markdown-inline-code-tint-rgb: 168, 180, 200;
-  --markdown-inline-code-hover-tint-rgb: 197, 208, 226;
-  --markdown-inline-code-text-light: var(--color-text-primary);
-  --markdown-inline-code-hover-text-light: var(--color-text-primary);
-  --markdown-code-bg-light: color-mix(in srgb, var(--color-static-white) 92%, var(--color-bg-primary));
-  --markdown-code-toolbar-bg-light: color-mix(in srgb, var(--color-static-white) 86%, var(--color-bg-primary));
+  --private-markdown-inline-code-tint-rgb: 168, 180, 200;
+  --private-markdown-inline-code-hover-tint-rgb: 197, 208, 226;
+  --private-markdown-inline-code-text-light: var(--color-text-primary);
+  --private-markdown-inline-code-hover-text-light: var(--color-text-primary);
+  --private-markdown-code-bg-light: color-mix(in srgb, var(--color-static-white) 92%, var(--color-bg-primary));
+  --private-markdown-code-toolbar-bg-light: color-mix(in srgb, var(--color-static-white) 86%, var(--color-bg-primary));
   --markdown-code-bg-elevated: color-mix(in srgb, var(--color-bg-primary) 92%, var(--color-static-white) 8%);
   --markdown-inline-code-bg: rgba(var(--color-static-white-rgb), 0.045);
   --markdown-inline-code-border: var(--color-overlay-white-08);
@@ -201,7 +201,7 @@
   border: 1px solid var(--markdown-inline-code-border);
   border-radius: 5px;
   background: var(--markdown-inline-code-bg);
-  color: color-mix(in srgb, var(--color-text-primary) 88%, rgb(var(--markdown-inline-code-tint-rgb)) 12%);
+  color: color-mix(in srgb, var(--color-text-primary) 88%, rgb(var(--private-markdown-inline-code-tint-rgb)) 12%);
   font-family: var(--font-family-mono);
   font-size: 0.88em;
   font-weight: 500;
@@ -217,7 +217,7 @@
 .markdown-renderer .inline-code:hover {
   background: rgba(var(--color-static-white-rgb), 0.075);
   border-color: rgba(var(--color-static-white-rgb), 0.14);
-  color: color-mix(in srgb, var(--color-text-primary) 92%, rgb(var(--markdown-inline-code-hover-tint-rgb)) 8%);
+  color: color-mix(in srgb, var(--color-text-primary) 92%, rgb(var(--private-markdown-inline-code-hover-tint-rgb)) 8%);
 }
 
 .markdown-renderer pre {
@@ -599,26 +599,26 @@
 :root[data-theme-type="light"] .markdown-renderer,
 [data-theme-type="light"] .markdown-renderer,
 .light .markdown-renderer {
-  --markdown-code-bg-elevated: var(--markdown-code-bg-light);
+  --markdown-code-bg-elevated: var(--private-markdown-code-bg-light);
   --markdown-inline-code-bg: rgba(var(--color-static-black-rgb), 0.05);
   --markdown-inline-code-border: var(--color-overlay-black-12);
-  --markdown-pre-bg: var(--markdown-code-bg-light);
+  --markdown-pre-bg: var(--private-markdown-code-bg-light);
   --markdown-pre-border: var(--color-overlay-slate-12);
   --markdown-blockquote-bg: var(--flowchat-md-bq-bg);
   --markdown-blockquote-border: var(--flowchat-md-bq-border);
 
   .inline-code {
-    color: var(--markdown-inline-code-text-light);
+    color: var(--private-markdown-inline-code-text-light);
   }
 
   .inline-code:hover {
     background: var(--color-overlay-black-08);
     border-color: rgba(var(--color-static-black-rgb), 0.18);
-    color: var(--markdown-inline-code-hover-text-light);
+    color: var(--private-markdown-inline-code-hover-text-light);
   }
 
   .code-block-toolbar {
-    background: var(--markdown-code-toolbar-bg-light);
+    background: var(--private-markdown-code-toolbar-bg-light);
     border-bottom-color: var(--color-overlay-slate-12);
   }
 

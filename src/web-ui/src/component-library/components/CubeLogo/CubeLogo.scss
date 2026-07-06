@@ -3,21 +3,21 @@
  * Supports standard and compact variants
  */
 .cube-logo {
-  --cube-logo-particle-rgb: 139, 92, 246;
-  --cube-logo-particle-secondary-rgb: 139, 92, 246;
-  --cube-logo-face-border-rgb: 110, 110, 120;
-  --cube-logo-face-front-rgb: 38, 38, 44;
-  --cube-logo-face-back-rgb: 30, 30, 35;
-  --cube-logo-face-top-rgb: 52, 52, 60;
-  --cube-logo-face-bottom-rgb: 25, 25, 30;
-  --cube-logo-face-right-rgb: 45, 45, 52;
-  --cube-logo-face-left-rgb: 32, 32, 38;
-  --cube-logo-face-front-shadow-rgb: 65, 65, 75;
-  --cube-logo-face-back-shadow-rgb: 55, 55, 62;
-  --cube-logo-face-top-shadow-rgb: 78, 78, 88;
-  --cube-logo-face-bottom-shadow-rgb: 48, 48, 56;
-  --cube-logo-face-right-shadow-rgb: 72, 72, 80;
-  --cube-logo-face-left-shadow-rgb: 58, 58, 66;
+  --private-cube-logo-particle-rgb: 139, 92, 246;
+  --private-cube-logo-particle-secondary-rgb: 139, 92, 246;
+  --private-cube-logo-face-border-rgb: 110, 110, 120;
+  --private-cube-logo-face-front-rgb: 38, 38, 44;
+  --private-cube-logo-face-back-rgb: 30, 30, 35;
+  --private-cube-logo-face-top-rgb: 52, 52, 60;
+  --private-cube-logo-face-bottom-rgb: 25, 25, 30;
+  --private-cube-logo-face-right-rgb: 45, 45, 52;
+  --private-cube-logo-face-left-rgb: 32, 32, 38;
+  --private-cube-logo-face-front-shadow-rgb: 65, 65, 75;
+  --private-cube-logo-face-back-shadow-rgb: 55, 55, 62;
+  --private-cube-logo-face-top-shadow-rgb: 78, 78, 88;
+  --private-cube-logo-face-bottom-shadow-rgb: 48, 48, 56;
+  --private-cube-logo-face-right-shadow-rgb: 72, 72, 80;
+  --private-cube-logo-face-left-shadow-rgb: 58, 58, 66;
 
   display: flex;
   justify-content: center;
@@ -37,10 +37,10 @@
     border-radius: 50%;
     background: linear-gradient(
       135deg,
-      rgba(var(--cube-logo-particle-rgb), 0.8),
+      rgba(var(--private-cube-logo-particle-rgb), 0.8),
       var(--border-accent-strong)
     );
-    box-shadow: 0 0 6px rgba(var(--cube-logo-particle-rgb), 0.5);
+    box-shadow: 0 0 6px rgba(var(--private-cube-logo-particle-rgb), 0.5);
     animation: cube-logo-particle-float 5s ease-in-out infinite;
   }
 
@@ -73,25 +73,25 @@
     position: absolute;
     backface-visibility: visible;
     box-sizing: border-box;
-    border: 0.3px solid rgba(var(--cube-logo-face-border-rgb), 0.5);
+    border: 0.3px solid rgba(var(--private-cube-logo-face-border-rgb), 0.5);
 
     &--front {
-      background: rgba(var(--cube-logo-face-front-rgb), 0.85);
+      background: rgba(var(--private-cube-logo-face-front-rgb), 0.85);
     }
     &--back {
-      background: rgba(var(--cube-logo-face-back-rgb), 0.8);
+      background: rgba(var(--private-cube-logo-face-back-rgb), 0.8);
     }
     &--top {
-      background: rgba(var(--cube-logo-face-top-rgb), 0.88);
+      background: rgba(var(--private-cube-logo-face-top-rgb), 0.88);
     }
     &--bottom {
-      background: rgba(var(--cube-logo-face-bottom-rgb), 0.75);
+      background: rgba(var(--private-cube-logo-face-bottom-rgb), 0.75);
     }
     &--right {
-      background: rgba(var(--cube-logo-face-right-rgb), 0.85);
+      background: rgba(var(--private-cube-logo-face-right-rgb), 0.85);
     }
     &--left {
-      background: rgba(var(--cube-logo-face-left-rgb), 0.8);
+      background: rgba(var(--private-cube-logo-face-left-rgb), 0.8);
     }
   }
 
@@ -99,28 +99,28 @@
     border: none;
 
     &--front {
-      background: rgba(var(--cube-logo-face-front-rgb), 0.85);
-      box-shadow: inset 0 0 0 0.5px rgba(var(--cube-logo-face-front-shadow-rgb), 0.3);
+      background: rgba(var(--private-cube-logo-face-front-rgb), 0.85);
+      box-shadow: inset 0 0 0 0.5px rgba(var(--private-cube-logo-face-front-shadow-rgb), 0.3);
     }
     &--back {
-      background: rgba(var(--cube-logo-face-back-rgb), 0.8);
-      box-shadow: inset 0 0 0 0.5px rgba(var(--cube-logo-face-back-shadow-rgb), 0.25);
+      background: rgba(var(--private-cube-logo-face-back-rgb), 0.8);
+      box-shadow: inset 0 0 0 0.5px rgba(var(--private-cube-logo-face-back-shadow-rgb), 0.25);
     }
     &--top {
-      background: rgba(var(--cube-logo-face-top-rgb), 0.88);
-      box-shadow: inset 0 0 0 0.5px rgba(var(--cube-logo-face-top-shadow-rgb), 0.32);
+      background: rgba(var(--private-cube-logo-face-top-rgb), 0.88);
+      box-shadow: inset 0 0 0 0.5px rgba(var(--private-cube-logo-face-top-shadow-rgb), 0.32);
     }
     &--bottom {
-      background: rgba(var(--cube-logo-face-bottom-rgb), 0.75);
-      box-shadow: inset 0 0 0 0.5px rgba(var(--cube-logo-face-bottom-shadow-rgb), 0.22);
+      background: rgba(var(--private-cube-logo-face-bottom-rgb), 0.75);
+      box-shadow: inset 0 0 0 0.5px rgba(var(--private-cube-logo-face-bottom-shadow-rgb), 0.22);
     }
     &--right {
-      background: rgba(var(--cube-logo-face-right-rgb), 0.85);
-      box-shadow: inset 0 0 0 0.5px rgba(var(--cube-logo-face-right-shadow-rgb), 0.3);
+      background: rgba(var(--private-cube-logo-face-right-rgb), 0.85);
+      box-shadow: inset 0 0 0 0.5px rgba(var(--private-cube-logo-face-right-shadow-rgb), 0.3);
     }
     &--left {
-      background: rgba(var(--cube-logo-face-left-rgb), 0.8);
-      box-shadow: inset 0 0 0 0.5px rgba(var(--cube-logo-face-left-shadow-rgb), 0.28);
+      background: rgba(var(--private-cube-logo-face-left-rgb), 0.8);
+      box-shadow: inset 0 0 0 0.5px rgba(var(--private-cube-logo-face-left-shadow-rgb), 0.28);
     }
   }
 }
@@ -128,44 +128,44 @@
 :root[data-theme="light"] .cube-logo,
 :root[data-theme-type="light"] .cube-logo,
 [data-theme-type="light"] .cube-logo {
-  --cube-logo-particle-rgb: 90, 123, 178;
-  --cube-logo-particle-secondary-rgb: 124, 107, 153;
-  --cube-logo-face-border-rgb: 90, 123, 178;
-  --cube-logo-face-front-rgb: 90, 123, 178;
-  --cube-logo-face-back-rgb: 90, 123, 178;
-  --cube-logo-face-top-rgb: 124, 107, 153;
-  --cube-logo-face-bottom-rgb: 90, 123, 178;
-  --cube-logo-face-right-rgb: 124, 107, 153;
-  --cube-logo-face-left-rgb: 107, 90, 137;
-  --cube-logo-face-front-shadow-rgb: 90, 123, 178;
-  --cube-logo-face-back-shadow-rgb: 90, 123, 178;
-  --cube-logo-face-top-shadow-rgb: 124, 107, 153;
-  --cube-logo-face-bottom-shadow-rgb: 90, 123, 178;
-  --cube-logo-face-right-shadow-rgb: 124, 107, 153;
-  --cube-logo-face-left-shadow-rgb: 107, 90, 137;
+  --private-cube-logo-particle-rgb: 90, 123, 178;
+  --private-cube-logo-particle-secondary-rgb: 124, 107, 153;
+  --private-cube-logo-face-border-rgb: 90, 123, 178;
+  --private-cube-logo-face-front-rgb: 90, 123, 178;
+  --private-cube-logo-face-back-rgb: 90, 123, 178;
+  --private-cube-logo-face-top-rgb: 124, 107, 153;
+  --private-cube-logo-face-bottom-rgb: 90, 123, 178;
+  --private-cube-logo-face-right-rgb: 124, 107, 153;
+  --private-cube-logo-face-left-rgb: 107, 90, 137;
+  --private-cube-logo-face-front-shadow-rgb: 90, 123, 178;
+  --private-cube-logo-face-back-shadow-rgb: 90, 123, 178;
+  --private-cube-logo-face-top-shadow-rgb: 124, 107, 153;
+  --private-cube-logo-face-bottom-shadow-rgb: 90, 123, 178;
+  --private-cube-logo-face-right-shadow-rgb: 124, 107, 153;
+  --private-cube-logo-face-left-shadow-rgb: 107, 90, 137;
 }
 
 :root[data-theme-type="light"] {
   .cube-logo__face {
-    border: 0.3px solid rgba(var(--cube-logo-face-border-rgb), 0.4);
+    border: 0.3px solid rgba(var(--private-cube-logo-face-border-rgb), 0.4);
 
     &--front {
-      background: rgba(var(--cube-logo-face-front-rgb), 0.45);
+      background: rgba(var(--private-cube-logo-face-front-rgb), 0.45);
     }
     &--back {
-      background: rgba(var(--cube-logo-face-back-rgb), 0.4);
+      background: rgba(var(--private-cube-logo-face-back-rgb), 0.4);
     }
     &--top {
-      background: rgba(var(--cube-logo-face-top-rgb), 0.4);
+      background: rgba(var(--private-cube-logo-face-top-rgb), 0.4);
     }
     &--bottom {
-      background: rgba(var(--cube-logo-face-bottom-rgb), 0.5);
+      background: rgba(var(--private-cube-logo-face-bottom-rgb), 0.5);
     }
     &--right {
-      background: rgba(var(--cube-logo-face-right-rgb), 0.45);
+      background: rgba(var(--private-cube-logo-face-right-rgb), 0.45);
     }
     &--left {
-      background: rgba(var(--cube-logo-face-left-rgb), 0.4);
+      background: rgba(var(--private-cube-logo-face-left-rgb), 0.4);
     }
   }
 
@@ -173,38 +173,38 @@
     border: none;
 
     &--front {
-      background: rgba(var(--cube-logo-face-front-rgb), 0.45);
-      box-shadow: inset 0 0 0 0.5px rgba(var(--cube-logo-face-front-shadow-rgb), 0.3);
+      background: rgba(var(--private-cube-logo-face-front-rgb), 0.45);
+      box-shadow: inset 0 0 0 0.5px rgba(var(--private-cube-logo-face-front-shadow-rgb), 0.3);
     }
     &--back {
-      background: rgba(var(--cube-logo-face-back-rgb), 0.4);
-      box-shadow: inset 0 0 0 0.5px rgba(var(--cube-logo-face-back-shadow-rgb), 0.25);
+      background: rgba(var(--private-cube-logo-face-back-rgb), 0.4);
+      box-shadow: inset 0 0 0 0.5px rgba(var(--private-cube-logo-face-back-shadow-rgb), 0.25);
     }
     &--top {
-      background: rgba(var(--cube-logo-face-top-rgb), 0.4);
-      box-shadow: inset 0 0 0 0.5px rgba(var(--cube-logo-face-top-shadow-rgb), 0.3);
+      background: rgba(var(--private-cube-logo-face-top-rgb), 0.4);
+      box-shadow: inset 0 0 0 0.5px rgba(var(--private-cube-logo-face-top-shadow-rgb), 0.3);
     }
     &--bottom {
-      background: rgba(var(--cube-logo-face-bottom-rgb), 0.5);
-      box-shadow: inset 0 0 0 0.5px rgba(var(--cube-logo-face-bottom-shadow-rgb), 0.35);
+      background: rgba(var(--private-cube-logo-face-bottom-rgb), 0.5);
+      box-shadow: inset 0 0 0 0.5px rgba(var(--private-cube-logo-face-bottom-shadow-rgb), 0.35);
     }
     &--right {
-      background: rgba(var(--cube-logo-face-right-rgb), 0.45);
-      box-shadow: inset 0 0 0 0.5px rgba(var(--cube-logo-face-right-shadow-rgb), 0.3);
+      background: rgba(var(--private-cube-logo-face-right-rgb), 0.45);
+      box-shadow: inset 0 0 0 0.5px rgba(var(--private-cube-logo-face-right-shadow-rgb), 0.3);
     }
     &--left {
-      background: rgba(var(--cube-logo-face-left-rgb), 0.4);
-      box-shadow: inset 0 0 0 0.5px rgba(var(--cube-logo-face-left-shadow-rgb), 0.28);
+      background: rgba(var(--private-cube-logo-face-left-rgb), 0.4);
+      box-shadow: inset 0 0 0 0.5px rgba(var(--private-cube-logo-face-left-shadow-rgb), 0.28);
     }
   }
 
   .cube-logo__particle {
     background: linear-gradient(
       135deg,
-      rgba(var(--cube-logo-particle-rgb), 0.5),
-      rgba(var(--cube-logo-particle-secondary-rgb), 0.35)
+      rgba(var(--private-cube-logo-particle-rgb), 0.5),
+      rgba(var(--private-cube-logo-particle-secondary-rgb), 0.35)
     );
-    box-shadow: 0 0 6px rgba(var(--cube-logo-particle-rgb), 0.3);
+    box-shadow: 0 0 6px rgba(var(--private-cube-logo-particle-rgb), 0.3);
   }
 }
 

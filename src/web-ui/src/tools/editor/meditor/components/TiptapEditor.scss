@@ -1,8 +1,8 @@
 @use '../../../../component-library/styles/tokens.scss' as *;
 
 .m-editor-tiptap {
-  --markdown-editor-highlight-rgb: 255, 213, 79;
-  --markdown-editor-highlight-border-rgb: 255, 193, 7;
+  --private-markdown-editor-highlight-rgb: 255, 213, 79;
+  --private-markdown-editor-highlight-border-rgb: 255, 193, 7;
 
   position: relative;
   width: 100%;
@@ -38,7 +38,7 @@
       }
 
       &.m-editor-tiptap-block-highlighted {
-        background: rgba(var(--markdown-editor-highlight-rgb), 0.15);
+        background: rgba(var(--private-markdown-editor-highlight-rgb), 0.15);
       }
     }
 
@@ -213,7 +213,7 @@
       }
 
       &[data-block-id].m-editor-tiptap-block-highlighted {
-        border-top-color: rgba(var(--markdown-editor-highlight-border-rgb), 0.55);
+        border-top-color: rgba(var(--private-markdown-editor-highlight-border-rgb), 0.55);
       }
     }
 

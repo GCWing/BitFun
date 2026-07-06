@@ -9,8 +9,8 @@
 }
 
 .workspace-session-batch-modal {
-  --workspace-batch-cowork-rgb: 15, 143, 116;
-  --workspace-batch-claw-rgb: 217, 119, 6;
+  --private-workspace-batch-cowork-rgb: 15, 143, 116;
+  --private-workspace-batch-claw-rgb: 217, 119, 6;
 
   display: flex;
   flex: 1 1 auto;
@@ -221,11 +221,11 @@
     }
 
     &.is-cowork {
-      color: color-mix(in srgb, rgb(var(--workspace-batch-cowork-rgb)) 80%, var(--color-text-primary));
+      color: color-mix(in srgb, rgb(var(--private-workspace-batch-cowork-rgb)) 80%, var(--color-text-primary));
     }
 
     &.is-claw {
-      color: color-mix(in srgb, rgb(var(--workspace-batch-claw-rgb)) 80%, var(--color-text-primary));
+      color: color-mix(in srgb, rgb(var(--private-workspace-batch-claw-rgb)) 80%, var(--color-text-primary));
     }
   }
 
@@ -285,13 +285,13 @@
     }
 
     &.is-cowork {
-      background: color-mix(in srgb, rgb(var(--workspace-batch-cowork-rgb)) 11%, transparent);
-      color: color-mix(in srgb, rgb(var(--workspace-batch-cowork-rgb)) 82%, var(--color-text-primary));
+      background: color-mix(in srgb, rgb(var(--private-workspace-batch-cowork-rgb)) 11%, transparent);
+      color: color-mix(in srgb, rgb(var(--private-workspace-batch-cowork-rgb)) 82%, var(--color-text-primary));
     }
 
     &.is-claw {
-      background: color-mix(in srgb, rgb(var(--workspace-batch-claw-rgb)) 11%, transparent);
-      color: color-mix(in srgb, rgb(var(--workspace-batch-claw-rgb)) 82%, var(--color-text-primary));
+      background: color-mix(in srgb, rgb(var(--private-workspace-batch-claw-rgb)) 11%, transparent);
+      color: color-mix(in srgb, rgb(var(--private-workspace-batch-claw-rgb)) 82%, var(--color-text-primary));
     }
   }
 
