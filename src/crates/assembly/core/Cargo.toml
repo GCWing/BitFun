@@ -38,9 +38,6 @@ hex = { workspace = true }
 rusqlite = { version = "0.32", features = ["bundled"] }
 dashmap = { workspace = true, optional = true }
 indexmap = { workspace = true, optional = true }
-htmd = "0.5.4"
-legible = "0.4.2"
-readability-js = "0.1.5"
 
 reqwest = { workspace = true, optional = true }
 
@@ -107,7 +104,9 @@ bitfun-services-integrations = { path = "../../services/services-integrations", 
 bitfun-product-domains = { path = "../../contracts/product-domains", default-features = false, optional = true }
 
 # Tool runtime
-tool-runtime = { path = "../../execution/tool-execution", optional = true }
+tool-runtime = { path = "../../execution/tool-execution", default-features = false, optional = true, features = [
+    "web-readable",
+] }
 
 # terminal
 terminal-core = { path = "../../services/terminal" }

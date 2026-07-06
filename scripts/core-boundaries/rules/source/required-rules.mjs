@@ -3335,6 +3335,84 @@ export const requiredContentRules = [
     ],
   },
   {
+    path: 'src/crates/execution/tool-execution/Cargo.toml',
+    reason:
+      'tool-runtime Web readable extraction must stay behind an explicit feature so minimal tool-runtime consumers do not pull HTML extractor dependencies',
+    patterns: [
+      {
+        regex: /default = \[\]/,
+        message: 'tool-runtime default feature set must stay empty',
+      },
+      {
+        regex:
+          /web-readable = \["dep:htmd", "dep:legible", "dep:readability-js", "dep:regex"\]/,
+        message: 'tool-runtime web-readable feature must own exactly the Web extractor deps',
+      },
+      {
+        regex: /htmd = \{[^}]*optional = true[^}]*\}/,
+        message: 'htmd must stay optional under the web-readable owner feature',
+      },
+      {
+        regex: /legible = \{[^}]*optional = true[^}]*\}/,
+        message: 'legible must stay optional under the web-readable owner feature',
+      },
+      {
+        regex: /readability-js = \{[^}]*optional = true[^}]*\}/,
+        message: 'readability-js must stay optional under the web-readable owner feature',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/execution/tool-execution/src/web_readable.rs',
+    reason:
+      'tool-runtime must own provider-neutral WebFetch readable extraction and preserve existing fallback behavior',
+    patterns: [
+      {
+        regex: /\bpub fn normalize_requested_format\b/,
+        message: 'missing WebFetch format normalization owner',
+      },
+      {
+        regex: /\bpub fn extract_markdown_with_text_fallback\b/,
+        message: 'missing WebFetch readable extraction owner',
+      },
+      {
+        regex: /\bfn attempt_legible\b/,
+        message: 'missing legible extraction attempt',
+      },
+      {
+        regex: /\bfn attempt_readability_js\b/,
+        message: 'missing readability-js extraction fallback',
+      },
+      {
+        regex: /\babsolutize_root_relative_markdown_uses_base_origin\b/,
+        message: 'missing root-relative markdown link behavior regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/execution/tool-execution/src/web_search.rs',
+    reason:
+      'tool-runtime must own provider-neutral WebSearch result parsing while core keeps product tool envelope assembly',
+    patterns: [
+      {
+        regex: /\bpub struct WebSearchResult\b/,
+        message: 'missing typed WebSearch result DTO',
+      },
+      {
+        regex: /\bpub fn parse_exa_text_results\b/,
+        message: 'missing Exa text result parser owner',
+      },
+      {
+        regex: /\bparses_exa_text_blocks\b/,
+        message: 'missing Exa text parsing regression',
+      },
+      {
+        regex: /\bfalls_back_for_unstructured_text\b/,
+        message: 'missing unstructured WebSearch result fallback regression',
+      },
+    ],
+  },
+  {
     path: 'src/crates/execution/tool-execution/tests/tool_io_contracts.rs',
     reason:
       'tool-runtime shell owner must keep focused behavior-equivalence contracts for Bash execution helpers',

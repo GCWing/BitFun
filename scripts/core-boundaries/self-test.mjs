@@ -544,7 +544,16 @@ export function runManifestParserSelfTest({
     throw new Error('services-integrations default profile must forbid non-optional uuid');
   }
   const coreProfile = dependencyProfileRules.find((rule) => rule.crateName === 'core');
-  for (const dep of ['git2', 'rmcp', 'image', 'tool-runtime', 'bitfun-relay-server']) {
+  for (const dep of [
+    'git2',
+    'rmcp',
+    'image',
+    'tool-runtime',
+    'bitfun-relay-server',
+    'htmd',
+    'legible',
+    'readability-js',
+  ]) {
     if (!coreProfile?.forbiddenNonOptionalDeps.includes(dep)) {
       throw new Error(`core no-default profile must forbid non-optional ${dep}`);
     }
@@ -558,9 +567,12 @@ export function runManifestParserSelfTest({
   const coreFullyMigratedDeps = new Set([
     'aes',
     'hostname',
+    'htmd',
+    'legible',
     'local-ip-address',
     'mac_address',
     'qrcode',
+    'readability-js',
     'x25519-dalek',
   ]);
   for (const dep of coreProfile?.forbiddenNonOptionalDeps ?? []) {

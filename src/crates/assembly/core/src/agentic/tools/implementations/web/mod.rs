@@ -14,12 +14,25 @@ mod tests {
         extract_html_title, extract_markdown_with_text_fallback, html_to_text, is_html,
         looks_noisy, normalize_requested_format, RequestedFormat,
     };
-    use super::search::WebSearchTool;
+    use super::search::{build_web_search_tool_result, WebSearchTool};
     use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext};
     use serde_json::json;
     use std::io::ErrorKind;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::TcpListener;
+
+    const SIMPLE_HTML: &str = r#"<!DOCTYPE html>
+<html>
+<head><title>Hello World</title></head>
+<body>
+  <article>
+    <h1>Hello World</h1>
+    <p>This is the primary article content.</p>
+    <p>It should become readable markdown.</p>
+  </article>
+  <footer>Ignore this footer</footer>
+</body>
+</html>"#;
 
     fn empty_context() -> ToolUseContext {
         ToolUseContext {
@@ -36,29 +49,30 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn webfetch_can_fetch_local_http_content() {
+    async fn local_text_server(
+        body: &'static str,
+        content_type: &'static str,
+    ) -> Option<(String, tokio::task::JoinHandle<()>)> {
         let listener = match TcpListener::bind("127.0.0.1:0").await {
             Ok(listener) => listener,
             Err(e) if e.kind() == ErrorKind::PermissionDenied => {
                 eprintln!(
-                    "Skipping webfetch local server test due to sandbox socket restrictions: {}",
+                    "Skipping web tool local server test due to sandbox socket restrictions: {}",
                     e
                 );
-                return;
+                return None;
             }
             Err(e) => panic!("bind local test server: {}", e),
         };
         let addr = listener.local_addr().expect("read local addr");
-
         let server = tokio::spawn(async move {
             let (mut socket, _) = listener.accept().await.expect("accept request");
             let mut req_buf = [0u8; 1024];
             let _ = socket.read(&mut req_buf).await;
 
-            let body = "hello from webfetch";
             let response = format!(
-                "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                "HTTP/1.1 200 OK\r\nContent-Type: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                content_type,
                 body.len(),
                 body
             );
@@ -69,9 +83,18 @@ mod tests {
             let _ = socket.shutdown().await;
         });
 
+        Some((format!("http://{}/test", addr), server))
+    }
+
+    #[tokio::test]
+    async fn webfetch_can_fetch_local_http_content() {
+        let Some((url, server)) = local_text_server("hello from webfetch", "text/plain").await
+        else {
+            return;
+        };
         let tool = WebFetchTool::new();
         let input = json!({
-            "url": format!("http://{}/test", addr),
+            "url": url,
             "format": "markdown"
         });
 
@@ -99,6 +122,68 @@ mod tests {
         }
 
         server.await.expect("server task");
+    }
+
+    #[tokio::test]
+    async fn webfetch_html_markdown_preserves_public_result_contract() {
+        let Some((url, server)) = local_text_server(SIMPLE_HTML, "text/html; charset=utf-8").await
+        else {
+            return;
+        };
+        let tool = WebFetchTool::new();
+        let input = json!({
+            "url": url,
+            "format": "markdown"
+        });
+
+        let results = tool
+            .call(&input, &empty_context())
+            .await
+            .expect("webfetch html call should succeed");
+        assert_eq!(results.len(), 1);
+
+        match &results[0] {
+            ToolResult::Result {
+                data,
+                result_for_assistant,
+                ..
+            } => {
+                let content = data["content"].as_str().expect("content string");
+                assert_eq!(data["format"], "markdown");
+                assert_eq!(data["content_representation"], "markdown");
+                assert_eq!(data["extractor"], "legible");
+                assert_eq!(data["title"], "Hello World");
+                assert_eq!(data["content_length"].as_u64(), Some(content.len() as u64));
+                assert!(content.contains("primary article content"));
+                assert!(!content.contains("Ignore this footer"));
+                assert_eq!(result_for_assistant.as_deref(), Some(content));
+            }
+            other => panic!("unexpected tool result variant: {:?}", other),
+        }
+
+        server.await.expect("server task");
+    }
+
+    #[test]
+    fn webfetch_format_normalization_preserves_public_aliases() {
+        assert!(matches!(
+            normalize_requested_format(None).expect("default format should work"),
+            RequestedFormat::Markdown
+        ));
+        assert!(matches!(
+            normalize_requested_format(Some("raw")).expect("raw format should work"),
+            RequestedFormat::Raw
+        ));
+        assert!(matches!(
+            normalize_requested_format(Some("json")).expect("json format should work"),
+            RequestedFormat::Json
+        ));
+        assert_eq!(
+            normalize_requested_format(Some("xml"))
+                .expect_err("unsupported format should fail")
+                .to_string(),
+            "Tool error: Unsupported format 'xml'. Expected raw, markdown, or json."
+        );
     }
 
     #[test]
@@ -154,22 +239,11 @@ mod tests {
 
     #[test]
     fn webfetch_extracts_markdown_for_simple_html() {
-        let html = r#"<!DOCTYPE html>
-<html>
-<head><title>Hello World</title></head>
-<body>
-  <article>
-    <h1>Hello World</h1>
-    <p>This is the primary article content.</p>
-    <p>It should become readable markdown.</p>
-  </article>
-  <footer>Ignore this footer</footer>
-</body>
-</html>"#;
-
-        let result = extract_markdown_with_text_fallback(html, "https://example.com/article")
-            .expect("readable extraction should succeed");
+        let result =
+            extract_markdown_with_text_fallback(SIMPLE_HTML, "https://example.com/article")
+                .expect("readable extraction should succeed");
         assert_eq!(result.content_representation, "markdown");
+        assert_eq!(result.extractor, "legible");
         assert_eq!(result.title.as_deref(), Some("Hello World"));
         assert!(result.content.contains("primary article content"));
         assert!(!result.content.contains("Ignore this footer"));
@@ -184,8 +258,47 @@ mod tests {
 
     #[test]
     fn websearch_parses_exa_text_into_results() {
-        let tool = WebSearchTool::new();
-        let text = r#"Title: Result One
+        let out = WebSearchTool::new().results(websearch_sample_text());
+        assert_eq!(out.len(), 2);
+        assert_eq!(out[0]["title"], "Result One");
+        assert_eq!(out[0]["url"], "https://example.com/one");
+        assert_eq!(out[0]["snippet"], "Result One First paragraph.");
+        assert_eq!(out[1]["title"], "Result Two");
+    }
+
+    #[test]
+    fn websearch_preserves_public_result_contract() {
+        let result = build_web_search_tool_result(
+            "example query",
+            WebSearchTool::new().results(websearch_sample_text()),
+        );
+
+        match &result {
+            ToolResult::Result {
+                data,
+                result_for_assistant,
+                ..
+            } => {
+                assert_eq!(data["query"], "example query");
+                assert_eq!(data["result_count"], 2);
+                assert_eq!(data["provider"], "exa_mcp");
+                assert_eq!(data["results"][0]["title"], "Result One");
+                assert_eq!(data["results"][0]["url"], "https://example.com/one");
+                assert_eq!(data["results"][0]["snippet"], "Result One First paragraph.");
+
+                let assistant_text = result_for_assistant.as_deref().expect("assistant text");
+                assert!(assistant_text.contains("Search query: 'example query'"));
+                assert!(assistant_text.contains("Found 2 results:"));
+                assert!(assistant_text.contains("1. Result One"));
+                assert!(assistant_text.contains("URL: https://example.com/one"));
+                assert!(assistant_text.contains("Snippet: Result One First paragraph."));
+            }
+            other => panic!("unexpected tool result variant: {:?}", other),
+        }
+    }
+
+    fn websearch_sample_text() -> &'static str {
+        r#"Title: Result One
 URL: https://example.com/one
 Text: Result One
 
@@ -196,13 +309,6 @@ URL: https://example.com/two
 Text: Result Two
 
 Second paragraph.
-"#;
-
-        let out = tool.results(text);
-        assert_eq!(out.len(), 2);
-        assert_eq!(out[0]["title"], "Result One");
-        assert_eq!(out[0]["url"], "https://example.com/one");
-        assert_eq!(out[0]["snippet"], "Result One First paragraph.");
-        assert_eq!(out[1]["title"], "Result Two");
+"#
     }
 }

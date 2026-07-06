@@ -141,6 +141,31 @@ export const forbiddenContentRules = [
         message:
           'core WebSearch tool must not own provider HTTP clients; use bitfun-services-integrations web provider',
       },
+      {
+        regex: /strip_prefix\("Title: "\)/,
+        message:
+          'core WebSearch tool must not own Exa text result parsing; use tool-runtime web_search helpers',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/web/readable.rs',
+    patterns: [
+      {
+        regex: /\bhtmd::|\bHtmlToMarkdown\b/,
+        message:
+          'core WebFetch readable facade must not own HTML-to-Markdown conversion; use tool-runtime web_readable helpers',
+      },
+      {
+        regex: /\blegible::|\bparse_legible\b/,
+        message:
+          'core WebFetch readable facade must not own legible extraction; use tool-runtime web_readable helpers',
+      },
+      {
+        regex: /\breadability_js::|\bReadability::new\b/,
+        message:
+          'core WebFetch readable facade must not own readability-js extraction; use tool-runtime web_readable helpers',
+      },
     ],
   },
   {
