@@ -57,3 +57,4 @@
 - MiniApp larger workflow 的 UI asset / desktop scheduler / AI factory 调用仍属于产品 host adapter；可复用规则不得回流到 desktop 命令内重复实现。
 - Agent Runtime SDK 已具备 v1 preview workspace 内公开边界、最小 fake-provider 闭环、runtime services / tool / harness / hook / workspace-scoped agent registry 注入基线、最小 feature 证明和外部 embedder 示例。若后续要独立发布为外部包，需要单独评审发布流程、crate packaging、semver 承诺和长期兼容策略。
 - Skill registry 主体 owner 已收口到 `agent-runtime`：`bitfun-core` 保留本地/远端扫描、config/registry IO、缓存和加载错误映射；内置 skill 分组、root/slot/key 事实、mode default/override、visible resolution、shadow 标记、mode skill info 和加载后 assistant payload 由 runtime 统一给出。
+- Workspace runtime provider owner 已继续外移：本地 workspace FS/shell 实现由 `bitfun-services-core` 的 `workspace-runtime` feature 持有，远端 SSH workspace FS/shell adapter 由 `bitfun-services-integrations::remote_ssh` 持有；`bitfun-core::agentic::workspace` 保留 binding、session storage 解析和旧路径 re-export。

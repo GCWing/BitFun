@@ -26,7 +26,7 @@
 - workspace 已按六层物理目录展开：`interfaces -> assembly -> adapters -> services -> execution -> contracts`。
 - Runtime Services、Agent Runtime、Tool Contracts、Tool Execution、Harness、Product Domains、Services Core、Services Integrations 等 owner crate 已建立。
 - `bitfun-core --no-default-features` 已裁掉多批 concrete provider 和 direct provider 依赖；Desktop、CLI、ACP 仍通过 `bitfun-core/product-full` 获取完整产品能力。
-- Computer Use 系统动作错误码、memory workspace Git baseline / diff / render、MCP OAuth credential store 已继续收口到 services owner；core 只保留既有工具 envelope、产品路径注入、授权入口和 deprecated 兼容 wrapper。
+- Computer Use 系统动作错误码、memory workspace Git baseline / diff / render、MCP OAuth credential store、本地/远端 workspace runtime provider 已继续收口到 services owner；core 只保留既有工具 envelope、产品路径注入、授权入口、workspace binding/re-export 和 deprecated 兼容 wrapper。
 - Agentic frontend event projection 和 AgenticEvent projection manifest 已进入 `bitfun-events`；Tauri/WebSocket transport 不再内联事件字段映射或 legacy event allowlist。
 - Tool ABI 基础合同已进入 `tool-contracts`：materialized snapshot、provider identity、default permission/effect filter、cancellation contract 和 stale-call guard 由 owner crate 提供，core 只投射现有产品 Tool 元数据。
 - Terminal / ExecCommand、remote SSH concrete execution、workspace search、debug ingest、AI provider adapter runtime、browser CDP、WebFetch/WebSearch、review platform transport 等多批 owner 已迁出或收口到 port/provider。

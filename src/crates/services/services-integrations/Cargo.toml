@@ -140,7 +140,16 @@ remote-connect = [
     "which",
     "x25519-dalek",
 ]
-remote-ssh = ["anyhow", "dunce", "sha2", "terminal-core", "thiserror", "tokio-util"]
+remote-ssh = [
+    "anyhow",
+    "async-trait",
+    "bitfun-runtime-ports",
+    "dunce",
+    "sha2",
+    "terminal-core",
+    "thiserror",
+    "tokio-util",
+]
 remote-ssh-concrete = [
     "remote-ssh",
     "aes-gcm",

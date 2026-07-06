@@ -95,7 +95,10 @@ bitfun-agent-tools = { path = "../../execution/tool-contracts" }
 bitfun-tool-packs = { path = "../../execution/tool-provider-groups", default-features = false, optional = true }
 
 # Core service owner crate
-bitfun-services-core = { path = "../../services/services-core", default-features = false, features = ["lsp"] }
+bitfun-services-core = { path = "../../services/services-core", default-features = false, features = [
+    "lsp",
+    "workspace-runtime",
+] }
 
 # Integration service owner crate
 bitfun-services-integrations = { path = "../../services/services-integrations", default-features = false, features = ["remote-ssh"] }

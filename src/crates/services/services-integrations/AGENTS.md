@@ -32,8 +32,9 @@ slices that are outside pure product logic but still platform-neutral.
   execution remain core-owned unless a reviewed port/provider moves them with
   equivalence tests.
 - Remote-SSH path/session identity helpers, disabled surfaces, SSH channels,
-  SFTP, remote FS, remote terminal, remote ExecCommand runtime-port adapter, and
-  manager assembly live here behind explicit remote SSH features.
+  SFTP, remote FS, remote workspace FS/shell providers, remote terminal, remote
+  ExecCommand runtime-port adapter, and manager assembly live here behind
+  explicit remote SSH features.
 - Workspace search owns the local flashgrep daemon/session lifecycle and
   indexed-search result conversion behind `workspace-search`; product config
   and workspace bootstrap stay in the core facade as injected hooks.
@@ -65,6 +66,9 @@ slices that are outside pure product logic but still platform-neutral.
 
 ```bash
 cargo test -p bitfun-services-integrations
+cargo test -p bitfun-services-integrations --features remote-ssh --test remote_ssh_disabled_contracts
+cargo test -p bitfun-services-integrations --features remote-ssh,workspace-search --test remote_workspace_search_disabled_contracts
+cargo test -p bitfun-services-integrations --features remote-ssh,remote-ssh-concrete,workspace-search remote_ssh
 node scripts/check-core-boundaries.mjs
 cargo check -p bitfun-core --features product-full
 ```
