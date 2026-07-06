@@ -284,12 +284,6 @@ export const SURFACE_TOKEN_RENAME_CONTRACTS = [
     reason: 'UserMessage failed-state line box should use readable Flow Chat surface names instead of an abbreviated local key family.',
   },
   {
-    key: '--tool-command-preview-empty-rgb',
-    canonical: '--tool-command-empty-rgb',
-    owner: 'src/web-ui/src/flow_chat/tool-cards/ToolCommandPreview.scss; src/web-ui/src/flow_chat/tool-cards/TerminalToolCard.scss',
-    reason: 'Empty command color is shared by command preview and terminal command rendering, so it needs one tool-command token.',
-  },
-  {
     key: '--m-editor-highlight-rgb',
     canonical: '--private-markdown-editor-highlight-rgb',
     owner: 'src/web-ui/src/tools/editor/meditor/components/TiptapEditor.scss',

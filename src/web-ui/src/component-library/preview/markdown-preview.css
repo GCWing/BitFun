@@ -1,6 +1,12 @@
 /* Markdown preview page styles */
 
 .markdown-preview-page {
+  --private-markdown-preview-header-bg: linear-gradient(135deg, color-mix(in srgb, var(--color-indigo-500) 18%, var(--color-static-black)) 0%, color-mix(in srgb, var(--color-accent-600) 18%, var(--color-static-black)) 100%);
+  --private-markdown-preview-header-border: color-mix(in srgb, var(--color-static-white) 16%, var(--color-static-black));
+  --private-markdown-preview-badge-bg: color-mix(in srgb, var(--color-accent-500) 20%, transparent);
+  --private-markdown-preview-badge-border: color-mix(in srgb, var(--color-accent-500) 40%, transparent);
+  --private-markdown-preview-badge-text: var(--color-accent-500);
+
   min-height: 100vh;
   height: 100vh;
   background: var(--color-bg-primary);
@@ -15,8 +21,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 20px 32px;
-  background: var(--markdown-preview-header-bg);
-  border-bottom: 1px solid var(--markdown-preview-header-border);
+  background: var(--private-markdown-preview-header-bg);
+  border-bottom: 1px solid var(--private-markdown-preview-header-border);
   box-shadow: 0 2px 8px var(--color-overlay-black-50);
 }
 
@@ -33,14 +39,14 @@
   color: var(--color-static-white);
 }
 
-.badge {
+.markdown-preview-page .badge {
   padding: 4px 12px;
-  background: var(--markdown-preview-badge-bg);
-  border: 1px solid var(--markdown-preview-badge-border);
+  background: var(--private-markdown-preview-badge-bg);
+  border: 1px solid var(--private-markdown-preview-badge-border);
   border-radius: 12px;
   font-size: 12px;
   font-weight: 500;
-  color: var(--markdown-preview-badge-text);
+  color: var(--private-markdown-preview-badge-text);
 }
 
 .header-right {

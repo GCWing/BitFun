@@ -10,7 +10,6 @@ import {
   createSecondaryAccentScale,
   createStandardEasing,
   createStandardSpacing,
-  createWindowControls,
   overlayBlack,
   rgbFromHex,
   rgbaFromHex,
@@ -169,8 +168,6 @@ export const bitfunTokyoNightTheme: ThemeConfig = {
   typography: createExpressiveTypography(),
 
   components: {
-    windowControls: createWindowControls(TOKYO_ERROR),
-
     button: {
 
       primary: {

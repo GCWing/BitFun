@@ -490,6 +490,30 @@ describe('ThemeService runtime theme tokens', () => {
     expect(rootStyle.getPropertyValue('--smooth-height-collapse-duration')).toBe('0.7s');
   });
 
+  it('keeps legacy window control close hover isolated from the static theme contract', () => {
+    const service = new ThemeService();
+    const customTheme = {
+      ...bitfunLightTheme,
+      id: 'custom-window-controls',
+      components: {
+        ...bitfunLightTheme.components,
+        windowControls: {
+          close: {
+            hoverColor: '#a85555',
+          },
+        },
+      },
+    } as unknown as ThemeConfig;
+
+    (service as unknown as { injectCSSVariables(theme: ThemeConfig): void }).injectCSSVariables(customTheme);
+    expect(document.documentElement.style.getPropertyValue('--window-control-close-hover-color')).toBe('#a85555');
+    expect(document.documentElement.getAttribute('data-window-control-close-hover-override')).toBe('true');
+
+    (service as unknown as { injectCSSVariables(theme: ThemeConfig): void }).injectCSSVariables(bitfunLightTheme);
+    expect(document.documentElement.style.getPropertyValue('--window-control-close-hover-color')).toBe('');
+    expect(document.documentElement.getAttribute('data-window-control-close-hover-override')).toBeNull();
+  });
+
   it('skips invalid persisted custom themes before they reach preview or runtime injection', async () => {
     const invalidCustomTheme = {
       ...bitfunLightTheme,

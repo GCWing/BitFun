@@ -1,9 +1,12 @@
+export const DEFAULT_CARD_GRADIENT =
+  'linear-gradient(135deg, color-mix(in srgb, var(--color-accent-600) 28%, transparent) 0%, color-mix(in srgb, var(--color-purple-500) 18%, transparent) 100%)';
+
 const CARD_GRADIENTS = [
-  'var(--app-card-gradient-0)',
-  'var(--app-card-gradient-1)',
-  'var(--app-card-gradient-2)',
-  'var(--app-card-gradient-3)',
-  'var(--app-card-gradient-4)',
+  DEFAULT_CARD_GRADIENT,
+  'linear-gradient(135deg, color-mix(in srgb, var(--color-success) 24%, transparent) 0%, color-mix(in srgb, var(--color-accent-600) 18%, transparent) 100%)',
+  'linear-gradient(135deg, color-mix(in srgb, var(--color-warning) 22%, transparent) 0%, color-mix(in srgb, var(--color-error) 16%, transparent) 100%)',
+  'linear-gradient(135deg, color-mix(in srgb, var(--color-purple-500) 28%, transparent) 0%, color-mix(in srgb, var(--color-error) 18%, transparent) 100%)',
+  'linear-gradient(135deg, color-mix(in srgb, var(--color-cyan-500) 22%, transparent) 0%, color-mix(in srgb, var(--color-accent-600) 18%, transparent) 100%)',
 ];
 
 function getCardGradient(seed: string): string {

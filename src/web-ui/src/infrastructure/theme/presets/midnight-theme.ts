@@ -10,7 +10,6 @@ import {
   createStandardRadius,
   createStandardSpacing,
   createStandardTypography,
-  createWindowControls,
   overlayBlack,
   overlayWhite,
   rgbFromHex,
@@ -28,7 +27,6 @@ const MIDNIGHT_PURPLE_HOVER = '#8b5cf6';
 const MIDNIGHT_SUCCESS = '#6aab73';
 const MIDNIGHT_WARNING = '#e0a055';
 const MIDNIGHT_ERROR = '#cc7f7a';
-const MIDNIGHT_CONTROL_ERROR = '#ef4444';
 
 const midnightBackground = (alpha: number | string) => rgbaFromHex(MIDNIGHT_BACKGROUND, alpha);
 const midnightText = (alpha: number | string) => rgbaFromHex(MIDNIGHT_TEXT_PRIMARY, alpha);
@@ -149,9 +147,6 @@ export const bitfunMidnightTheme: ThemeConfig = {
 
 
   components: {
-
-    windowControls: createWindowControls(MIDNIGHT_CONTROL_ERROR),
-
     button: {
 
 

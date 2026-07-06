@@ -819,12 +819,14 @@ export class ThemeService {
       root.style.setProperty('--btn-ghost-hover-border', 'transparent');
     }
 
-
-    root.style.setProperty(
-      '--window-control-close-hover-color',
-      theme.components?.windowControls?.close.hoverColor ?? colors.semantic.error,
-    );
-
+    const legacyWindowCloseHover = theme.components?.windowControls?.close.hoverColor;
+    if (legacyWindowCloseHover) {
+      root.style.setProperty('--window-control-close-hover-color', legacyWindowCloseHover);
+      root.setAttribute('data-window-control-close-hover-override', 'true');
+    } else {
+      root.removeAttribute('data-window-control-close-hover-override');
+      root.style.removeProperty('--window-control-close-hover-color');
+    }
 
     root.style.setProperty('--input-bg', colors.element.base);
     root.style.setProperty('--input-bg-hover', colors.element.medium);

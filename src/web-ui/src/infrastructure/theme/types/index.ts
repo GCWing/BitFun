@@ -200,16 +200,17 @@ export interface ButtonConfig {
   };
 }
 
- 
+/**
+ * @deprecated Legacy custom-theme compatibility only. New themes should use
+ * semantic `colors.semantic.error`; the app no longer treats window controls
+ * as an independent theme extension surface.
+ */
 export interface WindowControlsConfig {
   close: {
     hoverColor: ColorValue;
   };
 }
 
-
-
- 
 export interface MotionConfig {
   instant: string;
   fast: string;
@@ -338,6 +339,7 @@ export interface ThemeConfig {
   
   components?: {
     button?: ButtonConfig;
+    /** @deprecated Legacy custom-theme compatibility only. */
     windowControls?: WindowControlsConfig;
   };
   

@@ -8,7 +8,6 @@ import type {
   SecondaryAccentColors,
   SemanticColors,
   ThemeConfig,
-  WindowControlsConfig,
 } from '../types';
 
 export const STATIC_BLACK = '#000000';
@@ -140,12 +139,6 @@ export function createSemanticColors(input: SemanticColorsInput): SemanticColors
     infoBg: rgbaFromHex(input.info, bgAlpha),
     infoBorder: rgbaFromHex(input.info, borderAlpha),
     ...input.overrides,
-  };
-}
-
-export function createWindowControls(closeHoverColor: WindowControlsConfig['close']['hoverColor']): WindowControlsConfig {
-  return {
-    close: { hoverColor: closeHoverColor },
   };
 }
 

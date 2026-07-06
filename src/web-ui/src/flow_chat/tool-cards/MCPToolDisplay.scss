@@ -1,11 +1,11 @@
 /* MCP tool display styles. */
 .mcp-tool-display {
   .mcp-icon {
-    color: color-mix(in srgb, var(--tool-card-mcp-color) 55%, transparent);
+    color: color-mix(in srgb, var(--private-mcp-tool-identity-color) 55%, transparent);
   }
 
   .tool-card-icon.mcp-icon {
-    color: color-mix(in srgb, var(--tool-card-mcp-color) 55%, transparent);
+    color: color-mix(in srgb, var(--private-mcp-tool-identity-color) 55%, transparent);
   }
 
   .mcp-tool-info {

@@ -10,7 +10,6 @@ import {
   createStandardRadius,
   createStandardSpacing,
   createStandardTypography,
-  createWindowControls,
   rgbFromHex,
   rgbaFromHex,
   STATIC_BLACK,
@@ -184,9 +183,6 @@ export const bitfunLightTheme: ThemeConfig = {
 
 
   components: {
-
-    windowControls: createWindowControls('#a85555'),
-
     button: {
 
 

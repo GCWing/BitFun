@@ -42,7 +42,7 @@
       "max": 0
     },
     "surfaceTokenRenames.registeredUnique": {
-      "max": 9
+      "max": 8
     },
     "surfaceTokenRenames.activeUnique": {
       "max": 0
@@ -105,10 +105,10 @@
       "max": 0
     },
     "colorScopes.token.occurrences": {
-      "max": 305
+      "max": 295
     },
     "colorScopes.token.uniqueColors": {
-      "max": 192
+      "max": 184
     },
     "colorScopes.exception.uniqueColors": {
       "max": 182
@@ -120,7 +120,7 @@
       "max": 0
     },
     "cssVarDefinitions.runtimeOnlyRequiredContractUnique": {
-      "max": 0
+      "max": 1
     },
     "cssVarDefinitions.fallbackOnlyUnique": {
       "max": 0
@@ -144,16 +144,16 @@
       "max": 0
     },
     "cssVarDefinitions.staticContractDefinedUnique": {
-      "max": 412
+      "max": 352
     },
     "cssVarDefinitions.staticContractExternalUsageUnique": {
-      "max": 412
+      "max": 352
     },
     "cssVarDefinitions.staticContractInternalOnlyUnique": {
       "max": 0
     },
     "cssVarDefinitions.staticContractLowExternalUsageUnique": {
-      "max": 202
+      "max": 144
     },
     "tokenAliasLiterals.occurrences": {
       "max": 0
@@ -264,19 +264,19 @@
       "max": 0
     },
     "colorDomainScopes.themePreset.occurrences": {
-      "max": 170
+      "max": 168
     },
     "colorDomainScopes.themePreset.uniqueColors": {
-      "max": 116
+      "max": 115
     },
     "colorDomainScopes.themeRuntime.occurrences": {
       "max": 27
     },
     "colorDomainScopes.tokenContract.occurrences": {
-      "max": 102
+      "max": 94
     },
     "colorDomainScopes.tokenContract.uniqueColors": {
-      "max": 91
+      "max": 84
     },
     "colorDomainScopes.generatedWidget.occurrences": {
       "max": 0
@@ -335,5 +335,14 @@
     "colorDomainScopes.mermaid.uniqueColors": {
       "max": 65
     }
+  },
+  "allowlists": {
+    "runtimeOnlyRequiredContract": [
+      {
+        "key": "--window-control-close-hover-color",
+        "owner": "ThemeService legacy custom-theme compatibility",
+        "reason": "Deprecated components.windowControls.close.hoverColor override; default close hover uses semantic error without this runtime var."
+      }
+    ]
   }
 }
