@@ -1,14 +1,15 @@
 use std::collections::HashSet;
+use std::path::PathBuf;
 
 use bitfun_agent_runtime::skills::{
     annotate_shadowed_skills, build_mode_skill_infos, builtin_skill_group_key,
     filter_candidates_for_mode, render_loaded_skill_for_assistant, resolve_builtin_default_enabled,
     resolve_default_hidden_builtin_for_explicit_invocation, resolve_skill_default_enabled_for_mode,
-    resolve_skill_state_for_mode, resolve_visible_skills, sort_skills,
-    ExplicitSkillInvocationResolution, ModeSkillStateReason, SkillCandidate, SkillData, SkillInfo,
-    SkillLocation, UserModeSkillOverrides, BITFUN_SYSTEM_SKILL_DIR, BITFUN_SYSTEM_SKILL_SLOT,
-    BITFUN_USER_SKILL_SLOT, PROJECT_SKILL_KEY_PREFIX, PROJECT_SKILL_ROOTS, USER_CONFIG_SKILL_ROOTS,
-    USER_HOME_SKILL_ROOTS, USER_SKILL_KEY_PREFIX,
+    resolve_skill_state_for_mode, resolve_user_config_skill_root, resolve_visible_skills,
+    sort_skills, ExplicitSkillInvocationResolution, ModeSkillStateReason, SkillCandidate,
+    SkillData, SkillInfo, SkillLocation, UserModeSkillOverrides, BITFUN_SYSTEM_SKILL_DIR,
+    BITFUN_SYSTEM_SKILL_SLOT, BITFUN_USER_SKILL_SLOT, PROJECT_SKILL_KEY_PREFIX,
+    PROJECT_SKILL_ROOTS, USER_CONFIG_SKILL_ROOTS, USER_HOME_SKILL_ROOTS, USER_SKILL_KEY_PREFIX,
 };
 
 fn builtin_skill(dir_name: &str) -> SkillInfo {
@@ -129,9 +130,48 @@ fn skill_discovery_root_facts_are_runtime_owned() {
     assert!(USER_HOME_SKILL_ROOTS
         .iter()
         .any(|root| root.parent == ".codex" && root.slot == "home.codex"));
+    assert!(USER_HOME_SKILL_ROOTS
+        .iter()
+        .any(|root| root.parent == ".opencode" && root.slot == "home.opencode"));
+    assert!(USER_HOME_SKILL_ROOTS
+        .iter()
+        .any(|root| root.parent == ".agents" && root.slot == "home.agents"));
     assert!(USER_CONFIG_SKILL_ROOTS
         .iter()
         .any(|root| root.parent == "opencode" && root.slot == "config.opencode"));
+    assert!(!USER_CONFIG_SKILL_ROOTS
+        .iter()
+        .any(|root| root.parent == "agents"));
+}
+
+#[test]
+fn user_config_skill_root_resolution_matches_platform_contract() {
+    let opencode = USER_CONFIG_SKILL_ROOTS
+        .iter()
+        .find(|root| root.parent == "opencode")
+        .expect("opencode config root should exist");
+
+    if cfg!(target_os = "windows") {
+        let resolved = resolve_user_config_skill_root(
+            opencode,
+            std::path::Path::new(r"C:\Users\tester\AppData\Roaming"),
+            Some(std::path::Path::new(r"C:\Users\tester")),
+        );
+        assert_eq!(
+            resolved,
+            PathBuf::from(r"C:\Users\tester\.config\opencode\skills")
+        );
+    } else {
+        let resolved = resolve_user_config_skill_root(
+            opencode,
+            std::path::Path::new("/home/tester/.config"),
+            Some(std::path::Path::new("/home/tester")),
+        );
+        assert_eq!(
+            resolved,
+            PathBuf::from("/home/tester/.config/opencode/skills")
+        );
+    }
 }
 
 #[test]
