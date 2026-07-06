@@ -5,15 +5,18 @@
 [`../sdlc-harness/features/opencode-compatibility.md`](../sdlc-harness/features/opencode-compatibility.md)。
 本文只描述目标架构、合同和风险边界，不记录实施进度。
 
+阅读路径：第 1-3 节说明插件运行时主机的目标、非目标和总体关系；第 4-6 节说明主体进程 API、
+Product Assembly 能力模型和领域对象；第 7-14 节说明运行时、IPC、时序、OpenCode 映射、安全和验证细节。
+
 ## 1. 方案判断
 
-插件扩展能力需要独立于 Agent Kernel、Product Assembly 和具体生态适配器。合理的目标模型是：
+插件扩展能力需要独立于 Agent Kernel、Product Assembly 和具体生态适配器。目标模型如下：
 
 - **Plugin Runtime Host** 管理插件兼容层生命周期、项目执行域、IPC、隔离、健康、超时、幂等和候选效果路由。
 - **Compatibility Adapter** 只负责把 OpenCode、Claude Code、Codex 插件或 BitFun 原生插件 API 映射为 BitFun 稳定合同。
 - **BitFun 主体进程** 只依赖 `PluginRuntimeClient`、规范信封、候选效果、能力声明和 UI descriptor，不依赖任何具体生态适配器类型。
 
-该模型是合理的，因为它把“插件运行时治理”和“生态 API 翻译”拆开：主体进程可替换适配器，插件失败可降级，OpenCode
+该模型将“插件运行时治理”和“生态 API 翻译”分离：主体进程可替换适配器，插件失败可降级，OpenCode
 兼容不会反向成为 BitFun 内部 owner。若主体进程需要按 `OpenCodeAdapter`、`ClaudeCodeAdapter` 等类型分支，
 或需要读取插件运行单元内部对象，则设计不成立。
 
@@ -27,21 +30,40 @@
 - 保持 Kernel 是任务状态、事件和审计事实的权威源；Execution 是工具结果权威源；Security Boundary 是权限权威源。
   插件只能返回候选效果。
 - 让 Desktop、CLI、Server、Remote、ACP、Web、Mobile Web 和 SDK 显式启用、禁用或降级插件能力。
+- 支持插件在已声明 extension point 上追加或覆写贡献，但覆写必须由 Product Assembly、能力 owner 和安全控制面共同约束。
 
 非目标：
 
 - 不复制完整 OpenCode runtime，不承诺任意社区插件无修改运行。
-- 不把 JS/TS runtime、worker、WebView 或子进程视为安全边界。
+- 不将插件系统作为 first-party 产品能力裁剪的主要机制；产品形态裁剪仍由 `ProductProfile`、`CapabilityPack` 和
+  Product Assembly 负责。
+- 不将 JS/TS runtime、worker、WebView 或子进程视为安全边界。
 - 不允许插件直接写通过、失败、阻断、授权、审计、工具结果或产品状态。
-- 不把插件 API 暴露成无约束 localhost 服务；默认使用受控 IPC。
-- 不把插件运行时主机塞进 Agent Kernel、Tool Runtime、Harness 或 Product Assembly 的内部实现。
+- 不将插件 API 暴露成无约束 localhost 服务；默认使用受控 IPC。
+- 不将插件运行时主机内嵌到 Agent Kernel、Tool Runtime、Harness 或 Product Assembly 的内部实现。
+
+### 2.1 产品形态、运行策略与扩展贡献
+
+`ProductProfile`、`CapabilityPack`、`CapabilitySet` 和 `OverridePoint` 的权威定义见
+[`product-architecture.md`](product-architecture.md#3-产品如何成形)。本文限定说明插件运行时涉及的子集：
+
+| 类别 | 进入 BitFun 的方式 | 插件运行时关系 |
+|---|---|---|
+| 产品形态 | 产品入口、release 配置或白标配置选择 `ProductProfile`，Product Assembly 选择 first-party `CapabilityPack` | 不由插件决定；Host 只按 assembly binding 启用、禁用或降级 |
+| 运行策略 | Product Assembly 由 `CapabilityPlan`、provider health、license、workspace policy 和安全策略派生 `CapabilityAvailabilitySet`，再形成 `CapabilitySet` | Host 消费 `CapabilitySet` 与 policy snapshot；不能启用未构建能力 |
+| MCP provider | Assembly 注册外部 provider；MCP transport / catalog 在 Platform Adapter，tool/resource/prompt projection 在 Execution / Stable Contracts | 不属于 Plugin Runtime Host，除非插件显式提供 MCP adapter |
+| Plugin contribution | Host 校验 descriptor、provider candidate、event subscription 和 effect candidate | 默认追加；只能在已声明 `OverridePoint` 上覆写 |
+| Compatibility adapter | Host 内部 adapter 把 OpenCode、Claude Code、Codex 或其他生态 API 转为 BitFun canonical envelope | adapter 只做映射，不成为产品能力、权限或工具结果 owner |
+
+因此，插件运行时主机只负责运行期扩展治理。外部生态可在受控位置增加或替换贡献，但不得替代 Product Assembly
+决定产品形态，也不得将运行时扩展结果写成新的内核事实。
 
 ## 3. 目标逻辑视图
 
 ```mermaid
 flowchart TB
   Surface["产品入口与 UI<br/>Desktop / CLI / Server / Remote / ACP / Web / Mobile Web / SDK"]
-  Assembly["Product Assembly<br/>delivery profile / capability matrix / runtime binding"]
+  Assembly["Product Assembly<br/>ProductProfile to DeliveryProfile / capability availability / runtime binding"]
   Kernel["Agent Kernel<br/>event facts / permission coordination / task state / audit facts"]
   Execution["Execution<br/>Tool ABI / tool runtime / harness / sandbox"]
   UIExt["UI Extension Contract<br/>descriptor validation / fallback / projection"]
@@ -105,9 +127,13 @@ BitFun 主体进程的插件相关 API 只允许包含下列稳定概念：
 
 ## 5. Product Assembly 能力模型
 
-插件能力进入 Product Assembly 的 typed capability matrix，不隐藏在 hook、service locator 或全局 registry 中。
+插件能力进入 Product Assembly 的 typed capability matrix，不得隐藏在 hook、service locator 或全局 registry 中。
 这里的 `ExtensionCapabilitySet` 表示产品扩展能力聚合，不表示旧的扩展主机类型；插件运行时边界由
 `PluginRuntimeAvailability` 和 `PluginRuntimeBinding` 表达。
+
+Product Assembly 必须先根据 `ProductProfile` 和 `SurfaceContract` 派生 `DeliveryProfile`、first-party capability plan
+和 extension availability，再把插件 contribution 叠加到允许的 extension point 上。叠加规则是：默认追加、显式覆写、
+失败可回滚、状态可诊断。插件不得通过运行时发现改变 `ProductProfile`、隐式启用未构建能力，或替换没有 owner 的内部实现。
 
 ```rust
 pub struct ExtensionCapabilitySet {
@@ -137,6 +163,13 @@ pub enum PluginRuntimeBinding {
 
 SDK minimal feature 只能依赖 disabled stub 或测试 fake，不得隐式启动 JS/TS runtime。`DeliveryProfile` 只能影响
 binding 和 capability 选择，不得让 Agent Kernel 出现 `if desktop`、`if cli` 或 `if opencode` 分支。
+
+允许覆写的贡献必须满足：
+
+- 有稳定 `OverridePoint` id、能力 owner、适用 surface 和 fallback。
+- 有冲突策略，例如 single-winner、ordered-chain、first-party-pinned 或 policy-denied。
+- 有 permission/effect 声明，且最终授权、审计和状态写入仍由安全控制面完成。
+- 有产品形态验证，证明启用、禁用、失败和回滚时不会改变未声明的产品行为。
 
 ## 6. 领域模型
 
@@ -179,7 +212,7 @@ src/crates/services
 
 src/crates/assembly
   product-capabilities / core
-    selects DeliveryProfile, PluginRuntimeBinding, adapter set and fallback policy
+    derives DeliveryProfile, PluginRuntimeBinding, adapter set and fallback policy from ProductProfile and SurfaceContract
 
 src/apps/* / src/web-ui / src/mobile-web
   UI host and product entrypoints
@@ -285,21 +318,51 @@ interface PluginEffectBase {
   source_ref: PluginSourceRef;
 }
 
+interface OverrideScopedContribution {
+  override_point?: OverridePointRef;
+  conflict_policy?: OverrideConflictPolicy;
+  rollback?: OverrideRollbackPolicy;
+}
+
+interface OverridePointRef {
+  id: string;
+  owner: CapabilityOwnerRef;
+  surface?: "desktop" | "web" | "mobile_web" | "cli" | "server" | "remote" | "acp" | "sdk";
+}
+
+interface CapabilityOwnerRef {
+  kind: "product_feature" | "extension_contract" | "assembly_policy";
+  id: string;
+}
+
+type OverrideConflictPolicy =
+  | "single_winner"
+  | "ordered_chain"
+  | "first_party_pinned"
+  | "policy_denied";
+
+interface OverrideRollbackPolicy {
+  mode: "remove_contribution" | "restore_previous" | "disable_plugin";
+  reason_ref?: string;
+}
+
 type PluginEffectCandidate =
   | (PluginEffectBase & { kind: "suggestion"; body: CanonicalPayload | PayloadRef })
   | (PluginEffectBase & { kind: "evidence_candidate"; body: CanonicalPayload | PayloadRef })
   | (PluginEffectBase & { kind: "tool_input_patch_candidate"; tool_call_id: string; patch: CanonicalPayload | PayloadRef })
-  | (PluginEffectBase & { kind: "tool_provider_candidate"; manifest: ToolProviderDescriptor; source: PluginSourceRef })
+  | (PluginEffectBase & OverrideScopedContribution & { kind: "tool_provider_candidate"; manifest: ToolProviderDescriptor; source: PluginSourceRef })
   | (PluginEffectBase & { kind: "post_tool_evidence_candidate"; tool_call_id: string; body: CanonicalPayload | PayloadRef })
   | (PluginEffectBase & { kind: "permission_candidate"; request_id: string; recommendation: "allow" | "deny"; reason: string })
-  | (PluginEffectBase & { kind: "ui_contribution_candidate"; descriptor: UiContributionDescriptor })
-  | (PluginEffectBase & { kind: "event_subscription_candidate"; events: string[] })
+  | (PluginEffectBase & OverrideScopedContribution & { kind: "ui_contribution_candidate"; descriptor: UiContributionDescriptor })
+  | (PluginEffectBase & OverrideScopedContribution & { kind: "event_subscription_candidate"; events: string[] })
   | (PluginEffectBase & { kind: "unsupported"; capability: string; reason: string });
 
 interface UiContributionDescriptor {
   descriptor_version: 1;
   contribution_id: string;
   source_ref: PluginSourceRef;
+  override_point?: OverridePointRef;
+  conflict_policy?: OverrideConflictPolicy;
   surfaces: Array<"desktop" | "web" | "mobile_web" | "cli" | "server" | "remote" | "acp" | "sdk">;
   slot: "panel" | "command_palette" | "settings" | "notification" | "status" | "text_projection";
   component_kind: "text" | "summary" | "form" | "list" | "status_badge" | "command";
@@ -324,6 +387,8 @@ API 中绕过 schema 传递裸 JSON。
 
 `UiContributionDescriptor` 不得包含 React component、HTML script、DOM selector、Tauri command、store mutation
 或任意可执行代码。未知 slot、未知 action 或缺失 capability 时，入口必须按 fallback 降级。
+`override_point` 只表示插件请求进入已声明覆写点；是否接受、排序、回滚和审计由 Product Assembly、安全控制面与
+能力 owner 共同裁决。
 
 `tool_result`、`permission_granted`、`audit_written` 和 `state_changed` 不允许作为插件响应类型。真实工具结果由
 Execution 写入；真实权限状态由 Security Boundary 写入；审计事实由 Kernel 写入。
@@ -340,8 +405,8 @@ sequenceDiagram
   participant Host as Plugin Runtime Host
   participant Adapter as Compatibility Adapter
 
-  Surface->>Assembly: select DeliveryProfile
-  Assembly->>Assembly: build ExtensionCapabilitySet
+  Surface->>Assembly: provide ProductProfile + SurfaceContract
+  Assembly->>Assembly: derive DeliveryProfile and ExtensionCapabilitySet
   Assembly->>Host: runtime.initialize(adapter manifest set, policy snapshot)
   Host->>Adapter: load adapter descriptors
   Adapter-->>Host: supported capabilities
@@ -415,7 +480,7 @@ DTO。
 | CLI | 可启用本地 Host 或只读投影 | 文本 descriptor / warning | unsupported 明确输出，不静默忽略 |
 | Server | 默认受控启用或 disabled stub，取决于部署策略 | API 返回 typed unsupported 或 descriptor projection | 不自动启动本地 JS/TS runtime |
 | Remote | Host 靠近远端执行域 | UI 只接收 logical path 和 descriptor | 不回落到本地路径执行 |
-| ACP | 以 protocol adapter 暴露可组合 capability | 以 ACP 能力或 unsupported 表达 | 不把插件失败解释为 agent 失败 |
+| ACP | 以 protocol adapter 暴露可组合 capability | 以 ACP 能力或 unsupported 表达 | 不将插件失败解释为 agent 失败 |
 | Web / Mobile Web | 不启动本地 Host | 只消费后端投影 descriptor | 不持有插件执行单元 |
 | SDK minimal | disabled stub 或调用方注入 fake/client | 无默认 UI host | 不牵引 product-full 或 concrete provider |
 
@@ -436,7 +501,7 @@ DTO。
 
 ## 13. 安全与供应链
 
-插件能力必须绑定：
+插件能力必须声明以下绑定：
 
 - 来源：project、global、enterprise registry、signed bundle 或 remote source。
 - 身份：adapter id、plugin id、版本、hash、签名状态。
