@@ -3579,6 +3579,12 @@ export const requiredContentRules = [
       },
       {
         regex:
+          /canvas-runtime = \[[\s\S]*"product-domains"[\s\S]*"bitfun-services-integrations\/canvas-runtime"[\s\S]*\]/,
+        message:
+          'core canvas-runtime feature must explicitly aggregate product domains and the canvas service owner feature',
+      },
+      {
+        regex:
           /bitfun-product-domains = \{ path = "\.\.\/\.\.\/contracts\/product-domains", default-features = false, optional = true \}/,
         message:
           'bitfun-product-domains dependency must stay optional and not force product-full outside the core feature graph',
@@ -7315,7 +7321,7 @@ export const requiredContentRules = [
         message: 'missing Multitask runtime default model mapping',
       },
       {
-        regex: /builtin_agent_spec\(\s*"GeneralPurpose",\s*SubAgent,\s*"fast"/,
+        regex: /builtin_agent_spec\(\s*"GeneralPurpose",\s*SubAgent,\s*"primary"/,
         message: 'missing GeneralPurpose runtime default model mapping',
       },
       {

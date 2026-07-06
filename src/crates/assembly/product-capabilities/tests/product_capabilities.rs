@@ -11,7 +11,7 @@ use bitfun_product_capabilities::{
 use bitfun_runtime_ports::{
     PluginDispatchEnvelope, PluginResponseEnvelope, PluginRuntimeAvailability,
     PluginRuntimeBinding, PluginRuntimeClient, PluginRuntimeUnavailableReason, PortResult,
-    RuntimeServiceCapability, UiExtensionAvailability,
+    RuntimeServiceCapability,
 };
 use bitfun_runtime_services::test_support::FakeRuntimeServicesProvider;
 use bitfun_runtime_services::{
@@ -73,6 +73,7 @@ fn default_capability_registry_preserves_product_tool_provider_order() {
         vec![
             "core.basic",
             "core.agent",
+            "core.canvas",
             "core.session",
             "core.integration",
         ]
@@ -147,7 +148,13 @@ fn capability_packs_describe_service_tool_and_harness_requirements() {
         .collect::<Vec<_>>();
     assert_eq!(
         capability_ids,
-        vec!["code-agent", "deep-review", "deep-research", "miniapp"]
+        vec![
+            "code-agent",
+            "deep-review",
+            "deep-research",
+            "miniapp",
+            "canvas"
+        ]
     );
 
     let service_capabilities = registry.required_service_capabilities();
@@ -196,10 +203,17 @@ fn capability_packs_describe_service_tool_and_harness_requirements() {
 
 #[test]
 fn product_assembly_plan_keeps_full_capabilities_only_for_core_compatibility_profiles() {
-    let expected_capabilities = vec!["code-agent", "deep-review", "deep-research", "miniapp"];
+    let expected_capabilities = vec![
+        "code-agent",
+        "deep-review",
+        "deep-research",
+        "miniapp",
+        "canvas",
+    ];
     let expected_tool_groups = vec![
         "core.basic",
         "core.agent",
+        "core.canvas",
         "core.session",
         "core.integration",
     ];
@@ -401,16 +415,11 @@ fn product_assembly_plan_keeps_plugin_runtime_disabled_until_host_exists() {
             false,
             "{profile} must not imply executable plugin runtime support"
         );
-        assert_eq!(
-            extension_capabilities.ui_extensions().is_executable(),
-            false,
-            "{profile} must not imply UI extension rendering support"
-        );
     }
 }
 
 #[test]
-fn product_assembly_plan_distinguishes_extension_unavailable_reasons_by_profile() {
+fn product_assembly_plan_distinguishes_plugin_runtime_unavailable_reasons_by_profile() {
     assert_eq!(
         product_assembly_plan_for_profile(DeliveryProfile::Desktop)
             .extension_capabilities()
@@ -427,22 +436,6 @@ fn product_assembly_plan_distinguishes_extension_unavailable_reasons_by_profile(
             reason: PluginRuntimeUnavailableReason::UnsupportedProfile
         }
     );
-    assert_eq!(
-        product_assembly_plan_for_profile(DeliveryProfile::Desktop)
-            .extension_capabilities()
-            .ui_extensions(),
-        UiExtensionAvailability::Disabled {
-            reason: PluginRuntimeUnavailableReason::NotBuilt
-        }
-    );
-    assert_eq!(
-        product_assembly_plan_for_profile(DeliveryProfile::Cli)
-            .extension_capabilities()
-            .ui_extensions(),
-        UiExtensionAvailability::Disabled {
-            reason: PluginRuntimeUnavailableReason::UnsupportedProfile
-        }
-    );
 }
 
 #[test]
@@ -454,6 +447,7 @@ fn product_assembly_plan_exposes_build_feature_groups_explicitly() {
         &[
             ProductFeatureGroup::Basic,
             ProductFeatureGroup::AgentControl,
+            ProductFeatureGroup::Canvas,
             ProductFeatureGroup::BrowserWeb,
             ProductFeatureGroup::Mcp,
             ProductFeatureGroup::Git,
@@ -467,6 +461,7 @@ fn product_assembly_plan_exposes_build_feature_groups_explicitly() {
         vec![
             "basic",
             "agent-control",
+            "canvas",
             "browser-web",
             "mcp",
             "git",
@@ -740,7 +735,13 @@ fn default_capability_assembly_keeps_service_tool_and_harness_facts_together() {
         .collect::<Vec<_>>();
     assert_eq!(
         capability_ids,
-        vec!["code-agent", "deep-review", "deep-research", "miniapp"]
+        vec![
+            "code-agent",
+            "deep-review",
+            "deep-research",
+            "miniapp",
+            "canvas"
+        ]
     );
 
     let service_capabilities = assembly.required_service_capabilities();
@@ -769,6 +770,7 @@ fn default_capability_assembly_keeps_service_tool_and_harness_facts_together() {
         vec![
             "core.basic",
             "core.agent",
+            "core.canvas",
             "core.session",
             "core.integration"
         ]

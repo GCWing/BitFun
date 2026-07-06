@@ -12,7 +12,7 @@ use bitfun_harness::{
 };
 use bitfun_runtime_ports::{
     PluginRuntimeAvailability, PluginRuntimeBinding, PluginRuntimeUnavailableReason,
-    RuntimeServiceCapability, UiExtensionAvailability,
+    RuntimeServiceCapability,
 };
 use bitfun_runtime_services::RuntimeServices;
 pub use bitfun_tool_packs::ToolProviderGroupPlanSelectionError as ProductCapabilityBuildError;
@@ -635,10 +635,7 @@ impl ProductAssembler {
         }
 
         let plan = assembly.plan().clone().with_extension_capabilities(
-            ProductExtensionCapabilitySet::new(
-                plugin_runtime_availability,
-                assembly.plan().extension_capabilities().ui_extensions(),
-            ),
+            ProductExtensionCapabilitySet::new(plugin_runtime_availability),
         );
 
         Ok(ProductRuntimeParts {
@@ -867,26 +864,15 @@ impl ProductCapabilityRegistry {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProductExtensionCapabilitySet {
     plugin_runtime: PluginRuntimeAvailability,
-    ui_extensions: UiExtensionAvailability,
 }
 
 impl ProductExtensionCapabilitySet {
-    pub fn new(
-        plugin_runtime: PluginRuntimeAvailability,
-        ui_extensions: UiExtensionAvailability,
-    ) -> Self {
-        Self {
-            plugin_runtime,
-            ui_extensions,
-        }
+    pub fn new(plugin_runtime: PluginRuntimeAvailability) -> Self {
+        Self { plugin_runtime }
     }
 
     pub const fn plugin_runtime(&self) -> PluginRuntimeAvailability {
         self.plugin_runtime
-    }
-
-    pub const fn ui_extensions(&self) -> UiExtensionAvailability {
-        self.ui_extensions
     }
 }
 
@@ -906,22 +892,7 @@ pub fn product_extension_capabilities_for_profile(
         }
     };
 
-    let ui_extension_reason = match profile {
-        DeliveryProfile::ProductFull
-        | DeliveryProfile::Desktop
-        | DeliveryProfile::Web
-        | DeliveryProfile::MobileWeb => PluginRuntimeUnavailableReason::NotBuilt,
-        DeliveryProfile::Cli
-        | DeliveryProfile::Server
-        | DeliveryProfile::Remote
-        | DeliveryProfile::Acp
-        | DeliveryProfile::Sdk => PluginRuntimeUnavailableReason::UnsupportedProfile,
-    };
-
-    ProductExtensionCapabilitySet::new(
-        PluginRuntimeAvailability::disabled(plugin_runtime_reason),
-        UiExtensionAvailability::disabled(ui_extension_reason),
-    )
+    ProductExtensionCapabilitySet::new(PluginRuntimeAvailability::disabled(plugin_runtime_reason))
 }
 
 fn feature_groups_from_tool_provider_group_plan(

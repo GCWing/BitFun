@@ -43,6 +43,10 @@
 
 目标：为插件 UI contribution 提供声明式 descriptor，并明确不同交付形态的支持、禁用和降级行为。
 
+准入：本阶段不得只新增 descriptor、registry 或 matrix。任何 UI Extension Contract 代码都必须绑定至少一条既有
+实际消费方或旧路径迁移，例如输入框命令、settings entry、状态投影或插件候选 UI 的实际接入，并同步删除或显著简化旧
+实现；否则只允许保留在设计文档中。
+
 范围：
 
 - 定义 slot、route、command/keymap、prompt augmentation、dialog/toast、settings entry、state view descriptor。
@@ -50,7 +54,7 @@
 - Product Assembly 维护 UI contribution registry、capability matrix 和 unsupported/unavailable fallback。
 - 建立 Desktop、Web、CLI、Server、Remote、ACP、SDK、Mobile Web 的插件能力矩阵。
 
-当前 UI Extension 形态矩阵：
+Stage D 目标 UI Extension 形态矩阵：
 
 | 形态 | UI Extension 状态 | 降级要求 |
 |---|---|---|
