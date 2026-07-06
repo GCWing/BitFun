@@ -3,6 +3,22 @@
  * Supports standard and compact variants
  */
 .cube-logo {
+  --cube-logo-particle-rgb: 139, 92, 246;
+  --cube-logo-particle-secondary-rgb: 139, 92, 246;
+  --cube-logo-face-border-rgb: 110, 110, 120;
+  --cube-logo-face-front-rgb: 38, 38, 44;
+  --cube-logo-face-back-rgb: 30, 30, 35;
+  --cube-logo-face-top-rgb: 52, 52, 60;
+  --cube-logo-face-bottom-rgb: 25, 25, 30;
+  --cube-logo-face-right-rgb: 45, 45, 52;
+  --cube-logo-face-left-rgb: 32, 32, 38;
+  --cube-logo-face-front-shadow-rgb: 65, 65, 75;
+  --cube-logo-face-back-shadow-rgb: 55, 55, 62;
+  --cube-logo-face-top-shadow-rgb: 78, 78, 88;
+  --cube-logo-face-bottom-shadow-rgb: 48, 48, 56;
+  --cube-logo-face-right-shadow-rgb: 72, 72, 80;
+  --cube-logo-face-left-shadow-rgb: 58, 58, 66;
+
   display: flex;
   justify-content: center;
   align-items: center;
@@ -107,6 +123,26 @@
       box-shadow: inset 0 0 0 0.5px rgba(var(--cube-logo-face-left-shadow-rgb), 0.28);
     }
   }
+}
+
+:root[data-theme="light"] .cube-logo,
+:root[data-theme-type="light"] .cube-logo,
+[data-theme-type="light"] .cube-logo {
+  --cube-logo-particle-rgb: 90, 123, 178;
+  --cube-logo-particle-secondary-rgb: 124, 107, 153;
+  --cube-logo-face-border-rgb: 90, 123, 178;
+  --cube-logo-face-front-rgb: 90, 123, 178;
+  --cube-logo-face-back-rgb: 90, 123, 178;
+  --cube-logo-face-top-rgb: 124, 107, 153;
+  --cube-logo-face-bottom-rgb: 90, 123, 178;
+  --cube-logo-face-right-rgb: 124, 107, 153;
+  --cube-logo-face-left-rgb: 107, 90, 137;
+  --cube-logo-face-front-shadow-rgb: 90, 123, 178;
+  --cube-logo-face-back-shadow-rgb: 90, 123, 178;
+  --cube-logo-face-top-shadow-rgb: 124, 107, 153;
+  --cube-logo-face-bottom-shadow-rgb: 90, 123, 178;
+  --cube-logo-face-right-shadow-rgb: 124, 107, 153;
+  --cube-logo-face-left-shadow-rgb: 107, 90, 137;
 }
 
 :root[data-theme-type="light"] {

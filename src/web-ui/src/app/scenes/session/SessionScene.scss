@@ -7,6 +7,9 @@
 
 
 .bitfun-session-scene {
+  --session-pane-resizer-accent-rgb: 88, 166, 255;
+  --session-pane-resizer-muted-rgb: 128, 128, 128;
+
   display: flex;
   flex-direction: column;
   flex: 1;

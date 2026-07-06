@@ -3,6 +3,14 @@
  */
 
 .snapshot-fullscreen-overlay {
+  --diff-fullscreen-accept-rgb: 110, 184, 140;
+  --diff-fullscreen-reject-rgb: 199, 112, 112;
+  --diff-fullscreen-selected-rgb: 112, 150, 196;
+  --diff-fullscreen-accept-color: rgb(var(--diff-fullscreen-accept-rgb));
+  --diff-fullscreen-reject-color: rgb(var(--diff-fullscreen-reject-rgb));
+  --diff-fullscreen-selected-color: rgb(var(--diff-fullscreen-selected-rgb));
+  --diff-fullscreen-pending-color: var(--color-warning);
+
   position: fixed;
   top: 0;
   left: 0;

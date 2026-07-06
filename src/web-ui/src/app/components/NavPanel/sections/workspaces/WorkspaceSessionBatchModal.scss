@@ -9,6 +9,9 @@
 }
 
 .workspace-session-batch-modal {
+  --workspace-batch-cowork-rgb: 15, 143, 116;
+  --workspace-batch-claw-rgb: 217, 119, 6;
+
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
