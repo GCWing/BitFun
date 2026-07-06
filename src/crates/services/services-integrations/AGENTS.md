@@ -50,9 +50,10 @@ slices that are outside pure product logic but still platform-neutral.
   higher layers.
 - Debug log HTTP ingest posting lives behind `debug-log`; callers own log
   shaping and dispatch policy.
-- Review-platform HTTP transport lives behind `review-platform`; provider DTOs,
-  repository detection, pagination policy, and UI-facing envelopes stay in
-  higher layers.
+- Review-platform provider detection, repository discovery, token persistence,
+  provider DTO mapping, pagination policy, HTTP transport, and Git provider
+  integration live behind `review-platform`; core may only inject product data
+  paths, remote-workspace classification, and compatibility API wrappers.
 - MiniApp runtime here may own host primitive dispatch, built-in seed file
   writes, marker IO, storage/import bundle filesystem IO, and JS worker process/pool
   lifecycle. Manager workflow orchestration remains outside this crate until

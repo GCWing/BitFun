@@ -169,7 +169,15 @@ remote-ssh-concrete = [
     "thiserror",
     "uuid",
 ]
-review-platform = ["reqwest", "thiserror"]
+review-platform = [
+    "async-trait",
+    "bitfun-services-core",
+    "chrono",
+    "futures",
+    "reqwest",
+    "thiserror",
+    "urlencoding",
+]
 workspace-search = [
     "async-trait",
     "bitfun-services-core",

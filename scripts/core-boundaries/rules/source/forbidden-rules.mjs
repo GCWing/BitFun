@@ -186,6 +186,26 @@ export const forbiddenContentRules = [
         message:
           'core review platform service must not own concrete HTTP clients; use bitfun-services-integrations review platform HTTP transport',
       },
+      {
+        regex: /\btokio::fs\b|\bstd::fs\b/,
+        message:
+          'core review platform service must not own token or provider file IO; use bitfun-services-integrations review platform owner',
+      },
+      {
+        regex: /\bprocess_manager::|\bCommand::new\(|\bexecute_git_command\b|\bgit\s+remote\b|\brev-parse\b/,
+        message:
+          'core review platform service must not own Git probing; use bitfun-services-integrations review platform owner',
+      },
+      {
+        regex: /\bserde_json::|\bjson!\b|\bValue\b/,
+        message:
+          'core review platform service must not own provider DTO parsing; use bitfun-services-integrations review platform owner',
+      },
+      {
+        regex: /\bstruct\s+(?:Github|Gitlab|Gitcode)|\bimpl\s+ReviewProvider\b|\btrait\s+ReviewProvider\b/,
+        message:
+          'core review platform service must not own provider implementations; use bitfun-services-integrations review platform owner',
+      },
     ],
   },
   {

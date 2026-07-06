@@ -649,6 +649,21 @@ export function runManifestParserSelfTest({
       throw new Error(`core browser launcher facade boundary rule must forbid: ${contract}`);
     }
   }
+  const coreReviewPlatformFacadeRuleText = forbiddenRuleTextForPath(
+    'src/crates/assembly/core/src/service/review_platform/mod.rs',
+  );
+  for (const contract of [
+    'reqwest::',
+    'tokio::fs',
+    'process_manager::',
+    'execute_git_command',
+    'serde_json::',
+    'ReviewProvider',
+  ]) {
+    if (!coreReviewPlatformFacadeRuleText.includes(contract)) {
+      throw new Error(`core review platform facade boundary rule must forbid: ${contract}`);
+    }
+  }
   const coreComputerUseSystemFacadeRuleText = forbiddenRuleTextForPath(
     'src/crates/assembly/core/src/agentic/tools/implementations/computer_use_actions.rs',
   );
