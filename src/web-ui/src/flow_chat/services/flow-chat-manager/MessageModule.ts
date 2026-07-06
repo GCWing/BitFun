@@ -22,6 +22,7 @@ import {
   type FlowChatPinTurnToTopRequest,
 } from '../../events/flowchatNavigation';
 import {
+  cancelTransientBtwSession,
   isTransientBtwSession,
   sendMessageToTransientBtwSession,
 } from '../BtwThreadService';
@@ -422,14 +423,25 @@ function handleTitleGeneration(
   context.flowChatStore.updateSessionTitle(sessionId, tempTitle, 'generating');
 }
 
-export async function cancelCurrentTask(context: FlowChatContext): Promise<boolean> {
+export async function cancelSessionTask(context: FlowChatContext, requestedSessionId?: string): Promise<boolean> {
   try {
     const state = context.flowChatStore.getState();
-    const sessionId = state.activeSessionId;
+    const sessionId = requestedSessionId || state.activeSessionId;
     
     if (!sessionId) {
       log.debug('No active session to cancel');
       return false;
+    }
+
+    const session = state.sessions.get(sessionId);
+    if (isTransientBtwSession(session)) {
+      context.userCancelledSessionIds.add(sessionId);
+      context.flowChatStore.cancelSessionTask(sessionId);
+      markCurrentTurnItemsAsCancelled(context, sessionId);
+      cleanupSessionBuffers(context, sessionId);
+      await stateMachineManager.transition(sessionId, SessionExecutionEvent.FINISHING_SETTLED);
+      const success = await cancelTransientBtwSession(sessionId);
+      return success;
     }
 
     const currentState = stateMachineManager.getCurrentState(sessionId);
@@ -449,6 +461,10 @@ export async function cancelCurrentTask(context: FlowChatContext): Promise<boole
     log.error('Failed to cancel current task', error);
     return false;
   }
+}
+
+export async function cancelCurrentTask(context: FlowChatContext): Promise<boolean> {
+  return cancelSessionTask(context);
 }
 
 /**

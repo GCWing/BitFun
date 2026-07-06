@@ -5562,10 +5562,33 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         }
 
         let turn_id = format!("btw-turn-{}", request_id.trim());
-        let user_message_metadata = Some(serde_json::json!({
+        let mut user_message_metadata = serde_json::json!({
             "kind": "btw",
             "parentSessionId": parent_session_id,
-        }));
+        });
+        if let Some(images) = image_contexts.as_ref().filter(|images| !images.is_empty()) {
+            user_message_metadata["images"] = serde_json::Value::Array(
+                images
+                    .iter()
+                    .map(|image| {
+                        let name = image
+                            .metadata
+                            .as_ref()
+                            .and_then(|metadata| metadata.get("name"))
+                            .and_then(|value| value.as_str())
+                            .filter(|name| !name.trim().is_empty())
+                            .unwrap_or("image");
+                        serde_json::json!({
+                            "id": image.id,
+                            "name": name,
+                            "data_url": image.data_url,
+                            "image_path": image.image_path,
+                            "mime_type": image.mime_type,
+                        })
+                    })
+                    .collect(),
+            );
+        }
 
         let (user_input, prepended_messages) = build_btw_user_input(question);
 
@@ -5581,7 +5604,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             child_session.config.remote_ssh_host.clone(),
             DialogSubmissionPolicy::for_source(DialogTriggerSource::DesktopApi)
                 .with_skip_tool_confirmation(true),
-            user_message_metadata,
+            Some(user_message_metadata),
             prepended_messages,
             true,
         )

@@ -1,9 +1,9 @@
 import { agentAPI, btwAPI } from '@/infrastructure/api';
 import { notificationService } from '@/shared/notification-system';
 import { flowChatStore } from '../store/FlowChatStore';
-import { stateMachineManager } from '../state-machine';
+import { SessionExecutionEvent, stateMachineManager } from '../state-machine';
 import { flowChatManager } from './FlowChatManager';
-import type { Session } from '../types/flow-chat';
+import type { DialogTurn, Session } from '../types/flow-chat';
 import type { SessionKind, SessionRelationship } from '@/shared/types/session-history';
 import type { ReviewTeamRunManifest } from '@/shared/services/reviewTeamService';
 import type { ImagePayload } from '../utils/imagePayload';
@@ -51,6 +51,47 @@ function requireSession(sessionId: string): Session {
     throw new Error(`Session not found: ${sessionId}`);
   }
   return session;
+}
+
+function createPendingBtwTurn(params: {
+  childSessionId: string;
+  requestId: string;
+  question: string;
+  imagePayload?: ImagePayload;
+}): string {
+  const dialogTurnId = `btw-turn-${params.requestId.trim()}`;
+  const existingSession = flowChatStore.getState().sessions.get(params.childSessionId);
+  if (existingSession?.dialogTurns?.some(turn => turn.id === dialogTurnId)) {
+    return dialogTurnId;
+  }
+
+  const hasImages = (params.imagePayload?.imageContexts.length ?? 0) > 0;
+  const dialogTurn: DialogTurn = {
+    id: dialogTurnId,
+    sessionId: params.childSessionId,
+    kind: 'user_dialog',
+    userMessage: {
+      id: `user_btw_${Date.now()}`,
+      content: params.question,
+      timestamp: Date.now(),
+      hasImages,
+      images: params.imagePayload?.imageDisplayData,
+      metadata: {
+        kind: 'btw',
+        requestId: params.requestId,
+      },
+    },
+    modelRounds: [],
+    status: 'pending',
+    startTime: Date.now(),
+  };
+
+  flowChatStore.addDialogTurn(params.childSessionId, dialogTurn);
+  void stateMachineManager.transition(params.childSessionId, SessionExecutionEvent.START, {
+    taskId: params.childSessionId,
+    dialogTurnId,
+  });
+  return dialogTurnId;
 }
 
 export function isTransientBtwSession(session: Session | undefined): boolean {
@@ -238,20 +279,52 @@ export async function sendMessageToTransientBtwSession(params: {
   }
 
   const requestId = safeUuid('btw');
-  await btwAPI.askStream({
+  flowChatStore.updateSessionBtwOrigin(params.childSessionId, {
+    ...(childSession.btwOrigin || {}),
     requestId,
-    sessionId: params.parentSessionId,
+    parentSessionId: params.parentSessionId,
+  }, 'btw');
+  const localTurnId = createPendingBtwTurn({
     childSessionId: params.childSessionId,
-    childSessionName: params.childSessionName || childSession.title || 'Side thread',
+    requestId,
     question,
-    modelId: params.modelId ?? childSession.config.modelName ?? 'fast',
-    imageContexts: params.imagePayload?.imageContexts,
+    imagePayload: params.imagePayload,
   });
+  try {
+    await btwAPI.askStream({
+      requestId,
+      sessionId: params.parentSessionId,
+      childSessionId: params.childSessionId,
+      childSessionName: params.childSessionName || childSession.title || 'Side thread',
+      question,
+      modelId: params.modelId ?? childSession.config.modelName ?? 'fast',
+      imageContexts: params.imagePayload?.imageContexts,
+    });
+  } catch (error) {
+    flowChatStore.deleteDialogTurn(params.childSessionId, localTurnId);
+    await stateMachineManager.transition(params.childSessionId, SessionExecutionEvent.FINISHING_SETTLED);
+    throw error;
+  }
   if (params.modelId?.trim()) {
     flowChatStore.updateSessionModelName(params.childSessionId, params.modelId.trim());
   }
 
   return { requestId };
+}
+
+export async function cancelTransientBtwSession(sessionId: string): Promise<boolean> {
+  const session = flowChatStore.getState().sessions.get(sessionId);
+  if (!session || !isTransientBtwSession(session)) {
+    return false;
+  }
+
+  const requestId = session.btwOrigin?.requestId?.trim();
+  if (!requestId) {
+    return false;
+  }
+
+  await btwAPI.cancel({ requestId });
+  return true;
 }
 
 export async function startBtwThread(params: {

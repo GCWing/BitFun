@@ -1994,7 +1994,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         parentSessionId: currentSessionId,
         workspacePath,
         question,
-        modelId: 'fast',
+        modelId: imagesForBtw.length > 0
+          ? currentSession?.config?.modelName
+          : 'fast',
         imagePayload,
       });
       imagesForBtw.forEach(image => removeContext(image.id));
@@ -2012,7 +2014,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       pendingLargePastesRef.current = originalPendingLargePastes;
       dispatchInput({ type: 'SET_VALUE', payload: originalMessage });
     }
-  }, [clearPendingLargePastes, currentSessionId, derivedState, expandComposerSpecialTokens, imageContexts, inputState.value, isBtwSession, removeContext, setQueuedInput, t, workspacePath]);
+  }, [clearPendingLargePastes, currentSession?.config?.modelName, currentSessionId, derivedState, expandComposerSpecialTokens, imageContexts, inputState.value, isBtwSession, removeContext, setQueuedInput, t, workspacePath]);
 
   const submitCompactFromInput = useCallback(async () => {
     if (!effectiveTargetSessionId || !effectiveTargetSession) {
@@ -2500,8 +2502,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   ]);
 
   const handleCancelCurrentTask = useCallback(async () => {
+    if (effectiveTargetSessionId) {
+      await FlowChatManager.getInstance().cancelSessionTask(effectiveTargetSessionId);
+      return;
+    }
     await FlowChatManager.getInstance().cancelCurrentTask();
-  }, []);
+  }, [effectiveTargetSessionId]);
 
   const handleModelLoadingChange = useCallback((loading: boolean) => {
     setIsModelSwitching(loading);
