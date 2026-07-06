@@ -7,6 +7,7 @@
 
 .snapshot-card {
   --snapshot-card-operation-color: var(--color-accent-500);
+  --snapshot-card-neutral-rgb: 107, 114, 128;
 
   @include shared.liquid-card-base;
   font-family: tokens.$font-family-mono;

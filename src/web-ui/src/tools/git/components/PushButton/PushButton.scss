@@ -1,6 +1,11 @@
 @use '../../../../component-library/styles/tokens' as *;
 
 .bitfun-push-button {
+  --git-push-menu-text-rgb: 229, 229, 229;
+  --git-push-danger-rgb: 244, 71, 71;
+  --git-push-danger-text-rgb: 255, 135, 135;
+  --git-push-danger-title-rgb: 255, 107, 107;
+
   position: relative;
   display: inline-flex;
   flex-shrink: 0;
