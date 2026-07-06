@@ -783,7 +783,7 @@ fn default_memory_max_rollout_age_days() -> i64 {
 }
 
 fn default_memory_max_rollouts_per_startup() -> usize {
-    5
+    2
 }
 
 fn default_memory_max_rollouts_scan_limit() -> usize {
@@ -1554,8 +1554,8 @@ impl Default for AIConfig {
 impl Default for MemoriesConfig {
     fn default() -> Self {
         Self {
-            generate_memories: true,
-            use_memories: true,
+            generate_memories: false,
+            use_memories: false,
             external_context_policy: MemoryExternalContextPolicy::ClearToolResults,
             max_raw_memories_for_consolidation: default_memory_max_raw_memories_for_consolidation(),
             max_unused_days: default_memory_max_unused_days(),
@@ -2106,8 +2106,8 @@ mod tests {
     fn default_global_config_includes_enabled_memories_config() {
         let config = GlobalConfig::default();
 
-        assert!(config.memories.generate_memories);
-        assert!(config.memories.use_memories);
+        assert!(!config.memories.generate_memories);
+        assert!(!config.memories.use_memories);
         assert_eq!(
             config.memories.external_context_policy,
             MemoryExternalContextPolicy::ClearToolResults
@@ -2115,7 +2115,7 @@ mod tests {
         assert_eq!(config.memories.max_raw_memories_for_consolidation, 64);
         assert_eq!(config.memories.max_unused_days, 30);
         assert_eq!(config.memories.max_rollout_age_days, 10);
-        assert_eq!(config.memories.max_rollouts_per_startup, 5);
+        assert_eq!(config.memories.max_rollouts_per_startup, 2);
         assert_eq!(config.memories.max_rollouts_scan_limit, 2_000);
         assert_eq!(config.memories.min_rollout_idle_hours, 6);
         assert_eq!(config.memories.phase1_max_concurrency, 1);

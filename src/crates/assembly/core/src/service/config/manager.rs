@@ -821,10 +821,14 @@ mod tests {
         let value =
             config_value_for_persistence(&config).expect("config should serialize for persistence");
 
+        let memories = value
+            .get("memories")
+            .and_then(|value| value.as_object())
+            .expect("memories config should persist as an object");
+        assert!(!memories.contains_key("generate_memories"));
         assert_eq!(
             value.get("memories"),
             Some(&serde_json::json!({
-                "generate_memories": false,
                 "max_rollouts_per_startup": 12
             }))
         );

@@ -188,8 +188,15 @@ impl MemoryPhase2Runner {
     }
 
     pub async fn run_once(&self) -> BitFunResult<Option<Phase2RunReport>> {
-        let started_at = std::time::Instant::now();
         let config = get_phase2_runtime_config().await;
+        self.run_once_with_config(config).await
+    }
+
+    async fn run_once_with_config(
+        &self,
+        config: crate::service::config::types::GlobalConfig,
+    ) -> BitFunResult<Option<Phase2RunReport>> {
+        let started_at = std::time::Instant::now();
         info!(
             "Memory phase2 run started: generate_memories={}, limit={}, max_unused_days={}, phase2_lease_seconds={}, phase2_success_cooldown_seconds={}, phase2_retry_delay_seconds={}, memory_root={}",
             config.memories.generate_memories,
@@ -530,6 +537,14 @@ impl MemoryPhase2Runner {
         }))
     }
 
+    #[cfg(test)]
+    async fn run_once_with_config_for_tests(
+        &self,
+        config: crate::service::config::types::GlobalConfig,
+    ) -> BitFunResult<Option<Phase2RunReport>> {
+        self.run_once_with_config(config).await
+    }
+
     async fn select_enabled_rows(
         &self,
         rows: &[MemoryPhase2CandidateRow],
@@ -776,6 +791,7 @@ mod tests {
     use crate::agentic::memories::db::{MemoryDatabase, MemoryRow};
     use crate::agentic::persistence::PersistenceManager;
     use crate::infrastructure::app_paths::PathManager;
+    use crate::service::config::types::GlobalConfig;
     use crate::service::session::{SessionMemoryMode, SessionMetadata};
     use std::sync::Arc;
     use tempfile::tempdir;
@@ -826,6 +842,12 @@ mod tests {
             memory_root,
             Arc::new(FakeConsolidator),
         )
+    }
+
+    fn phase2_enabled_test_config() -> GlobalConfig {
+        let mut config = GlobalConfig::default();
+        config.memories.generate_memories = true;
+        config
     }
 
     async fn save_memory_row_metadata(
@@ -945,7 +967,11 @@ mod tests {
             runner.db.upsert_memory(&row).await.unwrap();
         }
 
-        let report = runner.run_once().await.unwrap().expect("phase2 report");
+        let report = runner
+            .run_once_with_config_for_tests(phase2_enabled_test_config())
+            .await
+            .unwrap()
+            .expect("phase2 report");
         assert_eq!(report.selected_count, 2);
 
         let job = runner
@@ -1006,7 +1032,11 @@ mod tests {
             .await
             .unwrap());
 
-        assert!(runner.run_once().await.unwrap().is_none());
+        assert!(runner
+            .run_once_with_config_for_tests(phase2_enabled_test_config())
+            .await
+            .unwrap()
+            .is_none());
     }
 
     #[tokio::test]
@@ -1022,7 +1052,11 @@ mod tests {
         let runner =
             runner_with_fake_consolidator(Arc::new(db), persistence, temp.path().join("memories"));
 
-        assert!(runner.run_once().await.unwrap().is_none());
+        assert!(runner
+            .run_once_with_config_for_tests(phase2_enabled_test_config())
+            .await
+            .unwrap()
+            .is_none());
 
         let job = runner
             .db
@@ -1075,7 +1109,7 @@ mod tests {
         .unwrap();
 
         let report = runner
-            .run_once()
+            .run_once_with_config_for_tests(phase2_enabled_test_config())
             .await
             .unwrap()
             .expect("ad-hoc note should trigger phase2 consolidation");
@@ -1120,7 +1154,7 @@ mod tests {
         runner.db.upsert_memory(&row).await.unwrap();
 
         let first_report = runner
-            .run_once()
+            .run_once_with_config_for_tests(phase2_enabled_test_config())
             .await
             .unwrap()
             .expect("first phase2 report");
@@ -1143,7 +1177,7 @@ mod tests {
             .await
             .expect("polluted selected session should enqueue phase2");
         let second_report = runner
-            .run_once()
+            .run_once_with_config_for_tests(phase2_enabled_test_config())
             .await
             .unwrap()
             .expect("pollution should enqueue phase2");
@@ -1209,7 +1243,11 @@ mod tests {
         save_memory_row_metadata(&persistence, &row, SessionMemoryMode::Enabled).await;
         runner.db.upsert_memory(&row).await.unwrap();
 
-        let report = runner.run_once().await.unwrap().expect("phase2 report");
+        let report = runner
+            .run_once_with_config_for_tests(phase2_enabled_test_config())
+            .await
+            .unwrap()
+            .expect("phase2 report");
         assert!(!report.consolidation_output.trim().is_empty());
         let summary = tokio::fs::read_to_string(
             crate::agentic::memories::workspace::memory_summary_file(&temp.path().join("memories")),
