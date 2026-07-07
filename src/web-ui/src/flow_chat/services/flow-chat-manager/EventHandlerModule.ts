@@ -27,6 +27,7 @@ import type {
   DeepReviewQueueStateChangedEvent,
   ImageAnalysisEvent,
   ModelRoundCompletedEvent,
+  OpenBuiltInBrowserEvent,
   AcpContextUsageUpdatedEvent,
   SessionModelAutoMigratedEvent,
   SubagentSessionLinkedEvent,
@@ -46,6 +47,7 @@ import { useReviewActionBarStore } from '../../store/deepReviewActionBarStore';
 import { buildDeepReviewCapacityQueueStateFromEvent } from '../../utils/deepReviewQueueStateEvents';
 import { useBackgroundCommandActivityStore } from '../../store/backgroundCommandActivityStore';
 import { useBackgroundSubagentActivityStore } from '../../store/backgroundSubagentActivityStore';
+import { createTab } from '@/shared/utils/tabUtils';
 
 const pendingImageAnalysisTurns = new Map<string, string>();
 import { 
@@ -705,6 +707,9 @@ export async function initializeEventListeners(
     },
     onThreadGoalUpdated: (event) => {
       handleThreadGoalUpdatedEvent(event);
+    },
+    onOpenBuiltInBrowser: (event) => {
+      handleOpenBuiltInBrowser(event);
     },
     onSessionTitleGenerated: (event) => {
       handleSessionTitleGenerated(event);
@@ -2049,6 +2054,30 @@ function handleThreadGoalUpdatedEvent(event: any): void {
   handleThreadGoalUpdated({
     sessionId,
     goal: event?.goal ?? null,
+  });
+}
+
+function handleOpenBuiltInBrowser(event: OpenBuiltInBrowserEvent): void {
+  const url = typeof event?.url === 'string' ? event.url.trim() : '';
+  if (!url) {
+    log.warn('OpenBuiltInBrowser missing url', { event });
+    return;
+  }
+
+  const title = typeof event?.title === 'string' && event.title.trim()
+    ? event.title.trim()
+    : 'Browser';
+  const duplicateCheckKey = `browser-panel:${url}`;
+
+  createTab({
+    type: 'browser',
+    title,
+    data: { url },
+    metadata: { duplicateCheckKey },
+    checkDuplicate: true,
+    duplicateCheckKey,
+    replaceExisting: event?.replaceExisting !== false,
+    mode: 'agent',
   });
 }
 

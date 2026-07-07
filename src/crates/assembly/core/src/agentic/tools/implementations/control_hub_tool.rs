@@ -19,6 +19,7 @@ use crate::agentic::tools::browser_control::session_registry::{
 use crate::agentic::tools::framework::{
     Tool, ToolExposure, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
+use crate::infrastructure::events::{get_global_event_system, BackendEvent};
 use crate::service::config::{get_global_config_service, GlobalConfig};
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
@@ -35,6 +36,8 @@ use super::control_hub::{err_response, ControlHubError, ErrorCode};
 /// in-flight `wait` / lifecycle subscriptions.
 static BROWSER_SESSIONS: std::sync::OnceLock<Arc<BrowserSessionRegistry>> =
     std::sync::OnceLock::new();
+
+const OPEN_BUILT_IN_BROWSER_EVENT: &str = "agentic://open-built-in-browser";
 
 fn browser_sessions() -> Arc<BrowserSessionRegistry> {
     BROWSER_SESSIONS
@@ -86,6 +89,36 @@ impl ControlHubTool {
         ]
     }
 
+    fn normalize_builtin_browser_url(raw_url: &str) -> Result<String, ControlHubError> {
+        let trimmed = raw_url.trim();
+        if trimmed.is_empty() {
+            return Err(ControlHubError::new(
+                ErrorCode::InvalidParams,
+                "browser.open_builtin requires params.url.",
+            )
+            .with_hint(
+                "Pass an http(s) URL or domain, e.g. { \"url\": \"https://example.com\" }.",
+            ));
+        }
+
+        let normalized = if trimmed.contains("://") {
+            trimmed.to_string()
+        } else {
+            format!("https://{trimmed}")
+        };
+
+        let lower = normalized.to_ascii_lowercase();
+        if !(lower.starts_with("http://") || lower.starts_with("https://")) {
+            return Err(ControlHubError::new(
+                ErrorCode::InvalidParams,
+                "Only http and https URLs can be opened in the built-in browser.",
+            )
+            .with_hint("Use WebFetch/WebSearch for reading content, or ComputerUse for local files and OS-level URL opening."));
+        }
+
+        Ok(normalized)
+    }
+
     fn description_text() -> String {
         r#"ControlHub — the unified control entry point for browser, terminal, and routing metadata.
 
@@ -97,7 +130,9 @@ Use this tool via `{ domain, action, params }` for browser automation, terminal 
 - Browser modes:
   * `connect { mode: "default" }` (default) — start or attach the stable managed browser profile with CDP enabled.
   * `connect { mode: "headless" }` — start or attach the stable managed headless browser profile for project Web UI testing that does not depend on user login state.
-- Actions: connect, tab_new, navigate, back, forward, reload, snapshot, click, hover, fill, type, check, uncheck, select, press_key, scroll, auto_scroll, wait, get, get_text, get_url, get_title, get_html, screenshot, evaluate, fetch, cookies, set_cookies, set_file_input_files, cdp, network, console, errors, trace, dialog, frame, frame_main, read_article, close, list_pages, tab_query, switch_page, list_sessions.
+- UI action:
+  * `open_builtin { url, title?, replace_existing? }` — open an http(s) URL in BitFun's built-in right-side browser panel. This changes the BitFun UI only; it does not fetch page text for reasoning.
+- Actions: open_builtin, connect, tab_new, navigate, back, forward, reload, snapshot, click, hover, fill, type, check, uncheck, select, press_key, scroll, auto_scroll, wait, get, get_text, get_url, get_title, get_html, screenshot, evaluate, fetch, cookies, set_cookies, set_file_input_files, cdp, network, console, errors, trace, dialog, frame, frame_main, read_article, close, list_pages, tab_query, switch_page, list_sessions.
 - Workflow: connect -> navigate -> snapshot (returns @e1, @e2 ... refs) -> click/fill using refs.
 - Take a fresh snapshot after any DOM mutation; stale refs return `error.code = STALE_REF`.
 
@@ -243,6 +278,11 @@ Branch on `ok` and `error.code`, not on English messages.
                             "session_count": browser_session_count,
                             "default_browser": browser_kind,
                             "cdp_supported": browser_cdp_supported,
+                            "ui_surface": {
+                                "built_in_browser_panel": true,
+                                "open_action": "open_builtin",
+                                "event": OPEN_BUILT_IN_BROWSER_EVENT,
+                            },
                         },
                         "terminal": { "available": likely_terminal_available, "reason": if likely_terminal_available { Value::Null } else { json!("TerminalApi is only available in contexts that registered it") } },
                         "meta":     { "available": true },
@@ -254,7 +294,7 @@ Branch on `ok` and `error.code`, not on English messages.
                         "desktop_environment": desktop_env,
                     },
                     "workspace_execution": workspace_execution,
-                    "schema_version": "1.2",
+                    "schema_version": "1.3",
                 });
                 Ok(vec![ToolResult::ok(
                     body,
@@ -288,9 +328,16 @@ Branch on `ok` and `error.code`, not on English messages.
                     "browser",
                     "google",
                     "tab",
+                    "built-in browser",
+                    "builtin browser",
+                    "embedded browser",
+                    "side browser",
+                    "right-side browser",
                     "网页",
                     "浏览器",
                     "网站",
+                    "内置浏览器",
+                    "侧边浏览器",
                 ];
                 let desktop_kw = [
                     "screenshot",
@@ -319,7 +366,7 @@ Branch on `ok` and `error.code`, not on English messages.
                             &mut suggestions,
                             "browser",
                             85,
-                            "Matches browser/URL keywords",
+                            "Matches browser/URL keywords; use browser.open_builtin for built-in/side browser requests",
                         );
                         break;
                     }
@@ -442,6 +489,50 @@ Branch on `ok` and `error.code`, not on English messages.
             .map(str::to_string);
 
         match action {
+            "open_builtin" => {
+                let raw_url = params.get("url").and_then(Value::as_str).unwrap_or("");
+                let url = match Self::normalize_builtin_browser_url(raw_url) {
+                    Ok(url) => url,
+                    Err(error) => return Ok(err_response("browser", "open_builtin", error)),
+                };
+                let title = params
+                    .get("title")
+                    .and_then(Value::as_str)
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                    .unwrap_or("Browser")
+                    .to_string();
+                let replace_existing = params
+                    .get("replace_existing")
+                    .or_else(|| params.get("replaceExisting"))
+                    .and_then(Value::as_bool)
+                    .unwrap_or(true);
+
+                get_global_event_system()
+                    .emit(BackendEvent::Custom {
+                        event_name: OPEN_BUILT_IN_BROWSER_EVENT.to_string(),
+                        payload: json!({
+                            "url": url,
+                            "title": title,
+                            "replaceExisting": replace_existing,
+                        }),
+                    })
+                    .await
+                    .map_err(|error| {
+                        BitFunError::tool(format!("failed to open built-in browser: {error}"))
+                    })?;
+
+                Ok(vec![ToolResult::ok(
+                    json!({
+                        "success": true,
+                        "url": url,
+                        "title": title,
+                        "replace_existing": replace_existing,
+                    }),
+                    Some(format!("Opened {url} in the built-in browser side panel.")),
+                )])
+            }
+
             "connect" => {
                 let mode = Self::browser_connect_mode_from_params(params);
 
@@ -2127,6 +2218,30 @@ mod control_hub_tests {
         );
     }
 
+    #[tokio::test]
+    async fn route_hint_picks_browser_for_builtin_browser_intent() {
+        let tool = ControlHubTool::new();
+        let ctx = empty_context();
+        let results = tool
+            .dispatch(
+                "meta",
+                "route_hint",
+                &json!({ "intent": "使用内置浏览器打开 example.com 网页" }),
+                &ctx,
+            )
+            .await
+            .expect("route_hint succeeds");
+        let payload = results.first().unwrap().content();
+        assert_eq!(
+            payload.get("suggested_domain").and_then(|v| v.as_str()),
+            Some("browser")
+        );
+        assert!(
+            payload.to_string().contains("open_builtin"),
+            "route hint should point built-in browser requests to browser.open_builtin: {payload}"
+        );
+    }
+
     #[test]
     fn route_hint_does_not_suggest_removed_app_domain() {
         let tool = ControlHubTool::new();
@@ -2337,6 +2452,33 @@ mod control_hub_tests {
         );
     }
 
+    #[test]
+    fn browser_open_builtin_normalizes_domain_url() {
+        assert_eq!(
+            ControlHubTool::normalize_builtin_browser_url("example.com").unwrap(),
+            "https://example.com"
+        );
+    }
+
+    #[tokio::test]
+    async fn browser_open_builtin_rejects_unsupported_scheme() {
+        let tool = ControlHubTool::new();
+        let ctx = empty_context();
+        let results = tool
+            .dispatch(
+                "browser",
+                "open_builtin",
+                &json!({ "url": "file:///tmp/demo.html" }),
+                &ctx,
+            )
+            .await
+            .expect("dispatch should succeed and return a structured error");
+        let payload: serde_json::Value =
+            serde_json::from_value(results[0].content().clone()).unwrap();
+        assert_eq!(payload["ok"], serde_json::Value::Bool(false));
+        assert_eq!(payload["error"]["code"], "INVALID_PARAMS");
+    }
+
     #[tokio::test]
     async fn system_open_url_rejects_unsupported_scheme() {
         let tool = ComputerUseActions::new();
@@ -2382,8 +2524,8 @@ mod control_hub_tests {
         // schema_version must have been bumped since we added new fields.
         assert_eq!(
             payload.get("schema_version").and_then(|v| v.as_str()),
-            Some("1.2"),
-            "schema_version must be bumped to 1.2: {payload}"
+            Some("1.3"),
+            "schema_version must be bumped to 1.3: {payload}"
         );
 
         assert!(
