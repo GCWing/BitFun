@@ -123,7 +123,7 @@ impl DialogScheduler {
         });
 
         let scheduler_for_handler = Arc::clone(&scheduler);
-        tauri::async_runtime::spawn(async move {
+        tokio::spawn(async move {
             scheduler_for_handler.run_outcome_handler(outcome_rx).await;
         });
 
