@@ -2,6 +2,7 @@
 
 @use '../../../../component-library/styles/tokens' as *;
 @use '../../../../component-library/styles/_extended-mixins' as mixins;
+@use './config-page-layout.tokens' as configLayout;
 
 
 .bitfun-config-page-layout {
@@ -34,11 +35,11 @@
    * the actual content, not at the flex-allocated truncated position. */
   flex-shrink: 0;
   overflow: visible;
-  padding: 0 var(--config-page-content-inline-padding);
+  padding: 0 configLayout.$config-page-content-inline-padding;
 }
 
 .bitfun-config-page-content__inner {
-  width: min(100%, var(--config-page-content-max-width));
+  width: min(100%, configLayout.$config-page-content-max-width);
   margin-inline: auto;
   display: flex;
   flex-direction: column;
@@ -174,10 +175,16 @@
 
 @container config-panel (max-width: 900px) {
   .bitfun-config-page-layout {
-    --config-page-content-inline-padding: var(--size-gap-4);
     --config-page-content-bottom-padding: 40px;
-    --config-page-content-max-width: 100%;
     --config-page-section-gap: var(--size-gap-8);
+  }
+
+  .bitfun-config-page-content {
+    padding-inline: var(--size-gap-4);
+  }
+
+  .bitfun-config-page-content__inner {
+    width: 100%;
   }
 }
 

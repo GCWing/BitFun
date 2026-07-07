@@ -1,6 +1,8 @@
 /* Markdown renderer styles */
 
 @use '../../styles/markdown-layout' as markdown;
+@use '../../styles/flowchat-markdown-code-vars' as markdownCode;
+@use '../../styles/flowchat-markdown-table-vars' as markdownTable;
 
 .markdown-renderer {
   --markdown-font-sans: var(--font-family-sans);
@@ -34,13 +36,18 @@
   --markdown-inline-code-border: var(--color-overlay-white-08);
   --markdown-pre-bg: var(--color-bg-primary);
   --markdown-pre-border: var(--border-subtle);
-  --markdown-blockquote-bg: rgba(var(--color-static-white-rgb), 0.025);
-  --markdown-blockquote-border: rgba(var(--color-static-white-rgb), 0.16);
-  --markdown-table-border: var(--flowchat-md-table-border);
-  --markdown-table-surface: var(--flowchat-md-table-surface);
-  --markdown-table-header-bg: var(--flowchat-md-table-th-bg);
-  --markdown-table-row-stripe: var(--flowchat-md-table-row-stripe);
-  --markdown-table-row-hover: var(--flowchat-md-table-hover);
+  --markdown-blockquote-bg: #{markdownCode.$bq-bg};
+  --markdown-blockquote-border: #{markdownCode.$bq-border};
+  --markdown-table-border: #{markdownTable.$border};
+  --markdown-table-shadow: #{markdownTable.$shadow};
+  --markdown-table-surface: #{markdownTable.$surface};
+  --markdown-table-cell-border: #{markdownTable.$cell-border};
+  --markdown-table-col-divider: #{markdownTable.$col-divider};
+  --markdown-table-header-bg: #{markdownTable.$th-bg};
+  --markdown-table-header-fg: #{markdownTable.$th-fg};
+  --markdown-table-row-base: #{markdownTable.$row-base};
+  --markdown-table-row-stripe: #{markdownTable.$row-stripe};
+  --markdown-table-row-hover: #{markdownTable.$hover};
 
   width: 100%;
   max-width: 100%;
@@ -484,7 +491,7 @@
   border: 1px solid var(--markdown-table-border);
   border-radius: var(--flowchat-card-radius);
   background: var(--markdown-table-surface);
-  box-shadow: var(--flowchat-md-table-shadow);
+  box-shadow: var(--markdown-table-shadow);
 }
 
 .markdown-renderer .table-wrapper table {
@@ -498,7 +505,7 @@
 .markdown-renderer .table-wrapper th,
 .markdown-renderer .table-wrapper td {
   padding: var(--markdown-table-cell-pad-y) var(--markdown-table-cell-pad-x);
-  border-bottom: 1px solid var(--flowchat-md-table-cell-border);
+  border-bottom: 1px solid var(--markdown-table-cell-border);
   color: var(--color-text-primary);
   text-align: left;
   vertical-align: top;
@@ -506,12 +513,12 @@
 
 .markdown-renderer .table-wrapper th + th,
 .markdown-renderer .table-wrapper td + td {
-  border-left: 1px solid var(--flowchat-md-table-col-divider);
+  border-left: 1px solid var(--markdown-table-col-divider);
 }
 
 .markdown-renderer .table-wrapper th {
   background: var(--markdown-table-header-bg);
-  color: var(--flowchat-md-table-th-fg);
+  color: var(--markdown-table-header-fg);
   font-family: var(--markdown-font-heading);
   font-weight: 600;
 }
@@ -521,7 +528,7 @@
 }
 
 .markdown-renderer .table-wrapper tbody tr {
-  background: var(--flowchat-md-table-row-base);
+  background: var(--markdown-table-row-base);
 }
 
 .markdown-renderer .table-wrapper tbody tr:nth-child(2n) {
@@ -607,8 +614,18 @@
   --markdown-inline-code-border: var(--color-overlay-black-12);
   --markdown-pre-bg: var(--private-markdown-code-bg-light);
   --markdown-pre-border: var(--color-overlay-slate-12);
-  --markdown-blockquote-bg: var(--flowchat-md-bq-bg);
-  --markdown-blockquote-border: var(--flowchat-md-bq-border);
+  --markdown-blockquote-bg: #{markdownCode.$bq-bg-light};
+  --markdown-blockquote-border: #{markdownCode.$bq-border-light};
+  --markdown-table-border: #{markdownTable.$border-light};
+  --markdown-table-shadow: #{markdownTable.$shadow-light};
+  --markdown-table-surface: #{markdownTable.$surface-light};
+  --markdown-table-cell-border: #{markdownTable.$cell-border-light};
+  --markdown-table-col-divider: #{markdownTable.$col-divider-light};
+  --markdown-table-header-bg: #{markdownTable.$th-bg-light};
+  --markdown-table-header-fg: #{markdownTable.$th-fg-light};
+  --markdown-table-row-base: #{markdownTable.$row-base-light};
+  --markdown-table-row-stripe: #{markdownTable.$row-stripe-light};
+  --markdown-table-row-hover: #{markdownTable.$hover-light};
 
   .inline-code {
     color: var(--private-markdown-inline-code-text-light);
@@ -640,7 +657,7 @@
 
   blockquote,
   .custom-blockquote {
-    color: var(--flowchat-md-bq-fg);
+    color: markdownCode.$bq-fg-light;
   }
 }
 

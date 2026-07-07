@@ -1,16 +1,17 @@
  
 
 @use '../../../../component-library/styles/tokens' as *;
+@use './config-page-layout.tokens' as configLayout;
 
 
 .bitfun-config-page-header {
   flex-shrink: 0;
-  padding: 48px var(--config-page-content-inline-padding) 0;
+  padding: 48px configLayout.$config-page-content-inline-padding 0;
   margin-bottom: var(--size-gap-6);
 }
 
 .bitfun-config-page-header__inner {
-  width: min(100%, var(--config-page-content-max-width));
+  width: min(100%, configLayout.$config-page-content-max-width);
   margin-inline: auto;
   display: flex;
   justify-content: space-between;
@@ -93,11 +94,25 @@
   height: 1px;
   background: var(--border-subtle);
   width: min(
-    calc(100% - (2 * var(--config-page-content-inline-padding))),
-    var(--config-page-content-max-width)
+    calc(100% - (2 * #{configLayout.$config-page-content-inline-padding})),
+    #{configLayout.$config-page-content-max-width}
   );
   margin: var(--size-gap-4) auto;
   display: none;
+}
+
+@container config-panel (max-width: 900px) {
+  .bitfun-config-page-header {
+    padding-inline: var(--size-gap-4);
+  }
+
+  .bitfun-config-page-header__inner {
+    width: 100%;
+  }
+
+  .bitfun-config-page-header-divider {
+    width: calc(100% - (2 * var(--size-gap-4)));
+  }
 }
 
 

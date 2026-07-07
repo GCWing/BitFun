@@ -1,4 +1,6 @@
 @use '../../../../component-library/styles/tokens.scss' as *;
+@use '../../../../component-library/styles/flowchat-markdown-code-vars' as markdownCode;
+@use '../../../../component-library/styles/flowchat-markdown-table-vars' as markdownTable;
 @use '../../styles/markdown-editor-layout' as markdownLayout;
 
 .m-editor-tiptap {
@@ -121,33 +123,35 @@
     }
 
     blockquote {
-      margin: var(--flowchat-md-bq-margin);
-      padding: var(--flowchat-md-bq-padding);
+      margin: markdownCode.$bq-margin;
+      padding: markdownCode.$bq-padding;
       font-style: italic;
-      color: var(--flowchat-md-bq-fg);
-      background: var(--flowchat-md-bq-bg);
-      border-left: 3px solid var(--flowchat-md-bq-border);
-      border-radius: var(--flowchat-md-bq-radius);
+      color: markdownCode.$bq-fg;
+      background: markdownCode.$bq-bg;
+      border-left: 3px solid markdownCode.$bq-border;
+      border-radius: markdownCode.$bq-radius;
     }
 
     pre {
       margin: 0.25rem 0.3rem;
-      padding: var(--flowchat-md-pre-padding);
+      padding: markdownCode.$pre-padding;
       overflow-x: auto;
       font-size: var(--flowchat-code-font-size);
       line-height: 1.5;
       font-family: var(--font-family-mono);
-      color: var(--flowchat-md-pre-code-fg);
-      background: var(--flowchat-md-pre-bg);
-      border: 1px dashed var(--flowchat-md-pre-border);
+      color: markdownCode.$pre-code-fg;
+      background: markdownCode.$pre-bg;
+      border: 1px dashed markdownCode.$pre-border;
       border-radius: var(--flowchat-card-radius);
-      box-shadow: var(--flowchat-md-pre-shadow);
-      transition: all 0.3s ease;
+      box-shadow: markdownCode.$pre-shadow;
+      transition:
+        border-color 0.3s ease,
+        box-shadow 0.3s ease;
 
       &:hover {
         border-style: solid;
-        border-color: var(--flowchat-md-pre-hover-border);
-        box-shadow: var(--flowchat-md-pre-hover-shadow);
+        border-color: markdownCode.$pre-hover-border;
+        box-shadow: markdownCode.$pre-hover-shadow;
       }
     }
 
@@ -160,18 +164,21 @@
       vertical-align: baseline;
       white-space: nowrap;
       font-family: var(--font-family-mono);
-      color: var(--flowchat-md-inline-code-fg);
-      background: var(--flowchat-md-inline-code-bg);
-      border: 1px solid var(--flowchat-md-inline-code-border);
+      color: markdownCode.$inline-code-fg;
+      background: markdownCode.$inline-code-bg;
+      border: 1px solid markdownCode.$inline-code-border;
       border-radius: 4px;
-      transition: all 0.15s ease;
+      transition:
+        background-color 0.15s ease,
+        border-color 0.15s ease,
+        color 0.15s ease;
       box-decoration-break: clone;
       -webkit-box-decoration-break: clone;
 
       &:hover {
-        background: var(--flowchat-md-inline-code-hover-bg);
-        border-color: var(--flowchat-md-inline-code-hover-border);
-        color: var(--flowchat-md-inline-code-hover-fg);
+        background: markdownCode.$inline-code-hover-bg;
+        border-color: markdownCode.$inline-code-hover-border;
+        color: markdownCode.$inline-code-hover-fg;
       }
     }
 
@@ -226,10 +233,10 @@
       margin: $size-gap-4 0;
       table-layout: fixed;
       font-size: 0.85rem;
-      border: 1px solid var(--flowchat-md-table-border);
+      border: 1px solid markdownTable.$border;
       border-radius: var(--flowchat-card-radius);
-      background: var(--flowchat-md-table-surface);
-      box-shadow: var(--flowchat-md-table-shadow);
+      background: markdownTable.$surface;
+      box-shadow: markdownTable.$shadow;
       overflow: hidden;
     }
 
@@ -237,7 +244,7 @@
     td {
       padding: $size-gap-3 $size-gap-4;
       border: none;
-      border-bottom: 1px solid var(--flowchat-md-table-cell-border);
+      border-bottom: 1px solid markdownTable.$cell-border;
       vertical-align: top;
       min-width: 5rem;
       word-break: break-word;
@@ -249,8 +256,8 @@
 
     th {
       font-weight: $font-weight-semibold;
-      background: var(--flowchat-md-table-th-bg);
-      color: var(--flowchat-md-table-th-fg);
+      background: markdownTable.$th-bg;
+      color: markdownTable.$th-fg;
     }
 
     td {
@@ -260,7 +267,7 @@
     th + th,
     td + td,
     th + td {
-      border-left: 1px solid var(--flowchat-md-table-col-divider);
+      border-left: 1px solid markdownTable.$col-divider;
     }
 
     tbody tr:last-child td,
@@ -269,19 +276,19 @@
     }
 
     tbody tr {
-      background: var(--flowchat-md-table-row-base);
+      background: markdownTable.$row-base;
     }
 
     tbody tr:nth-child(2n) {
-      background: var(--flowchat-md-table-row-stripe);
+      background: markdownTable.$row-stripe;
     }
 
     tbody tr:hover {
-      background: var(--flowchat-md-table-hover);
+      background: markdownTable.$hover;
     }
 
     thead tr:hover {
-      background: var(--flowchat-md-table-hover);
+      background: markdownTable.$hover;
     }
 
     thead tr:hover th,
@@ -826,13 +833,13 @@
 
   .m-editor-inline-ai-rendered__content.markdown-body blockquote {
     margin: 0 0 6px;
-    padding: var(--flowchat-md-bq-padding);
+    padding: markdownCode.$bq-padding;
     font-style: italic;
     font-size: var(--font-size-2xs);
-    color: var(--flowchat-md-bq-fg);
-    background: var(--flowchat-md-bq-bg);
-    border-left: 3px solid var(--flowchat-md-bq-border);
-    border-radius: var(--flowchat-md-bq-radius);
+    color: markdownCode.$bq-fg;
+    background: markdownCode.$bq-bg;
+    border-left: 3px solid markdownCode.$bq-border;
+    border-radius: markdownCode.$bq-radius;
     opacity: 1;
   }
 
@@ -842,18 +849,20 @@
     font-size: var(--font-size-2xs);
     line-height: 1.45;
     font-family: var(--font-family-mono);
-    color: var(--flowchat-md-pre-code-fg);
-    background: var(--flowchat-md-pre-bg);
-    border: 1px dashed var(--flowchat-md-pre-border);
+    color: markdownCode.$pre-code-fg;
+    background: markdownCode.$pre-bg;
+    border: 1px dashed markdownCode.$pre-border;
     border-radius: var(--flowchat-card-radius);
-    box-shadow: var(--flowchat-md-pre-shadow);
+    box-shadow: markdownCode.$pre-shadow;
     overflow-x: auto;
-    transition: all 0.3s ease;
+    transition:
+      border-color 0.3s ease,
+      box-shadow 0.3s ease;
 
     &:hover {
       border-style: solid;
-      border-color: var(--flowchat-md-pre-hover-border);
-      box-shadow: var(--flowchat-md-pre-hover-shadow);
+      border-color: markdownCode.$pre-hover-border;
+      box-shadow: markdownCode.$pre-hover-shadow;
     }
   }
 
@@ -879,9 +888,9 @@
     font-size: 0.9em;
     font-weight: 500;
     font-family: var(--font-family-mono);
-    color: var(--flowchat-md-inline-code-fg);
-    background: var(--flowchat-md-inline-code-bg);
-    border: 1px solid var(--flowchat-md-inline-code-border);
+    color: markdownCode.$inline-code-fg;
+    background: markdownCode.$inline-code-bg;
+    border: 1px solid markdownCode.$inline-code-border;
     border-radius: 4px;
   }
 
@@ -1235,5 +1244,118 @@
 
   .m-editor-details-block__content > :last-child {
     margin-bottom: 0;
+  }
+}
+
+:root[data-theme="light"] .m-editor-tiptap,
+:root[data-theme-type="light"] .m-editor-tiptap,
+[data-theme-type="light"] .m-editor-tiptap,
+.light .m-editor-tiptap {
+  .ProseMirror {
+    blockquote {
+      color: markdownCode.$bq-fg-light;
+      background: markdownCode.$bq-bg-light;
+      border-left-color: markdownCode.$bq-border-light;
+    }
+
+    pre {
+      color: markdownCode.$pre-code-fg-light;
+      background: markdownCode.$pre-bg-light;
+      border-color: markdownCode.$pre-border-light;
+      box-shadow: markdownCode.$pre-shadow-light;
+
+      &:hover {
+        border-color: markdownCode.$pre-hover-border-light;
+        box-shadow: markdownCode.$pre-hover-shadow-light;
+      }
+    }
+
+    code {
+      color: markdownCode.$inline-code-fg-light;
+      background: markdownCode.$inline-code-bg-light;
+      border-color: markdownCode.$inline-code-border-light;
+
+      &:hover {
+        background: markdownCode.$inline-code-hover-bg-light;
+        border-color: markdownCode.$inline-code-hover-border-light;
+        color: markdownCode.$inline-code-hover-fg-light;
+      }
+    }
+
+    pre code,
+    pre code:hover {
+      color: inherit;
+      background: transparent !important;
+      border: none !important;
+    }
+
+    table {
+      border-color: markdownTable.$border-light;
+      background: markdownTable.$surface-light;
+      box-shadow: markdownTable.$shadow-light;
+    }
+
+    th,
+    td {
+      border-bottom-color: markdownTable.$cell-border-light;
+    }
+
+    th {
+      background: markdownTable.$th-bg-light;
+      color: markdownTable.$th-fg-light;
+    }
+
+    th + th,
+    td + td,
+    th + td {
+      border-left-color: markdownTable.$col-divider-light;
+    }
+
+    tbody tr {
+      background: markdownTable.$row-base-light;
+    }
+
+    tbody tr:nth-child(2n) {
+      background: markdownTable.$row-stripe-light;
+    }
+
+    tbody tr:hover,
+    thead tr:hover {
+      background: markdownTable.$hover-light;
+    }
+  }
+
+  .m-editor-inline-ai-rendered__content.markdown-body blockquote {
+    color: markdownCode.$bq-fg-light;
+    background: markdownCode.$bq-bg-light;
+    border-left-color: markdownCode.$bq-border-light;
+  }
+
+  .m-editor-inline-ai-rendered__content.markdown-body pre {
+    color: markdownCode.$pre-code-fg-light;
+    background: markdownCode.$pre-bg-light;
+    border-color: markdownCode.$pre-border-light;
+    box-shadow: markdownCode.$pre-shadow-light;
+
+    &:hover {
+      border-color: markdownCode.$pre-hover-border-light;
+      box-shadow: markdownCode.$pre-hover-shadow-light;
+    }
+  }
+
+  .m-editor-inline-ai-rendered__content.markdown-body pre code {
+    color: inherit;
+    background: transparent;
+    border: none;
+  }
+
+  .m-editor-inline-ai-rendered__content.markdown-body :not(pre) > code,
+  .m-editor-inline-ai-rendered__content.markdown-body p code,
+  .m-editor-inline-ai-rendered__content.markdown-body li code,
+  .m-editor-inline-ai-rendered__content.markdown-body td code,
+  .m-editor-inline-ai-rendered__content.markdown-body th code {
+    color: markdownCode.$inline-code-fg-light;
+    background: markdownCode.$inline-code-bg-light;
+    border-color: markdownCode.$inline-code-border-light;
   }
 }

@@ -1,12 +1,24 @@
 @use '../../../../component-library/styles/tokens' as *;
 
 .review-team-page {
-  --config-page-content-max-width: 1480px;
-  --config-page-content-inline-padding: clamp(40px, 6vw, 80px);
   /* Aligns overview + member rows with `AgentTeamCard` / gallery team cards */
   --review-team-accent: var(--color-accent-400);
   --review-team-shadow-color: rgb(var(--color-overlay-slate-rgb));
   --member-accent: var(--color-accent-500);
+
+  .bitfun-config-page-header,
+  .bitfun-config-page-content {
+    padding-inline: clamp(40px, 6vw, 80px);
+  }
+
+  .bitfun-config-page-header__inner,
+  .bitfun-config-page-content__inner {
+    width: min(100%, 1480px);
+  }
+
+  .bitfun-config-page-header-divider {
+    width: min(calc(100% - (2 * clamp(40px, 6vw, 80px))), 1480px);
+  }
 
   .bitfun-config-page-content__inner {
     max-width: 1480px;
@@ -593,6 +605,24 @@
 
     &__member-detail-panel {
       animation: none;
+    }
+  }
+}
+
+@container config-panel (max-width: 900px) {
+  .review-team-page {
+    .bitfun-config-page-header,
+    .bitfun-config-page-content {
+      padding-inline: var(--size-gap-4);
+    }
+
+    .bitfun-config-page-header__inner,
+    .bitfun-config-page-content__inner {
+      width: 100%;
+    }
+
+    .bitfun-config-page-header-divider {
+      width: calc(100% - (2 * var(--size-gap-4)));
     }
   }
 }
