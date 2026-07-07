@@ -10,7 +10,6 @@ import {
   createSecondaryAccentScale,
   createStandardEasing,
   createStandardSpacing,
-  createWindowControls,
   overlayBlack,
   rgbFromHex,
   rgbaFromHex,
@@ -157,9 +156,6 @@ export const bitfunCyberTheme: ThemeConfig = {
 
 
   components: {
-
-    windowControls: createWindowControls(CYBER_ERROR),
-
     button: {
 
 

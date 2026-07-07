@@ -10,6 +10,7 @@ use bitfun_runtime_ports::{DelegationPolicy, RemoteExecPort, TerminalPort};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::SystemTime;
+pub use tool_runtime::context::PrimaryModelFacts;
 pub use tool_runtime::pipeline::SubagentBatchExecutionPolicy;
 
 /// Tool execution options
@@ -65,6 +66,7 @@ pub struct ToolExecutionContext {
     pub attempt_index: Option<u32>,
     pub agent_type: String,
     pub workspace: Option<WorkspaceBinding>,
+    pub primary_model_facts: PrimaryModelFacts,
     pub context_vars: HashMap<String, String>,
     pub subagent_parent_info: Option<SubagentParentInfo>,
     pub(crate) delegation_policy: DelegationPolicy,

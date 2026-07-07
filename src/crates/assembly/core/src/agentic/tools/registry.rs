@@ -360,7 +360,10 @@ mod tests {
             "submit_code_review",
             "GetToolSpec",
             "GetFileDiff",
-            "Log",
+            "CreateCanvas",
+            "ReadCanvas",
+            "UpdateCanvas",
+            "PatchCanvas",
             "SessionControl",
             "SessionMessage",
             "SessionHistory",
@@ -428,6 +431,7 @@ mod tests {
             vec![
                 "core.basic",
                 "core.agent",
+                "core.canvas",
                 "core.session",
                 "core.integration"
             ],
@@ -536,7 +540,6 @@ mod tests {
             vec![
                 "CreatePlan",
                 "GetFileDiff",
-                "Log",
                 "SessionControl",
                 "SessionMessage",
                 "SessionHistory",
@@ -585,7 +588,7 @@ mod tests {
                 "submit_code_review",
                 "GetToolSpec",
                 "GetFileDiff",
-                "Log",
+                "ReadCanvas",
                 "SessionHistory",
                 "WebSearch",
                 "WebFetch",

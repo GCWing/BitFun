@@ -1,0 +1,42 @@
+:root {
+  color-scheme: light dark;
+  --bitfun-canvas-bg: #ffffff;
+  --bitfun-canvas-panel: #f4f6f8;
+  --bitfun-canvas-fg: #20242a;
+  --bitfun-canvas-muted: #697386;
+  --bitfun-canvas-border: rgba(32, 36, 42, 0.15);
+  --bitfun-canvas-accent: #2f6fed;
+  --bitfun-canvas-success: #248a3d;
+  --bitfun-canvas-warning: #b54708;
+  --bitfun-canvas-danger: #d1242f;
+  --bitfun-canvas-info: #0969da;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bitfun-canvas-bg: #111318;
+    --bitfun-canvas-panel: #181b22;
+    --bitfun-canvas-fg: #eef0f4;
+    --bitfun-canvas-muted: #a4acb9;
+  }
+}
+body {
+  margin: 0;
+  background: #eef2f6;
+  color: var(--bitfun-canvas-fg);
+  font: 13px/1.5 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  text-rendering: geometricPrecision;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+html {
+  height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+#bitfun-canvas-root {
+  min-height: 100vh;
+  padding: 24px 20px 56px;
+  box-sizing: border-box;
+}
+* { box-sizing: border-box; }
+button, input, select { font: inherit; }

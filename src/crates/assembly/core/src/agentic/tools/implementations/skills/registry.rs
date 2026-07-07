@@ -14,11 +14,11 @@ use crate::util::errors::{BitFunError, BitFunResult};
 use bitfun_agent_runtime::skills::{
     annotate_shadowed_skills, build_mode_skill_infos, filter_candidates_for_mode,
     normalize_local_skill_dir_name, normalize_remote_skill_dir_name, normalize_skill_keys,
-    resolve_default_hidden_builtin_for_explicit_invocation, resolve_visible_skills,
-    sort_skill_candidates_by_dir, sort_skills, ExplicitSkillInvocationResolution, SkillCandidate,
-    BITFUN_SYSTEM_SKILL_DIR, BITFUN_SYSTEM_SKILL_SLOT, BITFUN_USER_SKILL_SLOT,
-    PROJECT_SKILL_KEY_PREFIX, PROJECT_SKILL_ROOTS, USER_CONFIG_SKILL_ROOTS, USER_HOME_SKILL_ROOTS,
-    USER_SKILL_KEY_PREFIX,
+    resolve_default_hidden_builtin_for_explicit_invocation, resolve_user_config_skill_root,
+    resolve_visible_skills, sort_skill_candidates_by_dir, sort_skills,
+    ExplicitSkillInvocationResolution, SkillCandidate, BITFUN_SYSTEM_SKILL_DIR,
+    BITFUN_SYSTEM_SKILL_SLOT, BITFUN_USER_SKILL_SLOT, PROJECT_SKILL_KEY_PREFIX,
+    PROJECT_SKILL_ROOTS, USER_CONFIG_SKILL_ROOTS, USER_HOME_SKILL_ROOTS, USER_SKILL_KEY_PREFIX,
 };
 use log::{debug, error};
 use std::collections::HashSet;
@@ -76,6 +76,7 @@ impl SkillRegistry {
     fn get_possible_paths_for_workspace(workspace_root: Option<&Path>) -> Vec<SkillRootEntry> {
         let mut entries = Vec::new();
         let mut priority = 0usize;
+        let mut deferred_home_entries = Vec::new();
 
         if let Some(workspace_path) = workspace_root {
             for spec in PROJECT_SKILL_ROOTS {
@@ -93,10 +94,14 @@ impl SkillRegistry {
             }
         }
 
-        if let Some(home) = dirs::home_dir() {
+        let home_dir = dirs::home_dir();
+
+        if let Some(home) = home_dir.as_deref() {
             for spec in USER_HOME_SKILL_ROOTS {
                 let path = home.join(spec.parent).join(spec.subdir);
-                if path.exists() && path.is_dir() {
+                if spec.parent == ".opencode" {
+                    deferred_home_entries.push((path, spec.slot));
+                } else if path.exists() && path.is_dir() {
                     entries.push(SkillRootEntry {
                         path,
                         level: SkillLocation::User,
@@ -109,7 +114,7 @@ impl SkillRegistry {
             }
         }
 
-        // BitFun's own user-defined skills sit between home slots and config slots.
+        // BitFun's own user-defined skills sit between most home slots and config slots.
         // This lets other agent directories (e.g. ~/.claude/skills) take precedence
         // while still keeping config-level overrides after BitFun defaults.
         let path_manager = get_path_manager_arc();
@@ -139,7 +144,7 @@ impl SkillRegistry {
 
         if let Some(config_dir) = dirs::config_dir() {
             for spec in USER_CONFIG_SKILL_ROOTS {
-                let path = config_dir.join(spec.parent).join(spec.subdir);
+                let path = resolve_user_config_skill_root(spec, &config_dir, home_dir.as_deref());
                 if path.exists() && path.is_dir() {
                     entries.push(SkillRootEntry {
                         path,
@@ -151,6 +156,19 @@ impl SkillRegistry {
                 }
                 priority += 1;
             }
+        }
+
+        for (path, slot) in deferred_home_entries {
+            if path.exists() && path.is_dir() {
+                entries.push(SkillRootEntry {
+                    path,
+                    level: SkillLocation::User,
+                    slot,
+                    priority,
+                    is_builtin: false,
+                });
+            }
+            priority += 1;
         }
 
         entries

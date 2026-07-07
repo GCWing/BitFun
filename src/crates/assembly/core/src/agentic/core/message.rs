@@ -66,6 +66,8 @@ pub struct MessageMetadata {
     pub internal_reminder_kind: Option<InternalReminderKind>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub compression_payload: Option<CompressionPayload>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub memory_citation: Option<MemoryCitation>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -106,6 +108,23 @@ pub enum InternalReminderKind {
     InterruptedContinue,
     ThinkingOnlyRescue,
     FinalizeCacheAnchor,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MemoryCitation {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub entries: Vec<MemoryCitationEntry>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub rollout_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MemoryCitationEntry {
+    pub path: String,
+    pub line_start: u32,
+    pub line_end: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
 }
 
 impl InternalReminderKind {
@@ -529,6 +548,11 @@ impl Message {
     /// Set message's thinking_signature (for Anthropic extended thinking multi-turn conversations)
     pub fn with_thinking_signature(mut self, signature: Option<String>) -> Self {
         self.metadata.thinking_signature = signature;
+        self
+    }
+
+    pub fn with_memory_citation(mut self, memory_citation: Option<MemoryCitation>) -> Self {
+        self.metadata.memory_citation = memory_citation;
         self
     }
 

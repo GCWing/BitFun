@@ -1,5 +1,7 @@
 import React from 'react';
 import {
+  Archive,
+  ArchiveRestore,
   Clipboard,
   Code,
   Copy,
@@ -35,6 +37,8 @@ import { MenuItem as SystemMenuItem } from '../types/menu.types';
 import { ContextMenuItem as UIMenuItem } from './ui/types';
 
 const CONTEXT_MENU_ICONS = {
+  Archive,
+  ArchiveRestore,
   Clipboard,
   Code,
   Copy,

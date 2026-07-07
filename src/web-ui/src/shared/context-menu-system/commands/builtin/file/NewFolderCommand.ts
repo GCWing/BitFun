@@ -5,6 +5,7 @@ import { CommandResult } from '../../../types/command.types';
 import { MenuContext, ContextType, FileNodeContext } from '../../../types/context.types';
 import { globalEventBus } from '../../../../../infrastructure/event-bus';
 import { i18nService } from '../../../../../infrastructure/i18n';
+import { dirnameAbsolutePath } from '@/shared/utils/pathUtils';
 
 export class NewFolderCommand extends BaseCommand {
   constructor() {
@@ -30,9 +31,9 @@ export class NewFolderCommand extends BaseCommand {
   async execute(context: MenuContext): Promise<CommandResult> {
     try {
       const fileContext = context as FileNodeContext;
-      const parentPath = fileContext.isDirectory 
-        ? fileContext.filePath 
-        : fileContext.filePath.substring(0, fileContext.filePath.lastIndexOf('/'));
+      const parentPath = fileContext.isDirectory
+        ? fileContext.filePath
+        : dirnameAbsolutePath(fileContext.filePath);
 
       globalEventBus.emit('file:new-folder', { parentPath });
 

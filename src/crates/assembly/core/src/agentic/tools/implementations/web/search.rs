@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use bitfun_services_integrations::web_tools::{ExaSearchRequest, WebToolNetworkProvider};
 use log::{error, info};
 use serde_json::{json, Value};
+use tool_runtime::web_search::{parse_exa_text_results, WebSearchResult};
 
 const EXA_RESULTS: u64 = 5;
 const EXA_CONTEXT: u64 = 8_000;
@@ -44,84 +45,51 @@ impl WebSearchTool {
     }
 
     pub(crate) fn results(&self, text: &str) -> Vec<Value> {
-        let mut out = Vec::new();
-        let mut cur: Option<(String, String, Vec<String>)> = None;
-        let mut body = false;
-
-        for line in text.lines() {
-            if let Some(next) = line.strip_prefix("Title: ") {
-                if let Some((title, url, text)) = cur.take() {
-                    out.push(self.item(title, url, text));
-                }
-                cur = Some((next.trim().to_string(), String::new(), Vec::new()));
-                body = false;
-                continue;
-            }
-
-            let Some(cur) = cur.as_mut() else {
-                continue;
-            };
-
-            if let Some(next) = line.strip_prefix("URL: ") {
-                cur.1 = next.trim().to_string();
-                continue;
-            }
-
-            if let Some(next) = line.strip_prefix("Text: ") {
-                if !next.trim().is_empty() {
-                    cur.2.push(next.trim().to_string());
-                }
-                body = true;
-                continue;
-            }
-
-            if body {
-                cur.2.push(line.to_string());
-            }
-        }
-
-        if let Some((title, url, text)) = cur.take() {
-            out.push(self.item(title, url, text));
-        }
-
-        if out.is_empty() && !text.trim().is_empty() {
-            return vec![json!({
-                "title": "Web search result",
-                "url": "",
-                "snippet": self.snippet(text)
-            })];
-        }
-
-        out
+        parse_exa_text_results(text)
+            .into_iter()
+            .map(search_result_to_value)
+            .collect()
     }
+}
 
-    fn item(&self, title: String, url: String, text: Vec<String>) -> Value {
-        json!({
-            "title": title,
-            "url": url,
-            "snippet": self.snippet(&text.join("\n"))
+fn search_result_to_value(result: WebSearchResult) -> Value {
+    json!({
+        "title": result.title,
+        "url": result.url,
+        "snippet": result.snippet,
+    })
+}
+
+pub(super) fn build_web_search_tool_result(query: &str, results: Vec<Value>) -> ToolResult {
+    let formatted_results = results
+        .iter()
+        .enumerate()
+        .map(|(i, r)| {
+            format!(
+                "{}. {}\n   URL: {}\n   Snippet: {}\n",
+                i + 1,
+                r["title"].as_str().unwrap_or("Untitled"),
+                r["url"].as_str().unwrap_or(""),
+                r["snippet"].as_str().unwrap_or("")
+            )
         })
-    }
+        .collect::<Vec<_>>()
+        .join("\n");
 
-    fn snippet(&self, text: &str) -> String {
-        let text = text
-            .lines()
-            .map(str::trim)
-            .filter(|line| !line.is_empty())
-            .filter(|line| !line.starts_with('#'))
-            .collect::<Vec<_>>()
-            .join(" ");
-
-        if text.chars().count() <= 320 {
-            return text;
-        }
-
-        let mut out = String::new();
-        for ch in text.chars().take(317) {
-            out.push(ch);
-        }
-        out.push_str("...");
-        out
+    ToolResult::Result {
+        data: json!({
+            "query": query,
+            "results": results,
+            "result_count": results.len(),
+            "provider": "exa_mcp"
+        }),
+        result_for_assistant: Some(format!(
+            "Search query: '{}'\nFound {} results:\n\n{}",
+            query,
+            results.len(),
+            formatted_results
+        )),
+        image_attachments: None,
     }
 }
 
@@ -248,38 +216,6 @@ Advanced features:
 
         let raw = self.search(query, num_results, kind, crawl, ctx).await?;
         let results = self.results(&raw);
-
-        let formatted_results = results
-            .iter()
-            .enumerate()
-            .map(|(i, r)| {
-                format!(
-                    "{}. {}\n   URL: {}\n   Snippet: {}\n",
-                    i + 1,
-                    r["title"].as_str().unwrap_or("Untitled"),
-                    r["url"].as_str().unwrap_or(""),
-                    r["snippet"].as_str().unwrap_or("")
-                )
-            })
-            .collect::<Vec<_>>()
-            .join("\n");
-
-        let result = ToolResult::Result {
-            data: json!({
-                "query": query,
-                "results": results,
-                "result_count": results.len(),
-                "provider": "exa_mcp"
-            }),
-            result_for_assistant: Some(format!(
-                "Search query: '{}'\nFound {} results:\n\n{}",
-                query,
-                results.len(),
-                formatted_results
-            )),
-            image_attachments: None,
-        };
-
-        Ok(vec![result])
+        Ok(vec![build_web_search_tool_result(query, results)])
     }
 }

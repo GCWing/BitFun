@@ -9,6 +9,9 @@ pub mod announcement;
 #[cfg(feature = "browser-control")]
 pub mod browser_control;
 
+#[cfg(feature = "canvas-runtime")]
+pub mod canvas;
+
 #[cfg(feature = "debug-log")]
 pub mod debug_log;
 
@@ -37,7 +40,10 @@ pub mod remote_connect;
 pub mod remote_ssh;
 
 #[cfg(feature = "review-platform")]
-pub mod review_platform_http;
+pub mod review_platform;
+
+#[cfg(feature = "review-platform")]
+pub(crate) mod review_platform_http;
 
 #[cfg(feature = "workspace-search")]
 pub mod workspace_search;

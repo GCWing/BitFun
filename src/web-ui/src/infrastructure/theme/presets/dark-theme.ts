@@ -13,7 +13,6 @@ import {
   createStandardRadius,
   createStandardSpacing,
   createStandardTypography,
-  createWindowControls,
   overlayBlack,
   overlayWhite,
   rgbFromHex,
@@ -141,9 +140,6 @@ export const bitfunDarkTheme: ThemeConfig = {
 
 
   components: {
-
-    windowControls: createWindowControls(DARK_ERROR),
-
     button: {
 
 

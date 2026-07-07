@@ -5,6 +5,7 @@ import { CommandResult } from '../../../types/command.types';
 import { MenuContext, ContextType, FileNodeContext } from '../../../types/context.types';
 import { globalEventBus } from '../../../../../infrastructure/event-bus';
 import { i18nService } from '@/infrastructure/i18n';
+import { confirmDanger } from '@/component-library/components/ConfirmDialog/confirmService';
 
 export class DeleteFileCommand extends BaseCommand {
   constructor() {
@@ -55,7 +56,9 @@ export class DeleteFileCommand extends BaseCommand {
       ? t('common:contextMenu.confirmDeleteFolder', { name: context.fileName })
       : t('common:contextMenu.confirmDeleteFile', { name: context.fileName });
 
-    return window.confirm(message);
+    return confirmDanger(t('common:file.delete'), message, {
+      confirmText: t('common:actions.delete'),
+    });
   }
 }
 

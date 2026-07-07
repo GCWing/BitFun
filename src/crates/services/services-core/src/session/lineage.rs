@@ -194,6 +194,7 @@ pub fn build_branched_session_metadata(facts: BranchSessionMetadataFacts<'_>) ->
     metadata.session_kind = SessionKind::Standard;
     metadata.created_at = facts.now_ms;
     metadata.last_active_at = facts.now_ms;
+    metadata.last_finished_at = None;
     metadata.turn_count = facts.branched_turns.len();
     metadata.message_count = facts
         .branched_turns

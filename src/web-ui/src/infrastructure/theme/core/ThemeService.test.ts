@@ -469,6 +469,50 @@ describe('ThemeService runtime theme tokens', () => {
     expect(rootStyle.getPropertyValue('--line-height-loose')).toBe('');
   });
 
+  it('projects theme motion duration tokens', () => {
+    const service = new ThemeService();
+    const customTheme = {
+      ...bitfunLightTheme,
+      id: 'custom-motion-alias',
+      motion: {
+        ...bitfunLightTheme.motion,
+        duration: {
+          ...bitfunLightTheme.motion.duration,
+          slow: '0.7s',
+        },
+      },
+    } as unknown as ThemeConfig;
+
+    (service as unknown as { injectCSSVariables(theme: ThemeConfig): void }).injectCSSVariables(customTheme);
+
+    const rootStyle = document.documentElement.style;
+    expect(rootStyle.getPropertyValue('--motion-slow')).toBe('0.7s');
+  });
+
+  it('keeps legacy window control close hover isolated from the static theme contract', () => {
+    const service = new ThemeService();
+    const customTheme = {
+      ...bitfunLightTheme,
+      id: 'custom-window-controls',
+      components: {
+        ...bitfunLightTheme.components,
+        windowControls: {
+          close: {
+            hoverColor: '#a85555',
+          },
+        },
+      },
+    } as unknown as ThemeConfig;
+
+    (service as unknown as { injectCSSVariables(theme: ThemeConfig): void }).injectCSSVariables(customTheme);
+    expect(document.documentElement.style.getPropertyValue('--window-control-close-hover-color')).toBe('#a85555');
+    expect(document.documentElement.getAttribute('data-window-control-close-hover-override')).toBe('true');
+
+    (service as unknown as { injectCSSVariables(theme: ThemeConfig): void }).injectCSSVariables(bitfunLightTheme);
+    expect(document.documentElement.style.getPropertyValue('--window-control-close-hover-color')).toBe('');
+    expect(document.documentElement.getAttribute('data-window-control-close-hover-override')).toBeNull();
+  });
+
   it('skips invalid persisted custom themes before they reach preview or runtime injection', async () => {
     const invalidCustomTheme = {
       ...bitfunLightTheme,

@@ -15,6 +15,7 @@ import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import { isMcpToolName } from '@/infrastructure/mcp/toolName';
 import { getCachedToolInfo } from '@/infrastructure/mcp/toolInfoCache';
+import { UI_EXCEPTION_ACCENTS } from '@/shared/theme/uiExceptionAccents';
 import type { ToolInfo } from '@/shared/types/agent-api';
 import { useToolCardHeightContract } from './useToolCardHeightContract';
 import './MCPToolDisplay.scss';
@@ -741,7 +742,11 @@ export const MCPToolDisplay: React.FC<ToolCardProps> = ({
   );
 
   return (
-    <div ref={cardRootRef} data-tool-card-id={toolId ?? ''}>
+    <div
+      ref={cardRootRef}
+      data-tool-card-id={toolId ?? ''}
+      style={{ '--private-mcp-tool-identity-color': UI_EXCEPTION_ACCENTS.toolIdentity.mcp } as React.CSSProperties}
+    >
       <BaseToolCard
         status={status}
         isExpanded={isExpanded}

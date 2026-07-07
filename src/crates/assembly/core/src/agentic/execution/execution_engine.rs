@@ -51,6 +51,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
+use tool_runtime::context::PrimaryModelFacts;
 
 /// Execution engine configuration
 #[derive(Debug, Clone)]
@@ -658,9 +659,9 @@ impl ExecutionEngine {
     async fn resolve_primary_model_context(
         model_id: &str,
         ai_client_model: &str,
-        ai_client_provider: &str,
+        ai_client_api_format: &str,
         unavailable_log_message: &str,
-    ) -> (String, bool) {
+    ) -> PrimaryModelFacts {
         let config_service = get_global_config_service().await.ok();
         if let Some(service) = config_service {
             let ai_config: crate::service::config::types::AIConfig =
@@ -680,7 +681,7 @@ impl ExecutionEngine {
                 })
                 .or_else(|| {
                     ai_config.models.iter().find(|m| {
-                        m.model_name == ai_client_model && m.provider == ai_client_provider
+                        m.model_name == ai_client_model && m.provider == ai_client_api_format
                     })
                 });
 
@@ -691,10 +692,10 @@ impl ExecutionEngine {
                     || matches!(m.category, ModelCategory::Multimodal)
             });
 
-            (resolved_id, supports)
+            PrimaryModelFacts::new(resolved_id, ai_client_model, ai_client_api_format, supports)
         } else {
             warn!("{}", unavailable_log_message);
-            (model_id.to_string(), false)
+            PrimaryModelFacts::new(model_id, ai_client_model, ai_client_api_format, false)
         }
     }
 
@@ -1116,7 +1117,7 @@ impl ExecutionEngine {
         round_number: usize,
         round_group_id: Option<String>,
         execution_context_vars: &HashMap<String, String>,
-        primary_supports_image_understanding: bool,
+        primary_model_facts: &PrimaryModelFacts,
         prepended_reminders: &[&str],
         messages: &[Message],
         reminder_text: &str,
@@ -1139,7 +1140,7 @@ impl ExecutionEngine {
                 .as_ref()
                 .map(|workspace| workspace.root_path()),
             &context.dialog_turn_id,
-            primary_supports_image_understanding,
+            primary_model_facts.supports_image_inputs,
             prepended_reminders,
         )
         .await?;
@@ -1159,6 +1160,7 @@ impl ExecutionEngine {
             collapsed_tools: Vec::new(),
             unlocked_collapsed_tools: Vec::new(),
             model_name: ai_client.config.model.clone(),
+            primary_model_facts: primary_model_facts.clone(),
             agent_type,
             context_vars: execution_context_vars.clone(),
             delegation_policy: context.delegation_policy,
@@ -1584,14 +1586,15 @@ impl ExecutionEngine {
                 ))
             })?;
 
-        let (resolved_primary_model_id, primary_supports_image_understanding) =
-            Self::resolve_primary_model_context(
-                &model_id,
-                &ai_client.config.model,
-                &ai_client.config.format,
-                "Config service unavailable, assuming compression model is text-only for image input gating",
-            )
-            .await;
+        let primary_model_facts = Self::resolve_primary_model_context(
+            &model_id,
+            &ai_client.config.model,
+            &ai_client.config.format,
+            "Config service unavailable, assuming compression model is text-only for image input gating",
+        )
+        .await;
+        let resolved_primary_model_id = primary_model_facts.model_id.clone();
+        let primary_supports_image_understanding = primary_model_facts.supports_image_inputs;
 
         let model_capability_profile = ModelCapabilityProfile::from_resolved_model(
             &resolved_primary_model_id,
@@ -1627,10 +1630,7 @@ impl ExecutionEngine {
             &context.agent_type,
             context.workspace.as_ref(),
             context.workspace_services.as_ref(),
-            Some(&resolved_primary_model_id),
-            Some(&ai_client.config.model),
-            Some(&ai_client.config.format),
-            primary_supports_image_understanding,
+            Some(&primary_model_facts),
             &tool_manifest_context_vars,
         );
         let tool_manifest = if enable_tools {
@@ -2226,14 +2226,15 @@ impl ExecutionEngine {
             })?;
 
         // Primary model vision capability (tools + system prompt appendix; also used below for API message stripping).
-        let (resolved_primary_model_id, primary_supports_image_understanding) =
-            Self::resolve_primary_model_context(
-                &model_id,
-                &ai_client.config.model,
-                &ai_client.config.format,
-                "Config service unavailable, assuming primary model is text-only for image input gating",
-            )
-            .await;
+        let primary_model_facts = Self::resolve_primary_model_context(
+            &model_id,
+            &ai_client.config.model,
+            &ai_client.config.format,
+            "Config service unavailable, assuming primary model is text-only for image input gating",
+        )
+        .await;
+        let resolved_primary_model_id = primary_model_facts.model_id.clone();
+        let primary_supports_image_understanding = primary_model_facts.supports_image_inputs;
 
         let model_context_window = ai_client.config.context_window as usize;
         let session_max_tokens = session.config.max_context_tokens;
@@ -2291,10 +2292,7 @@ impl ExecutionEngine {
             &agent_type,
             context.workspace.as_ref(),
             context.workspace_services.as_ref(),
-            Some(&resolved_primary_model_id),
-            Some(&ai_client.config.model),
-            Some(&ai_client.config.format),
-            primary_supports_image_understanding,
+            Some(&primary_model_facts),
             &tool_manifest_context_vars,
         );
 
@@ -2348,6 +2346,18 @@ impl ExecutionEngine {
         } else {
             (vec![], None)
         };
+        let final_tool_names = Self::finalize_tool_names(tool_definitions.as_deref());
+        debug!(
+            "Primary model and tool manifest resolved: session_id={}, turn_id={}, resolved_primary_model_id={}, primary_model_api_format={}, primary_model_supports_image_inputs={}, final_tool_count={}, final_tool_names={:?}, collapsed_tool_names={:?}",
+            context.session_id,
+            context.dialog_turn_id,
+            primary_model_facts.model_id,
+            primary_model_facts.api_format,
+            primary_model_facts.supports_image_inputs,
+            final_tool_names.len(),
+            final_tool_names,
+            collapsed_tools,
+        );
 
         // 4. Resolve the prompt scaffold used by model requests in this turn.
         // It is refreshed after successful context compression so the first
@@ -2417,22 +2427,6 @@ impl ExecutionEngine {
         let compression_threshold = session.config.compression_threshold;
 
         let mut execution_context_vars = context.context.clone();
-        execution_context_vars.insert(
-            "primary_model_id".to_string(),
-            resolved_primary_model_id.clone(),
-        );
-        execution_context_vars.insert(
-            "primary_model_name".to_string(),
-            ai_client.config.model.clone(),
-        );
-        execution_context_vars.insert(
-            "primary_model_provider".to_string(),
-            ai_client.config.format.clone(),
-        );
-        execution_context_vars.insert(
-            "primary_model_supports_image_understanding".to_string(),
-            primary_supports_image_understanding.to_string(),
-        );
         execution_context_vars.insert("turn_index".to_string(), context.turn_index.to_string());
 
         // If the primary model is text-only, do not send image payloads to the provider.
@@ -2646,6 +2640,7 @@ impl ExecutionEngine {
                 collapsed_tools: collapsed_tools.clone(),
                 unlocked_collapsed_tools,
                 model_name: ai_client.config.model.clone(),
+                primary_model_facts: primary_model_facts.clone(),
                 agent_type: agent_type.clone(),
                 context_vars: round_context_vars,
                 delegation_policy: context.delegation_policy,
@@ -3073,15 +3068,16 @@ impl ExecutionEngine {
                     dialog_turn_id
                 );
 
-                // Emit cancellation event
-                self.emit_event(
-                    AgenticEvent::DialogTurnCancelled {
-                        session_id: context.session_id.clone(),
-                        turn_id: context.dialog_turn_id.clone(),
-                    },
-                    EventPriority::High,
-                )
-                .await;
+                if context.emit_lifecycle_events {
+                    self.emit_event(
+                        AgenticEvent::DialogTurnCancelled {
+                            session_id: context.session_id.clone(),
+                            turn_id: context.dialog_turn_id.clone(),
+                        },
+                        EventPriority::High,
+                    )
+                    .await;
+                }
 
                 // Note: Token will be cleaned up when outer function exits
                 return Err(BitFunError::cancelled("Dialog cancelled"));
@@ -3136,7 +3132,7 @@ impl ExecutionEngine {
                         completed_rounds,
                         finalize_round_group_id.clone(),
                         &execution_context_vars,
-                        primary_supports_image_understanding,
+                        &primary_model_facts,
                         &finalize_prepended_reminders,
                         &messages,
                         finalize_reminder,
@@ -3166,7 +3162,7 @@ impl ExecutionEngine {
                             completed_rounds,
                             finalize_round_group_id.clone(),
                             &execution_context_vars,
-                            primary_supports_image_understanding,
+                            &primary_model_facts,
                             &finalize_prepended_reminders,
                             &messages,
                             finalize_reminder,
@@ -3271,28 +3267,29 @@ impl ExecutionEngine {
             }
         }
 
-        // Emit dialog turn completed event
-        debug!("Preparing to send DialogTurnCompleted event");
+        if context.emit_lifecycle_events {
+            debug!("Preparing to send DialogTurnCompleted event");
 
-        let _ = self
-            .event_queue
-            .enqueue(
-                AgenticEvent::DialogTurnCompleted {
-                    session_id: context.session_id.clone(),
-                    turn_id: context.dialog_turn_id.clone(),
-                    total_rounds: completed_rounds,
-                    total_tools,
-                    duration_ms,
-                    partial_recovery_reason: last_partial_recovery_reason,
-                    success: Some(success),
-                    finish_reason: Some(effective_finish_reason.to_string()),
-                    has_final_response: Some(has_final_response),
-                },
-                None,
-            )
-            .await;
+            let _ = self
+                .event_queue
+                .enqueue(
+                    AgenticEvent::DialogTurnCompleted {
+                        session_id: context.session_id.clone(),
+                        turn_id: context.dialog_turn_id.clone(),
+                        total_rounds: completed_rounds,
+                        total_tools,
+                        duration_ms,
+                        partial_recovery_reason: last_partial_recovery_reason,
+                        success: Some(success),
+                        finish_reason: Some(effective_finish_reason.to_string()),
+                        has_final_response: Some(has_final_response),
+                    },
+                    None,
+                )
+                .await;
 
-        debug!("DialogTurnCompleted event sent");
+            debug!("DialogTurnCompleted event sent");
+        }
 
         // Print dialog turn token statistics (from model's last returned usage)
         if let Some(usage) = last_usage {
@@ -3619,6 +3616,7 @@ mod tests {
             terminal_port: None,
             remote_exec_port: None,
             round_injection: None,
+            emit_lifecycle_events: true,
             recover_partial_on_cancel: false,
         };
 

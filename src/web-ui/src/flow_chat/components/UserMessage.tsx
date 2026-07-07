@@ -34,15 +34,15 @@ type InlineTagColor = 'blue' | 'green' | 'red' | 'yellow' | 'purple' | 'gray';
 
 // Tag metadata
 const TAG_CONFIG = {
-  file: { icon: File, color: 'var(--flowchat-inline-tag-blue)', tagColor: 'blue' as InlineTagColor, label: 'File' },
-  dir: { icon: Folder, color: 'var(--flowchat-inline-tag-purple)', tagColor: 'purple' as InlineTagColor, label: 'Directory' },
-  code: { icon: Code, color: 'var(--flowchat-inline-tag-green)', tagColor: 'green' as InlineTagColor, label: 'Code' },
-  img: { icon: Image, color: 'var(--flowchat-inline-tag-yellow)', tagColor: 'yellow' as InlineTagColor, label: 'Image' },
-  cmd: { icon: Terminal, color: 'var(--flowchat-inline-tag-gray)', tagColor: 'gray' as InlineTagColor, label: 'Command' },
-  chart: { icon: FileText, color: 'var(--flowchat-inline-tag-cyan)', tagColor: 'gray' as InlineTagColor, label: 'Chart' },
-  git: { icon: GitBranch, color: 'var(--flowchat-inline-tag-red)', tagColor: 'red' as InlineTagColor, label: 'Git' },
-  link: { icon: Link, color: 'var(--flowchat-inline-tag-blue)', tagColor: 'blue' as InlineTagColor, label: 'Link' },
-  pr: { icon: GitPullRequest, color: 'var(--flowchat-inline-tag-purple)', tagColor: 'purple' as InlineTagColor, label: 'Pull Request' }
+  file: { icon: File, color: 'var(--color-accent-500)', tagColor: 'blue' as InlineTagColor, label: 'File' },
+  dir: { icon: Folder, color: 'var(--color-purple-500)', tagColor: 'purple' as InlineTagColor, label: 'Directory' },
+  code: { icon: Code, color: 'var(--color-success)', tagColor: 'green' as InlineTagColor, label: 'Code' },
+  img: { icon: Image, color: 'var(--color-warning)', tagColor: 'yellow' as InlineTagColor, label: 'Image' },
+  cmd: { icon: Terminal, color: 'var(--color-text-muted)', tagColor: 'gray' as InlineTagColor, label: 'Command' },
+  chart: { icon: FileText, color: 'var(--color-cyan-500)', tagColor: 'gray' as InlineTagColor, label: 'Chart' },
+  git: { icon: GitBranch, color: 'var(--color-error)', tagColor: 'red' as InlineTagColor, label: 'Git' },
+  link: { icon: Link, color: 'var(--color-accent-500)', tagColor: 'blue' as InlineTagColor, label: 'Link' },
+  pr: { icon: GitPullRequest, color: 'var(--color-purple-500)', tagColor: 'purple' as InlineTagColor, label: 'Pull Request' }
 };
 
 /**

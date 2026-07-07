@@ -70,6 +70,14 @@ export function createTab(options: TabCreationOptions): void {
     }
   });
 
+  if (mode === 'agent' && isRightPanelCollapsed()) {
+    window.dispatchEvent(new CustomEvent(TAB_EVENTS.EXPAND_RIGHT_PANEL));
+    window.setTimeout(() => {
+      window.dispatchEvent(createTabEvent);
+    }, 300);
+    return;
+  }
+
   window.dispatchEvent(createTabEvent);
 }
 

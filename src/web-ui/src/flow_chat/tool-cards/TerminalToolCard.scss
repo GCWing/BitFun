@@ -73,7 +73,7 @@
   margin-right: calc(-1 * var(--flowchat-card-expanded-pad-x));
   margin-bottom: calc(-1 * var(--flowchat-card-expanded-pad-y));
   padding: var(--flowchat-inline-gap) var(--flowchat-card-expanded-pad-x);
-  border-radius: 0 0 6px 6px;
+  border-radius: 0 0 var(--flowchat-card-radius) var(--flowchat-card-radius);
 }
 
 /* ========== Fix scrollbar visibility on card hover ========== */
@@ -142,7 +142,7 @@
   }
   
   .command-empty {
-    color: rgb(var(--tool-command-empty-rgb));
+    color: color-mix(in srgb, var(--color-error) 72%, var(--color-static-white));
     font-style: italic;
   }
 }

@@ -15,3 +15,5 @@ pub mod session;
 pub mod session_usage;
 pub mod system;
 pub mod token_usage;
+#[cfg(feature = "workspace-runtime")]
+pub mod workspace;

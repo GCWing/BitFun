@@ -28,7 +28,6 @@ Notes:
 | `GetToolSpec` | Expanded | None | - |
 | `CreatePlan` | Collapsed | None | - |
 | `GetFileDiff` | Collapsed | `ReviewFixer`, `ReviewBusinessLogic`, `ReviewPerformance`, `ReviewSecurity`, `ReviewArchitecture`, `ReviewFrontend`, `ReviewJudge` | Expanded |
-| `Log` | Collapsed | None | - |
 | `SessionControl` | Collapsed | None | - |
 | `SessionMessage` | Collapsed | None | - |
 | `SessionHistory` | Collapsed | None | - |

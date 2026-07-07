@@ -40,6 +40,8 @@ test('performance scripts expose focused startup stability and interaction profi
   assert.match(interactionRunner, /BITFUN_E2E_PERF_MATRIX_PROFILE/);
   assert.match(interactionRunner, /first-scroll/);
   assert.match(interactionRunner, /resize-window-width/);
+  assert.match(interactionRunner, /turn-navigation/);
+  assert.match(interactionRunner, /l1-chat-turn-navigation-release\.spec\.ts/);
   assert.match(interactionRunner, /BITFUN_E2E_PERF_RAPID_SWITCH_DELAY_MS/);
   assert.match(interactionRunner, /BITFUN_E2E_PERF_ALLOW_MISSING_REPORTS/);
   assert.match(interactionRunner, /expected performance report was not written/);

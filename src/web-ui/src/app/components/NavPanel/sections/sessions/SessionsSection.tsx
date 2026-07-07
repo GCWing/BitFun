@@ -1184,7 +1184,7 @@ const SessionsSection: React.FC<SessionsSectionProps> = ({
                       data-testid="nav-session-menu-btn"
                       data-session-id={session.sessionId}
                     >
-                      <MoreHorizontal size="var(--bitfun-nav-row-action-icon-size)" />
+                      <MoreHorizontal size={13} />
                     </button>
                   </div>
                   {openMenuSessionId === session.sessionId && sessionMenuPosition && createPortal(

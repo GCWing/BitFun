@@ -243,14 +243,7 @@ pub(crate) fn join_remote_path(base: &str, child: &str) -> String {
 }
 
 pub(crate) fn shell_escape(value: &str) -> String {
-    if value
-        .chars()
-        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '/' | '.' | '-' | '_' | ':' | '='))
-    {
-        value.to_string()
-    } else {
-        format!("'{}'", value.replace('\'', "'\\''"))
-    }
+    crate::remote_ssh::shell::escape_command_arg(value)
 }
 
 fn resolve_local_flashgrep_bundle(binary_name: &str) -> Option<PathBuf> {

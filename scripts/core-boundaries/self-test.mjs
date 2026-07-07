@@ -544,7 +544,16 @@ export function runManifestParserSelfTest({
     throw new Error('services-integrations default profile must forbid non-optional uuid');
   }
   const coreProfile = dependencyProfileRules.find((rule) => rule.crateName === 'core');
-  for (const dep of ['git2', 'rmcp', 'image', 'tool-runtime', 'bitfun-relay-server']) {
+  for (const dep of [
+    'git2',
+    'rmcp',
+    'image',
+    'tool-runtime',
+    'bitfun-relay-server',
+    'htmd',
+    'legible',
+    'readability-js',
+  ]) {
     if (!coreProfile?.forbiddenNonOptionalDeps.includes(dep)) {
       throw new Error(`core no-default profile must forbid non-optional ${dep}`);
     }
@@ -558,9 +567,12 @@ export function runManifestParserSelfTest({
   const coreFullyMigratedDeps = new Set([
     'aes',
     'hostname',
+    'htmd',
+    'legible',
     'local-ip-address',
     'mac_address',
     'qrcode',
+    'readability-js',
     'x25519-dalek',
   ]);
   for (const dep of coreProfile?.forbiddenNonOptionalDeps ?? []) {
@@ -635,6 +647,21 @@ export function runManifestParserSelfTest({
   for (const contract of ['process_manager::', 'Command::new', 'reqwest::']) {
     if (!coreBrowserLauncherFacadeRuleText.includes(contract)) {
       throw new Error(`core browser launcher facade boundary rule must forbid: ${contract}`);
+    }
+  }
+  const coreReviewPlatformFacadeRuleText = forbiddenRuleTextForPath(
+    'src/crates/assembly/core/src/service/review_platform/mod.rs',
+  );
+  for (const contract of [
+    'reqwest::',
+    'tokio::fs',
+    'process_manager::',
+    'execute_git_command',
+    'serde_json::',
+    'ReviewProvider',
+  ]) {
+    if (!coreReviewPlatformFacadeRuleText.includes(contract)) {
+      throw new Error(`core review platform facade boundary rule must forbid: ${contract}`);
     }
   }
   const coreComputerUseSystemFacadeRuleText = forbiddenRuleTextForPath(
@@ -3014,6 +3041,8 @@ export function runManifestParserSelfTest({
         'bitfun-product-domains = \\{ path = "\\.\\.\\/\\.\\.\\/contracts\\/product-domains", default-features = false, optional = true \\}',
         'dep:bitfun-ai-adapters',
         'ai-adapter-runtime',
+        'canvas-runtime',
+        'bitfun-services-integrations\\/canvas-runtime',
         'bitfun-services-integrations\\/function-agents',
         'bitfun-services-integrations\\/miniapp-runtime',
         'dep:bitfun-product-capabilities',

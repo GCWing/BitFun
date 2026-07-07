@@ -450,8 +450,8 @@ fn computer_use_key_chord_guidance(host_os: &str) -> &'static str {
 pub enum UserContextSection {
     WorkspaceContext,
     WorkspaceInstructions,
-    WorkspaceMemoryFiles,
     ProjectLayout,
+    MemorySummary,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -486,12 +486,12 @@ impl UserContextPolicy {
         self.with_section(UserContextSection::WorkspaceInstructions)
     }
 
-    pub fn with_workspace_memory_files(self) -> Self {
-        self.with_section(UserContextSection::WorkspaceMemoryFiles)
-    }
-
     pub fn with_project_layout(self) -> Self {
         self.with_section(UserContextSection::ProjectLayout)
+    }
+
+    pub fn with_memory_summary(self) -> Self {
+        self.with_section(UserContextSection::MemorySummary)
     }
 
     pub fn includes(&self, section: UserContextSection) -> bool {
@@ -522,8 +522,8 @@ impl UserContextSection {
         match self {
             Self::WorkspaceContext => "workspace_context",
             Self::WorkspaceInstructions => "workspace_instructions",
-            Self::WorkspaceMemoryFiles => "workspace_memory_files",
             Self::ProjectLayout => "project_layout",
+            Self::MemorySummary => "memory_summary",
         }
     }
 }

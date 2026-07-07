@@ -271,6 +271,18 @@ impl PathManager {
         self.user_root.join("data")
     }
 
+    /// Get user memory database file: ~/.config/bitfun/data/memories/memories.sqlite
+    pub fn memories_database_file(&self) -> PathBuf {
+        self.user_data_dir()
+            .join("memories")
+            .join("memories.sqlite")
+    }
+
+    /// Get user memory workspace root directory: ~/.bitfun/memories/
+    pub fn memories_root_dir(&self) -> PathBuf {
+        self.bitfun_home_dir().join("memories")
+    }
+
     /// Root for per-host, per-remote-path workspace mirrors: `~/.bitfun/remote_ssh/`.
     ///
     /// Session/chat persistence for SSH workspaces lives under
@@ -389,11 +401,6 @@ impl PathManager {
     /// Get project plans directory: ~/.bitfun/projects/<workspace-slug>/plans/
     pub fn project_plans_dir(&self, workspace_path: &Path) -> PathBuf {
         self.project_runtime_root(workspace_path).join("plans")
-    }
-
-    /// Get project memory directory: ~/.bitfun/projects/<workspace-slug>/memory/
-    pub fn project_memory_dir(&self, workspace_path: &Path) -> PathBuf {
-        self.project_runtime_root(workspace_path).join("memory")
     }
 
     fn project_runtime_slug(&self, workspace_path: &Path) -> String {

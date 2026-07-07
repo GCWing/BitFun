@@ -57,6 +57,10 @@ import './CodeEditor.scss';
 export interface CodeEditorProps {
   /** File path */
   filePath: string;
+  /** Optional in-memory content used instead of loading from disk. */
+  initialContent?: string;
+  /** Show the editor breadcrumb header. */
+  showBreadcrumb?: boolean;
   /** Workspace path */
   workspacePath?: string;
   /** File name */
@@ -154,6 +158,8 @@ function isMacOSDesktop(): boolean {
 
 const CodeEditor: React.FC<CodeEditorProps> = ({
   filePath: rawFilePath,
+  initialContent,
+  showBreadcrumb = true,
   workspacePath,
   fileName,
   language = 'plaintext',
@@ -239,6 +245,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     minimap: { enabled: showMinimap, side: 'right', size: 'proportional' }
   });
   const [_currentThemeId, setCurrentThemeId] = useState<string>(BitFunDarkThemeMetadata.id);
+  const isMemoryContent = initialContent !== undefined;
   const [cursorPosition, setCursorPosition] = useState({ line: 1, column: 1 });
   const [selection, setSelection] = useState({ chars: 0, lines: 0 });
   const [statusBarPopover, setStatusBarPopover] = useState<null | 'position' | 'indent' | 'encoding' | 'language'>(null);
@@ -1446,9 +1453,10 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
   }, [performJump]);
 
   const fetchFileMetadata = useCallback(async () => {
+    if (isMemoryContent) return null;
     const { workspaceAPI } = await import('@/infrastructure/api');
     return workspaceAPI.getFileMetadata(filePath);
-  }, [filePath]);
+  }, [filePath, isMemoryContent]);
 
   const handleEncodingConfirm = useCallback(async (newEncoding: string) => {
     setEncoding(newEncoding);
@@ -1505,6 +1513,31 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
   const loadFileContent = useCallback(async () => {
     if (!filePath) {
       setLoading(false);
+      return;
+    }
+
+    if (isMemoryContent) {
+      const fileContent = initialContent ?? '';
+      setLoading(true);
+      setError(null);
+      isLoadingContentRef.current = true;
+      updateLargeFileMode(fileContent);
+      setContent(fileContent);
+      originalContentRef.current = fileContent;
+      setHasChanges(false);
+      hasChangesRef.current = false;
+      applyExternalContentToModel(fileContent);
+      reportFileMissingFromDisk(false);
+      queueMicrotask(() => {
+        if (modelRef.current && !isUnmountedRef.current) {
+          savedVersionIdRef.current = modelRef.current.getAlternativeVersionId();
+          monacoModelManager.markAsSaved(filePath);
+        }
+        if (!isUnmountedRef.current) {
+          setLoading(false);
+          isLoadingContentRef.current = false;
+        }
+      });
       return;
     }
 
@@ -1607,11 +1640,21 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
         isLoadingContentRef.current = false;
       });
     }
-  }, [applyExternalContentToModel, fetchFileMetadata, filePath, reportFileMissingFromDisk, t, updateLargeFileMode]);
+  }, [
+    applyExternalContentToModel,
+    fetchFileMetadata,
+    filePath,
+    initialContent,
+    isMemoryContent,
+    reportFileMissingFromDisk,
+    t,
+    updateLargeFileMode,
+  ]);
 
   // Save file content
   const saveFileContent = useCallback(async () => {
     if (!filePath) return;
+    if (isMemoryContent) return;
     
     // Read latest hasChanges state from ref to avoid closure issues
     const currentHasChanges = hasChangesRef.current;
@@ -1690,7 +1733,16 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     } finally {
       setSaving(false);
     }
-  }, [applyDiskSnapshotToEditor, fetchFileMetadata, filePath, onSave, reportFileMissingFromDisk, t, workspacePath]);
+  }, [
+    applyDiskSnapshotToEditor,
+    fetchFileMetadata,
+    filePath,
+    isMemoryContent,
+    onSave,
+    reportFileMissingFromDisk,
+    t,
+    workspacePath,
+  ]);
   
   useEffect(() => {
     saveFileContentRef.current = saveFileContent;
@@ -1909,7 +1961,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
   }, [loadFileContent]);
 
   useEffect(() => {
-    if (!filePath || !isActiveTab) {
+    if (!filePath || !isActiveTab || isMemoryContent) {
       return;
     }
 
@@ -1929,7 +1981,7 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
         window.clearInterval(intervalId);
       }
     };
-  }, [checkFileModification, filePath, isActiveTab]);
+  }, [checkFileModification, filePath, isActiveTab, isMemoryContent]);
 
   useEffect(() => {
     const editor = editorRef.current;
@@ -2277,10 +2329,12 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
       data-readonly={readOnly ? 'true' : 'false'}
       onKeyDownCapture={handleContainerKeyDown}
     >
-      <EditorBreadcrumb 
-        filePath={filePath}
-        workspacePath={workspacePath}
-      />
+      {showBreadcrumb && (
+        <EditorBreadcrumb
+          filePath={filePath}
+          workspacePath={workspacePath}
+        />
+      )}
       
       <div className="code-editor-tool__content" data-shortcut-scope="editor">
         <div 

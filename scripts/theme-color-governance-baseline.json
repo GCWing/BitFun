@@ -42,7 +42,7 @@
       "max": 0
     },
     "surfaceTokenRenames.registeredUnique": {
-      "max": 9
+      "max": 8
     },
     "surfaceTokenRenames.activeUnique": {
       "max": 0
@@ -87,7 +87,7 @@
       "max": 0
     },
     "colorDomainContracts.registeredUnique": {
-      "max": 13
+      "max": 14
     },
     "colorDomainContracts.missingRegisteredUnique": {
       "max": 0
@@ -104,17 +104,23 @@
     "colorScopes.appUi.occurrences": {
       "max": 0
     },
+    "colorScopes.token.occurrences": {
+      "max": 295
+    },
     "colorScopes.token.uniqueColors": {
-      "max": 197
+      "max": 184
     },
     "colorScopes.exception.uniqueColors": {
-      "max": 182
+      "max": 162
+    },
+    "cssVarDefinitions.unresolvedUnique": {
+      "max": 0
     },
     "cssVarDefinitions.unresolvedRequiredUnique": {
       "max": 0
     },
     "cssVarDefinitions.runtimeOnlyRequiredContractUnique": {
-      "max": 0
+      "max": 1
     },
     "cssVarDefinitions.fallbackOnlyUnique": {
       "max": 0
@@ -136,6 +142,18 @@
     },
     "cssVarDefinitions.staleRegisteredDynamicFamilyUnique": {
       "max": 0
+    },
+    "cssVarDefinitions.staticContractDefinedUnique": {
+      "max": 320
+    },
+    "cssVarDefinitions.staticContractExternalUsageUnique": {
+      "max": 320
+    },
+    "cssVarDefinitions.staticContractInternalOnlyUnique": {
+      "max": 0
+    },
+    "cssVarDefinitions.staticContractLowExternalUsageUnique": {
+      "max": 116
     },
     "tokenAliasLiterals.occurrences": {
       "max": 0
@@ -177,6 +195,12 @@
       "max": 0
     },
     "colorDomainNearPairs.generatedWidget.nearTotal": {
+      "max": 0
+    },
+    "colorDomainNearPairs.bitfunCanvas.indistinguishableTotal": {
+      "max": 0
+    },
+    "colorDomainNearPairs.bitfunCanvas.nearTotal": {
       "max": 0
     },
     "colorDomainNearPairs.boundaryFallback.indistinguishableTotal": {
@@ -240,21 +264,30 @@
       "max": 0
     },
     "colorDomainScopes.themePreset.occurrences": {
-      "max": 170
+      "max": 168
     },
     "colorDomainScopes.themePreset.uniqueColors": {
-      "max": 116
+      "max": 115
     },
     "colorDomainScopes.themeRuntime.occurrences": {
       "max": 27
     },
     "colorDomainScopes.tokenContract.occurrences": {
-      "max": 108
+      "max": 94
+    },
+    "colorDomainScopes.tokenContract.uniqueColors": {
+      "max": 84
     },
     "colorDomainScopes.generatedWidget.occurrences": {
       "max": 0
     },
     "colorDomainScopes.generatedWidget.uniqueColors": {
+      "max": 0
+    },
+    "colorDomainScopes.bitfunCanvas.occurrences": {
+      "max": 0
+    },
+    "colorDomainScopes.bitfunCanvas.uniqueColors": {
       "max": 0
     },
     "colorDomainScopes.boundaryFallback.occurrences": {
@@ -297,10 +330,19 @@
       "max": 0
     },
     "colorDomainScopes.mermaid.occurrences": {
-      "max": 82
+      "max": 53
     },
     "colorDomainScopes.mermaid.uniqueColors": {
-      "max": 65
+      "max": 48
     }
+  },
+  "allowlists": {
+    "runtimeOnlyRequiredContract": [
+      {
+        "key": "--window-control-close-hover-color",
+        "owner": "ThemeService legacy custom-theme compatibility",
+        "reason": "Deprecated components.windowControls.close.hoverColor override; default close hover uses semantic error without this runtime var."
+      }
+    ]
   }
 }

@@ -509,7 +509,7 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(({
     let currentHoverTarget: HTMLElement | null = null;
     const webLinksAddon = new WebLinksAddon(
       (event, uri) => {
-        if (event.ctrlKey) {
+        if (event.ctrlKey || event.metaKey) {
           systemAPI.openExternal(uri).catch((error) => {
             log.error('Failed to open external link', { uri, error });
           });
@@ -523,7 +523,8 @@ const Terminal = forwardRef<TerminalRef, TerminalProps>(({
               currentHoverTarget.removeAttribute('title');
             }
             currentHoverTarget = target;
-            target.title = 'Ctrl + click to open link';
+            const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(navigator.platform);
+            target.title = isMac ? '\u2318 + click to open link' : 'Ctrl + click to open link';
           }
         },
         leave: (event, _text) => {

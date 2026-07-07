@@ -10,9 +10,17 @@ const DARK_NODE_BORDER = '#4a4e58';
 const DARK_NODE_STROKE_SUBTLE = '#3a3e48';
 const DARK_NODE_STROKE_HOVER = '#6a6e7a';
 const DARK_CLUSTER_TEXT = '#9ca3af';
-const DARK_INFO = '#78a8d8';
-const DARK_ERROR = '#e87878';
-const DARK_ERROR_FILL = 'rgba(232, 120, 120, 0.15)';
+const MERMAID_SUCCESS = '#34d399';
+const MERMAID_SUCCESS_FILL = 'rgba(52, 211, 153, 0.1)';
+const MERMAID_WARNING = '#f59e0b';
+const MERMAID_ERROR = '#ef4444';
+const MERMAID_ERROR_FILL = 'rgba(239, 68, 68, 0.1)';
+const MERMAID_INFO = '#60a5fa';
+const MERMAID_INFO_FILL = 'rgba(96, 165, 250, 0.15)';
+const MERMAID_PIE_PURPLE = '#8b5cf6';
+const MERMAID_PIE_PINK = '#ec4899';
+const MERMAID_PIE_CYAN = '#06b6d4';
+const MERMAID_PIE_LIME = '#84cc16';
 
 const LIGHT_NODE_FILL = '#e8eaef';
 const LIGHT_NODE_FILL_HOVER = '#e0e2e8';
@@ -24,10 +32,7 @@ const LIGHT_EDGE_LABEL_BG = MERMAID_SOFT_LIGHT_SURFACE;
 const LIGHT_SECTION_ALT_FILL = LIGHT_NODE_FILL_HOVER;
 const LIGHT_TITLE_TEXT = '#111827';
 const LIGHT_HIGHLIGHT_STROKE = '#334155';
-const LIGHT_ERROR = '#dc2626';
-const LIGHT_WARNING = '#f59e0b';
 const LIGHT_CLUSTER_FILL = 'rgba(229, 231, 235, 0.7)';
-const LIGHT_ERROR_FILL = 'rgba(239, 68, 68, 0.15)';
 
 export const MERMAID_THEME_FALLBACKS = {
   dark: {
@@ -58,29 +63,29 @@ export const MERMAID_THEME_FALLBACKS = {
     noteFill: DARK_NODE_FILL_HOVER,
     noteText: DARK_CLUSTER_TEXT,
     noteStroke: DARK_NODE_BORDER,
-    activationFill: DARK_NODE_FILL_HOVER,
+    activationFill: MERMAID_INFO_FILL,
     activationStroke: DARK_NODE_STROKE,
     sectionFill: DARK_NODE_FILL,
     sectionAltFill: DARK_NODE_FILL_HOVER,
     gridStroke: DARK_NODE_STROKE_SUBTLE,
-    doneFill: 'rgba(109, 212, 160, 0.15)',
-    doneStroke: '#6dd4a0',
-    activeFill: 'rgba(120, 168, 216, 0.15)',
-    activeStroke: DARK_INFO,
-    critFill: DARK_ERROR_FILL,
-    critStroke: DARK_ERROR,
-    warning: '#e8b060',
-    info: DARK_INFO,
-    taskClickableInfo: DARK_INFO,
-    pie5: '#a090d8',
-    pie6: '#d890b8',
-    pie7: '#68c8d8',
-    pie8: '#a8d868',
+    doneFill: MERMAID_SUCCESS_FILL,
+    doneStroke: MERMAID_SUCCESS,
+    activeFill: MERMAID_INFO_FILL,
+    activeStroke: MERMAID_INFO,
+    critFill: MERMAID_ERROR_FILL,
+    critStroke: MERMAID_ERROR,
+    warning: MERMAID_WARNING,
+    info: MERMAID_INFO,
+    taskClickableInfo: MERMAID_INFO,
+    pie5: MERMAID_PIE_PURPLE,
+    pie6: MERMAID_PIE_PINK,
+    pie7: MERMAID_PIE_CYAN,
+    pie8: MERMAID_PIE_LIME,
     pieTitleText: DARK_NODE_TEXT,
     pieLegendText: DARK_CLUSTER_TEXT,
     pieStroke: DARK_NODE_FILL,
-    errorFill: DARK_ERROR_FILL,
-    error: DARK_ERROR,
+    errorFill: MERMAID_ERROR_FILL,
+    error: MERMAID_ERROR,
     highlightStroke: '#a8acb8',
     highlightGlow: 'drop-shadow(0 0 6px rgba(168, 172, 184, 0.4))',
     highlightGlowStrong: 'drop-shadow(0 0 10px rgba(168, 172, 184, 0.5))',
@@ -118,24 +123,24 @@ export const MERMAID_THEME_FALLBACKS = {
     sectionFill: LIGHT_EDGE_LABEL_BG,
     sectionAltFill: LIGHT_SECTION_ALT_FILL,
     gridStroke: 'rgba(156, 163, 175, 0.3)',
-    doneFill: 'rgba(34, 197, 94, 0.2)',
-    doneStroke: '#16a34a',
+    doneFill: MERMAID_SUCCESS_FILL,
+    doneStroke: MERMAID_SUCCESS,
     activeFill: 'rgba(15, 23, 42, 0.1)',
     activeStroke: LIGHT_HIGHLIGHT_STROKE,
-    critFill: LIGHT_ERROR_FILL,
-    critStroke: LIGHT_ERROR,
-    warning: LIGHT_WARNING,
+    critFill: MERMAID_ERROR_FILL,
+    critStroke: MERMAID_ERROR,
+    warning: MERMAID_WARNING,
     info: '#64748b',
     taskClickableInfo: '#475569',
-    pie5: '#8b5cf6',
-    pie6: '#ec4899',
-    pie7: '#06b6d4',
-    pie8: '#84cc16',
+    pie5: MERMAID_PIE_PURPLE,
+    pie6: MERMAID_PIE_PINK,
+    pie7: MERMAID_PIE_CYAN,
+    pie8: MERMAID_PIE_LIME,
     pieTitleText: LIGHT_TITLE_TEXT,
     pieLegendText: LIGHT_HIGHLIGHT_STROKE,
     pieStroke: MERMAID_SOFT_LIGHT_SURFACE,
-    errorFill: LIGHT_ERROR_FILL,
-    error: LIGHT_ERROR,
+    errorFill: MERMAID_ERROR_FILL,
+    error: MERMAID_ERROR,
     highlightStroke: LIGHT_HIGHLIGHT_STROKE,
     highlightGlow: 'drop-shadow(0 0 6px rgba(15, 23, 42, 0.18))',
     highlightGlowStrong: 'drop-shadow(0 0 10px rgba(15, 23, 42, 0.22))',

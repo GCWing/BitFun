@@ -29,15 +29,9 @@
   }
 }
 
-.search-card--compact.search-card--grep {
+.search-card--compact {
   .search-card__icon {
-    color: var(--color-purple-500);
-  }
-}
-
-.search-card--compact.search-card--glob {
-  .search-card__icon {
-    color: var(--tool-card-file-search-color);
+    color: var(--private-search-card-identity-color);
   }
 }
 

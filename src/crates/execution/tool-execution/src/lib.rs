@@ -7,3 +7,6 @@ pub mod pipeline;
 pub mod search;
 pub mod shell;
 pub mod util;
+#[cfg(feature = "web-readable")]
+pub mod web_readable;
+pub mod web_search;

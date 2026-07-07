@@ -9,7 +9,7 @@
 ## 定位
 
 `bitfun-core` 是共享产品 runtime facade。它仍承载兼容路径和 `product-full` 组装边界，但新的拆解工作应优先遵循
-`docs/architecture/core-decomposition.md` 与
+`docs/architecture/product-architecture.md` 与
 `docs/architecture/agent-runtime-services-design.md` 中定义的 owner crate 边界。
 
 主要区域：
@@ -52,7 +52,7 @@ SessionManager -> Session -> DialogTurn -> ModelRound
 
 归属细节放在下列文件中，不要继续扩写本指南：
 
-- `docs/architecture/core-decomposition.md`
+- `docs/architecture/product-architecture.md`
 - `docs/architecture/agent-runtime-services-design.md`
 - `src/crates/execution/agent-runtime/AGENTS.md`
 - `src/crates/execution/tool-contracts/AGENTS.md`

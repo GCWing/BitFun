@@ -370,6 +370,9 @@
   .base-tool-card.status-error {
     border-color: var(--border-medium);
     background: var(--element-bg-elevated);
+    /* Match wrapper's top corners so the elevated background fills to the rounded border,
+       even when backdrop-filter interferes with overflow:hidden clipping. */
+    border-radius: var(--flowchat-card-radius) var(--flowchat-card-radius) 0 0;
   }
 }
 

@@ -1,8 +1,8 @@
 //! Session metadata construction, counters, and visible-index mutation rules.
 
 use super::types::{
-    DialogTurnData, SessionMetadata, SessionRelationship, SessionRelationshipKind,
-    StoredSessionIndexFile,
+    DialogTurnData, DialogTurnKind, SessionMemoryMode, SessionMetadata, SessionRelationship,
+    SessionRelationshipKind, StoredSessionIndexFile, TurnStatus,
 };
 use bitfun_core_types::SessionKind;
 use serde_json::Value;
@@ -23,6 +23,7 @@ pub struct SessionMetadataBuildFacts<'a> {
     pub snapshot_session_id: Option<&'a str>,
     pub workspace_path: &'a str,
     pub workspace_hostname: Option<&'a str>,
+    pub new_session_memory_mode: SessionMemoryMode,
     pub existing: Option<&'a SessionMetadata>,
 }
 
@@ -48,9 +49,13 @@ pub fn build_session_metadata(facts: SessionMetadataBuildFacts<'_>) -> SessionMe
             .map(str::to_string)
             .or_else(|| existing.and_then(|value| value.created_by.clone())),
         session_kind: facts.session_kind,
+        memory_mode: existing
+            .map(|value| value.memory_mode)
+            .unwrap_or(facts.new_session_memory_mode),
         model_name,
         created_at,
         last_active_at: facts.last_active_at_ms,
+        last_finished_at: existing.and_then(|value| value.last_finished_at),
         turn_count: facts.turn_count,
         message_count: existing.map(|value| value.message_count).unwrap_or(0),
         tool_call_count: existing.map(|value| value.tool_call_count).unwrap_or(0),
@@ -158,6 +163,20 @@ fn estimate_turn_message_count(turn: &DialogTurnData) -> usize {
     1 + assistant_text_count
 }
 
+fn dialog_turn_finished_at(turn: &DialogTurnData) -> Option<u64> {
+    if turn.kind != DialogTurnKind::UserDialog {
+        return None;
+    }
+    if !matches!(
+        turn.status,
+        TurnStatus::Completed | TurnStatus::Error | TurnStatus::Cancelled
+    ) {
+        return None;
+    }
+
+    turn.end_time
+}
+
 pub fn refresh_session_metadata_from_turns(
     metadata: &mut SessionMetadata,
     workspace_path: &str,
@@ -167,6 +186,7 @@ pub fn refresh_session_metadata_from_turns(
     metadata.turn_count = turns.len();
     metadata.message_count = turns.iter().map(estimate_turn_message_count).sum();
     metadata.tool_call_count = turns.iter().map(DialogTurnData::count_tool_calls).sum();
+    metadata.last_finished_at = turns.iter().filter_map(dialog_turn_finished_at).max();
     metadata.last_active_at = last_active_at;
     fill_workspace_path_if_missing(metadata, workspace_path);
 }
@@ -205,6 +225,13 @@ pub fn try_refresh_session_metadata_for_saved_turn(
     }
 
     metadata.last_active_at = last_active_at;
+    if let Some(finished_at) = dialog_turn_finished_at(turn) {
+        metadata.last_finished_at = Some(
+            metadata
+                .last_finished_at
+                .map_or(finished_at, |current| current.max(finished_at)),
+        );
+    }
     fill_workspace_path_if_missing(metadata, workspace_path);
     true
 }
@@ -433,6 +460,7 @@ mod tests {
         existing.created_at = 10;
         existing.message_count = 7;
         existing.tool_call_count = 3;
+        existing.memory_mode = crate::session::SessionMemoryMode::Disabled;
         existing.custom_metadata = Some(json!({
             "parentSessionId": "parent-session",
             "parentRequestId": "parent-request",
@@ -460,6 +488,7 @@ mod tests {
             snapshot_session_id: Some("snapshot-1"),
             workspace_path: "/workspace",
             workspace_hostname: Some("host"),
+            new_session_memory_mode: crate::session::SessionMemoryMode::Enabled,
             existing: Some(&existing),
         });
 
@@ -472,6 +501,7 @@ mod tests {
         assert_eq!(built.last_user_dialog_agent_type.as_deref(), Some("plan"));
         assert_eq!(built.last_submitted_agent_type.as_deref(), Some("code"));
         assert_eq!(built.created_by.as_deref(), Some("creator"));
+        assert_eq!(built.memory_mode, existing.memory_mode);
         assert_eq!(built.snapshot_session_id.as_deref(), Some("snapshot-1"));
         assert_eq!(built.workspace_path.as_deref(), Some("/workspace"));
         assert_eq!(built.workspace_hostname.as_deref(), Some("host"));
@@ -492,6 +522,33 @@ mod tests {
                 parent_tool_call_id: Some("tool-1".to_string()),
                 subagent_type: Some("review".to_string()),
             })
+        );
+    }
+
+    #[test]
+    fn build_session_metadata_uses_supplied_memory_mode_for_new_sessions() {
+        let built = build_session_metadata(SessionMetadataBuildFacts {
+            session_id: "session-1",
+            session_name: "New session",
+            agent_type: "agentic",
+            last_user_dialog_agent_type: None,
+            last_submitted_agent_type: None,
+            created_by: None,
+            session_kind: crate::session::SessionKind::Standard,
+            model_name: Some("gpt-test"),
+            created_at_ms: 100,
+            last_active_at_ms: 200,
+            turn_count: 0,
+            snapshot_session_id: None,
+            workspace_path: "/workspace",
+            workspace_hostname: None,
+            new_session_memory_mode: crate::session::SessionMemoryMode::Disabled,
+            existing: None,
+        });
+
+        assert_eq!(
+            built.memory_mode,
+            crate::session::SessionMemoryMode::Disabled
         );
     }
 }

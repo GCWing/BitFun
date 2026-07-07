@@ -119,13 +119,23 @@ export function replaceBasename(fullPath: string, newName: string): string {
 }
 
 /**
- * Normalize for local rename IPC: `normalizePath` except skip UNC (`\\?\`, `\\server\...`)
- * so we do not turn backslashes into slashes there.
+ * Normalize an OS-native local path for rename/delete IPC.
+ *
+ * Mirrors `normalizePath`'s separator and drive-letter normalization, but
+ * skips URI percent-decoding: the input is an OS-native path (from the file
+ * tree DOM), not a URI, so file names containing literal `%XX` sequences
+ * must be preserved. UNC paths (`\\?\`, `\\server\...`) are returned as-is
+ * so their backslashes are not turned into slashes.
  */
 export function normalizeLocalPathForRename(path: string): string {
   const t = path.trim();
   if (t.startsWith('\\\\')) return t;
-  return normalizePath(t);
+  let normalized = t.replace(/^file:\/+/, '');
+  normalized = normalized.replace(/\\/g, '/');
+  normalized = normalized.replace(/^\/+([a-zA-Z]:)/, '$1');
+  normalized = normalized.replace(/^([a-z]):/, (_match, letter) => letter.toUpperCase() + ':');
+  normalized = normalized.replace(/\/+/g, '/');
+  return normalized;
 }
 
 /**

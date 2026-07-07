@@ -100,6 +100,12 @@
       "placeholder": "Enter folder name",
       "confirm": "Create",
       "cancel": "Cancel"
+    },
+    "largeFile": {
+      "title": "Large File",
+      "message": "The file is {{size}}, which exceeds 2 MB. Opening large files may cause the interface to freeze. Do you want to continue?",
+      "confirm": "Open Anyway",
+      "cancel": "Cancel"
     }
   },
   "validation": {
@@ -110,7 +116,16 @@
     "uploading": "Uploading",
     "missingConnection": "Remote workspace has no SSH connection id.",
     "failed": "File transfer failed: {{error}}",
-    "dropHint": "Drop files here to upload"
+    "dropHint": "Drop files here to upload",
+    "stop": "Stop"
+  },
+  "archive": {
+    "compress": "Compress",
+    "decompress": "Extract",
+    "compressSuccess": "Compressed \"{{name}}\" successfully",
+    "compressFailed": "Compression failed.\n{{error}}",
+    "decompressSuccess": "Extracted \"{{name}}\" successfully",
+    "decompressFailed": "Extraction failed.\n{{error}}"
   },
   "notifications": {
     "createFileSuccess": "File created successfully",
@@ -122,6 +137,9 @@
     "deleteSuccess": "Deleted successfully",
     "deleteFailed": "Failed to delete: {{error}}",
     "pasteSuccess": "Successfully pasted {{count}} files",
+    "pasteSuccessFiles": "Successfully pasted {{count}} files",
+    "pasteSuccessFolders": "Successfully pasted {{count}} folders",
+    "pasteSuccessItems": "Successfully pasted {{count}} items",
     "pasteFailed": "{{count}} files failed to paste",
     "pasteNoFiles": "No files in clipboard",
     "pastingFiles": "Pasting {{count}} files to {{target}}...",

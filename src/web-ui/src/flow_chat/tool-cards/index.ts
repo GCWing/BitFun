@@ -47,6 +47,7 @@ import { ExecControlToolCard } from './ExecControlToolCard';
 import { TerminalControlDisplay } from './TerminalControlDisplay';
 import { InitMiniAppDisplay } from './MiniAppToolDisplay';
 import { GenerativeWidgetToolCard } from './GenerativeWidgetToolCard';
+import { CanvasToolCard } from './CanvasToolCard';
 import { ReviewSessionSummaryCard } from './ReviewSessionSummaryCard';
 import { SessionControlToolCard } from './SessionControlToolCard';
 import { SessionMessageToolCard } from './SessionMessageToolCard';
@@ -119,6 +120,12 @@ export const TOOL_CARD_COMPONENTS = {
 
   // Computer use (desktop automation)
   'ComputerUse': ComputerUseToolCard,
+
+  // BitFun Canvas tools
+  'CreateCanvas': CanvasToolCard,
+  'ReadCanvas': CanvasToolCard,
+  'UpdateCanvas': CanvasToolCard,
+  'PatchCanvas': CanvasToolCard,
 };
 
 /**

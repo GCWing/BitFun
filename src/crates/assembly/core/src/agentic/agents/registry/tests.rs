@@ -170,7 +170,13 @@ async fn computer_use_is_builtin_subagent_not_mode() {
 
 #[test]
 fn non_deep_review_builtin_subagents_default_to_primary() {
-    for agent_type in ["Explore", "FileFinder", "CodeReview", "GenerateDoc"] {
+    for agent_type in [
+        "Explore",
+        "FileFinder",
+        "CodeReview",
+        "GeneralPurpose",
+        "MemoryPhase2",
+    ] {
         assert_eq!(
             default_model_id_for_builtin_agent(agent_type),
             "primary",
@@ -180,8 +186,19 @@ fn non_deep_review_builtin_subagents_default_to_primary() {
 }
 
 #[test]
-fn general_purpose_builtin_subagent_defaults_to_fast() {
-    assert_eq!(default_model_id_for_builtin_agent("GeneralPurpose"), "fast");
+fn memory_phase2_hidden_agent_is_registered() {
+    let registry = AgentRegistry::new();
+    let agent = registry
+        .get_agent("MemoryPhase2", None)
+        .expect("MemoryPhase2 should be registered as a hidden built-in agent");
+
+    assert_eq!(agent.id(), "MemoryPhase2");
+    assert_eq!(agent.name(), "Memory Phase 2");
+}
+
+#[test]
+fn generate_doc_hidden_agent_defaults_to_fast() {
+    assert_eq!(default_model_id_for_builtin_agent("GenerateDoc"), "fast");
 }
 
 #[test]
@@ -583,9 +600,7 @@ async fn explicit_custom_mode_load_exposes_user_mode_metadata_in_modes_info() {
         "PlannerPlus",
         "Planner Plus",
         vec!["Read".to_string(), "Grep".to_string()],
-        UserContextPolicy::empty()
-            .with_workspace_instructions()
-            .with_workspace_memory_files(),
+        UserContextPolicy::empty().with_workspace_instructions(),
         "primary",
         true,
     );
@@ -674,9 +689,7 @@ async fn custom_mode_detail_reports_kind_level_model_path_and_policy() {
         "PlannerPlus",
         "Planner Plus",
         vec!["Read".to_string(), "Grep".to_string()],
-        UserContextPolicy::empty()
-            .with_workspace_instructions()
-            .with_workspace_memory_files(),
+        UserContextPolicy::empty().with_workspace_instructions(),
         "primary",
         true,
     );
@@ -696,10 +709,7 @@ async fn custom_mode_detail_reports_kind_level_model_path_and_policy() {
     assert_eq!(detail.path, mode_path.to_string_lossy().to_string());
     assert_eq!(
         detail.user_context_policy,
-        vec![
-            "workspace_instructions".to_string(),
-            "workspace_memory_files".to_string(),
-        ]
+        vec!["workspace_instructions".to_string()]
     );
     assert_eq!(detail.tools, vec!["Read".to_string(), "Grep".to_string()]);
     assert!(detail.readonly);
@@ -776,11 +786,7 @@ async fn updating_custom_mode_definition_rewrites_file_and_preserves_mode_kind()
             Some(vec!["Read".to_string(), "Grep".to_string()]),
             Some(true),
             None,
-            Some(
-                UserContextPolicy::empty()
-                    .with_workspace_context()
-                    .with_workspace_memory_files(),
-            ),
+            Some(UserContextPolicy::empty().with_workspace_context()),
             Some("primary".to_string()),
         )
         .await
@@ -800,16 +806,12 @@ async fn updating_custom_mode_definition_rewrites_file_and_preserves_mode_kind()
     assert_eq!(detail.tools, vec!["Read".to_string(), "Grep".to_string()]);
     assert_eq!(
         detail.user_context_policy,
-        vec![
-            "workspace_context".to_string(),
-            "workspace_memory_files".to_string(),
-        ]
+        vec!["workspace_context".to_string()]
     );
     assert!(saved.contains("kind: mode"));
     assert!(saved.contains("name: Planner Pro"));
     assert!(saved.contains("model: primary"));
     assert!(saved.contains("- workspace_context"));
-    assert!(saved.contains("- workspace_memory_files"));
 }
 
 struct CustomAgentTestEnv {

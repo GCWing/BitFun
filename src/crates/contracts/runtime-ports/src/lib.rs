@@ -157,7 +157,6 @@ impl ExtensionCapabilityAvailability {
 }
 
 pub type PluginRuntimeAvailability = ExtensionCapabilityAvailability;
-pub type UiExtensionAvailability = ExtensionCapabilityAvailability;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

@@ -7,6 +7,7 @@ pub mod app_state;
 pub mod browser_api;
 pub mod browser_control_api;
 pub mod btw_api;
+pub mod canvas_api;
 pub mod clipboard_file_api;
 pub mod commands;
 pub mod computer_use_api;

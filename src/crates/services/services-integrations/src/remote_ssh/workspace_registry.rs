@@ -128,8 +128,13 @@ impl RemoteWorkspaceRegistry {
             .filter(|r| registration_matches_path(r, &path_norm))
             .collect();
 
-        if let Some(pref) = preferred_connection_id {
-            candidates.retain(|r| r.connection_id == pref);
+        // Only use preferred_connection_id to disambiguate when multiple
+        // path-matching candidates exist. When there is exactly one match,
+        // the path is unambiguous and the preferred hint must not override it.
+        if candidates.len() > 1 {
+            if let Some(pref) = preferred_connection_id {
+                candidates.retain(|r| r.connection_id == pref);
+            }
         }
 
         let best_len = candidates.iter().map(|r| r.remote_root.len()).max()?;

@@ -313,6 +313,7 @@ mod tests {
                 attempt_index: None,
                 agent_type: "agentic".to_string(),
                 workspace: None,
+                primary_model_facts: tool_runtime::context::PrimaryModelFacts::default(),
                 context_vars: HashMap::new(),
                 subagent_parent_info: None,
                 delegation_policy: bitfun_runtime_ports::DelegationPolicy::top_level(),

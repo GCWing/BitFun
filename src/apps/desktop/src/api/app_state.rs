@@ -87,6 +87,8 @@ pub struct AppState {
     pub remote_terminal_manager: Arc<RwLock<Option<RemoteTerminalManager>>>,
     pub remote_workspace: Arc<RwLock<Option<RemoteWorkspace>>>,
     pub active_searches: Arc<Mutex<HashMap<String, Arc<AtomicBool>>>>,
+    /// Cancellation flags for active file transfers (download/upload), keyed by transfer_id.
+    pub active_transfers: Arc<Mutex<HashMap<String, Arc<AtomicBool>>>>,
     pub announcement_scheduler: Arc<announcement::AnnouncementScheduler>,
 }
 
@@ -310,6 +312,7 @@ impl AppState {
             remote_terminal_manager,
             remote_workspace,
             active_searches: Arc::new(Mutex::new(HashMap::new())),
+            active_transfers: Arc::new(Mutex::new(HashMap::new())),
             announcement_scheduler,
         };
 

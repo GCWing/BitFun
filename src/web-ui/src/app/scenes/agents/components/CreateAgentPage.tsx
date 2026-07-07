@@ -293,13 +293,11 @@ const CreateAgentPage: React.FC = () => {
   const contextSectionLabels: Record<UserContextSection, string> = {
     workspace_context: t('agentsOverview.form.contextWorkspaceContext'),
     workspace_instructions: t('agentsOverview.form.contextWorkspaceInstructions'),
-    workspace_memory_files: t('agentsOverview.form.contextWorkspaceMemoryFiles'),
     project_layout: t('agentsOverview.form.contextProjectLayout'),
   };
   const contextSectionTooltips: Record<UserContextSection, string> = {
     workspace_context: t('agentsOverview.form.contextWorkspaceContextTooltip'),
     workspace_instructions: t('agentsOverview.form.contextWorkspaceInstructionsTooltip'),
-    workspace_memory_files: t('agentsOverview.form.contextWorkspaceMemoryFilesTooltip'),
     project_layout: t('agentsOverview.form.contextProjectLayoutTooltip'),
   };
 

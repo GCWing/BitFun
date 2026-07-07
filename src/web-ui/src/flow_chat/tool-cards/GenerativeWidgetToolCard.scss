@@ -12,7 +12,7 @@
 }
 
 .generative-widget-card__icon {
-  color: rgb(var(--generative-widget-card-icon-rgb));
+  color: var(--color-cyan-500);
 }
 
 .generative-widget-card__title {
@@ -35,7 +35,7 @@
 }
 
 .generative-widget-card__status--error {
-  color: rgb(var(--generative-widget-card-error-rgb));
+  color: color-mix(in srgb, var(--color-error) 72%, var(--color-static-white));
 }
 
 .generative-widget-card__preview {
@@ -57,7 +57,7 @@
 }
 
 .generative-widget-card__placeholder--error {
-  color: rgb(var(--generative-widget-card-error-soft-rgb));
+  color: color-mix(in srgb, var(--color-error) 64%, var(--color-static-white));
 }
 
 .generative-widget-card__capture-root {

@@ -1,8 +1,8 @@
 use bitfun_services_core::session::{
     build_session_index_snapshot, refresh_session_metadata_from_turns, remove_session_index_entry,
     try_refresh_session_metadata_for_saved_turn, upsert_session_index_entry, DialogTurnData,
-    ModelRoundData, SessionKind, SessionMetadata, StoredSessionIndexFile, TextItemData,
-    ToolCallData, ToolItemData, UserMessageData,
+    DialogTurnKind, ModelRoundData, SessionKind, SessionMetadata, StoredSessionIndexFile,
+    TextItemData, ToolCallData, ToolItemData, TurnStatus, UserMessageData,
 };
 
 fn metadata(session_id: &str) -> SessionMetadata {
@@ -118,6 +118,19 @@ fn turn(
     turn
 }
 
+fn finished_turn(
+    session_id: &str,
+    turn_index: usize,
+    status: TurnStatus,
+    end_time: u64,
+) -> DialogTurnData {
+    let mut turn = turn(session_id, turn_index, 1, 0);
+    turn.status = status;
+    turn.end_time = Some(end_time);
+    turn.duration_ms = Some(end_time.saturating_sub(turn.start_time));
+    turn
+}
+
 #[test]
 fn full_refresh_recomputes_metadata_counters_from_turns() {
     let mut metadata = metadata("session-1");
@@ -168,6 +181,109 @@ fn saved_turn_refresh_updates_incrementally_for_append_and_replace() {
     assert_eq!(metadata.message_count, 4);
     assert_eq!(metadata.tool_call_count, 2);
     assert_eq!(metadata.last_active_at, 60);
+}
+
+#[test]
+fn saved_turn_refresh_sets_last_finished_at_for_completed_user_dialog() {
+    let mut metadata = metadata("session-1");
+    let turn = finished_turn("session-1", 0, TurnStatus::Completed, 123);
+
+    assert!(try_refresh_session_metadata_for_saved_turn(
+        &mut metadata,
+        "D:/workspace/project",
+        None,
+        &turn,
+        200,
+    ));
+
+    assert_eq!(metadata.last_finished_at, Some(123));
+}
+
+#[test]
+fn saved_turn_refresh_ignores_in_progress_turn_for_last_finished_at() {
+    let mut metadata = metadata("session-1");
+    let turn = turn("session-1", 0, 1, 0);
+
+    assert!(try_refresh_session_metadata_for_saved_turn(
+        &mut metadata,
+        "D:/workspace/project",
+        None,
+        &turn,
+        200,
+    ));
+
+    assert_eq!(metadata.last_finished_at, None);
+}
+
+#[test]
+fn saved_turn_refresh_keeps_newer_last_finished_at() {
+    let mut metadata = metadata("session-1");
+    metadata.turn_count = 1;
+    metadata.last_finished_at = Some(500);
+    let turn = finished_turn("session-1", 1, TurnStatus::Completed, 300);
+
+    assert!(try_refresh_session_metadata_for_saved_turn(
+        &mut metadata,
+        "D:/workspace/project",
+        None,
+        &turn,
+        600,
+    ));
+
+    assert_eq!(metadata.last_finished_at, Some(500));
+}
+
+#[test]
+fn full_refresh_uses_latest_terminal_user_dialog_finish_time() {
+    let mut metadata = metadata("session-1");
+    metadata.last_finished_at = Some(1);
+
+    refresh_session_metadata_from_turns(
+        &mut metadata,
+        "D:/workspace/project",
+        &[
+            finished_turn("session-1", 0, TurnStatus::Completed, 100),
+            finished_turn("session-1", 1, TurnStatus::Error, 300),
+            finished_turn("session-1", 2, TurnStatus::Cancelled, 200),
+        ],
+        400,
+    );
+
+    assert_eq!(metadata.last_finished_at, Some(300));
+}
+
+#[test]
+fn full_refresh_ignores_non_user_dialog_turns_for_last_finished_at() {
+    let mut metadata = metadata("session-1");
+
+    let mut local_command = finished_turn("session-1", 0, TurnStatus::Completed, 100);
+    local_command.kind = DialogTurnKind::LocalCommand;
+    let mut manual_compaction = finished_turn("session-1", 1, TurnStatus::Completed, 200);
+    manual_compaction.kind = DialogTurnKind::ManualCompaction;
+
+    refresh_session_metadata_from_turns(
+        &mut metadata,
+        "D:/workspace/project",
+        &[local_command, manual_compaction],
+        300,
+    );
+
+    assert_eq!(metadata.last_finished_at, None);
+}
+
+#[test]
+fn full_refresh_clears_last_finished_at_without_terminal_user_dialog() {
+    let mut metadata = metadata("session-1");
+    metadata.last_finished_at = Some(500);
+
+    refresh_session_metadata_from_turns(
+        &mut metadata,
+        "D:/workspace/project",
+        &[turn("session-1", 0, 1, 0)],
+        600,
+    );
+
+    assert_eq!(metadata.last_finished_at, None);
 }
 
 #[test]

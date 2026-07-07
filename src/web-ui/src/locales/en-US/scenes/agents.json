@@ -174,8 +174,6 @@
       "contextWorkspaceContextTooltip": "Adds the current workspace identity and high-level session context, helping the agent understand where it is working.",
       "contextWorkspaceInstructions": "Workspace instructions",
       "contextWorkspaceInstructionsTooltip": "Adds project guidance such as AGENTS.md instructions, so the agent follows repository conventions and local rules.",
-      "contextWorkspaceMemoryFiles": "Workspace memory files",
-      "contextWorkspaceMemoryFilesTooltip": "Adds persisted workspace memory notes when available, helping the agent reuse long-lived project knowledge.",
       "contextProjectLayout": "Project layout",
       "contextProjectLayoutTooltip": "Adds a compact project structure summary, helping the agent choose relevant files and directories faster.",
       "noWorkspace": "Open a workspace first",

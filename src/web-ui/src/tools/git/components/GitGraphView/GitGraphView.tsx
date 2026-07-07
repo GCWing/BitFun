@@ -7,6 +7,7 @@ import { GitBranch, ChevronUp, ChevronDown } from 'lucide-react';
 import { Search } from '@/component-library';
 import { gitAPI } from '@/infrastructure/api';
 import type { GitGraph, GitGraphNode } from '@/infrastructure/api/service-api/GitAPI';
+import { UI_EXCEPTION_ACCENTS } from '@/shared/theme/uiExceptionAccents';
 import { 
   GitGraphViewProps, 
   GitGraphViewConfig,
@@ -25,19 +26,12 @@ const DEFAULT_CONFIG: GitGraphViewConfig = {
   rowHeight: 40,
   nodeSize: 5,
   lineWidth: 1.5,
-  colors: [
-    'var(--git-graph-lane-blue)',
-    'var(--git-graph-lane-green)',
-    'var(--git-graph-lane-warning)',
-    'var(--git-graph-lane-purple)',
-    'var(--git-graph-lane-error)',
-    'var(--git-graph-lane-cyan)',
-    'var(--git-graph-lane-pink)',
-    'var(--git-graph-lane-orange)',
-  ],
+  colors: [...UI_EXCEPTION_ACCENTS.gitGraphLane],
   showAvatar: false,
   showRelativeTime: true,
 };
+
+const GIT_GRAPH_LANE_MIN_CONTRAST = 3;
 
 export const GitGraphView: React.FC<GitGraphViewProps> = ({
   repositoryPath,
@@ -442,7 +436,12 @@ function drawNodeWithInfo(
 
   const x = (node.lane + 1) * laneWidth;
   const centerY = y + rowHeight / 2;
-  const color = resolveCanvasColor(colors[node.lane % colors.length]);
+  const resolveLaneColor = (lane: number) => ensureMinimumContrast(
+    resolveCanvasColor(colors[lane % colors.length]),
+    resolveCanvasColor('var(--color-bg-primary)'),
+    GIT_GRAPH_LANE_MIN_CONTRAST
+  );
+  const color = resolveLaneColor(node.lane);
 
 
 
@@ -473,7 +472,7 @@ function drawNodeWithInfo(
 
   node.forkingLanes.forEach(forkLane => {
     const forkX = (forkLane + 1) * laneWidth;
-    const forkColor = resolveCanvasColor(colors[forkLane % colors.length]);
+    const forkColor = resolveLaneColor(forkLane);
     
     ctx.strokeStyle = forkColor;
     ctx.lineWidth = lineWidth;
@@ -489,7 +488,7 @@ function drawNodeWithInfo(
 
   node.mergingLanes.forEach(mergeLane => {
     const mergeX = (mergeLane + 1) * laneWidth;
-    const mergeColor = resolveCanvasColor(colors[mergeLane % colors.length]);
+    const mergeColor = resolveLaneColor(mergeLane);
     
     ctx.strokeStyle = mergeColor;
     ctx.lineWidth = lineWidth;
@@ -505,7 +504,7 @@ function drawNodeWithInfo(
 
   node.passingLanes.forEach(passLane => {
     const passX = (passLane + 1) * laneWidth;
-    const passColor = resolveCanvasColor(colors[passLane % colors.length]);
+    const passColor = resolveLaneColor(passLane);
     
     ctx.strokeStyle = passColor;
     ctx.lineWidth = lineWidth;
@@ -526,7 +525,7 @@ function drawNodeWithInfo(
   
 
   if (state.isSelected) {
-    ctx.strokeStyle = resolveCanvasColor('var(--git-graph-static-white)');
+    ctx.strokeStyle = resolveCanvasColor('var(--color-static-white)');
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.arc(x, centerY, nodeSize + 1.5, 0, Math.PI * 2);
@@ -582,12 +581,16 @@ function drawNodeWithInfo(
     seenRefs.add(refKey);
     
 
-    const bgColor = resolveCanvasColor(
-      ref.refType === 'branch'
-        ? 'var(--git-graph-lane-blue)'
-        : ref.refType === 'tag'
-          ? 'var(--git-graph-lane-warning)'
-          : 'var(--git-graph-lane-purple)'
+    const bgColor = ensureMinimumContrast(
+      resolveCanvasColor(
+        ref.refType === 'branch'
+          ? UI_EXCEPTION_ACCENTS.gitGraphLane[0]
+          : ref.refType === 'tag'
+            ? UI_EXCEPTION_ACCENTS.gitGraphLane[2]
+            : UI_EXCEPTION_ACCENTS.gitGraphLane[3]
+      ),
+      resolveCanvasColor('var(--color-static-white)'),
+      GIT_GRAPH_LANE_MIN_CONTRAST
     );
     const text = displayName;
     
@@ -607,7 +610,7 @@ function drawNodeWithInfo(
 
     if (ref.isCurrent) {
       ctx.save();
-      ctx.fillStyle = resolveCanvasColor('var(--git-graph-static-white)');
+      ctx.fillStyle = resolveCanvasColor('var(--color-static-white)');
       ctx.beginPath();
       ctx.arc(refX + refWidth - 4, centerY - refHeight / 2 + 4, 2, 0, Math.PI * 2);
       ctx.fill();
@@ -616,7 +619,7 @@ function drawNodeWithInfo(
     
 
     ctx.save();
-    ctx.fillStyle = resolveCanvasColor('var(--git-graph-static-white)');
+    ctx.fillStyle = resolveCanvasColor('var(--color-static-white)');
     ctx.font = '500 11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
     ctx.textBaseline = 'middle';
     ctx.textAlign = 'left';
@@ -633,7 +636,7 @@ function drawNodeWithInfo(
   ctx.save();
   
 
-  ctx.fillStyle = resolveCanvasColor('var(--git-graph-text-primary)');
+  ctx.fillStyle = resolveCanvasColor('var(--color-text-primary)');
   ctx.font = '13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
   ctx.textBaseline = 'middle';
   ctx.textAlign = 'left';
@@ -654,7 +657,7 @@ function drawNodeWithInfo(
   const metaX = textX + ctx.measureText(displayText).width + 20;
 
 
-  ctx.fillStyle = resolveCanvasColor('var(--git-graph-text-muted)');
+  ctx.fillStyle = resolveCanvasColor('var(--color-text-muted)');
   ctx.font = '12px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
   
   let authorName = node.authorName;
@@ -674,7 +677,7 @@ function drawNodeWithInfo(
   const hashX = metaX + ctx.measureText(metaText).width + 16;
   const hashText = node.hash.substring(0, 7);
   
-  ctx.fillStyle = resolveCanvasColor('var(--git-graph-text-disabled)');
+  ctx.fillStyle = resolveCanvasColor('var(--color-text-disabled)');
   ctx.font = '11px "SF Mono", "Monaco", "Courier New", monospace';
   ctx.fillText(hashText, hashX, centerY);
   
@@ -700,6 +703,96 @@ function createCanvasColorResolver(): (color: string) => string {
     cache.set(color, resolved);
     return resolved;
   };
+}
+
+type RgbColor = {
+  r: number;
+  g: number;
+  b: number;
+};
+
+function ensureMinimumContrast(color: string, background: string, minRatio: number): string {
+  const foregroundRgb = parseCssColor(color);
+  const backgroundRgb = parseCssColor(background);
+  if (!foregroundRgb || !backgroundRgb || contrastRatio(foregroundRgb, backgroundRgb) >= minRatio) {
+    return color;
+  }
+
+  const targetRgb = relativeLuminance(backgroundRgb) > 0.5
+    ? { r: 0, g: 0, b: 0 }
+    : { r: 255, g: 255, b: 255 };
+
+  for (let amount = 0.12; amount <= 0.72; amount += 0.12) {
+    const candidate = mixRgb(foregroundRgb, targetRgb, amount);
+    if (contrastRatio(candidate, backgroundRgb) >= minRatio) {
+      return rgbToHex(candidate);
+    }
+  }
+
+  return rgbToHex(mixRgb(foregroundRgb, targetRgb, 0.72));
+}
+
+function parseCssColor(color: string): RgbColor | null {
+  const trimmed = color.trim();
+  const hexMatch = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(trimmed);
+  if (hexMatch) {
+    const rawHex = hexMatch[1]!;
+    const hex = rawHex.length === 3
+      ? rawHex.split('').map(value => value + value).join('')
+      : rawHex;
+    return {
+      r: parseInt(hex.slice(0, 2), 16),
+      g: parseInt(hex.slice(2, 4), 16),
+      b: parseInt(hex.slice(4, 6), 16),
+    };
+  }
+
+  const rgbMatch = /^rgba?\(\s*([0-9.]+)\s*,\s*([0-9.]+)\s*,\s*([0-9.]+)/i.exec(trimmed);
+  if (!rgbMatch) {
+    return null;
+  }
+
+  return {
+    r: clampRgb(Number(rgbMatch[1] ?? 0)),
+    g: clampRgb(Number(rgbMatch[2] ?? 0)),
+    b: clampRgb(Number(rgbMatch[3] ?? 0)),
+  };
+}
+
+function mixRgb(from: RgbColor, to: RgbColor, amount: number): RgbColor {
+  return {
+    r: clampRgb(from.r + (to.r - from.r) * amount),
+    g: clampRgb(from.g + (to.g - from.g) * amount),
+    b: clampRgb(from.b + (to.b - from.b) * amount),
+  };
+}
+
+function contrastRatio(a: RgbColor, b: RgbColor): number {
+  const luminanceA = relativeLuminance(a);
+  const luminanceB = relativeLuminance(b);
+  const lighter = Math.max(luminanceA, luminanceB);
+  const darker = Math.min(luminanceA, luminanceB);
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+function relativeLuminance(color: RgbColor): number {
+  const normalize = (channel: number) => {
+    const normalized = channel / 255;
+    return normalized <= 0.03928
+      ? normalized / 12.92
+      : ((normalized + 0.055) / 1.055) ** 2.4;
+  };
+  return normalize(color.r) * 0.2126 + normalize(color.g) * 0.7152 + normalize(color.b) * 0.0722;
+}
+
+function rgbToHex(color: RgbColor): string {
+  return `#${[color.r, color.g, color.b]
+    .map(channel => clampRgb(channel).toString(16).padStart(2, '0'))
+    .join('')}`;
+}
+
+function clampRgb(value: number): number {
+  return Math.max(0, Math.min(255, Math.round(value)));
 }
 
 function formatRelativeTime(timestamp: number): string {

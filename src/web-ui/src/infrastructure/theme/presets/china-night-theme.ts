@@ -10,7 +10,6 @@ import {
   createSecondaryAccentScale,
   createStandardEasing,
   createStandardSpacing,
-  createWindowControls,
   overlayBlack,
   rgbFromHex,
   rgbaFromHex,
@@ -148,9 +147,6 @@ export const bitfunChinaNightTheme: ThemeConfig = {
 
 
   components: {
-
-    windowControls: createWindowControls(CHINA_NIGHT_ERROR),
-
     button: {
 
 

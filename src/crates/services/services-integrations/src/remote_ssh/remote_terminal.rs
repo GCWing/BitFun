@@ -7,6 +7,7 @@
 //! - This eliminates Mutex deadlock between read and write operations
 
 use crate::remote_ssh::manager::SSHConnectionManager;
+use crate::remote_ssh::shell;
 use anyhow::Context;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -18,16 +19,6 @@ use tokio::time::{timeout, Duration};
 /// `pwd` can hang on some hosts (e.g. path resolution touching an unreachable `/`) while the shell still works;
 /// treat timeout the same as error and fall back to `~` for the initial `cd`.
 const REMOTE_PWD_PROBE_TIMEOUT: Duration = Duration::from_secs(5);
-
-fn shell_escape(s: &str) -> String {
-    if s.chars()
-        .all(|c| c.is_alphanumeric() || c == '/' || c == '.' || c == '-' || c == '_')
-    {
-        s.to_string()
-    } else {
-        format!("'{}'", s.replace('\'', "'\\''"))
-    }
-}
 
 #[derive(Debug, Clone)]
 pub struct RemoteTerminalSession {
@@ -204,7 +195,7 @@ impl RemoteTerminalManager {
                 let cd_arg = if initial_cd == "~" || initial_cd.starts_with("~/") {
                     initial_cd.clone()
                 } else {
-                    shell_escape(&initial_cd)
+                    shell::escape_terminal_cwd(&initial_cd)
                 };
                 let cd_cmd = format!("cd {} && clear\n", cd_arg);
                 if let Err(e) = writer.write_all(cd_cmd.as_bytes()).await {

@@ -40,12 +40,18 @@ export class CopyPathCommand extends BaseCommand {
   async execute(context: MenuContext): Promise<CommandResult> {
     try {
       const t = i18nService.getT();
-      const filePath = getContextFilePath(context);
+      let filePath = getContextFilePath(context);
 
       if (!filePath) {
         return this.failure(t('errors:contextMenu.copyPathFailed'));
       }
-      
+
+      // Convert forward slashes back to native backslashes on Windows-style
+      // paths (drive letters or UNC) so the clipboard yields OS-native paths.
+      if (/^[a-zA-Z]:\//.test(filePath) || filePath.startsWith('//')) {
+        filePath = filePath.replace(/\//g, '\\');
+      }
+
       if (navigator.clipboard) {
         await navigator.clipboard.writeText(filePath);
       } else {

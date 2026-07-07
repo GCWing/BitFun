@@ -100,6 +100,12 @@
       "placeholder": "請輸入資料夾名",
       "confirm": "建立",
       "cancel": "取消"
+    },
+    "largeFile": {
+      "title": "檔案較大",
+      "message": "檔案大小為 {{size}}，超過 2 MB。開啟大檔案可能導致介面卡頓，是否繼續開啟？",
+      "confirm": "繼續開啟",
+      "cancel": "取消"
     }
   },
   "validation": {
@@ -110,7 +116,16 @@
     "uploading": "正在上傳",
     "missingConnection": "遠程工作區缺少 SSH 連接資訊。",
     "failed": "檔案傳輸失敗：{{error}}",
-    "dropHint": "將檔案拖放到此處以上傳"
+    "dropHint": "將檔案拖放到此處以上傳",
+    "stop": "停止"
+  },
+  "archive": {
+    "compress": "壓縮",
+    "decompress": "解壓縮",
+    "compressSuccess": "壓縮 \"{{name}}\" 成功",
+    "compressFailed": "壓縮失敗。\n{{error}}",
+    "decompressSuccess": "解壓縮 \"{{name}}\" 成功",
+    "decompressFailed": "解壓縮失敗。\n{{error}}"
   },
   "notifications": {
     "createFileSuccess": "檔案建立成功",
@@ -122,6 +137,9 @@
     "deleteSuccess": "刪除成功",
     "deleteFailed": "刪除失敗: {{error}}",
     "pasteSuccess": "成功粘貼 {{count}} 個檔案",
+    "pasteSuccessFiles": "成功粘貼 {{count}} 個檔案",
+    "pasteSuccessFolders": "成功粘貼 {{count}} 個資料夾",
+    "pasteSuccessItems": "成功粘貼 {{count}} 項",
     "pasteFailed": "{{count}} 個檔案粘貼失敗",
     "pasteNoFiles": "剪貼板中沒有檔案",
     "pastingFiles": "正在粘貼 {{count}} 個檔案到 {{target}}...",

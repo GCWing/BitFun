@@ -2,7 +2,7 @@ import { FlowChatStore } from '../store/FlowChatStore';
 import { stateMachineManager } from '../state-machine/SessionStateMachineManager';
 import { ProcessingPhase, type SessionStateMachine } from '../state-machine/types';
 import { deriveChatInputPetMood, type ChatInputPetMood } from './chatInputPetMood';
-import type { DialogTurn, FlowTextItem, FlowThinkingItem, Session } from '../types/flow-chat';
+import type { DialogTurn, FlowToolItem, FlowTextItem, FlowThinkingItem, Session } from '../types/flow-chat';
 import { resolveSessionRelationship } from './sessionMetadata';
 import { toWellFormedText } from '@/shared/utils/wellFormedText';
 
@@ -48,6 +48,12 @@ const TRANSIENT_TURN_STATUSES = new Set<DialogTurn['status']>([
   'cancelling',
 ]);
 const LATEST_OUTPUT_MAX_CHARS = 512;
+const TERMINAL_TOOL_STATUSES = new Set<FlowToolItem['status']>([
+  'completed',
+  'error',
+  'cancelled',
+  'rejected',
+]);
 
 function ensureTaskOrder(sessionId: string): number {
   const existingOrder = taskOrderBySessionId.get(sessionId);
@@ -126,6 +132,77 @@ function latestAssistantSnippet(turn: DialogTurn | undefined): string | undefine
   }
 
   return undefined;
+}
+
+function extractAskUserQuestionText(tool: FlowToolItem): string | undefined {
+  const input = tool.toolCall?.input;
+  if (!input || typeof input !== 'object') {
+    return undefined;
+  }
+
+  const questions = input.questions;
+  if (!Array.isArray(questions) || questions.length === 0) {
+    return undefined;
+  }
+
+  const firstQuestion = questions[0]?.question;
+  if (typeof firstQuestion === 'string' && firstQuestion.trim()) {
+    return truncateLatestOutput(firstQuestion);
+  }
+
+  return undefined;
+}
+
+function findPendingAskUserQuestion(
+  turn: DialogTurn | undefined,
+): FlowToolItem | undefined {
+  if (!turn || !TRANSIENT_TURN_STATUSES.has(turn.status)) {
+    return undefined;
+  }
+
+  for (let roundIndex = turn.modelRounds.length - 1; roundIndex >= 0; roundIndex -= 1) {
+    const round = turn.modelRounds[roundIndex];
+    for (let itemIndex = round.items.length - 1; itemIndex >= 0; itemIndex -= 1) {
+      const item = round.items[itemIndex];
+      if (
+        item.type === 'tool'
+        && item.toolName === 'AskUserQuestion'
+        && !TERMINAL_TOOL_STATUSES.has(item.status)
+        && !item.isParamsStreaming
+      ) {
+        const input = item.toolCall?.input;
+        const questions = input && typeof input === 'object' ? input.questions : undefined;
+        if (Array.isArray(questions) && questions.length > 0) {
+          return item;
+        }
+      }
+    }
+  }
+
+  return undefined;
+}
+
+function askUserQuestionAttentionTask(
+  session: Session,
+  snapshot: SessionStateMachine | null,
+): AgentCompanionTaskStatus | null {
+  const turn = trackedDialogTurn(session, snapshot);
+  const pendingTool = findPendingAskUserQuestion(turn);
+  if (!pendingTool) {
+    return null;
+  }
+
+  return {
+    sessionId: session.sessionId,
+    title: sessionTitle(session),
+    mood: 'waiting',
+    state: 'attention',
+    labelKey: 'agentCompanion.activity.needsInput',
+    defaultLabel: 'Needs input',
+    latestOutput: extractAskUserQuestionText(pendingTool) ?? latestAssistantSnippet(turn),
+    startedAt: snapshot?.context.stats.startTime || session.lastActiveAt || session.updatedAt || session.createdAt,
+    updatedAt: snapshot?.context.lastUpdateTime || session.updatedAt || session.lastActiveAt || session.createdAt,
+  };
 }
 
 function trackedDialogTurn(
@@ -209,7 +286,12 @@ function runningLabel(snapshot: SessionStateMachine | null): {
   }
 }
 
-function attentionTask(session: Session): AgentCompanionTaskStatus | null {
+function attentionTask(
+  session: Session,
+  snapshot: SessionStateMachine | null,
+): AgentCompanionTaskStatus | null {
+  const latestOutput = latestAssistantSnippet(trackedDialogTurn(session, snapshot));
+
   if (session.needsUserAttention === 'ask_user') {
     return {
       sessionId: session.sessionId,
@@ -218,6 +300,7 @@ function attentionTask(session: Session): AgentCompanionTaskStatus | null {
       state: 'attention',
       labelKey: 'agentCompanion.activity.needsInput',
       defaultLabel: 'Needs input',
+      latestOutput,
       startedAt: session.lastActiveAt || session.updatedAt || session.createdAt,
       updatedAt: session.updatedAt || session.lastActiveAt || session.createdAt,
     };
@@ -231,12 +314,20 @@ function attentionTask(session: Session): AgentCompanionTaskStatus | null {
       state: 'attention',
       labelKey: 'agentCompanion.activity.needsApproval',
       defaultLabel: 'Needs approval',
+      latestOutput,
       startedAt: session.lastActiveAt || session.updatedAt || session.createdAt,
       updatedAt: session.updatedAt || session.lastActiveAt || session.createdAt,
     };
   }
 
   return null;
+}
+
+function resolveAttentionTask(
+  session: Session,
+  snapshot: SessionStateMachine | null,
+): AgentCompanionTaskStatus | null {
+  return attentionTask(session, snapshot) ?? askUserQuestionAttentionTask(session, snapshot);
 }
 
 function completionTask(session: Session): AgentCompanionTaskStatus | null {
@@ -315,6 +406,12 @@ export function buildAgentCompanionActivity(): AgentCompanionActivityPayload {
       ? deriveChatInputPetMood(snapshot)
       : 'rest';
 
+    const attention = resolveAttentionTask(session, snapshot);
+    if (attention) {
+      tasks.push(attention);
+      return;
+    }
+
     if (mood !== 'rest') {
       const label = runningLabel(snapshot);
       const turn = trackedDialogTurn(session, snapshot);
@@ -329,12 +426,6 @@ export function buildAgentCompanionActivity(): AgentCompanionActivityPayload {
         startedAt: snapshot?.context.stats.startTime || session.lastActiveAt || session.updatedAt || session.createdAt,
         updatedAt: snapshot?.context.lastUpdateTime || session.updatedAt || session.lastActiveAt || session.createdAt,
       });
-      return;
-    }
-
-    const attention = attentionTask(session);
-    if (attention) {
-      tasks.push(attention);
       return;
     }
 

@@ -12,8 +12,11 @@ use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
 pub use bitfun_agent_stream::{
-    StreamProcessOptions, StreamProcessorError, ToolCall as StreamToolCall,
+    HiddenTextBlock, HiddenTextTag, StreamProcessOptions, StreamProcessorError,
+    ToolCall as StreamToolCall,
 };
+
+const MEMORY_CITATION_HIDDEN_TEXT_TAG: &str = "memory_citation";
 
 /// Stream processing result exposed through bitfun-core compatibility types.
 #[derive(Debug, Clone)]
@@ -22,6 +25,7 @@ pub struct StreamResult {
     pub reasoning_content_present: bool,
     pub thinking_signature: Option<String>,
     pub full_text: String,
+    pub hidden_text_blocks: Vec<HiddenTextBlock>,
     pub tool_calls: Vec<ToolCall>,
     pub usage: Option<GeminiUsage>,
     pub provider_metadata: Option<Value>,
@@ -38,6 +42,7 @@ impl From<bitfun_agent_stream::StreamResult> for StreamResult {
             reasoning_content_present: result.reasoning_content_present,
             thinking_signature: result.thinking_signature,
             full_text: result.full_text,
+            hidden_text_blocks: result.hidden_text_blocks,
             tool_calls: result.tool_calls.into_iter().map(Into::into).collect(),
             usage: result.usage.map(Into::into),
             provider_metadata: result.provider_metadata,
@@ -123,6 +128,7 @@ impl StreamProcessor {
         cancellation_token: &CancellationToken,
         options: StreamProcessOptions,
     ) -> Result<StreamResult, StreamProcessError> {
+        let options = with_default_hidden_text_tags(options);
         self.inner
             .process_stream_with_options(
                 stream,
@@ -139,5 +145,42 @@ impl StreamProcessor {
             .await
             .map(Into::into)
             .map_err(Into::into)
+    }
+}
+
+fn with_default_hidden_text_tags(mut options: StreamProcessOptions) -> StreamProcessOptions {
+    if options.hidden_text_tags.is_empty() {
+        options.hidden_text_tags.push(HiddenTextTag::new(
+            MEMORY_CITATION_HIDDEN_TEXT_TAG,
+            "<bitfun-mem-citation>",
+            "</bitfun-mem-citation>",
+        ));
+    }
+    options
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_hidden_text_tags_adds_memory_citation_tag() {
+        let options = with_default_hidden_text_tags(StreamProcessOptions::default());
+
+        assert_eq!(options.hidden_text_tags.len(), 1);
+        assert_eq!(options.hidden_text_tags[0].name, "memory_citation");
+        assert_eq!(options.hidden_text_tags[0].open, "<bitfun-mem-citation>");
+        assert_eq!(options.hidden_text_tags[0].close, "</bitfun-mem-citation>");
+    }
+
+    #[test]
+    fn default_hidden_text_tags_preserves_explicit_tags() {
+        let options = with_default_hidden_text_tags(StreamProcessOptions {
+            hidden_text_tags: vec![HiddenTextTag::new("custom", "<x>", "</x>")],
+            ..Default::default()
+        });
+
+        assert_eq!(options.hidden_text_tags.len(), 1);
+        assert_eq!(options.hidden_text_tags[0].name, "custom");
     }
 }

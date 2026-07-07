@@ -50,11 +50,11 @@ describe('SessionsSection layout styles', () => {
     expect(mainBlock).not.toContain('padding-right');
     expect(stylesheet).toContain('&__inline-item:hover &__inline-item-main');
     expect(stylesheet).toContain('&__inline-item:focus-within &__inline-item-main');
-    expect(stylesheet).toContain('padding-right: calc(var(--bitfun-nav-row-action-size) + var(--bitfun-nav-row-action-offset));');
+    expect(stylesheet).toContain('padding-right: 24px;');
     expect(actionsBlock).not.toContain('display: none;');
     expect(actionsBlock).toContain('position: absolute;');
-    expect(actionsBlock).toContain('right: var(--bitfun-nav-row-action-offset);');
-    expect(actionsBlock).toContain('gap: var(--bitfun-nav-row-action-gap);');
+    expect(actionsBlock).toContain('right: 4px;');
+    expect(actionsBlock).toContain('gap: 4px;');
     expect(actionsBlock).toContain('visibility: hidden;');
     expect(actionsBlock).toContain('opacity: 0;');
     expect(actionsBlock).toContain('pointer-events: none;');
@@ -63,12 +63,12 @@ describe('SessionsSection layout styles', () => {
     expect(actionsBlock).toContain('visibility: visible;');
   });
 
-  it('uses the shared nav row-action size for session menu buttons', () => {
+  it('keeps session menu buttons at the compact row size', () => {
     const stylesheet = readSessionsSectionStylesheet();
     const actionButtonBlock = extractBlock(stylesheet, '&__inline-item-action-btn');
 
-    expect(actionButtonBlock).toContain('width: var(--bitfun-nav-row-action-size);');
-    expect(actionButtonBlock).toContain('height: var(--bitfun-nav-row-action-size);');
+    expect(actionButtonBlock).toContain('width: 20px;');
+    expect(actionButtonBlock).toContain('height: 20px;');
   });
 
   it('keeps child-session badges visible while long titles are ellipsized', () => {

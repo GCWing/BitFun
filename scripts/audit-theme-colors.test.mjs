@@ -201,6 +201,21 @@ test('theme CSS var contract registry is explicit and non-overlapping', () => {
   }
 });
 
+test('FlowChat 4xl alias mirrors runtime typography without static root 4xl fallback', () => {
+  const tokens = readText(path.join(root, 'src/web-ui/src/component-library/styles/tokens.scss'));
+
+  assert.match(
+    tokens,
+    /^\s*--flowchat-font-size-4xl:\s*var\(--font-size-4xl\);$/m,
+    'FlowChat 4xl should mirror the runtime typography owner',
+  );
+  assert.doesNotMatch(
+    tokens,
+    /^\s*--font-size-4xl:/m,
+    'static root --font-size-4xl should not be reintroduced',
+  );
+});
+
 test('repository dynamic CSS var families match the registered contract', () => {
   for (const sourceRoot of SOURCE_OWNER_ROOTS) {
     const result = runAudit(['--root', sourceRoot, '--json', '--no-baseline']);
@@ -460,6 +475,57 @@ test('theme color audit emits scoped machine-readable reports', (t) => {
   assert.equal(report.summary.baseline.enforced, false);
 });
 
+test('theme color audit reports static contract token external consumption', (t) => {
+  const { dir, sourceRoot } = createFixture({
+    'component-library/styles/tokens.scss': [
+      ':root {',
+      '  --color-text-primary: #111111;',
+      '  --private-helper-rgb: 17, 17, 17;',
+      '  --derived-from-helper: rgb(var(--private-helper-rgb));',
+      '  --payload-export: #333333;',
+      '  --unused-export: #222222;',
+      '}',
+      '',
+    ].join('\n'),
+    'app/App.scss': [
+      '.app {',
+      '  color: var(--color-text-primary);',
+      '  background: var(--derived-from-helper);',
+      '}',
+      '',
+    ].join('\n'),
+    'tools/generative-widget/themePayload.ts': [
+      'const WIDGET_THEME_VAR_GROUPS = {',
+      '  core: [',
+      "    '--payload-export',",
+      '  ],',
+      '} as const;',
+      '',
+    ].join('\n'),
+  });
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  const result = runAudit(['--root', sourceRoot, '--json', '--no-baseline']);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+
+  const report = JSON.parse(result.stdout);
+  assert.equal(report.cssVarDefinitions.staticContractExternalUsageUnique, 3);
+  assert.equal(report.cssVarDefinitions.staticContractInternalOnlyUnique, 2);
+  assert.deepEqual(
+    report.staticContractLowExternalUsageVars
+      .filter(row => row.key === '--payload-export')
+      .map(row => [row.key, row.count, row.externalUsageFileCount, row.usageFiles]),
+    [['--payload-export', 1, 1, ['tools/generative-widget/themePayload.ts']]],
+  );
+  assert.deepEqual(
+    report.staticContractInternalOnlyVars.map(row => [row.key, row.definitionFiles, row.internalUsageCount]),
+    [
+      ['--private-helper-rgb', ['component-library/styles/tokens.scss'], 1],
+      ['--unused-export', ['component-library/styles/tokens.scss'], 0],
+    ],
+  );
+});
+
 test('theme color audit reports deprecated surface-local token names', (t) => {
   const { dir, sourceRoot } = createFixture({
     'component-library/styles/tokens.scss': [
@@ -482,7 +548,7 @@ test('theme color audit reports deprecated surface-local token names', (t) => {
     ].join('\n'),
     'tools/editor/meditor/components/TiptapEditor.scss': [
       '.m-editor-tiptap {',
-      '  --m-editor-highlight-rgb: var(--markdown-editor-highlight-rgb);',
+      '  --m-editor-highlight-rgb: var(--private-markdown-editor-highlight-rgb);',
       '  background: rgba(var(--m-editor-highlight-rgb), 0.15);',
       '}',
       '',
@@ -499,7 +565,7 @@ test('theme color audit reports deprecated surface-local token names', (t) => {
   assert.deepEqual(
     report.surfaceTokenRenames.active.map(row => [row.key, row.canonical, row.definitionCount, row.usageCount]),
     [
-      ['--m-editor-highlight-rgb', '--markdown-editor-highlight-rgb', 1, 1],
+      ['--m-editor-highlight-rgb', '--private-markdown-editor-highlight-rgb', 1, 1],
       ['--primary-color', '--base-tool-card-accent-color', 1, 1],
       ['--operation-color', '--snapshot-card-operation-color', 1, 0],
     ],

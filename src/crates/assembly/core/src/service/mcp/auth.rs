@@ -1,7 +1,7 @@
 //! OAuth support for remote MCP servers.
 //!
 //! The owner implementation lives in `bitfun-services-integrations`. This
-//! module keeps the legacy core path and injects the product data directory.
+//! module keeps the legacy core entrypoints and injects the product data directory.
 
 use async_trait::async_trait;
 use rmcp::transport::auth::{AuthorizationManager, CredentialStore, StoredCredentials};
@@ -19,10 +19,19 @@ fn oauth_data_dir() -> BitFunResult<PathBuf> {
     Ok(try_get_path_manager_arc()?.user_data_dir())
 }
 
+pub fn map_auth_error(error: impl ToString) -> BitFunError {
+    BitFunError::MCPError(format!("OAuth error: {}", error.to_string()))
+}
+
+#[deprecated(
+    since = "0.2.12",
+    note = "use bitfun_services_integrations::mcp::auth::MCPRemoteOAuthCredentialVault with an injected data directory"
+)]
 pub struct MCPRemoteOAuthCredentialVault {
     inner: bitfun_services_integrations::mcp::auth::MCPRemoteOAuthCredentialVault,
 }
 
+#[allow(deprecated)]
 impl MCPRemoteOAuthCredentialVault {
     pub fn new() -> BitFunResult<Self> {
         Ok(Self {
@@ -50,10 +59,15 @@ impl MCPRemoteOAuthCredentialVault {
 }
 
 #[derive(Clone)]
+#[deprecated(
+    since = "0.2.12",
+    note = "use bitfun_services_integrations::mcp::auth::MCPRemoteOAuthCredentialStore with an injected data directory"
+)]
 pub struct MCPRemoteOAuthCredentialStore {
     server_id: String,
 }
 
+#[allow(deprecated)]
 impl MCPRemoteOAuthCredentialStore {
     pub fn new(server_id: impl Into<String>) -> Self {
         Self {
@@ -62,6 +76,7 @@ impl MCPRemoteOAuthCredentialStore {
     }
 }
 
+#[allow(deprecated)]
 #[async_trait]
 impl CredentialStore for MCPRemoteOAuthCredentialStore {
     async fn load(&self) -> Result<Option<StoredCredentials>, rmcp::transport::auth::AuthError> {
@@ -90,10 +105,6 @@ impl CredentialStore for MCPRemoteOAuthCredentialStore {
             .await
             .map_err(|error| rmcp::transport::auth::AuthError::InternalError(error.to_string()))
     }
-}
-
-pub fn map_auth_error(error: impl ToString) -> BitFunError {
-    BitFunError::MCPError(format!("OAuth error: {}", error.to_string()))
 }
 
 pub async fn has_stored_oauth_credentials(server_id: &str) -> BitFunResult<bool> {

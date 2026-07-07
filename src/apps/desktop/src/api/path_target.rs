@@ -218,7 +218,9 @@ pub async fn read_text_file(
     raw_path: &str,
     preferred_remote_connection_id: Option<&str>,
 ) -> Result<String, String> {
-    match resolve_desktop_path_target(app_state, raw_path, preferred_remote_connection_id).await? {
+    let target =
+        resolve_desktop_path_target(app_state, raw_path, preferred_remote_connection_id).await?;
+    match &target {
         DesktopPathTarget::Local { resolved_path, .. } => app_state
             .filesystem_service
             .read_file(&resolved_path.to_string_lossy())
@@ -234,7 +236,7 @@ pub async fn read_text_file(
                 .await
                 .map_err(|e| format!("Remote file service not available: {}", e))?;
             let bytes = remote_fs
-                .read_file(&entry.connection_id, &requested_path)
+                .read_file(&entry.connection_id, requested_path)
                 .await
                 .map_err(|e| format!("Failed to read remote file: {}", e))?;
             String::from_utf8(bytes).map_err(|e| format!("File is not valid UTF-8: {}", e))
@@ -352,22 +354,28 @@ pub async fn rename_path(
     app_state: &AppState,
     old_path: &str,
     new_path: &str,
+    preferred_remote_connection_id: Option<&str>,
 ) -> Result<(), String> {
-    match resolve_desktop_path_target(app_state, old_path, None).await? {
+    match resolve_desktop_path_target(app_state, old_path, preferred_remote_connection_id).await? {
         DesktopPathTarget::Local {
             resolved_path: old_resolved_path,
             ..
         } => {
-            let new_resolved_path =
-                match resolve_desktop_path_target(app_state, new_path, None).await? {
-                    DesktopPathTarget::Local { resolved_path, .. } => resolved_path,
-                    DesktopPathTarget::Remote { .. } => {
-                        return Err(format!(
-                            "Cannot rename local path '{}' to remote destination '{}'",
-                            old_path, new_path
-                        ))
-                    }
-                };
+            let new_resolved_path = match resolve_desktop_path_target(
+                app_state,
+                new_path,
+                preferred_remote_connection_id,
+            )
+            .await?
+            {
+                DesktopPathTarget::Local { resolved_path, .. } => resolved_path,
+                DesktopPathTarget::Remote { .. } => {
+                    return Err(format!(
+                        "Cannot rename local path '{}' to remote destination '{}'",
+                        old_path, new_path
+                    ))
+                }
+            };
 
             app_state
                 .filesystem_service
@@ -391,8 +399,12 @@ pub async fn rename_path(
     }
 }
 
-pub async fn delete_file(app_state: &AppState, raw_path: &str) -> Result<(), String> {
-    match resolve_desktop_path_target(app_state, raw_path, None).await? {
+pub async fn delete_file(
+    app_state: &AppState,
+    raw_path: &str,
+    preferred_remote_connection_id: Option<&str>,
+) -> Result<(), String> {
+    match resolve_desktop_path_target(app_state, raw_path, preferred_remote_connection_id).await? {
         DesktopPathTarget::Local { resolved_path, .. } => app_state
             .filesystem_service
             .delete_file(&resolved_path.to_string_lossy())
@@ -418,8 +430,9 @@ pub async fn delete_directory(
     app_state: &AppState,
     raw_path: &str,
     recursive: bool,
+    preferred_remote_connection_id: Option<&str>,
 ) -> Result<(), String> {
-    match resolve_desktop_path_target(app_state, raw_path, None).await? {
+    match resolve_desktop_path_target(app_state, raw_path, preferred_remote_connection_id).await? {
         DesktopPathTarget::Local { resolved_path, .. } => app_state
             .filesystem_service
             .delete_directory(&resolved_path.to_string_lossy(), recursive)
@@ -440,7 +453,7 @@ pub async fn delete_directory(
                     .map_err(|e| format!("Failed to delete remote directory: {}", e))
             } else {
                 remote_fs
-                    .remove_dir_all(&entry.connection_id, &requested_path)
+                    .remove_dir(&entry.connection_id, &requested_path)
                     .await
                     .map_err(|e| format!("Failed to delete remote directory: {}", e))
             }
@@ -448,8 +461,12 @@ pub async fn delete_directory(
     }
 }
 
-pub async fn create_empty_file(app_state: &AppState, raw_path: &str) -> Result<(), String> {
-    match resolve_desktop_path_target(app_state, raw_path, None).await? {
+pub async fn create_empty_file(
+    app_state: &AppState,
+    raw_path: &str,
+    preferred_remote_connection_id: Option<&str>,
+) -> Result<(), String> {
+    match resolve_desktop_path_target(app_state, raw_path, preferred_remote_connection_id).await? {
         DesktopPathTarget::Local { resolved_path, .. } => {
             let options = FileOperationOptions::default();
             app_state
@@ -475,8 +492,12 @@ pub async fn create_empty_file(app_state: &AppState, raw_path: &str) -> Result<(
     }
 }
 
-pub async fn create_directory(app_state: &AppState, raw_path: &str) -> Result<(), String> {
-    match resolve_desktop_path_target(app_state, raw_path, None).await? {
+pub async fn create_directory(
+    app_state: &AppState,
+    raw_path: &str,
+    preferred_remote_connection_id: Option<&str>,
+) -> Result<(), String> {
+    match resolve_desktop_path_target(app_state, raw_path, preferred_remote_connection_id).await? {
         DesktopPathTarget::Local { resolved_path, .. } => app_state
             .filesystem_service
             .create_directory(&resolved_path.to_string_lossy())

@@ -820,20 +820,14 @@ export class ThemeService {
       root.style.setProperty('--btn-ghost-hover-border', 'transparent');
     }
 
-
-    root.style.setProperty(
-      '--window-control-close-hover-color',
-      theme.components?.windowControls?.close.hoverColor ?? colors.semantic.error,
-    );
-
-
-    root.style.setProperty('--input-bg', colors.element.base);
-    root.style.setProperty('--input-bg-hover', colors.element.medium);
-    root.style.setProperty('--input-border', colors.border.base);
-    root.style.setProperty('--input-border-hover', colors.border.medium);
-    root.style.setProperty('--input-border-focus', colors.accent[400]);
-    root.style.setProperty('--input-text', colors.text.primary);
-
+    const legacyWindowCloseHover = theme.components?.windowControls?.close.hoverColor;
+    if (legacyWindowCloseHover) {
+      root.style.setProperty('--window-control-close-hover-color', legacyWindowCloseHover);
+      root.setAttribute('data-window-control-close-hover-override', 'true');
+    } else {
+      root.removeAttribute('data-window-control-close-hover-override');
+      root.style.removeProperty('--window-control-close-hover-color');
+    }
 
     if (theme.type === 'dark') {
 
@@ -858,9 +852,6 @@ export class ThemeService {
       root.style.setProperty('--card-bg-purple', 'rgba(124, 58, 237, 0.12)');
       root.style.setProperty('--card-bg-purple-hover', 'rgba(139, 92, 246, 0.15)');
     }
-
-
-    root.style.setProperty('--panel-bg', colors.background.primary);
 
 
     root.setAttribute('data-theme', theme.id);

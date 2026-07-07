@@ -576,6 +576,39 @@ pub async fn _run() {
 
             #[cfg(not(target_env = "ohos"))]
             {
+                let workspace_startup_bootstrap_snapshot = {
+                    let app_state: tauri::State<'_, api::app_state::AppState> = app.state();
+                    let startup_trace_state: tauri::State<'_, startup_trace::DesktopStartupTrace> =
+                        app.state();
+                    tokio::task::block_in_place(|| {
+                        tokio::runtime::Handle::current().block_on(
+                            prepare_workspace_startup_bootstrap_snapshot(
+                                &app_state,
+                                &app_handle,
+                                &startup_trace_state,
+                            ),
+                        )
+                    })
+                        .and_then(|snapshot| {
+                            serde_json::to_value(snapshot)
+                                .map_err(|error| {
+                                    log::warn!(
+                                "Failed to serialize workspace startup bootstrap snapshot, frontend will fall back to startup command: {}",
+                                error
+                            );
+                                    error
+                                })
+                                .ok()
+                        })
+                };
+                let window_started = Instant::now();
+                startup_trace.record_phase("main_window_create_start", "native_window");
+                theme::create_main_window(
+                    &app_handle,
+                    &startup_trace_id,
+                    &startup_trace,
+                    workspace_startup_bootstrap_snapshot,
+                );
                 let window_duration_ms = elapsed_ms(window_started);
                 startup_trace.record_step(
                     "native_step_end",
@@ -586,7 +619,7 @@ pub async fn _run() {
                 log::debug!(
                 "Desktop startup step completed: step=create_main_window, duration_ms={}",
                 window_duration_ms
-                    );
+            );
                 let webdriver_started = Instant::now();
                 bitfun_webdriver::maybe_start(app_handle.clone());
                 startup_trace.record_elapsed_step(
@@ -604,10 +637,10 @@ pub async fn _run() {
                 );
                 startup_trace.record_phase("tauri_setup_window_phase_end", "native_setup");
                 log::debug!(
-                    "Desktop startup timing: phase=tauri_setup_until_main_window_created, duration_ms={}, since_process_start_ms={}",
-                    window_phase_duration_ms,
-                    since_process_start_ms
-                );
+                "Desktop startup timing: phase=tauri_setup_until_main_window_created, duration_ms={}, since_process_start_ms={}",
+                window_phase_duration_ms,
+                since_process_start_ms
+            );
             }
 
             #[cfg(target_os = "macos")]
@@ -800,6 +833,10 @@ pub async fn _run() {
             api::agentic_api::restore_session,
             api::agentic_api::restore_session_view,
             api::agentic_api::restore_session_with_turns,
+            api::agentic_api::reset_memory,
+            api::agentic_api::get_memory_paths,
+            api::agentic_api::set_session_memory_mode,
+            webdriver_bridge_result,
             get_startup_native_trace,
             api::agentic_api::list_sessions,
             api::agentic_api::confirm_tool_execution,
@@ -870,6 +907,8 @@ pub async fn _run() {
             delete_directory,
             create_file,
             create_directory,
+            compress_path,
+            decompress_path,
             list_directory_files,
             start_file_watch,
             stop_file_watch,
@@ -1139,7 +1178,6 @@ pub async fn _run() {
             install_update,
             api::system_api::open_html_file_in_browser,
             restart_app,
-            open_external_ohos,
             send_system_notification,
             api::system_api::quit_app,
             api::system_api::minimize_to_tray,
@@ -1187,6 +1225,10 @@ pub async fn _run() {
             api::miniapp_api::miniapp_runtime_status,
             api::miniapp_api::miniapp_worker_call,
             api::miniapp_api::miniapp_host_call,
+            api::canvas_api::load_canvas_artifact,
+            api::canvas_api::load_canvas_state,
+            api::canvas_api::report_canvas_runtime_error,
+            api::canvas_api::save_canvas_state,
             api::miniapp_api::miniapp_worker_stop,
             api::miniapp_api::miniapp_worker_list_running,
             api::miniapp_api::miniapp_install_deps,
@@ -1254,6 +1296,7 @@ pub async fn _run() {
             api::ssh_api::remote_rename,
             api::ssh_api::remote_download_to_local_path,
             api::ssh_api::remote_upload_from_local_path,
+            api::ssh_api::cancel_transfer,
             api::ssh_api::remote_execute,
             api::ssh_api::remote_open_workspace,
             api::ssh_api::remote_close_workspace,
@@ -1276,6 +1319,7 @@ pub async fn _run() {
             window_start_dragging,
             close_window,
             set_theme_mode,
+            open_external_ohos,
 
             // Debug API (no-op stubs in release builds)
             api::debug_api::debug_devtools_available,

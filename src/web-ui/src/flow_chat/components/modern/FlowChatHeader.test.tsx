@@ -92,8 +92,8 @@ describe('FlowChatHeader', () => {
     container.remove();
   });
 
-  it('keeps the turn list open until the selected turn becomes current', () => {
-    const onJumpToTurn = vi.fn();
+  it('closes the turn list as soon as a different turn selection is accepted', () => {
+    const onJumpToTurn = vi.fn(() => true);
     const initialProps = createProps({ onJumpToTurn });
 
     act(() => {
@@ -117,7 +117,7 @@ describe('FlowChatHeader', () => {
     });
 
     expect(onJumpToTurn).toHaveBeenCalledWith('turn-2');
-    expect(container.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
 
     act(() => {
       root.render(<FlowChatHeader {...initialProps} currentTurn={2} />);
@@ -127,7 +127,7 @@ describe('FlowChatHeader', () => {
   });
 
   it('closes the turn list and notifies the container when selecting the current turn', () => {
-    const onJumpToTurn = vi.fn();
+    const onJumpToTurn = vi.fn(() => true);
 
     act(() => {
       root.render(<FlowChatHeader {...createProps({ onJumpToTurn })} />);
@@ -145,5 +145,26 @@ describe('FlowChatHeader', () => {
 
     expect(onJumpToTurn).toHaveBeenCalledWith('turn-1');
     expect(container.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  it('keeps the turn list open when the container rejects the selection', () => {
+    const onJumpToTurn = vi.fn(() => false);
+
+    act(() => {
+      root.render(<FlowChatHeader {...createProps({ onJumpToTurn })} />);
+    });
+
+    const turnListButton = container.querySelector<HTMLButtonElement>('[data-testid="flowchat-header-turn-list"]');
+    act(() => {
+      turnListButton?.click();
+    });
+
+    const turnItems = Array.from(container.querySelectorAll<HTMLButtonElement>('.flowchat-header__turn-list-item'));
+    act(() => {
+      turnItems[1]?.click();
+    });
+
+    expect(onJumpToTurn).toHaveBeenCalledWith('turn-2');
+    expect(container.querySelector('[role="dialog"]')).not.toBeNull();
   });
 });

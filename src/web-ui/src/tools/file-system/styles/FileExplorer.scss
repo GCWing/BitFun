@@ -235,96 +235,43 @@ $_indent-width: 8px;
     color: var(--color-text-muted);
   }
 
-  &--image {
-    color: rgb(var(--file-explorer-icon-image-rgb));
-  }
-
-  &--code {
-    color: rgb(var(--file-explorer-icon-code-rgb));
-  }
-
-  &--javascript {
-    color: rgb(var(--file-explorer-icon-javascript-rgb));
-  }
-
-  &--typescript {
-    color: rgb(var(--file-explorer-icon-typescript-rgb));
-  }
-
-  &--react {
-    color: rgb(var(--file-explorer-icon-react-rgb));
-  }
-
-  &--vue {
-    color: rgb(var(--file-explorer-icon-vue-rgb));
-  }
-
-  &--python {
-    color: rgb(var(--file-explorer-icon-python-rgb));
-  }
-
-  &--rust {
-    color: rgb(var(--file-explorer-icon-rust-rgb));
-  }
-
-  &--go {
-    color: rgb(var(--file-explorer-icon-go-rgb));
-  }
-
-  &--java {
-    color: rgb(var(--file-explorer-icon-java-rgb));
-  }
-
-  &--c-cpp {
-    color: rgb(var(--file-explorer-icon-c-cpp-rgb));
-  }
-
-  &--html {
-    color: rgb(var(--file-explorer-icon-html-rgb));
-  }
-
-  &--css {
-    color: rgb(var(--file-explorer-icon-css-rgb));
-  }
-
-  &--sass {
-    color: rgb(var(--file-explorer-icon-sass-rgb));
-  }
-
-  &--config {
-    color: rgb(var(--file-explorer-icon-config-rgb));
-  }
-
-  &--json {
-    color: rgb(var(--file-explorer-icon-config-rgb));
-  }
-
-  &--markdown {
-    color: rgb(var(--file-explorer-icon-markdown-rgb));
-  }
-
-  &--text {
-    color: rgb(var(--file-explorer-icon-text-rgb));
-  }
-
-  &--database {
-    color: rgb(var(--file-explorer-icon-database-rgb));
-  }
-
+  &--code,
+  &--javascript,
+  &--typescript,
+  &--react,
+  &--vue,
+  &--python,
+  &--rust,
+  &--go,
+  &--java,
+  &--c-cpp,
   &--font {
-    color: rgb(var(--file-explorer-icon-code-rgb));
+    color: var(--color-accent-500);
   }
 
-  &--audio {
-    color: rgb(var(--file-explorer-icon-audio-rgb));
+  &--html,
+  &--css,
+  &--sass,
+  &--markdown {
+    color: var(--color-purple-500);
   }
 
+  &--image,
+  &--audio,
   &--video {
-    color: rgb(var(--file-explorer-icon-video-rgb));
+    color: var(--color-success);
   }
 
+  &--config,
+  &--json,
+  &--database,
   &--archive {
-    color: rgb(var(--file-explorer-icon-archive-rgb));
+    color: var(--color-warning);
+  }
+
+  &--text,
+  &--binary {
+    color: var(--color-text-muted);
   }
 }
 

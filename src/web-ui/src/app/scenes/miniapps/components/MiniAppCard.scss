@@ -1,6 +1,9 @@
 @use '../../../../component-library/styles/tokens' as *;
 
 .miniapp-card {
+  --miniapp-card-action-bg: color-mix(in srgb, var(--color-static-white) 30%, transparent);
+  --miniapp-card-action-hover-bg: color-mix(in srgb, var(--color-static-white) 60%, transparent);
+
   width: 360px;
   min-height: 200px;
   border-radius: 15px;
@@ -240,7 +243,7 @@
     height: 30px;
     border-radius: $size-radius-sm;
     border: none;
-    background: rgba(var(--miniapp-card-action-bg-rgb), 0.3);
+    background: var(--miniapp-card-action-bg);
     color: var(--color-text-secondary);
     cursor: pointer;
     transition:
@@ -252,17 +255,17 @@
     }
 
     &--primary:hover {
-      background: rgba(var(--miniapp-card-action-bg-rgb), 0.6);
+      background: var(--miniapp-card-action-hover-bg);
       color: var(--color-accent-400);
     }
 
     &--danger:hover {
-      background: rgba(var(--miniapp-card-action-bg-rgb), 0.6);
+      background: var(--miniapp-card-action-hover-bg);
       color: var(--color-error);
     }
 
     &--stop:hover {
-      background: rgba(var(--miniapp-card-action-bg-rgb), 0.6);
+      background: var(--miniapp-card-action-hover-bg);
       color: var(--color-success);
     }
   }

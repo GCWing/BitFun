@@ -489,6 +489,16 @@
   &:hover {
     background: var(--element-bg-subtle);
   }
+
+  /* Collapsed (only child): match all card corners. */
+  &:last-child {
+    border-radius: var(--size-radius-md);
+  }
+
+  /* Expanded (has sibling below): match only top card corners. */
+  &:not(:last-child) {
+    border-radius: var(--size-radius-md) var(--size-radius-md) 0 0;
+  }
 }
 
 .summary-content {

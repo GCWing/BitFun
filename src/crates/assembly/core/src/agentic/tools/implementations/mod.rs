@@ -3,6 +3,8 @@
 pub mod analyze_image_tool;
 pub mod ask_user_question_tool;
 pub mod bash_tool;
+#[cfg(feature = "canvas-runtime")]
+pub mod canvas_tools;
 pub mod calendar_tool;
 pub mod harmonyos_project;
 pub mod code_review_tool;
@@ -26,7 +28,6 @@ pub mod get_time_tool;
 pub mod git_tool;
 pub mod glob_tool;
 pub mod grep_tool;
-pub mod log_tool;
 pub mod ls_tool;
 pub mod mcp_tools;
 pub mod miniapp_init_tool;
@@ -48,10 +49,12 @@ pub mod web;
 #[deprecated(note = "GetToolSpecTool is owned by the product tool runtime boundary")]
 pub use crate::agentic::tools::product_runtime::GetToolSpecTool;
 pub mod harmony_build_tool;
+pub use calendar_tool::CalendarTool;
 pub use analyze_image_tool::AnalyzeImageTool;
 pub use ask_user_question_tool::AskUserQuestionTool;
 pub use bash_tool::BashTool;
-pub use calendar_tool::CalendarTool;
+#[cfg(feature = "canvas-runtime")]
+pub use canvas_tools::{CreateCanvasTool, PatchCanvasTool, ReadCanvasTool, UpdateCanvasTool};
 pub use code_review_tool::CodeReviewTool;
 pub use computer_use_tool::ComputerUseTool;
 pub use control_hub_tool::ControlHubTool;
@@ -68,7 +71,6 @@ pub use get_time_tool::GetTimeTool;
 pub use git_tool::GitTool;
 pub use glob_tool::GlobTool;
 pub use grep_tool::GrepTool;
-pub use log_tool::LogTool;
 pub use ls_tool::LSTool;
 pub use mcp_tools::{
     GetMCPPromptTool, ListMCPPromptsTool, ListMCPResourcesTool, ReadMCPResourceTool,

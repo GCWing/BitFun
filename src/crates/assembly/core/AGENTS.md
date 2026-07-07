@@ -11,7 +11,7 @@ repository-wide rules and the nearest narrower guide when one exists.
 
 `bitfun-core` is the shared product runtime facade. It still owns compatibility
 paths and the `product-full` assembly boundary, but new decomposition work should
-prefer the owner crates described in `docs/architecture/core-decomposition.md`
+prefer the owner crates described in `docs/architecture/product-architecture.md`
 and `docs/architecture/agent-runtime-services-design.md`.
 
 Main areas:
@@ -71,7 +71,7 @@ SessionManager -> Session -> DialogTurn -> ModelRound
 
 Use these files for ownership details instead of expanding this guide:
 
-- `docs/architecture/core-decomposition.md`
+- `docs/architecture/product-architecture.md`
 - `docs/architecture/agent-runtime-services-design.md`
 - `src/crates/execution/agent-runtime/AGENTS.md`
 - `src/crates/execution/tool-contracts/AGENTS.md`

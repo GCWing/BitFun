@@ -107,6 +107,10 @@ const GenerativeWidgetPanel = React.lazy(() =>
   import('@/tools/generative-widget/GenerativeWidgetPanel')
 );
 
+const BitfunCanvasPanel = React.lazy(() =>
+  import('@/tools/bitfun-canvas/BitfunCanvasPanel')
+);
+
 const TaskDetailPanel = React.lazy(() => 
   import('@/flow_chat/components/TaskDetailPanel').then(module => ({ 
     default: module.TaskDetailPanel 
@@ -919,6 +923,23 @@ const FlexiblePanel: React.FC<ExtendedFlexiblePanelProps> = memo(({
                   }
                 }
               }}
+            />
+          </React.Suspense>
+        );
+
+      case 'bitfun-canvas':
+        return (
+          <React.Suspense fallback={<div className="bitfun-flexible-panel__loading">Loading Canvas preview...</div>}>
+            <BitfunCanvasPanel
+              title={content.title}
+              artifactReference={content.data?.artifactReference}
+              html={content.data?.html}
+              source={content.data?.source}
+              status={content.data?.status}
+              diagnostics={content.data?.diagnostics}
+              workspacePath={content.data?.workspacePath}
+              remoteConnectionId={content.data?.remoteConnectionId}
+              remoteSshHost={content.data?.remoteSshHost}
             />
           </React.Suspense>
         );

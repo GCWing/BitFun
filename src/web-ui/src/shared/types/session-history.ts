@@ -64,6 +64,7 @@ export interface SessionMetadata {
   modelName: string;
   createdAt: number;
   lastActiveAt: number;
+  lastFinishedAt?: number | null;
   turnCount: number;
   messageCount: number;
   toolCallCount: number;

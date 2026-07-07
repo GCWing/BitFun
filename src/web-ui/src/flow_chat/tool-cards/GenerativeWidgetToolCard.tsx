@@ -14,6 +14,7 @@ import { useGenerativeWidgetPromptMenu } from '@/tools/generative-widget/useGene
 import { useContextMenuStore } from '@/shared/context-menu-system/store/ContextMenuStore';
 import { captureElementToDownloadsPng } from '../utils/captureElementToDownloadsPng';
 import { createLogger } from '@/shared/utils/logger';
+import { createTab } from '@/shared/utils/tabUtils';
 import { notificationService } from '@/shared/notification-system';
 import './GenerativeWidgetToolCard.scss';
 
@@ -117,7 +118,7 @@ export const GenerativeWidgetToolCard: React.FC<ToolCardProps> = ({ toolItem, se
     }
 
     const duplicateCheckKey = `generative-widget-${toolCall?.id || toolItem.id}`;
-    const eventData = {
+    createTab({
       type: 'generative-widget',
       title,
       data: {
@@ -139,15 +140,8 @@ export const GenerativeWidgetToolCard: React.FC<ToolCardProps> = ({ toolItem, se
       checkDuplicate: true,
       duplicateCheckKey,
       replaceExisting: true,
-    };
-
-    window.dispatchEvent(new CustomEvent('expand-right-panel'));
-
-    setTimeout(() => {
-      window.dispatchEvent(new CustomEvent('agent-create-tab', {
-        detail: eventData,
-      }));
-    }, 100);
+      mode: 'agent',
+    });
   }, [isClickable, sessionId, title, toolCall?.id, toolItem.id, widgetCode, widgetId]);
 
   const handleCardClick = useCallback(

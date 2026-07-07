@@ -58,6 +58,21 @@ pub struct SessionRelationship {
     pub subagent_type: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum SessionMemoryMode {
+    #[default]
+    Enabled,
+    Disabled,
+    Polluted,
+}
+
+impl SessionMemoryMode {
+    pub fn is_enabled(self) -> bool {
+        matches!(self, Self::Enabled)
+    }
+}
+
 /// Session metadata
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -100,6 +115,10 @@ pub struct SessionMetadata {
     #[serde(default, alias = "session_kind", alias = "sessionKind")]
     pub session_kind: SessionKind,
 
+    /// Whether this session is eligible for memory generation.
+    #[serde(default, alias = "memory_mode", alias = "memoryMode")]
+    pub memory_mode: SessionMemoryMode,
+
     /// Model name
     #[serde(alias = "model_name")]
     pub model_name: String,
@@ -111,6 +130,15 @@ pub struct SessionMetadata {
     /// Last active time (Unix timestamp ms)
     #[serde(alias = "last_active_at")]
     pub last_active_at: u64,
+
+    /// Last dialog completion time (Unix timestamp ms)
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "last_finished_at",
+        alias = "lastFinishedAt"
+    )]
+    pub last_finished_at: Option<u64>,
 
     /// Turn count
     #[serde(alias = "turn_count")]
@@ -812,9 +840,11 @@ impl SessionMetadata {
             last_submitted_agent_type: None,
             created_by: None,
             session_kind: SessionKind::Standard,
+            memory_mode: SessionMemoryMode::Enabled,
             model_name,
             created_at: now,
             last_active_at: now,
+            last_finished_at: None,
             turn_count: 0,
             message_count: 0,
             tool_call_count: 0,
@@ -963,8 +993,9 @@ impl DialogTurnData {
 #[cfg(test)]
 mod tests {
     use super::{
-        DialogTurnData, DialogTurnKind, ModelRoundData, SessionMetadata, SessionRelationship,
-        SessionRelationshipKind, TextItemData, ThinkingItemData, ToolItemData, UserMessageData,
+        DialogTurnData, DialogTurnKind, ModelRoundData, SessionMemoryMode, SessionMetadata,
+        SessionRelationship, SessionRelationshipKind, TextItemData, ThinkingItemData, ToolItemData,
+        UserMessageData,
     };
     use bitfun_core_types::SessionKind;
 
@@ -1069,6 +1100,53 @@ mod tests {
 
         assert!(metadata.is_subagent());
         assert!(!metadata.is_standard());
+    }
+
+    #[test]
+    fn session_memory_mode_defaults_to_enabled_for_new_and_legacy_metadata() {
+        let metadata = SessionMetadata::new(
+            "session-1".to_string(),
+            "Session".to_string(),
+            "agentic".to_string(),
+            "model".to_string(),
+        );
+        assert_eq!(metadata.memory_mode, SessionMemoryMode::Enabled);
+
+        let payload = serde_json::json!({
+            "sessionId": "session-1",
+            "sessionName": "Legacy",
+            "agentType": "agentic",
+            "sessionKind": "standard",
+            "modelName": "model",
+            "createdAt": 1,
+            "lastActiveAt": 1,
+            "turnCount": 0,
+            "messageCount": 0,
+            "toolCallCount": 0,
+            "status": "active"
+        });
+        let legacy: SessionMetadata =
+            serde_json::from_value(payload).expect("legacy metadata should deserialize");
+        assert_eq!(legacy.memory_mode, SessionMemoryMode::Enabled);
+    }
+
+    #[test]
+    fn session_memory_mode_round_trips_disabled_and_polluted() {
+        for mode in [SessionMemoryMode::Disabled, SessionMemoryMode::Polluted] {
+            let mut metadata = SessionMetadata::new(
+                "session-1".to_string(),
+                "Session".to_string(),
+                "agentic".to_string(),
+                "model".to_string(),
+            );
+            metadata.memory_mode = mode;
+
+            let encoded = serde_json::to_value(&metadata).expect("metadata should serialize");
+            let decoded: SessionMetadata =
+                serde_json::from_value(encoded).expect("metadata should deserialize");
+
+            assert_eq!(decoded.memory_mode, mode);
+        }
     }
 
     #[test]

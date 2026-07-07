@@ -249,6 +249,14 @@ export const PANEL_CONTENT_CONFIGS: Record<PanelContentType, PanelContentConfig>
     supportsDownload: false,
     showHeader: false
   },
+  'bitfun-canvas': {
+    type: 'bitfun-canvas',
+    displayName: 'BitFun Canvas',
+    icon: Network,
+    supportsCopy: false,
+    supportsDownload: false,
+    showHeader: false
+  },
   'browser': {
     type: 'browser',
     displayName: 'Browser',

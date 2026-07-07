@@ -13,20 +13,20 @@ fn user_context_policy_preserves_order_and_deduplicates_sections() {
         .with_workspace_instructions()
         .with_workspace_context()
         .with_project_layout()
-        .without_section(UserContextSection::ProjectLayout)
-        .with_workspace_memory_files();
+        .with_memory_summary()
+        .without_section(UserContextSection::ProjectLayout);
 
     assert_eq!(
         policy.sections,
         vec![
             UserContextSection::WorkspaceContext,
             UserContextSection::WorkspaceInstructions,
-            UserContextSection::WorkspaceMemoryFiles,
+            UserContextSection::MemorySummary,
         ]
     );
     assert_eq!(
         policy.cache_scope_key(),
-        "workspace_context|workspace_instructions|workspace_memory_files"
+        "workspace_context|workspace_instructions|memory_summary"
     );
 }
 

@@ -268,6 +268,7 @@ mod tests {
             dialog_turn_id: Some("turn-1".to_string()),
             workspace: Some(WorkspaceBinding::new(None, root)),
             unlocked_collapsed_tools: Vec::new(),
+            primary_model_facts: tool_runtime::context::PrimaryModelFacts::default(),
             custom_data: HashMap::new(),
             computer_use_host: None,
             runtime_tool_restrictions: Default::default(),

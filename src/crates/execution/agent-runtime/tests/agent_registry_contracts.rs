@@ -162,7 +162,7 @@ fn mode_presentation_and_shared_context_policy_match_existing_mode_contract() {
 
     assert_eq!(
         shared_coding_mode_user_context_policy().cache_scope_key(),
-        "workspace_context|workspace_instructions|workspace_memory_files|project_layout"
+        "workspace_context|workspace_instructions|project_layout"
     );
 }
 
@@ -196,6 +196,7 @@ fn builtin_agent_definition_catalog_preserves_order_categories_models_and_visibi
             "CodeReview",
             "DeepReview",
             "GenerateDoc",
+            "MemoryPhase2",
         ]
     );
 
@@ -204,7 +205,15 @@ fn builtin_agent_definition_catalog_preserves_order_categories_models_and_visibi
     assert_eq!(specs[20].category, BuiltinAgentCategory::Hidden);
     assert_eq!(default_model_id_for_builtin_agent("agentic"), "auto");
     assert_eq!(default_model_id_for_builtin_agent("Explore"), "primary");
-    assert_eq!(default_model_id_for_builtin_agent("GeneralPurpose"), "fast");
+    assert_eq!(
+        default_model_id_for_builtin_agent("GeneralPurpose"),
+        "primary"
+    );
+    assert_eq!(default_model_id_for_builtin_agent("GenerateDoc"), "fast");
+    assert_eq!(
+        default_model_id_for_builtin_agent("MemoryPhase2"),
+        "primary"
+    );
     assert_eq!(
         default_model_id_for_builtin_agent("ResearchSpecialist"),
         "fast"

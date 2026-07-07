@@ -100,6 +100,12 @@
       "placeholder": "请输入文件夹名",
       "confirm": "创建",
       "cancel": "取消"
+    },
+    "largeFile": {
+      "title": "文件较大",
+      "message": "文件大小为 {{size}}，超过 2 MB。打开大文件可能导致界面卡顿，是否继续打开？",
+      "confirm": "继续打开",
+      "cancel": "取消"
     }
   },
   "validation": {
@@ -110,7 +116,16 @@
     "uploading": "正在上传",
     "missingConnection": "远程工作区缺少 SSH 连接信息。",
     "failed": "文件传输失败：{{error}}",
-    "dropHint": "将文件拖放到此处以上传"
+    "dropHint": "将文件拖放到此处以上传",
+    "stop": "停止"
+  },
+  "archive": {
+    "compress": "压缩",
+    "decompress": "解压",
+    "compressSuccess": "压缩 \"{{name}}\" 成功",
+    "compressFailed": "压缩失败。\n{{error}}",
+    "decompressSuccess": "解压 \"{{name}}\" 成功",
+    "decompressFailed": "解压失败。\n{{error}}"
   },
   "notifications": {
     "createFileSuccess": "文件创建成功",
@@ -122,6 +137,9 @@
     "deleteSuccess": "删除成功",
     "deleteFailed": "删除失败: {{error}}",
     "pasteSuccess": "成功粘贴 {{count}} 个文件",
+    "pasteSuccessFiles": "成功粘贴 {{count}} 个文件",
+    "pasteSuccessFolders": "成功粘贴 {{count}} 个文件夹",
+    "pasteSuccessItems": "成功粘贴 {{count}} 项",
     "pasteFailed": "{{count}} 个文件粘贴失败",
     "pasteNoFiles": "剪贴板中没有文件",
     "pastingFiles": "正在粘贴 {{count}} 个文件到 {{target}}...",
