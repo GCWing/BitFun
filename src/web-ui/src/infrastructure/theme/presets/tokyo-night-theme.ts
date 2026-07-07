@@ -35,12 +35,8 @@ const TOKYO_GIT_ADDED = '#41a6b5';
 const TOKYO_PRIMARY_BUTTON = '#3d59a1';
 
 const tokyoAccent = (alpha: number | string) => rgbaFromHex(TOKYO_ACCENT, alpha);
-const tokyoSuccess = (alpha: number | string) => rgbaFromHex(TOKYO_SUCCESS, alpha);
-const tokyoWarning = (alpha: number | string) => rgbaFromHex(TOKYO_WARNING, alpha);
-const tokyoError = (alpha: number | string) => rgbaFromHex(TOKYO_ERROR, alpha);
 const tokyoBorder = (alpha: number | string) => rgbaFromHex(TOKYO_BORDER, alpha);
 const tokyoScrollbar = (alpha: number | string) => rgbaFromHex(TOKYO_SCROLLBAR, alpha);
-const tokyoGitAdded = (alpha: number | string) => rgbaFromHex(TOKYO_GIT_ADDED, alpha);
 const tokyoPrimaryButton = (alpha: number | string) => rgbaFromHex(TOKYO_PRIMARY_BUTTON, alpha);
 
 /** Colors aligned with the Tokyo Night palette (Enkia / VS Code Tokyo Night). */
@@ -114,13 +110,9 @@ export const bitfunTokyoNightTheme: ThemeConfig = {
       branch: rgbFromHex(TOKYO_ACCENT),
       branchBg: tokyoAccent(0.12),
       changes: rgbFromHex(TOKYO_WARNING),
-      changesBg: tokyoWarning(0.12),
       added: rgbFromHex(TOKYO_GIT_ADDED),
-      addedBg: tokyoGitAdded(0.12),
       deleted: rgbFromHex(TOKYO_ERROR),
-      deletedBg: tokyoError(0.12),
       staged: rgbFromHex(TOKYO_SUCCESS),
-      stagedBg: tokyoSuccess(0.12),
     }),
 
     scrollbar: {

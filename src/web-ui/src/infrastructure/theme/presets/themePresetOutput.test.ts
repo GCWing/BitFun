@@ -37,30 +37,21 @@ describe('builtin theme preset output', () => {
       branch: '#64748b',
       branchBg: 'rgba(100, 116, 139, 0.1)',
       changes: '#f59e0b',
-      changesBg: 'rgba(245, 158, 11, 0.1)',
       added: '#22c55e',
-      addedBg: 'rgba(34, 197, 94, 0.1)',
       deleted: '#ef4444',
-      deletedBg: 'rgba(239, 68, 68, 0.1)',
     })).toMatchObject({
       staged: '#22c55e',
-      stagedBg: 'rgba(34, 197, 94, 0.1)',
     });
 
     expect(createGitColors({
       branch: '#64748b',
       branchBg: 'rgba(100, 116, 139, 0.1)',
       changes: '#f59e0b',
-      changesBg: 'rgba(245, 158, 11, 0.1)',
       added: '#22c55e',
-      addedBg: 'rgba(34, 197, 94, 0.1)',
       deleted: '#ef4444',
-      deletedBg: 'rgba(239, 68, 68, 0.1)',
       staged: '#10b981',
-      stagedBg: 'rgba(16, 185, 129, 0.1)',
     })).toMatchObject({
       staged: '#10b981',
-      stagedBg: 'rgba(16, 185, 129, 0.1)',
     });
   });
 
@@ -149,42 +140,42 @@ describe('builtin theme preset output', () => {
     }))).toMatchInlineSnapshot(`
       [
         {
-          "hash": "63622f32216bbb5aea27e3ba0aec61f385a43842e57a6f17c814b341b8a54ac7",
+          "hash": "64235e8fca47462c9943d3015d024dbd9be8df90d25a5e7508f7e5b2ee789c6c",
           "id": "bitfun-light",
           "type": "light",
         },
         {
-          "hash": "a62e5f3c6a5cbf4c7a35a2f51ed3a5f2a1eb82f6421f11e194ebb9a707517311",
+          "hash": "d6b190bdf145c29e28852d4922e0ee03cfe635ccc42081d82acd9ed75ba9e9c6",
           "id": "bitfun-slate",
           "type": "dark",
         },
         {
-          "hash": "a527410c9bdf5ed396d82d843e19b298f8b5fe280ebc70bfe01237e753b28713",
+          "hash": "65b55d4d15503949e120e28fa1210449dfec390af69514410cea429f28bd19da",
           "id": "bitfun-dark",
           "type": "dark",
         },
         {
-          "hash": "8b2f11e903371752749b5c7a44337df517dbb2ed9cf0fed29a2341ebb1890f0b",
+          "hash": "57d5efdaec49f1e4f21f3d095150dd81e810a0dedae4ae690d15b99e042228fa",
           "id": "bitfun-midnight",
           "type": "dark",
         },
         {
-          "hash": "d198bd1a20566689f5bf2660bc47b5aa2da854e5f3dcae9e655a5408b36141d1",
+          "hash": "9fa44f208108fa973bdded43853ad1de449a2f235b3469350900d3afa3e8a50a",
           "id": "bitfun-china-style",
           "type": "light",
         },
         {
-          "hash": "f93427f5952e5a7fe5882cb114a6969e8fb7564292761029d6ee071233b2bdd5",
+          "hash": "89461a6629abee37ae1d573b57bce7acf54b05101425c82b65d444573ef66722",
           "id": "bitfun-china-night",
           "type": "dark",
         },
         {
-          "hash": "fffcb8a66e3a10745d155402be32b90df29e162f3b4a589862cccb9bafb215b7",
+          "hash": "14f6897c94657f1e090107d8ff9d81d7540fad1fca0eaf1b068662b9fa5a518b",
           "id": "bitfun-cyber",
           "type": "dark",
         },
         {
-          "hash": "81ece301a307408b2149141c7b1553bf422245d20278e98442d6c36063acfc3b",
+          "hash": "80c5e00c474fd929154996d1fc8f0a230c50c5ccaaa966fbe588cf2349e2ede5",
           "id": "bitfun-tokyo-night",
           "type": "dark",
         },

@@ -291,12 +291,11 @@ export function createDarkNeutralElement(): ElementBackgrounds {
 }
 
 export function createGitColors(
-  config: Omit<GitColors, 'staged' | 'stagedBg'> & Partial<Pick<GitColors, 'staged' | 'stagedBg'>>,
+  config: Omit<GitColors, 'staged'> & Partial<Pick<GitColors, 'staged'>>,
 ): GitColors {
   return {
     ...config,
     staged: config.staged ?? config.added,
-    stagedBg: config.stagedBg ?? config.addedBg,
   };
 }
 

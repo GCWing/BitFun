@@ -137,13 +137,15 @@ describe('ThemeService runtime theme tokens', () => {
     expect(rootStyle.getPropertyValue('--git-color-branch')).toBe('#a1a1aa');
     expect(rootStyle.getPropertyValue('--git-color-branch-bg')).toBe('rgba(255, 255, 255, 0.06)');
     expect(rootStyle.getPropertyValue('--git-color-branch-bg-hover')).toBe('rgba(255, 255, 255, 0.12)');
+    expect(rootStyle.getPropertyValue('--git-color-changes')).toBe('rgb(245, 158, 11)');
     expect(rootStyle.getPropertyValue('--git-color-added')).toBe('rgb(34, 197, 94)');
-    expect(rootStyle.getPropertyValue('--git-color-added-bg')).toBe('rgba(34, 197, 94, 0.1)');
-    expect(rootStyle.getPropertyValue('--git-color-added-bg-hover')).toBe('rgba(34, 197, 94, 0.15)');
-    expect(rootStyle.getPropertyValue('--git-color-changes-bg')).toBe('rgba(245, 158, 11, 0.1)');
-    expect(rootStyle.getPropertyValue('--git-color-deleted-bg-hover')).toBe('rgba(239, 68, 68, 0.15)');
-    expect(rootStyle.getPropertyValue('--git-color-staged-bg-hover')).toBe('rgba(34, 197, 94, 0.15)');
-    expect(rootStyle.getPropertyValue('--git-color-staged-border')).toBe('rgba(34, 197, 94, 0.3)');
+    expect(rootStyle.getPropertyValue('--git-color-deleted')).toBe('rgb(239, 68, 68)');
+    expect(rootStyle.getPropertyValue('--git-color-staged')).toBe('rgb(34, 197, 94)');
+    expect(rootStyle.getPropertyValue('--git-color-changes-bg')).toBe('');
+    expect(rootStyle.getPropertyValue('--git-color-added-bg')).toBe('');
+    expect(rootStyle.getPropertyValue('--git-color-deleted-bg')).toBe('');
+    expect(rootStyle.getPropertyValue('--git-color-staged-bg')).toBe('');
+    expect(rootStyle.getPropertyValue('--git-color-staged-border')).toBe('');
     expect(rootStyle.getPropertyValue('--git-color-pull')).toBe('');
     expect(rootStyle.getPropertyValue('--git-color-push')).toBe('');
   });
@@ -388,7 +390,7 @@ describe('ThemeService runtime theme tokens', () => {
     expect(configAPI.setConfig).not.toHaveBeenCalledWith('themes.custom', expect.anything());
   });
 
-  it('does not export non-contract dynamic keys from custom themes', () => {
+  it('does not inject non-contract dynamic keys from custom themes', () => {
     const service = new ThemeService();
     const customTheme = {
       ...bitfunLightTheme,
@@ -614,6 +616,115 @@ describe('ThemeService runtime theme tokens', () => {
         name: 'Builtin Override',
       }),
     ).rejects.toThrow(/reserved for a built-in theme/);
+  });
+
+  it('strips non-contract git color keys from registered custom themes', async () => {
+    const nonContractGitColorKeys = [
+      'changesBg',
+      'addedBg',
+      'deletedBg',
+      'stagedBg',
+      'addedBgHover',
+      'stagedBorder',
+      'pull',
+    ] as const;
+    const expectNoNonContractGitColorKeys = (gitColors: ThemeConfig['colors']['git']) => {
+      const gitRecord = gitColors as unknown as Record<string, unknown>;
+      nonContractGitColorKeys.forEach(key => {
+        expect(gitRecord).not.toHaveProperty(key);
+      });
+    };
+    const service = new ThemeService();
+    const legacyTheme = {
+      ...bitfunDarkTheme,
+      id: 'custom-legacy-git-bg',
+      name: 'Legacy Git Backgrounds',
+      colors: {
+        ...bitfunDarkTheme.colors,
+        git: {
+          ...bitfunDarkTheme.colors.git,
+          changesBg: 'rgba(245, 158, 11, 0.1)',
+          addedBg: 'rgba(34, 197, 94, 0.1)',
+          deletedBg: 'rgba(239, 68, 68, 0.1)',
+          stagedBg: 'rgba(16, 185, 129, 0.1)',
+          addedBgHover: 'rgba(34, 197, 94, 0.2)',
+          stagedBorder: 'rgba(16, 185, 129, 0.4)',
+          pull: '#60a5fa',
+        },
+      },
+    } as unknown as ThemeConfig;
+
+    await service.registerTheme(legacyTheme);
+
+    const normalized = service.getTheme('custom-legacy-git-bg');
+    expect(normalized).toBeDefined();
+    if (!normalized) {
+      throw new Error('Expected custom legacy git theme to be registered');
+    }
+    expect(normalized.colors.git.added).toBe(bitfunDarkTheme.colors.git.added);
+    expectNoNonContractGitColorKeys(normalized.colors.git);
+
+    const persistedThemes = vi.mocked(configAPI.setConfig).mock.calls.find(([key]) => key === 'themes.custom')?.[1] as
+      | ThemeConfig[]
+      | undefined;
+    const persistedTheme = persistedThemes?.find(theme => theme.id === 'custom-legacy-git-bg');
+    expect(persistedTheme).toBeDefined();
+    if (!persistedTheme) {
+      throw new Error('Expected custom legacy git theme to be persisted');
+    }
+    expectNoNonContractGitColorKeys(persistedTheme.colors.git);
+
+    const exported = service.exportTheme('custom-legacy-git-bg');
+    expect(exported).not.toBeNull();
+    if (!exported) {
+      throw new Error('Expected custom legacy git theme to be exported');
+    }
+    expectNoNonContractGitColorKeys(exported.theme.colors.git);
+  });
+
+  it('migrates persisted custom themes with non-contract git color keys on load', async () => {
+    const legacyTheme = {
+      ...bitfunDarkTheme,
+      id: 'custom-loaded-legacy-git',
+      name: 'Loaded Legacy Git',
+      colors: {
+        ...bitfunDarkTheme.colors,
+        git: {
+          ...bitfunDarkTheme.colors.git,
+          changesBg: 'rgba(245, 158, 11, 0.1)',
+          addedBgHover: 'rgba(34, 197, 94, 0.2)',
+          stagedBorder: 'rgba(16, 185, 129, 0.4)',
+        },
+      },
+    } as unknown as ThemeConfig;
+    vi.mocked(configAPI.getConfig).mockResolvedValue({ custom: [legacyTheme] });
+    const service = new ThemeService();
+
+    await service.ensureUserThemesLoaded();
+
+    const normalized = service.getTheme('custom-loaded-legacy-git');
+    expect(normalized).toBeDefined();
+    if (!normalized) {
+      throw new Error('Expected legacy custom theme to load');
+    }
+    expect(normalized.colors.git.added).toBe(bitfunDarkTheme.colors.git.added);
+    expect(normalized.colors.git.staged).toBe(bitfunDarkTheme.colors.git.staged);
+    expect(normalized.colors.git as unknown as Record<string, unknown>).not.toHaveProperty('changesBg');
+    expect(normalized.colors.git as unknown as Record<string, unknown>).not.toHaveProperty('addedBgHover');
+    expect(normalized.colors.git as unknown as Record<string, unknown>).not.toHaveProperty('stagedBorder');
+
+    const migratedThemes = vi.mocked(configAPI.setConfig).mock.calls.find(([key]) => key === 'themes.custom')?.[1] as
+      | ThemeConfig[]
+      | undefined;
+    expect(migratedThemes).toHaveLength(1);
+    const migratedGitColors = migratedThemes?.[0]?.colors.git as unknown as Record<string, unknown> | undefined;
+    expect(migratedGitColors).toBeDefined();
+    if (!migratedGitColors) {
+      throw new Error('Expected migrated theme to keep git colors');
+    }
+    expect(migratedGitColors).not.toHaveProperty('changesBg');
+    expect(migratedGitColors).not.toHaveProperty('addedBgHover');
+    expect(migratedGitColors).not.toHaveProperty('stagedBorder');
   });
 
   it('projects normalized custom themes through the compact plugin color boundary', async () => {

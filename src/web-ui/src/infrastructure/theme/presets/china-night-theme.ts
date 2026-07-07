@@ -30,9 +30,6 @@ const CHINA_NIGHT_ERROR = '#e85555';
 const chinaNightBackground = (alpha: number | string) => rgbaFromHex(CHINA_NIGHT_BACKGROUND, alpha);
 const chinaNightText = (alpha: number | string) => rgbaFromHex(CHINA_NIGHT_TEXT_PRIMARY, alpha);
 const chinaNightAccent = (alpha: number | string) => rgbaFromHex(CHINA_NIGHT_ACCENT, alpha);
-const chinaNightSuccess = (alpha: number | string) => rgbaFromHex(CHINA_NIGHT_SUCCESS, alpha);
-const chinaNightWarning = (alpha: number | string) => rgbaFromHex(CHINA_NIGHT_WARNING, alpha);
-const chinaNightError = (alpha: number | string) => rgbaFromHex(CHINA_NIGHT_ERROR, alpha);
 
 export const bitfunChinaNightTheme: ThemeConfig = {
 
@@ -96,11 +93,8 @@ export const bitfunChinaNightTheme: ThemeConfig = {
       branch: rgbFromHex(CHINA_NIGHT_ACCENT),
       branchBg: chinaNightAccent(0.12),
       changes: rgbFromHex(CHINA_NIGHT_WARNING),
-      changesBg: chinaNightWarning(0.12),
       added: rgbFromHex(CHINA_NIGHT_SUCCESS),
-      addedBg: chinaNightSuccess(0.12),
       deleted: rgbFromHex(CHINA_NIGHT_ERROR),
-      deletedBg: chinaNightError(0.12),
     }),
   },
 

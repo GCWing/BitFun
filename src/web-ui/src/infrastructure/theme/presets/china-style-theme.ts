@@ -30,9 +30,6 @@ const CHINA_STYLE_BORDER = '#6a5c46';
 
 const chinaStylePaper = (alpha: number | string) => rgbaFromHex(CHINA_STYLE_PAPER, alpha);
 const chinaStyleBlue = (alpha: number | string) => rgbaFromHex(CHINA_STYLE_BLUE, alpha);
-const chinaStyleSuccess = (alpha: number | string) => rgbaFromHex(CHINA_STYLE_SUCCESS, alpha);
-const chinaStyleWarning = (alpha: number | string) => rgbaFromHex(CHINA_STYLE_WARNING, alpha);
-const chinaStyleError = (alpha: number | string) => rgbaFromHex(CHINA_STYLE_ERROR, alpha);
 const chinaStyleBorder = (alpha: number | string) => rgbaFromHex(CHINA_STYLE_BORDER, alpha);
 
 export const bitfunChinaStyleTheme: ThemeConfig = {
@@ -98,11 +95,8 @@ export const bitfunChinaStyleTheme: ThemeConfig = {
       branch: rgbFromHex(CHINA_STYLE_BLUE),
       branchBg: chinaStyleBlue(0.08),
       changes: rgbFromHex(CHINA_STYLE_WARNING),
-      changesBg: chinaStyleWarning(0.08),
       added: rgbFromHex(CHINA_STYLE_SUCCESS),
-      addedBg: chinaStyleSuccess(0.08),
       deleted: rgbFromHex(CHINA_STYLE_ERROR),
-      deletedBg: chinaStyleError(0.08),
     }),
   },
 

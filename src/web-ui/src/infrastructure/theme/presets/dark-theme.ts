@@ -32,9 +32,6 @@ const DARK_SUCCESS = '#34d399';
 const DARK_WARNING = '#f59e0b';
 const DARK_ERROR = '#ef4444';
 
-const darkWarning = (alpha: number | string) => rgbaFromHex(DARK_WARNING, alpha);
-const darkError = (alpha: number | string) => rgbaFromHex(DARK_ERROR, alpha);
-
 export const bitfunDarkTheme: ThemeConfig = {
 
   id: 'bitfun-dark',
@@ -87,11 +84,8 @@ export const bitfunDarkTheme: ThemeConfig = {
       branch: '#a1a1aa',
       branchBg: overlayWhite(0.06),
       changes: rgbFromHex(DARK_WARNING),
-      changesBg: darkWarning(0.1),
       added: 'rgb(34, 197, 94)',
-      addedBg: 'rgba(34, 197, 94, 0.1)',
       deleted: rgbFromHex(DARK_ERROR),
-      deletedBg: darkError(0.1),
     }),
 
     scrollbar: createDarkNeutralScrollbar(),
