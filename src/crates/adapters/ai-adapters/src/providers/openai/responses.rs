@@ -187,6 +187,7 @@ mod tests {
             custom_request_body: None,
             custom_request_body_mode: None,
         })
+        .expect("test AI client should initialize")
     }
 
     #[test]

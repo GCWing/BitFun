@@ -205,7 +205,7 @@ impl AIClientFactory {
             ai_config,
             proxy_config,
             stream_options,
-        ));
+        )?);
 
         {
             let mut cache = match self.client_cache.write() {
