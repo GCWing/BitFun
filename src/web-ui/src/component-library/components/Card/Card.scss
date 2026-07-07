@@ -18,11 +18,11 @@
   }
 
   &--elevated {
-    background: var(--card-bg-elevated);
+    background: var(--card-bg-hover);
   }
 
   &--subtle {
-    background: var(--card-bg-subtle);
+    background: transparent;
   }
 
   &--accent {

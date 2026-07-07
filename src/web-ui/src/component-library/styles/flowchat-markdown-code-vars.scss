@@ -6,8 +6,6 @@
 @use './markdown-layout' as markdown;
 
 :root {
-  --flowchat-md-code-font-mono: 'Fira Code', 'JetBrains Mono', Consolas, 'Courier New', monospace;
-
   --flowchat-md-inline-code-bg: var(--color-overlay-white-08);
   --flowchat-md-inline-code-border: var(--color-overlay-white-12);
   --flowchat-md-inline-code-fg: #a8b4c8;
@@ -17,11 +15,8 @@
 
   --flowchat-md-pre-bg: var(--color-bg-primary);
   --flowchat-md-pre-border: var(--color-overlay-white-12);
-  --flowchat-md-pre-border-style: dashed;
-  --flowchat-md-pre-radius: var(--flowchat-card-radius);
   --flowchat-md-pre-shadow: none;
   --flowchat-md-pre-padding: #{markdown.$code-block-pad-y} #{markdown.$code-block-pad-x};
-  --flowchat-md-pre-font-size: var(--flowchat-code-font-size);
   --flowchat-md-pre-hover-border: var(--color-overlay-white-15);
   --flowchat-md-pre-hover-shadow:
     0 8px 24px var(--color-overlay-black-40),

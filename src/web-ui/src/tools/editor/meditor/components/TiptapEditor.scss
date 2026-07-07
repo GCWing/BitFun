@@ -134,13 +134,13 @@
       margin: 0.25rem 0.3rem;
       padding: var(--flowchat-md-pre-padding);
       overflow-x: auto;
-      font-size: var(--flowchat-md-pre-font-size);
+      font-size: var(--flowchat-code-font-size);
       line-height: 1.5;
-      font-family: var(--flowchat-md-code-font-mono);
+      font-family: var(--font-family-mono);
       color: var(--flowchat-md-pre-code-fg);
       background: var(--flowchat-md-pre-bg);
-      border: 1px var(--flowchat-md-pre-border-style) var(--flowchat-md-pre-border);
-      border-radius: var(--flowchat-md-pre-radius);
+      border: 1px dashed var(--flowchat-md-pre-border);
+      border-radius: var(--flowchat-card-radius);
       box-shadow: var(--flowchat-md-pre-shadow);
       transition: all 0.3s ease;
 
@@ -159,7 +159,7 @@
       line-height: 1.4;
       vertical-align: baseline;
       white-space: nowrap;
-      font-family: var(--flowchat-md-code-font-mono);
+      font-family: var(--font-family-mono);
       color: var(--flowchat-md-inline-code-fg);
       background: var(--flowchat-md-inline-code-bg);
       border: 1px solid var(--flowchat-md-inline-code-border);
@@ -179,7 +179,7 @@
       display: block;
       padding: 0;
       margin: 0;
-      font-size: var(--flowchat-md-pre-font-size);
+      font-size: var(--flowchat-code-font-size);
       font-weight: inherit;
       white-space: pre-wrap;
       word-break: break-word;
@@ -227,7 +227,7 @@
       table-layout: fixed;
       font-size: 0.85rem;
       border: 1px solid var(--flowchat-md-table-border);
-      border-radius: var(--flowchat-md-table-radius);
+      border-radius: var(--flowchat-card-radius);
       background: var(--flowchat-md-table-surface);
       box-shadow: var(--flowchat-md-table-shadow);
       overflow: hidden;
@@ -254,7 +254,7 @@
     }
 
     td {
-      color: var(--flowchat-md-table-td-fg);
+      color: var(--color-text-primary);
     }
 
     th + th,
@@ -292,30 +292,30 @@
 
     tbody tr:first-child th:first-child,
     thead th:first-child {
-      border-top-left-radius: var(--flowchat-md-table-radius);
+      border-top-left-radius: var(--flowchat-card-radius);
     }
 
     tbody tr:first-child th:last-child,
     thead th:last-child {
-      border-top-right-radius: var(--flowchat-md-table-radius);
+      border-top-right-radius: var(--flowchat-card-radius);
     }
 
     tbody tr:last-child td:first-child,
     tbody tr:last-child th:first-child {
-      border-bottom-left-radius: var(--flowchat-md-table-radius);
+      border-bottom-left-radius: var(--flowchat-card-radius);
     }
 
     tbody tr:last-child td:last-child,
     tbody tr:last-child th:last-child {
-      border-bottom-right-radius: var(--flowchat-md-table-radius);
+      border-bottom-right-radius: var(--flowchat-card-radius);
     }
 
     tbody tr:first-child th:only-child {
-      border-radius: var(--flowchat-md-table-radius) var(--flowchat-md-table-radius) 0 0;
+      border-radius: var(--flowchat-card-radius) var(--flowchat-card-radius) 0 0;
     }
 
     tbody tr:last-child td:only-child {
-      border-radius: 0 0 var(--flowchat-md-table-radius) var(--flowchat-md-table-radius);
+      border-radius: 0 0 var(--flowchat-card-radius) var(--flowchat-card-radius);
     }
 
     th code,
@@ -841,11 +841,11 @@
     padding: 8px 10px;
     font-size: var(--font-size-2xs);
     line-height: 1.45;
-    font-family: var(--flowchat-md-code-font-mono);
+    font-family: var(--font-family-mono);
     color: var(--flowchat-md-pre-code-fg);
     background: var(--flowchat-md-pre-bg);
-    border: 1px var(--flowchat-md-pre-border-style) var(--flowchat-md-pre-border);
-    border-radius: var(--flowchat-md-pre-radius);
+    border: 1px dashed var(--flowchat-md-pre-border);
+    border-radius: var(--flowchat-card-radius);
     box-shadow: var(--flowchat-md-pre-shadow);
     overflow-x: auto;
     transition: all 0.3s ease;
@@ -878,7 +878,7 @@
     padding: 0.1em 0.35em;
     font-size: 0.9em;
     font-weight: 500;
-    font-family: var(--flowchat-md-code-font-mono);
+    font-family: var(--font-family-mono);
     color: var(--flowchat-md-inline-code-fg);
     background: var(--flowchat-md-inline-code-bg);
     border: 1px solid var(--flowchat-md-inline-code-border);
@@ -964,7 +964,7 @@
 
   .m-editor-raw-html-inline__source {
     margin: 0;
-    font-family: var(--flowchat-md-code-font-mono);
+    font-family: var(--font-family-mono);
     font-size: var(--font-size-xs);
     white-space: pre-wrap;
     word-break: break-word;
@@ -1001,7 +1001,7 @@
   .m-editor-render-only-block__textarea,
   .m-editor-raw-html-block__textarea {
     margin: 0;
-    font-family: var(--flowchat-md-code-font-mono);
+    font-family: var(--font-family-mono);
     font-size: var(--font-size-sm);
     display: block;
     width: 100%;
@@ -1063,7 +1063,7 @@
   .m-editor-raw-html-block__source-fallback {
     display: none;
     margin: 0;
-    font-family: var(--flowchat-md-code-font-mono);
+    font-family: var(--font-family-mono);
     font-size: var(--font-size-sm);
     white-space: pre-wrap;
     word-break: break-word;

@@ -40,8 +40,6 @@ struct ThemePromptSnapshot {
     accent_600: String,
     border_base: String,
     element_base: String,
-    radius_base: String,
-    spacing_4: String,
     shadow_base: String,
     style_notes: String,
 }
@@ -56,7 +54,7 @@ impl GenerativeUITool {
     }
 
     fn bitfun_design_system_reminder() -> &'static str {
-        "BitFun design-system reminder: when the widget should feel native to the host BitFun app, style it with BitFun theme tokens instead of hard-coded design values. Prefer CSS variables such as `var(--color-bg-primary)`, `var(--color-bg-secondary)`, `var(--color-bg-scene)`, `var(--color-bg-elevated)`, `var(--color-text-primary)`, `var(--color-text-secondary)`, `var(--color-text-muted)`, `var(--color-accent-500)`, `var(--color-accent-600)`, `var(--border-subtle)`, `var(--border-base)`, `var(--border-medium)`, `var(--element-bg-subtle)`, `var(--element-bg-soft)`, `var(--element-bg-base)`, `var(--element-bg-medium)`, `var(--shadow-*)`, `var(--radius-*)`, `var(--spacing-*)`, `var(--motion-*)`, `var(--easing-*)`, `var(--font-sans)`, and `var(--font-mono)`. Support both `bitfun-dark` and `bitfun-light`; do not assume dark-only, purple-only, or landing-page styling. Favor compact desktop workbench layouts, panel/card surfaces, strong information hierarchy, and reusable BitFun component patterns. Avoid hard-coded colors, arbitrary spacing, giant hero sections, fake mobile chrome, and full marketing-page shells; prefer understated, premium UI with layered surfaces, restrained contrast, subtle borders, and do not use thick left-accent emphasis blocks."
+        "BitFun design-system reminder: when the widget should feel native to the host BitFun app, compose the provided `bf-*` scaffold classes first and use host-projected theme tokens instead of hard-coded design values. Prefer CSS variables such as `var(--color-bg-primary)`, `var(--color-bg-secondary)`, `var(--color-bg-scene)`, `var(--color-bg-elevated)`, `var(--color-text-primary)`, `var(--color-text-secondary)`, `var(--color-text-muted)`, `var(--color-accent-500)`, `var(--color-accent-600)`, `var(--border-subtle)`, `var(--border-base)`, `var(--border-medium)`, `var(--element-bg-subtle)`, `var(--element-bg-soft)`, `var(--element-bg-base)`, `var(--element-bg-medium)`, `var(--shadow-*)`, `var(--motion-*)`, `var(--easing-*)`, `var(--font-sans)`, and `var(--font-mono)`. Legacy radius, spacing, font-size, and font-weight variables exist as iframe-local compatibility fallbacks, not as host theme extension points; avoid depending on them for custom-theme adaptation. Support both `bitfun-dark` and `bitfun-light`; do not assume dark-only, purple-only, or landing-page styling. Favor compact desktop workbench layouts, panel/card surfaces, strong information hierarchy, and reusable BitFun component patterns. Avoid hard-coded colors, arbitrary spacing, giant hero sections, fake mobile chrome, and full marketing-page shells; prefer understated, premium UI with layered surfaces, restrained contrast, subtle borders, and do not use thick left-accent emphasis blocks."
     }
 
     fn bitfun_widget_scaffold_reminder() -> &'static str {
@@ -95,7 +93,7 @@ impl GenerativeUITool {
 
     fn format_theme_snapshot(snapshot: &ThemePromptSnapshot) -> String {
         format!(
-            "{} ({}) => bg.primary={}, bg.secondary={}, bg.scene={}, text.primary={}, text.muted={}, accent.500={}, accent.600={}, border.base={}, element.base={}, radius.base={}, spacing.4={}, shadow.base={}, style={}",
+            "{} ({}) => bg.primary={}, bg.secondary={}, bg.scene={}, text.primary={}, text.muted={}, accent.500={}, accent.600={}, border.base={}, element.base={}, shadow.base={}, style={}",
             snapshot.id,
             snapshot.theme_type,
             snapshot.bg_primary,
@@ -107,8 +105,6 @@ impl GenerativeUITool {
             snapshot.accent_600,
             snapshot.border_base,
             snapshot.element_base,
-            snapshot.radius_base,
-            snapshot.spacing_4,
             snapshot.shadow_base,
             snapshot.style_notes
         )
@@ -202,11 +198,22 @@ mod tests {
             assert!(!snapshot.accent_600.trim().is_empty());
             assert!(!snapshot.border_base.trim().is_empty());
             assert!(!snapshot.element_base.trim().is_empty());
-            assert!(!snapshot.radius_base.trim().is_empty());
-            assert!(!snapshot.spacing_4.trim().is_empty());
             assert!(!snapshot.shadow_base.trim().is_empty());
             assert!(!snapshot.style_notes.trim().is_empty());
         }
+    }
+
+    #[test]
+    fn theme_prompt_snapshot_does_not_surface_iframe_fallback_dimensions() {
+        for snapshot in &GenerativeUITool::theme_prompt_snapshot_manifest().themes {
+            let formatted = GenerativeUITool::format_theme_snapshot(snapshot);
+            assert!(!formatted.contains("radius.base="));
+            assert!(!formatted.contains("spacing.4="));
+        }
+
+        let context = GenerativeUITool::baseline_theme_context();
+        assert!(!context.contains("radius.base="));
+        assert!(!context.contains("spacing.4="));
     }
 }
 
@@ -298,7 +305,7 @@ Input rules:
                 "widget_code": {
                     "type": "string",
                     "description": format!(
-                        "Raw HTML fragment or raw SVG. No Markdown code fences. For HTML: no <!DOCTYPE>, <html>, <head>, or <body>. The 260-line / 28KB guideline is a soft reliability threshold. For larger widgets, use data-driven loops, shared CSS classes, and simpler markup rather than truncating required behavior. {} If the widget should match BitFun, rely on the host CSS variables instead of hard-coded colors or spacing. If the user asked for file navigation, do not finish this field until each clickable node has verified file metadata or is intentionally non-clickable.",
+                        "Raw HTML fragment or raw SVG. No Markdown code fences. For HTML: no <!DOCTYPE>, <html>, <head>, or <body>. The 260-line / 28KB guideline is a soft reliability threshold. For larger widgets, use data-driven loops, shared CSS classes, and simpler markup rather than truncating required behavior. {} If the widget should match BitFun, rely on `bf-*` scaffold classes plus host-projected color, surface, status, border, shadow, motion, and font-family variables instead of hard-coded colors or custom chrome. Treat radius, spacing, font-size, and font-weight variables as iframe-local compatibility fallbacks, not host theme extension points. If the user asked for file navigation, do not finish this field until each clickable node has verified file metadata or is intentionally non-clickable.",
                         Self::combined_reminder()
                     )
                 },

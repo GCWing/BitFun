@@ -10,8 +10,8 @@ import {
 } from './themePayload';
 import { createWidgetThemeCompatibilityAliasCss } from './themePayloadCompatibility';
 
-const WIDGET_THEME_VAR_NAMES_HASH = '3c69b6767d5c5aa2752af7eab4c68596f1ab6014397dac02fa2b70343c771981';
-const WIDGET_THEME_STATIC_SHELL_VAR_NAMES_HASH = '9a8cd49f5599105a6b2ae44f79fc73d1d9067ecf8b5650a1f3527e75d7fe07b8';
+const WIDGET_THEME_VAR_NAMES_HASH = '2e1cf598b9f486f05a41381de28728d6b8282d306c3b597037eaf46cf498448e';
+const WIDGET_THEME_STATIC_SHELL_VAR_NAMES_HASH = '79210e8851a7046292763ac49981d0513d8feaaf5668eb67ef6542f2ca4874e5';
 const RETIRED_WIDGET_THEME_COMPAT_KEYS = [
   '--background-primary',
   '--background-secondary',
@@ -139,7 +139,30 @@ const DERIVED_WIDGET_THEME_PAYLOAD_KEYS = [
   '--border-strong',
   '--border-prominent',
   '--element-bg-strong',
+  '--size-radius-sm',
+  '--size-radius-base',
   '--size-radius-md',
+  '--size-radius-lg',
+  '--size-radius-xl',
+  '--size-radius-2xl',
+  '--size-radius-full',
+  '--size-gap-1',
+  '--size-gap-2',
+  '--size-gap-3',
+  '--size-gap-4',
+  '--size-gap-5',
+  '--size-gap-6',
+  '--size-gap-8',
+  '--size-gap-10',
+  '--size-gap-12',
+  '--size-gap-16',
+  '--font-size-xs',
+  '--font-size-sm',
+  '--font-size-base',
+  '--font-size-lg',
+  '--font-size-2xl',
+  '--font-weight-medium',
+  '--font-weight-semibold',
 ] as const;
 const STATIC_WIDGET_SHELL_THEME_VARS = new Set([
   ...WIDGET_THEME_STATIC_SHELL_VAR_NAMES,
@@ -157,7 +180,15 @@ const LOCAL_ONLY_WIDGET_SHELL_KEYS = [
 const IFRAME_ROOT_BASE_KEYS = [
   '--font-family-sans',
   '--font-family-mono',
+  '--font-size-xs',
+  '--font-size-sm',
+  '--font-size-base',
+  '--font-size-lg',
+  '--font-size-2xl',
+  '--font-weight-medium',
+  '--font-weight-semibold',
 ] as const;
+const IFRAME_ROOT_BASE_THEME_VARS = new Set<string>(IFRAME_ROOT_BASE_KEYS);
 
 function readPayloadWithHostValues(hostValues: Record<string, string> = {}) {
   const requestedNames: string[] = [];
@@ -215,7 +246,7 @@ describe('generated widget theme payload contract', () => {
       first: requestedNames[0],
       last: requestedNames[requestedNames.length - 1],
     }).toEqual({
-      count: 80,
+      count: 57,
       hash: WIDGET_THEME_VAR_NAMES_HASH,
       first: '--color-bg-primary',
       last: '--btn-ghost-hover-border',
@@ -247,8 +278,6 @@ describe('generated widget theme payload contract', () => {
         '--color-info',
         '--color-info-bg',
         '--color-info-border',
-        '--size-radius-xl',
-        '--size-gap-16',
         '--btn-primary-bg',
         '--btn-primary-hover-bg',
         '--btn-primary-hover-transform',
@@ -306,7 +335,11 @@ describe('generated widget theme payload contract', () => {
 
     for (const name of DERIVED_WIDGET_THEME_PAYLOAD_KEYS) {
       expect(requestedNames).not.toContain(name);
-      expect(name in WIDGET_THEME_FALLBACK_VARS || STATIC_WIDGET_SHELL_THEME_VARS.has(name)).toBe(true);
+      expect(
+        name in WIDGET_THEME_FALLBACK_VARS
+        || STATIC_WIDGET_SHELL_THEME_VARS.has(name)
+        || IFRAME_ROOT_BASE_THEME_VARS.has(name),
+      ).toBe(true);
     }
   });
 
@@ -337,10 +370,10 @@ describe('generated widget theme payload contract', () => {
       first: WIDGET_THEME_STATIC_SHELL_VAR_NAMES[0],
       last: WIDGET_THEME_STATIC_SHELL_VAR_NAMES[WIDGET_THEME_STATIC_SHELL_VAR_NAMES.length - 1],
     }).toEqual({
-      count: 82,
+      count: 76,
       hash: WIDGET_THEME_STATIC_SHELL_VAR_NAMES_HASH,
       first: '--color-bg-quaternary',
-      last: '--tool-card-action-font-weight',
+      last: '--tool-card-action-line-height',
     });
     const referencedVars = [...css.matchAll(/var\((--[a-zA-Z0-9_-]+)/g)].map((match) => match[1]);
     expect(referencedVars.filter((name) => !resolvableVars.has(name))).toEqual([]);

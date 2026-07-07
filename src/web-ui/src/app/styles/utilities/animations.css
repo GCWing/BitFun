@@ -247,8 +247,8 @@
 .glass-base {
   background: var(--glass-bg-base);
   border: 1px solid var(--glass-border-base);
-  backdrop-filter: var(--glass-blur-base);
-  -webkit-backdrop-filter: var(--glass-blur-base);
+  backdrop-filter: var(--blur-base);
+  -webkit-backdrop-filter: var(--blur-base);
   box-shadow: var(--shadow-base);
 }
 
@@ -346,8 +346,8 @@
 /* High-performance mode - mobile optimization */
 @media (max-width: 768px) {
   .glass-base {
-    backdrop-filter: var(--glass-blur-sm);
-    -webkit-backdrop-filter: var(--glass-blur-sm);
+    backdrop-filter: var(--blur-subtle);
+    -webkit-backdrop-filter: var(--blur-subtle);
   }
 
   .anim-glass-shine,

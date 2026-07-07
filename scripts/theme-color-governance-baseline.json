@@ -54,10 +54,10 @@
       "max": 0
     },
     "generatedWidgetPayload.varUnique": {
-      "max": 80
+      "max": 57
     },
     "generatedWidgetPayload.occurrences": {
-      "max": 80
+      "max": 57
     },
     "generatedWidgetPayload.undefinedUnique": {
       "max": 0
@@ -144,16 +144,16 @@
       "max": 0
     },
     "cssVarDefinitions.staticContractDefinedUnique": {
-      "max": 270
+      "max": 250
     },
     "cssVarDefinitions.staticContractExternalUsageUnique": {
-      "max": 270
+      "max": 250
     },
     "cssVarDefinitions.staticContractInternalOnlyUnique": {
       "max": 0
     },
     "cssVarDefinitions.staticContractLowExternalUsageUnique": {
-      "max": 69
+      "max": 51
     },
     "tokenAliasLiterals.occurrences": {
       "max": 0

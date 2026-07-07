@@ -481,8 +481,6 @@ impl ThemeConfig {
                     root.style.setProperty('--color-bg-flowchat', '{bg_scene}');
                     root.style.setProperty('--color-bg-scene', '{bg_scene}');
                     root.style.setProperty('--color-text-primary', '{text_primary}');
-                    root.style.setProperty('--bitfun-startup-bg', '{bg_primary}');
-                    
                     root.style.backgroundColor = '{bg_primary}';
                     
                     if (document.body) {{

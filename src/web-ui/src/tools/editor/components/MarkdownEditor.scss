@@ -222,7 +222,7 @@
     line-height: 1.4;
     vertical-align: baseline;
     white-space: nowrap;
-    font-family: var(--flowchat-md-code-font-mono);
+    font-family: var(--font-family-mono);
     color: var(--flowchat-md-inline-code-fg);
     background: var(--flowchat-md-inline-code-bg);
     border: 1px solid var(--flowchat-md-inline-code-border);
@@ -242,14 +242,14 @@
     margin: 0.25rem 0.3rem $size-gap-4;
     padding: var(--flowchat-md-pre-padding);
     overflow: auto;
-    font-size: var(--flowchat-md-pre-font-size);
+    font-size: var(--flowchat-code-font-size);
     line-height: 1.5;
     position: relative;
-    font-family: var(--flowchat-md-code-font-mono);
+    font-family: var(--font-family-mono);
     color: var(--flowchat-md-pre-code-fg);
     background: var(--flowchat-md-pre-bg);
-    border: 1px var(--flowchat-md-pre-border-style) var(--flowchat-md-pre-border);
-    border-radius: var(--flowchat-md-pre-radius);
+    border: 1px dashed var(--flowchat-md-pre-border);
+    border-radius: var(--flowchat-card-radius);
     box-shadow: var(--flowchat-md-pre-shadow);
     transition: all 0.3s ease;
 
@@ -265,8 +265,8 @@
       margin: 0;
       overflow: visible;
       white-space: pre;
-      font-family: var(--flowchat-md-code-font-mono);
-      font-size: var(--flowchat-md-pre-font-size);
+      font-family: var(--font-family-mono);
+      font-size: var(--flowchat-code-font-size);
       font-weight: inherit;
       line-height: inherit;
       word-wrap: normal;
@@ -379,7 +379,7 @@
     margin-bottom: $size-gap-4;
     font-size: 0.85rem;
     border: 1px solid var(--flowchat-md-table-border);
-    border-radius: var(--flowchat-md-table-radius);
+    border-radius: var(--flowchat-card-radius);
     background: var(--flowchat-md-table-surface);
     box-shadow: var(--flowchat-md-table-shadow);
     overflow: hidden;
@@ -405,7 +405,7 @@
   }
 
   table td {
-    color: var(--flowchat-md-table-td-fg);
+    color: var(--color-text-primary);
   }
 
   table th + th,
@@ -443,30 +443,30 @@
 
   table tbody tr:first-child th:first-child,
   table thead th:first-child {
-    border-top-left-radius: var(--flowchat-md-table-radius);
+    border-top-left-radius: var(--flowchat-card-radius);
   }
 
   table tbody tr:first-child th:last-child,
   table thead th:last-child {
-    border-top-right-radius: var(--flowchat-md-table-radius);
+    border-top-right-radius: var(--flowchat-card-radius);
   }
 
   table tbody tr:last-child td:first-child,
   table tbody tr:last-child th:first-child {
-    border-bottom-left-radius: var(--flowchat-md-table-radius);
+    border-bottom-left-radius: var(--flowchat-card-radius);
   }
 
   table tbody tr:last-child td:last-child,
   table tbody tr:last-child th:last-child {
-    border-bottom-right-radius: var(--flowchat-md-table-radius);
+    border-bottom-right-radius: var(--flowchat-card-radius);
   }
 
   table tbody tr:first-child th:only-child {
-    border-radius: var(--flowchat-md-table-radius) var(--flowchat-md-table-radius) 0 0;
+    border-radius: var(--flowchat-card-radius) var(--flowchat-card-radius) 0 0;
   }
 
   table tbody tr:last-child td:only-child {
-    border-radius: 0 0 var(--flowchat-md-table-radius) var(--flowchat-md-table-radius);
+    border-radius: 0 0 var(--flowchat-card-radius) var(--flowchat-card-radius);
   }
 
   table th code,

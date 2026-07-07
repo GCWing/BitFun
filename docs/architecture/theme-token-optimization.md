@@ -84,7 +84,7 @@ BitFun 后续适配插件体系时也必须遵循同一边界：插件消费 TS 
 | --- | --- | --- |
 | 主题选择持久化 | 启动时只读取 `themes.current`，解析 `system`、内置主题 id 和未知值回退；历史 `theme.id` 只在配置加载/导入时一次性归一到 `themes.current`，不能作为新扩展入口。 | 读写 `themes.current`，处理 `system`、内置主题和 custom theme 选择。 |
 | 完整主题契约 | 不维护完整 `ThemeConfig`、semantic token、component token 或专用 palette；旧 Rust GUI theme struct/provider 已退役，默认导出不得出现顶层 `theme`。 | 拥有 `ThemeConfig`、主题预设、validator、import/export、runtime CSS 变量注入和审计 registry。 |
-| 首屏 bootstrap | 只注入 WebView 首屏所需最小投影：`data-theme`、`data-theme-type`、核心背景/文本 CSS 变量和 `--bitfun-startup-bg`。 | JS 启动后必须重新应用完整主题，覆盖 bootstrap 投影并恢复 Monaco、Mermaid、terminal、widget payload 等专用域。 |
+| 首屏 bootstrap | 只注入 WebView 首屏所需最小投影：`data-theme`、`data-theme-type` 和核心背景/文本 CSS 变量。 | JS 启动后必须重新应用完整主题，覆盖 bootstrap 投影并恢复 Monaco、Mermaid、terminal、widget payload 等专用域。 |
 | 生成式 UI 主题提示 | 只读取 TS 预设生成的 prompt snapshot manifest，用于模型提示；不得手写内置主题 palette。 | 拥有 prompt snapshot 投影规则；新内置主题加入 `builtinThemes` 后由生成器同步到 Rust 只读 manifest。 |
 | 插件主题色扩展 | 不维护插件色彩 schema，不把 plugin color 解析放到 Rust/desktop。 | 拥有 `pluginThemeProjection.ts`，把完整主题映射到 OpenCode-compatible 的 7 个语义色 key；插件不得直接依赖内部 CSS var 全量表。 |
 | 内置主题扩展 | 不手写新增完整 palette。只有新内置主题需要首屏无闪烁时，才更新最小 bootstrap 投影。 | 新主题先进入 TS 预设和 `builtinThemes`；所有语义、组件和专用域 token 以 TS 侧为准。 |
@@ -238,10 +238,10 @@ CLI/TUI 使用独立审计，不参与 CSS var root 计数：
 | non-contract dynamic inputs | 0 |
 | non-contract component-private vars | 0 |
 | runtime-only legacy required vars | 1 |
-| static root contract key | 270 |
-| static root contract external usage key | 270 |
+| static root contract key | 250 |
+| static root contract external usage key | 250 |
 | static root contract internal-only key | 0 |
-| static root contract low external usage key | 69 |
+| static root contract low external usage key | 51 |
 
 审计补充了机器可校验的治理契约，用于把“可删除债务”和“必须保留的兼容/边界”
 分开：
@@ -261,10 +261,10 @@ CLI/TUI 使用独立审计，不参与 CSS var root 计数：
 | active surface token rename key | 0 | 防止 `--primary-color`、`--operation-color`、`--delay`、`--um-*` 等旧局部 key 回流 |
 | active surface token rename occurrences | 0 | 防止旧 key 在 SCSS、CSS 或 TSX inline style 中被重新定义或读取 |
 | surface token rename missing canonical | 0 | 防止 rename registry 指向不存在的 canonical key |
-| generated widget payload key | 80 | widget iframe 对外主题变量 allowlist，作为外部边界单独预算，不计入内部 alias 读取；payload 只保留需要随宿主主题变化的 canonical 颜色、文本、surface、形状、间距、字体、动效和 button component token 子集，host 内部、静态黑白 overlay、派生 accent/status/border/radius key 或历史兼容 key 由 iframe fallback/static shell 派生 |
+| generated widget payload key | 57 | widget iframe 对外主题变量 allowlist，作为外部边界单独预算，不计入内部 alias 读取；payload 只保留需要随宿主主题变化的 canonical 颜色、文本、surface、semantic、border/element/shadow、motion/font family 和 button component token 子集，shape/spacing/font size/font weight、host 内部、静态黑白 overlay、派生 accent/status/border/radius key 或历史兼容 key 由 iframe fallback/static shell 派生；Canvas iframe 复用 payload 时必须维护自己的静态 fallback，不得依赖 generated-widget shell |
 | generated widget button payload | 18 | Cyber/Tokyo/light 等主题把 button bg、border、shadow、transform 和 hover/active 作为主题身份与交互反馈的一部分；这些 key 不能仅因 iframe static shell 存在默认值就移除，否则会让生成式 widget 内按钮失去宿主主题视觉层级。后续只有证明所有内置主题 resolved button 输出等价时才可继续缩减 |
 | generated widget payload compatibility alias | 0 | payload 不再直接暴露 legacy alias；历史生成内容通过 iframe 内 alias fallback 读取 canonical key |
-| generated widget payload compatibility family key | 0 | payload 不直接暴露旧 `--radius-*`、`--spacing-*`；必要的 canonical 尺寸值由 payload 子集或 iframe fallback 保留 |
+| generated widget payload compatibility family key | 0 | payload 不直接暴露旧 `--radius-*`、`--spacing-*`；必要的 canonical 尺寸值由 iframe fallback 保留 |
 | generated widget payload external-only compatibility key | 0 | payload 中已清空仅因外部兼容保留且内部产品代码不再读取的 legacy key |
 | generated widget payload undefined key | 0 | 防止 payload 引入没有静态、运行时或动态 family 定义的游离 key |
 | generated widget payload missing compatibility canonical | 0 | 防止 payload 暴露 legacy key 但 canonical 目标不存在 |
@@ -287,7 +287,7 @@ PR 通过而放宽 `appUi`、fallback、unresolved、non-contract 或 dynamic fa
 | 区域 | 当前出现次数 | 当前唯一色数 | 说明 |
 | --- | ---: | ---: | --- |
 | Theme presets | 168 | 115 | 主题个性与 palette 映射；跨主题深色 neutral、弱文本、非状态浅色背景和同概念 success 色已收敛；相邻 surface、主题识别主背景、状态色和 editor lineHighlight 继续保留 |
-| Token contracts | 91 | 81 | `tokens.scss` 等静态契约根；黑白 overlay alpha stop 继续保留相邻状态层级，未消费 legacy mixin、自引用别名、死 Sass helper 和低复用单 surface helper 已移除，不按数值相近强行合并 |
+| Token contracts | 90 | 80 | `tokens.scss` 等静态契约根；黑白 overlay alpha stop 继续保留相邻状态层级，未消费 legacy mixin、自引用别名、死 Sass helper 和低复用单 surface helper 已移除，不按数值相近强行合并 |
 | Editor | 52 | 48 | Monaco/editor 专用域，不能直接泛化到 app token；被动 selection/word highlight 已收敛，但 diff text/line/gutter 继续保留用户可见层级 |
 | Mermaid | 53 | 48 | Mermaid 专用渲染域；status fallback 复用 app semantic status 默认值，pie 5-8 复用紧凑类别色，dark info/activation 恢复 accent 类别感；节点、边、cluster、note 文本和 light 高亮仍保留相邻层级差异。未接入当前 Markdown Mermaid 渲染路径的 SCSS token 文件已删除 |
 | Theme runtime | 27 | 26 | `ThemeService.ts` 运行时注入；黑白 overlay alpha 与静态 token、payload shell 保持相同 stop，避免 early render 与 runtime 状态层级漂移 |
@@ -415,7 +415,7 @@ Phase 5 决策记录：
 | remaining web theme near pairs | preserve | web theme preset | 剩余 web near 主要是 light/paper 相邻 surface、主题身份背景与 Monaco light lineHighlight；CLI preset/runtime near pair 已清零。后续继续合并需要截图或语义证据，不以 RGB distance 自动处理 |
 | web/installer dark/slate/midnight neutral text | merge | `src/web-ui/src/infrastructure/theme/presets/slate-theme.ts`、`midnight-theme.ts`、`BitFun-Installer/src/theme/installerThemesData.ts` | `#9da0a8`、`#9ea4ab` 收敛到 `#a1a1aa`，Slate branch 复用 `SLATE_ACCENT`；均为跨主题 neutral text/branch 语义，不合并 error/warning/status 色，同名安装器预览同步 |
 | installer preset seed compression | derive within installer namespace | `BitFun-Installer/src/theme/installerThemesData.ts`、`BitFun-Installer/src/styles/variables.css` | 安装器是简单首启/安装 surface，不应维护完整 app 级主题色板；8 套 installer 主题压缩为少量 background/accent/status seed 加 dark/light tone，theme preset 色值 160 -> 63、preset 唯一色 121 -> 60，静态变量同步用 alias 派生而不是复制色值；保留每个主题的 success/warning/error seed，避免安装进度、完成和错误反馈与最终主题状态色脱节 |
-| generated widget payload shell compression | move host-internal keys to iframe shell | `src/web-ui/src/tools/generative-widget/themePayload.ts`、`GenerativeWidgetFrame.tsx` | host payload allowlist 153 -> 98；只保留外部 widget 真正需要随主题变化的 canonical 子集和 `components.button` 投影，tool-card/layout/旧 overlay 与 legacy alias 由 iframe fallback/static shell 派生，避免把宿主内部 key 变成插件或主题扩展 API；accent/status/border/radius/spacing/button 等主题敏感 key 必须继续由宿主 payload 覆盖，不能固化在 iframe shell |
+| generated widget payload shell compression | move host-internal keys to iframe shell | `src/web-ui/src/tools/generative-widget/themePayload.ts`、`GenerativeWidgetFrame.tsx` | host payload allowlist 153 -> 98；只保留外部 widget 真正需要随主题变化的 canonical 子集和 `components.button` 投影，tool-card/layout/旧 overlay 与 legacy alias 由 iframe fallback/static shell 派生，避免把宿主内部 key 变成插件或主题扩展 API；该阶段仍保留 radius/spacing，后续 `root/layout and widget projection compression` 已将 shape/spacing/font size/font weight 退出 host payload |
 | slate success and CLI added diff near merge | merge non-adjacent equivalent concepts | `src/web-ui/src/infrastructure/theme/presets/slate-theme.ts`、`src/apps/cli/themes/presets/bitfun-ink-night.json`、`bitfun-tokyo-night.json` | Slate success 复用已有 success green；CLI ink/tokyo added diff body 复用同一深绿非相邻 surface。保留 Cyber element/border、diff body/gutter 等相邻区分，web theme preset near 11 -> 10，CLI preset near 5 -> 4 |
 | installer named dark background seed | preserve visible primary identity | `BitFun-Installer/src/theme/installerThemesData.ts` | 安装器界面简单，但 ThemeSetup 预览直接展示 primary/secondary background；Dark 复用 canonical seed，Ink Night/Cyber/Tokyo Night 保留各自 primary，secondary 复用 common dark surface。Installer theme preset 唯一色 57 -> 53，near pair 11 -> 3；剩余 near pair 是用户可见主题识别，而非内部冗余 |
 | web overlay alpha ladder | preserve adjacent state stops | `tokens.scss`、`ThemeService.ts`、`themePayload.ts` | 复审后保留 `0.04/0.08/0.12/0.15/0.20` 等黑白 overlay stop；card、markdown、shadow 等相邻状态仍通过语义 key 表达，不再保留 `0.06/0.10` 微弱中间 stop。生成式 widget host payload 仍不转发静态 overlay，由 iframe fallback/static shell 派生 |
@@ -448,6 +448,7 @@ Phase 5 决策记录：
 | low-external implementation key compression | retire preview/editor/gallery/MissionControl/mobile helper keys | `tokens.scss`, Markdown editor/Tiptap styles, component preview CSS/examples, GalleryLayout, MissionControl, NavSearchDialog, ContextMenu, Select, config/profile form styles, `src/mobile-web/src/theme/presets/shared.ts`, mobile SCSS | 将只表达局部实现或严格同义的低外部使用 key 移出 static root：Markdown editor list/task sizing、Markdown line-number gutter、gallery grid/skeleton defaults、preview palette/timing、旧 `flowchat-card-header-pad-*` 别名、`border-focus` 同义别名、glass green/disabled helper、MissionControl group helper 和 slate22 shadow helper。MissionControl 的组别区分保留为组件私有 modifier class，并继续使用 accent/success/warning；active filter 和 thumbnail badge 使用中性底加彩色指示，避免小字号实底语义色造成对比或状态误解；preview 和 gallery 不作为主题扩展入口；`--easing-smooth` 与 `--easing-standard` 当前同值，统一读 standard；mobile-web 同步删除未使用的 `--motion-instant`、同值 `--easing-smooth` 和不应作为主题扩展入口的 `--easing-decelerate`，现有 decelerate 动画由 mobile-local Sass owner 承载并补齐 reduced-motion 覆盖。该轮不触碰 Git added/staged/deleted、button payload、z-index、card/tool-card 跨组件布局等仍可能承担主题或相邻区域语义的 key。static root contract 320 -> 289，low external usage key 116 -> 86；普通 app raw、unresolved、fallback-only、non-contract 均保持 0，mobile color audit 保持通过。 |
 | installer and utility contract compression | retire simple-surface ramp and utility helper keys | `BitFun-Installer/src/theme/installerThemesData.ts`、`installerThemeRuntime.ts`、`variables.css`、`global.css`、installer language/theme pages、`tokens.scss`、`ThemeService.ts`、web utility CSS | 安装器只保留主题卡和安装流程实际可见的单一 accent seed，弱强调背景、focus 边框和 step shadow 改由局部 `color-mix()` 派生，不再导出完整 accent ramp；同时删除 motion/header、`border-medium`、`element-bg-strong` 等实现型 key。web root 侧删除 z-index、glass shadow、hover/focus opacity 等不表达主题语义的 utility helper；z-index 作为局部层级常量保留，glass shadow 读取 canonical `--shadow-*`，opacity 使用局部常量。generated widget iframe static shell 仍保留历史 helper 名称作为边界 fallback，不重新进入 app/root 主题扩展入口。static root contract 289 -> 274，low external usage key 86 -> 72，runtime contract 114 -> 108；installer color occurrences 76 -> 61，unique colors 62 -> 49，static root 29 -> 17，low external usage key 21 -> 10，runtime contract 18 -> 14。普通 app raw、unresolved、fallback-only、non-contract 和 dynamic family 错误保持 0。 |
 | local surface helper compression | remove root defaults for local-only helpers | `tokens.scss`、`surface-stagger.scss`、gallery/agent/skill/miniapp/profile card styles、`UserMessage.*`、`ReviewTeamPage.*`、profile quick input styles | 删除不属于主题扩展入口的局部默认 key：卡片 stagger index 从 root contract 移到共享 Sass mixin，保留同一动态输入名但避免跨文件游离 key；FlowChat inline tag 删除未引用 CSS 和无效颜色透传，继续由组件库 `Tag` 的语义色驱动；profile inline padding 改回 Sass spacing；review team member 默认色复用 `UI_EXCEPTION_ACCENTS` 常量。`--scene-viewport-border-width` 经复审保留静态默认，因为它是 ThemeService layout runtime key 且影响首屏边框宽度。static root contract 274 -> 270，low external usage key 72 -> 69，token contract unique colors 81 -> 80；fallback、unresolved、non-contract 和 dynamic family 错误保持 0。 |
+| root/layout and widget projection compression | retire exact aliases and shrink widget payload | `tokens.scss`、`ThemeService.ts`、generated widget `themePayload.ts`、Card/SplashScreen/tool-card/config/Markdown/Tiptap/utility styles | 删除或本地化不承担主题语义的 exact alias：Splash 直接读 `--color-bg-primary`，Card elevated/subtle 复用 hover/transparent，scrollbar helper 改读 `--scrollbar-thumb`，glass utility 改读 canonical `--blur-*`，tool-card 固定布局 key 改为局部常量或既有 FlowChat token，Markdown/Tiptap table radius、pre radius/border style/font size、td foreground 和 code font 复用现有 contract；Config page 大间距改为本地布局值。generated widget payload 不再读取 shape/spacing/font size/font weight，iframe fallback/static shell 继续提供历史 radius/spacing 和本地布局默认，button component token 继续保留。该轮不触碰 Git added/staged/deleted、button projection、tooltip background、scene viewport border、accent/purple ramp 等仍承担状态或主题识别的 key。static root contract 270 -> 250，low external usage key 69 -> 51，generated widget payload 80 -> 57；普通 app raw、unresolved、fallback-only、non-contract 和 dynamic family 错误保持 0。 |
 
 Phase 6 防回退约束：
 
@@ -462,15 +463,15 @@ Phase 6 防回退约束：
 | `colorScopes.token.occurrences` | 291 | 291 | 阻止 token 层重新写回已归并的派生色、扩展名色或 preview RGB 字面量 |
 | `colorScopes.token.uniqueColors` | 181 | 181 | 控制 root/token 层唯一色数量，后续只允许在债务减少时下调 |
 | `colorScopes.exception.uniqueColors` | 162 | 162 | 控制专用域/例外域总体规模；UI exception、syntax 和 language identity 已收敛，Mermaid status/pie fallback 已压缩且未接入 SCSS token 路径已退役，editor/terminal 仍按各自 owner 单独治理 |
-| `cssVarDefinitions.staticContractDefinedUnique` | 270 | 270 | 控制静态 root contract key 总量，避免新增主题时需要维护不可扩展的大型 CSS var 表 |
-| `cssVarDefinitions.staticContractExternalUsageUnique` | 270 | 270 | 跟踪真正被 root 外消费的 static contract key，防止删除 key 后遗漏调用点；generated widget payload 暴露给 iframe 的 key 也按外部消费计数 |
+| `cssVarDefinitions.staticContractDefinedUnique` | 250 | 250 | 控制静态 root contract key 总量，避免新增主题时需要维护不可扩展的大型 CSS var 表 |
+| `cssVarDefinitions.staticContractExternalUsageUnique` | 250 | 250 | 跟踪真正被 root 外消费的 static contract key，防止删除 key 后遗漏调用点；generated widget payload 暴露给 iframe 的 key 也按外部消费计数 |
 | `cssVarDefinitions.staticContractInternalOnlyUnique` | 0 | 0 | 暴露仅定义或内部派生的 root key；新增项必须删除、局部派生或证明是外部消费 contract |
-| `cssVarDefinitions.staticContractLowExternalUsageUnique` | 69 | 69 | 暴露低外部消费 key，作为后续继续压缩 root contract 的候选队列 |
+| `cssVarDefinitions.staticContractLowExternalUsageUnique` | 51 | 51 | 暴露低外部消费 key，作为后续继续压缩 root contract 的候选队列 |
 | `cssVarDefinitions.runtimeOnlyRequiredContractUnique` | 1 | 1 | 仅允许 `--window-control-close-hover-color` 作为 deprecated window close hover 覆盖，且由 baseline allowlist 锁定名称；默认路径不读取该 var，旧 custom theme 通过 `components.windowControls.close.hoverColor` 和 runtime attribute 激活 |
 | `colorDomainScopes.syntax.occurrences` | 16 | 16 | 阻止 Prism syntax palette 回到一 token class 一色的不可扩展模式，同时保留相邻 token 可读性边界 |
 | `colorDomainScopes.languageIdentity.uniqueColors` | 8 | 8 | 阻止 language/file identity 回到一语言一色或一扩展一色的不可扩展模式 |
-| `colorDomainScopes.tokenContract.occurrences` | 91 | 91 | 控制 token contract 域 raw color 出现次数，防止 root 派生色回流 |
-| `colorDomainScopes.tokenContract.uniqueColors` | 81 | 81 | 控制 token contract 域唯一色，确保新主题扩展不依赖额外静态色表 |
+| `colorDomainScopes.tokenContract.occurrences` | 90 | 90 | 控制 token contract 域 raw color 出现次数，防止 root 派生色回流 |
+| `colorDomainScopes.tokenContract.uniqueColors` | 80 | 80 | 控制 token contract 域唯一色，确保新主题扩展不依赖额外静态色表 |
 | `colorDomainScopes.boundaryFallback.occurrences` | 18 | 18 | 防止 iframe/mini app/截图兜底色重新散写；导出 key 可保留语义，实际字面值必须回到 boundary fallback palette |
 | `colorDomainScopes.mermaid.occurrences` | 53 | 53 | 控制 Mermaid 专用域 raw fallback 规模；status/pie 已压缩，未接入 SCSS token 路径已退役，节点/边/cluster/note 文本等相邻层级不能无证据合并 |
 | `colorDomainScopes.mermaid.uniqueColors` | 48 | 48 | 控制 Mermaid 专用域唯一色数量；新增类别色或状态色必须先复用现有 compact fallback，确有相邻可读性需求才新增 |
@@ -487,7 +488,7 @@ Phase 6 防回退约束：
 | `surfaceTokenRenames.activeUnique` | 0 | 0 | 防止已迁移的 surface-local 旧 key 重新出现 |
 | `surfaceTokenRenames.activeOccurrences` | 0 | 0 | 防止旧 key 在定义和读取两侧回流 |
 | `surfaceTokenRenames.missingCanonicalUnique` | 0 | 0 | 防止 surface rename contract 指向不存在的 canonical key |
-| `generatedWidgetPayload.varUnique` | 80 | 80 | 控制 widget 对外主题 payload allowlist 不继续膨胀；该预算只覆盖主题敏感 canonical 子集和 button component 投影，宿主内部、静态 overlay、派生 key 和历史兼容 key 不计入 payload API |
+| `generatedWidgetPayload.varUnique` | 57 | 57 | 控制 widget 对外主题 payload allowlist 不继续膨胀；该预算只覆盖主题敏感 canonical 子集和 button component 投影，宿主内部、shape/spacing/font-size/font-weight、静态 overlay、派生 key 和历史兼容 key 不计入 payload API |
 | generated widget button payload | 18 | 18 | Cyber/Tokyo/light 的 button bg、border、shadow、transform 和交互态不是低风险静态 key；除非 resolved button 输出等价，否则不从 host payload 移入 iframe shell |
 | `generatedWidgetPayload.compatibilityAliasUnique` | 0 | 0 | 防止 payload 重新直接导出显式 legacy alias |
 | `generatedWidgetPayload.compatibilityAliasFamilyUnique` | 0 | 0 | 防止 payload 重新直接导出 legacy size family 具体 key |
@@ -1159,9 +1160,9 @@ alpha 差异经常承担 elevation 和交互状态，不应全部压成一个值
    不能让 Rust/CLI 复制 web-ui palette。若要跨 surface 共享，只能先定义共享语义投影或生成链路。
 5. 自定义主题扩展后续体验优化：custom theme 校验、加载、注册、导出和 preview 输入已绑定到 TS schema；
    如需继续改善首屏体验，只允许由 TS schema 生成最小 bootstrap cache，不允许 Rust 直接拥有 custom theme schema。
-6. generated widget 兼容面维护：payload 已停止导出 `background/bg/text/radius/spacing` legacy key、静态黑白 overlay 转发、派生 accent/status/border/radius key 和已归并的
+6. generated widget / Canvas iframe 兼容面维护：payload 已停止导出 `background/bg/text/radius/spacing` legacy key、shape/spacing/font-size/font-weight host projection、静态黑白 overlay 转发、派生 accent/status/border/radius key 和已归并的
    `--color-overlay-white-02`、`--color-overlay-white-05`、`--color-overlay-white-06`、`--color-overlay-white-10`、`--color-overlay-black-06`、`--color-overlay-black-10`、`--color-overlay-black-25`；resolved button component token 因承载主题身份和交互反馈继续保留。历史内容兼容通过 iframe alias fallback 保留。后续新增 widget token 必须先导出 canonical，
-   再评估是否需要 iframe-only alias。
+   再评估是否需要 iframe-only alias。Canvas 复用压缩后的 payload 时必须维护自己的 iframe root fallback，避免依赖 generated-widget shell。
 
 每个 PR 应包含范围、影响 surface、before/after 指标、命中的 visual governance surface、
 明确保留的近似色列表，以及验证命令和结果。
@@ -1199,14 +1200,15 @@ alpha 差异经常承担 elevation 和交互状态，不应全部压成一个值
   generated widget iframe alias fallback 将历史读取映射到 `--color-overlay-black-12`。
 - `--color-overlay-black-25` 已从 root/runtime、内部读取和 generated widget payload 退役；
   generated widget iframe alias fallback 将历史读取映射到 `--color-overlay-black-30`。
-- generated widget payload 不导出宿主 FlowChat、navigation、z-index 和 tool-card 内部 key；iframe 内容保留独立布局和
-  stacking context，只通过核心 canonical color、spacing、shape、font、motion 和 `components.button` 投影获取必要主题信息，tool-card 所需派生值由 iframe static shell 提供。
+- generated widget payload 不导出宿主 FlowChat、navigation、z-index、shape/spacing/font-size/font-weight 和 tool-card 内部 key；iframe 内容保留独立布局和
+  stacking context，只通过核心 canonical color/text/surface/status/border/element/shadow、motion/font family 和 `components.button` 投影获取必要主题信息，shape/spacing/typography 默认与 tool-card 所需派生值由 iframe fallback/static shell 提供。Canvas iframe 复用同一 payload，但 shape/spacing/typography 由 Canvas runtime fallback 提供；custom theme 若主要依赖密度、圆角、字号或字重建立风格，iframe 内不会完整同步这些风格，这是为了保持外部投影上限的有意取舍。
 - 根 CSS var export 只保留被 `var()`、运行时主题注入或外部兼容边界实际消费的 key；组件内部仍可继续使用
   SCSS token/mixin，避免把未消费的 badge、legacy effect、z-index、git/status 和局部布局 key 扩散为运行时 contract。
 - `colors.purple` 是次级强调色契约，不再等同完整 `AccentColors`。运行时只导出
   `50/100/200/400/500/600/800`，`300/700` 因无内部读取和 payload 消费已退役。
 - ThemeService 的 runtime dynamic family 采用显式白名单导出，包括 accent、purple、shadow、
-  blur、radius、spacing、motion、easing、font weight、font size 和 line-height；custom theme
+  blur、受限的 radius/spacing、motion、easing、受限的 font weight/font size 和 line-height；radius 只投影到 `xl`，
+  spacing 只投影到 `8`，`2xl/full/10/12/16` 保留在 TS schema 和 iframe fallback 兼容面，不再是 Web root runtime contract。custom theme
   中的额外字段不得自动外溢为 root key。FontPreference 也不再生成 `5xl`。
 - `effects.shadow` 运行时主题 scale 到 `xl` 为止；`$shadow-2xl` 已从共享 SCSS token 和 runtime
   theme contract 退役，旧调用点应读取 canonical `--shadow-xl` 或定义更窄的组件局部阴影。

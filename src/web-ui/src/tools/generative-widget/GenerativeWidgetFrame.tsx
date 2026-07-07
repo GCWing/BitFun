@@ -99,7 +99,7 @@ ${createWidgetThemeFallbackCss()}
 ${createWidgetThemeStaticShellCss()}
 ${createWidgetThemeCompatibilityAliasCss()}
       --font-size-xs: 12px;
-      --font-size-sm: 14px;
+      --font-size-sm: 13px;
       --font-size-base: 14px;
       --font-size-lg: 15px;
       --font-size-2xl: 18px;

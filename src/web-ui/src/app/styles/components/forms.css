@@ -68,8 +68,8 @@
   background: var(--glass-bg-base);
   border: 1px solid var(--glass-border-base);
   border-radius: var(--size-radius-base);
-  backdrop-filter: var(--glass-blur-sm);
-  -webkit-backdrop-filter: var(--glass-blur-sm);
+  backdrop-filter: var(--blur-subtle);
+  -webkit-backdrop-filter: var(--blur-subtle);
   box-shadow: var(--shadow-sm);
   
   transition: all var(--motion-base) var(--easing-standard);

@@ -41,8 +41,8 @@ const ACCENT_STOPS = [50, 100, 200, 300, 400, 500, 600, 700, 800] as const;
 const SECONDARY_ACCENT_STOPS = [50, 100, 200, 400, 500, 600, 800] as const;
 const SHADOW_TOKENS = ['xs', 'sm', 'base', 'lg', 'xl'] as const;
 const BLUR_TOKENS = ['subtle', 'base'] as const;
-const RADIUS_TOKENS = ['sm', 'base', 'lg', 'xl', '2xl', 'full'] as const;
-const SPACING_TOKENS = [1, 2, 3, 4, 5, 6, 8, 10, 12, 16] as const;
+const RADIUS_TOKENS = ['sm', 'base', 'lg', 'xl'] as const;
+const SPACING_TOKENS = [1, 2, 3, 4, 5, 6, 8] as const;
 const MOTION_DURATION_TOKENS = ['instant', 'fast', 'base', 'slow'] as const;
 const EASING_TOKENS = ['standard', 'decelerate', 'smooth'] as const;
 const FONT_WEIGHT_TOKENS = ['normal', 'medium', 'semibold', 'bold'] as const;
@@ -660,7 +660,6 @@ export class ThemeService {
     );
     root.style.setProperty('--scrollbar-thumb', scrollbarThumb);
     root.style.setProperty('--scrollbar-thumb-hover', scrollbarThumbHover);
-    root.style.setProperty('--color-scrollbar', scrollbarThumb);
 
 
     const shadows = effects?.shadow;
@@ -678,8 +677,6 @@ export class ThemeService {
         const value = blurs[key];
         root.style.setProperty(`--blur-${key}`, value);
       });
-      root.style.setProperty('--glass-blur-sm', blurs.subtle);
-      root.style.setProperty('--glass-blur-base', blurs.base);
     }
 
 
@@ -824,8 +821,6 @@ export class ThemeService {
     if (theme.type === 'dark') {
 
       root.style.setProperty('--card-bg-default', THEME_OVERLAYS.white04);
-      root.style.setProperty('--card-bg-elevated', THEME_OVERLAYS.white08);
-      root.style.setProperty('--card-bg-subtle', 'transparent');
       root.style.setProperty('--card-bg-hover', THEME_OVERLAYS.white08);
       root.style.setProperty('--card-bg-active', THEME_OVERLAYS.white12);
       root.style.setProperty('--card-bg-accent', THEME_OVERLAYS.white08);
@@ -835,8 +830,6 @@ export class ThemeService {
     } else {
 
       root.style.setProperty('--card-bg-default', THEME_OVERLAYS.black08);
-      root.style.setProperty('--card-bg-elevated', THEME_OVERLAYS.black12);
-      root.style.setProperty('--card-bg-subtle', 'transparent');
       root.style.setProperty('--card-bg-hover', THEME_OVERLAYS.black12);
       root.style.setProperty('--card-bg-active', THEME_OVERLAYS.black15);
       root.style.setProperty('--card-bg-accent', 'rgba(15, 23, 42, 0.08)');
@@ -850,7 +843,6 @@ export class ThemeService {
     root.setAttribute('data-theme-type', theme.type);
 
     const bgPrimary = colors.background.primary;
-    root.style.setProperty('--bitfun-startup-bg', bgPrimary);
     root.style.backgroundColor = bgPrimary;
     if (document.body) {
       document.body.style.backgroundColor = bgPrimary;

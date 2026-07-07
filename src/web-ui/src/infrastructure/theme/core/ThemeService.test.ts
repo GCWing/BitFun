@@ -106,18 +106,18 @@ describe('ThemeService runtime theme tokens', () => {
     await service.applyTheme('bitfun-dark');
 
     expect(document.documentElement.style.getPropertyValue('--card-bg-default')).toBe('rgba(255, 255, 255, 0.04)');
-    expect(document.documentElement.style.getPropertyValue('--card-bg-subtle')).toBe('transparent');
-    expect(document.documentElement.style.getPropertyValue('--card-bg-elevated')).toBe('rgba(255, 255, 255, 0.08)');
     expect(document.documentElement.style.getPropertyValue('--card-bg-hover')).toBe('rgba(255, 255, 255, 0.08)');
     expect(document.documentElement.style.getPropertyValue('--card-bg-active')).toBe('rgba(255, 255, 255, 0.12)');
+    expect(document.documentElement.style.getPropertyValue('--card-bg-subtle')).toBe('');
+    expect(document.documentElement.style.getPropertyValue('--card-bg-elevated')).toBe('');
 
     await service.applyTheme('bitfun-light');
 
     expect(document.documentElement.style.getPropertyValue('--card-bg-default')).toBe('rgba(0, 0, 0, 0.08)');
-    expect(document.documentElement.style.getPropertyValue('--card-bg-elevated')).toBe('rgba(0, 0, 0, 0.12)');
-    expect(document.documentElement.style.getPropertyValue('--card-bg-subtle')).toBe('transparent');
     expect(document.documentElement.style.getPropertyValue('--card-bg-hover')).toBe('rgba(0, 0, 0, 0.12)');
     expect(document.documentElement.style.getPropertyValue('--card-bg-active')).toBe('rgba(0, 0, 0, 0.15)');
+    expect(document.documentElement.style.getPropertyValue('--card-bg-subtle')).toBe('');
+    expect(document.documentElement.style.getPropertyValue('--card-bg-elevated')).toBe('');
   });
 
   it('keeps dark info border aligned with the canonical medium overlay stop', async () => {
