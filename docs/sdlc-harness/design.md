@@ -15,7 +15,7 @@
 | 配置可组合 | 用户、任务、工作区、路径、团队和组织策略按稳定优先级合成 |
 | 证据可追溯 | PR、发布、事故和合规场景可以引用证据包、质量事件和交付物图谱 |
 | 评估可回放 | 策略、工具、模型、上下文和安全版本能进入评测与指标分析 |
-| 生态可扩展 | 先稳定 Plugin Runtime Host contract、binding、envelope、disabled stub、Event Manifest、Tool ABI、Permission/Effect 和 UI descriptor；外部插件生态后续通过 Product Assembly 注册的适配器接入 |
+| 生态可扩展 | 先稳定 Plugin Runtime Host contract、binding、envelope、disabled stub、Event Manifest、Tool ABI、Permission/Effect 和 UI descriptor；当前产品运行时 P0 完成 Desktop/CLI 的 OpenCode-compatible plugin 垂直切片，其他 full runtime 和生态完整兼容后续通过 Product Assembly 注册的适配器接入 |
 
 ## 2. 复杂来源
 
@@ -88,10 +88,20 @@ Plugin Runtime Host（按需启用）
 - 阶段收益编排约束每次落地必须说明用户可见收益、后台前置、延期边界和质量一致性。
 - 配置化策略面决定内部体验强度、检查建议、证据展示层级和用户覆盖选项。
 - 安全边界负责权限、执行位置、沙箱等级、网络、凭据和高风险动作隔离；权限确认、快照/回滚隔离和运行时沙箱必须分开表达。
-- 扩展契约先定义 Plugin Runtime Host contract、Event Manifest、Tool ABI、Permission/Effect 和 UI descriptor；插件运行时主机由 Product Assembly 注册，通过安全控制面约束，只返回建议、证据候选、UI contribution、工具输入补丁或工具后置证据候选。内核事实、安全控制面和执行层共同写入状态、安全、工具执行结果和审计事实。
+- 扩展契约先定义 Plugin Runtime Host contract、Event Manifest、Tool ABI、Permission/Effect 和 UI descriptor；插件运行时主机由 Product Assembly 注册，通过安全控制面约束，只返回建议、证据候选、UI contribution、工具输入补丁或工具后置证据候选。权威状态按 owner 写入，插件、外部适配器和模型输出只能作为候选输入。
 - 交付物、证据和质量数据面支撑解释、审查、发布和复盘。
 - 项目集成面适配外部系统，并把外部语义映射为内部稳定事件和契约。
 - 智能体运行时执行任务，并通过策略面和安全边界获取质量结论与授权状态。
+
+权威状态 owner：
+
+| 状态类别 | Owner | 非 owner 行为 |
+|---|---|---|
+| 任务事实、事件序列和审计事实落盘 | Agent Kernel | 产品入口、插件和适配器只能提交请求、descriptor 或候选效果；Security Boundary 只提交安全决策和安全审计 payload，不直接维护事件序列 |
+| 工具执行结果 | Execution | 插件只能提供 tool provider candidate、输入补丁候选或后置证据候选 |
+| 权限和安全决策 | Security Boundary 产生 permission decision、`security.decided` payload 和安全审计 payload | ACP、MCP、hook、plugin 或模型建议不能直接 approve、deny；Agent Kernel 只记录决策事实，不重新判定权限 |
+| 就绪度和门禁投影 | 变更就绪度 / PR 门禁，基于证据、策略和人工决策生成 | Execution 和插件不能写通过、失败或阻断结论 |
+| 质量数据投影 | Quality Data Plane | 只归一化、查询和投影事实，不成为新的权威状态源 |
 
 ## 5. 模块边界
 
@@ -144,11 +154,11 @@ Plugin Runtime Host（按需启用）
 | 未知先进入建议态 | 新项目初期先提示和建议，安全或团队策略再阻断 |
 | 用户可临时放行 | 应急放行有范围、期限、记录和撤销 |
 | 组织策略可强制 | 受管策略高于本地覆盖 |
-| 模型输出作为候选 | 确定性证据、用户决策和策略改变状态 |
+| 模型输出作为候选 | 模型只能输出解释、摘要、风险或影响候选；策略改变和权威状态来自确定性证据、用户决策或受管策略 |
 | 能力/效果模型统一 | tool、MCP、skills、插件、hook 和内置能力必须映射为能力声明、目标对象、数据类别、信任来源和副作用候选 |
 | 未声明能力受限 | 新增扩展未声明能力、声明不完整或运行时行为超出声明时，只能进入受限模式或安全确认，不能按低风险静默执行 |
 | 策略不写死工具名 | 策略引擎以能力、效果、数据、来源、执行域和配置上下文判定；工具名只用于展示、审计、兼容和调试 |
-| 外部适配不写权威状态 | 外部插件和适配器只能返回候选效果；通过、失败、阻断、审计和权限状态由内核、安全边界和执行层写入 |
+| 外部适配不写权威状态 | 外部插件和适配器只能返回候选效果；任务事实和审计事实落盘、工具结果、安全决策 payload、就绪度/门禁分别由 Agent Kernel、Execution、Security Boundary 和变更就绪度模块写入 |
 | 工具复写显式授权 | 用户确认复写哪个工具和能力范围；复写表按项目执行域生效，不能静默覆盖全局工具 |
 
 ## 8. 架构风险

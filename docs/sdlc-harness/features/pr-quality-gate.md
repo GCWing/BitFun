@@ -141,6 +141,14 @@ PR 文本投影示例：
 | `required` | 要求显式展示跳过项、未关闭风险和风险接受 | 守护策略或团队策略 |
 | `blocking` | 对确定性失败或组织策略阻断 | 合规策略或明确阻断策略 |
 
+`degraded` 投影规则：
+
+| 投影 | 默认结果 | 风险接受后的结果 |
+|---|---|---|
+| `summary` / `advisory` | 保持 `attention` / `warn`，展示缺失证据和下一步 | 仍保持 `warn`，附加风险接受范围和过期时间 |
+| `required` | PR 检查可映射为 `neutral` / `action_required`，不写成 `success` | 若团队策略允许，保持 `neutral` / `action_required` 并记录接受；若缺口属于必需证据，保持 `fail` |
+| `blocking` | 安全拒绝、组织策略、确定性失败、凭据/发布等高敏缺口 fail-closed | 本地风险接受不能改成 `pass`；只能补齐证据、由组织策略放行，或保留 `fail` |
+
 深度审查预算策略：
 
 | 风险画像 | 默认策略 |
