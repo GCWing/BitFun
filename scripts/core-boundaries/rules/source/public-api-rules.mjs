@@ -117,4 +117,10 @@ export const publicApiAllowlistRules = [
       'runtime-ports root must re-export only the explicitly budgeted plugin runtime contract surface',
     allowedPluginReexportEntries: pluginRuntimePublicApiEntries,
   },
+  {
+    path: 'src/crates/adapters/opencode-adapter/src/lib.rs',
+    reason:
+      'OpenCode adapter fixture contract must not expose public API before reviewed Plugin Runtime Host integration',
+    allowedSymbolEntries: [],
+  },
 ];

@@ -7,6 +7,7 @@ members = [
     "src/crates/interfaces/acp",
     "src/crates/assembly/core",
     "src/crates/adapters/ai-adapters",
+    "src/crates/adapters/opencode-adapter",
     "src/crates/adapters/webdriver",
     "src/crates/adapters/api-layer",
     "src/crates/adapters/transport",

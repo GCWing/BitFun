@@ -15,11 +15,25 @@ export const noCoreDependencyCrates = [
   'agent-tools',
   'tool-packs',
   'product-domains',
+  'opencode-adapter',
   'terminal',
   'tool-runtime',
   'transport',
   'api-layer',
   'webdriver',
+];
+
+export const forbiddenManifestDependencyRules = [
+  {
+    dependencyNames: ['bitfun-opencode-adapter'],
+    scanRoots: ['src/apps', 'src/crates', 'BitFun-Installer/src-tauri'],
+    workspaceManifestPath: 'Cargo.toml',
+    allowManifestPaths: ['src/crates/adapters/opencode-adapter/Cargo.toml'],
+    reason:
+      'OpenCode adapter fixture must not become a production dependency before reviewed Plugin Runtime Host wiring',
+    message:
+      'production manifests must not depend on bitfun-opencode-adapter; integrate OpenCode through the Plugin Runtime Host boundary',
+  },
 ];
 
 export const lightweightBoundaryRules = [

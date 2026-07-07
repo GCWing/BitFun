@@ -43,8 +43,8 @@
 
 P0 第一条插件体验必须是单一可验收的垂直切片，而不是多个候选方向并列推进：
 
-1. 用户能从 OpenCode 兼容来源或本地路径注册插件，Desktop settings 支持启用、禁用、信任确认和配置校验；CLI diagnostics 必须能展示同一 OpenCode-compatible plugin manifest、source、trust 和状态。
-2. Product Assembly 选择 host availability，Plugin Runtime Host 校验 source、manifest、trust policy、deadline、配置和 execution domain。
+1. 用户能从 `opencode.json` plugin package list 或 `.opencode/plugins/*.js|ts` 本地插件源注册 OpenCode-compatible plugin，Desktop settings 支持启用、禁用、信任确认和配置校验；CLI diagnostics 必须能展示同一插件的 package/local source、trust 和状态。
+2. Product Assembly 选择 host availability，Plugin Runtime Host 校验 source、config/profile、trust policy、deadline、配置和 execution domain。
 3. 插件贡献一个 command descriptor，并由该 command 调用 plugin-provided tool；hook 和 readonly state view 只作为可选扩展，未实现时返回 typed unsupported。
 4. 用户触发 command contribution 后进入 BitFun permission/effect gate；插件只能返回 provider candidate、descriptor 或 `PluginEffectCandidate`。
 5. permission prompt 必须展示最小决策信息：plugin id/source/hash、requested capability/effect、target/artifact、risk level、owner、可回滚性、deny 后状态和 audit/event id。
@@ -143,19 +143,19 @@ flowchart TB
 | `ProviderCandidate` | 插件贡献 tool/MCP provider 的候选声明；包含 source、capability、owner、Tool ABI、permission/effect gate、materialize 条件和拒绝审计，不能直接成为 provider 权威源 |
 | `PluginTrustPolicy` / `PluginSourceRef` | 插件来源、hash、信任状态、数据类别、执行域和能力范围 |
 | `UiContributionDescriptor` | 声明式 UI contribution；只描述 slot、command、settings entry、state view、fallback，不携带可执行 UI |
-| `CompatibilityAdapterManifest` | 外部生态适配声明：支持的 hook/tool/event/UI/effect 能力、不可用原因和降级方式 |
+| `CompatibilityAdapterProfile` | 外部生态适配 profile：支持的 hook/tool/event/UI/effect 能力、不可用原因和降级方式 |
 
 进入流程：
 
 1. Product Assembly 根据交付形态、策略和工作区事实选择 `PluginRuntimeBinding`、trust policy、adapter set 和 extension availability。
-2. Plugin Runtime Host 加载或连接受控插件运行单元，校验 source、manifest、capability、data category、deadline 和 execution domain。
+2. Plugin Runtime Host 加载或连接受控插件运行单元，校验 source、config/profile、capability、data category、deadline 和 execution domain。
 3. Compatibility Adapter 将外部生态 API 映射成 BitFun 的 descriptor、provider candidate、event subscription 或 `PluginEffectCandidate`。
 4. Agent Kernel 和 Execution 只通过 typed envelope 与 Host 通信；Host 不能直接写 kernel state、permission decision、audit event 或 tool result。
 5. 安全控制面和能力 owner 对 candidate effect 做最终判断；产品入口只展示 descriptor、状态、错误、产物和确认选项。
 
 当前必须优先建立的能力：
 
-- 可执行 Host 的最小生命周期：init、manifest、dispatch、deadline、dispose、failure quarantine、diagnostics。
+- 可执行 Host 的最小生命周期：init、source/config validation、dispatch、deadline、dispose、failure quarantine、diagnostics。
 - disabled / projection-only / host 三类 runtime binding 与产品能力状态的一致映射。
 - effect candidate 的权限、副作用、审计和回滚语义。
 - 同一条 OpenCode-compatible plugin 真实消费路径，避免只做空 registry。P0 必须覆盖 source 注册/启用、Desktop command/settings、permission 确认、effect materialize、CLI diagnostics 和拒绝路径；ACP 外部 agent/tool bridge 只能复用合同，不作为 P0 验收替代。

@@ -203,8 +203,9 @@ src/crates/execution
     materializes accepted tool provider candidates through Tool ABI
 
 src/crates/adapters
-  opencode-compatibility-adapter
-    maps OpenCode API to BitFun canonical envelopes and candidates
+  opencode-adapter
+    maps OpenCode config and local plugin source facts to BitFun read models and effect candidates
+    must not implement PluginRuntimeClient or declare executable availability
   future compatibility adapters
     map other plugin ecosystems through the same adapter trait
 
@@ -559,6 +560,10 @@ sequenceDiagram
 ## 11. OpenCode 兼容映射
 
 OpenCode Compatibility Adapter 是 Plugin Runtime Host 内部适配器，不是 BitFun 内部插件模型。
+当前 `bitfun-opencode-adapter` crate 只提供 fixture-scoped source/config discovery 和 typed candidate projection；
+其 public API budget 为空。它不得实现 `PluginRuntimeClient`，不得向 Product Assembly 或 Kernel 声明 executable availability。
+生产消费必须先经过 Plugin Runtime Host 的注册、生命周期、trust/policy 和 effect gate 设计评审。
+UI / CLI 消费降级状态时必须同时使用 status、diagnostics 和 quarantine，不得只根据 availability reason 推导用户可见结论。
 
 | OpenCode 能力 | BitFun 映射 | 约束 |
 |---|---|---|

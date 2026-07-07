@@ -3,6 +3,7 @@
 export function runManifestParserSelfTest({
   isManifestDependencyDeclaration,
   parseManifestDependencies,
+  manifestDependencyMatches,
   manifestDependencyDisablesDefaultFeatures,
   parseManifestDependencyFeatureNames,
   productCoreFeatureAssemblyRules,
@@ -13,6 +14,7 @@ export function runManifestParserSelfTest({
   optionalDependencyFeatureOwnerRules,
   lightweightBoundaryRules,
   dependencyProfileRules,
+  forbiddenManifestDependencyRules,
   noCoreDependencyCrates,
   requiredContentRules,
   forbiddenContentRules,
@@ -59,11 +61,15 @@ export function runManifestParserSelfTest({
     '    "auth",',
     '], optional = true }',
     'bitfun-core = { path = "../core", default-features = false, features = ["product-full"] }',
+    'single-quoted-opencode = { package = \'bitfun-opencode-adapter\', path = "../adapters/opencode-adapter" }',
     '[dependencies.git2]',
     'workspace = true',
     'optional = true',
     '[target.\'cfg(windows)\'.dependencies."bitfun-cli"]',
     'path = "../../apps/cli"',
+    '[dependencies.renamed-opencode]',
+    'package = "bitfun-opencode-adapter"',
+    'path = "../adapters/opencode-adapter"',
     '[features]',
     'image = []',
   ]);
@@ -82,6 +88,17 @@ export function runManifestParserSelfTest({
   }
   if (parsedByName.get('bitfun-cli')?.optional !== false) {
     throw new Error('dependency profile parser must detect non-optional target dependency tables');
+  }
+  if (parsedByName.get('renamed-opencode')?.optional !== false) {
+    throw new Error('dependency profile parser must detect renamed dependency tables');
+  }
+  if (
+    !manifestDependencyMatches(
+      parsedByName.get('single-quoted-opencode'),
+      'bitfun-opencode-adapter',
+    )
+  ) {
+    throw new Error('dependency profile parser must detect single-quoted package aliases');
   }
   const parsedCoreDep = parsedByName.get('bitfun-core');
   if (!manifestDependencyDisablesDefaultFeatures(parsedCoreDep)) {
@@ -108,6 +125,34 @@ export function runManifestParserSelfTest({
   }
   if (parsedByName.has('image')) {
     throw new Error('dependency profile parser must ignore feature entries named like dependencies');
+  }
+  const parsedWorkspaceDeps = parseManifestDependencies(
+    [
+      '[workspace.dependencies]',
+      'opencode-fixture = { path = "src/crates/adapters/opencode-adapter", package = "bitfun-opencode-adapter" }',
+      'opencode-fixture-single = { path = "src/crates/adapters/opencode-adapter", package = \'bitfun-opencode-adapter\' }',
+      '[workspace.dependencies.renamed-opencode-workspace]',
+      'package = "bitfun-opencode-adapter"',
+      'path = "src/crates/adapters/opencode-adapter"',
+    ],
+    { includeWorkspace: true },
+  );
+  const workspaceDepsByName = new Map(parsedWorkspaceDeps.map((dep) => [dep.name, dep]));
+  if (
+    !manifestDependencyMatches(
+      workspaceDepsByName.get('opencode-fixture'),
+      'bitfun-opencode-adapter',
+    ) ||
+    !manifestDependencyMatches(
+      workspaceDepsByName.get('opencode-fixture-single'),
+      'bitfun-opencode-adapter',
+    ) ||
+    !manifestDependencyMatches(
+      workspaceDepsByName.get('renamed-opencode-workspace'),
+      'bitfun-opencode-adapter',
+    )
+  ) {
+    throw new Error('manifest parser must detect workspace aliases to forbidden packages');
   }
 
   const productCoreRulePaths = new Set(
@@ -785,6 +830,9 @@ export function runManifestParserSelfTest({
   const pluginRootReexportRule = publicApiAllowlistRules.find(
     (rule) => rule.path === 'src/crates/contracts/runtime-ports/src/lib.rs',
   );
+  const opencodeAdapterPublicApiRule = publicApiAllowlistRules.find(
+    (rule) => rule.path === 'src/crates/adapters/opencode-adapter/src/lib.rs',
+  );
   const parsedPluginReexports = collectPluginRootReexports(`
     pub use plugin::{PluginDispatchEnvelope, PluginResponseEnvelope};
     pub use plugin::{
@@ -802,11 +850,20 @@ export function runManifestParserSelfTest({
   const parsedPluginSymbols = collectTopLevelRustPublicSymbols(`
     pub enum TopLevelEnum { Value }
     impl TopLevelEnum { pub fn hidden_method(&self) {} }
+    pub use plugin::PluginDispatchEnvelope;
+    pub use crate::hidden::{HiddenType, InternalName as PublicName};
+    pub use crate::multi::{
+      MultiLineType,
+      InternalMultiLine as PublicMultiLine,
+    };
     pub mod host;
     pub const CONTRACT_VERSION: u16 = 1;
   `);
-  if (parsedPluginSymbols.join(',') !== 'TopLevelEnum,host,CONTRACT_VERSION') {
-    throw new Error('public API parser must collect top-level items without impl methods');
+  if (
+    parsedPluginSymbols.join(',') !==
+    'TopLevelEnum,PluginDispatchEnvelope,HiddenType,PublicName,MultiLineType,PublicMultiLine,host,CONTRACT_VERSION'
+  ) {
+    throw new Error('public API parser must collect top-level items and re-exports without impl methods');
   }
   const pluginPublicApiSymbols = (pluginPublicApiRule?.allowedSymbolEntries || []).map(
     (entry) => entry.symbol,
@@ -844,6 +901,49 @@ export function runManifestParserSelfTest({
   }
   if (pluginRootReexportSymbols.length !== pluginPublicApiSymbols.length) {
     throw new Error('plugin root re-export allowlist must match plugin module public budget');
+  }
+  if (!opencodeAdapterPublicApiRule) {
+    throw new Error('OpenCode adapter fixture must have a public API budget rule');
+  }
+  if ((opencodeAdapterPublicApiRule.allowedSymbolEntries || []).length !== 0) {
+    throw new Error('OpenCode adapter fixture public API budget must stay empty');
+  }
+  const opencodeManifestRule = forbiddenManifestDependencyRules.find((rule) =>
+    rule.dependencyNames?.includes('bitfun-opencode-adapter'),
+  );
+  if (!opencodeManifestRule) {
+    throw new Error('OpenCode adapter fixture must have a forbidden manifest dependency rule');
+  }
+  for (const scanRoot of ['src/apps', 'src/crates', 'BitFun-Installer/src-tauri']) {
+    if (!opencodeManifestRule.scanRoots?.includes(scanRoot)) {
+      throw new Error(`OpenCode adapter manifest guard must scan ${scanRoot}`);
+    }
+  }
+  if (opencodeManifestRule.workspaceManifestPath !== 'Cargo.toml') {
+    throw new Error('OpenCode adapter manifest guard must scan root workspace dependencies');
+  }
+  if (
+    !opencodeManifestRule.allowManifestPaths?.includes(
+      'src/crates/adapters/opencode-adapter/Cargo.toml',
+    )
+  ) {
+    throw new Error('OpenCode adapter manifest guard must allow its own manifest');
+  }
+  const opencodeSourceRules = forbiddenContentUnderRules.filter((rule) =>
+    rule.reason.includes('OpenCode adapter fixture'),
+  );
+  for (const scanRoot of ['src', 'BitFun-Installer/src-tauri']) {
+    if (!opencodeSourceRules.some((rule) => rule.path === scanRoot)) {
+      throw new Error(`OpenCode adapter source guard must scan ${scanRoot}`);
+    }
+  }
+  const opencodeSourceRegex = opencodeSourceRules[0]?.patterns?.[0]?.regex;
+  if (
+    !opencodeSourceRegex?.test('use bitfun_opencode_adapter as opencode;') ||
+    !opencodeSourceRegex?.test('extern crate bitfun_opencode_adapter;') ||
+    !opencodeSourceRegex?.test('bitfun_opencode_adapter::OpenCodePluginAdapter')
+  ) {
+    throw new Error('OpenCode adapter source guard must catch direct, alias, and extern imports');
   }
   const runtimeServicesRule = lightweightBoundaryRules.find(
     (rule) => rule.crateName === 'runtime-services',

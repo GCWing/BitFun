@@ -3979,6 +3979,32 @@ export const forbiddenContentRules = [
 
 export const forbiddenContentUnderRules = [
   {
+    path: 'src',
+    reason:
+      'OpenCode adapter fixture must not become a production dependency before reviewed Plugin Runtime Host wiring',
+    patterns: [
+      {
+        regex:
+          /\b(?:use\s+bitfun_opencode_adapter\b|extern\s+crate\s+bitfun_opencode_adapter\b|bitfun_opencode_adapter::)/,
+        message:
+          'production crates must not import bitfun-opencode-adapter directly; integrate OpenCode through the Plugin Runtime Host boundary',
+      },
+    ],
+  },
+  {
+    path: 'BitFun-Installer/src-tauri',
+    reason:
+      'OpenCode adapter fixture must not become a production dependency before reviewed Plugin Runtime Host wiring',
+    patterns: [
+      {
+        regex:
+          /\b(?:use\s+bitfun_opencode_adapter\b|extern\s+crate\s+bitfun_opencode_adapter\b|bitfun_opencode_adapter::)/,
+        message:
+          'production crates must not import bitfun-opencode-adapter directly; integrate OpenCode through the Plugin Runtime Host boundary',
+      },
+    ],
+  },
+  {
     path: 'src/crates/assembly/core/src',
     reason:
       'core must use runtime-ports as the owner path for portable subagent contracts',

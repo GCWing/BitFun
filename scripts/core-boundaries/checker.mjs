@@ -5,6 +5,7 @@ import { dirname } from 'path';
 
 import {
   dependencyProfileRules,
+  forbiddenManifestDependencyRules,
   lightweightBoundaryRules,
   noCoreDependencyCrates,
 } from './rules/crate-rules.mjs';
@@ -103,17 +104,22 @@ function isManifestDependencyDeclaration(trimmedLine, depName) {
   return isInlineDependency || isDependencyTable;
 }
 
-function isDependencyListHeader(trimmedLine) {
-  return /^\[(?:target\.[^\]]+\.)?(?:dependencies|dev-dependencies|build-dependencies)\]$/.test(
-    trimmedLine,
-  );
+function isDependencyListHeader(trimmedLine, options = {}) {
+  const workspacePrefix = options.includeWorkspace ? '(?:workspace\\.)?' : '';
+  return new RegExp(`^\\[(?:target\\.[^\\]]+\\.)?${workspacePrefix}(?:dependencies|dev-dependencies|build-dependencies)\\]$`).test(trimmedLine);
 }
 
-function parseManifestDependencies(lines) {
+function dependencyTablePattern(options = {}) {
+  const workspacePrefix = options.includeWorkspace ? '(?:workspace\\.)?' : '';
+  return new RegExp(`^\\[(?:target\\.[^\\]]+\\.)?${workspacePrefix}(?:dependencies|dev-dependencies|build-dependencies)\\.([A-Za-z0-9_-]+|"[A-Za-z0-9_-]+")\\]$`);
+}
+
+function parseManifestDependencies(lines, options = {}) {
   const deps = [];
   let inDependencyList = false;
   let currentTable = null;
   let currentInline = null;
+  const tablePattern = dependencyTablePattern(options);
 
   lines.forEach((line, index) => {
     const trimmed = line.trim();
@@ -134,19 +140,17 @@ function parseManifestDependencies(lines) {
 
     const headerMatch = trimmed.match(/^\[(.+)]$/);
     if (headerMatch) {
-      inDependencyList = isDependencyListHeader(trimmed);
+      inDependencyList = isDependencyListHeader(trimmed, options);
       currentTable = null;
-      for (const depName of collectKnownDependencyNames()) {
-        if (manifestDependencyHeaderPattern(depName).test(trimmed)) {
-          currentTable = {
-            name: depName,
-            line: index + 1,
-            optional: false,
-            text: [trimmed],
-          };
-          deps.push(currentTable);
-          break;
-        }
+      const dependencyTableMatch = trimmed.match(tablePattern);
+      if (dependencyTableMatch) {
+        currentTable = {
+          name: dependencyTableMatch[1].replace(/^"|"$/g, ''),
+          line: index + 1,
+          optional: false,
+          text: [trimmed],
+        };
+        deps.push(currentTable);
       }
       return;
     }
@@ -282,20 +286,6 @@ function parseManifestFeatures(lines) {
   });
 
   return features;
-}
-
-function collectKnownDependencyNames() {
-  return Array.from(
-    new Set([
-      'bitfun-core',
-      ...lightweightBoundaryRules.flatMap((rule) => rule.forbiddenDeps),
-      ...dependencyProfileRules.flatMap((rule) => rule.forbiddenNonOptionalDeps),
-      ...optionalDependencyFeatureOwnerRules.flatMap((rule) =>
-        rule.dependencies.map((dependency) => dependency.depName),
-      ),
-      ...productCoreFeatureAssemblyRules.map((rule) => rule.dependencyName),
-    ]),
-  );
 }
 
 function parseWorkspaceMembers() {
@@ -458,6 +448,76 @@ function checkForbiddenNonOptionalManifestDeps(crateDir, forbiddenDeps, messageF
         message: messageForDep(dep.name),
       });
     }
+  }
+}
+
+function manifestDependencyMatches(dep, dependencyName) {
+  const text = manifestDependencyText(dep);
+  return dep.name === dependencyName || new RegExp(`\\bpackage\\s*=\\s*["']${escapeRegex(dependencyName)}["']`).test(text);
+}
+
+function manifestDependencyUsesWorkspace(dep) {
+  return /\bworkspace\s*=\s*true\b/.test(manifestDependencyText(dep));
+}
+function collectForbiddenWorkspaceDependencyAliases(rule) {
+  const workspaceManifestPath = repoPathToFsPath(rule.workspaceManifestPath ?? 'Cargo.toml');
+  if (!existsSync(workspaceManifestPath)) {
+    return new Map();
+  }
+  const deps = parseManifestDependencies(readText(workspaceManifestPath).split(/\r?\n/), {
+    includeWorkspace: true,
+  });
+  const aliases = new Map();
+  for (const dep of deps) {
+    const matchedDep = rule.dependencyNames.find((dependencyName) =>
+      manifestDependencyMatches(dep, dependencyName),
+    );
+    if (matchedDep) {
+      aliases.set(dep.name, { dep, matchedDep, workspaceManifestPath });
+    }
+  }
+  return aliases;
+}
+
+function checkForbiddenManifestDependencyRule(rule) {
+  const allowManifestPaths = new Set(rule.allowManifestPaths ?? []);
+  const workspaceAliases = collectForbiddenWorkspaceDependencyAliases(rule);
+  if (rule.forbidWorkspaceAliases !== false) {
+    for (const { dep, matchedDep, workspaceManifestPath } of workspaceAliases.values()) {
+      failures.push({
+        path: workspaceManifestPath,
+        line: dep.line,
+        message: `${rule.reason}; workspace dependency aliases must not point to ${matchedDep}: ${dep.name}`,
+      });
+    }
+  }
+  for (const repoDir of rule.scanRoots) {
+    walkFiles(repoPathToFsPath(repoDir), (path) => {
+      if (!path.endsWith('Cargo.toml')) {
+        return;
+      }
+      const repoPath = toRepoPath(path);
+      if (allowManifestPaths.has(repoPath)) {
+        return;
+      }
+      const deps = parseManifestDependencies(readText(path).split(/\r?\n/));
+      for (const dep of deps) {
+        const matchedDep = rule.dependencyNames.find((dependencyName) =>
+          manifestDependencyMatches(dep, dependencyName),
+        );
+        const workspaceAlias = workspaceAliases.get(dep.name);
+        if (!matchedDep && !(workspaceAlias && manifestDependencyUsesWorkspace(dep))) {
+          continue;
+        }
+        failures.push({
+          path,
+          line: dep.line,
+          message: `${rule.reason}; ${rule.message}: ${
+            matchedDep ?? `${dep.name} -> ${workspaceAlias.matchedDep}`
+          }`,
+        });
+      }
+    });
   }
 }
 
@@ -836,11 +896,55 @@ function checkRequiredContent(repoPath, patterns, reason) {
   }
 }
 
+function collectRustUseReexportSymbols(usePath) {
+  const blockMatch = usePath.match(/\{([\s\S]*)\}$/);
+  if (blockMatch) {
+    const prefix = usePath.slice(0, blockMatch.index).replace(/::$/, '');
+    return blockMatch[1].split(',').flatMap((symbol) => {
+      symbol = symbol.trim();
+      return symbol ? collectRustUseReexportSymbols(`${prefix}::${symbol}`) : [];
+    });
+  }
+
+  const aliasMatch = usePath.match(/\bas\s+([A-Za-z_][A-Za-z0-9_]*)$/);
+  const symbol =
+    aliasMatch?.[1] ??
+    usePath
+      .split('::')
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .pop();
+  return symbol ? [symbol] : [];
+}
+
 function collectTopLevelRustPublicSymbols(text) {
   const symbols = [];
   let braceDepth = 0;
+  let pendingUsePath = null;
   for (const line of text.split(/\r?\n/)) {
+    const code = line.replace(/\/\/.*$/, '');
+    if (pendingUsePath) {
+      pendingUsePath.push(code.trim());
+      if (code.includes(';')) {
+        symbols.push(
+          ...collectRustUseReexportSymbols(pendingUsePath.join(' ').replace(/;\s*$/, '')),
+        );
+        pendingUsePath = null;
+      }
+      continue;
+    }
+
     if (braceDepth === 0) {
+      const useMatch = code.match(/^\s*pub\s+use\s+(.+)/);
+      if (useMatch) {
+        const usePath = useMatch[1].trim();
+        if (usePath.includes(';')) {
+          symbols.push(...collectRustUseReexportSymbols(usePath.replace(/;\s*$/, '')));
+        } else {
+          pendingUsePath = [usePath];
+        }
+        continue;
+      }
       const match = line.match(
         /^\s*pub\s+(?:(?:async|unsafe)\s+)*(?:(?:const\s+fn)|fn|type|struct|enum|trait|mod|const|static)\s+([A-Za-z_][A-Za-z0-9_]*)\b/,
       );
@@ -848,7 +952,6 @@ function collectTopLevelRustPublicSymbols(text) {
         symbols.push(match[1]);
       }
     }
-    const code = line.replace(/\/\/.*$/, '');
     braceDepth += (code.match(/\{/g) || []).length;
     braceDepth -= (code.match(/\}/g) || []).length;
     if (braceDepth < 0) {
@@ -994,6 +1097,7 @@ export function runCoreBoundaryCheck() {
     runManifestParserSelfTest({
       isManifestDependencyDeclaration,
       parseManifestDependencies,
+      manifestDependencyMatches,
       manifestDependencyDisablesDefaultFeatures,
       parseManifestDependencyFeatureNames,
       productCoreFeatureAssemblyRules,
@@ -1004,6 +1108,7 @@ export function runCoreBoundaryCheck() {
       optionalDependencyFeatureOwnerRules,
       lightweightBoundaryRules,
       dependencyProfileRules,
+      forbiddenManifestDependencyRules,
       noCoreDependencyCrates,
       requiredContentRules,
       forbiddenContentRules,
@@ -1022,6 +1127,10 @@ export function runCoreBoundaryCheck() {
   }
 
   checkCrateLayoutRules();
+
+  for (const rule of forbiddenManifestDependencyRules) {
+    checkForbiddenManifestDependencyRule(rule);
+  }
 
   for (const crateName of noCoreDependencyCrates) {
     const crateDir = crateDirForName(crateName);
