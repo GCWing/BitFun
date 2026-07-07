@@ -24,6 +24,11 @@ use crate::relay::RoomManager;
 use crate::routes::websocket::OutboundProtocol;
 use crate::WebAssetStore;
 
+#[cfg(not(test))]
+const DESKTOP_ENQUEUE_TIMEOUT: Duration = Duration::from_secs(5);
+#[cfg(test)]
+const DESKTOP_ENQUEUE_TIMEOUT: Duration = Duration::from_millis(25);
+
 #[derive(Clone)]
 pub struct AppState {
     pub room_manager: Arc<RoomManager>,
@@ -98,7 +103,7 @@ pub async fn pair(
     let correlation_id = generate_correlation_id();
     let Some((_pending_guard, rx)) = state
         .room_manager
-        .try_register_pending(correlation_id.clone())
+        .try_register_pending(&room_id, correlation_id.clone())
     else {
         return Err(StatusCode::SERVICE_UNAVAILABLE);
     };
@@ -111,29 +116,22 @@ pub async fn pair(
     })
     .unwrap_or_default();
 
-    let result = tokio::time::timeout(Duration::from_secs(30), async {
-        if !state.room_manager.send_to_desktop(&room_id, &ws_msg).await {
-            return Err(StatusCode::SERVICE_UNAVAILABLE);
-        }
+    if let Err(status) = send_to_desktop_with_backpressure_timeout(&state, &room_id, &ws_msg).await
+    {
+        state.room_manager.cancel_pending(&correlation_id);
+        return Err(status);
+    }
 
-        rx.await
-            .map(|payload| {
-                Json(PairResponse {
-                    encrypted_data: payload.encrypted_data,
-                    nonce: payload.nonce,
-                })
-            })
-            .map_err(|_| StatusCode::GATEWAY_TIMEOUT)
-    })
-    .await;
-
-    match result {
-        Ok(Ok(response)) => Ok(response),
-        Ok(Err(status)) => {
-            state.room_manager.cancel_pending(&correlation_id);
-            Err(status)
-        }
+    match tokio::time::timeout(Duration::from_secs(30), rx).await {
+        Ok(Ok(payload)) => Ok(Json(PairResponse {
+            encrypted_data: payload.encrypted_data,
+            nonce: payload.nonce,
+        })),
         Err(_) => {
+            state.room_manager.cancel_pending(&correlation_id);
+            Err(StatusCode::GATEWAY_TIMEOUT)
+        }
+        Ok(Err(_)) => {
             state.room_manager.cancel_pending(&correlation_id);
             Err(StatusCode::GATEWAY_TIMEOUT)
         }
@@ -168,7 +166,7 @@ pub async fn command(
     let correlation_id = generate_correlation_id();
     let Some((_pending_guard, rx)) = state
         .room_manager
-        .try_register_pending(correlation_id.clone())
+        .try_register_pending(&room_id, correlation_id.clone())
     else {
         return Err(StatusCode::SERVICE_UNAVAILABLE);
     };
@@ -180,32 +178,41 @@ pub async fn command(
     })
     .unwrap_or_default();
 
-    let result = tokio::time::timeout(Duration::from_secs(60), async {
-        if !state.room_manager.send_to_desktop(&room_id, &ws_msg).await {
-            return Err(StatusCode::SERVICE_UNAVAILABLE);
-        }
+    if let Err(status) = send_to_desktop_with_backpressure_timeout(&state, &room_id, &ws_msg).await
+    {
+        state.room_manager.cancel_pending(&correlation_id);
+        return Err(status);
+    }
 
-        rx.await
-            .map(|payload| {
-                Json(CommandResponse {
-                    encrypted_data: payload.encrypted_data,
-                    nonce: payload.nonce,
-                })
-            })
-            .map_err(|_| StatusCode::GATEWAY_TIMEOUT)
-    })
-    .await;
-
-    match result {
-        Ok(Ok(response)) => Ok(response),
-        Ok(Err(status)) => {
-            state.room_manager.cancel_pending(&correlation_id);
-            Err(status)
-        }
+    match tokio::time::timeout(Duration::from_secs(60), rx).await {
+        Ok(Ok(payload)) => Ok(Json(CommandResponse {
+            encrypted_data: payload.encrypted_data,
+            nonce: payload.nonce,
+        })),
         Err(_) => {
             state.room_manager.cancel_pending(&correlation_id);
             Err(StatusCode::GATEWAY_TIMEOUT)
         }
+        Ok(Err(_)) => {
+            state.room_manager.cancel_pending(&correlation_id);
+            Err(StatusCode::GATEWAY_TIMEOUT)
+        }
+    }
+}
+
+async fn send_to_desktop_with_backpressure_timeout(
+    state: &AppState,
+    room_id: &str,
+    ws_msg: &str,
+) -> Result<(), StatusCode> {
+    match tokio::time::timeout(
+        DESKTOP_ENQUEUE_TIMEOUT,
+        state.room_manager.send_to_desktop(room_id, ws_msg),
+    )
+    .await
+    {
+        Ok(true) => Ok(()),
+        Ok(false) | Err(_) => Err(StatusCode::SERVICE_UNAVAILABLE),
     }
 }
 
@@ -490,5 +497,52 @@ fn mime_from_path(p: &str) -> &'static str {
         Some("ttf") => "font/ttf",
         Some("wasm") => "application/wasm",
         _ => "application/octet-stream",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::relay::room::OutboundMessage;
+    use crate::MemoryAssetStore;
+    use axum::extract::{Path, State};
+    use axum::Json;
+    use tokio::sync::mpsc;
+
+    fn test_state(room_manager: Arc<RoomManager>) -> AppState {
+        AppState {
+            room_manager,
+            start_time: std::time::Instant::now(),
+            asset_store: Arc::new(MemoryAssetStore::new()),
+        }
+    }
+
+    #[tokio::test]
+    async fn pair_reports_backpressure_before_response_timeout() {
+        let room_manager = RoomManager::new();
+        let (tx, _rx) = mpsc::channel(1);
+        tx.send(OutboundMessage {
+            text: "queued".to_string(),
+        })
+        .await
+        .expect("queue should accept first message");
+        room_manager.create_room("room-a", 1, "desktop-a", "public-key", tx);
+
+        let result = tokio::time::timeout(
+            Duration::from_millis(100),
+            pair(
+                State(test_state(room_manager)),
+                Path("room-a".to_string()),
+                Json(PairRequest {
+                    public_key: "mobile-key".to_string(),
+                    device_id: "mobile-a".to_string(),
+                    device_name: "Mobile A".to_string(),
+                }),
+            ),
+        )
+        .await
+        .expect("backpressure should return before the response timeout");
+
+        assert!(matches!(result, Err(StatusCode::SERVICE_UNAVAILABLE)));
     }
 }

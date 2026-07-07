@@ -117,13 +117,11 @@ impl MCPServerManager {
             if !config.enabled {
                 continue;
             }
-            if !self.runtime.contains(&config.id).await {
-                if let Err(e) = self.runtime.register(config).await {
-                    warn!(
-                        "Failed to register MCP server during non-destructive init: name={} id={} error={}",
-                        config.name, config.id, e
-                    );
-                }
+            if let Err(e) = self.runtime.ensure_registered(config).await {
+                warn!(
+                    "Failed to register MCP server during non-destructive init: name={} id={} error={}",
+                    config.name, config.id, e
+                );
             }
         }
 
@@ -162,7 +160,7 @@ impl MCPServerManager {
             return Ok(());
         }
 
-        self.runtime.register(&config).await?;
+        self.runtime.ensure_registered(&config).await?;
         Ok(())
     }
 
@@ -187,9 +185,7 @@ impl MCPServerManager {
             )));
         }
 
-        if !self.runtime.contains(server_id).await {
-            self.runtime.register(&config).await?;
-        }
+        self.runtime.ensure_registered(&config).await?;
 
         let process = self.runtime.get_process(server_id).await.ok_or_else(|| {
             error!("MCP server not registered: id={}", server_id);
@@ -402,8 +398,23 @@ impl MCPServerManager {
     pub async fn add_server(&self, config: MCPServerConfig) -> BitFunResult<()> {
         config.validate()?;
 
-        self.config_service.save_server_config(&config).await?;
+        if self
+            .config_service
+            .get_server_config(&config.id)
+            .await?
+            .is_some()
+        {
+            return Err(BitFunError::Configuration(format!(
+                "MCP server already exists: {}",
+                config.id
+            )));
+        }
+
         self.runtime.register(&config).await?;
+        if let Err(error) = self.config_service.save_server_config(&config).await {
+            let _ = self.runtime.unregister(&config.id).await;
+            return Err(error);
+        }
 
         if config.enabled && config.auto_start {
             self.start_server(&config.id).await?;

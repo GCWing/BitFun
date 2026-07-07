@@ -27,23 +27,46 @@ impl MCPServerRegistry {
 
     /// Registers a server.
     pub async fn register(&self, config: &MCPServerConfig) -> MCPRuntimeResult<()> {
+        self.register_new(config).await.map(|_| ())
+    }
+
+    /// Registers a server if it is not already present.
+    ///
+    /// Returns `true` when a new runtime process was inserted and `false` when
+    /// the server was already registered.
+    pub async fn ensure_registered(&self, config: &MCPServerConfig) -> MCPRuntimeResult<bool> {
+        self.register_with_duplicate_policy(config, true).await
+    }
+
+    async fn register_new(&self, config: &MCPServerConfig) -> MCPRuntimeResult<bool> {
+        self.register_with_duplicate_policy(config, false).await
+    }
+
+    async fn register_with_duplicate_policy(
+        &self,
+        config: &MCPServerConfig,
+        allow_existing: bool,
+    ) -> MCPRuntimeResult<bool> {
         config.validate().map_err(|error| {
             MCPRuntimeError::validation(format!("Invalid MCP server config: {}", error))
         })?;
 
+        let _lifecycle_guard = self.lifecycle_lock.lock().await;
+        {
+            let servers = self.servers.read().await;
+            if servers.contains_key(&config.id) {
+                if allow_existing {
+                    return Ok(false);
+                }
+                return Err(MCPRuntimeError::validation(format!(
+                    "MCP server is already registered: {}",
+                    config.id
+                )));
+            }
+        }
+
         let process =
             MCPServerProcess::new(config.id.clone(), config.name.clone(), config.server_type);
-
-        let _lifecycle_guard = self.lifecycle_lock.lock().await;
-        let previous_process = {
-            let mut servers = self.servers.write().await;
-            servers.remove(&config.id)
-        };
-
-        if let Some(previous_process) = previous_process {
-            let mut proc = previous_process.write().await;
-            proc.stop().await?;
-        }
 
         {
             let mut servers = self.servers.write().await;
@@ -54,7 +77,7 @@ impl MCPServerRegistry {
             "Registered MCP server: name={} id={}",
             config.name, config.id
         );
-        Ok(())
+        Ok(true)
     }
 
     /// Unregisters a server.
@@ -209,6 +232,43 @@ mod tests {
 
         let missing = registry.unregister("missing").await.unwrap_err();
         assert_eq!(missing.kind(), MCPRuntimeErrorKind::NotFound);
+    }
+
+    #[tokio::test]
+    async fn registry_rejects_duplicate_register_without_replacing_process() {
+        let registry = MCPServerRegistry::new();
+        let config = local_config("duplicate");
+
+        registry.register(&config).await.unwrap();
+        let first_process = registry
+            .get_process("duplicate")
+            .await
+            .expect("first process");
+
+        let duplicate = registry.register(&config).await.unwrap_err();
+
+        assert_eq!(duplicate.kind(), MCPRuntimeErrorKind::Validation);
+        let current_process = registry
+            .get_process("duplicate")
+            .await
+            .expect("process should remain registered");
+        assert!(Arc::ptr_eq(&first_process, &current_process));
+    }
+
+    #[tokio::test]
+    async fn registry_can_ensure_existing_registration_without_replacing_process() {
+        let registry = MCPServerRegistry::new();
+        let config = local_config("ensure");
+
+        assert!(registry.ensure_registered(&config).await.unwrap());
+        let first_process = registry.get_process("ensure").await.expect("first process");
+
+        assert!(!registry.ensure_registered(&config).await.unwrap());
+        let current_process = registry
+            .get_process("ensure")
+            .await
+            .expect("process should remain registered");
+        assert!(Arc::ptr_eq(&first_process, &current_process));
     }
 
     #[tokio::test]

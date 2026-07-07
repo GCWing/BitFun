@@ -6,6 +6,7 @@
 //! business data — it only routes messages.
 
 use chrono::Utc;
+use dashmap::mapref::entry::Entry;
 use dashmap::DashMap;
 use std::sync::Arc;
 use tokio::sync::{mpsc, oneshot, OwnedSemaphorePermit, Semaphore};
@@ -13,9 +14,11 @@ use tracing::{debug, info, warn};
 
 pub type ConnId = u64;
 pub const MAX_PENDING_REQUESTS: usize = 1024;
+pub const MAX_PENDING_REQUESTS_PER_ROOM: usize = 128;
 
 struct PendingRequest {
     tx: oneshot::Sender<ResponsePayload>,
+    room_id: String,
     _permit: OwnedSemaphorePermit,
 }
 
@@ -103,6 +106,7 @@ pub struct RoomManager {
     next_conn_id: std::sync::atomic::AtomicU64,
     pending_requests: DashMap<String, PendingRequest>,
     pending_permits: Arc<Semaphore>,
+    pending_room_counts: DashMap<String, usize>,
 }
 
 impl RoomManager {
@@ -113,6 +117,7 @@ impl RoomManager {
             next_conn_id: std::sync::atomic::AtomicU64::new(1),
             pending_requests: DashMap::new(),
             pending_permits: Arc::new(Semaphore::new(MAX_PENDING_REQUESTS)),
+            pending_room_counts: DashMap::new(),
         })
     }
 
@@ -191,26 +196,36 @@ impl RoomManager {
 
     pub fn try_register_pending(
         self: &Arc<Self>,
+        room_id: &str,
         correlation_id: String,
     ) -> Option<(PendingRequestGuard, oneshot::Receiver<ResponsePayload>)> {
         let permit = Arc::clone(&self.pending_permits).try_acquire_owned().ok()?;
+        if !self.try_acquire_room_pending(room_id) {
+            drop(permit);
+            return None;
+        }
+
         let (tx, rx) = oneshot::channel();
         let guard = PendingRequestGuard {
             room_manager: Arc::clone(self),
             correlation_id: correlation_id.clone(),
         };
-        self.pending_requests.insert(
+        if let Some(previous) = self.pending_requests.insert(
             correlation_id,
             PendingRequest {
                 tx,
+                room_id: room_id.to_string(),
                 _permit: permit,
             },
-        );
+        ) {
+            self.release_room_pending(&previous.room_id);
+        }
         Some((guard, rx))
     }
 
     pub fn resolve_pending(&self, correlation_id: &str, payload: ResponsePayload) -> bool {
         if let Some((_, pending)) = self.pending_requests.remove(correlation_id) {
+            self.release_room_pending(&pending.room_id);
             pending.tx.send(payload).is_ok()
         } else {
             warn!("No pending request for correlation_id={correlation_id}");
@@ -219,7 +234,34 @@ impl RoomManager {
     }
 
     pub fn cancel_pending(&self, correlation_id: &str) {
-        self.pending_requests.remove(correlation_id);
+        if let Some((_, pending)) = self.pending_requests.remove(correlation_id) {
+            self.release_room_pending(&pending.room_id);
+        }
+    }
+
+    fn try_acquire_room_pending(&self, room_id: &str) -> bool {
+        let mut count = self
+            .pending_room_counts
+            .entry(room_id.to_string())
+            .or_insert(0);
+        if *count >= MAX_PENDING_REQUESTS_PER_ROOM {
+            return false;
+        }
+        *count += 1;
+        true
+    }
+
+    fn release_room_pending(&self, room_id: &str) {
+        if let Entry::Occupied(mut entry) = self.pending_room_counts.entry(room_id.to_string()) {
+            let should_remove = {
+                let count = entry.get_mut();
+                *count = count.saturating_sub(1);
+                *count == 0
+            };
+            if should_remove {
+                entry.remove();
+            }
+        }
     }
 
     pub fn on_disconnect(&self, conn_id: ConnId) {
@@ -347,18 +389,64 @@ mod tests {
         let mut guards = Vec::new();
 
         for index in 0..MAX_PENDING_REQUESTS {
+            let room_id = format!("room-{index}");
             let (guard, _rx) = manager
-                .try_register_pending(format!("pending-{index}"))
+                .try_register_pending(&room_id, format!("pending-{index}"))
                 .expect("pending registration within limit");
             guards.push(guard);
         }
 
         assert!(manager
-            .try_register_pending("overflow".to_string())
+            .try_register_pending("overflow-room", "overflow".to_string())
             .is_none());
         drop(guards.pop());
         assert!(manager
-            .try_register_pending("after-cancel".to_string())
+            .try_register_pending("after-cancel-room", "after-cancel".to_string())
             .is_some());
+    }
+
+    #[test]
+    fn pending_registration_is_bounded_per_room_without_starving_other_rooms() {
+        let manager = RoomManager::new();
+        let mut guards = Vec::new();
+
+        for index in 0..MAX_PENDING_REQUESTS_PER_ROOM {
+            let (guard, _rx) = manager
+                .try_register_pending("room-a", format!("room-a-{index}"))
+                .expect("room-a pending registration within per-room limit");
+            guards.push(guard);
+        }
+
+        assert!(manager
+            .try_register_pending("room-a", "room-a-overflow".to_string())
+            .is_none());
+        assert!(manager
+            .try_register_pending("room-b", "room-b-still-healthy".to_string())
+            .is_some());
+    }
+
+    #[test]
+    fn pending_room_counts_are_reclaimed_after_cancel_and_resolve() {
+        let manager = RoomManager::new();
+
+        let (_guard, _rx) = manager
+            .try_register_pending("room-a", "pending-a".to_string())
+            .expect("pending registration");
+        assert!(manager.pending_room_counts.contains_key("room-a"));
+
+        manager.cancel_pending("pending-a");
+        assert!(!manager.pending_room_counts.contains_key("room-a"));
+
+        let (_guard, _rx) = manager
+            .try_register_pending("room-b", "pending-b".to_string())
+            .expect("pending registration");
+        assert!(manager.resolve_pending(
+            "pending-b",
+            ResponsePayload {
+                encrypted_data: "encrypted".to_string(),
+                nonce: "nonce".to_string(),
+            },
+        ));
+        assert!(!manager.pending_room_counts.contains_key("room-b"));
     }
 }

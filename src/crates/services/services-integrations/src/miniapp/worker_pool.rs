@@ -78,6 +78,27 @@ struct WorkerEntry {
     worker: Arc<Mutex<JsWorker>>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ExistingWorkerAdmission {
+    DrainIdle,
+    Reuse,
+    ReplaceStaleRevision,
+}
+
+fn plan_existing_worker_admission(
+    existing_revision: &str,
+    requested_revision: &str,
+    is_idle: bool,
+) -> ExistingWorkerAdmission {
+    if is_idle {
+        ExistingWorkerAdmission::DrainIdle
+    } else if existing_revision == requested_revision {
+        ExistingWorkerAdmission::Reuse
+    } else {
+        ExistingWorkerAdmission::ReplaceStaleRevision
+    }
+}
+
 fn spawn_worker_reaper() -> Arc<Mutex<HashMap<String, WorkerEntry>>> {
     let workers = Arc::new(Mutex::new(HashMap::<String, WorkerEntry>::new()));
 
@@ -234,19 +255,29 @@ impl JsWorkerPool {
 
         {
             let mut guard = self.workers.lock().await;
-            if let Some(entry) = guard.remove(worker_key) {
-                if entry.revision == worker_revision {
-                    let worker = Arc::clone(&entry.worker);
-                    guard.insert(worker_key.to_string(), entry);
-                    return Ok(worker);
-                }
-                workers_to_kill.push(entry);
-            }
-
             let now = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap_or_default()
                 .as_millis() as i64;
+            if let Some(entry) = guard.remove(worker_key) {
+                let is_idle = entry
+                    .worker
+                    .try_lock()
+                    .map(|worker| worker_is_idle(now, worker.last_activity_ms()))
+                    .unwrap_or(false);
+                match plan_existing_worker_admission(&entry.revision, worker_revision, is_idle) {
+                    ExistingWorkerAdmission::Reuse => {
+                        let worker = Arc::clone(&entry.worker);
+                        guard.insert(worker_key.to_string(), entry);
+                        return Ok(worker);
+                    }
+                    ExistingWorkerAdmission::DrainIdle
+                    | ExistingWorkerAdmission::ReplaceStaleRevision => {
+                        workers_to_kill.push(entry);
+                    }
+                }
+            }
+
             workers_to_kill.extend(drain_idle_workers(&mut guard, now));
         }
 
@@ -567,5 +598,21 @@ mod tests {
         assert!(result.success);
         assert!(result.stdout.is_empty());
         assert!(result.stderr.is_empty());
+    }
+
+    #[test]
+    fn worker_admission_drains_idle_before_reusing_matching_revision() {
+        assert_eq!(
+            plan_existing_worker_admission("rev-a", "rev-a", true),
+            ExistingWorkerAdmission::DrainIdle
+        );
+        assert_eq!(
+            plan_existing_worker_admission("rev-a", "rev-a", false),
+            ExistingWorkerAdmission::Reuse
+        );
+        assert_eq!(
+            plan_existing_worker_admission("rev-a", "rev-b", false),
+            ExistingWorkerAdmission::ReplaceStaleRevision
+        );
     }
 }
