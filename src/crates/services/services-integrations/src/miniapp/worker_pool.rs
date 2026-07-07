@@ -12,6 +12,7 @@ use bitfun_product_domains::miniapp::worker::{
     plan_install_deps, select_lru_worker, worker_is_idle, worker_pool_at_capacity, InstallDepsPlan,
 };
 use serde_json::Value;
+use std::collections::HashMap;
 use std::fmt;
 use std::path::Path;
 use std::path::PathBuf;
@@ -77,10 +78,8 @@ struct WorkerEntry {
     worker: Arc<Mutex<JsWorker>>,
 }
 
-fn spawn_worker_reaper() -> Arc<Mutex<std::collections::HashMap<String, WorkerEntry>>> {
-    let workers = Arc::new(Mutex::new(
-        std::collections::HashMap::<String, WorkerEntry>::new(),
-    ));
+fn spawn_worker_reaper() -> Arc<Mutex<HashMap<String, WorkerEntry>>> {
+    let workers = Arc::new(Mutex::new(HashMap::<String, WorkerEntry>::new()));
 
     // Background task: evict idle workers every 60s without waiting for a new spawn.
     let workers_bg = Arc::clone(&workers);
@@ -93,32 +92,63 @@ fn spawn_worker_reaper() -> Arc<Mutex<std::collections::HashMap<String, WorkerEn
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap_or_default()
                 .as_millis() as i64;
-            let mut guard = workers_bg.lock().await;
-            let to_remove: Vec<String> = guard
-                .iter()
-                .filter(|(_, entry)| {
-                    if let Ok(worker) = entry.worker.try_lock() {
-                        worker_is_idle(now, worker.last_activity_ms())
-                    } else {
-                        false
-                    }
-                })
-                .map(|(k, _)| k.clone())
-                .collect();
-            for id in to_remove {
-                if let Some(entry) = guard.remove(&id) {
-                    let mut w = entry.worker.lock().await;
-                    w.kill().await;
-                }
-            }
+            let idle_workers = {
+                let mut guard = workers_bg.lock().await;
+                drain_idle_workers(&mut guard, now)
+            };
+            kill_worker_entries(idle_workers).await;
         }
     });
 
     workers
 }
 
+fn drain_idle_workers(guard: &mut HashMap<String, WorkerEntry>, now: i64) -> Vec<WorkerEntry> {
+    let to_remove = guard
+        .iter()
+        .filter(|(_, entry)| {
+            entry
+                .worker
+                .try_lock()
+                .map(|worker| worker_is_idle(now, worker.last_activity_ms()))
+                .unwrap_or(false)
+        })
+        .map(|(key, _)| key.clone())
+        .collect::<Vec<_>>();
+
+    to_remove
+        .into_iter()
+        .filter_map(|key| guard.remove(&key))
+        .collect()
+}
+
+fn drain_lru_worker(guard: &mut HashMap<String, WorkerEntry>) -> Option<WorkerEntry> {
+    let oldest_id = select_lru_worker(guard.iter().filter_map(|(id, entry)| {
+        entry
+            .worker
+            .try_lock()
+            .map(|worker| (id.as_str(), worker.last_activity_ms()))
+            .ok()
+    }))
+    .unwrap_or_default();
+
+    if oldest_id.is_empty() {
+        return None;
+    }
+
+    guard.remove(&oldest_id)
+}
+
+async fn kill_worker_entries(entries: Vec<WorkerEntry>) {
+    for entry in entries {
+        let mut worker = entry.worker.lock().await;
+        worker.kill().await;
+    }
+}
+
 pub struct JsWorkerPool {
-    workers: Arc<Mutex<std::collections::HashMap<String, WorkerEntry>>>,
+    workers: Arc<Mutex<HashMap<String, WorkerEntry>>>,
+    spawn_lock: Arc<Mutex<()>>,
     runtime: DetectedRuntime,
     worker_host_path: PathBuf,
     miniapps_dir: PathBuf,
@@ -154,6 +184,7 @@ impl JsWorkerPool {
 
         Self {
             workers,
+            spawn_lock: Arc::new(Mutex::new(())),
             runtime,
             worker_host_path,
             miniapps_dir,
@@ -198,21 +229,42 @@ impl JsWorkerPool {
         policy_json: &str,
         node_perms: Option<&NodePermissions>,
     ) -> MiniAppWorkerPoolResult<Arc<Mutex<JsWorker>>> {
-        let mut guard = self.workers.lock().await;
-        self.evict_idle(&mut guard).await;
+        let _spawn_guard = self.spawn_lock.lock().await;
+        let mut workers_to_kill = Vec::new();
 
-        if let Some(entry) = guard.remove(worker_key) {
-            if entry.revision == worker_revision {
-                let worker = Arc::clone(&entry.worker);
-                guard.insert(worker_key.to_string(), entry);
-                return Ok(worker);
+        {
+            let mut guard = self.workers.lock().await;
+            if let Some(entry) = guard.remove(worker_key) {
+                if entry.revision == worker_revision {
+                    let worker = Arc::clone(&entry.worker);
+                    guard.insert(worker_key.to_string(), entry);
+                    return Ok(worker);
+                }
+                workers_to_kill.push(entry);
             }
-            let mut stale = entry.worker.lock().await;
-            stale.kill().await;
+
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis() as i64;
+            workers_to_kill.extend(drain_idle_workers(&mut guard, now));
         }
 
-        if worker_pool_at_capacity(guard.len()) {
-            self.evict_lru(&mut guard).await;
+        kill_worker_entries(workers_to_kill).await;
+
+        {
+            let mut guard = self.workers.lock().await;
+            while worker_pool_at_capacity(guard.len()) {
+                let Some(entry) = drain_lru_worker(&mut guard) else {
+                    return Err(MiniAppWorkerPoolError::new(
+                        MiniAppWorkerPoolErrorKind::Backend,
+                        "MiniApp worker pool is at capacity and all workers are busy",
+                    ));
+                };
+                drop(guard);
+                kill_worker_entries(vec![entry]).await;
+                guard = self.workers.lock().await;
+            }
         }
 
         if !app_dir.exists() {
@@ -225,7 +277,7 @@ impl JsWorkerPool {
         let worker = JsWorker::spawn(
             &self.runtime,
             &self.worker_host_path,
-            &app_dir,
+            app_dir,
             policy_json,
             app_id.to_string(),
             self.event_sink.clone(),
@@ -235,57 +287,17 @@ impl JsWorkerPool {
 
         let _timeout_ms = node_perms.and_then(|n| n.timeout_ms).unwrap_or(30_000);
         let worker = Arc::new(Mutex::new(worker));
-        guard.insert(
-            worker_key.to_string(),
-            WorkerEntry {
-                revision: worker_revision.to_string(),
-                worker: Arc::clone(&worker),
-            },
-        );
+        {
+            let mut guard = self.workers.lock().await;
+            guard.insert(
+                worker_key.to_string(),
+                WorkerEntry {
+                    revision: worker_revision.to_string(),
+                    worker: Arc::clone(&worker),
+                },
+            );
+        }
         Ok(worker)
-    }
-
-    async fn evict_idle(&self, guard: &mut std::collections::HashMap<String, WorkerEntry>) {
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis() as i64;
-        let to_remove: Vec<String> = guard
-            .iter()
-            .filter(|(_, entry)| {
-                let w = entry.worker.try_lock();
-                if let Ok(worker) = w {
-                    worker_is_idle(now, worker.last_activity_ms())
-                } else {
-                    false
-                }
-            })
-            .map(|(k, _)| k.clone())
-            .collect();
-        for id in to_remove {
-            if let Some(entry) = guard.remove(&id) {
-                let mut w = entry.worker.lock().await;
-                w.kill().await;
-            }
-        }
-    }
-
-    async fn evict_lru(&self, guard: &mut std::collections::HashMap<String, WorkerEntry>) {
-        let oldest_id = select_lru_worker(guard.iter().map(|(id, entry)| {
-            let activity = entry
-                .worker
-                .try_lock()
-                .map(|worker| worker.last_activity_ms())
-                .unwrap_or(0);
-            (id.as_str(), activity)
-        }))
-        .unwrap_or_default();
-        if !oldest_id.is_empty() {
-            if let Some(entry) = guard.remove(&oldest_id) {
-                let mut w = entry.worker.lock().await;
-                w.kill().await;
-            }
-        }
     }
 
     /// Call a method on the app's Worker. Spawns the worker if needed; caller must provide policy_json.
@@ -340,10 +352,14 @@ impl JsWorkerPool {
 
     /// Stop and remove the Worker for the app.
     pub async fn stop(&self, app_id: &str) {
-        let mut guard = self.workers.lock().await;
-        if let Some(entry) = guard.remove(app_id) {
-            let mut w = entry.worker.lock().await;
-            w.kill().await;
+        let _spawn_guard = self.spawn_lock.lock().await;
+        let entry = {
+            let mut guard = self.workers.lock().await;
+            guard.remove(app_id)
+        };
+
+        if let Some(entry) = entry {
+            kill_worker_entries(vec![entry]).await;
         }
     }
 
@@ -360,11 +376,12 @@ impl JsWorkerPool {
 
     /// Stop all Workers.
     pub async fn stop_all(&self) {
-        let mut guard = self.workers.lock().await;
-        for (_, entry) in guard.drain() {
-            let mut w = entry.worker.lock().await;
-            w.kill().await;
-        }
+        let _spawn_guard = self.spawn_lock.lock().await;
+        let entries = {
+            let mut guard = self.workers.lock().await;
+            guard.drain().map(|(_, entry)| entry).collect()
+        };
+        kill_worker_entries(entries).await;
     }
 
     pub fn has_installed_deps(&self, app_id: &str) -> bool {
@@ -408,7 +425,7 @@ impl JsWorkerPool {
 
         let output = bitfun_services_core::process_manager::create_tokio_command(command.program)
             .args(command.args)
-            .current_dir(&app_dir)
+            .current_dir(app_dir)
             .output()
             .await
             .map_err(|e| MiniAppWorkerPoolError::io(format!("install_deps failed: {}", e)))?;

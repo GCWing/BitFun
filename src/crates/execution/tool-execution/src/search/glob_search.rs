@@ -303,16 +303,51 @@ pub fn limit_paths(paths: &[PathBuf], limit: usize) -> Vec<PathBuf> {
 }
 
 pub fn collect_remote_glob_matches(search_dir: &str, stdout: &str, limit: usize) -> Vec<PathBuf> {
-    let matches = stdout
+    collect_remote_limited_paths(search_dir, stdout, limit).0
+}
+
+fn collect_remote_limited_paths(
+    search_dir: &str,
+    stdout: &str,
+    limit: usize,
+) -> (Vec<PathBuf>, usize) {
+    let mut best_matches = BinaryHeap::with_capacity(limit.saturating_add(1));
+    let mut observed_matches = 0usize;
+
+    for relative_path in stdout
         .lines()
         .filter(|line| !line.is_empty())
         .filter_map(|line| {
             let relative_path = relativize_remote_stdout_path(search_dir, line);
-            (!relative_path.is_empty()).then(|| PathBuf::from(relative_path))
+            (!relative_path.is_empty()).then_some(relative_path)
         })
-        .collect::<Vec<_>>();
+    {
+        observed_matches += 1;
+        if limit == 0 {
+            continue;
+        }
 
-    limit_paths(&matches, limit)
+        let candidate = GlobCandidate {
+            depth: relative_path.split('/').count(),
+            path: relative_path,
+        };
+        if best_matches.len() < limit {
+            best_matches.push(candidate);
+        } else if let Some(worst_match) = best_matches.peek() {
+            if candidate < *worst_match {
+                best_matches.pop();
+                best_matches.push(candidate);
+            }
+        }
+    }
+
+    let mut matches = best_matches
+        .into_sorted_vec()
+        .into_iter()
+        .map(|candidate| PathBuf::from(candidate.path))
+        .collect::<Vec<_>>();
+    matches.sort();
+    (matches, observed_matches)
 }
 
 pub fn collect_remote_glob_result(
@@ -321,15 +356,7 @@ pub fn collect_remote_glob_result(
     limit: usize,
     exact_total: bool,
 ) -> LocalGlobResult {
-    let matches = stdout
-        .lines()
-        .filter(|line| !line.is_empty())
-        .filter_map(|line| {
-            let relative_path = relativize_remote_stdout_path(search_dir, line);
-            (!relative_path.is_empty()).then(|| PathBuf::from(relative_path))
-        })
-        .collect::<Vec<_>>();
-    let observed_matches = matches.len();
+    let (matches, observed_matches) = collect_remote_limited_paths(search_dir, stdout, limit);
     let truncated = observed_matches > limit;
     let total_matches = if exact_total || !truncated {
         Some(observed_matches)
@@ -338,7 +365,7 @@ pub fn collect_remote_glob_result(
     };
 
     LocalGlobResult {
-        matches: limit_paths(&matches, limit),
+        matches,
         walk_root: PathBuf::from(search_dir),
         total_matches,
         truncated,

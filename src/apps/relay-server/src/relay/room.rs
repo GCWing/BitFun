@@ -8,10 +8,27 @@
 use chrono::Utc;
 use dashmap::DashMap;
 use std::sync::Arc;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{mpsc, oneshot, OwnedSemaphorePermit, Semaphore};
 use tracing::{debug, info, warn};
 
 pub type ConnId = u64;
+pub const MAX_PENDING_REQUESTS: usize = 1024;
+
+struct PendingRequest {
+    tx: oneshot::Sender<ResponsePayload>,
+    _permit: OwnedSemaphorePermit,
+}
+
+pub struct PendingRequestGuard {
+    room_manager: Arc<RoomManager>,
+    correlation_id: String,
+}
+
+impl Drop for PendingRequestGuard {
+    fn drop(&mut self) {
+        self.room_manager.cancel_pending(&self.correlation_id);
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct OutboundMessage {
@@ -32,7 +49,7 @@ pub struct DesktopConnection {
     pub device_id: String,
     #[allow(dead_code)]
     pub public_key: String,
-    pub tx: mpsc::UnboundedSender<OutboundMessage>,
+    pub tx: mpsc::Sender<OutboundMessage>,
     #[allow(dead_code)]
     pub joined_at: i64,
     pub last_heartbeat: i64,
@@ -65,14 +82,16 @@ impl RelayRoom {
     pub fn touch(&mut self) {
         self.last_activity = Utc::now().timestamp();
     }
+}
 
-    pub fn send_to_desktop(&self, message: &str) -> bool {
-        if let Some(ref desktop) = self.desktop {
-            let _ = desktop.tx.send(OutboundMessage {
-                text: message.to_string(),
-            });
-            true
-        } else {
+pub async fn send_outbound_message(
+    tx: &mpsc::Sender<OutboundMessage>,
+    message: OutboundMessage,
+) -> bool {
+    match tx.send(message).await {
+        Ok(()) => true,
+        Err(_) => {
+            debug!("Outbound websocket channel closed before message could be sent");
             false
         }
     }
@@ -82,7 +101,8 @@ pub struct RoomManager {
     rooms: DashMap<String, RelayRoom>,
     conn_to_room: DashMap<ConnId, String>,
     next_conn_id: std::sync::atomic::AtomicU64,
-    pending_requests: DashMap<String, oneshot::Sender<ResponsePayload>>,
+    pending_requests: DashMap<String, PendingRequest>,
+    pending_permits: Arc<Semaphore>,
 }
 
 impl RoomManager {
@@ -92,6 +112,7 @@ impl RoomManager {
             conn_to_room: DashMap::new(),
             next_conn_id: std::sync::atomic::AtomicU64::new(1),
             pending_requests: DashMap::new(),
+            pending_permits: Arc::new(Semaphore::new(MAX_PENDING_REQUESTS)),
         })
     }
 
@@ -106,7 +127,7 @@ impl RoomManager {
         conn_id: ConnId,
         device_id: &str,
         public_key: &str,
-        tx: mpsc::UnboundedSender<OutboundMessage>,
+        tx: mpsc::Sender<OutboundMessage>,
     ) -> bool {
         if let Some((_, old_room_id)) = self.conn_to_room.remove(&conn_id) {
             let should_remove = if let Some(mut room) = self.rooms.get_mut(&old_room_id) {
@@ -140,10 +161,22 @@ impl RoomManager {
         true
     }
 
-    pub fn send_to_desktop(&self, room_id: &str, message: &str) -> bool {
-        if let Some(mut room) = self.rooms.get_mut(room_id) {
+    pub async fn send_to_desktop(&self, room_id: &str, message: &str) -> bool {
+        let tx = if let Some(mut room) = self.rooms.get_mut(room_id) {
             room.touch();
-            room.send_to_desktop(message)
+            room.desktop.as_ref().map(|desktop| desktop.tx.clone())
+        } else {
+            None
+        };
+
+        if let Some(tx) = tx {
+            send_outbound_message(
+                &tx,
+                OutboundMessage {
+                    text: message.to_string(),
+                },
+            )
+            .await
         } else {
             false
         }
@@ -156,15 +189,29 @@ impl RoomManager {
             .and_then(|r| r.desktop.as_ref().map(|d| d.public_key.clone()))
     }
 
-    pub fn register_pending(&self, correlation_id: String) -> oneshot::Receiver<ResponsePayload> {
+    pub fn try_register_pending(
+        self: &Arc<Self>,
+        correlation_id: String,
+    ) -> Option<(PendingRequestGuard, oneshot::Receiver<ResponsePayload>)> {
+        let permit = Arc::clone(&self.pending_permits).try_acquire_owned().ok()?;
         let (tx, rx) = oneshot::channel();
-        self.pending_requests.insert(correlation_id, tx);
-        rx
+        let guard = PendingRequestGuard {
+            room_manager: Arc::clone(self),
+            correlation_id: correlation_id.clone(),
+        };
+        self.pending_requests.insert(
+            correlation_id,
+            PendingRequest {
+                tx,
+                _permit: permit,
+            },
+        );
+        Some((guard, rx))
     }
 
     pub fn resolve_pending(&self, correlation_id: &str, payload: ResponsePayload) -> bool {
-        if let Some((_, tx)) = self.pending_requests.remove(correlation_id) {
-            tx.send(payload).is_ok()
+        if let Some((_, pending)) = self.pending_requests.remove(correlation_id) {
+            pending.tx.send(payload).is_ok()
         } else {
             warn!("No pending request for correlation_id={correlation_id}");
             false
@@ -245,5 +292,73 @@ impl RoomManager {
 
     pub fn connection_count(&self) -> usize {
         self.conn_to_room.len()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::time::{timeout, Duration};
+
+    #[tokio::test]
+    async fn outbound_send_waits_for_bounded_queue_capacity() {
+        let (tx, mut rx) = mpsc::channel(1);
+
+        assert!(
+            send_outbound_message(
+                &tx,
+                OutboundMessage {
+                    text: "first".to_string(),
+                },
+            )
+            .await
+        );
+
+        let blocked_send = tokio::spawn({
+            let tx = tx.clone();
+            async move {
+                send_outbound_message(
+                    &tx,
+                    OutboundMessage {
+                        text: "second".to_string(),
+                    },
+                )
+                .await
+            }
+        });
+
+        tokio::task::yield_now().await;
+        assert!(
+            !blocked_send.is_finished(),
+            "bounded outbound send should apply backpressure instead of dropping"
+        );
+
+        assert_eq!(rx.recv().await.expect("first message").text, "first");
+        assert!(timeout(Duration::from_secs(1), blocked_send)
+            .await
+            .expect("send should complete after capacity is released")
+            .expect("send task should not panic"));
+        assert_eq!(rx.recv().await.expect("second message").text, "second");
+    }
+
+    #[test]
+    fn pending_registration_is_bounded() {
+        let manager = RoomManager::new();
+        let mut guards = Vec::new();
+
+        for index in 0..MAX_PENDING_REQUESTS {
+            let (guard, _rx) = manager
+                .try_register_pending(format!("pending-{index}"))
+                .expect("pending registration within limit");
+            guards.push(guard);
+        }
+
+        assert!(manager
+            .try_register_pending("overflow".to_string())
+            .is_none());
+        drop(guards.pop());
+        assert!(manager
+            .try_register_pending("after-cancel".to_string())
+            .is_some());
     }
 }

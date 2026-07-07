@@ -5,7 +5,7 @@ use log::{debug, error, info, warn};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
 
 use crate::lsp::plugin_loader::PluginLoader;
 use crate::lsp::process::{
@@ -22,6 +22,8 @@ pub struct LspManager {
     registry: Arc<RwLock<PluginRegistry>>,
     /// Running LSP server processes (`language -> process`).
     processes: Arc<RwLock<HashMap<String, Arc<LspServerProcess>>>>,
+    /// Per-language start/stop guards prevent duplicate process spawns.
+    lifecycle_locks: Arc<Mutex<HashMap<String, Arc<Mutex<()>>>>>,
     /// Diagnostics cache (`uri -> diagnostics`).
     diagnostics_cache: Arc<RwLock<HashMap<String, Vec<serde_json::Value>>>>,
 }
@@ -33,6 +35,7 @@ impl LspManager {
             plugin_loader: PluginLoader::new(plugins_dir),
             registry: Arc::new(RwLock::new(PluginRegistry::new())),
             processes: Arc::new(RwLock::new(HashMap::new())),
+            lifecycle_locks: Arc::new(Mutex::new(HashMap::new())),
             diagnostics_cache: Arc::new(RwLock::new(HashMap::new())),
         }
     }
@@ -142,6 +145,8 @@ impl LspManager {
         };
 
         let plugin_id = plugin.id.clone();
+        let lifecycle_lock = self.lifecycle_lock_for(language).await;
+        let _lifecycle_guard = lifecycle_lock.lock().await;
 
         {
             let processes = self.processes.read().await;
@@ -189,9 +194,15 @@ impl LspManager {
     /// Stops an LSP server.
     pub async fn stop_server(&self, language: &str) -> Result<()> {
         debug!("Stopping LSP server: {}", language);
+        let lifecycle_lock = self.lifecycle_lock_for(language).await;
+        let _lifecycle_guard = lifecycle_lock.lock().await;
 
-        let mut processes = self.processes.write().await;
-        if let Some(process) = processes.remove(language) {
+        let process = {
+            let mut processes = self.processes.write().await;
+            processes.remove(language)
+        };
+
+        if let Some(process) = process {
             if let Err(e) = process.shutdown().await {
                 warn!("Failed to shutdown server {}: {}", language, e);
             }
@@ -199,6 +210,14 @@ impl LspManager {
 
         info!("LSP server stopped: {}", language);
         Ok(())
+    }
+
+    async fn lifecycle_lock_for(&self, language: &str) -> Arc<Mutex<()>> {
+        let mut lifecycle_locks = self.lifecycle_locks.lock().await;
+        lifecycle_locks
+            .entry(language.to_string())
+            .or_insert_with(|| Arc::new(Mutex::new(())))
+            .clone()
     }
 
     /// Returns whether the server is running.
@@ -209,11 +228,14 @@ impl LspManager {
 
     /// Returns whether the server process is alive.
     pub async fn is_server_alive(&self, language: &str) -> bool {
-        let processes = self.processes.read().await;
-        if let Some(process) = processes.get(language) {
-            process.is_alive().await
-        } else {
-            false
+        let process = {
+            let processes = self.processes.read().await;
+            processes.get(language).cloned()
+        };
+
+        match process {
+            Some(process) => process.is_alive().await,
+            None => false,
         }
     }
 

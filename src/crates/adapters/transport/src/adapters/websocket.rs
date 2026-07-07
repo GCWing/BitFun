@@ -55,7 +55,7 @@ impl TransportAdapter for WebSocketTransportAdapter {
         if !is_legacy_websocket_agentic_event_type(&projected.event_type) {
             return Ok(());
         }
-        self.send_json(projected.legacy_flat_message())?;
+        self.send_json(projected.into_legacy_flat_message())?;
         Ok(())
     }
 

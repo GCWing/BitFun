@@ -2,14 +2,14 @@ use super::types::{
     ModelTokenStats, SessionTokenStats, TimeRange, TokenUsageQuery, TokenUsageRecord,
     TokenUsageSummary,
 };
-use chrono::{DateTime, Datelike, Duration, Utc};
+use chrono::{DateTime, Datelike, Duration, NaiveDate, Utc};
 use log::{debug, info, warn};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::fs;
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
 
 const MODEL_STATS_FILE: &str = "model_stats.json";
 const RECORDS_DIR: &str = "records";
@@ -18,6 +18,8 @@ pub struct TokenUsageService {
     base_dir: PathBuf,
     model_stats: Arc<RwLock<HashMap<String, ModelTokenStats>>>,
     session_cache: Arc<RwLock<HashMap<String, SessionTokenStats>>>,
+    record_batches: Arc<Mutex<HashMap<String, Arc<Mutex<RecordsBatch>>>>>,
+    usage_lifecycle: Arc<RwLock<()>>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -31,6 +33,8 @@ impl TokenUsageService {
             base_dir,
             model_stats: Arc::new(RwLock::new(HashMap::new())),
             session_cache: Arc::new(RwLock::new(HashMap::new())),
+            record_batches: Arc::new(Mutex::new(HashMap::new())),
+            usage_lifecycle: Arc::new(RwLock::new(())),
         };
 
         service.init_storage().await?;
@@ -63,8 +67,14 @@ impl TokenUsageService {
     }
 
     fn get_records_path(&self, date: DateTime<Utc>) -> PathBuf {
-        let filename = format!("{}.json", date.format("%Y-%m-%d"));
+        let filename = format!("{}.json", records_date_key(date));
         self.base_dir.join(RECORDS_DIR).join(filename)
+    }
+
+    fn get_records_path_for_key(&self, date_key: &str) -> PathBuf {
+        self.base_dir
+            .join(RECORDS_DIR)
+            .join(format!("{}.json", date_key))
     }
 
     async fn load_model_stats(&self) -> Result<(), String> {
@@ -132,6 +142,7 @@ impl TokenUsageService {
         token_details: Option<serde_json::Value>,
         is_subagent: bool,
     ) -> Result<(), String> {
+        let _usage_guard = self.usage_lifecycle.read().await;
         let now = Utc::now();
         let total_tokens = input_tokens + output_tokens;
         let cached_tokens_available = cached_tokens.is_some();
@@ -237,30 +248,48 @@ impl TokenUsageService {
     }
 
     async fn persist_record(&self, record: &TokenUsageRecord) -> Result<(), String> {
-        let path = self.get_records_path(record.timestamp);
+        let date_key = records_date_key(record.timestamp);
+        let path = self.get_records_path_for_key(&date_key);
+        let batch_lock = self.record_batch_for_key(&date_key, &path).await?;
+        let mut batch = batch_lock.lock().await;
+        let previous_len = batch.records.len();
+        batch.records.push(record.clone());
 
-        let mut batch = if path.exists() {
-            let content = fs::read_to_string(&path)
-                .await
-                .map_err(|e| format!("Failed to read token usage records: {}", e))?;
-            serde_json::from_str::<RecordsBatch>(&content).unwrap_or_else(|_| RecordsBatch {
-                records: Vec::new(),
-            })
-        } else {
-            RecordsBatch {
-                records: Vec::new(),
+        let content = match serde_json::to_string_pretty(&*batch) {
+            Ok(content) => content,
+            Err(e) => {
+                batch.records.truncate(previous_len);
+                return Err(format!("Failed to serialize token usage records: {}", e));
             }
         };
 
-        batch.records.push(record.clone());
-
-        let content = serde_json::to_string_pretty(&batch)
-            .map_err(|e| format!("Failed to serialize token usage records: {}", e))?;
-        fs::write(&path, content)
-            .await
-            .map_err(|e| format!("Failed to write token usage records: {}", e))?;
+        if let Err(e) = fs::write(&path, content).await {
+            batch.records.truncate(previous_len);
+            return Err(format!("Failed to write token usage records: {}", e));
+        }
 
         Ok(())
+    }
+
+    async fn record_batch_for_key(
+        &self,
+        date_key: &str,
+        path: &Path,
+    ) -> Result<Arc<Mutex<RecordsBatch>>, String> {
+        {
+            let record_batches = self.record_batches.lock().await;
+            if let Some(batch) = record_batches.get(date_key) {
+                return Ok(Arc::clone(batch));
+            }
+        }
+
+        let loaded_batch = read_records_batch(path).await?;
+        let mut record_batches = self.record_batches.lock().await;
+        Ok(Arc::clone(
+            record_batches
+                .entry(date_key.to_string())
+                .or_insert_with(|| Arc::new(Mutex::new(loaded_batch))),
+        ))
     }
 
     pub async fn get_model_stats(&self, model_id: &str) -> Option<ModelTokenStats> {
@@ -331,24 +360,17 @@ impl TokenUsageService {
         &self,
         query: TokenUsageQuery,
     ) -> Result<Vec<TokenUsageRecord>, String> {
-        let (start_date, end_date) = self.get_date_range(&query.time_range);
-
+        let _usage_guard = self.usage_lifecycle.read().await;
         let mut all_records = Vec::new();
-        let mut current_date = start_date;
+        let record_paths = self.record_paths_for_range(&query.time_range).await?;
 
-        while current_date <= end_date {
-            let path = self.get_records_path(current_date);
-
-            if path.exists() {
-                let content = fs::read_to_string(&path)
-                    .await
-                    .map_err(|e| format!("Failed to read token usage records: {}", e))?;
-                if let Ok(batch) = serde_json::from_str::<RecordsBatch>(&content) {
-                    all_records.extend(batch.records);
-                }
+        for path in record_paths {
+            let content = fs::read_to_string(&path)
+                .await
+                .map_err(|e| format!("Failed to read token usage records: {}", e))?;
+            if let Ok(batch) = serde_json::from_str::<RecordsBatch>(&content) {
+                all_records.extend(batch.records);
             }
-
-            current_date += Duration::days(1);
         }
 
         let include_subagent = query.include_subagent;
@@ -376,6 +398,51 @@ impl TokenUsageService {
         let limit = query.limit.unwrap_or(usize::MAX);
 
         Ok(filtered.into_iter().skip(offset).take(limit).collect())
+    }
+
+    async fn record_paths_for_range(&self, time_range: &TimeRange) -> Result<Vec<PathBuf>, String> {
+        if matches!(time_range, TimeRange::All) {
+            return self.all_record_paths().await;
+        }
+
+        let (start_date, end_date) = self.get_date_range(time_range);
+        let mut paths = Vec::new();
+        let mut current_date = start_date;
+
+        while current_date <= end_date {
+            let path = self.get_records_path(current_date);
+            if fs::try_exists(&path).await.unwrap_or(false) {
+                paths.push(path);
+            }
+            current_date += Duration::days(1);
+        }
+
+        Ok(paths)
+    }
+
+    async fn all_record_paths(&self) -> Result<Vec<PathBuf>, String> {
+        let records_dir = self.base_dir.join(RECORDS_DIR);
+        let mut read_dir = match fs::read_dir(&records_dir).await {
+            Ok(read_dir) => read_dir,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+            Err(error) => {
+                return Err(format!("Failed to read token usage records dir: {}", error));
+            }
+        };
+
+        let mut paths = Vec::new();
+        while let Some(entry) = read_dir
+            .next_entry()
+            .await
+            .map_err(|e| format!("Failed to read token usage record entry: {}", e))?
+        {
+            let path = entry.path();
+            if is_token_usage_record_path(&path) {
+                paths.push(path);
+            }
+        }
+        paths.sort();
+        Ok(paths)
     }
 
     fn get_date_range(&self, time_range: &TimeRange) -> (DateTime<Utc>, DateTime<Utc>) {
@@ -515,6 +582,7 @@ impl TokenUsageService {
     }
 
     pub async fn clear_model_stats(&self, model_id: &str) -> Result<(), String> {
+        let _usage_guard = self.usage_lifecycle.write().await;
         let mut model_stats = self.model_stats.write().await;
         model_stats.remove(model_id);
         drop(model_stats);
@@ -526,6 +594,7 @@ impl TokenUsageService {
     }
 
     pub async fn clear_all_stats(&self) -> Result<(), String> {
+        let _usage_guard = self.usage_lifecycle.write().await;
         let mut model_stats = self.model_stats.write().await;
         model_stats.clear();
         drop(model_stats);
@@ -536,6 +605,9 @@ impl TokenUsageService {
 
         self.save_model_stats().await?;
 
+        let mut record_batches = self.record_batches.lock().await;
+        record_batches.clear();
+
         let records_dir = self.base_dir.join(RECORDS_DIR);
         if records_dir.exists() {
             fs::remove_dir_all(&records_dir)
@@ -545,8 +617,40 @@ impl TokenUsageService {
                 .await
                 .map_err(|e| format!("Failed to recreate records directory: {}", e))?;
         }
+        drop(record_batches);
 
         info!("Cleared all token usage statistics");
         Ok(())
     }
+}
+
+fn records_date_key(date: DateTime<Utc>) -> String {
+    date.format("%Y-%m-%d").to_string()
+}
+
+fn is_token_usage_record_path(path: &Path) -> bool {
+    if path.extension().and_then(|value| value.to_str()) != Some("json") {
+        return false;
+    }
+
+    path.file_stem()
+        .and_then(|value| value.to_str())
+        .is_some_and(|stem| NaiveDate::parse_from_str(stem, "%Y-%m-%d").is_ok())
+}
+
+async fn read_records_batch(path: &Path) -> Result<RecordsBatch, String> {
+    if !fs::try_exists(path).await.unwrap_or(false) {
+        return Ok(RecordsBatch {
+            records: Vec::new(),
+        });
+    }
+
+    let content = fs::read_to_string(path)
+        .await
+        .map_err(|e| format!("Failed to read token usage records: {}", e))?;
+    Ok(
+        serde_json::from_str::<RecordsBatch>(&content).unwrap_or_else(|_| RecordsBatch {
+            records: Vec::new(),
+        }),
+    )
 }

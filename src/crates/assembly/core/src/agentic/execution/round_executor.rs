@@ -1368,7 +1368,6 @@ mod tests {
             round_number: 0,
             round_group_id: None,
             workspace: None,
-            messages: Vec::new(),
             available_tools: Vec::new(),
             collapsed_tools: Vec::new(),
             unlocked_collapsed_tools: Vec::new(),

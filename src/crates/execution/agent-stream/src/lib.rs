@@ -15,7 +15,7 @@ pub use hidden_text::{HiddenTextBlock, HiddenTextStreamParser, HiddenTextTag};
 use log::{debug, error, trace};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
 use std::fmt;
 use std::sync::Arc;
 use std::time::Instant;
@@ -91,29 +91,57 @@ fn elapsed_ms_u64(started_at: Instant) -> u64 {
 //==============================================================================
 
 /// SSE log collector configuration
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct SseLogConfig {
-    /// Maximum number of SSE data entries to output on error, None means unlimited
+    /// Maximum number of retained SSE data entries to output on error, None means unlimited.
     pub max_output: Option<usize>,
+    /// Maximum retained raw SSE bytes for diagnostics.
+    pub max_retained_bytes: usize,
+}
+
+impl Default for SseLogConfig {
+    fn default() -> Self {
+        Self {
+            max_output: Some(256),
+            max_retained_bytes: 1024 * 1024,
+        }
+    }
 }
 
 /// SSE log collector - Collects raw SSE data, outputs only on error
 pub struct SseLogCollector {
-    buffer: Vec<String>,
+    buffer: VecDeque<String>,
+    retained_bytes: usize,
+    dropped_events: usize,
+    dropped_bytes: usize,
     config: SseLogConfig,
 }
 
 impl SseLogCollector {
     pub fn new(config: SseLogConfig) -> Self {
         Self {
-            buffer: Vec::new(),
+            buffer: VecDeque::new(),
+            retained_bytes: 0,
+            dropped_events: 0,
+            dropped_bytes: 0,
             config,
         }
     }
 
     /// Push one SSE data entry
     pub fn push(&mut self, data: String) {
-        self.buffer.push(data);
+        self.retained_bytes = self.retained_bytes.saturating_add(data.len());
+        self.buffer.push_back(data);
+
+        while self.retained_bytes > self.config.max_retained_bytes {
+            let Some(dropped) = self.buffer.pop_front() else {
+                self.retained_bytes = 0;
+                break;
+            };
+            self.retained_bytes = self.retained_bytes.saturating_sub(dropped.len());
+            self.dropped_events = self.dropped_events.saturating_add(1);
+            self.dropped_bytes = self.dropped_bytes.saturating_add(dropped.len());
+        }
     }
 
     /// Get number of collected data entries
@@ -128,25 +156,44 @@ impl SseLogCollector {
 
     /// Flush all SSE data to log on error
     pub fn flush_on_error(&self, error_context: &str) {
-        if self.buffer.is_empty() {
+        let Some(sse_msg) = self.format_history_message() else {
             error!("SSE Error: {} (no SSE data collected)", error_context);
             return;
-        }
+        };
 
         error!("SSE Error: {}", error_context);
-        let mut sse_msg = format!("SSE history ({} events):\n", self.buffer.len());
+        error!("{}", sse_msg);
+    }
+
+    fn format_history_message(&self) -> Option<String> {
+        if self.buffer.is_empty() && self.dropped_events == 0 {
+            return None;
+        }
+
+        let total_events = self.dropped_events + self.buffer.len();
+        let mut sse_msg = if self.dropped_events == 0 {
+            format!("SSE history ({} events):\n", self.buffer.len())
+        } else {
+            format!(
+                "SSE history ({} retained of {} events, {} bytes omitted):\n",
+                self.buffer.len(),
+                total_events,
+                self.dropped_bytes
+            )
+        };
+        let retained_start_index = self.dropped_events;
 
         match self.config.max_output {
             None => {
                 // No limit, output all
                 for (i, data) in self.buffer.iter().enumerate() {
-                    sse_msg.push_str(&format!("{:>6}: {}\n", i, data));
+                    sse_msg.push_str(&format!("{:>6}: {}\n", retained_start_index + i, data));
                 }
             }
             Some(max) if self.buffer.len() <= max => {
                 // Within limit, output all
                 for (i, data) in self.buffer.iter().enumerate() {
-                    sse_msg.push_str(&format!("{:>6}: {}\n", i, data));
+                    sse_msg.push_str(&format!("{:>6}: {}\n", retained_start_index + i, data));
                 }
             }
             Some(max) => {
@@ -156,16 +203,20 @@ impl SseLogCollector {
                 let total = self.buffer.len();
 
                 for (i, data) in self.buffer.iter().take(head).enumerate() {
-                    sse_msg.push_str(&format!("{:>6}: {}\n", i, data));
+                    sse_msg.push_str(&format!("{:>6}: {}\n", retained_start_index + i, data));
                 }
                 sse_msg.push_str(&format!("... ({} events omitted) ...\n", total - max));
                 for (i, data) in self.buffer.iter().skip(total - tail).enumerate() {
-                    sse_msg.push_str(&format!("{:>6}: {}\n", total - tail + i, data));
+                    sse_msg.push_str(&format!(
+                        "{:>6}: {}\n",
+                        retained_start_index + total - tail + i,
+                        data
+                    ));
                 }
             }
         }
 
-        error!("{}", sse_msg);
+        Some(sse_msg)
     }
 }
 
@@ -893,7 +944,7 @@ impl StreamProcessor {
         // Start SSE log collector (if raw_sse_rx is provided)
         let sse_collector = if let Some(mut rx) = raw_sse_rx {
             let collector = Arc::new(tokio::sync::Mutex::new(SseLogCollector::new(
-                SseLogConfig::default(), // No limit for now
+                SseLogConfig::default(),
             )));
             let collector_clone = collector.clone();
 
@@ -1110,7 +1161,10 @@ impl StreamProcessor {
 
 #[cfg(test)]
 mod tests {
-    use super::{HiddenTextTag, StreamEventSink, StreamProcessOptions, StreamProcessor};
+    use super::{
+        HiddenTextTag, SseLogCollector, SseLogConfig, StreamEventSink, StreamProcessOptions,
+        StreamProcessor,
+    };
     use super::{UnifiedResponse, UnifiedTokenUsage, UnifiedToolCall};
     use bitfun_events::{AgenticEvent, AgenticEventPriority as EventPriority};
     use futures::StreamExt;
@@ -1149,6 +1203,44 @@ mod tests {
         assert_eq!(
             StreamProcessor::derive_watchdog_timeout(Some(Duration::from_secs(10))),
             Some(Duration::from_secs(12))
+        );
+    }
+
+    #[test]
+    fn sse_log_collector_retains_tail_with_byte_limit() {
+        let mut collector = SseLogCollector::new(SseLogConfig {
+            max_output: None,
+            max_retained_bytes: 6,
+        });
+
+        collector.push("abcd".to_string());
+        collector.push("ef".to_string());
+        collector.push("ghi".to_string());
+
+        assert_eq!(collector.len(), 2);
+        assert_eq!(collector.dropped_events, 1);
+        assert_eq!(collector.dropped_bytes, 4);
+        assert_eq!(
+            collector.buffer.iter().cloned().collect::<Vec<_>>(),
+            vec!["ef".to_string(), "ghi".to_string()]
+        );
+    }
+
+    #[test]
+    fn sse_log_collector_tracks_fully_omitted_events() {
+        let mut collector = SseLogCollector::new(SseLogConfig {
+            max_output: None,
+            max_retained_bytes: 3,
+        });
+
+        collector.push("abcd".to_string());
+
+        assert!(collector.is_empty());
+        assert_eq!(collector.dropped_events, 1);
+        assert_eq!(collector.dropped_bytes, 4);
+        assert_eq!(
+            collector.format_history_message().as_deref(),
+            Some("SSE history (0 retained of 1 events, 4 bytes omitted):\n")
         );
     }
 

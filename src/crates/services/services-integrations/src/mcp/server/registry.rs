@@ -6,12 +6,13 @@ use super::{MCPRuntimeError, MCPRuntimeResult, MCPServerConfig, MCPServerProcess
 use log::info;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
 
 /// MCP server registry.
 pub struct MCPServerRegistry {
     servers: Arc<RwLock<HashMap<String, Arc<RwLock<MCPServerProcess>>>>>,
     runtime_configs: Arc<RwLock<HashMap<String, MCPServerConfig>>>,
+    lifecycle_lock: Arc<Mutex<()>>,
 }
 
 impl MCPServerRegistry {
@@ -20,6 +21,7 @@ impl MCPServerRegistry {
         Self {
             servers: Arc::new(RwLock::new(HashMap::new())),
             runtime_configs: Arc::new(RwLock::new(HashMap::new())),
+            lifecycle_lock: Arc::new(Mutex::new(())),
         }
     }
 
@@ -32,8 +34,21 @@ impl MCPServerRegistry {
         let process =
             MCPServerProcess::new(config.id.clone(), config.name.clone(), config.server_type);
 
-        let mut servers = self.servers.write().await;
-        servers.insert(config.id.clone(), Arc::new(RwLock::new(process)));
+        let _lifecycle_guard = self.lifecycle_lock.lock().await;
+        let previous_process = {
+            let mut servers = self.servers.write().await;
+            servers.remove(&config.id)
+        };
+
+        if let Some(previous_process) = previous_process {
+            let mut proc = previous_process.write().await;
+            proc.stop().await?;
+        }
+
+        {
+            let mut servers = self.servers.write().await;
+            servers.insert(config.id.clone(), Arc::new(RwLock::new(process)));
+        }
 
         info!(
             "Registered MCP server: name={} id={}",
@@ -44,9 +59,13 @@ impl MCPServerRegistry {
 
     /// Unregisters a server.
     pub async fn unregister(&self, server_id: &str) -> MCPRuntimeResult<()> {
-        let mut servers = self.servers.write().await;
+        let _lifecycle_guard = self.lifecycle_lock.lock().await;
+        let process = {
+            let mut servers = self.servers.write().await;
+            servers.remove(server_id)
+        };
 
-        if let Some(process) = servers.remove(server_id) {
+        if let Some(process) = process {
             let mut proc = process.write().await;
             proc.stop().await?;
             info!("Unregistered MCP server: id={}", server_id);
@@ -108,14 +127,20 @@ impl MCPServerRegistry {
 
     /// Clears the registry.
     pub async fn clear(&self) -> MCPRuntimeResult<()> {
-        let mut servers = self.servers.write().await;
+        let _lifecycle_guard = self.lifecycle_lock.lock().await;
+        let processes = {
+            let mut servers = self.servers.write().await;
+            servers
+                .drain()
+                .map(|(_, process)| process)
+                .collect::<Vec<_>>()
+        };
 
-        for process in servers.values() {
+        for process in processes {
             let mut proc = process.write().await;
             let _ = proc.stop().await;
         }
 
-        servers.clear();
         info!("Cleared MCP server registry");
         Ok(())
     }

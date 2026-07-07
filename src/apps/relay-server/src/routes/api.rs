@@ -13,6 +13,7 @@
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::Json;
+use base64::{engine::general_purpose::STANDARD as B64, Engine};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
@@ -95,7 +96,12 @@ pub async fn pair(
     }
 
     let correlation_id = generate_correlation_id();
-    let rx = state.room_manager.register_pending(correlation_id.clone());
+    let Some((_pending_guard, rx)) = state
+        .room_manager
+        .try_register_pending(correlation_id.clone())
+    else {
+        return Err(StatusCode::SERVICE_UNAVAILABLE);
+    };
 
     let ws_msg = serde_json::to_string(&OutboundProtocol::PairRequest {
         correlation_id: correlation_id.clone(),
@@ -105,17 +111,29 @@ pub async fn pair(
     })
     .unwrap_or_default();
 
-    if !state.room_manager.send_to_desktop(&room_id, &ws_msg) {
-        state.room_manager.cancel_pending(&correlation_id);
-        return Err(StatusCode::SERVICE_UNAVAILABLE);
-    }
+    let result = tokio::time::timeout(Duration::from_secs(30), async {
+        if !state.room_manager.send_to_desktop(&room_id, &ws_msg).await {
+            return Err(StatusCode::SERVICE_UNAVAILABLE);
+        }
 
-    match tokio::time::timeout(Duration::from_secs(30), rx).await {
-        Ok(Ok(payload)) => Ok(Json(PairResponse {
-            encrypted_data: payload.encrypted_data,
-            nonce: payload.nonce,
-        })),
-        _ => {
+        rx.await
+            .map(|payload| {
+                Json(PairResponse {
+                    encrypted_data: payload.encrypted_data,
+                    nonce: payload.nonce,
+                })
+            })
+            .map_err(|_| StatusCode::GATEWAY_TIMEOUT)
+    })
+    .await;
+
+    match result {
+        Ok(Ok(response)) => Ok(response),
+        Ok(Err(status)) => {
+            state.room_manager.cancel_pending(&correlation_id);
+            Err(status)
+        }
+        Err(_) => {
             state.room_manager.cancel_pending(&correlation_id);
             Err(StatusCode::GATEWAY_TIMEOUT)
         }
@@ -148,7 +166,12 @@ pub async fn command(
     }
 
     let correlation_id = generate_correlation_id();
-    let rx = state.room_manager.register_pending(correlation_id.clone());
+    let Some((_pending_guard, rx)) = state
+        .room_manager
+        .try_register_pending(correlation_id.clone())
+    else {
+        return Err(StatusCode::SERVICE_UNAVAILABLE);
+    };
 
     let ws_msg = serde_json::to_string(&OutboundProtocol::Command {
         correlation_id: correlation_id.clone(),
@@ -157,17 +180,29 @@ pub async fn command(
     })
     .unwrap_or_default();
 
-    if !state.room_manager.send_to_desktop(&room_id, &ws_msg) {
-        state.room_manager.cancel_pending(&correlation_id);
-        return Err(StatusCode::SERVICE_UNAVAILABLE);
-    }
+    let result = tokio::time::timeout(Duration::from_secs(60), async {
+        if !state.room_manager.send_to_desktop(&room_id, &ws_msg).await {
+            return Err(StatusCode::SERVICE_UNAVAILABLE);
+        }
 
-    match tokio::time::timeout(Duration::from_secs(60), rx).await {
-        Ok(Ok(payload)) => Ok(Json(CommandResponse {
-            encrypted_data: payload.encrypted_data,
-            nonce: payload.nonce,
-        })),
-        _ => {
+        rx.await
+            .map(|payload| {
+                Json(CommandResponse {
+                    encrypted_data: payload.encrypted_data,
+                    nonce: payload.nonce,
+                })
+            })
+            .map_err(|_| StatusCode::GATEWAY_TIMEOUT)
+    })
+    .await;
+
+    match result {
+        Ok(Ok(response)) => Ok(response),
+        Ok(Err(status)) => {
+            state.room_manager.cancel_pending(&correlation_id);
+            Err(status)
+        }
+        Err(_) => {
             state.room_manager.cancel_pending(&correlation_id);
             Err(StatusCode::GATEWAY_TIMEOUT)
         }
@@ -198,38 +233,17 @@ pub async fn upload_web(
     Path(room_id): Path<String>,
     Json(body): Json<UploadWebRequest>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
-    use base64::{engine::general_purpose::STANDARD as B64, Engine};
-
     if !state.room_manager.room_exists(&room_id) {
         return Err(StatusCode::NOT_FOUND);
     }
 
-    let mut written = 0usize;
-    let mut reused = 0usize;
-    for (rel_path, b64_content) in &body.files {
-        if rel_path.contains("..") {
-            continue;
-        }
-        let decoded = B64
-            .decode(b64_content)
-            .map_err(|_| StatusCode::BAD_REQUEST)?;
-        let hash = hex_sha256(&decoded);
-
-        if !state.asset_store.has_content(&hash) {
-            state
-                .asset_store
-                .store_content(&hash, decoded)
-                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-            written += 1;
-        } else {
-            reused += 1;
-        }
-
-        state
-            .asset_store
-            .map_to_room(&room_id, rel_path, &hash)
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    }
+    let asset_store = Arc::clone(&state.asset_store);
+    let room_id_for_io = room_id.clone();
+    let (written, reused) = tokio::task::spawn_blocking(move || {
+        process_upload_web(asset_store, &room_id_for_io, body.files)
+    })
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)??;
 
     tracing::info!("Room {room_id}: upload-web complete (new={written}, reused={reused})");
     Ok(Json(serde_json::json!({
@@ -271,34 +285,22 @@ pub async fn check_web_files(
         return Err(StatusCode::NOT_FOUND);
     }
 
-    let mut needed = Vec::new();
-    let mut existing_count = 0usize;
-    let total_count = body.files.len();
-
-    for entry in &body.files {
-        if entry.path.contains("..") {
-            continue;
-        }
-        if state.asset_store.has_content(&entry.hash) {
-            existing_count += 1;
-            let _ = state
-                .asset_store
-                .map_to_room(&room_id, &entry.path, &entry.hash);
-        } else {
-            needed.push(entry.path.clone());
-        }
-    }
+    let asset_store = Arc::clone(&state.asset_store);
+    let room_id_for_io = room_id.clone();
+    let response = tokio::task::spawn_blocking(move || {
+        process_check_web_files(asset_store, &room_id_for_io, body.files)
+    })
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     tracing::info!(
-        "Room {room_id}: check-web-files total={total_count}, existing={existing_count}, needed={}",
-        needed.len()
+        "Room {room_id}: check-web-files total={total_count}, existing={existing_count}, needed={needed_count}",
+        total_count = response.total_count,
+        existing_count = response.existing_count,
+        needed_count = response.needed.len()
     );
 
-    Ok(Json(CheckWebFilesResponse {
-        needed,
-        existing_count,
-        total_count,
-    }))
+    Ok(Json(response))
 }
 
 #[derive(Deserialize)]
@@ -318,42 +320,17 @@ pub async fn upload_web_files(
     Path(room_id): Path<String>,
     Json(body): Json<UploadWebFilesRequest>,
 ) -> Result<Json<serde_json::Value>, StatusCode> {
-    use base64::{engine::general_purpose::STANDARD as B64, Engine};
-
     if !state.room_manager.room_exists(&room_id) {
         return Err(StatusCode::NOT_FOUND);
     }
 
-    let mut stored = 0usize;
-    for (rel_path, entry) in &body.files {
-        if rel_path.contains("..") {
-            continue;
-        }
-        let decoded = B64
-            .decode(&entry.content)
-            .map_err(|_| StatusCode::BAD_REQUEST)?;
-        let actual_hash = hex_sha256(&decoded);
-        if actual_hash != entry.hash {
-            tracing::warn!(
-                "Room {room_id}: hash mismatch for {rel_path} (expected={}, actual={actual_hash})",
-                entry.hash
-            );
-            return Err(StatusCode::BAD_REQUEST);
-        }
-
-        if !state.asset_store.has_content(&actual_hash) {
-            state
-                .asset_store
-                .store_content(&actual_hash, decoded)
-                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-            stored += 1;
-        }
-
-        state
-            .asset_store
-            .map_to_room(&room_id, rel_path, &actual_hash)
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    }
+    let asset_store = Arc::clone(&state.asset_store);
+    let room_id_for_io = room_id.clone();
+    let stored = tokio::task::spawn_blocking(move || {
+        process_upload_web_files(asset_store, &room_id_for_io, body.files)
+    })
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)??;
 
     tracing::info!("Room {room_id}: upload-web-files stored {stored} new files");
     Ok(Json(
@@ -384,15 +361,119 @@ pub async fn serve_room_web_catchall(
         "index.html"
     } else {
         file_path
-    };
+    }
+    .to_string();
 
-    let content = state
-        .asset_store
-        .get_file(room_id, lookup_path)
-        .ok_or(StatusCode::NOT_FOUND)?;
+    let asset_store = Arc::clone(&state.asset_store);
+    let room_id_for_io = room_id.to_string();
+    let lookup_path_for_io = lookup_path.clone();
+    let content = tokio::task::spawn_blocking(move || {
+        asset_store.get_file(&room_id_for_io, &lookup_path_for_io)
+    })
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    .ok_or(StatusCode::NOT_FOUND)?;
 
-    let mime = mime_from_path(lookup_path);
+    let mime = mime_from_path(&lookup_path);
     Ok(([(header::CONTENT_TYPE, mime)], Body::from(content)).into_response())
+}
+
+fn process_upload_web(
+    asset_store: Arc<dyn WebAssetStore>,
+    room_id: &str,
+    files: HashMap<String, String>,
+) -> Result<(usize, usize), StatusCode> {
+    let mut written = 0usize;
+    let mut reused = 0usize;
+    for (rel_path, b64_content) in files {
+        if rel_path.contains("..") {
+            continue;
+        }
+        let decoded = B64
+            .decode(b64_content)
+            .map_err(|_| StatusCode::BAD_REQUEST)?;
+        let hash = hex_sha256(&decoded);
+
+        if !asset_store.has_content(&hash) {
+            asset_store
+                .store_content(&hash, decoded)
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+            written += 1;
+        } else {
+            reused += 1;
+        }
+
+        asset_store
+            .map_to_room(room_id, &rel_path, &hash)
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    }
+
+    Ok((written, reused))
+}
+
+fn process_check_web_files(
+    asset_store: Arc<dyn WebAssetStore>,
+    room_id: &str,
+    files: Vec<FileManifestEntry>,
+) -> CheckWebFilesResponse {
+    let mut needed = Vec::new();
+    let mut existing_count = 0usize;
+    let total_count = files.len();
+
+    for entry in files {
+        if entry.path.contains("..") {
+            continue;
+        }
+        if asset_store.has_content(&entry.hash) {
+            existing_count += 1;
+            let _ = asset_store.map_to_room(room_id, &entry.path, &entry.hash);
+        } else {
+            needed.push(entry.path);
+        }
+    }
+
+    CheckWebFilesResponse {
+        needed,
+        existing_count,
+        total_count,
+    }
+}
+
+fn process_upload_web_files(
+    asset_store: Arc<dyn WebAssetStore>,
+    room_id: &str,
+    files: HashMap<String, UploadWebFilesEntry>,
+) -> Result<usize, StatusCode> {
+    let mut stored = 0usize;
+    for (rel_path, entry) in files {
+        if rel_path.contains("..") {
+            continue;
+        }
+        let decoded = B64
+            .decode(&entry.content)
+            .map_err(|_| StatusCode::BAD_REQUEST)?;
+        let actual_hash = hex_sha256(&decoded);
+        if actual_hash != entry.hash {
+            tracing::warn!(
+                "Room {room_id}: hash mismatch for {rel_path} (expected={}, actual={actual_hash})",
+                entry.hash
+            );
+            return Err(StatusCode::BAD_REQUEST);
+        }
+
+        if !asset_store.has_content(&actual_hash) {
+            asset_store
+                .store_content(&actual_hash, decoded)
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+            stored += 1;
+        }
+
+        asset_store
+            .map_to_room(room_id, &rel_path, &actual_hash)
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    }
+
+    Ok(stored)
 }
 
 fn mime_from_path(p: &str) -> &'static str {

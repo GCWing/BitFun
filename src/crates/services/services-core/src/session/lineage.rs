@@ -208,11 +208,9 @@ pub fn build_branched_session_metadata(facts: BranchSessionMetadataFacts<'_>) ->
         .sum();
     metadata.status = SessionStatus::Active;
     metadata.snapshot_session_id = None;
-    metadata.tags = metadata
+    metadata
         .tags
-        .into_iter()
-        .filter(|tag| !BRANCH_EXCLUDED_TAGS.contains(&tag.as_str()))
-        .collect();
+        .retain(|tag| !BRANCH_EXCLUDED_TAGS.contains(&tag.as_str()));
     metadata.custom_metadata = build_branch_custom_metadata(
         facts.source_metadata.custom_metadata.as_ref(),
         facts.source_session_id,

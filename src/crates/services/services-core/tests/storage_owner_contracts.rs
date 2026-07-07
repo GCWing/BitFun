@@ -252,3 +252,109 @@ async fn token_usage_service_persists_records_and_filters_subagents_by_default()
     assert_eq!(stats.request_count, 2);
     assert_eq!(stats.total_input, 150);
 }
+
+#[tokio::test]
+async fn token_usage_clear_does_not_replay_cached_record_batches() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let service =
+        bitfun_services_core::token_usage::TokenUsageService::new(temp.path().to_path_buf())
+            .await
+            .expect("service");
+
+    service
+        .record_usage(
+            "model-old".to_string(),
+            "session-old".to_string(),
+            "turn-old".to_string(),
+            10,
+            5,
+            None,
+            None,
+            false,
+        )
+        .await
+        .expect("record old usage");
+    service.clear_all_stats().await.expect("clear usage");
+    service
+        .record_usage(
+            "model-new".to_string(),
+            "session-new".to_string(),
+            "turn-new".to_string(),
+            20,
+            7,
+            None,
+            None,
+            false,
+        )
+        .await
+        .expect("record new usage");
+
+    let summary = service
+        .get_summary(bitfun_services_core::token_usage::TokenUsageQuery {
+            model_id: None,
+            session_id: None,
+            time_range: bitfun_services_core::token_usage::TimeRange::All,
+            limit: None,
+            offset: None,
+            include_subagent: true,
+        })
+        .await
+        .expect("summary after clear");
+
+    assert_eq!(summary.record_count, 1);
+    assert_eq!(summary.total_input, 20);
+    assert!(service.get_model_stats("model-old").await.is_none());
+    assert_eq!(
+        service
+            .get_model_stats("model-new")
+            .await
+            .expect("new model stats")
+            .request_count,
+        1
+    );
+}
+
+#[tokio::test]
+async fn token_usage_all_range_ignores_non_date_record_files() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let service =
+        bitfun_services_core::token_usage::TokenUsageService::new(temp.path().to_path_buf())
+            .await
+            .expect("service");
+
+    service
+        .record_usage(
+            "model-a".to_string(),
+            "session-a".to_string(),
+            "turn-a".to_string(),
+            10,
+            1,
+            None,
+            None,
+            false,
+        )
+        .await
+        .expect("record usage");
+
+    let records_dir = temp.path().join("records");
+    fs::write(
+        records_dir.join("manual-backup.json"),
+        r#"{"records":[{"model_id":"model-b","session_id":"session-b","turn_id":"turn-b","timestamp":"2026-07-07T00:00:00Z","input_tokens":999,"output_tokens":1,"cached_tokens":0,"cached_tokens_available":false,"cache_write_tokens":0,"total_tokens":1000,"token_details":null,"is_subagent":false}]}"#,
+    )
+    .expect("write stray record file");
+
+    let summary = service
+        .get_summary(bitfun_services_core::token_usage::TokenUsageQuery {
+            model_id: None,
+            session_id: None,
+            time_range: bitfun_services_core::token_usage::TimeRange::All,
+            limit: None,
+            offset: None,
+            include_subagent: true,
+        })
+        .await
+        .expect("summary");
+
+    assert_eq!(summary.record_count, 1);
+    assert_eq!(summary.total_input, 10);
+}

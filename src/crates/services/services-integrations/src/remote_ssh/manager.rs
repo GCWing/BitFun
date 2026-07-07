@@ -2479,14 +2479,19 @@ impl SSHConnectionManager {
         cols: u32,
         rows: u32,
     ) -> anyhow::Result<PTYSession> {
-        let guard = self.connections.read().await;
-        let conn = guard
-            .get(connection_id)
-            .ok_or_else(|| anyhow!("Connection {} not found", connection_id))?;
+        let handle = {
+            let guard = self.connections.read().await;
+            let conn = guard
+                .get(connection_id)
+                .ok_or_else(|| anyhow!("Connection {} not found", connection_id))?;
+            if !conn.alive.load(Ordering::SeqCst) {
+                return Err(anyhow!("Connection {} is not alive", connection_id));
+            }
+            conn.handle.clone()
+        };
 
         // Open a session channel
-        let channel = conn
-            .handle
+        let channel = handle
             .channel_open_session()
             .await
             .map_err(|e| anyhow!("Failed to open channel: {}", e))?;
@@ -2502,6 +2507,21 @@ impl SSHConnectionManager {
             .request_shell(false)
             .await
             .map_err(|e| anyhow!("Failed to start shell: {}", e))?;
+
+        let still_connected = {
+            let guard = self.connections.read().await;
+            guard.get(connection_id).is_some_and(|conn| {
+                conn.alive.load(Ordering::SeqCst) && Arc::ptr_eq(&conn.handle, &handle)
+            })
+        };
+        if !still_connected {
+            let _ = channel.eof().await;
+            let _ = channel.close().await;
+            return Err(anyhow!(
+                "Connection {} disconnected while opening PTY",
+                connection_id
+            ));
+        }
 
         Ok(PTYSession {
             channel: Arc::new(tokio::sync::Mutex::new(channel)),

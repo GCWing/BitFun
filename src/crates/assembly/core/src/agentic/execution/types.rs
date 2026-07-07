@@ -53,7 +53,6 @@ pub struct RoundContext {
     pub round_number: usize,
     pub round_group_id: Option<String>,
     pub workspace: Option<WorkspaceBinding>,
-    pub messages: Vec<Message>,
     pub available_tools: Vec<String>,
     pub collapsed_tools: Vec<String>,
     pub unlocked_collapsed_tools: Vec<String>,

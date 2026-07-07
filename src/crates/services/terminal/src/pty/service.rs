@@ -245,15 +245,18 @@ impl PtyService {
 
     /// Write data to a PTY process
     ///
-    /// Note: This no longer requires a lock! The writer uses a channel internally.
+    /// Note: The writer uses a channel internally, so the process map lock is
+    /// only held long enough to clone the writer handle.
     pub async fn write(&self, id: u32, data: &[u8]) -> TerminalResult<()> {
-        let processes = self.processes.read().await;
-        let process = processes
-            .get(&id)
-            .ok_or_else(|| TerminalError::SessionNotFound(id.to_string()))?;
+        let writer = {
+            let processes = self.processes.read().await;
+            processes
+                .get(&id)
+                .map(|process| process.writer.clone())
+                .ok_or_else(|| TerminalError::SessionNotFound(id.to_string()))?
+        };
 
-        // Direct write - no additional lock needed!
-        process.writer.write(data).await
+        writer.write(data).await
     }
 
     /// Resize a PTY process
@@ -263,23 +266,28 @@ impl PtyService {
         // Flush buffer on resize
         self.bufferer.flush_buffer(id).await;
 
-        let processes = self.processes.read().await;
-        let process = processes
-            .get(&id)
-            .ok_or_else(|| TerminalError::SessionNotFound(id.to_string()))?;
+        let controller = {
+            let processes = self.processes.read().await;
+            processes
+                .get(&id)
+                .map(|process| process.controller.clone())
+                .ok_or_else(|| TerminalError::SessionNotFound(id.to_string()))?
+        };
 
-        // Direct resize - no additional lock needed!
-        process.controller.resize(cols, rows).await
+        controller.resize(cols, rows).await
     }
 
     /// Send a signal to a PTY process
     pub async fn signal(&self, id: u32, signal: &str) -> TerminalResult<()> {
-        let processes = self.processes.read().await;
-        let process = processes
-            .get(&id)
-            .ok_or_else(|| TerminalError::SessionNotFound(id.to_string()))?;
+        let controller = {
+            let processes = self.processes.read().await;
+            processes
+                .get(&id)
+                .map(|process| process.controller.clone())
+                .ok_or_else(|| TerminalError::SessionNotFound(id.to_string()))?
+        };
 
-        process.controller.signal(signal).await
+        controller.signal(signal).await
     }
 
     /// Shutdown a PTY process
@@ -312,13 +320,15 @@ impl PtyService {
 
     /// Acknowledge data received by frontend (for flow control)
     pub async fn acknowledge_data(&self, id: u32, char_count: usize) -> TerminalResult<()> {
-        let processes = self.processes.read().await;
-        let process = processes
-            .get(&id)
-            .ok_or_else(|| TerminalError::SessionNotFound(id.to_string()))?;
+        let flow_control = {
+            let processes = self.processes.read().await;
+            processes
+                .get(&id)
+                .map(|process| process.flow_control.clone())
+                .ok_or_else(|| TerminalError::SessionNotFound(id.to_string()))?
+        };
 
-        // No lock needed - flow control uses atomic operations
-        process.flow_control.acknowledge_data(char_count);
+        flow_control.acknowledge_data(char_count);
         Ok(())
     }
 

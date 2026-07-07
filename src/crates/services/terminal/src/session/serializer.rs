@@ -177,7 +177,7 @@ mod tests {
             SessionSource::Manual,
         );
 
-        let serialized = SessionSerializer::serialize(&[session.clone()])
+        let serialized = SessionSerializer::serialize(std::slice::from_ref(&session))
             .expect("serialize should succeed for a valid terminal session");
         let deserialized = SessionSerializer::deserialize(&serialized)
             .expect("deserialize should succeed for serialized session payload");

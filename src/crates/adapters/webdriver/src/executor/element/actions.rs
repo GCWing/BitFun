@@ -62,6 +62,6 @@ impl BridgeExecutor {
             })?;
 
         let screenshot = self.take_screenshot().await?;
-        platform::crop_screenshot(screenshot, metadata)
+        platform::crop_screenshot(screenshot, metadata).await
     }
 }

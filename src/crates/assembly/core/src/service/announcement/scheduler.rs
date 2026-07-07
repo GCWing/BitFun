@@ -13,7 +13,7 @@ use crate::infrastructure::app_paths::PathManager;
 use crate::util::errors::BitFunResult;
 use log::{debug, info};
 use std::sync::Arc;
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
 
 /// Shared handle returned to `AppState`.
 pub type AnnouncementSchedulerRef = Arc<AnnouncementScheduler>;
@@ -22,6 +22,7 @@ pub struct AnnouncementScheduler {
     store: AnnouncementStateStore,
     remote_fetcher: RemoteFetcher,
     state: RwLock<AnnouncementState>,
+    save_lock: Mutex<()>,
     current_version: String,
 }
 
@@ -36,6 +37,7 @@ impl AnnouncementScheduler {
             store,
             remote_fetcher,
             state: RwLock::new(state),
+            save_lock: Mutex::new(()),
             current_version,
         })
     }
@@ -49,24 +51,25 @@ impl AnnouncementScheduler {
     /// Should be called once during application startup (non-blocking – awaited
     /// inside the Tauri `setup` callback or from `announcement_api`).
     pub async fn run(&self, locale: &str) -> BitFunResult<Vec<AnnouncementCard>> {
-        let mut state = self.state.write().await;
-        let is_version_first_open = state.last_seen_version != self.current_version;
+        let (open_count, is_version_first_open) = {
+            let mut state = self.state.write().await;
+            let is_version_first_open = state.last_seen_version != self.current_version;
 
-        if is_version_first_open {
-            info!(
-                "Announcement scheduler: version upgrade detected ({} → {}); resetting dismissed_ids",
-                state.last_seen_version, self.current_version
-            );
-            state.last_seen_version = self.current_version.clone();
-            // On version upgrade the user should see version-specific cards again
-            // even if they were dismissed in a previous sub-release.
-            state.dismissed_ids.clear();
-        }
+            if is_version_first_open {
+                info!(
+                    "Announcement scheduler: version upgrade detected ({} → {}); resetting dismissed_ids",
+                    state.last_seen_version, self.current_version
+                );
+                state.last_seen_version = self.current_version.clone();
+                // On version upgrade the user should see version-specific cards again
+                // even if they were dismissed in a previous sub-release.
+                state.dismissed_ids.clear();
+            }
 
-        state.app_open_count += 1;
-        let open_count = state.app_open_count;
-        self.store.save(&state).await?;
-        drop(state);
+            state.app_open_count += 1;
+            (state.app_open_count, is_version_first_open)
+        };
+        self.save_current_state().await?;
 
         // Kick off remote fetch in the background (does not block card delivery).
         let remote_fetcher = self.remote_fetcher.clone();
@@ -118,28 +121,40 @@ impl AnnouncementScheduler {
 
     /// Record that the user has seen (opened the modal for) a card.
     pub async fn mark_seen(&self, id: &str) -> BitFunResult<()> {
-        let mut state = self.state.write().await;
-        state.seen_ids.insert(id.to_string());
-        self.store.save(&state).await
+        {
+            let mut state = self.state.write().await;
+            state.seen_ids.insert(id.to_string());
+        }
+        self.save_current_state().await
     }
 
     /// Dismiss a card for the current version cycle.
     pub async fn dismiss(&self, id: &str) -> BitFunResult<()> {
-        let mut state = self.state.write().await;
-        state.dismissed_ids.insert(id.to_string());
-        self.store.save(&state).await
+        {
+            let mut state = self.state.write().await;
+            state.dismissed_ids.insert(id.to_string());
+        }
+        self.save_current_state().await
     }
 
     /// Permanently suppress a card.
     pub async fn never_show(&self, id: &str) -> BitFunResult<()> {
-        let mut state = self.state.write().await;
-        state.never_show_ids.insert(id.to_string());
-        self.store.save(&state).await
+        {
+            let mut state = self.state.write().await;
+            state.never_show_ids.insert(id.to_string());
+        }
+        self.save_current_state().await
     }
 
     // ──────────────────────────────────────────────────────────────────────
     // Private helpers
     // ──────────────────────────────────────────────────────────────────────
+
+    async fn save_current_state(&self) -> BitFunResult<()> {
+        let _save_guard = self.save_lock.lock().await;
+        let state_snapshot = self.state.read().await.clone();
+        self.store.save(&state_snapshot).await
+    }
 
     fn is_eligible(
         &self,

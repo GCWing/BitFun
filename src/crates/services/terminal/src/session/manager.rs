@@ -262,66 +262,67 @@ impl SessionManager {
                     if let Some(session_id) = session_id {
                         let terminal_event = match event {
                             PtyServiceEvent::ProcessData { data, .. } => {
+                                let data_str = String::from_utf8_lossy(&data).to_string();
+
                                 // Update last activity and record to history
                                 if let Some(session) = sessions.write().await.get_mut(&session_id) {
                                     session.touch();
                                     // Record output to history for frontend recovery
-                                    let data_str = String::from_utf8_lossy(&data).to_string();
                                     session.add_output(&data_str);
                                 }
 
-                                // Convert to string (lossy for now)
-                                let data_str = String::from_utf8_lossy(&data).to_string();
-
                                 // Process through shell integration
-                                {
+                                let si_events = {
                                     let mut integrations = session_integrations.write().await;
                                     if let Some(integration) = integrations.get_mut(&session_id) {
-                                        let si_events = integration.process_data(&data_str);
+                                        integration.process_data(&data_str)
+                                    } else {
+                                        Vec::new()
+                                    }
+                                };
 
-                                        // Emit shell integration events as terminal events
-                                        for si_event in si_events {
-                                            match si_event {
-                                                ShellIntegrationEvent::CommandStarted {
+                                // Emit shell integration events as terminal events after
+                                // releasing the integration map lock.
+                                for si_event in si_events {
+                                    match si_event {
+                                        ShellIntegrationEvent::CommandStarted {
+                                            command,
+                                            command_id,
+                                        } => {
+                                            let _ = event_emitter
+                                                .emit(TerminalEvent::CommandStarted {
+                                                    session_id: session_id.clone(),
                                                     command,
                                                     command_id,
-                                                } => {
-                                                    let _ = event_emitter
-                                                        .emit(TerminalEvent::CommandStarted {
-                                                            session_id: session_id.clone(),
-                                                            command,
-                                                            command_id,
-                                                        })
-                                                        .await;
-                                                }
-                                                ShellIntegrationEvent::CommandFinished {
-                                                    command_id,
-                                                    exit_code,
-                                                } => {
-                                                    let _ = event_emitter
-                                                        .emit(TerminalEvent::CommandFinished {
-                                                            session_id: session_id.clone(),
-                                                            command_id,
-                                                            exit_code: exit_code.unwrap_or(0),
-                                                        })
-                                                        .await;
-                                                }
-                                                ShellIntegrationEvent::CwdChanged { cwd } => {
-                                                    if let Some(session) =
-                                                        sessions.write().await.get_mut(&session_id)
-                                                    {
-                                                        session.update_cwd(cwd.clone());
-                                                    }
-                                                    let _ = event_emitter
-                                                        .emit(TerminalEvent::CwdChanged {
-                                                            session_id: session_id.clone(),
-                                                            cwd,
-                                                        })
-                                                        .await;
-                                                }
-                                                _ => {}
-                                            }
+                                                })
+                                                .await;
                                         }
+                                        ShellIntegrationEvent::CommandFinished {
+                                            command_id,
+                                            exit_code,
+                                        } => {
+                                            let _ = event_emitter
+                                                .emit(TerminalEvent::CommandFinished {
+                                                    session_id: session_id.clone(),
+                                                    command_id,
+                                                    exit_code: exit_code.unwrap_or(0),
+                                                })
+                                                .await;
+                                        }
+                                        ShellIntegrationEvent::CwdChanged { cwd } => {
+                                            if let Some(session) =
+                                                sessions.write().await.get_mut(&session_id)
+                                            {
+                                                session.update_cwd(cwd.clone());
+                                            }
+                                            let _ = event_emitter
+                                                .emit(TerminalEvent::CwdChanged {
+                                                    session_id: session_id.clone(),
+                                                    cwd,
+                                                })
+                                                .await;
+                                        }
+                                        _ => {}
                                     }
                                 }
 

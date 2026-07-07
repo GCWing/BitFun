@@ -90,7 +90,7 @@ pub fn generate_tool_result_preview(content: &str, max_chars: usize) -> (String,
     let cut_point = prefix
         .char_indices()
         .filter_map(|(idx, ch)| (ch == '\n').then_some(idx))
-        .last()
+        .next_back()
         .filter(|idx| *idx > prefix.len() / 2)
         .unwrap_or(prefix.len());
 

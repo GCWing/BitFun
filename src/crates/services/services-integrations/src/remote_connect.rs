@@ -55,6 +55,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, RwLock};
+use tokio::io::{AsyncReadExt, AsyncSeekExt};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -642,17 +643,36 @@ pub async fn read_remote_workspace_file_chunk(
         .map_err(|e| format!("Cannot read file metadata: {e}"))?
         .len();
 
-    let bytes = tokio::fs::read(&abs_path)
+    let range = resolve_remote_file_chunk_range(
+        usize::try_from(total_size).unwrap_or(usize::MAX),
+        offset,
+        limit,
+    );
+    let chunk_size = usize::try_from(range.chunk_size)
+        .map_err(|_| "Remote file chunk is too large to allocate".to_string())?;
+    let mut file = tokio::fs::File::open(&abs_path)
         .await
-        .map_err(|e| format!("Cannot read file: {e}"))?;
-    let range = resolve_remote_file_chunk_range(bytes.len(), offset, limit);
-    let chunk = bytes[range.start..range.end].to_vec();
+        .map_err(|e| format!("Cannot open file: {e}"))?;
+    file.seek(std::io::SeekFrom::Start(range.start as u64))
+        .await
+        .map_err(|e| format!("Cannot seek file: {e}"))?;
+    let mut chunk = Vec::with_capacity(chunk_size);
+    let mut limited_file = file.take(range.chunk_size);
+    limited_file
+        .read_to_end(&mut chunk)
+        .await
+        .map_err(|e| format!("Cannot read file chunk: {e}"))?;
+    let actual_chunk_size = u64::try_from(chunk.len()).unwrap_or(u64::MAX);
+    let total_size = tokio::fs::metadata(&abs_path)
+        .await
+        .map(|metadata| metadata.len())
+        .unwrap_or(total_size);
 
     Ok(RemoteWorkspaceFileChunk {
         name: remote_file_display_name(abs_path.file_name().and_then(|n| n.to_str())),
         bytes: chunk,
         offset,
-        chunk_size: range.chunk_size,
+        chunk_size: actual_chunk_size,
         total_size,
         mime_type: detect_remote_mime_type(&abs_path),
     })

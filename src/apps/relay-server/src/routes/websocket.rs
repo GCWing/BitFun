@@ -14,11 +14,15 @@ use axum::{
 use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tokio::sync::mpsc;
+use tokio::sync::mpsc::{self, error::TrySendError};
 use tracing::{debug, error, info, warn};
 
-use crate::relay::room::{ConnId, OutboundMessage, ResponsePayload, RoomManager};
+use crate::relay::room::{
+    send_outbound_message, ConnId, OutboundMessage, ResponsePayload, RoomManager,
+};
 use crate::routes::api::AppState;
+
+const OUTBOUND_QUEUE_CAPACITY: usize = 256;
 
 fn truncate_preview(text: &str, max_bytes: usize) -> &str {
     if text.len() <= max_bytes {
@@ -87,7 +91,7 @@ pub async fn websocket_handler(ws: WebSocketUpgrade, State(state): State<AppStat
 
 async fn handle_socket(socket: WebSocket, state: AppState) {
     let (mut ws_sender, mut ws_receiver) = socket.split();
-    let (out_tx, mut out_rx) = mpsc::unbounded_channel::<OutboundMessage>();
+    let (out_tx, mut out_rx) = mpsc::channel::<OutboundMessage>(OUTBOUND_QUEUE_CAPACITY);
 
     let conn_id = state.room_manager.next_conn_id();
     info!("WebSocket connected: conn_id={conn_id}");
@@ -108,7 +112,9 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
     while let Some(msg_result) = ws_receiver.next().await {
         match msg_result {
             Ok(Message::Text(text)) => {
-                handle_text_message(&text, conn_id, &state.room_manager, &out_tx);
+                if !handle_text_message(&text, conn_id, &state.room_manager, &out_tx).await {
+                    break;
+                }
             }
             Ok(Message::Ping(_)) => {}
             Ok(Message::Close(_)) => {
@@ -129,12 +135,12 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
     info!("WebSocket disconnected: conn_id={conn_id}");
 }
 
-fn handle_text_message(
+async fn handle_text_message(
     text: &str,
     conn_id: ConnId,
     room_manager: &Arc<RoomManager>,
-    out_tx: &mpsc::UnboundedSender<OutboundMessage>,
-) {
+    out_tx: &mpsc::Sender<OutboundMessage>,
+) -> bool {
     debug!(
         "Received from conn_id={conn_id}: {}",
         truncate_preview(text, 200)
@@ -143,13 +149,12 @@ fn handle_text_message(
         Ok(m) => m,
         Err(e) => {
             warn!("Invalid message from conn_id={conn_id}: {e}");
-            send_json(
+            return send_json_best_effort(
                 out_tx,
                 &OutboundProtocol::Error {
                     message: format!("invalid message format: {e}"),
                 },
             );
-            return;
         }
     };
 
@@ -169,14 +174,15 @@ fn handle_text_message(
                 out_tx.clone(),
             );
             if ok {
-                send_json(out_tx, &OutboundProtocol::RoomCreated { room_id });
+                send_json(out_tx, &OutboundProtocol::RoomCreated { room_id }).await
             } else {
                 send_json(
                     out_tx,
                     &OutboundProtocol::Error {
                         message: "failed to create room".into(),
                     },
-                );
+                )
+                .await
             }
         }
 
@@ -193,18 +199,19 @@ fn handle_text_message(
                     nonce,
                 },
             );
+            true
         }
 
         InboundMessage::Heartbeat => {
             if room_manager.heartbeat(conn_id) {
-                send_json(out_tx, &OutboundProtocol::HeartbeatAck);
+                send_json_best_effort(out_tx, &OutboundProtocol::HeartbeatAck)
             } else {
-                send_json(
+                send_json_best_effort(
                     out_tx,
                     &OutboundProtocol::Error {
                         message: "Room not found or expired".into(),
                     },
-                );
+                )
             }
         }
     }
@@ -212,7 +219,8 @@ fn handle_text_message(
 
 #[cfg(test)]
 mod tests {
-    use super::truncate_preview;
+    use super::{send_json_best_effort, truncate_preview, OutboundProtocol};
+    use tokio::sync::mpsc;
 
     #[test]
     fn truncate_preview_respects_utf8_boundaries() {
@@ -220,11 +228,43 @@ mod tests {
 
         assert_eq!(truncate_preview(&text, 200), "a".repeat(199));
     }
+
+    #[test]
+    fn best_effort_control_response_does_not_block_on_full_queue() {
+        let (tx, _rx) = mpsc::channel(1);
+        assert!(send_json_best_effort(&tx, &OutboundProtocol::HeartbeatAck));
+
+        assert!(
+            send_json_best_effort(&tx, &OutboundProtocol::HeartbeatAck),
+            "full queue should drop best-effort control response without closing read loop"
+        );
+    }
 }
 
-fn send_json<T: Serialize>(tx: &mpsc::UnboundedSender<OutboundMessage>, msg: &T) {
-    if let Ok(json) = serde_json::to_string(msg) {
-        let _ = tx.send(OutboundMessage { text: json });
+async fn send_json<T: Serialize>(tx: &mpsc::Sender<OutboundMessage>, msg: &T) -> bool {
+    match serde_json::to_string(msg) {
+        Ok(json) => send_outbound_message(tx, OutboundMessage { text: json }).await,
+        Err(e) => {
+            warn!("Failed to serialize outbound websocket message: {e}");
+            false
+        }
+    }
+}
+
+fn send_json_best_effort<T: Serialize>(tx: &mpsc::Sender<OutboundMessage>, msg: &T) -> bool {
+    match serde_json::to_string(msg) {
+        Ok(json) => match tx.try_send(OutboundMessage { text: json }) {
+            Ok(()) => true,
+            Err(TrySendError::Full(_)) => {
+                warn!("Outbound websocket queue is full; dropping best-effort control response");
+                true
+            }
+            Err(TrySendError::Closed(_)) => false,
+        },
+        Err(e) => {
+            warn!("Failed to serialize outbound websocket message: {e}");
+            false
+        }
     }
 }
 

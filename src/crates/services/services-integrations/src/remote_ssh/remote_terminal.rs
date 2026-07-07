@@ -290,12 +290,14 @@ impl RemoteTerminalManager {
     }
 
     pub async fn write(&self, session_id: &str, data: &[u8]) -> anyhow::Result<()> {
-        let handles = self.handles.read().await;
-        let handle = handles
-            .get(session_id)
-            .context("Session not found or PTY not active")?;
-        handle
-            .cmd_tx
+        let cmd_tx = {
+            let handles = self.handles.read().await;
+            handles
+                .get(session_id)
+                .map(|handle| handle.cmd_tx.clone())
+                .context("Session not found or PTY not active")?
+        };
+        cmd_tx
             .send(PtyCommand::Write(data.to_vec()))
             .await
             .map_err(|_| anyhow::anyhow!("PTY task has exited"))
@@ -309,10 +311,12 @@ impl RemoteTerminalManager {
                 s.rows = rows;
             }
         }
-        let handles = self.handles.read().await;
-        if let Some(handle) = handles.get(session_id) {
-            handle
-                .cmd_tx
+        let cmd_tx = {
+            let handles = self.handles.read().await;
+            handles.get(session_id).map(|handle| handle.cmd_tx.clone())
+        };
+        if let Some(cmd_tx) = cmd_tx {
+            cmd_tx
                 .send(PtyCommand::Resize(cols as u32, rows as u32))
                 .await
                 .map_err(|_| anyhow::anyhow!("PTY task has exited"))?;
@@ -322,11 +326,12 @@ impl RemoteTerminalManager {
 
     pub async fn close_session(&self, session_id: &str) -> anyhow::Result<()> {
         // Send close command to owner task
-        {
+        let cmd_tx = {
             let handles = self.handles.read().await;
-            if let Some(handle) = handles.get(session_id) {
-                let _ = handle.cmd_tx.send(PtyCommand::Close).await;
-            }
+            handles.get(session_id).map(|handle| handle.cmd_tx.clone())
+        };
+        if let Some(cmd_tx) = cmd_tx {
+            let _ = cmd_tx.send(PtyCommand::Close).await;
         }
         // Also remove from sessions map immediately so it disappears from list
         {

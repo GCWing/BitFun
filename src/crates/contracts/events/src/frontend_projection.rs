@@ -46,6 +46,25 @@ impl AgenticFrontendEvent {
         message.insert("type".to_string(), Value::String(self.event_type.clone()));
         Value::Object(message)
     }
+
+    pub fn into_legacy_flat_message(self) -> Value {
+        let mut message = Map::new();
+        match self.payload {
+            Value::Object(payload) => {
+                for (key, value) in payload {
+                    message.insert(key, value);
+                }
+            }
+            payload => {
+                message.insert("payload".to_string(), payload);
+            }
+        }
+        if self.event_type == "dialog-turn-started" {
+            message.remove("userInput");
+        }
+        message.insert("type".to_string(), Value::String(self.event_type));
+        Value::Object(message)
+    }
 }
 
 pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFrontendEvent> {

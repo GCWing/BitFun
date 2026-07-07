@@ -82,25 +82,19 @@ impl EventQueue {
         let envelope = EventEnvelope::new(event, priority);
         let event_id = envelope.id.clone();
 
-        // Check queue size
-        {
-            let queue = self.queue.lock().await;
+        let queue_len = {
+            let mut queue = self.queue.lock().await;
             if queue.len() >= self.config.max_queue_size {
                 warn!("Event queue full, dropping event: event_id={}", event_id);
                 return Ok(event_id);
             }
-        }
 
-        // Add to queue
-        {
-            let mut queue = self.queue.lock().await;
             queue.push(std::cmp::Reverse(envelope.clone()));
-        }
+            queue.len()
+        };
 
         let _ = self.broadcast_tx.send(envelope);
 
-        // Update statistics: get queue size first, then update statistics (avoid getting queue lock while holding stats lock)
-        let queue_len = self.queue.lock().await.len();
         {
             let mut stats = self.stats.lock().await;
             stats.total_enqueued += 1;
