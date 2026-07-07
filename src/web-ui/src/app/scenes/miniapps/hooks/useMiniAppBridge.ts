@@ -17,6 +17,7 @@ import { api } from '@/infrastructure/api/service-api/ApiClient';
 import { useI18n } from '@/infrastructure/i18n';
 import type { MiniAppRunScope } from '../customization/miniAppCustomizationTypes';
 import { systemAPI } from '@/infrastructure/api/service-api/SystemAPI';
+import { workspaceAPI } from '@/infrastructure/api';
 
 interface JSONRPC {
   jsonrpc?: string;
@@ -330,6 +331,22 @@ export function useMiniAppBridge(
             return;
           }
           await systemAPI.openExternal(parsed.toString());
+          reply(null);
+          return;
+        }
+
+        if (method === 'system.revealInFolder') {
+          // When `path` is omitted, open the system Downloads folder.
+          let targetPath = String(params.path ?? '');
+          if (!targetPath) {
+            const { downloadDir } = await import('@tauri-apps/api/path');
+            targetPath = await downloadDir();
+          }
+          if (!targetPath) {
+            replyError('Could not determine the folder to open.');
+            return;
+          }
+          await workspaceAPI.revealInExplorer(targetPath);
           reply(null);
           return;
         }

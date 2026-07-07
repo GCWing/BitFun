@@ -1,3 +1,11 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// PPT Live — UI entry point
+//
+// This is the entry point for build-bitfun.mjs. All src/*.js modules and npm
+// dependencies are bundled into dist/ui.bundle.js at build time.
+//
+// After editing this file or any src/*.js file, run:  node build-bitfun.mjs
+// ─────────────────────────────────────────────────────────────────────────────
 import { translate as t, getLocale } from './src/i18n.js';
 import {
   ELEMENT_TYPES,
@@ -2530,6 +2538,7 @@ function exportHtml() {
   updateBriefFromInputs({ includeTopic: !hasUsableDeckForRevision() });
   const filename = downloadHtmlDeck(state);
   setExportStatus(t('exportSavedTo', { path: filename }));
+  revealDownloadFolder();
   return filename;
 }
 
@@ -2594,6 +2603,16 @@ async function renderSlidesInHostWebView(slides, format) {
     pages.push({ index, base64: String(base64).replace(/^data:.*;base64,/, '') });
   }
   return pages;
+}
+
+function revealDownloadFolder() {
+  const reveal = runtime()?.system?.revealInFolder;
+  if (typeof reveal !== 'function') return;
+  Promise.resolve()
+    .then(() => reveal())
+    .catch((error) => {
+      runtime().log?.warn?.('PPT Live reveal download folder failed', { error: String(error) });
+    });
 }
 
 async function executeExport(format) {
@@ -3315,6 +3334,7 @@ async function confirmExportFromModal() {
     $('exportOverlay')?.classList.remove('is-exporting');
     setExportModalFeedback('success', savedMessage);
     setExportStatus(savedMessage);
+    revealDownloadFolder();
     await new Promise((resolve) => setTimeout(resolve, 1600));
     closeExportModal();
   } catch (error) {

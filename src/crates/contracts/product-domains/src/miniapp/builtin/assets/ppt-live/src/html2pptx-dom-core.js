@@ -1,3 +1,18 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// HTML → PPTX Slide Data Extraction (Stage 1 of 2)
+//
+// extractSlideDataFromDocument() walks a live DOM document and produces a
+// structured slideData object: { background, elements[], placeholders[], errors[] }.
+//
+// Each element has: { type, position: {x,y,w,h in inches}, style: {...}, text }
+// Positions come from getBoundingClientRect() (border-box), converted to inches.
+//
+// This file handles EXTRACTION only. The slideData is then passed to
+// pptx-html-build.js which maps it to pptxgenjs API calls (Stage 2).
+//
+// Unit conversions:  96 px = 1 inch,  1 px = 0.75 pt,  PPTX uses inches/EMU.
+// Slide canvas:      1280×720 px = 13.333"×7.5" (LAYOUT_WIDE).
+// ─────────────────────────────────────────────────────────────────────────────
 export const PT_PER_PX = 0.75;
 export const PX_PER_IN = 96;
 
@@ -364,18 +379,13 @@ export function extractSlideDataFromDocument(doc = document) {
       const slideHeightPx = bodyRect.height;
       const maxWPx = Math.max(8, slideWidthPx - x - 4);
       const scrollH = el.scrollHeight || 0;
-      const isHeading = /^H[1-6]$/.test(el.tagName);
-      const widthPad = isHeading ? Math.min(Math.max(8, w * 0.05), 32) : Math.min(Math.max(2, w * 0.02), 12);
-      if (isHeading) {
-        w = Math.max(w + widthPad, slideWidthPx * 0.92 - x);
-      } else {
-        w = Math.min(w + widthPad, maxWPx);
-      }
+      // Width: trust the browser's layout.  Adding extra width shifts the
+      // wrapping point and causes the PPT to break lines in different places
+      // than the HTML preview.  Only expand the height for scroll overflow.
       w = Math.min(w, maxWPx);
-      const heightPad = Math.max(6, h * (isHeading ? 0.18 : 0.12));
       const maxHPx = Math.max(8, slideHeightPx - y - 4);
-      if (scrollH > h + 2) h = Math.min(scrollH + heightPad, maxHPx);
-      else h = Math.min(h + heightPad, maxHPx);
+      if (scrollH > h + 2) h = Math.min(scrollH, maxHPx);
+      else h = Math.min(h, maxHPx);
       return { x, y, w, h };
     };
 
@@ -490,6 +500,20 @@ export function extractSlideDataFromDocument(doc = document) {
       return 'top';
     };
 
+    // Resolve CSS line-height to a concrete pt value that matches browser
+    // rendering.  CSS "normal" is font-dependent (~1.15–1.2× font-size); the
+    // PPT default differs, so we emit an explicit value to preserve the
+    // visual line spacing of the HTML preview.
+    const resolveLineSpacing = (computed) => {
+      const lh = computed.lineHeight;
+      if (!lh || lh === 'normal') {
+        return pxToPoints(computed.fontSize) * 1.2;
+      }
+      const parsed = parseFloat(lh);
+      if (Number.isNaN(parsed)) return pxToPoints(computed.fontSize) * 1.2;
+      return pxToPoints(lh);
+    };
+
     const emitTextElement = (el, type = el.tagName.toLowerCase(), exactFrame = false, rectOverride = null) => {
       const rect = rectOverride || rectFor(el);
       const text = el.textContent.replace(/\s+/g, ' ').trim();
@@ -513,25 +537,32 @@ export function extractSlideDataFromDocument(doc = document) {
         ? getPositionAndSize(el, rect, rotation)
         : expandTextFrame(el, rect, rotation);
       const isBold = computed.fontWeight === 'bold' || parseInt(computed.fontWeight, 10) >= 600;
-      const lineSpacing = computed.lineHeight && computed.lineHeight !== 'normal'
-        ? pxToPoints(computed.lineHeight)
-        : null;
+
+      // The element's CSS padding defines how far the text is inset from the
+      // element's border edge. In HTML, getBoundingClientRect() returns the
+      // border-box, and the browser renders text inside the content-box
+      // (border-box minus padding). To reproduce this in PPTX, we keep the
+      // frame at the border-box and set the PPTX internal margin (= inset)
+      // to the element's padding. This prevents text from shifting up-left
+      // when the element has non-zero padding.
+      const padL = parseFloat(computed.paddingLeft) || 0;
+      const padR = parseFloat(computed.paddingRight) || 0;
+      const padT = parseFloat(computed.paddingTop) || 0;
+      const padB = parseFloat(computed.paddingBottom) || 0;
+      const textInset = [padL, padR, padT, padB].some((v) => v > 0)
+        ? [pxToInch(padL), pxToInch(padR), pxToInch(padB), pxToInch(padT)]
+        : 0;
 
       const baseStyle = {
         fontSize: pxToPoints(computed.fontSize),
         fontFace: computed.fontFamily.split(',')[0].replace(/['"]/g, '').trim(),
         color: resolveTextColor(computed, el),
         align: resolveTextAlign(computed),
-        valign: exactFrame ? resolveVerticalAlign(computed, rect) : 'top',
-        lineSpacing,
-        paraSpaceBefore: pxToPoints(computed.marginTop),
-        paraSpaceAfter: pxToPoints(computed.marginBottom),
-        margin: [
-          pxToPoints(computed.paddingLeft),
-          pxToPoints(computed.paddingRight),
-          pxToPoints(computed.paddingBottom),
-          pxToPoints(computed.paddingTop)
-        ]
+        valign: resolveVerticalAlign(computed, rect),
+        lineSpacing: resolveLineSpacing(computed),
+        paraSpaceBefore: 0,
+        paraSpaceAfter: 0,
+        margin: textInset,
       };
 
       const transparency = extractAlpha(computed.color);
@@ -693,23 +724,22 @@ export function extractSlideDataFromDocument(doc = document) {
         // Use the first text element's computed style as the textbox-level base
         // (align / lineSpacing / paraSpace are paragraph/textbox-level in pptxgenjs, not per-run).
         const firstComputed = view.getComputedStyle(textDescendants[0]);
+        // Preserve the merge container's padding as PPTX internal margin so
+        // text stays inset from the frame edges like it does in HTML.
+        // (mergeComputed was declared earlier — line ~642)
+        const mPadL = pxToInch(parseFloat(mergeComputed.paddingLeft) || 0);
+        const mPadR = pxToInch(parseFloat(mergeComputed.paddingRight) || 0);
+        const mPadT = pxToInch(parseFloat(mergeComputed.paddingTop) || 0);
+        const mPadB = pxToInch(parseFloat(mergeComputed.paddingBottom) || 0);
         const baseStyle = {
           fontSize: pxToPoints(firstComputed.fontSize),
           fontFace: firstComputed.fontFamily.split(',')[0].replace(/['"]/g, '').trim(),
           color: rgbToHex(firstComputed.color),
           align: firstComputed.textAlign === 'start' ? 'left' : firstComputed.textAlign,
-          lineSpacing: firstComputed.lineHeight && firstComputed.lineHeight !== 'normal'
-            ? pxToPoints(firstComputed.lineHeight)
-            : null,
+          lineSpacing: resolveLineSpacing(firstComputed),
           paraSpaceBefore: 0,
           paraSpaceAfter: 0,
-          // Container padding becomes the textbox internal margin (PptxGenJS: [left, right, bottom, top]).
-          margin: [
-            pxToPoints(mergeComputed.paddingLeft),
-            pxToPoints(mergeComputed.paddingRight),
-            pxToPoints(mergeComputed.paddingBottom),
-            pxToPoints(mergeComputed.paddingTop)
-          ]
+          margin: [mPadL, mPadR, mPadB, mPadT].some((v) => v > 0) ? [mPadL, mPadR, mPadB, mPadT] : 0,
         };
         const baseTransparency = extractAlpha(firstComputed.color);
         if (baseTransparency !== null) baseStyle.transparency = baseTransparency;
@@ -1082,6 +1112,13 @@ export function extractSlideDataFromDocument(doc = document) {
 
         const listFrame = expandTextFrame(el, rect, null);
 
+        // UL/OL padding: paddingLeft is already split into bullet margin +
+        // text indent below. The remaining padding (top/right/bottom) must
+        // be preserved as PPTX internal margin so text doesn't shift.
+        const ulPadR = pxToInch(parseFloat(ulComputed.paddingRight) || 0);
+        const ulPadT = pxToInch(parseFloat(ulComputed.paddingTop) || 0);
+        const ulPadB = pxToInch(parseFloat(ulComputed.paddingBottom) || 0);
+
         pushElement({
           type: 'list',
           items: items,
@@ -1098,11 +1135,11 @@ export function extractSlideDataFromDocument(doc = document) {
             bulletColor,
             transparency: extractAlpha(computed.color),
             align: computed.textAlign === 'start' ? 'left' : computed.textAlign,
-            lineSpacing: computed.lineHeight && computed.lineHeight !== 'normal' ? pxToPoints(computed.lineHeight) : null,
+            lineSpacing: resolveLineSpacing(computed),
             paraSpaceBefore: 0,
             paraSpaceAfter: pxToPoints(computed.marginBottom),
             // PptxGenJS margin array is [left, right, bottom, top]
-            margin: [marginLeft, 0, 0, 0]
+            margin: [marginLeft, ulPadR, ulPadB, ulPadT]
           }
         }, el);
 

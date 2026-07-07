@@ -1,3 +1,15 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// Slide Preparation Orchestrator
+//
+// prepareSlidesForPptxExport() is the entry point for the PPTX export pipeline:
+//   1. Mount slide HTML in an off-screen shadow-DOM div (1280×720)
+//   2. sanitizeSlideDocumentRoot() — normalize/repair the HTML for export
+//   3. extractSlideDataFromDocument() — walk DOM → structured slideData
+//   4. Optionally rasterize a background layer (text hidden) for visual fidelity
+//
+// The prepared slideData is then passed to export-deck-browser.js →
+// pptx-html-build.js for the actual PPTX generation.
+// ─────────────────────────────────────────────────────────────────────────────
 import { normalizeSlideDocument, scopeSlideAuthorStyles } from './render.js';
 import { sanitizeSlideDocumentRoot } from './sanitize-slide-html.js';
 import { extractSlideDataFromDocument, measureBodyDimensions } from './html2pptx-dom-core.js';

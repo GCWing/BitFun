@@ -1,3 +1,14 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// PPTX / PDF / PNG Export Functions
+//
+// exportPptxPrepared() — builds a PPTX deck from prepared slideData + raster
+//   backgrounds (the main export path for HTML-based slides).
+// exportPptxFromDeck() — builds a PPTX from element-model slides (no HTML).
+// exportPdfFromBase64Pages() — merges rendered PDF pages.
+// exportPngZipFromPages() — zips rendered PNG slides.
+//
+// All functions return { filename, mimeType, base64 } for browser download.
+// ─────────────────────────────────────────────────────────────────────────────
 import { PDFDocument } from 'pdf-lib';
 import JSZip from 'jszip';
 import {

@@ -1,3 +1,18 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// Slide Data → PPTX Build (Stage 2 of 2)
+//
+// buildSlideFromExtracted() takes the slideData from html2pptx-dom-core.js and
+// maps each element to pptxgenjs API calls (addText, addImage, addShape, etc.).
+//
+// Key design decisions:
+//   WIDTH_SAFETY_IN  — text boxes are widened by 0.15" to absorb cross-renderer
+//     font metric drift (PowerPoint renders CJK glyphs slightly wider than
+//     browsers). safeTextBoxGeometry() shifts the x coordinate for right/center
+//     aligned text so the extra width doesn't shift the visual anchor.
+//   margin — set from the element's CSS padding so PPTX internal inset matches
+//     the HTML box model (prevents text from shifting toward top-left).
+//   valign — resolved from CSS flex/grid align-items or line-height ratio.
+// ─────────────────────────────────────────────────────────────────────────────
 import pptxgen from 'pptxgenjs';
 
 const PX_PER_IN = 96;
@@ -5,8 +20,49 @@ const EMU_PER_IN = 914400;
 const SLIDE_W_IN = 13.333;
 const SLIDE_H_IN = 7.5;
 
+// PowerPoint and browsers render the same font at the same point size with
+// measurably different glyph widths (different font metric tables / hinting).
+// For CJK text the drift is amplified because every glyph is full-width:
+// if a line of CJK text *barely* fits on one line in the browser, PowerPoint's
+// slightly wider rendering pushes the last character to the next line.
+//
+// 0.15 inch (~14.4px @ 96dpi) ≈ one CJK glyph at ~14pt body text. This is
+// large enough to absorb the worst-case cross-renderer metric drift while
+// capTextBoxWidth() prevents any overflow past the slide edge.
+//
+// IMPORTANT: the safety width widens the text box to prevent wrapping, but
+// for right/center-aligned text this alone would shift the rendered glyphs
+// (right edge moves right, center moves right).  The callers compensate by
+// adjusting the x coordinate so that the *original* text region is preserved.
+const WIDTH_SAFETY_IN = 0.15;
+
 function capTextBoxWidth(x, w) {
-  return Math.min(w, Math.max(0.15, SLIDE_W_IN - x - 0.04));
+  return Math.min(w, Math.max(0.15, SLIDE_W_IN - x - 0.02));
+}
+
+// Given an element's original x/w and its text-align, return {x, w} for the
+// PPTX text box.  The box is widened by WIDTH_SAFETY_IN to prevent wrapping,
+// but the x coordinate is shifted so the original left/right/center anchor
+// stays in the same visual position:
+//   left   → extra width extends to the right (x unchanged)
+//   right  → extra width extends to the left  (x shifts left by safety)
+//   center → split equally                    (x shifts left by safety/2)
+function safeTextBoxGeometry(origX, origW, align, isVerticalText) {
+  const safety = isVerticalText ? 0 : WIDTH_SAFETY_IN;
+  const rawW = origW + safety;
+  if (!safety || align === 'left' || !align) {
+    return { x: origX, w: capTextBoxWidth(origX, rawW) };
+  }
+  if (align === 'right') {
+    const x = Math.max(0, origX - safety);
+    return { x, w: capTextBoxWidth(x, rawW) };
+  }
+  if (align === 'center') {
+    const x = Math.max(0, origX - safety / 2);
+    return { x, w: capTextBoxWidth(x, rawW) };
+  }
+  // justify behaves like left for anchoring
+  return { x: origX, w: capTextBoxWidth(origX, rawW) };
 }
 
 function toImagePayload(src) {
@@ -109,10 +165,11 @@ function addElements(slideData, targetSlide, pres) {
       if (el.shape.shadow) shapeOptions.shadow = el.shape.shadow;
       targetSlide.addText(el.text || '', shapeOptions);
     } else if (el.type === 'list' || el.type === 'merged-text') {
+      const { x: boxX, w: boxW } = safeTextBoxGeometry(el.position.x, el.position.w, el.style.align, false);
       const listOptions = {
-        x: el.position.x,
+        x: boxX,
         y: el.position.y,
-        w: capTextBoxWidth(el.position.x, el.position.w + (el.position.w * 0.04)),
+        w: boxW,
         h: Math.min(el.position.h, Math.max(0.15, SLIDE_H_IN - el.position.y - 0.04)),
         fontSize: el.style.fontSize,
         fontFace: el.style.fontFace,
@@ -122,8 +179,7 @@ function addElements(slideData, targetSlide, pres) {
         lineSpacing: el.style.lineSpacing,
         paraSpaceBefore: el.style.paraSpaceBefore,
         paraSpaceAfter: el.style.paraSpaceAfter,
-        margin: el.style.margin,
-        inset: 0,
+        margin: el.style.margin || 0,
         shrinkText: false,
         autoFit: false,
       };
@@ -131,23 +187,12 @@ function addElements(slideData, targetSlide, pres) {
       targetSlide.addText(el.items || el.text, listOptions);
     } else {
       const lineHeight = el.style.lineSpacing || el.style.fontSize * 1.2;
-      const isSingleLine = el.position.h <= lineHeight * 1.5;
       const isVerticalText = el.style.vert && el.style.vert !== 'horz';
-      const widthIncrease = isVerticalText ? 0 : el.position.w * (isSingleLine ? 0.02 : 0.06);
-      let adjustedX = el.position.x;
-      let adjustedW = capTextBoxWidth(el.position.x, el.position.w + widthIncrease);
-      const align = el.style.align;
-      if (!isVerticalText && align === 'center') {
-        adjustedX = el.position.x - ((adjustedW - el.position.w) / 2);
-      } else if (!isVerticalText && align === 'right') {
-        adjustedX = el.position.x - (adjustedW - el.position.w);
-      }
-      adjustedX = Math.max(0, adjustedX);
-      adjustedW = capTextBoxWidth(adjustedX, adjustedW);
+      const { x: boxX, w: boxW } = safeTextBoxGeometry(el.position.x, el.position.w, el.style.align, isVerticalText);
       const textOptions = {
-        x: adjustedX,
+        x: boxX,
         y: el.position.y,
-        w: adjustedW,
+        w: boxW,
         h: Math.min(el.position.h, Math.max(0.15, SLIDE_H_IN - el.position.y - 0.04)),
         fontSize: el.style.fontSize,
         fontFace: el.style.fontFace,
@@ -159,12 +204,13 @@ function addElements(slideData, targetSlide, pres) {
         lineSpacing: el.style.lineSpacing,
         paraSpaceBefore: el.style.paraSpaceBefore,
         paraSpaceAfter: el.style.paraSpaceAfter,
-        inset: 0,
+        // margin reproduces the element's CSS padding as PPTX internal inset,
+        // preventing text from shifting toward the frame's top-left corner.
+        margin: el.style.margin || 0,
         shrinkText: false,
         autoFit: false,
       };
       if (el.style.align) textOptions.align = el.style.align;
-      if (el.style.margin) textOptions.margin = el.style.margin;
       if (el.style.rotate !== undefined) textOptions.rotate = el.style.rotate;
       if (el.style.vert) textOptions.vert = el.style.vert;
       if (el.style.transparency != null && el.style.transparency !== undefined) {
