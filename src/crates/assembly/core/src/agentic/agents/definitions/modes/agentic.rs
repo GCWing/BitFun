@@ -7,7 +7,7 @@
 //! only the reminder content differs.
 
 use crate::agentic::agents::{
-    get_embedded_prompt, shared_coding_mode_tool_exposure_overrides, shared_coding_mode_tools,
+    get_prompt_template, shared_coding_mode_tool_exposure_overrides, shared_coding_mode_tools,
     shared_coding_mode_user_context_policy, Agent, AgentToolPolicyOverrides, UserContextPolicy,
     SHARED_CODING_MODE_PROMPT_TEMPLATE,
 };
@@ -38,14 +38,12 @@ impl AgenticMode {
         &self,
         template_name: &str,
     ) -> crate::util::errors::BitFunResult<String> {
-        get_embedded_prompt(template_name)
-            .map(str::to_string)
-            .ok_or_else(|| {
-                crate::util::errors::BitFunError::Agent(format!(
-                    "{} not found in embedded files",
-                    template_name
-                ))
-            })
+        get_prompt_template(template_name).ok_or_else(|| {
+            crate::util::errors::BitFunError::Agent(format!(
+                "{} not found in prompt files",
+                template_name
+            ))
+        })
     }
 }
 

@@ -73,6 +73,10 @@ struct Cli {
     /// Disable file logging (stderr logging will still be used)
     #[arg(long, global = true)]
     no_log_file: bool,
+
+    /// Load agent prompt templates from disk instead of only using embedded prompts
+    #[arg(long, global = true, value_name = "DIR")]
+    prompts_dir: Option<PathBuf>,
 }
 
 #[derive(Subcommand)]
@@ -611,6 +615,11 @@ async fn run_cli() -> Result<()> {
             .init();
     } else {
         logging::init_file_logging(file_log_level);
+    }
+
+    if let Some(prompts_dir) = cli.prompts_dir.as_ref() {
+        bitfun_core::agentic::agents::set_runtime_prompt_dir(prompts_dir);
+        prompts::set_runtime_cli_prompt_dir(prompts_dir);
     }
 
     let config = CliConfig::load().unwrap_or_else(|e| {

@@ -7,7 +7,7 @@
 //! only the reminder content differs.
 
 use crate::agentic::agents::{
-    get_embedded_prompt, shared_coding_mode_tool_exposure_overrides, shared_coding_mode_tools,
+    get_prompt_template, shared_coding_mode_tool_exposure_overrides, shared_coding_mode_tools,
     shared_coding_mode_user_context_policy, Agent, AgentToolPolicyOverrides, UserContextPolicy,
     SHARED_CODING_MODE_PROMPT_TEMPLATE,
 };
@@ -58,14 +58,12 @@ impl DebugMode {
     }
 
     fn load_reminder_template(&self, template_name: &str) -> BitFunResult<String> {
-        get_embedded_prompt(template_name)
-            .map(str::to_string)
-            .ok_or_else(|| {
-                crate::util::errors::BitFunError::Agent(format!(
-                    "{} not found in embedded files",
-                    template_name
-                ))
-            })
+        get_prompt_template(template_name).ok_or_else(|| {
+            crate::util::errors::BitFunError::Agent(format!(
+                "{} not found in prompt files",
+                template_name
+            ))
+        })
     }
 
     const BUILTIN_JS_TEMPLATE: &'static str = r#"fetch('http://127.0.0.1:{PORT}/ingest/{SESSION_ID}',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'{LOCATION}',message:'{MESSAGE}',data:{DATA},timestamp:Date.now(),sessionId:'{SESSION_ID}',hypothesisId:'{HYPOTHESIS_ID}',runId:'{RUN_ID}'})}).catch(()=>{});"#;

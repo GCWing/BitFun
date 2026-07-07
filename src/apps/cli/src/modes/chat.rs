@@ -1712,14 +1712,9 @@ impl ChatMode {
             "/usage" => {
                 self.show_usage_report(chat_view, chat_state, rt_handle);
             }
-            "/init" => match crate::prompts::get_cli_prompt("init") {
+            "/init" => match crate::prompts::get_cli_prompt_text("init") {
                 Some(prompt) => {
-                    self.send_message_to_agent(
-                        prompt.to_string(),
-                        chat_view,
-                        chat_state,
-                        rt_handle,
-                    );
+                    self.send_message_to_agent(prompt, chat_view, chat_state, rt_handle);
                 }
                 None => {
                     chat_state.add_system_message(
