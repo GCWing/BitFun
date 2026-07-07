@@ -59,7 +59,7 @@ shellexpand = { workspace = true, optional = true }
 ssh_config = { workspace = true, optional = true }
 terminal-core = { path = "../terminal", optional = true }
 x25519-dalek = { workspace = true, optional = true }
-tauri = { workspace = true }
+tauri = { workspace = true, optional = true }
 
 [target.'cfg(not(windows))'.dependencies]
 git2 = { workspace = true, features = ["vendored-openssl"], optional = true }
@@ -69,6 +69,7 @@ schannel = { version = "0.1", optional = true }
 
 [features]
 default = []
+tauri-support = ["dep:tauri"]
 announcement = ["reqwest"]
 browser-control = ["anyhow", "bitfun-services-core", "dirs", "reqwest", "thiserror"]
 canvas-runtime = [

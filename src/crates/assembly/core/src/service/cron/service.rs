@@ -99,7 +99,7 @@ impl CronService {
         }
 
         let service = Arc::clone(self);
-        tauri::async_runtime::spawn(async move {
+        tokio::spawn(async move {
             service.run_loop().await;
         });
     }

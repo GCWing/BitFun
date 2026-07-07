@@ -147,8 +147,8 @@ bitfun-runtime-services = { path = "../../execution/runtime-services" }
 # Transport layer dependency
 bitfun-transport = { path = "../../adapters/transport" }
 
-# Tauri dependency (optional, enabled only when needed)
-tauri = { workspace = true }
+# Tauri dependency (optional, enabled only when the tauri-support feature is on)
+tauri = { workspace = true, optional = true }
 
 # Non-Windows: vendored OpenSSL for libgit2 (no system install).
 [target.'cfg(not(windows))'.dependencies]
@@ -225,7 +225,7 @@ service-integrations = [
     "bitfun-services-integrations/product-full",
 ]
 tool-packs = ["dep:bitfun-tool-packs", "bitfun-tool-packs/product-full", "dep:image"]
-tauri-support = []
+tauri-support = ["dep:tauri"]
 ssh-remote = [
     "bitfun-services-integrations/remote-ssh-concrete",
     "russh",

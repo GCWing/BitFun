@@ -389,7 +389,7 @@ pub async fn get_watched_paths() -> Result<Vec<String>, String> {
 pub fn initialize_file_watch_service(emitter: Arc<dyn EventEmitter>) {
     let watcher = get_global_file_watch_service();
 
-    tauri::async_runtime::spawn(async move {
+    tokio::spawn(async move {
         watcher.set_emitter(emitter).await;
     });
 }
