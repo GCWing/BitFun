@@ -176,6 +176,141 @@ export const forbiddenContentRules = [
         message:
           'core debug log facade must not own HTTP ingest posting; use bitfun-services-integrations debug log network provider',
       },
+      {
+        regex: /\bOpenOptions\b/,
+        message:
+          'core debug log facade must not own debug log file append; use bitfun-services-integrations debug log owner',
+      },
+      {
+        regex: /\bUuid::new_v4\b/,
+        message:
+          'core debug log facade must not own debug log id generation; use bitfun-services-integrations debug log owner',
+      },
+      {
+        regex: /\bfn redact_value\b/,
+        message:
+          'core debug log facade must not own redaction policy; use bitfun-services-integrations debug log owner',
+      },
+      {
+        regex: /\bfn build_log_line\b/,
+        message:
+          'core debug log facade must not build debug log lines; use bitfun-services-integrations debug log owner',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/infrastructure/storage/persistence.rs',
+    patterns: [
+      {
+        regex: /\bstatic\s+FILE_LOCKS\b/,
+        message:
+          'core persistence wrapper must not own file locks; use bitfun-services-core persistence owner',
+      },
+      {
+        regex: /\bserde_json::to_string_pretty\b/,
+        message:
+          'core persistence wrapper must not own JSON serialization; use bitfun-services-core persistence owner',
+      },
+      {
+        regex: /\btokio::fs::rename\b/,
+        message:
+          'core persistence wrapper must not own atomic file replacement; use bitfun-services-core persistence owner',
+      },
+      {
+        regex: /\bfn create_backup\b/,
+        message:
+          'core persistence wrapper must not own backup creation; use bitfun-services-core persistence owner',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/infrastructure/storage/cleanup.rs',
+    patterns: [
+      {
+        regex: /\btokio::fs::read_dir\b/,
+        message:
+          'core storage cleanup wrapper must not own directory traversal; use bitfun-services-core cleanup owner',
+      },
+      {
+        regex: /\btokio::fs::remove_file\b/,
+        message:
+          'core storage cleanup wrapper must not own cleanup deletion; use bitfun-services-core cleanup owner',
+      },
+      {
+        regex: /\bfn cleanup_recursively\b/,
+        message:
+          'core storage cleanup wrapper must not own recursive cleanup; use bitfun-services-core cleanup owner',
+      },
+      {
+        regex: /\bfn calculate_dir_size\b/,
+        message:
+          'core storage cleanup wrapper must not own cleanup size accounting; use bitfun-services-core cleanup owner',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/service/token_usage/service.rs',
+    patterns: [
+      {
+        regex: /\bconst\s+MODEL_STATS_FILE\b/,
+        message:
+          'core token usage wrapper must not own token usage file layout; use bitfun-services-core token usage owner',
+      },
+      {
+        regex: /\bRecordsBatch\b/,
+        message:
+          'core token usage wrapper must not own token usage persistence batches; use bitfun-services-core token usage owner',
+      },
+      {
+        regex: /\bfn persist_record\b/,
+        message:
+          'core token usage wrapper must not own record persistence; use bitfun-services-core token usage owner',
+      },
+      {
+        regex: /\btokio::fs::/,
+        message:
+          'core token usage wrapper must not own token usage file IO; use bitfun-services-core token usage owner',
+      },
+      {
+        regex: /\bchrono::/,
+        message:
+          'core token usage wrapper must not own token usage time aggregation; use bitfun-services-core token usage owner',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/service/instruction_context.rs',
+    patterns: [
+      {
+        regex: /\btokio::fs::read_to_string\b/,
+        message:
+          'core instruction context wrapper must not own workspace instruction file IO; use bitfun-services-core workspace instruction owner',
+      },
+      {
+        regex: /\bfor file_name in\b/,
+        message:
+          'core instruction context wrapper must not own instruction file ordering; use bitfun-services-core workspace instruction owner',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/util/front_matter_markdown.rs',
+    patterns: [
+      {
+        regex: /\bserde_yaml::from_str\b/,
+        message:
+          'core front-matter markdown facade must not own YAML parsing; use bitfun-services-core markdown owner',
+      },
+      {
+        regex: /\bserde_yaml::to_string\b/,
+        message:
+          'core front-matter markdown facade must not own YAML serialization; use bitfun-services-core markdown owner',
+      },
+      {
+        regex: /\bstd::fs::write\b/,
+        message:
+          'core front-matter markdown facade must not own markdown persistence; use bitfun-services-core markdown owner',
+      },
     ],
   },
   {

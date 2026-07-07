@@ -2,6 +2,242 @@
 
 export const requiredContentRules = [
   {
+    path: 'src/crates/services/services-core/src/persistence.rs',
+    reason:
+      'services-core must own generic JSON persistence storage while core keeps only PathManager compatibility adapters',
+    patterns: [
+      {
+        regex: /\bpub struct PersistenceService\b/,
+        message: 'missing services-owned generic persistence service',
+      },
+      {
+        regex: /\bpub async fn save_json\b/,
+        message: 'missing services-owned JSON save path',
+      },
+      {
+        regex: /\bpub async fn load_json\b/,
+        message: 'missing services-owned JSON load path',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/services/services-core/src/storage_cleanup.rs',
+    reason:
+      'services-core must own reusable storage cleanup traversal and cleanup policy execution',
+    patterns: [
+      {
+        regex: /\bpub struct CleanupRoots\b/,
+        message: 'missing explicit cleanup roots contract',
+      },
+      {
+        regex: /\bpub struct CleanupService\b/,
+        message: 'missing services-owned cleanup service',
+      },
+      {
+        regex: /\bpub async fn cleanup_all\b/,
+        message: 'missing services-owned cleanup entrypoint',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/services/services-core/src/token_usage/service.rs',
+    reason:
+      'services-core must own token usage persistence and query aggregation while core keeps compatibility construction',
+    patterns: [
+      {
+        regex: /\bpub struct TokenUsageService\b/,
+        message: 'missing services-owned token usage service',
+      },
+      {
+        regex: /\bpub async fn record_usage\b/,
+        message: 'missing token usage record owner',
+      },
+      {
+        regex: /\bpub async fn get_model_stats_filtered\b/,
+        message: 'missing token usage filtered query owner',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/services/services-core/src/workspace_instructions.rs',
+    reason:
+      'services-core must own workspace instruction file IO and file ordering while core keeps prompt rendering',
+    patterns: [
+      {
+        regex: /\bpub struct WorkspaceInstructionFile\b/,
+        message: 'missing workspace instruction file DTO',
+      },
+      {
+        regex: /\bpub async fn read_workspace_instruction_files\b/,
+        message: 'missing workspace instruction file reader',
+      },
+      {
+        regex: /\bAGENTS\.md\b/,
+        message: 'missing AGENTS.md instruction file order anchor',
+      },
+      {
+        regex: /\bCLAUDE\.md\b/,
+        message: 'missing CLAUDE.md instruction file order anchor',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/services/services-core/src/markdown.rs',
+    reason:
+      'services-core must own front-matter markdown file parsing and persistence',
+    patterns: [
+      {
+        regex: /\bpub struct FrontMatterMarkdown\b/,
+        message: 'missing front-matter markdown owner',
+      },
+      {
+        regex: /\bpub fn load_str\b/,
+        message: 'missing front-matter string parser',
+      },
+      {
+        regex: /\bpub fn save\b/,
+        message: 'missing front-matter save entrypoint',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/services/services-core/Cargo.toml',
+    reason:
+      'services-core markdown owner must keep serde_yaml behind an explicit feature to avoid growing the minimal service dependency set',
+    patterns: [
+      {
+        regex: /serde_yaml = \{ workspace = true, optional = true \}/,
+        message: 'serde_yaml must remain optional in services-core',
+      },
+      {
+        regex: /markdown = \["dep:serde_yaml"\]/,
+        message: 'missing explicit markdown feature for services-core',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/services/services-integrations/src/debug_log.rs',
+    reason:
+      'services-integrations must own debug log file append, redaction, default config, and HTTP dispatch behind the debug-log feature',
+    patterns: [
+      {
+        regex: /\bpub struct DebugLogConfig\b/,
+        message: 'missing debug log config owner',
+      },
+      {
+        regex: /\bpub struct DebugLogEntry\b/,
+        message: 'missing debug log entry owner',
+      },
+      {
+        regex: /\bpub async fn append_log_async\b/,
+        message: 'missing debug log append owner',
+      },
+      {
+        regex: /\bfn redact_value\b/,
+        message: 'missing debug log redaction owner',
+      },
+      {
+        regex: /\bpub async fn post_debug_log\b/,
+        message: 'missing debug log HTTP dispatch owner',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/services/services-core/tests/storage_owner_contracts.rs',
+    reason:
+      'services-core owner migrations must keep persistence, cleanup, workspace instruction, and token usage behavior contracts',
+    patterns: [
+      {
+        regex: /\bpersistence_service_keeps_atomic_json_shape_and_backups\b/,
+        message: 'missing persistence owner behavior regression',
+      },
+      {
+        regex: /\bcleanup_service_deletes_old_temp_and_log_files_without_product_paths\b/,
+        message: 'missing storage cleanup owner behavior regression',
+      },
+      {
+        regex: /\bworkspace_instruction_files_reads_agents_then_claude_and_skips_empty_files\b/,
+        message: 'missing workspace instruction owner behavior regression',
+      },
+      {
+        regex: /\btoken_usage_service_persists_records_and_filters_subagents_by_default\b/,
+        message: 'missing token usage owner behavior regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/services/services-core/tests/markdown_owner_contracts.rs',
+    reason:
+      'services-core markdown owner must keep front-matter behavior contracts behind the markdown feature',
+    patterns: [
+      {
+        regex: /\bfront_matter_markdown_preserves_metadata_and_trimmed_body_contract\b/,
+        message: 'missing front-matter owner behavior regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/services/services-integrations/tests/debug_log_owner_contracts.rs',
+    reason:
+      'services-integrations debug log migration must keep file append, redaction, and optional HTTP behavior contracts',
+    patterns: [
+      {
+        regex:
+          /\bdebug_log_owner_appends_legacy_partially_redacted_ndjson_and_skips_http_when_disabled\b/,
+        message: 'missing debug log file append and legacy partial redaction behavior regression',
+      },
+      {
+        regex: /\bdebug_log_owner_dispatches_the_same_redacted_payload_when_http_is_enabled\b/,
+        message: 'missing debug log HTTP dispatch behavior regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/infrastructure/debug_log/mod.rs',
+    reason:
+      'core debug log module must stay a compatibility facade over services-integrations for log append and redaction behavior',
+    patterns: [
+      {
+        regex: /\bpub use bitfun_services_integrations::debug_log::\{/,
+        message: 'missing debug log owner re-export',
+      },
+      {
+        regex: /\bappend_log_async\b/,
+        message: 'missing append_log_async compatibility export',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/infrastructure/storage/cleanup.rs',
+    reason:
+      'core storage cleanup compatibility path must preserve the legacy cleanup DTO imports while delegating behavior to services-core',
+    patterns: [
+      {
+        regex: /\bCleanupCategory\b/,
+        message: 'missing CleanupCategory compatibility re-export',
+      },
+      {
+        regex: /\bbitfun_services_core::storage_cleanup\b/,
+        message: 'missing services-core cleanup owner delegation',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/service/token_usage/service.rs',
+    reason:
+      'core token usage service must stay a compatibility wrapper over services-core',
+    patterns: [
+      {
+        regex: /\bbitfun_services_core::token_usage::TokenUsageService\b/,
+        message: 'missing services-core token usage delegation',
+      },
+      {
+        regex: /\buser_data_dir\(\)\.join\(TOKEN_USAGE_DIR\)/,
+        message: 'missing legacy token usage base directory adapter',
+      },
+    ],
+  },
+  {
     path: 'src/crates/contracts/events/src/frontend_projection.rs',
     reason:
       'events contract must own framework-neutral agentic frontend event projection for Tauri, WebSocket, and future extension hosts',

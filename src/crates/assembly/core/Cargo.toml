@@ -94,6 +94,7 @@ bitfun-tool-packs = { path = "../../execution/tool-provider-groups", default-fea
 # Core service owner crate
 bitfun-services-core = { path = "../../services/services-core", default-features = false, features = [
     "lsp",
+    "markdown",
     "workspace-runtime",
 ] }
 

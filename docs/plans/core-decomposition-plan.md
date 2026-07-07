@@ -26,17 +26,17 @@
 - workspace 已按六层物理目录展开：`interfaces -> assembly -> adapters -> services -> execution -> contracts`。
 - Runtime Services、Agent Runtime、Tool Contracts、Tool Execution、Harness、Product Domains、Services Core、Services Integrations 等 owner crate 已建立。
 - `bitfun-core --no-default-features` 已裁掉多批 concrete provider 和 direct provider 依赖；Desktop、CLI、ACP 仍通过 `bitfun-core/product-full` 获取完整产品能力。
-- Computer Use 系统动作错误码、memory workspace Git baseline / diff / render、MCP OAuth credential store、本地/远端 workspace runtime provider 已继续收口到 services owner；core 只保留既有工具 envelope、产品路径注入、授权入口、workspace binding/re-export 和 deprecated 兼容 wrapper。
+- Computer Use 系统动作错误码、memory workspace Git baseline / diff / render、MCP OAuth credential store、generic JSON persistence、storage cleanup、front-matter markdown、workspace instruction file IO/order、token usage persistence/query、本地/远端 workspace runtime provider 已继续收口到 services owner；core 只保留既有工具 envelope、产品路径注入、授权入口、workspace binding/re-export 和 deprecated 兼容 wrapper。
 - Agentic frontend event projection 和 AgenticEvent projection manifest 已进入 `bitfun-events`；Tauri/WebSocket transport 不再内联事件字段映射或 legacy event allowlist。
 - Tool ABI 基础合同已进入 `tool-contracts`：materialized snapshot、provider identity、default permission/effect filter、cancellation contract 和 stale-call guard 由 owner crate 提供，core 只投射现有产品 Tool 元数据。
-- Terminal / ExecCommand、remote SSH concrete execution、workspace search、debug ingest、AI provider adapter runtime、browser CDP、WebFetch/WebSearch、review platform provider service 等多批 owner 已迁出或收口到 port/provider。
+- Terminal / ExecCommand、remote SSH concrete execution、workspace search、debug-log file append/redaction/dispatch、AI provider adapter runtime、browser CDP、WebFetch/WebSearch、review platform provider service 等多批 owner 已迁出或收口到 port/provider。
 - Boundary scripts 已覆盖核心 owner 防回流、six-layer path 解析、facade-only 文件、custom agent owner / custom subagent wrapper 保护和重点 feature gate。
 
 ## 3. 目标差距
 
 | 差距 | 影响 | 收敛要求 |
 |---|---|---|
-| 部分 concrete owner 仍在 core 或产品命令路径 | 层级依赖和平台差异仍可能回流 | 继续迁移剩余 process/session host adapter、SDK-facing concrete provider 选择和其他仍由 core 持有的 I/O owner |
+| 部分 concrete owner 仍在 core 或产品命令路径 | 层级依赖和平台差异仍可能回流 | 继续迁移剩余 process/session host adapter、SDK-facing concrete provider 选择、DeepReview / prompt-cache / product command host adapter 等仍由 core 持有的产品耦合 I/O owner |
 | SDK readiness 仍未闭环 | 独立 Agent Runtime SDK 可能牵引 product-full 或 concrete provider | fake-provider smoke、minimal feature、cargo tree/metadata 对比和 API version 保护 |
 | UI Extension Contract 与产品形态矩阵仍需实现 | Desktop/Web/CLI/SDK/ACP 的插件 UI 行为可能不一致 | 建立 descriptor round-trip、fallback、unsupported/unavailable 和只读 state view |
 | Plugin Runtime Host 仍缺少真实执行 Host 和生态 adapter | 插件能力只能表达 disabled / projection-only，不能加载或执行外部插件 | 在 UI Extension Contract 后落地受控 Host facade、effect / trust / diagnostics / deadline / epoch；生态 adapter 在 Host 边界稳定后接入 |
@@ -50,7 +50,7 @@
 
 范围：
 
-- 继续迁移剩余 process/session host adapter、SDK-facing concrete provider 选择和其他仍由 core 持有的 I/O owner。
+- 继续迁移剩余 process/session host adapter、SDK-facing concrete provider 选择、DeepReview / prompt-cache / product command host adapter 等仍由 core 持有的产品耦合 I/O owner。
 - Product Assembly 负责选择 provider；Kernel、Execution、Extension、Product Feature 不直接依赖 platform concrete。
 - 建立 SDK minimal fake-provider smoke，确认 minimal feature 不牵引 Desktop、Tauri、Git provider、MCP client、AI HTTP client、remote SSH 或产品 UI。
 

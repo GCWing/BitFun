@@ -48,8 +48,9 @@ slices that are outside pure product logic but still platform-neutral.
 - Web tool network providers own concrete HTTP/Exa requests behind `web-tools`;
   product validation, readable extraction, and tool result envelopes stay in
   higher layers.
-- Debug log HTTP ingest posting lives behind `debug-log`; callers own log
-  shaping and dispatch policy.
+- Debug log file append, redaction, default path/env config, and optional HTTP
+  dispatch live behind `debug-log`; core only keeps ingest-server and product
+  workspace path adaptation.
 - Review-platform provider detection, repository discovery, token persistence,
   provider DTO mapping, pagination policy, HTTP transport, and Git provider
   integration live behind `review-platform`; core may only inject product data
@@ -67,6 +68,7 @@ slices that are outside pure product logic but still platform-neutral.
 
 ```bash
 cargo test -p bitfun-services-integrations
+cargo test -p bitfun-services-integrations --features debug-log --test debug_log_owner_contracts
 cargo test -p bitfun-services-integrations --features remote-ssh --test remote_ssh_disabled_contracts
 cargo test -p bitfun-services-integrations --features remote-ssh,workspace-search --test remote_workspace_search_disabled_contracts
 cargo test -p bitfun-services-integrations --features remote-ssh,remote-ssh-concrete,workspace-search remote_ssh

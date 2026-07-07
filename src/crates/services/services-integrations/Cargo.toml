@@ -77,7 +77,7 @@ canvas-runtime = [
     "urlencoding",
     "uuid",
 ]
-debug-log = ["reqwest"]
+debug-log = ["anyhow", "chrono", "reqwest", "uuid"]
 deep-research = ["bitfun-agent-runtime"]
 git = ["bitfun-services-core", "chrono", "git2", "thiserror"]
 file-watch = ["notify"]
@@ -205,3 +205,10 @@ product-full = [
     "workspace-search",
 ]
 ssh_config = ["dep:ssh_config"]
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[[test]]
+name = "debug_log_owner_contracts"
+required-features = ["debug-log"]

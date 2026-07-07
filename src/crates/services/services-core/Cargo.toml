@@ -17,6 +17,7 @@ bitfun-runtime-ports = { path = "../../contracts/runtime-ports", optional = true
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+serde_yaml = { workspace = true, optional = true }
 base64 = { workspace = true }
 chrono = { workspace = true }
 zip = { workspace = true, optional = true }
@@ -35,7 +36,17 @@ win32job = { workspace = true }
 [features]
 default = ["lsp"]
 lsp = ["dep:anyhow", "dep:notify", "dep:zip"]
+markdown = ["dep:serde_yaml"]
 workspace-runtime = ["dep:anyhow", "dep:async-trait", "dep:bitfun-runtime-ports"]
 
 [dev-dependencies]
+filetime = { workspace = true }
 tempfile = { workspace = true }
+
+[[test]]
+name = "markdown_owner_contracts"
+required-features = ["markdown"]
+
+[[test]]
+name = "lsp_plugin_registry_contracts"
+required-features = ["lsp"]
