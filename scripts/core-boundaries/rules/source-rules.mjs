@@ -5,4 +5,5 @@ export {
   forbiddenContentRules,
   forbiddenContentUnderRules,
 } from './source/forbidden-rules.mjs';
+export { publicApiAllowlistRules } from './source/public-api-rules.mjs';
 export { requiredContentRules } from './source/required-rules.mjs';

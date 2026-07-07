@@ -746,8 +746,17 @@ mod tests {
             envelope: PluginDispatchEnvelope,
         ) -> PortResult<PluginResponseEnvelope> {
             Ok(PluginResponseEnvelope {
-                envelope_id: envelope.envelope_id,
-                accepted: true,
+                envelope_version: envelope.envelope_version,
+                request_event_id: envelope.event_id,
+                project_domain_id: envelope.project_domain_id,
+                adapter_id: "test-plugin-runtime".to_string(),
+                plugin_id: Some(envelope.source.plugin_id),
+                completed_at_ms: 0,
+                effects: Vec::new(),
+                diagnostics: Vec::new(),
+                quarantine: None,
+                plugin_statuses: Vec::new(),
+                observed_epochs: envelope.epochs,
             })
         }
     }

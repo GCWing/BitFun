@@ -17,9 +17,12 @@ export function runManifestParserSelfTest({
   requiredContentRules,
   forbiddenContentRules,
   forbiddenContentUnderRules,
+  publicApiAllowlistRules,
   facadeOnlyFiles,
   forbiddenRuleTextForPath,
   regexSourceContainsContract,
+  collectTopLevelRustPublicSymbols,
+  collectPluginRootReexports,
   createFacadeLineChecker,
   escapeRegex,
 }) {
@@ -741,6 +744,106 @@ export function runManifestParserSelfTest({
   );
   if (!runtimePortsProfile?.forbiddenNonOptionalDeps.includes('bitfun-services-core')) {
     throw new Error('runtime-ports dependency profile must forbid service implementations');
+  }
+  const pluginRuntimeContractRule = requiredContentRules.find(
+    (rule) => rule.path === 'src/crates/contracts/runtime-ports/src/plugin.rs',
+  );
+  if (!pluginRuntimeContractRule) {
+    throw new Error('plugin runtime contracts must have a module-local owner rule');
+  }
+  const pluginRuntimeContractRuleText = pluginRuntimeContractRule.patterns
+    .map((pattern) => pattern.regex.source)
+    .join('\n');
+  for (const contract of [
+    'PluginRuntimeClient',
+    'PluginRuntimeBinding',
+    'read_plugins',
+    'execute_recovery_action',
+  ]) {
+    if (!pluginRuntimeContractRuleText.includes(contract)) {
+      throw new Error(`plugin runtime contract owner rule must require: ${contract}`);
+    }
+  }
+  const pluginRuntimeForbiddenRuleText = forbiddenRuleTextForPath(
+    'src/crates/contracts/runtime-ports/src/plugin.rs',
+  );
+  for (const forbiddenContract of [
+    'serde_json::Value',
+    'accepted',
+    'product-full',
+    'requires_permission',
+    'permission_prompt',
+    'PluginMaterializeCondition',
+  ]) {
+    if (!pluginRuntimeForbiddenRuleText.includes(forbiddenContract)) {
+      throw new Error(`plugin runtime boundary rule must forbid: ${forbiddenContract}`);
+    }
+  }
+  const pluginPublicApiRule = publicApiAllowlistRules.find(
+    (rule) => rule.path === 'src/crates/contracts/runtime-ports/src/plugin.rs',
+  );
+  const pluginRootReexportRule = publicApiAllowlistRules.find(
+    (rule) => rule.path === 'src/crates/contracts/runtime-ports/src/lib.rs',
+  );
+  const parsedPluginReexports = collectPluginRootReexports(`
+    pub use plugin::{PluginDispatchEnvelope, PluginResponseEnvelope};
+    pub use plugin::{
+      PluginRuntimeReadRequest,
+      PluginRuntimeReadResponse,
+    };
+    pub use plugin::PluginRuntimeClient;
+  `);
+  if (
+    parsedPluginReexports.join(',') !==
+    'PluginDispatchEnvelope,PluginResponseEnvelope,PluginRuntimeReadRequest,PluginRuntimeReadResponse,PluginRuntimeClient'
+  ) {
+    throw new Error('plugin root re-export parser must collect all block and single re-exports');
+  }
+  const parsedPluginSymbols = collectTopLevelRustPublicSymbols(`
+    pub enum TopLevelEnum { Value }
+    impl TopLevelEnum { pub fn hidden_method(&self) {} }
+    pub mod host;
+    pub const CONTRACT_VERSION: u16 = 1;
+  `);
+  if (parsedPluginSymbols.join(',') !== 'TopLevelEnum,host,CONTRACT_VERSION') {
+    throw new Error('public API parser must collect top-level items without impl methods');
+  }
+  const pluginPublicApiSymbols = (pluginPublicApiRule?.allowedSymbolEntries || []).map(
+    (entry) => entry.symbol,
+  );
+  const pluginRootReexportSymbols = (pluginRootReexportRule?.allowedPluginReexportEntries || []).map(
+    (entry) => entry.symbol,
+  );
+  if (!pluginPublicApiSymbols.includes('PluginDispatchEnvelope')) {
+    throw new Error('plugin runtime public API allowlist must include dispatch envelope');
+  }
+  if (!pluginPublicApiSymbols.includes('PluginPermissionGate')) {
+    throw new Error('plugin runtime public API allowlist must include permission gate');
+  }
+  if (!pluginPublicApiSymbols.includes('PluginRecoveryActionRequest')) {
+    throw new Error('plugin runtime public API allowlist must include recovery action request');
+  }
+  if (!pluginPublicApiSymbols.includes('PluginRuntimeReadRequest')) {
+    throw new Error('plugin runtime public API allowlist must include read request');
+  }
+  if (!pluginPublicApiSymbols.includes('PluginStatusSnapshot')) {
+    throw new Error('plugin runtime public API allowlist must include plugin status snapshot');
+  }
+  for (const entry of pluginPublicApiRule.allowedSymbolEntries) {
+    for (const field of ['owner', 'consumer', 'p0', 'rationale', 'exit']) {
+      if (!entry[field]) {
+        throw new Error(`plugin runtime public API entry must declare ${field}: ${entry.symbol}`);
+      }
+    }
+    if (typeof entry.wireImpact !== 'boolean') {
+      throw new Error(`plugin runtime public API entry must declare wireImpact: ${entry.symbol}`);
+    }
+  }
+  if (!pluginRootReexportSymbols.includes('PluginDispatchEnvelope')) {
+    throw new Error('runtime-ports root re-export allowlist must include dispatch envelope');
+  }
+  if (pluginRootReexportSymbols.length !== pluginPublicApiSymbols.length) {
+    throw new Error('plugin root re-export allowlist must match plugin module public budget');
   }
   const runtimeServicesRule = lightweightBoundaryRules.find(
     (rule) => rule.crateName === 'runtime-services',

@@ -4709,6 +4709,87 @@ export const requiredContentRules = [
     ],
   },
   {
+    path: 'src/crates/contracts/runtime-ports/src/plugin.rs',
+    reason:
+      'runtime-ports plugin module must own typed Plugin Runtime Contract DTOs and host boundary client traits',
+    patterns: [
+      {
+        regex: /\bpub trait PluginRuntimeClient\b/,
+        message: 'missing plugin runtime client boundary contract',
+      },
+      {
+        regex: /\bread_plugins\b/,
+        message: 'missing plugin discovery/status read boundary contract',
+      },
+      {
+        regex: /\bexecute_recovery_action\b/,
+        message: 'missing plugin recovery action execution boundary contract',
+      },
+      {
+        regex: /\bpub enum PluginRuntimeBinding\b/,
+        message: 'missing plugin runtime binding boundary contract',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/contracts/runtime-ports/tests/plugin_runtime_contracts.rs',
+    reason:
+      'runtime-ports plugin contract tests must cover typed envelopes, candidate effects, and disabled/projection-only behavior',
+    patterns: [
+      {
+        regex: /\bdispatch_envelope_serializes_typed_host_boundary_without_raw_payload\b/,
+        message: 'missing typed dispatch envelope regression',
+      },
+      {
+        regex: /\bresponse_envelope_carries_effect_candidates_and_observed_epochs\b/,
+        message: 'missing typed response envelope regression',
+      },
+      {
+        regex: /\bpolicy_allowed_effects_keep_auditable_permission_facts\b/,
+        message: 'missing auditable policy-allowed permission gate regression',
+      },
+      {
+        regex: /\bread_plugins_contract_supports_discovery_status_and_config_projection\b/,
+        message: 'missing plugin read-model contract regression',
+      },
+      {
+        regex: /\bPluginStatusSnapshot\b/,
+        message: 'missing plugin status snapshot regression coverage',
+      },
+      {
+        regex: /\bdisabled_plugin_runtime_binding_reports_not_available\b/,
+        message: 'missing disabled runtime binding regression',
+      },
+      {
+        regex: /\bprojection_only_plugin_runtime_rejects_dispatch_without_host\b/,
+        message: 'missing projection-only runtime binding regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/contracts/runtime-ports/tests/plugin_runtime_host_contracts.rs',
+    reason:
+      'runtime-ports plugin host contract tests must cover permission prompts, diagnostics, quarantine, and lifecycle facts',
+    patterns: [
+      {
+        regex: /\bpermission_prompt_descriptor_contains_minimum_user_decision_facts\b/,
+        message: 'missing permission prompt descriptor regression',
+      },
+      {
+        regex: /\bdiagnostic_and_quarantine_state_are_auditable_and_recoverable\b/,
+        message: 'missing diagnostic and quarantine regression',
+      },
+      {
+        regex: /\brecovery_action_request_and_result_are_typed_execution_contracts\b/,
+        message: 'missing recovery action request/result regression',
+      },
+      {
+        regex: /\bhost_lifecycle_event_tracks_phase_source_and_epoch\b/,
+        message: 'missing plugin host lifecycle regression',
+      },
+    ],
+  },
+  {
     path: 'src/crates/contracts/runtime-ports/src/lib.rs',
     reason:
       'runtime-ports must keep remote and subagent runtime boundary contracts DTO/trait-only',
@@ -4724,18 +4805,6 @@ export const requiredContentRules = [
       {
         regex: /\bpub trait RuntimeEventSink\b/,
         message: 'missing runtime event sink contract',
-      },
-      {
-        regex: /\bpub trait PluginRuntimeClient\b/,
-        message: 'missing plugin runtime client boundary contract',
-      },
-      {
-        regex: /\bpub enum PluginRuntimeBinding\b/,
-        message: 'missing plugin runtime binding boundary contract',
-      },
-      {
-        regex: /\bpub struct DisabledPluginRuntimeClient\b/,
-        message: 'missing disabled plugin runtime client contract',
       },
       {
         regex: /\bpub struct AgentSessionCreateResult\b[\s\S]*\bpub session_name: String\b/,

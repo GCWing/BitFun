@@ -2,6 +2,51 @@
 
 export const forbiddenContentRules = [
   {
+    path: 'src/crates/contracts/runtime-ports/src/lib.rs',
+    patterns: [
+      {
+        regex: /\bpub\s+use\s+plugin::\*/,
+        message:
+          'runtime-ports root must not wildcard re-export plugin contracts; update the explicit public API budget',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/contracts/runtime-ports/src/plugin.rs',
+    patterns: [
+      {
+        regex: /\bserde_json::Value\b|\bserde_json::Map\b|\bjson!\b/,
+        message:
+          'plugin runtime contracts must not expose raw JSON ABI; use typed refs, descriptors, candidates, diagnostics, and quarantine facts',
+      },
+      {
+        regex: /\bpub\s+(?:\w+\s+)*payload\s*:\s*serde_json::Value\b/,
+        message:
+          'PluginDispatchEnvelope must not regress to raw payload transport across the Host boundary',
+      },
+      {
+        regex: /\bpub\s+accepted\s*:\s*bool\b/,
+        message:
+          'PluginResponseEnvelope must return typed effect candidates and diagnostics instead of an accepted bool',
+      },
+      {
+        regex: /product-full/,
+        message:
+          'plugin runtime contracts must not pull product-full delivery assumptions into runtime-ports',
+      },
+      {
+        regex: /\brequires_permission\b|\bpermission_prompt\b/,
+        message:
+          'plugin effect permission state must use PluginPermissionGate to avoid invalid required-without-prompt combinations',
+      },
+      {
+        regex: /\bNotRequired\b|\bPluginMaterializeCondition\b|\bmaterialize_when\b/,
+        message:
+          'plugin effect materialization must be derived from an auditable PluginPermissionGate, not an unaudited no-op or free materialize flag',
+      },
+    ],
+  },
+  {
     path: 'src/crates/adapters/transport/src/adapters/tauri.rs',
     patterns: [
       {

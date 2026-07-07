@@ -24,6 +24,7 @@ import {
   facadeOnlyFiles,
   forbiddenContentRules,
   forbiddenContentUnderRules,
+  publicApiAllowlistRules,
   requiredContentRules,
 } from './rules/source-rules.mjs';
 import { runManifestParserSelfTest } from './self-test.mjs';
@@ -835,6 +836,132 @@ function checkRequiredContent(repoPath, patterns, reason) {
   }
 }
 
+function collectTopLevelRustPublicSymbols(text) {
+  const symbols = [];
+  let braceDepth = 0;
+  for (const line of text.split(/\r?\n/)) {
+    if (braceDepth === 0) {
+      const match = line.match(
+        /^\s*pub\s+(?:(?:async|unsafe)\s+)*(?:(?:const\s+fn)|fn|type|struct|enum|trait|mod|const|static)\s+([A-Za-z_][A-Za-z0-9_]*)\b/,
+      );
+      if (match) {
+        symbols.push(match[1]);
+      }
+    }
+    const code = line.replace(/\/\/.*$/, '');
+    braceDepth += (code.match(/\{/g) || []).length;
+    braceDepth -= (code.match(/\}/g) || []).length;
+    if (braceDepth < 0) {
+      braceDepth = 0;
+    }
+  }
+  return symbols;
+}
+
+function collectPluginRootReexports(text) {
+  const symbols = [];
+  const blockRegex = /\bpub\s+use\s+plugin::\{([\s\S]*?)\};/g;
+  for (const match of text.matchAll(blockRegex)) {
+    symbols.push(
+      ...match[1]
+        .split(',')
+        .map((symbol) => symbol.trim())
+        .filter(Boolean),
+    );
+  }
+  const singleRegex =
+    /\bpub\s+use\s+plugin::([A-Za-z_][A-Za-z0-9_]*)(?:\s+as\s+[A-Za-z_][A-Za-z0-9_]*)?\s*;/g;
+  for (const match of text.matchAll(singleRegex)) {
+    symbols.push(match[1]);
+  }
+  return symbols;
+}
+
+function allowedSymbolsForRule(rule, entriesField, symbolsField) {
+  if (rule[entriesField]) {
+    return rule[entriesField].map((entry) => entry.symbol);
+  }
+  return rule[symbolsField] || [];
+}
+
+function checkPublicApiEntryMetadata(path, entries, reason) {
+  if (!entries) {
+    return;
+  }
+  const requiredFields = ['symbol', 'owner', 'consumer', 'p0', 'rationale', 'exit'];
+  for (const entry of entries) {
+    for (const field of requiredFields) {
+      if (typeof entry[field] !== 'string' || entry[field].trim().length === 0) {
+        failures.push({
+          path,
+          line: 1,
+          message: `${reason}; public API entry ${entry.symbol || '<missing>'} is missing ${field}`,
+        });
+      }
+    }
+    if (typeof entry.wireImpact !== 'boolean') {
+      failures.push({
+        path,
+        line: 1,
+        message: `${reason}; public API entry ${entry.symbol || '<missing>'} must declare wireImpact`,
+      });
+    }
+  }
+}
+
+function compareSymbolAllowlist(path, actualSymbols, allowedSymbols, reason) {
+  const allowed = new Set(allowedSymbols);
+  const actual = new Set(actualSymbols);
+  for (const symbol of actual) {
+    if (!allowed.has(symbol)) {
+      failures.push({
+        path,
+        line: 1,
+        message: `${reason}; unexpected public symbol: ${symbol}`,
+      });
+    }
+  }
+  for (const symbol of allowed) {
+    if (!actual.has(symbol)) {
+      failures.push({
+        path,
+        line: 1,
+        message: `${reason}; missing public symbol: ${symbol}`,
+      });
+    }
+  }
+}
+
+function checkPublicApiAllowlist(rule) {
+  const path = repoPathToFsPath(rule.path);
+  const text = readText(path);
+  checkPublicApiEntryMetadata(path, rule.allowedSymbolEntries, rule.reason);
+  checkPublicApiEntryMetadata(path, rule.allowedPluginReexportEntries, rule.reason);
+  if (rule.allowedSymbols || rule.allowedSymbolEntries) {
+    compareSymbolAllowlist(
+      path,
+      collectTopLevelRustPublicSymbols(text),
+      allowedSymbolsForRule(rule, 'allowedSymbolEntries', 'allowedSymbols'),
+      rule.reason,
+    );
+  }
+  if (rule.allowedPluginReexports || rule.allowedPluginReexportEntries) {
+    compareSymbolAllowlist(
+      path,
+      collectPluginRootReexports(text),
+      allowedSymbolsForRule(rule, 'allowedPluginReexportEntries', 'allowedPluginReexports'),
+      rule.reason,
+    );
+    if (/\bpub\s+use\s+plugin::\*/.test(text)) {
+      failures.push({
+        path,
+        line: 1,
+        message: `${rule.reason}; wildcard plugin re-export is forbidden`,
+      });
+    }
+  }
+}
+
 function checkForbiddenContentUnder(repoDir, patterns, reason) {
   const dir = repoPathToFsPath(repoDir);
   walkFiles(dir, (path) => {
@@ -881,9 +1008,12 @@ export function runCoreBoundaryCheck() {
       requiredContentRules,
       forbiddenContentRules,
       forbiddenContentUnderRules,
+      publicApiAllowlistRules,
       facadeOnlyFiles,
       forbiddenRuleTextForPath,
       regexSourceContainsContract,
+      collectTopLevelRustPublicSymbols,
+      collectPluginRootReexports,
       createFacadeLineChecker,
       escapeRegex,
     });
@@ -942,6 +1072,10 @@ export function runCoreBoundaryCheck() {
 
   for (const rule of requiredContentRules) {
     checkRequiredContent(rule.path, rule.patterns, rule.reason);
+  }
+
+  for (const rule of publicApiAllowlistRules) {
+    checkPublicApiAllowlist(rule);
   }
 
   if (failures.length > 0) {
