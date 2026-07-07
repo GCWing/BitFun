@@ -1,7 +1,7 @@
-/* Z-index utilities bound to tokens */
+/* Z-index utilities are local layout helpers, not theme extension keys. */
 
-.u-z-base { z-index: var(--z-base); }
-.u-z-header { z-index: var(--z-header); }
-.u-z-floating { z-index: var(--z-floating); }
-.u-z-overlay { z-index: var(--z-overlay); }
+.u-z-base { z-index: 0; }
+.u-z-header { z-index: 10; }
+.u-z-floating { z-index: 50; }
+.u-z-overlay { z-index: 100; }
 

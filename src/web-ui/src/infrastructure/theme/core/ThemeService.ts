@@ -669,10 +669,6 @@ export class ThemeService {
         const value = shadows[key];
         root.style.setProperty(`--shadow-${key}`, value);
       });
-      root.style.setProperty('--glass-shadow-sm', shadows.sm);
-      root.style.setProperty('--glass-shadow-base', shadows.base);
-      root.style.setProperty('--glass-shadow-lg', shadows.lg);
-      root.style.setProperty('--glass-shadow-xl', shadows.xl);
     }
 
 
@@ -710,8 +706,6 @@ export class ThemeService {
 
     if (effects?.opacity) {
       root.style.setProperty('--opacity-disabled', String(effects.opacity.disabled));
-      root.style.setProperty('--opacity-hover', String(effects.opacity.hover));
-      root.style.setProperty('--opacity-focus', String(effects.opacity.focus));
     }
 
 

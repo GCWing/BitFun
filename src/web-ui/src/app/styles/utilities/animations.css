@@ -214,7 +214,7 @@
   transition: box-shadow var(--motion-fast) var(--easing-standard);
 }
 .hover-glow:hover {
-  box-shadow: var(--glass-shadow-lg);
+  box-shadow: var(--shadow-lg);
 }
 
 /* Glow sweep effect */
@@ -235,7 +235,7 @@
     transparent);
   transition: left 0.5s ease;
   pointer-events: none;
-  z-index: var(--z-decoration);
+  z-index: 1;
 }
 .sweep-glow:hover::before {
   animation: sweepGlow 0.5s ease;
@@ -249,7 +249,7 @@
   border: 1px solid var(--glass-border-base);
   backdrop-filter: var(--glass-blur-base);
   -webkit-backdrop-filter: var(--glass-blur-base);
-  box-shadow: var(--glass-shadow-base);
+  box-shadow: var(--shadow-base);
 }
 
 /* Enhanced glass effect on hover */
@@ -259,15 +259,15 @@
 .glass-hover:hover {
   background: var(--glass-bg-hover);
   border-color: var(--glass-border-hover);
-  box-shadow: var(--glass-shadow-lg);
+  box-shadow: var(--shadow-lg);
   transform: translateY(-1px);
 }
 
 /* Active glass effect */
 .glass-active {
   background: var(--glass-bg-active);
-  border-color: var(--glass-border-focus);
-  box-shadow: var(--glass-shadow-xl);
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-xl);
 }
 
 /* ========== Decorative effects ========== */
@@ -291,7 +291,7 @@
   opacity: 0.4;
   animation: glassShine 4s ease-in-out infinite;
   pointer-events: none;
-  z-index: var(--z-decoration);
+  z-index: 1;
 }
 
 /* Decorative gradient overlay */
@@ -307,7 +307,7 @@
     transparent 50%,
     color-mix(in srgb, var(--color-static-white) 1%, transparent) 100%);
   pointer-events: none;
-  z-index: var(--z-decoration);
+  z-index: 1;
   border-radius: inherit;
 }
 

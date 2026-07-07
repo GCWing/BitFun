@@ -66,8 +66,8 @@
 
 /* Opacity utilities */
 .u-opacity-disabled { opacity: var(--opacity-disabled); }
-.u-opacity-hover { opacity: var(--opacity-hover); }
-.u-opacity-focus { opacity: var(--opacity-focus); }
+.u-opacity-hover { opacity: 0.8; }
+.u-opacity-focus { opacity: 0.9; }
 
 /* Position utilities */
 .u-relative { position: relative; }

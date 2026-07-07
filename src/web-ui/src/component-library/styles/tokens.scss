@@ -451,15 +451,6 @@ $badge-info-text: $color-info;
   --border-accent: #{$border-accent};
   --border-accent-strong: #{$border-accent-strong};
 
-  --z-base: #{$z-base};
-  --z-decoration: #{$z-decoration};
-  --z-content: #{$z-content};
-  --z-header: #{$z-header};
-  --z-sticky: #{$z-sticky};
-  --z-floating: #{$z-floating};
-  --z-overlay: #{$z-overlay};
-  --z-modal: #{$z-modal};
-
   --shadow-xs: #{$shadow-xs};
   --shadow-sm: #{$shadow-sm};
   --shadow-base: #{$shadow-base};
@@ -505,13 +496,8 @@ $badge-info-text: $color-info;
   --glass-bg-active: var(--element-bg-strong);
   --glass-border-base: var(--border-base);
   --glass-border-hover: var(--border-medium);
-  --glass-border-focus: var(--border-strong);
   --glass-blur-sm: #{$blur-subtle};
   --glass-blur-base: #{$blur-base};
-  --glass-shadow-sm: var(--shadow-sm);
-  --glass-shadow-base: var(--shadow-base);
-  --glass-shadow-lg: var(--shadow-lg);
-  --glass-shadow-xl: var(--shadow-xl);
 
   --size-radius-sm: #{$size-radius-sm};
   --size-radius-base: #{$size-radius-base};
@@ -609,8 +595,6 @@ $badge-info-text: $color-info;
   --line-height-relaxed: #{$line-height-relaxed};
 
   --opacity-disabled: #{$opacity-disabled};
-  --opacity-hover: #{$opacity-hover};
-  --opacity-focus: #{$opacity-focus};
 
   --card-bg-default: #{$card-bg-default};
   --card-bg-elevated: #{$card-bg-elevated};

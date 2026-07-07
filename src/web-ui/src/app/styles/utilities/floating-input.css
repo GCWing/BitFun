@@ -18,7 +18,7 @@
     0 4px 15px color-mix(in srgb, var(--color-accent-600) 10%, transparent),
     inset 0 1px 0 var(--color-overlay-white-08);
   padding: var(--size-gap-3) var(--size-gap-4);
-  z-index: var(--z-overlay);
+  z-index: 100;
   transition: all var(--motion-base) var(--easing-standard);
   opacity: 0.6; /* Overall opacity when inactive */
   display: flex;

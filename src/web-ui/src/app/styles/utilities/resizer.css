@@ -8,7 +8,7 @@
     color-mix(in srgb, var(--color-static-white) 1%, transparent) 100%);
   cursor: col-resize;
   position: relative;
-  z-index: var(--z-base);
+  z-index: 0;
   display: flex;
   align-items: center;
   justify-content: center;

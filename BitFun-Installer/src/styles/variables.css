@@ -6,13 +6,7 @@
   --color-text-secondary: #b0b0b0;
   --color-text-muted: #858585;
 
-  --color-accent-50: rgba(96, 165, 250, 0.04);
-  --color-accent-100: rgba(96, 165, 250, 0.08);
-  --color-accent-200: rgba(96, 165, 250, 0.15);
-  --color-accent-300: rgba(96, 165, 250, 0.25);
-  --color-accent-400: rgba(96, 165, 250, 0.4);
   --color-accent-500: #60a5fa;
-  --color-accent-600: #3b82f6;
 
   --color-success: #34d399;
   --color-warning: #f59e0b;
@@ -21,11 +15,9 @@
   --element-bg-subtle: rgba(255, 255, 255, 0.06);
   --element-bg-soft: rgba(255, 255, 255, 0.12);
   --element-bg-medium: rgba(255, 255, 255, 0.18);
-  --element-bg-strong: rgba(255, 255, 255, 0.24);
 
   --border-subtle: rgba(255, 255, 255, 0.12);
   --border-base: rgba(255, 255, 255, 0.18);
-  --border-medium: rgba(255, 255, 255, 0.24);
 
   --size-radius-sm: 6px;
 
@@ -35,9 +27,4 @@
   --font-mono: 'Fira Code', 'JetBrains Mono', 'SF Mono', 'Consolas',
     'Noto Sans SC', 'Microsoft YaHei', monospace;
 
-  --motion-fast: 0.15s;
-  --motion-base: 0.3s;
-  --easing-standard: cubic-bezier(0.4, 0, 0.2, 1);
-
-  --header-height: 36px;
 }
