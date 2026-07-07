@@ -308,27 +308,30 @@ mod tests {
     };
 
     fn test_ai_client() -> Arc<super::AIClient> {
-        Arc::new(super::AIClient::new(AIConfig {
-            name: "test".to_string(),
-            base_url: "http://127.0.0.1".to_string(),
-            request_url: "http://127.0.0.1".to_string(),
-            api_key: "test".to_string(),
-            model: "test-model".to_string(),
-            format: "openai".to_string(),
-            context_window: 8192,
-            max_tokens: None,
-            temperature: None,
-            top_p: None,
-            reasoning_mode: ReasoningMode::Default,
-            inline_think_in_text: false,
-            custom_headers: None,
-            custom_headers_mode: None,
-            skip_ssl_verify: false,
-            reasoning_effort: None,
-            thinking_budget_tokens: None,
-            custom_request_body: None,
-            custom_request_body_mode: None,
-        }))
+        Arc::new(
+            super::AIClient::new(AIConfig {
+                name: "test".to_string(),
+                base_url: "http://127.0.0.1".to_string(),
+                request_url: "http://127.0.0.1".to_string(),
+                api_key: "test".to_string(),
+                model: "test-model".to_string(),
+                format: "openai".to_string(),
+                context_window: 8192,
+                max_tokens: None,
+                temperature: None,
+                top_p: None,
+                reasoning_mode: ReasoningMode::Default,
+                inline_think_in_text: false,
+                custom_headers: None,
+                custom_headers_mode: None,
+                skip_ssl_verify: false,
+                reasoning_effort: None,
+                thinking_budget_tokens: None,
+                custom_request_body: None,
+                custom_request_body_mode: None,
+            })
+            .expect("test AI client should initialize"),
+        )
     }
 
     #[test]
