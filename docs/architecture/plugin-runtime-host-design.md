@@ -30,6 +30,8 @@ Product Assembly 能力模型和领域对象；第 7-14 节说明运行时、IPC
 - 保持 Kernel 是任务状态、事件和审计事实的权威源；Execution 是工具结果权威源；Security Boundary 是权限权威源。
   插件只能返回候选效果。
 - 让 Desktop、CLI、Server、Remote、ACP、Web、Mobile Web 和 SDK 显式启用、禁用或降级插件能力。
+- 当前 P0 只实现 Desktop/CLI 的 OpenCode-compatible plugin 垂直切片；Server、Remote、ACP、Web、Mobile Web
+  和 SDK 的 full plugin runtime 均按第 12 节进入 P0+。
 - 支持插件在已声明 extension point 上追加或覆写贡献，但覆写必须由 Product Assembly、能力 owner 和安全控制面共同约束。
 
 非目标：
@@ -45,7 +47,7 @@ Product Assembly 能力模型和领域对象；第 7-14 节说明运行时、IPC
 ### 2.1 产品形态、运行策略与扩展贡献
 
 `ProductProfile`、`CapabilityPack`、`CapabilitySet` 和 `OverridePoint` 的权威定义见
-[`product-architecture.md`](product-architecture.md#3-产品如何成形)。本文限定说明插件运行时涉及的子集：
+[`product-architecture.md`](product-architecture.md#5-产品如何成形)。本文限定说明插件运行时涉及的子集：
 
 | 类别 | 进入 BitFun 的方式 | 插件运行时关系 |
 |---|---|---|
@@ -299,6 +301,7 @@ interface PluginResponseEnvelope {
   completed_at_ms: number;
   effects: PluginEffectCandidate[];
   diagnostics: PluginDiagnostic[];
+  quarantine?: PluginQuarantineState;
   observed_epochs: {
     project_epoch: number;
     trust_epoch: number;
@@ -315,6 +318,7 @@ interface PluginEffectBase {
   data_classification: DataClassification;
   risk_level: "low" | "medium" | "high";
   requires_permission: boolean;
+  permission_prompt?: PermissionPromptDescriptor;
   source_ref: PluginSourceRef;
 }
 
@@ -369,7 +373,7 @@ interface UiContributionDescriptor {
   data_refs: PayloadRef[];
   allowed_actions: ProductCommandRef[];
   required_capabilities: CapabilityId[];
-  permission_prompt?: PermissionPromptDescriptor;
+  permission_prompt_ref?: PermissionPromptRef;
   fallback: {
     mode: "hide" | "disabled" | "text_projection" | "unsupported_message";
     message_key?: string;
@@ -380,10 +384,110 @@ interface UiContributionDescriptor {
   };
   i18n_namespaces: string[];
 }
+
+interface PermissionPromptRef {
+  effect_id: string;
+  audit_ref: {
+    correlation_id: string;
+    event_id?: string;
+  };
+}
+
+type PermissionPromptEffectKind =
+  | "suggestion"
+  | "evidence_candidate"
+  | "tool_input_patch_candidate"
+  | "tool_provider_candidate"
+  | "post_tool_evidence_candidate"
+  | "permission_candidate"
+  | "ui_contribution_candidate"
+  | "event_subscription_candidate";
+
+interface PermissionPromptDescriptor {
+  descriptor_version: 1;
+  plugin_id: string;
+  source_ref: PluginSourceRef;
+  source_hash: string;
+  requested_capability: CapabilityId;
+  requested_effect: PermissionPromptEffectKind;
+  target_ref: TargetRef;
+  risk_level: "low" | "medium" | "high";
+  owner: CapabilityOwnerRef;
+  rollback: "none" | "automatic" | "manual";
+  deny_result: "no_state_change" | "candidate_discarded" | "temporarily_unavailable" | "policy_denied";
+  audit_ref: {
+    correlation_id: string;
+    event_id?: string;
+  };
+}
+
+interface PluginDiagnosticBase {
+  diagnostic_id: string;
+  severity: "info" | "warning" | "error";
+  plugin_id: string;
+  source_ref: PluginSourceRef;
+  action_hints: RecoveryAction[];
+  audit_ref: {
+    correlation_id: string;
+    event_id?: string;
+  };
+}
+
+type PluginDiagnostic =
+  | (PluginDiagnosticBase & {
+      kind: "trust_config";
+      trust_result: "trusted" | "untrusted" | "revoked" | "requires_confirmation";
+      config_validation: "valid" | "invalid" | "missing" | "unsupported";
+    })
+  | (PluginDiagnosticBase & {
+      kind: "manifest";
+      manifest_validation_error: string;
+    })
+  | (PluginDiagnosticBase & {
+      kind: "host_availability";
+      host_availability_reason: string;
+    })
+  | (PluginDiagnosticBase & {
+      kind: "deadline";
+      deadline_reason: string;
+    })
+  | (PluginDiagnosticBase & {
+      kind: "quarantine";
+      quarantine_reason: PluginQuarantineState["reason"];
+      quarantine_scope: PluginQuarantineState["scope"];
+    });
+
+type RecoveryAction =
+  | "retry"
+  | "disable"
+  | "retrust"
+  | "open_log"
+  | "clear_quarantine";
+
+interface PluginQuarantineState {
+  state_version: 1;
+  plugin_id: string;
+  source_ref: PluginSourceRef;
+  scope: "plugin" | "source" | "capability" | "command" | "execution_domain";
+  reason: "crash" | "deadline" | "manifest_invalid" | "trust_revoked" | "policy_denied" | "protocol_error";
+  clear_condition: "manual" | "manifest_changed" | "trust_renewed" | "host_restarted" | "policy_changed";
+  action_hints: RecoveryAction[];
+  log_ref?: PayloadRef;
+  audit_ref: {
+    correlation_id: string;
+    event_id?: string;
+  };
+}
 ```
 
 `unknown` 只能出现在带 `schema_version`、`data_classification` 和 `redaction` 的 canonical payload 内部。不得在公共
 API 中绕过 schema 传递裸 JSON。
+
+`PermissionPromptDescriptor`、`PermissionPromptRef`、`PluginDiagnostic` 和 `PluginQuarantineState` 是 Desktop settings、permission prompt、
+CLI diagnostics 和审计记录共享的结构化合同。`requires_permission=true` 的 effect candidate 必须携带
+`permission_prompt`；UI contribution 只能携带 `permission_prompt_ref`，并且必须引用同一个 effect id / audit ref。
+Desktop prompt、CLI diagnostics 和 audit 必须消费同一对象；prompt mismatch 必须让 descriptor 校验失败。Host
+不得只返回本地化文案或不可解析错误来表达权限确认、诊断、隔离状态或恢复动作。
 
 `UiContributionDescriptor` 不得包含 React component、HTML script、DOM selector、Tauri command、store mutation
 或任意可执行代码。未知 slot、未知 action 或缺失 capability 时，入口必须按 fallback 降级。
@@ -474,25 +578,31 @@ DTO。
 
 ## 12. 产品形态与降级
 
+本节能力矩阵是长期设计边界，不是 P0 验收范围。P0 override 以
+[`product-architecture.md`](product-architecture.md) 为准：P0 只验收 Desktop settings/command + CLI diagnostics 的同一条
+OpenCode-compatible plugin 垂直切片；ACP、Server、Remote、Web、Mobile Web 和 SDK minimal 在 P0 中只能是
+typed unsupported、unavailable、projection-only 或 status-only。Server / Remote Host、ACP capability / permission bridge
+和其他入口的 full plugin runtime 必须进入 P0+，并具备单独产品决策、迁移/回滚和验证指标。
+
 | 产品形态 | 插件运行时策略 | UI 策略 | 失败语义 |
 |---|---|---|---|
 | Desktop / product-full | 可启用本地 Host；高风险能力按 trust policy 提权 | 渲染已校验 descriptor | host crash 或 timeout 不影响默认任务 |
 | CLI | 可启用本地 Host 或只读投影 | 文本 descriptor / warning | unsupported 明确输出，不静默忽略 |
-| Server | 默认受控启用或 disabled stub，取决于部署策略 | API 返回 typed unsupported 或 descriptor projection | 不自动启动本地 JS/TS runtime |
-| Remote | Host 靠近远端执行域 | UI 只接收 logical path 和 descriptor | 不回落到本地路径执行 |
-| ACP | 以 protocol adapter 暴露可组合 capability | 以 ACP 能力或 unsupported 表达 | 不将插件失败解释为 agent 失败 |
+| Server | P0 为 typed unsupported / projection-only；P0+ 才可按部署策略受控启用 | API 返回 typed unsupported 或 descriptor projection | 不自动启动本地 JS/TS runtime |
+| Remote | P0 为 unavailable / projection-only；P0+ 才可让 Host 靠近远端执行域 | UI 只接收 logical path 和 descriptor | 不回落到本地路径执行 |
+| ACP | P0 为 status-only / projection-only / typed unsupported；P0+ 才可暴露 capability 或 permission bridge | 以 ACP 状态或 unsupported 表达 | 不将插件失败解释为 agent 失败 |
 | Web / Mobile Web | 不启动本地 Host | 只消费后端投影 descriptor | 不持有插件执行单元 |
-| SDK minimal | disabled stub 或调用方注入 fake/client | 无默认 UI host | 不牵引 product-full 或 concrete provider |
+| SDK minimal | P0 仅 disabled stub 或测试 fake/client；生产可执行 client 注入属于 P0+ | 无默认 UI host | 不牵引 product-full 或 concrete provider |
 
 能力矩阵：
 
 | 能力 | Desktop / product-full | CLI | Server | Remote | ACP | Web / Mobile Web | SDK minimal |
 |---|---|---|---|---|---|---|---|
-| discovery | 支持本地/项目发现 | 支持本地/项目发现 | 由部署策略启用 | 在远端执行域发现 | 通过 ACP capability 暴露 | 只消费后端投影 | 调用方注入或 disabled |
-| read-only event hook | 支持候选建议/证据 | 支持文本诊断 | 支持 API diagnostic | 靠近远端 Host 执行 | 映射为 ACP event/capability | 只展示投影 | fake/client 可选 |
-| tool provider candidate | 支持，必须经 Tool ABI | 支持，必须经 Tool ABI | 默认受部署策略限制 | 绑定远端 execution domain | 只作为 external tool capability | 不执行 | 默认 disabled |
-| permission candidate | 只作建议，最终由安全边界决策 | 只作建议 | 只作 API 候选 | 绑定远端 trust/policy epoch | 映射为 ACP permission bridge | 只展示状态 | 默认 disabled |
-| UI contribution | descriptor 渲染 | 文本或命令投影 | API projection / unsupported | 只使用 logical path | ACP 能力或 unsupported | descriptor 投影 | 默认无 UI host |
+| discovery | 支持本地/项目发现 | 支持本地/项目发现 | P0 projection/unsupported；P0+ 由部署策略启用 | P0 projection/unavailable；P0+ 在远端执行域发现 | P0 status/projection/unsupported；P0+ 通过 ACP capability 暴露 | 只消费后端投影 | 调用方注入或 disabled |
+| read-only event hook | 支持候选建议/证据 | 支持文本诊断 | P0 diagnostic projection；P0+ 支持 API diagnostic | P0 只读投影；P0+ 靠近远端 Host 执行 | P0 status-only；P0+ 映射为 ACP event/capability | 只展示投影 | fake/client 可选 |
+| tool provider candidate | 支持，必须经 Tool ABI | 支持，必须经 Tool ABI | P0 不执行；P0+ 受部署策略限制 | P0 不执行；P0+ 绑定远端 execution domain | P0 不执行；P0+ 只作为 external tool capability | 不执行 | 默认 disabled |
+| permission candidate | 只作建议，最终由安全边界决策 | 只作建议 | P0 不产生候选；P0+ 只作 API 候选 | P0 不产生候选；P0+ 绑定远端 trust/policy epoch | P0 不接入 permission bridge；P0+ 映射为 ACP permission bridge | 只展示状态 | 默认 disabled |
+| UI contribution | descriptor 渲染 | 文本或命令投影 | P0 API projection / unsupported；P0+ 受控 API projection | P0 只使用 logical path 投影；P0+ 受控远端投影 | P0 unsupported/status-only；P0+ ACP 能力或 unsupported | descriptor 投影 | 默认无 UI host |
 | shell helper | 默认禁用，可映射为 tool request 候选 | 默认禁用 | 默认禁用 | 只允许远端策略批准 | 不直接暴露 shell | 不执行 | disabled |
 | read-only state view | 支持脱敏投影 | 支持文本投影 | 支持 API 投影 | 支持远端脱敏投影 | 映射为 protocol state | 支持只读投影 | fake/client 可选 |
 | writable JS/TS runtime | 非默认能力，需独立安全评审 | 非默认能力 | 非默认能力 | 非默认能力 | 不作为默认能力 | 不执行 | disabled |
@@ -519,16 +629,20 @@ DTO。
 
 ## 14. 验证矩阵
 
+可执行验证目标以 [`../plans/core-decomposition-plan.md#8-验证矩阵`](../plans/core-decomposition-plan.md#8-验证矩阵)
+为准。Host、adapter、product-shape 或 SDK minimal 相关 PR 必须更新并运行其中固定命令；本节只说明覆盖面，不能用临时测试或
+PR 文案替代执行计划里的固定目标。
+
 | 验证面 | 必须覆盖 |
 |---|---|
 | 主体进程 API | 只暴露 runtime client、binding、envelope、candidate、trust 和 descriptor |
-| schema | dispatch / response / effect candidate serialization round-trip |
+| schema | dispatch / response / effect candidate / permission prompt / diagnostic / quarantine state serialization round-trip |
 | 时序 | initialize、deadline、cancel、stale epoch、idempotency key |
-| 权限 | plugin 不能 approve、不能写审计、不能伪造 tool result |
+| 权限 | plugin 不能 approve、不能写审计、不能伪造 tool result；permission prompt 字段必须覆盖 source/hash、effect、target、risk、owner、rollback、deny result 和 audit ref |
 | 工具 | tool provider candidate 经 Tool ABI 和 permission gate 后才能 materialize |
 | UI | descriptor 校验、未知 contribution fallback、无直接 UI state mutation |
 | 安全 | 未信任插件不执行、hash 变化重新信任、secret/network/shell 默认拒绝 |
-| 崩溃 | host、worker、subprocess 或 adapter failure 不影响默认任务 |
+| 崩溃 | host、worker、subprocess 或 adapter failure 不影响默认任务；quarantine state 必须提供 scope、reason、clear condition、action hints、log ref 和 audit ref |
 | 远程 | logical path、remote execution domain 和权限范围不泄漏本地路径 |
 | 产品形态 | Desktop、CLI、Server、Remote、ACP、Web、Mobile Web、SDK 的 unsupported 行为明确 |
 
