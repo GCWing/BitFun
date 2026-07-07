@@ -117,21 +117,12 @@ $git-color-branch-bg: $overlay-white-08;
 $git-color-branch-bg-hover: $overlay-white-12;
 
 $git-color-changes: $color-warning;
-$git-color-changes-bg: rgba(245, 158, 11, 0.1);
-$git-color-changes-bg-hover: rgba(245, 158, 11, 0.15);
 
 $git-color-staged: rgb(34, 197, 94);
-$git-color-staged-bg: rgba(34, 197, 94, 0.1);
-$git-color-staged-bg-hover: rgba(34, 197, 94, 0.15);
-$git-color-staged-border: rgba(34, 197, 94, 0.3);
 
 $git-color-added: $git-color-staged;
-$git-color-added-bg: $git-color-staged-bg;
-$git-color-added-bg-hover: $git-color-staged-bg-hover;
 
 $git-color-deleted: $color-error;
-$git-color-deleted-bg: $color-error-bg;
-$git-color-deleted-bg-hover: rgba(239, 68, 68, 0.15);
 
 // ==================== Border system ====================
 $border-subtle: $overlay-white-12;
@@ -428,17 +419,9 @@ $badge-info-text: $color-info;
   --git-color-branch-bg: #{$git-color-branch-bg};
   --git-color-branch-bg-hover: #{$git-color-branch-bg-hover};
   --git-color-changes: #{$git-color-changes};
-  --git-color-changes-bg: #{$git-color-changes-bg};
   --git-color-staged: #{$git-color-staged};
-  --git-color-staged-bg: #{$git-color-staged-bg};
-  --git-color-staged-bg-hover: #{$git-color-staged-bg-hover};
-  --git-color-staged-border: #{$git-color-staged-border};
   --git-color-added: #{$git-color-added};
-  --git-color-added-bg: #{$git-color-added-bg};
-  --git-color-added-bg-hover: #{$git-color-added-bg-hover};
   --git-color-deleted: #{$git-color-deleted};
-  --git-color-deleted-bg: #{$git-color-deleted-bg};
-  --git-color-deleted-bg-hover: #{$git-color-deleted-bg-hover};
 
   --border-subtle: #{$border-subtle};
   --border-base: #{$border-base};

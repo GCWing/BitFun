@@ -30,9 +30,6 @@ const LIGHT_ERROR = '#c26565';
 const lightInk = (alpha: number | string) => rgbaFromHex(LIGHT_INK, alpha);
 const lightAccent = (alpha: number | string) => rgbaFromHex(LIGHT_ACCENT, alpha);
 const lightAccentHover = (alpha: number | string) => rgbaFromHex(LIGHT_ACCENT_HOVER, alpha);
-const lightSuccess = (alpha: number | string) => rgbaFromHex(LIGHT_SUCCESS, alpha);
-const lightWarning = (alpha: number | string) => rgbaFromHex(LIGHT_WARNING, alpha);
-const lightError = (alpha: number | string) => rgbaFromHex(LIGHT_ERROR, alpha);
 
 export const bitfunLightTheme: ThemeConfig = {
 
@@ -130,11 +127,8 @@ export const bitfunLightTheme: ThemeConfig = {
       branch: rgbFromHex(LIGHT_ACCENT_HOVER),
       branchBg: lightAccentHover(0.1),
       changes: rgbFromHex(LIGHT_WARNING),
-      changesBg: lightWarning(0.08),
       added: rgbFromHex(LIGHT_SUCCESS),
-      addedBg: lightSuccess(0.08),
       deleted: rgbFromHex(LIGHT_ERROR),
-      deletedBg: lightError(0.08),
     }),
   },
 

@@ -32,6 +32,9 @@ const FLOW_CHAT_LINK_COLORS = {
   },
 } as const;
 
+const GIT_COLOR_CONTRACT_KEYS = ['branch', 'branchBg', 'changes', 'added', 'deleted', 'staged'] as const;
+const GIT_COLOR_CONTRACT_KEY_SET = new Set<string>(GIT_COLOR_CONTRACT_KEYS);
+
 const THEME_STATIC_COLORS = {
   white: '#ffffff',
   black: '#000000',
@@ -107,17 +110,27 @@ function accentColorToRgbChannels(accent: string): string | null {
   return null;
 }
 
-function colorWithAlpha(color: string, alpha: number): string {
-  const channels = accentColorToRgbChannels(color);
-  if (channels) {
-    return `rgba(${channels.replace(/\s+/g, ', ')}, ${alpha})`;
-  }
-  const percent = `${Math.round(alpha * 1000) / 10}%`;
-  return `color-mix(in srgb, ${color} ${percent}, transparent)`;
-}
-
 function cloneThemeConfig(theme: ThemeConfig): ThemeConfig {
   return JSON.parse(JSON.stringify(theme)) as ThemeConfig;
+}
+
+function hasNonContractGitColorKeys(theme: Partial<ThemeConfig>): boolean {
+  const gitColors = theme.colors?.git as unknown as Record<string, unknown> | undefined;
+  return Boolean(
+    gitColors &&
+    Object.keys(gitColors).some(key => !GIT_COLOR_CONTRACT_KEY_SET.has(key)),
+  );
+}
+
+function stripNonContractGitColorKeys(theme: ThemeConfig): ThemeConfig {
+  const sanitized = cloneThemeConfig(theme);
+  const gitColors = sanitized.colors?.git as unknown as Record<string, unknown> | undefined;
+  Object.keys(gitColors ?? {}).forEach(key => {
+    if (!GIT_COLOR_CONTRACT_KEY_SET.has(key)) {
+      delete gitColors?.[key];
+    }
+  });
+  return sanitized;
 }
 
 function mergeThemeConfig(base: ThemeConfig, override: Partial<ThemeConfig>): ThemeConfig {
@@ -278,11 +291,17 @@ export class ThemeService {
 
       if (Array.isArray(themes) && themes.length > 0) {
         let loadedCount = 0;
-        themes.forEach(theme => {
+        let migratedGitColorKeys = false;
+        const persistedThemes = [...themes];
+        themes.forEach((theme, index) => {
           try {
             const normalizedTheme = this.normalizeCustomTheme(theme);
             this.themes.set(normalizedTheme.id, normalizedTheme);
             loadedCount += 1;
+            if (hasNonContractGitColorKeys(theme)) {
+              persistedThemes[index] = normalizedTheme;
+              migratedGitColorKeys = true;
+            }
           } catch (error) {
             log.warn('Skipped invalid user theme', {
               id: theme?.id,
@@ -291,6 +310,13 @@ export class ThemeService {
           }
         });
         log.info('Loaded user themes', { count: loadedCount, skipped: themes.length - loadedCount });
+        if (migratedGitColorKeys) {
+          try {
+            await configAPI.setConfig('themes.custom', persistedThemes);
+          } catch (error) {
+            log.warn('Failed to migrate custom theme Git color keys', error);
+          }
+        }
       }
     } catch (_error) {
 
@@ -342,7 +368,7 @@ export class ThemeService {
     const baseTheme = theme.type === 'light'
       ? builtinThemes.find(item => item.type === 'light') || builtinThemes[0]
       : builtinThemes.find(item => item.id === 'bitfun-dark') || builtinThemes.find(item => item.type === 'dark') || builtinThemes[0];
-    const normalized = mergeThemeConfig(baseTheme, theme);
+    const normalized = stripNonContractGitColorKeys(mergeThemeConfig(baseTheme, theme));
     const validation = this.validateTheme(normalized);
 
     if (!validation.valid) {
@@ -633,17 +659,9 @@ export class ThemeService {
     root.style.setProperty('--git-color-branch-bg', colors.git.branchBg);
     root.style.setProperty('--git-color-branch-bg-hover', colors.element.medium);
     root.style.setProperty('--git-color-changes', colors.git.changes);
-    root.style.setProperty('--git-color-changes-bg', colors.git.changesBg);
     root.style.setProperty('--git-color-added', colors.git.added);
-    root.style.setProperty('--git-color-added-bg', colors.git.addedBg);
-    root.style.setProperty('--git-color-added-bg-hover', colorWithAlpha(colors.git.added, 0.15));
     root.style.setProperty('--git-color-deleted', colors.git.deleted);
-    root.style.setProperty('--git-color-deleted-bg', colors.git.deletedBg);
-    root.style.setProperty('--git-color-deleted-bg-hover', colorWithAlpha(colors.git.deleted, 0.15));
     root.style.setProperty('--git-color-staged', colors.git.staged);
-    root.style.setProperty('--git-color-staged-bg', colors.git.stagedBg);
-    root.style.setProperty('--git-color-staged-bg-hover', colorWithAlpha(colors.git.staged, 0.15));
-    root.style.setProperty('--git-color-staged-border', colorWithAlpha(colors.git.staged, 0.3));
 
 
 

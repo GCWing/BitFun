@@ -79,13 +79,13 @@
     word-break: break-all;
 
     .diff-add {
-      background: var(--git-color-added-bg-hover);
-      color: var(--color-success);
+      background: color-mix(in srgb, var(--git-color-added) 15%, transparent);
+      color: var(--git-color-added);
     }
 
     .diff-del {
-      background: var(--git-color-deleted-bg-hover);
-      color: var(--color-error);
+      background: color-mix(in srgb, var(--git-color-deleted) 15%, transparent);
+      color: var(--git-color-deleted);
     }
   }
 }

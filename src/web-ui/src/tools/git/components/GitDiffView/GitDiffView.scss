@@ -235,17 +235,17 @@ $opacity-high: 0.8 !default;
     color: var(--color-text-muted);
 
     &--added {
-      background: var(--git-color-added-bg);
+      background: color-mix(in srgb, var(--git-color-added) 10%, transparent);
       color: var(--git-color-added);
     }
 
     &--modified {
-      background: var(--git-color-changes-bg);
+      background: color-mix(in srgb, var(--git-color-changes) 10%, transparent);
       color: var(--git-color-changes);
     }
 
     &--deleted {
-      background: var(--git-color-deleted-bg);
+      background: color-mix(in srgb, var(--git-color-deleted) 10%, transparent);
       color: var(--git-color-deleted);
     }
 
@@ -304,10 +304,10 @@ $opacity-high: 0.8 !default;
     transition: background $motion-fast $easing-standard;
 
     &--added {
-      background: var(--git-color-added-bg);
+      background: color-mix(in srgb, var(--git-color-added) 10%, transparent);
       
       &:hover {
-        background: var(--git-color-added-bg-hover);
+        background: color-mix(in srgb, var(--git-color-added) 15%, transparent);
       }
 
       .bitfun-git-diff-view__line-content {
@@ -316,10 +316,10 @@ $opacity-high: 0.8 !default;
     }
 
     &--deleted {
-      background: var(--git-color-deleted-bg);
+      background: color-mix(in srgb, var(--git-color-deleted) 10%, transparent);
       
       &:hover {
-        background: var(--git-color-deleted-bg-hover);
+        background: color-mix(in srgb, var(--git-color-deleted) 15%, transparent);
       }
 
       .bitfun-git-diff-view__line-content {

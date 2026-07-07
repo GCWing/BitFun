@@ -97,13 +97,9 @@ export interface GitColors {
   branch: ColorValue;
   branchBg: ColorValue;
   changes: ColorValue;
-  changesBg: ColorValue;
   added: ColorValue;
-  addedBg: ColorValue;
   deleted: ColorValue;
-  deletedBg: ColorValue;
   staged: ColorValue;
-  stagedBg: ColorValue;
 }
 
  

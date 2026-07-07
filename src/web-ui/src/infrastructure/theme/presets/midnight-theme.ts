@@ -31,9 +31,6 @@ const MIDNIGHT_ERROR = '#cc7f7a';
 const midnightBackground = (alpha: number | string) => rgbaFromHex(MIDNIGHT_BACKGROUND, alpha);
 const midnightText = (alpha: number | string) => rgbaFromHex(MIDNIGHT_TEXT_PRIMARY, alpha);
 const midnightAccent = (alpha: number | string) => rgbaFromHex(MIDNIGHT_ACCENT, alpha);
-const midnightSuccess = (alpha: number | string) => rgbaFromHex(MIDNIGHT_SUCCESS, alpha);
-const midnightWarning = (alpha: number | string) => rgbaFromHex(MIDNIGHT_WARNING, alpha);
-const midnightError = (alpha: number | string) => rgbaFromHex(MIDNIGHT_ERROR, alpha);
 
 export const bitfunMidnightTheme: ThemeConfig = {
 
@@ -96,11 +93,8 @@ export const bitfunMidnightTheme: ThemeConfig = {
       branch: rgbFromHex(MIDNIGHT_ACCENT),
       branchBg: midnightAccent(0.1),
       changes: rgbFromHex(MIDNIGHT_WARNING),
-      changesBg: midnightWarning(0.1),
       added: rgbFromHex(MIDNIGHT_SUCCESS),
-      addedBg: midnightSuccess(0.1),
       deleted: rgbFromHex(MIDNIGHT_ERROR),
-      deletedBg: midnightError(0.1),
     }),
   },
 
