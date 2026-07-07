@@ -4,6 +4,7 @@ pub(super) enum BuiltinSkillGroup {
     Meta,
     MiniApp,
     ComputerUse,
+    Canvas,
     Gstack,
 }
 
@@ -14,6 +15,7 @@ impl BuiltinSkillGroup {
             Self::Meta => "meta",
             Self::MiniApp => "miniapp",
             Self::ComputerUse => "computer-use",
+            Self::Canvas => "canvas",
             Self::Gstack => "gstack",
         }
     }
@@ -29,6 +31,14 @@ const BUILTIN_SKILL_SPECS: &[BuiltinSkillSpec] = &[
     BuiltinSkillSpec {
         dir_name: "agent-browser",
         group: BuiltinSkillGroup::ComputerUse,
+    },
+    BuiltinSkillSpec {
+        dir_name: "docs-canvas",
+        group: BuiltinSkillGroup::Canvas,
+    },
+    BuiltinSkillSpec {
+        dir_name: "bitfun-canvas",
+        group: BuiltinSkillGroup::Canvas,
     },
     BuiltinSkillSpec {
         dir_name: "docx",
@@ -113,6 +123,10 @@ const BUILTIN_SKILL_SPECS: &[BuiltinSkillSpec] = &[
     BuiltinSkillSpec {
         dir_name: "pptx",
         group: BuiltinSkillGroup::Office,
+    },
+    BuiltinSkillSpec {
+        dir_name: "pr-review-canvas",
+        group: BuiltinSkillGroup::Canvas,
     },
     BuiltinSkillSpec {
         dir_name: "writing-skills",

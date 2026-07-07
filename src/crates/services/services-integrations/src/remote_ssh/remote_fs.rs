@@ -58,6 +58,21 @@ impl RemoteFileService {
         manager.sftp_read(connection_id, path).await
     }
 
+    /// Read a file from the remote server via SFTP with chunked progress
+    /// reporting. `on_progress` is called with `(bytes_read, total_size)`
+    /// after each chunk.
+    pub async fn read_file_with_progress(
+        &self,
+        connection_id: &str,
+        path: &str,
+        on_progress: &mut impl FnMut(u64, u64) -> bool,
+    ) -> anyhow::Result<Vec<u8>> {
+        let manager = self.get_manager(connection_id).await?;
+        manager
+            .sftp_read_with_progress(connection_id, path, 262_144, on_progress)
+            .await
+    }
+
     /// Write content to a remote file via SFTP
     pub async fn write_file(
         &self,
@@ -67,6 +82,22 @@ impl RemoteFileService {
     ) -> anyhow::Result<()> {
         let manager = self.get_manager(connection_id).await?;
         manager.sftp_write(connection_id, path, content).await
+    }
+
+    /// Write content to a remote file via SFTP with chunked progress
+    /// reporting. `on_progress` is called with `(bytes_written, total_size)`
+    /// after each chunk. Returns `false` from the callback to cancel.
+    pub async fn write_file_with_progress(
+        &self,
+        connection_id: &str,
+        path: &str,
+        content: &[u8],
+        on_progress: &mut impl FnMut(u64, u64) -> bool,
+    ) -> anyhow::Result<()> {
+        let manager = self.get_manager(connection_id).await?;
+        manager
+            .sftp_write_with_progress(connection_id, path, content, 262_144, on_progress)
+            .await
     }
 
     /// Check if a remote path exists
@@ -323,6 +354,12 @@ impl RemoteFileService {
         }
 
         // Then remove the directory itself
+        let manager = self.get_manager(connection_id).await?;
+        manager.sftp_rmdir(connection_id, path).await
+    }
+
+    /// Remove an empty directory via SFTP (non-recursive; fails if not empty)
+    pub async fn remove_dir(&self, connection_id: &str, path: &str) -> anyhow::Result<()> {
         let manager = self.get_manager(connection_id).await?;
         manager.sftp_rmdir(connection_id, path).await
     }

@@ -67,7 +67,7 @@ DevTools；`Cmd/Ctrl + Shift + I` 切换 BitFun 元素检查器，`Cmd/Ctrl + Sh
 - shared core 必须保持平台无关；Desktop/Tauri 细节属于 app adapter，并通过 transport / API layer 回流。
 - Tauri command 使用 `snake_case` 命令名和结构化 `request` 参数。
 - core 拆解、feature 边界、依赖边界和构建提速重构必须遵循
-  `docs/architecture/core-decomposition.md`。
+  `docs/architecture/product-architecture.md`。
 - 功能级规则应放在离代码最近的模块 `AGENTS.md` 中。
 
 ## 重点关注的贡献方向

@@ -1,0 +1,58 @@
+.canvas-tool-card.clickable {
+  cursor: pointer;
+}
+
+.canvas-tool-card__icon {
+  color: var(--color-accent-500);
+}
+
+.canvas-tool-card__title {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.canvas-tool-card__extra {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--flowchat-control-gap);
+  min-width: 0;
+}
+
+.canvas-tool-card__status,
+.canvas-tool-card__meta {
+  color: var(--color-text-secondary);
+  font-size: var(--flowchat-font-size-sm);
+}
+
+.canvas-tool-card__diagnostics {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--color-warning);
+  font-size: var(--flowchat-font-size-sm);
+}
+
+.canvas-tool-card__open-icon {
+  color: var(--color-text-muted);
+}
+
+.canvas-tool-card__body {
+  display: grid;
+  gap: var(--size-gap-2);
+  padding: var(--flowchat-card-expanded-pad-y) var(--flowchat-card-expanded-pad-x);
+}
+
+.canvas-tool-card__meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-family-mono);
+}
+
+.canvas-tool-card__diagnostic-list {
+  margin: 0;
+  padding-left: var(--size-gap-4);
+  color: var(--color-text-secondary);
+  font-size: var(--flowchat-font-size-sm);
+}

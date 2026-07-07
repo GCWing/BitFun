@@ -32,16 +32,20 @@ export function formatContextForPrompt(context: ContextItem): string {
     case 'url':
       return `[URL: ${context.url}]`;
     case 'web-element': {
+      const isCanvasElement = typeof context.metadata?.artifactReference === 'string';
+      const label = typeof context.metadata?.label === 'string' ? context.metadata.label : `<${context.tagName}>`;
       const attrStr = Object.entries(context.attributes)
         .map(([k, v]) => `${k}="${v}"`)
         .join(' ');
       const lines = [
-        `[Web Element: <${context.tagName}${attrStr ? ' ' + attrStr : ''}>]`,
+        isCanvasElement
+          ? `[Canvas Element: ${label}]`
+          : `[Web Element: <${context.tagName}${attrStr ? ' ' + attrStr : ''}>]`,
         `CSS Path: ${context.path}`,
       ];
       if (context.sourceUrl) lines.push(`Source URL: ${context.sourceUrl}`);
       if (context.textContent) lines.push(`Text Content: ${context.textContent}`);
-      if (context.outerHTML) lines.push(`Outer HTML:\n\`\`\`html\n${context.outerHTML}\n\`\`\``);
+      if (context.outerHTML) lines.push(`${isCanvasElement ? 'Element Reference' : 'Outer HTML'}:\n\`\`\`html\n${context.outerHTML}\n\`\`\``);
       return lines.join('\n');
     }
     default: {

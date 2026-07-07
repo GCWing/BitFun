@@ -6,13 +6,20 @@ use anyhow::Result;
 use clap::ValueEnum;
 use serde_json::json;
 use std::collections::HashMap;
+use std::io::Write;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::Duration;
 
+use bitfun_core::agentic::core::SessionState;
 use bitfun_events::AgenticEvent;
+use tokio::time::{sleep, Instant};
 
 use crate::agent::{agentic_system::AgenticSystem, core_adapter::CoreAgentAdapter, Agent};
 use crate::config::CliConfig;
+use crate::diagnostics::{emit_exit_diagnostic, ExitContext, ExitKind};
+
+const TOOL_START_INPUT_PREVIEW_CHARS: usize = 4_000;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
 pub enum ExecOutputFormat {
@@ -71,6 +78,77 @@ impl ExecMode {
         }
     }
 
+    fn exit_context<'a>(
+        &'a self,
+        session_id: Option<&'a str>,
+        turn_id: Option<&'a str>,
+    ) -> ExitContext<'a> {
+        ExitContext {
+            session_id,
+            turn_id,
+            agent_type: Some(self.agent_type.as_str()),
+            workspace: self.workspace_path.as_deref(),
+        }
+    }
+
+    fn workspace_display(&self) -> String {
+        self.workspace_path
+            .as_deref()
+            .map(|path| path.display().to_string())
+            .unwrap_or_else(|| {
+                std::env::current_dir()
+                    .map(|path| path.display().to_string())
+                    .unwrap_or_else(|_| ".".to_string())
+            })
+    }
+
+    fn redact_large_inline_data(value: &mut serde_json::Value) {
+        match value {
+            serde_json::Value::Object(map) => {
+                if map.remove("data_url").is_some() {
+                    map.insert("has_data_url".to_string(), serde_json::json!(true));
+                }
+                for child in map.values_mut() {
+                    Self::redact_large_inline_data(child);
+                }
+            }
+            serde_json::Value::Array(items) => {
+                for child in items {
+                    Self::redact_large_inline_data(child);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn tool_input_preview(params: &serde_json::Value) -> String {
+        let mut redacted = params.clone();
+        Self::redact_large_inline_data(&mut redacted);
+        let raw =
+            serde_json::to_string(&redacted).unwrap_or_else(|_| "<unserializable>".to_string());
+        if raw.chars().count() <= TOOL_START_INPUT_PREVIEW_CHARS {
+            return raw;
+        }
+
+        let preview: String = raw.chars().take(TOOL_START_INPUT_PREVIEW_CHARS).collect();
+        format!("{preview}... [truncated]")
+    }
+
+    fn print_tool_start_details(&self, tool_name: &str, tool_id: &str, params: &serde_json::Value) {
+        let started_at = chrono::Utc::now().to_rfc3339();
+        let cwd = self.workspace_display();
+        let input_preview = Self::tool_input_preview(params);
+
+        self.print_text(|| {
+            println!("\nTool call: {}", tool_name);
+            println!("   Started at: {}", started_at);
+            println!("   Tool ID: {}", tool_id);
+            println!("   CWD: {}", cwd);
+            println!("   Input: {}", input_preview);
+            std::io::stdout().flush().ok();
+        });
+    }
+
     fn get_git_diff(&self) -> Option<String> {
         let workspace = self.workspace_path.as_ref()?;
 
@@ -96,12 +174,21 @@ impl ExecMode {
 
     pub async fn run(&mut self) -> Result<()> {
         tracing::info!(
-            "Executing command, Agent: {}, Message: {}",
-            self.agent_type,
-            self.message
+            agent_type = %self.agent_type,
+            message_len = self.message.len(),
+            workspace = ?self.workspace_path,
+            "Executing command"
         );
 
-        let session_id = self.prepare_session().await?;
+        let session_id = self.prepare_session().await.map_err(|error| {
+            emit_exit_diagnostic(
+                ExitKind::SessionCreateFailed,
+                &error.to_string(),
+                &self.exit_context(None, None),
+            );
+            error
+        })?;
+        tracing::info!(session_id = %session_id, "Session ready");
         let event_queue = self.agent.event_queue().clone();
 
         self.emit(json!({
@@ -116,14 +203,24 @@ impl ExecMode {
             println!("Thinking...");
         });
 
-        let _turn_id = self
+        let turn_id = self
             .agent
             .send_message(self.message.clone(), &self.agent_type)
-            .await?;
+            .await
+            .map_err(|error| {
+                emit_exit_diagnostic(
+                    ExitKind::SendMessageFailed,
+                    &error.to_string(),
+                    &self.exit_context(Some(&session_id), None),
+                );
+                error
+            })?;
+        tracing::info!(session_id = %session_id, turn_id = %turn_id, "Message sent");
 
         // Consume events from EventQueue until turn completes
         let mut total_tool_calls = 0usize;
         let mut subagent_parent_sessions: HashMap<String, String> = HashMap::new();
+        let mut terminal_outcome: Option<Result<()>> = None;
 
         loop {
             // Wait for events (efficient, uses Notify internally)
@@ -155,15 +252,28 @@ impl ExecMode {
                             use bitfun_events::ToolEventData;
                             match tool_event {
                                 ToolEventData::Started {
-                                    tool_name, tool_id, ..
+                                    tool_name,
+                                    tool_id,
+                                    params,
+                                    ..
                                 } => {
                                     self.emit(json!({
                                         "type": "subagent_tool_start",
                                         "session_id": session_id,
                                         "tool_id": tool_id,
                                         "tool_name": tool_name,
+                                        "input": params,
                                     }))?;
-                                    self.print_text(|| println!("   [subagent] {}", tool_name));
+                                    self.print_text(|| {
+                                        let started_at = chrono::Utc::now().to_rfc3339();
+                                        let input_preview = Self::tool_input_preview(params);
+                                        println!("   [subagent] {}", tool_name);
+                                        println!("      Started at: {}", started_at);
+                                        println!("      Tool ID: {}", tool_id);
+                                        println!("      CWD: {}", self.workspace_display());
+                                        println!("      Input: {}", input_preview);
+                                        std::io::stdout().flush().ok();
+                                    });
                                 }
                                 ToolEventData::Completed {
                                     tool_name,
@@ -217,6 +327,18 @@ impl ExecMode {
                 }
 
                 match event {
+                    AgenticEvent::ModelRoundStarted {
+                        model_id: Some(model_id),
+                        ..
+                    }
+                    | AgenticEvent::ModelRoundCompleted {
+                        model_id: Some(model_id),
+                        ..
+                    }
+                    | AgenticEvent::TokenUsageUpdated { model_id, .. } => {
+                        self.record_resolved_model_id(&session_id, model_id).await;
+                    }
+
                     AgenticEvent::TextChunk { text, .. } => {
                         self.emit(json!({
                             "type": "text",
@@ -259,7 +381,7 @@ impl ExecMode {
                                     "tool_name": tool_name,
                                     "input": params,
                                 }))?;
-                                self.print_text(|| println!("\nTool call: {}", tool_name));
+                                self.print_tool_start_details(tool_name, tool_id, params);
                                 total_tool_calls += 1;
                             }
                             ToolEventData::Progress {
@@ -341,8 +463,8 @@ impl ExecMode {
                                 );
                             }
                         });
-                        self.output_patch_if_needed();
-                        return Ok(());
+                        terminal_outcome = Some(Ok(()));
+                        break;
                     }
 
                     AgenticEvent::DialogTurnFailed { error, .. } => {
@@ -352,8 +474,14 @@ impl ExecMode {
                             "message": error,
                         }))?;
                         self.print_text(|| eprintln!("\nExecution failed: {}", error));
-                        self.output_patch_if_needed();
-                        return Err(anyhow::anyhow!("Execution failed: {}", error));
+                        emit_exit_diagnostic(
+                            ExitKind::DialogTurnFailed,
+                            error,
+                            &self.exit_context(Some(&session_id), Some(&turn_id)),
+                        );
+                        terminal_outcome =
+                            Some(Err(anyhow::anyhow!("Execution failed: {}", error)));
+                        break;
                     }
 
                     AgenticEvent::DialogTurnCancelled { .. } => {
@@ -364,8 +492,8 @@ impl ExecMode {
                             "tool_calls": total_tool_calls,
                         }))?;
                         self.print_text(|| println!("\nExecution cancelled"));
-                        self.output_patch_if_needed();
-                        return Ok(());
+                        terminal_outcome = Some(Ok(()));
+                        break;
                     }
 
                     AgenticEvent::SystemError { error, .. } => {
@@ -375,13 +503,47 @@ impl ExecMode {
                             "message": error,
                         }))?;
                         self.print_text(|| eprintln!("\nSystem error: {}", error));
-                        self.output_patch_if_needed();
-                        return Err(anyhow::anyhow!("System error: {}", error));
+                        emit_exit_diagnostic(
+                            ExitKind::SystemError,
+                            error,
+                            &self.exit_context(Some(&session_id), Some(&turn_id)),
+                        );
+                        terminal_outcome = Some(Err(anyhow::anyhow!("System error: {}", error)));
+                        break;
                     }
 
                     _ => {}
                 }
             }
+
+            if terminal_outcome.is_some() {
+                break;
+            }
+        }
+
+        self.wait_for_turn_settlement(&session_id, &turn_id).await;
+        self.output_patch_if_needed();
+        terminal_outcome.unwrap_or(Ok(()))
+    }
+
+    async fn record_resolved_model_id(&self, session_id: &str, model_id: &str) {
+        let trimmed = model_id.trim();
+        if trimmed.is_empty() || matches!(trimmed, "auto" | "default" | "primary" | "fast") {
+            return;
+        }
+
+        if let Err(error) = self
+            .agent
+            .coordinator()
+            .update_session_model(session_id, trimmed)
+            .await
+        {
+            tracing::debug!(
+                "Failed to persist resolved CLI model id: session_id={}, model_id={}, error={}",
+                session_id,
+                trimmed,
+                error
+            );
         }
     }
 
@@ -495,7 +657,12 @@ impl ExecMode {
 
                 if self.output_format != ExecOutputFormat::Text {
                     if output_target != "-" && !patch.trim().is_empty() {
-                        if let Err(e) = std::fs::write(output_target, &patch) {
+                        if let Err(e) = write_patch_to_path(output_target, &patch) {
+                            emit_exit_diagnostic(
+                                ExitKind::PatchWriteFailed,
+                                &e.to_string(),
+                                &self.exit_context(None, None),
+                            );
                             eprintln!("Failed to save patch: {}", e);
                         }
                     }
@@ -510,12 +677,17 @@ impl ExecMode {
                     println!("{}", patch);
                     println!("---PATCH_END---");
                 } else {
-                    match std::fs::write(output_target, &patch) {
+                    match write_patch_to_path(output_target, &patch) {
                         Ok(_) => {
                             println!("Patch saved to: {}", output_target);
                             println!("({} bytes)", patch.len());
                         }
                         Err(e) => {
+                            emit_exit_diagnostic(
+                                ExitKind::PatchWriteFailed,
+                                &e.to_string(),
+                                &self.exit_context(None, None),
+                            );
                             eprintln!("Failed to save patch: {}", e);
                             println!("---PATCH_START---");
                             println!("{}", patch);
@@ -535,5 +707,89 @@ impl ExecMode {
                 self.print_text(|| println!("(Unable to generate patch)"));
             }
         }
+    }
+
+    async fn wait_for_turn_settlement(&self, session_id: &str, turn_id: &str) {
+        let session_manager = self.agent.coordinator().get_session_manager().clone();
+        let deadline = Instant::now() + Duration::from_secs(5);
+
+        loop {
+            let Some(session) = session_manager.get_session(session_id) else {
+                return;
+            };
+
+            let still_processing = matches!(
+                &session.state,
+                SessionState::Processing { current_turn_id, .. } if current_turn_id == turn_id
+            );
+
+            if !still_processing {
+                return;
+            }
+
+            if Instant::now() >= deadline {
+                tracing::warn!(
+                    "Timed out waiting for exec turn settlement: session_id={}, turn_id={}",
+                    session_id,
+                    turn_id
+                );
+                return;
+            }
+
+            sleep(Duration::from_millis(50)).await;
+        }
+    }
+}
+
+pub(crate) fn write_patch_to_path(output_target: &str, patch: &str) -> std::io::Result<()> {
+    use std::path::Path;
+
+    let path = Path::new(output_target);
+    if let Some(parent) = path.parent() {
+        if !parent.as_os_str().is_empty() {
+            std::fs::create_dir_all(parent)?;
+        }
+    }
+    std::fs::write(path, patch)
+}
+
+#[cfg(test)]
+mod patch_tests {
+    use super::{write_patch_to_path, ExecMode, TOOL_START_INPUT_PREVIEW_CHARS};
+    use serde_json::json;
+
+    #[test]
+    fn write_patch_to_path_creates_nested_parent_directories() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let patch_path = temp.path().join("parent/child/out.patch");
+        write_patch_to_path(patch_path.to_str().expect("utf8 path"), "diff content")
+            .expect("write patch");
+
+        let written = std::fs::read_to_string(&patch_path).expect("read patch");
+        assert_eq!(written, "diff content");
+    }
+
+    #[test]
+    fn tool_input_preview_redacts_data_urls() {
+        let preview = ExecMode::tool_input_preview(&json!({
+            "image": {
+                "data_url": "data:image/png;base64,abc",
+                "name": "sample"
+            }
+        }));
+
+        assert!(!preview.contains("data:image/png"));
+        assert!(preview.contains("\"has_data_url\":true"));
+        assert!(preview.contains("\"name\":\"sample\""));
+    }
+
+    #[test]
+    fn tool_input_preview_truncates_large_inputs() {
+        let preview = ExecMode::tool_input_preview(&json!({
+            "content": "x".repeat(TOOL_START_INPUT_PREVIEW_CHARS + 100)
+        }));
+
+        assert!(preview.ends_with("... [truncated]"));
+        assert!(preview.len() < TOOL_START_INPUT_PREVIEW_CHARS + 100);
     }
 }

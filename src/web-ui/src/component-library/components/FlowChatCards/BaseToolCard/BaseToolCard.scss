@@ -6,10 +6,13 @@
 
 .base-tool-card {
   --base-tool-card-accent-color: var(--color-accent-600);
-  --markdown-primary-color: var(--base-tool-card-accent-color);
 
   @include shared.liquid-card-base;
   @include shared.card-light-flow;
+
+  .markdown-renderer {
+    --markdown-primary-color: var(--base-tool-card-accent-color);
+  }
 
 
   &--pending {

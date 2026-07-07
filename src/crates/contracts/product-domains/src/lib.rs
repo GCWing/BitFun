@@ -3,6 +3,8 @@
 //! Product subdomains live here when they can be compiled without depending on
 //! the full BitFun core runtime assembly.
 
+pub mod canvas;
+
 #[cfg(feature = "miniapp")]
 pub mod miniapp;
 

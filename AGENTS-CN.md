@@ -15,9 +15,10 @@ BitFun 是一个由 Rust workspace 与 React 前端组成的项目。
 
 ## 分层模块索引
 
-依赖关系按自上而下读取。下表是物理 crate 布局，不是完整概念架构；Product Feature、Agent Kernel、
-Execution、Extension、Cross-platform Adapter 的边界以
-[`docs/architecture/core-decomposition.md`](docs/architecture/core-decomposition.md)
+依赖关系按自上而下读取。下表是物理 crate 布局，不是完整概念架构；Product Surface、Product Assembly、
+Product Feature、Agent Kernel、Execution、Extension、Cross-platform Adapter、
+Stable Contracts and Security Control Plane 的边界以
+[`docs/architecture/product-architecture.md`](docs/architecture/product-architecture.md)
 为准。同层 crate 也应保持最小依赖。
 
 | # | 层级 | 路径 | 职责 | 模块 / 入口 | 层级文档 |
@@ -144,11 +145,11 @@ await api.invoke('your_command', { request: { ... } });
 
 ## 架构
 
-### Core 拆解护栏
+### 产品架构护栏
 
 任何 `bitfun-core` 拆解、feature 边界、依赖边界或 Rust 构建提速重构，
 都必须先阅读
-[`docs/architecture/core-decomposition.md`](docs/architecture/core-decomposition.md)。
+[`docs/architecture/product-architecture.md`](docs/architecture/product-architecture.md)。
 顶层文档只作为入口；模块级 ownership 细节应放到离代码最近的模块 `AGENTS.md`。
 
 仓库级拆解规则：

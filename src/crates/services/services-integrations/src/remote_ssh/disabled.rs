@@ -537,11 +537,30 @@ impl RemoteFileService {
         Err(unsupported())
     }
 
+    pub async fn read_file_with_progress(
+        &self,
+        _connection_id: &str,
+        _path: &str,
+        _on_progress: &mut impl FnMut(u64, u64) -> bool,
+    ) -> anyhow::Result<Vec<u8>> {
+        Err(unsupported())
+    }
+
     pub async fn write_file(
         &self,
         _connection_id: &str,
         _path: &str,
         _content: &[u8],
+    ) -> anyhow::Result<()> {
+        Err(unsupported())
+    }
+
+    pub async fn write_file_with_progress(
+        &self,
+        _connection_id: &str,
+        _path: &str,
+        _content: &[u8],
+        _on_progress: &mut impl FnMut(u64, u64) -> bool,
     ) -> anyhow::Result<()> {
         Err(unsupported())
     }
@@ -596,6 +615,10 @@ impl RemoteFileService {
     }
 
     pub async fn remove_dir_all(&self, _connection_id: &str, _path: &str) -> anyhow::Result<()> {
+        Err(unsupported())
+    }
+
+    pub async fn remove_dir(&self, _connection_id: &str, _path: &str) -> anyhow::Result<()> {
         Err(unsupported())
     }
 

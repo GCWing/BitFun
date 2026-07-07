@@ -37,6 +37,7 @@ import {
   cleanupSessionBuffers,
   sendMessage as sendMessageModule,
   cancelCurrentTask as cancelCurrentTaskModule,
+  cancelSessionTask as cancelSessionTaskModule,
   installPendingQueueDrainListener,
   drainPendingQueue,
   initializeEventListeners,
@@ -615,6 +616,10 @@ export class FlowChatManager {
 
   async cancelCurrentTask(): Promise<boolean> {
     return cancelCurrentTaskModule(this.context);
+  }
+
+  async cancelSessionTask(sessionId: string): Promise<boolean> {
+    return cancelSessionTaskModule(this.context, sessionId);
   }
 
   public async saveAllInProgressTurns(): Promise<void> {

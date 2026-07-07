@@ -60,12 +60,12 @@
 }
 
 .tool-approval-bar__auto-execute-button:hover:not(:disabled) {
-  background: rgba(var(--component-action-success-rgb), 0.18);
+  background: color-mix(in srgb, var(--color-success) 18%, transparent);
   color: var(--color-success);
 }
 
 .tool-approval-bar__auto-execute-button:active:not(:disabled) {
-  background: rgba(var(--component-action-success-rgb), 0.24);
+  background: color-mix(in srgb, var(--color-success) 24%, transparent);
   color: var(--color-success);
 }
 

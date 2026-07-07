@@ -94,11 +94,8 @@ jobs:
       - name: Check compilation
         run: cargo check --workspace --exclude bitfun-cli
 
-      - name: Run core Rust tests
-        run: cargo test --locked -p bitfun-core
-
-      - name: Run desktop Rust tests
-        run: cargo test --locked -p bitfun-desktop
+      - name: Run core and desktop Rust tests
+        run: cargo test --locked -p bitfun-core -p bitfun-desktop
 
   # ── Frontend: build ────────────────────────────────────────────────
   frontend-build:

@@ -7,8 +7,31 @@ export interface GlobalConfig {
   terminal: TerminalConfig;
   workspace: WorkspaceConfig;
   ai: AIConfig;
+  memories: MemoriesConfig;
   version: string;
   last_modified: number;
+}
+
+export type MemoryExternalContextPolicy = 'clear_tool_results' | 'allow' | 'skip_session';
+
+export interface MemoriesConfig {
+  generate_memories: boolean;
+  use_memories: boolean;
+  external_context_policy: MemoryExternalContextPolicy;
+  max_raw_memories_for_consolidation: number;
+  max_unused_days: number;
+  max_rollout_age_days: number;
+  max_rollouts_per_startup: number;
+  max_rollouts_scan_limit: number;
+  min_rollout_idle_hours: number;
+  phase1_max_concurrency: number;
+  phase1_retry_backoff_minutes: number;
+  phase1_lease_seconds: number;
+  phase2_lease_seconds: number;
+  phase2_success_cooldown_seconds: number;
+  phase2_retry_delay_seconds: number;
+  extract_model?: string | null;
+  consolidation_model?: string | null;
 }
 
 export interface AppConfig {

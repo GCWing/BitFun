@@ -1,4 +1,8 @@
-#![cfg(feature = "workspace-search")]
+#![cfg(all(
+    feature = "workspace-search",
+    feature = "remote-ssh",
+    not(feature = "remote-ssh-concrete")
+))]
 
 use bitfun_services_integrations::remote_ssh::workspace_search::disabled::{
     remote_workspace_search_service_for_path, RemoteWorkspaceSearchService,

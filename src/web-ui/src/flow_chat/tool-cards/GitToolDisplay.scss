@@ -54,8 +54,13 @@
   margin-left: -8px;
   margin-right: -8px;
   margin-bottom: -8px;
-  padding: var(--flowchat-card-tight-pad-y) var(--flowchat-card-tight-pad-x);
+  padding: 0.375rem 0.5rem;
   border-radius: 0 0 6px 6px;
+}
+
+/* Inside a rounded, clipping wrapper, match its radius to avoid corner gaps. */
+.base-tool-card-wrapper.git-tool-display .git-result-footer {
+  border-radius: 0 0 var(--flowchat-card-radius) var(--flowchat-card-radius);
 }
 
 /* Expanded + same shell as Terminal: match `terminal-result-footer` inset from `TerminalToolCard.scss`. */
@@ -63,7 +68,7 @@
   margin-left: -12px;
   margin-right: -12px;
   margin-bottom: -12px;
-  padding: var(--flowchat-card-tight-pad-y) var(--flowchat-card-pad-x);
+  padding: 0.375rem var(--flowchat-card-pad-x);
 }
 
 /* ========== Fix scrollbar visibility on card hover ========== */

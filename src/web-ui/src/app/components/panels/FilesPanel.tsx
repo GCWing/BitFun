@@ -13,7 +13,7 @@ import {
   type FileExplorerToolbarHandlers,
 } from '@/tools/file-system';
 import { useExplorerSearch } from '@/tools/file-explorer';
-import { Search, IconButton, Tooltip, Badge } from '@/component-library';
+import { Search, IconButton, Tooltip, Badge, confirmWarning } from '@/component-library';
 import { FileSearchResults } from '@/tools/file-system/components/FileSearchResults';
 import { workspaceAPI } from '@/infrastructure/api';
 import type { FileSystemNode } from '@/tools/file-system/types';
@@ -26,6 +26,7 @@ import { createLogger } from '@/shared/utils/logger';
 import {
   basenamePath,
   normalizeLocalPathForRename,
+  normalizeRemoteWorkspacePath,
   pathsEquivalentFs,
   replaceBasename,
 } from '@/shared/utils/pathUtils';
@@ -45,12 +46,21 @@ import {
   type TransferProgressState,
 } from '@/tools/file-system/services/workspaceFileTransfer';
 import { useWorkspaceFileDrop } from '@/tools/file-system/hooks/useWorkspaceFileDrop';
+import { useShortcut } from '@/infrastructure/hooks/useShortcut';
+import { sshApi } from '@/features/ssh-remote/sshApi';
+import { formatBytes } from '@/shared/utils/format';
 import '@/tools/file-system/styles/FileExplorer.scss';
 import './FilesPanel.scss';
 
 const log = createLogger('FilesPanel');
 const FOCUS_REFRESH_THROTTLE_MS = 1000;
 const REMOTE_REFRESH_POLL_MS = 15000;
+const LARGE_FILE_THRESHOLD_BYTES = 2 * 1024 * 1024;
+
+/** Format a byte-per-second speed value for display, e.g. "1.4 MB/s". */
+function formatSpeed(bytesPerSec: number): string {
+  return `${formatBytes(bytesPerSec)}/s`;
+}
 
 function getIndexPhaseBadgeVariant(phase?: WorkspaceSearchRepoPhase): 'neutral' | 'warning' | 'success' | 'error' | 'info' {
   switch (phase) {
@@ -112,7 +122,6 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
   const { workspace: currentWorkspace } = useCurrentWorkspace();
   
   const panelRef = useRef<HTMLDivElement>(null);
-  const pasteInFlightRef = useRef(false);
   const lastFocusRefreshAtRef = useRef<number>(0);
   const [internalViewMode, setInternalViewMode] = useState<'tree' | 'search'>('tree');
   const viewMode = externalViewMode !== undefined ? externalViewMode : internalViewMode;
@@ -150,7 +159,8 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
   });
 
   const [renamingPath, setRenamingPath] = useState<string | null>(null);
-  const [transferProgress, setTransferProgress] = useState<TransferProgressState | null>(null);
+  const [transfers, setTransfers] = useState<Map<string, TransferProgressState>>(new Map());
+  const dropTransferIdRef = useRef<string | null>(null);
   const [fileDropHighlight, setFileDropHighlight] = useState(false);
   const [inputDialog, setInputDialog] = useState<{
     isOpen: boolean;
@@ -163,6 +173,65 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
   });
 
   const notification = useNotification();
+  const cancelledTransferIdsRef = useRef<Set<string>>(new Set());
+
+  /**
+   * Create a per-transfer onProgress callback that tracks a single transfer
+   * in the `transfers` Map by its unique ID. When `null` is received, the
+   * transfer is removed from the Map. Returns both the ID (for passing to
+   * the backend for cancellation) and the callback.
+   */
+  const createTransferProgress = useCallback(() => {
+    const id = crypto.randomUUID();
+    const onProgress = (state: TransferProgressState | null) => {
+      setTransfers((prev) => {
+        const next = new Map(prev);
+        if (state === null) {
+          next.delete(id);
+        } else {
+          next.set(id, state);
+        }
+        return next;
+      });
+    };
+    return { id, onProgress };
+  }, []);
+
+  /** Stop an in-progress transfer by its ID. */
+  const handleStopTransfer = useCallback((transferId: string) => {
+    cancelledTransferIdsRef.current.add(transferId);
+    void sshApi.cancelTransfer(transferId);
+    setTransfers((prev) => {
+      const next = new Map(prev);
+      next.delete(transferId);
+      return next;
+    });
+  }, []);
+
+  /**
+   * Stable callback for drag-and-drop file uploads. Uses a ref to track the
+   * current drop's transfer ID so each drop session gets its own entry in the
+   * `transfers` Map.
+   */
+  const handleDropProgress = useCallback((state: TransferProgressState | null) => {
+    setTransfers((prev) => {
+      const next = new Map(prev);
+      if (state === null) {
+        const id = dropTransferIdRef.current;
+        if (id) {
+          next.delete(id);
+          dropTransferIdRef.current = null;
+        }
+      } else {
+        if (!dropTransferIdRef.current) {
+          dropTransferIdRef.current = crypto.randomUUID();
+        }
+        next.set(dropTransferIdRef.current, state);
+      }
+      return next;
+    });
+  }, []);
+
   const searchLimitNotice =
     searchMode === 'content'
       ? contentTruncated
@@ -228,18 +297,56 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
     prevWorkspacePathRef.current = workspacePath;
   }, [workspacePath, clearSearch, onViewModeChange]);
 
+  const normalizePathForCurrentWorkspace = useCallback(
+    (path: string) =>
+      isRemoteCurrentWorkspace
+        ? normalizeRemoteWorkspacePath(path)
+        : normalizeLocalPathForRename(path),
+    [isRemoteCurrentWorkspace]
+  );
+
   // ===== File Operation Handlers =====
-  
+
+  const shouldOpenLargeFile = useCallback(async (filePath: string, nodeSize?: number): Promise<boolean> => {
+    let fileSize: number | undefined = nodeSize;
+
+    if (fileSize === undefined || fileSize === null) {
+      try {
+        const metadata = await workspaceAPI.getFileMetadata(filePath);
+        fileSize = metadata.size;
+      } catch (error) {
+        log.warn('Failed to get file metadata for size check, opening anyway', { filePath, error: String(error) });
+        return true;
+      }
+    }
+
+    if (fileSize === undefined || fileSize <= LARGE_FILE_THRESHOLD_BYTES) {
+      return true;
+    }
+
+    return confirmWarning(
+      t('dialog.largeFile.title'),
+      t('dialog.largeFile.message', { size: formatBytes(fileSize) }),
+      {
+        confirmText: t('dialog.largeFile.confirm'),
+        cancelText: t('dialog.largeFile.cancel'),
+      },
+    );
+  }, [t]);
+
   const handleOpenFile = useCallback((data: { path: string; line?: number; column?: number }) => {
     log.info('Opening file', { path: data.path, line: data.line, column: data.column });
 
-    openFileInBestTarget({
-      filePath: data.path,
-      workspacePath,
-      ...(data.line ? { jumpToLine: data.line } : {}),
-      ...(data.column ? { jumpToColumn: data.column } : {}),
+    void shouldOpenLargeFile(data.path).then((ok) => {
+      if (!ok) return;
+      openFileInBestTarget({
+        filePath: data.path,
+        workspacePath,
+        ...(data.line ? { jumpToLine: data.line } : {}),
+        ...(data.column ? { jumpToColumn: data.column } : {}),
+      });
     });
-  }, [workspacePath]);
+  }, [workspacePath, shouldOpenLargeFile]);
 
   const handleNewFile = useCallback((data: { parentPath: string }) => {
     setInputDialog({
@@ -265,7 +372,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
     );
     
     try {
-      await workspaceAPI.createFile(filePath);
+      await workspaceAPI.createFile(filePath, currentWorkspace?.connectionId);
       log.info('File created', { path: filePath });
       handleInputDialogClose();
       loadFileTree(workspacePath || '', true);
@@ -291,7 +398,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
     );
     
     try {
-      await workspaceAPI.createDirectory(folderPath);
+      await workspaceAPI.createDirectory(folderPath, currentWorkspace?.connectionId);
       log.info('Directory created', { path: folderPath });
       handleInputDialogClose();
       loadFileTree(workspacePath || '', true);
@@ -310,11 +417,11 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
   }, [inputDialog.type, handleConfirmNewFile, handleConfirmNewFolder]);
 
   const handleStartRename = useCallback((data: { path: string; name: string }) => {
-    setRenamingPath(normalizeLocalPathForRename(data.path));
-  }, []);
+    setRenamingPath(normalizePathForCurrentWorkspace(data.path));
+  }, [normalizePathForCurrentWorkspace]);
 
   const handleExecuteRename = useCallback(async (oldPath: string, newName: string) => {
-    const normalizedOld = normalizeLocalPathForRename(oldPath);
+    const normalizedOld = normalizePathForCurrentWorkspace(oldPath);
     const oldName = basenamePath(normalizedOld);
 
     if (newName.trim() === oldName) {
@@ -325,7 +432,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
     const newPath = replaceBasename(normalizedOld, newName.trim());
 
     try {
-      await workspaceAPI.renameFile(normalizedOld, newPath);
+      await workspaceAPI.renameFile(normalizedOld, newPath, currentWorkspace?.connectionId);
       log.info('File renamed', { oldPath: normalizedOld, newPath });
       setRenamingPath(null);
       removePath(normalizedOld);
@@ -335,20 +442,20 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
       notification.error(t('notifications.renameFailed', { error: String(error) }));
       setRenamingPath(null);
     }
-  }, [workspacePath, loadFileTree, removePath, notification, t]);
+  }, [workspacePath, loadFileTree, removePath, notification, t, normalizePathForCurrentWorkspace, currentWorkspace]);
 
   const handleCancelRename = useCallback(() => {
     setRenamingPath(null);
   }, []);
 
   const handleDelete = useCallback(async (data: { path: string; isDirectory: boolean }) => {
-    const normalizedPath = normalizeLocalPathForRename(data.path);
+    const normalizedPath = normalizePathForCurrentWorkspace(data.path);
 
     try {
       if (data.isDirectory) {
-        await workspaceAPI.deleteDirectory(normalizedPath);
+        await workspaceAPI.deleteDirectory(normalizedPath, true, currentWorkspace?.connectionId);
       } else {
-        await workspaceAPI.deleteFile(normalizedPath);
+        await workspaceAPI.deleteFile(normalizedPath, currentWorkspace?.connectionId);
       }
       log.info('File deleted', { path: normalizedPath, isDirectory: data.isDirectory });
       removePath(normalizedPath);
@@ -357,7 +464,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
       log.error('Failed to delete file', error);
       notification.error(t('notifications.deleteFailed', { error: String(error) }));
     }
-  }, [workspacePath, loadFileTree, removePath, notification, t]);
+  }, [workspacePath, loadFileTree, removePath, notification, t, normalizePathForCurrentWorkspace, currentWorkspace]);
 
   const handleReveal = useCallback(async (data: { path: string }) => {
     if (isRemoteWorkspace(workspaceManager.getState().currentWorkspace)) {
@@ -372,17 +479,66 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
   }, [notification, t]);
 
   const handleFileDownload = useCallback(
-    async (data: { path: string }) => {
+    async (data: { path: string; isDirectory?: boolean }) => {
       const ws = workspaceManager.getState().currentWorkspace;
+      const { id, onProgress } = createTransferProgress();
       try {
-        await downloadWorkspaceFileToDisk(data.path, ws, setTransferProgress);
+        await downloadWorkspaceFileToDisk(
+          data.path,
+          ws,
+          onProgress,
+          id,
+          data.isDirectory,
+        );
       } catch (error) {
         log.error('Failed to download file', error);
-        setTransferProgress(null);
-        notification.error(t('transfer.failed', { error: String(error) }));
+        onProgress(null);
+        if (cancelledTransferIdsRef.current.has(id)) {
+          cancelledTransferIdsRef.current.delete(id);
+        } else {
+          notification.error(t('transfer.failed', { error: String(error) }));
+        }
       }
     },
-    [notification, t]
+    [notification, t, createTransferProgress]
+  );
+
+  const handleCompress = useCallback(
+    async (data: { path: string; isDirectory?: boolean }) => {
+      const ws = workspaceManager.getState().currentWorkspace;
+      const remoteCid = ws?.connectionId;
+      try {
+        await workspaceAPI.compressPath(data.path, remoteCid);
+        notification.success(
+          t('archive.compressSuccess', { name: data.path.split(/[/\\]/).pop() || '' }),
+        );
+        loadFileTree(undefined, true);
+      } catch (error) {
+        log.error('Failed to compress', error);
+        const reason = error instanceof Error ? error.message : String(error);
+        notification.error(t('archive.compressFailed', { error: reason }));
+      }
+    },
+    [notification, t, loadFileTree],
+  );
+
+  const handleDecompress = useCallback(
+    async (data: { path: string }) => {
+      const ws = workspaceManager.getState().currentWorkspace;
+      const remoteCid = ws?.connectionId;
+      try {
+        await workspaceAPI.decompressPath(data.path, remoteCid);
+        notification.success(
+          t('archive.decompressSuccess', { name: data.path.split(/[/\\]/).pop() || '' }),
+        );
+        loadFileTree(undefined, true);
+      } catch (error) {
+        log.error('Failed to decompress', error);
+        const reason = error instanceof Error ? error.message : String(error);
+        notification.error(t('archive.decompressFailed', { error: reason }));
+      }
+    },
+    [notification, t, loadFileTree],
   );
 
   const handleFileTreeRefresh = useCallback(() => {
@@ -500,12 +656,7 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
       return;
     }
 
-    if (pasteInFlightRef.current) {
-      return;
-    }
-
-    pasteInFlightRef.current = true;
-
+    const { id, onProgress } = createTransferProgress();
     try {
       let targetDirectory = resolvePasteTargetDirectory({
         workspacePath,
@@ -527,7 +678,8 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
       const result = await pasteClipboardFilesToWorkspaceDirectory(
         targetDirectory,
         currentWorkspace,
-        setTransferProgress
+        onProgress,
+        id
       );
 
       if (result.successCount === 0 && result.failedFiles.length === 0) {
@@ -536,7 +688,16 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
       }
 
       if (result.successCount > 0) {
-        notification.success(t('notifications.pasteSuccess', { count: result.successCount }));
+        const dirCount = result.directoryCount ?? 0;
+        let key: string;
+        if (dirCount === 0) {
+          key = 'notifications.pasteSuccessFiles';
+        } else if (dirCount === result.successCount) {
+          key = 'notifications.pasteSuccessFolders';
+        } else {
+          key = 'notifications.pasteSuccessItems';
+        }
+        notification.success(t(key, { count: result.successCount }));
         await loadFileTree(undefined, true);
 
         if (!pathsEquivalentFs(targetDirectory, workspacePath)) {
@@ -556,10 +717,12 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
       }
     } catch (error) {
       log.error('Failed to paste files', error);
-      setTransferProgress(null);
-      notification.error(t('notifications.pasteFailed', { count: 1 }));
-    } finally {
-      pasteInFlightRef.current = false;
+      onProgress(null);
+      if (cancelledTransferIdsRef.current.has(id)) {
+        cancelledTransferIdsRef.current.delete(id);
+      } else {
+        notification.error(t('notifications.pasteFailed', { count: 1 }));
+      }
     }
   }, [
     workspacePath,
@@ -571,40 +734,82 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
     expandFolder,
     findNode,
     t,
+    createTransferProgress,
   ]);
 
   const handlePasteFromContextMenu = useCallback((data: { targetDirectory: string }) => {
     executePaste(data.targetDirectory);
   }, [executePaste]);
 
-  const handlePasteFromKeyboard = useCallback(() => {
+  const handlePaste = useCallback(() => {
     executePaste();
   }, [executePaste]);
 
+  // Register paste as a filetree-scoped shortcut (Windows/Linux primary path).
+  useShortcut(
+    'filetree.paste',
+    { key: 'V', ctrl: true, scope: 'filetree' },
+    () => handlePaste(),
+    { enabled: Boolean(workspacePath) }
+  );
+
+  // macOS bridge: the native menu bar intercepts Cmd+V before the DOM sees a
+  // keydown event, so ShortcutManager never fires. In "System" edit-menu mode
+  // (the default when no text editor is focused) the menu tells the WebView to
+  // perform a native paste, which surfaces as a DOM `paste` event. In
+  // "Renderer" mode (when a Monaco editor was recently focused) the menu emits
+  // a Tauri `bitfun_menu_edit_paste` event. We listen to both so file-tree
+  // paste works regardless of which mode the menu is in.
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (!panelRef.current?.contains(document.activeElement) && 
-          !panelRef.current?.contains(e.target as Node)) {
-        return;
-      }
+    if (!workspacePath) return;
 
-      const target = e.target as HTMLElement;
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
-        return;
-      }
-
-      if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
-        e.preventDefault();
-        e.stopPropagation();
-        handlePasteFromKeyboard();
-      }
+    const isPanelFocused = () => {
+      const el = document.activeElement;
+      return !!el && !!panelRef.current && panelRef.current.contains(el);
     };
 
-    document.addEventListener('keydown', handleKeyDown);
+    // DOM paste event — System menu mode path.
+    const handleDomPaste = (e: ClipboardEvent) => {
+      if (!isPanelFocused()) return;
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+        return;
+      }
+      e.preventDefault();
+      e.stopPropagation();
+      handlePaste();
+    };
+    document.addEventListener('paste', handleDomPaste, true);
+
+    // Tauri menu event — Renderer menu mode path.
+    let unlistenTauri: (() => void) | null = null;
+    let cancelled = false;
+    if (typeof window !== 'undefined' && '__TAURI__' in window) {
+      (async () => {
+        try {
+          const { listen } = await import('@tauri-apps/api/event');
+          const unsubscribe = await listen('bitfun_menu_edit_paste', () => {
+            if (isPanelFocused()) {
+              handlePaste();
+            }
+          });
+          if (cancelled) {
+            unsubscribe();
+            return;
+          }
+          unlistenTauri = unsubscribe;
+        } catch {
+          // Non-Tauri environment or event module unavailable — ignore.
+        }
+      })();
+    }
+
     return () => {
-      document.removeEventListener('keydown', handleKeyDown);
+      cancelled = true;
+      document.removeEventListener('paste', handleDomPaste, true);
+      unlistenTauri?.();
     };
-  }, [handlePasteFromKeyboard]);
+  }, [workspacePath, handlePaste]);
 
   useEffect(() => {
     globalEventBus.on('file:open', handleOpenFile);
@@ -614,6 +819,8 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
     globalEventBus.on('file:delete', handleDelete);
     globalEventBus.on('file:reveal', handleReveal);
     globalEventBus.on('file:download', handleFileDownload);
+    globalEventBus.on('file:compress', handleCompress);
+    globalEventBus.on('file:decompress', handleDecompress);
     globalEventBus.on('file:paste', handlePasteFromContextMenu);
     globalEventBus.on('file-tree:refresh', handleFileTreeRefresh);
     globalEventBus.on('file-explorer:navigate', handleNavigateToPath);
@@ -626,11 +833,13 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
       globalEventBus.off('file:delete', handleDelete);
       globalEventBus.off('file:reveal', handleReveal);
       globalEventBus.off('file:download', handleFileDownload);
+      globalEventBus.off('file:compress', handleCompress);
+      globalEventBus.off('file:decompress', handleDecompress);
       globalEventBus.off('file:paste', handlePasteFromContextMenu);
       globalEventBus.off('file-tree:refresh', handleFileTreeRefresh);
       globalEventBus.off('file-explorer:navigate', handleNavigateToPath);
     };
-  }, [handleOpenFile, handleNewFile, handleNewFolder, handleStartRename, handleDelete, handleReveal, handleFileDownload, handlePasteFromContextMenu, handleFileTreeRefresh, handleNavigateToPath]);
+  }, [handleOpenFile, handleNewFile, handleNewFolder, handleStartRename, handleDelete, handleReveal, handleFileDownload, handleCompress, handleDecompress, handlePasteFromContextMenu, handleFileTreeRefresh, handleNavigateToPath]);
 
   useEffect(() => {
     if (typeof window === 'undefined') {
@@ -697,16 +906,16 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
   }, [workspacePath, loadFileTree, expandFolder]);
 
   const handleFileDropError = useCallback((error: unknown) => {
-    setTransferProgress(null);
+    handleDropProgress(null);
     setFileDropHighlight(false);
     notification.error(t('transfer.failed', { error: String(error) }));
-  }, [notification, t]);
+  }, [notification, t, handleDropProgress]);
 
   useWorkspaceFileDrop({
     workspacePath,
     panelRef,
     enabled: Boolean(workspacePath) && viewMode === 'tree',
-    onProgress: setTransferProgress,
+    onProgress: handleDropProgress,
     onDragOver: handleFileDropOver,
     onComplete: handleFileDropComplete,
     onError: handleFileDropError,
@@ -718,13 +927,16 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
     
     const selectedNode = findNode(fileTree, filePath);
     if (selectedNode && !selectedNode.isDirectory) {
-      openFileInBestTarget({
-        filePath,
-        fileName,
-        workspacePath,
-      }, { source: 'project-nav' });
+      void shouldOpenLargeFile(filePath, selectedNode.size).then((ok) => {
+        if (!ok) return;
+        openFileInBestTarget({
+          filePath,
+          fileName,
+          workspacePath,
+        }, { source: 'project-nav' });
+      });
     }
-  }, [selectFile, onFileSelect, workspacePath, fileTree, findNode]);
+  }, [selectFile, onFileSelect, workspacePath, fileTree, findNode, shouldOpenLargeFile]);
 
   const handleFileDoubleClick = useCallback((filePath: string) => {
     onFileDoubleClick?.(filePath);
@@ -1033,33 +1245,71 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
         </div>
       </div>
 
-      {transferProgress && (
-        <div className="bitfun-files-panel__transfer" role="status">
-          <div className="bitfun-files-panel__transfer-label">
-            {transferProgress.phase === 'download'
-              ? t('transfer.downloading')
-              : t('transfer.uploading')}
-            {transferProgress.label ? ` — ${transferProgress.label}` : ''}
-          </div>
-          <div
-            className={`bitfun-files-panel__transfer-track${
-              transferProgress.indeterminate ? ' bitfun-files-panel__transfer-track--indeterminate' : ''
-            }`}
-          >
-            <div
-              className="bitfun-files-panel__transfer-fill"
-              style={
-                transferProgress.indeterminate || !transferProgress.total
-                  ? undefined
-                  : {
-                      width: `${Math.min(
-                        100,
-                        Math.round((100 * transferProgress.current) / transferProgress.total)
-                      )}%`,
-                    }
-              }
-            />
-          </div>
+      {transfers.size > 0 && (
+        <div className="bitfun-files-panel__transfers">
+          {Array.from(transfers.entries()).map(([id, tp]) => (
+            <div className="bitfun-files-panel__transfer" role="status" key={id}>
+              <div className="bitfun-files-panel__transfer-label">
+                <span className="bitfun-files-panel__transfer-label-text">
+                  {tp.phase === 'download'
+                    ? t('transfer.downloading')
+                    : t('transfer.uploading')}
+                  {tp.label ? ` — ${tp.label}` : ''}
+                </span>
+                {!tp.indeterminate &&
+                tp.bytesTotal &&
+                tp.bytesTotal > 0 ? (
+                  <span className="bitfun-files-panel__transfer-stats">
+                    {Math.min(
+                      100,
+                      Math.round(
+                        (100 * (tp.bytesTransferred ?? tp.current)) /
+                          tp.bytesTotal,
+                      ),
+                    )}
+                    %
+                    {tp.speed ? ` · ${formatSpeed(tp.speed)}` : ''}
+                  </span>
+                ) : null}
+              </div>
+              <div
+                className={`bitfun-files-panel__transfer-track${
+                  tp.indeterminate ? ' bitfun-files-panel__transfer-track--indeterminate' : ''
+                }`}
+              >
+                <div
+                  className="bitfun-files-panel__transfer-fill"
+                  style={
+                    tp.indeterminate || !tp.total
+                      ? undefined
+                      : {
+                          width: `${Math.min(
+                            100,
+                            Math.round((100 * tp.current) / tp.total)
+                          )}%`,
+                        }
+                  }
+                />
+              </div>
+              <div className="bitfun-files-panel__transfer-bottom">
+                {!tp.indeterminate &&
+                tp.bytesTotal &&
+                tp.bytesTotal > 0 ? (
+                  <span className="bitfun-files-panel__transfer-detail">
+                    {formatBytes(tp.bytesTransferred ?? 0)} /{' '}
+                    {formatBytes(tp.bytesTotal)}
+                  </span>
+                ) : <span />}
+                <button
+                  className="bitfun-files-panel__transfer-stop"
+                  onClick={() => handleStopTransfer(id)}
+                  title={t('transfer.stop')}
+                >
+                  {t('transfer.stop')}
+                </button>
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
@@ -1072,8 +1322,12 @@ const FilesPanel: React.FC<FilesPanelProps> = ({
         confirmText={inputDialog.type === 'newFile' ? t('dialog.newFile.confirm') : t('dialog.newFolder.confirm')}
         cancelText={inputDialog.type === 'newFile' ? t('dialog.newFile.cancel') : t('dialog.newFolder.cancel')}
         validator={(value) => {
-          // eslint-disable-next-line no-control-regex -- Windows filename rules explicitly forbid ASCII control characters.
-          if (!/^[^<>:"/\\|?*\x00-\x1F]+$/.test(value)) {
+          const validPattern = isRemoteCurrentWorkspace
+            // eslint-disable-next-line no-control-regex -- filename rules explicitly forbid ASCII control characters.
+            ? /^[^/\x00-\x1F]+$/
+            // eslint-disable-next-line no-control-regex -- filename rules explicitly forbid ASCII control characters.
+            : /^[^<>:"/\\|?*\x00-\x1F]+$/;
+          if (!validPattern.test(value)) {
             return t('validation.invalidFilename');
           }
           return null;

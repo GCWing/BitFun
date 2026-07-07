@@ -12,6 +12,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio_util::sync::CancellationToken;
+use tool_runtime::context::PrimaryModelFacts;
 
 /// Execution context
 #[derive(Clone)]
@@ -35,6 +36,8 @@ pub struct ExecutionContext {
     /// When set, engine drains pending round injections at each round boundary
     /// and injects them into the dialog history without ending the turn.
     pub round_injection: Option<Arc<dyn DialogRoundInjectionSource>>,
+    /// When false, the execution loop suppresses user-facing turn lifecycle events.
+    pub emit_lifecycle_events: bool,
     /// When true, stream cancellation may be converted into a partial assistant
     /// result if text/tool output has already been produced.
     pub recover_partial_on_cancel: bool,
@@ -55,6 +58,7 @@ pub struct RoundContext {
     pub collapsed_tools: Vec<String>,
     pub unlocked_collapsed_tools: Vec<String>,
     pub model_name: String,
+    pub primary_model_facts: PrimaryModelFacts,
     pub agent_type: String,
     pub context_vars: HashMap<String, String>,
     pub(crate) delegation_policy: DelegationPolicy,

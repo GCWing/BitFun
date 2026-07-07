@@ -34,6 +34,7 @@ pub mod round_preempt;
 
 // Image analysis module
 pub mod image_analysis;
+pub mod memories;
 
 // Ephemeral side-question module (used by desktop /btw overlay)
 pub mod side_question;
@@ -61,6 +62,9 @@ pub use execution::*;
 pub use fork_agent::*;
 pub use goal_mode::*;
 pub use image_analysis::{ImageAnalyzer, MessageEnhancer};
+pub use memories::service::MemoryPhase1Service;
+pub use memories::startup::{start_memory_startup_task, MemoryStartupRequest};
+pub use memories::types::{MemoryExtractionRecord, MemoryPhase1RunStats, MemorySourceSession};
 pub use persistence::PersistenceManager;
 pub use round_preempt::{
     DialogRoundInjectionInterrupt, DialogRoundInjectionSource, NoopDialogRoundInjectionSource,

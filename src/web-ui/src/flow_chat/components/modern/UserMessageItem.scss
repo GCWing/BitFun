@@ -5,7 +5,7 @@
 @use '../../../component-library/styles/tokens.scss' as tokens;
 
 .user-message-item {
-  padding: var(--flowchat-user-message-pad-y) var(--flowchat-user-message-pad-x);
+  padding: 0.32rem 0.75rem;
   background: color-mix(in srgb, var(--element-bg-medium) 86%, var(--color-bg-scene));
   border: 1px solid color-mix(in srgb, var(--border-subtle) 38%, transparent);
   border-radius: var(--flowchat-card-radius);
@@ -145,7 +145,7 @@
     flex-flow: row wrap;
     align-items: flex-start;
     column-gap: var(--flowchat-inline-gap);
-    row-gap: var(--flowchat-markdown-paragraph-gap);
+    row-gap: 0.28em;
     flex: 1;
     min-width: 0;
   }

@@ -1,7 +1,7 @@
 # BitFun 子模块设计：Plugin Runtime Host 与 OpenCode 兼容适配
 
 > 上游文档：[design.md](../design.md)、
-> [core-decomposition.md](../../architecture/core-decomposition.md)、
+> [product-architecture.md](../../architecture/product-architecture.md)、
 > [agent-runtime-services-design.md](../../architecture/agent-runtime-services-design.md)、
 > [plugin-runtime-host-design.md](../../architecture/plugin-runtime-host-design.md)
 

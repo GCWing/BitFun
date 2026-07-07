@@ -19,7 +19,7 @@
       border-radius: 6px;
       /* Match Search defaults; the canonical border token must stay defined to avoid a dropped border. */
       border: 1px solid var(--border-base);
-      background: var(--input-bg);
+      background: var(--element-bg-base);
       transition: border-color 0.15s ease, box-shadow 0.15s ease;
     }
 

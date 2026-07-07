@@ -482,11 +482,11 @@ impl AgentRegistry {
                     bitfun_agent_runtime::prompt::UserContextSection::WorkspaceInstructions => {
                         "workspace_instructions"
                     }
-                    bitfun_agent_runtime::prompt::UserContextSection::WorkspaceMemoryFiles => {
-                        "workspace_memory_files"
-                    }
                     bitfun_agent_runtime::prompt::UserContextSection::ProjectLayout => {
                         "project_layout"
+                    }
+                    bitfun_agent_runtime::prompt::UserContextSection::MemorySummary => {
+                        "memory_summary"
                     }
                 })
                 .map(str::to_string)

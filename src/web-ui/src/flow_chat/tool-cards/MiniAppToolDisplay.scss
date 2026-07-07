@@ -17,7 +17,7 @@
   margin-right: calc(-1 * var(--flowchat-card-expanded-pad-x));
   margin-bottom: calc(-1 * var(--flowchat-card-expanded-pad-y));
   padding: var(--flowchat-card-expanded-pad-y) var(--flowchat-card-expanded-pad-x);
-  border-radius: 0 0 7px 7px;
+  border-radius: 0 0 var(--flowchat-card-radius) var(--flowchat-card-radius);
 }
 
 .miniapp-tool-display {

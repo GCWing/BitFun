@@ -36,6 +36,7 @@ local-ip-address = { workspace = true, optional = true }
 mac_address = { workspace = true, optional = true }
 md5 = { workspace = true, optional = true }
 notify = { workspace = true, optional = true }
+oxc = { workspace = true, optional = true }
 qrcode = { workspace = true, optional = true }
 rand = { workspace = true, optional = true }
 reqwest = { workspace = true, optional = true }
@@ -70,6 +71,13 @@ schannel = { version = "0.1", optional = true }
 default = []
 announcement = ["reqwest"]
 browser-control = ["anyhow", "bitfun-services-core", "dirs", "reqwest", "thiserror"]
+canvas-runtime = [
+    "dep:bitfun-product-domains",
+    "oxc",
+    "sha2",
+    "urlencoding",
+    "uuid",
+]
 debug-log = ["reqwest"]
 deep-research = ["bitfun-agent-runtime"]
 git = ["bitfun-services-core", "chrono", "git2", "thiserror"]
@@ -133,7 +141,16 @@ remote-connect = [
     "which",
     "x25519-dalek",
 ]
-remote-ssh = ["anyhow", "dunce", "sha2", "terminal-core", "thiserror", "tokio-util"]
+remote-ssh = [
+    "anyhow",
+    "async-trait",
+    "bitfun-runtime-ports",
+    "dunce",
+    "sha2",
+    "terminal-core",
+    "thiserror",
+    "tokio-util",
+]
 remote-ssh-concrete = [
     "remote-ssh",
     "aes-gcm",
@@ -153,7 +170,15 @@ remote-ssh-concrete = [
     "thiserror",
     "uuid",
 ]
-review-platform = ["reqwest", "thiserror"]
+review-platform = [
+    "async-trait",
+    "bitfun-services-core",
+    "chrono",
+    "futures",
+    "reqwest",
+    "thiserror",
+    "urlencoding",
+]
 workspace-search = [
     "async-trait",
     "bitfun-services-core",
@@ -165,6 +190,7 @@ web-tools = ["reqwest", "thiserror"]
 product-full = [
     "announcement",
     "browser-control",
+    "canvas-runtime",
     "debug-log",
     "deep-research",
     "file-watch",

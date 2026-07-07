@@ -6,9 +6,10 @@ Scope: this guide applies to `src/crates/services/services-core`.
 without the full product runtime. This includes generic filesystem/search/JSON
 IO helpers, LSP package/protocol/watch/process primitives, session metadata
 storage helpers, and local OS action primitives such as command lookup,
-clipboard, file/url opening, script execution, and system facts. Product crates
-may layer routing, policy, capability selection, event emission, or legacy error
-mapping outside this crate.
+clipboard, file/url opening, script execution, workspace runtime FS/shell
+providers, and system facts. Product crates may layer routing, policy,
+capability selection, event emission, or legacy error mapping outside this
+crate.
 
 ## Guardrails
 
@@ -23,8 +24,9 @@ mapping outside this crate.
   belong in `services-core`; product workspace state, event emission, global
   singletons, and file-sync orchestration stay outside this crate.
 - Runtime call sites that touch agent execution, scheduler state, workspace
-  managers, filesystem orchestration, or product behavior stay in core until a
-  reviewed port/provider design and equivalence tests exist.
+  managers, filesystem orchestration, or product behavior stay outside this
+  crate. `workspace-runtime` may implement local `bitfun-runtime-ports`
+  providers, but not workspace selection or product orchestration.
 - Do not add remote SSH, MiniApp storage, tool-result persistence, `PathManager`
   globals, or product runtime bindings to `filesystem`; keep those in core or a
   reviewed adapter/provider.
@@ -34,6 +36,7 @@ mapping outside this crate.
 
 ```bash
 cargo test -p bitfun-services-core --features lsp
+cargo test -p bitfun-services-core --features workspace-runtime workspace
 node scripts/check-core-boundaries.mjs
 cargo check -p bitfun-core --features product-full
 ```

@@ -132,8 +132,8 @@ describe('sessionMetadata', () => {
     expect(metadata.toolCallCount).toBe(99);
     expect(metadata.customMetadata).toEqual({
       unrelated: 'preserved',
-      lastFinishedAt: null,
     });
+    expect(metadata.lastFinishedAt).toBeNull();
   });
 
   it('writes normal metadata explicitly and removes stale btw linkage', () => {
@@ -167,8 +167,8 @@ describe('sessionMetadata', () => {
 
     expect(metadata.customMetadata).toEqual({
       unrelated: 'preserved',
-      lastFinishedAt: null,
     });
+    expect(metadata.lastFinishedAt).toBeNull();
   });
 
   it('persists and restores lastFinishedAt without dropping unrelated metadata', () => {
@@ -197,9 +197,17 @@ describe('sessionMetadata', () => {
 
     expect(metadata.customMetadata).toEqual({
       unrelated: 'preserved',
-      lastFinishedAt: 4321,
     });
+    expect(metadata.lastFinishedAt).toBe(4321);
     expect(deriveLastFinishedAtFromMetadata(metadata)).toBe(4321);
+  });
+
+  it('restores legacy customMetadata lastFinishedAt as a fallback', () => {
+    expect(deriveLastFinishedAtFromMetadata({
+      customMetadata: {
+        lastFinishedAt: 4321,
+      },
+    })).toBe(4321);
   });
 
   it('persists locale-aware default title metadata before the first message', () => {
@@ -214,8 +222,8 @@ describe('sessionMetadata', () => {
     const metadata = buildSessionMetadata(session);
 
     expect(metadata.sessionName).toBe('flow-chat:session.newCodeWithIndex');
+    expect(metadata.lastFinishedAt).toBeNull();
     expect(metadata.customMetadata).toEqual({
-      lastFinishedAt: null,
       titleSource: 'i18n',
       titleKey: 'flow-chat:session.newCodeWithIndex',
       titleParams: { count: 2 },
@@ -309,8 +317,8 @@ describe('sessionMetadata', () => {
       parentTurnIndex: 3,
     });
     expect(metadata.customMetadata).toEqual({
-      lastFinishedAt: null,
     });
+    expect(metadata.lastFinishedAt).toBeNull();
 
     const relationship = deriveSessionRelationshipFromMetadata(metadata);
     const resolved = resolveSessionRelationship(relationship);
@@ -450,8 +458,8 @@ describe('sessionMetadata', () => {
       subagentType: 'Explore',
     });
     expect(metadata.customMetadata).toEqual({
-      lastFinishedAt: null,
     });
+    expect(metadata.lastFinishedAt).toBeNull();
 
     const relationship = deriveSessionRelationshipFromMetadata(metadata);
     expect(relationship).toEqual({

@@ -3,19 +3,28 @@
 //! Responsible for project-scoped session persistence.
 
 use crate::agentic::core::{
-    sanitize_persisted_session_state, strip_prompt_markup, CompressionState, Message,
-    MessageContent, PersistedSessionStateFile as StoredSessionStateFile, Session, SessionConfig,
-    SessionState, SessionSummary,
+    sanitize_persisted_session_state, CompressionState, Message, MessageContent,
+    PersistedSessionStateFile as StoredSessionStateFile, Session, SessionConfig, SessionState,
+    SessionSummary,
+};
+use crate::agentic::memories::db::{MemoryDatabase, MEMORY_PHASE2_GLOBAL_JOB_KEY};
+use crate::agentic::memories::external_context::dialog_turn_uses_external_context;
+use crate::agentic::session::transcript_render::{
+    transcript_assistant_blocks, transcript_display_user_content, transcript_round_blocks,
+    transcript_text_lines, transcript_thinking_blocks, transcript_tool_blocks,
+    TranscriptRoundBlock, TranscriptRoundData, TranscriptTextBlock, TranscriptToolBlock,
 };
 use crate::agentic::session::{SessionPromptCache, PROMPT_CACHE_SCHEMA_VERSION};
 use crate::agentic::skill_agent_snapshot::TurnSkillAgentSnapshot;
 use crate::infrastructure::PathManager;
+use crate::service::config::get_global_config_service;
+use crate::service::config::types::{GlobalConfig, MemoryExternalContextPolicy};
 use crate::service::remote_ssh::workspace_state::{
     resolve_workspace_session_identity, LOCAL_WORKSPACE_SSH_HOST,
 };
 use crate::service::session::{
     DialogTurnData, SessionMetadata, SessionTranscriptExport, SessionTranscriptExportOptions,
-    SessionTranscriptIndexEntry, ToolItemData, TranscriptLineRange, SESSION_STORAGE_SCHEMA_VERSION,
+    SessionTranscriptIndexEntry, TranscriptLineRange, SESSION_STORAGE_SCHEMA_VERSION,
 };
 use crate::service::workspace_runtime::WorkspaceRuntimeService;
 use crate::util::errors::{BitFunError, BitFunResult};
@@ -26,8 +35,8 @@ use bitfun_services_core::{
     session::{
         build_session_metadata as build_persisted_session_metadata, empty_session_metadata_page,
         refresh_session_metadata_from_turns, try_refresh_session_metadata_for_saved_turn,
-        SessionMetadataBuildFacts, SessionMetadataStore, SessionMetadataStoreError,
-        SessionStorageLayout,
+        SessionMemoryMode, SessionMetadataBuildFacts, SessionMetadataStore,
+        SessionMetadataStoreError, SessionStorageLayout,
     },
 };
 use futures::{stream, StreamExt};
@@ -50,6 +59,46 @@ const SESSION_TURN_READ_CONCURRENCY: usize = 4;
 
 static SESSION_METADATA_UPDATE_LOCKS: OnceLock<Mutex<HashMap<PathBuf, Arc<Mutex<()>>>>> =
     OnceLock::new();
+
+async fn memory_pollution_guard_enabled() -> bool {
+    match get_global_config_service().await {
+        Ok(service) => {
+            let config: BitFunResult<GlobalConfig> = service.get_config(None).await;
+            config
+                .map(|config| {
+                    config.memories.generate_memories
+                        && config.memories.external_context_policy
+                            == MemoryExternalContextPolicy::SkipSession
+                })
+                .unwrap_or(false)
+        }
+        Err(_) => false,
+    }
+}
+
+async fn new_session_memory_mode_from_global_config() -> SessionMemoryMode {
+    match get_global_config_service().await {
+        Ok(service) => {
+            let config: BitFunResult<GlobalConfig> = service.get_config(None).await;
+            if config
+                .map(|config| config.memories.generate_memories)
+                .unwrap_or(true)
+            {
+                SessionMemoryMode::Enabled
+            } else {
+                SessionMemoryMode::Disabled
+            }
+        }
+        Err(_) => SessionMemoryMode::Enabled,
+    }
+}
+
+fn current_unix_secs() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_secs() as i64)
+        .unwrap_or_default()
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct StoredDialogTurnFile {
@@ -210,32 +259,6 @@ struct TranscriptFingerprintTool {
     tool_name: String,
     tool_input: Option<String>,
     result: Option<String>,
-}
-
-#[derive(Debug, Clone)]
-struct TranscriptTextBlock {
-    round_index: usize,
-    content: String,
-}
-
-#[derive(Debug, Clone)]
-struct TranscriptToolBlock {
-    tool_name: String,
-    tool_input: Option<String>,
-    result: Option<String>,
-}
-
-#[derive(Debug, Clone)]
-enum TranscriptRoundBlock {
-    Thinking(String),
-    Assistant(String),
-    Tool(TranscriptToolBlock),
-}
-
-#[derive(Debug, Clone)]
-struct TranscriptRoundData {
-    round_index: usize,
-    blocks: Vec<TranscriptRoundBlock>,
 }
 
 #[derive(Debug, Clone)]
@@ -633,6 +656,7 @@ impl PersistenceManager {
             snapshot_session_id: session.snapshot_session_id.as_deref(),
             workspace_path: &workspace_root,
             workspace_hostname: workspace_hostname.as_deref(),
+            new_session_memory_mode: new_session_memory_mode_from_global_config().await,
             existing,
         })
     }
@@ -663,195 +687,33 @@ impl PersistenceManager {
     }
 
     fn transcript_text_lines(content: &str) -> Vec<String> {
-        if content.is_empty() {
-            return vec!["(empty)".to_string()];
-        }
-
-        let lines = content
-            .lines()
-            .map(|line| line.to_string())
-            .collect::<Vec<_>>();
-        if lines.is_empty() {
-            vec!["(empty)".to_string()]
-        } else {
-            lines
-        }
-    }
-
-    fn transcript_value_string(value: &serde_json::Value) -> String {
-        match value {
-            serde_json::Value::String(text) => text.clone(),
-            _ => serde_json::to_string_pretty(value).unwrap_or_else(|_| value.to_string()),
-        }
-    }
-
-    fn transcript_tool_input(item: &ToolItemData, tool_inputs: bool) -> Option<String> {
-        if !tool_inputs || item.tool_call.input.is_null() {
-            return None;
-        }
-
-        Some(Self::transcript_value_string(&item.tool_call.input))
-    }
-
-    fn transcript_tool_result(item: &ToolItemData) -> Option<String> {
-        item.tool_result.as_ref().and_then(|result| {
-            result
-                .result_for_assistant
-                .as_ref()
-                .map(|value| value.trim().to_string())
-                .filter(|value| !value.is_empty())
-                .or_else(|| {
-                    if result.result.is_null() {
-                        None
-                    } else {
-                        Some(Self::transcript_value_string(&result.result))
-                    }
-                })
-        })
+        transcript_text_lines(content)
     }
 
     fn transcript_display_user_content(turn: &DialogTurnData) -> String {
-        turn.user_message
-            .metadata
-            .as_ref()
-            .and_then(|metadata| metadata.get("original_text"))
-            .and_then(|value| value.as_str())
-            .map(str::to_string)
-            .unwrap_or_else(|| strip_prompt_markup(&turn.user_message.content))
+        transcript_display_user_content(turn)
     }
 
     fn transcript_assistant_blocks(turn: &DialogTurnData) -> Vec<TranscriptTextBlock> {
-        turn.model_rounds
-            .iter()
-            .filter_map(|round| {
-                let content = round
-                    .text_items
-                    .iter()
-                    .filter(|item| !item.is_subagent_item.unwrap_or(false))
-                    .map(|item| item.content.trim())
-                    .filter(|value| !value.is_empty())
-                    .collect::<Vec<_>>()
-                    .join("\n\n");
-                if content.is_empty() {
-                    None
-                } else {
-                    Some(TranscriptTextBlock {
-                        round_index: round.round_index,
-                        content,
-                    })
-                }
-            })
-            .collect()
+        transcript_assistant_blocks(turn)
     }
 
     fn transcript_thinking_blocks(turn: &DialogTurnData) -> Vec<TranscriptTextBlock> {
-        turn.model_rounds
-            .iter()
-            .filter_map(|round| {
-                let content = round
-                    .thinking_items
-                    .iter()
-                    .filter(|item| !item.is_subagent_item.unwrap_or(false))
-                    .map(|item| item.content.trim())
-                    .filter(|value| !value.is_empty())
-                    .collect::<Vec<_>>()
-                    .join("\n\n");
-                if content.is_empty() {
-                    None
-                } else {
-                    Some(TranscriptTextBlock {
-                        round_index: round.round_index,
-                        content,
-                    })
-                }
-            })
-            .collect()
+        transcript_thinking_blocks(turn)
     }
 
     fn transcript_tool_blocks(
         turn: &DialogTurnData,
         tool_inputs: bool,
     ) -> Vec<TranscriptToolBlock> {
-        turn.model_rounds
-            .iter()
-            .flat_map(|round| round.tool_items.iter())
-            .filter(|item| !item.is_subagent_item.unwrap_or(false))
-            .map(|item| TranscriptToolBlock {
-                tool_name: item.tool_name.clone(),
-                tool_input: Self::transcript_tool_input(item, tool_inputs),
-                result: Self::transcript_tool_result(item),
-            })
-            .collect()
+        transcript_tool_blocks(turn, tool_inputs)
     }
 
     fn transcript_round_blocks(
         turn: &DialogTurnData,
         options: &SessionTranscriptExportOptions,
     ) -> Vec<TranscriptRoundData> {
-        turn.model_rounds
-            .iter()
-            .filter_map(|round| {
-                let thinking_content = if options.thinking {
-                    round
-                        .thinking_items
-                        .iter()
-                        .filter(|item| !item.is_subagent_item.unwrap_or(false))
-                        .map(|item| item.content.trim())
-                        .filter(|value| !value.is_empty())
-                        .collect::<Vec<_>>()
-                        .join("\n\n")
-                } else {
-                    String::new()
-                };
-
-                let assistant_content = round
-                    .text_items
-                    .iter()
-                    .filter(|item| !item.is_subagent_item.unwrap_or(false))
-                    .map(|item| item.content.trim())
-                    .filter(|value| !value.is_empty())
-                    .collect::<Vec<_>>()
-                    .join("\n\n");
-
-                let tool_blocks = if options.tools {
-                    round
-                        .tool_items
-                        .iter()
-                        .filter(|item| !item.is_subagent_item.unwrap_or(false))
-                        .map(|item| TranscriptToolBlock {
-                            tool_name: item.tool_name.clone(),
-                            tool_input: Self::transcript_tool_input(item, options.tool_inputs),
-                            result: Self::transcript_tool_result(item),
-                        })
-                        .collect::<Vec<_>>()
-                } else {
-                    Vec::new()
-                };
-
-                if thinking_content.is_empty()
-                    && assistant_content.is_empty()
-                    && tool_blocks.is_empty()
-                {
-                    return None;
-                }
-
-                let mut blocks = Vec::new();
-                if !thinking_content.is_empty() {
-                    blocks.push(TranscriptRoundBlock::Thinking(thinking_content));
-                }
-                if !assistant_content.is_empty() {
-                    blocks.push(TranscriptRoundBlock::Assistant(assistant_content));
-                }
-                for tool in tool_blocks {
-                    blocks.push(TranscriptRoundBlock::Tool(tool));
-                }
-
-                Some(TranscriptRoundData {
-                    round_index: round.round_index,
-                    blocks,
-                })
-            })
-            .collect()
+        transcript_round_blocks(turn, options)
     }
 
     fn transcript_fingerprint(
@@ -1220,6 +1082,71 @@ impl PersistenceManager {
             .save_metadata(metadata)
             .await
             .map_err(Self::session_metadata_store_error)
+    }
+
+    pub async fn set_session_memory_mode(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+        mode: SessionMemoryMode,
+    ) -> BitFunResult<()> {
+        let metadata_update_lock = self
+            .get_session_metadata_update_lock(workspace_path, session_id)
+            .await;
+        let _metadata_update_guard = metadata_update_lock.lock().await;
+        let mut metadata = self
+            .load_session_metadata(workspace_path, session_id)
+            .await?
+            .ok_or_else(|| {
+                BitFunError::NotFound(format!("Session metadata not found: {}", session_id))
+            })?;
+        metadata.memory_mode = mode;
+        self.save_session_metadata(workspace_path, &metadata).await
+    }
+
+    pub async fn mark_session_memory_mode_polluted(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<()> {
+        let metadata_update_lock = self
+            .get_session_metadata_update_lock(workspace_path, session_id)
+            .await;
+        let _metadata_update_guard = metadata_update_lock.lock().await;
+        let mut metadata = self
+            .load_session_metadata(workspace_path, session_id)
+            .await?
+            .ok_or_else(|| {
+                BitFunError::NotFound(format!("Session metadata not found: {}", session_id))
+            })?;
+        let should_enqueue_phase2 = matches!(
+            metadata.memory_mode,
+            SessionMemoryMode::Enabled | SessionMemoryMode::Polluted
+        );
+        if metadata.memory_mode == SessionMemoryMode::Enabled {
+            metadata.memory_mode = SessionMemoryMode::Polluted;
+            self.save_session_metadata(workspace_path, &metadata)
+                .await?;
+        }
+        if should_enqueue_phase2 {
+            self.enqueue_phase2_if_session_selected(session_id, current_unix_secs())
+                .await?;
+        }
+        Ok(())
+    }
+
+    async fn enqueue_phase2_if_session_selected(
+        &self,
+        session_id: &str,
+        input_watermark: i64,
+    ) -> BitFunResult<()> {
+        let db = MemoryDatabase::new(self.path_manager.clone());
+        db.initialize().await?;
+        if db.phase2_selected_for_session(session_id).await? {
+            db.enqueue_phase2_job(MEMORY_PHASE2_GLOBAL_JOB_KEY, input_watermark)
+                .await?;
+        }
+        Ok(())
     }
 
     pub async fn load_session_metadata(
@@ -2061,10 +1988,24 @@ impl PersistenceManager {
                 last_active_at,
             );
         }
+        let uses_external_context = dialog_turn_uses_external_context(turn);
+        let should_pollute_memory = memory_pollution_guard_enabled().await && uses_external_context;
+        let should_enqueue_phase2_for_pollution = should_pollute_memory
+            && matches!(
+                metadata.memory_mode,
+                SessionMemoryMode::Enabled | SessionMemoryMode::Polluted
+            );
+        if should_pollute_memory && metadata.memory_mode == SessionMemoryMode::Enabled {
+            metadata.memory_mode = SessionMemoryMode::Polluted;
+        }
 
         let metadata_started_at = Instant::now();
         self.save_session_metadata(workspace_path, &metadata)
             .await?;
+        if should_enqueue_phase2_for_pollution {
+            self.enqueue_phase2_if_session_selected(&turn.session_id, current_unix_secs())
+                .await?;
+        }
         let metadata_duration = metadata_started_at.elapsed();
         let total_duration = save_started_at.elapsed();
         if total_duration >= Duration::from_millis(80) || metadata_refresh_mode == "full_scan" {
@@ -2640,14 +2581,17 @@ impl PersistenceManager {
 
 #[cfg(test)]
 mod tests {
-    use super::{context_snapshot_payload_stats, PersistenceManager, StoredDialogTurnFile};
+    use super::{
+        context_snapshot_payload_stats, current_unix_secs, PersistenceManager, StoredDialogTurnFile,
+    };
     use crate::agentic::core::{Message, Session, SessionConfig, SessionKind, ToolResult};
+    use crate::agentic::memories::db::{MemoryDatabase, MemoryRow, MEMORY_PHASE2_GLOBAL_JOB_KEY};
     use crate::agentic::skill_agent_snapshot::{
         AgentSnapshotEntry, SkillSnapshotEntry, TurnSkillAgentSnapshot,
     };
     use crate::infrastructure::PathManager;
     use crate::service::session::{
-        DialogTurnData, ModelRoundData, SessionMetadata, SessionRelationship,
+        DialogTurnData, ModelRoundData, SessionMemoryMode, SessionMetadata, SessionRelationship,
         SessionRelationshipKind, SessionTranscriptExportOptions, StoredSessionIndexFile,
         TextItemData, UserMessageData,
     };
@@ -3101,6 +3045,54 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn save_dialog_turn_persists_last_finished_at() {
+        let workspace = TestWorkspace::new();
+        let manager =
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager");
+        let session_id = Uuid::new_v4().to_string();
+        let session = Session::new_with_id(
+            session_id.clone(),
+            "Finished timestamp metadata".to_string(),
+            "agent".to_string(),
+            SessionConfig {
+                workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                ..Default::default()
+            },
+        );
+
+        manager
+            .save_session(workspace.path(), &session)
+            .await
+            .expect("session should save");
+
+        let mut turn = DialogTurnData::new(
+            "turn-0".to_string(),
+            0,
+            session_id.clone(),
+            user_message("finished"),
+        );
+        turn.model_rounds.push(round_with_text(
+            "turn-0",
+            vec![text_item("text-0", "finished response")],
+        ));
+        turn.mark_completed();
+        let finished_at = turn.end_time;
+
+        manager
+            .save_dialog_turn(workspace.path(), &turn)
+            .await
+            .expect("turn should save");
+
+        let metadata = manager
+            .load_session_metadata(workspace.path(), &session_id)
+            .await
+            .expect("metadata should load")
+            .expect("metadata should exist");
+
+        assert_eq!(metadata.last_finished_at, finished_at);
+    }
+
+    #[tokio::test]
     async fn concurrent_dialog_turn_saves_keep_metadata_counts_consistent() {
         let workspace = TestWorkspace::new();
         let manager =
@@ -3431,6 +3423,111 @@ mod tests {
 
         assert_eq!(page.total_top_level_count, 2);
         assert_eq!(session_ids, vec!["newer-session", "older-session"]);
+    }
+
+    #[tokio::test]
+    async fn session_memory_mode_helpers_update_and_preserve_disabled_precedence() {
+        let workspace = TestWorkspace::new();
+        let manager =
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager");
+        let mut metadata = SessionMetadata::new(
+            "session-memory-mode".to_string(),
+            "Memory Mode".to_string(),
+            "agent".to_string(),
+            "model".to_string(),
+        );
+        manager
+            .save_session_metadata(workspace.path(), &metadata)
+            .await
+            .expect("metadata should save");
+
+        manager
+            .mark_session_memory_mode_polluted(workspace.path(), &metadata.session_id)
+            .await
+            .expect("enabled session should mark polluted");
+        metadata = manager
+            .load_session_metadata(workspace.path(), &metadata.session_id)
+            .await
+            .expect("metadata should load")
+            .expect("metadata should exist");
+        assert_eq!(metadata.memory_mode, SessionMemoryMode::Polluted);
+
+        manager
+            .set_session_memory_mode(
+                workspace.path(),
+                &metadata.session_id,
+                SessionMemoryMode::Disabled,
+            )
+            .await
+            .expect("memory mode should update");
+        manager
+            .mark_session_memory_mode_polluted(workspace.path(), &metadata.session_id)
+            .await
+            .expect("disabled session should keep disabled");
+        metadata = manager
+            .load_session_metadata(workspace.path(), &metadata.session_id)
+            .await
+            .expect("metadata should load")
+            .expect("metadata should exist");
+        assert_eq!(metadata.memory_mode, SessionMemoryMode::Disabled);
+    }
+
+    #[tokio::test]
+    async fn polluted_selected_memory_session_enqueues_phase2() {
+        let workspace = TestWorkspace::new();
+        let path_manager = workspace.path_manager();
+        let manager = PersistenceManager::new(path_manager.clone()).expect("persistence manager");
+        let db = MemoryDatabase::new(path_manager);
+        db.initialize().await.expect("memory db should initialize");
+
+        let mut metadata = SessionMetadata::new(
+            "session-memory-polluted-selected".to_string(),
+            "Memory Polluted Selected".to_string(),
+            "agent".to_string(),
+            "model".to_string(),
+        );
+        metadata.memory_mode = SessionMemoryMode::Polluted;
+        manager
+            .save_session_metadata(workspace.path(), &metadata)
+            .await
+            .expect("metadata should save");
+
+        let now = current_unix_secs();
+        db.upsert_memory(&MemoryRow {
+            session_id: metadata.session_id.clone(),
+            workspace_path: workspace.path().to_string_lossy().to_string(),
+            rollout_path: workspace
+                .path()
+                .join("sessions")
+                .join(&metadata.session_id)
+                .to_string_lossy()
+                .to_string(),
+            source_updated_at_unix_secs: now,
+            raw_memory: "memory".to_string(),
+            rollout_summary: "summary".to_string(),
+            rollout_slug: None,
+            generated_at_unix_secs: now,
+            usage_count: 1,
+            last_usage_unix_secs: Some(now),
+            selected_for_phase2: 1,
+            selected_for_phase2_source_updated_at: Some(now),
+        })
+        .await
+        .expect("memory row should save");
+
+        manager
+            .mark_session_memory_mode_polluted(workspace.path(), &metadata.session_id)
+            .await
+            .expect("already polluted selected session should enqueue phase2");
+
+        let job = db
+            .get_phase2_job(MEMORY_PHASE2_GLOBAL_JOB_KEY)
+            .await
+            .expect("phase2 job should load")
+            .expect("phase2 job should be enqueued");
+        assert!(job.input_watermark.unwrap_or_default() >= now);
+        assert!(job.retry_at_unix_secs.is_none());
+        assert!(job.last_error.is_none());
     }
 
     #[tokio::test]

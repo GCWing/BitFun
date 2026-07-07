@@ -232,6 +232,7 @@ mod tests {
             dialog_turn_id: None,
             workspace: None,
             unlocked_collapsed_tools: Vec::new(),
+            primary_model_facts: tool_runtime::context::PrimaryModelFacts::default(),
             custom_data: HashMap::new(),
             computer_use_host: None,
             runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
@@ -241,13 +242,8 @@ mod tests {
 
     fn multimodal_anthropic_tool_context(agent_type: Option<&str>) -> ToolUseContext {
         let mut context = tool_context(agent_type);
-        context.custom_data.insert(
-            "primary_model_supports_image_understanding".to_string(),
-            json!(true),
-        );
-        context
-            .custom_data
-            .insert("primary_model_provider".to_string(), json!("anthropic"));
+        context.primary_model_facts =
+            tool_runtime::context::PrimaryModelFacts::new("model-1", "claude", "anthropic", true);
         context
     }
 
@@ -429,6 +425,30 @@ mod tests {
                 .contains("not an available collapsed tool"),
             "unexpected error: {error}"
         );
+    }
+
+    #[tokio::test]
+    async fn product_agentic_manifest_exposes_canvas_tools_directly() {
+        let policy = crate::agentic::agents::get_agent_registry()
+            .get_agent_tool_policy("agentic", None)
+            .await;
+        let manifest = resolve_product_resolved_tool_manifest(
+            &policy.allowed_tools,
+            &policy.exposure_overrides,
+            &tool_context(Some("agentic")),
+        )
+        .await;
+
+        assert!(manifest
+            .allowed_tool_names
+            .contains(&"CreateCanvas".to_string()));
+        assert!(manifest
+            .allowed_tool_names
+            .contains(&"PatchCanvas".to_string()));
+        assert!(manifest
+            .tool_definitions
+            .iter()
+            .any(|tool| tool.name == "CreateCanvas"));
     }
 
     #[tokio::test]

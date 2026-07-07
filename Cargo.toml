@@ -106,6 +106,10 @@ filetime = "0.2"
 fs2 = "0.4"
 zip = { version = "4.6", default-features = false, features = ["deflate"] } # plugin load
 flate2 = "1.0"
+tar = "0.4"
+bzip2 = "0.5"
+xz2 = "0.1"
+zstd = "0.13"
 toml = "0.9"
 
 # Git
@@ -138,6 +142,7 @@ sse-stream = "0.2.3"
 which = "8.0"
 similar = "2.5"
 urlencoding = "2.1"
+oxc = { version = "0.137.0", default-features = false, features = ["ast_visit", "codegen", "semantic", "transformer"] }
 
 # Tauri (desktop only)
 tauri = { git = "https://github.com/richerfu/tauri", branch = "feat/open-harmony", features = [] }

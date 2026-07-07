@@ -263,6 +263,11 @@ export const FILETREE_SHORTCUTS: ShortcutDef[] = [
     config: mod('[', { shift: true, scope: 'filetree' }),
     descriptionKey: 'keyboard.shortcuts.filetree.collapseAll',
   },
+  {
+    id: 'filetree.paste',
+    config: mod('V', { scope: 'filetree' }),
+    descriptionKey: 'keyboard.shortcuts.filetree.paste',
+  },
 ];
 
 // ─── Git shortcuts (scope: 'git') ─────────────────────────────────────────

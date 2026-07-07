@@ -12,8 +12,7 @@ use crate::agentic::tools::computer_use_host::{
 use crate::agentic::tools::framework::{Tool, ToolResult, ToolUseContext};
 use crate::util::errors::{BitFunError, BitFunResult};
 use bitfun_services_core::system::{
-    truncate_with_marker, LocalSystemActionError, LocalSystemActionErrorKind, LocalSystemProvider,
-    RunScriptRequest,
+    truncate_with_marker, LocalSystemActionError, LocalSystemProvider, RunScriptRequest,
 };
 use serde_json::{json, Value};
 
@@ -1562,7 +1561,7 @@ fn local_system_error_response(
     error: LocalSystemActionError,
 ) -> Vec<ToolResult> {
     let mut control_error =
-        ControlHubError::new(error_code_from_local(error.kind()), error.message());
+        ControlHubError::new(error_code_from_local(error.stable_code()), error.message());
     if !error.hints().is_empty() {
         control_error = control_error.with_hints(error.hints().to_vec());
     }
@@ -1570,30 +1569,21 @@ fn local_system_error_response(
 }
 
 fn map_run_script_error(error: LocalSystemActionError) -> BitFunResult<Vec<ToolResult>> {
-    match error.kind() {
-        LocalSystemActionErrorKind::NotAvailable | LocalSystemActionErrorKind::Timeout => {
+    match error.stable_code() {
+        "NOT_AVAILABLE" | "TIMEOUT" => {
             Ok(local_system_error_response("system", "run_script", error))
         }
-        LocalSystemActionErrorKind::UnknownScriptType => {
-            Err(BitFunError::tool(error.message().to_string()))
-        }
-        LocalSystemActionErrorKind::InvalidParams
-        | LocalSystemActionErrorKind::NotFound
-        | LocalSystemActionErrorKind::Internal => {
-            Err(BitFunError::tool(error.message().to_string()))
-        }
+        _ => Err(BitFunError::tool(error.message().to_string())),
     }
 }
 
-fn error_code_from_local(kind: LocalSystemActionErrorKind) -> ErrorCode {
-    match kind {
-        LocalSystemActionErrorKind::InvalidParams => ErrorCode::InvalidParams,
-        LocalSystemActionErrorKind::NotAvailable => ErrorCode::NotAvailable,
-        LocalSystemActionErrorKind::NotFound => ErrorCode::NotFound,
-        LocalSystemActionErrorKind::Timeout => ErrorCode::Timeout,
-        LocalSystemActionErrorKind::Internal | LocalSystemActionErrorKind::UnknownScriptType => {
-            ErrorCode::Internal
-        }
+fn error_code_from_local(code: &str) -> ErrorCode {
+    match code {
+        "INVALID_PARAMS" => ErrorCode::InvalidParams,
+        "NOT_AVAILABLE" => ErrorCode::NotAvailable,
+        "NOT_FOUND" => ErrorCode::NotFound,
+        "TIMEOUT" => ErrorCode::Timeout,
+        _ => ErrorCode::Internal,
     }
 }
 

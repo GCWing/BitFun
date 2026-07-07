@@ -52,9 +52,6 @@ pub async fn resolve_skill_agent_snapshot(
         workspace,
         workspace_services,
         None,
-        None,
-        None,
-        true,
         context_vars,
     );
     let manifest = resolve_tool_manifest(

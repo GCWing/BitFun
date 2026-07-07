@@ -74,8 +74,8 @@ terms:
   adapters and flow back through transport/API layers.
 - Tauri commands use `snake_case` command names and structured `request`
   payloads.
-- Core decomposition, feature-boundary, dependency-boundary, and build-speed
-  work must follow `docs/architecture/core-decomposition.md`.
+- Product architecture, feature-boundary, dependency-boundary, and build-speed
+  work must follow `docs/architecture/product-architecture.md`.
 - Feature-specific rules belong in the nearest module `AGENTS.md`.
 
 ## Key Contribution Focus Areas

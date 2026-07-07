@@ -91,7 +91,7 @@ export const FLOWCHAT_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: i18nService.t('components:flowChatCards.toolConfig.grep.description'),
     displayMode: 'compact',
-    primaryColor: 'var(--color-purple-500)'
+    primaryColor: UI_EXCEPTION_ACCENTS.toolIdentity.search
   },
   'Glob': {
     toolName: 'Glob',
@@ -101,7 +101,7 @@ export const FLOWCHAT_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'summary',
     description: i18nService.t('components:flowChatCards.toolConfig.glob.description'),
     displayMode: 'compact',
-    primaryColor: 'var(--tool-card-file-search-color)'
+    primaryColor: UI_EXCEPTION_ACCENTS.toolIdentity.search
   },
 
   'WebSearch': {
@@ -112,7 +112,7 @@ export const FLOWCHAT_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: i18nService.t('components:flowChatCards.toolConfig.webSearch.description'),
     displayMode: 'compact',
-    primaryColor: 'var(--tool-card-web-search-color)'
+    primaryColor: UI_EXCEPTION_ACCENTS.toolIdentity.webSearch
   },
   'WebFetch': {
     toolName: 'WebFetch',
@@ -122,7 +122,7 @@ export const FLOWCHAT_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: i18nService.t('components:flowChatCards.toolConfig.webFetch.description'),
     displayMode: 'standard',
-    primaryColor: 'var(--tool-card-web-search-color)'
+    primaryColor: UI_EXCEPTION_ACCENTS.toolIdentity.webSearch
   },
 
   'Task': {
@@ -133,7 +133,7 @@ export const FLOWCHAT_CARD_CONFIGS: Record<string, ToolCardConfig> = {
     resultDisplayType: 'detailed',
     description: i18nService.t('components:flowChatCards.toolConfig.task.description'),
     displayMode: 'detailed',
-    primaryColor: 'var(--color-purple-600)'
+    primaryColor: UI_EXCEPTION_ACCENTS.toolIdentity.assistantAction
   },
   'TodoWrite': {
     toolName: 'TodoWrite',

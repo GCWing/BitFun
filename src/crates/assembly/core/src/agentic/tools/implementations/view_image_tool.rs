@@ -39,11 +39,7 @@ impl ViewImageTool {
     }
 
     fn primary_api_format(ctx: &ToolUseContext) -> String {
-        ctx.custom_data
-            .get("primary_model_provider")
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_lowercase()
+        ctx.primary_model_facts().api_format.to_lowercase()
     }
 
     fn require_multimodal_tool_output(ctx: &ToolUseContext) -> BitFunResult<()> {
@@ -70,10 +66,7 @@ impl ViewImageTool {
 
     fn supports_multimodal_tool_output(ctx: &ToolUseContext) -> bool {
         ctx.primary_model_supports_image_understanding()
-            && matches!(
-                Self::primary_api_format(ctx).as_str(),
-                "anthropic" | "openai" | "response" | "responses"
-            )
+            && ctx.primary_model_facts().multimodal_tool_output_supported()
     }
 
     fn mime_type_for_image(bytes: &[u8]) -> BitFunResult<&'static str> {
@@ -454,6 +447,7 @@ mod tests {
     use std::io::Cursor;
     use std::path::PathBuf;
     use std::sync::Arc;
+    use tool_runtime::context::PrimaryModelFacts;
 
     fn png_bytes(width: u32, height: u32) -> Vec<u8> {
         let image = ImageBuffer::from_pixel(width, height, Rgb([80u8, 120u8, 160u8]));
@@ -520,12 +514,8 @@ mod tests {
     }
 
     fn context(provider: &str, supports_images: bool) -> ToolUseContext {
-        let mut custom_data = HashMap::new();
-        custom_data.insert("primary_model_provider".to_string(), json!(provider));
-        custom_data.insert(
-            "primary_model_supports_image_understanding".to_string(),
-            json!(supports_images),
-        );
+        let primary_model_facts =
+            PrimaryModelFacts::new("primary-model", "vision-model", provider, supports_images);
         ToolUseContext {
             tool_call_id: None,
             agent_type: None,
@@ -533,7 +523,8 @@ mod tests {
             dialog_turn_id: None,
             workspace: None,
             unlocked_collapsed_tools: Vec::new(),
-            custom_data,
+            primary_model_facts,
+            custom_data: HashMap::new(),
             computer_use_host: None,
             runtime_tool_restrictions: ToolRuntimeRestrictions::default(),
             runtime_handles: bitfun_runtime_ports::ToolRuntimeHandles::default(),

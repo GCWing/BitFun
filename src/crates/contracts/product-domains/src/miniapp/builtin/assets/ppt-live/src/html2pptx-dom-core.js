@@ -845,7 +845,10 @@ export function extractSlideDataFromDocument(doc = document) {
       }
 
       // Extract placeholder elements (for charts, etc.)
-      if (el.className && el.className.includes('placeholder')) {
+      // Use classList.contains — el.className is a string for HTML elements but an
+      // SVGAnimatedString object for SVG elements, so .includes() would throw
+      // "className.includes is not a function" when slides contain inline SVG.
+      if (el.classList && el.classList.contains('placeholder')) {
         const rect = rectFor(el);
         if (rect.width === 0 || rect.height === 0) {
           errors.push(

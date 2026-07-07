@@ -43,6 +43,7 @@ export {
 export {
   sendMessage,
   cancelCurrentTask,
+  cancelSessionTask,
   markCurrentTurnItemsAsCancelled,
   drainPendingQueue,
   installPendingQueueDrainListener

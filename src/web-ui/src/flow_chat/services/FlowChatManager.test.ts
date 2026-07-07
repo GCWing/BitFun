@@ -63,6 +63,7 @@ vi.mock('./flow-chat-manager', () => ({
   cleanupSessionBuffers: vi.fn(),
   sendMessage: vi.fn(),
   cancelCurrentTask: vi.fn(),
+  cancelSessionTask: vi.fn(),
   installPendingQueueDrainListener: vi.fn(),
   drainPendingQueue: vi.fn(),
   initializeEventListeners: storeMocks.initializeEventListeners,

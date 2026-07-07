@@ -12,6 +12,18 @@ import { addFileMentionToChat } from '@/shared/utils/chatContext';
 import { dirnameAbsolutePath } from '@/shared/utils/pathUtils';
 import { isHtmlFilePath } from '@/shared/utils/htmlFilePreview';
 
+const PASTE_SHORTCUT = /Mac|iPhone|iPad|iPod/.test(navigator.userAgent) ? 'Cmd+V' : 'Ctrl+V';
+
+const ARCHIVE_EXTENSIONS = [
+  '.zip', '.tar.gz', '.tgz', '.tar',
+  '.tar.bz2', '.tbz2', '.tar.xz', '.txz', '.tar.zst', '.tzst',
+];
+
+function isArchiveFile(filePath: string): boolean {
+  const lower = filePath.toLowerCase();
+  return ARCHIVE_EXTENSIONS.some((ext) => lower.endsWith(ext));
+}
+
 export class FileExplorerMenuProvider implements IMenuProvider {
   readonly id = 'file-explorer';
   readonly name = i18nService.t('common:contextMenu.fileExplorerMenu.name');
@@ -75,7 +87,7 @@ export class FileExplorerMenuProvider implements IMenuProvider {
           id: 'file-paste',
           label: i18nService.t('common:actions.paste'),
           icon: 'Clipboard',
-          shortcut: 'Ctrl+V',
+          shortcut: PASTE_SHORTCUT,
           onClick: async () => {
             globalEventBus.emit('file:paste', { targetDirectory: parentPath });
           }
@@ -114,25 +126,55 @@ export class FileExplorerMenuProvider implements IMenuProvider {
         });
       }
 
-      items.push({
-        id: 'file-download',
-        label: i18nService.t('common:file.download'),
-        icon: 'Download',
-        onClick: () => {
-          globalEventBus.emit('file:download', { path: fileContext.filePath });
-        }
-      });
-
-      items.push({
-        id: 'file-separator-1',
-        label: '',
-        separator: true
-      });
     }
+
+    // Download (available for both files and directories)
+    items.push({
+      id: 'file-download',
+      label: i18nService.t('common:file.download'),
+      icon: 'Download',
+      onClick: () => {
+        globalEventBus.emit('file:download', { path: fileContext.filePath, isDirectory });
+      }
+    });
+
+    items.push({
+      id: 'file-separator-1',
+      label: '',
+      separator: true
+    });
 
     
     if (!isReadOnly) {
-      
+
+      // Compress: available for both files and directories.
+      items.push({
+        id: 'file-compress',
+        label: i18nService.t('panels/files:archive.compress'),
+        icon: 'Archive',
+        onClick: () => {
+          globalEventBus.emit('file:compress', { path: fileContext.filePath, isDirectory });
+        }
+      });
+
+      // Decompress: only for archive files (not directories).
+      if (!isDirectory && isArchiveFile(fileContext.filePath)) {
+        items.push({
+          id: 'file-decompress',
+          label: i18nService.t('panels/files:archive.decompress'),
+          icon: 'ArchiveRestore',
+          onClick: () => {
+            globalEventBus.emit('file:decompress', { path: fileContext.filePath });
+          }
+        });
+      }
+
+      items.push({
+        id: 'file-separator-archive',
+        label: '',
+        separator: true
+      });
+
       if (isDirectory) {
         items.push({
           id: 'file-new',
@@ -201,7 +243,7 @@ export class FileExplorerMenuProvider implements IMenuProvider {
         id: 'file-paste',
         label: i18nService.t('common:actions.paste'),
         icon: 'Clipboard',
-        shortcut: 'Ctrl+V',
+        shortcut: PASTE_SHORTCUT,
         onClick: async () => {
           globalEventBus.emit('file:paste', { targetDirectory });
         }

@@ -7,7 +7,6 @@ export type CustomAgentLevel = 'user' | 'project';
 export type UserContextSection =
   | 'workspace_context'
   | 'workspace_instructions'
-  | 'workspace_memory_files'
   | 'project_layout';
 
 export interface CustomAgentDetail {

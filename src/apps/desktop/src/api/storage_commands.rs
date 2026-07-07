@@ -55,7 +55,6 @@ pub async fn get_project_storage_paths(
         runtime_root: path_manager.project_runtime_root(&workspace_path),
         agents_dir: path_manager.project_agents_dir(&workspace_path),
         sessions_dir: path_manager.project_sessions_dir(&workspace_path),
-        memory_dir: path_manager.project_memory_dir(&workspace_path),
         plans_dir: path_manager.project_plans_dir(&workspace_path),
     })
 }
@@ -67,7 +66,6 @@ pub struct ProjectStoragePathsInfo {
     pub runtime_root: PathBuf,
     pub agents_dir: PathBuf,
     pub sessions_dir: PathBuf,
-    pub memory_dir: PathBuf,
     pub plans_dir: PathBuf,
 }
 

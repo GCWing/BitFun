@@ -173,32 +173,100 @@ export const sshApi = {
 
   /**
    * Download a remote file to a local filesystem path (desktop; binary-safe).
+   *
+   * When `onProgress` is provided, listens for `download_progress` Tauri events
+   * emitted by the backend and invokes the callback with `(downloaded, total)`
+   * byte counts. A unique `transferId` is generated per call (or uses the one
+   * provided) so that concurrent downloads do not receive each other's progress
+   * events. The `transferId` can be passed to `cancelTransfer` to abort the
+   * download. The listener is cleaned up automatically on completion.
    */
   async downloadToLocalPath(
     connectionId: string,
     remotePath: string,
-    localPath: string
+    localPath: string,
+    onProgress?: (downloaded: number, total: number) => void,
+    transferId?: string,
   ): Promise<void> {
-    return api.invoke('remote_download_to_local_path', {
-      connectionId,
-      remotePath,
-      localPath,
-    });
+    const tid = transferId ?? crypto.randomUUID();
+    let unlisten: (() => void) | null = null;
+
+    if (onProgress) {
+      const { listen } = await import('@tauri-apps/api/event');
+      unlisten = await listen<{ transferId: string; downloaded: number; total: number }>(
+        'download_progress',
+        (event) => {
+          if (event.payload.transferId === tid) {
+            onProgress(event.payload.downloaded, event.payload.total);
+          }
+        },
+      );
+    }
+
+    try {
+      await api.invoke('remote_download_to_local_path', {
+        connectionId,
+        remotePath,
+        localPath,
+        transferId: tid,
+      });
+    } finally {
+      unlisten?.();
+    }
   },
 
   /**
-   * Upload a local file to a remote path (desktop; binary-safe).
+   * Upload a local file or directory to a remote path (desktop; binary-safe).
+   * Returns `{ wasDirectory: boolean }` indicating whether the uploaded path
+   * was a directory.
+   *
+   * When `onProgress` is provided, listens for `upload_progress` Tauri events
+   * emitted by the backend and invokes the callback with `(uploaded, total)`
+   * byte counts. A unique `transferId` is generated per call (or uses the one
+   * provided) so that concurrent uploads do not receive each other's progress
+   * events. The `transferId` can be passed to `cancelTransfer` to abort the
+   * upload. The listener is cleaned up automatically on completion.
    */
   async uploadFromLocalPath(
     connectionId: string,
     localPath: string,
-    remotePath: string
-  ): Promise<void> {
-    return api.invoke('remote_upload_from_local_path', {
-      connectionId,
-      localPath,
-      remotePath,
-    });
+    remotePath: string,
+    onProgress?: (uploaded: number, total: number) => void,
+    transferId?: string,
+  ): Promise<{ wasDirectory: boolean }> {
+    const tid = transferId ?? crypto.randomUUID();
+    let unlisten: (() => void) | null = null;
+
+    if (onProgress) {
+      const { listen } = await import('@tauri-apps/api/event');
+      unlisten = await listen<{ transferId: string; uploaded: number; total: number }>(
+        'upload_progress',
+        (event) => {
+          if (event.payload.transferId === tid) {
+            onProgress(event.payload.uploaded, event.payload.total);
+          }
+        },
+      );
+    }
+
+    try {
+      return await api.invoke('remote_upload_from_local_path', {
+        connectionId,
+        localPath,
+        remotePath,
+        transferId: tid,
+      });
+    } finally {
+      unlisten?.();
+    }
+  },
+
+  /**
+   * Cancel an in-progress file transfer (download or upload) by its transferId.
+   * The backend will abort the transfer at the next chunk boundary.
+   */
+  async cancelTransfer(transferId: string): Promise<void> {
+    return api.invoke('cancel_transfer', { transferId });
   },
 
   /**

@@ -2197,6 +2197,60 @@ impl SSHConnectionManager {
         Ok(buffer)
     }
 
+    /// Read a file via SFTP with chunked progress reporting.
+    ///
+    /// Reads the file in `chunk_size`-byte chunks, invoking `on_progress`
+    /// after each chunk with `(bytes_read, total_size)`. If the callback
+    /// returns `false`, the read is aborted. Returns the full file contents.
+    pub async fn sftp_read_with_progress(
+        &self,
+        connection_id: &str,
+        path: &str,
+        chunk_size: usize,
+        on_progress: &mut impl FnMut(u64, u64) -> bool,
+    ) -> anyhow::Result<Vec<u8>> {
+        let resolved = self.resolve_sftp_path(connection_id, path).await?;
+        let sftp = self.get_sftp(connection_id).await?;
+
+        // Determine file size from metadata for progress calculation.
+        let metadata = sftp
+            .as_ref()
+            .metadata(&resolved)
+            .await
+            .map_err(|e| anyhow!("Failed to stat '{}': {}", resolved, e))?;
+        let total = metadata.size.unwrap_or(0);
+
+        let mut file = sftp
+            .open(&resolved)
+            .await
+            .map_err(|e| anyhow!("Failed to open remote file '{}': {}", resolved, e))?;
+
+        let mut buffer = Vec::new();
+        let mut chunk = vec![0u8; chunk_size];
+        let mut bytes_read: u64 = 0;
+
+        use tokio::io::AsyncReadExt;
+        loop {
+            let n = file
+                .read(&mut chunk)
+                .await
+                .map_err(|e| anyhow!("Failed to read remote file '{}': {}", resolved, e))?;
+            if n == 0 {
+                break;
+            }
+            buffer.extend_from_slice(&chunk[..n]);
+            bytes_read += n as u64;
+            if !on_progress(bytes_read, total) {
+                return Err(anyhow!("Transfer cancelled"));
+            }
+        }
+
+        // Ensure final 100% progress is reported even if metadata returned 0.
+        on_progress(bytes_read, total);
+
+        Ok(buffer)
+    }
+
     /// Write a file via SFTP
     pub async fn sftp_write(
         &self,
@@ -2215,6 +2269,47 @@ impl SSHConnectionManager {
         file.write_all(content)
             .await
             .map_err(|e| anyhow!("Failed to write remote file '{}': {}", path, e))?;
+
+        file.flush()
+            .await
+            .map_err(|e| anyhow!("Failed to flush remote file '{}': {}", path, e))?;
+
+        Ok(())
+    }
+
+    /// Write a file via SFTP with chunked progress reporting.
+    ///
+    /// Writes `content` in `chunk_size`-byte chunks, invoking `on_progress`
+    /// after each chunk with `(bytes_written, total_size)`. If the callback
+    /// returns `false`, the write is aborted.
+    pub async fn sftp_write_with_progress(
+        &self,
+        connection_id: &str,
+        path: &str,
+        content: &[u8],
+        chunk_size: usize,
+        on_progress: &mut impl FnMut(u64, u64) -> bool,
+    ) -> anyhow::Result<()> {
+        let path = self.resolve_sftp_path(connection_id, path).await?;
+        let sftp = self.get_sftp(connection_id).await?;
+        let mut file = sftp
+            .create(&path)
+            .await
+            .map_err(|e| anyhow!("Failed to create remote file '{}': {}", path, e))?;
+
+        use tokio::io::AsyncWriteExt;
+        let total = content.len() as u64;
+        let mut written: u64 = 0;
+
+        for chunk in content.chunks(chunk_size) {
+            file.write_all(chunk)
+                .await
+                .map_err(|e| anyhow!("Failed to write remote file '{}': {}", path, e))?;
+            written += chunk.len() as u64;
+            if !on_progress(written, total) {
+                return Err(anyhow!("Transfer cancelled"));
+            }
+        }
 
         file.flush()
             .await

@@ -10,14 +10,6 @@ function readNavPanelStylesheet(): string {
   return stylesheet.replace(/\r\n/g, '\n');
 }
 
-function readDesignTokensStylesheet(): string {
-  const stylesheet = readFileSync(
-    fileURLToPath(new URL('../../../component-library/styles/tokens.scss', import.meta.url)),
-    'utf8',
-  );
-  return stylesheet.replace(/\r\n/g, '\n');
-}
-
 function extractBlock(stylesheet: string, selector: string): string {
   const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const match = stylesheet.match(new RegExp(`${escapedSelector}\\s*\\{(?<body>[\\s\\S]*?)\\n\\s*\\}`));
@@ -65,19 +57,14 @@ describe('NavPanel layout styles', () => {
     expect(collapsibleInnerBlock).toContain('min-height: 0;');
   });
 
-  it('uses one shared row-action size for root action buttons', () => {
+  it('keeps root action buttons at the compact row size', () => {
     const stylesheet = readNavPanelStylesheet();
-    const tokenStylesheet = readDesignTokensStylesheet();
     const sectionActionBlock = extractBlock(stylesheet, '&__section-action');
     const itemActionBlock = extractBlock(stylesheet, '&__item-action');
 
-    expect(tokenStylesheet).toContain('--bitfun-nav-row-action-size: 20px;');
-    expect(tokenStylesheet).toContain('--bitfun-nav-row-action-icon-size: 13px;');
-    expect(tokenStylesheet).toContain('--bitfun-nav-row-action-offset: 4px;');
-    expect(tokenStylesheet).toContain('--bitfun-nav-row-action-gap: 4px;');
     for (const block of [sectionActionBlock, itemActionBlock]) {
-      expect(block).toContain('width: var(--bitfun-nav-row-action-size);');
-      expect(block).toContain('height: var(--bitfun-nav-row-action-size);');
+      expect(block).toContain('width: 20px;');
+      expect(block).toContain('height: 20px;');
     }
   });
 });

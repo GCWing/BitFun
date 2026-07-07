@@ -22,6 +22,7 @@ pub struct PasteFilesRequest {
 pub struct PasteFilesResponse {
     pub success_count: usize,
     pub failed_files: Vec<FailedFile>,
+    pub directory_count: usize,
 }
 
 #[derive(Debug, Serialize)]
@@ -317,6 +318,7 @@ pub async fn paste_files(request: PasteFilesRequest) -> Result<PasteFilesRespons
     }
 
     let mut success_count = 0;
+    let mut directory_count = 0;
     let mut failed_files = Vec::new();
 
     for source_path in &request.source_paths {
@@ -349,7 +351,8 @@ pub async fn paste_files(request: PasteFilesRequest) -> Result<PasteFilesRespons
             target_path
         };
 
-        let result = if source.is_dir() {
+        let is_dir = source.is_dir();
+        let result = if is_dir {
             copy_directory_recursive(source, &final_target)
         } else {
             std::fs::copy(source, &final_target)
@@ -360,9 +363,12 @@ pub async fn paste_files(request: PasteFilesRequest) -> Result<PasteFilesRespons
         match result {
             Ok(_) => {
                 success_count += 1;
+                if is_dir {
+                    directory_count += 1;
+                }
 
                 if request.is_cut {
-                    if source.is_dir() {
+                    if is_dir {
                         if let Err(e) = std::fs::remove_dir_all(source) {
                             log::warn!("Failed to remove source directory after cut: {}", e);
                         }
@@ -383,6 +389,7 @@ pub async fn paste_files(request: PasteFilesRequest) -> Result<PasteFilesRespons
     Ok(PasteFilesResponse {
         success_count,
         failed_files,
+        directory_count,
     })
 }
 

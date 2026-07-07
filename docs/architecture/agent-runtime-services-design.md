@@ -1,9 +1,13 @@
 # Agent Kernel、Runtime Services 与 Extension API 设计
 
-本文是 [`core-decomposition.md`](core-decomposition.md) 的开发设计文档，描述目标模块、接口、
+本文是 [`product-architecture.md`](product-architecture.md) 的开发设计文档，描述目标模块、接口、
 crate 内部结构和行为保护。本文只记录设计约束，不记录实现过程或验证记录。插件运行时主机、
 生态兼容适配层、IPC 和候选效果契约见
 [`plugin-runtime-host-design.md`](plugin-runtime-host-design.md)。
+
+阅读路径：第 1 节确认 SDK、内核、产品特性、Extension API 和 crate 边界；第 2-3 节说明稳定接口、
+Runtime Services、Kernel、Tool 和 Harness；第 4 节说明 Product Assembly 与扩展注册；第 5 节作为质量保护和
+目标态判定口径。
 
 ## 1. 设计目标与边界
 
@@ -65,8 +69,9 @@ registry 或依赖全局 mutable state，SDK 发布边界就不成立。
 - 会改变用户入口、命令、设置、UI contribution、默认策略或产品文案的能力，归 Product Feature。
 - 会接触 OS、network、terminal、filesystem、remote host、MCP server 或 AI provider concrete 的能力，归 Cross-platform
   Adapter 或 protocol adapter。
-- 来自外部插件、OpenCode、ACP、external skill 或第三方 package 的能力，先进入 Extension Layer，再由 Product
-  Assembly 注册到 feature / kernel / execution 的稳定接口。
+- 来自外部插件、OpenCode、ACP external agent/tool bridge、external skill 或第三方 package 的能力，先进入
+  Extension Layer，再由 Product Assembly 注册到 feature / kernel / execution 的稳定接口；ACP protocol lifecycle
+  仍由 interfaces/acp 和对应入口 adapter 拥有。
 
 ### 1.3 Product API 与 Extension API
 
@@ -697,7 +702,8 @@ Host 和 Cross-platform Adapter。
 - 建立产品 feature matrix。
 - 把 interface 命令映射到 capability / harness / runtime request。
 - 把 feature bundle 映射为 Rust runtime request、UI contribution、plugin capability 和安全策略。
-- 根据交付形态选择 `DeliveryProfile`、`CapabilitySet`、adapter manifest set 和 service provider 集合。
+- 根据 `ProductProfile` 和 `SurfaceContract` 派生 `DeliveryProfile`、capability plan、capability availability、
+  adapter manifest set 和 service provider 集合。
 - 对不支持能力返回 typed unsupported / unavailable 错误，而不是让下层 runtime 判断产品形态。
 - 通过 typed `PluginRuntimeBinding` 向 Kernel 注入插件运行时 client 或 disabled stub，不使用全局 registry。
 
@@ -706,8 +712,10 @@ Host 和 Cross-platform Adapter。
 ```text
 product-assembly
   full.rs
+  product_profile.rs
   delivery_profile.rs
-  capability_set.rs
+  capability_plan.rs
+  capability_availability.rs
   feature_bundle.rs
   desktop.rs
   cli.rs
@@ -723,6 +731,18 @@ product-assembly
 核心结构：
 
 ```rust
+pub enum ProductProfile {
+    ProductFull,
+    DesktopFull,
+    CliFull,
+    Server,
+    Remote,
+    Acp,
+    Web,
+    MobileWeb,
+    SdkMinimal,
+}
+
 pub enum DeliveryProfile {
     ProductFull,
     Desktop,
@@ -735,7 +755,9 @@ pub enum DeliveryProfile {
     Sdk,
 }
 
-pub struct CapabilitySet {
+// 迁移期 ProductProfile 与 DeliveryProfile 可能一一映射；长期 ProductProfile 表示产品包、SKU 或白标策略，
+// DeliveryProfile 表示 Product Assembly 派生出的交付结果，二者允许分化。
+pub struct CapabilityPlan {
     pub agent_modes: Vec<AgentModeId>,
     pub tool_packs: Vec<ToolPackId>,
     pub harness_packs: Vec<HarnessId>,
@@ -745,9 +767,47 @@ pub struct CapabilitySet {
     pub extensions: ExtensionCapabilitySet,
 }
 
+pub struct CapabilityAvailabilitySet {
+    pub entries: Vec<CapabilityAvailability>,
+}
+
+pub struct CapabilityAvailability {
+    pub capability: CapabilityId,
+    pub state: CapabilityAvailabilityState,
+    pub reason: Option<CapabilityAvailabilityReason>,
+    pub provider: Option<ServiceCapabilityId>,
+}
+
+pub enum CapabilityAvailabilityState {
+    Full,
+    ArtifactOnly,
+    StatusOnly,
+    TemporarilyUnavailable,
+    Unsupported,
+    PolicyDenied,
+}
+
+pub struct CapabilityAvailabilityReason {
+    pub code: CapabilityAvailabilityReasonCode,
+    pub message_key: Option<String>,
+    pub policy_owner: Option<PolicyOwnerRef>,
+    pub security_decision: Option<SecurityDecisionId>,
+    pub provider_health: Option<ProviderHealthRef>,
+}
+
+pub enum CapabilityAvailabilityReasonCode {
+    UnsupportedSurface,
+    MissingProvider,
+    TemporarilyUnavailable,
+    PolicyDenied,
+    ProviderUnhealthy,
+}
+
 pub struct ProductAssemblyPlan {
-    pub profile: DeliveryProfile,
-    pub capabilities: CapabilitySet,
+    pub product_profile: ProductProfile,
+    pub delivery_profile: DeliveryProfile,
+    pub capability_plan: CapabilityPlan,
+    pub capability_availability: CapabilityAvailabilitySet,
     pub feature_groups: Vec<FeatureGroupId>,
     pub feature_bundles: Vec<FeatureBundleId>,
 }
@@ -776,8 +836,13 @@ pub enum PluginRuntimeBinding {
     Client(Arc<dyn PluginRuntimeClient>),
 }
 
+pub struct ProductAssemblyPlanInput {
+    pub product_profile: ProductProfile,
+    pub surface: SurfaceContractRef,
+}
+
 pub trait ProductAssembler {
-    fn plan(&self, profile: DeliveryProfile) -> Result<ProductAssemblyPlan, AssemblyError>;
+    fn plan(&self, input: ProductAssemblyPlanInput) -> Result<ProductAssemblyPlan, AssemblyError>;
     fn build(&self, plan: ProductAssemblyPlan) -> Result<ProductRuntime, AssemblyError>;
 }
 ```
@@ -788,7 +853,7 @@ pub trait ProductAssembler {
 
 ```rust
 pub struct ProductAssemblyInput {
-    pub profile: DeliveryProfile,
+    pub plan: ProductAssemblyPlan,
     pub services: ConcreteServiceProviders,
     pub tool_providers: Vec<Arc<dyn ToolProvider>>,
     pub harness_providers: Vec<Arc<dyn HarnessProvider>>,
@@ -866,8 +931,8 @@ pub fn build_desktop_runtime(input: DesktopAssemblyInput) -> Result<ProductRunti
   transport/API adapter；runtime parts 只接收 typed service port、DTO、event fact 和 capability availability。
 - 插件运行时 client 只能作为 Kernel 可调用的 typed boundary 注入；Agent Kernel、Tool Runtime 和 Harness 不直接加载
   OpenCode 插件代码。
-- feature group 是构建时能力边界，`CapabilitySet` 是产品运行时能力边界；两者必须在
-  assembly 中显式对应。
+- feature group 是构建时能力边界；capability plan 和 capability availability 是产品运行时能力边界；两者必须在
+  assembly 中显式对应，不得互相替代。
 - 任何交付形态减少能力前，必须先更新 product matrix 并补产品入口验证。
 - Product Assembly 不能把所有 API 收敛到单个大对象；Rust Kernel API、UI Extension Contract、Capability/Effect API
   必须按层分开。
@@ -885,8 +950,12 @@ pub fn build_desktop_runtime(input: DesktopAssemblyInput) -> Result<ProductRunti
 
 ### 4.3 Product Capability 设计
 
-Product Capability 位于 Product Assembly 与 Product Feature / Harness / Runtime / Tool / Extension 之间，负责把
-大块产品能力拆成可组装的 capability pack。它不拥有 UI，也不直接执行具体 IO。
+Product Capability 是 Product Feature 的声明单元，由 Product Assembly 消费，并引用 Kernel / Execution / Extension
+的稳定贡献。它负责把较大粒度的产品能力拆成可组装的 capability pack；不拥有 UI，也不直接执行具体 IO。
+
+`ProductProfile`、`CapabilityPack`、`CapabilitySet` 和 `OverridePoint` 的权威定义见
+[`product-architecture.md`](product-architecture.md#3-产品如何成形)。本文补充开发接口约束：
+运行时插件不得作为裁剪 first-party 产品功能的主机制，Cargo feature 也不得直接当作用户可见能力事实。
 
 建议模块：
 
@@ -910,6 +979,7 @@ product-capabilities
 ```rust
 pub trait CapabilityPack: Send + Sync {
     fn id(&self) -> CapabilityId;
+    fn shape(&self) -> CapabilityShapeDescriptor;
     fn required_services(&self) -> Vec<ServiceCapabilityId>;
     fn tool_packs(&self) -> Vec<ToolPackId>;
     fn harness_packs(&self) -> Vec<HarnessId>;
@@ -917,6 +987,18 @@ pub trait CapabilityPack: Send + Sync {
     fn command_providers(&self) -> Vec<CommandProviderRef>;
     fn ui_contributions(&self) -> Vec<UiContributionRef>;
     fn extension_capabilities(&self) -> Vec<ExtensionCapabilityRef>;
+}
+
+pub struct CapabilityShapeDescriptor {
+    pub id: CapabilityId,
+    pub supported_surfaces: Vec<SurfaceKind>,
+    pub dependencies: Vec<CapabilityId>,
+    pub conflicts: Vec<CapabilityId>,
+    pub required_providers: Vec<ServiceCapabilityId>,
+    pub effects: Vec<CapabilityEffectDeclaration>,
+    pub artifacts: Vec<ArtifactKind>,
+    pub degradation: Vec<CapabilityDegradationRule>,
+    pub verification_owner: VerificationOwnerRef,
 }
 ```
 
@@ -927,8 +1009,8 @@ pub trait CapabilityPack: Send + Sync {
   但 target resolution 和 UI construction 留在 surface。
 - MiniApp pack 允许声明 MiniApp harness、domain ports、artifact policy，但 worker process 和
   filesystem IO 通过 Runtime Services provider。
-- MCP App pack 允许声明 MCP tool/resource/prompt capability，但 MCP transport 属于
-  `bitfun-services-integrations`。
+- MCP App pack 允许声明 MCP tool/resource/prompt capability；MCP transport / catalog 属于 Platform / Provider Adapter，
+  materialized tool/resource/prompt projection 属于 Execution / Stable Contracts。
 - Input command pack 只声明 command 到 capability/harness/runtime request 的映射，不共享具体 UI。
 - Long-running task pack 只声明任务入口、默认 policy、UI contribution 和 command 映射；任务生命周期属于 Agent Kernel。
 - Plugin extension pack 只声明插件能力、UI contribution 和外部 API 映射；安全决策和最终状态写入属于 Kernel / Security Boundary。

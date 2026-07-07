@@ -55,7 +55,7 @@
     border-color: var(--color-warning);
     border-width: 1.5px;
     box-shadow: 
-      0 0 0 1px var(--tool-card-confirmation-ring),
+      0 0 0 1px color-mix(in srgb, var(--color-warning) 15%, transparent),
       0 0 12px color-mix(in srgb, var(--color-warning) 20%, transparent),
       inset 0 0 8px color-mix(in srgb, var(--color-warning) 5%, transparent);
     animation: confirmationPulse 2s ease-in-out infinite;
@@ -255,7 +255,7 @@
 @keyframes confirmationPulse {
   0%, 100% {
     box-shadow: 
-      0 0 0 1px var(--tool-card-confirmation-ring),
+      0 0 0 1px color-mix(in srgb, var(--color-warning) 15%, transparent),
       0 0 12px color-mix(in srgb, var(--color-warning) 20%, transparent),
       inset 0 0 8px color-mix(in srgb, var(--color-warning) 5%, transparent);
   }

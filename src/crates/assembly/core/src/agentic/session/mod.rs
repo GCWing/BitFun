@@ -9,6 +9,7 @@ pub mod file_read_state;
 pub mod prompt_cache;
 pub mod session_manager;
 pub mod session_store_port;
+pub(crate) mod transcript_render;
 pub mod turn_skill_agent_snapshot_store;
 
 pub use compression::*;

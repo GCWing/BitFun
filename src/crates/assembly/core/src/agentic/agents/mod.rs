@@ -71,8 +71,34 @@ pub fn shared_coding_mode_tool_exposure_overrides() -> AgentToolPolicyOverrides 
     overrides
 }
 
+fn append_provider_group_tools(tools: &mut Vec<String>, provider_id: &'static str) {
+    #[cfg(feature = "tool-packs")]
+    {
+        let provider_groups =
+            bitfun_tool_packs::try_product_tool_provider_group_plan_for_ids(&[provider_id])
+                .expect("shared coding mode provider group must exist");
+        for group in provider_groups {
+            tools.extend(
+                group
+                    .tool_names()
+                    .iter()
+                    .map(|tool_name| tool_name.to_string()),
+            );
+        }
+    }
+
+    #[cfg(all(feature = "canvas-runtime", not(feature = "tool-packs")))]
+    if provider_id == "core.canvas" {
+        tools.extend(
+            ["CreateCanvas", "ReadCanvas", "UpdateCanvas", "PatchCanvas"]
+                .into_iter()
+                .map(str::to_string),
+        );
+    }
+}
+
 pub fn shared_coding_mode_tools() -> Vec<String> {
-    vec![
+    let mut tools = vec![
         "Task".to_string(),
         "Read".to_string(),
         "view_image".to_string(),
@@ -96,10 +122,11 @@ pub fn shared_coding_mode_tools() -> Vec<String> {
         "AskUserQuestion".to_string(),
         "CreatePlan".to_string(),
         "Git".to_string(),
-        "Log".to_string(),
         "ControlHub".to_string(),
         "InitMiniApp".to_string(),
-    ]
+    ];
+    append_provider_group_tools(&mut tools, "core.canvas");
+    tools
 }
 
 /// Agent trait defining the interface for all agents
@@ -256,9 +283,18 @@ mod tests {
         let tools = shared_coding_mode_tools();
 
         assert!(tools.contains(&"CreatePlan".to_string()));
-        assert!(tools.contains(&"Log".to_string()));
         assert!(tools.contains(&"get_goal".to_string()));
         assert!(tools.contains(&"update_goal".to_string()));
+    }
+
+    #[test]
+    fn shared_coding_mode_tools_include_canvas_provider_tools() {
+        let tools = shared_coding_mode_tools();
+
+        assert!(tools.contains(&"CreateCanvas".to_string()));
+        assert!(tools.contains(&"ReadCanvas".to_string()));
+        assert!(tools.contains(&"UpdateCanvas".to_string()));
+        assert!(tools.contains(&"PatchCanvas".to_string()));
     }
 
     #[test]

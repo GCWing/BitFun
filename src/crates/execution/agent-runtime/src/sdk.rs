@@ -64,7 +64,7 @@ pub use bitfun_runtime_ports::{
     RemoteWorkspaceRuntimeHost, RemoteWorkspaceUpdate, RuntimeEventEnvelope, RuntimeEventSink,
     RuntimeEventType, RuntimeServiceCapability, RuntimeServicePort, SessionStorageKind,
     SessionStoragePathRequest, SessionStoragePathResolution, SessionStorePort, TerminalPort,
-    ThreadGoal, ThreadGoalStatus, UiExtensionAvailability, WorkspacePort,
+    ThreadGoal, ThreadGoalStatus, WorkspacePort,
 };
 pub use bitfun_runtime_services::{
     CapabilityAvailability, RuntimeServices, RuntimeServicesBuilder, RuntimeServicesError,

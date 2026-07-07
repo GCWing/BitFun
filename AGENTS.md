@@ -16,9 +16,10 @@ Repository rule: **keep product logic platform-agnostic, then expose it through 
 ## Layered Module Index
 
 Dependencies flow top to bottom. This table is the physical crate layout, not
-the full conceptual architecture. For Product Feature / Agent Kernel /
-Execution / Extension / Cross-platform Adapter boundaries, read
-[`docs/architecture/core-decomposition.md`](docs/architecture/core-decomposition.md).
+the full conceptual architecture. For Product Surface / Product Assembly /
+Product Feature / Agent Kernel / Execution / Extension / Cross-platform Adapter /
+Stable Contracts and Security Control Plane boundaries, read
+[`docs/architecture/product-architecture.md`](docs/architecture/product-architecture.md).
 Keep crate dependencies inside each layer to the smallest set needed.
 
 | # | Layer | Path | Owns | Modules / entries | Layer doc |
@@ -152,11 +153,11 @@ await api.invoke('your_command', { request: { ... } });
 
 ## Architecture
 
-### Core decomposition guardrails
+### Product architecture guardrails
 
 For any `bitfun-core` decomposition, feature-boundary, dependency-boundary, or
 Rust build-speed refactor, read
-[`docs/architecture/core-decomposition.md`](docs/architecture/core-decomposition.md)
+[`docs/architecture/product-architecture.md`](docs/architecture/product-architecture.md)
 before editing. Keep this file as an entry point; put module-specific ownership
 details in the nearest module `AGENTS.md`.
 

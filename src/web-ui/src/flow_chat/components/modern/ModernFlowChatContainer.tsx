@@ -8,7 +8,11 @@ import { useTranslation } from 'react-i18next';
 import { useShortcut } from '@/infrastructure/hooks/useShortcut';
 import { FlowChatManager } from '@/flow_chat/services/FlowChatManager';
 import { useSessionModeStore } from '@/app/stores/sessionModeStore';
-import { VirtualMessageList, VirtualMessageListRef } from './VirtualMessageList';
+import {
+  VirtualMessageList,
+  type FlowChatTurnPinRequestStatus,
+  type VirtualMessageListRef,
+} from './VirtualMessageList';
 import {
   FlowChatHeader,
   type FlowChatHeaderCommandSummary,
@@ -245,7 +249,7 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
   const releasedHistoryCompletionKeyRef = useRef<string | null>(null);
   const visibleTurnInfoRef = useRef<VisibleTurnInfo | null>(visibleTurnInfo);
   const turnSummariesRef = useRef<FlowChatHeaderTurnSummary[]>([]);
-  const requestHeaderTurnPinRef = useRef<((turnId: string, behavior?: ScrollBehavior) => boolean) | null>(null);
+  const requestHeaderTurnPinRef = useRef<((turnId: string, behavior?: ScrollBehavior) => FlowChatTurnPinRequestStatus) | null>(null);
   const virtualListRef = useRef<VirtualMessageListRef>(null);
   const chatScopeRef = useRef<HTMLDivElement>(null);
   const [historyInitialContentReadyKey, setHistoryInitialContentReadyKey] = useState<string | null>(null);
@@ -664,17 +668,17 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
     }
   }, [pendingHeaderTurnId, turnSummaries, visibleTurnInfo?.turnId]);
 
-  const requestHeaderTurnPin = useCallback((turnId: string, behavior: ScrollBehavior = 'smooth') => {
+  const requestHeaderTurnPin = useCallback((turnId: string, behavior: ScrollBehavior = 'smooth'): FlowChatTurnPinRequestStatus => {
     const isLatestTurn = turnSummaries[turnSummaries.length - 1]?.turnId === turnId;
     const targetTurn = findDialogTurn(activeSession?.dialogTurns, turnId);
     const pinMode = isLatestTurn && shouldUseStickyLatestPin(targetTurn)
       ? 'sticky-latest'
       : 'transient';
 
-    return virtualListRef.current?.pinTurnToTop(turnId, {
+    return virtualListRef.current?.pinTurnToTopWithStatus(turnId, {
       behavior,
       pinMode,
-    }) ?? false;
+    }) ?? 'rejected';
   }, [activeSession?.dialogTurns, turnSummaries]);
   useEffect(() => {
     requestHeaderTurnPinRef.current = requestHeaderTurnPin;
@@ -707,9 +711,11 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
         return;
       }
 
-      const accepted = requestHeaderTurnPinRef.current?.(queuedHeaderTurnPinId, 'auto') ?? false;
-      if (accepted) {
-        setPendingHeaderTurnId(queuedHeaderTurnPinId);
+      const pinStatus = requestHeaderTurnPinRef.current?.(queuedHeaderTurnPinId, 'auto') ?? 'rejected';
+      if (pinStatus === 'settled' || pinStatus === 'pending') {
+        setQueuedHeaderTurnPinId(null);
+        setPendingHeaderTurnId(null);
+        return;
       }
 
       attempts += 1;
@@ -1003,24 +1009,31 @@ export const ModernFlowChatContainer: React.FC<ModernFlowChatContainerProps> = (
   }, [searchCurrentMatchVirtualIndex]);
 
   const handleJumpToTurn = useCallback((turnId: string) => {
-    if (!turnId) return;
+    if (!turnId) return false;
 
     const targetStillExists = turnSummaries.some(turn => turn.turnId === turnId);
     if (!targetStillExists) {
       setQueuedHeaderTurnPinId(null);
       setPendingHeaderTurnId(null);
-      return;
+      return false;
     }
 
-    const accepted = requestHeaderTurnPin(turnId);
-    if (accepted) {
-      setQueuedHeaderTurnPinId(turnId);
-      setPendingHeaderTurnId(turnId);
-      return;
+    const pinStatus = requestHeaderTurnPin(turnId);
+    if (pinStatus === 'settled') {
+      setQueuedHeaderTurnPinId(null);
+      setPendingHeaderTurnId(null);
+      return true;
+    }
+
+    if (pinStatus === 'pending') {
+      setQueuedHeaderTurnPinId(null);
+      setPendingHeaderTurnId(null);
+      return false;
     }
 
     setQueuedHeaderTurnPinId(turnId);
     setPendingHeaderTurnId(null);
+    return false;
   }, [requestHeaderTurnPin, turnSummaries]);
 
   const handleJumpToPreviousTurn = useCallback(() => {

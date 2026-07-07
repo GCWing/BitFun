@@ -8,6 +8,7 @@
  */
 
 @use './_tool-card-common.scss';
+@use '../../component-library/styles/markdown-layout' as markdown;
 
 /* Minimal, borderless layout.
  * WebKit (Tauri/macOS) baseline-quirk fix:
@@ -198,8 +199,8 @@
   --markdown-font-size-sm: var(--flowchat-font-size-sm);
   --markdown-code-font-size: var(--flowchat-font-size-xs);
   --markdown-line-height: var(--flowchat-text-line-height);
-  --markdown-block-gap: var(--flowchat-markdown-block-gap);
-  --markdown-paragraph-gap: var(--flowchat-markdown-paragraph-gap);
+  --markdown-block-gap: #{markdown.$block-gap};
+  --markdown-paragraph-gap: #{markdown.$paragraph-gap};
 
   font-family: var(--font-family-sans);
   font-size: var(--flowchat-font-size-base);

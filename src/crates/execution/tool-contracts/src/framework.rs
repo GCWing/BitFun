@@ -578,7 +578,6 @@ pub fn tool_manifest_sort_rank(tool_name: &str) -> usize {
         "WebSearch" => 11,
         "TodoWrite" => 12,
         "Skill" => 13,
-        "Log" => 14,
         GET_TOOL_SPEC_TOOL_NAME => 15,
         "ControlHub" => 16,
         _ => 100,

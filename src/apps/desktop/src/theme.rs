@@ -591,6 +591,14 @@ pub fn create_main_window(
     // Keep HTML5 drag-and-drop working inside the webview for desktop UI drag targets.
     builder = builder.disable_drag_drop_handler();
 
+    // Block webview reloads: allow only the first navigation (initial load),
+    // cancel all subsequent navigations (F5 / Ctrl+R / location.reload()).
+    // The app uses state-driven routing, not browser navigation, so there are
+    // no legitimate full-page navigations after the initial load.
+    let first_navigation = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
+    builder = builder
+        .on_navigation(move |_| first_navigation.swap(false, std::sync::atomic::Ordering::SeqCst));
+
     #[cfg(target_os = "macos")]
     {
         builder = builder

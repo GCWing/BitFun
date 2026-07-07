@@ -1,0 +1,338 @@
+:root {
+  color-scheme: light;
+  --bitfun-canvas-bg: Canvas;
+  --bitfun-canvas-panel: Canvas;
+  --bitfun-canvas-fg: CanvasText;
+  --bitfun-canvas-muted: color-mix(in srgb, CanvasText 65%, transparent);
+  --bitfun-canvas-border: color-mix(in srgb, CanvasText 18%, transparent);
+  --bitfun-canvas-accent: LinkText;
+  --bitfun-canvas-success: LinkText;
+  --bitfun-canvas-warning: CanvasText;
+  --bitfun-canvas-danger: Mark;
+  --bitfun-canvas-info: LinkText;
+  --color-static-white: Canvas;
+  --color-bg-primary: var(--bitfun-canvas-bg);
+  --color-bg-secondary: var(--bitfun-canvas-panel);
+  --color-bg-elevated: color-mix(in srgb, var(--bitfun-canvas-bg) 86%, var(--bitfun-canvas-panel) 14%);
+  --color-bg-chrome: color-mix(in srgb, var(--bitfun-canvas-panel) 92%, var(--bitfun-canvas-bg) 8%);
+  --color-bg-scene: var(--color-bg-secondary);
+  --color-text-primary: var(--bitfun-canvas-fg);
+  --color-text-secondary: color-mix(in srgb, var(--bitfun-canvas-fg) 76%, transparent);
+  --color-text-muted: var(--bitfun-canvas-muted);
+  --color-accent-500: var(--bitfun-canvas-accent);
+  --color-accent-200: color-mix(in srgb, var(--bitfun-canvas-accent) 18%, transparent);
+  --color-success: var(--bitfun-canvas-success);
+  --color-warning: var(--bitfun-canvas-warning);
+  --color-error: var(--bitfun-canvas-danger);
+  --border-subtle: color-mix(in srgb, var(--bitfun-canvas-border) 70%, transparent);
+  --border-base: var(--bitfun-canvas-border);
+  --element-bg-subtle: color-mix(in srgb, var(--color-text-primary) 5%, transparent);
+  --element-bg-soft: color-mix(in srgb, var(--color-text-primary) 8%, transparent);
+  --element-bg-base: color-mix(in srgb, var(--color-text-primary) 12%, transparent);
+  --element-bg-medium: color-mix(in srgb, var(--color-text-primary) 16%, transparent);
+  --font-family-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-family-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+* { box-sizing: border-box; }
+
+html,
+body,
+#bitfun-canvas-root {
+  min-height: 100%;
+}
+
+html {
+  height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg-scene);
+  color: var(--color-text-primary);
+  font: 13px/1.5 var(--font-family-sans);
+  text-rendering: geometricPrecision;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  color: inherit;
+}
+
+#bitfun-canvas-root {
+  padding: 24px 20px 56px;
+}
+
+.bf-canvas-boot {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 12px;
+  border: 1px solid var(--border-base);
+  border-radius: 8px;
+  color: var(--color-text-muted);
+  background: color-mix(in srgb, var(--color-bg-secondary) 72%, transparent);
+}
+
+.bf-canvas-stack {
+  min-width: 0;
+  width: 100%;
+}
+
+#bitfun-canvas-root > .bf-canvas-stack {
+  max-width: min(100%, 980px);
+  margin-inline: auto;
+}
+
+html[data-bitfun-canvas-design-mode] {
+  cursor: crosshair;
+}
+
+html[data-bitfun-canvas-design-mode] body {
+  user-select: none;
+}
+
+[data-bitfun-canvas-hovered='true'] {
+  outline: 2px solid var(--color-accent-500) !important;
+  outline-offset: 2px !important;
+}
+
+.bf-card {
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--color-bg-elevated);
+  overflow: hidden;
+}
+
+.bf-card-header {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--color-text-primary);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.25;
+}
+
+.bf-card-body {
+  padding: 12px;
+}
+
+.bf-callout {
+  --bf-callout-accent: var(--color-accent-500);
+
+  position: relative;
+  border-radius: 8px;
+  padding: 12px 14px 12px 16px;
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 76%, transparent);
+  background: color-mix(in srgb, var(--color-bg-elevated) 58%, transparent);
+  color: var(--color-text-primary);
+}
+
+.bf-callout::before {
+  content: '';
+  position: absolute;
+  top: 11px;
+  bottom: 11px;
+  left: 0;
+  width: 3px;
+  border-radius: 0 999px 999px 0;
+  background: var(--bf-callout-accent);
+  opacity: 0.72;
+}
+
+.bf-callout-title {
+  margin-bottom: 6px;
+  color: var(--color-text-primary);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.bf-callout-body {
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.bf-callout-body > :first-child {
+  margin-top: 0;
+}
+
+.bf-callout-body > :last-child {
+  margin-bottom: 0;
+}
+
+.bf-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 999px;
+  padding: 3px 9px;
+  background: var(--element-bg-base);
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.bf-pill--active {
+  background: var(--color-accent-200);
+  color: var(--color-text-primary);
+}
+
+.bf-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--element-bg-base);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+
+.bf-button:hover {
+  background: var(--element-bg-medium);
+  color: var(--color-text-primary);
+}
+
+.bf-button--primary {
+  background: var(--color-accent-500);
+  color: var(--color-static-white);
+}
+
+.bf-code {
+  border-radius: 5px;
+  padding: 1px 5px;
+  background: var(--element-bg-base);
+  color: var(--color-text-primary);
+  font-family: var(--font-family-mono);
+  font-size: 0.92em;
+}
+
+.bf-table-wrap {
+  overflow: auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--color-bg-elevated);
+}
+
+.bf-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.bf-table th,
+.bf-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-subtle);
+  text-align: left;
+  vertical-align: top;
+}
+
+.bf-table th {
+  color: var(--color-text-primary);
+  font-weight: 650;
+  background: var(--color-bg-chrome);
+}
+
+.bf-table td {
+  color: var(--color-text-secondary);
+}
+
+.bf-diff {
+  overflow: auto;
+  background: color-mix(in srgb, var(--color-bg-primary) 54%, transparent);
+  font: 12px/1.55 var(--font-family-mono);
+}
+
+.bf-chart {
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--color-bg-elevated);
+  padding: 12px;
+  min-width: 0;
+}
+
+.bf-chart__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 22px;
+  margin-bottom: 8px;
+}
+
+.bf-chart__title {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--color-text-primary);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bf-chart__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  color: var(--color-text-muted);
+  font-size: 11px;
+}
+
+.bf-chart__legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.bf-chart__swatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex: 0 0 auto;
+}
+
+.bf-chart svg {
+  display: block;
+  width: 100%;
+  overflow: visible;
+}
+
+.bf-input,
+.bf-textarea,
+.bf-select {
+  width: 100%;
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  background: var(--element-bg-subtle);
+  color: var(--color-text-primary);
+  padding: 7px 9px;
+  outline: none;
+}
+
+.bf-input:focus,
+.bf-textarea:focus,
+.bf-select:focus {
+  border-color: color-mix(in srgb, var(--color-accent-500) 55%, var(--border-base));
+}

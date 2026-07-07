@@ -188,7 +188,6 @@ const WIDGET_THEME_STATIC_SHELL_VARS = {
   '--opacity-hover': '0.8',
   '--opacity-focus': '0.9',
   '--motion-slow': '0.6s',
-  '--smooth-height-collapse-duration': '0.6s',
   '--tool-card-font-mono': widgetVar('--font-family-mono'),
   '--btn-primary-bg': widgetVar(FALLBACK_VAR.accent100),
   '--btn-primary-color': widgetVar(FALLBACK_VAR.accent600),

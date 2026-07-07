@@ -10,6 +10,7 @@ mod agent;
 mod chat_state;
 mod commands;
 mod config;
+mod diagnostics;
 mod logging;
 mod management;
 mod modes;

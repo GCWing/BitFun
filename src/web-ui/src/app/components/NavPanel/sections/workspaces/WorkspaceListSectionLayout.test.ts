@@ -44,7 +44,7 @@ describe('WorkspaceListSection layout styles', () => {
     expect(workspaceNameButton).toContain('flex: 0 1 auto;');
     expect(workspaceNameButton).toContain('overflow: hidden;');
     expect(workspaceNameButton).not.toContain('58px');
-    expect(stylesheet).toContain('var(--bitfun-nav-row-action-size) +\n      var(--bitfun-nav-row-action-size)');
+    expect(stylesheet).toContain('padding-right: 52px;');
     expect(stylesheet).toContain('&__workspace-item:hover &__workspace-item-name-stack');
     expect(stylesheet).toContain('&__workspace-item.is-menu-open &__workspace-item-name-stack');
     expect(stylesheet).not.toContain('&__workspace-item.is-active &__workspace-item-name-btn');
@@ -54,9 +54,9 @@ describe('WorkspaceListSection layout styles', () => {
     expect(workspaceLabel).toContain('flex: 1 1 0;');
     expect(workspaceLabel).toContain('text-overflow: ellipsis;');
     expect(workspaceActions).toContain('position: absolute;');
-    expect(workspaceActions).toContain('right: var(--bitfun-nav-row-action-offset);');
-    expect(workspaceActions).toContain('gap: var(--bitfun-nav-row-action-gap);');
-    expect(workspaceMenu).toContain('gap: var(--bitfun-nav-row-action-gap);');
+    expect(workspaceActions).toContain('right: 4px;');
+    expect(workspaceActions).toContain('gap: 4px;');
+    expect(workspaceMenu).toContain('gap: 4px;');
 
     expect(assistantItem).toContain('min-width: 0;');
     expect(assistantItem).toContain('max-width: 100%;');
@@ -66,26 +66,28 @@ describe('WorkspaceListSection layout styles', () => {
     expect(assistantNameButton).toContain('overflow: hidden;');
     expect(assistantNameButton).not.toContain('58px');
     expect(stylesheet).toContain('&__assistant-item:hover &__assistant-item-name-btn');
+    expect(stylesheet).toContain('padding-right: 52px;');
+    expect(stylesheet).not.toContain('padding-right: 48px;');
     expect(stylesheet).toContain('&__assistant-item.is-menu-open &__assistant-item-name-btn');
     expect(stylesheet).not.toContain('&__assistant-item.is-active &__assistant-item-name-btn');
     expect(assistantLabel).toContain('flex: 1 1 0;');
     expect(assistantLabel).toContain('text-overflow: ellipsis;');
     expect(assistantMenu).toContain('position: absolute;');
-    expect(assistantMenu).toContain('right: var(--bitfun-nav-row-action-offset);');
-    expect(assistantMenu).toContain('gap: var(--bitfun-nav-row-action-gap);');
+    expect(assistantMenu).toContain('right: 4px;');
+    expect(assistantMenu).toContain('gap: 4px;');
     expect(stylesheet).toContain('.bitfun-nav-panel__inline-list {\n      margin-left: 8px;');
     expect(stylesheet).toContain('padding-left: 2px;');
     expect(stylesheet).toContain('padding-right: 0;');
   });
 
-  it('uses the shared nav row-action size for workspace and assistant menu triggers', () => {
+  it('keeps workspace and assistant menu triggers at the compact row size', () => {
     const stylesheet = readWorkspaceListStylesheet();
     const workspaceTrigger = extractBlock(stylesheet, '&__workspace-item-menu-trigger');
     const assistantTrigger = extractBlock(stylesheet, '&__assistant-item-menu-trigger');
 
     for (const block of [workspaceTrigger, assistantTrigger]) {
-      expect(block).toContain('width: var(--bitfun-nav-row-action-size);');
-      expect(block).toContain('height: var(--bitfun-nav-row-action-size);');
+      expect(block).toContain('width: 20px;');
+      expect(block).toContain('height: 20px;');
     }
   });
 });

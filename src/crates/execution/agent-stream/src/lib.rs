@@ -2,6 +2,7 @@
 //!
 //! Processes AI streaming responses, supports tool pre-detection and parameter streaming
 
+mod hidden_text;
 pub mod tool_call_accumulator;
 mod unified;
 
@@ -10,6 +11,7 @@ use crate::tool_call_accumulator::{
 };
 use bitfun_events::{AgenticEvent, AgenticEventPriority as EventPriority, ToolEventData};
 use futures::{Stream, StreamExt};
+pub use hidden_text::{HiddenTextBlock, HiddenTextStreamParser, HiddenTextTag};
 use log::{debug, error, trace};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -178,7 +180,10 @@ pub struct StreamResult {
     pub reasoning_content_present: bool,
     /// Signature of Anthropic extended thinking (passed back in multi-turn conversations)
     pub thinking_signature: Option<String>,
+    /// User-visible assistant text after stream-only hidden markup has been removed.
     pub full_text: String,
+    /// Hidden text blocks extracted from assistant text while streaming.
+    pub hidden_text_blocks: Vec<HiddenTextBlock>,
     pub tool_calls: Vec<ToolCall>,
     /// Token usage statistics (from model response)
     pub usage: Option<UnifiedTokenUsage>,
@@ -212,9 +217,10 @@ impl StreamProcessError {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct StreamProcessOptions {
     pub recover_partial_on_cancel: bool,
+    pub hidden_text_tags: Vec<HiddenTextTag>,
 }
 
 /// Stream processing context, encapsulates state during stream processing
@@ -231,6 +237,8 @@ struct StreamContext {
     /// Signature of Anthropic extended thinking (passed back in multi-turn conversations)
     thinking_signature: Option<String>,
     full_text: String,
+    hidden_text_blocks: Vec<HiddenTextBlock>,
+    hidden_text_parser: HiddenTextStreamParser,
     tool_calls: Vec<ToolCall>,
     usage: Option<UnifiedTokenUsage>,
     provider_metadata: Option<Value>,
@@ -260,7 +268,7 @@ impl StreamContext {
         round_id: String,
         attempt_id: String,
         attempt_index: u32,
-        _options: StreamProcessOptions,
+        options: &StreamProcessOptions,
     ) -> Self {
         Self {
             session_id,
@@ -272,6 +280,8 @@ impl StreamContext {
             reasoning_content_present: false,
             thinking_signature: None,
             full_text: String::new(),
+            hidden_text_blocks: Vec::new(),
+            hidden_text_parser: HiddenTextStreamParser::new(options.hidden_text_tags.clone()),
             tool_calls: Vec::new(),
             usage: None,
             provider_metadata: None,
@@ -295,6 +305,7 @@ impl StreamContext {
             reasoning_content_present: self.reasoning_content_present,
             thinking_signature: self.thinking_signature,
             full_text: self.full_text,
+            hidden_text_blocks: self.hidden_text_blocks,
             tool_calls: self.tool_calls,
             usage: self.usage,
             provider_metadata: self.provider_metadata,
@@ -679,6 +690,13 @@ impl StreamProcessor {
 
     /// Handle text chunk
     async fn handle_text_chunk(&self, ctx: &mut StreamContext, text: String) {
+        let parsed = ctx.hidden_text_parser.push_str(&text);
+        ctx.hidden_text_blocks.extend(parsed.hidden_blocks);
+        let text = parsed.visible_text;
+        if text.is_empty() {
+            return;
+        }
+
         if !text.trim().is_empty() {
             ctx.has_effective_output = true;
             ctx.mark_first_visible_output();
@@ -687,6 +705,37 @@ impl StreamProcessor {
         ctx.text_chunks_count += 1;
 
         // Send streaming text event
+        let _ = self
+            .event_sink
+            .enqueue(
+                AgenticEvent::TextChunk {
+                    session_id: ctx.session_id.clone(),
+                    turn_id: ctx.dialog_turn_id.clone(),
+                    round_id: ctx.round_id.clone(),
+                    attempt_id: Some(ctx.attempt_id.clone()),
+                    attempt_index: Some(ctx.attempt_index),
+                    text,
+                },
+                None,
+            )
+            .await;
+    }
+
+    async fn flush_hidden_text_tail(&self, ctx: &mut StreamContext) {
+        let parsed = ctx.hidden_text_parser.finish();
+        ctx.hidden_text_blocks.extend(parsed.hidden_blocks);
+        let text = parsed.visible_text;
+        if text.is_empty() {
+            return;
+        }
+
+        if !text.trim().is_empty() {
+            ctx.has_effective_output = true;
+            ctx.mark_first_visible_output();
+        }
+        ctx.full_text.push_str(&text);
+        ctx.text_chunks_count += 1;
+
         let _ = self
             .event_sink
             .enqueue(
@@ -839,7 +888,7 @@ impl StreamProcessor {
             round_id,
             attempt_id,
             attempt_index,
-            options,
+            &options,
         );
         // Start SSE log collector (if raw_sse_rx is provided)
         let sse_collector = if let Some(mut rx) = raw_sse_rx {
@@ -1026,6 +1075,7 @@ impl StreamProcessor {
 
         // Ensure thinking end marker is sent
         self.send_thinking_end_if_needed(&mut ctx).await;
+        self.flush_hidden_text_tail(&mut ctx).await;
 
         let _ = ctx.finalize_all_pending_tool_calls(ToolCallBoundary::StreamEnd);
 
@@ -1060,7 +1110,7 @@ impl StreamProcessor {
 
 #[cfg(test)]
 mod tests {
-    use super::{StreamEventSink, StreamProcessOptions, StreamProcessor};
+    use super::{HiddenTextTag, StreamEventSink, StreamProcessOptions, StreamProcessor};
     use super::{UnifiedResponse, UnifiedTokenUsage, UnifiedToolCall};
     use bitfun_events::{AgenticEvent, AgenticEventPriority as EventPriority};
     use futures::StreamExt;
@@ -1075,6 +1125,18 @@ mod tests {
     #[async_trait::async_trait]
     impl StreamEventSink for NoopEventSink {
         async fn enqueue(&self, _event: AgenticEvent, _priority: Option<EventPriority>) {}
+    }
+
+    #[derive(Default)]
+    struct RecordingEventSink {
+        events: tokio::sync::Mutex<Vec<AgenticEvent>>,
+    }
+
+    #[async_trait::async_trait]
+    impl StreamEventSink for RecordingEventSink {
+        async fn enqueue(&self, event: AgenticEvent, _priority: Option<EventPriority>) {
+            self.events.lock().await.push(event);
+        }
     }
 
     fn build_processor() -> StreamProcessor {
@@ -1099,6 +1161,105 @@ mod tests {
             cached_content_token_count: None,
             cache_creation_token_count: None,
         }
+    }
+
+    fn memory_hidden_tag() -> HiddenTextTag {
+        HiddenTextTag::new(
+            "memory_citation",
+            "<bitfun-mem-citation>",
+            "</bitfun-mem-citation>",
+        )
+    }
+
+    #[tokio::test]
+    async fn strips_hidden_text_tags_across_stream_chunks() {
+        let sink = Arc::new(RecordingEventSink::default());
+        let processor = StreamProcessor::new(sink.clone());
+        let stream = iter(vec![
+            Ok(UnifiedResponse {
+                text: Some("hello <bitfun-mem-".to_string()),
+                ..Default::default()
+            }),
+            Ok(UnifiedResponse {
+                text: Some(
+                    "citation><citation_entries>\nMEMORY.md:1-2|note=[x]\n</citation_entries></bitfun-mem-citation> world"
+                        .to_string(),
+                ),
+                ..Default::default()
+            }),
+        ])
+        .boxed();
+
+        let result = processor
+            .process_stream_with_options(
+                stream,
+                None,
+                None,
+                "session_1".to_string(),
+                "turn_1".to_string(),
+                "round_1".to_string(),
+                "round_1:attempt:1".to_string(),
+                1,
+                &CancellationToken::new(),
+                StreamProcessOptions {
+                    hidden_text_tags: vec![memory_hidden_tag()],
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("stream result");
+
+        assert_eq!(result.full_text, "hello  world");
+        assert_eq!(result.hidden_text_blocks.len(), 1);
+        assert_eq!(result.hidden_text_blocks[0].name, "memory_citation");
+        assert!(result.hidden_text_blocks[0]
+            .payload
+            .contains("MEMORY.md:1-2"));
+
+        let events = sink.events.lock().await;
+        let text_chunks = events
+            .iter()
+            .filter_map(|event| match event {
+                AgenticEvent::TextChunk { text, .. } => Some(text.as_str()),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(text_chunks, vec!["hello ", " world"]);
+        assert!(!text_chunks
+            .iter()
+            .any(|text| text.contains("<bitfun-mem-citation>")));
+    }
+
+    #[tokio::test]
+    async fn auto_closes_unterminated_hidden_text_tag_on_stream_end() {
+        let processor = build_processor();
+        let stream = iter(vec![Ok(UnifiedResponse {
+            text: Some("hello<bitfun-mem-citation>payload".to_string()),
+            ..Default::default()
+        })])
+        .boxed();
+
+        let result = processor
+            .process_stream_with_options(
+                stream,
+                None,
+                None,
+                "session_1".to_string(),
+                "turn_1".to_string(),
+                "round_1".to_string(),
+                "round_1:attempt:1".to_string(),
+                1,
+                &CancellationToken::new(),
+                StreamProcessOptions {
+                    hidden_text_tags: vec![memory_hidden_tag()],
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("stream result");
+
+        assert_eq!(result.full_text, "hello");
+        assert_eq!(result.hidden_text_blocks[0].payload, "payload");
     }
 
     #[tokio::test]

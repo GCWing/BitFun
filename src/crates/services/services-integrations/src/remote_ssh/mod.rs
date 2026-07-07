@@ -4,10 +4,12 @@
 //! the legacy public path.
 
 pub mod paths;
+mod shell;
 pub mod types;
 pub mod workspace_registry;
 #[cfg(feature = "workspace-search")]
 pub mod workspace_search;
+mod workspace_services;
 
 #[cfg(not(feature = "remote-ssh-concrete"))]
 mod disabled;
@@ -27,6 +29,7 @@ pub mod remote_terminal;
 pub use paths::*;
 pub use types::*;
 pub use workspace_registry::*;
+pub use workspace_services::{remote_workspace_services, RemoteWorkspaceFs, RemoteWorkspaceShell};
 
 #[cfg(not(feature = "remote-ssh-concrete"))]
 pub use disabled::{

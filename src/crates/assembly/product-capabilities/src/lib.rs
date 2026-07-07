@@ -12,7 +12,7 @@ use bitfun_harness::{
 };
 use bitfun_runtime_ports::{
     PluginRuntimeAvailability, PluginRuntimeBinding, PluginRuntimeUnavailableReason,
-    RuntimeServiceCapability, UiExtensionAvailability,
+    RuntimeServiceCapability,
 };
 use bitfun_runtime_services::RuntimeServices;
 pub use bitfun_tool_packs::ToolProviderGroupPlanSelectionError as ProductCapabilityBuildError;
@@ -26,6 +26,7 @@ pub enum ProductCapabilityId {
     DeepReview,
     DeepResearch,
     MiniApp,
+    Canvas,
 }
 
 impl ProductCapabilityId {
@@ -35,6 +36,7 @@ impl ProductCapabilityId {
             Self::DeepReview => "deep-review",
             Self::DeepResearch => "deep-research",
             Self::MiniApp => "miniapp",
+            Self::Canvas => "canvas",
         }
     }
 }
@@ -55,6 +57,7 @@ pub enum ProductFeatureGroup {
     ComputerUse,
     ImageAnalysis,
     MiniApp,
+    Canvas,
     AgentControl,
 }
 
@@ -68,6 +71,7 @@ impl ProductFeatureGroup {
             Self::ComputerUse => "computer-use",
             Self::ImageAnalysis => "image-analysis",
             Self::MiniApp => "miniapp",
+            Self::Canvas => "canvas",
             Self::AgentControl => "agent-control",
         }
     }
@@ -89,6 +93,7 @@ impl From<ToolPackFeatureGroup> for ProductFeatureGroup {
             ToolPackFeatureGroup::ComputerUse => Self::ComputerUse,
             ToolPackFeatureGroup::ImageAnalysis => Self::ImageAnalysis,
             ToolPackFeatureGroup::MiniApp => Self::MiniApp,
+            ToolPackFeatureGroup::Canvas => Self::Canvas,
             ToolPackFeatureGroup::AgentControl => Self::AgentControl,
         }
     }
@@ -630,10 +635,7 @@ impl ProductAssembler {
         }
 
         let plan = assembly.plan().clone().with_extension_capabilities(
-            ProductExtensionCapabilitySet::new(
-                plugin_runtime_availability,
-                assembly.plan().extension_capabilities().ui_extensions(),
-            ),
+            ProductExtensionCapabilitySet::new(plugin_runtime_availability),
         );
 
         Ok(ProductRuntimeParts {
@@ -862,26 +864,15 @@ impl ProductCapabilityRegistry {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProductExtensionCapabilitySet {
     plugin_runtime: PluginRuntimeAvailability,
-    ui_extensions: UiExtensionAvailability,
 }
 
 impl ProductExtensionCapabilitySet {
-    pub fn new(
-        plugin_runtime: PluginRuntimeAvailability,
-        ui_extensions: UiExtensionAvailability,
-    ) -> Self {
-        Self {
-            plugin_runtime,
-            ui_extensions,
-        }
+    pub fn new(plugin_runtime: PluginRuntimeAvailability) -> Self {
+        Self { plugin_runtime }
     }
 
     pub const fn plugin_runtime(&self) -> PluginRuntimeAvailability {
         self.plugin_runtime
-    }
-
-    pub const fn ui_extensions(&self) -> UiExtensionAvailability {
-        self.ui_extensions
     }
 }
 
@@ -901,22 +892,7 @@ pub fn product_extension_capabilities_for_profile(
         }
     };
 
-    let ui_extension_reason = match profile {
-        DeliveryProfile::ProductFull
-        | DeliveryProfile::Desktop
-        | DeliveryProfile::Web
-        | DeliveryProfile::MobileWeb => PluginRuntimeUnavailableReason::NotBuilt,
-        DeliveryProfile::Cli
-        | DeliveryProfile::Server
-        | DeliveryProfile::Remote
-        | DeliveryProfile::Acp
-        | DeliveryProfile::Sdk => PluginRuntimeUnavailableReason::UnsupportedProfile,
-    };
-
-    ProductExtensionCapabilitySet::new(
-        PluginRuntimeAvailability::disabled(plugin_runtime_reason),
-        UiExtensionAvailability::disabled(ui_extension_reason),
-    )
+    ProductExtensionCapabilitySet::new(PluginRuntimeAvailability::disabled(plugin_runtime_reason))
 }
 
 fn feature_groups_from_tool_provider_group_plan(
@@ -962,9 +938,16 @@ const MINIAPP_SERVICES: &[RuntimeServiceCapability] = &[
     RuntimeServiceCapability::Permission,
     RuntimeServiceCapability::Events,
 ];
+const CANVAS_SERVICES: &[RuntimeServiceCapability] = &[
+    RuntimeServiceCapability::FileSystem,
+    RuntimeServiceCapability::Workspace,
+    RuntimeServiceCapability::SessionStore,
+    RuntimeServiceCapability::Events,
+];
 
 const CODE_AGENT_TOOL_GROUPS: &[&str] = &["core.basic", "core.agent", "core.session"];
 const INTEGRATION_TOOL_GROUPS: &[&str] = &["core.integration"];
+const CANVAS_TOOL_GROUPS: &[&str] = &["core.canvas"];
 
 const DEEP_REVIEW_HARNESS_CAPABILITIES: &[HarnessCapability] = &[
     HarnessCapability::Plan,
@@ -1032,6 +1015,12 @@ const DEFAULT_PRODUCT_CAPABILITY_PACKS: &[ProductCapabilityPack] = &[
         MINIAPP_SERVICES,
         INTEGRATION_TOOL_GROUPS,
         MINIAPP_HARNESS_PROVIDERS,
+    ),
+    ProductCapabilityPack::new(
+        ProductCapabilityId::Canvas,
+        CANVAS_SERVICES,
+        CANVAS_TOOL_GROUPS,
+        NO_HARNESS_PROVIDERS,
     ),
 ];
 const EMPTY_PRODUCT_CAPABILITY_PACKS: &[ProductCapabilityPack] = &[];

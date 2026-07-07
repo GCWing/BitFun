@@ -206,10 +206,10 @@ fn available_model_select_options(ai_config: &AIConfig) -> Vec<SessionConfigSele
 }
 
 fn model_display_name(model: &bitfun_core::service::config::types::AIModelConfig) -> String {
-    if model.name.trim().is_empty() {
-        format!("{} / {}", model.provider, model.model_name)
+    if model.model_name.trim().is_empty() {
+        format!("{} / {}", model.provider, model.name)
     } else {
-        model.name.clone()
+        model.model_name.clone()
     }
 }
 

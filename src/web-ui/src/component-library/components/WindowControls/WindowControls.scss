@@ -85,12 +85,20 @@
     &--close {
       &:hover {
         background: var(--btn-ghost-hover-bg);
-        color: var(--window-control-close-hover-color);
+        color: var(--color-error);
         border-color: var(--btn-ghost-hover-border);
+
+        :root[data-window-control-close-hover-override='true'] & {
+          color: var(--window-control-close-hover-color);
+        }
       }
 
       &:focus-visible {
-        outline-color: var(--window-control-close-hover-color);
+        outline-color: var(--color-error);
+
+        :root[data-window-control-close-hover-override='true'] & {
+          outline-color: var(--window-control-close-hover-color);
+        }
       }
     }
 

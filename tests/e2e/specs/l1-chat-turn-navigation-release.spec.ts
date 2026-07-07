@@ -442,6 +442,15 @@ describe('Release long-session turn navigation', () => {
     const revealState = await revealHistoryUntilTurnListContains(targetTitle);
     const clickResult = await clickHeaderTurnListItemByTitle(targetTitle);
     expect(clickResult.itemCount).toBeGreaterThan(0);
+    await browser.waitUntil(async () => {
+      return browser.execute(() =>
+        document.querySelectorAll('.flowchat-header__turn-list-item').length === 0,
+      );
+    }, {
+      timeout: 500,
+      interval: 50,
+      timeoutMsg: '[ReleaseTurnNav] turn list did not close promptly after accepted selection',
+    });
 
     let lastMetrics = await readTurnViewportMetrics(targetTurnId);
     await browser.waitUntil(async () => {

@@ -80,7 +80,10 @@ function getContextDisplayName(context: ContextItem): string {
     case 'url': return context.title || context.url;
     case 'mermaid-node': return context.nodeText;
     case 'mermaid-diagram': return context.diagramTitle || 'Mermaid diagram';
-    case 'web-element': return context.tagName;
+    case 'web-element': {
+      const label = typeof context.metadata?.label === 'string' ? context.metadata.label.trim() : '';
+      return label || context.textContent || context.tagName;
+    }
     default: {
       const exhaustive: never = context;
       return String(exhaustive);
@@ -100,7 +103,10 @@ function getContextTagFormat(context: ContextItem): string {
     case 'url': return `#link:${context.title || context.url}`;
     case 'mermaid-node': return `#chart:${context.nodeText}`;
     case 'mermaid-diagram': return `#mermaid:${context.diagramTitle || 'Mermaid diagram'}`;
-    case 'web-element': return `#element:${context.tagName}`;
+    case 'web-element': {
+      const label = typeof context.metadata?.label === 'string' ? context.metadata.label.trim() : context.tagName;
+      return `#element:${label.replace(/\s+/g, '_')}`;
+    }
     default: {
       const exhaustive: never = context;
       return String(exhaustive);
@@ -137,7 +143,7 @@ function getContextFullPath(context: ContextItem): string {
     case 'mermaid-diagram':
       return `Mermaid diagram${context.diagramTitle ? ': ' + context.diagramTitle : ''} (${context.diagramCode.length} chars)`;
     case 'web-element':
-      return context.path;
+      return context.sourceUrl ? `${context.sourceUrl} · ${context.path}` : context.path;
     default: {
       const exhaustive: never = context;
       return String(exhaustive);

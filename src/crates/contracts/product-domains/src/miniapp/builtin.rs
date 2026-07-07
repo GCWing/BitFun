@@ -121,7 +121,7 @@ pub const BUILTIN_APPS: &[BuiltinMiniAppBundle] = &[
     },
     BuiltinMiniAppBundle {
         id: "builtin-daily-divination",
-        version: 21,
+        version: 22,
         meta_json: include_str!("builtin/assets/divination/meta.json"),
         html: include_str!("builtin/assets/divination/index.html"),
         css: include_str!("builtin/assets/divination/style.css"),
@@ -161,7 +161,7 @@ pub const BUILTIN_APPS: &[BuiltinMiniAppBundle] = &[
     },
     BuiltinMiniAppBundle {
         id: "builtin-ppt-live",
-        version: 193,
+        version: 194,
         meta_json: include_str!("builtin/assets/ppt-live/meta.json"),
         html: include_str!("builtin/assets/ppt-live/index.html"),
         css: include_str!("builtin/assets/ppt-live/style.css"),

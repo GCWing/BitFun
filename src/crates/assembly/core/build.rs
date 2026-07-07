@@ -113,6 +113,7 @@ fn embed_agents_prompt_data() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("cargo:rerun-if-changed=src/agentic/agents/prompts");
     println!("cargo:rerun-if-changed=src/agentic/prompts");
+    println!("cargo:rerun-if-changed=src/agentic/memories/prompts");
 
     // Get CARGO_MANIFEST_DIR (i.e. src/crates/assembly/core directory)
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")?;
@@ -148,6 +149,22 @@ fn embed_agents_prompt_data() -> Result<(), Box<dyn std::error::Error>> {
         eprintln!(
             "Warning: shared prompts directory not found at {:?}",
             shared_prompt_path
+        );
+    }
+
+    let memory_prompt_path = Path::new(&manifest_dir)
+        .join("src")
+        .join("agentic")
+        .join("memories")
+        .join("prompts");
+
+    if memory_prompt_path.exists() {
+        println!("Embedding memory prompts from: {:?}", memory_prompt_path);
+        read_prompts_recursive(&memory_prompt_path, &memory_prompt_path, &mut prompts)?;
+    } else {
+        eprintln!(
+            "Warning: memory prompts directory not found at {:?}",
+            memory_prompt_path
         );
     }
 
@@ -211,6 +228,9 @@ fn read_prompts_with_prefix(
 
             // Remove extension and add prefix as key
             let key = gen_key(&relative_path, prefix);
+            if prompts.contains_key(&key) {
+                return Err(format!("Duplicate embedded prompt key: {}", key).into());
+            }
             prompts.insert(key, content);
         }
     }
@@ -240,6 +260,9 @@ fn read_prompts_recursive(
 
             // Remove extension as key
             let key = gen_key(&relative_path, "");
+            if prompts.contains_key(&key) {
+                return Err(format!("Duplicate embedded prompt key: {}", key).into());
+            }
             prompts.insert(key, content);
         }
     }

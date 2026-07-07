@@ -7,8 +7,8 @@
 }
 
 .deep-review-consent {
-  --deep-review-accent: var(--deep-review-consent-accent);
-  --deep-review-accent-strong: var(--deep-review-consent-accent-strong);
+  --deep-review-accent: var(--color-accent-600);
+  --deep-review-accent-strong: var(--color-accent-600);
   --deep-review-warm: var(--color-warning);
   display: flex;
   flex-direction: column;
@@ -18,13 +18,6 @@
     radial-gradient(circle at 4% 0%, color-mix(in srgb, var(--deep-review-accent) 13%, transparent), transparent 34%),
     radial-gradient(circle at 96% 8%, color-mix(in srgb, var(--deep-review-warm) 9%, transparent), transparent 30%),
     var(--color-bg-primary);
-}
-
-:root[data-theme='dark'] .deep-review-consent,
-:root[data-theme-type='dark'] .deep-review-consent {
-  --deep-review-accent: var(--color-accent-600);
-  --deep-review-accent-strong: var(--deep-review-consent-accent-strong-dark);
-  --deep-review-warm: var(--deep-review-consent-warm-dark);
 }
 
 .deep-review-consent__header {

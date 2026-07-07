@@ -1016,10 +1016,22 @@ function pickIndices(rand, len, n) {
 }
 
 // ── Fortune generation ───────────────────────────────
-// `generateFortune` returns INDICES + raw stars. Localization happens at render
+// `generateFortuneIndices` returns INDICES + raw stars. Localization happens at render
 // time so changing language re-renders the same reading in another tongue.
+//
+// The seed mixes the date with a per-user identifier (appDataDir, which embeds
+// the OS user name) so different users get different readings on the same day,
+// while a single user's result stays stable throughout the day.
+function userSalt() {
+  try {
+    return (window.app && window.app.appDataDir) || 'shared';
+  } catch (_e) {
+    return 'shared';
+  }
+}
+
 function generateFortuneIndices(date) {
-  const seed = hashSeed('bitfun-divination-' + date);
+  const seed = hashSeed(userSalt() + '|bitfun-divination|' + date);
   const rand = mulberry32(seed);
 
   const cardIdx = Math.floor(rand() * CARD_VISUALS.length);
