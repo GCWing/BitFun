@@ -15,23 +15,22 @@ use bitfun_runtime_ports::{
     RuntimeServicePort, SessionStoragePathRequest, SessionStorePort,
 };
 use bitfun_services_integrations::remote_connect::{
-    build_remote_chat_messages, build_remote_model_catalog,
+    agent_input_attachment_from_remote_image_context, build_remote_chat_messages,
+    build_remote_model_catalog,
     normalize_remote_model_selection as normalize_remote_model_selection_contract,
-    normalize_remote_session_model_id as normalize_remote_session_model_id_contract,
-    remote_dialog_submit_outcome_from_scheduler,
-    remote_model_selection_needs_config as remote_model_selection_needs_config_contract,
-    ChatImageAttachment, ChatMessage, RemoteAssistantWorkspaceFacts, RemoteCancelRuntimeHost,
-    RemoteChatHistoryRound, RemoteChatHistoryTextItem, RemoteChatHistoryThinkingItem,
-    RemoteChatHistoryToolCall, RemoteChatHistoryToolItem, RemoteChatHistoryTurn,
-    RemoteConnectSubmissionSource, RemoteDefaultModelsConfig, RemoteDialogQueuePriority,
-    RemoteDialogResolvedSubmission, RemoteDialogRuntimeHost, RemoteDialogSchedulerOutcomeFact,
-    RemoteDialogSubmissionPolicy, RemoteDialogSubmitOutcome, RemoteDialogWorkspaceBinding,
-    RemoteImageContext, RemoteImageContextAdapter, RemoteInitialSyncRuntimeHost,
-    RemoteInteractionRuntimeHost, RemoteModelCapabilityFact, RemoteModelCatalog,
-    RemoteModelCatalogFacts, RemoteModelFacts, RemotePollRuntimeHost, RemoteReasoningModeFact,
-    RemoteRecentWorkspaceFacts, RemoteSessionMetadata, RemoteSessionRuntimeHost,
-    RemoteSessionStateTracker, RemoteSessionTrackerHost, RemoteTerminalPrewarmRequest,
-    RemoteWorkspaceFacts, RemoteWorkspaceFileRuntimeHost,
+    normalize_remote_session_model_id, project_remote_chat_user,
+    remote_dialog_submit_outcome_from_scheduler, remote_model_selection_needs_config, ChatMessage,
+    RemoteAssistantWorkspaceFacts, RemoteCancelRuntimeHost, RemoteChatHistoryRound,
+    RemoteChatHistoryTextItem, RemoteChatHistoryThinkingItem, RemoteChatHistoryToolCall,
+    RemoteChatHistoryToolItem, RemoteChatHistoryTurn, RemoteConnectSubmissionSource,
+    RemoteDefaultModelsConfig, RemoteDialogQueuePriority, RemoteDialogResolvedSubmission,
+    RemoteDialogRuntimeHost, RemoteDialogSchedulerOutcomeFact, RemoteDialogSubmissionPolicy,
+    RemoteDialogSubmitOutcome, RemoteDialogWorkspaceBinding, RemoteImageContext,
+    RemoteInitialSyncRuntimeHost, RemoteInteractionRuntimeHost, RemoteModelCapabilityFact,
+    RemoteModelCatalog, RemoteModelCatalogFacts, RemoteModelFacts, RemotePollRuntimeHost,
+    RemoteReasoningModeFact, RemoteRecentWorkspaceFacts, RemoteSessionMetadata,
+    RemoteSessionRuntimeHost, RemoteSessionStateTracker, RemoteSessionTrackerHost,
+    RemoteTerminalPrewarmRequest, RemoteWorkspaceFacts, RemoteWorkspaceFileRuntimeHost,
     RemoteWorkspaceKind as RemoteConnectWorkspaceKind, RemoteWorkspaceRuntimeHost,
     RemoteWorkspaceUpdate,
 };
@@ -49,9 +48,6 @@ use crate::service::remote_connect::remote_server::RemoteExecutionDispatcher;
 
 use crate::service::config::types::{AIConfig, GlobalConfig, ModelCapability, ReasoningMode};
 use crate::service::session::{DialogTurnData, TurnStatus};
-
-/// Max thumbnail size per remote chat image sent to mobile (100 KB).
-const MOBILE_IMAGE_MAX_BYTES: usize = 100 * 1024;
 
 fn current_workspace_path() -> Option<std::path::PathBuf> {
     crate::service::workspace::get_global_workspace_service()
@@ -186,10 +182,6 @@ async fn load_remote_session_metadata_for_workspace(
         .collect())
 }
 
-fn normalize_remote_session_model_id(model_id: Option<String>) -> Option<String> {
-    normalize_remote_session_model_id_contract(model_id.as_deref())
-}
-
 fn normalize_remote_model_selection(
     requested_model_id: &str,
     ai_config: Option<&AIConfig>,
@@ -201,10 +193,6 @@ fn normalize_remote_model_selection(
     normalize_remote_model_selection_contract(requested_model_id, |model_id| {
         ai_config.and_then(|config| config.resolve_model_reference(model_id))
     })
-}
-
-fn remote_model_selection_needs_config(requested_model_id: &str) -> bool {
-    remote_model_selection_needs_config_contract(requested_model_id)
 }
 
 fn remote_model_capability_fact(capability: ModelCapability) -> RemoteModelCapabilityFact {
@@ -229,58 +217,6 @@ fn remote_reasoning_mode_fact(reasoning_mode: ReasoningMode) -> RemoteReasoningM
     }
 }
 
-/// Compress a base64 data-URL image to a small thumbnail for mobile display.
-/// Falls back to the original if decoding/compression fails or the image is
-/// already within `max_bytes`.
-fn compress_remote_chat_data_url_for_mobile(data_url: &str, max_bytes: usize) -> String {
-    use base64::engine::general_purpose::STANDARD as BASE64;
-    use base64::Engine;
-    use image::imageops::FilterType;
-
-    const MAX_THUMBNAIL_DIM: u32 = 400;
-
-    let Some(comma_pos) = data_url.find(',') else {
-        return data_url.to_string();
-    };
-    let b64_data = &data_url[comma_pos + 1..];
-
-    if b64_data.len() * 3 / 4 <= max_bytes {
-        return data_url.to_string();
-    }
-
-    let Ok(raw_bytes) = BASE64.decode(b64_data) else {
-        return data_url.to_string();
-    };
-
-    let Ok(img) = image::load_from_memory(&raw_bytes) else {
-        return data_url.to_string();
-    };
-
-    let resized = if img.width() > MAX_THUMBNAIL_DIM || img.height() > MAX_THUMBNAIL_DIM {
-        img.resize(MAX_THUMBNAIL_DIM, MAX_THUMBNAIL_DIM, FilterType::Triangle)
-    } else {
-        img
-    };
-
-    fn encode_jpeg(img: &image::DynamicImage, quality: u8) -> Option<Vec<u8>> {
-        let mut buf = Vec::new();
-        let encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut buf, quality);
-        img.write_with_encoder(encoder).ok()?;
-        Some(buf)
-    }
-
-    for quality in [75u8, 60, 45, 30] {
-        if let Some(buf) = encode_jpeg(&resized, quality) {
-            if buf.len() <= max_bytes || quality == 30 {
-                let b64 = BASE64.encode(&buf);
-                return format!("data:image/jpeg;base64,{b64}");
-            }
-        }
-    }
-
-    data_url.to_string()
-}
-
 /// Convert persisted turns into mobile ChatMessages.
 /// This is the same data source the desktop frontend uses.
 fn remote_chat_messages_from_turns(turns: &[DialogTurnData]) -> Vec<ChatMessage> {
@@ -293,34 +229,10 @@ fn remote_chat_messages_from_turns(turns: &[DialogTurnData]) -> Vec<ChatMessage>
 }
 
 fn remote_chat_history_turn_from_core_turn(turn: &DialogTurnData) -> RemoteChatHistoryTurn {
-    let user_images = turn
-        .user_message
-        .metadata
-        .as_ref()
-        .and_then(|m| m.get("images"))
-        .and_then(|v| v.as_array())
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|v| {
-                    let name = v.get("name")?.as_str()?.to_string();
-                    let raw_url = v.get("data_url")?.as_str()?;
-                    let data_url =
-                        compress_remote_chat_data_url_for_mobile(raw_url, MOBILE_IMAGE_MAX_BYTES);
-                    Some(ChatImageAttachment { name, data_url })
-                })
-                .collect::<Vec<_>>()
-        })
-        .unwrap_or_default();
-
-    // Prefer original_text from metadata (pre-enhancement) for display.
-    let user_display_content = turn
-        .user_message
-        .metadata
-        .as_ref()
-        .and_then(|m| m.get("original_text"))
-        .and_then(|v| v.as_str())
-        .map(|s| s.to_string())
-        .unwrap_or_else(|| strip_remote_user_input_tags(&turn.user_message.content));
+    let prompt_visible_content =
+        crate::agentic::core::strip_prompt_markup(&turn.user_message.content);
+    let user_projection =
+        project_remote_chat_user(turn.user_message.metadata.as_ref(), &prompt_visible_content);
 
     let rounds = turn
         .model_rounds
@@ -370,23 +282,13 @@ fn remote_chat_history_turn_from_core_turn(turn: &DialogTurnData) -> RemoteChatH
     RemoteChatHistoryTurn {
         turn_id: turn.turn_id.clone(),
         user_message_id: turn.user_message.id.clone(),
-        user_display_content,
+        user_display_content: user_projection.content,
         user_timestamp_ms: turn.user_message.timestamp,
-        user_images,
+        user_images: user_projection.images,
         is_in_progress: turn.status == TurnStatus::InProgress,
         start_time_ms: turn.start_time,
         rounds,
     }
-}
-
-fn strip_remote_user_input_tags(content: &str) -> String {
-    let s = crate::agentic::core::strip_prompt_markup(content);
-    if s.starts_with("User uploaded") {
-        if let Some(pos) = s.find("User's question:\n") {
-            return s[pos + "User's question:\n".len()..].trim().to_string();
-        }
-    }
-    s
 }
 
 async fn resolve_session_model_id(session_id: &str) -> Option<String> {
@@ -394,7 +296,7 @@ async fn resolve_session_model_id(session_id: &str) -> Option<String> {
     let session_manager = coordinator.get_session_manager();
 
     if let Some(session) = session_manager.get_session(session_id) {
-        return normalize_remote_session_model_id(session.config.model_id.clone());
+        return normalize_remote_session_model_id(session.config.model_id.as_deref());
     }
 
     let session_storage_dir =
@@ -403,7 +305,7 @@ async fn resolve_session_model_id(session_id: &str) -> Option<String> {
         .restore_session_from_storage_path(&session_storage_dir, session_id)
         .await
         .ok()
-        .and_then(|session| normalize_remote_session_model_id(session.config.model_id.clone()))
+        .and_then(|session| normalize_remote_session_model_id(session.config.model_id.as_deref()))
 }
 
 fn core_dialog_submission_policy(policy: RemoteDialogSubmissionPolicy) -> DialogSubmissionPolicy {
@@ -445,30 +347,30 @@ fn remote_dialog_scheduler_outcome_fact(
     }
 }
 
-fn agent_input_attachment_from_image_context(context: ImageContextData) -> AgentInputAttachment {
-    let mut metadata = serde_json::Map::new();
-    if let Some(image_path) = context.image_path {
-        metadata.insert(
-            "imagePath".to_string(),
-            serde_json::Value::String(image_path),
-        );
-    }
-    if let Some(data_url) = context.data_url {
-        metadata.insert("dataUrl".to_string(), serde_json::Value::String(data_url));
-    }
-    metadata.insert(
-        "mimeType".to_string(),
-        serde_json::Value::String(context.mime_type),
-    );
-    if let Some(context_metadata) = context.metadata {
-        metadata.insert("metadata".to_string(), context_metadata);
-    }
-
-    AgentInputAttachment {
-        kind: "remote_image".to_string(),
+fn remote_image_context_from_image_context(context: ImageContextData) -> RemoteImageContext {
+    RemoteImageContext {
         id: context.id,
-        metadata,
+        image_path: context.image_path,
+        data_url: context.data_url,
+        mime_type: context.mime_type,
+        metadata: context.metadata,
     }
+}
+
+fn image_context_from_remote_image_context(context: RemoteImageContext) -> ImageContextData {
+    ImageContextData {
+        id: context.id,
+        image_path: context.image_path,
+        data_url: context.data_url,
+        mime_type: context.mime_type,
+        metadata: context.metadata,
+    }
+}
+
+fn agent_input_attachment_from_image_context(context: ImageContextData) -> AgentInputAttachment {
+    agent_input_attachment_from_remote_image_context(remote_image_context_from_image_context(
+        context,
+    ))
 }
 
 fn core_agent_runtime_builder(
@@ -485,18 +387,6 @@ fn core_agent_runtime_builder(
         .with_thread_goal_management_port(thread_goal_management)
         .with_cancellation_port(cancellation)
         .with_agent_registry(agent_registry)
-}
-
-impl RemoteImageContextAdapter for ImageContextData {
-    fn from_remote_image_context(context: RemoteImageContext) -> Self {
-        Self {
-            id: context.id,
-            image_path: context.image_path,
-            data_url: context.data_url,
-            mime_type: context.mime_type,
-            metadata: context.metadata,
-        }
-    }
 }
 
 pub(crate) struct CoreServiceAgentRuntime;
@@ -590,7 +480,7 @@ impl CoreServiceAgentRuntime {
     }
 
     pub(crate) fn remote_image_context(context: RemoteImageContext) -> ImageContextData {
-        ImageContextData::from_remote_image_context(context)
+        image_context_from_remote_image_context(context)
     }
 
     pub(crate) async fn load_remote_chat_messages(
@@ -1622,15 +1512,15 @@ mod tests {
             Some("auto".to_string())
         );
         assert_eq!(
-            normalize_remote_session_model_id(Some("".to_string())),
+            normalize_remote_session_model_id(Some("")),
             Some("auto".to_string())
         );
         assert_eq!(
-            normalize_remote_session_model_id(Some("  default  ".to_string())),
+            normalize_remote_session_model_id(Some("  default  ")),
             Some("auto".to_string())
         );
         assert_eq!(
-            normalize_remote_session_model_id(Some(" model-1 ".to_string())),
+            normalize_remote_session_model_id(Some(" model-1 ")),
             Some("model-1".to_string())
         );
     }
@@ -1714,9 +1604,13 @@ mod tests {
 
     #[test]
     fn core_service_agent_runtime_owner_strips_enhanced_remote_user_input() {
-        let content = "User uploaded a file.\nUser's question:\n  explain this  ";
+        let mut turn = remote_history_test_turn(TurnStatus::Completed, None);
+        turn.user_message.content =
+            "User uploaded a file.\nUser's question:\n  explain this  ".to_string();
 
-        assert_eq!(strip_remote_user_input_tags(content), "explain this");
+        let messages = remote_chat_messages_from_turns(&[turn]);
+
+        assert_eq!(messages[0].content, "explain this");
     }
 
     fn remote_history_test_turn(

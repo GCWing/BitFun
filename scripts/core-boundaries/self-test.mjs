@@ -851,6 +851,28 @@ export function runManifestParserSelfTest({
   if (!serviceAgentRuntimeRuleText.includes('self\\.scheduler')) {
     throw new Error('service agent runtime boundary rule must forbid direct scheduler submit');
   }
+  if (!serviceAgentRuntimeRuleText.includes('strip_remote_user_input_tags')) {
+    throw new Error('service agent runtime boundary rule must forbid remote display cleanup ownership');
+  }
+  if (!serviceAgentRuntimeRuleText.includes('compress_remote_chat_data_url_for_mobile')) {
+    throw new Error('service agent runtime boundary rule must forbid remote thumbnail compression ownership');
+  }
+  if (!serviceAgentRuntimeRuleText.includes('normalize_remote_session_model_id')) {
+    throw new Error('service agent runtime boundary rule must forbid session model normalization ownership');
+  }
+  const serviceAgentRuntimeOwnerFeatureContracts = [
+    'images',
+    'image::load_from_memory',
+    'JpegEncoder',
+    "User's question",
+    'AgentInputAttachment',
+    'remote_image',
+  ];
+  for (const contract of serviceAgentRuntimeOwnerFeatureContracts) {
+    if (!serviceAgentRuntimeRuleText.includes(contract)) {
+      throw new Error(`service agent runtime boundary rule must forbid remote chat owner feature: ${contract}`);
+    }
+  }
   const sessionMessageRuleText = forbiddenRuleTextForPath(
     'src/crates/assembly/core/src/agentic/tools/implementations/session_message_tool.rs',
   );
@@ -2356,7 +2378,6 @@ export function runManifestParserSelfTest({
         'build_remote_model_catalog',
         'update_remote_session_model',
         'normalize_remote_session_model_id',
-        'normalize_remote_session_model_id_contract',
         'normalize_remote_model_selection',
         'normalize_remote_model_selection_contract',
         'remote_chat_messages_from_turns',
@@ -2364,8 +2385,7 @@ export function runManifestParserSelfTest({
         'remote_dialog_submit_outcome_from_scheduler',
         'RemoteChatHistoryTurn',
         'build_remote_chat_messages',
-        'strip_remote_user_input_tags',
-        'compress_remote_chat_data_url_for_mobile',
+        'project_remote_chat_user',
         'load_remote_chat_messages',
         'agent_runtime',
         'agent_runtime_with_dialog_turns',
@@ -2391,7 +2411,7 @@ export function runManifestParserSelfTest({
         'CoreRemoteSessionTrackerHost',
         'RemoteExecutionDispatcher',
         'ImageContextData',
-        'RemoteImageContextAdapter',
+        'agent_input_attachment_from_remote_image_context',
         'AgentSubmissionPort',
         'AgentDialogTurnPort',
         'AgentTurnCancellationPort',
@@ -2475,6 +2495,8 @@ export function runManifestParserSelfTest({
         'RemoteChatHistoryRound',
         'RemoteChatHistoryToolItem',
         'build_remote_chat_messages',
+        'RemoteChatUserProjection',
+        'project_remote_chat_user',
         'REMOTE_FILE_MAX_READ_BYTES',
         'REMOTE_FILE_MAX_CHUNK_BYTES',
         'resolve_remote_file_chunk_range',

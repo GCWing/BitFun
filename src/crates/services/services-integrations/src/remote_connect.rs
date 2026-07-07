@@ -8,6 +8,7 @@
 //! session/runtime hosts stay in `bitfun-core` until their ports are explicit.
 
 pub mod bot;
+mod chat_projection;
 pub mod device;
 pub mod encryption;
 mod lan;
@@ -28,6 +29,10 @@ pub use bitfun_runtime_ports::{
     RemoteSessionWorkspaceIdentity, RemoteWorkspaceFacts, RemoteWorkspaceFileChunk,
     RemoteWorkspaceFileContent, RemoteWorkspaceFileInfo, RemoteWorkspaceFileRuntimeHost,
     RemoteWorkspaceKind, RemoteWorkspacePort, RemoteWorkspaceRuntimeHost, RemoteWorkspaceUpdate,
+};
+pub use chat_projection::{
+    agent_input_attachment_from_remote_image_context, project_remote_chat_user,
+    RemoteChatUserProjection,
 };
 pub use device::DeviceIdentity;
 pub use encryption::{decrypt_from_base64, encrypt_to_base64, KeyPair};

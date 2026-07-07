@@ -526,6 +526,46 @@ export const forbiddenContentRules = [
         message:
           'remote dialog runtime host must submit through AgentRuntime dialog lifecycle port, not direct DialogScheduler',
       },
+      {
+        regex: /\bfn\s+strip_remote_user_input_tags\b/,
+        message:
+          'service agent runtime must not own remote user display cleanup; use services-integrations projection helpers',
+      },
+      {
+        regex: /\bfn\s+compress_remote_chat_data_url_for_mobile\b/,
+        message:
+          'service agent runtime must not own remote chat thumbnail compression; use services-integrations projection helpers',
+      },
+      {
+        regex: /\bfn\s+normalize_remote_session_model_id\b/,
+        message:
+          'service agent runtime must not own remote session model id normalization; use services-integrations model selection helpers',
+      },
+      {
+        regex: /\.get\(\s*["']images["']\s*\)/,
+        message:
+          'service agent runtime must not extract remote chat image metadata directly; use services-integrations projection helpers',
+      },
+      {
+        regex: /\bimage::load_from_memory\b/,
+        message:
+          'service agent runtime must not own remote chat image decoding/compression; use services-integrations projection helpers',
+      },
+      {
+        regex: /\bJpegEncoder\b/,
+        message:
+          'service agent runtime must not own remote chat thumbnail encoding; use services-integrations projection helpers',
+      },
+      {
+        regex: /\.find\(\s*["']User's question:\\n["']\s*\)/,
+        message:
+          'service agent runtime must not parse remote chat legacy wrapper text; use services-integrations projection helpers',
+      },
+      {
+        regex: /\bAgentInputAttachment\s*\{[\s\S]*?\bkind:\s*["']remote_image["']/,
+        message:
+          'service agent runtime must not construct remote image attachments directly; use services-integrations attachment mapping',
+      },
     ],
   },
   {
@@ -3383,7 +3423,7 @@ export const forbiddenContentRules = [
       {
         regex: /\bfn compress_data_url_for_mobile\b/,
         message:
-          'remote_server must not own remote chat thumbnail compression; keep it in service_agent_runtime',
+          'remote_server must not own remote chat thumbnail compression; use services-integrations projection helpers',
       },
       {
         regex: /\bfn turns_to_chat_messages\b/,
@@ -3398,7 +3438,7 @@ export const forbiddenContentRules = [
       {
         regex: /\bfn strip_user_input_tags\b/,
         message:
-          'remote_server must not own remote user input display cleanup; keep it in service_agent_runtime',
+          'remote_server must not own remote user input display cleanup; use services-integrations projection helpers',
       },
       {
         regex: /\bpub struct ImageAttachment\b/,

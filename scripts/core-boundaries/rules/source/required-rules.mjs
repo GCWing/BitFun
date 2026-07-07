@@ -5504,11 +5504,7 @@ export const requiredContentRules = [
         message: 'missing remote session model update owner adapter',
       },
       {
-        regex: /\bfn normalize_remote_session_model_id\b/,
-        message: 'missing remote session model id normalization regression hook',
-      },
-      {
-        regex: /\bnormalize_remote_session_model_id_contract\b/,
+        regex: /\bnormalize_remote_session_model_id\(\s*session\.config\.model_id\.as_deref\(\)\s*\)/,
         message: 'missing remote session model id owner delegation',
       },
       {
@@ -5540,12 +5536,8 @@ export const requiredContentRules = [
         message: 'missing remote chat history assembly delegation',
       },
       {
-        regex: /\bfn strip_remote_user_input_tags\b/,
-        message: 'missing remote user input display cleanup owner adapter',
-      },
-      {
-        regex: /\bfn compress_remote_chat_data_url_for_mobile\b/,
-        message: 'missing remote chat thumbnail compression owner adapter',
+        regex: /\bproject_remote_chat_user\(\s*turn\.user_message\.metadata\.as_ref\(\),\s*&prompt_visible_content\s*\)/,
+        message: 'missing remote chat user projection owner delegation',
       },
       {
         regex: /\bfn load_remote_chat_messages\b/,
@@ -5664,8 +5656,8 @@ export const requiredContentRules = [
         message: 'missing core image context binding',
       },
       {
-        regex: /\bRemoteImageContextAdapter\b/,
-        message: 'missing remote image context adapter implementation',
+        regex: /\bagent_input_attachment_from_remote_image_context\(\s*remote_image_context_from_image_context\(/,
+        message: 'missing remote image lifecycle attachment owner delegation',
       },
       {
         regex: /\bAgentSubmissionPort\b/,
@@ -5965,6 +5957,14 @@ export const requiredContentRules = [
         message: 'missing remote chat history assembly owner',
       },
       {
+        regex: /\bRemoteChatUserProjection\b/,
+        message: 'missing remote chat user projection compatibility export',
+      },
+      {
+        regex: /\bproject_remote_chat_user\b/,
+        message: 'missing remote chat user projection compatibility export',
+      },
+      {
         regex: /\bpub const REMOTE_FILE_MAX_READ_BYTES\b/,
         message: 'missing remote file max-read policy',
       },
@@ -6223,6 +6223,33 @@ export const requiredContentRules = [
       {
         regex: /\bremote_interaction_handler_preserves_default_reject_reason\b/,
         message: 'missing remote interaction default reject regression',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/services/services-integrations/src/remote_connect/chat_projection.rs',
+    reason:
+      'remote chat projection helpers must own image metadata/display projection without leaking separate helper APIs',
+    patterns: [
+      {
+        regex: /\bpub struct RemoteChatUserProjection\b/,
+        message: 'missing remote chat user projection DTO',
+      },
+      {
+        regex: /\bpub fn project_remote_chat_user\b/,
+        message: 'missing remote chat user projection owner',
+      },
+      {
+        regex: /\bfn remote_chat_user_images_from_metadata\b/,
+        message: 'remote chat image metadata extraction must stay private to the projection owner',
+      },
+      {
+        regex: /\bfn remote_chat_user_display_content\b/,
+        message: 'remote chat display cleanup must stay private to the projection owner',
+      },
+      {
+        regex: /\bfn compress_remote_chat_data_url_for_mobile\b/,
+        message: 'remote chat thumbnail compression must stay private to the projection owner',
       },
     ],
   },
