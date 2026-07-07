@@ -34,15 +34,15 @@ type InlineTagColor = 'blue' | 'green' | 'red' | 'yellow' | 'purple' | 'gray';
 
 // Tag metadata
 const TAG_CONFIG = {
-  file: { icon: File, color: 'var(--color-accent-500)', tagColor: 'blue' as InlineTagColor, label: 'File' },
-  dir: { icon: Folder, color: 'var(--color-purple-500)', tagColor: 'purple' as InlineTagColor, label: 'Directory' },
-  code: { icon: Code, color: 'var(--color-success)', tagColor: 'green' as InlineTagColor, label: 'Code' },
-  img: { icon: Image, color: 'var(--color-warning)', tagColor: 'yellow' as InlineTagColor, label: 'Image' },
-  cmd: { icon: Terminal, color: 'var(--color-text-muted)', tagColor: 'gray' as InlineTagColor, label: 'Command' },
-  chart: { icon: FileText, color: 'var(--color-cyan-500)', tagColor: 'gray' as InlineTagColor, label: 'Chart' },
-  git: { icon: GitBranch, color: 'var(--color-error)', tagColor: 'red' as InlineTagColor, label: 'Git' },
-  link: { icon: Link, color: 'var(--color-accent-500)', tagColor: 'blue' as InlineTagColor, label: 'Link' },
-  pr: { icon: GitPullRequest, color: 'var(--color-purple-500)', tagColor: 'purple' as InlineTagColor, label: 'Pull Request' }
+  file: { icon: File, tagColor: 'blue' as InlineTagColor, label: 'File' },
+  dir: { icon: Folder, tagColor: 'purple' as InlineTagColor, label: 'Directory' },
+  code: { icon: Code, tagColor: 'green' as InlineTagColor, label: 'Code' },
+  img: { icon: Image, tagColor: 'yellow' as InlineTagColor, label: 'Image' },
+  cmd: { icon: Terminal, tagColor: 'gray' as InlineTagColor, label: 'Command' },
+  chart: { icon: FileText, tagColor: 'gray' as InlineTagColor, label: 'Chart' },
+  git: { icon: GitBranch, tagColor: 'red' as InlineTagColor, label: 'Git' },
+  link: { icon: Link, tagColor: 'blue' as InlineTagColor, label: 'Link' },
+  pr: { icon: GitPullRequest, tagColor: 'purple' as InlineTagColor, label: 'Pull Request' }
 };
 
 /**
@@ -115,7 +115,6 @@ const InlineContextTag: React.FC<{ tagType: string; label: string }> = ({ tagTyp
       size="small"
       className="inline-context-tag"
       title={`${config.label}: ${label}`}
-      style={{ '--inline-context-tag-color': config.color } as React.CSSProperties}
     >
       <IconComponent size={12} style={{ marginRight: '4px', display: 'inline-flex', verticalAlign: 'middle' }} />
       <span>{label}</span>

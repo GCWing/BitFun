@@ -1,4 +1,5 @@
 @use '../../../../component-library/styles/tokens' as *;
+@use '../../../styles/surface-stagger';
 
 // Same as GalleryLayout.scss — nursery sub-pages align with Agents / gallery lists
 $nursery-scene-gutter: clamp(40px, 6vw, 80px);
@@ -292,7 +293,7 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
   text-align: left;
   font-family: $font-family-sans;
   animation: nursery-card-in 0.22s $easing-decelerate both;
-  animation-delay: calc(var(--surface-stagger-index) * 40ms);
+  @include surface-stagger.animation-delay(40ms);
   transition:
     transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
     box-shadow 0.35s ease;
@@ -2819,8 +2820,8 @@ $acp-content-top: clamp(40px, 4.5vh, 52px);
   display: flex;
   align-items: flex-start;
   gap: $size-gap-3;
-  // Match .aqi and .acp-sessions-area horizontal inset from the shared profile ACP token
-  padding: $acp-content-top var(--profile-acp-left-inline-pad) $size-gap-5;
+  // Match .aqi and .acp-sessions-area horizontal inset.
+  padding: $acp-content-top $size-gap-6 $size-gap-5;
   flex-shrink: 0;
 
   &__info {
@@ -2906,7 +2907,7 @@ $acp-content-top: clamp(40px, 4.5vh, 52px);
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: $size-gap-3 var(--profile-acp-left-inline-pad) $size-gap-5;
+  padding: $size-gap-3 $size-gap-6 $size-gap-5;
 
   &__title {
     margin: 0 0 $size-gap-2;

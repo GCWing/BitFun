@@ -219,7 +219,7 @@
       "owner": "BitFun-Installer/src/theme; BitFun-Installer/src/pages; BitFun-Installer/src/styles",
       "platforms": ["installer"],
       "formFactors": ["desktop", "narrow"],
-      "themes": ["dark", "light", "system"],
+      "themes": ["dark", "light", "system", "bitfun-dark", "bitfun-light", "bitfun-midnight", "bitfun-china-style", "bitfun-china-night", "bitfun-cyber", "bitfun-slate", "bitfun-tokyo-night"],
       "states": ["theme-setup", "language", "options", "loading", "progress", "error", "completed", "hover", "focus"],
       "tokenFamilies": ["--color-bg-*", "--color-text-*", "--element-bg-*", "--border-*", "--color-accent-*", "--color-success", "--color-warning", "--color-error"],
       "evidence": [

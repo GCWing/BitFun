@@ -1,5 +1,6 @@
 @use '../../../component-library/styles/tokens' as *;
 @use '../../../component-library/styles/btn-primary-tokens.scss' as btn-primary;
+@use '../../styles/surface-stagger';
 
 $gutter: clamp(40px, 6vw, 80px);
 $content-max: 1480px;
@@ -175,7 +176,7 @@ $content-max: 1480px;
   position: relative;
   overflow: hidden;
   animation: gallery-item-in 0.28s $easing-decelerate both;
-  animation-delay: calc(var(--surface-stagger-index) * 60ms);
+  @include surface-stagger.animation-delay(60ms);
 
   &::after {
     content: '';
@@ -188,7 +189,7 @@ $content-max: 1480px;
       var(--skeleton-shimmer-peak) 50%,
       var(--skeleton-shimmer-0) 100%
     );
-    animation: gallery-shimmer 1.6s ease-in-out calc(var(--surface-stagger-index) * 0.12s) infinite;
+    animation: gallery-shimmer 1.6s ease-in-out surface-stagger.delay(0.12s) infinite;
   }
 }
 

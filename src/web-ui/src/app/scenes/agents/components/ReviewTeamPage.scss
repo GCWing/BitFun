@@ -6,7 +6,7 @@
   /* Aligns overview + member rows with `AgentTeamCard` / gallery team cards */
   --review-team-accent: var(--color-accent-400);
   --review-team-shadow-color: rgb(var(--color-overlay-slate-rgb));
-  --member-accent: var(--review-team-member-accent-default);
+  --member-accent: var(--color-accent-500);
 
   .bitfun-config-page-content__inner {
     max-width: 1480px;

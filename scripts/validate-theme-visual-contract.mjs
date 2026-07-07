@@ -15,7 +15,19 @@ const REQUIRED_SURFACE_KEYS = [
 ];
 const ALLOWED_PLATFORMS = new Set(['desktop-webview', 'web', 'mobile-web', 'generated-widget', 'installer']);
 const ALLOWED_FORM_FACTORS = new Set(['desktop', 'narrow', 'mobile', 'iframe']);
-const ALLOWED_THEMES = new Set(['dark', 'light', 'system']);
+const ALLOWED_THEMES = new Set([
+  'dark',
+  'light',
+  'system',
+  'bitfun-dark',
+  'bitfun-light',
+  'bitfun-midnight',
+  'bitfun-china-style',
+  'bitfun-china-night',
+  'bitfun-cyber',
+  'bitfun-slate',
+  'bitfun-tokyo-night',
+]);
 const ALLOWED_EVIDENCE_TYPES = new Set([
   'boundary-render-review',
   'contrast-review',

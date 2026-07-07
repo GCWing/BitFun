@@ -148,6 +148,7 @@ vi.mock('@/shared/services/reviewTeamService', () => ({
     maxSameRoleInstances: 3,
   },
   DEFAULT_REVIEW_TEAM_MODEL: 'fast',
+  REVIEW_TEAM_MEMBER_ACCENT_DEFAULT: '#64748b',
   FALLBACK_REVIEW_TEAM_DEFINITION: {
     id: 'default-review-team',
     name: 'Code Review Team',

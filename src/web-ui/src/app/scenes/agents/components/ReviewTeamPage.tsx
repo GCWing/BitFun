@@ -33,6 +33,7 @@ import { useAgentsStore } from '../agentsStore';
 import {
   DEFAULT_REVIEW_TEAM_CONCURRENCY_POLICY,
   DEFAULT_REVIEW_TEAM_EXECUTION_POLICY,
+  REVIEW_TEAM_MEMBER_ACCENT_DEFAULT,
   DEFAULT_REVIEW_TEAM_MODEL,
   FALLBACK_REVIEW_TEAM_DEFINITION,
   loadDefaultReviewTeam,
@@ -45,7 +46,7 @@ import './AgentTeamCard.scss';
 import './ReviewTeamPage.scss';
 
 const rtLog = createLogger('ReviewTeamPage');
-const DEFAULT_MEMBER_ACCENT = 'var(--review-team-member-accent-default)';
+const DEFAULT_MEMBER_ACCENT = REVIEW_TEAM_MEMBER_ACCENT_DEFAULT;
 
 function getMemberIcon(member: ReviewTeamMember) {
   switch (member.definitionKey) {

@@ -2,7 +2,7 @@
 
 .aqi {
   // Horizontal inset: shadow fade + align with .acp-sessions-area
-  padding: $size-gap-4 var(--profile-acp-left-inline-pad) $size-gap-5;
+  padding: $size-gap-4 $size-gap-6 $size-gap-5;
 
   &__box {
     display: flex;

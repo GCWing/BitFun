@@ -37,7 +37,8 @@ html, body, #root {
   position: absolute; top: 0; left: 0; right: 0; height: 1px;
   background: linear-gradient(90deg,
     transparent 0%, var(--border-base) 25%,
-    var(--border-base) 50%, var(--border-base) 75%,
+    color-mix(in srgb, var(--border-base) 70%, var(--color-text-primary)) 50%,
+    var(--border-base) 75%,
     transparent 100%);
   pointer-events: none; z-index: 1;
 }
@@ -154,14 +155,16 @@ html, body, #root {
   background: var(--element-bg-subtle);
   color: var(--color-text-primary);
   border-style: solid;
-  border-color: var(--border-base);
+  border-color: color-mix(in srgb, var(--border-base) 70%, var(--color-text-primary));
   box-shadow: none;
 }
 .btn:hover:not(:disabled) svg { color: var(--color-accent-500); }
 .btn:focus-visible {
   outline: none;
   background: var(--element-bg-subtle);
-  box-shadow: none;
+  border-style: solid;
+  border-color: color-mix(in srgb, var(--border-base) 55%, var(--color-accent-500));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent-500) 32%, transparent);
 }
 .btn:disabled { opacity: 0.46; cursor: default; box-shadow: none; }
 
@@ -213,7 +216,7 @@ html, body, #root {
 .card-btn:hover {
   background: var(--element-bg-subtle);
   border-style: solid;
-  border-color: var(--border-base);
+  border-color: color-mix(in srgb, var(--border-base) 70%, var(--color-text-primary));
   transform: translateY(-1px);
   box-shadow: none;
 }
@@ -221,7 +224,9 @@ html, body, #root {
 .card-btn:focus-visible {
   outline: none;
   background: var(--element-bg-soft);
-  box-shadow: none;
+  border-style: solid;
+  border-color: color-mix(in srgb, var(--border-base) 55%, var(--color-accent-500));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent-500) 32%, transparent);
 }
 .card-btn:hover .card-btn__icon { background: var(--element-bg-soft); }
 .card-btn:hover .card-btn__icon svg { color: var(--color-accent-500); }
@@ -286,7 +291,7 @@ html, body, #root {
 }
 
 .bf-select-trigger:hover {
-  border-color: var(--border-base);
+  border-color: color-mix(in srgb, var(--border-base) 70%, var(--color-text-primary));
   background: var(--element-bg-soft);
 }
 
@@ -328,7 +333,7 @@ html, body, #root {
   overflow-y: auto;
   padding: 4px;
   background: var(--color-bg-secondary);
-  border: 1px solid var(--border-base);
+  border: 1px solid color-mix(in srgb, var(--border-base) 70%, var(--color-text-primary));
   border-radius: var(--size-radius-sm);
   box-shadow: none;
 }
@@ -568,7 +573,7 @@ html, body, #root {
 
 .checkbox-box {
   width: 16px; height: 16px; border-radius: 4px;
-  border: 1.5px solid var(--border-base);
+  border: 1.5px solid color-mix(in srgb, var(--border-base) 70%, var(--color-text-primary));
   background: transparent;
   display: flex; align-items: center; justify-content: center;
   transition: all 0.15s ease; flex-shrink: 0;
@@ -602,7 +607,7 @@ html, body, #root {
 .step-dot-wrapper { display: flex; align-items: center; }
 .step-dot {
   width: 6px; height: 6px; border-radius: 50%;
-  background: var(--element-bg-medium);
+  background: color-mix(in srgb, var(--element-bg-medium) 75%, var(--color-text-primary));
   transition: all 0.25s ease;
 }
 .step-dot.active {
@@ -611,7 +616,7 @@ html, body, #root {
   box-shadow: 0 0 8px color-mix(in srgb, var(--color-accent-500) 25%, transparent);
 }
 .step-dot.completed { background: var(--color-success); }
-.step-line { width: 40px; height: 1px; background: var(--element-bg-medium); transition: background 0.25s ease; }
+.step-line { width: 40px; height: 1px; background: color-mix(in srgb, var(--element-bg-medium) 75%, var(--color-text-primary)); transition: background 0.25s ease; }
 .step-line.completed { background: var(--color-success); }
 
 .section-label {
@@ -631,7 +636,7 @@ html, body, #root {
 
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--element-bg-medium); border-radius: 2px; }
+::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--element-bg-medium) 75%, var(--color-text-primary)); border-radius: 2px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--color-text-muted); }
 
 .uninstall-page {
