@@ -240,7 +240,7 @@
     border-radius: 0 0 var(--size-radius-sm) var(--size-radius-sm);
     box-shadow: 0 4px 12px var(--color-overlay-black-40);
     z-index: tokens.$z-dropdown;
-    animation: select-dropdown-appear var(--motion-fast) var(--easing-decelerate);
+    animation: select-dropdown-appear var(--motion-fast) tokens.$easing-decelerate;
     overflow: hidden;
     display: flex;
     flex-direction: column;

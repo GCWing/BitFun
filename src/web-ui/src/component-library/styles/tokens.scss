@@ -4,8 +4,6 @@
 // ==================== Primitive color literals ====================
 $color-static-white: #ffffff;
 $color-static-black: #000000;
-$color-static-emerald: #10b981;
-$color-static-orange: #f97316;
 
 $overlay-white-04: rgba(255, 255, 255, 0.04);
 $overlay-white-08: rgba(255, 255, 255, 0.08);
@@ -142,7 +140,6 @@ $border-medium: $overlay-white-24;
 $border-strong: $overlay-white-32;
 $border-prominent: $overlay-white-40;
 
-$border-focus: $border-strong;
 $border-accent-soft: $color-blue-600-a30;
 $border-accent-subtle: $color-blue-600-a15;
 $border-accent: $color-blue-600-a40;
@@ -187,16 +184,11 @@ $glass-base: linear-gradient(135deg,
   $overlay-white-04 50%,
   $overlay-white-04 100%);
 
-$glass-disabled: $overlay-white-04;
-
 $glass-blue-subtle: $color-blue-600-a08;
 
 $glass-red-subtle: rgba(239, 68, 68, 0.05);
 $glass-red-base: $color-error-bg;
 $glass-red-hover: rgba(239, 68, 68, 0.15);
-
-$glass-green-base: $color-success-bg;
-$glass-green-hover: rgba(52, 211, 153, 0.15);
 
 // ==================== Sizing system ====================
 
@@ -377,7 +369,6 @@ $badge-info-text: $color-info;
   --color-overlay-slate-04: rgba(var(--color-overlay-slate-rgb), 0.04);
   --color-overlay-slate-08: rgba(var(--color-overlay-slate-rgb), 0.08);
   --color-overlay-slate-12: rgba(var(--color-overlay-slate-rgb), 0.12);
-  --color-overlay-slate-22: rgba(var(--color-overlay-slate-rgb), 0.22);
   --color-bg-secondary: #{$color-bg-secondary};
   --color-bg-tertiary: #{$color-bg-tertiary};
   --color-bg-quaternary: #{$color-bg-quaternary};
@@ -455,7 +446,6 @@ $badge-info-text: $color-info;
   --border-medium: #{$border-medium};
   --border-strong: #{$border-strong};
   --border-prominent: #{$border-prominent};
-  --border-focus: #{$border-focus};
   --border-accent-soft: #{$border-accent-soft};
   --border-accent-subtle: #{$border-accent-subtle};
   --border-accent: #{$border-accent};
@@ -496,29 +486,9 @@ $badge-info-text: $color-info;
   --btn-ghost-hover-bg: var(--color-overlay-white-08);
   --btn-ghost-hover-color: #b8b8b8;
   --btn-ghost-hover-border: transparent;
-  --mission-control-group-primary-color: var(--color-accent-600);
-  --mission-control-group-secondary-color: #{$color-static-emerald};
-  --mission-control-group-tertiary-color: var(--color-warning);
-  --markdown-code-gutter-light-rgb: 153, 153, 153;
-  --markdown-code-gutter-dark-rgb: 102, 102, 102;
-  --preview-bg: color-mix(in srgb, var(--color-static-black) 90%, var(--color-static-white));
-  --preview-panel-bg: color-mix(in srgb, var(--color-static-black) 96%, var(--color-static-white));
-  --preview-border: color-mix(in srgb, var(--color-static-black) 90%, var(--color-static-white));
-  --preview-text-primary: color-mix(in srgb, var(--color-static-white) 88%, var(--color-static-black));
-  --preview-text-muted: color-mix(in srgb, var(--color-static-white) 63%, var(--color-static-black));
-  --preview-text-subtle: color-mix(in srgb, var(--color-static-white) 60%, var(--color-static-black));
-  --preview-text-disabled: color-mix(in srgb, var(--color-static-white) 40%, var(--color-static-black));
-  --preview-heading-gradient: linear-gradient(135deg, var(--color-accent-500) 0%, var(--color-purple-500) 100%);
   --surface-stagger-index: 0;
-  --mission-control-group-color: var(--color-accent-500);
   --scene-viewport-border-width: 1px;
-  --gallery-grid-min: 320px;
-  --gallery-skeleton-height: 140px;
   --inline-context-tag-color: var(--color-accent-500);
-  --markdown-editor-list-indent: 1.75rem;
-  --markdown-editor-list-marker-width: 1.25rem;
-  --markdown-editor-list-gap: 0.25rem;
-  --markdown-editor-task-checkbox-size: 1rem;
   --config-page-content-inline-padding: clamp(16px, 2.2vw, 28px);
   --config-page-content-max-width: 600px;
   --profile-acp-left-inline-pad: var(--size-gap-6);
@@ -526,19 +496,16 @@ $badge-info-text: $color-info;
 
   --glow-shadow-blue: #{$glow-shadow-blue};
 
-  --glass-disabled: #{$glass-disabled};
   --glass-blue-subtle: #{$glass-blue-subtle};
   --glass-red-subtle: #{$glass-red-subtle};
   --glass-red-base: #{$glass-red-base};
   --glass-red-hover: #{$glass-red-hover};
-  --glass-green-base: #{$glass-green-base};
-  --glass-green-hover: #{$glass-green-hover};
   --glass-bg-base: #{$glass-base};
   --glass-bg-hover: var(--element-bg-medium);
   --glass-bg-active: var(--element-bg-strong);
   --glass-border-base: var(--border-base);
   --glass-border-hover: var(--border-medium);
-  --glass-border-focus: var(--border-focus);
+  --glass-border-focus: var(--border-strong);
   --glass-blur-sm: #{$blur-subtle};
   --glass-blur-base: #{$blur-base};
   --glass-shadow-sm: var(--shadow-sm);
@@ -565,13 +532,10 @@ $badge-info-text: $color-info;
   --size-gap-12: #{$size-gap-12};
   --size-gap-16: #{$size-gap-16};
 
-  --motion-instant: #{$motion-instant};
   --motion-fast: #{$motion-fast};
   --motion-base: #{$motion-base};
 
   --easing-standard: #{$easing-standard};
-  --easing-decelerate: #{$easing-decelerate};
-  --easing-smooth: #{$easing-smooth};
 
   --font-family-sans: #{$font-family-sans};
   --font-family-mono: #{$font-family-mono};
@@ -620,14 +584,11 @@ $badge-info-text: $color-info;
   --flowchat-card-radius: 8px;
   --flowchat-card-pad-y: 0.625rem;
   --flowchat-card-pad-x: 0.75rem;
-  --flowchat-card-header-pad-y: 0.44rem;
-  --flowchat-card-header-pad-x: 0;
-  --flowchat-card-header-pad-right: 0.625rem;
   --flowchat-card-expanded-pad-y: 0.5rem;
   --flowchat-card-expanded-pad-x: 0.625rem;
-  --tool-card-header-pad-y: var(--flowchat-card-header-pad-y);
-  --tool-card-header-pad-x: var(--flowchat-card-header-pad-x);
-  --tool-card-header-pad-right: var(--flowchat-card-header-pad-right);
+  --tool-card-header-pad-y: 0.44rem;
+  --tool-card-header-pad-x: 0;
+  --tool-card-header-pad-right: 0.625rem;
   --tool-card-header-icon-rail: 24px;
   --tool-card-header-icon-slot: calc(var(--tool-card-header-icon-rail) + 10px);
   --tool-card-icon-size: 16px;

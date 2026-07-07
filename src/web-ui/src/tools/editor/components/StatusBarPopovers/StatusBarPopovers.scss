@@ -23,7 +23,7 @@
    font-family: $font-family-sans;
    color: var(--color-text-primary);
    transform: translateY(-100%);
-   animation: status-bar-popover-enter 0.15s cubic-bezier(0, 0, 0.2, 1) forwards;
+   animation: status-bar-popover-enter 0.15s $easing-decelerate forwards;
 
    &__input-wrap {
      padding: 8px 10px;

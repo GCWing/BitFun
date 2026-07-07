@@ -145,9 +145,9 @@
 .form-select.success:focus,
 .form-textarea.success:focus {
   box-shadow: 
-    0 4px 16px var(--glass-green-hover),
+    0 4px 16px var(--color-success-bg),
     0 2px 8px var(--color-overlay-black-08),
-    0 0 0 2px color-mix(in srgb, var(--color-success) 20%, transparent);
+    0 0 0 2px var(--color-success-border);
 }
 
 /* Disabled state */

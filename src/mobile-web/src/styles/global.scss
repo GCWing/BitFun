@@ -1,3 +1,5 @@
+@use './motion' as motion;
+
 * {
   margin: 0;
   padding: 0;
@@ -94,7 +96,7 @@ body {
 
 // Page transition wrapper
 .page-transition {
-  animation: fadeIn var(--motion-base) var(--easing-decelerate);
+  animation: fadeIn var(--motion-base) motion.$easing-decelerate;
 }
 
 // Nav-stack page transitions (iOS-style push/pop)
@@ -140,6 +142,16 @@ body {
 @keyframes navPopOut {
   from { transform: translateX(0); }
   to   { transform: translateX(100%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-transition,
+  .nav-push-enter,
+  .nav-push-exit,
+  .nav-pop-enter,
+  .nav-pop-exit {
+    animation: none;
+  }
 }
 
 // Spinner utility

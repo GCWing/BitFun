@@ -95,7 +95,7 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
     content: '';
     position: absolute;
     inset: 0;
-    background: linear-gradient(135deg, var(--glass-green-base) 0%, var(--color-accent-100) 100%);
+    background: linear-gradient(135deg, var(--color-success-bg) 0%, var(--color-accent-100) 100%);
     opacity: 0;
     transition: opacity 0.32s ease;
     pointer-events: none;
@@ -2497,8 +2497,8 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
     &--connected,
     &--healthy {
       color: var(--color-success);
-      background: var(--glass-green-base);
-      border-color: color-mix(in srgb, var(--color-success) 22%, transparent);
+      background: var(--color-success-bg);
+      border-color: var(--color-success-border);
     }
 
     &--starting,

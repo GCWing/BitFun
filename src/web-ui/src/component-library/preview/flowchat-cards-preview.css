@@ -5,6 +5,8 @@
 /* Preview-only tool card typography override. */
 :root {
   --tool-card-font-mono: 'SF Mono', 'Monaco', 'Cascadia Code', 'Cascadia Mono', Consolas, 'Inconsolata', 'Fira Code', 'Fira Mono', 'Droid Sans Mono', 'Source Code Pro', 'Lucida Console', 'Courier New', monospace;
+  --private-flowchat-preview-border: color-mix(in srgb, var(--color-static-black) 90%, var(--color-static-white));
+  --private-flowchat-preview-text-muted: color-mix(in srgb, var(--color-static-white) 63%, var(--color-static-black));
 }
 
 .column-item-preview {
@@ -22,10 +24,10 @@
 .column-item-preview h3 {
   font-size: 14px;
   font-weight: 600;
-  color: var(--preview-text-muted);
+  color: var(--private-flowchat-preview-text-muted);
   margin: 0 0 12px 0;
   padding: 0;
-  border-bottom: 1px solid var(--preview-border);
+  border-bottom: 1px solid var(--private-flowchat-preview-border);
   padding-bottom: 8px;
 }
 

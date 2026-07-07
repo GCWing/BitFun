@@ -4,7 +4,7 @@
   padding: 40px;
   max-width: 1400px;
   margin: 0 auto;
-  background: var(--preview-bg);
+  background: color-mix(in srgb, var(--color-static-black) 90%, var(--color-static-white));
   min-height: 100vh;
   color: var(--color-static-white);
 }
@@ -13,7 +13,7 @@
   font-size: 36px;
   font-weight: 700;
   margin-bottom: 40px;
-  background: var(--preview-heading-gradient);
+  background: linear-gradient(135deg, var(--color-accent-500) 0%, var(--color-purple-500) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -29,7 +29,7 @@
 .preview-container h3 {
   font-size: 18px;
   font-weight: 500;
-  color: var(--preview-text-primary);
+  color: color-mix(in srgb, var(--color-static-white) 88%, var(--color-static-black));
 }
 
 .preview-section {
@@ -41,7 +41,7 @@
 }
 
 .preview-description {
-  color: var(--preview-text-muted);
+  color: color-mix(in srgb, var(--color-static-white) 63%, var(--color-static-black));
   font-size: 14px;
   margin-bottom: 24px;
   font-style: italic;
@@ -75,7 +75,7 @@
 .preview-label {
   margin-top: 16px;
   font-size: 13px;
-  color: var(--preview-text-subtle);
+  color: color-mix(in srgb, var(--color-static-white) 60%, var(--color-static-black));
   font-weight: 500;
   text-transform: capitalize;
 }

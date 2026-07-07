@@ -1,3 +1,5 @@
+@use '../motion' as motion;
+
 .chat-page {
   display: flex;
   flex-direction: column;
@@ -368,7 +370,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--size-gap-3);
-  animation: menuSlideUp var(--motion-base) var(--easing-decelerate);
+  animation: menuSlideUp var(--motion-base) motion.$easing-decelerate;
 }
 
 .chat-msg__menu-handle {

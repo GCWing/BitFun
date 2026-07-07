@@ -112,7 +112,7 @@ $config-input-height: 32px;
   &:disabled {
     opacity: var(--opacity-disabled) !important;
     cursor: default !important;
-    background: var(--glass-disabled) !important;
+    background: var(--color-overlay-white-04) !important;
     border-color: var(--border-subtle) !important;
   }
 }

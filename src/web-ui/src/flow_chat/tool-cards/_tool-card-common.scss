@@ -57,10 +57,6 @@
 
 /* ========== Shared header icon variables ========== */
 :root {
-  --tool-card-header-pad-y: var(--flowchat-card-header-pad-y);
-  --tool-card-header-pad-x: var(--flowchat-card-header-pad-x);
-  --tool-card-header-pad-right: var(--flowchat-card-header-pad-right);
-
   /* Shared icon & text sizing — dense-command variants only override spacing, not these */
   --tool-card-action-font-size: var(--flowchat-font-size-sm);
   --tool-card-action-line-height: var(--flowchat-support-line-height);

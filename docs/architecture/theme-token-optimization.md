@@ -238,10 +238,10 @@ CLI/TUI 使用独立审计，不参与 CSS var root 计数：
 | non-contract dynamic inputs | 0 |
 | non-contract component-private vars | 0 |
 | runtime-only legacy required vars | 1 |
-| static root contract key | 320 |
-| static root contract external usage key | 320 |
+| static root contract key | 289 |
+| static root contract external usage key | 289 |
 | static root contract internal-only key | 0 |
-| static root contract low external usage key | 116 |
+| static root contract low external usage key | 86 |
 
 审计补充了机器可校验的治理契约，用于把“可删除债务”和“必须保留的兼容/边界”
 分开：
@@ -257,7 +257,7 @@ CLI/TUI 使用独立审计，不参与 CSS var root 计数：
 | compatibility alias family 直接使用次数 | 0 | generated widget payload 只暴露经过审核的 canonical 子集，iframe shell 通过 alias fallback 兼容 legacy family |
 | stale compatibility alias family contracts | 0 | 防止 family contract 指向缺失的 canonical family |
 | missing compatibility alias family canonicals | 0 | 防止新增 `--radius-x` / `--spacing-x` 但缺少对应 canonical key |
-| surface token rename contracts | 9 | 显式记录已迁移的 surface-local 旧 key、canonical 目标、owner 和命名边界 |
+| surface token rename contracts | 8 | 显式记录已迁移的 surface-local 旧 key、canonical 目标、owner 和命名边界 |
 | active surface token rename key | 0 | 防止 `--primary-color`、`--operation-color`、`--delay`、`--um-*` 等旧局部 key 回流 |
 | active surface token rename occurrences | 0 | 防止旧 key 在 SCSS、CSS 或 TSX inline style 中被重新定义或读取 |
 | surface token rename missing canonical | 0 | 防止 rename registry 指向不存在的 canonical key |
@@ -287,7 +287,7 @@ PR 通过而放宽 `appUi`、fallback、unresolved、non-contract 或 dynamic fa
 | 区域 | 当前出现次数 | 当前唯一色数 | 说明 |
 | --- | ---: | ---: | --- |
 | Theme presets | 168 | 115 | 主题个性与 palette 映射；跨主题深色 neutral、弱文本、非状态浅色背景和同概念 success 色已收敛；相邻 surface、主题识别主背景、状态色和 editor lineHighlight 继续保留 |
-| Token contracts | 94 | 84 | `tokens.scss` 等静态契约根；黑白 overlay alpha stop 继续保留相邻状态层级，未消费 legacy mixin、自引用别名和低复用单 surface helper 已移除，不按数值相近强行合并 |
+| Token contracts | 91 | 81 | `tokens.scss` 等静态契约根；黑白 overlay alpha stop 继续保留相邻状态层级，未消费 legacy mixin、自引用别名、死 Sass helper 和低复用单 surface helper 已移除，不按数值相近强行合并 |
 | Editor | 52 | 48 | Monaco/editor 专用域，不能直接泛化到 app token；被动 selection/word highlight 已收敛，但 diff text/line/gutter 继续保留用户可见层级 |
 | Mermaid | 53 | 48 | Mermaid 专用渲染域；status fallback 复用 app semantic status 默认值，pie 5-8 复用紧凑类别色，dark info/activation 恢复 accent 类别感；节点、边、cluster、note 文本和 light 高亮仍保留相邻层级差异。未接入当前 Markdown Mermaid 渲染路径的 SCSS token 文件已删除 |
 | Theme runtime | 27 | 26 | `ThemeService.ts` 运行时注入；黑白 overlay alpha 与静态 token、payload shell 保持相同 stop，避免 early render 与 runtime 状态层级漂移 |
@@ -342,10 +342,10 @@ fallback 收敛决策表：
 | 原 fallback token | 决策 | 依据 | 结果 |
 | --- | --- | --- | --- |
 | `--surface-stagger-index` | 上移默认值 | `tokens.scss` 已提供 `0` 默认值，TS inline style 仍可覆盖动画序号 | 移除 12 处 selector fallback |
-| `--mission-control-group-color` | 上移默认值并保留组别差异 | filter 仍由 inline style 驱动；thumbnail badge 的 primary/secondary/tertiary 默认值保持原 accent/success/warning 语义 | 移除 6 处背景 fallback，避免误把组别统一成同一颜色 |
+| `--mission-control-group-color` | 退役 root 默认并拆成组件私有变量 | filter 改为静态 modifier class；thumbnail badge 使用独立 `--private-thumbnail-group-color`，primary/secondary/tertiary 仍读 accent/success/warning | 移除背景 fallback 和非 contract 跨文件共享，避免误把组别统一成同一颜色 |
 | `--char-index` | 上移到组件根 | StreamText 根提供 `0`，每字符 inline style 仍可覆盖 | 移除 3 处 keyframe fallback |
-| `--gallery-grid-min` | 上移到根 token 默认值 | `tokens.scss` 提供 `320px`，祖先变量和 props inline style 仍可覆盖 | 移除 grid sizing fallback |
-| `--gallery-skeleton-height` | 上移到根 token 默认值 | `tokens.scss` 提供 `140px`，祖先变量和 props inline style 仍可覆盖 | 移除 skeleton height fallback |
+| `--gallery-grid-min` | 上移到 Gallery 组件默认值 | `GalleryLayout.scss` 提供 `320px`，祖先变量和 props inline style 仍可覆盖 | 移除 grid sizing fallback 且不暴露 root contract |
+| `--gallery-skeleton-height` | 上移到 Gallery 组件默认值 | `GalleryLayout.scss` 提供 `140px`，祖先变量和 props inline style 仍可覆盖 | 移除 skeleton height fallback 且不暴露 root contract |
 | `--primary-color` | 改为明确的 tool-card accent token | `--primary-color` 是历史 tool card 局部入口，不提升为全局 app token；BaseToolCard 现在通过 `--base-tool-card-accent-color` 映射到 `--markdown-primary-color` | 产品代码不再定义或读取旧 key，回流由 `surfaceTokenRenames` 拦截 |
 | `--scene-viewport-border-width` | 上移默认值 | 静态 token 提供 `1px`，ThemeService 继续按主题 layout 覆盖为 `1px` 或 `0` | 移除 viewport border fallback |
 
@@ -445,6 +445,8 @@ Phase 5 决策记录：
 
 | component layout contract compression | retire implementation/layout aliases | `tokens.scss`、`ThemeService.ts`、`Button.scss`、`Badge.scss`、`Markdown.scss`、`BaseToolCard.scss`、`SmoothHeightCollapse.*`、NavPanel workspace/session styles、`themePayload.ts`、`themePayloadCompatibility.ts` | 删除不承担主题语义的全局布局或实现 key：`--input-*` 改读 canonical element/border/text/accent token，`--panel-bg` 改读 `--color-bg-primary`，button height、badge font size、user message padding、Git tight card padding 和 nav row action size/offset/gap 改为组件局部尺寸；Markdown spacing 不回到 root theme key，改由本地 Sass partial 作为 Markdown surface owner，供 renderer、FlowChat thinking、Mermaid/code-vars 复用；`SmoothHeightCollapse` 的 duration prop 改为 inline transition duration，不再投影到 Web root；generated widget static shell 同步移除该实现 key，但 iframe compatibility alias 保留 `--smooth-height-collapse-duration -> --motion-slow`，避免历史 widget CSS 失去动画时长。Markdown accent 不再是 root theme key，但保留 renderer 局部默认和 BaseToolCard 嵌入覆盖，避免工具卡片语义 accent 被默认值吞掉。该轮不合并相邻可见 surface/status 颜色，也不触碰 card/tool-card 跨组件布局 key，避免相邻区域语义被误合并。普通 app raw、unresolved、fallback-only、non-contract 仍为 0。static root contract 352 -> 320，low external usage key 144 -> 116。 |
 
+| low-external implementation key compression | retire preview/editor/gallery/MissionControl/mobile helper keys | `tokens.scss`, Markdown editor/Tiptap styles, component preview CSS/examples, GalleryLayout, MissionControl, NavSearchDialog, ContextMenu, Select, config/profile form styles, `src/mobile-web/src/theme/presets/shared.ts`, mobile SCSS | 将只表达局部实现或严格同义的低外部使用 key 移出 static root：Markdown editor list/task sizing、Markdown line-number gutter、gallery grid/skeleton defaults、preview palette/timing、旧 `flowchat-card-header-pad-*` 别名、`border-focus` 同义别名、glass green/disabled helper、MissionControl group helper 和 slate22 shadow helper。MissionControl 的组别区分保留为组件私有 modifier class，并继续使用 accent/success/warning；active filter 和 thumbnail badge 使用中性底加彩色指示，避免小字号实底语义色造成对比或状态误解；preview 和 gallery 不作为主题扩展入口；`--easing-smooth` 与 `--easing-standard` 当前同值，统一读 standard；mobile-web 同步删除未使用的 `--motion-instant`、同值 `--easing-smooth` 和不应作为主题扩展入口的 `--easing-decelerate`，现有 decelerate 动画由 mobile-local Sass owner 承载并补齐 reduced-motion 覆盖。该轮不触碰 Git added/staged/deleted、button payload、z-index、card/tool-card 跨组件布局等仍可能承担主题或相邻区域语义的 key。static root contract 320 -> 289，low external usage key 116 -> 86；普通 app raw、unresolved、fallback-only、non-contract 均保持 0，mobile color audit 保持通过。 |
+
 Phase 6 防回退约束：
 
 | 约束 | 当前值 | baseline | 作用 |
@@ -455,18 +457,18 @@ Phase 6 防回退约束：
 | `colorDomainNearPairs.nearTotal` | 9 | 9 | 控制 theme preset/runtime/token/editor/Mermaid 等专用域 near 队列规模 |
 | `colorScopes.appUi.uniqueColors` | 0 | 0 | 阻止普通组件 raw color 唯一色回涨 |
 | `colorScopes.appUi.occurrences` | 0 | 0 | 阻止普通组件 raw color 出现次数回涨 |
-| `colorScopes.token.occurrences` | 295 | 295 | 阻止 token 层重新写回已归并的派生色、扩展名色或 preview RGB 字面量 |
-| `colorScopes.token.uniqueColors` | 184 | 184 | 控制 root/token 层唯一色数量，后续只允许在债务减少时下调 |
+| `colorScopes.token.occurrences` | 292 | 292 | 阻止 token 层重新写回已归并的派生色、扩展名色或 preview RGB 字面量 |
+| `colorScopes.token.uniqueColors` | 181 | 181 | 控制 root/token 层唯一色数量，后续只允许在债务减少时下调 |
 | `colorScopes.exception.uniqueColors` | 162 | 162 | 控制专用域/例外域总体规模；UI exception、syntax 和 language identity 已收敛，Mermaid status/pie fallback 已压缩且未接入 SCSS token 路径已退役，editor/terminal 仍按各自 owner 单独治理 |
-| `cssVarDefinitions.staticContractDefinedUnique` | 320 | 320 | 控制静态 root contract key 总量，避免新增主题时需要维护不可扩展的大型 CSS var 表 |
-| `cssVarDefinitions.staticContractExternalUsageUnique` | 320 | 320 | 跟踪真正被 root 外消费的 static contract key，防止删除 key 后遗漏调用点；generated widget payload 暴露给 iframe 的 key 也按外部消费计数 |
+| `cssVarDefinitions.staticContractDefinedUnique` | 289 | 289 | 控制静态 root contract key 总量，避免新增主题时需要维护不可扩展的大型 CSS var 表 |
+| `cssVarDefinitions.staticContractExternalUsageUnique` | 289 | 289 | 跟踪真正被 root 外消费的 static contract key，防止删除 key 后遗漏调用点；generated widget payload 暴露给 iframe 的 key 也按外部消费计数 |
 | `cssVarDefinitions.staticContractInternalOnlyUnique` | 0 | 0 | 暴露仅定义或内部派生的 root key；新增项必须删除、局部派生或证明是外部消费 contract |
-| `cssVarDefinitions.staticContractLowExternalUsageUnique` | 116 | 116 | 暴露低外部消费 key，作为后续继续压缩 root contract 的候选队列 |
+| `cssVarDefinitions.staticContractLowExternalUsageUnique` | 86 | 86 | 暴露低外部消费 key，作为后续继续压缩 root contract 的候选队列 |
 | `cssVarDefinitions.runtimeOnlyRequiredContractUnique` | 1 | 1 | 仅允许 `--window-control-close-hover-color` 作为 deprecated window close hover 覆盖，且由 baseline allowlist 锁定名称；默认路径不读取该 var，旧 custom theme 通过 `components.windowControls.close.hoverColor` 和 runtime attribute 激活 |
 | `colorDomainScopes.syntax.occurrences` | 16 | 16 | 阻止 Prism syntax palette 回到一 token class 一色的不可扩展模式，同时保留相邻 token 可读性边界 |
 | `colorDomainScopes.languageIdentity.uniqueColors` | 8 | 8 | 阻止 language/file identity 回到一语言一色或一扩展一色的不可扩展模式 |
-| `colorDomainScopes.tokenContract.occurrences` | 94 | 94 | 控制 token contract 域 raw color 出现次数，防止 root 派生色回流 |
-| `colorDomainScopes.tokenContract.uniqueColors` | 84 | 84 | 控制 token contract 域唯一色，确保新主题扩展不依赖额外静态色表 |
+| `colorDomainScopes.tokenContract.occurrences` | 91 | 91 | 控制 token contract 域 raw color 出现次数，防止 root 派生色回流 |
+| `colorDomainScopes.tokenContract.uniqueColors` | 81 | 81 | 控制 token contract 域唯一色，确保新主题扩展不依赖额外静态色表 |
 | `colorDomainScopes.boundaryFallback.occurrences` | 18 | 18 | 防止 iframe/mini app/截图兜底色重新散写；导出 key 可保留语义，实际字面值必须回到 boundary fallback palette |
 | `colorDomainScopes.mermaid.occurrences` | 53 | 53 | 控制 Mermaid 专用域 raw fallback 规模；status/pie 已压缩，未接入 SCSS token 路径已退役，节点/边/cluster/note 文本等相邻层级不能无证据合并 |
 | `colorDomainScopes.mermaid.uniqueColors` | 48 | 48 | 控制 Mermaid 专用域唯一色数量；新增类别色或状态色必须先复用现有 compact fallback，确有相邻可读性需求才新增 |
@@ -689,8 +691,8 @@ semantic token 描述产品级语义，应作为共享 UI 的默认使用层。
 - 文本：`--color-text-primary`、`--color-text-secondary`、
   `--color-text-muted`、`--color-text-disabled`；如果设计系统确实需要第三层
   文本强度，再将 `--color-text-tertiary` 转正。
-- 边框：`--border-base`、`--border-subtle`、`--border-emphasis`、
-  `--border-focus`。
+- 边框：`--border-base`、`--border-subtle`、`--border-strong`、
+  `--border-accent`。
 - 元素状态：`--element-bg-default`、`--element-bg-subtle`、
   `--element-bg-hover`、`--element-bg-active`、`--element-bg-selected`。
 - 意图色：`--color-success`、`--color-warning`、`--color-error`、
@@ -1047,7 +1049,7 @@ alpha 差异经常承担 elevation 和交互状态，不应全部压成一个值
 - `--color-primary`
 - `--color-accent-500`
 - `--color-info`
-- `--border-focus`
+- `--border-accent`
 - `--link-color`
 - `--selection-bg`
 

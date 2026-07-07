@@ -1,3 +1,5 @@
+@use '../motion' as motion;
+
 .pairing-page {
   position: relative;
   display: flex;
@@ -7,7 +9,7 @@
   height: 100%;
   gap: var(--size-gap-6);
   padding: var(--size-gap-8);
-  animation: fadeIn var(--motion-slow) var(--easing-decelerate);
+  animation: fadeIn var(--motion-slow) motion.$easing-decelerate;
 }
 
 .pairing-page__actions {
@@ -142,5 +144,12 @@
   &:disabled {
     opacity: 0.6;
     cursor: not-allowed;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pairing-page,
+  .pairing-page__cube-inner {
+    animation: none;
   }
 }

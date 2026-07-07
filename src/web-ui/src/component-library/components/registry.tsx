@@ -41,6 +41,9 @@ import { TOOL_CARD_CONFIGS } from '@/flow_chat/tool-cards/toolCardMetadata';
 import { ModelThinkingDisplay } from '@/flow_chat/tool-cards/ModelThinkingDisplay';
 import { ReproductionStepsBlock } from '@components/Markdown/ReproductionStepsBlock';
 
+const previewTextSubtle = 'color-mix(in srgb, var(--color-static-white) 60%, var(--color-static-black))';
+const previewTextDisabled = 'color-mix(in srgb, var(--color-static-white) 40%, var(--color-static-black))';
+
 function createMockToolItem(
   toolName: string,
   input: any,
@@ -281,25 +284,25 @@ export const componentRegistry: ComponentCategory[] = [
           <div style={{ display: 'flex', flexDirection: 'column', gap: '32px', padding: '20px' }}>
             {}
             <div>
-              <div style={{ fontSize: '12px', color: 'var(--preview-text-disabled)', marginBottom: '16px', fontWeight: 500 }}>尺寸</div>
+              <div style={{ fontSize: '12px', color: previewTextDisabled, marginBottom: '16px', fontWeight: 500 }}>尺寸</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '48px', alignItems: 'flex-end' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
                   <CubeLoading size="small" />
-                  <span style={{ fontSize: '12px', color: 'var(--preview-text-subtle)' }}>Small</span>
+                  <span style={{ fontSize: '12px', color: previewTextSubtle }}>Small</span>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
                   <CubeLoading size="medium" />
-                  <span style={{ fontSize: '12px', color: 'var(--preview-text-subtle)' }}>Medium</span>
+                  <span style={{ fontSize: '12px', color: previewTextSubtle }}>Medium</span>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
                   <CubeLoading size="large" />
-                  <span style={{ fontSize: '12px', color: 'var(--preview-text-subtle)' }}>Large</span>
+                  <span style={{ fontSize: '12px', color: previewTextSubtle }}>Large</span>
                 </div>
               </div>
             </div>
             {}
             <div>
-              <div style={{ fontSize: '12px', color: 'var(--preview-text-disabled)', marginBottom: '16px', fontWeight: 500 }}>With text</div>
+              <div style={{ fontSize: '12px', color: previewTextDisabled, marginBottom: '16px', fontWeight: 500 }}>With text</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '48px', alignItems: 'flex-start' }}>
                 <CubeLoading text="加载中.." />
                 <CubeLoading size="large" text="加载中.." />

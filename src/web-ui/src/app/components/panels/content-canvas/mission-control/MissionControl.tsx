@@ -233,22 +233,19 @@ export const MissionControl: React.FC<MissionControlProps> = ({
             {hasMultipleGroups && (
               <div className="canvas-mission-control__group-filters">
                 {[
-                  { id: 'primary' as EditorGroupId, labelKey: 'canvas.groupPrimaryFull', shortLabelKey: 'canvas.groupPrimary', color: 'var(--mission-control-group-primary-color)' },
-                  { id: 'secondary' as EditorGroupId, labelKey: 'canvas.groupSecondaryFull', shortLabelKey: 'canvas.groupSecondary', color: 'var(--mission-control-group-secondary-color)' },
-                  { id: 'tertiary' as EditorGroupId, labelKey: 'canvas.groupTertiaryFull', shortLabelKey: 'canvas.groupTertiary', color: 'var(--mission-control-group-tertiary-color)' },
-                ].map(({ id, labelKey, shortLabelKey, color }) => {
+                  { id: 'primary' as EditorGroupId, labelKey: 'canvas.groupPrimaryFull', shortLabelKey: 'canvas.groupPrimary' },
+                  { id: 'secondary' as EditorGroupId, labelKey: 'canvas.groupSecondaryFull', shortLabelKey: 'canvas.groupSecondary' },
+                  { id: 'tertiary' as EditorGroupId, labelKey: 'canvas.groupTertiaryFull', shortLabelKey: 'canvas.groupTertiary' },
+                ].map(({ id, labelKey, shortLabelKey }) => {
                   const hasTabs = organizedTabs[id as keyof typeof organizedTabs].length > 0;
                   if (!hasTabs) return null;
                   
                   return (
                     <button
                       key={id}
-                      className={`canvas-mission-control__group-filter ${selectedGroups.has(id) ? 'is-active' : ''}`}
+                      className={`canvas-mission-control__group-filter canvas-mission-control__group-filter--${id} ${selectedGroups.has(id) ? 'is-active' : ''}`}
                       onClick={() => toggleGroupFilter(id)}
                       title={t(labelKey)}
-                      style={{ 
-                        '--mission-control-group-color': color,
-                      } as React.CSSProperties}
                     >
                       <span className="canvas-mission-control__group-filter-indicator" />
                       <span className="canvas-mission-control__group-filter-text">{t(shortLabelKey)}</span>

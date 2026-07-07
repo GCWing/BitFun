@@ -132,6 +132,8 @@
   }
 
   &__group-filter {
+    --private-mission-control-filter-color: var(--color-accent-600);
+
     position: relative;
     display: flex;
     align-items: center;
@@ -154,13 +156,23 @@
     }
 
     &.is-active {
-      background: var(--mission-control-group-color);
+      background: color-mix(in srgb, var(--element-bg-soft) 84%, var(--private-mission-control-filter-color) 16%);
       color: var(--color-text-primary);
-      box-shadow: 0 1px 3px var(--color-overlay-black-20);
+      box-shadow:
+        inset 0 0 0 1px var(--private-mission-control-filter-color),
+        0 1px 3px var(--color-overlay-black-20);
 
       .canvas-mission-control__group-filter-indicator {
-        opacity: 0;
+        opacity: 1;
       }
+    }
+
+    &--secondary {
+      --private-mission-control-filter-color: var(--color-success);
+    }
+
+    &--tertiary {
+      --private-mission-control-filter-color: var(--color-warning);
     }
 
     &-indicator {
@@ -170,7 +182,7 @@
       width: 6px;
       height: 6px;
       border-radius: 50%;
-      background: var(--mission-control-group-color);
+      background: var(--private-mission-control-filter-color);
       opacity: 0.6;
       transition: opacity 0.15s ease;
     }

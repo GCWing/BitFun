@@ -26,7 +26,7 @@
     0 0 0 1px color-mix(in srgb, var(--color-text-primary) 4%, transparent),
     0 2px 4px var(--color-overlay-slate-04),
     0 8px 24px var(--color-overlay-slate-08),
-    0 24px 56px -12px var(--color-overlay-slate-22),
+    0 24px 56px -12px rgba(var(--color-overlay-slate-rgb), 0.22),
     0 48px 80px -24px var(--color-overlay-slate-12);
   overflow: hidden;
   display: flex;

@@ -28,7 +28,7 @@
 
     &:focus-within {
       transform: translateY(-2px);
-      border-color: var(--border-focus);
+      border-color: var(--border-strong);
       background: var(--element-bg-soft);
       box-shadow:
         0 22px 52px -12px color-mix(in srgb, var(--color-accent-500) 18%, transparent),

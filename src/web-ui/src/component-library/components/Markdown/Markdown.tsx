@@ -1058,8 +1058,8 @@ export const Markdown = React.memo<MarkdownProps>(({
         fontFamily: 'var(--font-family-mono)',
       };
       const gutterColor = isLight
-        ? 'rgb(var(--markdown-code-gutter-light-rgb))'
-        : 'rgb(var(--markdown-code-gutter-dark-rgb))';
+        ? 'color-mix(in srgb, var(--color-static-black) 40%, var(--color-static-white))'
+        : 'color-mix(in srgb, var(--color-static-white) 40%, var(--color-static-black))';
 
       return (
         <div className={`code-block-wrapper${hasMultipleLines ? '' : ' code-block-wrapper--single-line'}`}>

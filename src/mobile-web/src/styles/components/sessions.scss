@@ -1,3 +1,5 @@
+@use '../motion' as motion;
+
 @mixin squircle($radius) {
   border-radius: $radius;
   corner-shape: squircle;
@@ -166,7 +168,7 @@
   cursor: pointer;
   transition: transform var(--motion-fast) var(--easing-standard),
     background var(--motion-fast) var(--easing-standard);
-  animation: sessionItemIn var(--motion-base) var(--easing-decelerate) both;
+  animation: sessionItemIn var(--motion-base) motion.$easing-decelerate both;
 
   &:active {
     transform: scale(0.985);
@@ -497,7 +499,7 @@
   text-align: left;
   transition: transform var(--motion-fast) var(--easing-standard),
     background var(--motion-fast) var(--easing-standard);
-  animation: sessionItemIn var(--motion-base) var(--easing-decelerate) both;
+  animation: sessionItemIn var(--motion-base) motion.$easing-decelerate both;
   box-shadow: var(--shadow-sm);
 
   &:active:not(:disabled) {
@@ -596,7 +598,7 @@
   cursor: pointer;
   transition: transform var(--motion-fast) var(--easing-standard),
     background var(--motion-fast) var(--easing-standard);
-  animation: sessionItemIn var(--motion-base) var(--easing-decelerate) both;
+  animation: sessionItemIn var(--motion-base) motion.$easing-decelerate both;
 
   @for $i from 1 through 20 {
     &:nth-child(#{$i}) {
@@ -719,7 +721,7 @@
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  transition: height 0.2s var(--easing-decelerate);
+  transition: height 0.2s motion.$easing-decelerate;
 }
 
 .session-list__pull-spinner {
@@ -760,7 +762,7 @@
   background: var(--color-bg-elevated);
   border-radius: 20px 20px 0 0;
   overflow: hidden;
-  animation: slideUp var(--motion-base) var(--easing-decelerate);
+  animation: slideUp var(--motion-base) motion.$easing-decelerate;
 }
 
 .session-list__picker-header {
@@ -998,7 +1000,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--size-gap-3);
-  animation: slideUp var(--motion-base) var(--easing-decelerate);
+  animation: slideUp var(--motion-base) motion.$easing-decelerate;
 }
 
 .session-list__menu-handle {
@@ -1091,7 +1093,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--size-gap-4);
-  animation: slideUp var(--motion-base) var(--easing-decelerate);
+  animation: slideUp var(--motion-base) motion.$easing-decelerate;
 }
 
 .session-list__rename-title {
@@ -1168,7 +1170,7 @@
   align-items: center;
   gap: var(--size-gap-3);
   text-align: center;
-  animation: slideUp var(--motion-base) var(--easing-decelerate);
+  animation: slideUp var(--motion-base) motion.$easing-decelerate;
 }
 
 .session-list__confirm-icon {

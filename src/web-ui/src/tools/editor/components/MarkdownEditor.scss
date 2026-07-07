@@ -1,4 +1,5 @@
 @use '../../../component-library/styles/tokens.scss' as *;
+@use '../styles/markdown-editor-layout' as markdownLayout;
 
 .bitfun-markdown-editor {
   display: flex;
@@ -318,7 +319,7 @@
     list-style: none;
     position: relative;
     margin-bottom: $size-gap-1;
-    padding-left: calc(var(--markdown-editor-list-marker-width) + var(--markdown-editor-list-gap));
+    padding-left: calc(#{markdownLayout.$list-marker-width} + #{markdownLayout.$list-gap});
   }
 
   > ul:not(.contains-task-list) > li::before,
@@ -326,7 +327,7 @@
     position: absolute;
     left: 0;
     top: 0;
-    width: var(--markdown-editor-list-marker-width);
+    width: markdownLayout.$list-marker-width;
     color: var(--color-text-primary);
     font-weight: $font-weight-medium;
   }
@@ -353,7 +354,7 @@
   li > ol {
     margin-top: $size-gap-1;
     margin-bottom: 0;
-    padding-left: var(--markdown-editor-list-indent);
+    padding-left: markdownLayout.$list-indent;
   }
 
   li {
@@ -538,24 +539,24 @@
   > ul.contains-task-list > .task-list-item {
     list-style: none;
     position: relative;
-    padding-left: calc(var(--markdown-editor-list-marker-width) + var(--markdown-editor-list-gap));
+    padding-left: calc(#{markdownLayout.$list-marker-width} + #{markdownLayout.$list-gap});
     margin-bottom: $size-gap-1;
   }
 
   > ul.contains-task-list > .task-list-item > input[type="checkbox"] {
     position: absolute;
-    left: calc((var(--markdown-editor-list-marker-width) - var(--markdown-editor-task-checkbox-size)) / 2);
+    left: calc((#{markdownLayout.$list-marker-width} - #{markdownLayout.$task-checkbox-size}) / 2);
     top: 0.15rem;
     margin: 0;
-    width: var(--markdown-editor-task-checkbox-size);
-    height: var(--markdown-editor-task-checkbox-size);
+    width: markdownLayout.$task-checkbox-size;
+    height: markdownLayout.$task-checkbox-size;
   }
 
   .task-list-item > ul,
   .task-list-item > ol {
     margin-top: $size-gap-1;
     margin-bottom: 0;
-    padding-left: var(--markdown-editor-list-indent);
+    padding-left: markdownLayout.$list-indent;
   }
 
   // KaTeX math formula styles

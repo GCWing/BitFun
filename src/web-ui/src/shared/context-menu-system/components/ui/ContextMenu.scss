@@ -272,7 +272,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .context-menu {
-    transition: opacity var(--motion-instant) ease;
+    transition: opacity $motion-instant ease;
     transform: none;
   }
 
@@ -281,7 +281,7 @@
   }
 
   .context-menu-item {
-    transition: background-color var(--motion-instant) ease, color var(--motion-instant) ease;
+    transition: background-color $motion-instant ease, color $motion-instant ease;
   }
 }
 
