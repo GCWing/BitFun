@@ -28,7 +28,6 @@ const MIDNIGHT_SUCCESS = '#6aab73';
 const MIDNIGHT_WARNING = '#e0a055';
 const MIDNIGHT_ERROR = '#cc7f7a';
 
-const midnightBackground = (alpha: number | string) => rgbaFromHex(MIDNIGHT_BACKGROUND, alpha);
 const midnightText = (alpha: number | string) => rgbaFromHex(MIDNIGHT_TEXT_PRIMARY, alpha);
 const midnightAccent = (alpha: number | string) => rgbaFromHex(MIDNIGHT_ACCENT, alpha);
 
@@ -47,11 +46,9 @@ export const bitfunMidnightTheme: ThemeConfig = {
       primary: MIDNIGHT_BACKGROUND,
       secondary: MIDNIGHT_BACKGROUND_SECONDARY,
       tertiary: '#313335',
-      quaternary: '#3d3d3d',
       elevated: MIDNIGHT_BACKGROUND,
       workbench: MIDNIGHT_BACKGROUND_SECONDARY,
       scene: MIDNIGHT_BACKGROUND,
-      tooltip: midnightBackground(0.94),
     },
 
     text: {
@@ -86,7 +83,6 @@ export const bitfunMidnightTheme: ThemeConfig = {
       base: overlayWhite(0.09),
       medium: overlayWhite(0.12),
       strong: overlayWhite(0.15),
-      elevated: overlayWhite(0.18),
     },
 
     git: createGitColors({

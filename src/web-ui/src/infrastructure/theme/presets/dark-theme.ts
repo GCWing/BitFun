@@ -16,7 +16,6 @@ import {
   overlayBlack,
   overlayWhite,
   rgbFromHex,
-  rgbaFromHex,
   STATIC_WHITE,
 } from './shared';
 
@@ -47,11 +46,9 @@ export const bitfunDarkTheme: ThemeConfig = {
       primary: DARK_BACKGROUND_PRIMARY,
       secondary: DARK_BACKGROUND_SECONDARY,
       tertiary: DARK_BACKGROUND_PRIMARY,
-      quaternary: '#262626',
       elevated: DARK_BACKGROUND_SECONDARY,
       workbench: DARK_BACKGROUND_PRIMARY,
       scene: DARK_BACKGROUND_SECONDARY,
-      tooltip: rgbaFromHex(DARK_BACKGROUND_SECONDARY, 0.96),
     },
 
     text: {

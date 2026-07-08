@@ -101,6 +101,9 @@ describe('builtin theme preset output', () => {
       expect(theme.colors.purple).not.toHaveProperty('50');
       expect(theme.colors.purple).not.toHaveProperty('400');
       expect(theme.colors.purple).not.toHaveProperty('800');
+      expect(theme.colors.background).not.toHaveProperty('quaternary');
+      expect(theme.colors.background).not.toHaveProperty('tooltip');
+      expect(theme.colors.element).not.toHaveProperty('elevated');
       expect(theme.typography.weight).not.toHaveProperty('bold');
     }
   });
@@ -146,42 +149,42 @@ describe('builtin theme preset output', () => {
     }))).toMatchInlineSnapshot(`
       [
         {
-          "hash": "07ac3c2391daeeb61276222879877407d2b0308daf1ae6fb992359ab4c760bfb",
+          "hash": "18bde3b1b694643489ccf854d6a4ec2f92b6522925b1afae71c053c84fe018a8",
           "id": "bitfun-light",
           "type": "light",
         },
         {
-          "hash": "9bb6e963edc70e14da1e4b009ffaa4e8313fa58e46be104a2678425407135eef",
+          "hash": "7def888a159fe62da73f21717777cad2fd13a048853b9264cda683220e899677",
           "id": "bitfun-slate",
           "type": "dark",
         },
         {
-          "hash": "4d9beb6796a2037b4e75d4bc77dd2bfc4e97703dc6ee445b9e795d413b05a6b7",
+          "hash": "c7a28e7fde81910bb796e18afabdb7b2840a5c0ae7a471b583990b43ce804921",
           "id": "bitfun-dark",
           "type": "dark",
         },
         {
-          "hash": "d8b041347f3cb06996f27a011df5a661dc1d9ebb4c215ef75cbedafc0922135b",
+          "hash": "b3447ec7218ad3f9bfe9749ca5ed567aee733f8555c86fb9dbca712294484b7c",
           "id": "bitfun-midnight",
           "type": "dark",
         },
         {
-          "hash": "0e453739640a89cdb0c7f78522ea8d928b3def3c2184190f61d4a0bcd0c711a1",
+          "hash": "438f2ae26c4d1ebecbfa98e020d8e7d6559668fbf8e2c56b2dc6aa6bcadc3537",
           "id": "bitfun-china-style",
           "type": "light",
         },
         {
-          "hash": "9b2cf6146d238463e02985ed1fb5c45cb1be3ca0de4b0f2032af6d3526c6f9ac",
+          "hash": "9caa3cc0deac7cf940ab550c79ea0a5d747f9496095af8ef78e4df1a64abf842",
           "id": "bitfun-china-night",
           "type": "dark",
         },
         {
-          "hash": "21cf925270c495469895638825cb8523bf66ec388048bab9be84b066779070c8",
+          "hash": "6443493750d1b48805d6392fd17c11347f4f02af88943326522efee29330b417",
           "id": "bitfun-cyber",
           "type": "dark",
         },
         {
-          "hash": "b6d1c7a8138172ce6436dd2dae595147a8317d5cbd0697b39c8373211e02c8ac",
+          "hash": "34e5b2c1ea244d28dffa9be172d3d48e65e82100b39125b21e3760b4316192d3",
           "id": "bitfun-tokyo-night",
           "type": "dark",
         },

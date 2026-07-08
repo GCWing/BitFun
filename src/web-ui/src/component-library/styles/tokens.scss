@@ -55,11 +55,9 @@ $color-purple-500-a40: rgba(139, 92, 246, 0.4);
 $color-bg-primary: #0e0e10;
 $color-bg-secondary: #1c1c1f;
 $color-bg-tertiary: $color-bg-primary;
-$color-bg-quaternary: #252528;
 $color-bg-elevated: $color-bg-secondary;
 $color-bg-workbench: $color-bg-primary;
 $color-bg-scene: $color-bg-secondary;
-$color-bg-tooltip: rgba(28, 28, 31, 0.96);
 
 $color-text-primary: #e8e8e8;
 $color-text-secondary: #b0b0b0;
@@ -72,7 +70,6 @@ $element-bg-soft: $overlay-white-08;
 $element-bg-base: $overlay-white-12;
 $element-bg-medium: $overlay-white-12;
 $element-bg-strong: $overlay-white-15;
-$element-bg-elevated: $overlay-white-20;
 
 // ==================== Blue system ====================
 $color-accent-50: $color-blue-500-a06;
@@ -348,11 +345,9 @@ $badge-info-text: $color-info;
   --color-overlay-slate-12: rgba(var(--color-overlay-slate-rgb), 0.12);
   --color-bg-secondary: #{$color-bg-secondary};
   --color-bg-tertiary: #{$color-bg-tertiary};
-  --color-bg-quaternary: #{$color-bg-quaternary};
   --color-bg-elevated: #{$color-bg-elevated};
   --color-bg-workbench: #{$color-bg-workbench};
   --color-bg-scene: #{$color-bg-scene};
-  --color-bg-tooltip: #{$color-bg-tooltip};
 
   --color-text-primary: #{$color-text-primary};
   --color-text-secondary: #{$color-text-secondary};
@@ -364,7 +359,6 @@ $badge-info-text: $color-info;
   --element-bg-base: #{$element-bg-base};
   --element-bg-medium: #{$element-bg-medium};
   --element-bg-strong: #{$element-bg-strong};
-  --element-bg-elevated: #{$element-bg-elevated};
   --element-bg-hover: var(--element-bg-medium);
 
   --color-accent-50: #{$color-accent-50};
@@ -454,13 +448,11 @@ $badge-info-text: $color-info;
   --glass-border-base: var(--border-base);
   --glass-border-hover: var(--border-medium);
   --blur-subtle: #{$blur-subtle};
-  --blur-base: #{$blur-base};
 
   --size-radius-sm: #{$size-radius-sm};
   --size-radius-base: #{$size-radius-base};
   --size-radius-md: var(--size-radius-base);
   --size-radius-lg: #{$size-radius-lg};
-  --size-radius-xl: #{$size-radius-xl};
 
   --size-gap-1: #{$size-gap-1};
   --size-gap-2: #{$size-gap-2};
@@ -505,7 +497,6 @@ $badge-info-text: $color-info;
   --flowchat-font-size-xl: var(--font-size-xl);
   --flowchat-font-size-2xl: var(--font-size-2xl);
   --flowchat-font-size-3xl: var(--font-size-3xl);
-  --flowchat-font-size-4xl: var(--font-size-4xl);
   --flowchat-text-line-height: 1.58;
   --flowchat-support-line-height: 1.45;
   --flowchat-compact-line-height: 1.32;

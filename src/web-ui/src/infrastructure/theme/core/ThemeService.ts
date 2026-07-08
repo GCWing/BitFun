@@ -35,7 +35,9 @@ const FLOW_CHAT_LINK_COLORS = {
 const GIT_COLOR_CONTRACT_KEYS = ['branch', 'branchBg', 'changes', 'added', 'deleted', 'staged'] as const;
 const GIT_COLOR_CONTRACT_KEY_SET = new Set<string>(GIT_COLOR_CONTRACT_KEYS);
 const RETIRED_ACCENT_COLOR_KEYS = ['800'] as const;
+const RETIRED_BACKGROUND_COLOR_KEYS = ['quaternary', 'tooltip'] as const;
 const RETIRED_PURPLE_COLOR_KEYS = ['50', '400', '800'] as const;
+const RETIRED_ELEMENT_BACKGROUND_KEYS = ['elevated'] as const;
 const RETIRED_FONT_WEIGHT_KEYS = ['bold'] as const;
 const RETIRED_COMPONENT_KEYS = ['windowControls'] as const;
 
@@ -132,12 +134,16 @@ function hasAnyRecordKey(record: Record<string, unknown> | undefined, keys: read
 
 function hasRetiredThemeAuthoringKeys(theme: Partial<ThemeConfig>): boolean {
   const accentColors = theme.colors?.accent as unknown as Record<string, unknown> | undefined;
+  const backgroundColors = theme.colors?.background as unknown as Record<string, unknown> | undefined;
   const purpleColors = theme.colors?.purple as unknown as Record<string, unknown> | undefined;
+  const elementColors = theme.colors?.element as unknown as Record<string, unknown> | undefined;
   const fontWeights = theme.typography?.weight as unknown as Record<string, unknown> | undefined;
   const components = theme.components as unknown as Record<string, unknown> | undefined;
   return (
     hasAnyRecordKey(accentColors, RETIRED_ACCENT_COLOR_KEYS) ||
+    hasAnyRecordKey(backgroundColors, RETIRED_BACKGROUND_COLOR_KEYS) ||
     hasAnyRecordKey(purpleColors, RETIRED_PURPLE_COLOR_KEYS) ||
+    hasAnyRecordKey(elementColors, RETIRED_ELEMENT_BACKGROUND_KEYS) ||
     hasAnyRecordKey(fontWeights, RETIRED_FONT_WEIGHT_KEYS) ||
     hasAnyRecordKey(components, RETIRED_COMPONENT_KEYS)
   );
@@ -159,9 +165,17 @@ function stripNonContractThemeKeys(theme: ThemeConfig): ThemeConfig {
   RETIRED_ACCENT_COLOR_KEYS.forEach(key => {
     delete accentColors?.[key];
   });
+  const backgroundColors = sanitized.colors?.background as unknown as Record<string, unknown> | undefined;
+  RETIRED_BACKGROUND_COLOR_KEYS.forEach(key => {
+    delete backgroundColors?.[key];
+  });
   const purpleColors = sanitized.colors?.purple as unknown as Record<string, unknown> | undefined;
   RETIRED_PURPLE_COLOR_KEYS.forEach(key => {
     delete purpleColors?.[key];
+  });
+  const elementColors = sanitized.colors?.element as unknown as Record<string, unknown> | undefined;
+  RETIRED_ELEMENT_BACKGROUND_KEYS.forEach(key => {
+    delete elementColors?.[key];
   });
   const fontWeights = sanitized.typography?.weight as unknown as Record<string, unknown> | undefined;
   RETIRED_FONT_WEIGHT_KEYS.forEach(key => {
@@ -621,13 +635,9 @@ export class ThemeService {
     });
     root.style.setProperty('--color-bg-secondary', colors.background.secondary);
     root.style.setProperty('--color-bg-tertiary', colors.background.tertiary);
-    root.style.setProperty('--color-bg-quaternary', colors.background.quaternary);
     root.style.setProperty('--color-bg-elevated', colors.background.elevated);
     root.style.setProperty('--color-bg-workbench', colors.background.workbench);
     root.style.setProperty('--color-bg-scene', colors.background.scene);
-    if (colors.background.tooltip) {
-      root.style.setProperty('--color-bg-tooltip', colors.background.tooltip);
-    }
 
     root.style.setProperty('--color-text-primary', colors.text.primary);
     root.style.setProperty('--color-text-secondary', colors.text.secondary);
@@ -692,7 +702,6 @@ export class ThemeService {
     root.style.setProperty('--element-bg-base', colors.element.base);
     root.style.setProperty('--element-bg-medium', colors.element.medium);
     root.style.setProperty('--element-bg-strong', colors.element.strong);
-    root.style.setProperty('--element-bg-elevated', colors.element.elevated);
     root.style.setProperty('--element-bg-hover', colors.element.medium);
 
 

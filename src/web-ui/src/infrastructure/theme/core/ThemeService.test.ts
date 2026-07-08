@@ -20,13 +20,18 @@ function expectThemeError(
 
 function expectNoRetiredThemeAuthoringKeys(theme: ThemeConfig) {
   const accentColors = theme.colors.accent as unknown as Record<string, unknown>;
+  const backgroundColors = theme.colors.background as unknown as Record<string, unknown>;
   const purpleColors = theme.colors.purple as unknown as Record<string, unknown>;
+  const elementColors = theme.colors.element as unknown as Record<string, unknown>;
   const fontWeights = theme.typography.weight as unknown as Record<string, unknown>;
   const components = theme.components as unknown as Record<string, unknown> | undefined;
   expect(accentColors).not.toHaveProperty('800');
+  expect(backgroundColors).not.toHaveProperty('quaternary');
+  expect(backgroundColors).not.toHaveProperty('tooltip');
   expect(purpleColors).not.toHaveProperty('50');
   expect(purpleColors).not.toHaveProperty('400');
   expect(purpleColors).not.toHaveProperty('800');
+  expect(elementColors).not.toHaveProperty('elevated');
   expect(fontWeights).not.toHaveProperty('bold');
   expect(components?.windowControls).toBeUndefined();
 }
@@ -42,11 +47,20 @@ function createThemeWithRetiredAuthoringKeys(id: string, name: string): ThemeCon
         ...bitfunDarkTheme.colors.accent,
         800: '#0f766e',
       },
+      background: {
+        ...bitfunDarkTheme.colors.background,
+        quaternary: '#252528',
+        tooltip: 'rgba(28, 28, 31, 0.96)',
+      },
       purple: {
         ...(bitfunDarkTheme.colors.purple ?? {}),
         50: '#faf5ff',
         400: '#c084fc',
         800: '#6b21a8',
+      },
+      element: {
+        ...bitfunDarkTheme.colors.element,
+        elevated: 'rgba(255, 255, 255, 0.2)',
       },
     },
     typography: {

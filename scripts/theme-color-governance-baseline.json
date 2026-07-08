@@ -54,10 +54,10 @@
       "max": 0
     },
     "generatedWidgetPayload.varUnique": {
-      "max": 57
+      "max": 56
     },
     "generatedWidgetPayload.occurrences": {
-      "max": 57
+      "max": 56
     },
     "generatedWidgetPayload.undefinedUnique": {
       "max": 0
@@ -105,10 +105,10 @@
       "max": 0
     },
     "colorScopes.token.occurrences": {
-      "max": 275
+      "max": 266
     },
     "colorScopes.token.uniqueColors": {
-      "max": 171
+      "max": 168
     },
     "colorScopes.exception.uniqueColors": {
       "max": 162
@@ -144,16 +144,16 @@
       "max": 0
     },
     "cssVarDefinitions.staticContractDefinedUnique": {
-      "max": 199
+      "max": 193
     },
     "cssVarDefinitions.staticContractExternalUsageUnique": {
-      "max": 199
+      "max": 193
     },
     "cssVarDefinitions.staticContractInternalOnlyUnique": {
       "max": 0
     },
     "cssVarDefinitions.staticContractLowExternalUsageUnique": {
-      "max": 18
+      "max": 12
     },
     "tokenAliasLiterals.occurrences": {
       "max": 0
@@ -264,19 +264,19 @@
       "max": 0
     },
     "colorDomainScopes.themePreset.occurrences": {
-      "max": 166
+      "max": 159
     },
     "colorDomainScopes.themePreset.uniqueColors": {
-      "max": 113
+      "max": 112
     },
     "colorDomainScopes.themeRuntime.occurrences": {
       "max": 21
     },
     "colorDomainScopes.tokenContract.occurrences": {
-      "max": 82
+      "max": 80
     },
     "colorDomainScopes.tokenContract.uniqueColors": {
-      "max": 74
+      "max": 72
     },
     "colorDomainScopes.generatedWidget.occurrences": {
       "max": 0

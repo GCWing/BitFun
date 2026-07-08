@@ -90,10 +90,10 @@
       "max": 0
     },
     "colorDomainScopes.themePreset.occurrences": {
-      "max": 35
+      "max": 33
     },
     "colorDomainScopes.themePreset.uniqueColors": {
-      "max": 30
+      "max": 29
     },
     "colorDomainScopes.appUi.occurrences": {
       "max": 0

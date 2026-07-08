@@ -50,11 +50,9 @@ export const bitfunLightTheme: ThemeConfig = {
       primary: '#f3f3f5',
       secondary: STATIC_WHITE,
       tertiary: '#e8e8e8',
-      quaternary: '#e8e8e8',
       elevated: STATIC_WHITE,
       workbench: '#e8e8e8',
       scene: STATIC_WHITE,
-      tooltip: rgbaFromHex(STATIC_WHITE, 0.98),
     },
 
     text: {
@@ -118,7 +116,6 @@ export const bitfunLightTheme: ThemeConfig = {
       base: lightInk(0.09),
       medium: lightInk(0.12),
       strong: lightInk(0.16),
-      elevated: rgbaFromHex(STATIC_WHITE, 0.92),
     },
 
 
