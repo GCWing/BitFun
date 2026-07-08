@@ -2058,10 +2058,10 @@ function handleAcpContextUsageUpdate(event: AcpContextUsageUpdatedEvent): void {
  * Handle context compression started event
  */
 function handleCompressionStarted(_context: FlowChatContext, event: any): void {
-  const { sessionId, turnId, compressionId, trigger, tokensBefore, contextWindow, threshold } = event;
+  const { sessionId, turnId, compressionId, trigger, tokensBefore, contextWindow } = event;
   
   log.info('Context compression started', {
-    sessionId, turnId, compressionId, trigger, tokensBefore, contextWindow, threshold
+    sessionId, turnId, compressionId, trigger, tokensBefore, contextWindow
   });
   
   const store = FlowChatStore.getInstance();
@@ -2096,7 +2096,6 @@ function handleCompressionStarted(_context: FlowChatContext, event: any): void {
         trigger,
         tokens_before: tokensBefore,
         context_window: contextWindow,
-        threshold,
       },
       id: compressionId
     },

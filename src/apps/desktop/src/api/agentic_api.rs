@@ -72,7 +72,6 @@ pub struct SessionConfigDTO {
     pub safe_mode: Option<bool>,
     pub max_turns: Option<usize>,
     pub enable_context_compression: Option<bool>,
-    pub compression_threshold: Option<f32>,
     pub model_name: Option<String>,
     #[serde(default)]
     pub remote_connection_id: Option<String>,
@@ -689,7 +688,6 @@ pub async fn create_session(
             safe_mode: c.safe_mode.unwrap_or(true),
             max_turns: c.max_turns.unwrap_or(200),
             enable_context_compression: c.enable_context_compression.unwrap_or(true),
-            compression_threshold: c.compression_threshold.unwrap_or(0.8),
             workspace_path: Some(request.workspace_path.clone()),
             workspace_id: request.workspace_id.clone(),
             remote_connection_id: remote_conn.clone(),

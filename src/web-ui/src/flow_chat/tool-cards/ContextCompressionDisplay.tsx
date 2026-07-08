@@ -38,14 +38,14 @@ export const ContextCompressionDisplay: React.FC<ContextCompressionDisplayProps>
 }) => {
   const { t } = useTranslation('flow-chat');
   const data = toolItem ? {
-    compressionCount: toolItem.toolResult?.result?.compression_count || compressionData?.compression_count,
-    tokensBefore: toolItem.toolResult?.result?.tokens_before || toolItem.toolCall?.input?.tokens_before || compressionData?.tokens_before,
-    tokensAfter: toolItem.toolResult?.result?.tokens_after || compressionData?.tokens_after,
-    compressionRatio: toolItem.toolResult?.result?.compression_ratio || compressionData?.compression_ratio,
-    duration: toolItem.toolResult?.duration_ms || compressionData?.duration,
+    compressionCount: toolItem.toolResult?.result?.compression_count ?? compressionData?.compression_count,
+    tokensBefore: toolItem.toolResult?.result?.tokens_before ?? toolItem.toolCall?.input?.tokens_before ?? compressionData?.tokens_before,
+    tokensAfter: toolItem.toolResult?.result?.tokens_after ?? compressionData?.tokens_after,
+    compressionRatio: toolItem.toolResult?.result?.compression_ratio ?? compressionData?.compression_ratio,
+    duration: toolItem.toolResult?.duration_ms ?? compressionData?.duration,
     hasSummary: toolItem.toolResult?.result?.has_summary ?? compressionData?.has_summary,
-    summarySource: toolItem.toolResult?.result?.summary_source || compressionData?.summary_source,
-    trigger: toolItem.toolCall?.input?.trigger || compressionData?.trigger,
+    summarySource: toolItem.toolResult?.result?.summary_source ?? compressionData?.summary_source,
+    trigger: toolItem.toolCall?.input?.trigger ?? compressionData?.trigger,
     status: (toolItem.status === 'cancelled' || toolItem.status === 'analyzing') ? 'completed' : toolItem.status,
     error: toolItem.toolResult?.error
   } : {
@@ -75,8 +75,14 @@ export const ContextCompressionDisplay: React.FC<ContextCompressionDisplayProps>
     }
   };
 
-  const savedTokens = data.tokensBefore && data.tokensAfter ? 
-    data.tokensBefore - data.tokensAfter : undefined;
+  const savedTokens =
+    typeof data.tokensBefore === 'number' && typeof data.tokensAfter === 'number'
+      ? data.tokensBefore - data.tokensAfter
+      : undefined;
+  const savedRatio =
+    typeof data.compressionRatio === 'number'
+      ? 1 - data.compressionRatio
+      : undefined;
   const formatNumber = (value: number): string => i18nService.formatNumber(value);
 
   const isLoading = data.status === 'preparing' || data.status === 'streaming' || data.status === 'running';
@@ -118,11 +124,11 @@ export const ContextCompressionDisplay: React.FC<ContextCompressionDisplayProps>
                   after: formatNumber(data.tokensAfter),
                 })}
               </span>
-              {savedTokens !== undefined && data.compressionRatio !== undefined && (
+              {savedTokens !== undefined && savedRatio !== undefined && (
                 <span className="savings-tag">
                   {t('toolCards.contextCompression.savingsTag', {
                     saved: formatNumber(savedTokens),
-                    ratio: (data.compressionRatio * 100).toFixed(0),
+                    ratio: (savedRatio * 100).toFixed(0),
                   })}
                 </span>
               )}

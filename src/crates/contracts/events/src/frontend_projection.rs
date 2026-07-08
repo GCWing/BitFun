@@ -334,7 +334,6 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
             trigger,
             tokens_before,
             context_window,
-            threshold,
         } => Some(AgenticFrontendEvent::new(
             "agentic://context-compression-started",
             "context-compression-started",
@@ -345,7 +344,6 @@ pub fn project_agentic_frontend_event(event: AgenticEvent) -> Option<AgenticFron
                 "trigger": trigger,
                 "tokensBefore": tokens_before,
                 "contextWindow": context_window,
-                "threshold": threshold,
             }),
         )),
         AgenticEvent::ContextCompressionCompleted {

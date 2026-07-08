@@ -24,7 +24,8 @@ use crate::agentic::image_analysis::{
 };
 use crate::agentic::round_preempt::RoundInjectionKind;
 use crate::agentic::session::{
-    CompressionMode, ContextCompressor, SessionManager, UserContextCacheIdentity,
+    CompressionMode, ContextCompressor, SessionManager, TokenAnchor, TokenAnchorInput,
+    UserContextCacheIdentity,
 };
 use crate::agentic::skill_agent_snapshot::build_skill_agent_tool_listing_sections_from_snapshot;
 use crate::agentic::tools::implementations::{SkillTool, TaskTool};
@@ -249,6 +250,45 @@ impl ContextHealthSnapshot {
     }
 }
 
+#[derive(Debug, Clone)]
+struct TokenAnchorPressureDetails {
+    anchor_id: String,
+    prefix_message_count: usize,
+    input_tokens: usize,
+    adjusted_anchor_tokens: usize,
+    system_tokens_at_anchor: usize,
+    current_system_tokens: usize,
+    system_delta: isize,
+    tool_tokens_at_anchor: usize,
+    current_tool_tokens: usize,
+    tool_delta: isize,
+    prepended_reminder_tokens_at_anchor: usize,
+    current_prepended_reminder_tokens: usize,
+    prepended_reminder_delta: isize,
+    tail_tokens: usize,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct TokenPressureSnapshot {
+    total_tokens: usize,
+    system_tokens: usize,
+    tool_tokens: usize,
+    prepended_reminder_tokens: usize,
+    conversation_tokens: usize,
+    context_window: usize,
+    input_limit: usize,
+    output_reserve_tokens: usize,
+    safety_reserve_tokens: usize,
+    usage_ratio: f32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct CompressionTriggerBudget {
+    input_limit: usize,
+    output_reserve_tokens: usize,
+    safety_reserve_tokens: usize,
+}
+
 /// Execution engine
 pub struct ExecutionEngine {
     round_executor: Arc<RoundExecutor>,
@@ -259,7 +299,8 @@ pub struct ExecutionEngine {
 }
 
 impl ExecutionEngine {
-    const COMPRESSION_MAX_TOKENS: u32 = 8192;
+    const AUTO_COMPRESSION_DEFAULT_OUTPUT_RESERVE_TOKENS: usize = 16_000;
+    const AUTO_COMPRESSION_SAFETY_RESERVE_TOKENS: usize = 10_000;
     const FINALIZE_AFTER_REPEATED_TOOL_FAILURES_REMINDER: &'static str = "This turn must end now because repeated tool failures have prevented further progress. Ignore any unfinished work. Your task now is to give the user a final answer. Do not call any more tools; any tool call will fail. Respond in plain text only. Summarize what was completed, what failed, the evidence available from the tool results, and the single best next step for the user.";
     const FINALIZE_AFTER_MAX_ROUNDS_REMINDER: &'static str = "This turn must end now because it has reached the round limit. Ignore any unfinished work. Your task now is to give the user a final answer. Do not call any more tools; any tool call will fail. Respond in plain text only. Summarize the most useful completed work and evidence collected so far, and clearly distinguish resolved items from anything still unresolved.";
     const FINALIZE_TOOL_DENIED_MESSAGE: &'static str =
@@ -294,18 +335,111 @@ impl ExecutionEngine {
         )
     }
 
-    /// Estimate how full the mutable conversation portion is for compression decisions.
+    /// Estimate request pressure for compression decisions.
     ///
-    /// System prompt and tool definitions are fixed per dialog turn and should not
-    /// count against the auto-compression threshold the same way tool results do.
-    /// Keeping them fixed also preserves provider-side prefix/KV cache reuse;
-    /// changing tool definitions mid-turn turns every later round into a cache miss.
+    /// `total_tokens` tracks the whole provider request input. The snapshot also
+    /// keeps the mutable conversation portion and fixed scaffold overhead
+    /// available for diagnostics, while the trigger decision reserves output and
+    /// safety budget from the full context window.
     fn estimate_auto_compression_pressure(
         messages: &[Message],
         tools: Option<&[ToolDefinition]>,
         context_window: usize,
-    ) -> (usize, usize, f32) {
-        let total_tokens = Self::estimate_request_tokens_internal(messages, tools);
+        trigger_budget: CompressionTriggerBudget,
+        prepended_reminder_tokens: usize,
+    ) -> TokenPressureSnapshot {
+        let total_tokens = Self::estimate_request_tokens_internal(messages, tools)
+            .saturating_add(prepended_reminder_tokens);
+        Self::token_pressure_snapshot_from_total(
+            total_tokens,
+            messages,
+            tools,
+            context_window,
+            trigger_budget,
+            prepended_reminder_tokens,
+        )
+    }
+
+    fn estimate_auto_compression_pressure_with_anchor(
+        messages: &[Message],
+        tools: Option<&[ToolDefinition]>,
+        context_window: usize,
+        trigger_budget: CompressionTriggerBudget,
+        anchor: Option<&TokenAnchor>,
+        prepended_reminder_tokens: usize,
+    ) -> (TokenPressureSnapshot, Option<TokenAnchorPressureDetails>) {
+        let Some(anchor) = anchor else {
+            let snapshot = Self::estimate_auto_compression_pressure(
+                messages,
+                tools,
+                context_window,
+                trigger_budget,
+                prepended_reminder_tokens,
+            );
+            return (snapshot, None);
+        };
+
+        let current_system_tokens = Self::system_tokens_for_pressure(messages);
+        let current_tool_tokens = tools
+            .map(TokenCounter::estimate_tool_definitions_tokens)
+            .unwrap_or(0);
+        let adjusted_anchor_tokens = Self::apply_token_delta(
+            anchor.input_tokens,
+            anchor.system_tokens_at_anchor,
+            current_system_tokens,
+        );
+        let adjusted_anchor_tokens = Self::apply_token_delta(
+            adjusted_anchor_tokens,
+            anchor.tool_tokens_at_anchor,
+            current_tool_tokens,
+        );
+        let adjusted_anchor_tokens = Self::apply_token_delta(
+            adjusted_anchor_tokens,
+            anchor.prepended_reminder_tokens_at_anchor,
+            prepended_reminder_tokens,
+        );
+        let tail_tokens = Self::estimate_tail_tokens(&messages[anchor.prefix_message_count..]);
+        let total_tokens = adjusted_anchor_tokens.saturating_add(tail_tokens);
+
+        let snapshot = Self::token_pressure_snapshot_from_total(
+            total_tokens,
+            messages,
+            tools,
+            context_window,
+            trigger_budget,
+            prepended_reminder_tokens,
+        );
+        (
+            snapshot,
+            Some(TokenAnchorPressureDetails {
+                anchor_id: anchor.anchor_id.clone(),
+                prefix_message_count: anchor.prefix_message_count,
+                input_tokens: anchor.input_tokens,
+                adjusted_anchor_tokens,
+                system_tokens_at_anchor: anchor.system_tokens_at_anchor,
+                current_system_tokens,
+                system_delta: current_system_tokens as isize
+                    - anchor.system_tokens_at_anchor as isize,
+                tool_tokens_at_anchor: anchor.tool_tokens_at_anchor,
+                current_tool_tokens,
+                tool_delta: current_tool_tokens as isize - anchor.tool_tokens_at_anchor as isize,
+                prepended_reminder_tokens_at_anchor: anchor.prepended_reminder_tokens_at_anchor,
+                current_prepended_reminder_tokens: prepended_reminder_tokens,
+                prepended_reminder_delta: prepended_reminder_tokens as isize
+                    - anchor.prepended_reminder_tokens_at_anchor as isize,
+                tail_tokens,
+            }),
+        )
+    }
+
+    fn token_pressure_snapshot_from_total(
+        total_tokens: usize,
+        messages: &[Message],
+        tools: Option<&[ToolDefinition]>,
+        context_window: usize,
+        trigger_budget: CompressionTriggerBudget,
+        prepended_reminder_tokens: usize,
+    ) -> TokenPressureSnapshot {
         let system_tokens = messages
             .first()
             .filter(|message| message.role == MessageRole::System)
@@ -314,11 +448,76 @@ impl ExecutionEngine {
         let tool_tokens = tools
             .map(TokenCounter::estimate_tool_definitions_tokens)
             .unwrap_or(0);
-        let reserved_overhead = system_tokens.saturating_add(tool_tokens);
+        let reserved_overhead = system_tokens
+            .saturating_add(tool_tokens)
+            .saturating_add(prepended_reminder_tokens);
         let conversation_tokens = total_tokens.saturating_sub(reserved_overhead);
-        let conversation_budget = context_window.saturating_sub(reserved_overhead).max(1);
-        let usage_ratio = conversation_tokens as f32 / conversation_budget as f32;
-        (total_tokens, conversation_tokens, usage_ratio)
+        let usage_ratio = ContextHealthSnapshot::token_usage_ratio(total_tokens, context_window);
+        TokenPressureSnapshot {
+            total_tokens,
+            system_tokens,
+            tool_tokens,
+            prepended_reminder_tokens,
+            conversation_tokens,
+            context_window,
+            input_limit: trigger_budget.input_limit,
+            output_reserve_tokens: trigger_budget.output_reserve_tokens,
+            safety_reserve_tokens: trigger_budget.safety_reserve_tokens,
+            usage_ratio,
+        }
+    }
+
+    fn compression_trigger_budget(
+        context_window: usize,
+        configured_max_tokens: Option<u32>,
+    ) -> CompressionTriggerBudget {
+        let output_reserve_tokens = configured_max_tokens
+            .map(|value| value as usize)
+            .unwrap_or(Self::AUTO_COMPRESSION_DEFAULT_OUTPUT_RESERVE_TOKENS);
+        let safety_reserve_tokens = Self::AUTO_COMPRESSION_SAFETY_RESERVE_TOKENS;
+        let input_limit =
+            context_window.saturating_sub(output_reserve_tokens + safety_reserve_tokens);
+
+        CompressionTriggerBudget {
+            input_limit,
+            output_reserve_tokens,
+            safety_reserve_tokens,
+        }
+    }
+
+    fn prepended_reminder_tokens_for_pressure(prepended_reminders: &[&str]) -> usize {
+        prepended_reminders
+            .iter()
+            .map(|reminder| reminder.trim())
+            .filter(|reminder| !reminder.is_empty())
+            .map(|reminder| {
+                Message::user(render_system_reminder(reminder))
+                    .estimate_tokens_with_reasoning(false)
+            })
+            .sum()
+    }
+
+    fn system_tokens_for_pressure(messages: &[Message]) -> usize {
+        messages
+            .first()
+            .filter(|message| message.role == MessageRole::System)
+            .map(|message| message.estimate_tokens_with_reasoning(false))
+            .unwrap_or(0)
+    }
+
+    fn estimate_tail_tokens(messages: &[Message]) -> usize {
+        messages
+            .iter()
+            .map(|message| message.estimate_tokens_with_reasoning(true))
+            .sum()
+    }
+
+    fn apply_token_delta(base: usize, old: usize, new: usize) -> usize {
+        if new >= old {
+            base.saturating_add(new - old)
+        } else {
+            base.saturating_sub(old - new)
+        }
     }
 
     fn tool_signature_args_summary(args_str: &str) -> String {
@@ -381,19 +580,6 @@ impl ExecutionEngine {
     fn should_continue_after_partial_response(reason: &str) -> bool {
         let lower = reason.to_ascii_lowercase();
         !lower.contains("cancelled")
-    }
-
-    fn compression_request_max_tokens(configured_max_tokens: Option<u32>, cap: u32) -> Option<u32> {
-        Some(configured_max_tokens.unwrap_or(cap).min(cap))
-    }
-
-    fn build_compression_ai_client(
-        ai_client: &crate::infrastructure::ai::AIClient,
-    ) -> crate::infrastructure::ai::AIClient {
-        ai_client.with_max_tokens(Self::compression_request_max_tokens(
-            ai_client.config.max_tokens,
-            Self::COMPRESSION_MAX_TOKENS,
-        ))
     }
 
     /// Detect periodic tool-signature loops in the trailing window.
@@ -499,6 +685,7 @@ impl ExecutionEngine {
         messages: Vec<Message>,
         context_window: usize,
         tools: Option<&[ToolDefinition]>,
+        prepended_reminder_tokens: usize,
     ) -> Vec<Message> {
         use crate::agentic::core::MessageRole;
 
@@ -554,6 +741,7 @@ impl ExecutionEngine {
             .map(|m| m.estimate_tokens_with_reasoning(true))
             .sum::<usize>()
             + tool_tokens
+            + prepended_reminder_tokens
             + 3;
 
         let mut kept_start = 0;
@@ -1430,10 +1618,9 @@ impl ExecutionEngine {
     ) -> BitFunResult<String> {
         let mut last_error = None;
         let base_wait_time_ms = 500;
-        let compression_ai_client = Arc::new(Self::build_compression_ai_client(ai_client.as_ref()));
 
         for attempt in 0..max_tries {
-            let result = compression_ai_client
+            let result = ai_client
                 .send_message_with_trace(
                     request_messages.clone(),
                     tool_definitions.clone(),
@@ -1686,12 +1873,12 @@ impl ExecutionEngine {
 
     /// Compress context, will emit compression events (Started, Completed, and Failed)
     #[allow(clippy::too_many_arguments)]
-    pub async fn compress_messages(
+    async fn compress_messages(
         &self,
         session_id: &str,
         dialog_turn_id: &str,
         runtime_messages: Vec<Message>,
-        current_tokens: usize,
+        before_pressure: TokenPressureSnapshot,
         context_window: usize,
         ai_client: Arc<crate::infrastructure::ai::AIClient>,
         tool_definitions: &Option<Vec<ToolDefinition>>,
@@ -1727,9 +1914,8 @@ impl ExecutionEngine {
                 turn_id: dialog_turn_id.to_string(),
                 compression_id: compression_id.clone(),
                 trigger: "auto".to_string(),
-                tokens_before: current_tokens,
+                tokens_before: before_pressure.total_tokens,
                 context_window,
-                threshold: session.config.compression_threshold,
             },
             EventPriority::Normal,
         )
@@ -1817,10 +2003,21 @@ impl ExecutionEngine {
                 let duration_ms = elapsed_ms_u64(start_time);
 
                 // Recalculate tokens after compression
-                let compressed_tokens = Self::estimate_request_tokens_internal(
-                    &mut new_messages,
+                let prepended_reminders = prepended_prompt_reminders.ordered_reminders();
+                let prepended_reminder_tokens =
+                    Self::prepended_reminder_tokens_for_pressure(&prepended_reminders);
+                let after_pressure = Self::estimate_auto_compression_pressure(
+                    &new_messages,
                     tool_definitions.as_deref(),
+                    context_window,
+                    CompressionTriggerBudget {
+                        input_limit: before_pressure.input_limit,
+                        output_reserve_tokens: before_pressure.output_reserve_tokens,
+                        safety_reserve_tokens: before_pressure.safety_reserve_tokens,
+                    },
+                    prepended_reminder_tokens,
                 );
+                let compressed_tokens = after_pressure.total_tokens;
                 let summary_source = if compression_result.has_model_summary {
                     "model"
                 } else {
@@ -1828,13 +2025,27 @@ impl ExecutionEngine {
                 };
 
                 info!(
-                    "Compression completed: session_id={}, turn_id={}, messages {} -> {}, tokens {} -> {}, compression_count={}, duration_ms={}, summary_source={}",
+                    "Compression completed: session_id={}, turn_id={}, messages {} -> {}, total_tokens {} -> {}, system_tokens {} -> {}, tool_tokens {} -> {}, prepended_reminder_tokens {} -> {}, conversation_tokens {} -> {}, context_window={}, input_limit={}, output_reserve={}, safety_reserve={}, usage {:.3} -> {:.3}, compression_count={}, duration_ms={}, summary_source={}",
                     session_id,
                     dialog_turn_id,
                     old_messages_len,
                     new_messages.len(),
-                    current_tokens,
-                    compressed_tokens,
+                    before_pressure.total_tokens,
+                    after_pressure.total_tokens,
+                    before_pressure.system_tokens,
+                    after_pressure.system_tokens,
+                    before_pressure.tool_tokens,
+                    after_pressure.tool_tokens,
+                    before_pressure.prepended_reminder_tokens,
+                    after_pressure.prepended_reminder_tokens,
+                    before_pressure.conversation_tokens,
+                    after_pressure.conversation_tokens,
+                    before_pressure.context_window,
+                    before_pressure.input_limit,
+                    before_pressure.output_reserve_tokens,
+                    before_pressure.safety_reserve_tokens,
+                    before_pressure.usage_ratio,
+                    after_pressure.usage_ratio,
                     session.compression_state.compression_count,
                     duration_ms,
                     summary_source
@@ -1847,9 +2058,13 @@ impl ExecutionEngine {
                         turn_id: dialog_turn_id.to_string(),
                         compression_id: compression_id.clone(),
                         compression_count: session.compression_state.compression_count,
-                        tokens_before: current_tokens,
+                        tokens_before: before_pressure.total_tokens,
                         tokens_after: compressed_tokens,
-                        compression_ratio: (compressed_tokens as f64) / (current_tokens as f64),
+                        compression_ratio: if before_pressure.total_tokens == 0 {
+                            1.0
+                        } else {
+                            (compressed_tokens as f64) / (before_pressure.total_tokens as f64)
+                        },
                         duration_ms,
                         has_summary: compression_result.has_model_summary,
                         summary_source: summary_source.to_string(),
@@ -1887,7 +2102,6 @@ impl ExecutionEngine {
         dialog_turn_id: String,
         context: ExecutionContext,
         messages: Vec<Message>,
-        current_tokens: usize,
         trigger: &str,
     ) -> BitFunResult<ContextCompactionOutcome> {
         let mut session = self
@@ -1901,6 +2115,20 @@ impl ExecutionEngine {
             .await?;
         let context_window = (scaffold.ai_client.config.context_window as usize)
             .min(session.config.max_context_tokens);
+        let prepended_reminders = scaffold.prepended_prompt_reminders.ordered_reminders();
+        let prepended_reminder_tokens =
+            Self::prepended_reminder_tokens_for_pressure(&prepended_reminders);
+        let compression_trigger_budget =
+            Self::compression_trigger_budget(context_window, scaffold.ai_client.config.max_tokens);
+        let mut runtime_messages = vec![scaffold.system_prompt_message.clone()];
+        runtime_messages.extend(messages.clone());
+        let before_pressure = Self::estimate_auto_compression_pressure(
+            &runtime_messages,
+            scaffold.tool_definitions.as_deref(),
+            context_window,
+            compression_trigger_budget,
+            prepended_reminder_tokens,
+        );
 
         self.emit_event(
             AgenticEvent::ContextCompressionStarted {
@@ -1908,9 +2136,8 @@ impl ExecutionEngine {
                 turn_id: dialog_turn_id.to_string(),
                 compression_id: compression_id.clone(),
                 trigger: trigger.to_string(),
-                tokens_before: current_tokens,
+                tokens_before: before_pressure.total_tokens,
                 context_window,
-                threshold: session.config.compression_threshold,
             },
             EventPriority::Normal,
         )
@@ -1922,12 +2149,28 @@ impl ExecutionEngine {
 
         if turns.is_empty() {
             let duration_ms = elapsed_ms_u64(start_time);
-            let tokens_after = current_tokens;
-            let compression_ratio = if current_tokens == 0 {
+            let tokens_after = before_pressure.total_tokens;
+            let compression_ratio = if before_pressure.total_tokens == 0 {
                 1.0
             } else {
-                (tokens_after as f64) / (current_tokens as f64)
+                (tokens_after as f64) / (before_pressure.total_tokens as f64)
             };
+            info!(
+                "Manual compression skipped: session_id={}, turn_id={}, reason=no_eligible_turns, total_tokens={}, system_tokens={}, tool_tokens={}, prepended_reminder_tokens={}, conversation_tokens={}, context_window={}, input_limit={}, output_reserve={}, safety_reserve={}, usage={:.3}, duration_ms={}",
+                session_id,
+                dialog_turn_id,
+                before_pressure.total_tokens,
+                before_pressure.system_tokens,
+                before_pressure.tool_tokens,
+                before_pressure.prepended_reminder_tokens,
+                before_pressure.conversation_tokens,
+                before_pressure.context_window,
+                before_pressure.input_limit,
+                before_pressure.output_reserve_tokens,
+                before_pressure.safety_reserve_tokens,
+                before_pressure.usage_ratio,
+                duration_ms
+            );
 
             self.emit_event(
                 AgenticEvent::ContextCompressionCompleted {
@@ -1935,7 +2178,7 @@ impl ExecutionEngine {
                     turn_id: dialog_turn_id.to_string(),
                     compression_id: compression_id.clone(),
                     compression_count: session.compression_state.compression_count,
-                    tokens_before: current_tokens,
+                    tokens_before: before_pressure.total_tokens,
                     tokens_after,
                     compression_ratio,
                     duration_ms,
@@ -1949,7 +2192,7 @@ impl ExecutionEngine {
             return Ok(ContextCompactionOutcome {
                 compression_id,
                 compression_count: session.compression_state.compression_count,
-                tokens_before: current_tokens,
+                tokens_before: before_pressure.total_tokens,
                 tokens_after,
                 compression_ratio,
                 duration_ms,
@@ -1959,8 +2202,6 @@ impl ExecutionEngine {
             });
         }
 
-        let mut runtime_messages = vec![scaffold.system_prompt_message.clone()];
-        runtime_messages.extend(messages);
         let compression_contract = self
             .session_manager
             .compression_contract_for_session(&session_id, scaffold.compression_contract_limit);
@@ -2007,7 +2248,7 @@ impl ExecutionEngine {
             model_summary,
         ) {
             Ok(compression_result) => {
-                let mut compressed_messages = compression_result.messages;
+                let compressed_messages = compression_result.messages;
                 self.session_manager
                     .replace_context_messages(&session_id, compressed_messages.clone())
                     .await;
@@ -2037,15 +2278,49 @@ impl ExecutionEngine {
                     .await;
 
                 let duration_ms = elapsed_ms_u64(start_time);
-                let tokens_after = compressed_messages
-                    .iter_mut()
-                    .map(|message| message.get_tokens())
-                    .sum::<usize>();
-                let compression_ratio = if current_tokens == 0 {
+                let mut compressed_runtime_messages = vec![scaffold.system_prompt_message.clone()];
+                compressed_runtime_messages.extend(compressed_messages.clone());
+                let after_pressure = Self::estimate_auto_compression_pressure(
+                    &compressed_runtime_messages,
+                    scaffold.tool_definitions.as_deref(),
+                    context_window,
+                    compression_trigger_budget,
+                    prepended_reminder_tokens,
+                );
+                let tokens_after = after_pressure.total_tokens;
+                let compression_ratio = if before_pressure.total_tokens == 0 {
                     1.0
                 } else {
-                    (tokens_after as f64) / (current_tokens as f64)
+                    (tokens_after as f64) / (before_pressure.total_tokens as f64)
                 };
+                info!(
+                    "Manual compression completed: session_id={}, turn_id={}, total_tokens {} -> {}, system_tokens {} -> {}, tool_tokens {} -> {}, prepended_reminder_tokens {} -> {}, conversation_tokens {} -> {}, context_window={}, input_limit={}, output_reserve={}, safety_reserve={}, usage {:.3} -> {:.3}, compression_count={}, duration_ms={}, summary_source={}",
+                    session_id,
+                    dialog_turn_id,
+                    before_pressure.total_tokens,
+                    after_pressure.total_tokens,
+                    before_pressure.system_tokens,
+                    after_pressure.system_tokens,
+                    before_pressure.tool_tokens,
+                    after_pressure.tool_tokens,
+                    before_pressure.prepended_reminder_tokens,
+                    after_pressure.prepended_reminder_tokens,
+                    before_pressure.conversation_tokens,
+                    after_pressure.conversation_tokens,
+                    before_pressure.context_window,
+                    before_pressure.input_limit,
+                    before_pressure.output_reserve_tokens,
+                    before_pressure.safety_reserve_tokens,
+                    before_pressure.usage_ratio,
+                    after_pressure.usage_ratio,
+                    compression_count,
+                    duration_ms,
+                    if compression_result.has_model_summary {
+                        "model"
+                    } else {
+                        "local_fallback"
+                    }
+                );
 
                 self.emit_event(
                     AgenticEvent::ContextCompressionCompleted {
@@ -2053,7 +2328,7 @@ impl ExecutionEngine {
                         turn_id: dialog_turn_id.to_string(),
                         compression_id: compression_id.clone(),
                         compression_count,
-                        tokens_before: current_tokens,
+                        tokens_before: before_pressure.total_tokens,
                         tokens_after,
                         compression_ratio,
                         duration_ms,
@@ -2071,7 +2346,7 @@ impl ExecutionEngine {
                 Ok(ContextCompactionOutcome {
                     compression_id,
                     compression_count,
-                    tokens_before: current_tokens,
+                    tokens_before: before_pressure.total_tokens,
                     tokens_after,
                     compression_ratio,
                     duration_ms,
@@ -2423,7 +2698,8 @@ impl ExecutionEngine {
         );
 
         let enable_context_compression = session.config.enable_context_compression;
-        let compression_threshold = session.config.compression_threshold;
+        let compression_trigger_budget =
+            Self::compression_trigger_budget(context_window, ai_client.config.max_tokens);
 
         let mut execution_context_vars = context.context.clone();
         execution_context_vars.insert("turn_index".to_string(), context.turn_index.to_string());
@@ -2472,24 +2748,100 @@ impl ExecutionEngine {
             //   - L1: AI-summary based full compression (preserves semantics).
             //   - L2: Emergency truncation (only if tokens still exceed the
             //         provider context window after L1).
-            let (current_tokens, conversation_tokens, token_usage_ratio) =
-                Self::estimate_auto_compression_pressure(
+            let pressure_prepended_reminders = turn_prompt_scaffold
+                .prepended_prompt_reminders
+                .ordered_reminders();
+            let pressure_prepended_reminder_tokens =
+                Self::prepended_reminder_tokens_for_pressure(&pressure_prepended_reminders);
+            let token_anchor_selection = self
+                .session_manager
+                .select_latest_matching_token_anchor(&context.session_id, &messages)
+                .await;
+            let (token_pressure, anchor_details) =
+                Self::estimate_auto_compression_pressure_with_anchor(
                     &messages,
                     tool_definitions.as_deref(),
                     context_window,
+                    compression_trigger_budget,
+                    token_anchor_selection.selected.as_ref(),
+                    pressure_prepended_reminder_tokens,
                 );
+            if let Some(details) = anchor_details.as_ref() {
+                debug!(
+                    "Token pressure estimate: session_id={}, turn_id={}, round_index={}, source=provider_anchor, anchor_id={}, prefix_messages={}, input_tokens={}, adjusted_anchor_tokens={}, tail_tokens={}, system_tokens_at_anchor={}, current_system_tokens={}, system_delta={}, tool_tokens_at_anchor={}, current_tool_tokens={}, tool_delta={}, prepended_reminder_tokens_at_anchor={}, current_prepended_reminder_tokens={}, prepended_reminder_delta={}, total_tokens={}, system_tokens={}, tool_tokens={}, prepended_reminder_tokens={}, conversation_tokens={}, context_window={}, input_limit={}, output_reserve={}, safety_reserve={}, usage={:.3}",
+                    context.session_id,
+                    context.dialog_turn_id,
+                    round_index,
+                    details.anchor_id,
+                    details.prefix_message_count,
+                    details.input_tokens,
+                    details.adjusted_anchor_tokens,
+                    details.tail_tokens,
+                    details.system_tokens_at_anchor,
+                    details.current_system_tokens,
+                    details.system_delta,
+                    details.tool_tokens_at_anchor,
+                    details.current_tool_tokens,
+                    details.tool_delta,
+                    details.prepended_reminder_tokens_at_anchor,
+                    details.current_prepended_reminder_tokens,
+                    details.prepended_reminder_delta,
+                    token_pressure.total_tokens,
+                    token_pressure.system_tokens,
+                    token_pressure.tool_tokens,
+                    token_pressure.prepended_reminder_tokens,
+                    token_pressure.conversation_tokens,
+                    token_pressure.context_window,
+                    token_pressure.input_limit,
+                    token_pressure.output_reserve_tokens,
+                    token_pressure.safety_reserve_tokens,
+                    token_pressure.usage_ratio
+                );
+                if !token_anchor_selection.skipped.is_empty() {
+                    trace!(
+                        "Token anchor selection skipped newer anchors before match: session_id={}, turn_id={}, round_index={}, selected_anchor_id={}, skipped={:?}",
+                        context.session_id,
+                        context.dialog_turn_id,
+                        round_index,
+                        details.anchor_id,
+                        token_anchor_selection.skipped
+                    );
+                }
+            } else {
+                debug!(
+                    "Token pressure estimate: session_id={}, turn_id={}, round_index={}, source=full_estimate, total_tokens={}, system_tokens={}, tool_tokens={}, prepended_reminder_tokens={}, conversation_tokens={}, context_window={}, input_limit={}, output_reserve={}, safety_reserve={}, usage={:.3}, fallback_reasons={:?}",
+                    context.session_id,
+                    context.dialog_turn_id,
+                    round_index,
+                    token_pressure.total_tokens,
+                    token_pressure.system_tokens,
+                    token_pressure.tool_tokens,
+                    token_pressure.prepended_reminder_tokens,
+                    token_pressure.conversation_tokens,
+                    token_pressure.context_window,
+                    token_pressure.input_limit,
+                    token_pressure.output_reserve_tokens,
+                    token_pressure.safety_reserve_tokens,
+                    token_pressure.usage_ratio,
+                    token_anchor_selection.skipped
+                );
+            }
             debug!(
-                "Round {} token usage before send: total={} / {}, conversation={} / {}, usage={:.1}%",
+                "Round {} token usage before send: total={} / {}, conversation={} / {}, usage={:.1}%, input_limit={}, output_reserve={}, safety_reserve={}",
                 round_index,
-                current_tokens,
-                context_window,
-                conversation_tokens,
-                context_window,
-                token_usage_ratio * 100.0
+                token_pressure.total_tokens,
+                token_pressure.context_window,
+                token_pressure.conversation_tokens,
+                token_pressure.context_window,
+                token_pressure.usage_ratio * 100.0,
+                token_pressure.input_limit,
+                token_pressure.output_reserve_tokens,
+                token_pressure.safety_reserve_tokens
             );
 
-            let should_compress =
-                enable_context_compression && token_usage_ratio >= compression_threshold;
+            let should_compress = enable_context_compression
+                && token_pressure.total_tokens >= token_pressure.input_limit;
+            let mut send_pressure_reusable = true;
 
             // Circuit breaker: skip full compression if it has failed too many
             // consecutive times.  Microcompact and emergency truncation still run.
@@ -2498,10 +2850,14 @@ impl ExecutionEngine {
 
             if !should_compress {
                 debug!(
-                    "No compression needed: session={}, token_usage={:.1}%, threshold={:.1}%",
+                    "No compression needed: session={}, total_tokens={}, input_limit={}, context_window={}, output_reserve={}, safety_reserve={}, usage={:.1}%",
                     context.session_id,
-                    token_usage_ratio * 100.0,
-                    compression_threshold * 100.0
+                    token_pressure.total_tokens,
+                    token_pressure.input_limit,
+                    token_pressure.context_window,
+                    token_pressure.output_reserve_tokens,
+                    token_pressure.safety_reserve_tokens,
+                    token_pressure.usage_ratio * 100.0
                 );
             } else if circuit_breaker_open {
                 warn!(
@@ -2510,10 +2866,14 @@ impl ExecutionEngine {
                 );
             } else {
                 info!(
-                    "Triggering context compression: session={}, token_usage={:.1}%, threshold={:.1}%",
+                    "Triggering context compression: session={}, total_tokens={}, input_limit={}, context_window={}, output_reserve={}, safety_reserve={}, usage={:.1}%",
                     context.session_id,
-                    token_usage_ratio * 100.0,
-                    compression_threshold * 100.0
+                    token_pressure.total_tokens,
+                    token_pressure.input_limit,
+                    token_pressure.context_window,
+                    token_pressure.output_reserve_tokens,
+                    token_pressure.safety_reserve_tokens,
+                    token_pressure.usage_ratio * 100.0
                 );
 
                 match self
@@ -2521,7 +2881,7 @@ impl ExecutionEngine {
                         &context.session_id,
                         &context.dialog_turn_id,
                         messages.clone(),
-                        current_tokens,
+                        token_pressure,
                         context_window,
                         ai_client.clone(),
                         &tool_definitions,
@@ -2539,7 +2899,7 @@ impl ExecutionEngine {
                             round_index,
                             messages.len(),
                             compressed_messages.len(),
-                            current_tokens,
+                            token_pressure.total_tokens,
                             compressed_tokens,
                         );
 
@@ -2561,6 +2921,7 @@ impl ExecutionEngine {
                         );
                         full_compression_count += 1;
                         consecutive_compression_failures = 0;
+                        send_pressure_reusable = false;
                     }
                     Ok(None) => {
                         debug!("No eligible multi-turn context available for compression");
@@ -2582,30 +2943,54 @@ impl ExecutionEngine {
 
             // L2: Emergency truncation — if tokens still exceed context_window
             // after all compression layers, drop oldest API rounds until we fit.
-            let post_compress_tokens =
-                Self::estimate_request_tokens_internal(&messages, tool_definitions.as_deref());
-            if post_compress_tokens > context_window {
+            let send_prepended_reminders = turn_prompt_scaffold
+                .prepended_prompt_reminders
+                .ordered_reminders();
+            let send_prepended_reminder_tokens =
+                Self::prepended_reminder_tokens_for_pressure(&send_prepended_reminders);
+            let mut send_pressure = if send_pressure_reusable
+                && token_pressure.prepended_reminder_tokens == send_prepended_reminder_tokens
+            {
+                token_pressure
+            } else {
+                Self::estimate_auto_compression_pressure(
+                    &messages,
+                    tool_definitions.as_deref(),
+                    context_window,
+                    compression_trigger_budget,
+                    send_prepended_reminder_tokens,
+                )
+            };
+            if send_pressure.total_tokens > context_window {
                 warn!(
                     "Round {} tokens ({}) still exceed context_window ({}) after compression, performing emergency truncation",
-                    round_index, post_compress_tokens, context_window
+                    round_index, send_pressure.total_tokens, context_window
                 );
+                let before_truncate_tokens = send_pressure.total_tokens;
                 messages = Self::emergency_truncate_messages(
                     messages,
                     context_window,
                     tool_definitions.as_deref(),
+                    send_prepended_reminder_tokens,
                 );
-                let after_truncate =
-                    Self::estimate_request_tokens_internal(&messages, tool_definitions.as_deref());
+                self.session_manager
+                    .prune_token_anchors_to_messages(&context.session_id, &messages)
+                    .await;
+                send_pressure = Self::estimate_auto_compression_pressure(
+                    &messages,
+                    tool_definitions.as_deref(),
+                    context_window,
+                    compression_trigger_budget,
+                    send_prepended_reminder_tokens,
+                );
                 info!(
                     "Emergency truncation complete: tokens {} -> {}",
-                    post_compress_tokens, after_truncate
+                    before_truncate_tokens, send_pressure.total_tokens
                 );
             }
 
-            let before_send_tokens =
-                Self::estimate_request_tokens_internal(&messages, tool_definitions.as_deref());
             ContextHealthSnapshot::from_runtime_observations(
-                ContextHealthSnapshot::token_usage_ratio(before_send_tokens, context_window),
+                send_pressure.usage_ratio,
                 full_compression_count,
                 compression_failure_count,
                 &recent_tool_signatures,
@@ -2664,9 +3049,6 @@ impl ExecutionEngine {
                 messages.len()
             );
 
-            let prepended_reminders = turn_prompt_scaffold
-                .prepended_prompt_reminders
-                .ordered_reminders();
             let ai_messages = Self::build_ai_messages_for_send(
                 &messages,
                 &ai_client.config.format,
@@ -2676,7 +3058,7 @@ impl ExecutionEngine {
                     .map(|workspace| workspace.root_path()),
                 &context.dialog_turn_id,
                 primary_supports_image_understanding,
-                &prepended_reminders,
+                &send_prepended_reminders,
             )
             .await?;
 
@@ -2702,6 +3084,31 @@ impl ExecutionEngine {
             // Save the last token usage statistics (update each time, keep the last one)
             if let Some(ref usage) = round_result.usage {
                 last_usage = Some(usage.clone());
+                let round_id = round_result
+                    .assistant_message
+                    .metadata
+                    .round_id
+                    .clone()
+                    .unwrap_or_else(|| format!("round_{}", round_index));
+                let system_tokens_at_anchor = Self::system_tokens_for_pressure(&messages);
+                let tool_tokens_at_anchor = tool_definitions
+                    .as_deref()
+                    .map(TokenCounter::estimate_tool_definitions_tokens)
+                    .unwrap_or(0);
+                let anchor = TokenAnchor::from_request_prefix(
+                    TokenAnchorInput {
+                        session_id: context.session_id.clone(),
+                        turn_id: context.dialog_turn_id.clone(),
+                        round_id,
+                        model_id: ai_client.config.model.clone(),
+                        input_tokens: usage.prompt_token_count as usize,
+                        system_tokens_at_anchor,
+                        tool_tokens_at_anchor,
+                        prepended_reminder_tokens_at_anchor: send_prepended_reminder_tokens,
+                    },
+                    &messages,
+                );
+                self.session_manager.remember_token_anchor(anchor).await;
             }
 
             // Add assistant message to history
@@ -2762,10 +3169,15 @@ impl ExecutionEngine {
                 failed_tool_recovery_attempts = 0;
             }
 
-            let after_round_tokens =
-                Self::estimate_request_tokens_internal(&messages, tool_definitions.as_deref());
+            let after_round_pressure = Self::estimate_auto_compression_pressure(
+                &messages,
+                tool_definitions.as_deref(),
+                context_window,
+                compression_trigger_budget,
+                send_prepended_reminder_tokens,
+            );
             let after_round_health = ContextHealthSnapshot::from_runtime_observations(
-                ContextHealthSnapshot::token_usage_ratio(after_round_tokens, context_window),
+                after_round_pressure.usage_ratio,
                 full_compression_count,
                 compression_failure_count,
                 &recent_tool_signatures,
@@ -3385,10 +3797,10 @@ mod tests {
     use super::{ContextHealthSnapshot, ExecutionEngine, TurnPromptScaffold};
     use crate::agentic::agents::PrependedPromptReminders;
     use crate::agentic::core::{InternalReminderKind, Message, MessageRole, ToolCall, ToolResult};
+    use crate::agentic::session::{TokenAnchor, TokenAnchorInput};
     use crate::agentic::tools::ToolRuntimeRestrictions;
     use crate::service::config::types::AIConfig;
     use crate::service::config::types::AIModelConfig;
-    use crate::util::types::config as ai_config_types;
     use crate::util::types::ToolDefinition;
     use serde_json::json;
     use sha2::{Digest, Sha256};
@@ -3426,7 +3838,7 @@ mod tests {
     }
 
     #[test]
-    fn auto_compression_pressure_excludes_system_and_tool_overhead() {
+    fn auto_compression_pressure_tracks_total_and_conversation_tokens() {
         let messages = vec![
             Message::system("system prompt".repeat(10_000)),
             Message::user("hello".to_string()),
@@ -3436,13 +3848,199 @@ mod tests {
             description: "Read files".repeat(5_000),
             parameters: json!({"type": "object"}),
         }];
+        let prepended_reminders = vec!["prepended reminder".repeat(5_000)];
+        let prepended_reminder_refs = prepended_reminders
+            .iter()
+            .map(String::as_str)
+            .collect::<Vec<_>>();
+        let prepended_reminder_tokens =
+            ExecutionEngine::prepended_reminder_tokens_for_pressure(&prepended_reminder_refs);
 
-        let (total_tokens, conversation_tokens, usage_ratio) =
-            ExecutionEngine::estimate_auto_compression_pressure(&messages, Some(&tools), 128_000);
+        let snapshot = ExecutionEngine::estimate_auto_compression_pressure(
+            &messages,
+            Some(&tools),
+            128_000,
+            ExecutionEngine::compression_trigger_budget(128_000, None),
+            prepended_reminder_tokens,
+        );
 
-        assert!(total_tokens > conversation_tokens);
-        assert!(usage_ratio < total_tokens as f32 / 128_000_f32);
+        assert!(snapshot.total_tokens > snapshot.conversation_tokens);
+        assert!(snapshot.system_tokens > 0);
+        assert!(snapshot.tool_tokens > 0);
+        assert_eq!(
+            snapshot.prepended_reminder_tokens,
+            prepended_reminder_tokens
+        );
+        assert!(
+            (snapshot.usage_ratio - snapshot.total_tokens as f32 / 128_000_f32).abs()
+                < f32::EPSILON
+        );
         assert_eq!(messages[1].role, MessageRole::User);
+    }
+
+    #[test]
+    fn compression_trigger_budget_reserves_output_and_safety_tokens() {
+        let budget = ExecutionEngine::compression_trigger_budget(128_000, Some(32_000));
+
+        assert_eq!(budget.output_reserve_tokens, 32_000);
+        assert_eq!(budget.safety_reserve_tokens, 10_000);
+        assert_eq!(budget.input_limit, 86_000);
+    }
+
+    #[test]
+    fn compression_trigger_budget_uses_16k_output_reserve_when_max_tokens_is_unset() {
+        let budget = ExecutionEngine::compression_trigger_budget(128_000, None);
+
+        assert_eq!(budget.output_reserve_tokens, 16_000);
+        assert_eq!(budget.safety_reserve_tokens, 10_000);
+        assert_eq!(budget.input_limit, 102_000);
+    }
+
+    #[test]
+    fn auto_compression_pressure_uses_provider_input_anchor_plus_tail_estimate() {
+        let prefix = vec![
+            Message::system("system prompt".to_string()),
+            Message::user("hello".to_string()),
+        ];
+        let system_tokens = ExecutionEngine::system_tokens_for_pressure(&prefix);
+        let anchor = TokenAnchor::from_request_prefix(
+            TokenAnchorInput {
+                session_id: "session".to_string(),
+                turn_id: "turn".to_string(),
+                round_id: "round".to_string(),
+                model_id: "model".to_string(),
+                input_tokens: 100,
+                system_tokens_at_anchor: system_tokens,
+                tool_tokens_at_anchor: 0,
+                prepended_reminder_tokens_at_anchor: 0,
+            },
+            &prefix,
+        );
+        let mut messages = prefix;
+        messages.push(Message::assistant("assistant tail".repeat(10)));
+        let tail_tokens =
+            ExecutionEngine::estimate_tail_tokens(&messages[anchor.prefix_message_count..]);
+
+        let (snapshot, details) = ExecutionEngine::estimate_auto_compression_pressure_with_anchor(
+            &messages,
+            None,
+            1_000,
+            ExecutionEngine::compression_trigger_budget(1_000, None),
+            Some(&anchor),
+            0,
+        );
+
+        assert_eq!(snapshot.total_tokens, 100 + tail_tokens);
+        assert_eq!(details.expect("anchor details").tail_tokens, tail_tokens);
+    }
+
+    #[test]
+    fn auto_compression_pressure_applies_tool_definition_delta_to_anchor() {
+        let messages = vec![
+            Message::system("system prompt".to_string()),
+            Message::user("hello".to_string()),
+        ];
+        let old_tools = vec![ToolDefinition {
+            name: "Read".to_string(),
+            description: "read files".to_string(),
+            parameters: json!({"type": "object"}),
+        }];
+        let new_tools = vec![ToolDefinition {
+            name: "Read".to_string(),
+            description: "read files with a longer provider-visible description".repeat(10),
+            parameters: json!({"type": "object"}),
+        }];
+        let old_tool_tokens =
+            crate::util::TokenCounter::estimate_tool_definitions_tokens(&old_tools);
+        let new_tool_tokens =
+            crate::util::TokenCounter::estimate_tool_definitions_tokens(&new_tools);
+        let anchor = TokenAnchor::from_request_prefix(
+            TokenAnchorInput {
+                session_id: "session".to_string(),
+                turn_id: "turn".to_string(),
+                round_id: "round".to_string(),
+                model_id: "model".to_string(),
+                input_tokens: 100,
+                system_tokens_at_anchor: ExecutionEngine::system_tokens_for_pressure(&messages),
+                tool_tokens_at_anchor: old_tool_tokens,
+                prepended_reminder_tokens_at_anchor: 0,
+            },
+            &messages,
+        );
+
+        let (snapshot, details) = ExecutionEngine::estimate_auto_compression_pressure_with_anchor(
+            &messages,
+            Some(&new_tools),
+            1_000,
+            ExecutionEngine::compression_trigger_budget(1_000, None),
+            Some(&anchor),
+            0,
+        );
+
+        assert_eq!(
+            snapshot.total_tokens,
+            100 + (new_tool_tokens - old_tool_tokens)
+        );
+        assert_eq!(snapshot.tool_tokens, new_tool_tokens);
+        assert_eq!(
+            details.expect("anchor details").tool_delta,
+            (new_tool_tokens - old_tool_tokens) as isize
+        );
+    }
+
+    #[test]
+    fn auto_compression_pressure_applies_prepended_reminder_delta_to_anchor() {
+        let messages = vec![
+            Message::system("system prompt".to_string()),
+            Message::user("hello".to_string()),
+        ];
+        let old_reminders = vec!["short reminder".to_string()];
+        let new_reminders = vec!["longer reminder ".repeat(20)];
+        let old_reminder_refs = old_reminders.iter().map(String::as_str).collect::<Vec<_>>();
+        let new_reminder_refs = new_reminders.iter().map(String::as_str).collect::<Vec<_>>();
+        let old_reminder_tokens =
+            ExecutionEngine::prepended_reminder_tokens_for_pressure(&old_reminder_refs);
+        let new_reminder_tokens =
+            ExecutionEngine::prepended_reminder_tokens_for_pressure(&new_reminder_refs);
+        let anchor = TokenAnchor::from_request_prefix(
+            TokenAnchorInput {
+                session_id: "session".to_string(),
+                turn_id: "turn".to_string(),
+                round_id: "round".to_string(),
+                model_id: "model".to_string(),
+                input_tokens: 100,
+                system_tokens_at_anchor: ExecutionEngine::system_tokens_for_pressure(&messages),
+                tool_tokens_at_anchor: 0,
+                prepended_reminder_tokens_at_anchor: old_reminder_tokens,
+            },
+            &messages,
+        );
+
+        let (snapshot, details) = ExecutionEngine::estimate_auto_compression_pressure_with_anchor(
+            &messages,
+            None,
+            1_000,
+            ExecutionEngine::compression_trigger_budget(1_000, None),
+            Some(&anchor),
+            new_reminder_tokens,
+        );
+        let details = details.expect("anchor details");
+
+        assert_eq!(
+            snapshot.total_tokens,
+            100 + (new_reminder_tokens - old_reminder_tokens)
+        );
+        assert_eq!(
+            snapshot.conversation_tokens,
+            snapshot.total_tokens
+                - ExecutionEngine::system_tokens_for_pressure(&messages)
+                - new_reminder_tokens
+        );
+        assert_eq!(snapshot.prepended_reminder_tokens, new_reminder_tokens);
+        assert_eq!(
+            details.prepended_reminder_delta,
+            (new_reminder_tokens - old_reminder_tokens) as isize
+        );
     }
 
     #[test]
@@ -3500,60 +4098,6 @@ mod tests {
         let summary = ExecutionEngine::tool_signature_args_summary(args);
 
         assert_eq!(summary, args);
-    }
-
-    #[test]
-    fn compression_request_max_tokens_clamps_to_global_cap() {
-        assert_eq!(
-            ExecutionEngine::compression_request_max_tokens(Some(16_000), 8192),
-            Some(8192)
-        );
-        assert_eq!(
-            ExecutionEngine::compression_request_max_tokens(Some(4096), 8192),
-            Some(4096)
-        );
-        assert_eq!(
-            ExecutionEngine::compression_request_max_tokens(None, 8192),
-            Some(8192)
-        );
-    }
-
-    #[test]
-    fn build_compression_ai_client_overrides_only_max_tokens() {
-        let client = crate::infrastructure::ai::AIClient::new(ai_config_types::AIConfig {
-            name: "test".to_string(),
-            base_url: "https://example.com/v1".to_string(),
-            request_url: "https://example.com/v1/responses".to_string(),
-            api_key: "key".to_string(),
-            model: "test-model".to_string(),
-            format: "responses".to_string(),
-            context_window: 128_000,
-            max_tokens: None,
-            temperature: None,
-            top_p: None,
-            reasoning_mode: Default::default(),
-            inline_think_in_text: true,
-            custom_headers: None,
-            custom_headers_mode: None,
-            skip_ssl_verify: false,
-            reasoning_effort: None,
-            thinking_budget_tokens: None,
-            custom_request_body: None,
-            custom_request_body_mode: None,
-        });
-
-        let compression_client = ExecutionEngine::build_compression_ai_client(&client);
-
-        assert_eq!(client.config.max_tokens, None);
-        assert_eq!(
-            compression_client.config.max_tokens,
-            Some(ExecutionEngine::COMPRESSION_MAX_TOKENS)
-        );
-        assert_eq!(compression_client.config.model, client.config.model);
-        assert_eq!(
-            compression_client.config.request_url,
-            client.config.request_url
-        );
     }
 
     #[test]

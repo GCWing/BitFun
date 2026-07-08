@@ -192,7 +192,6 @@ pub enum AgenticEvent {
         trigger: String,
         tokens_before: usize,
         context_window: usize,
-        threshold: f32,
     },
 
     ContextCompressionCompleted {

@@ -32,7 +32,6 @@ export interface SessionConfig {
   safeMode?: boolean;
   maxTurns?: number;
   enableContextCompression?: boolean;
-  compressionThreshold?: number;
   remoteConnectionId?: string;
   remoteSshHost?: string;
 }
@@ -434,7 +433,6 @@ export interface CompressionEvent extends AgenticEvent {
   trigger?: string;                // "auto" | "manual" | "user_message"
   tokensBefore?: number;           
   contextWindow?: number;          
-  threshold?: number;              
   
   compressionCount?: number;       
   tokensAfter?: number;            

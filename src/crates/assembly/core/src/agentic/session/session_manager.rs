@@ -17,8 +17,8 @@ use crate::agentic::session::{
     EvidenceLedgerSummary, EvidenceLedgerTargetKind, FileReadState, FileReadStateStore,
     PromptCacheLookup, PromptCachePersistenceWriteAction, PromptCachePolicy,
     PromptCacheRestoreDecision, PromptCacheScope, SessionContextStore, SessionEvidenceLedger,
-    SessionPromptCache, SessionPromptCacheStore, SystemPromptCacheIdentity,
-    TurnSkillAgentSnapshotStore, UserContextCacheIdentity,
+    SessionPromptCache, SessionPromptCacheStore, SystemPromptCacheIdentity, TokenAnchor,
+    TokenAnchorSelection, TokenAnchorStore, TurnSkillAgentSnapshotStore, UserContextCacheIdentity,
 };
 use crate::agentic::skill_agent_snapshot::TurnSkillAgentSnapshot;
 use crate::agentic::workspace::WorkspaceBinding;
@@ -127,6 +127,7 @@ pub struct SessionManager {
     /// Sub-components
     context_store: Arc<SessionContextStore>,
     prompt_cache_store: Arc<SessionPromptCacheStore>,
+    token_anchor_store: Arc<TokenAnchorStore>,
     turn_skill_agent_snapshot_store: Arc<TurnSkillAgentSnapshotStore>,
     skill_agent_baseline_override_snapshot_store: Arc<DashMap<String, TurnSkillAgentSnapshot>>,
     file_read_state_store: Arc<FileReadStateStore>,
@@ -1021,6 +1022,132 @@ impl SessionManager {
         }
     }
 
+    async fn ensure_token_anchors_loaded(&self, session_id: &str) {
+        if self.token_anchor_store.has_session(session_id) {
+            return;
+        }
+
+        let anchors = if self.should_persist_session_id(session_id) {
+            match self.effective_session_storage_path(session_id).await {
+                Some(workspace_path) => match self
+                    .persistence_manager
+                    .load_token_anchors(&workspace_path, session_id)
+                    .await
+                {
+                    Ok(Some(anchors)) => anchors,
+                    Ok(None) => Vec::new(),
+                    Err(error) => {
+                        warn!(
+                            "Failed to load token anchors: session_id={}, workspace_path={}, error={}",
+                            session_id,
+                            workspace_path.display(),
+                            error
+                        );
+                        Vec::new()
+                    }
+                },
+                None => Vec::new(),
+            }
+        } else {
+            Vec::new()
+        };
+
+        if let Some(stats) = self.token_anchor_store.replace_session(session_id, anchors) {
+            debug!(
+                "Token anchor retention pruned loaded anchors: session_id={}, before={}, after={}, removed={}, recent_limit={}, retained_recent={}, retained_turn_boundaries={}",
+                session_id,
+                stats.before,
+                stats.after,
+                stats.removed,
+                stats.recent_limit,
+                stats.retained_recent,
+                stats.retained_turn_boundaries
+            );
+        }
+    }
+
+    async fn persist_token_anchors_best_effort(&self, session_id: &str, reason: &str) {
+        if !self.should_persist_session_id(session_id) {
+            return;
+        }
+
+        let Some(workspace_path) = self.effective_session_storage_path(session_id).await else {
+            debug!(
+                "Skipping token anchor persistence because workspace path is unavailable: session_id={}, reason={}",
+                session_id, reason
+            );
+            return;
+        };
+
+        let anchors = self.token_anchor_store.anchors(session_id);
+        let persist_result = if anchors.is_empty() {
+            self.persistence_manager
+                .delete_token_anchors(&workspace_path, session_id)
+                .await
+        } else {
+            self.persistence_manager
+                .save_token_anchors(&workspace_path, session_id, &anchors)
+                .await
+        };
+
+        if let Err(error) = persist_result {
+            warn!(
+                "Failed to persist token anchors: session_id={}, workspace_path={}, reason={}, error={}",
+                session_id,
+                workspace_path.display(),
+                reason,
+                error
+            );
+        }
+    }
+
+    pub async fn remember_token_anchor(&self, anchor: TokenAnchor) {
+        let session_id = anchor.session_id.clone();
+        self.ensure_token_anchors_loaded(&session_id).await;
+        if let Some(stats) = self.token_anchor_store.append(anchor) {
+            debug!(
+                "Token anchor retention pruned anchors: session_id={}, before={}, after={}, removed={}, recent_limit={}, retained_recent={}, retained_turn_boundaries={}",
+                session_id,
+                stats.before,
+                stats.after,
+                stats.removed,
+                stats.recent_limit,
+                stats.retained_recent,
+                stats.retained_turn_boundaries
+            );
+        }
+        self.persist_token_anchors_best_effort(&session_id, "token_anchor_recorded")
+            .await;
+    }
+
+    pub async fn latest_matching_token_anchor(
+        &self,
+        session_id: &str,
+        messages: &[Message],
+    ) -> Option<TokenAnchor> {
+        self.select_latest_matching_token_anchor(session_id, messages)
+            .await
+            .selected
+    }
+
+    pub async fn select_latest_matching_token_anchor(
+        &self,
+        session_id: &str,
+        messages: &[Message],
+    ) -> TokenAnchorSelection {
+        self.ensure_token_anchors_loaded(session_id).await;
+        self.token_anchor_store
+            .select_latest_matching(session_id, messages)
+    }
+
+    pub async fn prune_token_anchors_to_messages(&self, session_id: &str, messages: &[Message]) {
+        self.ensure_token_anchors_loaded(session_id).await;
+        self.token_anchor_store
+            .remove_non_matching(session_id, messages);
+        self.persist_token_anchors_best_effort(session_id, "token_anchor_pruned")
+            .await;
+    }
+
     pub fn new(
         context_store: Arc<SessionContextStore>,
         persistence_manager: Arc<PersistenceManager>,
@@ -1036,6 +1163,7 @@ impl SessionManager {
             session_storage_path_index: Arc::new(DashMap::new()),
             context_store,
             prompt_cache_store: Arc::new(SessionPromptCacheStore::new()),
+            token_anchor_store: Arc::new(TokenAnchorStore::new()),
             turn_skill_agent_snapshot_store: Arc::new(TurnSkillAgentSnapshotStore::new()),
             skill_agent_baseline_override_snapshot_store: Arc::new(DashMap::new()),
             file_read_state_store: Arc::new(FileReadStateStore::new()),
@@ -1226,6 +1354,7 @@ impl SessionManager {
         let session_storage_path_index = self.session_storage_path_index.clone();
         let context_store = self.context_store.clone();
         let prompt_cache_store = self.prompt_cache_store.clone();
+        let token_anchor_store = self.token_anchor_store.clone();
         let turn_skill_agent_snapshot_store = self.turn_skill_agent_snapshot_store.clone();
         let skill_agent_baseline_override_snapshot_store =
             self.skill_agent_baseline_override_snapshot_store.clone();
@@ -1251,6 +1380,7 @@ impl SessionManager {
                 session_storage_path_index,
                 context_store,
                 prompt_cache_store,
+                token_anchor_store,
                 turn_skill_agent_snapshot_store,
                 skill_agent_baseline_override_snapshot_store,
                 file_read_state_store,
@@ -1394,6 +1524,7 @@ impl SessionManager {
 
         // 2. Initialize the in-memory context cache.
         self.context_store.create_session(&session_id);
+        self.token_anchor_store.create_session(&session_id);
         self.turn_skill_agent_snapshot_store
             .create_session(&session_id);
         self.file_read_state_store.create_session(&session_id);
@@ -2526,6 +2657,7 @@ impl SessionManager {
         );
         self.context_store.delete_session(session_id);
         self.prompt_cache_store.delete_session(session_id);
+        self.token_anchor_store.delete_session(session_id);
         self.turn_skill_agent_snapshot_store
             .delete_session(session_id);
         self.skill_agent_baseline_override_snapshot_store
@@ -3338,6 +3470,7 @@ impl SessionManager {
         if session_already_in_memory {
             self.context_store.delete_session(session_id);
             self.prompt_cache_store.delete_session(session_id);
+            self.token_anchor_store.delete_session(session_id);
             self.turn_skill_agent_snapshot_store
                 .delete_session(session_id);
             self.skill_agent_baseline_override_snapshot_store
@@ -3479,7 +3612,10 @@ impl SessionManager {
         };
 
         // 2) Restore the in-memory context cache.
-        self.context_store.replace_context(session_id, messages);
+        self.context_store
+            .replace_context(session_id, messages.clone());
+        self.prune_token_anchors_to_messages(session_id, &messages)
+            .await;
 
         let last_user_dialog_agent_type = if target_turn == 0 {
             None
@@ -4796,8 +4932,11 @@ impl SessionManager {
     /// Replace the runtime context cache for a session and immediately refresh the current turn
     /// snapshot. This is primarily used after compression rewrites the model-visible context.
     pub async fn replace_context_messages(&self, session_id: &str, messages: Vec<Message>) {
-        self.context_store.replace_context(session_id, messages);
+        self.context_store
+            .replace_context(session_id, messages.clone());
         self.file_read_state_store.clear_session(session_id);
+        self.prune_token_anchors_to_messages(session_id, &messages)
+            .await;
         self.persist_current_turn_context_snapshot_best_effort(session_id, "context_replaced")
             .await;
     }
@@ -5054,6 +5193,7 @@ impl SessionManager {
         let enable_persistence = self.config.enable_persistence;
         let context_store = self.context_store.clone();
         let prompt_cache_store = self.prompt_cache_store.clone();
+        let token_anchor_store = self.token_anchor_store.clone();
         let turn_skill_agent_snapshot_store = self.turn_skill_agent_snapshot_store.clone();
         let skill_agent_baseline_override_snapshot_store =
             self.skill_agent_baseline_override_snapshot_store.clone();
@@ -5119,6 +5259,7 @@ impl SessionManager {
                     {
                         context_store.delete_session(&candidate.session_id);
                         prompt_cache_store.delete_session(&candidate.session_id);
+                        token_anchor_store.delete_session(&candidate.session_id);
                         turn_skill_agent_snapshot_store.delete_session(&candidate.session_id);
                         skill_agent_baseline_override_snapshot_store.remove(&candidate.session_id);
                         file_read_state_store.delete_session(&candidate.session_id);

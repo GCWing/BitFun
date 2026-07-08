@@ -14,7 +14,7 @@ use crate::agentic::session::transcript_render::{
     transcript_text_lines, transcript_thinking_blocks, transcript_tool_blocks,
     TranscriptRoundBlock, TranscriptRoundData, TranscriptTextBlock, TranscriptToolBlock,
 };
-use crate::agentic::session::{SessionPromptCache, PROMPT_CACHE_SCHEMA_VERSION};
+use crate::agentic::session::{SessionPromptCache, TokenAnchor, PROMPT_CACHE_SCHEMA_VERSION};
 use crate::agentic::skill_agent_snapshot::TurnSkillAgentSnapshot;
 use crate::infrastructure::PathManager;
 use crate::service::config::get_global_config_service;
@@ -54,6 +54,7 @@ use tokio::sync::Mutex;
 pub use bitfun_services_core::session::SessionMetadataPage;
 
 const TRANSCRIPT_SCHEMA_VERSION: u32 = 1;
+const TOKEN_ANCHOR_SCHEMA_VERSION: u32 = 1;
 const SESSION_TRANSCRIPT_PREVIEW_CHAR_LIMIT: usize = 120;
 const SESSION_TURN_READ_CONCURRENCY: usize = 4;
 
@@ -118,6 +119,13 @@ struct StoredSessionPromptCacheFile {
     schema_version: u32,
     #[serde(flatten)]
     cache: SessionPromptCache,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct StoredTokenAnchorsFile {
+    schema_version: u32,
+    session_id: String,
+    anchors: Vec<TokenAnchor>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -348,6 +356,12 @@ impl PersistenceManager {
     fn prompt_cache_path(&self, workspace_path: &Path, session_id: &str) -> PathBuf {
         self.session_layout(workspace_path)
             .prompt_cache_path(session_id)
+    }
+
+    fn token_anchors_path(&self, workspace_path: &Path, session_id: &str) -> PathBuf {
+        self.session_layout(workspace_path)
+            .session_dir(session_id)
+            .join("token-anchors.json")
     }
 
     fn turns_dir(&self, workspace_path: &Path, session_id: &str) -> PathBuf {
@@ -1223,6 +1237,54 @@ impl PersistenceManager {
             Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
             Err(error) => Err(BitFunError::io(format!(
                 "Failed to delete prompt cache for session {}: {}",
+                session_id, error
+            ))),
+        }
+    }
+
+    pub async fn load_token_anchors(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<Option<Vec<TokenAnchor>>> {
+        Ok(self
+            .read_json_optional::<StoredTokenAnchorsFile>(
+                &self.token_anchors_path(workspace_path, session_id),
+            )
+            .await?
+            .map(|file| file.anchors))
+    }
+
+    pub async fn save_token_anchors(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+        anchors: &[TokenAnchor],
+    ) -> BitFunResult<()> {
+        self.ensure_runtime_for_write(workspace_path).await?;
+        self.ensure_session_dir(workspace_path, session_id).await?;
+
+        self.write_json_atomic(
+            &self.token_anchors_path(workspace_path, session_id),
+            &StoredTokenAnchorsFile {
+                schema_version: TOKEN_ANCHOR_SCHEMA_VERSION,
+                session_id: session_id.to_string(),
+                anchors: anchors.to_vec(),
+            },
+        )
+        .await
+    }
+
+    pub async fn delete_token_anchors(
+        &self,
+        workspace_path: &Path,
+        session_id: &str,
+    ) -> BitFunResult<()> {
+        match fs::remove_file(self.token_anchors_path(workspace_path, session_id)).await {
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
+            Err(error) => Err(BitFunError::io(format!(
+                "Failed to delete token anchors for session {}: {}",
                 session_id, error
             ))),
         }
@@ -2586,6 +2648,7 @@ mod tests {
     };
     use crate::agentic::core::{Message, Session, SessionConfig, SessionKind, ToolResult};
     use crate::agentic::memories::db::{MemoryDatabase, MemoryRow, MEMORY_PHASE2_GLOBAL_JOB_KEY};
+    use crate::agentic::session::{TokenAnchor, TokenAnchorInput};
     use crate::agentic::skill_agent_snapshot::{
         AgentSnapshotEntry, SkillSnapshotEntry, TurnSkillAgentSnapshot,
     };
@@ -2627,6 +2690,54 @@ mod tests {
         fn drop(&mut self) {
             let _ = std::fs::remove_dir_all(&self.path);
         }
+    }
+
+    #[tokio::test]
+    async fn token_anchors_save_load_and_delete_roundtrip() {
+        let workspace = TestWorkspace::new();
+        let manager =
+            PersistenceManager::new(workspace.path_manager()).expect("persistence manager");
+        let session_id = format!("session-{}", Uuid::new_v4());
+        let messages = vec![
+            Message::system("system".to_string()),
+            Message::user("hello".to_string()),
+        ];
+        let anchor = TokenAnchor::from_request_prefix(
+            TokenAnchorInput {
+                session_id: session_id.clone(),
+                turn_id: "turn".to_string(),
+                round_id: "round".to_string(),
+                model_id: "model".to_string(),
+                input_tokens: 100,
+                system_tokens_at_anchor: 10,
+                tool_tokens_at_anchor: 20,
+                prepended_reminder_tokens_at_anchor: 0,
+            },
+            &messages,
+        );
+
+        manager
+            .save_token_anchors(workspace.path(), &session_id, std::slice::from_ref(&anchor))
+            .await
+            .expect("token anchors should save");
+        let loaded = manager
+            .load_token_anchors(workspace.path(), &session_id)
+            .await
+            .expect("token anchors should load")
+            .expect("token anchor file should exist");
+
+        assert_eq!(loaded, vec![anchor]);
+
+        manager
+            .delete_token_anchors(workspace.path(), &session_id)
+            .await
+            .expect("token anchors should delete");
+        let loaded_after_delete = manager
+            .load_token_anchors(workspace.path(), &session_id)
+            .await
+            .expect("deleted token anchor load should succeed");
+
+        assert!(loaded_after_delete.is_none());
     }
 
     #[test]

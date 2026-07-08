@@ -966,11 +966,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         )
     }
 
-    fn estimate_context_tokens(messages: &[Message]) -> usize {
-        let mut cloned = messages.to_vec();
-        cloned.iter_mut().map(|message| message.get_tokens()).sum()
-    }
-
     fn manual_compaction_metadata() -> serde_json::Value {
         serde_json::json!({
             "kind": "manual_compaction",
@@ -982,7 +977,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         turn_id: &str,
         outcome: &ContextCompactionOutcome,
         context_window: usize,
-        threshold: f32,
     ) -> crate::service::session::ModelRoundData {
         use crate::service::session::{ModelRoundData, ToolCallData, ToolItemData, ToolResultData};
 
@@ -1007,7 +1001,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                         "trigger": "manual",
                         "tokens_before": outcome.tokens_before,
                         "context_window": context_window,
-                        "threshold": threshold,
                     }),
                     id: outcome.compression_id.clone(),
                 },
@@ -1069,7 +1062,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         compression_id: String,
         error: &str,
         context_window: usize,
-        threshold: f32,
     ) -> crate::service::session::ModelRoundData {
         use crate::service::session::{ModelRoundData, ToolCallData, ToolItemData, ToolResultData};
 
@@ -1092,7 +1084,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     input: serde_json::json!({
                         "trigger": "manual",
                         "context_window": context_window,
-                        "threshold": threshold,
                         "summary_source": "none",
                     }),
                     id: compression_id,
@@ -2887,7 +2878,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         })
         .await;
 
-        let current_tokens = Self::estimate_context_tokens(&context_messages);
         let manual_workspace = Self::build_workspace_binding(&session.config).await;
         let manual_workspace_services = Self::build_workspace_services(&manual_workspace).await;
         let manual_execution_context = ExecutionContext {
@@ -2926,8 +2916,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             Some(mcw) => mcw.min(session_max_tokens),
             None => session_max_tokens,
         };
-        let compression_threshold = session.config.compression_threshold;
-
         match self
             .execution_engine
             .compact_session_context(
@@ -2935,7 +2923,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 turn_id.clone(),
                 manual_execution_context,
                 context_messages,
-                current_tokens,
                 "manual",
             )
             .await
@@ -2945,7 +2932,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     &turn_id,
                     &outcome,
                     context_window,
-                    compression_threshold,
                 );
                 self.session_manager
                     .complete_maintenance_turn(
@@ -2982,7 +2968,6 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                     compression_id,
                     &error_text,
                     context_window,
-                    compression_threshold,
                 );
                 let _ = self
                     .session_manager
