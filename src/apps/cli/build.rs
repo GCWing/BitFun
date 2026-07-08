@@ -2,11 +2,89 @@ use std::collections::HashMap;
 use std::fs;
 use std::io::Write;
 use std::path::Path;
+use std::process::Command;
 
 fn main() {
+    emit_build_metadata();
+
     if let Err(e) = embed_cli_prompts() {
         eprintln!("Warning: Failed to embed CLI prompts: {}", e);
     }
+}
+
+fn emit_build_metadata() {
+    println!("cargo:rerun-if-env-changed=BITFUN_CLI_BUILD_COMMIT");
+    emit_git_rerun_paths();
+
+    let commit = std::env::var("BITFUN_CLI_BUILD_COMMIT")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .or_else(resolve_git_commit)
+        .unwrap_or_else(|| "unknown".to_string());
+
+    println!("cargo:rustc-env=BITFUN_CLI_BUILD_COMMIT={commit}");
+}
+
+fn emit_git_rerun_paths() {
+    let Some(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR").ok() else {
+        return;
+    };
+
+    let git_dir = Command::new("git")
+        .args(["-C", &manifest_dir, "rev-parse", "--git-dir"])
+        .output()
+        .ok()
+        .and_then(|output| output.status.success().then_some(output.stdout))
+        .and_then(|stdout| String::from_utf8(stdout).ok())
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
+
+    let Some(git_dir) = git_dir else {
+        return;
+    };
+
+    let git_dir = Path::new(&manifest_dir).join(git_dir);
+    println!("cargo:rerun-if-changed={}", git_dir.join("HEAD").display());
+    println!(
+        "cargo:rerun-if-changed={}",
+        git_dir.join("packed-refs").display()
+    );
+
+    if let Some(head_ref) = current_git_head_ref(&manifest_dir) {
+        println!(
+            "cargo:rerun-if-changed={}",
+            git_dir.join(head_ref).display()
+        );
+    }
+}
+
+fn current_git_head_ref(manifest_dir: &str) -> Option<String> {
+    let output = Command::new("git")
+        .args(["-C", manifest_dir, "symbolic-ref", "--quiet", "HEAD"])
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    let head_ref = String::from_utf8(output.stdout).ok()?.trim().to_string();
+    (!head_ref.is_empty()).then_some(head_ref)
+}
+
+fn resolve_git_commit() -> Option<String> {
+    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").ok()?;
+    let output = Command::new("git")
+        .args(["-C", &manifest_dir, "rev-parse", "--short=12", "HEAD"])
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    let commit = String::from_utf8(output.stdout).ok()?.trim().to_string();
+    (!commit.is_empty()).then_some(commit)
 }
 
 fn embed_cli_prompts() -> Result<(), Box<dyn std::error::Error>> {

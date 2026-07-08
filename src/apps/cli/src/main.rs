@@ -28,6 +28,13 @@ use config::CliConfig;
 use modes::chat::ChatMode;
 use modes::exec::ExecOutputFormat;
 
+const CLI_VERSION: &str = concat!(
+    env!("CARGO_PKG_VERSION"),
+    " (commit ",
+    env!("BITFUN_CLI_BUILD_COMMIT"),
+    ")"
+);
+
 // ======================== Global MCP Service ========================
 
 static MCP_SERVICE: OnceLock<std::sync::Arc<bitfun_core::service::mcp::MCPService>> =
@@ -61,7 +68,7 @@ pub fn get_mcp_service() -> Option<&'static std::sync::Arc<bitfun_core::service:
 #[derive(Parser)]
 #[command(name = "bitfun")]
 #[command(about = "BitFun CLI - AI agent-driven command-line programming assistant", long_about = None)]
-#[command(version)]
+#[command(version = CLI_VERSION)]
 struct Cli {
     #[command(subcommand)]
     command: Option<Commands>,
@@ -382,11 +389,7 @@ async fn initialize_core_services(
     skip_tool_confirmation: bool,
     suppress_title_generation: bool,
     disable_persistence: bool,
-) -> Result<(
-    agent::agentic_system::AgenticSystem,
-    bool,
-    bool,
-)> {
+) -> Result<(agent::agentic_system::AgenticSystem, bool, bool)> {
     use bitfun_core::infrastructure::ai::AIClientFactory;
 
     bitfun_core::service::config::initialize_global_config()
@@ -422,10 +425,7 @@ async fn initialize_core_services(
     if suppress_title_generation {
         if let Some(ref svc) = config_service {
             let _ = svc
-                .set_config(
-                    "app.ai_experience.enable_session_title_generation",
-                    false,
-                )
+                .set_config("app.ai_experience.enable_session_title_generation", false)
                 .await;
         }
     }
@@ -485,7 +485,11 @@ async fn initialize_core_services(
         }
     }
 
-    Ok((agentic_system, original_skip_confirmation, original_title_generation))
+    Ok((
+        agentic_system,
+        original_skip_confirmation,
+        original_title_generation,
+    ))
 }
 
 /// Restore original tool confirmation setting
