@@ -12,10 +12,15 @@
 
 ### 环境准备
 
-- Node.js（建议 LTS 版本）
-- pnpm
+- Node.js 22.12+（建议 LTS 版本）
+- pnpm 10.15.0（建议通过 Corepack 使用）
 - Rust toolchain（通过 rustup 安装）
 - 桌面端开发需准备 Tauri 依赖
+
+BitFun 将本地 JavaScript 构建和 CI 统一到 Node.js 22.12+。仓库里的
+GitHub Actions 升级使用的是兼容 Node.js 24 的 action runtime，但项目脚本
+默认仍以 Node.js 22.12+ 为基线，除非局部指南另有说明。从旧 Node.js 版本切换
+后，请重新运行 `pnpm install`。
 
 #### Windows：OpenSSL 配置
 

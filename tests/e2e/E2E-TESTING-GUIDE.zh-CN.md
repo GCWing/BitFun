@@ -109,7 +109,11 @@ BitFun 使用三级测试分类系统：
 
 ### 1. 前置条件
 
-安装必需的依赖：
+安装项目运行时基线和必需依赖：
+
+- Node.js 22.12+（与仓库根目录基线一致）
+- pnpm 10.15.0（建议通过 Corepack 使用）
+- Rust toolchain
 
 ```bash
 # 安装 E2E 测试依赖
@@ -578,15 +582,15 @@ jobs:
   l0-tests:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v5
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v5
         with:
           version: 10.15.0
       - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v5
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'pnpm'
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -602,9 +606,22 @@ jobs:
     needs: l0-tests
     if: github.event_name == 'pull_request'
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v5
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v5
+        with:
+          version: 10.15.0
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
       - name: 构建应用
         run: cargo build -p bitfun-desktop
+      - name: 安装测试依赖
+        run: cd tests/e2e && pnpm install
       - name: 运行 L1 测试
         run: cd tests/e2e && BITFUN_E2E_APP_MODE=debug pnpm run test:l1
 ```

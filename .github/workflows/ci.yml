@@ -34,7 +34,7 @@ jobs:
           - macos-15
           - windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Setup OpenSSL (Windows, prebuilt)
         if: runner.os == 'Windows'
@@ -42,7 +42,7 @@ jobs:
         run: ./scripts/ci/setup-openssl-windows.ps1
 
       - name: Download frontend build artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: frontend-dist
           path: dist
@@ -104,16 +104,16 @@ jobs:
     env:
       NODE_OPTIONS: --max-old-space-size=6144
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 2
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
           cache: pnpm
 
       - name: Check repository hygiene
@@ -164,7 +164,7 @@ jobs:
         run: pnpm run build:mobile-web
 
       - name: Upload frontend build artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: frontend-dist
           path: dist

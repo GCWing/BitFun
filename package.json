@@ -4,7 +4,7 @@
   "version": "0.2.12",
   "type": "module",
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=22.12.0"
   },
   "scripts": {
     "copy-monaco": "copyfiles -u 5 \"src/web-ui/node_modules/monaco-editor/min/vs/**/*\" src/web-ui/public/monaco-editor",
@@ -34,7 +34,7 @@
     "theme:color-audit:test": "node --test scripts/audit-theme-colors.test.mjs scripts/audit-cli-theme-colors.test.mjs",
     "theme:visual-contract": "node scripts/validate-theme-visual-contract.mjs",
     "check:repo-hygiene": "node scripts/check-repo-hygiene.mjs",
-    "check:github-config": "pnpm --dir src/web-ui exec node ../../scripts/check-github-config.mjs",
+    "check:github-config": "pnpm --dir src/web-ui exec node ../../scripts/check-github-config.mjs && node --test scripts/check-github-config.test.mjs",
     "fmt:rs": "node scripts/format-changed-rust.mjs",
     "prebuild": "pnpm run prebuild:web",
     "prebuild:web": "pnpm run copy-assets --silent && pnpm run generate-all --silent",

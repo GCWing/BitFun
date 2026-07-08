@@ -25,7 +25,7 @@ jobs:
       should_build: ${{ steps.check.outputs.should_build }}
       nightly_version: ${{ steps.check.outputs.nightly_version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -94,7 +94,7 @@ jobs:
             build_command: pnpm run installer:build
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Setup OpenSSL (Windows, prebuilt)
         if: runner.os == 'Windows'
@@ -137,12 +137,12 @@ jobs:
             tesseract-ocr-eng
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v5
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
           cache: pnpm
 
       - name: Setup Rust toolchain
@@ -192,7 +192,7 @@ jobs:
         run: ${{ matrix.platform.build_command }}
 
       - name: Upload bundles
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: bitfun-nightly-${{ matrix.platform.name }}-bundle
           if-no-files-found: error
@@ -211,10 +211,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Download bundled artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           pattern: bitfun-nightly-*-bundle
           path: release-assets
@@ -232,7 +232,7 @@ jobs:
           gh release delete "${{ env.NIGHTLY_TAG }}" --yes --cleanup-tag 2>/dev/null || true
 
       - name: Create nightly release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ env.NIGHTLY_TAG }}
           name: "Nightly Build (${{ needs.check-changes.outputs.nightly_version }})"
