@@ -1642,6 +1642,11 @@
       "readingFile": "正在读取",
       "preparingRead": "准备读取"
     },
+    "viewImage": {
+      "loading": "正在加载图片...",
+      "loadFailed": "图片加载失败",
+      "runtimeUriUnsupported": "暂不支持预览此运行时产物路径"
+    },
     "terminalControl": {
       "terminatingSession": "正在终止终端",
       "sessionKilled": "终端已终止",

@@ -1642,6 +1642,11 @@
       "readingFile": "Reading",
       "preparingRead": "Preparing to read"
     },
+    "viewImage": {
+      "loading": "Loading image...",
+      "loadFailed": "Failed to load image",
+      "runtimeUriUnsupported": "Preview is not available for this runtime artifact path"
+    },
     "terminalControl": {
       "terminatingSession": "Terminating terminal",
       "sessionKilled": "Terminal killed",
