@@ -1,6 +1,6 @@
 [package]
 name = "bitfun-cli"
-version.workspace = true
+version = "0.2.10-eval.1"
 authors.workspace = true
 edition.workspace = true
 description = "BitFun CLI - Terminal User Interface"
