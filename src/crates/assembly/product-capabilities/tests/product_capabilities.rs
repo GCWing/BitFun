@@ -35,6 +35,7 @@ impl PluginRuntimeClient for AvailablePluginRuntimeClient {
             envelope_version: envelope.envelope_version,
             request_event_id: envelope.event_id,
             project_domain_id: envelope.project_domain_id,
+            workspace_id: envelope.workspace_id,
             adapter_id: "test-plugin-runtime".to_string(),
             plugin_id: Some(envelope.source.plugin_id),
             completed_at_ms: 0,
@@ -65,6 +66,7 @@ impl PluginRuntimeClient for MisreportedPluginRuntimeClient {
             envelope_version: envelope.envelope_version,
             request_event_id: envelope.event_id,
             project_domain_id: envelope.project_domain_id,
+            workspace_id: envelope.workspace_id,
             adapter_id: "test-plugin-runtime".to_string(),
             plugin_id: Some(envelope.source.plugin_id),
             completed_at_ms: 0,
@@ -422,7 +424,7 @@ fn product_assembly_plan_follows_core_dependency_matrix() {
 }
 
 #[test]
-fn product_assembly_plan_keeps_plugin_runtime_disabled_until_host_exists() {
+fn product_assembly_plan_keeps_plugin_runtime_disabled_until_explicit_host_binding() {
     for profile in DeliveryProfile::all_current_product_profiles() {
         let extension_capabilities = product_assembly_plan_for_profile(*profile)
             .extension_capabilities()
@@ -627,7 +629,7 @@ fn product_assembler_preserves_explicit_plugin_runtime_binding() {
 }
 
 #[test]
-fn product_assembler_rejects_executable_plugin_runtime_binding() {
+fn product_assembler_rejects_executable_plugin_runtime_binding_for_non_p0_profile() {
     let services = FakeRuntimeServicesProvider::with_all_required()
         .register(RuntimeServicesBuilder::new())
         .with_optional_terminal(Some(FakeRuntimeServicesProvider::terminal_port()))
@@ -638,16 +640,16 @@ fn product_assembler_rejects_executable_plugin_runtime_binding() {
 
     let error = ProductAssembler::new()
         .assemble(
-            ProductAssemblyInput::new(DeliveryProfile::Desktop, services).with_plugin_runtime(
+            ProductAssemblyInput::new(DeliveryProfile::Acp, services).with_plugin_runtime(
                 PluginRuntimeBinding::client(Arc::new(AvailablePluginRuntimeClient)),
             ),
         )
-        .expect_err("executable plugin runtime binding must wait for host-stage gates");
+        .expect_err("ACP must not inherit executable P0 plugin host binding");
 
     assert_eq!(
         error,
         ProductAssemblyError::UnsupportedPluginRuntime {
-            profile: DeliveryProfile::Desktop,
+            profile: DeliveryProfile::Acp,
             availability: PluginRuntimeAvailability::Available
         }
     );

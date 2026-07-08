@@ -13,19 +13,18 @@ use tokio_util::sync::CancellationToken;
 
 mod plugin;
 pub use plugin::{
+    validate_plugin_dispatch_response, validate_plugin_runtime_read_response,
     DisabledPluginRuntimeClient, ExtensionCapabilityAvailability, PermissionPromptDenyState,
     PermissionPromptDescriptor, PermissionPromptEffectKind, PluginArtifactRef, PluginAuditRef,
     PluginCapabilityRef, PluginConfigValidationIssue, PluginConfigValidationState,
     PluginConfigValidationStatus, PluginDataClassification, PluginDiagnostic,
     PluginDiagnosticDetail, PluginDiagnosticSeverity, PluginDispatchEnvelope,
-    PluginEffectCandidate, PluginEffectCandidatePayload, PluginHostLifecycleEvent,
-    PluginHostLifecyclePhase, PluginManifestRef, PluginOwnerKind, PluginOwnerRef,
-    PluginPayloadRedaction, PluginPayloadRef, PluginPermissionGate, PluginQuarantineClearCondition,
-    PluginQuarantineReason, PluginQuarantineScope, PluginQuarantineState, PluginRecoveryAction,
-    PluginRecoveryActionKind, PluginRecoveryActionRequest, PluginRecoveryActionResult,
-    PluginRecoveryActionStatus, PluginResponseEnvelope, PluginRiskLevel, PluginRollbackMode,
-    PluginRollbackPolicy, PluginRuntimeAvailability, PluginRuntimeBinding, PluginRuntimeClient,
-    PluginRuntimeEpochs, PluginRuntimeReadRequest, PluginRuntimeReadResponse,
+    PluginEffectCandidate, PluginEffectCandidatePayload, PluginHostLifecyclePhase,
+    PluginManifestRef, PluginOwnerKind, PluginOwnerRef, PluginPayloadRedaction, PluginPayloadRef,
+    PluginPermissionGate, PluginQuarantineClearCondition, PluginQuarantineReason,
+    PluginQuarantineScope, PluginQuarantineState, PluginResponseEnvelope, PluginRiskLevel,
+    PluginRollbackMode, PluginRollbackPolicy, PluginRuntimeAvailability, PluginRuntimeBinding,
+    PluginRuntimeClient, PluginRuntimeEpochs, PluginRuntimeReadRequest, PluginRuntimeReadResponse,
     PluginRuntimeUnavailableReason, PluginSourceKind, PluginSourceRef, PluginStatusKind,
     PluginStatusSnapshot, PluginTargetRef, PluginTrustLevel, ProjectionOnlyPluginRuntimeClient,
 };

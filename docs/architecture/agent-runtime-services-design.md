@@ -1,23 +1,23 @@
-# Agent Kernel、Runtime Services 与 Extension API 设计
+# 智能体内核、运行时服务与扩展契约设计
 
-本文是 [`product-architecture.md`](product-architecture.md) 的开发设计文档，描述目标模块、接口、
-crate 内部结构和行为保护。本文只记录设计约束，不记录实现过程或验证记录。插件运行时主机、
-生态兼容适配层、IPC 和候选效果契约见
+本文件是 [`product-architecture.md`](product-architecture.md) 的开发设计，定义目标模块、接口、
+crate 内部结构和行为保护要求。本文件记录设计约束，不记录实现过程或验证记录。插件运行时主机、
+生态兼容适配层、进程间通信和候选效果契约见
 [`plugin-runtime-host-design.md`](plugin-runtime-host-design.md)。
 
-阅读路径：第 1 节确认 SDK、内核、产品特性、Extension API 和 crate 边界；第 2-3 节说明稳定接口、
-Runtime Services、Kernel、Tool 和 Harness；第 4 节说明 Product Assembly 与扩展注册；第 5 节作为质量保护和
-目标态判定口径。
+阅读路径：第 1 节确认 SDK、内核、产品特性、扩展契约和 crate 边界；第 2-3 节说明稳定接口、
+运行时服务、内核、工具和工作流；第 4 节说明产品组装与扩展注册；第 5 节作为质量保护和
+目标态判定标准。
 
 ## 1. 设计目标与边界
 
-- Agent Kernel 可被 Desktop、CLI、Server、Remote、ACP、Web 和独立 SDK 形态嵌入。
-- Agent Kernel 对外提供稳定、窄口径的 Rust runtime API，而不是暴露 `bitfun-core`、产品命令路径或 concrete manager。
-- Product Feature 把内核能力组装为用户侧能力，可能同时触达 Rust 和 UI，但不拥有内核状态机或平台实现。
-- Product API 同时包含 Rust Kernel API 与 UI Extension Contract；OpenCode / ACP / plugin adapter 仅承担映射和注册。
-- Agent Kernel 不感知平台差异、工具实现差异、UI host 差异和构建形态差异。
-- Tool、Skill、MCP、Harness 和 extension 使用通用接口和 provider / contribution 注册，不绑定底层实现。
-- 具体 service、UI host、Plugin Runtime Host binding 和 adapter manifest set 由上层 Product Assembly 注入。
+- 智能体内核可被 Desktop、CLI、Server、Remote、ACP、Web 和独立 SDK 形态嵌入。
+- 智能体内核对外提供稳定、窄口径的 Rust 运行时 API，而不是暴露 `bitfun-core`、产品命令路径或具体管理器。
+- 产品特性把内核能力组装为用户侧能力，可能同时触达 Rust 和 UI，但不拥有内核状态机或平台实现。
+- 运行时内部接口、能力服务接口契约、扩展契约和主机内部 ABI 分层表达；OpenCode / ACP / 插件适配器仅承担映射和注册。
+- 智能体内核不感知平台差异、工具实现差异、界面宿主差异和构建形态差异。
+- 工具、Skill、MCP、工作流和扩展使用通用接口和提供方 / 贡献注册，不绑定底层实现。
+- 具体服务、界面宿主、插件运行时主机绑定和适配器清单集合由上层产品组装注入。
 - 每个 crate 只依赖最小稳定集合，依赖方向可检查。
 
 ### 1.1 SDK 发布边界
@@ -25,31 +25,29 @@ Runtime Services、Kernel、Tool 和 Harness；第 4 节说明 Product Assembly 
 Agent Runtime SDK 的发布边界以调用方能力为准，而不是以物理 crate 命名为准。达到目标状态时，外部调用方
 应能在不依赖 `bitfun-core`、app crate、Tauri 或产品内部 manager 的情况下完成以下动作：
 
-- 构建 runtime：注入 model provider、`RuntimeServices`、tool provider、harness provider、agent definitions、
-  hooks 和 runtime config。
-- 发起执行：创建或恢复 session，提交 turn，取消 turn，消费 provider-neutral event stream。
-- 执行工具：通过稳定 tool manifest、permission request、tool result、artifact ref 和 cancellation contract
+- 构建运行时：注入模型提供方、`RuntimeServices`、工具提供方、工作流提供方、智能体定义、
+  钩子和运行时配置。
+- 发起执行：创建或恢复会话，提交轮次，取消轮次，消费提供方无关事件流。
+- 执行工具：通过稳定工具清单、权限请求、工具结果、产物引用和取消契约
   管理工具调用。
-- 扩展能力：通过 registry 注册 subagent、prompt module、skill、MCP/API tool、harness workflow 和 post-turn
-  processor。
-- 处理运维语义：接收 typed error、usage/cost/cache facts、telemetry event、checkpoint/resume facts 和
-  unsupported capability。
+- 扩展能力：通过注册表注册子智能体、提示模块、skill、MCP/API 工具、工作流和轮次后处理器。
+- 处理运维语义：接收类型化错误、用量/成本/缓存事实、遥测事件、检查点/恢复事实和不支持能力。
 
-因此，SDK readiness 的最低标准是：
+因此，SDK 可用性准备的最低标准是：
 
-- 公共 facade 只暴露 builder、runner、request/response DTO、event stream、typed error 和 registry API。
-- 所有 DTO 可序列化，所有 runtime handle 通过 typed port 注入，不进入 wire contract。
-- `bitfun-agent-runtime`、Tool primitives、Runtime Services 和 Harness 能通过 fake provider 独立测试。
-- SDK minimal feature 不牵引 Desktop、Tauri、Git provider、MCP client、AI HTTP client、remote SSH 或产品 UI。
-- 完整产品能力只能通过 Product Assembly 或兼容 `bitfun-core/product-full` 组装，不反向污染 SDK API。
+- 公共门面只暴露 builder、runner、请求/响应 DTO、事件流、类型化错误和注册表 API。
+- 所有 DTO 可序列化，所有运行时句柄通过类型化端口注入，不进入线缆契约。
+- `bitfun-agent-runtime`、工具原语、运行时服务和工作流能通过测试替身提供方独立测试。
+- 内部 SDK 最小特性不牵引 Desktop、Tauri、Git 提供方、MCP 客户端、AI HTTP 客户端、remote SSH 或产品 UI。
+- 完整产品能力只能通过产品组装或兼容 `bitfun-core/product-full` 组装，不反向污染 SDK API。
 
-SDK 公共 API 以 `AGENT_RUNTIME_SDK_API_VERSION` 标记兼容边界。当前 API version 为 v1 preview：
-小版本更新允许增加可选 builder hook、DTO 字段或 registry 查询能力，但不得改变既有端口语义、
+SDK 公共 API 以 `AGENT_RUNTIME_SDK_API_VERSION` 标记兼容边界。当前 API 版本为 v1 preview：
+小版本更新允许增加可选 builder hook、DTO 字段或注册表查询能力，但不得改变既有端口语义、
 错误分类、session / turn 标识含义或默认 feature 依赖。任何需要调用方改写现有嵌入代码的变更，
 必须提升 API version 并提供兼容迁移路径。
 
-只要外部调用方仍必须导入 `bitfun-core`、启用 `product-full`、持有 concrete service manager、读取产品命令
-registry 或依赖全局 mutable state，SDK 发布边界就不成立。
+只要外部调用方仍必须导入 `bitfun-core`、启用 `product-full`、持有具体服务管理器、读取产品命令
+注册表或依赖全局可变状态，SDK 发布边界就不成立。
 
 ### 1.2 内核与特性的分界
 
@@ -57,87 +55,87 @@ registry 或依赖全局 mutable state，SDK 发布边界就不成立。
 
 | 领域 | 属于内核 | 属于产品特性 |
 |---|---|---|
-| 长程任务 | task identity、queue、resume、cancel、event、persistence facts | `/goal` 命令、默认目标模板、UI 展示、设置项和产品文案 |
-| 权限 | permission facts、source identity、decision request、audit event | 桌面弹窗、CLI 提示、Web 状态投影和产品默认选项 |
-| 上下文 | session/workspace facts、context assembly contract、memory port | 具体入口的上下文展示、快捷命令和 feature 默认配置 |
-| 模型调度 | provider-neutral model route request、usage/cost/cache facts | 产品形态默认模型、设置入口和降级文案 |
-| Hook / Event | event schema、hook order、timeout、error policy | 哪些 feature 注册 hook、UI 如何展示 hook 结果 |
+| 长程任务 | 任务身份、队列、恢复、取消、事件、持久化事实 | `/goal` 命令、默认目标模板、UI 展示、设置项和产品文案 |
+| 权限 | 权限事实、来源身份、决策请求、审计事件 | 桌面弹窗、CLI 提示、Web 状态投影和产品默认选项 |
+| 上下文 | 会话/工作区事实、上下文组装契约、记忆端口 | 具体入口的上下文展示、快捷命令和特性默认配置 |
+| 模型调度 | 提供方无关模型路由请求、用量/成本/缓存事实 | 产品形态默认模型、设置入口和降级文案 |
+| 钩子 / 事件 | 事件 schema、钩子顺序、超时、错误策略 | 哪些特性注册钩子、UI 如何展示钩子结果 |
 
 判断标准：
 
-- 在 Desktop、CLI、Web、ACP 和 SDK 中都可复用，且不依赖 UI 或平台 concrete 的能力，优先归 Agent Kernel。
-- 会改变用户入口、命令、设置、UI contribution、默认策略或产品文案的能力，归 Product Feature。
-- 会接触 OS、network、terminal、filesystem、remote host、MCP server 或 AI provider concrete 的能力，归 Cross-platform
-  Adapter 或 protocol adapter。
-- 来自外部插件、OpenCode、ACP external agent/tool bridge、external skill 或第三方 package 的能力，先进入
-  Extension Layer，再由 Product Assembly 注册到 feature / kernel / execution 的稳定接口；ACP protocol lifecycle
-  仍由 interfaces/acp 和对应入口 adapter 拥有。
+- 在 Desktop、CLI、Web、ACP 和 SDK 中都可复用，且不依赖 UI 或平台具体实现的能力，优先归智能体内核。
+- 会改变用户入口、命令、设置、界面贡献、默认策略或产品文案的能力，归产品特性。
+- 会接触 OS、网络、终端、文件系统、远端主机、MCP server 或 AI 提供方具体实现的能力，归跨平台适配器或协议适配器。
+- 来自外部插件、OpenCode、ACP 外部智能体/工具桥接、外部 skill 或第三方包的能力，先进入
+  扩展层，再由产品组装注册到特性 / 内核 / 执行层的稳定接口；ACP 协议生命周期
+  仍由 interfaces/acp 和对应入口适配器拥有。
 
-### 1.3 Product API 与 Extension API
+### 1.3 运行时、能力服务、扩展与主机接口面
 
-Product API 不应被定义为单一 Rust 后端 API。目标 API 分为三类：
+本设计不使用单一“产品 API”伞状概念。目标接口面分为四类：
 
-| API | 作用 | 主要消费者 | 约束 |
+| 接口面 | 作用 | 主要消费者 | 约束 |
 |---|---|---|---|
-| Rust Kernel API | 创建 runtime、提交 turn、消费 event、注册 ports/providers/hooks | Product Assembly、SDK、extension adapter | 不暴露 `bitfun-core/product-full` 或 concrete manager |
-| UI Extension Contract | 描述 UI contribution、命令入口、设置项、panel、状态投影 | Web UI、Desktop UI、插件适配层 | 只传 descriptor 和 stable DTO，不 import React/Tauri implementation |
-| Capability / Effect API | 声明 tool、MCP、plugin、hook、network、file、shell 等能力和副作用 | Plugin Runtime Host、Security Boundary、Product Assembly | 未声明或超声明的能力默认受限 |
+| 运行时内部接口 | 创建运行时、提交轮次、消费事件、注册端口/提供方/钩子 | 产品组装、内部运行时归属模块 | 不暴露 `bitfun-core/product-full` 或具体管理器；不作为 SDK / 能力服务接口线缆契约 |
+| 能力服务接口契约 | 命令、会话/工作区状态、权限提示、诊断、产物、能力状态、类型化错误、事件流 | 桌面 GUI、TUI/CLI、Web、ACP、Server、Remote、SDK 客户端 | 只暴露投影 DTO/读模型，不暴露内核、执行层或主机内部 ABI |
+| 扩展契约 | 描述扩展点、界面贡献、钩子、提供方候选、能力/副作用声明 | 插件运行时主机、安全边界、产品组装、插件适配层 | 只传描述符和稳定 DTO，不导入 React/Tauri 实现 |
+| 主机内部 ABI | `PluginRuntimeClient`、read/dispatch 信封、状态快照、诊断、隔离、候选效果 | 智能体内核 / 执行层 / 产品组装与插件运行时主机 | 内部契约，不直接暴露给 SDK 门面或能力服务接口契约 |
 
-OpenCode adapter、ACP bridge 和未来 plugin runtime 必须把外部 API 映射为上述三类 API，再由 Product Assembly
-统一注册。它们不能直接写 Agent Kernel 权威状态，也不能绕过 permission、sandbox、audit 或 UI host 的渲染边界。
+OpenCode 适配器、ACP 桥接和未来插件运行时必须把外部 API 映射为上述对应接口面，再由产品组装
+统一注册。它们不能直接写智能体内核权威状态，也不能绕过权限、沙箱、审计或界面宿主的渲染边界。
 
-Agentic frontend event projection 属于稳定 event contract：Agent Kernel 产生 provider-neutral `AgenticEvent`，
-契约层给出 event name、event type 和 payload；Tauri、WebSocket、OpenCode adapter 或 UI host
-只选择 delivery/profile，不重新定义字段映射。
+Agentic 前端事件投影属于稳定事件契约：智能体内核产生提供方无关 `AgenticEvent`，
+契约层给出事件名、事件类型和载荷；Tauri、WebSocket、OpenCode 适配器或界面宿主
+只选择交付形态，不重新定义字段映射。
 
-Extension registration contract 属于稳定扩展契约，不属于 Product Assembly 的具体实现。Plugin Runtime Host 和
-compatibility adapter 只产出可注册的 descriptor、provider 和 contribution；Product Assembly 消费这些 contract 并完成
-产品形态内的注册，避免 Extension 层反向依赖 assembly crate。
+扩展注册契约属于稳定扩展契约，不属于产品组装的具体实现。插件运行时主机和
+兼容适配器只产出可注册的描述符、提供方和贡献；产品组装消费这些契约并完成
+产品形态内的注册，避免扩展层反向依赖 assembly crate。
 
 ### 1.4 API 与 crate 边界
 
-本设计按 API owner 划分 crate，而不是按调用方或产品形态划分。一个 crate 只能拥有一类稳定边界；如果同一文件同时
-处理 UI 入口、产品策略、内核状态和 OS I/O，应拆到对应 owner。
+本设计按 API 归属划分 crate，而不是按调用方或产品形态划分。一个 crate 只能拥有一类稳定边界；如果同一文件同时
+处理 UI 入口、产品策略、内核状态和 OS I/O，应拆到对应归属模块。
 
-| API / owner | 主要 crate | 允许依赖 | 不允许依赖 | 对外承诺 |
+| API / 归属 | 主要 crate | 允许依赖 | 不允许依赖 | 对外承诺 |
 |---|---|---|---|---|
-| Product Assembly API | `src/crates/assembly/*` | feature packs、Kernel API、Execution API、Runtime Services、platform providers | Agent 内部状态机、具体 UI 组件实现作为下层依赖 | 按产品形态组装能力，输出 typed runtime parts |
-| Product Feature API | `product-capabilities`、`product-domains`、对应 UI contribution owner | Kernel API、UI Extension Contract、Capability/Effect contract、domain contract | OS concrete、Tauri handle、Execution concrete、permission 最终策略 | 把内核能力和稳定 descriptor 映射为用户功能和默认策略 |
-| Rust Kernel API | `agent-runtime`、`agent-stream`、`runtime-services`、`runtime-ports`、`events`、`core-types` | stable contracts、tool/harness registry、typed services | `bitfun-core`、Tauri、Web UI、ACP protocol、provider concrete | session / turn / event / permission / scheduler / context 等 SDK 候选接口 |
-| Execution API | `tool-contracts`、`tool-provider-groups`、`tool-execution`、`harness` | stable contracts、runtime ports、注入的 service ports | product registry、UI、具体 filesystem/Git/terminal/MCP client | tool、skills、MCP tool bridge、sandbox、harness 执行语义 |
-| Extension API | Plugin Runtime Host / OpenCode compatibility / ACP adapter owner | Rust Kernel API contract、UI Extension Contract、Capability/Effect contract | Web UI React implementation、Tauri state、kernel 权威状态写入 | 把外部生态能力转换为 descriptor、provider 和 candidate effect |
-| Platform / Provider Adapter API | `services/*`、`adapters/*`、app-local provider | runtime ports、stable DTO、允许的第三方库 | Product Feature、Agent Kernel 状态机、UI command | 实现 filesystem、terminal、network、remote、Git、MCP transport、AI provider 等边界外 I/O |
-| Stable Contract API | `contracts/*` | 低层无行为依赖或标准序列化依赖 | 上层 crate、concrete manager、UI rendering | DTO、event、port、capability/effect、permission、sandbox、audit、typed error |
+| 产品组装 API | `src/crates/assembly/*` | 特性包、内核 API、执行层 API、运行时服务、平台提供方 | 智能体内部状态机、具体 UI 组件实现作为下层依赖 | 按产品形态组装能力，输出类型化运行时部件 |
+| 产品特性 API | `product-capabilities`、`product-domains`、对应界面贡献归属模块 | 内核 API、界面扩展契约、能力/副作用契约、领域契约 | OS 具体实现、Tauri 句柄、执行层具体实现、最终权限策略 | 把内核能力和稳定描述符映射为用户功能和默认策略 |
+| Rust 内核 API | `agent-runtime`、`agent-stream`、`runtime-services`、`runtime-ports`、`events`、`core-types` | 稳定契约、工具/工作流注册表、类型化服务 | `bitfun-core`、Tauri、Web UI、ACP 协议、提供方具体实现 | 会话 / 轮次 / 事件 / 权限 / 调度 / 上下文等 SDK 候选接口 |
+| 执行层 API | `tool-contracts`、`tool-provider-groups`、`tool-execution`、`harness` | 稳定契约、运行时端口、注入的服务端口 | 产品注册表、UI、具体文件系统/Git/终端/MCP 客户端 | 工具、skills、MCP 工具桥接、沙箱、工作流执行语义 |
+| 扩展契约 API | 插件运行时主机 / OpenCode 兼容 / ACP 适配器归属模块 | Rust 内核 API 契约、界面扩展契约、能力/副作用契约 | Web UI React 实现、Tauri 状态、内核权威状态写入 | 把外部生态能力转换为描述符、提供方和候选效果 |
+| 平台/提供方适配器 API | `services/*`、`adapters/*`、app-local provider | 运行时端口、稳定 DTO、允许的第三方库 | 产品特性、智能体内核状态机、UI 命令 | 实现文件系统、终端、网络、远端、Git、MCP 传输、AI 提供方等边界外 I/O |
+| 稳定契约 API | `contracts/*` | 低层无行为依赖或标准序列化依赖 | 上层 crate、具体管理器、UI 渲染 | DTO、事件、端口、能力/副作用、权限、沙箱、审计、类型化错误 |
 
 禁止依赖：
 
-- `contracts/*` 或 `runtime-ports` 依赖 `bitfun-core`、assembly、apps、UI 或 concrete service。
-- `agent-runtime` 依赖 `bitfun-core`、Tauri、Web UI、ACP protocol、AI provider concrete、MCP client concrete 或 OS service manager。
-- `tool-contracts` 依赖具体 service crate；`tool-execution` 依赖产品 registry、产品 permission policy 或具体 UI。
-- `harness` 依赖具体 filesystem/Git/terminal manager；它只通过 ports 和 provider contract 获取能力。
-- Plugin Runtime Host 不能依赖 Web UI React component implementation、Tauri app state 或 concrete core manager。
-- Product Feature 直接依赖 platform adapter concrete、execution concrete、全局 mutable runtime state 或边界外资源 client。
+- `contracts/*` 或 `runtime-ports` 依赖 `bitfun-core`、assembly、apps、UI 或具体服务。
+- `agent-runtime` 依赖 `bitfun-core`、Tauri、Web UI、ACP 协议、AI 提供方具体实现、MCP 客户端具体实现或 OS 服务管理器。
+- `tool-contracts` 依赖具体 service crate；`tool-execution` 依赖产品注册表、产品权限策略或具体 UI。
+- `harness` 依赖具体文件系统/Git/终端管理器；它只通过端口和提供方契约获取能力。
+- 插件运行时主机不能依赖 Web UI React 组件实现、Tauri app 状态或具体 core 管理器。
+- 产品特性直接依赖平台适配器具体实现、执行层具体实现、全局可变运行时状态或边界外资源客户端。
 
 接口暴露原则：
 
-- 对外 API 按层拆分：Rust Kernel API、UI Extension Contract、Capability/Effect API、Product Assembly API 分别定义。
-- 下层不暴露上层对象。Kernel 不返回 UI command；Execution 不返回 React descriptor 以外的 UI 实现；Platform Adapter 不返回产品命令。
-- 注册接口接收 typed provider / descriptor / policy，不接收 `Any`、无类型 service name 或全局 mutable registry。
-- 兼容 facade 可以保留旧路径导出，但旧路径不得成为新 API 的真实 owner。
+- 对外 API 按层拆分：运行时内部接口、能力服务接口契约、扩展契约、主机内部 ABI、产品组装 API 分别定义。
+- 下层不暴露上层对象。内核不返回 UI 命令；执行层不返回 React 描述符以外的 UI 实现；平台适配器不返回产品命令。
+- 注册接口接收类型化提供方、描述符和策略，不接收 `Any`、无类型服务名或全局可变注册表。
+- 兼容门面可以保留旧路径导出，但旧路径不得成为新 API 的真实归属模块。
 
 ### 1.5 平台适配与边界外资源
 
-Platform / Provider Adapter 是仓库内实现层，负责把稳定 port 转换为 OS、network、terminal、remote、MCP
-transport、AI provider、browser runtime 或第三方库调用。边界外资源不是 crate、不是逻辑层，也不是所有模块可依赖的
+平台 / 提供方适配器是仓库内实现层，负责把稳定端口转换为 OS、网络、终端、远端、MCP
+传输、AI 提供方、浏览器运行时或第三方库调用。边界外资源不是 crate、不是逻辑层，也不是所有模块可依赖的
 基础设施。
 
 实现规则：
 
-- Product Assembly 是唯一可以选择具体 platform provider 的位置；选择结果以 typed runtime parts 注入。
-- Kernel、Execution、Extension 和 Product Feature 只消费 stable contract、port handle 或 descriptor，不导入具体
-  provider crate。
-- Platform adapter 不读取 delivery profile、feature pack 或 UI command；形态差异由 Product Assembly 注入。
-- 外部资源错误必须在 adapter 边界转换为 typed error、unsupported/unavailable 或 capability/effect fact，不能泄漏为
+- 产品组装是唯一可以选择具体平台提供方的位置；选择结果以类型化运行时部件注入。
+- 内核、执行层、扩展层和产品特性只消费稳定契约、端口句柄或描述符，不导入具体
+  提供方 crate。
+- 平台适配器不读取交付形态、特性包或 UI 命令；形态差异由产品组装注入。
+- 外部资源错误必须在适配器边界转换为类型化错误、unsupported / temporarily-unavailable 或能力/副作用事实，不能泄漏为
   产品层专用分支。
 
 ## 2. 稳定接口与运行时服务
@@ -200,28 +198,28 @@ pub trait WorkspacePort: Send + Sync {
 }
 ```
 
-### 2.2 Runtime Services
+### 2.2 运行时服务
 
-目标 owner crate：`bitfun-runtime-services`。
+目标归属 crate：`bitfun-runtime-services`。
 
 职责：
 
-- 承载 runtime 可消费的 typed service bundle。
-- 提供 provider 注册和 capability resolution。
-- 把具体实现与 runtime port 隔离。
-- 提供统一的 unavailable / unsupported 错误。
-- 为测试提供 fake provider builder。
+- 承载运行时可消费的类型化服务集合。
+- 提供提供方注册和能力解析。
+- 把具体实现与运行时端口隔离。
+- 提供统一的 temporarily-unavailable / unsupported 错误。
+- 为测试提供测试替身提供方 builder。
 
 建议内部模块：
 
 ```text
 bitfun-runtime-services
   bundle.rs             # RuntimeServices / ToolServices / HarnessServices
-  builder.rs            # typed builder
+  builder.rs            # 类型化 builder
   capability.rs         # capability ids 与 availability
   registry.rs           # provider 注册
-  errors.rs             # unsupported / unavailable 映射
-  test_support.rs       # fake providers
+  errors.rs             # unsupported / temporarily-unavailable 映射
+  test_support.rs       # 测试替身提供方
 ```
 
 核心结构：
@@ -262,25 +260,25 @@ impl RuntimeServicesBuilder {
 
 Remote ports 的边界：
 
-- `RemoteConnectionPort` 只描述连接身份、状态、认证上下文和连接生命周期请求，不暴露 SSH / relay / tunnel concrete handle。
-- `RemoteWorkspacePort` 只描述 remote workspace identity、root resolution、startup guard 和 persistence/session facts。
-- `RemoteProjectionPort` 只描述 file、terminal、image/context projection 的 request / response shape，不直接执行具体 OS 命令。
-- `RemoteCapabilityPort` 只描述 remote host capability facts，例如 filesystem、terminal、review platform、model catalog 支持状态。
-- SSH、relay、本地隧道、远端 OS、认证和 transport 实现必须留在具体 Remote provider，由 Product Assembly 注册。
+- `RemoteConnectionPort` 只描述连接身份、状态、认证上下文和连接生命周期请求，不暴露 SSH / relay / tunnel 具体句柄。
+- `RemoteWorkspacePort` 只描述远端工作区身份、根目录解析、启动保护和持久化/会话事实。
+- `RemoteProjectionPort` 只描述文件、终端、image/context 投影的请求 / 响应形态，不直接执行具体 OS 命令。
+- `RemoteCapabilityPort` 只描述远端主机能力事实，例如文件系统、终端、review platform、model catalog 支持状态。
+- SSH、relay、本地隧道、远端 OS、认证和传输实现必须留在具体 Remote 提供方，由产品组装注册。
 
 设计约束：
 
 - 不提供 `get<T>() -> Any` 作为主路径。
-- capability 缺失必须返回 typed unsupported 错误。
-- 不在 runtime services 中执行产品命令。
-- 不在 runtime services 中创建 concrete manager；创建发生在 Product Assembly。
-- `RuntimeServices` 是运行时依赖集合，不是全局 mutable app state。
+- 能力缺失必须返回类型化 unsupported 错误。
+- 不在运行时服务中执行产品命令。
+- 不在运行时服务中创建具体管理器；创建发生在产品组装。
+- `RuntimeServices` 是运行时依赖集合，不是全局可变 app 状态。
 
 ### 2.3 安全控制面接口
 
 安全控制面把 tool、MCP、skills、plugin、hook、shell、network、file、browser/desktop 和 remote 动作归一为
-capability/effect/security decision。它跨越 Kernel、Execution、Extension、Cross-platform Adapter 和 UI projection，
-但最终决策必须由 Product Assembly 注入的确定性策略实现和内核事实共同约束。该接口定义的是跨层 contract，
+能力/副作用/安全决策。它跨越内核、执行层、扩展层、跨平台适配器和界面投影，
+但最终决策必须由产品组装注入的确定性策略实现和内核事实共同约束。该接口定义的是跨层契约，
 不是 contracts crate 内部的具体策略实现。
 
 建议接口：
@@ -312,36 +310,36 @@ pub trait SecurityDecisionPort: Send + Sync {
 约束：
 
 - UI 只展示 decision 和 user options，不成为最终授权来源。
-- Plugin Runtime Host 必须声明 capability/effect，未知或超声明能力默认受限。
+- 插件运行时主机必须声明能力/副作用，未知或超声明能力默认受限。
 - `allow_in_sandbox` 只能在实际 sandbox 或隔离路径存在时返回。
-- 远程、ACP、MCP、plugin、browser/desktop 和 cloud task 必须携带 execution domain。
-- 模型输出只能辅助解释和候选判断，不能直接写 permission、audit 或 policy state。
+- 远程、ACP、MCP、插件、browser/desktop 和 cloud task 必须携带执行域。
+- 模型输出只能辅助解释和候选判断，不能直接写权限、审计或策略状态。
 
-## 3. Kernel / Tool / Harness 内核
+## 3. 内核、工具与工作流
 
 ### 3.1 Agent Kernel / Runtime SDK
 
-目标 owner crate：`bitfun-agent-runtime`。
+目标归属 crate：`bitfun-agent-runtime`。
 
 目标职责：
 
-- session 生命周期。
-- dialog turn / model round 生命周期。
+- 会话生命周期。
+- 对话轮次 / 模型轮生命周期。
 - long-running task 生命周期、resume/checkpoint fact 和 result delivery。
-- scheduler / queue / cancellation。
-- permission coordination 和安全事实投递。
-- model routing / usage / cost / cache facts。
-- prompt loop 和 context assembly。
+- 调度器 / 队列 / 取消。
+- 权限协调和安全事实投递。
+- 模型路由 / 用量 / 成本 / 缓存事实。
+- 提示循环和上下文组装。
 - prompt cache 协调。
 - memory / workspace facts。
-- DFX / telemetry / audit facts。
-- agent definition registry、subagent registry 查询和 delegation policy。
+- DFX / 遥测 / 审计事实。
+- 智能体定义注册表、子智能体注册表查询和委派策略。
 - fork context seeding。
-- tool call 调度。
-- runtime events。
-- post-turn processor。
+- 工具调用调度。
+- 运行时事件。
+- 轮次后处理器。
 
-公共 facade：
+公共门面：
 
 ```rust
 pub struct AgentRuntimeBuilder {
@@ -385,30 +383,29 @@ impl AgentRuntime {
 }
 ```
 
-该 facade 是目标 API 形态。它必须只接收已组装的 typed parts，不负责创建
-filesystem、terminal、MCP、AI client、Remote provider 或产品命令。
+该门面是目标 API 形态。它必须只接收已组装的类型化部件，不负责创建
+文件系统、终端、MCP、AI 客户端、Remote 提供方或产品命令。
 当前 v1 preview API 以 message / attachment / metadata 作为最小输入形态；若把
-model-round cancellation token、structured AgentInput 或更复杂的 event cursor 纳入公开 SDK，
+model-round cancellation token、结构化 AgentInput 或更复杂的事件游标纳入公开 SDK，
 必须提升 SDK API version 并保留旧路径兼容。
 
 产品特性边界：
 
-- `/goal`、slash command、输入框按钮、设置项、UI panel 和默认文案不进入 Agent Kernel。
-- 内核只提供 goal / long-running task 所需的任务 identity、生命周期、队列、resume/cancel、event 和 persistence fact。
-- Product Feature 负责把这些内核事实映射为 `/goal` 命令、可见状态、快捷操作和默认策略。
-- 若某个 feature 需要修改 Rust 和 UI，必须以 feature pack 同时声明 Rust runtime request、UI contribution 和
-  capability/effect，不得仅在单侧隐式扩展。
+- `/goal`、slash command、输入框按钮、设置项、UI panel 和默认文案不进入智能体内核。
+- 内核只提供 goal / long-running task 所需的任务身份、生命周期、队列、resume/cancel、事件和持久化事实。
+- 产品特性负责把这些内核事实映射为 `/goal` 命令、可见状态、快捷操作和默认策略。
+- 若某个特性需要修改 Rust 和 UI，必须以特性包同时声明 Rust 运行时请求、界面贡献和
+  能力/副作用，不得仅在单侧隐式扩展。
 
 兼容边界：
 
-- `bitfun-agent-runtime` 只能依赖稳定契约、Tool Runtime、Runtime Services 接口和注入的 provider。
-- concrete scheduler 生命周期、session metadata store、token subscriber、event delivery、product `Tool`
-  handler、concrete prompt assembly、workspace / remote / config IO、custom subagent file IO 和平台 adapter
-  在行为等价未证明前不得下沉到 runtime kernel。
-- product feature command、UI state、settings persistence、plugin UI rendering 和 delivery-profile 默认策略不得下沉到
-  runtime kernel。
-- prompt、event、thread goal、scheduler 或 subagent 的纯事实如果进入 Agent Runtime SDK，旧 owner 只能保留兼容入口；
-  行为等价需要有 contract test 和 boundary guard 证明。
+- `bitfun-agent-runtime` 只能依赖稳定契约、工具运行时、运行时服务接口和注入的提供方。
+- 具体调度器生命周期、会话元数据存储、token 订阅器、事件投递、产品 `Tool`
+  handler、具体提示组装、workspace / remote / config IO、自定义子智能体文件 IO 和平台适配器
+  在行为等价未证明前不得下沉到运行时内核。
+- 产品特性命令、UI 状态、settings 持久化、插件 UI 渲染和交付形态默认策略不得下沉到运行时内核。
+- prompt、event、thread goal、scheduler 或 subagent 的纯事实如果进入 Agent Runtime SDK，旧归属模块只能保留兼容入口；
+  行为等价需要有契约测试和边界保护证明。
 
 建议内部模块：
 
@@ -583,28 +580,25 @@ pub struct ToolExecutionContext {
 
 目标职责：
 
-- provider-neutral manifest、catalog、permission gate、execution admission、tool hook、execution result
-  presentation 和 result artifact policy。
+- 提供方无关清单、目录、权限门禁、执行准入、工具钩子、执行结果呈现和结果产物策略。
 - `GetToolSpec` catalog、detail、assistant result 和 collapsed-tool unlock observation。
-- workspace service、path policy、runtime artifact reference、remote path containment 和 tool context facts 的
-  稳定 contract。
+- 工作区服务、路径策略、运行时产物引用、远端路径限制和工具上下文事实的稳定契约。
 
 兼容边界：
 
-- core 允许保留旧路径 facade、concrete tool adapter、state update、registry lookup、confirmation、actual
-  execution 和 filesystem persistence；目标状态要求只有在等价测试保护下才能移动这些行为。
-- workspace file/shell contract 保留既有错误与取消语义；不得把错误分类、取消语义或产品 tool exposure
-  变更混入 owner 边界移动。
+- core 允许保留旧路径门面、具体工具适配器、状态更新、注册表查询、确认、实际执行和文件系统持久化；目标状态要求只有在等价测试保护下才能移动这些行为。
+- 工作区文件/shell 契约保留既有错误与取消语义；不得把错误分类、取消语义或产品工具暴露
+  变更混入归属边界移动。
 
 设计约束：
 
 - `ToolExecutionContext` 不暴露具体 manager。
 - `ToolContextFacts` 只包含 portable facts。
-- Tool primitives 只消费 `ToolExecutionServices` 这样的窄 service 视图，不依赖完整
+- 工具原语只消费 `ToolExecutionServices` 这样的窄服务视图，不依赖完整
   `RuntimeServices` bundle。
 - path policy、runtime artifact ref、remote POSIX containment 由 `tool-contracts` 承载。
-- MCP tool 作为 external tool provider 注入，不内置在 Agent Runtime SDK。
-- `GetToolSpec` 是 tool catalog 能力，不是产品 UI。
+- MCP 工具作为外部工具提供方注入，不内置在 Agent Runtime SDK。
+- `GetToolSpec` 是工具目录能力，不是产品 UI。
 
 必须保护：
 
@@ -617,16 +611,16 @@ pub struct ToolExecutionContext {
 - oversized tool result persistence、flush、preview、artifact ref。
 - Write/Edit/Read file-read-state guardrail。
 
-### 3.3 Harness Layer
+### 3.3 工作流层
 
-目标 owner crate：`bitfun-harness`。
+目标归属 crate：`bitfun-harness`。
 
 职责：
 
-- 把 SDD、DeepReview、DeepResearch、MiniApp、function-agent 等工作流从 runtime kernel 中分离。
-- 定义 workflow descriptor、route plan、provider registry、workflow plan、step、policy、artifact、
+- 把 SDD、DeepReview、DeepResearch、MiniApp、function-agent 等工作流从运行时内核中分离。
+- 定义工作流描述符、路由计划、提供方注册表、工作流计划、步骤、策略、产物、
   review gate 和 post-processor。
-- 通过 Agent Runtime SDK、Tool Runtime 和 service ports 编排。
+- 通过 Agent Runtime SDK、工具运行时和服务端口编排。
 
 建议内部模块：
 
@@ -676,36 +670,36 @@ pub struct HarnessExecutionContext {
 
 设计约束：
 
-- harness 允许编排 runtime/tool，但不拥有 session manager internals。
-- harness 不直接访问 concrete filesystem / Git / terminal。
-- 产品命令只映射到 harness capability，不把命令展示逻辑下沉。
-- 新 harness 通过 provider 注册，不改 Agent Runtime SDK 内核。
-- descriptor-only / legacy-facade provider 只能表达 route plan；不得被描述为已经拥有 concrete workflow execution。
+- 工作流允许编排运行时/工具，但不拥有会话管理器内部结构。
+- 工作流不直接访问具体文件系统 / Git / 终端。
+- 产品命令只映射到工作流能力，不把命令展示逻辑下沉。
+- 新工作流通过提供方注册，不改 Agent Runtime SDK 内核。
+- 描述符专用 / 旧门面提供方只能表达路由计划；不得被描述为已经拥有具体工作流执行。
   执行语义移动必须单独证明行为等价。
 
 ## 4. 产品组装与扩展
 
-### 4.1 Product Assembly
+### 4.1 产品组装
 
-Product Assembly 是 composition root。初始状态可由 `bitfun-core` 兼容 facade 承载；目标状态可拆成独立
-Product Assembly crate。它按 feature bundle 触发组装，同时连接 UI host、Rust Kernel、Execution、Plugin Runtime
-Host 和 Cross-platform Adapter。
+产品组装是组装根。初始状态可由 `bitfun-core` 兼容门面承载；目标状态可拆成独立
+产品组装 crate。它按特性包触发组装，同时连接界面宿主、Rust 内核、执行层、插件运行时主机
+和跨平台适配器。
 
 职责：
 
-- 创建或接收具体 service 实现、Plugin Runtime Host binding 和 adapter manifest set。
+- 创建或接收具体服务实现、插件运行时主机绑定和适配器清单集合。
 - 构建 `RuntimeServices`。
-- 注册 tool provider groups。
-- 注册 harness providers。
-- 注册 agent definitions、subagents、skills、prompt modules。
-- 注册 plugin runtime binding、adapter manifest set、ACP bridge 和 UI contribution provider。
-- 建立产品 feature matrix。
-- 把 interface 命令映射到 capability / harness / runtime request。
-- 把 feature bundle 映射为 Rust runtime request、UI contribution、plugin capability 和安全策略。
-- 根据 `ProductProfile` 和 `SurfaceContract` 派生 `DeliveryProfile`、capability plan、capability availability、
-  adapter manifest set 和 service provider 集合。
-- 对不支持能力返回 typed unsupported / unavailable 错误，而不是让下层 runtime 判断产品形态。
-- 通过 typed `PluginRuntimeBinding` 向 Kernel 注入插件运行时 client 或 disabled stub，不使用全局 registry。
+- 注册工具提供方组。
+- 注册工作流提供方。
+- 注册智能体定义、子智能体、skills、提示模块。
+- 注册插件运行时绑定、适配器清单集合、ACP 桥接和界面贡献提供方。
+- 建立产品特性矩阵。
+- 把接口命令映射到能力 / 工作流 / 运行时请求。
+- 把特性包映射为 Rust 运行时请求、界面贡献、插件能力和安全策略。
+- 根据 `ProductProfile` 和 `SurfaceContract` 派生 `DeliveryProfile`、能力计划、能力可用性、
+  适配器清单集合和服务提供方集合。
+- 对不支持能力返回类型化 unsupported / temporarily-unavailable 错误，而不是让下层运行时判断产品形态。
+- 通过类型化 `PluginRuntimeBinding` 向内核 / Agent Runtime 内部 builder 注入插件运行时客户端或 disabled stub，不使用全局注册表；该绑定不进入 Agent Runtime SDK 门面。
 
 建议模块：
 
@@ -756,7 +750,7 @@ pub enum DeliveryProfile {
 }
 
 // 迁移期 ProductProfile 与 DeliveryProfile 可能一一映射；长期 ProductProfile 表示产品包、SKU 或白标策略，
-// DeliveryProfile 表示 Product Assembly 派生出的交付结果，二者允许分化。
+// DeliveryProfile 表示产品组装派生出的交付结果，二者允许分化。
 pub struct CapabilityPlan {
     pub agent_modes: Vec<AgentModeId>,
     pub tool_packs: Vec<ToolPackId>,
@@ -878,15 +872,15 @@ pub struct ProductRuntimeParts {
 
 注册路径：
 
-- concrete service provider 只注册到 `RuntimeServicesBuilder`。
-- tool provider 只注册到 `ToolRuntimeBuilder::install_provider`。
-- harness provider 只注册到 `HarnessRegistryBuilder`。
-- agent、subagent、prompt、skill 只注册到 `AgentDefinitionRegistry` 或对应 registry。
-- 输入框命令、审核入口、MiniApp 入口只注册到 `ProductCommandRegistry`，再映射到 capability 或 harness。
-- UI panel、command palette item、settings entry 和状态投影只注册为 `UiContributionDescriptor`，由对应 UI host 渲染。
-- Adapter manifest/capability set 由 Product Assembly 选择；具体 adapter object 只由 Plugin Runtime Host 内部加载。
-  OpenCode / plugin adapter 只能产出候选效果；ACP bridge 仍按协议 adapter 进入对应入口。
-- unsupported / unavailable 能力在 `CapabilityAvailability` 中表达，不让 runtime kernel 读取产品形态。
+- 具体服务提供方只注册到 `RuntimeServicesBuilder`。
+- 工具提供方只注册到 `ToolRuntimeBuilder::install_provider`。
+- 工作流提供方只注册到 `HarnessRegistryBuilder`。
+- 智能体、子智能体、提示、skill 只注册到 `AgentDefinitionRegistry` 或对应注册表。
+- 输入框命令、审核入口、MiniApp 入口只注册到 `ProductCommandRegistry`，再映射到能力或工作流。
+- UI 面板、命令面板项、设置入口和状态投影只注册为 `UiContributionDescriptor`，由对应界面宿主渲染。
+- 适配器清单/能力集合由产品组装选择；具体适配器对象只由插件运行时主机内部加载。
+  OpenCode / 插件适配器只能产出候选效果；ACP 桥接仍按协议适配器进入对应入口。
+- unsupported / temporarily-unavailable 能力在 `CapabilityAvailability` 中表达，不让运行时内核读取产品形态。
 
 示例构建流程：
 
@@ -921,41 +915,41 @@ pub fn build_desktop_runtime(input: DesktopAssemblyInput) -> Result<ProductRunti
 
 约束：
 
-- Product Assembly 允许依赖具体实现；runtime kernel 不允许依赖具体实现。
-- 不同产品允许注册不同 surface command 和 UI contribution，但必须映射到稳定 capability。
-- 输入框命令、审核、MiniApp、ACP client、自定义 tool/subagent/skill/plugin 均通过 assembly 注册。
-- assembly 不得改变底层 runtime 语义来适配某个 surface。
-- `DeliveryProfile` 只能影响 capability/provider 选择，不得让下层出现 `if desktop`
-  或 `if cli` 这样的 product 分支。
-- Tauri handle、window、command macro 和 desktop app state 只能存在于 Desktop provider 或
-  transport/API adapter；runtime parts 只接收 typed service port、DTO、event fact 和 capability availability。
-- 插件运行时 client 只能作为 Kernel 可调用的 typed boundary 注入；Agent Kernel、Tool Runtime 和 Harness 不直接加载
+- 产品组装允许依赖具体实现；运行时内核不允许依赖具体实现。
+- 不同产品允许注册不同入口命令和界面贡献，但必须映射到稳定能力。
+- 输入框命令、审核、MiniApp、ACP 客户端、自定义工具/子智能体/skill/插件均通过组装层注册。
+- 组装层不得改变底层运行时语义来适配某个入口。
+- `DeliveryProfile` 只能影响能力/提供方选择，不得让下层出现 `if desktop`
+  或 `if cli` 这样的产品分支。
+- Tauri 句柄、窗口、命令宏和桌面 app 状态只能存在于 Desktop 提供方或
+  传输/API 适配器；运行时部件只接收类型化服务端口、DTO、事件事实和能力可用性。
+- 插件运行时客户端只能作为内核可调用的类型化边界注入；智能体内核、工具运行时和工作流不直接加载
   OpenCode 插件代码。
-- feature group 是构建时能力边界；capability plan 和 capability availability 是产品运行时能力边界；两者必须在
-  assembly 中显式对应，不得互相替代。
+- feature group 是构建时能力边界；能力计划和能力可用性是产品运行时能力边界；两者必须在
+  组装层中显式对应，不得互相替代。
 - 任何交付形态减少能力前，必须先更新 product matrix 并补产品入口验证。
-- Product Assembly 不能把所有 API 收敛到单个大对象；Rust Kernel API、UI Extension Contract、Capability/Effect API
+- 产品组装不能把所有 API 收敛到单个大对象；Rust 内核 API、界面扩展契约、能力/副作用 API
   必须按层分开。
 
 ### 4.2 产品形态与组装差异
 
 | 产品形态 | 关键差异 | 组装时必须稳定的下层契约 |
 |---|---|---|
-| Desktop | Tauri window、desktop API、本地 permission UI、UI contribution host | runtime events、permission facts、artifact refs、desktop service providers、UI extension contract |
-| CLI | TUI、命令输入、终端展示、package workflow | command provider、agent/session/tool contract、CLI-safe service providers、text UI contribution |
-| Server / SDK | HTTP/WebSocket route、server workspace policy、外部 SDK 嵌入 | transport DTO、runtime request/response、workspace identity、stable Rust Kernel API |
-| Remote / mobile | remote workspace、relay/bot、file/terminal projection | remote state、logical path、permission/event facts、remote capability facts |
-| ACP | ACP protocol、client lifecycle、remote probing | external agent/tool capability、environment facts、permission bridge |
-| Web UI / mobile web | UI state、hydration、pairing、session 展示、插件 UI contribution | API/transport DTO、runtime event facts、UI extension contract |
+| Desktop | Tauri 窗口、桌面 API、本地权限界面、界面贡献宿主 | 运行时事件、权限事实、产物引用、桌面服务提供方、界面扩展契约 |
+| CLI | TUI、命令输入、终端展示、包工作流 | 命令提供方、智能体/会话/工具契约、CLI 安全服务提供方、文本界面贡献 |
+| Server / SDK | HTTP/WebSocket 路由、server 工作区策略、外部 SDK 嵌入 | 传输 DTO、运行时请求/响应、工作区身份、稳定 Rust 内核 API |
+| Remote / mobile | 远端工作区、relay/bot、文件/终端投影 | 远端状态、逻辑路径、权限/事件事实、远端能力事实 |
+| ACP | ACP 协议、客户端生命周期、远端探测 | 外部智能体/工具能力、环境事实、权限桥接 |
+| Web UI / mobile web | UI 状态、hydration、配对、会话展示、插件界面贡献 | API/传输 DTO、运行时事件事实、界面扩展契约 |
 
 ### 4.3 Product Capability 设计
 
-Product Capability 是 Product Feature 的声明单元，由 Product Assembly 消费，并引用 Kernel / Execution / Extension
-的稳定贡献。它负责把较大粒度的产品能力拆成可组装的 capability pack；不拥有 UI，也不直接执行具体 IO。
+Product Capability 是产品特性的声明单元，由产品组装消费，并引用内核 / 执行层 / 扩展层
+的稳定贡献。它负责把较大粒度的产品能力拆成可组装的能力包；不拥有 UI，也不直接执行具体 IO。
 
 `ProductProfile`、`CapabilityPack`、`CapabilitySet` 和 `OverridePoint` 的权威定义见
-[`product-architecture.md`](product-architecture.md#3-产品如何成形)。本文补充开发接口约束：
-运行时插件不得作为裁剪 first-party 产品功能的主机制，Cargo feature 也不得直接当作用户可见能力事实。
+[`product-architecture.md`](product-architecture.md#8-产品如何成形)。本文件补充开发接口约束：
+运行时插件不得作为裁剪内置产品功能的主机制，Cargo feature 也不得直接当作用户可见能力事实。
 
 建议模块：
 
@@ -1004,46 +998,46 @@ pub struct CapabilityShapeDescriptor {
 
 分层规则：
 
-- Code Agent pack 允许声明 agent modes、tool packs、prompt modules，但不拥有 tool execution。
-- Deep Review pack 允许声明 harness provider、report artifact contract、queue/retry policy，
-  但 target resolution 和 UI construction 留在 surface。
-- MiniApp pack 允许声明 MiniApp harness、domain ports、artifact policy，但 worker process 和
-  filesystem IO 通过 Runtime Services provider。
-- MCP App pack 允许声明 MCP tool/resource/prompt capability；MCP transport / catalog 属于 Platform / Provider Adapter，
-  materialized tool/resource/prompt projection 属于 Execution / Stable Contracts。
-- Input command pack 只声明 command 到 capability/harness/runtime request 的映射，不共享具体 UI。
-- Long-running task pack 只声明任务入口、默认 policy、UI contribution 和 command 映射；任务生命周期属于 Agent Kernel。
-- Plugin extension pack 只声明插件能力、UI contribution 和外部 API 映射；安全决策和最终状态写入属于 Kernel / Security Boundary。
+- Code Agent 包允许声明智能体模式、工具包、提示模块，但不拥有工具执行。
+- Deep Review 包允许声明工作流提供方、报告产物契约、队列/重试策略，
+  但目标解析和界面构造留在入口。
+- MiniApp 包允许声明 MiniApp 工作流、领域端口、产物策略，但 worker 进程和
+  文件系统 IO 通过运行时服务提供方。
+- MCP App 包允许声明 MCP 工具/资源/提示能力；MCP 传输 / 目录属于平台/提供方适配器，
+  物化后的工具/资源/提示投影属于执行层 / 稳定契约。
+- 输入命令包只声明命令到能力/工作流/运行时请求的映射，不共享具体 UI。
+- 长程任务包只声明任务入口、默认策略、界面贡献和命令映射；任务生命周期属于智能体内核。
+- 插件扩展包只声明插件能力、界面贡献和外部 API 映射；安全决策和最终状态写入属于内核 / 安全边界。
 
-### 4.4 Plugin Runtime Host 与 Compatibility Adapter
+### 4.4 插件运行时主机与兼容适配器
 
-Plugin Runtime Host 是插件层运行时，不是第二个 Agent Kernel。它负责插件兼容层生命周期、主机通信、项目执行域、
-隔离、健康、deadline、幂等、adapter registry 和候选效果路由。Compatibility Adapter 运行在该 Host 内部，
-只把 OpenCode、Claude Code、Codex 插件或 BitFun 原生插件 API 映射为 BitFun 稳定合同。
+插件运行时主机是插件层运行时，不是第二个智能体内核。它负责插件兼容层生命周期、主机通信、项目执行域、
+隔离、健康、截止时间、幂等、适配器注册表和候选效果路由。兼容适配器运行在该主机内部，
+只把 OpenCode、Claude Code 等 JS/TS 运行时插件生态或 BitFun 原生插件 API 映射为 BitFun 稳定契约；Codex 插件按长期包元数据、skills、apps、MCP bridge 候选处理，不在 P0 声称 Codex runtime ABI 兼容。
 
-主体进程只能依赖 `PluginRuntimeClient`、`PluginRuntimeBinding`、dispatch/response envelope、candidate effect、
-trust policy 和 UI descriptor。主体进程不得按具体 adapter 类型分支，也不得读取插件 worker、subprocess、
-package manager 或生态原始对象。
+主体进程只能在主机内部 ABI 边界内依赖 `PluginRuntimeClient`、`PluginRuntimeBinding`、dispatch/read/response
+信封、候选效果、信任策略和界面描述符。该边界不进入 Agent Runtime SDK 门面或
+能力服务接口契约；主体进程不得按具体适配器类型分支，也不得读取插件 worker、subprocess、package manager
+或生态原始对象。
 
 核心合同分为六组：
 
 | 合同 | 作用 | 不能暴露 |
 |---|---|---|
-| Runtime binding | Product Assembly 注入 enabled、projection-only 或 disabled 插件运行时 | 具体生态 adapter、worker handle、全局 registry |
-| Adapter manifest | 描述生态、来源、版本、capability/effect、兼容等级 | package manager 具体实现、下载路径、secret |
-| Lifecycle | initialize、activate、deactivate、reload、dispose、failure quarantine | kernel state、UI implementation、concrete manager |
-| Contribution set | tool、hook、workflow、UI descriptor、config/provider transform | React/Tauri object、完整 `RuntimeServices` |
-| Security bridge | permission/effect request、sandbox facts、audit candidate | 直接授权写入、policy state mutation |
-| Compatibility mapping | 外部生态 API 到 BitFun contract 的映射 | 作为内部真实 owner 的 OpenCode/Claude/Codex 类型 |
+| 运行时绑定 | 产品组装注入 enabled、projection-only 或 disabled 插件运行时 | 具体生态适配器、worker 句柄、全局注册表 |
+| 适配器清单 | 描述生态、来源、版本、能力/副作用、兼容等级 | package manager 具体实现、下载路径、secret |
+| 生命周期 | initialize、activate、deactivate、reload、dispose、失败隔离 | 内核状态、UI 实现、具体管理器 |
+| 贡献集合 | 工具、钩子、工作流、界面描述符、配置/提供方转换 | React/Tauri 对象、完整 `RuntimeServices` |
+| 安全桥接 | 权限/副作用请求、沙箱事实、审计候选 | 直接授权写入、策略状态修改 |
+| 兼容映射 | 外部生态 API 到 BitFun 契约的映射 | 作为内部真实归属模块的 OpenCode/Claude/Codex 类型 |
 
 主体进程可见接口：
 
 ```rust
 pub trait PluginRuntimeClient: Send + Sync {
     fn availability(&self) -> PluginRuntimeAvailability;
-    async fn dispatch(&self, envelope: PluginDispatchEnvelope) -> Result<PluginResponseEnvelope, PluginRuntimeError>;
-    async fn refresh_project(&self, update: ProjectRuntimeRefresh) -> Result<(), PluginRuntimeError>;
-    async fn shutdown(&self, request: PluginRuntimeShutdown) -> Result<(), PluginRuntimeError>;
+    async fn read_plugins(&self, request: PluginRuntimeReadRequest) -> PortResult<PluginRuntimeReadResponse>;
+    async fn dispatch(&self, envelope: PluginDispatchEnvelope) -> PortResult<PluginResponseEnvelope>;
 }
 ```
 
@@ -1067,27 +1061,27 @@ pub struct PluginAdapterManifest {
 ```
 
 `PluginEffectCandidate`、`PluginDispatchEnvelope`、`PluginResponseEnvelope` 和 `UiContributionDescriptor` 的权威 schema
-由 [`plugin-runtime-host-design.md`](plugin-runtime-host-design.md) 定义。本文不维护第二套字段。
-`Arc<dyn ToolProvider>`、`RuntimeHookProviderRef`、`Arc<dyn HarnessProvider>` 等内部 provider trait 只能在
-Product Assembly 内部 materialize，不能成为插件或 SDK 的公开返回值。
-`CompatibilityAdapter` 是 Host-internal 接口；Product Assembly 只选择 adapter manifest/capability set 和
-`PluginRuntimeBinding`，不持有具体 adapter object。
+由 [`plugin-runtime-host-design.md`](plugin-runtime-host-design.md) 定义。本文件不维护第二套字段。
+`Arc<dyn ToolProvider>`、`RuntimeHookProviderRef`、`Arc<dyn HarnessProvider>` 等内部提供方 trait 只能在
+产品组装内部物化，不能成为插件或 SDK 的公开返回值。
+`CompatibilityAdapter` 是主机内部接口；产品组装只选择适配器清单/能力集合和
+`PluginRuntimeBinding`，不持有具体适配器对象。
 
 OpenCode adapter 的边界：
 
-- OpenCode server plugin 映射到 tool provider candidate、runtime hook candidate、permission candidate hook、
-  config/provider transform 和 event subscription。
-- OpenCode TUI plugin 映射到 UI contribution descriptor，包括 slot、route、command/keymap、prompt augmentation、
-  dialog/toast、theme 和只读 state view。
-- OpenCode `permission.ask` 只能映射为 candidate decision；最终 permission decision、audit result 和 policy write
-  仍由 Security Boundary 完成。
-- OpenCode tool 映射到 BitFun Tool ABI 时必须进入 materialized snapshot，携带 provider identity、schema、
-  permission/effect declaration、cancellation 和 stale call guard。
-- OpenCode event subscription 只能消费 BitFun public event manifest；不得读取 session、turn、tool 或 UI host
+- OpenCode server plugin 映射到工具提供方候选、运行时钩子候选、权限候选钩子、
+  配置/提供方转换和事件订阅。
+- OpenCode TUI plugin 映射到界面贡献描述符，包括槽位、路由、键位映射、提示增强、
+  dialog/toast、主题和只读状态视图。
+- OpenCode `permission.ask` 只能映射为候选决策；最终权限决策、审计结果和策略写入
+  仍由安全边界完成。
+- OpenCode tool 映射到 BitFun 工具 ABI 时必须进入物化快照，携带提供方身份、schema、
+  权限/副作用声明、取消和陈旧调用保护。
+- OpenCode 事件订阅只能消费 BitFun 公开事件清单；不得读取会话、轮次、工具或界面宿主
   的内部结构。
-- OpenCode config/provider/model/skill/MCP transform 必须逐项进入 support matrix。未支持能力返回 typed unsupported。
+- OpenCode 配置/提供方/模型/skill/MCP 转换必须逐项进入支持矩阵。未支持能力返回类型化 unsupported。
 
-UI Extension Contract：
+界面扩展契约：
 
 ```rust
 pub struct UiExtensionContract {
@@ -1108,28 +1102,28 @@ pub struct UiSlotDescriptor {
 
 设计约束：
 
-- UI descriptor 只描述可渲染贡献，不包含 React component、Tauri window、DOM node 或 renderer handle。
-- Desktop、Web、CLI 可以对同一 descriptor 提供不同 host 实现；不支持时必须返回 unsupported/unavailable。
-- UI state view 必须是只读 projection，不能成为插件写 kernel state 的旁路。
-- Plugin lifecycle 的 dispose 必须撤销 tool、hook、workflow、UI contribution、event subscription 和 transform。
-- Product Assembly 只能通过 support matrix 暴露已实现能力；未实现能力必须返回 typed unsupported。
+- 界面描述符只描述可渲染贡献，不包含 React 组件、Tauri 窗口、DOM 节点或渲染器句柄。
+- Desktop、Web、CLI 可以对同一描述符提供不同宿主实现；不支持时必须返回 unsupported / temporarily-unavailable。
+- 界面状态视图必须是只读投影，不能成为插件写内核状态的旁路。
+- 插件生命周期的 dispose 必须撤销工具、钩子、工作流、界面贡献、事件订阅和转换。
+- 产品组装只能通过支持矩阵暴露已实现能力；未实现能力必须返回类型化 unsupported。
 
 风险与保护：
 
 | 风险 | 保护方式 |
 |---|---|
-| 外部生态 API 反向成为内部 owner | BitFun 先定义 Plugin Runtime Host、Tool ABI、Event Manifest、Permission/Effect 和 UI descriptor |
-| 主体进程直接感知具体 adapter | 主体进程只依赖 `PluginRuntimeClient` 和规范 envelope；adapter 类型仅在 Host 内部出现 |
-| 插件越权修改权限或状态 | hook 只产出候选效果；最终 decision / audit / state write 由 Security Boundary 完成 |
-| UI contribution 绑定具体前端实现 | descriptor-only contract；host adapter 渲染；unsupported 显式返回 |
-| Tool ABI 与 built-in/MCP/plugin 分裂 | 统一 materialized snapshot、provider identity、permission/effect filter 和 stale call guard |
-| 插件生命周期泄漏 | 注册 token + dispose finalizer；reload 必须撤销旧 contribution 后再注册 |
-| 远程/SDK 形态能力漂移 | contribution 必须声明 execution domain、workspace identity、required capabilities 和 fallback |
-| 外部 JS/TS runtime 安全不可控 | 默认目标态只承诺受控 Host 和 compatibility adapter；可写 runtime 需要单独安全评审 |
+| 外部生态 API 反向成为内部归属模块 | BitFun 先定义插件运行时主机、工具 ABI、事件清单、权限/副作用和界面描述符 |
+| 主体进程直接感知具体适配器 | 主体进程只依赖 `PluginRuntimeClient` 和规范信封；适配器类型仅在主机内部出现 |
+| 插件越权修改权限或状态 | 钩子只产出候选效果；最终决策、审计和状态写入由安全边界完成 |
+| 界面贡献绑定具体前端实现 | 描述符契约；宿主适配器渲染；unsupported 显式返回 |
+| 工具 ABI 与内置/MCP/插件分裂 | 统一物化快照、提供方身份、权限/副作用过滤和陈旧调用保护 |
+| 插件生命周期泄漏 | 注册 token + dispose finalizer；reload 必须撤销旧贡献后再注册 |
+| 远程/SDK 形态能力漂移 | 贡献必须声明执行域、工作区身份、所需能力和回退 |
+| 外部 JS/TS 运行时安全不可控 | 默认目标态只承诺受控主机和兼容适配器；可写运行时需要单独安全评审 |
 
 ### 4.5 ACP 扩展方式
 
-`bitfun-acp` 保持 integration owner。
+`bitfun-acp` 保持集成归属。
 
 继续拥有：
 
@@ -1230,7 +1224,7 @@ pub trait BeforeToolExecution: Send + Sync {
 
 错误：
 
-- contract 层使用 portable error facts。
+- 契约层使用可移植错误事实。
 - Agent Runtime SDK / Runtime Services 负责错误分类和事件上报边界。
 - Product Surface 只负责展示逻辑。
 - unsupported capability 必须明确，不允许泛化为 unknown failure。
@@ -1252,12 +1246,12 @@ pub trait BeforeToolExecution: Send + Sync {
 
 - scheduler queue、subagent background、fork context 必须定义并发限制。
 - fork context 继续保留禁止字段和递归 subagent 保护。
-- provider registry 构建后应尽量 immutable，避免 runtime 期间 materialization 漂移。
+- 提供方注册表构建后应尽量不可变，避免运行时期间物化漂移。
 
 ### 5.2 设计边界
 
-本文只描述目标接口、crate 内部结构和行为保护要求。若验证发现目标接口、crate 归属、行为边界或风险判断不成立，
-应先修正设计判断，再调整实现边界。
+本文件描述目标接口、crate 内部结构和行为保护要求。若验证发现目标接口、crate 归属、行为边界或风险判断不成立，
+必须先修正设计约束，再调整实现边界。
 
 ### 5.3 测试策略
 
@@ -1300,22 +1294,22 @@ Product 测试：
 - MCP dynamic tool catalog。
 - MiniApp 与 review workflow。
 - UI contribution descriptor round-trip 和 host fallback。
-- SDK minimal feature / no-default-features 嵌入验证。
+- 内部 SDK 最小特性 / no-default-features 嵌入验证。
 - OpenCode / plugin adapter 的 capability/effect 声明与安全决策测试。
 
-### 5.4 目标态判定口径
+### 5.4 目标态判定标准
 
-- `bitfun-agent-runtime` 能在不依赖 `bitfun-core` 的情况下构建 runtime kernel。
-- Agent Runtime SDK facade 能通过 fake model provider、fake runtime services、fake tool provider 和 fake
-  harness provider 完成最小 session / turn / event stream 流程。
-- 长程任务、scheduler、permission、context、session/workspace、memory、DFX、hook/event 能作为内核能力被产品特性复用。
-- `/goal`、DeepReview、MiniApp、输入框命令、settings 和 UI panel 通过 feature pack / Product Assembly 组装，不进入内核。
-- Product API 同时包含 Rust Kernel API、UI Extension Contract 和 Capability/Effect API。
-- Plugin Runtime Host / compatibility adapter 能把外部 plugin API 映射为 BitFun 的 tool、hook、workflow、UI contribution 和
-  capability/effect declaration，并受安全控制面约束。
-- `bitfun-runtime-services` 提供 typed service injection，并由 boundary check 保护。
-- `tool-contracts`、`tool-provider-groups` 和 `tool-execution` 分别承担 tool contract、provider group plan 和低层 execution helper；具体 tool 通过 Product Assembly 注册。
-- `bitfun-harness` 支持工作流 provider 扩展。
-- `bitfun-core` 只作为兼容 facade / product-full assembly。
-- 所有产品形态通过 Product Assembly 显式启用能力。
+- `bitfun-agent-runtime` 能在不依赖 `bitfun-core` 的情况下构建运行时内核。
+- Agent Runtime SDK 门面能通过测试替身模型提供方、测试替身运行时服务、测试替身工具提供方和测试替身
+  工作流提供方完成最小会话 / 轮次 / 事件流流程。
+- 长程任务、调度、权限、上下文、会话/工作区、记忆、DFX、钩子/事件能作为内核能力被产品特性复用。
+- `/goal`、DeepReview、MiniApp、输入框命令、settings 和 UI panel 通过特性包 / 产品组装来组装，不进入内核。
+- 运行时内部接口、能力服务接口契约、扩展契约和主机内部 ABI 分层表达，不再合并为单一“产品 API”。
+- 插件运行时主机 / 兼容适配器能把外部插件 API 映射为 BitFun 的工具、钩子、工作流、界面贡献和
+  能力/副作用声明，并受安全控制面约束。
+- `bitfun-runtime-services` 提供类型化服务注入，并由边界检查保护。
+- `tool-contracts`、`tool-provider-groups` 和 `tool-execution` 分别承担工具契约、提供方组计划和低层执行辅助；具体工具通过产品组装注册。
+- `bitfun-harness` 支持工作流提供方扩展。
+- `bitfun-core` 只作为兼容门面 / product-full 组装。
+- 所有产品形态通过产品组装显式启用能力。
 - 所有高风险行为有 snapshot、focused regression 或 product check 保护。

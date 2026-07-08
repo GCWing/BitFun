@@ -2,6 +2,30 @@
 
 export const forbiddenContentRules = [
   {
+    path: 'src/crates/execution/plugin-runtime-host/src/adapter.rs',
+    reason: 'plugin-runtime-host adapter trait method surface must stay narrow',
+    patterns: [
+      {
+        regex: /^\s*(?:async\s+)?fn\s+(?!(?:adapter_id|read_plugins|dispatch)\b)[A-Za-z_][A-Za-z0-9_]*\b/,
+        message:
+          'unexpected PluginHostAdapter trait method; update the reviewed adapter method budget before exposing more Host API',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/execution/plugin-runtime-host/src/lib.rs',
+    reason:
+      'plugin-runtime-host public Host method surface must stay narrow and must not expose status-write or test-helper side channels',
+    patterns: [
+      {
+        regex:
+          /\bpub\s+(?:async\s+)?fn\s+(?!(?:new|dispose_project|restart)\b)[A-Za-z_][A-Za-z0-9_]*\b/,
+        message:
+          'unexpected public PluginRuntimeHost method; update the reviewed method budget before exposing more Host API',
+      },
+    ],
+  },
+  {
     path: 'src/crates/contracts/runtime-ports/src/lib.rs',
     patterns: [
       {
@@ -35,6 +59,11 @@ export const forbiddenContentRules = [
           'plugin runtime contracts must not pull product-full delivery assumptions into runtime-ports',
       },
       {
+        regex: /\b(?:TrustEpochAdvanced|PluginUpdated|PolicyUpdated)\b/,
+        message:
+          'P0-B quarantine clear condition public API must only expose implemented HostRestarted semantics',
+      },
+      {
         regex: /\brequires_permission\b|\bpermission_prompt\b/,
         message:
           'plugin effect permission state must use PluginPermissionGate to avoid invalid required-without-prompt combinations',
@@ -43,6 +72,11 @@ export const forbiddenContentRules = [
         regex: /\bNotRequired\b|\bPluginMaterializeCondition\b|\bmaterialize_when\b/,
         message:
           'plugin effect materialization must be derived from an auditable PluginPermissionGate, not an unaudited no-op or free materialize flag',
+      },
+      {
+        regex: /\bPermissionPromptEffectKind\s*\{[^}]*\bUnsupported\b|\bPluginEffectCandidatePayload\s*\{[^}]*\bUnsupported\b/s,
+        message:
+          'unsupported plugin capabilities must be reported as typed diagnostics/status, not permission prompts or effect candidates',
       },
     ],
   },
@@ -116,6 +150,12 @@ export const forbiddenContentRules = [
       {
         regex: /\brmcp\b/,
         message: 'SDK facade must not expose concrete MCP clients',
+      },
+      {
+        regex:
+          /\b(?:PluginRuntime[A-Za-z0-9_]*|PluginDispatchEnvelope|PluginResponseEnvelope|PluginRuntimeReadRequest|PluginRuntimeReadResponse|PluginStatusSnapshot|PluginQuarantineState|PluginHostLifecycle[A-Za-z0-9_]*)\b/,
+        message:
+          'SDK facade must not expose raw Plugin Runtime Host ABI; use product assembly or Server/API projection instead',
       },
     ],
   },
@@ -1059,7 +1099,7 @@ export const forbiddenContentRules = [
     ],
   },
   {
-    path: 'src/crates/assembly/core/src/agentic/tools/implementations/task_tool.rs',
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/task/execution.rs',
     patterns: [
       {
         regex: /\bDeepReviewIncrementalCache\b/,
@@ -2251,9 +2291,9 @@ export const forbiddenContentRules = [
           'core scheduler must not own dialog queue storage; use bitfun-agent-runtime scheduler',
       },
       {
-        regex: /\bdashmap::DashMap\b/,
+        regex: /\bactive_turns:\s*Arc<dashmap::DashMap\b/,
         message:
-          'core scheduler must not own scheduler state maps; use bitfun-agent-runtime scheduler stores',
+          'core scheduler must not own active-turn state maps; use bitfun-agent-runtime scheduler stores',
       },
       {
         regex: /\bstruct\s+ActiveTurn\b/,
@@ -3978,6 +4018,71 @@ export const forbiddenContentRules = [
 ];
 
 export const forbiddenContentUnderRules = [
+  {
+    path: 'src/apps',
+    reason:
+      'product entrypoints must consume capability-surface projections instead of raw Plugin Runtime Host ABI',
+    patterns: [
+      {
+        regex:
+          /\b(?:PluginRuntimeReadResponse|PluginStatusSnapshot|PluginResponseEnvelope|PluginDispatchEnvelope|PluginEffectCandidate|PluginQuarantineState|PluginRuntimeClient|PluginRuntimeBinding|bitfun_plugin_runtime_host|bitfun_agent_runtime::runtime)\b/,
+        message:
+          'product entrypoints must not consume raw Plugin Runtime Host ABI; project through the capability surface contract first',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/interfaces',
+    reason:
+      'Server/API interface crates must expose projected DTOs instead of raw Plugin Runtime Host ABI',
+    patterns: [
+      {
+        regex:
+          /\b(?:PluginRuntimeReadResponse|PluginStatusSnapshot|PluginResponseEnvelope|PluginDispatchEnvelope|PluginEffectCandidate|PluginQuarantineState|PluginRuntimeClient|PluginRuntimeBinding|bitfun_plugin_runtime_host|bitfun_agent_runtime::runtime)\b/,
+        message:
+          'Server/API interfaces must not consume raw Plugin Runtime Host ABI; define a projected contract first',
+      },
+    ],
+  },
+  {
+    path: 'src/web-ui',
+    reason:
+      'frontend surfaces must consume capability-surface projections instead of raw Plugin Runtime Host ABI',
+    patterns: [
+      {
+        regex:
+          /\b(?:PluginRuntimeReadResponse|PluginStatusSnapshot|PluginResponseEnvelope|PluginDispatchEnvelope|PluginEffectCandidate|PluginQuarantineState|PluginRuntimeClient|PluginRuntimeBinding|bitfun_plugin_runtime_host|bitfun_agent_runtime::runtime)\b/,
+        message:
+          'frontend surfaces must not consume raw Plugin Runtime Host ABI; project through the capability surface contract first',
+      },
+    ],
+  },
+  {
+    path: 'src/mobile-web',
+    reason:
+      'mobile surfaces must consume capability-surface projections instead of raw Plugin Runtime Host ABI',
+    patterns: [
+      {
+        regex:
+          /\b(?:PluginRuntimeReadResponse|PluginStatusSnapshot|PluginResponseEnvelope|PluginDispatchEnvelope|PluginEffectCandidate|PluginQuarantineState|PluginRuntimeClient|PluginRuntimeBinding|bitfun_plugin_runtime_host|bitfun_agent_runtime::runtime)\b/,
+        message:
+          'mobile surfaces must not consume raw Plugin Runtime Host ABI; project through the capability surface contract first',
+      },
+    ],
+  },
+  {
+    path: 'BitFun-Installer',
+    reason:
+      'installer surfaces must consume capability-surface projections instead of raw Plugin Runtime Host ABI',
+    patterns: [
+      {
+        regex:
+          /\b(?:PluginRuntimeReadResponse|PluginStatusSnapshot|PluginResponseEnvelope|PluginDispatchEnvelope|PluginEffectCandidate|PluginQuarantineState|PluginRuntimeClient|PluginRuntimeBinding|bitfun_plugin_runtime_host|bitfun_agent_runtime::runtime)\b/,
+        message:
+          'installer surfaces must not consume raw Plugin Runtime Host ABI; project through the capability surface contract first',
+      },
+    ],
+  },
   {
     path: 'src',
     reason:

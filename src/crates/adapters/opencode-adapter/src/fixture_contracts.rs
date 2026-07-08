@@ -138,6 +138,7 @@ impl OpenCodeSourceProjection {
             return Ok(PluginRuntimeReadResponse {
                 request_id: request.request_id,
                 project_domain_id: request.project_domain_id,
+                workspace_id: request.workspace_id,
                 sources: Vec::new(),
                 plugin_statuses: Vec::new(),
                 diagnostics: Vec::new(),
@@ -155,6 +156,7 @@ impl OpenCodeSourceProjection {
         Ok(PluginRuntimeReadResponse {
             request_id: request.request_id,
             project_domain_id: request.project_domain_id,
+            workspace_id: request.workspace_id,
             sources: vec![self.source.clone()],
             plugin_statuses: vec![self.status_snapshot(
                 availability,
@@ -190,22 +192,24 @@ impl OpenCodeSourceProjection {
             ));
         }
 
-        let effects = if envelope.extension_point_id == CUSTOM_TOOL_EXTENSION_POINT {
-            self.local_plugin
-                .custom_tools
-                .iter()
-                .map(|tool| self.provider_candidate_effect(&envelope, tool))
-                .collect()
+        let (effects, diagnostics) = if envelope.extension_point_id == CUSTOM_TOOL_EXTENSION_POINT {
+            (
+                self.local_plugin
+                    .custom_tools
+                    .iter()
+                    .map(|tool| self.provider_candidate_effect(&envelope, tool))
+                    .collect(),
+                Vec::new(),
+            )
         } else {
-            vec![self.unsupported_extension_effect(&envelope)]
+            (
+                Vec::new(),
+                vec![self.unsupported_hook_diagnostic(&envelope.extension_point_id)],
+            )
         };
 
-        Ok(self.response(
-            &envelope,
-            effects,
-            Vec::new(),
-            PluginStatusKind::ProjectionOnly,
-        ))
+        let status = PluginStatusKind::ProjectionOnly;
+        Ok(self.response(&envelope, effects, diagnostics, status))
     }
 
     fn read_diagnostics(&self) -> Vec<PluginDiagnostic> {
@@ -290,10 +294,13 @@ impl OpenCodeSourceProjection {
             .map(|diagnostic| diagnostic.diagnostic_id.clone())
             .collect();
 
+        let availability = self.trust_status().0;
+
         PluginResponseEnvelope {
             envelope_version: envelope.envelope_version,
             request_event_id: envelope.event_id.clone(),
             project_domain_id: envelope.project_domain_id.clone(),
+            workspace_id: envelope.workspace_id.clone(),
             adapter_id: OPENCODE_ADAPTER_ID.to_string(),
             plugin_id: Some(self.source.plugin_id.clone()),
             completed_at_ms: self.observed_at_ms,
@@ -301,7 +308,7 @@ impl OpenCodeSourceProjection {
             diagnostics,
             quarantine: None,
             plugin_statuses: vec![self.status_snapshot(
-                self.trust_status().0,
+                availability,
                 false,
                 status,
                 diagnostic_ids,
@@ -358,48 +365,13 @@ impl OpenCodeSourceProjection {
             requested_effect: PermissionPromptEffectKind::ProviderCandidate,
             target,
             risk_level: PluginRiskLevel::Medium,
-            owner: PluginOwnerRef {
-                kind: PluginOwnerKind::ProductFeature,
-                id: "tools".to_string(),
-            },
+            owner: tool.capability_ref().owner,
             rollback: PluginRollbackPolicy {
                 mode: PluginRollbackMode::DisablePlugin,
                 reason_ref: Some(format!("audit:{}", envelope.event_id)),
             },
             deny_state: PermissionPromptDenyState::CandidateDiscarded,
             audit,
-        }
-    }
-
-    fn unsupported_extension_effect(
-        &self,
-        envelope: &PluginDispatchEnvelope,
-    ) -> PluginEffectCandidate {
-        PluginEffectCandidate {
-            effect_id: format!(
-                "{}:{}:unsupported",
-                envelope.event_id, self.source.plugin_id
-            ),
-            schema_version: PLUGIN_EFFECT_SCHEMA_VERSION.to_string(),
-            declared_capability: envelope.declared_capability.clone(),
-            target_ref: PluginTargetRef {
-                target_kind: "opencode_hook".to_string(),
-                target_id: envelope.extension_point_id.clone(),
-                display_name: envelope.extension_point_id.clone(),
-                artifact: None,
-            },
-            data_classification: PluginDataClassification::Workspace,
-            risk_level: PluginRiskLevel::Low,
-            permission: PluginPermissionGate::PolicyDenied {
-                deny_state: PermissionPromptDenyState::PolicyDenied,
-                audit: audit_ref(envelope),
-            },
-            source_ref: self.source.clone(),
-            payload: PluginEffectCandidatePayload::Unsupported {
-                capability: envelope.extension_point_id.clone(),
-                reason: "OpenCode hook execution requires a reviewed Plugin Runtime Host"
-                    .to_string(),
-            },
         }
     }
 
@@ -424,7 +396,6 @@ impl OpenCodeSourceProjection {
                 event_id: None,
             },
             retryable: false,
-            recovery_actions: Vec::new(),
         }
     }
 
@@ -445,15 +416,13 @@ impl OpenCodeSourceProjection {
                 event_id: None,
             },
             retryable: false,
-            recovery_actions: Vec::new(),
         }
     }
 
     fn trust_diagnostic(&self) -> PluginDiagnostic {
-        let retryable = self.source.trust_level == PluginTrustLevel::Unknown;
         PluginDiagnostic {
             diagnostic_id: format!("diag:{}:trust", self.source.plugin_id),
-            severity: if retryable {
+            severity: if self.source.trust_level == PluginTrustLevel::Unknown {
                 PluginDiagnosticSeverity::Warning
             } else {
                 PluginDiagnosticSeverity::Error
@@ -468,8 +437,7 @@ impl OpenCodeSourceProjection {
                 correlation_id: format!("trust:{}", self.source.plugin_id),
                 event_id: None,
             },
-            retryable,
-            recovery_actions: Vec::new(),
+            retryable: false,
         }
     }
 }
@@ -802,6 +770,16 @@ mod opencode_fixture_contracts {
         );
         assert_eq!(response.effects.len(), 1);
         assert!(response.diagnostics.is_empty());
+        assert_eq!(
+            response.plugin_statuses[0].status,
+            PluginStatusKind::ProjectionOnly
+        );
+        assert_eq!(
+            response.plugin_statuses[0].availability,
+            PluginRuntimeAvailability::ProjectionOnly {
+                reason: PluginRuntimeUnavailableReason::HostUnavailable
+            }
+        );
 
         let effect = &response.effects[0];
         assert_eq!(
@@ -848,7 +826,7 @@ mod opencode_fixture_contracts {
                     prompt.target.target_id,
                     "opencode.local.workspace_tools.workspaceSummary"
                 );
-                assert_eq!(prompt.owner.kind, PluginOwnerKind::ProductFeature);
+                assert_eq!(prompt.owner.kind, PluginOwnerKind::ExtensionContract);
                 assert_eq!(
                     prompt.deny_state,
                     PermissionPromptDenyState::CandidateDiscarded
@@ -896,24 +874,25 @@ mod opencode_fixture_contracts {
     }
 
     #[test]
-    fn unsupported_opencode_hook_projects_typed_unsupported_candidate() {
+    fn unsupported_opencode_hook_projects_typed_diagnostic_without_effect() {
         let adapter = adapter(PluginTrustLevel::Trusted);
         let response = adapter
             .project_dispatch_response(envelope(&adapter, "tool.execute.before"))
             .expect("project dispatch response");
 
-        assert_eq!(response.effects.len(), 1);
-        match &response.effects[0].payload {
-            PluginEffectCandidatePayload::Unsupported { capability, reason } => {
-                assert_eq!(capability, "tool.execute.before");
-                assert!(reason.contains("Plugin Runtime Host"));
-            }
-            other => panic!("expected unsupported effect, got {other:?}"),
-        }
-        assert!(matches!(
-            response.effects[0].permission,
-            PluginPermissionGate::PolicyDenied { .. }
-        ));
+        assert!(response.effects.is_empty());
+        assert_eq!(
+            response.diagnostics[0].code,
+            "opencode.hook_projection_only"
+        );
+        assert_eq!(
+            response.diagnostics[0].source.plugin_id,
+            "opencode.local.workspace_tools"
+        );
+        assert_eq!(
+            response.plugin_statuses[0].status,
+            PluginStatusKind::ProjectionOnly
+        );
     }
 
     #[test]

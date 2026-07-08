@@ -1,5 +1,7 @@
 // Self-tests for the core boundary checker configuration and parsers.
 
+import { crateLayoutRules } from './rules/crate-layout.mjs';
+
 export function runManifestParserSelfTest({
   isManifestDependencyDeclaration,
   parseManifestDependencies,
@@ -360,7 +362,7 @@ export function runManifestParserSelfTest({
     }
   }
   const coreTaskToolRuleText = forbiddenRuleTextForPath(
-    'src/crates/assembly/core/src/agentic/tools/implementations/task_tool.rs',
+    'src/crates/assembly/core/src/agentic/tools/implementations/task/execution.rs',
   );
   if (!coreTaskToolRuleText) {
     throw new Error('missing core TaskTool DeepReview boundary rule');
@@ -803,7 +805,7 @@ export function runManifestParserSelfTest({
     'PluginRuntimeClient',
     'PluginRuntimeBinding',
     'read_plugins',
-    'execute_recovery_action',
+    'PluginQuarantineState',
   ]) {
     if (!pluginRuntimeContractRuleText.includes(contract)) {
       throw new Error(`plugin runtime contract owner rule must require: ${contract}`);
@@ -877,8 +879,8 @@ export function runManifestParserSelfTest({
   if (!pluginPublicApiSymbols.includes('PluginPermissionGate')) {
     throw new Error('plugin runtime public API allowlist must include permission gate');
   }
-  if (!pluginPublicApiSymbols.includes('PluginRecoveryActionRequest')) {
-    throw new Error('plugin runtime public API allowlist must include recovery action request');
+  if (pluginPublicApiSymbols.some((symbol) => symbol.startsWith('PluginRecoveryAction'))) {
+    throw new Error('plugin runtime P0-B public API allowlist must not include recovery action API');
   }
   if (!pluginPublicApiSymbols.includes('PluginRuntimeReadRequest')) {
     throw new Error('plugin runtime public API allowlist must include read request');
@@ -907,6 +909,23 @@ export function runManifestParserSelfTest({
   }
   if ((opencodeAdapterPublicApiRule.allowedSymbolEntries || []).length !== 0) {
     throw new Error('OpenCode adapter fixture public API budget must stay empty');
+  }
+  const appHostAbiRule = forbiddenContentUnderRules.find((rule) => rule.path === 'src/apps');
+  if (!appHostAbiRule) {
+    throw new Error('product app entrypoints must have a Host ABI import guard');
+  }
+  const appHostAbiRuleText = appHostAbiRule.patterns
+    .map((pattern) => pattern.regex.source)
+    .join('\n');
+  for (const forbiddenHostAbi of [
+    'PluginRuntimeReadResponse',
+    'PluginStatusSnapshot',
+    'PluginResponseEnvelope',
+    'PluginRuntimeBinding',
+  ]) {
+    if (!appHostAbiRuleText.includes(forbiddenHostAbi)) {
+      throw new Error(`product app entrypoint Host ABI guard must forbid: ${forbiddenHostAbi}`);
+    }
   }
   const opencodeManifestRule = forbiddenManifestDependencyRules.find((rule) =>
     rule.dependencyNames?.includes('bitfun-opencode-adapter'),
@@ -959,6 +978,63 @@ export function runManifestParserSelfTest({
   );
   if (!runtimeServicesProfile?.forbiddenNonOptionalDeps.includes('tool-runtime')) {
     throw new Error('runtime-services dependency profile must forbid tool runtime implementations');
+  }
+  if (
+    crateLayoutRules.find((rule) => rule.crateName === 'plugin-runtime-host')?.path !==
+    'src/crates/execution/plugin-runtime-host'
+  ) {
+    throw new Error('plugin-runtime-host must be registered in the execution crate layout');
+  }
+  if (!noCoreDependencyCrates.includes('plugin-runtime-host')) {
+    throw new Error('plugin-runtime-host must be covered by the no-core dependency guard');
+  }
+  const pluginRuntimeHostRule = lightweightBoundaryRules.find(
+    (rule) => rule.crateName === 'plugin-runtime-host',
+  );
+  if (!pluginRuntimeHostRule?.forbiddenDeps.includes('bitfun-core')) {
+    throw new Error('plugin-runtime-host lightweight boundary must forbid bitfun-core');
+  }
+  if (!pluginRuntimeHostRule?.forbiddenDeps.includes('bitfun-opencode-adapter')) {
+    throw new Error('plugin-runtime-host must not depend on the OpenCode fixture adapter');
+  }
+  if (!pluginRuntimeHostRule?.forbiddenDeps.includes('bitfun-services-integrations')) {
+    throw new Error('plugin-runtime-host must not depend on concrete service integrations');
+  }
+  const pluginRuntimeHostProfile = dependencyProfileRules.find(
+    (rule) => rule.crateName === 'plugin-runtime-host',
+  );
+  if (!pluginRuntimeHostProfile?.forbiddenNonOptionalDeps.includes('tauri')) {
+    throw new Error('plugin-runtime-host dependency profile must forbid product surfaces');
+  }
+  const pluginRuntimeHostPublicApiRule = publicApiAllowlistRules.find(
+    (rule) => rule.path === 'src/crates/execution/plugin-runtime-host/src/lib.rs',
+  );
+  const hostPublicSymbols = (pluginRuntimeHostPublicApiRule?.allowedSymbolEntries || []).map(
+    (entry) => entry.symbol,
+  );
+  if (hostPublicSymbols.join(',') !== 'PluginHostAdapter,PluginRuntimeHost') {
+    throw new Error('plugin-runtime-host public API budget must stay narrow');
+  }
+  const hasPluginRuntimeHostMethodBudgetRule = forbiddenContentRules.some(
+    (rule) =>
+      rule.path === 'src/crates/execution/plugin-runtime-host/src/lib.rs' &&
+      rule.patterns.some((pattern) =>
+        pattern.message.includes('unexpected public PluginRuntimeHost method') &&
+        pattern.regex.test('pub fn restart(&self)') === false,
+      ),
+  );
+  if (!hasPluginRuntimeHostMethodBudgetRule) {
+    throw new Error('plugin-runtime-host public method budget forbidden rule is missing');
+  }
+  const hasPluginHostAdapterMethodBudgetRule = forbiddenContentRules.some(
+    (rule) =>
+      rule.path === 'src/crates/execution/plugin-runtime-host/src/adapter.rs' &&
+      rule.patterns.some((pattern) =>
+        pattern.message.includes('unexpected PluginHostAdapter trait method'),
+      ),
+  );
+  if (!hasPluginHostAdapterMethodBudgetRule) {
+    throw new Error('plugin-runtime-host adapter method budget forbidden rule is missing');
   }
   const agentRuntimeRule = lightweightBoundaryRules.find(
     (rule) => rule.crateName === 'agent-runtime',
@@ -2313,6 +2389,46 @@ export function runManifestParserSelfTest({
       ],
     },
     {
+      path: 'src/crates/assembly/product-capabilities/tests/plugin_product_shape.rs',
+      contracts: [
+        'p0_plugin_host_is_executable_only_for_product_full_desktop_and_cli',
+        'p0_plugin_host_binding_builds_agent_runtime_parts',
+        'non_p0_surfaces_cannot_inherit_executable_plugin_host',
+        'default_product_shapes_expose_only_disabled_plugin_availability',
+        'default_assembled_product_shapes_keep_profile_specific_plugin_availability',
+      ],
+    },
+    {
+      path: 'src/crates/execution/plugin-runtime-host/tests/plugin_runtime_host.rs',
+      contracts: [
+        'host_dispatches_candidates',
+        'host_replays_idempotent_dispatch_without_recalling_adapter',
+        'concurrent_idempotent_dispatch_reuses_in_flight_response',
+        'concurrent_cross_key_dispatch_observes_active_quarantine_before_success',
+        'idempotent_dispatch_cache_is_scoped_by_project_workspace_and_source',
+        'idempotent_dispatch_cache_does_not_replay_across_events',
+        'idempotent_dispatch_cache_is_scoped_by_epoch_changes',
+        'idempotent_dispatch_cache_evicts_old_entries',
+        'read_model_is_scoped_by_project_and_workspace',
+        'read_model_rejects_wrong_workspace_response',
+        'active_quarantine_blocks_new_dispatches_until_host_restart',
+        'active_quarantine_blocks_malformed_follow_up_without_new_quarantine',
+        'malformed_dispatch_with_missing_identity_observes_active_quarantine',
+        'host_owned_quarantine_is_visible_in_read_model_with_diagnostics',
+        'host_restart_clears_domain_quarantine_and_cached_dispatch',
+        'zero_deadline_quarantines_without_adapter_dispatch',
+        'malformed_dispatch_envelope_quarantines_without_adapter_dispatch',
+        'nonzero_deadline_timeout_quarantines_without_success_effects',
+        'adapter_failure_quarantines_without_writing_success',
+        'malformed_adapter_success_quarantines_without_effects',
+        'permission_prompt_target_mismatch_quarantines_without_effects',
+        'final_policy_decision_from_adapter_fails_closed',
+        'adapter_id_or_quarantine_with_effects_mismatch_fails_closed',
+        'status_quarantine_with_success_effects_fails_closed',
+        'disposed_project_rejects_dispatch_and_read_model_reports_statuses',
+      ],
+    },
+    {
       path: 'src/crates/assembly/product-capabilities/tests/product_sdk_assembly.rs',
       contracts: [
         'product_runtime_parts_can_build_agent_runtime_sdk_without_core',
@@ -3100,17 +3216,30 @@ export function runManifestParserSelfTest({
       contracts: ['builtin_agent_specs', 'runtime_agents::default_model_id_for_builtin_agent'],
     },
     {
-      path: 'src/crates/assembly/core/src/agentic/tools/implementations/task_tool.rs',
+      path: 'src/crates/assembly/core/src/agentic/tools/implementations/task/input.rs',
       contracts: [
         'fork_context',
         'SubagentContextMode::Fork',
-        'delegation_policy\\(\\)\\.spawn_child\\(\\)',
         'run_in_background',
+      ],
+    },
+    {
+      path: 'src/crates/assembly/core/src/agentic/tools/implementations/task/execution.rs',
+      contracts: [
+        'delegation_policy\\(\\)\\.spawn_child\\(\\)',
         'start_background_subagent',
         'background_task_id',
-        'Background \\{\\} started successfully',
-        '<background_task status=\\\\"started\\\\"',
-        'background_subagent_start_acknowledgement_keeps_structured_task_marker',
+      ],
+    },
+    {
+      path: 'src/crates/assembly/core/src/agentic/tools/implementations/task/background.rs',
+      contracts: ['Background subagent started successfully'],
+    },
+    {
+      path: 'src/crates/assembly/core/src/agentic/tools/implementations/task/tests.rs',
+      contracts: [
+        'background_subagent_start_acknowledgement_uses_session_id_only',
+        '<background_task',
       ],
     },
     {
@@ -3181,14 +3310,19 @@ export function runManifestParserSelfTest({
       ],
     },
     {
-      path: 'src/crates/assembly/core/src/agentic/tools/implementations/task_tool.rs',
+      path: 'src/crates/assembly/core/src/agentic/tools/implementations/task/deep_review.rs',
       contracts: [
         'deep_review_task_adapter::should_emit_deep_review_retry_guidance',
-        'deep_review_task_adapter::deep_review_retry_guidance',
         'deep_review_task_adapter::auto_retry_suppression_reason',
         'deep_review_task_adapter::ensure_deep_review_auto_retry_allowed',
-        'deep_review_task_adapter::deep_review_task_completion_result',
         'deep_review_task_adapter::deep_review_cancelled_reviewer_result',
+      ],
+    },
+    {
+      path: 'src/crates/assembly/core/src/agentic/tools/implementations/task/execution.rs',
+      contracts: [
+        'deep_review_task_adapter::deep_review_retry_guidance',
+        'deep_review_task_adapter::deep_review_task_completion_result',
         'DeepReviewProviderCapacityRetryRuntime::default',
         'DeepReviewProviderCapacityRetryDecision::WaitForCapacity',
       ],

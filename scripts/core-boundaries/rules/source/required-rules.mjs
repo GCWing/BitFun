@@ -1468,6 +1468,33 @@ export const requiredContentRules = [
     ],
   },
   {
+    path: 'src/crates/assembly/product-capabilities/tests/plugin_product_shape.rs',
+    reason:
+      'product-capabilities plugin shape tests must protect P0 host-capable profiles, non-P0 rejection, default availability reasons, and runtime handoff',
+    patterns: [
+      {
+        regex: /\bp0_plugin_host_is_executable_only_for_product_full_desktop_and_cli\b/,
+        message: 'missing P0 host-capable profile regression',
+      },
+      {
+        regex: /\bp0_plugin_host_binding_builds_agent_runtime_parts\b/,
+        message: 'missing ProductAssembler to AgentRuntimeBuilder host handoff regression',
+      },
+      {
+        regex: /\bnon_p0_surfaces_cannot_inherit_executable_plugin_host\b/,
+        message: 'missing non-P0 executable plugin host rejection regression',
+      },
+      {
+        regex: /\bdefault_product_shapes_expose_only_disabled_plugin_availability\b/,
+        message: 'missing default plugin availability reason regression',
+      },
+      {
+        regex: /\bdefault_assembled_product_shapes_keep_profile_specific_plugin_availability\b/,
+        message: 'missing assembled default plugin availability reason regression',
+      },
+    ],
+  },
+  {
     path: 'src/crates/assembly/product-capabilities/tests/product_sdk_assembly.rs',
     reason:
       'product-capabilities must prove product runtime parts can feed the SDK runtime without bitfun-core',
@@ -2636,17 +2663,13 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/assembly/core/src/agentic/tools/implementations/task_tool.rs',
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/task/deep_review.rs',
     reason:
       'TaskTool must keep DeepReview retry/result presentation as a facade call instead of re-owning provider-neutral policy text or data shaping',
     patterns: [
       {
         regex: /deep_review_task_adapter::should_emit_deep_review_retry_guidance/,
         message: 'missing TaskTool DeepReview retry guidance emission facade call',
-      },
-      {
-        regex: /deep_review_task_adapter::deep_review_retry_guidance/,
-        message: 'missing TaskTool DeepReview retry guidance facade call',
       },
       {
         regex: /deep_review_task_adapter::auto_retry_suppression_reason/,
@@ -2657,12 +2680,23 @@ export const requiredContentRules = [
         message: 'missing TaskTool DeepReview auto-retry admission facade call',
       },
       {
-        regex: /deep_review_task_adapter::deep_review_task_completion_result/,
-        message: 'missing TaskTool DeepReview completion result facade call',
-      },
-      {
         regex: /deep_review_task_adapter::deep_review_cancelled_reviewer_result/,
         message: 'missing TaskTool DeepReview cancelled reviewer result facade call',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/task/execution.rs',
+    reason:
+      'TaskTool execution must keep DeepReview retry/result presentation as facade calls instead of re-owning provider-neutral policy text or data shaping',
+    patterns: [
+      {
+        regex: /deep_review_task_adapter::deep_review_retry_guidance/,
+        message: 'missing TaskTool DeepReview retry guidance facade call',
+      },
+      {
+        regex: /deep_review_task_adapter::deep_review_task_completion_result/,
+        message: 'missing TaskTool DeepReview completion result facade call',
       },
       {
         regex: /DeepReviewProviderCapacityRetryRuntime::default/,
@@ -4722,8 +4756,8 @@ export const requiredContentRules = [
         message: 'missing plugin discovery/status read boundary contract',
       },
       {
-        regex: /\bexecute_recovery_action\b/,
-        message: 'missing plugin recovery action execution boundary contract',
+        regex: /\bPluginQuarantineState\b/,
+        message: 'missing plugin quarantine read-model contract',
       },
       {
         regex: /\bpub enum PluginRuntimeBinding\b/,
@@ -4745,8 +4779,8 @@ export const requiredContentRules = [
         message: 'missing typed response envelope regression',
       },
       {
-        regex: /\bpolicy_allowed_effects_keep_auditable_permission_facts\b/,
-        message: 'missing auditable policy-allowed permission gate regression',
+        regex: /\bpermission_required_effects_keep_auditable_candidate_facts\b/,
+        message: 'missing auditable permission-required candidate effect regression',
       },
       {
         regex: /\bread_plugins_contract_supports_discovery_status_and_config_projection\b/,
@@ -4764,28 +4798,154 @@ export const requiredContentRules = [
         regex: /\bprojection_only_plugin_runtime_rejects_dispatch_without_host\b/,
         message: 'missing projection-only runtime binding regression',
       },
+      {
+        regex: /\bclient_binding_rejects_unchecked_available_client_responses\b/,
+        message: 'missing contract-checked executable runtime binding regression',
+      },
+      {
+        regex: /\bclient_binding_rejects_read_sources_outside_request\b/,
+        message: 'missing contract-checked read source isolation regression',
+      },
+      {
+        regex: /\bclient_binding_rejects_executable_read_quarantine\b/,
+        message: 'missing contract-checked read quarantine availability regression',
+      },
+      {
+        regex:
+          /\bclient_binding_rejects_dispatch_quarantine_without_host_restart_clear_condition\b/,
+        message: 'missing dispatch quarantine clear-condition regression',
+      },
+      {
+        regex:
+          /\bclient_binding_rejects_read_quarantine_without_host_restart_clear_condition\b/,
+        message: 'missing read quarantine clear-condition regression',
+      },
     ],
   },
   {
     path: 'src/crates/contracts/runtime-ports/tests/plugin_runtime_host_contracts.rs',
     reason:
-      'runtime-ports plugin host contract tests must cover permission prompts, diagnostics, quarantine, and lifecycle facts',
+      'runtime-ports plugin host contract tests must cover permission prompts, diagnostics, and quarantine facts',
     patterns: [
       {
         regex: /\bpermission_prompt_descriptor_contains_minimum_user_decision_facts\b/,
         message: 'missing permission prompt descriptor regression',
       },
       {
-        regex: /\bdiagnostic_and_quarantine_state_are_auditable_and_recoverable\b/,
+        regex: /\bdiagnostic_and_quarantine_state_are_auditable_projection_facts\b/,
         message: 'missing diagnostic and quarantine regression',
       },
+    ],
+  },
+  {
+    path: 'src/crates/execution/plugin-runtime-host/tests/plugin_runtime_host.rs',
+    reason:
+      'plugin-runtime-host owner tests must cover dispatch, idempotency, deadline quarantine, adapter failure quarantine, and disposed project behavior',
+    patterns: [
       {
-        regex: /\brecovery_action_request_and_result_are_typed_execution_contracts\b/,
-        message: 'missing recovery action request/result regression',
+        regex: /\bhost_dispatches_candidates\b/,
+        message: 'missing host dispatch regression',
       },
       {
-        regex: /\bhost_lifecycle_event_tracks_phase_source_and_epoch\b/,
-        message: 'missing plugin host lifecycle regression',
+        regex: /\bhost_replays_idempotent_dispatch_without_recalling_adapter\b/,
+        message: 'missing host idempotency regression',
+      },
+      {
+        regex: /\bconcurrent_idempotent_dispatch_reuses_in_flight_response\b/,
+        message: 'missing concurrent host idempotency regression',
+      },
+      {
+        regex:
+          /\bconcurrent_cross_key_dispatch_observes_active_quarantine_before_success\b/,
+        message: 'missing cross-key active quarantine concurrency regression',
+      },
+      {
+        regex: /\bidempotent_dispatch_cache_is_scoped_by_project_workspace_and_source\b/,
+        message: 'missing host execution-domain scoped idempotency regression',
+      },
+      {
+        regex: /\bidempotent_dispatch_cache_does_not_replay_across_events\b/,
+        message: 'missing host event-scoped idempotency regression',
+      },
+      {
+        regex: /\bidempotent_dispatch_cache_is_scoped_by_epoch_changes\b/,
+        message: 'missing host epoch-scoped idempotency regression',
+      },
+      {
+        regex: /\bidempotent_dispatch_cache_evicts_old_entries\b/,
+        message: 'missing host bounded idempotency cache regression',
+      },
+      {
+        regex: /\bread_model_is_scoped_by_project_and_workspace\b/,
+        message: 'missing host read-model execution-domain isolation regression',
+      },
+      {
+        regex: /\bread_model_rejects_wrong_workspace_response\b/,
+        message: 'missing host wrong-workspace read-model rejection regression',
+      },
+      {
+        regex: /\bactive_quarantine_blocks_new_dispatches_until_host_restart\b/,
+        message: 'missing active quarantine dispatch blocking regression',
+      },
+      {
+        regex: /\bactive_quarantine_blocks_malformed_follow_up_without_new_quarantine\b/,
+        message: 'missing active quarantine malformed follow-up regression',
+      },
+      {
+        regex: /\bmalformed_dispatch_with_missing_identity_observes_active_quarantine\b/,
+        message: 'missing malformed dispatch missing-identity quarantine regression',
+      },
+      {
+        regex: /\bhost_owned_quarantine_is_visible_in_read_model_with_diagnostics\b/,
+        message: 'missing host-owned quarantine diagnostic read-model projection regression',
+      },
+      {
+        regex: /\bhost_restart_clears_domain_quarantine_and_cached_dispatch\b/,
+        message: 'missing host restart quarantine/cache cleanup regression',
+      },
+      {
+        regex: /\bzero_deadline_quarantines_without_adapter_dispatch\b/,
+        message: 'missing host deadline quarantine regression',
+      },
+      {
+        regex: /\bmalformed_dispatch_envelope_quarantines_without_adapter_dispatch\b/,
+        message: 'missing host dispatch request preflight regression',
+      },
+      {
+        regex: /\bnonzero_deadline_timeout_quarantines_without_success_effects\b/,
+        message: 'missing host nonzero timeout regression',
+      },
+      {
+        regex: /\badapter_failure_quarantines_without_writing_success\b/,
+        message: 'missing host adapter failure quarantine regression',
+      },
+      {
+        regex: /\bmalformed_adapter_success_quarantines_without_effects\b/,
+        message: 'missing host malformed adapter success quarantine regression',
+      },
+      {
+        regex: /\bpermission_prompt_target_mismatch_quarantines_without_effects\b/,
+        message: 'missing host permission prompt/effect mismatch regression',
+      },
+      {
+        regex: /\bpermission_prompt_authority_mismatch_quarantines_without_effects\b/,
+        message: 'missing host permission authority mismatch regression',
+      },
+      {
+        regex: /\bfinal_policy_decision_from_adapter_fails_closed\b/,
+        message: 'missing host final policy outcome rejection regression',
+      },
+      {
+        regex: /\badapter_id_or_quarantine_with_effects_mismatch_fails_closed\b/,
+        message: 'missing host adapter id and mixed quarantine/effects regression',
+      },
+      {
+        regex: /\bstatus_quarantine_with_success_effects_fails_closed\b/,
+        message: 'missing host nested status quarantine/effects rejection regression',
+      },
+      {
+        regex: /\bdisposed_project_rejects_dispatch_and_read_model_reports_statuses\b/,
+        message: 'missing host dispose/read-model regression',
       },
     ],
   },
@@ -7750,9 +7910,9 @@ export const requiredContentRules = [
     ],
   },
   {
-    path: 'src/crates/assembly/core/src/agentic/tools/implementations/task_tool.rs',
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/task/input.rs',
     reason:
-      'core Task tool must continue owning fork-aware background subagent launch semantics until a reviewed agent-runtime port preserves delivery behavior',
+      'core Task input must continue owning fork-aware background subagent launch semantics until a reviewed agent-runtime port preserves delivery behavior',
     patterns: [
       {
         regex: /\bfork_context\b/,
@@ -7763,12 +7923,19 @@ export const requiredContentRules = [
         message: 'missing forked subagent context mode path',
       },
       {
-        regex: /delegation_policy\(\)\.spawn_child\(\)/,
-        message: 'missing child delegation policy propagation',
-      },
-      {
         regex: /"run_in_background"/,
         message: 'missing Task run_in_background schema flag',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/task/execution.rs',
+    reason:
+      'core Task execution must continue owning background subagent launch semantics until a reviewed agent-runtime port preserves delivery behavior',
+    patterns: [
+      {
+        regex: /delegation_policy\(\)\.spawn_child\(\)/,
+        message: 'missing child delegation policy propagation',
       },
       {
         regex: /\bstart_background_subagent\b/,
@@ -7778,17 +7945,31 @@ export const requiredContentRules = [
         regex: /\bbackground_task_id\b/,
         message: 'missing background task id result contract',
       },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/task/background.rs',
+    reason:
+      'core Task background acknowledgement must remain assistant-visible and not expose internal background task ids',
+    patterns: [
       {
-        regex: /Background \{\} started successfully/,
+        regex: /Background subagent started successfully/,
         message: 'missing assistant-visible background start acknowledgement',
       },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/agentic/tools/implementations/task/tests.rs',
+    reason:
+      'core Task tests must preserve background acknowledgement shape',
+    patterns: [
       {
-        regex: /<background_task status=\\"started\\"/,
-        message: 'missing structured background task start acknowledgement',
+        regex: /\bbackground_subagent_start_acknowledgement_uses_session_id_only\b/,
+        message: 'missing background task start acknowledgement regression',
       },
       {
-        regex: /\bbackground_subagent_start_acknowledgement_keeps_structured_task_marker\b/,
-        message: 'missing background task start acknowledgement regression',
+        regex: /<background_task/,
+        message: 'missing regression that started background tasks do not expose structured task markers',
       },
     ],
   },

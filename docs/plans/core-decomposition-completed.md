@@ -1,6 +1,6 @@
 # BitFun Core 拆解已完成内容归档
 
-本文只记录已完成事实摘要。后续执行路径以
+本文件记录已完成事实摘要。后续执行路径以
 [`core-decomposition-plan.md`](core-decomposition-plan.md) 为准；稳定架构目标以
 [`product-architecture.md`](../architecture/product-architecture.md) 和
 [`agent-runtime-services-design.md`](../architecture/agent-runtime-services-design.md)
@@ -8,12 +8,12 @@
 
 ## 1. 基础边界
 
-- 已建立 `product-full` 作为兼容入口的完整产品能力保护开关，产品入口显式启用当前兼容能力集合；它不是未来按产品形态拆分能力的唯一 source of truth。
+- 已建立 `product-full` 作为兼容入口的完整产品能力保护开关，产品入口显式启用当前兼容能力集合；它不是未来按产品形态拆分能力的唯一事实源。
 - 已抽取 `bitfun-core-types`、`bitfun-events`、`bitfun-runtime-ports`、`bitfun-agent-stream` 等基础契约；LSP protocol DTO 和 plugin manifest DTO 已进入 `bitfun-core-types`。
-- 已建立 `bitfun-services-core`、`bitfun-services-integrations`、`bitfun-agent-tools`、`tool-runtime`、`bitfun-tool-packs`、`bitfun-agent-runtime`、`bitfun-runtime-services`、`bitfun-harness`、`bitfun-product-domains`、`bitfun-product-capabilities` 等 owner crate。
-- `src/crates` 已按 `interfaces / assembly / adapters / services / execution / contracts` 六层布局整理，DeepReview path classifier、boundary rules、Cargo workspace path 和根/层级 AGENTS 已同步。
+- 已建立 `bitfun-services-core`、`bitfun-services-integrations`、`bitfun-agent-tools`、`tool-runtime`、`bitfun-tool-packs`、`bitfun-agent-runtime`、`bitfun-runtime-services`、`bitfun-harness`、`bitfun-product-domains`、`bitfun-product-capabilities` 等归属 crate。
+- `src/crates` 已按 `interfaces / assembly / adapters / services / execution / contracts` 六层布局整理，DeepReview path classifier、边界规则、Cargo workspace 路径和根/层级 AGENTS 已同步。
 
-## 2. 已迁移 owner
+## 2. 已迁移归属
 
 - `services-core` 已承接 session layout、metadata store CRUD / index rebuild、metadata pagination、metadata construction / mutation、lineage / branch shaping、JSON file store、generic JSON persistence、storage cleanup、front-matter markdown、workspace instruction file IO/order、filesystem primitives、managed runtime command resolution / PATH merge、LSP plugin registry / extension matching / command-target mapping、diagnostic redaction、session usage/token usage 持久化与查询服务。
 - `services-core` 已承接 workspace-runtime legacy session-store merge、metadata 冲突选择、index rebuild 和 legacy path copy/move fallback；core workspace-runtime 只保留路径计算、runtime layout ensure 和错误兼容映射。
@@ -29,8 +29,8 @@
 - `harness` 已建立 descriptor、route plan 和 legacy provider registry。
 - `product-domains` 已承接 MiniApp state/workflow planning、built-in seed orchestration / host adapter contract、compile / permission adaptation、import lifecycle、AI / Agent permission、rate-limit、model/message/session/workspace/turn-text bridge rules、AI / Agent 请求计划、stream / runtime event payload、worker restart / draft key / workspace input 规则、function-agent prompt/parser/response policy 和部分 Git snapshot/fallback 逻辑。
 - `bitfun-core` 的 function-agent AI concrete acquisition 已从旧 `runtime_services` 路径收拢到明确的 core port adapter；Git / AI compatibility re-export 仍保留旧 public path。
-- Product Assembly 已承接 `DeliveryProfile`、当前交付形态入口矩阵、`CapabilitySet`、feature group matrix、profile-scoped capability plan、product-full provider plan、service availability report、profile-scoped harness registry 入口与 legacy-route 行为保护，以及 `ProductAssembler` 对 explicit profile input、runtime services、harness registry 和 service requirement 的验证；core 只保留兼容 re-export。ProductFull / Desktop / CLI / ACP 保留完整能力；Server / Remote / Web / MobileWeb 不再 materialize product-full capability packs、feature groups、runtime services、tool groups 或 harness routes。
-- Plugin Runtime Boundary Foundation 已建立：`runtime-ports` 持有 `PluginRuntimeClient`、binding、availability、dispatch / response envelope、disabled stub 和 projection-only stub；Product Assembly 输出 extension availability facts 与 plugin runtime binding；Agent Runtime SDK 可注入该 binding。默认产品形态仍不启动真实 plugin Host、生态 adapter、JS/TS runtime、worker、subprocess 或 package discovery。
+- 产品组装已承接 `DeliveryProfile`、当前交付形态入口矩阵、`CapabilitySet`、feature group matrix、profile-scoped capability plan、product-full provider plan、service availability report、profile-scoped harness registry 入口与 legacy-route 行为保护，以及 `ProductAssembler` 对 explicit profile input、runtime services、harness registry 和 service requirement 的验证；core 只保留兼容 re-export。ProductFull / Desktop / CLI / ACP 保留完整能力；Server / Remote / Web / MobileWeb 不再 materialize product-full capability packs、feature groups、runtime services、tool groups 或 harness routes。
+- 插件运行时边界基础已建立：`runtime-ports` 持有 `PluginRuntimeClient`、binding、availability、dispatch / response envelope、disabled stub 和 projection-only stub；产品组装输出扩展可用性事实与插件运行时绑定，并通过 Agent Runtime 内部 builder 注入该 binding；Agent Runtime SDK 门面不导出插件运行时主机 ABI。默认产品形态仍不启动真实 plugin Host、生态 adapter、JS/TS runtime、worker、subprocess 或 package discovery。
 - LSP plugin runtime target 和命令占位符解析已从 `services-core` 收口到 `core-types`；`services-core` 保留兼容 re-export、registry、current-target detection 和 filesystem / runtime service 逻辑。
 
 - Agent session/workspace owner routing 已继续收敛：`AgentRuntime` 提供 port-backed session workspace resolution entrypoint；Cron、SessionControl、SessionMessage 和 SessionHistory 不再在工具实现中直接解析目标 session workspace，Cron 保留 target session 可见性验证，workspace identity 中的 `workspace_id` / remote connection / remote host 通过 runtime contract 传递。
@@ -39,18 +39,18 @@
 
 ## 3. 已建立保护
 
-- owner crate 不得依赖回 `bitfun-core`。
-- `product-full` 保持兼容入口的完整产品能力集合，产品形态差异仍以 Product Assembly 的 capability plan 表达。
-- boundary check 覆盖 owner crate 禁止依赖、旧路径 facade-only、feature gate、six-layer path 解析、Product Assembly 收口、session/config/context fact owner、tool confirmation gate owner 和高风险 owner 回流。
+- 归属 crate 不得依赖回 `bitfun-core`。
+- `product-full` 保持兼容入口的完整产品能力集合，产品形态差异仍以产品组装的 capability plan 表达。
+- 边界检查覆盖归属 crate 禁止依赖、旧路径仅门面约束、特性开关、六层路径解析、产品组装收口、session/config/context fact 归属、tool confirmation gate 归属和高风险归属回流。
 - focused tests 覆盖当前 delivery profile 能力裁剪、ProductAssembler 缺失 service 报告、无直接 core 入口的空 capability plan、SDK fake provider / services / tool / harness / hook / workspace-scoped agent registry 闭环，以及 runtime hook 顺序、timeout、错误策略和重复 id 拦截。
 - focused baseline 覆盖 tool manifest、GetToolSpec、execution admission、workspace search、remote workspace fallback、MCP config/catalog、prompt cache、custom agent / mode / subagent、thread-goal tools、AskUserQuestion、DeepReview policy、tool confirmation、session restore、MiniApp storage/builtin/import、function-agent Git、scheduled-job state 等路径。
 - H4 已完成 Agent Runtime SDK 发布准备的 workspace 内收口：`sdk` facade 暴露 v1 preview 兼容元数据、空默认 feature、稳定注入 registry/service 类型、最小外部 embedder 示例，以及 boundary required rules / self-test 保护。
 - Public API / Tool ABI / Event Manifest 基础闭环已建立：Agent Runtime SDK 继续只暴露 preview facade；`bitfun-agent-tools` 暴露 materialized snapshot / default effect facts / stale-call guard；`bitfun-events` 暴露 AgenticEvent projection manifest；core compatibility path 和 WebSocket adapter 不再拥有对应 contract 清单。
 
-## 4. Adapter 边界与后续专项
+## 4. 适配器边界与后续专项
 
-- `bitfun-core` 仍承载 compatibility facade / `product-full` assembly 和少量迁移期 adapter；不应继续新增 owner 逻辑。
-- 产品入口的能力裁剪已由 Product Assembly profile plan 表达；后续新增入口必须先明确 `ProductCoreDependencyMode`、unsupported / unavailable 语义和兼容性测试。
+- `bitfun-core` 仍承载兼容门面 / `product-full` 组装和少量迁移期适配器；不应继续新增归属逻辑。
+- 产品入口的能力裁剪已由产品组装 profile plan 表达；后续新增入口必须先明确 `ProductCoreDependencyMode`、unsupported / temporarily-unavailable 语义和兼容性测试；内部 `NotAvailable` 类错误进入 Server/API 前必须投影为稳定状态词。
 - H1 剩余 owner 决策已迁出：dialog start route / outcome lifecycle 继续由 `agent-runtime` 给出可测试决策，tool pipeline 的 Task batch 策略由 `tool-execution` 持有，prompt runtime / workspace / user-context 组合由 `agent-runtime` 持有，AI model selector / cache-key 解析由 `bitfun-ai-adapters` 持有。`bitfun-core` 仍只保留 coordinator 调用、config IO、credential overlay、prompt 事实收集和 prompt-cache persistence IO 等 concrete adapter。
 - DeepReview concrete Task launch 和 session metadata cache persistence 仍是 core adapter，因为它们依赖 coordinator、session manager、subagent runtime 和产品事件；provider-neutral policy / queue / retry / report shaping 与 queue event payload shaping 已在 `agent-runtime`，core 只负责事件发送。
 - H2 已完成：MiniApp AI / Agent 请求计划、stream payload、runtime event payload、worker restart / draft key / workspace input 规则已迁入 `product-domains`，desktop 命令只保留 AI factory、scheduler、worker pool、目录创建和事件发送等 concrete host 调用。

@@ -20,6 +20,7 @@ members = [
     "src/crates/execution/agent-stream",
     "src/crates/execution/tool-contracts",
     "src/crates/execution/harness",
+    "src/crates/execution/plugin-runtime-host",
     "src/crates/execution/runtime-services",
     "src/crates/execution/tool-provider-groups",
     "src/crates/execution/tool-execution",

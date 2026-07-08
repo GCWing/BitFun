@@ -1,8 +1,8 @@
-//! Public Agent Runtime facade over stable runtime ports.
+//! Internal Agent Runtime facade over stable runtime ports.
 //!
-//! This module is intentionally port-backed. It gives product assembly and
-//! future SDK consumers a narrow agent entrypoint without depending on
-//! `bitfun-core`, app crates, Tauri, or concrete service managers.
+//! This module is intentionally port-backed for product assembly and internal
+//! runtime owners. Client-facing SDK consumers should use `crate::sdk`, which
+//! does not expose Plugin Runtime Host ABI.
 
 use std::path::Path;
 use std::sync::{Arc, Mutex};
@@ -29,7 +29,7 @@ use crate::post_call_hooks::RuntimeHookRegistry;
 pub enum RuntimeBuildError {
     #[error("agent submission port is required")]
     MissingSubmissionPort,
-    #[error("plugin runtime host binding is not supported before host gates are registered")]
+    #[error("plugin runtime client binding must report executable host availability")]
     UnsupportedPluginRuntimeHostBinding,
 }
 
@@ -310,9 +310,7 @@ impl AgentRuntimeBuilder {
             plugin_runtime,
         } = self;
 
-        if matches!(plugin_runtime, PluginRuntimeBinding::Client(_))
-            || plugin_runtime.availability().is_executable()
-        {
+        if plugin_runtime.is_client_binding() && !plugin_runtime.availability().is_executable() {
             return Err(RuntimeBuildError::UnsupportedPluginRuntimeHostBinding);
         }
 
@@ -749,6 +747,36 @@ mod tests {
                 envelope_version: envelope.envelope_version,
                 request_event_id: envelope.event_id,
                 project_domain_id: envelope.project_domain_id,
+                workspace_id: envelope.workspace_id,
+                adapter_id: "test-plugin-runtime".to_string(),
+                plugin_id: Some(envelope.source.plugin_id),
+                completed_at_ms: 0,
+                effects: Vec::new(),
+                diagnostics: Vec::new(),
+                quarantine: None,
+                plugin_statuses: Vec::new(),
+                observed_epochs: envelope.epochs,
+            })
+        }
+    }
+
+    struct AvailablePluginRuntimeClient;
+
+    #[async_trait::async_trait]
+    impl PluginRuntimeClient for AvailablePluginRuntimeClient {
+        fn availability(&self) -> PluginRuntimeAvailability {
+            PluginRuntimeAvailability::Available
+        }
+
+        async fn dispatch(
+            &self,
+            envelope: PluginDispatchEnvelope,
+        ) -> PortResult<PluginResponseEnvelope> {
+            Ok(PluginResponseEnvelope {
+                envelope_version: envelope.envelope_version,
+                request_event_id: envelope.event_id,
+                project_domain_id: envelope.project_domain_id,
+                workspace_id: envelope.workspace_id,
                 adapter_id: "test-plugin-runtime".to_string(),
                 plugin_id: Some(envelope.source.plugin_id),
                 completed_at_ms: 0,
@@ -978,7 +1006,24 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn builder_rejects_plugin_runtime_client_until_host_boundary_exists() {
+    async fn builder_accepts_executable_plugin_runtime_client() {
+        let ports = Arc::new(FakeAgentRuntimePorts::default());
+        let runtime = AgentRuntimeBuilder::new()
+            .with_submission_port(ports)
+            .with_plugin_runtime(PluginRuntimeBinding::client(Arc::new(
+                AvailablePluginRuntimeClient,
+            )))
+            .build()
+            .expect("executable plugin runtime clients should build");
+
+        assert_eq!(
+            runtime.plugin_runtime().availability(),
+            PluginRuntimeAvailability::Available
+        );
+    }
+
+    #[tokio::test]
+    async fn builder_rejects_plugin_runtime_client_that_reports_projection_only() {
         let ports = Arc::new(FakeAgentRuntimePorts::default());
         let err = AgentRuntimeBuilder::new()
             .with_submission_port(ports)

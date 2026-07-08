@@ -11,6 +11,7 @@ export const crateLayoutRules = [
   { crateName: 'agent-stream', layer: 'execution', path: 'src/crates/execution/agent-stream' },
   { crateName: 'agent-tools', layer: 'execution', path: 'src/crates/execution/tool-contracts' },
   { crateName: 'harness', layer: 'execution', path: 'src/crates/execution/harness' },
+  { crateName: 'plugin-runtime-host', layer: 'execution', path: 'src/crates/execution/plugin-runtime-host' },
   { crateName: 'runtime-services', layer: 'execution', path: 'src/crates/execution/runtime-services' },
   { crateName: 'tool-packs', layer: 'execution', path: 'src/crates/execution/tool-provider-groups' },
   { crateName: 'tool-runtime', layer: 'execution', path: 'src/crates/execution/tool-execution' },

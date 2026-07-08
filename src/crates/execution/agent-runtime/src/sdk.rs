@@ -2,8 +2,11 @@
 //!
 //! This module is the stable entrypoint for embedding the portable agent
 //! runtime with caller-provided ports. Concrete product assembly remains
-//! outside this crate. Plugin runtime facts are exposed as non-executable
-//! availability only until host gates land.
+//! outside this crate. The SDK facade exposes stable agent/session/event ports;
+//! product assembly owns plugin-host handoff through the internal runtime
+//! builder, not through this SDK surface.
+
+use std::sync::Arc;
 
 pub const AGENT_RUNTIME_SDK_API_VERSION: u32 = 1;
 
@@ -37,9 +40,9 @@ pub use crate::post_call_hooks::{
     RuntimeHookRegistryBuildError,
 };
 pub use crate::runtime::{
-    AgentEventStream, AgentRunHandle, AgentRunRequest, AgentRuntime, AgentRuntimeBuilder,
-    RuntimeAgentRegistry, RuntimeAgentRegistryQuery, RuntimeBuildError, RuntimeError,
-    RuntimeToolRegistry, SessionSelector,
+    AgentEventStream, AgentRunHandle, AgentRunRequest, RuntimeAgentRegistry,
+    RuntimeAgentRegistryQuery, RuntimeBuildError, RuntimeError, RuntimeToolRegistry,
+    SessionSelector,
 };
 pub use crate::session_state::{session_state_label_for_state, ProcessingPhase, SessionState};
 pub use bitfun_agent_tools::{ToolRegistry, ToolRegistryItem};
@@ -48,17 +51,17 @@ pub use bitfun_harness::{
     HarnessRegistry, HarnessWorkflow,
 };
 pub use bitfun_runtime_ports::{
-    AgentDialogTurnPort, AgentDialogTurnRequest, AgentInputAttachment, AgentLifecycleDeliveryPort,
-    AgentSessionCreateRequest, AgentSessionCreateResult, AgentSessionDeleteRequest,
-    AgentSessionListRequest, AgentSessionManagementPort, AgentSessionSummary,
+    AgentBackgroundResultRequest, AgentDialogTurnPort, AgentDialogTurnRequest,
+    AgentInputAttachment, AgentLifecycleDeliveryPort, AgentSessionCreateRequest,
+    AgentSessionCreateResult, AgentSessionDeleteRequest, AgentSessionListRequest,
+    AgentSessionManagementPort, AgentSessionSummary, AgentSessionWorkspaceBinding,
     AgentSessionWorkspaceRequest, AgentSubmissionPort, AgentSubmissionRequest,
     AgentSubmissionResult, AgentSubmissionSource, AgentThreadGoalCreateRequest,
     AgentThreadGoalDeliveryRequest, AgentThreadGoalGetRequest, AgentThreadGoalManagementPort,
     AgentThreadGoalUpdateStatusRequest, AgentTurnCancellationPort, AgentTurnCancellationRequest,
     AgentTurnCancellationResult, ClockPort, DialogSubmitOutcome, FileSystemPort, GitPort,
-    McpCatalogPort, NetworkPort, PermissionDecision, PermissionPort, PermissionRequest,
-    PluginRuntimeAvailability, PluginRuntimeUnavailableReason, PortError, PortResult,
-    RemoteAssistantWorkspaceFacts, RemoteCapabilityPort, RemoteConnectionPort,
+    McpCatalogPort, NetworkPort, PermissionDecision, PermissionPort, PermissionRequest, PortError,
+    PortResult, RemoteAssistantWorkspaceFacts, RemoteCapabilityPort, RemoteConnectionPort,
     RemoteProjectionPort, RemoteRecentWorkspaceFacts, RemoteWorkspaceFacts,
     RemoteWorkspaceFileRuntimeHost, RemoteWorkspaceKind, RemoteWorkspacePort,
     RemoteWorkspaceRuntimeHost, RemoteWorkspaceUpdate, RuntimeEventEnvelope, RuntimeEventSink,
@@ -70,3 +73,221 @@ pub use bitfun_runtime_services::{
     CapabilityAvailability, RuntimeServices, RuntimeServicesBuilder, RuntimeServicesError,
     RuntimeServicesProvider, RuntimeServicesRegistry,
 };
+
+#[derive(Clone)]
+pub struct AgentRuntime {
+    inner: crate::runtime::AgentRuntime,
+}
+
+impl std::fmt::Debug for AgentRuntime {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AgentRuntime").finish_non_exhaustive()
+    }
+}
+
+#[derive(Default, Clone)]
+pub struct AgentRuntimeBuilder {
+    inner: crate::runtime::AgentRuntimeBuilder,
+}
+
+impl AgentRuntimeBuilder {
+    pub fn new() -> Self {
+        Self {
+            inner: crate::runtime::AgentRuntimeBuilder::new(),
+        }
+    }
+
+    pub fn with_submission_port(mut self, port: Arc<dyn AgentSubmissionPort>) -> Self {
+        self.inner = self.inner.with_submission_port(port);
+        self
+    }
+
+    pub fn with_session_management_port(
+        mut self,
+        port: Arc<dyn AgentSessionManagementPort>,
+    ) -> Self {
+        self.inner = self.inner.with_session_management_port(port);
+        self
+    }
+
+    pub fn with_thread_goal_management_port(
+        mut self,
+        port: Arc<dyn AgentThreadGoalManagementPort>,
+    ) -> Self {
+        self.inner = self.inner.with_thread_goal_management_port(port);
+        self
+    }
+
+    pub fn with_dialog_turn_port(mut self, port: Arc<dyn AgentDialogTurnPort>) -> Self {
+        self.inner = self.inner.with_dialog_turn_port(port);
+        self
+    }
+
+    pub fn with_lifecycle_delivery_port(
+        mut self,
+        port: Arc<dyn AgentLifecycleDeliveryPort>,
+    ) -> Self {
+        self.inner = self.inner.with_lifecycle_delivery_port(port);
+        self
+    }
+
+    pub fn with_cancellation_port(mut self, port: Arc<dyn AgentTurnCancellationPort>) -> Self {
+        self.inner = self.inner.with_cancellation_port(port);
+        self
+    }
+
+    pub fn with_services(mut self, services: RuntimeServices) -> Self {
+        self.inner = self.inner.with_services(services);
+        self
+    }
+
+    pub fn with_event_stream(mut self, events: AgentEventStream) -> Self {
+        self.inner = self.inner.with_event_stream(events);
+        self
+    }
+
+    pub fn with_tool_registry(mut self, registry: Arc<dyn RuntimeToolRegistry>) -> Self {
+        self.inner = self.inner.with_tool_registry(registry);
+        self
+    }
+
+    pub fn with_harness_registry(mut self, registry: Arc<HarnessRegistry>) -> Self {
+        self.inner = self.inner.with_harness_registry(registry);
+        self
+    }
+
+    pub fn with_hook_registry(mut self, registry: RuntimeHookRegistry) -> Self {
+        self.inner = self.inner.with_hook_registry(registry);
+        self
+    }
+
+    pub fn with_agent_registry(mut self, registry: Arc<dyn RuntimeAgentRegistry>) -> Self {
+        self.inner = self.inner.with_agent_registry(registry);
+        self
+    }
+
+    pub fn build(self) -> Result<AgentRuntime, RuntimeBuildError> {
+        self.inner.build().map(|inner| AgentRuntime { inner })
+    }
+}
+
+impl AgentRuntime {
+    pub fn services(&self) -> Option<&RuntimeServices> {
+        self.inner.services()
+    }
+
+    pub fn registered_tool_names(&self) -> Vec<String> {
+        self.inner.registered_tool_names()
+    }
+
+    pub fn harness_provider_ids(&self) -> Vec<&str> {
+        self.inner.harness_provider_ids()
+    }
+
+    pub fn hook_registry(&self) -> &RuntimeHookRegistry {
+        self.inner.hook_registry()
+    }
+
+    pub fn registered_agent_ids(&self, query: RuntimeAgentRegistryQuery<'_>) -> Vec<String> {
+        self.inner.registered_agent_ids(query)
+    }
+
+    pub async fn create_session(
+        &self,
+        request: AgentSessionCreateRequest,
+    ) -> Result<AgentSessionCreateResult, RuntimeError> {
+        self.inner.create_session(request).await
+    }
+
+    pub async fn list_sessions(
+        &self,
+        request: AgentSessionListRequest,
+    ) -> Result<Vec<AgentSessionSummary>, RuntimeError> {
+        self.inner.list_sessions(request).await
+    }
+
+    pub async fn delete_session(
+        &self,
+        request: AgentSessionDeleteRequest,
+    ) -> Result<(), RuntimeError> {
+        self.inner.delete_session(request).await
+    }
+
+    pub async fn resolve_session_workspace_binding(
+        &self,
+        request: AgentSessionWorkspaceRequest,
+    ) -> Result<Option<AgentSessionWorkspaceBinding>, RuntimeError> {
+        self.inner.resolve_session_workspace_binding(request).await
+    }
+
+    pub async fn submit_turn(
+        &self,
+        request: AgentSubmissionRequest,
+    ) -> Result<AgentSubmissionResult, RuntimeError> {
+        self.inner.submit_turn(request).await
+    }
+
+    pub async fn submit_dialog_turn(
+        &self,
+        request: AgentDialogTurnRequest,
+    ) -> Result<DialogSubmitOutcome, RuntimeError> {
+        self.inner.submit_dialog_turn(request).await
+    }
+
+    pub async fn deliver_background_result(
+        &self,
+        request: AgentBackgroundResultRequest,
+    ) -> Result<(), RuntimeError> {
+        self.inner.deliver_background_result(request).await
+    }
+
+    pub async fn deliver_thread_goal(
+        &self,
+        request: AgentThreadGoalDeliveryRequest,
+    ) -> Result<(), RuntimeError> {
+        self.inner.deliver_thread_goal(request).await
+    }
+
+    pub async fn get_thread_goal(
+        &self,
+        request: AgentThreadGoalGetRequest,
+    ) -> Result<Option<ThreadGoal>, RuntimeError> {
+        self.inner.get_thread_goal(request).await
+    }
+
+    pub async fn create_thread_goal(
+        &self,
+        request: AgentThreadGoalCreateRequest,
+    ) -> Result<ThreadGoal, RuntimeError> {
+        self.inner.create_thread_goal(request).await
+    }
+
+    pub async fn update_thread_goal_status(
+        &self,
+        request: AgentThreadGoalUpdateStatusRequest,
+    ) -> Result<ThreadGoal, RuntimeError> {
+        self.inner.update_thread_goal_status(request).await
+    }
+
+    pub async fn resolve_session_agent_type(
+        &self,
+        session_id: &str,
+    ) -> Result<Option<String>, RuntimeError> {
+        self.inner.resolve_session_agent_type(session_id).await
+    }
+
+    pub async fn cancel_turn(
+        &self,
+        request: AgentTurnCancellationRequest,
+    ) -> Result<AgentTurnCancellationResult, RuntimeError> {
+        self.inner.cancel_turn(request).await
+    }
+
+    pub async fn publish_event(&self, event: RuntimeEventEnvelope) -> Result<(), RuntimeError> {
+        self.inner.publish_event(event).await
+    }
+
+    pub async fn run(&self, request: AgentRunRequest) -> Result<AgentRunHandle, RuntimeError> {
+        self.inner.run(request).await
+    }
+}

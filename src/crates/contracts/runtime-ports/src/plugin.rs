@@ -252,10 +252,7 @@ pub enum PluginRiskLevel {
 #[serde(rename_all = "snake_case")]
 #[non_exhaustive]
 pub enum PermissionPromptEffectKind {
-    Unsupported,
     ProviderCandidate,
-    Descriptor,
-    EvidenceCandidate,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -330,22 +327,9 @@ pub enum PluginPermissionGate {
 )]
 #[non_exhaustive]
 pub enum PluginEffectCandidatePayload {
-    Unsupported {
-        capability: String,
-        reason: String,
-    },
     ProviderCandidate {
         provider_id: String,
         tool_contract_id: String,
-    },
-    Descriptor {
-        descriptor_id: String,
-        descriptor_version: u16,
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        payload_ref: Option<PluginPayloadRef>,
-    },
-    EvidenceCandidate {
-        payload_ref: PluginPayloadRef,
     },
 }
 
@@ -417,8 +401,6 @@ pub struct PluginDiagnostic {
     pub detail: PluginDiagnosticDetail,
     pub audit: PluginAuditRef,
     pub retryable: bool,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub recovery_actions: Vec<PluginRecoveryAction>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -430,19 +412,34 @@ pub struct PluginDiagnostic {
 #[non_exhaustive]
 pub enum PluginQuarantineScope {
     Plugin {
+        #[serde(default)]
+        project_domain_id: String,
+        #[serde(default)]
+        workspace_id: String,
         plugin_id: String,
     },
     Capability {
+        #[serde(default)]
+        project_domain_id: String,
+        #[serde(default)]
+        workspace_id: String,
         plugin_id: String,
         capability_id: String,
     },
     Target {
+        #[serde(default)]
+        project_domain_id: String,
+        #[serde(default)]
+        workspace_id: String,
         plugin_id: String,
         target_kind: String,
         target_id: String,
     },
     ProjectPlugin {
+        #[serde(default)]
         project_domain_id: String,
+        #[serde(default)]
+        workspace_id: String,
         plugin_id: String,
     },
 }
@@ -462,70 +459,7 @@ pub enum PluginQuarantineReason {
 #[serde(rename_all = "snake_case")]
 #[non_exhaustive]
 pub enum PluginQuarantineClearCondition {
-    UserAction,
-    TrustEpochAdvanced,
-    PluginUpdated,
     HostRestarted,
-    PolicyUpdated,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-#[non_exhaustive]
-pub enum PluginRecoveryActionKind {
-    Retry,
-    Disable,
-    Retrust,
-    OpenLog,
-    ClearQuarantine,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PluginRecoveryAction {
-    pub action_id: String,
-    pub kind: PluginRecoveryActionKind,
-    pub target: PluginTargetRef,
-    pub audit: PluginAuditRef,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub artifact: Option<PluginArtifactRef>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PluginRecoveryActionRequest {
-    pub request_id: String,
-    pub source: PluginSourceRef,
-    pub action_id: String,
-    pub quarantine_id: String,
-    pub scope: PluginQuarantineScope,
-    pub requested_by: PluginOwnerRef,
-    pub authorization: PluginAuditRef,
-    pub epochs: PluginRuntimeEpochs,
-    pub idempotency_key: String,
-    pub requested_at_ms: u64,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-#[non_exhaustive]
-pub enum PluginRecoveryActionStatus {
-    Accepted,
-    Completed,
-    Rejected,
-    Unsupported,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PluginRecoveryActionResult {
-    pub request_id: String,
-    pub action_id: String,
-    pub status: PluginRecoveryActionStatus,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub diagnostic: Option<PluginDiagnostic>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub quarantine: Option<PluginQuarantineState>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -541,7 +475,6 @@ pub struct PluginQuarantineState {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub log_ref: Option<PluginArtifactRef>,
     pub clears_when: Vec<PluginQuarantineClearCondition>,
-    pub recovery_actions: Vec<PluginRecoveryAction>,
     pub diagnostic_ids: Vec<String>,
 }
 
@@ -556,19 +489,6 @@ pub enum PluginHostLifecyclePhase {
     Dispose,
     FailureQuarantine,
     Diagnostics,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PluginHostLifecycleEvent {
-    pub event_id: String,
-    pub phase: PluginHostLifecyclePhase,
-    pub project_domain_id: String,
-    pub source: PluginSourceRef,
-    pub observed_at_ms: u64,
-    pub project_epoch: u64,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub diagnostic_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -598,6 +518,7 @@ pub struct PluginRuntimeReadRequest {
 pub struct PluginRuntimeReadResponse {
     pub request_id: String,
     pub project_domain_id: String,
+    pub workspace_id: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub sources: Vec<PluginSourceRef>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -635,6 +556,7 @@ pub struct PluginResponseEnvelope {
     pub envelope_version: u16,
     pub request_event_id: String,
     pub project_domain_id: String,
+    pub workspace_id: String,
     pub adapter_id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub plugin_id: Option<String>,
@@ -666,16 +588,382 @@ pub trait PluginRuntimeClient: Send + Sync {
         &self,
         envelope: PluginDispatchEnvelope,
     ) -> PortResult<PluginResponseEnvelope>;
+}
 
-    async fn execute_recovery_action(
-        &self,
-        _request: PluginRecoveryActionRequest,
-    ) -> PortResult<PluginRecoveryActionResult> {
-        Err(PortError::new(
-            PortErrorKind::NotAvailable,
-            "plugin runtime recovery actions are not available",
-        ))
+pub fn validate_plugin_runtime_read_response(
+    request: &PluginRuntimeReadRequest,
+    response: &PluginRuntimeReadResponse,
+) -> PortResult<()> {
+    if response.request_id != request.request_id {
+        return Err(invalid_plugin_runtime_response(
+            "read response request_id mismatch",
+        ));
     }
+    if response.project_domain_id != request.project_domain_id {
+        return Err(invalid_plugin_runtime_response(
+            "read response project_domain_id mismatch",
+        ));
+    }
+    if response.workspace_id != request.workspace_id {
+        return Err(invalid_plugin_runtime_response(
+            "read response workspace_id mismatch",
+        ));
+    }
+    if response.observed_epochs != request.epochs {
+        return Err(invalid_plugin_runtime_response(
+            "read response epoch mismatch",
+        ));
+    }
+
+    for status in &response.plugin_statuses {
+        validate_read_status_snapshot(request, status)?;
+    }
+    for source in &response.sources {
+        if !request.plugin_ids.is_empty() && !request.plugin_ids.contains(&source.plugin_id) {
+            return Err(invalid_plugin_runtime_response(
+                "read response source plugin_id outside request",
+            ));
+        }
+    }
+    for diagnostic in &response.diagnostics {
+        validate_read_diagnostic(request, response, diagnostic)?;
+    }
+
+    Ok(())
+}
+
+pub fn validate_plugin_dispatch_response(
+    envelope: &PluginDispatchEnvelope,
+    response: &PluginResponseEnvelope,
+    expected_adapter_id: Option<&str>,
+) -> PortResult<()> {
+    validate_plugin_dispatch_response_contract(envelope, response, expected_adapter_id)
+        .map_err(invalid_plugin_runtime_response)
+}
+
+fn validate_read_status_snapshot(
+    request: &PluginRuntimeReadRequest,
+    status: &PluginStatusSnapshot,
+) -> PortResult<()> {
+    if !request.plugin_ids.is_empty() && !request.plugin_ids.contains(&status.source.plugin_id) {
+        return Err(invalid_plugin_runtime_response(
+            "read response status plugin_id outside request",
+        ));
+    }
+    if let Some(quarantine) = &status.quarantine {
+        if status.status != PluginStatusKind::Quarantined {
+            return Err(invalid_plugin_runtime_response(
+                "read response quarantine status mismatch",
+            ));
+        }
+        if status.availability.is_executable() {
+            return Err(invalid_plugin_runtime_response(
+                "read response quarantined plugin must not be executable",
+            ));
+        }
+        validate_quarantine_against_read_request(request, &status.source, quarantine)?;
+    }
+    Ok(())
+}
+
+fn validate_read_diagnostic(
+    request: &PluginRuntimeReadRequest,
+    response: &PluginRuntimeReadResponse,
+    diagnostic: &PluginDiagnostic,
+) -> PortResult<()> {
+    if !request.plugin_ids.is_empty() && !request.plugin_ids.contains(&diagnostic.source.plugin_id)
+    {
+        return Err(invalid_plugin_runtime_response(
+            "read response diagnostic plugin_id outside request",
+        ));
+    }
+    let diagnostic_source_is_projected = response
+        .sources
+        .iter()
+        .any(|source| source == &diagnostic.source)
+        || response
+            .plugin_statuses
+            .iter()
+            .any(|status| status.source == diagnostic.source);
+    if !diagnostic_source_is_projected {
+        return Err(invalid_plugin_runtime_response(
+            "read response diagnostic source is not projected",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_plugin_dispatch_response_contract(
+    envelope: &PluginDispatchEnvelope,
+    response: &PluginResponseEnvelope,
+    expected_adapter_id: Option<&str>,
+) -> Result<(), String> {
+    if response.envelope_version != envelope.envelope_version {
+        return Err("envelope_version mismatch".to_string());
+    }
+    if response.request_event_id != envelope.event_id {
+        return Err("request_event_id mismatch".to_string());
+    }
+    if response.project_domain_id != envelope.project_domain_id {
+        return Err("project_domain_id mismatch".to_string());
+    }
+    if response.workspace_id != envelope.workspace_id {
+        return Err("workspace_id mismatch".to_string());
+    }
+    if response.adapter_id.is_empty() {
+        return Err("adapter_id is empty".to_string());
+    }
+    if let Some(expected_adapter_id) = expected_adapter_id {
+        if response.adapter_id != expected_adapter_id {
+            return Err("adapter_id mismatch".to_string());
+        }
+    }
+    if response.plugin_id.as_deref() != Some(envelope.source.plugin_id.as_str()) {
+        return Err("plugin_id mismatch".to_string());
+    }
+    if response.observed_epochs != envelope.epochs {
+        return Err("observed epoch mismatch".to_string());
+    }
+    let has_nested_quarantine = response
+        .plugin_statuses
+        .iter()
+        .any(|status| status.quarantine.is_some());
+    if (response.quarantine.is_some() || has_nested_quarantine) && !response.effects.is_empty() {
+        return Err("quarantine response must not carry success effects".to_string());
+    }
+
+    for (index, effect) in response.effects.iter().enumerate() {
+        validate_effect_candidate(envelope, effect)
+            .map_err(|message| format!("effect {index}: {message}"))?;
+    }
+    for diagnostic in &response.diagnostics {
+        if diagnostic.source != envelope.source {
+            return Err(format!(
+                "diagnostic {} source mismatch",
+                diagnostic.diagnostic_id
+            ));
+        }
+        validate_audit_ref(envelope, &diagnostic.audit)
+            .map_err(|message| format!("diagnostic {}: {message}", diagnostic.diagnostic_id))?;
+    }
+    if let Some(quarantine) = &response.quarantine {
+        validate_quarantine_against_envelope(envelope, quarantine)?;
+    }
+    for status in &response.plugin_statuses {
+        if status.source != envelope.source {
+            return Err(format!(
+                "status source mismatch for plugin {}",
+                status.source.plugin_id
+            ));
+        }
+        if let Some(quarantine) = &status.quarantine {
+            validate_quarantine_against_envelope(envelope, quarantine)?;
+        }
+    }
+
+    Ok(())
+}
+
+fn validate_effect_candidate(
+    envelope: &PluginDispatchEnvelope,
+    effect: &PluginEffectCandidate,
+) -> Result<(), String> {
+    if effect.source_ref != envelope.source {
+        return Err("source_ref mismatch".to_string());
+    }
+    if effect.declared_capability != envelope.declared_capability {
+        return Err("declared_capability mismatch".to_string());
+    }
+    match &effect.permission {
+        PluginPermissionGate::PolicyAllowed { .. } => {
+            Err("plugin host responses must not carry final policy_allowed decisions".to_string())
+        }
+        PluginPermissionGate::PermissionRequired { prompt } => {
+            validate_permission_prompt(envelope, effect, prompt)
+        }
+        PluginPermissionGate::PolicyDenied { .. } => {
+            Err("plugin host responses must not carry final policy_denied decisions".to_string())
+        }
+    }
+}
+
+fn validate_permission_prompt(
+    envelope: &PluginDispatchEnvelope,
+    effect: &PluginEffectCandidate,
+    prompt: &PermissionPromptDescriptor,
+) -> Result<(), String> {
+    if prompt.plugin != envelope.source {
+        return Err("permission prompt plugin mismatch".to_string());
+    }
+    if prompt.requested_capability != envelope.declared_capability {
+        return Err("permission prompt capability mismatch".to_string());
+    }
+    if prompt.requested_effect != permission_effect_kind_for_payload(&effect.payload) {
+        return Err("permission prompt requested_effect mismatch".to_string());
+    }
+    if prompt.target != effect.target_ref {
+        return Err("permission prompt target mismatch".to_string());
+    }
+    if prompt.risk_level != effect.risk_level {
+        return Err("permission prompt risk_level mismatch".to_string());
+    }
+    if prompt.owner != envelope.declared_capability.owner {
+        return Err("permission prompt owner mismatch".to_string());
+    }
+    if prompt.rollback.reason_ref.as_deref() != Some(audit_reason_ref(envelope).as_str()) {
+        return Err("permission prompt rollback reason_ref mismatch".to_string());
+    }
+    if prompt.deny_state != PermissionPromptDenyState::CandidateDiscarded {
+        return Err("permission prompt deny_state mismatch".to_string());
+    }
+    validate_audit_ref(envelope, &prompt.audit)
+}
+
+fn validate_quarantine_against_read_request(
+    request: &PluginRuntimeReadRequest,
+    source: &PluginSourceRef,
+    quarantine: &PluginQuarantineState,
+) -> PortResult<()> {
+    if quarantine.source != *source {
+        return Err(invalid_plugin_runtime_response(
+            "read response quarantine source mismatch",
+        ));
+    }
+    validate_quarantine_scope(
+        &request.project_domain_id,
+        &request.workspace_id,
+        source,
+        &quarantine.scope,
+    )
+    .map_err(invalid_plugin_runtime_response)?;
+    validate_quarantine_clear_condition(quarantine).map_err(invalid_plugin_runtime_response)?;
+    Ok(())
+}
+
+fn validate_quarantine_against_envelope(
+    envelope: &PluginDispatchEnvelope,
+    quarantine: &PluginQuarantineState,
+) -> Result<(), String> {
+    if quarantine.source != envelope.source {
+        return Err("quarantine source mismatch".to_string());
+    }
+    validate_quarantine_scope(
+        &envelope.project_domain_id,
+        &envelope.workspace_id,
+        &envelope.source,
+        &quarantine.scope,
+    )?;
+    validate_audit_ref(envelope, &quarantine.audit)
+        .map_err(|message| format!("quarantine {message}"))?;
+    validate_quarantine_clear_condition(quarantine)
+        .map_err(|message| format!("quarantine {message}"))?;
+    Ok(())
+}
+
+fn validate_quarantine_clear_condition(quarantine: &PluginQuarantineState) -> Result<(), String> {
+    if quarantine.clears_when.len() != 1
+        || quarantine.clears_when[0] != PluginQuarantineClearCondition::HostRestarted
+    {
+        return Err(
+            "clears_when must contain only host_restarted for the P0-B quarantine contract"
+                .to_string(),
+        );
+    }
+    Ok(())
+}
+
+fn validate_quarantine_scope(
+    project_domain_id: &str,
+    workspace_id: &str,
+    source: &PluginSourceRef,
+    scope: &PluginQuarantineScope,
+) -> Result<(), String> {
+    match scope {
+        PluginQuarantineScope::Plugin {
+            project_domain_id: scope_project_domain_id,
+            workspace_id: scope_workspace_id,
+            plugin_id,
+        } if scope_project_domain_id == project_domain_id
+            && scope_workspace_id == workspace_id
+            && plugin_id == &source.plugin_id =>
+        {
+            Ok(())
+        }
+        PluginQuarantineScope::Capability {
+            project_domain_id: scope_project_domain_id,
+            workspace_id: scope_workspace_id,
+            plugin_id,
+            capability_id,
+        } if scope_project_domain_id == project_domain_id
+            && scope_workspace_id == workspace_id
+            && plugin_id == &source.plugin_id
+            && !capability_id.is_empty() =>
+        {
+            Ok(())
+        }
+        PluginQuarantineScope::Target {
+            project_domain_id: scope_project_domain_id,
+            workspace_id: scope_workspace_id,
+            plugin_id,
+            target_kind,
+            target_id,
+        } if scope_project_domain_id == project_domain_id
+            && scope_workspace_id == workspace_id
+            && plugin_id == &source.plugin_id
+            && !target_kind.is_empty()
+            && !target_id.is_empty() =>
+        {
+            Ok(())
+        }
+        PluginQuarantineScope::ProjectPlugin {
+            project_domain_id: scope_project_domain_id,
+            workspace_id: scope_workspace_id,
+            plugin_id,
+        } if scope_project_domain_id == project_domain_id
+            && scope_workspace_id == workspace_id
+            && plugin_id == &source.plugin_id =>
+        {
+            Ok(())
+        }
+        _ => Err("quarantine scope mismatch".to_string()),
+    }
+}
+
+fn validate_audit_ref(
+    envelope: &PluginDispatchEnvelope,
+    audit: &PluginAuditRef,
+) -> Result<(), String> {
+    if audit.correlation_id != envelope.correlation_id {
+        return Err("audit correlation_id mismatch".to_string());
+    }
+    if audit.event_id.as_deref() != Some(envelope.event_id.as_str()) {
+        return Err("audit event_id mismatch".to_string());
+    }
+    Ok(())
+}
+
+fn permission_effect_kind_for_payload(
+    payload: &PluginEffectCandidatePayload,
+) -> PermissionPromptEffectKind {
+    match payload {
+        PluginEffectCandidatePayload::ProviderCandidate { .. } => {
+            PermissionPromptEffectKind::ProviderCandidate
+        }
+    }
+}
+
+fn audit_reason_ref(envelope: &PluginDispatchEnvelope) -> String {
+    format!("audit:{}", envelope.event_id)
+}
+
+fn invalid_plugin_runtime_response(message: impl Into<String>) -> PortError {
+    PortError::new(
+        PortErrorKind::Backend,
+        format!(
+            "plugin runtime returned an invalid response: {}",
+            message.into()
+        ),
+    )
 }
 
 #[derive(Debug, Clone)]
@@ -767,11 +1055,47 @@ impl PluginRuntimeClient for ProjectionOnlyPluginRuntimeClient {
 }
 
 #[derive(Clone)]
+struct ContractCheckedPluginRuntimeClient {
+    inner: Arc<dyn PluginRuntimeClient>,
+}
+
+#[async_trait::async_trait]
+impl PluginRuntimeClient for ContractCheckedPluginRuntimeClient {
+    fn availability(&self) -> PluginRuntimeAvailability {
+        self.inner.availability()
+    }
+
+    async fn read_plugins(
+        &self,
+        request: PluginRuntimeReadRequest,
+    ) -> PortResult<PluginRuntimeReadResponse> {
+        let response = self.inner.read_plugins(request.clone()).await?;
+        validate_plugin_runtime_read_response(&request, &response)?;
+        Ok(response)
+    }
+
+    async fn dispatch(
+        &self,
+        envelope: PluginDispatchEnvelope,
+    ) -> PortResult<PluginResponseEnvelope> {
+        let response = self.inner.dispatch(envelope.clone()).await?;
+        validate_plugin_dispatch_response(&envelope, &response, None)?;
+        Ok(response)
+    }
+}
+
+#[derive(Clone)]
+struct PluginRuntimeClientToken(());
+
+#[derive(Clone)]
+// The private token seals the executable variant so callers must use
+// PluginRuntimeBinding::client(), which wraps clients with contract validation.
+#[allow(private_interfaces)]
 #[non_exhaustive]
 pub enum PluginRuntimeBinding {
     Disabled(DisabledPluginRuntimeClient),
     ProjectionOnly(ProjectionOnlyPluginRuntimeClient),
-    Client(Arc<dyn PluginRuntimeClient>),
+    Client(PluginRuntimeClientToken, Arc<dyn PluginRuntimeClient>),
 }
 
 impl PluginRuntimeBinding {
@@ -784,14 +1108,21 @@ impl PluginRuntimeBinding {
     }
 
     pub fn client(client: Arc<dyn PluginRuntimeClient>) -> Self {
-        Self::Client(client)
+        Self::Client(
+            PluginRuntimeClientToken(()),
+            Arc::new(ContractCheckedPluginRuntimeClient { inner: client }),
+        )
+    }
+
+    pub fn is_client_binding(&self) -> bool {
+        matches!(self, Self::Client(_, _))
     }
 
     pub fn availability(&self) -> PluginRuntimeAvailability {
         match self {
             Self::Disabled(client) => client.availability(),
             Self::ProjectionOnly(client) => client.availability(),
-            Self::Client(client) => client.availability(),
+            Self::Client(_, client) => client.availability(),
         }
     }
 
@@ -799,7 +1130,7 @@ impl PluginRuntimeBinding {
         match self {
             Self::Disabled(client) => Arc::new(client.clone()),
             Self::ProjectionOnly(client) => Arc::new(client.clone()),
-            Self::Client(client) => Arc::clone(client),
+            Self::Client(_, client) => Arc::clone(client),
         }
     }
 }

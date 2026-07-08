@@ -162,7 +162,7 @@ fn mode_presentation_and_shared_context_policy_match_existing_mode_contract() {
 
     assert_eq!(
         shared_coding_mode_user_context_policy().cache_scope_key(),
-        "workspace_context|workspace_instructions|project_layout"
+        "workspace_context|workspace_instructions|project_layout|memory_summary"
     );
 }
 
