@@ -83,9 +83,15 @@ function prepareTauriConfig(baseConfigPath, { desktopDir, flashgrepBinary }) {
       process.exit(1);
     }
 
-    const endpoint =
+    const primaryEndpoint =
       process.env.TAURI_UPDATER_ENDPOINT ||
       'https://github.com/GCWing/BitFun/releases/latest/download/latest.json';
+    // Fallback endpoint used when GitHub is unreachable (not when no update is found).
+    // Tauri updater iterates endpoints and only falls through on network/HTTP errors;
+    // a 204 (no update) or a successfully parsed manifest stops the loop.
+    const fallbackEndpoint =
+      process.env.TAURI_UPDATER_FALLBACK_ENDPOINT ||
+      'https://openbitfun.com/release/latest.json';
 
     config.bundle = {
       ...(config.bundle || {}),
@@ -94,14 +100,16 @@ function prepareTauriConfig(baseConfigPath, { desktopDir, flashgrepBinary }) {
     config.plugins = {
       ...(config.plugins || {}),
       updater: {
-        endpoints: [endpoint],
+        endpoints: [primaryEndpoint, fallbackEndpoint],
         pubkey,
         windows: {
           installMode: 'passive',
         },
       },
     };
-    console.log(`[tauri-build] Updater artifacts enabled: ${endpoint}`);
+    console.log(
+      `[tauri-build] Updater artifacts enabled: ${primaryEndpoint} (fallback: ${fallbackEndpoint})`
+    );
   }
 
   const generatedDir = join(desktopDir, 'gen');
