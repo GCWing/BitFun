@@ -142,5 +142,5 @@
 }
 
 .copy-output-button.edit-button:active {
-  box-shadow: 0 2px 6px var(--color-purple-400);
+  box-shadow: 0 2px 6px color-mix(in srgb, var(--color-purple-500) 40%, transparent);
 }

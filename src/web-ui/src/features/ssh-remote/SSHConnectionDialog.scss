@@ -76,13 +76,13 @@
     gap: 8px;
     padding: 5px 10px;
     border-radius: 6px;
-    background: var(--card-bg-default);
+    background: var(--element-bg-subtle);
     transition: all var(--motion-fast) var(--easing-standard);
     cursor: pointer;
     position: relative;
 
     &:hover {
-      background: var(--card-bg-hover);
+      background: var(--element-bg-soft);
     }
 
     &:active {

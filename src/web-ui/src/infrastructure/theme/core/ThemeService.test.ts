@@ -18,6 +18,55 @@ function expectThemeError(
   expect(result.errors).toEqual(expect.arrayContaining([expect.objectContaining({ path, code })]));
 }
 
+function expectNoRetiredThemeAuthoringKeys(theme: ThemeConfig) {
+  const accentColors = theme.colors.accent as unknown as Record<string, unknown>;
+  const purpleColors = theme.colors.purple as unknown as Record<string, unknown>;
+  const fontWeights = theme.typography.weight as unknown as Record<string, unknown>;
+  const components = theme.components as unknown as Record<string, unknown> | undefined;
+  expect(accentColors).not.toHaveProperty('800');
+  expect(purpleColors).not.toHaveProperty('50');
+  expect(purpleColors).not.toHaveProperty('400');
+  expect(purpleColors).not.toHaveProperty('800');
+  expect(fontWeights).not.toHaveProperty('bold');
+  expect(components?.windowControls).toBeUndefined();
+}
+
+function createThemeWithRetiredAuthoringKeys(id: string, name: string): ThemeConfig {
+  return {
+    ...bitfunDarkTheme,
+    id,
+    name,
+    colors: {
+      ...bitfunDarkTheme.colors,
+      accent: {
+        ...bitfunDarkTheme.colors.accent,
+        800: '#0f766e',
+      },
+      purple: {
+        ...(bitfunDarkTheme.colors.purple ?? {}),
+        50: '#faf5ff',
+        400: '#c084fc',
+        800: '#6b21a8',
+      },
+    },
+    typography: {
+      ...bitfunDarkTheme.typography,
+      weight: {
+        ...bitfunDarkTheme.typography.weight,
+        bold: 700,
+      },
+    },
+    components: {
+      ...bitfunDarkTheme.components,
+      windowControls: {
+        close: {
+          hoverColor: '#a85555',
+        },
+      },
+    },
+  } as unknown as ThemeConfig;
+}
+
 vi.mock('@/infrastructure/api', () => ({
   configAPI: {
     getConfig: vi.fn(),
@@ -100,24 +149,16 @@ describe('ThemeService runtime theme tokens', () => {
     expect(document.documentElement.style.getPropertyValue('--scrollbar-thumb-hover')).toBe('rgba(0, 0, 0, 0.3)');
   });
 
-  it('keeps card surfaces on the compact canonical overlay ramp', async () => {
+  it('does not inject component-private card surface variables into the root theme contract', async () => {
     const service = new ThemeService();
 
     await service.applyTheme('bitfun-dark');
 
-    expect(document.documentElement.style.getPropertyValue('--card-bg-default')).toBe('rgba(255, 255, 255, 0.04)');
-    expect(document.documentElement.style.getPropertyValue('--card-bg-hover')).toBe('rgba(255, 255, 255, 0.08)');
-    expect(document.documentElement.style.getPropertyValue('--card-bg-active')).toBe('rgba(255, 255, 255, 0.12)');
-    expect(document.documentElement.style.getPropertyValue('--card-bg-subtle')).toBe('');
-    expect(document.documentElement.style.getPropertyValue('--card-bg-elevated')).toBe('');
-
-    await service.applyTheme('bitfun-light');
-
-    expect(document.documentElement.style.getPropertyValue('--card-bg-default')).toBe('rgba(0, 0, 0, 0.08)');
-    expect(document.documentElement.style.getPropertyValue('--card-bg-hover')).toBe('rgba(0, 0, 0, 0.12)');
-    expect(document.documentElement.style.getPropertyValue('--card-bg-active')).toBe('rgba(0, 0, 0, 0.15)');
-    expect(document.documentElement.style.getPropertyValue('--card-bg-subtle')).toBe('');
-    expect(document.documentElement.style.getPropertyValue('--card-bg-elevated')).toBe('');
+    expect(document.documentElement.style.getPropertyValue('--card-bg-default')).toBe('');
+    expect(document.documentElement.style.getPropertyValue('--card-bg-hover')).toBe('');
+    expect(document.documentElement.style.getPropertyValue('--card-bg-active')).toBe('');
+    expect(document.documentElement.style.getPropertyValue('--card-bg-accent')).toBe('');
+    expect(document.documentElement.style.getPropertyValue('--card-bg-purple')).toBe('');
   });
 
   it('keeps dark info border aligned with the canonical medium overlay stop', async () => {
@@ -491,7 +532,7 @@ describe('ThemeService runtime theme tokens', () => {
     expect(rootStyle.getPropertyValue('--motion-slow')).toBe('0.7s');
   });
 
-  it('keeps legacy window control close hover isolated from the static theme contract', () => {
+  it('does not expose window controls as a theme extension surface', () => {
     const service = new ThemeService();
     const customTheme = {
       ...bitfunLightTheme,
@@ -507,10 +548,6 @@ describe('ThemeService runtime theme tokens', () => {
     } as unknown as ThemeConfig;
 
     (service as unknown as { injectCSSVariables(theme: ThemeConfig): void }).injectCSSVariables(customTheme);
-    expect(document.documentElement.style.getPropertyValue('--window-control-close-hover-color')).toBe('#a85555');
-    expect(document.documentElement.getAttribute('data-window-control-close-hover-override')).toBe('true');
-
-    (service as unknown as { injectCSSVariables(theme: ThemeConfig): void }).injectCSSVariables(bitfunLightTheme);
     expect(document.documentElement.style.getPropertyValue('--window-control-close-hover-color')).toBe('');
     expect(document.documentElement.getAttribute('data-window-control-close-hover-override')).toBeNull();
   });
@@ -680,6 +717,70 @@ describe('ThemeService runtime theme tokens', () => {
       throw new Error('Expected custom legacy git theme to be exported');
     }
     expectNoNonContractGitColorKeys(exported.theme.colors.git);
+  });
+
+  it('strips retired theme authoring keys from registered custom themes', async () => {
+    const service = new ThemeService();
+    const retiredAuthoringTheme = createThemeWithRetiredAuthoringKeys(
+      'custom-retired-authoring',
+      'Retired Authoring Keys',
+    );
+
+    await service.registerTheme(retiredAuthoringTheme);
+
+    const normalized = service.getTheme('custom-retired-authoring');
+    expect(normalized).toBeDefined();
+    if (!normalized) {
+      throw new Error('Expected custom theme with retired keys to be registered');
+    }
+    expect(normalized.colors.accent[700]).toBe(bitfunDarkTheme.colors.accent[700]);
+    expectNoRetiredThemeAuthoringKeys(normalized);
+
+    const persistedThemes = vi.mocked(configAPI.setConfig).mock.calls.find(([key]) => key === 'themes.custom')?.[1] as
+      | ThemeConfig[]
+      | undefined;
+    const persistedTheme = persistedThemes?.find(theme => theme.id === 'custom-retired-authoring');
+    expect(persistedTheme).toBeDefined();
+    if (!persistedTheme) {
+      throw new Error('Expected custom theme with retired keys to be persisted');
+    }
+    expectNoRetiredThemeAuthoringKeys(persistedTheme);
+
+    const exported = service.exportTheme('custom-retired-authoring');
+    expect(exported).not.toBeNull();
+    if (!exported) {
+      throw new Error('Expected custom theme with retired keys to be exported');
+    }
+    expectNoRetiredThemeAuthoringKeys(exported.theme);
+  });
+
+  it('migrates persisted custom themes with retired authoring keys on load', async () => {
+    const retiredAuthoringTheme = createThemeWithRetiredAuthoringKeys(
+      'custom-loaded-retired-authoring',
+      'Loaded Retired Authoring Keys',
+    );
+    vi.mocked(configAPI.getConfig).mockResolvedValue({ custom: [retiredAuthoringTheme] });
+    const service = new ThemeService();
+
+    await service.ensureUserThemesLoaded();
+
+    const normalized = service.getTheme('custom-loaded-retired-authoring');
+    expect(normalized).toBeDefined();
+    if (!normalized) {
+      throw new Error('Expected custom theme with retired keys to load');
+    }
+    expectNoRetiredThemeAuthoringKeys(normalized);
+
+    const migratedThemes = vi.mocked(configAPI.setConfig).mock.calls.find(([key]) => key === 'themes.custom')?.[1] as
+      | ThemeConfig[]
+      | undefined;
+    expect(migratedThemes).toHaveLength(1);
+    const migratedTheme = migratedThemes?.[0];
+    expect(migratedTheme).toBeDefined();
+    if (!migratedTheme) {
+      throw new Error('Expected custom theme with retired keys to be migrated');
+    }
+    expectNoRetiredThemeAuthoringKeys(migratedTheme);
   });
 
   it('migrates persisted custom themes with non-contract git color keys on load', async () => {

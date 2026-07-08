@@ -78,7 +78,6 @@ export const bitfunSlateTheme: ThemeConfig = {
         200: 'rgba(203, 213, 225, 0.14)',
         300: 'rgba(203, 213, 225, 0.24)',
         400: 'rgba(148, 163, 184, 0.45)',
-        800: 'rgba(71, 85, 105, 0.92)',
       },
     }),
 

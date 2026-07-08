@@ -71,13 +71,12 @@ export const bitfunTokyoNightTheme: ThemeConfig = {
     accent: createAccentScale({
       base: TOKYO_ACCENT,
       hover: TOKYO_ACCENT_HOVER,
-      alpha: { 50: 0.05, 700: 0.85, 800: 0.95 },
+      alpha: { 50: 0.05, 700: 0.85 },
     }),
 
     purple: createSecondaryAccentScale({
       base: TOKYO_PURPLE,
       hover: TOKYO_PURPLE_HOVER,
-      alpha: { 50: 0.05, 800: 0.95 },
     }),
 
     semantic: createSemanticColors({

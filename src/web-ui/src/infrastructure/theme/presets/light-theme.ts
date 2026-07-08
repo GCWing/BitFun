@@ -75,7 +75,6 @@ export const bitfunLightTheme: ThemeConfig = {
         200: lightInk(0.1),
         300: lightInk(0.16),
         400: lightInk(0.26),
-        800: rgbaFromHex(LIGHT_TEXT_STRONG, 0.94),
       },
     }),
 
@@ -83,7 +82,7 @@ export const bitfunLightTheme: ThemeConfig = {
     purple: createSecondaryAccentScale({
       base: '#6b5a89',
       hover: LIGHT_PURPLE_HOVER,
-      alpha: { 200: 0.14, 400: 0.36 },
+      alpha: { 200: 0.14 },
       stops: {
         500: LIGHT_PURPLE,
       },

@@ -122,7 +122,7 @@ $_diff-error-max-width: 400px;
       transform: translateY(-1px);
       box-shadow: 
         0 2px 8px color-mix(in srgb, var(--color-accent-500) 20%, transparent),
-        0 0 20px var(--card-bg-accent);
+        0 0 20px var(--color-accent-100);
     }
 
     &:active:not(:disabled) {

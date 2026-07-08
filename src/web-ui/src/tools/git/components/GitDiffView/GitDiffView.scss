@@ -470,7 +470,7 @@ $opacity-high: 0.8 !default;
       outline: none;
       border-color: var(--color-accent-500);
       background: var(--element-bg-medium);
-      box-shadow: 0 0 0 3px var(--card-bg-accent);
+      box-shadow: 0 0 0 3px var(--color-accent-100);
     }
 
     &::placeholder {

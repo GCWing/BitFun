@@ -48,10 +48,9 @@ export interface AccentColors {
   500: ColorValue;
   600: ColorValue;
   700: ColorValue;
-  800: ColorValue;
 }
 
-export type SecondaryAccentStop = 50 | 100 | 200 | 400 | 500 | 600 | 800;
+export type SecondaryAccentStop = 100 | 200 | 500 | 600;
 export type SecondaryAccentColors = Pick<AccentColors, SecondaryAccentStop>;
 
 
@@ -196,17 +195,6 @@ export interface ButtonConfig {
   };
 }
 
-/**
- * @deprecated Legacy custom-theme compatibility only. New themes should use
- * semantic `colors.semantic.error`; the app no longer treats window controls
- * as an independent theme extension surface.
- */
-export interface WindowControlsConfig {
-  close: {
-    hoverColor: ColorValue;
-  };
-}
-
 export interface MotionConfig {
   instant: string;
   fast: string;
@@ -234,7 +222,6 @@ export interface FontWeightConfig {
   normal: number;
   medium: number;
   semibold: number;
-  bold: number;
 }
 
  
@@ -335,8 +322,6 @@ export interface ThemeConfig {
   
   components?: {
     button?: ButtonConfig;
-    /** @deprecated Legacy custom-theme compatibility only. */
-    windowControls?: WindowControlsConfig;
   };
   
   // Monaco Editor

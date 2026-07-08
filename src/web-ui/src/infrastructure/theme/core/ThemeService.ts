@@ -34,21 +34,25 @@ const FLOW_CHAT_LINK_COLORS = {
 
 const GIT_COLOR_CONTRACT_KEYS = ['branch', 'branchBg', 'changes', 'added', 'deleted', 'staged'] as const;
 const GIT_COLOR_CONTRACT_KEY_SET = new Set<string>(GIT_COLOR_CONTRACT_KEYS);
+const RETIRED_ACCENT_COLOR_KEYS = ['800'] as const;
+const RETIRED_PURPLE_COLOR_KEYS = ['50', '400', '800'] as const;
+const RETIRED_FONT_WEIGHT_KEYS = ['bold'] as const;
+const RETIRED_COMPONENT_KEYS = ['windowControls'] as const;
 
 const THEME_STATIC_COLORS = {
   white: '#ffffff',
   black: '#000000',
 } as const;
 
-const ACCENT_STOPS = [50, 100, 200, 300, 400, 500, 600, 700, 800] as const;
-const SECONDARY_ACCENT_STOPS = [50, 100, 200, 400, 500, 600, 800] as const;
+const ACCENT_STOPS = [50, 100, 200, 300, 400, 500, 600, 700] as const;
+const SECONDARY_ACCENT_STOPS = [100, 200, 500, 600] as const;
 const SHADOW_TOKENS = ['xs', 'sm', 'base', 'lg', 'xl'] as const;
 const BLUR_TOKENS = ['subtle', 'base'] as const;
 const RADIUS_TOKENS = ['sm', 'base', 'lg', 'xl'] as const;
 const SPACING_TOKENS = [1, 2, 3, 4, 5, 6, 8] as const;
 const MOTION_DURATION_TOKENS = ['instant', 'fast', 'base', 'slow'] as const;
 const EASING_TOKENS = ['standard', 'decelerate', 'smooth'] as const;
-const FONT_WEIGHT_TOKENS = ['normal', 'medium', 'semibold', 'bold'] as const;
+const FONT_WEIGHT_TOKENS = ['normal', 'medium', 'semibold'] as const;
 const FONT_SIZE_TOKENS = ['xs', 'sm', 'base', 'lg', 'xl', '2xl', '3xl', '4xl'] as const;
 const LINE_HEIGHT_TOKENS = ['tight', 'base', 'relaxed'] as const;
 
@@ -122,13 +126,50 @@ function hasNonContractGitColorKeys(theme: Partial<ThemeConfig>): boolean {
   );
 }
 
-function stripNonContractGitColorKeys(theme: ThemeConfig): ThemeConfig {
+function hasAnyRecordKey(record: Record<string, unknown> | undefined, keys: readonly string[]): boolean {
+  return Boolean(record && keys.some(key => Object.prototype.hasOwnProperty.call(record, key)));
+}
+
+function hasRetiredThemeAuthoringKeys(theme: Partial<ThemeConfig>): boolean {
+  const accentColors = theme.colors?.accent as unknown as Record<string, unknown> | undefined;
+  const purpleColors = theme.colors?.purple as unknown as Record<string, unknown> | undefined;
+  const fontWeights = theme.typography?.weight as unknown as Record<string, unknown> | undefined;
+  const components = theme.components as unknown as Record<string, unknown> | undefined;
+  return (
+    hasAnyRecordKey(accentColors, RETIRED_ACCENT_COLOR_KEYS) ||
+    hasAnyRecordKey(purpleColors, RETIRED_PURPLE_COLOR_KEYS) ||
+    hasAnyRecordKey(fontWeights, RETIRED_FONT_WEIGHT_KEYS) ||
+    hasAnyRecordKey(components, RETIRED_COMPONENT_KEYS)
+  );
+}
+
+function hasNonContractThemeKeys(theme: Partial<ThemeConfig>): boolean {
+  return hasNonContractGitColorKeys(theme) || hasRetiredThemeAuthoringKeys(theme);
+}
+
+function stripNonContractThemeKeys(theme: ThemeConfig): ThemeConfig {
   const sanitized = cloneThemeConfig(theme);
   const gitColors = sanitized.colors?.git as unknown as Record<string, unknown> | undefined;
   Object.keys(gitColors ?? {}).forEach(key => {
     if (!GIT_COLOR_CONTRACT_KEY_SET.has(key)) {
       delete gitColors?.[key];
     }
+  });
+  const accentColors = sanitized.colors?.accent as unknown as Record<string, unknown> | undefined;
+  RETIRED_ACCENT_COLOR_KEYS.forEach(key => {
+    delete accentColors?.[key];
+  });
+  const purpleColors = sanitized.colors?.purple as unknown as Record<string, unknown> | undefined;
+  RETIRED_PURPLE_COLOR_KEYS.forEach(key => {
+    delete purpleColors?.[key];
+  });
+  const fontWeights = sanitized.typography?.weight as unknown as Record<string, unknown> | undefined;
+  RETIRED_FONT_WEIGHT_KEYS.forEach(key => {
+    delete fontWeights?.[key];
+  });
+  const components = sanitized.components as unknown as Record<string, unknown> | undefined;
+  RETIRED_COMPONENT_KEYS.forEach(key => {
+    delete components?.[key];
   });
   return sanitized;
 }
@@ -291,16 +332,16 @@ export class ThemeService {
 
       if (Array.isArray(themes) && themes.length > 0) {
         let loadedCount = 0;
-        let migratedGitColorKeys = false;
+        let migratedThemeKeys = false;
         const persistedThemes = [...themes];
         themes.forEach((theme, index) => {
           try {
             const normalizedTheme = this.normalizeCustomTheme(theme);
             this.themes.set(normalizedTheme.id, normalizedTheme);
             loadedCount += 1;
-            if (hasNonContractGitColorKeys(theme)) {
+            if (hasNonContractThemeKeys(theme)) {
               persistedThemes[index] = normalizedTheme;
-              migratedGitColorKeys = true;
+              migratedThemeKeys = true;
             }
           } catch (error) {
             log.warn('Skipped invalid user theme', {
@@ -310,11 +351,11 @@ export class ThemeService {
           }
         });
         log.info('Loaded user themes', { count: loadedCount, skipped: themes.length - loadedCount });
-        if (migratedGitColorKeys) {
+        if (migratedThemeKeys) {
           try {
             await configAPI.setConfig('themes.custom', persistedThemes);
           } catch (error) {
-            log.warn('Failed to migrate custom theme Git color keys', error);
+            log.warn('Failed to migrate custom theme keys', error);
           }
         }
       }
@@ -368,7 +409,7 @@ export class ThemeService {
     const baseTheme = theme.type === 'light'
       ? builtinThemes.find(item => item.type === 'light') || builtinThemes[0]
       : builtinThemes.find(item => item.id === 'bitfun-dark') || builtinThemes.find(item => item.type === 'dark') || builtinThemes[0];
-    const normalized = stripNonContractGitColorKeys(mergeThemeConfig(baseTheme, theme));
+    const normalized = stripNonContractThemeKeys(mergeThemeConfig(baseTheme, theme));
     const validation = this.validateTheme(normalized);
 
     if (!validation.valid) {
@@ -826,36 +867,6 @@ export class ThemeService {
       root.style.setProperty('--btn-ghost-hover-color', colors.text.primary);
       root.style.setProperty('--btn-ghost-hover-border', 'transparent');
     }
-
-    const legacyWindowCloseHover = theme.components?.windowControls?.close.hoverColor;
-    if (legacyWindowCloseHover) {
-      root.style.setProperty('--window-control-close-hover-color', legacyWindowCloseHover);
-      root.setAttribute('data-window-control-close-hover-override', 'true');
-    } else {
-      root.removeAttribute('data-window-control-close-hover-override');
-      root.style.removeProperty('--window-control-close-hover-color');
-    }
-
-    if (theme.type === 'dark') {
-
-      root.style.setProperty('--card-bg-default', THEME_OVERLAYS.white04);
-      root.style.setProperty('--card-bg-hover', THEME_OVERLAYS.white08);
-      root.style.setProperty('--card-bg-active', THEME_OVERLAYS.white12);
-      root.style.setProperty('--card-bg-accent', THEME_OVERLAYS.white08);
-      root.style.setProperty('--card-bg-accent-hover', THEME_OVERLAYS.white12);
-      root.style.setProperty('--card-bg-purple', 'rgba(139, 92, 246, 0.08)');
-      root.style.setProperty('--card-bg-purple-hover', 'rgba(139, 92, 246, 0.15)');
-    } else {
-
-      root.style.setProperty('--card-bg-default', THEME_OVERLAYS.black08);
-      root.style.setProperty('--card-bg-hover', THEME_OVERLAYS.black12);
-      root.style.setProperty('--card-bg-active', THEME_OVERLAYS.black15);
-      root.style.setProperty('--card-bg-accent', 'rgba(15, 23, 42, 0.08)');
-      root.style.setProperty('--card-bg-accent-hover', 'rgba(15, 23, 42, 0.12)');
-      root.style.setProperty('--card-bg-purple', 'rgba(124, 58, 237, 0.12)');
-      root.style.setProperty('--card-bg-purple-hover', 'rgba(139, 92, 246, 0.15)');
-    }
-
 
     root.setAttribute('data-theme', theme.id);
     root.setAttribute('data-theme-type', theme.type);

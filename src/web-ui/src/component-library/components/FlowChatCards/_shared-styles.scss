@@ -94,7 +94,7 @@
       border-color: color-mix(in srgb, var(--color-error) 40%, transparent);
     }
   } @else if $variant == 'primary' {
-    background: var(--card-bg-accent);
+    background: var(--color-accent-100);
     color: var(--color-accent-500);
     border-color: var(--color-info-border);
 

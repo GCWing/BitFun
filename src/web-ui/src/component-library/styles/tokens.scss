@@ -83,16 +83,12 @@ $color-accent-400: rgba(96, 165, 250, 0.4);
 $color-accent-500: #60a5fa;
 $color-accent-600: #3b82f6;
 $color-accent-700: rgba(59, 130, 246, 0.8);
-$color-accent-800: rgba(59, 130, 246, 0.9);
 
 // ==================== Purple system ====================
-$color-purple-50: $color-purple-500-a05;
 $color-purple-100: $color-purple-500-a08;
 $color-purple-200: $color-purple-500-a15;
-$color-purple-400: $color-purple-500-a40;
 $color-purple-500: #8b5cf6;
 $color-purple-600: #7c3aed;
-$color-purple-800: rgba(124, 58, 237, 0.9);
 
 // ==================== Semantic colors ====================
 $color-success: #34d399;
@@ -292,16 +288,6 @@ $button-bg-hover: linear-gradient(135deg,
 $button-text-hover: $color-static-white;
 
 
-$card-bg-default: $overlay-white-04;
-$card-bg-elevated: $overlay-white-08;
-$card-bg-subtle: $overlay-white-04;
-$card-bg-hover: $overlay-white-08;
-$card-bg-active: $overlay-white-08;
-$card-bg-accent: $color-blue-500-a08;
-$card-bg-accent-hover: $color-blue-500-a15;
-$card-bg-purple: $color-purple-500-a10;
-$card-bg-purple-hover: $color-purple-500-a15;
-
 // ==================== Badge/label tokens ====================
 // Badges/labels are borderless by default and use background color to differentiate
 $badge-border-radius: $size-radius-sm;
@@ -390,15 +376,11 @@ $badge-info-text: $color-info;
   --color-accent-500-rgb: 96 165 250;
   --color-accent-600: #{$color-accent-600};
   --color-accent-700: #{$color-accent-700};
-  --color-accent-800: #{$color-accent-800};
 
-  --color-purple-50: #{$color-purple-50};
   --color-purple-100: #{$color-purple-100};
   --color-purple-200: #{$color-purple-200};
-  --color-purple-400: #{$color-purple-400};
   --color-purple-500: #{$color-purple-500};
   --color-purple-600: #{$color-purple-600};
-  --color-purple-800: #{$color-purple-800};
   --color-indigo-500: #6366f1;
   --color-cyan-500: #06b6d4;
 
@@ -502,7 +484,6 @@ $badge-info-text: $color-info;
   --font-weight-normal: #{$font-weight-normal};
   --font-weight-medium: #{$font-weight-medium};
   --font-weight-semibold: #{$font-weight-semibold};
-  --font-weight-bold: #{$font-weight-bold};
 
   --font-size-xxs: #{$font-size-xxs};
   --font-size-2xs: #{$font-size-2xs};
@@ -561,13 +542,6 @@ $badge-info-text: $color-info;
 
   --opacity-disabled: #{$opacity-disabled};
 
-  --card-bg-default: #{$card-bg-default};
-  --card-bg-hover: #{$card-bg-hover};
-  --card-bg-active: #{$card-bg-active};
-  --card-bg-accent: #{$card-bg-accent};
-  --card-bg-accent-hover: #{$card-bg-accent-hover};
-  --card-bg-purple: #{$card-bg-purple};
-  --card-bg-purple-hover: #{$card-bg-purple-hover};
 }
 
 :root[data-theme="light"],

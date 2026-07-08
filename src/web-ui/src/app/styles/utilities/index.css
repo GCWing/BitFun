@@ -153,7 +153,7 @@
 .font-normal { font-weight: var(--font-weight-normal); }
 .font-medium { font-weight: var(--font-weight-medium); }
 .font-semibold { font-weight: var(--font-weight-semibold); }
-.font-bold { font-weight: var(--font-weight-bold); }
+.font-bold { font-weight: var(--font-weight-semibold); }
 
 /* Text color */
 .text-primary { color: var(--color-text-primary); }

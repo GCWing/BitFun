@@ -63,13 +63,13 @@ export const bitfunCyberTheme: ThemeConfig = {
     accent: createAccentScale({
       base: CYBER_ACCENT,
       hover: CYBER_ACCENT_HOVER,
-      alpha: { 50: 0.05, 100: 0.1, 200: 0.18, 300: 0.3, 400: 0.45, 700: 0.85, 800: 0.95 },
+      alpha: { 50: 0.05, 100: 0.1, 200: 0.18, 300: 0.3, 400: 0.45, 700: 0.85 },
     }),
 
     purple: createSecondaryAccentScale({
       base: CYBER_PURPLE,
       hover: CYBER_PURPLE_HOVER,
-      alpha: { 50: 0.05, 100: 0.1, 200: 0.18, 400: 0.45, 800: 0.95 },
+      alpha: { 100: 0.1, 200: 0.18 },
     }),
 
     semantic: createSemanticColors({

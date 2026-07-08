@@ -27,7 +27,7 @@
     background: radial-gradient(
       ellipse at center,
       var(--color-accent-50) 0%,
-      var(--color-purple-50) 40%,
+      color-mix(in srgb, var(--color-purple-500) 4%, transparent) 40%,
       transparent 70%
     );
     filter: blur(60px);
