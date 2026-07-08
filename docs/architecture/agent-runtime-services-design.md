@@ -72,7 +72,7 @@ SDK 公共 API 以 `AGENT_RUNTIME_SDK_API_VERSION` 标记兼容边界。当前 A
 
 ### 1.3 运行时、能力服务、扩展与主机接口面
 
-本设计不使用单一“产品 API”伞状概念。目标接口面分为四类：
+本设计不使用单一“产品接口”伞状概念。目标接口面分为四类：
 
 | 接口面 | 作用 | 主要消费者 | 约束 |
 |---|---|---|---|
@@ -947,8 +947,8 @@ pub fn build_desktop_runtime(input: DesktopAssemblyInput) -> Result<ProductRunti
 Product Capability 是产品特性的声明单元，由产品组装消费，并引用内核 / 执行层 / 扩展层
 的稳定贡献。它负责把较大粒度的产品能力拆成可组装的能力包；不拥有 UI，也不直接执行具体 IO。
 
-`ProductProfile`、`CapabilityPack`、`CapabilitySet` 和 `OverridePoint` 的权威定义见
-[`product-architecture.md`](product-architecture.md#8-产品如何成形)。本文件补充开发接口约束：
+`ProductProfile`、`CapabilityPack`、`CapabilityPlan`、`CapabilityAvailabilitySet` 和 `OverridePoint` 的权威定义见
+[`product-architecture.md`](product-architecture.md#6-产品形态与能力装配)。本文件补充开发接口约束：
 运行时插件不得作为裁剪内置产品功能的主机制，Cargo feature 也不得直接当作用户可见能力事实。
 
 建议模块：
@@ -1304,7 +1304,7 @@ Product 测试：
   工作流提供方完成最小会话 / 轮次 / 事件流流程。
 - 长程任务、调度、权限、上下文、会话/工作区、记忆、DFX、钩子/事件能作为内核能力被产品特性复用。
 - `/goal`、DeepReview、MiniApp、输入框命令、settings 和 UI panel 通过特性包 / 产品组装来组装，不进入内核。
-- 运行时内部接口、能力服务接口契约、扩展契约和主机内部 ABI 分层表达，不再合并为单一“产品 API”。
+- 运行时内部接口、能力服务接口契约、扩展契约和主机内部 ABI 分层表达，不再合并为单一“产品接口”。
 - 插件运行时主机 / 兼容适配器能把外部插件 API 映射为 BitFun 的工具、钩子、工作流、界面贡献和
   能力/副作用声明，并受安全控制面约束。
 - `bitfun-runtime-services` 提供类型化服务注入，并由边界检查保护。
