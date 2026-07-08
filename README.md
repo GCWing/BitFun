@@ -88,8 +88,8 @@ Go to [Releases](https://github.com/GCWing/BitFun/releases) to download the late
 
 **Prerequisites:**
 
-- [Node.js](https://nodejs.org/) (LTS recommended)
-- [pnpm](https://pnpm.io/)
+- [Node.js](https://nodejs.org/) 22.12+ (LTS recommended)
+- [pnpm](https://pnpm.io/) 10.15.0 via Corepack
 - [Rust toolchain](https://rustup.rs/)
 - [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/)
 

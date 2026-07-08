@@ -12,10 +12,16 @@ Be respectful, kind, and constructive. We welcome contributors of all background
 
 ### Prerequisites
 
-- Node.js (LTS recommended)
-- pnpm
+- Node.js 22.12+ (LTS recommended)
+- pnpm 10.15.0 via Corepack
 - Rust toolchain (install via [rustup](https://rustup.rs/))
 - [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for desktop development
+
+BitFun standardizes local JavaScript builds and CI on Node.js 22.12+. The GitHub
+Actions upgrades in this repository use Node.js 24-compatible action runtimes,
+but project scripts should run on Node.js 22.12+ unless a narrower local guide
+says otherwise. After switching from an older Node.js version, rerun
+`pnpm install`.
 
 #### Windows: OpenSSL Setup
 

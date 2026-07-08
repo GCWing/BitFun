@@ -44,7 +44,7 @@ jobs:
       checkout_ref: ${{ steps.meta.outputs.checkout_ref }}
       matrix: ${{ steps.meta.outputs.matrix }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: ${{ inputs.ref_name != '' && inputs.ref_name || github.ref }}
           fetch-depth: 0
@@ -119,7 +119,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
 
@@ -201,7 +201,7 @@ jobs:
           echo "checksum=${ARCHIVE}.sha256" >> "$GITHUB_OUTPUT"
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: bitfun-cli-${{ needs.prepare.outputs.version }}-${{ needs.prepare.outputs.short_sha }}-${{ matrix.platform.name }}
           if-no-files-found: error

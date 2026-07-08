@@ -34,7 +34,7 @@ jobs:
       upload_to_release: ${{ steps.meta.outputs.upload_to_release }}
       checkout_ref: ${{ steps.meta.outputs.checkout_ref }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Resolve version metadata
         id: meta
@@ -123,7 +123,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
 
@@ -191,12 +191,12 @@ jobs:
             tesseract-ocr-eng
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v5
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
           cache: pnpm
 
       - name: Setup Rust toolchain
@@ -220,7 +220,7 @@ jobs:
         run: ${{ matrix.platform.build_command }}
 
       - name: Upload bundles
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: bitfun-${{ needs.prepare.outputs.release_tag }}-${{ matrix.platform.name }}-bundle
           if-no-files-found: error
@@ -241,10 +241,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Download bundled artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           pattern: bitfun-${{ needs.prepare.outputs.release_tag }}-*-bundle
           path: release-assets
@@ -281,7 +281,7 @@ jobs:
             --required-platforms "${REQUIRED_UPDATER_PLATFORMS}"
 
       - name: Upload to release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.prepare.outputs.release_tag }}
           generate_release_notes: true

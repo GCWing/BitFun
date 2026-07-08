@@ -34,7 +34,7 @@ jobs:
       upload_to_release: ${{ steps.meta.outputs.upload_to_release }}
       checkout_ref: ${{ steps.meta.outputs.checkout_ref }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Resolve version metadata
         id: meta
@@ -103,7 +103,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: ${{ needs.prepare.outputs.checkout_ref }}
 
@@ -187,7 +187,7 @@ jobs:
           echo "checksum=${ARCHIVE}.sha256"  >> "$GITHUB_OUTPUT"
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: bitfun-cli-${{ needs.prepare.outputs.release_tag }}-${{ matrix.platform.name }}
           if-no-files-found: error
@@ -204,7 +204,7 @@ jobs:
 
     steps:
       - name: Download CLI artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           pattern: bitfun-cli-${{ needs.prepare.outputs.release_tag }}-*
           path: cli-release-assets
@@ -234,7 +234,7 @@ jobs:
           cat SHA256SUMS
 
       - name: Upload to release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.prepare.outputs.release_tag }}
           files: |
