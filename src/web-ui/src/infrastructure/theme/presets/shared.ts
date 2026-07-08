@@ -276,7 +276,6 @@ export function createDarkNeutralElement(): ElementBackgrounds {
     base: overlayWhite(0.1),
     medium: overlayWhite(0.12),
     strong: overlayWhite(0.15),
-    elevated: overlayWhite(0.2),
   };
 }
 

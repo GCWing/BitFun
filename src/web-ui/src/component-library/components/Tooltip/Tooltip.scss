@@ -33,7 +33,7 @@
     line-height: 1.4;
     color: var(--color-text-primary);
 
-    background: var(--color-bg-tooltip);
+    background: color-mix(in srgb, var(--color-bg-elevated) 96%, transparent);
 
     border: 1px solid var(--border-base);
     border-radius: var(--size-radius-sm);

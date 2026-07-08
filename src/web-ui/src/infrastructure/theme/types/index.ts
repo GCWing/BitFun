@@ -22,12 +22,10 @@ export interface BackgroundColors {
   primary: ColorValue;
   secondary: ColorValue;
   tertiary: ColorValue;
-  quaternary: ColorValue;
   elevated: ColorValue;
   workbench: ColorValue;
   /** Scene panel background — used by SceneViewport, FlowChat, and all scene content areas. */
   scene: ColorValue;
-  tooltip?: ColorValue;
 }
 
  
@@ -88,7 +86,6 @@ export interface ElementBackgrounds {
   base: ColorValue;
   medium: ColorValue;
   strong: ColorValue;
-  elevated: ColorValue;
 }
 
  

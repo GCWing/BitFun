@@ -199,11 +199,12 @@
 .border-focus { border-color: var(--color-accent-400); }
 
 /* Border radius */
+/* Static utility sizes are intentionally not public theme contracts. */
 .rounded-none { border-radius: 0; }
 .rounded-sm { border-radius: var(--size-radius-sm); }
 .rounded { border-radius: var(--size-radius-base); }
 .rounded-lg { border-radius: var(--size-radius-lg); }
-.rounded-xl { border-radius: var(--size-radius-xl); }
+.rounded-xl { border-radius: 16px; }
 .rounded-full { border-radius: 9999px; }
 
 /* ========== Shadow utilities ========== */
@@ -268,12 +269,13 @@
 
 /* ========== Glassmorphism composites ========== */
 
+/* Static utility effect; themed components should use their owning surface tokens. */
 .glass-panel {
   background: var(--glass-bg-base);
   border: 1px solid var(--glass-border-base);
-  border-radius: var(--size-radius-xl);
-  backdrop-filter: var(--blur-base);
-  -webkit-backdrop-filter: var(--blur-base);
+  border-radius: 16px;
+  backdrop-filter: blur(8px) saturate(1.1);
+  -webkit-backdrop-filter: blur(8px) saturate(1.1);
   box-shadow: var(--shadow-base);
 }
 
@@ -281,8 +283,8 @@
   background: var(--glass-bg-base);
   border: 1px solid var(--glass-border-base);
   border-radius: var(--size-radius-base);
-  backdrop-filter: var(--blur-base);
-  -webkit-backdrop-filter: var(--blur-base);
+  backdrop-filter: blur(8px) saturate(1.1);
+  -webkit-backdrop-filter: blur(8px) saturate(1.1);
   box-shadow: var(--shadow-base);
   transition: all var(--motion-base) var(--easing-standard);
 }

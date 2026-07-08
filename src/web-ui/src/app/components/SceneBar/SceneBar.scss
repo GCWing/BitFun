@@ -257,7 +257,7 @@ $_tab-v-margin: 6px;   // symmetric top/bottom gap inside SceneBar
     box-shadow: 0 0 0 1px color-mix(in srgb, var(--border-subtle) 38%, transparent);
 
     &:hover {
-      background: color-mix(in srgb, var(--color-bg-secondary) 82%, var(--color-bg-quaternary));
+      background: color-mix(in srgb, var(--color-bg-secondary) 82%, var(--element-bg-medium));
       color: color-mix(in srgb, var(--color-text-primary) 90%, var(--color-text-muted));
       box-shadow: 0 0 0 1px color-mix(in srgb, var(--border-subtle) 48%, transparent);
     }

@@ -28,7 +28,6 @@ const CHINA_STYLE_WARNING = '#f0a020';
 const CHINA_STYLE_ERROR = '#c8102e';
 const CHINA_STYLE_BORDER = '#6a5c46';
 
-const chinaStylePaper = (alpha: number | string) => rgbaFromHex(CHINA_STYLE_PAPER, alpha);
 const chinaStyleBlue = (alpha: number | string) => rgbaFromHex(CHINA_STYLE_BLUE, alpha);
 const chinaStyleBorder = (alpha: number | string) => rgbaFromHex(CHINA_STYLE_BORDER, alpha);
 
@@ -47,11 +46,9 @@ export const bitfunChinaStyleTheme: ThemeConfig = {
       primary: CHINA_STYLE_PAPER,
       secondary: '#f5f3e8',
       tertiary: '#f0ede0',
-      quaternary: '#ebe8d8',
       elevated: '#f0ede0',
       workbench: CHINA_STYLE_PAPER,
       scene: CHINA_STYLE_PAPER,
-      tooltip: chinaStylePaper(0.96),
     },
 
     text: {
@@ -88,7 +85,6 @@ export const bitfunChinaStyleTheme: ThemeConfig = {
       base: chinaStyleBlue(0.1),
       medium: chinaStyleBlue(0.14),
       strong: chinaStyleBlue(0.18),
-      elevated: rgbaFromHex(STATIC_WHITE, 0.85),
     },
 
     git: createGitColors({

@@ -54,11 +54,9 @@ export const bitfunTokyoNightTheme: ThemeConfig = {
       primary: TOKYO_BACKGROUND_PRIMARY,
       secondary: TOKYO_BACKGROUND_SECONDARY,
       tertiary: TOKYO_BACKGROUND_SECONDARY,
-      quaternary: TOKYO_BACKGROUND_SECONDARY,
       elevated: TOKYO_BACKGROUND_SECONDARY,
       workbench: TOKYO_BACKGROUND_SECONDARY,
       scene: TOKYO_BACKGROUND_PRIMARY,
-      tooltip: rgbaFromHex(TOKYO_BACKGROUND_SECONDARY, 0.94),
     },
 
     text: {
@@ -102,7 +100,6 @@ export const bitfunTokyoNightTheme: ThemeConfig = {
       base: tokyoAccent(0.11),
       medium: tokyoAccent(0.14),
       strong: tokyoAccent(0.18),
-      elevated: tokyoAccent(0.22),
     },
 
     git: createGitColors({

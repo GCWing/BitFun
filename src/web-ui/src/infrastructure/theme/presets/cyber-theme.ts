@@ -46,11 +46,9 @@ export const bitfunCyberTheme: ThemeConfig = {
       primary: CYBER_BACKGROUND,
       secondary: CYBER_SURFACE_SECONDARY,
       tertiary: CYBER_SURFACE_SECONDARY,
-      quaternary: CYBER_SURFACE_SECONDARY,
       elevated: CYBER_BACKGROUND,
       workbench: CYBER_BACKGROUND,
       scene: CYBER_SURFACE_SECONDARY,
-      tooltip: rgbaFromHex(CYBER_BACKGROUND, 0.95),
     },
 
     text: {
@@ -95,7 +93,6 @@ export const bitfunCyberTheme: ThemeConfig = {
       base: cyberAccent(0.13),
       medium: cyberAccent(0.17),
       strong: cyberAccent(0.22),
-      elevated: cyberAccent(0.27),
     },
 
     git: createGitColors({

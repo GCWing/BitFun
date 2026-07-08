@@ -52,11 +52,9 @@ export const bitfunSlateTheme: ThemeConfig = {
       primary: SLATE_BACKGROUND_PRIMARY,
       secondary: SLATE_BACKGROUND_SECONDARY,
       tertiary: SLATE_BACKGROUND_PRIMARY,
-      quaternary: '#313335',
       elevated: SLATE_BACKGROUND_SECONDARY,
       workbench: SLATE_BACKGROUND_PRIMARY,
       scene: SLATE_BACKGROUND_SECONDARY,
-      tooltip: rgbaFromHex(SLATE_BACKGROUND_SECONDARY, 0.96),
     },
 
     text: {

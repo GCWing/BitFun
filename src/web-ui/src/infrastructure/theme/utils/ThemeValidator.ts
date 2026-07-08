@@ -3,7 +3,6 @@ import type { ThemeConfig, ThemeValidationResult } from '../types';
 
 const REQUIRED_SCHEMA_ROOTS = ['colors', 'effects', 'motion', 'typography'] as const;
 const OPTIONAL_SCHEMA_PATHS = new Set([
-  'colors.background.tooltip',
   'colors.purple',
   'colors.scrollbar',
 ]);
