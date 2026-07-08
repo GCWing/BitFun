@@ -71,7 +71,7 @@ pub fn capture_window_bgra(hwnd: HWND) -> BitFunResult<(Vec<u8>, u32, u32)> {
             .map_err(|e| BitFunError::service(format!("WGC StartCapture: {e}")))?;
 
         let deadline = Instant::now() + Duration::from_secs(2);
-        let mut last_err: Option<String> = None;
+        let mut last_err: Option<String>;
         let result = loop {
             match frame_pool.TryGetNextFrame() {
                 Ok(frame) => match copy_frame_to_bgra(&frame, &d3d_device, &d3d_context) {

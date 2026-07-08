@@ -2,12 +2,12 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 
 use agent_client_protocol::schema::{
-    ContentBlock, PermissionOption, PermissionOptionKind, RequestPermissionRequest, SessionId,
+    PermissionOption, PermissionOptionKind, RequestPermissionRequest, SessionId,
     SessionNotification, SessionUpdate, ToolCall, ToolCallContent, ToolCallLocation,
     ToolCallStatus, ToolCallUpdate, ToolCallUpdateFields, ToolKind,
 };
 use agent_client_protocol::{Client, ConnectionTo, Result};
-use bitfun_core::service::session::{ToolCallData, ToolItemData};
+use bitfun_core::service::session::ToolItemData;
 use bitfun_events::ToolEventData;
 
 pub(super) const PERMISSION_ALLOW_ONCE: &str = "allow_once";
@@ -523,6 +523,8 @@ impl ToolEventExt for ToolEventData {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use agent_client_protocol::schema::ContentBlock;
+    use bitfun_core::service::session::ToolCallData;
 
     #[test]
     fn early_detected_creates_tool_call_once() {

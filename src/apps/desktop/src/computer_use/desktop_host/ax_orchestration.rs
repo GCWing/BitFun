@@ -24,7 +24,9 @@ use bitfun_core::agentic::tools::computer_use_host::{
     VisualActionResult, VisualClickParams, VisualMark, VisualMarkView, VisualMarkViewOpts,
 };
 use bitfun_core::util::errors::{BitFunError, BitFunResult};
-use log::{debug, warn};
+#[cfg(target_os = "macos")]
+use log::debug;
+use log::warn;
 use std::time::{Duration, Instant};
 
 impl DesktopComputerUseHost {
