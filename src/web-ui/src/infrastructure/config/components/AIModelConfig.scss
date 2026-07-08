@@ -509,7 +509,7 @@
       background: color-mix(in srgb, var(--color-accent-500) 6%, transparent);
       
       &:hover {
-        background: var(--card-bg-accent);
+        background: var(--color-accent-100);
       }
     }
   }

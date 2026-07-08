@@ -51,14 +51,14 @@ export interface AccentScaleInput {
   base: string;
   hover?: string;
   stops?: Partial<AccentColors>;
-  alpha?: Partial<Record<50 | 100 | 200 | 300 | 400 | 700 | 800, number | string>>;
+  alpha?: Partial<Record<50 | 100 | 200 | 300 | 400 | 700, number | string>>;
 }
 
 export interface SecondaryAccentScaleInput {
   base: string;
   hover?: string;
   stops?: Partial<SecondaryAccentColors>;
-  alpha?: Partial<Record<50 | 100 | 200 | 400 | 800, number | string>>;
+  alpha?: Partial<Record<100 | 200, number | string>>;
 }
 
 export interface SemanticColorsInput {
@@ -80,7 +80,6 @@ export function createAccentScale(input: AccentScaleInput): AccentColors {
     300: 0.25,
     400: 0.4,
     700: 0.8,
-    800: 0.9,
     ...input.alpha,
   };
 
@@ -93,7 +92,6 @@ export function createAccentScale(input: AccentScaleInput): AccentColors {
     500: input.base,
     600: hover,
     700: rgbaFromHex(hover, alpha[700]),
-    800: rgbaFromHex(hover, alpha[800]),
     ...input.stops,
   };
 }
@@ -101,22 +99,16 @@ export function createAccentScale(input: AccentScaleInput): AccentColors {
 export function createSecondaryAccentScale(input: SecondaryAccentScaleInput): SecondaryAccentColors {
   const hover = input.hover ?? input.base;
   const alpha = {
-    50: 0.04,
     100: 0.08,
     200: 0.15,
-    400: 0.4,
-    800: 0.9,
     ...input.alpha,
   };
 
   return {
-    50: rgbaFromHex(input.base, alpha[50]),
     100: rgbaFromHex(input.base, alpha[100]),
     200: rgbaFromHex(input.base, alpha[200]),
-    400: rgbaFromHex(input.base, alpha[400]),
     500: input.base,
     600: hover,
-    800: rgbaFromHex(hover, alpha[800]),
     ...input.stops,
   };
 }
@@ -152,7 +144,6 @@ export function createStandardTypography(): ThemeConfig['typography'] {
       normal: 400,
       medium: 500,
       semibold: 600,
-      bold: 700,
     },
     size: {
       xs: '12px',
@@ -193,7 +184,6 @@ export function createChinaTypography(): ThemeConfig['typography'] {
       normal: 400,
       medium: 500,
       semibold: 600,
-      bold: 700,
     },
     size: {
       xs: '12px',

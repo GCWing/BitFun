@@ -68,20 +68,16 @@ describe('builtin theme preset output', () => {
       500: '#60a5fa',
       600: '#3b82f6',
       700: 'rgba(59, 130, 246, 0.8)',
-      800: 'rgba(59, 130, 246, 0.9)',
     });
 
     expect(createSecondaryAccentScale({
       base: '#8b5cf6',
       hover: '#7c3aed',
     })).toEqual({
-      50: 'rgba(139, 92, 246, 0.04)',
       100: 'rgba(139, 92, 246, 0.08)',
       200: 'rgba(139, 92, 246, 0.15)',
-      400: 'rgba(139, 92, 246, 0.4)',
       500: '#8b5cf6',
       600: '#7c3aed',
-      800: 'rgba(124, 58, 237, 0.9)',
     });
 
     expect(createSemanticColors({
@@ -97,6 +93,16 @@ describe('builtin theme preset output', () => {
       infoBg: 'rgba(161, 161, 170, 0.1)',
       infoBorder: 'rgba(161, 161, 170, 0.3)',
     });
+  });
+
+  it('does not carry retired runtime-only authoring stops in builtin theme schemas', () => {
+    for (const theme of builtinThemes) {
+      expect(theme.colors.accent).not.toHaveProperty('800');
+      expect(theme.colors.purple).not.toHaveProperty('50');
+      expect(theme.colors.purple).not.toHaveProperty('400');
+      expect(theme.colors.purple).not.toHaveProperty('800');
+      expect(theme.typography.weight).not.toHaveProperty('bold');
+    }
   });
 
   it('keeps near-neutral preset foregrounds on canonical stops', () => {
@@ -140,42 +146,42 @@ describe('builtin theme preset output', () => {
     }))).toMatchInlineSnapshot(`
       [
         {
-          "hash": "64235e8fca47462c9943d3015d024dbd9be8df90d25a5e7508f7e5b2ee789c6c",
+          "hash": "07ac3c2391daeeb61276222879877407d2b0308daf1ae6fb992359ab4c760bfb",
           "id": "bitfun-light",
           "type": "light",
         },
         {
-          "hash": "d6b190bdf145c29e28852d4922e0ee03cfe635ccc42081d82acd9ed75ba9e9c6",
+          "hash": "9bb6e963edc70e14da1e4b009ffaa4e8313fa58e46be104a2678425407135eef",
           "id": "bitfun-slate",
           "type": "dark",
         },
         {
-          "hash": "65b55d4d15503949e120e28fa1210449dfec390af69514410cea429f28bd19da",
+          "hash": "4d9beb6796a2037b4e75d4bc77dd2bfc4e97703dc6ee445b9e795d413b05a6b7",
           "id": "bitfun-dark",
           "type": "dark",
         },
         {
-          "hash": "57d5efdaec49f1e4f21f3d095150dd81e810a0dedae4ae690d15b99e042228fa",
+          "hash": "d8b041347f3cb06996f27a011df5a661dc1d9ebb4c215ef75cbedafc0922135b",
           "id": "bitfun-midnight",
           "type": "dark",
         },
         {
-          "hash": "9fa44f208108fa973bdded43853ad1de449a2f235b3469350900d3afa3e8a50a",
+          "hash": "0e453739640a89cdb0c7f78522ea8d928b3def3c2184190f61d4a0bcd0c711a1",
           "id": "bitfun-china-style",
           "type": "light",
         },
         {
-          "hash": "89461a6629abee37ae1d573b57bce7acf54b05101425c82b65d444573ef66722",
+          "hash": "9b2cf6146d238463e02985ed1fb5c45cb1be3ca0de4b0f2032af6d3526c6f9ac",
           "id": "bitfun-china-night",
           "type": "dark",
         },
         {
-          "hash": "14f6897c94657f1e090107d8ff9d81d7540fad1fca0eaf1b068662b9fa5a518b",
+          "hash": "21cf925270c495469895638825cb8523bf66ec388048bab9be84b066779070c8",
           "id": "bitfun-cyber",
           "type": "dark",
         },
         {
-          "hash": "80c5e00c474fd929154996d1fc8f0a230c50c5ccaaa966fbe588cf2349e2ede5",
+          "hash": "b6d1c7a8138172ce6436dd2dae595147a8317d5cbd0697b39c8373211e02c8ac",
           "id": "bitfun-tokyo-night",
           "type": "dark",
         },

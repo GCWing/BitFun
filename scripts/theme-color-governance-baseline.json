@@ -105,10 +105,10 @@
       "max": 0
     },
     "colorScopes.token.occurrences": {
-      "max": 284
+      "max": 275
     },
     "colorScopes.token.uniqueColors": {
-      "max": 177
+      "max": 171
     },
     "colorScopes.exception.uniqueColors": {
       "max": 162
@@ -120,7 +120,7 @@
       "max": 0
     },
     "cssVarDefinitions.runtimeOnlyRequiredContractUnique": {
-      "max": 1
+      "max": 0
     },
     "cssVarDefinitions.fallbackOnlyUnique": {
       "max": 0
@@ -144,16 +144,16 @@
       "max": 0
     },
     "cssVarDefinitions.staticContractDefinedUnique": {
-      "max": 211
+      "max": 199
     },
     "cssVarDefinitions.staticContractExternalUsageUnique": {
-      "max": 211
+      "max": 199
     },
     "cssVarDefinitions.staticContractInternalOnlyUnique": {
       "max": 0
     },
     "cssVarDefinitions.staticContractLowExternalUsageUnique": {
-      "max": 26
+      "max": 18
     },
     "tokenAliasLiterals.occurrences": {
       "max": 0
@@ -264,19 +264,19 @@
       "max": 0
     },
     "colorDomainScopes.themePreset.occurrences": {
-      "max": 167
+      "max": 166
     },
     "colorDomainScopes.themePreset.uniqueColors": {
-      "max": 114
+      "max": 113
     },
     "colorDomainScopes.themeRuntime.occurrences": {
-      "max": 27
+      "max": 21
     },
     "colorDomainScopes.tokenContract.occurrences": {
-      "max": 84
+      "max": 82
     },
     "colorDomainScopes.tokenContract.uniqueColors": {
-      "max": 76
+      "max": 74
     },
     "colorDomainScopes.generatedWidget.occurrences": {
       "max": 0
@@ -337,12 +337,6 @@
     }
   },
   "allowlists": {
-    "runtimeOnlyRequiredContract": [
-      {
-        "key": "--window-control-close-hover-color",
-        "owner": "ThemeService legacy custom-theme compatibility",
-        "reason": "Deprecated components.windowControls.close.hoverColor override; default close hover uses semantic error without this runtime var."
-      }
-    ]
+    "runtimeOnlyRequiredContract": []
   }
 }

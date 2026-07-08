@@ -58,7 +58,7 @@
 .u-font-normal { font-weight: var(--font-weight-normal); }
 .u-font-medium { font-weight: var(--font-weight-medium); }
 .u-font-semibold { font-weight: var(--font-weight-semibold); }
-.u-font-bold { font-weight: var(--font-weight-bold); }
+.u-font-bold { font-weight: var(--font-weight-semibold); }
 
 .u-leading-tight { line-height: var(--line-height-tight); }
 .u-leading-normal { line-height: var(--line-height-base); }

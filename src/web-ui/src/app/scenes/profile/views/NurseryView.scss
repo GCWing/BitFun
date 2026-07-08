@@ -82,7 +82,7 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
     135deg,
     color-mix(in srgb, var(--color-success) 10%, transparent) 0%,
     color-mix(in srgb, var(--color-accent-600) 7%, transparent) 55%,
-    var(--card-bg-purple) 100%
+    var(--color-purple-100) 100%
   );
   position: relative;
   text-align: left;
@@ -276,7 +276,7 @@ $nursery-scene-gutter: clamp(40px, 6vw, 80px);
   --assistant-card-default-gradient: linear-gradient(
     135deg,
     color-mix(in srgb, var(--color-accent-500) 20%, transparent) 0%,
-    var(--card-bg-purple-hover) 100%
+    var(--color-purple-200) 100%
   );
   --assistant-card-gradient: var(--assistant-card-default-gradient);
 

@@ -75,7 +75,7 @@
     justify-content: center;
     
     // Glass-like badge
-    background: var(--color-accent-800);
+    background: color-mix(in srgb, var(--color-accent-600) 92%, var(--color-static-black));
     color: white;
     border-radius: 8px;
     border: 1px solid color-mix(in srgb, var(--color-accent-500) 30%, transparent);

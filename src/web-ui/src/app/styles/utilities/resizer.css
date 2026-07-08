@@ -29,7 +29,7 @@
   opacity: 0.4;
   box-shadow:
     0 0 6px color-mix(in srgb, var(--color-accent-500) 5%, transparent),
-    0 0 12px var(--color-purple-50),
+    0 0 12px color-mix(in srgb, var(--color-purple-500) 8%, transparent),
     inset 0 0 3px var(--color-overlay-white-04);
   transform: scaleY(1.02);
 }

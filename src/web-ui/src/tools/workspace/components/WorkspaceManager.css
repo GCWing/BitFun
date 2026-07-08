@@ -166,7 +166,7 @@
   background: var(--color-overlay-black-20);
   padding: 4px 8px;
   border-radius: 6px;
-  border: 1px solid var(--card-bg-accent);
+  border: 1px solid var(--color-accent-100);
 }
 
 .workspace-meta {
@@ -190,7 +190,7 @@
   padding: 4px 10px;
   border-radius: 999px;
   background: var(--color-accent-100);
-  border: 1px solid var(--card-bg-accent-hover);
+  border: 1px solid var(--color-accent-200);
 }
 
 .workspace-identity__label {
@@ -300,7 +300,7 @@
     var(--color-accent-50) 0%,
     color-mix(in srgb, var(--color-accent-600) 2%, transparent) 100%);
   border-radius: 8px;
-  border: 1px solid var(--card-bg-accent);
+  border: 1px solid var(--color-accent-100);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
