@@ -1126,7 +1126,8 @@ pub async fn initialize_ai(state: State<'_, AppState>) -> Result<String, String>
         ai_config,
         None,
         stream_options,
-    );
+    )
+    .map_err(|e| format!("Failed to initialize AI client: {}", e))?;
 
     {
         let mut ai_client_guard = state.ai_client.write().await;
@@ -1170,13 +1171,12 @@ async fn create_transient_ai_client_for_config(
         None
     };
 
-    Ok(
-        bitfun_core::infrastructure::ai::AIClient::new_with_runtime_options(
-            ai_config,
-            proxy_config,
-            stream_options,
-        ),
+    bitfun_core::infrastructure::ai::AIClient::new_with_runtime_options(
+        ai_config,
+        proxy_config,
+        stream_options,
     )
+    .map_err(|e| format!("Failed to initialize AI client: {}", e))
 }
 
 #[tauri::command]

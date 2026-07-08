@@ -72,12 +72,12 @@ impl AIClient {
     pub(crate) const HTTP_TCP_KEEPALIVE_SECS: u64 = 60;
 
     /// Create an AIClient without proxy.
-    pub fn new(config: AIConfig) -> Self {
+    pub fn new(config: AIConfig) -> Result<Self> {
         Self::new_with_runtime_options(config, None, StreamOptions::default())
     }
 
     /// Create an AIClient with proxy configuration.
-    pub fn new_with_proxy(config: AIConfig, proxy_config: Option<ProxyConfig>) -> Self {
+    pub fn new_with_proxy(config: AIConfig, proxy_config: Option<ProxyConfig>) -> Result<Self> {
         Self::new_with_runtime_options(config, proxy_config, StreamOptions::default())
     }
 
@@ -86,13 +86,13 @@ impl AIClient {
         config: AIConfig,
         proxy_config: Option<ProxyConfig>,
         stream_options: StreamOptions,
-    ) -> Self {
-        let client = http::create_http_client(proxy_config, config.skip_ssl_verify);
-        Self {
+    ) -> Result<Self> {
+        let client = http::create_http_client(proxy_config, config.skip_ssl_verify)?;
+        Ok(Self {
             client,
             config,
             stream_options,
-        }
+        })
     }
 
     /// Returns the configured idle timeout between streamed chunks, if any.
