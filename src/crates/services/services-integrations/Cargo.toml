@@ -191,7 +191,6 @@ web-tools = ["reqwest", "thiserror"]
 product-full = [
     "announcement",
     "browser-control",
-    "canvas-runtime",
     "debug-log",
     "deep-research",
     "file-watch",

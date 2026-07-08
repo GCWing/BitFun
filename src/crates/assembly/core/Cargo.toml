@@ -169,7 +169,6 @@ schannel = "0.1"
 default = ["product-full"]
 product-full = [
     "ai-adapter-runtime",
-    "canvas-runtime",
     "dep:chrono-tz",
     "dep:cron",
     "dep:dashmap",

@@ -172,7 +172,6 @@ export const ownerCrateFeatureAssemblyRules = [
     requiredProductFullFeatures: [
       'announcement',
       'browser-control',
-      'canvas-runtime',
       'debug-log',
       'deep-research',
       'file-watch',
