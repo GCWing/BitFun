@@ -10,6 +10,7 @@ REGISTRY_VOLUME="${BITFUN_HARBOR_MUSL_REGISTRY_VOLUME:-bitfun-harbor-musl-cargo-
 GIT_VOLUME="${BITFUN_HARBOR_MUSL_GIT_VOLUME:-bitfun-harbor-musl-cargo-git}"
 TARGET_TRIPLE="x86_64-unknown-linux-musl"
 BINARY="${ROOT}/target/${TARGET_TRIPLE}/release/bitfun-cli"
+PROMPTS_DIR="${BITFUN_HARBOR_PROMPTS_DIR:-}"
 
 usage() {
   cat <<EOF
@@ -30,12 +31,17 @@ Commands:
 Environment overrides:
   BITFUN_HARBOR_MUSL_IMAGE, BITFUN_HARBOR_MUSL_CONTAINER
   BITFUN_HARBOR_MUSL_REGISTRY_VOLUME, BITFUN_HARBOR_MUSL_GIT_VOLUME
+  BITFUN_HARBOR_PROMPTS_DIR  Optional local prompt directory containing agentic_mode.md
 
 Output binary:
   ${BINARY}
 
-Harbor mount example:
+Harbor mount examples:
   {"type":"bind","source":"${BINARY}","target":"/usr/local/bin/bitfun-cli","read_only":true}
+  {"type":"bind","source":"\${BITFUN_HARBOR_PROMPTS_DIR}","target":"/prompts","read_only":true}
+
+Harbor environment example:
+  BITFUN_PROMPTS_DIR=/prompts
 EOF
 }
 
@@ -60,6 +66,23 @@ docker_exec() {
   else
     docker exec "${CONTAINER}" "$@"
   fi
+}
+
+prompt_docker_args() {
+  if [[ -z "${PROMPTS_DIR}" ]]; then
+    return 0
+  fi
+  if [[ ! -d "${PROMPTS_DIR}" ]]; then
+    echo "error: prompt directory not found: ${PROMPTS_DIR}" >&2
+    exit 1
+  fi
+  if [[ ! -f "${PROMPTS_DIR}/agentic_mode.md" ]]; then
+    echo "error: prompt directory must contain agentic_mode.md: ${PROMPTS_DIR}" >&2
+    exit 1
+  fi
+  printf '%s\n' \
+    -v "${PROMPTS_DIR}:/prompts:ro" \
+    -e "BITFUN_PROMPTS_DIR=/prompts"
 }
 
 cmd_build_image() {
@@ -128,10 +151,16 @@ cmd_test_binary() {
   file "${BINARY}"
   ldd "${BINARY}" || true
 
+  mapfile -t prompt_args < <(prompt_docker_args)
+  if [[ ${#prompt_args[@]} -gt 0 ]]; then
+    echo "Runtime prompts: ${PROMPTS_DIR} -> /prompts"
+  fi
+
   echo
   echo "Ubuntu smoke test:"
   docker run --rm \
     -v "${BINARY}:/usr/local/bin/bitfun-cli:ro" \
+    "${prompt_args[@]}" \
     ubuntu:22.04 \
     /usr/local/bin/bitfun-cli --version
 
@@ -139,6 +168,7 @@ cmd_test_binary() {
   echo "Alpine smoke test:"
   docker run --rm \
     -v "${BINARY}:/usr/local/bin/bitfun-cli:ro" \
+    "${prompt_args[@]}" \
     alpine:3.20 \
     /usr/local/bin/bitfun-cli --version
 }
@@ -156,6 +186,12 @@ cmd_status() {
   echo "Volumes:"
   echo "  ${REGISTRY_VOLUME}"
   echo "  ${GIT_VOLUME}"
+  echo "Runtime prompts:"
+  if [[ -n "${PROMPTS_DIR}" ]]; then
+    echo "  ${PROMPTS_DIR} -> /prompts (BITFUN_PROMPTS_DIR=/prompts)"
+  else
+    echo "  (not configured; set BITFUN_HARBOR_PROMPTS_DIR)"
+  fi
   echo "Binary:"
   if [[ -e "${BINARY}" ]]; then
     ls -lh "${BINARY}"

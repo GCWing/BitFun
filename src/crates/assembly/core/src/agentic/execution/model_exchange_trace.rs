@@ -417,6 +417,10 @@ pub async fn prepare_model_exchange_trace_for_workspace(
 }
 
 async fn current_model_exchange_trace_policy() -> Option<ModelExchangeTracePolicy> {
+    if let Some(config) = trace_config_from_env() {
+        return ModelExchangeTracePolicy::from_config(config);
+    }
+
     let Ok(config_service) = GlobalConfigManager::get_service().await else {
         return None;
     };
@@ -426,6 +430,17 @@ async fn current_model_exchange_trace_policy() -> Option<ModelExchangeTracePolic
         .await
         .unwrap_or_default();
     ModelExchangeTracePolicy::from_config(tracing_config)
+}
+
+fn trace_config_from_env() -> Option<ModelExchangeTracingConfig> {
+    let value = std::env::var("BITFUN_MODEL_EXCHANGE_TRACE").ok()?;
+    let mode = match value.trim().to_ascii_lowercase().as_str() {
+        "full" => ModelExchangeTracingMode::Full,
+        "usage" | "usage_only" | "usage-only" => ModelExchangeTracingMode::UsageOnly,
+        "off" | "false" | "0" | "" => ModelExchangeTracingMode::Off,
+        _ => return None,
+    };
+    Some(ModelExchangeTracingConfig { mode })
 }
 
 async fn detect_last_sequence(session_dir: &Path) -> Result<u64, String> {

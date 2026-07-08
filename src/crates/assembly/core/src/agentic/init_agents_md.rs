@@ -1,4 +1,4 @@
-use crate::agentic::agents::get_embedded_prompt;
+use crate::agentic::agents::get_prompt_template;
 use crate::agentic::core::{InternalReminderKind, Message};
 use crate::service::config::get_app_language_code;
 use crate::util::errors::{BitFunError, BitFunResult};
@@ -14,9 +14,9 @@ fn init_agents_md_user_query(is_chinese: bool) -> &'static str {
 }
 
 pub(crate) async fn build_init_agents_md_user_input() -> BitFunResult<(String, Vec<Message>)> {
-    let prompt = get_embedded_prompt(INIT_AGENTS_MD_PROMPT_NAME).ok_or_else(|| {
+    let prompt = get_prompt_template(INIT_AGENTS_MD_PROMPT_NAME).ok_or_else(|| {
         BitFunError::Agent(format!(
-            "{} not found in embedded files",
+            "{} not found in prompt files",
             INIT_AGENTS_MD_PROMPT_NAME
         ))
     })?;
@@ -26,7 +26,7 @@ pub(crate) async fn build_init_agents_md_user_input() -> BitFunResult<(String, V
         user_query,
         vec![Message::internal_reminder(
             InternalReminderKind::InitAgentsMd,
-            prompt.to_string(),
+            prompt,
         )],
     ))
 }

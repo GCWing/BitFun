@@ -4533,6 +4533,7 @@ mod tests {
         ModelRoundData {
             id: round_id.to_string(),
             turn_id: turn_id.to_string(),
+            round_group_id: None,
             round_index: 0,
             timestamp: 100,
             text_items: vec![TextItemData {
@@ -4545,6 +4546,8 @@ mod tests {
                 is_subagent_item: None,
                 parent_task_tool_id: None,
                 subagent_session_id: None,
+                attempt_id: None,
+                attempt_index: None,
                 status: Some("completed".to_string()),
             }],
             tool_items: vec![ToolItemData {
@@ -4575,6 +4578,8 @@ mod tests {
                 subagent_session_id: None,
                 subagent_model_id: None,
                 subagent_model_alias: None,
+                attempt_id: None,
+                attempt_index: None,
                 status: Some("completed".to_string()),
                 interruption_reason: None,
             }],

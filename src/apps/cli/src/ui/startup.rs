@@ -1146,10 +1146,10 @@ impl StartupPage {
             "/usage" => {
                 self.status = Some("No active session for /usage.".to_string());
             }
-            "/init" => match crate::prompts::get_cli_prompt("init") {
+            "/init" => match crate::prompts::get_cli_prompt_text("init") {
                 Some(prompt) => {
                     return Some(StartupResult::NewSession {
-                        prompt: Some(prompt.to_string()),
+                        prompt: Some(prompt),
                     });
                 }
                 None => {

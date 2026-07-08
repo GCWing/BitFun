@@ -4,6 +4,7 @@
 
 mod definitions;
 mod prompt_builder;
+mod prompt_runtime;
 mod registry;
 
 use crate::agentic::session::{SystemPromptCacheIdentity, UserContextCacheIdentity};
@@ -37,6 +38,7 @@ pub use prompt_builder::{
     PromptBuilderContext, RemoteExecutionHints, RuntimeContextNeeds, ToolListingSections,
     UserContextPolicy, UserContextSection,
 };
+pub use prompt_runtime::{set_runtime_prompt_dir, AGENT_PROMPTS_ENV};
 pub use registry::catalog::{builtin_agent_specs, BuiltinAgentSpec};
 pub use registry::types::{
     subagent_source_from_custom_kind, AgentCategory, AgentInfo, AgentToolPolicy,
@@ -108,6 +110,8 @@ pub trait Agent: Send + Sync + 'static {
         let template_name = self.prompt_template_name(model_name).trim();
         let scope_key = if template_name.is_empty() {
             format!("agent:{}", self.id())
+        } else if let Some(fingerprint) = prompt_runtime::cache_fingerprint(template_name) {
+            format!("template:{}:{}", template_name, fingerprint)
         } else {
             format!("template:{}", template_name)
         };
@@ -129,12 +133,12 @@ pub trait Agent: Send + Sync + 'static {
     async fn build_prompt(&self, context: &PromptBuilderContext) -> BitFunResult<String> {
         let prompt_components = PromptBuilder::new(context.clone());
         let template_name = self.prompt_template_name(context.model_name.as_deref());
-        let system_prompt_template = get_embedded_prompt(template_name).ok_or_else(|| {
-            BitFunError::Agent(format!("{} not found in embedded files", template_name))
+        let system_prompt_template = get_prompt_template(template_name).ok_or_else(|| {
+            BitFunError::Agent(format!("{} not found in prompt files", template_name))
         })?;
 
         let prompt = prompt_components
-            .build_prompt_from_template(system_prompt_template)
+            .build_prompt_from_template(&system_prompt_template)
             .await?;
 
         Ok(prompt)
@@ -166,13 +170,13 @@ pub trait Agent: Send + Sync + 'static {
     ) -> BitFunResult<String> {
         if let Some(system_reminder_template_name) = self.system_reminder_template_name() {
             let system_reminder =
-                get_embedded_prompt(system_reminder_template_name).ok_or_else(|| {
+                get_prompt_template(system_reminder_template_name).ok_or_else(|| {
                     BitFunError::Agent(format!(
-                        "{} not found in embedded files",
+                        "{} not found in prompt files",
                         system_reminder_template_name
                     ))
                 })?;
-            Ok(system_reminder.to_string())
+            Ok(system_reminder)
         } else {
             Ok("".to_string())
         }
@@ -192,6 +196,12 @@ pub trait Agent: Send + Sync + 'static {
     fn is_readonly(&self) -> bool {
         false
     }
+}
+
+pub fn get_prompt_template(prompt_name: &str) -> Option<String> {
+    prompt_runtime::get_runtime_prompt(prompt_name)
+        .map(|prompt| prompt.content)
+        .or_else(|| get_embedded_prompt(prompt_name).map(str::to_string))
 }
 
 #[cfg(test)]
@@ -267,5 +277,23 @@ mod tests {
         assert_eq!(multitask.tool_exposure_overrides(), &shared_overrides);
         assert_eq!(plan.tool_exposure_overrides(), &shared_overrides);
         assert_eq!(debug.tool_exposure_overrides(), &shared_overrides);
+    }
+
+    #[test]
+    fn runtime_prompt_override_reaches_anthropic_request_body_system_field() {
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        let prompt = "# Runtime Prompt Override Test\n\nRUNTIME_PROMPT_OVERRIDE_ACTIVE\n";
+        std::fs::write(tempdir.path().join("agentic_mode.md"), prompt).expect("write prompt");
+
+        let runtime_prompt =
+            super::prompt_runtime::get_runtime_prompt_from_root(tempdir.path(), "agentic_mode")
+                .expect("runtime prompt");
+        let request_body = serde_json::json!({
+            "model": "test-model",
+            "messages": [{"role": "user", "content": "hello"}],
+            "system": runtime_prompt.content,
+        });
+
+        assert_eq!(request_body["system"], prompt);
     }
 }
