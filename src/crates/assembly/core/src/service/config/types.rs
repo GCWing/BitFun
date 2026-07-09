@@ -744,12 +744,12 @@ fn default_true() -> bool {
 
 /// Default streaming idle timeout between chunks.
 fn default_stream_idle_timeout() -> Option<u64> {
-    Some(45)
+    Some(600)
 }
 
 /// Default timeout while waiting for the first effective streamed output.
 fn default_stream_ttft_timeout() -> Option<u64> {
-    Some(30)
+    Some(600)
 }
 
 /// Default is no timeout (wait forever).
@@ -2079,11 +2079,11 @@ mod tests {
     }
 
     #[test]
-    fn default_ai_config_uses_stream_timeouts() {
+    fn default_ai_config_uses_generous_stream_timeouts() {
         let config = AIConfig::default();
 
-        assert_eq!(config.stream_idle_timeout_secs, Some(45));
-        assert_eq!(config.stream_ttft_timeout_secs, Some(30));
+        assert_eq!(config.stream_idle_timeout_secs, Some(600));
+        assert_eq!(config.stream_ttft_timeout_secs, Some(600));
         assert_eq!(config.subagent_max_concurrency, 5);
         assert_eq!(
             config.subagent_batch_execution_policy,
@@ -2179,7 +2179,7 @@ mod tests {
     }
 
     #[test]
-    fn deserializes_missing_stream_idle_timeout_as_default() {
+    fn deserializes_missing_stream_timeouts_as_generous_defaults() {
         let config: AIConfig = serde_json::from_value(serde_json::json!({
             "models": [],
             "agent_models": {},
@@ -2193,8 +2193,8 @@ mod tests {
         }))
         .expect("config without stream_idle_timeout_secs should deserialize");
 
-        assert_eq!(config.stream_idle_timeout_secs, Some(45));
-        assert_eq!(config.stream_ttft_timeout_secs, Some(30));
+        assert_eq!(config.stream_idle_timeout_secs, Some(600));
+        assert_eq!(config.stream_ttft_timeout_secs, Some(600));
         assert_eq!(config.subagent_max_concurrency, 5);
         assert_eq!(
             config.subagent_batch_execution_policy,
@@ -2220,7 +2220,7 @@ mod tests {
         .expect("config with explicit null stream_ttft_timeout_secs should deserialize");
 
         assert_eq!(config.stream_ttft_timeout_secs, None);
-        assert_eq!(config.stream_idle_timeout_secs, Some(45));
+        assert_eq!(config.stream_idle_timeout_secs, Some(600));
     }
 
     #[test]

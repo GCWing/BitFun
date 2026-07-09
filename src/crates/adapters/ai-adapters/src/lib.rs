@@ -11,10 +11,7 @@ pub mod tool_call_accumulator;
 pub mod trace;
 pub mod types;
 
-pub use client::{
-    AIClient, StreamOptions, StreamResponse, DEFAULT_STREAM_IDLE_TIMEOUT_SECS,
-    DEFAULT_STREAM_TTFT_TIMEOUT_SECS,
-};
+pub use client::{AIClient, StreamOptions, StreamResponse};
 pub use model_selector::{
     classify_model_selector, resolve_cache_model_selector, resolve_required_model_selector,
     ModelSelectorError, ModelSelectorKind,
