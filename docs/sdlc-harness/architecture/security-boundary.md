@@ -159,7 +159,7 @@ interface SecurityBoundaryDecision {
 | P0 | 展示执行位置、工作区根、授权范围和基础 allow/ask/deny；记录沙箱不可用时的降级原因 |
 | P1 | 本地临时 worktree、只读/写入范围、远程上下文提示、ACP 权限桥接和 UI iframe sandbox 统一记录 |
 | P2 | 工作区配置声明可信命令、域名、路径和凭据范围；支持撤销、过期和项目级审计 |
-| P3 | 插件运行时主机的 cell/worker/subprocess/sandbox 分级和项目执行域隔离增强；产品运行时 P0 的 Desktop/CLI OpenCode-compatible plugin 切片只要求按当前真实隔离能力准确展示降级和残余风险 |
+| P3 | 插件运行时主机的 cell/worker/subprocess/sandbox 分级和项目执行域隔离增强；产品运行时 P0 的 OpenCode-compatible 插件来源、诊断和最小候选效果消费路径只要求按当前真实隔离能力准确展示降级和残余风险 |
 | P4 | 企业受管 sandbox、容器策略、无凭据运行、网络策略、签名插件和跨项目审计导出 |
 
 ## 6. 应急放行规则

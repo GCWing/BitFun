@@ -12,6 +12,7 @@ const MODULES = [
   './core-boundaries/rules/source-rules.mjs',
   './core-boundaries/rules/source/facade-rules.mjs',
   './core-boundaries/rules/source/forbidden-rules.mjs',
+  './core-boundaries/rules/source/public-api-rules.mjs',
   './core-boundaries/rules/source/required-rules.mjs',
 ];
 

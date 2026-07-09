@@ -26,6 +26,7 @@ import {
   forbiddenContentRules,
   forbiddenContentUnderRules,
   publicApiAllowlistRules,
+  publicApiContractSlices,
   requiredContentRules,
 } from './rules/source-rules.mjs';
 import { runManifestParserSelfTest } from './self-test.mjs';
@@ -33,6 +34,7 @@ import { runManifestParserSelfTest } from './self-test.mjs';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..', '..');
 const failures = [];
+const publicApiContractSliceSet = new Set(publicApiContractSlices);
 
 function toRepoPath(path) {
   return relative(ROOT, path).replace(/\\/g, '/');
@@ -963,22 +965,23 @@ function collectTopLevelRustPublicSymbols(text) {
 
 function collectPluginRootReexports(text) {
   const symbols = [];
-  const blockRegex = /\bpub\s+use\s+plugin::\{([\s\S]*?)\};/g;
+  const publicName = (symbol) => symbol.split(/\s+as\s+/).pop().trim();
+  const blockRegex = /\bpub\s+use\s+(?:crate::|self::)?plugin::\{([\s\S]*?)\};/g;
   for (const match of text.matchAll(blockRegex)) {
     symbols.push(
       ...match[1]
         .split(',')
         .map((symbol) => symbol.trim())
-        .filter(Boolean),
+        .filter(Boolean)
+        .map(publicName),
     );
   }
-  const singleRegex =
-    /\bpub\s+use\s+plugin::([A-Za-z_][A-Za-z0-9_]*)(?:\s+as\s+[A-Za-z_][A-Za-z0-9_]*)?\s*;/g;
-  for (const match of text.matchAll(singleRegex)) {
-    symbols.push(match[1]);
-  }
+  const singleRegex = /\bpub\s+use\s+(?:crate::|self::)?plugin::([A-Za-z_][A-Za-z0-9_]*|\*)(?:\s+as\s+([A-Za-z_][A-Za-z0-9_]*))?\s*;/g;
+  for (const match of text.matchAll(singleRegex)) symbols.push(match[2] || match[1]);
   return symbols;
 }
+
+const hasPluginWildcardReexport = (text) => /\bpub\s+use\s+(?:crate::|self::)?plugin::\*/.test(text);
 
 function allowedSymbolsForRule(rule, entriesField, symbolsField) {
   if (rule[entriesField]) {
@@ -988,26 +991,21 @@ function allowedSymbolsForRule(rule, entriesField, symbolsField) {
 }
 
 function checkPublicApiEntryMetadata(path, entries, reason) {
-  if (!entries) {
-    return;
-  }
-  const requiredFields = ['symbol', 'owner', 'consumer', 'p0', 'rationale', 'exit'];
+  if (!entries) return;
+  const fail = (entry, message) =>
+    failures.push({ path, line: 1, message: `${reason}; public API entry ${entry.symbol || '<missing>'} ${message}` });
+  const requiredFields = ['symbol', 'owner', 'consumer', 'verification', 'p0', 'contractSlice', 'rationale', 'exit'];
   for (const entry of entries) {
     for (const field of requiredFields) {
       if (typeof entry[field] !== 'string' || entry[field].trim().length === 0) {
-        failures.push({
-          path,
-          line: 1,
-          message: `${reason}; public API entry ${entry.symbol || '<missing>'} is missing ${field}`,
-        });
+        fail(entry, `is missing ${field}`);
       }
     }
     if (typeof entry.wireImpact !== 'boolean') {
-      failures.push({
-        path,
-        line: 1,
-        message: `${reason}; public API entry ${entry.symbol || '<missing>'} must declare wireImpact`,
-      });
+      fail(entry, 'must declare wireImpact');
+    }
+    if (!publicApiContractSliceSet.has(entry.contractSlice)) {
+      fail(entry, 'has unknown contractSlice');
     }
   }
 }
@@ -1055,7 +1053,7 @@ function checkPublicApiAllowlist(rule) {
       allowedSymbolsForRule(rule, 'allowedPluginReexportEntries', 'allowedPluginReexports'),
       rule.reason,
     );
-    if (/\bpub\s+use\s+plugin::\*/.test(text)) {
+    if (hasPluginWildcardReexport(text)) {
       failures.push({
         path,
         line: 1,
@@ -1114,11 +1112,13 @@ export function runCoreBoundaryCheck() {
       forbiddenContentRules,
       forbiddenContentUnderRules,
       publicApiAllowlistRules,
+      publicApiContractSlices,
       facadeOnlyFiles,
       forbiddenRuleTextForPath,
       regexSourceContainsContract,
       collectTopLevelRustPublicSymbols,
       collectPluginRootReexports,
+      hasPluginWildcardReexport,
       createFacadeLineChecker,
       escapeRegex,
     });

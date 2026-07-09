@@ -1,25 +1,25 @@
 # BitFun 子模块设计：证据包
 
 > 上游文档：[design.md](../design.md)
-> 模块角色：把一次任务或变更的上下文、验证、风险、跳过项、人工决策和安全授权整理成可投影、可失效、可回放的证据快照。
+> 模块角色：把一次任务或变更的上下文、验证、风险、跳过项、人工决策和安全授权整理成可呈现、可失效、可回放的证据快照。
 
 ## 1. 模块定位
 
-证据包是后台证据投影契约。快速路径下用户看到信心摘要；准备 PR、团队策略启用、风险升级、发布/事故追溯或评测回放时，系统按配置展示证据引用或完整证据包。
+证据包是后台证据视图和 schema。快速路径下用户看到信心摘要；准备 PR、团队策略启用、风险升级、发布/事故追溯或评测回放时，系统按配置展示证据引用或完整证据包。
 
 质量数据面记录事件和引用，证据包负责把这些事实整理成一次任务或变更集可消费、可审计、可失效的快照。证据包陈述证据内容、来源、新鲜度、跳过检查、风险接受和安全授权；合入判断由变更就绪度、团队策略、CI、分支保护和人工审查共同决定。
 
-外部系统的成熟实践说明了这个边界：[GitHub Checks](https://docs.github.com/rest/checks) 把检查结论和摘要投影到提交（commit）或 PR；[SLSA provenance](https://slsa.dev/provenance) 关注制品的来源、时间和生成方式；[OpenTelemetry semantic conventions](https://opentelemetry.io/docs/specs/semconv/) 关注跨系统语义稳定。证据包应吸收这些思想，但保持 BitFun 内部规范证据模型。
+外部系统的成熟实践说明了这个边界：[GitHub Checks](https://docs.github.com/rest/checks) 把检查结论和摘要呈现到提交（commit）或 PR；[SLSA provenance](https://slsa.dev/provenance) 关注制品的来源、时间和生成方式；[OpenTelemetry semantic conventions](https://opentelemetry.io/docs/specs/semconv/) 关注跨系统语义稳定。证据包应吸收这些思想，但保持 BitFun 内部规范证据模型。
 
 ## 2. 设计约束
 
-- 证据包由交付物与证据层（Artifact and Evidence Plane）负责投影和版本化。
+- 证据包由交付物与证据层（Artifact and Evidence Plane）负责生成视图和版本化。
 - 原始事实来自质量数据面的 `LifecycleEvent` 和 `EvidenceReference`。
 - 证据包保存摘要和引用，完整终端日志、prompt、模型上下文或第三方载荷按隐私策略另行保留或丢弃。
 - 证据包必须能表达 `fresh`、`partial`、`stale`、`blocked` 和 `superseded`。
 - 证据包必须支持展示层级，避免完整证据包默认污染快速路径。
 - 缺少证据、证据过期或主动配置未确认时，证据包使用 `partial`、`stale` 或 `blocked` 状态。
-- PR 文本、审查界面、门禁、发布就绪度和评测回放都应消费同一证据包契约。
+- PR 文本、审查界面、门禁、发布就绪度和评测回放都应消费同一证据包 schema。
 
 ## 3. 证据展示层级
 
@@ -142,7 +142,7 @@ interface EvidencePack {
 
 | 阶段 | 目标 |
 |---|---|
-| P-1 | 定义 EvidenceReference、证据包结构、状态、展示层级、新鲜度和风险接受契约 |
+| P-1 | 定义 EvidenceReference、证据包结构、状态、展示层级、新鲜度和风险接受字段 |
 | P0 | 为快速路径生成摘要层级，记录验证、安全决策、沙箱等级和跳过项 |
 | P1 | 支撑 PR 就绪度的证据引用、过期证据和定向审查证据 |
 | P2 | 支撑团队/守护策略的 PR 门禁投影、风险接受和主动配置信任审查 |
@@ -159,7 +159,7 @@ interface EvidencePack {
 | 门禁与证据包状态不一致 | 门禁结果必须引用 `evidence_pack_id` 和 `policy_version` |
 | 人工接受掩盖证据缺失 | 风险接受不能把缺失证据改写成通过 |
 | 证据过期不可见 | 变更集、策略画像、策略、检查、审查或主动配置变化必须标记过期 |
-| 模块重复定义字段 | 证据包结构是唯一证据投影契约，其他模块只能扩展引用或消费 |
+| 模块重复定义字段 | 证据包结构是唯一证据视图和 schema，其他模块只能扩展引用或消费 |
 
 ## 9. 成功标准
 

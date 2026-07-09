@@ -5,7 +5,7 @@
 
 ## 1. 模块定位
 
-质量数据面是追加式事件和事实投影层。它负责把项目画像、任务、工具调用、文件变更、验证命令、策略决策、安全授权、审查、CI、发布和运行期反馈整理成可追踪、可裁剪、可回放的事实投影，并为摘要、审查、门禁、复盘和评测提供统一查询口径。
+质量数据面是追加式事件和事实视图层。它负责把项目画像、任务、工具调用、文件变更、验证命令、策略决策、安全授权、审查、CI、发布和运行期反馈整理成可追踪、可裁剪、可回放的事实视图，并为摘要、审查、门禁、复盘和评测提供统一查询口径。
 
 P0 事件集优先支撑三件事：
 
@@ -13,7 +13,7 @@ P0 事件集优先支撑三件事：
 2. 安全敏感动作能追溯允许、询问、拒绝、应急放行的原因和范围。
 3. 配置化策略能用真实数据校准是否过度打断、误升级或漏提示。
 
-证据包、交付物图谱、风险分类器、变更就绪度、PR 门禁和智能体评测都消费同一事实投影层；模块通过稳定查询和投影契约读取事实，避免各自重新定义字段。权威事实仍由 Agent Kernel、Execution、Security Boundary、受信外部系统或人工确认产生，质量数据面不成为新的状态 owner。
+证据包、交付物图谱、风险分类器、变更就绪度、PR 门禁和智能体评测都消费同一事实视图层；模块通过稳定查询接口和事实视图读取事实，避免各自重新定义字段。权威事实仍由 Agent Kernel、Execution、Security Boundary、受信外部系统或人工确认产生，质量数据面不成为新的状态 owner。
 
 ## 2. 行业参照与设计约束
 
@@ -120,7 +120,7 @@ interface LifecycleEvent {
 |---|---|
 | producer | 明确由 Agent Kernel、Execution、Security Boundary、Project Profile Integration、Configurable Policy Profile、Artifact and Evidence Plane、Product Feature、adapter 或 UI 投影中的哪个 owner 产生 |
 | trigger | 说明何时产生，缺少输入时是否跳过、降级或使用摘要 |
-| payload schema | 定义稳定字段、版本和可删除字段；禁止无界 `payload: unknown` 直接进入长期合同 |
+| payload schema | 定义稳定字段、版本和可删除字段；禁止无界 `payload: unknown` 直接进入长期 schema |
 | privacy / retention | 标注隐私分级、保留周期、脱敏和导出策略 |
 | consumer | 列出当前消费方；没有当前消费方的字段必须有删除条件 |
 | fallback | 事件缺失、过期或不可访问时的用户可见降级 |

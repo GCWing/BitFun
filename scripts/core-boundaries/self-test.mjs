@@ -22,11 +22,13 @@ export function runManifestParserSelfTest({
   forbiddenContentRules,
   forbiddenContentUnderRules,
   publicApiAllowlistRules,
+  publicApiContractSlices,
   facadeOnlyFiles,
   forbiddenRuleTextForPath,
   regexSourceContainsContract,
   collectTopLevelRustPublicSymbols,
   collectPluginRootReexports,
+  hasPluginWildcardReexport,
   createFacadeLineChecker,
   escapeRegex,
 }) {
@@ -837,17 +839,35 @@ export function runManifestParserSelfTest({
   );
   const parsedPluginReexports = collectPluginRootReexports(`
     pub use plugin::{PluginDispatchEnvelope, PluginResponseEnvelope};
-    pub use plugin::{
+    pub use self::plugin::{
       PluginRuntimeReadRequest,
-      PluginRuntimeReadResponse,
+      PluginRuntimeReadResponse as RuntimeReadResponse,
     };
-    pub use plugin::PluginRuntimeClient;
+    pub use crate::plugin::PluginRuntimeClient;
+    pub use plugin::*;
   `);
   if (
     parsedPluginReexports.join(',') !==
-    'PluginDispatchEnvelope,PluginResponseEnvelope,PluginRuntimeReadRequest,PluginRuntimeReadResponse,PluginRuntimeClient'
+    'PluginDispatchEnvelope,PluginResponseEnvelope,PluginRuntimeReadRequest,RuntimeReadResponse,PluginRuntimeClient,*'
   ) {
-    throw new Error('plugin root re-export parser must collect all block and single re-exports');
+    throw new Error('plugin root re-export parser must collect plugin path variants, aliases, and wildcard markers');
+  }
+  for (const wildcardReexport of [
+    'pub use plugin::*;',
+    'pub use crate::plugin::*;',
+    'pub use self::plugin::*;',
+  ]) {
+    if (!hasPluginWildcardReexport(wildcardReexport)) {
+      throw new Error(`plugin wildcard guard must reject path variant: ${wildcardReexport}`);
+    }
+  }
+  for (const nonWildcardReexport of [
+    'pub use plugin::PluginDispatchEnvelope;',
+    'pub use crate::not_plugin::*;',
+  ]) {
+    if (hasPluginWildcardReexport(nonWildcardReexport)) {
+      throw new Error(`plugin wildcard guard must not reject non-plugin wildcard: ${nonWildcardReexport}`);
+    }
   }
   const parsedPluginSymbols = collectTopLevelRustPublicSymbols(`
     pub enum TopLevelEnum { Value }
@@ -889,10 +909,13 @@ export function runManifestParserSelfTest({
     throw new Error('plugin runtime public API allowlist must include plugin status snapshot');
   }
   for (const entry of pluginPublicApiRule.allowedSymbolEntries) {
-    for (const field of ['owner', 'consumer', 'p0', 'rationale', 'exit']) {
+    for (const field of ['owner', 'consumer', 'verification', 'p0', 'contractSlice', 'rationale', 'exit']) {
       if (!entry[field]) {
         throw new Error(`plugin runtime public API entry must declare ${field}: ${entry.symbol}`);
       }
+    }
+    if (!publicApiContractSlices.includes(entry.contractSlice)) {
+      throw new Error(`plugin runtime public API entry uses unknown contractSlice: ${entry.symbol}`);
     }
     if (typeof entry.wireImpact !== 'boolean') {
       throw new Error(`plugin runtime public API entry must declare wireImpact: ${entry.symbol}`);
