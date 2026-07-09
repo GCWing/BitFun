@@ -5696,7 +5696,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             .filter(|name| !name.is_empty())
             .unwrap_or("Side thread")
             .to_string();
-        let child_session = self
+        let mut child_session = self
             .session_manager
             .create_session_with_id_and_details(
                 Some(child_session_id.to_string()),
@@ -5707,6 +5707,15 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 SessionKind::EphemeralChild,
             )
             .await?;
+        self.session_manager
+            .inherit_session_agent_type_state(
+                &child_session.session_id,
+                snapshot.last_user_dialog_agent_type.clone(),
+                snapshot.last_submitted_agent_type.clone(),
+            )
+            .await?;
+        child_session.last_user_dialog_agent_type = snapshot.last_user_dialog_agent_type.clone();
+        child_session.last_submitted_agent_type = snapshot.last_submitted_agent_type.clone();
 
         let copied = self
             .session_manager
@@ -8150,6 +8159,14 @@ mod tests {
             .await
             .expect("parent session should be created");
         session_manager
+            .inherit_session_agent_type_state(
+                &parent_session.session_id,
+                Some("agentic".to_string()),
+                Some("agentic".to_string()),
+            )
+            .await
+            .expect("parent agent type state should be set");
+        session_manager
             .replace_context_messages(
                 &parent_session.session_id,
                 vec![crate::agentic::core::Message::user(
@@ -8199,6 +8216,14 @@ mod tests {
         assert_eq!(
             child_session.kind,
             crate::agentic::core::SessionKind::EphemeralChild
+        );
+        assert_eq!(
+            child_session.last_user_dialog_agent_type.as_deref(),
+            Some("agentic")
+        );
+        assert_eq!(
+            child_session.last_submitted_agent_type.as_deref(),
+            Some("agentic")
         );
         assert_eq!(
             session_manager

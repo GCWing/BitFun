@@ -2453,6 +2453,46 @@ impl SessionManager {
         Ok(())
     }
 
+    /// Inherit parent dialog mode state when creating forked child sessions.
+    ///
+    /// `last_user_dialog_agent_type` drives first-entry mode reminders, while
+    /// `last_submitted_agent_type` preserves scheduler prompt-cache state.
+    pub async fn inherit_session_agent_type_state(
+        &self,
+        session_id: &str,
+        last_user_dialog_agent_type: Option<String>,
+        last_submitted_agent_type: Option<String>,
+    ) -> BitFunResult<()> {
+        if let Some(mut session) = self.sessions.get_mut(session_id) {
+            session.last_user_dialog_agent_type = last_user_dialog_agent_type;
+            session.last_submitted_agent_type = last_submitted_agent_type;
+            session.updated_at = SystemTime::now();
+            session.last_activity_at = SystemTime::now();
+        } else {
+            return Err(BitFunError::NotFound(format!(
+                "Session not found: {}",
+                session_id
+            )));
+        }
+
+        if self.should_persist_session_id(session_id) {
+            let effective_path = self.effective_session_storage_path(session_id).await;
+            let session_snapshot = self.sessions.get(session_id).map(|s| s.clone());
+            if let (Some(workspace_path), Some(session)) = (effective_path, session_snapshot) {
+                self.persistence_manager
+                    .save_session(&workspace_path, &session)
+                    .await?;
+            }
+        }
+
+        debug!(
+            "Session agent type state inherited: session_id={}",
+            session_id
+        );
+
+        Ok(())
+    }
+
     fn derive_last_user_dialog_agent_type_from_turns(
         turns: &[DialogTurnData],
         fallback_agent_type: Option<&str>,

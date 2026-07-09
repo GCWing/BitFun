@@ -2156,9 +2156,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         parentSessionId: currentSessionId,
         workspacePath,
         question,
-        modelId: imagesForBtw.length > 0
-          ? currentSession?.config?.modelName
-          : 'fast',
         imagePayload,
       });
       imagesForBtw.forEach(image => removeContext(image.id));
@@ -2176,7 +2173,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       pendingLargePastesRef.current = originalPendingLargePastes;
       dispatchInput({ type: 'SET_VALUE', payload: originalMessage });
     }
-  }, [clearPendingLargePastes, currentSession?.config?.modelName, currentSessionId, derivedState, expandComposerSpecialTokens, imageContexts, inputState.value, isBtwSession, removeContext, setQueuedInput, t, workspacePath]);
+  }, [clearPendingLargePastes, currentSessionId, derivedState, expandComposerSpecialTokens, imageContexts, inputState.value, isBtwSession, removeContext, setQueuedInput, t, workspacePath]);
 
   const submitCompactFromInput = useCallback(async () => {
     if (!effectiveTargetSessionId || !effectiveTargetSession) {

@@ -17,6 +17,8 @@ pub struct ForkAgentContextSnapshot {
     pub remote_ssh_host: Option<String>,
     pub session_model_id: Option<String>,
     pub session_config: SessionConfig,
+    pub last_user_dialog_agent_type: Option<String>,
+    pub last_submitted_agent_type: Option<String>,
     pub messages: Vec<Message>,
 }
 
@@ -44,6 +46,8 @@ impl ForkAgentContextSnapshot {
             remote_ssh_host: parent_session.config.remote_ssh_host.clone(),
             session_model_id: parent_session.config.model_id.clone(),
             session_config: parent_session.config.clone(),
+            last_user_dialog_agent_type: parent_session.last_user_dialog_agent_type.clone(),
+            last_submitted_agent_type: parent_session.last_submitted_agent_type.clone(),
             messages,
         })
     }
@@ -112,5 +116,21 @@ mod tests {
         assert_eq!(child_config.remote_ssh_host.as_deref(), Some("prod-box"));
         assert_eq!(child_config.model_id.as_deref(), Some("primary"));
         assert_eq!(child_config.max_turns, 7);
+    }
+
+    #[test]
+    fn snapshot_retains_parent_agent_type_state() {
+        let mut parent = parent_session();
+        parent.last_user_dialog_agent_type = Some("agentic".to_string());
+        parent.last_submitted_agent_type = Some("Plan".to_string());
+
+        let snapshot =
+            ForkAgentContextSnapshot::from_parent_session(&parent, Vec::new()).expect("snapshot");
+
+        assert_eq!(
+            snapshot.last_user_dialog_agent_type.as_deref(),
+            Some("agentic")
+        );
+        assert_eq!(snapshot.last_submitted_agent_type.as_deref(), Some("Plan"));
     }
 }

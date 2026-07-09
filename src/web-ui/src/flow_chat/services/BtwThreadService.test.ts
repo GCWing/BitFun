@@ -180,6 +180,7 @@ describe('BtwThreadService', () => {
         ],
       }),
     );
+    expect(mockAskStream.mock.calls[0][0]).not.toHaveProperty('modelId');
     expect(mockAddDialogTurn).toHaveBeenCalledWith(
       'btw-child',
       expect.objectContaining({
@@ -259,7 +260,7 @@ describe('BtwThreadService', () => {
     expect(mockTransition).toHaveBeenCalledWith('btw-child', 'finishing_settled');
   });
 
-  it('uses the provided parent model for image /btw sends instead of forcing fast', async () => {
+  it('uses an explicit model override for /btw sends when provided', async () => {
     sessions.set('btw-child', {
       sessionId: 'btw-child',
       title: 'Side question',

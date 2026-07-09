@@ -290,6 +290,7 @@ export async function sendMessageToTransientBtwSession(params: {
     question,
     imagePayload: params.imagePayload,
   });
+  const modelId = params.modelId?.trim();
   try {
     await btwAPI.askStream({
       requestId,
@@ -297,7 +298,7 @@ export async function sendMessageToTransientBtwSession(params: {
       childSessionId: params.childSessionId,
       childSessionName: params.childSessionName || childSession.title || 'Side thread',
       question,
-      modelId: params.modelId ?? childSession.config.modelName ?? 'fast',
+      ...(modelId ? { modelId } : {}),
       imageContexts: params.imagePayload?.imageContexts,
     });
   } catch (error) {
@@ -305,8 +306,8 @@ export async function sendMessageToTransientBtwSession(params: {
     await stateMachineManager.transition(params.childSessionId, SessionExecutionEvent.FINISHING_SETTLED);
     throw error;
   }
-  if (params.modelId?.trim()) {
-    flowChatStore.updateSessionModelName(params.childSessionId, params.modelId.trim());
+  if (modelId) {
+    flowChatStore.updateSessionModelName(params.childSessionId, modelId);
   }
 
   return { requestId };
