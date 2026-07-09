@@ -135,7 +135,7 @@ pub const GENERATED_SHARED_TERMS: &[GeneratedSharedTermEntry] = &[
     GeneratedSharedTermEntry {
         locale: LocaleId::ZhCN,
         key: "features.deepReview",
-        value: "深度代码评审",
+        value: "严格审查",
     },
     GeneratedSharedTermEntry {
         locale: LocaleId::ZhCN,
@@ -310,7 +310,7 @@ pub const GENERATED_SHARED_TERMS: &[GeneratedSharedTermEntry] = &[
     GeneratedSharedTermEntry {
         locale: LocaleId::ZhTW,
         key: "features.deepReview",
-        value: "深度程式碼審查",
+        value: "嚴格審查",
     },
     GeneratedSharedTermEntry {
         locale: LocaleId::ZhTW,
@@ -485,7 +485,7 @@ pub const GENERATED_SHARED_TERMS: &[GeneratedSharedTermEntry] = &[
     GeneratedSharedTermEntry {
         locale: LocaleId::EnUS,
         key: "features.deepReview",
-        value: "Deep Review",
+        value: "Review: Strict",
     },
     GeneratedSharedTermEntry {
         locale: LocaleId::EnUS,
@@ -675,7 +675,7 @@ mod tests {
     fn generated_contract_contains_shared_terms() {
         assert_eq!(
             generated_shared_term(LocaleId::EnUS, "features.deepReview"),
-            Some("Deep Review")
+            Some("Review: Strict")
         );
     }
 }

@@ -2,11 +2,23 @@ import type {
   AiErrorDetail,
   AiErrorPresentation,
 } from '@/shared/ai-errors/aiErrorPresenter';
+import {
+  DEFAULT_REVIEW_COVERAGE_SOURCE_LABELS,
+  resolveReviewCoverageSourceLabelKey,
+} from '../report/reviewCoverageSource';
 
 type Translate = (key: string, options?: Record<string, unknown> & { defaultValue?: string }) => string;
 
 function truncateDiagnosticValue(value: string): string {
-  return value.length > 500 ? `${value.slice(0, 500)}... [truncated]` : value;
+  const sanitizedValue = value.replace(/\bReview[A-Za-z0-9_]+\b/g, (source) => {
+    const labelKey = resolveReviewCoverageSourceLabelKey(source);
+    return labelKey
+      ? DEFAULT_REVIEW_COVERAGE_SOURCE_LABELS[labelKey]
+      : 'review coverage';
+  });
+  return sanitizedValue.length > 500
+    ? `${sanitizedValue.slice(0, 500)}... [truncated]`
+    : sanitizedValue;
 }
 
 export function buildInterruptionDiagnostics(
@@ -19,7 +31,7 @@ export function buildInterruptionDiagnostics(
   }
 
   const lines: string[] = [];
-  lines.push(t('deepReviewActionBar.diagnosticsTitle', { defaultValue: '=== Deep Review Interruption Diagnostics ===' }));
+  lines.push(t('deepReviewActionBar.diagnosticsTitle', { defaultValue: '=== Strict Review Interruption Diagnostics ===' }));
   lines.push('');
 
   const categoryLabel = t(presentation.titleKey, { defaultValue: presentation.category });

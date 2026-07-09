@@ -70,7 +70,7 @@ describe('ReviewActionControls', () => {
       />,
     );
 
-    expect(html).toContain('Retry incomplete slices (2)');
+    expect(html).toContain('Retry incomplete review work (2)');
     expect(html).toContain('Start fixing');
     expect(html).toContain('Fix &amp; re-review');
     expect(html).toContain('Fill to input');
@@ -104,7 +104,7 @@ describe('ReviewActionControls', () => {
 
     expect(html).toContain('Continue review');
     expect(html).toContain('Switch model');
-    expect(html).toContain('Copy diagnostics');
+    expect(html).toContain('Copy troubleshooting summary');
     expect(html).toContain('View partial results');
   });
 

@@ -1,123 +1,79 @@
 {
   "title": "审核",
-  "subtitle": "配置深度审核及 /DeepReview 命令如何组织审核员、应用审核深度，并通过质量检查汇总结果。",
+  "subtitle": "配置严格 Review 的默认覆盖、成本和容量策略。",
   "loading": "正在加载审核设置...",
   "overview": {
     "title": "审核工作流",
-    "description": "深度审核会并行启动只读审核团队，再由质量检查员合并并校验最终报告。",
+    "description": "Review 可以把复杂或高风险变更提升为严格只读审核，并在最后合并和校验报告。",
     "command": {
-      "title": "/DeepReview 入口",
-      "description": "聊天会话启动完整代码审核团队时，会使用这里的策略、模型与执行设置。"
+      "title": "严格审核路由",
+      "description": "当 Review 针对大范围、高风险或用户明确要求严格审核的请求选择严格路径时，会使用这些设置。"
     },
     "reviewers": {
-      "title": "审核员阵容",
-      "description": "固定核心角色覆盖业务逻辑、性能、安全和最终质量检查；符合条件的只读 Sub-Agent 可以作为专家加入。"
+      "title": "审核覆盖",
+      "description": "BitFun 会根据当前任务选择合适的独立覆盖，不暴露底层审核编排。"
     },
     "qualityGate": {
       "title": "质量检查",
-      "description": "审核深度、模型选择和容量控制会共同决定每个审核员在汇总前能完成的工作量。"
+      "description": "审核深度、模型选择和容量控制会决定本次审核在汇总前需要多广的覆盖。"
     }
   },
   "strategy": {
     "title": "审核策略",
-    "description": "选择整个代码审核团队的默认审核深度。每种策略都带有内置范围、耗时和 Token 行为。",
+    "description": "选择严格审核的默认深度。每种策略都带有内置范围、耗时和 Token 行为。",
     "quick": {
       "label": "快速",
-      "summary": "通过收窄范围筛查高置信问题，并明确降低覆盖范围。"
+      "summary": "面向范围清晰的变更，聚焦筛查高置信问题。"
     },
     "normal": {
       "label": "标准",
       "summary": "适合慢速模型的日常审核，保持耗时有界。"
     },
     "deep": {
-      "label": "深度",
-      "summary": "适合高风险变更和更广覆盖的长耗时深入审核。"
+      "label": "严格",
+      "summary": "适合高风险、大范围或发布前变更的更广审核覆盖。"
     },
-    "inherit": "继承团队（{{level}}）"
+    "inherit": "继承审核（{{level}}）"
   },
   "execution": {
     "title": "执行策略",
-    "description": "控制审核员超时，以及大范围审核如何拆分为并行审核实例。",
-    "reviewerTimeout": "审核员超时",
-    "reviewerTimeoutDesc": "每个审核员的超时时间，单位秒。设为 0 表示不限制。",
+    "description": "为大范围或较慢的严格 Review 设置安全上限。",
+    "reviewerTimeout": "覆盖超时",
+    "reviewerTimeoutDesc": "单个覆盖方向的最长时间，单位秒。设为 0 表示不限制。",
     "judgeTimeout": "质量检查超时",
     "judgeTimeoutDesc": "质量检查员的超时时间，单位秒。设为 0 表示不限制。",
-    "fileSplitThreshold": "文件拆分阈值",
-    "fileSplitThresholdDesc": "目标文件数超过该值时，同一审核角色会拆分为多个实例。",
-    "maxSameRoleInstances": "同角色最大实例数",
-    "maxSameRoleInstancesDesc": "单个审核角色允许并行启动的最大实例数。"
+    "fileSplitThreshold": "大范围目标阈值",
+    "fileSplitThresholdDesc": "目标文件数超过该值时，系统会扩大覆盖。",
+    "maxSameRoleInstances": "最大并行覆盖方向",
+    "maxSameRoleInstancesDesc": "同一严格 Review 方向允许并行执行的最大覆盖数量。"
   },
   "capacity": {
     "title": "容量与重试",
-    "description": "控制 Deep Review 如何等待可用容量，以及在你同意后是否允许对未完成的小范围内容重试。",
+    "description": "控制严格 Review 如何等待可用容量，以及在你同意后是否允许对未完成覆盖重试。",
     "maxParallelReviewers": {
-      "label": "最大并行审核员",
-      "description": "Deep Review 同时运行的审核员实例上限。该设置不会修改全局会话并发。"
+      "label": "最大并行审核工作",
+      "description": "严格 Review 同时运行的审核工作上限。调高后可能并行启动更多模型请求，更早触发供应商限流，并增加 Token 消耗。"
     },
     "maxQueueWaitSeconds": {
-      "label": "最大排队等待",
-      "description": "审核员等待 Deep Review 容量的最长时间，超过后会被跳过。"
+      "label": "最大容量等待",
+      "description": "严格 Review 等待可用容量的最长时间，超过后会继续执行核心检查。"
     },
     "allowProviderCapacityQueue": {
       "label": "等待供应商容量",
-      "description": "遇到供应商容量问题时先排队等待，而不是立即跳过；排队中的审核可以随时取消。"
+      "description": "遇到模型容量问题时先短暂等待，而不是立即只执行核心检查；等待可以随时取消。"
     },
     "allowBoundedAutoRetry": {
       "label": "允许有界自动重试",
-      "description": "你在重试提示中同意后，后续 Deep Review 可以在严格限制内自动重试更小的未完成范围。"
+      "description": "你在重试提示中同意后，后续严格审核可以在严格限制内自动重试更小的未完成覆盖。"
     },
     "autoRetryElapsedGuardSeconds": {
       "label": "自动重试耗时上限",
-      "description": "单次 Deep Review 中自动重试最多可额外使用的时间。"
+      "description": "单次严格审核中自动重试最多可额外使用的时间。"
     }
-  },
-  "members": {
-    "title": "审核员",
-    "description": "调整每个审核员的策略和模型。核心角色会保持锁定。",
-    "count": "{{count}} 个成员",
-    "locked": "锁定",
-    "extra": "额外",
-    "remove": "移除",
-    "businessLogic": {
-      "name": "业务逻辑审核员",
-      "role": "业务逻辑审核员"
-    },
-    "performance": {
-      "name": "性能审核员",
-      "role": "性能审核员"
-    },
-    "security": {
-      "name": "安全审核员",
-      "role": "安全审核员"
-    },
-    "judge": {
-      "name": "审核质量检查员",
-      "role": "审核质量检查员"
-    },
-    "architecture": {
-      "name": "架构审核员",
-      "role": "架构审核员"
-    },
-    "frontend": {
-      "name": "前端审核员",
-      "role": "前端审核员"
-    }
-  },
-  "extra": {
-    "title": "额外审核 Sub-Agent",
-    "description": "只有启用审核能力且保持只读的 Sub-Agent 可以加入审核团队。",
-    "role": "额外专业审核员",
-    "candidate": "候选项",
-    "hint": "创建或编辑 Sub-Agent，启用审核能力并保持只读后会出现在这里。",
-    "placeholder": "选择审核 Sub-Agent",
-    "add": "加入团队",
-    "empty": "当前没有可加入的审核 Sub-Agent。"
   },
   "messages": {
     "loadFailed": "加载审核设置失败。",
     "saveFailed": "保存审核设置失败。",
-    "saved": "审核设置已保存。",
-    "memberAdded": "已添加额外审核员。",
-    "memberRemoved": "已移除额外审核员。"
+    "saved": "审核设置已保存。"
   }
 }

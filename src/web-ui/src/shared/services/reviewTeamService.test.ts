@@ -410,7 +410,7 @@ describe('reviewTeamService', () => {
       {
         definition: {
           id: 'default-review-team',
-          name: 'Code Review Team',
+          name: 'Strict Review Coverage',
           description: 'Backend-defined team',
           warning: 'Review may take longer.',
           defaultModel: 'fast',
@@ -723,7 +723,7 @@ describe('reviewTeamService', () => {
       });
   });
 
-  it('keeps changed-file coverage metadata visible for reduced-depth scope profiles', () => {
+  it('keeps changed-file coverage metadata visible for focused-scope profiles', () => {
     const team = resolveDefaultReviewTeam(
       coreSubagents(),
       storedConfigWithExtra([], { strategy_level: 'quick' }),
@@ -731,7 +731,7 @@ describe('reviewTeamService', () => {
     const files = [
       'src/crates/assembly/core/src/agentic/deep_review/report.rs',
       'src/apps/desktop/src/api/agentic_api.rs',
-      'src/web-ui/src/app/scenes/agents/components/ReviewTeamPage.tsx',
+      'src/web-ui/src/flow_chat/deep-review/action-bar/CapacityQueueNotice.tsx',
     ];
 
     const manifest = buildEffectiveReviewTeamManifest(team, {
@@ -752,7 +752,7 @@ describe('reviewTeamService', () => {
     ).toBe(true);
   });
 
-  it('includes reduced-depth scope profile guidance in the prompt block', () => {
+  it('includes focused-scope profile guidance in the prompt block', () => {
     const team = resolveDefaultReviewTeam(
       coreSubagents(),
       storedConfigWithExtra([], { strategy_level: 'quick' }),
@@ -766,7 +766,7 @@ describe('reviewTeamService', () => {
     expect(promptBlock).toContain('- optional_reviewer_policy: risk_matched_only');
     expect(promptBlock).toContain('- allow_broad_tool_exploration: no');
     expect(promptBlock).toContain('- coverage_expectation: High-risk-only pass.');
-    expect(promptBlock).toContain('Reduced-depth profiles are not full-depth coverage.');
+    expect(promptBlock).toContain('Focused-scope profiles are not full-depth coverage.');
     expect(promptBlock).toContain('populate reliability_signals with reduced_scope');
   });
 
@@ -896,7 +896,7 @@ describe('reviewTeamService', () => {
     const target = classifyReviewTargetFromFiles(
       [
         'src/web-ui/src/shared/services/reviewTeamService.ts',
-        'src/web-ui/src/app/scenes/agents/components/ReviewTeamPage.tsx',
+        'src/web-ui/src/flow_chat/deep-review/action-bar/CapacityQueueNotice.tsx',
         'src/web-ui/src/locales/en-US/scenes/agents.json',
         'src/crates/assembly/core/src/agentic/deep_review_policy.rs',
         'src/crates/assembly/core/src/agentic/tools/implementations/task_tool.rs',
@@ -923,7 +923,7 @@ describe('reviewTeamService', () => {
           fileCount: 3,
           sampleFiles: [
             'src/web-ui/src/shared/services/reviewTeamService.ts',
-            'src/web-ui/src/app/scenes/agents/components/ReviewTeamPage.tsx',
+            'src/web-ui/src/flow_chat/deep-review/action-bar/CapacityQueueNotice.tsx',
             'src/web-ui/src/locales/en-US/scenes/agents.json',
           ],
         },
@@ -1237,7 +1237,7 @@ describe('reviewTeamService', () => {
         'src/web-ui/src/shared/services/reviewTeamService.ts',
         'src/crates/assembly/core/src/agentic/tools/implementations/task_tool.rs',
         'src/apps/desktop/src/api/agent.rs',
-        'src/web-ui/src/app/scenes/agents/components/ReviewTeamPage.tsx',
+        'src/web-ui/src/flow_chat/deep-review/action-bar/CapacityQueueNotice.tsx',
         'src/crates/assembly/core/src/agentic/agents/deep_review_agent.rs',
         'src/apps/desktop/src/api/config.rs',
         'src/web-ui/src/locales/en-US/scenes/agents.json',
@@ -1263,7 +1263,7 @@ describe('reviewTeamService', () => {
       [
         'src/web-ui/src/components/ReviewPanel.tsx',
         'src/web-ui/src/shared/services/reviewTeamService.ts',
-        'src/web-ui/src/app/scenes/agents/components/ReviewTeamPage.tsx',
+        'src/web-ui/src/flow_chat/deep-review/action-bar/CapacityQueueNotice.tsx',
         'src/web-ui/src/locales/en-US/scenes/agents.json',
       ],
       [
@@ -2106,7 +2106,9 @@ describe('reviewTeamService', () => {
     );
 
     const promptBlock = buildReviewTeamPromptBlock(team, manifest);
-    expect(promptBlock).toContain('- team_strategy: quick');
+    expect(promptBlock).toContain('- review_strategy: quick');
+    expect(promptBlock).toContain('Review execution plan:');
+    expect(promptBlock).toContain('Review execution rules:');
     expect(promptBlock).toContain('subagent_type: ReviewSecurity');
     expect(promptBlock).toContain('strategy: deep');
     expect(promptBlock).toContain('model_id: primary');
@@ -2159,7 +2161,7 @@ describe('reviewTeamService', () => {
     });
 
     const promptBlock = buildReviewTeamPromptBlock(team, manifest);
-    expect(promptBlock).toContain('- team_strategy: deep');
+    expect(promptBlock).toContain('- review_strategy: deep');
     expect(promptBlock).toContain('subagent_type: ReviewSecurity');
     expect(promptBlock).toContain('strategy: quick');
   });
@@ -2217,7 +2219,7 @@ describe('reviewTeamService', () => {
 
     expect(promptBlock).toContain('Run manifest:');
     expect(promptBlock).toContain('target_resolution: unknown');
-    expect(promptBlock).toContain('- team_strategy: normal');
+    expect(promptBlock).toContain('- review_strategy: normal');
     expect(promptBlock).toContain(`- workspace_path: ${WORKSPACE_PATH}`);
     expect(promptBlock).toContain('quality_gate_reviewer: ReviewJudge');
     expect(promptBlock).toContain('enabled_extra_reviewers: ExtraEnabled');
@@ -2225,6 +2227,8 @@ describe('reviewTeamService', () => {
     expect(promptBlock).toContain('- ExtraDisabled: disabled');
     expect(promptBlock).not.toContain('subagent_type: ExtraDisabled');
     expect(promptBlock).toContain('Run only reviewers listed in core_reviewers and enabled_extra_reviewers.');
+    expect(promptBlock).not.toContain('Configured code review team:');
+    expect(promptBlock).not.toContain('Team execution rules:');
     expect(promptBlock).not.toContain('run it in parallel with the locked reviewers whenever the change contains frontend files');
   });
 

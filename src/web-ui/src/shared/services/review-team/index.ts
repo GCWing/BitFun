@@ -1178,7 +1178,7 @@ export async function prepareDefaultReviewTeamForLaunch(
 
   if (missingCoreMembers.length > 0) {
     throw new Error(
-      `Required code review team members are unavailable: ${missingCoreMembers
+      `Required strict Review coverage reviewers are unavailable: ${missingCoreMembers
         .map((member) => member.subagentId)
         .join(', ')}`,
     );

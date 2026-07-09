@@ -1085,7 +1085,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
           parentSession: marker?.parentSessionId ? flowState.sessions.get(marker.parentSessionId) : undefined,
           marker,
           kind,
-          title: marker?.title || getSessionTitle(session, kind === 'deep_review' ? 'Deep review' : 'Code review'),
+          title: marker?.title || getSessionTitle(session, kind === 'deep_review' ? 'Review: Strict' : 'Review'),
           requestedFiles,
           issueCount: summary.issueCount,
           riskLevel: summary.riskLevel,

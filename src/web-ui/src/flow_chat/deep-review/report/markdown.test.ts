@@ -16,6 +16,26 @@ describe('markdown', () => {
     expect(markdown).toContain('# Code Review Report');
     expect(markdown).toContain('## Executive Summary');
     expect(markdown).toContain('- Looks good.');
-    expect(markdown).not.toContain('## Run manifest');
+    expect(markdown).not.toContain('## Review Coverage And Cost');
+  });
+
+  it('maps internal reviewer source ids to coverage labels', () => {
+    const markdown = formatCodeReviewReportMarkdown({
+      review_mode: 'deep',
+      summary: {
+        risk_level: 'medium',
+        recommended_action: 'request_changes',
+      },
+      issues: [{
+        severity: 'high',
+        certainty: 'likely',
+        title: 'Token leak',
+        description: 'A token is logged.',
+        source_reviewer: 'ReviewSecurity',
+      }],
+    });
+
+    expect(markdown).toContain('- Source: Security coverage');
+    expect(markdown).not.toContain('ReviewSecurity');
   });
 });

@@ -16,17 +16,19 @@ function activity(overrides: Partial<SessionReviewActivity> = {}): SessionReview
 }
 
 describe('shouldBlockDeepReviewCommand', () => {
-  it('blocks /DeepReview while the parent session already has a blocking review activity', () => {
-    expect(shouldBlockDeepReviewCommand('/DeepReview', activity())).toBe(true);
+  it('blocks strict Review typed commands while the parent session already has a blocking review activity', () => {
+    expect(shouldBlockDeepReviewCommand('/review strict', activity())).toBe(true);
+    expect(shouldBlockDeepReviewCommand('/review deep focus on auth', activity())).toBe(false);
     expect(shouldBlockDeepReviewCommand('/DeepReview focus on auth', activity())).toBe(true);
+    expect(shouldBlockDeepReviewCommand('/deepreview focus on auth', activity())).toBe(true);
   });
 
-  it('does not block non-DeepReview input, lowercase aliases, or completed review activity', () => {
+  it('does not block non-strict Review input or completed review activity', () => {
     expect(shouldBlockDeepReviewCommand('please review this', activity())).toBe(false);
-    expect(shouldBlockDeepReviewCommand('/deepreview', activity())).toBe(false);
+    expect(shouldBlockDeepReviewCommand('/review', activity())).toBe(false);
     expect(
       shouldBlockDeepReviewCommand(
-        '/DeepReview',
+        '/review strict',
         activity({
           lifecycle: 'completed',
           isBlocking: false,

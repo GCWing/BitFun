@@ -14,7 +14,7 @@ describe('reliabilityNotices', () => {
           kind: 'retry_guidance',
           severity: 'warning',
           source: 'runtime',
-          detail: 'Retry one reduced reviewer packet.',
+          detail: 'Retry one optional check outside this run.',
         },
       ],
     });
@@ -24,14 +24,14 @@ describe('reliabilityNotices', () => {
         kind: 'retry_guidance',
         severity: 'warning',
         source: 'runtime',
-        detail: 'Retry one reduced reviewer packet.',
+        detail: 'Retry one optional check outside this run.',
       },
     ]);
     expect(reliabilityNoticeMarkdownLine(
       notices[0],
       DEFAULT_CODE_REVIEW_MARKDOWN_LABELS,
     )).toBe(
-      '- Retry guidance emitted [warning/runtime]: Retry one reduced reviewer packet.',
+      '- Retry guidance emitted [warning/runtime]: Retry one optional check outside this run.',
     );
   });
 });

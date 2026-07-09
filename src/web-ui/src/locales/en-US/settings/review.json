@@ -1,123 +1,79 @@
 {
   "title": "Review",
-  "subtitle": "Configure how Deep Review and /DeepReview assemble reviewers, apply strategy depth, and finish with a quality gate.",
+  "subtitle": "Configure the default coverage, cost, and capacity behavior for strict Review.",
   "loading": "Loading review settings...",
   "overview": {
     "title": "Review workflow",
-    "description": "Deep Review runs a read-only reviewer lineup in parallel, then asks the quality inspector to merge and validate the final report.",
+    "description": "Review can raise difficult or risky changes into a strict read-only review pass, then merge and validate the final report.",
     "command": {
-      "title": "/DeepReview entry",
-      "description": "The command uses these settings whenever a chat session launches the full code review team."
+      "title": "Strict review routing",
+      "description": "These settings apply when Review selects the strict path for broad, risky, or explicitly strict review requests."
     },
     "reviewers": {
-      "title": "Reviewer lineup",
-      "description": "Locked core reviewers cover business logic, performance, security, and final quality inspection; eligible read-only Sub-Agents can join as specialists."
+      "title": "Review coverage",
+      "description": "BitFun selects the right independent coverage for the current task without exposing reviewer orchestration."
     },
     "qualityGate": {
-      "title": "Quality gate",
-      "description": "Strategy depth, model choices, and capacity controls shape how much work each reviewer can do before the result is summarized."
+      "title": "Final quality check",
+      "description": "Strategy depth, model choices, and capacity controls decide how broad the review should be before the result is summarized."
     }
   },
   "strategy": {
     "title": "Review strategy",
-    "description": "Choose the default depth for the whole code review team. Each strategy carries built-in scope, runtime, and token behavior.",
+    "description": "Choose the default depth for strict review. Each strategy carries built-in scope, runtime, and token behavior.",
     "quick": {
       "label": "Quick",
-      "summary": "Reduced-scope screening for high-confidence issues with reduced coverage."
+      "summary": "Focused screening for high-confidence issues on clearly scoped changes."
     },
     "normal": {
-      "label": "Normal",
-      "summary": "Bounded day-to-day review tuned for slower models."
+      "label": "Standard",
+      "summary": "Balanced review coverage with practical evidence for day-to-day review."
     },
     "deep": {
-      "label": "Deep",
-      "summary": "Longer thorough pass for risky changes and broader coverage."
+      "label": "Strict",
+      "summary": "Broader review coverage for risky, broad, or release-sensitive changes."
     },
-    "inherit": "Inherit team ({{level}})"
+    "inherit": "Inherit review ({{level}})"
   },
   "execution": {
     "title": "Execution policy",
-    "description": "Control reviewer timeouts and how large scopes split across parallel reviewer instances.",
-    "reviewerTimeout": "Reviewer timeout",
-    "reviewerTimeoutDesc": "Per-reviewer timeout in seconds. Set 0 to disable the cap.",
-    "judgeTimeout": "Judge timeout",
-    "judgeTimeoutDesc": "Quality-gate timeout in seconds. Set 0 to disable the cap.",
-    "fileSplitThreshold": "File split threshold",
-    "fileSplitThresholdDesc": "Split each reviewer role when the target file count exceeds this value.",
-    "maxSameRoleInstances": "Max same-role instances",
-    "maxSameRoleInstancesDesc": "Maximum parallel instances for one reviewer role."
+    "description": "Set safety limits for strict Review coverage when a target is broad or slow.",
+    "reviewerTimeout": "Coverage timeout",
+    "reviewerTimeoutDesc": "Maximum seconds for one coverage path. Set 0 to disable the cap.",
+    "judgeTimeout": "Final check timeout",
+    "judgeTimeoutDesc": "Final quality-check timeout in seconds. Set 0 to disable the cap.",
+    "fileSplitThreshold": "Large target threshold",
+    "fileSplitThresholdDesc": "Broaden coverage when the target file count exceeds this value.",
+    "maxSameRoleInstances": "Max parallel coverage paths",
+    "maxSameRoleInstancesDesc": "Maximum parallel coverage paths for one strict Review direction."
   },
   "capacity": {
     "title": "Capacity and retry",
-    "description": "Control how Deep Review waits for capacity and whether unresolved slices may retry after you opt in.",
+    "description": "Control how strict Review waits for capacity and whether unresolved coverage may retry after you opt in.",
     "maxParallelReviewers": {
-      "label": "Max parallel reviewers",
-      "description": "Maximum Deep Review reviewer instances to run at the same time. This does not change global session concurrency."
+      "label": "Max parallel review work",
+      "description": "Maximum strict Review work to run at the same time. Higher values may start more model requests in parallel, hit provider rate limits sooner, and increase token spend."
     },
     "maxQueueWaitSeconds": {
-      "label": "Max queue wait",
-      "description": "How long a reviewer may wait for Deep Review capacity before it is skipped."
+      "label": "Max capacity wait",
+      "description": "How long strict Review may wait for capacity before continuing with core checks."
     },
     "allowProviderCapacityQueue": {
       "label": "Wait for provider capacity",
-      "description": "Queue transient provider capacity errors instead of skipping immediately. You can cancel the queued review at any time."
+      "description": "Wait through transient model capacity errors instead of immediately continuing with core checks. You can cancel waiting at any time."
     },
     "allowBoundedAutoRetry": {
       "label": "Allow bounded automatic retry",
-      "description": "After you opt in from a retry prompt, future Deep Reviews may retry smaller unresolved slices within strict limits."
+      "description": "After you opt in from a retry prompt, future strict reviews may retry smaller unresolved coverage within strict limits."
     },
     "autoRetryElapsedGuardSeconds": {
       "label": "Auto-retry elapsed guard",
-      "description": "Maximum extra elapsed time automatic retries may use in one Deep Review run."
+      "description": "Maximum extra elapsed time automatic retries may use in one strict review run."
     }
-  },
-  "members": {
-    "title": "Reviewers",
-    "description": "Adjust reviewer strategy and model assignment. Core roles stay locked.",
-    "count": "{{count}} members",
-    "locked": "Locked",
-    "extra": "Extra",
-    "remove": "Remove",
-    "businessLogic": {
-      "name": "Business Logic Reviewer",
-      "role": "Business Logic Reviewer"
-    },
-    "performance": {
-      "name": "Performance Reviewer",
-      "role": "Performance Reviewer"
-    },
-    "security": {
-      "name": "Security Reviewer",
-      "role": "Security Reviewer"
-    },
-    "judge": {
-      "name": "Review Quality Inspector",
-      "role": "Review Quality Inspector"
-    },
-    "architecture": {
-      "name": "Architecture Reviewer",
-      "role": "Architecture Reviewer"
-    },
-    "frontend": {
-      "name": "Frontend Reviewer",
-      "role": "Frontend Reviewer"
-    }
-  },
-  "extra": {
-    "title": "Extra Review Sub-Agents",
-    "description": "Only Sub-Agents marked Review and kept read-only can join the review team.",
-    "role": "Additional Specialist Reviewer",
-    "candidate": "Candidate",
-    "hint": "Create or edit a Sub-Agent, enable Review, and keep it read-only to make it available here.",
-    "placeholder": "Select a Review Sub-Agent",
-    "add": "Add to team",
-    "empty": "No eligible Review Sub-Agents are available."
   },
   "messages": {
     "loadFailed": "Failed to load review settings.",
     "saveFailed": "Failed to save review settings.",
-    "saved": "Review settings saved.",
-    "memberAdded": "Added the extra reviewer.",
-    "memberRemoved": "Removed the extra reviewer."
+    "saved": "Review settings saved."
   }
 }

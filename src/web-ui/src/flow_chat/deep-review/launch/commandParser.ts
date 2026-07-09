@@ -4,9 +4,14 @@ import type {
   GitStatus,
 } from '@/infrastructure/api/service-api/GitAPI';
 import { normalizeReviewPath } from '@/shared/services/reviewTargetClassifier';
-import { DEEP_REVIEW_COMMAND_RE } from '../../utils/deepReviewConstants';
+import {
+  DEEP_REVIEW_COMMAND_RE,
+  DEEP_REVIEW_COMPAT_COMMAND_PREFIX_RE,
+  REVIEW_STRICT_COMMAND_PREFIX_RE,
+  REVIEW_STRICT_SLASH_COMMAND,
+} from '../../utils/deepReviewConstants';
 
-export const DEEP_REVIEW_SLASH_COMMAND = '/DeepReview';
+export const DEEP_REVIEW_SLASH_COMMAND = REVIEW_STRICT_SLASH_COMMAND;
 
 const EXPLICIT_REVIEW_FILE_EXTENSIONS = new Set([
   '.ts',
@@ -28,7 +33,11 @@ export function isDeepReviewSlashCommand(commandText: string): boolean {
 }
 
 export function getDeepReviewCommandFocus(commandText: string): string {
-  return commandText.trim().replace(/^\/DeepReview\b/, '').trim();
+  return commandText
+    .trim()
+    .replace(REVIEW_STRICT_COMMAND_PREFIX_RE, '')
+    .replace(DEEP_REVIEW_COMPAT_COMMAND_PREFIX_RE, '')
+    .trim();
 }
 
 function cleanPotentialFileToken(token: string): string {

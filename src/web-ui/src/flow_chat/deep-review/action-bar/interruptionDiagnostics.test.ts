@@ -44,7 +44,7 @@ describe('buildInterruptionDiagnostics', () => {
       t,
     );
 
-    expect(diagnostics).toContain('=== Deep Review Interruption Diagnostics ===');
+    expect(diagnostics).toContain('=== Strict Review Interruption Diagnostics ===');
     expect(diagnostics).toContain('Error type: provider_unavailable (provider_unavailable)');
     expect(diagnostics).toContain('Suggested actions: wait_and_retry, copy_diagnostics');
     expect(diagnostics).toContain('  - provider: anthropic');
@@ -69,9 +69,10 @@ describe('buildInterruptionDiagnostics', () => {
       t,
     );
 
-    expect(diagnostics).toContain('=== Deep Review Interruption Diagnostics ===');
+    expect(diagnostics).toContain('=== Strict Review Interruption Diagnostics ===');
     expect(diagnostics).toContain('Error type: unknown (unknown)');
-    expect(diagnostics).toContain('raw message: Conversation execution failed after ReviewSecurity completed.');
+    expect(diagnostics).toContain('raw message: Conversation execution failed after Security coverage completed.');
+    expect(diagnostics).not.toContain('ReviewSecurity');
     expect(diagnostics).not.toBe('category=unknown');
   });
 });

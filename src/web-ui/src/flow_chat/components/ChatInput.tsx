@@ -49,7 +49,6 @@ import { useThreadGoalController } from '../hooks/useThreadGoalController';
 import { ThreadGoalDialogs } from './thread-goal/ThreadGoalDialogs';
 import { FlowChatManager } from '@/flow_chat/services/FlowChatManager';
 import {
-  DEEP_REVIEW_SLASH_COMMAND,
   getDeepReviewLaunchErrorMessage,
   buildDeepReviewLaunchFromSlashCommand,
   buildDeepReviewPreviewFromSlashCommand,
@@ -1828,12 +1827,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         command: '/usage',
         label: t('chatInput.usageAction'),
       },
-      {
-        kind: 'action',
-        id: 'deepreview',
-        command: DEEP_REVIEW_SLASH_COMMAND,
-        label: t('chatInput.deepreviewAction'),
-      },
       ...(canUseSkillsForTarget
         ? [{
             kind: 'action' as const,
@@ -2057,7 +2050,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
         // Only show the picker for "/..." patterns that are plausibly a command (/ or /b... /d...).
         // Once the user types a space (starts composing the real question), stop showing the picker
-        // so Enter can submit "/btw ..." or "/DeepReview ..." instead of selecting from the picker.
+        // so Enter can submit "/btw ..." or "/review strict ..." instead of selecting from the picker.
         if (pickerQuery !== null && (query === '' || query.startsWith('b') || query.startsWith('d') || query.startsWith('g') || query.startsWith('u'))) {
           setSlashCommandState({
             isActive: true,
@@ -2538,7 +2531,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       });
       dispatchInput({ type: 'DEACTIVATE' });
     } catch (error) {
-      log.error('Failed to trigger /DeepReview', {
+      log.error('Failed to trigger Review: Strict', {
         error,
         sessionId: effectiveTargetSessionId,
       });
@@ -2987,8 +2980,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       next = '/usage';
     } else if (actionId === 'init') {
       next = '/init';
-    } else if (actionId === 'deepreview') {
-      next = `${DEEP_REVIEW_SLASH_COMMAND} `;
     } else if (actionId === 'reload-skills') {
       // /reload-skills takes no arguments. Setting the value to the bare
       // command lets the user immediately press Enter to dispatch it

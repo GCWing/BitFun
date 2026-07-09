@@ -35,7 +35,7 @@
 | [Agentless](https://arxiv.org/abs/2407.01489) | 简单、可解释的定位/修复/验证流程可达到强基线 | 不宜默认采用全自治或强流程；结构化流程应作为基线 |
 | [Agentic AI in the SDLC](https://arxiv.org/abs/2604.26275) | Agentic SDLC 需要从架构、证据、生产力和治理同时评估 | BitFun 可扩展到 SDLC，但必须以产品体验和可验证价值逐步推进 |
 | [Terminal-Bench](https://arxiv.org/abs/2601.11868) / [Terminal-Bench 3.0](https://www.tbench.ai/) | 真实终端任务覆盖软件工程、ML、安全、数据科学等场景 | 需要终端任务回放和工具轨迹评测，防止任务泄漏和基准测试过拟合 |
-| [RovoDev Code Reviewer](https://arxiv.org/html/2601.01129v1) | 在线评估显示 AI 审查可缩短 PR 周期，但缺少上下文会产生错误反馈 | 深度审查必须有上下文完整性、问题生命周期、反证和预算控制 |
+| [RovoDev Code Reviewer](https://arxiv.org/html/2601.01129v1) | 在线评估显示 AI 审查可缩短 PR 周期，但缺少上下文会产生错误反馈 | 严格审查必须有上下文完整性、问题生命周期、反证和预算控制 |
 | [TraceLLM](https://arxiv.org/html/2602.01253v1) / [LLM-driven requirements change impact analysis](https://arxiv.org/html/2511.00262v1) | LLM 可辅助需求追踪和变更影响分析，但输出仍需成本、召回、精度和人工确认约束 | 需求变更影响面分析应输出候选集合、置信度和人工检查成本 |
 | [Testing with AI Agents](https://arxiv.org/abs/2603.13724) | AI 已大量参与测试生成，但测试质量需要结构化衡量 | 测试质量保护要关注质量、稳定性和变异杀伤，而非仅增加测试数量 |
 | [NIST SP 800-218A](https://csrc.nist.gov/pubs/sp/800/218/a/final) | 将生成式 AI 和基础模型纳入 SSDF 生命周期实践 | AI 参与开发后，安全开发框架需要覆盖模型、工具、数据、权限和供应链风险 |
@@ -49,7 +49,7 @@
 | [SLSA Provenance](https://slsa.dev/spec/v0.1/provenance) / [in-toto](https://slsa.dev/blog/2023/05/in-toto-and-slsa) | 构建和供应链证据需要说明来源、时间和生成方式 | 证据包应支持来源/证明引用，为发布就绪度和审计预留接口 |
 | [OWASP LLM Top 10](https://owasp.org/www-project-top-10-for-large-language-model-applications/) | prompt 注入、敏感信息、供应链、过度代理和模型拒绝服务都是 LLM 应用风险 | Hook/Event、plugin、工具、memory、外部适配器必须默认最小权限、脱敏、超时和预算 |
 | DORA / SPACE / DevEx | 速度、稳定性、协作和开发者体验需要联合衡量 | 指标体系同时覆盖速度、打断、信心、安全、质量和成本 |
-| AI 编码成本治理 | 高级模型、AI 审查、CI/Actions 资源和长上下文都会形成显性成本 | 深度审查、评测、Hook 和智能体运行必须将 token、耗时、缓存命中和降级原因作为核心指标 |
+| AI 编码成本治理 | 高级模型、AI 审查、CI/Actions 资源和长上下文都会形成显性成本 | 严格审查、评测、Hook 和智能体运行必须将 token、耗时、缓存命中和降级原因作为核心指标 |
 
 ## 4. 对抗性审查后的趋势判断
 

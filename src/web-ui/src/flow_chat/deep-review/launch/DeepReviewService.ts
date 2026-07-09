@@ -1,7 +1,7 @@
 import { agentAPI } from '@/infrastructure/api';
 import { createLogger } from '@/shared/utils/logger';
 import { createBtwChildSession } from '../../services/BtwThreadService';
-import { closeBtwSessionInAuxPane, openBtwSessionInAuxPane } from '../../services/btwSessionPane';
+import { closeBtwSessionInAuxPane } from '../../services/btwSessionPane';
 import { FlowChatManager } from '../../services/FlowChatManager';
 import { flowChatStore } from '../../store/FlowChatStore';
 import { insertReviewSessionSummaryMarker } from '../../services/ReviewSessionMarkerService';
@@ -72,14 +72,14 @@ async function cleanupFailedDeepReviewLaunch(
   try {
     closeBtwSessionInAuxPane(childSessionId);
   } catch (error) {
-    const message = `Failed to close the deep review pane during cleanup: ${normalizeErrorMessage(error)}`;
+    const message = `Failed to close the strict review pane during cleanup: ${normalizeErrorMessage(error)}`;
     cleanupIssues.push(message);
     log.warn(message, { childSessionId, launchStep, error });
   }
 
   let backendSessionRemoved = false;
   if (!workspacePath) {
-    const message = 'Workspace path is missing, so backend deep review session cleanup could not run.';
+    const message = 'Workspace path is missing, so backend strict review session cleanup could not run.';
     cleanupIssues.push(message);
     log.warn(message, { childSessionId, launchStep });
   } else {
@@ -95,7 +95,7 @@ async function cleanupFailedDeepReviewLaunch(
       if (isSessionMissingError(error)) {
         backendSessionRemoved = true;
       } else {
-        const message = `Failed to delete the backend deep review session: ${normalizeErrorMessage(error)}`;
+        const message = `Failed to delete the backend strict review session: ${normalizeErrorMessage(error)}`;
         cleanupIssues.push(message);
         log.warn(message, { childSessionId, launchStep, error });
       }
@@ -107,7 +107,7 @@ async function cleanupFailedDeepReviewLaunch(
       const flowChatManager = FlowChatManager.getInstance();
       flowChatManager.discardLocalSession(childSessionId);
     } catch (error) {
-      const message = `Failed to remove the local deep review session state: ${normalizeErrorMessage(error)}`;
+      const message = `Failed to remove the local strict review session state: ${normalizeErrorMessage(error)}`;
       cleanupIssues.push(message);
       log.warn(message, { childSessionId, launchStep, error });
     }
@@ -126,12 +126,12 @@ async function buildReviewTeamManifestWithRuntimeSignals(
   const manifestOptions = options ?? {};
   const [rateLimitStatus, strategyOverride] = await Promise.all([
     loadReviewTeamRateLimitStatus().catch((error) => {
-      log.warn('Failed to load Deep Review rate limit status', { error });
+      log.warn('Failed to load strict review rate limit status', { error });
       return null;
     }),
     manifestOptions.workspacePath
       ? loadReviewTeamProjectStrategyOverride(manifestOptions.workspacePath).catch((error) => {
-        log.warn('Failed to load Deep Review project strategy override', { error });
+        log.warn('Failed to load strict review project strategy override', { error });
         return undefined;
       })
       : Promise.resolve(undefined),
@@ -285,7 +285,7 @@ export async function launchDeepReviewSession({
   workspacePath,
   prompt,
   displayMessage,
-  childSessionName = 'Deep review',
+  childSessionName = 'Review: Strict',
   requestedFiles = [],
   runManifest,
 }: LaunchDeepReviewSessionParams): Promise<{ childSessionId: string }> {
@@ -307,14 +307,6 @@ export async function launchDeepReviewSession({
       deepReviewRunManifest: runManifest,
     });
     childSessionId = created.childSessionId;
-
-    launchStep = 'open_aux_pane';
-    openBtwSessionInAuxPane({
-      childSessionId,
-      parentSessionId,
-      workspacePath,
-      expand: true,
-    });
 
     launchStep = 'send_start_message';
     const flowChatManager = FlowChatManager.getInstance();
@@ -362,7 +354,7 @@ export async function launchDeepReviewSession({
       cleanupResult,
     );
 
-    log.error('Deep review launch failed', {
+    log.error('Strict review launch failed', {
       parentSessionId,
       childSessionId,
       launchStep,

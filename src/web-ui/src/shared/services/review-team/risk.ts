@@ -81,7 +81,7 @@ export function recommendReviewStrategyForTarget(
       ? `Small change (${sizeLabel}). Quick scan sufficient.`
       : strategyLevel === 'normal'
         ? `Medium change (${sizeLabel}; ${riskDetails}). Standard review recommended.`
-        : `Large/high-risk change (${sizeLabel}; ${riskDetails}). Deep review recommended.`;
+        : `Large/high-risk change (${sizeLabel}; ${riskDetails}). Strict review recommended.`;
 
   return {
     strategyLevel,

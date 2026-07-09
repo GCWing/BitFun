@@ -33,14 +33,14 @@ const RELIABILITY_NOTICE_ORDER: ReviewReliabilityNoticeKind[] = [
 export const RELIABILITY_NOTICE_FALLBACK_LABELS: Record<ReviewReliabilityNoticeKind, string> = {
   context_pressure: 'Context pressure rising',
   compression_preserved: 'Compression preserved key facts',
-  cache_hit: 'Incremental cache reused reviewer output',
+  cache_hit: 'Incremental cache reused review output',
   cache_miss: 'Incremental cache missed or refreshed',
-  concurrency_limited: 'Reviewer launch was concurrency-limited',
-  partial_reviewer: 'Reviewer returned partial result',
-  reduced_scope: 'Reduced-depth coverage',
+  concurrency_limited: 'Review launch was concurrency-limited',
+  partial_reviewer: 'Review returned partial result',
+  reduced_scope: 'Focused review scope',
   retry_guidance: 'Retry guidance emitted',
-  skipped_reviewers: 'Skipped reviewers',
-  token_budget_limited: 'Token budget limited reviewer coverage',
+  skipped_reviewers: 'Review scope tailored',
+  token_budget_limited: 'Token budget limited review coverage',
   user_decision: 'User decision needed',
 };
 

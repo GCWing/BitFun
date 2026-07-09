@@ -294,10 +294,10 @@ export function buildSelectedReviewRemediationPrompt(params: {
     .map((item) => formatIssueForPrompt(item, params.decisionSelections?.[item.id]))
     .join('\n\n');
   const isDeepReview = params.reviewMode === 'deep';
-  const reviewLabel = isDeepReview ? 'Deep Review' : 'Code Review';
+  const reviewLabel = isDeepReview ? 'Review: Strict' : 'Review';
   const rerunInstruction = isDeepReview
-    ? 'After implementing fixes, run the most relevant verification. Then launch a full follow-up deep review of the fix diff by dispatching all enabled review team reviewers in parallel, followed by ReviewJudge. Submit the follow-up review result via submit_code_review.'
-    : 'After implementing fixes, run the most relevant verification. Then submit a follow-up standard code review of the fix diff via submit_code_review.';
+    ? 'After implementing fixes, run the most relevant verification. Then launch a full follow-up strict review of the fix diff by dispatching the assigned read-only reviewers in parallel, followed by ReviewJudge. Submit the follow-up review result via submit_code_review.'
+    : 'After implementing fixes, run the most relevant verification. Then submit a follow-up standard review of the fix diff via submit_code_review.';
 
   const lines: string[] = [
     `The user approved remediation for selected ${reviewLabel} findings only.`,

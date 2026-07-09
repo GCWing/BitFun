@@ -15,20 +15,11 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('./components/ReviewTeamPage', () => ({
-  default: () => <div data-testid="review-team-page">review team</div>,
-  ReviewTeamErrorBoundary: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-}));
-
 vi.mock('./components/CreateAgentPage', () => ({
   default: () => <div data-testid="create-agent-page">create agent</div>,
 }));
 
 vi.mock('./components/AgentCard', () => ({
-  default: () => <div />,
-}));
-
-vi.mock('./components/AgentTeamCard', () => ({
   default: () => <div />,
 }));
 
@@ -104,10 +95,6 @@ vi.mock('@/infrastructure/api/service-api/SubagentAPI', () => ({
   },
 }));
 
-vi.mock('@/shared/services/reviewTeamService', () => ({
-  loadDefaultReviewTeam: vi.fn(async () => null),
-}));
-
 let JSDOMCtor: (new (
   html?: string,
   options?: { pretendToBeVisual?: boolean }
@@ -167,15 +154,15 @@ describeWithJsdom('AgentsScene', () => {
     useAgentsStore.getState().openHome();
   });
 
-  it('keeps the review team detail page inside a full-height scene page wrapper', async () => {
-    useAgentsStore.getState().openReviewTeam();
+  it('keeps agent creation inside a full-height scene page wrapper', async () => {
+    useAgentsStore.getState().openCreateAgent();
     const { default: AgentsScene } = await import('./AgentsScene');
 
     await act(async () => {
       root.render(<AgentsScene />);
     });
 
-    expect(container.querySelector('[data-testid="review-team-page"]')).toBeTruthy();
+    expect(container.querySelector('[data-testid="create-agent-page"]')).toBeTruthy();
     expect(container.querySelector('.bitfun-agents-scene--page')).toBeTruthy();
   }, 10_000);
 

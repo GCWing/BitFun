@@ -105,7 +105,7 @@ export const REVIEW_TEAM_MEMBER_ACCENT_DEFAULT = UI_EXCEPTION_ACCENTS.reviewTeam
 export const EXTRA_MEMBER_DEFAULTS = {
   roleName: 'Additional Specialist Reviewer',
   description:
-    'User-added Sub-Agent that joins the deep review lineup with its own instructions, tools, and perspective.',
+    'Optional specialist coverage for strict Review with its own instructions, tools, and perspective.',
   responsibilities: [
     'Bring an extra independent review perspective into the same target scope.',
     'Stay tightly focused on the requested diff, commit, or workspace changes.',
@@ -240,11 +240,11 @@ export const DISALLOWED_REVIEW_TEAM_MEMBER_IDS = new Set<string>([
 
 export const FALLBACK_REVIEW_TEAM_DEFINITION: ReviewTeamDefinition = {
   id: DEFAULT_REVIEW_TEAM_ID,
-  name: 'Code Review Team',
+  name: 'Strict Review Coverage',
   description:
-    'A multi-reviewer team for deep code review with mandatory logic, performance, security, architecture, conditional frontend, and quality-gate roles.',
+    'A multi-reviewer coverage plan for strict code review with mandatory logic, performance, security, architecture, conditional frontend, and quality-gate roles.',
   warning:
-    'Deep review may take longer and usually consumes more tokens than a standard review.',
+    'Strict review may take longer and usually consumes more tokens than a standard review.',
   defaultModel: DEFAULT_REVIEW_TEAM_MODEL,
   defaultStrategyLevel: DEFAULT_REVIEW_TEAM_STRATEGY_LEVEL,
   defaultExecutionPolicy: {

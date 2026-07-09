@@ -356,17 +356,13 @@ Notes:
 | Agent detail tool item | `agent-detail-tool-item` | Repeated enabled tool item. Includes `data-tool-name`. |
 | Agent detail close | `agent-detail-close` | Modal close button. |
 | Core anchor button | `agents-anchor-core` | Scrolls to core agents zone. |
-| Teams anchor button | `agents-anchor-teams` | Scrolls to teams zone. |
 | Custom agents anchor button | `agents-anchor-custom` | Scrolls to custom agents zone. |
 | Agents search button | `agents-search-btn` | Search suffix button. |
 | Core agents zone | `agents-core-zone` | Core agents section. |
-| Teams zone | `agents-teams-zone` | Agent teams section. |
 | Custom agents zone | `agents-custom-zone` | Custom/subagent section. |
-| Review team configure button | `agents-review-team-configure-btn` | Opens review team configuration. |
 | Agent source filter | `agents-source-filter` | Repeated item. Pair with `data-agent-source`. |
 | Agent kind filter | `agents-kind-filter` | Repeated item. Pair with `data-agent-kind`. |
 | Create agent button | `agents-create-agent-btn` | Opens custom agent creation page. |
-| Agent team card | `agents-team-card` | Repeated item. Pair with `data-team-id`. |
 | BTW stop review button | `btw-session-panel-stop-review` | Stops review session from BTW panel. |
 | BTW origin button | `btw-session-panel-origin-button` | Opens origin session from BTW panel. |
 

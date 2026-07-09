@@ -6,7 +6,7 @@
   "features": {
     "remoteControl": "远程控制",
     "codeAgent": "代码助手",
-    "deepReview": "深度代码评审",
+    "deepReview": "严格审查",
     "settings": "设置",
     "workspace": "工作区",
     "accountLogin": "账户登录"

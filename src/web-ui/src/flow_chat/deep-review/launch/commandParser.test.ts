@@ -10,18 +10,22 @@ import {
 } from './commandParser';
 
 describe('Deep Review launch command parser', () => {
-  it('recognizes only the canonical slash command', () => {
-    expect(DEEP_REVIEW_SLASH_COMMAND).toBe('/DeepReview');
+  it('recognizes strict Review typed commands and compatibility aliases', () => {
+    expect(DEEP_REVIEW_SLASH_COMMAND).toBe('/review strict');
+    expect(isDeepReviewSlashCommand('/review strict')).toBe(true);
+    expect(isDeepReviewSlashCommand('/review strict commit abc123')).toBe(true);
+    expect(isDeepReviewSlashCommand('/review deep commit abc123')).toBe(false);
     expect(isDeepReviewSlashCommand('/DeepReview')).toBe(true);
     expect(isDeepReviewSlashCommand('/DeepReview review commit abc123')).toBe(true);
-    expect(isDeepReviewSlashCommand('/deepreview review commit abc123')).toBe(false);
+    expect(isDeepReviewSlashCommand('/deepreview review commit abc123')).toBe(true);
+    expect(isDeepReviewSlashCommand('/review')).toBe(false);
     expect(isDeepReviewSlashCommand('/DeepReviewer review commit abc123')).toBe(false);
   });
 
   it('strips the canonical command before target parsing', () => {
-    expect(getDeepReviewCommandFocus('/DeepReview review commit abc123')).toBe(
-      'review commit abc123',
-    );
+    expect(getDeepReviewCommandFocus('/review strict commit abc123')).toBe('commit abc123');
+    expect(getDeepReviewCommandFocus('/DeepReview review commit abc123')).toBe('review commit abc123');
+    expect(getDeepReviewCommandFocus('/deepreview review commit abc123')).toBe('review commit abc123');
     expect(getDeepReviewCommandFocus('/DeepReview')).toBe('');
   });
 

@@ -10,24 +10,17 @@ type JsonObject = Record<string, unknown>;
 
 const REVIEW_TEAM_FLOW_CHAT_KEYS = [
   'deepReviewConsent.runStrategy',
-  'deepReviewConsent.recommendedStrategy',
-  'deepReviewConsent.recommendationTitle',
-  'deepReviewConsent.strategyOverrideTitle',
-  'deepReviewConsent.strategyOverrideBody',
-  'deepReviewConsent.teamDefaultStrategy',
+  'deepReviewConsent.skippedSummary',
   'deepReviewConsent.strategyLabels.quick',
   'deepReviewConsent.strategyLabels.normal',
   'deepReviewConsent.strategyLabels.deep',
-  'deepReviewConsent.reviewDepth',
-  'deepReviewConsent.reviewDepthLabels.high_risk_only',
-  'deepReviewConsent.reviewDepthLabels.risk_expanded',
-  'deepReviewConsent.reviewDepthLabels.full_depth',
   'toolCards.codeReview.runManifest.recommendedStrategy',
   'toolCards.codeReview.runManifest.riskRecommendationTitle',
   'toolCards.codeReview.runManifest.reviewDepth',
   'toolCards.codeReview.runManifest.reviewDepthLabels.high_risk_only',
   'toolCards.codeReview.runManifest.reviewDepthLabels.risk_expanded',
   'toolCards.codeReview.runManifest.reviewDepthLabels.full_depth',
+  'toolCards.codeReview.runManifest.reducedCoverageSummary',
   'toolCards.codeReview.reliabilityStatus.reduced_scope.label',
   'toolCards.codeReview.reliabilityStatus.reduced_scope.detail',
 ] as const;
@@ -57,15 +50,11 @@ function expectNonEmptyLocaleString(source: JsonObject, path: string) {
 
 describe('review team locale completeness', () => {
   it.each(REVIEW_TEAM_LOCALES)(
-    'keeps core review roles translated in %s settings and agents namespaces',
+    'keeps core review role details translated in %s agents namespace',
     (locale) => {
-      const settingsReview = readLocaleJson(locale, 'settings/review.json');
       const scenesAgents = readLocaleJson(locale, 'scenes/agents.json');
 
       for (const role of FALLBACK_REVIEW_TEAM_DEFINITION.coreRoles) {
-        expectNonEmptyLocaleString(settingsReview, `members.${role.key}.name`);
-        expectNonEmptyLocaleString(settingsReview, `members.${role.key}.role`);
-
         expectNonEmptyLocaleString(scenesAgents, `reviewTeams.members.${role.key}.funName`);
         expectNonEmptyLocaleString(scenesAgents, `reviewTeams.members.${role.key}.role`);
         expectNonEmptyLocaleString(scenesAgents, `reviewTeams.members.${role.key}.description`);

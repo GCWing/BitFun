@@ -1,14 +1,23 @@
-# DeepReview Architecture
+# DeepReview / Strict Review Architecture
 
 ## Scope
 
-DeepReview is a child-session workflow that runs a configurable Code Review Team against a review target. The current implementation has three layers:
+DeepReview is the compatibility runtime for `Review: Strict`, the highest-strength mode of the unified Review experience. It remains implemented as a child-session workflow that runs a configurable read-only reviewer set against a review target, but it should not be presented as a second ordinary product entry next to Review.
+
+Product-facing guardrails live in [review-verify-implementation-guardrails.md](../sdlc-harness/review-verify-implementation-guardrails.md):
+
+- `Review` is the primary user-facing entry.
+- `/review` is the intended long-term command entry; `/DeepReview` is only a transitional typed compatibility command for historical strict-review launches.
+- `ReviewTeam` is an internal strict-review reviewer-set configuration, not a separate product concept users must learn.
+- PR Review consumes review/verify results and readiness projections; it must not own another reviewer executor.
+
+The current implementation has three layers:
 
 - Frontend launch and UI orchestration in `src/web-ui`.
 - Platform adapter commands in `src/apps/desktop/src/api/agentic_api.rs`.
 - Platform-agnostic runtime policy, task admission, queue state, retry metadata, and report enrichment in `src/crates/assembly/core/src/agentic`.
 
-The backend does not choose the review target or build the launch manifest. The frontend builds the effective `ReviewTeamRunManifest`, persists it on the DeepReview child session, and sends it with the first user message.
+The backend does not choose the review target or build the launch manifest. The frontend builds the effective `ReviewTeamRunManifest`, persists it on the DeepReview child session, and sends it with the first user message. The manifest, session kind, agent type, storage keys, and queue event names stay compatible with historical DeepReview sessions.
 
 ## Runtime Roles
 
@@ -29,14 +38,14 @@ The reviewer agents use instruction-only context and read/search/git/diff tools.
 
 ## Launch Flow
 
-DeepReview can be launched from session-file review controls or a `/DeepReview` slash command.
+Strict Review can currently be launched from session-file review controls or the canonical typed `/review strict` command. Historical `/DeepReview` and `/deepreview` inputs remain compatibility aliases that route into the same strict Review path, but new product entry points should route through unified Review and `/review`, then select strict review only when task scope, difficulty, risk, explicit quality intent, and budget justify L3.
 
 Frontend launch code lives in `src/web-ui/src/flow_chat/deep-review/launch`:
 
-- `commandParser.ts` identifies `/DeepReview` commands and optional file or git targets.
+- `commandParser.ts` identifies canonical `/review strict` commands, transitional `/DeepReview` compatibility aliases, and optional file or git targets.
 - `targetResolver.ts` resolves slash-command targets from git status, changed files, and diffs when a workspace is available.
 - `launchPrompt.ts` formats the user-facing launch prompt.
-- `DeepReviewService.ts` builds the review-team manifest, creates a child session, opens it in the auxiliary pane, sends the launch prompt, and inserts the parent-session summary marker.
+- `DeepReviewService.ts` builds the review-team manifest, creates a child session, sends the launch prompt, and inserts the parent-session summary marker. Launch does not automatically open the auxiliary pane; the summary-card detail action is the normal user-facing way to inspect the background review run.
 - `src/web-ui/src/flow_chat/services/DeepReviewService.ts` is a compatibility re-export.
 
 `launchDeepReviewSession` creates a child session with:
@@ -49,11 +58,11 @@ Frontend launch code lives in `src/web-ui/src/flow_chat/deep-review/launch`:
 - context compression enabled
 - `deepReviewRunManifest` stored on the child session metadata
 
-If launch fails after the child session is created, the frontend closes the auxiliary pane, deletes the backend session when possible, discards local session state, and reports cleanup issues with the launch error.
+If launch fails after the child session is created, the frontend runs idempotent UI/session cleanup, deletes the backend session when possible, discards local session state, and reports cleanup issues with the launch error.
 
-## Review Team Configuration
+## Strict Reviewer Configuration
 
-The default review team contract is mirrored in Rust and TypeScript.
+The default strict reviewer configuration contract is mirrored in Rust and TypeScript.
 
 Rust source:
 
@@ -72,8 +81,8 @@ The desktop command `get_default_review_team_definition` returns the backend def
 The persisted config path is `ai.review_teams.default`. The frontend config shape includes:
 
 - extra subagent ids
-- team strategy level
-- per-member strategy overrides
+- review strategy level
+- per-reviewer strategy overrides
 - reviewer and judge timeouts
 - reviewer file-split threshold
 - max same-role instances
@@ -83,7 +92,7 @@ The persisted config path is `ai.review_teams.default`. The frontend config shap
 - provider capacity queue enablement
 - bounded auto-retry enablement and elapsed guard
 
-Extra team members must be enabled subagents with read-only review tooling. Core team members, `DeepReview`, and `ReviewFixer` are disallowed as extra members.
+Extra reviewers must be enabled subagents with read-only review tooling. Core reviewers, `DeepReview`, and `ReviewFixer` are disallowed as extra reviewers.
 
 ## Manifest Shape
 
@@ -290,6 +299,6 @@ The review action bar persists UI state separately through `ReviewActionBarPersi
 When changing DeepReview behavior, update all affected contracts together:
 
 - Backend constants, team definition, execution policy, manifest gate, task adapter, queue events, and report enrichment.
-- Frontend review-team defaults/types, manifest builder, prompt block, launch service, action-bar store, event mapping, report rendering, and locales.
-- Desktop Tauri command DTOs when queue controls or default team definition contracts change.
-- Tests near the touched module, especially policy tests, review-team manifest tests, queue event tests, launch tests, action-bar tests, and locale completeness tests.
+- Frontend strict-review defaults/types, manifest builder, prompt block, launch service, action-bar store, event mapping, report rendering, and locales.
+- Desktop Tauri command DTOs when capacity controls or default review definition contracts change.
+- Tests near the touched module, especially policy tests, strict-review manifest tests, queue event tests, launch tests, action-bar tests, and locale completeness tests.

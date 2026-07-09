@@ -288,7 +288,7 @@ describe('deepReviewActionBarStore', () => {
       expect(state.optionalReviewerCount).toBe(0);
     });
 
-    it('merges reviewer queue events and closes the queue when the last reviewer leaves', () => {
+    it('merges capacity-wait events and closes waiting state when the last reviewer leaves', () => {
       bar().showCapacityQueueBar({
         childSessionId: 'child-1',
         parentSessionId: 'parent-1',

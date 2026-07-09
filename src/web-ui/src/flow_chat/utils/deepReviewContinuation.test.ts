@@ -10,7 +10,7 @@ import type { AiErrorDetail } from '@/shared/ai-errors/aiErrorPresenter';
 function createDeepReviewSession(overrides: Partial<Session> = {}): Session {
   return {
     sessionId: 'deep-review-session',
-    title: 'Deep Review',
+    title: 'Review: Strict',
     dialogTurns: [],
     status: 'idle',
     config: {
@@ -51,7 +51,7 @@ describe('deepReviewContinuation', () => {
           status: 'error',
           userMessage: {
             id: 'user-1',
-            content: 'Run a deep code review using the parallel Code Review Team.',
+            content: 'Run a strict code review using the assigned read-only Review execution plan.',
             timestamp: 1,
           },
           modelRounds: [],
@@ -79,7 +79,7 @@ describe('deepReviewContinuation', () => {
           status: 'error',
           userMessage: {
             id: 'user-1',
-            content: 'Run a deep code review using the parallel Code Review Team.',
+            content: 'Run a strict code review using the assigned read-only Review execution plan.',
             timestamp: 1,
           },
           modelRounds: [],
@@ -166,8 +166,8 @@ describe('deepReviewContinuation', () => {
     const interruption = deriveDeepReviewInterruption(session, { category: 'timeout' });
     const prompt = buildDeepReviewContinuationPrompt(interruption!);
 
-    expect(prompt).toContain('Continue the interrupted Deep Review');
-    expect(prompt).toContain('Do not restart completed reviewer work');
+    expect(prompt).toContain('Continue the interrupted strict review');
+    expect(prompt).toContain('Do not restart completed review work');
     expect(prompt).toContain('ReviewPerformance: completed');
     expect(prompt).toContain('ReviewSecurity: timed_out');
   });
@@ -248,7 +248,7 @@ describe('deepReviewContinuation', () => {
           status: 'error',
           userMessage: {
             id: 'user-1',
-            content: 'Run a deep review for src/crates/assembly/core/src/lib.rs',
+            content: 'Run a strict review for src/crates/assembly/core/src/lib.rs',
             timestamp: 1,
           },
           startTime: 1,
@@ -297,7 +297,7 @@ describe('deepReviewContinuation', () => {
       }),
     ]);
     expect(prompt).toContain('ReviewFrontend: skipped');
-    expect(prompt).toContain('Do not re-run skipped, non-applicable, or policy-ineligible reviewers');
+    expect(prompt).toContain('Do not re-run skipped, non-applicable, or policy-ineligible coverage');
   });
 
   it('derives a resumable interruption for manually cancelled deep reviews without model recovery actions', () => {
@@ -365,7 +365,7 @@ describe('deepReviewContinuation', () => {
     expect(actionCodes).not.toContain('switch_model');
     expect(actionCodes).not.toContain('wait_and_retry');
     expect(prompt).toContain('The previous interruption was requested by the user.');
-    expect(prompt).toContain('User cancellation does not consume reviewer retry budget.');
+    expect(prompt).toContain('User cancellation does not consume review retry budget.');
     expect(prompt).toContain('Do not expose internal retry-budget settings or names');
     expect(prompt).toContain('Last interruption:');
     expect(prompt).not.toContain('Last error:');
@@ -490,7 +490,7 @@ describe('deepReviewContinuation', () => {
 
     expect(prompt).toContain('max_retries_per_role = 1');
     expect(prompt).toContain('retry = true');
-    expect(prompt).toContain('reduce the scope');
+    expect(prompt).toContain('focus the scope');
   });
 
   it('includes persisted manifest skips when continuing an interrupted review', () => {
@@ -526,7 +526,7 @@ describe('deepReviewContinuation', () => {
     const interruption = deriveDeepReviewInterruption(session, { category: 'timeout' });
     const prompt = buildDeepReviewContinuationPrompt(interruption!);
 
-    expect(prompt).toContain('Do not run reviewers skipped as not_applicable.');
+    expect(prompt).toContain('Do not run coverage marked not_applicable.');
     expect(prompt).toContain('ReviewFrontend: skipped (not_applicable)');
   });
 
@@ -581,8 +581,9 @@ describe('deepReviewContinuation', () => {
     expect(prompt).toContain('Incremental review cache guidance:');
     expect(prompt).toContain('cache_key: incremental-review:abc12345');
     expect(prompt).toContain('fingerprint: abc12345');
-    expect(prompt).toContain('Only reuse completed reviewer outputs when the current review target fingerprint still matches.');
-    expect(prompt).toContain('reviewer:ReviewBusinessLogic');
+    expect(prompt).toContain('Only reuse completed review outputs when the current review target fingerprint still matches.');
+    expect(prompt).toContain('completed_review_work_count: 2');
+    expect(prompt).not.toContain('reviewer:ReviewBusinessLogic');
     expect(prompt).toContain('target_file_set_changed');
   });
 
@@ -647,9 +648,9 @@ describe('deepReviewContinuation', () => {
       'continue',
       'copy_diagnostics',
     ]);
-    expect(prompt).toContain('The previous Deep Review ended without a usable structured submit_code_review result.');
-    expect(prompt).toContain('First reconstruct and submit the missing final report from preserved reviewer outputs.');
-    expect(prompt).toContain('Do not rerun completed reviewer work just to regenerate the report.');
+    expect(prompt).toContain('The previous strict review ended without a usable structured submit_code_review result.');
+    expect(prompt).toContain('First reconstruct and submit the missing final report from preserved review outputs.');
+    expect(prompt).toContain('Do not rerun completed review work just to regenerate the report.');
     expect(prompt).toContain('ReviewSecurity: completed');
   });
 });

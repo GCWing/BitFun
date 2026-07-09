@@ -51,11 +51,11 @@ const RESUME_BLOCKING_CATEGORIES = new Set([
 
 const RESULT_RECOVERY_MESSAGES: Record<DeepReviewResultRecoveryReason, string> = {
   missing_submit_code_review:
-    'Deep Review completed, but BitFun did not receive a structured submit_code_review result.',
+    'Strict review completed, but BitFun did not receive a structured submit_code_review result.',
   invalid_submit_code_review:
-    'Deep Review submitted a structured result that BitFun could not read.',
+    'Strict review submitted a structured result that BitFun could not read.',
   wrong_review_mode:
-    'Deep Review submitted a standard Code Review result instead of a Deep Review result.',
+    'Strict review submitted a standard Review result instead of a strict review result.',
 };
 
 export function deriveDeepReviewInterruption(
@@ -76,7 +76,7 @@ export function deriveDeepReviewInterruption(
   const fallbackMessage =
     session.error ??
     lastTurn?.error ??
-    (wasManuallyCancelled ? 'Deep Review was stopped by the user.' : '');
+    (wasManuallyCancelled ? 'Strict review was stopped by the user.' : '');
   const effectiveErrorDetail =
     errorDetail ??
     (wasManuallyCancelled
@@ -147,18 +147,18 @@ export function buildDeepReviewContinuationPrompt(interruption: DeepReviewInterr
           return `- ${reviewer.reviewer}: ${reviewer.status}${suffix}${partialOutput}`;
         })
         .join('\n')
-    : '- No reliable reviewer progress was detected. Reconstruct progress from this session before deciding what to rerun.';
+    : '- No reliable review progress was detected. Reconstruct progress from this session before deciding what to rerun.';
   const skippedReviewers = interruption.runManifest?.skippedReviewers ?? [];
   const manifestSkippedReviewers = formatManifestSkippedReviewers(skippedReviewers);
   const manifestRules = skippedReviewers.some((reviewer) => reviewer.reason === 'not_applicable')
     ? [
-        '- Do not run reviewers skipped as not_applicable.',
+        '- Do not run coverage marked not_applicable.',
       ]
     : [];
   const manifestBlock = manifestSkippedReviewers.length
     ? [
         '',
-        'Run manifest reviewer skips:',
+        'Review scope selected by the prior review plan:',
         manifestSkippedReviewers.join('\n'),
       ]
     : [];
@@ -170,37 +170,37 @@ export function buildDeepReviewContinuationPrompt(interruption: DeepReviewInterr
   );
   const manualCancelRules = wasManuallyCancelled
     ? [
-        '- The previous interruption was requested by the user. Treat it as a user stop/pause, not as a model failure or reviewer timeout.',
-        '- Preserve completed reviewer output and continue only unfinished reviewer work where enough context exists.',
+        '- The previous interruption was requested by the user. Treat it as a user stop/pause, not as a model failure or review timeout.',
+        '- Preserve completed review output and continue only unfinished review work where enough context exists.',
       ]
     : [];
   const resultRecoveryRules = interruption.resultRecoveryReason
     ? [
-        '- The previous Deep Review ended without a usable structured submit_code_review result.',
-        '- First reconstruct and submit the missing final report from preserved reviewer outputs.',
-        '- Do not rerun completed reviewer work just to regenerate the report.',
-        '- If preserved reviewer output is insufficient, rerun only missing, failed, timed-out, or cancelled reviewers before submitting the report.',
+        '- The previous strict review ended without a usable structured submit_code_review result.',
+        '- First reconstruct and submit the missing final report from preserved review outputs.',
+        '- Do not rerun completed review work just to regenerate the report.',
+        '- If preserved review output is insufficient, rerun only missing, failed, timed-out, or cancelled review work before submitting the report.',
       ]
     : [];
 
   return [
-    'Continue the interrupted Deep Review in this same session.',
+    'Continue the interrupted strict review in this same session.',
     '',
     'Recovery rules:',
     ...manualCancelRules,
     ...resultRecoveryRules,
-    '- Do not restart completed reviewer work unless the existing result is clearly incomplete or unusable.',
-    '- Do not re-run skipped, non-applicable, or policy-ineligible reviewers; keep them recorded as skipped coverage.',
+    '- Do not restart completed review work unless the existing result is clearly incomplete or unusable.',
+    '- Do not re-run skipped, non-applicable, or policy-ineligible coverage; keep it recorded as skipped coverage.',
     ...retryBudgetRules,
     ...manifestRules,
-    '- Re-run only missing, failed, timed-out, or cancelled reviewers when enough context exists.',
-    '- If reviewer coverage remains incomplete, say that explicitly and mark the final report as lower confidence.',
-    '- Run ReviewJudge before the final submit_code_review result when reviewer findings exist.',
+    '- Re-run only missing, failed, timed-out, or cancelled review work when enough context exists.',
+    '- If review coverage remains incomplete, say that explicitly and mark the final report as lower confidence.',
+    '- Run ReviewJudge before the final submit_code_review result when findings exist.',
     '',
     'Original review target:',
     interruption.originalTarget,
     '',
-    'Known reviewer progress:',
+    'Known review progress:',
     reviewerLines,
     ...manifestBlock,
     ...incrementalCacheBlock,
@@ -222,10 +222,10 @@ function formatIncrementalReviewCacheGuidance(
     `- cache_key: ${cachePlan.cacheKey}`,
     `- fingerprint: ${cachePlan.fingerprint}`,
     `- strategy: ${cachePlan.strategy}`,
-    `- reviewer_packet_ids: ${cachePlan.reviewerPacketIds.join(', ') || 'none'}`,
+    `- completed_review_work_count: ${cachePlan.reviewerPacketIds.length}`,
     `- invalidates_on: ${cachePlan.invalidatesOn.join(', ') || 'none'}`,
-    '- Only reuse completed reviewer outputs when the current review target fingerprint still matches.',
-    '- If any invalidates_on condition changed, rerun affected reviewer packets and explain the fresh review boundary.',
+    '- Only reuse completed review outputs when the current review target fingerprint still matches.',
+    '- If any invalidates_on condition changed, rerun affected review work and explain the fresh review boundary.',
   ];
 }
 
@@ -234,37 +234,37 @@ function formatRetryBudgetRules(
 ): string[] {
   const maxRetriesPerRole = runManifest?.executionPolicy?.maxRetriesPerRole;
   const baseRules = [
-    '- Treat partial_timeout reviewers as preserved partial evidence. Re-run them only when useful evidence is missing or unusable.',
+    '- Treat partial_timeout review work as preserved partial evidence. Re-run it only when useful evidence is missing or unusable.',
   ];
 
   if (typeof maxRetriesPerRole !== 'number') {
     return [
       ...baseRules,
-      '- Respect the original retry budget if it is recoverable from context; do not retry the same reviewer repeatedly.',
+      '- Respect the original retry budget if it is recoverable from context; do not retry the same review work repeatedly.',
     ];
   }
 
   if (maxRetriesPerRole <= 0) {
     return [
       ...baseRules,
-      '- Retry budget from manifest: max_retries_per_role = 0. Do not re-run failed, timed-out, or partial reviewers automatically; report remaining gaps instead.',
+      '- Retry budget from manifest: max_retries_per_role = 0. Do not re-run failed, timed-out, or partial review work automatically; report remaining gaps instead.',
     ];
   }
 
   return [
     ...baseRules,
     `- Retry budget from manifest: max_retries_per_role = ${maxRetriesPerRole}.`,
-    '- For each retry, use the same subagent_type with retry = true, reduce the scope to missing evidence, downgrade strategy when possible, and use a shorter timeout.',
+    '- For each retry, use the same subagent_type with retry = true, focus the scope on missing evidence, use a lower-cost strategy when possible, and use a shorter timeout.',
   ];
 }
 
 function formatManualCancelRetryBudgetRules(): string[] {
   return [
-    '- Treat partial_timeout reviewers as preserved partial evidence. Re-run them only when useful evidence is missing or unusable.',
-    '- User cancellation does not consume reviewer retry budget.',
+    '- Treat partial_timeout review work as preserved partial evidence. Re-run it only when useful evidence is missing or unusable.',
+    '- User cancellation does not consume review retry budget.',
     '- Do not expose internal retry-budget settings or names such as max retry counts in the user-facing reply.',
-    '- An initial timed-out or cancelled reviewer attempt does not by itself mean reviewer retry budget is exhausted.',
-    '- Use retry=true only when the Task tool permits structured retry_coverage for partial_timeout or transient capacity failure. Otherwise continue missing or user-cancelled reviewer work as normal continuation work when possible, or report reduced coverage without internal budget jargon.',
+    '- An initial timed-out or cancelled review attempt does not by itself mean review retry budget is exhausted.',
+    '- Use retry=true only when the Task tool permits structured retry_coverage for partial_timeout or transient capacity failure. Otherwise continue missing or user-cancelled review work as normal continuation work when possible, or report scope limits without internal budget jargon.',
   ];
 }
 
@@ -302,7 +302,7 @@ function formatManifestSkippedReviewers(
 
 function findOriginalTarget(session: Session): string {
   const firstTurn = session.dialogTurns[0];
-  return firstTurn?.userMessage?.content?.trim() || 'Unknown Deep Review target.';
+  return firstTurn?.userMessage?.content?.trim() || 'Unknown strict review target.';
 }
 
 export function collectReviewerProgress(session: Session): DeepReviewReviewerProgress[] {

@@ -31,5 +31,6 @@
 | [implementation-plan.md](implementation-plan.md) | 阶段用户收益、必要技术前置、延期边界、验收条件和过程风险 | 不替代产品需求或模块契约 |
 | [product-requirements-agent-workflow-adjustment.md](product-requirements-agent-workflow-adjustment.md) | 提出 workflow、Review、并发 GUI 和成本控制的候选产品调整议题 | 不作为正式 PRD 编号、指标口径、阶段承诺或门禁规则；采纳前必须回填到权威文档 |
 | [agent-workflow-staged-plan.md](agent-workflow-staged-plan.md) | 将 workflow、审查、并发和成本控制映射到真实用户场景 | 不定义独立阶段路线，不定义新的核心对象模型；通用任务生命周期、scheduler 和队列状态归 Agent Kernel，Harness 只通过 provider/plan/step 参与编排；DeepReview 的 reviewer 调度只服务 L3 严格审查 |
+| [review-verify-implementation-guardrails.md](review-verify-implementation-guardrails.md) | 约束后续两次大型 PR 的 Review / Verify 收敛实施边界 | 不定义新的 workflow DSL、任务 scheduler、PR gate 执行器或 Verify 门禁；PR1 只收敛可见入口和命名，PR2 才引入动态质量决策 |
 | 子模块文档 | 单模块输入、输出、状态、边界场景和成功标准 | 不重新定义产品定位 |
 | [governance/metrics-spec.md](governance/metrics-spec.md) | 指标公式、分母、窗口、负责人和解释边界 | 不直接作为阻断策略 |

@@ -31,7 +31,7 @@ export function formatSessionFilesLaunchPrompt({
     : 'User-provided focus:\nNone.';
 
   return [
-    'Run a deep code review using the parallel Code Review Team.',
+    'Run a strict code review using the assigned read-only Review execution plan.',
     'Review scope: ONLY inspect the following files modified in this session.',
     formatFileList(filePaths),
     contextBlock,
@@ -54,7 +54,7 @@ export function formatPullRequestLaunchPrompt({
     : 'Pull request provider diff:\nNo provider diff was included. Confirm findings against the listed files and PR metadata.';
 
   return [
-    'Run a deep code review using the parallel Code Review Team.',
+    'Run a strict code review using the assigned read-only Review execution plan.',
     'Review scope: ONLY inspect the following files changed by this pull request.',
     formatFileList(filePaths),
     contextBlock,
@@ -74,7 +74,7 @@ export function formatSlashCommandLaunchPrompt({
     : 'User-provided focus or target:\nNone. If no explicit target is given, review the current workspace changes relative to HEAD.';
 
   return [
-    'Run a deep code review using the parallel Code Review Team.',
+    'Run a strict code review using the assigned read-only Review execution plan.',
     'Interpret the user command below to determine the review target.',
     'If the user mentions a commit, ref, branch, or explicit file set, review that target.',
     'Otherwise, review the current workspace changes relative to HEAD.',

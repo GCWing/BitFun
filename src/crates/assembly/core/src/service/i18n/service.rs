@@ -271,7 +271,7 @@ mod tests {
             service
                 .translate_with_locale(&LocaleId::EnUS, "shared.features.deepReview", None)
                 .await,
-            "Deep Review"
+            "Review: Strict"
         );
     }
 

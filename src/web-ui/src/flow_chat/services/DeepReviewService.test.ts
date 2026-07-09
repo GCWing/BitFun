@@ -95,26 +95,30 @@ describe('DeepReviewService slash command', () => {
     mockGitGetDiff.mockResolvedValue('');
   });
 
-  it('uses /DeepReview as the canonical command', () => {
-    expect(DEEP_REVIEW_SLASH_COMMAND).toBe('/DeepReview');
+  it('uses /review strict as the canonical typed command', () => {
+    expect(DEEP_REVIEW_SLASH_COMMAND).toBe('/review strict');
   });
 
-  it('recognizes canonical deep review commands and rejects near matches', () => {
+  it('recognizes strict Review typed commands and compatibility aliases', () => {
+    expect(isDeepReviewSlashCommand('/review strict')).toBe(true);
+    expect(isDeepReviewSlashCommand('/review strict commit abc123')).toBe(true);
+    expect(isDeepReviewSlashCommand('/review deep commit abc123')).toBe(false);
     expect(isDeepReviewSlashCommand('/DeepReview')).toBe(true);
     expect(isDeepReviewSlashCommand('/DeepReview review commit abc123')).toBe(true);
-    expect(isDeepReviewSlashCommand('/deepreview review commit abc123')).toBe(false);
+    expect(isDeepReviewSlashCommand('/deepreview review commit abc123')).toBe(true);
+    expect(isDeepReviewSlashCommand('/review')).toBe(false);
     expect(isDeepReviewSlashCommand('/DeepReviewer review commit abc123')).toBe(false);
   });
 
   it('strips the canonical command before building the focus block', async () => {
     const prompt = await buildDeepReviewPromptFromSlashCommand(
-      '/DeepReview review commit abc123 for security',
+      '/review strict commit abc123 for security',
       'D:\\workspace\\repo',
     );
 
-    expect(prompt).toContain('Original command:\n/DeepReview review commit abc123 for security');
-    expect(prompt).toContain('User-provided focus or target:\nreview commit abc123 for security');
-    expect(prompt).not.toContain('User-provided focus or target:\n/DeepReview');
+    expect(prompt).toContain('Original command:\n/review strict commit abc123 for security');
+    expect(prompt).toContain('User-provided focus or target:\ncommit abc123 for security');
+    expect(prompt).not.toContain('User-provided focus or target:\n/review');
   });
 
   it('classifies explicit slash-command file paths before building the review team manifest', async () => {
@@ -491,7 +495,7 @@ describe('launchDeepReviewSession', () => {
       parentSessionId: 'parent-123',
       workspacePath: 'D:\\workspace\\repo',
       prompt: 'Review these files',
-      displayMessage: 'Deep review started',
+      displayMessage: 'Strict review started',
     });
 
     expect(result.childSessionId).toBe('child-123');
@@ -503,13 +507,11 @@ describe('launchDeepReviewSession', () => {
         agentType: 'DeepReview',
       }),
     );
-    expect(mockOpenBtwSessionInAuxPane).toHaveBeenCalledWith(
-      expect.objectContaining({ childSessionId: 'child-123' }),
-    );
+    expect(mockOpenBtwSessionInAuxPane).not.toHaveBeenCalled();
     expect(mockSendMessage).toHaveBeenCalledWith(
       'Review these files',
       'child-123',
-      'Deep review started',
+      'Strict review started',
     );
     expect(mockInsertReviewSessionSummaryMarker).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -532,7 +534,7 @@ describe('launchDeepReviewSession', () => {
       parentSessionId: 'parent-123',
       workspacePath: 'D:\\workspace\\repo',
       prompt: 'Review these files',
-      displayMessage: 'Deep review started',
+      displayMessage: 'Strict review started',
       runManifest: runManifest as any,
     });
 
@@ -555,14 +557,14 @@ describe('launchDeepReviewSession', () => {
       parentSessionId: 'parent-123',
       workspacePath: 'D:\\workspace\\repo',
       prompt: 'Review these files',
-      displayMessage: 'Deep review started',
+      displayMessage: 'Strict review started',
       runManifest: runManifest as any,
     });
 
     expect(mockSendMessage).toHaveBeenCalledWith(
       'Review these files',
       'child-123',
-      'Deep review started',
+      'Strict review started',
       undefined,
       undefined,
       {
@@ -582,14 +584,14 @@ describe('launchDeepReviewSession', () => {
         parentSessionId: 'parent-123',
         workspacePath: 'D:\\workspace\\repo',
         prompt: 'Review these files',
-        displayMessage: 'Deep review started',
+        displayMessage: 'Strict review started',
       });
     } catch (error) {
       caughtError = error;
     }
 
     expect(caughtError).toBeInstanceOf(Error);
-    expect((caughtError as Error).message).toBe('Deep review failed to start. Please try again.');
+    expect((caughtError as Error).message).toBe('Strict review failed to start. Please try again.');
     expect((caughtError as { launchErrorMessageKey?: string }).launchErrorMessageKey).toBe(
       'deepReviewActionBar.launchError.unknown',
     );
@@ -600,36 +602,6 @@ describe('launchDeepReviewSession', () => {
     expect(mockCloseBtwSessionInAuxPane).not.toHaveBeenCalled();
     expect(mockDeleteSession).not.toHaveBeenCalled();
     expect(mockDiscardLocalSession).not.toHaveBeenCalled();
-  });
-
-  it('throws and performs full cleanup when openBtwSessionInAuxPane fails', async () => {
-    mockCreateBtwChildSession.mockResolvedValue({
-      childSessionId: 'child-123',
-      parentDialogTurnId: 'turn-456',
-    });
-    mockOpenBtwSessionInAuxPane.mockImplementation(() => {
-      throw new Error('Pane open failed');
-    });
-    mockDeleteSession.mockResolvedValue(undefined);
-    mockSessionsMap.set('child-123', { workspacePath: 'D:\\workspace\\repo' });
-
-    await expect(
-      launchDeepReviewSession({
-        parentSessionId: 'parent-123',
-        workspacePath: 'D:\\workspace\\repo',
-        prompt: 'Review these files',
-        displayMessage: 'Deep review started',
-      }),
-    ).rejects.toThrow('Pane open failed');
-
-    expect(mockCloseBtwSessionInAuxPane).toHaveBeenCalledWith('child-123');
-    expect(mockDeleteSession).toHaveBeenCalledWith(
-      'child-123',
-      'D:\\workspace\\repo',
-      undefined,
-      undefined,
-    );
-    expect(mockDiscardLocalSession).toHaveBeenCalledWith('child-123');
   });
 
   it('classifies sendMessage launch failures after cleanup', async () => {
@@ -647,14 +619,14 @@ describe('launchDeepReviewSession', () => {
         parentSessionId: 'parent-123',
         workspacePath: 'D:\\workspace\\repo',
         prompt: 'Review these files',
-        displayMessage: 'Deep review started',
+        displayMessage: 'Strict review started',
       });
     } catch (error) {
       caughtError = error;
     }
 
     expect(caughtError).toBeInstanceOf(Error);
-    expect((caughtError as Error).message).toBe('Network connection was interrupted before Deep Review could start.');
+    expect((caughtError as Error).message).toBe('Network connection was interrupted before strict review could start.');
     expect((caughtError as { launchErrorMessageKey?: string }).launchErrorMessageKey).toBe(
       'deepReviewActionBar.launchError.network',
     );
@@ -665,14 +637,12 @@ describe('launchDeepReviewSession', () => {
     expect(mockDiscardLocalSession).toHaveBeenCalledWith('child-123');
   });
 
-  it('skips backend cleanup when workspace path is missing', async () => {
+  it('skips backend cleanup when sendMessage fails and workspace path is missing', async () => {
     mockCreateBtwChildSession.mockResolvedValue({
       childSessionId: 'child-123',
       parentDialogTurnId: 'turn-456',
     });
-    mockOpenBtwSessionInAuxPane.mockImplementation(() => {
-      throw new Error('Pane open failed');
-    });
+    mockSendMessage.mockRejectedValue(new Error('SSE stream connection timeout'));
     // No workspacePath in session
     mockSessionsMap.set('child-123', {});
 
@@ -681,9 +651,9 @@ describe('launchDeepReviewSession', () => {
         parentSessionId: 'parent-123',
         workspacePath: 'D:\\workspace\\repo',
         prompt: 'Review these files',
-        displayMessage: 'Deep review started',
+        displayMessage: 'Strict review started',
       }),
-    ).rejects.toThrow('Pane open failed');
+    ).rejects.toThrow('Cleanup was incomplete');
 
     expect(mockCloseBtwSessionInAuxPane).toHaveBeenCalledWith('child-123');
     expect(mockDeleteSession).not.toHaveBeenCalled();
@@ -695,9 +665,7 @@ describe('launchDeepReviewSession', () => {
       childSessionId: 'child-123',
       parentDialogTurnId: 'turn-456',
     });
-    mockOpenBtwSessionInAuxPane.mockImplementation(() => {
-      throw new Error('Pane open failed');
-    });
+    mockSendMessage.mockRejectedValue(new Error('SSE stream connection timeout'));
     mockDeleteSession.mockRejectedValue(new Error('Session does not exist'));
     mockSessionsMap.set('child-123', { workspacePath: 'D:\\workspace\\repo' });
 
@@ -706,9 +674,9 @@ describe('launchDeepReviewSession', () => {
         parentSessionId: 'parent-123',
         workspacePath: 'D:\\workspace\\repo',
         prompt: 'Review these files',
-        displayMessage: 'Deep review started',
+        displayMessage: 'Strict review started',
       }),
-    ).rejects.toThrow('Pane open failed');
+    ).rejects.toThrow('Network connection was interrupted before strict review could start.');
 
     expect(mockDeleteSession).toHaveBeenCalled();
     // discardLocalSession should still be called because backend reports session missing

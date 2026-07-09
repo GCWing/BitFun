@@ -88,7 +88,7 @@ describe('buildSelectedReviewRemediationPrompt', () => {
     expect(prompt).toBe('');
   });
 
-  it('builds prompt with selected items for deep review', () => {
+  it('builds prompt with selected items for strict review', () => {
     const prompt = buildSelectedReviewRemediationPrompt({
       reviewData: {
         summary: { recommended_action: 'request_changes' },
@@ -99,7 +99,7 @@ describe('buildSelectedReviewRemediationPrompt', () => {
       reviewMode: 'deep',
     });
 
-    expect(prompt).toContain('Deep Review findings only');
+    expect(prompt).toContain('Review: Strict findings only');
     expect(prompt).toContain('Fix issue 1');
     expect(prompt).toContain('Selected Remediation Plan');
   });
@@ -115,8 +115,8 @@ describe('buildSelectedReviewRemediationPrompt', () => {
       reviewMode: 'deep',
     });
 
-    expect(prompt).toContain('follow-up deep review');
-    expect(prompt).toContain('dispatching all enabled review team reviewers');
+    expect(prompt).toContain('follow-up strict review');
+    expect(prompt).toContain('assigned read-only reviewers');
   });
 
   it('builds prompt with standard review mode', () => {
@@ -130,7 +130,7 @@ describe('buildSelectedReviewRemediationPrompt', () => {
       reviewMode: 'standard',
     });
 
-    expect(prompt).toContain('Code Review findings only');
+    expect(prompt).toContain('Review findings only');
   });
 
   it('appends continuation context when completedItems provided', () => {

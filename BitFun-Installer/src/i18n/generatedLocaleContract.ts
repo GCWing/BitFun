@@ -59,7 +59,7 @@ export const SHARED_TERMS_BY_APP_LANGUAGE = {
     "features": {
       "remoteControl": "Remote Control",
       "codeAgent": "Code Agent",
-      "deepReview": "Deep Review",
+      "deepReview": "Review: Strict",
       "settings": "Settings",
       "workspace": "Workspace",
       "accountLogin": "Account Login"
@@ -110,7 +110,7 @@ export const SHARED_TERMS_BY_APP_LANGUAGE = {
     "features": {
       "remoteControl": "远程控制",
       "codeAgent": "代码助手",
-      "deepReview": "深度代码评审",
+      "deepReview": "严格审查",
       "settings": "设置",
       "workspace": "工作区",
       "accountLogin": "账户登录"
@@ -161,7 +161,7 @@ export const SHARED_TERMS_BY_APP_LANGUAGE = {
     "features": {
       "remoteControl": "遠端控制",
       "codeAgent": "程式碼助手",
-      "deepReview": "深度程式碼審查",
+      "deepReview": "嚴格審查",
       "settings": "設定",
       "workspace": "工作區",
       "accountLogin": "帳號登入"

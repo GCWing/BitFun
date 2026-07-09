@@ -6,7 +6,7 @@
   "features": {
     "remoteControl": "遠端控制",
     "codeAgent": "程式碼助手",
-    "deepReview": "深度程式碼審查",
+    "deepReview": "嚴格審查",
     "settings": "設定",
     "workspace": "工作區",
     "accountLogin": "帳號登入"

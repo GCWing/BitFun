@@ -431,15 +431,15 @@ export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({ childSessionId
               ? 'reviewActionBar.fixAndReviewRequestDisplayDeep'
               : 'reviewActionBar.fixAndReviewRequestDisplayStandard', {
               defaultValue: isDeepReview
-                ? 'Fix Deep Review findings and re-review'
-                : 'Fix Code Review findings and re-review',
+                ? 'Fix strict review findings and re-review'
+                : 'Fix review findings and re-review',
             })
           : t(isDeepReview
               ? 'reviewActionBar.fixRequestDisplayDeep'
               : 'reviewActionBar.fixRequestDisplayStandard', {
               defaultValue: isDeepReview
-                ? 'Start fixing Deep Review findings'
-                : 'Start fixing Code Review findings',
+                ? 'Start fixing strict review findings'
+                : 'Start fixing review findings',
             }),
         isDeepReview ? 'DeepReview' : 'CodeReview',
         'agentic',
@@ -493,7 +493,7 @@ export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({ childSessionId
       );
       store.minimize(childSessionId);
     } catch (error) {
-      log.error('Failed to start DeepReview retry slices', { childSessionId, error });
+      log.error('Failed to start DeepReview retry coverage', { childSessionId, error });
       const message = error instanceof Error
         ? error.message
         : t('deepReviewActionBar.retryIncompleteFailed');
@@ -569,7 +569,7 @@ export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({ childSessionId
     try {
       await continueDeepReviewSession(interruption, t('deepReviewActionBar.resumeRequestDisplay'), { force: !interruption.canResume });
     } catch (error) {
-      log.error('Failed to continue interrupted Deep Review', { childSessionId, error });
+      log.error('Failed to continue interrupted strict review', { childSessionId, error });
       const message = t('deepReviewActionBar.resumeFailedMessage');
       store.updatePhase('resume_failed', message, childSessionId ?? undefined);
       store.restore(childSessionId ?? undefined);
@@ -655,11 +655,11 @@ export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({ childSessionId
     switch (phase) {
       case 'review_running':
         return t(isDeepReview ? 'deepReviewActionBar.reviewRunningDeep' : 'deepReviewActionBar.reviewRunningStandard', {
-          defaultValue: isDeepReview ? 'Deep review in progress...' : 'Review in progress...',
+          defaultValue: isDeepReview ? 'Strict review in progress...' : 'Review in progress...',
         });
       case 'review_completed':
         return t(isDeepReview ? 'reviewActionBar.reviewCompletedDeep' : 'reviewActionBar.reviewCompletedStandard', {
-          defaultValue: isDeepReview ? 'Deep review completed' : 'Review completed',
+          defaultValue: isDeepReview ? 'Strict review completed' : 'Review completed',
         });
       case 'fix_running':
         if (lastSubmittedAction === 'fix-review') {

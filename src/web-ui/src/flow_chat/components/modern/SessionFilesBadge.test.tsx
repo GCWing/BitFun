@@ -21,8 +21,17 @@ const mocks = vi.hoisted(() => ({
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string, options?: Record<string, unknown>) => {
+      const messages: Record<string, string> = {
+        'sessionFilesBadge.actionsButton': 'Actions',
+        'sessionFilesBadge.actionsMenuHint': 'Quick actions',
+        'sessionFilesBadge.reviewModeStandard': 'Review',
+        'sessionFilesBadge.reviewModeDeep': 'Review: Strict',
+      };
       if (key === 'sessionFilesBadge.filesSummaryCount') {
         return `${String(options?.count ?? 0)} files`;
+      }
+      if (messages[key]) {
+        return messages[key];
       }
       return typeof options?.defaultValue === 'string' ? options.defaultValue : key;
     },
@@ -216,5 +225,27 @@ describe('SessionFilesBadge', () => {
 
     expect(container.textContent).toContain('1 files');
     expect(container.textContent).not.toContain('stale-session.ts');
+  });
+
+  it('presents strict review as a Review option instead of a second Deep Review product', async () => {
+    await act(async () => {
+      root.render(<SessionFilesBadge sessionId="session-1" />);
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(350);
+      await Promise.resolve();
+    });
+
+    const actionsButton = container.querySelector('.session-files-badge__review-btn') as HTMLButtonElement | null;
+    expect(actionsButton).not.toBeNull();
+
+    await act(async () => {
+      actionsButton?.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(container.textContent).toContain('Review');
+    expect(container.textContent).toContain('Review: Strict');
+    expect(container.textContent).not.toContain('Deep review');
   });
 });

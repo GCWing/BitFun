@@ -114,7 +114,7 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
     : 'btw';
   const childBadgeLabel = t(`childSession.kinds.${childKind}.short`, {
     defaultValue: childKind === 'deep_review'
-      ? 'Deep'
+      ? 'Strict'
       : childKind === 'review'
         ? 'Review'
         : childKind === 'subagent'

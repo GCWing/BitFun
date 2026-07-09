@@ -294,6 +294,41 @@ describeWithJsdom('TaskToolDisplay', () => {
     expect(taskCollapseStateManager.isCollapsed('task-tool-1')).toBe(true);
   });
 
+  it('does not treat Review-prefixed remediation agents as read-only coverage tasks', async () => {
+    const completedItem: FlowToolItem = {
+      ...reviewTaskItem('completed', 'ReviewFixer', 'Fix reviewed issues'),
+      subagentSessionId: 'review-fixer-session',
+    };
+    const runningItem: FlowToolItem = {
+      ...reviewTaskItem('running', 'ReviewFixer', 'Fix reviewed issues'),
+      subagentSessionId: 'review-fixer-session',
+    };
+
+    await act(async () => {
+      root.render(
+        <TaskToolDisplay
+          toolItem={completedItem}
+          config={config}
+          sessionId="parent-session"
+        />,
+      );
+    });
+
+    await act(async () => {
+      root.render(
+        <TaskToolDisplay
+          toolItem={runningItem}
+          config={config}
+          sessionId="parent-session"
+        />,
+      );
+    });
+
+    expect(taskCollapseStateManager.isCollapsed('task-tool-1')).toBe(false);
+    expect(container.textContent).toContain('ReviewFixer');
+    expect(container.querySelector('.task-subagent-stop-button')).toBeTruthy();
+  });
+
   it('opens the real subagent session in the aux pane when the task card rail is clicked', async () => {
     const toolItem: FlowToolItem = {
       ...reviewTaskItem('completed', 'Explore', 'Investigate task card behavior'),

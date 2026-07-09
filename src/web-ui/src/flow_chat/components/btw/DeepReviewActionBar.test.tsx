@@ -298,8 +298,8 @@ describeWithJsdom('DeepReviewActionBar', () => {
 
     expect(sendMessageMock).toHaveBeenCalledTimes(1);
     const [prompt, sessionId, displayMessage, agentType] = sendMessageMock.mock.calls[0];
-    expect(prompt).toContain('selected Code Review findings only');
-    expect(prompt).toContain('follow-up standard code review');
+    expect(prompt).toContain('selected Review findings only');
+    expect(prompt).toContain('follow-up standard review');
     expect(sessionId).toBe('review-session');
     expect(displayMessage).toBe('Fix Code Review findings and re-review');
     expect(agentType).toBe('CodeReview');
@@ -422,9 +422,9 @@ describeWithJsdom('DeepReviewActionBar', () => {
       root.render(<DeepReviewActionBar />);
     });
 
-    expect(container.textContent).not.toContain('Reviewers waiting for capacity');
+    expect(container.textContent).not.toContain('Review waiting for capacity');
     expect(Array.from(container.querySelectorAll('button')).some((button) => (
-      button.textContent?.includes('Pause queue')
+      button.textContent?.includes('Pause waiting')
     ))).toBe(false);
   });
 
@@ -457,14 +457,14 @@ describeWithJsdom('DeepReviewActionBar', () => {
 
     expect(container.textContent).toContain('Waiting for model capacity');
     expect(container.textContent).toContain('BitFun is waiting for temporary model capacity.');
-    expect(container.textContent).toContain('Reason: provider concurrency limit');
+    expect(container.textContent).toContain('Reason: model concurrency limit');
     expect(container.textContent).toContain('Waited 12s of 1m 0s');
     expect(container.textContent).toContain('Your active session is busy.');
     expect(container.textContent).not.toContain('Run slower next time');
     expect(container.textContent).toContain('Open Review settings');
 
     const pauseButton = Array.from(container.querySelectorAll('button'))
-      .find((button) => button.textContent?.includes('Pause queue'));
+      .find((button) => button.textContent?.includes('Pause waiting'));
     expect(pauseButton).toBeTruthy();
 
     await act(async () => {
@@ -475,7 +475,7 @@ describeWithJsdom('DeepReviewActionBar', () => {
     expect((useReviewActionBarStore.getState() as unknown as {
       capacityQueueState: { status: string };
     }).capacityQueueState.status).toBe('paused_by_user');
-    expect(container.textContent).toContain('Queue paused');
+    expect(container.textContent).toContain('Review wait paused');
 
     const openSettingsButton = Array.from(container.querySelectorAll('button'))
       .find((button) => button.textContent?.includes('Open Review settings'));
@@ -527,7 +527,7 @@ describeWithJsdom('DeepReviewActionBar', () => {
     });
 
     const pauseButton = Array.from(container.querySelectorAll('button'))
-      .find((button) => button.textContent?.includes('Pause queue'));
+      .find((button) => button.textContent?.includes('Pause waiting'));
     expect(pauseButton).toBeTruthy();
 
     await act(async () => {
@@ -575,7 +575,7 @@ describeWithJsdom('DeepReviewActionBar', () => {
     });
 
     const pauseButton = Array.from(container.querySelectorAll('button'))
-      .find((button) => button.textContent?.includes('Pause queue'));
+      .find((button) => button.textContent?.includes('Pause waiting'));
     expect(pauseButton).toBeTruthy();
 
     await act(async () => {
@@ -629,7 +629,7 @@ describeWithJsdom('DeepReviewActionBar', () => {
     });
 
     const pauseButton = Array.from(container.querySelectorAll('button'))
-      .find((button) => button.textContent?.includes('Pause queue'));
+      .find((button) => button.textContent?.includes('Pause waiting'));
     expect(pauseButton).toBeTruthy();
 
     await act(async () => {
@@ -639,7 +639,7 @@ describeWithJsdom('DeepReviewActionBar', () => {
 
     expect(controlDeepReviewQueueMock).toHaveBeenCalledTimes(2);
     expect(notificationService.error).toHaveBeenCalledWith(
-      expect.stringContaining('1 of 2 reviewers failed'),
+      expect.stringContaining('1 of 2 review items failed'),
     );
     expect(notificationService.error).toHaveBeenCalledWith(
       expect.stringContaining('tool already running'),
@@ -649,7 +649,7 @@ describeWithJsdom('DeepReviewActionBar', () => {
     }).capacityQueueState.status).toBe('queued_for_capacity');
   });
 
-  it('starts a structured retry turn for explicit incomplete Deep Review slices', async () => {
+  it('starts a structured retry turn for explicit incomplete strict review coverage', async () => {
     flowChatSessionsMock.set('deep-review-session', {
       sessionId: 'deep-review-session',
       sessionKind: 'deep_review',
@@ -712,7 +712,7 @@ describeWithJsdom('DeepReviewActionBar', () => {
     });
 
     const retryButton = Array.from(container.querySelectorAll('button'))
-      .find((button) => button.textContent?.includes('Retry incomplete slices'));
+      .find((button) => button.textContent?.includes('Retry incomplete review work'));
     expect(retryButton).toBeTruthy();
 
     await act(async () => {
@@ -972,13 +972,13 @@ describeWithJsdom('DeepReviewActionBar', () => {
 
     expect(buttonTexts.some((text) => text.includes('Continue review'))).toBe(true);
     expect(buttonTexts.some((text) => text.includes('Switch model'))).toBe(true);
-    expect(buttonTexts.some((text) => text.includes('Copy diagnostics'))).toBe(true);
+    expect(buttonTexts.some((text) => text.includes('Copy troubleshooting summary'))).toBe(true);
     expect(buttonTexts.some((text) => text.includes('Retry'))).toBe(false);
     expect(buttonTexts.some((text) => text.includes('Show recovery plan'))).toBe(false);
     expect(container.querySelectorAll('.deep-review-action-bar__attribution button')).toHaveLength(0);
     expect(container.querySelector('.deep-review-action-bar__attribution-actions')).toBeNull();
-    expect(container.textContent).toContain('1 completed reviewers will be preserved');
-    expect(container.textContent).toContain('1 reviewers will be rerun');
+    expect(container.textContent).toContain('1 completed review results will be preserved');
+    expect(container.textContent).toContain('1 review items will be rerun');
   });
 
   it('minimizes and hides stale interruption controls after a resume request starts successfully', async () => {
