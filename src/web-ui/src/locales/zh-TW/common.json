@@ -474,7 +474,16 @@
     "cancel": "取消",
     "emptyFields": "請填寫所有欄位",
     "loginSuccess": "登入成功：{{user_id}}",
-    "processing": "處理中..."
+    "processing": "處理中...",
+    "devices": "線上裝置",
+    "noDevices": "沒有其他裝置線上",
+    "connectDevices": "連接裝置",
+    "syncSessions": "同步對話",
+    "syncSettings": "同步設定",
+    "syncSuccess": "同步成功",
+    "fetchSuccess": "取得成功",
+    "sendToDevice": "發送到裝置",
+    "deviceSyncError": "裝置同步錯誤：{{message}}"
   },
   "remoteConnect": {
     "tabNgrok": "內網穿透",

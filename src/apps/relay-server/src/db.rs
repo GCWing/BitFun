@@ -43,6 +43,24 @@ CREATE TABLE IF NOT EXISTS auth_tokens (
 );
 CREATE INDEX IF NOT EXISTS idx_auth_tokens_user ON auth_tokens(user_id);
 CREATE INDEX IF NOT EXISTS idx_devices_user ON devices(user_id);
+CREATE TABLE IF NOT EXISTS sync_sessions (
+  user_id        TEXT NOT NULL REFERENCES users(user_id),
+  session_id     TEXT NOT NULL,
+  encrypted_data TEXT NOT NULL,
+  nonce          TEXT NOT NULL,
+  version        INTEGER NOT NULL,
+  updated_at     INTEGER NOT NULL,
+  deleted        INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (user_id, session_id)
+);
+CREATE INDEX IF NOT EXISTS idx_sync_sessions_user ON sync_sessions(user_id);
+CREATE TABLE IF NOT EXISTS sync_settings (
+  user_id        TEXT PRIMARY KEY REFERENCES users(user_id),
+  encrypted_data TEXT NOT NULL,
+  nonce          TEXT NOT NULL,
+  version        INTEGER NOT NULL,
+  updated_at     INTEGER NOT NULL
+);
 "#;
 
 /// Open (or create) the SQLite database and ensure the schema exists.
@@ -324,6 +342,136 @@ impl AuthToken {
 fn generate_token() -> String {
     let bytes: [u8; 32] = rand::random();
     bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+// ── Sync sessions (encrypted blobs, server never decrypts) ─────────────
+
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct SyncSessionRow {
+    pub session_id: String,
+    pub encrypted_data: String,
+    pub nonce: String,
+    pub version: i64,
+    pub updated_at: i64,
+    pub deleted: i64,
+}
+
+impl SyncSessionRow {
+    /// Upsert an encrypted session blob. Last-writer-wins via version.
+    pub async fn upsert(
+        pool: &DbPool,
+        user_id: &str,
+        session_id: &str,
+        encrypted_data: &str,
+        nonce: &str,
+        version: i64,
+    ) -> Result<()> {
+        let now = Utc::now().timestamp();
+        sqlx::query(
+            "INSERT INTO sync_sessions (user_id, session_id, encrypted_data, nonce, version, updated_at, deleted) \
+             VALUES (?, ?, ?, ?, ?, ?, 0) \
+             ON CONFLICT(user_id, session_id) DO UPDATE SET \
+               encrypted_data = excluded.encrypted_data, \
+               nonce = excluded.nonce, \
+               version = excluded.version, \
+               updated_at = excluded.updated_at, \
+               deleted = 0",
+        )
+        .bind(user_id)
+        .bind(session_id)
+        .bind(encrypted_data)
+        .bind(nonce)
+        .bind(version)
+        .bind(now)
+        .execute(pool)
+        .await
+        .map_err(|e| anyhow!("upsert sync session: {e}"))?;
+        Ok(())
+    }
+
+    /// Fetch all non-deleted sessions for a user updated after `since_version`.
+    pub async fn list_since(
+        pool: &DbPool,
+        user_id: &str,
+        since_version: i64,
+    ) -> Result<Vec<SyncSessionRow>> {
+        let rows = sqlx::query_as::<_, SyncSessionRow>(
+            "SELECT session_id, encrypted_data, nonce, version, updated_at, deleted \
+             FROM sync_sessions WHERE user_id = ? AND version > ? AND deleted = 0",
+        )
+        .bind(user_id)
+        .bind(since_version)
+        .fetch_all(pool)
+        .await
+        .map_err(|e| anyhow!("list sync sessions: {e}"))?;
+        Ok(rows)
+    }
+
+    /// Soft-delete a session (tombstone for syncing deletions across devices).
+    pub async fn delete(pool: &DbPool, user_id: &str, session_id: &str) -> Result<()> {
+        let now = Utc::now().timestamp();
+        sqlx::query(
+            "UPDATE sync_sessions SET deleted = 1, updated_at = ? WHERE user_id = ? AND session_id = ?",
+        )
+        .bind(now)
+        .bind(user_id)
+        .bind(session_id)
+        .execute(pool)
+        .await
+        .map_err(|e| anyhow!("delete sync session: {e}"))?;
+        Ok(())
+    }
+}
+
+// ── Sync settings (single encrypted blob per user) ──────────────────────
+
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct SyncSettingsRow {
+    pub encrypted_data: String,
+    pub nonce: String,
+    pub version: i64,
+    pub updated_at: i64,
+}
+
+impl SyncSettingsRow {
+    pub async fn upsert(
+        pool: &DbPool,
+        user_id: &str,
+        encrypted_data: &str,
+        nonce: &str,
+        version: i64,
+    ) -> Result<()> {
+        let now = Utc::now().timestamp();
+        sqlx::query(
+            "INSERT INTO sync_settings (user_id, encrypted_data, nonce, version, updated_at) \
+             VALUES (?, ?, ?, ?, ?) \
+             ON CONFLICT(user_id) DO UPDATE SET \
+               encrypted_data = excluded.encrypted_data, \
+               nonce = excluded.nonce, \
+               version = excluded.version, \
+               updated_at = excluded.updated_at",
+        )
+        .bind(user_id)
+        .bind(encrypted_data)
+        .bind(nonce)
+        .bind(version)
+        .bind(now)
+        .execute(pool)
+        .await
+        .map_err(|e| anyhow!("upsert sync settings: {e}"))?;
+        Ok(())
+    }
+
+    pub async fn get(pool: &DbPool, user_id: &str) -> Result<Option<SyncSettingsRow>> {
+        let row = sqlx::query_as::<_, SyncSettingsRow>(
+            "SELECT encrypted_data, nonce, version, updated_at FROM sync_settings WHERE user_id = ?",
+        )
+        .bind(user_id)
+        .fetch_optional(pool)
+        .await
+        .map_err(|e| anyhow!("get sync settings: {e}"))?;
+        Ok(row)
+    }
 }
 
 #[cfg(test)]

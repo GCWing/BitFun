@@ -2113,6 +2113,33 @@ pub enum RemoteCommand {
         session_id: Option<String>,
     },
     Ping,
+
+    // ── Device-to-device distributed control ──────────────────────────────
+    //
+    // These variants are carried *inside* an encrypted device-to-device
+    // payload (see `RelayMessage::DeviceMessage`). The relay never sees them
+    // in cleartext; the receiving device decrypts the outer envelope with the
+    // account master_key, then deserializes the inner JSON into `RemoteCommand`.
+    //
+    // Currently sent over the HTTP /api/sync/* path (encrypted with master_key)
+    // or the WS device-messaging path. The relay routes by device_id only.
+    /// Push a serialized chat session to a peer device so it can import it.
+    SendSessionToDevice {
+        /// The opaque session blob (exported session JSON, encrypted by the
+        /// caller before it reaches this layer if sent over WS).
+        session_data: String,
+        session_id: String,
+        session_name: Option<String>,
+    },
+    /// Ask a peer device to execute a prompt in an existing or new session.
+    ExecuteOnDevice {
+        session_id: Option<String>,
+        content: String,
+        agent_type: Option<String>,
+        workspace_path: Option<String>,
+    },
+    /// Query a peer device for workspace / session info (read-only).
+    DeviceQueryInfo,
 }
 
 /// Responses sent from desktop back to remote clients.
@@ -2246,6 +2273,20 @@ pub enum RemoteResponse {
         mime_type: String,
     },
     Pong,
+    /// Device-to-device: a session was received and imported.
+    SessionReceived {
+        session_id: String,
+    },
+    /// Device-to-device: a command was accepted by the peer device.
+    DeviceAccepted {
+        message: String,
+    },
+    /// Device-to-device: info response from a peer device.
+    DeviceInfo {
+        device_name: Option<String>,
+        workspace_path: Option<String>,
+        session_count: Option<usize>,
+    },
     Error {
         message: String,
     },
@@ -2264,6 +2305,15 @@ pub trait RemoteCommandRuntimeHost: Send + Sync {
     async fn handle_poll_command(&self, command: &RemoteCommand) -> RemoteResponse;
     async fn handle_workspace_file_command(&self, command: &RemoteCommand) -> RemoteResponse;
     async fn handle_interaction_command(&self, command: &RemoteCommand) -> RemoteResponse;
+
+    /// Handle a device-to-device command arriving from a peer in the same
+    /// account.  Default implementation returns an error so existing
+    /// implementors don't break.
+    async fn handle_device_command(&self, _command: &RemoteCommand) -> RemoteResponse {
+        RemoteResponse::Error {
+            message: "Device-to-device commands are not supported on this device".to_string(),
+        }
+    }
 
     async fn submit_dialog(
         &self,
@@ -2357,6 +2407,10 @@ where
             })
             .await,
         ),
+
+        RemoteCommand::SendSessionToDevice { .. }
+        | RemoteCommand::ExecuteOnDevice { .. }
+        | RemoteCommand::DeviceQueryInfo => host.handle_device_command(command).await,
     }
 }
 

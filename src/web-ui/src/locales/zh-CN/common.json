@@ -474,7 +474,16 @@
     "cancel": "取消",
     "emptyFields": "请填写所有字段",
     "loginSuccess": "登录成功：{{user_id}}",
-    "processing": "处理中..."
+    "processing": "处理中...",
+    "devices": "在线设备",
+    "noDevices": "没有其他设备在线",
+    "connectDevices": "连接设备",
+    "syncSessions": "同步会话",
+    "syncSettings": "同步设置",
+    "syncSuccess": "同步成功",
+    "fetchSuccess": "获取成功",
+    "sendToDevice": "发送到设备",
+    "deviceSyncError": "设备同步错误：{{message}}"
   },
   "remoteConnect": {
     "tabNgrok": "内网穿透",

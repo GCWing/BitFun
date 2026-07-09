@@ -264,6 +264,191 @@ impl AccountClient {
             master_key,
         })
     }
+
+    // ── Encrypted sync (sessions + settings) ────────────────────────────────
+    //
+    // All sync payloads are encrypted with the in-memory master_key via
+    // AES-256-GCM before leaving this device. The relay stores opaque
+    // ciphertext only.
+
+    fn auth_header(session: &AccountSession) -> String {
+        format!("Bearer {}", session.token)
+    }
+
+    /// Encrypt `plaintext` with the master key, returning base64 `(data, nonce)`.
+    fn seal(session: &AccountSession, plaintext: &str) -> Result<(String, String)> {
+        encrypt(&session.master_key, plaintext.as_bytes())
+            .map(|(ct, nonce)| (BASE64.encode(ct), BASE64.encode(&nonce[..])))
+            .map_err(|e| anyhow!("encrypt sync blob: {e}"))
+    }
+
+    /// Decrypt base64 `(data, nonce)` with the master key.
+    fn open(session: &AccountSession, data_b64: &str, nonce_b64: &str) -> Result<String> {
+        let ct = BASE64
+            .decode(data_b64)
+            .map_err(|e| anyhow!("b64 decode sync ct: {e}"))?;
+        let nonce_vec = BASE64
+            .decode(nonce_b64)
+            .map_err(|e| anyhow!("b64 decode sync nonce: {e}"))?;
+        if nonce_vec.len() != NONCE_LEN {
+            return Err(anyhow!("invalid sync nonce length"));
+        }
+        let mut nonce = [0u8; NONCE_LEN];
+        nonce.copy_from_slice(&nonce_vec);
+        let pt = decrypt(&session.master_key, &ct, &nonce)
+            .map_err(|e| anyhow!("decrypt sync blob: {e}"))?;
+        String::from_utf8(pt).map_err(|e| anyhow!("sync blob utf8: {e}"))
+    }
+
+    /// Upload (or replace) a single encrypted session blob for this device.
+    pub async fn upload_session(
+        &self,
+        relay_url: &str,
+        session: &AccountSession,
+        session_id: &str,
+        plaintext: &str,
+    ) -> Result<()> {
+        let (data, nonce) = Self::seal(session, plaintext)?;
+        let body = serde_json::json!({
+            "session_id": session_id,
+            "encrypted_data": data,
+            "nonce": nonce,
+            "version": chrono::Utc::now().timestamp_millis(),
+        });
+        let resp = self
+            .http
+            .post(Self::endpoint(relay_url, "/api/sync/sessions"))
+            .header("Authorization", Self::auth_header(session))
+            .json(&body)
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(Self::into_error(resp).await);
+        }
+        Ok(())
+    }
+
+    /// Fetch all encrypted session blobs for the account, returning decrypted
+    /// `(session_id, plaintext)` pairs.
+    pub async fn fetch_sessions(
+        &self,
+        relay_url: &str,
+        session: &AccountSession,
+    ) -> Result<Vec<(String, String)>> {
+        let resp = self
+            .http
+            .get(Self::endpoint(relay_url, "/api/sync/sessions"))
+            .header("Authorization", Self::auth_header(session))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(Self::into_error(resp).await);
+        }
+        let payload: SessionsListResponse = resp.json().await?;
+        payload
+            .sessions
+            .into_iter()
+            .map(|entry| {
+                let pt = Self::open(session, &entry.encrypted_data, &entry.nonce)?;
+                Ok((entry.session_id, pt))
+            })
+            .collect()
+    }
+
+    /// Delete a session blob (tombstone) — used when a session is removed.
+    pub async fn delete_session(
+        &self,
+        relay_url: &str,
+        session: &AccountSession,
+        session_id: &str,
+    ) -> Result<()> {
+        let resp = self
+            .http
+            .delete(Self::endpoint(
+                relay_url,
+                &format!("/api/sync/sessions/{session_id}"),
+            ))
+            .header("Authorization", Self::auth_header(session))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(Self::into_error(resp).await);
+        }
+        Ok(())
+    }
+
+    /// Upload an encrypted settings blob (keyed by the user, not per-device).
+    pub async fn upload_settings(
+        &self,
+        relay_url: &str,
+        session: &AccountSession,
+        plaintext: &str,
+    ) -> Result<()> {
+        let (data, nonce) = Self::seal(session, plaintext)?;
+        let body = serde_json::json!({
+            "encrypted_data": data,
+            "nonce": nonce,
+            "version": chrono::Utc::now().timestamp_millis(),
+        });
+        let resp = self
+            .http
+            .post(Self::endpoint(relay_url, "/api/sync/settings"))
+            .header("Authorization", Self::auth_header(session))
+            .json(&body)
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(Self::into_error(resp).await);
+        }
+        Ok(())
+    }
+
+    /// Fetch and decrypt the settings blob. Returns `None` if no settings exist.
+    pub async fn fetch_settings(
+        &self,
+        relay_url: &str,
+        session: &AccountSession,
+    ) -> Result<Option<String>> {
+        let resp = self
+            .http
+            .get(Self::endpoint(relay_url, "/api/sync/settings"))
+            .header("Authorization", Self::auth_header(session))
+            .send()
+            .await?;
+        if resp.status() == reqwest::StatusCode::NOT_FOUND {
+            return Ok(None);
+        }
+        if !resp.status().is_success() {
+            return Err(Self::into_error(resp).await);
+        }
+        // The relay returns `Json<Option<SettingsBlob>>`, so we parse as optional.
+        let opt: Option<SettingsEntry> = resp.json().await?;
+        match opt {
+            None => Ok(None),
+            Some(entry) => {
+                let pt = Self::open(session, &entry.encrypted_data, &entry.nonce)?;
+                Ok(Some(pt))
+            }
+        }
+    }
+}
+
+#[derive(Deserialize)]
+struct SessionsListResponse {
+    sessions: Vec<SessionEntry>,
+}
+
+#[derive(Deserialize)]
+struct SessionEntry {
+    session_id: String,
+    encrypted_data: String,
+    nonce: String,
+}
+
+#[derive(Deserialize)]
+struct SettingsEntry {
+    encrypted_data: String,
+    nonce: String,
 }
 
 #[cfg(test)]

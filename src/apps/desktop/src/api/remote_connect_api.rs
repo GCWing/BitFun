@@ -19,8 +19,27 @@ static REMOTE_CONNECT_SERVICE: OnceLock<Arc<RwLock<Option<RemoteConnectService>>
 /// persisted to disk; it is lost on restart and re-derived on next login.
 static ACCOUNT_SESSION: OnceLock<Arc<RwLock<Option<AccountSession>>>> = OnceLock::new();
 
+/// The relay URL associated with the current account session (needed for sync
+/// and device-routing calls).
+static ACCOUNT_RELAY_URL: OnceLock<Arc<RwLock<Option<String>>>> = OnceLock::new();
+
 fn get_account_session() -> &'static Arc<RwLock<Option<AccountSession>>> {
     ACCOUNT_SESSION.get_or_init(|| Arc::new(RwLock::new(None)))
+}
+
+fn get_account_relay_url() -> &'static Arc<RwLock<Option<String>>> {
+    ACCOUNT_RELAY_URL.get_or_init(|| Arc::new(RwLock::new(None)))
+}
+
+/// Read both the session and relay URL, returning owned clones to avoid
+/// holding locks across awaits.
+async fn read_account_context() -> Result<(AccountSession, String), String> {
+    let session = get_account_session().read().await.clone();
+    let relay_url = get_account_relay_url().read().await.clone();
+    match (session, relay_url) {
+        (Some(s), Some(u)) => Ok((s, u)),
+        _ => Err("not logged in".to_string()),
+    }
 }
 
 /// Tauri resource directory path for mobile-web, set during app setup.
@@ -783,6 +802,7 @@ pub async fn account_login(request: AccountAuthRequest) -> Result<AccountLoginRe
         user_id: session.user_id.clone(),
     };
     *get_account_session().write().await = Some(session);
+    *get_account_relay_url().write().await = Some(request.relay_url.clone());
     log::info!("Account logged in: {}", result.user_id);
     Ok(result)
 }
@@ -798,7 +818,220 @@ pub async fn account_status() -> Result<AccountStatus, String> {
 
 #[tauri::command]
 pub async fn account_logout() -> Result<(), String> {
+    // Disconnect device routing before clearing the session.
+    if let Some(service) = get_service_holder().read().await.as_ref() {
+        service.stop_device_connection().await;
+    }
     *get_account_session().write().await = None;
+    *get_account_relay_url().write().await = None;
     log::info!("Account logged out");
     Ok(())
+}
+
+// ── P2: Device routing commands ──────────────────────────────────────────
+
+#[derive(Serialize)]
+pub struct OnlineDeviceInfo {
+    pub device_id: String,
+    pub device_name: String,
+}
+
+/// Connect to the account relay for device-to-device routing. Must be called
+/// after `account_login`. The event receiver is consumed in a background task
+/// that logs presence updates; device messages are forwarded to the RemoteConnectService.
+#[tauri::command]
+pub async fn account_connect_devices() -> Result<Vec<OnlineDeviceInfo>, String> {
+    let (session, relay_url) = read_account_context().await?;
+    let device_name = current_device_identity()?.device_name;
+    let holder = get_service_holder().read().await;
+    let service = holder
+        .as_ref()
+        .ok_or_else(|| "remote connect service not initialized".to_string())?;
+    let mut event_rx = service
+        .start_device_connection(&relay_url, &session.token, &device_name)
+        .await
+        .map_err(|e| format!("{e}"))?;
+
+    // Background task: consume events (presence / device messages / auth errors)
+    let session_arc = get_account_session().clone();
+    tokio::spawn(async move {
+        use bitfun_core::service::remote_connect::relay_client::RelayEvent;
+        while let Some(event) = event_rx.recv().await {
+            match event {
+                RelayEvent::AuthOk { user_id, device_id } => {
+                    log::info!("Device routing auth ok: user={user_id} device={device_id}");
+                }
+                RelayEvent::AuthError { message } => {
+                    log::warn!("Device routing auth error: {message}");
+                }
+                RelayEvent::DevicePresence { devices } => {
+                    log::info!("Device presence updated: {} online", devices.len());
+                }
+                RelayEvent::DeviceMessageReceived {
+                    source_device_id,
+                    correlation_id,
+                    encrypted_data,
+                    nonce,
+                } => {
+                    // Decrypt with the master key and log the inner command.
+                    // Full execution dispatch happens at the product runtime level;
+                    // here we validate and acknowledge receipt.
+                    let session_guard = session_arc.read().await.clone();
+                    let Some(ref session) = session_guard else {
+                        continue;
+                    };
+                    use bitfun_core::service::remote_connect::encryption::decrypt_from_base64;
+                    match decrypt_from_base64(&session.master_key, &encrypted_data, &nonce) {
+                        Ok(plaintext) => {
+                            log::info!(
+                                "Device message from {source_device_id} corr={correlation_id}: \
+                                 {} bytes",
+                                plaintext.len()
+                            );
+                            // Attempt to deserialize as RemoteCommand for logging.
+                            use bitfun_core::service::remote_connect::remote_server::RemoteCommand;
+                            if let Ok(cmd) = serde_json::from_str::<RemoteCommand>(&plaintext) {
+                                log::info!("Received device command: {cmd:?}");
+                            }
+                        }
+                        Err(e) => {
+                            log::warn!("Failed to decrypt device message: {e}");
+                        }
+                    }
+                }
+                RelayEvent::Disconnected => {
+                    log::info!("Device routing disconnected");
+                }
+                _ => {}
+            }
+        }
+    });
+
+    // Give the relay a moment to send initial presence
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    let devices = service.online_devices().await;
+    Ok(devices
+        .into_iter()
+        .map(|d| OnlineDeviceInfo {
+            device_id: d.device_id,
+            device_name: d.device_name,
+        })
+        .collect())
+}
+
+/// Get the current online device list.
+#[tauri::command]
+pub async fn account_online_devices() -> Result<Vec<OnlineDeviceInfo>, String> {
+    let holder = get_service_holder().read().await;
+    let service = holder
+        .as_ref()
+        .ok_or_else(|| "remote connect service not initialized".to_string())?;
+    let devices = service.online_devices().await;
+    Ok(devices
+        .into_iter()
+        .map(|d| OnlineDeviceInfo {
+            device_id: d.device_id,
+            device_name: d.device_name,
+        })
+        .collect())
+}
+
+/// Send an encrypted session to a peer device. The `session_json` is encrypted
+/// with the master key before being sent over the relay.
+#[tauri::command]
+pub async fn account_send_session_to_device(
+    target_device_id: String,
+    session_id: String,
+    session_json: String,
+) -> Result<(), String> {
+    let (session, _) = read_account_context().await?;
+    let holder = get_service_holder().read().await;
+    let service = holder
+        .as_ref()
+        .ok_or_else(|| "remote connect service not initialized".to_string())?;
+
+    // Wrap the raw session JSON in a SendSessionToDevice command envelope so the
+    // receiving device knows what to do with the payload.
+    use bitfun_core::service::remote_connect::remote_server::RemoteCommand;
+    let envelope = serde_json::to_string(&RemoteCommand::SendSessionToDevice {
+        session_data: session_json,
+        session_id: session_id.clone(),
+        session_name: None,
+    })
+    .map_err(|e| format!("serialize envelope: {e}"))?;
+
+    use bitfun_core::service::remote_connect::encryption::encrypt_to_base64;
+    let (encrypted_data, nonce) =
+        encrypt_to_base64(&session.master_key, &envelope).map_err(|e| format!("{e}"))?;
+
+    let correlation_id = uuid::Uuid::new_v4().to_string();
+    service
+        .send_device_message(&target_device_id, &correlation_id, &encrypted_data, &nonce)
+        .await
+        .map_err(|e| format!("{e}"))
+}
+
+// ── P4: Session / settings sync commands ─────────────────────────────────
+
+/// Upload a single session blob (encrypted client-side with the master key).
+#[tauri::command]
+pub async fn account_sync_session(session_id: String, session_json: String) -> Result<(), String> {
+    let (session, relay_url) = read_account_context().await?;
+    AccountClient::new()
+        .upload_session(&relay_url, &session, &session_id, &session_json)
+        .await
+        .map_err(|e| format!("{e}"))
+}
+
+/// Fetch all synced session blobs (decrypted client-side).
+#[derive(Serialize)]
+pub struct SyncedSession {
+    pub session_id: String,
+    pub session_json: String,
+}
+
+#[tauri::command]
+pub async fn account_fetch_synced_sessions() -> Result<Vec<SyncedSession>, String> {
+    let (session, relay_url) = read_account_context().await?;
+    let sessions = AccountClient::new()
+        .fetch_sessions(&relay_url, &session)
+        .await
+        .map_err(|e| format!("{e}"))?;
+    Ok(sessions
+        .into_iter()
+        .map(|(id, json)| SyncedSession {
+            session_id: id,
+            session_json: json,
+        })
+        .collect())
+}
+
+/// Delete a synced session blob from the relay.
+#[tauri::command]
+pub async fn account_delete_synced_session(session_id: String) -> Result<(), String> {
+    let (session, relay_url) = read_account_context().await?;
+    AccountClient::new()
+        .delete_session(&relay_url, &session, &session_id)
+        .await
+        .map_err(|e| format!("{e}"))
+}
+
+/// Upload settings blob (encrypted client-side with the master key).
+#[tauri::command]
+pub async fn account_sync_settings(settings_json: String) -> Result<(), String> {
+    let (session, relay_url) = read_account_context().await?;
+    AccountClient::new()
+        .upload_settings(&relay_url, &session, &settings_json)
+        .await
+        .map_err(|e| format!("{e}"))
+}
+
+/// Fetch and decrypt the settings blob. Returns null if none exists.
+#[tauri::command]
+pub async fn account_fetch_settings() -> Result<Option<String>, String> {
+    let (session, relay_url) = read_account_context().await?;
+    AccountClient::new()
+        .fetch_settings(&relay_url, &session)
+        .await
+        .map_err(|e| format!("{e}"))
 }

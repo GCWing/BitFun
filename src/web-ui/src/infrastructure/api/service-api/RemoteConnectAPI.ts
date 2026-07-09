@@ -94,6 +94,16 @@ export interface AccountStatus {
   user_id: string | null;
 }
 
+export interface OnlineDeviceInfo {
+  device_id: string;
+  device_name: string;
+}
+
+export interface SyncedSession {
+  session_id: string;
+  session_json: string;
+}
+
 class RemoteConnectAPIService {
   private adapter = getTransportAdapter();
 
@@ -281,6 +291,98 @@ class RemoteConnectAPIService {
     } catch (e) {
       log.error('accountLogout failed', e);
       throw e;
+    }
+  }
+
+  // ── P2: Device routing ──────────────────────────────────────────────────
+
+  async accountConnectDevices(): Promise<OnlineDeviceInfo[]> {
+    try {
+      return await this.adapter.request<OnlineDeviceInfo[]>('account_connect_devices');
+    } catch (e) {
+      log.error('accountConnectDevices failed', e);
+      throw e;
+    }
+  }
+
+  async accountOnlineDevices(): Promise<OnlineDeviceInfo[]> {
+    try {
+      return await this.adapter.request<OnlineDeviceInfo[]>('account_online_devices');
+    } catch (e) {
+      log.warn('accountOnlineDevices failed', e);
+      return [];
+    }
+  }
+
+  async accountSendSessionToDevice(
+    targetDeviceId: string,
+    sessionId: string,
+    sessionJson: string,
+  ): Promise<void> {
+    try {
+      await this.adapter.request<void>('account_send_session_to_device', {
+        request: {
+          target_device_id: targetDeviceId,
+          session_id: sessionId,
+          session_json: sessionJson,
+        },
+      });
+    } catch (e) {
+      log.error('accountSendSessionToDevice failed', e);
+      throw e;
+    }
+  }
+
+  // ── P4: Session / settings sync ─────────────────────────────────────────
+
+  async accountSyncSession(sessionId: string, sessionJson: string): Promise<void> {
+    try {
+      await this.adapter.request<void>('account_sync_session', {
+        request: { session_id: sessionId, session_json: sessionJson },
+      });
+    } catch (e) {
+      log.error('accountSyncSession failed', e);
+      throw e;
+    }
+  }
+
+  async accountFetchSyncedSessions(): Promise<SyncedSession[]> {
+    try {
+      return await this.adapter.request<SyncedSession[]>('account_fetch_synced_sessions');
+    } catch (e) {
+      log.error('accountFetchSyncedSessions failed', e);
+      throw e;
+    }
+  }
+
+  async accountDeleteSyncedSession(sessionId: string): Promise<void> {
+    try {
+      await this.adapter.request<void>('account_delete_synced_session', {
+        request: { session_id: sessionId },
+      });
+    } catch (e) {
+      log.error('accountDeleteSyncedSession failed', e);
+      throw e;
+    }
+  }
+
+  async accountSyncSettings(settingsJson: string): Promise<void> {
+    try {
+      await this.adapter.request<void>('account_sync_settings', {
+        request: { settings_json: settingsJson },
+      });
+    } catch (e) {
+      log.error('accountSyncSettings failed', e);
+      throw e;
+    }
+  }
+
+  async accountFetchSettings(): Promise<string | null> {
+    try {
+      return await this.adapter.request<string | null>('account_fetch_settings');
+    } catch (e) {
+      log.error('accountFetchSettings failed', e);
+      return null;
     }
   }
 }

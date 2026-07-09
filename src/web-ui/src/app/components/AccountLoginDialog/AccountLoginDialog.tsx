@@ -9,7 +9,10 @@ import { Modal, Button, Input, Alert } from '@/component-library';
 import { User, Lock, Server, LogIn } from 'lucide-react';
 import { remoteConnectAPI } from '@/infrastructure/api/service-api/RemoteConnectAPI';
 import { useNotification } from '@/shared/notification-system';
+import { createLogger } from '@/shared/utils/logger';
 import './AccountLoginDialog.scss';
+
+const log = createLogger('AccountLoginDialog');
 
 interface AccountLoginDialogProps {
   isOpen: boolean;
@@ -54,6 +57,11 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
     setError(null);
     try {
       const result = await remoteConnectAPI.accountLogin(authServer.trim(), username.trim(), password);
+      // Establish the device-routing WS connection in the background.
+      remoteConnectAPI.accountConnectDevices().catch((err) => {
+        // Non-fatal — device sync is an add-on; login itself succeeded.
+        log.warn('accountConnectDevices failed after login', err);
+      });
       success(t('accountLogin.loginSuccess', { user_id: result.user_id }));
       onClose();
     } catch (e: unknown) {

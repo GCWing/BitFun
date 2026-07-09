@@ -1,0 +1,153 @@
+//! Per-user online device registry for account-based device routing.
+//!
+//! This is a **parallel** pathway to `RoomManager`: the existing QR-pairing
+//! flow keeps using rooms (1 desktop per room, unchanged). Account-logged-in
+//! devices register here, scoped by `user_id`, and can route
+//! `device_to_device` messages to each other. The relay never decrypts the
+//! payloads — it only routes by `(user_id, target_device_id)`.
+
+use dashmap::DashMap;
+use std::sync::Arc;
+use tokio::sync::mpsc;
+use tracing::{debug, info};
+
+use crate::relay::room::{ConnId, OutboundMessage};
+
+/// An online device connection belonging to a user.
+struct DeviceConn {
+    #[allow(dead_code)]
+    conn_id: ConnId,
+    device_name: String,
+    tx: mpsc::Sender<OutboundMessage>,
+}
+
+/// Tracks online devices grouped by `user_id` so that `device_to_device`
+/// messages can be routed within an account without exposing other accounts.
+pub struct DeviceManager {
+    /// user_id → (device_id → DeviceConn)
+    users: DashMap<String, DashMap<String, DeviceConn>>,
+    /// conn_id → (user_id, device_id) for cleanup on disconnect.
+    conn_to_device: DashMap<ConnId, (String, String)>,
+}
+
+impl DeviceManager {
+    pub fn new() -> Arc<Self> {
+        Arc::new(Self {
+            users: DashMap::new(),
+            conn_to_device: DashMap::new(),
+        })
+    }
+
+    /// Register an online device under a user. Replaces any prior connection
+    /// for the same `(user_id, device_id)` (reconnect). Returns the list of
+    /// *other* online device ids in the account so the caller can push a
+    /// presence update.
+    pub fn register(
+        &self,
+        user_id: &str,
+        device_id: &str,
+        device_name: &str,
+        conn_id: ConnId,
+        tx: mpsc::Sender<OutboundMessage>,
+    ) -> Vec<(String, String)> {
+        // Remove any stale conn mapping for this conn first.
+        if let Some((_, (old_user, old_device))) = self.conn_to_device.remove(&conn_id) {
+            if let Some(user_devices) = self.users.get(&old_user) {
+                user_devices.remove(&old_device);
+            }
+        }
+
+        let entry = self.users.entry(user_id.to_string()).or_default();
+        let others: Vec<(String, String)> = entry
+            .iter()
+            .map(|d| (d.key().clone(), d.device_name.clone()))
+            .collect();
+        entry.insert(
+            device_id.to_string(),
+            DeviceConn {
+                conn_id,
+                device_name: device_name.to_string(),
+                tx,
+            },
+        );
+        self.conn_to_device
+            .insert(conn_id, (user_id.to_string(), device_id.to_string()));
+
+        info!(
+            "Device {device_id} registered for user {user_id} ({} online)",
+            entry.len()
+        );
+        others
+    }
+
+    /// Remove a device on disconnect. Returns the `(user_id, device_id)` that
+    /// was removed, if any (for presence/DB cleanup by the caller).
+    pub fn unregister(&self, conn_id: ConnId) -> Option<(String, String)> {
+        let removed = self.conn_to_device.remove(&conn_id);
+        if let Some((_, (user_id, device_id))) = &removed {
+            if let Some(user_devices) = self.users.get(user_id) {
+                user_devices.remove(device_id);
+                debug!("Device {device_id} disconnected from user {user_id}");
+            }
+        }
+        removed.map(|(_, v)| v)
+    }
+
+    /// Route a raw JSON text message to `target_device_id` within `user_id`.
+    /// Returns false if the target is offline or its queue is full.
+    pub fn route_message(&self, user_id: &str, target_device_id: &str, text: &str) -> bool {
+        let Some(user_devices) = self.users.get(user_id) else {
+            return false;
+        };
+        let Some(dev) = user_devices.get(target_device_id) else {
+            return false;
+        };
+        match dev.tx.try_send(OutboundMessage {
+            text: text.to_string(),
+        }) {
+            Ok(()) => true,
+            Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
+                debug!("route_message: target {target_device_id} queue full, dropping");
+                false
+            }
+            Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => false,
+        }
+    }
+
+    /// List currently online `(device_id, device_name)` for a user (for
+    /// presence broadcasts).
+    pub fn online_devices(&self, user_id: &str) -> Vec<(String, String)> {
+        self.users
+            .get(user_id)
+            .map(|d| {
+                d.iter()
+                    .map(|e| (e.key().clone(), e.device_name.clone()))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Look up the `(user_id, device_id)` owning a connection (for routing
+    /// device-to-device messages from the sender's conn). Returns an owned
+    /// copy because the registry guard is released on return.
+    pub fn conn_mapping(&self, conn_id: ConnId) -> Option<(String, String)> {
+        self.conn_to_device.get(&conn_id).map(|e| e.value().clone())
+    }
+
+    /// Broadcast a message to *all* online devices of a user except the sender.
+    pub fn broadcast_except(&self, user_id: &str, exclude_device_id: &str, text: &str) {
+        let Some(user_devices) = self.users.get(user_id) else {
+            return;
+        };
+        for entry in user_devices.iter() {
+            if entry.key() != exclude_device_id {
+                let tx = entry.tx.clone();
+                let msg = OutboundMessage {
+                    text: text.to_string(),
+                };
+                // best-effort; don't block the caller on a slow peer
+                let _ = tx.try_send(msg);
+            }
+        }
+    }
+}

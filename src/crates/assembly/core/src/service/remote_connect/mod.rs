@@ -147,6 +147,11 @@ pub struct RemoteConnectService {
     bot_connected_info: Arc<RwLock<Option<String>>>,
     /// Trusted mobile identity for the current relay lifecycle only.
     trusted_mobile_identity: Arc<RwLock<Option<TrustedMobileIdentity>>>,
+    /// Account-authenticated device-routing relay client (P2). Independent from
+    /// the room-pairing relay_client above; connects after account login.
+    device_relay_client: Arc<RwLock<Option<RelayClient>>>,
+    /// Latest online-device presence for the account (P2).
+    online_devices: Arc<RwLock<Vec<relay_client::DevicePresenceEntry>>>,
 }
 
 impl RemoteConnectService {
@@ -171,6 +176,8 @@ impl RemoteConnectService {
             weixin_bot: Arc::new(RwLock::new(None)),
             bot_connected_info: Arc::new(RwLock::new(None)),
             trusted_mobile_identity: Arc::new(RwLock::new(None)),
+            device_relay_client: Arc::new(RwLock::new(None)),
+            online_devices: Arc::new(RwLock::new(Vec::new())),
         })
     }
 
@@ -1050,5 +1057,88 @@ impl RemoteConnectService {
             .await
             .as_ref()
             .map(|identity| identity.user_id.clone())
+    }
+
+    // ── P2: Account-authenticated device routing ───────────────────────────
+
+    /// Connect to the relay's WS endpoint and authenticate with an account
+    /// token. This establishes a parallel device-routing pathway that does not
+    /// interfere with the room-pairing flow.  Incoming device messages are
+    /// forwarded via the returned event receiver.
+    ///
+    /// The caller (desktop Tauri layer) owns the AccountSession containing the
+    /// master_key and is responsible for decrypting device-message payloads.
+    pub async fn start_device_connection(
+        &self,
+        relay_url: &str,
+        token: &str,
+        device_name: &str,
+    ) -> Result<tokio::sync::mpsc::UnboundedReceiver<relay_client::RelayEvent>> {
+        // Disconnect previous device connection if any.
+        self.stop_device_connection().await;
+
+        let ws_url = format!(
+            "{}/ws",
+            relay_url
+                .replace("https://", "wss://")
+                .replace("http://", "ws://")
+        );
+
+        let (client, mut event_rx) = RelayClient::new();
+        client.connect(&ws_url).await?;
+        client.connect_authenticated(token, device_name).await?;
+
+        let online_arc = self.online_devices.clone();
+        let device_client_arc = self.device_relay_client.clone();
+        // Spawn event forwarder that updates presence state; the raw event stream
+        // is also forwarded to a new channel for the caller to consume.
+        let (forward_tx, forward_rx) = tokio::sync::mpsc::unbounded_channel();
+        tokio::spawn(async move {
+            while let Some(event) = event_rx.recv().await {
+                match &event {
+                    relay_client::RelayEvent::DevicePresence { devices } => {
+                        *online_arc.write().await = devices.clone();
+                    }
+                    relay_client::RelayEvent::Disconnected => {
+                        *online_arc.write().await = Vec::new();
+                    }
+                    _ => {}
+                }
+                let _ = forward_tx.send(event);
+            }
+        });
+
+        *device_client_arc.write().await = Some(client);
+        Ok(forward_rx)
+    }
+
+    /// Disconnect the account-authenticated device-routing connection.
+    pub async fn stop_device_connection(&self) {
+        if let Some(client) = self.device_relay_client.write().await.take() {
+            client.disconnect().await;
+        }
+        self.online_devices.write().await.clear();
+    }
+
+    /// Send an encrypted device-to-device message via the account relay.
+    pub async fn send_device_message(
+        &self,
+        target_device_id: &str,
+        correlation_id: &str,
+        encrypted_data: &str,
+        nonce: &str,
+    ) -> Result<()> {
+        let guard = self.device_relay_client.read().await;
+        let client = guard
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("device routing not connected"))?;
+        client
+            .send_device_message(target_device_id, correlation_id, encrypted_data, nonce)
+            .await
+    }
+
+    /// Current online devices in the account (presence list).
+    pub async fn online_devices(&self) -> Vec<relay_client::DevicePresenceEntry> {
+        self.online_devices.read().await.clone()
     }
 }

@@ -474,7 +474,16 @@
     "cancel": "Cancel",
     "emptyFields": "Please fill in all fields",
     "loginSuccess": "Logged in: {{user_id}}",
-    "processing": "Processing..."
+    "processing": "Processing...",
+    "devices": "Online Devices",
+    "noDevices": "No other devices online",
+    "connectDevices": "Connect Devices",
+    "syncSessions": "Sync Sessions",
+    "syncSettings": "Sync Settings",
+    "syncSuccess": "Synced successfully",
+    "fetchSuccess": "Fetched successfully",
+    "sendToDevice": "Send to Device",
+    "deviceSyncError": "Device sync error: {{message}}"
   },
   "remoteConnect": {
     "tabNgrok": "NAT Traversal",

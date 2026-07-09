@@ -13,13 +13,10 @@ use axum::{
 };
 use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 use tokio::sync::mpsc::{self, error::TrySendError};
 use tracing::{debug, error, info, warn};
 
-use crate::relay::room::{
-    send_outbound_message, ConnId, OutboundMessage, ResponsePayload, RoomManager,
-};
+use crate::relay::room::{send_outbound_message, ConnId, OutboundMessage, ResponsePayload};
 use crate::routes::api::AppState;
 
 const OUTBOUND_QUEUE_CAPACITY: usize = 256;
@@ -54,6 +51,19 @@ pub enum InboundMessage {
         nonce: String,
     },
     Heartbeat,
+    /// Account-authenticated connect (parallel to CreateRoom for the device
+    /// routing pathway). Validates the token and registers the device.
+    AuthConnect {
+        token: String,
+        device_name: String,
+    },
+    /// Route an encrypted payload to another device in the same account.
+    DeviceMessage {
+        target_device_id: String,
+        correlation_id: String,
+        encrypted_data: String,
+        nonce: String,
+    },
 }
 
 /// Messages sent to the desktop via WebSocket.
@@ -80,6 +90,31 @@ pub enum OutboundProtocol {
     Error {
         message: String,
     },
+    /// Result of an `AuthConnect`: the validated user_id + this device's id.
+    AuthOk {
+        user_id: String,
+        device_id: String,
+    },
+    AuthError {
+        message: String,
+    },
+    /// A device-to-device message routed from another device in the account.
+    IncomingDeviceMessage {
+        source_device_id: String,
+        correlation_id: String,
+        encrypted_data: String,
+        nonce: String,
+    },
+    /// Current online devices in the account (presence broadcast).
+    DevicePresence {
+        devices: Vec<DevicePresenceEntry>,
+    },
+}
+
+#[derive(Debug, Serialize)]
+pub struct DevicePresenceEntry {
+    pub device_id: String,
+    pub device_name: String,
 }
 
 pub async fn websocket_handler(ws: WebSocketUpgrade, State(state): State<AppState>) -> Response {
@@ -112,7 +147,7 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
     while let Some(msg_result) = ws_receiver.next().await {
         match msg_result {
             Ok(Message::Text(text)) => {
-                if !handle_text_message(&text, conn_id, &state.room_manager, &out_tx).await {
+                if !handle_text_message(&text, conn_id, &state, &out_tx).await {
                     break;
                 }
             }
@@ -130,6 +165,20 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
     }
 
     state.room_manager.on_disconnect(conn_id);
+    if let Some((user_id, device_id)) = state.device_manager.unregister(conn_id) {
+        // Best-effort: mark the device offline in the DB and notify peers.
+        if let Some(db) = state.db.as_ref() {
+            let _ = crate::db::DeviceRow::set_online(db, &device_id, false).await;
+        }
+        let remaining = state.device_manager.online_devices(&user_id);
+        let presence = build_presence(&remaining);
+        state.device_manager.broadcast_except(
+            &user_id,
+            &device_id,
+            &serde_json::to_string(&OutboundProtocol::DevicePresence { devices: presence })
+                .unwrap_or_default(),
+        );
+    }
     drop(out_tx);
     let _ = write_task.await;
     info!("WebSocket disconnected: conn_id={conn_id}");
@@ -138,7 +187,7 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
 async fn handle_text_message(
     text: &str,
     conn_id: ConnId,
-    room_manager: &Arc<RoomManager>,
+    state: &AppState,
     out_tx: &mpsc::Sender<OutboundMessage>,
 ) -> bool {
     debug!(
@@ -166,7 +215,7 @@ async fn handle_text_message(
             public_key,
         } => {
             let room_id = room_id.unwrap_or_else(generate_room_id);
-            let ok = room_manager.create_room(
+            let ok = state.room_manager.create_room(
                 &room_id,
                 conn_id,
                 &device_id,
@@ -192,7 +241,7 @@ async fn handle_text_message(
             nonce,
         } => {
             debug!("RelayResponse from desktop conn_id={conn_id} corr={correlation_id}");
-            room_manager.resolve_pending(
+            state.room_manager.resolve_pending(
                 &correlation_id,
                 ResponsePayload {
                     encrypted_data,
@@ -203,7 +252,7 @@ async fn handle_text_message(
         }
 
         InboundMessage::Heartbeat => {
-            if room_manager.heartbeat(conn_id) {
+            if state.room_manager.heartbeat(conn_id) {
                 send_json_best_effort(out_tx, &OutboundProtocol::HeartbeatAck)
             } else {
                 send_json_best_effort(
@@ -214,7 +263,119 @@ async fn handle_text_message(
                 )
             }
         }
+
+        InboundMessage::AuthConnect { token, device_name } => {
+            let Some(db) = state.db.as_ref() else {
+                return send_json_best_effort(
+                    out_tx,
+                    &OutboundProtocol::AuthError {
+                        message: "account features disabled".into(),
+                    },
+                );
+            };
+            let auth = match crate::db::AuthToken::find(db, &token).await {
+                Ok(Some(a)) => a,
+                _ => {
+                    return send_json_best_effort(
+                        out_tx,
+                        &OutboundProtocol::AuthError {
+                            message: "invalid or expired token".into(),
+                        },
+                    )
+                }
+            };
+            // Mark the device online in the DB and the in-memory registry.
+            let _ = crate::db::DeviceRow::upsert(
+                db,
+                &auth.device_id,
+                &auth.user_id,
+                &device_name,
+                None,
+            )
+            .await;
+            let _ = crate::db::DeviceRow::set_online(db, &auth.device_id, true).await;
+            let others = state.device_manager.register(
+                &auth.user_id,
+                &auth.device_id,
+                &device_name,
+                conn_id,
+                out_tx.clone(),
+            );
+            send_json(
+                out_tx,
+                &OutboundProtocol::AuthOk {
+                    user_id: auth.user_id.clone(),
+                    device_id: auth.device_id.clone(),
+                },
+            )
+            .await;
+            // Push presence to this device (others already online) and notify
+            // those others that this device just joined.
+            let presence = build_presence(&others);
+            send_json_best_effort(
+                out_tx,
+                &OutboundProtocol::DevicePresence { devices: presence },
+            );
+            let joined = vec![DevicePresenceEntry {
+                device_id: auth.device_id.clone(),
+                device_name,
+            }];
+            state.device_manager.broadcast_except(
+                &auth.user_id,
+                &auth.device_id,
+                &serde_json::to_string(&OutboundProtocol::DevicePresence { devices: joined })
+                    .unwrap_or_default(),
+            );
+            true
+        }
+
+        InboundMessage::DeviceMessage {
+            target_device_id,
+            correlation_id,
+            encrypted_data,
+            nonce,
+        } => {
+            // Look up the sender's (user_id, device_id) from the conn map.
+            let sender = state.device_manager.conn_mapping(conn_id);
+            let Some((user_id, source_device_id)) = sender else {
+                return send_json_best_effort(
+                    out_tx,
+                    &OutboundProtocol::Error {
+                        message: "not authenticated (send AuthConnect first)".into(),
+                    },
+                );
+            };
+            let out_msg = OutboundProtocol::IncomingDeviceMessage {
+                source_device_id,
+                correlation_id,
+                encrypted_data,
+                nonce,
+            };
+            let json = serde_json::to_string(&out_msg).unwrap_or_default();
+            if !state
+                .device_manager
+                .route_message(&user_id, &target_device_id, &json)
+            {
+                return send_json_best_effort(
+                    out_tx,
+                    &OutboundProtocol::Error {
+                        message: format!("target device {target_device_id} offline"),
+                    },
+                );
+            }
+            true
+        }
     }
+}
+
+fn build_presence(devices: &[(String, String)]) -> Vec<DevicePresenceEntry> {
+    devices
+        .iter()
+        .map(|(id, name)| DevicePresenceEntry {
+            device_id: id.clone(),
+            device_name: name.clone(),
+        })
+        .collect()
 }
 
 #[cfg(test)]

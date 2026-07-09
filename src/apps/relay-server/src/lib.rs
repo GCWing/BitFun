@@ -243,6 +243,7 @@ pub fn build_relay_router(
         asset_store,
         db,
         login_rate_limiter: std::sync::Arc::new(crate::routes::auth::LoginRateLimiter::new()),
+        device_manager: crate::relay::DeviceManager::new(),
     };
 
     Router::new()
@@ -272,6 +273,7 @@ pub fn build_relay_router(
         )
         .route("/r/{*rest}", get(routes::api::serve_room_web_catchall))
         .route("/ws", get(routes::websocket::websocket_handler))
+        .merge(routes::sync::sync_router())
         .layer(tower_http::cors::CorsLayer::permissive())
         .with_state(state)
 }
