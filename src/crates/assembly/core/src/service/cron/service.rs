@@ -196,6 +196,8 @@ impl CronService {
         let job = jobs
             .get_mut(job_id)
             .ok_or_else(|| BitFunError::NotFound(format!("Scheduled job not found: {}", job_id)))?;
+        let previous_schedule = job.schedule.clone();
+        let was_enabled = job.enabled;
 
         if let Some(name) = request.name {
             job.name = name.trim().to_string();
@@ -212,6 +214,8 @@ impl CronService {
         if let Some(schedule) = request.schedule {
             job.schedule = materialize_schedule(schedule, current_ms);
         }
+        let schedule_changed = job.schedule != previous_schedule;
+        let reenabled = !was_enabled && job.enabled;
 
         validate_request_fields(&job.name, &job.payload, &job.target)?;
         validate_schedule(&job.schedule, job.created_at_ms)?;
@@ -222,15 +226,9 @@ impl CronService {
 
         if !job.enabled {
             job.state.next_run_at_ms = None;
-        } else if job.state.active_turn_id.is_some() {
-            if job.is_one_shot() {
-                job.state.next_run_at_ms = None;
-            } else {
-                job.state.next_run_at_ms =
-                    compute_next_run_after_ms(&job.schedule, job.created_at_ms, current_ms)?;
-            }
         } else {
-            job.state.next_run_at_ms = compute_initial_next_run_at_ms(job, current_ms)?;
+            job.state.next_run_at_ms =
+                compute_next_run_after_update(job, current_ms, schedule_changed, reenabled)?;
         }
 
         let updated = job.clone();
@@ -761,6 +759,27 @@ fn materialize_schedule(schedule: CronSchedule, anchor_ms: i64) -> CronSchedule 
     }
 }
 
+fn compute_next_run_after_update(
+    job: &CronJob,
+    current_ms: i64,
+    schedule_changed: bool,
+    reenabled: bool,
+) -> BitFunResult<Option<i64>> {
+    if schedule_changed || reenabled {
+        return compute_next_run_after_ms(&job.schedule, job.created_at_ms, current_ms);
+    }
+
+    if job.state.active_turn_id.is_some() {
+        if job.is_one_shot() {
+            Ok(None)
+        } else {
+            compute_next_run_after_ms(&job.schedule, job.created_at_ms, current_ms)
+        }
+    } else {
+        compute_initial_next_run_at_ms(job, current_ms)
+    }
+}
+
 fn materialize_target(target: CronJobTarget) -> CronJobTarget {
     match target {
         CronJobTarget::Session {
@@ -1005,6 +1024,32 @@ fn cron_enqueue_error_is_missing_session(error: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::service::cron::CronJobState;
+
+    fn sample_job(schedule: CronSchedule) -> CronJob {
+        CronJob {
+            id: "cron_test".to_string(),
+            name: "test".to_string(),
+            schedule,
+            payload: CronJobPayload {
+                text: "hello".to_string(),
+            },
+            enabled: true,
+            target: CronJobTarget::Session {
+                session_id: "session_1".to_string(),
+                workspace: CronWorkspaceRef {
+                    workspace_id: None,
+                    workspace_path: "E:/workspace".to_string(),
+                    remote_connection_id: None,
+                    remote_ssh_host: None,
+                },
+            },
+            created_at_ms: 0,
+            config_updated_at_ms: 0,
+            updated_at_ms: 0,
+            state: CronJobState::default(),
+        }
+    }
 
     #[test]
     fn generate_cron_job_id_uses_short_hex_suffix() {
@@ -1065,5 +1110,66 @@ mod tests {
             None,
             Some("ssh-1"),
         ));
+    }
+
+    #[test]
+    fn changed_at_schedule_rearms_consumed_one_shot_only_for_future_time() {
+        let mut job = sample_job(CronSchedule::At {
+            at: "1970-01-01T00:00:03Z".to_string(),
+        });
+        job.state.last_enqueued_at_ms = Some(1_500);
+
+        let future_next =
+            compute_next_run_after_update(&job, 2_000, true, false).expect("future next run");
+        assert_eq!(future_next, Some(3_000));
+
+        job.schedule = CronSchedule::At {
+            at: "1970-01-01T00:00:01Z".to_string(),
+        };
+        let past_next =
+            compute_next_run_after_update(&job, 2_000, true, false).expect("past next run");
+        assert_eq!(past_next, None);
+    }
+
+    #[test]
+    fn reenabled_at_schedule_rearms_consumed_one_shot_only_for_future_time() {
+        let mut job = sample_job(CronSchedule::At {
+            at: "1970-01-01T00:00:03Z".to_string(),
+        });
+        job.state.last_enqueued_at_ms = Some(1_500);
+
+        let future_next =
+            compute_next_run_after_update(&job, 2_000, false, true).expect("future next run");
+        assert_eq!(future_next, Some(3_000));
+
+        job.schedule = CronSchedule::At {
+            at: "1970-01-01T00:00:01Z".to_string(),
+        };
+        let past_next =
+            compute_next_run_after_update(&job, 2_000, false, true).expect("past next run");
+        assert_eq!(past_next, None);
+    }
+
+    #[test]
+    fn unchanged_at_schedule_keeps_initial_catchup_semantics() {
+        let job = sample_job(CronSchedule::At {
+            at: "1970-01-01T00:00:01Z".to_string(),
+        });
+
+        let next =
+            compute_next_run_after_update(&job, 2_000, false, false).expect("initial next run");
+        assert_eq!(next, Some(1_000));
+    }
+
+    #[test]
+    fn unchanged_consumed_at_schedule_stays_completed() {
+        let mut job = sample_job(CronSchedule::At {
+            at: "1970-01-01T00:00:03Z".to_string(),
+        });
+        job.state.last_enqueued_at_ms = Some(1_500);
+
+        let next =
+            compute_next_run_after_update(&job, 2_000, false, false).expect("completed next run");
+        assert_eq!(next, None);
     }
 }

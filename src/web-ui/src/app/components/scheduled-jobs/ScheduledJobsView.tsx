@@ -106,6 +106,11 @@ function timestampMsToLocalDateTimeInput(timestampMs: number): string {
   return toLocalDateTimeInput(new Date(timestampMs).toISOString());
 }
 
+function isFutureLocalDateTimeInput(value: string, nowMs = Date.now()): boolean {
+  const timestampMs = new Date(value).getTime();
+  return Number.isFinite(timestampMs) && timestampMs > nowMs;
+}
+
 function formatEveryMinutes(everyMs: number): string {
   const everyMinutes = everyMs / MINUTE_IN_MS;
   if (Number.isInteger(everyMinutes)) return String(everyMinutes);
@@ -956,7 +961,11 @@ const ScheduledJobsView: React.FC<ScheduledJobsViewProps> = ({
                 onChange={e => {
                   const at = e.currentTarget.value;
                   setValidationErrors(current => ({ ...current, at: false }));
-                  setDraft(c => ({ ...c, at }));
+                  setDraft(c => ({
+                    ...c,
+                    at,
+                    enabled: !c.enabled && isFutureLocalDateTimeInput(at) ? true : c.enabled,
+                  }));
                 }}
               />
             </div>
