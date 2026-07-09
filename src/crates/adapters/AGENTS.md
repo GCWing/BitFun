@@ -13,7 +13,7 @@ services.
 |---|---|---|
 | `ai-adapters` | AI provider request/response adapters and stream protocol glue | [AGENTS.md](ai-adapters/AGENTS.md) |
 | `api-layer` | Backend API adapter surface shared by product hosts | [AGENTS.md](api-layer/AGENTS.md) |
-| `opencode-adapter` | Fixture-only OpenCode config and local plugin source projection contracts | [AGENTS.md](opencode-adapter/AGENTS.md) |
+| `opencode-adapter` | Projection-only OpenCode config and local plugin source adapter | [AGENTS.md](opencode-adapter/AGENTS.md) |
 | `transport` | Event transport emitters and host transport adapters | [AGENTS.md](transport/AGENTS.md) |
 | `webdriver` | Embedded WebDriver protocol and browser automation adapter | [AGENTS.md](webdriver/AGENTS.md) |
 

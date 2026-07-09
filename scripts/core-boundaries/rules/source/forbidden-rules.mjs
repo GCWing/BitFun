@@ -4086,11 +4086,12 @@ export const forbiddenContentUnderRules = [
   {
     path: 'src',
     reason:
-      'OpenCode adapter fixture must not become a production dependency before reviewed Plugin Runtime Host wiring',
+      'OpenCode adapter must not become a production dependency before reviewed product source wiring',
     patterns: [
       {
         regex:
           /\b(?:use\s+bitfun_opencode_adapter\b|extern\s+crate\s+bitfun_opencode_adapter\b|bitfun_opencode_adapter::)/,
+        allowPaths: ['src/crates/adapters/opencode-adapter/tests/opencode_source_adapter.rs'],
         message:
           'production crates must not import bitfun-opencode-adapter directly; integrate OpenCode through the Plugin Runtime Host boundary',
       },
@@ -4099,7 +4100,7 @@ export const forbiddenContentUnderRules = [
   {
     path: 'BitFun-Installer/src-tauri',
     reason:
-      'OpenCode adapter fixture must not become a production dependency before reviewed Plugin Runtime Host wiring',
+      'OpenCode adapter must not become a production dependency before reviewed product source wiring',
     patterns: [
       {
         regex:

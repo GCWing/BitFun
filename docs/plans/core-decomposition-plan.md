@@ -22,7 +22,7 @@
 - Desktop、CLI、ACP 仍有路径通过 `bitfun-core/product-full` 获取完整产品能力；后续插件主线不能把该状态固化为新入口依赖。
 - 工具 ABI、事件清单、运行时服务、智能体运行时、产品能力和插件 `disabled` / `projection-only` 基础边界已存在。
 - `runtime-ports` 的插件主机 ABI 已有公开接口预算脚本；后续不能绕过预算新增插件、hook、event、UI 或生态兼容对象。
-- `opencode-adapter` 当前只可视为 fixture 兼容用例和来源视图验证，不是生产插件运行时。
+- `opencode-adapter` 当前只提供 projection-only 来源发现适配器，不是生产插件运行时。
 
 ## 3. 当前差距
 
@@ -83,7 +83,7 @@
 
 验收：
 
-- `cargo test -p bitfun-opencode-adapter opencode_fixture_contracts`
+- `cargo test -p bitfun-opencode-adapter --test opencode_source_adapter`
 - 不要求用户安装 OpenCode CLI。
 - 不继承 OpenCode 启用顺序、权限语义或运行时状态。
 
@@ -108,7 +108,7 @@
 | 优先级 | 问题 | 方向 |
 |---|---|---|
 | P0 | 插件公开接口容易继续膨胀 | 公开接口预算必须声明接口切面、消费方、P0 场景、wire impact、退场条件 |
-| P0 | OpenCode 适配可能成为内部模型 | 保持 `opencode-adapter` fixture-only，生产消费必须通过插件主机和扩展贡献接口 |
+| P0 | OpenCode 适配可能成为内部模型 | 保持 `opencode-adapter` projection-only，生产消费必须通过插件主机和扩展贡献接口 |
 | P1 | `runtime-ports` 单文件仍宽 | 先按模块分组和预算护栏收口；只有真实迁移收益明确时再拆 crate |
 | P1 | `bitfun-core` 门面仍是事实大入口 | 新调用方不得依赖 `bitfun_core::agentic::*` / `service::*` 作为主路径 |
 | P1 | Product capability 与 tool provider group 存在双重建模 | 短期以 provider group id 作为组装边界；长期收敛到单一能力事实 |
@@ -131,7 +131,8 @@
 | docs / boundary / layout | `pnpm run check:repo-hygiene`，`node --test scripts/check-core-boundaries.test.mjs`，`node scripts/check-core-boundaries.mjs` |
 | 插件公开接口预算 | `node --test scripts/check-core-boundaries.test.mjs`，`node scripts/check-core-boundaries.mjs` |
 | 插件运行时主机 ABI | `cargo test -p bitfun-runtime-ports --test plugin_runtime_contracts`，`cargo test -p bitfun-runtime-ports --test plugin_runtime_host_contracts`，`cargo test -p bitfun-plugin-runtime-host` |
-| OpenCode fixture 兼容用例 | `cargo test -p bitfun-opencode-adapter opencode_fixture_contracts` |
+| OpenCode P0-C.1 host-path 来源发现 | `cargo test -p bitfun-opencode-adapter --test opencode_source_adapter` |
+| OpenCode P0-C.2 私有 fixture 兼容保护 | `cargo test -p bitfun-opencode-adapter p0_c2_fixture` |
 | 产品形态 / SDK 最小可用性 | `cargo test -p bitfun-product-capabilities --test plugin_product_shape`，`cargo test -p bitfun-product-capabilities --test product_sdk_assembly`，`cargo metadata --no-deps --format-version 1` |
 | 大范围归属迁移 | `cargo check --workspace`，必要时补 focused test |
 

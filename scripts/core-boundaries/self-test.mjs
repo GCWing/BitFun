@@ -928,10 +928,29 @@ export function runManifestParserSelfTest({
     throw new Error('plugin root re-export allowlist must match plugin module public budget');
   }
   if (!opencodeAdapterPublicApiRule) {
-    throw new Error('OpenCode adapter fixture must have a public API budget rule');
+    throw new Error('OpenCode adapter must have a public API budget rule');
   }
-  if ((opencodeAdapterPublicApiRule.allowedSymbolEntries || []).length !== 0) {
-    throw new Error('OpenCode adapter fixture public API budget must stay empty');
+  const opencodeAdapterPublicApiSymbols = (
+    opencodeAdapterPublicApiRule.allowedSymbolEntries || []
+  ).map((entry) => entry.symbol);
+  if (
+    opencodeAdapterPublicApiSymbols.join(',') !==
+    'load_opencode_workspace_adapter'
+  ) {
+    throw new Error('OpenCode adapter public API budget must stay limited to source adapter loading');
+  }
+  for (const entry of opencodeAdapterPublicApiRule.allowedSymbolEntries) {
+    for (const field of ['owner', 'consumer', 'verification', 'p0', 'contractSlice', 'rationale', 'exit']) {
+      if (!entry[field]) {
+        throw new Error(`OpenCode adapter public API entry must declare ${field}: ${entry.symbol}`);
+      }
+    }
+    if (entry.contractSlice !== 'opencode-adapter-boundary') {
+      throw new Error(`OpenCode adapter public API entry uses wrong contractSlice: ${entry.symbol}`);
+    }
+    if (entry.wireImpact !== false) {
+      throw new Error(`OpenCode adapter public API entry must not claim wire impact: ${entry.symbol}`);
+    }
   }
   const appHostAbiRule = forbiddenContentUnderRules.find((rule) => rule.path === 'src/apps');
   if (!appHostAbiRule) {
@@ -954,7 +973,7 @@ export function runManifestParserSelfTest({
     rule.dependencyNames?.includes('bitfun-opencode-adapter'),
   );
   if (!opencodeManifestRule) {
-    throw new Error('OpenCode adapter fixture must have a forbidden manifest dependency rule');
+    throw new Error('OpenCode adapter must have a forbidden manifest dependency rule');
   }
   for (const scanRoot of ['src/apps', 'src/crates', 'BitFun-Installer/src-tauri']) {
     if (!opencodeManifestRule.scanRoots?.includes(scanRoot)) {
@@ -972,7 +991,7 @@ export function runManifestParserSelfTest({
     throw new Error('OpenCode adapter manifest guard must allow its own manifest');
   }
   const opencodeSourceRules = forbiddenContentUnderRules.filter((rule) =>
-    rule.reason.includes('OpenCode adapter fixture'),
+    rule.reason.includes('OpenCode adapter must not become a production dependency'),
   );
   for (const scanRoot of ['src', 'BitFun-Installer/src-tauri']) {
     if (!opencodeSourceRules.some((rule) => rule.path === scanRoot)) {

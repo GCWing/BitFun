@@ -1,7 +1,10 @@
-//! OpenCode-compatible plugin adapter fixture contracts.
+//! OpenCode-compatible plugin adapter.
 //!
-//! This crate intentionally exposes no public API until a reviewed Plugin
-//! Runtime Host integration introduces a production consumer.
+//! The production surface is intentionally small: load OpenCode-compatible
+//! workspace sources as a projection-only Plugin Runtime Host adapter. It does
+//! not execute JavaScript, install npm packages, or depend on a user-local
+//! `opencode` CLI.
 
-#[cfg(test)]
-mod fixture_contracts;
+mod source_adapter;
+
+pub use source_adapter::load_opencode_workspace_adapter;

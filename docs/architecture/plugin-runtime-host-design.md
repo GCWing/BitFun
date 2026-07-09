@@ -157,7 +157,8 @@ sequenceDiagram
 - `cargo test -p bitfun-runtime-ports --test plugin_runtime_contracts`
 - `cargo test -p bitfun-runtime-ports --test plugin_runtime_host_contracts`
 - `cargo test -p bitfun-plugin-runtime-host`
-- `cargo test -p bitfun-opencode-adapter opencode_fixture_contracts`，仅证明 OpenCode 输入可被诊断并转换为 BitFun 来源视图，不等同于 P0-C 产品体验完成。
+- `cargo test -p bitfun-opencode-adapter --test opencode_source_adapter`，证明 OpenCode 输入可通过 projection-only Host adapter 转换为 BitFun 来源视图和诊断读模型，不等同于 P0-C 产品体验完成。
+- `cargo test -p bitfun-opencode-adapter p0_c2_fixture` 只保护后续 custom tool 候选映射的私有兼容 fixture，不属于 P0-C.1 host-path 验收。
 - `node scripts/check-core-boundaries.mjs`
 
 PR 审查重点：

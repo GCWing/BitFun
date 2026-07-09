@@ -56,7 +56,7 @@
 |---|---|---|
 | `runtime-ports` plugin contract | 已有主机 ABI、读模型、候选效果、权限提示、诊断和隔离类型；公开符号较多但已受脚本预算约束 | 不继续新增泛描述符；公开符号必须声明接口切面、消费方和验证目标 |
 | `plugin-runtime-host` | 已有受控 host 边界、deadline、幂等、隔离和 restart 清理路径 | 继续保持窄方法集；来源发现和激活属于 P0-C |
-| `opencode-adapter` | 当前是 fixture contract 范围，只做配置导入、来源发现和候选来源视图测试 | 不得实现 `PluginRuntimeClient`，不得声明可执行可用性 |
+| `opencode-adapter` | 当前提供 projection-only 来源发现适配器，只做配置导入、来源发现和诊断读模型 | 不得实现 `PluginRuntimeClient`，不得声明可执行可用性 |
 | `events` | 已有产品事件清单 | 需要在真实插件事件消费前定义可订阅子集，不新增插件专用事件模型 |
 | `tool-contracts` | 已有动态工具提供方和工具快照 | custom tool 映射必须复用它，不新增插件专用工具 ABI |
 

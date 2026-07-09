@@ -3,16 +3,21 @@ name = "bitfun-opencode-adapter"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
-description = "Fixture-only OpenCode source projection contracts for BitFun"
+description = "Projection-only OpenCode-compatible source adapter for BitFun"
 
 [lib]
 name = "bitfun_opencode_adapter"
 crate-type = ["rlib"]
 
-[dev-dependencies]
+[dependencies]
+async-trait = { workspace = true }
+bitfun-plugin-runtime-host = { path = "../../execution/plugin-runtime-host" }
 bitfun-runtime-ports = { path = "../../contracts/runtime-ports" }
 hex = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
 thiserror = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }

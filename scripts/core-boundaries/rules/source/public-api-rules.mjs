@@ -150,6 +150,30 @@ export const pluginRuntimeHostPublicApiEntries = [
   ),
 ];
 
+function opencodeAdapterEntry(symbol, consumer) {
+  return {
+    symbol,
+    owner: 'opencode-adapter owner',
+    consumer,
+    verification:
+      'opencode-adapter source adapter tests, PluginRuntimeHost integration path, and core-boundary public API budget checks',
+    p0: 'OpenCode-compatible P0-C.1 source discovery and diagnostics read model',
+    contractSlice: contractSlices.opencodeAdapterBoundary,
+    wireImpact: false,
+    rationale:
+      'P0-C.1 needs one projection-only adapter factory for host-readable OpenCode-compatible sources without exposing ecosystem DTOs',
+    exit:
+      'remove only if source discovery moves behind a reviewed product source registry with equivalent host tests',
+  };
+}
+
+export const opencodeAdapterPublicApiEntries = [
+  opencodeAdapterEntry(
+    'load_opencode_workspace_adapter',
+    'PluginRuntimeHost::new integration tests and future product source loader host binding',
+  ),
+];
+
 export const publicApiAllowlistRules = [
   {
     path: 'src/crates/contracts/runtime-ports/src/plugin.rs',
@@ -166,8 +190,8 @@ export const publicApiAllowlistRules = [
   {
     path: 'src/crates/adapters/opencode-adapter/src/lib.rs',
     reason:
-      'OpenCode adapter fixture contract must not expose public API before reviewed Plugin Runtime Host integration',
-    allowedSymbolEntries: [],
+      'OpenCode adapter public API must stay limited to projection-only source loading through the Plugin Runtime Host adapter boundary',
+    allowedSymbolEntries: opencodeAdapterPublicApiEntries,
   },
   {
     path: 'src/crates/execution/plugin-runtime-host/src/lib.rs',
