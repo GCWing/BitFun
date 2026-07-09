@@ -143,7 +143,7 @@ jobs:
         run: pnpm run theme:color-audit:test
 
       - name: Audit theme color governance
-        run: pnpm run theme:color-audit
+        run: pnpm run theme:color-audit:all
 
       - name: Validate theme visual governance contract
         run: pnpm run theme:visual-contract

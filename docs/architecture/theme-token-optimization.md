@@ -50,6 +50,23 @@
 3. 有独立语义：新增 semantic 或 component token，并说明为什么不能复用。
 4. 属于 editor、terminal、syntax、diff 等专用域：进入 exception namespace。
 
+### Theme Governance Ratchet Contract
+
+主题治理 baseline 是 no-growth / ratchet 契约，不是普通测试快照。测试中的数量、
+baseline `max`、near-pair decision 和 allowlist 都不能被当成“让 CI 通过”的可调参数。
+如果审计失败，默认修复路径是复用现有 token、合并冗余色值、删除游离 key，或补充最小 owner
+contract；不能直接上调测试期望值或 baseline。
+
+受保护指标包括：普通 app UI raw color、token-equivalent literal、fallback var、unresolved
+CSS var、non-contract key、dynamic family、compatibility alias、surface rename、static root
+contract key、generated widget payload key、mobile / installer key、CLI/TUI runtime key，以及普通组件和专用域
+near color pair。上述指标只能在实际审计值下降时下调 baseline；确需增长时，必须使用独立治理 PR
+说明用户可见语义、不能复用的原因、影响 surface、回退方案和复审结论。
+
+AI 生成或辅助修改不得通过扩大 fixture 数量、放宽断言、增加 allowlist 或关闭审计命令来绕过该契约。
+PR reviewer 应把这类修改视为主题治理回退，而不是正常测试维护。跨 root 主题变更必须执行
+`pnpm run theme:color-audit:all`，CI 也必须保持同等覆盖。
+
 第一阶段不覆盖：
 
 - 重新设计品牌视觉方向或重做主题风格。

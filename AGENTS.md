@@ -111,6 +111,18 @@ For the full script list, see [`package.json`](package.json).
   no-growth baselines, shared-term/l10n governance baselines, non-blocking
   same-text locale inventory, and the no-hardcoded-CJK source budget.
 
+### Theme and color tokens
+
+- Theme and color-token baselines are ratchet contracts, not editable test
+  expectations. Do not make a failing theme audit pass by raising values in
+  `scripts/theme-color-governance-baseline*.json`, loosening fixture/assertion
+  counts, adding broad allowlist entries, or removing CI audit coverage.
+- Lower theme baselines when measured debt is removed. If a change truly needs a
+  new color or key, add the smallest owner contract and document why existing
+  semantic, component, or specialized-domain tokens cannot cover it.
+- For theme, CSS variable, widget payload, mobile, installer, or CLI/TUI color
+  changes, run `pnpm run theme:color-audit:all`.
+
 ### Logging
 
 Logs must be English-only, with no emojis.

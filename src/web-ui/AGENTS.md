@@ -26,6 +26,13 @@ Most changes start in:
 
 - Do not call Tauri APIs directly from UI components; go through the adapter / infrastructure layer
 - Reuse existing theme, i18n, component-library, and Zustand stores before adding new frontend primitives
+- Theme and color-token changes must follow
+  `docs/architecture/theme-token-optimization.md`: failing audits should be
+  fixed by reusing tokens, merging redundant values, or adding a scoped owner
+  contract. Do not raise baseline or test expectation counts just to make a
+  theme audit pass. Use `pnpm run theme:color-audit:all` for changes that touch
+  theme tokens, CSS variables, color literals, widget payloads, mobile,
+  installer, or CLI/TUI color projection.
 - Keep locale metadata in the generated i18n contract files. Edit
   `src/shared/i18n/contract/locales.json`, run `pnpm run i18n:generate`, and
   keep Web UI strings under `src/web-ui/src/locales`.
