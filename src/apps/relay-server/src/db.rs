@@ -307,6 +307,7 @@ impl DeviceRow {
             "INSERT INTO devices (device_id, user_id, device_name, public_key, last_seen_at, online) \
              VALUES (?, ?, ?, ?, ?, 1) \
              ON CONFLICT(device_id) DO UPDATE SET \
+               user_id = excluded.user_id, \
                device_name = excluded.device_name, \
                public_key = excluded.public_key, \
                last_seen_at = excluded.last_seen_at, \
@@ -483,11 +484,14 @@ impl SyncSessionRow {
     }
 
     /// Soft-delete a session (tombstone for syncing deletions across devices).
+    /// Bumps `version` so incremental-sync consumers pick up the deletion.
     pub async fn delete(pool: &DbPool, user_id: &str, session_id: &str) -> Result<()> {
         let now = Utc::now().timestamp();
         sqlx::query(
-            "UPDATE sync_sessions SET deleted = 1, updated_at = ? WHERE user_id = ? AND session_id = ?",
+            "UPDATE sync_sessions SET deleted = 1, version = ?, updated_at = ? \
+             WHERE user_id = ? AND session_id = ?",
         )
+        .bind(now)
         .bind(now)
         .bind(user_id)
         .bind(session_id)
