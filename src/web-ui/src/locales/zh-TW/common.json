@@ -463,6 +463,17 @@
     "errorEnterName": "請輸入工作區名稱",
     "errorCreateFailed": "建立工作區失敗"
   },
+  "accountLogin": {
+    "username": "帳號",
+    "password": "密碼",
+    "authServer": "認證伺服器",
+    "usernamePlaceholder": "請輸入帳號",
+    "passwordPlaceholder": "請輸入密碼",
+    "authServerPlaceholder": "https://auth.example.com",
+    "login": "登入",
+    "cancel": "取消",
+    "emptyFields": "請填寫所有欄位"
+  },
   "remoteConnect": {
     "tabNgrok": "內網穿透",
     "tabCustomServer": "自建伺服器",

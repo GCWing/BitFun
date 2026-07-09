@@ -11,6 +11,7 @@ import {
   ExternalLink,
   BarChart3,
   ChevronUp,
+  LogIn,
 } from 'lucide-react';
 import { Tooltip, Modal } from '@/component-library';
 import { useI18n } from '@/infrastructure/i18n/hooks/useI18n';
@@ -31,6 +32,7 @@ import {
 } from '../../RemoteConnectDialog/remoteConnectDisclaimerStorage';
 
 const RemoteConnectDialog = lazy(() => import('../../RemoteConnectDialog'));
+const AccountLoginDialog = lazy(() => import('../../AccountLoginDialog'));
 const AboutDialog = lazy(() =>
   import('../../AboutDialog').then(module => ({ default: module.AboutDialog }))
 );
@@ -56,6 +58,7 @@ const PersistentFooterActions: React.FC = () => {
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuClosing, setMenuClosing] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
+  const [showAccountLogin, setShowAccountLogin] = useState(false);
   const [showRemoteConnect, setShowRemoteConnect] = useState(false);
   const [showRemoteDisclaimer, setShowRemoteDisclaimer] = useState(false);
   const [hasAgreedRemoteDisclaimer, setHasAgreedRemoteDisclaimer] = useState<boolean>(() => getRemoteConnectDisclaimerAgreed());
@@ -121,6 +124,11 @@ const PersistentFooterActions: React.FC = () => {
     enableToolbarMode();
   };
 
+  const handleAccountLogin = () => {
+    closeMenu();
+    setShowAccountLogin(true);
+  };
+
   const handleRemoteConnect = useCallback(async () => {
     if (!hasWorkspace) {
       warning(t('header.remoteConnectRequiresWorkspace'));
@@ -184,6 +192,17 @@ const PersistentFooterActions: React.FC = () => {
                   role="menu"
                   data-testid="nav-footer-menu"
                 >
+                  <button
+                    type="button"
+                    className="bitfun-nav-panel__footer-menu-item"
+                    role="menuitem"
+                    onClick={handleAccountLogin}
+                    data-testid="nav-footer-account-login-item"
+                  >
+                    <LogIn size={14} />
+                    <span>{t('shared:features.accountLogin')}</span>
+                  </button>
+                  <div className="bitfun-nav-panel__footer-menu-divider" />
                   <Tooltip
                     content={t('header.remoteConnectRequiresWorkspace')}
                     placement="right"
@@ -284,6 +303,11 @@ const PersistentFooterActions: React.FC = () => {
       {showAbout && (
         <Suspense fallback={null}>
           <AboutDialog isOpen={showAbout} onClose={() => setShowAbout(false)} />
+        </Suspense>
+      )}
+      {showAccountLogin && (
+        <Suspense fallback={null}>
+          <AccountLoginDialog isOpen={showAccountLogin} onClose={() => setShowAccountLogin(false)} />
         </Suspense>
       )}
       {showRemoteConnect && (

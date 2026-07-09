@@ -463,6 +463,17 @@
     "errorEnterName": "Please enter a project name",
     "errorCreateFailed": "Failed to create project"
   },
+  "accountLogin": {
+    "username": "Username",
+    "password": "Password",
+    "authServer": "Auth Server",
+    "usernamePlaceholder": "Enter username",
+    "passwordPlaceholder": "Enter password",
+    "authServerPlaceholder": "https://auth.example.com",
+    "login": "Log In",
+    "cancel": "Cancel",
+    "emptyFields": "Please fill in all fields"
+  },
   "remoteConnect": {
     "tabNgrok": "NAT Traversal",
     "tabCustomServer": "Self-Hosted",

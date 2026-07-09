@@ -463,6 +463,17 @@
     "errorEnterName": "请输入工作区名称",
     "errorCreateFailed": "创建工作区失败"
   },
+  "accountLogin": {
+    "username": "用户名",
+    "password": "密码",
+    "authServer": "认证服务器",
+    "usernamePlaceholder": "请输入用户名",
+    "passwordPlaceholder": "请输入密码",
+    "authServerPlaceholder": "https://auth.example.com",
+    "login": "登录",
+    "cancel": "取消",
+    "emptyFields": "请填写所有字段"
+  },
   "remoteConnect": {
     "tabNgrok": "内网穿透",
     "tabCustomServer": "自建服务器",
