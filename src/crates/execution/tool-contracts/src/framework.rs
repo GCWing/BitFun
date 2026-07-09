@@ -461,6 +461,39 @@ pub fn build_get_tool_spec_duplicate_load_result(tool_name: &str) -> ToolResult 
     }
 }
 
+pub fn build_get_tool_spec_already_available_hint(tool_name: &str) -> String {
+    format!(
+        "Tool '{}' is already fully defined in the available tool list. Use '{}' directly.",
+        tool_name, tool_name
+    )
+}
+
+pub fn build_get_tool_spec_already_available_result(tool_name: &str) -> ToolResult {
+    ToolResult::Result {
+        data: serde_json::json!({
+            "tool_name": tool_name,
+            "already_available": true
+        }),
+        result_for_assistant: Some(build_get_tool_spec_already_available_hint(tool_name)),
+        image_attachments: None,
+    }
+}
+
+pub fn build_get_tool_spec_unavailable_collapsed_hint(tool_name: &str) -> String {
+    format!("'{}' is not available in the current context", tool_name)
+}
+
+pub fn build_get_tool_spec_unavailable_collapsed_result(tool_name: &str) -> ToolResult {
+    ToolResult::Result {
+        data: serde_json::json!({
+            "tool_name": tool_name,
+            "available_collapsed_tool": false
+        }),
+        result_for_assistant: Some(build_get_tool_spec_unavailable_collapsed_hint(tool_name)),
+        image_attachments: None,
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GetToolSpecExecutionError {
     MissingToolName,
@@ -715,6 +748,13 @@ where
         &self,
         context: Option<&Context>,
     ) -> Result<Vec<ToolRef<Tool>>, String>;
+
+    async fn available_tools_for_get_tool_spec(
+        &self,
+        context: Option<&Context>,
+    ) -> Result<Vec<ToolRef<Tool>>, String> {
+        self.collapsed_tools_for_get_tool_spec(context).await
+    }
 }
 
 pub fn summarize_get_tool_spec_collapsed_tools<Tool: ToolRegistryItem + ?Sized>(
@@ -836,9 +876,7 @@ where
     let tool = collapsed_tools
         .iter()
         .find(|tool| tool.name() == tool_name)
-        .ok_or_else(|| {
-            format!("Tool '{tool_name}' is not an available collapsed tool in the current context")
-        })?;
+        .ok_or_else(|| format!("'{tool_name}' is not available in the current context"))?;
 
     if tool.name() == get_tool_spec_tool_name {
         return Err(format!("Tool '{tool_name}' cannot inspect itself"));
@@ -895,15 +933,32 @@ where
     match resolve_get_tool_spec_execution_plan(input, loaded_collapsed_tools)? {
         GetToolSpecExecutionPlan::DuplicateLoad(result) => Ok(result),
         GetToolSpecExecutionPlan::LoadDetail { tool_name } => {
-            let detail = resolve_get_tool_spec_detail_from_provider(
-                provider,
-                tool_name,
-                context,
-                get_tool_spec_tool_name,
-            )
-            .await
-            .map_err(GetToolSpecExecutionError::Detail)?;
-            Ok(build_get_tool_spec_detail_result(&detail))
+            let collapsed_tools = provider
+                .collapsed_tools_for_get_tool_spec(Some(context))
+                .await
+                .map_err(GetToolSpecExecutionError::Detail)?;
+
+            if collapsed_tools.iter().any(|tool| tool.name() == tool_name) {
+                let detail = resolve_get_tool_spec_detail(
+                    &collapsed_tools,
+                    tool_name,
+                    context,
+                    get_tool_spec_tool_name,
+                )
+                .await
+                .map_err(GetToolSpecExecutionError::Detail)?;
+                return Ok(build_get_tool_spec_detail_result(&detail));
+            }
+
+            let available_tools = provider
+                .available_tools_for_get_tool_spec(Some(context))
+                .await
+                .map_err(GetToolSpecExecutionError::Detail)?;
+            if available_tools.iter().any(|tool| tool.name() == tool_name) {
+                return Ok(build_get_tool_spec_already_available_result(tool_name));
+            }
+
+            Ok(build_get_tool_spec_unavailable_collapsed_result(tool_name))
         }
     }
 }
