@@ -4,7 +4,7 @@ FROM rust:1.85-slim AS builder
 
 WORKDIR /build
 
-RUN apt-get update && apt-get install -y pkg-config libssl-dev && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y pkg-config libssl-dev build-essential && rm -rf /var/lib/apt/lists/*
 
 COPY Cargo.toml ./
 RUN mkdir -p src && echo 'fn main() { println!("placeholder"); }' > src/main.rs
