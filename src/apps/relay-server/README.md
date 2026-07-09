@@ -94,7 +94,7 @@ RELAY_PORT=9700 ./target/release/bitfun-relay-server
 | `RELAY_STATIC_DIR` | _(none)_ | Path to mobile web static files fallback SPA. When unset, no fallback static files are served. Docker Compose sets this to `/app/static`. |
 | `RELAY_ROOM_WEB_DIR` | `/tmp/bitfun-room-web` | Directory for per-room uploaded mobile-web files. Docker Compose uses a named volume mounted at `/app/room-web`. |
 | `RELAY_ROOM_TTL` | `3600` | Room TTL in seconds (0 = no expiry) |
-| `RELAY_DB_PATH` | _(none)_ | SQLite database path for account storage. When unset, the relay runs in pure-relay mode with no account features. Set to a persistent path (e.g. `/app/data/bitfun_relay.db`) to enable account login, register, and (future) cross-device sync. The server stays zero-knowledge: it only stores Argon2id password hashes and AES-GCM-wrapped master keys — never plaintext passwords or master keys. |
+| `RELAY_DB_PATH` | _(none)_ | SQLite database path for account storage. When unset, the relay runs in pure-relay mode with no account features. Set to a persistent path (e.g. `/app/data/bitfun_relay.db`) to enable account login, device routing, and cross-device session/settings sync. The server stays zero-knowledge: it only stores Argon2id password hashes and AES-GCM-wrapped master keys — never plaintext passwords or master keys. Accounts are provisioned via the `relay-admin` CLI (see below). |
 
 ## API Endpoints
 
@@ -113,6 +113,32 @@ Zero-knowledge authentication. Clients derive an Argon2id KEK locally and send o
 |----------|--------|-------------|
 | `/api/auth/login/challenge` | POST | Fetch KDF params + wrapped master key for local derivation |
 | `/api/auth/login` | POST | Verify password hash and issue a token; returns `{ token, user_id }` |
+
+#### Account Provisioning (`relay-admin` CLI)
+
+Accounts are created out-of-band via the `relay-admin` binary (shipped inside the Docker image). No public registration endpoint is exposed.
+
+```bash
+# All commands require --db pointing to the same SQLite file as RELAY_DB_PATH
+
+# Add an account (interactive password prompt, recommended)
+docker exec -it <container> /app/relay-admin --db /app/data/bitfun_relay.db add-user --username alice
+
+# Add with password on the command line (for scripts)
+docker exec <container> /app/relay-admin --db /app/data/bitfun_relay.db add-user --username alice --password "Secret123!"
+
+# List all accounts
+docker exec <container> /app/relay-admin --db /app/data/bitfun_relay.db list-users
+
+# Reset password (generates new salts + new master key;
+# previously synced encrypted data becomes unreadable)
+docker exec -it <container> /app/relay-admin --db /app/data/bitfun_relay.db reset-password --username alice
+
+# Delete an account and all its data
+docker exec <container> /app/relay-admin --db /app/data/bitfun_relay.db delete-user --username alice
+```
+
+The tool performs the same client-side Argon2id key derivation and AES-256-GCM master-key wrapping as the login client, then writes only non-secret artifacts (salts, hashes, wrapped key) to the database. Passwords are never stored. When `--password` is omitted the tool prompts with hidden input and asks for confirmation.
 
 ### Room Operations (Mobile HTTP → Desktop WS bridge)
 
@@ -136,6 +162,18 @@ Zero-knowledge authentication. Clients derive an Argon2id KEK locally and send o
 |----------|--------|-------------|
 | `/ws` | WebSocket | Desktop client connection endpoint |
 
+### Cross-Device Sync (optional — requires `RELAY_DB_PATH` + Bearer token)
+
+Encrypted session and settings blobs, stored opaquely on the relay. All payloads are AES-256-GCM encrypted client-side with the account master key; the relay cannot read them.
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/sync/sessions` | POST | Upload/replace an encrypted session blob |
+| `/api/sync/sessions` | GET | List all encrypted session blobs (`?since=<timestamp>`) |
+| `/api/sync/sessions/:session_id` | DELETE | Soft-delete a session blob (tombstone) |
+| `/api/sync/settings` | POST | Upload/replace the encrypted settings blob |
+| `/api/sync/settings` | GET | Fetch the encrypted settings blob |
+
 ## WebSocket Protocol (Desktop Only)
 
 Only desktop clients connect via WebSocket. Mobile clients use the HTTP endpoints above.
@@ -151,6 +189,10 @@ Only desktop clients connect via WebSocket. Mobile clients use the HTTP endpoint
 
 // Heartbeat
 { "type": "heartbeat" }
+
+// Account-authenticated device routing (parallel to room pairing)
+{ "type": "auth_connect", "token": "...", "device_name": "..." }
+{ "type": "device_message", "target_device_id": "...", "correlation_id": "...", "encrypted_data": "base64...", "nonce": "base64..." }
 ```
 
 ### Server → Desktop (Outbound)
@@ -167,6 +209,12 @@ Only desktop clients connect via WebSocket. Mobile clients use the HTTP endpoint
 
 // Heartbeat acknowledgment
 { "type": "heartbeat_ack" }
+
+// Device routing responses
+{ "type": "auth_ok", "user_id": "...", "device_id": "..." }
+{ "type": "auth_error", "message": "..." }
+{ "type": "incoming_device_message", "source_device_id": "...", "correlation_id": "...", "encrypted_data": "base64...", "nonce": "base64..." }
+{ "type": "device_presence", "devices": [{ "device_id": "...", "device_name": "..." }] }
 
 // Error
 { "type": "error", "message": "..." }
@@ -194,7 +242,16 @@ The relay server bridges HTTP and WebSocket:
 
 ```
 relay-server/
-├── src/                    # Rust source code
+├── src/
+│   ├── main.rs             # Relay server binary entry point
+│   ├── lib.rs              # Shared library (router, asset stores)
+│   ├── config.rs           # Environment-based configuration
+│   ├── db.rs               # SQLite account/device/sync storage
+│   ├── admin.rs            # Account provisioning crypto (used by relay-admin)
+│   ├── bin/
+│   │   └── relay_admin.rs  # relay-admin CLI binary
+│   ├── relay/              # Room manager + device routing manager
+│   └── routes/             # HTTP/WS route handlers (auth, sync, api, websocket)
 ├── static/                 # Mobile-web static files
 ├── Cargo.toml              # Crate manifest
 ├── Dockerfile              # Docker build
