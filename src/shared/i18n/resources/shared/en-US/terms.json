@@ -8,7 +8,8 @@
     "codeAgent": "Code Agent",
     "deepReview": "Deep Review",
     "settings": "Settings",
-    "workspace": "Workspace"
+    "workspace": "Workspace",
+    "accountLogin": "Account Login"
   },
   "modes": {
     "agentic": "Agentic Mode",

@@ -45,7 +45,8 @@ export const SHARED_TERMS_BY_LOCALE = {
       "codeAgent": "代码助手",
       "deepReview": "深度代码评审",
       "settings": "设置",
-      "workspace": "工作区"
+      "workspace": "工作区",
+      "accountLogin": "账户登录"
     },
     "modes": {
       "agentic": "代理模式",
@@ -95,7 +96,8 @@ export const SHARED_TERMS_BY_LOCALE = {
       "codeAgent": "程式碼助手",
       "deepReview": "深度程式碼審查",
       "settings": "設定",
-      "workspace": "工作區"
+      "workspace": "工作區",
+      "accountLogin": "帳號登入"
     },
     "modes": {
       "agentic": "代理模式",
@@ -145,7 +147,8 @@ export const SHARED_TERMS_BY_LOCALE = {
       "codeAgent": "Code Agent",
       "deepReview": "Deep Review",
       "settings": "Settings",
-      "workspace": "Workspace"
+      "workspace": "Workspace",
+      "accountLogin": "Account Login"
     },
     "modes": {
       "agentic": "Agentic Mode",
