@@ -13,7 +13,7 @@ crate 约束见 [`agent-runtime-services-design.md`](agent-runtime-services-desi
 BitFun 同时面向桌面 GUI、TUI/CLI、Web、ACP、Server、Remote、SDK 和插件生态。架构设计优先保护稳定接口：
 
 1. **实现变化不得外溢**：高频变化的运行时、适配器、平台服务、远端能力和插件执行单元，只能通过稳定契约、端口、绑定或兼容门面被消费。
-2. **插件生态优先交付**：扩展点、插件运行时主机、候选效果、安全校验、隔离和 OpenCode 兼容垂直切片属于首要能力，不作为后置研究项。
+2. **插件生态优先交付**：扩展点、插件运行时主机、候选效果、安全校验、隔离和 OpenCode-compatible 垂直切片属于首要能力，不作为后置研究项。
 3. **产品入口共享能力服务接口**：GUI、TUI/CLI、Web、ACP、Server、Remote 和 SDK 通过同一类后端能力服务契约访问任务、权限、状态、诊断、产物和事件。
 4. **扩展能力先声明后物化**：插件、钩子、工具提供方、MCP 提供方和界面贡献只能先返回描述符或候选效果；最终权限、审计、工具结果和状态写入由归属模块完成。
 5. **公开接口有预算**：新增公开 DTO、trait、模块或门面必须说明归属模块、真实消费方、版本策略、验证方式和退场条件。
@@ -193,11 +193,39 @@ flowchart LR
 - 执行层是工具 ABI、工具运行时、沙箱、MCP 工具和工作流执行的归属模块。
 - 插件运行时主机只治理插件运行、截止时间、幂等、诊断、隔离和适配器通信；不写内核权威状态。
 - 平台适配器访问 OS、Git、文件系统、终端、远端、模型、MCP 和外部系统；上层只能通过端口和能力事实使用它。
-- CLI 在 P0-B 只消费只读投影和诊断；P0-C 才可绑定本地插件主机完成 OpenCode 兼容插件消费。
+- CLI 在 P0-B 只消费只读投影和诊断；P0-C 才可绑定本地插件主机完成 OpenCode-compatible 插件消费。
 
 ## 5. P0 插件垂直切片
 
-P0 必须以 OpenCode 兼容插件形成一条可验收闭环。ACP 外部智能体/工具桥接是 P0+ 互操作路径，不能替代 P0 验收。
+P0 必须以 OpenCode-compatible 插件形成一条可验收闭环。ACP 外部智能体/工具桥接是 P0+ 互操作路径，不能替代 P0 验收。
+
+关键产品场景：
+
+1. 用户在 Desktop 设置或命令入口安装、启用或禁用来自 BitFun 插件包、随版本携带包、组织/项目插件源或受控外部包源的 OpenCode-compatible 插件。
+2. Desktop 展示插件来源类型、位置、hash、签名/信任、配置校验、能力声明、诊断和隔离状态，并提供重新信任、禁用或查看诊断的入口。
+3. 用户执行插件提供的自定义工具或提供方候选时，权限提示展示插件 id、来源、hash、请求能力/副作用、目标/产物、风险、归属模块和审计/事件 id；确认后由归属模块物化结果，拒绝或失败时不写成功状态。
+4. CLI 读取同一个插件读模型，输出同一插件 id、来源、状态、配置、诊断、隔离和审计/事件关联信息。
+
+来源边界：
+
+- **BitFun 插件来源是主入口**：插件可以来自安装包、打版携带、项目/组织插件源、受控外部包源、签名包或后续 marketplace/registry。运行时以 BitFun 插件来源、manifest、hash、签名和信任状态作为权威输入。
+- **OpenCode 配置是兼容导入源**：`opencode.json`、`.opencode/plugins/*.js|ts` 和 OpenCode 全局插件目录只能作为导入已有 OpenCode 项目的来源线索，导入后必须转换为 BitFun 插件来源与扩展契约对象。
+- **OpenCode CLI 不是前置依赖**：用户本机是否安装 `opencode` 只影响外部 OpenCode/ACP 互操作或迁移辅助，不影响 BitFun 加载、诊断或执行 OpenCode-compatible 插件。
+- **OpenCode-compatible 表示插件形态兼容**：它约束 JS/TS 插件模块、hook、自定义工具、permission hook 和 UI contribution 的映射方式，不表示复刻用户已有 OpenCode 运行时或配置系统。
+
+插件接入方式：
+
+| 接入方式 | 产品形态 | 稳定事实 |
+|---|---|---|
+| 动态安装 / 卸载 | 用户、项目或组织在 Desktop / CLI 中安装、启用、禁用、卸载插件 | BitFun 插件来源记录、manifest、版本、hash、签名、信任、启用状态、诊断和审计引用 |
+| 随产品协同发布 / 完整打包 | 产品打版、白标包、企业发行包或离线包携带插件集合 | 发布配置、内置包版本、只读 manifest、hash、签名、默认启用策略和禁用 / 隔离覆盖 |
+| 兼容导入 | 从 OpenCode、Claude Code、Codex 等生态读取已有配置、插件目录或技能目录 | 导入 provenance、原始生态、原始位置、转换后的 BitFun manifest、hash、诊断和信任状态 |
+
+目录治理原则：
+
+- BitFun 只把自身安装目录、用户数据目录、项目 `.bitfun` 配置、组织/企业 registry 和内容寻址缓存作为权威目录；具体 OS 路径由平台适配器解析，不进入稳定插件契约。
+- OpenCode 的 `opencode.json` / `.opencode/plugins` / 全局插件目录、Claude Code 的 marketplace / `.claude-plugin` / `.claude` 配置、Codex 的 `~/.codex` / `.codex` 配置和 skill / plugin 目录都只能作为只读兼容输入。
+- 兼容导入不得回写外部产品目录，不要求外部产品已安装，也不得把外部产品的加载顺序、启用状态或权限语义直接作为 BitFun 权威状态。
 
 ```mermaid
 sequenceDiagram
@@ -229,8 +257,8 @@ P0 插件体验按阶段交付：
 | 阶段 | 交付边界 | 不交付 |
 |---|---|---|
 | P0-B | 主机内部 ABI、产品形态保护、只读状态/诊断/隔离投影、`HostRestarted` 清除条件、`restart(project_domain_id, workspace_id)` 内部清理路径 | Desktop/CLI 消费、来源发现、激活、副作用物化、用户可执行恢复动作 |
-| P0-C | 从 `opencode.json` 或 `.opencode/plugins/*.js|ts` 发现插件；桌面设置展示来源/信任/配置/状态；CLI 诊断展示同一插件；桌面命令调用自定义工具或提供方候选；候选效果进入权限/副作用门禁并由归属模块物化 | ACP、Server、Remote、Web、Mobile Web、SDK 的完整插件运行时 |
-| P0+ | ACP 外部智能体/工具桥接、Server/Remote 主机、Web/Mobile Web/SDK 受控投影或完整运行时 | 不替代 P0-C 的 Desktop/CLI OpenCode 垂直切片验收 |
+| P0-C | 从 BitFun 插件来源发现、启用和诊断 OpenCode-compatible 插件；可选导入 `opencode.json`、`.opencode/plugins/*.js|ts` 或 OpenCode 全局插件目录；桌面设置展示来源/信任/配置/状态；CLI 诊断展示同一插件；桌面命令调用自定义工具或提供方候选；候选效果进入权限/副作用门禁并由归属模块物化 | 要求用户已安装 OpenCode CLI、复刻 OpenCode 全量配置系统、ACP/Server/Remote/Web/Mobile Web/SDK 的完整插件运行时 |
+| P0+ | ACP 外部智能体/工具桥接、Server/Remote 主机、Web/Mobile Web/SDK 受控投影或完整运行时 | 不替代 P0-C 的 Desktop/CLI OpenCode-compatible 插件垂直切片验收 |
 
 权限提示和诊断的不可降级字段：插件 id、来源、hash、请求副作用、目标/产物、风险、归属模块、回滚、
 拒绝后状态、审计/事件 id 和关联 id。
@@ -274,6 +302,7 @@ P0-B 不暴露用户可执行恢复动作；主机内部 `restart(project_domain
 - 内核维护可审计事实：会话、工作区、轮次、权限来源、执行域、事件序列、取消、恢复、检查点和诊断事实。
 - 执行层在工具、MCP、skills、评审工作流执行前消费权限、沙箱和能力事实。
 - 插件运行时主机声明来源、hash、能力、数据类别、副作用、执行域和界面贡献范围；未知或声明不完整的能力默认受限。
+- OpenCode 配置导入不得绕过 BitFun 插件来源、manifest、hash、签名、信任和执行域校验；导入失败只能产生诊断或 `unsupported`，不能隐式启用插件能力。
 - 平台适配器表达执行位置和降级原因，例如本地主机、远程 SSH、容器、ACP 客户端、MCP server 或插件执行域。
 
 公开接口预算：
@@ -288,7 +317,8 @@ P0-B 不暴露用户可执行恢复动作；主机内部 `restart(project_domain
 
 阶段验收标准：
 
-- 扩展契约、插件运行时主机、候选效果、信任策略、类型化可用性和同一条 OpenCode 兼容插件桌面命令/设置入口 + CLI 诊断垂直切片形成闭环。
+- 扩展契约、插件运行时主机、候选效果、信任策略、类型化可用性和同一条 OpenCode-compatible 插件桌面命令/设置入口 + CLI 诊断垂直切片形成闭环。
+- P0-C 验收以 BitFun 插件来源闭环为准；OpenCode 配置导入是兼容能力，不能替代插件安装、打包携带、信任和诊断主路径。
 - 能力服务接口契约能同时服务桌面 GUI、TUI/CLI、Web、ACP、Remote、Server 和 SDK 客户端，且后端归属迁移不要求客户端大面积改协议。
 - 插件、ACP 外部智能体/工具桥接、钩子、插件贡献的工具提供方和界面贡献都通过稳定描述符、信封和候选效果进入，不能直接写内核权威状态。
 - ProductFull、Desktop、CLI 和 ACP 的非插件默认任务能力、权限、工具、事件、session、remote 和 release 形态默认保持等价；插件能力按产品形态矩阵显式降级。

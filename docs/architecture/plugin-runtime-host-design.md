@@ -29,11 +29,14 @@
 - 让插件、钩子、自定义工具、事件订阅和界面贡献映射到 BitFun 的扩展点、工具 ABI、权限/副作用和界面描述符。
 - 保持内核是任务状态、事件和审计事实的权威源；执行层是工具结果权威源；安全控制面是权限权威源。
 - 让 Desktop、CLI、Server、Remote、ACP、Web、Mobile Web 和 SDK 显式启用、禁用或降级插件能力。
+- 区分 BitFun 插件来源、OpenCode 配置导入和外部 OpenCode CLI/ACP 互操作，避免把兼容输入误认为运行时前置条件。
 - P0-B 只交付主机边界与产品形态保护；Desktop/CLI 消费、来源发现、激活和副作用物化属于 P0-C。
 
 非目标：
 
 - 不复制完整 OpenCode 运行时，不承诺任意社区插件无修改运行。
+- 不要求用户本机已安装 `opencode` CLI 才能加载或诊断 OpenCode-compatible 插件。
+- 不把 `opencode.json`、OpenCode 全局配置或 `.opencode/plugins` 作为 BitFun 插件生态的主配置系统。
 - 不把插件系统作为内置产品能力裁剪的主要机制；产品形态裁剪仍由产品组装负责。
 - 不把 JS/TS 运行时、worker、WebView 或子进程视为安全边界。
 - 不允许插件直接写通过、失败、阻断、授权、审计、工具结果或产品状态。
@@ -50,6 +53,39 @@
 | 原生 MCP 提供方 | 平台适配器和执行层注册 | 不属于插件运行时主机，除非插件显式贡献 MCP 候选 |
 | 插件贡献 | 主机校验描述符、事件订阅、提供方候选和候选效果 | 默认追加；覆写必须绑定已声明 `OverridePoint` |
 | 兼容适配器 | 主机内部把外部生态接口转为 BitFun 信封、描述符和候选 | 只做映射，不成为产品能力、权限、审计或工具结果归属模块 |
+
+BitFun 插件来源模型：
+
+| 来源类型 | 产品定位 | 进入主机前的要求 |
+|---|---|---|
+| BitFun 插件安装包 | P0-C 主入口；用户或项目显式安装 | manifest、插件 id、版本、hash、签名/信任、能力声明、执行域和启用状态 |
+| 随版本携带的插件包 | P0-C 主入口；由产品打版携带或白标预装 | 与安装包相同，另需记录内置包版本和发布来源 |
+| 项目/组织插件源 | P0-C 主入口；由项目、组织或企业策略声明 | 来源作用域、策略来源、hash、信任状态和禁用/回滚方式 |
+| 受控外部包源 / 签名包 / registry | P0-C 主入口；由用户、项目或组织从受控渠道安装 | 包来源、版本、hash、签名/信任、撤销/回滚策略、能力声明和执行域 |
+
+兼容导入与外部互操作不属于插件来源模型：
+
+| 路径 | 定位 | 约束 |
+|---|---|---|
+| OpenCode 配置导入 | 迁移或读取已有 OpenCode 项目的兼容输入 | 只能生成导入事实、诊断和候选 BitFun 插件来源；原始配置不得直接成为运行时主状态 |
+| 外部 OpenCode CLI / ACP | P0+ 互操作；用于外部 agent、ACP client/server 或迁移辅助 | 不进入插件来源模型，不能作为 P0-C 插件加载前置条件；失败只影响互操作能力 |
+
+接入方式与目录职责：
+
+| 接入方式 | 目录 / 配置职责 | 生命周期职责 |
+|---|---|---|
+| 动态安装 / 卸载 | 写入 BitFun 管理的用户或项目插件来源记录；包内容进入内容寻址缓存；项目可通过 `.bitfun` 声明共享来源 | install、enable、disable、uninstall、trust、revoke、quarantine 和 diagnostics 必须可审计 |
+| 随产品协同发布 / 完整打包 | 插件包随 `ProductProfile` 或发行包携带，manifest 和 hash 是只读发布事实；运行时不得修改发行目录 | 可按工作区禁用、隔离或重新信任；升级、移除和默认启用策略必须通过新发行包或签名更新完成 |
+| 组织 / 企业来源 | 由组织配置、企业 registry 或 managed policy 声明；本地只保留解析后的来源事实和缓存 | 用户可在权限允许范围内启用或禁用；组织撤销必须覆盖本地启用状态 |
+| 兼容导入 | 只读扫描外部产品配置或插件目录，生成 `imported_from`、原始路径、hash 和转换诊断 | 导入结果进入候选 BitFun 插件来源；不得回写外部目录，不要求外部产品运行时存在 |
+
+目录规则：
+
+- 权威目录只属于 BitFun：安装目录中的内置插件包、用户数据目录、项目 `.bitfun` 配置、组织/企业 registry、本地内容寻址缓存和隔离/诊断状态目录。
+- 兼容目录只作为输入：OpenCode 的 `opencode.json`、`.opencode/plugins`、全局插件目录；Claude Code 的 marketplace、`.claude-plugin`、`.claude` 配置；Codex 的 `~/.codex`、`.codex` 配置和 skill / plugin 目录。
+- 平台适配器解析 OS 具体路径；跨 crate 稳定合同只能传递逻辑来源类型、scope、provenance、hash、manifest、trust state、diagnostic 和 quarantine state。
+- 同一个物理包被多个来源引用时，以内容 hash 和插件 id / version 去重；启用状态、信任状态和策略覆盖仍按来源 scope 独立记录。
+- 外部生态的加载顺序只能影响导入诊断和冲突提示，不能直接决定 BitFun 运行时启用顺序。BitFun 启用顺序由产品组装、来源 scope、信任策略和显式优先级决定。
 
 ## 3. 主机运行视图
 
@@ -237,7 +273,7 @@ src/crates/execution
 
 src/crates/adapters
   opencode-adapter
-    将 OpenCode 配置和本地插件来源事实映射为 BitFun 读模型与候选效果
+    将 OpenCode-compatible 插件来源和可选 OpenCode 配置导入映射为 BitFun 读模型与候选效果
     不得实现 PluginRuntimeClient 或声明可执行可用性
   future compatibility adapters
     通过同一适配器 trait 映射其他插件生态
@@ -294,7 +330,7 @@ Host 内部按风险选择执行单元：
 | `read_plugins` | 内核 / 组装层 -> 客户端 | 读取项目和工作区作用域内的插件来源、状态、诊断和隔离投影 |
 | `dispatch` | 内核 -> 客户端 -> 主机 | 投递规范事件并等待提供方候选、诊断、隔离状态或超时 |
 | P0-C `runtime.initialize` | 主机监控器 -> 主机 | 后续传入适配器清单集合、策略快照、传输能力；不属于 P0-B 已交付面 |
-| P0-C `plugin.discover` | 主机监控器 -> 主机 | 后续发现配置、插件来源、hash、声明能力和兼容等级；不属于 P0-B 已交付面 |
+| P0-C `plugin.discover` | 主机监控器 -> 主机 | 后续发现 BitFun 插件来源、hash、声明能力和兼容等级；OpenCode 配置导入只能作为兼容输入分支，输出候选 BitFun 插件来源和诊断，默认不执行；不属于 P0-B 已交付面 |
 
 ```ts
 interface PluginDispatchEnvelope {
@@ -525,14 +561,37 @@ P0-B 不公开界面贡献副作用载荷；界面贡献、描述符投影和入
 ## 11. OpenCode 兼容映射
 
 OpenCode 兼容适配器是插件运行时主机内部适配器，不是 BitFun 内部插件模型。
-当前 `bitfun-opencode-adapter` crate 只提供测试夹具范围的来源/配置发现和类型化候选投影；
+当前 `bitfun-opencode-adapter` crate 只提供测试夹具范围的 OpenCode 配置导入、来源发现和类型化候选投影；
 其公开接口预算为空。它不得实现 `PluginRuntimeClient`，不得向产品组装或内核声明可执行可用性。
 生产消费必须先经过插件运行时主机的注册、生命周期、信任/策略和副作用门禁设计评审。
 界面 / CLI 消费降级状态时必须同时使用状态、诊断和隔离状态，不得只根据可用性原因推导用户可见结论。
 
+OpenCode 兼容有三层含义，不能混用：
+
+| 层次 | 含义 | P0-C 处理 |
+|---|---|---|
+| 插件形态兼容 | 识别 JS/TS plugin module、hook、自定义工具、permission hook、UI contribution 等形态 | 作为生态适配器的输入格式，转换为 BitFun 扩展契约 |
+| 配置导入兼容 | 读取 `opencode.json`、`.opencode/plugins/*.js|ts` 或 OpenCode 全局插件目录，帮助已有项目迁移 | 可选导入源；导入后生成 BitFun 插件来源、manifest、hash、诊断和信任状态 |
+| 外部 OpenCode 互操作 | 调用用户安装的 OpenCode CLI、ACP client 或 server API | P0+；不得成为 BitFun 插件加载和诊断的前置条件 |
+
+外部生态兼容策略：
+
+| 外部生态 | 可读取的事实 | BitFun 处理 |
+|---|---|---|
+| OpenCode | npm 插件列表、项目插件目录、全局插件目录、hook / custom tool / permission hook / UI contribution | 作为 OpenCode-compatible 适配器输入；导入后转为 BitFun source、manifest、hash、capability、diagnostic 和 trust state |
+| Claude Code | marketplace 安装记录、`.claude-plugin/plugin.json`、skills、agents、hooks、MCP / LSP servers、user / project / local scope | 后续通过 Claude-compatible 适配器读取；组件先转为 BitFun 扩展描述符和候选效果，不继承 Claude Code 的启用状态或权限决定 |
+| Codex | `~/.codex/config.toml`、项目 `.codex/config.toml`、AGENTS.md / override、skills、plugin 分发单元、MCP 配置 | 后续通过 Codex-compatible 适配器读取；skills 作为工作流能力输入，plugin 作为分发 provenance，不要求 Codex CLI / App 安装 |
+
+跨生态原则：
+
+- 优先兼容“文件形态、manifest、组件目录和配置层级”，不兼容外部产品运行时状态。
+- 每个外部生态对应独立 compatibility adapter；多个生态适配器只能输出同一组 BitFun 描述符、候选效果和诊断，不增加产品入口专用接口。
+- 兼容导入必须保留 `ecosystem`、`imported_from`、原始位置、原始版本和转换诊断，便于回滚、重新导入和向用户解释能力差异。
+- BitFun 原生插件体系是长期权威格式；OpenCode、Claude Code、Codex 兼容层应收敛到 BitFun manifest / capability / effect / UI descriptor，而不是形成三套稳定插件 API。
+
 | OpenCode 能力 | BitFun 映射 | 约束 |
 |---|---|---|
-| workspace / global plugin 配置 | P0-B 测试夹具范围的来源/状态投影；P0-C `plugin.discover` | 默认发现但不执行 |
+| workspace / global plugin 配置 | 可选导入源；P0-B 仅测试夹具投影；P0-C 可由 `plugin.discover` 的兼容输入分支生成候选 BitFun 插件来源 | 不作为主配置系统；默认只导入和诊断，不执行 |
 | hooks object | P0-B unsupported 钩子投影为诊断 / 状态；P0-C 后再接入事件订阅 | 不伪造成副作用 |
 | custom tools | `provider_candidate` | 启用后仍走工具 ABI 和权限门禁 |
 | tool execute before | P0-B 诊断 / status-only；P0+ 才能设计受控只读候选 | 不能直接改写执行结果 |
@@ -550,7 +609,8 @@ DTO。
 
 本节能力矩阵是长期设计边界，不是 P0 验收范围。P0 约束以
 [`product-architecture.md`](product-architecture.md) 为准：P0 只验收桌面设置/命令入口 + CLI 诊断的同一条
-OpenCode 兼容插件垂直切片；ACP、Server、Remote、Web、Mobile Web 和内部 SDK 最小可用性在 P0 中只能是
+OpenCode-compatible 插件垂直切片；该切片以 BitFun 插件来源、安装/打包携带、信任和诊断为主路径，
+OpenCode 配置导入只是兼容入口。ACP、Server、Remote、Web、Mobile Web 和内部 SDK 最小可用性在 P0 中只能是
 `unsupported`、`temporarily-unavailable`、`projection-only`、`status-only`、`policy-denied` 或 `quarantined`。`artifact-only` 是长期能力服务接口状态词，
 只有在真实产物/结果投影消费者出现后才能进入入口验收。Server / Remote 主机、ACP 能力/权限桥接
 和其他入口的完整插件运行时必须进入 P0+，并具备单独产品决策、迁移/回滚和验证指标。
@@ -584,7 +644,7 @@ OpenCode 兼容插件垂直切片；ACP、Server、Remote、Web、Mobile Web 和
 
 插件能力必须声明以下绑定：
 
-- 来源：project、global、enterprise registry、signed bundle 或 remote source。
+- 来源：安装包、随版本携带包、项目/组织插件源、受控外部包源、enterprise registry、signed bundle 或 remote source；OpenCode 配置导入只能作为来源 provenance 和诊断事实。
 - 身份：适配器 id、插件 id、版本、hash、签名状态。
 - 能力声明：事件、工具、文件、网络、凭据、界面贡献和执行域。
 - 信任状态：未信任、只读信任、项目级信任、组织级信任、撤销。

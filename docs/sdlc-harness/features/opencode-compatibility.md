@@ -17,7 +17,8 @@ UI Extension Contract。
 核心原则：
 
 - OpenCode API 只作为兼容输入和映射目标；BitFun 内部模块只依赖自身稳定 contract。
-- 插件、hook、自定义工具和工具复写默认是主动配置，必须先发现、记录来源和权限，再进入信任审查。
+- BitFun 插件安装包、随版本携带插件包、项目/组织插件源、受控外部包源、签名包和 registry 包是生产插件来源；OpenCode 配置只作为兼容导入源。
+- 插件、hook、自定义工具和工具复写默认是主动配置，必须先发现、记录来源、hash、信任和权限，再进入信任审查。
 - 插件只能产出候选效果；任务事实和审计事实落盘、工具结果、权限与安全决策 payload、就绪度/门禁投影分别由 Agent Kernel、Execution、Security Boundary 和变更就绪度模块写入。
 - UI 扩展只通过 descriptor 暴露 slot、route、command、prompt、dialog、state view 等贡献，不暴露 React、Tauri、DOM 或具体 renderer handle。
 - 可写 JS/TS 插件运行时不是默认能力，必须在沙箱、secret、网络、包源安全和崩溃隔离具备独立评审后再开放。
@@ -43,7 +44,8 @@ UI Extension Contract。
 
 范围：
 
-- 发现 OpenCode 风格配置、hook、自定义工具和插件入口，并写入项目画像。
+- 发现 BitFun 插件来源中的 OpenCode-compatible 插件、hook、自定义工具和插件入口，并写入项目画像。
+- 可选导入 OpenCode 风格配置、工作区插件目录或全局插件目录，并将其转换为 BitFun 插件来源、manifest、hash、诊断和信任状态。
 - 维护 OpenCode server plugin 和 TUI plugin 的支持矩阵。
 - 将 OpenCode 事件、工具、permission hook、配置 transform 和 UI contribution 映射为 BitFun contract。
 - 将插件输出整理为建议、证据候选、工具输入补丁、工具后置观察、UI contribution 或 typed unsupported。
@@ -52,6 +54,8 @@ UI Extension Contract。
 边界：
 
 - 不复制 OpenCode 运行时，也不承诺任意社区插件无修改运行。
+- 不要求用户本机安装 `opencode` CLI 才能加载或诊断 OpenCode-compatible 插件；外部 OpenCode CLI/ACP 互操作属于独立能力。
+- 不把 `opencode.json`、`.opencode/plugins/*.js|ts` 或 OpenCode 全局插件目录作为 BitFun 插件生态的主配置系统。
 - 不允许插件直接写任务状态、审计事实、权限状态、PR 门禁、证据通过状态或安全策略。
 - 不允许工具复写静默覆盖全局工具；复写必须按项目执行域、来源、hash、能力范围和期限生效。
 - 不把插件失败解释为任务失败；失败必须进入降级、警告、候选丢弃或安全决策。
@@ -90,9 +94,11 @@ interface ExtensionCompatibilityDescriptor {
   adapter_id: string;
   ecosystem: "opencode" | "kiro" | "claude_code" | "bitfun_native";
   source: {
-    kind: "workspace" | "user" | "organization" | "remote";
+    kind: "package" | "bundled" | "project_source" | "organization_source" | "controlled_external_package" | "signed_bundle" | "registry_package";
+    scope: "project" | "workspace" | "user" | "organization";
     location: string;
     hash?: string;
+    imported_from?: "opencode_json" | "opencode_workspace_plugin" | "opencode_global_plugin";
   };
   trust: {
     state: "discovered" | "trusted" | "changed" | "disabled" | "revoked";
@@ -118,6 +124,8 @@ interface ExtensionCompatibilityDescriptor {
 | 风险 | 保护方式 |
 |---|---|
 | OpenCode API 反向污染内部模型 | 内部只依赖 BitFun Plugin Runtime Host、Tool ABI、Event Manifest、Permission/Effect 和 UI descriptor |
+| OpenCode 配置反向成为主模型 | 配置导入只生成 BitFun 插件来源、manifest、hash、诊断和信任事实；运行时不直接消费原始配置 |
+| 外部 OpenCode CLI 可用性污染 P0 | P0 插件加载不检查用户是否安装 `opencode`；外部 CLI/ACP 互操作独立降级 |
 | 插件越权授权 | hook 只返回 candidate；最终安全决策和安全审计 payload 由 Security Boundary 生成，审计事实落盘由 Agent Kernel 维护 |
 | 工具复写绕过内置工具策略 | 复写按项目执行域生效，重新经过 Tool ABI、权限声明和安全边界 |
 | UI 插件耦合前端实现 | descriptor-only；宿主适配器渲染；不支持时返回 unsupported 或安全文本投影 |
@@ -132,7 +140,7 @@ interface ExtensionCompatibilityDescriptor {
 
 | 能力等级 | 必须满足的合同 |
 |---|---|
-| Discovery | 能发现配置、记录来源/hash/权限并默认禁用 |
+| Discovery | 能发现 BitFun 插件来源、记录来源/hash/权限并默认禁用；签名包和 registry 包必须保留签名、撤销和回滚事实；可选 OpenCode 配置导入只能生成来源事实和 `imported_from` provenance |
 | Read-only adapter | 能消费 public event manifest，输出建议或证据候选，失败可降级 |
 | Tool provider adapter | Tool ABI、permission/effect、stale call guard、cancellation 和项目执行域隔离通过测试 |
 | UI contribution adapter | descriptor round-trip、入口 fallback、只读 state view 和 unsupported 行为通过测试 |
@@ -142,7 +150,7 @@ interface ExtensionCompatibilityDescriptor {
 
 - OpenCode adapter 不成为 BitFun 内部 owner。
 - 当前产品运行时 P0 覆盖 Desktop settings/command + CLI diagnostics 的同一条 OpenCode-compatible plugin 垂直切片；非 Desktop/CLI full runtime、ACP permission bridge 和可写 JS/TS 插件运行时属于 P0+。这里的 P0+ 指产品架构 P0 后的独立产品决策阶段，不等同于 SDLC Harness P1。
-- 插件配置能被发现、解释、禁用、重新信任和撤销。
+- BitFun 插件来源能被发现、解释、禁用、重新信任和撤销；OpenCode 配置导入只能服务迁移和兼容诊断。
 - 插件只能通过候选效果影响治理链路，不能直接写权威状态。
 - 工具、MCP、自定义工具和插件工具使用同一 Tool ABI 语义。
 - UI 扩展能力可在 Desktop、CLI、Server、Remote、ACP、Web、Mobile Web、SDK 等形态下明确支持或显式不可用。
