@@ -62,6 +62,22 @@ docker_exec() {
   fi
 }
 
+# Bind-mounted repos are owned by the host user; git 2.35+ rejects them as dubious.
+ensure_container_git_safe_directory() {
+  docker_exec git config --global --add safe.directory /src >/dev/null 2>&1 || true
+}
+
+resolve_build_commit() {
+  if [[ -n "${BITFUN_CLI_BUILD_COMMIT:-}" ]]; then
+    echo "${BITFUN_CLI_BUILD_COMMIT}"
+    return 0
+  fi
+
+  if command -v git >/dev/null 2>&1; then
+    git -C "${ROOT}" rev-parse --short=12 HEAD 2>/dev/null || true
+  fi
+}
+
 cmd_build_image() {
   docker build -f "${DOCKERFILE}" -t "${IMAGE}" "${ROOT}"
   echo "Built image: ${IMAGE}"
@@ -108,12 +124,27 @@ cmd_stop() {
 
 cmd_shell() {
   cmd_start
+  ensure_container_git_safe_directory
   docker exec -it "${CONTAINER}" bash
 }
 
 cmd_compile() {
   cmd_start
-  docker_exec bash -lc "cargo build --release -p bitfun-cli --target ${TARGET_TRIPLE}"
+  ensure_container_git_safe_directory
+
+  local commit cargo_env=""
+  commit="$(resolve_build_commit || true)"
+  if [[ -n "${commit}" ]]; then
+    echo "Build commit: ${commit}"
+    cargo_env="BITFUN_CLI_BUILD_COMMIT=${commit}"
+  else
+    echo "warning: could not resolve git commit; build.rs will try inside container" >&2
+  fi
+
+  docker_exec bash -lc "
+    git config --global --add safe.directory /src 2>/dev/null || true
+    ${cargo_env} cargo build --release -p bitfun-cli --target ${TARGET_TRIPLE}
+  "
   echo "Binary: ${BINARY}"
 }
 
