@@ -44,7 +44,7 @@ use bitfun_runtime_ports::{SessionStoragePathRequest, SessionStorePort};
 use bitfun_services_core::session::{
     apply_session_lineage, collect_hidden_subagent_cascade as collect_hidden_subagent_cascade_ids,
     merge_session_custom_metadata as merge_session_custom_metadata_value,
-    set_deep_review_run_manifest, set_session_relationship,
+    set_deep_review_run_manifest, set_session_relationship, SessionStorageLayout,
 };
 use dashmap::DashMap;
 use log::{debug, error, info, warn};
@@ -521,6 +521,23 @@ impl SessionManager {
     async fn effective_session_storage_path(&self, session_id: &str) -> Option<PathBuf> {
         let config = self.sessions.get(session_id)?.config.clone();
         self.effective_storage_path_for_config(&config).await
+    }
+
+    pub async fn persistent_model_exchange_trace_dir(&self, session_id: &str) -> Option<PathBuf> {
+        if !self.should_persist_session_id(session_id) {
+            return None;
+        }
+
+        let storage_path = self
+            .effective_session_storage_path(session_id)
+            .await
+            .or_else(|| {
+                self.session_storage_path_index
+                    .get(session_id)
+                    .map(|entry| entry.value().clone())
+            })?;
+
+        Some(SessionStorageLayout::new(storage_path).request_traces_dir(session_id))
     }
 
     pub async fn resolve_session_workspace_binding(
@@ -5742,6 +5759,48 @@ mod tests {
             .await
             .expect("metadata lookup should succeed")
             .is_none());
+        assert_eq!(
+            manager
+                .persistent_model_exchange_trace_dir(&session.session_id)
+                .await,
+            None
+        );
+    }
+
+    #[tokio::test]
+    async fn persisted_session_uses_session_local_model_exchange_trace_dir() {
+        let workspace = TestWorkspace::new();
+        let path_manager = workspace.path_manager();
+        let persistence_manager =
+            Arc::new(PersistenceManager::new(path_manager.clone()).expect("persistence manager"));
+        let manager = test_manager(persistence_manager);
+
+        let session = manager
+            .create_session_with_id_and_details(
+                Some(Uuid::new_v4().to_string()),
+                "Main thread".to_string(),
+                "agentic".to_string(),
+                SessionConfig {
+                    workspace_path: Some(workspace.path().to_string_lossy().to_string()),
+                    ..Default::default()
+                },
+                None,
+                SessionKind::Standard,
+            )
+            .await
+            .expect("standard session should create");
+
+        assert_eq!(
+            manager
+                .persistent_model_exchange_trace_dir(&session.session_id)
+                .await,
+            Some(
+                path_manager
+                    .project_sessions_dir(workspace.path())
+                    .join(&session.session_id)
+                    .join("request-traces")
+            )
+        );
     }
 
     #[tokio::test]

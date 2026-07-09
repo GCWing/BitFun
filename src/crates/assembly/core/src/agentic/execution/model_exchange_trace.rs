@@ -4,9 +4,7 @@ use crate::infrastructure::ai::AIClient;
 use crate::service::config::{
     GlobalConfigManager, ModelExchangeTracingConfig, ModelExchangeTracingMode,
 };
-use crate::service::workspace_runtime::{
-    get_workspace_runtime_service_arc, WorkspaceRuntimeContext,
-};
+use crate::service::workspace_runtime::get_workspace_runtime_service_arc;
 use async_trait::async_trait;
 use bitfun_ai_adapters::{
     ModelExchangeRequestAttempt, ModelExchangeRequestTraceHandle, ModelExchangeResponseTrace,
@@ -99,7 +97,7 @@ impl ModelExchangeTracePolicy {
 
 #[derive(Debug)]
 struct WorkspaceModelExchangeTraceSink {
-    runtime_context: WorkspaceRuntimeContext,
+    trace_session_dir: PathBuf,
     policy: ModelExchangeTracePolicy,
     session_id: String,
     turn_id: String,
@@ -114,7 +112,7 @@ struct WorkspaceModelExchangeTraceSink {
 
 impl WorkspaceModelExchangeTraceSink {
     fn new(
-        runtime_context: WorkspaceRuntimeContext,
+        trace_session_dir: PathBuf,
         policy: ModelExchangeTracePolicy,
         session_id: String,
         turn_id: String,
@@ -126,7 +124,7 @@ impl WorkspaceModelExchangeTraceSink {
         model_id: String,
     ) -> Self {
         Self {
-            runtime_context,
+            trace_session_dir,
             policy,
             session_id,
             turn_id,
@@ -141,10 +139,7 @@ impl WorkspaceModelExchangeTraceSink {
     }
 
     async fn allocate_sequence(&self) -> Result<u64, String> {
-        let session_dir = self
-            .runtime_context
-            .request_trace_session_dir(&self.session_id);
-        let key = session_dir.to_string_lossy().to_string();
+        let key = self.trace_session_dir.to_string_lossy().to_string();
         let allocator = sequence_allocators()
             .entry(key)
             .or_insert_with(|| Arc::new(Mutex::new(None)))
@@ -153,7 +148,7 @@ impl WorkspaceModelExchangeTraceSink {
         let current = match *guard {
             Some(value) => value,
             None => {
-                let detected = detect_last_sequence(&session_dir).await?;
+                let detected = detect_last_sequence(&self.trace_session_dir).await?;
                 *guard = Some(detected);
                 detected
             }
@@ -161,6 +156,11 @@ impl WorkspaceModelExchangeTraceSink {
         let next = current.saturating_add(1);
         *guard = Some(next);
         Ok(next)
+    }
+
+    fn trace_path(&self, sequence: u64) -> PathBuf {
+        self.trace_session_dir
+            .join(format!("request-{:06}.json", sequence))
     }
 
     async fn write_record(
@@ -264,9 +264,7 @@ impl ModelExchangeTraceSink for WorkspaceModelExchangeTraceSink {
         };
 
         let trace_id = Uuid::new_v4().to_string();
-        let path = self
-            .runtime_context
-            .request_trace_path(&self.session_id, sequence);
+        let path = self.trace_path(sequence);
         let record = ModelExchangeTraceRecord {
             version: TRACE_LAYOUT_VERSION,
             trace_id: trace_id.clone(),
@@ -356,6 +354,7 @@ pub async fn prepare_model_exchange_trace(
         &context.session_id,
         &context.dialog_turn_id,
         context.workspace.as_ref(),
+        context.model_exchange_trace_dir.as_deref(),
         ModelExchangeTraceOperation {
             kind: "model_round",
             id: round_id,
@@ -370,6 +369,7 @@ pub async fn prepare_model_exchange_trace_for_workspace(
     session_id: &str,
     turn_id: &str,
     workspace: Option<&WorkspaceBinding>,
+    model_exchange_trace_dir: Option<&Path>,
     operation: ModelExchangeTraceOperation<'_>,
     ai_client: &AIClient,
 ) -> Option<ModelExchangeTraceConfig> {
@@ -385,23 +385,26 @@ pub async fn prepare_model_exchange_trace_for_workspace(
         return None;
     };
 
-    let runtime_context = match get_workspace_runtime_service_arc()
-        .ensure_runtime_for_workspace_binding(workspace)
-        .await
-    {
-        Ok(result) => result.context,
-        Err(error) => {
-            warn!(
-                "Model exchange trace skipped because runtime init failed: session_id={}, operation_kind={}, operation_id={}, error={}",
-                session_id, operation.kind, operation.id, error
-            );
-            return None;
-        }
+    let trace_session_dir = match model_exchange_trace_dir {
+        Some(path) => path.to_path_buf(),
+        None => match get_workspace_runtime_service_arc()
+            .ensure_runtime_for_workspace_binding(workspace)
+            .await
+        {
+            Ok(result) => result.context.request_trace_session_dir(session_id),
+            Err(error) => {
+                warn!(
+                    "Model exchange trace skipped because runtime init failed: session_id={}, operation_kind={}, operation_id={}, error={}",
+                    session_id, operation.kind, operation.id, error
+                );
+                return None;
+            }
+        },
     };
 
     Some(ModelExchangeTraceConfig {
         sink: Arc::new(WorkspaceModelExchangeTraceSink::new(
-            runtime_context,
+            trace_session_dir,
             policy,
             session_id.to_string(),
             turn_id.to_string(),

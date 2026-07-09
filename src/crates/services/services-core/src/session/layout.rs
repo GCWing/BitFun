@@ -43,6 +43,15 @@ impl SessionStorageLayout {
         self.session_dir(session_id).join("prompt_cache.json")
     }
 
+    pub fn request_traces_dir(&self, session_id: &str) -> PathBuf {
+        self.session_dir(session_id).join("request-traces")
+    }
+
+    pub fn request_trace_path(&self, session_id: &str, sequence: u64) -> PathBuf {
+        self.request_traces_dir(session_id)
+            .join(format!("request-{:06}.json", sequence))
+    }
+
     pub fn turns_dir(&self, session_id: &str) -> PathBuf {
         self.session_dir(session_id).join("turns")
     }
@@ -87,6 +96,10 @@ impl SessionStorageLayout {
 
     pub async fn ensure_session_dir(&self, session_id: &str) -> io::Result<PathBuf> {
         self.ensure_dir(self.session_dir(session_id)).await
+    }
+
+    pub async fn ensure_request_traces_dir(&self, session_id: &str) -> io::Result<PathBuf> {
+        self.ensure_dir(self.request_traces_dir(session_id)).await
     }
 
     pub async fn ensure_turns_dir(&self, session_id: &str) -> io::Result<PathBuf> {

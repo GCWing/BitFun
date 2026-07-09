@@ -1335,6 +1335,10 @@ impl ExecutionEngine {
         final_ai_messages.push(AIMessage::user(render_system_reminder(reminder_text)));
         final_ai_messages.push(AIMessage::user(Self::FINALIZE_USER_FOLLOWUP.to_string()));
 
+        let model_exchange_trace_dir = self
+            .session_manager
+            .persistent_model_exchange_trace_dir(&context.session_id)
+            .await;
         let round_context = RoundContext {
             session_id: context.session_id.clone(),
             subagent_parent_info: context.subagent_parent_info.clone(),
@@ -1343,6 +1347,7 @@ impl ExecutionEngine {
             round_number,
             round_group_id,
             workspace: context.workspace.clone(),
+            model_exchange_trace_dir,
             available_tools: finalize_tool_names,
             collapsed_tools: Vec::new(),
             unlocked_collapsed_tools: Vec::new(),
@@ -1925,10 +1930,15 @@ impl ExecutionEngine {
         let compression_contract = self
             .session_manager
             .compression_contract_for_session(session_id, compression_contract_limit);
+        let model_exchange_trace_dir = self
+            .session_manager
+            .persistent_model_exchange_trace_dir(session_id)
+            .await;
         let trace_config = prepare_model_exchange_trace_for_workspace(
             session_id,
             dialog_turn_id,
             workspace,
+            model_exchange_trace_dir.as_deref(),
             ModelExchangeTraceOperation {
                 kind: "context_compression",
                 id: &compression_id,
@@ -2205,10 +2215,15 @@ impl ExecutionEngine {
         let compression_contract = self
             .session_manager
             .compression_contract_for_session(&session_id, scaffold.compression_contract_limit);
+        let model_exchange_trace_dir = self
+            .session_manager
+            .persistent_model_exchange_trace_dir(&session_id)
+            .await;
         let trace_config = prepare_model_exchange_trace_for_workspace(
             &session_id,
             &dialog_turn_id,
             context.workspace.as_ref(),
+            model_exchange_trace_dir.as_deref(),
             ModelExchangeTraceOperation {
                 kind: "context_compression",
                 id: &compression_id,
@@ -3011,6 +3026,10 @@ impl ExecutionEngine {
             let unlocked_collapsed_tools =
                 collect_product_unlocked_collapsed_tools(&messages, &collapsed_tools);
 
+            let model_exchange_trace_dir = self
+                .session_manager
+                .persistent_model_exchange_trace_dir(&context.session_id)
+                .await;
             let round_context = RoundContext {
                 session_id: context.session_id.clone(),
                 subagent_parent_info: context.subagent_parent_info.clone(),
@@ -3019,6 +3038,7 @@ impl ExecutionEngine {
                 round_number: round_index,
                 round_group_id: None,
                 workspace: context.workspace.clone(),
+                model_exchange_trace_dir,
                 available_tools: available_tools.clone(),
                 collapsed_tools: collapsed_tools.clone(),
                 unlocked_collapsed_tools,
