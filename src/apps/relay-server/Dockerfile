@@ -1,6 +1,6 @@
 # BitFun Relay Server — standalone Docker build.
 # Build context is relay-server root (Cargo.toml + src/), no workspace needed.
-FROM rust:1.85-slim AS builder
+FROM rust:1-slim AS builder
 
 WORKDIR /build
 
