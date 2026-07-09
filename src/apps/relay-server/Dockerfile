@@ -7,10 +7,10 @@ WORKDIR /build
 RUN apt-get update && apt-get install -y pkg-config libssl-dev build-essential && rm -rf /var/lib/apt/lists/*
 
 COPY Cargo.toml ./
-RUN mkdir -p src && echo 'fn main() { println!("placeholder"); }' > src/main.rs
+RUN mkdir -p src/bin && echo 'fn main() { println!("placeholder"); }' > src/main.rs && echo 'fn main() { println!("placeholder"); }' > src/bin/relay_admin.rs
 RUN cargo build --release 2>/dev/null || true
 
-RUN rm -rf src target/release/bitfun-relay-server target/release/deps/bitfun*
+RUN rm -rf src target/release/bitfun-relay-server target/release/relay-admin target/release/deps/bitfun*
 
 COPY src/ src/
 
@@ -22,6 +22,7 @@ RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/
 
 WORKDIR /app
 COPY --from=builder /build/target/release/bitfun-relay-server /app/bitfun-relay-server
+COPY --from=builder /build/target/release/relay-admin /app/relay-admin
 RUN mkdir -p /app/static
 
 ENV RELAY_PORT=9700

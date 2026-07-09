@@ -143,6 +143,81 @@ impl UserRow {
         Ok(row)
     }
 
+    /// List all usernames (admin tooling). Returns `(username, created_at)`.
+    pub async fn list_all(pool: &DbPool) -> Result<Vec<(String, String, i64)>> {
+        let rows = sqlx::query_as::<_, (String, String, i64)>(
+            "SELECT username, user_id, created_at FROM users ORDER BY created_at",
+        )
+        .fetch_all(pool)
+        .await
+        .map_err(|e| anyhow!("list users: {e}"))?;
+        Ok(rows)
+    }
+
+    /// Update credentials for an existing user (admin password reset).
+    /// Replaces salt, kdf_salt, password_hash, and wrapped_master_key.
+    pub async fn update_credentials(
+        pool: &DbPool,
+        user_id: &str,
+        salt: &str,
+        kdf_salt: &str,
+        argon2_params: &str,
+        password_hash: &str,
+        wrapped_master_key: &str,
+    ) -> Result<()> {
+        let now = Utc::now().timestamp();
+        sqlx::query(
+            "UPDATE users SET salt = ?, kdf_salt = ?, argon2_params = ?, \
+             password_hash = ?, wrapped_master_key = ?, failed_attempts = 0, \
+             locked_until = 0, updated_at = ? WHERE user_id = ?",
+        )
+        .bind(salt)
+        .bind(kdf_salt)
+        .bind(argon2_params)
+        .bind(password_hash)
+        .bind(wrapped_master_key)
+        .bind(now)
+        .bind(user_id)
+        .execute(pool)
+        .await
+        .map_err(|e| anyhow!("update credentials: {e}"))?;
+        Ok(())
+    }
+
+    /// Permanently delete a user and all associated data (devices, tokens,
+    /// sync blobs).  Cascading deletes handle FK-linked rows.
+    pub async fn delete(pool: &DbPool, user_id: &str) -> Result<()> {
+        // Clean up sync tables first (no FK cascade configured on them).
+        sqlx::query("DELETE FROM sync_sessions WHERE user_id = ?")
+            .bind(user_id)
+            .execute(pool)
+            .await
+            .map_err(|e| anyhow!("delete sync_sessions: {e}"))?;
+        sqlx::query("DELETE FROM sync_settings WHERE user_id = ?")
+            .bind(user_id)
+            .execute(pool)
+            .await
+            .map_err(|e| anyhow!("delete sync_settings: {e}"))?;
+        // auth_tokens and devices have REFERENCES users(user_id) but SQLite
+        // doesn't cascade by default, so clean them up explicitly.
+        sqlx::query("DELETE FROM auth_tokens WHERE user_id = ?")
+            .bind(user_id)
+            .execute(pool)
+            .await
+            .map_err(|e| anyhow!("delete auth_tokens: {e}"))?;
+        sqlx::query("DELETE FROM devices WHERE user_id = ?")
+            .bind(user_id)
+            .execute(pool)
+            .await
+            .map_err(|e| anyhow!("delete devices: {e}"))?;
+        sqlx::query("DELETE FROM users WHERE user_id = ?")
+            .bind(user_id)
+            .execute(pool)
+            .await
+            .map_err(|e| anyhow!("delete user: {e}"))?;
+        Ok(())
+    }
+
     /// Increment the failed-attempt counter and apply an exponential-backoff
     /// lockout once the threshold is reached. Returns the new `locked_until`
     /// timestamp (0 when not locked).

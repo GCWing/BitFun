@@ -9,6 +9,7 @@
 //!   - The relay forwards encrypted payloads without inspection
 //!   - Per-room mobile-web static files are managed via `WebAssetStore`
 
+pub mod admin;
 pub mod db;
 pub mod relay;
 pub mod routes;

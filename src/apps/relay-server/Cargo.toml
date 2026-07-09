@@ -13,6 +13,10 @@ path = "src/lib.rs"
 name = "bitfun-relay-server"
 path = "src/main.rs"
 
+[[bin]]
+name = "relay-admin"
+path = "src/bin/relay_admin.rs"
+
 [dependencies]
 # NOTE: Dependencies are intentionally inlined rather than inherited from the
 # workspace so that this crate can be built standalone inside its Docker
@@ -51,3 +55,13 @@ sha2 = "0.10"
 # self-contained (no system libsqlite3 needed).
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "sqlite", "macros"] }
 libsqlite3-sys = { version = "0.30", features = ["bundled"] }
+
+# Crypto — used only by the `relay-admin` provisioning tool to derive KEK /
+# password hashes and wrap the master key *before* writing to the DB.
+# The relay server runtime itself never touches these crates.
+argon2 = "0.5"
+aes-gcm = "0.10"
+
+# CLI parsing for the admin tool
+clap = { version = "4", features = ["derive", "env"] }
+rpassword = "7"
