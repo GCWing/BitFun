@@ -9,6 +9,7 @@
 //!   - The relay forwards encrypted payloads without inspection
 //!   - Per-room mobile-web static files are managed via `WebAssetStore`
 
+pub mod db;
 pub mod relay;
 pub mod routes;
 
@@ -234,16 +235,25 @@ pub fn build_relay_router(
     room_manager: Arc<RoomManager>,
     asset_store: Arc<dyn WebAssetStore>,
     start_time: std::time::Instant,
+    db: Option<std::sync::Arc<crate::db::DbPool>>,
 ) -> Router {
     let state = AppState {
         room_manager,
         start_time,
         asset_store,
+        db,
+        login_rate_limiter: std::sync::Arc::new(crate::routes::auth::LoginRateLimiter::new()),
     };
 
     Router::new()
         .route("/health", get(routes::api::health_check))
         .route("/api/info", get(routes::api::server_info))
+        .route("/api/auth/register", post(routes::auth::register))
+        .route(
+            "/api/auth/login/challenge",
+            post(routes::auth::login_challenge),
+        )
+        .route("/api/auth/login", post(routes::auth::login))
         .route("/api/rooms/{room_id}/pair", post(routes::api::pair))
         .route(
             "/api/rooms/{room_id}/command",

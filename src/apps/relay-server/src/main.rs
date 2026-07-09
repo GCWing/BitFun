@@ -37,7 +37,23 @@ async fn main() -> anyhow::Result<()> {
     });
 
     let start_time = std::time::Instant::now();
-    let mut app = build_relay_router(room_manager, asset_store, start_time);
+
+    let db = if let Some(path) = &cfg.db_path {
+        match bitfun_relay_server::db::connect(path).await {
+            Ok(pool) => Some(Arc::new(pool)),
+            Err(e) => {
+                tracing::error!(
+                    "Failed to init account database at {path}: {e}; account features disabled"
+                );
+                None
+            }
+        }
+    } else {
+        info!("RELAY_DB_PATH not set — account features disabled (pure relay mode)");
+        None
+    };
+
+    let mut app = build_relay_router(room_manager, asset_store, start_time, db);
 
     if let Some(static_dir) = &cfg.static_dir {
         info!("Serving static files from: {static_dir}");

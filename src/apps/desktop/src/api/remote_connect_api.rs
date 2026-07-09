@@ -2,8 +2,8 @@
 
 use bitfun_core::service::remote_connect::{
     bot::{self, weixin, BotConfig},
-    lan, ConnectionMethod, ConnectionResult, PairingState, RemoteConnectConfig,
-    RemoteConnectService,
+    lan, AccountClient, AccountSession, ConnectionMethod, ConnectionResult, DeviceIdentity,
+    PairingState, RemoteConnectConfig, RemoteConnectService,
 };
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -14,6 +14,14 @@ use tokio::sync::RwLock;
 
 static REMOTE_CONNECT_SERVICE: OnceLock<Arc<RwLock<Option<RemoteConnectService>>>> =
     OnceLock::new();
+
+/// In-memory account session (token + master key). The master key is never
+/// persisted to disk; it is lost on restart and re-derived on next login.
+static ACCOUNT_SESSION: OnceLock<Arc<RwLock<Option<AccountSession>>>> = OnceLock::new();
+
+fn get_account_session() -> &'static Arc<RwLock<Option<AccountSession>>> {
+    ACCOUNT_SESSION.get_or_init(|| Arc::new(RwLock::new(None)))
+}
 
 /// Tauri resource directory path for mobile-web, set during app setup.
 static MOBILE_WEB_RESOURCE_PATH: OnceLock<PathBuf> = OnceLock::new();
@@ -725,5 +733,94 @@ pub async fn remote_connect_set_bot_verbose_mode(verbose: bool) -> Result<(), St
     data.verbose_mode = verbose;
     bot::save_bot_persistence(&data);
     log::info!("Saved bot verbose_mode={} to persistence", verbose);
+    Ok(())
+}
+
+// ── Account commands ────────────────────────────────────────────────────
+
+/// Result returned to the frontend after a successful register/login.
+/// The master key is deliberately NOT included — it stays in Rust memory.
+#[derive(Serialize, Deserialize, Clone)]
+pub struct AccountLoginResult {
+    pub token: String,
+    pub user_id: String,
+}
+
+/// Current account login status (no secrets exposed).
+#[derive(Serialize, Deserialize)]
+pub struct AccountStatus {
+    pub logged_in: bool,
+    pub user_id: Option<String>,
+}
+
+/// Request payload for register/login (matches the frontend `request` wrapper).
+#[derive(Deserialize)]
+pub struct AccountAuthRequest {
+    pub relay_url: String,
+    pub username: String,
+    pub password: String,
+}
+
+fn current_device_identity() -> Result<DeviceIdentity, String> {
+    DeviceIdentity::from_current_machine().map_err(|e| format!("detect device: {e}"))
+}
+
+#[tauri::command]
+pub async fn account_register(request: AccountAuthRequest) -> Result<AccountLoginResult, String> {
+    let device = current_device_identity()?;
+    let client = AccountClient::new();
+    let session = client
+        .register(
+            &request.relay_url,
+            &request.username,
+            &request.password,
+            &device,
+        )
+        .await
+        .map_err(|e| format!("{e}"))?;
+    let result = AccountLoginResult {
+        token: session.token.clone(),
+        user_id: session.user_id.clone(),
+    };
+    *get_account_session().write().await = Some(session);
+    log::info!("Account registered and logged in: {}", result.user_id);
+    Ok(result)
+}
+
+#[tauri::command]
+pub async fn account_login(request: AccountAuthRequest) -> Result<AccountLoginResult, String> {
+    let device = current_device_identity()?;
+    let client = AccountClient::new();
+    let session = client
+        .login(
+            &request.relay_url,
+            &request.username,
+            &request.password,
+            &device,
+        )
+        .await
+        .map_err(|e| format!("{e}"))?;
+    let result = AccountLoginResult {
+        token: session.token.clone(),
+        user_id: session.user_id.clone(),
+    };
+    *get_account_session().write().await = Some(session);
+    log::info!("Account logged in: {}", result.user_id);
+    Ok(result)
+}
+
+#[tauri::command]
+pub async fn account_status() -> Result<AccountStatus, String> {
+    let guard = get_account_session().read().await;
+    Ok(AccountStatus {
+        logged_in: guard.is_some(),
+        user_id: guard.as_ref().map(|s| s.user_id.clone()),
+    })
+}
+
+#[tauri::command]
+pub async fn account_logout() -> Result<(), String> {
+    *get_account_session().write().await = None;
+    log::info!("Account logged out");
     Ok(())
 }

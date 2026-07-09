@@ -43,3 +43,11 @@ dashmap = "6"
 rand = "0.8"
 base64 = "0.22"
 sha2 = "0.10"
+
+# Account storage (SQLite). The relay stays zero-knowledge: it only stores
+# encrypted blobs and password-derived hashes; it never holds a master key.
+# libsqlite3-sys is pinned to 0.30 to match the workspace's rusqlite 0.32 and
+# avoid duplicate native `sqlite3` links; `bundled` keeps the Docker build
+# self-contained (no system libsqlite3 needed).
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "sqlite", "macros"] }
+libsqlite3-sys = { version = "0.30", features = ["bundled"] }

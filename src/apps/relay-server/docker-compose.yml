@@ -12,9 +12,11 @@ services:
       - RELAY_STATIC_DIR=/app/static
       - RELAY_ROOM_WEB_DIR=/app/room-web
       - RELAY_ROOM_TTL=3600
+      - RELAY_DB_PATH=/app/data/bitfun_relay.db
     volumes:
       - ./static:/app/static:ro
       - room-web:/app/room-web
+      - relay-db:/app/data
 
   # Optional: Caddy reverse proxy for automatic HTTPS.
   # Uncomment if you need HTTPS / domain-based access.
@@ -34,5 +36,6 @@ services:
 
 volumes:
   room-web:
+  relay-db:
   # caddy-data:
   # caddy-config:

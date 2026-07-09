@@ -6,7 +6,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 import { Modal, Button, Input, Alert } from '@/component-library';
-import { User, Lock, Server, LogIn } from 'lucide-react';
+import { User, Lock, Server, LogIn, UserPlus } from 'lucide-react';
+import { remoteConnectAPI } from '@/infrastructure/api/service-api/RemoteConnectAPI';
+import { useNotification } from '@/shared/notification-system';
 import './AccountLoginDialog.scss';
 
 interface AccountLoginDialogProps {
@@ -19,11 +21,13 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
   onClose,
 }) => {
   const { t } = useI18n('common');
+  const { success } = useNotification();
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [authServer, setAuthServer] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!isOpen) {
@@ -31,17 +35,48 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
       setPassword('');
       setAuthServer('');
       setError(null);
+      setLoading(false);
     }
   }, [isOpen]);
 
-  const handleLogin = useCallback(() => {
+  const validate = useCallback(() => {
     if (!username.trim() || !password.trim() || !authServer.trim()) {
       setError(t('accountLogin.emptyFields'));
-      return;
+      return false;
     }
     setError(null);
-    onClose();
-  }, [username, password, authServer, t, onClose]);
+    return true;
+  }, [username, password, authServer, t]);
+
+  const handleLogin = useCallback(async () => {
+    if (!validate()) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await remoteConnectAPI.accountLogin(authServer.trim(), username.trim(), password);
+      success(t('accountLogin.loginSuccess', { user_id: result.user_id }));
+      onClose();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
+  }, [validate, authServer, username, password, success, t, onClose]);
+
+  const handleRegister = useCallback(async () => {
+    if (!validate()) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await remoteConnectAPI.accountRegister(authServer.trim(), username.trim(), password);
+      success(t('accountLogin.registerSuccess', { user_id: result.user_id }));
+      onClose();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
+  }, [validate, authServer, username, password, success, t, onClose]);
 
   return (
     <Modal
@@ -77,6 +112,7 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
                 placeholder=""
                 prefix={<User size={16} />}
                 size="medium"
+                disabled={loading}
               />
             </div>
             <div className="account-login-dialog__field">
@@ -88,6 +124,7 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
                 placeholder=""
                 prefix={<Lock size={16} />}
                 size="medium"
+                disabled={loading}
               />
             </div>
             <div className="account-login-dialog__field">
@@ -99,6 +136,7 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
                 placeholder={t('accountLogin.authServerPlaceholder')}
                 prefix={<Server size={16} />}
                 size="medium"
+                disabled={loading}
               />
             </div>
           </div>
@@ -109,16 +147,27 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
             variant="secondary"
             size="small"
             onClick={onClose}
+            disabled={loading}
           >
             {t('accountLogin.cancel')}
+          </Button>
+          <Button
+            variant="secondary"
+            size="small"
+            onClick={handleRegister}
+            disabled={loading}
+          >
+            <UserPlus size={14} />
+            {t('accountLogin.register')}
           </Button>
           <Button
             variant="primary"
             size="small"
             onClick={handleLogin}
+            disabled={loading}
           >
             <LogIn size={14} />
-            {t('accountLogin.login')}
+            {loading ? t('accountLogin.processing') : t('accountLogin.login')}
           </Button>
         </div>
       </div>

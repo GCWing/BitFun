@@ -13,6 +13,9 @@ pub struct RelayConfig {
     /// Directory where per-room uploaded mobile-web files are stored.
     pub room_web_dir: String,
     pub cors_allow_origins: Vec<String>,
+    /// Path to the SQLite database file used for account storage.
+    /// When None, account features are disabled (relay acts as pure relay only).
+    pub db_path: Option<String>,
 }
 
 impl Default for RelayConfig {
@@ -25,6 +28,7 @@ impl Default for RelayConfig {
             static_dir: None,
             room_web_dir: "/tmp/bitfun-room-web".to_string(),
             cors_allow_origins: vec!["*".to_string()],
+            db_path: None,
         }
     }
 }
@@ -46,6 +50,13 @@ impl RelayConfig {
         if let Ok(ttl) = std::env::var("RELAY_ROOM_TTL") {
             if let Ok(t) = ttl.parse() {
                 cfg.room_ttl_secs = t;
+            }
+        }
+        if let Ok(path) = std::env::var("RELAY_DB_PATH") {
+            if path.is_empty() {
+                cfg.db_path = None;
+            } else {
+                cfg.db_path = Some(path);
             }
         }
         cfg

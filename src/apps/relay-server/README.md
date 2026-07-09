@@ -9,6 +9,7 @@ WebSocket relay server for BitFun Remote Connect. It bridges desktop (WebSocket)
 - Correlation-based HTTP-to-WebSocket request-response matching
 - Per-room mobile-web static file upload and serving
 - Heartbeat-based connection management with configurable room TTL
+- Optional zero-knowledge account storage (E2E encrypted — the server never sees passwords or master keys)
 - Docker deployment support with optional Caddy reverse proxy
 
 ## Quick Start
@@ -93,6 +94,7 @@ RELAY_PORT=9700 ./target/release/bitfun-relay-server
 | `RELAY_STATIC_DIR` | _(none)_ | Path to mobile web static files fallback SPA. When unset, no fallback static files are served. Docker Compose sets this to `/app/static`. |
 | `RELAY_ROOM_WEB_DIR` | `/tmp/bitfun-room-web` | Directory for per-room uploaded mobile-web files. Docker Compose uses a named volume mounted at `/app/room-web`. |
 | `RELAY_ROOM_TTL` | `3600` | Room TTL in seconds (0 = no expiry) |
+| `RELAY_DB_PATH` | _(none)_ | SQLite database path for account storage. When unset, the relay runs in pure-relay mode with no account features. Set to a persistent path (e.g. `/app/data/bitfun_relay.db`) to enable account login, register, and (future) cross-device sync. The server stays zero-knowledge: it only stores Argon2id password hashes and AES-GCM-wrapped master keys — never plaintext passwords or master keys. |
 
 ## API Endpoints
 
@@ -102,6 +104,16 @@ RELAY_PORT=9700 ./target/release/bitfun-relay-server
 |----------|--------|-------------|
 | `/health` | GET | Health check (returns status, version, uptime, room and connection counts) |
 | `/api/info` | GET | Server info (name, version, protocol version) |
+
+### Account (optional — requires `RELAY_DB_PATH`)
+
+Zero-knowledge authentication. Clients derive an Argon2id KEK locally and send only password hashes and AES-GCM-wrapped master keys; the server never sees plaintext passwords or master keys. Brute-force protection: per-account exponential-backoff lockout + per-IP sliding-window rate limit.
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/auth/register` | POST | Create an account + first device; returns `{ token, user_id }` |
+| `/api/auth/login/challenge` | POST | Fetch KDF params + wrapped master key for local derivation |
+| `/api/auth/login` | POST | Verify password hash and issue a token; returns `{ token, user_id }` |
 
 ### Room Operations (Mobile HTTP → Desktop WS bridge)
 

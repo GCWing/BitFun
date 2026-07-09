@@ -34,6 +34,11 @@ pub mod relay_client {
     pub use bitfun_services_integrations::remote_connect::relay_client::*;
 }
 
+pub mod account {
+    pub use bitfun_services_integrations::remote_connect::account::*;
+}
+
+pub use account::{AccountClient, AccountSession, KdfParams};
 pub use device::DeviceIdentity;
 pub use encryption::{decrypt_from_base64, encrypt_to_base64, KeyPair};
 pub use pairing::{PairingProtocol, PairingState};

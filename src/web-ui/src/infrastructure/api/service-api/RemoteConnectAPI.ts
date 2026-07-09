@@ -84,6 +84,16 @@ export interface WeixinQrPollResponse {
   base_url: string | null;
 }
 
+export interface AccountLoginResult {
+  token: string;
+  user_id: string;
+}
+
+export interface AccountStatus {
+  logged_in: boolean;
+  user_id: string | null;
+}
+
 class RemoteConnectAPIService {
   private adapter = getTransportAdapter();
 
@@ -241,6 +251,46 @@ class RemoteConnectAPIService {
       await this.adapter.request<void>('remote_connect_set_bot_verbose_mode', { verbose });
     } catch (e) {
       log.error('setBotVerboseMode failed', e);
+      throw e;
+    }
+  }
+
+  async accountRegister(relayUrl: string, username: string, password: string): Promise<AccountLoginResult> {
+    try {
+      return await this.adapter.request<AccountLoginResult>('account_register', {
+        request: { relay_url: relayUrl, username, password },
+      });
+    } catch (e) {
+      log.error('accountRegister failed', e);
+      throw e;
+    }
+  }
+
+  async accountLogin(relayUrl: string, username: string, password: string): Promise<AccountLoginResult> {
+    try {
+      return await this.adapter.request<AccountLoginResult>('account_login', {
+        request: { relay_url: relayUrl, username, password },
+      });
+    } catch (e) {
+      log.error('accountLogin failed', e);
+      throw e;
+    }
+  }
+
+  async accountStatus(): Promise<AccountStatus> {
+    try {
+      return await this.adapter.request<AccountStatus>('account_status');
+    } catch (e) {
+      log.warn('accountStatus failed', e);
+      return { logged_in: false, user_id: null };
+    }
+  }
+
+  async accountLogout(): Promise<void> {
+    try {
+      await this.adapter.request<void>('account_logout');
+    } catch (e) {
+      log.error('accountLogout failed', e);
       throw e;
     }
   }

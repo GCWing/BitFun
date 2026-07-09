@@ -7,6 +7,7 @@
 //! assembly, concrete runtime hosts, and IM bot command routing that still needs
 //! session/runtime hosts stay in `bitfun-core` until their ports are explicit.
 
+pub mod account;
 pub mod bot;
 mod chat_projection;
 pub mod device;

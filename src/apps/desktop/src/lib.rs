@@ -1180,6 +1180,11 @@ pub async fn run() {
             api::remote_connect_api::remote_connect_weixin_qr_poll,
             api::remote_connect_api::remote_connect_get_bot_verbose_mode,
             api::remote_connect_api::remote_connect_set_bot_verbose_mode,
+            // Account API
+            api::remote_connect_api::account_register,
+            api::remote_connect_api::account_login,
+            api::remote_connect_api::account_status,
+            api::remote_connect_api::account_logout,
             // MiniApp API
             api::miniapp_api::list_miniapps,
             api::miniapp_api::get_miniapp,
