@@ -766,28 +766,6 @@ fn current_device_identity() -> Result<DeviceIdentity, String> {
 }
 
 #[tauri::command]
-pub async fn account_register(request: AccountAuthRequest) -> Result<AccountLoginResult, String> {
-    let device = current_device_identity()?;
-    let client = AccountClient::new();
-    let session = client
-        .register(
-            &request.relay_url,
-            &request.username,
-            &request.password,
-            &device,
-        )
-        .await
-        .map_err(|e| format!("{e}"))?;
-    let result = AccountLoginResult {
-        token: session.token.clone(),
-        user_id: session.user_id.clone(),
-    };
-    *get_account_session().write().await = Some(session);
-    log::info!("Account registered and logged in: {}", result.user_id);
-    Ok(result)
-}
-
-#[tauri::command]
 pub async fn account_login(request: AccountAuthRequest) -> Result<AccountLoginResult, String> {
     let device = current_device_identity()?;
     let client = AccountClient::new();

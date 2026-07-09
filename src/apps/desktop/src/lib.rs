@@ -1181,7 +1181,6 @@ pub async fn run() {
             api::remote_connect_api::remote_connect_get_bot_verbose_mode,
             api::remote_connect_api::remote_connect_set_bot_verbose_mode,
             // Account API
-            api::remote_connect_api::account_register,
             api::remote_connect_api::account_login,
             api::remote_connect_api::account_status,
             api::remote_connect_api::account_logout,

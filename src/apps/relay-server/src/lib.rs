@@ -248,7 +248,6 @@ pub fn build_relay_router(
     Router::new()
         .route("/health", get(routes::api::health_check))
         .route("/api/info", get(routes::api::server_info))
-        .route("/api/auth/register", post(routes::auth::register))
         .route(
             "/api/auth/login/challenge",
             post(routes::auth::login_challenge),

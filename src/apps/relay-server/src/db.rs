@@ -76,6 +76,10 @@ pub struct UserRow {
 }
 
 impl UserRow {
+    /// Insert a new user row. Not exposed via HTTP — accounts are provisioned
+    /// out-of-band (e.g. an admin import tool) so the relay never sees a
+    /// password. Kept as a DB primitive for that future tooling.
+    #[allow(dead_code)]
     pub async fn create(
         pool: &DbPool,
         user_id: &str,

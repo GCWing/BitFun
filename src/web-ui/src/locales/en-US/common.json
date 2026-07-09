@@ -473,9 +473,7 @@
     "login": "Log In",
     "cancel": "Cancel",
     "emptyFields": "Please fill in all fields",
-    "register": "Register",
     "loginSuccess": "Logged in: {{user_id}}",
-    "registerSuccess": "Registered: {{user_id}}",
     "processing": "Processing..."
   },
   "remoteConnect": {

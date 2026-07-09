@@ -6,7 +6,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 import { Modal, Button, Input, Alert } from '@/component-library';
-import { User, Lock, Server, LogIn, UserPlus } from 'lucide-react';
+import { User, Lock, Server, LogIn } from 'lucide-react';
 import { remoteConnectAPI } from '@/infrastructure/api/service-api/RemoteConnectAPI';
 import { useNotification } from '@/shared/notification-system';
 import './AccountLoginDialog.scss';
@@ -55,21 +55,6 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
     try {
       const result = await remoteConnectAPI.accountLogin(authServer.trim(), username.trim(), password);
       success(t('accountLogin.loginSuccess', { user_id: result.user_id }));
-      onClose();
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setLoading(false);
-    }
-  }, [validate, authServer, username, password, success, t, onClose]);
-
-  const handleRegister = useCallback(async () => {
-    if (!validate()) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await remoteConnectAPI.accountRegister(authServer.trim(), username.trim(), password);
-      success(t('accountLogin.registerSuccess', { user_id: result.user_id }));
       onClose();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
@@ -150,15 +135,6 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
             disabled={loading}
           >
             {t('accountLogin.cancel')}
-          </Button>
-          <Button
-            variant="secondary"
-            size="small"
-            onClick={handleRegister}
-            disabled={loading}
-          >
-            <UserPlus size={14} />
-            {t('accountLogin.register')}
           </Button>
           <Button
             variant="primary"

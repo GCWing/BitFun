@@ -473,9 +473,7 @@
     "login": "登录",
     "cancel": "取消",
     "emptyFields": "请填写所有字段",
-    "register": "注册",
     "loginSuccess": "登录成功：{{user_id}}",
-    "registerSuccess": "注册成功：{{user_id}}",
     "processing": "处理中..."
   },
   "remoteConnect": {

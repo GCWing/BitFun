@@ -255,17 +255,6 @@ class RemoteConnectAPIService {
     }
   }
 
-  async accountRegister(relayUrl: string, username: string, password: string): Promise<AccountLoginResult> {
-    try {
-      return await this.adapter.request<AccountLoginResult>('account_register', {
-        request: { relay_url: relayUrl, username, password },
-      });
-    } catch (e) {
-      log.error('accountRegister failed', e);
-      throw e;
-    }
-  }
-
   async accountLogin(relayUrl: string, username: string, password: string): Promise<AccountLoginResult> {
     try {
       return await this.adapter.request<AccountLoginResult>('account_login', {

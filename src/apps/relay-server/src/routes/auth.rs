@@ -79,18 +79,6 @@ fn client_ip(headers: &HeaderMap) -> String {
 
 // ── Request / response types ────────────────────────────────────────────
 
-#[derive(Deserialize)]
-pub struct RegisterRequest {
-    pub username: String,
-    pub salt: String,
-    pub kdf_salt: String,
-    pub argon2_params: String,
-    pub password_hash: String,
-    pub wrapped_master_key: String,
-    pub device_id: String,
-    pub device_name: String,
-}
-
 #[derive(Serialize)]
 pub struct AuthResponse {
     pub token: String,
@@ -136,68 +124,6 @@ fn err(error: &str, status: StatusCode) -> (StatusCode, Json<ErrorResponse>) {
 }
 
 // ── Handlers ────────────────────────────────────────────────────────────
-
-/// `POST /api/auth/register` — create a new account + first device.
-pub async fn register(
-    State(state): State<AppState>,
-    Json(body): Json<RegisterRequest>,
-) -> Result<Json<AuthResponse>, (StatusCode, Json<ErrorResponse>)> {
-    let Some(db) = state.db.as_ref() else {
-        return Err(err(
-            "account features disabled on this relay",
-            StatusCode::NOT_IMPLEMENTED,
-        ));
-    };
-
-    if body.username.trim().is_empty()
-        || body.password_hash.is_empty()
-        || body.wrapped_master_key.is_empty()
-    {
-        return Err(err("missing required fields", StatusCode::BAD_REQUEST));
-    }
-
-    let user_id = uuid::Uuid::new_v4().to_string();
-
-    if let Err(e) = UserRow::create(
-        db,
-        &user_id,
-        body.username.trim(),
-        &body.salt,
-        &body.kdf_salt,
-        &body.argon2_params,
-        &body.password_hash,
-        &body.wrapped_master_key,
-    )
-    .await
-    {
-        // UNIQUE constraint failure → username already exists
-        let msg = e.to_string();
-        if msg.contains("UNIQUE") {
-            return Err(err("username already exists", StatusCode::CONFLICT));
-        }
-        tracing::error!("register: failed to create user: {e}");
-        return Err(err("internal error", StatusCode::INTERNAL_SERVER_ERROR));
-    }
-
-    if let Err(e) = DeviceRow::upsert(db, &body.device_id, &user_id, &body.device_name, None).await
-    {
-        tracing::error!("register: failed to upsert device: {e}");
-        return Err(err("internal error", StatusCode::INTERNAL_SERVER_ERROR));
-    }
-
-    let token = AuthToken::create(db, &user_id, &body.device_id)
-        .await
-        .map_err(|e| {
-            tracing::error!("register: failed to create token: {e}");
-            err("internal error", StatusCode::INTERNAL_SERVER_ERROR)
-        })?;
-
-    tracing::info!("Account registered: user_id={user_id}");
-    Ok(Json(AuthResponse {
-        token: token.token,
-        user_id,
-    }))
-}
 
 /// `POST /api/auth/login/challenge` — fetch KDF params + wrapped master key
 /// so the client can derive the KEK locally and attempt decryption.

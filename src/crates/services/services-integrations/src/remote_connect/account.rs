@@ -8,12 +8,16 @@
 use anyhow::{anyhow, Result};
 use argon2::{Algorithm, Argon2, Params, Version};
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
+#[cfg(test)]
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 
 use crate::remote_connect::device::DeviceIdentity;
 use crate::remote_connect::encryption::{decrypt, encrypt};
 
+/// Salt length for provisioning (client-side account-blob export). Only used
+/// by tests until that tooling lands.
+#[allow(dead_code)]
 const SALT_LEN: usize = 16;
 const MASTER_KEY_LEN: usize = 32;
 const NONCE_LEN: usize = 12;
@@ -83,6 +87,9 @@ fn derive_password_hash(password: &str, kdf_salt: &[u8], params: &KdfParams) -> 
 }
 
 /// Pack wrapped ciphertext + nonce into a single storable string: `"ct.nonce"`.
+/// Used by the provisioning path (client-side account-blob export for admin
+/// import); not needed for login, hence `dead_code` until that tooling lands.
+#[allow(dead_code)]
 fn pack_wrapped(ct_b64: &str, nonce_b64: &str) -> String {
     format!("{ct_b64}.{nonce_b64}")
 }
@@ -96,6 +103,8 @@ fn unpack_wrapped(packed: &str) -> Result<(String, String)> {
 }
 
 /// Wrap (encrypt) the master key with the KEK → `"ct.nonce"`.
+/// Provisioning helper (see `pack_wrapped`); unused by login.
+#[allow(dead_code)]
 fn wrap_master_key(
     kek: &[u8; MASTER_KEY_LEN],
     master_key: &[u8; MASTER_KEY_LEN],
@@ -191,55 +200,6 @@ impl AccountClient {
             }
             Err(_) => anyhow!("relay returned HTTP {status}"),
         }
-    }
-
-    /// Register a new account. Derives keys locally, sends only non-secret
-    /// artifacts, and returns the session with the freshly-generated master key.
-    pub async fn register(
-        &self,
-        relay_url: &str,
-        username: &str,
-        password: &str,
-        device: &DeviceIdentity,
-    ) -> Result<AccountSession> {
-        let params = KdfParams::default();
-        let mut salt = [0u8; SALT_LEN];
-        let mut kdf_salt = [0u8; SALT_LEN];
-        let mut master_key = [0u8; MASTER_KEY_LEN];
-        rand::thread_rng().fill_bytes(&mut salt);
-        rand::thread_rng().fill_bytes(&mut kdf_salt);
-        rand::thread_rng().fill_bytes(&mut master_key);
-
-        let kek = derive_kek(password, &salt, &params)?;
-        let password_hash = derive_password_hash(password, &kdf_salt, &params)?;
-        let wrapped_mk = wrap_master_key(&kek, &master_key)?;
-
-        let body = serde_json::json!({
-            "username": username,
-            "salt": BASE64.encode(salt),
-            "kdf_salt": BASE64.encode(kdf_salt),
-            "argon2_params": serde_json::to_string(&params)?,
-            "password_hash": password_hash,
-            "wrapped_master_key": wrapped_mk,
-            "device_id": device.device_id,
-            "device_name": device.device_name,
-        });
-
-        let resp = self
-            .http
-            .post(Self::endpoint(relay_url, "/api/auth/register"))
-            .json(&body)
-            .send()
-            .await?;
-        if !resp.status().is_success() {
-            return Err(Self::into_error(resp).await);
-        }
-        let auth: AuthResponse = resp.json().await?;
-        Ok(AccountSession {
-            token: auth.token,
-            user_id: auth.user_id,
-            master_key,
-        })
     }
 
     /// Log in to an existing account. Fetches the KDF challenge, derives the KEK

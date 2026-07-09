@@ -107,11 +107,10 @@ RELAY_PORT=9700 ./target/release/bitfun-relay-server
 
 ### Account (optional — requires `RELAY_DB_PATH`)
 
-Zero-knowledge authentication. Clients derive an Argon2id KEK locally and send only password hashes and AES-GCM-wrapped master keys; the server never sees plaintext passwords or master keys. Brute-force protection: per-account exponential-backoff lockout + per-IP sliding-window rate limit.
+Zero-knowledge authentication. Clients derive an Argon2id KEK locally and send only password hashes; the server never sees plaintext passwords or master keys. Brute-force protection: per-account exponential-backoff lockout + per-IP sliding-window rate limit. Accounts are **provisioned out-of-band** (no public registration endpoint) so the relay never handles a password.
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/api/auth/register` | POST | Create an account + first device; returns `{ token, user_id }` |
 | `/api/auth/login/challenge` | POST | Fetch KDF params + wrapped master key for local derivation |
 | `/api/auth/login` | POST | Verify password hash and issue a token; returns `{ token, user_id }` |
 

@@ -473,9 +473,7 @@
     "login": "登入",
     "cancel": "取消",
     "emptyFields": "請填寫所有欄位",
-    "register": "註冊",
     "loginSuccess": "登入成功：{{user_id}}",
-    "registerSuccess": "註冊成功：{{user_id}}",
     "processing": "處理中..."
   },
   "remoteConnect": {
