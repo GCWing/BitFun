@@ -145,7 +145,7 @@ interface ExtensionCompatibilityView {
 | 风险 | 保护方式 |
 |---|---|
 | OpenCode 接口反向污染内部模型 | 内部只依赖 BitFun Plugin Runtime Host、Tool ABI、Event Manifest、Permission/Effect、插件诊断和插件效果候选 |
-| OpenCode 配置反向成为主模型 | 配置导入只生成 BitFun 插件来源、manifest、hash、诊断和信任事实；运行时不直接消费原始配置 |
+| OpenCode 配置反向成为主模型 | 配置导入只生成 BitFun 插件来源、manifest、hash、诊断和信任快照；运行时不直接消费原始配置 |
 | 外部 OpenCode CLI 可用性污染 P0 | P0 插件加载不检查用户是否安装 `opencode`；外部 CLI/ACP 互操作独立降级 |
 | 插件越权授权 | hook 只返回 candidate；最终安全决策和安全审计 payload 由 Security Boundary 生成，审计事实落盘由 Agent Kernel 维护 |
 | 工具复写绕过内置工具策略 | 复写按项目执行域生效，重新经过 Tool ABI、权限声明和安全边界 |

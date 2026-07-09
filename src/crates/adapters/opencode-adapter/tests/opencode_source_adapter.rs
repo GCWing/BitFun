@@ -1,10 +1,11 @@
 use bitfun_opencode_adapter::load_opencode_workspace_adapter;
 use bitfun_plugin_runtime_host::PluginRuntimeHost;
 use bitfun_runtime_ports::{
-    PluginCapabilityRef, PluginDataClassification, PluginDispatchEnvelope, PluginOwnerKind,
-    PluginOwnerRef, PluginPayloadRedaction, PluginPayloadRef, PluginRuntimeAvailability,
-    PluginRuntimeClient, PluginRuntimeEpochs, PluginRuntimeReadRequest,
-    PluginRuntimeUnavailableReason, PluginSourceKind, PluginStatusKind, PluginTrustLevel,
+    PluginCapabilityRef, PluginDataClassification, PluginDispatchEnvelope,
+    PluginEffectCandidatePayload, PluginOwnerKind, PluginOwnerRef, PluginPayloadRedaction,
+    PluginPayloadRef, PluginRuntimeAvailability, PluginRuntimeClient, PluginRuntimeEpochs,
+    PluginRuntimeReadRequest, PluginRuntimeUnavailableReason, PluginSourceKind, PluginSourceRef,
+    PluginStatusKind, PluginTrustLevel,
 };
 use std::{
     fs,
@@ -71,8 +72,9 @@ async fn discovers_opencode_sources_through_plugin_runtime_host() {
     let project = TempProject::new("read-model");
     project.write_opencode_fixture();
 
-    let adapter = load_opencode_workspace_adapter(project.path(), 1_720_000_001)
-        .expect("load OpenCode-compatible workspace adapter");
+    let adapter =
+        load_opencode_workspace_adapter(project.path(), 1_720_000_001, epochs().trust_epoch, &[])
+            .expect("load OpenCode-compatible workspace adapter");
     let host = PluginRuntimeHost::new(adapter);
 
     let response = host
@@ -131,8 +133,9 @@ async fn dispatch_for_discovered_opencode_source_remains_projection_only() {
     let project = TempProject::new("dispatch-model");
     project.write_opencode_fixture();
 
-    let adapter = load_opencode_workspace_adapter(project.path(), 1_720_000_001)
-        .expect("load OpenCode-compatible workspace adapter");
+    let adapter =
+        load_opencode_workspace_adapter(project.path(), 1_720_000_001, epochs().trust_epoch, &[])
+            .expect("load OpenCode-compatible workspace adapter");
     let host = PluginRuntimeHost::new(adapter);
     let read_response = host
         .read_plugins(read_request(vec![
@@ -168,6 +171,318 @@ async fn dispatch_for_discovered_opencode_source_remains_projection_only() {
 }
 
 #[tokio::test]
+async fn trusted_source_snapshot_enables_custom_tool_candidate_through_host() {
+    let project = TempProject::new("trusted-candidate");
+    project.write_opencode_fixture();
+
+    let discovery_adapter =
+        load_opencode_workspace_adapter(project.path(), 1_720_000_001, epochs().trust_epoch, &[])
+            .expect("load OpenCode-compatible workspace adapter");
+    let discovery_host = PluginRuntimeHost::new(discovery_adapter);
+    let discovery = discovery_host
+        .read_plugins(read_request(vec![
+            "opencode.local.workspace_tools".to_string()
+        ]))
+        .await
+        .expect("read local plugin source");
+    let discovered_source = discovery
+        .sources
+        .into_iter()
+        .find(|source| source.plugin_id == "opencode.local.workspace_tools")
+        .expect("local plugin source");
+
+    let source_trust_refs = vec![trust_ref_for_source(
+        &discovered_source,
+        PluginTrustLevel::Trusted,
+    )];
+    let adapter = load_opencode_workspace_adapter(
+        project.path(),
+        1_720_000_001,
+        epochs().trust_epoch,
+        &source_trust_refs,
+    )
+    .expect("load trusted OpenCode-compatible workspace adapter");
+    let host = PluginRuntimeHost::new(adapter);
+    let read_response = host
+        .read_plugins(read_request(vec![
+            "opencode.local.workspace_tools".to_string()
+        ]))
+        .await
+        .expect("read trusted local plugin source");
+    let trusted_source = read_response
+        .sources
+        .into_iter()
+        .find(|source| source.plugin_id == "opencode.local.workspace_tools")
+        .expect("trusted local plugin source");
+
+    assert_eq!(trusted_source.trust_level, PluginTrustLevel::Trusted);
+
+    let response = host
+        .dispatch(dispatch_envelope(trusted_source))
+        .await
+        .expect("trusted source should project custom tool candidate");
+
+    assert_eq!(response.effects.len(), 1);
+    assert!(response.diagnostics.is_empty());
+    assert_eq!(
+        response.plugin_statuses[0].status,
+        PluginStatusKind::ProjectionOnly
+    );
+    match &response.effects[0].payload {
+        PluginEffectCandidatePayload::ProviderCandidate {
+            provider_id,
+            tool_contract_id,
+        } => {
+            assert_eq!(
+                provider_id,
+                "opencode.local.workspace_tools.workspaceSummary"
+            );
+            assert_eq!(tool_contract_id, "opencode.custom-tool.v1");
+        }
+        other => panic!("expected provider candidate, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn mismatched_source_trust_ref_does_not_enable_candidate() {
+    let project = TempProject::new("mismatched-trust-fact");
+    project.write_opencode_fixture();
+
+    let discovery_adapter =
+        load_opencode_workspace_adapter(project.path(), 1_720_000_001, epochs().trust_epoch, &[])
+            .expect("load OpenCode-compatible workspace adapter");
+    let discovery_host = PluginRuntimeHost::new(discovery_adapter);
+    let discovery = discovery_host
+        .read_plugins(read_request(vec![
+            "opencode.local.workspace_tools".to_string()
+        ]))
+        .await
+        .expect("read local plugin source");
+    let discovered_source = discovery
+        .sources
+        .into_iter()
+        .find(|source| source.plugin_id == "opencode.local.workspace_tools")
+        .expect("local plugin source");
+    let mut mismatched_trust_ref =
+        trust_ref_for_source(&discovered_source, PluginTrustLevel::Trusted);
+    mismatched_trust_ref.content_hash = "sha256:stale".to_string();
+
+    let source_trust_refs = vec![mismatched_trust_ref];
+    let adapter = load_opencode_workspace_adapter(
+        project.path(),
+        1_720_000_001,
+        epochs().trust_epoch,
+        &source_trust_refs,
+    )
+    .expect("load OpenCode-compatible workspace adapter");
+    let host = PluginRuntimeHost::new(adapter);
+    let read_response = host
+        .read_plugins(read_request(vec![
+            "opencode.local.workspace_tools".to_string()
+        ]))
+        .await
+        .expect("read source after mismatched trust snapshot");
+    let source = read_response
+        .sources
+        .into_iter()
+        .find(|source| source.plugin_id == "opencode.local.workspace_tools")
+        .expect("local plugin source");
+
+    assert_eq!(source.trust_level, PluginTrustLevel::Unknown);
+
+    let response = host
+        .dispatch(dispatch_envelope(source))
+        .await
+        .expect("mismatched trust snapshot should keep dispatch readable");
+
+    assert!(response.effects.is_empty());
+    assert_eq!(
+        response.plugin_statuses[0].status,
+        PluginStatusKind::TrustRequired
+    );
+    assert!(response
+        .diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.code == "opencode.trust_required"));
+}
+
+#[tokio::test]
+async fn last_source_trust_ref_wins_for_duplicate_identity() {
+    let project = TempProject::new("latest-trust-fact");
+    project.write_opencode_fixture();
+
+    let discovery_adapter =
+        load_opencode_workspace_adapter(project.path(), 1_720_000_001, epochs().trust_epoch, &[])
+            .expect("load OpenCode-compatible workspace adapter");
+    let discovery_host = PluginRuntimeHost::new(discovery_adapter);
+    let discovery = discovery_host
+        .read_plugins(read_request(vec![
+            "opencode.local.workspace_tools".to_string()
+        ]))
+        .await
+        .expect("read local plugin source");
+    let discovered_source = discovery
+        .sources
+        .into_iter()
+        .find(|source| source.plugin_id == "opencode.local.workspace_tools")
+        .expect("local plugin source");
+    let old_trusted_ref = trust_ref_for_source(&discovered_source, PluginTrustLevel::Trusted);
+    let new_revoked_ref = trust_ref_for_source(&discovered_source, PluginTrustLevel::Revoked);
+
+    let source_trust_refs = vec![old_trusted_ref, new_revoked_ref];
+    let adapter = load_opencode_workspace_adapter(
+        project.path(),
+        1_720_000_001,
+        epochs().trust_epoch,
+        &source_trust_refs,
+    )
+    .expect("load OpenCode-compatible workspace adapter");
+    let host = PluginRuntimeHost::new(adapter);
+    let read_response = host
+        .read_plugins(read_request(vec![
+            "opencode.local.workspace_tools".to_string()
+        ]))
+        .await
+        .expect("read source after duplicate trust snapshots");
+    let source = read_response
+        .sources
+        .into_iter()
+        .find(|source| source.plugin_id == "opencode.local.workspace_tools")
+        .expect("local plugin source");
+
+    assert_eq!(source.trust_level, PluginTrustLevel::Revoked);
+    assert!(read_response.diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == "opencode.trust_ref_conflict"
+            && diagnostic.source.plugin_id == "opencode.local.workspace_tools"
+    }));
+
+    let response = host
+        .dispatch(dispatch_envelope(source))
+        .await
+        .expect("last revoked trust snapshot should keep dispatch readable");
+
+    assert!(response.effects.is_empty());
+    assert_eq!(
+        response.plugin_statuses[0].status,
+        PluginStatusKind::Disabled
+    );
+}
+
+#[tokio::test]
+async fn executable_plugin_source_is_not_evaluated_during_projection() {
+    let project = TempProject::new("non-executed-source");
+    project.write_opencode_config();
+    let marker = project.path().join("executed-marker.txt");
+    let marker_path = marker.to_string_lossy().replace('\\', "\\\\");
+    project.write_plugin(
+        "executable-plugin.ts",
+        &format!(
+            r#"
+import {{ writeFileSync }} from "node:fs"
+writeFileSync("{marker_path}", "executed")
+export const ExecutablePlugin = async () => ({{
+  tool: {{
+    sideEffectTool: tool({{
+      description: "Should only be discovered as a declaration",
+      args: {{}},
+      async execute() {{
+        writeFileSync("{marker_path}", "executed from tool")
+      }},
+    }}),
+  }},
+}})
+"#
+        ),
+    );
+
+    let adapter =
+        load_opencode_workspace_adapter(project.path(), 1_720_000_001, epochs().trust_epoch, &[])
+            .expect("load OpenCode-compatible workspace adapter");
+    let host = PluginRuntimeHost::new(adapter);
+    let response = host
+        .read_plugins(read_request(vec![
+            "opencode.local.executable_plugin".to_string()
+        ]))
+        .await
+        .expect("read executable-looking plugin source");
+
+    assert!(!marker.exists());
+    assert!(response
+        .sources
+        .iter()
+        .any(|source| source.plugin_id == "opencode.local.executable_plugin"));
+    assert!(response
+        .diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.code == "opencode.trust_required"));
+}
+
+#[tokio::test]
+async fn source_trust_epoch_mismatch_does_not_enable_candidate() {
+    let project = TempProject::new("trust-fact-epoch-mismatch");
+    project.write_opencode_fixture();
+
+    let discovery_adapter =
+        load_opencode_workspace_adapter(project.path(), 1_720_000_001, epochs().trust_epoch, &[])
+            .expect("load OpenCode-compatible workspace adapter");
+    let discovery_host = PluginRuntimeHost::new(discovery_adapter);
+    let discovery = discovery_host
+        .read_plugins(read_request(vec![
+            "opencode.local.workspace_tools".to_string()
+        ]))
+        .await
+        .expect("read local plugin source");
+    let discovered_source = discovery
+        .sources
+        .into_iter()
+        .find(|source| source.plugin_id == "opencode.local.workspace_tools")
+        .expect("local plugin source");
+    let stale_trust_ref = trust_ref_for_source(&discovered_source, PluginTrustLevel::Trusted);
+
+    let source_trust_refs = vec![stale_trust_ref];
+    let adapter = load_opencode_workspace_adapter(
+        project.path(),
+        1_720_000_001,
+        epochs().trust_epoch + 1,
+        &source_trust_refs,
+    )
+    .expect("load OpenCode-compatible workspace adapter");
+    let host = PluginRuntimeHost::new(adapter);
+    let read_response = host
+        .read_plugins(read_request(vec![
+            "opencode.local.workspace_tools".to_string()
+        ]))
+        .await
+        .expect("read source after stale trust epoch");
+    let source = read_response
+        .sources
+        .into_iter()
+        .find(|source| source.plugin_id == "opencode.local.workspace_tools")
+        .expect("local plugin source");
+
+    assert_eq!(source.trust_level, PluginTrustLevel::Unknown);
+    assert!(read_response
+        .diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.code == "opencode.trust_epoch_mismatch"));
+
+    let response = host
+        .dispatch(dispatch_envelope(source))
+        .await
+        .expect("stale trust epoch should keep dispatch readable");
+
+    assert!(response.effects.is_empty());
+    assert_eq!(
+        response.plugin_statuses[0].status,
+        PluginStatusKind::TrustRequired
+    );
+    assert!(response
+        .diagnostics
+        .iter()
+        .any(|diagnostic| diagnostic.code == "opencode.trust_epoch_mismatch"));
+}
+
+#[tokio::test]
 async fn invalid_local_plugin_reports_diagnostic_without_hiding_valid_sources() {
     let project = TempProject::new("invalid-local");
     project.write_opencode_fixture();
@@ -176,8 +491,9 @@ async fn invalid_local_plugin_reports_diagnostic_without_hiding_valid_sources() 
         "export const BrokenPlugin = async () => ({ name: 'broken' })",
     );
 
-    let adapter = load_opencode_workspace_adapter(project.path(), 1_720_000_001)
-        .expect("load OpenCode-compatible workspace adapter");
+    let adapter =
+        load_opencode_workspace_adapter(project.path(), 1_720_000_001, epochs().trust_epoch, &[])
+            .expect("load OpenCode-compatible workspace adapter");
     let host = PluginRuntimeHost::new(adapter);
     let response = host
         .read_plugins(read_request(Vec::new()))
@@ -229,8 +545,9 @@ export const EventPlugin = async () => ({
 "#,
     );
 
-    let adapter = load_opencode_workspace_adapter(project.path(), 1_720_000_001)
-        .expect("load OpenCode-compatible workspace adapter");
+    let adapter =
+        load_opencode_workspace_adapter(project.path(), 1_720_000_001, epochs().trust_epoch, &[])
+            .expect("load OpenCode-compatible workspace adapter");
     let host = PluginRuntimeHost::new(adapter);
     let response = host
         .read_plugins(read_request(Vec::new()))
@@ -257,8 +574,9 @@ async fn oversized_local_plugin_reports_diagnostic_without_reading_source() {
     let oversized_source = "x".repeat(1_048_577);
     project.write_plugin("large-plugin.ts", &oversized_source);
 
-    let adapter = load_opencode_workspace_adapter(project.path(), 1_720_000_001)
-        .expect("load OpenCode-compatible workspace adapter");
+    let adapter =
+        load_opencode_workspace_adapter(project.path(), 1_720_000_001, epochs().trust_epoch, &[])
+            .expect("load OpenCode-compatible workspace adapter");
     let host = PluginRuntimeHost::new(adapter);
     let response = host
         .read_plugins(read_request(Vec::new()))
@@ -321,6 +639,16 @@ fn dispatch_envelope(source: bitfun_runtime_ports::PluginSourceRef) -> PluginDis
             redaction: PluginPayloadRedaction::Partial,
             uri: Some("bitfun://payloads/payload-1".to_string()),
         }),
+    }
+}
+
+fn trust_ref_for_source(
+    source: &PluginSourceRef,
+    trust_level: PluginTrustLevel,
+) -> PluginSourceRef {
+    PluginSourceRef {
+        trust_level,
+        ..source.clone()
     }
 }
 

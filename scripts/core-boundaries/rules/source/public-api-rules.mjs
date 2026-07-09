@@ -70,8 +70,8 @@ export const pluginRuntimePublicApiEntries = [
   ].map((symbol) =>
     pluginRuntimeEntry(
       symbol,
-      'plugin permission, effect-preview, and candidate materialization',
-      'Plugin Runtime Host, tool ABI integration, and security-control candidate materialization',
+      'plugin permission, effect-preview, and provider handoff',
+      'Plugin Runtime Host, tool ABI integration, and security-control candidate validation',
       'runtime-ports candidate-effect contract tests and plugin-runtime-host permission/effect validation tests',
       contractSlices.bitfunPluginExtension,
     ),
@@ -157,11 +157,11 @@ function opencodeAdapterEntry(symbol, consumer) {
     consumer,
     verification:
       'opencode-adapter source adapter tests, PluginRuntimeHost integration path, and core-boundary public API budget checks',
-    p0: 'OpenCode-compatible P0-C.1 source discovery and diagnostics read model',
+    p0: 'OpenCode-compatible P0-C.1 source discovery/read model and P0-C.2 custom tool candidate mapping',
     contractSlice: contractSlices.opencodeAdapterBoundary,
     wireImpact: false,
     rationale:
-      'P0-C.1 needs one projection-only adapter factory for host-readable OpenCode-compatible sources without exposing ecosystem DTOs',
+      'P0-C needs one adapter factory for host-readable OpenCode-compatible sources; trust input reuses existing PluginSourceRef snapshots plus trust epoch instead of adding an ecosystem DTO',
     exit:
       'remove only if source discovery moves behind a reviewed product source registry with equivalent host tests',
   };
@@ -170,7 +170,7 @@ function opencodeAdapterEntry(symbol, consumer) {
 export const opencodeAdapterPublicApiEntries = [
   opencodeAdapterEntry(
     'load_opencode_workspace_adapter',
-    'PluginRuntimeHost::new integration tests and future product source loader host binding',
+    'PluginRuntimeHost::new integration tests with PluginSourceRef trust snapshots; production Product Assembly binding is out of scope for this PR',
   ),
 ];
 
@@ -190,7 +190,7 @@ export const publicApiAllowlistRules = [
   {
     path: 'src/crates/adapters/opencode-adapter/src/lib.rs',
     reason:
-      'OpenCode adapter public API must stay limited to projection-only source loading through the Plugin Runtime Host adapter boundary',
+      'OpenCode adapter public API must stay limited to source and candidate mapping through the Plugin Runtime Host adapter boundary',
     allowedSymbolEntries: opencodeAdapterPublicApiEntries,
   },
   {

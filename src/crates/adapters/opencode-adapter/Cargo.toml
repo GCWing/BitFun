@@ -3,7 +3,7 @@ name = "bitfun-opencode-adapter"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
-description = "Projection-only OpenCode-compatible source adapter for BitFun"
+description = "OpenCode-compatible source and candidate adapter for BitFun"
 
 [lib]
 name = "bitfun_opencode_adapter"

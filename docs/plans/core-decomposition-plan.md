@@ -22,7 +22,9 @@
 - Desktop、CLI、ACP 仍有路径通过 `bitfun-core/product-full` 获取完整产品能力；后续插件主线不能把该状态固化为新入口依赖。
 - 工具 ABI、事件清单、运行时服务、智能体运行时、产品能力和插件 `disabled` / `projection-only` 基础边界已存在。
 - `runtime-ports` 的插件主机 ABI 已有公开接口预算脚本；后续不能绕过预算新增插件、hook、event、UI 或生态兼容对象。
-- `opencode-adapter` 当前只提供 projection-only 来源发现适配器，不是生产插件运行时。
+- `opencode-adapter` 当前提供来源发现、诊断只读视图和受信任 custom tool 候选映射。
+- 信任输入复用既有 `PluginSourceRef` 来源快照，并由产品来源/策略侧提供统一信任 epoch；只有该 epoch 与本次 read/dispatch epoch 一致时才能进入受信任候选链路。
+- 本阶段只验证适配器到 Plugin Runtime Host 的候选链路，不包含生产组装入口，不执行 JS/TS 或外部 OpenCode CLI。
 
 ## 3. 当前差距
 
@@ -30,8 +32,8 @@
 |---|---|---|
 | 接口切面仍易混用 | 前后端线缆、插件扩展、host ABI 和生态适配容易互相穿透 | 以主架构文档的四个接口切面作为唯一口径，详细设计只补充归属和验证 |
 | 公开接口预算只覆盖部分源码 | 可以继续在文档或代码中声明无消费方对象 | 扩展公开接口预算元数据，要求每个插件公开符号声明接口切面、消费方和退场条件 |
-| 插件主机只完成受控边界 | 还不能证明 OpenCode-compatible 产品体验 | P0-B 只算主机边界；P0-C 才做来源发现、启用和最小候选效果消费 |
-| OpenCode 适配容易反向定义 BitFun | 可能形成 OpenCode 专用产品入口或内部模型 | OpenCode 只作为反腐层输入，输出 BitFun 来源、诊断、候选效果或 unsupported |
+| 插件主机只完成受控边界 | 还不能证明 OpenCode-compatible 产品体验 | P0-B 只算主机边界；P0-C 才做来源发现、启用和最小候选项消费 |
+| OpenCode 适配容易反向定义 BitFun | 可能形成 OpenCode 专用产品入口或内部模型 | OpenCode 只作为兼容适配输入，输出 BitFun 来源、诊断、候选项或 unsupported |
 | 部分 core / product-full 路径仍偏宽 | 新入口可能继续依赖旧大门面 | 只迁移与插件主线或关键产品路径直接相关的归属模块，并同步删除或显著简化旧路径 |
 
 ## 4. 后续 PR 阶段
@@ -48,9 +50,9 @@
 
 验收：
 
-- 没有新增稳定 Rust 接口。
+- 没有新增稳定 Rust 符号；既有公开入口签名变更必须同步公开接口预算和主机路径测试。
 - `node --test scripts/check-core-boundaries.test.mjs` 和 `node scripts/check-core-boundaries.mjs` 通过。
-- 文档中 OpenCode-compatible P0 只保留配置导入、custom tool candidate、permission candidate、事件清单受控订阅和明确 unsupported 的最小路径。
+- 文档中 OpenCode-compatible P0 只保留配置导入、custom tool 候选、权限候选、事件清单受控订阅和明确 unsupported 的最小路径。
 
 ### 阶段 B：插件运行时主机最小边界
 
@@ -61,7 +63,7 @@
 - `PluginRuntimeClient` 只保留 availability、read_plugins、dispatch。
 - 主机公开方法只保留 `new`、`restart`、`dispose_project`。
 - Adapter trait 只保留 adapter_id、read_plugins、dispatch。
-- read/dispatch 响应只能返回候选效果、诊断、隔离和状态只读视图。
+- read/dispatch 响应只能返回候选项、诊断、隔离和状态只读视图。
 - `HostRestarted` 是 P0-B 唯一清除条件。
 
 验收：
@@ -89,26 +91,29 @@
 
 ### 阶段 P0-C.2：OpenCode custom tool 最小候选链路
 
-目标：证明一个 OpenCode-compatible custom tool 可以映射为 BitFun 工具候选，但最终物化仍由工具 ABI、权限门禁和归属模块完成。
+目标：证明一个 OpenCode-compatible custom tool 可以映射为 BitFun 工具候选；是否进入最终工具链路，仍由工具 ABI、权限门禁和归属模块决定。
 
 范围：
 
-- custom tool 只映射为 provider candidate。
+- custom tool 只映射为提供方候选（`ProviderCandidate`）。
 - 权限提示展示插件 id、来源、hash、能力、副作用、目标、风险、归属模块和审计/关联 id。
 - 拒绝、超时、policy-denied 或主机失败不得写内核状态、审计成功或工具结果。
 
 验收：
 
-- 覆盖确认、拒绝、无副作用、隔离和诊断路径。
+- 可信 OpenCode custom tool 在 `PluginRuntimeHost` dispatch 路径映射为 `ProviderCandidate`，带来源、hash、能力、目标、风险、归属和审计信息。
+- 未建立信任的来源只返回信任诊断和只读状态，不进入 custom tool 候选链路。
+- 生成最终工具或执行任何工具前，必须继续经过工具快照、权限门禁和归属模块；OpenCode adapter 内不得执行工具。
 - 不新增插件专用工具 ABI。
-- Desktop / CLI 只消费能力服务接口和读模型。
+- Desktop / CLI 产品入口只消费能力服务接口、插件只读视图、诊断和稳定状态词，不直接依赖 OpenCode adapter。
+- 后续生产接入必须通过 `PluginRuntimeBinding` 注册插件运行时主机，并同步边界脚本、主机路径测试和启用/降级策略。
 
 ## 5. 后端复杂度整改清单
 
 | 优先级 | 问题 | 方向 |
 |---|---|---|
 | P0 | 插件公开接口容易继续膨胀 | 公开接口预算必须声明接口切面、消费方、P0 场景、wire impact、退场条件 |
-| P0 | OpenCode 适配可能成为内部模型 | 保持 `opencode-adapter` projection-only，生产消费必须通过插件主机和扩展贡献接口 |
+| P0 | OpenCode 适配可能成为内部模型 | 保持 `opencode-adapter` 只做来源、诊断和候选映射；产品侧接入必须消费 Plugin Runtime Host / 扩展贡献接口，不直接依赖适配器内部类型 |
 | P1 | `runtime-ports` 单文件仍宽 | 先按模块分组和预算护栏收口；只有真实迁移收益明确时再拆 crate |
 | P1 | `bitfun-core` 门面仍是事实大入口 | 新调用方不得依赖 `bitfun_core::agentic::*` / `service::*` 作为主路径 |
 | P1 | Product capability 与 tool provider group 存在双重建模 | 短期以 provider group id 作为组装边界；长期收敛到单一能力事实 |
@@ -131,8 +136,8 @@
 | docs / boundary / layout | `pnpm run check:repo-hygiene`，`node --test scripts/check-core-boundaries.test.mjs`，`node scripts/check-core-boundaries.mjs` |
 | 插件公开接口预算 | `node --test scripts/check-core-boundaries.test.mjs`，`node scripts/check-core-boundaries.mjs` |
 | 插件运行时主机 ABI | `cargo test -p bitfun-runtime-ports --test plugin_runtime_contracts`，`cargo test -p bitfun-runtime-ports --test plugin_runtime_host_contracts`，`cargo test -p bitfun-plugin-runtime-host` |
-| OpenCode P0-C.1 host-path 来源发现 | `cargo test -p bitfun-opencode-adapter --test opencode_source_adapter` |
-| OpenCode P0-C.2 私有 fixture 兼容保护 | `cargo test -p bitfun-opencode-adapter p0_c2_fixture` |
+| OpenCode P0-C.1 主机路径来源发现 | `cargo test -p bitfun-opencode-adapter --test opencode_source_adapter` |
+| OpenCode P0-C.2 custom tool 候选映射 | `cargo test -p bitfun-opencode-adapter p0_c2_fixture`，`cargo test -p bitfun-opencode-adapter host_path_projects_trusted_custom_tool_candidate_with_permission_prompt` |
 | 产品形态 / SDK 最小可用性 | `cargo test -p bitfun-product-capabilities --test plugin_product_shape`，`cargo test -p bitfun-product-capabilities --test product_sdk_assembly`，`cargo metadata --no-deps --format-version 1` |
 | 大范围归属迁移 | `cargo check --workspace`，必要时补 focused test |
 

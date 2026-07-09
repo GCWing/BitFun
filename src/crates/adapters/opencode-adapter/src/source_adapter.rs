@@ -6,7 +6,6 @@
 
 use async_trait::async_trait;
 use bitfun_plugin_runtime_host::PluginHostAdapter;
-#[cfg(test)]
 use bitfun_runtime_ports::{
     PermissionPromptDenyState, PermissionPromptDescriptor, PermissionPromptEffectKind,
     PluginArtifactRef, PluginCapabilityRef, PluginDataClassification, PluginEffectCandidatePayload,
@@ -17,9 +16,10 @@ use bitfun_runtime_ports::{
     PluginAuditRef, PluginConfigValidationIssue, PluginConfigValidationState,
     PluginConfigValidationStatus, PluginDiagnostic, PluginDiagnosticDetail,
     PluginDiagnosticSeverity, PluginDispatchEnvelope, PluginEffectCandidate, PluginManifestRef,
-    PluginResponseEnvelope, PluginRuntimeAvailability, PluginRuntimeReadRequest,
-    PluginRuntimeReadResponse, PluginRuntimeUnavailableReason, PluginSourceKind, PluginSourceRef,
-    PluginStatusKind, PluginStatusSnapshot, PluginTrustLevel, PortError, PortErrorKind, PortResult,
+    PluginResponseEnvelope, PluginRuntimeAvailability, PluginRuntimeEpochs,
+    PluginRuntimeReadRequest, PluginRuntimeReadResponse, PluginRuntimeUnavailableReason,
+    PluginSourceKind, PluginSourceRef, PluginStatusKind, PluginStatusSnapshot, PluginTrustLevel,
+    PortError, PortErrorKind, PortResult,
 };
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
@@ -32,10 +32,10 @@ use std::{
 const OPENCODE_ADAPTER_ID: &str = "opencode-compatible";
 const OPENCODE_CONFIG_SCHEMA: &str = "https://opencode.ai/config.json";
 const OPENCODE_LOCAL_PLUGIN_SCHEMA_VERSION: &str = "opencode.plugin.module.ts";
-#[cfg(test)]
 const PLUGIN_EFFECT_SCHEMA_VERSION: &str = "plugin.effect.v1";
 const CUSTOM_TOOL_CONTRACT_ID: &str = "opencode.custom-tool.v1";
-#[cfg(test)]
+const CUSTOM_TOOL_CAPABILITY_ID: &str = "opencode.custom_tool";
+const CUSTOM_TOOL_CAPABILITY_OWNER_ID: &str = "opencode.custom-tools";
 const CUSTOM_TOOL_EXTENSION_POINT: &str = "tool";
 const OPENCODE_WORKSPACE_PLUGIN_DIR: &str = ".opencode/plugins";
 const MAX_OPENCODE_PLUGIN_SOURCE_BYTES: u64 = 1_048_576;
@@ -78,10 +78,16 @@ impl OpenCodeAdapterError {
 
 struct OpenCodePluginHostAdapter {
     projections: Vec<OpenCodeProjection>,
+    observed_at_ms: u64,
 }
 
 impl OpenCodePluginHostAdapter {
-    fn from_workspace(project_root: impl AsRef<Path>, observed_at_ms: u64) -> PortResult<Self> {
+    fn from_workspace(
+        project_root: impl AsRef<Path>,
+        observed_at_ms: u64,
+        source_trust_epoch: u64,
+        source_trust_refs: &[PluginSourceRef],
+    ) -> PortResult<Self> {
         let project_root = project_root.as_ref();
         let config_path = project_root.join("opencode.json");
         let (config_json, config_uri) = read_opencode_config(&config_path)?;
@@ -140,8 +146,11 @@ impl OpenCodePluginHostAdapter {
                 ),
                 config.clone(),
             )
-            .map(|projection| projection.without_config_package_diagnostics())
-            {
+            .map(|projection| {
+                projection
+                    .with_source_trust_refs(source_trust_epoch, source_trust_refs)
+                    .without_config_package_diagnostics()
+            }) {
                 Ok(projection) => projections.push(OpenCodeProjection::Local(projection)),
                 Err(error) => projections.push(OpenCodeProjection::Invalid(
                     OpenCodeInvalidProjection::local_source(
@@ -164,13 +173,60 @@ impl OpenCodePluginHostAdapter {
             ))
         }));
 
-        Ok(Self { projections })
+        Ok(Self {
+            projections,
+            observed_at_ms,
+        })
     }
 
-    fn projection_for(&self, plugin_id: &str) -> Option<&OpenCodeProjection> {
+    fn projection_for_source(&self, source: &PluginSourceRef) -> Option<&OpenCodeProjection> {
         self.projections
             .iter()
-            .find(|projection| projection.source_ref().plugin_id == plugin_id)
+            .find(|projection| source_identity_matches(projection.source_ref(), source))
+    }
+
+    fn source_mismatch_response(&self, envelope: PluginDispatchEnvelope) -> PluginResponseEnvelope {
+        let diagnostic_id = format!(
+            "diag:{}:dispatch:{}:source_mismatch",
+            envelope.source.plugin_id, envelope.event_id
+        );
+        let diagnostic = PluginDiagnostic {
+            diagnostic_id: diagnostic_id.clone(),
+            severity: PluginDiagnosticSeverity::Warning,
+            source: envelope.source.clone(),
+            code: "opencode.source_mismatch".to_string(),
+            message: "OpenCode dispatch source does not match a loaded source snapshot".to_string(),
+            detail: PluginDiagnosticDetail::Adapter {
+                adapter_id: OPENCODE_ADAPTER_ID.to_string(),
+            },
+            audit: audit_ref(&envelope),
+            retryable: false,
+        };
+
+        PluginResponseEnvelope {
+            envelope_version: envelope.envelope_version,
+            request_event_id: envelope.event_id.clone(),
+            project_domain_id: envelope.project_domain_id.clone(),
+            workspace_id: envelope.workspace_id.clone(),
+            adapter_id: OPENCODE_ADAPTER_ID.to_string(),
+            plugin_id: Some(envelope.source.plugin_id.clone()),
+            completed_at_ms: self.observed_at_ms,
+            effects: Vec::new(),
+            diagnostics: vec![diagnostic],
+            quarantine: None,
+            plugin_statuses: vec![PluginStatusSnapshot {
+                source: envelope.source.clone(),
+                status: PluginStatusKind::Unavailable,
+                availability: PluginRuntimeAvailability::Unavailable {
+                    reason: PluginRuntimeUnavailableReason::HostUnavailable,
+                },
+                config_validation: None,
+                quarantine: None,
+                diagnostic_ids: vec![diagnostic_id],
+                updated_at_ms: self.observed_at_ms,
+            }],
+            observed_epochs: envelope.epochs,
+        }
     }
 }
 
@@ -195,15 +251,17 @@ impl PluginHostAdapter for OpenCodePluginHostAdapter {
                     .iter()
                     .any(|plugin_id| plugin_id == &projection.source_ref().plugin_id)
         }) {
-            let projection_diagnostics = projection.read_diagnostics();
+            let projection_diagnostics = projection.read_diagnostics(&request.epochs);
             let diagnostic_ids = projection_diagnostics
                 .iter()
                 .map(|diagnostic| diagnostic.diagnostic_id.clone())
                 .collect();
-            sources.push(projection.source_ref().clone());
-            plugin_statuses.push(
-                projection.status_snapshot(request.include_config_validation, diagnostic_ids),
-            );
+            sources.push(projection.source_ref_for_epochs(&request.epochs));
+            plugin_statuses.push(projection.status_snapshot(
+                request.include_config_validation,
+                diagnostic_ids,
+                &request.epochs,
+            ));
             diagnostics.extend(projection_diagnostics);
         }
 
@@ -222,28 +280,42 @@ impl PluginHostAdapter for OpenCodePluginHostAdapter {
         &self,
         envelope: PluginDispatchEnvelope,
     ) -> PortResult<PluginResponseEnvelope> {
-        self.projection_for(&envelope.source.plugin_id)
-            .ok_or_else(|| {
-                PortError::new(
-                    PortErrorKind::NotFound,
-                    format!(
-                        "OpenCode source {} is not loaded by this adapter",
-                        envelope.source.plugin_id
-                    ),
-                )
-            })?
-            .project_projection_only_dispatch_response(envelope)
+        match self.projection_for_source(&envelope.source) {
+            Some(projection) => projection.project_dispatch_response(envelope),
+            None => Ok(self.source_mismatch_response(envelope)),
+        }
     }
 }
 
 pub fn load_opencode_workspace_adapter(
     project_root: impl AsRef<Path>,
     observed_at_ms: u64,
+    source_trust_epoch: u64,
+    source_trust_refs: &[PluginSourceRef],
 ) -> PortResult<Arc<dyn PluginHostAdapter>> {
     Ok(Arc::new(OpenCodePluginHostAdapter::from_workspace(
         project_root,
         observed_at_ms,
+        source_trust_epoch,
+        source_trust_refs,
     )?))
+}
+
+fn source_identity_matches(left: &PluginSourceRef, right: &PluginSourceRef) -> bool {
+    left.plugin_id == right.plugin_id
+        && left.source_kind == right.source_kind
+        && left.source == right.source
+        && left.version == right.version
+        && left.content_hash == right.content_hash
+}
+
+fn plugin_owner_kind_name(kind: PluginOwnerKind) -> &'static str {
+    match kind {
+        PluginOwnerKind::ProductFeature => "product_feature",
+        PluginOwnerKind::ExtensionContract => "extension_contract",
+        PluginOwnerKind::AssemblyPolicy => "assembly_policy",
+        _ => "unknown",
+    }
 }
 
 enum OpenCodeProjection {
@@ -261,9 +333,17 @@ impl OpenCodeProjection {
         }
     }
 
-    fn read_diagnostics(&self) -> Vec<PluginDiagnostic> {
+    fn source_ref_for_epochs(&self, epochs: &PluginRuntimeEpochs) -> PluginSourceRef {
         match self {
-            Self::Local(projection) => projection.read_diagnostics(),
+            Self::Local(projection) => projection.source_ref_for_epochs(epochs),
+            Self::Package(projection) => projection.source_ref().clone(),
+            Self::Invalid(projection) => projection.source_ref().clone(),
+        }
+    }
+
+    fn read_diagnostics(&self, epochs: &PluginRuntimeEpochs) -> Vec<PluginDiagnostic> {
+        match self {
+            Self::Local(projection) => projection.read_diagnostics(epochs),
             Self::Package(projection) => projection.read_diagnostics(),
             Self::Invalid(projection) => projection.read_diagnostics(),
         }
@@ -273,11 +353,13 @@ impl OpenCodeProjection {
         &self,
         include_config_validation: bool,
         diagnostic_ids: Vec<String>,
+        epochs: &PluginRuntimeEpochs,
     ) -> PluginStatusSnapshot {
         match self {
             Self::Local(projection) => {
-                let (availability, status) = projection.trust_status();
+                let (availability, status) = projection.trust_status_for_epochs(epochs);
                 projection.status_snapshot(
+                    projection.source_ref_for_epochs(epochs),
                     availability,
                     include_config_validation,
                     status,
@@ -293,14 +375,12 @@ impl OpenCodeProjection {
         }
     }
 
-    fn project_projection_only_dispatch_response(
+    fn project_dispatch_response(
         &self,
         envelope: PluginDispatchEnvelope,
     ) -> PortResult<PluginResponseEnvelope> {
         match self {
-            Self::Local(projection) => {
-                projection.project_projection_only_dispatch_response(envelope)
-            }
+            Self::Local(projection) => projection.project_dispatch_response(envelope),
             Self::Package(projection) => projection.project_dispatch_response(envelope),
             Self::Invalid(projection) => projection.project_dispatch_response(envelope),
         }
@@ -388,16 +468,26 @@ impl OpenCodePackageProjection {
 
         Ok(PluginResponseEnvelope {
             envelope_version: envelope.envelope_version,
-            request_event_id: envelope.event_id,
-            project_domain_id: envelope.project_domain_id,
-            workspace_id: envelope.workspace_id,
+            request_event_id: envelope.event_id.clone(),
+            project_domain_id: envelope.project_domain_id.clone(),
+            workspace_id: envelope.workspace_id.clone(),
             adapter_id: OPENCODE_ADAPTER_ID.to_string(),
-            plugin_id: Some(self.source.plugin_id.clone()),
+            plugin_id: Some(envelope.source.plugin_id.clone()),
             completed_at_ms: self.observed_at_ms,
             effects: Vec::new(),
             diagnostics,
             quarantine: None,
-            plugin_statuses: vec![self.status_snapshot(false, diagnostic_ids)],
+            plugin_statuses: vec![PluginStatusSnapshot {
+                source: envelope.source.clone(),
+                status: PluginStatusKind::TrustRequired,
+                availability: PluginRuntimeAvailability::projection_only(
+                    PluginRuntimeUnavailableReason::DisabledByPolicy,
+                ),
+                config_validation: None,
+                quarantine: None,
+                diagnostic_ids,
+                updated_at_ms: self.observed_at_ms,
+            }],
             observed_epochs: envelope.epochs,
         })
     }
@@ -408,6 +498,7 @@ impl OpenCodePackageProjection {
             "diag:{}:dispatch:{}:trust",
             self.source.plugin_id, envelope.event_id
         );
+        trust.source = envelope.source.clone();
         trust.audit = audit_ref(envelope);
 
         let mut package = self.package_diagnostic();
@@ -415,6 +506,7 @@ impl OpenCodePackageProjection {
             "diag:{}:dispatch:{}:npm:{}",
             self.source.plugin_id, envelope.event_id, self.package
         );
+        package.source = envelope.source.clone();
         package.audit = audit_ref(envelope);
 
         vec![trust, package]
@@ -619,16 +711,26 @@ impl OpenCodeInvalidProjection {
             .collect();
         Ok(PluginResponseEnvelope {
             envelope_version: envelope.envelope_version,
-            request_event_id: envelope.event_id,
-            project_domain_id: envelope.project_domain_id,
-            workspace_id: envelope.workspace_id,
+            request_event_id: envelope.event_id.clone(),
+            project_domain_id: envelope.project_domain_id.clone(),
+            workspace_id: envelope.workspace_id.clone(),
             adapter_id: OPENCODE_ADAPTER_ID.to_string(),
-            plugin_id: Some(self.source.plugin_id.clone()),
+            plugin_id: Some(envelope.source.plugin_id.clone()),
             completed_at_ms: self.observed_at_ms,
             effects: Vec::new(),
             diagnostics,
             quarantine: None,
-            plugin_statuses: vec![self.status_snapshot(false, diagnostic_ids)],
+            plugin_statuses: vec![PluginStatusSnapshot {
+                source: envelope.source.clone(),
+                status: PluginStatusKind::InvalidConfig,
+                availability: PluginRuntimeAvailability::projection_only(
+                    PluginRuntimeUnavailableReason::DisabledByPolicy,
+                ),
+                config_validation: None,
+                quarantine: None,
+                diagnostic_ids,
+                updated_at_ms: self.observed_at_ms,
+            }],
             observed_epochs: envelope.epochs,
         })
     }
@@ -644,7 +746,8 @@ impl OpenCodeInvalidProjection {
         PluginDiagnostic {
             diagnostic_id,
             severity: PluginDiagnosticSeverity::Error,
-            source: self.source.clone(),
+            source: envelope
+                .map_or_else(|| self.source.clone(), |envelope| envelope.source.clone()),
             code: self.diagnostic_code.clone(),
             message: self.diagnostic_message.clone(),
             detail: PluginDiagnosticDetail::ConfigValidation {
@@ -692,7 +795,15 @@ struct OpenCodeSourceProjection {
     config: OpenCodeConfig,
     local_plugin: OpenCodeLocalPlugin,
     source: PluginSourceRef,
+    source_trust_snapshot: Option<OpenCodeMatchedTrustSnapshot>,
+    source_trust_conflict: bool,
     observed_at_ms: u64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct OpenCodeMatchedTrustSnapshot {
+    trust_level: PluginTrustLevel,
+    trust_epoch: u64,
 }
 
 impl OpenCodeSourceProjection {
@@ -725,8 +836,32 @@ impl OpenCodeSourceProjection {
             config,
             local_plugin,
             source: source_ref,
+            source_trust_snapshot: None,
+            source_trust_conflict: false,
             observed_at_ms: source.observed_at_ms,
         })
+    }
+
+    fn with_source_trust_refs(
+        mut self,
+        source_trust_epoch: u64,
+        source_trust_refs: &[PluginSourceRef],
+    ) -> Self {
+        let matching_refs = source_trust_refs
+            .iter()
+            .filter(|trust_ref| source_identity_matches(trust_ref, &self.source))
+            .collect::<Vec<_>>();
+        self.source_trust_conflict = matching_refs
+            .windows(2)
+            .any(|window| window[0].trust_level != window[1].trust_level);
+
+        if let Some(trust_ref) = matching_refs.last() {
+            self.source_trust_snapshot = Some(OpenCodeMatchedTrustSnapshot {
+                trust_level: trust_ref.trust_level,
+                trust_epoch: source_trust_epoch,
+            });
+        }
+        self
     }
 
     #[cfg(test)]
@@ -742,6 +877,30 @@ impl OpenCodeSourceProjection {
 
     fn source_ref(&self) -> &PluginSourceRef {
         &self.source
+    }
+
+    fn source_ref_for_epochs(&self, epochs: &PluginRuntimeEpochs) -> PluginSourceRef {
+        let mut source = self.source.clone();
+        source.trust_level = self.effective_trust_level(epochs);
+        source
+    }
+
+    fn effective_trust_level(&self, epochs: &PluginRuntimeEpochs) -> PluginTrustLevel {
+        match self.source_trust_snapshot {
+            Some(trust_snapshot) if trust_snapshot.trust_epoch == epochs.trust_epoch => {
+                trust_snapshot.trust_level
+            }
+            Some(_) => PluginTrustLevel::Unknown,
+            None => self.source.trust_level,
+        }
+    }
+
+    fn trust_epoch_mismatch(
+        &self,
+        epochs: &PluginRuntimeEpochs,
+    ) -> Option<OpenCodeMatchedTrustSnapshot> {
+        self.source_trust_snapshot
+            .filter(|trust_snapshot| trust_snapshot.trust_epoch != epochs.trust_epoch)
     }
 
     fn without_config_package_diagnostics(mut self) -> Self {
@@ -771,19 +930,21 @@ impl OpenCodeSourceProjection {
             });
         }
 
-        let diagnostics = self.read_diagnostics();
+        let diagnostics = self.read_diagnostics(&request.epochs);
         let diagnostic_ids = diagnostics
             .iter()
             .map(|diagnostic| diagnostic.diagnostic_id.clone())
             .collect();
-        let (availability, status) = self.trust_status();
+        let (availability, status) = self.trust_status_for_epochs(&request.epochs);
+        let source = self.source_ref_for_epochs(&request.epochs);
 
         Ok(PluginRuntimeReadResponse {
             request_id: request.request_id,
             project_domain_id: request.project_domain_id,
             workspace_id: request.workspace_id,
-            sources: vec![self.source.clone()],
+            sources: vec![source.clone()],
             plugin_statuses: vec![self.status_snapshot(
+                source,
                 availability,
                 request.include_config_validation,
                 status,
@@ -794,7 +955,6 @@ impl OpenCodeSourceProjection {
         })
     }
 
-    #[cfg(test)]
     fn project_dispatch_response(
         &self,
         envelope: PluginDispatchEnvelope,
@@ -809,16 +969,30 @@ impl OpenCodeSourceProjection {
             ));
         }
 
-        if self.source.trust_level != PluginTrustLevel::Trusted {
+        let effective_trust_level = self.effective_trust_level(&envelope.epochs);
+        if effective_trust_level != PluginTrustLevel::Trusted {
+            let mut diagnostics = Vec::new();
+            if let Some(trust_fact) = self.trust_epoch_mismatch(&envelope.epochs) {
+                diagnostics
+                    .push(self.trust_epoch_mismatch_dispatch_diagnostic(&envelope, trust_fact));
+            }
+            diagnostics.push(self.trust_dispatch_diagnostic(&envelope, effective_trust_level));
             return Ok(self.response(
                 &envelope,
                 Vec::new(),
-                vec![self.trust_diagnostic()],
-                self.trust_status().1,
+                diagnostics,
+                Self::trust_status_for_level(effective_trust_level).1,
             ));
         }
 
-        let (effects, diagnostics) = if envelope.extension_point_id == CUSTOM_TOOL_EXTENSION_POINT {
+        let (effects, diagnostics) = if envelope.extension_point_id == CUSTOM_TOOL_EXTENSION_POINT
+            && !self.supports_custom_tool_capability(&envelope.declared_capability)
+        {
+            (
+                Vec::new(),
+                vec![self.custom_tool_capability_mismatch_diagnostic(&envelope)],
+            )
+        } else if envelope.extension_point_id == CUSTOM_TOOL_EXTENSION_POINT {
             (
                 self.local_plugin
                     .custom_tools
@@ -830,7 +1004,7 @@ impl OpenCodeSourceProjection {
         } else {
             (
                 Vec::new(),
-                vec![self.unsupported_hook_diagnostic(&envelope.extension_point_id)],
+                vec![self.unsupported_hook_dispatch_diagnostic(&envelope)],
             )
         };
 
@@ -838,51 +1012,55 @@ impl OpenCodeSourceProjection {
         Ok(self.response(&envelope, effects, diagnostics, status))
     }
 
-    fn project_projection_only_dispatch_response(
-        &self,
-        envelope: PluginDispatchEnvelope,
-    ) -> PortResult<PluginResponseEnvelope> {
-        if envelope.source.plugin_id != self.source.plugin_id {
-            return Err(PortError::new(
-                PortErrorKind::NotFound,
-                format!(
-                    "OpenCode source {} is not loaded by this adapter",
-                    envelope.source.plugin_id
-                ),
+    fn read_diagnostics(&self, epochs: &PluginRuntimeEpochs) -> Vec<PluginDiagnostic> {
+        let mut diagnostics = Vec::new();
+        let source = self.source_ref_for_epochs(epochs);
+        if let Some(trust_fact) = self.trust_epoch_mismatch(epochs) {
+            diagnostics.push(self.trust_epoch_mismatch_diagnostic(
+                source.clone(),
+                epochs.trust_epoch,
+                trust_fact,
             ));
         }
-
-        let diagnostics = if self.source.trust_level == PluginTrustLevel::Unknown {
-            vec![self.trust_dispatch_diagnostic(&envelope)]
-        } else {
-            vec![self.projection_only_dispatch_diagnostic(&envelope)]
-        };
-        let status = self.trust_status().1;
-        Ok(self.response(&envelope, Vec::new(), diagnostics, status))
-    }
-
-    fn read_diagnostics(&self) -> Vec<PluginDiagnostic> {
-        let mut diagnostics = Vec::new();
-        if self.source.trust_level != PluginTrustLevel::Trusted {
-            diagnostics.push(self.trust_diagnostic());
+        if self.source_trust_conflict {
+            diagnostics.push(self.trust_ref_conflict_diagnostic(source.clone()));
+        }
+        if source.trust_level != PluginTrustLevel::Trusted {
+            diagnostics.push(self.trust_diagnostic(source.clone(), source.trust_level));
         }
         diagnostics.extend(
             self.config
                 .npm_plugins
                 .iter()
-                .map(|package| self.npm_package_diagnostic(package)),
+                .map(|package| self.npm_package_diagnostic(package, source.clone())),
         );
         diagnostics.extend(
             self.local_plugin
                 .unsupported_hooks
                 .iter()
-                .map(|hook| self.unsupported_hook_diagnostic(hook)),
+                .map(|hook| self.unsupported_hook_diagnostic(hook, source.clone())),
         );
         diagnostics
     }
 
-    fn trust_status(&self) -> (PluginRuntimeAvailability, PluginStatusKind) {
-        match self.source.trust_level {
+    fn supports_custom_tool_capability(&self, capability: &PluginCapabilityRef) -> bool {
+        self.local_plugin
+            .custom_tools
+            .iter()
+            .any(|tool| tool.capability_ref() == *capability)
+    }
+
+    fn trust_status_for_epochs(
+        &self,
+        epochs: &PluginRuntimeEpochs,
+    ) -> (PluginRuntimeAvailability, PluginStatusKind) {
+        Self::trust_status_for_level(self.effective_trust_level(epochs))
+    }
+
+    fn trust_status_for_level(
+        trust_level: PluginTrustLevel,
+    ) -> (PluginRuntimeAvailability, PluginStatusKind) {
+        match trust_level {
             PluginTrustLevel::Trusted => (
                 PluginRuntimeAvailability::projection_only(
                     PluginRuntimeUnavailableReason::HostUnavailable,
@@ -912,13 +1090,14 @@ impl OpenCodeSourceProjection {
 
     fn status_snapshot(
         &self,
+        source: PluginSourceRef,
         availability: PluginRuntimeAvailability,
         include_config_validation: bool,
         status: PluginStatusKind,
         diagnostic_ids: Vec<String>,
     ) -> PluginStatusSnapshot {
         PluginStatusSnapshot {
-            source: self.source.clone(),
+            source,
             status,
             availability,
             config_validation: include_config_validation.then(|| PluginConfigValidationState {
@@ -943,7 +1122,7 @@ impl OpenCodeSourceProjection {
             .map(|diagnostic| diagnostic.diagnostic_id.clone())
             .collect();
 
-        let availability = self.trust_status().0;
+        let availability = self.trust_status_for_epochs(&envelope.epochs).0;
 
         PluginResponseEnvelope {
             envelope_version: envelope.envelope_version,
@@ -951,12 +1130,13 @@ impl OpenCodeSourceProjection {
             project_domain_id: envelope.project_domain_id.clone(),
             workspace_id: envelope.workspace_id.clone(),
             adapter_id: OPENCODE_ADAPTER_ID.to_string(),
-            plugin_id: Some(self.source.plugin_id.clone()),
+            plugin_id: Some(envelope.source.plugin_id.clone()),
             completed_at_ms: self.observed_at_ms,
             effects,
             diagnostics,
             quarantine: None,
             plugin_statuses: vec![self.status_snapshot(
+                envelope.source.clone(),
                 availability,
                 false,
                 status,
@@ -966,7 +1146,6 @@ impl OpenCodeSourceProjection {
         }
     }
 
-    #[cfg(test)]
     fn provider_candidate_effect(
         &self,
         envelope: &PluginDispatchEnvelope,
@@ -989,7 +1168,7 @@ impl OpenCodeSourceProjection {
             data_classification: PluginDataClassification::Workspace,
             risk_level: PluginRiskLevel::Medium,
             permission,
-            source_ref: self.source.clone(),
+            source_ref: envelope.source.clone(),
             payload: PluginEffectCandidatePayload::ProviderCandidate {
                 provider_id: tool.provider_id(&self.source.plugin_id),
                 tool_contract_id: tool.tool_contract_id.clone(),
@@ -997,7 +1176,6 @@ impl OpenCodeSourceProjection {
         }
     }
 
-    #[cfg(test)]
     fn permission_prompt(
         &self,
         envelope: &PluginDispatchEnvelope,
@@ -1011,7 +1189,7 @@ impl OpenCodeSourceProjection {
                 "prompt:{}:{}:{}",
                 self.source.plugin_id, tool.id, envelope.event_id
             ),
-            plugin: self.source.clone(),
+            plugin: envelope.source.clone(),
             requested_capability: tool.capability_ref(),
             requested_effect: PermissionPromptEffectKind::ProviderCandidate,
             target,
@@ -1026,14 +1204,14 @@ impl OpenCodeSourceProjection {
         }
     }
 
-    fn npm_package_diagnostic(&self, package: &str) -> PluginDiagnostic {
+    fn npm_package_diagnostic(&self, package: &str, source: PluginSourceRef) -> PluginDiagnostic {
         PluginDiagnostic {
             diagnostic_id: format!("diag:{}:npm:{package}", self.source.plugin_id),
             severity: PluginDiagnosticSeverity::Info,
-            source: self.source.clone(),
+            source,
             code: "opencode.npm_plugin_projection_only".to_string(),
             message: format!(
-                "OpenCode npm plugin is present in opencode.json but is not installed or executed by this projection-only adapter: {package}"
+                "OpenCode npm plugin is present in opencode.json but is not installed or executed by BitFun: {package}"
             ),
             detail: PluginDiagnosticDetail::Manifest {
                 manifest: PluginManifestRef {
@@ -1050,14 +1228,14 @@ impl OpenCodeSourceProjection {
         }
     }
 
-    fn unsupported_hook_diagnostic(&self, hook: &str) -> PluginDiagnostic {
+    fn unsupported_hook_diagnostic(&self, hook: &str, source: PluginSourceRef) -> PluginDiagnostic {
         PluginDiagnostic {
             diagnostic_id: format!("diag:{}:hook:{hook}", self.source.plugin_id),
             severity: PluginDiagnosticSeverity::Warning,
-            source: self.source.clone(),
+            source,
             code: "opencode.hook_projection_only".to_string(),
             message: format!(
-                "OpenCode hook is discovered but cannot run in the P0-C.1 projection-only adapter: {hook}"
+                "OpenCode hook is discovered but the current OpenCode adapter does not support hook execution: {hook}"
             ),
             detail: PluginDiagnosticDetail::Adapter {
                 adapter_id: OPENCODE_ADAPTER_ID.to_string(),
@@ -1070,19 +1248,95 @@ impl OpenCodeSourceProjection {
         }
     }
 
-    fn trust_diagnostic(&self) -> PluginDiagnostic {
+    fn unsupported_hook_dispatch_diagnostic(
+        &self,
+        envelope: &PluginDispatchEnvelope,
+    ) -> PluginDiagnostic {
+        let mut diagnostic =
+            self.unsupported_hook_diagnostic(&envelope.extension_point_id, envelope.source.clone());
+        diagnostic.diagnostic_id = format!(
+            "diag:{}:dispatch:{}:hook:{}",
+            self.source.plugin_id, envelope.event_id, envelope.extension_point_id
+        );
+        diagnostic.source = envelope.source.clone();
+        diagnostic.audit = audit_ref(envelope);
+        diagnostic
+    }
+
+    fn trust_diagnostic(
+        &self,
+        source: PluginSourceRef,
+        trust_level: PluginTrustLevel,
+    ) -> PluginDiagnostic {
         PluginDiagnostic {
             diagnostic_id: format!("diag:{}:trust", self.source.plugin_id),
-            severity: if self.source.trust_level == PluginTrustLevel::Unknown {
+            severity: if trust_level == PluginTrustLevel::Unknown {
                 PluginDiagnosticSeverity::Warning
             } else {
                 PluginDiagnosticSeverity::Error
             },
-            source: self.source.clone(),
+            source,
             code: "opencode.trust_required".to_string(),
             message: "OpenCode plugin source is not trusted for projection".to_string(),
-            detail: PluginDiagnosticDetail::Trust {
-                trust_level: self.source.trust_level,
+            detail: PluginDiagnosticDetail::Trust { trust_level },
+            audit: PluginAuditRef {
+                correlation_id: format!("trust:{}", self.source.plugin_id),
+                event_id: None,
+            },
+            retryable: false,
+        }
+    }
+
+    fn trust_dispatch_diagnostic(
+        &self,
+        envelope: &PluginDispatchEnvelope,
+        trust_level: PluginTrustLevel,
+    ) -> PluginDiagnostic {
+        let mut diagnostic = self.trust_diagnostic(envelope.source.clone(), trust_level);
+        diagnostic.diagnostic_id = format!(
+            "diag:{}:dispatch:{}:trust",
+            self.source.plugin_id, envelope.event_id
+        );
+        diagnostic.source = envelope.source.clone();
+        diagnostic.audit = audit_ref(envelope);
+        diagnostic
+    }
+
+    fn trust_epoch_mismatch_diagnostic(
+        &self,
+        source: PluginSourceRef,
+        runtime_trust_epoch: u64,
+        trust_snapshot: OpenCodeMatchedTrustSnapshot,
+    ) -> PluginDiagnostic {
+        PluginDiagnostic {
+            diagnostic_id: format!("diag:{}:trust_epoch", self.source.plugin_id),
+            severity: PluginDiagnosticSeverity::Warning,
+            source,
+            code: "opencode.trust_epoch_mismatch".to_string(),
+            message: format!(
+                "OpenCode trust snapshot epoch {} does not match runtime trust epoch {}; source remains untrusted",
+                trust_snapshot.trust_epoch, runtime_trust_epoch
+            ),
+            detail: PluginDiagnosticDetail::Adapter {
+                adapter_id: OPENCODE_ADAPTER_ID.to_string(),
+            },
+            audit: PluginAuditRef {
+                correlation_id: format!("trust:{}", self.source.plugin_id),
+                event_id: None,
+            },
+            retryable: true,
+        }
+    }
+
+    fn trust_ref_conflict_diagnostic(&self, source: PluginSourceRef) -> PluginDiagnostic {
+        PluginDiagnostic {
+            diagnostic_id: format!("diag:{}:trust_ref_conflict", self.source.plugin_id),
+            severity: PluginDiagnosticSeverity::Warning,
+            source,
+            code: "opencode.trust_ref_conflict".to_string(),
+            message: "OpenCode source has multiple trust snapshots with conflicting trust levels; the last snapshot is used".to_string(),
+            detail: PluginDiagnosticDetail::Adapter {
+                adapter_id: OPENCODE_ADAPTER_ID.to_string(),
             },
             audit: PluginAuditRef {
                 correlation_id: format!("trust:{}", self.source.plugin_id),
@@ -1092,32 +1346,43 @@ impl OpenCodeSourceProjection {
         }
     }
 
-    fn trust_dispatch_diagnostic(&self, envelope: &PluginDispatchEnvelope) -> PluginDiagnostic {
-        let mut diagnostic = self.trust_diagnostic();
+    fn trust_epoch_mismatch_dispatch_diagnostic(
+        &self,
+        envelope: &PluginDispatchEnvelope,
+        trust_snapshot: OpenCodeMatchedTrustSnapshot,
+    ) -> PluginDiagnostic {
+        let mut diagnostic = self.trust_epoch_mismatch_diagnostic(
+            envelope.source.clone(),
+            envelope.epochs.trust_epoch,
+            trust_snapshot,
+        );
         diagnostic.diagnostic_id = format!(
-            "diag:{}:dispatch:{}:trust",
+            "diag:{}:dispatch:{}:trust_epoch",
             self.source.plugin_id, envelope.event_id
         );
         diagnostic.audit = audit_ref(envelope);
         diagnostic
     }
 
-    fn projection_only_dispatch_diagnostic(
+    fn custom_tool_capability_mismatch_diagnostic(
         &self,
         envelope: &PluginDispatchEnvelope,
     ) -> PluginDiagnostic {
         PluginDiagnostic {
             diagnostic_id: format!(
-                "diag:{}:dispatch_projection_only:{extension_point_id}",
-                self.source.plugin_id,
-                extension_point_id = envelope.extension_point_id
+                "diag:{}:dispatch:{}:custom_tool_capability",
+                self.source.plugin_id, envelope.event_id
             ),
-            severity: PluginDiagnosticSeverity::Info,
-            source: self.source.clone(),
-            code: "opencode.dispatch_projection_only".to_string(),
+            severity: PluginDiagnosticSeverity::Warning,
+            source: envelope.source.clone(),
+            code: "opencode.custom_tool_capability_mismatch".to_string(),
             message: format!(
-                "OpenCode extension point is discovered but not executed by this projection-only adapter: {}",
-                envelope.extension_point_id
+                "OpenCode custom tool dispatch requires expected capability {CUSTOM_TOOL_CAPABILITY_ID} owned by {}/{}; actual capability {} owned by {}/{}",
+                plugin_owner_kind_name(PluginOwnerKind::ExtensionContract),
+                CUSTOM_TOOL_CAPABILITY_OWNER_ID,
+                envelope.declared_capability.capability_id,
+                plugin_owner_kind_name(envelope.declared_capability.owner.kind),
+                envelope.declared_capability.owner.id
             ),
             detail: PluginDiagnosticDetail::Adapter {
                 adapter_id: OPENCODE_ADAPTER_ID.to_string(),
@@ -1217,12 +1482,10 @@ struct OpenCodeCustomTool {
 }
 
 impl OpenCodeCustomTool {
-    #[cfg(test)]
     fn provider_id(&self, plugin_id: &str) -> String {
         format!("{plugin_id}.{}", self.id)
     }
 
-    #[cfg(test)]
     fn target_ref(&self, plugin_id: &str) -> PluginTargetRef {
         let target_id = self.provider_id(plugin_id);
         PluginTargetRef {
@@ -1238,13 +1501,12 @@ impl OpenCodeCustomTool {
         }
     }
 
-    #[cfg(test)]
     fn capability_ref(&self) -> PluginCapabilityRef {
         PluginCapabilityRef {
-            capability_id: "opencode.custom_tool".to_string(),
+            capability_id: CUSTOM_TOOL_CAPABILITY_ID.to_string(),
             owner: PluginOwnerRef {
                 kind: PluginOwnerKind::ExtensionContract,
-                id: "opencode.custom-tools".to_string(),
+                id: CUSTOM_TOOL_CAPABILITY_OWNER_ID.to_string(),
             },
         }
     }
@@ -1373,7 +1635,7 @@ fn workspace_plugin_paths(
             "opencode.local_plugin_directory_link_unsupported",
             "source",
             format!(
-                "OpenCode plugin directory is a symlink or reparse point and is not scanned by this projection-only adapter: {}",
+                "OpenCode plugin directory is a symlink or reparse point and is not scanned by this OpenCode adapter: {}",
                 plugin_dir.display()
             ),
             observed_at_ms,
@@ -1440,7 +1702,7 @@ fn plugin_file_candidate(
             "opencode.local_plugin_symlink_unsupported",
             "source",
             format!(
-                "OpenCode plugin source is a symlink and is not scanned by this projection-only adapter: {}",
+                "OpenCode plugin source is a symlink and is not scanned by this OpenCode adapter: {}",
                 path.display()
             ),
             observed_at_ms,
@@ -1452,7 +1714,7 @@ fn plugin_file_candidate(
             "opencode.local_plugin_not_file",
             "source",
             format!(
-                "OpenCode plugin source is not a regular file and is not scanned by this projection-only adapter: {}",
+                "OpenCode plugin source is not a regular file and is not scanned by this OpenCode adapter: {}",
                 path.display()
             ),
             observed_at_ms,
@@ -1464,7 +1726,7 @@ fn plugin_file_candidate(
             "opencode.local_plugin_too_large",
             "source",
             format!(
-                "OpenCode plugin source exceeds the projection-only size limit of {MAX_OPENCODE_PLUGIN_SOURCE_BYTES} bytes: {}",
+                "OpenCode plugin source exceeds the OpenCode adapter size limit of {MAX_OPENCODE_PLUGIN_SOURCE_BYTES} bytes: {}",
                 path.display()
             ),
             observed_at_ms,
@@ -1574,10 +1836,12 @@ fn audit_ref(envelope: &PluginDispatchEnvelope) -> PluginAuditRef {
 #[cfg(test)]
 mod opencode_projection_contracts {
     use super::*;
+    use bitfun_plugin_runtime_host::PluginRuntimeHost;
     use bitfun_runtime_ports::{
         PermissionPromptDenyState, PermissionPromptEffectKind, PluginPayloadRedaction,
-        PluginPayloadRef, PluginRuntimeEpochs,
+        PluginPayloadRef, PluginRuntimeClient, PluginRuntimeEpochs,
     };
+    use std::sync::Arc;
 
     const CONFIG: &str = include_str!("../tests/fixtures/opencode-example/opencode.json");
     const LOCAL_PLUGIN_PATH: &str = ".opencode/plugins/workspace-tools.ts";
@@ -1609,10 +1873,10 @@ mod opencode_projection_contracts {
 
     fn capability_ref() -> PluginCapabilityRef {
         PluginCapabilityRef {
-            capability_id: "opencode.custom_tool".to_string(),
+            capability_id: CUSTOM_TOOL_CAPABILITY_ID.to_string(),
             owner: PluginOwnerRef {
                 kind: PluginOwnerKind::ExtensionContract,
-                id: "opencode.custom-tools".to_string(),
+                id: CUSTOM_TOOL_CAPABILITY_OWNER_ID.to_string(),
             },
         }
     }
@@ -1788,6 +2052,314 @@ mod opencode_projection_contracts {
             }
             other => panic!("expected permission prompt, got {other:?}"),
         }
+    }
+
+    #[tokio::test]
+    async fn host_path_projects_trusted_custom_tool_candidate_with_permission_prompt() {
+        let adapter = adapter(PluginTrustLevel::Trusted);
+        let dispatch = envelope(&adapter, CUSTOM_TOOL_EXTENSION_POINT);
+        let host_adapter: Arc<dyn PluginHostAdapter> = Arc::new(OpenCodePluginHostAdapter {
+            projections: vec![OpenCodeProjection::Local(adapter)],
+            observed_at_ms: 1_720_000_001,
+        });
+        let host = PluginRuntimeHost::new(host_adapter);
+
+        let response = host
+            .dispatch(dispatch)
+            .await
+            .expect("host dispatch should preserve trusted custom tool candidate");
+
+        assert_eq!(response.adapter_id, OPENCODE_ADAPTER_ID);
+        assert_eq!(
+            response.plugin_id.as_deref(),
+            Some("opencode.local.workspace_tools")
+        );
+        assert_eq!(response.effects.len(), 1);
+        assert!(response.diagnostics.is_empty());
+
+        let effect = &response.effects[0];
+        assert_eq!(
+            effect.declared_capability.capability_id,
+            CUSTOM_TOOL_CAPABILITY_ID
+        );
+        match &effect.payload {
+            PluginEffectCandidatePayload::ProviderCandidate {
+                provider_id,
+                tool_contract_id,
+            } => {
+                assert_eq!(
+                    provider_id,
+                    "opencode.local.workspace_tools.workspaceSummary"
+                );
+                assert_eq!(tool_contract_id, CUSTOM_TOOL_CONTRACT_ID);
+            }
+            other => panic!("expected provider candidate, got {other:?}"),
+        }
+        match &effect.permission {
+            PluginPermissionGate::PermissionRequired { prompt } => {
+                assert_eq!(
+                    prompt.requested_effect,
+                    PermissionPromptEffectKind::ProviderCandidate
+                );
+                assert_eq!(
+                    prompt.target.target_id,
+                    "opencode.local.workspace_tools.workspaceSummary"
+                );
+                assert_eq!(
+                    prompt.deny_state,
+                    PermissionPromptDenyState::CandidateDiscarded
+                );
+            }
+            other => panic!("expected permission prompt, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn host_path_rejects_mismatched_custom_tool_capability_without_effect() {
+        let adapter = adapter(PluginTrustLevel::Trusted);
+        let mut dispatch = envelope(&adapter, CUSTOM_TOOL_EXTENSION_POINT);
+        dispatch.declared_capability.capability_id = "opencode.permission_hook".to_string();
+        let host_adapter: Arc<dyn PluginHostAdapter> = Arc::new(OpenCodePluginHostAdapter {
+            projections: vec![OpenCodeProjection::Local(adapter)],
+            observed_at_ms: 1_720_000_001,
+        });
+        let host = PluginRuntimeHost::new(host_adapter);
+
+        let response = host
+            .dispatch(dispatch)
+            .await
+            .expect("host dispatch should reject mismatched custom tool capability");
+
+        assert!(response.effects.is_empty());
+        assert_eq!(
+            response.diagnostics[0].code,
+            "opencode.custom_tool_capability_mismatch"
+        );
+        assert_eq!(
+            response.diagnostics[0].message,
+            "OpenCode custom tool dispatch requires expected capability opencode.custom_tool owned by extension_contract/opencode.custom-tools; actual capability opencode.permission_hook owned by extension_contract/opencode.custom-tools"
+        );
+        assert_eq!(
+            response.plugin_statuses[0].status,
+            PluginStatusKind::ProjectionOnly
+        );
+    }
+
+    #[tokio::test]
+    async fn host_path_rejects_custom_tool_capability_owner_mismatch_without_quarantine() {
+        let adapter = adapter(PluginTrustLevel::Trusted);
+        let mut dispatch = envelope(&adapter, CUSTOM_TOOL_EXTENSION_POINT);
+        dispatch.declared_capability.owner = PluginOwnerRef {
+            kind: PluginOwnerKind::ExtensionContract,
+            id: "opencode.wrong-owner".to_string(),
+        };
+        let host_adapter: Arc<dyn PluginHostAdapter> = Arc::new(OpenCodePluginHostAdapter {
+            projections: vec![OpenCodeProjection::Local(adapter.clone())],
+            observed_at_ms: 1_720_000_001,
+        });
+        let host = PluginRuntimeHost::new(host_adapter);
+
+        let response = host
+            .dispatch(dispatch)
+            .await
+            .expect("host dispatch should reject full capability ref mismatch");
+
+        assert!(response.effects.is_empty());
+        assert_eq!(
+            response.diagnostics[0].code,
+            "opencode.custom_tool_capability_mismatch"
+        );
+        assert_eq!(
+            response.diagnostics[0].message,
+            "OpenCode custom tool dispatch requires expected capability opencode.custom_tool owned by extension_contract/opencode.custom-tools; actual capability opencode.custom_tool owned by extension_contract/opencode.wrong-owner"
+        );
+        let follow_up = host
+            .dispatch(envelope(&adapter, CUSTOM_TOOL_EXTENSION_POINT))
+            .await
+            .expect("capability mismatch diagnostic should not quarantine the plugin");
+        assert_eq!(follow_up.effects.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn host_path_rejects_custom_tool_capability_owner_kind_mismatch_without_quarantine() {
+        let adapter = adapter(PluginTrustLevel::Trusted);
+        let mut dispatch = envelope(&adapter, CUSTOM_TOOL_EXTENSION_POINT);
+        dispatch.declared_capability.owner = PluginOwnerRef {
+            kind: PluginOwnerKind::ProductFeature,
+            id: CUSTOM_TOOL_CAPABILITY_OWNER_ID.to_string(),
+        };
+        let host_adapter: Arc<dyn PluginHostAdapter> = Arc::new(OpenCodePluginHostAdapter {
+            projections: vec![OpenCodeProjection::Local(adapter.clone())],
+            observed_at_ms: 1_720_000_001,
+        });
+        let host = PluginRuntimeHost::new(host_adapter);
+
+        let response = host
+            .dispatch(dispatch)
+            .await
+            .expect("host dispatch should reject capability owner kind mismatch");
+
+        assert!(response.effects.is_empty());
+        assert_eq!(
+            response.diagnostics[0].code,
+            "opencode.custom_tool_capability_mismatch"
+        );
+        assert_eq!(
+            response.diagnostics[0].message,
+            "OpenCode custom tool dispatch requires expected capability opencode.custom_tool owned by extension_contract/opencode.custom-tools; actual capability opencode.custom_tool owned by product_feature/opencode.custom-tools"
+        );
+        let follow_up = host
+            .dispatch(envelope(&adapter, CUSTOM_TOOL_EXTENSION_POINT))
+            .await
+            .expect("owner kind mismatch diagnostic should not quarantine the plugin");
+        assert_eq!(follow_up.effects.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn host_path_accepts_source_identity_with_different_read_model_fields() {
+        let adapter = adapter(PluginTrustLevel::Trusted);
+        let mut dispatch = envelope(&adapter, CUSTOM_TOOL_EXTENSION_POINT);
+        dispatch.source.trust_level = PluginTrustLevel::Unknown;
+        dispatch.source.manifest = None;
+        let host_adapter: Arc<dyn PluginHostAdapter> = Arc::new(OpenCodePluginHostAdapter {
+            projections: vec![OpenCodeProjection::Local(adapter)],
+            observed_at_ms: 1_720_000_001,
+        });
+        let host = PluginRuntimeHost::new(host_adapter);
+
+        let response = host
+            .dispatch(dispatch.clone())
+            .await
+            .expect("read-model-only source fields should not break dispatch routing");
+
+        assert_eq!(response.effects.len(), 1);
+        assert!(response.diagnostics.is_empty());
+        assert_eq!(response.effects[0].source_ref, dispatch.source);
+        assert_eq!(response.plugin_statuses[0].source, dispatch.source);
+        assert_eq!(
+            response.plugin_statuses[0].status,
+            PluginStatusKind::ProjectionOnly
+        );
+    }
+
+    #[tokio::test]
+    async fn host_path_revoked_source_snapshot_overrides_stale_dispatch_source_without_quarantine()
+    {
+        let adapter = adapter(PluginTrustLevel::Revoked);
+        let mut dispatch = envelope(&adapter, CUSTOM_TOOL_EXTENSION_POINT);
+        dispatch.source.trust_level = PluginTrustLevel::Trusted;
+        dispatch.source.manifest = None;
+        let host_adapter: Arc<dyn PluginHostAdapter> = Arc::new(OpenCodePluginHostAdapter {
+            projections: vec![OpenCodeProjection::Local(adapter.clone())],
+            observed_at_ms: 1_720_000_001,
+        });
+        let host = PluginRuntimeHost::new(host_adapter);
+
+        let response = host
+            .dispatch(dispatch.clone())
+            .await
+            .expect("revoked trust snapshot should project a typed diagnostic");
+
+        assert!(response.effects.is_empty());
+        assert_eq!(
+            response.plugin_statuses[0].status,
+            PluginStatusKind::Disabled
+        );
+        assert_eq!(response.diagnostics[0].source, dispatch.source);
+        assert_eq!(response.plugin_statuses[0].source, dispatch.source);
+
+        let follow_up = host
+            .dispatch(dispatch)
+            .await
+            .expect("revoked trust diagnostic should not quarantine the plugin");
+        assert!(follow_up.effects.is_empty());
+    }
+
+    #[tokio::test]
+    async fn host_path_rejects_stale_source_ref_without_quarantine() {
+        let adapter = adapter(PluginTrustLevel::Trusted);
+        let mut dispatch = envelope(&adapter, CUSTOM_TOOL_EXTENSION_POINT);
+        dispatch.source.content_hash = "sha256:stale".to_string();
+        let host_adapter: Arc<dyn PluginHostAdapter> = Arc::new(OpenCodePluginHostAdapter {
+            projections: vec![OpenCodeProjection::Local(adapter.clone())],
+            observed_at_ms: 1_720_000_001,
+        });
+        let host = PluginRuntimeHost::new(host_adapter);
+
+        let response = host
+            .dispatch(dispatch.clone())
+            .await
+            .expect("host dispatch should convert stale source refs into diagnostics");
+
+        assert!(response.effects.is_empty());
+        assert_eq!(response.diagnostics[0].code, "opencode.source_mismatch");
+        assert_eq!(response.diagnostics[0].source, dispatch.source);
+        assert_eq!(response.plugin_statuses[0].source, dispatch.source);
+        assert_eq!(
+            response.plugin_statuses[0].availability,
+            PluginRuntimeAvailability::Unavailable {
+                reason: PluginRuntimeUnavailableReason::HostUnavailable
+            }
+        );
+
+        let follow_up = host
+            .dispatch(envelope(&adapter, CUSTOM_TOOL_EXTENSION_POINT))
+            .await
+            .expect("stale source diagnostic should not quarantine the plugin");
+        assert_eq!(follow_up.effects.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn host_path_projects_unsupported_hook_diagnostic_without_quarantine() {
+        let adapter = adapter(PluginTrustLevel::Trusted);
+        let host_adapter: Arc<dyn PluginHostAdapter> = Arc::new(OpenCodePluginHostAdapter {
+            projections: vec![OpenCodeProjection::Local(adapter.clone())],
+            observed_at_ms: 1_720_000_001,
+        });
+        let host = PluginRuntimeHost::new(host_adapter);
+
+        let response = host
+            .dispatch(envelope(&adapter, "tool.execute.before"))
+            .await
+            .expect("host dispatch should preserve unsupported hook diagnostic");
+
+        assert!(response.effects.is_empty());
+        assert_eq!(response.diagnostics.len(), 1);
+        assert_eq!(
+            response.diagnostics[0].code,
+            "opencode.hook_projection_only"
+        );
+        assert_eq!(
+            response.diagnostics[0].audit.event_id.as_deref(),
+            Some("event-tool.execute.before")
+        );
+
+        let follow_up = host
+            .dispatch(envelope(&adapter, CUSTOM_TOOL_EXTENSION_POINT))
+            .await
+            .expect("unsupported hook diagnostic should not quarantine the plugin");
+        assert_eq!(follow_up.effects.len(), 1);
+    }
+
+    #[test]
+    fn custom_tool_dispatch_rejects_mismatched_declared_capability_without_effect() {
+        let adapter = adapter(PluginTrustLevel::Trusted);
+        let mut dispatch = envelope(&adapter, CUSTOM_TOOL_EXTENSION_POINT);
+        dispatch.declared_capability.capability_id = "opencode.permission_hook".to_string();
+
+        let response = adapter
+            .project_dispatch_response(dispatch)
+            .expect("project dispatch response");
+
+        assert!(response.effects.is_empty());
+        assert_eq!(
+            response.diagnostics[0].code,
+            "opencode.custom_tool_capability_mismatch"
+        );
+        assert_eq!(
+            response.plugin_statuses[0].status,
+            PluginStatusKind::ProjectionOnly
+        );
     }
 
     #[test]

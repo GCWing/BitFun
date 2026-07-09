@@ -10,22 +10,22 @@
 
 结论：
 
-- OpenCode 适配器只能是主机内部反腐层。
+- OpenCode 适配器只能是主机内部兼容适配层。
 - BitFun 插件来源、manifest、hash、信任、诊断和权限/副作用门禁是权威路径。
 - OpenCode 配置和目录只作为可选导入输入，不是 BitFun 插件主配置。
 - 用户本机是否安装 `opencode` CLI 不影响 BitFun 加载或诊断 OpenCode-compatible 插件。
 - TUI 与 GUI 插件能力必须分别声明目标入口形态；主题贡献只能通过语义 token 映射，不能共享或透传原始主题键。
-- 没有 OpenCode 对应能力、没有当前消费方、不能复用 BitFun 工具/事件/权限子接口的公开接口，不进入稳定面。
+- 公开接口必须同时具备当前消费方、明确接口切面和可复核验证路径。缺少任一条件，或不能复用 BitFun 工具/事件/权限子接口或已预算入口形态声明接口，不进入稳定面。
 
 ## 2. 接口准入表
 
 | OpenCode 能力 | P0 处理 | BitFun 承接位置 | 处理方式 |
 |---|---|---|---|
-| `opencode.json` plugin 配置 | 可作为兼容输入进入 P0 | OpenCode 适配层 -> BitFun 插件来源读模型 | 只读扫描，生成 provenance、manifest、hash、诊断和候选来源 |
+| `opencode.json` plugin 配置 | 可作为兼容输入进入 P0 | OpenCode 适配层 -> BitFun 插件来源只读视图 | 只读扫描，生成 provenance、manifest、hash、诊断和候选来源 |
 | `.opencode/plugins/*.js|ts` | 可作为兼容输入进入 P0 | OpenCode 适配层 | 只识别文件形态和能力声明，不直接执行 |
 | 全局插件目录 | 可作为兼容输入进入 P0 | OpenCode 适配层 | 只读导入；不继承 OpenCode 启用顺序 |
 | npm 插件列表 | P0 可诊断，执行属于后续 | OpenCode 适配层 | 只产出来源和 unsupported / projection-only 诊断 |
-| custom tool | 是，最小候选能力 | 扩展贡献接口 -> 工具 ABI | 映射为 provider candidate；物化前必须走权限和工具快照 |
+| custom tool | 是，最小候选能力 | 扩展贡献接口 -> 工具 ABI | 映射为提供方候选（`ProviderCandidate`）；进入最终工具链路前必须走权限和工具快照 |
 | permission hook | 是，候选能力 | 权限/副作用子接口 | 只能产生候选确认或诊断；不能直接批准 |
 | `tool.execute.before` | 否，P0 只诊断 | 诊断 / status-only | 不改写输入、权限或工具结果 |
 | `tool.execute.after` | 否，P0 只诊断 | 诊断 / status-only | 不伪造工具结果或审计成功 |
@@ -54,11 +54,18 @@
 
 | 区域 | 当前判断 | 后续处理 |
 |---|---|---|
-| `runtime-ports` plugin contract | 已有主机 ABI、读模型、候选效果、权限提示、诊断和隔离类型；公开符号较多但已受脚本预算约束 | 不继续新增泛描述符；公开符号必须声明接口切面、消费方和验证目标 |
+| `runtime-ports` plugin contract | 已有主机 ABI、只读视图、候选项、权限提示、诊断和隔离类型；公开符号较多但已受脚本预算约束 | 不继续新增泛描述符；公开符号必须声明接口切面、消费方和验证目标 |
 | `plugin-runtime-host` | 已有受控 host 边界、deadline、幂等、隔离和 restart 清理路径 | 继续保持窄方法集；来源发现和激活属于 P0-C |
-| `opencode-adapter` | 当前提供 projection-only 来源发现适配器，只做配置导入、来源发现和诊断读模型 | 不得实现 `PluginRuntimeClient`，不得声明可执行可用性 |
+| `opencode-adapter` | 提供来源发现、诊断只读视图和受信任 custom tool 候选映射；未建立信任或暂不支持的能力返回诊断或 `unsupported` 状态 | 当前只验证适配器到 Plugin Runtime Host 的候选链路；生产组装接入须独立评审 |
 | `events` | 已有产品事件清单 | 需要在真实插件事件消费前定义可订阅子集，不新增插件专用事件模型 |
 | `tool-contracts` | 已有动态工具提供方和工具快照 | custom tool 映射必须复用它，不新增插件专用工具 ABI |
+
+`opencode-adapter` 当前规则：
+
+- 通过 `load_opencode_workspace_adapter` 接入 Plugin Runtime Host，并接收产品来源/策略侧生成的 `PluginSourceRef` 来源快照和信任 epoch。
+- 信任快照的 epoch 必须与本次 read/dispatch epoch 一致，否则只返回诊断，不产生受信任候选。
+- GUI、TUI/CLI、Web 等产品入口只消费能力服务接口、插件只读视图、诊断和稳定状态词。
+- 适配器不执行 JS/TS、不安装 npm、不依赖用户本机 `opencode`。
 
 ## 5. PR 审查问题
 
