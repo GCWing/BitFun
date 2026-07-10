@@ -1196,6 +1196,7 @@ pub async fn run() {
             api::remote_connect_api::account_export_all_sessions,
             api::remote_connect_api::account_import_remote_sessions,
             api::remote_connect_api::account_execute_on_device,
+            api::remote_connect_api::account_auto_sync,
             // MiniApp API
             api::miniapp_api::list_miniapps,
             api::miniapp_api::get_miniapp,

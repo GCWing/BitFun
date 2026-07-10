@@ -778,6 +778,10 @@ pub async fn remote_connect_set_bot_verbose_mode(verbose: bool) -> Result<(), St
 pub struct AccountLoginResult {
     pub token: String,
     pub user_id: String,
+    /// Whether the relay already has a cloud settings blob for this account.
+    /// `true` = non-first login → the frontend should prompt the user before
+    /// overwriting local settings. `false` = first login → auto-upload local.
+    pub has_cloud_settings: bool,
 }
 
 /// Current account login status (no secrets exposed).
@@ -812,13 +816,27 @@ pub async fn account_login(request: AccountAuthRequest) -> Result<AccountLoginRe
         )
         .await
         .map_err(|e| format!("{e}"))?;
+
+    // Check whether the relay already has a cloud settings blob for this
+    // account.  This tells the frontend whether to prompt before overwriting.
+    let has_cloud_settings = client
+        .fetch_settings(&request.relay_url, &session)
+        .await
+        .unwrap_or(None)
+        .is_some();
+
     let result = AccountLoginResult {
         token: session.token.clone(),
         user_id: session.user_id.clone(),
+        has_cloud_settings,
     };
     *get_account_session().write().await = Some(session);
     *get_account_relay_url().write().await = Some(request.relay_url.clone());
-    log::info!("Account logged in: {}", result.user_id);
+    log::info!(
+        "Account logged in: {} (has_cloud_settings={})",
+        result.user_id,
+        result.has_cloud_settings
+    );
     Ok(result)
 }
 
@@ -1345,4 +1363,139 @@ pub async fn account_execute_on_device(
         .send_device_message(&target_device_id, &correlation_id, &encrypted_data, &nonce)
         .await
         .map_err(|e| format!("{e}"))
+}
+
+/// Result of an auto-sync operation, returned to the frontend.
+#[derive(Serialize)]
+pub struct AutoSyncResult {
+    pub settings_synced: bool,
+    pub sessions_exported: usize,
+    pub sessions_imported: usize,
+}
+
+/// Perform the full auto-sync flow. Called by the frontend after login
+/// (first login) or after the user confirms cloud-settings overwrite
+/// (non-first login).
+#[tauri::command]
+pub async fn account_auto_sync(
+    is_first_login: bool,
+    workspace_path: String,
+    config_json: String,
+    app_state: State<'_, crate::api::app_state::AppState>,
+    path_manager: State<'_, Arc<bitfun_core::infrastructure::PathManager>>,
+) -> Result<AutoSyncResult, String> {
+    let (acct_session, relay_url) = read_account_context().await?;
+    let client = AccountClient::new();
+
+    // 1. Settings sync
+    let settings_synced = if is_first_login {
+        client
+            .upload_settings(&relay_url, &acct_session, &config_json)
+            .await
+            .map_err(|e| format!("upload settings: {e}"))?;
+        log::info!("First login: uploaded local settings to cloud");
+        true
+    } else {
+        let cloud_settings = client
+            .fetch_settings(&relay_url, &acct_session)
+            .await
+            .map_err(|e| format!("fetch settings: {e}"))?;
+        if let Some(cloud_json) = cloud_settings {
+            let config_value: serde_json::Value = serde_json::from_str(&cloud_json)
+                .map_err(|e| format!("parse cloud config: {e}"))?;
+            app_state
+                .config_service
+                .import_config_data(config_value)
+                .await
+                .map_err(|e| format!("import cloud config: {e}"))?;
+            app_state.ai_client_factory.invalidate_cache();
+            log::info!("Applied cloud settings to local device");
+            true
+        } else {
+            false
+        }
+    };
+
+    // 2. Session sync: export local + import remote
+    let storage_path =
+        desktop_effective_session_storage_path(&app_state, &workspace_path, None, None).await;
+    let manager = PersistenceManager::new(path_manager.inner().clone())
+        .map_err(|e| format!("create persistence manager: {e}"))?;
+
+    let local_sessions = manager
+        .list_session_metadata(&storage_path)
+        .await
+        .map_err(|e| format!("list sessions: {e}"))?;
+
+    let mut exported = 0usize;
+    for meta in &local_sessions {
+        let turns = manager
+            .load_session_turns(&storage_path, &meta.session_id)
+            .await
+            .map_err(|e| format!("load turns: {e}"))?;
+        let metadata_json =
+            serde_json::to_value(meta).map_err(|e| format!("serialize metadata: {e}"))?;
+        let turns_json: Vec<serde_json::Value> = turns
+            .iter()
+            .map(|t| serde_json::to_value(t).unwrap_or(serde_json::Value::Null))
+            .collect();
+        let bundle = SessionBundle {
+            session_id: meta.session_id.clone(),
+            metadata: metadata_json,
+            turns: turns_json,
+            source_device_id: None,
+            source_device_name: None,
+        };
+        let bundle_json =
+            serde_json::to_string(&bundle).map_err(|e| format!("serialize bundle: {e}"))?;
+        if client
+            .upload_session(&relay_url, &acct_session, &meta.session_id, &bundle_json)
+            .await
+            .is_ok()
+        {
+            exported += 1;
+        }
+    }
+
+    let remote_sessions = client
+        .fetch_sessions(&relay_url, &acct_session)
+        .await
+        .map_err(|e| format!("fetch sessions: {e}"))?;
+
+    let mut imported = 0usize;
+    for (session_id, bundle_json) in remote_sessions {
+        if manager
+            .load_session_metadata(&storage_path, &session_id)
+            .await
+            .ok()
+            .flatten()
+            .is_some()
+        {
+            continue;
+        }
+        let bundle: SessionBundle =
+            serde_json::from_str(&bundle_json).map_err(|e| format!("deserialize bundle: {e}"))?;
+        let metadata: SessionMetadata = serde_json::from_value(bundle.metadata)
+            .map_err(|e| format!("deserialize metadata: {e}"))?;
+        if manager
+            .save_session_metadata(&storage_path, &metadata)
+            .await
+            .is_err()
+        {
+            continue;
+        }
+        for turn_val in &bundle.turns {
+            let turn: DialogTurnData = serde_json::from_value(turn_val.clone())
+                .map_err(|e| format!("deserialize turn: {e}"))?;
+            let _ = manager.save_dialog_turn(&storage_path, &turn).await;
+        }
+        imported += 1;
+    }
+
+    log::info!("Auto-sync: settings={settings_synced} exported={exported} imported={imported}");
+    Ok(AutoSyncResult {
+        settings_synced,
+        sessions_exported: exported,
+        sessions_imported: imported,
+    })
 }

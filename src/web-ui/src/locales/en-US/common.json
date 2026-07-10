@@ -483,7 +483,11 @@
     "syncSuccess": "Synced successfully",
     "fetchSuccess": "Fetched successfully",
     "sendToDevice": "Send to Device",
-    "deviceSyncError": "Device sync error: {{message}}"
+    "deviceSyncError": "Device sync error: {{message}}",
+    "cloudOverwriteWarning": "Cloud settings detected for this account. Continuing will overwrite this device's local BitFun configuration with the cloud version.",
+    "cloudOverwriteDetail": "If you disagree, you will be logged out and no changes will be made.",
+    "agree": "Agree and Continue",
+    "disagree": "Disagree"
   },
   "remoteConnect": {
     "tabNgrok": "NAT Traversal",

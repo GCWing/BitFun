@@ -483,7 +483,11 @@
     "syncSuccess": "同步成功",
     "fetchSuccess": "取得成功",
     "sendToDevice": "發送到裝置",
-    "deviceSyncError": "裝置同步錯誤：{{message}}"
+    "deviceSyncError": "裝置同步錯誤：{{message}}",
+    "cloudOverwriteWarning": "偵測到此帳號已有雲端設定。繼續登入將使用雲端設定覆蓋本裝置的 BitFun 設定。",
+    "cloudOverwriteDetail": "如果您不同意，將取消登入，不會做任何修改。",
+    "agree": "同意並繼續",
+    "disagree": "不同意"
   },
   "remoteConnect": {
     "tabNgrok": "內網穿透",

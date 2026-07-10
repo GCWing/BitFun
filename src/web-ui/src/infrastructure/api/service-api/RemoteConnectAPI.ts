@@ -87,6 +87,13 @@ export interface WeixinQrPollResponse {
 export interface AccountLoginResult {
   token: string;
   user_id: string;
+  has_cloud_settings: boolean;
+}
+
+export interface AutoSyncResult {
+  settings_synced: boolean;
+  sessions_exported: number;
+  sessions_imported: number;
 }
 
 export interface AccountStatus {
@@ -443,6 +450,25 @@ class RemoteConnectAPIService {
       });
     } catch (e) {
       log.error('accountExecuteOnDevice failed', e);
+      throw e;
+    }
+  }
+
+  async accountAutoSync(
+    isFirstLogin: boolean,
+    workspacePath: string,
+    configJson: string,
+  ): Promise<AutoSyncResult> {
+    try {
+      return await this.adapter.request<AutoSyncResult>('account_auto_sync', {
+        request: {
+          is_first_login: isFirstLogin,
+          workspace_path: workspacePath,
+          config_json: configJson,
+        },
+      });
+    } catch (e) {
+      log.error('accountAutoSync failed', e);
       throw e;
     }
   }
