@@ -39,6 +39,7 @@
 | 输入 | 来源 |
 |---|---|
 | 项目画像快照 | 项目结构、规则、验证能力、负责人、主动配置状态 |
+| Review 目标证据 | 当前工作区、明确 Git range 或 PR 的 base/head、目标指纹、文件状态、受控 diff 引用、完整度、workspace binding 和失效状态 |
 | 任务与变更摘要 | 用户意图、Git diff、文件变更、重命名/删除、生成文件 |
 | 验证证据 | `verification.completed`、CI 检查、命令摘要、制品引用 |
 | 风险策略提示 | 风险标签、推荐/强制检查、审查强度 |
@@ -63,6 +64,28 @@ type EvidenceDisplayTier =
   | "evidence_refs"
   | "full_pack";
 
+interface ReviewTargetFileEvidence {
+  path: string;
+  previousPath?: string;
+  status: "added" | "modified" | "deleted" | "renamed" | "copied" | "unknown";
+  completeness: "complete" | "partial" | "unavailable";
+}
+
+interface ReviewTargetEvidence {
+  version: 1;
+  source: "workspace" | "git_range";
+  fingerprint: string;
+  baseRevision?: string;
+  headRevision?: string;
+  completeness: "complete" | "partial" | "unknown" | "stale";
+  workspaceBinding: "matching_clean" | "matching_dirty" | "mismatched" | "unavailable";
+  files: ReviewTargetFileEvidence[];
+  limitations: string[];
+  omittedFileCount?: number;
+}
+
+type ReviewEvidenceStatus = "complete" | "limited" | "stale" | "failed";
+
 interface EvidencePack {
   id: string;
   version: number;
@@ -74,6 +97,7 @@ interface EvidencePack {
   generated_at: string;
   status: EvidencePackStatus;
   display_tier: EvidenceDisplayTier;
+  review_target?: ReviewTargetEvidence;
   context: ContextEvidence[];
   change?: ChangeEvidence;
   verification: VerificationEvidence[];
@@ -90,12 +114,20 @@ interface EvidencePack {
 }
 ```
 
+`ReviewTargetEvidence.completeness` describes prepared target facts. The final
+report carries `ReviewEvidenceStatus` separately from its recommendation. Only
+an immutable, complete Git range with no omitted files may retain a clean
+approval. Mutable workspace evidence is always `limited` in the current design.
+Synthetic diff references and embedded diff bodies are intentionally excluded;
+reviewers page through the target-bound diff tool using opaque cursors.
+
 关键字段语义：
 
 | 字段 | 语义 |
 |---|---|
 | `source_events` | 生成该包使用的事件 id 集合 |
 | `evidence_refs` | 指向日志摘要、报告、CI、截图、轨迹或外部系统事实的引用 |
+| `review_target` | 本次 Review 的目标摘要；完整 diff/provider body 仍通过受控 `evidence_refs` 访问。immutable revision 可声明内容不可变；live workspace 可在有界 diff、冲突状态和未跟踪内容指纹完整时声明覆盖完整，但必须保留可变新鲜度限制。base/head、目标指纹、完整度或 workspace binding 变化后，具备生命周期 adapter 的入口必须使当前包 stale |
 | `security` | 执行安全决策摘要，包括执行位置、沙箱等级组合、降级原因和授权范围；不作为质量通过依据 |
 | `skipped_checks` | 未运行检查的原因、触发规则、可接受条件和残余风险 |
 | `open_risks` | 尚未被证据覆盖或人工接受的风险 |
@@ -106,7 +138,7 @@ interface EvidencePack {
 
 ```text
 源事件
-  -> 构建证据摘要
+  -> 固定 Review 目标并构建证据摘要
   -> 附加画像和策略版本
   -> 判断新鲜度与完整度
   -> 选择展示层级
@@ -121,7 +153,7 @@ interface EvidencePack {
 |---|---|---|
 | `fresh` | 当前层级所需证据完整且来源版本未变化 | 可支撑就绪度或门禁判断 |
 | `partial` | 推荐证据缺失、非阻塞跳过项或低风险未知 | 摘要或建议投影展示缺口 |
-| `stale` | diff、项目画像、策略、强制检查、审查范围或主动配置变化 | 不得继续支撑通过/就绪判断 |
+| `stale` | Review base/head、目标指纹、workspace binding、diff、项目画像、策略、强制检查、审查范围或主动配置变化 | 不得继续支撑通过/就绪判断或当前 head 的评论发布 |
 | `blocked` | 必要验证失败、安全拒绝、高权限主动配置未确认或证据不可访问 | 下游应进入阻断、失败或降级状态 |
 | `superseded` | 新版本证据包取代旧版本 | 旧包保留审计，不作为当前判断依据 |
 

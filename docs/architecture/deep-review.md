@@ -36,7 +36,7 @@ The backend does not resolve the review target or build the launch manifest. The
 - `ReviewFrontend`
 - `ReviewJudge`
 
-The reviewer agents use instruction-only context and read/search/diff tools. They do not receive the generic Git tool because it also exposes mutating operations. `ReviewFrontend` is a conditional role. `ReviewJudge` validates reviewer evidence and consistency instead of performing a full independent review pass.
+The reviewer agents use instruction-only context and read/search/diff tools. The existing generic Git exposure remains for legacy compatibility, but it is not authorized as prepared changed-code evidence. Prepared `GetFileDiff` is the source of truth for changed code; when the local binding is `matching_clean`, existing Read/Grep/Glob/LS tools may supplement it with repository context. `ReviewFrontend` is a conditional role. `ReviewJudge` validates reviewer evidence and consistency instead of performing a full independent review pass.
 
 `ReviewFixer` is the separate writable remediation identity. DeepReview runtime policy rejects it during review execution. The frontend action surface invokes it only after user approval, and a new read-only Review run checks the fix when requested.
 
@@ -47,7 +47,7 @@ Review can be launched from session-file controls or `/review`. The product-doma
 Frontend launch code lives in `src/web-ui/src/flow_chat/deep-review/launch`:
 
 - `commandParser.ts` identifies canonical `/review strict` commands, transitional `/DeepReview` compatibility aliases, and optional file or git targets.
-- `targetResolver.ts` resolves slash-command targets from git status, changed files, and diffs when a workspace is available. File-scoped sizing reads untracked content through the registered, remote-aware workspace API; a resolved non-empty target with unknown change size cannot select L1.
+- `targetResolver.ts` resolves slash-command target file lists, immutable base/head revisions, change statistics, and target evidence from git status, explicit ranges, and diffs when a workspace is available. Explicit file and directory targets remain exact instead of widening to the whole worktree. Provider adapters may later supply the same provider-neutral target contract only after product metrics justify that follow-up. File-scoped sizing reads untracked content through the registered, remote-aware workspace API; a resolved non-empty target with unknown change size cannot select L1.
 - `launchPrompt.ts` formats the user-facing launch prompt.
 - `DeepReviewService.ts` builds the review-team manifest, creates a child session, sends the launch prompt, and inserts the parent-session summary marker. Launch does not automatically open the auxiliary pane; the summary-card detail action is the normal user-facing way to inspect the background review run.
 - `src/web-ui/src/flow_chat/services/DeepReviewService.ts` is a compatibility re-export.
@@ -64,7 +64,30 @@ Frontend launch code lives in `src/web-ui/src/flow_chat/deep-review/launch`:
 - context compression enabled
 - `deepReviewRunManifest` stored on the child session metadata
 
-If launch fails after the child session is created, the frontend runs idempotent UI/session cleanup, deletes the backend session when possible, discards local session state, and reports cleanup issues with the launch error.
+If the first launch message has an uncertain outcome after the child session is created, the frontend preserves and opens that child session, records an interruption marker, and lets the user inspect or resume it. It never deletes a possibly running backend session. Failures that are proven to occur before message submission may still use idempotent cleanup.
+
+## Target Evidence Convergence
+
+The current change is limited to local workspace and explicit Git-range target correctness. Provider/PR entry convergence is a conditional follow-up, not a committed second implementation: it requires post-launch evidence that target mistakes or duplicate Review paths remain a material decision bottleneck. This is not a new DeepReview phase or persistence system.
+
+This change introduces session-scoped Review target evidence for current workspace changes and explicit Git ranges. Explicit ranges provide immutable content reads and may be `complete`. Current-workspace evidence is always `limited` because there is no immutable snapshot; bounded diff, conflict, binary, and untracked-file facts improve coverage but do not authorize a clean recommendation. The view carries:
+
+- source kind and opaque target fingerprint
+- base and head revisions
+- changed file path, previous path, and add/modify/delete/rename status
+- completeness and limitation facts for truncation, binary files, unavailable content, or remote capability gaps
+- a deterministic workspace binding that says whether the local repository head matches the target head and whether any staged, unstaged, untracked, or conflicted worktree state could contaminate repository context
+- final report evidence status (`complete`, `limited`, `stale`, or `failed`) separately from the Review recommendation
+
+Project integration resolves local Git facts. The artifact/evidence layer exposes the target evidence and its honest completeness state. Review policy consumes target facts; reviewers consume read-only evidence. Provider identity, authentication, URLs, CI state, provider diff acquisition, and publish operations stay outside this change.
+
+Prepared Review work packets do not authorize generic Git as changed-code evidence. `GetFileDiff` is the source of truth and uses a bounded target-bound diff. Review-only pagination uses an opaque cursor, fixed-size pages, the existing per-file bound, and a lightweight per-reviewer aggregate allowance (240,000 returned characters or 16 distinct pages). Repeating the same page does not consume the allowance twice; exhaustion returns structured limited evidence instead of encouraging retries. Workspace rename preparation and consumption force rename detection and keep both old and new paths. Untracked-file fingerprinting has aggregate file and byte budgets, a single-file limit below one model-visible page, and rejects symlinks/reparse points. The existing Git exposure remains only for legacy compatibility; it must not guess or widen prepared refs. When the local repository binding matches the target head and the whole worktree is clean, existing Read/Grep/Glob/LS tools may supplement that evidence with repository context. When either condition fails, live repository context is withheld. The product does not re-run whole-worktree status before every tool call, automatically clone, fetch, checkout, or create a worktree.
+
+Deleted, renamed, binary, oversized, conflicted, or unavailable files remain visible as coverage facts. Missing evidence reduces confidence or coverage and cannot become a clean result. A workspace may change after preparation; this accepted residual risk avoids a full-repository status scan before every tool call, and live reads remain supplemental rather than changed-code evidence.
+
+Provider entry convergence remains a measured candidate only. If later justified, it should fix provider identity/base/head/diff, remove duplicate AI decision paths, and keep platform facts, BitFun readiness, and AI advice separate. Automatic publishing and inline-comment generation remain excluded.
+
+Stable cross-review finding identities, new in-session result actions, automatic reviews, same-diff reuse, feedback learning, full remote checkout, reviewer command execution, speculative caches, and organizational analytics are excluded.
 
 ## Strict Reviewer Configuration
 
@@ -116,8 +139,6 @@ Extra reviewers must be enabled subagents with read-only review tooling. Core re
 - change stats
 - pre-review summary
 - evidence pack
-- shared-context cache plan
-- incremental-review cache plan
 - token-budget plan
 - active core reviewers
 - quality-gate reviewer
@@ -127,7 +148,7 @@ Extra reviewers must be enabled subagents with read-only review tooling. Core re
 
 The target classifier drives conditional reviewer selection. `ReviewFrontend` is included only when the target matches frontend-oriented files.
 
-The evidence pack is metadata-only. It lists changed file paths, aggregate diff stats, domain/risk tags, packet ids, hunk hints, contract hints, and budget counts. It explicitly excludes source text, full diff text, model output, provider raw bodies, and full file contents.
+The evidence pack is metadata-only. It lists changed file paths, aggregate diff stats, domain/risk tags, packet ids, hunk hints, contract hints, budget counts, and workspace/Git-range target facts. It explicitly excludes embedded source text, full diff text, model output, duplicated manifest JSON, provider raw bodies, synthetic diff references, speculative cache plans, and full file contents.
 
 ## Strategies and Scope
 
@@ -194,7 +215,7 @@ The generic `Task` tool is adapted for DeepReview in:
 DeepReview task execution uses the manifest and tool context to:
 
 - identify reviewer role and packet id
-- attach incremental review cache data
+- read historical incremental-cache metadata when present, without creating cache plans for new runs
 - enforce policy and retry coverage
 - cap active reviewers
 - preserve launch-batch ordering
@@ -260,7 +281,7 @@ In DeepReview context, the tool requires the deep-review fields in addition to t
 - `reviewers`
 - `remediation_plan`
 
-DeepReview report enrichment lives in `src/crates/assembly/core/src/agentic/deep_review/report.rs`. It fills missing reviewer packet metadata when a unique packet can be inferred, adds runtime diagnostics, updates incremental cache data, and adds reliability signals for cache hits, cache misses, partial coverage, capacity skips, retry guidance, queue waits, reduced scope, and evidence-pack metadata.
+DeepReview report enrichment lives in `src/crates/assembly/core/src/agentic/deep_review/report.rs`. It fills missing reviewer packet metadata when a unique packet can be inferred, adds runtime diagnostics, preserves read compatibility for historical incremental-cache data, and adds reliability signals for partial coverage, capacity skips, retry guidance, queue waits, reduced scope, and evidence status. Missing or invalid report summaries fail closed instead of defaulting to approval.
 
 Report enrichment is guarded by the tool context. Standard Code Review output should not receive DeepReview-only metadata unless the active tool context proves `agent_type == 'DeepReview'`.
 
@@ -298,9 +319,11 @@ The review action bar persists UI state separately through `ReviewActionBarPersi
 - Frontend components do not call Tauri directly; they use infrastructure APIs such as `agentAPI`.
 - Shared core stays platform-agnostic and uses event/config/tool abstractions instead of Tauri handles.
 - Product domains own the platform-neutral L1-L3 Review decision; the frontend owns target resolution, team manifest construction, strategy profile wording, prompt-block construction, consent, and action UI.
+- Project integration adapters own raw workspace/Git/provider target acquisition. The artifact/evidence layer owns the fixed session target manifest and its completeness; only immutable revisions may be `complete` in this change. Mutable workspace targets remain `limited`. Reviewers may not mutate or silently widen that target, and the quality decision layer does not own provider identity or fetch behavior.
 - The backend owns policy validation, runtime admission, queue/retry state, event emission, and report enrichment.
 - Reviewer subagents and review orchestrators stay read-only. Remediation runs under `ReviewFixer` after user approval, not during the reviewer pass.
 - Work packets and evidence packs are planning metadata; they must not embed file contents or full diffs.
+- Existing reviewer Git exposure remains unchanged for legacy compatibility, but prepared work packets do not authorize it as changed-code evidence and no dedicated multi-operation Git tool is added. Prepared `GetFileDiff` must be bounded and disable external diff/text conversion; live repository reads are supplemental and require a deterministic clean local binding.
 
 ## Change Checklist
 
@@ -310,3 +333,4 @@ When changing DeepReview behavior, update all affected contracts together:
 - Frontend strict-review defaults/types, manifest builder, prompt block, launch service, action-bar store, event mapping, report rendering, and locales.
 - Desktop Tauri command DTOs when capacity controls or default review definition contracts change.
 - Tests near the touched module, especially policy tests, strict-review manifest tests, queue event tests, launch tests, action-bar tests, and locale completeness tests.
+- For target-evidence changes, add contract coverage for workspace changes, exact file/directory scopes, explicit ranges, clean checkout, deleted/renamed/binary/oversized files, remote fast rejection, dirty-workspace isolation, exact-diff bounds, fail-closed reports, uncertain launch preservation, and unchanged ordinary Agent behavior. Provider truncation and head invalidation belong to a separately justified provider-adapter change.

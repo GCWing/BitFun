@@ -937,6 +937,8 @@
     "launchError": {
       "modelConfig": "無法建立審核會話，請檢查模型設定",
       "network": "網絡連接中斷，審核未能啟動",
+      "target": "無法安全準備要求的審核範圍，請檢查目標後重試",
+      "uncertain": "審核要求可能已在執行。工作階段已保留，可安全檢查或重試",
       "unknown": "審核啟動失敗，請重試"
     }
   },
@@ -1864,6 +1866,10 @@
         "reduced_scope": {
           "label": "聚焦 Review 範圍",
           "detail": "本次 Review 使用了聚焦範圍設定。"
+        },
+        "target_evidence_limited": {
+          "label": "目標證據受限",
+          "detail": "準備好的目標證據無法安全涵蓋所有要求的變更。"
         },
         "retry_guidance": {
           "label": "已給出重試指引",

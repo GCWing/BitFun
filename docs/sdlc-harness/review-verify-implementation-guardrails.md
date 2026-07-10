@@ -1,6 +1,6 @@
 # Review / Verify 收敛实施护栏
 
-> 范围：记录统一 Review、DeepReview 收敛和 ReviewTeam 内部化两次大型 PR 的已合入基线，明确既有 PR Review 独立 AI 草稿路径仍待收敛，并约束 Verify 探索和后续产品优化不重新扩张概念。
+> 范围：记录统一 Review、DeepReview 收敛、ReviewTeam 内部化与当前 PR1 目标证据候选基线，明确既有 PR Review 独立 AI 草稿路径仍待收敛，并约束 Verify 探索和后续产品优化不重新扩张概念。
 > 本文是实施护栏，不新增 SDLC Harness 阶段路线，不定义新的 workflow DSL，也不替代 [product-requirements.md](product-requirements.md)、[agent-workflow-staged-plan.md](agent-workflow-staged-plan.md) 或 [features/pr-quality-gate.md](features/pr-quality-gate.md)。
 > 合入后的竞品复盘、体验差距和候选需求见 [research/review-product-experience-benchmark.md](research/review-product-experience-benchmark.md)。
 
@@ -106,15 +106,25 @@ PR2 已合入实现边界：
 
 合入后仍需解决的是产品表达和问题闭环，而不是继续增加 Review 执行机制：
 
+- `GetFileDiff` 对普通 Agent 保留单文件 baseline / 本地 `HEAD` 兼容路径；对 prepared Review 则只消费目标准备层固定的 base/head、文件状态与有界 exact diff，包括新增、删除和保留 old/new path 的重命名文件。超大 prepared diff 使用显式 continuation cursor，避免通用持久化层只向模型显示短预览。只读 Reviewer 保留旧入口既有 `Git` 暴露以避免过渡期能力回退，但 prepared work packet 不授权它作为 changed-code 证据；仅在本地 head 匹配且整个工作区干净时保留现有 Read/Grep/Glob/LS 作为辅助上下文，changed-code source of truth 始终是 prepared diff。
 - 近期问题动作只在本次 Review 内生效并复用现有修复计划；跨 Review 的处理状态和修复后关闭必须先定义稳定身份、持久化所有者和失效规则，不能用启发式关联冒充闭环。
 - “未发现问题”必须限定为本次覆盖范围，不能形成质量背书。
 - 扩大覆盖确认需要说明新增收益，并提供保留核心检查的收敛选择。
 - 自动复审应优先增量化并具备暂停条件，不能默认在每次 push 后持续消费成本。
 - 当前容量设置只作为高级运行控制，不扩张为 Reviewer、策略档位或 Workflow 配置中心。
 
-这些条目在进入实现前必须先按 [Review 产品体验竞品基准与优化需求](research/review-product-experience-benchmark.md) 的优先级回填权威 PRD 和实施计划。
+这些条目在进入实现前必须先按 [Review 产品体验竞品基准与优化需求](research/review-product-experience-benchmark.md) 的优先级回填权威 PRD 和实施计划；当前只承诺目标证据正确这一项。Provider 入口收敛仅保留为需要指标重新立项的候选。
 
-## 4. Review 强度规则
+## 4. 后续实施上限
+
+| PR | 允许范围 | 不得带入 |
+|---|---|---|
+| 当前 PR：目标证据正确 | 当前工作区 / Git range 的 session-scoped target evidence；base/head、文件状态、完整度与 evidence status；exact scope；opaque cursor；reviewer 聚合预算；启动和报告 fail-close | PR/provider 接线、额外 Git 工具、逐调用全仓重验、合成 diff refs、snapshot 系统、增量缓存计划、任意 shell、fetch/checkout/worktree、跨 Review identity、PR UI 重做 |
+| 条件式候选：PR 单入口与最小投影 | 仅在指标证明重复入口是高频障碍后，评估 PR adapter 固定 identity/base/head/provider diff 并启动统一 Review；平台事实/就绪度/AI 建议分层；head 过期 | 未重新立项前不实现；即使立项也排除自动/inline 评论、自动 Review、同 diff 复用、问题处理器、自动修复和新 provider |
+
+若当前 PR 需要突破右栏才能合入，应缩小产品承诺。自动审查、增量问题身份、完整远程 checkout、Reviewer 命令验证、结果动作、provider 入口收敛和组织分析都必须在观察真实收益后重新立项。
+
+## 5. Review 强度规则
 
 | 强度 | 默认适用 | 执行倾向 | 用户呈现 |
 |---|---|---|---|
@@ -123,7 +133,7 @@ PR2 已合入实现边界：
 | L2 定向审查 | 安全、性能、架构、关键 UI、跨模块、验证缺口 | 2-3 个定向只读 reviewer | 合并结论、分歧和未覆盖范围 |
 | L3 严格审查 | 大型 PR、核心接口、安全敏感、大迁移、用户明确要求严格 | 复用 DeepReview 内部 capacity queue、work packets 和 judge | Review: Strict，带预算和范围控制选择 |
 
-所有 L1-L3 review 都必须是对抗性的：reviewer 只能读取、查找、分析和提交审查结果；不能同时执行修复，不能继承实现者的自我证明，不能把“我刚实现的内容看起来没问题”当作独立结论。
+所有 L1-L3 review 都必须是对抗性的：reviewer 只能读取、查找、分析和提交审查结果；不能同时执行修复，不能继承实现者的自我证明，不能把“我刚实现的内容看起来没问题”当作独立结论。Prepared `GetFileDiff` 提供变更事实，clean binding 下的既有 Read/Grep/Glob/LS 只补充仓库上下文，不改变 Reviewer 的只读身份。
 
 只读 Review 和修正阶段必须分开判断：
 
@@ -133,7 +143,7 @@ PR2 已合入实现边界：
 - 没有明确可验证 oracle、问题需要产品决策、或修复会扩大范围时，先回填输入框或请求用户确认，不自动写入。
 - 修复后是否复审由用户诉求、风险等级、变更范围和预算共同决定；低风险单点修复可快速复核，高风险或跨边界修复才进入严格复审。
 
-## 5. GUI 交互原则
+## 6. GUI 交互原则
 
 并发和 review 在 GUI 中必须降低复杂度：
 
@@ -143,7 +153,7 @@ PR2 已合入实现边界：
 - 不因为后台存在多个 subagent 就打开多个 GUI 窗口。
 - 不用“workflow”“subagent queue”“evidence graph”等内部术语作为普通用户主标签。
 
-## 6. 成本和完成率平衡
+## 7. 成本和完成率平衡
 
 默认策略：
 
@@ -161,7 +171,7 @@ PR2 已合入实现边界：
 - 不升级会放弃哪些覆盖。
 - 当前可安全收敛的结果是什么。
 
-## 7. 历史兼容和取舍
+## 8. 历史兼容和取舍
 
 迁移窗口内必须兼容：
 
@@ -181,7 +191,7 @@ PR2 已合入实现边界：
 - Verify 不应默认变成新门禁。
 - 对抗性 review 不能被实现者自检替代。
 
-## 8. PR 前复查清单
+## 9. PR 前复查清单
 
 每个 PR 合入前必须检查：
 

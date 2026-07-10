@@ -84,6 +84,38 @@ export interface DeepReviewEvidencePackPrivacyBoundary {
   ];
 }
 
+export type ReviewTargetEvidenceSource = 'workspace' | 'git_range';
+export type ReviewTargetEvidenceCompleteness = 'complete' | 'partial' | 'unknown' | 'stale';
+export type ReviewTargetWorkspaceBinding =
+  | 'matching_clean'
+  | 'matching_dirty'
+  | 'mismatched'
+  | 'unavailable';
+
+export interface ReviewTargetEvidenceFile {
+  path: string;
+  previousPath?: string;
+  status: 'added' | 'modified' | 'deleted' | 'renamed' | 'copied' | 'unknown';
+  /** Legacy synthetic reference; new evidence does not write it. */
+  diffRef?: string;
+  completeness: 'complete' | 'partial' | 'unavailable';
+}
+
+export interface ReviewTargetEvidence {
+  version: 1;
+  source: ReviewTargetEvidenceSource;
+  fingerprint: string;
+  baseRevision?: string;
+  headRevision?: string;
+  completeness: ReviewTargetEvidenceCompleteness;
+  workspaceBinding: ReviewTargetWorkspaceBinding;
+  files: ReviewTargetEvidenceFile[];
+  /** Legacy synthetic references retained only for old-session compatibility. */
+  diffRefs?: string[];
+  limitations: string[];
+  omittedFileCount?: number;
+}
+
 export interface DeepReviewEvidencePack {
   version: 1;
   source: DeepReviewEvidencePackSource;
@@ -96,6 +128,7 @@ export interface DeepReviewEvidencePack {
   contractHints: DeepReviewEvidencePackContractHint[];
   budget: DeepReviewEvidencePackBudget;
   privacy: DeepReviewEvidencePackPrivacyBoundary;
+  reviewTarget?: ReviewTargetEvidence;
 }
 
 export interface ReviewStrategyCommonRules {
@@ -327,7 +360,10 @@ export type ReviewTeamIncrementalReviewCacheInvalidation =
   | 'target_tag_changed'
   | 'target_warning_changed'
   | 'reviewer_roster_changed'
-  | 'strategy_changed';
+  | 'strategy_changed'
+  | 'target_revision_changed'
+  | 'target_completeness_changed'
+  | 'workspace_binding_changed';
 
 export interface ReviewTeamIncrementalReviewCachePlan {
   source: 'target_manifest';
@@ -445,8 +481,10 @@ export interface ReviewTeamRunManifest {
   changeStats?: ReviewTeamChangeStats;
   preReviewSummary: ReviewTeamPreReviewSummary;
   evidencePack?: DeepReviewEvidencePack;
-  sharedContextCache: ReviewTeamSharedContextCachePlan;
-  incrementalReviewCache: ReviewTeamIncrementalReviewCachePlan;
+  /** Legacy launch metadata; no longer written by new Review runs. */
+  sharedContextCache?: ReviewTeamSharedContextCachePlan;
+  /** Legacy speculative cache plan; retained only for old-session recovery. */
+  incrementalReviewCache?: ReviewTeamIncrementalReviewCachePlan;
   tokenBudget: ReviewTeamTokenBudgetPlan;
   coreReviewers: ReviewTeamManifestMember[];
   qualityGateReviewer?: ReviewTeamManifestMember;

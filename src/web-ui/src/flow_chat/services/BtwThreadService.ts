@@ -5,7 +5,10 @@ import { SessionExecutionEvent, stateMachineManager } from '../state-machine';
 import { flowChatManager } from './FlowChatManager';
 import type { DialogTurn, Session } from '../types/flow-chat';
 import type { SessionKind, SessionRelationship } from '@/shared/types/session-history';
-import type { ReviewTeamRunManifest } from '@/shared/services/reviewTeamService';
+import type {
+  ReviewTargetEvidence,
+  ReviewTeamRunManifest,
+} from '@/shared/services/reviewTeamService';
 import type { ImagePayload } from '../utils/imagePayload';
 
 export function createBtwRequestId(prefix = 'btw'): string {
@@ -118,6 +121,7 @@ export async function createBtwChildSession(params: {
   isTransient?: boolean;
   sessionKind?: Extract<SessionKind, 'btw' | 'review' | 'deep_review'>;
   deepReviewRunManifest?: ReviewTeamRunManifest;
+  reviewTargetEvidence?: ReviewTargetEvidence;
   reviewTargetFilePaths?: string[];
 }): Promise<{
   requestId: string;
@@ -154,7 +158,6 @@ export async function createBtwChildSession(params: {
           parentDialogTurnId,
           parentTurnIndex,
         };
-
   const childSessionId = shouldPersistStandaloneSession
     ? (
         await agentAPI.createSession({
@@ -167,6 +170,7 @@ export async function createBtwChildSession(params: {
           remoteSshHost,
           relationship,
           deepReviewRunManifest: params.deepReviewRunManifest,
+          reviewTargetEvidence: params.reviewTargetEvidence,
           config: {
             modelName,
             enableTools: params.enableTools ?? false,

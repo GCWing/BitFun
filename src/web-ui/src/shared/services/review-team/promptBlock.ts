@@ -7,17 +7,15 @@ import {
 import { toManifestMember } from './manifestMembers';
 import type { ReviewDomainTag } from '../reviewTargetClassifier';
 import type {
-  DeepReviewEvidencePack,
   DeepReviewScopeProfile,
   ReviewRoleDirectiveKey,
   ReviewStrategyLevel,
   ReviewStrategyProfile,
+  ReviewTargetEvidence,
   ReviewTeam,
-  ReviewTeamIncrementalReviewCachePlan,
   ReviewTeamManifestMember,
   ReviewTeamPreReviewSummary,
   ReviewTeamRunManifest,
-  ReviewTeamSharedContextCachePlan,
   ReviewTeamTokenBudgetDecision,
   ReviewTeamWorkPacket,
 } from './types';
@@ -122,85 +120,6 @@ function formatPreReviewSummaryBlock(summary: ReviewTeamPreReviewSummary): strin
   ].join('\n');
 }
 
-function evidencePackToPromptPayload(pack: DeepReviewEvidencePack) {
-  return {
-    version: pack.version,
-    source: pack.source,
-    changed_files: pack.changedFiles,
-    diff_stat: {
-      file_count: pack.diffStat.fileCount,
-      ...(pack.diffStat.totalChangedLines !== undefined
-        ? { total_changed_lines: pack.diffStat.totalChangedLines }
-        : {}),
-      line_count_source: pack.diffStat.lineCountSource,
-    },
-    domain_tags: pack.domainTags,
-    risk_focus_tags: pack.riskFocusTags,
-    packet_ids: pack.packetIds,
-    hunk_hints: pack.hunkHints.map((hint) => ({
-      file_path: hint.filePath,
-      changed_line_count: hint.changedLineCount,
-      line_count_source: hint.lineCountSource,
-    })),
-    contract_hints: pack.contractHints.map((hint) => ({
-      kind: hint.kind,
-      file_path: hint.filePath,
-      source: hint.source,
-    })),
-    budget: {
-      max_changed_files: pack.budget.maxChangedFiles,
-      max_hunk_hints: pack.budget.maxHunkHints,
-      max_contract_hints: pack.budget.maxContractHints,
-      omitted_changed_file_count: pack.budget.omittedChangedFileCount,
-      omitted_hunk_hint_count: pack.budget.omittedHunkHintCount,
-      omitted_contract_hint_count: pack.budget.omittedContractHintCount,
-    },
-    privacy: pack.privacy,
-  };
-}
-
-function formatEvidencePackBlock(pack?: DeepReviewEvidencePack): string {
-  if (!pack) {
-    return [
-      'Evidence pack:',
-      '- none',
-    ].join('\n');
-  }
-
-  return [
-    'Evidence pack:',
-    '```json',
-    JSON.stringify(evidencePackToPromptPayload(pack), null, 2),
-    '```',
-    '- Evidence pack hunk_hints and contract_hints are orientation only; verify each hinted claim with GetFileDiff, Read, or Grep before reporting it.',
-    '- The evidence pack privacy boundary is metadata_only. Do not treat it as source text, a full diff, model output, or provider raw data.',
-  ].join('\n');
-}
-
-function sharedContextCacheToPromptPayload(plan: ReviewTeamSharedContextCachePlan) {
-  return {
-    source: plan.source,
-    strategy: plan.strategy,
-    omitted_entry_count: plan.omittedEntryCount,
-    entries: plan.entries.map((entry) => ({
-      cache_key: entry.cacheKey,
-      path: entry.path,
-      workspace_area: entry.workspaceArea,
-      recommended_tools: entry.recommendedTools,
-      consumer_packet_ids: entry.consumerPacketIds,
-    })),
-  };
-}
-
-function formatSharedContextCacheBlock(plan: ReviewTeamSharedContextCachePlan): string {
-  return [
-    'Shared context cache plan:',
-    '```json',
-    JSON.stringify(sharedContextCacheToPromptPayload(plan), null, 2),
-    '```',
-  ].join('\n');
-}
-
 function formatScopeProfileBlock(profile?: DeepReviewScopeProfile): string {
   if (!profile) {
     return [
@@ -219,6 +138,36 @@ function formatScopeProfileBlock(profile?: DeepReviewScopeProfile): string {
     `- coverage_expectation: ${profile.coverageExpectation}`,
     '- Focused-scope profiles are not full-depth coverage. Keep changed files visible in coverage notes and do not describe quick or normal runs as full-depth reviews.',
     '- Reviewers and the judge must carry review_depth and coverage_expectation into their summaries. If review_depth is high_risk_only or risk_expanded, populate reliability_signals with reduced_scope in the final submit_code_review payload.',
+  ].join('\n');
+}
+
+function formatReviewTargetEvidenceBlock(
+  evidence: ReviewTargetEvidence | undefined,
+): string {
+  if (!evidence) {
+    return [
+      'Review target evidence:',
+      '- unavailable (legacy launch); do not claim exact range or complete coverage',
+    ].join('\n');
+  }
+
+  const freshnessGuidance = evidence.source === 'git_range'
+    ? '- Treat the prepared base/head revisions and diff references as immutable target facts. Never guess or widen refs.'
+    : '- Treat the fingerprint and diff references as preparation-time workspace facts. The live workspace may change; never describe it as immutable or silently widen scope.';
+
+  return [
+    'Review target evidence:',
+    `- source: ${evidence.source}`,
+    `- fingerprint: ${evidence.fingerprint}`,
+    `- base_revision: ${evidence.baseRevision ?? 'unknown'}`,
+    `- head_revision: ${evidence.headRevision ?? 'unknown'}`,
+    `- completeness: ${evidence.completeness}`,
+    `- workspace_binding: ${evidence.workspaceBinding}`,
+    `- file_count: ${evidence.files.length}`,
+    `- omitted_file_count: ${evidence.omittedFileCount ?? 0}`,
+    `- limitations: ${evidence.limitations.join(', ') || 'none'}`,
+    freshnessGuidance,
+    '- If completeness is partial, unknown, or stale, preserve that limitation in coverage notes and never convert it into a clean result.',
   ].join('\n');
 }
 
@@ -241,31 +190,6 @@ function formatLocaleOnlyReviewGuardrail(manifest: ReviewTeamRunManifest): strin
     '- Keep ReviewFrontend focused on changed keys, missing or stale translations, placeholder parity, ICU or Fluent syntax, component tag parity, accelerator or formatting consistency, and cross-locale meaning drift.',
     '- Do not broaden into React performance, accessibility, or frontend-backend API contract review unless the locale diff directly references a changed UI/API contract key that requires one-hop verification.',
     '- Prefer GetFileDiff and targeted key lookup before full-file reads. If a full-file read is necessary, explain the exact key family being verified.',
-  ].join('\n');
-}
-
-function incrementalReviewCacheToPromptPayload(plan: ReviewTeamIncrementalReviewCachePlan) {
-  return {
-    source: plan.source,
-    strategy: plan.strategy,
-    cache_key: plan.cacheKey,
-    fingerprint: plan.fingerprint,
-    file_paths: plan.filePaths,
-    workspace_areas: plan.workspaceAreas,
-    target_tags: plan.targetTags,
-    reviewer_packet_ids: plan.reviewerPacketIds,
-    ...(plan.lineCount !== undefined ? { line_count: plan.lineCount } : {}),
-    line_count_source: plan.lineCountSource,
-    invalidates_on: plan.invalidatesOn,
-  };
-}
-
-function formatIncrementalReviewCacheBlock(plan: ReviewTeamIncrementalReviewCachePlan): string {
-  return [
-    'Incremental review cache plan:',
-    '```json',
-    JSON.stringify(incrementalReviewCacheToPromptPayload(plan), null, 2),
-    '```',
   ].join('\n');
 }
 
@@ -373,11 +297,6 @@ export function buildReviewTeamPromptBlockContent(
     `- target_line_count_source: ${manifest.changeStats?.lineCountSource ?? 'unknown'}`,
     `- token_budget_mode: ${manifest.tokenBudget.mode}`,
     `- estimated_reviewer_calls: ${manifest.tokenBudget.estimatedReviewerCalls}`,
-    `- max_prompt_bytes_per_reviewer: ${manifest.tokenBudget.maxPromptBytesPerReviewer ?? 'none'}`,
-    `- estimated_prompt_bytes_per_reviewer: ${manifest.tokenBudget.estimatedPromptBytesPerReviewer ?? 'unknown'}`,
-    `- estimated_prompt_bytes_total: ${manifest.tokenBudget.estimatedPromptBytesTotal ?? 'unknown'}`,
-    `- prompt_byte_estimate_source: ${manifest.tokenBudget.promptByteEstimateSource ?? 'none'}`,
-    `- prompt_byte_limit_exceeded: ${manifest.tokenBudget.promptByteLimitExceeded ? 'yes' : 'no'}`,
     `- token_budget_decisions: ${formatTokenBudgetDecisionKinds(manifest.tokenBudget.decisions)}`,
     `- budget_limited_reviewers: ${manifest.tokenBudget.skippedReviewerIds.join(', ') || 'none'}`,
     `- core_reviewers: ${formatManifestList(manifest.coreReviewers, 'none')}`,
@@ -413,12 +332,10 @@ export function buildReviewTeamPromptBlockContent(
 
   return [
     manifestBlock,
+    formatReviewTargetEvidenceBlock(manifest.evidencePack?.reviewTarget),
     formatScopeProfileBlock(manifest.scopeProfile),
     ...(localeOnlyReviewGuardrail ? [localeOnlyReviewGuardrail] : []),
-    formatEvidencePackBlock(manifest.evidencePack),
     formatPreReviewSummaryBlock(manifest.preReviewSummary),
-    formatSharedContextCacheBlock(manifest.sharedContextCache),
-    formatIncrementalReviewCacheBlock(manifest.incrementalReviewCache),
     'Review work packets:',
     formatWorkPacketBlock(manifest.workPackets),
     'Work packet rules:',
@@ -431,10 +348,7 @@ export function buildReviewTeamPromptBlockContent(
     '- If packet_id cannot be reported or inferred, mark packet_status_source as missing and explain the confidence impact in coverage_notes.',
     '- If a reviewer response is missing packet_id or status, the judge must treat that reviewer output as lower confidence instead of discarding the whole review.',
     '- Use the pre-generated diff summary for initial orientation and token discipline, but verify claims against assigned files or diffs before reporting findings.',
-    '- Evidence pack hunk_hints and contract_hints are orientation only; verify each hinted claim with GetFileDiff, Read, or Grep before reporting it.',
-    '- When prompt_byte_limit_exceeded is yes, use the pre-generated diff summary before detailed reads. Do not remove files from assigned_scope or hide unreviewed files; if a file cannot be covered, report it in coverage_notes and reliability_signals.',
-    '- Use shared_context_cache entries to reuse read-only GetFileDiff/Read context by cache_key across reviewer packets. Do not duplicate full-file reads when a reusable cached diff or file summary already covers the same path.',
-    '- Use incremental_review_cache only when the target fingerprint matches a prior run; preserve completed reviewer outputs by packet_id and rerun only missing, failed, timed-out, or stale packets. If any invalidates_on condition changed, ignore the cache and explain the fresh review boundary.',
+    '- Reuse already-read diff context when possible. Do not repeat full-file reads without a concrete verification need.',
     '- The assigned_scope is the default scope for that packet; only widen it when a critical cross-file dependency requires it and note the reason in coverage_notes.',
     'Review execution plan:',
     members || '- No reviewers available.',
@@ -459,7 +373,7 @@ export function buildReviewTeamPromptBlockContent(
     '- If judge_timeout_seconds is greater than 0, pass timeout_seconds with that value to the ReviewJudge LaunchReviewAgent call.',
     '- If a reviewer LaunchReviewAgent result returns status partial_timeout, treat its output as partial evidence: preserve it in reviewers[].partial_output, mark the reviewer status partial_timeout, and mention the confidence impact in coverage_notes.',
     '- If a reviewer fails or times out without useful partial output, retry that same reviewer at most max_retries_per_role times: focus its scope, use a lower-cost strategy when possible, use a shorter timeout, and set retry to true on the retry LaunchReviewAgent call.',
-    '- In the final submit_code_review payload, populate reliability_signals for context_pressure, compression_preserved, partial_reviewer, reduced_scope, and user_decision when those conditions apply. Use severity info/warning/action, count when useful, and source runtime/manifest/report/inferred.',
+    '- In the final submit_code_review payload, populate reliability_signals for context_pressure, compression_preserved, partial_reviewer, target_evidence_limited, reduced_scope, and user_decision when those conditions apply. Use severity info/warning/action, count when useful, and source runtime/manifest/report/inferred.',
     '- If reviewer_file_split_threshold is greater than 0 and the target file count exceeds it, split files across multiple same-role reviewer instances only up to the concurrency-capped max_same_role_instances for this run.',
     '- Prefer module/workspace-area coherent file groups when splitting reviewer work; avoid mixing unrelated workspace areas in the same packet when the group budget allows it.',
     '- When file splitting is active, each same-role instance must only review its assigned file group. Label instances in the LaunchReviewAgent description with both group and packet_id (e.g. "Security review [group 1/3] [packet reviewer:ReviewSecurity:group-1-of-3]").',

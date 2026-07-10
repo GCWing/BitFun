@@ -3,8 +3,8 @@
 use bitfun_services_integrations::git::{
     build_git_changed_files_args, build_git_diff_args, parse_branch_line, parse_git_log_line,
     parse_name_status_output, parse_worktree_list, GitAuthor, GitChangedFile, GitChangedFileStatus,
-    GitChangedFilesParams, GitCommandOutput, GitCommitParams, GitDiffParams, GitGraph, GitService,
-    GitWorktreeInfo, GraphNode, GraphRef,
+    GitChangedFilesParams, GitCommandOutput, GitCommitParams, GitDiffParams, GitError, GitGraph,
+    GitService, GitStatus, GitWorktreeInfo, GraphNode, GraphRef,
 };
 use std::fs;
 use std::process::Command;
@@ -114,11 +114,16 @@ fn git_diff_arg_builders_preserve_existing_command_contract() {
         files: Some(vec!["src/lib.rs".to_string(), "README.md".to_string()]),
         staged: Some(true),
         stat: Some(true),
+        review_safe: Some(true),
     });
     assert_eq!(
         args,
         vec![
+            "--literal-pathspecs",
             "diff",
+            "--no-ext-diff",
+            "--no-textconv",
+            "--find-renames",
             "--cached",
             "main..feature",
             "--stat",
@@ -134,6 +139,7 @@ fn git_diff_arg_builders_preserve_existing_command_contract() {
         files: None,
         staged: None,
         stat: None,
+        review_safe: None,
     });
     assert_eq!(target_only_args, vec!["diff"]);
 
@@ -141,11 +147,75 @@ fn git_diff_arg_builders_preserve_existing_command_contract() {
         source: None,
         target: Some("feature".to_string()),
         staged: Some(true),
+        review_safe: Some(true),
     });
     assert_eq!(
         changed_args,
-        vec!["diff", "--name-status", "--cached", "feature"]
+        vec![
+            "--literal-pathspecs",
+            "diff",
+            "--no-ext-diff",
+            "--no-textconv",
+            "--find-renames",
+            "--name-status",
+            "-z",
+            "--cached",
+            "feature",
+        ]
     );
+}
+
+#[tokio::test]
+async fn review_safe_workspace_diff_forces_rename_detection() {
+    let repo_dir = TempRepoDir::new("review-workspace-rename");
+    run_git(repo_dir.path(), &["init"]);
+    run_git(repo_dir.path(), &["config", "user.name", "BitFun Tests"]);
+    run_git(
+        repo_dir.path(),
+        &["config", "user.email", "tests@bitfun.dev"],
+    );
+    let original = (0..10)
+        .map(|index| format!("stable line {index}\n"))
+        .collect::<String>();
+    fs::write(repo_dir.path().join("old.txt"), &original).unwrap();
+    run_git(repo_dir.path(), &["add", "--", "old.txt"]);
+    run_git(repo_dir.path(), &["commit", "-m", "base"]);
+    run_git(repo_dir.path(), &["config", "diff.renames", "false"]);
+    run_git(repo_dir.path(), &["mv", "old.txt", "new.txt"]);
+    fs::write(
+        repo_dir.path().join("new.txt"),
+        original.replace("stable line 5", "edited line 5"),
+    )
+    .unwrap();
+
+    let files = GitService::get_changed_files(
+        repo_dir.path(),
+        &GitChangedFilesParams {
+            source: Some("HEAD".to_string()),
+            review_safe: Some(true),
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(files.len(), 1);
+    assert_eq!(files[0].status, GitChangedFileStatus::Renamed);
+    assert_eq!(files[0].old_path.as_deref(), Some("old.txt"));
+    assert_eq!(files[0].path, "new.txt");
+
+    let diff = GitService::get_diff(
+        repo_dir.path(),
+        &GitDiffParams {
+            source: Some("HEAD".to_string()),
+            files: Some(vec!["old.txt".to_string(), "new.txt".to_string()]),
+            review_safe: Some(true),
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+    assert!(diff.contains("rename from old.txt"));
+    assert!(diff.contains("rename to new.txt"));
 }
 
 #[tokio::test]
@@ -169,6 +239,177 @@ async fn git_service_preserves_repository_status_contract() {
         .untracked
         .iter()
         .any(|path| path == "new-file.txt" || path == "new-file.txt/"));
+}
+
+#[test]
+fn git_name_status_parser_preserves_nul_delimited_unicode_and_rename_paths() {
+    let files = parse_name_status_output("M\0src/中文.rs\0R100\0old name.rs\0new name.rs\0");
+    assert_eq!(
+        files,
+        vec![
+            GitChangedFile {
+                path: "src/中文.rs".to_string(),
+                old_path: None,
+                status: GitChangedFileStatus::Modified,
+            },
+            GitChangedFile {
+                path: "new name.rs".to_string(),
+                old_path: Some("old name.rs".to_string()),
+                status: GitChangedFileStatus::Renamed,
+            },
+        ]
+    );
+}
+
+#[test]
+fn git_status_json_preserves_conflict_contract() {
+    let status = GitStatus {
+        staged: Vec::new(),
+        unstaged: Vec::new(),
+        untracked: Vec::new(),
+        conflicts: vec!["src/conflicted.rs".to_string()],
+        current_branch: "main".to_string(),
+        ahead: 0,
+        behind: 0,
+    };
+    assert_eq!(
+        serde_json::to_value(status).unwrap()["conflicts"],
+        serde_json::json!(["src/conflicted.rs"])
+    );
+}
+
+#[tokio::test]
+async fn review_git_service_reads_exact_renamed_and_deleted_range_without_mutation() {
+    let repo_dir = TempRepoDir::new("review-exact-range");
+    run_git(repo_dir.path(), &["init"]);
+    run_git(repo_dir.path(), &["config", "user.name", "BitFun Tests"]);
+    run_git(
+        repo_dir.path(),
+        &["config", "user.email", "bitfun-tests@example.com"],
+    );
+    fs::write(
+        repo_dir.path().join(".gitattributes"),
+        "*.txt diff=reviewdriver\n",
+    )
+    .unwrap();
+    fs::write(repo_dir.path().join("renamed.txt"), "before rename\n").unwrap();
+    fs::write(repo_dir.path().join("deleted.txt"), "deleted content\n").unwrap();
+    fs::write(
+        repo_dir.path().join(" leading whitespace.txt"),
+        "before whitespace\n",
+    )
+    .unwrap();
+    run_git(repo_dir.path(), &["add", "."]);
+    run_git(repo_dir.path(), &["commit", "-m", "base"]);
+    let base = GitService::resolve_revision(repo_dir.path(), "HEAD")
+        .await
+        .unwrap();
+
+    run_git(repo_dir.path(), &["mv", "renamed.txt", "moved.txt"]);
+    run_git(repo_dir.path(), &["rm", "deleted.txt"]);
+    fs::write(repo_dir.path().join("moved.txt"), "after rename\n").unwrap();
+    fs::write(
+        repo_dir.path().join(" leading whitespace.txt"),
+        "after whitespace\n",
+    )
+    .unwrap();
+    run_git(repo_dir.path(), &["add", "."]);
+    run_git(repo_dir.path(), &["commit", "-m", "target"]);
+    let head = GitService::resolve_revision(repo_dir.path(), "HEAD")
+        .await
+        .unwrap();
+
+    run_git(
+        repo_dir.path(),
+        &["config", "diff.external", "bitfun-review-should-not-run"],
+    );
+    run_git(
+        repo_dir.path(),
+        &[
+            "config",
+            "diff.reviewdriver.textconv",
+            "bitfun-review-should-not-run",
+        ],
+    );
+
+    let diff = GitService::get_review_diff(
+        repo_dir.path(),
+        &base,
+        &head,
+        &[
+            "renamed.txt".to_string(),
+            "moved.txt".to_string(),
+            "deleted.txt".to_string(),
+            " leading whitespace.txt".to_string(),
+        ],
+    )
+    .await
+    .unwrap();
+    assert!(diff.contains("moved.txt"));
+    assert!(diff.contains("deleted.txt"));
+    assert!(diff.contains("after rename"));
+    assert!(diff.contains("after whitespace"));
+
+    let generic_diff = GitService::get_diff(
+        repo_dir.path(),
+        &GitDiffParams {
+            source: Some(base.clone()),
+            target: Some(head.clone()),
+            files: Some(vec!["moved.txt".to_string()]),
+            staged: None,
+            stat: None,
+            review_safe: Some(true),
+        },
+    )
+    .await
+    .expect("generic read-only diff must ignore external diff and textconv helpers");
+    assert!(generic_diff.contains("after rename"));
+
+    let wildcard_diff =
+        GitService::get_review_diff(repo_dir.path(), &base, &head, &["*.txt".to_string()])
+            .await
+            .unwrap();
+    assert!(wildcard_diff.is_empty());
+
+    let status = GitService::get_status(repo_dir.path()).await.unwrap();
+    assert!(status.staged.is_empty());
+    assert!(status.unstaged.is_empty());
+    assert!(status.untracked.is_empty());
+    assert!(status.conflicts.is_empty());
+}
+
+#[tokio::test]
+async fn review_git_service_rejects_mutable_revisions_and_escaping_paths() {
+    let repo_dir = TempRepoDir::new("review-input-boundary");
+
+    let mutable_revision = GitService::get_review_diff(
+        repo_dir.path(),
+        "main",
+        "feature",
+        &["src/lib.rs".to_string()],
+    )
+    .await;
+    assert!(mutable_revision.is_err());
+
+    let escaping_path = GitService::get_review_diff(
+        repo_dir.path(),
+        &"1".repeat(40),
+        &"2".repeat(40),
+        &["../outside.rs".to_string()],
+    )
+    .await;
+    assert!(escaping_path.is_err());
+
+    let nul_path = GitService::get_review_diff(
+        repo_dir.path(),
+        &"1".repeat(40),
+        &"2".repeat(40),
+        &["src/nul\0path.rs".to_string()],
+    )
+    .await;
+    assert!(
+        matches!(nul_path, Err(GitError::InvalidPath(message)) if message.contains("workspace-relative"))
+    );
 }
 
 struct TempRepoDir {

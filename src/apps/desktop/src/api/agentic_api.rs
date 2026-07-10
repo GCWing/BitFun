@@ -67,6 +67,8 @@ pub struct CreateSessionRequest {
     pub relationship: Option<SessionRelationship>,
     #[serde(default)]
     pub deep_review_run_manifest: Option<serde_json::Value>,
+    #[serde(default)]
+    pub review_target_evidence: Option<serde_json::Value>,
     pub config: Option<SessionConfigDTO>,
 }
 
@@ -102,7 +104,7 @@ fn existing_session_create_response(
         metadata.relationship.as_ref(),
         request.relationship.as_ref(),
     ) {
-        (None, None) => true,
+        (None, None) | (None, Some(_)) => true,
         (Some(existing), Some(requested)) => {
             existing.kind == requested.kind
                 && existing.parent_session_id == requested.parent_session_id
@@ -110,7 +112,27 @@ fn existing_session_create_response(
         }
         _ => false,
     };
-    if metadata.agent_type != request.agent_type || !relationship_matches {
+    let deep_manifest_matches = match (
+        metadata.deep_review_run_manifest.as_ref(),
+        request.deep_review_run_manifest.as_ref(),
+    ) {
+        (Some(existing), Some(requested)) => existing == requested,
+        (None, Some(_)) | (None, None) => true,
+        (Some(_), None) => false,
+    };
+    let target_evidence_matches = match (
+        metadata.review_target_evidence.as_ref(),
+        request.review_target_evidence.as_ref(),
+    ) {
+        (Some(existing), Some(requested)) => existing == requested,
+        (None, Some(_)) | (None, None) => true,
+        (Some(_), None) => false,
+    };
+    if metadata.agent_type != request.agent_type
+        || !relationship_matches
+        || !deep_manifest_matches
+        || !target_evidence_matches
+    {
         return Err(format!(
             "Session ID {} already exists with different identity",
             metadata.session_id
@@ -747,8 +769,34 @@ pub async fn create_session(
             .load_session_metadata(&effective_path, session_id)
             .await
             .map_err(|error| format!("Failed to check existing session: {error}"))?;
-        if let Some(metadata) = existing {
-            return existing_session_create_response(&request, &metadata);
+        if let Some(mut metadata) = existing {
+            let response = existing_session_create_response(&request, &metadata)?;
+            let mut repaired = false;
+            if metadata.relationship.is_none() && request.relationship.is_some() {
+                metadata.relationship = request.relationship.clone();
+                repaired = true;
+            }
+            if metadata.deep_review_run_manifest.is_none()
+                && request.deep_review_run_manifest.is_some()
+            {
+                metadata.deep_review_run_manifest = request.deep_review_run_manifest.clone();
+                repaired = true;
+            }
+            if metadata.review_target_evidence.is_none() && request.review_target_evidence.is_some()
+            {
+                metadata.review_target_evidence = request.review_target_evidence.clone();
+                repaired = true;
+            }
+            if repaired {
+                coordinator
+                    .get_session_manager()
+                    .save_session_metadata(&effective_path, &metadata)
+                    .await
+                    .map_err(|error| {
+                        format!("Failed to repair Review session metadata: {error}")
+                    })?;
+            }
+            return Ok(response);
         }
     }
 
@@ -814,6 +862,14 @@ pub async fn create_session(
             .set_session_deep_review_run_manifest(&session.session_id, Some(run_manifest))
             .await
             .map_err(|e| format!("Failed to persist Deep Review run manifest: {}", e))?;
+    }
+
+    if let Some(target_evidence) = request.review_target_evidence {
+        coordinator
+            .get_session_manager()
+            .set_session_review_target_evidence(&session.session_id, Some(target_evidence))
+            .await
+            .map_err(|e| format!("Failed to persist Review target evidence: {}", e))?;
     }
 
     Ok(CreateSessionResponse {
@@ -2392,6 +2448,7 @@ mod tests {
                 ..Default::default()
             }),
             deep_review_run_manifest: None,
+            review_target_evidence: None,
             config: None,
         }
     }
@@ -2448,6 +2505,37 @@ mod tests {
         metadata.relationship = Some(relationship);
 
         assert!(existing_session_create_response(&request, &metadata).is_err());
+    }
+
+    #[test]
+    fn existing_create_session_retry_rejects_different_target_evidence() {
+        let mut request = idempotent_create_request();
+        request.review_target_evidence = Some(json!({ "fingerprint": "requested" }));
+        let mut metadata = SessionMetadata::new(
+            "review_child_request-1".to_string(),
+            "Review fixes".to_string(),
+            "CodeReview".to_string(),
+            "auto".to_string(),
+        );
+        metadata.relationship = request.relationship.clone();
+        metadata.review_target_evidence = Some(json!({ "fingerprint": "existing" }));
+
+        assert!(existing_session_create_response(&request, &metadata).is_err());
+    }
+
+    #[test]
+    fn existing_create_session_retry_allows_missing_target_evidence_repair() {
+        let mut request = idempotent_create_request();
+        request.review_target_evidence = Some(json!({ "fingerprint": "requested" }));
+        let mut metadata = SessionMetadata::new(
+            "review_child_request-1".to_string(),
+            "Review fixes".to_string(),
+            "CodeReview".to_string(),
+            "auto".to_string(),
+        );
+        metadata.relationship = request.relationship.clone();
+
+        assert!(existing_session_create_response(&request, &metadata).is_ok());
     }
 
     #[test]

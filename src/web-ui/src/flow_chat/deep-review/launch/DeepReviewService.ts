@@ -1,7 +1,7 @@
 import { agentAPI } from '@/infrastructure/api';
 import { createLogger } from '@/shared/utils/logger';
 import { createBtwChildSession } from '../../services/BtwThreadService';
-import { closeBtwSessionInAuxPane } from '../../services/btwSessionPane';
+import { closeBtwSessionInAuxPane, openBtwSessionInAuxPane } from '../../services/btwSessionPane';
 import { FlowChatManager } from '../../services/FlowChatManager';
 import { flowChatStore } from '../../store/FlowChatStore';
 import { insertReviewSessionSummaryMarker } from '../../services/ReviewSessionMarkerService';
@@ -15,6 +15,7 @@ import {
   type ReviewTeamRunManifest,
   type ReviewStrategyLevel,
   type ReviewTeamChangeStats,
+  type ReviewTargetEvidence,
 } from '@/shared/services/reviewTeamService';
 import { classifyReviewTargetFromFiles } from '@/shared/services/reviewTargetClassifier';
 import {
@@ -22,6 +23,7 @@ import {
 } from './commandParser';
 import {
   buildUnknownChangeStats,
+  resolveCurrentFileReviewSnapshot,
   resolveSlashCommandReviewTarget,
 } from './targetResolver';
 import {
@@ -61,9 +63,11 @@ export interface DeepReviewLaunchBuildOptions {
   strategyOverride?: ReviewStrategyLevel;
   qualityDecision?: ReviewTeamRunManifest['qualityDecision'];
   changeStats?: ReviewTeamChangeStats;
+  targetEvidence?: ReviewTargetEvidence;
   resolvedTarget?: {
     target: ReviewTeamRunManifest['target'];
     changeStats: ReviewTeamChangeStats;
+    targetEvidence: ReviewTargetEvidence;
   };
   maxCoreReviewers?: number;
   maxExtraReviewers?: number;
@@ -169,13 +173,21 @@ export async function buildDeepReviewLaunchFromSessionFiles(
   workspacePath?: string,
   options: DeepReviewLaunchBuildOptions = {},
 ): Promise<DeepReviewLaunchPrompt> {
-  const target = classifyReviewTargetFromFiles(filePaths, 'session_files');
-  const changeStats = options.changeStats ?? buildUnknownChangeStats(target);
+  const initialTarget = classifyReviewTargetFromFiles(filePaths, 'session_files');
+  const resolved = options.resolvedTarget ?? (
+    options.targetEvidence
+      ? undefined
+      : await resolveCurrentFileReviewSnapshot(workspacePath, initialTarget)
+  );
+  const target = resolved?.target ?? initialTarget;
+  const changeStats = options.changeStats ?? resolved?.changeStats ?? buildUnknownChangeStats(target);
+  const targetEvidence = options.targetEvidence ?? resolved?.targetEvidence;
   const team = await loadDefaultReviewTeam(workspacePath);
   const manifest = await buildReviewTeamManifestWithRuntimeSignals(team, {
     workspacePath,
     target,
     changeStats,
+    targetEvidence,
     ...(options.strategyOverride
       ? { strategyOverride: options.strategyOverride }
       : {}),
@@ -206,12 +218,16 @@ export async function buildDeepReviewPreviewFromSessionFiles(
   workspacePath?: string,
 ): Promise<ReviewTeamRunManifest> {
   const team = await loadDefaultReviewTeam(workspacePath);
-  const target = classifyReviewTargetFromFiles(filePaths, 'session_files');
-  const changeStats = buildUnknownChangeStats(target);
+  const initialTarget = classifyReviewTargetFromFiles(filePaths, 'session_files');
+  const snapshot = await resolveCurrentFileReviewSnapshot(
+    workspacePath,
+    initialTarget,
+  );
   return buildReviewTeamManifestWithRuntimeSignals(team, {
     workspacePath,
-    target,
-    changeStats,
+    target: snapshot.target,
+    changeStats: snapshot.changeStats,
+    targetEvidence: snapshot.targetEvidence,
   });
 }
 
@@ -276,12 +292,13 @@ export async function buildDeepReviewLaunchFromSlashCommand(
   const team = await loadDefaultReviewTeam(workspacePath);
   const trimmed = commandText.trim();
   const extraContext = getDeepReviewCommandFocus(trimmed);
-  const { target, changeStats } = options.resolvedTarget ??
+  const { target, changeStats, targetEvidence } = options.resolvedTarget ??
     await resolveSlashCommandReviewTarget(extraContext, workspacePath);
   const manifest = await buildReviewTeamManifestWithRuntimeSignals(team, {
     workspacePath,
     target,
     changeStats,
+    targetEvidence,
     ...(options.strategyOverride
       ? { strategyOverride: options.strategyOverride }
       : {}),
@@ -314,11 +331,12 @@ export async function buildDeepReviewPreviewFromSlashCommand(
   const team = await loadDefaultReviewTeam(workspacePath);
   const trimmed = commandText.trim();
   const extraContext = getDeepReviewCommandFocus(trimmed);
-  const { target, changeStats } = await resolveSlashCommandReviewTarget(extraContext, workspacePath);
+  const { target, changeStats, targetEvidence } = await resolveSlashCommandReviewTarget(extraContext, workspacePath);
   return buildReviewTeamManifestWithRuntimeSignals(team, {
     workspacePath,
     target,
     changeStats,
+    targetEvidence,
   });
 }
 
@@ -404,6 +422,28 @@ export async function launchDeepReviewSession({
       throw createDeepReviewLaunchError(launchStep, error);
     }
 
+    if (launchStep === 'send_start_message') {
+      insertReviewSessionSummaryMarker({
+        parentSessionId,
+        childSessionId,
+        kind: 'deep_review',
+        title: childSessionName,
+        requestedFiles,
+      });
+      openBtwSessionInAuxPane({
+        childSessionId,
+        parentSessionId,
+        workspacePath,
+        expand: true,
+        sessionKind: 'deep_review',
+        sessionTitle: childSessionName,
+        agentType: 'DeepReview',
+      });
+      throw Object.assign(createDeepReviewLaunchError(launchStep, error, childSessionId), {
+        launchErrorMessageKey: 'deepReviewActionBar.launchError.uncertain',
+      });
+    }
+
     const cleanupResult = await cleanupFailedDeepReviewLaunch(childSessionId, launchStep);
     const wrappedError = buildLaunchCleanupError(
       launchStep,
@@ -420,10 +460,6 @@ export async function launchDeepReviewSession({
       cleanupIssues: cleanupResult.cleanupIssues,
       error,
     });
-
-    if (launchStep === 'send_start_message' && cleanupResult.cleanupCompleted) {
-      throw createDeepReviewLaunchError(launchStep, error, childSessionId, cleanupResult);
-    }
 
     throw wrappedError;
   }

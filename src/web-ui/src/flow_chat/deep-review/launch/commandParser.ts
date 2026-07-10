@@ -28,6 +28,20 @@ const EXPLICIT_REVIEW_FILE_EXTENSIONS = new Set([
   '.toml',
   '.yaml',
   '.yml',
+  '.lock',
+  '.txt',
+  '.sh',
+  '.py',
+  '.go',
+  '.java',
+  '.kt',
+  '.swift',
+  '.c',
+  '.h',
+  '.cpp',
+  '.hpp',
+  '.xml',
+  '.ftl',
 ]);
 
 export function isDeepReviewSlashCommand(commandText: string): boolean {
@@ -58,6 +72,17 @@ function cleanPotentialFileToken(token: string): string {
     .replace(/[`"',;:]+$/, '');
 }
 
+function tokenizeReviewFocus(commandFocus: string): string[] {
+  const tokens: string[] = [];
+  const tokenPattern = /`([^`]+)`|"([^"]+)"|'([^']+)'|(\S+)/g;
+  let match: RegExpExecArray | null;
+  while ((match = tokenPattern.exec(commandFocus)) !== null) {
+    const token = match[1] ?? match[2] ?? match[3] ?? match[4];
+    if (token) tokens.push(token);
+  }
+  return tokens;
+}
+
 function getPathExtension(path: string): string {
   const lastSlash = path.lastIndexOf('/');
   const lastDot = path.lastIndexOf('.');
@@ -68,17 +93,22 @@ function getPathExtension(path: string): string {
 }
 
 function looksLikeExplicitReviewPath(token: string): boolean {
+  const cleaned = cleanPotentialFileToken(token);
   const normalizedPath = normalizeReviewPath(token);
   return (
-    normalizedPath.includes('/') &&
+    (
+      EXPLICIT_REVIEW_FILE_EXTENSIONS.has(getPathExtension(normalizedPath)) ||
+      cleaned.startsWith('./') ||
+      cleaned.startsWith('../') ||
+      /[\\/]$/.test(cleaned)
+    ) &&
     !normalizedPath.startsWith('-') &&
-    EXPLICIT_REVIEW_FILE_EXTENSIONS.has(getPathExtension(normalizedPath))
+    normalizedPath.length > 0
   );
 }
 
 export function extractExplicitReviewFilePaths(commandFocus: string): string[] {
-  const paths = commandFocus
-    .split(/\s+/)
+  const paths = tokenizeReviewFocus(commandFocus)
     .map(cleanPotentialFileToken)
     .filter(Boolean)
     .filter(looksLikeExplicitReviewPath);
@@ -87,8 +117,7 @@ export function extractExplicitReviewFilePaths(commandFocus: string): string[] {
 }
 
 export function parseSlashCommandGitTarget(commandFocus: string): GitChangedFilesParams | null {
-  const tokens = commandFocus
-    .split(/\s+/)
+  const tokens = tokenizeReviewFocus(commandFocus)
     .map(cleanPotentialFileToken)
     .filter(Boolean);
 
@@ -120,11 +149,7 @@ export function parseSlashCommandGitTarget(commandFocus: string): GitChangedFile
 
 export function collectChangedFilePaths(changedFiles: GitChangedFile[]): string[] {
   return Array.from(
-    new Set(
-      changedFiles
-        .flatMap((file) => [file.path, file.old_path])
-        .filter((path): path is string => Boolean(path)),
-    ),
+    new Set(changedFiles.map((file) => file.path).filter(Boolean)),
   );
 }
 

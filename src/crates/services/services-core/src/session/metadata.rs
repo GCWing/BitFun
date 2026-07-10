@@ -73,6 +73,7 @@ pub fn build_session_metadata(facts: SessionMetadataBuildFacts<'_>) -> SessionMe
         todos: existing.and_then(|value| value.todos.clone()),
         review_action_state: existing.and_then(|value| value.review_action_state.clone()),
         deep_review_run_manifest: existing.and_then(|value| value.deep_review_run_manifest.clone()),
+        review_target_evidence: existing.and_then(|value| value.review_target_evidence.clone()),
         deep_review_cache: existing.and_then(|value| value.deep_review_cache.clone()),
         workspace_path: Some(facts.workspace_path.to_string()),
         workspace_hostname: facts.workspace_hostname.map(str::to_string),
@@ -340,6 +341,13 @@ pub fn set_deep_review_run_manifest(
     metadata.deep_review_run_manifest = deep_review_run_manifest;
 }
 
+pub fn set_review_target_evidence(
+    metadata: &mut SessionMetadata,
+    review_target_evidence: Option<Value>,
+) {
+    metadata.review_target_evidence = review_target_evidence;
+}
+
 pub fn set_deep_review_cache(metadata: &mut SessionMetadata, cache: Value) {
     metadata.deep_review_cache = Some(cache);
 }
@@ -417,11 +425,16 @@ mod tests {
 
         set_session_relationship(&mut metadata, relationship.clone());
         set_deep_review_run_manifest(&mut metadata, Some(json!({ "run": "manifest" })));
+        set_review_target_evidence(&mut metadata, Some(json!({ "target": "evidence" })));
 
         assert_eq!(metadata.relationship, Some(relationship));
         assert_eq!(
             metadata.deep_review_run_manifest,
             Some(json!({ "run": "manifest" }))
+        );
+        assert_eq!(
+            metadata.review_target_evidence,
+            Some(json!({ "target": "evidence" }))
         );
         assert_eq!(metadata.custom_metadata, Some(json!({ "existing": true })));
     }

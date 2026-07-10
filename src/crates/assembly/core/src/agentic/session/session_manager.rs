@@ -44,7 +44,8 @@ use bitfun_runtime_ports::{SessionStoragePathRequest, SessionStorePort};
 use bitfun_services_core::session::{
     apply_session_lineage, collect_hidden_subagent_cascade as collect_hidden_subagent_cascade_ids,
     merge_session_custom_metadata as merge_session_custom_metadata_value,
-    set_deep_review_run_manifest, set_session_relationship, SessionStorageLayout,
+    set_deep_review_run_manifest, set_review_target_evidence, set_session_relationship,
+    SessionStorageLayout,
 };
 use dashmap::DashMap;
 use log::{debug, error, info, warn};
@@ -3989,6 +3990,17 @@ impl SessionManager {
     ) -> BitFunResult<()> {
         self.update_persisted_session_metadata(session_id, |metadata| {
             set_deep_review_run_manifest(metadata, deep_review_run_manifest)
+        })
+        .await
+    }
+
+    pub async fn set_session_review_target_evidence(
+        &self,
+        session_id: &str,
+        review_target_evidence: Option<serde_json::Value>,
+    ) -> BitFunResult<()> {
+        self.update_persisted_session_metadata(session_id, |metadata| {
+            set_review_target_evidence(metadata, review_target_evidence)
         })
         .await
     }

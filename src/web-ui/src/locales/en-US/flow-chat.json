@@ -937,6 +937,8 @@
     "launchError": {
       "modelConfig": "Failed to create review session. Please check model configuration.",
       "network": "Network connection interrupted. Review failed to start.",
+      "target": "The requested Review scope could not be prepared safely. Check the target and try again.",
+      "uncertain": "The Review request may already be running. Its session was preserved so you can inspect or retry it safely.",
       "unknown": "Review launch failed. Please retry."
     }
   },
@@ -1864,6 +1866,10 @@
         "reduced_scope": {
           "label": "Focused review scope",
           "detail": "This review used a focused scope profile."
+        },
+        "target_evidence_limited": {
+          "label": "Target evidence limited",
+          "detail": "Prepared target evidence could not safely cover every requested change."
         },
         "retry_guidance": {
           "label": "Retry guidance emitted",
