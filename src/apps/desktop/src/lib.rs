@@ -659,6 +659,7 @@ pub async fn run() {
             // paired bots start listening immediately on app startup.
             let step_started = Instant::now();
             api::remote_connect_api::init_on_startup();
+            api::remote_connect_api::init_auto_sync();
             startup_trace.record_elapsed_step(
                 "native_setup",
                 "remote_connect_init_on_startup",

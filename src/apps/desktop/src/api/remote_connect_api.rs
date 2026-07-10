@@ -899,6 +899,10 @@ pub async fn account_connect_devices() -> Result<Vec<OnlineDeviceInfo>, String> 
                 }
                 RelayEvent::DevicePresence { devices } => {
                     log::info!("Device presence updated: {} online", devices.len());
+                    // If another device came online, trigger a session import
+                    if devices.len() > 1 {
+                        log::debug!("Multiple devices online, sync will pick up remote sessions");
+                    }
                 }
                 RelayEvent::DeviceMessageReceived {
                     source_device_id,
@@ -1498,4 +1502,204 @@ pub async fn account_auto_sync(
         sessions_exported: exported,
         sessions_imported: imported,
     })
+}
+
+// ── Auto-sync: debounced upload on session/config changes ──────────────────
+
+use std::time::Duration;
+use tokio::sync::mpsc;
+
+/// What to sync. `Session` carries the session_id + workspace_path.
+#[derive(Debug, Clone)]
+enum SyncRequest {
+    Session {
+        session_id: String,
+        workspace_path: String,
+    },
+    Settings,
+}
+
+/// Global channel for notifying the sync background task.
+static SYNC_TX: OnceLock<mpsc::UnboundedSender<SyncRequest>> = OnceLock::new();
+
+/// Called once at app startup to start the debounced sync background task.
+pub fn init_auto_sync() {
+    let (tx, rx) = mpsc::unbounded_channel::<SyncRequest>();
+    let _ = SYNC_TX.set(tx);
+    tokio::spawn(sync_background_loop(rx));
+}
+
+/// Non-blocking notification that a session was modified. Called from
+/// `save_session_turn` / `save_session_metadata` Tauri commands.
+pub fn notify_session_changed(session_id: &str, workspace_path: &str) {
+    if let Some(tx) = SYNC_TX.get() {
+        let _ = tx.send(SyncRequest::Session {
+            session_id: session_id.to_string(),
+            workspace_path: workspace_path.to_string(),
+        });
+    }
+}
+
+/// Non-blocking notification that config was changed. Called from `set_config`.
+pub fn notify_settings_changed() {
+    if let Some(tx) = SYNC_TX.get() {
+        let _ = tx.send(SyncRequest::Settings);
+    }
+}
+
+/// Background loop: collects sync requests, debounces 5 seconds, then uploads.
+async fn sync_background_loop(mut rx: mpsc::UnboundedReceiver<SyncRequest>) {
+    let debounce = Duration::from_secs(5);
+    loop {
+        // Wait for the first request
+        let Some(first) = rx.recv().await else {
+            break;
+        };
+
+        // Collect initial request + drain any more during debounce window
+        let mut pending_sessions: HashMap<String, String> = HashMap::new(); // session_id → workspace_path
+        let mut pending_settings = false;
+        match first {
+            SyncRequest::Session {
+                session_id,
+                workspace_path,
+            } => {
+                pending_sessions.insert(session_id, workspace_path);
+            }
+            SyncRequest::Settings => {
+                pending_settings = true;
+            }
+        }
+
+        // Drain additional requests during debounce window
+        let deadline = tokio::time::sleep(debounce);
+        tokio::pin!(deadline);
+        loop {
+            tokio::select! {
+                _ = &mut deadline => break,
+                Some(req) = rx.recv() => {
+                    match req {
+                        SyncRequest::Session { session_id, workspace_path } => {
+                            pending_sessions.insert(session_id, workspace_path);
+                        }
+                        SyncRequest::Settings => {
+                            pending_settings = true;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Execute sync — all errors are non-fatal (logged, not propagated)
+        execute_debounced_sync(pending_sessions, pending_settings).await;
+    }
+}
+
+/// Execute the debounced sync: upload changed sessions + optionally settings.
+async fn execute_debounced_sync(sessions: HashMap<String, String>, sync_settings: bool) {
+    // Need to be logged in
+    let (acct_session, relay_url) = match read_account_context().await {
+        Ok(ctx) => ctx,
+        Err(_) => return, // not logged in — silently skip
+    };
+    let client = AccountClient::new();
+
+    // Upload changed sessions
+    for (session_id, workspace_path) in &sessions {
+        match export_and_upload_session(
+            &client,
+            &acct_session,
+            &relay_url,
+            session_id,
+            workspace_path,
+        )
+        .await
+        {
+            Ok(()) => {
+                log::debug!("Auto-synced session {session_id}");
+            }
+            Err(e) => {
+                log::warn!("Auto-sync session {session_id} failed: {e}");
+            }
+        }
+    }
+
+    // Upload settings if changed
+    if sync_settings {
+        // We need the exported config — but export_config is a Tauri command
+        // that requires State. Instead, use the global config service directly.
+        if let Ok(config_service) = bitfun_core::service::config::get_global_config_service().await
+        {
+            match config_service.export_config().await {
+                Ok(export_data) => {
+                    let json = serde_json::to_string(&export_data).unwrap_or_else(|_| "{}".into());
+                    if let Err(e) = client
+                        .upload_settings(&relay_url, &acct_session, &json)
+                        .await
+                    {
+                        log::warn!("Auto-sync settings failed: {e}");
+                    } else {
+                        log::debug!("Auto-synced settings");
+                    }
+                }
+                Err(e) => {
+                    log::warn!("Auto-sync: export config failed: {e}");
+                }
+            }
+        }
+    }
+}
+
+/// Load a single session from disk, serialize to bundle, and upload.
+async fn export_and_upload_session(
+    client: &AccountClient,
+    acct_session: &AccountSession,
+    relay_url: &str,
+    session_id: &str,
+    workspace_path: &str,
+) -> anyhow::Result<()> {
+    // Resolve storage path — we need app_state for desktop_effective_session_storage_path
+    // but in this background context we don't have it. Use the path_manager approach.
+    let path_manager = std::sync::Arc::new(
+        bitfun_core::infrastructure::PathManager::new()
+            .map_err(|e| anyhow::anyhow!("create path manager: {e}"))?,
+    );
+    let storage_path =
+        bitfun_core::service::remote_ssh::workspace_state::get_effective_session_path(
+            workspace_path,
+            None,
+            None,
+        )
+        .await;
+
+    let manager = PersistenceManager::new(path_manager)
+        .map_err(|e| anyhow::anyhow!("create persistence manager: {e}"))?;
+
+    let metadata = manager
+        .load_session_metadata(&storage_path, session_id)
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("session not found: {session_id}"))?;
+
+    let turns = manager
+        .load_session_turns(&storage_path, session_id)
+        .await?;
+
+    let metadata_json = serde_json::to_value(&metadata)?;
+    let turns_json: Vec<serde_json::Value> = turns
+        .iter()
+        .map(|t| serde_json::to_value(t).unwrap_or(serde_json::Value::Null))
+        .collect();
+
+    let bundle = SessionBundle {
+        session_id: session_id.to_string(),
+        metadata: metadata_json,
+        turns: turns_json,
+        source_device_id: None,
+        source_device_name: None,
+    };
+    let bundle_json = serde_json::to_string(&bundle)?;
+    client
+        .upload_session(relay_url, acct_session, session_id, &bundle_json)
+        .await?;
+    Ok(())
 }

@@ -200,6 +200,9 @@ pub async fn set_config(
                 );
             }
 
+            // Notify auto-sync to upload the updated config to the relay
+            crate::api::remote_connect_api::notify_settings_changed();
+
             Ok("Configuration set successfully".to_string())
         }
         Err(e) => {

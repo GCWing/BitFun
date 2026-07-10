@@ -343,7 +343,14 @@ pub async fn save_session_turn(
     manager
         .save_dialog_turn(&workspace_path, &request.turn_data)
         .await
-        .map_err(|e| format!("Failed to save session turn: {}", e))
+        .map_err(|e| format!("Failed to save session turn: {}", e))?;
+
+    // Notify the auto-sync background task (debounced upload to relay)
+    crate::api::remote_connect_api::notify_session_changed(
+        &request.turn_data.session_id,
+        &request.workspace_path,
+    );
+    Ok(())
 }
 
 #[tauri::command]
@@ -365,7 +372,14 @@ pub async fn save_session_metadata(
     manager
         .save_session_metadata(&workspace_path, &request.metadata)
         .await
-        .map_err(|e| format!("Failed to save session metadata: {}", e))
+        .map_err(|e| format!("Failed to save session metadata: {}", e))?;
+
+    // Notify the auto-sync background task
+    crate::api::remote_connect_api::notify_session_changed(
+        &request.metadata.session_id,
+        &request.workspace_path,
+    );
+    Ok(())
 }
 
 #[tauri::command]
