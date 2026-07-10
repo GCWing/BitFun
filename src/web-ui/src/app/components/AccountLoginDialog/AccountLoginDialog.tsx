@@ -60,6 +60,14 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
       setError(null);
       setLoading(false);
       setPendingOverwrite(null);
+    } else {
+      // Pre-fill username + auth server from persisted credential hint
+      remoteConnectAPI.accountGetCredentialHint().then((hint) => {
+        if (hint) {
+          setUsername(hint.username);
+          setAuthServer(hint.relay_url);
+        }
+      });
     }
   }, [isOpen]);
 

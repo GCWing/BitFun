@@ -666,6 +666,7 @@ pub async fn create_session(
     fn norm_conn(s: Option<String>) -> Option<String> {
         s.map(|x| x.trim().to_string()).filter(|x| !x.is_empty())
     }
+    let wp = request.workspace_path.clone();
     let remote_conn = norm_conn(request.remote_connection_id.clone()).or_else(|| {
         request
             .config
@@ -743,6 +744,10 @@ pub async fn create_session(
             .map_err(|e| format!("Failed to persist Deep Review run manifest: {}", e))?;
     }
 
+    let session_id = session.session_id.clone();
+    // Notify auto-sync: new session created
+    crate::api::remote_connect_api::notify_session_changed(&session_id, &wp);
+
     Ok(CreateSessionResponse {
         session_id: session.session_id,
         session_name: session.session_name,
@@ -800,10 +805,16 @@ pub async fn update_session_title(
             .map_err(|e| format!("Failed to restore session before renaming: {}", e))?;
     }
 
-    coordinator
+    let result = coordinator
         .update_session_title(session_id, &request.title)
         .await
-        .map_err(|e| format!("Failed to update session title: {}", e))
+        .map_err(|e| format!("Failed to update session title: {}", e));
+
+    // Notify auto-sync: metadata changed (title)
+    let wp = request.workspace_path.as_deref().unwrap_or("");
+    crate::api::remote_connect_api::notify_session_changed(session_id, wp);
+
+    result
 }
 
 /// Load the session into the coordinator process when it exists on disk but is not in memory.
@@ -1828,7 +1839,11 @@ pub async fn delete_session(
     coordinator
         .delete_session(&effective_path, &request.session_id)
         .await
-        .map_err(|e| format!("Failed to delete session: {}", e))
+        .map_err(|e| format!("Failed to delete session: {}", e))?;
+
+    // Notify auto-sync: tombstone this session on the relay
+    crate::api::remote_connect_api::notify_session_deleted(&request.session_id);
+    Ok(())
 }
 
 #[tauri::command]

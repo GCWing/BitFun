@@ -90,6 +90,11 @@ export interface AccountLoginResult {
   has_cloud_settings: boolean;
 }
 
+export interface AccountHint {
+  username: string;
+  relay_url: string;
+}
+
 export interface AutoSyncResult {
   settings_synced: boolean;
   sessions_exported: number;
@@ -289,6 +294,15 @@ class RemoteConnectAPIService {
     } catch (e) {
       log.warn('accountStatus failed', e);
       return { logged_in: false, user_id: null };
+    }
+  }
+
+  async accountGetCredentialHint(): Promise<AccountHint | null> {
+    try {
+      return await this.adapter.request<AccountHint | null>('account_get_credential_hint');
+    } catch (e) {
+      log.warn('accountGetCredentialHint failed', e);
+      return null;
     }
   }
 

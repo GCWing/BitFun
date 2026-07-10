@@ -57,6 +57,54 @@ async fn read_account_context() -> Result<(AccountSession, String), String> {
     }
 }
 
+// ── Credential persistence (non-secret: username + relay_url only) ──────
+
+/// Path to the persisted credential hint file (non-secret data only).
+fn credential_hint_path() -> PathBuf {
+    let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
+    home.join(".bitfun").join("account_hint.json")
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct AccountHint {
+    pub username: String,
+    pub relay_url: String,
+}
+
+/// Persist non-secret credentials (username + relay_url) so the login dialog
+/// can pre-fill them on next startup. No password or master key is stored.
+fn save_credential_hint(username: &str, relay_url: &str) {
+    let hint = AccountHint {
+        username: username.to_string(),
+        relay_url: relay_url.to_string(),
+    };
+    let path = credential_hint_path();
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    if let Ok(json) = serde_json::to_string(&hint) {
+        let _ = std::fs::write(&path, json);
+    }
+}
+
+/// Load the persisted credential hint. Returns None if not found or invalid.
+fn load_credential_hint() -> Option<AccountHint> {
+    let path = credential_hint_path();
+    let json = std::fs::read_to_string(&path).ok()?;
+    serde_json::from_str(&json).ok()
+}
+
+/// Clear the credential hint (called on logout).
+fn clear_credential_hint() {
+    let _ = std::fs::remove_file(credential_hint_path());
+}
+
+/// Tauri command: get the persisted credential hint for pre-filling the login form.
+#[tauri::command]
+pub async fn account_get_credential_hint() -> Option<AccountHint> {
+    load_credential_hint()
+}
+
 /// Tauri resource directory path for mobile-web, set during app setup.
 static MOBILE_WEB_RESOURCE_PATH: OnceLock<PathBuf> = OnceLock::new();
 
@@ -832,6 +880,8 @@ pub async fn account_login(request: AccountAuthRequest) -> Result<AccountLoginRe
     };
     *get_account_session().write().await = Some(session);
     *get_account_relay_url().write().await = Some(request.relay_url.clone());
+    // Persist non-secret credentials for next startup pre-fill
+    save_credential_hint(&request.username, &request.relay_url);
     log::info!(
         "Account logged in: {} (has_cloud_settings={})",
         result.user_id,
@@ -857,6 +907,8 @@ pub async fn account_logout() -> Result<(), String> {
     }
     *get_account_session().write().await = None;
     *get_account_relay_url().write().await = None;
+    // Clear the persisted credential hint
+    clear_credential_hint();
     log::info!("Account logged out");
     Ok(())
 }
@@ -1003,6 +1055,9 @@ pub async fn account_connect_devices() -> Result<Vec<OnlineDeviceInfo>, String> 
                 }
                 RelayEvent::Disconnected => {
                     log::info!("Device routing disconnected");
+                }
+                RelayEvent::Reconnected => {
+                    log::info!("Device routing reconnected — AuthConnect re-sent by transport");
                 }
                 _ => {}
             }
@@ -1510,12 +1565,17 @@ use std::time::Duration;
 use tokio::sync::mpsc;
 
 /// What to sync. `Session` carries the session_id + workspace_path.
+/// What to sync. Each variant maps to a single relay operation.
 #[derive(Debug, Clone)]
 enum SyncRequest {
-    Session {
+    /// Upload (or replace) a session blob — fired on create/turn-save/metadata/rename.
+    SessionUpsert {
         session_id: String,
         workspace_path: String,
     },
+    /// Tombstone a session on the relay — fired on delete. Prevents re-import.
+    SessionDelete { session_id: String },
+    /// Upload config blob — fired on set_config/import_config/reset_config.
     Settings,
 }
 
@@ -1529,13 +1589,25 @@ pub fn init_auto_sync() {
     tokio::spawn(sync_background_loop(rx));
 }
 
-/// Non-blocking notification that a session was modified. Called from
-/// `save_session_turn` / `save_session_metadata` Tauri commands.
+/// Non-blocking notification that a session was created/modified. Called from
+/// `save_session_turn`, `save_session_metadata`, `create_session`,
+/// `update_session_title` Tauri commands.
 pub fn notify_session_changed(session_id: &str, workspace_path: &str) {
     if let Some(tx) = SYNC_TX.get() {
-        let _ = tx.send(SyncRequest::Session {
+        let _ = tx.send(SyncRequest::SessionUpsert {
             session_id: session_id.to_string(),
             workspace_path: workspace_path.to_string(),
+        });
+    }
+}
+
+/// Non-blocking notification that a session was deleted. Called from
+/// `delete_session` and `delete_persisted_session` Tauri commands. Sends a
+/// tombstone to the relay so the deleted session is not re-imported.
+pub fn notify_session_deleted(session_id: &str) {
+    if let Some(tx) = SYNC_TX.get() {
+        let _ = tx.send(SyncRequest::SessionDelete {
+            session_id: session_id.to_string(),
         });
     }
 }
@@ -1556,15 +1628,20 @@ async fn sync_background_loop(mut rx: mpsc::UnboundedReceiver<SyncRequest>) {
             break;
         };
 
-        // Collect initial request + drain any more during debounce window
-        let mut pending_sessions: HashMap<String, String> = HashMap::new(); // session_id → workspace_path
+        // Collect: session upserts (id→workspace), session deletes (ids), settings flag
+        let mut pending_upserts: HashMap<String, String> = HashMap::new();
+        let mut pending_deletes: std::collections::HashSet<String> =
+            std::collections::HashSet::new();
         let mut pending_settings = false;
         match first {
-            SyncRequest::Session {
+            SyncRequest::SessionUpsert {
                 session_id,
                 workspace_path,
             } => {
-                pending_sessions.insert(session_id, workspace_path);
+                pending_upserts.insert(session_id, workspace_path);
+            }
+            SyncRequest::SessionDelete { session_id } => {
+                pending_deletes.insert(session_id);
             }
             SyncRequest::Settings => {
                 pending_settings = true;
@@ -1579,8 +1656,15 @@ async fn sync_background_loop(mut rx: mpsc::UnboundedReceiver<SyncRequest>) {
                 _ = &mut deadline => break,
                 Some(req) = rx.recv() => {
                     match req {
-                        SyncRequest::Session { session_id, workspace_path } => {
-                            pending_sessions.insert(session_id, workspace_path);
+                        SyncRequest::SessionUpsert { session_id, workspace_path } => {
+                            // A subsequent upsert cancels a pending delete
+                            pending_deletes.remove(&session_id);
+                            pending_upserts.insert(session_id, workspace_path);
+                        }
+                        SyncRequest::SessionDelete { session_id } => {
+                            // A subsequent delete cancels a pending upsert
+                            pending_upserts.remove(&session_id);
+                            pending_deletes.insert(session_id);
                         }
                         SyncRequest::Settings => {
                             pending_settings = true;
@@ -1591,12 +1675,17 @@ async fn sync_background_loop(mut rx: mpsc::UnboundedReceiver<SyncRequest>) {
         }
 
         // Execute sync — all errors are non-fatal (logged, not propagated)
-        execute_debounced_sync(pending_sessions, pending_settings).await;
+        execute_debounced_sync(pending_upserts, pending_deletes, pending_settings).await;
     }
 }
 
-/// Execute the debounced sync: upload changed sessions + optionally settings.
-async fn execute_debounced_sync(sessions: HashMap<String, String>, sync_settings: bool) {
+/// Execute the debounced sync: upload changed sessions, tombstone deleted
+/// sessions, optionally upload settings.
+async fn execute_debounced_sync(
+    upserts: HashMap<String, String>,
+    deletes: std::collections::HashSet<String>,
+    sync_settings: bool,
+) {
     // Need to be logged in
     let (acct_session, relay_url) = match read_account_context().await {
         Ok(ctx) => ctx,
@@ -1604,8 +1693,20 @@ async fn execute_debounced_sync(sessions: HashMap<String, String>, sync_settings
     };
     let client = AccountClient::new();
 
+    // Tombstone deleted sessions on the relay
+    for session_id in &deletes {
+        if let Err(e) = client
+            .delete_session(&relay_url, &acct_session, session_id)
+            .await
+        {
+            log::warn!("Auto-sync delete {session_id} failed: {e}");
+        } else {
+            log::debug!("Auto-synced tombstone for session {session_id}");
+        }
+    }
+
     // Upload changed sessions
-    for (session_id, workspace_path) in &sessions {
+    for (session_id, workspace_path) in &upserts {
         match export_and_upload_session(
             &client,
             &acct_session,

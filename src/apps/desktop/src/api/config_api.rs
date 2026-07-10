@@ -245,6 +245,9 @@ pub async fn reset_config(
                 );
             }
 
+            // Notify auto-sync: config reset, upload to relay
+            crate::api::remote_connect_api::notify_settings_changed();
+
             Ok(message)
         }
         Err(e) => {
@@ -286,6 +289,8 @@ pub async fn import_config(
         Ok(result) => {
             state.ai_client_factory.invalidate_cache();
             info!("Config imported, AI client cache invalidated");
+            // Notify auto-sync: config changed, upload to relay
+            crate::api::remote_connect_api::notify_settings_changed();
             Ok(to_json_value(result, "import config result")?)
         }
         Err(e) => {

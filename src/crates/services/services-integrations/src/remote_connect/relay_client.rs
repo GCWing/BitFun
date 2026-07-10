@@ -179,6 +179,10 @@ struct ReconnectCtx {
     device_id: String,
     room_id: String,
     public_key: String,
+    /// Account token for device-routing re-auth after reconnect.
+    token: String,
+    /// Device name for re-auth after reconnect.
+    device_name: String,
 }
 
 pub struct RelayClient {
@@ -329,6 +333,16 @@ impl RelayClient {
                                 };
                                 let _ = new_cmd_tx.send(recreate);
                                 info!("Room '{}' recreated after reconnect", &ctx.room_id);
+                            }
+
+                            // Re-authenticate device routing after reconnect.
+                            if !ctx.token.is_empty() {
+                                let reauth = RelayMessage::AuthConnect {
+                                    token: ctx.token.clone(),
+                                    device_name: ctx.device_name.clone(),
+                                };
+                                let _ = new_cmd_tx.send(reauth);
+                                info!("Re-sent AuthConnect after reconnect");
                             }
 
                             let _ = event_tx.send(RelayEvent::Reconnected);
@@ -491,6 +505,21 @@ impl RelayClient {
     /// `create_room` for the device-routing pathway). The relay validates the
     /// token and registers the device; success arrives as `RelayEvent::AuthOk`.
     pub async fn connect_authenticated(&self, token: &str, device_name: &str) -> Result<()> {
+        // Store credentials in reconnect context so the WS read task can
+        // re-send AuthConnect after a reconnect.
+        let mut guard = self.reconnect_ctx.write().await;
+        if let Some(ref mut ctx) = *guard {
+            ctx.token = token.to_string();
+            ctx.device_name = device_name.to_string();
+        } else {
+            *guard = Some(ReconnectCtx {
+                token: token.to_string(),
+                device_name: device_name.to_string(),
+                ..Default::default()
+            });
+        }
+        drop(guard);
+
         self.send(RelayMessage::AuthConnect {
             token: token.to_string(),
             device_name: device_name.to_string(),
