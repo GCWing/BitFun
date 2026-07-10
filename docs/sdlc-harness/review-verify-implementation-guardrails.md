@@ -1,7 +1,8 @@
 # Review / Verify 收敛实施护栏
 
-> 范围：约束统一 Review、DeepReview 收敛、ReviewTeam 内部化、PR Review 投影和 Verify 探索的后续两次大型 PR。
+> 范围：记录统一 Review、DeepReview 收敛和 ReviewTeam 内部化两次大型 PR 的已合入基线，明确既有 PR Review 独立 AI 草稿路径仍待收敛，并约束 Verify 探索和后续产品优化不重新扩张概念。
 > 本文是实施护栏，不新增 SDLC Harness 阶段路线，不定义新的 workflow DSL，也不替代 [product-requirements.md](product-requirements.md)、[agent-workflow-staged-plan.md](agent-workflow-staged-plan.md) 或 [features/pr-quality-gate.md](features/pr-quality-gate.md)。
+> 合入后的竞品复盘、体验差距和候选需求见 [research/review-product-experience-benchmark.md](research/review-product-experience-benchmark.md)。
 
 ## 1. 产品目标
 
@@ -22,14 +23,28 @@
 | `Review: Strict` / 严格审查 | Review 的最高强度，适合高风险、大范围或用户显式要求 | 复用现有 `DeepReview` child session、manifest、queue 和 report enrichment |
 | `/DeepReview` | 迁移窗口内的历史兼容命令，不作为长期产品入口 | 静默路由到 `/review strict` 等价路径，最终从普通体验中移除 |
 | `ReviewTeam` | 严格审查的内部 reviewer 配置 | 类型名、配置路径和 manifest 名称可保留，避免破坏历史设置 |
-| PR Review | PR/代码托管平台的评论、线程和就绪度投影 | 不拥有新的 reviewer 调度器 |
+| PR Review | PR/代码托管平台的评论、线程和就绪度投影 | 既有 MiniApp 独立强度和 AI 草稿路径属于待收敛历史实现；不再扩展，目标态不拥有 reviewer 调度器 |
 | Verify | 任务闭环中的证据生产动作 | 先探索，不在 PR1 中变成强制门禁或独立界面 |
 
 禁止新增与上表平级的用户概念，例如 `DeepReview`、`ReviewTeam`、`Verify Gate`、`Workflow Queue` 作为普通用户必须理解的入口。`/DeepReview` 只能服务迁移兼容，不能继续被包装成高级用户入口或新增能力承载点。
 
-## 3. 两次大型 PR 边界
+## 3. 已完成的两次大型 PR 基线
 
-### PR1：统一 Review 入口和可见命名收敛
+两次大型 PR 已完成并合入。以下内容保留为行为和兼容基线，不代表继续扩张实现范围：
+
+| 阶段 | 已达成结果 | 后续约束 |
+|---|---|---|
+| PR1 | 统一 Review 可见命名，DeepReview 和 ReviewTeam 收回内部兼容层 | 不恢复第二套入口或设置心智 |
+| PR2 | `/review` 自适应选择 L1-L3，只读 Reviewer 与 ReviewFixer 分离，同侧栏修复和 follow-up Review 闭环；未包含既有 PR Review MiniApp 的独立 AI 草稿路径收敛 | 后续优先改善问题状态、增量复审、成本授权和 PR 结果投影，不新建调度体系 |
+
+### 合入证据
+
+| 基线 | PR / commit | 关键实现入口 | 回归证据 |
+|---|---|---|---|
+| PR1：可见命名与历史入口收敛 | [PR #1488](https://github.com/GCWing/BitFun/pull/1488) / [`f072467ea`](https://github.com/GCWing/BitFun/commit/f072467ea4332aafeb6ff25cb1fc4cd133c2ff64) | [commandParser.ts](../../src/web-ui/src/flow_chat/deep-review/launch/commandParser.ts)、[ReviewConfig.tsx](../../src/web-ui/src/infrastructure/config/components/ReviewConfig.tsx) | [commandParser.test.ts](../../src/web-ui/src/flow_chat/deep-review/launch/commandParser.test.ts)、[ReviewConfig.test.tsx](../../src/web-ui/src/infrastructure/config/components/ReviewConfig.test.tsx) |
+| PR2：自适应质量决策与同侧栏闭环 | [PR #1497](https://github.com/GCWing/BitFun/pull/1497) / [`99ac62ffd`](https://github.com/GCWing/BitFun/commit/99ac62ffde8f942c52fbae9dc0a19f622173fe74) | [review.rs](../../src/crates/contracts/product-domains/src/review.rs)、[ReviewService.ts](../../src/web-ui/src/flow_chat/services/ReviewService.ts) | [review_policy.rs](../../src/crates/contracts/product-domains/tests/review_policy.rs)、[ReviewService.test.ts](../../src/web-ui/src/flow_chat/services/ReviewService.test.ts)、[BtwSessionPanel.review-action.test.tsx](../../src/web-ui/src/flow_chat/components/btw/BtwSessionPanel.review-action.test.tsx) |
+
+### PR1：统一 Review 入口和可见命名收敛（已完成）
 
 目标：
 
@@ -51,15 +66,15 @@
 - 不把 Verify 设计成新门禁。
 - 不为 PR Review 新建一套 reviewer 执行器。
 
-### PR2：动态 Review 决策和只读审查闭环
+### PR2：动态 Review 决策和只读审查闭环（已完成）
 
 目标：
 
 - 引入单一质量决策入口，根据用户意图、diff 规模、风险和项目策略选择 L1/L2/L3。
 - 引入 `/review` 统一命令和对应 GUI 入口，由系统根据问题、待审核范围、变更难度、风险、质量诉求和预算动态选择强度。
-- 在任务执行过程中，当用户要求“仔细审核”或风险升高时，自动触发合适强度的只读 adversarial review。
+- 在任务执行过程中，只有用户明确要求“完成并仔细审核”等诉求时，主 Agent 才在当前任务内触发一个只读 adversarial reviewer；风险升高只影响用户显式发起的 `/review` / GUI Review 强度，或形成 Review 建议，不自动启动额外 Reviewer。风险驱动的自动触发属于后续候选，必须单独评审收益和成本授权。
 - Verify 继续作为后续探索，不在本 PR 增加生产决策字段、证据生产器、门禁或独立界面。
-- PR 面板继续只消费 Review 摘要，不拥有执行策略。
+- 目标边界是统一 Review 结果作为既有变更就绪度 / PR 门禁的输入，不拥有执行策略或门禁决策；门禁继续基于证据、确定性失败、团队策略、残余风险接受和人工决策生成，代码托管平台事实与最终执行约束保持独立。当前 PR 面板仅按工作区和文件重叠启发式展示相关 Review 会话数量，没有稳定 PR 身份关联；既有 PR Review MiniApp 仍自行选择 fast / focused / deep 并生成 AI 草稿。两条路径都尚未形成统一投影，不能把目标态或启发式关系误写成现状契约，也不能继续扩展其策略和 Reviewer 能力。
 - `/DeepReview` 开始迁移为 `/review strict` 等价内部路由；普通用户不需要学习或选择 DeepReview。
 
 允许：
@@ -77,7 +92,7 @@
 - 不把缺失证据写成通过状态。
 - 不让自动化在没有用户提示或策略原因时显著增加 token。
 
-当前 PR2 实现边界：
+PR2 已合入实现边界：
 
 - 平台无关的产品域策略只接收用户意图、目标事实和项目策略，输出 L1-L3、执行模式、策略级别、原因和是否需要成本确认。
 - GUI 和 `/review` 共用同一个预构建计划；确认前后不重新解析目标或重建 manifest，避免用户确认的范围与实际执行漂移。
@@ -85,9 +100,19 @@
 - 用户在普通任务中明确要求“完成并仔细审核”时，主 Agent 完成实现后在当前任务内调用 1 个隔离 `CodeReview`，不另开产品界面，内部 Task 名称默认折叠和匿名化；需要多 reviewer 的覆盖统一进入 `/review` 和成本确认，不在提示词中复制 reviewer-count 策略，也不在用户无感知时增加并发成本。
 - Review 与修复分为两个运行身份：`CodeReview` / `DeepReview` 只读，用户批准后由 `ReviewFixer` 修改；能精确归因时，修复后按“原审核文件 + `ReviewFixer` 直接改动文件”重新统计 diff 和决策。命令、Git 或 stdin 工具一旦出现，无论成功、失败或中断，都明确提示并回退当前工作区 diff，不伪装成窄范围复核。Fixer 基线和本次选中的 remediation id 在发送修复任务前持久化，重启只恢复原范围内未完成项。follow-up 预留携带唯一 request id，并把同一 id 写入现有子会话 relationship metadata、派生后端 session id；创建响应不确定时保留同一预留供重试，后端按 agent、relationship kind、parent session 和 parent request 复用既有会话，不把可变化的 parent turn 位置当作幂等身份。侧栏明确区分重试、进行中、完成、失败、取消和查看结果。最终范围、改动文件和子会话关系继续使用现有 session metadata，不新增事务系统。
 - L2/L3 的 manifest 约束不能只依赖前端组装：portable runtime 校验 L2 的 normal、最多 3 个 active reviewer、无 judge，以及 L3 的 deep、全部非条件 core reviewer、`ReviewJudge` quality gate，并要求条件 reviewer 启用或明确标记 `not_applicable`；缺少 `qualityDecision` 的历史 manifest 保持兼容。创建幂等短路只用于带 parent request 的 Review/DeepReview 子会话，不改变普通显式 ID 会话的 coordinator 恢复路径。
-- 文件范围统计必须通过已注册、支持远程路由的 workspace API 包含可读取的未跟踪文件内容；非空目标的变更规模未知时至少进入 L2，不把缺失事实解释为低风险。
+- 文件范围统计必须通过已注册、支持远程路由的 workspace API 包含可读取的未跟踪文件内容。普通 `Review` intent 下，当前策略对 `Partial` / `Unknown` 目标保持 L1/Quick，项目策略 override 也不会让未解析目标静默扩展并发；显式 `/review strict` 仍优先进入 L3/Deep。只有 `Resolved` 且非空目标的变更行数未知时，普通 Review 的风险下限才进入 L2。若后续产品要求未解析的普通目标也进入 L2，必须另开实现 PR 修改策略和回归测试，不能把目标态写成已合入基线。
 - L2/L3 确认框按每个实际 work packet（包含 judge）分别估算后求和；单 reviewer 最大值只服务 prompt guardrail，不能乘调用数冒充总成本。容量设置描述为可选工作的等待窗口，不承诺整个 Review 的硬耗时上限；容量 policy 串行保存，保存期间锁定全部容量输入，失败立即恢复最后确认值。
 - Verify 本 PR 不进入生产决策契约。后续探索必须先定义可信 evidence producer，不能把缺失证据解释为通过。
+
+合入后仍需解决的是产品表达和问题闭环，而不是继续增加 Review 执行机制：
+
+- 近期问题动作只在本次 Review 内生效并复用现有修复计划；跨 Review 的处理状态和修复后关闭必须先定义稳定身份、持久化所有者和失效规则，不能用启发式关联冒充闭环。
+- “未发现问题”必须限定为本次覆盖范围，不能形成质量背书。
+- 扩大覆盖确认需要说明新增收益，并提供保留核心检查的收敛选择。
+- 自动复审应优先增量化并具备暂停条件，不能默认在每次 push 后持续消费成本。
+- 当前容量设置只作为高级运行控制，不扩张为 Reviewer、策略档位或 Workflow 配置中心。
+
+这些条目在进入实现前必须先按 [Review 产品体验竞品基准与优化需求](research/review-product-experience-benchmark.md) 的优先级回填权威 PRD 和实施计划。
 
 ## 4. Review 强度规则
 

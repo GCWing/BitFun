@@ -8,10 +8,11 @@
 | 文档 | 角色 | 主要内容 |
 |---|---|---|
 | [research/external-research.md](research/external-research.md) | 调研文档 | 外部产品、论文、标准和趋势信号 |
+| [research/review-product-experience-benchmark.md](research/review-product-experience-benchmark.md) | Review 产品体验基准 | 统一 Review 合入后的竞品对比、当前体验差距、候选优化和明确非目标 |
 | [product-requirements.md](product-requirements.md) | 产品需求 | 产品定位、用户画像、体验路径、产品规格、关键边界、平台差异和成功指标 |
 | [product-requirements-agent-workflow-adjustment.md](product-requirements-agent-workflow-adjustment.md) | 非权威候选调整提案 | 智能体工作流、并发 GUI、Review 范围控制、token 成本和任务完成度平衡；采纳前需回填权威文档 |
 | [agent-workflow-staged-plan.md](agent-workflow-staged-plan.md) | 场景收敛计划 | 将工作流、审查、并发和成本控制压回真实用户场景，不新增独立阶段路线 |
-| [review-verify-implementation-guardrails.md](review-verify-implementation-guardrails.md) | Review / Verify 实施护栏 | 约束统一 Review、Strict Review、ReviewTeam 内部化、PR Review 投影和 Verify 探索的两次大型 PR 边界 |
+| [review-verify-implementation-guardrails.md](review-verify-implementation-guardrails.md) | Review / Verify 实施护栏 | 记录统一 Review 两次大型 PR 的已合入基线，并约束后续优化不重新扩张产品和架构概念 |
 | [design.md](design.md) | 架构设计 | 设计目标、领域模型、配置层级、模块边界和架构风险 |
 | [implementation-plan.md](implementation-plan.md) | 实施计划 | 按用户收益切片组织快速路径、上下文保障、团队治理、复杂生命周期能力的阶段落地 |
 | [traceability-matrix.md](traceability-matrix.md) | 追踪矩阵 | 需求、设计、功能规格、执行阶段和测试方法的映射 |
