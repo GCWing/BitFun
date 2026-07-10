@@ -925,8 +925,8 @@ pub async fn account_logout() -> Result<(), String> {
     }
     *get_account_session().write().await = None;
     *get_account_relay_url().write().await = None;
-    // Clear the persisted credential hint
     clear_credential_hint();
+    TOKEN_EXPIRED.store(false, std::sync::atomic::Ordering::Relaxed);
     log::info!("Account logged out");
     Ok(())
 }
@@ -966,6 +966,8 @@ pub async fn account_connect_devices() -> Result<Vec<OnlineDeviceInfo>, String> 
                 }
                 RelayEvent::AuthError { message } => {
                     log::warn!("Device routing auth error: {message}");
+                    // Token expired or invalid — mark for re-login prompt
+                    TOKEN_EXPIRED.store(true, std::sync::atomic::Ordering::Relaxed);
                 }
                 RelayEvent::DevicePresence { devices } => {
                     log::info!("Device presence updated: {} online", devices.len());
@@ -1489,9 +1491,14 @@ pub async fn account_auto_sync(
         if let Some(cloud_json) = cloud_settings {
             let config_value: serde_json::Value = serde_json::from_str(&cloud_json)
                 .map_err(|e| format!("parse cloud config: {e}"))?;
+            // Extract the .config field from the ConfigExport wrapper —
+            // the upload path stores the full ConfigExport JSON which has
+            // { config: GlobalConfig, export_timestamp, version }, but
+            // import_config_data expects the inner GlobalConfig directly.
+            let inner_config = config_value.get("config").cloned().unwrap_or(config_value);
             app_state
                 .config_service
-                .import_config_data(config_value)
+                .import_config_data(inner_config)
                 .await
                 .map_err(|e| format!("import cloud config: {e}"))?;
             app_state.ai_client_factory.invalidate_cache();
@@ -1914,30 +1921,35 @@ async fn import_session_bundle(bundle_json: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Periodic pull: fetch all remote sessions, diff against local, import new
-/// ones and delete local orphans (sessions that were tombstoned on the relay).
-/// Enumerates all workspace directories under ~/.bitfun/projects/ so that
-/// every workspace is reconciled, not just the active one.
+/// Periodic pull: fetch all remote sessions, import any that don't exist
+/// locally anywhere. Does NOT delete local sessions based on remote
+/// absence — that would risk deleting locally-created sessions that
+/// haven't been uploaded yet. Deletion propagation is handled by the
+/// explicit tombstone call in the SessionDelete sync path (the relay
+/// marks deleted=1, and future pulls simply won't return that session,
+/// so it won't be re-imported).
+///
+/// To avoid cross-workspace duplication, we first collect ALL local
+/// session IDs across ALL workspaces, then only import a remote session
+/// if it doesn't exist in ANY workspace.
 async fn pull_and_reconcile() {
-    // Need to be logged in
     let (acct_session, relay_url) = match read_account_context().await {
         Ok(ctx) => ctx,
         Err(_) => return,
     };
     let client = AccountClient::new();
 
-    // Fetch all remote sessions (returns session_id → bundle_json)
     let remote_sessions = match client.fetch_sessions(&relay_url, &acct_session).await {
         Ok(s) => s,
         Err(e) => {
+            if is_token_expired_error(&e) {
+                TOKEN_EXPIRED.store(true, std::sync::atomic::Ordering::Relaxed);
+            }
             log::debug!("Pull: fetch_sessions failed: {e}");
             return;
         }
     };
-    let remote_ids: std::collections::HashSet<&String> =
-        remote_sessions.iter().map(|(id, _)| id).collect();
 
-    // Enumerate all local workspace session directories
     let path_manager = match bitfun_core::infrastructure::PathManager::new() {
         Ok(pm) => std::sync::Arc::new(pm),
         Err(e) => {
@@ -1956,77 +1968,72 @@ async fn pull_and_reconcile() {
     let projects_root = path_manager.projects_root();
     let entries = match std::fs::read_dir(&projects_root) {
         Ok(e) => e,
-        Err(_) => return, // no projects dir — nothing to reconcile
+        Err(_) => return,
     };
 
+    // First pass: collect ALL local session IDs across ALL workspaces
+    // to prevent cross-workspace duplication.
+    let mut all_local_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut workspace_session_dirs: Vec<std::path::PathBuf> = Vec::new();
     for entry in entries.flatten() {
         if !entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
             continue;
         }
-        let workspace_slug_dir = entry.path();
-        let sessions_dir = workspace_slug_dir.join("sessions");
+        let sessions_dir = entry.path().join("sessions");
         if !sessions_dir.is_dir() {
             continue;
         }
+        if let Ok(local_sessions) = manager.list_session_metadata(&sessions_dir).await {
+            for meta in &local_sessions {
+                all_local_ids.insert(meta.session_id.clone());
+            }
+        }
+        workspace_session_dirs.push(sessions_dir);
+    }
 
-        // List local sessions in this workspace
-        let local_sessions = match manager.list_session_metadata(&sessions_dir).await {
-            Ok(s) => s,
-            Err(_) => continue,
+    // Second pass: import remote sessions that don't exist in ANY workspace.
+    // Write to the first workspace dir (best-effort; no source-workspace metadata
+    // in the bundle to route correctly).
+    if workspace_session_dirs.is_empty() {
+        return;
+    }
+    let target_dir = &workspace_session_dirs[0];
+
+    for (session_id, bundle_json) in &remote_sessions {
+        // Skip if this session already exists in any local workspace
+        if all_local_ids.contains(session_id) {
+            continue;
+        }
+
+        let bundle: SessionBundle = match serde_json::from_str(bundle_json) {
+            Ok(b) => b,
+            Err(e) => {
+                log::warn!("Pull: deserialize bundle {session_id}: {e}");
+                continue;
+            }
         };
-        let local_ids: std::collections::HashSet<String> = local_sessions
-            .iter()
-            .map(|m| m.session_id.clone())
-            .collect();
-
-        // Delete local orphans (exist locally but not on relay = tombstoned)
-        for meta in &local_sessions {
-            if !remote_ids.contains(&meta.session_id) {
-                if manager
-                    .delete_session(&sessions_dir, &meta.session_id)
-                    .await
-                    .is_ok()
-                {
-                    log::info!("Pull: deleted orphaned session {}", meta.session_id);
-                }
-            }
-        }
-
-        // Import new remote sessions (exist on relay but not locally)
-        for (session_id, bundle_json) in &remote_sessions {
-            if local_ids.contains(session_id) {
+        let metadata: SessionMetadata = match serde_json::from_value(bundle.metadata.clone()) {
+            Ok(m) => m,
+            Err(e) => {
+                log::warn!("Pull: deserialize metadata {session_id}: {e}");
                 continue;
             }
-            // Deserialize and write
-            let bundle: SessionBundle = match serde_json::from_str(bundle_json) {
-                Ok(b) => b,
-                Err(e) => {
-                    log::warn!("Pull: deserialize bundle {session_id}: {e}");
-                    continue;
-                }
-            };
-            let metadata: SessionMetadata = match serde_json::from_value(bundle.metadata.clone()) {
-                Ok(m) => m,
-                Err(e) => {
-                    log::warn!("Pull: deserialize metadata {session_id}: {e}");
-                    continue;
-                }
-            };
-            if manager
-                .save_session_metadata(&sessions_dir, &metadata)
-                .await
-                .is_err()
-            {
-                continue;
-            }
-            for turn_val in &bundle.turns {
-                let turn: DialogTurnData = match serde_json::from_value(turn_val.clone()) {
-                    Ok(t) => t,
-                    Err(_) => continue,
-                };
-                let _ = manager.save_dialog_turn(&sessions_dir, &turn).await;
-            }
-            log::info!("Pull: imported session {session_id}");
+        };
+        if manager
+            .save_session_metadata(target_dir, &metadata)
+            .await
+            .is_err()
+        {
+            continue;
         }
+        for turn_val in &bundle.turns {
+            let turn: DialogTurnData = match serde_json::from_value(turn_val.clone()) {
+                Ok(t) => t,
+                Err(_) => continue,
+            };
+            let _ = manager.save_dialog_turn(target_dir, &turn).await;
+        }
+        all_local_ids.insert(session_id.clone()); // prevent re-import in same cycle
+        log::info!("Pull: imported session {session_id}");
     }
 }

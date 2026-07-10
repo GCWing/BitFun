@@ -66,19 +66,27 @@ const PersistentFooterActions: React.FC = () => {
 
   // On mount: check if user was previously logged in (credential hint exists)
   // or if token has expired. Auto-open the login dialog in either case.
+  // Also periodically check for token expiry (every 60s) while the app runs.
   useEffect(() => {
     remoteConnectAPI.accountGetCredentialHint().then((hint) => {
       if (hint) {
-        // User was logged in before — auto-open login dialog for re-auth
         setShowAccountLogin(true);
       }
     });
-    // Also check if token expired during a previous session
     remoteConnectAPI.accountTokenExpired().then((expired) => {
       if (expired) {
         setShowAccountLogin(true);
       }
     });
+    // Periodic check: if token expires while the app is running, prompt re-login
+    const expiryCheck = setInterval(() => {
+      remoteConnectAPI.accountTokenExpired().then((expired) => {
+        if (expired) {
+          setShowAccountLogin(true);
+        }
+      });
+    }, 60000);
+    return () => clearInterval(expiryCheck);
   }, []);
 
   const closeMenu = useCallback(() => {
