@@ -1280,19 +1280,15 @@ pub async fn account_import_remote_sessions(
             continue;
         }
 
-        // Deserialize the bundle
+        // Deserialize the bundle and write metadata as-is. The source device's
+        // workspace_path is preserved for display (read-only history). Tasks
+        // are always executed on the receiving device's own workspace, so
+        // cross-platform path differences don't affect execution.
         let bundle: SessionBundle =
             serde_json::from_str(&bundle_json).map_err(|e| format!("deserialize bundle: {e}"))?;
 
-        // Rewrite workspace_path / workspace_hostname to the importing
-        // device's actual workspace so the session can be opened locally.
-        // The source device's path (e.g. /Users/alice/project on macOS)
-        // would be invalid on Windows/Linux.
-        let mut metadata: SessionMetadata = serde_json::from_value(bundle.metadata)
+        let metadata: SessionMetadata = serde_json::from_value(bundle.metadata)
             .map_err(|e| format!("deserialize metadata: {e}"))?;
-        metadata.workspace_path = Some(workspace_path.clone());
-        metadata.workspace_hostname = None; // clear source hostname
-
         if manager
             .save_session_metadata(&storage_path, &metadata)
             .await
