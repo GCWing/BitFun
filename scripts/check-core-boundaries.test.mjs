@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 const ENTRYPOINT = new URL('./check-core-boundaries.mjs', import.meta.url);
 const MODULES = [
   './core-boundaries/checker.mjs',
+  './core-boundaries/manifest-feature-helpers.mjs',
   './core-boundaries/self-test.mjs',
   './core-boundaries/rules/crate-rules.mjs',
   './core-boundaries/rules/feature-rules.mjs',
@@ -63,4 +64,25 @@ test('split core boundary check keeps self-test and default execution behavior',
   });
   assert.equal(defaultRun.status, 0, defaultRun.stderr || defaultRun.stdout);
   assert.match(defaultRun.stdout, /Core boundary check passed\./);
+});
+
+test('optional dependency ownership rejects undeclared direct feature owners', async () => {
+  const { unexpectedDependencyOwnerFeatures } = await import(
+    './core-boundaries/manifest-feature-helpers.mjs'
+  );
+  const features = new Map([
+    ['declared', { refs: ['dep:example'], line: 1 }],
+    ['missing', { refs: ['example'], line: 2 }],
+    ['feature-ref', { refs: ['example/subfeature'], line: 3 }],
+    ['weak-ref', { refs: ['example?/subfeature'], line: 4 }],
+    ['unrelated', { refs: ['other'], line: 5 }],
+  ]);
+
+  assert.deepEqual(
+    unexpectedDependencyOwnerFeatures(features, {
+      depName: 'example',
+      ownerFeatures: ['declared'],
+    }).map(([featureName]) => featureName),
+    ['missing', 'feature-ref'],
+  );
 });

@@ -28,10 +28,12 @@ bitfun-services-core = { path = "../services-core", default-features = false, op
 chrono = { workspace = true, optional = true }
 dunce = { workspace = true, optional = true }
 futures = { workspace = true, optional = true }
+fs2 = { workspace = true, optional = true }
 git2 = { workspace = true, optional = true }
 hostname = { workspace = true, optional = true }
 image = { workspace = true, optional = true }
 hex = { workspace = true, optional = true }
+libc = { workspace = true, optional = true }
 local-ip-address = { workspace = true, optional = true }
 mac_address = { workspace = true, optional = true }
 md5 = { workspace = true, optional = true }
@@ -65,6 +67,7 @@ git2 = { workspace = true, features = ["vendored-openssl"], optional = true }
 
 [target.'cfg(windows)'.dependencies]
 schannel = { version = "0.1", optional = true }
+windows = { workspace = true, optional = true, features = ["Win32_Foundation", "Win32_Storage_FileSystem"] }
 
 [features]
 default = []
@@ -109,6 +112,18 @@ miniapp-runtime = [
     "reqwest",
     "uuid",
     "which",
+]
+plugin-source = [
+    "bitfun-product-domains/plugin-source",
+    "dep:bitfun-product-domains",
+    "dunce",
+    "fs2",
+    "hex",
+    "libc",
+    "sha2",
+    "thiserror",
+    "uuid",
+    "windows",
 ]
 remote-connect = [
     "anyhow",
@@ -197,6 +212,7 @@ product-full = [
     "git",
     "miniapp-runtime",
     "mcp",
+    "plugin-source",
     "remote-connect",
     "remote-ssh",
     "remote-ssh-concrete",

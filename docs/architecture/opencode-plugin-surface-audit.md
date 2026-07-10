@@ -55,7 +55,11 @@
 | 区域 | 当前判断 | 后续处理 |
 |---|---|---|
 | `runtime-ports` plugin contract | 已有主机 ABI、只读视图、候选项、权限提示、诊断和隔离类型；公开符号较多但已受脚本预算约束 | 不继续新增泛描述符；公开符号必须声明接口切面、消费方和验证目标 |
-| `plugin-runtime-host` | 已有受控 host 边界、deadline、幂等、隔离和 restart 清理路径 | 继续保持窄方法集；来源发现和激活属于 P0-C |
+| `plugin-runtime-host` | 已有受控 host 边界、deadline、幂等、隔离和 restart 清理路径 | 继续保持窄方法集；P0-C.1 来源接口不得直接泄漏主机 ABI |
+| `product-domains/plugin_source` | 定义生态无关的版本 1 包清单、来源标识、工作区信任记录和 epoch 规则 | `adapter` 仅为不透明标识；不得加入生态入口规则、文件系统、安装或主机行为 |
+| `services-integrations/plugin_source` | 校验用户级和项目级 BitFun 目录中的全部声明文件，安全替换工作区信任记录 | 不解释 `.opencode` 布局，不扫描外部生态目录，不执行插件，不增加通用 registry/manager 接口 |
+| `bitfun-core/plugin_source` | 注入产品目录并向 CLI 保留来源与诊断兼容接口 | 不实现文件扫描、锁、持久化或生态解析 |
+| `bitfun-cli plugins` | 当前来源审核接口的产品消费方，支持 `list/approve-source/deny/revoke`；`doctor` 汇总严重来源错误 | `SourceApproved` 不得宣称能力已批准、包已启用或可执行，不承担安装复制和卸载 |
 | `opencode-adapter` | 提供来源发现、诊断只读视图和受信任 custom tool 候选映射；未建立信任或暂不支持的能力返回诊断或 `unsupported` 状态 | 当前只验证适配器到 Plugin Runtime Host 的候选链路；生产组装接入须独立评审 |
 | `events` | 已有产品事件清单 | 需要在真实插件事件消费前定义可订阅子集，不新增插件专用事件模型 |
 | `tool-contracts` | 已有动态工具提供方和工具快照 | custom tool 映射必须复用它，不新增插件专用工具 ABI |
@@ -66,6 +70,14 @@
 - 信任快照的 epoch 必须与本次 read/dispatch epoch 一致，否则只返回诊断，不产生受信任候选。
 - GUI、TUI/CLI、Web 等产品入口只消费能力服务接口、插件只读视图、诊断和稳定状态词。
 - 适配器不执行 JS/TS、不安装 npm、不依赖用户本机 `opencode`。
+
+当前受管包规则：
+
+- 包清单文件为 `bitfun.plugin.json`；版本 1 的 `adapter` 是小写不透明标识。只有清单声明并通过哈希校验的文件进入来源标识和后续适配器访问范围。
+- `.opencode/plugins/*.js|ts` 只在 OpenCode 适配层中解释，不是产品域或来源模块规则，也不是对用户 OpenCode 配置目录的直接扫描。
+- 包内容变化后旧来源审核失效，新来源标识回到 `Unknown`；损坏的信任文件按失败处理且不自动覆盖。
+- P0-C.2 不得把 `SourceApproved` 直接映射为 Host 的 `Trusted`；首次激活需展示适配器、入口、能力和副作用并重新确认。
+- P0-C.1 没有生产 Host 绑定和 JS/TS 执行能力。
 
 ## 5. PR 审查问题
 

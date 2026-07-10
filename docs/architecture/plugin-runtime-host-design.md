@@ -70,11 +70,12 @@ flowchart LR
 | 阶段 | 交付内容 | 明确不交付 |
 |---|---|---|
 | P0-B | 主机内部 ABI、产品形态保护、read/dispatch 校验、deadline、epoch、幂等、隔离、诊断、`HostRestarted` 清除路径 | Desktop/CLI 插件消费、来源发现、激活、副作用执行、用户可执行恢复动作、界面贡献载荷 |
-| P0-C | BitFun 插件来源发现、启用/禁用、OpenCode-compatible 最小映射、最小入口诊断视图和一个真实候选项消费路径 | 完整 OpenCode 运行时、外部 OpenCode CLI 前置依赖、全入口界面扩展矩阵、任意可写 hook |
+| P0-C.1 | BitFun 受管插件包发现、完整性校验、工作区信任和 CLI 诊断 | 插件执行、生产主机绑定、安装复制、随产品携带包和外部 OpenCode 目录导入 |
+| P0-C.2 | OpenCode-compatible 最小映射和一个真实候选项消费路径 | 完整 OpenCode 运行时、外部 OpenCode CLI 前置依赖、全入口界面扩展矩阵、任意可写 hook |
 | P0+ | Server/Remote/ACP/SDK 受控运行、更多 OpenCode hook、界面贡献、跨生态兼容 | 让外部生态接口成为 BitFun 内部归属接口 |
 
 P0-B 的完成标准只能证明主机边界安全，不能宣称 OpenCode-compatible 产品体验完成。
-执行计划中的 P0-C.1 只覆盖来源、信任和诊断；P0-C.2 才覆盖 custom tool 候选项消费。产品架构里提到的 P0-C 产品边界必须同时满足这两段，不能用 P0-C.1 代替完整候选链路。
+P0-C.1 只证明 BitFun 可以识别、校验和审核受管包；P0-C.2 才覆盖 custom tool 候选项消费。完成 P0-C.1 不表示插件已启用或可执行。
 
 ## 4. OpenCode 适配边界
 
@@ -136,22 +137,38 @@ sequenceDiagram
 
 ## 6. 目录与来源原则
 
-权威来源只属于 BitFun。来源事实和生命周期动作必须分开：
+P0-C.1 只读取两个 BitFun 受管目录：用户数据目录的 `plugins` 和项目目录的 `.bitfun/plugins`。工作区同 ID 包覆盖用户包。包目录名必须与 `bitfun.plugin.json` 的 `id` 一致；清单声明文件及其哈希构成来源标识。信任记录按本地项目与工作区作用域存放在用户运行数据目录，不写回项目或插件包。
 
-| 形态 | 来源事实归属 | 生命周期动作 | 主机职责 |
-|---|---|---|---|
-| 动态安装包 | BitFun 插件来源注册表、manifest、hash、签名和信任快照 | 安装、启用、禁用、卸载由能力服务 / 产品特性命令和审计路径负责 | 只消费已启用来源视图，不写安装状态 |
-| 随产品携带包 | 构建配置、安装器和产品组装 | 可禁用、隔离和诊断；物理删除随产品更新或卸载处理 | 按组装结果加载或返回诊断，不把包存在性当成启用事实 |
-| 协同发布包 | 发布流水线、安装器和产品组装 | 更新随产品版本或插件包版本治理；用户侧通常是禁用或恢复，不是主机物理卸载 | 校验版本、hash 和策略结果后消费 |
-| 项目 / 组织插件源 | 项目、组织或受控 registry 策略 | 启用、禁用、策略拒绝和诊断展示属于产品命令和能力服务接口 | 只接收当前执行域允许的来源集合 |
-| 受控外部包源、签名包或 registry | BitFun 来源策略、签名和信任快照 | 安装与更新必须进入 BitFun 审计路径 | 不直接访问未纳入来源视图的外部 registry 状态 |
+`adapter` 是来源模块不解释的小写标识；`opencode_compatible` 包的入口和能力只由 OpenCode 适配层解释。当前来源模块不扫描用户的 `opencode.json`、全局 OpenCode 目录，也不要求 `opencode` CLI 存在。外部目录导入、随产品携带包、安装复制和卸载属于独立产品流程；接入后仍必须转换为相同的 BitFun 包来源和信任输入。
 
-兼容输入只读扫描外部生态目录：
+版本 1 包清单示例：
 
-- OpenCode 的 `opencode.json`、`.opencode/plugins`、全局插件目录。
-- 其他生态必须另建接口审计和准入表，不能继承 OpenCode P0 的扫描、导入或信任规则。
+```json
+{
+  "schemaVersion": 1,
+  "id": "acme.demo",
+  "version": "1.0.0",
+  "adapter": "opencode_compatible",
+  "files": [
+    {
+      "path": ".opencode/plugins/demo.ts",
+      "sha256": "sha256:<64 lowercase hex characters>"
+    }
+  ]
+}
+```
 
-兼容输入不得回写外部目录，不要求外部产品运行时存在，也不得继承外部产品的启用状态或权限语义。OpenCode 兼容导入只能生成 BitFun 来源候选、诊断和能力声明；是否安装、启用、禁用或卸载，必须回到 BitFun 能力服务和产品特性命令。
+- `id` 以小写字母或数字开头，只允许小写字母、数字、`.`、`-`、`_`；`adapter` 以小写字母开头并使用同一字符集合。
+- 清单文本字段拒绝控制字符；CLI 在输出包路径和诊断前再次转义控制字符。
+- 文件路径必须相对包根目录，不能包含 `.`、`..`、反斜杠或盘符。来源标识和后续适配器访问范围只包含清单声明文件；未声明文件不进入审核范围，也不得被适配器读取或执行。
+- 单文件、包总量、一次来源刷新或审核操作的总读取字节、总扫描时间和信任文件均有固定上限；校验失败或部分失败的读取同样计入操作预算，二次稳定性扫描不得重置预算。符号链接、Windows reparse point 和越出受管根目录的路径按错误处理。
+- 工作区包存在时，用户级同 ID 包及其诊断归一化为 `shadowed_package`；工作区包无效时也不得回退。
+- 本地项目 ID、工作区 ID 和来源标识基于平台原生路径摘要生成，避免非 UTF-8 或非法 UTF-16 路径经有损转换后共享信任；Remote、Server 或组织项目必须提供自己的身份来源。
+- 信任文件按平台原生工作区路径摘要隔离并存放在用户运行数据目录。BitFun 进程的完整读改写使用同一文件锁；锁等待受操作期限约束，阻塞写入任务持锁直至替换与同步完成，调用 future 取消不能提前释放锁。写入使用同目录临时文件、大小上限、Windows 备份恢复和平台原子替换；提交前复核文件身份，替换完成但目录同步失败时明确报告“状态已写入但持久性不确定”。该锁只协调遵守同一锁文件的 BitFun 进程，不承诺阻止其他进程直接篡改用户信任文件；外部修改在后续读取时按文件身份或内容校验结果处理。文件重建时使用新的随机初始 epoch；扫描不完整时保留原记录但不返回 `SourceApproved`，也不允许写入新决定。
+- 具体文件系统校验和信任持久化归 `services-integrations/plugin_source`，`bitfun-core/plugin_source` 只注入产品目录并保留兼容接口。
+- 产品路径初始化失败或全局路径管理器已降级到临时目录时，来源列表、审核和 `doctor` 必须返回错误，不得在临时目录中创建信任记录。
+- 产品域的 `SourceApproved` 只确认来源内容，不依赖 Host ABI，也不得直接映射为 Host 的 `Trusted`。P0-C.2 首次激活必须展示适配器、入口、能力和副作用并重新确认。
+- P0-C.2 加载器不得复用 CLI 扫描结果直接执行文件；绑定前必须把清单声明文件重新校验并固定为不可变快照，dispatch 前还必须校验来源标识、激活确认和 Host 信任 epoch。
 
 ## 7. 验证要求
 
@@ -160,6 +177,9 @@ sequenceDiagram
 - `cargo test -p bitfun-runtime-ports --test plugin_runtime_contracts`
 - `cargo test -p bitfun-runtime-ports --test plugin_runtime_host_contracts`
 - `cargo test -p bitfun-plugin-runtime-host`
+- `cargo test -p bitfun-product-domains --test plugin_source_contracts --features plugin-source`
+- `cargo test -p bitfun-services-integrations --no-default-features --features plugin-source plugin_source --lib`
+- `cargo test -p bitfun-cli --test plugin_source_cli`，在隔离用户目录和临时工作区验证真实 `list/approve-source/deny/revoke/doctor` 生命周期与退出码。
 - `cargo test -p bitfun-opencode-adapter --test opencode_source_adapter`，证明 OpenCode 输入可通过 Host adapter 转换为 BitFun 来源只读视图和诊断只读视图；未建立信任的来源只返回诊断和只读状态，不进入工具候选链路。
 - `cargo test -p bitfun-opencode-adapter p0_c2_fixture` 保护可信源 custom tool 到 `PluginEffectCandidatePayload::ProviderCandidate` 的候选映射、权限提示和工具 ABI 标识。
 - `cargo test -p bitfun-opencode-adapter host_path_projects_trusted_custom_tool_candidate_with_permission_prompt` 保护可信 custom tool 候选在 `PluginRuntimeHost` dispatch 路径下仍通过权限门禁和响应契约校验。

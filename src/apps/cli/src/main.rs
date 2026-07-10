@@ -14,6 +14,7 @@ mod diagnostics;
 mod logging;
 mod management;
 mod modes;
+mod plugin_diagnostics;
 mod prompts;
 mod root_handlers;
 mod ui;
@@ -145,6 +146,14 @@ enum Commands {
         action: Option<McpAction>,
     },
 
+    /// Inspect and review BitFun-managed plugin packages
+    ///
+    /// Package layout: <package-root>/<package-id>/bitfun.plugin.json
+    Plugins {
+        #[command(subcommand)]
+        action: Option<PluginAction>,
+    },
+
     /// Usage reporting
     Usage {
         /// Session ID to inspect; defaults to the most recent session in the current workspace
@@ -185,7 +194,7 @@ enum ModelAction {
 enum McpAction {
     /// List configured MCP servers
     List,
-    /// Check MCP readiness
+    /// Show the configured MCP entries without probing readiness
     Doctor,
     /// Enable an MCP server by id
     Enable {
@@ -199,6 +208,18 @@ enum McpAction {
     },
     /// Print the stored MCP JSON config
     Config,
+}
+
+#[derive(Subcommand)]
+enum PluginAction {
+    /// List discovered packages and trust status
+    List,
+    /// Approve the current manifest and declared files without enabling execution
+    ApproveSource { package_id: String },
+    /// Deny the current manifest and declared files for this workspace
+    Deny { package_id: String },
+    /// Revoke the current package approval for this workspace
+    Revoke { package_id: String },
 }
 
 #[derive(Subcommand)]
@@ -614,11 +635,7 @@ async fn run_cli() -> Result<()> {
 
         Some(Commands::Mcp { action }) => match action {
             None | Some(McpAction::List) => management::print_mcp_servers().await?,
-            Some(McpAction::Doctor) => {
-                if !management::print_doctor().await? {
-                    std::process::exit(1);
-                }
-            }
+            Some(McpAction::Doctor) => management::print_mcp_config_summary().await?,
             Some(McpAction::Enable { server_id }) => {
                 management::set_mcp_server_enabled(&server_id, true).await?;
             }
@@ -627,6 +644,31 @@ async fn run_cli() -> Result<()> {
             }
             Some(McpAction::Config) => {
                 management::print_mcp_json_config().await?;
+            }
+        },
+
+        Some(Commands::Plugins { action }) => match action {
+            None | Some(PluginAction::List) => management::print_plugins().await?,
+            Some(PluginAction::ApproveSource { package_id }) => {
+                management::set_plugin_trust(
+                    &package_id,
+                    bitfun_core::plugin_source::ManagedPluginTrustDecision::ApproveSource,
+                )
+                .await?;
+            }
+            Some(PluginAction::Deny { package_id }) => {
+                management::set_plugin_trust(
+                    &package_id,
+                    bitfun_core::plugin_source::ManagedPluginTrustDecision::Denied,
+                )
+                .await?;
+            }
+            Some(PluginAction::Revoke { package_id }) => {
+                management::set_plugin_trust(
+                    &package_id,
+                    bitfun_core::plugin_source::ManagedPluginTrustDecision::Revoked,
+                )
+                .await?;
             }
         },
 
@@ -767,5 +809,48 @@ fn main() {
             eprintln!("Error: bitfun-cli worker thread panicked");
             std::process::exit(1);
         }
+    }
+}
+
+#[cfg(test)]
+mod plugin_command_tests {
+    use super::{Cli, Commands, PluginAction};
+    use clap::Parser;
+
+    #[test]
+    fn plugin_commands_parse_list_and_source_review_actions() {
+        let list = Cli::try_parse_from(["bitfun-cli", "plugins"]).expect("parse plugin list");
+        assert!(matches!(
+            list.command,
+            Some(Commands::Plugins { action: None })
+        ));
+
+        let approval =
+            Cli::try_parse_from(["bitfun-cli", "plugins", "approve-source", "acme.demo"])
+                .expect("parse plugin source approval");
+        assert!(matches!(
+            approval.command,
+            Some(Commands::Plugins {
+                action: Some(PluginAction::ApproveSource { package_id })
+            }) if package_id == "acme.demo"
+        ));
+
+        let deny = Cli::try_parse_from(["bitfun-cli", "plugins", "deny", "acme.demo"])
+            .expect("parse plugin deny");
+        assert!(matches!(
+            deny.command,
+            Some(Commands::Plugins {
+                action: Some(PluginAction::Deny { package_id })
+            }) if package_id == "acme.demo"
+        ));
+
+        let revoke = Cli::try_parse_from(["bitfun-cli", "plugins", "revoke", "acme.demo"])
+            .expect("parse plugin revoke");
+        assert!(matches!(
+            revoke.command,
+            Some(Commands::Plugins {
+                action: Some(PluginAction::Revoke { package_id })
+            }) if package_id == "acme.demo"
+        ));
     }
 }

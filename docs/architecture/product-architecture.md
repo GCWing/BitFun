@@ -127,24 +127,36 @@ flowchart TB
 
 P0 的目标不是复制完整 OpenCode 运行时，也不是导入用户已有 OpenCode 安装。P0 只验证一条 BitFun 主导的 OpenCode-compatible 插件路径。
 
-主路径：
+当前 P0-C.1 只建立包识别、完整性校验、工作区信任和 CLI 诊断，不执行插件：
 
-1. 插件来源来自 BitFun 插件安装包、随产品携带包、项目/组织来源或受控外部包源。
-2. OpenCode 的 `opencode.json`、`.opencode/plugins` 和全局插件目录只能作为可选兼容导入输入。
-3. 导入后必须生成 BitFun 插件来源、manifest、hash、信任状态、能力声明和诊断事实。
-4. 插件贡献 custom tool 或提供方候选时，必须进入工具 ABI、权限/副作用门禁和归属模块处理流程；适配层不得直接生成最终工具结果。
-5. Desktop / CLI 可以成为最小消费入口；Web、Mobile Web、Server、Remote、ACP 和 SDK 在 P0 中只能返回只读状态、诊断或显式不支持。
+1. 用户级包和项目级包只从 BitFun 受管目录发现；工作区同 ID 来源优先且不得回退到用户级包。
+2. `bitfun.plugin.json` 只定义生态无关的包来源标识、适配器标识和文件哈希；具体生态入口由对应适配器解释。
+3. `bitfun-cli plugins` 提供来源审核和诊断；`SourceApproved` 只确认当前来源内容，不表示能力已批准、已启用或可执行，完整性错误由 `bitfun-cli doctor` 返回失败。
+4. 当前来源接口未绑定生产插件主机，不执行 JS/TS，不注册最终工具。目录、清单和持久化规则见 [`plugin-runtime-host-design.md`](plugin-runtime-host-design.md#6-目录与来源原则)。
 
-插件来源与生命周期动作：
+归属边界：`product-domains/plugin_source` 定义纯数据和信任规则，`services-integrations/plugin_source` 负责文件系统校验、锁和持久化，`bitfun-core/plugin_source` 仅注入产品目录并保留 CLI 兼容接口。
 
-| 形态 | 来源归属 | 用户动作归属 | 主机边界 |
-|---|---|---|---|
-| 动态安装包 | BitFun 插件来源注册表、manifest、hash、签名和信任快照 | 能力服务 / 产品特性命令负责安装、启用、禁用、卸载和审计 | 只消费已启用的来源视图；不得执行安装、卸载或信任写入 |
-| 随产品携带包 | 构建、安装器和产品组装选择 | 可禁用、隔离和恢复；物理删除随产品更新或卸载处理，不作为插件主机动作 | 按组装结果加载或诊断；不得把包存在性当成用户启用状态 |
-| 协同发布包 | 发布流水线、安装器和产品组装 | 更新随产品版本或插件包版本治理；用户侧通常是禁用、隔离或恢复 | 校验版本、hash 和策略结果后消费 |
-| 项目 / 组织插件源 | 项目、组织策略 | 能力服务 / 产品特性命令负责启用、禁用、策略拒绝和诊断展示 | 只接收当前执行域的来源集合和策略结果 |
-| 受控外部包源、签名包或 registry | BitFun 来源策略、签名、撤销和回滚事实 | 安装、更新、撤销、回滚和审计必须进入 BitFun 能力服务路径 | 不直接访问未纳入来源视图的外部 registry 状态 |
-| OpenCode 兼容导入 | OpenCode 适配层只读解析外部配置和目录 | 导入结果必须落为 BitFun 来源候选后，才能由 BitFun 命令启用 | 不要求用户安装 OpenCode CLI，不继承 OpenCode 启用顺序或权限语义 |
+```mermaid
+flowchart LR
+  UserRoot["用户级 BitFun 插件目录"] --> Discovery["包发现与完整性校验"]
+  WorkspaceRoot["项目级 .bitfun/plugins"] --> Discovery
+  Manifest["bitfun.plugin.json"] --> Discovery
+  Discovery --> Snapshot["来源与诊断接口"]
+  Trust["工作区信任存储"] --> Snapshot
+  CLI["CLI 插件管理与 doctor"] --> Snapshot
+  CLI --> Trust
+  Snapshot -.->|后续生产绑定| Host["插件运行时主机"]
+```
+
+当前实现与后续能力边界：
+
+| 能力 | 当前实现 | 后续工作 |
+|---|---|---|
+| 用户级、项目级包 | 从两个 BitFun 受管目录发现并校验 | 安装复制、更新、卸载和组织策略 |
+| 随产品携带包 | 未建立独立扫描根 | 由构建配置、安装器和产品组装提供来源后接入同一校验接口 |
+| OpenCode 兼容内容 | 包清单可声明 `opencode_compatible`，来源模块只验证清单声明文件 | OpenCode 适配器解释包内布局；外部目录需独立导入流程 |
+| 来源审核 | 工作区 `SourceApproved`、`Denied`、`Revoked`；内容变化使旧审核失效，新来源标识回到 `Unknown` | 首次激活能力审核、组织策略、签名和撤销列表 |
+| 插件运行 | 不执行 JS/TS，不注册最终工具 | 通过 `PluginRuntimeBinding` 接入主机，再完成工具 ABI 消费路径 |
 
 OpenCode 适配接入规则：
 
@@ -156,11 +168,10 @@ OpenCode 适配接入规则：
 
 信任 epoch 与生命周期：
 
-- 信任 epoch 由产品来源/策略服务维护，随同一事务生成 `PluginSourceRef` 信任快照；调用适配器时不得手工拼接不同事务的 epoch 和来源快照。
-- 发现的新来源默认为 `Unknown`；用户通过插件管理入口批准，或组织策略批准，且来源 identity、manifest、hash 和执行域一致后可进入 `Trusted`。
-- 批准、拒绝、撤销只能由插件管理能力服务、产品特性命令或组织策略写入；适配器和主机不得写信任状态。
-- 用户禁用、组织策略拒绝、签名/hash 变化、撤销列表命中或来源归属变化时必须推进信任 epoch，并将对应来源降为 `Revoked`、`Denied` 或 `Unknown`。
-- 只有 `Trusted` 且 epoch 匹配的来源可以产生 custom tool 候选；最终工具创建、权限结果和审计写入仍由工具 ABI、权限门禁和归属模块完成。
+- 来源审核 epoch 由 BitFun 来源与信任模块维护。审核、拒绝、撤销、已有记录的来源标识或哈希变化都会推进 epoch；重复写入相同决定不推进 epoch。信任文件重建时使用新的随机初始值，避免旧 epoch 被重复使用。
+- 发现的新来源默认为 `Unknown`；CLI 只允许对当前工作区已发现且 id 唯一的包写入 `SourceApproved`、`Denied` 或 `Revoked`。
+- 损坏、版本未知或记录冲突的信任文件按失败处理；适配器和主机不得写信任状态。
+- `SourceApproved` 不得直接映射为 Host 的 `Trusted`。P0-C.2 首次激活必须展示适配器、入口、能力和副作用并重新确认；只有该确认产生的 Host 信任且 epoch 匹配时才可生成 custom tool 候选。
 - `ProjectionOnly` 在候选路径中表示插件代码没有被执行、最终效果没有提交；它允许主机返回受权限门禁保护的候选项和诊断，不表示插件运行时已经可执行。
 
 OpenCode 能力映射：
@@ -192,8 +203,8 @@ OpenCode 能力映射：
 
 | 产品形态 | P0 插件策略 | 入口行为 |
 |---|---|---|
-| Desktop / product-full | 可启用本地插件主机；高风险能力按信任策略提权 | 展示来源、信任、配置、诊断、隔离和权限提示；默认任务不因插件失败而失败 |
-| CLI | 可启用本地主机或只读状态视图 | 输出同一插件只读视图和诊断；TUI 界面贡献默认返回类型化 `unsupported`；不静默忽略 unsupported |
+| Desktop / product-full | 当前仅保留插件主机基础边界，尚未绑定受管包来源 | 生产绑定完成前不得把来源审核通过的包显示为已启用或可执行 |
+| CLI | 提供受管包来源审核和诊断入口，不启动插件主机 | `plugins list` 显示两个扫描根、适配器、来源、hash、审核状态和执行不可用；`doctor` 对完整性错误返回失败 |
 | ACP | `status-only`、`projection-only`、`unsupported`、`policy-denied` 或 `quarantined` | 不把插件失败解释为 agent 失败，不接入 P0 副作用闭环 |
 | Server / Remote | `projection-only`、`temporarily-unavailable`、`unsupported` 或 `policy-denied` | 不自动启动本地 JS/TS 运行时；远端执行域需 P0+ 单独设计 |
 | Web / Mobile Web | 只消费后端能力服务接口和只读视图 | 不持有插件执行单元，不直接加载插件代码 |

@@ -9,6 +9,11 @@ description = "BitFun product domain owner crate"
 name = "bitfun_product_domains"
 crate-type = ["rlib"]
 
+[[test]]
+name = "plugin_source_contracts"
+path = "tests/plugin_source_contracts.rs"
+required-features = ["plugin-source"]
+
 [dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -19,9 +24,10 @@ which = { workspace = true, optional = true }
 
 [features]
 default = []
+plugin-source = []
 miniapp = ["dirs", "sha2", "which"]
 function-agents = ["log"]
-product-full = ["miniapp", "function-agents"]
+product-full = ["plugin-source", "miniapp", "function-agents"]
 
 [dev-dependencies]
 tokio = { workspace = true }

@@ -59,6 +59,10 @@ slices that are outside pure product logic but still platform-neutral.
   writes, marker IO, storage/import bundle filesystem IO, and JS worker process/pool
   lifecycle. Manager workflow orchestration remains outside this crate until
   reviewed owner migration.
+- Managed plugin source integration may own bounded package discovery,
+  integrity checks, no-follow path handling, trust-file locking, and atomic
+  persistence. Product path selection stays in assembly; ecosystem parsing and
+  Plugin Runtime Host behavior stay in their adapter and execution owners.
 - Announcement remote fetch/cache lives here; product assembly supplies config
   values such as endpoint, locale, version, platform, and cache path.
 - DeepResearch report IO here may own report/citation sidecar filesystem work;
@@ -68,6 +72,7 @@ slices that are outside pure product logic but still platform-neutral.
 
 ```bash
 cargo test -p bitfun-services-integrations
+cargo test -p bitfun-services-integrations --no-default-features --features plugin-source plugin_source --lib
 cargo test -p bitfun-services-integrations --features debug-log --test debug_log_owner_contracts
 cargo test -p bitfun-services-integrations --features remote-ssh --test remote_ssh_disabled_contracts
 cargo test -p bitfun-services-integrations --features remote-ssh,workspace-search --test remote_workspace_search_disabled_contracts

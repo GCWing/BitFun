@@ -666,10 +666,14 @@ export function runManifestParserSelfTest({
   for (const dep of [
     'aes',
     'bitfun-services-core',
+    'bitfun-product-domains',
+    'dunce',
+    'fs2',
     'bitfun-runtime-ports',
     'git2',
     'hex',
     'hostname',
+    'libc',
     'local-ip-address',
     'mac_address',
     'md5',
@@ -679,10 +683,19 @@ export function runManifestParserSelfTest({
     'rmcp',
     'tokio-tungstenite',
     'which',
+    'windows',
     'x25519-dalek',
   ]) {
     if (!servicesOptionalOwnerRule?.dependencies.some((dependency) => dependency.depName === dep)) {
       throw new Error(`services-integrations optional dependency owner rule must cover ${dep}`);
+    }
+  }
+  for (const dep of ['bitfun-product-domains', 'dunce', 'fs2', 'hex', 'libc', 'sha2', 'thiserror', 'uuid', 'windows']) {
+    const owner = servicesOptionalOwnerRule?.dependencies.find(
+      (dependency) => dependency.depName === dep,
+    );
+    if (!owner?.ownerFeatures.includes('plugin-source')) {
+      throw new Error(`services-integrations plugin-source must own optional dependency ${dep}`);
     }
   }
   const productDomainsOptionalOwnerRule = optionalDependencyFeatureOwnerRules.find(
