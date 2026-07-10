@@ -1,0 +1,9 @@
+{
+  "name": "entry",
+  "version": "1.0.0",
+  "description": "BitFun HarmonyOS entry module.",
+  "main": "",
+  "author": "",
+  "license": "",
+  "dependencies": {}
+}
