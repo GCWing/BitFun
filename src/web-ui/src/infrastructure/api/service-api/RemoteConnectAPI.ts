@@ -306,6 +306,15 @@ class RemoteConnectAPIService {
     }
   }
 
+  async accountTokenExpired(): Promise<boolean> {
+    try {
+      return await this.adapter.request<boolean>('account_token_expired');
+    } catch (e) {
+      log.warn('accountTokenExpired failed', e);
+      return false;
+    }
+  }
+
   async accountLogout(): Promise<void> {
     try {
       await this.adapter.request<void>('account_logout');

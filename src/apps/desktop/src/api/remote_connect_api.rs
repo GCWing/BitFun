@@ -38,6 +38,22 @@ pub fn set_dialog_scheduler(scheduler: Arc<bitfun_core::agentic::coordination::D
     let _ = DIALOG_SCHEDULER.set(scheduler);
 }
 
+/// Global flag set when the relay returns HTTP 401 (token expired). The
+/// frontend checks this via `account_token_expired` and prompts re-login.
+static TOKEN_EXPIRED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Check if the account token has been marked expired by the sync loop.
+#[tauri::command]
+pub async fn account_token_expired() -> bool {
+    TOKEN_EXPIRED.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// Internal helper: check if an error message indicates HTTP 401.
+fn is_token_expired_error(e: &anyhow::Error) -> bool {
+    let msg = e.to_string();
+    msg.contains("HTTP 401") || msg.contains("HTTP 401 Unauthorized")
+}
+
 fn get_account_session() -> &'static Arc<RwLock<Option<AccountSession>>> {
     ACCOUNT_SESSION.get_or_init(|| Arc::new(RwLock::new(None)))
 }
@@ -882,6 +898,8 @@ pub async fn account_login(request: AccountAuthRequest) -> Result<AccountLoginRe
     *get_account_relay_url().write().await = Some(request.relay_url.clone());
     // Persist non-secret credentials for next startup pre-fill
     save_credential_hint(&request.username, &request.relay_url);
+    // Reset the token-expired flag on fresh login
+    TOKEN_EXPIRED.store(false, std::sync::atomic::Ordering::Relaxed);
     log::info!(
         "Account logged in: {} (has_cloud_settings={})",
         result.user_id,
@@ -975,7 +993,7 @@ pub async fn account_connect_devices() -> Result<Vec<OnlineDeviceInfo>, String> 
                                     session_id,
                                     content,
                                     agent_type,
-                                    workspace_path,
+                                    workspace_path: _,
                                 }) => {
                                     log::info!(
                                         "ExecuteOnDevice from {source_device_id}: \
@@ -984,6 +1002,9 @@ pub async fn account_connect_devices() -> Result<Vec<OnlineDeviceInfo>, String> 
                                         content.len()
                                     );
                                     // Submit the dialog turn via the global scheduler.
+                                    // We ignore the sender's workspace_path and use our own
+                                    // (the receiving device's) workspace, since the task
+                                    // executes locally.
                                     if let Some(scheduler) = DIALOG_SCHEDULER.get() {
                                         use bitfun_core::agentic::coordination::{
                                             DialogSubmissionPolicy, DialogTriggerSource,
@@ -993,7 +1014,7 @@ pub async fn account_connect_devices() -> Result<Vec<OnlineDeviceInfo>, String> 
                                         let policy = DialogSubmissionPolicy::for_source(
                                             DialogTriggerSource::RemoteRelay,
                                         );
-                                        let wp = workspace_path.unwrap_or_default();
+                                        let wp = resolve_local_workspace_path();
                                         let agent =
                                             agent_type.unwrap_or_else(|| "agentic".to_string());
                                         if let Err(e) = scheduler
@@ -1033,12 +1054,18 @@ pub async fn account_connect_devices() -> Result<Vec<OnlineDeviceInfo>, String> 
                                     );
                                     // Import the session into local storage.
                                     // The session_data is a SessionBundle JSON.
-                                    // We write it to the default workspace's session dir.
-                                    // A full import requires knowing the workspace path;
-                                    // for now we log receipt — the frontend can trigger
-                                    // account_import_remote_sessions after receiving
-                                    // a presence update.
-                                    log::info!("Session bundle received, run account_import_remote_sessions to import");
+                                    // Try all workspace session dirs and write
+                                    // to the first one that exists.
+                                    match import_session_bundle(&session_data).await {
+                                        Ok(()) => {
+                                            log::info!("Session {session_id} imported from device {source_device_id}");
+                                        }
+                                        Err(e) => {
+                                            log::warn!(
+                                                "Failed to import session {session_id}: {e}"
+                                            );
+                                        }
+                                    }
                                 }
                                 Ok(cmd) => {
                                     log::info!("Received device command: {cmd:?}");
@@ -1622,60 +1649,64 @@ pub fn notify_settings_changed() {
 /// Background loop: collects sync requests, debounces 5 seconds, then uploads.
 async fn sync_background_loop(mut rx: mpsc::UnboundedReceiver<SyncRequest>) {
     let debounce = Duration::from_secs(5);
+    let pull_interval = Duration::from_secs(30);
+    let mut next_pull = tokio::time::Instant::now() + pull_interval;
     loop {
-        // Wait for the first request
-        let Some(first) = rx.recv().await else {
-            break;
-        };
+        // Wait for either a sync request (push) or the pull timer
+        let pull_deadline = tokio::time::sleep_until(next_pull);
+        tokio::pin!(pull_deadline);
 
-        // Collect: session upserts (id→workspace), session deletes (ids), settings flag
-        let mut pending_upserts: HashMap<String, String> = HashMap::new();
-        let mut pending_deletes: std::collections::HashSet<String> =
-            std::collections::HashSet::new();
-        let mut pending_settings = false;
-        match first {
-            SyncRequest::SessionUpsert {
-                session_id,
-                workspace_path,
-            } => {
-                pending_upserts.insert(session_id, workspace_path);
-            }
-            SyncRequest::SessionDelete { session_id } => {
-                pending_deletes.insert(session_id);
-            }
-            SyncRequest::Settings => {
-                pending_settings = true;
-            }
-        }
+        tokio::select! {
+            // Push path: collect and debounce
+            Some(first) = rx.recv() => {
+                let mut pending_upserts: HashMap<String, String> = HashMap::new();
+                let mut pending_deletes: std::collections::HashSet<String> =
+                    std::collections::HashSet::new();
+                let mut pending_settings = false;
+                match first {
+                    SyncRequest::SessionUpsert { session_id, workspace_path } => {
+                        pending_upserts.insert(session_id, workspace_path);
+                    }
+                    SyncRequest::SessionDelete { session_id } => {
+                        pending_deletes.insert(session_id);
+                    }
+                    SyncRequest::Settings => {
+                        pending_settings = true;
+                    }
+                }
 
-        // Drain additional requests during debounce window
-        let deadline = tokio::time::sleep(debounce);
-        tokio::pin!(deadline);
-        loop {
-            tokio::select! {
-                _ = &mut deadline => break,
-                Some(req) = rx.recv() => {
-                    match req {
-                        SyncRequest::SessionUpsert { session_id, workspace_path } => {
-                            // A subsequent upsert cancels a pending delete
-                            pending_deletes.remove(&session_id);
-                            pending_upserts.insert(session_id, workspace_path);
-                        }
-                        SyncRequest::SessionDelete { session_id } => {
-                            // A subsequent delete cancels a pending upsert
-                            pending_upserts.remove(&session_id);
-                            pending_deletes.insert(session_id);
-                        }
-                        SyncRequest::Settings => {
-                            pending_settings = true;
+                // Drain during debounce window
+                let deadline = tokio::time::sleep(debounce);
+                tokio::pin!(deadline);
+                loop {
+                    tokio::select! {
+                        _ = &mut deadline => break,
+                        Some(req) = rx.recv() => {
+                            match req {
+                                SyncRequest::SessionUpsert { session_id, workspace_path } => {
+                                    pending_deletes.remove(&session_id);
+                                    pending_upserts.insert(session_id, workspace_path);
+                                }
+                                SyncRequest::SessionDelete { session_id } => {
+                                    pending_upserts.remove(&session_id);
+                                    pending_deletes.insert(session_id);
+                                }
+                                SyncRequest::Settings => {
+                                    pending_settings = true;
+                                }
+                            }
                         }
                     }
                 }
+
+                execute_debounced_sync(pending_upserts, pending_deletes, pending_settings).await;
+            }
+            // Pull path: periodic remote fetch + reconcile
+            _ = &mut pull_deadline => {
+                next_pull = tokio::time::Instant::now() + pull_interval;
+                pull_and_reconcile().await;
             }
         }
-
-        // Execute sync — all errors are non-fatal (logged, not propagated)
-        execute_debounced_sync(pending_upserts, pending_deletes, pending_settings).await;
     }
 }
 
@@ -1699,6 +1730,9 @@ async fn execute_debounced_sync(
             .delete_session(&relay_url, &acct_session, session_id)
             .await
         {
+            if is_token_expired_error(&e) {
+                TOKEN_EXPIRED.store(true, std::sync::atomic::Ordering::Relaxed);
+            }
             log::warn!("Auto-sync delete {session_id} failed: {e}");
         } else {
             log::debug!("Auto-synced tombstone for session {session_id}");
@@ -1720,6 +1754,9 @@ async fn execute_debounced_sync(
                 log::debug!("Auto-synced session {session_id}");
             }
             Err(e) => {
+                if is_token_expired_error(&e) {
+                    TOKEN_EXPIRED.store(true, std::sync::atomic::Ordering::Relaxed);
+                }
                 log::warn!("Auto-sync session {session_id} failed: {e}");
             }
         }
@@ -1727,8 +1764,6 @@ async fn execute_debounced_sync(
 
     // Upload settings if changed
     if sync_settings {
-        // We need the exported config — but export_config is a Tauri command
-        // that requires State. Instead, use the global config service directly.
         if let Ok(config_service) = bitfun_core::service::config::get_global_config_service().await
         {
             match config_service.export_config().await {
@@ -1738,6 +1773,9 @@ async fn execute_debounced_sync(
                         .upload_settings(&relay_url, &acct_session, &json)
                         .await
                     {
+                        if is_token_expired_error(&e) {
+                            TOKEN_EXPIRED.store(true, std::sync::atomic::Ordering::Relaxed);
+                        }
                         log::warn!("Auto-sync settings failed: {e}");
                     } else {
                         log::debug!("Auto-synced settings");
@@ -1803,4 +1841,192 @@ async fn export_and_upload_session(
         .upload_session(relay_url, acct_session, session_id, &bundle_json)
         .await?;
     Ok(())
+}
+
+/// Resolve the local workspace path for task execution. Returns the first
+/// project directory found under ~/.bitfun/projects/, or "/" as fallback.
+fn resolve_local_workspace_path() -> String {
+    let home = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("/"));
+    let projects = home.join(".bitfun").join("projects");
+    if let Ok(entries) = std::fs::read_dir(&projects) {
+        for entry in entries.flatten() {
+            if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+                // Return the workspace slug dir path as a string
+                return entry.path().to_string_lossy().to_string();
+            }
+        }
+    }
+    "/".to_string()
+}
+
+/// Import a SessionBundle JSON into local storage. Tries all workspace session
+/// directories and writes to the first one found (or creates one if none exist).
+async fn import_session_bundle(bundle_json: &str) -> anyhow::Result<()> {
+    let bundle: SessionBundle = serde_json::from_str(bundle_json)?;
+
+    let path_manager = std::sync::Arc::new(bitfun_core::infrastructure::PathManager::new()?);
+    let manager = PersistenceManager::new(path_manager.clone())?;
+
+    // Find the first workspace sessions dir that exists
+    let projects_root = path_manager.projects_root();
+    let entries = std::fs::read_dir(&projects_root)?;
+    let mut target_dir: Option<std::path::PathBuf> = None;
+    for entry in entries.flatten() {
+        if !entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+            continue;
+        }
+        let sessions = entry.path().join("sessions");
+        if sessions.is_dir() {
+            target_dir = Some(sessions);
+            break;
+        }
+    }
+
+    // If no workspace sessions dir exists, create one under a "synced" workspace
+    let target_dir = target_dir.unwrap_or_else(|| {
+        let dir = projects_root.join("synced").join("sessions");
+        let _ = std::fs::create_dir_all(&dir);
+        dir
+    });
+
+    // Skip if session already exists locally
+    if manager
+        .load_session_metadata(&target_dir, &bundle.session_id)
+        .await
+        .ok()
+        .flatten()
+        .is_some()
+    {
+        return Ok(());
+    }
+
+    let metadata: SessionMetadata = serde_json::from_value(bundle.metadata.clone())?;
+    manager
+        .save_session_metadata(&target_dir, &metadata)
+        .await
+        .map_err(|e| anyhow::anyhow!("save metadata: {e}"))?;
+
+    for turn_val in &bundle.turns {
+        let turn: DialogTurnData = serde_json::from_value(turn_val.clone())?;
+        let _ = manager.save_dialog_turn(&target_dir, &turn).await;
+    }
+
+    Ok(())
+}
+
+/// Periodic pull: fetch all remote sessions, diff against local, import new
+/// ones and delete local orphans (sessions that were tombstoned on the relay).
+/// Enumerates all workspace directories under ~/.bitfun/projects/ so that
+/// every workspace is reconciled, not just the active one.
+async fn pull_and_reconcile() {
+    // Need to be logged in
+    let (acct_session, relay_url) = match read_account_context().await {
+        Ok(ctx) => ctx,
+        Err(_) => return,
+    };
+    let client = AccountClient::new();
+
+    // Fetch all remote sessions (returns session_id → bundle_json)
+    let remote_sessions = match client.fetch_sessions(&relay_url, &acct_session).await {
+        Ok(s) => s,
+        Err(e) => {
+            log::debug!("Pull: fetch_sessions failed: {e}");
+            return;
+        }
+    };
+    let remote_ids: std::collections::HashSet<&String> =
+        remote_sessions.iter().map(|(id, _)| id).collect();
+
+    // Enumerate all local workspace session directories
+    let path_manager = match bitfun_core::infrastructure::PathManager::new() {
+        Ok(pm) => std::sync::Arc::new(pm),
+        Err(e) => {
+            log::debug!("Pull: path manager init failed: {e}");
+            return;
+        }
+    };
+    let manager = match PersistenceManager::new(path_manager.clone()) {
+        Ok(m) => m,
+        Err(e) => {
+            log::debug!("Pull: persistence manager init failed: {e}");
+            return;
+        }
+    };
+
+    let projects_root = path_manager.projects_root();
+    let entries = match std::fs::read_dir(&projects_root) {
+        Ok(e) => e,
+        Err(_) => return, // no projects dir — nothing to reconcile
+    };
+
+    for entry in entries.flatten() {
+        if !entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+            continue;
+        }
+        let workspace_slug_dir = entry.path();
+        let sessions_dir = workspace_slug_dir.join("sessions");
+        if !sessions_dir.is_dir() {
+            continue;
+        }
+
+        // List local sessions in this workspace
+        let local_sessions = match manager.list_session_metadata(&sessions_dir).await {
+            Ok(s) => s,
+            Err(_) => continue,
+        };
+        let local_ids: std::collections::HashSet<String> = local_sessions
+            .iter()
+            .map(|m| m.session_id.clone())
+            .collect();
+
+        // Delete local orphans (exist locally but not on relay = tombstoned)
+        for meta in &local_sessions {
+            if !remote_ids.contains(&meta.session_id) {
+                if manager
+                    .delete_session(&sessions_dir, &meta.session_id)
+                    .await
+                    .is_ok()
+                {
+                    log::info!("Pull: deleted orphaned session {}", meta.session_id);
+                }
+            }
+        }
+
+        // Import new remote sessions (exist on relay but not locally)
+        for (session_id, bundle_json) in &remote_sessions {
+            if local_ids.contains(session_id) {
+                continue;
+            }
+            // Deserialize and write
+            let bundle: SessionBundle = match serde_json::from_str(bundle_json) {
+                Ok(b) => b,
+                Err(e) => {
+                    log::warn!("Pull: deserialize bundle {session_id}: {e}");
+                    continue;
+                }
+            };
+            let metadata: SessionMetadata = match serde_json::from_value(bundle.metadata.clone()) {
+                Ok(m) => m,
+                Err(e) => {
+                    log::warn!("Pull: deserialize metadata {session_id}: {e}");
+                    continue;
+                }
+            };
+            if manager
+                .save_session_metadata(&sessions_dir, &metadata)
+                .await
+                .is_err()
+            {
+                continue;
+            }
+            for turn_val in &bundle.turns {
+                let turn: DialogTurnData = match serde_json::from_value(turn_val.clone()) {
+                    Ok(t) => t,
+                    Err(_) => continue,
+                };
+                let _ = manager.save_dialog_turn(&sessions_dir, &turn).await;
+            }
+            log::info!("Pull: imported session {session_id}");
+        }
+    }
 }

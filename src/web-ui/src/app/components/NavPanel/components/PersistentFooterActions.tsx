@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useState, useCallback } from 'react';
+import React, { lazy, Suspense, useState, useCallback, useEffect } from 'react';
 import {
   Settings,
   Info,
@@ -22,6 +22,7 @@ import { useCanvasStore } from '@/app/components/panels/content-canvas/stores';
 import { useToolbarModeContext } from '@/flow_chat/components/toolbar-mode/ToolbarModeContext';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { useNotification } from '@/shared/notification-system';
+import { remoteConnectAPI } from '@/infrastructure/api/service-api/RemoteConnectAPI';
 import NotificationButton from '../../TitleBar/NotificationButton';
 import {
   RemoteConnectDisclaimerContent,
@@ -62,6 +63,23 @@ const PersistentFooterActions: React.FC = () => {
   const [showRemoteConnect, setShowRemoteConnect] = useState(false);
   const [showRemoteDisclaimer, setShowRemoteDisclaimer] = useState(false);
   const [hasAgreedRemoteDisclaimer, setHasAgreedRemoteDisclaimer] = useState<boolean>(() => getRemoteConnectDisclaimerAgreed());
+
+  // On mount: check if user was previously logged in (credential hint exists)
+  // or if token has expired. Auto-open the login dialog in either case.
+  useEffect(() => {
+    remoteConnectAPI.accountGetCredentialHint().then((hint) => {
+      if (hint) {
+        // User was logged in before — auto-open login dialog for re-auth
+        setShowAccountLogin(true);
+      }
+    });
+    // Also check if token expired during a previous session
+    remoteConnectAPI.accountTokenExpired().then((expired) => {
+      if (expired) {
+        setShowAccountLogin(true);
+      }
+    });
+  }, []);
 
   const closeMenu = useCallback(() => {
     setMenuClosing(true);
