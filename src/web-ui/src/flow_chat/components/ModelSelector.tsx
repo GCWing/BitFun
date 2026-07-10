@@ -29,6 +29,7 @@ import {
   type ContextUsageSource,
 } from '../utils/tokenUsageDisplay';
 import { createLogger } from '@/shared/utils/logger';
+import { getModelSelectorDropdownStyle } from './modelSelectorDropdownPosition';
 import './ModelSelector.scss';
 
 const log = createLogger('ModelSelector');
@@ -340,18 +341,14 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
 
     const updatePosition = () => {
       if (!dropdownRef.current) return;
-      const rect = dropdownRef.current.getBoundingClientRect();
-      const placementStyle = dropdownPlacement === 'bottom'
-        ? { top: `${rect.bottom + 6}px`, bottom: 'auto' }
-        : { top: 'auto', bottom: `${window.innerHeight - rect.top + 6}px` };
-      setDropdownStyle({
-        position: 'fixed',
-        visibility: 'visible',
-        left: `${rect.left}px`,
-        minWidth: '220px',
-        maxWidth: '280px',
-        ...placementStyle,
-      });
+      setDropdownStyle(getModelSelectorDropdownStyle(
+        dropdownRef.current.getBoundingClientRect(),
+        dropdownPlacement,
+        {
+          width: window.innerWidth,
+          height: window.innerHeight,
+        },
+      ));
     };
 
     updatePosition();
