@@ -1,7 +1,4 @@
-//! Code Review Agent - Agentic code review with context gathering capabilities
-//!
-//! This agent can use Read/Grep/Glob/LS tools to gather context before
-//! submitting a code review, reducing false positives from missing context.
+//! Independent, read-only code reviewer.
 
 use crate::agentic::agents::{Agent, UserContextPolicy};
 use async_trait::async_trait;
@@ -14,25 +11,12 @@ impl CodeReviewAgent {
     pub fn new() -> Self {
         Self {
             default_tools: vec![
-                // Context gathering tools (read-only)
                 "Read".to_string(),
                 "Grep".to_string(),
                 "Glob".to_string(),
                 "LS".to_string(),
                 "GetFileDiff".to_string(),
-                // Code review submission tool
                 "submit_code_review".to_string(),
-                // User interaction tool
-                "AskUserQuestion".to_string(),
-                // Remediation tools, only after explicit user approval
-                "Edit".to_string(),
-                "Write".to_string(),
-                "ExecCommand".to_string(),
-                "WriteStdin".to_string(),
-                "ExecControl".to_string(),
-                "TodoWrite".to_string(),
-                // Git operations tool
-                "Git".to_string(),
             ],
         }
     }
@@ -59,7 +43,7 @@ impl Agent for CodeReviewAgent {
     }
 
     fn description(&self) -> &str {
-        r#"Agentic code review agent that can gather context before reviewing. Use this for thorough code reviews that require understanding of the broader codebase. The agent will use Read/Grep/Glob tools to understand function definitions, type structures, and related code before reporting issues."#
+        r#"Independent adversarial, read-only code reviewer. Direct Task calls use one isolated instance. Multi-reviewer execution is owned by the unified Review decision and launch plan. Reviewers report evidence-backed findings and never implement fixes."#
     }
 
     fn prompt_template_name(&self, _model_name: Option<&str>) -> &str {
@@ -78,7 +62,7 @@ impl Agent for CodeReviewAgent {
     }
 
     fn is_readonly(&self) -> bool {
-        false // Code review agent can remediate only after explicit user approval
+        true
     }
 }
 
@@ -87,7 +71,7 @@ mod tests {
     use super::{Agent, CodeReviewAgent};
 
     #[test]
-    fn code_review_agent_has_review_and_user_approved_remediation_tools() {
+    fn code_review_agent_is_an_independent_readonly_reviewer() {
         let agent = CodeReviewAgent::new();
         let tools = agent.default_tools();
 
@@ -95,13 +79,15 @@ mod tests {
         assert!(tools.contains(&"Grep".to_string()));
         assert!(tools.contains(&"GetFileDiff".to_string()));
         assert!(tools.contains(&"submit_code_review".to_string()));
-        assert!(tools.contains(&"AskUserQuestion".to_string()));
-        assert!(tools.contains(&"Edit".to_string()));
-        assert!(tools.contains(&"Write".to_string()));
-        assert!(tools.contains(&"ExecCommand".to_string()));
-        assert!(tools.contains(&"WriteStdin".to_string()));
-        assert!(tools.contains(&"ExecControl".to_string()));
-        assert!(tools.contains(&"TodoWrite".to_string()));
-        assert!(!agent.is_readonly());
+        assert!(agent.description().contains("one isolated instance"));
+        assert!(!agent.description().contains("two or three"));
+        assert!(!tools.contains(&"AskUserQuestion".to_string()));
+        assert!(!tools.contains(&"Edit".to_string()));
+        assert!(!tools.contains(&"Write".to_string()));
+        assert!(!tools.contains(&"ExecCommand".to_string()));
+        assert!(!tools.contains(&"WriteStdin".to_string()));
+        assert!(!tools.contains(&"ExecControl".to_string()));
+        assert!(!tools.contains(&"TodoWrite".to_string()));
+        assert!(agent.is_readonly());
     }
 }

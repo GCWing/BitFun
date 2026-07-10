@@ -172,7 +172,7 @@ function formatEvidencePackBlock(pack?: DeepReviewEvidencePack): string {
     '```json',
     JSON.stringify(evidencePackToPromptPayload(pack), null, 2),
     '```',
-    '- Evidence pack hunk_hints and contract_hints are orientation only; verify each hinted claim with GetFileDiff, Read, Grep, or Git before reporting it.',
+    '- Evidence pack hunk_hints and contract_hints are orientation only; verify each hinted claim with GetFileDiff, Read, or Grep before reporting it.',
     '- The evidence pack privacy boundary is metadata_only. Do not treat it as source text, a full diff, model output, or provider raw data.',
   ].join('\n');
 }
@@ -375,6 +375,7 @@ export function buildReviewTeamPromptBlockContent(
     `- estimated_reviewer_calls: ${manifest.tokenBudget.estimatedReviewerCalls}`,
     `- max_prompt_bytes_per_reviewer: ${manifest.tokenBudget.maxPromptBytesPerReviewer ?? 'none'}`,
     `- estimated_prompt_bytes_per_reviewer: ${manifest.tokenBudget.estimatedPromptBytesPerReviewer ?? 'unknown'}`,
+    `- estimated_prompt_bytes_total: ${manifest.tokenBudget.estimatedPromptBytesTotal ?? 'unknown'}`,
     `- prompt_byte_estimate_source: ${manifest.tokenBudget.promptByteEstimateSource ?? 'none'}`,
     `- prompt_byte_limit_exceeded: ${manifest.tokenBudget.promptByteLimitExceeded ? 'yes' : 'no'}`,
     `- token_budget_decisions: ${formatTokenBudgetDecisionKinds(manifest.tokenBudget.decisions)}`,
@@ -430,7 +431,7 @@ export function buildReviewTeamPromptBlockContent(
     '- If packet_id cannot be reported or inferred, mark packet_status_source as missing and explain the confidence impact in coverage_notes.',
     '- If a reviewer response is missing packet_id or status, the judge must treat that reviewer output as lower confidence instead of discarding the whole review.',
     '- Use the pre-generated diff summary for initial orientation and token discipline, but verify claims against assigned files or diffs before reporting findings.',
-    '- Evidence pack hunk_hints and contract_hints are orientation only; verify each hinted claim with GetFileDiff, Read, Grep, or Git before reporting it.',
+    '- Evidence pack hunk_hints and contract_hints are orientation only; verify each hinted claim with GetFileDiff, Read, or Grep before reporting it.',
     '- When prompt_byte_limit_exceeded is yes, use the pre-generated diff summary before detailed reads. Do not remove files from assigned_scope or hide unreviewed files; if a file cannot be covered, report it in coverage_notes and reliability_signals.',
     '- Use shared_context_cache entries to reuse read-only GetFileDiff/Read context by cache_key across reviewer packets. Do not duplicate full-file reads when a reusable cached diff or file summary already covers the same path.',
     '- Use incremental_review_cache only when the target fingerprint matches a prior run; preserve completed reviewer outputs by packet_id and rerun only missing, failed, timed-out, or stale packets. If any invalidates_on condition changed, ignore the cache and explain the fresh review boundary.',

@@ -18,7 +18,7 @@ import {
 } from './reviewCoverageSource';
 
 export const DEFAULT_CODE_REVIEW_MARKDOWN_LABELS: CodeReviewReportMarkdownLabels = {
-  titleStandard: 'Code Review Report',
+  titleStandard: 'Review Report',
   titleDeep: 'Strict Review Report',
   executiveSummary: 'Executive Summary',
   reviewDecision: 'Review Decision',

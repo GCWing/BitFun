@@ -43,12 +43,16 @@ const baseProps = {
   hasInterruption: false,
   partialResultsAvailable: false,
   activeAction: null,
+  followUpReviewState: 'none' as const,
+  canLaunchFollowUpReview: true,
   isFixDisabled: false,
   isResumeRunning: false,
   remainingFixIds: [],
   modelRecoveryAction: null,
   onRetryIncompleteSlices: vi.fn(),
   onStartFixing: vi.fn(),
+  onReviewFixes: vi.fn(),
+  onOpenFollowUpReview: vi.fn(),
   onFillBackInput: vi.fn(),
   onContinueReview: vi.fn(),
   onOpenModelSettings: vi.fn(),
@@ -72,8 +76,81 @@ describe('ReviewActionControls', () => {
 
     expect(html).toContain('Retry incomplete review work (2)');
     expect(html).toContain('Start fixing');
-    expect(html).toContain('Fix &amp; re-review');
+    expect(html).not.toContain('Fix &amp; re-review');
     expect(html).toContain('Fill to input');
+  });
+
+  it('offers an independent review only after fixing completes', () => {
+    const html = renderToStaticMarkup(
+      <ReviewActionControls
+        {...baseProps}
+        phase="fix_completed"
+      />,
+    );
+
+    expect(html).toContain('Review fixes');
+    expect(html).not.toContain('Start fixing');
+  });
+
+  it('labels recoverable and completed follow-up reviews without exposing internal state', () => {
+    const retryHtml = renderToStaticMarkup(
+      <ReviewActionControls {...baseProps} phase="fix_completed" followUpReviewState="retry" />,
+    );
+    const completedHtml = renderToStaticMarkup(
+      <ReviewActionControls {...baseProps} phase="fix_completed" followUpReviewState="completed" />,
+    );
+
+    expect(retryHtml).toContain('Retry review');
+    expect(completedHtml).toContain('View review');
+    expect(completedHtml).not.toContain('Review started');
+  });
+
+  it('keeps failed and cancelled attempts viewable before retrying', () => {
+    const failedHtml = renderToStaticMarkup(
+      <ReviewActionControls {...baseProps} phase="fix_completed" followUpReviewState="failed" />,
+    );
+    const cancelledHtml = renderToStaticMarkup(
+      <ReviewActionControls {...baseProps} phase="fix_completed" followUpReviewState="cancelled" />,
+    );
+
+    expect(failedHtml).toContain('View failed review');
+    expect(failedHtml).toContain('Retry review');
+    expect(cancelledHtml).toContain('View cancelled review');
+    expect(cancelledHtml).toContain('Retry review');
+  });
+
+  it('hides unsupported launches while preserving access to an existing review', () => {
+    const unavailableHtml = renderToStaticMarkup(
+      <ReviewActionControls
+        {...baseProps}
+        phase="fix_completed"
+        canLaunchFollowUpReview={false}
+      />,
+    );
+    const existingHtml = renderToStaticMarkup(
+      <ReviewActionControls
+        {...baseProps}
+        phase="fix_completed"
+        canLaunchFollowUpReview={false}
+        followUpReviewState="completed"
+      />,
+    );
+
+    expect(unavailableHtml).not.toContain('Review fixes');
+    expect(existingHtml).toContain('View review');
+  });
+
+  it('opens a metadata-only review instead of offering a duplicate retry', () => {
+    const html = renderToStaticMarkup(
+      <ReviewActionControls
+        {...baseProps}
+        phase="fix_completed"
+        followUpReviewState="available"
+      />,
+    );
+
+    expect(html).toContain('Open review');
+    expect(html).not.toContain('Retry review');
   });
 
   it('places Open as Markdown in the completed review action row', () => {
@@ -117,8 +194,8 @@ describe('ReviewActionControls', () => {
       />,
     );
 
-    expect(html).toContain('Fix was interrupted. 2 items remain.');
-    expect(html).toContain('Continue fixing 2 items');
+    expect(html).toContain('Fix was interrupted. Up to 2 selected items may still need attention.');
+    expect(html).toContain('Recheck and continue (2)');
     expect(html).toContain('Skip remaining');
   });
 });

@@ -214,6 +214,7 @@ export interface ReviewTeamTokenBudgetPlan {
   maxFilesPerReviewer?: number;
   maxPromptBytesPerReviewer?: number;
   estimatedPromptBytesPerReviewer?: number;
+  estimatedPromptBytesTotal?: number;
   promptByteEstimateSource?: ReviewPromptByteEstimateSource;
   promptByteLimitExceeded?: boolean;
   largeDiffSummaryFirst: boolean;
@@ -274,6 +275,15 @@ export interface ReviewTeamStrategyDecision {
   mismatch: boolean;
   mismatchSeverity: ReviewTeamStrategyMismatchSeverity;
   rationale: string;
+}
+
+export interface ReviewQualityDecisionMetadata {
+  level: 'l2' | 'l3';
+  executionMode: 'strict';
+  strategyLevel: Exclude<ReviewStrategyLevel, 'quick'>;
+  reason: 'risk_score' | 'explicit_strict' | 'unresolved_target' | 'project_strategy_override';
+  score: number;
+  requiresConsent: boolean;
 }
 
 export interface ReviewTeamPreReviewSummaryArea {
@@ -428,6 +438,7 @@ export interface ReviewTeamRunManifest {
   strategyLevel: ReviewStrategyLevel;
   scopeProfile?: DeepReviewScopeProfile;
   strategyRecommendation?: ReviewTeamStrategyRecommendation;
+  qualityDecision?: ReviewQualityDecisionMetadata;
   strategyDecision: ReviewTeamStrategyDecision;
   executionPolicy: ReviewTeamExecutionPolicy;
   concurrencyPolicy: ReviewTeamConcurrencyPolicy;

@@ -110,6 +110,7 @@ describe('BtwThreadService', () => {
       childSessionName: 'Deep review',
       sessionKind: 'deep_review',
       agentType: 'DeepReview',
+      requestId: 'review-request-1',
       deepReviewRunManifest,
     });
 
@@ -117,13 +118,14 @@ describe('BtwThreadService', () => {
       expect.objectContaining({
         sessionName: 'Deep review',
         agentType: 'DeepReview',
+        sessionId: 'review_child_review-request-1',
         workspacePath: '/workspace',
         remoteConnectionId: 'remote-1',
         remoteSshHost: 'host-1',
         relationship: {
           kind: 'deep_review',
           parentSessionId: 'parent-1',
-          parentRequestId: expect.any(String),
+          parentRequestId: 'review-request-1',
           parentDialogTurnId: 'turn-parent-1',
           parentTurnIndex: 1,
         },

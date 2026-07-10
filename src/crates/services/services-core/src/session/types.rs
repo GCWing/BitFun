@@ -189,6 +189,15 @@ pub struct SessionMetadata {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub todos: Option<serde_json::Value>,
 
+    /// Persisted Review action-bar state, including follow-up linkage and scope.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "review_action_state",
+        alias = "reviewActionState"
+    )]
+    pub review_action_state: Option<serde_json::Value>,
+
     /// Deep Review run manifest for this session, when the session was launched
     /// from Code Review Team.
     #[serde(
@@ -861,6 +870,7 @@ impl SessionMetadata {
             custom_metadata: None,
             relationship: None,
             todos: None,
+            review_action_state: None,
             deep_review_run_manifest: None,
             deep_review_cache: None,
             workspace_path: None,
@@ -1399,5 +1409,37 @@ mod tests {
             serialized["deepReviewRunManifest"]["coreReviewers"][0]["subagentId"],
             "ReviewBusinessLogic"
         );
+    }
+
+    #[test]
+    fn session_metadata_preserves_review_action_state() {
+        let payload = serde_json::json!({
+            "sessionId": "review-session",
+            "sessionName": "Review",
+            "agentType": "CodeReview",
+            "modelName": "default",
+            "createdAt": 1,
+            "lastActiveAt": 1,
+            "turnCount": 1,
+            "messageCount": 1,
+            "toolCallCount": 1,
+            "status": "active",
+            "tags": [],
+            "reviewActionState": {
+                "version": 1,
+                "phase": "fix_completed",
+                "followUpReviewSessionId": "follow-up-review"
+            }
+        });
+
+        let metadata: SessionMetadata =
+            serde_json::from_value(payload).expect("metadata should deserialize");
+        assert_eq!(
+            metadata.review_action_state.as_ref().unwrap()["followUpReviewSessionId"],
+            "follow-up-review"
+        );
+
+        let serialized = serde_json::to_value(metadata).expect("metadata should serialize");
+        assert_eq!(serialized["reviewActionState"]["phase"], "fix_completed");
     }
 }

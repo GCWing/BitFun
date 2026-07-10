@@ -36,7 +36,6 @@ const REQUIRED_ACTION_BAR_KEYS = [
   'deepReviewActionBar.decisionGate.missingSelection',
   'deepReviewActionBar.decisionGate.noOptionsHint',
   'deepReviewActionBar.decisionGate.confirmFix',
-  'deepReviewActionBar.decisionGate.confirmFixAndReview',
   'deepReviewActionBar.decisionGate.cancel',
   'deepReviewActionBar.switchModel',
   'deepReviewActionBar.capacityQueue.title',
@@ -73,10 +72,6 @@ const REQUIRED_CODE_REVIEW_CARD_KEYS = [
   'toolCards.codeReview.severities.low',
   'toolCards.codeReview.severities.info',
   'toolCards.codeReview.runManifest.reducedCoverageSummary',
-];
-
-const USER_VISIBLE_TEXT_KEYS_MUST_NOT_CONTAIN_ESCAPED_UNICODE = [
-  'toolCards.codeReview.remediationActions.fixAndReview',
 ];
 
 const REQUIRED_DEEP_REVIEW_CONSENT_KEYS = [
@@ -116,16 +111,6 @@ describe('DeepReviewActionBar i18n', () => {
       });
 
       expect(missingKeys, `${locale} missing keys`).toEqual([]);
-    }
-  });
-
-  it('does not show escaped unicode sequences in user-visible action text', () => {
-    for (const [locale, messages] of Object.entries(LOCALES)) {
-      for (const key of USER_VISIBLE_TEXT_KEYS_MUST_NOT_CONTAIN_ESCAPED_UNICODE) {
-        const value = getMessageValue(messages, key);
-        expect(typeof value, `${locale} ${key} should be a string`).toBe('string');
-        expect(value, `${locale} ${key} should not contain literal unicode escape text`).not.toMatch(/\\u[0-9a-fA-F]{4}/);
-      }
     }
   });
 

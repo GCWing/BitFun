@@ -120,7 +120,6 @@ export const REVIEW_WORK_PACKET_ALLOWED_TOOLS = [
   'Grep',
   'Glob',
   'LS',
-  'Git',
 ] as const;
 
 export const REVIEWER_WORK_PACKET_REQUIRED_OUTPUT_FIELDS = [

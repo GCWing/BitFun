@@ -1,18 +1,23 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import {
   countChangedLinesFromUnifiedDiff,
+  resolveCurrentFileReviewChangeStats,
   resolveSlashCommandReviewTarget,
 } from './targetResolver';
 
 const mockGitGetStatus = vi.fn();
 const mockGitGetChangedFiles = vi.fn();
 const mockGitGetDiff = vi.fn();
+const mockWorkspaceReadFile = vi.fn();
 
 vi.mock('@/infrastructure/api', () => ({
   gitAPI: {
     getStatus: (...args: any[]) => mockGitGetStatus(...args),
     getChangedFiles: (...args: any[]) => mockGitGetChangedFiles(...args),
     getDiff: (...args: any[]) => mockGitGetDiff(...args),
+  },
+  workspaceAPI: {
+    readFileContent: (...args: any[]) => mockWorkspaceReadFile(...args),
   },
 }));
 
@@ -30,6 +35,7 @@ describe('Deep Review target resolver', () => {
     });
     mockGitGetChangedFiles.mockResolvedValue([]);
     mockGitGetDiff.mockResolvedValue('');
+    mockWorkspaceReadFile.mockResolvedValue('');
   });
 
   it('counts changed lines from unified diff without headers', () => {
@@ -106,5 +112,73 @@ describe('Deep Review target resolver', () => {
       fileCount: 2,
       lineCountSource: 'unknown',
     });
+  });
+
+  it('counts untracked file content in current file-scoped change stats', async () => {
+    mockGitGetStatus.mockResolvedValueOnce({
+      staged: [],
+      unstaged: [],
+      untracked: ['src/new.ts'],
+      conflicts: [],
+      current_branch: 'main',
+      ahead: 0,
+      behind: 0,
+    });
+    mockWorkspaceReadFile.mockResolvedValueOnce('one\ntwo\nthree\n');
+    const target = {
+      source: 'session_files' as const,
+      resolution: 'resolved' as const,
+      files: [{
+        path: 'src/new.ts',
+        normalizedPath: 'src/new.ts',
+        status: 'modified' as const,
+        source: 'session_files' as const,
+        tags: [],
+      }],
+      tags: [],
+      warnings: [],
+    };
+
+    const stats = await resolveCurrentFileReviewChangeStats(
+      'D:/workspace/project',
+      target,
+      undefined,
+      'remote-connection-1',
+    );
+
+    expect(mockWorkspaceReadFile).toHaveBeenCalledWith(
+      'D:/workspace/project/src/new.ts',
+      undefined,
+      'remote-connection-1',
+    );
+    expect(stats).toEqual({
+      fileCount: 1,
+      totalLinesChanged: 3,
+      lineCountSource: 'diff_stat',
+    });
+  });
+
+  it('treats free-form focus as guidance while still resolving workspace changes', async () => {
+    mockGitGetStatus.mockResolvedValueOnce({
+      staged: [{ path: 'src/crates/assembly/core/src/agentic/auth.rs', status: 'modified' }],
+      unstaged: [],
+      untracked: [],
+      conflicts: [],
+      current_branch: 'main',
+      ahead: 0,
+      behind: 0,
+    });
+
+    const result = await resolveSlashCommandReviewTarget(
+      'focus on authentication and authorization risks',
+      'D:\\workspace\\repo',
+    );
+
+    expect(mockGitGetStatus).toHaveBeenCalledWith('D:\\workspace\\repo', 'deep_review_target_resolver');
+    expect(result.target.source).toBe('workspace_diff');
+    expect(result.target.resolution).toBe('resolved');
+    expect(result.target.files.map((file) => file.normalizedPath)).toContain(
+      'src/crates/assembly/core/src/agentic/auth.rs',
+    );
   });
 });

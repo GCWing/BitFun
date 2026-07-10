@@ -3,7 +3,7 @@ import { WorkspaceKind, type WorkspaceInfo } from '@/shared/types';
 export const DEFAULT_CHAT_INPUT_MODE_CONFIG_PATH = 'app.flow_chat.default_mode_id';
 
 const FIXED_CHAT_INPUT_MODE_IDS = new Set(['cowork', 'claw']);
-const SUBAGENT_HIDDEN_CHAT_INPUT_ACTION_IDS = new Set(['goal', 'deepreview', 'init']);
+const SUBAGENT_HIDDEN_CHAT_INPUT_ACTION_IDS = new Set(['goal', 'review', 'deepreview', 'init']);
 
 type WorkspaceResolutionInfo = Pick<
   WorkspaceInfo,
@@ -287,6 +287,18 @@ export function isChatInputActionVisibleForTarget(params: {
 
   const actionId = normalizeModeLookupId(params.actionId);
   return !actionId || !SUBAGENT_HIDDEN_CHAT_INPUT_ACTION_IDS.has(actionId);
+}
+
+export function isPrimarySlashActionVisible(params: {
+  actionId: 'btw' | 'review';
+  isBtwSession: boolean;
+  canLaunchReview: boolean;
+}): boolean {
+  if (params.isBtwSession) {
+    return false;
+  }
+
+  return params.actionId === 'btw' || params.canLaunchReview;
 }
 
 export function resolveWorkspaceChatInputMode(params: {

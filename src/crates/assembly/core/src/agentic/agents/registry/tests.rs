@@ -235,7 +235,7 @@ async fn frontend_reviewer_is_registered_as_review_subagent() {
 }
 
 #[test]
-fn built_in_deep_review_reviewers_are_marked_as_review_agents() {
+fn built_in_readonly_reviewers_are_marked_as_review_agents() {
     let registry = AgentRegistry::new();
 
     for agent_type in [
@@ -245,6 +245,7 @@ fn built_in_deep_review_reviewers_are_marked_as_review_agents() {
         "ReviewArchitecture",
         "ReviewFrontend",
         "ReviewJudge",
+        "CodeReview",
     ] {
         assert_eq!(
             registry.get_subagent_is_review(agent_type),
@@ -270,6 +271,12 @@ async fn task_visible_subagents_are_filtered_by_parent_agent() {
     assert!(agentic_visible
         .iter()
         .any(|agent| agent.id == "GeneralPurpose"));
+    let code_review = agentic_visible
+        .iter()
+        .find(|agent| agent.id == "CodeReview")
+        .expect("CodeReview should be available as an isolated review task");
+    assert!(code_review.is_review);
+    assert!(code_review.is_readonly);
     assert!(!agentic_visible
         .iter()
         .any(|agent| agent.id == "ReviewSecurity"));

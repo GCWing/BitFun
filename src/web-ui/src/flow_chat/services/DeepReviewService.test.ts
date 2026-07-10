@@ -199,6 +199,10 @@ describe('DeepReviewService slash command', () => {
 
     expect(mockGitGetDiff).toHaveBeenCalledWith('D:\\workspace\\repo', {
       source: 'HEAD',
+      files: [
+        'src/web-ui/src/App.tsx',
+        'src/crates/assembly/core/src/service/config/types.rs',
+      ],
     });
     expect(buildEffectiveReviewTeamManifest).toHaveBeenLastCalledWith(
       expect.anything(),
@@ -496,6 +500,7 @@ describe('launchDeepReviewSession', () => {
       workspacePath: 'D:\\workspace\\repo',
       prompt: 'Review these files',
       displayMessage: 'Strict review started',
+      requestId: 'review-follow-up-3',
     });
 
     expect(result.childSessionId).toBe('child-123');
@@ -505,6 +510,7 @@ describe('launchDeepReviewSession', () => {
         workspacePath: 'D:\\workspace\\repo',
         sessionKind: 'deep_review',
         agentType: 'DeepReview',
+        requestId: 'review-follow-up-3',
       }),
     );
     expect(mockOpenBtwSessionInAuxPane).not.toHaveBeenCalled();

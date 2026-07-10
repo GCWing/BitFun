@@ -13,6 +13,8 @@ import {
   loadReviewTeamRateLimitStatus,
   prepareDefaultReviewTeamForLaunch,
   type ReviewTeamRunManifest,
+  type ReviewStrategyLevel,
+  type ReviewTeamChangeStats,
 } from '@/shared/services/reviewTeamService';
 import { classifyReviewTargetFromFiles } from '@/shared/services/reviewTargetClassifier';
 import {
@@ -52,6 +54,20 @@ interface LaunchDeepReviewSessionParams {
   childSessionName?: string;
   requestedFiles?: string[];
   runManifest?: ReviewTeamRunManifest;
+  requestId?: string;
+}
+
+export interface DeepReviewLaunchBuildOptions {
+  strategyOverride?: ReviewStrategyLevel;
+  qualityDecision?: ReviewTeamRunManifest['qualityDecision'];
+  changeStats?: ReviewTeamChangeStats;
+  resolvedTarget?: {
+    target: ReviewTeamRunManifest['target'];
+    changeStats: ReviewTeamChangeStats;
+  };
+  maxCoreReviewers?: number;
+  maxExtraReviewers?: number;
+  includeQualityGate?: boolean;
 }
 
 export interface DeepReviewLaunchPrompt {
@@ -124,12 +140,12 @@ async function buildReviewTeamManifestWithRuntimeSignals(
   options: Parameters<typeof buildEffectiveReviewTeamManifest>[1],
 ): Promise<ReviewTeamRunManifest> {
   const manifestOptions = options ?? {};
-  const [rateLimitStatus, strategyOverride] = await Promise.all([
+  const [rateLimitStatus, projectStrategyOverride] = await Promise.all([
     loadReviewTeamRateLimitStatus().catch((error) => {
       log.warn('Failed to load strict review rate limit status', { error });
       return null;
     }),
-    manifestOptions.workspacePath
+    manifestOptions.workspacePath && !manifestOptions.strategyOverride && !manifestOptions.qualityDecision
       ? loadReviewTeamProjectStrategyOverride(manifestOptions.workspacePath).catch((error) => {
         log.warn('Failed to load strict review project strategy override', { error });
         return undefined;
@@ -140,7 +156,10 @@ async function buildReviewTeamManifestWithRuntimeSignals(
   return buildEffectiveReviewTeamManifest(team, {
     ...manifestOptions,
     ...(rateLimitStatus ? { rateLimitStatus } : {}),
-    ...(strategyOverride ? { strategyOverride } : {}),
+    ...(projectStrategyOverride ? { strategyOverride: projectStrategyOverride } : {}),
+    ...(manifestOptions.strategyOverride
+      ? { strategyOverride: manifestOptions.strategyOverride }
+      : {}),
   });
 }
 
@@ -148,17 +167,30 @@ export async function buildDeepReviewLaunchFromSessionFiles(
   filePaths: string[],
   extraContext?: string,
   workspacePath?: string,
+  options: DeepReviewLaunchBuildOptions = {},
 ): Promise<DeepReviewLaunchPrompt> {
   const target = classifyReviewTargetFromFiles(filePaths, 'session_files');
-  const changeStats = buildUnknownChangeStats(target);
-  const team = await prepareDefaultReviewTeamForLaunch(workspacePath, {
-    reviewTargetFilePaths: filePaths,
-    target,
-  });
+  const changeStats = options.changeStats ?? buildUnknownChangeStats(target);
+  const team = await loadDefaultReviewTeam(workspacePath);
   const manifest = await buildReviewTeamManifestWithRuntimeSignals(team, {
     workspacePath,
     target,
     changeStats,
+    ...(options.strategyOverride
+      ? { strategyOverride: options.strategyOverride }
+      : {}),
+    ...(options.qualityDecision
+      ? { qualityDecision: options.qualityDecision }
+      : {}),
+    ...(options.maxCoreReviewers !== undefined
+      ? { maxCoreReviewers: options.maxCoreReviewers }
+      : {}),
+    ...(options.maxExtraReviewers !== undefined
+      ? { maxExtraReviewers: options.maxExtraReviewers }
+      : {}),
+    ...(options.includeQualityGate !== undefined
+      ? { includeQualityGate: options.includeQualityGate }
+      : {}),
   });
   const prompt = formatSessionFilesLaunchPrompt({
     filePaths,
@@ -239,15 +271,32 @@ export async function buildDeepReviewPromptFromSessionFiles(
 export async function buildDeepReviewLaunchFromSlashCommand(
   commandText: string,
   workspacePath?: string,
+  options: DeepReviewLaunchBuildOptions = {},
 ): Promise<DeepReviewLaunchPrompt> {
-  const team = await prepareDefaultReviewTeamForLaunch(workspacePath);
+  const team = await loadDefaultReviewTeam(workspacePath);
   const trimmed = commandText.trim();
   const extraContext = getDeepReviewCommandFocus(trimmed);
-  const { target, changeStats } = await resolveSlashCommandReviewTarget(extraContext, workspacePath);
+  const { target, changeStats } = options.resolvedTarget ??
+    await resolveSlashCommandReviewTarget(extraContext, workspacePath);
   const manifest = await buildReviewTeamManifestWithRuntimeSignals(team, {
     workspacePath,
     target,
     changeStats,
+    ...(options.strategyOverride
+      ? { strategyOverride: options.strategyOverride }
+      : {}),
+    ...(options.qualityDecision
+      ? { qualityDecision: options.qualityDecision }
+      : {}),
+    ...(options.maxCoreReviewers !== undefined
+      ? { maxCoreReviewers: options.maxCoreReviewers }
+      : {}),
+    ...(options.maxExtraReviewers !== undefined
+      ? { maxExtraReviewers: options.maxExtraReviewers }
+      : {}),
+    ...(options.includeQualityGate !== undefined
+      ? { includeQualityGate: options.includeQualityGate }
+      : {}),
   });
   const prompt = formatSlashCommandLaunchPrompt({
     commandText: trimmed,
@@ -288,11 +337,18 @@ export async function launchDeepReviewSession({
   childSessionName = 'Review: Strict',
   requestedFiles = [],
   runManifest,
+  requestId,
 }: LaunchDeepReviewSessionParams): Promise<{ childSessionId: string }> {
   let childSessionId: string | null = null;
-  let launchStep: DeepReviewLaunchStep = 'create_child_session';
+  let launchStep: DeepReviewLaunchStep = 'prepare_review_team';
 
   try {
+    await prepareDefaultReviewTeamForLaunch(workspacePath, {
+      reviewTargetFilePaths: requestedFiles,
+      target: runManifest?.target,
+    });
+
+    launchStep = 'create_child_session';
     const created = await createBtwChildSession({
       parentSessionId,
       workspacePath,
@@ -305,6 +361,8 @@ export async function launchDeepReviewSession({
       enableContextCompression: true,
       addMarker: false,
       deepReviewRunManifest: runManifest,
+      reviewTargetFilePaths: requestedFiles,
+      requestId,
     });
     childSessionId = created.childSessionId;
 

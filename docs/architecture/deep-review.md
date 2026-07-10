@@ -9,7 +9,7 @@ Product-facing guardrails live in [review-verify-implementation-guardrails.md](.
 - `Review` is the primary user-facing entry.
 - `/review` is the intended long-term command entry; `/DeepReview` is only a transitional typed compatibility command for historical strict-review launches.
 - `ReviewTeam` is an internal strict-review reviewer-set configuration, not a separate product concept users must learn.
-- PR Review consumes review/verify results and readiness projections; it must not own another reviewer executor.
+- PR Review consumes Review results and future readiness projections; it must not own another reviewer executor.
 
 The current implementation has three layers:
 
@@ -17,13 +17,17 @@ The current implementation has three layers:
 - Platform adapter commands in `src/apps/desktop/src/api/agentic_api.rs`.
 - Platform-agnostic runtime policy, task admission, queue state, retry metadata, and report enrichment in `src/crates/assembly/core/src/agentic`.
 
-The backend does not choose the review target or build the launch manifest. The frontend builds the effective `ReviewTeamRunManifest`, persists it on the DeepReview child session, and sends it with the first user message. The manifest, session kind, agent type, storage keys, and queue event names stay compatible with historical DeepReview sessions.
+The launch adapter is currently desktop-only. Browser/server surfaces hide every Review launch action, including fix follow-up retry, and reject typed Review commands with a clear unsupported-state message until the server owns the same session, Git-target, and policy command contracts; existing review attempts remain viewable. Adding only one RPC method to the current ping-only server would not make the workflow functional. The Review settings route remains visible for navigation compatibility on those surfaces, but renders a read-only desktop-only state and never loads or saves desktop capacity settings.
+
+The platform-neutral L1-L3 Review decision is owned by `src/crates/contracts/product-domains/src/review.rs`. Desktop exposes it through `decide_review_quality`; frontend surfaces pass raw target facts and consume the decision instead of owning another threshold table. L0 completion checks and Verify evidence are intentionally outside the production contract until the separate Verify exploration defines a trustworthy evidence source.
+
+The backend does not resolve the review target or build the launch manifest. The frontend resolves target facts, asks the product-domain policy for a quality decision, and builds the effective `ReviewTeamRunManifest` for L2/L3. The prepared prompt and manifest are reused unchanged for consent and execution. The manifest, session kind, agent type, storage keys, and queue event names stay compatible with historical DeepReview sessions.
 
 ## Runtime Roles
 
-`src/crates/assembly/core/src/agentic/agents/deep_review_agent.rs` defines the writable `DeepReview` orchestrator. It can call `Task`, read/search/git tools, `submit_code_review`, `AskUserQuestion`, and write/edit/bash tools for user-approved remediation.
+`CodeReview` and the `DeepReview` orchestrator are read-only adversarial review identities. `CodeReview` handles L1 and can run inline as one isolated Task when a normal coding request explicitly asks for a careful review. That inline check stays in the current task, uses an anonymized collapsed progress card, and cannot silently expand into multiple reviewers. Broader L2/L3 execution remains in the unified Review launch so scope and cost confirmation stay visible. `DeepReview` can launch only manifest-approved reviewers, inspect repository evidence, and submit the consolidated report; it has no edit, command, Git-mutation, or remediation tools.
 
-`src/crates/assembly/core/src/agentic/agents/review_specialist_agents.rs` defines read-only reviewer agents:
+`src/crates/assembly/core/src/agentic/agents/definitions/review/review_specialists.rs` defines read-only reviewer agents:
 
 - `ReviewBusinessLogic`
 - `ReviewPerformance`
@@ -32,21 +36,23 @@ The backend does not choose the review target or build the launch manifest. The 
 - `ReviewFrontend`
 - `ReviewJudge`
 
-The reviewer agents use instruction-only context and read/search/git/diff tools. `ReviewFrontend` is a conditional role. `ReviewJudge` validates reviewer evidence and consistency instead of performing a full independent review pass.
+The reviewer agents use instruction-only context and read/search/diff tools. They do not receive the generic Git tool because it also exposes mutating operations. `ReviewFrontend` is a conditional role. `ReviewJudge` validates reviewer evidence and consistency instead of performing a full independent review pass.
 
-`ReviewFixer` exists as a separate remediation agent, but DeepReview runtime policy rejects it during review execution. Remediation is launched later only from the frontend action surface after user approval.
+`ReviewFixer` is the separate writable remediation identity. DeepReview runtime policy rejects it during review execution. The frontend action surface invokes it only after user approval, and a new read-only Review run checks the fix when requested.
 
 ## Launch Flow
 
-Strict Review can currently be launched from session-file review controls or the canonical typed `/review strict` command. Historical `/DeepReview` and `/deepreview` inputs remain compatibility aliases that route into the same strict Review path, but new product entry points should route through unified Review and `/review`, then select strict review only when task scope, difficulty, risk, explicit quality intent, and budget justify L3.
+Review can be launched from session-file controls or `/review`. The product-domain decision chooses L1, L2, or L3 from target facts and intent. `/review strict` explicitly requests L3. Historical `/DeepReview` and `/deepreview` inputs remain compatibility aliases that route into the same L3 path.
 
 Frontend launch code lives in `src/web-ui/src/flow_chat/deep-review/launch`:
 
 - `commandParser.ts` identifies canonical `/review strict` commands, transitional `/DeepReview` compatibility aliases, and optional file or git targets.
-- `targetResolver.ts` resolves slash-command targets from git status, changed files, and diffs when a workspace is available.
+- `targetResolver.ts` resolves slash-command targets from git status, changed files, and diffs when a workspace is available. File-scoped sizing reads untracked content through the registered, remote-aware workspace API; a resolved non-empty target with unknown change size cannot select L1.
 - `launchPrompt.ts` formats the user-facing launch prompt.
 - `DeepReviewService.ts` builds the review-team manifest, creates a child session, sends the launch prompt, and inserts the parent-session summary marker. Launch does not automatically open the auxiliary pane; the summary-card detail action is the normal user-facing way to inspect the background review run.
 - `src/web-ui/src/flow_chat/services/DeepReviewService.ts` is a compatibility re-export.
+- `src/web-ui/src/flow_chat/services/ReviewService.ts` owns the unified prepared plan and launches either one read-only CodeReview child or the existing DeepReview child runtime.
+- Fix follow-up uses the same service to re-evaluate the union of the original review files and files directly changed by `ReviewFixer`. If command, Git, or stdin tools can produce changes that cannot be attributed safely, the UI explicitly falls back to the current workspace diff instead of claiming a narrower scope. It remeasures the selected diff before obtaining a new decision and consent, then opens one fresh isolated reviewer child in the existing auxiliary pane. The fixer baseline and exact selected remediation ids are persisted before remediation starts, so restart restores only unfinished items from the original selection. The follow-up reservation stores the same request id later written to the existing child relationship metadata and used to derive the backend session id. Restart reconciles a created child, while an uncertain or incomplete launch keeps the reservation retryable with the same id. Backend creation returns an existing session only when the immutable identity (`agent_type`, relationship kind, parent session, and parent request) matches; mutable parent turn location does not break retries. This early-return path is restricted to Review/DeepReview child relationships with a parent request, so ordinary explicit-id session restoration keeps its existing coordinator rebuild behavior. The action bar distinguishes retry, in-progress, completed, failed, cancelled, and view states instead of leaving a permanently disabled button. A metadata-only historical child is opened and hydrated before terminal state is inferred; lack of loaded turns is not treated as permission to launch a duplicate. Scope, changed-file records, and the final child id stay in session metadata so restart does not widen scope or duplicate a known run. Older sessions without recoverable scope explicitly notify the user before falling back to the current workspace diff.
 
 `launchDeepReviewSession` creates a child session with:
 
@@ -125,7 +131,7 @@ The evidence pack is metadata-only. It lists changed file paths, aggregate diff 
 
 ## Strategies and Scope
 
-The frontend owns strategy profile text and manifest planning in `src/web-ui/src/shared/services/review-team/strategy.ts` and `scopeProfile.ts`.
+The product-domain decision owns the selected Review level and strategy. The frontend owns strategy profile text and converts the selected strategy into manifest planning in `src/web-ui/src/shared/services/review-team/strategy.ts` and `scopeProfile.ts`.
 
 Supported strategy levels are `quick`, `normal`, and `deep`.
 
@@ -133,7 +139,9 @@ Supported strategy levels are `quick`, `normal`, and `deep`.
 - `normal` uses risk-expanded scope, one dependency hop, configured optional reviewers, and no broad tool exploration.
 - `deep` uses full-depth scope, policy-limited dependency context, full optional reviewer policy, and broad tool exploration.
 
-The backend parses the strategy from the manifest/config and uses it for runtime guardrails such as timeouts, policy classification, and retry limits. Backend strategy scoring is advisory and does not replace the frontend manifest decision.
+L2 manifests cap all active reviewers at three, prioritize target-relevant roles, and omit the judge to control token and latency. L3 manifests keep the full applicable reviewer set and judge. The portable runtime validates the structural invariants carried by `qualityDecision`: L2 requires `normal`, at most three active reviewers, and no quality gate; L3 requires `deep`, every non-conditional core reviewer, `ReviewJudge` as the quality gate, and each conditional core reviewer must be active or explicitly `not_applicable`. Manifests without `qualityDecision` retain historical compatibility. The backend also parses the selected strategy from the manifest/config and uses it for runtime guardrails such as timeouts, policy classification, and retry limits. Legacy frontend/backend recommendation fields remain report metadata and do not replace the product-domain decision.
+
+The launch consent token estimate sums the manifest heuristic for every planned work packet, including the judge, instead of multiplying the largest reviewer packet by the call count. The per-reviewer maximum remains a separate prompt-limit guardrail. Historical manifests without the total estimate use the older per-call fallback and keep the estimate explicitly approximate.
 
 ## Work Packets
 
@@ -275,7 +283,7 @@ The action bar can show:
 - recovery plan preview
 - remediation item selection
 - needs-decision gate
-- fix, fix-and-review, resume, and retry controls
+- fix, independently review fixes, resume, and retry controls
 
 The action bar dispatches queue controls through `agentAPI.controlDeepReviewQueue` when backend queue-control identifiers are available. Otherwise it falls back to local/session-stop-only behavior exposed by the store.
 
@@ -289,9 +297,9 @@ The review action bar persists UI state separately through `ReviewActionBarPersi
 
 - Frontend components do not call Tauri directly; they use infrastructure APIs such as `agentAPI`.
 - Shared core stays platform-agnostic and uses event/config/tool abstractions instead of Tauri handles.
-- The frontend owns target resolution, team manifest construction, strategy profile wording, prompt-block construction, consent, and action UI.
+- Product domains own the platform-neutral L1-L3 Review decision; the frontend owns target resolution, team manifest construction, strategy profile wording, prompt-block construction, consent, and action UI.
 - The backend owns policy validation, runtime admission, queue/retry state, event emission, and report enrichment.
-- Reviewer subagents stay read-only. Remediation runs after user approval through the action surface, not during the reviewer pass.
+- Reviewer subagents and review orchestrators stay read-only. Remediation runs under `ReviewFixer` after user approval, not during the reviewer pass.
 - Work packets and evidence packs are planning metadata; they must not embed file contents or full diffs.
 
 ## Change Checklist

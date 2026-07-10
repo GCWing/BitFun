@@ -1,6 +1,7 @@
 import { classifyLaunchError } from '../../utils/deepReviewExperience';
 
 export type DeepReviewLaunchStep =
+  | 'prepare_review_team'
   | 'create_child_session'
   | 'open_aux_pane'
   | 'send_start_message';
@@ -46,6 +47,8 @@ export function isSessionMissingError(error: unknown): boolean {
 
 function describeLaunchStep(step: DeepReviewLaunchStep): string {
   switch (step) {
+    case 'prepare_review_team':
+      return 'checking review coverage';
     case 'create_child_session':
       return 'creating the strict review session';
     case 'open_aux_pane':

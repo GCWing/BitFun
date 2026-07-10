@@ -883,6 +883,7 @@ pub async fn run() {
             api::agentic_api::generate_session_title,
             api::agentic_api::get_available_modes,
             api::agentic_api::get_default_review_team_definition,
+            api::agentic_api::decide_review_quality,
             api::btw_api::btw_ask_stream,
             api::btw_api::btw_cancel,
             api::editor_ai_api::editor_ai_stream,

@@ -71,6 +71,7 @@ pub fn build_session_metadata(facts: SessionMetadataBuildFacts<'_>) -> SessionMe
         custom_metadata: existing.and_then(|value| value.custom_metadata.clone()),
         relationship: build_session_relationship(facts.session_kind, existing),
         todos: existing.and_then(|value| value.todos.clone()),
+        review_action_state: existing.and_then(|value| value.review_action_state.clone()),
         deep_review_run_manifest: existing.and_then(|value| value.deep_review_run_manifest.clone()),
         deep_review_cache: existing.and_then(|value| value.deep_review_cache.clone()),
         workspace_path: Some(facts.workspace_path.to_string()),

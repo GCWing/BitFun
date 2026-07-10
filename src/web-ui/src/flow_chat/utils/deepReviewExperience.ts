@@ -377,7 +377,7 @@ export function buildRecoveryPlan(
 // ---------------------------------------------------------------------------
 
 export interface DegradationOption {
-  type: 'reduce_reviewers' | 'compress_context' | 'view_partial';
+  type: 'view_partial';
   labelKey: string;
   descriptionKey: string;
   enabled: boolean;
@@ -394,26 +394,14 @@ export function evaluateDegradationOptions(
     (r) => r.status === 'completed',
   );
 
-  return [
-    {
-      type: 'reduce_reviewers',
-      labelKey: 'deepReviewActionBar.degradation.reduceReviewers',
-      descriptionKey: 'deepReviewActionBar.degradation.reduceReviewersDesc',
-      enabled: false, // Requires backend support
-    },
-    {
-      type: 'compress_context',
-      labelKey: 'deepReviewActionBar.degradation.compressContext',
-      descriptionKey: 'deepReviewActionBar.degradation.compressContextDesc',
-      enabled: false, // Requires backend support
-    },
-    {
+  return hasPartialResults
+    ? [{
       type: 'view_partial',
       labelKey: 'deepReviewActionBar.degradation.viewPartial',
       descriptionKey: 'deepReviewActionBar.degradation.viewPartialDesc',
-      enabled: hasPartialResults,
-    },
-  ];
+      enabled: true,
+    }]
+    : [];
 }
 
 // ---------------------------------------------------------------------------

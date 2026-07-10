@@ -294,6 +294,21 @@ describeWithJsdom('TaskToolDisplay', () => {
     expect(taskCollapseStateManager.isCollapsed('task-tool-1')).toBe(true);
   });
 
+  it('keeps inline CodeReview tasks collapsed without exposing the internal agent name', async () => {
+    await act(async () => {
+      root.render(
+        <TaskToolDisplay
+          toolItem={reviewTaskItem('running', 'CodeReview', 'Review completed work')}
+          config={config}
+          sessionId="parent-session"
+        />,
+      );
+    });
+
+    expect(taskCollapseStateManager.isCollapsed('task-tool-1')).toBe(true);
+    expect(container.textContent).not.toContain('CodeReview');
+  });
+
   it('does not treat Review-prefixed remediation agents as read-only coverage tasks', async () => {
     const completedItem: FlowToolItem = {
       ...reviewTaskItem('completed', 'ReviewFixer', 'Fix reviewed issues'),

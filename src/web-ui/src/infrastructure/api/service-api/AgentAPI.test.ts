@@ -37,4 +37,32 @@ describe('AgentAPI', () => {
       },
     });
   });
+
+  it('requests the platform-neutral Review quality decision with raw target facts', async () => {
+    await agentAPI.decideReviewQuality({
+      intent: 'review',
+      target: {
+        resolution: 'resolved',
+        fileCount: 2,
+        totalLinesChanged: 40,
+        securitySensitiveFileCount: 1,
+        workspaceAreaCount: 1,
+        contractSurfaceChanged: false,
+      },
+    });
+
+    expect(invokeMock).toHaveBeenCalledWith('decide_review_quality', {
+      request: {
+        intent: 'review',
+        target: {
+          resolution: 'resolved',
+          fileCount: 2,
+          totalLinesChanged: 40,
+          securitySensitiveFileCount: 1,
+          workspaceAreaCount: 1,
+          contractSurfaceChanged: false,
+        },
+      },
+    });
+  });
 });

@@ -5,7 +5,9 @@ import {
   collectWorkspaceDiffFilePaths,
   extractExplicitReviewFilePaths,
   getDeepReviewCommandFocus,
+  getReviewSlashCommandIntent,
   isDeepReviewSlashCommand,
+  isReviewSlashCommand,
   parseSlashCommandGitTarget,
 } from './commandParser';
 
@@ -22,8 +24,22 @@ describe('Deep Review launch command parser', () => {
     expect(isDeepReviewSlashCommand('/DeepReviewer review commit abc123')).toBe(false);
   });
 
+  it('recognizes the unified Review command and derives intent without exposing levels', () => {
+    expect(isReviewSlashCommand('/review')).toBe(true);
+    expect(isReviewSlashCommand('/review focus on auth')).toBe(true);
+    expect(isReviewSlashCommand('/review strict focus on auth')).toBe(true);
+    expect(isReviewSlashCommand('/DeepReview focus on auth')).toBe(true);
+    expect(isReviewSlashCommand('/reviewer')).toBe(false);
+
+    expect(getReviewSlashCommandIntent('/review')).toBe('adaptive');
+    expect(getReviewSlashCommandIntent('/review focus on auth')).toBe('adaptive');
+    expect(getReviewSlashCommandIntent('/review strict focus on auth')).toBe('strict');
+    expect(getReviewSlashCommandIntent('/DeepReview focus on auth')).toBe('strict');
+  });
+
   it('strips the canonical command before target parsing', () => {
     expect(getDeepReviewCommandFocus('/review strict commit abc123')).toBe('commit abc123');
+    expect(getDeepReviewCommandFocus('/review commit abc123')).toBe('commit abc123');
     expect(getDeepReviewCommandFocus('/DeepReview review commit abc123')).toBe('review commit abc123');
     expect(getDeepReviewCommandFocus('/deepreview review commit abc123')).toBe('review commit abc123');
     expect(getDeepReviewCommandFocus('/DeepReview')).toBe('');

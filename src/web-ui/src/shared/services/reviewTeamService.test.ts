@@ -694,6 +694,60 @@ describe('reviewTeamService', () => {
     ]);
   });
 
+  it('builds a bounded targeted manifest for an L2 review plan', () => {
+    const team = resolveDefaultReviewTeam(
+      [
+        ...coreSubagents(),
+        subagent('ExtraEnabled', true, 'user', 'fast', true, true),
+      ],
+      storedConfigWithExtra(['ExtraEnabled']),
+    );
+    const target = classifyReviewTargetFromFiles(
+      ['src/apps/desktop/src/api/agentic_api.rs'],
+      'session_files',
+    );
+
+    const manifest = buildEffectiveReviewTeamManifest(team, {
+      target,
+      qualityDecision: {
+        level: 'l2',
+        executionMode: 'strict',
+        strategyLevel: 'normal',
+        reason: 'risk_score',
+        score: 8,
+        requiresConsent: true,
+      },
+      maxCoreReviewers: 3,
+      maxExtraReviewers: 0,
+      includeQualityGate: false,
+    });
+
+    expect(manifest.coreReviewers.map((member) => member.subagentId)).toEqual([
+      'ReviewBusinessLogic',
+      'ReviewFrontend',
+      'ReviewArchitecture',
+    ]);
+    expect(manifest.qualityGateReviewer).toBeUndefined();
+    expect(manifest.qualityDecision).toMatchObject({ level: 'l2', score: 8 });
+    expect(manifest.strategyDecision.userOverride).toBeUndefined();
+    expect(manifest.enabledExtraReviewers).toEqual([]);
+    expect(manifest.workPackets).toHaveLength(3);
+    expect(manifest.skippedReviewers).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        subagentId: 'ReviewPerformance',
+        reason: 'budget_limited',
+      }),
+      expect.objectContaining({
+        subagentId: 'ReviewSecurity',
+        reason: 'budget_limited',
+      }),
+      expect.objectContaining({
+        subagentId: 'ExtraEnabled',
+        reason: 'budget_limited',
+      }),
+    ]));
+  });
+
   it('maps review strategies to explicit scope profiles in the run manifest', () => {
     const team = resolveDefaultReviewTeam(
       coreSubagents(),
@@ -805,7 +859,7 @@ describe('reviewTeamService', () => {
         fileCount: 1,
         files: ['src/web-ui/src/components/ReviewPanel.tsx'],
       },
-      allowedTools: ['GetFileDiff', 'Read', 'Grep', 'Glob', 'LS', 'Git'],
+      allowedTools: ['GetFileDiff', 'Read', 'Grep', 'Glob', 'LS'],
       timeoutSeconds: manifest.executionPolicy.reviewerTimeoutSeconds,
       requiredOutputFields: expect.arrayContaining([
         'packet_id',
@@ -837,6 +891,27 @@ describe('reviewTeamService', () => {
     expect(promptBlock).toContain('set retry to true');
     expect(promptBlock).toContain('Each reviewer LaunchReviewAgent prompt must include the matching work packet verbatim.');
     expect(promptBlock).toContain('If the reviewer omits packet_id but the LaunchReviewAgent call was launched from a packet, infer the packet_id from the LaunchReviewAgent description or work packet and mark packet_status_source as inferred.');
+  });
+
+  it('intersects extra reviewer tools with the read-only review tool set', () => {
+    const team = resolveDefaultReviewTeam(
+      [
+        ...coreSubagents(),
+        subagent(
+          'ExtraEnabled',
+          true,
+          'user',
+          'fast',
+          true,
+          true,
+          ['Read', 'Grep', 'Git', 'Edit', 'Exec'],
+        ),
+      ],
+      storedConfigWithExtra(['ExtraEnabled']),
+    );
+
+    expect(team.members.find((member) => member.subagentId === 'ExtraEnabled')?.allowedTools)
+      .toEqual(['Read', 'Grep']);
   });
 
   it('adds a locale-only guardrail for i18n-only frontend review targets', () => {
@@ -1094,7 +1169,8 @@ describe('reviewTeamService', () => {
     expect(promptBlock).toContain('"changed_files"');
     expect(promptBlock).toContain('"contract_hints"');
     expect(promptBlock).toContain('Evidence pack hunk_hints and contract_hints are orientation only');
-    expect(promptBlock).toContain('verify each hinted claim with GetFileDiff, Read, Grep, or Git before reporting it');
+    expect(promptBlock).toContain('verify each hinted claim with GetFileDiff, Read, or Grep before reporting it');
+    expect(promptBlock).not.toContain('"Git"');
     expect(promptBlock).not.toContain('sourceText');
     expect(promptBlock).not.toContain('fullDiff');
     expect(promptBlock).not.toContain('modelOutput');
@@ -1515,6 +1591,9 @@ describe('reviewTeamService', () => {
       maxExtraReviewers: 1,
       skippedReviewerIds: [],
     });
+    expect(manifest.tokenBudget.estimatedPromptBytesTotal).toBeGreaterThan(
+      manifest.tokenBudget.estimatedPromptBytesPerReviewer ?? 0,
+    );
   });
 
   it('keeps quick strategy bounded and reduced-scope for slow-model friendly launches', () => {
@@ -1549,6 +1628,9 @@ describe('reviewTeamService', () => {
       maxExtraReviewers: 0,
       skippedReviewerIds: ['ExtraEnabled'],
     });
+    expect(manifest.tokenBudget.maxReviewerCalls).toBe(
+      manifest.tokenBudget.estimatedReviewerCalls,
+    );
     expect(manifest.enabledExtraReviewers).toEqual([]);
     expect(manifest.executionPolicy).toMatchObject({
       reviewerTimeoutSeconds: 1200,

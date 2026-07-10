@@ -6,30 +6,18 @@ import { createRoot, type Root } from 'react-dom/client';
 import ReviewConfig from './ReviewConfig';
 
 const loadDefaultReviewTeamMock = vi.hoisted(() => vi.fn());
-const saveDefaultReviewTeamStrategyLevelMock = vi.hoisted(() => vi.fn());
 const saveDefaultReviewTeamConcurrencyPolicyMock = vi.hoisted(() => vi.fn());
 const notifySuccessMock = vi.hoisted(() => vi.fn());
 const notifyErrorMock = vi.hoisted(() => vi.fn());
+const isTauriRuntimeMock = vi.hoisted(() => vi.fn(() => true));
 const translateMock = vi.hoisted(() => (key: string, params?: Record<string, unknown>) => {
   const translations: Record<string, string> = {
     title: 'Review',
     subtitle: 'Review chooses the right depth for each request without exposing reviewer orchestration.',
-    'overview.title': 'Review entry',
-    'overview.description': 'Use /review for normal and strict review requests.',
-    'overview.command.title': '/review',
-    'overview.command.description': 'One command adapts to task size, risk, and requested care.',
-    'overview.reviewers.title': 'Adaptive coverage',
-    'overview.reviewers.description': 'BitFun chooses enough independent checks for the current task.',
-    'overview.qualityGate.title': 'Quality gate',
-    'overview.qualityGate.description': 'Findings stay adversarial and evidence based.',
-    'strategy.title': 'Review depth',
-    'strategy.description': 'Set the default balance between cost, latency, and confidence.',
-    'strategy.quick.label': 'Quick',
-    'strategy.quick.summary': 'Fast check for small changes.',
-    'strategy.normal.label': 'Standard',
-    'strategy.normal.summary': 'Balanced review for typical changes.',
-    'strategy.deep.label': 'Strict',
-    'strategy.deep.summary': 'Higher confidence for larger or riskier changes.',
+    'desktopOnly.title': 'Desktop only',
+    'desktopOnly.description': 'Review settings are available in the desktop app.',
+    'error.title': 'Review settings unavailable',
+    'error.retry': 'Retry',
     'capacity.title': 'Capacity',
     'capacity.description': 'Limit parallel Review work so cost and latency stay predictable.',
     'capacity.maxParallelReviewers.label': 'Parallel checks',
@@ -137,6 +125,10 @@ vi.mock('@/infrastructure/contexts/WorkspaceContext', () => ({
   useCurrentWorkspace: () => ({ workspacePath: 'D:/workspace/project' }),
 }));
 
+vi.mock('@/infrastructure/runtime', () => ({
+  isTauriRuntime: isTauriRuntimeMock,
+}));
+
 vi.mock('@/shared/notification-system', () => ({
   useNotification: () => ({
     success: notifySuccessMock,
@@ -145,10 +137,8 @@ vi.mock('@/shared/notification-system', () => ({
 }));
 
 vi.mock('@/shared/services/reviewTeamService', () => ({
-  REVIEW_STRATEGY_LEVELS: ['quick', 'normal', 'deep'],
   loadDefaultReviewTeam: loadDefaultReviewTeamMock,
   saveDefaultReviewTeamConcurrencyPolicy: saveDefaultReviewTeamConcurrencyPolicyMock,
-  saveDefaultReviewTeamStrategyLevel: saveDefaultReviewTeamStrategyLevelMock,
 }));
 
 function createReviewTeam() {
@@ -214,9 +204,9 @@ describe('ReviewConfig', () => {
     document.body.appendChild(container);
     root = createRoot(container);
     vi.clearAllMocks();
+    isTauriRuntimeMock.mockReturnValue(true);
 
     loadDefaultReviewTeamMock.mockResolvedValue(createReviewTeam());
-    saveDefaultReviewTeamStrategyLevelMock.mockResolvedValue(undefined);
     saveDefaultReviewTeamConcurrencyPolicyMock.mockResolvedValue(undefined);
   });
 
@@ -234,8 +224,8 @@ describe('ReviewConfig', () => {
     await flushPromises();
 
     expect(container.textContent).toContain('Review');
-    expect(container.textContent).toContain('/review');
-    expect(container.textContent).toContain('Review depth');
+    expect(container.textContent).not.toContain('Review workflow');
+    expect(container.textContent).not.toContain('Review depth');
     expect(container.textContent).toContain('Capacity');
     expect(container.textContent).not.toContain('DeepReview');
     expect(container.textContent).not.toContain('Sub-Agent');
@@ -245,19 +235,48 @@ describe('ReviewConfig', () => {
     expect(container.textContent).not.toContain('orchestration controls');
   });
 
-  it('saves strategy and capacity changes', async () => {
+  it('shows an honest read-only boundary outside the desktop runtime', async () => {
+    isTauriRuntimeMock.mockReturnValue(false);
+
     await act(async () => {
       root.render(<ReviewConfig />);
     });
     await flushPromises();
 
-    const strictStrategyButton = Array.from(container.querySelectorAll('button'))
-      .find((button) => button.textContent?.includes('Strict'));
-    expect(strictStrategyButton).toBeTruthy();
+    expect(container.textContent).toContain('Desktop only');
+    expect(container.querySelectorAll('input')).toHaveLength(0);
+    expect(loadDefaultReviewTeamMock).not.toHaveBeenCalled();
+  });
+
+  it('shows a recoverable error state when desktop settings fail to load', async () => {
+    loadDefaultReviewTeamMock.mockRejectedValueOnce(new Error('Temporary failure'));
+
     await act(async () => {
-      strictStrategyButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      root.render(<ReviewConfig />);
     });
-    expect(saveDefaultReviewTeamStrategyLevelMock).toHaveBeenCalledWith('deep');
+    await flushPromises();
+
+    expect(container.textContent).toContain('Review settings unavailable');
+    expect(container.textContent).toContain('Temporary failure');
+    expect(container.textContent).toContain('Retry');
+    expect(container.textContent).not.toContain('Loading review settings');
+
+    loadDefaultReviewTeamMock.mockResolvedValueOnce(createReviewTeam());
+    const retryButton = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Retry'))!;
+    await act(async () => {
+      retryButton.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain('Capacity');
+  });
+
+  it('saves capacity changes without exposing an ineffective depth selector', async () => {
+    await act(async () => {
+      root.render(<ReviewConfig />);
+    });
+    await flushPromises();
 
     const numberInputs = Array.from(container.querySelectorAll('input[type="number"]'));
     expect(numberInputs).toHaveLength(2);
@@ -270,5 +289,66 @@ describe('ReviewConfig', () => {
     expect(saveDefaultReviewTeamConcurrencyPolicyMock).toHaveBeenCalledWith(
       expect.objectContaining({ maxParallelInstances: 4 }),
     );
+  });
+
+  it('restores the last confirmed value when saving capacity fails', async () => {
+    saveDefaultReviewTeamConcurrencyPolicyMock.mockRejectedValueOnce(
+      new Error('Save failed'),
+    );
+    await act(async () => {
+      root.render(<ReviewConfig />);
+    });
+    await flushPromises();
+
+    const parallelInput = container.querySelector<HTMLInputElement>('input[type="number"]')!;
+    expect(parallelInput.value).toBe('2');
+
+    await act(async () => {
+      const valueSetter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        'value',
+      )?.set;
+      valueSetter?.call(parallelInput, '4');
+      parallelInput.dispatchEvent(new Event('input', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(parallelInput.value).toBe('2');
+    expect(notifyErrorMock).toHaveBeenCalledWith('Save failed');
+  });
+
+  it('serializes capacity saves by locking both inputs', async () => {
+    let resolveSave: (() => void) | undefined;
+    saveDefaultReviewTeamConcurrencyPolicyMock.mockImplementationOnce(
+      () => new Promise<void>((resolve) => {
+        resolveSave = resolve;
+      }),
+    );
+    await act(async () => {
+      root.render(<ReviewConfig />);
+    });
+    await flushPromises();
+
+    const numberInputs = Array.from(
+      container.querySelectorAll<HTMLInputElement>('input[type="number"]'),
+    );
+    await act(async () => {
+      const valueSetter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        'value',
+      )?.set;
+      valueSetter?.call(numberInputs[0], '4');
+      numberInputs[0].dispatchEvent(new Event('input', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(numberInputs.every((input) => input.disabled)).toBe(true);
+    expect(saveDefaultReviewTeamConcurrencyPolicyMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveSave?.();
+      await Promise.resolve();
+    });
+    expect(numberInputs.every((input) => !input.disabled)).toBe(true);
   });
 });

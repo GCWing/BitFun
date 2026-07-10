@@ -13,7 +13,7 @@ describe('markdown', () => {
       issues: [],
     });
 
-    expect(markdown).toContain('# Code Review Report');
+    expect(markdown).toContain('# Review Report');
     expect(markdown).toContain('## Executive Summary');
     expect(markdown).toContain('- Looks good.');
     expect(markdown).not.toContain('## Review Coverage And Cost');

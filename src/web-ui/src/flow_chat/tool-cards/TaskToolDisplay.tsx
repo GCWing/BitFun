@@ -130,6 +130,7 @@ function readTaskRunInBackground(input: unknown, toolResult: FlowToolItem['toolR
 }
 
 const INTERNAL_READONLY_REVIEW_AGENT_IDS = new Set([
+  'CodeReview',
   'ReviewBusinessLogic',
   'ReviewPerformance',
   'ReviewSecurity',

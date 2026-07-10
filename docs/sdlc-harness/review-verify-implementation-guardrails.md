@@ -18,9 +18,9 @@
 
 | 概念 | 用户可见定位 | 内部兼容 |
 |---|---|---|
-| `Review` / `/review` | 唯一主审查入口；用户不需要先理解审查强度 | 后续统一路由到 L0/L1/L2/L3 |
+| `Review` / `/review` | 唯一主审查入口；用户不需要先理解审查强度 | 当前统一路由到 L1/L2/L3；L0 留给后续 Verify 探索 |
 | `Review: Strict` / 严格审查 | Review 的最高强度，适合高风险、大范围或用户显式要求 | 复用现有 `DeepReview` child session、manifest、queue 和 report enrichment |
-| `/DeepReview` | 迁移窗口内的历史兼容命令，不作为长期产品入口 | PR1 保留手输兼容；PR2 起迁移到 `/review`，最终从普通体验中移除 |
+| `/DeepReview` | 迁移窗口内的历史兼容命令，不作为长期产品入口 | 静默路由到 `/review strict` 等价路径，最终从普通体验中移除 |
 | `ReviewTeam` | 严格审查的内部 reviewer 配置 | 类型名、配置路径和 manifest 名称可保留，避免破坏历史设置 |
 | PR Review | PR/代码托管平台的评论、线程和就绪度投影 | 不拥有新的 reviewer 调度器 |
 | Verify | 任务闭环中的证据生产动作 | 先探索，不在 PR1 中变成强制门禁或独立界面 |
@@ -51,21 +51,21 @@
 - 不把 Verify 设计成新门禁。
 - 不为 PR Review 新建一套 reviewer 执行器。
 
-### PR2：动态 Review/Verify 决策和结果投影
+### PR2：动态 Review 决策和只读审查闭环
 
 目标：
 
-- 引入单一质量决策入口，根据用户意图、diff 规模、风险、验证证据、预算和团队策略选择 L0/L1/L2/L3。
+- 引入单一质量决策入口，根据用户意图、diff 规模、风险和项目策略选择 L1/L2/L3。
 - 引入 `/review` 统一命令和对应 GUI 入口，由系统根据问题、待审核范围、变更难度、风险、质量诉求和预算动态选择强度。
 - 在任务执行过程中，当用户要求“仔细审核”或风险升高时，自动触发合适强度的只读 adversarial review。
-- Verify 作为证据生产动作进入任务闭环，但默认表现为已验证/未验证摘要，不独立启动新界面。
-- Review、Verify 和 PR 就绪度共用结果投影，PR 面板只消费摘要和证据，不拥有执行策略。
-- `/DeepReview` 开始迁移为 `/review --strict` 或等价内部路由；普通用户不需要学习或选择 DeepReview。
+- Verify 继续作为后续探索，不在本 PR 增加生产决策字段、证据生产器、门禁或独立界面。
+- PR 面板继续只消费 Review 摘要，不拥有执行策略。
+- `/DeepReview` 开始迁移为 `/review strict` 等价内部路由；普通用户不需要学习或选择 DeepReview。
 
 允许：
 
 - 新增小而明确的 policy/decision 模型。
-- 把现有 CodeReview、Strict Review、PR readiness 和 verify evidence 通过同一结果摘要投影。
+- 把现有 CodeReview 和 Strict Review 通过同一结果摘要投影。
 - 在高风险或用户明确要求时建议升级，并展示 token/耗时预估、范围控制和停止选项。
 - 对历史 `/DeepReview` 调用给出轻量迁移提示或静默路由到统一 Review，不再扩展 `/DeepReview` 专属交互。
 
@@ -77,11 +77,23 @@
 - 不把缺失证据写成通过状态。
 - 不让自动化在没有用户提示或策略原因时显著增加 token。
 
+当前 PR2 实现边界：
+
+- 平台无关的产品域策略只接收用户意图、目标事实和项目策略，输出 L1-L3、执行模式、策略级别、原因和是否需要成本确认。
+- GUI 和 `/review` 共用同一个预构建计划；确认前后不重新解析目标或重建 manifest，避免用户确认的范围与实际执行漂移。
+- L1 使用一个独立只读 `CodeReview`；L2 的 core 与 extra reviewer 总数最多为 3，且不追加 judge；L3 才使用完整适用 reviewer、capacity queue 和 judge。
+- 用户在普通任务中明确要求“完成并仔细审核”时，主 Agent 完成实现后在当前任务内调用 1 个隔离 `CodeReview`，不另开产品界面，内部 Task 名称默认折叠和匿名化；需要多 reviewer 的覆盖统一进入 `/review` 和成本确认，不在提示词中复制 reviewer-count 策略，也不在用户无感知时增加并发成本。
+- Review 与修复分为两个运行身份：`CodeReview` / `DeepReview` 只读，用户批准后由 `ReviewFixer` 修改；能精确归因时，修复后按“原审核文件 + `ReviewFixer` 直接改动文件”重新统计 diff 和决策。命令、Git 或 stdin 工具一旦出现，无论成功、失败或中断，都明确提示并回退当前工作区 diff，不伪装成窄范围复核。Fixer 基线和本次选中的 remediation id 在发送修复任务前持久化，重启只恢复原范围内未完成项。follow-up 预留携带唯一 request id，并把同一 id 写入现有子会话 relationship metadata、派生后端 session id；创建响应不确定时保留同一预留供重试，后端按 agent、relationship kind、parent session 和 parent request 复用既有会话，不把可变化的 parent turn 位置当作幂等身份。侧栏明确区分重试、进行中、完成、失败、取消和查看结果。最终范围、改动文件和子会话关系继续使用现有 session metadata，不新增事务系统。
+- L2/L3 的 manifest 约束不能只依赖前端组装：portable runtime 校验 L2 的 normal、最多 3 个 active reviewer、无 judge，以及 L3 的 deep、全部非条件 core reviewer、`ReviewJudge` quality gate，并要求条件 reviewer 启用或明确标记 `not_applicable`；缺少 `qualityDecision` 的历史 manifest 保持兼容。创建幂等短路只用于带 parent request 的 Review/DeepReview 子会话，不改变普通显式 ID 会话的 coordinator 恢复路径。
+- 文件范围统计必须通过已注册、支持远程路由的 workspace API 包含可读取的未跟踪文件内容；非空目标的变更规模未知时至少进入 L2，不把缺失事实解释为低风险。
+- L2/L3 确认框按每个实际 work packet（包含 judge）分别估算后求和；单 reviewer 最大值只服务 prompt guardrail，不能乘调用数冒充总成本。容量设置描述为可选工作的等待窗口，不承诺整个 Review 的硬耗时上限；容量 policy 串行保存，保存期间锁定全部容量输入，失败立即恢复最后确认值。
+- Verify 本 PR 不进入生产决策契约。后续探索必须先定义可信 evidence producer，不能把缺失证据解释为通过。
+
 ## 4. Review 强度规则
 
 | 强度 | 默认适用 | 执行倾向 | 用户呈现 |
 |---|---|---|---|
-| L0 自检 | 文档、小样式、低风险局部改动、已有验证 | 主 agent 总结已验证/未验证 | 任务完成摘要 |
+| L0 自检（后续探索） | 文档、小样式、低风险局部改动、已有验证 | 由 Verify 设计定义可信摘要；当前未接入生产策略 | 任务完成摘要 |
 | L1 快速独立审查 | 提交前、少量代码变更、用户要求“review” | 1 个只读 subagent 或等价隔离 reviewer | 简短问题清单和可信度 |
 | L2 定向审查 | 安全、性能、架构、关键 UI、跨模块、验证缺口 | 2-3 个定向只读 reviewer | 合并结论、分歧和未覆盖范围 |
 | L3 严格审查 | 大型 PR、核心接口、安全敏感、大迁移、用户明确要求严格 | 复用 DeepReview 内部 capacity queue、work packets 和 judge | Review: Strict，带预算和范围控制选择 |

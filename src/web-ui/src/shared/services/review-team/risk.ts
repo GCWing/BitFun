@@ -20,27 +20,13 @@ export function recommendReviewStrategyForTarget(
   target: ReviewTargetClassification,
   changeStats: ReviewTeamChangeStats,
 ): ReviewTeamStrategyRecommendation {
-  const includedFiles = target.files.filter((file) => !file.excluded);
-  const securityFileCount = includedFiles.filter((file) =>
-    isSecuritySensitiveReviewPath(file.normalizedPath),
-  ).length;
-  const workspaceAreaCount = new Set(
-    includedFiles.map((file) => workspaceAreaForReviewPath(file.normalizedPath)),
-  ).size;
-  const contractSurfaceChanged = target.tags.includes('frontend_contract') ||
-    target.tags.includes('desktop_contract') ||
-    target.tags.includes('web_server_contract') ||
-    target.tags.includes('api_layer') ||
-    target.tags.includes('transport');
-  const totalLinesChanged = changeStats.totalLinesChanged;
-  const factors: ReviewTeamRiskFactors = {
-    fileCount: changeStats.fileCount,
-    ...(totalLinesChanged !== undefined ? { totalLinesChanged } : {}),
-    lineCountSource: changeStats.lineCountSource,
+  const factors = buildReviewRiskFactors(target, changeStats);
+  const {
     securityFileCount,
     workspaceAreaCount,
     contractSurfaceChanged,
-  };
+    totalLinesChanged,
+  } = factors;
 
   if (target.resolution === 'unknown' || changeStats.fileCount === 0) {
     return {
@@ -88,6 +74,33 @@ export function recommendReviewStrategyForTarget(
     score,
     rationale,
     factors,
+  };
+}
+
+export function buildReviewRiskFactors(
+  target: ReviewTargetClassification,
+  changeStats: ReviewTeamChangeStats,
+): ReviewTeamRiskFactors {
+  const includedFiles = target.files.filter((file) => !file.excluded);
+  const securityFileCount = includedFiles.filter((file) =>
+    isSecuritySensitiveReviewPath(file.normalizedPath),
+  ).length;
+  const workspaceAreaCount = new Set(
+    includedFiles.map((file) => workspaceAreaForReviewPath(file.normalizedPath)),
+  ).size;
+  const contractSurfaceChanged = target.tags.includes('frontend_contract') ||
+    target.tags.includes('desktop_contract') ||
+    target.tags.includes('web_server_contract') ||
+    target.tags.includes('api_layer') ||
+    target.tags.includes('transport');
+  const totalLinesChanged = changeStats.totalLinesChanged;
+  return {
+    fileCount: changeStats.fileCount,
+    ...(totalLinesChanged !== undefined ? { totalLinesChanged } : {}),
+    lineCountSource: changeStats.lineCountSource,
+    securityFileCount,
+    workspaceAreaCount,
+    contractSurfaceChanged,
   };
 }
 

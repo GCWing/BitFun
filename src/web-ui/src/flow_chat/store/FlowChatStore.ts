@@ -1496,6 +1496,7 @@ export class FlowChatStore {
       isTransient?: boolean;
       agentBackedTransient?: boolean;
       deepReviewRunManifest?: Session['deepReviewRunManifest'];
+      reviewTargetFilePaths?: Session['reviewTargetFilePaths'];
     },
     remoteConnectionId?: string,
     remoteSshHost?: string
@@ -1540,6 +1541,7 @@ export class FlowChatStore {
         btwThreads: [],
         btwOrigin: relationship.btwOrigin,
         deepReviewRunManifest: meta?.deepReviewRunManifest,
+        reviewTargetFilePaths: meta?.reviewTargetFilePaths,
         isTransient: meta?.isTransient ?? false,
         agentBackedTransient: meta?.agentBackedTransient ?? false,
       };

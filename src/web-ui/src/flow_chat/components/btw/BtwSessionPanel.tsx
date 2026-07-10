@@ -33,13 +33,39 @@ import {
 import {buildReviewRemediationItems, type CodeReviewRemediationData} from '../../utils/codeReviewRemediation';
 import {ReviewActionBar} from './DeepReviewActionBar';
 import {
+  getPendingFollowUpReviewRequestId,
   getReviewActionBarStateForSession,
+  isPendingFollowUpReviewSessionId,
   type ReviewActionMode,
   type ReviewActionPhase,
   useReviewActionBarStore,
 } from '../../store/deepReviewActionBarStore';
 import {loadPersistedReviewState} from '../../services/ReviewActionBarPersistenceService';
 import type {ReviewActionPersistedState} from '@/shared/types/session-history';
+import {
+  collectModifiedFilePathsFromTurns,
+  hasOpaqueWorkspaceMutationRisk,
+} from '../../utils/modifiedFilePaths';
+
+function findReviewChildByRequestId(
+  parentSessionId: string | null | undefined,
+  requestId: string,
+): string | null {
+  if (!parentSessionId) {
+    return null;
+  }
+  for (const [sessionId, session] of flowChatStore.getState().sessions) {
+    const relationship = resolveSessionRelationship(session);
+    if (
+      relationship.isReview &&
+      relationship.parentSessionId === parentSessionId &&
+      session.btwOrigin?.requestId === requestId
+    ) {
+      return sessionId;
+    }
+  }
+  return null;
+}
 import './BtwSessionPanel.scss';
 
 export interface BtwSessionPanelProps {
@@ -513,6 +539,21 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
       return;
     }
 
+    if (!isDeepReview && !latestReviewData && currentActionState) {
+      const terminalWithoutReport = isComplete || isError || turnStatus === 'cancelled';
+      if (terminalWithoutReport) {
+        const message = lastTurn?.error ?? childSession.error ?? (
+          turnStatus === 'cancelled'
+            ? t('deepReviewActionBar.reviewCancelledWithoutReport')
+            : t('deepReviewActionBar.reviewEndedWithoutReport')
+        );
+        store.setActiveAction(null, undefined, childSessionId);
+        store.updatePhase('review_error', message, childSessionId);
+        store.restore(childSessionId);
+      }
+      return;
+    }
+
     if (!latestReviewData) return;
     if (isDeepReview && latestReviewMode !== 'deep') return;
     if (!isDeepReview && latestReviewMode === 'deep') return;
@@ -529,6 +570,28 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
 
       if (currentActionState.phase === 'fix_running' && !currentFixTurnHasStarted && (isComplete || isError)) {
         return;
+      }
+
+      if (
+        currentActionState.phase === 'fix_running' &&
+        currentFixTurnHasStarted &&
+        (isComplete || isError || turnStatus === 'cancelled')
+      ) {
+        store.setRemediationModifiedFilePaths(
+          collectModifiedFilePathsFromTurns(
+            childSession.dialogTurns,
+            currentActionState.fixingBaselineTurnId,
+            childSession.workspacePath,
+          ),
+          childSessionId,
+        );
+        store.setRemediationScopeRequiresWorkspaceFallback(
+          hasOpaqueWorkspaceMutationRisk(
+            childSession.dialogTurns,
+            currentActionState.fixingBaselineTurnId,
+          ),
+          childSessionId,
+        );
       }
 
       // Update phase based on turn status if currently showing
@@ -627,6 +690,7 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
     isDeepReview,
     actionBarPhase,
     actionBarChildSessionId,
+    t,
   ]);
 
   // Restore persisted review action state on mount
@@ -635,11 +699,14 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
 
     const store = useReviewActionBarStore.getState();
     const currentActionState = store.getSessionState(childSessionId);
-    const canReplaceRunningPlaceholder =
-      currentActionState?.phase === 'review_running';
-    // Only restore if store is idle, or if the start-time running placeholder
-    // is waiting for a more specific persisted action state for this session.
-    if (!canReplaceRunningPlaceholder && currentActionState && currentActionState.phase !== 'idle') return;
+    const canReplaceDerivedReviewState = currentActionState && [
+      'review_running',
+      'review_completed',
+      'review_interrupted',
+    ].includes(currentActionState.phase);
+    // Initial session projection may finish before metadata is loaded. Persisted
+    // action state is more specific for fix/review recovery than that projection.
+    if (!canReplaceDerivedReviewState && currentActionState && currentActionState.phase !== 'idle') return;
 
     const workspacePath = childSession.workspacePath;
     if (!workspacePath) return;
@@ -660,6 +727,10 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
       // Detect fix interruption
       let phase: ReviewActionPhase = persisted.phase as ReviewActionPhase;
       let remainingFixIds: string[] = [];
+      const fixingBaselineTurnId = persisted.fixingBaselineTurnId ?? null;
+      let remediationModifiedFilePaths = persisted.remediationModifiedFilePaths ?? [];
+      let remediationScopeRequiresWorkspaceFallback =
+        persisted.remediationScopeRequiresWorkspaceFallback ?? false;
 
       if (persisted.phase === 'fix_running') {
         const lastTurn = childSession.dialogTurns[childSession.dialogTurns.length - 1];
@@ -671,8 +742,26 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
           const latestItems = latestReviewData ? buildReviewRemediationItems(latestReviewData) : [];
           const latestIds = new Set(latestItems.map((i) => i.id));
           // Items that were being fixed but still exist in latest review data
-          remainingFixIds = persisted.completedRemediationIds.filter((id: string) => latestIds.has(id));
+          const completedIds = new Set(persisted.completedRemediationIds);
+          remainingFixIds = (persisted.fixingRemediationIds ?? [])
+            .filter((id: string) => latestIds.has(id) && !completedIds.has(id));
         }
+        remediationModifiedFilePaths = [
+          ...new Set([
+            ...remediationModifiedFilePaths,
+            ...collectModifiedFilePathsFromTurns(
+              childSession.dialogTurns,
+              fixingBaselineTurnId,
+              childSession.workspacePath,
+            ),
+          ]),
+        ];
+        remediationScopeRequiresWorkspaceFallback =
+          remediationScopeRequiresWorkspaceFallback ||
+          hasOpaqueWorkspaceMutationRisk(
+            childSession.dialogTurns,
+            fixingBaselineTurnId,
+          );
       }
 
       store.showActionBar({
@@ -686,6 +775,43 @@ export const BtwSessionPanel: React.FC<BtwSessionPanelProps> = ({
 
       // Apply additional restored state
       store.setCustomInstructions(persisted.customInstructions, childSessionId);
+      if (persisted.reviewTargetFilePaths?.length) {
+        store.setReviewTargetFilePaths(persisted.reviewTargetFilePaths, childSessionId);
+      }
+      if (remediationModifiedFilePaths.length) {
+        store.setRemediationModifiedFilePaths(
+          remediationModifiedFilePaths,
+          childSessionId,
+        );
+      }
+      store.setRemediationScopeRequiresWorkspaceFallback(
+        remediationScopeRequiresWorkspaceFallback,
+        childSessionId,
+      );
+      if (phase === 'fix_running' && fixingBaselineTurnId) {
+        store.setFixingBaselineTurnId(fixingBaselineTurnId, childSessionId);
+      }
+      if (persisted.followUpReviewSessionId) {
+        const pendingRequestId = getPendingFollowUpReviewRequestId(
+          persisted.followUpReviewSessionId,
+        );
+        const followUpSessionId = pendingRequestId
+          ? findReviewChildByRequestId(parentSessionId, pendingRequestId)
+          : isPendingFollowUpReviewSessionId(persisted.followUpReviewSessionId)
+            ? null
+            : persisted.followUpReviewSessionId;
+        if (
+          followUpSessionId &&
+          flowChatStore.getState().sessions.has(followUpSessionId)
+        ) {
+          store.setFollowUpReviewSessionId(followUpSessionId, childSessionId);
+        } else if (pendingRequestId) {
+          store.setFollowUpReviewSessionId(
+            persisted.followUpReviewSessionId,
+            childSessionId,
+          );
+        }
+      }
       if (persisted.minimized) {
         store.minimize(childSessionId);
       }

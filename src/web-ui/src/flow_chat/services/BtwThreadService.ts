@@ -8,7 +8,7 @@ import type { SessionKind, SessionRelationship } from '@/shared/types/session-hi
 import type { ReviewTeamRunManifest } from '@/shared/services/reviewTeamService';
 import type { ImagePayload } from '../utils/imagePayload';
 
-function safeUuid(prefix = 'btw'): string {
+export function createBtwRequestId(prefix = 'btw'): string {
   try {
     const fn = (globalThis as any)?.crypto?.randomUUID as (() => string) | undefined;
     if (fn) return fn();
@@ -20,6 +20,11 @@ function safeUuid(prefix = 'btw'): string {
 
 function toOneLine(input: string): string {
   return input.replace(/\s+/g, ' ').trim();
+}
+
+function buildPersistentReviewSessionId(requestId: string): string {
+  const safeRequestId = requestId.trim().replace(/[^A-Za-z0-9_-]/g, '_');
+  return `review_child_${safeRequestId}`;
 }
 
 function buildChildSessionName(question: string): string {
@@ -113,6 +118,7 @@ export async function createBtwChildSession(params: {
   isTransient?: boolean;
   sessionKind?: Extract<SessionKind, 'btw' | 'review' | 'deep_review'>;
   deepReviewRunManifest?: ReviewTeamRunManifest;
+  reviewTargetFilePaths?: string[];
 }): Promise<{
   requestId: string;
   childSessionId: string;
@@ -120,7 +126,7 @@ export async function createBtwChildSession(params: {
   parentTurnIndex?: number;
 }> {
   const { parentSessionId } = params;
-  const requestId = params.requestId || safeUuid('btw');
+  const requestId = params.requestId || createBtwRequestId('btw');
   const childSessionKind = params.sessionKind ?? 'btw';
   const shouldPersistStandaloneSession =
     !params.isTransient && childSessionKind !== 'btw';
@@ -152,6 +158,7 @@ export async function createBtwChildSession(params: {
   const childSessionId = shouldPersistStandaloneSession
     ? (
         await agentAPI.createSession({
+          sessionId: buildPersistentReviewSessionId(requestId),
           sessionName: childSessionName,
           agentType,
           workspacePath,
@@ -171,7 +178,7 @@ export async function createBtwChildSession(params: {
           },
         })
       ).sessionId
-    : safeUuid('btw_session');
+    : createBtwRequestId('btw_session');
   flowChatStore.addExternalSession(
     childSessionId,
     childSessionName,
@@ -187,6 +194,7 @@ export async function createBtwChildSession(params: {
         parentTurnIndex,
       },
       deepReviewRunManifest: params.deepReviewRunManifest,
+      reviewTargetFilePaths: params.reviewTargetFilePaths,
       isTransient: params.isTransient ?? false,
       agentBackedTransient: params.isTransient ?? false,
     },
@@ -235,7 +243,7 @@ export function createTransientBtwSession(params: {
     throw new Error(`Workspace path is required for BTW child session: ${params.parentSessionId}`);
   }
 
-  const childSessionId = safeUuid('btw_session');
+  const childSessionId = createBtwRequestId('btw_session');
   const childSessionName = params.childSessionName.trim() || 'Side thread';
 
   flowChatStore.addExternalSession(
@@ -278,7 +286,7 @@ export async function sendMessageToTransientBtwSession(params: {
     throw new Error(`Session is not a transient /btw session: ${params.childSessionId}`);
   }
 
-  const requestId = safeUuid('btw');
+  const requestId = createBtwRequestId('btw');
   flowChatStore.updateSessionBtwOrigin(params.childSessionId, {
     ...(childSession.btwOrigin || {}),
     requestId,

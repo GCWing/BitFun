@@ -168,6 +168,17 @@ export function buildTokenBudgetPlan(params: {
     target: params.target,
     changeStats: params.changeStats,
   });
+  const totalIncludedFileCount = params.target.files.filter(
+    (file) => !file.excluded,
+  ).length;
+  const estimatedPromptBytesTotal = params.workPackets.reduce(
+    (total, packet) => total + estimateReviewerPromptBytes({
+      packet,
+      changeStats: params.changeStats,
+      totalIncludedFileCount,
+    }),
+    0,
+  );
   const promptByteLimitExceeded =
     estimatedPromptBytesPerReviewer > maxPromptBytesPerReviewer;
   const largeDiffSummaryFirst = promptByteLimitExceeded;
@@ -202,15 +213,14 @@ export function buildTokenBudgetPlan(params: {
   return {
     mode: params.mode,
     estimatedReviewerCalls: params.activeReviewerCalls,
-    maxReviewerCalls:
-      params.activeReviewerCalls +
-      Math.max(0, params.eligibleExtraReviewerCount - params.maxExtraReviewers),
+    maxReviewerCalls: params.activeReviewerCalls,
     maxExtraReviewers: params.maxExtraReviewers,
     ...(fileSplitGuardrailActive
       ? { maxFilesPerReviewer: params.executionPolicy.reviewerFileSplitThreshold }
       : {}),
     maxPromptBytesPerReviewer,
     estimatedPromptBytesPerReviewer,
+    estimatedPromptBytesTotal,
     promptByteEstimateSource: 'manifest_heuristic',
     promptByteLimitExceeded,
     largeDiffSummaryFirst,

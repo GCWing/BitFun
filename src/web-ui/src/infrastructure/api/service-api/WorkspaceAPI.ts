@@ -384,13 +384,21 @@ export class WorkspaceAPI {
   }
 
    
-  async readFileContent(filePath: string, encoding?: string): Promise<string> {
+  async readFileContent(
+    filePath: string,
+    encoding?: string,
+    remoteConnectionId?: string,
+  ): Promise<string> {
     try {
       return await api.invoke('read_file_content', { 
-        request: { filePath, encoding } 
+        request: { filePath, encoding, remoteConnectionId }
       });
     } catch (error) {
-      throw createTauriCommandError('read_file_content', error, { filePath, encoding });
+      throw createTauriCommandError('read_file_content', error, {
+        filePath,
+        encoding,
+        remoteConnectionId,
+      });
     }
   }
 

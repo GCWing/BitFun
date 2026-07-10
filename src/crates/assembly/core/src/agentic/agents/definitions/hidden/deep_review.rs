@@ -21,15 +21,7 @@ impl DeepReviewAgent {
                 "Glob".to_string(),
                 "LS".to_string(),
                 "GetFileDiff".to_string(),
-                "Git".to_string(),
                 "submit_code_review".to_string(),
-                "AskUserQuestion".to_string(),
-                "Edit".to_string(),
-                "Write".to_string(),
-                "ExecCommand".to_string(),
-                "WriteStdin".to_string(),
-                "ExecControl".to_string(),
-                "TodoWrite".to_string(),
             ],
         }
     }
@@ -50,7 +42,7 @@ impl Agent for DeepReviewAgent {
     }
 
     fn description(&self) -> &str {
-        r#"Local deep-review orchestrator that builds a parallel Code Review Team for substantial changes. It dispatches independent specialist reviewers for business logic, performance, and security, can perform user-approved remediation plus incremental re-review, and then runs a quality-inspector pass before producing a consolidated report."#
+        r#"Read-only strict-review orchestrator for substantial changes. It dispatches independent specialist reviewers, runs a quality-inspector pass, and submits a consolidated evidence-backed report. A separate ReviewFixer owns approved remediation."#
     }
 
     fn prompt_template_name(&self, _model_name: Option<&str>) -> &str {
@@ -69,7 +61,7 @@ impl Agent for DeepReviewAgent {
     }
 
     fn is_readonly(&self) -> bool {
-        false
+        true
     }
 }
 
@@ -85,12 +77,12 @@ mod tests {
         assert!(tools.contains(&"LaunchReviewAgent".to_string()));
         assert!(!tools.contains(&"Task".to_string()));
         assert!(tools.contains(&"submit_code_review".to_string()));
-        assert!(tools.contains(&"AskUserQuestion".to_string()));
-        assert!(tools.contains(&"Edit".to_string()));
-        assert!(tools.contains(&"Write".to_string()));
-        assert!(tools.contains(&"ExecCommand".to_string()));
-        assert!(tools.contains(&"WriteStdin".to_string()));
-        assert!(tools.contains(&"ExecControl".to_string()));
-        assert!(!agent.is_readonly());
+        assert!(!tools.contains(&"AskUserQuestion".to_string()));
+        assert!(!tools.contains(&"Edit".to_string()));
+        assert!(!tools.contains(&"Write".to_string()));
+        assert!(!tools.contains(&"ExecCommand".to_string()));
+        assert!(!tools.contains(&"WriteStdin".to_string()));
+        assert!(!tools.contains(&"ExecControl".to_string()));
+        assert!(agent.is_readonly());
     }
 }

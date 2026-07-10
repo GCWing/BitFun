@@ -8,7 +8,6 @@ import {
   FileEdit,
   FilePlus,
   SearchCheck,
-  Sparkles,
   Trash2,
   ChevronDown,
   ChevronUp,
@@ -24,14 +23,11 @@ import { useWorkspaceContext } from '../../../infrastructure/contexts/WorkspaceC
 import { notificationService } from '../../../shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
 import { runWithConcurrencyLimit } from '@/shared/utils/runWithConcurrencyLimit';
-import { createBtwChildSession } from '../../services/BtwThreadService';
-import { openBtwSessionInAuxPane } from '../../services/btwSessionPane';
 import {
-  buildDeepReviewLaunchFromSessionFiles,
-  buildDeepReviewPreviewFromSessionFiles,
-  launchDeepReviewSession,
-} from '../../services/DeepReviewService';
-import { insertReviewSessionSummaryMarker } from '../../services/ReviewSessionMarkerService';
+  launchPreparedReviewSession,
+  prepareReviewLaunchFromSessionFiles,
+} from '../../services/ReviewService';
+import { getDeepReviewLaunchErrorMessage } from '../../deep-review/launch/launchErrors';
 import { useDeepReviewConsent } from '../DeepReviewConsentDialog';
 import {
   REVIEW_READY_GLINT_DURATION_MS,
@@ -51,6 +47,7 @@ import {
 import { resolveQuickActionText } from '@/infrastructure/config/services/quickActionLocalization';
 import { deriveDeepReviewSessionConcurrencyGuard } from '../../utils/deepReviewCapacityGuard';
 import { scheduleAfterStartupSignal } from '@/shared/utils/startupTaskScheduling';
+import { isTauriRuntime } from '@/infrastructure/runtime';
 import './SessionFilesBadge.scss';
 
 const log = createLogger('SessionFilesBadge');
@@ -164,12 +161,13 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
   disabled = false,
 }) => {
   const { t } = useTranslation('flow-chat');
+  const canLaunchReview = isTauriRuntime();
   const { files } = useSnapshotState(sessionId);
   const { currentWorkspace } = useWorkspaceContext();
   const [isExpanded, setIsExpanded] = useState(false);
   const [isReviewMenuOpen, setIsReviewMenuOpen] = useState(false);
   const [showReviewReadyGlint, setShowReviewReadyGlint] = useState(false);
-  const [launchingReviewMode, setLaunchingReviewMode] = useState<'review' | 'deep_review' | null>(null);
+  const [launchingReviewMode, setLaunchingReviewMode] = useState<'review' | null>(null);
   const [fileStats, setFileStats] = useState<Map<string, FileStats>>(new Map());
   const [loadingStats, setLoadingStats] = useState(false);
   const reviewActivity = useSessionReviewActivity(sessionId);
@@ -604,7 +602,7 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
     }
   }, [sessionId, currentWorkspace?.rootPath]);
 
-  // Trigger CodeReview agent for the current session's changes.
+  // Prepare and launch the least costly sufficient Review path.
   const handleReviewClick = useCallback(async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!sessionId || fileStats.size === 0 || isReviewActionLocked) return;
@@ -639,52 +637,51 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
           skipped: skippedCount,
         })
       : t('sessionFilesBadge.review.displayMessage', { files: fileList });
-    const reviewMessage = skippedCount > 0
-      ? t('sessionFilesBadge.review.promptFiltered', {
-          files: fileList,
-          skipped: skippedCount,
-        })
-      : t('sessionFilesBadge.review.prompt', { files: fileList });
-
     setLaunchingReviewMode('review');
     try {
-      const { FlowChatManager } = await import('../../services/FlowChatManager');
-      const flowChatManager = FlowChatManager.getInstance();
-      const reviewThreadTitle = t('sessionFilesBadge.review.threadTitle');
-      const created = await createBtwChildSession({
-        parentSessionId: sessionId,
-        workspacePath: currentWorkspace?.rootPath,
-        childSessionName: reviewThreadTitle,
-        sessionKind: 'review',
-        agentType: 'CodeReview',
-        enableTools: true,
-        safeMode: true,
-        autoCompact: true,
-        enableContextCompression: true,
-        addMarker: false,
-      });
-      const { childSessionId } = created;
-      insertReviewSessionSummaryMarker({
-        parentSessionId: sessionId,
-        childSessionId,
-        kind: 'review',
-        title: reviewThreadTitle,
-        requestedFiles: reviewableFilePaths,
-        parentDialogTurnId: created.parentDialogTurnId,
-      });
-
-      openBtwSessionInAuxPane({
-        childSessionId,
-        parentSessionId: sessionId,
-        workspacePath: currentWorkspace?.rootPath,
-        expand: true,
-      });
-
-      await flowChatManager.sendMessage(
-        reviewMessage,
-        childSessionId,
-        displayMessage
+      const reviewableStats = reviewableFilePaths
+        .map((filePath) => fileStats.get(filePath))
+        .filter((stat): stat is FileStats => Boolean(stat));
+      const hasUnknownLineStats = reviewableStats.some((stat) => Boolean(stat.error));
+      const prepared = await prepareReviewLaunchFromSessionFiles(
+        reviewableFilePaths,
+        {
+          workspacePath: currentWorkspace?.rootPath,
+          changeStats: {
+            fileCount: reviewableFilePaths.length,
+            ...(!hasUnknownLineStats
+              ? {
+                totalLinesChanged: reviewableStats.reduce(
+                  (total, stat) => total + stat.additions + stat.deletions,
+                  0,
+                ),
+              }
+              : {}),
+            lineCountSource: hasUnknownLineStats ? 'unknown' : 'diff_stat',
+          },
+        },
       );
+
+      if (prepared.mode === 'strict' && prepared.requiresConsent) {
+        const confirmed = await confirmDeepReviewLaunch(prepared.runManifest, {
+          sessionConcurrencyGuard: deriveDeepReviewSessionConcurrencyGuard(
+            flowChatStore.getState(),
+            sessionId,
+          ),
+        });
+        if (!confirmed) {
+          return;
+        }
+      }
+
+      const reviewThreadTitle = t('sessionFilesBadge.review.threadTitle');
+      await launchPreparedReviewSession({
+        parentSessionId: sessionId,
+        workspacePath: currentWorkspace?.rootPath,
+        displayMessage,
+        prepared,
+        childSessionName: reviewThreadTitle,
+      });
 
       setIsExpanded(false);
     } catch (error) {
@@ -694,88 +691,13 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
         skippedCount,
         error,
       });
-    } finally {
-      setLaunchingReviewMode(null);
-    }
-  }, [fileStats, isReviewActionLocked, sessionId, t, currentWorkspace?.rootPath]);
-
-  const handleDeepReviewClick = useCallback(async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!sessionId || fileStats.size === 0 || isReviewActionLocked) return;
-    setIsReviewMenuOpen(false);
-
-    const filePaths = Array.from(fileStats.keys());
-    const reviewableFilePaths = filePaths.filter(shouldReviewFile);
-    const skippedCount = filePaths.length - reviewableFilePaths.length;
-
-    if (reviewableFilePaths.length === 0) {
-      notificationService.warning(
-        t('sessionFilesBadge.review.noEligibleFiles'),
-        { duration: 3500 }
+      notificationService.error(
+        getDeepReviewLaunchErrorMessage(error, t, t('error.unknown')),
+        {
+          title: t('sessionFilesBadge.review.launchFailed'),
+          duration: 5000,
+        },
       );
-      return;
-    }
-
-    const fileList = reviewableFilePaths.map(p => `- ${p}`).join('\n');
-    const displayMessage = skippedCount > 0
-      ? t('sessionFilesBadge.deepReview.displayMessageFiltered', {
-          files: fileList,
-          skipped: skippedCount,
-        })
-      : t('sessionFilesBadge.deepReview.displayMessage', {
-          files: fileList,
-        });
-
-    try {
-      const preview = await buildDeepReviewPreviewFromSessionFiles(
-        reviewableFilePaths,
-        currentWorkspace?.rootPath,
-      );
-      const confirmed = await confirmDeepReviewLaunch(preview, {
-        sessionConcurrencyGuard: deriveDeepReviewSessionConcurrencyGuard(
-          flowChatStore.getState(),
-          sessionId,
-        ),
-      });
-      if (!confirmed) {
-        return;
-      }
-      setLaunchingReviewMode('deep_review');
-
-      if (skippedCount > 0) {
-        notificationService.info(
-          t('sessionFilesBadge.review.filteredNotice', {
-            included: reviewableFilePaths.length,
-            skipped: skippedCount,
-          }),
-          { duration: 3500 }
-        );
-      }
-
-      const { prompt, runManifest } = await buildDeepReviewLaunchFromSessionFiles(
-        reviewableFilePaths,
-        undefined,
-        currentWorkspace?.rootPath,
-      );
-
-      await launchDeepReviewSession({
-        parentSessionId: sessionId,
-        workspacePath: currentWorkspace?.rootPath,
-        prompt,
-        displayMessage,
-        runManifest,
-        childSessionName: t('sessionFilesBadge.deepReview.threadTitle'),
-        requestedFiles: reviewableFilePaths,
-      });
-
-      setIsExpanded(false);
-    } catch (error) {
-      log.error('Failed to send deep review request', {
-        sessionId,
-        fileCount: reviewableFilePaths.length,
-        skippedCount,
-        error,
-      });
     } finally {
       setLaunchingReviewMode(null);
     }
@@ -873,7 +795,7 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
 
         {isReviewMenuOpen && !isReviewLaunchOrActivityBlocking && (
           <div className="session-files-badge__review-menu-popover" role="menu">
-            <button
+            {canLaunchReview && <button
               className="session-files-badge__review-menu-item"
               onClick={handleReviewClick}
               type="button"
@@ -882,18 +804,7 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
             >
               <SearchCheck size={12} className="session-files-badge__review-icon session-files-badge__review-icon--standard" />
               <span>{t('sessionFilesBadge.reviewModeStandard')}</span>
-            </button>
-            <button
-              className="session-files-badge__review-menu-item session-files-badge__review-menu-item--deep"
-              onClick={handleDeepReviewClick}
-              type="button"
-              role="menuitem"
-              disabled={areReviewMenuItemsDisabled}
-            >
-              <Sparkles size={12} className="session-files-badge__review-icon" />
-              <span>{t('sessionFilesBadge.reviewModeDeep')}</span>
-            </button>
-
+            </button>}
             {quickActions.filter(a => a.enabled).length > 0 && (
               <div className="session-files-badge__review-menu-separator" role="separator" />
             )}

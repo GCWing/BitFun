@@ -5,6 +5,7 @@
 //! compatible with older manifest field spellings and should not silently hide
 //! reduced coverage, omitted files, or stale evidence hints.
 
+use super::constants::{CONDITIONAL_REVIEWER_AGENT_TYPES, CORE_REVIEWER_AGENT_TYPES};
 use super::execution_policy::DeepReviewPolicyViolation;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
@@ -584,6 +585,7 @@ fn forbidden_evidence_pack_key(value: &Value) -> Option<String> {
 pub struct DeepReviewRunManifestGate {
     active_subagent_ids: HashSet<String>,
     skipped_subagent_reasons: HashMap<String, String>,
+    manifest_policy_error: Option<String>,
 }
 
 impl DeepReviewRunManifestGate {
@@ -607,10 +609,6 @@ impl DeepReviewRunManifestGate {
             active_subagent_ids.insert(id);
         }
 
-        if active_subagent_ids.is_empty() {
-            return None;
-        }
-
         let mut skipped_subagent_reasons = HashMap::new();
         if let Some(skipped) = manifest.get("skippedReviewers").and_then(Value::as_array) {
             for member in skipped {
@@ -632,14 +630,27 @@ impl DeepReviewRunManifestGate {
                 );
             }
         }
+        let manifest_policy_error =
+            validate_quality_decision(manifest, &active_subagent_ids, &skipped_subagent_reasons);
+
+        if active_subagent_ids.is_empty() && manifest_policy_error.is_none() {
+            return None;
+        }
 
         Some(Self {
             active_subagent_ids,
             skipped_subagent_reasons,
+            manifest_policy_error,
         })
     }
 
     pub fn ensure_active(&self, subagent_type: &str) -> Result<(), DeepReviewPolicyViolation> {
+        if let Some(error) = self.manifest_policy_error.as_deref() {
+            return Err(DeepReviewPolicyViolation::new(
+                "deep_review_manifest_quality_decision_mismatch",
+                error,
+            ));
+        }
         if self.active_subagent_ids.contains(subagent_type) {
             return Ok(());
         }
@@ -658,6 +669,75 @@ impl DeepReviewRunManifestGate {
             ),
         ))
     }
+}
+
+fn validate_quality_decision(
+    manifest: &serde_json::Map<String, Value>,
+    active_subagent_ids: &HashSet<String>,
+    skipped_subagent_reasons: &HashMap<String, String>,
+) -> Option<String> {
+    let decision = manifest
+        .get("qualityDecision")
+        .or_else(|| manifest.get("quality_decision"))?;
+    let level = decision.get("level").and_then(Value::as_str).unwrap_or("");
+    let strategy_level = manifest
+        .get("strategyLevel")
+        .or_else(|| manifest.get("strategy_level"))
+        .and_then(Value::as_str)
+        .unwrap_or("");
+    let quality_gate_id = manifest
+        .get("qualityGateReviewer")
+        .or_else(|| manifest.get("quality_gate_reviewer"))
+        .and_then(manifest_member_subagent_id);
+
+    match level {
+        "l2" => {
+            if strategy_level != "normal" {
+                return Some("L2 Review requires the normal strategy".to_string());
+            }
+            if quality_gate_id.is_some() || active_subagent_ids.contains("ReviewJudge") {
+                return Some("L2 Review must not launch a quality-gate reviewer".to_string());
+            }
+            if active_subagent_ids.len() > 3 {
+                return Some(format!(
+                    "L2 Review allows at most 3 active reviewers, found {}",
+                    active_subagent_ids.len()
+                ));
+            }
+        }
+        "l3" => {
+            if strategy_level != "deep" {
+                return Some("L3 Review requires the deep strategy".to_string());
+            }
+            if quality_gate_id.as_deref() != Some("ReviewJudge") {
+                return Some("L3 Review requires ReviewJudge as its quality gate".to_string());
+            }
+            let missing_core = CORE_REVIEWER_AGENT_TYPES
+                .iter()
+                .filter(|id| !active_subagent_ids.contains(**id))
+                .copied()
+                .collect::<Vec<_>>();
+            if !missing_core.is_empty() {
+                return Some(format!(
+                    "L3 Review is missing required core reviewers: {}",
+                    missing_core.join(", ")
+                ));
+            }
+            for reviewer in CONDITIONAL_REVIEWER_AGENT_TYPES {
+                if !active_subagent_ids.contains(reviewer)
+                    && skipped_subagent_reasons.get(reviewer).map(String::as_str)
+                        != Some("not_applicable")
+                {
+                    return Some(format!(
+                        "L3 Review must activate {reviewer} or mark it not_applicable"
+                    ));
+                }
+            }
+        }
+        _ => return Some(format!("Unsupported Review quality level: {level}")),
+    }
+
+    None
 }
 
 fn collect_manifest_members(raw: Option<&Value>, output: &mut HashSet<String>) {
@@ -685,6 +765,118 @@ fn manifest_member_subagent_id(value: &Value) -> Option<String> {
 mod tests {
     use super::*;
     use serde_json::{json, Value};
+
+    fn quality_manifest(level: &str, strategy: &str, reviewers: &[&str]) -> Value {
+        json!({
+            "reviewMode": "deep",
+            "strategyLevel": strategy,
+            "qualityDecision": { "level": level },
+            "coreReviewers": reviewers.iter().map(|id| json!({ "subagentId": id })).collect::<Vec<_>>()
+        })
+    }
+
+    #[test]
+    fn l2_manifest_accepts_up_to_three_reviewers_without_judge() {
+        let manifest = quality_manifest(
+            "l2",
+            "normal",
+            &[
+                "ReviewBusinessLogic",
+                "ReviewSecurity",
+                "ReviewArchitecture",
+            ],
+        );
+        let gate = DeepReviewRunManifestGate::from_value(&manifest).expect("gate should parse");
+
+        assert!(gate.ensure_active("ReviewSecurity").is_ok());
+    }
+
+    #[test]
+    fn l2_manifest_rejects_more_than_three_reviewers() {
+        let manifest = quality_manifest(
+            "l2",
+            "normal",
+            &[
+                "ReviewBusinessLogic",
+                "ReviewSecurity",
+                "ReviewArchitecture",
+                "ReviewFrontend",
+            ],
+        );
+        let gate = DeepReviewRunManifestGate::from_value(&manifest).expect("gate should parse");
+
+        let error = gate
+            .ensure_active("ReviewSecurity")
+            .expect_err("L2 must stay bounded");
+        assert_eq!(error.code, "deep_review_manifest_quality_decision_mismatch");
+    }
+
+    #[test]
+    fn l2_manifest_rejects_a_quality_gate_reviewer() {
+        let mut manifest = quality_manifest("l2", "normal", &["ReviewBusinessLogic"]);
+        manifest["qualityGateReviewer"] = json!({ "subagentId": "ReviewJudge" });
+        let gate = DeepReviewRunManifestGate::from_value(&manifest).expect("gate should parse");
+
+        assert!(gate.ensure_active("ReviewBusinessLogic").is_err());
+    }
+
+    #[test]
+    fn l3_manifest_requires_deep_strategy_and_quality_gate() {
+        let manifest = quality_manifest("l3", "normal", &["ReviewBusinessLogic"]);
+        let gate = DeepReviewRunManifestGate::from_value(&manifest).expect("gate should parse");
+        assert!(gate.ensure_active("ReviewBusinessLogic").is_err());
+
+        let mut incomplete = quality_manifest("l3", "deep", &["ReviewBusinessLogic"]);
+        incomplete["qualityGateReviewer"] = json!({ "subagentId": "ReviewJudge" });
+        let incomplete_gate =
+            DeepReviewRunManifestGate::from_value(&incomplete).expect("gate should parse");
+        assert!(incomplete_gate.ensure_active("ReviewJudge").is_err());
+
+        let mut wrong_judge = quality_manifest(
+            "l3",
+            "deep",
+            &[
+                "ReviewBusinessLogic",
+                "ReviewPerformance",
+                "ReviewSecurity",
+                "ReviewArchitecture",
+                "ReviewFrontend",
+            ],
+        );
+        wrong_judge["qualityGateReviewer"] = json!({ "subagentId": "ReviewSecurity" });
+        let wrong_judge_gate =
+            DeepReviewRunManifestGate::from_value(&wrong_judge).expect("gate should parse");
+        assert!(wrong_judge_gate.ensure_active("ReviewSecurity").is_err());
+
+        let mut valid = quality_manifest(
+            "l3",
+            "deep",
+            &[
+                "ReviewBusinessLogic",
+                "ReviewPerformance",
+                "ReviewSecurity",
+                "ReviewArchitecture",
+            ],
+        );
+        valid["qualityGateReviewer"] = json!({ "subagentId": "ReviewJudge" });
+        valid["skippedReviewers"] = json!([{
+            "subagentId": "ReviewFrontend",
+            "reason": "not_applicable"
+        }]);
+        let valid_gate = DeepReviewRunManifestGate::from_value(&valid).expect("gate should parse");
+        assert!(valid_gate.ensure_active("ReviewJudge").is_ok());
+    }
+
+    #[test]
+    fn legacy_manifest_without_quality_decision_remains_compatible() {
+        let manifest = json!({
+            "reviewMode": "deep",
+            "coreReviewers": [{ "subagentId": "ReviewSecurity" }]
+        });
+        let gate = DeepReviewRunManifestGate::from_value(&manifest).expect("gate should parse");
+
+        assert!(gate.ensure_active("ReviewSecurity").is_ok());
+    }
 
     #[test]
     fn scope_profile_parses_camel_case_manifest() {

@@ -46,7 +46,7 @@ export const ReviewActionHeader: React.FC<ReviewActionHeaderProps> = ({
       </button>
     </div>
 
-    <div className="deep-review-action-bar__status">
+    <div className="deep-review-action-bar__status" role="status" aria-live="polite">
       <PhaseIcon
         size={18}
         className={`deep-review-action-bar__icon ${phaseIconClass}`}
