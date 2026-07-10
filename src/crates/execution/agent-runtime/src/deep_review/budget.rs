@@ -21,12 +21,28 @@ use super::shared_context::{
     DeepReviewSharedContextMeasurementSnapshot, DeepReviewSharedContextUseRecord,
 };
 use dashmap::DashMap;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 const BUDGET_TTL: Duration = Duration::from_secs(60 * 60);
 const PRUNE_INTERVAL: Duration = Duration::from_secs(300);
+pub const REVIEW_DIFF_MAX_CHARS_PER_REVIEWER: usize = 240_000;
+pub const REVIEW_DIFF_MAX_CALLS_PER_REVIEWER: usize = 16;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReviewDiffBudgetAdmission {
+    Accepted { repeated_page: bool },
+    Exhausted,
+}
+
+#[derive(Debug, Default)]
+struct ReviewDiffReviewerBudget {
+    returned_chars: usize,
+    calls: usize,
+    returned_pages: HashSet<String>,
+    exhausted: bool,
+}
 
 #[derive(Debug)]
 struct DeepReviewTurnBudget {
@@ -43,6 +59,7 @@ struct DeepReviewTurnBudget {
     concurrency_cap_rejections: usize,
     capacity_skips: usize,
     shared_context_uses: HashMap<DeepReviewSharedContextKey, DeepReviewSharedContextUseRecord>,
+    review_diff_by_reviewer: HashMap<String, ReviewDiffReviewerBudget>,
     effective_concurrency: Option<DeepReviewEffectiveConcurrencyState>,
     runtime_diagnostics: DeepReviewRuntimeDiagnostics,
     created_at: Instant,
@@ -61,6 +78,7 @@ impl DeepReviewTurnBudget {
             concurrency_cap_rejections: 0,
             capacity_skips: 0,
             shared_context_uses: HashMap::new(),
+            review_diff_by_reviewer: HashMap::new(),
             effective_concurrency: None,
             runtime_diagnostics: DeepReviewRuntimeDiagnostics::default(),
             created_at: now,
@@ -119,6 +137,66 @@ impl DeepReviewBudgetTracker {
         *counts
             .entry(reason.as_snake_case().to_string())
             .or_insert(0) += 1;
+    }
+
+    pub fn record_review_diff_page(
+        &self,
+        parent_dialog_turn_id: &str,
+        reviewer_id: &str,
+        page_key: &str,
+        returned_chars: usize,
+    ) -> ReviewDiffBudgetAdmission {
+        if parent_dialog_turn_id.trim().is_empty()
+            || reviewer_id.trim().is_empty()
+            || page_key.trim().is_empty()
+        {
+            return ReviewDiffBudgetAdmission::Exhausted;
+        }
+
+        let now = Instant::now();
+        if let Ok(last_pruned) = self.last_pruned_at.lock() {
+            if now.saturating_duration_since(*last_pruned) >= PRUNE_INTERVAL {
+                drop(last_pruned);
+                self.prune_stale(now);
+            }
+        }
+        let mut turn = self
+            .turns
+            .entry(parent_dialog_turn_id.to_string())
+            .or_insert_with(|| DeepReviewTurnBudget::new(now));
+        let reviewer = turn
+            .review_diff_by_reviewer
+            .entry(reviewer_id.trim().to_string())
+            .or_default();
+        if reviewer.returned_pages.contains(page_key) {
+            return ReviewDiffBudgetAdmission::Accepted {
+                repeated_page: true,
+            };
+        }
+        if reviewer.exhausted
+            || reviewer.calls >= REVIEW_DIFF_MAX_CALLS_PER_REVIEWER
+            || reviewer.returned_chars.saturating_add(returned_chars)
+                > REVIEW_DIFF_MAX_CHARS_PER_REVIEWER
+        {
+            reviewer.exhausted = true;
+            turn.updated_at = now;
+            return ReviewDiffBudgetAdmission::Exhausted;
+        }
+        reviewer.calls = reviewer.calls.saturating_add(1);
+        reviewer.returned_chars = reviewer.returned_chars.saturating_add(returned_chars);
+        reviewer.returned_pages.insert(page_key.to_string());
+        turn.updated_at = now;
+        ReviewDiffBudgetAdmission::Accepted {
+            repeated_page: false,
+        }
+    }
+
+    pub fn review_diff_budget_exhausted(&self, parent_dialog_turn_id: &str) -> bool {
+        self.turns.get(parent_dialog_turn_id).is_some_and(|turn| {
+            turn.review_diff_by_reviewer
+                .values()
+                .any(|reviewer| reviewer.exhausted)
+        })
     }
 
     fn update_runtime_diagnostics(
@@ -802,6 +880,45 @@ fn normalize_budget_subagent_type(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn review_diff_budget_does_not_charge_an_identical_page_twice() {
+        let tracker = DeepReviewBudgetTracker::default();
+        assert_eq!(
+            tracker.record_review_diff_page("turn", "reviewer", "page-1", 40_000),
+            ReviewDiffBudgetAdmission::Accepted {
+                repeated_page: false
+            }
+        );
+        assert_eq!(
+            tracker.record_review_diff_page("turn", "reviewer", "page-1", 40_000),
+            ReviewDiffBudgetAdmission::Accepted {
+                repeated_page: true
+            }
+        );
+        assert!(!tracker.review_diff_budget_exhausted("turn"));
+    }
+
+    #[test]
+    fn review_diff_budget_fails_closed_after_the_reviewer_allowance() {
+        let tracker = DeepReviewBudgetTracker::default();
+        for index in 0..6 {
+            assert!(matches!(
+                tracker.record_review_diff_page(
+                    "turn-exhausted",
+                    "reviewer",
+                    &format!("page-{index}"),
+                    40_000,
+                ),
+                ReviewDiffBudgetAdmission::Accepted { .. }
+            ));
+        }
+        assert_eq!(
+            tracker.record_review_diff_page("turn-exhausted", "reviewer", "page-over", 1,),
+            ReviewDiffBudgetAdmission::Exhausted
+        );
+        assert!(tracker.review_diff_budget_exhausted("turn-exhausted"));
+    }
 
     #[test]
     fn launch_batch_admission_allows_later_batch_when_reviewer_capacity_is_free() {

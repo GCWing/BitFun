@@ -37,6 +37,7 @@ export interface FileMetadata {
   size: number;
   isFile: boolean;
   isDir: boolean;
+  isSymlink?: boolean;
   isRemote?: boolean;
   isRuntimeArtifact?: boolean;
 }
@@ -414,6 +415,7 @@ export class WorkspaceAPI {
         size: Number(raw.size ?? 0),
         isFile: raw.isFile === true,
         isDir: raw.isDir === true,
+        isSymlink: typeof raw.isSymlink === 'boolean' ? raw.isSymlink : undefined,
         isRemote: typeof raw.isRemote === 'boolean' ? raw.isRemote : undefined,
         isRuntimeArtifact:
           typeof raw.isRuntimeArtifact === 'boolean' ? raw.isRuntimeArtifact : undefined,

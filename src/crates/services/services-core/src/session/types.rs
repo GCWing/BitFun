@@ -208,6 +208,15 @@ pub struct SessionMetadata {
     )]
     pub deep_review_run_manifest: Option<serde_json::Value>,
 
+    /// Narrow target evidence for a standard Review session.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "review_target_evidence",
+        alias = "reviewTargetEvidence"
+    )]
+    pub review_target_evidence: Option<serde_json::Value>,
+
     /// Cached reviewer outputs from previous deep review runs in this session.
     /// Keyed by packet_id, value is the reviewer's output text.
     /// Used for incremental review: when the fingerprint matches, skip re-dispatching.
@@ -872,6 +881,7 @@ impl SessionMetadata {
             todos: None,
             review_action_state: None,
             deep_review_run_manifest: None,
+            review_target_evidence: None,
             deep_review_cache: None,
             workspace_path: None,
             workspace_hostname: None,
@@ -1217,6 +1227,33 @@ mod tests {
             serde_json::from_value(json).expect("metadata should deserialize");
 
         assert_eq!(round_trip.relationship, metadata.relationship);
+    }
+
+    #[test]
+    fn review_target_evidence_round_trips_through_metadata_contract() {
+        let mut metadata = SessionMetadata::new(
+            "session-target".to_string(),
+            "Review child".to_string(),
+            "CodeReview".to_string(),
+            "model".to_string(),
+        );
+        metadata.review_target_evidence = Some(serde_json::json!({
+            "version": 1,
+            "fingerprint": "target-fingerprint"
+        }));
+
+        let json = serde_json::to_value(&metadata).expect("metadata should serialize");
+        assert_eq!(
+            json["reviewTargetEvidence"]["fingerprint"],
+            "target-fingerprint"
+        );
+        let round_trip: SessionMetadata =
+            serde_json::from_value(json).expect("metadata should deserialize");
+
+        assert_eq!(
+            round_trip.review_target_evidence,
+            metadata.review_target_evidence
+        );
     }
 
     #[test]

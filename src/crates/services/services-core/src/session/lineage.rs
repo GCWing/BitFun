@@ -221,6 +221,7 @@ pub fn build_branched_session_metadata(facts: BranchSessionMetadataFacts<'_>) ->
     metadata.todos = None;
     metadata.review_action_state = None;
     metadata.deep_review_run_manifest = None;
+    metadata.review_target_evidence = None;
     metadata.unread_completion = None;
     metadata.needs_user_attention = None;
     metadata

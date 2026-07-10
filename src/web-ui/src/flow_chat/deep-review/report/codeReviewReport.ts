@@ -20,6 +20,7 @@ export type { ReviewCoverageSourceLabelKey } from './reviewCoverageSource';
 export type ReviewRiskLevel = 'low' | 'medium' | 'high' | 'critical';
 export type ReviewAction = 'approve' | 'approve_with_suggestions' | 'request_changes' | 'block';
 export type ReviewMode = 'standard' | 'deep';
+export type ReviewEvidenceStatus = 'complete' | 'limited' | 'stale' | 'failed';
 export type ReviewIssueSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info';
 export type ReviewIssueCertainty = 'confirmed' | 'likely' | 'possible';
 export type ReviewPacketStatusSource = 'reported' | 'inferred' | 'missing';
@@ -115,6 +116,7 @@ export interface CodeReviewReportData {
   remediation_plan?: string[];
   report_sections?: CodeReviewReportSectionsData;
   reliability_signals?: CodeReviewReliabilitySignal[];
+  evidence_status?: ReviewEvidenceStatus;
 }
 
 export interface ReviewReportGroup<TId extends string = string> {
@@ -153,6 +155,7 @@ export type ReviewReliabilityNoticeKind =
   | 'cache_miss'
   | 'concurrency_limited'
   | 'partial_reviewer'
+  | 'target_evidence_limited'
   | 'reduced_scope'
   | 'retry_guidance'
   | 'skipped_reviewers'

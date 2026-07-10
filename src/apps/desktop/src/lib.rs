@@ -1002,6 +1002,7 @@ pub async fn run() {
             delete_skill,
             git_is_repository,
             git_get_repository_basic,
+            git_resolve_revision,
             git_get_repository,
             review_platform_get_workspace_snapshot,
             review_platform_get_pull_request_detail,

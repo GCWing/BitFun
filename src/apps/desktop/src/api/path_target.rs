@@ -164,6 +164,7 @@ pub struct LocalFileMetadata {
     pub size: u64,
     pub is_file: bool,
     pub is_dir: bool,
+    pub is_symlink: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub is_remote: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -178,6 +179,7 @@ pub struct RemoteFileMetadata {
     pub size: u64,
     pub is_file: bool,
     pub is_dir: bool,
+    pub is_symlink: bool,
     pub is_remote: bool,
 }
 
@@ -186,6 +188,13 @@ pub fn stat_local_path_metadata(
     resolved_path: &Path,
     is_runtime_artifact: bool,
 ) -> Result<LocalFileMetadata, String> {
+    let link_metadata = std::fs::symlink_metadata(resolved_path).map_err(|e| {
+        format!(
+            "Failed to inspect local file type '{}': {}",
+            resolved_path.display(),
+            e
+        )
+    })?;
     let metadata = std::fs::metadata(resolved_path).map_err(|e| {
         format!(
             "Failed to stat local file '{}': {}",
@@ -193,6 +202,21 @@ pub fn stat_local_path_metadata(
             e
         )
     })?;
+
+    let is_symlink = if link_metadata.file_type().is_symlink() {
+        true
+    } else {
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::MetadataExt;
+            const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0400;
+            link_metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
+        }
+        #[cfg(not(windows))]
+        {
+            false
+        }
+    };
 
     let modified = metadata
         .modified()
@@ -208,6 +232,7 @@ pub fn stat_local_path_metadata(
         size: metadata.len(),
         is_file: metadata.is_file(),
         is_dir: metadata.is_dir(),
+        is_symlink,
         is_remote: Some(false),
         is_runtime_artifact: is_runtime_artifact.then_some(true),
     })
@@ -327,14 +352,15 @@ pub async fn get_path_metadata(
                 .await
                 .map_err(|e| format!("Failed to stat remote file: {}", e))?;
 
-            let (is_file, is_dir, size, modified) = match stat_entry {
+            let (is_file, is_dir, is_symlink, size, modified) = match stat_entry {
                 Some(entry) => (
                     entry.is_file,
                     entry.is_dir,
+                    entry.is_symlink,
                     entry.size.unwrap_or(0),
                     entry.modified.unwrap_or(0),
                 ),
-                None => (false, false, 0, 0),
+                None => (false, false, false, 0, 0),
             };
 
             serde_json::to_value(RemoteFileMetadata {
@@ -343,6 +369,7 @@ pub async fn get_path_metadata(
                 size,
                 is_file,
                 is_dir,
+                is_symlink,
                 is_remote: true,
             })
             .map_err(|e| format!("Failed to serialize remote file metadata: {}", e))

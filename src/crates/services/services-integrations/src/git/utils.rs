@@ -8,6 +8,31 @@ use super::{GitCommandOutput, GitError, GitFileStatus};
 use bitfun_services_core::process_manager;
 use git2::{Repository, Status, StatusOptions};
 use std::path::Path;
+use std::process::Stdio;
+use std::time::Duration;
+use tokio::io::{AsyncRead, AsyncReadExt};
+use tokio::time::timeout;
+
+const REVIEW_GIT_TIMEOUT: Duration = Duration::from_secs(30);
+const REVIEW_GIT_OUTPUT_LIMIT: usize = 8 * 1024 * 1024;
+
+async fn read_bounded_review_git_stream<R>(reader: R) -> Result<Vec<u8>, GitError>
+where
+    R: AsyncRead + Unpin,
+{
+    let mut bytes = Vec::new();
+    let mut limited = reader.take((REVIEW_GIT_OUTPUT_LIMIT + 1) as u64);
+    limited
+        .read_to_end(&mut bytes)
+        .await
+        .map_err(|error| GitError::CommandFailed(format!("Failed to read Git output: {error}")))?;
+    if bytes.len() > REVIEW_GIT_OUTPUT_LIMIT {
+        return Err(GitError::CommandFailed(
+            "Review Git inspection output exceeded the 8 MiB safety limit".to_string(),
+        ));
+    }
+    Ok(bytes)
+}
 
 /// Returns whether the given path is a Git repository.
 pub fn is_git_repository<P: AsRef<Path>>(path: P) -> bool {
@@ -16,8 +41,21 @@ pub fn is_git_repository<P: AsRef<Path>>(path: P) -> bool {
 
 /// Returns the repository root directory.
 pub fn get_repository_root<P: AsRef<Path>>(path: P) -> Result<String, GitError> {
+    let requested = path.as_ref();
+    let lexical_start = if requested.is_file() {
+        requested.parent().unwrap_or(requested)
+    } else {
+        requested
+    };
+    if let Some(root) = lexical_start
+        .ancestors()
+        .find(|ancestor| ancestor.join(".git").exists())
+    {
+        return Ok(root.to_string_lossy().to_string());
+    }
+
     let repo =
-        Repository::discover(path).map_err(|e| GitError::RepositoryNotFound(e.to_string()))?;
+        Repository::discover(requested).map_err(|e| GitError::RepositoryNotFound(e.to_string()))?;
 
     let workdir = repo
         .workdir()
@@ -245,6 +283,90 @@ pub async fn execute_git_command(repo_path: &str, args: &[&str]) -> Result<Strin
             result.stderr
         };
         Err(GitError::CommandFailed(error))
+    }
+}
+
+/// Executes a bounded read-only Git command without optional locks or external
+/// diff/text-conversion helpers. Callers must still provide a fixed operation
+/// and validated arguments rather than forwarding arbitrary command strings.
+pub async fn execute_git_readonly_command(
+    repo_path: &str,
+    args: &[&str],
+) -> Result<String, GitError> {
+    let mut command = process_manager::create_tokio_command("git");
+    command
+        .current_dir(repo_path)
+        .env("GIT_OPTIONAL_LOCKS", "0")
+        .env("GIT_NO_LAZY_FETCH", "1")
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .env("GCM_INTERACTIVE", "never")
+        .env("GIT_LITERAL_PATHSPECS", "1")
+        .env_remove("GIT_EXTERNAL_DIFF")
+        .args(args)
+        .kill_on_drop(true)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let mut child = command.spawn().map_err(|error| {
+        GitError::CommandFailed(format!("Failed to execute Git inspection: {error}"))
+    })?;
+    let stdout = child.stdout.take().ok_or_else(|| {
+        GitError::CommandFailed("Failed to capture Git inspection stdout".to_string())
+    })?;
+    let stderr = child.stderr.take().ok_or_else(|| {
+        GitError::CommandFailed("Failed to capture Git inspection stderr".to_string())
+    })?;
+
+    let bounded_output = timeout(REVIEW_GIT_TIMEOUT, async {
+        tokio::try_join!(
+            read_bounded_review_git_stream(stdout),
+            read_bounded_review_git_stream(stderr),
+            async {
+                child.wait().await.map_err(|error| {
+                    GitError::CommandFailed(format!("Failed to wait for Git inspection: {error}"))
+                })
+            },
+        )
+    })
+    .await;
+
+    let (stdout, stderr, status) = match bounded_output {
+        Ok(Ok(output)) => output,
+        Ok(Err(error)) => {
+            let _ = child.kill().await;
+            return Err(error);
+        }
+        Err(_) => {
+            let _ = child.kill().await;
+            return Err(GitError::CommandFailed(
+                "Review Git inspection timed out".to_string(),
+            ));
+        }
+    };
+
+    if status.success() {
+        Ok(String::from_utf8_lossy(&stdout).to_string())
+    } else {
+        let stderr = String::from_utf8_lossy(&stderr).trim().to_string();
+        let stdout = String::from_utf8_lossy(&stdout).trim().to_string();
+        Err(GitError::CommandFailed(if stderr.is_empty() {
+            stdout
+        } else {
+            stderr
+        }))
+    }
+}
+
+#[cfg(test)]
+mod review_git_output_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn bounded_reader_rejects_output_before_unbounded_buffering() {
+        let reader = tokio::io::repeat(b'x');
+        let error = read_bounded_review_git_stream(reader)
+            .await
+            .expect_err("unbounded output must be rejected");
+        assert!(error.to_string().contains("8 MiB safety limit"));
     }
 }
 

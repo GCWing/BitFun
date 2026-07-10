@@ -7,6 +7,7 @@
 
 use super::constants::{CONDITIONAL_REVIEWER_AGENT_TYPES, CORE_REVIEWER_AGENT_TYPES};
 use super::execution_policy::DeepReviewPolicyViolation;
+use super::target_evidence::ReviewTargetEvidence;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
@@ -586,6 +587,7 @@ pub struct DeepReviewRunManifestGate {
     active_subagent_ids: HashSet<String>,
     skipped_subagent_reasons: HashMap<String, String>,
     manifest_policy_error: Option<String>,
+    manifest_policy_error_code: &'static str,
 }
 
 impl DeepReviewRunManifestGate {
@@ -630,8 +632,25 @@ impl DeepReviewRunManifestGate {
                 );
             }
         }
-        let manifest_policy_error =
+        let target_evidence_error = match ReviewTargetEvidence::from_manifest(raw) {
+            Ok(Some(evidence)) => evidence
+                .validate_manifest_scope(raw)
+                .err()
+                .map(|error| error.to_string()),
+            Ok(None) => None,
+            Err(error) => Some(error.to_string()),
+        };
+        let quality_decision_error =
             validate_quality_decision(manifest, &active_subagent_ids, &skipped_subagent_reasons);
+        let (manifest_policy_error_code, manifest_policy_error) =
+            if let Some(error) = target_evidence_error {
+                ("deep_review_target_evidence_invalid", Some(error))
+            } else {
+                (
+                    "deep_review_manifest_quality_decision_mismatch",
+                    quality_decision_error,
+                )
+            };
 
         if active_subagent_ids.is_empty() && manifest_policy_error.is_none() {
             return None;
@@ -641,13 +660,14 @@ impl DeepReviewRunManifestGate {
             active_subagent_ids,
             skipped_subagent_reasons,
             manifest_policy_error,
+            manifest_policy_error_code,
         })
     }
 
     pub fn ensure_active(&self, subagent_type: &str) -> Result<(), DeepReviewPolicyViolation> {
         if let Some(error) = self.manifest_policy_error.as_deref() {
             return Err(DeepReviewPolicyViolation::new(
-                "deep_review_manifest_quality_decision_mismatch",
+                self.manifest_policy_error_code,
                 error,
             ));
         }

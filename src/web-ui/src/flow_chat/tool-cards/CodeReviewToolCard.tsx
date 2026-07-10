@@ -143,6 +143,7 @@ function getReliabilityNoticeLabel(notice: ReviewReliabilityNotice, t: Translate
       cache_miss: 'Incremental cache missed or refreshed',
       concurrency_limited: 'Review launch was concurrency-limited',
       partial_reviewer: 'Review returned partial result',
+      target_evidence_limited: 'Target evidence limited',
       reduced_scope: 'Focused review scope',
       retry_guidance: 'Retry guidance emitted',
       skipped_reviewers: 'Review scope tailored',
@@ -166,6 +167,7 @@ function getReliabilityNoticeDetail(notice: ReviewReliabilityNotice, t: Translat
       cache_miss: '{{count}} review result ran fresh or refreshed stale cache.',
       concurrency_limited: '{{count}} review launch hit a concurrency cap.',
       partial_reviewer: '{{count}} review result is partial; confidence is limited.',
+      target_evidence_limited: 'Prepared target evidence could not safely cover every requested change.',
       reduced_scope: 'This review used a focused scope profile.',
       retry_guidance: '{{count}} retry guidance item was emitted for partial review coverage.',
       skipped_reviewers: '{{count}} optional check was outside this run because of applicability, configuration, or budget.',
@@ -176,13 +178,17 @@ function getReliabilityNoticeDetail(notice: ReviewReliabilityNotice, t: Translat
 }
 
 function getReliabilityNoticeIcon(notice: ReviewReliabilityNotice): React.ReactNode {
-  if (notice.kind === 'partial_reviewer' || notice.kind === 'retry_guidance') {
+  if (
+    notice.kind === 'partial_reviewer' ||
+    notice.kind === 'retry_guidance'
+  ) {
     return <Clock size={13} />;
   }
   if (
     notice.kind === 'user_decision' ||
     notice.kind === 'concurrency_limited' ||
-    notice.kind === 'token_budget_limited'
+    notice.kind === 'token_budget_limited' ||
+    notice.kind === 'target_evidence_limited'
   ) {
     return <AlertTriangle size={13} />;
   }

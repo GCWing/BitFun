@@ -1022,7 +1022,7 @@ describe('reviewTeamService', () => {
     expect(promptBlock).toContain('Use the pre-generated diff summary');
   });
 
-  it('builds a shared context cache plan for files consumed by multiple reviewers', () => {
+  it('does not serialize speculative shared-context cache metadata', () => {
     const team = resolveDefaultReviewTeam(
       coreSubagents(),
       storedConfigWithExtra(),
@@ -1036,33 +1036,10 @@ describe('reviewTeamService', () => {
     );
 
     const manifest = buildEffectiveReviewTeamManifest(team, { target });
-    const webUiCacheEntry = manifest.sharedContextCache.entries.find(
-      (entry) => entry.path === 'src/web-ui/src/shared/services/reviewTeamService.ts',
-    );
-
-    expect(manifest.sharedContextCache).toMatchObject({
-      source: 'work_packets',
-      strategy: 'reuse_readonly_file_context_by_cache_key',
-      omittedEntryCount: 0,
-    });
-    expect(webUiCacheEntry).toMatchObject({
-      cacheKey: 'shared-context:1',
-      workspaceArea: 'web-ui',
-      recommendedTools: ['GetFileDiff', 'Read'],
-      consumerPacketIds: expect.arrayContaining([
-        'reviewer:ReviewBusinessLogic',
-        'reviewer:ReviewPerformance',
-        'reviewer:ReviewSecurity',
-        'reviewer:ReviewArchitecture',
-        'reviewer:ReviewFrontend',
-      ]),
-    });
-    expect(webUiCacheEntry?.consumerPacketIds).not.toContain('judge:ReviewJudge');
-
+    expect(manifest.sharedContextCache).toBeUndefined();
     const promptBlock = buildReviewTeamPromptBlock(team, manifest);
-    expect(promptBlock).toContain('Shared context cache plan:');
-    expect(promptBlock).toContain('"cache_key": "shared-context:1"');
-    expect(promptBlock).toContain('Use shared_context_cache entries');
+    expect(promptBlock).not.toContain('Shared context cache plan:');
+    expect(promptBlock).not.toContain('shared_context_cache');
   });
 
   it('builds a metadata-only evidence pack without source, diff, or model output', () => {
@@ -1144,7 +1121,7 @@ describe('reviewTeamService', () => {
     expect(serializedEvidencePack).not.toContain('modelOutput');
   });
 
-  it('injects the metadata-only evidence pack into the prompt as verifiable orientation', () => {
+  it('keeps the evidence pack out of the repeated launch prompt', () => {
     const team = resolveDefaultReviewTeam(
       coreSubagents(),
       storedConfigWithExtra(),
@@ -1164,19 +1141,16 @@ describe('reviewTeamService', () => {
 
     const promptBlock = buildReviewTeamPromptBlock(team, manifest);
 
-    expect(promptBlock).toContain('Evidence pack:');
-    expect(promptBlock).toContain('"content": "metadata_only"');
-    expect(promptBlock).toContain('"changed_files"');
-    expect(promptBlock).toContain('"contract_hints"');
-    expect(promptBlock).toContain('Evidence pack hunk_hints and contract_hints are orientation only');
-    expect(promptBlock).toContain('verify each hinted claim with GetFileDiff, Read, or Grep before reporting it');
+    expect(promptBlock).not.toContain('Evidence pack:');
+    expect(promptBlock).not.toContain('"content": "metadata_only"');
+    expect(promptBlock).not.toContain('"contract_hints"');
     expect(promptBlock).not.toContain('"Git"');
     expect(promptBlock).not.toContain('sourceText');
     expect(promptBlock).not.toContain('fullDiff');
     expect(promptBlock).not.toContain('modelOutput');
   });
 
-  it('builds an incremental review cache plan for follow-up reviews', () => {
+  it('does not write a speculative incremental review cache plan', () => {
     const team = resolveDefaultReviewTeam(
       coreSubagents(),
       storedConfigWithExtra(),
@@ -1197,35 +1171,10 @@ describe('reviewTeamService', () => {
       },
     });
 
-    expect(manifest.incrementalReviewCache).toMatchObject({
-      source: 'target_manifest',
-      strategy: 'reuse_completed_packets_when_fingerprint_matches',
-      filePaths: [
-        'src/crates/assembly/core/src/agentic/deep_review_policy.rs',
-        'src/web-ui/src/shared/services/reviewTeamService.ts',
-      ],
-      workspaceAreas: ['crate:core', 'web-ui'],
-      lineCount: 128,
-      lineCountSource: 'diff_stat',
-      reviewerPacketIds: expect.arrayContaining([
-        'reviewer:ReviewBusinessLogic',
-        'reviewer:ReviewSecurity',
-        'reviewer:ReviewFrontend',
-      ]),
-      invalidatesOn: expect.arrayContaining([
-        'target_file_set_changed',
-        'target_line_count_changed',
-        'reviewer_roster_changed',
-      ]),
-    });
-    expect(manifest.incrementalReviewCache.cacheKey).toMatch(/^incremental-review:/);
-    expect(manifest.incrementalReviewCache.fingerprint).toHaveLength(8);
-    expect(manifest.incrementalReviewCache.reviewerPacketIds).not.toContain('judge:ReviewJudge');
-
+    expect(manifest.incrementalReviewCache).toBeUndefined();
     const promptBlock = buildReviewTeamPromptBlock(team, manifest);
-    expect(promptBlock).toContain('Incremental review cache plan:');
-    expect(promptBlock).toContain('"strategy": "reuse_completed_packets_when_fingerprint_matches"');
-    expect(promptBlock).toContain('Use incremental_review_cache only when the target fingerprint matches');
+    expect(promptBlock).not.toContain('Incremental review cache plan:');
+    expect(promptBlock).not.toContain('incremental_review_cache');
   });
 
   it('splits reviewer work packets across file groups for large targets', () => {
@@ -1801,10 +1750,8 @@ describe('reviewTeamService', () => {
     }
 
     const promptBlock = buildReviewTeamPromptBlock(team, manifest);
-    expect(promptBlock).toContain('- max_prompt_bytes_per_reviewer: 96000');
-    expect(promptBlock).toContain('- prompt_byte_limit_exceeded: yes');
     expect(promptBlock).toContain('- token_budget_decisions: summary_first_full_scope');
-    expect(promptBlock).toContain('Do not remove files from assigned_scope');
+    expect(promptBlock).not.toContain('prompt_byte_limit_exceeded');
   });
 
   it('keeps summary-first disabled when split guardrails fit the prompt-byte budget', () => {
@@ -1853,8 +1800,8 @@ describe('reviewTeamService', () => {
       );
 
     const promptBlock = buildReviewTeamPromptBlock(team, manifest);
-    expect(promptBlock).toContain('- prompt_byte_limit_exceeded: no');
     expect(promptBlock).toContain('- token_budget_decisions: none');
+    expect(promptBlock).not.toContain('prompt_byte_limit_exceeded');
   });
 
   it('keeps normal manifest timeouts bounded for resolved target size', () => {
@@ -2312,6 +2259,51 @@ describe('reviewTeamService', () => {
     expect(promptBlock).not.toContain('Configured code review team:');
     expect(promptBlock).not.toContain('Team execution rules:');
     expect(promptBlock).not.toContain('run it in parallel with the locked reviewers whenever the change contains frontend files');
+  });
+
+  it('describes Git ranges as immutable but workspace evidence as a mutable snapshot', () => {
+    const team = resolveDefaultReviewTeam(coreSubagents(), storedConfigWithExtra());
+    const target = classifyReviewTargetFromFiles(['src/lib.rs'], 'session_files');
+    const baseEvidence = {
+      version: 1 as const,
+      fingerprint: '0123456789abcdef',
+      completeness: 'complete' as const,
+      workspaceBinding: 'matching_clean' as const,
+      files: [{
+        path: 'src/lib.rs',
+        status: 'modified' as const,
+        completeness: 'complete' as const,
+      }],
+      diffRefs: ['review-target://src/lib.rs'],
+      limitations: [],
+    };
+
+    const workspacePrompt = buildReviewTeamPromptBlock(
+      team,
+      buildEffectiveReviewTeamManifest(team, {
+        workspacePath: WORKSPACE_PATH,
+        target,
+        targetEvidence: { ...baseEvidence, source: 'workspace' },
+      }),
+    );
+    const gitRangePrompt = buildReviewTeamPromptBlock(
+      team,
+      buildEffectiveReviewTeamManifest(team, {
+        workspacePath: WORKSPACE_PATH,
+        target,
+        targetEvidence: {
+          ...baseEvidence,
+          source: 'git_range',
+          baseRevision: '1'.repeat(40),
+          headRevision: '2'.repeat(40),
+        },
+      }),
+    );
+
+    expect(workspacePrompt).toContain('preparation-time workspace facts');
+    expect(workspacePrompt).toContain('never describe it as immutable');
+    expect(gitRangePrompt).toContain('immutable target facts');
+    expect(gitRangePrompt).not.toContain('live workspace may change');
   });
 
   it('tells DeepReview to wait for user approval before running ReviewFixer', () => {

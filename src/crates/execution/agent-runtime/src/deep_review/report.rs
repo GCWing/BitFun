@@ -5,6 +5,7 @@
 
 use super::incremental_cache::DeepReviewIncrementalCache;
 use super::manifest::{DeepReviewEvidencePack, DeepReviewScopeProfile};
+use super::target_evidence::{ReviewTargetEvidence, ReviewTargetEvidenceCompleteness};
 use serde_json::{json, Value};
 use std::collections::HashSet;
 
@@ -347,6 +348,34 @@ pub fn fill_deep_review_reliability_signals(
                 }),
             );
         }
+
+        match ReviewTargetEvidence::from_manifest(manifest) {
+            Ok(Some(evidence))
+                if evidence.completeness() != ReviewTargetEvidenceCompleteness::Complete
+                    || evidence
+                        .limitations()
+                        .iter()
+                        .any(|limitation| limitation != "mutable_workspace_snapshot") =>
+            {
+                push_reliability_signal_if_missing(
+                    input,
+                    json!({
+                        "kind": "target_evidence_limited",
+                        "severity": "warning",
+                        "source": "manifest"
+                    }),
+                );
+            }
+            Err(_) => push_reliability_signal_if_missing(
+                input,
+                json!({
+                    "kind": "target_evidence_limited",
+                    "severity": "warning",
+                    "source": "manifest"
+                }),
+            ),
+            _ => {}
+        }
     }
 
     if let Some(token_budget) = run_manifest
@@ -449,6 +478,108 @@ pub fn fill_deep_review_reliability_signals(
     }
 }
 
+fn target_evidence_status(run_manifest: Option<&Value>) -> &'static str {
+    let Some(manifest) = run_manifest else {
+        return "failed";
+    };
+    match ReviewTargetEvidence::from_manifest(manifest) {
+        Ok(Some(evidence)) => match evidence.completeness() {
+            ReviewTargetEvidenceCompleteness::Stale => "stale",
+            ReviewTargetEvidenceCompleteness::Complete
+                if evidence.source()
+                    == super::target_evidence::ReviewTargetEvidenceSource::GitRange
+                    && evidence.omitted_file_count() == 0 =>
+            {
+                "complete"
+            }
+            ReviewTargetEvidenceCompleteness::Complete
+            | ReviewTargetEvidenceCompleteness::Partial
+            | ReviewTargetEvidenceCompleteness::Unknown => "limited",
+        },
+        Ok(None) | Err(_) => "failed",
+    }
+}
+
+pub fn apply_review_evidence_guardrail(input: &mut Value, run_manifest: Option<&Value>) {
+    if input
+        .get("evidence_status")
+        .and_then(Value::as_str)
+        .is_some_and(|status| status == "failed")
+    {
+        return;
+    }
+
+    let status = target_evidence_status(run_manifest);
+    input["evidence_status"] = json!(status);
+    if status == "complete" {
+        return;
+    }
+
+    let summary = input
+        .get_mut("summary")
+        .and_then(Value::as_object_mut)
+        .expect("review defaults must provide a summary object");
+    let action = summary
+        .get("recommended_action")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    if matches!(action, "approve" | "approve_with_suggestions" | "") {
+        summary.insert("recommended_action".to_string(), json!("request_changes"));
+    }
+    if summary
+        .get("risk_level")
+        .and_then(Value::as_str)
+        .is_none_or(|risk| risk == "low")
+    {
+        summary.insert("risk_level".to_string(), json!("medium"));
+    }
+    let detail = match status {
+        "stale" => {
+            "Review evidence changed during the run; rerun before relying on a clean result."
+        }
+        "failed" => "Review evidence was unavailable or invalid; a clean result is not allowed.",
+        _ => "Review evidence is limited; a clean result is not allowed.",
+    };
+    summary.insert("confidence_note".to_string(), json!(detail));
+    push_reliability_signal_if_missing(
+        input,
+        json!({
+            "kind": "target_evidence_limited",
+            "severity": "warning",
+            "source": "runtime",
+            "detail": detail
+        }),
+    );
+}
+
+pub fn apply_review_runtime_limitation(input: &mut Value, detail: &str) {
+    if input.get("evidence_status").and_then(Value::as_str) != Some("failed") {
+        input["evidence_status"] = json!("limited");
+    }
+    if let Some(summary) = input.get_mut("summary").and_then(Value::as_object_mut) {
+        if summary
+            .get("recommended_action")
+            .and_then(Value::as_str)
+            .is_some_and(|action| matches!(action, "approve" | "approve_with_suggestions"))
+        {
+            summary.insert("recommended_action".to_string(), json!("request_changes"));
+        }
+        if summary.get("risk_level").and_then(Value::as_str) == Some("low") {
+            summary.insert("risk_level".to_string(), json!("medium"));
+        }
+        summary.insert("confidence_note".to_string(), json!(detail));
+    }
+    push_reliability_signal_if_missing(
+        input,
+        json!({
+            "kind": "target_evidence_limited",
+            "severity": "warning",
+            "source": "runtime",
+            "detail": detail
+        }),
+    );
+}
+
 fn deep_review_cache_fingerprint(run_manifest: Option<&Value>) -> Option<String> {
     let manifest = run_manifest?;
     let cache_config = value_for_any_key(
@@ -543,6 +674,110 @@ mod tests {
         fill_deep_review_runtime_tracker_signal(&mut input, 0);
 
         assert!(input.get("reliability_signals").is_none());
+    }
+
+    #[test]
+    fn target_evidence_limit_has_a_distinct_warning_signal() {
+        let manifest = json!({
+            "reviewTargetEvidence": {
+                "version": 1,
+                "source": "git_range",
+                "fingerprint": "0123456789abcdef",
+                "baseRevision": "1111111111111111111111111111111111111111",
+                "headRevision": "2222222222222222222222222222222222222222",
+                "completeness": "partial",
+                "workspaceBinding": "matching_clean",
+                "files": [{
+                    "path": "src/lib.rs",
+                    "status": "modified",
+                    "completeness": "partial"
+                }],
+                "diffRefs": [],
+                "limitations": ["git_diff_unavailable"]
+            }
+        });
+        let mut input = json!({});
+
+        fill_deep_review_reliability_signals(&mut input, Some(&manifest), None);
+
+        assert_eq!(
+            input["reliability_signals"][0]["kind"],
+            "target_evidence_limited"
+        );
+        assert_eq!(input["reliability_signals"][0]["severity"], "warning");
+    }
+
+    #[test]
+    fn complete_git_range_preserves_clean_recommendation() {
+        let manifest = json!({
+            "reviewTargetEvidence": {
+                "version": 1,
+                "source": "git_range",
+                "fingerprint": "0123456789abcdef",
+                "baseRevision": "1111111111111111111111111111111111111111",
+                "headRevision": "2222222222222222222222222222222222222222",
+                "completeness": "complete",
+                "workspaceBinding": "matching_clean",
+                "files": [{
+                    "path": "src/lib.rs",
+                    "status": "modified",
+                    "completeness": "complete"
+                }],
+                "limitations": [],
+                "omittedFileCount": 0
+            }
+        });
+        let mut input = json!({
+            "summary": {
+                "overall_assessment": "No blocking issues",
+                "risk_level": "low",
+                "recommended_action": "approve"
+            }
+        });
+
+        apply_review_evidence_guardrail(&mut input, Some(&manifest));
+
+        assert_eq!(input["evidence_status"], "complete");
+        assert_eq!(input["summary"]["recommended_action"], "approve");
+        assert_eq!(input["summary"]["risk_level"], "low");
+    }
+
+    #[test]
+    fn mutable_workspace_cannot_preserve_clean_recommendation() {
+        let manifest = json!({
+            "reviewTargetEvidence": {
+                "version": 1,
+                "source": "workspace",
+                "fingerprint": "fedcba9876543210",
+                "baseRevision": "1111111111111111111111111111111111111111",
+                "headRevision": "WORKTREE",
+                "completeness": "complete",
+                "workspaceBinding": "matching_dirty",
+                "files": [{
+                    "path": "src/lib.rs",
+                    "status": "modified",
+                    "completeness": "complete"
+                }],
+                "limitations": []
+            }
+        });
+        let mut input = json!({
+            "summary": {
+                "overall_assessment": "No blocking issues",
+                "risk_level": "low",
+                "recommended_action": "approve"
+            }
+        });
+
+        apply_review_evidence_guardrail(&mut input, Some(&manifest));
+
+        assert_eq!(input["evidence_status"], "limited");
+        assert_eq!(input["summary"]["recommended_action"], "request_changes");
+        assert_eq!(input["summary"]["risk_level"], "medium");
+        assert_eq!(
+            input["reliability_signals"][0]["kind"],
+            "target_evidence_limited"
+        );
     }
 
     #[test]

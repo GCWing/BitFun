@@ -14,7 +14,9 @@ import type {
   ReviewTeamWorkPacket,
   ReviewTeamWorkPacketScope,
   ReviewTokenBudgetMode,
+  ReviewTargetEvidence,
 } from './types';
+import { allowsReviewLiveRepositoryContext } from './targetEvidence';
 
 // Work packets are pure launch-plan metadata. They must not inspect file
 // contents or make runtime retry/queue decisions.
@@ -80,8 +82,13 @@ function buildWorkPacket(params: {
   launchBatch: number;
   scope: ReviewTeamWorkPacketScope;
   timeoutSeconds: number;
+  targetEvidence?: ReviewTargetEvidence;
 }): ReviewTeamWorkPacket {
   const manifestMember = toManifestMember(params.member);
+  const liveRepositoryContextAllowed = !params.targetEvidence ||
+    params.targetEvidence.source === 'workspace' ||
+    allowsReviewLiveRepositoryContext(params.targetEvidence);
+  const liveRepositoryTools = new Set(['Read', 'Grep', 'Glob', 'LS']);
   const packetGroupSuffix =
     params.phase === 'reviewer' &&
     params.scope.groupIndex !== undefined &&
@@ -97,7 +104,8 @@ function buildWorkPacket(params: {
     displayName: manifestMember.displayName,
     roleName: manifestMember.roleName,
     assignedScope: params.scope,
-    allowedTools: [...params.member.allowedTools],
+    allowedTools: params.member.allowedTools.filter((tool) =>
+      liveRepositoryContextAllowed || !liveRepositoryTools.has(tool)),
     timeoutSeconds: params.timeoutSeconds,
     requiredOutputFields:
       params.phase === 'judge'
@@ -250,6 +258,7 @@ export function buildWorkPackets(params: {
   target: ReviewTargetClassification;
   executionPolicy: ReviewTeamExecutionPolicy;
   concurrencyPolicy: ReviewTeamConcurrencyPolicy;
+  targetEvidence?: ReviewTargetEvidence;
 }): ReviewTeamWorkPacket[] {
   const reviewerScopes = resolveReviewerPacketScopes(
     params.target,
@@ -278,6 +287,7 @@ export function buildWorkPackets(params: {
         Math.floor(index / params.concurrencyPolicy.maxParallelInstances),
       scope: seed.scope,
       timeoutSeconds: params.executionPolicy.reviewerTimeoutSeconds,
+      targetEvidence: params.targetEvidence,
     }),
   );
   const reviewerPackets = params.concurrencyPolicy.batchExtrasSeparately
@@ -310,6 +320,7 @@ export function buildWorkPackets(params: {
         launchBatch: finalReviewerBatch + 1,
         scope: fullScope,
         timeoutSeconds: params.executionPolicy.judgeTimeoutSeconds,
+        targetEvidence: params.targetEvidence,
       }),
     ]
     : [];

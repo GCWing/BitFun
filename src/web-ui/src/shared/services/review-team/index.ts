@@ -39,10 +39,6 @@ import {
   REVIEW_STRATEGY_PROFILES,
 } from './strategy';
 import { buildPreReviewSummary } from './preReviewSummary';
-import {
-  buildIncrementalReviewCachePlan,
-  buildSharedContextCachePlan,
-} from './cachePlan';
 import { buildDeepReviewEvidencePack } from './evidencePack';
 import {
   applyTeamStrategyOverrideToMember,
@@ -71,6 +67,7 @@ import type {
   ReviewStrategyLevel,
   ReviewStrategyProfile,
   ReviewStrategySource,
+  ReviewTargetEvidence,
   ReviewTeam,
   ReviewTeamChangeStats,
   ReviewTeamConcurrencyPolicy,
@@ -88,6 +85,7 @@ import type {
 
 export * from './types';
 export * from './strategy';
+export * from './targetEvidence';
 export { buildReviewRiskFactors, recommendReviewStrategyForTarget } from './risk';
 export {
   DEFAULT_REVIEW_TEAM_ID,
@@ -1132,6 +1130,7 @@ interface ReviewTeamManifestOptions {
   maxCoreReviewers?: number;
   maxExtraReviewers?: number;
   includeQualityGate?: boolean;
+  targetEvidence?: ReviewTargetEvidence;
 }
 
 const REVIEW_WORK_PACKET_ALLOWED_TOOL_SET = new Set<string>(
@@ -1432,18 +1431,13 @@ export function buildEffectiveReviewTeamManifest(
     target,
     executionPolicy,
     concurrencyPolicy,
+    targetEvidence: options.targetEvidence,
   });
   const evidencePack = buildDeepReviewEvidencePack({
     target,
     changeStats,
     scopeProfile,
-    workPackets,
-  });
-  const sharedContextCache = buildSharedContextCachePlan(workPackets);
-  const incrementalReviewCache = buildIncrementalReviewCachePlan({
-    target,
-    changeStats,
-    strategyLevel,
+    targetEvidence: options.targetEvidence,
     workPackets,
   });
   const tokenBudget = buildTokenBudgetPlan({
@@ -1495,8 +1489,6 @@ export function buildEffectiveReviewTeamManifest(
     changeStats,
     preReviewSummary,
     evidencePack,
-    sharedContextCache,
-    incrementalReviewCache,
     tokenBudget,
     coreReviewers,
     ...(qualityGateReviewer ? { qualityGateReviewer } : {}),

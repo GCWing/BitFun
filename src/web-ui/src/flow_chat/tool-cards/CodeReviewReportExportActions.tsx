@@ -101,6 +101,7 @@ export const CodeReviewReportExportActions: React.FC<CodeReviewReportExportActio
       cache_miss: t('toolCards.codeReview.reliabilityStatus.cache_miss.label'),
       concurrency_limited: t('toolCards.codeReview.reliabilityStatus.concurrency_limited.label'),
       partial_reviewer: t('toolCards.codeReview.reliabilityStatus.partial_reviewer.label'),
+      target_evidence_limited: t('toolCards.codeReview.reliabilityStatus.target_evidence_limited.label'),
       reduced_scope: t('toolCards.codeReview.reliabilityStatus.reduced_scope.label'),
       retry_guidance: t('toolCards.codeReview.reliabilityStatus.retry_guidance.label'),
       skipped_reviewers: t('toolCards.codeReview.reliabilityStatus.skipped_reviewers.label'),

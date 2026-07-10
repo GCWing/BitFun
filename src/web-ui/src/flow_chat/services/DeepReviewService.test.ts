@@ -21,6 +21,8 @@ const mockInsertReviewSessionSummaryMarker = vi.fn();
 const mockGitGetStatus = vi.fn();
 const mockGitGetChangedFiles = vi.fn();
 const mockGitGetDiff = vi.fn();
+const mockGitResolveRevision = vi.fn();
+const mockWorkspaceReadFile = vi.fn();
 const mockLoadDefaultReviewTeam = vi.fn();
 const mockPrepareDefaultReviewTeamForLaunch = vi.fn();
 const mockLoadReviewTeamRateLimitStatus = vi.fn();
@@ -34,6 +36,10 @@ vi.mock('@/infrastructure/api', () => ({
     getStatus: (...args: any[]) => mockGitGetStatus(...args),
     getChangedFiles: (...args: any[]) => mockGitGetChangedFiles(...args),
     getDiff: (...args: any[]) => mockGitGetDiff(...args),
+    resolveRevision: (...args: any[]) => mockGitResolveRevision(...args),
+  },
+  workspaceAPI: {
+    readFileContent: (...args: any[]) => mockWorkspaceReadFile(...args),
   },
 }));
 
@@ -66,7 +72,8 @@ vi.mock('./ReviewSessionMarkerService', () => ({
   insertReviewSessionSummaryMarker: (...args: any[]) => mockInsertReviewSessionSummaryMarker(...args),
 }));
 
-vi.mock('@/shared/services/reviewTeamService', () => ({
+vi.mock('@/shared/services/reviewTeamService', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@/shared/services/reviewTeamService')>(),
   loadDefaultReviewTeam: (...args: any[]) => mockLoadDefaultReviewTeam(...args),
   prepareDefaultReviewTeamForLaunch: (...args: any[]) => mockPrepareDefaultReviewTeamForLaunch(...args),
   loadReviewTeamRateLimitStatus: (...args: any[]) => mockLoadReviewTeamRateLimitStatus(...args),
@@ -93,6 +100,12 @@ describe('DeepReviewService slash command', () => {
     });
     mockGitGetChangedFiles.mockResolvedValue([]);
     mockGitGetDiff.mockResolvedValue('');
+    mockGitResolveRevision.mockImplementation(async (_workspacePath: string, revision: string) => (
+      revision === 'main' || revision.endsWith('^')
+        ? '1'.repeat(40)
+        : '2'.repeat(40)
+    ));
+    mockWorkspaceReadFile.mockResolvedValue('untracked content');
   });
 
   it('uses /review strict as the canonical typed command', () => {
@@ -203,6 +216,7 @@ describe('DeepReviewService slash command', () => {
         'src/web-ui/src/App.tsx',
         'src/crates/assembly/core/src/service/config/types.rs',
       ],
+      reviewSafe: true,
     });
     expect(buildEffectiveReviewTeamManifest).toHaveBeenLastCalledWith(
       expect.anything(),
@@ -293,8 +307,9 @@ describe('DeepReviewService slash command', () => {
     );
 
     expect(mockGitGetChangedFiles).toHaveBeenCalledWith('D:\\workspace\\repo', {
-      source: 'abc123^',
-      target: 'abc123',
+      source: '1'.repeat(40),
+      target: '2'.repeat(40),
+      reviewSafe: true,
     });
     expect(buildEffectiveReviewTeamManifest).toHaveBeenLastCalledWith(
       expect.anything(),
@@ -332,8 +347,9 @@ describe('DeepReviewService slash command', () => {
     );
 
     expect(mockGitGetDiff).toHaveBeenCalledWith('D:\\workspace\\repo', {
-      source: 'abc123^',
-      target: 'abc123',
+      source: '1'.repeat(40),
+      target: '2'.repeat(40),
+      reviewSafe: true,
     });
     expect(buildEffectiveReviewTeamManifest).toHaveBeenLastCalledWith(
       expect.anything(),
@@ -388,8 +404,9 @@ describe('DeepReviewService slash command', () => {
     );
 
     expect(mockGitGetChangedFiles).toHaveBeenCalledWith('D:\\workspace\\repo', {
-      source: 'main',
-      target: 'feature/deep-review',
+      source: '1'.repeat(40),
+      target: '2'.repeat(40),
+      reviewSafe: true,
     });
     expect(buildEffectiveReviewTeamManifest).toHaveBeenLastCalledWith(
       expect.anything(),
@@ -610,7 +627,7 @@ describe('launchDeepReviewSession', () => {
     expect(mockDiscardLocalSession).not.toHaveBeenCalled();
   });
 
-  it('classifies sendMessage launch failures after cleanup', async () => {
+  it('preserves the strict review session when sendMessage acceptance is uncertain', async () => {
     mockCreateBtwChildSession.mockResolvedValue({
       childSessionId: 'child-123',
       parentDialogTurnId: 'turn-456',
@@ -634,16 +651,19 @@ describe('launchDeepReviewSession', () => {
     expect(caughtError).toBeInstanceOf(Error);
     expect((caughtError as Error).message).toBe('Network connection was interrupted before strict review could start.');
     expect((caughtError as { launchErrorMessageKey?: string }).launchErrorMessageKey).toBe(
-      'deepReviewActionBar.launchError.network',
+      'deepReviewActionBar.launchError.uncertain',
     );
     expect((caughtError as { launchErrorCategory?: string }).launchErrorCategory).toBe('network');
 
-    expect(mockCloseBtwSessionInAuxPane).toHaveBeenCalledWith('child-123');
-    expect(mockDeleteSession).toHaveBeenCalled();
-    expect(mockDiscardLocalSession).toHaveBeenCalledWith('child-123');
+    expect(mockCloseBtwSessionInAuxPane).not.toHaveBeenCalled();
+    expect(mockDeleteSession).not.toHaveBeenCalled();
+    expect(mockDiscardLocalSession).not.toHaveBeenCalled();
+    expect(mockOpenBtwSessionInAuxPane).toHaveBeenCalledWith(
+      expect.objectContaining({ childSessionId: 'child-123', sessionKind: 'deep_review' }),
+    );
   });
 
-  it('skips backend cleanup when sendMessage fails and workspace path is missing', async () => {
+  it('preserves an uncertain strict review even when workspace metadata is missing', async () => {
     mockCreateBtwChildSession.mockResolvedValue({
       childSessionId: 'child-123',
       parentDialogTurnId: 'turn-456',
@@ -659,14 +679,15 @@ describe('launchDeepReviewSession', () => {
         prompt: 'Review these files',
         displayMessage: 'Strict review started',
       }),
-    ).rejects.toThrow('Cleanup was incomplete');
+    ).rejects.toThrow('Network connection was interrupted before strict review could start.');
 
-    expect(mockCloseBtwSessionInAuxPane).toHaveBeenCalledWith('child-123');
+    expect(mockCloseBtwSessionInAuxPane).not.toHaveBeenCalled();
     expect(mockDeleteSession).not.toHaveBeenCalled();
     expect(mockDiscardLocalSession).not.toHaveBeenCalled();
+    expect(mockOpenBtwSessionInAuxPane).toHaveBeenCalled();
   });
 
-  it('treats session missing error as successful cleanup', async () => {
+  it('does not probe deletion for an uncertain accepted strict review', async () => {
     mockCreateBtwChildSession.mockResolvedValue({
       childSessionId: 'child-123',
       parentDialogTurnId: 'turn-456',
@@ -684,8 +705,7 @@ describe('launchDeepReviewSession', () => {
       }),
     ).rejects.toThrow('Network connection was interrupted before strict review could start.');
 
-    expect(mockDeleteSession).toHaveBeenCalled();
-    // discardLocalSession should still be called because backend reports session missing
-    expect(mockDiscardLocalSession).toHaveBeenCalledWith('child-123');
+    expect(mockDeleteSession).not.toHaveBeenCalled();
+    expect(mockDiscardLocalSession).not.toHaveBeenCalled();
   });
 });

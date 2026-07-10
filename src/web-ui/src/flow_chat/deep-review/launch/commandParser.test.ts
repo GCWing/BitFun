@@ -56,6 +56,18 @@ describe('Deep Review launch command parser', () => {
     ]);
   });
 
+  it('recognizes root files, quoted paths with spaces, and explicit directories', () => {
+    expect(
+      extractExplicitReviewFilePaths(
+        'README.md "docs/review notes.md" ./src/ and prose',
+      ),
+    ).toEqual([
+      'README.md',
+      'docs/review notes.md',
+      './src/',
+    ]);
+  });
+
   it('parses commit and range targets', () => {
     expect(parseSlashCommandGitTarget('review commit abc123 for regressions')).toEqual({
       source: 'abc123^',
@@ -68,13 +80,13 @@ describe('Deep Review launch command parser', () => {
     expect(parseSlashCommandGitTarget('review --flag docs only')).toBeNull();
   });
 
-  it('collects unique changed paths including renamed sources', () => {
+  it('collects each renamed change once using its current path', () => {
     expect(
       collectChangedFilePaths([
         { path: 'src/new.ts', old_path: 'src/old.ts' },
         { path: 'src/new.ts' },
       ] as any),
-    ).toEqual(['src/new.ts', 'src/old.ts']);
+    ).toEqual(['src/new.ts']);
   });
 
   it('collects workspace diff paths from all status buckets', () => {

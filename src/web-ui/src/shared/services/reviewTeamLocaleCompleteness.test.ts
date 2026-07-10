@@ -23,6 +23,8 @@ const REVIEW_TEAM_FLOW_CHAT_KEYS = [
   'toolCards.codeReview.runManifest.reducedCoverageSummary',
   'toolCards.codeReview.reliabilityStatus.reduced_scope.label',
   'toolCards.codeReview.reliabilityStatus.reduced_scope.detail',
+  'toolCards.codeReview.reliabilityStatus.target_evidence_limited.label',
+  'toolCards.codeReview.reliabilityStatus.target_evidence_limited.detail',
 ] as const;
 
 function readLocaleJson(

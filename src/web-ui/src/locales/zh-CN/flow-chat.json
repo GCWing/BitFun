@@ -937,6 +937,8 @@
     "launchError": {
       "modelConfig": "无法创建审核会话，请检查模型配置",
       "network": "网络连接中断，审核未能启动",
+      "target": "无法安全准备请求的审核范围，请检查目标后重试",
+      "uncertain": "审核请求可能已经在运行。会话已保留，可安全检查或重试",
       "unknown": "审核启动失败，请重试"
     }
   },
@@ -1864,6 +1866,10 @@
         "reduced_scope": {
           "label": "聚焦 Review 范围",
           "detail": "本次 Review 使用了聚焦范围配置。"
+        },
+        "target_evidence_limited": {
+          "label": "目标证据受限",
+          "detail": "准备好的目标证据无法安全覆盖所有请求的变更。"
         },
         "retry_guidance": {
           "label": "已给出重试指引",

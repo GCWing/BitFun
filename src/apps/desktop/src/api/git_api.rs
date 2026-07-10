@@ -4,8 +4,8 @@ use crate::api::app_state::AppState;
 use crate::startup_trace::DesktopStartupTrace;
 use bitfun_core::infrastructure::storage::StorageOptions;
 use bitfun_core::service::git::{
-    build_git_changed_files_args, build_git_diff_args, GitAddParams, GitChangedFile,
-    GitChangedFileStatus, GitChangedFilesParams, GitCommitParams, GitDiffParams, GitFileStatus,
+    build_git_changed_files_args, build_git_diff_args, parse_name_status_output, GitAddParams,
+    GitChangedFile, GitChangedFilesParams, GitCommitParams, GitDiffParams, GitFileStatus,
     GitLogParams, GitPullParams, GitPushParams, GitService,
 };
 use bitfun_core::service::git::{
@@ -136,7 +136,7 @@ fn parse_remote_status_line(
 
     let index = line.chars().next()?;
     let worktree = line.chars().nth(1)?;
-    let path = line.get(3..)?.trim().to_string();
+    let path = line.get(3..)?.to_string();
     if path.is_empty() {
         return None;
     }
@@ -162,8 +162,20 @@ fn parse_remote_git_status(output: &str) -> GitStatus {
     let mut staged = Vec::new();
     let mut unstaged = Vec::new();
     let mut untracked = Vec::new();
+    let mut conflicts = Vec::new();
 
-    for line in output.lines() {
+    let records = if output.contains('\0') {
+        output.split('\0').collect::<Vec<_>>()
+    } else {
+        output.lines().collect::<Vec<_>>()
+    };
+    let mut record_index = 0usize;
+    while record_index < records.len() {
+        let line = records[record_index];
+        record_index += 1;
+        if line.is_empty() {
+            continue;
+        }
         if let Some(branch) = line.strip_prefix("## ") {
             let mut branch_part = branch.split("...").next().unwrap_or(branch).trim();
             if let Some((name, _)) = branch_part.split_once(' ') {
@@ -198,6 +210,24 @@ fn parse_remote_git_status(output: &str) -> GitStatus {
             continue;
         }
 
+        let is_rename_or_copy = status.contains('R') || status.contains('C');
+        if is_rename_or_copy && output.contains('\0') && record_index < records.len() {
+            record_index += 1;
+        }
+        let is_conflict = matches!(
+            (status.chars().next(), status.chars().nth(1)),
+            (Some('D'), Some('D'))
+                | (Some('A'), Some('U'))
+                | (Some('U'), Some('D'))
+                | (Some('U'), Some('A'))
+                | (Some('D'), Some('U'))
+                | (Some('A'), Some('A'))
+                | (Some('U'), Some('U'))
+        );
+        if is_conflict {
+            conflicts.push(path.clone());
+        }
+
         let file = GitFileStatus {
             path,
             status,
@@ -217,6 +247,7 @@ fn parse_remote_git_status(output: &str) -> GitStatus {
         staged,
         unstaged,
         untracked,
+        conflicts,
         current_branch,
         ahead,
         behind,
@@ -303,48 +334,6 @@ fn parse_remote_commits(output: &str) -> Vec<GitCommit> {
         .collect()
 }
 
-fn parse_remote_name_status_output(output: &str) -> Vec<GitChangedFile> {
-    output
-        .lines()
-        .filter_map(|line| {
-            let mut parts = line.split('\t');
-            let raw_status = parts.next()?.trim();
-            if raw_status.is_empty() {
-                return None;
-            }
-
-            let status = match raw_status.chars().next().unwrap_or_default() {
-                'A' => GitChangedFileStatus::Added,
-                'M' => GitChangedFileStatus::Modified,
-                'D' => GitChangedFileStatus::Deleted,
-                'R' => GitChangedFileStatus::Renamed,
-                'C' => GitChangedFileStatus::Copied,
-                _ => GitChangedFileStatus::Unknown,
-            };
-
-            match status {
-                GitChangedFileStatus::Renamed | GitChangedFileStatus::Copied => {
-                    let old_path = parts.next()?.to_string();
-                    let path = parts.next()?.to_string();
-                    Some(GitChangedFile {
-                        path,
-                        old_path: Some(old_path),
-                        status,
-                    })
-                }
-                _ => {
-                    let path = parts.next()?.to_string();
-                    Some(GitChangedFile {
-                        path,
-                        old_path: None,
-                        status,
-                    })
-                }
-            }
-        })
-        .collect()
-}
-
 fn git_log_args(params: &GitLogParams) -> Vec<String> {
     let mut args = vec![
         "log".to_string(),
@@ -373,6 +362,13 @@ fn git_log_args(params: &GitLogParams) -> Vec<String> {
 #[serde(rename_all = "camelCase")]
 pub struct GitRepositoryRequest {
     pub repository_path: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GitResolveRevisionRequest {
+    pub repository_path: String,
+    pub revision: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -653,6 +649,35 @@ pub async fn git_get_repository_basic(
 }
 
 #[tauri::command]
+pub async fn git_resolve_revision(
+    state: State<'_, AppState>,
+    request: GitResolveRevisionRequest,
+) -> Result<String, String> {
+    let revision = request.revision.trim();
+    if revision.is_empty() {
+        return Err("Revision cannot be empty".to_string());
+    }
+
+    if let Some(target) = resolve_remote_git_target(&request.repository_path).await {
+        return execute_remote_git_success(
+            &state,
+            &target,
+            &[
+                "rev-parse".to_string(),
+                "--verify".to_string(),
+                format!("{}^{{commit}}", revision),
+            ],
+        )
+        .await
+        .map(|output| output.trim().to_string());
+    }
+
+    GitService::resolve_revision(&request.repository_path, revision)
+        .await
+        .map_err(|e| format!("Failed to resolve Git revision: {}", e))
+}
+
+#[tauri::command]
 pub async fn git_get_status(
     state: State<'_, AppState>,
     request: GitRepositoryRequest,
@@ -665,6 +690,7 @@ pub async fn git_get_status(
                 "status".to_string(),
                 "--porcelain=v1".to_string(),
                 "--branch".to_string(),
+                "-z".to_string(),
             ],
         )
         .await?;
@@ -1018,7 +1044,7 @@ pub async fn git_get_changed_files(
             &build_git_changed_files_args(&request.params),
         )
         .await?;
-        return Ok(parse_remote_name_status_output(&output));
+        return Ok(parse_name_status_output(&output));
     }
 
     GitService::get_changed_files(&request.repository_path, &request.params)

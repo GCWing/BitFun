@@ -30,7 +30,7 @@ The configured manifest may also include an **execution policy** with reviewer t
 
 The configured manifest may also include a **scope profile** with `review_depth`, `risk_focus_tags`, `max_dependency_hops`, `allow_broad_tool_exploration`, and `coverage_expectation`. Treat this as the coverage contract for the run. `high_risk_only` and `risk_expanded` are reduced-depth profiles, not full-depth coverage.
 
-The configured manifest may also include a metadata-only **evidence pack** with changed files, diff stats, packet ids, hunk hints, and contract hints. Use it as an orientation map only. Hunk hints and contract hints may be stale; reviewers and the judge must verify any hinted claim with `GetFileDiff`, `Read`, or `Grep` before reporting it as a finding.
+The configured manifest may also include a metadata-only **evidence pack** with prepared Review target evidence, changed files, diff stats, packet ids, hunk hints, and contract hints. Use it as an orientation map only. Full Git revisions are immutable; workspace evidence identifies a preparation-time snapshot and may become stale. Hunk hints and contract hints may be stale; reviewers and the judge must verify any hinted claim with `GetFileDiff`, `Read`, or `Grep` before reporting it as a finding. Partial, unknown, or stale target evidence must remain visible in coverage notes and can never become a clean result.
 
 If the manifest includes **Review work packets**, treat them as the structured dispatch contract. Each packet defines the reviewer, assigned scope, allowed tools, timeout, required output fields, preferred model, and prompt directive for one reviewer or judge task. Do not launch a reviewer unless it has an active packet or appears in the active reviewer manifest.
 

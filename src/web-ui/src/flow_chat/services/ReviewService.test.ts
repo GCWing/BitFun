@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
   launchDeepReviewSession: vi.fn(),
   loadProjectStrategyOverride: vi.fn(),
   resolveSlashCommandReviewTarget: vi.fn(),
-  resolveCurrentFileReviewChangeStats: vi.fn(),
+  resolveCurrentFileReviewSnapshot: vi.fn(),
   createBtwChildSession: vi.fn(),
   sendMessage: vi.fn(),
   insertReviewSessionSummaryMarker: vi.fn(),
@@ -54,8 +54,8 @@ vi.mock('../deep-review/launch/targetResolver', async (importOriginal) => {
     ...actual,
     resolveSlashCommandReviewTarget: (...args: unknown[]) =>
       mocks.resolveSlashCommandReviewTarget(...args),
-    resolveCurrentFileReviewChangeStats: (...args: unknown[]) =>
-      mocks.resolveCurrentFileReviewChangeStats(...args),
+    resolveCurrentFileReviewSnapshot: (...args: unknown[]) =>
+      mocks.resolveCurrentFileReviewSnapshot(...args),
   };
 });
 
@@ -119,6 +119,25 @@ function runManifest(strategyLevel: 'normal' | 'deep' = 'normal'): ReviewTeamRun
   };
 }
 
+function targetEvidence() {
+  return {
+    version: 1 as const,
+    source: 'workspace' as const,
+    fingerprint: 'abc12345',
+    baseRevision: '1'.repeat(40),
+    headRevision: 'worktree:abc12345',
+    completeness: 'complete' as const,
+    workspaceBinding: 'matching_dirty' as const,
+    files: [{
+      path: 'src/file.ts',
+      status: 'modified' as const,
+      completeness: 'complete' as const,
+    }],
+    diffRefs: [],
+    limitations: ['mutable_workspace_snapshot'],
+  };
+}
+
 describe('ReviewService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -131,10 +150,16 @@ describe('ReviewService', () => {
     mocks.sendMessage.mockResolvedValue(undefined);
     mocks.launchDeepReviewSession.mockResolvedValue({ childSessionId: 'strict-child' });
     mocks.deleteSession.mockResolvedValue(undefined);
-    mocks.resolveCurrentFileReviewChangeStats.mockResolvedValue({
-      fileCount: 1,
-      lineCountSource: 'unknown',
-    });
+    mocks.resolveCurrentFileReviewSnapshot.mockImplementation(
+      async (_workspacePath, target) => ({
+        target,
+        changeStats: {
+          fileCount: 1,
+          lineCountSource: 'unknown',
+        },
+        targetEvidence: targetEvidence(),
+      }),
+    );
     mocks.decideReviewQuality.mockResolvedValue({
       level: 'l1',
       executionMode: 'standard',
@@ -166,11 +191,17 @@ describe('ReviewService', () => {
   });
 
   it('measures the current diff for a file-scoped follow-up decision', async () => {
-    mocks.resolveCurrentFileReviewChangeStats.mockResolvedValueOnce({
-      fileCount: 2,
-      totalLinesChanged: 3,
-      lineCountSource: 'diff_stat',
-    });
+    mocks.resolveCurrentFileReviewSnapshot.mockImplementationOnce(
+      async (_workspacePath, target) => ({
+        target,
+        changeStats: {
+          fileCount: 2,
+          totalLinesChanged: 3,
+          lineCountSource: 'diff_stat',
+        },
+        targetEvidence: targetEvidence(),
+      }),
+    );
 
     await prepareReviewLaunchFromSessionFiles(
       ['src/auth.ts', 'src/helper.ts'],
@@ -180,7 +211,7 @@ describe('ReviewService', () => {
       },
     );
 
-    expect(mocks.resolveCurrentFileReviewChangeStats).toHaveBeenCalledWith(
+    expect(mocks.resolveCurrentFileReviewSnapshot).toHaveBeenCalledWith(
       'D:/workspace/project',
       expect.objectContaining({
         files: expect.arrayContaining([
@@ -188,7 +219,6 @@ describe('ReviewService', () => {
           expect.objectContaining({ normalizedPath: 'src/helper.ts' }),
         ]),
       }),
-      undefined,
       'remote-connection-1',
     );
     expect(mocks.decideReviewQuality).toHaveBeenCalledWith(expect.objectContaining({
@@ -241,7 +271,9 @@ describe('ReviewService', () => {
           strategyLevel: 'normal',
           reason: 'risk_score',
         }),
-        changeStats: expect.objectContaining({ fileCount: 6 }),
+        resolvedTarget: expect.objectContaining({
+          changeStats: expect.objectContaining({ fileCount: 6 }),
+        }),
         maxCoreReviewers: 3,
         maxExtraReviewers: 0,
         includeQualityGate: false,
@@ -266,6 +298,7 @@ describe('ReviewService', () => {
         totalLinesChanged: 4,
         lineCountSource: 'diff_stat',
       },
+      targetEvidence: targetEvidence(),
     });
     mocks.buildDeepReviewLaunchFromSlashCommand.mockResolvedValue({
       prompt: 'strict prompt',
@@ -283,6 +316,84 @@ describe('ReviewService', () => {
       strategyLevel: 'deep',
       runManifest: manifest,
     });
+  });
+
+  it('rejects targets that exceed the evidence file boundary before quality selection', async () => {
+    mocks.resolveCurrentFileReviewSnapshot.mockImplementationOnce(
+      async (_workspacePath, target) => ({
+        target,
+        changeStats: { fileCount: 501, lineCountSource: 'unknown' },
+        targetEvidence: {
+          ...targetEvidence(),
+          omittedFileCount: 1,
+          completeness: 'partial' as const,
+          limitations: ['target_file_limit_exceeded'],
+        },
+      }),
+    );
+
+    await expect(prepareReviewLaunchFromSessionFiles(
+      ['src/file.ts'],
+      { workspacePath: 'D:/workspace/project' },
+    )).rejects.toThrow('exceeds the bounded evidence file limit');
+    expect(mocks.decideReviewQuality).not.toHaveBeenCalled();
+  });
+
+  it('blocks remote Git ranges before spending reviewer capacity', async () => {
+    const manifest = runManifest('normal');
+    mocks.resolveSlashCommandReviewTarget.mockResolvedValue({
+      target: {
+        ...manifest.target,
+        source: 'slash_command_git_ref',
+      },
+      changeStats: {
+        fileCount: 1,
+        lineCountSource: 'diff_stat',
+        totalLinesChanged: 4,
+      },
+      targetEvidence: {
+        ...targetEvidence(),
+        source: 'git_range',
+        headRevision: '2'.repeat(40),
+        completeness: 'partial',
+        workspaceBinding: 'unavailable',
+        limitations: ['remote_exact_diff_unavailable'],
+      },
+    });
+
+    await expect(prepareReviewLaunchFromSlashCommand(
+      '/review main..feature',
+      '/remote/workspace',
+      'remote-1',
+    )).rejects.toThrow('Remote Git range Review is not supported yet');
+    expect(mocks.decideReviewQuality).not.toHaveBeenCalled();
+    expect(mocks.buildDeepReviewLaunchFromSlashCommand).not.toHaveBeenCalled();
+  });
+
+  it('blocks an empty confirmed workspace snapshot before spending reviewer capacity', async () => {
+    const manifest = runManifest('normal');
+    mocks.resolveSlashCommandReviewTarget.mockResolvedValue({
+      target: {
+        ...manifest.target,
+        source: 'workspace_diff',
+        files: [],
+      },
+      changeStats: {
+        fileCount: 0,
+        lineCountSource: 'diff_stat',
+        totalLinesChanged: 0,
+      },
+      targetEvidence: {
+        ...targetEvidence(),
+        files: [],
+      },
+    });
+
+    await expect(prepareReviewLaunchFromSlashCommand(
+      '/review',
+      'D:/workspace/project',
+    )).rejects.toThrow('There are no workspace changes to review.');
+    expect(mocks.decideReviewQuality).not.toHaveBeenCalled();
   });
 
   it('launches standard review as a read-only CodeReview child in the shared pane', async () => {
@@ -309,7 +420,13 @@ describe('ReviewService', () => {
       agentType: 'CodeReview',
       childSessionName: 'Review',
       requestId: 'review-follow-up-1',
+      reviewTargetEvidence: prepared.targetEvidence,
     }));
+    expect(mocks.sendMessage).toHaveBeenCalledWith(
+      expect.any(String),
+      'review-child',
+      'Review current changes',
+    );
     expect(mocks.insertReviewSessionSummaryMarker).toHaveBeenCalledWith(expect.objectContaining({
       childSessionId: 'review-child',
       kind: 'review',
@@ -350,7 +467,7 @@ describe('ReviewService', () => {
     expect(mocks.buildDeepReviewLaunchFromSlashCommand).not.toHaveBeenCalled();
   });
 
-  it('cleans up a standard review child when its first message fails', async () => {
+  it('preserves a standard review child when first-message acceptance is uncertain', async () => {
     const prepared = await prepareReviewLaunchFromSessionFiles(['src/small.ts'], {
       workspacePath: 'D:/workspace/project',
       changeStats: {
@@ -369,12 +486,13 @@ describe('ReviewService', () => {
       prepared,
     })).rejects.toThrow('send failed');
 
-    expect(mocks.deleteSession).toHaveBeenCalledWith(
-      'review-child',
-      'D:/workspace/project',
-      undefined,
-      undefined,
+    expect(mocks.deleteSession).not.toHaveBeenCalled();
+    expect(mocks.discardLocalSession).not.toHaveBeenCalled();
+    expect(mocks.insertReviewSessionSummaryMarker).toHaveBeenCalledWith(
+      expect.objectContaining({ childSessionId: 'review-child', kind: 'review' }),
     );
-    expect(mocks.discardLocalSession).toHaveBeenCalledWith('review-child');
+    expect(mocks.openBtwSessionInAuxPane).toHaveBeenCalledWith(
+      expect.objectContaining({ childSessionId: 'review-child', sessionKind: 'review' }),
+    );
   });
 });
