@@ -1192,6 +1192,10 @@ pub async fn run() {
             api::remote_connect_api::account_delete_synced_session,
             api::remote_connect_api::account_sync_settings,
             api::remote_connect_api::account_fetch_settings,
+            api::remote_connect_api::account_export_local_session,
+            api::remote_connect_api::account_export_all_sessions,
+            api::remote_connect_api::account_import_remote_sessions,
+            api::remote_connect_api::account_execute_on_device,
             // MiniApp API
             api::miniapp_api::list_miniapps,
             api::miniapp_api::get_miniapp,
@@ -1438,6 +1442,7 @@ async fn init_agentic_system() -> anyhow::Result<(
     coordinator.set_scheduler_notifier(scheduler.outcome_sender());
     coordinator.set_round_injection_source(scheduler.round_injection_monitor());
     coordination::set_global_scheduler(scheduler.clone());
+    api::remote_connect_api::set_dialog_scheduler(scheduler.clone());
 
     let cron_service = bitfun_core::service::cron::CronService::new(
         path_manager.clone(),

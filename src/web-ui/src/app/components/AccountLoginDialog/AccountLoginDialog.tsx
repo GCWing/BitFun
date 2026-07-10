@@ -6,8 +6,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 import { Modal, Button, Input, Alert } from '@/component-library';
-import { User, Lock, Server, LogIn } from 'lucide-react';
+import { User, Lock, Server, LogIn, RefreshCw, Monitor } from 'lucide-react';
 import { remoteConnectAPI } from '@/infrastructure/api/service-api/RemoteConnectAPI';
+import type { OnlineDeviceInfo } from '@/infrastructure/api/service-api/RemoteConnectAPI';
 import { useNotification } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
 import './AccountLoginDialog.scss';
@@ -31,6 +32,8 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
   const [authServer, setAuthServer] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [onlineDevices, setOnlineDevices] = useState<OnlineDeviceInfo[]>([]);
+  const [refreshingDevices, setRefreshingDevices] = useState(false);
 
   useEffect(() => {
     if (!isOpen) {
@@ -57,9 +60,7 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
     setError(null);
     try {
       const result = await remoteConnectAPI.accountLogin(authServer.trim(), username.trim(), password);
-      // Establish the device-routing WS connection in the background.
       remoteConnectAPI.accountConnectDevices().catch((err) => {
-        // Non-fatal — device sync is an add-on; login itself succeeded.
         log.warn('accountConnectDevices failed after login', err);
       });
       success(t('accountLogin.loginSuccess', { user_id: result.user_id }));
@@ -70,6 +71,41 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
       setLoading(false);
     }
   }, [validate, authServer, username, password, success, t, onClose]);
+
+  const refreshDevices = useCallback(async () => {
+    setRefreshingDevices(true);
+    try {
+      const devices = await remoteConnectAPI.accountOnlineDevices();
+      setOnlineDevices(devices);
+    } catch (e) {
+      log.warn('refreshDevices failed', e);
+    } finally {
+      setRefreshingDevices(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isOpen) {
+      refreshDevices();
+      const interval = setInterval(refreshDevices, 10000);
+      return () => clearInterval(interval);
+    }
+  }, [isOpen, refreshDevices]);
+
+  const handleSyncSessions = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      await remoteConnectAPI.accountExportAllSessions('/');
+      const imported = await remoteConnectAPI.accountImportRemoteSessions('/');
+      success(t('accountLogin.syncSuccess'));
+      log.info(`Imported ${imported.length} remote sessions`);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
+    }
+  }, [success, t]);
 
   return (
     <Modal
@@ -133,6 +169,31 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
               />
             </div>
           </div>
+
+          {onlineDevices.length > 0 && (
+            <div className="account-login-dialog__devices">
+              <div className="account-login-dialog__devices-header">
+                <Monitor size={14} />
+                <span>{t('accountLogin.devices')}</span>
+                <Button
+                  variant="ghost"
+                  size="small"
+                  onClick={refreshDevices}
+                  disabled={refreshingDevices}
+                >
+                  <RefreshCw size={12} className={refreshingDevices ? 'spinning' : ''} />
+                </Button>
+              </div>
+              <div className="account-login-dialog__device-list">
+                {onlineDevices.map((d) => (
+                  <div key={d.device_id} className="account-login-dialog__device-item">
+                    <span className="account-login-dialog__device-name">{d.device_name}</span>
+                    <span className="account-login-dialog__device-id">{d.device_id.slice(0, 8)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="account-login-dialog__actions">
@@ -143,6 +204,15 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
             disabled={loading}
           >
             {t('accountLogin.cancel')}
+          </Button>
+          <Button
+            variant="secondary"
+            size="small"
+            onClick={handleSyncSessions}
+            disabled={loading}
+          >
+            <RefreshCw size={14} />
+            {t('accountLogin.syncSessions')}
           </Button>
           <Button
             variant="primary"

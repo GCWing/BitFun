@@ -385,6 +385,67 @@ class RemoteConnectAPIService {
       return null;
     }
   }
+
+  // ── High-level session sync ───────────────────────────────────────────────
+
+  async accountExportLocalSession(
+    sessionId: string,
+    workspacePath: string,
+  ): Promise<void> {
+    try {
+      await this.adapter.request<void>('account_export_local_session', {
+        request: { session_id: sessionId, workspace_path: workspacePath },
+      });
+    } catch (e) {
+      log.error('accountExportLocalSession failed', e);
+      throw e;
+    }
+  }
+
+  async accountExportAllSessions(workspacePath: string): Promise<number> {
+    try {
+      return await this.adapter.request<number>('account_export_all_sessions', {
+        request: { workspace_path: workspacePath },
+      });
+    } catch (e) {
+      log.error('accountExportAllSessions failed', e);
+      throw e;
+    }
+  }
+
+  async accountImportRemoteSessions(workspacePath: string): Promise<string[]> {
+    try {
+      return await this.adapter.request<string[]>('account_import_remote_sessions', {
+        request: { workspace_path: workspacePath },
+      });
+    } catch (e) {
+      log.error('accountImportRemoteSessions failed', e);
+      throw e;
+    }
+  }
+
+  async accountExecuteOnDevice(
+    targetDeviceId: string,
+    content: string,
+    sessionId?: string,
+    agentType?: string,
+    workspacePath?: string,
+  ): Promise<void> {
+    try {
+      await this.adapter.request<void>('account_execute_on_device', {
+        request: {
+          target_device_id: targetDeviceId,
+          session_id: sessionId ?? null,
+          content,
+          agent_type: agentType ?? null,
+          workspace_path: workspacePath ?? null,
+        },
+      });
+    } catch (e) {
+      log.error('accountExecuteOnDevice failed', e);
+      throw e;
+    }
+  }
 }
 
 export const remoteConnectAPI = new RemoteConnectAPIService();

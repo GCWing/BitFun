@@ -1,15 +1,19 @@
 //! Tauri commands for Remote Connect.
 
+use crate::api::session_storage_path::desktop_effective_session_storage_path;
+use bitfun_core::agentic::persistence::PersistenceManager;
 use bitfun_core::service::remote_connect::{
     bot::{self, weixin, BotConfig},
     lan, AccountClient, AccountSession, ConnectionMethod, ConnectionResult, DeviceIdentity,
     PairingState, RemoteConnectConfig, RemoteConnectService,
 };
+use bitfun_core::service::session::{DialogTurnData, SessionMetadata};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
+use tauri::State;
 use tokio::sync::RwLock;
 
 static REMOTE_CONNECT_SERVICE: OnceLock<Arc<RwLock<Option<RemoteConnectService>>>> =
@@ -22,6 +26,17 @@ static ACCOUNT_SESSION: OnceLock<Arc<RwLock<Option<AccountSession>>>> = OnceLock
 /// The relay URL associated with the current account session (needed for sync
 /// and device-routing calls).
 static ACCOUNT_RELAY_URL: OnceLock<Arc<RwLock<Option<String>>>> = OnceLock::new();
+
+/// Global handle to the DialogScheduler, set during app startup. Used by the
+/// device-routing background task to execute commands received from peer
+/// devices (ExecuteOnDevice).
+static DIALOG_SCHEDULER: OnceLock<Arc<bitfun_core::agentic::coordination::DialogScheduler>> =
+    OnceLock::new();
+
+/// Set the global scheduler handle. Called once during app startup.
+pub fn set_dialog_scheduler(scheduler: Arc<bitfun_core::agentic::coordination::DialogScheduler>) {
+    let _ = DIALOG_SCHEDULER.set(scheduler);
+}
 
 fn get_account_session() -> &'static Arc<RwLock<Option<AccountSession>>> {
     ACCOUNT_SESSION.get_or_init(|| Arc::new(RwLock::new(None)))
@@ -869,13 +884,10 @@ pub async fn account_connect_devices() -> Result<Vec<OnlineDeviceInfo>, String> 
                 }
                 RelayEvent::DeviceMessageReceived {
                     source_device_id,
-                    correlation_id,
+                    correlation_id: _,
                     encrypted_data,
                     nonce,
                 } => {
-                    // Decrypt with the master key and log the inner command.
-                    // Full execution dispatch happens at the product runtime level;
-                    // here we validate and acknowledge receipt.
                     let session_guard = session_arc.read().await.clone();
                     let Some(ref session) = session_guard else {
                         continue;
@@ -883,15 +895,83 @@ pub async fn account_connect_devices() -> Result<Vec<OnlineDeviceInfo>, String> 
                     use bitfun_core::service::remote_connect::encryption::decrypt_from_base64;
                     match decrypt_from_base64(&session.master_key, &encrypted_data, &nonce) {
                         Ok(plaintext) => {
-                            log::info!(
-                                "Device message from {source_device_id} corr={correlation_id}: \
-                                 {} bytes",
-                                plaintext.len()
-                            );
-                            // Attempt to deserialize as RemoteCommand for logging.
                             use bitfun_core::service::remote_connect::remote_server::RemoteCommand;
-                            if let Ok(cmd) = serde_json::from_str::<RemoteCommand>(&plaintext) {
-                                log::info!("Received device command: {cmd:?}");
+                            match serde_json::from_str::<RemoteCommand>(&plaintext) {
+                                Ok(RemoteCommand::ExecuteOnDevice {
+                                    session_id,
+                                    content,
+                                    agent_type,
+                                    workspace_path,
+                                }) => {
+                                    log::info!(
+                                        "ExecuteOnDevice from {source_device_id}: \
+                                         session={:?} content_len={}",
+                                        session_id,
+                                        content.len()
+                                    );
+                                    // Submit the dialog turn via the global scheduler.
+                                    if let Some(scheduler) = DIALOG_SCHEDULER.get() {
+                                        use bitfun_core::agentic::coordination::{
+                                            DialogSubmissionPolicy, DialogTriggerSource,
+                                        };
+                                        let session_id = session_id
+                                            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+                                        let policy = DialogSubmissionPolicy::for_source(
+                                            DialogTriggerSource::RemoteRelay,
+                                        );
+                                        let wp = workspace_path.unwrap_or_default();
+                                        let agent =
+                                            agent_type.unwrap_or_else(|| "agentic".to_string());
+                                        if let Err(e) = scheduler
+                                            .submit(
+                                                session_id,
+                                                content,
+                                                None,
+                                                None,
+                                                agent,
+                                                Some(wp),
+                                                None,
+                                                None,
+                                                policy,
+                                                None,
+                                                None,
+                                                None,
+                                            )
+                                            .await
+                                        {
+                                            log::warn!("ExecuteOnDevice failed: {e}");
+                                        }
+                                    } else {
+                                        log::warn!(
+                                            "DialogScheduler not available for ExecuteOnDevice"
+                                        );
+                                    }
+                                }
+                                Ok(RemoteCommand::SendSessionToDevice {
+                                    session_data,
+                                    session_id,
+                                    session_name: _,
+                                }) => {
+                                    log::info!(
+                                        "SendSessionToDevice from {source_device_id}: \
+                                         session={session_id} bytes={}",
+                                        session_data.len()
+                                    );
+                                    // Import the session into local storage.
+                                    // The session_data is a SessionBundle JSON.
+                                    // We write it to the default workspace's session dir.
+                                    // A full import requires knowing the workspace path;
+                                    // for now we log receipt — the frontend can trigger
+                                    // account_import_remote_sessions after receiving
+                                    // a presence update.
+                                    log::info!("Session bundle received, run account_import_remote_sessions to import");
+                                }
+                                Ok(cmd) => {
+                                    log::info!("Received device command: {cmd:?}");
+                                }
+                                Err(e) => {
+                                    log::warn!("Could not parse device command: {e}");
+                                }
                             }
                         }
                         Err(e) => {
@@ -1032,6 +1112,235 @@ pub async fn account_fetch_settings() -> Result<Option<String>, String> {
     let (session, relay_url) = read_account_context().await?;
     AccountClient::new()
         .fetch_settings(&relay_url, &session)
+        .await
+        .map_err(|e| format!("{e}"))
+}
+
+// ── High-level session sync (export / import / auto-sync) ─────────────────
+
+/// A serializable session bundle: metadata + all dialog turns.
+/// This is the unit of cross-device sync — encrypted with the master key
+/// before upload to the relay.
+#[derive(Serialize, Deserialize)]
+pub struct SessionBundle {
+    pub session_id: String,
+    pub metadata: serde_json::Value,
+    pub turns: Vec<serde_json::Value>,
+    pub source_device_id: Option<String>,
+    pub source_device_name: Option<String>,
+}
+
+/// Export a single local session as an encrypted blob and upload it to the relay.
+/// Uses the workspace + session_id to load metadata and turns from disk.
+#[tauri::command]
+pub async fn account_export_local_session(
+    session_id: String,
+    workspace_path: String,
+    app_state: State<'_, crate::api::app_state::AppState>,
+    path_manager: State<'_, Arc<bitfun_core::infrastructure::PathManager>>,
+) -> Result<(), String> {
+    let (acct_session, relay_url) = read_account_context().await?;
+
+    let storage_path =
+        desktop_effective_session_storage_path(&app_state, &workspace_path, None, None).await;
+
+    let manager = PersistenceManager::new(path_manager.inner().clone())
+        .map_err(|e| format!("create persistence manager: {e}"))?;
+
+    // Load metadata
+    let metadata = manager
+        .load_session_metadata(&storage_path, &session_id)
+        .await
+        .map_err(|e| format!("load metadata: {e}"))?
+        .ok_or_else(|| format!("session not found: {session_id}"))?;
+
+    // Load all turns
+    let turns = manager
+        .load_session_turns(&storage_path, &session_id)
+        .await
+        .map_err(|e| format!("load turns: {e}"))?;
+
+    // Serialize to bundle
+    let metadata_json =
+        serde_json::to_value(&metadata).map_err(|e| format!("serialize metadata: {e}"))?;
+    let turns_json: Vec<serde_json::Value> = turns
+        .iter()
+        .map(|t| serde_json::to_value(t).unwrap_or(serde_json::Value::Null))
+        .collect();
+
+    let device = current_device_identity()?;
+    let bundle = SessionBundle {
+        session_id: session_id.clone(),
+        metadata: metadata_json,
+        turns: turns_json,
+        source_device_id: Some(device.device_id.clone()),
+        source_device_name: Some(device.device_name.clone()),
+    };
+
+    let bundle_json =
+        serde_json::to_string(&bundle).map_err(|e| format!("serialize bundle: {e}"))?;
+
+    AccountClient::new()
+        .upload_session(&relay_url, &acct_session, &session_id, &bundle_json)
+        .await
+        .map_err(|e| format!("{e}"))
+}
+
+/// Export all local sessions for a workspace and upload them to the relay.
+/// Returns the number of sessions synced.
+#[tauri::command]
+pub async fn account_export_all_sessions(
+    workspace_path: String,
+    app_state: State<'_, crate::api::app_state::AppState>,
+    path_manager: State<'_, Arc<bitfun_core::infrastructure::PathManager>>,
+) -> Result<usize, String> {
+    let (acct_session, relay_url) = read_account_context().await?;
+
+    let storage_path =
+        desktop_effective_session_storage_path(&app_state, &workspace_path, None, None).await;
+
+    let manager = PersistenceManager::new(path_manager.inner().clone())
+        .map_err(|e| format!("create persistence manager: {e}"))?;
+
+    let sessions = manager
+        .list_session_metadata(&storage_path)
+        .await
+        .map_err(|e| format!("list sessions: {e}"))?;
+
+    let client = AccountClient::new();
+    let mut count = 0usize;
+    for meta in &sessions {
+        let turns = manager
+            .load_session_turns(&storage_path, &meta.session_id)
+            .await
+            .map_err(|e| format!("load turns for {}: {e}", meta.session_id))?;
+
+        let metadata_json =
+            serde_json::to_value(meta).map_err(|e| format!("serialize metadata: {e}"))?;
+        let turns_json: Vec<serde_json::Value> = turns
+            .iter()
+            .map(|t| serde_json::to_value(t).unwrap_or(serde_json::Value::Null))
+            .collect();
+
+        let bundle = SessionBundle {
+            session_id: meta.session_id.clone(),
+            metadata: metadata_json,
+            turns: turns_json,
+            source_device_id: None,
+            source_device_name: None,
+        };
+
+        let bundle_json =
+            serde_json::to_string(&bundle).map_err(|e| format!("serialize bundle: {e}"))?;
+
+        if client
+            .upload_session(&relay_url, &acct_session, &meta.session_id, &bundle_json)
+            .await
+            .is_ok()
+        {
+            count += 1;
+        }
+    }
+    log::info!("Exported {count} sessions to relay");
+    Ok(count)
+}
+
+/// Import all synced sessions from the relay into local storage.
+/// Sessions that already exist locally are skipped (no overwrite).
+/// Returns the number of newly imported sessions.
+#[tauri::command]
+pub async fn account_import_remote_sessions(
+    workspace_path: String,
+    app_state: State<'_, crate::api::app_state::AppState>,
+    path_manager: State<'_, Arc<bitfun_core::infrastructure::PathManager>>,
+) -> Result<Vec<String>, String> {
+    let (acct_session, relay_url) = read_account_context().await?;
+
+    let storage_path =
+        desktop_effective_session_storage_path(&app_state, &workspace_path, None, None).await;
+
+    let manager = PersistenceManager::new(path_manager.inner().clone())
+        .map_err(|e| format!("create persistence manager: {e}"))?;
+
+    let remote_sessions = AccountClient::new()
+        .fetch_sessions(&relay_url, &acct_session)
+        .await
+        .map_err(|e| format!("{e}"))?;
+
+    let mut imported = Vec::new();
+    for (session_id, bundle_json) in remote_sessions {
+        // Skip if session already exists locally
+        if manager
+            .load_session_metadata(&storage_path, &session_id)
+            .await
+            .ok()
+            .flatten()
+            .is_some()
+        {
+            continue;
+        }
+
+        // Deserialize the bundle
+        let bundle: SessionBundle =
+            serde_json::from_str(&bundle_json).map_err(|e| format!("deserialize bundle: {e}"))?;
+
+        // Write metadata
+        let metadata: SessionMetadata = serde_json::from_value(bundle.metadata)
+            .map_err(|e| format!("deserialize metadata: {e}"))?;
+        if manager
+            .save_session_metadata(&storage_path, &metadata)
+            .await
+            .is_err()
+        {
+            continue;
+        }
+
+        // Write turns
+        for turn_val in &bundle.turns {
+            let turn: DialogTurnData = serde_json::from_value(turn_val.clone())
+                .map_err(|e| format!("deserialize turn: {e}"))?;
+            let _ = manager.save_dialog_turn(&storage_path, &turn).await;
+        }
+
+        imported.push(session_id);
+    }
+
+    log::info!("Imported {} remote sessions", imported.len());
+    Ok(imported)
+}
+
+/// Execute a task on a remote device — sends an ExecuteOnDevice command
+/// over the device-messaging WS pathway.
+#[tauri::command]
+pub async fn account_execute_on_device(
+    target_device_id: String,
+    session_id: Option<String>,
+    content: String,
+    agent_type: Option<String>,
+    workspace_path: Option<String>,
+) -> Result<(), String> {
+    let (session, _) = read_account_context().await?;
+    let holder = get_service_holder().read().await;
+    let service = holder
+        .as_ref()
+        .ok_or_else(|| "remote connect service not initialized".to_string())?;
+
+    use bitfun_core::service::remote_connect::remote_server::RemoteCommand;
+    let envelope = serde_json::to_string(&RemoteCommand::ExecuteOnDevice {
+        session_id,
+        content,
+        agent_type,
+        workspace_path,
+    })
+    .map_err(|e| format!("serialize envelope: {e}"))?;
+
+    use bitfun_core::service::remote_connect::encryption::encrypt_to_base64;
+    let (encrypted_data, nonce) =
+        encrypt_to_base64(&session.master_key, &envelope).map_err(|e| format!("{e}"))?;
+
+    let correlation_id = uuid::Uuid::new_v4().to_string();
+    service
+        .send_device_message(&target_device_id, &correlation_id, &encrypted_data, &nonce)
         .await
         .map_err(|e| format!("{e}"))
 }
