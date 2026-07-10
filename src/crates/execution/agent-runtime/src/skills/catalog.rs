@@ -33,6 +33,10 @@ const BUILTIN_SKILL_SPECS: &[BuiltinSkillSpec] = &[
         group: BuiltinSkillGroup::ComputerUse,
     },
     BuiltinSkillSpec {
+        dir_name: "agent-eval-canvas",
+        group: BuiltinSkillGroup::Canvas,
+    },
+    BuiltinSkillSpec {
         dir_name: "docs-canvas",
         group: BuiltinSkillGroup::Canvas,
     },
