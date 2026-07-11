@@ -1,5 +1,6 @@
 //! Concrete HTTP transport for review-platform providers.
 
+use futures::StreamExt;
 use serde::Serialize;
 use serde_json::Value;
 use std::time::Duration;
@@ -18,6 +19,8 @@ pub enum ReviewHttpError {
     Http { status: u16, message: String },
     #[error("Parse error: {0}")]
     Parse(String),
+    #[error("Provider response exceeded the {limit_bytes} byte limit")]
+    ResponseTooLarge { limit_bytes: usize },
 }
 
 #[derive(Clone)]
@@ -144,6 +147,64 @@ pub async fn send_json_response(
     Ok(ReviewJsonResponse { value, headers })
 }
 
+pub async fn send_json_response_bounded(
+    request: ReviewHttpRequest,
+    max_bytes: usize,
+) -> Result<ReviewJsonResponse, ReviewHttpError> {
+    let response = request
+        .inner
+        .send()
+        .await
+        .map_err(|error| ReviewHttpError::Network(error.to_string()))?;
+
+    let status = response.status();
+    let headers = ReviewHttpHeaders::from_header_map(response.headers());
+    if response
+        .content_length()
+        .is_some_and(|content_length| content_length > max_bytes as u64)
+    {
+        return Err(ReviewHttpError::ResponseTooLarge {
+            limit_bytes: max_bytes,
+        });
+    }
+
+    let mut body = Vec::new();
+    let mut stream = response.bytes_stream();
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.map_err(|error| ReviewHttpError::Network(error.to_string()))?;
+        append_bounded_chunk(&mut body, &chunk, max_bytes)?;
+    }
+
+    if !status.is_success() {
+        let message = String::from_utf8_lossy(&body)
+            .chars()
+            .take(HTTP_ERROR_PREVIEW_CHARS)
+            .collect();
+        return Err(ReviewHttpError::Http {
+            status: status.as_u16(),
+            message,
+        });
+    }
+
+    let value = serde_json::from_slice::<Value>(&body)
+        .map_err(|error| ReviewHttpError::Parse(error.to_string()))?;
+    Ok(ReviewJsonResponse { value, headers })
+}
+
+fn append_bounded_chunk(
+    body: &mut Vec<u8>,
+    chunk: &[u8],
+    max_bytes: usize,
+) -> Result<(), ReviewHttpError> {
+    if body.len().saturating_add(chunk.len()) > max_bytes {
+        return Err(ReviewHttpError::ResponseTooLarge {
+            limit_bytes: max_bytes,
+        });
+    }
+    body.extend_from_slice(chunk);
+    Ok(())
+}
+
 pub async fn send_text(request: ReviewHttpRequest) -> Result<String, ReviewHttpError> {
     let response = request
         .inner
@@ -170,7 +231,7 @@ pub async fn send_text(request: ReviewHttpRequest) -> Result<String, ReviewHttpE
 
 #[cfg(test)]
 mod tests {
-    use super::ReviewHttpHeaders;
+    use super::{append_bounded_chunk, ReviewHttpError, ReviewHttpHeaders};
 
     #[test]
     fn review_headers_are_case_insensitive() {
@@ -191,5 +252,17 @@ mod tests {
         };
 
         assert_eq!(headers.get("x-total"), None);
+    }
+
+    #[test]
+    fn bounded_body_rejects_a_chunk_past_the_limit() {
+        let mut body = vec![1, 2];
+        let error = append_bounded_chunk(&mut body, &[3, 4], 3).unwrap_err();
+
+        assert!(matches!(
+            error,
+            ReviewHttpError::ResponseTooLarge { limit_bytes: 3 }
+        ));
+        assert_eq!(body, vec![1, 2]);
     }
 }

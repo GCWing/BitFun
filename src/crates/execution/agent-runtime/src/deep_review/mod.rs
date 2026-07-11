@@ -50,7 +50,8 @@ pub use shared_context::{
 };
 pub use target_evidence::{
     ReviewTargetEvidence, ReviewTargetEvidenceCompleteness, ReviewTargetEvidenceFile,
-    ReviewTargetEvidenceSource, ReviewTargetEvidenceValidationError, ReviewTargetWorkspaceBinding,
+    ReviewTargetEvidenceSource, ReviewTargetEvidenceValidationError,
+    ReviewTargetPullRequestIdentity, ReviewTargetWorkspaceBinding,
 };
 pub use task_execution::{DeepReviewLaunchBatchInfo, DeepReviewQueueWaitSkipReason};
 pub use team_definition::{

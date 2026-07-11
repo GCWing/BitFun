@@ -1496,6 +1496,7 @@ export class FlowChatStore {
       isTransient?: boolean;
       agentBackedTransient?: boolean;
       deepReviewRunManifest?: Session['deepReviewRunManifest'];
+      reviewTargetEvidence?: Session['reviewTargetEvidence'];
       reviewTargetFilePaths?: Session['reviewTargetFilePaths'];
     },
     remoteConnectionId?: string,
@@ -1541,6 +1542,7 @@ export class FlowChatStore {
         btwThreads: [],
         btwOrigin: relationship.btwOrigin,
         deepReviewRunManifest: meta?.deepReviewRunManifest,
+        reviewTargetEvidence: meta?.reviewTargetEvidence,
         reviewTargetFilePaths: meta?.reviewTargetFilePaths,
         isTransient: meta?.isTransient ?? false,
         agentBackedTransient: meta?.agentBackedTransient ?? false,
@@ -3394,6 +3396,7 @@ export class FlowChatStore {
             titleStatus: hasDynamicDefaultTitle ? undefined : 'generated',
             dialogTurns: [],
             status: 'idle',
+            persistedStatus: metadata.status,
             config: {
               agentType: validatedAgentType,
               modelName: metadata.modelName,
@@ -3422,6 +3425,7 @@ export class FlowChatStore {
             hasUnreadCompletion: metadata.unreadCompletion,
             needsUserAttention: metadata.needsUserAttention,
             deepReviewRunManifest: metadata.deepReviewRunManifest,
+            reviewTargetEvidence: metadata.reviewTargetEvidence,
             isTransient: false,
           };
 
@@ -3760,6 +3764,7 @@ export class FlowChatStore {
               titleStatus: hasDynamicDefaultTitle ? undefined : 'generated',
               dialogTurns: [],
               status: 'idle',
+              persistedStatus: metadata.status,
               config: {
                 agentType: validatedAgentType,
                 modelName: metadata.modelName,
@@ -3788,6 +3793,7 @@ export class FlowChatStore {
               hasUnreadCompletion: metadata.unreadCompletion,
               needsUserAttention: metadata.needsUserAttention,
               deepReviewRunManifest: metadata.deepReviewRunManifest,
+              reviewTargetEvidence: metadata.reviewTargetEvidence,
               isTransient: false,
             };
 

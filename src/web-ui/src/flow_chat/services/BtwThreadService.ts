@@ -198,6 +198,7 @@ export async function createBtwChildSession(params: {
         parentTurnIndex,
       },
       deepReviewRunManifest: params.deepReviewRunManifest,
+      reviewTargetEvidence: params.reviewTargetEvidence,
       reviewTargetFilePaths: params.reviewTargetFilePaths,
       isTransient: params.isTransient ?? false,
       agentBackedTransient: params.isTransient ?? false,

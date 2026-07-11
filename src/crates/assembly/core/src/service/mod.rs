@@ -79,9 +79,9 @@ pub use review_platform::{
     ReviewItemState, ReviewPlatformAccount, ReviewPlatformAuthChallenge,
     ReviewPlatformAuthChallengeState, ReviewPlatformCapabilities, ReviewPlatformCiLog,
     ReviewPlatformCommit, ReviewPlatformError, ReviewPlatformFile, ReviewPlatformKind,
-    ReviewPlatformPullRequest, ReviewPlatformPullRequestDetail, ReviewPlatformRemote,
-    ReviewPlatformRepositoryRef, ReviewPlatformService, ReviewPlatformThread,
-    ReviewPlatformWorkspaceSnapshot,
+    ReviewPlatformPullRequest, ReviewPlatformPullRequestDetail, ReviewPlatformPullRequestFileDiff,
+    ReviewPlatformPullRequestReviewTarget, ReviewPlatformRemote, ReviewPlatformRepositoryRef,
+    ReviewPlatformService, ReviewPlatformThread, ReviewPlatformWorkspaceSnapshot,
 };
 pub use runtime::{ResolvedCommand, RuntimeCommandCapability, RuntimeManager, RuntimeSource};
 #[cfg(feature = "product-full")]

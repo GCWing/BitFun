@@ -5,11 +5,13 @@ use crate::agentic::tools::workspace_paths::is_bitfun_runtime_uri;
 use crate::service::git::git_service::GitService;
 use crate::service::git::git_types::GitDiffParams;
 use crate::service::git::git_utils::get_repository_root;
+use crate::service::review_platform::{ReviewPlatformError, ReviewPlatformService};
 use crate::service::snapshot::manager::get_snapshot_manager_for_workspace;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use bitfun_agent_runtime::deep_review::{
-    record_review_diff_page, review_diff_page_was_returned, ReviewDiffBudgetAdmission,
+    record_review_diff_limitation, record_review_diff_page, record_review_target_stale,
+    review_diff_budget_exhausted, review_diff_page_was_returned, ReviewDiffBudgetAdmission,
     ReviewTargetEvidence, ReviewTargetEvidenceSource,
 };
 use log::{debug, warn};
@@ -204,6 +206,120 @@ impl GetFileDiffTool {
         )
     }
 
+    async fn pull_request_review_diff(
+        &self,
+        context: &ToolUseContext,
+        evidence: &ReviewTargetEvidence,
+        logical_path: &str,
+        diff_offset: usize,
+    ) -> BitFunResult<Option<Value>> {
+        if evidence.source() != ReviewTargetEvidenceSource::PullRequest {
+            return Ok(None);
+        }
+        if !evidence.contains_file(logical_path) {
+            return Err(BitFunError::tool(
+                "Requested file is outside the prepared Review target evidence".to_string(),
+            ));
+        }
+        if evidence.file_completeness_for_path(logical_path) != Some("complete") {
+            if let Some((parent_turn_id, _)) = Self::review_budget_identity(context) {
+                record_review_diff_limitation(parent_turn_id);
+            }
+            return Ok(Some(Self::limited_review_diff_data(
+                logical_path,
+                "limited",
+                "provider_file_diff_unavailable",
+                "Exact provider diff is unavailable for this prepared pull request file",
+            )));
+        }
+        let pull_request = evidence.pull_request().ok_or_else(|| {
+            BitFunError::tool("Prepared pull request Review identity is unavailable".to_string())
+        })?;
+        let base_revision = evidence.base_revision().ok_or_else(|| {
+            BitFunError::tool("Prepared pull request base revision is unavailable".to_string())
+        })?;
+        let head_revision = evidence.head_revision().ok_or_else(|| {
+            BitFunError::tool("Prepared pull request head revision is unavailable".to_string())
+        })?;
+        let repository_path = context.workspace_root().ok_or_else(|| {
+            BitFunError::tool("Workspace root is required for pull request Review".to_string())
+        })?;
+        let diff = match ReviewPlatformService::pull_request_file_diff(
+            repository_path.to_string_lossy().as_ref(),
+            pull_request.remote_id(),
+            pull_request.pull_request_id(),
+            base_revision,
+            head_revision,
+            logical_path,
+            evidence.file_page_hint_for_path(logical_path, 100),
+        )
+        .await
+        {
+            Ok(diff) => diff,
+            Err(ReviewPlatformError::StaleTarget(_)) => {
+                if let Some((parent_turn_id, _)) = Self::review_budget_identity(context) {
+                    record_review_target_stale(parent_turn_id);
+                }
+                return Ok(Some(Self::limited_review_diff_data(
+                    logical_path,
+                    "stale",
+                    "pull_request_head_changed",
+                    "Pull request head changed after Review target preparation",
+                )));
+            }
+            Err(error) => {
+                if let Some((parent_turn_id, _)) = Self::review_budget_identity(context) {
+                    record_review_diff_limitation(parent_turn_id);
+                }
+                let limitation = match error {
+                    ReviewPlatformError::Http {
+                        status: 401 | 403, ..
+                    } => "pull_request_auth_unavailable",
+                    ReviewPlatformError::Network(_) | ReviewPlatformError::Http { .. } => {
+                        "pull_request_provider_unavailable"
+                    }
+                    _ => "provider_file_diff_unavailable",
+                };
+                return Ok(Some(Self::limited_review_diff_data(
+                    logical_path,
+                    "limited",
+                    limitation,
+                    "Prepared pull request diff could not be read from the provider",
+                )));
+            }
+        };
+        let mut additions = 0usize;
+        let mut deletions = 0usize;
+        for line in diff.diff.lines() {
+            if line.starts_with('+') && !line.starts_with("+++") {
+                additions += 1;
+            } else if line.starts_with('-') && !line.starts_with("---") {
+                deletions += 1;
+            }
+        }
+        Ok(Some(Self::paginate_prepared_diff(
+            json!({
+                "file_path": logical_path,
+                "diff_type": "review_target",
+                "diff_format": "unified",
+                "diff_content": diff.diff,
+                "original_content": "",
+                "modified_content": "",
+                "base_revision": diff.base_revision,
+                "head_revision": diff.head_revision,
+                "target_fingerprint": evidence.fingerprint(),
+                "stats": {
+                    "additions": additions,
+                    "deletions": deletions
+                },
+                "message": "Diff from prepared pull request target"
+            }),
+            diff_offset,
+            evidence.fingerprint(),
+            logical_path,
+        )?))
+    }
+
     fn review_cursor(binding: &str, path: &str, offset: usize) -> String {
         let digest = Sha256::digest(format!("{binding}\0{path}\0{offset}").as_bytes());
         format!("review-v1:{offset}:{}", hex::encode(&digest[..8]))
@@ -383,6 +499,9 @@ impl GetFileDiffTool {
                 "Prepared Review diff budget cannot be tracked for this turn",
             );
         };
+        if data.get("diff_budget_truncated").and_then(Value::as_bool) == Some(true) {
+            record_review_diff_limitation(parent_turn_id);
+        }
         let page_key = Self::review_cursor(binding, path, diff_offset);
         let returned_chars = data
             .get("returned_chars")
@@ -1099,9 +1218,10 @@ Usage:
             {
                 match Self::target_evidence(context) {
                     Ok(Some(evidence)) => (
-                        relative_path
-                            .as_deref()
-                            .is_some_and(|path| evidence.diff_revisions_for_path(path).is_some()),
+                        relative_path.as_deref().is_some_and(|path| {
+                            evidence.source() == ReviewTargetEvidenceSource::PullRequest
+                                || evidence.diff_revisions_for_path(path).is_some()
+                        }),
                         relative_path.as_deref().is_some_and(|path| {
                             evidence.file_status_for_path(path) == Some("deleted")
                         }),
@@ -1253,9 +1373,45 @@ Usage:
                     image_attachments: None,
                 }]);
             }
+            if Self::review_budget_identity(context)
+                .is_some_and(|(parent_turn_id, _)| review_diff_budget_exhausted(parent_turn_id))
+            {
+                let data = Self::limited_review_diff_data(
+                    logical_path,
+                    "limited",
+                    "review_diff_budget_exhausted",
+                    "Prepared Review diff allowance exhausted",
+                );
+                let result_for_assistant = Self::diff_for_assistant(&data);
+                return Ok(vec![ToolResult::Result {
+                    data,
+                    result_for_assistant: Some(result_for_assistant),
+                    image_attachments: None,
+                }]);
+            }
             if let Some(data) =
                 Self::workspace_binding_limitation(context, evidence, logical_path).await
             {
+                let result_for_assistant = Self::diff_for_assistant(&data);
+                return Ok(vec![ToolResult::Result {
+                    data,
+                    result_for_assistant: Some(result_for_assistant),
+                    image_attachments: None,
+                }]);
+            }
+        }
+        if let Some(evidence) = prepared_evidence.as_ref() {
+            if let Some(data) = self
+                .pull_request_review_diff(context, evidence, logical_path, diff_offset)
+                .await?
+            {
+                let data = Self::apply_review_diff_budget(
+                    data,
+                    context,
+                    evidence.fingerprint(),
+                    logical_path,
+                    diff_offset,
+                );
                 let result_for_assistant = Self::diff_for_assistant(&data);
                 return Ok(vec![ToolResult::Result {
                     data,
@@ -1597,6 +1753,54 @@ mod tests {
         let result = GetFileDiffTool::exact_review_target("src/lib.rs", &context);
 
         assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn unavailable_pull_request_file_returns_limited_without_provider_access() {
+        let mut context = prepared_context();
+        context.custom_data.insert(
+            "deep_review_run_manifest".to_string(),
+            json!({
+                "evidencePack": {
+                    "reviewTarget": {
+                        "version": 1,
+                        "source": "pull_request",
+                        "fingerprint": "provider-target-fingerprint",
+                        "baseRevision": "1111111111111111111111111111111111111111",
+                        "headRevision": "2222222222222222222222222222222222222222",
+                        "completeness": "partial",
+                        "workspaceBinding": "unavailable",
+                        "pullRequest": {
+                            "remoteId": "origin",
+                            "platform": "github",
+                            "host": "github.com",
+                            "projectPath": "example/repo",
+                            "pullRequestId": "42",
+                            "number": 42,
+                            "webUrl": "https://github.com/example/repo/pull/42"
+                        },
+                        "files": [{
+                            "path": "src/lib.rs",
+                            "status": "modified",
+                            "completeness": "unavailable"
+                        }],
+                        "limitations": ["provider_file_diff_unavailable"]
+                    }
+                }
+            }),
+        );
+        let evidence = GetFileDiffTool::target_evidence(&context)
+            .expect("evidence should parse")
+            .expect("evidence should exist");
+
+        let data = GetFileDiffTool::new()
+            .pull_request_review_diff(&context, &evidence, "src/lib.rs", 0)
+            .await
+            .expect("unavailable provider diff should be structured")
+            .expect("pull request evidence should be handled");
+
+        assert_eq!(data["evidence_limited"], true);
+        assert_eq!(data["limitation"], "provider_file_diff_unavailable");
     }
 
     #[test]

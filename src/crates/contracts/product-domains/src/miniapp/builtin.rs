@@ -150,16 +150,6 @@ pub const BUILTIN_APPS: &[BuiltinMiniAppBundle] = &[
         esm_dependencies_json: "[]",
     },
     BuiltinMiniAppBundle {
-        id: "builtin-pr-review",
-        version: 3,
-        meta_json: include_str!("builtin/assets/pr-review/meta.json"),
-        html: include_str!("builtin/assets/pr-review/index.html"),
-        css: include_str!("builtin/assets/pr-review/style.css"),
-        ui_js: include_str!("builtin/assets/pr-review/ui.js"),
-        worker_js: include_str!("builtin/assets/pr-review/worker.js"),
-        esm_dependencies_json: "[]",
-    },
-    BuiltinMiniAppBundle {
         id: "builtin-ppt-live",
         version: 203,
         meta_json: include_str!("builtin/assets/ppt-live/meta.json"),
@@ -377,7 +367,6 @@ mod tests {
                 "builtin-daily-divination",
                 "builtin-regex-playground",
                 "builtin-coding-selfie",
-                "builtin-pr-review",
                 "builtin-ppt-live",
             ]
         );

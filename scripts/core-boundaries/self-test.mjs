@@ -3638,7 +3638,6 @@ export function runManifestParserSelfTest({
     {
       path: 'src/crates/contracts/product-domains/src/miniapp/builtin.rs',
       contracts: [
-        'builtin-pr-review',
         'BUILTIN_APPS',
         'BuiltinMiniAppBundle',
         'BuiltinInstallMarker',

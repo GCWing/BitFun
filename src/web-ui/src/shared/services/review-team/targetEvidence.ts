@@ -8,6 +8,7 @@ import type {
   ReviewTargetEvidenceCompleteness,
   ReviewTargetEvidenceFile,
   ReviewTargetEvidenceSource,
+  ReviewTargetPullRequestIdentity,
   ReviewTargetWorkspaceBinding,
 } from './types';
 
@@ -150,25 +151,29 @@ function evidence(params: {
   files: ReviewTargetEvidenceFile[];
   completeness: ReviewTargetEvidenceCompleteness;
   limitations?: string[];
+  pullRequest?: ReviewTargetPullRequestIdentity;
+  omittedFileCount?: number;
   fingerprintInput: unknown;
 }): ReviewTargetEvidence {
   const capped = cappedFiles(params.files);
+  const omittedFileCount = capped.omittedFileCount + (params.omittedFileCount ?? 0);
   const limitations = [...(params.limitations ?? [])];
-  if (capped.omittedFileCount > 0) {
+  if (omittedFileCount > 0 && !limitations.includes('target_file_limit_exceeded')) {
     limitations.push('target_file_limit_exceeded');
   }
   const completeness = finalCompleteness(
     params.completeness,
     capped.files,
-    capped.omittedFileCount,
+    omittedFileCount,
   );
   const fingerprint = stableReviewFingerprint({
     source: params.source,
     baseRevision: params.baseRevision ?? null,
     headRevision: params.headRevision ?? null,
     workspaceBinding: params.workspaceBinding,
+    pullRequest: params.pullRequest ?? null,
     files: capped.files,
-    omittedFileCount: capped.omittedFileCount,
+    omittedFileCount,
     limitations,
     evidence: params.fingerprintInput,
   });
@@ -181,10 +186,11 @@ function evidence(params: {
     ...(params.headRevision ? { headRevision: params.headRevision } : {}),
     completeness,
     workspaceBinding: params.workspaceBinding,
+    ...(params.pullRequest ? { pullRequest: params.pullRequest } : {}),
     files: capped.files,
     limitations,
-    ...(capped.omittedFileCount > 0
-      ? { omittedFileCount: capped.omittedFileCount }
+    ...(omittedFileCount > 0
+      ? { omittedFileCount }
       : {}),
   };
 }
@@ -384,12 +390,59 @@ export function buildGitRangeReviewTargetEvidence(params: {
   });
 }
 
+export function buildPullRequestReviewTargetEvidence(params: {
+  target: ReviewTargetClassification;
+  baseRevision?: string;
+  headRevision?: string;
+  pullRequest: ReviewTargetPullRequestIdentity;
+  files: Array<{
+    path: string;
+    oldPath?: string | null;
+    status: string;
+    diffAvailable: boolean;
+  }>;
+  omittedFileCount?: number;
+  limitations?: string[];
+}): ReviewTargetEvidence {
+  const revisionsComplete = isFullCommitId(params.baseRevision) && isFullCommitId(params.headRevision);
+  const limitations = [
+    ...(params.limitations ?? []),
+    ...(!revisionsComplete ? ['provider_revision_unresolved'] : []),
+  ];
+  const files = params.files.map((file) => ({
+    path: normalizedPath(file.path),
+    ...(file.oldPath ? { previousPath: normalizedPath(file.oldPath) } : {}),
+    status: normalizeStatus(file.status),
+    completeness: file.diffAvailable ? 'complete' as const : 'unavailable' as const,
+  }));
+  const complete = revisionsComplete
+    && (params.omittedFileCount ?? 0) === 0
+    && files.every((file) => file.completeness === 'complete');
+
+  return evidence({
+    source: 'pull_request',
+    baseRevision: params.baseRevision,
+    headRevision: params.headRevision,
+    workspaceBinding: 'unavailable',
+    pullRequest: params.pullRequest,
+    files,
+    completeness: complete ? 'complete' : 'partial',
+    limitations,
+    omittedFileCount: params.omittedFileCount,
+    fingerprintInput: {
+      pullRequest: params.pullRequest,
+      target: params.target,
+      files,
+    },
+  });
+}
+
 export function allowsReviewLiveRepositoryContext(
   evidence: ReviewTargetEvidence | undefined,
 ): boolean {
   return Boolean(
     evidence &&
-    evidence.source !== 'workspace' &&
+    evidence.source === 'git_range' &&
     evidence.workspaceBinding === 'matching_clean' &&
     isFullCommitId(evidence.baseRevision) &&
     isFullCommitId(evidence.headRevision),

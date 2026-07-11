@@ -8,7 +8,7 @@ import type {
   SessionKind,
   SessionTitleSource,
 } from '@/shared/types/session-history';
-import type { ReviewTeamRunManifest } from '@/shared/services/reviewTeamService';
+import type { ReviewTargetEvidence, ReviewTeamRunManifest } from '@/shared/services/reviewTeamService';
 
 // Base type for streaming items.
 export interface FlowItem {
@@ -302,6 +302,8 @@ export interface Session {
   // - 'error': state machine state === ERROR
   // - 'idle': otherwise
   status: 'active' | 'idle' | 'error';
+  /** Persisted backend status retained while historical turns are metadata-only. */
+  persistedStatus?: 'active' | 'archived' | 'completed';
   
   config: SessionConfig;
   createdAt: number;
@@ -455,6 +457,9 @@ export interface Session {
 
   /** Per-run reviewer manifest for Deep Review child sessions. */
   deepReviewRunManifest?: ReviewTeamRunManifest;
+
+  /** Immutable target identity used to associate Review results with a PR or Git target. */
+  reviewTargetEvidence?: ReviewTargetEvidence;
 
   /** Original file scope for Review remediation follow-ups. */
   reviewTargetFilePaths?: string[];

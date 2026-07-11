@@ -10,7 +10,9 @@ use crate::service::config::get_app_language_code;
 use crate::service::i18n::code_review_copy_for_language;
 use crate::util::errors::BitFunResult;
 use async_trait::async_trait;
-use bitfun_agent_runtime::deep_review::review_diff_budget_exhausted;
+use bitfun_agent_runtime::deep_review::{
+    review_diff_budget_exhausted, review_diff_limited, review_target_stale,
+};
 use log::warn;
 use serde_json::{json, Value};
 
@@ -687,6 +689,15 @@ impl Tool for CodeReviewTool {
                 &mut filled_input,
                 "Review diff allowance was exhausted; uncovered files remain limited.",
             );
+        }
+        if review_parent_turn_id.is_some_and(review_diff_limited) {
+            deep_review_report::apply_review_runtime_limitation(
+                &mut filled_input,
+                "One or more prepared Review diffs were unavailable or truncated; uncovered scope remains limited.",
+            );
+        }
+        if review_parent_turn_id.is_some_and(review_target_stale) {
+            deep_review_report::apply_review_runtime_stale(&mut filled_input);
         }
         if deep_review {
             Self::fill_deep_review_runtime_tracker_signals(

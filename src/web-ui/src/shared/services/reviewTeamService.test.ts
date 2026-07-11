@@ -12,12 +12,10 @@ import {
   canUseSubagentAsReviewTeamMember,
   loadDefaultReviewTeamDefinition,
   loadDefaultReviewTeamConfig,
-  loadReviewTeamProjectStrategyOverride,
   loadReviewTeamRateLimitStatus,
   prepareDefaultReviewTeamForLaunch,
   resolveDefaultReviewTeam,
   saveDefaultReviewTeamConcurrencyPolicy,
-  saveReviewTeamProjectStrategyOverride,
   type ReviewTeamStoredConfig,
 } from './reviewTeamService';
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
@@ -276,53 +274,6 @@ describe('reviewTeamService', () => {
     await expect(loadReviewTeamRateLimitStatus()).resolves.toBeNull();
     await expect(loadReviewTeamRateLimitStatus()).resolves.toBeNull();
     await expect(loadReviewTeamRateLimitStatus()).resolves.toBeNull();
-  });
-
-  it('loads project strategy overrides by normalized workspace path', async () => {
-    vi.mocked(configAPI.getConfig).mockResolvedValueOnce({
-      'd:/workspace/repo': 'deep',
-      '/test-fixtures/project-a': 'quick',
-      invalid: 'invalid',
-    });
-
-    await expect(
-      loadReviewTeamProjectStrategyOverride('D:\\workspace\\repo'),
-    ).resolves.toBe('deep');
-    expect(configAPI.getConfig).toHaveBeenCalledWith(
-      'ai.review_team_project_strategy_overrides',
-      { skipRetryOnNotFound: true },
-    );
-  });
-
-  it('saves and clears project strategy overrides by normalized workspace path', async () => {
-    vi.mocked(configAPI.getConfig)
-      .mockResolvedValueOnce({
-        'd:/workspace/repo': 'quick',
-        '/test-fixtures/project-a': 'normal',
-      })
-      .mockResolvedValueOnce({
-        'd:/workspace/repo': 'deep',
-        '/test-fixtures/project-a': 'normal',
-      });
-
-    await saveReviewTeamProjectStrategyOverride('D:\\workspace\\repo', 'deep');
-    expect(configAPI.setConfig).toHaveBeenNthCalledWith(
-      1,
-      'ai.review_team_project_strategy_overrides',
-      {
-        'd:/workspace/repo': 'deep',
-        '/test-fixtures/project-a': 'normal',
-      },
-    );
-
-    await saveReviewTeamProjectStrategyOverride('D:\\workspace\\repo');
-    expect(configAPI.setConfig).toHaveBeenNthCalledWith(
-      2,
-      'ai.review_team_project_strategy_overrides',
-      {
-        '/test-fixtures/project-a': 'normal',
-      },
-    );
   });
 
   it('only force-enables locked core members before launch', async () => {

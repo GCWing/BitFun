@@ -84,7 +84,7 @@ export interface DeepReviewEvidencePackPrivacyBoundary {
   ];
 }
 
-export type ReviewTargetEvidenceSource = 'workspace' | 'git_range';
+export type ReviewTargetEvidenceSource = 'workspace' | 'git_range' | 'pull_request';
 export type ReviewTargetEvidenceCompleteness = 'complete' | 'partial' | 'unknown' | 'stale';
 export type ReviewTargetWorkspaceBinding =
   | 'matching_clean'
@@ -99,6 +99,16 @@ export interface ReviewTargetEvidenceFile {
   completeness: 'complete' | 'partial' | 'unavailable';
 }
 
+export interface ReviewTargetPullRequestIdentity {
+  remoteId: string;
+  platform: 'github' | 'gitlab' | 'gitcode';
+  host: string;
+  projectPath: string;
+  pullRequestId: string;
+  number: number;
+  webUrl: string;
+}
+
 export interface ReviewTargetEvidence {
   version: 1;
   source: ReviewTargetEvidenceSource;
@@ -107,6 +117,7 @@ export interface ReviewTargetEvidence {
   headRevision?: string;
   completeness: ReviewTargetEvidenceCompleteness;
   workspaceBinding: ReviewTargetWorkspaceBinding;
+  pullRequest?: ReviewTargetPullRequestIdentity;
   files: ReviewTargetEvidenceFile[];
   limitations: string[];
   omittedFileCount?: number;
@@ -137,8 +148,6 @@ export interface ReviewStrategyProfile {
   level: ReviewStrategyLevel;
   label: string;
   summary: string;
-  tokenImpact: string;
-  runtimeImpact: string;
   defaultModelSlot: 'fast' | 'primary';
   promptDirective: string;
   /** Per-role strategy directives. When a role key is present, its directive
@@ -312,7 +321,7 @@ export interface ReviewQualityDecisionMetadata {
   level: 'l2' | 'l3';
   executionMode: 'strict';
   strategyLevel: Exclude<ReviewStrategyLevel, 'quick'>;
-  reason: 'risk_score' | 'explicit_strict' | 'unresolved_target' | 'project_strategy_override';
+  reason: 'risk_score' | 'explicit_strict' | 'unresolved_target';
   score: number;
   requiresConsent: boolean;
 }

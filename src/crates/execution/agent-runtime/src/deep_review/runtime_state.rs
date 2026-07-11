@@ -136,6 +136,22 @@ pub fn review_diff_budget_exhausted(parent_dialog_turn_id: &str) -> bool {
     GLOBAL_DEEP_REVIEW_BUDGET_TRACKER.review_diff_budget_exhausted(parent_dialog_turn_id)
 }
 
+pub fn record_review_diff_limitation(parent_dialog_turn_id: &str) {
+    GLOBAL_DEEP_REVIEW_BUDGET_TRACKER.record_review_diff_limitation(parent_dialog_turn_id)
+}
+
+pub fn review_diff_limited(parent_dialog_turn_id: &str) -> bool {
+    GLOBAL_DEEP_REVIEW_BUDGET_TRACKER.review_diff_limited(parent_dialog_turn_id)
+}
+
+pub fn record_review_target_stale(parent_dialog_turn_id: &str) {
+    GLOBAL_DEEP_REVIEW_BUDGET_TRACKER.record_review_target_stale(parent_dialog_turn_id)
+}
+
+pub fn review_target_stale(parent_dialog_turn_id: &str) -> bool {
+    GLOBAL_DEEP_REVIEW_BUDGET_TRACKER.review_target_stale(parent_dialog_turn_id)
+}
+
 pub fn review_diff_page_was_returned(
     parent_dialog_turn_id: &str,
     reviewer_id: &str,

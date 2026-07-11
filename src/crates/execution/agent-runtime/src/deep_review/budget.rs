@@ -53,6 +53,8 @@ struct DeepReviewTurnBudget {
     review_diff_returned_chars: usize,
     review_diff_returned_pages_by_reviewer: HashMap<String, HashSet<String>>,
     review_diff_exhausted: bool,
+    review_diff_limited: bool,
+    review_target_stale: bool,
     effective_concurrency: Option<DeepReviewEffectiveConcurrencyState>,
     runtime_diagnostics: DeepReviewRuntimeDiagnostics,
     created_at: Instant,
@@ -74,6 +76,8 @@ impl DeepReviewTurnBudget {
             review_diff_returned_chars: 0,
             review_diff_returned_pages_by_reviewer: HashMap::new(),
             review_diff_exhausted: false,
+            review_diff_limited: false,
+            review_target_stale: false,
             effective_concurrency: None,
             runtime_diagnostics: DeepReviewRuntimeDiagnostics::default(),
             created_at: now,
@@ -195,6 +199,38 @@ impl DeepReviewBudgetTracker {
         self.turns
             .get(parent_dialog_turn_id)
             .is_some_and(|turn| turn.review_diff_exhausted)
+    }
+
+    pub fn record_review_diff_limitation(&self, parent_dialog_turn_id: &str) {
+        let now = Instant::now();
+        let mut turn = self
+            .turns
+            .entry(parent_dialog_turn_id.to_string())
+            .or_insert_with(|| DeepReviewTurnBudget::new(now));
+        turn.review_diff_limited = true;
+        turn.updated_at = now;
+    }
+
+    pub fn review_diff_limited(&self, parent_dialog_turn_id: &str) -> bool {
+        self.turns
+            .get(parent_dialog_turn_id)
+            .is_some_and(|turn| turn.review_diff_limited)
+    }
+
+    pub fn record_review_target_stale(&self, parent_dialog_turn_id: &str) {
+        let now = Instant::now();
+        let mut turn = self
+            .turns
+            .entry(parent_dialog_turn_id.to_string())
+            .or_insert_with(|| DeepReviewTurnBudget::new(now));
+        turn.review_target_stale = true;
+        turn.updated_at = now;
+    }
+
+    pub fn review_target_stale(&self, parent_dialog_turn_id: &str) -> bool {
+        self.turns
+            .get(parent_dialog_turn_id)
+            .is_some_and(|turn| turn.review_target_stale)
     }
 
     pub fn review_diff_page_was_returned(
@@ -980,6 +1016,18 @@ mod tests {
             ReviewDiffBudgetAdmission::Exhausted
         );
         assert!(tracker.review_diff_budget_exhausted("turn-exhausted"));
+    }
+
+    #[test]
+    fn review_runtime_limitations_are_tracked_per_turn() {
+        let tracker = DeepReviewBudgetTracker::default();
+
+        tracker.record_review_diff_limitation("turn-limited");
+        tracker.record_review_target_stale("turn-stale");
+
+        assert!(tracker.review_diff_limited("turn-limited"));
+        assert!(!tracker.review_target_stale("turn-limited"));
+        assert!(tracker.review_target_stale("turn-stale"));
     }
 
     #[test]

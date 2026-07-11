@@ -99,7 +99,7 @@ Plugin Runtime Host（按需启用）
 |---|---|---|
 | 任务事实、事件序列和审计事实落盘 | Agent Kernel | 产品入口、插件和适配器只能提交请求、descriptor 或候选效果；Security Boundary 只提交安全决策和安全审计 payload，不直接维护事件序列 |
 | 工具执行结果 | Execution | 当前 P0 插件只能提供 tool provider candidate、只读证据候选或后置证据候选；输入补丁候选必须等真实消费方和安全评审后再进入后续阶段 |
-| Review 目标证据 | 项目集成面解析当前工作区 / Git range / PR 的原始事实，交付物与证据面生成本次会话的固定目标清单和完整度；只有 immutable revision 或真实快照可声明内容不可变 | Reviewer、PR MiniApp 和质量决策层只能消费目标证据或提交展示/执行请求；不能改写 base/head、静默补 fetch、把文件重叠当作目标身份 |
+| Review 目标证据 | 项目集成面解析当前工作区 / Git range / PR 的原始事实，交付物与证据面生成本次会话的固定目标清单和完整度；只有 immutable revision 或真实快照可声明内容不可变 | Reviewer、PR 面板和质量决策层只能消费目标证据或提交展示/执行请求；不能改写 base/head、静默补 fetch、把文件重叠当作目标身份 |
 | 权限和安全决策 | Security Boundary 产生 permission decision、`security.decided` payload 和安全审计 payload | ACP、MCP、hook、plugin 或模型建议不能直接 approve、deny；Agent Kernel 只记录决策事实，不重新判定权限 |
 | 就绪度和门禁视图 | 变更就绪度 / PR 门禁，基于证据、策略和人工决策生成 | Execution 和插件不能写通过、失败或阻断结论 |
 | 质量数据视图 | Quality Data Plane | 只归一化、查询和生成只读视图，不成为新的权威状态源 |
@@ -156,7 +156,7 @@ Plugin Runtime Host（按需启用）
 | 用户可临时放行 | 应急放行有范围、期限、记录和撤销 |
 | 组织策略可强制 | 受管策略高于本地覆盖 |
 | 模型输出作为候选 | 模型只能输出解释、摘要、风险或影响候选；策略改变和权威状态来自确定性证据、用户决策或受管策略 |
-| Review 目标先于执行 | 当前修改和明确 Git range 必须先形成带 revision、文件状态和完整度的只读目标证据；证据缺失只能降级，不能由 Reviewer 猜测或写成完整覆盖 |
+| Review 目标先于执行 | 当前修改、明确 Git range 和 provider PR 必须先形成带 revision、文件状态和完整度的只读目标证据；证据缺失只能降级，不能由 Reviewer 猜测或写成完整覆盖 |
 | Reviewer Git 最小权限 | 保留既有 Reviewer Git 暴露以兼容旧入口，但 prepared work packet 不把它作为 changed-code 证据，也不新增 Git 工具或任意 shell；prepared target 只通过有界 `GetFileDiff` 消费变更。只有本地仓库与目标 head 匹配且整个工作区干净时，现有 Read/Grep/Glob/LS 才补充 live context；不做逐调用全仓扫描、网络、checkout 或仓库状态修改 |
 | 能力/效果模型统一 | tool、MCP、skills、插件、hook 和内置能力必须映射为能力声明、目标对象、数据类别、信任来源和副作用候选 |
 | 未声明能力受限 | 新增扩展未声明能力、声明不完整或运行时行为超出声明时，只能进入受限模式或安全确认，不能按低风险静默执行 |
@@ -180,5 +180,5 @@ Plugin Runtime Host（按需启用）
 | 工具复写静默越权 | 内置工具复写必须显式展示、按项目生效，并重新经过安全边界 |
 | 图谱和证据过早显露 | 只在解释、PR、发布、事故时显性化 |
 | Review 审错目标或复用过期结果 | base/head、目标指纹、完整度和 workspace binding 进入目标证据；head、diff 或绑定变化后旧结果只能作为历史引用，不能发布或支撑当前就绪度 |
-| “只读 Git”仍产生副作用 | Reviewer 的既有 Git 暴露不扩权，prepared work packet 不将其作为 changed-code 证据；目标 diff 只走禁用 external diff/textconv 的有界 `GetFileDiff`，普通 Agent 和旧 Review 保留既有行为；remote exact diff 不可用时在 Reviewer 启动前停止 |
+| “只读 Git”仍产生副作用 | Reviewer 的既有 Git 暴露不扩权，prepared work packet 不将其作为 changed-code 证据；本地目标 diff 走禁用 external diff/textconv 的有界 `GetFileDiff`，provider PR diff 按文件读取并复核 base/head；普通 Agent 和旧 Review 保留既有行为；exact diff 不可用时明确降级或在 Reviewer 启动前停止 |
 | 平均体验掩盖局部问题 | 指标按用户画像、任务风险、内部策略画像、用户可见视图、入口平台和受管状态切片 |

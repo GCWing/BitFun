@@ -3,6 +3,7 @@ import { classifyReviewTargetFromFiles } from '../reviewTargetClassifier';
 import {
   allowsReviewLiveRepositoryContext,
   buildGitRangeReviewTargetEvidence,
+  buildPullRequestReviewTargetEvidence,
   buildUnknownReviewTargetEvidence,
   buildWorkspaceReviewTargetEvidence,
   stableReviewFingerprint,
@@ -277,5 +278,32 @@ describe('Review target evidence', () => {
 
     expect(first).toHaveLength(16);
     expect(first).not.toBe(second);
+  });
+
+  it('binds pull request evidence to provider identity without enabling live workspace reads', () => {
+    const target = classifyReviewTargetFromFiles(['src/lib.rs'], 'pull_request');
+    const evidence = buildPullRequestReviewTargetEvidence({
+      target,
+      baseRevision: '1'.repeat(40),
+      headRevision: '2'.repeat(40),
+      pullRequest: {
+        remoteId: 'origin|https://github.com/example/repo.git',
+        platform: 'github',
+        host: 'github.com',
+        projectPath: 'example/repo',
+        pullRequestId: '42',
+        number: 42,
+        webUrl: 'https://github.com/example/repo/pull/42',
+      },
+      files: [{
+        path: 'src/lib.rs',
+        status: 'modified',
+        diffAvailable: true,
+      }],
+    });
+
+    expect(evidence.completeness).toBe('complete');
+    expect(evidence.pullRequest?.pullRequestId).toBe('42');
+    expect(allowsReviewLiveRepositoryContext(evidence)).toBe(false);
   });
 });

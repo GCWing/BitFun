@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReviewTeamRunManifest } from '@/shared/services/reviewTeamService';
 import {
   launchPreparedReviewSession,
+  prepareReviewLaunchFromPullRequest,
   prepareReviewLaunchFromSessionFiles,
   prepareReviewLaunchFromSlashCommand,
 } from './ReviewService';
@@ -10,7 +11,6 @@ const mocks = vi.hoisted(() => ({
   buildDeepReviewLaunchFromSessionFiles: vi.fn(),
   buildDeepReviewLaunchFromSlashCommand: vi.fn(),
   launchDeepReviewSession: vi.fn(),
-  loadProjectStrategyOverride: vi.fn(),
   resolveSlashCommandReviewTarget: vi.fn(),
   resolveCurrentFileReviewSnapshot: vi.fn(),
   createBtwChildSession: vi.fn(),
@@ -39,15 +39,6 @@ vi.mock('./DeepReviewService', () => ({
     mocks.buildDeepReviewLaunchFromSlashCommand(...args),
   launchDeepReviewSession: (...args: unknown[]) => mocks.launchDeepReviewSession(...args),
 }));
-
-vi.mock('@/shared/services/reviewTeamService', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/shared/services/reviewTeamService')>();
-  return {
-    ...actual,
-    loadReviewTeamProjectStrategyOverride: (...args: unknown[]) =>
-      mocks.loadProjectStrategyOverride(...args),
-  };
-});
 
 vi.mock('../deep-review/launch/targetResolver', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../deep-review/launch/targetResolver')>();
@@ -143,7 +134,6 @@ describe('ReviewService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.sessions.clear();
-    mocks.loadProjectStrategyOverride.mockResolvedValue(undefined);
     mocks.createBtwChildSession.mockResolvedValue({
       childSessionId: 'review-child',
       parentDialogTurnId: 'turn-1',
@@ -370,6 +360,72 @@ describe('ReviewService', () => {
     )).rejects.toThrow('Remote Git range Review is not supported yet');
     expect(mocks.decideReviewQuality).not.toHaveBeenCalled();
     expect(mocks.buildDeepReviewLaunchFromSlashCommand).not.toHaveBeenCalled();
+  });
+
+  it('prepares a provider-bound pull request review without embedding the diff', async () => {
+    const prepared = await prepareReviewLaunchFromPullRequest({
+      workspacePath: 'D:/workspace/project',
+      remote: {
+        id: 'origin|https://github.com/example/repo.git',
+        name: 'origin',
+        url: 'https://github.com/example/repo.git',
+        platform: 'github',
+        host: 'github.com',
+        owner: 'example',
+        repositoryName: 'repo',
+        projectPath: 'example/repo',
+        webUrl: 'https://github.com/example/repo',
+        supported: true,
+        authState: 'connected',
+        authSource: 'stored',
+      },
+      repository: {
+        providerId: 'origin|https://github.com/example/repo.git',
+        platform: 'github',
+        host: 'github.com',
+        owner: 'example',
+        name: 'repo',
+        projectPath: 'example/repo',
+        defaultBranch: 'main',
+        workspacePath: 'D:/workspace/project',
+        webUrl: 'https://github.com/example/repo',
+      },
+      reviewTarget: {
+        pullRequest: {
+          id: '42',
+          number: 42,
+          title: 'Fix review target',
+          state: 'open',
+          author: 'alice',
+          sourceBranch: 'feature',
+          targetBranch: 'main',
+          baseRevision: '1'.repeat(40),
+          headRevision: '2'.repeat(40),
+          updatedAt: '2026-07-11T00:00:00Z',
+          webUrl: 'https://github.com/example/repo/pull/42',
+          additions: 3,
+          deletions: 1,
+          changedFiles: 1,
+          comments: 0,
+          reviewDecision: 'pending',
+          checks: { total: 0, passed: 0, failed: 0, pending: 0 },
+        },
+        files: [{
+          path: 'src/lib.rs',
+          status: 'modified',
+          additions: 3,
+          deletions: 1,
+          diffAvailable: true,
+        }],
+        omittedFileCount: 0,
+        limitations: [],
+      },
+    });
+
+    expect(prepared.mode).toBe('standard');
+    expect(prepared.targetEvidence.source).toBe('pull_request');
+    expect(prepared.targetEvidence.pullRequest?.pullRequestId).toBe('42');
+    expect(prepared.prompt).not.toContain('@@');
   });
 
   it('blocks remote workspace Review before spending reviewer capacity', async () => {

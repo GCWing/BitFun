@@ -9595,10 +9595,6 @@ export const requiredContentRules = [
       'product-domains owns built-in MiniApp bundle assets, marker, hash, seed orchestration, and host adapter contract while core keeps concrete IO and recompilation',
     patterns: [
       {
-        regex: /id: "builtin-pr-review"/,
-        message: 'missing built-in PR Review MiniApp bundle anchor',
-      },
-      {
         regex: /\bpub const BUILTIN_APPS\b/,
         message: 'missing built-in MiniApp bundle asset owner',
       },

@@ -15,6 +15,7 @@ const TARGET_STRING_LIMIT: usize = 4096;
 pub enum ReviewTargetEvidenceSource {
     Workspace,
     GitRange,
+    PullRequest,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -39,6 +40,47 @@ pub struct ReviewTargetEvidenceFile {
     previous_path: Option<String>,
     status: String,
     completeness: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReviewTargetPullRequestIdentity {
+    remote_id: String,
+    platform: String,
+    host: String,
+    project_path: String,
+    pull_request_id: String,
+    number: u64,
+    web_url: String,
+}
+
+impl ReviewTargetPullRequestIdentity {
+    pub fn remote_id(&self) -> &str {
+        &self.remote_id
+    }
+
+    pub fn pull_request_id(&self) -> &str {
+        &self.pull_request_id
+    }
+
+    pub fn platform(&self) -> &str {
+        &self.platform
+    }
+
+    pub fn host(&self) -> &str {
+        &self.host
+    }
+
+    pub fn project_path(&self) -> &str {
+        &self.project_path
+    }
+
+    pub fn number(&self) -> u64 {
+        self.number
+    }
+
+    pub fn web_url(&self) -> &str {
+        &self.web_url
+    }
 }
 
 impl ReviewTargetEvidenceFile {
@@ -72,6 +114,7 @@ pub struct ReviewTargetEvidence {
     head_revision: Option<String>,
     completeness: ReviewTargetEvidenceCompleteness,
     workspace_binding: ReviewTargetWorkspaceBinding,
+    pull_request: Option<ReviewTargetPullRequestIdentity>,
     files: Vec<ReviewTargetEvidenceFile>,
     limitations: Vec<String>,
     omitted_file_count: usize,
@@ -120,6 +163,7 @@ impl ReviewTargetEvidence {
         let source = match required_string(evidence, &["source"], "reviewTarget.source")?.as_str() {
             "workspace" => ReviewTargetEvidenceSource::Workspace,
             "git_range" => ReviewTargetEvidenceSource::GitRange,
+            "pull_request" => ReviewTargetEvidenceSource::PullRequest,
             _ => {
                 return Err(ReviewTargetEvidenceValidationError::invalid(
                     "reviewTarget.source",
@@ -171,6 +215,23 @@ impl ReviewTargetEvidence {
                 ))
             }
         };
+        let pull_request = evidence
+            .get("pullRequest")
+            .or_else(|| evidence.get("pull_request"))
+            .map(parse_pull_request_identity)
+            .transpose()?;
+        if source == ReviewTargetEvidenceSource::PullRequest && pull_request.is_none() {
+            return Err(ReviewTargetEvidenceValidationError::invalid(
+                "reviewTarget.pullRequest",
+                "pull request targets require provider identity",
+            ));
+        }
+        if source != ReviewTargetEvidenceSource::PullRequest && pull_request.is_some() {
+            return Err(ReviewTargetEvidenceValidationError::invalid(
+                "reviewTarget.pullRequest",
+                "provider identity is only valid for pull request targets",
+            ));
+        }
 
         let file_values = required_array(
             evidence,
@@ -237,7 +298,7 @@ impl ReviewTargetEvidence {
         {
             return Err(ReviewTargetEvidenceValidationError::invalid(
                 "reviewTarget.completeness",
-                "complete Git range targets require base and head revisions",
+                "complete immutable targets require base and head revisions",
             ));
         }
         if completeness == ReviewTargetEvidenceCompleteness::Complete
@@ -247,7 +308,7 @@ impl ReviewTargetEvidence {
         {
             return Err(ReviewTargetEvidenceValidationError::invalid(
                 "reviewTarget.completeness",
-                "complete Git range targets require full commit ids",
+                "complete immutable targets require full commit ids",
             ));
         }
         if completeness == ReviewTargetEvidenceCompleteness::Complete
@@ -259,7 +320,7 @@ impl ReviewTargetEvidence {
             ));
         }
         if workspace_binding == ReviewTargetWorkspaceBinding::MatchingClean
-            && (source == ReviewTargetEvidenceSource::Workspace
+            && (source != ReviewTargetEvidenceSource::GitRange
                 || !base_revision.as_deref().is_some_and(is_full_commit_id)
                 || !head_revision.as_deref().is_some_and(is_full_commit_id))
         {
@@ -277,6 +338,7 @@ impl ReviewTargetEvidence {
             head_revision,
             completeness,
             workspace_binding,
+            pull_request,
             files,
             limitations,
             omitted_file_count,
@@ -307,6 +369,10 @@ impl ReviewTargetEvidence {
         self.workspace_binding
     }
 
+    pub fn pull_request(&self) -> Option<&ReviewTargetPullRequestIdentity> {
+        self.pull_request.as_ref()
+    }
+
     pub fn files(&self) -> &[ReviewTargetEvidenceFile] {
         &self.files
     }
@@ -328,6 +394,21 @@ impl ReviewTargetEvidence {
             .iter()
             .find(|file| file.matches_path(path))
             .map(ReviewTargetEvidenceFile::status)
+    }
+
+    pub fn file_completeness_for_path(&self, path: &str) -> Option<&str> {
+        self.files
+            .iter()
+            .find(|file| file.matches_path(path))
+            .map(ReviewTargetEvidenceFile::completeness)
+    }
+
+    pub fn file_page_hint_for_path(&self, path: &str, page_size: usize) -> Option<u32> {
+        if page_size == 0 {
+            return None;
+        }
+        let index = self.files.iter().position(|file| file.matches_path(path))?;
+        u32::try_from(index / page_size + 1).ok()
     }
 
     pub fn diff_revisions_for_path(&self, path: &str) -> Option<(&str, &str)> {
@@ -358,7 +439,7 @@ impl ReviewTargetEvidence {
     }
 
     pub fn allows_live_repository_context(&self) -> bool {
-        self.source != ReviewTargetEvidenceSource::Workspace
+        self.source == ReviewTargetEvidenceSource::GitRange
             && self.workspace_binding == ReviewTargetWorkspaceBinding::MatchingClean
             && self.base_revision.as_deref().is_some_and(is_full_commit_id)
             && self.head_revision.as_deref().is_some_and(is_full_commit_id)
@@ -507,6 +588,49 @@ impl fmt::Display for ReviewTargetEvidenceValidationError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(&self.detail)
     }
+}
+
+fn parse_pull_request_identity(
+    value: &Value,
+) -> Result<ReviewTargetPullRequestIdentity, ReviewTargetEvidenceValidationError> {
+    if !value.is_object() {
+        return Err(ReviewTargetEvidenceValidationError::invalid(
+            "reviewTarget.pullRequest",
+            "expected object",
+        ));
+    }
+    let platform = required_string(value, &["platform"], "reviewTarget.pullRequest.platform")?;
+    if !matches!(platform.as_str(), "github" | "gitlab" | "gitcode") {
+        return Err(ReviewTargetEvidenceValidationError::invalid(
+            "reviewTarget.pullRequest.platform",
+            "unknown provider",
+        ));
+    }
+    Ok(ReviewTargetPullRequestIdentity {
+        remote_id: required_string(
+            value,
+            &["remoteId", "remote_id"],
+            "reviewTarget.pullRequest.remoteId",
+        )?,
+        platform,
+        host: required_string(value, &["host"], "reviewTarget.pullRequest.host")?,
+        project_path: required_string(
+            value,
+            &["projectPath", "project_path"],
+            "reviewTarget.pullRequest.projectPath",
+        )?,
+        pull_request_id: required_string(
+            value,
+            &["pullRequestId", "pull_request_id"],
+            "reviewTarget.pullRequest.pullRequestId",
+        )?,
+        number: required_u64(value, &["number"], "reviewTarget.pullRequest.number")?,
+        web_url: required_string(
+            value,
+            &["webUrl", "web_url"],
+            "reviewTarget.pullRequest.webUrl",
+        )?,
+    })
 }
 
 fn value_for_any_key<'a>(value: &'a Value, keys: &[&str]) -> Option<&'a Value> {
@@ -743,6 +867,33 @@ mod tests {
                 "2222222222222222222222222222222222222222"
             ))
         );
+    }
+
+    #[test]
+    fn parses_pull_request_identity_without_enabling_live_repository_context() {
+        let mut value = manifest();
+        value["evidencePack"]["reviewTarget"]["source"] = json!("pull_request");
+        value["evidencePack"]["reviewTarget"]["workspaceBinding"] = json!("unavailable");
+        value["evidencePack"]["reviewTarget"]["pullRequest"] = json!({
+            "remoteId": "origin|https://github.com/example/repo.git",
+            "platform": "github",
+            "host": "github.com",
+            "projectPath": "example/repo",
+            "pullRequestId": "42",
+            "number": 42,
+            "webUrl": "https://github.com/example/repo/pull/42"
+        });
+
+        let evidence = ReviewTargetEvidence::from_manifest(&value)
+            .expect("pull request evidence should validate")
+            .expect("pull request evidence should exist");
+        let identity = evidence
+            .pull_request()
+            .expect("provider identity should be retained");
+        assert_eq!(identity.pull_request_id(), "42");
+        assert_eq!(identity.project_path(), "example/repo");
+        assert!(!evidence.allows_live_repository_context());
+        assert_eq!(evidence.diff_revisions_for_path("src/lib.rs"), None);
     }
 
     #[test]

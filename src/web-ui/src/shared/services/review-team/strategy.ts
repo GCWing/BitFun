@@ -27,8 +27,6 @@ export const REVIEW_STRATEGY_PROFILES: Record<
     label: 'Quick',
     summary:
       'Quick keeps built-in target-matched checks focused on the most likely issues.',
-    tokenImpact: '0.4-0.6x',
-    runtimeImpact: '0.5-0.7x',
     defaultModelSlot: 'fast',
     promptDirective:
       'Prefer a concise diff-focused pass. Report only high-confidence correctness, security, or regression risks and avoid speculative design rewrites.',
@@ -52,8 +50,6 @@ export const REVIEW_STRATEGY_PROFILES: Record<
     label: 'Standard',
     summary:
       'Standard balances role coverage with practical evidence for day-to-day code review.',
-    tokenImpact: '1x',
-    runtimeImpact: '1x',
     defaultModelSlot: 'fast',
     promptDirective:
       'Perform the standard role-specific review. Balance coverage with precision and include concrete evidence for each issue.',
@@ -77,8 +73,6 @@ export const REVIEW_STRATEGY_PROFILES: Record<
     label: 'Strict',
     summary:
       'Strict review uses the broadest reviewer coverage and budget for risky or release-sensitive changes.',
-    tokenImpact: '1.8-2.5x',
-    runtimeImpact: '1.5-2.5x',
     defaultModelSlot: 'primary',
     promptDirective:
       'Run a thorough role-specific pass. Inspect edge cases, cross-file interactions, failure modes, and remediation tradeoffs before finalizing findings.',

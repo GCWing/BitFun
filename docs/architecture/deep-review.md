@@ -68,7 +68,7 @@ If the first launch message has an uncertain outcome after the child session is 
 
 ## Target Evidence
 
-Review target evidence is session-scoped and covers current workspace changes or an explicit local Git range. It carries:
+Review target evidence is session-scoped and covers current workspace changes, an explicit local Git range, or a provider pull request. It carries:
 
 - source kind and opaque target fingerprint
 - base and head revisions
@@ -77,11 +77,11 @@ Review target evidence is session-scoped and covers current workspace changes or
 - a deterministic workspace binding that says whether the local repository head matches the target head and whether any staged, unstaged, untracked, or conflicted worktree state could contaminate repository context
 - final report evidence status (`complete`, `limited`, `stale`, or `failed`) separately from the model's risk and recommendation
 
-An explicit, complete Git range with a matching clean workspace may report `complete`. Workspace evidence remains `limited` because it is mutable, even when its prepared diff coverage is complete. Limited or stale evidence does not rewrite the model's risk or recommendation; the report and UI display reliability separately. Invalid evidence fails closed, while historical manifests with no target evidence keep legacy behavior.
+An explicit, complete Git range with a matching clean workspace or a provider PR with immutable base/head and complete per-file diff availability may report `complete`. Workspace evidence remains `limited` because it is mutable, even when its prepared diff coverage is complete. Limited or stale evidence does not rewrite the model's risk or recommendation; the report and UI display reliability separately. Invalid evidence fails closed, while historical manifests with no target evidence keep legacy behavior.
 
-Prepared Review work packets use bounded `GetFileDiff` pages as changed-code evidence. The parent Review has a 240,000-character aggregate allowance with no hard call-count limit. Repeating the same page for the same reviewer returns a compact already-served result instead of the diff again. Exhaustion and stale workspace bindings return structured limited evidence. Existing generic Git exposure remains for legacy compatibility but does not authorize ref guessing or scope widening; Read/Grep/Glob/LS are supplemental only for a matching clean Git-range binding.
+Prepared Review work packets use bounded `GetFileDiff` pages as changed-code evidence. Local ranges read exact Git revisions; PR targets read provider diffs on demand and revalidate base/head before each file. The parent Review has a 240,000-character aggregate allowance with no hard call-count limit. Repeating the same page for the same reviewer returns a compact already-served result instead of the diff again. Exhaustion and stale target bindings return structured limited evidence. Existing generic Git exposure remains for legacy compatibility but does not authorize ref guessing or scope widening; Read/Grep/Glob/LS are supplemental only for a matching clean Git-range binding, never for a provider-only PR target.
 
-Deleted, renamed, binary, oversized, conflicted, or unavailable files remain visible as coverage facts. Remote Review is rejected before remote Git inspection until a bounded exact-diff path exists. The implementation does not add provider integration, automatic checkout, reviewer command execution, cross-review identity, speculative cache plans, or automatic publishing.
+Deleted, renamed, binary, oversized, conflicted, or unavailable files remain visible as coverage facts. The PR panel is the only built-in PR Review entry and associates progress/results by provider repository, PR id, and immutable revisions; revision changes make prior results stale. The implementation does not add automatic checkout, reviewer command execution, speculative cache plans, automatic Review, inline comments, approval, merge, or automatic publishing.
 
 ## Strict Reviewer Configuration
 
@@ -327,4 +327,4 @@ When changing DeepReview behavior, update all affected contracts together:
 - Frontend strict-review defaults/types, manifest builder, prompt block, launch service, action-bar store, event mapping, report rendering, and locales.
 - Desktop Tauri command DTOs when capacity controls or default review definition contracts change.
 - Tests near the touched module, especially policy tests, strict-review manifest tests, queue event tests, launch tests, action-bar tests, and locale completeness tests.
-- For target-evidence changes, add contract coverage for workspace changes, exact file/directory scopes, explicit ranges, clean checkout, deleted/renamed/binary/oversized files, remote fast rejection, dirty-workspace isolation, exact-diff bounds, fail-closed reports, uncertain launch preservation, and unchanged ordinary Agent behavior. Provider truncation and head invalidation belong to a separately justified provider-adapter change.
+- For target-evidence changes, add contract coverage for workspace changes, exact file/directory scopes, explicit ranges, provider PR identity/base/head, provider diff availability, head invalidation, clean checkout, deleted/renamed/binary/oversized files, dirty-workspace isolation, exact-diff bounds, fail-closed reports, uncertain launch preservation, and unchanged ordinary Agent behavior.

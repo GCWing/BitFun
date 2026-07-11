@@ -999,6 +999,39 @@ describe('SessionModule historical session coordination', () => {
     );
   });
 
+  it('recreates standard Review sessions with prepared target evidence', async () => {
+    const reviewTargetEvidence = {
+      version: 1,
+      source: 'pull_request',
+      fingerprint: 'review-target-fingerprint',
+      baseRevision: '1'.repeat(40),
+      headRevision: '2'.repeat(40),
+      completeness: 'complete',
+      workspaceBinding: 'unavailable',
+      files: [],
+      limitations: [],
+      omittedFileCount: 0,
+    } as Session['reviewTargetEvidence'];
+    const { context } = createContext(createSession({
+      isHistorical: false,
+      historyState: 'ready',
+      contextRestoreState: 'pending',
+      sessionKind: 'review',
+      parentSessionId: 'parent-1',
+      reviewTargetEvidence,
+    }));
+    agentApiMocks.ensureCoordinatorSession.mockRejectedValueOnce(
+      new Error('Session metadata not found')
+    );
+    agentApiMocks.createSession.mockResolvedValueOnce(undefined);
+
+    await ensureBackendSession(context, 'history-1');
+
+    expect(agentApiMocks.createSession).toHaveBeenCalledWith(
+      expect.objectContaining({ reviewTargetEvidence })
+    );
+  });
+
   it('retries child sessions with structured subagent relationship', async () => {
     const { context } = createContext(createSession({
       sessionId: 'subagent-1',

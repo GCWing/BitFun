@@ -15,7 +15,6 @@ fn request(intent: ReviewIntent) -> ReviewQualityDecisionRequest {
             workspace_area_count: 1,
             contract_surface_changed: false,
         },
-        project_strategy_override: None,
     }
 }
 
@@ -59,7 +58,6 @@ fn unresolved_targets_do_not_silently_fan_out() {
     let mut input = request(ReviewIntent::Review);
     input.target.resolution = ReviewTargetResolution::Unknown;
     input.target.file_count = 50;
-    input.project_strategy_override = Some(ReviewStrategyLevel::Deep);
 
     let decision = decide_review_quality(input);
 
@@ -84,41 +82,10 @@ fn resolved_targets_with_unknown_change_size_use_directional_review() {
             workspace_area_count: 1,
             contract_surface_changed: false,
         },
-        project_strategy_override: None,
     });
 
     assert_eq!(decision.level, ReviewLevel::L2);
     assert!(decision.requires_consent);
-}
-
-#[test]
-fn project_strategy_override_applies_only_to_resolved_targets() {
-    let mut input = request(ReviewIntent::Review);
-    input.project_strategy_override = Some(ReviewStrategyLevel::Deep);
-
-    let decision = decide_review_quality(input);
-
-    assert_eq!(decision.level, ReviewLevel::L3);
-    assert_eq!(
-        decision.reason,
-        ReviewQualityDecisionReason::ProjectStrategyOverride
-    );
-}
-
-#[test]
-fn project_quick_override_cannot_bypass_a_hard_risk_floor() {
-    let mut input = request(ReviewIntent::Review);
-    input.target.security_sensitive_file_count = 1;
-    input.project_strategy_override = Some(ReviewStrategyLevel::Quick);
-
-    let decision = decide_review_quality(input);
-
-    assert_eq!(decision.level, ReviewLevel::L2);
-    assert_eq!(decision.strategy_level, ReviewStrategyLevel::Normal);
-    assert_eq!(
-        decision.reason,
-        ReviewQualityDecisionReason::ProjectStrategyOverride
-    );
 }
 
 #[test]

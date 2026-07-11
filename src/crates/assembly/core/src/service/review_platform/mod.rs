@@ -15,7 +15,8 @@ pub use bitfun_services_integrations::review_platform::{
     ReviewPlatformCapabilities, ReviewPlatformCiItem, ReviewPlatformCiLog, ReviewPlatformCommit,
     ReviewPlatformCreatePullRequestRequest, ReviewPlatformDetailSection, ReviewPlatformError,
     ReviewPlatformFile, ReviewPlatformKind, ReviewPlatformPullRequest,
-    ReviewPlatformPullRequestDetail, ReviewPlatformPullRequestDetailPage, ReviewPlatformRemote,
+    ReviewPlatformPullRequestDetail, ReviewPlatformPullRequestDetailPage,
+    ReviewPlatformPullRequestFileDiff, ReviewPlatformPullRequestReviewTarget, ReviewPlatformRemote,
     ReviewPlatformReplyToThreadRequest, ReviewPlatformRepositoryRef,
     ReviewPlatformRequestChangesRequest, ReviewPlatformResolveThreadRequest,
     ReviewPlatformSubmitReviewRequest, ReviewPlatformThread, ReviewPlatformThreadKind,
@@ -74,6 +75,38 @@ impl ReviewPlatformService {
     ) -> Result<ReviewPlatformPullRequestDetail, ReviewPlatformError> {
         owner_service()?
             .pull_request_detail(repository_path, remote_id, pull_request_id)
+            .await
+    }
+
+    pub async fn pull_request_review_target(
+        repository_path: &str,
+        remote_id: &str,
+        pull_request_id: &str,
+    ) -> Result<ReviewPlatformPullRequestReviewTarget, ReviewPlatformError> {
+        owner_service()?
+            .pull_request_review_target(repository_path, remote_id, pull_request_id)
+            .await
+    }
+
+    pub async fn pull_request_file_diff(
+        repository_path: &str,
+        remote_id: &str,
+        pull_request_id: &str,
+        expected_base_revision: &str,
+        expected_head_revision: &str,
+        file_path: &str,
+        file_page_hint: Option<u32>,
+    ) -> Result<ReviewPlatformPullRequestFileDiff, ReviewPlatformError> {
+        owner_service()?
+            .pull_request_file_diff(
+                repository_path,
+                remote_id,
+                pull_request_id,
+                expected_base_revision,
+                expected_head_revision,
+                file_path,
+                file_page_hint,
+            )
             .await
     }
 

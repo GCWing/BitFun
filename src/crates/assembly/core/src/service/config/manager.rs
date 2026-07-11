@@ -20,7 +20,6 @@ type ConfigMigration = (&'static str, &'static str, ConfigMigrationFn);
 fn canonical_config_path(path: &str) -> &str {
     match path {
         "ai.review_teams.rate_limit_status" => "ai.review_team_rate_limit_status",
-        "ai.review_teams.project_strategy_overrides" => "ai.review_team_project_strategy_overrides",
         "theme.id" => "themes.current",
         _ => path,
     }
@@ -743,10 +742,6 @@ mod tests {
         assert_eq!(
             canonical_config_path("ai.review_teams.rate_limit_status"),
             "ai.review_team_rate_limit_status"
-        );
-        assert_eq!(
-            canonical_config_path("ai.review_teams.project_strategy_overrides"),
-            "ai.review_team_project_strategy_overrides"
         );
         assert_eq!(
             canonical_config_path("ai.review_teams.default"),

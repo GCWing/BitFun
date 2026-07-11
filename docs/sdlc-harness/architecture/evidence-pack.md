@@ -39,7 +39,7 @@
 | 输入 | 来源 |
 |---|---|
 | 项目画像快照 | 项目结构、规则、验证能力、负责人、主动配置状态 |
-| Review 目标证据 | 当前工作区或明确 Git range 的 base/head、目标指纹、文件状态、有界 diff 可用性、完整度、workspace binding 和失效状态 |
+| Review 目标证据 | 当前工作区、明确 Git range 或 provider PR 的 base/head、目标指纹、provider identity、文件状态、有界 diff 可用性、完整度、workspace binding 和失效状态 |
 | 任务与变更摘要 | 用户意图、Git diff、文件变更、重命名/删除、生成文件 |
 | 验证证据 | `verification.completed`、CI 检查、命令摘要、制品引用 |
 | 风险策略提示 | 风险标签、推荐/强制检查、审查强度 |
@@ -128,7 +128,7 @@ reviewers page through the target-bound diff tool using opaque cursors.
 |---|---|
 | `source_events` | 生成该包使用的事件 id 集合 |
 | `evidence_refs` | 指向日志摘要、报告、CI、截图、轨迹或外部系统事实的引用 |
-| `review_target` | 本次 Review 的目标摘要；changed-code 内容通过 prepared `GetFileDiff` 的有界分页读取，不嵌入 evidence pack。immutable revision 可声明内容不可变；live workspace 可声明 prepared diff 覆盖完整，但最终 evidence status 仍为 limited。base revision 与当前 HEAD 不一致时，工具返回 stale/limited 而不是读取错误 diff |
+| `review_target` | 本次 Review 的目标摘要；changed-code 内容通过 prepared `GetFileDiff` 的有界分页读取，不嵌入 evidence pack。Git range 和 provider PR 的 immutable revision 可声明内容不可变；PR diff 按文件从 provider 读取并在读取前复核 base/head。live workspace 可声明 prepared diff 覆盖完整，但最终 evidence status 仍为 limited。revision 变化时工具返回 stale/limited 而不是读取错误 diff |
 | `security` | 执行安全决策摘要，包括执行位置、沙箱等级组合、降级原因和授权范围；不作为质量通过依据 |
 | `skipped_checks` | 未运行检查的原因、触发规则、可接受条件和残余风险 |
 | `open_risks` | 尚未被证据覆盖或人工接受的风险 |

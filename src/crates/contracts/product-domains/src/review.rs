@@ -46,7 +46,6 @@ pub enum ReviewQualityDecisionReason {
     RiskScore,
     ExplicitStrict,
     UnresolvedTarget,
-    ProjectStrategyOverride,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -65,8 +64,6 @@ pub struct ReviewTargetFacts {
 pub struct ReviewQualityDecisionRequest {
     pub intent: ReviewIntent,
     pub target: ReviewTargetFacts,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub project_strategy_override: Option<ReviewStrategyLevel>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -110,14 +107,6 @@ pub fn decide_review_quality(request: ReviewQualityDecisionRequest) -> ReviewQua
     } else {
         ReviewStrategyLevel::Quick
     };
-    if let Some(strategy) = request.project_strategy_override {
-        return strategy_decision(
-            strategy.max(risk_floor),
-            ReviewQualityDecisionReason::ProjectStrategyOverride,
-            score,
-        );
-    }
-
     let strategy = strategy_for_score(score).max(risk_floor);
 
     strategy_decision(strategy, ReviewQualityDecisionReason::RiskScore, score)

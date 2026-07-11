@@ -9,7 +9,6 @@ import {
   buildEffectiveReviewTeamManifest,
   buildReviewTeamPromptBlock,
   loadDefaultReviewTeam,
-  loadReviewTeamProjectStrategyOverride,
   loadReviewTeamRateLimitStatus,
   prepareDefaultReviewTeamForLaunch,
   type ReviewTeamRunManifest,
@@ -143,23 +142,14 @@ async function buildReviewTeamManifestWithRuntimeSignals(
   options: Parameters<typeof buildEffectiveReviewTeamManifest>[1],
 ): Promise<ReviewTeamRunManifest> {
   const manifestOptions = options ?? {};
-  const [rateLimitStatus, projectStrategyOverride] = await Promise.all([
-    loadReviewTeamRateLimitStatus().catch((error) => {
-      log.warn('Failed to load strict review rate limit status', { error });
-      return null;
-    }),
-    manifestOptions.workspacePath && !manifestOptions.strategyOverride && !manifestOptions.qualityDecision
-      ? loadReviewTeamProjectStrategyOverride(manifestOptions.workspacePath).catch((error) => {
-        log.warn('Failed to load strict review project strategy override', { error });
-        return undefined;
-      })
-      : Promise.resolve(undefined),
-  ]);
+  const rateLimitStatus = await loadReviewTeamRateLimitStatus().catch((error) => {
+    log.warn('Failed to load strict review rate limit status', { error });
+    return null;
+  });
 
   return buildEffectiveReviewTeamManifest(team, {
     ...manifestOptions,
     ...(rateLimitStatus ? { rateLimitStatus } : {}),
-    ...(projectStrategyOverride ? { strategyOverride: projectStrategyOverride } : {}),
     ...(manifestOptions.strategyOverride
       ? { strategyOverride: manifestOptions.strategyOverride }
       : {}),
@@ -340,6 +330,7 @@ export async function launchDeepReviewSession({
       enableContextCompression: true,
       addMarker: false,
       deepReviewRunManifest: runManifest,
+      reviewTargetEvidence: runManifest?.evidencePack?.reviewTarget,
       reviewTargetFilePaths: requestedFiles,
       requestId: effectiveRequestId,
     } as const;

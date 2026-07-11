@@ -1,17 +1,23 @@
 import { agentAPI } from '@/infrastructure/api';
 import type {
+  ReviewPlatformPullRequestReviewTarget,
+  ReviewPlatformRemote,
+  ReviewPlatformRepositoryRef,
+} from '@/infrastructure/api/service-api/ReviewPlatformAPI';
+import type {
   ReviewIntent,
   ReviewQualityDecision,
   ReviewQualityDecisionRequest,
 } from '@/infrastructure/api/service-api/AgentAPI';
 import {
   buildReviewRiskFactors,
-  loadReviewTeamProjectStrategyOverride,
+  buildPullRequestReviewTargetEvidence,
   type ReviewTeamChangeStats,
   type ReviewTeamRunManifest,
   type ReviewTargetEvidence,
 } from '@/shared/services/reviewTeamService';
 import {
+  classifyReviewTargetFromPathChanges,
   classifyReviewTargetFromFiles,
   type ReviewTargetClassification,
 } from '@/shared/services/reviewTargetClassifier';
@@ -90,7 +96,6 @@ function buildDecisionRequest(params: {
   intent: ReviewIntent;
   target: ReviewTargetClassification;
   changeStats: ReviewTeamChangeStats;
-  projectStrategyOverride?: ReviewQualityDecisionRequest['projectStrategyOverride'];
 }): ReviewQualityDecisionRequest {
   const factors = buildReviewRiskFactors(params.target, params.changeStats);
   return {
@@ -105,9 +110,6 @@ function buildDecisionRequest(params: {
       workspaceAreaCount: factors.workspaceAreaCount,
       contractSurfaceChanged: factors.contractSurfaceChanged,
     },
-    ...(params.projectStrategyOverride
-      ? { projectStrategyOverride: params.projectStrategyOverride }
-      : {}),
   };
 }
 
@@ -117,21 +119,7 @@ async function decideReview(params: {
   target: ReviewTargetClassification;
   changeStats: ReviewTeamChangeStats;
 }): Promise<ReviewQualityDecision> {
-  let projectStrategyOverride: ReviewQualityDecisionRequest['projectStrategyOverride'];
-  if (params.workspacePath) {
-    try {
-      projectStrategyOverride = await loadReviewTeamProjectStrategyOverride(
-        params.workspacePath,
-      );
-    } catch (error) {
-      log.warn('Failed to load Review project strategy override', { error });
-    }
-  }
-
-  return agentAPI.decideReviewQuality(buildDecisionRequest({
-    ...params,
-    projectStrategyOverride,
-  }));
+  return agentAPI.decideReviewQuality(buildDecisionRequest(params));
 }
 
 function buildStandardReviewPrompt(params: {
@@ -174,7 +162,7 @@ function buildStandardReviewPrompt(params: {
     `Remain read-only: report findings and do not edit files or run mutating commands.\n\n` +
     `Review target:\n${targetBlock}\n${focusBlock}\n` +
     `Prepared target evidence:\n${evidenceBlock}\n` +
-    `For an exact Git range, use only the prepared target-bound tools and never guess refs. ` +
+    `For an exact Git range or provider pull request, use only the prepared target-bound tools and never guess refs. ` +
     `Use the prepared exact diff as the source of truth for changed code. Read live repository context only for a workspace target or when the prepared binding is matching_clean. ` +
     `If completeness is not complete, keep the conclusion explicitly limited.\n\n` +
     `Return findings first, ordered by severity, with precise file and line references. ` +
@@ -251,6 +239,28 @@ async function prepareFromResolvedTarget(params: {
     throw reviewTargetError(
       'There are no workspace changes to review.',
       'deepReviewActionBar.launchError.emptyWorkspace',
+    );
+  }
+  if (
+    params.targetEvidence.source === 'pull_request' &&
+    params.targetEvidence.limitations.includes('provider_revision_unresolved')
+  ) {
+    throw reviewTargetError(
+      'The provider did not return immutable base and head revisions for this pull request.',
+    );
+  }
+  if (
+    params.targetEvidence.source === 'pull_request' &&
+    params.targetEvidence.files.length === 0
+  ) {
+    throw reviewTargetError('The pull request contains no reviewable changed files.');
+  }
+  if (
+    params.targetEvidence.source === 'pull_request' &&
+    !params.targetEvidence.files.some((file) => file.completeness === 'complete')
+  ) {
+    throw reviewTargetError(
+      'The provider did not return an exact diff for any changed file in this pull request.',
     );
   }
   if (params.targetEvidence.limitations.includes('remote_workspace_review_unavailable')) {
@@ -403,6 +413,71 @@ export async function prepareReviewLaunchFromSlashCommand(
     extraContext,
     commandText,
     intent: getReviewSlashCommandIntent(commandText) === 'strict' ? 'strict' : 'review',
+  });
+}
+
+export async function prepareReviewLaunchFromPullRequest(params: {
+  workspacePath: string;
+  remote: ReviewPlatformRemote;
+  repository: ReviewPlatformRepositoryRef;
+  reviewTarget: ReviewPlatformPullRequestReviewTarget;
+}): Promise<PreparedReviewLaunch> {
+  if (params.remote.platform === 'unknown') {
+    throw reviewTargetError('This pull request provider does not support Review.');
+  }
+  const pullRequest = params.reviewTarget.pullRequest;
+  const classifiedTarget = classifyReviewTargetFromPathChanges(
+    params.reviewTarget.files.map((file) => ({
+      path: file.path,
+      ...(file.oldPath ? { oldPath: file.oldPath } : {}),
+      status: file.status,
+    })),
+    'pull_request',
+  );
+  const target: ReviewTargetClassification = {
+    ...classifiedTarget,
+    // Provider identity and the complete changed-file list resolve the target;
+    // an unknown domain tag only affects reviewer focus, not target validity.
+    resolution: 'resolved',
+  };
+  const targetEvidence = buildPullRequestReviewTargetEvidence({
+    target,
+    baseRevision: pullRequest.baseRevision ?? undefined,
+    headRevision: pullRequest.headRevision ?? undefined,
+    pullRequest: {
+      remoteId: params.remote.id,
+      platform: params.remote.platform,
+      host: params.remote.host,
+      projectPath: params.repository.projectPath,
+      pullRequestId: pullRequest.id,
+      number: pullRequest.number,
+      webUrl: pullRequest.webUrl,
+    },
+    files: params.reviewTarget.files,
+    omittedFileCount: params.reviewTarget.omittedFileCount,
+    limitations: params.reviewTarget.limitations,
+  });
+  const totalLinesChanged = params.reviewTarget.files.reduce(
+    (total, file) => total + Math.max(0, file.additions) + Math.max(0, file.deletions),
+    0,
+  );
+  const extraContext = [
+    `Pull request #${pullRequest.number}: ${pullRequest.title}`,
+    `Provider URL: ${pullRequest.webUrl}`,
+  ].join('\n');
+
+  return prepareFromResolvedTarget({
+    target,
+    changeStats: {
+      fileCount: params.reviewTarget.files.length,
+      totalLinesChanged,
+      lineCountSource: 'diff_stat',
+    },
+    targetEvidence,
+    requestedFiles: includedTargetFiles(target),
+    workspacePath: params.workspacePath,
+    extraContext,
+    intent: 'review',
   });
 }
 

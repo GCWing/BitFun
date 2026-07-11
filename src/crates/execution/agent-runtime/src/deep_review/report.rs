@@ -483,11 +483,13 @@ fn target_evidence_status(run_manifest: Option<&Value>) -> Option<&'static str> 
         Ok(Some(evidence)) => match evidence.completeness() {
             ReviewTargetEvidenceCompleteness::Stale => Some("stale"),
             ReviewTargetEvidenceCompleteness::Complete
-                if evidence.source()
-                    == super::target_evidence::ReviewTargetEvidenceSource::GitRange
-                    && evidence.workspace_binding()
-                        == ReviewTargetWorkspaceBinding::MatchingClean
-                    && evidence.omitted_file_count() == 0 =>
+                if evidence.omitted_file_count() == 0
+                    && (evidence.source()
+                        == super::target_evidence::ReviewTargetEvidenceSource::PullRequest
+                        || (evidence.source()
+                            == super::target_evidence::ReviewTargetEvidenceSource::GitRange
+                            && evidence.workspace_binding()
+                                == ReviewTargetWorkspaceBinding::MatchingClean)) =>
             {
                 Some("complete")
             }
@@ -546,6 +548,21 @@ pub fn apply_review_runtime_limitation(input: &mut Value, detail: &str) {
             "severity": "warning",
             "source": "runtime",
             "detail": detail
+        }),
+    );
+}
+
+pub fn apply_review_runtime_stale(input: &mut Value) {
+    if input.get("evidence_status").and_then(Value::as_str) != Some("failed") {
+        input["evidence_status"] = json!("stale");
+    }
+    push_reliability_signal_if_missing(
+        input,
+        json!({
+            "kind": "target_evidence_limited",
+            "severity": "warning",
+            "source": "runtime",
+            "detail": "Pull request revisions changed during the Review; rerun before relying on the result."
         }),
     );
 }
@@ -712,6 +729,49 @@ mod tests {
     }
 
     #[test]
+    fn complete_pull_request_evidence_can_report_complete_without_live_workspace_binding() {
+        let manifest = json!({
+            "reviewTargetEvidence": {
+                "version": 1,
+                "source": "pull_request",
+                "fingerprint": "0123456789abcdef",
+                "baseRevision": "1111111111111111111111111111111111111111",
+                "headRevision": "2222222222222222222222222222222222222222",
+                "completeness": "complete",
+                "workspaceBinding": "unavailable",
+                "pullRequest": {
+                    "remoteId": "origin|https://github.com/example/repo.git",
+                    "platform": "github",
+                    "host": "github.com",
+                    "projectPath": "example/repo",
+                    "pullRequestId": "42",
+                    "number": 42,
+                    "webUrl": "https://github.com/example/repo/pull/42"
+                },
+                "files": [{
+                    "path": "src/lib.rs",
+                    "status": "modified",
+                    "completeness": "complete"
+                }],
+                "limitations": [],
+                "omittedFileCount": 0
+            }
+        });
+        let mut input = json!({
+            "summary": {
+                "overall_assessment": "No blocking issues",
+                "risk_level": "low",
+                "recommended_action": "approve"
+            }
+        });
+
+        apply_review_evidence_guardrail(&mut input, Some(&manifest));
+
+        assert_eq!(input["evidence_status"], "complete");
+        assert_eq!(input["summary"]["recommended_action"], "approve");
+    }
+
+    #[test]
     fn dirty_git_binding_is_limited_even_when_the_range_is_complete() {
         let manifest = json!({
             "reviewTargetEvidence": {
@@ -799,6 +859,19 @@ mod tests {
         assert!(input.get("evidence_status").is_none());
         assert!(input.get("reliability_signals").is_none());
         assert_eq!(input["summary"]["recommended_action"], "approve");
+    }
+
+    #[test]
+    fn runtime_stale_overrides_a_prepared_complete_target() {
+        let mut input = json!({ "evidence_status": "complete" });
+
+        apply_review_runtime_stale(&mut input);
+
+        assert_eq!(input["evidence_status"], "stale");
+        assert_eq!(
+            input["reliability_signals"][0]["kind"],
+            "target_evidence_limited"
+        );
     }
 
     #[test]

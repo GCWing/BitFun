@@ -1006,6 +1006,7 @@ pub async fn run() {
             git_get_repository,
             review_platform_get_workspace_snapshot,
             review_platform_get_pull_request_detail,
+            review_platform_get_pull_request_review_target,
             review_platform_get_pull_request_detail_page,
             review_platform_get_pull_request_ci_log,
             review_platform_update_auth_token,

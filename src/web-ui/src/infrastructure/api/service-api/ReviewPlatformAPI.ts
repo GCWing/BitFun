@@ -92,6 +92,8 @@ export interface ReviewPlatformPullRequest {
   author: string;
   sourceBranch: string;
   targetBranch: string;
+  baseRevision?: string | null;
+  headRevision?: string | null;
   updatedAt: string;
   webUrl: string;
   additions: number;
@@ -109,6 +111,22 @@ export interface ReviewPlatformFile {
   additions: number;
   deletions: number;
   patch?: string | null;
+}
+
+export interface ReviewPlatformReviewTargetFile {
+  path: string;
+  oldPath?: string | null;
+  status: ReviewFileStatus;
+  additions: number;
+  deletions: number;
+  diffAvailable: boolean;
+}
+
+export interface ReviewPlatformPullRequestReviewTarget {
+  pullRequest: ReviewPlatformPullRequest;
+  files: ReviewPlatformReviewTargetFile[];
+  omittedFileCount: number;
+  limitations: string[];
 }
 
 export interface ReviewPlatformCommit {
@@ -258,6 +276,30 @@ export class ReviewPlatformAPI {
         error,
       });
       throw createTauriCommandError('review_platform_get_pull_request_detail', error, {
+        repositoryPath,
+        remoteId,
+        pullRequestId,
+      });
+    }
+  }
+
+  async getPullRequestReviewTarget(
+    repositoryPath: string,
+    remoteId: string,
+    pullRequestId: string,
+  ): Promise<ReviewPlatformPullRequestReviewTarget> {
+    try {
+      return await api.invoke('review_platform_get_pull_request_review_target', {
+        request: { repositoryPath, remoteId, pullRequestId },
+      });
+    } catch (error) {
+      log.error('Failed to prepare review platform pull request target', {
+        repositoryPath,
+        remoteId,
+        pullRequestId,
+        error,
+      });
+      throw createTauriCommandError('review_platform_get_pull_request_review_target', error, {
         repositoryPath,
         remoteId,
         pullRequestId,

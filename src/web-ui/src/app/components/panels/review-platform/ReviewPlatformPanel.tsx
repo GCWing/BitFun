@@ -28,6 +28,13 @@ import { createLogger } from '@/shared/utils/logger';
 import { notificationService } from '@/shared/notification-system';
 import { i18nService } from '@/infrastructure/i18n';
 import { openMainSession } from '@/flow_chat/services/sessionActivation';
+import { openBtwSessionInAuxPane } from '@/flow_chat/services/btwSessionPane';
+import {
+  launchPreparedReviewSession,
+  prepareReviewLaunchFromPullRequest,
+} from '@/flow_chat/services/ReviewService';
+import { useDeepReviewConsent } from '@/flow_chat/components/DeepReviewConsentDialog';
+import { deriveDeepReviewSessionConcurrencyGuard } from '@/flow_chat/utils/deepReviewCapacityGuard';
 import { flowChatStore } from '@/flow_chat/store/FlowChatStore';
 import type { FlowToolItem, Session } from '@/flow_chat/types/flow-chat';
 import { findLatestCodeReviewResult, summarizeCodeReviewResult } from '@/flow_chat/utils/reviewSessionSummary';
@@ -105,10 +112,65 @@ interface LinkedReviewSession {
   kind: 'review' | 'deep_review';
   title: string;
   requestedFiles: string[];
+  hasResult: boolean;
   issueCount: number;
   riskLevel?: string;
   lifecycle: 'running' | 'completed' | 'error' | 'idle';
+  freshness: PullRequestReviewFreshness;
+  limitedCoverage: boolean;
   updatedAt: number;
+}
+
+export type PullRequestReviewFreshness = 'current' | 'stale' | 'unknown';
+
+type PullRequestReviewIdentity = NonNullable<Session['reviewTargetEvidence']>['pullRequest'];
+
+function normalizeProviderHost(value: string): string {
+  return value.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/+$/, '');
+}
+
+function normalizeProviderProjectPath(value: string): string {
+  return value.trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '').toLowerCase();
+}
+
+export function samePullRequestIdentity(
+  identity: PullRequestReviewIdentity,
+  current: {
+    platform: string;
+    host: string;
+    projectPath: string;
+    pullRequestId: string;
+  },
+): boolean {
+  return Boolean(
+    identity
+    && identity.platform === current.platform
+    && normalizeProviderHost(identity.host) === normalizeProviderHost(current.host)
+    && normalizeProviderProjectPath(identity.projectPath) === normalizeProviderProjectPath(current.projectPath)
+    && identity.pullRequestId === current.pullRequestId
+  );
+}
+
+function isFullRevision(value?: string | null): value is string {
+  return Boolean(value && /^[0-9a-f]{40,64}$/i.test(value.trim()));
+}
+
+export function pullRequestReviewFreshness(
+  evidence: Session['reviewTargetEvidence'],
+  current: Pick<ReviewPlatformPullRequest, 'baseRevision' | 'headRevision'>,
+): PullRequestReviewFreshness {
+  if (
+    !isFullRevision(evidence?.baseRevision)
+    || !isFullRevision(evidence?.headRevision)
+    || !isFullRevision(current.baseRevision)
+    || !isFullRevision(current.headRevision)
+  ) {
+    return 'unknown';
+  }
+  return evidence.baseRevision.toLowerCase() === current.baseRevision.toLowerCase()
+    && evidence.headRevision.toLowerCase() === current.headRevision.toLowerCase()
+    ? 'current'
+    : 'stale';
 }
 
 const snapshotCache = new Map<string, SnapshotCacheEntry>();
@@ -383,12 +445,6 @@ function uniquePaths(paths: string[]): string[] {
   return next;
 }
 
-function pathsOverlap(left: string[], right: string[]): boolean {
-  if (!left.length || !right.length) return false;
-  const rightSet = new Set(right.map(normalizePath));
-  return left.some(path => rightSet.has(normalizePath(path)));
-}
-
 function isReviewSessionRunning(session: Session): boolean {
   const turn = session.dialogTurns[session.dialogTurns.length - 1];
   return turn?.status === 'pending' ||
@@ -399,9 +455,13 @@ function isReviewSessionRunning(session: Session): boolean {
 
 function reviewSessionLifecycle(session: Session): LinkedReviewSession['lifecycle'] {
   const turn = session.dialogTurns[session.dialogTurns.length - 1];
-  if (session.error || turn?.status === 'error') return 'error';
+  if (session.error || session.hasUnreadCompletion === 'error' || session.hasUnreadCompletion === 'interrupted' || turn?.status === 'error') return 'error';
   if (isReviewSessionRunning(session)) return 'running';
-  if (turn?.status === 'completed') return 'completed';
+  if (
+    turn?.status === 'completed' ||
+    session.hasUnreadCompletion === 'completed' ||
+    (session.historyState === 'metadata-only' && session.persistedStatus === 'completed')
+  ) return 'completed';
   return 'idle';
 }
 
@@ -627,6 +687,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
   const snapshotRequestSeq = useRef(0);
   const detailRequestSeq = useRef(0);
   const detailSectionRequestSeq = useRef(0);
+  const reviewLaunchInFlight = useRef(false);
   const [snapshot, setSnapshot] = useState<ReviewPlatformWorkspaceSnapshot>(emptySnapshot);
   const [selectedRemoteId, setSelectedRemoteId] = useState<string | null>(null);
   const [selectedPrId, setSelectedPrId] = useState<string | null>(null);
@@ -658,6 +719,8 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
   const [authToken, setAuthToken] = useState('');
   const [authSaving, setAuthSaving] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [reviewLaunching, setReviewLaunching] = useState(false);
+  const { confirmDeepReviewLaunch, deepReviewConsentDialog } = useDeepReviewConsent();
 
   const repository = snapshot.repository;
   const account = snapshot.accounts[0] ?? null;
@@ -1052,7 +1115,12 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
       .sort((left, right) => (right.lastActiveAt || right.updatedAt || right.createdAt) - (left.lastActiveAt || left.updatedAt || left.createdAt))[0];
   }, [flowState.activeSessionId, flowState.sessions, workspacePath]);
 
+  const currentPullRequest = detail ?? selectedPr;
+
   const linkedReviewSessions = useMemo<LinkedReviewSession[]>(() => {
+    if (!selectedRemote || !repository || !selectedPr || !currentPullRequest) {
+      return [];
+    }
     const sessions = Array.from(flowState.sessions.values());
     const markersByChildId = new Map<string, ReviewSessionMarker>();
     for (const session of sessions) {
@@ -1061,21 +1129,26 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
       }
     }
 
-    const selectedPaths = prFilePaths;
-    const sameWorkspace = (session: Session) =>
-      !workspacePath || normalizePath(session.workspacePath ?? '') === normalizePath(workspacePath);
-
     return sessions
       .filter(session =>
-        (session.sessionKind === 'review' || session.sessionKind === 'deep_review') &&
-        sameWorkspace(session),
+        session.sessionKind === 'review' || session.sessionKind === 'deep_review',
       )
       .map((session): LinkedReviewSession | null => {
         const marker = markersByChildId.get(session.sessionId);
-        const requestedFiles = marker?.requestedFiles ?? [];
-        if (selectedPaths.length > 0 && requestedFiles.length > 0 && !pathsOverlap(selectedPaths, requestedFiles)) {
+        const evidence = session.reviewTargetEvidence
+          ?? session.deepReviewRunManifest?.evidencePack?.reviewTarget;
+        const identity = evidence?.pullRequest;
+        if (
+          !samePullRequestIdentity(identity, {
+            platform: selectedRemote.platform,
+            host: selectedRemote.host,
+            projectPath: repository.projectPath,
+            pullRequestId: selectedPr.id,
+          })
+        ) {
           return null;
         }
+        const requestedFiles = marker?.requestedFiles ?? session.reviewTargetFilePaths ?? [];
 
         const reviewResult = findLatestCodeReviewResult(session);
         const summary = summarizeCodeReviewResult(reviewResult);
@@ -1087,16 +1160,27 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
           kind,
           title: marker?.title || getSessionTitle(session, kind === 'deep_review' ? 'Review: Strict' : 'Review'),
           requestedFiles,
+          hasResult: Boolean(reviewResult),
           issueCount: summary.issueCount,
           riskLevel: summary.riskLevel,
           lifecycle: reviewSessionLifecycle(session),
+          freshness: pullRequestReviewFreshness(evidence, currentPullRequest),
+          limitedCoverage: evidence?.completeness !== 'complete'
+            || Boolean(
+              (reviewResult as { evidence_status?: string } | null)?.evidence_status
+              && (reviewResult as { evidence_status?: string }).evidence_status !== 'complete'
+            ),
           updatedAt: session.lastActiveAt || session.updatedAt || session.createdAt,
         };
       })
       .filter((session): session is LinkedReviewSession => Boolean(session))
       .sort((left, right) => right.updatedAt - left.updatedAt)
       .slice(0, MAX_LINKED_REVIEW_SESSIONS);
-  }, [flowState.sessions, prFilePaths, workspacePath]);
+  }, [currentPullRequest, flowState.sessions, repository, selectedPr, selectedRemote]);
+
+  const latestCurrentReview = linkedReviewSessions.find((session) => session.freshness === 'current');
+  const latestStaleReview = linkedReviewSessions.find((session) => session.freshness === 'stale');
+  const latestUnknownReview = linkedReviewSessions.find((session) => session.freshness === 'unknown');
 
   const pagination = snapshot.pagination;
   const totalCount = pagination.total ?? null;
@@ -1341,6 +1425,75 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
     });
   }, [addPullRequestContextToChat, detail, prFilePaths, repository, reviewItemCount, selectedPr, selectedRemote]);
 
+  const handleStartReview = useCallback(async () => {
+    if (!workspacePath || !selectedRemote || !repository || !selectedPr || !parentSession) {
+      notificationService.warning('Open or create a chat session before reviewing this pull request.', {
+        duration: 3500,
+      });
+      return;
+    }
+    if (reviewLaunchInFlight.current || latestCurrentReview?.lifecycle === 'running') {
+      return;
+    }
+    reviewLaunchInFlight.current = true;
+    setReviewLaunching(true);
+    try {
+      const reviewTarget = await reviewPlatformAPI.getPullRequestReviewTarget(
+        workspacePath,
+        selectedRemote.id,
+        selectedPr.id,
+      );
+      setDetail((current) => current ? { ...current, ...reviewTarget.pullRequest } : current);
+      const prepared = await prepareReviewLaunchFromPullRequest({
+        workspacePath,
+        remote: selectedRemote,
+        repository,
+        reviewTarget,
+      });
+      if (prepared.mode === 'strict' && prepared.requiresConsent) {
+        const confirmed = await confirmDeepReviewLaunch(prepared.runManifest, {
+          sessionConcurrencyGuard: deriveDeepReviewSessionConcurrencyGuard(
+            flowChatStore.getState(),
+            parentSession.sessionId,
+          ),
+        });
+        if (!confirmed) return;
+      }
+      const launched = await launchPreparedReviewSession({
+        parentSessionId: parentSession.sessionId,
+        workspacePath,
+        displayMessage: `Review pull request #${reviewTarget.pullRequest.number}`,
+        childSessionName: `Review: PR #${reviewTarget.pullRequest.number}`,
+        prepared,
+      });
+      if (launched.launchStatus === 'uncertain') {
+        notificationService.warning('Review started, but its start acknowledgement is uncertain.', {
+          duration: 8000,
+        });
+      }
+    } catch (reviewError) {
+      log.error('Failed to start pull request Review', {
+        pullRequestId: selectedPr.id,
+        error: reviewError,
+      });
+      notificationService.error(
+        reviewError instanceof Error ? reviewError.message : 'Failed to start pull request Review.',
+        { duration: 6000 },
+      );
+    } finally {
+      reviewLaunchInFlight.current = false;
+      setReviewLaunching(false);
+    }
+  }, [
+    confirmDeepReviewLaunch,
+    latestCurrentReview?.lifecycle,
+    parentSession,
+    repository,
+    selectedPr,
+    selectedRemote,
+    workspacePath,
+  ]);
+
   const handleAddFileDiffContext = useCallback(async (file: ReviewPlatformFile) => {
     if (!selectedPr) return;
     await addPullRequestContextToChat({
@@ -1528,7 +1681,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
   const remoteStatus = selectedRemote
     ? `${providerLabel(selectedRemote)} · ${authLabel(account)}`
     : 'No remote detected';
-  const displayPr = detail ?? selectedPr;
+  const displayPr = currentPullRequest;
   const checksText = displayPr && displayPr.checks.total > 0
     ? `${displayPr.checks.passed}/${displayPr.checks.total}`
     : 'N/A';
@@ -1544,6 +1697,20 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
       ? 'Cached pull requests'
       : null;
   const parentSessionLabel = parentSession ? getSessionTitle(parentSession, 'Current chat') : 'No chat session linked';
+  const handleOpenLatestReview = () => {
+    const linked = latestCurrentReview ?? latestStaleReview ?? latestUnknownReview;
+    const linkedParentSessionId = linked?.childSession.parentSessionId ?? linked?.parentSession?.sessionId;
+    if (!linked || !linkedParentSessionId) return;
+    openBtwSessionInAuxPane({
+      childSessionId: linked.childSession.sessionId,
+      parentSessionId: linkedParentSessionId,
+      workspacePath: linked.childSession.workspacePath,
+      expand: true,
+      sessionKind: linked.kind,
+      sessionTitle: linked.title,
+      agentType: linked.childSession.config.agentType ?? (linked.kind === 'deep_review' ? 'DeepReview' : 'CodeReview'),
+    });
+  };
 
   return (
     <div className={`review-platform${detailOnly ? ' review-platform--detail-only' : ''}`}>
@@ -1813,6 +1980,28 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                       {account?.authSource === 'stored' ? 'Update token' : 'Token'}
                     </Button>
                   )}
+                  <Tooltip content={!parentSession ? 'Open or create a chat first' : 'Start Review'}>
+                    <span>
+                      <Button
+                        className="review-platform__panel-button"
+                        size="small"
+                        variant="primary"
+                        onClick={handleStartReview}
+                        disabled={
+                          !parentSession ||
+                          !repository ||
+                          !selectedRemote ||
+                          reviewLaunching ||
+                          detailLoading ||
+                          latestCurrentReview?.lifecycle === 'running'
+                        }
+                        isLoading={reviewLaunching}
+                      >
+                        <Sparkles size={13} />
+                        {latestCurrentReview?.lifecycle === 'running' ? 'Review running' : 'Review'}
+                      </Button>
+                    </span>
+                  </Tooltip>
                   <Button className="review-platform__panel-button" size="small" variant="secondary" onClick={handleFillPrContext} disabled={!selectedPr}>
                     <MessageSquareText size={13} />
                     Add context
@@ -1848,8 +2037,20 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                   <span className="review-platform__agent-link-label">Conversation link</span>
                   <strong>{parentSessionLabel}</strong>
                   <span>
-                    {prFilePaths.length} changed files
-                    {linkedReviewSessions.length > 0 ? ` · ${linkedReviewSessions.length} related review sessions` : ''}
+                    {latestCurrentReview
+                      ? latestCurrentReview.lifecycle === 'completed'
+                        ? latestCurrentReview.hasResult
+                          ? `Review complete · ${latestCurrentReview.issueCount} findings${latestCurrentReview.riskLevel ? ` · ${latestCurrentReview.riskLevel}` : ''}`
+                            + (latestCurrentReview.limitedCoverage ? ' · limited coverage' : '')
+                          : 'Review complete · open to view the result'
+                        : latestCurrentReview.lifecycle === 'idle'
+                          ? 'Review available · open to view'
+                          : `Review ${latestCurrentReview.lifecycle}`
+                      : latestStaleReview
+                        ? 'Previous Review is stale because the PR revisions changed'
+                        : latestUnknownReview
+                          ? 'Review result cannot be matched to current PR revisions · refresh PR'
+                          : 'No Review has run for the current PR revisions'}
                   </span>
                 </div>
                 <div className="review-platform__agent-link-actions">
@@ -1861,6 +2062,12 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
                     <Code2 size={13} />
                     Insert context
                   </Button>
+                  {(latestCurrentReview || latestStaleReview || latestUnknownReview) && (
+                    <Button className="review-platform__panel-button" size="small" variant="ghost" onClick={handleOpenLatestReview}>
+                      <Sparkles size={13} />
+                      Open Review
+                    </Button>
+                  )}
                 </div>
               </section>
 
@@ -2300,6 +2507,7 @@ export const ReviewPlatformPanel: React.FC<ReviewPlatformPanelProps> = ({
           </div>
         </form>
       </Modal>
+      {deepReviewConsentDialog}
     </div>
   );
 };

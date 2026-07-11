@@ -6,8 +6,8 @@
 
 use crate::review_platform_http::{
     send_json as send_review_json, send_json_response as send_review_json_response,
-    send_text as send_review_text, ReviewHttpClient, ReviewHttpError, ReviewHttpHeaders,
-    ReviewHttpRequest, ReviewJsonResponse,
+    send_json_response_bounded as send_review_json_response_bounded, send_text as send_review_text,
+    ReviewHttpClient, ReviewHttpError, ReviewHttpHeaders, ReviewHttpRequest, ReviewJsonResponse,
 };
 use bitfun_services_core::process_manager;
 use futures::{stream, StreamExt};
@@ -29,6 +29,9 @@ const DEFAULT_PR_PAGE_SIZE: u32 = 10;
 const MAX_PR_PAGE_SIZE: u32 = 50;
 const PROVIDER_ENRICH_CONCURRENCY: usize = 4;
 const MAX_CI_LOG_CHARS: usize = 80_000;
+const MAX_REVIEW_TARGET_FILES: usize = 500;
+const MAX_REVIEW_TARGET_RESPONSE_BYTES: usize = 4 * 1024 * 1024;
+const MAX_REVIEW_FILE_DIFF_CHARS: usize = 80_000;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ReviewPlatformError {
@@ -46,6 +49,8 @@ pub enum ReviewPlatformError {
     Network(String),
     #[error("Parse error: {0}")]
     Parse(String),
+    #[error("Pull request target changed: {0}")]
+    StaleTarget(String),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -196,6 +201,8 @@ pub struct ReviewPlatformPullRequest {
     pub author: String,
     pub source_branch: String,
     pub target_branch: String,
+    pub base_revision: Option<String>,
+    pub head_revision: Option<String>,
     pub updated_at: String,
     pub web_url: String,
     pub additions: i32,
@@ -215,6 +222,37 @@ pub struct ReviewPlatformFile {
     pub additions: i32,
     pub deletions: i32,
     pub patch: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReviewPlatformReviewTargetFile {
+    pub path: String,
+    pub old_path: Option<String>,
+    pub status: ReviewFileStatus,
+    pub additions: i32,
+    pub deletions: i32,
+    pub diff_available: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReviewPlatformPullRequestReviewTarget {
+    pub pull_request: ReviewPlatformPullRequest,
+    pub files: Vec<ReviewPlatformReviewTargetFile>,
+    pub omitted_file_count: usize,
+    pub limitations: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReviewPlatformPullRequestFileDiff {
+    pub path: String,
+    pub old_path: Option<String>,
+    pub status: ReviewFileStatus,
+    pub base_revision: String,
+    pub head_revision: String,
+    pub diff: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -705,6 +743,45 @@ impl ReviewPlatformService {
             .await
     }
 
+    pub async fn pull_request_review_target(
+        &self,
+        repository_path: &str,
+        remote_id: &str,
+        pull_request_id: &str,
+    ) -> Result<ReviewPlatformPullRequestReviewTarget, ReviewPlatformError> {
+        let ctx = self
+            .provider_context_for_repository(repository_path, Some(remote_id))
+            .await?;
+        provider_for(ctx.remote.platform)
+            .pull_request_review_target(&ctx, pull_request_id)
+            .await
+    }
+
+    pub async fn pull_request_file_diff(
+        &self,
+        repository_path: &str,
+        remote_id: &str,
+        pull_request_id: &str,
+        expected_base_revision: &str,
+        expected_head_revision: &str,
+        file_path: &str,
+        file_page_hint: Option<u32>,
+    ) -> Result<ReviewPlatformPullRequestFileDiff, ReviewPlatformError> {
+        let ctx = self
+            .provider_context_for_repository(repository_path, Some(remote_id))
+            .await?;
+        provider_for(ctx.remote.platform)
+            .pull_request_file_diff(
+                &ctx,
+                pull_request_id,
+                expected_base_revision,
+                expected_head_revision,
+                file_path,
+                file_page_hint,
+            )
+            .await
+    }
+
     pub async fn pull_request_detail_page(
         &self,
         repository_path: &str,
@@ -918,6 +995,34 @@ trait ReviewProvider: Sync {
         pull_request_id: &str,
     ) -> Result<ReviewPlatformPullRequestDetail, ReviewPlatformError>;
 
+    async fn pull_request_review_target(
+        &self,
+        ctx: &ProviderContext,
+        pull_request_id: &str,
+    ) -> Result<ReviewPlatformPullRequestReviewTarget, ReviewPlatformError> {
+        let detail = self.pull_request_detail(ctx, pull_request_id).await?;
+        Ok(review_target_from_parts(detail.pull_request, detail.files))
+    }
+
+    async fn pull_request_file_diff(
+        &self,
+        ctx: &ProviderContext,
+        pull_request_id: &str,
+        expected_base_revision: &str,
+        expected_head_revision: &str,
+        file_path: &str,
+        _file_page_hint: Option<u32>,
+    ) -> Result<ReviewPlatformPullRequestFileDiff, ReviewPlatformError> {
+        let detail = self.pull_request_detail(ctx, pull_request_id).await?;
+        file_diff_from_parts(
+            detail.pull_request,
+            detail.files,
+            expected_base_revision,
+            expected_head_revision,
+            file_path,
+        )
+    }
+
     async fn pull_request_detail_page(
         &self,
         ctx: &ProviderContext,
@@ -1083,6 +1188,243 @@ fn provider_for(platform: ReviewPlatformKind) -> &'static dyn ReviewProvider {
     }
 }
 
+fn ensure_pull_request_revisions_stable(
+    initial: &ReviewPlatformPullRequest,
+    confirmed: &ReviewPlatformPullRequest,
+) -> Result<(), ReviewPlatformError> {
+    if initial.id != confirmed.id
+        || initial.base_revision != confirmed.base_revision
+        || initial.head_revision != confirmed.head_revision
+    {
+        return Err(ReviewPlatformError::StaleTarget(
+            "pull request revisions changed while preparing Review evidence".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+async fn github_review_target_parts(
+    ctx: &ProviderContext,
+    pull_request_id: &str,
+) -> Result<(ReviewPlatformPullRequest, Vec<ReviewPlatformFile>), ReviewPlatformError> {
+    let client = http_client()?;
+    let base = format!(
+        "{}/repos/{}/{}/pulls/{}",
+        ctx.api_base_url, ctx.remote.owner, ctx.remote.repository_name, pull_request_id
+    );
+    let initial_detail =
+        send_bounded_json(github_request(client.clone(), &base, ctx.token.as_deref())).await?;
+    let token = ctx.token.clone();
+    let files_url = format!("{}/files", base);
+    let files = fetch_bounded_paginated_array(
+        |page| {
+            let page = page.to_string();
+            github_request(client.clone(), &files_url, token.as_deref())
+                .query(&[("per_page", "100"), ("page", &page)])
+        },
+        github_next_page,
+        MAX_REVIEW_TARGET_FILES.saturating_add(1),
+    )
+    .await?;
+    let confirmed_detail =
+        send_bounded_json(github_request(client, &base, ctx.token.as_deref())).await?;
+    let initial_pull_request = github_pull_request_from_value(&initial_detail);
+    let confirmed_pull_request = github_pull_request_from_value(&confirmed_detail);
+    ensure_pull_request_revisions_stable(&initial_pull_request, &confirmed_pull_request)?;
+    Ok((
+        confirmed_pull_request,
+        array_items(&files)
+            .iter()
+            .map(github_file_from_value)
+            .collect(),
+    ))
+}
+
+async fn github_review_file_parts(
+    ctx: &ProviderContext,
+    pull_request_id: &str,
+    file_path: &str,
+    file_page_hint: Option<u32>,
+) -> Result<(ReviewPlatformPullRequest, Vec<ReviewPlatformFile>), ReviewPlatformError> {
+    let client = http_client()?;
+    let base = format!(
+        "{}/repos/{}/{}/pulls/{}",
+        ctx.api_base_url, ctx.remote.owner, ctx.remote.repository_name, pull_request_id
+    );
+    let token = ctx.token.clone();
+    let files_url = format!("{}/files", base);
+    let file = fetch_bounded_paginated_file(
+        |page| {
+            let page = page.to_string();
+            github_request(client.clone(), &files_url, token.as_deref())
+                .query(&[("per_page", "100"), ("page", &page)])
+        },
+        github_next_page,
+        file_page_hint.unwrap_or(1),
+        if file_page_hint.is_some() {
+            100
+        } else {
+            MAX_REVIEW_TARGET_FILES
+        },
+        file_path,
+        github_file_from_value,
+    )
+    .await?;
+    let detail = send_bounded_json(github_request(client, &base, ctx.token.as_deref())).await?;
+    Ok((
+        github_pull_request_from_value(&detail),
+        file.into_iter().collect(),
+    ))
+}
+
+async fn gitlab_review_target_parts(
+    ctx: &ProviderContext,
+    pull_request_id: &str,
+) -> Result<(ReviewPlatformPullRequest, Vec<ReviewPlatformFile>), ReviewPlatformError> {
+    let client = http_client()?;
+    let project = urlencoding::encode(&ctx.remote.project_path);
+    let base = format!(
+        "{}/projects/{}/merge_requests/{}",
+        ctx.api_base_url, project, pull_request_id
+    );
+    let initial_detail =
+        send_bounded_json(gitlab_request(client.clone(), &base, ctx.token.as_deref())).await?;
+    let token = ctx.token.clone();
+    let diffs_url = format!("{}/diffs", base);
+    let diffs = fetch_bounded_paginated_array(
+        |page| {
+            let page = page.to_string();
+            gitlab_request(client.clone(), &diffs_url, token.as_deref())
+                .query(&[("per_page", "100"), ("page", &page)])
+        },
+        gitlab_next_page,
+        MAX_REVIEW_TARGET_FILES.saturating_add(1),
+    )
+    .await?;
+    let files = array_items(&diffs)
+        .iter()
+        .map(gitlab_file_from_value)
+        .collect::<Vec<_>>();
+    let confirmed_detail =
+        send_bounded_json(gitlab_request(client, &base, ctx.token.as_deref())).await?;
+    let initial_pull_request = gitlab_pull_request_from_value(&initial_detail);
+    let confirmed_pull_request = gitlab_pull_request_from_value(&confirmed_detail);
+    ensure_pull_request_revisions_stable(&initial_pull_request, &confirmed_pull_request)?;
+    Ok((confirmed_pull_request, files))
+}
+
+async fn gitlab_review_file_parts(
+    ctx: &ProviderContext,
+    pull_request_id: &str,
+    file_path: &str,
+    file_page_hint: Option<u32>,
+) -> Result<(ReviewPlatformPullRequest, Vec<ReviewPlatformFile>), ReviewPlatformError> {
+    let client = http_client()?;
+    let project = urlencoding::encode(&ctx.remote.project_path);
+    let base = format!(
+        "{}/projects/{}/merge_requests/{}",
+        ctx.api_base_url, project, pull_request_id
+    );
+    let token = ctx.token.clone();
+    let diffs_url = format!("{}/diffs", base);
+    let file = fetch_bounded_paginated_file(
+        |page| {
+            let page = page.to_string();
+            gitlab_request(client.clone(), &diffs_url, token.as_deref())
+                .query(&[("per_page", "100"), ("page", &page)])
+        },
+        gitlab_next_page,
+        file_page_hint.unwrap_or(1),
+        if file_page_hint.is_some() {
+            100
+        } else {
+            MAX_REVIEW_TARGET_FILES
+        },
+        file_path,
+        gitlab_file_from_value,
+    )
+    .await?;
+    let detail = send_bounded_json(gitlab_request(client, &base, ctx.token.as_deref())).await?;
+    Ok((
+        gitlab_pull_request_from_value(&detail),
+        file.into_iter().collect(),
+    ))
+}
+
+async fn gitcode_review_target_parts(
+    ctx: &ProviderContext,
+    pull_request_id: &str,
+) -> Result<(ReviewPlatformPullRequest, Vec<ReviewPlatformFile>), ReviewPlatformError> {
+    let client = http_client()?;
+    let base = format!(
+        "{}/repos/{}/{}/pulls/{}",
+        ctx.api_base_url, ctx.remote.owner, ctx.remote.repository_name, pull_request_id
+    );
+    let initial_detail =
+        send_bounded_json(gitcode_request(client.clone(), &base, ctx.token.as_deref())).await?;
+    let token = ctx.token.clone();
+    let files_url = format!("{}/files", base);
+    let files = fetch_bounded_paginated_array(
+        |page| {
+            let page = page.to_string();
+            gitcode_request(client.clone(), &files_url, token.as_deref())
+                .query(&[("per_page", "100"), ("page", &page)])
+        },
+        github_next_page,
+        MAX_REVIEW_TARGET_FILES.saturating_add(1),
+    )
+    .await?;
+    let confirmed_detail =
+        send_bounded_json(gitcode_request(client, &base, ctx.token.as_deref())).await?;
+    let initial_pull_request = gitcode_pull_request_from_value(&initial_detail);
+    let confirmed_pull_request = gitcode_pull_request_from_value(&confirmed_detail);
+    ensure_pull_request_revisions_stable(&initial_pull_request, &confirmed_pull_request)?;
+    Ok((
+        confirmed_pull_request,
+        array_items(&files)
+            .iter()
+            .map(gitcode_file_from_value)
+            .collect(),
+    ))
+}
+
+async fn gitcode_review_file_parts(
+    ctx: &ProviderContext,
+    pull_request_id: &str,
+    file_path: &str,
+    file_page_hint: Option<u32>,
+) -> Result<(ReviewPlatformPullRequest, Vec<ReviewPlatformFile>), ReviewPlatformError> {
+    let client = http_client()?;
+    let base = format!(
+        "{}/repos/{}/{}/pulls/{}",
+        ctx.api_base_url, ctx.remote.owner, ctx.remote.repository_name, pull_request_id
+    );
+    let token = ctx.token.clone();
+    let files_url = format!("{}/files", base);
+    let file = fetch_bounded_paginated_file(
+        |page| {
+            let page = page.to_string();
+            gitcode_request(client.clone(), &files_url, token.as_deref())
+                .query(&[("per_page", "100"), ("page", &page)])
+        },
+        github_next_page,
+        file_page_hint.unwrap_or(1),
+        if file_page_hint.is_some() {
+            100
+        } else {
+            MAX_REVIEW_TARGET_FILES
+        },
+        file_path,
+        gitcode_file_from_value,
+    )
+    .await?;
+    let detail = send_bounded_json(gitcode_request(client, &base, ctx.token.as_deref())).await?;
+    Ok((
+        gitcode_pull_request_from_value(&detail),
+        file.into_iter().collect(),
+    ))
+}
+
 #[async_trait::async_trait]
 impl ReviewProvider for GithubProvider {
     async fn list_pull_requests(
@@ -1216,6 +1558,35 @@ impl ReviewProvider for GithubProvider {
                 .collect(),
             threads: github_threads(&reviews, &review_comments, &issue_comments),
         })
+    }
+
+    async fn pull_request_review_target(
+        &self,
+        ctx: &ProviderContext,
+        pull_request_id: &str,
+    ) -> Result<ReviewPlatformPullRequestReviewTarget, ReviewPlatformError> {
+        let (pull_request, files) = github_review_target_parts(ctx, pull_request_id).await?;
+        Ok(review_target_from_parts(pull_request, files))
+    }
+
+    async fn pull_request_file_diff(
+        &self,
+        ctx: &ProviderContext,
+        pull_request_id: &str,
+        expected_base_revision: &str,
+        expected_head_revision: &str,
+        file_path: &str,
+        file_page_hint: Option<u32>,
+    ) -> Result<ReviewPlatformPullRequestFileDiff, ReviewPlatformError> {
+        let (pull_request, files) =
+            github_review_file_parts(ctx, pull_request_id, file_path, file_page_hint).await?;
+        file_diff_from_parts(
+            pull_request,
+            files,
+            expected_base_revision,
+            expected_head_revision,
+            file_path,
+        )
     }
 
     async fn pull_request_detail_page(
@@ -1543,6 +1914,35 @@ impl ReviewProvider for GitlabProvider {
         pull_request_id: &str,
     ) -> Result<ReviewPlatformPullRequestDetail, ReviewPlatformError> {
         gitlab_pull_request_detail(ctx, pull_request_id).await
+    }
+
+    async fn pull_request_review_target(
+        &self,
+        ctx: &ProviderContext,
+        pull_request_id: &str,
+    ) -> Result<ReviewPlatformPullRequestReviewTarget, ReviewPlatformError> {
+        let (pull_request, files) = gitlab_review_target_parts(ctx, pull_request_id).await?;
+        Ok(review_target_from_parts(pull_request, files))
+    }
+
+    async fn pull_request_file_diff(
+        &self,
+        ctx: &ProviderContext,
+        pull_request_id: &str,
+        expected_base_revision: &str,
+        expected_head_revision: &str,
+        file_path: &str,
+        file_page_hint: Option<u32>,
+    ) -> Result<ReviewPlatformPullRequestFileDiff, ReviewPlatformError> {
+        let (pull_request, files) =
+            gitlab_review_file_parts(ctx, pull_request_id, file_path, file_page_hint).await?;
+        file_diff_from_parts(
+            pull_request,
+            files,
+            expected_base_revision,
+            expected_head_revision,
+            file_path,
+        )
     }
 
     async fn pull_request_detail_page(
@@ -2294,6 +2694,35 @@ impl ReviewProvider for GitcodeProvider {
         })
     }
 
+    async fn pull_request_review_target(
+        &self,
+        ctx: &ProviderContext,
+        pull_request_id: &str,
+    ) -> Result<ReviewPlatformPullRequestReviewTarget, ReviewPlatformError> {
+        let (pull_request, files) = gitcode_review_target_parts(ctx, pull_request_id).await?;
+        Ok(review_target_from_parts(pull_request, files))
+    }
+
+    async fn pull_request_file_diff(
+        &self,
+        ctx: &ProviderContext,
+        pull_request_id: &str,
+        expected_base_revision: &str,
+        expected_head_revision: &str,
+        file_path: &str,
+        file_page_hint: Option<u32>,
+    ) -> Result<ReviewPlatformPullRequestFileDiff, ReviewPlatformError> {
+        let (pull_request, files) =
+            gitcode_review_file_parts(ctx, pull_request_id, file_path, file_page_hint).await?;
+        file_diff_from_parts(
+            pull_request,
+            files,
+            expected_base_revision,
+            expected_head_revision,
+            file_path,
+        )
+    }
+
     async fn pull_request_detail_page(
         &self,
         ctx: &ProviderContext,
@@ -2434,6 +2863,9 @@ fn review_http_error(error: ReviewHttpError) -> ReviewPlatformError {
         }
         ReviewHttpError::Http { status, message } => ReviewPlatformError::Http { status, message },
         ReviewHttpError::Parse(message) => ReviewPlatformError::Parse(message),
+        ReviewHttpError::ResponseTooLarge { limit_bytes } => ReviewPlatformError::Parse(format!(
+            "Provider response exceeded the {limit_bytes} byte Review limit"
+        )),
     }
 }
 
@@ -2445,6 +2877,21 @@ async fn send_json_response(
     request: ReviewHttpRequest,
 ) -> Result<JsonResponse, ReviewPlatformError> {
     send_review_json_response(request)
+        .await
+        .map_err(review_http_error)
+}
+
+async fn send_bounded_json(request: ReviewHttpRequest) -> Result<Value, ReviewPlatformError> {
+    send_review_json_response_bounded(request, MAX_REVIEW_TARGET_RESPONSE_BYTES)
+        .await
+        .map(|response| response.value)
+        .map_err(review_http_error)
+}
+
+async fn send_bounded_json_response(
+    request: ReviewHttpRequest,
+) -> Result<JsonResponse, ReviewPlatformError> {
+    send_review_json_response_bounded(request, MAX_REVIEW_TARGET_RESPONSE_BYTES)
         .await
         .map_err(review_http_error)
 }
@@ -4036,6 +4483,8 @@ fn github_pull_request_from_value(value: &Value) -> ReviewPlatformPullRequest {
         author: nested_string(value, &["user", "login"]),
         source_branch: nested_string(value, &["head", "ref"]),
         target_branch: nested_string(value, &["base", "ref"]),
+        base_revision: non_empty_option(nested_string(value, &["base", "sha"])),
+        head_revision: non_empty_option(nested_string(value, &["head", "sha"])),
         updated_at: value_string(value, "updated_at"),
         web_url: value_string(value, "html_url"),
         additions: value_i64(value, "additions") as i32,
@@ -4059,6 +4508,7 @@ fn gitlab_pull_request_from_value(value: &Value) -> ReviewPlatformPullRequest {
         }
     };
     let changed_files = value_string(value, "changes_count")
+        .trim_end_matches('+')
         .parse::<i32>()
         .unwrap_or(0);
 
@@ -4073,6 +4523,15 @@ fn gitlab_pull_request_from_value(value: &Value) -> ReviewPlatformPullRequest {
         ]),
         source_branch: value_string(value, "source_branch"),
         target_branch: value_string(value, "target_branch"),
+        base_revision: non_empty_option(first_non_empty(&[
+            nested_string(value, &["diff_refs", "base_sha"]),
+            value_string(value, "base_sha"),
+        ])),
+        head_revision: non_empty_option(first_non_empty(&[
+            nested_string(value, &["diff_refs", "head_sha"]),
+            value_string(value, "sha"),
+            value_string(value, "head_sha"),
+        ])),
         updated_at: value_string(value, "updated_at"),
         web_url: value_string(value, "web_url"),
         additions: 0,
@@ -4109,6 +4568,15 @@ fn gitcode_pull_request_from_value(value: &Value) -> ReviewPlatformPullRequest {
             nested_string(value, &["base", "ref"]),
             value_string(value, "base_branch"),
         ]),
+        base_revision: non_empty_option(first_non_empty(&[
+            nested_string(value, &["base", "sha"]),
+            value_string(value, "base_sha"),
+        ])),
+        head_revision: non_empty_option(first_non_empty(&[
+            nested_string(value, &["head", "sha"]),
+            value_string(value, "head_sha"),
+            value_string(value, "sha"),
+        ])),
         updated_at: value_string(value, "updated_at"),
         web_url: first_non_empty(&[
             value_string(value, "html_url"),
@@ -4160,31 +4628,36 @@ fn gitlab_files(value: &Value) -> Vec<ReviewPlatformFile> {
         .and_then(Value::as_array)
         .unwrap_or(&Vec::new())
         .iter()
-        .map(|change| {
-            let diff = value_string(change, "diff");
-            let (additions, deletions) = count_diff_lines(&diff);
-            let status = if value_bool(change, "new_file") {
-                ReviewFileStatus::Added
-            } else if value_bool(change, "deleted_file") {
-                ReviewFileStatus::Deleted
-            } else if value_bool(change, "renamed_file") {
-                ReviewFileStatus::Renamed
-            } else {
-                ReviewFileStatus::Modified
-            };
-            ReviewPlatformFile {
-                path: value_string(change, "new_path"),
-                old_path: change
-                    .get("old_path")
-                    .and_then(Value::as_str)
-                    .map(str::to_string),
-                status,
-                additions,
-                deletions,
-                patch: Some(diff),
-            }
-        })
+        .map(gitlab_file_from_value)
         .collect()
+}
+
+fn gitlab_file_from_value(change: &Value) -> ReviewPlatformFile {
+    let diff = value_string(change, "diff");
+    let (additions, deletions) = count_diff_lines(&diff);
+    let status = if value_bool(change, "new_file") {
+        ReviewFileStatus::Added
+    } else if value_bool(change, "deleted_file") {
+        ReviewFileStatus::Deleted
+    } else if value_bool(change, "renamed_file") {
+        ReviewFileStatus::Renamed
+    } else {
+        ReviewFileStatus::Modified
+    };
+    let diff_available = !diff.trim().is_empty()
+        && !value_bool(change, "collapsed")
+        && !value_bool(change, "too_large");
+    ReviewPlatformFile {
+        path: value_string(change, "new_path"),
+        old_path: change
+            .get("old_path")
+            .and_then(Value::as_str)
+            .map(str::to_string),
+        status,
+        additions,
+        deletions,
+        patch: diff_available.then_some(diff),
+    }
 }
 
 fn github_commit_from_value(value: &Value) -> ReviewPlatformCommit {
@@ -4583,13 +5056,214 @@ fn count_diff_lines(diff: &str) -> (i32, i32) {
     (additions, deletions)
 }
 
+fn file_has_complete_patch(file: &ReviewPlatformFile) -> bool {
+    let Some(patch) = file
+        .patch
+        .as_deref()
+        .filter(|patch| !patch.trim().is_empty())
+    else {
+        return false;
+    };
+    if patch.chars().count() > MAX_REVIEW_FILE_DIFF_CHARS {
+        return false;
+    }
+    let (patch_additions, patch_deletions) = count_diff_lines(patch);
+    patch_additions == file.additions
+        && patch_deletions == file.deletions
+        && (patch_additions > 0 || patch_deletions > 0)
+}
+
 fn apply_files_stats(pull_request: &mut ReviewPlatformPullRequest, files: &[ReviewPlatformFile]) {
-    pull_request.changed_files = files.len() as i32;
+    if pull_request.changed_files <= 0 {
+        pull_request.changed_files = files.len() as i32;
+    }
     let (additions, deletions) = files.iter().fold((0, 0), |acc, file| {
         (acc.0 + file.additions, acc.1 + file.deletions)
     });
     pull_request.additions = additions;
     pull_request.deletions = deletions;
+}
+
+async fn fetch_bounded_paginated_array<F>(
+    mut build_request: F,
+    next_page: fn(&ReviewHttpHeaders, u32) -> Option<u32>,
+    max_items: usize,
+) -> Result<Value, ReviewPlatformError>
+where
+    F: FnMut(u32) -> ReviewHttpRequest,
+{
+    let mut page = 1;
+    let mut values = Vec::new();
+    while values.len() < max_items {
+        let response = send_bounded_json_response(build_request(page)).await?;
+        let items = response.value.as_array().ok_or_else(|| {
+            ReviewPlatformError::Parse("Provider paginated response was not an array".to_string())
+        })?;
+        values.extend(items.iter().take(max_items - values.len()).cloned());
+        if values.len() >= max_items {
+            break;
+        }
+        let Some(next) = next_page(&response.headers, page).filter(|next| *next > page) else {
+            break;
+        };
+        page = next;
+    }
+    Ok(Value::Array(values))
+}
+
+async fn fetch_bounded_paginated_file<F, M>(
+    mut build_request: F,
+    next_page: fn(&ReviewHttpHeaders, u32) -> Option<u32>,
+    start_page: u32,
+    max_items: usize,
+    file_path: &str,
+    map_file: M,
+) -> Result<Option<ReviewPlatformFile>, ReviewPlatformError>
+where
+    F: FnMut(u32) -> ReviewHttpRequest,
+    M: Fn(&Value) -> ReviewPlatformFile,
+{
+    let mut page = start_page.max(1);
+    let mut visited = 0usize;
+    while visited < max_items {
+        let response = send_bounded_json_response(build_request(page)).await?;
+        let items = response.value.as_array().ok_or_else(|| {
+            ReviewPlatformError::Parse("Provider paginated response was not an array".to_string())
+        })?;
+        for item in items.iter().take(max_items - visited) {
+            let file = map_file(item);
+            if file.path == file_path || file.old_path.as_deref() == Some(file_path) {
+                return Ok(Some(file));
+            }
+            visited += 1;
+        }
+        if visited >= max_items {
+            break;
+        }
+        let Some(next) = next_page(&response.headers, page).filter(|next| *next > page) else {
+            break;
+        };
+        page = next;
+    }
+    Ok(None)
+}
+
+fn review_target_from_parts(
+    pull_request: ReviewPlatformPullRequest,
+    files: Vec<ReviewPlatformFile>,
+) -> ReviewPlatformPullRequestReviewTarget {
+    let provider_file_count =
+        usize::try_from(pull_request.changed_files.max(0)).unwrap_or_default();
+    let known_file_count = provider_file_count.max(files.len());
+    let kept_file_count = files.len().min(MAX_REVIEW_TARGET_FILES);
+    let omitted_file_count = known_file_count.saturating_sub(kept_file_count);
+    let mut limitations = Vec::new();
+    if provider_file_count > files.len() {
+        limitations.push("provider_file_list_incomplete".to_string());
+    }
+    if omitted_file_count > 0 {
+        limitations.push("review_target_file_limit_exceeded".to_string());
+    }
+
+    let files = files
+        .into_iter()
+        .take(MAX_REVIEW_TARGET_FILES)
+        .map(|file| {
+            let diff_available = file_has_complete_patch(&file);
+            ReviewPlatformReviewTargetFile {
+                path: file.path,
+                old_path: file.old_path,
+                status: file.status,
+                additions: file.additions,
+                deletions: file.deletions,
+                diff_available,
+            }
+        })
+        .collect::<Vec<_>>();
+    if files.iter().any(|file| !file.diff_available) {
+        limitations.push("provider_file_diff_unavailable".to_string());
+    }
+
+    ReviewPlatformPullRequestReviewTarget {
+        pull_request,
+        files,
+        omitted_file_count,
+        limitations,
+    }
+}
+
+fn file_diff_from_parts(
+    pull_request: ReviewPlatformPullRequest,
+    files: Vec<ReviewPlatformFile>,
+    expected_base_revision: &str,
+    expected_head_revision: &str,
+    file_path: &str,
+) -> Result<ReviewPlatformPullRequestFileDiff, ReviewPlatformError> {
+    let base_revision = pull_request.base_revision.as_deref().unwrap_or_default();
+    let head_revision = pull_request.head_revision.as_deref().unwrap_or_default();
+    if base_revision != expected_base_revision || head_revision != expected_head_revision {
+        return Err(ReviewPlatformError::StaleTarget(format!(
+            "expected {expected_base_revision}..{expected_head_revision}, provider returned {base_revision}..{head_revision}"
+        )));
+    }
+    let file = files
+        .into_iter()
+        .find(|file| file.path == file_path || file.old_path.as_deref() == Some(file_path))
+        .ok_or_else(|| {
+            ReviewPlatformError::Api(format!(
+                "Pull request file is not available from the provider: {file_path}"
+            ))
+        })?;
+    if file.path.contains(['\n', '\r'])
+        || file
+            .old_path
+            .as_deref()
+            .is_some_and(|path| path.contains(['\n', '\r']))
+    {
+        return Err(ReviewPlatformError::Parse(
+            "Provider returned an invalid pull request file path".to_string(),
+        ));
+    }
+    if !file_has_complete_patch(&file) {
+        return Err(ReviewPlatformError::Api(format!(
+            "Exact provider diff is unavailable for pull request file: {}",
+            file.path
+        )));
+    }
+    let patch = file.patch.as_deref().ok_or_else(|| {
+        ReviewPlatformError::Api(format!(
+            "Exact provider diff is unavailable for pull request file: {}",
+            file.path
+        ))
+    })?;
+    let old_path = file.old_path.as_deref().unwrap_or(&file.path);
+    let diff = if patch.starts_with("diff --git ") {
+        patch.to_string()
+    } else {
+        let old_marker = if file.status == ReviewFileStatus::Added {
+            "/dev/null".to_string()
+        } else {
+            format!("a/{old_path}")
+        };
+        let new_marker = if file.status == ReviewFileStatus::Deleted {
+            "/dev/null".to_string()
+        } else {
+            format!("b/{}", file.path)
+        };
+        format!(
+            "diff --git a/{old_path} b/{}\n--- {old_marker}\n+++ {new_marker}\n{patch}",
+            file.path
+        )
+    };
+
+    Ok(ReviewPlatformPullRequestFileDiff {
+        path: file.path,
+        old_path: file.old_path,
+        status: file.status,
+        base_revision: base_revision.to_string(),
+        head_revision: head_revision.to_string(),
+        diff,
+    })
 }
 
 fn array_items<'a>(value: &'a Value) -> &'a [Value] {
@@ -4614,6 +5288,10 @@ fn optional_string(value: &Value, key: &str) -> Option<String> {
         .and_then(Value::as_str)
         .map(str::to_string)
         .filter(|value| !value.trim().is_empty())
+}
+
+fn non_empty_option(value: String) -> Option<String> {
+    (!value.trim().is_empty()).then_some(value)
 }
 
 fn nested_string(value: &Value, path: &[&str]) -> String {
@@ -4818,6 +5496,144 @@ mod tests {
         ]);
 
         assert_eq!(github_review_decision(&reviews), ReviewDecision::Approved);
+    }
+
+    #[test]
+    fn github_pull_request_keeps_immutable_revisions() {
+        let pull_request = github_pull_request_from_value(&json!({
+            "number": 42,
+            "title": "Review target",
+            "state": "open",
+            "user": { "login": "alice" },
+            "head": { "ref": "feature", "sha": "2222222222222222222222222222222222222222" },
+            "base": { "ref": "main", "sha": "1111111111111111111111111111111111111111" },
+            "updated_at": "2026-07-11T00:00:00Z",
+            "html_url": "https://github.com/example/repo/pull/42",
+            "changed_files": 1
+        }));
+
+        assert_eq!(
+            pull_request.base_revision.as_deref(),
+            Some("1111111111111111111111111111111111111111")
+        );
+        assert_eq!(
+            pull_request.head_revision.as_deref(),
+            Some("2222222222222222222222222222222222222222")
+        );
+    }
+
+    #[test]
+    fn review_target_reports_unavailable_provider_diffs_without_embedding_them() {
+        let mut pull_request = github_pull_request_from_value(&json!({
+            "number": 42,
+            "title": "Review target",
+            "state": "open",
+            "head": { "ref": "feature", "sha": "2222222222222222222222222222222222222222" },
+            "base": { "ref": "main", "sha": "1111111111111111111111111111111111111111" },
+            "changed_files": 2
+        }));
+        pull_request.changed_files = 2;
+        let target = review_target_from_parts(
+            pull_request,
+            vec![
+                ReviewPlatformFile {
+                    path: "src/lib.rs".to_string(),
+                    old_path: None,
+                    status: ReviewFileStatus::Modified,
+                    additions: 1,
+                    deletions: 1,
+                    patch: Some("@@ -1 +1 @@\n-old\n+new".to_string()),
+                },
+                ReviewPlatformFile {
+                    path: "assets/image.png".to_string(),
+                    old_path: None,
+                    status: ReviewFileStatus::Modified,
+                    additions: 0,
+                    deletions: 0,
+                    patch: None,
+                },
+            ],
+        );
+
+        assert_eq!(target.files.len(), 2);
+        assert!(target.files[0].diff_available);
+        assert!(!target.files[1].diff_available);
+        assert!(target
+            .limitations
+            .contains(&"provider_file_diff_unavailable".to_string()));
+    }
+
+    #[test]
+    fn review_target_rejects_a_non_empty_but_truncated_provider_patch() {
+        let mut pull_request = github_pull_request_from_value(&json!({
+            "number": 42,
+            "title": "Review target",
+            "state": "open",
+            "head": { "ref": "feature", "sha": "2222222222222222222222222222222222222222" },
+            "base": { "ref": "main", "sha": "1111111111111111111111111111111111111111" },
+            "changed_files": 1
+        }));
+        pull_request.changed_files = 1;
+
+        let target = review_target_from_parts(
+            pull_request,
+            vec![ReviewPlatformFile {
+                path: "src/lib.rs".to_string(),
+                old_path: None,
+                status: ReviewFileStatus::Modified,
+                additions: 10,
+                deletions: 10,
+                patch: Some("@@ -1 +1 @@\n-old\n+new".to_string()),
+            }],
+        );
+
+        assert!(!target.files[0].diff_available);
+        assert!(target
+            .limitations
+            .contains(&"provider_file_diff_unavailable".to_string()));
+    }
+
+    #[test]
+    fn pull_request_file_diff_rejects_changed_head() {
+        let pull_request = github_pull_request_from_value(&json!({
+            "number": 42,
+            "title": "Review target",
+            "state": "open",
+            "head": { "ref": "feature", "sha": "2222222222222222222222222222222222222222" },
+            "base": { "ref": "main", "sha": "1111111111111111111111111111111111111111" }
+        }));
+        let result = file_diff_from_parts(
+            pull_request,
+            Vec::new(),
+            "1111111111111111111111111111111111111111",
+            "3333333333333333333333333333333333333333",
+            "src/lib.rs",
+        );
+
+        assert!(matches!(result, Err(ReviewPlatformError::StaleTarget(_))));
+    }
+
+    #[test]
+    fn review_target_rejects_revisions_that_change_during_preparation() {
+        let initial = github_pull_request_from_value(&json!({
+            "number": 42,
+            "title": "Review target",
+            "state": "open",
+            "head": { "sha": "2222222222222222222222222222222222222222" },
+            "base": { "sha": "1111111111111111111111111111111111111111" }
+        }));
+        let confirmed = github_pull_request_from_value(&json!({
+            "number": 42,
+            "title": "Review target",
+            "state": "open",
+            "head": { "sha": "3333333333333333333333333333333333333333" },
+            "base": { "sha": "1111111111111111111111111111111111111111" }
+        }));
+
+        assert!(matches!(
+            ensure_pull_request_revisions_stable(&initial, &confirmed),
+            Err(ReviewPlatformError::StaleTarget(_))
+        ));
     }
 
     #[test]

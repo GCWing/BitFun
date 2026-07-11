@@ -397,7 +397,6 @@ export interface ReviewQualityDecisionRequest {
     workspaceAreaCount: number;
     contractSurfaceChanged: boolean;
   };
-  projectStrategyOverride?: ReviewStrategyLevel;
 }
 
 export interface ReviewQualityDecision {
@@ -407,8 +406,7 @@ export interface ReviewQualityDecision {
   reason:
     | 'risk_score'
     | 'explicit_strict'
-    | 'unresolved_target'
-    | 'project_strategy_override';
+    | 'unresolved_target';
   score: number;
   requiresConsent: boolean;
 }
