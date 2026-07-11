@@ -518,7 +518,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn product_manifest_write_schema_requires_content() {
+    async fn product_manifest_write_schema_requires_payload() {
         let context = tool_context(Some("test-agent"));
 
         let manifest = resolve_product_resolved_tool_manifest(
@@ -534,11 +534,9 @@ mod tests {
             .find(|tool| tool.name == "Write")
             .expect("Write definition should exist");
 
-        assert_eq!(
-            write.parameters["required"],
-            json!(["file_path", "content"])
-        );
-        assert!(write.parameters["properties"].get("content").is_some());
+        assert_eq!(write.parameters["required"], json!(["payload"]));
+        assert!(write.parameters["properties"].get("payload").is_some());
+        assert!(write.parameters["properties"].get("mode").is_none());
         assert!(write.description.contains("Read tool first"));
     }
 

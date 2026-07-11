@@ -474,10 +474,24 @@ fn build_tool_detail(prompt: &PermissionPrompt) -> String {
         "Write" | "write_file" | "write_file_tool" => {
             let path = prompt
                 .params
-                .get("file_path")
-                .or_else(|| prompt.params.get("target_file"))
-                .and_then(|v| v.as_str())
-                .unwrap_or("unknown");
+                .get("payload")
+                .and_then(|value| value.as_str())
+                .and_then(|value| {
+                    let first_line = value.split_once('\n').map_or(value, |(path, _)| path);
+                    first_line
+                        .strip_suffix('\r')
+                        .unwrap_or(first_line)
+                        .strip_prefix("+++ ")
+                })
+                .filter(|path| !path.trim().is_empty())
+                .or_else(|| {
+                    prompt
+                        .params
+                        .get("file_path")
+                        .or_else(|| prompt.params.get("target_file"))
+                        .and_then(|value| value.as_str())
+                })
+                .unwrap_or("workspace temporary file");
             format!("Write {}", path)
         }
         "Delete" => {

@@ -1231,19 +1231,43 @@ fn render_write_block(
     spinner_frame: &str,
     available_width: u16,
 ) -> ToolCardRenderOutput {
-    let file_path = param_str(
-        &tool_state.parameters,
-        &["file_path", "target_file", "path"],
-    );
+    let payload = tool_state
+        .parameters
+        .get("payload")
+        .and_then(|value| value.as_str());
+    let combined = payload.and_then(|value| {
+        let (first_line, content) = value.split_once('\n').unwrap_or((value, ""));
+        let first_line = first_line.strip_suffix('\r').unwrap_or(first_line);
+        let file_path = first_line.strip_prefix("+++ ")?;
+        (!file_path.trim().is_empty()).then_some((file_path, content))
+    });
+    let file_path = combined
+        .map(|(file_path, _)| file_path.to_string())
+        .unwrap_or_else(|| {
+            let legacy_path = param_str(
+                &tool_state.parameters,
+                &["file_path", "target_file", "path"],
+            );
+            if legacy_path.is_empty() && payload.is_some() {
+                "workspace temporary file".to_string()
+            } else {
+                legacy_path
+            }
+        });
 
     let mut content_lines = Vec::new();
 
     // Show content preview with syntax highlighting and line numbers
-    if let Some(content) = tool_state
-        .parameters
-        .get("contents")
-        .or_else(|| tool_state.parameters.get("content"))
-        .and_then(|v| v.as_str())
+    if let Some(content) = combined
+        .map(|(_, content)| content)
+        .or(payload.filter(|_| combined.is_none()))
+        .or_else(|| {
+            tool_state
+                .parameters
+                .get("contents")
+                .or_else(|| tool_state.parameters.get("content"))
+                .and_then(|value| value.as_str())
+        })
     {
         let total_lines = content.lines().count();
         let max = if expanded { usize::MAX } else { 8 };

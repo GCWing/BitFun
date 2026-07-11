@@ -1,3 +1,5 @@
+import { splitFilePathAndContent } from '@/shared/utils/partialJsonParser';
+
 import type { DialogTurn, FlowToolItem } from '../types/flow-chat';
 
 const FILE_MUTATION_TOOLS = new Set([
@@ -70,7 +72,8 @@ export function collectModifiedFilePathsFromTurns(
           continue;
         }
 
-        const filePath = input.file_path ?? input.filePath ?? input.path;
+        const combinedFilePath = splitFilePathAndContent(input.payload)?.filePath;
+        const filePath = combinedFilePath ?? input.file_path ?? input.filePath ?? input.path;
         if (typeof filePath === 'string' && filePath.trim()) {
           paths.add(workspaceRelativePath(filePath, workspacePath));
         }

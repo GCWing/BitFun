@@ -517,10 +517,9 @@ fn truncation_recovery_notice_preserves_write_like_guidance() {
     let notice = build_tool_call_truncation_recovery_notice("Write");
 
     assert!(notice.contains("latest Read result"));
-    assert!(notice.contains("ONE Write call"));
-    assert!(notice.contains("`mode`: \"a\""));
-    assert!(notice.contains("missing continuation"));
-    assert!(notice.contains("Do NOT rewrite the whole file with overwrite mode"));
+    assert!(notice.contains("use Edit to add only the missing continuation"));
+    assert!(notice.contains("stop tool-calling and tell the user"));
+    assert!(!notice.contains("`mode`"));
     assert!(notice.ends_with("Original tool result follows.\n\n"));
 }
 

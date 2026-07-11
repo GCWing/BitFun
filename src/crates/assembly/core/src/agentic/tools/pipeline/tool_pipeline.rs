@@ -286,6 +286,19 @@ fn map_tool_execution_admission_rejection(error: ToolExecutionAdmissionRejection
     }
 }
 
+fn recovered_write_has_potentially_truncated_marked_path(
+    tool_name: &str,
+    arguments: &serde_json::Value,
+    recovered_from_truncation: bool,
+) -> bool {
+    recovered_from_truncation
+        && tool_name == "Write"
+        && arguments
+            .get("payload")
+            .and_then(serde_json::Value::as_str)
+            .is_some_and(|value| value.starts_with("+++ ") && !value.contains('\n'))
+}
+
 const SUBAGENT_LAUNCH_TOOL_NAME: &str = "Task";
 
 /// Tool pipeline
@@ -632,26 +645,32 @@ impl ToolPipeline {
             tool_name, tool_id, queue_wait_ms
         );
 
-        if recovered_from_truncation {
-            warn!(
-                "Tool '{}' arguments were recovered from a truncated stream (tool_id={}, session_id={}). Executing with patched arguments — content may be incomplete.",
-                tool_name, tool_id, task.context.session_id
-            );
-        }
-
-        if tool_name.is_empty() || tool_is_error {
+        let invalid_call_error = if tool_name.is_empty() || tool_is_error {
             let raw_arguments_preview = task
                 .tool_call
                 .raw_arguments
                 .as_deref()
                 .map(truncate_raw_tool_arguments_preview);
-            let error_msg = build_invalid_tool_call_error_message(
+            Some(build_invalid_tool_call_error_message(
                 &tool_name,
                 tool_is_error,
                 recovered_from_truncation,
                 raw_arguments_preview,
-            );
+            ))
+        } else if recovered_write_has_potentially_truncated_marked_path(
+            &tool_name,
+            &tool_args,
+            recovered_from_truncation,
+        ) {
+            Some(
+                "Recovered Write arguments are missing the newline separator between the path and content; refusing to execute because the path may be truncated."
+                    .to_string(),
+            )
+        } else {
+            None
+        };
 
+        if let Some(error_msg) = invalid_call_error {
             self.state_manager
                 .update_state(
                     &tool_id,
@@ -668,6 +687,13 @@ impl ToolPipeline {
                 .await;
 
             return Err(BitFunError::Validation(error_msg));
+        }
+
+        if recovered_from_truncation {
+            warn!(
+                "Tool '{}' arguments were recovered from a truncated stream (tool_id={}, session_id={}). Executing with patched arguments — content may be incomplete.",
+                tool_name, tool_id, task.context.session_id
+            );
         }
 
         // Repetition alone is not execution failure: polling and status checks
@@ -1468,6 +1494,43 @@ mod tests {
     use std::time::SystemTime;
     use tokio::time::{sleep, Duration};
 
+    #[test]
+    fn recovered_write_without_separator_is_rejected_as_potentially_truncated_path() {
+        assert!(recovered_write_has_potentially_truncated_marked_path(
+            "Write",
+            &json!({ "payload": "+++ C:/workspace/truncated" }),
+            true,
+        ));
+    }
+
+    #[test]
+    fn complete_path_only_write_is_not_treated_as_truncation_recovery() {
+        assert!(!recovered_write_has_potentially_truncated_marked_path(
+            "Write",
+            &json!({ "payload": "+++ C:/workspace/empty.txt" }),
+            false,
+        ));
+        assert!(!recovered_write_has_potentially_truncated_marked_path(
+            "Write",
+            &json!({ "payload": "+++ C:/workspace/empty.txt\n" }),
+            true,
+        ));
+    }
+
+    #[test]
+    fn recovered_write_without_marker_can_fall_back_safely() {
+        assert!(!recovered_write_has_potentially_truncated_marked_path(
+            "Write",
+            &json!({ "payload": "partial content without a path" }),
+            true,
+        ));
+        assert!(!recovered_write_has_potentially_truncated_marked_path(
+            "Write",
+            &json!({ "payload": "+++ C:/workspace/main.rs\npartial content" }),
+            true,
+        ));
+    }
+
     struct StaticTestTool {
         name: String,
         response: serde_json::Value,
@@ -2066,8 +2129,7 @@ mod tests {
 
         assert!(notice.contains("file may have been written with partial content"));
         assert!(notice.contains("latest Read result"));
-        assert!(notice.contains("issue ONE Write call"));
-        assert!(notice.contains("`mode`: \"a\""));
+        assert!(notice.contains("use Edit to add only the missing continuation"));
     }
 
     #[test]

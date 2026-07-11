@@ -50,6 +50,7 @@ import { buildDeepReviewCapacityQueueStateFromEvent } from '../../utils/deepRevi
 import { useBackgroundCommandActivityStore } from '../../store/backgroundCommandActivityStore';
 import { useBackgroundSubagentActivityStore } from '../../store/backgroundSubagentActivityStore';
 import { createTab } from '@/shared/utils/tabUtils';
+import { splitFilePathAndContent } from '@/shared/utils/partialJsonParser';
 
 const pendingImageAnalysisTurns = new Map<string, string>();
 import { 
@@ -2659,7 +2660,10 @@ function detectModifiedPlanFiles(dialogTurn: DialogTurn): string[] {
       
       if (['Edit', 'Write'].includes(toolItem.toolName) && toolItem.toolResult?.success) {
         const input = toolItem.toolCall?.input;
-        const filePath = input?.file_path || input?.target_file || '';
+        const filePath = splitFilePathAndContent(input?.payload)?.filePath
+          || input?.file_path
+          || input?.target_file
+          || '';
         if (filePath.endsWith('.plan.md')) {
           planFiles.push(filePath);
         }
