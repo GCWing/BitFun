@@ -24,6 +24,7 @@ export const DEFAULT_CODE_REVIEW_MARKDOWN_LABELS: CodeReviewReportMarkdownLabels
   reviewDecision: 'Review Decision',
   riskLevel: 'Risk Level',
   recommendedAction: 'Recommended Action',
+  evidenceStatus: 'Evidence Status',
   scope: 'Scope',
   issues: 'Issues',
   noIssues: 'No validated issues.',
@@ -108,6 +109,7 @@ export function formatCodeReviewReportMarkdown(
   lines.push(`## ${mergedLabels.reviewDecision}`);
   lines.push(`- ${mergedLabels.riskLevel}: ${report.summary?.risk_level ?? 'unknown'}`);
   lines.push(`- ${mergedLabels.recommendedAction}: ${report.summary?.recommended_action ?? 'unknown'}`);
+  lines.push(`- ${mergedLabels.evidenceStatus}: ${report.evidence_status ?? 'unknown'}`);
   if (report.review_scope?.trim()) {
     lines.push(`- ${mergedLabels.scope}: ${report.review_scope.trim()}`);
   }

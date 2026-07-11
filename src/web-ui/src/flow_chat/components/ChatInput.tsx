@@ -2529,13 +2529,18 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       setQueuedInput(null);
       setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
 
-      await launchPreparedReviewSession({
+      const launched = await launchPreparedReviewSession({
         parentSessionId: effectiveTargetSessionId,
         workspacePath: effectiveTargetSession.workspacePath,
         displayMessage: message,
         prepared,
         childSessionName: t('chatInput.reviewThreadTitle'),
       });
+      if (launched?.launchStatus === 'uncertain') {
+        notificationService.warning(t('deepReviewActionBar.launchError.uncertain'), {
+          duration: 8000,
+        });
+      }
       dispatchInput({ type: 'DEACTIVATE' });
     } catch (error) {
       log.error('Failed to trigger Review', {

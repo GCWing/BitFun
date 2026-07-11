@@ -90,7 +90,7 @@ Plugin Runtime Host（按需启用）
 - 安全边界负责权限、执行位置、沙箱等级、网络、凭据和高风险动作隔离；权限确认、快照/回滚隔离和运行时沙箱必须分开表达。
 - 扩展接口先定义 Plugin Runtime Host contract、Event Manifest、Tool ABI、Permission/Effect、插件诊断和插件效果候选；插件运行时主机由 Product Assembly 注册，通过安全控制面约束，只返回建议、只读证据候选或工具后置证据候选。工具输入补丁、配置 transform 和未预算界面贡献必须等真实消费方和安全评审后再进入后续阶段。权威状态按 owner 写入，插件、外部适配器和模型输出只能作为候选输入。
 - 交付物、证据和质量数据面支撑解释、审查、发布和复盘。
-- 项目集成面适配外部系统，并把外部语义映射为内部稳定事件和接口。当前工作区和明确 Git range 先固定可证明的 revision、文件状态、diff 引用和完整度，再由交付物与证据面形成 session-scoped 目标清单；工作区在有界 diff、冲突状态和未跟踪内容指纹都可用时可声明覆盖完整，但仍保留可变新鲜度限制。PR provider 取证留在后续 PR adapter 接线；Reviewer 不自行 fetch、checkout 或猜 ref。
+- 项目集成面适配外部系统，并把外部语义映射为内部稳定事件和接口。当前工作区和明确 Git range 先固定 revision、文件状态和完整度，再由交付物与证据面形成 session-scoped 目标清单；工作区可声明 prepared diff 覆盖完整，但最终 evidence status 保持 limited。Reviewer 不自行 fetch、checkout 或猜 ref。
 - 智能体运行时执行任务，并通过策略面和安全边界获取质量结论与授权状态。
 
 权威状态 owner：
@@ -156,7 +156,7 @@ Plugin Runtime Host（按需启用）
 | 用户可临时放行 | 应急放行有范围、期限、记录和撤销 |
 | 组织策略可强制 | 受管策略高于本地覆盖 |
 | 模型输出作为候选 | 模型只能输出解释、摘要、风险或影响候选；策略改变和权威状态来自确定性证据、用户决策或受管策略 |
-| Review 目标先于执行 | 当前修改、明确 Git range 和 PR 必须先形成带 revision、文件状态、diff 引用和完整度的只读目标证据；证据缺失只能降级，不能由 Reviewer 猜测或写成完整覆盖 |
+| Review 目标先于执行 | 当前修改和明确 Git range 必须先形成带 revision、文件状态和完整度的只读目标证据；证据缺失只能降级，不能由 Reviewer 猜测或写成完整覆盖 |
 | Reviewer Git 最小权限 | 保留既有 Reviewer Git 暴露以兼容旧入口，但 prepared work packet 不把它作为 changed-code 证据，也不新增 Git 工具或任意 shell；prepared target 只通过有界 `GetFileDiff` 消费变更。只有本地仓库与目标 head 匹配且整个工作区干净时，现有 Read/Grep/Glob/LS 才补充 live context；不做逐调用全仓扫描、网络、checkout 或仓库状态修改 |
 | 能力/效果模型统一 | tool、MCP、skills、插件、hook 和内置能力必须映射为能力声明、目标对象、数据类别、信任来源和副作用候选 |
 | 未声明能力受限 | 新增扩展未声明能力、声明不完整或运行时行为超出声明时，只能进入受限模式或安全确认，不能按低风险静默执行 |

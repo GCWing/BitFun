@@ -23,6 +23,7 @@ import { createLogger } from '@/shared/utils/logger';
 import {
   collectWorkspaceDiffFilePaths,
   extractExplicitReviewFilePaths,
+  hasUnresolvedPathLikeReviewFocus,
   parseSlashCommandGitTarget,
 } from './commandParser';
 
@@ -131,11 +132,21 @@ function normalizePath(path: string, workspacePath: string): string {
   return platformPath.replace(/^\.\/+/, '');
 }
 
+function hasParentTraversal(path: string, workspacePath: string): boolean {
+  const normalized = isWindowsWorkspacePath(workspacePath)
+    ? path.replace(/\\/g, '/')
+    : path;
+  return normalized.split('/').some((segment) => segment === '..');
+}
+
 function workspaceRelativeTargetPath(
   path: string,
   workspacePath: string,
 ): string | undefined {
   const normalized = normalizePath(path, workspacePath);
+  if (hasParentTraversal(normalized, workspacePath)) {
+    return undefined;
+  }
   const root = normalizePath(workspacePath, workspacePath).replace(/\/+$/, '');
   const absolute = isAbsoluteWorkspacePath(normalized, isWindowsWorkspacePath(workspacePath));
   if (!absolute) return normalized;
@@ -384,11 +395,10 @@ export async function resolveCurrentFileReviewSnapshot(
       changeStats: buildUnknownChangeStats(workspaceTarget),
       targetEvidence: buildUnknownReviewTargetEvidence(
         workspaceTarget,
-        'remote_workspace_snapshot_unavailable',
+        'remote_workspace_review_unavailable',
       ),
     };
   }
-
   const targetFiles = workspaceTarget.files
     .filter((file) => !file.excluded)
     .map((file) => normalizePath(file.normalizedPath, workspacePath));
@@ -439,7 +449,6 @@ export async function resolveCurrentFileReviewSnapshot(
       diff,
       status,
       untrackedContentFingerprints: untrackedFacts.fingerprints,
-      remote: Boolean(remoteConnectionId),
     });
 
     const changedPaths = new Set(
@@ -586,7 +595,14 @@ export async function resolveSlashCommandReviewTarget(
     }
 
     if (!bindTargetToWorkspace(target, workspacePath)) {
-      return resolveCurrentFileReviewSnapshot(workspacePath, target);
+      return {
+        target,
+        changeStats: buildUnknownChangeStats(target),
+        targetEvidence: buildUnknownReviewTargetEvidence(
+          target,
+          'target_path_outside_workspace',
+        ),
+      };
     }
 
     try {
@@ -597,11 +613,26 @@ export async function resolveSlashCommandReviewTarget(
           reviewSafe: true,
         }),
       ]);
+      const candidatePaths = new Set<string>();
+      for (const file of changedFiles) {
+        candidatePaths.add(normalizePath(file.path, workspacePath).replace(/\/+$/, ''));
+        if (file.old_path) {
+          candidatePaths.add(normalizePath(file.old_path, workspacePath).replace(/\/+$/, ''));
+        }
+      }
+      for (const path of collectWorkspaceDiffFilePaths(status)) {
+        candidatePaths.add(normalizePath(path, workspacePath).replace(/\/+$/, ''));
+      }
       const requested = explicitFilePaths.map((path) => {
         const normalized = normalizePath(path, workspacePath);
+        const normalizedPath = normalized.replace(/\/+$/, '');
+        const exactFileExists = candidatePaths.has(normalizedPath);
+        const containsChangedFiles = [...candidatePaths].some((candidate) => (
+          candidate.startsWith(`${normalizedPath}/`)
+        ));
         return {
-          path: normalized.replace(/\/+$/, ''),
-          directory: /[\\/]$/.test(path),
+          path: normalizedPath,
+          directory: /[\\/]$/.test(path) || (!exactFileExists && containsChangedFiles),
         };
       });
       const matchesRequestedPath = (path: string): boolean => {
@@ -667,6 +698,18 @@ export async function resolveSlashCommandReviewTarget(
         ),
       };
     }
+  }
+
+  if (!gitTarget && hasUnresolvedPathLikeReviewFocus(commandFocus)) {
+    const target = createUnknownReviewTargetClassification('slash_command_explicit_files');
+    return {
+      target,
+      changeStats: buildUnknownChangeStats(target),
+      targetEvidence: buildUnknownReviewTargetEvidence(
+        target,
+        'explicit_target_unrecognized',
+      ),
+    };
   }
 
   if (gitTarget) {
@@ -741,7 +784,6 @@ export async function resolveSlashCommandReviewTarget(
           workspaceHeadRevision,
           status,
           diff,
-          remote: Boolean(remoteConnectionId),
         }),
       };
     } catch (error) {
@@ -769,7 +811,7 @@ export async function resolveSlashCommandReviewTarget(
       changeStats: buildUnknownChangeStats(target),
       targetEvidence: buildUnknownReviewTargetEvidence(
         target,
-        'remote_workspace_snapshot_unavailable',
+        'remote_workspace_review_unavailable',
       ),
     };
   }

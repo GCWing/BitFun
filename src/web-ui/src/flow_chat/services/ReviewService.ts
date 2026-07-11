@@ -21,7 +21,7 @@ import {
   buildDeepReviewLaunchFromSlashCommand,
   launchDeepReviewSession,
 } from './DeepReviewService';
-import { createBtwChildSession } from './BtwThreadService';
+import { createBtwChildSession, createBtwRequestId } from './BtwThreadService';
 import { FlowChatManager } from './FlowChatManager';
 import { insertReviewSessionSummaryMarker } from './ReviewSessionMarkerService';
 import { openBtwSessionInAuxPane } from './btwSessionPane';
@@ -36,9 +36,12 @@ import {
 
 const log = createLogger('ReviewService');
 
-function reviewTargetError(message: string): Error {
+function reviewTargetError(
+  message: string,
+  messageKey = 'deepReviewActionBar.launchError.target',
+): Error {
   return Object.assign(new Error(message), {
-    launchErrorMessageKey: 'deepReviewActionBar.launchError.target',
+    launchErrorMessageKey: messageKey,
     originalMessage: message,
   });
 }
@@ -191,10 +194,14 @@ async function prepareFromResolvedTarget(params: {
   if ((params.targetEvidence.omittedFileCount ?? 0) > 0) {
     throw reviewTargetError(
       'This Review target exceeds the bounded evidence file limit. Narrow the target before starting Review.',
+      'deepReviewActionBar.launchError.fileLimit',
     );
   }
   if (params.targetEvidence.limitations.includes('target_path_outside_workspace')) {
-    throw reviewTargetError('Review files must be inside the current workspace.');
+    throw reviewTargetError(
+      'Review files must be inside the current workspace.',
+      'deepReviewActionBar.launchError.outsideWorkspace',
+    );
   }
   if (
     params.targetEvidence.source === 'git_range' &&
@@ -202,6 +209,7 @@ async function prepareFromResolvedTarget(params: {
   ) {
     throw reviewTargetError(
       'Remote Git range Review is not supported yet because exact target-bound diffs are unavailable. Review workspace changes or use a local checkout.',
+      'deepReviewActionBar.launchError.remoteGitRange',
     );
   }
   if (
@@ -211,6 +219,7 @@ async function prepareFromResolvedTarget(params: {
     if (params.targetEvidence.limitations.includes('three_dot_git_range_not_supported')) {
       throw reviewTargetError(
         'Three-dot Git ranges are not supported in this Review release. Use an explicit merge-base..head range.',
+        'deepReviewActionBar.launchError.threeDotRange',
       );
     }
     if (
@@ -220,21 +229,18 @@ async function prepareFromResolvedTarget(params: {
     ) {
       throw reviewTargetError(
         'Combining a Git range with file filters is not supported yet. Review the range or the files separately.',
+        'deepReviewActionBar.launchError.combinedScope',
       );
     }
     if (params.targetEvidence.completeness === 'complete') {
-      throw reviewTargetError('The requested Git range contains no changed files.');
+      throw reviewTargetError(
+        'The requested Git range contains no changed files.',
+        'deepReviewActionBar.launchError.emptyGitRange',
+      );
     }
     throw reviewTargetError(
       'The requested Git range could not be resolved to reviewable evidence. Check the ref or range and try again.',
-    );
-  }
-  if (
-    params.requestedFiles.length === 0 &&
-    params.targetEvidence.limitations.includes('remote_workspace_snapshot_unavailable')
-  ) {
-    throw reviewTargetError(
-      'Remote workspace-wide Review is not supported yet because a bounded changed-file snapshot is unavailable. Select specific files to review.',
+      'deepReviewActionBar.launchError.unresolvedGitRange',
     );
   }
   if (
@@ -242,10 +248,37 @@ async function prepareFromResolvedTarget(params: {
     params.targetEvidence.completeness === 'complete' &&
     params.targetEvidence.files.length === 0
   ) {
-    throw reviewTargetError('There are no workspace changes to review.');
+    throw reviewTargetError(
+      'There are no workspace changes to review.',
+      'deepReviewActionBar.launchError.emptyWorkspace',
+    );
+  }
+  if (params.targetEvidence.limitations.includes('remote_workspace_review_unavailable')) {
+    throw reviewTargetError(
+      'Remote workspace Review is not supported until bounded exact diff evidence is available. Use a local checkout.',
+      'deepReviewActionBar.launchError.remoteWorkspace',
+    );
+  }
+  if (
+    params.targetEvidence.completeness === 'unknown' &&
+    params.targetEvidence.limitations.some((limitation) => [
+      'review_target_unresolved',
+      'workspace_unavailable_for_file_scope',
+      'file_scope_target_evidence_failed',
+      'workspace_diff_unavailable',
+      'explicit_target_unrecognized',
+    ].includes(limitation))
+  ) {
+    throw reviewTargetError(
+      'The requested Review target could not be prepared as bounded evidence. Open its workspace or narrow the target and try again.',
+      'deepReviewActionBar.launchError.unresolvedTarget',
+    );
   }
   if (params.targetEvidence.limitations.includes('explicit_file_scope_has_no_workspace_changes')) {
-    throw reviewTargetError('The requested files or directories contain no workspace changes.');
+    throw reviewTargetError(
+      'The requested files or directories contain no workspace changes.',
+      'deepReviewActionBar.launchError.emptyExplicitScope',
+    );
   }
   const decision = await decideReview(params);
 
@@ -380,7 +413,10 @@ export async function launchPreparedReviewSession(params: {
   prepared: PreparedReviewLaunch;
   childSessionName?: string;
   requestId?: string;
-}): Promise<{ childSessionId: string }> {
+}): Promise<{
+  childSessionId: string;
+  launchStatus: 'started' | 'uncertain';
+}> {
   const childSessionName = params.childSessionName ?? 'Review';
   if (params.prepared.mode === 'strict') {
     const result = await launchDeepReviewSession({
@@ -405,7 +441,8 @@ export async function launchPreparedReviewSession(params: {
     return result;
   }
 
-  const created = await createBtwChildSession({
+  const requestId = params.requestId ?? createBtwRequestId('review');
+  const createChild = () => createBtwChildSession({
     parentSessionId: params.parentSessionId,
     workspacePath: params.workspacePath,
     childSessionName,
@@ -418,13 +455,29 @@ export async function launchPreparedReviewSession(params: {
     addMarker: false,
     reviewTargetEvidence: params.prepared.targetEvidence,
     reviewTargetFilePaths: params.prepared.requestedFiles,
-    requestId: params.requestId,
+    requestId,
   });
+  let created: Awaited<ReturnType<typeof createBtwChildSession>>;
+  try {
+    created = await createChild();
+  } catch (error) {
+    log.warn('Review child creation was uncertain; retrying idempotently', {
+      requestId,
+      error,
+    });
+    created = await createChild();
+  }
   try {
     await FlowChatManager.getInstance().sendMessage(
       params.prepared.prompt,
       created.childSessionId,
       params.displayMessage,
+      undefined,
+      undefined,
+      {
+        turnId: `review_turn_${requestId}`,
+        preserveTurnOnStartError: true,
+      },
     );
   } catch (error) {
     insertReviewSessionSummaryMarker({
@@ -444,12 +497,12 @@ export async function launchPreparedReviewSession(params: {
       sessionTitle: childSessionName,
       agentType: 'CodeReview',
     });
-    const message = error instanceof Error ? error.message : 'Review launch status is uncertain';
-    throw Object.assign(error instanceof Error ? error : new Error(message), {
-      launchErrorMessageKey: 'deepReviewActionBar.launchError.uncertain',
-      originalMessage: message,
+    log.warn('Review start acknowledgement was uncertain; preserving the child session', {
       childSessionId: created.childSessionId,
+      requestId,
+      error,
     });
+    return { childSessionId: created.childSessionId, launchStatus: 'uncertain' };
   }
   insertReviewSessionSummaryMarker({
     parentSessionId: params.parentSessionId,
@@ -468,5 +521,5 @@ export async function launchPreparedReviewSession(params: {
     sessionTitle: childSessionName,
     agentType: 'CodeReview',
   });
-  return { childSessionId: created.childSessionId };
+  return { childSessionId: created.childSessionId, launchStatus: 'started' };
 }

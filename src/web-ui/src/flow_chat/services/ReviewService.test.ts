@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   resolveSlashCommandReviewTarget: vi.fn(),
   resolveCurrentFileReviewSnapshot: vi.fn(),
   createBtwChildSession: vi.fn(),
+  createBtwRequestId: vi.fn(),
   sendMessage: vi.fn(),
   insertReviewSessionSummaryMarker: vi.fn(),
   openBtwSessionInAuxPane: vi.fn(),
@@ -61,6 +62,7 @@ vi.mock('../deep-review/launch/targetResolver', async (importOriginal) => {
 
 vi.mock('./BtwThreadService', () => ({
   createBtwChildSession: (...args: unknown[]) => mocks.createBtwChildSession(...args),
+  createBtwRequestId: (...args: unknown[]) => mocks.createBtwRequestId(...args),
 }));
 
 vi.mock('./FlowChatManager', () => ({
@@ -133,8 +135,7 @@ function targetEvidence() {
       status: 'modified' as const,
       completeness: 'complete' as const,
     }],
-    diffRefs: [],
-    limitations: ['mutable_workspace_snapshot'],
+    limitations: ['mutable_workspace_evidence'],
   };
 }
 
@@ -147,6 +148,7 @@ describe('ReviewService', () => {
       childSessionId: 'review-child',
       parentDialogTurnId: 'turn-1',
     });
+    mocks.createBtwRequestId.mockReturnValue('generated-review-id');
     mocks.sendMessage.mockResolvedValue(undefined);
     mocks.launchDeepReviewSession.mockResolvedValue({ childSessionId: 'strict-child' });
     mocks.deleteSession.mockResolvedValue(undefined);
@@ -370,6 +372,28 @@ describe('ReviewService', () => {
     expect(mocks.buildDeepReviewLaunchFromSlashCommand).not.toHaveBeenCalled();
   });
 
+  it('blocks remote workspace Review before spending reviewer capacity', async () => {
+    const manifest = runManifest('normal');
+    mocks.resolveSlashCommandReviewTarget.mockResolvedValue({
+      target: { ...manifest.target, source: 'workspace_diff', resolution: 'unknown' },
+      changeStats: { fileCount: 0, lineCountSource: 'unknown' },
+      targetEvidence: {
+        ...targetEvidence(),
+        completeness: 'unknown',
+        workspaceBinding: 'unavailable',
+        files: [],
+        limitations: ['remote_workspace_review_unavailable'],
+      },
+    });
+
+    await expect(prepareReviewLaunchFromSlashCommand(
+      '/review',
+      '/remote/workspace',
+      'remote-1',
+    )).rejects.toThrow('Remote workspace Review is not supported');
+    expect(mocks.decideReviewQuality).not.toHaveBeenCalled();
+  });
+
   it('blocks an empty confirmed workspace snapshot before spending reviewer capacity', async () => {
     const manifest = runManifest('normal');
     mocks.resolveSlashCommandReviewTarget.mockResolvedValue({
@@ -393,6 +417,30 @@ describe('ReviewService', () => {
       '/review',
       'D:/workspace/project',
     )).rejects.toThrow('There are no workspace changes to review.');
+    expect(mocks.decideReviewQuality).not.toHaveBeenCalled();
+  });
+
+  it('blocks unresolved workspace evidence before spending reviewer capacity', async () => {
+    const manifest = runManifest('normal');
+    mocks.resolveSlashCommandReviewTarget.mockResolvedValue({
+      target: {
+        ...manifest.target,
+        source: 'workspace_diff',
+        resolution: 'unknown',
+        files: [],
+      },
+      changeStats: { fileCount: 0, lineCountSource: 'unknown' },
+      targetEvidence: {
+        ...targetEvidence(),
+        completeness: 'unknown',
+        workspaceBinding: 'unavailable',
+        files: [],
+        limitations: ['review_target_unresolved'],
+      },
+    });
+
+    await expect(prepareReviewLaunchFromSlashCommand('/review focus on auth'))
+      .rejects.toThrow('could not be prepared as bounded evidence');
     expect(mocks.decideReviewQuality).not.toHaveBeenCalled();
   });
 
@@ -426,6 +474,12 @@ describe('ReviewService', () => {
       expect.any(String),
       'review-child',
       'Review current changes',
+      undefined,
+      undefined,
+      {
+        turnId: 'review_turn_review-follow-up-1',
+        preserveTurnOnStartError: true,
+      },
     );
     expect(mocks.insertReviewSessionSummaryMarker).toHaveBeenCalledWith(expect.objectContaining({
       childSessionId: 'review-child',
@@ -484,7 +538,7 @@ describe('ReviewService', () => {
       workspacePath: 'D:/workspace/project',
       displayMessage: '/review',
       prepared,
-    })).rejects.toThrow('send failed');
+    })).resolves.toEqual({ childSessionId: 'review-child', launchStatus: 'uncertain' });
 
     expect(mocks.deleteSession).not.toHaveBeenCalled();
     expect(mocks.discardLocalSession).not.toHaveBeenCalled();
@@ -493,6 +547,38 @@ describe('ReviewService', () => {
     );
     expect(mocks.openBtwSessionInAuxPane).toHaveBeenCalledWith(
       expect.objectContaining({ childSessionId: 'review-child', sessionKind: 'review' }),
+    );
+  });
+
+  it('retries uncertain standard child creation with the same request id', async () => {
+    const prepared = await prepareReviewLaunchFromSessionFiles(['src/small.ts'], {
+      workspacePath: 'D:/workspace/project',
+      changeStats: {
+        fileCount: 1,
+        totalLinesChanged: 4,
+        lineCountSource: 'diff_stat',
+      },
+    });
+    mocks.createBtwChildSession
+      .mockRejectedValueOnce(new Error('Create acknowledgement lost'))
+      .mockResolvedValueOnce({
+        childSessionId: 'review-child',
+        parentDialogTurnId: 'turn-1',
+      });
+
+    await expect(launchPreparedReviewSession({
+      parentSessionId: 'parent',
+      workspacePath: 'D:/workspace/project',
+      displayMessage: '/review',
+      prepared,
+    })).resolves.toEqual({ childSessionId: 'review-child', launchStatus: 'started' });
+
+    expect(mocks.createBtwChildSession).toHaveBeenCalledTimes(2);
+    expect(mocks.createBtwChildSession.mock.calls[0][0].requestId).toBe(
+      'generated-review-id',
+    );
+    expect(mocks.createBtwChildSession.mock.calls[1][0].requestId).toBe(
+      'generated-review-id',
     );
   });
 });

@@ -29,7 +29,7 @@ vi.mock('@/infrastructure/api', () => ({
 
 describe('Deep Review target resolver', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     mockGitGetStatus.mockResolvedValue({
       staged: [],
       unstaged: [],
@@ -139,6 +139,64 @@ describe('Deep Review target resolver', () => {
     });
   });
 
+  it('infers an explicit directory without requiring a trailing slash', async () => {
+    mockGitGetStatus.mockResolvedValueOnce({
+      staged: [{ path: 'src/web-ui/inside.ts', status: 'modified' }],
+      unstaged: [{ path: 'src/crates/outside.rs', status: 'modified' }],
+      untracked: [],
+      conflicts: [],
+      current_branch: 'main',
+      ahead: 0,
+      behind: 0,
+    });
+    mockGitGetChangedFiles.mockResolvedValue([
+      { path: 'src/web-ui/inside.ts', status: 'modified' },
+      { path: 'src/crates/outside.rs', status: 'modified' },
+    ]);
+
+    const result = await resolveSlashCommandReviewTarget(
+      'src/web-ui',
+      'D:\\workspace\\repo',
+    );
+
+    expect(result.target.files.map((file) => file.normalizedPath)).toEqual([
+      'src/web-ui/inside.ts',
+    ]);
+  });
+
+  it('rejects explicit parent traversal before Git inspection', async () => {
+    const result = await resolveSlashCommandReviewTarget(
+      '../outside.ts',
+      'D:\\workspace\\repo',
+    );
+
+    expect(mockGitGetStatus).not.toHaveBeenCalled();
+    expect(mockGitGetChangedFiles).not.toHaveBeenCalled();
+    expect(mockGitGetDiff).not.toHaveBeenCalled();
+    expect(result.targetEvidence).toMatchObject({
+      completeness: 'unknown',
+      limitations: ['target_path_outside_workspace'],
+    });
+  });
+
+  it('fails closed for unresolved path-like focus instead of widening to workspace', async () => {
+    for (const focus of ['UNKNOWN_BUILD_FILE', 'config.custom', '"custombuild"']) {
+      const result = await resolveSlashCommandReviewTarget(
+        focus,
+        'D:\\workspace\\repo',
+      );
+
+      expect(result.targetEvidence).toMatchObject({
+        completeness: 'unknown',
+        limitations: ['explicit_target_unrecognized'],
+      });
+    }
+
+    expect(mockGitGetStatus).not.toHaveBeenCalled();
+    expect(mockGitGetChangedFiles).not.toHaveBeenCalled();
+    expect(mockGitGetDiff).not.toHaveBeenCalled();
+  });
+
   it('resolves commit targets using changed files and diff stats', async () => {
     mockGitGetChangedFiles.mockResolvedValueOnce([
       { path: 'src/new.ts', old_path: 'src/old.ts' },
@@ -223,6 +281,23 @@ describe('Deep Review target resolver', () => {
     expect(result.targetEvidence).toMatchObject({
       source: 'workspace',
       workspaceBinding: 'matching_dirty',
+    });
+  });
+
+  it('rejects remote workspace Review before unbounded remote Git inspection', async () => {
+    const result = await resolveSlashCommandReviewTarget(
+      '',
+      '/remote/workspace',
+      'remote-1',
+    );
+
+    expect(mockGitGetStatus).not.toHaveBeenCalled();
+    expect(mockGitGetChangedFiles).not.toHaveBeenCalled();
+    expect(mockGitGetDiff).not.toHaveBeenCalled();
+    expect(result.targetEvidence).toMatchObject({
+      source: 'workspace',
+      completeness: 'unknown',
+      limitations: ['remote_workspace_review_unavailable'],
     });
   });
 

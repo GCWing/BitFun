@@ -62,6 +62,7 @@ export const CodeReviewReportExportActions: React.FC<CodeReviewReportExportActio
     reviewDecision: t('toolCards.codeReview.report.reviewDecision'),
     riskLevel: t('toolCards.codeReview.riskLevel'),
     recommendedAction: t('toolCards.codeReview.recommendedAction'),
+    evidenceStatus: t('toolCards.codeReview.evidenceStatus'),
     scope: t('toolCards.codeReview.reviewScope'),
     issues: t('toolCards.codeReview.sections.issues'),
     noIssues: t('toolCards.codeReview.report.noIssues'),

@@ -96,8 +96,6 @@ export interface ReviewTargetEvidenceFile {
   path: string;
   previousPath?: string;
   status: 'added' | 'modified' | 'deleted' | 'renamed' | 'copied' | 'unknown';
-  /** Legacy synthetic reference; new evidence does not write it. */
-  diffRef?: string;
   completeness: 'complete' | 'partial' | 'unavailable';
 }
 
@@ -110,8 +108,6 @@ export interface ReviewTargetEvidence {
   completeness: ReviewTargetEvidenceCompleteness;
   workspaceBinding: ReviewTargetWorkspaceBinding;
   files: ReviewTargetEvidenceFile[];
-  /** Legacy synthetic references retained only for old-session compatibility. */
-  diffRefs?: string[];
   limitations: string[];
   omittedFileCount?: number;
 }
@@ -224,6 +220,7 @@ export type ReviewTeamManifestMemberReason =
   | 'invalid_tooling';
 
 export type ReviewTokenBudgetMode = 'economy' | 'balanced' | 'thorough';
+/** Legacy prompt-size estimate marker retained for historical manifests only. */
 export type ReviewPromptByteEstimateSource = 'manifest_heuristic';
 export type ReviewTeamTokenBudgetDecisionKind =
   | 'summary_first_full_scope'
@@ -245,6 +242,7 @@ export interface ReviewTeamTokenBudgetPlan {
   maxReviewerCalls: number;
   maxExtraReviewers: number;
   maxFilesPerReviewer?: number;
+  /** Legacy advisory fields. New manifests do not estimate prompt bytes. */
   maxPromptBytesPerReviewer?: number;
   estimatedPromptBytesPerReviewer?: number;
   estimatedPromptBytesTotal?: number;

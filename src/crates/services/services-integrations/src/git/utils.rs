@@ -47,11 +47,13 @@ pub fn get_repository_root<P: AsRef<Path>>(path: P) -> Result<String, GitError> 
     } else {
         requested
     };
-    if let Some(root) = lexical_start
+    for root in lexical_start
         .ancestors()
-        .find(|ancestor| ancestor.join(".git").exists())
+        .filter(|ancestor| ancestor.join(".git").exists())
     {
-        return Ok(root.to_string_lossy().to_string());
+        if Repository::open(root).is_ok() {
+            return Ok(root.to_string_lossy().to_string());
+        }
     }
 
     let repo =
@@ -359,6 +361,29 @@ pub async fn execute_git_readonly_command(
 #[cfg(test)]
 mod review_git_output_tests {
     use super::*;
+
+    #[test]
+    fn repository_root_ignores_an_invalid_lexical_git_marker() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let nested = temp.path().join("nested");
+        std::fs::create_dir_all(temp.path().join(".git")).expect("fake git marker");
+        std::fs::create_dir_all(&nested).expect("nested directory");
+
+        assert!(get_repository_root(&nested).is_err());
+    }
+
+    #[test]
+    fn repository_root_preserves_a_valid_lexical_worktree_root() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        Repository::init(temp.path()).expect("repository");
+        let nested = temp.path().join("nested");
+        std::fs::create_dir_all(&nested).expect("nested directory");
+
+        assert_eq!(
+            get_repository_root(&nested).expect("repository root"),
+            temp.path().to_string_lossy()
+        );
+    }
 
     #[tokio::test]
     async fn bounded_reader_rejects_output_before_unbounded_buffering() {

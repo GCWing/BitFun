@@ -2,7 +2,6 @@ import React, { useCallback, useState } from 'react';
 import { AlertTriangle, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button, Modal } from '@/component-library';
-import { i18nService } from '@/infrastructure/i18n';
 import type {
   ReviewStrategyLevel,
   ReviewTeamRunManifest,
@@ -10,8 +9,6 @@ import type {
 import { getReviewStrategyProfile } from '@/shared/services/reviewTeamService';
 import type { DeepReviewSessionConcurrencyGuard } from '../utils/deepReviewCapacityGuard';
 import './DeepReviewConsentDialog.scss';
-
-const APPROXIMATE_TOKENS_PER_PROMPT_BYTE = 0.25;
 
 interface PendingConsent {
   resolve: (confirmed: boolean) => void;
@@ -29,31 +26,6 @@ export interface DeepReviewConsentControls {
     launchContext?: DeepReviewConsentLaunchContext,
   ) => Promise<boolean>;
   deepReviewConsentDialog: React.ReactNode;
-}
-
-function estimatePromptTokenCount(promptBytes: number | undefined): number | null {
-  if (!Number.isFinite(promptBytes) || !promptBytes || promptBytes <= 0) {
-    return null;
-  }
-  return Math.max(1, Math.ceil(promptBytes * APPROXIMATE_TOKENS_PER_PROMPT_BYTE));
-}
-
-function getReviewPromptTokenEstimate(preview: ReviewTeamRunManifest): number | null {
-  const totalEstimate = estimatePromptTokenCount(
-    preview.tokenBudget.estimatedPromptBytesTotal,
-  );
-  if (totalEstimate) {
-    return totalEstimate;
-  }
-  const perCallEstimate = estimatePromptTokenCount(
-    preview.tokenBudget.estimatedPromptBytesPerReviewer,
-  );
-  if (!perCallEstimate) {
-    return null;
-  }
-
-  const estimatedCalls = Math.max(1, preview.tokenBudget.estimatedReviewerCalls || 1);
-  return perCallEstimate * estimatedCalls;
 }
 
 function getInitialReviewCallFacts(preview: ReviewTeamRunManifest): {
@@ -151,7 +123,6 @@ export function useDeepReviewConsent(): DeepReviewConsentControls {
     const skippedCount = skippedReviewers.length;
     const selectedStrategyLabel = getStrategyLabel(preview.strategyLevel, t);
     const targetSummary = getReviewTargetSummary(preview, t);
-    const promptTokenEstimate = getReviewPromptTokenEstimate(preview);
     const callFacts = getInitialReviewCallFacts(preview);
     return (
       <div className="deep-review-consent__summary">
@@ -185,17 +156,6 @@ export function useDeepReviewConsent(): DeepReviewConsentControls {
             <strong>{t('deepReviewConsent.readonly')}</strong>
           </div>
         </div>
-
-        {promptTokenEstimate && (
-          <div className="deep-review-consent__token-estimate">
-            <strong>
-              {t('deepReviewConsent.estimatedTokens', {
-                tokens: i18nService.formatNumber(promptTokenEstimate),
-              })}
-            </strong>
-            <span>{t('deepReviewConsent.estimatedTokensNote')}</span>
-          </div>
-        )}
 
         <div className="deep-review-consent__token-estimate">
           <strong>

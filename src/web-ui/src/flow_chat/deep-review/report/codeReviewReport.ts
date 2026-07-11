@@ -188,6 +188,7 @@ export interface CodeReviewReportMarkdownLabels {
   reviewDecision: string;
   riskLevel: string;
   recommendedAction: string;
+  evidenceStatus: string;
   scope: string;
   issues: string;
   noIssues: string;

@@ -6,6 +6,7 @@ import {
   extractExplicitReviewFilePaths,
   getDeepReviewCommandFocus,
   getReviewSlashCommandIntent,
+  hasUnresolvedPathLikeReviewFocus,
   isDeepReviewSlashCommand,
   isReviewSlashCommand,
   parseSlashCommandGitTarget,
@@ -66,6 +67,52 @@ describe('Deep Review launch command parser', () => {
       'docs/review notes.md',
       './src/',
     ]);
+  });
+
+  it('treats untrailed directories, extensionless files, and file locations as explicit scope', () => {
+    expect(
+      extractExplicitReviewFilePaths(
+        'src/web-ui Dockerfile README src/schema.proto:42:3',
+      ),
+    ).toEqual([
+      'src/web-ui',
+      'Dockerfile',
+      'README',
+      'src/schema.proto',
+    ]);
+  });
+
+  it('recognizes common root build files and dotfiles as explicit scope', () => {
+    expect(
+      extractExplicitReviewFilePaths(
+        '.gitignore BUILD WORKSPACE go.mod go.sum BUILD.bazel',
+      ),
+    ).toEqual([
+      '.gitignore',
+      'BUILD',
+      'WORKSPACE',
+      'go.mod',
+      'go.sum',
+      'BUILD.bazel',
+    ]);
+  });
+
+  it('flags unresolved path-like focus instead of allowing workspace fallback', () => {
+    expect(hasUnresolvedPathLikeReviewFocus('UNKNOWN_BUILD_FILE')).toBe(true);
+    expect(hasUnresolvedPathLikeReviewFocus('config.custom')).toBe(true);
+    expect(hasUnresolvedPathLikeReviewFocus('"config.custom"')).toBe(true);
+    expect(hasUnresolvedPathLikeReviewFocus('"custombuild"')).toBe(true);
+    expect(hasUnresolvedPathLikeReviewFocus('API security')).toBe(false);
+    expect(hasUnresolvedPathLikeReviewFocus('focus on API v2.0 behavior')).toBe(false);
+    expect(hasUnresolvedPathLikeReviewFocus('focus on authentication risks')).toBe(false);
+  });
+
+  it('does not misclassify commit refs or branch ranges containing slashes as files', () => {
+    expect(
+      extractExplicitReviewFilePaths(
+        'commit feature/review main..feature/review',
+      ),
+    ).toEqual([]);
   });
 
   it('parses commit and range targets', () => {

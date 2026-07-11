@@ -613,6 +613,11 @@ export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({ childSessionId
         prepared,
       });
       store.setFollowUpReviewSessionId(launched.childSessionId, childSessionId);
+      if (launched?.launchStatus === 'uncertain') {
+        notificationService.warning(t('deepReviewActionBar.launchError.uncertain'), {
+          duration: 8000,
+        });
+      }
       try {
         await persistReviewActionState(useReviewActionBarStore.getState());
       } catch (error) {

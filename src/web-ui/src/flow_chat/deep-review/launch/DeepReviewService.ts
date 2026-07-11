@@ -1,6 +1,6 @@
 import { agentAPI } from '@/infrastructure/api';
 import { createLogger } from '@/shared/utils/logger';
-import { createBtwChildSession } from '../../services/BtwThreadService';
+import { createBtwChildSession, createBtwRequestId } from '../../services/BtwThreadService';
 import { closeBtwSessionInAuxPane, openBtwSessionInAuxPane } from '../../services/btwSessionPane';
 import { FlowChatManager } from '../../services/FlowChatManager';
 import { flowChatStore } from '../../store/FlowChatStore';
@@ -27,7 +27,6 @@ import {
   resolveSlashCommandReviewTarget,
 } from './targetResolver';
 import {
-  formatPullRequestLaunchPrompt,
   formatSessionFilesLaunchPrompt,
   formatSlashCommandLaunchPrompt,
 } from './launchPrompt';
@@ -205,7 +204,6 @@ export async function buildDeepReviewLaunchFromSessionFiles(
       : {}),
   });
   const prompt = formatSessionFilesLaunchPrompt({
-    filePaths,
     extraContext,
     reviewTeamPromptBlock: buildReviewTeamPromptBlock(team, manifest),
   });
@@ -228,47 +226,6 @@ export async function buildDeepReviewPreviewFromSessionFiles(
     target: snapshot.target,
     changeStats: snapshot.changeStats,
     targetEvidence: snapshot.targetEvidence,
-  });
-}
-
-export async function buildDeepReviewLaunchFromPullRequestFiles(
-  filePaths: string[],
-  extraContext?: string,
-  diffContext?: string,
-  workspacePath?: string,
-): Promise<DeepReviewLaunchPrompt> {
-  const target = classifyReviewTargetFromFiles(filePaths, 'pull_request');
-  const changeStats = buildUnknownChangeStats(target);
-  const team = await prepareDefaultReviewTeamForLaunch(workspacePath, {
-    reviewTargetFilePaths: filePaths,
-    target,
-  });
-  const manifest = await buildReviewTeamManifestWithRuntimeSignals(team, {
-    workspacePath,
-    target,
-    changeStats,
-  });
-  const prompt = formatPullRequestLaunchPrompt({
-    filePaths,
-    extraContext,
-    diffContext,
-    reviewTeamPromptBlock: buildReviewTeamPromptBlock(team, manifest),
-  });
-
-  return { prompt, runManifest: manifest };
-}
-
-export async function buildDeepReviewPreviewFromPullRequestFiles(
-  filePaths: string[],
-  workspacePath?: string,
-): Promise<ReviewTeamRunManifest> {
-  const team = await loadDefaultReviewTeam(workspacePath);
-  const target = classifyReviewTargetFromFiles(filePaths, 'pull_request');
-  const changeStats = buildUnknownChangeStats(target);
-  return buildReviewTeamManifestWithRuntimeSignals(team, {
-    workspacePath,
-    target,
-    changeStats,
   });
 }
 
@@ -316,7 +273,6 @@ export async function buildDeepReviewLaunchFromSlashCommand(
       : {}),
   });
   const prompt = formatSlashCommandLaunchPrompt({
-    commandText: trimmed,
     extraContext,
     reviewTeamPromptBlock: buildReviewTeamPromptBlock(team, manifest),
   });
@@ -356,9 +312,14 @@ export async function launchDeepReviewSession({
   requestedFiles = [],
   runManifest,
   requestId,
-}: LaunchDeepReviewSessionParams): Promise<{ childSessionId: string }> {
+}: LaunchDeepReviewSessionParams): Promise<{
+  childSessionId: string;
+  launchStatus: 'started' | 'uncertain';
+}> {
   let childSessionId: string | null = null;
+  let parentDialogTurnId: string | undefined;
   let launchStep: DeepReviewLaunchStep = 'prepare_review_team';
+  const effectiveRequestId = requestId ?? createBtwRequestId('deep_review');
 
   try {
     await prepareDefaultReviewTeamForLaunch(workspacePath, {
@@ -367,7 +328,7 @@ export async function launchDeepReviewSession({
     });
 
     launchStep = 'create_child_session';
-    const created = await createBtwChildSession({
+    const createParams = {
       parentSessionId,
       workspacePath,
       childSessionName,
@@ -380,9 +341,21 @@ export async function launchDeepReviewSession({
       addMarker: false,
       deepReviewRunManifest: runManifest,
       reviewTargetFilePaths: requestedFiles,
-      requestId,
-    });
+      requestId: effectiveRequestId,
+    } as const;
+    let created: Awaited<ReturnType<typeof createBtwChildSession>>;
+    try {
+      created = await createBtwChildSession(createParams);
+    } catch (firstCreateError) {
+      log.warn('Strict review child creation was uncertain; retrying idempotently', {
+        parentSessionId,
+        requestId: effectiveRequestId,
+        error: firstCreateError,
+      });
+      created = await createBtwChildSession(createParams);
+    }
     childSessionId = created.childSessionId;
+    parentDialogTurnId = created.parentDialogTurnId;
 
     launchStep = 'send_start_message';
     const flowChatManager = FlowChatManager.getInstance();
@@ -394,6 +367,8 @@ export async function launchDeepReviewSession({
         undefined,
         undefined,
         {
+          turnId: `review_turn_${effectiveRequestId}`,
+          preserveTurnOnStartError: true,
           userMessageMetadata: {
             deepReviewRunManifest: runManifest,
           },
@@ -404,6 +379,12 @@ export async function launchDeepReviewSession({
         prompt,
         childSessionId,
         displayMessage,
+        undefined,
+        undefined,
+        {
+          turnId: `review_turn_${effectiveRequestId}`,
+          preserveTurnOnStartError: true,
+        },
       );
     }
 
@@ -413,10 +394,10 @@ export async function launchDeepReviewSession({
       kind: 'deep_review',
       title: childSessionName,
       requestedFiles,
-      parentDialogTurnId: created.parentDialogTurnId,
+      parentDialogTurnId,
     });
 
-    return { childSessionId };
+    return { childSessionId, launchStatus: 'started' };
   } catch (error) {
     if (!childSessionId) {
       throw createDeepReviewLaunchError(launchStep, error);
@@ -429,6 +410,7 @@ export async function launchDeepReviewSession({
         kind: 'deep_review',
         title: childSessionName,
         requestedFiles,
+        parentDialogTurnId,
       });
       openBtwSessionInAuxPane({
         childSessionId,
@@ -439,9 +421,13 @@ export async function launchDeepReviewSession({
         sessionTitle: childSessionName,
         agentType: 'DeepReview',
       });
-      throw Object.assign(createDeepReviewLaunchError(launchStep, error, childSessionId), {
-        launchErrorMessageKey: 'deepReviewActionBar.launchError.uncertain',
+      log.warn('Strict review start acknowledgement was uncertain; preserving the child session', {
+        parentSessionId,
+        childSessionId,
+        requestId: effectiveRequestId,
+        error,
       });
+      return { childSessionId, launchStatus: 'uncertain' };
     }
 
     const cleanupResult = await cleanupFailedDeepReviewLaunch(childSessionId, launchStep);

@@ -5,6 +5,7 @@ describe('markdown', () => {
   it('formats standard reports without Deep Review manifest sections', () => {
     const markdown = formatCodeReviewReportMarkdown({
       review_mode: 'standard',
+      evidence_status: 'complete',
       summary: {
         overall_assessment: 'Looks good.',
         risk_level: 'low',
@@ -16,6 +17,7 @@ describe('markdown', () => {
     expect(markdown).toContain('# Review Report');
     expect(markdown).toContain('## Executive Summary');
     expect(markdown).toContain('- Looks good.');
+    expect(markdown).toContain('- Evidence Status: complete');
     expect(markdown).not.toContain('## Review Coverage And Cost');
   });
 

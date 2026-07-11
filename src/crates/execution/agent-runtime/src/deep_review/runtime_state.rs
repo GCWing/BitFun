@@ -136,6 +136,18 @@ pub fn review_diff_budget_exhausted(parent_dialog_turn_id: &str) -> bool {
     GLOBAL_DEEP_REVIEW_BUDGET_TRACKER.review_diff_budget_exhausted(parent_dialog_turn_id)
 }
 
+pub fn review_diff_page_was_returned(
+    parent_dialog_turn_id: &str,
+    reviewer_id: &str,
+    page_key: &str,
+) -> bool {
+    GLOBAL_DEEP_REVIEW_BUDGET_TRACKER.review_diff_page_was_returned(
+        parent_dialog_turn_id,
+        reviewer_id,
+        page_key,
+    )
+}
+
 pub fn deep_review_shared_context_measurement_snapshot(
     parent_dialog_turn_id: &str,
 ) -> DeepReviewSharedContextMeasurementSnapshot {

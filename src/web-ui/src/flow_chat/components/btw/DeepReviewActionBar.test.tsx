@@ -25,6 +25,7 @@ const launchPreparedReviewMock = vi.hoisted(() => vi.fn());
 const confirmReviewLaunchMock = vi.hoisted(() => vi.fn());
 const persistReviewActionStateMock = vi.hoisted(() => vi.fn());
 const openBtwSessionInAuxPaneMock = vi.hoisted(() => vi.fn());
+const notificationWarningMock = vi.hoisted(() => vi.fn());
 
 vi.mock('react-i18next', async () => {
   const { createTestI18nT } = await import('@/test/i18nTestUtils');
@@ -137,7 +138,7 @@ vi.mock('@/shared/notification-system', () => ({
     error: vi.fn(),
     info: vi.fn(),
     success: vi.fn(),
-    warning: vi.fn(),
+    warning: notificationWarningMock,
   },
 }));
 
@@ -862,7 +863,7 @@ describeWithJsdom('DeepReviewActionBar', () => {
     expect(sendMessageMock).not.toHaveBeenCalled();
   });
 
-  it('keeps an uncertain follow-up launch retryable with the same request id', async () => {
+  it('surfaces an uncertain follow-up without automatically launching again', async () => {
     flowChatSessionsMock.set('child-session', {
       sessionId: 'child-session',
       sessionKind: 'review',
@@ -880,9 +881,10 @@ describeWithJsdom('DeepReviewActionBar', () => {
       reviewMode: 'standard',
       phase: 'fix_completed',
     });
-    launchPreparedReviewMock
-      .mockRejectedValueOnce(new Error('response lost'))
-      .mockResolvedValueOnce({ childSessionId: 'follow-up-review' });
+    launchPreparedReviewMock.mockResolvedValueOnce({
+      childSessionId: 'follow-up-review',
+      launchStatus: 'uncertain',
+    });
 
     await act(async () => {
       root.render(<DeepReviewActionBar />);
@@ -894,18 +896,13 @@ describeWithJsdom('DeepReviewActionBar', () => {
       reviewButton.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
       await Promise.resolve();
     });
-    const firstRequestId = launchPreparedReviewMock.mock.calls[0]?.[0]?.requestId;
-    expect(reviewButton.textContent).toContain('Retry review');
+    expect(launchPreparedReviewMock).toHaveBeenCalledTimes(1);
     expect(useReviewActionBarStore.getState().getSessionState('child-session')?.followUpReviewSessionId)
-      .toBe(`__pending_follow_up_review__:${firstRequestId}`);
-
-    await act(async () => {
-      reviewButton.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
-      await Promise.resolve();
-    });
-
-    expect(launchPreparedReviewMock).toHaveBeenCalledTimes(2);
-    expect(launchPreparedReviewMock.mock.calls[1]?.[0]?.requestId).toBe(firstRequestId);
+      .toBe('follow-up-review');
+    expect(notificationWarningMock).toHaveBeenCalledWith(
+      expect.stringContaining('may already be running'),
+      { duration: 8000 },
+    );
   });
 
   it('opens a metadata-only follow-up review without launching a duplicate', async () => {

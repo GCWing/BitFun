@@ -142,7 +142,6 @@ describe('BtwThreadService', () => {
       completeness: 'partial' as const,
       workspaceBinding: 'matching_dirty' as const,
       files: [],
-      diffRefs: [],
       limitations: ['mutable_workspace_snapshot'],
     };
 

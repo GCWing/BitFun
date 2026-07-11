@@ -9,7 +9,8 @@ use crate::service::snapshot::manager::get_snapshot_manager_for_workspace;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use bitfun_agent_runtime::deep_review::{
-    record_review_diff_page, ReviewDiffBudgetAdmission, ReviewTargetEvidence,
+    record_review_diff_page, review_diff_page_was_returned, ReviewDiffBudgetAdmission,
+    ReviewTargetEvidence, ReviewTargetEvidenceSource,
 };
 use log::{debug, warn};
 use serde_json::{json, Value};
@@ -40,6 +41,29 @@ impl Default for GetFileDiffTool {
 }
 
 impl GetFileDiffTool {
+    fn review_budget_identity(context: &ToolUseContext) -> Option<(&str, &str)> {
+        let parent_turn_id = context
+            .custom_data
+            .get("deep_review_parent_dialog_turn_id")
+            .and_then(Value::as_str)
+            .or(context.dialog_turn_id.as_deref())
+            .or(context.session_id.as_deref())?;
+        let reviewer_id = context
+            .custom_data
+            .get("deep_review_parent_tool_call_id")
+            .and_then(Value::as_str)
+            .or(context.session_id.as_deref())
+            .or_else(|| {
+                context
+                    .custom_data
+                    .get("deep_review_subagent_type")
+                    .and_then(Value::as_str)
+            })
+            .or(context.agent_type.as_deref())
+            .unwrap_or("CodeReview");
+        Some((parent_turn_id, reviewer_id))
+    }
+
     pub fn new() -> Self {
         Self
     }
@@ -295,8 +319,28 @@ impl GetFileDiffTool {
     }
 
     fn diff_for_assistant(data: &Value) -> String {
+        if data
+            .get("review_budget_repeated_page")
+            .and_then(Value::as_bool)
+            == Some(true)
+        {
+            let continuation = data
+                .get("next_cursor")
+                .and_then(Value::as_str)
+                .map(|cursor| format!(" Continue with next_cursor={cursor} if needed."))
+                .unwrap_or_default();
+            return format!(
+                "This prepared Review diff page was already returned. Reuse the prior page instead of reading it again.{continuation}"
+            );
+        }
         if data.get("evidence_limited").and_then(Value::as_bool) == Some(true) {
-            return "Prepared Review diff allowance is exhausted. Preserve the uncovered scope as limited evidence and continue without retrying this page.".to_string();
+            let message = data
+                .get("message")
+                .and_then(Value::as_str)
+                .unwrap_or("Prepared Review evidence is limited");
+            return format!(
+                "{message}. Preserve the uncovered scope as limited evidence and do not retry this page."
+            );
         }
         let mut text = data
             .get("diff_content")
@@ -331,21 +375,13 @@ impl GetFileDiffTool {
         path: &str,
         diff_offset: usize,
     ) -> Value {
-        let parent_turn_id = context
-            .custom_data
-            .get("deep_review_parent_dialog_turn_id")
-            .and_then(Value::as_str)
-            .or(context.dialog_turn_id.as_deref())
-            .or(context.session_id.as_deref());
-        let reviewer_id = context
-            .custom_data
-            .get("deep_review_subagent_type")
-            .and_then(Value::as_str)
-            .or(context.agent_type.as_deref())
-            .unwrap_or("CodeReview");
-        let Some(parent_turn_id) = parent_turn_id else {
-            data["review_budget_tracking"] = json!("unavailable");
-            return data;
+        let Some((parent_turn_id, reviewer_id)) = Self::review_budget_identity(context) else {
+            return Self::limited_review_diff_data(
+                path,
+                "limited",
+                "review_budget_tracking_unavailable",
+                "Prepared Review diff budget cannot be tracked for this turn",
+            );
         };
         let page_key = Self::review_cursor(binding, path, diff_offset);
         let returned_chars = data
@@ -361,6 +397,12 @@ impl GetFileDiffTool {
         ) {
             ReviewDiffBudgetAdmission::Accepted { repeated_page } => {
                 data["review_budget_repeated_page"] = json!(repeated_page);
+                if repeated_page {
+                    data["diff_content"] = Value::String(String::new());
+                    data["original_content"] = Value::String(String::new());
+                    data["modified_content"] = Value::String(String::new());
+                    data["returned_chars"] = json!(0);
+                }
                 data
             }
             ReviewDiffBudgetAdmission::Exhausted => json!({
@@ -378,6 +420,117 @@ impl GetFileDiffTool {
                 "message": "Prepared Review diff allowance exhausted"
             }),
         }
+    }
+
+    fn repeated_review_diff_data(
+        context: &ToolUseContext,
+        binding: &str,
+        path: &str,
+        diff_offset: usize,
+    ) -> Option<Value> {
+        let (parent_turn_id, reviewer_id) = Self::review_budget_identity(context)?;
+        let cursor = Self::review_cursor(binding, path, diff_offset);
+        let page_key = format!("{binding}:{path}:{cursor}");
+        review_diff_page_was_returned(parent_turn_id, reviewer_id, &page_key).then(|| {
+            json!({
+                "file_path": path,
+                "diff_type": "review_target",
+                "diff_format": "unified",
+                "diff_content": "",
+                "original_content": "",
+                "modified_content": "",
+                "has_more": false,
+                "next_cursor": null,
+                "returned_chars": 0,
+                "review_budget_repeated_page": true
+            })
+        })
+    }
+
+    fn limited_review_diff_data(
+        path: &str,
+        evidence_status: &str,
+        limitation: &str,
+        message: &str,
+    ) -> Value {
+        json!({
+            "file_path": path,
+            "diff_type": "review_target",
+            "diff_format": "unified",
+            "diff_content": "",
+            "original_content": "",
+            "modified_content": "",
+            "has_more": false,
+            "next_cursor": null,
+            "returned_chars": 0,
+            "evidence_limited": true,
+            "evidence_status": evidence_status,
+            "limitation": limitation,
+            "message": message
+        })
+    }
+
+    async fn workspace_binding_limitation(
+        context: &ToolUseContext,
+        evidence: &ReviewTargetEvidence,
+        path: &str,
+    ) -> Option<Value> {
+        if evidence.source() != ReviewTargetEvidenceSource::Workspace {
+            return None;
+        }
+        let base_revision = match evidence.base_revision() {
+            Some(revision) => revision,
+            None => {
+                return Some(Self::limited_review_diff_data(
+                    path,
+                    "limited",
+                    "workspace_base_revision_unavailable",
+                    "Prepared Review workspace base revision is unavailable",
+                ))
+            }
+        };
+        let workspace_root = match context.workspace_root() {
+            Some(root) => root,
+            None => {
+                return Some(Self::limited_review_diff_data(
+                    path,
+                    "limited",
+                    "workspace_root_unavailable",
+                    "Prepared Review workspace root is unavailable",
+                ))
+            }
+        };
+        let repository_root = match get_repository_root(workspace_root) {
+            Ok(root) => root,
+            Err(_) => {
+                return Some(Self::limited_review_diff_data(
+                    path,
+                    "limited",
+                    "workspace_repository_unavailable",
+                    "Prepared Review Git repository is unavailable",
+                ))
+            }
+        };
+        let current_head = match GitService::resolve_revision(&repository_root, "HEAD").await {
+            Ok(revision) => revision,
+            Err(_) => {
+                return Some(Self::limited_review_diff_data(
+                    path,
+                    "limited",
+                    "workspace_head_unavailable",
+                    "Prepared Review workspace HEAD could not be verified",
+                ))
+            }
+        };
+        if current_head != base_revision {
+            return Some(Self::limited_review_diff_data(
+                path,
+                "stale",
+                "workspace_head_changed",
+                "Prepared Review workspace HEAD changed after target preparation",
+            ));
+        }
+        None
     }
 
     /// Try to get diff from baseline
@@ -785,7 +938,7 @@ Usage:
         Ok(
             r#"Gets the target-bound diff for one file in a prepared Review.
 
-The Review session binds Git-range revisions or a preparation-time workspace snapshot automatically. The tool never guesses refs, widens scope, falls back to another baseline, or returns unbounded full-file content.
+The Review session binds immutable Git-range revisions or a fixed workspace file list and preparation-time base revision. Workspace content remains mutable, so the tool verifies HEAD before reading it. The tool never guesses refs, widens scope, falls back to another baseline, or returns unbounded full-file content.
 
 Usage:
 - Pass only a prepared workspace-relative target file.
@@ -1049,8 +1202,30 @@ Usage:
 
         let relative_path =
             Self::workspace_relative_path(Path::new(&resolved.resolved_path), context);
-        Self::ensure_prepared_target_path(relative_path.as_deref(), context)?;
         let prepared_evidence = Self::target_evidence(context)?;
+        if let Some(evidence) = prepared_evidence.as_ref() {
+            if resolved.uses_remote_workspace_backend() {
+                let logical_path = relative_path.as_deref().unwrap_or(file_path);
+                if !evidence.contains_file(logical_path) {
+                    return Err(BitFunError::tool(
+                        "Requested file is outside the prepared Review target evidence".to_string(),
+                    ));
+                }
+                let data = Self::limited_review_diff_data(
+                    logical_path,
+                    "limited",
+                    "remote_prepared_diff_unavailable",
+                    "Prepared Review exact diff is unavailable for this remote workspace",
+                );
+                let result_for_assistant = Self::diff_for_assistant(&data);
+                return Ok(vec![ToolResult::Result {
+                    data,
+                    result_for_assistant: Some(result_for_assistant),
+                    image_attachments: None,
+                }]);
+            }
+        }
+        Self::ensure_prepared_target_path(relative_path.as_deref(), context)?;
         let cursor = input.get("cursor").and_then(Value::as_str);
         let diff_offset = match (prepared_evidence.as_ref(), relative_path.as_deref()) {
             (Some(evidence), Some(path)) => {
@@ -1063,22 +1238,41 @@ Usage:
             }
             _ => 0,
         };
+        let logical_path = relative_path.as_deref().unwrap_or(file_path);
+        if let Some(evidence) = prepared_evidence.as_ref() {
+            if let Some(data) = Self::repeated_review_diff_data(
+                context,
+                evidence.fingerprint(),
+                logical_path,
+                diff_offset,
+            ) {
+                let result_for_assistant = Self::diff_for_assistant(&data);
+                return Ok(vec![ToolResult::Result {
+                    data,
+                    result_for_assistant: Some(result_for_assistant),
+                    image_attachments: None,
+                }]);
+            }
+            if let Some(data) =
+                Self::workspace_binding_limitation(context, evidence, logical_path).await
+            {
+                let result_for_assistant = Self::diff_for_assistant(&data);
+                return Ok(vec![ToolResult::Result {
+                    data,
+                    result_for_assistant: Some(result_for_assistant),
+                    image_attachments: None,
+                }]);
+            }
+        }
         let exact_target = match relative_path.as_deref() {
             Some(relative_path) => Self::exact_review_target(relative_path, context)?,
             None => None,
         };
 
         if let Some((base_revision, head_revision, paths, fingerprint)) = exact_target {
-            if resolved.uses_remote_workspace_backend() {
-                return Err(BitFunError::tool(
-                    "Exact Review target diff is unavailable for this remote workspace; preserve reduced coverage"
-                        .to_string(),
-                ));
-            }
             let workspace_root = context.workspace_root().ok_or_else(|| {
                 BitFunError::tool("Workspace root is required for Review target diff".to_string())
             })?;
-            let logical_path = relative_path.as_deref().unwrap_or(file_path);
             let data = self
                 .exact_review_diff(
                     workspace_root,
@@ -1115,12 +1309,6 @@ Usage:
         }
 
         if resolved.uses_remote_workspace_backend() {
-            if prepared_evidence.is_some() {
-                return Err(BitFunError::tool(
-                    "Prepared Review remote workspace diffs are unavailable within the bounded evidence path; use Read for the selected file and preserve the coverage limitation"
-                        .to_string(),
-                ));
-            }
             let ws_fs = context.ws_fs().ok_or_else(|| {
                 BitFunError::tool("Workspace file system not available for remote diff".to_string())
             })?;
@@ -1360,6 +1548,7 @@ mod tests {
 
     fn prepared_context() -> ToolUseContext {
         let mut context = ToolUseContext::for_tool_listing(None, None);
+        attach_review_budget_identity(&mut context, "prepared-context");
         context.custom_data.insert(
             "deep_review_run_manifest".to_string(),
             json!({
@@ -1385,6 +1574,17 @@ mod tests {
             }),
         );
         context
+    }
+
+    fn attach_review_budget_identity(context: &mut ToolUseContext, identity: &str) {
+        context.custom_data.insert(
+            "deep_review_parent_dialog_turn_id".to_string(),
+            json!(format!("turn-{identity}")),
+        );
+        context.custom_data.insert(
+            "deep_review_parent_tool_call_id".to_string(),
+            json!(format!("reviewer-{identity}")),
+        );
     }
 
     #[test]
@@ -1430,6 +1630,48 @@ mod tests {
             GetFileDiffTool::diff_for_assistant(&data),
             "@@ -1 +1 @@\n-old\n+new"
         );
+    }
+
+    #[test]
+    fn repeated_prepared_page_returns_only_a_compact_notice() {
+        let mut context = ToolUseContext::for_tool_listing(None, None);
+        attach_review_budget_identity(&mut context, "repeat-page");
+        let page = json!({
+            "file_path": "src/lib.rs",
+            "diff_type": "review_target",
+            "diff_format": "unified",
+            "diff_content": "@@ -1 +1 @@\n-old\n+new",
+            "original_content": "old",
+            "modified_content": "new",
+            "has_more": true,
+            "next_cursor": "next-page",
+            "returned_chars": 22
+        });
+
+        let first = GetFileDiffTool::apply_review_diff_budget(
+            page.clone(),
+            &context,
+            "binding",
+            "src/lib.rs",
+            0,
+        );
+        let repeated =
+            GetFileDiffTool::apply_review_diff_budget(page, &context, "binding", "src/lib.rs", 0);
+        let early_repeat =
+            GetFileDiffTool::repeated_review_diff_data(&context, "binding", "src/lib.rs", 0)
+                .expect("a repeated page should be rejected before Git IO");
+        let assistant = GetFileDiffTool::diff_for_assistant(&repeated);
+
+        assert!(!first["review_budget_repeated_page"].as_bool().unwrap());
+        assert_eq!(repeated["diff_content"], "");
+        assert_eq!(repeated["original_content"], "");
+        assert_eq!(repeated["modified_content"], "");
+        assert_eq!(repeated["returned_chars"], 0);
+        assert_eq!(repeated["next_cursor"], "next-page");
+        assert_eq!(early_repeat["review_budget_repeated_page"], true);
+        assert_eq!(early_repeat["diff_content"], "");
+        assert!(assistant.contains("already returned"));
+        assert!(!assistant.contains("-old"));
     }
 
     #[tokio::test]
@@ -1577,6 +1819,7 @@ mod tests {
         )
         .expect("renamed fixture should be edited");
         let mut context = ToolUseContext::for_tool_listing(None, None);
+        attach_review_budget_identity(&mut context, "workspace-rename");
         context.workspace = Some(crate::agentic::WorkspaceBinding::new(
             None,
             directory.path().to_path_buf(),
@@ -1640,6 +1883,7 @@ mod tests {
         );
         fs::write(&path, "after\n").expect("nested fixture should be edited");
         let mut context = ToolUseContext::for_tool_listing(None, None);
+        attach_review_budget_identity(&mut context, "workspace-nested");
         context.workspace = Some(crate::agentic::WorkspaceBinding::new(
             None,
             directory.path().to_path_buf(),
@@ -1680,6 +1924,122 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn prepared_workspace_returns_stale_when_head_changes() {
+        let directory = committed_repo();
+        let prepared_head = git_stdout(directory.path(), &["rev-parse", "HEAD"]);
+        fs::write(directory.path().join("tracked.txt"), "new head\n")
+            .expect("new HEAD fixture should be written");
+        git(directory.path(), &["add", "--", "tracked.txt"]);
+        git(
+            directory.path(),
+            &[
+                "-c",
+                "user.name=BitFun Tests",
+                "-c",
+                "user.email=tests@bitfun.dev",
+                "commit",
+                "-m",
+                "move head",
+            ],
+        );
+
+        let mut context = ToolUseContext::for_tool_listing(None, None);
+        context.workspace = Some(crate::agentic::WorkspaceBinding::new(
+            None,
+            directory.path().to_path_buf(),
+        ));
+        context.custom_data.insert(
+            "deep_review_run_manifest".to_string(),
+            json!({
+                "reviewTargetEvidence": {
+                    "version": 1,
+                    "source": "workspace",
+                    "fingerprint": "0123456789abcdef",
+                    "baseRevision": prepared_head,
+                    "headRevision": "worktree:0123456789abcdef",
+                    "completeness": "complete",
+                    "workspaceBinding": "matching_dirty",
+                    "files": [{
+                        "path": "tracked.txt",
+                        "status": "modified",
+                        "completeness": "complete"
+                    }],
+                    "diffRefs": [],
+                    "limitations": ["mutable_workspace_evidence"]
+                }
+            }),
+        );
+
+        let results = GetFileDiffTool::new()
+            .call_impl(&json!({ "file_path": "tracked.txt" }), &context)
+            .await
+            .expect("changed workspace HEAD should degrade structurally");
+        let ToolResult::Result { data, .. } = &results[0] else {
+            panic!("expected a structured tool result");
+        };
+        assert_eq!(data["evidence_status"], "stale");
+        assert_eq!(data["limitation"], "workspace_head_changed");
+        assert_eq!(data["diff_content"], "");
+    }
+
+    #[tokio::test]
+    async fn prepared_remote_workspace_returns_a_structured_limitation() {
+        let mut context = ToolUseContext::for_tool_listing(None, None);
+        context.workspace = Some(crate::agentic::WorkspaceBinding::new_remote(
+            None,
+            std::path::PathBuf::from("/workspace"),
+            "connection-id".to_string(),
+            "Remote".to_string(),
+            crate::service::remote_ssh::workspace_state::WorkspaceSessionIdentity {
+                hostname: "example.test".to_string(),
+                logical_workspace_path: "/workspace".to_string(),
+                remote_connection_id: Some("connection-id".to_string()),
+            },
+        ));
+        context.custom_data.insert(
+            "deep_review_run_manifest".to_string(),
+            json!({
+                "reviewTargetEvidence": {
+                    "version": 1,
+                    "source": "workspace",
+                    "fingerprint": "0123456789abcdef",
+                    "baseRevision": "1111111111111111111111111111111111111111",
+                    "headRevision": "worktree:0123456789abcdef",
+                    "completeness": "partial",
+                    "workspaceBinding": "matching_dirty",
+                    "files": [{
+                        "path": "src/lib.rs",
+                        "status": "modified",
+                        "completeness": "partial"
+                    }],
+                    "diffRefs": [],
+                    "limitations": ["remote_prepared_diff_unavailable"]
+                }
+            }),
+        );
+
+        let results = GetFileDiffTool::new()
+            .call_impl(&json!({ "file_path": "src/lib.rs" }), &context)
+            .await
+            .expect("prepared remote target should degrade structurally");
+        let ToolResult::Result {
+            data,
+            result_for_assistant,
+            ..
+        } = &results[0]
+        else {
+            panic!("expected a structured tool result");
+        };
+        assert_eq!(data["evidence_status"], "limited");
+        assert_eq!(data["limitation"], "remote_prepared_diff_unavailable");
+        assert_eq!(data["diff_content"], "");
+        assert!(result_for_assistant
+            .as_deref()
+            .unwrap()
+            .contains("do not retry"));
+    }
+
+    #[tokio::test]
     async fn prepared_workspace_does_not_switch_to_a_nested_repository() {
         let directory = committed_repo();
         let nested = directory.path().join("nested");
@@ -1704,6 +2064,7 @@ mod tests {
             .expect("inner fixture should be edited");
 
         let mut context = ToolUseContext::for_tool_listing(None, None);
+        attach_review_budget_identity(&mut context, "workspace-nested-repo");
         context.workspace = Some(crate::agentic::WorkspaceBinding::new(
             None,
             directory.path().to_path_buf(),
@@ -1747,6 +2108,7 @@ mod tests {
         let path = directory.path().join("tracked.txt");
         fs::write(&path, "after\n").expect("legacy fixture should be edited");
         let mut context = ToolUseContext::for_tool_listing(None, None);
+        attach_review_budget_identity(&mut context, "large-dirty-range");
         context.workspace = Some(crate::agentic::WorkspaceBinding::new(
             None,
             directory.path().to_path_buf(),
@@ -1957,13 +2319,16 @@ mod tests {
             }),
         );
 
-        let error = GetFileDiffTool::new()
+        let results = GetFileDiffTool::new()
             .call_impl(&json!({ "file_path": "large.txt" }), &context)
             .await
-            .expect_err("prepared non-Git targets must not fall back to full content");
+            .expect("prepared non-Git targets should degrade structurally");
 
-        assert!(error
-            .to_string()
-            .contains("Prepared Review Git repository is unavailable"));
+        let ToolResult::Result { data, .. } = &results[0] else {
+            panic!("expected a structured tool result");
+        };
+        assert_eq!(data["evidence_status"], "limited");
+        assert_eq!(data["limitation"], "workspace_base_revision_unavailable");
+        assert_eq!(data["diff_content"], "");
     }
 }

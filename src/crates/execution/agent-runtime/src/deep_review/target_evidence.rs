@@ -8,7 +8,6 @@ use std::collections::HashSet;
 use std::fmt;
 
 const TARGET_FILE_LIMIT: usize = 500;
-const TARGET_DIFF_REF_LIMIT: usize = 500;
 const TARGET_LIMITATION_LIMIT: usize = 32;
 const TARGET_STRING_LIMIT: usize = 4096;
 
@@ -39,7 +38,6 @@ pub struct ReviewTargetEvidenceFile {
     path: String,
     previous_path: Option<String>,
     status: String,
-    diff_ref: Option<String>,
     completeness: String,
 }
 
@@ -54,10 +52,6 @@ impl ReviewTargetEvidenceFile {
 
     pub fn status(&self) -> &str {
         &self.status
-    }
-
-    pub fn diff_ref(&self) -> Option<&str> {
-        self.diff_ref.as_deref()
     }
 
     pub fn completeness(&self) -> &str {
@@ -221,41 +215,8 @@ impl ReviewTargetEvidence {
                 path: normalize_path(&path),
                 previous_path: previous_path.map(|path| normalize_path(&path)),
                 status,
-                diff_ref: optional_string(
-                    file,
-                    &["diffRef", "diff_ref"],
-                    "reviewTarget.files[].diffRef",
-                )?,
                 completeness: completeness_value,
             });
-        }
-
-        let diff_refs = if evidence
-            .get("diffRefs")
-            .or_else(|| evidence.get("diff_refs"))
-            .is_some()
-        {
-            required_string_array(
-                evidence,
-                &["diffRefs", "diff_refs"],
-                "reviewTarget.diffRefs",
-                TARGET_DIFF_REF_LIMIT,
-            )?
-        } else {
-            Vec::new()
-        };
-        let file_diff_refs = files
-            .iter()
-            .filter_map(|file| file.diff_ref.clone())
-            .collect::<HashSet<_>>();
-        if diff_refs
-            .iter()
-            .any(|diff_ref| !file_diff_refs.contains(diff_ref))
-        {
-            return Err(ReviewTargetEvidenceValidationError::invalid(
-                "reviewTarget.diffRefs",
-                "contains a reference not owned by a target file",
-            ));
         }
         let limitations = required_string_array(
             evidence,
@@ -423,6 +384,7 @@ impl ReviewTargetEvidence {
             })?;
 
         let mut target_pairs = HashSet::new();
+        let mut included_target_pairs = HashSet::new();
         let mut included_paths = HashSet::new();
         for file in target_files {
             let path = required_path_string(
@@ -446,12 +408,13 @@ impl ReviewTargetEvidence {
             }
             let path = normalize_path(&path);
             let previous_path = previous_path.map(|path| normalize_path(&path));
-            target_pairs.insert((path.clone(), previous_path));
-            if !file
+            let excluded = file
                 .get("excluded")
                 .and_then(Value::as_bool)
-                .unwrap_or(false)
-            {
+                .unwrap_or(false);
+            target_pairs.insert((path.clone(), previous_path.clone()));
+            if !excluded {
+                included_target_pairs.insert((path.clone(), previous_path));
                 included_paths.insert(path);
             }
         }
@@ -465,6 +428,20 @@ impl ReviewTargetEvidence {
                 "reviewTarget.files",
                 "evidence path or previous path is outside the classified target",
             ));
+        }
+
+        if self.completeness == ReviewTargetEvidenceCompleteness::Complete {
+            let evidence_pairs = self
+                .files
+                .iter()
+                .map(|file| (file.path.clone(), file.previous_path.clone()))
+                .collect::<HashSet<_>>();
+            if evidence_pairs != included_target_pairs {
+                return Err(ReviewTargetEvidenceValidationError::invalid(
+                    "reviewTarget.files",
+                    "complete evidence must cover every included target file",
+                ));
+            }
         }
 
         let Some(work_packets) = raw
@@ -495,6 +472,12 @@ impl ReviewTargetEvidence {
                     return Err(ReviewTargetEvidenceValidationError::invalid(
                         "workPackets[].assignedScope.files",
                         "packet path is outside the included classified target",
+                    ));
+                }
+                if !self.contains_file(path) {
+                    return Err(ReviewTargetEvidenceValidationError::invalid(
+                        "workPackets[].assignedScope.files",
+                        "packet path is missing from Review target evidence",
                     ));
                 }
             }
@@ -802,6 +785,66 @@ mod tests {
         assert!(error
             .to_string()
             .contains("outside the included classified target"));
+    }
+
+    #[test]
+    fn rejects_complete_evidence_that_omits_an_included_target_file() {
+        let mut value = scoped_manifest();
+        value["target"]["files"] = json!([
+            {
+                "path": "src/lib.rs",
+                "normalizedPath": "src/lib.rs",
+                "status": "modified",
+                "excluded": false
+            },
+            {
+                "path": "src/other.rs",
+                "normalizedPath": "src/other.rs",
+                "status": "modified",
+                "excluded": false
+            }
+        ]);
+        let evidence = ReviewTargetEvidence::from_manifest(&value)
+            .expect("evidence shape should parse")
+            .expect("target evidence should exist");
+
+        let error = evidence
+            .validate_manifest_scope(&value)
+            .expect_err("complete evidence cannot omit a target file");
+        assert!(error
+            .to_string()
+            .contains("cover every included target file"));
+    }
+
+    #[test]
+    fn rejects_a_work_packet_file_missing_from_partial_evidence() {
+        let mut value = scoped_manifest();
+        value["evidencePack"]["reviewTarget"]["completeness"] = json!("partial");
+        value["target"]["files"] = json!([
+            {
+                "path": "src/lib.rs",
+                "normalizedPath": "src/lib.rs",
+                "status": "modified",
+                "excluded": false
+            },
+            {
+                "path": "src/other.rs",
+                "normalizedPath": "src/other.rs",
+                "status": "modified",
+                "excluded": false
+            }
+        ]);
+        value["workPackets"][0]["assignedScope"]["files"] = json!(["src/other.rs"]);
+        let evidence = ReviewTargetEvidence::from_manifest(&value)
+            .expect("evidence shape should parse")
+            .expect("target evidence should exist");
+
+        let error = evidence
+            .validate_manifest_scope(&value)
+            .expect_err("a packet cannot request missing evidence");
+        assert!(error
+            .to_string()
+            .contains("missing from Review target evidence"));
     }
 
     #[test]

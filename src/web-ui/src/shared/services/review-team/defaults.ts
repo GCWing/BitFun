@@ -90,16 +90,6 @@ export const PREDICTIVE_TIMEOUT_BASE_SECONDS: Record<ReviewStrategyLevel, number
   normal: 300,
   deep: 600,
 };
-export const TOKEN_BUDGET_PROMPT_BYTE_LIMIT_BY_MODE: Record<ReviewTokenBudgetMode, number> = {
-  economy: 64_000,
-  balanced: 96_000,
-  thorough: 192_000,
-};
-export const PROMPT_BYTE_ESTIMATE_BASE_BYTES = 12_000;
-export const PROMPT_BYTE_ESTIMATE_PER_FILE_BYTES = 1_800;
-export const PROMPT_BYTE_ESTIMATE_PER_CHANGED_LINE_BYTES = 120;
-export const PROMPT_BYTE_ESTIMATE_UNKNOWN_LINES_PER_FILE = 80;
-
 export const REVIEW_TEAM_MEMBER_ACCENT_DEFAULT = UI_EXCEPTION_ACCENTS.reviewTeam.memberDefault;
 
 export const EXTRA_MEMBER_DEFAULTS = {

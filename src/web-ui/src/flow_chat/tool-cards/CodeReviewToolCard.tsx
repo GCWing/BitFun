@@ -30,6 +30,7 @@ import {
   getDefaultExpandedCodeReviewSectionIds,
   formatReviewCoverageSource,
   type CodeReviewReportData,
+  type ReviewEvidenceStatus,
   type ReviewReliabilityNotice,
   type RemediationGroupId,
   type ReviewReportGroup,
@@ -42,6 +43,13 @@ import { globalEventBus } from '@/infrastructure/event-bus';
 import { normalizeDecisionEntry, type DecisionContext } from '../utils/codeReviewReport';
 import type { ReviewTeamRunManifest } from '@/shared/services/reviewTeamService';
 import './CodeReviewToolCard.scss';
+
+const EVIDENCE_STATUS_LABEL_KEYS: Record<ReviewEvidenceStatus, string> = {
+  complete: 'toolCards.codeReview.evidenceStatuses.complete',
+  limited: 'toolCards.codeReview.evidenceStatuses.limited',
+  stale: 'toolCards.codeReview.evidenceStatuses.stale',
+  failed: 'shared:statuses.failed',
+};
 
 const log = createLogger('CodeReviewToolCard');
 
@@ -458,7 +466,7 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
 
   const renderContent = () => {
     if (status === 'completed' && reviewData) {
-      const riskLevel = reviewData.summary?.risk_level ?? 'low';
+      const riskLevel = reviewData.summary?.risk_level;
       const reviewLabel = reviewData.review_mode === 'deep'
         ? t('toolCards.codeReview.deepReviewResult')
         : t('toolCards.codeReview.reviewResult');
@@ -506,11 +514,9 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
         );
       }
 
-      return (
-        <>
-          {reviewLabel} - {t(`toolCards.codeReview.riskLevels.${riskLevel}`)}
-        </>
-      );
+      return riskLevel
+        ? <>{reviewLabel} - {t(`toolCards.codeReview.riskLevels.${riskLevel}`)}</>
+        : <>{reviewLabel}</>;
     }
 
     if (status === 'running' || status === 'streaming') {
@@ -574,8 +580,8 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
       : undefined;
     const reportSections = buildCodeReviewReportSections(reviewData);
     const reliabilityNotices = buildCodeReviewReliabilityNotices(reviewData, runManifest);
-    const riskLevel = summary.risk_level ?? 'low';
-    const recommendedAction = summary.recommended_action ?? 'approve';
+    const riskLevel = summary.risk_level;
+    const recommendedAction = summary.recommended_action;
     const remediationItemCount = reportSections.remediationGroups
       .reduce((total, group) => total + group.items.length, 0);
     const strengthItemCount = reportSections.strengthGroups
@@ -621,20 +627,34 @@ export const CodeReviewToolCard: React.FC<ToolCardProps> = React.memo(({
         <div className="review-summary">
           <div className="summary-header">{t('toolCards.codeReview.overallAssessment')}</div>
           <div className="summary-rows">
-            <div className="summary-row">
-              <span className="summary-label">{t('toolCards.codeReview.riskLevel')}</span>
-              <span
-                className="summary-value risk-level"
-                style={{ color: riskLevelColors[riskLevel] }}
-              >
-                {getSeverityIcon(riskLevel)}
-                <span>{t(`toolCards.codeReview.riskLevels.${riskLevel}`)}</span>
-              </span>
-            </div>
-            <div className="summary-row">
-              <span className="summary-label">{t('toolCards.codeReview.recommendedAction')}</span>
-              <span className="summary-value">{t(`toolCards.codeReview.actions.${recommendedAction}`)}</span>
-            </div>
+            {riskLevel && (
+              <div className="summary-row">
+                <span className="summary-label">{t('toolCards.codeReview.riskLevel')}</span>
+                <span
+                  className="summary-value risk-level"
+                  style={{ color: riskLevelColors[riskLevel] }}
+                >
+                  {getSeverityIcon(riskLevel)}
+                  <span>{t(`toolCards.codeReview.riskLevels.${riskLevel}`)}</span>
+                </span>
+              </div>
+            )}
+            {recommendedAction && (
+              <div className="summary-row">
+                <span className="summary-label">{t('toolCards.codeReview.recommendedAction')}</span>
+                <span className="summary-value">{t(`toolCards.codeReview.actions.${recommendedAction}`)}</span>
+              </div>
+            )}
+            {reviewData.evidence_status && (
+              <div className="summary-row">
+                <span className="summary-label">
+                  {t('toolCards.codeReview.evidenceStatus')}
+                </span>
+                <span className="summary-value">
+                  {t(EVIDENCE_STATUS_LABEL_KEYS[reviewData.evidence_status])}
+                </span>
+              </div>
+            )}
             {review_mode && (
               <div className="summary-row">
                 <span className="summary-label">{t('shared:modes.review')}</span>

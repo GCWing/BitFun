@@ -165,7 +165,9 @@ function normalizeStructuredReliabilityNotice(
     ...(signal.source && isReliabilitySignalSource(signal.source)
       ? { source: signal.source }
       : {}),
-    ...(detail ? { detail } : {}),
+    // Evidence status is rendered from a localized product label. Runtime
+    // details are diagnostic English and must not replace that user-facing copy.
+    ...(detail && signal.kind !== 'target_evidence_limited' ? { detail } : {}),
   };
 }
 
@@ -230,6 +232,17 @@ export function buildCodeReviewReliabilityNotices(
       severity: 'info',
       count: runManifest.tokenBudget.estimatedReviewerCalls,
       source: 'manifest',
+    });
+  }
+
+  const structuredTargetEvidence = structuredNotices.get('target_evidence_limited');
+  if (structuredTargetEvidence) {
+    notices.push(structuredTargetEvidence);
+  } else if (report.evidence_status && report.evidence_status !== 'complete') {
+    notices.push({
+      kind: 'target_evidence_limited',
+      severity: 'warning',
+      source: 'runtime',
     });
   }
 

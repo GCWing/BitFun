@@ -1,11 +1,6 @@
 import type { ReviewTargetClassification } from '../reviewTargetClassifier';
 import {
-  PROMPT_BYTE_ESTIMATE_BASE_BYTES,
-  PROMPT_BYTE_ESTIMATE_PER_CHANGED_LINE_BYTES,
-  PROMPT_BYTE_ESTIMATE_PER_FILE_BYTES,
-  PROMPT_BYTE_ESTIMATE_UNKNOWN_LINES_PER_FILE,
   REVIEW_STRATEGY_RUNTIME_BUDGETS,
-  TOKEN_BUDGET_PROMPT_BYTE_LIMIT_BY_MODE,
 } from './defaults';
 import type {
   ReviewStrategyLevel,
@@ -14,7 +9,6 @@ import type {
   ReviewTeamTokenBudgetDecision,
   ReviewTeamTokenBudgetPlan,
   ReviewTeamWorkPacket,
-  ReviewTeamWorkPacketScope,
   ReviewTokenBudgetMode,
 } from './types';
 
@@ -75,75 +69,6 @@ export function buildEffectiveExecutionPolicy(params: {
   };
 }
 
-function estimateChangedLinesForScope(params: {
-  scope: ReviewTeamWorkPacketScope;
-  changeStats: ReviewTeamChangeStats;
-  totalIncludedFileCount: number;
-}): number {
-  if (params.changeStats.totalLinesChanged === undefined) {
-    return params.scope.fileCount * PROMPT_BYTE_ESTIMATE_UNKNOWN_LINES_PER_FILE;
-  }
-
-  if (params.totalIncludedFileCount <= 0) {
-    return params.changeStats.totalLinesChanged;
-  }
-
-  return Math.ceil(
-    params.changeStats.totalLinesChanged *
-      (params.scope.fileCount / params.totalIncludedFileCount),
-  );
-}
-
-function estimateReviewerPromptBytes(params: {
-  packet: ReviewTeamWorkPacket;
-  changeStats: ReviewTeamChangeStats;
-  totalIncludedFileCount: number;
-}): number {
-  const pathBytes = params.packet.assignedScope.files.reduce(
-    (total, filePath) => total + filePath.length + 1,
-    0,
-  );
-  const estimatedChangedLines = estimateChangedLinesForScope({
-    scope: params.packet.assignedScope,
-    changeStats: params.changeStats,
-    totalIncludedFileCount: params.totalIncludedFileCount,
-  });
-
-  return Math.ceil(
-    PROMPT_BYTE_ESTIMATE_BASE_BYTES +
-      pathBytes +
-      params.packet.assignedScope.fileCount * PROMPT_BYTE_ESTIMATE_PER_FILE_BYTES +
-      estimatedChangedLines * PROMPT_BYTE_ESTIMATE_PER_CHANGED_LINE_BYTES,
-  );
-}
-
-function estimateMaxReviewerPromptBytes(params: {
-  workPackets: ReviewTeamWorkPacket[];
-  target: ReviewTargetClassification;
-  changeStats: ReviewTeamChangeStats;
-}): number {
-  const reviewerPackets = params.workPackets.filter(
-    (packet) => packet.phase === 'reviewer',
-  );
-  const totalIncludedFileCount = params.target.files.filter(
-    (file) => !file.excluded,
-  ).length;
-
-  if (reviewerPackets.length === 0) {
-    return PROMPT_BYTE_ESTIMATE_BASE_BYTES;
-  }
-
-  return Math.max(
-    ...reviewerPackets.map((packet) =>
-      estimateReviewerPromptBytes({
-        packet,
-        changeStats: params.changeStats,
-        totalIncludedFileCount,
-      }),
-    ),
-  );
-}
-
 export function buildTokenBudgetPlan(params: {
   mode: ReviewTokenBudgetMode;
   activeReviewerCalls: number;
@@ -153,7 +78,8 @@ export function buildTokenBudgetPlan(params: {
   target: ReviewTargetClassification;
   changeStats: ReviewTeamChangeStats;
   executionPolicy: ReviewTeamExecutionPolicy;
-  workPackets: ReviewTeamWorkPacket[];
+  /** Retained at the call boundary for compatibility; no prompt-size estimate is derived. */
+  workPackets?: ReviewTeamWorkPacket[];
 }): ReviewTeamTokenBudgetPlan {
   const includedFileCount = params.target.files.filter(
     (file) => !file.excluded,
@@ -161,41 +87,8 @@ export function buildTokenBudgetPlan(params: {
   const fileSplitGuardrailActive =
     params.executionPolicy.reviewerFileSplitThreshold > 0 &&
     includedFileCount > params.executionPolicy.reviewerFileSplitThreshold;
-  const maxPromptBytesPerReviewer =
-    TOKEN_BUDGET_PROMPT_BYTE_LIMIT_BY_MODE[params.mode];
-  const estimatedPromptBytesPerReviewer = estimateMaxReviewerPromptBytes({
-    workPackets: params.workPackets,
-    target: params.target,
-    changeStats: params.changeStats,
-  });
-  const totalIncludedFileCount = params.target.files.filter(
-    (file) => !file.excluded,
-  ).length;
-  const estimatedPromptBytesTotal = params.workPackets.reduce(
-    (total, packet) => total + estimateReviewerPromptBytes({
-      packet,
-      changeStats: params.changeStats,
-      totalIncludedFileCount,
-    }),
-    0,
-  );
-  const promptByteLimitExceeded =
-    estimatedPromptBytesPerReviewer > maxPromptBytesPerReviewer;
-  const largeDiffSummaryFirst = promptByteLimitExceeded;
   const decisions: ReviewTeamTokenBudgetDecision[] = [];
   const warnings: string[] = [];
-
-  if (promptByteLimitExceeded) {
-    decisions.push({
-      kind: 'summary_first_full_scope',
-      reason: 'prompt_bytes_exceeded',
-      detail:
-        `Estimated reviewer prompt ${estimatedPromptBytesPerReviewer} bytes exceeds ${maxPromptBytesPerReviewer} bytes for ${params.mode} budget; use summary-first while keeping every assigned_scope file visible.`,
-    });
-    warnings.push(
-      'Estimated reviewer prompt exceeds the selected token budget; use summary-first without hiding assigned files.',
-    );
-  }
 
   if (params.skippedReviewerIds.length > 0) {
     decisions.push({
@@ -218,12 +111,7 @@ export function buildTokenBudgetPlan(params: {
     ...(fileSplitGuardrailActive
       ? { maxFilesPerReviewer: params.executionPolicy.reviewerFileSplitThreshold }
       : {}),
-    maxPromptBytesPerReviewer,
-    estimatedPromptBytesPerReviewer,
-    estimatedPromptBytesTotal,
-    promptByteEstimateSource: 'manifest_heuristic',
-    promptByteLimitExceeded,
-    largeDiffSummaryFirst,
+    largeDiffSummaryFirst: false,
     decisions,
     skippedReviewerIds: params.skippedReviewerIds,
     warnings,

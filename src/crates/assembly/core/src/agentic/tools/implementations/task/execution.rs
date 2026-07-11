@@ -968,7 +968,6 @@ mod target_context_tests {
                     "status": "modified",
                     "completeness": "complete"
                 }],
-                "diffRefs": [],
                 "limitations": []
             }
         });

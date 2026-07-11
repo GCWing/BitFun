@@ -675,13 +675,18 @@ export const SessionFilesBadge: React.FC<SessionFilesBadgeProps> = ({
       }
 
       const reviewThreadTitle = t('sessionFilesBadge.review.threadTitle');
-      await launchPreparedReviewSession({
+      const launched = await launchPreparedReviewSession({
         parentSessionId: sessionId,
         workspacePath: currentWorkspace?.rootPath,
         displayMessage,
         prepared,
         childSessionName: reviewThreadTitle,
       });
+      if (launched?.launchStatus === 'uncertain') {
+        notificationService.warning(t('deepReviewActionBar.launchError.uncertain'), {
+          duration: 8000,
+        });
+      }
 
       setIsExpanded(false);
     } catch (error) {

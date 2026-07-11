@@ -32,8 +32,23 @@ describe('Review target evidence', () => {
     });
 
     expect(evidence.completeness).toBe('partial');
-    expect(evidence.limitations).toContain('target_diff_requires_paging');
     expect(evidence.limitations).toContain('target_diff_budget_exceeded');
+  });
+
+  it('keeps a two-page diff complete when it remains within the total budget', () => {
+    const target = classifyReviewTargetFromFiles(['src/lib.rs'], 'slash_command_git_ref');
+    const evidence = buildGitRangeReviewTargetEvidence({
+      target,
+      changedFiles: [{ path: 'src/lib.rs', status: 'modified' }],
+      baseRevision: '1'.repeat(40),
+      headRevision: '2'.repeat(40),
+      workspaceHeadRevision: '2'.repeat(40),
+      status: CLEAN_STATUS,
+      diff: '+'.repeat(60_000),
+    });
+
+    expect(evidence.completeness).toBe('complete');
+    expect(evidence.limitations).not.toContain('target_diff_budget_exceeded');
   });
 
   it('does not penalize several independently small file diffs for aggregate size', () => {
@@ -201,19 +216,26 @@ describe('Review target evidence', () => {
     expect(evidence.files[0].status).toBe('modified');
   });
 
-  it('marks remote ranges partial when exact reviewer diff is unavailable', () => {
-    const target = classifyReviewTargetFromFiles(['src/lib.rs'], 'slash_command_git_ref');
+  it('keeps excluded target files out of reviewer evidence', () => {
+    const target = classifyReviewTargetFromFiles(
+      ['src/lib.rs', 'generated/output.js'],
+      'slash_command_git_ref',
+    );
+    target.files[1].excluded = true;
     const evidence = buildGitRangeReviewTargetEvidence({
       target,
-      changedFiles: [{ path: 'src/lib.rs', status: 'modified' }],
+      changedFiles: [
+        { path: 'src/lib.rs', status: 'modified' },
+        { path: 'generated/output.js', status: 'modified' },
+      ],
       baseRevision: '1'.repeat(40),
       headRevision: '2'.repeat(40),
+      workspaceHeadRevision: '2'.repeat(40),
+      status: CLEAN_STATUS,
       diff: '-old\n+new',
-      remote: true,
     });
 
-    expect(evidence.completeness).toBe('partial');
-    expect(evidence.limitations).toContain('remote_exact_diff_unavailable');
+    expect(evidence.files.map((file) => file.path)).toEqual(['src/lib.rs']);
   });
 
   it('marks binary Git range evidence unavailable', () => {
@@ -231,6 +253,22 @@ describe('Review target evidence', () => {
     expect(evidence.completeness).toBe('partial');
     expect(evidence.files[0].completeness).toBe('unavailable');
     expect(allowsReviewLiveRepositoryContext(evidence)).toBe(true);
+  });
+
+  it('fails closed when a quoted binary diff header cannot be assigned safely', () => {
+    const target = classifyReviewTargetFromFiles(['image with space.png'], 'slash_command_git_ref');
+    const evidence = buildGitRangeReviewTargetEvidence({
+      target,
+      changedFiles: [{ path: 'image with space.png', status: 'modified' }],
+      baseRevision: '1'.repeat(40),
+      headRevision: '2'.repeat(40),
+      workspaceHeadRevision: '2'.repeat(40),
+      status: CLEAN_STATUS,
+      diff: 'diff --git "a/image with space.png" "b/image with space.png"\nBinary files "a/image with space.png" and "b/image with space.png" differ',
+    });
+
+    expect(evidence.completeness).toBe('partial');
+    expect(evidence.limitations).toContain('binary_diff_unavailable');
   });
 
   it('uses a stronger target fingerprint than the former 32-bit collision pair', () => {

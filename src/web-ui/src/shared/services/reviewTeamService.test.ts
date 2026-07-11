@@ -394,10 +394,9 @@ describe('reviewTeamService', () => {
 
     const promptBlock = buildReviewTeamPromptBlock(team);
 
-    expect(promptBlock).toContain('subagent_type: ExtraEnabled');
-    expect(promptBlock).not.toContain('subagent_type: ExtraDisabled');
-    expect(promptBlock).toContain('Run the active core reviewer roles first');
-    expect(promptBlock).not.toContain('Always run the three locked reviewer roles');
+    expect(promptBlock).toContain('"subagent_type": "ExtraEnabled"');
+    expect(promptBlock).not.toContain('"subagent_type": "ExtraDisabled"');
+    expect(promptBlock).toContain('Launch only active_packets');
   });
 
   it('can resolve the team from a backend-provided reviewer definition', () => {
@@ -581,13 +580,10 @@ describe('reviewTeamService', () => {
     );
 
     const promptBlock = buildReviewTeamPromptBlock(team, manifest);
-    expect(promptBlock).toContain('subagent_type: ExtraReadonlyReview');
-    expect(promptBlock).toContain('- ExtraReadonlyPlain: invalid_tooling');
-    expect(promptBlock).toContain('- ExtraWritableReview: invalid_tooling');
-    expect(promptBlock).toContain('- ExtraMissingReviewer: unavailable');
-    expect(promptBlock).not.toContain('subagent_type: ExtraReadonlyPlain');
-    expect(promptBlock).not.toContain('subagent_type: ExtraWritableReview');
-    expect(promptBlock).not.toContain('subagent_type: ExtraMissingReviewer');
+    expect(promptBlock).toContain('"subagent_type": "ExtraReadonlyReview"');
+    expect(promptBlock).not.toContain('ExtraReadonlyPlain');
+    expect(promptBlock).not.toContain('ExtraWritableReview');
+    expect(promptBlock).not.toContain('ExtraMissingReviewer');
   });
 
   it('requires extra review members to have the minimum review tools', () => {
@@ -650,10 +646,8 @@ describe('reviewTeamService', () => {
     );
 
     const promptBlock = buildReviewTeamPromptBlock(team, manifest);
-    expect(promptBlock).toContain('- ExtraMissingDiff: invalid_tooling');
-    expect(promptBlock).toContain('- ExtraMissingRead: invalid_tooling');
-    expect(promptBlock).not.toContain('subagent_type: ExtraMissingDiff');
-    expect(promptBlock).not.toContain('subagent_type: ExtraMissingRead');
+    expect(promptBlock).not.toContain('ExtraMissingDiff');
+    expect(promptBlock).not.toContain('ExtraMissingRead');
   });
 
   it('builds an explicit run manifest for enabled, skipped, and quality-gate reviewers', () => {
@@ -814,14 +808,12 @@ describe('reviewTeamService', () => {
 
     const promptBlock = buildReviewTeamPromptBlock(team);
 
-    expect(promptBlock).toContain('Scope profile:');
-    expect(promptBlock).toContain('- review_depth: high_risk_only');
-    expect(promptBlock).toContain('- max_dependency_hops: 0');
-    expect(promptBlock).toContain('- optional_reviewer_policy: risk_matched_only');
-    expect(promptBlock).toContain('- allow_broad_tool_exploration: no');
-    expect(promptBlock).toContain('- coverage_expectation: High-risk-only pass.');
-    expect(promptBlock).toContain('Focused-scope profiles are not full-depth coverage.');
-    expect(promptBlock).toContain('populate reliability_signals with reduced_scope');
+    expect(promptBlock).toContain('"review_depth": "high_risk_only"');
+    expect(promptBlock).toContain('"max_dependency_hops": 0');
+    expect(promptBlock).toContain('"coverage_expectation": "High-risk-only pass.');
+    expect(promptBlock).not.toContain('optional_reviewer_policy');
+    expect(promptBlock).not.toContain('allow_broad_tool_exploration');
+    expect(promptBlock).toContain('evidence must remain an explicit coverage limitation');
   });
 
   it('generates structured work packets for active reviewers and the judge', () => {
@@ -884,13 +876,13 @@ describe('reviewTeamService', () => {
     expect(manifest.executionPolicy.maxRetriesPerRole).toBe(1);
 
     const promptBlock = buildReviewTeamPromptBlock(team, manifest);
-    expect(promptBlock).toContain('Review work packets:');
+    expect(promptBlock).toContain('"active_packets"');
     expect(promptBlock).toContain('"packet_id": "reviewer:ReviewBusinessLogic"');
     expect(promptBlock).toContain('"allowed_tools"');
-    expect(promptBlock).toContain('- max_retries_per_role: 1');
-    expect(promptBlock).toContain('set retry to true');
-    expect(promptBlock).toContain('Each reviewer LaunchReviewAgent prompt must include the matching work packet verbatim.');
-    expect(promptBlock).toContain('If the reviewer omits packet_id but the LaunchReviewAgent call was launched from a packet, infer the packet_id from the LaunchReviewAgent description or work packet and mark packet_status_source as inferred.');
+    expect(promptBlock).toContain('"max_retries_per_role": 1');
+    expect(promptBlock).toContain('Retry a failed or timed-out role only when evidence is still missing');
+    expect(promptBlock).toContain('Build each reviewer prompt from its active packet plus the referenced scope_group');
+    expect(promptBlock).toContain('Infer missing packet_id only from the scheduled packet and mark it inferred.');
   });
 
   it('intersects extra reviewer tools with the read-only review tool set', () => {
@@ -934,10 +926,11 @@ describe('reviewTeamService', () => {
     });
     const promptBlock = buildReviewTeamPromptBlock(team, manifest);
 
-    expect(promptBlock).toContain('Locale-only review guardrail:');
-    expect(promptBlock).toContain('placeholder parity');
-    expect(promptBlock).toContain('Do not broaden into React performance');
+    expect(promptBlock).not.toContain('Locale-only review guardrail:');
+    expect(promptBlock).not.toContain('placeholder parity');
+    expect(promptBlock).not.toContain('Do not broaden into React performance');
     expect(promptBlock).toContain('BitFun-Installer/src/i18n/locales/zh-TW.json');
+    expect(promptBlock.match(/BitFun-Installer\/src\/i18n\/locales\/zh-TW\.json/g)).toHaveLength(1);
     expect(promptBlock).not.toContain('BitFun-Installer/src/i18n/BitFun-Installer/src/i18n/locales/zh-TW.json');
   });
 
@@ -1017,9 +1010,9 @@ describe('reviewTeamService', () => {
     );
 
     const promptBlock = buildReviewTeamPromptBlock(team, manifest);
-    expect(promptBlock).toContain('Pre-generated diff summary:');
-    expect(promptBlock).toContain('"key": "web-ui"');
-    expect(promptBlock).toContain('Use the pre-generated diff summary');
+    expect(promptBlock).not.toContain('Pre-generated diff summary:');
+    expect(promptBlock).not.toContain('"key": "web-ui"');
+    expect(promptBlock).toContain('"changed_line_count": 420');
   });
 
   it('does not serialize speculative shared-context cache metadata', () => {
@@ -1306,7 +1299,9 @@ describe('reviewTeamService', () => {
     ]);
 
     const promptBlock = buildReviewTeamPromptBlock(team, manifest);
-    expect(promptBlock).toContain('Prefer module/workspace-area coherent file groups');
+    expect(promptBlock).toContain('"scope_groups"');
+    expect(promptBlock).toContain('"scope_id": "scope-1"');
+    expect(promptBlock).not.toContain('assigned_scope');
   });
 
   it('caps file splitting and launch batches by concurrency policy', () => {
@@ -1349,9 +1344,9 @@ describe('reviewTeamService', () => {
     )?.launchBatch).toBe(3);
 
     const promptBlock = buildReviewTeamPromptBlock(team, manifest);
-    expect(promptBlock).toContain('- max_parallel_instances: 4');
-    expect(promptBlock).toContain('- max_queue_wait_seconds: 1200');
-    expect(promptBlock).toContain('Launch reviewer LaunchReviewAgent calls by launch_batch');
+    expect(promptBlock).toContain('"max_parallel_instances": 4');
+    expect(promptBlock).not.toContain('max_queue_wait_seconds');
+    expect(promptBlock).toContain('in launch_batch order');
     expect(promptBlock).toContain('"launch_batch": 2');
   });
 
@@ -1425,8 +1420,8 @@ describe('reviewTeamService', () => {
     )?.launchBatch).toBe(4);
 
     const promptBlock = buildReviewTeamPromptBlock(team, manifest);
-    expect(promptBlock).toContain('- max_parallel_instances: 2');
-    expect(promptBlock).toContain('- stagger_seconds: 10');
+    expect(promptBlock).toContain('"max_parallel_instances": 2');
+    expect(promptBlock).not.toContain('stagger_seconds');
   });
 
   it('skips the frontend reviewer when the resolved target has no frontend tags', () => {
@@ -1540,9 +1535,8 @@ describe('reviewTeamService', () => {
       maxExtraReviewers: 1,
       skippedReviewerIds: [],
     });
-    expect(manifest.tokenBudget.estimatedPromptBytesTotal).toBeGreaterThan(
-      manifest.tokenBudget.estimatedPromptBytesPerReviewer ?? 0,
-    );
+    expect(manifest.tokenBudget.estimatedPromptBytesTotal).toBeUndefined();
+    expect(manifest.tokenBudget.estimatedPromptBytesPerReviewer).toBeUndefined();
   });
 
   it('keeps quick strategy bounded and reduced-scope for slow-model friendly launches', () => {
@@ -1602,8 +1596,8 @@ describe('reviewTeamService', () => {
     )).toBe(true);
 
     const promptBlock = buildReviewTeamPromptBlock(team, manifest);
-    expect(promptBlock).toContain('- review_depth: high_risk_only');
-    expect(promptBlock).toContain('reduced_scope');
+    expect(promptBlock).toContain('"review_depth": "high_risk_only"');
+    expect(promptBlock).toContain('evidence must remain an explicit coverage limitation');
   });
 
   it('keeps normal strategy from expanding into long split-heavy launches on large targets', () => {
@@ -1638,7 +1632,7 @@ describe('reviewTeamService', () => {
       mode: 'balanced',
       maxExtraReviewers: 1,
       skippedReviewerIds: ['ExtraTwo'],
-      largeDiffSummaryFirst: true,
+      largeDiffSummaryFirst: false,
     });
     expect(manifest.enabledExtraReviewers.map((member) => member.subagentId)).toEqual([
       'ExtraOne',
@@ -1704,7 +1698,7 @@ describe('reviewTeamService', () => {
     ).toHaveLength(2);
   });
 
-  it('enables summary-first from prompt-byte pressure without hiding assigned files', () => {
+  it('does not invent prompt-byte pressure or hide assigned files', () => {
     const team = resolveDefaultReviewTeam(
       coreSubagents(),
       storedConfigWithExtra(),
@@ -1725,20 +1719,15 @@ describe('reviewTeamService', () => {
     });
 
     expect(manifest.tokenBudget).toMatchObject({
-      maxPromptBytesPerReviewer: 96_000,
-      promptByteEstimateSource: 'manifest_heuristic',
-      promptByteLimitExceeded: true,
-      largeDiffSummaryFirst: true,
+      largeDiffSummaryFirst: false,
     });
-    expect(manifest.tokenBudget.estimatedPromptBytesPerReviewer).toBeGreaterThan(
-      manifest.tokenBudget.maxPromptBytesPerReviewer ?? 0,
-    );
-    expect(manifest.tokenBudget.decisions).toEqual(
+    expect(manifest.tokenBudget.maxPromptBytesPerReviewer).toBeUndefined();
+    expect(manifest.tokenBudget.estimatedPromptBytesPerReviewer).toBeUndefined();
+    expect(manifest.tokenBudget.promptByteEstimateSource).toBeUndefined();
+    expect(manifest.tokenBudget.promptByteLimitExceeded).toBeUndefined();
+    expect(manifest.tokenBudget.decisions).not.toEqual(
       expect.arrayContaining([
-        expect.objectContaining({
-          kind: 'summary_first_full_scope',
-          reason: 'prompt_bytes_exceeded',
-        }),
+        expect.objectContaining({ kind: 'summary_first_full_scope' }),
       ]),
     );
     const reviewerPackets = manifest.workPackets.filter(
@@ -1750,8 +1739,8 @@ describe('reviewTeamService', () => {
     }
 
     const promptBlock = buildReviewTeamPromptBlock(team, manifest);
-    expect(promptBlock).toContain('- token_budget_decisions: summary_first_full_scope');
-    expect(promptBlock).not.toContain('prompt_byte_limit_exceeded');
+    expect(promptBlock).not.toContain('token_budget_decisions');
+    expect(promptBlock).not.toContain('prompt_byte');
   });
 
   it('keeps summary-first disabled when split guardrails fit the prompt-byte budget', () => {
@@ -1784,10 +1773,10 @@ describe('reviewTeamService', () => {
 
     expect(manifest.tokenBudget).toMatchObject({
       maxFilesPerReviewer: 4,
-      maxPromptBytesPerReviewer: 192_000,
-      promptByteLimitExceeded: false,
       largeDiffSummaryFirst: false,
     });
+    expect(manifest.tokenBudget.maxPromptBytesPerReviewer).toBeUndefined();
+    expect(manifest.tokenBudget.promptByteLimitExceeded).toBeUndefined();
     expect(manifest.workPackets.filter((packet) => packet.phase === 'reviewer'))
       .toEqual(
         expect.arrayContaining([
@@ -1800,8 +1789,8 @@ describe('reviewTeamService', () => {
       );
 
     const promptBlock = buildReviewTeamPromptBlock(team, manifest);
-    expect(promptBlock).toContain('- token_budget_decisions: none');
-    expect(promptBlock).not.toContain('prompt_byte_limit_exceeded');
+    expect(promptBlock).not.toContain('token_budget_decisions');
+    expect(promptBlock).not.toContain('prompt_byte');
   });
 
   it('keeps normal manifest timeouts bounded for resolved target size', () => {
@@ -1829,10 +1818,10 @@ describe('reviewTeamService', () => {
     });
 
     const promptBlock = buildReviewTeamPromptBlock(team, manifest);
-    expect(promptBlock).toContain('- target_file_count: 25');
-    expect(promptBlock).toContain('- target_line_count: unknown');
-    expect(promptBlock).toContain('- reviewer_timeout_seconds: 1800');
-    expect(promptBlock).toContain('- judge_timeout_seconds: 1200');
+    expect(promptBlock).toContain('"file_count": 25');
+    expect(promptBlock).toContain('"changed_line_count": null');
+    expect(promptBlock).toContain('"timeout_seconds": 1800');
+    expect(promptBlock).toContain('"timeout_seconds": 1200');
   });
 
   it('keeps normal manifest timeouts bounded even with diff line stats', () => {
@@ -1868,13 +1857,13 @@ describe('reviewTeamService', () => {
     });
 
     const promptBlock = buildReviewTeamPromptBlock(team, manifest);
-    expect(promptBlock).toContain('- target_line_count: 800');
-    expect(promptBlock).toContain('- target_line_count_source: diff_stat');
-    expect(promptBlock).toContain('- reviewer_timeout_seconds: 1800');
-    expect(promptBlock).toContain('- judge_timeout_seconds: 1200');
+    expect(promptBlock).toContain('"changed_line_count": 800');
+    expect(promptBlock).toContain('"changed_line_count_source": "diff_stat"');
+    expect(promptBlock).toContain('"timeout_seconds": 1800');
+    expect(promptBlock).toContain('"timeout_seconds": 1200');
   });
 
-  it('adds an advisory risk-based strategy recommendation to the manifest and prompt', () => {
+  it('keeps advisory risk recommendations in the manifest but out of the launch prompt', () => {
     const team = resolveDefaultReviewTeam(
       coreSubagents(),
       storedConfigWithExtra(),
@@ -1932,14 +1921,11 @@ describe('reviewTeamService', () => {
     });
 
     const promptBlock = buildReviewTeamPromptBlock(team, manifest);
-    expect(promptBlock).toContain('- recommended_strategy: deep');
-    expect(promptBlock).toContain('- frontend_recommended_strategy: deep');
-    expect(promptBlock).toContain('- backend_recommended_strategy: deep');
-    expect(promptBlock).toContain('- strategy_authority: mismatch_warning');
-    expect(promptBlock).toContain('- strategy_mismatch: yes');
-    expect(promptBlock).toContain('- max_cyclomatic_complexity_delta_source: not_measured');
-    expect(promptBlock).toContain('- strategy_recommendation_rationale: Large/high-risk change');
-    expect(promptBlock).toContain('Risk recommendation is advisory');
+    expect(promptBlock).toContain('"selected_strategy": "normal"');
+    expect(promptBlock).not.toContain('recommended_strategy');
+    expect(promptBlock).not.toContain('strategy_mismatch');
+    expect(promptBlock).not.toContain('max_cyclomatic_complexity_delta_source');
+    expect(promptBlock).not.toContain('Large/high-risk change');
   });
 
   it('records explicit strategy override as final strategy metadata without expanding reviewer roster', () => {
@@ -1991,9 +1977,9 @@ describe('reviewTeamService', () => {
     });
 
     const promptBlock = buildReviewTeamPromptBlock(team, manifest);
-    expect(promptBlock).toContain('- final_strategy: quick');
-    expect(promptBlock).toContain('- strategy_user_override: quick');
-    expect(promptBlock).toContain('- strategy_mismatch_severity: high');
+    expect(promptBlock).toContain('"selected_strategy": "quick"');
+    expect(promptBlock).not.toContain('strategy_user_override');
+    expect(promptBlock).not.toContain('strategy_mismatch');
   });
 
   it('keeps unknown targets at a conservative normal recommendation', () => {
@@ -2013,7 +1999,8 @@ describe('reviewTeamService', () => {
     expect(manifest.strategyRecommendation?.rationale).toContain('unresolved target');
 
     const promptBlock = buildReviewTeamPromptBlock(team, manifest);
-    expect(promptBlock).toContain('- recommended_strategy: normal');
+    expect(promptBlock).toContain('"selected_strategy": "normal"');
+    expect(promptBlock).not.toContain('recommended_strategy');
   });
 
   it('preserves explicit zero timeout policy when predicting manifest timeouts', () => {
@@ -2135,15 +2122,14 @@ describe('reviewTeamService', () => {
     );
 
     const promptBlock = buildReviewTeamPromptBlock(team, manifest);
-    expect(promptBlock).toContain('- review_strategy: quick');
-    expect(promptBlock).toContain('Review execution plan:');
-    expect(promptBlock).toContain('Review execution rules:');
-    expect(promptBlock).toContain('subagent_type: ReviewSecurity');
-    expect(promptBlock).toContain('strategy: deep');
-    expect(promptBlock).toContain('model_id: primary');
-    expect(promptBlock).toContain(`prompt_directive: ${REVIEW_STRATEGY_DEFINITIONS.deep.roleDirectives.ReviewSecurity}`);
-    expect(promptBlock).toContain('pass model_id with that value to the matching LaunchReviewAgent call');
-    expect(promptBlock).toContain('Token/time impact: approximately 1.8-2.5x token usage and 1.5-2.5x runtime.');
+    expect(promptBlock).toContain('"selected_strategy": "quick"');
+    expect(promptBlock).toContain('Prepared Review execution plan');
+    expect(promptBlock).toContain('Execution rules:');
+    expect(promptBlock).toContain('"subagent_type": "ReviewSecurity"');
+    expect(promptBlock).toContain('"strategy": "deep"');
+    expect(promptBlock).toContain('"model_id": "primary"');
+    expect(promptBlock).toContain(`"prompt_directive": ${JSON.stringify(REVIEW_STRATEGY_DEFINITIONS.deep.roleDirectives.ReviewSecurity)}`);
+    expect(promptBlock).not.toContain('Token/time impact');
   });
 
   it('applies a project strategy override to the launch manifest without changing member overrides', () => {
@@ -2190,9 +2176,9 @@ describe('reviewTeamService', () => {
     });
 
     const promptBlock = buildReviewTeamPromptBlock(team, manifest);
-    expect(promptBlock).toContain('- review_strategy: deep');
-    expect(promptBlock).toContain('subagent_type: ReviewSecurity');
-    expect(promptBlock).toContain('strategy: quick');
+    expect(promptBlock).toContain('"selected_strategy": "deep"');
+    expect(promptBlock).toContain('"subagent_type": "ReviewSecurity"');
+    expect(promptBlock).toContain('"strategy": "quick"');
   });
 
   it('falls back removed concrete reviewer models to the strategy default model slot', () => {
@@ -2246,22 +2232,19 @@ describe('reviewTeamService', () => {
       }),
     );
 
-    expect(promptBlock).toContain('Run manifest:');
-    expect(promptBlock).toContain('target_resolution: unknown');
-    expect(promptBlock).toContain('- review_strategy: normal');
-    expect(promptBlock).toContain(`- workspace_path: ${WORKSPACE_PATH}`);
-    expect(promptBlock).toContain('quality_gate_reviewer: ReviewJudge');
-    expect(promptBlock).toContain('enabled_extra_reviewers: ExtraEnabled');
-    expect(promptBlock).toContain('skipped_reviewers:');
-    expect(promptBlock).toContain('- ExtraDisabled: disabled');
-    expect(promptBlock).not.toContain('subagent_type: ExtraDisabled');
-    expect(promptBlock).toContain('Run only reviewers listed in core_reviewers and enabled_extra_reviewers.');
+    expect(promptBlock).toContain('Prepared Review execution plan');
+    expect(promptBlock).toContain('"resolution": "unknown"');
+    expect(promptBlock).toContain('"selected_strategy": "normal"');
+    expect(promptBlock).not.toContain(WORKSPACE_PATH);
+    expect(promptBlock).toContain('"subagent_type": "ExtraEnabled"');
+    expect(promptBlock).not.toContain('ExtraDisabled');
+    expect(promptBlock).toContain('Launch only active_packets');
     expect(promptBlock).not.toContain('Configured code review team:');
     expect(promptBlock).not.toContain('Team execution rules:');
     expect(promptBlock).not.toContain('run it in parallel with the locked reviewers whenever the change contains frontend files');
   });
 
-  it('describes Git ranges as immutable but workspace evidence as a mutable snapshot', () => {
+  it('distinguishes immutable Git ranges from mutable workspace evidence', () => {
     const team = resolveDefaultReviewTeam(coreSubagents(), storedConfigWithExtra());
     const target = classifyReviewTargetFromFiles(['src/lib.rs'], 'session_files');
     const baseEvidence = {
@@ -2274,7 +2257,6 @@ describe('reviewTeamService', () => {
         status: 'modified' as const,
         completeness: 'complete' as const,
       }],
-      diffRefs: ['review-target://src/lib.rs'],
       limitations: [],
     };
 
@@ -2300,10 +2282,13 @@ describe('reviewTeamService', () => {
       }),
     );
 
-    expect(workspacePrompt).toContain('preparation-time workspace facts');
-    expect(workspacePrompt).toContain('never describe it as immutable');
-    expect(gitRangePrompt).toContain('immutable target facts');
-    expect(gitRangePrompt).not.toContain('live workspace may change');
+    expect(workspacePrompt).toContain('"source": "workspace"');
+    expect(workspacePrompt).not.toContain('immutable');
+    expect(gitRangePrompt).toContain('"source": "git_range"');
+    expect(gitRangePrompt).toContain(`"base_revision": "${'1'.repeat(40)}"`);
+    expect(gitRangePrompt).toContain(`"head_revision": "${'2'.repeat(40)}"`);
+    expect(workspacePrompt).toContain('Do not reinterpret, widen, or replace the prepared target.');
+    expect(gitRangePrompt).toContain('Do not reinterpret, widen, or replace the prepared target.');
   });
 
   it('tells DeepReview to wait for user approval before running ReviewFixer', () => {
@@ -2314,7 +2299,6 @@ describe('reviewTeamService', () => {
 
     const promptBlock = buildReviewTeamPromptBlock(team);
 
-    expect(promptBlock).toContain('Do not run ReviewFixer during the review pass.');
-    expect(promptBlock).toContain('Wait for explicit user approval before starting any remediation.');
+    expect(promptBlock).toContain('Remain read-only. Do not launch ReviewFixer or start remediation without explicit user approval.');
   });
 });

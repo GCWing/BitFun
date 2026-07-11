@@ -500,38 +500,14 @@ impl CodeReviewTool {
                                 )
                             })
                 });
-        // Fill summary default values
-        if input.get("summary").is_none() {
-            warn!("CodeReview tool missing summary field, failing closed");
+        if !summary_is_valid {
+            warn!("CodeReview tool received a missing or invalid summary, failing closed");
             input["summary"] = json!({
-                "overall_assessment": "Review result is incomplete",
+                "overall_assessment": "Review result is incomplete or invalid",
                 "risk_level": "high",
                 "recommended_action": "request_changes",
                 "confidence_note": "AI did not return a valid review summary"
             });
-        } else if let Some(summary) = input.get_mut("summary") {
-            if summary.get("overall_assessment").is_none() {
-                summary["overall_assessment"] = json!("None");
-            }
-            if summary.get("risk_level").is_none() {
-                summary["risk_level"] = json!("high");
-            }
-            if summary.get("recommended_action").is_none() {
-                summary["recommended_action"] = json!("request_changes");
-            }
-        } else {
-            warn!(
-                "CodeReview tool summary field exists but is not mutable object, using default values"
-            );
-            input["summary"] = json!({
-                "overall_assessment": "Review result is invalid",
-                "risk_level": "high",
-                "recommended_action": "request_changes",
-                "confidence_note": "AI returned invalid summary format"
-            });
-        }
-
-        if !summary_is_valid {
             input["evidence_status"] = json!("failed");
         }
 
@@ -786,6 +762,33 @@ mod tests {
         assert_eq!(input["evidence_status"], "failed");
     }
 
+    #[test]
+    fn partially_invalid_summary_is_replaced_as_a_unit() {
+        let mut input = json!({
+            "summary": {
+                "overall_assessment": "Looks good",
+                "risk_level": "unknown",
+                "recommended_action": "approve",
+                "confidence_note": "high confidence"
+            },
+            "issues": [],
+            "positive_points": []
+        });
+
+        CodeReviewTool::validate_and_fill_defaults(&mut input, false, None, None);
+
+        assert_eq!(
+            input["summary"],
+            json!({
+                "overall_assessment": "Review result is incomplete or invalid",
+                "risk_level": "high",
+                "recommended_action": "request_changes",
+                "confidence_note": "AI did not return a valid review summary"
+            })
+        );
+        assert_eq!(input["evidence_status"], "failed");
+    }
+
     #[tokio::test]
     async fn deep_review_schema_requires_deep_review_fields() {
         let tool = CodeReviewTool::new();
@@ -836,8 +839,7 @@ mod tests {
                     "status": "modified",
                     "completeness": "complete"
                 }],
-                "diffRefs": [],
-                "limitations": ["mutable_workspace_snapshot"]
+                "limitations": ["mutable_workspace_evidence"]
             }
         });
         let mut input = json!({});
@@ -1124,7 +1126,6 @@ mod tests {
                 "partial_reviewer",
                 "retry_guidance",
                 "user_decision",
-                "target_evidence_limited",
             ]
         );
     }
@@ -1353,8 +1354,8 @@ mod tests {
             .iter()
             .filter_map(|signal| signal["kind"].as_str())
             .collect::<Vec<_>>();
-        assert_eq!(kinds, vec!["reduced_scope", "target_evidence_limited"]);
-        assert_eq!(input["evidence_status"], "failed");
+        assert_eq!(kinds, vec!["reduced_scope"]);
+        assert!(input.get("evidence_status").is_none());
     }
 
     #[test]
@@ -1375,12 +1376,13 @@ mod tests {
 
         CodeReviewTool::validate_and_fill_defaults(&mut input, true, Some(&manifest), None);
 
-        assert!(input["reliability_signals"]
-            .as_array()
-            .unwrap()
-            .iter()
+        assert!(input
+            .get("reliability_signals")
+            .and_then(serde_json::Value::as_array)
+            .into_iter()
+            .flatten()
             .all(|signal| signal["kind"] != "reduced_scope"));
-        assert_eq!(input["evidence_status"], "failed");
+        assert!(input.get("evidence_status").is_none());
     }
 
     #[test]
@@ -1469,12 +1471,13 @@ mod tests {
 
         CodeReviewTool::validate_and_fill_defaults(&mut input, true, Some(&manifest), None);
 
-        assert!(input["reliability_signals"]
-            .as_array()
-            .unwrap()
-            .iter()
+        assert!(input
+            .get("reliability_signals")
+            .and_then(serde_json::Value::as_array)
+            .into_iter()
+            .flatten()
             .all(|signal| signal["kind"] != "reduced_scope"));
-        assert_eq!(input["evidence_status"], "failed");
+        assert!(input.get("evidence_status").is_none());
     }
 
     #[test]

@@ -39,7 +39,7 @@
 | 输入 | 来源 |
 |---|---|
 | 项目画像快照 | 项目结构、规则、验证能力、负责人、主动配置状态 |
-| Review 目标证据 | 当前工作区、明确 Git range 或 PR 的 base/head、目标指纹、文件状态、受控 diff 引用、完整度、workspace binding 和失效状态 |
+| Review 目标证据 | 当前工作区或明确 Git range 的 base/head、目标指纹、文件状态、有界 diff 可用性、完整度、workspace binding 和失效状态 |
 | 任务与变更摘要 | 用户意图、Git diff、文件变更、重命名/删除、生成文件 |
 | 验证证据 | `verification.completed`、CI 检查、命令摘要、制品引用 |
 | 风险策略提示 | 风险标签、推荐/强制检查、审查强度 |
@@ -116,8 +116,9 @@ interface EvidencePack {
 
 `ReviewTargetEvidence.completeness` describes prepared target facts. The final
 report carries `ReviewEvidenceStatus` separately from its recommendation. Only
-an immutable, complete Git range with no omitted files may retain a clean
-approval. Mutable workspace evidence is always `limited` in the current design.
+an immutable, complete Git range with no omitted files and a matching clean
+workspace may report evidence status `complete`. Mutable workspace evidence is
+always `limited`; this status does not rewrite the model recommendation.
 Synthetic diff references and embedded diff bodies are intentionally excluded;
 reviewers page through the target-bound diff tool using opaque cursors.
 
@@ -127,7 +128,7 @@ reviewers page through the target-bound diff tool using opaque cursors.
 |---|---|
 | `source_events` | 生成该包使用的事件 id 集合 |
 | `evidence_refs` | 指向日志摘要、报告、CI、截图、轨迹或外部系统事实的引用 |
-| `review_target` | 本次 Review 的目标摘要；完整 diff/provider body 仍通过受控 `evidence_refs` 访问。immutable revision 可声明内容不可变；live workspace 可在有界 diff、冲突状态和未跟踪内容指纹完整时声明覆盖完整，但必须保留可变新鲜度限制。base/head、目标指纹、完整度或 workspace binding 变化后，具备生命周期 adapter 的入口必须使当前包 stale |
+| `review_target` | 本次 Review 的目标摘要；changed-code 内容通过 prepared `GetFileDiff` 的有界分页读取，不嵌入 evidence pack。immutable revision 可声明内容不可变；live workspace 可声明 prepared diff 覆盖完整，但最终 evidence status 仍为 limited。base revision 与当前 HEAD 不一致时，工具返回 stale/limited 而不是读取错误 diff |
 | `security` | 执行安全决策摘要，包括执行位置、沙箱等级组合、降级原因和授权范围；不作为质量通过依据 |
 | `skipped_checks` | 未运行检查的原因、触发规则、可接受条件和残余风险 |
 | `open_risks` | 尚未被证据覆盖或人工接受的风险 |

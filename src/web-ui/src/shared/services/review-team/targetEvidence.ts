@@ -12,7 +12,6 @@ import type {
 } from './types';
 
 const REVIEW_TARGET_FILE_LIMIT = 500;
-const REVIEW_TARGET_DIFF_PAGE_CHARS = 40_000;
 const REVIEW_TARGET_DIFF_TOTAL_CHARS = 80_000;
 
 function maximumUnifiedDiffSectionLength(diff: string | undefined): number {
@@ -98,9 +97,12 @@ function binaryPathsFromUnifiedDiff(diff: string | undefined): {
   let hasUnassignedBinarySection = false;
 
   for (const line of diff?.split(/\r?\n/) ?? []) {
-    const header = line.match(/^diff --git a\/(.+) b\/(.+)$/);
-    if (header) {
-      currentPaths = [normalizedPath(header[1]), normalizedPath(header[2])];
+    if (line.startsWith('diff --git ')) {
+      currentPaths = [];
+      const header = line.match(/^diff --git a\/(.+) b\/(.+)$/);
+      if (header) {
+        currentPaths = [normalizedPath(header[1]), normalizedPath(header[2])];
+      }
       continue;
     }
     if (line === 'GIT binary patch' || /^Binary files .+ differ$/.test(line)) {
@@ -198,7 +200,7 @@ export function buildUnknownReviewTargetEvidence(
     source,
     workspaceBinding: 'unavailable',
     completeness: 'unknown',
-    files: target.files.map((file) => ({
+    files: target.files.filter((file) => !file.excluded).map((file) => ({
       path: file.normalizedPath,
       ...(file.normalizedOldPath ? { previousPath: file.normalizedOldPath } : {}),
       status: file.status,
@@ -215,10 +217,10 @@ export function buildWorkspaceReviewTargetEvidence(params: {
   diff?: string;
   status: GitStatus;
   untrackedContentFingerprints?: Record<string, string>;
-  remote?: boolean;
 }): ReviewTargetEvidence {
   const conflictPaths = new Set(params.status.conflicts.map(normalizedPath));
-  const targetPaths = new Set(params.target.files.map((file) => file.normalizedPath));
+  const includedTargetFiles = params.target.files.filter((file) => !file.excluded);
+  const targetPaths = new Set(includedTargetFiles.map((file) => file.normalizedPath));
   const targetUntrackedPaths = params.status.untracked
     .map(normalizedPath)
     .filter((path) => targetPaths.has(path));
@@ -234,7 +236,6 @@ export function buildWorkspaceReviewTargetEvidence(params: {
   ) || untrackedDirectoryTargets.length > 0;
   const binaryDiff = binaryPathsFromUnifiedDiff(params.diff);
   const maximumDiffSection = maximumUnifiedDiffSectionLength(params.diff);
-  const diffRequiresPaging = maximumDiffSection > REVIEW_TARGET_DIFF_PAGE_CHARS;
   const diffExceedsBudget = maximumDiffSection > REVIEW_TARGET_DIFF_TOTAL_CHARS;
   const changedStatusByPath = new Map<string, ReviewTargetEvidenceFile['status']>();
   for (const file of params.status.staged) {
@@ -255,15 +256,13 @@ export function buildWorkspaceReviewTargetEvidence(params: {
     untracked: params.untrackedContentFingerprints ?? {},
   });
   const limitations = [
-    'mutable_workspace_snapshot',
-    ...(params.remote ? ['remote_git_inspection_unavailable'] : []),
+    'mutable_workspace_evidence',
     ...(params.status.conflicts.length > 0 ? ['conflicted_files_present'] : []),
     ...(params.diff === undefined ? ['workspace_diff_unavailable'] : []),
     ...(unavailableUntrackedContent ? ['untracked_content_unavailable'] : []),
     ...(untrackedDirectoryTargets.length > 0
       ? ['untracked_directory_content_unavailable']
       : []),
-    ...(diffRequiresPaging ? ['target_diff_requires_paging'] : []),
     ...(diffExceedsBudget ? ['target_diff_budget_exceeded'] : []),
     ...(binaryDiff.paths.size > 0 || binaryDiff.hasUnassignedBinarySection
       ? ['binary_diff_unavailable']
@@ -273,7 +272,7 @@ export function buildWorkspaceReviewTargetEvidence(params: {
     params.diff !== undefined &&
     params.status.conflicts.length === 0 &&
     !unavailableUntrackedContent &&
-    !diffRequiresPaging &&
+    !diffExceedsBudget &&
     binaryDiff.paths.size === 0 &&
     !binaryDiff.hasUnassignedBinarySection
       ? 'complete'
@@ -285,7 +284,7 @@ export function buildWorkspaceReviewTargetEvidence(params: {
     headRevision: `worktree:${diffFingerprint}`,
     workspaceBinding: 'matching_dirty',
     completeness,
-    files: params.target.files.map((file) => ({
+    files: includedTargetFiles.map((file) => ({
       path: file.normalizedPath,
       ...(file.normalizedOldPath ? { previousPath: file.normalizedOldPath } : {}),
       status: untrackedDirectoryTargets.includes(normalizedPath(file.normalizedPath))
@@ -321,27 +320,29 @@ export function buildGitRangeReviewTargetEvidence(params: {
   workspaceHeadRevision?: string;
   status?: GitStatus;
   diff?: string;
-  remote?: boolean;
 }): ReviewTargetEvidence {
-  const workspaceBinding = params.remote
-    ? 'unavailable'
-    : resolveWorkspaceBinding({
-      targetHeadRevision: params.headRevision,
-      workspaceHeadRevision: params.workspaceHeadRevision,
-      status: params.status,
-    });
+  const includedTargetPaths = new Set(
+    params.target.files
+      .filter((file) => !file.excluded)
+      .flatMap((file) => [
+        normalizedPath(file.normalizedPath),
+        ...(file.normalizedOldPath ? [normalizedPath(file.normalizedOldPath)] : []),
+      ]),
+  );
+  const workspaceBinding = resolveWorkspaceBinding({
+    targetHeadRevision: params.headRevision,
+    workspaceHeadRevision: params.workspaceHeadRevision,
+    status: params.status,
+  });
   const revisionsComplete = isFullCommitId(params.baseRevision) && isFullCommitId(params.headRevision);
   const binaryDiff = binaryPathsFromUnifiedDiff(params.diff);
   const maximumDiffSection = maximumUnifiedDiffSectionLength(params.diff);
-  const diffRequiresPaging = maximumDiffSection > REVIEW_TARGET_DIFF_PAGE_CHARS;
   const diffExceedsBudget = maximumDiffSection > REVIEW_TARGET_DIFF_TOTAL_CHARS;
   const limitations = [
     ...(!revisionsComplete ? ['git_revision_unresolved'] : []),
     ...(params.diff === undefined ? ['git_diff_unavailable'] : []),
-    ...(params.remote ? ['remote_exact_diff_unavailable'] : []),
     ...(workspaceBinding === 'matching_dirty' ? ['workspace_has_local_changes'] : []),
     ...(workspaceBinding === 'mismatched' ? ['workspace_head_mismatch'] : []),
-    ...(diffRequiresPaging ? ['target_diff_requires_paging'] : []),
     ...(diffExceedsBudget ? ['target_diff_budget_exceeded'] : []),
     ...(binaryDiff.paths.size > 0 || binaryDiff.hasUnassignedBinarySection
       ? ['binary_diff_unavailable']
@@ -357,13 +358,16 @@ export function buildGitRangeReviewTargetEvidence(params: {
     completeness:
       revisionsComplete &&
       params.diff !== undefined &&
-      !params.remote &&
-      !diffRequiresPaging &&
+      workspaceBinding === 'matching_clean' &&
+      !diffExceedsBudget &&
       binaryDiff.paths.size === 0 &&
       !binaryDiff.hasUnassignedBinarySection
         ? 'complete'
         : 'partial',
-    files: params.changedFiles.map((file) => ({
+    files: params.changedFiles.filter((file) => (
+      includedTargetPaths.has(normalizedPath(file.path)) ||
+      Boolean(file.old_path && includedTargetPaths.has(normalizedPath(file.old_path)))
+    )).map((file) => ({
       path: normalizedPath(file.path),
       ...(file.old_path ? { previousPath: normalizedPath(file.old_path) } : {}),
       status: normalizeStatus(file.status),
