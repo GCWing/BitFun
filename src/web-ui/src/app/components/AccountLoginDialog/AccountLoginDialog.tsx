@@ -1,23 +1,24 @@
 /**
- * Account login dialog with three fields: username, password, auth server.
- * Visual style mirrors the SSH new-connection dialog.
+ * Account Login + Device Control Dialog
  *
- * Login flow:
- * 1. User enters credentials and clicks Login
- * 2. accountLogin() → relay authenticates, returns has_cloud_settings flag
- * 3. If first login (has_cloud_settings=false): auto-sync local config+sessions to cloud
- * 4. If non-first login (has_cloud_settings=true): show confirmation dialog —
- *    cloud config will overwrite local. User must agree or cancel (logout).
- * 5. After sync: connect WS device routing, close dialog.
+ * Three views:
+ * 1. Login form (username/password/server)
+ * 2. Cloud overwrite confirmation (non-first login)
+ * 3. Device control panel (list devices → browse workspaces/sessions → send messages)
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { Modal, Button, Input, Alert } from '@/component-library';
-import { User, Lock, Server, LogIn, Monitor, CloudDownload, RefreshCw } from 'lucide-react';
+import {
+  User, Lock, Server, LogIn, Monitor, CloudDownload,
+  ChevronRight, ArrowLeft, Send, Plus, MessageSquare,
+} from 'lucide-react';
 import { remoteConnectAPI } from '@/infrastructure/api/service-api/RemoteConnectAPI';
-import type { OnlineDeviceInfo } from '@/infrastructure/api/service-api/RemoteConnectAPI';
+import type {
+  AccountHint, AccountDeviceInfo,
+} from '@/infrastructure/api/service-api/RemoteConnectAPI';
 import { configAPI } from '@/infrastructure/api/service-api/ConfigAPI';
 import { useNotification } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
@@ -29,6 +30,24 @@ interface AccountLoginDialogProps {
   isOpen: boolean;
   onClose: () => void;
 }
+
+// Remote workspace info (from RemoteResponse::WorkspaceInfo)
+interface RemoteWorkspaceInfo {
+  has_workspace: boolean;
+  path: string | null;
+  project_name: string | null;
+}
+
+// Remote session info (from RemoteResponse::SessionList)
+interface RemoteSessionInfo {
+  session_id: string;
+  name: string;
+  agent_type: string;
+  updated_at: string;
+  message_count: number;
+}
+
+type View = 'login' | 'overwrite' | 'devices' | 'sessions' | 'chat';
 
 export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
   isOpen,
@@ -43,33 +62,39 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
   const [authServer, setAuthServer] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [onlineDevices, setOnlineDevices] = useState<OnlineDeviceInfo[]>([]);
-  const [refreshingDevices, setRefreshingDevices] = useState(false);
-  // Cloud overwrite confirmation state
-  const [pendingOverwrite, setPendingOverwrite] = useState<{
-    server: string;
-    username: string;
-    password: string;
-  } | null>(null);
+  const [view, setView] = useState<View>('login');
+
+  // Device control panel state
+  const [devices, setDevices] = useState<AccountDeviceInfo[]>([]);
+  const [selectedDevice, setSelectedDevice] = useState<AccountDeviceInfo | null>(null);
+  const [remoteWorkspace, setRemoteWorkspace] = useState<RemoteWorkspaceInfo | null>(null);
+  const [remoteSessions, setRemoteSessions] = useState<RemoteSessionInfo[]>([]);
+  const [remoteMessages, setRemoteMessages] = useState<any[]>([]);
+  const [selectedSession, setSelectedSession] = useState<string | null>(null);
+  const [messageInput, setMessageInput] = useState('');
+
+  const refreshDevices = useCallback(async () => {
+    try {
+      const list = await remoteConnectAPI.accountListDevices();
+      setDevices(list);
+    } catch (e) { log.warn('refreshDevices failed', e); }
+  }, []);
 
   useEffect(() => {
     if (!isOpen) {
-      setUsername('');
-      setPassword('');
-      setAuthServer('');
-      setError(null);
-      setLoading(false);
-      setPendingOverwrite(null);
+      setUsername(''); setPassword(''); setAuthServer('');
+      setError(null); setLoading(false); setView('login');
+      setDevices([]); setSelectedDevice(null); setRemoteSessions([]);
+      setRemoteMessages([]); setSelectedSession(null); setMessageInput('');
     } else {
-      // Pre-fill username + auth server from persisted credential hint
-      remoteConnectAPI.accountGetCredentialHint().then((hint) => {
-        if (hint) {
-          setUsername(hint.username);
-          setAuthServer(hint.relay_url);
-        }
+      remoteConnectAPI.accountGetCredentialHint().then((hint: AccountHint | null) => {
+        if (hint) { setUsername(hint.username); setAuthServer(hint.relay_url); }
+      });
+      remoteConnectAPI.accountStatus().then((status) => {
+        if (status.logged_in) { setView('devices'); refreshDevices(); }
       });
     }
-  }, [isOpen]);
+  }, [isOpen, refreshDevices]);
 
   const validate = useCallback(() => {
     if (!username.trim() || !password.trim() || !authServer.trim()) {
@@ -80,166 +105,166 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
     return true;
   }, [username, password, authServer, t]);
 
-  const doAutoSync = useCallback(
-    async (isFirstLogin: boolean) => {
-      // Export local config JSON for upload (first login) or skip (non-first)
-      let configJson = '{}';
-      if (isFirstLogin) {
-        try {
-          const exported = await configAPI.exportConfig();
-          configJson = JSON.stringify(exported);
-        } catch (e) {
-          log.warn('Failed to export local config, using empty', e);
-        }
-      }
-
-      const wp = workspacePath || '/';
-      const result = await remoteConnectAPI.accountAutoSync(isFirstLogin, wp, configJson);
-      log.info(
-        `Auto-sync done: settings=${result.settings_synced} exported=${result.sessions_exported} imported=${result.sessions_imported}`,
-      );
-    },
-    [workspacePath],
-  );
+  const doAutoSync = useCallback(async (isFirstLogin: boolean) => {
+    let configJson = '{}';
+    if (isFirstLogin) {
+      try {
+        const exported = await configAPI.exportConfig();
+        configJson = JSON.stringify(exported);
+      } catch (e) { log.warn('export config failed', e); }
+    }
+    const wp = workspacePath || '/';
+    const result = await remoteConnectAPI.accountAutoSync(isFirstLogin, wp, configJson);
+    log.info(`Auto-sync done: settings=${result.settings_synced} exported=${result.sessions_exported} imported=${result.sessions_imported}`);
+  }, [workspacePath]);
 
   const handleLogin = useCallback(async () => {
     if (!validate()) return;
-    setLoading(true);
-    setError(null);
-    const server = authServer.trim();
-    const user = username.trim();
-    const pass = password;
+    setLoading(true); setError(null);
     try {
-      const result = await remoteConnectAPI.accountLogin(server, user, pass);
-
+      const result = await remoteConnectAPI.accountLogin(authServer.trim(), username.trim(), password);
       if (result.has_cloud_settings) {
-        // Non-first login: pause and ask user to confirm cloud overwrite
-        setPendingOverwrite({ server, username: user, password: pass });
+        setView('overwrite');
         setLoading(false);
         return;
       }
-
-      // First login: auto-sync (upload local config + sessions to cloud)
       await doAutoSync(true);
-
-      // Connect WS device routing
       remoteConnectAPI.accountConnectDevices().catch((err) => {
-        log.warn('accountConnectDevices failed after login', err);
+        log.warn('accountConnectDevices failed', err);
       });
-
       success(t('accountLogin.loginSuccess', { user_id: result.user_id }));
-      onClose();
+      setView('devices');
+      refreshDevices();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setLoading(false);
-    }
-  }, [validate, authServer, username, password, success, t, onClose, doAutoSync]);
+    } finally { setLoading(false); }
+  }, [validate, authServer, username, password, doAutoSync, success, t, refreshDevices]);
 
   const handleConfirmOverwrite = useCallback(async () => {
-    if (!pendingOverwrite) return;
-    setLoading(true);
-    setError(null);
+    setLoading(true); setError(null);
     try {
-      // Non-first login: download cloud config, overwrite local
       await doAutoSync(false);
-
       remoteConnectAPI.accountConnectDevices().catch((err) => {
-        log.warn('accountConnectDevices failed after login', err);
+        log.warn('accountConnectDevices failed', err);
       });
-
-      success(t('accountLogin.loginSuccess', { user_id: pendingOverwrite.username }));
-      setPendingOverwrite(null);
-      onClose();
+      success(t('accountLogin.loginSuccess', { user_id: username }));
+      setView('devices');
+      refreshDevices();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setLoading(false);
-    }
-  }, [pendingOverwrite, doAutoSync, success, t, onClose]);
+    } finally { setLoading(false); }
+  }, [doAutoSync, success, t, username, refreshDevices]);
 
   const handleCancelOverwrite = useCallback(async () => {
-    // User declined cloud overwrite → logout and close
-    try {
-      await remoteConnectAPI.accountLogout();
-    } catch (e) {
-      log.warn('Logout after cancel failed', e);
-    }
-    setPendingOverwrite(null);
+    try { await remoteConnectAPI.accountLogout(); } catch (e) { log.warn('logout failed', e); }
+    setView('login');
     onClose();
   }, [onClose]);
 
-  const refreshDevices = useCallback(async () => {
-    setRefreshingDevices(true);
+  // ── Device control: browse remote workspace + sessions ──────────────
+  const selectDevice = useCallback(async (device: AccountDeviceInfo) => {
+    setSelectedDevice(device);
+    setLoading(true); setError(null);
     try {
-      const devices = await remoteConnectAPI.accountOnlineDevices();
-      setOnlineDevices(devices);
-    } catch (e) {
-      log.warn('refreshDevices failed', e);
-    } finally {
-      setRefreshingDevices(false);
-    }
+      // Get workspace info
+      const wsResp = await remoteConnectAPI.accountDeviceRpc(
+        device.device_id,
+        JSON.stringify({ cmd: 'get_workspace_info' }),
+      );
+      const wsInfo = JSON.parse(wsResp);
+      setRemoteWorkspace(wsInfo);
+
+      // List sessions
+      const sessResp = await remoteConnectAPI.accountDeviceRpc(
+        device.device_id,
+        JSON.stringify({ cmd: 'list_sessions', workspace_path: wsInfo.path || '/', limit: 50 }),
+      );
+      const sessData = JSON.parse(sessResp);
+      setRemoteSessions(sessData.sessions || []);
+      setView('sessions');
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally { setLoading(false); }
   }, []);
 
-  useEffect(() => {
-    if (isOpen) {
-      refreshDevices();
-      const interval = setInterval(refreshDevices, 10000);
-      return () => clearInterval(interval);
-    }
-  }, [isOpen, refreshDevices]);
+  const selectSession = useCallback(async (sessionId: string) => {
+    if (!selectedDevice) return;
+    setSelectedSession(sessionId);
+    setLoading(true); setError(null);
+    try {
+      const resp = await remoteConnectAPI.accountDeviceRpc(
+        selectedDevice.device_id,
+        JSON.stringify({ cmd: 'get_session_messages', session_id: sessionId, limit: 100 }),
+      );
+      const data = JSON.parse(resp);
+      setRemoteMessages(data.messages || []);
+      setView('chat');
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally { setLoading(false); }
+  }, [selectedDevice]);
 
-  // ── Cloud overwrite confirmation view ──────────────────────────────────
-  if (pendingOverwrite) {
-    return (
-      <Modal
-        isOpen={isOpen}
-        onClose={handleCancelOverwrite}
-        title={t('shared:features.accountLogin')}
-        size="medium"
-        showCloseButton
-        closeOnOverlayClick={false}
-        contentClassName="modal__content--fill-flex"
-      >
-        <div className="account-login-dialog">
-          <div className="account-login-dialog__scroll">
-            <div className="account-login-dialog__overwrite-notice">
-              <CloudDownload size={32} />
-              <p>{t('accountLogin.cloudOverwriteWarning')}</p>
-              <p className="account-login-dialog__overwrite-detail">
-                {t('accountLogin.cloudOverwriteDetail')}
-              </p>
-            </div>
-          </div>
-          <div className="account-login-dialog__actions">
-            <Button
-              variant="secondary"
-              size="small"
-              onClick={handleCancelOverwrite}
-              disabled={loading}
-            >
-              {t('accountLogin.disagree')}
-            </Button>
-            <Button
-              variant="primary"
-              size="small"
-              onClick={handleConfirmOverwrite}
-              disabled={loading}
-            >
-              {loading ? t('accountLogin.processing') : t('accountLogin.agree')}
-            </Button>
-          </div>
-        </div>
-      </Modal>
-    );
-  }
+  const handleSendRemoteMessage = useCallback(async () => {
+    if (!selectedDevice || !selectedSession || !messageInput.trim()) return;
+    setLoading(true); setError(null);
+    try {
+      await remoteConnectAPI.accountDeviceRpc(
+        selectedDevice.device_id,
+        JSON.stringify({
+          cmd: 'send_message',
+          session_id: selectedSession,
+          content: messageInput,
+          agent_type: null,
+          images: null,
+          image_contexts: null,
+        }),
+      );
+      setMessageInput('');
+      // Refresh messages
+      await selectSession(selectedSession);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally { setLoading(false); }
+  }, [selectedDevice, selectedSession, messageInput, selectSession]);
 
-  // ── Login form view ─────────────────────────────────────────────────────
+  const handleCreateRemoteSession = useCallback(async () => {
+    if (!selectedDevice) return;
+    setLoading(true); setError(null);
+    try {
+      const resp = await remoteConnectAPI.accountDeviceRpc(
+        selectedDevice.device_id,
+        JSON.stringify({
+          cmd: 'create_session',
+          agent_type: null,
+          session_name: null,
+          workspace_path: remoteWorkspace?.path || '/',
+        }),
+      );
+      const data = JSON.parse(resp);
+      if (data.session_id) {
+        await selectDevice(selectedDevice);
+        await selectSession(data.session_id);
+      }
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally { setLoading(false); }
+  }, [selectedDevice, remoteWorkspace, selectDevice, selectSession]);
+
+  // ── Render ───────────────────────────────────────────────────────────
+
+  const title = view === 'login' || view === 'overwrite'
+    ? t('shared:features.accountLogin')
+    : view === 'devices'
+    ? t('accountLogin.devices')
+    : view === 'sessions'
+    ? selectedDevice?.device_name || 'Sessions'
+    : 'Chat';
+
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title={t('shared:features.accountLogin')}
+      title={title}
       size="medium"
       showCloseButton
       closeOnOverlayClick={false}
@@ -248,101 +273,154 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
       <div className="account-login-dialog">
         {error && (
           <div className="account-login-dialog__error-banner">
-            <Alert
-              type="error"
-              message={error}
-              closable
-              onClose={() => setError(null)}
-              className="account-login-dialog__error-alert"
-            />
+            <Alert type="error" message={error} closable onClose={() => setError(null)}
+              className="account-login-dialog__error-alert" />
           </div>
         )}
 
-        <div className="account-login-dialog__scroll">
-          <div className="account-login-dialog__form">
-            <div className="account-login-dialog__field">
-              <Input
-                label={t('accountLogin.username')}
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder=""
-                prefix={<User size={16} />}
-                size="medium"
-                disabled={loading}
-              />
+        {/* ── Login form ────────────────────────────────────────────── */}
+        {view === 'login' && (
+          <div className="account-login-dialog__scroll">
+            <div className="account-login-dialog__form">
+              <div className="account-login-dialog__field">
+                <Input label={t('accountLogin.username')} type="text" value={username}
+                  onChange={(e) => setUsername(e.target.value)} prefix={<User size={16} />}
+                  size="medium" disabled={loading} />
+              </div>
+              <div className="account-login-dialog__field">
+                <Input label={t('accountLogin.password')} type="password" value={password}
+                  onChange={(e) => setPassword(e.target.value)} prefix={<Lock size={16} />}
+                  size="medium" disabled={loading} />
+              </div>
+              <div className="account-login-dialog__field">
+                <Input label={t('accountLogin.authServer')} type="url" value={authServer}
+                  onChange={(e) => setAuthServer(e.target.value)}
+                  placeholder={t('accountLogin.authServerPlaceholder')}
+                  prefix={<Server size={16} />} size="medium" disabled={loading} />
+              </div>
             </div>
-            <div className="account-login-dialog__field">
-              <Input
-                label={t('accountLogin.password')}
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder=""
-                prefix={<Lock size={16} />}
-                size="medium"
-                disabled={loading}
-              />
-            </div>
-            <div className="account-login-dialog__field">
-              <Input
-                label={t('accountLogin.authServer')}
-                type="url"
-                value={authServer}
-                onChange={(e) => setAuthServer(e.target.value)}
-                placeholder={t('accountLogin.authServerPlaceholder')}
-                prefix={<Server size={16} />}
-                size="medium"
-                disabled={loading}
-              />
+            <div className="account-login-dialog__actions">
+              <Button variant="secondary" size="small" onClick={onClose} disabled={loading}>
+                {t('accountLogin.cancel')}
+              </Button>
+              <Button variant="primary" size="small" onClick={handleLogin} disabled={loading}>
+                <LogIn size={14} />
+                {loading ? t('accountLogin.processing') : t('accountLogin.login')}
+              </Button>
             </div>
           </div>
+        )}
 
-          {onlineDevices.length > 0 && (
-            <div className="account-login-dialog__devices">
-              <div className="account-login-dialog__devices-header">
-                <Monitor size={14} />
-                <span>{t('accountLogin.devices')}</span>
-                <Button
-                  variant="ghost"
-                  size="small"
-                  onClick={refreshDevices}
-                  disabled={refreshingDevices}
-                >
-                  <RefreshCw size={12} className={refreshingDevices ? 'spinning' : ''} />
-                </Button>
-              </div>
-              <div className="account-login-dialog__device-list">
-                {onlineDevices.map((d) => (
-                  <div key={d.device_id} className="account-login-dialog__device-item">
+        {/* ── Cloud overwrite confirmation ─────────────────────────── */}
+        {view === 'overwrite' && (
+          <div className="account-login-dialog__scroll">
+            <div className="account-login-dialog__overwrite-notice">
+              <CloudDownload size={32} />
+              <p>{t('accountLogin.cloudOverwriteWarning')}</p>
+              <p className="account-login-dialog__overwrite-detail">
+                {t('accountLogin.cloudOverwriteDetail')}
+              </p>
+            </div>
+            <div className="account-login-dialog__actions">
+              <Button variant="secondary" size="small" onClick={handleCancelOverwrite} disabled={loading}>
+                {t('accountLogin.disagree')}
+              </Button>
+              <Button variant="primary" size="small" onClick={handleConfirmOverwrite} disabled={loading}>
+                {loading ? t('accountLogin.processing') : t('accountLogin.agree')}
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* ── Device list ───────────────────────────────────────────── */}
+        {view === 'devices' && (
+          <div className="account-login-dialog__scroll">
+            <div className="account-login-dialog__device-list">
+              {devices.length === 0 && (
+                <div className="account-login-dialog__empty">{t('accountLogin.noDevices')}</div>
+              )}
+              {devices.map((d) => (
+                <div key={d.device_id} className="account-login-dialog__device-card"
+                  onClick={() => selectDevice(d)}>
+                  <Monitor size={16} />
+                  <div className="account-login-dialog__device-info">
                     <span className="account-login-dialog__device-name">{d.device_name}</span>
                     <span className="account-login-dialog__device-id">{d.device_id.slice(0, 8)}</span>
                   </div>
-                ))}
-              </div>
+                  <ChevronRight size={14} />
+                </div>
+              ))}
             </div>
-          )}
-        </div>
+            <div className="account-login-dialog__actions">
+              <Button variant="secondary" size="small" onClick={() => { remoteConnectAPI.accountLogout(); setView('login'); }}>
+                {t('accountLogin.logout') || 'Logout'}
+              </Button>
+            </div>
+          </div>
+        )}
 
-        <div className="account-login-dialog__actions">
-          <Button
-            variant="secondary"
-            size="small"
-            onClick={onClose}
-            disabled={loading}
-          >
-            {t('accountLogin.cancel')}
-          </Button>
-          <Button
-            variant="primary"
-            size="small"
-            onClick={handleLogin}
-            disabled={loading}
-          >
-            <LogIn size={14} />
-            {loading ? t('accountLogin.processing') : t('accountLogin.login')}
-          </Button>
-        </div>
+        {/* ── Session list on selected device ───────────────────────── */}
+        {view === 'sessions' && selectedDevice && (
+          <div className="account-login-dialog__scroll">
+            <div className="account-login-dialog__back-bar">
+              <Button variant="ghost" size="small" onClick={() => setView('devices')}>
+                <ArrowLeft size={14} /> {t('accountLogin.devices')}
+              </Button>
+              <Button variant="ghost" size="small" onClick={handleCreateRemoteSession} disabled={loading}>
+                <Plus size={14} /> {t('accountLogin.newSession') || 'New Session'}
+              </Button>
+            </div>
+            {remoteWorkspace && (
+              <div className="account-login-dialog__workspace-info">
+                {remoteWorkspace.project_name || remoteWorkspace.path || '/'} ({remoteSessions.length} sessions)
+              </div>
+            )}
+            <div className="account-login-dialog__session-list">
+              {remoteSessions.map((s) => (
+                <div key={s.session_id} className="account-login-dialog__session-item"
+                  onClick={() => selectSession(s.session_id)}>
+                  <MessageSquare size={14} />
+                  <div className="account-login-dialog__session-info">
+                    <span className="account-login-dialog__session-name">{s.name}</span>
+                    <span className="account-login-dialog__session-meta">
+                      {s.agent_type} · {s.message_count} msgs
+                    </span>
+                  </div>
+                  <ChevronRight size={14} />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── Chat view (remote session messages) ──────────────────── */}
+        {view === 'chat' && selectedDevice && selectedSession && (
+          <div className="account-login-dialog__scroll">
+            <div className="account-login-dialog__back-bar">
+              <Button variant="ghost" size="small" onClick={() => setView('sessions')}>
+                <ArrowLeft size={14} /> Sessions
+              </Button>
+            </div>
+            <div className="account-login-dialog__messages">
+              {remoteMessages.map((msg, i) => (
+                <div key={i} className={`account-login-dialog__message account-login-dialog__message--${msg.role}`}>
+                  <div className="account-login-dialog__message-role">{msg.role}</div>
+                  <div className="account-login-dialog__message-content">{msg.content}</div>
+                </div>
+              ))}
+            </div>
+            <div className="account-login-dialog__message-input">
+              <Input type="text" value={messageInput}
+                onChange={(e) => setMessageInput(e.target.value)}
+                placeholder={t('accountLogin.sendMessagePlaceholder') || 'Send message...'}
+                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendRemoteMessage(); } }}
+                size="medium" disabled={loading} />
+              <Button variant="primary" size="small" onClick={handleSendRemoteMessage} disabled={loading || !messageInput.trim()}>
+                <Send size={14} />
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
     </Modal>
   );

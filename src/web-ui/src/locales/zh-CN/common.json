@@ -487,7 +487,10 @@
     "cloudOverwriteWarning": "检测到此账号已有云端配置。继续登录将使用云端配置覆盖本设备的 BitFun 配置。",
     "cloudOverwriteDetail": "如果您不同意，将取消登录，不会做任何修改。",
     "agree": "同意并继续",
-    "disagree": "不同意"
+    "disagree": "不同意",
+    "logout": "退出登录",
+    "newSession": "新建会话",
+    "sendMessagePlaceholder": "向此设备发送消息..."
   },
   "remoteConnect": {
     "tabNgrok": "内网穿透",

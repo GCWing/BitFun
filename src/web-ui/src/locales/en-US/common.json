@@ -487,7 +487,10 @@
     "cloudOverwriteWarning": "Cloud settings detected for this account. Continuing will overwrite this device's local BitFun configuration with the cloud version.",
     "cloudOverwriteDetail": "If you disagree, you will be logged out and no changes will be made.",
     "agree": "Agree and Continue",
-    "disagree": "Disagree"
+    "disagree": "Disagree",
+    "logout": "Logout",
+    "newSession": "New Session",
+    "sendMessagePlaceholder": "Send message to this device..."
   },
   "remoteConnect": {
     "tabNgrok": "NAT Traversal",

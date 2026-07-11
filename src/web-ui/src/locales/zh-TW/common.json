@@ -487,7 +487,10 @@
     "cloudOverwriteWarning": "偵測到此帳號已有雲端設定。繼續登入將使用雲端設定覆蓋本裝置的 BitFun 設定。",
     "cloudOverwriteDetail": "如果您不同意，將取消登入，不會做任何修改。",
     "agree": "同意並繼續",
-    "disagree": "不同意"
+    "disagree": "不同意",
+    "logout": "登出",
+    "newSession": "新建對話",
+    "sendMessagePlaceholder": "向此裝置發送訊息..."
   },
   "remoteConnect": {
     "tabNgrok": "內網穿透",
