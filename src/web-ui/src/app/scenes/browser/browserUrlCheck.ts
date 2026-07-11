@@ -11,19 +11,3 @@ export function validateUrl(url: string): void {
     throw new Error(`Invalid URL: ${url}${e instanceof Error ? ` (${e.message})` : ''}`);
   }
 }
-
-export async function checkConnectivity(url: string): Promise<void> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 5000);
-  try {
-    await fetch(url, {
-      method: 'HEAD',
-      mode: 'no-cors',
-      signal: controller.signal,
-    });
-  } catch {
-    throw new Error(`Connection failed: ${new URL(url).hostname} is not reachable`);
-  } finally {
-    clearTimeout(timeout);
-  }
-}
