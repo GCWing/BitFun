@@ -41,7 +41,7 @@ struct ModelExchangeTraceRecord {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct ModelExchangeTraceOperation<'a> {
+pub(super) struct ModelExchangeTraceOperation<'a> {
     pub kind: &'a str,
     pub id: &'a str,
     pub trigger: Option<&'a str>,
@@ -345,7 +345,7 @@ impl ModelExchangeTraceSink for WorkspaceModelExchangeTraceSink {
     }
 }
 
-pub async fn prepare_model_exchange_trace(
+pub(super) async fn prepare_model_exchange_trace(
     context: &RoundContext,
     round_id: &str,
     ai_client: &AIClient,
@@ -365,7 +365,7 @@ pub async fn prepare_model_exchange_trace(
     .await
 }
 
-pub async fn prepare_model_exchange_trace_for_workspace(
+pub(super) async fn prepare_model_exchange_trace_for_workspace(
     session_id: &str,
     turn_id: &str,
     workspace: Option<&WorkspaceBinding>,

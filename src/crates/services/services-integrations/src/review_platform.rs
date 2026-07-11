@@ -4737,13 +4737,13 @@ fn github_review_decision(reviews: &Value) -> ReviewDecision {
         .map(String::as_str)
         .collect::<Vec<_>>();
 
-    if states.iter().any(|state| *state == "CHANGES_REQUESTED") {
+    if states.contains(&"CHANGES_REQUESTED") {
         return ReviewDecision::ChangesRequested;
     }
-    if states.iter().any(|state| *state == "APPROVED") {
+    if states.contains(&"APPROVED") {
         return ReviewDecision::Approved;
     }
-    if states.iter().any(|state| *state == "COMMENTED") {
+    if states.contains(&"COMMENTED") {
         return ReviewDecision::Commented;
     }
     ReviewDecision::Pending
@@ -5637,24 +5637,52 @@ mod tests {
     }
 
     #[test]
-    fn github_review_decision_keeps_active_change_request_from_any_reviewer() {
-        let reviews = json!([
-            {
-                "id": 1,
-                "state": "APPROVED",
-                "user": { "login": "alice" }
-            },
-            {
-                "id": 2,
-                "state": "CHANGES_REQUESTED",
-                "user": { "login": "bob" }
-            }
-        ]);
+    fn github_review_decision_preserves_state_precedence() {
+        let cases = [
+            (
+                "changes requested beats approved and commented",
+                ["APPROVED", "COMMENTED", "CHANGES_REQUESTED"].as_slice(),
+                ReviewDecision::ChangesRequested,
+            ),
+            (
+                "approved beats commented",
+                ["COMMENTED", "APPROVED"].as_slice(),
+                ReviewDecision::Approved,
+            ),
+            (
+                "commented beats unmatched pending state",
+                ["PENDING", "COMMENTED"].as_slice(),
+                ReviewDecision::Commented,
+            ),
+            (
+                "unmatched state stays pending",
+                ["PENDING"].as_slice(),
+                ReviewDecision::Pending,
+            ),
+            (
+                "no reviews stays pending",
+                [].as_slice(),
+                ReviewDecision::Pending,
+            ),
+        ];
 
-        assert_eq!(
-            github_review_decision(&reviews),
-            ReviewDecision::ChangesRequested
-        );
+        for (label, states, expected) in cases {
+            let reviews = Value::Array(
+                states
+                    .iter()
+                    .enumerate()
+                    .map(|(index, state)| {
+                        json!({
+                            "id": index,
+                            "state": state,
+                            "user": { "login": format!("reviewer-{index}") }
+                        })
+                    })
+                    .collect(),
+            );
+
+            assert_eq!(github_review_decision(&reviews), expected, "{label}");
+        }
     }
 
     #[test]

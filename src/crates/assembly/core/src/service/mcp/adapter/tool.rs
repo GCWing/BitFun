@@ -23,7 +23,7 @@ use serde_json::Value;
 use std::sync::Arc;
 
 /// MCP tool wrapper that adapts an MCP tool to BitFun's `Tool`.
-pub struct MCPToolWrapper {
+struct MCPToolWrapper {
     mcp_tool: MCPTool,
     connection: Arc<MCPConnection>,
     descriptor: McpDynamicToolDescriptor,

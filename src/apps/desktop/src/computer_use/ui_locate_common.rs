@@ -4,7 +4,7 @@ use bitfun_core::agentic::tools::computer_use_host::{UiElementLocateQuery, UiEle
 use bitfun_core::util::errors::{BitFunError, BitFunResult};
 use screenshots::display_info::DisplayInfo;
 
-pub fn validate_query(q: &UiElementLocateQuery) -> BitFunResult<()> {
+pub(super) fn validate_query(q: &UiElementLocateQuery) -> BitFunResult<()> {
     // node_idx alone is enough: it short-circuits BFS via the per-pid AX cache.
     if q.node_idx.is_some() {
         return Ok(());
@@ -38,10 +38,10 @@ pub fn validate_query(q: &UiElementLocateQuery) -> BitFunResult<()> {
     Ok(())
 }
 
-/// All AX text-bearing attributes considered by `matches_filters` / ranking.
+/// All AX text-bearing attributes considered by `matches_filters_attrs` / ranking.
 /// Pass `None` for anything the platform host can't read (e.g. AT-SPI lacks `help`).
 #[derive(Debug, Clone, Copy, Default)]
-pub struct NodeAttrs<'a> {
+pub(super) struct NodeAttrs<'a> {
     pub role: Option<&'a str>,
     pub subrole: Option<&'a str>,
     pub title: Option<&'a str>,
@@ -49,22 +49,6 @@ pub struct NodeAttrs<'a> {
     pub description: Option<&'a str>,
     pub identifier: Option<&'a str>,
     pub help: Option<&'a str>,
-}
-
-impl<'a> NodeAttrs<'a> {
-    /// Convenience for the legacy three-field path (role/title/ident).
-    pub fn legacy(
-        role: Option<&'a str>,
-        title: Option<&'a str>,
-        identifier: Option<&'a str>,
-    ) -> Self {
-        Self {
-            role,
-            title,
-            identifier,
-            ..Self::default()
-        }
-    }
 }
 
 fn global_xy_to_native_with_display(d: &DisplayInfo, gx: f64, gy: f64) -> BitFunResult<(u32, u32)> {
@@ -102,7 +86,7 @@ fn global_xy_to_native_with_display(d: &DisplayInfo, gx: f64, gy: f64) -> BitFun
     Ok((nx, ny))
 }
 
-pub fn global_to_native_center(gx: f64, gy: f64) -> BitFunResult<(u32, u32)> {
+fn global_to_native_center(gx: f64, gy: f64) -> BitFunResult<(u32, u32)> {
     let d = DisplayInfo::from_point(gx.round() as i32, gy.round() as i32)
         .map_err(|e| BitFunError::tool(format!("DisplayInfo::from_point: {}", e)))?;
     global_xy_to_native_with_display(&d, gx, gy)
@@ -147,7 +131,7 @@ fn contains_ci(hay: &str, needle: &str) -> bool {
 
 /// `role_substring` match with macOS AX aliases: chat apps often expose compose as **`AXTextField`**
 /// while models ask for `TextArea`; treat those as overlapping for locate/click_element.
-pub fn role_substring_matches_ax_role(ax_role: &str, want: &str) -> bool {
+fn role_substring_matches_ax_role(ax_role: &str, want: &str) -> bool {
     let w = want.trim();
     if w.is_empty() {
         return true;
@@ -208,7 +192,7 @@ fn text_contains_matches(n: &NodeAttrs<'_>, want: &str) -> bool {
 }
 
 /// OR semantics: element matches if **at least one** non-empty filter matches.
-pub fn matches_filters_any_attrs(query: &UiElementLocateQuery, n: &NodeAttrs<'_>) -> bool {
+fn matches_filters_any_attrs(query: &UiElementLocateQuery, n: &NodeAttrs<'_>) -> bool {
     let mut has_filter = false;
     let mut matched = false;
     if let Some(ref want) = query.role_substring {
@@ -251,7 +235,7 @@ pub fn matches_filters_any_attrs(query: &UiElementLocateQuery, n: &NodeAttrs<'_>
 }
 
 /// AND semantics (default): **every** non-empty filter must match the same element.
-pub fn matches_filters_all_attrs(query: &UiElementLocateQuery, n: &NodeAttrs<'_>) -> bool {
+fn matches_filters_all_attrs(query: &UiElementLocateQuery, n: &NodeAttrs<'_>) -> bool {
     if let Some(ref want) = query.role_substring {
         let w = want.trim();
         if !w.is_empty() && !role_or_subrole_matches(n.role, n.subrole, w) {
@@ -280,7 +264,7 @@ pub fn matches_filters_all_attrs(query: &UiElementLocateQuery, n: &NodeAttrs<'_>
 }
 
 /// Structured matcher (preferred, used by macOS host).
-pub fn matches_filters_attrs(query: &UiElementLocateQuery, n: &NodeAttrs<'_>) -> bool {
+pub(super) fn matches_filters_attrs(query: &UiElementLocateQuery, n: &NodeAttrs<'_>) -> bool {
     if combine_is_any(query) {
         matches_filters_any_attrs(query, n)
     } else {
@@ -288,41 +272,9 @@ pub fn matches_filters_attrs(query: &UiElementLocateQuery, n: &NodeAttrs<'_>) ->
     }
 }
 
-/// Legacy three-field shim — preserved so linux/windows hosts compile while they migrate.
-/// New code should construct `NodeAttrs` and call [`matches_filters_attrs`] directly.
-#[allow(dead_code)]
-pub fn matches_filters(
-    query: &UiElementLocateQuery,
-    role: Option<&str>,
-    title: Option<&str>,
-    ident: Option<&str>,
-) -> bool {
-    matches_filters_attrs(query, &NodeAttrs::legacy(role, title, ident))
-}
-
-#[allow(dead_code)]
-pub fn matches_filters_any(
-    query: &UiElementLocateQuery,
-    role: Option<&str>,
-    title: Option<&str>,
-    ident: Option<&str>,
-) -> bool {
-    matches_filters_any_attrs(query, &NodeAttrs::legacy(role, title, ident))
-}
-
-#[allow(dead_code)]
-pub fn matches_filters_all(
-    query: &UiElementLocateQuery,
-    role: Option<&str>,
-    title: Option<&str>,
-    ident: Option<&str>,
-) -> bool {
-    matches_filters_all_attrs(query, &NodeAttrs::legacy(role, title, ident))
-}
-
 #[allow(dead_code)] // Used by windows_ax_ui / linux_ax_ui (not compiled on macOS)
 #[allow(clippy::too_many_arguments)]
-pub fn ok_result(
+pub(super) fn ok_result(
     gx: f64,
     gy: f64,
     bounds_left: f64,
@@ -350,7 +302,7 @@ pub fn ok_result(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn ok_result_with_context(
+fn ok_result_with_context(
     gx: f64,
     gy: f64,
     bounds_left: f64,
@@ -405,7 +357,7 @@ pub fn ok_result_with_context(
 /// `matched_via`. New code should prefer this entry point.
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 #[allow(clippy::too_many_arguments)]
-pub fn ok_result_with_context_full(
+pub(super) fn ok_result_with_context_full(
     gx: f64,
     gy: f64,
     bounds_left: f64,
@@ -590,7 +542,7 @@ mod tests {
 
 /// Whether an element's global bounds fall within any visible display.
 #[allow(dead_code)]
-pub fn is_element_on_screen(gx: f64, gy: f64, width: f64, height: f64) -> bool {
+pub(super) fn is_element_on_screen(gx: f64, gy: f64, width: f64, height: f64) -> bool {
     // Element must have reasonable size (not a giant container)
     if width > 3000.0 || height > 2000.0 {
         return false;

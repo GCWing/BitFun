@@ -46,10 +46,6 @@ use windows::Win32::UI::Accessibility::{
 };
 use windows::Win32::UI::WindowsAndMessaging::GetForegroundWindow;
 
-/// Default depth cap; mirrors cua-driver-rs.
-pub const DEFAULT_MAX_DEPTH: usize = 25;
-/// Default total-element cap; mirrors cua-driver-rs.
-pub const DEFAULT_MAX_TOTAL_ELEMENTS: usize = 5000;
 /// Transient-provider retry count for `BuildUpdatedCache`.
 const BUILD_CACHE_MAX_ATTEMPTS: u32 = 3;
 /// Backoff between `BuildUpdatedCache` retries (milliseconds).
@@ -64,7 +60,7 @@ const BUILD_CACHE_BACKOFF_MS: u64 = 40;
 /// `ElementCache` (cua parity); until then the pointers simply outlive the
 /// snapshot, which is acceptable for a not-yet-wired code path.
 #[derive(Clone)]
-pub struct UiaNode {
+pub(super) struct UiaNode {
     /// Dense index assigned only to actionable elements (`[N]` in the tree
     /// text). `None` for non-actionable content-only nodes.
     pub element_index: Option<usize>,
@@ -99,7 +95,7 @@ impl UiaNode {
     /// nodes), whereas [`UiaNode::element_index`] only numbers actionable
     /// elements. The integration wiring is responsible for the dense
     /// re-indexing when `get_app_state` is connected on Windows.
-    pub fn to_ax_node(&self, idx: u32, parent_idx: Option<u32>) -> AxNode {
+    fn to_ax_node(&self, idx: u32, parent_idx: Option<u32>) -> AxNode {
         let frame_global = self
             .rect
             .map(|(l, t, r, b)| (l as f64, t as f64, (r - l) as f64, (b - t) as f64));
@@ -419,40 +415,6 @@ fn control_type_name(id: i32) -> String {
 
 // ── Tree walk ───────────────────────────────────────────────────────────────
 
-/// Walk the UIA tree for the window with the given HWND, returning the indexed
-/// node vector (no rendered tree text). Caps truncate both the walk and the
-/// rendered markdown identically.
-pub fn walk_tree_bounded(
-    hwnd: u64,
-    max_elements: usize,
-    max_depth: usize,
-) -> BitFunResult<Vec<UiaNode>> {
-    unsafe {
-        walk_tree_full(
-            windows::Win32::Foundation::HWND(hwnd as *mut _),
-            max_elements,
-            max_depth,
-        )
-    }
-    .map(|(_tree_text, nodes)| nodes)
-}
-
-/// Walk the foreground window's UIA tree and return the rendered tree text plus
-/// the indexed node vector. Intended for integration with BitFun's
-/// `get_app_state` path.
-pub fn walk_uia_tree(
-    max_elements: usize,
-    max_depth: usize,
-) -> BitFunResult<(String, Vec<UiaNode>)> {
-    let hwnd = unsafe { GetForegroundWindow() };
-    if hwnd.is_invalid() {
-        return Err(BitFunError::tool(
-            "No foreground window (GetForegroundWindow returned null).".to_string(),
-        ));
-    }
-    unsafe { walk_tree_full(hwnd, max_elements, max_depth) }
-}
-
 /// Core walk: COM init → cache request → `ElementFromHandle` →
 /// `BuildUpdatedCache` (retried) → recursive cached traversal → render.
 unsafe fn walk_tree_full(
@@ -721,7 +683,7 @@ fn center_result_from_node(
 /// whole subtree, then in-process cached reads). `node_idx` is now supported
 /// because the cached walk produces a real indexed tree (previously
 /// Windows-only-`text_contains`/`title_contains`+`role_substring`).
-pub fn locate_ui_element_center(
+pub(super) fn locate_ui_element_center(
     query: &UiElementLocateQuery,
 ) -> BitFunResult<UiElementLocateResult> {
     ui_locate_common::validate_query(query)?;
@@ -802,7 +764,7 @@ pub fn locate_ui_element_center(
 /// Single-element hit-test: only a handful of COM calls, so it stays on the
 /// `CurrentXxx` accessors (caching does not help one element). Signature is
 /// intentionally unchanged.
-pub fn accessibility_hit_at_global_point(
+pub(super) fn accessibility_hit_at_global_point(
     gx: f64,
     gy: f64,
 ) -> BitFunResult<Option<OcrAccessibilityHit>> {
@@ -872,22 +834,9 @@ pub fn accessibility_hit_at_global_point(
 
 // ── AppStateSnapshot builder ────────────────────────────────────────────────
 
-/// Build a full [`AppStateSnapshot`] from the foreground window's UIA tree.
-///
-/// This is the Windows equivalent of macOS `dump_app_ax` — it walks the
-/// UIA control-view tree, converts nodes to [`AxNode`] with dense indexing,
-/// computes a SHA1 digest, and returns the snapshot.
-pub fn get_app_state_snapshot(
-    max_depth: u32,
-    focus_window_only: bool,
-) -> BitFunResult<AppStateSnapshot> {
-    let hwnd = unsafe { GetForegroundWindow() };
-    get_app_state_snapshot_for_window(hwnd, max_depth, focus_window_only)
-}
-
-/// Same as [`get_app_state_snapshot`] but targets an explicit top-level HWND
-/// (used when the caller resolved an `AppSelector` to a pid/window).
-pub fn get_app_state_snapshot_for_window(
+/// Build a full [`AppStateSnapshot`] for an explicit top-level HWND selected by
+/// the caller.
+pub(super) fn get_app_state_snapshot_for_window(
     hwnd: windows::Win32::Foundation::HWND,
     max_depth: u32,
     focus_window_only: bool,
@@ -1045,13 +994,13 @@ fn window_pid_for(hwnd: windows::Win32::Foundation::HWND) -> Option<u32> {
 /// Raw handle of the current foreground window as `isize` (0 when none). Used
 /// by the desktop host to capture a screenshot of the same window the AX
 /// snapshot was taken from.
-pub fn foreground_window_handle() -> isize {
+pub(super) fn foreground_window_handle() -> isize {
     let hwnd = unsafe { GetForegroundWindow() };
     hwnd.0 as isize
 }
 
 /// Owning process id of the current foreground window, if any.
-pub fn foreground_window_pid() -> Option<u32> {
+pub(super) fn foreground_window_pid() -> Option<u32> {
     let hwnd = unsafe { GetForegroundWindow() };
     window_pid_for(hwnd)
 }

@@ -10,7 +10,7 @@
 //!      whole window (`GetWindowRect`), not just the client area, so non-client
 //!      chrome (title bar, VCL button strips) is captured.
 //!   2. **WGC (Windows.Graphics.Capture)** — occlusion-immune UWP /
-//!      DirectComposition capture via [`screenshot_window_via_wgc`].
+//!      DirectComposition capture through the dedicated WGC module.
 //!   3. **Screen-region `BitBlt` fallback** — when WGC is unavailable or fails,
 //!      `BitBlt` the matching pixels off the desktop DC. Works when the target is
 //!      on-screen and not occluded.
@@ -24,7 +24,7 @@
 //!
 //! ## Occlusion flag
 //!
-//! [`screenshot_window_bytes`] returns `(png_bytes, occluded_flag)` — the flag
+//! [`screenshot_window_capture`] reports an `occluded` flag — the flag
 //! is `true` when the capture fell through to the screen-region `BitBlt` path
 //! AND another window was visibly covering the target at sample time (see
 //! [`target_is_obscured`]). In that case the bitmap reflects the *covering*
@@ -49,8 +49,7 @@ use windows::Win32::Graphics::Gdi::{
 };
 use windows::Win32::Storage::Xps::{PrintWindow, PRINT_WINDOW_FLAGS};
 use windows::Win32::UI::WindowsAndMessaging::{
-    GetAncestor, GetSystemMetrics, GetWindowRect, IsIconic, WindowFromPoint, GA_ROOT, SM_CXSCREEN,
-    SM_CYSCREEN,
+    GetAncestor, GetWindowRect, IsIconic, WindowFromPoint, GA_ROOT,
 };
 
 /// `PW_RENDERFULLCONTENT` (0x2): render window contents even when occluded or
@@ -98,7 +97,7 @@ fn encode_bgra_to_png(bgra: &[u8], width: u32, height: u32) -> BitFunResult<Vec<
 /// alpha ignored — that's the all-zero pattern DirectComposition leaves behind).
 /// The threshold is intentionally aggressive so legitimate dark UI does not trip
 /// the fallback.
-pub fn is_mostly_black_bgra(data: &[u8], width: u32, height: u32) -> bool {
+fn is_mostly_black_bgra(data: &[u8], width: u32, height: u32) -> bool {
     if data.len() < 16 {
         return true;
     }
@@ -135,7 +134,7 @@ pub fn is_mostly_black_bgra(data: &[u8], width: u32, height: u32) -> bool {
 /// positives from a single corner covered by a non-opaque layered overlay (e.g.
 /// an agent cursor). Callers that surface a screen-region `BitBlt` result should
 /// use this to warn that the bitmap may show the *covering* window's pixels.
-pub fn target_is_obscured(hwnd: HWND) -> bool {
+fn target_is_obscured(hwnd: HWND) -> bool {
     if hwnd.is_invalid() {
         return false;
     }
@@ -179,7 +178,7 @@ pub fn target_is_obscured(hwnd: HWND) -> bool {
 /// and `PrintWindow` paints nothing — the result is a degenerate all-black
 /// ~28x160 PNG that an agent can't tell apart from a real blank screen.
 /// Guarding here lets callers restore the window before retrying.
-pub fn is_iconic(hwnd: HWND) -> bool {
+fn is_iconic(hwnd: HWND) -> bool {
     if hwnd.is_invalid() {
         return false;
     }
@@ -191,7 +190,7 @@ pub fn is_iconic(hwnd: HWND) -> bool {
 ///
 /// WGC is the only API that returns a UWP target's own composited pixels even
 /// when occluded by another window.
-pub fn screenshot_window_via_wgc(hwnd: HWND) -> BitFunResult<(Vec<u8>, u32, u32)> {
+fn screenshot_window_via_wgc(hwnd: HWND) -> BitFunResult<(Vec<u8>, u32, u32)> {
     crate::computer_use::windows_wgc_capture::capture_window_bgra(hwnd)
 }
 
@@ -280,22 +279,13 @@ unsafe fn screenshot_via_screen_region(hwnd: HWND) -> BitFunResult<(Vec<u8>, i32
 /// dimensions. Together they let the desktop host build a `PointerMap` that
 /// converts an image pixel the vision model picked back into the screen
 /// coordinate a background click should target.
-pub struct WindowCapture {
+pub(super) struct WindowCapture {
     pub png: Vec<u8>,
     pub occluded: bool,
     pub origin_x: i32,
     pub origin_y: i32,
     pub width: u32,
     pub height: u32,
-}
-
-/// Capture a window by HWND, returning `(png_bytes, occluded_flag)`.
-///
-/// Thin wrapper over [`screenshot_window_capture`] that drops the geometry —
-/// kept for callers that only need the encoded bitmap.
-pub fn screenshot_window_bytes(hwnd: HWND) -> BitFunResult<(Vec<u8>, bool)> {
-    let cap = screenshot_window_capture(hwnd)?;
-    Ok((cap.png, cap.occluded))
 }
 
 /// Capture a window by HWND, returning the encoded PNG plus the screen-space
@@ -313,7 +303,7 @@ pub fn screenshot_window_bytes(hwnd: HWND) -> BitFunResult<(Vec<u8>, bool)> {
 /// Minimized windows are rejected up front via [`is_iconic`]. The DWM
 /// extended-frame bounds are used to crop the invisible drop-shadow margin; the
 /// returned `origin_*` account for that crop so coordinate mapping stays exact.
-pub fn screenshot_window_capture(hwnd: HWND) -> BitFunResult<WindowCapture> {
+pub(super) fn screenshot_window_capture(hwnd: HWND) -> BitFunResult<WindowCapture> {
     unsafe { screenshot_window_bytes_unsafe(hwnd) }
 }
 
@@ -526,63 +516,4 @@ fn crop_to_dwm_frame(
             .copy_from_slice(&pixels[src_row..src_row + stride_crop]);
     }
     (cropped, crop_w, crop_h, off_x, off_y)
-}
-
-/// Capture the primary display (full screen), returning raw PNG bytes.
-///
-/// Uses a desktop-DC `BitBlt` into a compatible memory bitmap, then reads the
-/// pixels back via `GetDIBits` and encodes to PNG.
-pub fn screenshot_display_bytes() -> BitFunResult<Vec<u8>> {
-    unsafe {
-        // Per-Monitor V2 DPI awareness: GetSystemMetrics returns PHYSICAL pixels
-        // and BitBlt captures in the same unit — use the metrics as-is.
-        let w = GetSystemMetrics(SM_CXSCREEN);
-        let h = GetSystemMetrics(SM_CYSCREEN);
-        if w <= 0 || h <= 0 {
-            return Err(BitFunError::service("Could not get screen metrics"));
-        }
-        let screen_dc = GetDC(None);
-        let mem_dc = CreateCompatibleDC(Some(screen_dc));
-        let bitmap = CreateCompatibleBitmap(screen_dc, w, h);
-        let old_bitmap = SelectObject(mem_dc, bitmap.into());
-        let blt_ok = BitBlt(mem_dc, 0, 0, w, h, Some(screen_dc), 0, 0, SRCCOPY);
-        let mut bmi = BITMAPINFO {
-            bmiHeader: BITMAPINFOHEADER {
-                biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
-                biWidth: w,
-                biHeight: -h, // top-down
-                biPlanes: 1,
-                biBitCount: 32,
-                biCompression: BI_RGB.0,
-                biSizeImage: (w * h * 4) as u32,
-                ..Default::default()
-            },
-            bmiColors: [RGBQUAD::default(); 1],
-        };
-        let mut pixels = vec![0u8; (w * h * 4) as usize];
-        let ok = GetDIBits(
-            mem_dc,
-            bitmap,
-            0,
-            h as u32,
-            Some(pixels.as_mut_ptr() as *mut _),
-            &mut bmi,
-            DIB_RGB_COLORS,
-        );
-        SelectObject(mem_dc, old_bitmap);
-        let _ = DeleteObject(bitmap.into());
-        let _ = DeleteDC(mem_dc);
-        ReleaseDC(None, screen_dc);
-        if blt_ok.is_err() {
-            return Err(BitFunError::service(format!(
-                "screenshot_display_bytes: BitBlt failed: {blt_ok:?}"
-            )));
-        }
-        if ok == 0 {
-            return Err(BitFunError::service(
-                "screenshot_display_bytes: GetDIBits returned 0",
-            ));
-        }
-        encode_bgra_to_png(&pixels, w as u32, h as u32)
-    }
 }

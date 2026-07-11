@@ -21,19 +21,17 @@ use crate::ui::theme::{StyleKind, Theme};
 
 /// An MCP server item for display in the selector
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
-pub struct McpItem {
+pub(crate) struct McpItem {
     pub id: String,
     pub name: String,
     pub server_type: String,
     pub status: String,
-    pub enabled: bool,
     pub tool_count: usize,
 }
 
 /// Action returned from the MCP selector
 #[derive(Debug, Clone)]
-pub enum McpAction {
+pub(crate) enum McpAction {
     /// Toggle (start/stop) the selected server
     Toggle(McpItem),
     /// No action (dismiss)
@@ -41,19 +39,19 @@ pub enum McpAction {
 }
 
 /// MCP selector popup state
-pub struct McpSelectorState {
+pub(super) struct McpSelectorState {
     items: Vec<McpItem>,
     list_state: ListState,
     visible: bool,
     /// Which server is currently being toggled (loading indicator)
-    pub loading_id: Option<String>,
+    pub(super) loading_id: Option<String>,
     /// Server ID pending delete confirmation (double-tap 'd' to confirm)
-    pub confirm_delete_id: Option<String>,
+    confirm_delete_id: Option<String>,
     last_area: Option<Rect>,
 }
 
 impl McpSelectorState {
-    pub fn new() -> Self {
+    pub(super) fn new() -> Self {
         Self {
             items: Vec::new(),
             list_state: ListState::default(),
@@ -65,7 +63,7 @@ impl McpSelectorState {
     }
 
     /// Show the MCP selector with given server list
-    pub fn show(&mut self, items: Vec<McpItem>) {
+    pub(super) fn show(&mut self, items: Vec<McpItem>) {
         self.items = items;
         if !self.items.is_empty() {
             self.list_state.select(Some(0));
@@ -77,7 +75,7 @@ impl McpSelectorState {
     }
 
     /// Update items in-place (after toggle completes) without closing
-    pub fn update_items(&mut self, items: Vec<McpItem>) {
+    pub(super) fn update_items(&mut self, items: Vec<McpItem>) {
         let selected_idx = self.list_state.selected();
         self.items = items;
         // Preserve selection if possible
@@ -89,7 +87,7 @@ impl McpSelectorState {
         }
     }
 
-    pub fn hide(&mut self) {
+    pub(super) fn hide(&mut self) {
         self.visible = false;
         // Note: we don't clear items here to support back navigation
         self.loading_id = None;
@@ -98,32 +96,32 @@ impl McpSelectorState {
     }
 
     /// Reshow the MCP selector (for back navigation)
-    pub fn reshow(&mut self) {
+    pub(super) fn reshow(&mut self) {
         if !self.items.is_empty() {
             self.visible = true;
         }
     }
 
     /// Enter confirm-delete mode for a server
-    pub fn start_confirm_delete(&mut self, server_id: String) {
+    pub(super) fn start_confirm_delete(&mut self, server_id: String) {
         self.confirm_delete_id = Some(server_id);
     }
 
     /// Cancel confirm-delete mode
-    pub fn cancel_confirm_delete(&mut self) {
+    pub(super) fn cancel_confirm_delete(&mut self) {
         self.confirm_delete_id = None;
     }
 
     /// Check if a server is in confirm-delete mode
-    pub fn is_confirm_delete(&self, server_id: &str) -> bool {
+    pub(super) fn is_confirm_delete(&self, server_id: &str) -> bool {
         self.confirm_delete_id.as_deref() == Some(server_id)
     }
 
-    pub fn is_visible(&self) -> bool {
+    pub(super) fn is_visible(&self) -> bool {
         self.visible
     }
 
-    pub fn move_up(&mut self) {
+    pub(super) fn move_up(&mut self) {
         if !self.visible || self.items.is_empty() {
             return;
         }
@@ -133,7 +131,7 @@ impl McpSelectorState {
         self.list_state.select(Some(next));
     }
 
-    pub fn move_down(&mut self) {
+    pub(super) fn move_down(&mut self) {
         if !self.visible || self.items.is_empty() {
             return;
         }
@@ -143,7 +141,7 @@ impl McpSelectorState {
     }
 
     /// Get the selected MCP item (for toggle action)
-    pub fn confirm_selection(&self) -> Option<McpItem> {
+    pub(super) fn confirm_selection(&self) -> Option<McpItem> {
         if !self.visible {
             return None;
         }
@@ -152,7 +150,7 @@ impl McpSelectorState {
     }
 
     /// Render the MCP selector popup as an overlay
-    pub fn render(&mut self, frame: &mut Frame, area: Rect, theme: &Theme) {
+    pub(super) fn render(&mut self, frame: &mut Frame, area: Rect, theme: &Theme) {
         if !self.visible {
             self.last_area = None;
             return;
@@ -304,7 +302,7 @@ impl McpSelectorState {
     }
 
     /// Handle mouse events
-    pub fn handle_mouse_event(&mut self, mouse: &MouseEvent) -> McpAction {
+    pub(super) fn handle_mouse_event(&mut self, mouse: &MouseEvent) -> McpAction {
         if !self.visible {
             return McpAction::None;
         }
@@ -351,7 +349,7 @@ impl McpSelectorState {
         }
     }
 
-    pub fn captures_mouse(&self, _mouse: &MouseEvent) -> bool {
+    pub(super) fn captures_mouse(&self, _mouse: &MouseEvent) -> bool {
         self.visible
     }
 

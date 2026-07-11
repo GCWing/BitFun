@@ -15,7 +15,7 @@ use crate::ui::theme::{StyleKind, Theme};
 
 /// A model item for display in the selector
 #[derive(Debug, Clone)]
-pub struct ModelItem {
+pub(crate) struct ModelItem {
     pub id: String,
     pub name: String,
     pub provider: String,
@@ -23,7 +23,7 @@ pub struct ModelItem {
 }
 
 /// Model selector popup state
-pub struct ModelSelectorState {
+pub(super) struct ModelSelectorState {
     items: Vec<ModelItem>,
     list_state: ListState,
     visible: bool,
@@ -33,7 +33,7 @@ pub struct ModelSelectorState {
 }
 
 impl ModelSelectorState {
-    pub fn new() -> Self {
+    pub(super) fn new() -> Self {
         Self {
             items: Vec::new(),
             list_state: ListState::default(),
@@ -44,7 +44,7 @@ impl ModelSelectorState {
     }
 
     /// Show the model selector with given model list
-    pub fn show(&mut self, models: Vec<ModelItem>, current_model_id: Option<String>) {
+    pub(super) fn show(&mut self, models: Vec<ModelItem>, current_model_id: Option<String>) {
         if models.is_empty() {
             return;
         }
@@ -62,24 +62,24 @@ impl ModelSelectorState {
     }
 
     /// Hide the model selector
-    pub fn hide(&mut self) {
+    pub(super) fn hide(&mut self) {
         self.visible = false;
         // Note: we don't clear items here to support back navigation
         self.last_area = None;
     }
 
     /// Reshow the model selector (for back navigation)
-    pub fn reshow(&mut self) {
+    pub(super) fn reshow(&mut self) {
         if !self.items.is_empty() {
             self.visible = true;
         }
     }
 
-    pub fn is_visible(&self) -> bool {
+    pub(super) fn is_visible(&self) -> bool {
         self.visible
     }
 
-    pub fn move_up(&mut self) {
+    pub(super) fn move_up(&mut self) {
         if !self.visible || self.items.is_empty() {
             return;
         }
@@ -89,7 +89,7 @@ impl ModelSelectorState {
         self.list_state.select(Some(next));
     }
 
-    pub fn move_down(&mut self) {
+    pub(super) fn move_down(&mut self) {
         if !self.visible || self.items.is_empty() {
             return;
         }
@@ -99,7 +99,7 @@ impl ModelSelectorState {
     }
 
     /// Get the selected model item (returns clone of ModelItem)
-    pub fn confirm_selection(&self) -> Option<ModelItem> {
+    pub(super) fn confirm_selection(&self) -> Option<ModelItem> {
         if !self.visible {
             return None;
         }
@@ -108,7 +108,7 @@ impl ModelSelectorState {
     }
 
     /// Render the model selector popup as an overlay
-    pub fn render(&mut self, frame: &mut Frame, area: Rect, theme: &Theme) {
+    pub(super) fn render(&mut self, frame: &mut Frame, area: Rect, theme: &Theme) {
         if !self.visible || self.items.is_empty() {
             self.last_area = None;
             return;
@@ -205,7 +205,7 @@ impl ModelSelectorState {
 
     /// Handle mouse events in the model selector
     /// Returns Some(model_id) if a model was clicked/selected, None otherwise
-    pub fn handle_mouse_event(&mut self, mouse: &MouseEvent) -> Option<ModelItem> {
+    pub(super) fn handle_mouse_event(&mut self, mouse: &MouseEvent) -> Option<ModelItem> {
         if !self.visible {
             return None;
         }
@@ -252,7 +252,7 @@ impl ModelSelectorState {
     }
 
     /// Check if a mouse event is within the popup area (used to prevent event passthrough)
-    pub fn captures_mouse(&self, _mouse: &MouseEvent) -> bool {
+    pub(super) fn captures_mouse(&self, _mouse: &MouseEvent) -> bool {
         if !self.visible {
             return false;
         }

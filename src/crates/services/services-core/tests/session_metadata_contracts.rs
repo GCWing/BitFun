@@ -310,18 +310,28 @@ fn saved_turn_refresh_rejects_gaps_and_session_mismatches() {
 
 #[test]
 fn index_snapshot_keeps_visible_sessions_but_counts_all_metadata_files() {
-    let mut visible = metadata("visible");
-    visible.last_active_at = 1_000;
+    let mut first_tied = metadata("first-tied");
+    first_tied.last_active_at = 1_000;
+    let mut second_tied = metadata("second-tied");
+    second_tied.last_active_at = 1_000;
+    let mut older = metadata("older");
+    older.last_active_at = 500;
     let mut internal = metadata("internal");
     internal.session_kind = SessionKind::Subagent;
 
-    let (index, visible_sessions) = build_session_index_snapshot(vec![internal, visible], 99);
+    let (index, visible_sessions) =
+        build_session_index_snapshot(vec![first_tied, older, internal, second_tied], 99);
 
     assert_eq!(index.updated_at, 99);
-    assert_eq!(index.metadata_file_count, 2);
-    assert_eq!(index.sessions.len(), 1);
-    assert_eq!(index.sessions[0].session_id, "visible");
-    assert_eq!(visible_sessions.len(), 1);
+    assert_eq!(index.metadata_file_count, 4);
+    assert_eq!(index.sessions.len(), 3);
+    assert_eq!(
+        visible_sessions
+            .iter()
+            .map(|metadata| metadata.session_id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["first-tied", "second-tied", "older"]
+    );
 }
 
 #[test]

@@ -1,13 +1,13 @@
 /// CLI slash command definitions
 
 #[derive(Debug, Clone, Copy)]
-pub struct CommandSpec {
+pub(crate) struct CommandSpec {
     pub name: &'static str,
     pub description: &'static str,
 }
 
 /// All commands (available in chat mode)
-pub const COMMAND_SPECS: &[CommandSpec] = &[
+pub(crate) const COMMAND_SPECS: &[CommandSpec] = &[
     CommandSpec {
         name: "/help",
         description: "Show help",
@@ -79,7 +79,7 @@ pub const COMMAND_SPECS: &[CommandSpec] = &[
 ];
 
 /// Commands available on the startup page
-pub const STARTUP_COMMAND_SPECS: &[CommandSpec] = &[
+pub(crate) const STARTUP_COMMAND_SPECS: &[CommandSpec] = &[
     CommandSpec {
         name: "/help",
         description: "Show keyboard shortcuts",
@@ -134,7 +134,7 @@ pub const STARTUP_COMMAND_SPECS: &[CommandSpec] = &[
     },
 ];
 
-pub fn match_substring_in(
+pub(crate) fn match_substring_in(
     query: &str,
     commands: &'static [CommandSpec],
 ) -> Vec<&'static CommandSpec> {

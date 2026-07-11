@@ -10,7 +10,7 @@ const REVIEW_PLATFORM_TIMEOUT_SECS: u64 = 25;
 const HTTP_ERROR_PREVIEW_CHARS: usize = 280;
 
 #[derive(Debug, Error)]
-pub enum ReviewHttpError {
+pub(crate) enum ReviewHttpError {
     #[error("Failed to create HTTP client: {0}")]
     BuildClient(String),
     #[error("Network error: {0}")]
@@ -24,12 +24,12 @@ pub enum ReviewHttpError {
 }
 
 #[derive(Clone)]
-pub struct ReviewHttpClient {
+pub(crate) struct ReviewHttpClient {
     inner: reqwest::Client,
 }
 
 impl ReviewHttpClient {
-    pub fn new_review_platform() -> Result<Self, ReviewHttpError> {
+    pub(crate) fn new_review_platform() -> Result<Self, ReviewHttpError> {
         let inner = reqwest::Client::builder()
             .use_native_tls()
             .timeout(Duration::from_secs(REVIEW_PLATFORM_TIMEOUT_SECS))
@@ -39,59 +39,59 @@ impl ReviewHttpClient {
         Ok(Self { inner })
     }
 
-    pub fn get(&self, url: &str) -> ReviewHttpRequest {
+    pub(crate) fn get(&self, url: &str) -> ReviewHttpRequest {
         ReviewHttpRequest {
             inner: self.inner.get(url),
         }
     }
 
-    pub fn post(&self, url: &str) -> ReviewHttpRequest {
+    pub(crate) fn post(&self, url: &str) -> ReviewHttpRequest {
         ReviewHttpRequest {
             inner: self.inner.post(url),
         }
     }
 
-    pub fn put(&self, url: &str) -> ReviewHttpRequest {
+    pub(crate) fn put(&self, url: &str) -> ReviewHttpRequest {
         ReviewHttpRequest {
             inner: self.inner.put(url),
         }
     }
 }
 
-pub struct ReviewHttpRequest {
+pub(crate) struct ReviewHttpRequest {
     inner: reqwest::RequestBuilder,
 }
 
 impl ReviewHttpRequest {
-    pub fn header(mut self, name: &str, value: impl ToString) -> Self {
+    pub(crate) fn header(mut self, name: &str, value: impl ToString) -> Self {
         self.inner = self.inner.header(name, value.to_string());
         self
     }
 
-    pub fn query<T: Serialize + ?Sized>(mut self, query: &T) -> Self {
+    pub(crate) fn query<T: Serialize + ?Sized>(mut self, query: &T) -> Self {
         self.inner = self.inner.query(query);
         self
     }
 
-    pub fn json<T: Serialize + ?Sized>(mut self, body: &T) -> Self {
+    pub(crate) fn json<T: Serialize + ?Sized>(mut self, body: &T) -> Self {
         self.inner = self.inner.json(body);
         self
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct ReviewJsonResponse {
+pub(crate) struct ReviewJsonResponse {
     pub value: Value,
     pub headers: ReviewHttpHeaders,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct ReviewHttpHeaders {
+pub(crate) struct ReviewHttpHeaders {
     values: Vec<(String, String)>,
 }
 
 impl ReviewHttpHeaders {
-    pub fn get(&self, name: &str) -> Option<&str> {
+    pub(crate) fn get(&self, name: &str) -> Option<&str> {
         self.values
             .iter()
             .find(|(key, _)| key.eq_ignore_ascii_case(name))
@@ -113,13 +113,13 @@ impl ReviewHttpHeaders {
     }
 }
 
-pub async fn send_json(request: ReviewHttpRequest) -> Result<Value, ReviewHttpError> {
+pub(crate) async fn send_json(request: ReviewHttpRequest) -> Result<Value, ReviewHttpError> {
     send_json_response(request)
         .await
         .map(|response| response.value)
 }
 
-pub async fn send_json_response(
+pub(crate) async fn send_json_response(
     request: ReviewHttpRequest,
 ) -> Result<ReviewJsonResponse, ReviewHttpError> {
     let response = request
@@ -147,7 +147,7 @@ pub async fn send_json_response(
     Ok(ReviewJsonResponse { value, headers })
 }
 
-pub async fn send_json_response_bounded(
+pub(crate) async fn send_json_response_bounded(
     request: ReviewHttpRequest,
     max_bytes: usize,
 ) -> Result<ReviewJsonResponse, ReviewHttpError> {
@@ -205,7 +205,7 @@ fn append_bounded_chunk(
     Ok(())
 }
 
-pub async fn send_text(request: ReviewHttpRequest) -> Result<String, ReviewHttpError> {
+pub(crate) async fn send_text(request: ReviewHttpRequest) -> Result<String, ReviewHttpError> {
     let response = request
         .inner
         .send()

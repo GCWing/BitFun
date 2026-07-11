@@ -18,7 +18,7 @@ use crate::ui::theme::{StyleKind, Theme};
 
 /// A preset provider template
 #[derive(Debug, Clone)]
-pub struct ProviderTemplate {
+pub(crate) struct ProviderTemplate {
     pub name: String,
     pub base_url: String,
     /// "openai" or "anthropic"
@@ -29,7 +29,7 @@ pub struct ProviderTemplate {
 
 /// The result of selecting from the provider list
 #[derive(Debug, Clone)]
-pub enum ProviderSelection {
+pub(crate) enum ProviderSelection {
     /// User selected a preset provider
     Provider(ProviderTemplate),
     /// User selected "Add Custom model"
@@ -37,7 +37,7 @@ pub enum ProviderSelection {
 }
 
 /// Build built-in provider templates used by CLI model configuration.
-pub fn builtin_provider_templates() -> Vec<ProviderTemplate> {
+fn builtin_provider_templates() -> Vec<ProviderTemplate> {
     vec![
         ProviderTemplate {
             name: "ZhiPu AI".into(),
@@ -120,7 +120,7 @@ enum DisplayRow {
 }
 
 /// Provider selector popup state
-pub struct ProviderSelectorState {
+pub(super) struct ProviderSelectorState {
     visible: bool,
     templates: Vec<ProviderTemplate>,
     /// Flattened rows for rendering
@@ -138,7 +138,7 @@ pub struct ProviderSelectorState {
 }
 
 impl ProviderSelectorState {
-    pub fn new() -> Self {
+    pub(super) fn new() -> Self {
         Self {
             visible: false,
             templates: Vec::new(),
@@ -151,7 +151,7 @@ impl ProviderSelectorState {
         }
     }
 
-    pub fn show(&mut self) {
+    pub(super) fn show(&mut self) {
         self.templates = builtin_provider_templates();
         self.selected = 0;
         self.scroll_offset = 0;
@@ -159,7 +159,7 @@ impl ProviderSelectorState {
         self.build_rows();
     }
 
-    pub fn hide(&mut self) {
+    pub(super) fn hide(&mut self) {
         self.visible = false;
         self.templates.clear();
         self.rows.clear();
@@ -167,12 +167,12 @@ impl ProviderSelectorState {
         self.last_area = None;
     }
 
-    pub fn is_visible(&self) -> bool {
+    pub(super) fn is_visible(&self) -> bool {
         self.visible
     }
 
     /// Reshow the provider selector (for back navigation)
-    pub fn reshow(&mut self) {
+    pub(super) fn reshow(&mut self) {
         if !self.templates.is_empty() || !builtin_provider_templates().is_empty() {
             self.templates = builtin_provider_templates();
             self.build_rows();
@@ -244,7 +244,7 @@ impl ProviderSelectorState {
 
     // ── Key handling ──
 
-    pub fn handle_key_event(&mut self, key: KeyEvent) -> Option<ProviderSelection> {
+    pub(super) fn handle_key_event(&mut self, key: KeyEvent) -> Option<ProviderSelection> {
         if !self.visible {
             return None;
         }
@@ -292,7 +292,7 @@ impl ProviderSelectorState {
             .position(|&ri| ri == row_index)
     }
 
-    pub fn handle_mouse_event(&mut self, mouse: &MouseEvent) -> Option<ProviderSelection> {
+    pub(super) fn handle_mouse_event(&mut self, mouse: &MouseEvent) -> Option<ProviderSelection> {
         if !self.visible {
             return None;
         }
@@ -342,13 +342,13 @@ impl ProviderSelectorState {
         }
     }
 
-    pub fn captures_mouse(&self, _mouse: &MouseEvent) -> bool {
+    pub(super) fn captures_mouse(&self, _mouse: &MouseEvent) -> bool {
         self.visible
     }
 
     // ── Rendering ──
 
-    pub fn render(&mut self, frame: &mut Frame, area: Rect, theme: &Theme) {
+    pub(super) fn render(&mut self, frame: &mut Frame, area: Rect, theme: &Theme) {
         if !self.visible {
             self.last_area = None;
             return;

@@ -81,7 +81,7 @@ const RESIZE_REDRAW_DEBOUNCE_MS: u64 = 75;
 
 /// Chat mode exit reason
 #[derive(Debug, Clone, PartialEq)]
-pub enum ChatExitReason {
+pub(crate) enum ChatExitReason {
     /// User exits program
     Quit,
     /// Switch to a different session
@@ -118,7 +118,7 @@ struct NonKeyEventOutcome {
     resize_seen: bool,
 }
 
-pub struct ChatMode {
+pub(crate) struct ChatMode {
     config: CliConfig,
     /// Current agent type (e.g. "agentic", "plan", "debug")
     agent_type: String,
@@ -144,7 +144,7 @@ fn agent_display_name(agent_type: &str) -> &'static str {
 }
 
 impl ChatMode {
-    pub fn new(
+    pub(crate) fn new(
         config: CliConfig,
         agent_type: String,
         workspace: Option<String>,
@@ -170,13 +170,13 @@ impl ChatMode {
     }
 
     /// Set a session ID to restore (for "Continue Last Session")
-    pub fn with_restore_session(mut self, session_id: String) -> Self {
+    pub(crate) fn with_restore_session(mut self, session_id: String) -> Self {
         self.restore_session_id = Some(session_id);
         self
     }
 
     /// Set an initial prompt to send automatically when the session starts
-    pub fn with_initial_prompt(mut self, prompt: String) -> Self {
+    pub(crate) fn with_initial_prompt(mut self, prompt: String) -> Self {
         self.initial_prompt = Some(prompt);
         self
     }
@@ -271,7 +271,7 @@ impl ChatMode {
         }
     }
 
-    pub fn run(
+    pub(crate) fn run(
         &mut self,
         existing_terminal: Option<Terminal<CrosstermBackend<io::Stdout>>>,
     ) -> Result<ChatExitReason> {
@@ -1873,7 +1873,7 @@ impl ChatMode {
             themes.push(ThemeItem { id });
         }
 
-        themes.sort_by(|a, b| a.id.to_ascii_lowercase().cmp(&b.id.to_ascii_lowercase()));
+        themes.sort_by_cached_key(|theme| theme.id.to_ascii_lowercase());
         themes.dedup_by(|a, b| a.id == b.id);
         themes
     }
@@ -2316,7 +2316,6 @@ impl ChatMode {
                         name: config.name.clone(),
                         server_type,
                         status,
-                        enabled: config.enabled,
                         tool_count,
                     });
                 }
@@ -3271,7 +3270,6 @@ impl ChatMode {
             description: info.description,
             source,
             enabled: info.effective_enabled,
-            default_enabled: info.default_enabled,
         }
     }
 

@@ -19,7 +19,7 @@ use crate::ui::question::QuestionPrompt;
 
 /// Tool display status (for UI rendering)
 #[derive(Debug, Clone, PartialEq)]
-pub enum ToolDisplayStatus {
+pub(crate) enum ToolDisplayStatus {
     EarlyDetected,
     ParamsPartial,
     Queued,
@@ -41,7 +41,7 @@ impl ToolDisplayStatus {
     /// (ParamsPartial, Queued, Waiting) should not overwrite these states,
     /// since priority queue ordering can cause late-arriving low-priority
     /// events to arrive after high-priority state transitions.
-    pub fn is_execution_phase(&self) -> bool {
+    pub(crate) fn is_execution_phase(&self) -> bool {
         matches!(
             self,
             ToolDisplayStatus::Running
@@ -56,7 +56,7 @@ impl ToolDisplayStatus {
 
 /// Message role for display
 #[derive(Debug, Clone, PartialEq)]
-pub enum MessageRole {
+pub(crate) enum MessageRole {
     User,
     Assistant,
     System,
@@ -86,7 +86,7 @@ fn display_text_for_role(role: &MessageRole, text: &str) -> String {
 
 /// Subagent progress tracking (for Task tool real-time display)
 #[derive(Debug, Clone, Default)]
-pub struct SubagentProgress {
+pub(crate) struct SubagentProgress {
     /// Total tool calls made by the subagent so far
     pub tool_count: usize,
     /// Name of the currently executing tool in the subagent (if any)
@@ -97,7 +97,7 @@ pub struct SubagentProgress {
 
 /// Tool call display state (for rendering tool cards)
 #[derive(Debug, Clone)]
-pub struct ToolDisplayState {
+pub(crate) struct ToolDisplayState {
     pub tool_id: String,
     pub tool_name: String,
     pub parameters: serde_json::Value,
@@ -113,7 +113,7 @@ pub struct ToolDisplayState {
 
 /// A single content block in a message (text, thinking, or tool call)
 #[derive(Debug, Clone)]
-pub enum FlowItem {
+pub(crate) enum FlowItem {
     /// Text content block
     Text { content: String, is_streaming: bool },
     /// AI thinking/reasoning block
@@ -124,7 +124,7 @@ pub enum FlowItem {
 
 /// A chat message for UI rendering (converted from core Message + streaming state)
 #[derive(Debug, Clone)]
-pub struct ChatMessage {
+pub(crate) struct ChatMessage {
     pub id: String,
     pub role: MessageRole,
     pub timestamp: SystemTime,
@@ -137,7 +137,7 @@ pub struct ChatMessage {
 
 impl ChatMessage {
     /// Convert a core Message to a UI ChatMessage
-    pub fn from_core_message(msg: &CoreMessage) -> Self {
+    pub(crate) fn from_core_message(msg: &CoreMessage) -> Self {
         let role = MessageRole::from(&msg.role);
         let mut flow_items = Vec::new();
 
@@ -240,7 +240,7 @@ impl ChatMessage {
 
 /// Statistics for the current chat session
 #[derive(Debug, Clone, Default)]
-pub struct ChatMetadata {
+pub(crate) struct ChatMetadata {
     pub message_count: usize,
     pub tool_calls: usize,
     pub total_rounds: usize,
@@ -252,7 +252,7 @@ pub struct ChatMetadata {
 /// Complete UI state for the chat interface.
 /// This is the single source of truth for rendering — but NOT for persistence.
 /// All persistence is handled by bitfun-core's SessionManager.
-pub struct ChatState {
+pub(crate) struct ChatState {
     /// Core session ID (the real session managed by core)
     pub core_session_id: String,
     /// Session display name
@@ -291,7 +291,7 @@ pub struct ChatState {
 
 impl ChatState {
     /// Create a new ChatState for a fresh session
-    pub fn new(
+    pub(crate) fn new(
         core_session_id: String,
         session_name: String,
         agent_type: String,
@@ -318,7 +318,7 @@ impl ChatState {
     ///
     /// Tool results (ToolResult messages) are merged back into the corresponding
     /// tool calls (in Mixed messages) so that tool cards render with full result data.
-    pub fn from_core_messages(
+    pub(crate) fn from_core_messages(
         core_session_id: String,
         session_name: String,
         agent_type: String,
@@ -385,7 +385,7 @@ impl ChatState {
     // ============ Event Handlers ============
 
     /// Handle the start of a new dialog turn
-    pub fn handle_turn_started(&mut self, turn_id: &str, user_input: &str) {
+    pub(crate) fn handle_turn_started(&mut self, turn_id: &str, user_input: &str) {
         self.current_turn_id = Some(turn_id.to_string());
         self.current_flow_items.clear();
         self.tool_index.clear();
@@ -420,7 +420,7 @@ impl ChatState {
     /// Handle a text chunk from the AI.
     /// Appends to the last Text flow item if it exists, otherwise creates a new one.
     /// This ensures text and tool blocks remain interleaved in chronological order.
-    pub fn handle_text_chunk(&mut self, text: &str) {
+    pub(crate) fn handle_text_chunk(&mut self, text: &str) {
         // Try to append to the last flow item if it's a Text block
         if let Some(FlowItem::Text { content, .. }) = self.current_flow_items.last_mut() {
             content.push_str(text);
@@ -437,7 +437,7 @@ impl ChatState {
     /// Handle a thinking/reasoning chunk from the AI.
     /// Thinking blocks typically appear at the start, before text/tool content.
     /// Appends to the last Thinking flow item if it exists, otherwise creates a new one.
-    pub fn handle_thinking_chunk(&mut self, content: &str) {
+    pub(crate) fn handle_thinking_chunk(&mut self, content: &str) {
         // Try to append to the last Thinking block
         // (Thinking usually comes before text, so check the last item)
         let appended = if let Some(FlowItem::Thinking { content: existing }) =
@@ -463,7 +463,7 @@ impl ChatState {
     /// Handle a tool event.
     /// New tools are appended to current_flow_items in chronological order.
     /// Existing tools are updated in-place via tool_index for O(1) lookup.
-    pub fn handle_tool_event(&mut self, tool_event: &ToolEventData) {
+    pub(crate) fn handle_tool_event(&mut self, tool_event: &ToolEventData) {
         match tool_event {
             ToolEventData::EarlyDetected { tool_id, tool_name } => {
                 self.insert_or_update_tool(
@@ -700,7 +700,7 @@ impl ChatState {
     ///
     /// When a subagent emits events (tool started, completed, etc.), we forward
     /// key information to the parent Task tool so the UI can show real-time progress.
-    pub fn handle_subagent_event(
+    pub(crate) fn handle_subagent_event(
         &mut self,
         parent_tool_id: &str,
         event: &bitfun_events::AgenticEvent,
@@ -773,7 +773,7 @@ impl ChatState {
     }
 
     /// Handle dialog turn completion
-    pub fn handle_turn_completed(&mut self, total_rounds: usize, _total_tools: usize) {
+    pub(crate) fn handle_turn_completed(&mut self, total_rounds: usize, _total_tools: usize) {
         // Finalize the streaming message
         if let Some(last_msg) = self.messages.last_mut() {
             if last_msg.role == MessageRole::Assistant {
@@ -798,7 +798,7 @@ impl ChatState {
     }
 
     /// Handle dialog turn failure
-    pub fn handle_turn_failed(&mut self, error: &str) {
+    pub(crate) fn handle_turn_failed(&mut self, error: &str) {
         // Add error to the last assistant message
         if let Some(last_msg) = self.messages.last_mut() {
             if last_msg.role == MessageRole::Assistant {
@@ -820,7 +820,7 @@ impl ChatState {
     }
 
     /// Handle dialog turn cancellation
-    pub fn handle_turn_cancelled(&mut self) {
+    pub(crate) fn handle_turn_cancelled(&mut self) {
         if let Some(last_msg) = self.messages.last_mut() {
             if last_msg.role == MessageRole::Assistant {
                 last_msg.is_streaming = false;
@@ -841,12 +841,12 @@ impl ChatState {
     }
 
     /// Handle token usage update
-    pub fn handle_token_usage(&mut self, total_tokens: usize) {
+    pub(crate) fn handle_token_usage(&mut self, total_tokens: usize) {
         self.metadata.total_tokens = total_tokens;
     }
 
     /// Add a system message (for commands like /help, /clear, etc.)
-    pub fn add_system_message(&mut self, content: String) {
+    pub(crate) fn add_system_message(&mut self, content: String) {
         self.messages.push(ChatMessage {
             id: uuid::Uuid::new_v4().to_string(),
             role: MessageRole::System,
@@ -861,7 +861,7 @@ impl ChatState {
     }
 
     /// Add a local assistant message (for rendered reports and other UI-only content).
-    pub fn add_assistant_message(&mut self, content: String) {
+    pub(crate) fn add_assistant_message(&mut self, content: String) {
         self.messages.push(ChatMessage {
             id: uuid::Uuid::new_v4().to_string(),
             role: MessageRole::Assistant,
@@ -876,12 +876,12 @@ impl ChatState {
     }
 
     /// Clear all messages (for /clear command)
-    pub fn clear_messages(&mut self) {
+    pub(crate) fn clear_messages(&mut self) {
         self.messages.clear();
     }
 
     /// Get the current turn ID (if processing)
-    pub fn current_turn_id(&self) -> Option<&str> {
+    pub(crate) fn current_turn_id(&self) -> Option<&str> {
         self.current_turn_id.as_deref()
     }
 

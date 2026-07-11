@@ -97,7 +97,7 @@ impl AnnouncementScheduler {
             .collect();
 
         // Highest priority first; stable sort preserves source order for equal priorities.
-        eligible.sort_by(|a, b| b.priority.cmp(&a.priority));
+        eligible.sort_by_key(|card| std::cmp::Reverse(card.priority));
 
         debug!(
             "Announcement scheduler: {} cards eligible for display",

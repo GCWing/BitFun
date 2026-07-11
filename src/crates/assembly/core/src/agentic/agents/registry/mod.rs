@@ -1,14 +1,14 @@
 mod availability;
 mod builtin;
-pub mod catalog;
+pub(super) mod catalog;
 mod custom;
 mod query;
 mod resolution;
 mod support;
 #[cfg(test)]
 mod tests;
-pub mod types;
-pub mod visibility;
+pub(super) mod types;
+pub(super) mod visibility;
 
 use self::types::AgentEntry;
 use self::types::{AgentCategory, SubAgentSource};

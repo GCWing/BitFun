@@ -24,7 +24,7 @@ async fn ensure_global_config_service(
         .context("Failed to get global config service")
 }
 
-pub async fn print_agents(workspace: Option<&Path>) -> Result<()> {
+pub(crate) async fn print_agents(workspace: Option<&Path>) -> Result<()> {
     let registry = get_agent_registry();
     let modes = registry.get_modes_info().await;
     let subagents = registry.get_subagents_info(workspace).await;
@@ -70,7 +70,7 @@ pub async fn print_agents(workspace: Option<&Path>) -> Result<()> {
     Ok(())
 }
 
-pub async fn print_models() -> Result<()> {
+pub(crate) async fn print_models() -> Result<()> {
     let config_service = ensure_global_config_service().await?;
     let models = config_service.get_ai_models().await?;
     let global_config: bitfun_core::service::config::GlobalConfig =
@@ -111,7 +111,7 @@ pub async fn print_models() -> Result<()> {
     Ok(())
 }
 
-pub async fn print_mcp_servers() -> Result<()> {
+pub(crate) async fn print_mcp_servers() -> Result<()> {
     let config_service = ensure_global_config_service().await?;
     let mcp_service = bitfun_core::service::mcp::MCPService::new(config_service.clone())
         .map_err(|error| anyhow!(error.to_string()))?;
@@ -162,7 +162,7 @@ pub async fn print_mcp_servers() -> Result<()> {
     Ok(())
 }
 
-pub async fn set_default_model(model_id: &str) -> Result<()> {
+pub(crate) async fn set_default_model(model_id: &str) -> Result<()> {
     let config_service = ensure_global_config_service().await?;
     let agent_registry = get_agent_registry();
     let modes = agent_registry.get_modes_info().await;
@@ -179,7 +179,7 @@ pub async fn set_default_model(model_id: &str) -> Result<()> {
     Ok(())
 }
 
-pub async fn set_mcp_server_enabled(server_id: &str, enabled: bool) -> Result<()> {
+pub(crate) async fn set_mcp_server_enabled(server_id: &str, enabled: bool) -> Result<()> {
     let config_service = ensure_global_config_service().await?;
     let mcp_service = bitfun_core::service::mcp::MCPService::new(config_service.clone())
         .map_err(|error| anyhow!(error.to_string()))?;
@@ -202,7 +202,7 @@ pub async fn set_mcp_server_enabled(server_id: &str, enabled: bool) -> Result<()
     Ok(())
 }
 
-pub async fn print_mcp_json_config() -> Result<()> {
+pub(crate) async fn print_mcp_json_config() -> Result<()> {
     let config_service = ensure_global_config_service().await?;
     let mcp_service = bitfun_core::service::mcp::MCPService::new(config_service.clone())
         .map_err(|error| anyhow!(error.to_string()))?;
@@ -211,7 +211,7 @@ pub async fn print_mcp_json_config() -> Result<()> {
     Ok(())
 }
 
-pub async fn print_usage_report(session_id: Option<&str>) -> Result<()> {
+pub(crate) async fn print_usage_report(session_id: Option<&str>) -> Result<()> {
     let agentic_system = crate::agent::agentic_system::init_agentic_system_for_cli().await?;
     let path_manager = try_get_path_manager_arc().map_err(|error| anyhow!(error.to_string()))?;
     let persistence_manager =
@@ -246,7 +246,7 @@ pub async fn print_usage_report(session_id: Option<&str>) -> Result<()> {
     Ok(())
 }
 
-pub async fn print_plugins() -> Result<()> {
+pub(crate) async fn print_plugins() -> Result<()> {
     let workspace = std::env::current_dir().context("Failed to resolve current directory")?;
     let path_manager = try_get_path_manager_arc().map_err(|error| anyhow!(error.to_string()))?;
     let snapshot = refresh_managed_plugin_sources(&workspace)
@@ -271,7 +271,7 @@ pub async fn print_plugins() -> Result<()> {
     Ok(())
 }
 
-pub async fn set_plugin_trust(
+pub(crate) async fn set_plugin_trust(
     package_id: &str,
     decision: ManagedPluginTrustDecision,
 ) -> Result<()> {
@@ -393,7 +393,7 @@ fn plugin_trust_label(trust_level: ManagedPluginTrustLevel) -> &'static str {
     }
 }
 
-pub async fn print_mcp_config_summary() -> Result<()> {
+pub(crate) async fn print_mcp_config_summary() -> Result<()> {
     let config_service = ensure_global_config_service().await?;
     let mcp_service = bitfun_core::service::mcp::MCPService::new(config_service)
         .map_err(|error| anyhow!(error.to_string()))?;
@@ -409,7 +409,7 @@ pub async fn print_mcp_config_summary() -> Result<()> {
     Ok(())
 }
 
-pub async fn print_doctor() -> Result<bool> {
+pub(crate) async fn print_doctor() -> Result<bool> {
     let workspace = std::env::current_dir().context("Failed to resolve current directory")?;
     let config_dir = crate::config::CliConfig::config_dir()?;
     let config_service = ensure_global_config_service().await?;

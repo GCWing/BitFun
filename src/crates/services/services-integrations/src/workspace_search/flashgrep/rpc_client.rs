@@ -21,7 +21,7 @@ type PendingResponseSender = oneshot::Sender<Result<ResponseEnvelope>>;
 type PendingResponses = HashMap<u64, PendingResponseSender>;
 
 #[derive(Clone)]
-pub struct ProtocolClient {
+pub(crate) struct ProtocolClient {
     inner: Arc<ProtocolClientInner>,
 }
 
@@ -34,7 +34,7 @@ struct ProtocolClientInner {
 }
 
 impl ProtocolClient {
-    pub fn channel(backend_name: impl Into<String>) -> (Self, mpsc::Receiver<Vec<u8>>) {
+    pub(crate) fn channel(backend_name: impl Into<String>) -> (Self, mpsc::Receiver<Vec<u8>>) {
         let (write_tx, write_rx) = mpsc::channel::<Vec<u8>>(128);
         (
             Self {
@@ -50,15 +50,15 @@ impl ProtocolClient {
         )
     }
 
-    pub fn is_closed(&self) -> bool {
+    pub(crate) fn is_closed(&self) -> bool {
         self.inner.closed.load(Ordering::Relaxed)
     }
 
-    pub fn mark_closed(&self) {
+    pub(crate) fn mark_closed(&self) {
         self.inner.closed.store(true, Ordering::Relaxed);
     }
 
-    pub async fn send_request_with_timeout(
+    pub(crate) async fn send_request_with_timeout(
         &self,
         request: Request,
         request_timeout: Option<Duration>,
@@ -116,7 +116,7 @@ impl ProtocolClient {
         decode_response(request_id, response)
     }
 
-    pub async fn send_notification(&self, request: Request) -> Result<()> {
+    pub(crate) async fn send_notification(&self, request: Request) -> Result<()> {
         if self.is_closed() {
             return Err(AppError::Protocol(format!(
                 "{} is not running",
@@ -138,7 +138,7 @@ impl ProtocolClient {
         })
     }
 
-    pub async fn handle_server_message(&self, message: ServerMessage) {
+    pub(crate) async fn handle_server_message(&self, message: ServerMessage) {
         match message {
             ServerMessage::Response(response) => {
                 let Some(request_id) = response.id else {
@@ -159,12 +159,12 @@ impl ProtocolClient {
         }
     }
 
-    pub async fn close_with_message(&self, message: impl Into<String>) {
+    pub(crate) async fn close_with_message(&self, message: impl Into<String>) {
         self.mark_closed();
         self.reject_pending(message).await;
     }
 
-    pub async fn reject_pending(&self, message: impl Into<String>) {
+    pub(crate) async fn reject_pending(&self, message: impl Into<String>) {
         let message = message.into();
         let mut pending = self.inner.pending.lock().await;
         for (_, sender) in pending.drain() {
@@ -183,7 +183,7 @@ impl fmt::Debug for ProtocolClient {
     }
 }
 
-pub async fn read_content_length_message<R>(reader: &mut R) -> Result<Option<ServerMessage>>
+pub(super) async fn read_content_length_message<R>(reader: &mut R) -> Result<Option<ServerMessage>>
 where
     R: AsyncBufRead + AsyncRead + Unpin,
 {
@@ -219,7 +219,7 @@ where
         .map_err(|error| AppError::Protocol(format!("failed to decode daemon message: {error}")))
 }
 
-pub fn drain_content_length_messages(buffer: &mut Vec<u8>) -> Result<Vec<ServerMessage>> {
+pub(crate) fn drain_content_length_messages(buffer: &mut Vec<u8>) -> Result<Vec<ServerMessage>> {
     let mut messages = Vec::new();
 
     loop {

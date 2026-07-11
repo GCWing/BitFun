@@ -54,7 +54,7 @@ static INSTALLER_APP_LANGUAGE_ALIASES_BY_PRIORITY: LazyLock<Vec<(&'static str, &
             })
             .collect::<Vec<_>>();
         // Keep script-specific aliases ahead of broad prefixes like `zh`.
-        aliases.sort_by(|(_, a), (_, b)| b.len().cmp(&a.len()));
+        aliases.sort_by_key(|(_, alias)| std::cmp::Reverse(alias.len()));
         aliases
     });
 
@@ -70,7 +70,7 @@ struct PayloadManifestFile {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct LaunchContext {
+pub(crate) struct LaunchContext {
     pub mode: String,
     pub uninstall_path: Option<String>,
     pub app_language: Option<String>,
@@ -78,14 +78,14 @@ pub struct LaunchContext {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct InstallPathValidation {
+pub(crate) struct InstallPathValidation {
     pub install_path: String,
 }
 
 /// Matches Tauri NSIS detection via `UNINSTKEY` / `MANUPRODUCTKEY`.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ExistingInstallationResponse {
+pub(crate) struct ExistingInstallationResponse {
     pub detected: bool,
     pub install_location: Option<String>,
     pub display_version: Option<String>,
@@ -102,7 +102,7 @@ struct InstallerState {
 
 /// Get the default installation path.
 #[tauri::command]
-pub fn get_default_install_path() -> String {
+pub(crate) fn get_default_install_path() -> String {
     let base = if cfg!(target_os = "windows") {
         std::env::var("LOCALAPPDATA")
             .map(PathBuf::from)
@@ -125,7 +125,7 @@ pub fn get_default_install_path() -> String {
 
 /// Last successful install path if still valid, otherwise platform default.
 #[tauri::command]
-pub fn get_initial_install_path() -> String {
+pub(crate) fn get_initial_install_path() -> String {
     #[cfg(target_os = "windows")]
     {
         use super::registry;
@@ -150,7 +150,7 @@ pub fn get_initial_install_path() -> String {
 
 /// Detect existing BitFun install (Tauri NSIS or this installer) via Add/Remove Programs registry.
 #[tauri::command]
-pub fn get_existing_installation() -> ExistingInstallationResponse {
+pub(crate) fn get_existing_installation() -> ExistingInstallationResponse {
     #[cfg(not(target_os = "windows"))]
     {
         return ExistingInstallationResponse {
@@ -202,7 +202,7 @@ pub fn get_existing_installation() -> ExistingInstallationResponse {
 
 /// Run the uninstall command stored in Add/Remove Programs (NSIS or custom `uninstall.exe`), like NSIS maintenance.
 #[tauri::command]
-pub async fn launch_registered_uninstaller(
+pub(crate) async fn launch_registered_uninstaller(
     uninstall_command: String,
     install_path: Option<String>,
 ) -> Result<(), String> {
@@ -331,7 +331,7 @@ fn parse_windows_command_line(command_line: &str) -> Result<Vec<String>, String>
 
 /// Get available disk space for the given path.
 #[tauri::command]
-pub fn get_disk_space(path: String) -> Result<DiskSpaceInfo, String> {
+pub(crate) fn get_disk_space(path: String) -> Result<DiskSpaceInfo, String> {
     let path = PathBuf::from(&path);
 
     // Walk up to find an existing ancestor directory
@@ -406,7 +406,7 @@ unsafe fn windows_sys_get_disk_free_space(
 }
 
 #[tauri::command]
-pub fn get_launch_context() -> LaunchContext {
+pub(crate) fn get_launch_context() -> LaunchContext {
     let args: Vec<String> = std::env::args().collect();
     let app_language = read_saved_app_language();
     if let Some(idx) = args.iter().position(|arg| arg == "--uninstall") {
@@ -438,7 +438,7 @@ pub fn get_launch_context() -> LaunchContext {
 
 /// Validate the installation path.
 #[tauri::command]
-pub fn validate_install_path(path: String) -> Result<InstallPathValidation, String> {
+pub(crate) fn validate_install_path(path: String) -> Result<InstallPathValidation, String> {
     let requested_path = PathBuf::from(&path);
     let install_path = prepare_install_target(&requested_path)?;
     Ok(InstallPathValidation {
@@ -448,7 +448,10 @@ pub fn validate_install_path(path: String) -> Result<InstallPathValidation, Stri
 
 /// Main installation command. Emits progress events to the frontend.
 #[tauri::command]
-pub async fn start_installation(window: Window, options: InstallOptions) -> Result<(), String> {
+pub(crate) async fn start_installation(
+    window: Window,
+    options: InstallOptions,
+) -> Result<(), String> {
     let install_path = prepare_install_target(Path::new(&options.install_path))?;
     let install_dir_was_absent = !install_path.exists();
     #[cfg(target_os = "windows")]
@@ -616,7 +619,7 @@ pub async fn start_installation(window: Window, options: InstallOptions) -> Resu
 
 /// Uninstall BitFun (for the uninstaller companion).
 #[tauri::command]
-pub async fn uninstall(install_path: String) -> Result<(), String> {
+pub(crate) async fn uninstall(install_path: String) -> Result<(), String> {
     let install_path = PathBuf::from(&install_path);
     let uninstall_targets = collect_uninstall_targets(&install_path)?;
 
@@ -771,7 +774,7 @@ fn append_uninstall_runtime_log(message: &str) {
 
 /// Launch the installed application.
 #[tauri::command]
-pub fn launch_application(install_path: String) -> Result<(), String> {
+pub(crate) fn launch_application(install_path: String) -> Result<(), String> {
     let exe = if cfg!(target_os = "windows") {
         PathBuf::from(&install_path).join(MAIN_APP_EXE)
     } else if cfg!(target_os = "macos") {
@@ -797,13 +800,13 @@ pub fn launch_application(install_path: String) -> Result<(), String> {
 
 /// Close the installer window.
 #[tauri::command]
-pub fn close_installer(window: Window) {
+pub(crate) fn close_installer(window: Window) {
     let _ = window.close();
 }
 
 /// Save theme preference for first launch (called after installation).
 #[tauri::command]
-pub fn set_theme_preference(theme_preference: String) -> Result<(), String> {
+pub(crate) fn set_theme_preference(theme_preference: String) -> Result<(), String> {
     let allowed = [
         "system",
         "bitfun-dark",
@@ -838,13 +841,13 @@ pub fn set_theme_preference(theme_preference: String) -> Result<(), String> {
 
 /// Save default model configuration for first launch (called after installation).
 #[tauri::command]
-pub fn set_model_config(model_config: ModelConfig) -> Result<(), String> {
+pub(crate) fn set_model_config(model_config: ModelConfig) -> Result<(), String> {
     apply_first_launch_model(&model_config)
 }
 
 /// Validate model configuration connectivity from installer (same stack as desktop `test_ai_config_connection`).
 #[tauri::command]
-pub async fn test_model_config_connection(
+pub(crate) async fn test_model_config_connection(
     model_config: ModelConfig,
 ) -> Result<ConnectionTestResult, String> {
     let required_fields = [
@@ -950,7 +953,7 @@ pub async fn test_model_config_connection(
 
 /// List remote models using the same discovery rules as the main app (installer-local HTTP).
 #[tauri::command]
-pub async fn list_model_config_models(
+pub(crate) async fn list_model_config_models(
     model_config: ModelConfig,
 ) -> Result<Vec<RemoteModelInfo>, String> {
     if model_config.api_key.trim().is_empty() {
@@ -1805,7 +1808,28 @@ fn rollback_installation(install_path: &Path, install_dir_was_absent: bool) {
 
 #[cfg(test)]
 mod tests {
-    use super::normalize_app_language;
+    use super::{normalize_app_language, INSTALLER_APP_LANGUAGE_ALIASES_BY_PRIORITY};
+
+    #[test]
+    fn language_alias_priority_is_descending_and_stable_for_equal_lengths() {
+        let aliases = INSTALLER_APP_LANGUAGE_ALIASES_BY_PRIORITY.as_slice();
+
+        assert!(aliases
+            .windows(2)
+            .all(|pair| pair[0].1.len() >= pair[1].1.len()));
+
+        let expected_equal_length_order = super::INSTALLER_GENERATED_LOCALES
+            .iter()
+            .flat_map(|locale| locale.aliases.iter().map(move |alias| (locale.code, *alias)))
+            .filter(|(_, alias)| alias.len() == 2)
+            .collect::<Vec<_>>();
+        let actual_equal_length_order = aliases
+            .iter()
+            .copied()
+            .filter(|(_, alias)| alias.len() == 2)
+            .collect::<Vec<_>>();
+        assert_eq!(actual_equal_length_order, expected_equal_length_order);
+    }
 
     #[test]
     fn normalize_app_language_maps_aliases_to_canonical_ids() {

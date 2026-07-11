@@ -2,7 +2,7 @@ impl ChatView {
     // ============ Tool card expand/collapse ============
 
     /// Toggle expand/collapse on the currently focused block tool
-    pub fn toggle_focused_tool_expand(&mut self, chat_state: &ChatState) {
+    pub(crate) fn toggle_focused_tool_expand(&mut self, chat_state: &ChatState) {
         // If no tool is focused, auto-focus the last block tool
         if self.focused_block_tool.is_none() {
             self.focus_last_block_tool(chat_state);
@@ -20,7 +20,7 @@ impl ChatView {
     }
 
     /// Focus the next block tool (Ctrl+I)
-    pub fn cycle_block_tool_focus_next(&mut self, chat_state: &ChatState) {
+    pub(crate) fn cycle_block_tool_focus_next(&mut self, chat_state: &ChatState) {
         let block_tool_ids = self.collect_block_tool_ids(chat_state);
         if block_tool_ids.is_empty() {
             self.focused_block_tool = None;
@@ -43,7 +43,7 @@ impl ChatView {
     }
 
     /// Focus the previous block tool (Ctrl+U)
-    pub fn cycle_block_tool_focus_prev(&mut self, chat_state: &ChatState) {
+    pub(crate) fn cycle_block_tool_focus_prev(&mut self, chat_state: &ChatState) {
         let block_tool_ids = self.collect_block_tool_ids(chat_state);
         if block_tool_ids.is_empty() {
             self.focused_block_tool = None;

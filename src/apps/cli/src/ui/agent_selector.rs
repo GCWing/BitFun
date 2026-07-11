@@ -15,13 +15,13 @@ use crate::ui::theme::{StyleKind, Theme};
 
 /// An agent item for display in the selector
 #[derive(Debug, Clone)]
-pub struct AgentItem {
+pub(crate) struct AgentItem {
     pub id: String,
     pub description: String,
 }
 
 /// Agent selector popup state
-pub struct AgentSelectorState {
+pub(super) struct AgentSelectorState {
     items: Vec<AgentItem>,
     list_state: ListState,
     visible: bool,
@@ -31,7 +31,7 @@ pub struct AgentSelectorState {
 }
 
 impl AgentSelectorState {
-    pub fn new() -> Self {
+    pub(super) fn new() -> Self {
         Self {
             items: Vec::new(),
             list_state: ListState::default(),
@@ -42,7 +42,7 @@ impl AgentSelectorState {
     }
 
     /// Show the agent selector with given agent list
-    pub fn show(&mut self, agents: Vec<AgentItem>, current_agent_id: Option<String>) {
+    pub(super) fn show(&mut self, agents: Vec<AgentItem>, current_agent_id: Option<String>) {
         if agents.is_empty() {
             return;
         }
@@ -58,24 +58,24 @@ impl AgentSelectorState {
         self.visible = true;
     }
 
-    pub fn hide(&mut self) {
+    pub(super) fn hide(&mut self) {
         self.visible = false;
         // Note: we don't clear items here to support back navigation
         self.last_area = None;
     }
 
     /// Reshow the agent selector (for back navigation)
-    pub fn reshow(&mut self) {
+    pub(super) fn reshow(&mut self) {
         if !self.items.is_empty() {
             self.visible = true;
         }
     }
 
-    pub fn is_visible(&self) -> bool {
+    pub(super) fn is_visible(&self) -> bool {
         self.visible
     }
 
-    pub fn move_up(&mut self) {
+    pub(super) fn move_up(&mut self) {
         if !self.visible || self.items.is_empty() {
             return;
         }
@@ -85,7 +85,7 @@ impl AgentSelectorState {
         self.list_state.select(Some(next));
     }
 
-    pub fn move_down(&mut self) {
+    pub(super) fn move_down(&mut self) {
         if !self.visible || self.items.is_empty() {
             return;
         }
@@ -95,7 +95,7 @@ impl AgentSelectorState {
     }
 
     /// Get the selected agent item
-    pub fn confirm_selection(&self) -> Option<AgentItem> {
+    pub(super) fn confirm_selection(&self) -> Option<AgentItem> {
         if !self.visible {
             return None;
         }
@@ -104,7 +104,7 @@ impl AgentSelectorState {
     }
 
     /// Render the agent selector popup as an overlay
-    pub fn render(&mut self, frame: &mut Frame, area: Rect, theme: &Theme) {
+    pub(super) fn render(&mut self, frame: &mut Frame, area: Rect, theme: &Theme) {
         if !self.visible || self.items.is_empty() {
             self.last_area = None;
             return;
@@ -178,7 +178,7 @@ impl AgentSelectorState {
     }
 
     /// Handle mouse events
-    pub fn handle_mouse_event(&mut self, mouse: &MouseEvent) -> Option<AgentItem> {
+    pub(super) fn handle_mouse_event(&mut self, mouse: &MouseEvent) -> Option<AgentItem> {
         if !self.visible {
             return None;
         }
@@ -223,7 +223,7 @@ impl AgentSelectorState {
         }
     }
 
-    pub fn captures_mouse(&self, _mouse: &MouseEvent) -> bool {
+    pub(super) fn captures_mouse(&self, _mouse: &MouseEvent) -> bool {
         self.visible
     }
 

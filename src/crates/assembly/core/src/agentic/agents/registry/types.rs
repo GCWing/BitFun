@@ -11,9 +11,10 @@ use crate::agentic::deep_review_policy::{
     REVIEWER_FRONTEND_AGENT_TYPE, REVIEWER_PERFORMANCE_AGENT_TYPE, REVIEWER_SECURITY_AGENT_TYPE,
     REVIEW_JUDGE_AGENT_TYPE,
 };
+pub(super) use bitfun_agent_runtime::agents::SubagentOverrideState;
 pub use bitfun_agent_runtime::agents::{
-    BuiltinAgentCategory as AgentCategory, SubAgentSource, SubagentListScope,
-    SubagentOverrideState, SubagentQueryContext, SubagentStateReason,
+    BuiltinAgentCategory as AgentCategory, SubAgentSource, SubagentListScope, SubagentQueryContext,
+    SubagentStateReason,
 };
 use bitfun_agent_runtime::custom_agent::CustomAgentLevel;
 use bitfun_agent_runtime::prompt_cache::prompt_cache_scope_key;
@@ -110,14 +111,17 @@ pub fn subagent_source_from_custom_kind(kind: CustomSubagentKind) -> SubAgentSou
     }
 }
 
-pub fn agent_source_from_custom_level(level: CustomAgentLevel) -> AgentSource {
+pub(super) fn agent_source_from_custom_level(level: CustomAgentLevel) -> AgentSource {
     match level {
         CustomAgentLevel::Project => AgentSource::Project,
         CustomAgentLevel::User => AgentSource::User,
     }
 }
 
-pub fn subagent_key_for(source: Option<SubAgentSource>, agent: &dyn Agent) -> Option<String> {
+pub(super) fn subagent_key_for(
+    source: Option<SubAgentSource>,
+    agent: &dyn Agent,
+) -> Option<String> {
     let source = source?;
     let slot = match source {
         SubAgentSource::Builtin => "builtin",

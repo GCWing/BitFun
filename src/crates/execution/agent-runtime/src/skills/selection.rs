@@ -103,7 +103,7 @@ fn skill_candidate_precedence(candidate: &SkillCandidate) -> (usize, u8, String,
 }
 
 fn sort_resolved_skill_candidates(mut resolved: Vec<SkillCandidate>) -> Vec<SkillCandidate> {
-    resolved.sort_by(|a, b| skill_candidate_precedence(a).cmp(&skill_candidate_precedence(b)));
+    resolved.sort_by_cached_key(skill_candidate_precedence);
     resolved
 }
 
@@ -245,5 +245,47 @@ pub fn resolve_default_hidden_builtin_for_explicit_invocation(
 
     ExplicitSkillInvocationResolution::DisabledForMode {
         mode_id: mode_id.to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resolved_candidate_sort_is_case_insensitive_ascending_and_stable_for_equal_precedence() {
+        let beta_first = candidate("beta", "project::beta", "/tmp/first");
+        let alpha = candidate("ALPHA", "project::alpha", "/tmp/alpha");
+        let beta_second = candidate("beta", "project::beta", "/tmp/second");
+        let zulu = candidate("Zulu", "project::zulu", "/tmp/zulu");
+
+        let sorted = sort_resolved_skill_candidates(vec![beta_first, zulu, alpha, beta_second]);
+
+        assert_eq!(
+            sorted
+                .iter()
+                .map(|candidate| candidate.info.path.as_str())
+                .collect::<Vec<_>>(),
+            ["/tmp/alpha", "/tmp/first", "/tmp/second", "/tmp/zulu"]
+        );
+    }
+
+    fn candidate(name: &str, key: &str, path: &str) -> SkillCandidate {
+        SkillCandidate {
+            info: SkillInfo {
+                key: key.to_string(),
+                name: name.to_string(),
+                description: String::new(),
+                path: path.to_string(),
+                level: SkillLocation::Project,
+                source_slot: String::new(),
+                dir_name: name.to_string(),
+                is_builtin: false,
+                group_key: None,
+                is_shadowed: false,
+                shadowed_by_key: None,
+            },
+            priority: 0,
+        }
     }
 }

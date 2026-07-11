@@ -33,7 +33,7 @@ impl RecordingEventSink {
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy)]
-pub enum StreamFixtureProvider {
+pub(crate) enum StreamFixtureProvider {
     OpenAi,
     Anthropic,
     Gemini,
@@ -42,13 +42,13 @@ pub enum StreamFixtureProvider {
 
 #[allow(dead_code)]
 #[derive(Debug)]
-pub struct StreamFixtureRunOutput {
+pub(crate) struct StreamFixtureRunOutput {
     pub result: Result<StreamResult, StreamProcessError>,
     pub events: Vec<AgenticEvent>,
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct StreamFixtureRunOptions {
+pub(crate) struct StreamFixtureRunOptions {
     pub server_options: FixtureSseServerOptions,
     pub request_timeout: Duration,
     pub process_timeout: Duration,
@@ -75,7 +75,7 @@ impl Default for StreamFixtureRunOptions {
 }
 
 #[allow(dead_code)]
-pub async fn run_stream_fixture(
+pub(crate) async fn run_stream_fixture(
     provider: StreamFixtureProvider,
     fixture_relative_path: &str,
     server_options: FixtureSseServerOptions,
@@ -91,7 +91,7 @@ pub async fn run_stream_fixture(
     .await
 }
 
-pub async fn run_stream_fixture_with_options(
+pub(crate) async fn run_stream_fixture_with_options(
     provider: StreamFixtureProvider,
     fixture_relative_path: &str,
     options: StreamFixtureRunOptions,

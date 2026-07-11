@@ -6,24 +6,24 @@ pub(crate) enum MouseGestureOutcome {
 
 impl ChatView {
     /// Take the pending command (set by mouse click on command menu)
-    pub fn take_pending_command(&mut self) -> Option<String> {
+    pub(crate) fn take_pending_command(&mut self) -> Option<String> {
         self.pending_command.take()
     }
 
     /// Take the pending theme selection (set by mouse click on theme selector)
-    pub fn take_pending_theme_preview(&mut self) -> Option<ThemeItem> {
+    pub(crate) fn take_pending_theme_preview(&mut self) -> Option<ThemeItem> {
         self.pending_theme_preview.take()
     }
 
-    pub fn take_pending_skill_action(&mut self) -> Option<SkillSelectorAction> {
+    pub(crate) fn take_pending_skill_action(&mut self) -> Option<SkillSelectorAction> {
         self.pending_skill_action.take()
     }
 
-    pub fn take_pending_subagent_action(&mut self) -> Option<SubagentSelectorAction> {
+    pub(crate) fn take_pending_subagent_action(&mut self) -> Option<SubagentSelectorAction> {
         self.pending_subagent_action.take()
     }
 
-    pub fn handle_mouse_event(&mut self, mouse: &crossterm::event::MouseEvent) -> bool {
+    pub(crate) fn handle_mouse_event(&mut self, mouse: &crossterm::event::MouseEvent) -> bool {
         // Popups take priority when visible
         if self.model_selector.captures_mouse(mouse) {
             self.model_selector.handle_mouse_event(mouse);
@@ -176,7 +176,7 @@ impl ChatView {
         }
     }
 
-    pub fn begin_mouse_selection(&mut self, column: u16, row: u16) -> bool {
+    pub(crate) fn begin_mouse_selection(&mut self, column: u16, row: u16) -> bool {
         let Some(point) = self.map_mouse_to_selection_point(column, row, false) else {
             self.clear_mouse_selection_state();
             return false;
@@ -189,7 +189,7 @@ impl ChatView {
         true
     }
 
-    pub fn update_mouse_selection(&mut self, column: u16, row: u16) -> bool {
+    pub(crate) fn update_mouse_selection(&mut self, column: u16, row: u16) -> bool {
         if self.selection_mouse_down.is_none() {
             return false;
         }
@@ -208,7 +208,7 @@ impl ChatView {
         true
     }
 
-    pub fn complete_mouse_selection_or_click(
+    pub(crate) fn complete_mouse_selection_or_click(
         &mut self,
         column: u16,
         row: u16,
@@ -237,7 +237,7 @@ impl ChatView {
         MouseGestureOutcome::Click(origin_x, origin_y)
     }
 
-    pub fn render_mouse_selection_overlay(&mut self, frame: &mut Frame, area: Rect) {
+    fn render_mouse_selection_overlay(&mut self, frame: &mut Frame, area: Rect) {
         let Some((start, end)) = self.selection_bounds() else {
             return;
         };
@@ -294,7 +294,7 @@ impl ChatView {
         }
     }
 
-    pub fn handle_mouse_move(&mut self, _column: u16, row: u16) {
+    pub(crate) fn handle_mouse_move(&mut self, _column: u16, row: u16) {
         let area = match self.messages_area {
             Some(a) => a,
             None => return,
@@ -321,7 +321,7 @@ impl ChatView {
 
     /// Handle a mouse click at the given absolute (column, row) coordinates.
     /// Toggles expand/collapse for block tools if the click lands within their region.
-    pub fn handle_mouse_click(&mut self, _column: u16, row: u16) {
+    pub(crate) fn handle_mouse_click(&mut self, _column: u16, row: u16) {
         // Convert absolute row to relative row within the messages area
         let area = match self.messages_area {
             Some(a) => a,

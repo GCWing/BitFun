@@ -2,7 +2,6 @@ use once_cell::sync::Lazy;
 /// Theme and style definitions
 use std::collections::{HashMap, HashSet};
 use std::io::IsTerminal;
-use std::path::Path;
 use std::time::{Duration, Instant};
 
 use ratatui::style::{Color, Modifier, Style};
@@ -11,63 +10,63 @@ use ratatui::style::{Color, Modifier, Style};
 use std::io::Read;
 
 #[derive(Debug, Clone)]
-pub struct Theme {
-    pub primary: Color,
-    pub success: Color,
-    pub warning: Color,
-    pub error: Color,
-    pub info: Color,
-    pub muted: Color,
-    pub background: Color,
-    pub border: Color,
+pub(crate) struct Theme {
+    pub(super) primary: Color,
+    pub(super) success: Color,
+    pub(super) warning: Color,
+    pub(super) error: Color,
+    pub(super) info: Color,
+    pub(super) muted: Color,
+    pub(super) background: Color,
+    pub(super) border: Color,
 
     // Panel backgrounds (inspired by opencode theme)
-    pub background_panel: Color,
-    pub background_element: Color,
-    pub input_background: Color,
+    pub(super) background_panel: Color,
+    pub(super) background_element: Color,
+    pub(super) input_background: Color,
 
     // Diff colors
-    pub diff_added_fg: Color,
-    pub diff_removed_fg: Color,
-    pub diff_added_bg: Color,
-    pub diff_removed_bg: Color,
+    pub(super) diff_added_fg: Color,
+    pub(super) diff_removed_fg: Color,
+    pub(super) diff_added_bg: Color,
+    pub(super) diff_removed_bg: Color,
 
     // Block card colors
-    pub block_bg: Color,
-    pub block_bg_hover: Color,
-    pub block_border_active: Color,
+    pub(super) block_bg: Color,
+    pub(super) block_bg_hover: Color,
+    pub(super) block_border_active: Color,
 
     // Inline tool icon color
-    pub inline_icon: Color,
+    pub(super) inline_icon: Color,
 
     // Command text color (for bash $ prefix)
-    pub command_text: Color,
+    pub(super) command_text: Color,
 
     // Diff hunk header and line number colors
-    pub diff_hunk_header: Color,
-    pub diff_line_number: Color,
+    pub(super) diff_hunk_header: Color,
+    pub(super) diff_line_number: Color,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum EffectiveColorScheme {
+pub(crate) enum EffectiveColorScheme {
     Truecolor,
     Ansi16,
     Monochrome,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Appearance {
+pub(crate) enum Appearance {
     Dark,
     Light,
 }
 
 impl Appearance {
-    pub fn is_light(self) -> bool {
+    pub(crate) fn is_light(self) -> bool {
         matches!(self, Appearance::Light)
     }
 }
 
-pub fn resolve_effective_color_scheme(preference: &str) -> EffectiveColorScheme {
+pub(crate) fn resolve_effective_color_scheme(preference: &str) -> EffectiveColorScheme {
     if std::env::var_os("NO_COLOR").is_some() {
         return EffectiveColorScheme::Monochrome;
     }
@@ -134,7 +133,7 @@ fn terminal_supports_truecolor() -> bool {
     false
 }
 
-pub fn resolve_appearance(preference: &str) -> Appearance {
+pub(crate) fn resolve_appearance(preference: &str) -> Appearance {
     match preference.trim().to_ascii_lowercase().as_str() {
         "light" => Appearance::Light,
         "auto" => {
@@ -227,7 +226,7 @@ fn detect_terminal_appearance(timeout: Duration) -> Option<Appearance> {
     }
 }
 
-#[allow(dead_code)]
+#[cfg(unix)]
 fn parse_osc_color(s: &str) -> Option<(u8, u8, u8)> {
     if let Some(hex) = s.strip_prefix('#') {
         if hex.len() == 6 {
@@ -262,11 +261,11 @@ fn parse_osc_color(s: &str) -> Option<(u8, u8, u8)> {
 }
 
 impl Theme {
-    pub fn dark() -> Self {
+    pub(crate) fn dark() -> Self {
         Self::from_builtin_preset("bitfun-dark", Appearance::Dark)
     }
 
-    pub fn dark_ansi16() -> Self {
+    pub(crate) fn dark_ansi16() -> Self {
         Self {
             primary: Color::Blue,
             success: Color::Green,
@@ -299,11 +298,11 @@ impl Theme {
         }
     }
 
-    pub fn light() -> Self {
+    pub(crate) fn light() -> Self {
         Self::from_builtin_preset("bitfun-light", Appearance::Light)
     }
 
-    pub fn light_ansi16() -> Self {
+    pub(crate) fn light_ansi16() -> Self {
         Self {
             primary: Color::Blue,
             success: Color::Green,
@@ -336,7 +335,7 @@ impl Theme {
         }
     }
 
-    pub fn monochrome() -> Self {
+    pub(crate) fn monochrome() -> Self {
         Self {
             primary: Color::Reset,
             success: Color::Reset,
@@ -369,7 +368,7 @@ impl Theme {
         }
     }
 
-    pub fn with_effective_scheme(mut self, scheme: EffectiveColorScheme) -> Self {
+    pub(crate) fn with_effective_scheme(mut self, scheme: EffectiveColorScheme) -> Self {
         match scheme {
             EffectiveColorScheme::Truecolor => self,
             EffectiveColorScheme::Monochrome => Theme::monochrome(),
@@ -402,7 +401,7 @@ impl Theme {
         }
     }
 
-    pub fn apply_opencode_theme_json(
+    pub(crate) fn apply_opencode_theme_json(
         &self,
         json: &OpencodeThemeJson,
         appearance: Appearance,
@@ -412,7 +411,7 @@ impl Theme {
         build_theme_from_resolved_tokens(resolved, Some(&fallback))
     }
 
-    pub fn style(&self, kind: StyleKind) -> Style {
+    pub(super) fn style(&self, kind: StyleKind) -> Style {
         match kind {
             StyleKind::Primary => Style::default().fg(self.primary),
             StyleKind::Success => Style::default().fg(self.success),
@@ -430,8 +429,6 @@ impl Theme {
             StyleKind::DiffRemoved => Style::default()
                 .fg(self.diff_removed_fg)
                 .bg(self.diff_removed_bg),
-            StyleKind::BackgroundPanel => Style::default().bg(self.background_panel),
-            StyleKind::BackgroundElement => Style::default().bg(self.background_element),
             StyleKind::BlockBackground => Style::default().bg(self.block_bg),
             StyleKind::BlockBackgroundHover => Style::default().bg(self.block_bg_hover),
             StyleKind::BlockBorderActive => Style::default().fg(self.block_border_active),
@@ -442,7 +439,7 @@ impl Theme {
         }
     }
 
-    pub fn selection_foreground(&self) -> Color {
+    pub(super) fn selection_foreground(&self) -> Color {
         readable_foreground_for(self.primary)
     }
 
@@ -641,8 +638,7 @@ fn rgb_to_ansi16(r: u8, g: u8, b: u8) -> Color {
 }
 
 #[derive(Debug, Clone, Copy)]
-#[allow(dead_code)]
-pub enum StyleKind {
+pub(super) enum StyleKind {
     Primary,
     Success,
     Warning,
@@ -653,8 +649,6 @@ pub enum StyleKind {
     Border,
     DiffAdded,
     DiffRemoved,
-    BackgroundPanel,
-    BackgroundElement,
     BlockBackground,
     BlockBackgroundHover,
     BlockBorderActive,
@@ -665,7 +659,7 @@ pub enum StyleKind {
 }
 
 /// Tool icon mapping — Unicode symbols inspired by opencode TUI
-pub fn tool_icon(tool_name: &str) -> &'static str {
+pub(super) fn tool_icon(tool_name: &str) -> &'static str {
     match tool_name {
         "Bash" | "bash_tool" | "run_terminal_cmd" => "$",
         "Read" | "read_file" | "read_file_tool" => "\u{2192}", // →
@@ -698,31 +692,22 @@ pub fn tool_icon(tool_name: &str) -> &'static str {
 // ======================= opencode-compatible theme.json =======================
 
 #[derive(Debug, Clone, serde::Deserialize)]
-pub struct OpencodeThemeJson {
+pub(crate) struct OpencodeThemeJson {
     #[serde(rename = "$schema")]
-    #[allow(dead_code)]
-    pub schema: Option<String>,
-    #[allow(dead_code)]
-    pub defs: Option<HashMap<String, ColorValueJson>>,
-    pub theme: HashMap<String, ColorValueJson>,
+    _schema: Option<String>,
+    defs: Option<HashMap<String, ColorValueJson>>,
+    theme: HashMap<String, ColorValueJson>,
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
 #[serde(untagged)]
-pub enum ColorValueJson {
+enum ColorValueJson {
     Number(u8),
     String(String),
     Variant {
         dark: Box<ColorValueJson>,
         light: Box<ColorValueJson>,
     },
-}
-
-#[allow(dead_code)]
-pub fn load_opencode_theme_json(path: &Path) -> anyhow::Result<OpencodeThemeJson> {
-    let data = std::fs::read_to_string(path)?;
-    let json = serde_json::from_str::<OpencodeThemeJson>(&data)?;
-    Ok(json)
 }
 
 static BUILTIN_OPENCODE_THEMES: Lazy<HashMap<&'static str, OpencodeThemeJson>> = Lazy::new(|| {
@@ -778,16 +763,16 @@ static BUILTIN_OPENCODE_THEMES: Lazy<HashMap<&'static str, OpencodeThemeJson>> =
     ])
 });
 
-pub fn builtin_theme_ids() -> Vec<String> {
+pub(crate) fn builtin_theme_ids() -> Vec<String> {
     let mut ids: Vec<String> = BUILTIN_OPENCODE_THEMES
         .keys()
         .map(|k| (*k).to_string())
         .collect();
-    ids.sort_by(|a, b| a.to_ascii_lowercase().cmp(&b.to_ascii_lowercase()));
+    ids.sort_by_cached_key(|id| id.to_ascii_lowercase());
     ids
 }
 
-pub fn builtin_theme_json(id: &str) -> Option<&'static OpencodeThemeJson> {
+pub(crate) fn builtin_theme_json(id: &str) -> Option<&'static OpencodeThemeJson> {
     BUILTIN_OPENCODE_THEMES.get(id)
 }
 
@@ -949,6 +934,15 @@ fn blend_alpha_channel(fg: u8, alpha: u8, bg: u8) -> u8 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn builtin_theme_ids_are_case_insensitive_ascending() {
+        let ids = builtin_theme_ids();
+
+        assert!(ids
+            .windows(2)
+            .all(|pair| pair[0].to_ascii_lowercase() <= pair[1].to_ascii_lowercase()));
+    }
 
     #[test]
     fn builtin_themes_resolve_for_dark_and_light() {

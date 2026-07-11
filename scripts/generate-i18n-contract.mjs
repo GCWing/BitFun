@@ -561,12 +561,12 @@ function generateInstallerRustLocaleContract(contract) {
   const locales = orderedLocales(contract, 'installer');
 
   return `${generatedHeader('rust')}#[derive(Debug, Clone, Copy)]
-pub struct InstallerGeneratedLocaleEntry {
+pub(super) struct InstallerGeneratedLocaleEntry {
     pub code: &'static str,
     pub aliases: &'static [&'static str],
 }
 
-pub const INSTALLER_GENERATED_LOCALES: &[InstallerGeneratedLocaleEntry] = &[
+pub(super) const INSTALLER_GENERATED_LOCALES: &[InstallerGeneratedLocaleEntry] = &[
 ${locales.map((locale) => `    InstallerGeneratedLocaleEntry {
         code: ${rustString(locale.id)},
         aliases: ${rustStringArray(locale.aliases)},

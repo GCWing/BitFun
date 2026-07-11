@@ -154,7 +154,7 @@ impl CleanupService {
         let mut files = Vec::new();
         self.collect_files_with_time(dir, &mut files).await?;
 
-        files.sort_by(|a, b| b.1.cmp(&a.1));
+        files.sort_by_key(|entry| std::cmp::Reverse(entry.1));
 
         let mut current_size = 0u64;
 

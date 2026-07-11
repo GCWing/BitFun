@@ -13,11 +13,11 @@ use ratatui::{
 use crate::ui::theme::{StyleKind, Theme};
 
 #[derive(Debug, Clone)]
-pub struct ThemeItem {
+pub(crate) struct ThemeItem {
     pub id: String,
 }
 
-pub struct ThemeSelectorState {
+pub(super) struct ThemeSelectorState {
     items: Vec<ThemeItem>,
     list_state: ListState,
     visible: bool,
@@ -26,7 +26,7 @@ pub struct ThemeSelectorState {
 }
 
 impl ThemeSelectorState {
-    pub fn new() -> Self {
+    pub(super) fn new() -> Self {
         Self {
             items: Vec::new(),
             list_state: ListState::default(),
@@ -36,7 +36,7 @@ impl ThemeSelectorState {
         }
     }
 
-    pub fn show(&mut self, themes: Vec<ThemeItem>, current_theme_id: Option<String>) {
+    pub(super) fn show(&mut self, themes: Vec<ThemeItem>, current_theme_id: Option<String>) {
         if themes.is_empty() {
             return;
         }
@@ -52,24 +52,24 @@ impl ThemeSelectorState {
         self.visible = true;
     }
 
-    pub fn hide(&mut self) {
+    pub(super) fn hide(&mut self) {
         self.visible = false;
         // Note: we don't clear items here to support back navigation
         self.last_area = None;
     }
 
     /// Reshow the theme selector (for back navigation)
-    pub fn reshow(&mut self) {
+    pub(super) fn reshow(&mut self) {
         if !self.items.is_empty() {
             self.visible = true;
         }
     }
 
-    pub fn is_visible(&self) -> bool {
+    pub(super) fn is_visible(&self) -> bool {
         self.visible
     }
 
-    pub fn move_up(&mut self) {
+    pub(super) fn move_up(&mut self) {
         if !self.visible || self.items.is_empty() {
             return;
         }
@@ -79,7 +79,7 @@ impl ThemeSelectorState {
         self.list_state.select(Some(next));
     }
 
-    pub fn move_down(&mut self) {
+    pub(super) fn move_down(&mut self) {
         if !self.visible || self.items.is_empty() {
             return;
         }
@@ -88,7 +88,7 @@ impl ThemeSelectorState {
         self.list_state.select(Some(next));
     }
 
-    pub fn selected_item(&self) -> Option<&ThemeItem> {
+    pub(super) fn selected_item(&self) -> Option<&ThemeItem> {
         if !self.visible {
             return None;
         }
@@ -96,11 +96,11 @@ impl ThemeSelectorState {
         self.items.get(idx)
     }
 
-    pub fn confirm_selection(&self) -> Option<ThemeItem> {
+    pub(super) fn confirm_selection(&self) -> Option<ThemeItem> {
         self.selected_item().cloned()
     }
 
-    pub fn render(&mut self, frame: &mut Frame, area: Rect, theme: &Theme) {
+    pub(super) fn render(&mut self, frame: &mut Frame, area: Rect, theme: &Theme) {
         if !self.visible || self.items.is_empty() {
             self.last_area = None;
             return;
@@ -169,7 +169,7 @@ impl ThemeSelectorState {
         frame.render_stateful_widget(list, popup_area, &mut self.list_state);
     }
 
-    pub fn captures_mouse(&self, mouse: &MouseEvent) -> bool {
+    pub(super) fn captures_mouse(&self, mouse: &MouseEvent) -> bool {
         if !self.visible {
             return false;
         }
@@ -183,7 +183,7 @@ impl ThemeSelectorState {
         in_popup
     }
 
-    pub fn handle_mouse_event(&mut self, mouse: &MouseEvent) -> Option<ThemeItem> {
+    pub(super) fn handle_mouse_event(&mut self, mouse: &MouseEvent) -> Option<ThemeItem> {
         if !self.visible {
             return None;
         }

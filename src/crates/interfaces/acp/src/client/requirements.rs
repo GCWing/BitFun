@@ -127,15 +127,7 @@ async fn probe_npm_adapter_with_path(
         }
     }
 
-    let offline_args = vec![
-        "exec".to_string(),
-        "--offline".to_string(),
-        "--yes".to_string(),
-        format!("--package={package}"),
-        "--".to_string(),
-        bin.to_string(),
-        "--help".to_string(),
-    ];
+    let offline_args = npm_offline_probe_args(package, bin);
     match run_command_with_timeout(
         npm_path.as_os_str(),
         offline_args.iter().map(String::as_str),
@@ -157,6 +149,18 @@ async fn probe_npm_adapter_with_path(
     }
 
     item
+}
+
+fn npm_offline_probe_args(package: &str, bin: &str) -> [String; 7] {
+    [
+        "exec".to_string(),
+        "--offline".to_string(),
+        "--yes".to_string(),
+        format!("--package={package}"),
+        "--".to_string(),
+        bin.to_string(),
+        "--help".to_string(),
+    ]
 }
 
 fn npx_adapter_probe_item(package: &str) -> AcpRequirementProbeItem {
@@ -281,14 +285,7 @@ pub(crate) async fn probe_remote_npx_adapter(
 pub(crate) async fn predownload_npm_adapter(package: &str, bin: &str) -> BitFunResult<()> {
     let npm_path = find_executable("npm")
         .ok_or_else(|| BitFunError::service("npm is not available on PATH".to_string()))?;
-    let args = vec![
-        "exec".to_string(),
-        "--yes".to_string(),
-        format!("--package={package}"),
-        "--".to_string(),
-        bin.to_string(),
-        "--help".to_string(),
-    ];
+    let args = npm_predownload_args(package, bin);
 
     match run_command_with_timeout(
         npm_path.as_os_str(),
@@ -308,6 +305,17 @@ pub(crate) async fn predownload_npm_adapter(package: &str, bin: &str) -> BitFunR
             package, error
         ))),
     }
+}
+
+fn npm_predownload_args(package: &str, bin: &str) -> [String; 6] {
+    [
+        "exec".to_string(),
+        "--yes".to_string(),
+        format!("--package={package}"),
+        "--".to_string(),
+        bin.to_string(),
+        "--help".to_string(),
+    ]
 }
 
 pub(crate) async fn install_npm_cli_package(package: &str) -> BitFunResult<()> {
@@ -625,6 +633,35 @@ fn executable_file(path: &Path) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn npm_adapter_argument_builders_preserve_cli_order() {
+        assert_eq!(
+            npm_offline_probe_args("@zed-industries/codex-acp", "codex-acp"),
+            [
+                "exec",
+                "--offline",
+                "--yes",
+                "--package=@zed-industries/codex-acp",
+                "--",
+                "codex-acp",
+                "--help",
+            ]
+            .map(str::to_string)
+        );
+        assert_eq!(
+            npm_predownload_args("@zed-industries/codex-acp", "codex-acp"),
+            [
+                "exec",
+                "--yes",
+                "--package=@zed-industries/codex-acp",
+                "--",
+                "codex-acp",
+                "--help",
+            ]
+            .map(str::to_string)
+        );
+    }
 
     #[test]
     fn command_search_paths_keep_configured_path_first() {

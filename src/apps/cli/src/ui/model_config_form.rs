@@ -21,7 +21,7 @@ use crate::ui::theme::{StyleKind, Theme};
 
 /// Result of the model config form
 #[derive(Debug, Clone)]
-pub struct ModelFormResult {
+pub(crate) struct ModelFormResult {
     /// If set, this is an edit of an existing model (contains the model ID)
     pub editing_model_id: Option<String>,
     pub name: String,
@@ -45,7 +45,7 @@ pub struct ModelFormResult {
 
 /// Action returned by the form
 #[derive(Debug, Clone)]
-pub enum ModelFormAction {
+pub(crate) enum ModelFormAction {
     /// No action, key consumed
     None,
     /// User saved the form
@@ -79,7 +79,7 @@ const PROVIDER_FORMATS: [&str; 2] = ["openai", "anthropic"];
 const CUSTOM_HEADERS_MODES: [&str; 2] = ["merge", "replace"];
 
 /// Model config form state
-pub struct ModelConfigFormState {
+pub(super) struct ModelConfigFormState {
     visible: bool,
 
     // ── Field values ──
@@ -112,7 +112,7 @@ pub struct ModelConfigFormState {
 }
 
 impl ModelConfigFormState {
-    pub fn new() -> Self {
+    pub(super) fn new() -> Self {
         Self {
             visible: false,
             name: String::new(),
@@ -139,7 +139,7 @@ impl ModelConfigFormState {
     }
 
     /// Show the form for a custom model (empty fields)
-    pub fn show_custom(&mut self) {
+    pub(super) fn show_custom(&mut self) {
         self.visible = true;
         self.provider_name = None;
         self.editing_model_id = None;
@@ -163,7 +163,7 @@ impl ModelConfigFormState {
     }
 
     /// Show the form pre-filled from a provider template
-    pub fn show_from_provider(
+    pub(super) fn show_from_provider(
         &mut self,
         provider_name: &str,
         base_url: &str,
@@ -200,7 +200,7 @@ impl ModelConfigFormState {
     }
 
     /// Show the form pre-filled for editing an existing model
-    pub fn show_for_edit(&mut self, model_id: &str, result: &ModelFormResult) {
+    pub(super) fn show_for_edit(&mut self, model_id: &str, result: &ModelFormResult) {
         self.visible = true;
         self.editing_model_id = Some(model_id.to_string());
         self.provider_name = None;
@@ -234,16 +234,16 @@ impl ModelConfigFormState {
             || (self.enable_thinking && self.support_preserved_thinking);
     }
 
-    pub fn hide(&mut self) {
+    pub(super) fn hide(&mut self) {
         self.visible = false;
     }
 
     /// Reshow the model config form (for back navigation)
-    pub fn reshow(&mut self) {
+    pub(super) fn reshow(&mut self) {
         self.visible = true;
     }
 
-    pub fn is_visible(&self) -> bool {
+    pub(super) fn is_visible(&self) -> bool {
         self.visible
     }
 
@@ -474,7 +474,7 @@ impl ModelConfigFormState {
 
     // ── Key handling ──
 
-    pub fn handle_key_event(&mut self, key: KeyEvent) -> ModelFormAction {
+    pub(super) fn handle_key_event(&mut self, key: KeyEvent) -> ModelFormAction {
         if !self.visible {
             return ModelFormAction::None;
         }
@@ -648,7 +648,7 @@ impl ModelConfigFormState {
 
     // ── Rendering ──
 
-    pub fn render(&self, frame: &mut Frame, area: Rect, theme: &Theme) {
+    pub(super) fn render(&self, frame: &mut Frame, area: Rect, theme: &Theme) {
         if !self.visible {
             return;
         }
@@ -802,7 +802,7 @@ impl ModelConfigFormState {
     }
 
     /// Render a mutable version (updates visible_rows)
-    pub fn render_mut(&mut self, frame: &mut Frame, area: Rect, theme: &Theme) {
+    pub(super) fn render_mut(&mut self, frame: &mut Frame, area: Rect, theme: &Theme) {
         if !self.visible {
             return;
         }

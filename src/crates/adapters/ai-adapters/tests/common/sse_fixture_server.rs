@@ -15,7 +15,7 @@ use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 
 #[derive(Debug, Clone, Copy)]
-pub struct FixtureSseServerOptions {
+pub(crate) struct FixtureSseServerOptions {
     pub chunk_size: usize,
     pub chunk_delay: Duration,
     pub initial_delay: Duration,
@@ -37,13 +37,13 @@ struct FixtureSseState {
     options: FixtureSseServerOptions,
 }
 
-pub struct FixtureSseServer {
+pub(crate) struct FixtureSseServer {
     url: String,
     server_task: JoinHandle<()>,
 }
 
 impl FixtureSseServer {
-    pub async fn spawn(payload: Vec<u8>, options: FixtureSseServerOptions) -> Self {
+    pub(crate) async fn spawn(payload: Vec<u8>, options: FixtureSseServerOptions) -> Self {
         let state = FixtureSseState {
             payload: Arc::new(payload),
             options,
@@ -68,7 +68,7 @@ impl FixtureSseServer {
         }
     }
 
-    pub fn url(&self) -> &str {
+    pub(crate) fn url(&self) -> &str {
         &self.url
     }
 }

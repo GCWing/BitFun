@@ -15,19 +15,17 @@ use crate::ui::theme::{StyleKind, Theme};
 
 /// A subagent item for display in the selector
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
-pub struct SubagentItem {
+pub(crate) struct SubagentItem {
     pub key: String,
     pub id: String,
     pub name: String,
     pub description: String,
     pub source: String, // "builtin", "project", or "user"
     pub enabled: bool,
-    pub default_enabled: bool,
 }
 
 #[derive(Debug, Clone)]
-pub enum SubagentSelectorAction {
+pub(crate) enum SubagentSelectorAction {
     ListSubagents,
     ConfigureSubagents,
     Launch(SubagentItem),
@@ -42,7 +40,7 @@ enum SubagentSelectorScreen {
 }
 
 /// Subagent selector popup state
-pub struct SubagentSelectorState {
+pub(super) struct SubagentSelectorState {
     items: Vec<SubagentItem>,
     list_state: ListState,
     visible: bool,
@@ -51,7 +49,7 @@ pub struct SubagentSelectorState {
 }
 
 impl SubagentSelectorState {
-    pub fn new() -> Self {
+    pub(super) fn new() -> Self {
         Self {
             items: Vec::new(),
             list_state: ListState::default(),
@@ -61,7 +59,7 @@ impl SubagentSelectorState {
         }
     }
 
-    pub fn show_menu(&mut self) {
+    pub(super) fn show_menu(&mut self) {
         self.items.clear();
         self.screen = SubagentSelectorScreen::Menu;
         self.list_state.select(Some(0));
@@ -69,7 +67,7 @@ impl SubagentSelectorState {
     }
 
     /// Show subagents available to the current parent mode.
-    pub fn show_list(&mut self, subagents: Vec<SubagentItem>) {
+    pub(super) fn show_list(&mut self, subagents: Vec<SubagentItem>) {
         if subagents.is_empty() {
             return;
         }
@@ -81,7 +79,7 @@ impl SubagentSelectorState {
     }
 
     /// Show all discovered subagents with mode-specific enablement checkboxes.
-    pub fn show_config(&mut self, subagents: Vec<SubagentItem>) {
+    pub(super) fn show_config(&mut self, subagents: Vec<SubagentItem>) {
         if subagents.is_empty() {
             return;
         }
@@ -105,24 +103,24 @@ impl SubagentSelectorState {
         self.visible = true;
     }
 
-    pub fn hide(&mut self) {
+    pub(super) fn hide(&mut self) {
         self.visible = false;
         // Note: we don't clear items here to support back navigation
         self.last_area = None;
     }
 
     /// Reshow the subagent selector (for back navigation)
-    pub fn reshow(&mut self) {
+    pub(super) fn reshow(&mut self) {
         if self.screen == SubagentSelectorScreen::Menu || !self.items.is_empty() {
             self.visible = true;
         }
     }
 
-    pub fn is_visible(&self) -> bool {
+    pub(super) fn is_visible(&self) -> bool {
         self.visible
     }
 
-    pub fn move_up(&mut self) {
+    pub(super) fn move_up(&mut self) {
         if !self.visible || self.len() == 0 {
             return;
         }
@@ -132,7 +130,7 @@ impl SubagentSelectorState {
         self.list_state.select(Some(next));
     }
 
-    pub fn move_down(&mut self) {
+    pub(super) fn move_down(&mut self) {
         if !self.visible || self.len() == 0 {
             return;
         }
@@ -142,7 +140,7 @@ impl SubagentSelectorState {
     }
 
     /// Get the selected action.
-    pub fn confirm_selection(&self) -> Option<SubagentSelectorAction> {
+    pub(super) fn confirm_selection(&self) -> Option<SubagentSelectorAction> {
         if !self.visible {
             return None;
         }
@@ -174,7 +172,7 @@ impl SubagentSelectorState {
     }
 
     /// Render the subagent selector popup as an overlay
-    pub fn render(&mut self, frame: &mut Frame, area: Rect, theme: &Theme) {
+    pub(super) fn render(&mut self, frame: &mut Frame, area: Rect, theme: &Theme) {
         if !self.visible || self.len() == 0 {
             self.last_area = None;
             return;
@@ -226,7 +224,10 @@ impl SubagentSelectorState {
     }
 
     /// Handle mouse events
-    pub fn handle_mouse_event(&mut self, mouse: &MouseEvent) -> Option<SubagentSelectorAction> {
+    pub(super) fn handle_mouse_event(
+        &mut self,
+        mouse: &MouseEvent,
+    ) -> Option<SubagentSelectorAction> {
         if !self.visible {
             return None;
         }
@@ -271,7 +272,7 @@ impl SubagentSelectorState {
         }
     }
 
-    pub fn captures_mouse(&self, _mouse: &MouseEvent) -> bool {
+    pub(super) fn captures_mouse(&self, _mouse: &MouseEvent) -> bool {
         self.visible
     }
 

@@ -434,7 +434,7 @@ impl FileSystemService {
             max_depth: stats.max_depth_reached,
             most_common_extensions: {
                 let mut ext_vec: Vec<_> = stats.file_type_counts.into_iter().collect();
-                ext_vec.sort_by(|a, b| b.1.cmp(&a.1));
+                ext_vec.sort_by_key(|entry| std::cmp::Reverse(entry.1));
                 ext_vec.into_iter().take(10).collect()
             },
             large_files_count: stats.large_files.len(),

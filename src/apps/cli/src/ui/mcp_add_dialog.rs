@@ -18,7 +18,7 @@ use crate::ui::theme::{StyleKind, Theme};
 
 /// Action returned by the MCP add dialog
 #[derive(Debug, Clone)]
-pub enum McpAddAction {
+pub(crate) enum McpAddAction {
     /// No action, dialog consumed the key
     None,
     /// User completed all steps — returns name + generated JSON config string
@@ -43,7 +43,7 @@ enum ServerType {
 }
 
 /// MCP add dialog state
-pub struct McpAddDialogState {
+pub(super) struct McpAddDialogState {
     visible: bool,
     step: Step,
     /// Server name / ID
@@ -59,7 +59,7 @@ pub struct McpAddDialogState {
 }
 
 impl McpAddDialogState {
-    pub fn new() -> Self {
+    pub(super) fn new() -> Self {
         Self {
             visible: false,
             step: Step::Name,
@@ -72,7 +72,7 @@ impl McpAddDialogState {
         }
     }
 
-    pub fn show(&mut self) {
+    pub(super) fn show(&mut self) {
         self.visible = true;
         self.step = Step::Name;
         self.name_buf.clear();
@@ -83,19 +83,19 @@ impl McpAddDialogState {
         self.error = None;
     }
 
-    pub fn hide(&mut self) {
+    pub(super) fn hide(&mut self) {
         self.visible = false;
         self.name_buf.clear();
         self.value_buf.clear();
         self.error = None;
     }
 
-    pub fn is_visible(&self) -> bool {
+    pub(super) fn is_visible(&self) -> bool {
         self.visible
     }
 
     /// Insert pasted text into the current active text field
-    pub fn insert_text(&mut self, text: &str) {
+    pub(super) fn insert_text(&mut self, text: &str) {
         if !self.visible {
             return;
         }
@@ -109,7 +109,7 @@ impl McpAddDialogState {
     }
 
     /// Handle a key event
-    pub fn handle_key_event(&mut self, key: KeyEvent) -> McpAddAction {
+    pub(super) fn handle_key_event(&mut self, key: KeyEvent) -> McpAddAction {
         if !self.visible {
             return McpAddAction::None;
         }
@@ -319,7 +319,7 @@ impl McpAddDialogState {
 
     // ── Rendering ──
 
-    pub fn render(&self, frame: &mut Frame, area: Rect, theme: &Theme) {
+    pub(super) fn render(&self, frame: &mut Frame, area: Rect, theme: &Theme) {
         if !self.visible {
             return;
         }

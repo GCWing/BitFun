@@ -3864,7 +3864,7 @@ mod tests {
             description: "Read files".repeat(5_000),
             parameters: json!({"type": "object"}),
         }];
-        let prepended_reminders = vec!["prepended reminder".repeat(5_000)];
+        let prepended_reminders = ["prepended reminder".repeat(5_000)];
         let prepended_reminder_refs = prepended_reminders
             .iter()
             .map(String::as_str)
@@ -4010,8 +4010,8 @@ mod tests {
             Message::system("system prompt".to_string()),
             Message::user("hello".to_string()),
         ];
-        let old_reminders = vec!["short reminder".to_string()];
-        let new_reminders = vec!["longer reminder ".repeat(20)];
+        let old_reminders = ["short reminder".to_string()];
+        let new_reminders = ["longer reminder ".repeat(20)];
         let old_reminder_refs = old_reminders.iter().map(String::as_str).collect::<Vec<_>>();
         let new_reminder_refs = new_reminders.iter().map(String::as_str).collect::<Vec<_>>();
         let old_reminder_tokens =

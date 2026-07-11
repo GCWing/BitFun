@@ -1,30 +1,30 @@
 /// TUI interface module
 ///
 /// Build terminal user interface using ratatui
-pub mod agent_selector;
-pub mod chat;
-pub mod command_menu;
-pub mod command_palette;
-pub mod diff_render;
-pub mod markdown;
-pub mod mcp_add_dialog;
-pub mod mcp_selector;
-pub mod model_config_form;
-pub mod model_selector;
-pub mod permission;
-pub mod provider_selector;
-pub mod question;
-pub mod session_selector;
-pub mod skill_selector;
-pub mod startup;
-pub mod string_utils;
-pub mod subagent_selector;
-pub mod syntax_highlight;
-pub mod text_input;
-pub mod theme;
-pub mod theme_selector;
-pub mod tool_cards;
-pub mod widgets;
+pub(crate) mod agent_selector;
+pub(crate) mod chat;
+mod command_menu;
+pub(crate) mod command_palette;
+mod diff_render;
+mod markdown;
+pub(crate) mod mcp_add_dialog;
+pub(crate) mod mcp_selector;
+pub(crate) mod model_config_form;
+pub(crate) mod model_selector;
+pub(crate) mod permission;
+pub(crate) mod provider_selector;
+pub(crate) mod question;
+pub(crate) mod session_selector;
+pub(crate) mod skill_selector;
+pub(crate) mod startup;
+pub(crate) mod string_utils;
+pub(crate) mod subagent_selector;
+mod syntax_highlight;
+mod text_input;
+pub(crate) mod theme;
+pub(crate) mod theme_selector;
+mod tool_cards;
+mod widgets;
 
 use anyhow::Result;
 use crossterm::{
@@ -43,7 +43,7 @@ use ratatui::{
 use std::io;
 
 /// Initialize terminal
-pub fn init_terminal() -> Result<Terminal<CrosstermBackend<io::Stdout>>> {
+pub(crate) fn init_terminal() -> Result<Terminal<CrosstermBackend<io::Stdout>>> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(
@@ -58,7 +58,7 @@ pub fn init_terminal() -> Result<Terminal<CrosstermBackend<io::Stdout>>> {
 }
 
 /// Restore terminal
-pub fn restore_terminal(mut terminal: Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
+pub(crate) fn restore_terminal(mut terminal: Terminal<CrosstermBackend<io::Stdout>>) -> Result<()> {
     disable_raw_mode()?;
     execute!(
         terminal.backend_mut(),
@@ -71,7 +71,7 @@ pub fn restore_terminal(mut terminal: Terminal<CrosstermBackend<io::Stdout>>) ->
 }
 
 /// Render a loading/status message on the terminal (stays in alternate screen)
-pub fn render_loading(
+pub(crate) fn render_loading(
     terminal: &mut Terminal<CrosstermBackend<io::Stdout>>,
     message: &str,
 ) -> Result<()> {

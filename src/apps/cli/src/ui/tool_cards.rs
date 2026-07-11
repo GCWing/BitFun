@@ -38,13 +38,13 @@ thread_local! {
 }
 
 #[derive(Clone)]
-pub struct ToolCardRenderOutput {
-    pub items: Vec<ListItem<'static>>,
-    pub plain_lines: Vec<String>,
+pub(super) struct ToolCardRenderOutput {
+    pub(super) items: Vec<ListItem<'static>>,
+    pub(super) plain_lines: Vec<String>,
 }
 
 /// Clear the tool card render cache (call on session switch or /clear)
-pub fn clear_tool_card_cache() {
+pub(super) fn clear_tool_card_cache() {
     TOOL_CARD_CACHE.with(|cache| cache.borrow_mut().clear());
 }
 
@@ -158,7 +158,7 @@ fn normalize_tool_name(name: &str) -> &str {
 /// - `focused`: whether this tool card is currently focused (for border highlight)
 /// - `spinner_frame`: current spinner animation frame (for running tools)
 /// - `available_width`: terminal width available for rendering (for split diff)
-pub fn render_tool_card(
+pub(super) fn render_tool_card(
     tool_state: &ToolDisplayState,
     theme: &Theme,
     expanded: bool,

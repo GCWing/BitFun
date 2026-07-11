@@ -105,7 +105,7 @@ const MAX_TOTAL_ELEMENTS: usize = 5000;
 /// the UIA path; every emitted node carries `msaa_role = Some(role)` so a
 /// downstream dispatcher can distinguish MSAA-sourced nodes from UIA-sourced
 /// ones.
-pub fn walk_msaa_tree(hwnd: isize) -> BitFunResult<Vec<UiaNode>> {
+pub(super) fn walk_msaa_tree(hwnd: isize) -> BitFunResult<Vec<UiaNode>> {
     unsafe { walk_bounded(hwnd, MAX_TOTAL_ELEMENTS, MAX_DEPTH) }
 }
 
@@ -166,7 +166,7 @@ unsafe fn walk_bounded(
 /// these cleanly because it sidesteps the bulk-cache cross-process RPC that the
 /// UIA provider deadlocks on. Callers should prefer [`walk_msaa_tree`] over the
 /// UIA path when this returns `true`.
-pub fn is_sal_vcl_window(hwnd: isize) -> bool {
+pub(super) fn is_sal_vcl_window(hwnd: isize) -> bool {
     match window_class_name(hwnd) {
         Some(class) if class.starts_with("SAL") => {
             log::debug!(

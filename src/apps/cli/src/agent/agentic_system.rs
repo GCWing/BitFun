@@ -4,9 +4,9 @@ use bitfun_core::infrastructure::ai::AIClientFactory;
 use bitfun_core::product_runtime::CoreRuntimeServicesProvider;
 use bitfun_core::service::config::initialize_global_config;
 
-pub use bitfun_core::agentic::system::AgenticSystem;
+pub(crate) use bitfun_core::agentic::system::AgenticSystem;
 
-pub async fn init_agentic_system() -> Result<AgenticSystem> {
+pub(crate) async fn init_agentic_system() -> Result<AgenticSystem> {
     let system = bitfun_core::agentic::system::init_agentic_system()
         .await
         .context("Failed to initialize agentic system")?;
@@ -19,7 +19,7 @@ pub async fn init_agentic_system() -> Result<AgenticSystem> {
     Ok(system)
 }
 
-pub async fn init_agentic_system_for_cli() -> Result<AgenticSystem> {
+pub(crate) async fn init_agentic_system_for_cli() -> Result<AgenticSystem> {
     initialize_global_config()
         .await
         .context("Failed to initialize global config service")?;

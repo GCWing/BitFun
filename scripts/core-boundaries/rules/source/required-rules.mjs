@@ -7797,11 +7797,11 @@ export const requiredContentRules = [
       'core agent registry must adapt config and AgentEntry facts while bitfun-agent-runtime owns mode-scoped subagent availability decisions',
     patterns: [
       {
-        regex: /\bpub fn resolve_availability\b/,
+        regex: /\bfn resolve_availability\b/,
         message: 'missing core compatibility availability adapter',
       },
       {
-        regex: /\bpub fn resolve_override_layers\b/,
+        regex: /\bfn resolve_override_layers\b/,
         message: 'missing project/user override layering adapter',
       },
       {
@@ -7824,7 +7824,11 @@ export const requiredContentRules = [
       'core agent registry must preserve legacy DTO fields while bitfun-agent-runtime owns query scope and availability reason contracts',
     patterns: [
       {
-        regex: /pub use bitfun_agent_runtime::agents::\{[\s\S]*SubAgentSource[\s\S]*SubagentListScope[\s\S]*SubagentOverrideState[\s\S]*SubagentQueryContext[\s\S]*SubagentStateReason[\s\S]*\};/,
+        regex: /\bSubagentOverrideState\b/,
+        message: 'missing agent-runtime subagent override contract',
+      },
+      {
+        regex: /pub use bitfun_agent_runtime::agents::\{[\s\S]*SubAgentSource[\s\S]*SubagentListScope[\s\S]*SubagentQueryContext[\s\S]*SubagentStateReason[\s\S]*\};/,
         message: 'missing agent-runtime subagent registry contract re-export',
       },
       {
@@ -8025,20 +8029,20 @@ export const requiredContentRules = [
       'CLI subagent selector presentation must remain app-layer UI while registry availability semantics stay in core',
     patterns: [
       {
-        regex: /\bpub enum SubagentSelectorAction\b/,
+        regex: /\bSubagentSelectorAction\b/,
         message: 'missing CLI subagent selector action contract',
       },
       {
-        regex: /\bpub fn show_list\b/,
+        regex: /\bshow_list\b/,
         message: 'missing CLI subagent list mode',
       },
       {
-        regex: /\bpub fn show_config\b/,
+        regex: /\bshow_config\b/,
         message: 'missing CLI subagent config mode',
       },
       {
-        regex: /\bdefault_enabled\b/,
-        message: 'missing CLI default availability display',
+        regex: /\benabled\b/,
+        message: 'missing CLI effective availability state',
       },
       {
         regex: /\bfn render_subagent_line\b/,

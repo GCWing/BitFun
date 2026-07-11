@@ -11,7 +11,7 @@ use ratatui::{
 use crate::commands::{match_substring_in, CommandSpec, COMMAND_SPECS};
 use crate::ui::theme::{StyleKind, Theme};
 
-pub struct CommandMenuState {
+pub(super) struct CommandMenuState {
     items: Vec<&'static CommandSpec>,
     list_state: ListState,
     visible: bool,
@@ -21,7 +21,7 @@ pub struct CommandMenuState {
 }
 
 impl CommandMenuState {
-    pub fn new() -> Self {
+    pub(super) fn new() -> Self {
         Self {
             items: Vec::new(),
             list_state: ListState::default(),
@@ -32,11 +32,11 @@ impl CommandMenuState {
         }
     }
 
-    pub fn update(&mut self, input: &str, cursor: usize) {
+    pub(super) fn update(&mut self, input: &str, cursor: usize) {
         self.update_with_commands(input, cursor, COMMAND_SPECS);
     }
 
-    pub fn update_with_commands(
+    pub(super) fn update_with_commands(
         &mut self,
         input: &str,
         cursor: usize,
@@ -75,11 +75,11 @@ impl CommandMenuState {
         }
     }
 
-    pub fn is_visible(&self) -> bool {
+    pub(super) fn is_visible(&self) -> bool {
         self.visible
     }
 
-    pub fn move_up(&mut self) {
+    pub(super) fn move_up(&mut self) {
         if !self.visible {
             return;
         }
@@ -89,7 +89,7 @@ impl CommandMenuState {
         self.list_state.select(Some(next));
     }
 
-    pub fn move_down(&mut self) {
+    pub(super) fn move_down(&mut self) {
         if !self.visible {
             return;
         }
@@ -99,7 +99,7 @@ impl CommandMenuState {
     }
 
     /// Confirm the selected command and return its name
-    pub fn apply_selection(&mut self) -> Option<String> {
+    pub(super) fn apply_selection(&mut self) -> Option<String> {
         if !self.visible {
             return None;
         }
@@ -110,7 +110,7 @@ impl CommandMenuState {
         Some(command)
     }
 
-    pub fn render(&mut self, frame: &mut Frame, area: Rect, theme: &Theme) {
+    pub(super) fn render(&mut self, frame: &mut Frame, area: Rect, theme: &Theme) {
         if !self.visible || area.height < 3 {
             self.last_area = None;
             return;
@@ -167,7 +167,7 @@ impl CommandMenuState {
     }
 
     /// Handle mouse events. Returns `Some(command_name)` when a command is clicked.
-    pub fn handle_mouse_event(&mut self, mouse: &MouseEvent) -> Option<String> {
+    pub(super) fn handle_mouse_event(&mut self, mouse: &MouseEvent) -> Option<String> {
         if !self.visible {
             return None;
         }
@@ -209,7 +209,7 @@ impl CommandMenuState {
     }
 
     /// Whether the menu captures this mouse event (prevents passthrough)
-    pub fn captures_mouse(&self, mouse: &MouseEvent) -> bool {
+    pub(super) fn captures_mouse(&self, mouse: &MouseEvent) -> bool {
         if !self.visible {
             return false;
         }

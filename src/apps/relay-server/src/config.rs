@@ -4,7 +4,7 @@ use std::net::SocketAddr;
 
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
-pub struct RelayConfig {
+pub(super) struct RelayConfig {
     pub listen_addr: SocketAddr,
     pub room_ttl_secs: u64,
     pub heartbeat_interval_secs: u64,
@@ -30,7 +30,7 @@ impl Default for RelayConfig {
 }
 
 impl RelayConfig {
-    pub fn from_env() -> Self {
+    pub(super) fn from_env() -> Self {
         let mut cfg = Self::default();
         if let Ok(port) = std::env::var("RELAY_PORT") {
             if let Ok(p) = port.parse::<u16>() {

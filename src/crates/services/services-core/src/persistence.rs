@@ -188,7 +188,7 @@ impl PersistenceService {
             }
         }
 
-        backups.sort_by(|a, b| b.1.cmp(&a.1));
+        backups.sort_by_key(|entry| std::cmp::Reverse(entry.1));
 
         if backups.len() > max_backups {
             for (path, _) in backups.into_iter().skip(max_backups) {

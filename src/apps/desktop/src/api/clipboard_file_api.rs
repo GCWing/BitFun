@@ -130,7 +130,7 @@ mod windows_clipboard {
         ) -> u32;
     }
 
-    pub fn get_clipboard_files() -> Result<Vec<String>, String> {
+    pub(super) fn get_clipboard_files() -> Result<Vec<String>, String> {
         unsafe {
             if IsClipboardFormatAvailable(CF_HDROP) == 0 {
                 return Ok(Vec::new());
@@ -187,7 +187,7 @@ mod macos_clipboard {
     use super::parse_clipboard_path_segments;
     use std::process::Command;
 
-    pub fn get_clipboard_files() -> Result<Vec<String>, String> {
+    pub(super) fn get_clipboard_files() -> Result<Vec<String>, String> {
         let output = Command::new("osascript")
             .args(&[
                 "-e",
@@ -254,7 +254,7 @@ mod linux_clipboard {
         }
     }
 
-    pub fn get_clipboard_files() -> Result<Vec<String>, String> {
+    pub(super) fn get_clipboard_files() -> Result<Vec<String>, String> {
         let content = read_xclip_uri_list()
             .or_else(read_wl_paste_uri_list)
             .unwrap_or_default();

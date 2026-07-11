@@ -726,7 +726,7 @@ impl SessionManager {
     async fn tracked_workspace_candidates(&self) -> Option<Vec<WorkspaceInfo>> {
         let workspace_service = get_global_workspace_service()?;
         let mut workspaces = workspace_service.list_workspace_infos().await;
-        workspaces.sort_by(|left, right| right.last_accessed.cmp(&left.last_accessed));
+        workspaces.sort_by_key(|workspace| std::cmp::Reverse(workspace.last_accessed));
         Some(workspaces)
     }
 

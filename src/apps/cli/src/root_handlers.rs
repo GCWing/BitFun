@@ -11,7 +11,7 @@ use crate::{
     ConfigAction, SessionAction,
 };
 
-pub struct ExecCommandArgs {
+pub(crate) struct ExecCommandArgs {
     pub message: Option<String>,
     pub agent: String,
     pub continue_last: bool,
@@ -24,7 +24,7 @@ pub struct ExecCommandArgs {
     pub confirm: bool,
 }
 
-pub async fn handle_exec_command(config: CliConfig, args: ExecCommandArgs) -> Result<()> {
+pub(crate) async fn handle_exec_command(config: CliConfig, args: ExecCommandArgs) -> Result<()> {
     let workspace_path_resolved = std::env::current_dir().ok();
 
     if let Some(ref ws_path) = workspace_path_resolved {
@@ -111,7 +111,7 @@ fn resolve_exec_message(message: Option<String>) -> Result<String> {
     Ok(message)
 }
 
-pub async fn handle_session_action(action: SessionAction) -> Result<Option<String>> {
+pub(crate) async fn handle_session_action(action: SessionAction) -> Result<Option<String>> {
     let agentic_system = crate::agent::agentic_system::init_agentic_system_for_cli().await?;
 
     let coordinator = agentic_system.coordinator.clone();
@@ -296,7 +296,7 @@ async fn resolve_cli_session_id(
     Ok(id.to_string())
 }
 
-pub fn handle_config_action(action: ConfigAction, config: &CliConfig) -> Result<()> {
+pub(crate) fn handle_config_action(action: ConfigAction, config: &CliConfig) -> Result<()> {
     match action {
         ConfigAction::Show => {
             println!("Current Configuration\n");
@@ -337,14 +337,14 @@ pub fn handle_config_action(action: ConfigAction, config: &CliConfig) -> Result<
     Ok(())
 }
 
-pub fn handle_health_command() -> Result<()> {
+pub(crate) fn handle_health_command() -> Result<()> {
     println!("BitFun CLI is running normally");
     println!("Version: {}", env!("CARGO_PKG_VERSION"));
     println!("Config directory: {:?}", CliConfig::config_dir()?);
     Ok(())
 }
 
-pub async fn serve_acp_stdio() -> Result<()> {
+pub(crate) async fn serve_acp_stdio() -> Result<()> {
     crate::setup_workspace();
 
     bitfun_core::service::config::initialize_global_config()

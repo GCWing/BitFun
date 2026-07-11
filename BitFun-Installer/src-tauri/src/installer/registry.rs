@@ -18,9 +18,9 @@ const APP_NAME: &str = "BitFun";
 const UNINSTALL_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Uninstall\BitFun";
 
 /// Matches Tauri NSIS `MANUFACTURER` (`bundle.publisher`).
-pub const TAURI_MANUFACTURER: &str = "BitFun Team";
+const TAURI_MANUFACTURER: &str = "BitFun Team";
 /// Matches Tauri NSIS `PRODUCTNAME` (`productName`).
-pub const TAURI_PRODUCT_NAME: &str = "BitFun";
+const TAURI_PRODUCT_NAME: &str = "BitFun";
 
 /// `HKCU\Software\{TAURI_MANUFACTURER}\{TAURI_PRODUCT_NAME}` — same as Tauri `MANUPRODUCTKEY`.
 fn tauri_manufacturer_product_key() -> String {
@@ -46,7 +46,7 @@ fn normalize_registry_path(value: &str) -> Option<String> {
 }
 
 /// Register the application in Add/Remove Programs.
-pub fn register_uninstall_entry(
+pub(super) fn register_uninstall_entry(
     install_path: &Path,
     version: &str,
     uninstall_command: &str,
@@ -74,7 +74,7 @@ pub fn register_uninstall_entry(
 }
 
 /// Same as Tauri NSIS `WriteRegStr SHCTX "${MANUPRODUCTKEY}" "" $INSTDIR` — used for default install dir / upgrades.
-pub fn register_tauri_install_location(install_path: &Path) -> Result<()> {
+pub(super) fn register_tauri_install_location(install_path: &Path) -> Result<()> {
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
     let path = tauri_manufacturer_product_key();
     let (key, _) = hkcu
@@ -87,7 +87,7 @@ pub fn register_tauri_install_location(install_path: &Path) -> Result<()> {
 }
 
 /// Read install dir written by Tauri NSIS or this installer (`MANUPRODUCTKEY` default value).
-pub fn read_tauri_install_location() -> Option<String> {
+pub(super) fn read_tauri_install_location() -> Option<String> {
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
     let path = tauri_manufacturer_product_key();
     let key = hkcu.open_subkey(&path).ok()?;
@@ -96,7 +96,7 @@ pub fn read_tauri_install_location() -> Option<String> {
 }
 
 /// Remove `MANUPRODUCTKEY` (HKCU and HKLM, matching Tauri NSIS `SHCTX` per-user / per-machine).
-pub fn remove_tauri_install_location() -> Result<()> {
+pub(super) fn remove_tauri_install_location() -> Result<()> {
     let path = tauri_manufacturer_product_key();
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
     if hkcu.delete_subkey_all(&path).is_ok() {
@@ -110,7 +110,7 @@ pub fn remove_tauri_install_location() -> Result<()> {
 }
 
 /// Remove Add/Remove Programs entry — same subkey as Tauri NSIS `UNINSTKEY` (per-user and per-machine).
-pub fn remove_uninstall_entry() -> Result<()> {
+pub(super) fn remove_uninstall_entry() -> Result<()> {
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
     if hkcu.delete_subkey_all(UNINSTALL_KEY).is_ok() {
         log::info!("Removed HKCU uninstall key {}", UNINSTALL_KEY);
@@ -123,7 +123,7 @@ pub fn remove_uninstall_entry() -> Result<()> {
 }
 
 /// NSIS `DeleteRegValue HKCU ... Run "${PRODUCTNAME}"` — align uninstall with Tauri NSIS.
-pub fn remove_autostart_run_entry() -> Result<()> {
+pub(super) fn remove_autostart_run_entry() -> Result<()> {
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
     let key = hkcu.open_subkey_with_flags(
         r"Software\Microsoft\Windows\CurrentVersion\Run",
@@ -138,7 +138,7 @@ pub fn remove_autostart_run_entry() -> Result<()> {
 
 /// Data read from `Uninstall\BitFun` (Tauri NSIS / this installer).
 #[derive(Debug, Clone)]
-pub struct UninstallRegistryData {
+pub(super) struct UninstallRegistryData {
     pub install_location: String,
     pub display_version: Option<String>,
     pub uninstall_string: Option<String>,
@@ -159,13 +159,13 @@ fn read_uninstall_key(root: RegKey, hive_name: &'static str) -> Option<Uninstall
 }
 
 /// Detect existing install like NSIS `ReadRegStr` on `UNINSTKEY` (HKCU then HKLM).
-pub fn read_existing_install_from_uninstall_registry() -> Option<UninstallRegistryData> {
+pub(super) fn read_existing_install_from_uninstall_registry() -> Option<UninstallRegistryData> {
     read_uninstall_key(RegKey::predef(HKEY_CURRENT_USER), "hkcu")
         .or_else(|| read_uninstall_key(RegKey::predef(HKEY_LOCAL_MACHINE), "hklm"))
 }
 
 /// Remove legacy context menu entries from older installer builds (no longer registered on install).
-pub fn remove_context_menu() -> Result<()> {
+pub(super) fn remove_context_menu() -> Result<()> {
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
     let _ = hkcu.delete_subkey_all(r"Software\Classes\Directory\Background\shell\BitFun");
     let _ = hkcu.delete_subkey_all(r"Software\Classes\Directory\shell\BitFun");
@@ -173,7 +173,7 @@ pub fn remove_context_menu() -> Result<()> {
 }
 
 /// Remove the install path from the user's PATH environment variable.
-pub fn remove_from_path(install_path: &Path) -> Result<()> {
+pub(super) fn remove_from_path(install_path: &Path) -> Result<()> {
     let hkcu = RegKey::predef(HKEY_CURRENT_USER);
     let env_key = hkcu.open_subkey_with_flags("Environment", KEY_READ | KEY_WRITE)?;
 
