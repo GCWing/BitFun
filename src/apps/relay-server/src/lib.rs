@@ -256,6 +256,7 @@ pub fn build_relay_router(
         )
         .route("/api/auth/login", post(routes::auth::login))
         .route("/api/auth/logout", post(routes::auth::logout))
+        .route("/api/auth/delegate", post(routes::auth::delegate))
         .route("/api/rooms/{room_id}/pair", post(routes::api::pair))
         .route(
             "/api/rooms/{room_id}/command",

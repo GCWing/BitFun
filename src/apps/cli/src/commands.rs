@@ -76,6 +76,10 @@ pub const COMMAND_SPECS: &[CommandSpec] = &[
         name: "/exit",
         description: "Exit the app",
     },
+    CommandSpec {
+        name: "/login",
+        description: "Log in to BitFun account for multi-device sync",
+    },
 ];
 
 /// Commands available on the startup page

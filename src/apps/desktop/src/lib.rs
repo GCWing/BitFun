@@ -1202,6 +1202,7 @@ pub async fn run() {
             api::remote_connect_api::account_token_expired,
             api::remote_connect_api::account_list_devices,
             api::remote_connect_api::account_device_rpc,
+            api::remote_connect_api::account_delegate_to_paired,
             // MiniApp API
             api::miniapp_api::list_miniapps,
             api::miniapp_api::get_miniapp,

@@ -598,6 +598,12 @@ async fn dispatch(
         | BotCommand::CancelTask(_)
         | BotCommand::NumberSelection(_)
         | BotCommand::PairingCode(_) => menu_or_welcome(state, s), // already handled
+        BotCommand::ListDevices | BotCommand::SendToDevice(_, _, _) => {
+            let view = MenuView::plain("Multi-device Control")
+                .with_body("The paired desktop must be logged into a BitFun account to enable multi-device control. Use the desktop's Account Login dialog to log in, then the bot will automatically inherit the account identity.")
+                .with_items(vec![MenuItem::default(s.item_back, "/menu")]);
+            result_from_menu(state, view)
+        }
     }
 }
 

@@ -294,3 +294,46 @@ pub async fn logout(State(state): State<AppState>, headers: HeaderMap) -> Status
         _ => StatusCode::UNAUTHORIZED,
     }
 }
+
+/// `POST /api/auth/delegate` — the caller (an already-authenticated desktop)
+/// requests a new token for the same account, to be delegated to a paired
+/// mobile-web or IM bot client. Returns `{token, user_id}`.
+///
+/// The delegate token carries the same `user_id` as the caller's token but
+/// references the caller's `device_id` (the paired desktop) for tracking.
+/// The desktop is responsible for securely transmitting the token + master_key
+/// to the paired client via the existing E2E room channel.
+pub async fn delegate(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<AuthResponse>, StatusCode> {
+    let db = state.db.as_ref().ok_or(StatusCode::NOT_IMPLEMENTED)?;
+    let token = headers
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.strip_prefix("Bearer "))
+        .map(|t| t.trim().to_string())
+        .filter(|t| !t.is_empty())
+        .ok_or(StatusCode::UNAUTHORIZED)?;
+
+    let auth = AuthToken::find(db, &token)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::UNAUTHORIZED)?;
+
+    // Issue a new token for the same user, same device (the desktop's).
+    let new_token = AuthToken::create(db, &auth.user_id, &auth.device_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    tracing::info!(
+        "Delegated token for user_id={} device_id={}",
+        auth.user_id,
+        auth.device_id
+    );
+
+    Ok(Json(AuthResponse {
+        token: new_token.token,
+        user_id: auth.user_id,
+    }))
+}

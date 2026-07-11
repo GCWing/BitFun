@@ -32,6 +32,11 @@ pub enum BotCommand {
     NumberSelection(usize),
     /// Free-form chat message forwarded to the AI session.
     ChatMessage(String),
+    /// List all online same-account devices (multi-device control).
+    ListDevices,
+    /// Send a message to a session on a specific device.
+    /// Format: /send <device_id> <session_id> <message>
+    SendToDevice(String, String, String),
 }
 
 // ── Command parsing ────────────────────────────────────────────────
@@ -119,6 +124,21 @@ pub fn parse_command(text: &str) -> BotCommand {
         // Switch model for the current session.
         "/model" | "/switch_model" | "切换模型" => return BotCommand::SwitchModel,
         _ => {}
+    }
+
+    // Multi-device commands (require account login on paired desktop).
+    if lower == "/devices" || lower == "/list_devices" || lower == "设备列表" {
+        return BotCommand::ListDevices;
+    }
+    if let Some(rest) = trimmed.strip_prefix("/send ") {
+        let parts: Vec<&str> = rest.splitn(3, ' ').collect();
+        if parts.len() == 3 {
+            return BotCommand::SendToDevice(
+                parts[0].to_string(),
+                parts[1].to_string(),
+                parts[2].to_string(),
+            );
+        }
     }
 
     if trimmed.len() == 6 && trimmed.chars().all(|c| c.is_ascii_digit()) {

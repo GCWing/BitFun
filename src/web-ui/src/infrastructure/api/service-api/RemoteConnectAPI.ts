@@ -525,6 +525,17 @@ class RemoteConnectAPIService {
       throw e;
     }
   }
+
+  async accountDelegateToPaired(correlationId: string): Promise<string> {
+    try {
+      return await this.adapter.request<string>('account_delegate_to_paired', {
+        request: { correlation_id: correlationId },
+      });
+    } catch (e) {
+      log.warn('accountDelegateToPaired failed', e);
+      throw e;
+    }
+  }
 }
 
 export const remoteConnectAPI = new RemoteConnectAPIService();

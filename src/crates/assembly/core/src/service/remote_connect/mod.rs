@@ -38,7 +38,7 @@ pub mod account {
     pub use bitfun_services_integrations::remote_connect::account::*;
 }
 
-pub use account::{AccountClient, AccountSession, KdfParams};
+pub use account::{AccountClient, AccountSession, DelegateToken, DelegatedIdentity, KdfParams};
 pub use device::DeviceIdentity;
 pub use encryption::{decrypt_from_base64, encrypt_to_base64, KeyPair};
 pub use pairing::{PairingProtocol, PairingState};
@@ -1140,5 +1140,27 @@ impl RemoteConnectService {
     /// Current online devices in the account (presence list).
     pub async fn online_devices(&self) -> Vec<relay_client::DevicePresenceEntry> {
         self.online_devices.read().await.clone()
+    }
+
+    /// Send an encrypted response to the paired mobile/IM client via the room
+    /// channel. Used to delegate account identity after pairing.
+    pub async fn send_room_response(
+        &self,
+        correlation_id: &str,
+        encrypted_data: &str,
+        nonce: &str,
+    ) -> Result<()> {
+        let guard = self.relay_client.read().await;
+        let client = guard
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("relay client not connected"))?;
+        client
+            .send_relay_response(correlation_id, encrypted_data, nonce)
+            .await
+    }
+
+    /// Get the pairing shared secret (for encrypting delegate identity).
+    pub async fn pairing_shared_secret(&self) -> Option<[u8; 32]> {
+        self.pairing.read().await.shared_secret().copied()
     }
 }

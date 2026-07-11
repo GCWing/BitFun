@@ -1762,6 +1762,11 @@ impl ChatMode {
                 }
                 return Ok(Some(ChatExitReason::Quit));
             }
+            "/login" => {
+                chat_state.add_system_message(
+                    "Account login for CLI is not yet implemented. Please use the desktop app to log in and enable multi-device sync.".to_string()
+                );
+            }
             _ => {
                 chat_state.add_system_message(format!(
                     "Unknown command: {}\nUse /help to see available commands",

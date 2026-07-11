@@ -62,6 +62,24 @@ pub struct AccountSession {
     pub master_key: [u8; MASTER_KEY_LEN],
 }
 
+/// A delegated token for a paired client (mobile-web / IM bot).
+/// The desktop requests this from the relay and transmits it along
+/// with the master_key to the paired client via the E2E room channel.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DelegateToken {
+    pub token: String,
+    pub user_id: String,
+}
+
+/// A delegated account identity: token + master_key, for paired clients
+/// that don't do Argon2id themselves. The desktop delegates both.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DelegatedIdentity {
+    pub token: String,
+    pub user_id: String,
+    pub master_key: String, // base64-encoded 32-byte master key
+}
+
 // ── Key derivation & wrapping ───────────────────────────────────────────
 
 /// Derive the KEK (key-encryption key) from the password. The KEK never leaves
@@ -433,6 +451,30 @@ impl AccountClient {
     }
 
     // ── Device RPC (browse/control other same-account devices) ────────────
+
+    /// Delegate a new token for the same account (for paired mobile/IM clients).
+    /// Returns the new token + user_id. The caller is responsible for securely
+    /// transmitting the token + master_key to the paired client.
+    pub async fn delegate_token(
+        &self,
+        relay_url: &str,
+        session: &AccountSession,
+    ) -> Result<DelegateToken> {
+        let resp = self
+            .http
+            .post(Self::endpoint(relay_url, "/api/auth/delegate"))
+            .header("Authorization", Self::auth_header(session))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(Self::into_error(resp).await);
+        }
+        let auth: AuthResponse = resp.json().await?;
+        Ok(DelegateToken {
+            token: auth.token,
+            user_id: auth.user_id,
+        })
+    }
 
     /// Revoke the account token on the relay (server-side logout).
     pub async fn revoke_token(&self, relay_url: &str, session: &AccountSession) -> Result<()> {

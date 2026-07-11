@@ -1536,6 +1536,49 @@ pub async fn account_device_rpc(
     Ok(response)
 }
 
+/// Delegate the account identity to a paired mobile-web/IM client.
+/// Called by the frontend after pairing succeeds.
+#[tauri::command]
+pub async fn account_delegate_to_paired(correlation_id: String) -> Result<String, String> {
+    let (session, relay_url) = read_account_context().await?;
+    let client = AccountClient::new();
+
+    // 1. Get a delegated token from the relay
+    let delegated = client
+        .delegate_token(&relay_url, &session)
+        .await
+        .map_err(|e| format!("{e}"))?;
+
+    // 2. Build the delegated identity JSON (master_key as base64)
+    use base64::{engine::general_purpose::STANDARD as B64, Engine};
+    let identity_json = serde_json::json!({
+        "resp": "delegate_identity",
+        "token": delegated.token,
+        "user_id": delegated.user_id,
+        "master_key": B64.encode(&session.master_key),
+    });
+    let identity_str =
+        serde_json::to_string(&identity_json).map_err(|e| format!("serialize identity: {e}"))?;
+
+    // 3. Encrypt with the room shared secret and send via room channel
+    let holder = get_service_holder().read().await;
+    let service = holder
+        .as_ref()
+        .ok_or_else(|| "remote connect service not initialized".to_string())?;
+
+    if let Some(secret) = service.pairing_shared_secret().await {
+        use bitfun_core::service::remote_connect::encryption::encrypt_to_base64;
+        if let Ok((enc, nonce)) = encrypt_to_base64(&secret, &identity_str) {
+            let _ = service
+                .send_room_response(&correlation_id, &enc, &nonce)
+                .await;
+            log::info!("Delegated identity sent to paired device (corr={correlation_id})");
+        }
+    }
+
+    Ok(identity_str)
+}
+
 /// Result of an auto-sync operation, returned to the frontend.
 #[derive(Serialize)]
 pub struct AutoSyncResult {
