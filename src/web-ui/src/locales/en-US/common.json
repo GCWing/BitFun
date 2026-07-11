@@ -492,7 +492,9 @@
     "newSession": "New Session",
     "sendMessagePlaceholder": "Send message to this device...",
     "newWorkspace": "New",
-    "newWorkspacePlaceholder": "/path/to/new/workspace"
+    "newWorkspacePlaceholder": "/path/to/new/workspace",
+    "online": "Online",
+    "offline": "Offline"
   },
   "remoteConnect": {
     "tabNgrok": "NAT Traversal",

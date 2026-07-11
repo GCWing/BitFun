@@ -492,7 +492,9 @@
     "newSession": "新建對話",
     "sendMessagePlaceholder": "向此裝置發送訊息...",
     "newWorkspace": "新建",
-    "newWorkspacePlaceholder": "/新/工作區/路徑"
+    "newWorkspacePlaceholder": "/新/工作區/路徑",
+    "online": "線上",
+    "offline": "離線"
   },
   "remoteConnect": {
     "tabNgrok": "內網穿透",

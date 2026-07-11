@@ -1,24 +1,19 @@
 /**
  * Account Login + Device Control Dialog
  *
- * Three views:
- * 1. Login form (username/password/server)
- * 2. Cloud overwrite confirmation (non-first login)
- * 3. Device control panel (list devices → browse workspaces/sessions → send messages)
+ * Views: login → overwrite (optional) → devices → sessions → chat
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useI18n } from '@/infrastructure/i18n';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { Modal, Button, Input, Alert } from '@/component-library';
 import {
   User, Lock, Server, LogIn, Monitor, CloudDownload,
-  ChevronRight, ArrowLeft, Send, Plus, MessageSquare,
+  ChevronRight, ArrowLeft, Send, Plus, MessageSquare, RefreshCw,
 } from 'lucide-react';
 import { remoteConnectAPI } from '@/infrastructure/api/service-api/RemoteConnectAPI';
-import type {
-  AccountHint, AccountDeviceInfo,
-} from '@/infrastructure/api/service-api/RemoteConnectAPI';
+import type { AccountHint, AccountDeviceInfo } from '@/infrastructure/api/service-api/RemoteConnectAPI';
 import { configAPI } from '@/infrastructure/api/service-api/ConfigAPI';
 import { useNotification } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
@@ -31,14 +26,12 @@ interface AccountLoginDialogProps {
   onClose: () => void;
 }
 
-// Remote workspace info (from RemoteResponse::WorkspaceInfo)
 interface RemoteWorkspaceInfo {
   has_workspace: boolean;
   path: string | null;
   project_name: string | null;
 }
 
-// Remote session info (from RemoteResponse::SessionList)
 interface RemoteSessionInfo {
   session_id: string;
   name: string;
@@ -48,6 +41,15 @@ interface RemoteSessionInfo {
 }
 
 type View = 'login' | 'overwrite' | 'devices' | 'sessions' | 'chat';
+
+/** Parse an RPC response JSON string and check for remote-side errors. */
+function parseRpcResponse(json: string): any {
+  const data = JSON.parse(json);
+  if (data.resp === 'error') {
+    throw new Error(data.message || 'Remote error');
+  }
+  return data;
+}
 
 export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
   isOpen,
@@ -74,6 +76,8 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
   const [selectedSession, setSelectedSession] = useState<string | null>(null);
   const [messageInput, setMessageInput] = useState('');
   const [newWorkspacePath, setNewWorkspacePath] = useState('');
+  const [localDeviceId, setLocalDeviceId] = useState<string | null>(null);
+  const refreshTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const refreshDevices = useCallback(async () => {
     try {
@@ -82,21 +86,36 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
     } catch (e) { log.warn('refreshDevices failed', e); }
   }, []);
 
+  const resetState = useCallback(() => {
+    setDevices([]); setSelectedDevice(null); setRemoteWorkspace(null);
+    setRemoteWorkspaces([]); setRemoteSessions([]); setRemoteMessages([]);
+    setSelectedSession(null); setMessageInput(''); setNewWorkspacePath('');
+    setLocalDeviceId(null);
+    if (refreshTimer.current) { clearInterval(refreshTimer.current); refreshTimer.current = null; }
+  }, []);
+
   useEffect(() => {
     if (!isOpen) {
       setUsername(''); setPassword(''); setAuthServer('');
       setError(null); setLoading(false); setView('login');
-      setDevices([]); setSelectedDevice(null); setRemoteSessions([]);
-      setRemoteMessages([]); setSelectedSession(null); setMessageInput('');
+      resetState();
     } else {
       remoteConnectAPI.accountGetCredentialHint().then((hint: AccountHint | null) => {
         if (hint) { setUsername(hint.username); setAuthServer(hint.relay_url); }
       });
       remoteConnectAPI.accountStatus().then((status) => {
-        if (status.logged_in) { setView('devices'); refreshDevices(); }
+        if (status.logged_in && status.user_id) {
+          setView('devices');
+          refreshDevices();
+          // Auto-refresh device list every 10s while dialog is open
+          refreshTimer.current = setInterval(refreshDevices, 10000);
+        }
       });
     }
-  }, [isOpen, refreshDevices]);
+    return () => {
+      if (refreshTimer.current) { clearInterval(refreshTimer.current); refreshTimer.current = null; }
+    };
+  }, [isOpen, refreshDevices, resetState]);
 
   const validate = useCallback(() => {
     if (!username.trim() || !password.trim() || !authServer.trim()) {
@@ -137,6 +156,7 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
       success(t('accountLogin.loginSuccess', { user_id: result.user_id }));
       setView('devices');
       refreshDevices();
+      refreshTimer.current = setInterval(refreshDevices, 10000);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
     } finally { setLoading(false); }
@@ -152,6 +172,7 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
       success(t('accountLogin.loginSuccess', { user_id: username }));
       setView('devices');
       refreshDevices();
+      refreshTimer.current = setInterval(refreshDevices, 10000);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
     } finally { setLoading(false); }
@@ -159,36 +180,42 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
 
   const handleCancelOverwrite = useCallback(async () => {
     try { await remoteConnectAPI.accountLogout(); } catch (e) { log.warn('logout failed', e); }
+    resetState();
     setView('login');
     onClose();
-  }, [onClose]);
+  }, [onClose, resetState]);
+
+  const handleLogout = useCallback(async () => {
+    setLoading(true);
+    try {
+      await remoteConnectAPI.accountLogout();
+      resetState();
+      setView('login');
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally { setLoading(false); }
+  }, [resetState]);
 
   // ── Device control: browse remote workspace + sessions ──────────────
   const selectDevice = useCallback(async (device: AccountDeviceInfo) => {
+    if (!device.online) return;
     setSelectedDevice(device);
     setLoading(true); setError(null);
     try {
-      // Get workspace info + recent workspaces
-      const wsResp = await remoteConnectAPI.accountDeviceRpc(
-        device.device_id,
-        JSON.stringify({ cmd: 'get_workspace_info' }),
-      );
-      const wsInfo = JSON.parse(wsResp);
+      const wsInfo = parseRpcResponse(await remoteConnectAPI.accountDeviceRpc(
+        device.device_id, JSON.stringify({ cmd: 'get_workspace_info' }),
+      ));
       setRemoteWorkspace(wsInfo);
 
-      const wsListResp = await remoteConnectAPI.accountDeviceRpc(
-        device.device_id,
-        JSON.stringify({ cmd: 'list_recent_workspaces' }),
-      );
-      const wsListData = JSON.parse(wsListResp);
+      const wsListData = parseRpcResponse(await remoteConnectAPI.accountDeviceRpc(
+        device.device_id, JSON.stringify({ cmd: 'list_recent_workspaces' }),
+      ));
       setRemoteWorkspaces(wsListData.workspaces || []);
 
-      // List sessions for current workspace
-      const sessResp = await remoteConnectAPI.accountDeviceRpc(
+      const sessData = parseRpcResponse(await remoteConnectAPI.accountDeviceRpc(
         device.device_id,
         JSON.stringify({ cmd: 'list_sessions', workspace_path: wsInfo.path || '/', limit: 50 }),
-      );
-      const sessData = JSON.parse(sessResp);
+      ));
       setRemoteSessions(sessData.sessions || []);
       setView('sessions');
     } catch (e: unknown) {
@@ -201,11 +228,10 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
     setSelectedSession(sessionId);
     setLoading(true); setError(null);
     try {
-      const resp = await remoteConnectAPI.accountDeviceRpc(
+      const data = parseRpcResponse(await remoteConnectAPI.accountDeviceRpc(
         selectedDevice.device_id,
         JSON.stringify({ cmd: 'get_session_messages', session_id: sessionId, limit: 100 }),
-      );
-      const data = JSON.parse(resp);
+      ));
       setRemoteMessages(data.messages || []);
       setView('chat');
     } catch (e: unknown) {
@@ -219,17 +245,9 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
     try {
       await remoteConnectAPI.accountDeviceRpc(
         selectedDevice.device_id,
-        JSON.stringify({
-          cmd: 'send_message',
-          session_id: selectedSession,
-          content: messageInput,
-          agent_type: null,
-          images: null,
-          image_contexts: null,
-        }),
+        JSON.stringify({ cmd: 'send_message', session_id: selectedSession, content: messageInput, agent_type: null, images: null, image_contexts: null }),
       );
       setMessageInput('');
-      // Refresh messages
       await selectSession(selectedSession);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
@@ -240,16 +258,10 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
     if (!selectedDevice) return;
     setLoading(true); setError(null);
     try {
-      const resp = await remoteConnectAPI.accountDeviceRpc(
+      const data = parseRpcResponse(await remoteConnectAPI.accountDeviceRpc(
         selectedDevice.device_id,
-        JSON.stringify({
-          cmd: 'create_session',
-          agent_type: null,
-          session_name: null,
-          workspace_path: remoteWorkspace?.path || '/',
-        }),
-      );
-      const data = JSON.parse(resp);
+        JSON.stringify({ cmd: 'create_session', agent_type: null, session_name: null, workspace_path: remoteWorkspace?.path || '/' }),
+      ));
       if (data.session_id) {
         await selectDevice(selectedDevice);
         await selectSession(data.session_id);
@@ -263,17 +275,12 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
     if (!selectedDevice) return;
     setLoading(true); setError(null);
     try {
-      // Switch the remote device's workspace
       await remoteConnectAPI.accountDeviceRpc(
-        selectedDevice.device_id,
-        JSON.stringify({ cmd: 'set_workspace', path: wsPath }),
+        selectedDevice.device_id, JSON.stringify({ cmd: 'set_workspace', path: wsPath }),
       );
-      // List sessions for the new workspace
-      const sessResp = await remoteConnectAPI.accountDeviceRpc(
-        selectedDevice.device_id,
-        JSON.stringify({ cmd: 'list_sessions', workspace_path: wsPath, limit: 50 }),
-      );
-      const sessData = JSON.parse(sessResp);
+      const sessData = parseRpcResponse(await remoteConnectAPI.accountDeviceRpc(
+        selectedDevice.device_id, JSON.stringify({ cmd: 'list_sessions', workspace_path: wsPath, limit: 50 }),
+      ));
       setRemoteSessions(sessData.sessions || []);
       setRemoteWorkspace({ has_workspace: true, path: wsPath, project_name: wsPath.split('/').pop() || wsPath });
     } catch (e: unknown) {
@@ -285,12 +292,10 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
     if (!selectedDevice || !newWorkspacePath.trim()) return;
     setLoading(true); setError(null);
     try {
-      await remoteConnectAPI.accountDeviceRpc(
-        selectedDevice.device_id,
-        JSON.stringify({ cmd: 'create_workspace', path: newWorkspacePath.trim() }),
-      );
+      parseRpcResponse(await remoteConnectAPI.accountDeviceRpc(
+        selectedDevice.device_id, JSON.stringify({ cmd: 'create_workspace', path: newWorkspacePath.trim() }),
+      ));
       setNewWorkspacePath('');
-      // Refresh workspace list + sessions
       await selectDevice(selectedDevice);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
@@ -304,24 +309,25 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
     : view === 'devices'
     ? t('accountLogin.devices')
     : view === 'sessions'
-    ? selectedDevice?.device_name || 'Sessions'
-    : 'Chat';
+    ? (selectedDevice?.device_name || t('accountLogin.devices'))
+    : t('accountLogin.devices');
 
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      title={title}
-      size="medium"
-      showCloseButton
-      closeOnOverlayClick={false}
-      contentClassName="modal__content--fill-flex"
-    >
+    <Modal isOpen={isOpen} onClose={onClose} title={title} size="medium"
+      showCloseButton closeOnOverlayClick={false} contentClassName="modal__content--fill-flex">
       <div className="account-login-dialog">
         {error && (
           <div className="account-login-dialog__error-banner">
             <Alert type="error" message={error} closable onClose={() => setError(null)}
               className="account-login-dialog__error-alert" />
+          </div>
+        )}
+
+        {/* Loading overlay */}
+        {loading && (view === 'devices' || view === 'sessions' || view === 'chat') && (
+          <div className="account-login-dialog__loading-overlay">
+            <RefreshCw size={20} className="spinning" />
+            <span>{t('accountLogin.processing')}</span>
           </div>
         )}
 
@@ -388,13 +394,13 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
               )}
               {devices.map((d) => (
                 <div key={d.device_id}
-                  className={`account-login-dialog__device-card ${d.online ? '' : 'offline'}`}
-                  onClick={() => d.online && selectDevice(d)}>
+                  className={`account-login-dialog__device-card ${d.online ? '' : 'offline'} ${localDeviceId === d.device_id ? 'current' : ''}`}
+                  onClick={() => selectDevice(d)}>
                   <Monitor size={16} />
                   <div className="account-login-dialog__device-info">
                     <span className="account-login-dialog__device-name">{d.device_name}</span>
                     <span className="account-login-dialog__device-id">
-                      {d.device_id.slice(0, 8)} · {d.online ? 'Online' : 'Offline'}
+                      {d.device_id.slice(0, 8)} · {d.online ? t('accountLogin.online') : t('accountLogin.offline')}
                     </span>
                   </div>
                   {d.online && <ChevronRight size={14} />}
@@ -402,8 +408,8 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
               ))}
             </div>
             <div className="account-login-dialog__actions">
-              <Button variant="secondary" size="small" onClick={() => { remoteConnectAPI.accountLogout(); setView('login'); }}>
-                {t('accountLogin.logout') || 'Logout'}
+              <Button variant="secondary" size="small" onClick={handleLogout} disabled={loading}>
+                {t('accountLogin.logout')}
               </Button>
             </div>
           </div>
@@ -416,22 +422,25 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
               <Button variant="ghost" size="small" onClick={() => setView('devices')}>
                 <ArrowLeft size={14} /> {t('accountLogin.devices')}
               </Button>
-              <Button variant="ghost" size="small" onClick={handleCreateRemoteSession} disabled={loading}>
-                <Plus size={14} /> {t('accountLogin.newSession') || 'New Session'}
-              </Button>
+              <div className="account-login-dialog__back-bar-right">
+                <Button variant="ghost" size="small" onClick={() => selectDevice(selectedDevice)} disabled={loading}>
+                  <RefreshCw size={14} />
+                </Button>
+                <Button variant="ghost" size="small" onClick={handleCreateRemoteSession} disabled={loading}>
+                  <Plus size={14} /> {t('accountLogin.newSession')}
+                </Button>
+              </div>
             </div>
 
             {/* Workspace selector */}
             {remoteWorkspaces.length > 0 && (
               <div className="account-login-dialog__workspace-section">
-                <div className="account-login-dialog__workspace-label">Workspaces</div>
+                <div className="account-login-dialog__workspace-label">{t('accountLogin.devices')}</div>
                 <div className="account-login-dialog__workspace-chips">
                   {remoteWorkspaces.map((ws: any, i: number) => (
-                    <div
-                      key={i}
+                    <div key={i}
                       className={`account-login-dialog__workspace-chip ${remoteWorkspace?.path === ws.path ? 'active' : ''}`}
-                      onClick={() => switchWorkspace(ws.path)}
-                    >
+                      onClick={() => switchWorkspace(ws.path)}>
                       {ws.name || ws.path}
                     </div>
                   ))}
@@ -441,34 +450,33 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
 
             {/* New workspace input */}
             <div className="account-login-dialog__new-workspace">
-              <Input
-                type="text"
-                value={newWorkspacePath}
+              <Input type="text" value={newWorkspacePath}
                 onChange={(e) => setNewWorkspacePath(e.target.value)}
-                placeholder={t('accountLogin.newWorkspacePlaceholder') || '/path/to/new/workspace'}
-                size="small"
-                disabled={loading}
-              />
+                placeholder={t('accountLogin.newWorkspacePlaceholder')}
+                size="small" disabled={loading} />
               <Button variant="secondary" size="small" onClick={handleCreateRemoteWorkspace}
                 disabled={loading || !newWorkspacePath.trim()}>
-                <Plus size={14} /> {t('accountLogin.newWorkspace') || 'New'}
+                <Plus size={14} /> {t('accountLogin.newWorkspace')}
               </Button>
             </div>
 
             {remoteWorkspace && (
               <div className="account-login-dialog__workspace-info">
-                {remoteWorkspace.project_name || remoteWorkspace.path || '/'} ({remoteSessions.length} sessions)
+                {remoteWorkspace.project_name || remoteWorkspace.path || '/'} ({remoteSessions.length})
               </div>
             )}
             <div className="account-login-dialog__session-list">
+              {remoteSessions.length === 0 && (
+                <div className="account-login-dialog__empty">{t('accountLogin.noDevices')}</div>
+              )}
               {remoteSessions.map((s) => (
                 <div key={s.session_id} className="account-login-dialog__session-item"
-                  onClick={() => selectSession(s.session_id)}>
+                  onClick={() => !loading && selectSession(s.session_id)}>
                   <MessageSquare size={14} />
                   <div className="account-login-dialog__session-info">
                     <span className="account-login-dialog__session-name">{s.name}</span>
                     <span className="account-login-dialog__session-meta">
-                      {s.agent_type} · {s.message_count} msgs
+                      {s.agent_type} · {s.message_count}
                     </span>
                   </div>
                   <ChevronRight size={14} />
@@ -483,10 +491,16 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
           <div className="account-login-dialog__scroll">
             <div className="account-login-dialog__back-bar">
               <Button variant="ghost" size="small" onClick={() => setView('sessions')}>
-                <ArrowLeft size={14} /> Sessions
+                <ArrowLeft size={14} /> {t('accountLogin.devices')}
+              </Button>
+              <Button variant="ghost" size="small" onClick={() => selectSession(selectedSession)} disabled={loading}>
+                <RefreshCw size={14} />
               </Button>
             </div>
             <div className="account-login-dialog__messages">
+              {remoteMessages.length === 0 && (
+                <div className="account-login-dialog__empty">{t('accountLogin.noDevices')}</div>
+              )}
               {remoteMessages.map((msg, i) => (
                 <div key={i} className={`account-login-dialog__message account-login-dialog__message--${msg.role}`}>
                   <div className="account-login-dialog__message-role">{msg.role}</div>
@@ -497,7 +511,7 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
             <div className="account-login-dialog__message-input">
               <Input type="text" value={messageInput}
                 onChange={(e) => setMessageInput(e.target.value)}
-                placeholder={t('accountLogin.sendMessagePlaceholder') || 'Send message...'}
+                placeholder={t('accountLogin.sendMessagePlaceholder')}
                 onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendRemoteMessage(); } }}
                 size="medium" disabled={loading} />
               <Button variant="primary" size="small" onClick={handleSendRemoteMessage} disabled={loading || !messageInput.trim()}>
