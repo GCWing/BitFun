@@ -80,6 +80,14 @@ pub const COMMAND_SPECS: &[CommandSpec] = &[
         name: "/login",
         description: "Log in to BitFun account for multi-device sync",
     },
+    CommandSpec {
+        name: "/logout",
+        description: "Log out of BitFun account",
+    },
+    CommandSpec {
+        name: "/devices",
+        description: "List devices on this account",
+    },
 ];
 
 /// Commands available on the startup page

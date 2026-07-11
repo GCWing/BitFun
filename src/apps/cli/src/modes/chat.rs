@@ -1763,9 +1763,70 @@ impl ChatMode {
                 return Ok(Some(ChatExitReason::Quit));
             }
             "/login" => {
-                chat_state.add_system_message(
-                    "Account login for CLI is not yet implemented. Please use the desktop app to log in and enable multi-device sync.".to_string()
-                );
+                if chat_state.is_processing {
+                    chat_view.set_status(Some(
+                        "Wait until the session is idle before using /login.".to_string(),
+                    ));
+                    return Ok(None);
+                }
+                // Temporarily leave raw mode so the user can type credentials
+                // with normal line editing. Alternate screen stays active; the
+                // prompt + echoed input render inside it.
+                chat_view.set_status(Some(
+                    "Login: switch to terminal to enter credentials.".to_string(),
+                ));
+                let _ = crossterm::terminal::disable_raw_mode();
+                let result = tokio::task::block_in_place(|| {
+                    rt_handle.block_on(crate::account::login_interactive())
+                });
+                // Always restore raw mode before returning to the TUI loop.
+                let _ = crossterm::terminal::enable_raw_mode();
+                match result {
+                    Ok(msg) => {
+                        chat_state.add_system_message(msg);
+                    }
+                    Err(e) => {
+                        chat_state.add_system_message(format!("Login failed: {e}"));
+                    }
+                }
+            }
+            "/logout" => {
+                let logged_in = tokio::task::block_in_place(|| {
+                    rt_handle.block_on(crate::account::is_logged_in())
+                });
+                if !logged_in {
+                    chat_state.add_system_message("Not logged in.".to_string());
+                } else {
+                    match tokio::task::block_in_place(|| {
+                        rt_handle.block_on(crate::account::logout())
+                    }) {
+                        Ok(()) => {
+                            chat_state.add_system_message("Logged out.".to_string());
+                        }
+                        Err(e) => {
+                            chat_state.add_system_message(format!("Logout failed: {e}"));
+                        }
+                    }
+                }
+            }
+            "/devices" => {
+                let logged_in = tokio::task::block_in_place(|| {
+                    rt_handle.block_on(crate::account::is_logged_in())
+                });
+                if !logged_in {
+                    chat_state.add_system_message("Not logged in. Use /login first.".to_string());
+                } else {
+                    match tokio::task::block_in_place(|| {
+                        rt_handle.block_on(crate::account::list_devices())
+                    }) {
+                        Ok(devices) => {
+                            chat_state.add_system_message(crate::account::format_devices(&devices));
+                        }
+                        Err(e) => {
+                            chat_state.add_system_message(format!("Failed to list devices: {e}"));
+                        }
+                    }
+                }
             }
             _ => {
                 chat_state.add_system_message(format!(

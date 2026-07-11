@@ -152,6 +152,25 @@ pub struct RemoteConnectService {
     device_relay_client: Arc<RwLock<Option<RelayClient>>>,
     /// Latest online-device presence for the account (P2).
     online_devices: Arc<RwLock<Vec<relay_client::DevicePresenceEntry>>>,
+    /// Callback that provides a delegated identity (token + master_key)
+    /// for paired mobile/IM clients. Set by the desktop layer after account
+    /// login. Called automatically after pairing succeeds.
+    delegated_identity_fn: Arc<
+        RwLock<
+            Option<
+                Arc<
+                    dyn Fn() -> std::pin::Pin<
+                            Box<
+                                dyn std::future::Future<Output = Option<(String, [u8; 32], String)>>
+                                    + Send
+                                    + Sync,
+                            >,
+                        > + Send
+                        + Sync,
+                >,
+            >,
+        >,
+    >,
 }
 
 impl RemoteConnectService {
@@ -178,7 +197,21 @@ impl RemoteConnectService {
             trusted_mobile_identity: Arc::new(RwLock::new(None)),
             device_relay_client: Arc::new(RwLock::new(None)),
             online_devices: Arc::new(RwLock::new(Vec::new())),
+            delegated_identity_fn: Arc::new(RwLock::new(None)),
         })
+    }
+
+    /// Set the delegated identity provider (called by desktop after login).
+    /// Returns `(token, master_key, relay_url)` for the paired client.
+    pub async fn set_delegated_identity_provider<F, Fut>(&self, f: F)
+    where
+        F: Fn() -> Fut + Send + Sync + 'static,
+        Fut: std::future::Future<Output = Option<(String, [u8; 32], String)>>
+            + Send
+            + Sync
+            + 'static,
+    {
+        *self.delegated_identity_fn.write().await = Some(Arc::new(move || Box::pin(f())));
     }
 
     pub fn device_identity(&self) -> &DeviceIdentity {
@@ -442,6 +475,7 @@ impl RemoteConnectService {
         let relay_arc = self.relay_client.clone();
         let server_arc = self.remote_server.clone();
         let trusted_mobile_identity_arc = self.trusted_mobile_identity.clone();
+        let delegated_identity_fn_arc = self.delegated_identity_fn.clone();
         tokio::spawn(async move {
             while let Some(event) = event_rx.recv().await {
                 match event {
@@ -588,6 +622,51 @@ impl RemoteConnectService {
                                                 }
 
                                                 *server_arc.write().await = Some(server);
+
+                                                // After pairing succeeds, if the desktop
+                                                // is logged into an account, delegate the
+                                                // account identity to the paired client
+                                                // (token + master_key via room channel).
+                                                let delegate_fn =
+                                                    delegated_identity_fn_arc.read().await.clone();
+                                                if let Some(get_identity) = delegate_fn {
+                                                    if let Some((token, master_key, _relay_url)) =
+                                                        get_identity().await
+                                                    {
+                                                        use base64::{
+                                                            engine::general_purpose::STANDARD as B64,
+                                                            Engine,
+                                                        };
+                                                        let identity_json = serde_json::json!({
+                                                            "resp": "delegate_identity",
+                                                            "token": token,
+                                                            "user_id": submitted_identity.user_id.clone(),
+                                                            "master_key": B64.encode(&master_key),
+                                                        });
+                                                        let identity_str =
+                                                            serde_json::to_string(&identity_json)
+                                                                .unwrap_or_default();
+                                                        if let Ok((denc, dnonce)) =
+                                                            encryption::encrypt_to_base64(
+                                                                &shared_secret,
+                                                                &identity_str,
+                                                            )
+                                                        {
+                                                            if let Some(ref client) =
+                                                                *relay_arc.read().await
+                                                            {
+                                                                let _ = client
+                                                                    .send_relay_response(
+                                                                        &correlation_id,
+                                                                        &denc,
+                                                                        &dnonce,
+                                                                    )
+                                                                    .await;
+                                                                info!("Delegated identity sent to paired client");
+                                                            }
+                                                        }
+                                                    }
+                                                }
                                             }
                                         }
                                         Ok(false) => {

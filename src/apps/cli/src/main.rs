@@ -4,6 +4,7 @@
 /// - Interactive TUI
 /// - Single command execution
 /// - Batch task processing
+mod account;
 mod acp_cli;
 mod agent;
 #[allow(dead_code)]

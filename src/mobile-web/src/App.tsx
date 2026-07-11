@@ -3,6 +3,7 @@ import PairingPage from './pages/PairingPage';
 import WorkspacePage from './pages/WorkspacePage';
 import SessionListPage from './pages/SessionListPage';
 import ChatPage from './pages/ChatPage';
+import DevicesPage from './pages/DevicesPage';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { I18nProvider, useI18n } from './i18n';
 import { RelayHttpClient } from './services/RelayHttpClient';
@@ -12,7 +13,7 @@ import { useConnectionHealth } from './hooks/useConnectionHealth';
 import { useMobileStore } from './services/store';
 import './styles/index.scss';
 
-type Page = 'pairing' | 'workspace' | 'sessions' | 'chat';
+type Page = 'pairing' | 'workspace' | 'sessions' | 'chat' | 'devices';
 type NavDirection = 'push' | 'pop' | null;
 
 const NAV_DURATION = 300;
@@ -259,6 +260,15 @@ const AppContent: React.FC = () => {
           />
         </div>
       )}
+      {page === 'devices' && clientRef.current && (
+        <DevicesPage
+          client={clientRef.current}
+          onBack={() => {
+            pageStackRef.current = pageStackRef.current.slice(0, -1);
+            setPage('sessions');
+          }}
+        />
+      )}
       {shouldShow('sessions') && sessionMgrRef.current && (
         <div className={`nav-page ${getNavClass('sessions', currentPage, navDir, isAnimating)}`}>
           <SessionListPage
@@ -266,6 +276,11 @@ const AppContent: React.FC = () => {
             onSelectSession={handleSelectSession}
             onOpenWorkspace={handleOpenWorkspace}
             onDisconnect={handleDisconnect}
+            onOpenDevices={() => {
+              pageStackRef.current = [...pageStackRef.current, 'devices'];
+              history.pushState({ page: 'devices' }, '');
+              setPage('devices');
+            }}
           />
         </div>
       )}

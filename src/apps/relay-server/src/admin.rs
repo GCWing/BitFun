@@ -89,8 +89,7 @@ pub fn provision(_username: &str, password: &str) -> Result<ProvisionedAccount> 
     let mut master_key = [0u8; MASTER_KEY_LEN];
     OsRng.fill_bytes(&mut master_key);
 
-    let cipher =
-        Aes256Gcm::new_from_slice(&kek).map_err(|e| anyhow!("aes init: {e}"))?;
+    let cipher = Aes256Gcm::new_from_slice(&kek).map_err(|e| anyhow!("aes init: {e}"))?;
     let mut nonce_bytes = [0u8; NONCE_LEN];
     OsRng.fill_bytes(&mut nonce_bytes);
     let nonce = Nonce::from_slice(&nonce_bytes);

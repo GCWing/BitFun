@@ -900,6 +900,35 @@ pub async fn account_login(request: AccountAuthRequest) -> Result<AccountLoginRe
     save_credential_hint(&request.username, &request.relay_url);
     // Reset the token-expired flag on fresh login
     TOKEN_EXPIRED.store(false, std::sync::atomic::Ordering::Relaxed);
+
+    // Set the delegated identity provider so that paired mobile/IM clients
+    // automatically receive the account identity after pairing.
+    let session_clone = get_account_session().clone();
+    let relay_url_clone = get_account_relay_url().clone();
+    if let Some(service) = get_service_holder().read().await.as_ref() {
+        service
+            .set_delegated_identity_provider(move || {
+                let session_arc = session_clone.clone();
+                let relay_url_arc = relay_url_clone.clone();
+                Box::pin(async move {
+                    let session = session_arc.read().await.clone()?;
+                    let relay_url = relay_url_arc.read().await.clone()?;
+                    // Delegate a new token via the relay
+                    match AccountClient::new()
+                        .delegate_token(&relay_url, &session)
+                        .await
+                    {
+                        Ok(delegated) => Some((delegated.token, session.master_key, relay_url)),
+                        Err(e) => {
+                            log::warn!("Delegate token failed: {e}");
+                            None
+                        }
+                    }
+                })
+            })
+            .await;
+    }
+
     log::info!(
         "Account logged in: {} (has_cloud_settings={})",
         result.user_id,

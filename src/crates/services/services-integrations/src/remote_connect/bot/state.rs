@@ -36,6 +36,18 @@ pub struct BotChatState {
     pub pending_invalid_count: u8,
     #[serde(skip, default)]
     pub last_menu_commands: Vec<String>,
+    /// Relay base URL the bot should hit for multi-device control. Set by the
+    /// desktop when the bot is paired so the bot can reach the same relay.
+    #[serde(skip, default)]
+    pub relay_url: Option<String>,
+    /// Delegated account token + master key for multi-device control. Set by
+    /// the desktop layer when the paired desktop has account login. These are
+    /// in-memory only (`serde(skip)`) — the master key is never persisted,
+    /// mirroring the `AccountSession.master_key` in-memory-only contract.
+    #[serde(skip, default)]
+    pub delegated_token: Option<String>,
+    #[serde(skip, default)]
+    pub delegated_master_key: Option<Vec<u8>>,
 }
 
 impl BotChatState {
@@ -52,6 +64,9 @@ impl BotChatState {
             pending_expires_at: 0,
             pending_invalid_count: 0,
             last_menu_commands: Vec::new(),
+            relay_url: None,
+            delegated_token: None,
+            delegated_master_key: None,
         }
     }
 
@@ -75,6 +90,20 @@ impl BotChatState {
 
     pub fn pending_expired(&self) -> bool {
         self.pending_action.is_some() && now_secs() > self.pending_expires_at
+    }
+
+    /// Install the desktop's delegated account identity (token + master key)
+    /// so the bot can call the relay's device-control endpoints directly.
+    /// The master key is kept in memory only; callers must never persist it.
+    pub fn set_delegated_identity(&mut self, token: String, master_key: Vec<u8>) {
+        self.delegated_token = Some(token);
+        self.delegated_master_key = Some(master_key);
+    }
+
+    /// Whether a delegated account identity is available for multi-device
+    /// control. Both the token and the master key must be present.
+    pub fn has_delegated_identity(&self) -> bool {
+        self.delegated_token.is_some() && self.delegated_master_key.is_some()
     }
 }
 

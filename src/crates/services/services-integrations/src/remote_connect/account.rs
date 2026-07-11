@@ -19,7 +19,7 @@ use crate::remote_connect::encryption::{decrypt, encrypt};
 /// by tests until that tooling lands.
 #[allow(dead_code)]
 const SALT_LEN: usize = 16;
-const MASTER_KEY_LEN: usize = 32;
+pub const MASTER_KEY_LEN: usize = 32;
 const NONCE_LEN: usize = 12;
 
 /// Argon2id parameters used for key derivation. Stored on the relay (non-secret)

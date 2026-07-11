@@ -598,9 +598,134 @@ async fn dispatch(
         | BotCommand::CancelTask(_)
         | BotCommand::NumberSelection(_)
         | BotCommand::PairingCode(_) => menu_or_welcome(state, s), // already handled
-        BotCommand::ListDevices | BotCommand::SendToDevice(_, _, _) => {
-            let view = MenuView::plain("Multi-device Control")
-                .with_body("The paired desktop must be logged into a BitFun account to enable multi-device control. Use the desktop's Account Login dialog to log in, then the bot will automatically inherit the account identity.")
+        BotCommand::ListDevices => list_devices(state, s).await,
+        BotCommand::SendToDevice(device_id, session_id, message) => {
+            send_to_device(state, &device_id, &session_id, &message, s).await
+        }
+    }
+}
+
+// ── Multi-device control ──────────────────────────────────────────
+//
+// The bot drives the relay's HTTP device-control API directly using a
+// delegated account identity (token + master key) that the desktop layer
+// installs on `BotChatState` after pairing + account login. We reuse the
+// existing `AccountClient` (which wraps reqwest + AES-256-GCM) rather than
+// re-implementing the encryption/request envelope inline.
+
+fn devices_unavailable_view(s: &'static BotStrings) -> MenuView {
+    MenuView::plain("Multi-device Control")
+        .with_body(s.devices_account_required)
+        .with_items(vec![MenuItem::default(s.item_back, "/menu")])
+}
+
+/// Build a temporary `AccountSession` from the delegated identity so the
+/// existing `AccountClient` methods (list_devices / device_rpc) can be reused
+/// without duplicating the relay/encryption envelope.
+fn delegated_session(
+    state: &BotChatState,
+) -> Option<crate::service::remote_connect::AccountSession> {
+    use crate::service::remote_connect::account::MASTER_KEY_LEN;
+    let token = state.delegated_token.clone()?;
+    let key_vec = state.delegated_master_key.clone()?;
+    if key_vec.len() != MASTER_KEY_LEN {
+        log::warn!(
+            "delegated master key has wrong length {} (expected {MASTER_KEY_LEN})",
+            key_vec.len()
+        );
+        return None;
+    }
+    let mut master_key = [0u8; 32];
+    master_key.copy_from_slice(&key_vec);
+    Some(crate::service::remote_connect::AccountSession {
+        token,
+        user_id: String::new(),
+        master_key,
+    })
+}
+
+async fn list_devices(state: &mut BotChatState, s: &'static BotStrings) -> HandleResult {
+    let Some(relay_url) = state.relay_url.clone() else {
+        return result_from_menu(state, devices_unavailable_view(s));
+    };
+    let Some(session) = delegated_session(state) else {
+        return result_from_menu(state, devices_unavailable_view(s));
+    };
+
+    let client = crate::service::remote_connect::AccountClient::new();
+    match client.list_devices(&relay_url, &session).await {
+        Ok(devices) => {
+            let body = if devices.is_empty() {
+                s.devices_empty.to_string()
+            } else {
+                let mut buf = String::new();
+                for d in &devices {
+                    let status = if d.online {
+                        s.devices_status_online
+                    } else {
+                        s.devices_status_offline
+                    };
+                    buf.push_str(&format!(
+                        "• {} [{}]\n  {}\n",
+                        d.device_name, status, d.device_id
+                    ));
+                }
+                buf.trim_end().to_string()
+            };
+            let view = MenuView::plain(s.devices_title)
+                .with_body(body)
+                .with_items(vec![MenuItem::default(s.item_back, "/menu")]);
+            result_from_menu(state, view)
+        }
+        Err(e) => {
+            error!("Bot list_devices failed: {e}");
+            let view = MenuView::plain(format!("{}{e}", s.devices_list_failed_prefix))
+                .with_items(vec![MenuItem::default(s.item_back, "/menu")]);
+            result_from_menu(state, view)
+        }
+    }
+}
+
+async fn send_to_device(
+    state: &mut BotChatState,
+    device_id: &str,
+    session_id: &str,
+    message: &str,
+    s: &'static BotStrings,
+) -> HandleResult {
+    let Some(relay_url) = state.relay_url.clone() else {
+        return result_from_menu(state, devices_unavailable_view(s));
+    };
+    let Some(session) = delegated_session(state) else {
+        return result_from_menu(state, devices_unavailable_view(s));
+    };
+
+    // Serialize a RemoteCommand::SendMessage exactly as the relay/target
+    // device expects, then hand it to AccountClient which encrypts + posts
+    // to /api/devices/{id}/rpc and decrypts the response.
+    use bitfun_services_integrations::remote_connect::RemoteCommand;
+    let command = serde_json::to_string(&RemoteCommand::SendMessage {
+        session_id: session_id.to_string(),
+        content: message.to_string(),
+        agent_type: None,
+        images: None,
+        image_contexts: None,
+    })
+    .unwrap_or_default();
+
+    let client = crate::service::remote_connect::AccountClient::new();
+    match client
+        .device_rpc(&relay_url, &session, device_id, &command)
+        .await
+    {
+        Ok(_response) => {
+            let view = MenuView::plain(s.devices_send_ok)
+                .with_items(vec![MenuItem::default(s.item_back, "/menu")]);
+            result_from_menu(state, view)
+        }
+        Err(e) => {
+            error!("Bot send_to_device failed: {e}");
+            let view = MenuView::plain(format!("{}{e}", s.devices_send_failed_prefix))
                 .with_items(vec![MenuItem::default(s.item_back, "/menu")]);
             result_from_menu(state, view)
         }
