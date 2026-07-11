@@ -22,7 +22,7 @@ pub mod tool_context;
 
 pub use budget::{
     DeepReviewActiveReviewerGuard, DeepReviewBudgetTracker, ReviewDiffBudgetAdmission,
-    REVIEW_DIFF_MAX_CHARS_PER_TURN,
+    REVIEW_DIFF_MAX_CHARS_PER_TURN, REVIEW_PROVIDER_DIFF_MAX_ACQUISITIONS_PER_TURN,
 };
 pub use concurrency_policy::{DeepReviewConcurrencyPolicy, DeepReviewEffectiveConcurrencySnapshot};
 pub use constants::{

@@ -181,7 +181,9 @@ async function prepareFromResolvedTarget(params: {
 }): Promise<PreparedReviewLaunch> {
   if ((params.targetEvidence.omittedFileCount ?? 0) > 0) {
     throw reviewTargetError(
-      'This Review target exceeds the bounded evidence file limit. Narrow the target before starting Review.',
+      params.targetEvidence.source === 'pull_request'
+        ? 'This pull request exceeds the provider Review file limit. Review a narrower local Git range or inspect the remaining files on the provider.'
+        : 'This Review target exceeds the bounded evidence file limit. Narrow the target before starting Review.',
       'deepReviewActionBar.launchError.fileLimit',
     );
   }
@@ -461,11 +463,6 @@ export async function prepareReviewLaunchFromPullRequest(params: {
     (total, file) => total + Math.max(0, file.additions) + Math.max(0, file.deletions),
     0,
   );
-  const extraContext = [
-    `Pull request #${pullRequest.number}: ${pullRequest.title}`,
-    `Provider URL: ${pullRequest.webUrl}`,
-  ].join('\n');
-
   return prepareFromResolvedTarget({
     target,
     changeStats: {
@@ -476,7 +473,6 @@ export async function prepareReviewLaunchFromPullRequest(params: {
     targetEvidence,
     requestedFiles: includedTargetFiles(target),
     workspacePath: params.workspacePath,
-    extraContext,
     intent: 'review',
   });
 }

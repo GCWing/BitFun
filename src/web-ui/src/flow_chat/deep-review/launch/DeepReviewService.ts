@@ -330,7 +330,6 @@ export async function launchDeepReviewSession({
       enableContextCompression: true,
       addMarker: false,
       deepReviewRunManifest: runManifest,
-      reviewTargetEvidence: runManifest?.evidencePack?.reviewTarget,
       reviewTargetFilePaths: requestedFiles,
       requestId: effectiveRequestId,
     } as const;

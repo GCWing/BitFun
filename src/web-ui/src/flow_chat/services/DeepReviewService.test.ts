@@ -540,6 +540,7 @@ describe('launchDeepReviewSession', () => {
         deepReviewRunManifest: runManifest,
       }),
     );
+    expect(mockCreateBtwChildSession.mock.calls[0][0].reviewTargetEvidence).toBeUndefined();
   });
 
   it('passes the run manifest as first-turn message metadata', async () => {

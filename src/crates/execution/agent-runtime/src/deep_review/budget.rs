@@ -28,6 +28,7 @@ use std::time::{Duration, Instant};
 const BUDGET_TTL: Duration = Duration::from_secs(60 * 60);
 const PRUNE_INTERVAL: Duration = Duration::from_secs(300);
 pub const REVIEW_DIFF_MAX_CHARS_PER_TURN: usize = 240_000;
+pub const REVIEW_PROVIDER_DIFF_MAX_ACQUISITIONS_PER_TURN: usize = 128;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ReviewDiffBudgetAdmission {
@@ -52,6 +53,7 @@ struct DeepReviewTurnBudget {
     shared_context_uses: HashMap<DeepReviewSharedContextKey, DeepReviewSharedContextUseRecord>,
     review_diff_returned_chars: usize,
     review_diff_returned_pages_by_reviewer: HashMap<String, HashSet<String>>,
+    review_provider_diff_acquisitions: usize,
     review_diff_exhausted: bool,
     review_diff_limited: bool,
     review_target_stale: bool,
@@ -75,6 +77,7 @@ impl DeepReviewTurnBudget {
             shared_context_uses: HashMap::new(),
             review_diff_returned_chars: 0,
             review_diff_returned_pages_by_reviewer: HashMap::new(),
+            review_provider_diff_acquisitions: 0,
             review_diff_exhausted: false,
             review_diff_limited: false,
             review_target_stale: false,
@@ -199,6 +202,27 @@ impl DeepReviewBudgetTracker {
         self.turns
             .get(parent_dialog_turn_id)
             .is_some_and(|turn| turn.review_diff_exhausted)
+    }
+
+    pub fn admit_review_provider_diff_acquisition(&self, parent_dialog_turn_id: &str) -> bool {
+        if parent_dialog_turn_id.trim().is_empty() {
+            return false;
+        }
+        let now = Instant::now();
+        let mut turn = self
+            .turns
+            .entry(parent_dialog_turn_id.to_string())
+            .or_insert_with(|| DeepReviewTurnBudget::new(now));
+        if turn.review_provider_diff_acquisitions >= REVIEW_PROVIDER_DIFF_MAX_ACQUISITIONS_PER_TURN
+        {
+            turn.review_diff_limited = true;
+            turn.updated_at = now;
+            return false;
+        }
+        turn.review_provider_diff_acquisitions =
+            turn.review_provider_diff_acquisitions.saturating_add(1);
+        turn.updated_at = now;
+        true
     }
 
     pub fn record_review_diff_limitation(&self, parent_dialog_turn_id: &str) {
@@ -979,22 +1003,13 @@ mod tests {
     }
 
     #[test]
-    fn review_diff_budget_has_no_independent_call_count_limit() {
+    fn provider_diff_acquisitions_are_bounded_before_io() {
         let tracker = DeepReviewBudgetTracker::default();
-        for index in 0..17 {
-            assert_eq!(
-                tracker.record_review_diff_page(
-                    "turn-many-small-pages",
-                    "reviewer",
-                    &format!("page-{index}"),
-                    1,
-                ),
-                ReviewDiffBudgetAdmission::Accepted {
-                    repeated_page: false
-                }
-            );
+        for _ in 0..REVIEW_PROVIDER_DIFF_MAX_ACQUISITIONS_PER_TURN {
+            assert!(tracker.admit_review_provider_diff_acquisition("turn-many-small-files"));
         }
-        assert!(!tracker.review_diff_budget_exhausted("turn-many-small-pages"));
+        assert!(!tracker.admit_review_provider_diff_acquisition("turn-many-small-files"));
+        assert!(tracker.review_diff_limited("turn-many-small-files"));
     }
 
     #[test]

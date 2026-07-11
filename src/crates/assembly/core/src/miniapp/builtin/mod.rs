@@ -30,7 +30,7 @@ const RETIRED_BUILTIN_APP_IDS: &[&str] = &["builtin-pr-review"];
 /// is preserved across reseeds; source files & meta.json (without timestamps) are
 /// overwritten.
 pub async fn seed_builtin_miniapps(manager: &Arc<MiniAppManager>) -> BitFunResult<()> {
-    retire_removed_builtin_miniapps(manager).await?;
+    retire_removed_builtin_miniapps(manager).await;
     let host = CoreBuiltinMiniAppSeedHost {
         manager: Arc::clone(manager),
     };
@@ -40,18 +40,30 @@ pub async fn seed_builtin_miniapps(manager: &Arc<MiniAppManager>) -> BitFunResul
     Ok(())
 }
 
-async fn retire_removed_builtin_miniapps(manager: &Arc<MiniAppManager>) -> BitFunResult<()> {
+async fn retire_removed_builtin_miniapps(manager: &Arc<MiniAppManager>) {
     for app_id in RETIRED_BUILTIN_APP_IDS {
         let app_dir = manager.path_manager().miniapp_dir(app_id);
-        if read_builtin_install_marker(&app_dir.join(BUILTIN_INSTALL_MARKER))
-            .await?
-            .is_some()
+        let marker = match read_builtin_install_marker(&app_dir.join(BUILTIN_INSTALL_MARKER)).await
         {
-            manager.delete(app_id).await?;
-            log::info!("retired builtin miniapp '{}'", app_id);
+            Ok(marker) => marker,
+            Err(error) => {
+                log::warn!(
+                    "failed to inspect retired builtin miniapp '{}': {}",
+                    app_id,
+                    error
+                );
+                continue;
+            }
+        };
+        if marker.is_none() {
+            continue;
         }
+        if let Err(error) = manager.delete(app_id).await {
+            log::warn!("failed to retire builtin miniapp '{}': {}", app_id, error);
+            continue;
+        }
+        log::info!("retired builtin miniapp '{}'", app_id);
     }
-    Ok(())
 }
 
 struct CoreBuiltinMiniAppSeedHost {

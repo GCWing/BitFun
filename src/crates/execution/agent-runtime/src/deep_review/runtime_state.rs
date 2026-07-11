@@ -136,6 +136,10 @@ pub fn review_diff_budget_exhausted(parent_dialog_turn_id: &str) -> bool {
     GLOBAL_DEEP_REVIEW_BUDGET_TRACKER.review_diff_budget_exhausted(parent_dialog_turn_id)
 }
 
+pub fn admit_review_provider_diff_acquisition(parent_dialog_turn_id: &str) -> bool {
+    GLOBAL_DEEP_REVIEW_BUDGET_TRACKER.admit_review_provider_diff_acquisition(parent_dialog_turn_id)
+}
+
 pub fn record_review_diff_limitation(parent_dialog_turn_id: &str) {
     GLOBAL_DEEP_REVIEW_BUDGET_TRACKER.record_review_diff_limitation(parent_dialog_turn_id)
 }

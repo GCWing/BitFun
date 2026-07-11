@@ -426,6 +426,8 @@ describe('ReviewService', () => {
     expect(prepared.targetEvidence.source).toBe('pull_request');
     expect(prepared.targetEvidence.pullRequest?.pullRequestId).toBe('42');
     expect(prepared.prompt).not.toContain('@@');
+    expect(prepared.prompt).not.toContain('Fix review target');
+    expect(prepared.prompt).not.toContain('https://github.com/example/repo/pull/42');
   });
 
   it('blocks remote workspace Review before spending reviewer capacity', async () => {

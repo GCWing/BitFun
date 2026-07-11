@@ -10,9 +10,9 @@ use crate::service::snapshot::manager::get_snapshot_manager_for_workspace;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
 use bitfun_agent_runtime::deep_review::{
-    record_review_diff_limitation, record_review_diff_page, record_review_target_stale,
-    review_diff_budget_exhausted, review_diff_page_was_returned, ReviewDiffBudgetAdmission,
-    ReviewTargetEvidence, ReviewTargetEvidenceSource,
+    admit_review_provider_diff_acquisition, record_review_diff_limitation, record_review_diff_page,
+    record_review_target_stale, review_diff_budget_exhausted, review_diff_page_was_returned,
+    ReviewDiffBudgetAdmission, ReviewTargetEvidence, ReviewTargetEvidenceSource,
 };
 use log::{debug, warn};
 use serde_json::{json, Value};
@@ -244,6 +244,22 @@ impl GetFileDiffTool {
         let repository_path = context.workspace_root().ok_or_else(|| {
             BitFunError::tool("Workspace root is required for pull request Review".to_string())
         })?;
+        let Some((parent_turn_id, _)) = Self::review_budget_identity(context) else {
+            return Ok(Some(Self::limited_review_diff_data(
+                logical_path,
+                "limited",
+                "review_provider_acquisition_budget_unavailable",
+                "Provider diff acquisition allowance cannot be tracked for this Review turn",
+            )));
+        };
+        if !admit_review_provider_diff_acquisition(parent_turn_id) {
+            return Ok(Some(Self::limited_review_diff_data(
+                logical_path,
+                "limited",
+                "review_provider_acquisition_budget_exhausted",
+                "Provider diff acquisition allowance exhausted for this Review turn",
+            )));
+        }
         let diff = match ReviewPlatformService::pull_request_file_diff(
             repository_path.to_string_lossy().as_ref(),
             pull_request.remote_id(),
@@ -1801,6 +1817,70 @@ mod tests {
 
         assert_eq!(data["evidence_limited"], true);
         assert_eq!(data["limitation"], "provider_file_diff_unavailable");
+    }
+
+    #[tokio::test]
+    async fn provider_acquisition_budget_stops_pull_request_diff_before_provider_io() {
+        let directory = tempfile::tempdir().expect("temporary workspace should be created");
+        let mut context = prepared_context();
+        attach_review_budget_identity(&mut context, "provider-request-cap");
+        context.workspace = Some(crate::agentic::WorkspaceBinding::new(
+            None,
+            directory.path().to_path_buf(),
+        ));
+        context.custom_data.insert(
+            "deep_review_run_manifest".to_string(),
+            json!({
+                "evidencePack": {
+                    "reviewTarget": {
+                        "version": 1,
+                        "source": "pull_request",
+                        "fingerprint": "provider-request-cap-fingerprint",
+                        "baseRevision": "1111111111111111111111111111111111111111",
+                        "headRevision": "2222222222222222222222222222222222222222",
+                        "completeness": "complete",
+                        "workspaceBinding": "unavailable",
+                        "pullRequest": {
+                            "remoteId": "origin",
+                            "platform": "github",
+                            "host": "github.com",
+                            "projectPath": "example/repo",
+                            "pullRequestId": "42",
+                            "number": 42,
+                            "webUrl": "https://github.com/example/repo/pull/42"
+                        },
+                        "files": [{
+                            "path": "src/lib.rs",
+                            "status": "modified",
+                            "completeness": "complete"
+                        }],
+                        "limitations": []
+                    }
+                }
+            }),
+        );
+        let (parent_turn_id, _) = GetFileDiffTool::review_budget_identity(&context)
+            .expect("review budget identity should be available");
+        for _ in
+            0..bitfun_agent_runtime::deep_review::REVIEW_PROVIDER_DIFF_MAX_ACQUISITIONS_PER_TURN
+        {
+            assert!(admit_review_provider_diff_acquisition(parent_turn_id));
+        }
+        let evidence = GetFileDiffTool::target_evidence(&context)
+            .expect("evidence should parse")
+            .expect("evidence should exist");
+
+        let data = GetFileDiffTool::new()
+            .pull_request_review_diff(&context, &evidence, "src/lib.rs", 0)
+            .await
+            .expect("request budget exhaustion should be structured")
+            .expect("pull request evidence should be handled");
+
+        assert_eq!(data["evidence_limited"], true);
+        assert_eq!(
+            data["limitation"],
+            "review_provider_acquisition_budget_exhausted"
+        );
     }
 
     #[test]

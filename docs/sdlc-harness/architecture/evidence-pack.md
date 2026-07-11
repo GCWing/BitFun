@@ -128,7 +128,7 @@ reviewers page through the target-bound diff tool using opaque cursors.
 |---|---|
 | `source_events` | 生成该包使用的事件 id 集合 |
 | `evidence_refs` | 指向日志摘要、报告、CI、截图、轨迹或外部系统事实的引用 |
-| `review_target` | 本次 Review 的目标摘要；changed-code 内容通过 prepared `GetFileDiff` 的有界分页读取，不嵌入 evidence pack。Git range 和 provider PR 的 immutable revision 可声明内容不可变；PR diff 按文件从 provider 读取并在读取前复核 base/head。live workspace 可声明 prepared diff 覆盖完整，但最终 evidence status 仍为 limited。revision 变化时工具返回 stale/limited 而不是读取错误 diff |
+| `review_target` | 本次 Review 的目标摘要；changed-code 内容通过 prepared `GetFileDiff` 的有界分页读取，不嵌入 evidence pack。Git range 和 provider PR 的 immutable revision 可声明内容不可变；PR diff 按文件从 provider 读取并在读取前复核 base/head，同时受父 Review turn 的字符预算和 provider diff acquisition 上限约束。live workspace 可声明 prepared diff 覆盖完整，但最终 evidence status 仍为 limited。revision 变化时工具返回 stale/limited 而不是读取错误 diff |
 | `security` | 执行安全决策摘要，包括执行位置、沙箱等级组合、降级原因和授权范围；不作为质量通过依据 |
 | `skipped_checks` | 未运行检查的原因、触发规则、可接受条件和残余风险 |
 | `open_risks` | 尚未被证据覆盖或人工接受的风险 |
