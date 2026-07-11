@@ -1815,6 +1815,10 @@ impl ChatMode {
                 });
                 if !logged_in {
                     chat_state.add_system_message("Not logged in. Use /login first.".to_string());
+                } else if crate::account::is_token_expired() {
+                    chat_state.add_system_message(
+                        "Account token has expired. Use /login to re-authenticate.".to_string(),
+                    );
                 } else {
                     match tokio::task::block_in_place(|| {
                         rt_handle.block_on(crate::account::list_devices())

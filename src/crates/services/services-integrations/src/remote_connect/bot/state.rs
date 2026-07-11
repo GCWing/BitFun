@@ -48,6 +48,20 @@ pub struct BotChatState {
     pub delegated_token: Option<String>,
     #[serde(skip, default)]
     pub delegated_master_key: Option<Vec<u8>>,
+    /// When Some, the bot operates on a remote device via HTTP RPC instead
+    /// of the local desktop. Set by `/devices` → pick a device.
+    /// Cleared by `/devices` → pick "local" or selecting an offline device.
+    #[serde(skip, default)]
+    pub active_remote_device: Option<RemoteDeviceTarget>,
+}
+
+/// A remote device the bot has switched to. All subsequent bot commands
+/// (create_session, send_message, list_sessions, etc.) are routed to this
+/// device via the relay HTTP RPC API instead of executing locally.
+#[derive(Debug, Clone)]
+pub struct RemoteDeviceTarget {
+    pub device_id: String,
+    pub device_name: String,
 }
 
 impl BotChatState {
@@ -67,6 +81,7 @@ impl BotChatState {
             relay_url: None,
             delegated_token: None,
             delegated_master_key: None,
+            active_remote_device: None,
         }
     }
 
@@ -141,6 +156,11 @@ pub enum PendingAction {
     ConfirmModeSwitch {
         target_mode: BotDisplayMode,
         target_cmd: String,
+    },
+    /// User is picking a device from the /devices list to switch context to.
+    /// `options` is `(device_id, device_name)`; index 0 = "local" (clear).
+    SelectDevice {
+        options: Vec<(String, String)>,
     },
 }
 

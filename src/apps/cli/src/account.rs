@@ -8,7 +8,10 @@
 //!
 //! The master key lives in memory only and is lost when the CLI exits.
 
-use std::sync::{Arc, OnceLock};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc, OnceLock,
+};
 
 use anyhow::{anyhow, Result};
 use tokio::sync::RwLock;
@@ -28,6 +31,10 @@ static ACCOUNT_RELAY_URL: OnceLock<Arc<RwLock<Option<String>>>> = OnceLock::new(
 /// connection alive (the internal read/write tasks own the socket). Dropping it
 /// tears the connection down.
 static DEVICE_RELAY_CLIENT: OnceLock<RwLock<Option<Arc<RelayClient>>>> = OnceLock::new();
+
+/// Set when the relay returns an auth error (token expired or invalid).
+/// The chat loop checks this via `is_token_expired()` and prompts the user.
+static TOKEN_EXPIRED: AtomicBool = AtomicBool::new(false);
 
 fn account_session() -> &'static Arc<RwLock<Option<AccountSession>>> {
     ACCOUNT_SESSION.get_or_init(|| Arc::new(RwLock::new(None)))
@@ -55,6 +62,12 @@ async fn read_account_context() -> Result<(AccountSession, String)> {
 /// Whether an account session is currently held.
 pub async fn is_logged_in() -> bool {
     account_session().read().await.is_some()
+}
+
+/// Whether the relay has reported the account token as expired/invalid.
+/// The chat loop can call this to prompt the user to re-login.
+pub fn is_token_expired() -> bool {
+    TOKEN_EXPIRED.load(Ordering::Relaxed)
 }
 
 /// Resolve the current device identity (machine-based).
@@ -223,6 +236,7 @@ pub async fn login_interactive() -> Result<String> {
     let device_name = device.device_name.clone();
     *account_session().write().await = Some(session);
     *account_relay_url().write().await = Some(relay_url.clone());
+    TOKEN_EXPIRED.store(false, Ordering::Relaxed);
 
     // Establish device routing so the CLI becomes RPC-controllable.
     let connect_result = spawn_device_routing(&relay_url, &device_name).await;
@@ -296,6 +310,7 @@ pub async fn logout() -> Result<()> {
     }
     *account_session().write().await = None;
     *account_relay_url().write().await = None;
+    TOKEN_EXPIRED.store(false, Ordering::Relaxed);
     Ok(())
 }
 
@@ -311,6 +326,7 @@ async fn handle_relay_event(
         }
         RelayEvent::AuthError { message } => {
             tracing::warn!("Device routing auth error: {message}");
+            TOKEN_EXPIRED.store(true, Ordering::Relaxed);
         }
         RelayEvent::DevicePresence { devices } => {
             tracing::info!("Device presence updated: {} online", devices.len());

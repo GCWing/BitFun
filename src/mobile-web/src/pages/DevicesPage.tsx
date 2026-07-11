@@ -36,6 +36,12 @@ interface Props {
   onBack: () => void;
 }
 
+/** Check whether an error is an HTTP 401 (token expired/unauthorized). */
+function isTokenExpiredError(e: any): boolean {
+  const msg = String(e?.message || '');
+  return msg.includes('HTTP 401') || msg.includes('Unauthorized');
+}
+
 const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
   const { t } = useI18n();
   const [view, setView] = useState<View>('devices');
@@ -47,14 +53,19 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
   const [messageInput, setMessageInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [tokenExpired, setTokenExpired] = useState(false);
 
   const refreshDevices = useCallback(async () => {
     if (!client.hasDelegatedIdentity) return;
     try {
       const list = await client.listDevices();
       setDevices(list);
-    } catch (e) {
-      // silent
+      setTokenExpired(false);
+    } catch (e: any) {
+      if (isTokenExpiredError(e)) {
+        setTokenExpired(true);
+      }
+      // silent for other errors during background refresh
     }
   }, [client]);
 
@@ -76,9 +87,10 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
       setSessions(sessResp.sessions || []);
       setView('sessions');
     } catch (e: any) {
-      setError(e.message || 'Failed to load device');
+      if (isTokenExpiredError(e)) setTokenExpired(true);
+      setError(e.message || t('devices.loadDeviceFailed'));
     } finally { setLoading(false); }
-  }, [client]);
+  }, [client, t]);
 
   const selectSession = useCallback(async (sessionId: string) => {
     if (!selectedDevice) return;
@@ -91,9 +103,10 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
       setMessages(data.messages || []);
       setView('chat');
     } catch (e: any) {
-      setError(e.message || 'Failed to load messages');
+      if (isTokenExpiredError(e)) setTokenExpired(true);
+      setError(e.message || t('devices.loadMessagesFailed'));
     } finally { setLoading(false); }
-  }, [client, selectedDevice]);
+  }, [client, selectedDevice, t]);
 
   const sendMessage = useCallback(async () => {
     if (!selectedDevice || !selectedSession || !messageInput.trim()) return;
@@ -109,9 +122,10 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
       });
       setMessages(data.messages || []);
     } catch (e: any) {
-      setError(e.message || 'Failed to send message');
+      if (isTokenExpiredError(e)) setTokenExpired(true);
+      setError(e.message || t('devices.sendFailed'));
     } finally { setLoading(false); }
-  }, [client, selectedDevice, selectedSession, messageInput]);
+  }, [client, selectedDevice, selectedSession, messageInput, t]);
 
   const createSession = useCallback(async () => {
     if (!selectedDevice) return;
@@ -125,20 +139,20 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
         await selectSession(data.session_id);
       }
     } catch (e: any) {
-      setError(e.message || 'Failed to create session');
+      if (isTokenExpiredError(e)) setTokenExpired(true);
+      setError(e.message || t('devices.createSessionFailed'));
     } finally { setLoading(false); }
-  }, [client, selectedDevice, selectDevice, selectSession]);
+  }, [client, selectedDevice, selectDevice, selectSession, t]);
 
   if (!client.hasDelegatedIdentity) {
     return (
       <div className="devices-page">
         <div className="devices-page__header">
           <button className="devices-page__back" onClick={onBack}>←</button>
-          <h2>{t('accountLogin.devices') || 'Devices'}</h2>
+          <h2>{t('devices.title')}</h2>
         </div>
         <div className="devices-page__empty">
-          The paired desktop is not logged into a BitFun account.
-          Please log in on the desktop to enable multi-device control.
+          {t('devices.noDelegatedIdentity')}
         </div>
       </div>
     );
@@ -153,26 +167,29 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
             else setView('devices');
           }}>←</button>
         )}
-        <h2>{view === 'devices' ? (t('accountLogin.devices') || 'Devices')
-          : view === 'sessions' ? (selectedDevice?.device_name || 'Sessions')
-          : 'Chat'}</h2>
+        <h2>{view === 'devices' ? t('devices.title')
+          : view === 'sessions' ? (selectedDevice?.device_name || t('devices.sessionsTitle'))
+          : t('devices.chatTitle')}</h2>
       </div>
 
-      {error && <div className="devices-page__error">{error}</div>}
+      {tokenExpired && (
+        <div className="devices-page__error">{t('devices.tokenExpired')}</div>
+      )}
+      {error && !tokenExpired && <div className="devices-page__error">{error}</div>}
 
-      {loading && <div className="devices-page__loading">Loading...</div>}
+      {loading && <div className="devices-page__loading">{t('devices.loading')}</div>}
 
       {/* Device list */}
-      {view === 'devices' && !loading && (
+      {view === 'devices' && !loading && !tokenExpired && (
         <div className="devices-page__list">
-          {devices.length === 0 && <div className="devices-page__empty">No devices found</div>}
+          {devices.length === 0 && <div className="devices-page__empty">{t('devices.noDevices')}</div>}
           {devices.map(d => (
             <div key={d.device_id}
               className={`devices-page__device ${d.online ? '' : 'offline'}`}
               onClick={() => selectDevice(d)}>
               <span className="devices-page__device-name">{d.device_name}</span>
               <span className="devices-page__device-status">
-                {d.online ? '🟢' : '⚪'} {d.device_id.slice(0, 8)}
+                {d.online ? t('devices.online') : t('devices.offline')} {d.device_id.slice(0, 8)}
               </span>
             </div>
           ))}
@@ -183,9 +200,9 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
       {view === 'sessions' && selectedDevice && !loading && (
         <div className="devices-page__list">
           <button className="devices-page__new-btn" onClick={createSession}>
-            + New Session
+            {t('devices.newSession')}
           </button>
-          {sessions.length === 0 && <div className="devices-page__empty">No sessions</div>}
+          {sessions.length === 0 && <div className="devices-page__empty">{t('devices.noSessions')}</div>}
           {sessions.map(s => (
             <div key={s.session_id} className="devices-page__session"
               onClick={() => selectSession(s.session_id)}>
@@ -210,10 +227,10 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
           <div className="devices-page__input-bar">
             <input type="text" value={messageInput}
               onChange={e => setMessageInput(e.target.value)}
-              placeholder="Send message..."
+              placeholder={t('devices.sendMessagePlaceholder')}
               onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); sendMessage(); } }}
               disabled={loading} />
-            <button onClick={sendMessage} disabled={loading || !messageInput.trim()}>Send</button>
+            <button onClick={sendMessage} disabled={loading || !messageInput.trim()}>{t('devices.sendMessage')}</button>
           </div>
         </>
       )}

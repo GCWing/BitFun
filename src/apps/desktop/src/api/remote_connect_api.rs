@@ -929,6 +929,36 @@ pub async fn account_login(request: AccountAuthRequest) -> Result<AccountLoginRe
             .await;
     }
 
+    // Also set the global provider for the bot pairing path (IM bots don't
+    // go through the room channel, so they can't inherit the identity via
+    // the delegated_identity_fn callback above). Instead, when a bot
+    // completes pairing via `complete_im_bot_pairing`, it calls this
+    // provider to get relay_url + token + master_key.
+    {
+        let session_arc = get_account_session().clone();
+        let relay_url_arc = get_account_relay_url().clone();
+        bitfun_core::service::remote_connect::bot::set_delegated_identity_provider(move || {
+            let session_arc = session_arc.clone();
+            let relay_url_arc = relay_url_arc.clone();
+            Box::pin(async move {
+                let session = session_arc.read().await.clone()?;
+                let relay_url = relay_url_arc.read().await.clone()?;
+                match AccountClient::new()
+                    .delegate_token(&relay_url, &session)
+                    .await
+                {
+                    Ok(delegated) => {
+                        Some((relay_url, delegated.token, session.master_key.to_vec()))
+                    }
+                    Err(e) => {
+                        log::warn!("Bot delegate token failed: {e}");
+                        None
+                    }
+                }
+            })
+        });
+    }
+
     log::info!(
         "Account logged in: {} (has_cloud_settings={})",
         result.user_id,
@@ -1459,6 +1489,8 @@ pub async fn account_import_remote_sessions(
 
         let metadata: SessionMetadata = serde_json::from_value(bundle.metadata)
             .map_err(|e| format!("deserialize metadata: {e}"))?;
+        // Only write metadata — turns are lazy-loaded when the user opens
+        // the session (see `account_fetch_session_turns`).
         if manager
             .save_session_metadata(&storage_path, &metadata)
             .await
@@ -1467,18 +1499,76 @@ pub async fn account_import_remote_sessions(
             continue;
         }
 
-        // Write turns
-        for turn_val in &bundle.turns {
-            let turn: DialogTurnData = serde_json::from_value(turn_val.clone())
-                .map_err(|e| format!("deserialize turn: {e}"))?;
-            let _ = manager.save_dialog_turn(&storage_path, &turn).await;
-        }
-
         imported.push(session_id);
     }
 
     log::info!("Imported {} remote sessions", imported.len());
     Ok(imported)
+}
+
+/// Lazy-load a session's turns from the relay on first open.
+///
+/// When the periodic pull imports a remote session, it writes only metadata
+/// (no turns) to keep the pull lightweight. When the user clicks into that
+/// session, the frontend calls this command to fetch the full session bundle
+/// from the relay and persist the turns locally. Subsequent opens read from
+/// local disk without hitting the relay.
+///
+/// Returns `true` if turns were fetched and written, `false` if the session
+/// already had local turns (no relay fetch needed).
+#[tauri::command]
+pub async fn account_fetch_session_turns(
+    session_id: String,
+    workspace_path: String,
+    app_state: State<'_, crate::api::app_state::AppState>,
+    path_manager: State<'_, Arc<bitfun_core::infrastructure::PathManager>>,
+) -> Result<bool, String> {
+    let storage_path =
+        desktop_effective_session_storage_path(&app_state, &workspace_path, None, None).await;
+    let manager = PersistenceManager::new(path_manager.inner().clone())
+        .map_err(|e| format!("create persistence manager: {e}"))?;
+
+    // If turns already exist locally, no fetch needed.
+    if let Ok(turns) = manager.load_session_turns(&storage_path, &session_id).await {
+        if !turns.is_empty() {
+            return Ok(false);
+        }
+    }
+
+    // Fetch the full bundle from the relay (which includes turns).
+    let (acct_session, relay_url) = read_account_context().await?;
+    let remote_sessions = AccountClient::new()
+        .fetch_sessions(&relay_url, &acct_session)
+        .await
+        .map_err(|e| format!("{e}"))?;
+
+    let bundle_json = remote_sessions
+        .iter()
+        .find(|(sid, _)| sid == &session_id)
+        .map(|(_, json)| json.as_str())
+        .ok_or_else(|| "session not found on relay".to_string())?;
+
+    let bundle: SessionBundle =
+        serde_json::from_str(bundle_json).map_err(|e| format!("deserialize bundle: {e}"))?;
+
+    // Write turns first, then metadata (self-healing on crash).
+    for turn_val in &bundle.turns {
+        let turn: DialogTurnData = serde_json::from_value(turn_val.clone())
+            .map_err(|e| format!("deserialize turn: {e}"))?;
+        let _ = manager.save_dialog_turn(&storage_path, &turn).await;
+    }
+    // Re-save metadata to ensure consistency.
+    let metadata: SessionMetadata = serde_json::from_value(bundle.metadata)
+        .map_err(|e| format!("deserialize metadata: {e}"))?;
+    let _ = manager
+        .save_session_metadata(&storage_path, &metadata)
+        .await;
+
+    log::info!(
+        "Lazy-loaded {} turns for session {session_id}",
+        bundle.turns.len()
+    );
+    Ok(true)
 }
 
 /// Execute a task on a remote device — sends an ExecuteOnDevice command
@@ -1580,11 +1670,13 @@ pub async fn account_delegate_to_paired(correlation_id: String) -> Result<String
 
     // 2. Build the delegated identity JSON (master_key as base64)
     use base64::{engine::general_purpose::STANDARD as B64, Engine};
+    let device_id = current_device_identity()?.device_id;
     let identity_json = serde_json::json!({
         "resp": "delegate_identity",
         "token": delegated.token,
         "user_id": delegated.user_id,
         "master_key": B64.encode(&session.master_key),
+        "device_id": device_id,
     });
     let identity_str =
         serde_json::to_string(&identity_json).map_err(|e| format!("serialize identity: {e}"))?;
@@ -1636,15 +1728,19 @@ pub async fn account_auto_sync(
             .upload_settings(&relay_url, &acct_session, &config_json)
             .await
             .map_err(|e| format!("upload settings: {e}"))?;
+        LAST_SETTINGS_VERSION.store(
+            chrono::Utc::now().timestamp_millis(),
+            std::sync::atomic::Ordering::Relaxed,
+        );
         log::info!("First login: uploaded local settings to cloud");
         true
     } else {
-        let cloud_settings = client
-            .fetch_settings(&relay_url, &acct_session)
+        let cloud = client
+            .fetch_settings_with_version(&relay_url, &acct_session)
             .await
             .map_err(|e| format!("fetch settings: {e}"))?;
-        if let Some(cloud_json) = cloud_settings {
-            let config_value: serde_json::Value = serde_json::from_str(&cloud_json)
+        if let Some(blob) = cloud {
+            let config_value: serde_json::Value = serde_json::from_str(&blob.plaintext)
                 .map_err(|e| format!("parse cloud config: {e}"))?;
             // Extract the .config field from the ConfigExport wrapper —
             // the upload path stores the full ConfigExport JSON which has
@@ -1657,7 +1753,11 @@ pub async fn account_auto_sync(
                 .await
                 .map_err(|e| format!("import cloud config: {e}"))?;
             app_state.ai_client_factory.invalidate_cache();
-            log::info!("Applied cloud settings to local device");
+            LAST_SETTINGS_VERSION.store(blob.version, std::sync::atomic::Ordering::Relaxed);
+            log::info!(
+                "Applied cloud settings to local device (version={})",
+                blob.version
+            );
             true
         } else {
             false
@@ -1725,17 +1825,14 @@ pub async fn account_auto_sync(
             serde_json::from_str(&bundle_json).map_err(|e| format!("deserialize bundle: {e}"))?;
         let metadata: SessionMetadata = serde_json::from_value(bundle.metadata)
             .map_err(|e| format!("deserialize metadata: {e}"))?;
+        // Only write metadata — turns are lazy-loaded when the user opens
+        // the session (see `account_fetch_session_turns`).
         if manager
             .save_session_metadata(&storage_path, &metadata)
             .await
             .is_err()
         {
             continue;
-        }
-        for turn_val in &bundle.turns {
-            let turn: DialogTurnData = serde_json::from_value(turn_val.clone())
-                .map_err(|e| format!("deserialize turn: {e}"))?;
-            let _ = manager.save_dialog_turn(&storage_path, &turn).await;
         }
         imported += 1;
     }
@@ -1752,6 +1849,11 @@ pub async fn account_auto_sync(
 
 use std::time::Duration;
 use tokio::sync::mpsc;
+
+/// Tracks the last-known cloud settings version so the periodic pull can
+/// skip re-applying unchanged settings. Updated by both the push path
+/// (after upload) and the pull path (after fetch).
+static LAST_SETTINGS_VERSION: std::sync::atomic::AtomicI64 = std::sync::atomic::AtomicI64::new(0);
 
 /// What to sync. `Session` carries the session_id + workspace_path.
 /// What to sync. Each variant maps to a single relay operation.
@@ -1940,6 +2042,12 @@ async fn execute_debounced_sync(
                         }
                         log::warn!("Auto-sync settings failed: {e}");
                     } else {
+                        // Record the version we just uploaded so the pull path
+                        // doesn't immediately re-apply our own upload.
+                        LAST_SETTINGS_VERSION.store(
+                            chrono::Utc::now().timestamp_millis(),
+                            std::sync::atomic::Ordering::Relaxed,
+                        );
                         log::debug!("Auto-synced settings");
                     }
                 }
@@ -2078,14 +2186,9 @@ async fn import_session_bundle(bundle_json: &str) -> anyhow::Result<()> {
 
     let metadata: SessionMetadata = serde_json::from_value(bundle.metadata.clone())?;
 
-    // Write turns FIRST, then metadata. If a crash occurs during turn writes,
-    // no metadata exists → the session appears "not imported" → a future pull
-    // will re-import it (self-healing). If metadata exists, all turns are written.
-    for turn_val in &bundle.turns {
-        let turn: DialogTurnData = serde_json::from_value(turn_val.clone())?;
-        let _ = manager.save_dialog_turn(&target_dir, &turn).await;
-    }
-
+    // Only write metadata — turns are lazy-loaded when the user opens the
+    // session. This keeps the import fast and avoids writing potentially
+    // large turn data that may never be read.
     manager
         .save_session_metadata(&target_dir, &metadata)
         .await
@@ -2112,6 +2215,49 @@ async fn pull_and_reconcile() {
     };
     let client = AccountClient::new();
 
+    // ── Settings pull ──
+    // Fetch the cloud settings blob; if the version changed since our last
+    // known version, apply it locally.
+    match client
+        .fetch_settings_with_version(&relay_url, &acct_session)
+        .await
+    {
+        Ok(Some(blob)) => {
+            let known = LAST_SETTINGS_VERSION.load(std::sync::atomic::Ordering::Relaxed);
+            if blob.version != known {
+                if let Ok(config_value) = serde_json::from_str::<serde_json::Value>(&blob.plaintext)
+                {
+                    let inner_config = config_value.get("config").cloned().unwrap_or(config_value);
+                    if let Ok(config_service) =
+                        bitfun_core::service::config::get_global_config_service().await
+                    {
+                        match config_service.import_config_data(inner_config).await {
+                            Ok(_) => {
+                                LAST_SETTINGS_VERSION
+                                    .store(blob.version, std::sync::atomic::Ordering::Relaxed);
+                                log::info!(
+                                    "Pull: applied cloud settings (version={})",
+                                    blob.version
+                                );
+                            }
+                            Err(e) => {
+                                log::warn!("Pull: import config failed: {e}");
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Ok(None) => {} // no cloud settings yet
+        Err(e) => {
+            if is_token_expired_error(&e) {
+                TOKEN_EXPIRED.store(true, std::sync::atomic::Ordering::Relaxed);
+            }
+            log::debug!("Pull: fetch_settings failed: {e}");
+        }
+    }
+
+    // ── Session pull (metadata-only; turns are lazy-loaded on open) ──
     let remote_sessions = match client.fetch_sessions(&relay_url, &acct_session).await {
         Ok(s) => s,
         Err(e) => {
@@ -2165,8 +2311,9 @@ async fn pull_and_reconcile() {
     }
 
     // Second pass: import remote sessions that don't exist in ANY workspace.
-    // Write to the first workspace dir (best-effort; no source-workspace metadata
-    // in the bundle to route correctly).
+    // Only write metadata — turns are lazy-loaded when the user opens the
+    // session (see `account_fetch_session_turns` Tauri command). This keeps
+    // the pull lightweight even with hundreds of remote sessions.
     if workspace_session_dirs.is_empty() {
         return;
     }
@@ -2178,6 +2325,7 @@ async fn pull_and_reconcile() {
             continue;
         }
 
+        // Parse only the metadata; skip turns for now.
         let bundle: SessionBundle = match serde_json::from_str(bundle_json) {
             Ok(b) => b,
             Err(e) => {
@@ -2192,16 +2340,6 @@ async fn pull_and_reconcile() {
                 continue;
             }
         };
-        // Write turns first, then metadata (self-healing: if a crash occurs
-        // during turn writes, no metadata → session appears unimported →
-        // future pull will retry).
-        for turn_val in &bundle.turns {
-            let turn: DialogTurnData = match serde_json::from_value(turn_val.clone()) {
-                Ok(t) => t,
-                Err(_) => continue,
-            };
-            let _ = manager.save_dialog_turn(target_dir, &turn).await;
-        }
         if manager
             .save_session_metadata(target_dir, &metadata)
             .await
@@ -2210,6 +2348,6 @@ async fn pull_and_reconcile() {
             continue;
         }
         all_local_ids.insert(session_id.clone()); // prevent re-import in same cycle
-        log::info!("Pull: imported session {session_id}");
+        log::info!("Pull: imported session metadata {session_id} (turns lazy-loaded)");
     }
 }

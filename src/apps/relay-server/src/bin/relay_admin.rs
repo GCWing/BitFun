@@ -50,6 +50,13 @@ enum Command {
         #[arg(long)]
         password: Option<String>,
     },
+    /// Rename an existing account. Credentials and user_id stay the same.
+    RenameUser {
+        #[arg(long)]
+        username: String,
+        #[arg(long)]
+        new_username: String,
+    },
 }
 
 #[tokio::main]
@@ -89,6 +96,13 @@ async fn main() -> Result<()> {
             println!("Password reset for: {username}");
             println!("NOTE: All previously synced sessions/settings are now unreadable");
             println!("      (they were encrypted with the old master key).");
+        }
+        Command::RenameUser {
+            username,
+            new_username,
+        } => {
+            bitfun_relay_server::admin::rename_user(&pool, &username, &new_username).await?;
+            println!("Renamed: {username} → {new_username}");
         }
     }
 

@@ -427,6 +427,20 @@ impl AccountClient {
         relay_url: &str,
         session: &AccountSession,
     ) -> Result<Option<String>> {
+        Ok(self
+            .fetch_settings_with_version(relay_url, session)
+            .await?
+            .map(|b| b.plaintext))
+    }
+
+    /// Fetch and decrypt the settings blob, including the relay version.
+    /// The version lets the caller skip applying if the cloud hasn't changed
+    /// since the last pull.
+    pub async fn fetch_settings_with_version(
+        &self,
+        relay_url: &str,
+        session: &AccountSession,
+    ) -> Result<Option<SettingsBlob>> {
         let resp = self
             .http
             .get(Self::endpoint(relay_url, "/api/sync/settings"))
@@ -439,13 +453,15 @@ impl AccountClient {
         if !resp.status().is_success() {
             return Err(Self::into_error(resp).await);
         }
-        // The relay returns `Json<Option<SettingsBlob>>`, so we parse as optional.
         let opt: Option<SettingsEntry> = resp.json().await?;
         match opt {
             None => Ok(None),
             Some(entry) => {
                 let pt = Self::open(session, &entry.encrypted_data, &entry.nonce)?;
-                Ok(Some(pt))
+                Ok(Some(SettingsBlob {
+                    plaintext: pt,
+                    version: entry.version,
+                }))
             }
         }
     }
@@ -593,10 +609,21 @@ struct SessionEntry {
     nonce: String,
 }
 
+/// A settings blob with version metadata, returned by `fetch_settings_with_version`.
+#[derive(Debug, Clone)]
+pub struct SettingsBlob {
+    pub plaintext: String,
+    pub version: i64,
+}
+
 #[derive(Deserialize)]
 struct SettingsEntry {
     encrypted_data: String,
     nonce: String,
+    #[serde(default)]
+    version: i64,
+    #[serde(default)]
+    updated_at: i64,
 }
 
 #[cfg(test)]

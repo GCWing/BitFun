@@ -24,6 +24,8 @@ export class RelayHttpClient {
   /** Delegated account identity (token + master_key) from the paired desktop. */
   public delegatedToken: string | null = null;
   public delegatedMasterKey: Uint8Array | null = null;
+  /** The paired desktop's device_id (for sendDeviceRpc when in relay mode). */
+  public pairedDeviceId: string | null = null;
 
   constructor(relayUrl: string, roomId: string) {
     this.relayUrl = relayUrl.replace(/\/$/, '');
@@ -120,6 +122,9 @@ export class RelayHttpClient {
     if (parsed?.resp === 'delegate_identity' && parsed.token && parsed.master_key) {
       this.delegatedToken = parsed.token;
       this.delegatedMasterKey = fromB64(parsed.master_key);
+      if (parsed.device_id) {
+        this.pairedDeviceId = parsed.device_id;
+      }
       // Return a minimal initial_sync so the UI continues normally
       return {
         authenticated_user_id: parsed.user_id,

@@ -143,6 +143,19 @@ impl UserRow {
         Ok(row)
     }
 
+    /// Rename a user. Fails if the new username already exists.
+    pub async fn rename(pool: &DbPool, user_id: &str, new_username: &str) -> Result<()> {
+        let now = Utc::now().timestamp();
+        sqlx::query("UPDATE users SET username = ?, updated_at = ? WHERE user_id = ?")
+            .bind(new_username)
+            .bind(now)
+            .bind(user_id)
+            .execute(pool)
+            .await
+            .map_err(|e| anyhow!("rename user: {e}"))?;
+        Ok(())
+    }
+
     /// List all usernames (admin tooling). Returns `(username, created_at)`.
     pub async fn list_all(pool: &DbPool) -> Result<Vec<(String, String, i64)>> {
         let rows = sqlx::query_as::<_, (String, String, i64)>(

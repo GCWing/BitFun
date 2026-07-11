@@ -20,6 +20,7 @@ pub use menu::{MenuItem, MenuItemStyle, MenuView};
 pub use state::{
     BotAction, BotActionStyle, BotChatState, BotDisplayMode, BotInteractionHandler,
     BotInteractiveRequest, BotMessageSender, BotQuestion, BotQuestionOption, PendingAction,
+    RemoteDeviceTarget,
 };
 pub use telegram::{TelegramBotApi, TelegramConfig};
 pub use weixin::{WeixinConfig, WeixinProviderClient};

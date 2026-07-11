@@ -38,7 +38,9 @@ pub mod account {
     pub use bitfun_services_integrations::remote_connect::account::*;
 }
 
-pub use account::{AccountClient, AccountSession, DelegateToken, DelegatedIdentity, KdfParams};
+pub use account::{
+    AccountClient, AccountSession, DelegateToken, DelegatedIdentity, KdfParams, SettingsBlob,
+};
 pub use device::DeviceIdentity;
 pub use encryption::{decrypt_from_base64, encrypt_to_base64, KeyPair};
 pub use pairing::{PairingProtocol, PairingState};
@@ -476,6 +478,7 @@ impl RemoteConnectService {
         let server_arc = self.remote_server.clone();
         let trusted_mobile_identity_arc = self.trusted_mobile_identity.clone();
         let delegated_identity_fn_arc = self.delegated_identity_fn.clone();
+        let local_device_id = self.device_identity.device_id.clone();
         tokio::spawn(async move {
             while let Some(event) = event_rx.recv().await {
                 match event {
@@ -642,6 +645,7 @@ impl RemoteConnectService {
                                                             "token": token,
                                                             "user_id": submitted_identity.user_id.clone(),
                                                             "master_key": B64.encode(&master_key),
+                                                            "device_id": local_device_id.clone(),
                                                         });
                                                         let identity_str =
                                                             serde_json::to_string(&identity_json)

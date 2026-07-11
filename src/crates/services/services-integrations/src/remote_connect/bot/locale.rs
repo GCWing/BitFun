@@ -61,6 +61,7 @@ pub struct BotStrings {
     pub item_switch_assistant: &'static str,
     pub item_switch_workspace: &'static str,
     pub item_settings: &'static str,
+    pub item_devices: &'static str,
     pub item_back: &'static str,
     pub item_help: &'static str,
     pub item_switch_to_expert: &'static str,
@@ -178,6 +179,12 @@ pub struct BotStrings {
     pub devices_list_failed_prefix: &'static str,
     pub devices_send_ok: &'static str,
     pub devices_send_failed_prefix: &'static str,
+    pub devices_local: &'static str,
+    pub devices_pick_to_switch: &'static str,
+    pub devices_switched_to: &'static str,
+    pub devices_switched_local: &'static str,
+    pub devices_remote_prefix: &'static str,
+    pub devices_msg_sent: &'static str,
 }
 
 const STRINGS_ZH: BotStrings = BotStrings {
@@ -214,6 +221,7 @@ const STRINGS_ZH: BotStrings = BotStrings {
     item_switch_assistant: "切换助理",
     item_switch_workspace: "切换工作区",
     item_settings: "设置",
+    item_devices: "设备",
     item_back: "返回",
     item_help: "帮助",
     item_switch_to_expert: "切换到专业模式",
@@ -327,6 +335,12 @@ const STRINGS_ZH: BotStrings = BotStrings {
     devices_list_failed_prefix: "获取设备列表失败：",
     devices_send_ok: "消息已发送到目标设备。",
     devices_send_failed_prefix: "发送到设备失败：",
+    devices_local: "本地设备",
+    devices_pick_to_switch: "回复序号切换设备，之后所有操作在该设备上执行",
+    devices_switched_to: "已切换到远程设备",
+    devices_switched_local: "已切换回本地设备",
+    devices_remote_prefix: "远程设备",
+    devices_msg_sent: "消息已发送，远程 agent 正在执行",
 };
 
 const STRINGS_ZH_TW: BotStrings = BotStrings {
@@ -363,6 +377,7 @@ const STRINGS_ZH_TW: BotStrings = BotStrings {
     item_switch_assistant: "切換助理",
     item_switch_workspace: "切換工作區",
     item_settings: "設置",
+    item_devices: "裝置",
     item_back: "返回",
     item_help: "幫助",
     item_switch_to_expert: "切換到專業模式",
@@ -476,6 +491,12 @@ const STRINGS_ZH_TW: BotStrings = BotStrings {
     devices_list_failed_prefix: "取得裝置清單失敗：",
     devices_send_ok: "訊息已傳送到目標裝置。",
     devices_send_failed_prefix: "傳送到裝置失敗：",
+    devices_local: "本地裝置",
+    devices_pick_to_switch: "回覆序號切換裝置，之後所有操作在該裝置上執行",
+    devices_switched_to: "已切換到遠端裝置",
+    devices_switched_local: "已切換回本地裝置",
+    devices_remote_prefix: "遠端裝置",
+    devices_msg_sent: "訊息已傳送，遠端 agent 正在執行",
 };
 
 const STRINGS_EN: BotStrings = BotStrings {
@@ -512,6 +533,7 @@ Open Remote Connect in BitFun Desktop and send the 6-digit pairing code here to 
     item_switch_assistant: "Switch Assistant",
     item_switch_workspace: "Switch Workspace",
     item_settings: "Settings",
+    item_devices: "Devices",
     item_back: "Back",
     item_help: "Help",
     item_switch_to_expert: "Switch to Expert Mode",
@@ -625,6 +647,12 @@ Open Remote Connect in BitFun Desktop and send the 6-digit pairing code here to 
     devices_list_failed_prefix: "Failed to list devices: ",
     devices_send_ok: "Message sent to the target device.",
     devices_send_failed_prefix: "Failed to send to device: ",
+    devices_local: "Local device",
+    devices_pick_to_switch: "Reply with a number to switch — all subsequent commands run on that device",
+    devices_switched_to: "Switched to remote device",
+    devices_switched_local: "Switched back to local device",
+    devices_remote_prefix: "Remote device",
+    devices_msg_sent: "Message sent, remote agent is working",
 };
 
 pub fn strings_for(language: BotLanguage) -> &'static BotStrings {

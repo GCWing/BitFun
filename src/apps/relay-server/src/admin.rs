@@ -190,3 +190,18 @@ pub async fn delete_user(pool: &DbPool, username: &str) -> Result<()> {
 pub async fn list_users(pool: &DbPool) -> Result<Vec<(String, String, i64)>> {
     UserRow::list_all(pool).await
 }
+
+/// Rename an existing account. Fails if the new username is already taken.
+/// The user_id and all credentials remain unchanged.
+pub async fn rename_user(pool: &DbPool, old_username: &str, new_username: &str) -> Result<()> {
+    let user = UserRow::find_by_username(pool, old_username)
+        .await?
+        .ok_or_else(|| anyhow!("username '{old_username}' not found"))?;
+    if UserRow::find_by_username(pool, new_username)
+        .await?
+        .is_some()
+    {
+        return Err(anyhow!("username '{new_username}' already exists"));
+    }
+    UserRow::rename(pool, &user.user_id, new_username).await
+}

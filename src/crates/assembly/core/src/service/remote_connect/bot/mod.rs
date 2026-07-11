@@ -18,6 +18,9 @@ pub use bitfun_services_integrations::remote_connect::bot::{
     extract_downloadable_file_paths, format_file_size, get_file_metadata, load_bot_persistence,
     read_workspace_file, resolve_workspace_path, save_bot_persistence, AutoPushFile, BotConfig,
     BotLanguage, BotPairingInfo, BotPersistenceData, MenuItem, MenuItemStyle, MenuView,
-    RemoteConnectFormState, SavedBotConnection, WorkspaceFileContent,
+    RemoteConnectFormState, RemoteDeviceTarget, SavedBotConnection, WorkspaceFileContent,
 };
-pub use command_router::{BotChatState, ForwardRequest, ForwardedTurnResult, HandleResult};
+pub use command_router::{
+    set_delegated_identity_provider, BotChatState, ForwardRequest, ForwardedTurnResult,
+    HandleResult,
+};

@@ -461,6 +461,18 @@ class RemoteConnectAPIService {
     }
   }
 
+  /** Lazy-load a session's turns from the relay on first open. */
+  async accountFetchSessionTurns(sessionId: string, workspacePath: string): Promise<boolean> {
+    try {
+      return await this.adapter.request<boolean>('account_fetch_session_turns', {
+        request: { session_id: sessionId, workspace_path: workspacePath },
+      });
+    } catch (e) {
+      log.warn('accountFetchSessionTurns failed', e);
+      return false;
+    }
+  }
+
   async accountExecuteOnDevice(
     targetDeviceId: string,
     content: string,
