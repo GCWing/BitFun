@@ -151,11 +151,65 @@
 
     &:hover { border-color: var(--color-accent); }
 
+    &.offline {
+      opacity: 0.5;
+      cursor: not-allowed;
+      &:hover { border-color: var(--border-subtle); }
+    }
+
     .account-login-dialog__device-info {
       flex: 1;
       display: flex;
       flex-direction: column;
     }
+  }
+
+  &__workspace-section {
+    margin-bottom: 8px;
+  }
+
+  &__workspace-label {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--color-text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 4px;
+  }
+
+  &__workspace-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  &__workspace-chip {
+    padding: 3px 8px;
+    border-radius: 4px;
+    background: var(--color-bg-primary);
+    border: 1px solid var(--border-subtle);
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.15s;
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    &:hover { border-color: var(--color-accent); }
+    &.active { background: var(--color-accent); color: white; border-color: var(--color-accent); }
+  }
+
+  &__new-workspace {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    margin: 8px 0;
+    padding: 6px;
+    border-radius: 6px;
+    background: var(--color-bg-secondary);
+
+    .input-wrapper { flex: 1; }
   }
 
   &__back-bar {

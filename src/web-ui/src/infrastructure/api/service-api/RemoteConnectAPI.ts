@@ -114,6 +114,8 @@ export interface OnlineDeviceInfo {
 export interface AccountDeviceInfo {
   device_id: string;
   device_name: string;
+  online: boolean;
+  last_seen_at: number | null;
 }
 
 export interface SyncedSession {

@@ -490,7 +490,9 @@
     "disagree": "不同意",
     "logout": "登出",
     "newSession": "新建對話",
-    "sendMessagePlaceholder": "向此裝置發送訊息..."
+    "sendMessagePlaceholder": "向此裝置發送訊息...",
+    "newWorkspace": "新建",
+    "newWorkspacePlaceholder": "/新/工作區/路徑"
   },
   "remoteConnect": {
     "tabNgrok": "內網穿透",

@@ -198,6 +198,33 @@ impl RemoteCommandRuntimeHost for CoreRemoteCommandRuntimeHost<'_> {
         handle_remote_interaction_command(&host, command).await
     }
 
+    async fn handle_device_command(&self, command: &RemoteCommand) -> RemoteResponse {
+        match command {
+            RemoteCommand::CreateWorkspace { path } => {
+                let path = std::path::PathBuf::from(path);
+                // Create the directory if it doesn't exist, then open it
+                // as a workspace via the workspace manager.
+                if let Err(e) = std::fs::create_dir_all(&path) {
+                    return RemoteResponse::Error {
+                        message: format!("Failed to create workspace directory: {e}"),
+                    };
+                }
+                // Now delegate to the workspace host to actually open/track it.
+                let host = CoreServiceAgentRuntime::remote_workspace_host();
+                handle_remote_workspace_command(
+                    &host,
+                    &RemoteCommand::SetWorkspace {
+                        path: path.to_string_lossy().to_string(),
+                    },
+                )
+                .await
+            }
+            _ => RemoteResponse::Error {
+                message: "Unsupported device command".to_string(),
+            },
+        }
+    }
+
     async fn submit_dialog(
         &self,
         request: RemoteDialogSubmissionRequest<Self::ImageContext>,

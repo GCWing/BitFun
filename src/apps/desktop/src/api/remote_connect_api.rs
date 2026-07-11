@@ -923,6 +923,12 @@ pub async fn account_logout() -> Result<(), String> {
     if let Some(service) = get_service_holder().read().await.as_ref() {
         service.stop_device_connection().await;
     }
+    // Revoke the token on the relay (best-effort — don't block on failure)
+    if let Ok((session, relay_url)) = read_account_context().await {
+        let _ = AccountClient::new()
+            .revoke_token(&relay_url, &session)
+            .await;
+    }
     *get_account_session().write().await = None;
     *get_account_relay_url().write().await = None;
     clear_credential_hint();
@@ -1488,6 +1494,8 @@ pub async fn account_execute_on_device(
 pub struct AccountDeviceInfo {
     pub device_id: String,
     pub device_name: String,
+    pub online: bool,
+    pub last_seen_at: Option<i64>,
 }
 
 #[tauri::command]
@@ -1500,9 +1508,11 @@ pub async fn account_list_devices() -> Result<Vec<AccountDeviceInfo>, String> {
         .map_err(|e| format!("{e}"))?;
     Ok(devices
         .into_iter()
-        .map(|(id, name)| AccountDeviceInfo {
-            device_id: id,
-            device_name: name,
+        .map(|d| AccountDeviceInfo {
+            device_id: d.device_id,
+            device_name: d.device_name,
+            online: d.online,
+            last_seen_at: d.last_seen_at,
         })
         .collect())
 }
@@ -1995,15 +2005,19 @@ async fn import_session_bundle(bundle_json: &str) -> anyhow::Result<()> {
     }
 
     let metadata: SessionMetadata = serde_json::from_value(bundle.metadata.clone())?;
-    manager
-        .save_session_metadata(&target_dir, &metadata)
-        .await
-        .map_err(|e| anyhow::anyhow!("save metadata: {e}"))?;
 
+    // Write turns FIRST, then metadata. If a crash occurs during turn writes,
+    // no metadata exists → the session appears "not imported" → a future pull
+    // will re-import it (self-healing). If metadata exists, all turns are written.
     for turn_val in &bundle.turns {
         let turn: DialogTurnData = serde_json::from_value(turn_val.clone())?;
         let _ = manager.save_dialog_turn(&target_dir, &turn).await;
     }
+
+    manager
+        .save_session_metadata(&target_dir, &metadata)
+        .await
+        .map_err(|e| anyhow::anyhow!("save metadata: {e}"))?;
 
     Ok(())
 }
@@ -2106,19 +2120,22 @@ async fn pull_and_reconcile() {
                 continue;
             }
         };
-        if manager
-            .save_session_metadata(target_dir, &metadata)
-            .await
-            .is_err()
-        {
-            continue;
-        }
+        // Write turns first, then metadata (self-healing: if a crash occurs
+        // during turn writes, no metadata → session appears unimported →
+        // future pull will retry).
         for turn_val in &bundle.turns {
             let turn: DialogTurnData = match serde_json::from_value(turn_val.clone()) {
                 Ok(t) => t,
                 Err(_) => continue,
             };
             let _ = manager.save_dialog_turn(target_dir, &turn).await;
+        }
+        if manager
+            .save_session_metadata(target_dir, &metadata)
+            .await
+            .is_err()
+        {
+            continue;
         }
         all_local_ids.insert(session_id.clone()); // prevent re-import in same cycle
         log::info!("Pull: imported session {session_id}");

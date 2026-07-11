@@ -255,6 +255,7 @@ pub fn build_relay_router(
             post(routes::auth::login_challenge),
         )
         .route("/api/auth/login", post(routes::auth::login))
+        .route("/api/auth/logout", post(routes::auth::logout))
         .route("/api/rooms/{room_id}/pair", post(routes::api::pair))
         .route(
             "/api/rooms/{room_id}/command",

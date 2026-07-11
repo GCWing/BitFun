@@ -434,12 +434,28 @@ impl AccountClient {
 
     // ── Device RPC (browse/control other same-account devices) ────────────
 
-    /// List all online devices in the account. Returns `(device_id, device_name)`.
+    /// Revoke the account token on the relay (server-side logout).
+    pub async fn revoke_token(&self, relay_url: &str, session: &AccountSession) -> Result<()> {
+        let resp = self
+            .http
+            .post(Self::endpoint(relay_url, "/api/auth/logout"))
+            .header("Authorization", Self::auth_header(session))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            // Non-fatal — best-effort revocation
+            log::warn!("revoke_token: relay returned {}", resp.status());
+        }
+        Ok(())
+    }
+
+    /// List all devices in the account (online + offline). Returns
+    /// `(device_id, device_name, online, last_seen_at)`.
     pub async fn list_devices(
         &self,
         relay_url: &str,
         session: &AccountSession,
-    ) -> Result<Vec<(String, String)>> {
+    ) -> Result<Vec<DeviceInfo>> {
         let resp = self
             .http
             .get(Self::endpoint(relay_url, "/api/devices"))
@@ -452,7 +468,12 @@ impl AccountClient {
         let entries: Vec<DeviceListEntry> = resp.json().await?;
         Ok(entries
             .into_iter()
-            .map(|e| (e.device_id, e.device_name))
+            .map(|e| DeviceInfo {
+                device_id: e.device_id,
+                device_name: e.device_name,
+                online: e.online,
+                last_seen_at: e.last_seen_at,
+            })
             .collect())
     }
 
@@ -493,10 +514,23 @@ impl AccountClient {
     }
 }
 
+/// A device in the account (online or offline).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeviceInfo {
+    pub device_id: String,
+    pub device_name: String,
+    pub online: bool,
+    pub last_seen_at: Option<i64>,
+}
+
 #[derive(Deserialize)]
 struct DeviceListEntry {
     device_id: String,
     device_name: String,
+    #[serde(default)]
+    online: bool,
+    #[serde(default)]
+    last_seen_at: Option<i64>,
 }
 
 #[derive(Deserialize)]

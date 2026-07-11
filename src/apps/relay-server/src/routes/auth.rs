@@ -263,3 +263,34 @@ pub async fn login(
         user_id: user.user_id,
     }))
 }
+
+/// `POST /api/auth/logout` — revoke the caller's token on the relay.
+pub async fn logout(State(state): State<AppState>, headers: HeaderMap) -> StatusCode {
+    let db = match state.db.as_ref() {
+        Some(db) => db,
+        None => return StatusCode::NOT_IMPLEMENTED,
+    };
+    let token = headers
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.strip_prefix("Bearer "))
+        .map(|t| t.trim().to_string())
+        .filter(|t| !t.is_empty());
+    let Some(token) = token else {
+        return StatusCode::UNAUTHORIZED;
+    };
+    match AuthToken::find(db, &token).await {
+        Ok(Some(auth)) => {
+            // Delete the token row
+            let _ = sqlx::query("DELETE FROM auth_tokens WHERE token = ?")
+                .bind(&token)
+                .execute(&**db)
+                .await;
+            // Mark device offline
+            let _ = crate::db::DeviceRow::set_online(db, &auth.device_id, false).await;
+            tracing::info!("Token revoked for device_id={}", auth.device_id);
+            StatusCode::NO_CONTENT
+        }
+        _ => StatusCode::UNAUTHORIZED,
+    }
+}

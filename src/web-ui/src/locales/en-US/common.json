@@ -490,7 +490,9 @@
     "disagree": "Disagree",
     "logout": "Logout",
     "newSession": "New Session",
-    "sendMessagePlaceholder": "Send message to this device..."
+    "sendMessagePlaceholder": "Send message to this device...",
+    "newWorkspace": "New",
+    "newWorkspacePlaceholder": "/path/to/new/workspace"
   },
   "remoteConnect": {
     "tabNgrok": "NAT Traversal",

@@ -54,23 +54,51 @@ pub fn device_router() -> Router<AppState> {
 pub struct DeviceListEntry {
     pub device_id: String,
     pub device_name: String,
+    pub online: bool,
+    pub last_seen_at: Option<i64>,
 }
 
+/// `GET /api/devices` — list all devices for the account (online + offline).
 async fn list_devices(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> Result<Json<Vec<DeviceListEntry>>, StatusCode> {
     let user_id = validate_user(&state, &headers).await?;
-    let devices = state.device_manager.online_devices(&user_id);
-    Ok(Json(
-        devices
-            .into_iter()
-            .map(|(id, name)| DeviceListEntry {
-                device_id: id,
-                device_name: name,
-            })
-            .collect(),
-    ))
+
+    // Get online devices from DeviceManager (in-memory)
+    let online = state.device_manager.online_devices(&user_id);
+    let online_ids: std::collections::HashSet<String> =
+        online.iter().map(|(id, _)| id.clone()).collect();
+
+    // Get all registered devices from the DB (online + offline)
+    let mut devices = Vec::new();
+    if let Some(db) = &state.db {
+        if let Ok(db_devices) = crate::db::DeviceRow::list_by_user(db, &user_id).await {
+            for row in db_devices {
+                let is_online = online_ids.contains(&row.device_id) || row.online != 0;
+                devices.push(DeviceListEntry {
+                    device_id: row.device_id,
+                    device_name: row.device_name.unwrap_or_default(),
+                    online: is_online,
+                    last_seen_at: row.last_seen_at,
+                });
+            }
+        }
+    }
+
+    // Also include any online-only devices not yet in the DB
+    for (id, name) in &online {
+        if !devices.iter().any(|d| &d.device_id == id) {
+            devices.push(DeviceListEntry {
+                device_id: id.clone(),
+                device_name: name.clone(),
+                online: true,
+                last_seen_at: None,
+            });
+        }
+    }
+
+    Ok(Json(devices))
 }
 
 // ── Device RPC ──────────────────────────────────────────────────────────

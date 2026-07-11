@@ -2140,6 +2140,10 @@ pub enum RemoteCommand {
     },
     /// Query a peer device for workspace / session info (read-only).
     DeviceQueryInfo,
+    /// Create a new workspace directory on the peer device.
+    CreateWorkspace {
+        path: String,
+    },
 }
 
 /// Responses sent from desktop back to remote clients.
@@ -2410,7 +2414,8 @@ where
 
         RemoteCommand::SendSessionToDevice { .. }
         | RemoteCommand::ExecuteOnDevice { .. }
-        | RemoteCommand::DeviceQueryInfo => host.handle_device_command(command).await,
+        | RemoteCommand::DeviceQueryInfo
+        | RemoteCommand::CreateWorkspace { .. } => host.handle_device_command(command).await,
     }
 }
 
