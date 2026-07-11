@@ -5,10 +5,14 @@
 //! devices register here, scoped by `user_id`, and can route
 //! `device_to_device` messages to each other. The relay never decrypts the
 //! payloads — it only routes by `(user_id, target_device_id)`.
+//!
+//! The manager also supports HTTP RPC: a request can register a pending
+//! response keyed by `correlation_id`, and when a `DeviceMessage` response
+//! arrives via WS from a device, the pending future is resolved.
 
 use dashmap::DashMap;
 use std::sync::Arc;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 use tracing::{debug, info};
 
 use crate::relay::room::{ConnId, OutboundMessage};
@@ -21,6 +25,18 @@ struct DeviceConn {
     tx: mpsc::Sender<OutboundMessage>,
 }
 
+/// Pending HTTP RPC response, keyed by correlation_id.
+struct PendingRpc {
+    tx: oneshot::Sender<RpcResponse>,
+}
+
+/// The response payload from a device RPC call.
+#[derive(Debug, Clone)]
+pub struct RpcResponse {
+    pub encrypted_data: String,
+    pub nonce: String,
+}
+
 /// Tracks online devices grouped by `user_id` so that `device_to_device`
 /// messages can be routed within an account without exposing other accounts.
 pub struct DeviceManager {
@@ -28,6 +44,8 @@ pub struct DeviceManager {
     users: DashMap<String, DashMap<String, DeviceConn>>,
     /// conn_id → (user_id, device_id) for cleanup on disconnect.
     conn_to_device: DashMap<ConnId, (String, String)>,
+    /// correlation_id → pending RPC response sender (for HTTP→WS→HTTP bridge).
+    pending_rpcs: DashMap<String, PendingRpc>,
 }
 
 impl DeviceManager {
@@ -35,6 +53,7 @@ impl DeviceManager {
         Arc::new(Self {
             users: DashMap::new(),
             conn_to_device: DashMap::new(),
+            pending_rpcs: DashMap::new(),
         })
     }
 
@@ -149,5 +168,34 @@ impl DeviceManager {
                 let _ = tx.try_send(msg);
             }
         }
+    }
+
+    // ── HTTP RPC bridge ────────────────────────────────────────────────
+
+    /// Register a pending RPC response keyed by `correlation_id`.
+    /// Returns the receiver end that the HTTP handler will await.
+    pub fn register_rpc(&self, correlation_id: &str) -> oneshot::Receiver<RpcResponse> {
+        let (tx, rx) = oneshot::channel();
+        self.pending_rpcs
+            .insert(correlation_id.to_string(), PendingRpc { tx });
+        rx
+    }
+
+    /// Resolve a pending RPC by `correlation_id` (called when a device
+    /// sends back a DeviceMessage response via WS). Returns false if no
+    /// pending RPC matches (e.g. it was a fire-and-forget WS message, not
+    /// an HTTP-initiated RPC).
+    pub fn resolve_rpc(&self, correlation_id: &str, response: RpcResponse) -> bool {
+        if let Some(entry) = self.pending_rpcs.remove(correlation_id) {
+            let _ = entry.1.tx.send(response);
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Cancel a pending RPC (called on timeout/error).
+    pub fn cancel_rpc(&self, correlation_id: &str) {
+        self.pending_rpcs.remove(correlation_id);
     }
 }

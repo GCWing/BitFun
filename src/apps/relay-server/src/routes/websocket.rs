@@ -345,6 +345,22 @@ async fn handle_text_message(
                     },
                 );
             };
+
+            // First check: is this a response to a pending HTTP RPC?
+            // If so, resolve the pending future and don't forward via WS.
+            let rpc_response = crate::relay::device_manager::RpcResponse {
+                encrypted_data: encrypted_data.clone(),
+                nonce: nonce.clone(),
+            };
+            if state
+                .device_manager
+                .resolve_rpc(&correlation_id, rpc_response)
+            {
+                // HTTP RPC resolved — the HTTP caller gets the response.
+                return true;
+            }
+
+            // Normal WS-to-WS device routing
             let out_msg = OutboundProtocol::IncomingDeviceMessage {
                 source_device_id,
                 correlation_id,

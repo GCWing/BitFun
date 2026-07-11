@@ -111,6 +111,11 @@ export interface OnlineDeviceInfo {
   device_name: string;
 }
 
+export interface AccountDeviceInfo {
+  device_id: string;
+  device_name: string;
+}
+
 export interface SyncedSession {
   session_id: string;
   session_json: string;
@@ -492,6 +497,29 @@ class RemoteConnectAPIService {
       });
     } catch (e) {
       log.error('accountAutoSync failed', e);
+      throw e;
+    }
+  }
+
+  async accountListDevices(): Promise<AccountDeviceInfo[]> {
+    try {
+      return await this.adapter.request<AccountDeviceInfo[]>('account_list_devices');
+    } catch (e) {
+      log.error('accountListDevices failed', e);
+      throw e;
+    }
+  }
+
+  async accountDeviceRpc(
+    targetDeviceId: string,
+    commandJson: string,
+  ): Promise<string> {
+    try {
+      return await this.adapter.request<string>('account_device_rpc', {
+        request: { target_device_id: targetDeviceId, command_json: commandJson },
+      });
+    } catch (e) {
+      log.error('accountDeviceRpc failed', e);
       throw e;
     }
   }

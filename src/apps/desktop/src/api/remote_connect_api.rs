@@ -978,7 +978,7 @@ pub async fn account_connect_devices() -> Result<Vec<OnlineDeviceInfo>, String> 
                 }
                 RelayEvent::DeviceMessageReceived {
                     source_device_id,
-                    correlation_id: _,
+                    correlation_id,
                     encrypted_data,
                     nonce,
                 } => {
@@ -1003,10 +1003,6 @@ pub async fn account_connect_devices() -> Result<Vec<OnlineDeviceInfo>, String> 
                                         session_id,
                                         content.len()
                                     );
-                                    // Submit the dialog turn via the global scheduler.
-                                    // We ignore the sender's workspace_path and use our own
-                                    // (the receiving device's) workspace, since the task
-                                    // executes locally.
                                     if let Some(scheduler) = DIALOG_SCHEDULER.get() {
                                         use bitfun_core::agentic::coordination::{
                                             DialogSubmissionPolicy, DialogTriggerSource,
@@ -1054,10 +1050,6 @@ pub async fn account_connect_devices() -> Result<Vec<OnlineDeviceInfo>, String> 
                                          session={session_id} bytes={}",
                                         session_data.len()
                                     );
-                                    // Import the session into local storage.
-                                    // The session_data is a SessionBundle JSON.
-                                    // Try all workspace session dirs and write
-                                    // to the first one that exists.
                                     match import_session_bundle(&session_data).await {
                                         Ok(()) => {
                                             log::info!("Session {session_id} imported from device {source_device_id}");
@@ -1066,6 +1058,43 @@ pub async fn account_connect_devices() -> Result<Vec<OnlineDeviceInfo>, String> 
                                             log::warn!(
                                                 "Failed to import session {session_id}: {e}"
                                             );
+                                        }
+                                    }
+                                }
+                                Ok(cmd) if source_device_id == "rpc" => {
+                                    // HTTP RPC request from another device via relay.
+                                    // Execute the command locally and send back
+                                    // the encrypted response.
+                                    log::info!(
+                                        "RPC request from relay: {cmd:?} corr={correlation_id}"
+                                    );
+                                    match execute_local_remote_command(&cmd).await {
+                                        Ok(resp_value) => {
+                                            let resp_json = serde_json::to_string(&resp_value)
+                                                .unwrap_or_default();
+                                            use bitfun_core::service::remote_connect::encryption::encrypt_to_base64;
+                                            match encrypt_to_base64(&session.master_key, &resp_json)
+                                            {
+                                                Ok((enc_resp, resp_nonce)) => {
+                                                    let holder = get_service_holder().read().await;
+                                                    if let Some(ref svc) = *holder {
+                                                        let _ = svc
+                                                            .send_device_message(
+                                                                "rpc",
+                                                                &correlation_id,
+                                                                &enc_resp,
+                                                                &resp_nonce,
+                                                            )
+                                                            .await;
+                                                    }
+                                                }
+                                                Err(e) => {
+                                                    log::warn!("RPC: encrypt response failed: {e}");
+                                                }
+                                            }
+                                        }
+                                        Err(e) => {
+                                            log::warn!("RPC: execute command failed: {e}");
                                         }
                                     }
                                 }
@@ -1451,6 +1480,50 @@ pub async fn account_execute_on_device(
         .send_device_message(&target_device_id, &correlation_id, &encrypted_data, &nonce)
         .await
         .map_err(|e| format!("{e}"))
+}
+
+/// List all online devices in the account via the relay HTTP API.
+/// Returns `(device_id, device_name)` pairs.
+#[derive(Serialize)]
+pub struct AccountDeviceInfo {
+    pub device_id: String,
+    pub device_name: String,
+}
+
+#[tauri::command]
+pub async fn account_list_devices() -> Result<Vec<AccountDeviceInfo>, String> {
+    let (session, relay_url) = read_account_context().await?;
+    let client = AccountClient::new();
+    let devices = client
+        .list_devices(&relay_url, &session)
+        .await
+        .map_err(|e| format!("{e}"))?;
+    Ok(devices
+        .into_iter()
+        .map(|(id, name)| AccountDeviceInfo {
+            device_id: id,
+            device_name: name,
+        })
+        .collect())
+}
+
+/// Send any RemoteCommand to a target device via HTTP RPC.
+/// The command is encrypted with the master_key, sent to the relay,
+/// which routes it to the target device's WS. The target executes it
+/// and the response is returned (decrypted).
+/// Returns the decrypted response JSON.
+#[tauri::command]
+pub async fn account_device_rpc(
+    target_device_id: String,
+    command_json: String,
+) -> Result<String, String> {
+    let (session, relay_url) = read_account_context().await?;
+    let client = AccountClient::new();
+    let response = client
+        .device_rpc(&relay_url, &session, &target_device_id, &command_json)
+        .await
+        .map_err(|e| format!("{e}"))?;
+    Ok(response)
 }
 
 /// Result of an auto-sync operation, returned to the frontend.
@@ -1864,6 +1937,20 @@ fn resolve_local_workspace_path() -> String {
         }
     }
     "/".to_string()
+}
+
+/// Execute a RemoteCommand locally (for RPC requests from other devices).
+/// Returns the RemoteResponse serialized as JSON to be encrypted and sent back.
+async fn execute_local_remote_command(
+    cmd: &bitfun_core::service::remote_connect::remote_server::RemoteCommand,
+) -> anyhow::Result<serde_json::Value> {
+    // RemoteServer uses the global dispatcher internally — no need for
+    // manual coordinator access. The dummy shared secret is irrelevant
+    // because we call dispatch() directly (encryption is handled at the
+    // RPC envelope level, not here).
+    let server = bitfun_core::service::remote_connect::RemoteServer::new([0u8; 32]);
+    let response = server.dispatch(cmd).await;
+    serde_json::to_value(&response).map_err(|e| anyhow::anyhow!("serialize response: {e}"))
 }
 
 /// Import a SessionBundle JSON into local storage. Tries all workspace session

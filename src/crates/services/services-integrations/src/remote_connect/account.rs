@@ -431,6 +431,78 @@ impl AccountClient {
             }
         }
     }
+
+    // ── Device RPC (browse/control other same-account devices) ────────────
+
+    /// List all online devices in the account. Returns `(device_id, device_name)`.
+    pub async fn list_devices(
+        &self,
+        relay_url: &str,
+        session: &AccountSession,
+    ) -> Result<Vec<(String, String)>> {
+        let resp = self
+            .http
+            .get(Self::endpoint(relay_url, "/api/devices"))
+            .header("Authorization", Self::auth_header(session))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(Self::into_error(resp).await);
+        }
+        let entries: Vec<DeviceListEntry> = resp.json().await?;
+        Ok(entries
+            .into_iter()
+            .map(|e| (e.device_id, e.device_name))
+            .collect())
+    }
+
+    /// Send an encrypted RemoteCommand to a target device via HTTP RPC.
+    /// The relay routes the opaque ciphertext to the target device's WS,
+    /// waits for the response, and returns the encrypted response.
+    /// The caller is responsible for encrypting the command and decrypting
+    /// the response with the account master_key.
+    pub async fn device_rpc(
+        &self,
+        relay_url: &str,
+        session: &AccountSession,
+        target_device_id: &str,
+        plaintext_command: &str,
+    ) -> Result<String> {
+        // Encrypt the command with the master key
+        let (data, nonce) = Self::seal(session, plaintext_command)?;
+        let body = serde_json::json!({
+            "encrypted_data": data,
+            "nonce": nonce,
+        });
+        let resp = self
+            .http
+            .post(Self::endpoint(
+                relay_url,
+                &format!("/api/devices/{target_device_id}/rpc"),
+            ))
+            .header("Authorization", Self::auth_header(session))
+            .json(&body)
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(Self::into_error(resp).await);
+        }
+        let entry: RpcResponseEntry = resp.json().await?;
+        // Decrypt the response with the master key
+        Self::open(session, &entry.encrypted_data, &entry.nonce)
+    }
+}
+
+#[derive(Deserialize)]
+struct DeviceListEntry {
+    device_id: String,
+    device_name: String,
+}
+
+#[derive(Deserialize)]
+struct RpcResponseEntry {
+    encrypted_data: String,
+    nonce: String,
 }
 
 #[derive(Deserialize)]

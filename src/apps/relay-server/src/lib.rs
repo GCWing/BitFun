@@ -275,6 +275,7 @@ pub fn build_relay_router(
         .route("/r/{*rest}", get(routes::api::serve_room_web_catchall))
         .route("/ws", get(routes::websocket::websocket_handler))
         .merge(routes::sync::sync_router())
+        .merge(routes::devices::device_router())
         .layer(tower_http::cors::CorsLayer::permissive())
         .with_state(state)
 }
