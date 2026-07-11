@@ -599,9 +599,6 @@ async fn dispatch(
         | BotCommand::NumberSelection(_)
         | BotCommand::PairingCode(_) => menu_or_welcome(state, s), // already handled
         BotCommand::ListDevices => list_devices(state, s).await,
-        BotCommand::SendToDevice(device_id, session_id, message) => {
-            send_to_device(state, &device_id, &session_id, &message, s).await
-        }
     }
 }
 
@@ -680,52 +677,6 @@ async fn list_devices(state: &mut BotChatState, s: &'static BotStrings) -> Handl
         Err(e) => {
             error!("Bot list_devices failed: {e}");
             let view = MenuView::plain(format!("{}{e}", s.devices_list_failed_prefix))
-                .with_items(vec![MenuItem::default(s.item_back, "/menu")]);
-            result_from_menu(state, view)
-        }
-    }
-}
-
-async fn send_to_device(
-    state: &mut BotChatState,
-    device_id: &str,
-    session_id: &str,
-    message: &str,
-    s: &'static BotStrings,
-) -> HandleResult {
-    let Some(relay_url) = state.relay_url.clone() else {
-        return result_from_menu(state, devices_unavailable_view(s));
-    };
-    let Some(session) = delegated_session(state) else {
-        return result_from_menu(state, devices_unavailable_view(s));
-    };
-
-    // Serialize a RemoteCommand::SendMessage exactly as the relay/target
-    // device expects, then hand it to AccountClient which encrypts + posts
-    // to /api/devices/{id}/rpc and decrypts the response.
-    use bitfun_services_integrations::remote_connect::RemoteCommand;
-    let command = serde_json::to_string(&RemoteCommand::SendMessage {
-        session_id: session_id.to_string(),
-        content: message.to_string(),
-        agent_type: None,
-        images: None,
-        image_contexts: None,
-    })
-    .unwrap_or_default();
-
-    let client = crate::service::remote_connect::AccountClient::new();
-    match client
-        .device_rpc(&relay_url, &session, device_id, &command)
-        .await
-    {
-        Ok(_response) => {
-            let view = MenuView::plain(s.devices_send_ok)
-                .with_items(vec![MenuItem::default(s.item_back, "/menu")]);
-            result_from_menu(state, view)
-        }
-        Err(e) => {
-            error!("Bot send_to_device failed: {e}");
-            let view = MenuView::plain(format!("{}{e}", s.devices_send_failed_prefix))
                 .with_items(vec![MenuItem::default(s.item_back, "/menu")]);
             result_from_menu(state, view)
         }
