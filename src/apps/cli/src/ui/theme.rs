@@ -847,13 +847,12 @@ fn resolve_opencode_theme(
     tokens.diff_added_bg = resolve_key(json, &defs, "diffAddedBg", mode)?;
     tokens.diff_removed_bg = resolve_key(json, &defs, "diffRemovedBg", mode)?;
 
-    tokens.block_bg = tokens.background_panel.clone();
-    tokens.block_bg_hover = tokens.background_element.clone();
+    tokens.block_bg = tokens.background_panel;
+    tokens.block_bg_hover = tokens.background_element;
 
-    tokens.block_border_active =
-        resolve_key(json, &defs, "borderActive", mode)?.or(tokens.primary.clone());
-    tokens.inline_icon = resolve_key(json, &defs, "accent", mode)?.or(tokens.primary.clone());
-    tokens.command_text = tokens.primary.clone();
+    tokens.block_border_active = resolve_key(json, &defs, "borderActive", mode)?.or(tokens.primary);
+    tokens.inline_icon = resolve_key(json, &defs, "accent", mode)?.or(tokens.primary);
+    tokens.command_text = tokens.primary;
     tokens.diff_hunk_header = resolve_key(json, &defs, "diffHunkHeader", mode)?;
     tokens.diff_line_number = resolve_key(json, &defs, "diffLineNumber", mode)?;
 

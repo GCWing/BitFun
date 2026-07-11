@@ -430,9 +430,8 @@ fn product_assembly_plan_keeps_plugin_runtime_disabled_until_explicit_host_bindi
             .extension_capabilities()
             .clone();
 
-        assert_eq!(
-            extension_capabilities.plugin_runtime().is_executable(),
-            false,
+        assert!(
+            !extension_capabilities.plugin_runtime().is_executable(),
             "{profile} must not imply executable plugin runtime support"
         );
     }

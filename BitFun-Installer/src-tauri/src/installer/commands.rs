@@ -218,7 +218,7 @@ pub async fn launch_registered_uninstaller(
             .filter(|path| !path.is_empty())
             .map(PathBuf::from);
         launch_windows_registered_uninstaller(s, install_path.as_deref())?;
-        return Ok(());
+        Ok(())
     }
     #[cfg(not(target_os = "windows"))]
     {

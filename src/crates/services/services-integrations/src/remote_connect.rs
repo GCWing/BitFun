@@ -3428,16 +3428,17 @@ mod tests {
             sessions[0].workspace_path.as_deref(),
             Some("/workspace/project")
         );
-        let list_identities = host.list_identities.lock().unwrap();
-        assert_eq!(
-            list_identities[0].remote_connection_id.as_deref(),
-            Some("conn-1")
-        );
-        assert_eq!(
-            list_identities[0].remote_ssh_host.as_deref(),
-            Some("host-1")
-        );
-        drop(list_identities);
+        {
+            let list_identities = host.list_identities.lock().unwrap();
+            assert_eq!(
+                list_identities[0].remote_connection_id.as_deref(),
+                Some("conn-1")
+            );
+            assert_eq!(
+                list_identities[0].remote_ssh_host.as_deref(),
+                Some("host-1")
+            );
+        }
 
         let created = handle_remote_session_command(
             &host,

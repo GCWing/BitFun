@@ -24,3 +24,6 @@ tracing-subscriber = { workspace = true }
 futures-util = { workspace = true }
 chrono = { workspace = true }
 
+[lints]
+workspace = true
+

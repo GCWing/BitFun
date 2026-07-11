@@ -40,7 +40,7 @@ fn availability_preserves_builtin_project_and_user_override_layering() {
             user_override: Some(SubagentOverrideState::Enabled),
         },
     );
-    assert_eq!(builtin.default_enabled, false);
+    assert!(!builtin.default_enabled);
     assert_eq!(builtin.override_state, Some(SubagentOverrideState::Enabled));
     assert_eq!(
         builtin.state_reason,

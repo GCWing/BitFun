@@ -5266,7 +5266,7 @@ fn file_diff_from_parts(
     })
 }
 
-fn array_items<'a>(value: &'a Value) -> &'a [Value] {
+fn array_items(value: &Value) -> &[Value] {
     value
         .as_array()
         .map(|items| items.as_slice())

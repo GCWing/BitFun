@@ -1563,11 +1563,7 @@ impl ExecutionEngine {
                 .map(str::to_string)
                 .unwrap_or_else(|| image.id.clone());
 
-            let path = image
-                .image_path
-                .as_ref()
-                .map(String::as_str)
-                .filter(|s| !s.trim().is_empty());
+            let path = image.image_path.as_deref().filter(|s| !s.trim().is_empty());
 
             if let Some(path) = path {
                 content.push_str(&format!(

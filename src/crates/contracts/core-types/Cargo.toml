@@ -11,3 +11,6 @@ crate-type = ["rlib"]
 [dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }
+
+[lints]
+workspace = true

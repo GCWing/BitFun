@@ -54,3 +54,6 @@ dirs = { workspace = true }
 # Windows process-tree ownership
 win32job = { workspace = true }
 
+[lints]
+workspace = true
+

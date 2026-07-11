@@ -27,3 +27,6 @@ serde_json = { workspace = true }
 tokio = { workspace = true }
 tokio-util = { workspace = true }
 vte = { workspace = true, features = ["ansi"] }
+
+[lints]
+workspace = true

@@ -228,3 +228,6 @@ tempfile = { workspace = true }
 [[test]]
 name = "debug_log_owner_contracts"
 required-features = ["debug-log"]
+
+[lints]
+workspace = true

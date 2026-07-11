@@ -41,6 +41,23 @@ version = "0.2.12" # x-release-please-version
 authors = ["BitFun Team"]
 edition = "2021"
 
+[workspace.lints.rust]
+unsafe_op_in_unsafe_fn = "warn"
+unexpected_cfgs = "warn"
+unreachable_pub = "warn"
+unused_lifetimes = "warn"
+
+[workspace.lints.clippy]
+correctness = { level = "deny", priority = -1 }
+suspicious = { level = "deny", priority = -1 }
+perf = { level = "warn", priority = -1 }
+complexity = { level = "warn", priority = -1 }
+style = { level = "warn", priority = -1 }
+dbg_macro = "warn"
+todo = "warn"
+unimplemented = "warn"
+undocumented_unsafe_blocks = "warn"
+
 # Shared dependency versions to keep all crates aligned
 [workspace.dependencies]
 # Async runtime

@@ -642,7 +642,7 @@ impl BrowserLauncher {
                     String::from_utf8_lossy(&output.stderr).trim()
                 ));
             }
-            return Ok(());
+            Ok(())
         }
 
         #[cfg(not(any(target_os = "macos", target_os = "windows")))]
