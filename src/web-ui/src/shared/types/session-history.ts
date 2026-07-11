@@ -107,8 +107,14 @@ export interface ReviewActionPersistedState {
   version: number;
   phase: string;
   completedRemediationIds: string[];
+  fixingRemediationIds?: string[];
   minimized: boolean;
   customInstructions: string;
+  followUpReviewSessionId?: string;
+  reviewTargetFilePaths?: string[];
+  remediationModifiedFilePaths?: string[];
+  remediationScopeRequiresWorkspaceFallback?: boolean;
+  fixingBaselineTurnId?: string;
   persistedAt: number;
 }
 

@@ -1,25 +1,25 @@
 # BitFun 子模块设计：证据包
 
 > 上游文档：[design.md](../design.md)
-> 模块角色：把一次任务或变更的上下文、验证、风险、跳过项、人工决策和安全授权整理成可投影、可失效、可回放的证据快照。
+> 模块角色：把一次任务或变更的上下文、验证、风险、跳过项、人工决策和安全授权整理成可呈现、可失效、可回放的证据快照。
 
 ## 1. 模块定位
 
-证据包是后台证据投影契约。快速路径下用户看到信心摘要；准备 PR、团队策略启用、风险升级、发布/事故追溯或评测回放时，系统按配置展示证据引用或完整证据包。
+证据包是后台证据视图和 schema。快速路径下用户看到信心摘要；准备 PR、团队策略启用、风险升级、发布/事故追溯或评测回放时，系统按配置展示证据引用或完整证据包。
 
 质量数据面记录事件和引用，证据包负责把这些事实整理成一次任务或变更集可消费、可审计、可失效的快照。证据包陈述证据内容、来源、新鲜度、跳过检查、风险接受和安全授权；合入判断由变更就绪度、团队策略、CI、分支保护和人工审查共同决定。
 
-外部系统的成熟实践说明了这个边界：[GitHub Checks](https://docs.github.com/rest/checks) 把检查结论和摘要投影到提交（commit）或 PR；[SLSA provenance](https://slsa.dev/provenance) 关注制品的来源、时间和生成方式；[OpenTelemetry semantic conventions](https://opentelemetry.io/docs/specs/semconv/) 关注跨系统语义稳定。证据包应吸收这些思想，但保持 BitFun 内部规范证据模型。
+外部系统的成熟实践说明了这个边界：[GitHub Checks](https://docs.github.com/rest/checks) 把检查结论和摘要呈现到提交（commit）或 PR；[SLSA provenance](https://slsa.dev/provenance) 关注制品的来源、时间和生成方式；[OpenTelemetry semantic conventions](https://opentelemetry.io/docs/specs/semconv/) 关注跨系统语义稳定。证据包应吸收这些思想，但保持 BitFun 内部规范证据模型。
 
 ## 2. 设计约束
 
-- 证据包由交付物与证据层（Artifact and Evidence Plane）负责投影和版本化。
+- 证据包由交付物与证据层（Artifact and Evidence Plane）负责生成视图和版本化。
 - 原始事实来自质量数据面的 `LifecycleEvent` 和 `EvidenceReference`。
 - 证据包保存摘要和引用，完整终端日志、prompt、模型上下文或第三方载荷按隐私策略另行保留或丢弃。
 - 证据包必须能表达 `fresh`、`partial`、`stale`、`blocked` 和 `superseded`。
 - 证据包必须支持展示层级，避免完整证据包默认污染快速路径。
 - 缺少证据、证据过期或主动配置未确认时，证据包使用 `partial`、`stale` 或 `blocked` 状态。
-- PR 文本、审查界面、门禁、发布就绪度和评测回放都应消费同一证据包契约。
+- PR 文本、审查界面、门禁、发布就绪度和评测回放都应消费同一证据包 schema。
 
 ## 3. 证据展示层级
 
@@ -39,11 +39,12 @@
 | 输入 | 来源 |
 |---|---|
 | 项目画像快照 | 项目结构、规则、验证能力、负责人、主动配置状态 |
+| Review 目标证据 | 当前工作区或明确 Git range 的 base/head、目标指纹、文件状态、有界 diff 可用性、完整度、workspace binding 和失效状态 |
 | 任务与变更摘要 | 用户意图、Git diff、文件变更、重命名/删除、生成文件 |
 | 验证证据 | `verification.completed`、CI 检查、命令摘要、制品引用 |
 | 风险策略提示 | 风险标签、推荐/强制检查、审查强度 |
 | 安全决策 | allow/ask/deny/应急放行、授权范围、残余风险 |
-| 审查证据 | 深度审查问题、人工审查、过期标记 |
+| 审查证据 | 严格审查问题、人工审查、过期标记 |
 | 主动配置证据 | hook、plugin、自定义工具、MCP、智能体规则的发现、hash、权限和信任状态 |
 | 人工决策 | 覆盖、风险接受、确认、拒绝 |
 
@@ -63,6 +64,28 @@ type EvidenceDisplayTier =
   | "evidence_refs"
   | "full_pack";
 
+interface ReviewTargetFileEvidence {
+  path: string;
+  previousPath?: string;
+  status: "added" | "modified" | "deleted" | "renamed" | "copied" | "unknown";
+  completeness: "complete" | "partial" | "unavailable";
+}
+
+interface ReviewTargetEvidence {
+  version: 1;
+  source: "workspace" | "git_range";
+  fingerprint: string;
+  baseRevision?: string;
+  headRevision?: string;
+  completeness: "complete" | "partial" | "unknown" | "stale";
+  workspaceBinding: "matching_clean" | "matching_dirty" | "mismatched" | "unavailable";
+  files: ReviewTargetFileEvidence[];
+  limitations: string[];
+  omittedFileCount?: number;
+}
+
+type ReviewEvidenceStatus = "complete" | "limited" | "stale" | "failed";
+
 interface EvidencePack {
   id: string;
   version: number;
@@ -74,6 +97,7 @@ interface EvidencePack {
   generated_at: string;
   status: EvidencePackStatus;
   display_tier: EvidenceDisplayTier;
+  review_target?: ReviewTargetEvidence;
   context: ContextEvidence[];
   change?: ChangeEvidence;
   verification: VerificationEvidence[];
@@ -90,12 +114,21 @@ interface EvidencePack {
 }
 ```
 
+`ReviewTargetEvidence.completeness` describes prepared target facts. The final
+report carries `ReviewEvidenceStatus` separately from its recommendation. Only
+an immutable, complete Git range with no omitted files and a matching clean
+workspace may report evidence status `complete`. Mutable workspace evidence is
+always `limited`; this status does not rewrite the model recommendation.
+Synthetic diff references and embedded diff bodies are intentionally excluded;
+reviewers page through the target-bound diff tool using opaque cursors.
+
 关键字段语义：
 
 | 字段 | 语义 |
 |---|---|
 | `source_events` | 生成该包使用的事件 id 集合 |
 | `evidence_refs` | 指向日志摘要、报告、CI、截图、轨迹或外部系统事实的引用 |
+| `review_target` | 本次 Review 的目标摘要；changed-code 内容通过 prepared `GetFileDiff` 的有界分页读取，不嵌入 evidence pack。immutable revision 可声明内容不可变；live workspace 可声明 prepared diff 覆盖完整，但最终 evidence status 仍为 limited。base revision 与当前 HEAD 不一致时，工具返回 stale/limited 而不是读取错误 diff |
 | `security` | 执行安全决策摘要，包括执行位置、沙箱等级组合、降级原因和授权范围；不作为质量通过依据 |
 | `skipped_checks` | 未运行检查的原因、触发规则、可接受条件和残余风险 |
 | `open_risks` | 尚未被证据覆盖或人工接受的风险 |
@@ -106,7 +139,7 @@ interface EvidencePack {
 
 ```text
 源事件
-  -> 构建证据摘要
+  -> 固定 Review 目标并构建证据摘要
   -> 附加画像和策略版本
   -> 判断新鲜度与完整度
   -> 选择展示层级
@@ -121,7 +154,7 @@ interface EvidencePack {
 |---|---|---|
 | `fresh` | 当前层级所需证据完整且来源版本未变化 | 可支撑就绪度或门禁判断 |
 | `partial` | 推荐证据缺失、非阻塞跳过项或低风险未知 | 摘要或建议投影展示缺口 |
-| `stale` | diff、项目画像、策略、强制检查、审查范围或主动配置变化 | 不得继续支撑通过/就绪判断 |
+| `stale` | Review base/head、目标指纹、workspace binding、diff、项目画像、策略、强制检查、审查范围或主动配置变化 | 不得继续支撑通过/就绪判断或当前 head 的评论发布 |
 | `blocked` | 必要验证失败、安全拒绝、高权限主动配置未确认或证据不可访问 | 下游应进入阻断、失败或降级状态 |
 | `superseded` | 新版本证据包取代旧版本 | 旧包保留审计，不作为当前判断依据 |
 
@@ -142,7 +175,7 @@ interface EvidencePack {
 
 | 阶段 | 目标 |
 |---|---|
-| P-1 | 定义 EvidenceReference、证据包结构、状态、展示层级、新鲜度和风险接受契约 |
+| P-1 | 定义 EvidenceReference、证据包结构、状态、展示层级、新鲜度和风险接受字段 |
 | P0 | 为快速路径生成摘要层级，记录验证、安全决策、沙箱等级和跳过项 |
 | P1 | 支撑 PR 就绪度的证据引用、过期证据和定向审查证据 |
 | P2 | 支撑团队/守护策略的 PR 门禁投影、风险接受和主动配置信任审查 |
@@ -159,7 +192,7 @@ interface EvidencePack {
 | 门禁与证据包状态不一致 | 门禁结果必须引用 `evidence_pack_id` 和 `policy_version` |
 | 人工接受掩盖证据缺失 | 风险接受不能把缺失证据改写成通过 |
 | 证据过期不可见 | 变更集、策略画像、策略、检查、审查或主动配置变化必须标记过期 |
-| 模块重复定义字段 | 证据包结构是唯一证据投影契约，其他模块只能扩展引用或消费 |
+| 模块重复定义字段 | 证据包结构是唯一证据视图和 schema，其他模块只能扩展引用或消费 |
 
 ## 9. 成功标准
 

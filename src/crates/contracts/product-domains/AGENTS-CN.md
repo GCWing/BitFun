@@ -14,7 +14,7 @@ ports；具体 runtime 行为不属于本 crate。
 - 本 crate 可以承载纯 DTO、枚举、序列化契约、搜索计划、命令选择决策、storage-shape parser、领域策略和产品领域 port trait。
 - 真正执行 IO、进程、AI 调用、Git service 调用、平台集成、tool exposure 或 desktop/Tauri 工作的 concrete adapter 属于本 crate 外部。
 - 在下游调用点被有意迁移前，用 re-export 或 wrapper facade 保持既有 core import path。
-- 新增 feature-gated 内容必须保持窄边界。`miniapp`、`function-agents` 和 `product-full` 只应启用已声明的产品领域 feature 组。
+- 新增 feature-gated 内容必须保持窄边界。`plugin-source`、`miniapp`、`function-agents` 和 `product-full` 只应启用已声明的产品领域 feature 组。
 
 ## 归属边界
 
@@ -22,6 +22,7 @@ ports；具体 runtime 行为不属于本 crate。
   seed-plan facts、marker wire format、host primitive call plan 和窄 port。
 - `function-agents` 可以拥有 function-agent DTO、prompt/domain policy、response parsing/repair rule、file-shape analysis
   和 Git/AI port trait。
+- `plugin-source` 可以拥有 BitFun 插件包清单数据结构、来源标识、工作区信任记录和纯信任版本变更规则。
 - 具体 filesystem writes、marker IO、host dispatch、worker side effect、compile orchestration、`PathManager` integration、
   concrete Git/AI service、provider acquisition 和 transport error mapping 均属于本 crate 外部。
 

@@ -9,7 +9,10 @@ import {
   MessageSquare,
 } from 'lucide-react';
 import {
+  buildPendingFollowUpReviewSessionId,
+  getPendingFollowUpReviewRequestId,
   getReviewActionBarStateForSession,
+  isPendingFollowUpReviewSessionId,
   useReviewActionBarStore,
   type DeepReviewCapacityQueueAction,
   type DeepReviewCapacityQueueState,
@@ -23,6 +26,7 @@ import {
 } from '../../utils/codeReviewReport';
 import { continueDeepReviewSession } from '../../services/DeepReviewContinuationService';
 import { flowChatManager } from '../../services/FlowChatManager';
+import { persistReviewActionState } from '../../services/ReviewActionBarPersistenceService';
 import { globalEventBus } from '@/infrastructure/event-bus';
 import { notificationService } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
@@ -38,6 +42,7 @@ import {
 } from '../../utils/deepReviewExperience';
 import { flowChatStore } from '../../store/FlowChatStore';
 import { agentAPI } from '@/infrastructure/api/service-api/AgentAPI';
+import { isTauriRuntime } from '@/infrastructure/runtime';
 import { useSettingsStore } from '@/app/scenes/settings/settingsStore';
 import { useSceneStore } from '@/app/stores/sceneStore';
 import type { ConfigTab } from '@/app/scenes/settings/settingsConfig';
@@ -48,8 +53,18 @@ import { buildInterruptionDiagnostics } from './interruptionDiagnostics';
 import { PartialResultsPanel } from './PartialResultsPanel';
 import { RemediationSelectionPanel } from './RemediationSelectionPanel';
 import { RecoveryPlanPreview } from './RecoveryPlanPreview';
-import { ReviewActionControls } from './ReviewActionControls';
+import { ReviewActionControls, type FollowUpReviewState } from './ReviewActionControls';
 import { ReviewActionHeader } from './ReviewActionHeader';
+import {
+  launchPreparedReviewSession,
+  prepareReviewLaunchFromSlashCommand,
+  prepareReviewLaunchFromSessionFiles,
+} from '../../services/ReviewService';
+import { createBtwRequestId } from '../../services/BtwThreadService';
+import { openBtwSessionInAuxPane } from '../../services/btwSessionPane';
+import type { Session } from '../../types/flow-chat';
+import { useDeepReviewConsent } from '../../components/DeepReviewConsentDialog';
+import { deriveDeepReviewSessionConcurrencyGuard } from '../../utils/deepReviewCapacityGuard';
 import '../../components/btw/DeepReviewActionBar.scss';
 
 const log = createLogger('DeepReviewActionBar');
@@ -67,6 +82,31 @@ function normalizeActionErrorMessage(error: unknown): string {
     return error.trim();
   }
   return 'unknown error';
+}
+
+function deriveFollowUpReviewState(
+  followUpSessionId: string | null,
+  session: Session | null,
+  activeAction: string | null,
+): FollowUpReviewState {
+  if (!followUpSessionId) return 'none';
+  if (isPendingFollowUpReviewSessionId(followUpSessionId)) {
+    return activeAction === 'review' ? 'launching' : 'retry';
+  }
+  if (!session) return 'retry';
+
+  const lastTurn = session.dialogTurns[session.dialogTurns.length - 1];
+  if (!lastTurn) {
+    return session.isHistorical ||
+      session.historyState === 'metadata-only' ||
+      session.historyState === 'hydrating'
+      ? 'available'
+      : 'retry';
+  }
+  if (lastTurn.status === 'cancelled') return 'cancelled';
+  if (lastTurn.status === 'error' || session.status === 'error') return 'failed';
+  if (lastTurn.status === 'completed') return 'completed';
+  return 'running';
 }
 
 function buildCapacityQueueControlToolIds(
@@ -96,7 +136,6 @@ const stopNestedScrollPropagation = (event: React.WheelEvent | React.TouchEvent)
 };
 
 interface PendingDecisionAction {
-  rerunReview: boolean;
   selectedIds: Set<string>;
 }
 
@@ -134,22 +173,28 @@ export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({ childSessionId
   const actionState = scopedState ?? store;
   const {
     childSessionId,
+    parentSessionId,
     reviewMode,
     phase,
     reviewData,
     remediationItems,
     selectedRemediationIds,
     activeAction,
+    followUpReviewSessionId,
+    reviewTargetFilePaths,
     lastSubmittedAction,
     customInstructions,
     errorMessage,
     interruption,
     completedRemediationIds,
     fixingRemediationIds,
+    remediationModifiedFilePaths,
+    remediationScopeRequiresWorkspaceFallback,
     remainingFixIds,
     decisionSelections,
     capacityQueueState,
   } = actionState;
+  const { confirmDeepReviewLaunch, deepReviewConsentDialog } = useDeepReviewConsent();
 
   const [showCustomInput, setShowCustomInput] = useState(false);
   const [showRemediationList, setShowRemediationList] = useState(true);
@@ -243,6 +288,15 @@ export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({ childSessionId
     if (!childSessionId) return null;
     return Array.from(sessions.values()).find((s) => s.sessionId === childSessionId) ?? null;
   }, [sessions, childSessionId]);
+  const followUpReviewSession = followUpReviewSessionId &&
+    !isPendingFollowUpReviewSessionId(followUpReviewSessionId)
+    ? sessions.get(followUpReviewSessionId) ?? null
+    : null;
+  const followUpReviewState = deriveFollowUpReviewState(
+    followUpReviewSessionId,
+    followUpReviewSession,
+    activeAction,
+  );
 
   const retryableSlices = useMemo(() => {
     if (!isDeepReview || !reviewData || !childSession?.deepReviewRunManifest) {
@@ -381,7 +435,6 @@ export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({ childSessionId
   }, []);
 
   const handleStartFixing = useCallback(async (
-    rerunReview: boolean,
     overrideSelectedIds?: Set<string>,
     options?: { skipDecisionGate?: boolean },
   ) => {
@@ -395,17 +448,16 @@ export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({ childSessionId
     ));
     if (!options?.skipDecisionGate && selectedDecisionItems.length > 0) {
       const decisionIds = selectedDecisionItems.map((item) => item.id);
-      setPendingDecisionAction({ rerunReview, selectedIds: new Set(idsToFix) });
+      setPendingDecisionAction({ selectedIds: new Set(idsToFix) });
       setShowRemediationList(true);
       setExpandedDecisionIds((current) => new Set([...current, ...decisionIds]));
       return;
     }
 
-    const action = rerunReview ? 'fix-review' : 'fix';
+    const action = 'fix';
     let prompt = buildSelectedReviewRemediationPrompt({
       reviewData,
       selectedIds: idsToFix,
-      rerunReview,
       reviewMode,
       completedItems: [...completedRemediationIds],
       decisionSelections,
@@ -423,29 +475,22 @@ export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({ childSessionId
     store.minimize(childSessionId ?? undefined);
 
     try {
+      await persistReviewActionState(useReviewActionBarStore.getState());
       await flowChatManager.sendMessage(
         prompt,
         childSessionId,
-        rerunReview
-          ? t(isDeepReview
-              ? 'reviewActionBar.fixAndReviewRequestDisplayDeep'
-              : 'reviewActionBar.fixAndReviewRequestDisplayStandard', {
-              defaultValue: isDeepReview
-                ? 'Fix Deep Review findings and re-review'
-                : 'Fix Code Review findings and re-review',
-            })
-          : t(isDeepReview
-              ? 'reviewActionBar.fixRequestDisplayDeep'
-              : 'reviewActionBar.fixRequestDisplayStandard', {
-              defaultValue: isDeepReview
-                ? 'Start fixing Deep Review findings'
-                : 'Start fixing Code Review findings',
-            }),
-        isDeepReview ? 'DeepReview' : 'CodeReview',
+        t(isDeepReview
+            ? 'reviewActionBar.fixRequestDisplayDeep'
+            : 'reviewActionBar.fixRequestDisplayStandard', {
+            defaultValue: isDeepReview
+              ? 'Start fixing strict review findings'
+              : 'Start fixing review findings',
+          }),
+        'ReviewFixer',
         'agentic',
       );
     } catch (error) {
-      log.error('Failed to start review remediation', { childSessionId, reviewMode, rerunReview, error });
+      log.error('Failed to start review remediation', { childSessionId, reviewMode, error });
       const msg = error instanceof Error ? error.message : String(error);
       const isTimeout = /timeout/i.test(msg);
       store.updatePhase(isTimeout ? 'fix_timeout' : 'fix_failed', msg, childSessionId);
@@ -463,6 +508,164 @@ export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({ childSessionId
     }
   }, [reviewData, childSessionId, childSession, selectedRemediationIds, remediationItems, completedRemediationIds, customInstructions, reviewMode, isDeepReview, decisionSelections, store, t]);
 
+  const handleReviewFixes = useCallback(async () => {
+    if (!isTauriRuntime()) {
+      notificationService.warning(t('chatInput.reviewUnavailableSurface'));
+      return;
+    }
+    const workspacePath = childSession?.workspacePath;
+    if (!childSessionId || !parentSessionId || !workspacePath) {
+      notificationService.error(t('deepReviewActionBar.reviewFixesUnavailable'));
+      return;
+    }
+
+    const currentActionState = store.getSessionState(childSessionId);
+    if (!currentActionState || currentActionState.activeAction !== null) {
+      return;
+    }
+    const pendingFollowUpRequestId = getPendingFollowUpReviewRequestId(
+      currentActionState.followUpReviewSessionId,
+    );
+    const currentFollowUpSession = currentActionState.followUpReviewSessionId &&
+      !pendingFollowUpRequestId
+      ? flowChatStore.getState().sessions.get(currentActionState.followUpReviewSessionId) ?? null
+      : null;
+    const currentFollowUpState = deriveFollowUpReviewState(
+      currentActionState.followUpReviewSessionId,
+      currentFollowUpSession,
+      currentActionState.activeAction,
+    );
+    if (!['none', 'retry', 'failed', 'cancelled'].includes(currentFollowUpState)) {
+      return;
+    }
+    const recoverableEmptySessionRequestId = currentFollowUpSession?.dialogTurns.length === 0
+      ? currentFollowUpSession.btwOrigin?.requestId
+      : undefined;
+
+    store.setActiveAction('review', undefined, childSessionId);
+    try {
+      const originalReviewTargetFilePaths = reviewTargetFilePaths.length > 0
+        ? reviewTargetFilePaths
+        : childSession.reviewTargetFilePaths
+        ?? childSession.deepReviewRunManifest?.target.files
+          .filter((file) => !file.excluded)
+          .map((file) => file.normalizedPath)
+        ?? [];
+      const followUpReviewTargetFilePaths = [
+        ...new Set([
+          ...originalReviewTargetFilePaths,
+          ...remediationModifiedFilePaths,
+        ]),
+      ];
+      if (followUpReviewTargetFilePaths.length === 0) {
+        notificationService.info(t('deepReviewActionBar.reviewFixesScopeFallback'), {
+          duration: 4000,
+        });
+      }
+      if (remediationScopeRequiresWorkspaceFallback) {
+        notificationService.info(t('deepReviewActionBar.reviewFixesCommandScopeFallback'), {
+          duration: 5000,
+        });
+      }
+      const prepared = remediationScopeRequiresWorkspaceFallback
+        ? await prepareReviewLaunchFromSlashCommand(
+            '/review',
+            workspacePath,
+            childSession.remoteConnectionId,
+          )
+        : followUpReviewTargetFilePaths.length > 0
+        ? await prepareReviewLaunchFromSessionFiles(followUpReviewTargetFilePaths, {
+            workspacePath,
+            remoteConnectionId: childSession.remoteConnectionId,
+          })
+        : await prepareReviewLaunchFromSlashCommand(
+            '/review',
+            workspacePath,
+            childSession.remoteConnectionId,
+          );
+      if (prepared.mode === 'strict' && prepared.requiresConsent) {
+        const confirmed = await confirmDeepReviewLaunch(prepared.runManifest, {
+          sessionConcurrencyGuard: deriveDeepReviewSessionConcurrencyGuard(
+            flowChatStore.getState(),
+            parentSessionId,
+          ),
+        });
+        if (!confirmed) {
+          return;
+        }
+      }
+
+      const followUpRequestId = pendingFollowUpRequestId
+        ?? recoverableEmptySessionRequestId
+        ?? createBtwRequestId('review_follow_up');
+      store.setFollowUpReviewSessionId(
+        buildPendingFollowUpReviewSessionId(followUpRequestId),
+        childSessionId,
+      );
+      await persistReviewActionState(useReviewActionBarStore.getState());
+
+      const launched = await launchPreparedReviewSession({
+        parentSessionId,
+        workspacePath,
+        displayMessage: t('deepReviewActionBar.reviewFixesRequest'),
+        childSessionName: t('deepReviewActionBar.reviewFixesThreadTitle'),
+        requestId: followUpRequestId,
+        prepared,
+      });
+      store.setFollowUpReviewSessionId(launched.childSessionId, childSessionId);
+      if (launched?.launchStatus === 'uncertain') {
+        notificationService.warning(t('deepReviewActionBar.launchError.uncertain'), {
+          duration: 8000,
+        });
+      }
+      try {
+        await persistReviewActionState(useReviewActionBarStore.getState());
+      } catch (error) {
+        log.warn('Follow-up review started but its final session id was not persisted', {
+          childSessionId,
+          followUpReviewSessionId: launched.childSessionId,
+          error,
+        });
+      }
+    } catch (error) {
+      log.error('Failed to start remediation follow-up review', {
+        childSessionId,
+        reviewMode,
+        error,
+      });
+      const message = normalizeActionErrorMessage(error);
+      notificationService.error(message, { duration: 5000 });
+    } finally {
+      store.setActiveAction(null, undefined, childSessionId);
+    }
+  }, [
+    childSession,
+    childSessionId,
+    confirmDeepReviewLaunch,
+    parentSessionId,
+    remediationModifiedFilePaths,
+    remediationScopeRequiresWorkspaceFallback,
+    reviewMode,
+    reviewTargetFilePaths,
+    store,
+    t,
+  ]);
+
+  const handleOpenFollowUpReview = useCallback(() => {
+    if (!followUpReviewSession || !parentSessionId) return;
+    openBtwSessionInAuxPane({
+      childSessionId: followUpReviewSession.sessionId,
+      parentSessionId,
+      workspacePath: followUpReviewSession.workspacePath ?? childSession?.workspacePath,
+      expand: true,
+      sessionKind: followUpReviewSession.sessionKind === 'deep_review' ? 'deep_review' : 'review',
+      sessionTitle: followUpReviewSession.title,
+      agentType: followUpReviewSession.config?.agentType,
+      remoteConnectionId: followUpReviewSession.remoteConnectionId,
+      remoteSshHost: followUpReviewSession.remoteSshHost,
+    });
+  }, [childSession?.workspacePath, followUpReviewSession, parentSessionId]);
+
   const handleConfirmDecisionGate = useCallback(async () => {
     if (!pendingDecisionAction || decisionGateMissingSelection) {
       return;
@@ -470,7 +673,7 @@ export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({ childSessionId
 
     const action = pendingDecisionAction;
     setPendingDecisionAction(null);
-    await handleStartFixing(action.rerunReview, action.selectedIds, { skipDecisionGate: true });
+    await handleStartFixing(action.selectedIds, { skipDecisionGate: true });
   }, [decisionGateMissingSelection, handleStartFixing, pendingDecisionAction]);
 
   const handleCancelDecisionGate = useCallback(() => {
@@ -493,7 +696,7 @@ export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({ childSessionId
       );
       store.minimize(childSessionId);
     } catch (error) {
-      log.error('Failed to start DeepReview retry slices', { childSessionId, error });
+      log.error('Failed to start DeepReview retry coverage', { childSessionId, error });
       const message = error instanceof Error
         ? error.message
         : t('deepReviewActionBar.retryIncompleteFailed');
@@ -509,7 +712,6 @@ export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({ childSessionId
     let prompt = buildSelectedReviewRemediationPrompt({
       reviewData,
       selectedIds: selectedRemediationIds,
-      rerunReview: false,
       reviewMode,
       decisionSelections,
     });
@@ -569,7 +771,7 @@ export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({ childSessionId
     try {
       await continueDeepReviewSession(interruption, t('deepReviewActionBar.resumeRequestDisplay'), { force: !interruption.canResume });
     } catch (error) {
-      log.error('Failed to continue interrupted Deep Review', { childSessionId, error });
+      log.error('Failed to continue interrupted strict review', { childSessionId, error });
       const message = t('deepReviewActionBar.resumeFailedMessage');
       store.updatePhase('resume_failed', message, childSessionId ?? undefined);
       store.restore(childSessionId ?? undefined);
@@ -585,7 +787,7 @@ export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({ childSessionId
     const remainingSet = new Set(remainingFixIds);
     store.setSelectedRemediationIds(remainingSet, childSessionId);
 
-    await handleStartFixing(false, remainingSet);
+    await handleStartFixing(remainingSet);
   }, [reviewData, childSessionId, remainingFixIds, store, handleStartFixing]);
 
   const handleOpenModelSettings = useCallback(async () => {
@@ -600,18 +802,8 @@ export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({ childSessionId
   const handleDegradationAction = useCallback((type: string) => {
     if (type === 'view_partial') {
       setShowPartialResults(true);
-    } else if (type === 'reduce_reviewers') {
-      notificationService.info(
-        t('deepReviewActionBar.degradation.reduceReviewersPending'),
-        { duration: 3000 },
-      );
-    } else if (type === 'compress_context') {
-      notificationService.info(
-        t('deepReviewActionBar.degradation.compressContextPending'),
-        { duration: 3000 },
-      );
     }
-  }, [t]);
+  }, []);
 
   const handleCopyDiagnostics = useCallback(async () => {
     const detail = interruption?.errorDetail;
@@ -655,11 +847,11 @@ export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({ childSessionId
     switch (phase) {
       case 'review_running':
         return t(isDeepReview ? 'deepReviewActionBar.reviewRunningDeep' : 'deepReviewActionBar.reviewRunningStandard', {
-          defaultValue: isDeepReview ? 'Deep review in progress...' : 'Review in progress...',
+          defaultValue: isDeepReview ? 'Strict review in progress...' : 'Review in progress...',
         });
       case 'review_completed':
         return t(isDeepReview ? 'reviewActionBar.reviewCompletedDeep' : 'reviewActionBar.reviewCompletedStandard', {
-          defaultValue: isDeepReview ? 'Deep review completed' : 'Review completed',
+          defaultValue: isDeepReview ? 'Strict review completed' : 'Review completed',
         });
       case 'fix_running':
         if (lastSubmittedAction === 'fix-review') {
@@ -827,7 +1019,6 @@ export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({ childSessionId
           items={decisionGateItems}
           decisionSelections={decisionSelections}
           customInstructions={customInstructions}
-          rerunReview={pendingDecisionAction.rerunReview}
           confirmDisabled={decisionGateMissingSelection}
           onSelectDecision={(itemId, optionIndex) =>
             store.setDecisionSelection(itemId, optionIndex, childSessionId ?? undefined)
@@ -895,6 +1086,8 @@ export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({ childSessionId
         hasInterruption={showInterruptionDetails}
         partialResultsAvailable={Boolean(partialResults?.hasPartialResults)}
         activeAction={activeAction}
+        followUpReviewState={followUpReviewState}
+        canLaunchFollowUpReview={isTauriRuntime()}
         isFixDisabled={isFixDisabled}
         isResumeRunning={isResumeRunning}
         remainingFixIds={remainingFixIds}
@@ -902,6 +1095,8 @@ export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({ childSessionId
         reviewData={reviewData}
         onRetryIncompleteSlices={handleRetryIncompleteSlices}
         onStartFixing={handleStartFixing}
+        onReviewFixes={handleReviewFixes}
+        onOpenFollowUpReview={handleOpenFollowUpReview}
         onFillBackInput={handleFillBackInput}
         onContinueReview={handleContinueReview}
         onOpenModelSettings={handleOpenModelSettings}
@@ -911,6 +1106,7 @@ export const ReviewActionBar: React.FC<ReviewActionBarProps> = ({ childSessionId
         onSkipRemainingFixes={() => store.skipRemainingFixes(childSessionId ?? undefined)}
         onMinimize={handleMinimize}
       />
+      {deepReviewConsentDialog}
     </div>
   );
 };

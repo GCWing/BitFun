@@ -90,22 +90,12 @@ export const PREDICTIVE_TIMEOUT_BASE_SECONDS: Record<ReviewStrategyLevel, number
   normal: 300,
   deep: 600,
 };
-export const TOKEN_BUDGET_PROMPT_BYTE_LIMIT_BY_MODE: Record<ReviewTokenBudgetMode, number> = {
-  economy: 64_000,
-  balanced: 96_000,
-  thorough: 192_000,
-};
-export const PROMPT_BYTE_ESTIMATE_BASE_BYTES = 12_000;
-export const PROMPT_BYTE_ESTIMATE_PER_FILE_BYTES = 1_800;
-export const PROMPT_BYTE_ESTIMATE_PER_CHANGED_LINE_BYTES = 120;
-export const PROMPT_BYTE_ESTIMATE_UNKNOWN_LINES_PER_FILE = 80;
-
 export const REVIEW_TEAM_MEMBER_ACCENT_DEFAULT = UI_EXCEPTION_ACCENTS.reviewTeam.memberDefault;
 
 export const EXTRA_MEMBER_DEFAULTS = {
   roleName: 'Additional Specialist Reviewer',
   description:
-    'User-added Sub-Agent that joins the deep review lineup with its own instructions, tools, and perspective.',
+    'Optional specialist coverage for strict Review with its own instructions, tools, and perspective.',
   responsibilities: [
     'Bring an extra independent review perspective into the same target scope.',
     'Stay tightly focused on the requested diff, commit, or workspace changes.',
@@ -120,7 +110,6 @@ export const REVIEW_WORK_PACKET_ALLOWED_TOOLS = [
   'Grep',
   'Glob',
   'LS',
-  'Git',
 ] as const;
 
 export const REVIEWER_WORK_PACKET_REQUIRED_OUTPUT_FIELDS = [
@@ -240,11 +229,11 @@ export const DISALLOWED_REVIEW_TEAM_MEMBER_IDS = new Set<string>([
 
 export const FALLBACK_REVIEW_TEAM_DEFINITION: ReviewTeamDefinition = {
   id: DEFAULT_REVIEW_TEAM_ID,
-  name: 'Code Review Team',
+  name: 'Strict Review Coverage',
   description:
-    'A multi-reviewer team for deep code review with mandatory logic, performance, security, architecture, conditional frontend, and quality-gate roles.',
+    'A multi-reviewer coverage plan for strict code review with mandatory logic, performance, security, architecture, conditional frontend, and quality-gate roles.',
   warning:
-    'Deep review may take longer and usually consumes more tokens than a standard review.',
+    'Strict review may take longer and usually consumes more tokens than a standard review.',
   defaultModel: DEFAULT_REVIEW_TEAM_MODEL,
   defaultStrategyLevel: DEFAULT_REVIEW_TEAM_STRATEGY_LEVEL,
   defaultExecutionPolicy: {

@@ -83,6 +83,29 @@ const DEFAULT_SUBAGENT_MAX_CONCURRENCY: usize = 5;
 const MAX_SUBAGENT_MAX_CONCURRENCY: usize = 64;
 const SUBAGENT_TIMEOUT_GRACE_PERIOD: Duration = Duration::from_secs(10);
 
+fn is_review_agent_type(agent_type: &str) -> bool {
+    matches!(
+        agent_type.to_ascii_lowercase().as_str(),
+        "codereview" | "deepreview"
+    )
+}
+
+fn turn_review_manifest_for_agent(
+    metadata: Option<&serde_json::Value>,
+    agent_type: &str,
+) -> Option<serde_json::Value> {
+    if !is_review_agent_type(agent_type) {
+        return None;
+    }
+    metadata
+        .and_then(|metadata| {
+            metadata
+                .get("deepReviewRunManifest")
+                .or_else(|| metadata.get("deep_review_run_manifest"))
+        })
+        .cloned()
+}
+
 /// Subagent execution result
 ///
 /// Contains the text response after subagent execution
@@ -1471,7 +1494,9 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
                 custom_metadata: None,
                 relationship: None,
                 todos: None,
+                review_action_state: None,
                 deep_review_run_manifest: None,
+                review_target_evidence: None,
                 deep_review_cache: None,
                 workspace_path: Some(workspace_path.to_string()),
                 workspace_hostname: None,
@@ -3478,11 +3503,30 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
 
         // Pass turn_index (for operation history/rollback)
         context_vars.insert("turn_index".to_string(), turn_index.to_string());
-        if let Some(run_manifest) = user_message_metadata.as_ref().and_then(|metadata| {
-            metadata
-                .get("deepReviewRunManifest")
-                .or_else(|| metadata.get("deep_review_run_manifest"))
-        }) {
+        let review_agent = is_review_agent_type(&effective_agent_type);
+        let turn_review_manifest =
+            turn_review_manifest_for_agent(user_message_metadata.as_ref(), &effective_agent_type);
+        let persisted_review_manifest = if turn_review_manifest.is_none() && review_agent {
+            match session_workspace.as_ref() {
+                Some(workspace) => self
+                    .session_manager
+                    .load_session_metadata(&workspace.session_storage_dir(), &session_id)
+                    .await
+                    .ok()
+                    .flatten()
+                    .and_then(|metadata| {
+                        metadata.deep_review_run_manifest.or_else(|| {
+                            metadata.review_target_evidence.map(
+                                |evidence| serde_json::json!({ "reviewTargetEvidence": evidence }),
+                            )
+                        })
+                    }),
+                None => None,
+            }
+        } else {
+            None
+        };
+        if let Some(run_manifest) = turn_review_manifest.or(persisted_review_manifest) {
             context_vars.insert(
                 "deep_review_run_manifest".to_string(),
                 run_manifest.to_string(),
@@ -7526,7 +7570,7 @@ mod tests {
     use super::{
         merge_prepended_messages_for_turn, normalize_subagent_max_concurrency,
         resolve_agent_session_create_created_by, resolve_agent_submission_turn_id,
-        ConversationCoordinator, SubagentExecutionRequest,
+        turn_review_manifest_for_agent, ConversationCoordinator, SubagentExecutionRequest,
     };
     use crate::agentic::core::{
         InternalReminderKind, Message, MessageContent, MessageRole, MessageSemanticKind,
@@ -8280,5 +8324,16 @@ mod tests {
                 Some(InternalReminderKind::ScheduledJob),
             ]
         );
+    }
+
+    #[test]
+    fn turn_review_manifest_is_ignored_for_ordinary_agents() {
+        let metadata = serde_json::json!({
+            "deepReviewRunManifest": { "reviewTargetEvidence": { "version": 1 } }
+        });
+
+        assert!(turn_review_manifest_for_agent(Some(&metadata), "agentic").is_none());
+        assert!(turn_review_manifest_for_agent(Some(&metadata), "CodeReview").is_some());
+        assert!(turn_review_manifest_for_agent(Some(&metadata), "DeepReview").is_some());
     }
 }

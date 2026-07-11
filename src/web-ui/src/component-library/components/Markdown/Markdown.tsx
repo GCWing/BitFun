@@ -811,7 +811,7 @@ export const Markdown = React.memo<MarkdownProps>(({
   );
 
   useEffect(() => {
-    if (!needsWorkspacePathForLinks || currentWorkspacePath) {
+    if (!needsWorkspacePathForLinks || currentWorkspacePath || basePath) {
       return;
     }
 
@@ -830,7 +830,7 @@ export const Markdown = React.memo<MarkdownProps>(({
     return () => {
       cancelled = true;
     };
-  }, [currentWorkspacePath, needsWorkspacePathForLinks]);
+  }, [basePath, currentWorkspacePath, needsWorkspacePathForLinks]);
 
   const markdownFeatureProfile = useMemo(() => ({
     contentLength: markdownContent.length,
@@ -1319,7 +1319,7 @@ export const Markdown = React.memo<MarkdownProps>(({
     },
 
     img({ node: _node, ...props }: any) {
-      return <MarkdownImage {...props} basePath={basePath} />;
+      return <MarkdownImage {...props} basePath={basePath || currentWorkspacePath} />;
     },
     
     blockquote({ children }: any) {

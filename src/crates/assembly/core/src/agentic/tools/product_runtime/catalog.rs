@@ -102,6 +102,19 @@ impl GetToolSpecCatalogProvider<dyn Tool, ToolUseContext> for ProductToolCatalog
             None => Ok(self.default_collapsed_tools().await),
         }
     }
+
+    async fn available_tools_for_get_tool_spec(
+        &self,
+        context: Option<&ToolUseContext>,
+    ) -> Result<Vec<ToolRef>, String> {
+        match context {
+            Some(context) => self
+                .contextual_available_tools(context)
+                .await
+                .map_err(|error| error.to_string()),
+            None => Ok(self.default_collapsed_tools().await),
+        }
+    }
 }
 
 impl ProductToolCatalogProvider {
@@ -131,6 +144,26 @@ impl ProductToolCatalogProvider {
             .visible_tools(&policy.allowed_tools, &policy.exposure_overrides, context)
             .await;
         Ok(visible_tools.collapsed_tools)
+    }
+
+    async fn contextual_available_tools(
+        &self,
+        context: &ToolUseContext,
+    ) -> BitFunResult<Vec<ToolRef>> {
+        let agent_type = context.agent_type.as_deref().ok_or_else(|| {
+            BitFunError::Validation("GetToolSpec requires agent type context".to_string())
+        })?;
+        let workspace_root = context.workspace_root();
+        let agent_registry = get_agent_registry();
+        let policy = agent_registry
+            .get_agent_tool_policy(agent_type, workspace_root)
+            .await;
+        let visible_tools = product_tool_catalog_runtime(self)
+            .visible_tools(&policy.allowed_tools, &policy.exposure_overrides, context)
+            .await;
+        let mut tools = visible_tools.expanded_tools;
+        tools.extend(visible_tools.collapsed_tools);
+        Ok(tools)
     }
 }
 
@@ -410,20 +443,33 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn product_get_tool_spec_rejects_expanded_webfetch_in_agentic_mode() {
-        let error = resolve_product_get_tool_spec_results(
+    async fn product_get_tool_spec_returns_assistant_hint_for_expanded_webfetch_in_agentic_mode() {
+        let results = resolve_product_get_tool_spec_results(
             &json!({ "tool_name": "WebFetch" }),
             &tool_context(Some("agentic")),
             "GetToolSpec",
         )
         .await
-        .expect_err("agentic mode expands WebFetch, so GetToolSpec should reject it");
+        .expect("agentic mode expands WebFetch, so GetToolSpec should return a direct-use hint");
 
+        assert_eq!(results.len(), 1);
+        let ToolResult::Result {
+            data,
+            result_for_assistant,
+            ..
+        } = &results[0]
+        else {
+            panic!("expected normal tool result");
+        };
+
+        assert_eq!(data["tool_name"], "WebFetch");
+        assert_eq!(data["already_available"], true);
         assert!(
-            error
-                .to_string()
-                .contains("not an available collapsed tool"),
-            "unexpected error: {error}"
+            result_for_assistant
+                .as_deref()
+                .unwrap_or_default()
+                .contains("already fully defined in the available tool list"),
+            "unexpected assistant text: {result_for_assistant:?}"
         );
     }
 

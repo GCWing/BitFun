@@ -15,11 +15,15 @@ pub mod queue;
 pub mod report;
 mod runtime_state;
 pub mod shared_context;
+pub mod target_evidence;
 pub mod task_execution;
 pub mod team_definition;
 pub mod tool_context;
 
-pub use budget::{DeepReviewActiveReviewerGuard, DeepReviewBudgetTracker};
+pub use budget::{
+    DeepReviewActiveReviewerGuard, DeepReviewBudgetTracker, ReviewDiffBudgetAdmission,
+    REVIEW_DIFF_MAX_CHARS_PER_TURN,
+};
 pub use concurrency_policy::{DeepReviewConcurrencyPolicy, DeepReviewEffectiveConcurrencySnapshot};
 pub use constants::{
     CONDITIONAL_REVIEWER_AGENT_TYPES, CORE_REVIEWER_AGENT_TYPES, DEEP_REVIEW_AGENT_TYPE,
@@ -43,6 +47,10 @@ pub use report::DeepReviewCacheUpdate;
 pub use runtime_state::*;
 pub use shared_context::{
     DeepReviewSharedContextDuplicate, DeepReviewSharedContextMeasurementSnapshot,
+};
+pub use target_evidence::{
+    ReviewTargetEvidence, ReviewTargetEvidenceCompleteness, ReviewTargetEvidenceFile,
+    ReviewTargetEvidenceSource, ReviewTargetEvidenceValidationError, ReviewTargetWorkspaceBinding,
 };
 pub use task_execution::{DeepReviewLaunchBatchInfo, DeepReviewQueueWaitSkipReason};
 pub use team_definition::{

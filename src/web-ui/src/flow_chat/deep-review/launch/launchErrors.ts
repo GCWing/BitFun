@@ -1,6 +1,7 @@
 import { classifyLaunchError } from '../../utils/deepReviewExperience';
 
 export type DeepReviewLaunchStep =
+  | 'prepare_review_team'
   | 'create_child_session'
   | 'open_aux_pane'
   | 'send_start_message';
@@ -22,9 +23,9 @@ export interface DeepReviewLaunchError extends Error {
 }
 
 const LAUNCH_ERROR_DEFAULT_MESSAGES: Record<string, string> = {
-  'deepReviewActionBar.launchError.modelConfig': 'Deep review could not create a review session. Check the model configuration.',
-  'deepReviewActionBar.launchError.network': 'Network connection was interrupted before Deep Review could start.',
-  'deepReviewActionBar.launchError.unknown': 'Deep review failed to start. Please try again.',
+  'deepReviewActionBar.launchError.modelConfig': 'Strict review could not create a review session. Check the model configuration.',
+  'deepReviewActionBar.launchError.network': 'Network connection was interrupted before strict review could start.',
+  'deepReviewActionBar.launchError.unknown': 'Strict review failed to start. Please try again.',
 };
 
 export function normalizeErrorMessage(error: unknown): string {
@@ -36,7 +37,7 @@ export function normalizeErrorMessage(error: unknown): string {
     return error.trim();
   }
 
-  return 'Deep review failed to start';
+  return 'Strict review failed to start';
 }
 
 export function isSessionMissingError(error: unknown): boolean {
@@ -46,14 +47,16 @@ export function isSessionMissingError(error: unknown): boolean {
 
 function describeLaunchStep(step: DeepReviewLaunchStep): string {
   switch (step) {
+    case 'prepare_review_team':
+      return 'checking review coverage';
     case 'create_child_session':
-      return 'creating the deep review session';
+      return 'creating the strict review session';
     case 'open_aux_pane':
-      return 'opening the deep review pane';
+      return 'preparing the strict review session';
     case 'send_start_message':
-      return 'starting the deep review run';
+      return 'starting the strict review run';
     default:
-      return 'launching deep review';
+      return 'launching strict review';
   }
 }
 
@@ -118,6 +121,6 @@ export function buildLaunchCleanupError(
   const cleanupSummary = cleanupResult.cleanupIssues.join(' ');
   return new Error(
     `${originalMessage} Cleanup was incomplete after failure while ${describeLaunchStep(launchStep)}. ` +
-      `The partially created deep review session (${childSessionId}) may need manual cleanup. ${cleanupSummary}`.trim(),
+      `The partially created strict review session (${childSessionId}) may need manual cleanup. ${cleanupSummary}`.trim(),
   );
 }

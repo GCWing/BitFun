@@ -19,6 +19,13 @@ const buildRecoveryPlanMock = vi.hoisted(() => vi.fn(() => ({
 })));
 const controlDeepReviewQueueMock = vi.hoisted(() => vi.fn());
 const flowChatSessionsMock = vi.hoisted(() => new Map<string, unknown>());
+const prepareReviewLaunchMock = vi.hoisted(() => vi.fn());
+const prepareReviewLaunchFromFilesMock = vi.hoisted(() => vi.fn());
+const launchPreparedReviewMock = vi.hoisted(() => vi.fn());
+const confirmReviewLaunchMock = vi.hoisted(() => vi.fn());
+const persistReviewActionStateMock = vi.hoisted(() => vi.fn());
+const openBtwSessionInAuxPaneMock = vi.hoisted(() => vi.fn());
+const notificationWarningMock = vi.hoisted(() => vi.fn());
 
 vi.mock('react-i18next', async () => {
   const { createTestI18nT } = await import('@/test/i18nTestUtils');
@@ -85,10 +92,35 @@ vi.mock('../../services/FlowChatManager', () => ({
   },
 }));
 
+vi.mock('../../services/ReviewService', () => ({
+  prepareReviewLaunchFromSlashCommand: prepareReviewLaunchMock,
+  prepareReviewLaunchFromSessionFiles: prepareReviewLaunchFromFilesMock,
+  launchPreparedReviewSession: launchPreparedReviewMock,
+}));
+
+vi.mock('../../components/DeepReviewConsentDialog', () => ({
+  useDeepReviewConsent: () => ({
+    confirmDeepReviewLaunch: confirmReviewLaunchMock,
+    deepReviewConsentDialog: null,
+  }),
+}));
+
+vi.mock('../../services/ReviewActionBarPersistenceService', () => ({
+  persistReviewActionState: (...args: unknown[]) => persistReviewActionStateMock(...args),
+}));
+
+vi.mock('../../services/btwSessionPane', () => ({
+  openBtwSessionInAuxPane: (...args: unknown[]) => openBtwSessionInAuxPaneMock(...args),
+}));
+
 vi.mock('@/infrastructure/api/service-api/AgentAPI', () => ({
   agentAPI: {
     controlDeepReviewQueue: controlDeepReviewQueueMock,
   },
+}));
+
+vi.mock('@/infrastructure/runtime', () => ({
+  isTauriRuntime: () => true,
 }));
 
 vi.mock('@/infrastructure/event-bus', () => ({
@@ -106,6 +138,7 @@ vi.mock('@/shared/notification-system', () => ({
     error: vi.fn(),
     info: vi.fn(),
     success: vi.fn(),
+    warning: notificationWarningMock,
   },
 }));
 
@@ -188,6 +221,19 @@ describeWithJsdom('DeepReviewActionBar', () => {
     document.body.appendChild(container);
     root = createRoot(container);
     sendMessageMock.mockResolvedValue(undefined);
+    prepareReviewLaunchMock.mockResolvedValue({
+      mode: 'standard',
+      level: 'l1',
+      requiresConsent: false,
+    });
+    prepareReviewLaunchFromFilesMock.mockResolvedValue({
+      mode: 'standard',
+      level: 'l1',
+      requiresConsent: false,
+    });
+    launchPreparedReviewMock.mockResolvedValue({ childSessionId: 'follow-up-review' });
+    confirmReviewLaunchMock.mockResolvedValue(true);
+    persistReviewActionStateMock.mockResolvedValue(undefined);
     confirmWarningMock.mockResolvedValue(true);
     eventBusEmitMock.mockReturnValue(false);
     continueDeepReviewSessionMock.mockResolvedValue(undefined);
@@ -268,7 +314,7 @@ describeWithJsdom('DeepReviewActionBar', () => {
     expect(itemCheckbox?.disabled).toBe(true);
   });
 
-  it('uses standard review mode when starting Code Review remediation', async () => {
+  it('uses a separate ReviewFixer agent for standard review remediation', async () => {
     useReviewActionBarStore.getState().showActionBar({
       childSessionId: 'review-session',
       parentSessionId: 'parent-session',
@@ -286,23 +332,23 @@ describeWithJsdom('DeepReviewActionBar', () => {
       root.render(<ReviewActionBar />);
     });
 
-    const fixAndReviewButton = Array.from(container.querySelectorAll('button'))
-      .find((button) => button.textContent?.includes('Fix & re-review'));
+    const startFixButton = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Start fixing'));
 
-    expect(fixAndReviewButton).toBeTruthy();
+    expect(startFixButton).toBeTruthy();
 
     await act(async () => {
-      fixAndReviewButton!.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+      startFixButton!.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
       await Promise.resolve();
     });
 
     expect(sendMessageMock).toHaveBeenCalledTimes(1);
     const [prompt, sessionId, displayMessage, agentType] = sendMessageMock.mock.calls[0];
-    expect(prompt).toContain('selected Code Review findings only');
-    expect(prompt).toContain('follow-up standard code review');
+    expect(prompt).toContain('selected Review findings only');
+    expect(prompt).not.toContain('follow-up standard review');
     expect(sessionId).toBe('review-session');
-    expect(displayMessage).toBe('Fix Code Review findings and re-review');
-    expect(agentType).toBe('CodeReview');
+    expect(displayMessage).toBe('Start fixing Review findings');
+    expect(agentType).toBe('ReviewFixer');
   });
 
   it('asks for confirmation before replacing existing chat input text', async () => {
@@ -422,9 +468,9 @@ describeWithJsdom('DeepReviewActionBar', () => {
       root.render(<DeepReviewActionBar />);
     });
 
-    expect(container.textContent).not.toContain('Reviewers waiting for capacity');
+    expect(container.textContent).not.toContain('Review waiting for capacity');
     expect(Array.from(container.querySelectorAll('button')).some((button) => (
-      button.textContent?.includes('Pause queue')
+      button.textContent?.includes('Pause waiting')
     ))).toBe(false);
   });
 
@@ -457,14 +503,14 @@ describeWithJsdom('DeepReviewActionBar', () => {
 
     expect(container.textContent).toContain('Waiting for model capacity');
     expect(container.textContent).toContain('BitFun is waiting for temporary model capacity.');
-    expect(container.textContent).toContain('Reason: provider concurrency limit');
+    expect(container.textContent).toContain('Reason: model concurrency limit');
     expect(container.textContent).toContain('Waited 12s of 1m 0s');
     expect(container.textContent).toContain('Your active session is busy.');
     expect(container.textContent).not.toContain('Run slower next time');
     expect(container.textContent).toContain('Open Review settings');
 
     const pauseButton = Array.from(container.querySelectorAll('button'))
-      .find((button) => button.textContent?.includes('Pause queue'));
+      .find((button) => button.textContent?.includes('Pause waiting'));
     expect(pauseButton).toBeTruthy();
 
     await act(async () => {
@@ -475,7 +521,7 @@ describeWithJsdom('DeepReviewActionBar', () => {
     expect((useReviewActionBarStore.getState() as unknown as {
       capacityQueueState: { status: string };
     }).capacityQueueState.status).toBe('paused_by_user');
-    expect(container.textContent).toContain('Queue paused');
+    expect(container.textContent).toContain('Review wait paused');
 
     const openSettingsButton = Array.from(container.querySelectorAll('button'))
       .find((button) => button.textContent?.includes('Open Review settings'));
@@ -527,7 +573,7 @@ describeWithJsdom('DeepReviewActionBar', () => {
     });
 
     const pauseButton = Array.from(container.querySelectorAll('button'))
-      .find((button) => button.textContent?.includes('Pause queue'));
+      .find((button) => button.textContent?.includes('Pause waiting'));
     expect(pauseButton).toBeTruthy();
 
     await act(async () => {
@@ -575,7 +621,7 @@ describeWithJsdom('DeepReviewActionBar', () => {
     });
 
     const pauseButton = Array.from(container.querySelectorAll('button'))
-      .find((button) => button.textContent?.includes('Pause queue'));
+      .find((button) => button.textContent?.includes('Pause waiting'));
     expect(pauseButton).toBeTruthy();
 
     await act(async () => {
@@ -629,7 +675,7 @@ describeWithJsdom('DeepReviewActionBar', () => {
     });
 
     const pauseButton = Array.from(container.querySelectorAll('button'))
-      .find((button) => button.textContent?.includes('Pause queue'));
+      .find((button) => button.textContent?.includes('Pause waiting'));
     expect(pauseButton).toBeTruthy();
 
     await act(async () => {
@@ -639,7 +685,7 @@ describeWithJsdom('DeepReviewActionBar', () => {
 
     expect(controlDeepReviewQueueMock).toHaveBeenCalledTimes(2);
     expect(notificationService.error).toHaveBeenCalledWith(
-      expect.stringContaining('1 of 2 reviewers failed'),
+      expect.stringContaining('1 of 2 review items failed'),
     );
     expect(notificationService.error).toHaveBeenCalledWith(
       expect.stringContaining('tool already running'),
@@ -649,7 +695,7 @@ describeWithJsdom('DeepReviewActionBar', () => {
     }).capacityQueueState.status).toBe('queued_for_capacity');
   });
 
-  it('starts a structured retry turn for explicit incomplete Deep Review slices', async () => {
+  it('starts a structured retry turn for explicit incomplete strict review coverage', async () => {
     flowChatSessionsMock.set('deep-review-session', {
       sessionId: 'deep-review-session',
       sessionKind: 'deep_review',
@@ -712,7 +758,7 @@ describeWithJsdom('DeepReviewActionBar', () => {
     });
 
     const retryButton = Array.from(container.querySelectorAll('button'))
-      .find((button) => button.textContent?.includes('Retry incomplete slices'));
+      .find((button) => button.textContent?.includes('Retry incomplete review work'));
     expect(retryButton).toBeTruthy();
 
     await act(async () => {
@@ -730,7 +776,14 @@ describeWithJsdom('DeepReviewActionBar', () => {
     expect(agentType).toBe('DeepReview');
   });
 
-  it('shows distinct progress text after starting fix and re-review', async () => {
+  it('offers an independent follow-up review after remediation completes', async () => {
+    flowChatSessionsMock.set('child-session', {
+      sessionId: 'child-session',
+      sessionKind: 'review',
+      workspacePath: 'D:/workspace/project',
+      reviewTargetFilePaths: ['src/auth.ts'],
+      dialogTurns: [],
+    });
     useReviewActionBarStore.getState().showActionBar({
       childSessionId: 'child-session',
       parentSessionId: 'parent-session',
@@ -738,23 +791,215 @@ describeWithJsdom('DeepReviewActionBar', () => {
         summary: { recommended_action: 'request_changes' },
         remediation_plan: ['Fix issue 1'],
       },
-      phase: 'review_completed',
+      reviewMode: 'standard',
+      phase: 'fix_completed',
+    });
+    useReviewActionBarStore.getState().setRemediationModifiedFilePaths(
+      ['src/helper.ts'],
+      'child-session',
+    );
+
+    await act(async () => {
+      root.render(<DeepReviewActionBar />);
+    });
+
+    const reviewFixesButton = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Review fixes'));
+    expect(reviewFixesButton).toBeTruthy();
+
+    launchPreparedReviewMock.mockImplementationOnce(async () => {
+      flowChatSessionsMock.set('follow-up-review', {
+        sessionId: 'follow-up-review',
+        sessionKind: 'review',
+        workspacePath: 'D:/workspace/project',
+        config: { agentType: 'CodeReview' },
+        status: 'idle',
+        dialogTurns: [{ id: 'follow-up-turn', status: 'completed', modelRounds: [] }],
+      });
+      return { childSessionId: 'follow-up-review' };
+    });
+
+    await act(async () => {
+      reviewFixesButton!.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(prepareReviewLaunchFromFilesMock).toHaveBeenCalledWith(
+      ['src/auth.ts', 'src/helper.ts'],
+      { workspacePath: 'D:/workspace/project' },
+    );
+    expect(prepareReviewLaunchMock).not.toHaveBeenCalled();
+    expect(launchPreparedReviewMock).toHaveBeenCalledWith(expect.objectContaining({
+      parentSessionId: 'parent-session',
+      workspacePath: 'D:/workspace/project',
+      displayMessage: 'Review the remediation changes',
+    }));
+    expect(persistReviewActionStateMock).toHaveBeenCalledTimes(2);
+    expect(persistReviewActionStateMock.mock.invocationCallOrder[0])
+      .toBeLessThan(launchPreparedReviewMock.mock.invocationCallOrder[0]);
+    const launchRequestId = launchPreparedReviewMock.mock.calls[0]?.[0]?.requestId;
+    const persistedReservation = persistReviewActionStateMock.mock.calls[0]?.[0]
+      ?.sessionStates?.['child-session']?.followUpReviewSessionId;
+    expect(launchRequestId).toMatch(/^review_follow_up/);
+    expect(persistedReservation).toBe(
+      `__pending_follow_up_review__:${launchRequestId}`,
+    );
+    expect(useReviewActionBarStore.getState().getSessionState('child-session')?.followUpReviewSessionId)
+      .toBe('follow-up-review');
+    const viewReviewButton = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('View review'));
+    expect(viewReviewButton?.disabled).toBe(false);
+
+    await act(async () => {
+      viewReviewButton!.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(launchPreparedReviewMock).toHaveBeenCalledTimes(1);
+    expect(openBtwSessionInAuxPaneMock).toHaveBeenCalledWith(expect.objectContaining({
+      childSessionId: 'follow-up-review',
+      parentSessionId: 'parent-session',
+    }));
+    expect(sendMessageMock).not.toHaveBeenCalled();
+  });
+
+  it('surfaces an uncertain follow-up without automatically launching again', async () => {
+    flowChatSessionsMock.set('child-session', {
+      sessionId: 'child-session',
+      sessionKind: 'review',
+      workspacePath: 'D:/workspace/project',
+      reviewTargetFilePaths: ['src/auth.ts'],
+      dialogTurns: [],
+    });
+    useReviewActionBarStore.getState().showActionBar({
+      childSessionId: 'child-session',
+      parentSessionId: 'parent-session',
+      reviewData: {
+        summary: { recommended_action: 'request_changes' },
+        remediation_plan: ['Fix issue 1'],
+      },
+      reviewMode: 'standard',
+      phase: 'fix_completed',
+    });
+    launchPreparedReviewMock.mockResolvedValueOnce({
+      childSessionId: 'follow-up-review',
+      launchStatus: 'uncertain',
+    });
+
+    await act(async () => {
+      root.render(<DeepReviewActionBar />);
+    });
+    const reviewButton = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Review fixes'))!;
+
+    await act(async () => {
+      reviewButton.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+    expect(launchPreparedReviewMock).toHaveBeenCalledTimes(1);
+    expect(useReviewActionBarStore.getState().getSessionState('child-session')?.followUpReviewSessionId)
+      .toBe('follow-up-review');
+    expect(notificationWarningMock).toHaveBeenCalledWith(
+      expect.stringContaining('may already be running'),
+      { duration: 8000 },
+    );
+  });
+
+  it('opens a metadata-only follow-up review without launching a duplicate', async () => {
+    flowChatSessionsMock.set('child-session', {
+      sessionId: 'child-session',
+      sessionKind: 'review',
+      workspacePath: 'D:/workspace/project',
+      dialogTurns: [],
+    });
+    flowChatSessionsMock.set('historical-follow-up', {
+      sessionId: 'historical-follow-up',
+      sessionKind: 'review',
+      workspacePath: 'D:/workspace/project',
+      status: 'idle',
+      config: { agentType: 'CodeReview' },
+      dialogTurns: [],
+      isHistorical: true,
+      historyState: 'metadata-only',
+    });
+    const store = useReviewActionBarStore.getState();
+    store.showActionBar({
+      childSessionId: 'child-session',
+      parentSessionId: 'parent-session',
+      reviewData: {
+        summary: { recommended_action: 'request_changes' },
+        remediation_plan: ['Fix issue 1'],
+      },
+      reviewMode: 'standard',
+      phase: 'fix_completed',
+    });
+    store.setFollowUpReviewSessionId('historical-follow-up', 'child-session');
+
+    await act(async () => {
+      root.render(<DeepReviewActionBar />);
+    });
+    const openButton = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Open review'))!;
+
+    await act(async () => {
+      openButton.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(openBtwSessionInAuxPaneMock).toHaveBeenCalledWith(expect.objectContaining({
+      childSessionId: 'historical-follow-up',
+      parentSessionId: 'parent-session',
+    }));
+    expect(launchPreparedReviewMock).not.toHaveBeenCalled();
+  });
+
+  it('confirms a newly prepared broader follow-up plan before launching it', async () => {
+    const runManifest = {
+      reviewMode: 'deep',
+      target: { files: [] },
+    };
+    const prepared = {
+      mode: 'strict',
+      level: 'l2',
+      requiresConsent: true,
+      runManifest,
+    };
+    prepareReviewLaunchMock.mockResolvedValueOnce(prepared);
+    flowChatSessionsMock.set('deep-review-session', {
+      sessionId: 'deep-review-session',
+      sessionKind: 'deep_review',
+      workspacePath: 'D:/workspace/project',
+      dialogTurns: [],
+    });
+    useReviewActionBarStore.getState().showActionBar({
+      childSessionId: 'deep-review-session',
+      parentSessionId: 'parent-session',
+      reviewData: {
+        review_mode: 'deep',
+        summary: { recommended_action: 'request_changes' },
+        remediation_plan: ['Fix issue 1'],
+      },
+      reviewMode: 'deep',
+      phase: 'fix_completed',
     });
 
     await act(async () => {
       root.render(<DeepReviewActionBar />);
     });
 
-    const fixAndReviewButton = Array.from(container.querySelectorAll('button'))
-      .find((button) => button.textContent?.includes('Fix & re-review'));
-    expect(fixAndReviewButton).toBeTruthy();
+    const reviewFixesButton = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Review fixes'));
 
     await act(async () => {
-      fixAndReviewButton!.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
+      reviewFixesButton!.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true }));
       await Promise.resolve();
     });
 
-    expect(container.textContent).toContain('Fixing & preparing re-review...');
+    expect(confirmReviewLaunchMock).toHaveBeenCalledWith(
+      runManifest,
+      expect.objectContaining({ sessionConcurrencyGuard: expect.any(Object) }),
+    );
+    expect(launchPreparedReviewMock).toHaveBeenCalledWith(expect.objectContaining({ prepared }));
+    expect(sendMessageMock).not.toHaveBeenCalled();
   });
 
   it('requires explicit decision confirmation before executing selected decision remediation', async () => {
@@ -900,7 +1145,7 @@ describeWithJsdom('DeepReviewActionBar', () => {
     });
 
     const continueButton = Array.from(container.querySelectorAll('button'))
-      .find((button) => button.textContent?.includes('Continue fixing'));
+      .find((button) => button.textContent?.includes('Recheck and continue'));
     expect(continueButton).toBeTruthy();
 
     const skipButton = Array.from(container.querySelectorAll('button'))
@@ -972,13 +1217,13 @@ describeWithJsdom('DeepReviewActionBar', () => {
 
     expect(buttonTexts.some((text) => text.includes('Continue review'))).toBe(true);
     expect(buttonTexts.some((text) => text.includes('Switch model'))).toBe(true);
-    expect(buttonTexts.some((text) => text.includes('Copy diagnostics'))).toBe(true);
+    expect(buttonTexts.some((text) => text.includes('Copy troubleshooting summary'))).toBe(true);
     expect(buttonTexts.some((text) => text.includes('Retry'))).toBe(false);
     expect(buttonTexts.some((text) => text.includes('Show recovery plan'))).toBe(false);
     expect(container.querySelectorAll('.deep-review-action-bar__attribution button')).toHaveLength(0);
     expect(container.querySelector('.deep-review-action-bar__attribution-actions')).toBeNull();
-    expect(container.textContent).toContain('1 completed reviewers will be preserved');
-    expect(container.textContent).toContain('1 reviewers will be rerun');
+    expect(container.textContent).toContain('1 completed review results will be preserved');
+    expect(container.textContent).toContain('1 review items will be rerun');
   });
 
   it('minimizes and hides stale interruption controls after a resume request starts successfully', async () => {

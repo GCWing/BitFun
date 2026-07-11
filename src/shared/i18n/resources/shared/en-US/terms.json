@@ -6,7 +6,7 @@
   "features": {
     "remoteControl": "Remote Control",
     "codeAgent": "Code Agent",
-    "deepReview": "Deep Review",
+    "deepReview": "Review: Strict",
     "settings": "Settings",
     "workspace": "Workspace",
     "accountLogin": "Account Login"

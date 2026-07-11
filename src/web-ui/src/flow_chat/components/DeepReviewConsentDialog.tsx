@@ -1,25 +1,14 @@
 import React, { useCallback, useState } from 'react';
 import { AlertTriangle, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Button, Checkbox, Modal } from '@/component-library';
-import { createLogger } from '@/shared/utils/logger';
+import { Button, Modal } from '@/component-library';
 import type {
   ReviewStrategyLevel,
-  ReviewTeamManifestMember,
-  ReviewTeamManifestMemberReason,
   ReviewTeamRunManifest,
 } from '@/shared/services/reviewTeamService';
-import {
-  REVIEW_STRATEGY_LEVELS,
-  getReviewStrategyProfile,
-  saveReviewTeamProjectStrategyOverride,
-} from '@/shared/services/reviewTeamService';
+import { getReviewStrategyProfile } from '@/shared/services/reviewTeamService';
 import type { DeepReviewSessionConcurrencyGuard } from '../utils/deepReviewCapacityGuard';
 import './DeepReviewConsentDialog.scss';
-
-const log = createLogger('DeepReviewConsentDialog');
-const SKIP_DEEP_REVIEW_CONFIRMATION_STORAGE_KEY = 'bitfun.deepReview.skipCostConfirmation';
-const MAX_VISIBLE_SKIPPED_REVIEWERS = 3;
 
 interface PendingConsent {
   resolve: (confirmed: boolean) => void;
@@ -39,16 +28,15 @@ export interface DeepReviewConsentControls {
   deepReviewConsentDialog: React.ReactNode;
 }
 
-function hasSkippedReviewers(preview?: ReviewTeamRunManifest): boolean {
-  return Boolean(preview?.skippedReviewers?.length);
-}
-
-function hasSessionConcurrencyWarning(launchContext?: DeepReviewConsentLaunchContext): boolean {
-  return Boolean(launchContext?.sessionConcurrencyGuard?.highActivity);
-}
-
-function getReviewerLabel(member: ReviewTeamManifestMember): string {
-  return member.displayName || member.subagentId;
+function getInitialReviewCallFacts(preview: ReviewTeamRunManifest): {
+  planned: number;
+  parallel: number;
+} {
+  const planned = Math.max(1, preview.tokenBudget.estimatedReviewerCalls || 1);
+  return {
+    planned,
+    parallel: Math.max(1, Math.min(planned, preview.concurrencyPolicy.maxParallelInstances)),
+  };
 }
 
 function getReviewTargetFileCount(preview: ReviewTeamRunManifest): number {
@@ -110,31 +98,12 @@ function getStrategySummary(strategyLevel: ReviewStrategyLevel, t: ReturnType<ty
 export function useDeepReviewConsent(): DeepReviewConsentControls {
   const { t } = useTranslation('flow-chat');
   const [pendingConsent, setPendingConsent] = useState<PendingConsent | null>(null);
-  const [dontShowAgain, setDontShowAgain] = useState(false);
-  const [selectedStrategyOverride, setSelectedStrategyOverride] =
-    useState<ReviewStrategyLevel | null>(null);
-  const [strategySelectionTouched, setStrategySelectionTouched] = useState(false);
 
   const confirmDeepReviewLaunch = useCallback(async (
     preview?: ReviewTeamRunManifest,
     launchContext?: DeepReviewConsentLaunchContext,
   ) => {
-    try {
-      if (
-        localStorage.getItem(SKIP_DEEP_REVIEW_CONFIRMATION_STORAGE_KEY) === 'true' &&
-        !hasSkippedReviewers(preview) &&
-        !hasSessionConcurrencyWarning(launchContext)
-      ) {
-        return true;
-      }
-    } catch (error) {
-      log.warn('Failed to read Deep Review confirmation preference from local storage', error);
-    }
-
     return new Promise<boolean>((resolve) => {
-      setDontShowAgain(false);
-      setSelectedStrategyOverride(null);
-      setStrategySelectionTouched(false);
       setPendingConsent({ resolve, preview, launchContext });
     });
   }, []);
@@ -145,63 +114,16 @@ export function useDeepReviewConsent(): DeepReviewConsentControls {
       return;
     }
 
-    if (
-      confirmed &&
-      strategySelectionTouched &&
-      pending.preview?.workspacePath
-    ) {
-      try {
-        await saveReviewTeamProjectStrategyOverride(
-          pending.preview.workspacePath,
-          selectedStrategyOverride ?? undefined,
-        );
-      } catch (error) {
-        log.warn('Failed to persist Deep Review project strategy override', error);
-      }
-    }
-
-    if (confirmed && dontShowAgain) {
-      try {
-        localStorage.setItem(SKIP_DEEP_REVIEW_CONFIRMATION_STORAGE_KEY, 'true');
-      } catch (error) {
-        log.warn('Failed to persist Deep Review confirmation preference to local storage', error);
-      }
-    }
-
     setPendingConsent(null);
     pending.resolve(confirmed);
-  }, [dontShowAgain, pendingConsent, selectedStrategyOverride, strategySelectionTouched]);
-
-  const selectStrategyOverride = useCallback((strategyLevel: ReviewStrategyLevel | null) => {
-    setSelectedStrategyOverride(strategyLevel);
-    setStrategySelectionTouched(true);
-  }, []);
-
-  const getSkippedReasonLabel = useCallback((reason?: ReviewTeamManifestMemberReason) => {
-    switch (reason) {
-      case 'not_applicable':
-        return t('deepReviewConsent.skippedReasons.notApplicable');
-      case 'budget_limited':
-        return t('deepReviewConsent.skippedReasons.budgetLimited');
-      case 'invalid_tooling':
-        return t('deepReviewConsent.skippedReasons.invalidTooling');
-      case 'disabled':
-        return t('deepReviewConsent.skippedReasons.disabled');
-      case 'unavailable':
-        return t('deepReviewConsent.skippedReasons.unavailable');
-      default:
-        return t('deepReviewConsent.skippedReasons.skipped');
-    }
-  }, [t]);
+  }, [pendingConsent]);
 
   const renderLaunchSummary = useCallback((preview: ReviewTeamRunManifest) => {
     const skippedReviewers = preview.skippedReviewers;
     const skippedCount = skippedReviewers.length;
-    const visibleSkippedReviewers = skippedReviewers.slice(0, MAX_VISIBLE_SKIPPED_REVIEWERS);
-    const hiddenSkippedCount = Math.max(0, skippedCount - visibleSkippedReviewers.length);
-    const effectiveStrategy = selectedStrategyOverride ?? preview.strategyLevel;
-    const selectedStrategyLabel = getStrategyLabel(effectiveStrategy, t);
+    const selectedStrategyLabel = getStrategyLabel(preview.strategyLevel, t);
     const targetSummary = getReviewTargetSummary(preview, t);
+    const callFacts = getInitialReviewCallFacts(preview);
     return (
       <div className="deep-review-consent__summary">
         <div className="deep-review-consent__summary-header">
@@ -220,6 +142,33 @@ export function useDeepReviewConsent(): DeepReviewConsentControls {
             </span>
           )}
         </div>
+        <div className="deep-review-consent__impact-grid">
+          <div>
+            <span>{t('deepReviewConsent.costLabel')}</span>
+            <strong>{t('deepReviewConsent.cost')}</strong>
+          </div>
+          <div>
+            <span>{t('deepReviewConsent.timeLabel')}</span>
+            <strong>{t('deepReviewConsent.time')}</strong>
+          </div>
+          <div>
+            <span>{t('deepReviewConsent.readonlyLabel')}</span>
+            <strong>{t('deepReviewConsent.readonly')}</strong>
+          </div>
+        </div>
+
+        <div className="deep-review-consent__token-estimate">
+          <strong>
+            {t('deepReviewConsent.initialCalls', {
+              planned: callFacts.planned,
+            })}
+          </strong>
+          <span>
+            {t('deepReviewConsent.parallelCalls', {
+              count: callFacts.parallel,
+            })}
+          </span>
+        </div>
 
         {preview.workspacePath && (
           <div className="deep-review-consent__strategy-control">
@@ -229,52 +178,7 @@ export function useDeepReviewConsent(): DeepReviewConsentControls {
                   strategy: selectedStrategyLabel,
                 })}
               </strong>
-              <span>{getStrategySummary(effectiveStrategy, t)}</span>
-            </div>
-            <div
-              className="deep-review-consent__strategy-options"
-              role="group"
-              aria-label={t('deepReviewConsent.strategyOverrideTitle')}
-            >
-              {REVIEW_STRATEGY_LEVELS.map((strategyLevel) => {
-                const isActive = effectiveStrategy === strategyLevel;
-                const profile = getReviewStrategyProfile(strategyLevel);
-                return (
-                  <button
-                    key={strategyLevel}
-                    type="button"
-                    className={[
-                      'deep-review-consent__strategy-option',
-                      isActive ? 'deep-review-consent__strategy-option--active' : '',
-                    ].filter(Boolean).join(' ')}
-                    aria-pressed={isActive}
-                    onClick={() => selectStrategyOverride(strategyLevel)}
-                  >
-                    <span className="deep-review-consent__strategy-option-header">
-                      <span className="deep-review-consent__strategy-option-label">
-                        {getStrategyLabel(strategyLevel, t)}
-                      </span>
-                      {isActive && (
-                        <span className="deep-review-consent__strategy-option-badge">
-                          {t('deepReviewConsent.selectedStrategy')}
-                        </span>
-                      )}
-                    </span>
-                    <span className="deep-review-consent__strategy-option-meta">
-                      <span>
-                        {t('deepReviewConsent.strategyTokenImpact', {
-                          tokenImpact: profile.tokenImpact,
-                        })}
-                      </span>
-                      <span>
-                        {t('deepReviewConsent.strategyRuntimeImpact', {
-                          runtimeImpact: profile.runtimeImpact,
-                        })}
-                      </span>
-                    </span>
-                  </button>
-                );
-              })}
+              <span>{getStrategySummary(preview.strategyLevel, t)}</span>
             </div>
           </div>
         )}
@@ -285,33 +189,16 @@ export function useDeepReviewConsent(): DeepReviewConsentControls {
               <AlertTriangle size={13} />
               {t('deepReviewConsent.skippedGroupTitle')}
             </div>
-            <ul className="deep-review-consent__skipped-list">
-              {visibleSkippedReviewers.map((member) => (
-                <li key={`skipped-${member.subagentId}`}>
-                  <span>{getReviewerLabel(member)}</span>
-                  <strong>{getSkippedReasonLabel(member.reason)}</strong>
-                </li>
-              ))}
-              {hiddenSkippedCount > 0 && (
-                <li className="deep-review-consent__skipped-more">
-                  <span>
-                    {t('deepReviewConsent.skippedMore', {
-                      count: hiddenSkippedCount,
-                    })}
-                  </span>
-                </li>
-              )}
-            </ul>
+            <p className="deep-review-consent__skipped-summary">
+              {t('deepReviewConsent.skippedSummary', {
+                count: skippedCount,
+              })}
+            </p>
           </div>
         )}
       </div>
     );
-  }, [
-    getSkippedReasonLabel,
-    selectStrategyOverride,
-    selectedStrategyOverride,
-    t,
-  ]);
+  }, [t]);
 
   const deepReviewConsentDialog = pendingConsent ? (
     <Modal
@@ -321,6 +208,7 @@ export function useDeepReviewConsent(): DeepReviewConsentControls {
       closeOnOverlayClick={false}
       showCloseButton={false}
       contentClassName="deep-review-consent-modal"
+      ariaLabel={t('deepReviewConsent.windowTitle')}
     >
       <div className="deep-review-consent">
         <div className="deep-review-consent__header">
@@ -329,6 +217,9 @@ export function useDeepReviewConsent(): DeepReviewConsentControls {
               {t('deepReviewConsent.eyebrow')}
             </span>
             <h3>{t('deepReviewConsent.title')}</h3>
+            <p className="deep-review-consent__body">
+              {t('deepReviewConsent.body')}
+            </p>
           </div>
           <button
             type="button"
@@ -361,12 +252,6 @@ export function useDeepReviewConsent(): DeepReviewConsentControls {
         {pendingConsent.preview && renderLaunchSummary(pendingConsent.preview)}
 
         <div className="deep-review-consent__footer">
-          <Checkbox
-            className="deep-review-consent__checkbox"
-            checked={dontShowAgain}
-            onChange={(event) => setDontShowAgain(event.target.checked)}
-            label={t('deepReviewConsent.dontShowAgain')}
-          />
           <div className="deep-review-consent__actions">
             <Button
               variant="secondary"

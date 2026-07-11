@@ -5,11 +5,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useDeepReviewConsent } from './DeepReviewConsentDialog';
 import type { ReviewTeamRunManifest } from '@/shared/services/reviewTeamService';
 
-const mockSaveReviewTeamProjectStrategyOverride = vi.hoisted(() => vi.fn());
-
 vi.mock('react-i18next', async () => {
   const { createTestI18nT } = await import('@/test/i18nTestUtils');
   return {
+    initReactI18next: {
+      type: '3rdParty',
+      init: vi.fn(),
+    },
     useTranslation: () => ({
       t: createTestI18nT('flow-chat'),
     }),
@@ -43,23 +45,15 @@ vi.mock('@/component-library', () => ({
     </label>
   ),
   Modal: ({
+    ariaLabel,
     children,
     isOpen,
   }: {
+    ariaLabel?: string;
     children: React.ReactNode;
     isOpen: boolean;
-  }) => (isOpen ? <div role="dialog">{children}</div> : null),
+  }) => (isOpen ? <div role="dialog" aria-modal="true" aria-label={ariaLabel}>{children}</div> : null),
 }));
-
-vi.mock('@/shared/services/reviewTeamService', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/shared/services/reviewTeamService')>();
-  return {
-    ...actual,
-    saveReviewTeamProjectStrategyOverride: (
-      ...args: Parameters<typeof actual.saveReviewTeamProjectStrategyOverride>
-    ) => mockSaveReviewTeamProjectStrategyOverride(...args),
-  };
-});
 
 let JSDOMCtor: (new (
   html?: string,
@@ -127,7 +121,7 @@ function buildPreview(): ReviewTeamRunManifest {
     strategyRecommendation: {
       strategyLevel: 'deep',
       score: 24,
-      rationale: 'Large/high-risk change (8 files, 900 lines; 2 security-sensitive files, 3 workspace areas). Deep review recommended.',
+      rationale: 'Large/high-risk change (8 files, 900 lines; 2 security-sensitive files, 3 workspace areas). Strict review recommended.',
       factors: {
         fileCount: 8,
         totalLinesChanged: 900,
@@ -143,11 +137,24 @@ function buildPreview(): ReviewTeamRunManifest {
       reviewerFileSplitThreshold: 20,
       maxSameRoleInstances: 3,
     },
+    concurrencyPolicy: {
+      maxParallelInstances: 4,
+      staggerSeconds: 0,
+      maxQueueWaitSeconds: 300,
+      batchExtrasSeparately: false,
+      allowProviderCapacityQueue: true,
+      allowBoundedAutoRetry: false,
+      autoRetryElapsedGuardSeconds: 300,
+    },
     tokenBudget: {
       mode: 'balanced',
       estimatedReviewerCalls: 3,
       maxReviewerCalls: 4,
       maxExtraReviewers: 1,
+      maxPromptBytesPerReviewer: 96_000,
+      estimatedPromptBytesPerReviewer: 16_000,
+      estimatedPromptBytesTotal: 24_000,
+      promptByteEstimateSource: 'manifest_heuristic',
       largeDiffSummaryFirst: false,
       skippedReviewerIds: [],
       warnings: [],
@@ -246,7 +253,6 @@ describeWithJsdom('DeepReviewConsentDialog', () => {
   let root: Root;
 
   beforeEach(() => {
-    mockSaveReviewTeamProjectStrategyOverride.mockResolvedValue(undefined);
     dom = new JSDOMCtor!('<!doctype html><html><body></body></html>', {
       pretendToBeVisual: true,
       url: 'http://localhost',
@@ -285,18 +291,27 @@ describeWithJsdom('DeepReviewConsentDialog', () => {
       container.querySelector('button')?.dispatchEvent(new window.Event('click', { bubbles: true }));
     });
 
-    expect(container.textContent).toContain('Launch summary');
+    expect(container.textContent).toContain('Review plan');
+    expect(container.querySelector('[role="dialog"]')?.getAttribute('aria-modal')).toBe('true');
+    expect(container.querySelector('[role="dialog"]')?.getAttribute('aria-label')).toBe('Review plan');
     expect(container.textContent).toContain('1 file');
-    expect(container.textContent).toContain('2 skipped');
-    expect(container.textContent).toContain('Run strategy: Normal');
+    expect(container.textContent).toContain('2 optional checks not needed');
+    expect(container.textContent).toContain('BitFun selected the most relevant checks for this target.');
+    expect(container.textContent).not.toContain('Estimated reviewer prompt input');
+    expect(container.textContent).not.toContain('Reviewer prompt input only');
+    expect(container.textContent).toContain('Independent checks: 3 planned calls');
+    expect(container.textContent).toContain('Up to 3 calls can run at the same time.');
+    expect(container.textContent).not.toContain('up to 4 initial calls');
+    expect(container.textContent).toContain('Run strategy: Standard');
+    expect(container.textContent).not.toContain('Do not show this again');
     expect(container.textContent).not.toContain('Risk areas: Backend core');
-    expect(container.textContent).not.toContain('3 reviewer calls');
+    expect(container.textContent).toContain('Planned independent reviewer calls; token use is not estimated here.');
     expect(container.textContent).not.toContain('1 extra specialist');
     expect(container.textContent).not.toContain('Review depth: Risk-expanded');
-    expect(container.textContent).toContain('Frontend reviewer');
-    expect(container.textContent).toContain('Not applicable to this target');
-    expect(container.textContent).toContain('Custom invalid reviewer');
-    expect(container.textContent).toContain('Configuration issue');
+    expect(container.textContent).not.toContain('Frontend reviewer');
+    expect(container.textContent).not.toContain('Not applicable to this target');
+    expect(container.textContent).not.toContain('Custom invalid reviewer');
+    expect(container.textContent).not.toContain('Configuration issue');
     expect(container.textContent).not.toContain('Logic reviewer');
     expect(container.textContent).not.toContain('Custom security reviewer');
   });
@@ -329,7 +344,7 @@ describeWithJsdom('DeepReviewConsentDialog', () => {
     expect(container.textContent).toContain('Provided context');
     expect(container.textContent).not.toContain('0 files');
     expect(container.textContent).not.toContain('Risk areas:');
-    expect(container.textContent).not.toContain('reviewer calls');
+    expect(container.textContent).toContain('Planned independent reviewer calls; token use is not estimated here.');
   });
 
   it('still opens when skip preference is set but reviewers are skipped', async () => {
@@ -371,11 +386,11 @@ describeWithJsdom('DeepReviewConsentDialog', () => {
 
     expect(container.querySelector('[role="dialog"]')).not.toBeNull();
     expect(container.textContent).toContain('Active session is busy');
-    expect(container.textContent).toContain('2 running subagent tasks');
+    expect(container.textContent).toContain('2 review tasks running');
     expect(result).not.toHaveBeenCalled();
   });
 
-  it('persists a selected project strategy override before confirming', async () => {
+  it('keeps strategy selection out of the launch confirmation', async () => {
     const result = vi.fn();
 
     await act(async () => {
@@ -385,23 +400,14 @@ describeWithJsdom('DeepReviewConsentDialog', () => {
       container.querySelector('button')?.dispatchEvent(new window.Event('click', { bubbles: true }));
     });
 
-    const deepStrategyButton = Array.from(container.querySelectorAll('button'))
-      .find((button) => button.textContent?.includes('Deep'));
-    expect(deepStrategyButton).not.toBeUndefined();
+    expect(container.querySelector('.deep-review-consent__strategy-option')).toBeNull();
 
     await act(async () => {
-      deepStrategyButton?.dispatchEvent(new window.Event('click', { bubbles: true }));
-    });
-    await act(async () => {
       Array.from(container.querySelectorAll('button'))
-        .find((button) => button.textContent === 'Start Deep Review')
+        .find((button) => button.textContent === 'Start review')
         ?.dispatchEvent(new window.Event('click', { bubbles: true }));
     });
 
-    expect(mockSaveReviewTeamProjectStrategyOverride).toHaveBeenCalledWith(
-      '/test-fixtures/project-a',
-      'deep',
-    );
     expect(result).toHaveBeenCalledWith(true);
   });
 
@@ -420,33 +426,21 @@ describeWithJsdom('DeepReviewConsentDialog', () => {
     expect(container.querySelectorAll('.deep-review-consent__strategy-heading')).toHaveLength(0);
     expect(container.textContent).not.toContain('Quick is narrower');
     expect(container.textContent).not.toContain('Risk areas: Backend core');
-    expect(container.textContent).not.toContain('3 reviewer calls');
+    expect(container.textContent).toContain('Planned independent reviewer calls; token use is not estimated here.');
     expect(container.textContent).not.toContain('1 extra specialist');
     expect(container.textContent).not.toContain('Expected cost:');
     expect(container.querySelectorAll('.deep-review-consent__strategy-selected-summary')).toHaveLength(0);
     expect(container.querySelectorAll('.deep-review-consent__strategy-current')).toHaveLength(1);
-    expect(container.querySelectorAll('.deep-review-consent__strategy-option')).toHaveLength(3);
-    expect(container.querySelectorAll('.deep-review-consent__strategy-option--active')).toHaveLength(1);
+    expect(container.querySelectorAll('.deep-review-consent__strategy-option')).toHaveLength(0);
+    expect(container.querySelectorAll('.deep-review-consent__strategy-option--active')).toHaveLength(0);
     expect(container.textContent).not.toContain('Team default');
-    expect(container.textContent).toContain('Selected');
-    expect(container.textContent).toContain('Token: 1x');
-    expect(container.textContent).toContain('Time: 1x');
-    expect(container.textContent).toContain('Normal stays practical for slower models');
+    expect(container.textContent).toContain('Standard adds independent coverage while keeping cost practical.');
     expect(container.querySelectorAll('.deep-review-consent__strategy-option-summary')).toHaveLength(0);
 
     const quickStrategyButton = Array.from(container.querySelectorAll('button'))
       .find((button) => button.textContent?.includes('Quick'));
-    expect(quickStrategyButton).not.toBeUndefined();
-
-    await act(async () => {
-      quickStrategyButton?.dispatchEvent(new window.Event('click', { bubbles: true }));
-    });
-
-    expect(quickStrategyButton?.getAttribute('aria-pressed')).toBe('true');
-    expect(quickStrategyButton?.className).toContain('deep-review-consent__strategy-option--active');
-    expect(container.textContent).toContain('Run strategy: Quick');
-    expect(container.textContent).toContain('Token: 0.4-0.6x');
-    expect(container.textContent).toContain('Time: 0.5-0.7x');
-    expect(container.textContent).toContain('Quick keeps built-in target-matched reviewers');
+    expect(quickStrategyButton).toBeUndefined();
+    expect(container.textContent).not.toContain('Run strategy: Quick');
+    expect(container.textContent).not.toContain('Quick keeps target-matched checks');
   });
 });

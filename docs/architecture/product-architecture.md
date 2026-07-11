@@ -1,326 +1,225 @@
 # BitFun 产品运行时架构
 
-本文件定义 BitFun 产品运行时的架构基线。详细执行计划见
-[`../plans/core-decomposition-plan.md`](../plans/core-decomposition-plan.md)；智能体内核、服务和
-crate 约束见 [`agent-runtime-services-design.md`](agent-runtime-services-design.md)；插件运行时主机和生态适配见
-[`plugin-runtime-host-design.md`](plugin-runtime-host-design.md)。当详细设计与本文件冲突时，以本文件为准。
+本文件定义 BitFun 产品运行时的稳定架构边界。详细执行计划见
+[`../plans/core-decomposition-plan.md`](../plans/core-decomposition-plan.md)；智能体内核、运行时服务和 crate
+约束见 [`agent-runtime-services-design.md`](agent-runtime-services-design.md)；插件运行时主机内部 ABI 和生态适配细节见
+[`plugin-runtime-host-design.md`](plugin-runtime-host-design.md)。详细设计与本文件冲突时，以本文件为准。
 
-本文件只约束稳定边界，不记录实现进度，也不展开 crate 内部结构。架构目标是让后端实现和插件生态可以持续演进，
-同时让产品入口、插件调用方和核心运行时不被实现细节牵引。
+本文件只约束稳定边界，不记录单次 PR 进度，也不把未来可能支持的生态能力提前声明为公开接口。
 
-## 1. 设计原则
+## 1. 架构目标
 
-BitFun 同时面向桌面 GUI、TUI/CLI、Web、ACP、Server、Remote、SDK 和插件生态。架构设计优先保护稳定接口：
+BitFun 同时面向桌面 GUI、TUI/CLI、Web、ACP、Server、Remote、SDK 和插件生态。架构目标是降低后端实现高频变更对稳定接口的影响，同时保持插件生态和 OpenCode-compatible 能力可以按受控路径扩展。
 
-1. **实现变化不得外溢**：高频变化的运行时、适配器、平台服务、远端能力和插件执行单元，只能通过稳定契约、端口、绑定或兼容门面被消费。
-2. **插件生态优先交付**：扩展点、插件运行时主机、候选效果、安全校验、隔离和 OpenCode-compatible 垂直切片属于首要能力，不作为后置研究项。
-3. **产品入口共享能力服务接口**：GUI、TUI/CLI、Web、ACP、Server、Remote 和 SDK 通过同一类后端能力服务契约访问任务、权限、状态、诊断、产物和事件。
-4. **扩展能力先声明后物化**：插件、钩子、工具提供方、MCP 提供方和界面贡献只能先返回描述符或候选效果；最终权限、审计、工具结果和状态写入由归属模块完成。
-5. **公开接口有预算**：新增公开 DTO、trait、模块或门面必须说明归属模块、真实消费方、版本策略、验证方式和退场条件。
+设计原则：
 
-调用路径长度只作为工程成本因素处理，不作为独立架构目标。为了降低实现变动对稳定接口的影响，可以保留承担反腐、投影、兼容或能力选择职责的中间层。
+1. **接口少而稳定**：每个切面只有一个主入口；不能因为新增生态适配或实现重构而新增平行接口。
+2. **实现不外溢**：运行时、平台服务、生态适配器、插件执行单元和传输实现只能通过稳定接口、只读视图或内部 ABI 被消费。
+3. **扩展先声明，最终写入归属模块**：插件、钩子和工具提供方先产出声明或候选项；最终权限、审计、工具结果和状态写入由归属模块完成。
+4. **OpenCode 是适配输入，不是内部模型**：OpenCode plugin、hook、custom tool、permission hook 和配置目录只能映射到 BitFun 接口，不能反向定义 BitFun 的内部接口。
+5. **公开接口有预算**：新增公开 DTO、trait、模块或门面必须同时具备归属模块、真实消费方、版本策略、验证方式和退场条件。
+6. **入口形态受宿主约束**：TUI、GUI、Web 和 SDK 共享能力服务接口和只读视图，不共享渲染句柄、主题键、键位模型或界面状态；插件界面贡献必须先声明目标入口形态，再由对应宿主适配。
 
-## 2. 外部契约边界
+调用路径长度只作为工程成本处理，不作为独立架构目标。允许保留承担兼容隔离、只读视图或能力选择职责的中间层；不允许为了兼容而长期暴露没有消费方的抽象接口。
 
-BitFun 有两个面向外部调用方的稳定契约，另有一个只在主进程与插件主机之间使用的内部 ABI。三者必须分开设计、分开测试、分开投影。
+## 2. 接口切面
 
-| 边界 | 消费方 | 稳定的接口和对象 | 允许扩展的能力 | 禁止暴露 |
+BitFun 只保留四个稳定接口切面；工具、事件和权限作为归属子接口被复用，不在插件层重复定义。本文使用“接口”描述可被调用或依赖的能力面；只有描述跨进程消息封装、结构化 schema、序列化对象或强兼容约束时才使用“契约”；只读状态视图表示从权威状态派生出的查询结果。
+
+| 切面 | 主要消费方 | 主入口 | 稳定内容 | 禁止暴露 |
 |---|---|---|---|---|
-| **能力服务接口契约** | GUI、TUI/CLI、Web、ACP、Server、Remote、SDK | 命令请求、会话/工作区状态、权限提示、诊断、产物引用、能力状态、界面贡献投影、事件信封、类型化错误、稳定状态词 | 新入口、新客户端、新传输、只读投影、版本化命令和读模型 | 内核状态机、执行层内部类型、插件运行时主机、生态原始载荷、Tauri/React/TUI 实现、具体服务提供方 |
-| **扩展契约** | 插件、钩子、自定义工具/MCP 提供方、界面贡献、生态适配器 | 扩展点 id、来源/信任、能力/副作用声明、事件/钩子信封、描述符、候选效果、隔离和诊断事实 | 新插件生态、新扩展点、新候选效果、新声明式界面贡献、新钩子事件 | 前后端协议 DTO、最终权限结果、最终工具结果、审计写入、内核权威状态、界面实现代码 |
-| **主机内部 ABI** | 智能体内核、执行层、产品组装与插件运行时主机 | `PluginRuntimeClient`、`PluginRuntimeBinding`、dispatch/read 信封、响应信封、状态快照、隔离、诊断、候选效果 | 主机实现、进程间通信、适配器注册表、隔离策略、幂等缓存 | GUI/TUI/Web/SDK DTO、产品入口状态、生态原始载荷、worker 或进程句柄 |
+| 前后端能力服务切面 | GUI、TUI/CLI、Web、ACP、Server、Remote、SDK 客户端 | 能力服务接口 | 命令请求、会话/工作区状态、权限提示、诊断、产物引用、能力状态、事件流、类型化错误、插件状态只读视图 | 内核状态机、执行层内部类型、`PluginRuntimeClient`、主机状态快照、生态原始载荷、Tauri/React/TUI 实现、具体服务提供方、未预算的界面贡献接口 |
+| BitFun 与插件切面 | 插件运行时主机、安全控制面、产品组装、生态适配器 | 扩展贡献接口 | 插件来源、信任、能力/副作用声明、事件订阅声明、工具贡献、受控 hook 候选、权限候选、诊断、隔离事实 | 最终权限结果、最终工具结果、审计写入、内核权威状态、前后端线缆 DTO、界面实现代码 |
+| 插件通用运行时切面 | 智能体内核、执行层、产品组装、插件运行时主机 | 主机内部 ABI | `PluginRuntimeClient`、`PluginRuntimeBinding`、read/dispatch 请求与响应对象、deadline、epoch、幂等、隔离、诊断、候选项 | SDK 门面、前后端接口、生态适配器对象、worker/subprocess 句柄、产品入口状态 |
+| OpenCode 适配切面 | 插件运行时主机内部 | 兼容适配层 | OpenCode plugin/config/tool/hook/event 的解析、诊断和 BitFun 接口映射 | 独立产品入口、OpenCode 原始类型、外部 OpenCode CLI 依赖、OpenCode 配置作为 BitFun 主配置 |
 
-稳定状态词属于能力服务接口契约：`available`、`projection-only`、`status-only`、`artifact-only`、
-`temporarily-unavailable`、`unsupported`、`policy-denied`、`quarantined`。主机和扩展侧可以拥有更细的内部状态，
-但进入产品入口前必须投影为这些状态词或类型化错误。
+归属子接口：
 
-能力服务接口契约的最小落地标准：
-
-| 项 | 要求 |
-|---|---|
-| 归属 | `src/crates/interfaces` 拥有线缆 DTO、读模型、事件信封和类型化错误；后端归属模块只提供稳定端口、事实和命令实现 |
-| DTO 分类 | 命令请求、会话/工作区状态、权限提示、诊断、产物引用、能力状态、插件状态投影、界面贡献投影、事件信封、类型化错误 |
-| 状态映射 | 可执行能力投影为 `available`；只读能力投影为 `projection-only` 或 `status-only`；未构建、禁用或不支持形态投影为 `unsupported`；策略/信任拒绝投影为 `policy-denied`；主机失败、截止时间或远端不可用投影为 `temporarily-unavailable`；隔离投影为 `quarantined`；仅真实产物/结果消费者出现后使用 `artifact-only`，P0 不以它作为入口验收状态 |
-| 插件投影字段 | 插件 id、来源、信任/配置状态、能力服务接口状态词、原因、诊断引用、审计/关联 id、隔离范围和清除条件；不得包含主机内部状态快照、适配器载荷、worker 句柄或恢复动作 |
-| 版本策略 | 追加字段默认向后兼容；语义变更必须新增版本、迁移说明、客户端兼容计划和聚焦验证 |
-
-```mermaid
-flowchart LR
-  Clients["GUI TUI Web ACP Server Remote SDK"]
-  ServerContract["能力服务接口契约"]
-  ProjectionAdapter["入口适配器和读模型投影"]
-  RuntimeOwners["内核 执行 安全 归属模块"]
-  ExtensionContract["扩展契约"]
-  RuntimeClient["PluginRuntimeClient"]
-  HostAbi["主机内部 ABI"]
-  PluginHost["插件运行时主机"]
-  Plugins["插件和生态适配器"]
-
-  Clients --> ServerContract
-  ServerContract --> ProjectionAdapter
-  ProjectionAdapter --> RuntimeOwners
-  Plugins --> ExtensionContract
-  ExtensionContract --> RuntimeClient
-  RuntimeClient --> HostAbi
-  HostAbi --> PluginHost
-  PluginHost --> HostAbi
-  HostAbi --> RuntimeClient
-  RuntimeClient --> RuntimeOwners
-  RuntimeOwners --> ProjectionAdapter
-```
-
-设计含义：
-
-- 产品入口只消费能力服务接口契约；即使展示插件状态，也只能展示投影后的状态、诊断、权限提示、产物和界面贡献。
-- 插件只进入扩展契约；它可以声明能力、订阅事件、提供候选效果或描述符，但不能直接成为前后端协议。
-- 主机内部 ABI 只保护主进程与插件运行时之间的隔离通信；它不是 SDK，也不是 GUI/TUI/Web 可见接口。
-
-## 3. 竞品校准结论
-
-竞品只用于校准已有消费方需要的边界模式，不引入 BitFun 暂无落地路径的抽象。
-
-| 参考 | 可验证做法 | BitFun 约束 |
+| 子接口 | 归属 | 用法 |
 |---|---|---|
-| [OpenCode Server](https://opencode.ai/docs/server/) / [SDK](https://opencode.ai/docs/sdk/) | TUI、Web、IDE 和 SDK 共享 server 协议与生成客户端 | BitFun 多入口共享能力服务接口契约；SDK 是类型化客户端或嵌入门面，不暴露 `product-full` 或主机 ABI |
-| [Codex app-server](https://developers.openai.com/codex/app-server) | 富客户端通过 JSON-RPC/schema 与 app-server 通信，CLI 可连接远端 app-server | BitFun 能力服务接口契约约束命令、状态、权限、诊断、事件和错误对象；传输可以替换 |
-| [OpenCode Plugins](https://opencode.ai/docs/plugins/) | 插件由宿主加载，可订阅事件并访问受控上下文 | BitFun 插件只能消费扩展契约；插件上下文和候选效果不得直接成为前后端协议 |
-| VS Code / JetBrains / Eclipse | 通过声明式贡献点、扩展点 schema 和宿主激活控制扩展能力 | BitFun 扩展点必须声明 id、归属、输入输出、权限、副作用、回退和验证责任 |
-| MCP / Claude Code / Zed | 能力先声明，再由宿主、协议或权限桥接裁决 | BitFun 插件、MCP、钩子和工具提供方都先产出能力事实或候选，再进入权限和归属模块裁决 |
+| 工具 ABI | `tool-contracts` / 执行层 | 插件 custom tool、MCP 工具和内置工具都进入同一工具快照、权限和陈旧调用保护路径。 |
+| 事件清单 | `events` / 智能体内核事件 schema | 插件只能订阅公开事件清单的受控子集；不得读取会话、轮次或工具内部结构。 |
+| 权限与副作用 | 安全控制面 / runtime ports | 插件只能提交权限候选或副作用候选；最终裁决、审计和状态写入属于安全控制面和能力归属模块。 |
 
-## 4. 运行与部署视图
+### 2.1 公开接口准入规则
 
-产品运行时由产品入口、能力服务接口、后端归属模块、扩展契约、插件主机和平台适配器组成。
+新增或保留公开接口必须满足以下条件：
+
+1. 属于上表一个明确接口切面；公开接口进入预算时必须在 `scripts/core-boundaries/rules/source/public-api-rules.mjs` 声明 `contractSlice`，该字段只用于机器校验接口归属，不能同时承担前后端线缆、插件扩展、host ABI 和生态适配职责。
+2. 有当前消费方；仅为了未来兼容、完整矩阵或概念完整性保留的接口不进入稳定面。
+3. 能映射到 OpenCode-compatible P0 关键场景，或属于 BitFun 已有关键路径的稳定子接口。
+4. 不能由既有工具 ABI、事件清单、权限控制面或能力服务接口承接时，才允许新增。
+5. PR 必须说明版本影响、验证命令和退场条件。
+
+没有 OpenCode 对应能力、没有当前消费方、不能归入关键 BitFun 场景的接口，处理方式只有三种：删除、降级为主机内部实现，或返回类型化 `unsupported` / 诊断。
+
+### 2.2 入口形态接口规则
+
+入口形态接口只描述宿主可消费的声明，不描述具体渲染实现。TUI 与 GUI 的能力边界不同，不能因为存在一个界面插件就自动扩展为全入口稳定接口。
+
+| 目标入口形态 | 可进入稳定接口的内容 | 必须由宿主决定 | 禁止进入插件接口 |
+|---|---|---|---|
+| TUI / CLI | 斜杠命令、键位候选、状态行/通知候选、终端主题语义 token、只读状态视图 | 键位冲突处理、终端能力降级、ANSI/truecolor 映射、文本回退 | React/DOM/Tauri 句柄、CSS token、GUI 布局、可执行界面代码 |
+| Desktop GUI / Web | 路由、面板、槽位、对话框、提示、GUI 主题语义 token、只读状态视图 | 组件装载位置、布局约束、焦点与可访问性、设计 token 映射 | 终端键位、ANSI 颜色、TUI 状态行键、宿主组件实例 |
+| SDK / Server / Remote / ACP | 状态、诊断、能力清单、类型化 `unsupported` | 是否暴露只读状态或降级原因 | 任意界面贡献、主题键、渲染句柄 |
+
+主题贡献只能声明语义角色和目标入口形态，例如 `accent`、`danger`、`surface`、`text`、`border`。TUI 宿主把语义角色映射为终端颜色、ANSI 或 truecolor；GUI 宿主把语义角色映射为设计 token 或 CSS 变量。若插件只提供 GUI 主题键而当前入口是 TUI，系统只能使用语义回退或返回类型化 `unsupported`，不得把 GUI 主题键直接传给 TUI。
+
+## 3. 运行视图
 
 ```mermaid
 flowchart TB
   subgraph Entry["产品入口"]
     Desktop["Desktop GUI"]
-    Cli["TUI CLI"]
-    Web["Web Mobile Web"]
-    Protocol["ACP Server Remote SDK"]
+    Cli["TUI / CLI"]
+    Web["Web / Mobile Web"]
+    Protocol["ACP / Server / Remote / SDK"]
   end
 
-  ServerContract["能力服务接口契约"]
-  InterfaceAdapter["入口适配器和读模型投影"]
-  CapabilityPorts["归属能力端口和读模型"]
-  Assembly["产品组装 组装期"]
+  CapabilitySurface["前后端能力服务切面"]
+  Projection["入口适配器和只读视图"]
+  Assembly["产品组装"]
 
-  subgraph Backend["后端能力归属模块"]
+  subgraph Owners["后端归属模块"]
     Feature["产品特性"]
     Kernel["智能体内核"]
-    Execution["执行层"]
+    Execution["执行层 / 工具 ABI"]
     Security["安全控制面"]
+    Events["事件清单"]
   end
 
-  ExtensionContract["扩展契约"]
-  HostAbi["主机内部 ABI"]
+  Extension["BitFun 与插件切面"]
+  HostAbi["插件通用运行时切面"]
   PluginHost["插件运行时主机"]
-  PluginAdapter["生态兼容适配器"]
+  OpenCodeAdapter["OpenCode 适配切面"]
   PluginUnit["插件执行单元"]
   PlatformPorts["平台端口"]
   PlatformAdapters["平台和外部系统适配器"]
 
-  Entry --> ServerContract
-  ServerContract --> InterfaceAdapter
-  InterfaceAdapter --> CapabilityPorts
-  CapabilityPorts --> Feature
-  CapabilityPorts --> Kernel
-  CapabilityPorts --> Execution
-  CapabilityPorts --> Security
-  Assembly -.-> InterfaceAdapter
-  Assembly -.-> Feature
-  Assembly -.-> Kernel
-  Assembly -.-> Execution
-  Assembly -.-> ExtensionContract
-  Feature --> Kernel
-  Kernel --> Execution
-  Kernel --> Security
-  Execution --> Security
-  Kernel --> ExtensionContract
-  Execution --> ExtensionContract
-  Security --> ExtensionContract
-  ExtensionContract --> HostAbi
+  Entry --> CapabilitySurface
+  CapabilitySurface --> Projection
+  Projection --> Owners
+  Assembly -.-> Projection
+  Assembly -.-> Owners
+  Assembly -.-> Extension
+  Kernel --> Extension
+  Execution --> Extension
+  Security --> Extension
+  Events --> Extension
+  Extension --> HostAbi
   HostAbi --> PluginHost
-  PluginHost --> PluginAdapter
-  PluginAdapter --> PluginUnit
+  PluginHost --> OpenCodeAdapter
+  OpenCodeAdapter --> PluginUnit
   Execution --> PlatformPorts
   PluginHost --> PlatformPorts
   PlatformPorts --> PlatformAdapters
 ```
 
-部署形态按入口和执行域拆分，不按内部实现模块拆分：
+关键规则：
+
+- 产品入口只消费能力服务接口和只读视图，不直接调用插件主机。
+- 插件只进入扩展贡献接口，不直接写内核状态、工具结果、权限结果或审计事实。
+- 插件运行时主机只负责隔离通信、deadline、幂等、诊断、隔离和候选项路由。
+- OpenCode 适配层只做解析、诊断和映射；不成为 BitFun 内部真实归属模块。
+- 产品组装是组装根，只在组装期选择能力、服务实现、插件运行时绑定和降级策略。
+
+## 4. OpenCode-compatible P0 边界
+
+P0 的目标不是复制完整 OpenCode 运行时，也不是导入用户已有 OpenCode 安装。P0 只验证一条 BitFun 主导的 OpenCode-compatible 插件路径。
+
+当前 P0-C.1 只建立包识别、完整性校验、工作区信任和 CLI 诊断，不执行插件：
+
+1. 用户级包和项目级包只从 BitFun 受管目录发现；工作区同 ID 来源优先且不得回退到用户级包。
+2. `bitfun.plugin.json` 只定义生态无关的包来源标识、适配器标识和文件哈希；具体生态入口由对应适配器解释。
+3. `bitfun-cli plugins` 提供来源审核和诊断；`SourceApproved` 只确认当前来源内容，不表示能力已批准、已启用或可执行，完整性错误由 `bitfun-cli doctor` 返回失败。
+4. 当前来源接口未绑定生产插件主机，不执行 JS/TS，不注册最终工具。目录、清单和持久化规则见 [`plugin-runtime-host-design.md`](plugin-runtime-host-design.md#6-目录与来源原则)。
+
+归属边界：`product-domains/plugin_source` 定义纯数据和信任规则，`services-integrations/plugin_source` 负责文件系统校验、锁和持久化，`bitfun-core/plugin_source` 仅注入产品目录并保留 CLI 兼容接口。
 
 ```mermaid
 flowchart LR
-  subgraph LocalDesktop["本地桌面交付"]
-    DesktopApp["桌面 GUI"]
-    LocalRuntime["本地产品运行时"]
-    LocalPluginHost["本地插件主机"]
-  end
-
-  subgraph CliHost["命令行交付"]
-    CliApp["TUI CLI"]
-    CliRuntime["命令行运行时"]
-    CliPluginHost["CLI 插件主机 P0-C"]
-  end
-
-  subgraph RemoteHost["远端执行域"]
-    RemoteRuntime["远端运行时"]
-    RemotePluginHost["远端插件主机"]
-  end
-
-  subgraph ApiHost["协议和嵌入交付"]
-    ServerApi["Server API"]
-    SdkClient["SDK 客户端"]
-    AcpBridge["ACP 桥接"]
-  end
-
-  DesktopApp --> LocalRuntime
-  LocalRuntime --> LocalPluginHost
-  CliApp --> CliRuntime
-  CliRuntime --> CliPluginHost
-  ServerApi --> RemoteRuntime
-  SdkClient --> ServerApi
-  AcpBridge --> ServerApi
-  RemoteRuntime --> RemotePluginHost
+  UserRoot["用户级 BitFun 插件目录"] --> Discovery["包发现与完整性校验"]
+  WorkspaceRoot["项目级 .bitfun/plugins"] --> Discovery
+  Manifest["bitfun.plugin.json"] --> Discovery
+  Discovery --> Snapshot["来源与诊断接口"]
+  Trust["工作区信任存储"] --> Snapshot
+  CLI["CLI 插件管理与 doctor"] --> Snapshot
+  CLI --> Trust
+  Snapshot -.->|后续生产绑定| Host["插件运行时主机"]
 ```
 
-关键规则：
+当前实现与后续能力边界：
 
-- 产品组装是组装根，负责选择交付形态、能力计划、服务实现、扩展可用性和插件运行时绑定。
-- 运行时请求不流经产品组装；产品组装只在组装期注入入口适配器、归属能力端口和插件运行时绑定。
-- 智能体内核是会话、轮次、事件事实、权限协调和审计事实的权威源。
-- 执行层是工具 ABI、工具运行时、沙箱、MCP 工具和工作流执行的归属模块。
-- 插件运行时主机只治理插件运行、截止时间、幂等、诊断、隔离和适配器通信；不写内核权威状态。
-- 平台适配器访问 OS、Git、文件系统、终端、远端、模型、MCP 和外部系统；上层只能通过端口和能力事实使用它。
-- CLI 在 P0-B 只消费只读投影和诊断；P0-C 才可绑定本地插件主机完成 OpenCode-compatible 插件消费。
-
-## 5. P0 插件垂直切片
-
-P0 必须以 OpenCode-compatible 插件形成一条可验收闭环。ACP 外部智能体/工具桥接是 P0+ 互操作路径，不能替代 P0 验收。
-
-关键产品场景：
-
-1. 用户在 Desktop 设置或命令入口安装、启用或禁用来自 BitFun 插件包、随版本携带包、组织/项目插件源或受控外部包源的 OpenCode-compatible 插件。
-2. Desktop 展示插件来源类型、位置、hash、签名/信任、配置校验、能力声明、诊断和隔离状态，并提供重新信任、禁用或查看诊断的入口。
-3. 用户执行插件提供的自定义工具或提供方候选时，权限提示展示插件 id、来源、hash、请求能力/副作用、目标/产物、风险、归属模块和审计/事件 id；确认后由归属模块物化结果，拒绝或失败时不写成功状态。
-4. CLI 读取同一个插件读模型，输出同一插件 id、来源、状态、配置、诊断、隔离和审计/事件关联信息。
-
-来源边界：
-
-- **BitFun 插件来源是主入口**：插件可以来自安装包、打版携带、项目/组织插件源、受控外部包源、签名包或后续 marketplace/registry。运行时以 BitFun 插件来源、manifest、hash、签名和信任状态作为权威输入。
-- **OpenCode 配置是兼容导入源**：`opencode.json`、`.opencode/plugins/*.js|ts` 和 OpenCode 全局插件目录只能作为导入已有 OpenCode 项目的来源线索，导入后必须转换为 BitFun 插件来源与扩展契约对象。
-- **OpenCode CLI 不是前置依赖**：用户本机是否安装 `opencode` 只影响外部 OpenCode/ACP 互操作或迁移辅助，不影响 BitFun 加载、诊断或执行 OpenCode-compatible 插件。
-- **OpenCode-compatible 表示插件形态兼容**：它约束 JS/TS 插件模块、hook、自定义工具、permission hook 和 UI contribution 的映射方式，不表示复刻用户已有 OpenCode 运行时或配置系统。
-
-插件接入方式：
-
-| 接入方式 | 产品形态 | 稳定事实 |
+| 能力 | 当前实现 | 后续工作 |
 |---|---|---|
-| 动态安装 / 卸载 | 用户、项目或组织在 Desktop / CLI 中安装、启用、禁用、卸载插件 | BitFun 插件来源记录、manifest、版本、hash、签名、信任、启用状态、诊断和审计引用 |
-| 随产品协同发布 / 完整打包 | 产品打版、白标包、企业发行包或离线包携带插件集合 | 发布配置、内置包版本、只读 manifest、hash、签名、默认启用策略和禁用 / 隔离覆盖 |
-| 兼容导入 | 从 OpenCode、Claude Code、Codex 等生态读取已有配置、插件目录或技能目录 | 导入 provenance、原始生态、原始位置、转换后的 BitFun manifest、hash、诊断和信任状态 |
+| 用户级、项目级包 | 从两个 BitFun 受管目录发现并校验 | 安装复制、更新、卸载和组织策略 |
+| 随产品携带包 | 未建立独立扫描根 | 由构建配置、安装器和产品组装提供来源后接入同一校验接口 |
+| OpenCode 兼容内容 | 包清单可声明 `opencode_compatible`，来源模块只验证清单声明文件 | OpenCode 适配器解释包内布局；外部目录需独立导入流程 |
+| 来源审核 | 工作区 `SourceApproved`、`Denied`、`Revoked`；内容变化使旧审核失效，新来源标识回到 `Unknown` | 首次激活能力审核、组织策略、签名和撤销列表 |
+| 插件运行 | 不执行 JS/TS，不注册最终工具 | 通过 `PluginRuntimeBinding` 接入主机，再完成工具 ABI 消费路径 |
 
-目录治理原则：
+OpenCode 适配接入规则：
 
-- BitFun 只把自身安装目录、用户数据目录、项目 `.bitfun` 配置、组织/企业 registry 和内容寻址缓存作为权威目录；具体 OS 路径由平台适配器解析，不进入稳定插件契约。
-- OpenCode 的 `opencode.json` / `.opencode/plugins` / 全局插件目录、Claude Code 的 marketplace / `.claude-plugin` / `.claude` 配置、Codex 的 `~/.codex` / `.codex` 配置和 skill / plugin 目录都只能作为只读兼容输入。
-- 兼容导入不得回写外部产品目录，不要求外部产品已安装，也不得把外部产品的加载顺序、启用状态或权限语义直接作为 BitFun 权威状态。
+- OpenCode 适配器通过插件运行时主机暴露来源只读视图、诊断和受信任 custom tool 候选映射。
+- 信任输入复用既有 `PluginSourceRef` 来源快照，并携带产品来源/策略侧生成的信任 epoch；信任 epoch 必须与本次 read/dispatch epoch 一致。
+- 未支持或信任不足的能力必须返回诊断或 `unsupported` 状态，不得因外部插件内容导致运行时崩溃。
+- 生产产品组装接入必须通过 `PluginRuntimeBinding` 注册适配器，并在同一变更中同步边界脚本、主机路径测试和启用/降级策略。
+- GUI、TUI/CLI、Web 等产品入口只消费能力服务接口、插件只读视图、诊断和稳定状态词，不直接依赖 OpenCode 适配器内部类型或插件主机内部 ABI。
 
-```mermaid
-sequenceDiagram
-  participant Surface as Desktop 或 CLI
-  participant ServerApi as 能力服务接口
-  participant Kernel as 智能体内核
-  participant Client as PluginRuntimeClient
-  participant Host as 插件运行时主机
-  participant Adapter as OpenCode 适配器
-  participant Security as 安全控制面
-  participant Owner as 能力归属模块
+信任 epoch 与生命周期：
 
-  Surface->>ServerApi: 触发插件命令或读取诊断
-  ServerApi->>Kernel: 转换为稳定命令或读模型请求
-  Kernel->>Client: dispatch PluginDispatchEnvelope
-  Client->>Host: 投递规范事件
-  Host->>Adapter: 映射到生态接口
-  Adapter-->>Host: 返回描述符或候选效果
-  Host-->>Client: 返回 PluginResponseEnvelope
-  Client-->>Kernel: 返回候选效果和诊断
-  Kernel->>Security: 校验权限和副作用
-  Security->>Owner: 接受后交由归属模块物化
-  Owner->>ServerApi: 产出状态 产物 诊断 审计引用
-  ServerApi-->>Surface: 返回能力服务接口契约投影
-```
+- 来源审核 epoch 由 BitFun 来源与信任模块维护。审核、拒绝、撤销、已有记录的来源标识或哈希变化都会推进 epoch；重复写入相同决定不推进 epoch。信任文件重建时使用新的随机初始值，避免旧 epoch 被重复使用。
+- 发现的新来源默认为 `Unknown`；CLI 只允许对当前工作区已发现且 id 唯一的包写入 `SourceApproved`、`Denied` 或 `Revoked`。
+- 损坏、版本未知或记录冲突的信任文件按失败处理；适配器和主机不得写信任状态。
+- `SourceApproved` 不得直接映射为 Host 的 `Trusted`。P0-C.2 首次激活必须展示适配器、入口、能力和副作用并重新确认；只有该确认产生的 Host 信任且 epoch 匹配时才可生成 custom tool 候选。
+- `ProjectionOnly` 在候选路径中表示插件代码没有被执行、最终效果没有提交；它允许主机返回受权限门禁保护的候选项和诊断，不表示插件运行时已经可执行。
 
-P0 插件体验按阶段交付：
+OpenCode 能力映射：
 
-| 阶段 | 交付边界 | 不交付 |
+| OpenCode 能力 | BitFun P0 处理 | 不允许 |
 |---|---|---|
-| P0-B | 主机内部 ABI、产品形态保护、只读状态/诊断/隔离投影、`HostRestarted` 清除条件、`restart(project_domain_id, workspace_id)` 内部清理路径 | Desktop/CLI 消费、来源发现、激活、副作用物化、用户可执行恢复动作 |
-| P0-C | 从 BitFun 插件来源发现、启用和诊断 OpenCode-compatible 插件；可选导入 `opencode.json`、`.opencode/plugins/*.js|ts` 或 OpenCode 全局插件目录；桌面设置展示来源/信任/配置/状态；CLI 诊断展示同一插件；桌面命令调用自定义工具或提供方候选；候选效果进入权限/副作用门禁并由归属模块物化 | 要求用户已安装 OpenCode CLI、复刻 OpenCode 全量配置系统、ACP/Server/Remote/Web/Mobile Web/SDK 的完整插件运行时 |
-| P0+ | ACP 外部智能体/工具桥接、Server/Remote 主机、Web/Mobile Web/SDK 受控投影或完整运行时 | 不替代 P0-C 的 Desktop/CLI OpenCode-compatible 插件垂直切片验收 |
+| project/global plugin config | 可选导入源，产出 provenance、manifest、hash、诊断和候选 BitFun 来源 | 作为 BitFun 主配置或直接决定启用状态 |
+| custom tools | 映射为工具提供方候选，最终走工具 ABI | 新增插件专用工具模型 |
+| permission hooks | 映射为权限候选或需要确认的诊断 | 插件直接批准、拒绝或写审计 |
+| events / SSE | 订阅 BitFun 公开事件清单的受控子集 | 读取内部 session、turn、tool 或 UI 状态 |
+| tool execute before/after | 当前阶段只允许诊断或只读候选；可写变换必须进入 P0+ 安全评审 | 改写工具结果、伪造成功或绕过权限 |
+| TUI 命令/键位/主题 | 当前 P0 返回类型化 `unsupported` 或 status-only；后续必须通过目标入口形态为 `tui` 的声明式接口进入 | 复用 GUI 路由/面板/槽位、暴露终端渲染句柄、直接消费 GUI 主题键 |
+| GUI 路由/面板/对话/主题 | OpenCode P0 不提供稳定来源；后续只能作为 BitFun GUI 入口的声明式贡献进入 | 复用 TUI 键位/状态行、暴露 React/DOM/Tauri 句柄、直接消费 TUI 主题键 |
+| shell/env helper | 默认不开放；未来只能映射为受控工具请求候选 | 无约束 shell、环境变量或 localhost 能力 |
 
-权限提示和诊断的不可降级字段：插件 id、来源、hash、请求副作用、目标/产物、风险、归属模块、回滚、
-拒绝后状态、审计/事件 id 和关联 id。
+不进入当前阶段：
 
-P0-B 不暴露用户可执行恢复动作；主机内部 `restart(project_domain_id, workspace_id)` 只用于兑现 `HostRestarted`
-清除条件，清理对应执行域的隔离、诊断投影和幂等缓存。
+- 完整 OpenCode 运行时兼容。
+- 要求用户本机安装 `opencode` CLI。
+- 对 Claude Code、Codex 等生态声明稳定运行时接口。
+- 全入口 UI 扩展矩阵。
+- 任意 provider/model/config 转换。
+- 无约束 JS/TS runtime、localhost 接口或可写 hook。
+- 对外稳定 SDK 发布。
 
-## 6. 产品形态与能力装配
+## 5. 产品形态与降级
 
-产品形态由组装期决定，不由任务运行时、插件配置或单个 Cargo feature 临时决定。
+产品形态由产品组装决定，不由插件配置、单个 Cargo feature 或生态适配器临时决定。
 
-| 概念 | 含义 |
-|---|---|
-| `ProductProfile` | 产品包、SKU、白标或发布配置的输入选择 |
-| `SurfaceContract` | GUI、TUI/CLI、Web、ACP、Server、Remote、SDK 的协议、权限和展示约束 |
-| `DeliveryProfile` | 组装后的入口交付形态，例如 ProductFull、Desktop、CLI、ACP、Web、MobileWeb、Server、Remote、SDK |
-| `CapabilityPack` | 内置能力声明单元，例如 CodeAgent、DeepReview、DeepResearch、MiniApp、Canvas |
-| `CapabilityPlan` | 组装期准备注册的内置能力、命令、服务和扩展入口 |
-| `CapabilityAvailabilitySet` | 运行时环境、策略、授权和服务健康状态下的可用、降级或不可用事实 |
-| `OverridePoint` | 插件或能力包替换已声明扩展点时必须具备的显式合同 |
+| 产品形态 | P0 插件策略 | 入口行为 |
+|---|---|---|
+| Desktop / product-full | 当前仅保留插件主机基础边界，尚未绑定受管包来源 | 生产绑定完成前不得把来源审核通过的包显示为已启用或可执行 |
+| CLI | 提供受管包来源审核和诊断入口，不启动插件主机 | `plugins list` 显示两个扫描根、适配器、来源、hash、审核状态和执行不可用；`doctor` 对完整性错误返回失败 |
+| ACP | `status-only`、`projection-only`、`unsupported`、`policy-denied` 或 `quarantined` | 不把插件失败解释为 agent 失败，不接入 P0 副作用闭环 |
+| Server / Remote | `projection-only`、`temporarily-unavailable`、`unsupported` 或 `policy-denied` | 不自动启动本地 JS/TS 运行时；远端执行域需 P0+ 单独设计 |
+| Web / Mobile Web | 只消费后端能力服务接口和只读视图 | 不持有插件执行单元，不直接加载插件代码 |
+| SDK | 默认 disabled stub 或测试替身 | 不牵引 `product-full`、具体服务管理器或插件 host ABI |
 
-组装流程：
+稳定状态词限制为：`available`、`projection-only`、`status-only`、`temporarily-unavailable`、`unsupported`、`policy-denied`、`quarantined`。其他内部状态必须先归一化为这些状态词或类型化错误。
 
-1. 产品入口声明入口类型和约束，发布配置选择目标 `DeliveryProfile`。
-2. 产品组装校验内置能力包和扩展贡献的依赖、冲突、入口适用性、服务需求、权限/副作用和降级语义。
-3. 产品组装生成 `CapabilityPlan`、`CapabilityAvailabilitySet`、扩展可用性、能力服务接口绑定和插件运行时绑定。
-4. 内核、执行层、产品特性、插件运行时主机和平台适配器只消费注入后的稳定对象。
+## 6. 完成判定
 
-必须保持的规则：
+架构或实现 PR 必须满足：
 
-- 内置能力通过产品组装加入或裁剪；插件不是裁剪内置功能的主要机制。
-- 运行时策略、授权状态和服务健康状态只能让能力降级，不能启用构建包里不存在的内置能力。
-- 插件可以追加贡献或返回候选效果；替换已声明行为必须走 `OverridePoint`。
-- 能力事实不能散落在 Rust feature、前端路由、Tauri 命令、工具注册表和插件配置里各自维护。
-- `bitfun-core/product-full` 可以作为兼容门面保留，但不能成为新能力的真实归属模块。
-
-## 7. 安全、接口预算和完成判定
-
-安全边界贯穿产品入口、运行时、扩展和平台适配：
-
-- 内核维护可审计事实：会话、工作区、轮次、权限来源、执行域、事件序列、取消、恢复、检查点和诊断事实。
-- 执行层在工具、MCP、skills、评审工作流执行前消费权限、沙箱和能力事实。
-- 插件运行时主机声明来源、hash、能力、数据类别、副作用、执行域和界面贡献范围；未知或声明不完整的能力默认受限。
-- OpenCode 配置导入不得绕过 BitFun 插件来源、manifest、hash、签名、信任和执行域校验；导入失败只能产生诊断或 `unsupported`，不能隐式启用插件能力。
-- 平台适配器表达执行位置和降级原因，例如本地主机、远程 SSH、容器、ACP 客户端、MCP server 或插件执行域。
-
-公开接口预算：
-
-| 问题 | 处理规则 |
-|---|---|
-| 新增公开 DTO、trait 或 module | 写明唯一归属模块、当前消费方、版本策略、线缆契约影响、测试和退场条件 |
-| 实现高频变化但外部消费稳定 | 通过稳定门面、契约或适配器吸收变化；实现变化不得外溢到产品入口或插件接口 |
-| 同一语义出现多套 DTO | 选择一个归属模块；其他入口做投影或适配 |
-| 原始生态载荷想进入公共接口 | 拒绝；跨边界必须转换为类型化信封、描述符或候选 |
-| 无真实消费方的描述符、注册表或矩阵 | 不进入稳定接口；若已进入，必须标注实验性、归属模块、删除条件和聚焦验证 |
-
-阶段验收标准：
-
-- 扩展契约、插件运行时主机、候选效果、信任策略、类型化可用性和同一条 OpenCode-compatible 插件桌面命令/设置入口 + CLI 诊断垂直切片形成闭环。
-- P0-C 验收以 BitFun 插件来源闭环为准；OpenCode 配置导入是兼容能力，不能替代插件安装、打包携带、信任和诊断主路径。
-- 能力服务接口契约能同时服务桌面 GUI、TUI/CLI、Web、ACP、Remote、Server 和 SDK 客户端，且后端归属迁移不要求客户端大面积改协议。
-- 插件、ACP 外部智能体/工具桥接、钩子、插件贡献的工具提供方和界面贡献都通过稳定描述符、信封和候选效果进入，不能直接写内核权威状态。
-- ProductFull、Desktop、CLI 和 ACP 的非插件默认任务能力、权限、工具、事件、session、remote 和 release 形态默认保持等价；插件能力按产品形态矩阵显式降级。
-- Web、Mobile Web、Server、Remote 和 SDK 不隐式继承完整产品或插件能力；P0 中只能表达 `projection-only`、`status-only`、`temporarily-unavailable`、`unsupported`、`policy-denied` 或 `quarantined`。
-- 所有会影响默认能力、权限、工具、事件、会话、远端能力、插件副作用或发布形态的迁移，都有行为等价保护、接口稳定性验证、产品形态验证和必要的性能/构建影响说明。
+- 未新增无消费方的公开接口、空注册表、泛描述符或多生态稳定接口。
+- 没有把 OpenCode 类型、配置、加载顺序或 CLI 可用性提升为 BitFun 权威状态。
+- 插件贡献不能写最终权限、审计、工具结果或内核状态。
+- 前后端入口不能消费 `PluginRuntimeClient`、host 快照、生态原始载荷或插件执行单元句柄。
+- 工具、事件、权限能力优先复用既有归属子接口，不在插件层重复建模。
+- TUI 与 GUI 不共享主题键、键位模型或界面状态；跨入口能力只能通过语义 token、只读视图和对应宿主适配。
+- 文档、边界脚本和 focused 测试能说明本次变更保护了哪个稳定接口切面，或删除/降级了哪个过宽接口。

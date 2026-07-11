@@ -17,6 +17,16 @@ fn elapsed_ms_u64(started_at: Instant) -> u64 {
     started_at.elapsed().as_millis() as u64
 }
 
+fn review_path_has_parent_traversal(path: &str, windows: bool) -> bool {
+    if windows {
+        path.replace('\\', "/")
+            .split('/')
+            .any(|segment| segment == "..")
+    } else {
+        path.split('/').any(|segment| segment == "..")
+    }
+}
+
 impl GitService {
     /// Checks whether the path is a Git repository.
     pub async fn is_repository<P: AsRef<Path>>(path: P) -> Result<bool, GitError> {
@@ -24,6 +34,84 @@ impl GitService {
         task::spawn_blocking(move || Ok(is_git_repository(path_buf)))
             .await
             .map_err(|e| GitError::CommandFailed(format!("spawn_blocking join: {e}")))?
+    }
+
+    /// Resolves a revision to an immutable commit id without changing repository state.
+    pub async fn resolve_revision<P: AsRef<Path>>(
+        path: P,
+        revision: &str,
+    ) -> Result<String, GitError> {
+        let path_buf = path.as_ref().to_path_buf();
+        let revision = revision.trim().to_string();
+        if revision.is_empty() {
+            return Err(GitError::CommandFailed(
+                "Revision cannot be empty".to_string(),
+            ));
+        }
+
+        task::spawn_blocking(move || {
+            let repo = Repository::open(&path_buf)
+                .map_err(|e| GitError::RepositoryNotFound(e.to_string()))?;
+            let object = repo
+                .revparse_single(&revision)
+                .map_err(|e| GitError::CommandFailed(format!("Failed to resolve revision: {e}")))?;
+            let commit = object
+                .peel_to_commit()
+                .map_err(|e| GitError::CommandFailed(format!("Revision is not a commit: {e}")))?;
+            Ok(commit.id().to_string())
+        })
+        .await
+        .map_err(|e| GitError::CommandFailed(format!("spawn_blocking join: {e}")))?
+    }
+
+    /// Returns an exact target-bound diff for Review without external diff or
+    /// text-conversion helpers. Revisions must already be immutable commit ids.
+    pub async fn get_review_diff<P: AsRef<Path>>(
+        path: P,
+        base_revision: &str,
+        head_revision: &str,
+        files: &[String],
+    ) -> Result<String, GitError> {
+        fn is_commit_id(value: &str) -> bool {
+            value.len() == 40 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
+        }
+
+        if !is_commit_id(base_revision) || !is_commit_id(head_revision) {
+            return Err(GitError::CommandFailed(
+                "Review diff requires full immutable commit ids".to_string(),
+            ));
+        }
+        if files.is_empty() {
+            return Err(GitError::CommandFailed(
+                "Review diff requires at least one target file".to_string(),
+            ));
+        }
+        if files.iter().any(|file| {
+            file.trim().is_empty()
+                || file.contains('\0')
+                || Path::new(file).is_absolute()
+                || review_path_has_parent_traversal(file, cfg!(windows))
+        }) {
+            return Err(GitError::InvalidPath(
+                "Review diff files must be workspace-relative target paths".to_string(),
+            ));
+        }
+
+        let repo_path = path.as_ref().to_string_lossy();
+        let range = format!("{}..{}", base_revision, head_revision);
+        let mut args = vec![
+            "--literal-pathspecs".to_string(),
+            "--no-pager".to_string(),
+            "diff".to_string(),
+            "--no-ext-diff".to_string(),
+            "--no-textconv".to_string(),
+            "--find-renames".to_string(),
+            range,
+            "--".to_string(),
+        ];
+        args.extend(files.iter().cloned());
+        let arg_refs = args.iter().map(String::as_str).collect::<Vec<_>>();
+        execute_git_readonly_command(&repo_path, &arg_refs).await
     }
 
     /// Gets repository information.
@@ -109,9 +197,11 @@ impl GitService {
                 let mut staged = Vec::new();
                 let mut unstaged = Vec::new();
                 let mut untracked = Vec::new();
+                let mut conflicts = Vec::new();
 
                 for status in file_statuses {
                     if status.status.contains('C') {
+                        conflicts.push(status.path.clone());
                         staged.push(status.clone());
                         unstaged.push(status);
                     } else if status.status.contains('?') {
@@ -133,6 +223,7 @@ impl GitService {
                     staged,
                     unstaged,
                     untracked,
+                    conflicts,
                     current_branch,
                     ahead,
                     behind,
@@ -906,7 +997,11 @@ impl GitService {
         let args = build_git_diff_args(params);
         let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
 
-        execute_git_command(&repo_path, &arg_refs).await
+        if params.review_safe.unwrap_or(false) {
+            execute_git_readonly_command(&repo_path, &arg_refs).await
+        } else {
+            execute_git_command(&repo_path, &arg_refs).await
+        }
     }
 
     /// Gets changed files using `git diff --name-status`.
@@ -918,7 +1013,11 @@ impl GitService {
         let args = build_git_changed_files_args(params);
         let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
 
-        let output = execute_git_command(&repo_path, &arg_refs).await?;
+        let output = if params.review_safe.unwrap_or(false) {
+            execute_git_readonly_command(&repo_path, &arg_refs).await?
+        } else {
+            execute_git_command(&repo_path, &arg_refs).await?
+        };
         Ok(parse_name_status_output(&output))
     }
 
@@ -1251,5 +1350,20 @@ impl GitService {
             output: Some(output),
             duration: Some(duration),
         })
+    }
+}
+
+#[cfg(test)]
+mod review_path_tests {
+    use super::review_path_has_parent_traversal;
+
+    #[test]
+    fn parent_traversal_uses_platform_path_separators() {
+        assert!(review_path_has_parent_traversal("src/../outside.rs", false));
+        assert!(!review_path_has_parent_traversal(
+            r"src/literal\..\name.rs",
+            false,
+        ));
+        assert!(review_path_has_parent_traversal(r"src\..\outside.rs", true,));
     }
 }

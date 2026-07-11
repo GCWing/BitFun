@@ -73,7 +73,10 @@ export const FlowTextBlock = React.memo<FlowTextBlockProps>(({
     onTabOpen,
     onHttpLinkClick,
     onOpenVisualization,
+    activeSessionOverride,
   } = useFlowChatContext();
+  const markdownBasePath = activeSessionOverride?.workspacePath
+    || activeSessionOverride?.config?.workspacePath;
 
   // Normalize content to a string.
   const content = typeof textItem.content === 'string'
@@ -147,6 +150,7 @@ export const FlowTextBlock = React.memo<FlowTextBlockProps>(({
       {textItem.isMarkdown ? (
         <MarkdownRenderer
           content={displayContent}
+          basePath={markdownBasePath}
           // Pass the raw streaming flag (not the idle-gated
           // `isActivelyStreaming`) so the code-block render path inside
           // Markdown stays stable across bursty AI output. Otherwise

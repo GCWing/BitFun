@@ -118,7 +118,7 @@ const getChildSessionBadge = (kind: Session['sessionKind']): string => {
       ? kind
       : 'btw';
   const fallback = normalizedKind === 'deep_review'
-    ? 'Deep'
+    ? 'Strict'
     : normalizedKind === 'review'
       ? 'Review'
       : normalizedKind === 'subagent'
@@ -135,7 +135,7 @@ const getReviewActivityBadge = (kind: 'review' | 'deep_review'): string =>
       ? 'common:nav.sessions.deepReviewRunning'
       : 'common:nav.sessions.reviewRunning',
     {
-      defaultValue: kind === 'deep_review' ? 'Deep reviewing' : 'Reviewing',
+      defaultValue: 'Reviewing',
     },
   );
 

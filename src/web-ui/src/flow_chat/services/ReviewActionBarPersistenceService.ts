@@ -20,12 +20,40 @@ export async function persistReviewActionState(state: ReviewActionBarState): Pro
   const session = flowChatStore.getState().sessions.get(state.childSessionId);
   if (!session?.workspacePath) return;
 
+  const stateReviewTargetFilePaths = state.reviewTargetFilePaths ?? [];
+  const remediationModifiedFilePaths = state.remediationModifiedFilePaths ?? [];
+  const reviewTargetFilePaths = stateReviewTargetFilePaths.length > 0
+    ? stateReviewTargetFilePaths
+    : session.reviewTargetFilePaths
+      ?? session.deepReviewRunManifest?.target.files
+        .filter((file) => !file.excluded)
+        .map((file) => file.normalizedPath)
+      ?? [];
+
   const payload: ReviewActionPersistedState = {
     version: 1,
     phase: state.phase,
     completedRemediationIds: [...state.completedRemediationIds],
+    ...(state.fixingRemediationIds.size > 0
+      ? { fixingRemediationIds: [...state.fixingRemediationIds] }
+      : {}),
     minimized: state.minimized,
     customInstructions: state.customInstructions,
+    ...(state.followUpReviewSessionId
+      ? { followUpReviewSessionId: state.followUpReviewSessionId }
+      : {}),
+    ...(reviewTargetFilePaths.length > 0
+      ? { reviewTargetFilePaths }
+      : {}),
+    ...(remediationModifiedFilePaths.length > 0
+      ? { remediationModifiedFilePaths }
+      : {}),
+    ...(state.remediationScopeRequiresWorkspaceFallback
+      ? { remediationScopeRequiresWorkspaceFallback: true }
+      : {}),
+    ...(state.fixingBaselineTurnId
+      ? { fixingBaselineTurnId: state.fixingBaselineTurnId }
+      : {}),
     persistedAt: Date.now(),
   };
 

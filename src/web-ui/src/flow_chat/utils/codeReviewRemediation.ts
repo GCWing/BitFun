@@ -259,7 +259,6 @@ function formatIssueForPrompt(item: ReviewRemediationItem, decisionSelection?: n
 export function buildSelectedRemediationPrompt(params: {
   reviewData: CodeReviewRemediationData;
   selectedIds: Set<string>;
-  rerunReview: boolean;
   decisionSelections?: Record<string, number>;
 }): string {
   return buildSelectedReviewRemediationPrompt({
@@ -271,7 +270,6 @@ export function buildSelectedRemediationPrompt(params: {
 export function buildSelectedReviewRemediationPrompt(params: {
   reviewData: CodeReviewRemediationData;
   selectedIds: Set<string>;
-  rerunReview: boolean;
   reviewMode: ReviewMode;
   completedItems?: string[];
   decisionSelections?: Record<string, number>;
@@ -294,16 +292,12 @@ export function buildSelectedReviewRemediationPrompt(params: {
     .map((item) => formatIssueForPrompt(item, params.decisionSelections?.[item.id]))
     .join('\n\n');
   const isDeepReview = params.reviewMode === 'deep';
-  const reviewLabel = isDeepReview ? 'Deep Review' : 'Code Review';
-  const rerunInstruction = isDeepReview
-    ? 'After implementing fixes, run the most relevant verification. Then launch a full follow-up deep review of the fix diff by dispatching all enabled review team reviewers in parallel, followed by ReviewJudge. Submit the follow-up review result via submit_code_review.'
-    : 'After implementing fixes, run the most relevant verification. Then submit a follow-up standard code review of the fix diff via submit_code_review.';
-
+  const reviewLabel = isDeepReview ? 'Review: Strict' : 'Review';
   const lines: string[] = [
     `The user approved remediation for selected ${reviewLabel} findings only.`,
     '',
     'Please implement only the selected remediation items below. Do not broaden scope beyond these selected findings unless required for correctness.',
-    params.rerunReview ? rerunInstruction : 'After implementing fixes, summarize what changed and what verification was run.',
+    'Before editing, inspect the current diff and skip any selected item that is already resolved. After implementing fixes, summarize what changed and what verification was run.',
   ];
 
   // Append continuation context if there are completed items

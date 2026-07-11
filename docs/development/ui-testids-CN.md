@@ -356,17 +356,13 @@
 | Agent 详情工具项 | `agent-detail-tool-item` | 重复的已启用工具项。包含 `data-tool-name`。 |
 | Agent 详情关闭按钮 | `agent-detail-close` | 详情弹窗关闭按钮。 |
 | Core 锚点按钮 | `agents-anchor-core` | 滚动到 core agents 区域。 |
-| Teams 锚点按钮 | `agents-anchor-teams` | 滚动到 teams 区域。 |
 | Custom agents 锚点按钮 | `agents-anchor-custom` | 滚动到 custom agents 区域。 |
 | Agents 搜索按钮 | `agents-search-btn` | 搜索后缀按钮。 |
 | Core agents 区域 | `agents-core-zone` | Core agents section。 |
-| Teams 区域 | `agents-teams-zone` | Agent teams section。 |
 | Custom agents 区域 | `agents-custom-zone` | Custom/subagent section。 |
-| Review team 配置按钮 | `agents-review-team-configure-btn` | 打开 review team 配置。 |
 | Agent source 过滤器 | `agents-source-filter` | 重复项。配合 `data-agent-source` 使用。 |
 | Agent kind 过滤器 | `agents-kind-filter` | 重复项。配合 `data-agent-kind` 使用。 |
 | 创建 agent 按钮 | `agents-create-agent-btn` | 打开 custom agent 创建页。 |
-| Agent team 卡片 | `agents-team-card` | 重复项。配合 `data-team-id` 使用。 |
 | BTW 停止 review 按钮 | `btw-session-panel-stop-review` | 从 BTW 面板停止 review session。 |
 | BTW origin 按钮 | `btw-session-panel-origin-button` | 从 BTW 面板打开 origin session。 |
 

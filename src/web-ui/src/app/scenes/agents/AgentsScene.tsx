@@ -8,7 +8,6 @@ import {
   Plus,
   Puzzle,
   Search as SearchIcon,
-  ShieldCheck,
   Trash2,
   Wrench,
 } from 'lucide-react';
@@ -24,10 +23,8 @@ import {
   GalleryZone,
 } from '@/app/components';
 import AgentCard from './components/AgentCard';
-import AgentTeamCard from './components/AgentTeamCard';
 import CoreAgentCard, { type CoreAgentMeta } from './components/CoreAgentCard';
 import CreateAgentPage from './components/CreateAgentPage';
-import ReviewTeamPage, { ReviewTeamErrorBoundary } from './components/ReviewTeamPage';
 import {
   type AgentWithCapabilities,
   useAgentsStore,
@@ -46,8 +43,6 @@ import { configManager } from '@/infrastructure/config/services/ConfigManager';
 import type { ModeSkillInfo } from '@/infrastructure/config/types';
 import type { SubagentInfo } from '@/infrastructure/api/service-api/SubagentAPI';
 import { useNotification } from '@/shared/notification-system';
-import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
-import { loadDefaultReviewTeam, type ReviewTeam } from '@/shared/services/reviewTeamService';
 
 const UNGROUPED_SKILL_GROUP = '__ungrouped__';
 
@@ -182,7 +177,6 @@ function buildSkillGroups(
 const AgentsHomeView: React.FC = () => {
   const { t } = useTranslation('scenes/agents');
   const notification = useNotification();
-  const { workspacePath } = useCurrentWorkspace();
   const [deletingAgent, setDeletingAgent] = useState(false);
   const {
     searchQuery,
@@ -193,7 +187,6 @@ const AgentsHomeView: React.FC = () => {
     setAgentFilterType,
     openCreateAgent,
     openEditAgent,
-    openReviewTeam,
   } = useAgentsStore();
   const [selectedAgentId, setSelectedAgentId] = React.useState<string | null>(null);
   const [activeCapabilityTab, setActiveCapabilityTab] = React.useState<CapabilityTab>('tools');
@@ -206,7 +199,6 @@ const AgentsHomeView: React.FC = () => {
   const [savingTools, setSavingTools] = React.useState(false);
   const [savingSkills, setSavingSkills] = React.useState(false);
   const [savingSubagents, setSavingSubagents] = React.useState(false);
-  const [reviewTeam, setReviewTeam] = useState<ReviewTeam | null>(null);
   const [computerUseEnabled, setComputerUseEnabled] = useState(true);
 
   const {
@@ -237,32 +229,8 @@ const AgentsHomeView: React.FC = () => {
     sceneId: 'agents',
     refetch: () => {
       void loadAgents();
-      void loadDefaultReviewTeam(workspacePath || undefined).then(setReviewTeam).catch(() => {
-        setReviewTeam(null);
-      });
     },
   });
-
-  useEffect(() => {
-    let cancelled = false;
-
-    (async () => {
-      try {
-        const loadedTeam = await loadDefaultReviewTeam(workspacePath || undefined);
-        if (!cancelled) {
-          setReviewTeam(loadedTeam);
-        }
-      } catch {
-        if (!cancelled) {
-          setReviewTeam(null);
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [workspacePath]);
 
   useEffect(() => {
     let cancelled = false;
@@ -592,14 +560,6 @@ const AgentsHomeView: React.FC = () => {
             <button
               type="button"
               className="gallery-anchor-btn"
-              onClick={() => scrollToZone('teams-zone')}
-              data-testid="agents-anchor-teams"
-            >
-              {t('nav.teams')}
-            </button>
-            <button
-              type="button"
-              className="gallery-anchor-btn"
               onClick={() => scrollToZone('agents-zone')}
               data-testid="agents-anchor-custom"
             >
@@ -674,51 +634,6 @@ const AgentsHomeView: React.FC = () => {
               ))}
             </div>
           )}
-        </GalleryZone>
-
-        <GalleryZone
-          id="teams-zone"
-          data-testid="agents-teams-zone"
-          title={t('teamsZone.title')}
-          subtitle={t('teamsZone.subtitle')}
-          tools={(
-            <>
-              <button
-                type="button"
-                className="gallery-action-btn"
-                onClick={openReviewTeam}
-                data-testid="agents-review-team-configure-btn"
-              >
-                <ShieldCheck size={15} />
-                <span>{t('reviewTeams.detail.open')}</span>
-              </button>
-              <span className="gallery-zone-count">{reviewTeam ? 1 : 0}</span>
-            </>
-          )}
-        >
-          {loading && !reviewTeam ? renderSkeletons('team') : null}
-
-          {!loading && reviewTeam ? (
-            <GalleryGrid minCardWidth={360}>
-              <AgentTeamCard
-                index={0}
-                title={t('reviewTeams.default.name')}
-                subtitle={t('reviewTeams.default.summary')}
-                roleName={t('reviewTeams.detail.localOnly')}
-                tagNames={t('reviewTeams.default.tags', {
-                  returnObjects: true
-                }) as string[]}
-                onOpen={openReviewTeam}
-              />
-            </GalleryGrid>
-          ) : null}
-
-          {!loading && !reviewTeam ? (
-            <GalleryEmpty
-              icon={<ShieldCheck size={32} strokeWidth={1.5} />}
-              message={t('teamsZone.empty')}
-            />
-          ) : null}
         </GalleryZone>
 
         <GalleryZone
@@ -1380,16 +1295,6 @@ const AgentsScene: React.FC = () => {
     return (
       <div className="bitfun-agents-scene bitfun-agents-scene--page">
         <CreateAgentPage />
-      </div>
-    );
-  }
-
-  if (page === 'reviewTeam') {
-    return (
-      <div className="bitfun-agents-scene bitfun-agents-scene--page">
-        <ReviewTeamErrorBoundary>
-          <ReviewTeamPage />
-        </ReviewTeamErrorBoundary>
       </div>
     );
   }

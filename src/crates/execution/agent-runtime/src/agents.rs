@@ -162,13 +162,13 @@ pub fn builtin_agent_definition_specs() -> Vec<BuiltinAgentDefinitionSpec> {
             "ReviewFixer",
             SubAgent,
             "fast",
-            SubagentVisibilityPolicy::restricted(["DeepReview"]),
+            SubagentVisibilityPolicy::hidden(["CodeReview", "DeepReview"]),
         ),
         builtin_agent_spec(
             "CodeReview",
-            Hidden,
+            SubAgent,
             "primary",
-            SubagentVisibilityPolicy::default(),
+            SubagentVisibilityPolicy::hidden(["agentic", "Cowork", "debug", "Multitask", "Team"]),
         ),
         builtin_agent_spec(
             "DeepReview",

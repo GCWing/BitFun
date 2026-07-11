@@ -33,6 +33,9 @@ pub mod mcp;
 #[cfg(feature = "miniapp-runtime")]
 pub mod miniapp;
 
+#[cfg(feature = "plugin-source")]
+pub mod plugin_source;
+
 #[cfg(feature = "remote-connect")]
 pub mod remote_connect;
 

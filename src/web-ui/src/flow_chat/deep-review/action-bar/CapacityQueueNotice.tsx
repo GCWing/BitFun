@@ -42,23 +42,23 @@ const CAPACITY_QUEUE_REASON_DETAIL_KEYS: Record<DeepReviewCapacityQueueReason, {
   },
   provider_concurrency_limit: {
     key: 'deepReviewActionBar.capacityQueue.reasonDetails.providerConcurrencyLimit',
-    defaultValue: 'The model provider rejected another concurrent reviewer. BitFun will retry after capacity opens.',
+    defaultValue: 'The model provider rejected another concurrent review request. BitFun will retry after capacity opens.',
   },
   retry_after: {
     key: 'deepReviewActionBar.capacityQueue.reasonDetails.retryAfter',
-    defaultValue: 'The model provider asked BitFun to retry later. Waiting here avoids spending reviewer runtime while the provider cools down.',
+    defaultValue: 'The model provider asked BitFun to retry later. Waiting here avoids spending Review work while the provider cools down.',
   },
   local_concurrency_cap: {
     key: 'deepReviewActionBar.capacityQueue.reasonDetails.localConcurrencyCap',
-    defaultValue: 'The configured Review Team reviewer limit is full. This reviewer will start after an active reviewer finishes.',
+    defaultValue: 'The configured strict review capacity is full. Waiting review work will start after active work finishes.',
   },
   launch_batch_blocked: {
     key: 'deepReviewActionBar.capacityQueue.reasonDetails.launchBatchBlocked',
-    defaultValue: 'An earlier launch batch is still running. Waiting preserves the planned review order and prevents a later batch from overtaking it.',
+    defaultValue: 'Earlier review work is still running. Waiting preserves the planned review order and prevents later work from overtaking it.',
   },
   temporary_overload: {
     key: 'deepReviewActionBar.capacityQueue.reasonDetails.temporaryOverload',
-    defaultValue: 'The model provider reported temporary overload. BitFun will wait briefly and then continue or mark the reviewer as capacity skipped.',
+    defaultValue: 'The model provider reported temporary overload. BitFun will wait briefly and then continue or reduce coverage.',
   },
 };
 
@@ -85,12 +85,6 @@ function getCapacityQueueWaitMode(
   }
 
   return 'generic';
-}
-
-function reviewerLabel(
-  reviewer: NonNullable<DeepReviewCapacityQueueState['waitingReviewers']>[number],
-): string {
-  return reviewer.displayName || reviewer.subagentType || 'Reviewer';
 }
 
 export const CapacityQueueNotice: React.FC<CapacityQueueNoticeProps> = ({
@@ -138,11 +132,9 @@ export const CapacityQueueNotice: React.FC<CapacityQueueNoticeProps> = ({
     : capacityQueueWaitMode === 'provider_capacity'
       ? t('deepReviewActionBar.capacityQueue.providerDetail')
       : t('deepReviewActionBar.capacityQueue.detail');
-  const waitingReviewers = capacityQueueState.waitingReviewers ?? [];
   const showCapacityQueueMeta = Boolean(
     capacityQueueReasonLabel
-      || capacityQueueElapsedLabel
-      || capacityQueueWaitMode === 'active_reviewer',
+      || capacityQueueElapsedLabel,
   );
 
   return (
@@ -177,13 +169,6 @@ export const CapacityQueueNotice: React.FC<CapacityQueueNoticeProps> = ({
                     })}
                 </span>
               )}
-              {capacityQueueWaitMode === 'active_reviewer' && activeReviewerCount > 0 && (
-                <span className="deep-review-action-bar__capacity-queue-chip">
-                  {t('deepReviewActionBar.capacityQueue.activeReviewerCount', {
-                    count: activeReviewerCount,
-                  })}
-                </span>
-              )}
             </span>
           )}
           {capacityQueueReasonDetail && (
@@ -200,51 +185,6 @@ export const CapacityQueueNotice: React.FC<CapacityQueueNoticeProps> = ({
             <span className="deep-review-action-bar__capacity-queue-detail">
               {t('deepReviewActionBar.capacityQueue.sessionBusy')}
             </span>
-          )}
-          {waitingReviewers.length > 0 && (
-            <div className="deep-review-action-bar__capacity-queue-reviewers">
-              <span className="deep-review-action-bar__capacity-queue-reviewers-title">
-                {t('deepReviewActionBar.capacityQueue.waitingReviewersTitle')}
-              </span>
-              <div className="deep-review-action-bar__capacity-queue-reviewer-list">
-                {waitingReviewers.map((reviewer) => {
-                  const label = reviewerLabel(reviewer);
-                  const reviewerElapsed = reviewer.queueElapsedMs !== undefined
-                    ? formatElapsedTime(reviewer.queueElapsedMs)
-                    : null;
-                  const statusLabel = reviewer.status === 'paused_by_user'
-                    ? t('deepReviewActionBar.capacityQueue.reviewerStatusPaused')
-                    : t('deepReviewActionBar.capacityQueue.reviewerStatusQueued');
-                  return (
-                    <span
-                      key={reviewer.toolId || reviewer.subagentType || label}
-                      className="deep-review-action-bar__capacity-queue-reviewer"
-                    >
-                      <span className="deep-review-action-bar__capacity-queue-reviewer-name">
-                        {label}
-                      </span>
-                      <span className="deep-review-action-bar__capacity-queue-reviewer-meta">
-                        {statusLabel}
-                        {reviewer.optional && (
-                          <>
-                            {' / '}
-                            {t('deepReviewActionBar.capacityQueue.optionalReviewer')}
-                          </>
-                        )}
-                        {reviewerElapsed && (
-                          <>
-                            {' / '}
-                            {t('deepReviewActionBar.capacityQueue.elapsed', {
-                              elapsed: reviewerElapsed,
-                            })}
-                          </>
-                        )}
-                      </span>
-                    </span>
-                  );
-                })}
-              </div>
-            </div>
           )}
           {!supportsInlineQueueControls && (
             <span className="deep-review-action-bar__capacity-queue-detail">

@@ -4,6 +4,7 @@ use crate::api::app_state::AppState;
 use crate::computer_use::DesktopComputerUseHost;
 use bitfun_core::agentic::tools::computer_use_host::ComputerUseHost;
 use bitfun_core::service::config::types::AIConfig;
+use bitfun_core::util::process_manager;
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
@@ -82,7 +83,7 @@ pub async fn computer_use_open_system_settings(
             "screen_capture" => "ms-settings:privacy",
             _ => return Err(format!("Unknown settings pane: {}", request.pane)),
         };
-        std::process::Command::new("cmd")
+        process_manager::create_command("cmd")
             .args(["/C", "start", "", uri])
             .status()
             .map_err(|e| e.to_string())?;

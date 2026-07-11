@@ -15,8 +15,7 @@
   },
   "nav": {
     "coreAgents": "核心智能體",
-    "agents": "Agent",
-    "teams": "智能體團隊"
+    "agents": "Agent"
   },
   "filters": {
     "source": "來源",
@@ -177,117 +176,10 @@
       "createSuccess": "已建立 Agent「{{name}}」",
       "createFailed": "建立失敗：",
       "review": "審查",
-      "reviewToolsHint": "審查子代理只能使用唯讀工具。"
+      "reviewToolsHint": "Review 檢查只能使用唯讀工具。"
     }
   },
-  "teamsZone": {
-    "title": "智能體團隊",
-    "subtitle": "為更深入的任務組織多智能體陣容，目前已提供專業的程式碼審核團隊。",
-    "empty": "暫無可用的智能體團隊"
-  },
   "reviewTeams": {
-    "default": {
-      "name": "程式碼審核團隊",
-      "summary": "專業深度程式碼審核團隊，內置業務邏輯、性能、安全、架構與質檢固定角色。",
-      "members": "{{count}} 名成員",
-      "tags": ["質量", "性能", "架構"]
-    },
-    "detail": {
-      "open": "開啟團隊",
-      "back": "返回專業智能體",
-      "openSettings": "審核設定",
-      "loading": "正在載入程式碼審核團隊...",
-      "title": "程式碼審核團隊",
-      "subtitle": "設定深度審核及 /DeepReview 使用的程式碼審核團隊。每個審核員預設使用快速模型，也可以單獨修改。",
-      "summaryTitle": "團隊概覽",
-      "summaryDescription": "多個審核員會並行覆蓋目標範圍，最後由質檢員彙總為最終結論。",
-      "membersTitle": "團隊成員",
-      "membersDescription": "選擇成員可查看職責、模型和策略覆蓋。固定角色會始終保留在團隊中。",
-      "membersCount": "{{count}} 名成員",
-      "lockedCount": "{{count}} 個固定角色",
-      "extraCount": "{{count}} 個額外 Sub-Agent",
-      "localOnly": "程式碼審核",
-      "localOnlyDescription": "在 BitFun 內以唯讀 Sub-Agent 運行，並把結果回傳到目前審核線程。",
-      "parallelLabel": "並行審核",
-      "parallelDescription": "邏輯、性能、安全、架構和額外審核員會並行工作，再由質檢員驗證結果。",
-      "warningLabel": "審核更重",
-      "warning": "建議用於風險更高的改動；它可能比普通審核耗時更久並消耗更多 token。",
-      "qualityGate": "質檢覆核",
-      "executionPolicyTitle": "審核執行策略",
-      "executionPolicyDescription": "控制審核深度、超時，以及大範圍目標如何拆分給並行唯讀審核員。",
-      "policySummaryTitle": "目前策略",
-      "policySummaryIntro": "這裡展示的即時策略來自審核設定，團隊策略變更後會同步更新。",
-      "policySummaryEyebrow": "已設定行為",
-      "policySummaryDescription": "{{strategy}}審核會為每位審核員使用 {{reviewerTimeout}} 超時，為質檢員使用 {{judgeTimeout}} 超時；每類角色在 {{splitThreshold}} 後拆分，並將同角色並發限制為 {{maxSameRoleInstances}}。",
-      "policySummaryAction": "開啟審核設定以編輯目前策略",
-      "policyMetricsLabel": "目前策略值",
-      "policyStrategyLabel": "策略",
-      "reviewerTimeout": "審核員超時",
-      "reviewerTimeoutDescription": "單個審核員的超時時間，單位為秒。設為 0 表示不設置硬性截止時間。",
-      "judgeTimeout": "質檢員超時",
-      "judgeTimeoutDescription": "質檢覆核的超時時間，單位為秒。設為 0 表示一直等待質檢員完成。",
-      "fileSplitThreshold": "檔案拆分閾值",
-      "fileSplitThresholdDescription": "目標檔案數超過該值時，每類審核員可拆分為多個實例。設為 0 表示關閉拆分。",
-      "maxSameRoleInstances": "同角色最大實例數",
-      "maxSameRoleInstancesDescription": "啟用檔案拆分時，每個審核角色最多可並行運行的實例數。",
-      "seconds": "秒",
-      "secondsValue": "{{seconds}} 秒",
-      "noTimeout": "不限制",
-      "fileCountValue": "{{count}} 個檔案",
-      "splitDisabled": "不拆分",
-      "instancesValue": "最多 {{count}} 個",
-      "memberDetailTitle": "成員詳情",
-      "memberDetailDescription": "團隊運行時，每個審核員都會保留自己的獨立上下文。",
-      "responsibilities": "職責範圍",
-      "model": "使用模型",
-      "modelDescription": "只修改目前審核員使用的模型。Primary/Fast 別名會跟隨目前策略，具體自定義模型在可用時會保持不變。",
-      "remove": "移除成員",
-      "removeDescription": "將這個額外 Sub-Agent 從程式碼審核團隊中移除。固定角色不可刪除。",
-      "addTitle": "新增額外 Sub-Agent",
-      "addDescription": "把其他唯讀 Sub-Agent 加入深度程式碼審核團隊，固定角色會始終保留。",
-      "addLabel": "候選成員",
-      "addHint": "只有唯讀 Sub-Agent 可以加入初始審核流程；每個額外審核員的結果仍會由質檢員統一覆核。",
-      "addPlaceholder": "選擇一個 Sub-Agent",
-      "addButton": "加入團隊",
-      "emptyCandidates": "目前沒有可新增的額外唯讀 Sub-Agent。",
-      "memberTypes": {
-        "locked": "固定",
-        "core": "核心角色",
-        "extra": "額外 Sub-Agent",
-        "builtin": "內置",
-        "user": "用戶級",
-        "project": "項目級"
-      },
-      "messages": {
-        "modelUpdated": "已更新 {{name}} 的模型設定。",
-        "memberAdded": "已將額外審核員加入團隊。",
-        "memberRemoved": "已將額外審核員移出團隊。",
-        "saveFailed": "儲存程式碼審核團隊設定失敗。"
-      }
-    },
-    "strategy": {
-      "teamTitle": "審核策略",
-      "teamDescription": "選擇整個程式碼審核團隊的預設審核深度。單個審核員可以在成員詳情中單獨覆蓋。",
-      "memberTitle": "審核員策略",
-      "memberDescription": "只有當某個角色需要不同於團隊預設值的審核深度時，才建議單獨覆蓋。",
-      "impact": "大約 {{token}} token 消耗，{{runtime}} 耗時。",
-      "inheritLabel": "繼承團隊（{{level}}）",
-      "inheritSummary": "該審核員使用團隊級審核策略。",
-      "modelFallbackShort": "已回退",
-      "modelFallbackDescription": "已設定的模型 {{configuredModel}} 目前不可用，因此該審核員會使用 {{model}}。",
-      "quick": {
-        "label": "快速",
-        "summary": "面向指定 diff 或範圍的快速篩查，只保留高置信問題。"
-      },
-      "normal": {
-        "label": "正常",
-        "summary": "適合日常代碼審核的均衡深度，兼顧覆蓋面和證據質量。"
-      },
-      "deep": {
-        "label": "深度",
-        "summary": "適合高風險、大範圍或發布前變更的多輪深度審核。"
-      }
-    },
     "members": {
       "businessLogic": {
         "funName": "邏輯審核員",
@@ -324,7 +216,7 @@
         "role": "審核質檢員",
         "description": "獨立的第三方仲裁者，從邏輯一致性和證據品質角度校驗審核員報告。僅在特定聲明需要驗證時才抽查程式碼位置，而非從頭重新審核程式碼庫。",
         "responsibilities": [
-          "基於邏輯一致性和證據品質，對各審核員的發現進行驗證、合併、降級或駁回。",
+          "基於邏輯一致性和證據品質，對各審核員的發現進行驗證、合併、重新定級或駁回。",
           "透過審核審核員的推理過程，過濾誤報以及方向錯誤的優化建議。",
           "僅在審核員的聲明需要驗證時，對特定程式碼位置進行抽查。",
           "確保每條保留的問題都帶有明確修復方案或後續計劃。"
@@ -353,7 +245,7 @@
     },
     "extraReviewer": {
       "role": "額外專項審核員",
-      "description": "由用戶手動加入的額外 Sub-Agent，會帶著自己的系統提示、工具和視角參與深度審核。",
+      "description": "嚴格 Review 的可選專項覆蓋，會帶著自己的系統提示、工具和視角參與審核。",
       "responsibilities": [
         "從額外的獨立視角補充本次審核目標中的問題發現。",
         "保持 scope 嚴格聚焦在本次 diff、commit 或工作區改動中。",
@@ -369,7 +261,7 @@
     "Explore": "探索智慧體：快速瀏覽程式碼庫，理解專案結構和關鍵檔案",
     "FileFinder": "檔案查找智慧體：根據需求定位相關檔案和程式碼片段",
     "CodeReview": "程式碼審查智慧體：對程式碼進行品質檢查和改進建議",
-    "DeepReview": "深度審查智慧體：執行全面的程式碼審查，發現潛在問題",
+    "DeepReview": "嚴格 Review 相容智慧體：在歷史會話或命令需要時執行最高強度 Review 路徑",
     "GenerateDoc": "檔案生成智慧體：自動生成程式碼檔案和說明",
     "Init": "初始化智慧體：幫助設定專案結構和初始設定",
     "ReviewFixer": "審查修復智慧體：根據審查結果自動修復程式碼問題",

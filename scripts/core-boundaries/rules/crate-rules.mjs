@@ -31,7 +31,7 @@ export const forbiddenManifestDependencyRules = [
     workspaceManifestPath: 'Cargo.toml',
     allowManifestPaths: ['src/crates/adapters/opencode-adapter/Cargo.toml'],
     reason:
-      'OpenCode adapter fixture must not become a production dependency before reviewed Plugin Runtime Host wiring',
+      'OpenCode adapter must not become a production dependency before reviewed product source wiring',
     message:
       'production manifests must not depend on bitfun-opencode-adapter; integrate OpenCode through the Plugin Runtime Host boundary',
   },

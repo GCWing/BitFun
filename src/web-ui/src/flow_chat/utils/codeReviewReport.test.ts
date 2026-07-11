@@ -51,7 +51,7 @@ function buildRunManifest(): ReviewTeamRunManifest {
     strategyRecommendation: {
       strategyLevel: 'deep',
       score: 24,
-      rationale: 'Large/high-risk change (8 files, 900 lines; 2 security-sensitive files, 3 workspace areas). Deep review recommended.',
+      rationale: 'Large/high-risk change (8 files, 900 lines; 2 security-sensitive files, 3 workspace areas). Strict review recommended.',
       factors: {
         fileCount: 8,
         totalLinesChanged: 900,
@@ -296,7 +296,7 @@ describe('codeReviewReport', () => {
     ]);
   });
 
-  it('surfaces partial reviewer output in coverage notes', () => {
+  it('surfaces partial review output in coverage notes', () => {
     const sections = buildCodeReviewReportSections({
       summary: {
         overall_assessment: 'Review completed with reduced confidence.',
@@ -316,7 +316,7 @@ describe('codeReviewReport', () => {
 
     expect(sections.reviewerStats).toMatchObject({ total: 1, completed: 0, degraded: 1 });
     expect(sections.coverageNotes).toEqual([
-      'Security Reviewer stopped before completion after producing partial output: Found likely token logging in src/auth.ts before timeout.',
+      'A review coverage check stopped before completion after producing partial output: Found likely token logging in src/auth.ts before timeout.',
     ]);
   });
 
@@ -398,7 +398,7 @@ describe('codeReviewReport', () => {
           severity: 'warning',
           count: 7,
           source: 'runtime',
-          detail: 'Runtime profile capped reviewer fan-out for this large target.',
+          detail: 'Runtime profile reduced review coverage for this large target.',
         },
         {
           kind: 'compression_preserved',
@@ -411,28 +411,28 @@ describe('codeReviewReport', () => {
           severity: 'info',
           count: 2,
           source: 'runtime',
-          detail: 'Two reviewer packets reused matching cached output.',
+          detail: 'Two review results reused matching cached output.',
         },
         {
           kind: 'cache_miss',
           severity: 'info',
           count: 1,
           source: 'runtime',
-          detail: 'One reviewer packet ran fresh and updated the cache.',
+          detail: 'One review result ran fresh and updated the cache.',
         },
         {
           kind: 'concurrency_limited',
           severity: 'warning',
           count: 1,
           source: 'runtime',
-          detail: 'One reviewer launch hit the configured concurrency cap.',
+          detail: 'One review launch hit the configured concurrency cap.',
         },
         {
           kind: 'retry_guidance',
           severity: 'warning',
           count: 1,
           source: 'runtime',
-          detail: 'Retry guidance was emitted for a partial reviewer.',
+          detail: 'Retry guidance was emitted for partial review coverage.',
         },
       ],
     };
@@ -445,7 +445,7 @@ describe('codeReviewReport', () => {
         severity: 'warning',
         count: 7,
         source: 'runtime',
-        detail: 'Runtime profile capped reviewer fan-out for this large target.',
+        detail: 'Runtime profile reduced review coverage for this large target.',
       },
       {
         kind: 'compression_preserved',
@@ -458,28 +458,28 @@ describe('codeReviewReport', () => {
         severity: 'info',
         count: 2,
         source: 'runtime',
-        detail: 'Two reviewer packets reused matching cached output.',
+        detail: 'Two review results reused matching cached output.',
       },
       {
         kind: 'cache_miss',
         severity: 'info',
         count: 1,
         source: 'runtime',
-        detail: 'One reviewer packet ran fresh and updated the cache.',
+        detail: 'One review result ran fresh and updated the cache.',
       },
       {
         kind: 'concurrency_limited',
         severity: 'warning',
         count: 1,
         source: 'runtime',
-        detail: 'One reviewer launch hit the configured concurrency cap.',
+        detail: 'One review launch hit the configured concurrency cap.',
       },
       {
         kind: 'retry_guidance',
         severity: 'warning',
         count: 1,
         source: 'runtime',
-        detail: 'Retry guidance was emitted for a partial reviewer.',
+        detail: 'Retry guidance was emitted for partial review coverage.',
       },
     ]);
 
@@ -487,29 +487,29 @@ describe('codeReviewReport', () => {
 
     expect(markdown).toContain('## Review Reliability');
     expect(markdown).toContain(
-      '- Context pressure rising [warning/runtime]: Runtime profile capped reviewer fan-out for this large target.',
+      '- Context pressure rising [warning/runtime]: Runtime profile reduced review coverage for this large target.',
     );
     expect(markdown).toContain(
       '- Compression preserved key facts [info/runtime]: Compression contract retained modified files and failed commands.',
     );
     expect(markdown).toContain(
-      '- Incremental cache reused reviewer output [info/runtime]: Two reviewer packets reused matching cached output.',
+      '- Incremental cache reused review output [info/runtime]: Two review results reused matching cached output.',
     );
     expect(markdown).toContain(
-      '- Incremental cache missed or refreshed [info/runtime]: One reviewer packet ran fresh and updated the cache.',
+      '- Incremental cache missed or refreshed [info/runtime]: One review result ran fresh and updated the cache.',
     );
     expect(markdown).toContain(
-      '- Reviewer launch was concurrency-limited [warning/runtime]: One reviewer launch hit the configured concurrency cap.',
+      '- Review launch was concurrency-limited [warning/runtime]: One review launch hit the configured concurrency cap.',
     );
     expect(markdown).toContain(
-      '- Retry guidance emitted [warning/runtime]: Retry guidance was emitted for a partial reviewer.',
+      '- Retry guidance emitted [warning/runtime]: Retry guidance was emitted for partial review coverage.',
     );
   });
 
-  it('summarizes skipped reviewer and token budget tradeoffs from the run manifest', () => {
+  it('summarizes tailored review scope and token budget tradeoffs from the run manifest', () => {
     const report = {
       summary: {
-        overall_assessment: 'Review completed with one skipped reviewer.',
+        overall_assessment: 'Review completed with tailored scope.',
         risk_level: 'medium' as const,
         recommended_action: 'request_changes' as const,
       },
@@ -542,11 +542,11 @@ describe('codeReviewReport', () => {
 
     const markdown = formatCodeReviewReportMarkdown(report, undefined, { runManifest: buildRunManifest() });
 
-    expect(markdown).toContain('- Skipped reviewers [info/manifest]: Count: 2');
-    expect(markdown).toContain('- Token budget limited reviewer coverage [warning/manifest]: Count: 1');
+    expect(markdown).toContain('- Review scope tailored [info/manifest]: Count: 2');
+    expect(markdown).toContain('- Token budget limited review coverage [warning/manifest]: Count: 1');
   });
 
-  it('surfaces reduced-depth scope profile in reliability notices and markdown export', () => {
+  it('surfaces focused scope profile in reliability notices and markdown export', () => {
     const report = {
       summary: {
         overall_assessment: 'No blocking issues found in the high-risk pass.',
@@ -569,14 +569,14 @@ describe('codeReviewReport', () => {
 
     const markdown = formatCodeReviewReportMarkdown(report, undefined, { runManifest });
 
-    expect(markdown).toContain('- Review depth: high_risk_only');
-    expect(markdown).toContain('- Coverage expectation: High-risk-only pass; changed files remain visible.');
+    expect(markdown).not.toContain('- Review depth:');
+    expect(markdown).not.toContain('- Coverage expectation:');
     expect(markdown).toContain(
-      '- Reduced-depth coverage [info/manifest]: High-risk-only pass; changed files remain visible.',
+      '- Focused review scope [info/manifest]: High-risk-only pass; changed files remain visible.',
     );
   });
 
-  it('exports a compact metadata-only evidence pack summary without content', () => {
+  it('keeps evidence pack metadata out of exported markdown', () => {
     const report = {
       summary: {
         overall_assessment: 'Review completed.',
@@ -637,11 +637,12 @@ describe('codeReviewReport', () => {
 
     const markdown = formatCodeReviewReportMarkdown(report, undefined, { runManifest });
 
-    expect(markdown).toContain('### Evidence pack');
-    expect(markdown).toContain('- Source: target_manifest; privacy: metadata_only');
-    expect(markdown).toContain('- Changed files: 1; hunk hints: 1; contract hints: 1; packet ids: 2');
-    expect(markdown).toContain('- Omitted metadata: changed files 0, hunk hints 0, contract hints 0');
-    expect(markdown).toContain('- Hints are orientation only and require tool confirmation before findings.');
+    expect(markdown).not.toContain('### Evidence scope');
+    expect(markdown).not.toContain('- Changed files: 1; hunk hints: 1; contract hints: 1');
+    expect(markdown).not.toContain('- Hints are orientation only and require tool confirmation before findings.');
+    expect(markdown).not.toContain('packet ids');
+    expect(markdown).not.toContain('target_manifest');
+    expect(markdown).not.toContain('metadata_only');
     expect(markdown).not.toContain('source_text');
     expect(markdown).not.toContain('full_diff');
     expect(markdown).not.toContain('model_output');
@@ -691,16 +692,16 @@ describe('codeReviewReport', () => {
       reviewers: [{ name: 'Business Logic Reviewer', specialty: 'logic', status: 'completed', summary: 'Found one issue.' }],
     });
 
-    expect(markdown).toContain('# Deep Review Report');
+    expect(markdown).toContain('# Strict Review Report');
     expect(markdown).toContain('## Executive Summary');
     expect(markdown).toContain('- One fix required.');
     expect(markdown).toContain('## Issues');
     expect(markdown).toContain('src/auth.ts:12');
     expect(markdown).toContain('## Remediation Plan');
-    expect(markdown).toContain('## Code Review Team');
+    expect(markdown).not.toContain('## Review Execution Plan');
   });
 
-  it('exports partial reviewer output in markdown', () => {
+  it('exports partial review output in markdown', () => {
     const markdown = formatCodeReviewReportMarkdown({
       summary: {
         overall_assessment: 'Review completed with partial security evidence.',
@@ -720,14 +721,14 @@ describe('codeReviewReport', () => {
       ],
     });
 
-    expect(markdown).toContain('Security Reviewer (security; Status: partial_timeout)');
-    expect(markdown).toContain('Partial output: Found likely token logging in src/auth.ts before timeout.');
+    expect(markdown).not.toContain('Security Reviewer (security; Status: partial_timeout)');
+    expect(markdown).not.toContain('Partial output: Found likely token logging in src/auth.ts before timeout.');
     expect(markdown).toContain(
-      'Security Reviewer stopped before completion after producing partial output: Found likely token logging in src/auth.ts before timeout.',
+      'A review coverage check stopped before completion after producing partial output: Found likely token logging in src/auth.ts before timeout.',
     );
   });
 
-  it('exports reviewer packet fallback metadata in markdown', () => {
+  it('keeps internal packet fallback metadata out of exported markdown', () => {
     const markdown = formatCodeReviewReportMarkdown({
       summary: {
         overall_assessment: 'Review completed with inferred packet metadata.',
@@ -748,10 +749,11 @@ describe('codeReviewReport', () => {
       ],
     });
 
-    expect(markdown).toContain('Packet: reviewer:ReviewSecurity:group-1-of-3 (inferred)');
+    expect(markdown).not.toContain('Security Reviewer (security; Status: completed)');
+    expect(markdown).not.toContain('reviewer:ReviewSecurity:group-1-of-3');
   });
 
-  it('extracts explicit retry slices for partial timeout reviewers', () => {
+  it('extracts explicit retry coverage for partial timeout reviewers', () => {
     const slices = extractDeepReviewRetryableSlices({
       review_mode: 'deep',
       reviewers: [
@@ -823,7 +825,7 @@ describe('codeReviewReport', () => {
     expect(slices).toEqual([]);
   });
 
-  it('includes the run manifest when exporting a deep review report', () => {
+  it('keeps run manifest details out of strict review markdown export', () => {
     const markdown = formatCodeReviewReportMarkdown(
       {
         summary: {
@@ -839,26 +841,35 @@ describe('codeReviewReport', () => {
       { runManifest: buildRunManifest() },
     );
 
-    expect(markdown).toContain('## Run manifest');
-    expect(markdown).toContain('- Target: frontend');
-    expect(markdown).toContain('- Budget: balanced');
-    expect(markdown).toContain('- Estimated calls: 3');
-    expect(markdown).toContain('- Recommended strategy: deep');
-    expect(markdown).toContain('- Recommendation score: 24');
-    expect(markdown).toContain('- Recommendation rationale: Large/high-risk change');
-    expect(markdown).toContain('- Logic reviewer (ReviewBusinessLogic)');
-    expect(markdown).toContain('- Custom security reviewer (CustomSecurity)');
-    expect(markdown).toContain('- Quality inspector (ReviewJudge)');
-    expect(markdown).toContain('- Frontend reviewer (ReviewFrontend): not_applicable');
-    expect(markdown).toContain('- Custom invalid reviewer (CustomInvalid): invalid_tooling');
-    expect(markdown).toContain('### Pre-review summary');
-    expect(markdown).toContain('- 1 file, 12 changed lines across 1 workspace area: web-ui (1)');
-    expect(markdown).toContain('- web-ui: 1 file (src/App.tsx)');
-    expect(markdown).toContain('### Shared context cache');
-    expect(markdown).toContain('- shared-context:1: src/App.tsx -> reviewer:ReviewBusinessLogic, reviewer:CustomSecurity');
-    expect(markdown).toContain('### Incremental review cache');
-    expect(markdown).toContain('- Cache key: incremental-review:abc12345');
-    expect(markdown).toContain('- Fingerprint: abc12345');
-    expect(markdown).toContain('- Invalidates on: target_file_set_changed, target_line_count_changed, reviewer_roster_changed');
+    expect(markdown).not.toContain('## Review Coverage And Cost');
+    expect(markdown).not.toContain('- Target: frontend');
+    expect(markdown).not.toContain('- Budget: balanced');
+    expect(markdown).not.toContain('- Estimated review checks: 3');
+    expect(markdown).not.toContain('- Recommended strategy: Deep');
+    expect(markdown).not.toContain('- Recommendation score: 24');
+    expect(markdown).not.toContain('- Recommendation rationale: Large/high-risk change');
+    expect(markdown).not.toContain('- Included coverage: 3 coverage areas.');
+    expect(markdown).not.toContain('- Review scope tailored: 2 optional checks outside this run.');
+    expect(markdown).not.toContain('Logic reviewer - Logic reviewer');
+    expect(markdown).not.toContain('Custom security reviewer - Custom security reviewer');
+    expect(markdown).not.toContain('Quality inspector - Quality inspector');
+    expect(markdown).not.toContain('Frontend reviewer');
+    expect(markdown).not.toContain('not_applicable');
+    expect(markdown).not.toContain('Custom invalid reviewer');
+    expect(markdown).not.toContain('invalid_tooling');
+    expect(markdown).not.toContain('### Pre-review summary');
+    expect(markdown).not.toContain('- 1 file, 12 changed lines across 1 workspace area: web-ui (1)');
+    expect(markdown).not.toContain('- web-ui: 1 file (src/App.tsx)');
+    expect(markdown).not.toContain('### Context reuse');
+    expect(markdown).not.toContain('- Reused context entries: 1');
+    expect(markdown).not.toContain('### Incremental coverage');
+    expect(markdown).not.toContain('- Reused review work: 2');
+    expect(markdown).not.toContain('- Refresh triggers: target_file_set_changed, target_line_count_changed, reviewer_roster_changed');
+    expect(markdown).toContain('- Review scope tailored [info/manifest]: Count: 2');
+    expect(markdown).toContain('- Token budget limited review coverage [warning/manifest]: Count: 1');
+    expect(markdown).not.toContain('reviewer:ReviewBusinessLogic');
+    expect(markdown).not.toContain('shared-context:1');
+    expect(markdown).not.toContain('incremental-review:abc12345');
+    expect(markdown).not.toContain('Fingerprint: abc12345');
   });
 });

@@ -110,6 +110,7 @@ describe('BtwThreadService', () => {
       childSessionName: 'Deep review',
       sessionKind: 'deep_review',
       agentType: 'DeepReview',
+      requestId: 'review-request-1',
       deepReviewRunManifest,
     });
 
@@ -117,19 +118,46 @@ describe('BtwThreadService', () => {
       expect.objectContaining({
         sessionName: 'Deep review',
         agentType: 'DeepReview',
+        sessionId: 'review_child_review-request-1',
         workspacePath: '/workspace',
         remoteConnectionId: 'remote-1',
         remoteSshHost: 'host-1',
         relationship: {
           kind: 'deep_review',
           parentSessionId: 'parent-1',
-          parentRequestId: expect.any(String),
+          parentRequestId: 'review-request-1',
           parentDialogTurnId: 'turn-parent-1',
           parentTurnIndex: 1,
         },
         deepReviewRunManifest,
       }),
     );
+  });
+
+  it('persists the narrow target envelope for standard review follow-up turns', async () => {
+    const reviewTargetEvidence = {
+      version: 1 as const,
+      source: 'workspace' as const,
+      fingerprint: '0123456789abcdef',
+      completeness: 'partial' as const,
+      workspaceBinding: 'matching_dirty' as const,
+      files: [],
+      limitations: ['mutable_workspace_snapshot'],
+    };
+
+    await createBtwChildSession({
+      parentSessionId: 'parent-1',
+      workspacePath: '/workspace',
+      childSessionName: 'Review',
+      sessionKind: 'review',
+      agentType: 'CodeReview',
+      requestId: 'review-target-1',
+      reviewTargetEvidence,
+    });
+
+    expect(mockCreateSession).toHaveBeenCalledWith(expect.objectContaining({
+      reviewTargetEvidence,
+    }));
   });
 
   it('passes image contexts through to the desktop /btw API', async () => {

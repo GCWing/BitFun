@@ -129,6 +129,20 @@ function readTaskRunInBackground(input: unknown, toolResult: FlowToolItem['toolR
   return false;
 }
 
+const INTERNAL_READONLY_REVIEW_AGENT_IDS = new Set([
+  'CodeReview',
+  'ReviewBusinessLogic',
+  'ReviewPerformance',
+  'ReviewSecurity',
+  'ReviewArchitecture',
+  'ReviewFrontend',
+  'ReviewJudge',
+]);
+
+function isInternalReadonlyReviewAgent(subagentType: string): boolean {
+  return INTERNAL_READONLY_REVIEW_AGENT_IDS.has(subagentType);
+}
+
 function readTaskWasCancelled(
   status: FlowToolItem['status'],
   toolResult: FlowToolItem['toolResult'] | undefined,
@@ -160,7 +174,7 @@ function isDeepReviewReviewerTask(toolItem: FlowToolItem): boolean {
     return false;
   }
 
-  if (getReviewerContextBySubagentId(subagentType) || /^Review[A-Z0-9_]/.test(subagentType)) {
+  if (getReviewerContextBySubagentId(subagentType) || isInternalReadonlyReviewAgent(subagentType)) {
     return true;
   }
 
@@ -186,6 +200,7 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
   const rawTaskAction = readTaskAction(toolCall?.input, toolResult);
   const isCancelAction = rawTaskAction === 'cancel';
   const isBackgroundTask = readTaskRunInBackground(toolCall?.input, toolResult);
+  const isReviewCoverageTask = isDeepReviewReviewerTask(toolItem);
   const [isStoppingSubagent, setIsStoppingSubagent] = useState(false);
   
   // Restore collapse state; default to collapsed.
@@ -198,7 +213,7 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
   });
   
   const isRunning = status === 'preparing' || status === 'streaming' || status === 'running';
-  const keepCollapsedWhileRunning = isCancelAction || isDeepReviewReviewerTask(toolItem);
+  const keepCollapsedWhileRunning = isCancelAction || isReviewCoverageTask;
   
   const { cardRootRef, applyExpandedState } = useToolCardHeightContract({
     toolId,
@@ -309,8 +324,19 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
       readStringValue(toolCall.input.model_id) ||
       readStringValue(toolCall.input.modelId);
 
-    // For built-in review-team reviewers, surface role context instead of
-    // the raw prompt so internal directives stay private.
+    if (isReviewCoverageTask) {
+      return {
+        description: t('toolCards.taskTool.reviewCoverageDescription'),
+        prompt: 'Not provided',
+        agentType: t('toolCards.taskTool.reviewCoverageLabel'),
+        modelName,
+        reviewerContext: null,
+        isReviewCoverageTask: true,
+      };
+    }
+
+    // For built-in review-team reviewers outside the unified Review flow,
+    // surface role context instead of the raw prompt so internal directives stay private.
     const reviewerContext: ReviewerContext | null =
       agentType !== 'Not provided'
         ? getReviewerContextBySubagentId(agentType)
@@ -322,6 +348,7 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
       agentType,
       modelName,
       reviewerContext,
+      isReviewCoverageTask: false,
     };
   };
 
@@ -385,6 +412,7 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
   );
   const showSubagentExecModel =
     isTaskTool &&
+    !isReviewCoverageTask &&
     (
       Boolean(linkedSubagentSessionId)
       || Boolean(resolvedSubagentModel)
@@ -441,7 +469,7 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
     hasInterruptionNote ||
     hasRealPrompt ||
     needsConfirmation ||
-    Boolean(taskInput?.reviewerContext)
+    (Boolean(taskInput?.reviewerContext) && !taskInput?.isReviewCoverageTask)
   );
 
   const { taskHeaderLine, taskAgentTypeLabel, taskDesc } = useMemo(() => {
@@ -450,8 +478,10 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
     const raw = taskInput?.agentType;
     let agentTypeLabel: string;
     if (raw && raw !== 'Not provided') {
-      const rc = taskInput?.reviewerContext;
-      agentTypeLabel = rc
+      const rc = taskInput?.isReviewCoverageTask ? null : taskInput?.reviewerContext;
+      agentTypeLabel = taskInput?.isReviewCoverageTask
+        ? t('toolCards.taskTool.reviewCoverageLabel')
+        : rc
         ? tAgents(`reviewTeams.members.${rc.definitionKey}.funName`, {
             defaultValue: rc.roleName,
           })
@@ -476,7 +506,7 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
         return;
       }
 
-      if (linkedSubagentSessionId && sessionId) {
+      if (linkedSubagentSessionId && sessionId && !isReviewCoverageTask) {
         const parentSession = flowChatStore.getState().sessions.get(sessionId);
         openBtwSessionInAuxPane({
           childSessionId: linkedSubagentSessionId,
@@ -507,7 +537,7 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
         window.dispatchEvent(new CustomEvent('agent-create-tab', { detail: tabInfo }));
       }
     },
-    [isCancelAction, linkedSubagentSessionId, onOpenInPanel, sessionId, taskInput, toolCall?.id, toolItem, taskHeaderLine],
+    [isCancelAction, isReviewCoverageTask, linkedSubagentSessionId, onOpenInPanel, sessionId, taskInput, toolCall?.id, toolItem, taskHeaderLine],
   );
 
   const renderToolIcon = () => {
@@ -568,12 +598,16 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
                     aria-label={
                       isStoppingSubagent
                         ? t('toolCards.taskDetailPanel.stoppingSubagent')
-                        : t('toolCards.taskDetailPanel.stopSubagent')
+                        : isReviewCoverageTask
+                          ? t('toolCards.taskDetailPanel.stopReviewWork')
+                          : t('toolCards.taskDetailPanel.stopSubagent')
                     }
                     title={
                       isStoppingSubagent
                         ? t('toolCards.taskDetailPanel.stoppingSubagent')
-                        : t('toolCards.taskDetailPanel.stopSubagent')
+                        : isReviewCoverageTask
+                          ? t('toolCards.taskDetailPanel.stopReviewWork')
+                          : t('toolCards.taskDetailPanel.stopSubagent')
                     }
                   >
                     {isStoppingSubagent ? (
@@ -616,7 +650,7 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
       return null;
     }
 
-    const rc = taskInput?.reviewerContext;
+    const rc = taskInput?.isReviewCoverageTask ? null : taskInput?.reviewerContext;
 
     if (
       !hasInterruptionNote &&
@@ -635,7 +669,7 @@ export const TaskToolDisplay: React.FC<ToolCardProps> = ({
               <AlertTriangle size={14} strokeWidth={2} aria-hidden />
               <span>{interruptionNote}</span>
             </div>
-            {(hasRealPrompt || needsConfirmation || taskInput?.reviewerContext) && (
+            {(hasRealPrompt || needsConfirmation || rc) && (
               <div className="task-interruption-divider" aria-hidden />
             )}
           </>

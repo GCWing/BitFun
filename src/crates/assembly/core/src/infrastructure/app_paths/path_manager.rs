@@ -330,6 +330,11 @@ impl PathManager {
         self.user_data_dir().join("rules")
     }
 
+    /// Get user-installed product plugin packages directory.
+    pub fn user_plugins_dir(&self) -> PathBuf {
+        self.user_data_dir().join("plugins")
+    }
+
     /// Get logs directory: ~/.config/bitfun/logs/
     pub fn logs_dir(&self) -> PathBuf {
         self.user_root.join("logs")
@@ -389,6 +394,11 @@ impl PathManager {
         self.project_root(workspace_path).join("rules")
     }
 
+    /// Get project-owned product plugin packages directory.
+    pub fn project_plugins_dir(&self, workspace_path: &Path) -> PathBuf {
+        self.project_root(workspace_path).join("plugins")
+    }
+
     /// Get project snapshots directory: ~/.bitfun/projects/<workspace-slug>/snapshots/
     pub fn project_snapshots_dir(&self, workspace_path: &Path) -> PathBuf {
         self.project_runtime_root(workspace_path).join("snapshots")
@@ -402,6 +412,16 @@ impl PathManager {
     /// Get project plans directory: ~/.bitfun/projects/<workspace-slug>/plans/
     pub fn project_plans_dir(&self, workspace_path: &Path) -> PathBuf {
         self.project_runtime_root(workspace_path).join("plans")
+    }
+
+    /// Get the user-owned trust store for a workspace's product plugins.
+    pub fn project_plugin_trust_file(&self, workspace_path: &Path) -> PathBuf {
+        let canonical =
+            dunce::canonicalize(workspace_path).unwrap_or_else(|_| workspace_path.to_path_buf());
+        self.project_runtime_root(workspace_path)
+            .join("plugin-runtime")
+            .join(Self::native_path_digest(&canonical))
+            .join("trust.json")
     }
 
     fn project_runtime_slug(&self, workspace_path: &Path) -> String {
@@ -469,6 +489,29 @@ impl PathManager {
         let max_prefix_len = MAX_PROJECT_SLUG_LEN.saturating_sub(suffix.len() + 1);
         let prefix = slug[..max_prefix_len].trim_end_matches('-');
         format!("{}-{}", prefix, suffix)
+    }
+
+    #[cfg(unix)]
+    fn native_path_digest(path: &Path) -> String {
+        use std::os::unix::ffi::OsStrExt;
+
+        hex::encode(Sha256::digest(path.as_os_str().as_bytes()))
+    }
+
+    #[cfg(windows)]
+    fn native_path_digest(path: &Path) -> String {
+        use std::os::windows::ffi::OsStrExt;
+
+        let mut hasher = Sha256::new();
+        for unit in path.as_os_str().encode_wide() {
+            hasher.update(unit.to_le_bytes());
+        }
+        hex::encode(hasher.finalize())
+    }
+
+    #[cfg(not(any(unix, windows)))]
+    fn native_path_digest(path: &Path) -> String {
+        hex::encode(Sha256::digest(path.to_string_lossy().as_bytes()))
     }
 
     /// Ensure directory exists
@@ -544,7 +587,37 @@ impl PathManager {
 use std::sync::OnceLock;
 
 /// Global PathManager instance
-static GLOBAL_PATH_MANAGER: OnceLock<Arc<PathManager>> = OnceLock::new();
+static GLOBAL_PATH_MANAGER: OnceLock<GlobalPathManagerState> = OnceLock::new();
+
+struct GlobalPathManagerState {
+    manager: Arc<PathManager>,
+    initialization_error: Option<String>,
+}
+
+impl GlobalPathManagerState {
+    fn ready(manager: Arc<PathManager>) -> Self {
+        Self {
+            manager,
+            initialization_error: None,
+        }
+    }
+
+    fn fallback(manager: Arc<PathManager>, error: impl Into<String>) -> Self {
+        Self {
+            manager,
+            initialization_error: Some(error.into()),
+        }
+    }
+
+    fn strict_manager(&self) -> BitFunResult<Arc<PathManager>> {
+        if let Some(error) = &self.initialization_error {
+            return Err(BitFunError::config(format!(
+                "global path manager is using a temporary fallback after initialization failed: {error}"
+            )));
+        }
+        Ok(Arc::clone(&self.manager))
+    }
+}
 
 fn init_global_path_manager() -> BitFunResult<Arc<PathManager>> {
     PathManager::new().map(Arc::new)
@@ -556,41 +629,62 @@ fn init_global_path_manager() -> BitFunResult<Arc<PathManager>> {
 pub fn get_path_manager_arc() -> Arc<PathManager> {
     GLOBAL_PATH_MANAGER
         .get_or_init(|| match init_global_path_manager() {
-            Ok(manager) => manager,
+            Ok(manager) => GlobalPathManagerState::ready(manager),
             Err(e) => {
                 error!(
                     "Failed to create global PathManager from config directory, using fallback: {}",
                     e
                 );
-                Arc::new(PathManager::default())
+                GlobalPathManagerState::fallback(Arc::new(PathManager::default()), e.to_string())
             }
         })
+        .manager
         .clone()
 }
 
 /// Try to get the global PathManager instance (Arc)
 pub fn try_get_path_manager_arc() -> BitFunResult<Arc<PathManager>> {
     if let Some(manager) = GLOBAL_PATH_MANAGER.get() {
-        return Ok(Arc::clone(manager));
+        return manager.strict_manager();
     }
 
     let manager = init_global_path_manager()?;
-    match GLOBAL_PATH_MANAGER.set(Arc::clone(&manager)) {
+    match GLOBAL_PATH_MANAGER.set(GlobalPathManagerState::ready(Arc::clone(&manager))) {
         Ok(()) => Ok(manager),
-        Err(_) => Ok(Arc::clone(GLOBAL_PATH_MANAGER.get().expect(
-            "GLOBAL_PATH_MANAGER should be initialized after set failure",
-        ))),
+        Err(_) => GLOBAL_PATH_MANAGER
+            .get()
+            .expect("GLOBAL_PATH_MANAGER should be initialized after set failure")
+            .strict_manager(),
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::PathManager;
+    use super::{GlobalPathManagerState, PathManager};
     use std::ffi::OsString;
     use std::path::Path;
-    use std::sync::Mutex;
+    use std::sync::{Arc, Mutex};
 
     static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    #[test]
+    fn strict_path_access_rejects_a_cached_temporary_fallback() {
+        let state = GlobalPathManagerState::fallback(
+            Arc::new(PathManager::with_user_root_for_tests(
+                std::env::temp_dir().join("bitfun-fallback-test"),
+            )),
+            "injected initialization failure",
+        );
+
+        let error = state
+            .strict_manager()
+            .expect_err("strict access must reject fallback state");
+
+        assert!(error.to_string().contains("temporary fallback"));
+        assert!(error
+            .to_string()
+            .contains("injected initialization failure"));
+    }
 
     #[test]
     fn assistant_workspace_paths_use_personal_assistant_subdir() {
@@ -616,6 +710,25 @@ mod tests {
         assert_eq!(
             path_manager.resolve_assistant_workspace_dir(Some("demo"), None),
             base_dir.join("workspace-demo")
+        );
+    }
+
+    #[test]
+    fn plugin_package_and_trust_paths_separate_package_scope_from_user_trust() {
+        let pm = PathManager::default();
+        let workspace = Path::new("workspace");
+
+        assert_eq!(pm.user_plugins_dir(), pm.user_data_dir().join("plugins"));
+        assert_eq!(
+            pm.project_plugins_dir(workspace),
+            workspace.join(".bitfun").join("plugins")
+        );
+        assert_eq!(
+            pm.project_plugin_trust_file(workspace),
+            pm.project_runtime_root(workspace)
+                .join("plugin-runtime")
+                .join(PathManager::native_path_digest(workspace))
+                .join("trust.json")
         );
     }
 
@@ -658,6 +771,48 @@ mod tests {
 
         assert!(slug.starts_with("e--projects-openbitfun-bitfun"));
         assert_eq!(runtime_root.parent(), Some(pm.projects_root().as_path()));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn plugin_trust_path_distinguishes_lossy_utf16_paths() {
+        use std::os::windows::ffi::OsStringExt;
+
+        let pm = PathManager::default();
+        let first = std::path::PathBuf::from(OsString::from_wide(&[
+            b'C' as u16,
+            b':' as u16,
+            b'\\' as u16,
+            0xd800,
+        ]));
+        let second = std::path::PathBuf::from(OsString::from_wide(&[
+            b'C' as u16,
+            b':' as u16,
+            b'\\' as u16,
+            0xd801,
+        ]));
+
+        assert_eq!(first.to_string_lossy(), second.to_string_lossy());
+        assert_ne!(
+            pm.project_plugin_trust_file(&first),
+            pm.project_plugin_trust_file(&second)
+        );
+    }
+
+    #[test]
+    fn plugin_trust_path_distinguishes_workspace_slug_collisions() {
+        let pm = PathManager::default();
+        let first = Path::new("workspace-a");
+        let second = Path::new("workspace_a");
+
+        assert_eq!(
+            pm.project_runtime_root(first),
+            pm.project_runtime_root(second)
+        );
+        assert_ne!(
+            pm.project_plugin_trust_file(first),
+            pm.project_plugin_trust_file(second)
+        );
     }
 
     #[test]

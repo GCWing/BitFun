@@ -217,6 +217,7 @@ pub(crate) fn is_review_agent_entry(entry: &AgentEntry) -> bool {
             | REVIEWER_ARCHITECTURE_AGENT_TYPE
             | REVIEWER_FRONTEND_AGENT_TYPE
             | REVIEW_JUDGE_AGENT_TYPE
+            | "CodeReview"
     )
 }
 

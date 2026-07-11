@@ -37,6 +37,7 @@ tauri-plugin-autostart = { workspace = true }
 tauri-plugin-notification = { workspace = true }
 tauri-plugin-updater = { workspace = true }
 tauri-plugin-global-shortcut = { workspace = true }
+tauri-plugin-single-instance = { workspace = true }
 # Keep Tauri's transitive time resolution on the known-good release in CI,
 # where the root Cargo.lock is intentionally ignored.
 time = { workspace = true }

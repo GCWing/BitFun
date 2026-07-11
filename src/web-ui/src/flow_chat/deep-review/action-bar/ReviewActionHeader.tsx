@@ -3,7 +3,6 @@ import { Minus } from 'lucide-react';
 import { CodeReviewReportExportActions } from '../../tool-cards/CodeReviewReportExportActions';
 
 type ExportableReviewData = React.ComponentProps<typeof CodeReviewReportExportActions>['reviewData'];
-type ExportableRunManifest = React.ComponentProps<typeof CodeReviewReportExportActions>['runManifest'];
 
 interface ReviewActionHeaderProps {
   reviewData?: ExportableReviewData | null;
@@ -15,7 +14,6 @@ interface ReviewActionHeaderProps {
   phaseIconClass: string;
   phaseTitle: string;
   errorMessage?: string | null;
-  runManifest?: ExportableRunManifest;
   minimizeLabel: string;
   onMinimize: () => void;
 }
@@ -26,7 +24,6 @@ export const ReviewActionHeader: React.FC<ReviewActionHeaderProps> = ({
   phaseIconClass,
   phaseTitle,
   errorMessage,
-  runManifest,
   minimizeLabel,
   onMinimize,
 }) => (
@@ -35,7 +32,6 @@ export const ReviewActionHeader: React.FC<ReviewActionHeaderProps> = ({
       {reviewData && (
         <CodeReviewReportExportActions
           reviewData={reviewData}
-          runManifest={runManifest}
           actions={['copy', 'save']}
         />
       )}
@@ -50,7 +46,7 @@ export const ReviewActionHeader: React.FC<ReviewActionHeaderProps> = ({
       </button>
     </div>
 
-    <div className="deep-review-action-bar__status">
+    <div className="deep-review-action-bar__status" role="status" aria-live="polite">
       <PhaseIcon
         size={18}
         className={`deep-review-action-bar__icon ${phaseIconClass}`}

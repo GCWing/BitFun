@@ -22,11 +22,13 @@ export function runManifestParserSelfTest({
   forbiddenContentRules,
   forbiddenContentUnderRules,
   publicApiAllowlistRules,
+  publicApiContractSlices,
   facadeOnlyFiles,
   forbiddenRuleTextForPath,
   regexSourceContainsContract,
   collectTopLevelRustPublicSymbols,
   collectPluginRootReexports,
+  hasPluginWildcardReexport,
   createFacadeLineChecker,
   escapeRegex,
 }) {
@@ -664,10 +666,14 @@ export function runManifestParserSelfTest({
   for (const dep of [
     'aes',
     'bitfun-services-core',
+    'bitfun-product-domains',
+    'dunce',
+    'fs2',
     'bitfun-runtime-ports',
     'git2',
     'hex',
     'hostname',
+    'libc',
     'local-ip-address',
     'mac_address',
     'md5',
@@ -677,10 +683,19 @@ export function runManifestParserSelfTest({
     'rmcp',
     'tokio-tungstenite',
     'which',
+    'windows',
     'x25519-dalek',
   ]) {
     if (!servicesOptionalOwnerRule?.dependencies.some((dependency) => dependency.depName === dep)) {
       throw new Error(`services-integrations optional dependency owner rule must cover ${dep}`);
+    }
+  }
+  for (const dep of ['bitfun-product-domains', 'dunce', 'fs2', 'hex', 'libc', 'sha2', 'thiserror', 'uuid', 'windows']) {
+    const owner = servicesOptionalOwnerRule?.dependencies.find(
+      (dependency) => dependency.depName === dep,
+    );
+    if (!owner?.ownerFeatures.includes('plugin-source')) {
+      throw new Error(`services-integrations plugin-source must own optional dependency ${dep}`);
     }
   }
   const productDomainsOptionalOwnerRule = optionalDependencyFeatureOwnerRules.find(
@@ -837,17 +852,35 @@ export function runManifestParserSelfTest({
   );
   const parsedPluginReexports = collectPluginRootReexports(`
     pub use plugin::{PluginDispatchEnvelope, PluginResponseEnvelope};
-    pub use plugin::{
+    pub use self::plugin::{
       PluginRuntimeReadRequest,
-      PluginRuntimeReadResponse,
+      PluginRuntimeReadResponse as RuntimeReadResponse,
     };
-    pub use plugin::PluginRuntimeClient;
+    pub use crate::plugin::PluginRuntimeClient;
+    pub use plugin::*;
   `);
   if (
     parsedPluginReexports.join(',') !==
-    'PluginDispatchEnvelope,PluginResponseEnvelope,PluginRuntimeReadRequest,PluginRuntimeReadResponse,PluginRuntimeClient'
+    'PluginDispatchEnvelope,PluginResponseEnvelope,PluginRuntimeReadRequest,RuntimeReadResponse,PluginRuntimeClient,*'
   ) {
-    throw new Error('plugin root re-export parser must collect all block and single re-exports');
+    throw new Error('plugin root re-export parser must collect plugin path variants, aliases, and wildcard markers');
+  }
+  for (const wildcardReexport of [
+    'pub use plugin::*;',
+    'pub use crate::plugin::*;',
+    'pub use self::plugin::*;',
+  ]) {
+    if (!hasPluginWildcardReexport(wildcardReexport)) {
+      throw new Error(`plugin wildcard guard must reject path variant: ${wildcardReexport}`);
+    }
+  }
+  for (const nonWildcardReexport of [
+    'pub use plugin::PluginDispatchEnvelope;',
+    'pub use crate::not_plugin::*;',
+  ]) {
+    if (hasPluginWildcardReexport(nonWildcardReexport)) {
+      throw new Error(`plugin wildcard guard must not reject non-plugin wildcard: ${nonWildcardReexport}`);
+    }
   }
   const parsedPluginSymbols = collectTopLevelRustPublicSymbols(`
     pub enum TopLevelEnum { Value }
@@ -889,10 +922,13 @@ export function runManifestParserSelfTest({
     throw new Error('plugin runtime public API allowlist must include plugin status snapshot');
   }
   for (const entry of pluginPublicApiRule.allowedSymbolEntries) {
-    for (const field of ['owner', 'consumer', 'p0', 'rationale', 'exit']) {
+    for (const field of ['owner', 'consumer', 'verification', 'p0', 'contractSlice', 'rationale', 'exit']) {
       if (!entry[field]) {
         throw new Error(`plugin runtime public API entry must declare ${field}: ${entry.symbol}`);
       }
+    }
+    if (!publicApiContractSlices.includes(entry.contractSlice)) {
+      throw new Error(`plugin runtime public API entry uses unknown contractSlice: ${entry.symbol}`);
     }
     if (typeof entry.wireImpact !== 'boolean') {
       throw new Error(`plugin runtime public API entry must declare wireImpact: ${entry.symbol}`);
@@ -905,10 +941,29 @@ export function runManifestParserSelfTest({
     throw new Error('plugin root re-export allowlist must match plugin module public budget');
   }
   if (!opencodeAdapterPublicApiRule) {
-    throw new Error('OpenCode adapter fixture must have a public API budget rule');
+    throw new Error('OpenCode adapter must have a public API budget rule');
   }
-  if ((opencodeAdapterPublicApiRule.allowedSymbolEntries || []).length !== 0) {
-    throw new Error('OpenCode adapter fixture public API budget must stay empty');
+  const opencodeAdapterPublicApiSymbols = (
+    opencodeAdapterPublicApiRule.allowedSymbolEntries || []
+  ).map((entry) => entry.symbol);
+  if (
+    opencodeAdapterPublicApiSymbols.join(',') !==
+    'load_opencode_workspace_adapter'
+  ) {
+    throw new Error('OpenCode adapter public API budget must stay limited to source adapter loading');
+  }
+  for (const entry of opencodeAdapterPublicApiRule.allowedSymbolEntries) {
+    for (const field of ['owner', 'consumer', 'verification', 'p0', 'contractSlice', 'rationale', 'exit']) {
+      if (!entry[field]) {
+        throw new Error(`OpenCode adapter public API entry must declare ${field}: ${entry.symbol}`);
+      }
+    }
+    if (entry.contractSlice !== 'opencode-adapter-boundary') {
+      throw new Error(`OpenCode adapter public API entry uses wrong contractSlice: ${entry.symbol}`);
+    }
+    if (entry.wireImpact !== false) {
+      throw new Error(`OpenCode adapter public API entry must not claim wire impact: ${entry.symbol}`);
+    }
   }
   const appHostAbiRule = forbiddenContentUnderRules.find((rule) => rule.path === 'src/apps');
   if (!appHostAbiRule) {
@@ -931,7 +986,7 @@ export function runManifestParserSelfTest({
     rule.dependencyNames?.includes('bitfun-opencode-adapter'),
   );
   if (!opencodeManifestRule) {
-    throw new Error('OpenCode adapter fixture must have a forbidden manifest dependency rule');
+    throw new Error('OpenCode adapter must have a forbidden manifest dependency rule');
   }
   for (const scanRoot of ['src/apps', 'src/crates', 'BitFun-Installer/src-tauri']) {
     if (!opencodeManifestRule.scanRoots?.includes(scanRoot)) {
@@ -949,7 +1004,7 @@ export function runManifestParserSelfTest({
     throw new Error('OpenCode adapter manifest guard must allow its own manifest');
   }
   const opencodeSourceRules = forbiddenContentUnderRules.filter((rule) =>
-    rule.reason.includes('OpenCode adapter fixture'),
+    rule.reason.includes('OpenCode adapter must not become a production dependency'),
   );
   for (const scanRoot of ['src', 'BitFun-Installer/src-tauri']) {
     if (!opencodeSourceRules.some((rule) => rule.path === scanRoot)) {

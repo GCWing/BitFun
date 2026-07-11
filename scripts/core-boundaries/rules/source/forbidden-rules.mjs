@@ -26,6 +26,43 @@ export const forbiddenContentRules = [
     ],
   },
   {
+    path: 'src/crates/services/services-integrations/src/plugin_source.rs',
+    reason:
+      'managed plugin source service method surface must stay limited to construction, refresh, and trust review',
+    patterns: [
+      {
+        regex:
+          /\bpub\s+(?:async\s+)?fn\s+(?!(?:new|refresh|set_trust)\b)[A-Za-z_][A-Za-z0-9_]*\b/,
+        message:
+          'unexpected public ManagedPluginSourceService method; update the reviewed method budget before exposing more API',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/contracts/product-domains/src/plugin_source.rs',
+    reason:
+      'plugin source contract methods must stay limited to manifest validation and source review transitions',
+    patterns: [
+      {
+        regex:
+          /\bpub\s+(?:const\s+)?fn\s+(?!(?:parse_json|validate|new|epoch|trust_level_for|apply_decision|reconcile_sources)\b)[A-Za-z_][A-Za-z0-9_]*\b/,
+        message:
+          'unexpected public plugin source contract method; update the reviewed method budget before exposing more API',
+      },
+    ],
+  },
+  {
+    path: 'src/crates/assembly/core/src/plugin_source.rs',
+    reason: 'plugin source review must fail when product path initialization fails',
+    patterns: [
+      {
+        regex: /crate::infrastructure::get_path_manager_arc\s*\(/,
+        message:
+          'plugin source review must use try_get_path_manager_arc instead of the temporary fallback path manager',
+      },
+    ],
+  },
+  {
     path: 'src/crates/contracts/runtime-ports/src/lib.rs',
     patterns: [
       {
@@ -4086,11 +4123,12 @@ export const forbiddenContentUnderRules = [
   {
     path: 'src',
     reason:
-      'OpenCode adapter fixture must not become a production dependency before reviewed Plugin Runtime Host wiring',
+      'OpenCode adapter must not become a production dependency before reviewed product source wiring',
     patterns: [
       {
         regex:
           /\b(?:use\s+bitfun_opencode_adapter\b|extern\s+crate\s+bitfun_opencode_adapter\b|bitfun_opencode_adapter::)/,
+        allowPaths: ['src/crates/adapters/opencode-adapter/tests/opencode_source_adapter.rs'],
         message:
           'production crates must not import bitfun-opencode-adapter directly; integrate OpenCode through the Plugin Runtime Host boundary',
       },
@@ -4099,7 +4137,7 @@ export const forbiddenContentUnderRules = [
   {
     path: 'BitFun-Installer/src-tauri',
     reason:
-      'OpenCode adapter fixture must not become a production dependency before reviewed Plugin Runtime Host wiring',
+      'OpenCode adapter must not become a production dependency before reviewed product source wiring',
     patterns: [
       {
         regex:

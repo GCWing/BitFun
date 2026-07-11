@@ -81,42 +81,25 @@ describe('buildSelectedReviewRemediationPrompt', () => {
         remediation_plan: ['Fix issue 1'],
       },
       selectedIds: new Set(),
-      rerunReview: false,
       reviewMode: 'deep',
     });
 
     expect(prompt).toBe('');
   });
 
-  it('builds prompt with selected items for deep review', () => {
+  it('builds prompt with selected items for strict review', () => {
     const prompt = buildSelectedReviewRemediationPrompt({
       reviewData: {
         summary: { recommended_action: 'request_changes' },
         remediation_plan: ['Fix issue 1'],
       },
       selectedIds: new Set(['remediation-0']),
-      rerunReview: false,
       reviewMode: 'deep',
     });
 
-    expect(prompt).toContain('Deep Review findings only');
+    expect(prompt).toContain('Review: Strict findings only');
     expect(prompt).toContain('Fix issue 1');
     expect(prompt).toContain('Selected Remediation Plan');
-  });
-
-  it('builds prompt with rerun instruction when rerunReview is true', () => {
-    const prompt = buildSelectedReviewRemediationPrompt({
-      reviewData: {
-        summary: { recommended_action: 'request_changes' },
-        remediation_plan: ['Fix issue 1'],
-      },
-      selectedIds: new Set(['remediation-0']),
-      rerunReview: true,
-      reviewMode: 'deep',
-    });
-
-    expect(prompt).toContain('follow-up deep review');
-    expect(prompt).toContain('dispatching all enabled review team reviewers');
   });
 
   it('builds prompt with standard review mode', () => {
@@ -126,11 +109,10 @@ describe('buildSelectedReviewRemediationPrompt', () => {
         remediation_plan: ['Fix issue 1'],
       },
       selectedIds: new Set(['remediation-0']),
-      rerunReview: false,
       reviewMode: 'standard',
     });
 
-    expect(prompt).toContain('Code Review findings only');
+    expect(prompt).toContain('Review findings only');
   });
 
   it('appends continuation context when completedItems provided', () => {
@@ -140,7 +122,6 @@ describe('buildSelectedReviewRemediationPrompt', () => {
         remediation_plan: ['Fix issue 1', 'Fix issue 2', 'Fix issue 3'],
       },
       selectedIds: new Set(['remediation-1', 'remediation-2']),
-      rerunReview: false,
       reviewMode: 'deep',
       completedItems: ['remediation-0'],
     });
@@ -158,7 +139,6 @@ describe('buildSelectedReviewRemediationPrompt', () => {
         remediation_plan: ['Fix issue 1'],
       },
       selectedIds: new Set(['remediation-0']),
-      rerunReview: false,
       reviewMode: 'deep',
       completedItems: [],
     });
@@ -173,7 +153,6 @@ describe('buildSelectedReviewRemediationPrompt', () => {
         remediation_plan: ['Fix issue 1'],
       },
       selectedIds: new Set(['remediation-0']),
-      rerunReview: false,
       reviewMode: 'deep',
     });
 
@@ -187,7 +166,6 @@ describe('buildSelectedReviewRemediationPrompt', () => {
         remediation_plan: ['Fix issue 1', 'Fix issue 2'],
       },
       selectedIds: new Set(['remediation-1']),
-      rerunReview: false,
       reviewMode: 'deep',
       completedItems: ['remediation-0', 'non-existent-id'],
     });

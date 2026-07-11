@@ -1,15 +1,15 @@
 ---
-name: review
+name: pre-landing-review
 description: |
   Pre-landing PR review. Analyzes diff against the base branch for SQL safety, LLM trust
   boundary violations, conditional side effects, and other structural issues. Use when
-  asked to "review this PR", "code review", "pre-landing review", or "check my diff".
-  Proactively suggest when the user is about to merge or land code changes. (gstack)
+  explicitly asked for the specialized pre-landing workflow. Product `/review` requests are
+  handled by BitFun's unified Review mechanism instead. (gstack)
 ---
 
 # Pre-Landing PR Review
 
-You are running the `/review` workflow. Analyze the current branch's diff against the base branch for structural issues that tests don't catch.
+You are running the specialized pre-landing workflow. Analyze the current branch's diff against the base branch for structural issues that tests don't catch. Do not present this skill as the product `/review` command.
 
 ## BitFun Team Mode Dispatch
 

@@ -18,6 +18,7 @@ export const PARTIAL_TIMEOUT_REVIEWER_STATUSES = new Set([
 
 const RELIABILITY_NOTICE_ORDER: ReviewReliabilityNoticeKind[] = [
   'context_pressure',
+  'target_evidence_limited',
   'reduced_scope',
   'skipped_reviewers',
   'token_budget_limited',
@@ -33,14 +34,15 @@ const RELIABILITY_NOTICE_ORDER: ReviewReliabilityNoticeKind[] = [
 export const RELIABILITY_NOTICE_FALLBACK_LABELS: Record<ReviewReliabilityNoticeKind, string> = {
   context_pressure: 'Context pressure rising',
   compression_preserved: 'Compression preserved key facts',
-  cache_hit: 'Incremental cache reused reviewer output',
+  cache_hit: 'Incremental cache reused review output',
   cache_miss: 'Incremental cache missed or refreshed',
-  concurrency_limited: 'Reviewer launch was concurrency-limited',
-  partial_reviewer: 'Reviewer returned partial result',
-  reduced_scope: 'Reduced-depth coverage',
+  concurrency_limited: 'Review launch was concurrency-limited',
+  partial_reviewer: 'Review returned partial result',
+  target_evidence_limited: 'Target evidence limited',
+  reduced_scope: 'Focused review scope',
   retry_guidance: 'Retry guidance emitted',
-  skipped_reviewers: 'Skipped reviewers',
-  token_budget_limited: 'Token budget limited reviewer coverage',
+  skipped_reviewers: 'Review scope tailored',
+  token_budget_limited: 'Token budget limited review coverage',
   user_decision: 'User decision needed',
 };
 
@@ -54,6 +56,7 @@ const RELIABILITY_NOTICE_SEVERITY_BY_KIND: Record<
   cache_miss: 'info',
   concurrency_limited: 'warning',
   partial_reviewer: 'warning',
+  target_evidence_limited: 'warning',
   reduced_scope: 'info',
   retry_guidance: 'warning',
   skipped_reviewers: 'info',
@@ -162,7 +165,9 @@ function normalizeStructuredReliabilityNotice(
     ...(signal.source && isReliabilitySignalSource(signal.source)
       ? { source: signal.source }
       : {}),
-    ...(detail ? { detail } : {}),
+    // Evidence status is rendered from a localized product label. Runtime
+    // details are diagnostic English and must not replace that user-facing copy.
+    ...(detail && signal.kind !== 'target_evidence_limited' ? { detail } : {}),
   };
 }
 
@@ -227,6 +232,17 @@ export function buildCodeReviewReliabilityNotices(
       severity: 'info',
       count: runManifest.tokenBudget.estimatedReviewerCalls,
       source: 'manifest',
+    });
+  }
+
+  const structuredTargetEvidence = structuredNotices.get('target_evidence_limited');
+  if (structuredTargetEvidence) {
+    notices.push(structuredTargetEvidence);
+  } else if (report.evidence_status && report.evidence_status !== 'complete') {
+    notices.push({
+      kind: 'target_evidence_limited',
+      severity: 'warning',
+      source: 'runtime',
     });
   }
 

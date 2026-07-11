@@ -149,6 +149,8 @@ export async function sendMessage(
      */
     bypassPendingQueue?: boolean;
     userMessageMetadata?: Record<string, unknown>;
+    turnId?: string;
+    preserveTurnOnStartError?: boolean;
   }
 ): Promise<void> {
   const session = context.flowChatStore.getState().sessions.get(sessionId);
@@ -251,7 +253,8 @@ export async function sendMessage(
     }
 
     const isFirstMessage = readySession.dialogTurns.length === 0 && readySession.titleStatus !== 'generated';
-    const dialogTurnId = `dialog_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const dialogTurnId = options?.turnId?.trim() ||
+      `dialog_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const hasImages = (options?.imageContexts?.length ?? 0) > 0;
 
     const dialogTurn: DialogTurn = {
@@ -399,14 +402,16 @@ export async function sendMessage(
     
     const state = context.flowChatStore.getState();
     const currentSession = state.sessions.get(sessionId);
-    if (createdLocalTurnId && currentSession) {
+    if (createdLocalTurnId && currentSession && !options?.preserveTurnOnStartError) {
       context.flowChatStore.deleteDialogTurn(sessionId, createdLocalTurnId);
     }
     
-    notificationService.error(errorMessage, {
-      title: 'Thinking process error',
-      duration: 5000
-    });
+    if (!options?.preserveTurnOnStartError) {
+      notificationService.error(errorMessage, {
+        title: 'Thinking process error',
+        duration: 5000
+      });
+    }
     
     throw error;
   }

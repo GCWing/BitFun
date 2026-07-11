@@ -156,6 +156,7 @@ tauri-plugin-autostart = "2.5"
 tauri-plugin-notification = "2.3"
 tauri-plugin-updater = "2.10"
 tauri-plugin-global-shortcut = "2.3"
+tauri-plugin-single-instance = "2.4"
 tauri-build = { version = "2.6", features = [] }
 
 # Desktop support

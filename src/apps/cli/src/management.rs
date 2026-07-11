@@ -5,6 +5,10 @@ use std::time::Duration;
 use bitfun_core::agentic::get_agent_registry;
 use bitfun_core::agentic::persistence::PersistenceManager;
 use bitfun_core::infrastructure::try_get_path_manager_arc;
+use bitfun_core::plugin_source::{
+    refresh_managed_plugin_sources, set_managed_plugin_trust, ManagedPluginSourceSnapshot,
+    ManagedPluginTrustDecision, ManagedPluginTrustLevel,
+};
 use bitfun_core::service::config::initialize_global_config;
 use bitfun_core::service::session_usage::{
     generate_session_usage_report, render_usage_report_markdown, SessionUsageReportRequest,
@@ -242,6 +246,169 @@ pub async fn print_usage_report(session_id: Option<&str>) -> Result<()> {
     Ok(())
 }
 
+pub async fn print_plugins() -> Result<()> {
+    let workspace = std::env::current_dir().context("Failed to resolve current directory")?;
+    let path_manager = try_get_path_manager_arc().map_err(|error| anyhow!(error.to_string()))?;
+    let snapshot = refresh_managed_plugin_sources(&workspace)
+        .await
+        .map_err(|error| anyhow!(error.to_string()))?;
+    println!(
+        "User package root: {}",
+        crate::plugin_diagnostics::escape_terminal_text(
+            &path_manager.user_plugins_dir().to_string_lossy()
+        )
+    );
+    println!(
+        "Workspace package root: {}",
+        crate::plugin_diagnostics::escape_terminal_text(
+            &path_manager
+                .project_plugins_dir(&workspace)
+                .to_string_lossy()
+        )
+    );
+    println!();
+    print_plugin_snapshot(&snapshot);
+    Ok(())
+}
+
+pub async fn set_plugin_trust(
+    package_id: &str,
+    decision: ManagedPluginTrustDecision,
+) -> Result<()> {
+    let workspace = std::env::current_dir().context("Failed to resolve current directory")?;
+    let snapshot = set_managed_plugin_trust(&workspace, package_id, decision)
+        .await
+        .map_err(|error| {
+            anyhow!(crate::plugin_diagnostics::escape_terminal_text(
+                &error.to_string()
+            ))
+        })?;
+    let package = snapshot
+        .packages
+        .iter()
+        .find(|package| package.package_id == package_id)
+        .ok_or_else(|| anyhow!("Managed plugin package disappeared during trust update"))?;
+    let trust_epoch = snapshot
+        .trust_epoch
+        .ok_or_else(|| anyhow!("Managed plugin source review epoch is unavailable after update"))?;
+    println!(
+        "Plugin package {} {} is now {} (source review epoch {}).",
+        crate::plugin_diagnostics::escape_terminal_text(&package.package_id),
+        crate::plugin_diagnostics::escape_terminal_text(&package.version),
+        plugin_trust_label(package.trust_level),
+        trust_epoch
+    );
+    println!(
+        "Source: {}",
+        crate::plugin_diagnostics::escape_terminal_text(&package.source_path)
+    );
+    println!(
+        "Adapter: {}",
+        crate::plugin_diagnostics::escape_terminal_text(&package.adapter)
+    );
+    println!("Content hash: {}", package.content_hash);
+    match decision {
+        ManagedPluginTrustDecision::ApproveSource => {
+            println!("The current manifest and declared files are approved for source review.");
+        }
+        ManagedPluginTrustDecision::Denied => {
+            println!("The current manifest and declared files are denied for this workspace.");
+        }
+        ManagedPluginTrustDecision::Revoked => {
+            println!("The previous approval has been revoked for this workspace.");
+        }
+    }
+    println!("Execution remains unavailable; this action does not enable the package.");
+    Ok(())
+}
+
+fn print_plugin_snapshot(snapshot: &ManagedPluginSourceSnapshot) {
+    let approved_count = snapshot
+        .packages
+        .iter()
+        .filter(|package| package.trust_level == ManagedPluginTrustLevel::SourceApproved)
+        .count();
+    let warning_count = snapshot
+        .issues
+        .iter()
+        .filter(|issue| !issue.is_error)
+        .count();
+    let error_count = snapshot
+        .issues
+        .iter()
+        .filter(|issue| issue.is_error)
+        .count();
+    println!("Managed plugin packages");
+    println!();
+    println!(
+        "{}",
+        crate::plugin_diagnostics::render_plugin_source_summary(
+            snapshot.packages.len(),
+            approved_count,
+            warning_count,
+            error_count,
+        )
+    );
+    for package in &snapshot.packages {
+        println!(
+            "- {} {} ({}, {})",
+            crate::plugin_diagnostics::escape_terminal_text(&package.package_id),
+            crate::plugin_diagnostics::escape_terminal_text(&package.version),
+            package.source_scope,
+            plugin_trust_label(package.trust_level),
+        );
+        println!(
+            "  Source: {}",
+            crate::plugin_diagnostics::escape_terminal_text(&package.source_path)
+        );
+        println!(
+            "  Adapter: {}",
+            crate::plugin_diagnostics::escape_terminal_text(&package.adapter)
+        );
+        println!("  Content hash: {}", package.content_hash);
+        println!("  Execution: unavailable; source review does not enable this package");
+    }
+    for issue in &snapshot.issues {
+        println!(
+            "- [{}:{}] {}: {}",
+            if issue.is_error { "error" } else { "warn" },
+            crate::plugin_diagnostics::escape_terminal_text(&issue.code),
+            crate::plugin_diagnostics::escape_terminal_text(&issue.source_path),
+            crate::plugin_diagnostics::escape_terminal_text(&issue.message)
+        );
+    }
+    println!(
+        "{}",
+        crate::plugin_diagnostics::render_source_review_epoch(snapshot.trust_epoch)
+    );
+}
+
+fn plugin_trust_label(trust_level: ManagedPluginTrustLevel) -> &'static str {
+    match trust_level {
+        ManagedPluginTrustLevel::Unknown => "unreviewed",
+        ManagedPluginTrustLevel::SourceApproved => "source-approved",
+        ManagedPluginTrustLevel::Denied => "denied",
+        ManagedPluginTrustLevel::Revoked => "revoked",
+        _ => "other",
+    }
+}
+
+pub async fn print_mcp_config_summary() -> Result<()> {
+    let config_service = ensure_global_config_service().await?;
+    let mcp_service = bitfun_core::service::mcp::MCPService::new(config_service)
+        .map_err(|error| anyhow!(error.to_string()))?;
+    let configs = mcp_service.config_service().load_all_configs().await?;
+
+    println!("MCP configuration summary");
+    println!();
+    println!(
+        "{}",
+        crate::plugin_diagnostics::render_mcp_configuration_count(configs.len())
+    );
+    println!("This command does not probe server readiness.");
+    Ok(())
+}
+
 pub async fn print_doctor() -> Result<bool> {
     let workspace = std::env::current_dir().context("Failed to resolve current directory")?;
     let config_dir = crate::config::CliConfig::config_dir()?;
@@ -255,6 +422,26 @@ pub async fn print_doctor() -> Result<bool> {
     let mcp_service = bitfun_core::service::mcp::MCPService::new(config_service.clone())
         .map_err(|error| anyhow!(error.to_string()))?;
     let mcp_configs = mcp_service.config_service().load_all_configs().await?;
+    let plugin_sources = refresh_managed_plugin_sources(&workspace)
+        .await
+        .map_err(|error| anyhow!(error.to_string()))?;
+    let approved_plugin_count = plugin_sources
+        .packages
+        .iter()
+        .filter(|package| package.trust_level == ManagedPluginTrustLevel::SourceApproved)
+        .count();
+    let plugin_warning_count = plugin_sources
+        .issues
+        .iter()
+        .filter(|issue| !issue.is_error)
+        .count();
+    let plugin_error_count = plugin_sources
+        .issues
+        .iter()
+        .filter(|issue| issue.is_error)
+        .count();
+    let plugin_sources_ready =
+        crate::plugin_diagnostics::plugin_source_check_passes(plugin_error_count);
 
     println!("BitFun CLI doctor");
     println!();
@@ -267,8 +454,38 @@ pub async fn print_doctor() -> Result<bool> {
         models.len(),
         models.iter().filter(|m| m.enabled).count()
     );
-    println!("[ok] MCP servers: {}", mcp_configs.len());
+    println!("[ok] MCP configuration entries: {}", mcp_configs.len());
+    println!(
+        "{}",
+        crate::plugin_diagnostics::render_plugin_source_summary(
+            plugin_sources.packages.len(),
+            approved_plugin_count,
+            plugin_warning_count,
+            plugin_error_count,
+        )
+    );
+    for issue in plugin_sources.issues.iter().take(10) {
+        println!(
+            "  - [{}:{}] {}: {}",
+            if issue.is_error { "error" } else { "warn" },
+            crate::plugin_diagnostics::escape_terminal_text(&issue.code),
+            crate::plugin_diagnostics::escape_terminal_text(&issue.source_path),
+            crate::plugin_diagnostics::escape_terminal_text(&issue.message)
+        );
+    }
+    if plugin_sources.issues.len() > 10 {
+        println!(
+            "  - {} additional plugin diagnostics omitted",
+            plugin_sources.issues.len() - 10
+        );
+    }
     println!();
-    println!("Doctor checks passed.");
-    Ok(true)
+    if !plugin_sources_ready {
+        println!("Doctor checks found plugin source errors.");
+    } else if plugin_warning_count > 0 {
+        println!("Doctor checks completed with plugin warnings.");
+    } else {
+        println!("Doctor checks passed.");
+    }
+    Ok(plugin_sources_ready)
 }

@@ -21,7 +21,7 @@
       "sessionPersonalization": "Session title and Agent companion.",
       "sessionPermissions": "Accelerated workspace search, tool confirmation, Computer use, browser, and debug.",
       "quickActions": "One-click AI actions after coding. Built-in and customizable prompts.",
-      "review": "Deep Review strategy, reviewer models, and extra Review Sub-Agents.",
+      "review": "Review strategy, coverage depth, capacity, cost, and latency controls.",
       "memories": "Automatic memory generation, injection, retention windows, and memory models.",
       "mcpTools": "MCP servers and tool integrations.",
       "acpAgents": "External ACP agents such as opencode, Claude Code, and Codex.",

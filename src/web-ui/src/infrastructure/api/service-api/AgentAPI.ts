@@ -5,7 +5,10 @@ import { createTauriCommandError } from '../errors/TauriCommandError';
 import type { DialogTurnData, SessionRelationship } from '@/shared/types/session-history';
 import type { ImageContextData as ImageInputContextData } from './ImageContextTypes';
 import type { AgentSource } from './CustomAgentAPI';
-import type { ReviewTeamRunManifest } from '@/shared/services/reviewTeamService';
+import type {
+  ReviewTargetEvidence,
+  ReviewTeamRunManifest,
+} from '@/shared/services/reviewTeamService';
 
 
 
@@ -48,6 +51,7 @@ export interface CreateSessionRequest {
   sessionKind?: 'standard' | 'subagent';
   relationship?: SessionRelationship;
   deepReviewRunManifest?: ReviewTeamRunManifest;
+  reviewTargetEvidence?: ReviewTargetEvidence;
   config?: SessionConfig;
 }
 
@@ -377,6 +381,38 @@ export interface DeepReviewQueueControlRequest {
   action: DeepReviewQueueControlAction;
 }
 
+export type ReviewIntent = 'review' | 'strict';
+export type ReviewTargetResolution = 'resolved' | 'partial' | 'unknown';
+export type ReviewStrategyLevel = 'quick' | 'normal' | 'deep';
+export type ReviewLevel = 'l1' | 'l2' | 'l3';
+export type ReviewExecutionMode = 'standard' | 'strict';
+
+export interface ReviewQualityDecisionRequest {
+  intent: ReviewIntent;
+  target: {
+    resolution: ReviewTargetResolution;
+    fileCount: number;
+    totalLinesChanged?: number;
+    securitySensitiveFileCount: number;
+    workspaceAreaCount: number;
+    contractSurfaceChanged: boolean;
+  };
+  projectStrategyOverride?: ReviewStrategyLevel;
+}
+
+export interface ReviewQualityDecision {
+  level: ReviewLevel;
+  executionMode: ReviewExecutionMode;
+  strategyLevel: ReviewStrategyLevel;
+  reason:
+    | 'risk_score'
+    | 'explicit_strict'
+    | 'unresolved_target'
+    | 'project_strategy_override';
+  score: number;
+  requiresConsent: boolean;
+}
+
  
 export interface ImageAnalysisEvent extends AgenticEvent {
   imageCount?: number;
@@ -651,6 +687,16 @@ export class AgentAPI {
       await api.invoke<void>('control_deep_review_queue', { request });
     } catch (error) {
       throw createTauriCommandError('control_deep_review_queue', error, request);
+    }
+  }
+
+  async decideReviewQuality(
+    request: ReviewQualityDecisionRequest,
+  ): Promise<ReviewQualityDecision> {
+    try {
+      return await api.invoke<ReviewQualityDecision>('decide_review_quality', { request });
+    } catch (error) {
+      throw createTauriCommandError('decide_review_quality', error, request);
     }
   }
 

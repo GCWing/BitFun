@@ -188,9 +188,13 @@ ai-adapter-runtime = [
     "dep:reqwest",
 ]
 product-capabilities = ["dep:bitfun-product-capabilities"]
+plugin-source = [
+    "bitfun-services-integrations/plugin-source",
+]
 product-domains = [
     "ai-adapter-runtime",
     "dep:bitfun-product-domains",
+    "plugin-source",
     "bitfun-services-integrations/function-agents",
     "bitfun-services-integrations/miniapp-runtime",
     "bitfun-product-domains/product-full",

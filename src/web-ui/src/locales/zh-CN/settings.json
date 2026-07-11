@@ -6,13 +6,34 @@
     "searchClear": "清除搜索",
     "beta": "Beta",
     "searchAliases": {
-      "archivedSessions": ["归档", "会话"],
-      "keyboard": ["快捷键", "键位"],
-      "sessionPersonalization": ["伙伴", "个性化"],
-      "sessionPermissions": ["权限"],
-      "quickActions": ["快捷动作", "提交"],
-      "review": ["审核", "代码审核"],
-      "memories": ["记忆", "长期记忆", "学习"]
+      "archivedSessions": [
+        "归档",
+        "会话"
+      ],
+      "keyboard": [
+        "快捷键",
+        "键位"
+      ],
+      "sessionPersonalization": [
+        "伙伴",
+        "个性化"
+      ],
+      "sessionPermissions": [
+        "权限"
+      ],
+      "quickActions": [
+        "快捷动作",
+        "提交"
+      ],
+      "review": [
+        "审核",
+        "代码审核"
+      ],
+      "memories": [
+        "记忆",
+        "长期记忆",
+        "学习"
+      ]
     },
     "tabDescriptions": {
       "basics": "日志、终端 Shell、通知与开机启动。",
@@ -21,7 +42,7 @@
       "sessionPersonalization": "会话标题与 Agent 伙伴。",
       "sessionPermissions": "加速工作区搜索、工具确认与超时、Computer use、浏览器与调试。",
       "quickActions": "代码完成后的一键 AI 动作，支持内置和自定义指令。",
-      "review": "深度审核策略、审核员模型与额外审核 Sub-Agent。",
+      "review": "Review 策略、覆盖深度、容量、成本和耗时控制。",
       "memories": "自动记忆生成、注入、整理窗口与记忆模型。",
       "mcpTools": "MCP 服务器与工具集成。",
       "acpAgents": "opencode、Claude Code、Codex 等外部 ACP Agent。",

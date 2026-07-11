@@ -483,6 +483,7 @@ impl GitTool {
             source: parsed.source,
             target: parsed.target,
             files: parsed.files,
+            review_safe: None,
         };
 
         let diff_output = GitService::get_diff(repo_path, &params)

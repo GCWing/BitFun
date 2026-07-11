@@ -9,6 +9,7 @@ import { Markdown } from './Markdown';
 const mocks = vi.hoisted(() => ({
   getCurrentWorkspacePath: vi.fn(),
   revealInExplorer: vi.fn(),
+  readFileContent: vi.fn(),
   openExternal: vi.fn(),
   renderMath: vi.fn(),
 }));
@@ -19,7 +20,7 @@ vi.mock('../../../infrastructure/api', () => ({
   },
   workspaceAPI: {
     revealInExplorer: (...args: unknown[]) => mocks.revealInExplorer(...args),
-    readFileContent: vi.fn(),
+    readFileContent: (...args: unknown[]) => mocks.readFileContent(...args),
   },
   systemAPI: {
     openExternal: (...args: unknown[]) => mocks.openExternal(...args),
@@ -98,9 +99,11 @@ describe('Markdown file links', () => {
     onFileViewRequest = vi.fn();
     mocks.getCurrentWorkspacePath.mockReset();
     mocks.revealInExplorer.mockReset();
+    mocks.readFileContent.mockReset();
     mocks.openExternal.mockReset();
     mocks.renderMath.mockReset();
     mocks.getCurrentWorkspacePath.mockResolvedValue(EXAMPLE_WORKSPACE);
+    mocks.readFileContent.mockResolvedValue('cmVsdS1wbmc=');
   });
 
   afterEach(() => {
@@ -227,5 +230,25 @@ describe('Markdown file links', () => {
 
     expect(container.querySelector('[data-testid="markdown-math-renderer"]')).not.toBeNull();
     expect(mocks.renderMath).toHaveBeenCalledWith('Formula: $x + y$');
+  });
+
+  it('loads relative markdown images from the provided base path', async () => {
+    await act(async () => {
+      root.render(
+        <Markdown
+          content={'![ReLU 图像](relu.png)'}
+          basePath={EXAMPLE_WORKSPACE}
+          onFileViewRequest={onFileViewRequest}
+        />,
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const image = container.querySelector<HTMLImageElement>('img[alt="ReLU 图像"]');
+    expect(image).not.toBeNull();
+    expect(mocks.readFileContent).toHaveBeenCalledWith(`${EXAMPLE_WORKSPACE}/relu.png`);
+    expect(image?.src).toBe('data:image/png;base64,cmVsdS1wbmc=');
+    expect(mocks.getCurrentWorkspacePath).not.toHaveBeenCalled();
   });
 });

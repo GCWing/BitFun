@@ -21,8 +21,9 @@ policies, and narrow ports; concrete runtime behavior belongs outside this crate
   outside this crate.
 - Preserve existing core import paths with re-export or wrapper facades until
   downstream call sites are intentionally migrated.
-- Feature-gated additions must remain narrow. `miniapp`, `function-agents`, and
-  `product-full` should only enable their declared product-domain feature groups.
+- Feature-gated additions must remain narrow. `plugin-source`, `miniapp`,
+  `function-agents`, and `product-full` should only enable their declared
+  product-domain feature groups.
 
 ## Ownership Boundary
 
@@ -31,6 +32,8 @@ policies, and narrow ports; concrete runtime behavior belongs outside this crate
   facts, marker wire formats, host primitive call plans, and narrow ports.
 - `function-agents` may own function-agent DTOs, prompt/domain policies,
   response parsing and repair rules, file-shape analysis, and Git/AI port traits.
+- `plugin-source` may own BitFun package manifest shapes, source identity,
+  workspace trust records, and pure trust epoch transitions.
 - Concrete filesystem writes, marker IO, host dispatch, worker side effects,
   compile orchestration, `PathManager` integration, concrete Git/AI services,
   provider acquisition, and transport error mapping must stay outside

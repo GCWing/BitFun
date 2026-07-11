@@ -2,20 +2,11 @@ import { describe, expect, it } from 'vitest';
 import enFlowChat from '@/locales/en-US/flow-chat.json';
 import zhCnFlowChat from '@/locales/zh-CN/flow-chat.json';
 import zhTwFlowChat from '@/locales/zh-TW/flow-chat.json';
-import enAgents from '@/locales/en-US/scenes/agents.json';
-import zhCnAgents from '@/locales/zh-CN/scenes/agents.json';
-import zhTwAgents from '@/locales/zh-TW/scenes/agents.json';
 
 const LOCALES = {
   'en-US': enFlowChat,
   'zh-CN': zhCnFlowChat,
   'zh-TW': zhTwFlowChat,
-};
-
-const AGENT_LOCALES = {
-  'en-US': enAgents,
-  'zh-CN': zhCnAgents,
-  'zh-TW': zhTwAgents,
 };
 
 const REQUIRED_ACTION_BAR_KEYS = [
@@ -45,7 +36,6 @@ const REQUIRED_ACTION_BAR_KEYS = [
   'deepReviewActionBar.decisionGate.missingSelection',
   'deepReviewActionBar.decisionGate.noOptionsHint',
   'deepReviewActionBar.decisionGate.confirmFix',
-  'deepReviewActionBar.decisionGate.confirmFixAndReview',
   'deepReviewActionBar.decisionGate.cancel',
   'deepReviewActionBar.switchModel',
   'deepReviewActionBar.capacityQueue.title',
@@ -81,28 +71,13 @@ const REQUIRED_CODE_REVIEW_CARD_KEYS = [
   'toolCards.codeReview.severities.medium',
   'toolCards.codeReview.severities.low',
   'toolCards.codeReview.severities.info',
-  'toolCards.codeReview.reviewerStatuses.completed',
-  'toolCards.codeReview.reviewerStatuses.timed_out',
-  'toolCards.codeReview.reviewerStatuses.cancelled_by_user',
-  'toolCards.codeReview.reviewerStatuses.cancelled',
-  'toolCards.codeReview.reviewerStatuses.failed',
-  'toolCards.codeReview.reviewerStatuses.skipped',
-  'toolCards.codeReview.reviewerStatuses.running',
-  'toolCards.codeReview.reviewerStatuses.partial',
-  'toolCards.codeReview.reviewerStatuses.unknown',
-];
-
-const USER_VISIBLE_TEXT_KEYS_MUST_NOT_CONTAIN_ESCAPED_UNICODE = [
-  'toolCards.codeReview.remediationActions.fixAndReview',
-];
-
-const REQUIRED_REVIEW_TEAM_PAGE_KEYS = [
-  'reviewTeams.detail.loading',
+  'toolCards.codeReview.runManifest.reducedCoverageSummary',
 ];
 
 const REQUIRED_DEEP_REVIEW_CONSENT_KEYS = [
   'deepReviewConsent.sessionConcurrencyTitle',
   'deepReviewConsent.sessionConcurrencyBody',
+  'deepReviewConsent.skippedSummary',
 ];
 
 function getMessageValue(messages: unknown, key: string): unknown {
@@ -128,30 +103,9 @@ describe('DeepReviewActionBar i18n', () => {
     }
   });
 
-  it('keeps review report lineup strings available in every bundled locale', () => {
+  it('keeps review report coverage strings available in every bundled locale', () => {
     for (const [locale, messages] of Object.entries(LOCALES)) {
       const missingKeys = REQUIRED_CODE_REVIEW_CARD_KEYS.filter((key) => {
-        const value = getMessageValue(messages, key);
-        return typeof value !== 'string' || value.trim().length === 0;
-      });
-
-      expect(missingKeys, `${locale} missing keys`).toEqual([]);
-    }
-  });
-
-  it('does not show escaped unicode sequences in user-visible action text', () => {
-    for (const [locale, messages] of Object.entries(LOCALES)) {
-      for (const key of USER_VISIBLE_TEXT_KEYS_MUST_NOT_CONTAIN_ESCAPED_UNICODE) {
-        const value = getMessageValue(messages, key);
-        expect(typeof value, `${locale} ${key} should be a string`).toBe('string');
-        expect(value, `${locale} ${key} should not contain literal unicode escape text`).not.toMatch(/\\u[0-9a-fA-F]{4}/);
-      }
-    }
-  });
-
-  it('keeps review team page strings available in every bundled locale', () => {
-    for (const [locale, messages] of Object.entries(AGENT_LOCALES)) {
-      const missingKeys = REQUIRED_REVIEW_TEAM_PAGE_KEYS.filter((key) => {
         const value = getMessageValue(messages, key);
         return typeof value !== 'string' || value.trim().length === 0;
       });

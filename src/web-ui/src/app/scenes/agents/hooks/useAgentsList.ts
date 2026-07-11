@@ -9,7 +9,7 @@ import { useNotification } from '@/shared/notification-system';
 import type { DynamicToolInfo } from '@/shared/types/agent-api';
 import type { AgentWithCapabilities } from '../agentsStore';
 import { enrichCapabilities } from '../utils';
-import { STATIC_HIDDEN_AGENT_IDS, isAgentInOverviewZone } from '../agentVisibility';
+import { HIDDEN_AGENT_IDS, isAgentInOverviewZone } from '../agentVisibility';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { loadDefaultReviewTeamDefinition } from '@/shared/services/reviewTeamService';
 import { globalEventBus } from '@/infrastructure/event-bus';
@@ -107,7 +107,7 @@ export function useAgentsList({
   const [modeConfigs, setModeConfigs] = useState<Record<string, AgentProfileConfigItem>>({});
   const [modeManageableSubagents, setModeManageableSubagents] = useState<Record<string, SubagentInfo[]>>({});
   const [hiddenAgentIds, setHiddenAgentIds] = useState<ReadonlySet<string>>(
-    () => new Set(STATIC_HIDDEN_AGENT_IDS),
+    () => new Set(HIDDEN_AGENT_IDS),
   );
   const loadRequestIdRef = useRef(0);
 
@@ -201,7 +201,7 @@ export function useAgentsList({
       setModeConfigs(buildModeConfigsByProfile(modes, configs as Record<string, AgentProfileConfigItem>));
       setModeManageableSubagents(manageableSubagentsByProfile);
       setHiddenAgentIds(new Set([
-        ...STATIC_HIDDEN_AGENT_IDS,
+        ...HIDDEN_AGENT_IDS,
         ...(reviewTeamDefinition?.hiddenAgentIds ?? []),
       ]));
     } finally {

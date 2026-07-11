@@ -193,6 +193,59 @@ async fn hide_main_window_after_close_request(app: tauri::AppHandle) -> Result<(
     Ok(())
 }
 
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+fn show_main_window_for_secondary_launch(
+    app: &tauri::AppHandle,
+    attempt: &str,
+) -> Result<(), String> {
+    let Some(main_window) = app.get_webview_window("main") else {
+        return Err("main window not found".to_string());
+    };
+
+    #[cfg(target_os = "macos")]
+    {
+        cancel_main_window_close_request_on_macos();
+        mark_main_window_hidden_on_macos(false);
+    }
+
+    main_window
+        .unminimize()
+        .map_err(|error| format!("failed to unminimize main window: {}", error))?;
+    main_window
+        .show()
+        .map_err(|error| format!("failed to show main window: {}", error))?;
+    main_window
+        .set_focus()
+        .map_err(|error| format!("failed to focus main window: {}", error))?;
+
+    log::info!(
+        "Main window shown from secondary launch: attempt={}",
+        attempt
+    );
+    Ok(())
+}
+
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+fn handle_secondary_launch(app: &tauri::AppHandle) {
+    if let Err(error) = show_main_window_for_secondary_launch(app, "immediate") {
+        log::warn!(
+            "Failed to show main window from secondary launch immediately: {}",
+            error
+        );
+
+        let app_handle = app.clone();
+        tauri::async_runtime::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(300)).await;
+            if let Err(error) = show_main_window_for_secondary_launch(&app_handle, "retry") {
+                log::warn!(
+                    "Failed to show main window from secondary launch retry: {}",
+                    error
+                );
+            }
+        });
+    }
+}
+
 #[tauri::command]
 async fn webdriver_bridge_result(request: WebdriverBridgeResultRequest) -> Result<(), String> {
     log::debug!("webdriver_bridge_result command invoked");
@@ -342,7 +395,21 @@ pub async fn run() {
 
     let path_manager = get_path_manager_arc();
 
-    let app = tauri::Builder::default()
+    let mut builder = tauri::Builder::default();
+
+    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+    {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, cwd| {
+            log::info!(
+                "Existing BitFun Desktop instance received launch request: args_count={}, cwd={}",
+                args.len(),
+                cwd
+            );
+            handle_secondary_launch(app);
+        }));
+    }
+
+    let app = builder
         .plugin(logging::build_log_plugin(log_targets))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
@@ -817,6 +884,7 @@ pub async fn run() {
             api::agentic_api::generate_session_title,
             api::agentic_api::get_available_modes,
             api::agentic_api::get_default_review_team_definition,
+            api::agentic_api::decide_review_quality,
             api::btw_api::btw_ask_stream,
             api::btw_api::btw_cancel,
             api::editor_ai_api::editor_ai_stream,
@@ -935,6 +1003,7 @@ pub async fn run() {
             delete_skill,
             git_is_repository,
             git_get_repository_basic,
+            git_resolve_revision,
             git_get_repository,
             review_platform_get_workspace_snapshot,
             review_platform_get_pull_request_detail,

@@ -13,7 +13,7 @@ export const REVIEW_STRATEGY_LEVELS: ReviewStrategyLevel[] = [
 export const REVIEW_STRATEGY_COMMON_RULES: ReviewStrategyCommonRules = {
   reviewerPromptRules: [
     'Each reviewer must follow its own strategy field.',
-    'Member-level strategy overrides take precedence over the team strategy.',
+    'Reviewer-level strategy overrides take precedence over the review strategy.',
     'The reviewer LaunchReviewAgent prompt must include the resolved prompt_directive.',
   ],
 };
@@ -26,7 +26,7 @@ export const REVIEW_STRATEGY_PROFILES: Record<
     level: 'quick',
     label: 'Quick',
     summary:
-      'Quick keeps built-in target-matched reviewers, skips user-added specialists, and reports reduced coverage.',
+      'Quick keeps built-in target-matched checks focused on the most likely issues.',
     tokenImpact: '0.4-0.6x',
     runtimeImpact: '0.5-0.7x',
     defaultModelSlot: 'fast',
@@ -49,9 +49,9 @@ export const REVIEW_STRATEGY_PROFILES: Record<
   },
   normal: {
     level: 'normal',
-    label: 'Normal',
+    label: 'Standard',
     summary:
-      'Normal stays practical for slower models, limits optional expansion, and uses summary-first on large changes.',
+      'Standard balances role coverage with practical evidence for day-to-day code review.',
     tokenImpact: '1x',
     runtimeImpact: '1x',
     defaultModelSlot: 'fast',
@@ -74,9 +74,9 @@ export const REVIEW_STRATEGY_PROFILES: Record<
   },
   deep: {
     level: 'deep',
-    label: 'Deep',
+    label: 'Strict',
     summary:
-      'Thorough multi-pass review with the longest budget for risky or release-sensitive changes.',
+      'Strict review uses the broadest reviewer coverage and budget for risky or release-sensitive changes.',
     tokenImpact: '1.8-2.5x',
     runtimeImpact: '1.5-2.5x',
     defaultModelSlot: 'primary',
@@ -94,7 +94,7 @@ export const REVIEW_STRATEGY_PROFILES: Record<
       ReviewFrontend:
         'Thorough React analysis: effect dependencies, memoization, virtualization. Full accessibility audit. State management pattern review. Cross-layer contract verification.',
       ReviewJudge:
-        'This was a deep review with potentially complex findings. Cross-validate findings across reviewers for consistency. For each finding, verify the evidence supports the conclusion and the suggested fix is safe. Pay extra attention to overlapping findings across reviewers or same-role instances.',
+        'This was a strict review with potentially complex findings. Cross-validate findings across reviewers for consistency. For each finding, verify the evidence supports the conclusion and the suggested fix is safe. Pay extra attention to overlapping findings across reviewers or same-role instances.',
     },
   },
 };

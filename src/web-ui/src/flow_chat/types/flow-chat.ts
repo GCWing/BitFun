@@ -456,6 +456,9 @@ export interface Session {
   /** Per-run reviewer manifest for Deep Review child sessions. */
   deepReviewRunManifest?: ReviewTeamRunManifest;
 
+  /** Original file scope for Review remediation follow-ups. */
+  reviewTargetFilePaths?: string[];
+
   /**
    * Runtime-only session that should stay in memory but never be persisted or
    * shown in the main session navigation.

@@ -2087,6 +2087,26 @@ impl GetToolSpecCatalogProvider<ContextualManifestTool, ManifestTestContext>
 
         Ok(tools)
     }
+
+    async fn available_tools_for_get_tool_spec(
+        &self,
+        context: Option<&ManifestTestContext>,
+    ) -> Result<Vec<Arc<ContextualManifestTool>>, String> {
+        let tools = match context {
+            Some(context) => {
+                let mut tools = Vec::new();
+                for tool in &self.tools {
+                    if tool.is_available_in_context(context).await {
+                        tools.push(tool.clone());
+                    }
+                }
+                tools
+            }
+            None => self.tools.clone(),
+        };
+
+        Ok(tools)
+    }
 }
 
 #[async_trait::async_trait]
@@ -2734,10 +2754,7 @@ async fn get_tool_spec_detail_resolver_preserves_contextual_detail_contract() {
         resolve_get_tool_spec_detail(&collapsed_tools, "Git", &context, GET_TOOL_SPEC_TOOL_NAME)
             .await
             .expect_err("missing tool should stay a validation-style error");
-    assert_eq!(
-        missing,
-        "Tool 'Git' is not an available collapsed tool in the current context"
-    );
+    assert_eq!(missing, "'Git' is not available in the current context");
 
     let self_inspection = resolve_get_tool_spec_detail(
         &collapsed_tools,
@@ -2847,6 +2864,47 @@ async fn get_tool_spec_provider_execution_returns_detail_result_from_provider() 
     assert!(assistant.contains("<description>\nWebFetch description for agentic"));
     assert!(assistant.contains("\"agent\""));
     assert!(assistant.contains("\"agentic\""));
+    assert_eq!(image_attachments, None);
+}
+
+#[tokio::test]
+async fn get_tool_spec_provider_execution_returns_already_available_result_for_expanded_tool() {
+    let provider = ContextualManifestSnapshotProvider {
+        tools: vec![
+            contextual_manifest_tool("WebFetch", ToolExposure::Collapsed, None),
+            contextual_manifest_tool("Read", ToolExposure::Expanded, None),
+        ],
+    };
+    let context = ManifestTestContext { agent: "agentic" };
+    let input = json!({ "tool_name": "Read" });
+
+    let result = resolve_get_tool_spec_execution_result_from_provider(
+        &provider,
+        &input,
+        &[],
+        &context,
+        GET_TOOL_SPEC_TOOL_NAME,
+    )
+    .await
+    .expect("expanded available tool should return a normal assistant hint");
+
+    let ToolResult::Result {
+        data,
+        result_for_assistant,
+        image_attachments,
+    } = result
+    else {
+        panic!("expected normal tool result");
+    };
+
+    assert_eq!(data["tool_name"], "Read");
+    assert_eq!(data["already_available"], true);
+    assert_eq!(
+        result_for_assistant.as_deref(),
+        Some(
+            "Tool 'Read' is already fully defined in the available tool list. Use 'Read' directly."
+        )
+    );
     assert_eq!(image_attachments, None);
 }
 
@@ -2980,7 +3038,7 @@ fn get_tool_spec_runtime_facade_owns_static_tool_surface() {
 }
 
 #[tokio::test]
-async fn get_tool_spec_provider_execution_classifies_detail_errors() {
+async fn get_tool_spec_provider_execution_returns_unavailable_result_for_unknown_tool() {
     let provider = ContextualManifestSnapshotProvider {
         tools: vec![contextual_manifest_tool(
             "WebFetch",
@@ -2991,7 +3049,7 @@ async fn get_tool_spec_provider_execution_classifies_detail_errors() {
     let context = ManifestTestContext { agent: "agentic" };
     let input = json!({ "tool_name": "Git" });
 
-    let err = resolve_get_tool_spec_execution_result_from_provider(
+    let result = resolve_get_tool_spec_execution_result_from_provider(
         &provider,
         &input,
         &[],
@@ -2999,18 +3057,24 @@ async fn get_tool_spec_provider_execution_classifies_detail_errors() {
         GET_TOOL_SPEC_TOOL_NAME,
     )
     .await
-    .expect_err("missing detail should be classified separately from input errors");
+    .expect("unknown tool should return a normal assistant hint");
 
+    let ToolResult::Result {
+        data,
+        result_for_assistant,
+        image_attachments,
+    } = result
+    else {
+        panic!("expected normal tool result");
+    };
+
+    assert_eq!(data["tool_name"], "Git");
+    assert_eq!(data["available_collapsed_tool"], false);
     assert_eq!(
-        err,
-        GetToolSpecExecutionError::Detail(
-            "Tool 'Git' is not an available collapsed tool in the current context".to_string()
-        )
+        result_for_assistant.as_deref(),
+        Some("'Git' is not available in the current context")
     );
-    assert_eq!(
-        err.to_string(),
-        "Tool 'Git' is not an available collapsed tool in the current context"
-    );
+    assert_eq!(image_attachments, None);
 }
 
 #[tokio::test]

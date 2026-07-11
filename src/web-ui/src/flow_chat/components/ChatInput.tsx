@@ -49,14 +49,15 @@ import { useThreadGoalController } from '../hooks/useThreadGoalController';
 import { ThreadGoalDialogs } from './thread-goal/ThreadGoalDialogs';
 import { FlowChatManager } from '@/flow_chat/services/FlowChatManager';
 import {
-  DEEP_REVIEW_SLASH_COMMAND,
   getDeepReviewLaunchErrorMessage,
-  buildDeepReviewLaunchFromSlashCommand,
-  buildDeepReviewPreviewFromSlashCommand,
-  isDeepReviewSlashCommand,
-  launchDeepReviewSession,
 } from '../services/DeepReviewService';
+import {
+  launchPreparedReviewSession,
+  prepareReviewLaunchFromSlashCommand,
+} from '../services/ReviewService';
+import { isReviewSlashCommand } from '../deep-review/launch/commandParser';
 import { createLogger } from '@/shared/utils/logger';
+import { isTauriRuntime } from '@/infrastructure/runtime';
 import { Tooltip, IconButton, confirmWarning } from '@/component-library';
 import { PendingQueuePanel } from './PendingQueuePanel';
 import { useAgentCanvasStore } from '@/app/components/panels/content-canvas/stores';
@@ -70,9 +71,11 @@ import {
   resolveChatInputCanUseSkills,
   resolveChatInputSendAgentType,
   resolveChatInputModePolicy,
+  isPrimarySlashActionVisible,
   resolveSessionAssistantWorkspace,
   resolveSwitchableChatInputModes,
 } from '../utils/chatInputMode';
+import { collectModifiedFilePathsFromTurns } from '../utils/modifiedFilePaths';
 import { useSceneStore } from '@/app/stores/sceneStore';
 import type { SceneTabId } from '@/app/components/SceneBar/types';
 import { useAgentsStore } from '@/app/scenes/agents/agentsStore';
@@ -91,7 +94,7 @@ import {
 } from '../utils/skillPromptReference';
 import { useDeepReviewConsent } from './DeepReviewConsentDialog';
 import { useSessionReviewActivity } from '../hooks/useSessionReviewActivity';
-import { shouldBlockDeepReviewCommand } from '../utils/deepReviewCommandGuard';
+import { shouldBlockReviewCommand } from '../utils/deepReviewCommandGuard';
 import { deriveDeepReviewSessionConcurrencyGuard } from '../utils/deepReviewCapacityGuard';
 import { acpAgentTypeFromSession } from '../utils/acpSession';
 import {
@@ -260,6 +263,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   onSendMessage
 }) => {
   const { t } = useTranslation('flow-chat');
+  const canLaunchReview = isTauriRuntime();
   
   const [inputState, dispatchInput] = useReducer(inputReducer, initialInputState);
   const [modeState, dispatchMode] = useReducer(modeReducer, initialModeState);
@@ -271,6 +275,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   // Ref so the queuedInput sync effect can read the latest value without it being a dep
   const inputValueRef = useRef('');
   const pendingLargePastesRef = useRef<PendingLargePasteMap>({});
+  const reviewLaunchPendingRef = useRef(false);
   const largePasteCountersRef = useRef<Record<number, number>>({});
   const undoImageStackRef = useRef<string[]>([]);
   
@@ -1770,25 +1775,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     const lastTurn = session.dialogTurns[session.dialogTurns.length - 1];
     
     if (lastTurn.status === 'completed') {
-      const modifiedFiles: string[] = [];
-      
-      for (const round of lastTurn.modelRounds) {
-        for (const item of round.items) {
-          if (item.type === 'tool') {
-            const toolItem = item as import('../types/flow-chat').FlowToolItem;
-            const fileModifyTools = ['write_file', 'edit_file', 'create_file', 'delete_file'];
-            if (fileModifyTools.includes(toolItem.toolName)) {
-              const toolInput = toolItem.toolCall?.input;
-              if (toolInput && typeof toolInput === 'object') {
-                const filePath = (toolInput as any).file_path || (toolInput as any).path || (toolInput as any).filePath;
-                if (filePath && typeof filePath === 'string') {
-                  modifiedFiles.push(filePath);
-                }
-              }
-            }
-          }
-        }
-      }
+      const modifiedFiles = collectModifiedFilePathsFromTurns(
+        [lastTurn],
+        undefined,
+        workspacePath,
+      );
 
       if (modifiedFiles.length > 0) {
         log.debug('File modifications detected, updating recommendation context', { modifiedFiles });
@@ -1796,7 +1787,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           workspacePath,
           sessionId: effectiveTargetSessionId,
           turnIndex: lastTurn.backendTurnIndex ?? session.dialogTurns.length - 1,
-          modifiedFiles: [...new Set(modifiedFiles)]
+          modifiedFiles,
         });
       }
     }
@@ -1808,14 +1799,22 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
 
     const items: SlashActionItem[] = [
-      ...(isBtwSession
-        ? []
-        : [{
+      ...(isPrimarySlashActionVisible({ actionId: 'btw', isBtwSession, canLaunchReview })
+        ? [{
             kind: 'action' as const,
             id: 'btw',
             command: '/btw',
             label: t('btw.title'),
-          }]),
+          }]
+        : []),
+      ...(isPrimarySlashActionVisible({ actionId: 'review', isBtwSession, canLaunchReview })
+        ? [{
+            kind: 'action' as const,
+            id: 'review',
+            command: '/review',
+            label: t('chatInput.reviewAction'),
+          }]
+        : []),
       {
         kind: 'action',
         id: 'goal',
@@ -1827,12 +1826,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         id: 'usage',
         command: '/usage',
         label: t('chatInput.usageAction'),
-      },
-      {
-        kind: 'action',
-        id: 'deepreview',
-        command: DEEP_REVIEW_SLASH_COMMAND,
-        label: t('chatInput.deepreviewAction'),
       },
       ...(canUseSkillsForTarget
         ? [{
@@ -1870,7 +1863,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       const cmd = i.command.slice(1).toLowerCase();
       return cmd.includes(q) || i.label.toLowerCase().includes(q);
     });
-  }, [canUseSkillsForTarget, derivedState?.isProcessing, isAcpInputSession, isBtwSession, isSubagentInputTarget, slashCommandState.query, t]);
+  }, [canLaunchReview, canUseSkillsForTarget, derivedState?.isProcessing, isAcpInputSession, isBtwSession, isSubagentInputTarget, slashCommandState.query, t]);
 
   const getFilteredMcpPromptCommands = useCallback((): SlashMcpPromptItem[] => {
     if (isAcpInputSession) {
@@ -2022,11 +2015,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     const isCompactCommand = localSlashCommandsEnabled && isSlashCommand(trimmed, '/compact');
     const isGoalCommand = localSlashCommandsEnabled && isGoalSlashCommand(text);
     const isUsageCommand = localSlashCommandsEnabled && isSlashCommand(trimmed, '/usage');
-    const isDeepReviewCommand = localSlashCommandsEnabled && isDeepReviewSlashCommand(text);
+    const isReviewCommand = localSlashCommandsEnabled && isReviewSlashCommand(text);
     const isProcessing = !!derivedState?.isProcessing;
 
     // Don't queue /btw or /goal while the main session is processing; they have dedicated flows.
-    if (derivedState?.isProcessing && !isBtwCommand && !isGoalCommand && !isCompactCommand && !isUsageCommand && !isDeepReviewCommand) {
+    if (derivedState?.isProcessing && !isBtwCommand && !isGoalCommand && !isCompactCommand && !isUsageCommand && !isReviewCommand) {
       setQueuedInput(text);
     }
 
@@ -2057,8 +2050,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
         // Only show the picker for "/..." patterns that are plausibly a command (/ or /b... /d...).
         // Once the user types a space (starts composing the real question), stop showing the picker
-        // so Enter can submit "/btw ..." or "/DeepReview ..." instead of selecting from the picker.
-        if (pickerQuery !== null && (query === '' || query.startsWith('b') || query.startsWith('d') || query.startsWith('g') || query.startsWith('u'))) {
+        // so Enter can submit "/btw ..." or "/review strict ..." instead of selecting from the picker.
+        if (pickerQuery !== null && (query === '' || query.startsWith('b') || query.startsWith('d') || query.startsWith('g') || query.startsWith('r') || query.startsWith('u'))) {
           setSlashCommandState({
             isActive: true,
             kind: 'actions',
@@ -2072,7 +2065,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       }
 
       // When idle, keep the picker for mode switching, but don't interfere with executable slash commands.
-      if (pickerQuery !== null && !isBtwCommand && !isGoalCommand && !isCompactCommand && !isUsageCommand && !isDeepReviewCommand && !matchedMcpPrompt) {
+      if (pickerQuery !== null && !isBtwCommand && !isGoalCommand && !isCompactCommand && !isUsageCommand && !isReviewCommand && !matchedMcpPrompt) {
         setSlashCommandState({
           isActive: true,
           kind: 'all',
@@ -2466,51 +2459,64 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
   }, [inputState.value, setQueuedInput, t, workspacePath]);
 
-  const submitDeepreviewFromInput = useCallback(async () => {
+  const submitReviewFromInput = useCallback(async () => {
+    if (!canLaunchReview) {
+      notificationService.warning(t('chatInput.reviewUnavailableSurface'));
+      return;
+    }
     if (!effectiveTargetSessionId || !effectiveTargetSession) {
       notificationService.error(
-        t('chatInput.deepreviewNoSession')
+        t('chatInput.reviewNoSession')
       );
       return;
     }
 
     const message = inputState.value.trim();
-    if (!isDeepReviewSlashCommand(message)) {
+    if (!isReviewSlashCommand(message)) {
       notificationService.warning(
-        t('chatInput.deepreviewUsage')
+        t('chatInput.reviewUsage')
       );
       return;
     }
 
     if (isBtwSession) {
       notificationService.warning(
-        t('chatInput.deepreviewNestedDisabled'),
+        t('chatInput.reviewNestedDisabled'),
       );
       return;
     }
 
-    if (shouldBlockDeepReviewCommand(message, currentReviewActivity)) {
+    if (shouldBlockReviewCommand(message, currentReviewActivity)) {
       notificationService.warning(
-        t('chatInput.deepreviewBusy'),
+        t('chatInput.reviewBusy'),
       );
       return;
     }
+
+    if (reviewLaunchPendingRef.current) {
+      notificationService.warning(t('chatInput.reviewBusy'));
+      return;
+    }
+    reviewLaunchPendingRef.current = true;
 
     const originalPendingLargePastes = { ...pendingLargePastesRef.current };
 
     try {
-      const preview = await buildDeepReviewPreviewFromSlashCommand(
+      const prepared = await prepareReviewLaunchFromSlashCommand(
         message,
         effectiveTargetSession.workspacePath,
+        effectiveTargetSession.remoteConnectionId,
       );
-      const confirmed = await confirmDeepReviewLaunch(preview, {
-        sessionConcurrencyGuard: deriveDeepReviewSessionConcurrencyGuard(
-          flowChatState,
-          effectiveTargetSessionId,
-        ),
-      });
-      if (!confirmed) {
-        return;
+      if (prepared.mode === 'strict' && prepared.requiresConsent) {
+        const confirmed = await confirmDeepReviewLaunch(prepared.runManifest, {
+          sessionConcurrencyGuard: deriveDeepReviewSessionConcurrencyGuard(
+            flowChatState,
+            effectiveTargetSessionId,
+          ),
+        });
+        if (!confirmed) {
+          return;
+        }
       }
 
       if (effectiveTargetSessionId) {
@@ -2523,22 +2529,21 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       setQueuedInput(null);
       setSlashCommandState({ isActive: false, kind: 'modes', query: '', selectedIndex: 0 });
 
-      const { prompt, runManifest } = await buildDeepReviewLaunchFromSlashCommand(
-        message,
-        effectiveTargetSession.workspacePath,
-      );
-
-      await launchDeepReviewSession({
+      const launched = await launchPreparedReviewSession({
         parentSessionId: effectiveTargetSessionId,
         workspacePath: effectiveTargetSession.workspacePath,
-        prompt,
         displayMessage: message,
-        runManifest,
-        childSessionName: t('chatInput.deepreviewThreadTitle'),
+        prepared,
+        childSessionName: t('chatInput.reviewThreadTitle'),
       });
+      if (launched?.launchStatus === 'uncertain') {
+        notificationService.warning(t('deepReviewActionBar.launchError.uncertain'), {
+          duration: 8000,
+        });
+      }
       dispatchInput({ type: 'DEACTIVATE' });
     } catch (error) {
-      log.error('Failed to trigger /DeepReview', {
+      log.error('Failed to trigger Review', {
         error,
         sessionId: effectiveTargetSessionId,
       });
@@ -2548,13 +2553,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       notificationService.error(
         getDeepReviewLaunchErrorMessage(error, t, t('error.unknown')),
         {
-          title: t('chatInput.deepreviewFailed'),
+          title: t('chatInput.reviewFailed'),
           duration: 5000,
         }
       );
+    } finally {
+      reviewLaunchPendingRef.current = false;
     }
   }, [
     addToHistory,
+    canLaunchReview,
     clearPendingLargePastes,
     confirmDeepReviewLaunch,
     currentReviewActivity,
@@ -2735,8 +2743,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       return;
     }
 
-    if (localSlashCommandsEnabled && isDeepReviewSlashCommand(message)) {
-      await submitDeepreviewFromInput();
+    if (localSlashCommandsEnabled && isReviewSlashCommand(message)) {
+      await submitReviewFromInput();
       return;
     }
 
@@ -2841,7 +2849,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     submitCompactFromInput,
     submitUsageFromInput,
     submitInitFromInput,
-    submitDeepreviewFromInput,
+    submitReviewFromInput,
     submitMcpPromptFromInput,
     submitReloadSkillsFromInput,
     confirmPromptCacheGuardIfNeeded,
@@ -2987,8 +2995,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       next = '/usage';
     } else if (actionId === 'init') {
       next = '/init';
-    } else if (actionId === 'deepreview') {
-      next = `${DEEP_REVIEW_SLASH_COMMAND} `;
     } else if (actionId === 'reload-skills') {
       // /reload-skills takes no arguments. Setting the value to the bare
       // command lets the user immediately press Enter to dispatch it

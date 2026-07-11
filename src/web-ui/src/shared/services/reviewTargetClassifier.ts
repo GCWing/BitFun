@@ -58,6 +58,12 @@ export interface ReviewTargetClassification {
   warnings: ReviewTargetWarning[];
 }
 
+export interface ReviewTargetPathChange {
+  path: string;
+  oldPath?: string;
+  status?: ReviewTargetFile['status'];
+}
+
 interface PathTagRule {
   id: string;
   tags: ReviewDomainTag[];
@@ -286,8 +292,9 @@ function inferSupplementalTags(path: string): ReviewDomainTag[] {
 function classifyPath(
   originalPath: string,
   source: ReviewTargetSource,
+  normalize: (path: string) => string = normalizeReviewPath,
 ): { file: ReviewTargetFile; evidence: string[] } {
-  const normalizedPath = normalizeReviewPath(originalPath);
+  const normalizedPath = normalize(originalPath);
   const matchedRules = PATH_TAG_RULES.filter((rule) =>
     matchesRule(normalizedPath, rule),
   );
@@ -329,9 +336,16 @@ export function classifyReviewTargetFromFiles(
   filePaths: string[],
   source: ReviewTargetSource,
 ): ReviewTargetClassification {
-  const normalizedInputs = filePaths
-    .map((path) => path.trim())
-    .filter(Boolean);
+  const preservesRepositoryPaths = [
+    'session_files',
+    'pull_request',
+    'slash_command_git_ref',
+    'workspace_diff',
+  ].includes(source);
+  const canonicalRepositoryPath = (path: string) => path.replace(/^\.\/+/, '');
+  const normalizedInputs = preservesRepositoryPaths
+    ? filePaths.filter((path) => path.length > 0)
+    : filePaths.map((path) => path.trim()).filter(Boolean);
 
   if (normalizedInputs.length === 0) {
     return {
@@ -345,7 +359,11 @@ export function classifyReviewTargetFromFiles(
     };
   }
 
-  const classified = normalizedInputs.map((path) => classifyPath(path, source));
+  const classified = normalizedInputs.map((path) => classifyPath(
+    path,
+    source,
+    preservesRepositoryPaths ? canonicalRepositoryPath : normalizeReviewPath,
+  ));
   const files = classified.map((item) => item.file);
   const tags = dedupe(files.flatMap((file) => file.tags));
   const hasUnknown = tags.includes('unknown');
@@ -373,6 +391,78 @@ export function classifyReviewTargetFromFiles(
     files,
     tags,
     evidence: dedupe(classified.flatMap((item) => item.evidence)),
+    warnings,
+  };
+}
+
+/**
+ * Classifies one logical changed file while retaining both sides of a rename.
+ * The old and new paths contribute risk tags, but the file is counted once.
+ */
+export function classifyReviewTargetFromPathChanges(
+  changes: ReviewTargetPathChange[],
+  source: ReviewTargetSource,
+): ReviewTargetClassification {
+  const canonicalChanges = changes.filter((change) => change.path.length > 0);
+  if (canonicalChanges.length === 0) {
+    return createUnknownReviewTargetClassification(source);
+  }
+
+  const canonicalGitPath = (path: string) => path.replace(/^\.\/+/, '');
+  const classified = canonicalChanges.map((change) =>
+    classifyPath(change.path, source, canonicalGitPath)
+  );
+  const files = classified.map(({ file }, index) => {
+    const change = canonicalChanges[index];
+    const oldClassification = change.oldPath
+      ? classifyPath(change.oldPath, source, canonicalGitPath)
+      : undefined;
+    return {
+      ...file,
+      ...(change.oldPath
+        ? {
+          oldPath: change.oldPath,
+          normalizedOldPath: canonicalGitPath(change.oldPath),
+        }
+        : {}),
+      status: change.status ?? file.status,
+      tags: dedupe([
+        ...file.tags,
+        ...(oldClassification?.file.tags ?? []),
+      ]),
+    };
+  });
+  const tags = dedupe(files.flatMap((file) => file.tags));
+  const hasUnknown = tags.includes('unknown');
+  const hasKnown = tags.some((tag) => tag !== 'unknown');
+  const resolution = hasUnknown ? (hasKnown ? 'partial' : 'unknown') : 'resolved';
+  const warnings: ReviewTargetWarning[] = [];
+  if (resolution === 'partial') {
+    warnings.push({
+      code: 'classification_partial',
+      message: 'Some review target files could not be classified.',
+    });
+  }
+  if (tags.includes('frontend_contract')) {
+    warnings.push({
+      code: 'contract_surface_detected',
+      message: 'A frontend-facing contract surface changed.',
+    });
+  }
+
+  return {
+    source,
+    resolution,
+    files,
+    tags,
+    evidence: dedupe([
+      ...classified.flatMap((item) => item.evidence),
+      ...canonicalChanges.flatMap((change) =>
+        change.oldPath
+          ? classifyPath(change.oldPath, source, canonicalGitPath).evidence
+          : []
+      ),
+    ]),
     warnings,
   };
 }

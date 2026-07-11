@@ -39,7 +39,7 @@ export function buildDeepReviewScopeProfile(
       optionalReviewerPolicy: 'configured',
       allowBroadToolExploration: false,
       coverageExpectation:
-        'Risk-expanded pass. Cover changed files plus one-hop high-risk context when evidence requires it, and describe any reduced-depth confidence limits.',
+        'Risk-expanded pass. Cover changed files plus one-hop high-risk context when evidence requires it, and describe any focused-scope confidence limits.',
     };
   }
 

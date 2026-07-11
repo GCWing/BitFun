@@ -189,6 +189,15 @@ pub struct SessionMetadata {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub todos: Option<serde_json::Value>,
 
+    /// Persisted Review action-bar state, including follow-up linkage and scope.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "review_action_state",
+        alias = "reviewActionState"
+    )]
+    pub review_action_state: Option<serde_json::Value>,
+
     /// Deep Review run manifest for this session, when the session was launched
     /// from Code Review Team.
     #[serde(
@@ -198,6 +207,15 @@ pub struct SessionMetadata {
         alias = "deepReviewRunManifest"
     )]
     pub deep_review_run_manifest: Option<serde_json::Value>,
+
+    /// Narrow target evidence for a standard Review session.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "review_target_evidence",
+        alias = "reviewTargetEvidence"
+    )]
+    pub review_target_evidence: Option<serde_json::Value>,
 
     /// Cached reviewer outputs from previous deep review runs in this session.
     /// Keyed by packet_id, value is the reviewer's output text.
@@ -861,7 +879,9 @@ impl SessionMetadata {
             custom_metadata: None,
             relationship: None,
             todos: None,
+            review_action_state: None,
             deep_review_run_manifest: None,
+            review_target_evidence: None,
             deep_review_cache: None,
             workspace_path: None,
             workspace_hostname: None,
@@ -1210,6 +1230,33 @@ mod tests {
     }
 
     #[test]
+    fn review_target_evidence_round_trips_through_metadata_contract() {
+        let mut metadata = SessionMetadata::new(
+            "session-target".to_string(),
+            "Review child".to_string(),
+            "CodeReview".to_string(),
+            "model".to_string(),
+        );
+        metadata.review_target_evidence = Some(serde_json::json!({
+            "version": 1,
+            "fingerprint": "target-fingerprint"
+        }));
+
+        let json = serde_json::to_value(&metadata).expect("metadata should serialize");
+        assert_eq!(
+            json["reviewTargetEvidence"]["fingerprint"],
+            "target-fingerprint"
+        );
+        let round_trip: SessionMetadata =
+            serde_json::from_value(json).expect("metadata should deserialize");
+
+        assert_eq!(
+            round_trip.review_target_evidence,
+            metadata.review_target_evidence
+        );
+    }
+
+    #[test]
     fn session_metadata_keeps_normal_sessions_visible() {
         let metadata = SessionMetadata::new(
             "session-1".to_string(),
@@ -1399,5 +1446,37 @@ mod tests {
             serialized["deepReviewRunManifest"]["coreReviewers"][0]["subagentId"],
             "ReviewBusinessLogic"
         );
+    }
+
+    #[test]
+    fn session_metadata_preserves_review_action_state() {
+        let payload = serde_json::json!({
+            "sessionId": "review-session",
+            "sessionName": "Review",
+            "agentType": "CodeReview",
+            "modelName": "default",
+            "createdAt": 1,
+            "lastActiveAt": 1,
+            "turnCount": 1,
+            "messageCount": 1,
+            "toolCallCount": 1,
+            "status": "active",
+            "tags": [],
+            "reviewActionState": {
+                "version": 1,
+                "phase": "fix_completed",
+                "followUpReviewSessionId": "follow-up-review"
+            }
+        });
+
+        let metadata: SessionMetadata =
+            serde_json::from_value(payload).expect("metadata should deserialize");
+        assert_eq!(
+            metadata.review_action_state.as_ref().unwrap()["followUpReviewSessionId"],
+            "follow-up-review"
+        );
+
+        let serialized = serde_json::to_value(metadata).expect("metadata should serialize");
+        assert_eq!(serialized["reviewActionState"]["phase"], "fix_completed");
     }
 }

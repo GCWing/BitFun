@@ -550,7 +550,7 @@ mod tests {
     fn generated_contract_contains_shared_terms() {
         assert_eq!(
             generated_shared_term(LocaleId::EnUS, "features.deepReview"),
-            Some("Deep Review")
+            Some("Review: Strict")
         );
     }
 }

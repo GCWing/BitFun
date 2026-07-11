@@ -1,4 +1,5 @@
 import type { ReviewTeamRunManifest } from '@/shared/services/reviewTeamService';
+import type { ReviewCoverageSourceLabelKey } from './reviewCoverageSource';
 
 export { buildCodeReviewReliabilityNotices } from './reliabilityNotices';
 export {
@@ -9,10 +10,17 @@ export {
   DEFAULT_CODE_REVIEW_MARKDOWN_LABELS,
   formatCodeReviewReportMarkdown,
 } from './markdown';
+export {
+  DEFAULT_REVIEW_COVERAGE_SOURCE_LABELS,
+  formatReviewCoverageSource,
+  resolveReviewCoverageSourceLabelKey,
+} from './reviewCoverageSource';
+export type { ReviewCoverageSourceLabelKey } from './reviewCoverageSource';
 
 export type ReviewRiskLevel = 'low' | 'medium' | 'high' | 'critical';
 export type ReviewAction = 'approve' | 'approve_with_suggestions' | 'request_changes' | 'block';
 export type ReviewMode = 'standard' | 'deep';
+export type ReviewEvidenceStatus = 'complete' | 'limited' | 'stale' | 'failed';
 export type ReviewIssueSeverity = 'critical' | 'high' | 'medium' | 'low' | 'info';
 export type ReviewIssueCertainty = 'confirmed' | 'likely' | 'possible';
 export type ReviewPacketStatusSource = 'reported' | 'inferred' | 'missing';
@@ -21,8 +29,6 @@ export type ReviewSectionId =
   | 'issues'
   | 'remediation'
   | 'strengths'
-  | 'runManifest'
-  | 'team'
   | 'coverage';
 export type RemediationGroupId = 'must_fix' | 'should_improve' | 'needs_decision' | 'verification';
 export type StrengthGroupId =
@@ -110,6 +116,7 @@ export interface CodeReviewReportData {
   remediation_plan?: string[];
   report_sections?: CodeReviewReportSectionsData;
   reliability_signals?: CodeReviewReliabilitySignal[];
+  evidence_status?: ReviewEvidenceStatus;
 }
 
 export interface ReviewReportGroup<TId extends string = string> {
@@ -148,6 +155,7 @@ export type ReviewReliabilityNoticeKind =
   | 'cache_miss'
   | 'concurrency_limited'
   | 'partial_reviewer'
+  | 'target_evidence_limited'
   | 'reduced_scope'
   | 'retry_guidance'
   | 'skipped_reviewers'
@@ -178,30 +186,21 @@ export interface CodeReviewReportMarkdownLabels {
   titleDeep: string;
   executiveSummary: string;
   reviewDecision: string;
-  runManifest: string;
   riskLevel: string;
   recommendedAction: string;
+  evidenceStatus: string;
   scope: string;
-  target: string;
-  budget: string;
-  estimatedCalls: string;
-  activeReviewers: string;
-  skippedReviewers: string;
   issues: string;
   noIssues: string;
   remediationPlan: string;
   strengths: string;
-  reviewTeam: string;
   reliabilitySignals: string;
   coverageNotes: string;
-  status: string;
-  packet: string;
-  partialOutput: string;
-  findings: string;
   validation: string;
   suggestion: string;
   source: string;
   noItems: string;
+  coverageSourceLabels: Record<ReviewCoverageSourceLabelKey, string>;
   groupTitles: Record<RemediationGroupId | StrengthGroupId, string>;
   reliabilityNoticeLabels: Record<ReviewReliabilityNoticeKind, string>;
 }
@@ -413,7 +412,7 @@ export function buildDeepReviewRetryPrompt(slices: DeepReviewRetryableSlice[]): 
   }));
 
   return [
-    'Retry only the listed incomplete Deep Review slices in this same session.',
+    'Retry only the listed incomplete strict review coverage in this same session.',
     'Use the Task tool once for each retry task below. Do not retry files outside retry_scope_files.',
     'After these retry tasks finish, run ReviewJudge and submit an updated code review report with honest coverage notes.',
     '',

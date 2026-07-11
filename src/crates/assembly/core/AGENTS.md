@@ -60,6 +60,10 @@ SessionManager -> Session -> DialogTurn -> ModelRound
   coverage, but filesystem writes, worker/host side effects, Git/AI concrete
   calls, marker IO, and path-manager integration stay in core unless a reviewed
   owner design says otherwise.
+- `plugin_source` may inject product-owned paths and keep compatibility exports;
+  concrete managed-package discovery and trust persistence stay in
+  `services-integrations`, while ecosystem parsing and Plugin Runtime Host
+  behavior remain in their adapter and execution owners.
 - Remote/service changes must keep external protocol lifecycle, workspace
   projection, scheduler/session restore, terminal pre-warm, and product
   execution boundaries explicit.
