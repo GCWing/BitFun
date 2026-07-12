@@ -499,7 +499,10 @@
     "newWorkspacePlaceholder": "/path/to/new/workspace",
     "online": "Online",
     "offline": "Offline",
+    "syncStarted": "Cloud sync started...",
+    "syncing": "Syncing with cloud...",
     "syncDone": "Cloud sync complete: {{exported}} sessions uploaded, {{imported}} downloaded",
+    "syncDoneShort": "Cloud sync complete",
     "syncFailed": "Cloud sync failed — will retry automatically"
   },
   "remoteConnect": {

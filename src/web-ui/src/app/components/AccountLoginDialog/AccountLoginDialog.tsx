@@ -56,7 +56,7 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
   onClose,
 }) => {
   const { t } = useI18n('common');
-  const { success, info, error: notifyError } = useNotification();
+  const { success, info, warning } = useNotification();
   const { workspacePath } = useCurrentWorkspace();
 
   const [username, setUsername] = useState('');
@@ -64,6 +64,7 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
   const [authServer, setAuthServer] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'done' | 'failed'>('idle');
   const [view, setView] = useState<View>('login');
 
   // Device control panel state
@@ -134,8 +135,8 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
 
   const doAutoSync = useCallback((isFirstLogin: boolean) => {
     const wp = workspacePath || '/';
-    // Fire-and-forget: don't block the login flow. The result is reported
-    // via notification so the user sees when sync finishes.
+    setSyncStatus('syncing');
+    info(t('accountLogin.syncStarted'));
     (async () => {
       let configJson = '{}';
       if (isFirstLogin) {
@@ -146,15 +147,17 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
       }
       const result = await remoteConnectAPI.accountAutoSync(isFirstLogin, wp, configJson);
       log.info(`Auto-sync done: settings=${result.settings_synced} exported=${result.sessions_exported} imported=${result.sessions_imported}`);
-      info(t('accountLogin.syncDone', {
+      setSyncStatus('done');
+      success(t('accountLogin.syncDone', {
         exported: result.sessions_exported,
         imported: result.sessions_imported,
       }));
     })().catch((e) => {
       log.error('Auto-sync failed', e);
-      notifyError(t('accountLogin.syncFailed'));
+      setSyncStatus('failed');
+      warning(t('accountLogin.syncFailed'));
     });
-  }, [workspacePath, info, notifyError, t]);
+  }, [workspacePath, info, success, warning, t]);
 
   const handleLogin = useCallback(async () => {
     if (!validate()) return;
@@ -448,6 +451,18 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
         {/* ── Device list ───────────────────────────────────────────── */}
         {view === 'devices' && (
           <div className="account-login-dialog__scroll">
+            {syncStatus !== 'idle' && (
+              <div className={`account-login-dialog__sync-indicator ${syncStatus}`}>
+                {syncStatus === 'syncing' && <RefreshCw size={14} className="spinning" />}
+                {syncStatus === 'done' && <span>✓</span>}
+                {syncStatus === 'failed' && <span>⚠</span>}
+                <span>
+                  {syncStatus === 'syncing' && t('accountLogin.syncing')}
+                  {syncStatus === 'done' && t('accountLogin.syncDoneShort')}
+                  {syncStatus === 'failed' && t('accountLogin.syncFailed')}
+                </span>
+              </div>
+            )}
             <div className="account-login-dialog__device-list">
               {devices.length === 0 && (
                 <div className="account-login-dialog__empty">{t('accountLogin.noDevices')}</div>

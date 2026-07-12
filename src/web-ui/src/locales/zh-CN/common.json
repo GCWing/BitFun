@@ -499,7 +499,10 @@
     "newWorkspacePlaceholder": "/新/工作区/路径",
     "online": "在线",
     "offline": "离线",
+    "syncStarted": "云端同步已开始...",
+    "syncing": "正在与云端同步...",
     "syncDone": "云端同步完成：上传 {{exported}} 个会话，下载 {{imported}} 个会话",
+    "syncDoneShort": "云端同步完成",
     "syncFailed": "云端同步失败 — 将自动重试"
   },
   "remoteConnect": {

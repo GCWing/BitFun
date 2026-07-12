@@ -184,6 +184,27 @@
     animation: spin 1s linear infinite;
   }
 
+  &__sync-indicator {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 16px;
+    font-size: 11px;
+    color: var(--color-text-secondary);
+
+    &.syncing {
+      color: var(--color-text-secondary);
+    }
+
+    &.done {
+      color: var(--color-success);
+    }
+
+    &.failed {
+      color: var(--color-error);
+    }
+  }
+
   &__empty {
     text-align: center;
     padding: 20px;
