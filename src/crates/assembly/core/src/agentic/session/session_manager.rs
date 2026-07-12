@@ -32,7 +32,7 @@ use crate::service::remote_ssh::workspace_state::LOCAL_WORKSPACE_SSH_HOST;
 use crate::service::session::{
     DialogTurnData, DialogTurnKind, ModelRoundData, SessionMemoryMode, SessionMetadata,
     SessionRelationship, TextItemData, ThinkingItemData, ToolCallData, ToolItemData,
-    ToolResultData, TurnStatus, UserMessageData,
+    ToolResultData, TranscriptLineRange, TurnStatus, UserMessageData,
 };
 use crate::service::snapshot::ensure_snapshot_manager_for_workspace;
 use crate::service::workspace::{get_global_workspace_service, WorkspaceInfo, WorkspaceKind};
@@ -77,6 +77,12 @@ impl Default for SessionManagerConfig {
             prompt_cache_policy: PromptCachePolicy::default(),
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CompressionTranscriptReference {
+    pub uri: String,
+    pub index_range: TranscriptLineRange,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -522,6 +528,57 @@ impl SessionManager {
     async fn effective_session_storage_path(&self, session_id: &str) -> Option<PathBuf> {
         let config = self.sessions.get(session_id)?.config.clone();
         self.effective_storage_path_for_config(&config).await
+    }
+
+    pub async fn create_compression_transcript_reference(
+        &self,
+        session_id: &str,
+        boundary_turn_index: usize,
+        compression_id: &str,
+        trigger: &str,
+    ) -> BitFunResult<Option<CompressionTranscriptReference>> {
+        if !self.should_persist_session_id(session_id) {
+            return Ok(None);
+        }
+        let storage_path = self
+            .effective_session_storage_path(session_id)
+            .await
+            .or_else(|| {
+                self.session_storage_path_index
+                    .get(session_id)
+                    .map(|entry| entry.value().clone())
+            })
+            .ok_or_else(|| {
+                BitFunError::Validation(format!(
+                    "Session storage path is unavailable: {}",
+                    session_id
+                ))
+            })?;
+        let artifact = self
+            .persistence_manager
+            .create_compression_transcript(
+                &storage_path,
+                session_id,
+                boundary_turn_index,
+                compression_id,
+                trigger,
+            )
+            .await?;
+        if let Some(artifact) = artifact {
+            debug!(
+                "Created compression transcript: session_id={}, boundary_turn_index={}, transcript_path={}, meta_path={}",
+                session_id,
+                boundary_turn_index,
+                artifact.transcript_path.display(),
+                artifact.meta_path.display()
+            );
+            Ok(Some(CompressionTranscriptReference {
+                uri: artifact.uri,
+                index_range: artifact.index_range,
+            }))
+        } else {
+            Ok(None)
+        }
     }
 
     pub async fn persistent_model_exchange_trace_dir(&self, session_id: &str) -> Option<PathBuf> {
@@ -3726,6 +3783,9 @@ impl SessionManager {
                 .await?;
             self.persistence_manager
                 .delete_turn_context_snapshots_from(workspace_path, session_id, target_turn)
+                .await?;
+            self.persistence_manager
+                .delete_compression_transcripts_from(workspace_path, session_id, target_turn)
                 .await?;
             self.truncate_listing_baseline_rebuild_turn_index_after_rollback(
                 workspace_path,

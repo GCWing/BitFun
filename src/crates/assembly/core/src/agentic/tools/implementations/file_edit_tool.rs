@@ -24,7 +24,7 @@ const EDIT_TOOL_PROMPT: &str = r#"Performs exact string replacements in files.
 
 Usage:
 - You must use your `Read` tool at least once in the conversation before editing. This tool will error if you attempt an edit without reading the file.
-- The `file_path` parameter must be a workspace-relative path, an absolute path inside the current workspace, or an exact `bitfun://runtime/...` URI returned by another tool.
+- The `file_path` parameter must be a workspace-relative path, an absolute path inside the current workspace, or an exact `bitfun://...` URI returned by another tool.
 - When editing text from Read tool output, ensure you preserve the exact indentation (tabs/spaces) as it appears AFTER the line number prefix. The line number prefix format is: spaces + line number + tab. Everything after that is the actual file content to match. Never include any part of the line number prefix in the old_string or new_string.
 - Copy `old_string` verbatim from your latest Read of this file. Do not reformat HTML/CSS/JS, do not normalize indentation, and do not reconstruct the block from memory.
 - Use the smallest `old_string` that is clearly unique — usually 2-4 adjacent lines with stable surrounding context is sufficient.

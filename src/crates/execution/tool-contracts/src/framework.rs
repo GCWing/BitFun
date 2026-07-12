@@ -1620,23 +1620,32 @@ impl ToolPathResolution {
     }
 
     pub fn is_runtime_artifact(&self) -> bool {
-        self.runtime_scope.is_some()
+        self.runtime_root.is_some()
     }
 
     pub fn logical_child_path(&self, absolute_child_path: &Path) -> Option<String> {
-        let scope = self.runtime_scope.as_deref()?;
         let root = self.runtime_root.as_ref()?;
         let relative = absolute_child_path.strip_prefix(root).ok()?;
         let relative_str = relative.to_string_lossy().replace('\\', "/");
+        if is_bitfun_current_session_uri(&self.logical_path) {
+            return build_bitfun_current_session_uri(&relative_str).ok();
+        }
+        let scope = self.runtime_scope.as_deref()?;
         build_bitfun_runtime_uri(scope, &relative_str).ok()
     }
 }
 
 pub const BITFUN_RUNTIME_URI_PREFIX: &str = "bitfun://runtime/";
+pub const BITFUN_CURRENT_SESSION_URI_PREFIX: &str = "bitfun://current-session/";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParsedBitFunRuntimeUri {
     pub workspace_scope: String,
+    pub relative_path: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ParsedBitFunCurrentSessionUri {
     pub relative_path: String,
 }
 
@@ -1650,6 +1659,8 @@ pub enum ToolPathContractError {
     EmptyRuntimeWorkspaceScope,
     RuntimeUriScopeMismatch { workspace_scope: String },
     MissingRuntimeRoot,
+    MissingCurrentSessionRoot,
+    MissingCurrentSessionArtifactPath,
     EmptyPath,
     MissingWorkspaceRoot { path: String },
 }
@@ -1687,6 +1698,15 @@ impl fmt::Display for ToolPathContractError {
                     "A workspace is required to resolve runtime artifacts"
                 )
             }
+            Self::MissingCurrentSessionRoot => {
+                write!(
+                    formatter,
+                    "A current session is required to resolve session artifacts"
+                )
+            }
+            Self::MissingCurrentSessionArtifactPath => {
+                write!(formatter, "Current-session URI is missing artifact path")
+            }
             Self::EmptyPath => write!(formatter, "path cannot be empty"),
             Self::MissingWorkspaceRoot { path } => {
                 write!(
@@ -1702,6 +1722,14 @@ impl std::error::Error for ToolPathContractError {}
 
 pub fn is_bitfun_runtime_uri(path: &str) -> bool {
     path.trim().starts_with(BITFUN_RUNTIME_URI_PREFIX)
+}
+
+pub fn is_bitfun_current_session_uri(path: &str) -> bool {
+    path.trim().starts_with(BITFUN_CURRENT_SESSION_URI_PREFIX)
+}
+
+pub fn is_bitfun_tool_uri(path: &str) -> bool {
+    path.trim().starts_with("bitfun://")
 }
 
 pub fn normalize_host_path(path: &str) -> String {
@@ -1766,6 +1794,24 @@ pub fn resolve_tool_path_with_context(
     workspace_scope: Option<&str>,
     runtime_root: Option<PathBuf>,
 ) -> Result<ToolPathResolution, ToolPathContractError> {
+    resolve_tool_path_with_context_roots(
+        path,
+        workspace_root,
+        workspace_is_remote,
+        workspace_scope,
+        runtime_root,
+        None,
+    )
+}
+
+pub fn resolve_tool_path_with_context_roots(
+    path: &str,
+    workspace_root: Option<&str>,
+    workspace_is_remote: bool,
+    workspace_scope: Option<&str>,
+    runtime_root: Option<PathBuf>,
+    current_session_root: Option<PathBuf>,
+) -> Result<ToolPathResolution, ToolPathContractError> {
     if is_bitfun_runtime_uri(path) {
         let parsed = parse_bitfun_runtime_uri(path)?;
         let scope_matches = parsed.workspace_scope == "current"
@@ -1797,6 +1843,30 @@ pub fn resolve_tool_path_with_context(
         });
     }
 
+    if is_bitfun_current_session_uri(path) {
+        let parsed = parse_bitfun_current_session_uri(path)?;
+        let current_session_root =
+            current_session_root.ok_or(ToolPathContractError::MissingCurrentSessionRoot)?;
+        let mut resolved_path = current_session_root.clone();
+        for segment in parsed.relative_path.split('/') {
+            resolved_path.push(segment);
+        }
+        return Ok(ToolPathResolution {
+            requested_path: path.to_string(),
+            logical_path: build_bitfun_current_session_uri(&parsed.relative_path)?,
+            resolved_path: resolved_path.to_string_lossy().to_string(),
+            backend: ToolPathBackend::Local,
+            runtime_scope: None,
+            runtime_root: Some(current_session_root),
+        });
+    }
+
+    if is_bitfun_tool_uri(path) {
+        return Err(ToolPathContractError::UnsupportedRuntimeUri {
+            uri: path.to_string(),
+        });
+    }
+
     let resolved_path = resolve_workspace_tool_path(path, workspace_root, workspace_is_remote)?;
     Ok(ToolPathResolution {
         requested_path: path.to_string(),
@@ -1813,7 +1883,7 @@ pub fn resolve_tool_path_with_context(
 }
 
 pub fn tool_path_is_effectively_absolute(path: &str, workspace_is_remote: bool) -> bool {
-    if is_bitfun_runtime_uri(path) {
+    if is_bitfun_tool_uri(path) {
         return true;
     }
 
@@ -1872,6 +1942,33 @@ pub fn parse_bitfun_runtime_uri(
         workspace_scope,
         relative_path: normalize_runtime_relative_path(relative_path)?,
     })
+}
+
+pub fn parse_bitfun_current_session_uri(
+    path: &str,
+) -> Result<ParsedBitFunCurrentSessionUri, ToolPathContractError> {
+    let trimmed = path.trim();
+    let relative_path = trimmed
+        .strip_prefix(BITFUN_CURRENT_SESSION_URI_PREFIX)
+        .ok_or_else(|| ToolPathContractError::UnsupportedRuntimeUri {
+            uri: path.to_string(),
+        })?;
+    if relative_path.trim().is_empty() {
+        return Err(ToolPathContractError::MissingCurrentSessionArtifactPath);
+    }
+    Ok(ParsedBitFunCurrentSessionUri {
+        relative_path: normalize_runtime_relative_path(relative_path)?,
+    })
+}
+
+pub fn build_bitfun_current_session_uri(
+    relative_path: &str,
+) -> Result<String, ToolPathContractError> {
+    Ok(format!(
+        "{}{}",
+        BITFUN_CURRENT_SESSION_URI_PREFIX,
+        normalize_runtime_relative_path(relative_path)?
+    ))
 }
 
 pub fn build_bitfun_runtime_uri(
