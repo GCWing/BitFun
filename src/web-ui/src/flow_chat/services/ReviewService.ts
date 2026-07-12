@@ -1,16 +1,9 @@
-import { agentAPI } from '@/infrastructure/api';
 import type {
   ReviewPlatformPullRequestReviewTarget,
   ReviewPlatformRemote,
   ReviewPlatformRepositoryRef,
 } from '@/infrastructure/api/service-api/ReviewPlatformAPI';
-import type {
-  ReviewIntent,
-  ReviewQualityDecision,
-  ReviewQualityDecisionRequest,
-} from '@/infrastructure/api/service-api/AgentAPI';
 import {
-  buildReviewRiskFactors,
   buildPullRequestReviewTargetEvidence,
   type ReviewTeamChangeStats,
   type ReviewTeamRunManifest,
@@ -56,7 +49,6 @@ interface PreparedReviewBase {
   target: ReviewTargetClassification;
   requestedFiles: string[];
   prompt: string;
-  decision: ReviewQualityDecision;
   requiresConsent: boolean;
   targetEvidence: ReviewTargetEvidence;
 }
@@ -69,8 +61,8 @@ export interface PreparedStandardReviewLaunch extends PreparedReviewBase {
 
 export interface PreparedStrictReviewLaunch extends PreparedReviewBase {
   mode: 'strict';
-  level: 'l2' | 'l3';
-  strategyLevel: 'normal' | 'deep';
+  level: 'l3';
+  strategyLevel: 'deep';
   runManifest: ReviewTeamRunManifest;
 }
 
@@ -83,43 +75,13 @@ export interface PrepareReviewLaunchOptions {
   remoteConnectionId?: string;
   extraContext?: string;
   changeStats?: ReviewTeamChangeStats;
-  intent?: 'adaptive' | 'strict';
+  intent?: 'review' | 'strict';
 }
 
 function includedTargetFiles(target: ReviewTargetClassification): string[] {
   return target.files
     .filter((file) => !file.excluded)
     .map((file) => file.normalizedPath);
-}
-
-function buildDecisionRequest(params: {
-  intent: ReviewIntent;
-  target: ReviewTargetClassification;
-  changeStats: ReviewTeamChangeStats;
-}): ReviewQualityDecisionRequest {
-  const factors = buildReviewRiskFactors(params.target, params.changeStats);
-  return {
-    intent: params.intent,
-    target: {
-      resolution: params.target.resolution,
-      fileCount: factors.fileCount,
-      ...(factors.totalLinesChanged !== undefined
-        ? { totalLinesChanged: factors.totalLinesChanged }
-        : {}),
-      securitySensitiveFileCount: factors.securityFileCount,
-      workspaceAreaCount: factors.workspaceAreaCount,
-      contractSurfaceChanged: factors.contractSurfaceChanged,
-    },
-  };
-}
-
-async function decideReview(params: {
-  workspacePath?: string;
-  intent: ReviewIntent;
-  target: ReviewTargetClassification;
-  changeStats: ReviewTeamChangeStats;
-}): Promise<ReviewQualityDecision> {
-  return agentAPI.decideReviewQuality(buildDecisionRequest(params));
 }
 
 function buildStandardReviewPrompt(params: {
@@ -177,7 +139,7 @@ async function prepareFromResolvedTarget(params: {
   workspacePath?: string;
   extraContext?: string;
   commandText?: string;
-  intent: ReviewIntent;
+  intent: 'review' | 'strict';
 }): Promise<PreparedReviewLaunch> {
   if ((params.targetEvidence.omittedFileCount ?? 0) > 0) {
     throw reviewTargetError(
@@ -292,9 +254,7 @@ async function prepareFromResolvedTarget(params: {
       'deepReviewActionBar.launchError.emptyExplicitScope',
     );
   }
-  const decision = await decideReview(params);
-
-  if (decision.executionMode === 'standard' && decision.level === 'l1') {
+  if (params.intent === 'review') {
     return {
       mode: 'standard',
       level: 'l1',
@@ -303,36 +263,18 @@ async function prepareFromResolvedTarget(params: {
       targetEvidence: params.targetEvidence,
       requestedFiles: params.requestedFiles,
       prompt: buildStandardReviewPrompt(params),
-      decision,
-      requiresConsent: decision.requiresConsent,
+      requiresConsent: false,
     };
   }
-
-  if (
-    decision.executionMode !== 'strict' ||
-    (decision.level !== 'l2' && decision.level !== 'l3') ||
-    (decision.strategyLevel !== 'normal' && decision.strategyLevel !== 'deep')
-  ) {
-    throw reviewTargetError(`Unsupported explicit Review decision: ${decision.level}/${decision.executionMode}`);
-  }
-  const qualityDecision = {
-    level: decision.level,
-    executionMode: decision.executionMode,
-    strategyLevel: decision.strategyLevel,
-    reason: decision.reason,
-    score: decision.score,
-    requiresConsent: decision.requiresConsent,
-  };
 
   const launch = params.commandText
     ? await buildDeepReviewLaunchFromSlashCommand(
       params.commandText,
       params.workspacePath,
       {
-        qualityDecision,
-        ...(decision.level === 'l2'
-          ? { maxCoreReviewers: 3, maxExtraReviewers: 0, includeQualityGate: false }
-          : { includeQualityGate: true }),
+        strategyOverride: 'deep',
+        qualityDecision: { level: 'l3' },
+        includeQualityGate: true,
         resolvedTarget: {
           target: params.target,
           changeStats: params.changeStats,
@@ -345,29 +287,27 @@ async function prepareFromResolvedTarget(params: {
       params.extraContext,
       params.workspacePath,
       {
-        qualityDecision,
+        strategyOverride: 'deep',
+        qualityDecision: { level: 'l3' },
         resolvedTarget: {
           target: params.target,
           changeStats: params.changeStats,
           targetEvidence: params.targetEvidence,
         },
-        ...(decision.level === 'l2'
-          ? { maxCoreReviewers: 3, maxExtraReviewers: 0, includeQualityGate: false }
-          : { includeQualityGate: true }),
+        includeQualityGate: true,
       },
     );
 
   return {
     mode: 'strict',
-    level: decision.level,
-    strategyLevel: decision.strategyLevel,
+    level: 'l3',
+    strategyLevel: 'deep',
     target: params.target,
     targetEvidence: params.targetEvidence,
     requestedFiles: params.requestedFiles,
     prompt: launch.prompt,
     runManifest: launch.runManifest,
-    decision,
-    requiresConsent: decision.requiresConsent,
+    requiresConsent: true,
   };
 }
 

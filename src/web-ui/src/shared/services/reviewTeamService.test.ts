@@ -639,60 +639,6 @@ describe('reviewTeamService', () => {
     ]);
   });
 
-  it('builds a bounded targeted manifest for an L2 review plan', () => {
-    const team = resolveDefaultReviewTeam(
-      [
-        ...coreSubagents(),
-        subagent('ExtraEnabled', true, 'user', 'fast', true, true),
-      ],
-      storedConfigWithExtra(['ExtraEnabled']),
-    );
-    const target = classifyReviewTargetFromFiles(
-      ['src/apps/desktop/src/api/agentic_api.rs'],
-      'session_files',
-    );
-
-    const manifest = buildEffectiveReviewTeamManifest(team, {
-      target,
-      qualityDecision: {
-        level: 'l2',
-        executionMode: 'strict',
-        strategyLevel: 'normal',
-        reason: 'risk_score',
-        score: 8,
-        requiresConsent: true,
-      },
-      maxCoreReviewers: 3,
-      maxExtraReviewers: 0,
-      includeQualityGate: false,
-    });
-
-    expect(manifest.coreReviewers.map((member) => member.subagentId)).toEqual([
-      'ReviewBusinessLogic',
-      'ReviewFrontend',
-      'ReviewArchitecture',
-    ]);
-    expect(manifest.qualityGateReviewer).toBeUndefined();
-    expect(manifest.qualityDecision).toMatchObject({ level: 'l2', score: 8 });
-    expect(manifest.strategyDecision.userOverride).toBeUndefined();
-    expect(manifest.enabledExtraReviewers).toEqual([]);
-    expect(manifest.workPackets).toHaveLength(3);
-    expect(manifest.skippedReviewers).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        subagentId: 'ReviewPerformance',
-        reason: 'budget_limited',
-      }),
-      expect.objectContaining({
-        subagentId: 'ReviewSecurity',
-        reason: 'budget_limited',
-      }),
-      expect.objectContaining({
-        subagentId: 'ExtraEnabled',
-        reason: 'budget_limited',
-      }),
-    ]));
-  });
-
   it('maps review strategies to explicit scope profiles in the run manifest', () => {
     const team = resolveDefaultReviewTeam(
       coreSubagents(),
@@ -720,6 +666,23 @@ describe('reviewTeamService', () => {
         optionalReviewerPolicy: 'full',
         allowBroadToolExploration: true,
       });
+  });
+
+  it('keeps the explicit strict contract bound to a deep L3 manifest', () => {
+    const team = resolveDefaultReviewTeam(
+      coreSubagents(),
+      storedConfigWithExtra(),
+    );
+
+    const manifest = buildEffectiveReviewTeamManifest(team, {
+      strategyOverride: 'deep',
+      qualityDecision: { level: 'l3' },
+      includeQualityGate: true,
+    });
+
+    expect(manifest.strategyLevel).toBe('deep');
+    expect(manifest.qualityDecision).toEqual({ level: 'l3' });
+    expect(manifest.qualityGateReviewer?.subagentId).toBe('ReviewJudge');
   });
 
   it('keeps changed-file coverage metadata visible for focused-scope profiles', () => {

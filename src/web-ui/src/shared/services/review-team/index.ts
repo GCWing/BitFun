@@ -1267,7 +1267,7 @@ export function buildEffectiveReviewTeamManifest(
     }),
     options.rateLimitStatus,
   );
-  const strategyLevel = options.qualityDecision?.strategyLevel ?? options.strategyOverride ?? team.strategyLevel;
+  const strategyLevel = options.strategyOverride ?? team.strategyLevel;
   const strategyBudget = REVIEW_STRATEGY_RUNTIME_BUDGETS[strategyLevel];
   const tokenBudgetMode = options.tokenBudgetMode ?? strategyBudget.tokenBudgetMode;
   const scopeProfile = buildDeepReviewScopeProfile(strategyLevel);

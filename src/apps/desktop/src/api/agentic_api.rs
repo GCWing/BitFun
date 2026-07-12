@@ -38,10 +38,6 @@ use bitfun_core::service::session::{
     DialogTurnData, SessionMemoryMode, SessionMetadata, SessionRelationship,
     SessionRelationshipKind,
 };
-use bitfun_product_domains::review::{
-    decide_review_quality as decide_review_quality_policy, ReviewQualityDecision,
-    ReviewQualityDecisionRequest,
-};
 
 const SESSION_VIEW_TOOL_RESULT_TOTAL_CHAR_BUDGET: usize = 512 * 1024;
 const SESSION_VIEW_TOOL_RESULT_STRING_CHAR_LIMIT: usize = 16 * 1024;
@@ -2310,13 +2306,6 @@ pub async fn get_available_modes(
 #[tauri::command]
 pub async fn get_default_review_team_definition() -> Result<ReviewTeamDefinition, String> {
     Ok(default_review_team_definition())
-}
-
-#[tauri::command]
-pub async fn decide_review_quality(
-    request: ReviewQualityDecisionRequest,
-) -> Result<ReviewQualityDecision, String> {
-    Ok(decide_review_quality_policy(request))
 }
 
 #[derive(Debug, Serialize)]
