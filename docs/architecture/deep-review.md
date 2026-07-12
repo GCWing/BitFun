@@ -2,7 +2,7 @@
 
 ## Scope
 
-DeepReview is the compatibility runtime for `Review: Strict`, the highest-strength mode of the unified Review experience. It remains implemented as a child-session workflow that runs a configurable read-only reviewer set against a review target, but it should not be presented as a second ordinary product entry next to Review.
+DeepReview is the compatibility runtime for `Review: Strict`, the highest-strength mode of the unified Review experience. It remains a read-only child session, but the child is now the primary strict reviewer rather than a dispatcher for a fixed reviewer committee. It should not be presented as a second ordinary product entry next to Review.
 
 Product-facing guardrails are summarized here:
 
@@ -25,7 +25,7 @@ The backend does not resolve the review target or build the launch manifest. The
 
 ## Runtime Roles
 
-`CodeReview` and the `DeepReview` orchestrator are read-only adversarial review identities. `CodeReview` handles ordinary Review as one isolated child and cannot silently expand into multiple reviewers. `DeepReview` is reserved for an explicit strict request, can launch only manifest-approved reviewers, inspect repository evidence, and submit the consolidated report; it has no edit, command, Git-mutation, or remediation tools.
+`CodeReview` and `DeepReview` are read-only adversarial review identities. `CodeReview` handles ordinary Review as one isolated child and cannot silently expand into multiple reviewers. `DeepReview` is reserved for an explicit strict request, reviews the prepared target directly, may ask one manifest-approved specialist for a focused second perspective, and submits the report; it has no edit, command, Git-mutation, or remediation tools.
 
 `src/crates/assembly/core/src/agentic/agents/definitions/review/review_specialists.rs` defines read-only reviewer agents:
 
@@ -36,7 +36,7 @@ The backend does not resolve the review target or build the launch manifest. The
 - `ReviewFrontend`
 - `ReviewJudge`
 
-The reviewer agents use instruction-only context and read/search/diff tools. The existing generic Git exposure remains for legacy compatibility, but it is not authorized as prepared changed-code evidence. Prepared `GetFileDiff` is the source of truth for changed code; when the local binding is `matching_clean`, existing Read/Grep/Glob/LS tools may supplement it with repository context. `ReviewFrontend` is a conditional role. `ReviewJudge` validates reviewer evidence and consistency instead of performing a full independent review pass.
+These agents form an optional specialist pool, not mandatory coverage lanes. A new strict run may launch at most one specialist for a concrete uncertainty. The existing generic Git exposure remains for legacy compatibility, but it is not authorized as prepared changed-code evidence. Prepared `GetFileDiff` is the source of truth for changed code; when the local binding is `matching_clean`, existing Read/Grep/Glob/LS tools may supplement it with repository context. `ReviewJudge` is a conditional quality check used only for a high-severity finding, conflicting evidence, or a materially low-confidence conclusion; it does not perform a full independent review pass.
 
 `ReviewFixer` is the separate writable remediation identity. DeepReview runtime policy rejects it during review execution. The frontend action surface invokes it only after user approval, and a new read-only Review run checks the fix when requested.
 
@@ -79,123 +79,59 @@ Review target evidence is session-scoped and covers current workspace changes, a
 
 An explicit, complete Git range with a matching clean workspace or a provider PR with immutable base/head and complete per-file diff availability may report `complete`. Workspace evidence remains `limited` because it is mutable, even when its prepared diff coverage is complete. Limited or stale evidence does not rewrite the model's risk or recommendation; the report and UI display reliability separately. Invalid evidence fails closed, while historical manifests with no target evidence keep legacy behavior.
 
-Prepared Review work packets use bounded `GetFileDiff` pages as changed-code evidence. Local ranges read exact Git revisions; PR targets read provider diffs on demand and revalidate base/head before each file. The parent Review has a 240,000-character aggregate allowance and admits at most 128 provider diff acquisitions before provider I/O; one acquisition normally performs one file-page request and one detail request. The fixed cap bounds repeated multi-reviewer acquisition without adding configuration or changing local ranges and ordinary Agent tool use. Repeating the same page for the same reviewer returns a compact already-served result instead of the diff again. Exhaustion and stale target bindings return structured limited evidence. Existing generic Git exposure remains for legacy compatibility but does not authorize ref guessing or scope widening; Read/Grep/Glob/LS are supplemental only for a matching clean Git-range binding, never for a provider-only PR target.
+Prepared Review target evidence uses bounded `GetFileDiff` pages as changed-code evidence. Local ranges read exact Git revisions; PR targets read provider diffs on demand and revalidate base/head before each file. The parent Review has a 240,000-character aggregate allowance and admits at most 128 provider diff acquisitions before provider I/O; one acquisition normally performs one file-page request and one detail request. Repeating the same page for the same reviewer returns a compact already-served result instead of the diff again. Exhaustion and stale target bindings return structured limited evidence. Existing generic Git exposure remains for legacy compatibility but does not authorize ref guessing or scope widening; Read/Grep/Glob/LS are supplemental only for a matching clean Git-range binding, never for a provider-only PR target.
 
 Deleted, renamed, binary, oversized, conflicted, or unavailable files remain visible as coverage facts. The PR panel is the only built-in PR Review entry and associates progress/results by provider repository, PR id, and immutable revisions. Cached overview data is display-only until the selected PR is revalidated; revision or runtime-evidence changes make prior results stale, and failed or unavailable results remain distinct from limited coverage. The implementation does not add automatic checkout, reviewer command execution, speculative cache plans, automatic Review, inline comments, approval, merge, or automatic publishing.
 
-## Strict Reviewer Configuration
+## Strict Review Delegation Policy
 
-The default strict reviewer configuration contract is mirrored in Rust and TypeScript.
+The default strict-review contract is mirrored in Rust and TypeScript. New strict launches use the following fixed boundary:
 
-Rust source:
+- the `DeepReview` child performs the primary full review itself;
+- applicable core and explicitly configured extra reviewers form an allowed specialist pool;
+- at most one specialist may be launched for a concrete unresolved question;
+- `ReviewJudge` is available only as a conditional quality check;
+- automatic file splitting, same-role fan-out, and reviewer retry are disabled;
+- the run uses one primary review-agent execution, with at most one specialist execution and one quality-inspector execution.
 
-- `src/crates/assembly/core/src/agentic/deep_review/team_definition.rs`
-- `src/crates/assembly/core/src/agentic/deep_review_policy.rs`
-- `src/apps/desktop/src/api/agentic_api.rs`
+The runtime enforces the one-specialist budget even if a weak model ignores the prompt. This is a resource ceiling, not a keyword or risk-score workflow rule. The model decides whether delegation is useful from the actual evidence and task, while the manifest limits which read-only agents it may call.
 
-Frontend source:
-
-- `src/web-ui/src/shared/services/review-team/defaults.ts`
-- `src/web-ui/src/shared/services/review-team/types.ts`
-- `src/web-ui/src/shared/services/review-team/index.ts`
-
-The desktop command `get_default_review_team_definition` returns the backend default definition. The frontend normalizes that response and falls back to its TypeScript default if the command is unavailable.
-
-The persisted config path is `ai.review_teams.default`. The frontend config shape includes:
-
-- extra subagent ids
-- review strategy level
-- per-reviewer strategy overrides
-- reviewer and judge timeouts
-- reviewer file-split threshold
-- max same-role instances
-- max retries per role
-- max parallel reviewers
-- max queue wait seconds
-- provider capacity queue enablement
-- bounded auto-retry enablement and elapsed guard
-
-Extra reviewers must be enabled subagents with read-only review tooling. Core reviewers, `DeepReview`, and `ReviewFixer` are disallowed as extra reviewers.
+Historical configuration fields for reviewer timeouts, file-split thresholds, same-role instances, retries, concurrency, and queue behavior remain readable so stored sessions can recover honestly. New strict manifests override split, same-role, retry, and specialist-call values to the bounded policy above. Extra reviewers must still be enabled subagents with read-only review tooling. `DeepReview` and `ReviewFixer` remain disallowed.
 
 ## Manifest Shape
 
-`buildEffectiveReviewTeamManifest` in `src/web-ui/src/shared/services/review-team/index.ts` builds the launch manifest. The manifest has `reviewMode: 'deep'` and may include:
+`buildEffectiveReviewTeamManifest` in `src/web-ui/src/shared/services/review-team/index.ts` builds the launch manifest. The manifest keeps `reviewMode: 'deep'`, resolved target evidence, strategy/scope metadata, execution policy, specialist pool, optional quality-inspector identity, skipped members, and token/call budget facts.
 
-- workspace path
-- policy source
-- target classification
-- final strategy level
-- scope profile
-- frontend and backend strategy recommendations
-- strategy decision
-- execution policy
-- concurrency policy
-- change stats
-- pre-review summary
-- evidence pack
-- token-budget plan
-- active core reviewers
-- quality-gate reviewer
-- enabled extra reviewers
-- skipped reviewers
-- work packets
+For new strict launches:
 
-The target classifier drives conditional reviewer selection. `ReviewFrontend` is included only when the target matches frontend-oriented files.
+- `coreReviewers` and `enabledExtraReviewers` describe agents the primary reviewer may choose from; they are not scheduled calls;
+- `qualityGateReviewer` identifies the available conditional inspector and does not require it to run;
+- `workPackets` is empty;
+- `executionPolicy.maxReviewerCalls` is `1`;
+- file splitting and retries are disabled;
+- the launch preview reports one planned primary review-agent execution and a maximum of three review-agent executions; it does not claim a bound on underlying model requests.
 
-The evidence pack is metadata-only. It lists changed file paths, aggregate diff stats, domain/risk tags, packet ids, hunk hints, contract hints, budget counts, and workspace/Git-range target facts. It explicitly excludes embedded source text, full diff text, model output, duplicated manifest JSON, provider raw bodies, synthetic diff references, speculative cache plans, and full file contents.
+The evidence pack remains metadata-only. It lists changed file paths, aggregate diff stats, domain/risk tags, hunk hints, contract hints, budget counts, and workspace/Git-range target facts. It excludes embedded source text, full diff text, model output, provider raw bodies, speculative cache plans, and full file contents.
 
 ## Strategies and Scope
 
-Strategy profiles are internal DeepReview configuration. They do not select or upgrade ordinary Review. The frontend maps an explicit strict request to the deep profile in `src/web-ui/src/shared/services/review-team/strategy.ts` and `scopeProfile.ts`.
+Ordinary Review remains one `CodeReview` child. A new explicit strict request always selects the deep profile, but “deep” now means deeper evidence inspection by the primary reviewer, not maximum fan-out. Security, performance, architecture, frontend, and test concerns are investigation dimensions for that model.
 
-Supported strategy levels are `quick`, `normal`, and `deep`.
+`quick` and `normal` strategy values, legacy work packets, and older L2 manifests remain readable for stored-session recovery. They do not create new production Review launches. New L3 validation requires the deep strategy but no longer requires every core reviewer or a Judge call. If a quality-gate member is present, it must be `ReviewJudge`.
 
-- `quick` uses high-risk-only scope, zero dependency hops, risk-matched optional reviewers, and no broad tool exploration.
-- `normal` uses risk-expanded scope, one dependency hop, configured optional reviewers, and no broad tool exploration.
-- `deep` uses full-depth scope, policy-limited dependency context, full optional reviewer policy, and broad tool exploration.
+Launch consent shows the exact target, one planned primary review-agent execution, the maximum bounded review-agent execution count, runtime tendency, and read-only boundary. It does not estimate underlying model requests or tokens.
 
-New strict launches carry only the minimal `qualityDecision: { level: 'l3' }` runtime marker. The portable runtime requires the deep strategy, every non-conditional core reviewer, `ReviewJudge` as the quality gate, and each conditional core reviewer to be active or explicitly `not_applicable`. Historical L2 manifests remain readable and continue to receive their legacy structural validation; manifests without `qualityDecision` retain older-session compatibility. The backend also parses the selected strategy from the manifest/config and uses it for runtime guardrails such as timeouts, policy classification, and retry limits. Frontend/backend recommendation fields remain report metadata and never upgrade an ordinary Review.
+## Historical Work Packet Compatibility
 
-Launch consent shows the exact planned independent checks, maximum parallel calls, runtime tendency, and read-only boundary. It does not display a heuristic token estimate.
+New strict reviews do not generate work packets or module-aware reviewer shards. Stored manifests may still contain reviewer/judge packets, launch batches, packet ids, assigned scopes, and retry metadata. Runtime parsing, report enrichment, recovery UI, and target-evidence validation continue to read those fields so historical sessions are not rewritten as complete or successful.
 
-## Work Packets
-
-`src/web-ui/src/shared/services/review-team/workPackets.ts` creates pure launch-plan metadata. Work packets do not inspect file contents and do not make runtime retry or queue decisions.
-
-Each work packet includes:
-
-- packet id
-- phase (`reviewer` or `judge`)
-- launch batch
-- subagent id and labels
-- assigned scope
-- allowed tools
-- timeout seconds
-- required output fields
-- strategy level and directive
-- model slot
-
-If the included file count exceeds the reviewer file-split threshold and same-role instances are allowed, reviewer scopes are split into module-aware groups. Reviewer packets are then assigned launch batches using the concurrency policy. The judge packet, when present, runs in the batch after the final reviewer batch.
+Compatibility code must not turn historical packet support back into a new-launch requirement. Packet-specific queue and retry behavior applies only when an existing manifest actually contains those packets.
 
 ## Backend Policy and Admission
 
-`DeepReviewExecutionPolicy` in `src/crates/assembly/core/src/agentic/deep_review/execution_policy.rs` parses runtime policy from config and classifies subagent launches.
+`DeepReviewExecutionPolicy` in `src/crates/execution/agent-runtime/src/deep_review/execution_policy.rs` parses runtime policy and the new per-turn specialist-call ceiling. `DeepReviewRunManifestGate` admits only specialist-pool members and the optional `ReviewJudge`, rejects `ReviewFixer`, nested `DeepReview`, skipped members, and unconfigured agents, and preserves legacy manifest parsing and membership validation.
 
-Allowed DeepReview runtime launches are:
-
-- core reviewer roles
-- conditional reviewer roles when active in the manifest
-- configured extra reviewer roles
-- `ReviewJudge`
-
-Rejected launches include:
-
-- `ReviewFixer` during review execution
-- nested `DeepReview`
-- any subagent not configured for the review team
-- subagents skipped or absent from the run manifest
-
-`DeepReviewRunManifestGate` in `manifest.rs` reads active subagent ids from `workPackets`, `coreReviewers`, `enabledExtraReviewers`, and `qualityGateReviewer`. It also records skipped reviewer reasons so policy failures can explain why a reviewer is inactive.
+`DeepReviewBudgetTracker` separately permits at most one initial specialist and one Judge call for a new strict turn. This keeps the safety boundary deterministic without hard-coding which domain deserves delegation.
 
 ## Task Execution and Queue State
 
@@ -208,11 +144,11 @@ The generic `Task` tool is adapted for DeepReview in:
 
 DeepReview task execution uses the manifest and tool context to:
 
-- identify reviewer role and packet id
+- identify an optional specialist or quality-inspector role and any historical packet id
 - read historical incremental-cache metadata when present, without creating cache plans for new runs
-- enforce policy and retry coverage
-- cap active reviewers
-- preserve launch-batch ordering
+- enforce the new specialist-call ceiling and historical retry coverage
+- cap active optional reviewers
+- preserve launch-batch ordering only for historical packet manifests
 - wait for transient capacity when allowed
 - emit queue state events
 - record runtime diagnostics and capacity skips
@@ -316,8 +252,8 @@ The review action bar persists UI state separately through `ReviewActionBarPersi
 - Project integration adapters own raw workspace/Git target acquisition. The artifact/evidence layer owns the fixed session target manifest and its completeness. Mutable workspace targets may have complete prepared diff coverage, but their final evidence status remains `limited`. Reviewers may not mutate or silently widen that target.
 - The backend owns policy validation, runtime admission, queue/retry state, event emission, and report enrichment.
 - Reviewer subagents and review orchestrators stay read-only. Remediation runs under `ReviewFixer` after user approval, not during the reviewer pass.
-- Work packets and evidence packs are planning metadata; they must not embed file contents or full diffs.
-- Existing reviewer Git exposure remains unchanged for legacy compatibility, but prepared work packets do not authorize it as changed-code evidence and no dedicated multi-operation Git tool is added. Prepared `GetFileDiff` must be bounded and disable external diff/text conversion; live repository reads are supplemental and require a deterministic clean local binding.
+- Historical work packets and current evidence packs are metadata only; they must not embed file contents or full diffs.
+- Existing reviewer Git exposure remains unchanged for legacy compatibility, but prepared target evidence does not authorize it as changed-code evidence and no dedicated multi-operation Git tool is added. Prepared `GetFileDiff` must be bounded and disable external diff/text conversion; live repository reads are supplemental and require a deterministic clean local binding.
 
 ## Change Checklist
 

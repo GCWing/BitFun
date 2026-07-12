@@ -72,6 +72,7 @@ export function buildEffectiveExecutionPolicy(params: {
 export function buildTokenBudgetPlan(params: {
   mode: ReviewTokenBudgetMode;
   activeReviewerCalls: number;
+  maxReviewerCalls?: number;
   eligibleExtraReviewerCount: number;
   maxExtraReviewers: number;
   skippedReviewerIds: string[];
@@ -106,7 +107,7 @@ export function buildTokenBudgetPlan(params: {
   return {
     mode: params.mode,
     estimatedReviewerCalls: params.activeReviewerCalls,
-    maxReviewerCalls: params.activeReviewerCalls,
+    maxReviewerCalls: params.maxReviewerCalls ?? params.activeReviewerCalls,
     maxExtraReviewers: params.maxExtraReviewers,
     ...(fileSplitGuardrailActive
       ? { maxFilesPerReviewer: params.executionPolicy.reviewerFileSplitThreshold }

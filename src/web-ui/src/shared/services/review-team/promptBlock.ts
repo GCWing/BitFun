@@ -113,6 +113,15 @@ export function buildReviewTeamPromptBlockContent(
   manifest: ReviewTeamRunManifest,
 ): string {
   const executionPlan = compactExecutionPlan(manifest.workPackets);
+  const hasLegacyPackets = executionPlan.active_packets.length > 0;
+  const specialistPool = [
+    ...manifest.coreReviewers,
+    ...manifest.enabledExtraReviewers,
+  ].map((member) => ({
+    subagent_type: member.subagentId,
+    role: member.roleName,
+    model_id: member.model,
+  }));
   const compactManifest = {
     review_mode: manifest.reviewMode,
     selected_strategy: manifest.strategyLevel,
@@ -121,6 +130,9 @@ export function buildReviewTeamPromptBlockContent(
       resolution: manifest.target.resolution,
       tags: manifest.target.tags,
       file_count: manifest.changeStats?.fileCount ?? manifest.target.files.length,
+      files: manifest.target.files
+        .filter((file) => !file.excluded)
+        .map((file) => file.normalizedPath),
       changed_line_count: manifest.changeStats?.totalLinesChanged ?? null,
       changed_line_count_source: manifest.changeStats?.lineCountSource ?? 'unknown',
     },
@@ -134,27 +146,60 @@ export function buildReviewTeamPromptBlockContent(
       }
       : null,
     execution: {
-      max_parallel_instances: manifest.concurrencyPolicy.maxParallelInstances,
-      max_retries_per_role: manifest.executionPolicy.maxRetriesPerRole,
+      ...(hasLegacyPackets
+        ? {
+          max_parallel_instances: manifest.concurrencyPolicy.maxParallelInstances,
+          max_retries_per_role: manifest.executionPolicy.maxRetriesPerRole,
+        }
+        : {
+          max_specialist_calls: manifest.executionPolicy.maxReviewerCalls ?? 1,
+          max_review_agent_executions: manifest.tokenBudget.maxReviewerCalls,
+          specialist_timeout_seconds: manifest.executionPolicy.reviewerTimeoutSeconds,
+          quality_inspector_timeout_seconds: manifest.executionPolicy.judgeTimeoutSeconds,
+        }),
     },
+    specialist_pool: specialistPool,
+    quality_inspector: manifest.qualityGateReviewer
+      ? {
+        subagent_type: manifest.qualityGateReviewer.subagentId,
+        role: manifest.qualityGateReviewer.roleName,
+        model_id: manifest.qualityGateReviewer.model,
+      }
+      : null,
     ...executionPlan,
   };
 
-  return [
+  const rules = [
     'Prepared Review execution plan (target already resolved):',
     '```json',
     JSON.stringify(compactManifest, null, 2),
     '```',
     'Execution rules:',
     '- Do not reinterpret, widen, or replace the prepared target.',
-    '- Launch only active_packets, in launch_batch order, and never exceed max_parallel_instances.',
-    '- Build each reviewer prompt from its active packet plus the referenced scope_group; do not repeat unrelated scopes or policies.',
-    '- Stay within allowed_tools and the referenced scope. Read one-hop context only when required to verify a concrete finding.',
-    '- Run a judge packet only after all reviewer packets finish.',
-    '- Every result must report packet_id and status. Infer missing packet_id only from the scheduled packet and mark it inferred.',
-    '- Retry a failed or timed-out role only when evidence is still missing and within max_retries_per_role.',
     '- Partial, unknown, stale, omitted, or exhausted evidence must remain an explicit coverage limitation.',
     '- Remain read-only. Do not launch ReviewFixer or start remediation without explicit user approval.',
-    '- Submit one structured final report after the active plan completes.',
-  ].join('\n');
+  ];
+
+  if (hasLegacyPackets) {
+    rules.push(
+      'Legacy packet compatibility:',
+      '- Launch only active_packets, in launch_batch order, and never exceed max_parallel_instances.',
+      '- Build each reviewer prompt from its packet and referenced scope_group; stay within allowed_tools and the assigned scope.',
+      '- Run a judge packet only after all reviewer packets finish.',
+      '- Retry only when evidence is still missing and within max_retries_per_role; do not invent additional packets.',
+      '- Every packet result must report packet_id and status; preserve missing or inferred packet state in coverage notes.',
+      '- Submit one structured final report after the historical packet plan completes.',
+    );
+  } else {
+    rules.push(
+      '- Review the prepared target directly before considering delegation.',
+      '- Launch at most one specialist, and only for a concrete uncertainty where a fresh focused pass can materially improve the result.',
+      '- Do not use a specialist to repeat the primary review, divide files, or provide routine role coverage.',
+      '- Run the quality inspector only when a high-severity finding, conflicting evidence, or low-confidence conclusion needs independent validation.',
+      '- If no specialist or quality inspector is needed, complete the report directly.',
+      '- Submit one structured final report after review and any justified validation complete.',
+    );
+  }
+
+  return rules.join('\n');
 }

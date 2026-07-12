@@ -54,7 +54,6 @@ import {
   buildTokenBudgetPlan,
 } from './tokenBudget';
 import {
-  buildWorkPackets,
   resolveChangeStats,
   resolveMaxExtraReviewers,
 } from './workPackets';
@@ -79,6 +78,7 @@ import type {
   ReviewTeamRateLimitStatus,
   ReviewTeamRunManifest,
   ReviewTeamStoredConfig,
+  ReviewTeamWorkPacket,
   ReviewTokenBudgetMode,
 } from './types';
 
@@ -1332,20 +1332,21 @@ export function buildEffectiveReviewTeamManifest(
   const budgetLimitedExtraMembers = eligibleExtraMembers.slice(maxExtraReviewers);
   const enabledExtraReviewers = enabledExtraMembers
     .map((member) => toManifestMember(member));
-  const executionPolicy = buildEffectiveExecutionPolicy({
-    basePolicy: team.executionPolicy,
-    strategyLevel,
-    target,
-    changeStats,
-  });
-  const workPackets = buildWorkPackets({
-    reviewerMembers: [...coreReviewerMembers, ...enabledExtraMembers],
-    judgeMember: qualityGateReviewerMember,
-    target,
-    executionPolicy,
-    concurrencyPolicy,
-    targetEvidence: options.targetEvidence,
-  });
+  const executionPolicy = {
+    ...buildEffectiveExecutionPolicy({
+      basePolicy: team.executionPolicy,
+      strategyLevel,
+      target,
+      changeStats,
+    }),
+    // A strict run is reviewed by the DeepReview agent itself. Specialist
+    // agents are optional fresh perspectives, not a pre-scheduled team.
+    reviewerFileSplitThreshold: 0,
+    maxSameRoleInstances: 1,
+    maxRetriesPerRole: 0,
+    maxReviewerCalls: 1,
+  };
+  const workPackets: ReviewTeamWorkPacket[] = [];
   const evidencePack = buildDeepReviewEvidencePack({
     target,
     changeStats,
@@ -1355,7 +1356,10 @@ export function buildEffectiveReviewTeamManifest(
   });
   const tokenBudget = buildTokenBudgetPlan({
     mode: tokenBudgetMode,
-    activeReviewerCalls: workPackets.length,
+    // One primary DeepReview agent execution is guaranteed. At most one
+    // specialist and one conditional quality-inspector execution may follow.
+    activeReviewerCalls: 1,
+    maxReviewerCalls: 3,
     eligibleExtraReviewerCount: eligibleExtraMembers.length,
     maxExtraReviewers,
     skippedReviewerIds: budgetLimitedExtraMembers.map((member) => member.subagentId),

@@ -110,23 +110,6 @@ export const REVIEW_WORK_PACKET_ALLOWED_TOOLS = [
   'LS',
 ] as const;
 
-export const REVIEWER_WORK_PACKET_REQUIRED_OUTPUT_FIELDS = [
-  'packet_id',
-  'status',
-  'verdict',
-  'findings',
-  'reviewer_summary',
-] as const;
-
-export const JUDGE_WORK_PACKET_REQUIRED_OUTPUT_FIELDS = [
-  'packet_id',
-  'status',
-  'decision_summary',
-  'validated_findings',
-  'rejected_or_downgraded_notes',
-  'coverage_notes',
-] as const;
-
 export const DEFAULT_REVIEW_TEAM_CORE_ROLES: ReviewTeamCoreRoleDefinition[] = [
   {
     key: 'businessLogic',
@@ -229,7 +212,7 @@ export const FALLBACK_REVIEW_TEAM_DEFINITION: ReviewTeamDefinition = {
   id: DEFAULT_REVIEW_TEAM_ID,
   name: 'Strict Review Coverage',
   description:
-    'A multi-reviewer coverage plan for strict code review with mandatory logic, performance, security, architecture, conditional frontend, and quality-gate roles.',
+    'A strict code-review policy where the primary reviewer works directly and may request one focused specialist or a conditional quality check.',
   warning:
     'Strict review may take longer and usually consumes more tokens than a standard review.',
   defaultModel: DEFAULT_REVIEW_TEAM_MODEL,

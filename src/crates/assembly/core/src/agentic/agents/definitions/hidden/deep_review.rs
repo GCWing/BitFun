@@ -48,7 +48,7 @@ impl Agent for DeepReviewAgent {
     }
 
     fn description(&self) -> &str {
-        r#"Read-only strict-review orchestrator for substantial changes. It dispatches independent specialist reviewers, runs a quality-inspector pass, and submits a consolidated evidence-backed report. A separate ReviewFixer owns approved remediation."#
+        r#"Read-only strict reviewer for substantial changes. It reviews the prepared target directly, may request one focused specialist or conditional quality check, and submits an evidence-backed report. A separate ReviewFixer owns approved remediation."#
     }
 
     fn prompt_template_name(&self, _model_name: Option<&str>) -> &str {
@@ -81,7 +81,7 @@ mod tests {
     use crate::agentic::tools::framework::ToolExposure;
 
     #[test]
-    fn deep_review_agent_has_team_orchestration_tools() {
+    fn deep_review_agent_has_optional_validation_tools() {
         let agent = DeepReviewAgent::new();
         let tools = agent.default_tools();
 

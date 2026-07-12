@@ -205,6 +205,8 @@ export interface ReviewTeamExecutionPolicy {
   reviewerFileSplitThreshold: number;
   maxSameRoleInstances: number;
   maxRetriesPerRole: number;
+  /** Maximum optional specialist launches for a new strict-review turn. */
+  maxReviewerCalls?: number;
 }
 
 export interface ReviewTeamConcurrencyPolicy {

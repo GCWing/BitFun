@@ -1,7 +1,7 @@
 # BitFun 智能体工作流交互与边界补充设计
 
 > 范围：为 [../agent-workflow-staged-plan.md](../agent-workflow-staged-plan.md) 中的场景提供交互和边界补充。
-> 本文不定义新的 Agent Kernel、Harness、QDP 或 DeepReview 核心对象模型；实现时优先复用既有 session、task、Agent Kernel/Harness long-running queue、DeepReview manifest、work packets、runtime events 和质量数据面契约。
+> 本文不定义新的 Agent Kernel、Harness、QDP 或 DeepReview 核心对象模型；实现时优先复用既有 session、task、Agent Kernel/Harness long-running queue、DeepReview manifest、runtime events 和质量数据面契约。历史 work packets 仅用于旧会话兼容。
 
 ## 1. 设计定位
 
@@ -16,7 +16,7 @@
 - 不定义新的 workflow DSL。
 - 不定义新的 P0/P1/P2/P3/P4。
 - 不定义新的持久化实体作为 P0/P1 前置。
-- 不把多 reviewer 严格审查或任务控制台放入默认路径。
+- 不把固定多 reviewer 严格审查或任务控制台放入默认路径。
 
 ## 2. 复用边界
 
@@ -42,12 +42,12 @@
 
 ## 4. Review 交互
 
-Review 是用户唯一需要理解的审查入口。普通 Review 固定为一个只读 reviewer；显式 Strict Review 才复用 L3 DeepReview。用户不需要理解 DeepReview、subagent 或 work packets。
+Review 是用户唯一需要理解的审查入口。普通 Review 固定为一个只读 reviewer；显式 Strict Review 复用 L3 DeepReview，由主审直接完成更深检查并自行决定是否需要一次专家或条件质量检查。用户不需要理解 DeepReview、subagent 或历史 work packets。
 
 入口兼容约束：
 
 - `/DeepReview` 只作为迁移窗口内的历史兼容输入，等价路由到 “Review: Strict”，不作为高级别名、调试入口或长期产品入口。
-- child session、auxiliary pane、work packets 和内部 capacity queue 默认后台化；普通用户只看到统一 Review 面板。
+- child session 和 auxiliary pane 默认后台化；历史 work packets 与 capacity queue 只服务旧会话兼容，普通用户只看到统一 Review 面板。
 - 如果辅助 pane 因排障需要暴露，必须折叠到高级详情，并同步更新 DeepReview 架构文档，避免形成第二套产品入口。
 
 | 强度 | 用户看到 | 默认限制 |
@@ -72,8 +72,8 @@ Review 面板只按问题呈现：
 
 | 触发 | UI 行为 |
 |---|---|
-| 显式 Strict Review | 展示范围、计划 reviewer/调用数、并发或耗时倾向和只读边界；不估算 token |
-| 需要多个 reviewer | 说明新增覆盖范围和运行时倾向，不承诺尚无可靠来源的成本数字 |
+| 显式 Strict Review | 展示范围、一次计划主审、最多三次审查代理执行的硬上限、耗时倾向和只读边界；不估算底层模型请求或 token |
+| 主审决定请求专家或质量检查 | 只在具体不确定性、高严重度、冲突或低置信度时发生，不提前承诺固定覆盖角色 |
 | 需要并发 worker | 说明节省墙钟时间和冲突风险 |
 | 预算接近上限 | 暂停扩大执行，给出追加预算、保留核心检查、只收敛已完成 |
 | oracle 不可靠 | 停止扩大，改为人工确认或小样本建议 |
@@ -83,7 +83,7 @@ Review 面板只按问题呈现：
 成本确认最低契约：
 
 - 只有进入显式 L3 strict review、并发 worker、批量队列或长任务控制台时才弹出预算确认。
-- 当前 Strict Review 确认展示范围、计划 reviewer/调用数、并发或耗时倾向和只读边界。Token 估算、启动前范围调整和停止选项尚未实现，不写成当前能力。
+- 当前 Strict Review 确认展示范围、一次计划主审、最多三次审查代理执行的硬上限、耗时倾向和只读边界。底层模型请求与 Token 估算、启动前范围调整和停止选项尚未实现，不写成当前能力。
 - 预算确认不能替代安全确认；执行位置、沙箱等级、写入范围、网络/凭据状态仍由安全边界提供。
 
 ## 6. 批量任务 GUI

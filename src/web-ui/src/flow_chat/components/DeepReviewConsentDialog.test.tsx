@@ -299,13 +299,13 @@ describeWithJsdom('DeepReviewConsentDialog', () => {
     expect(container.textContent).toContain('BitFun selected the most relevant checks for this target.');
     expect(container.textContent).not.toContain('Estimated reviewer prompt input');
     expect(container.textContent).not.toContain('Reviewer prompt input only');
-    expect(container.textContent).toContain('Independent checks: 3 planned calls');
-    expect(container.textContent).toContain('Up to 3 calls can run at the same time.');
+    expect(container.textContent).toContain('Independent checks: 3 planned review agent run');
+    expect(container.textContent).toContain('Up to 4 review agent runs may occur without another confirmation.');
     expect(container.textContent).not.toContain('up to 4 initial calls');
     expect(container.textContent).toContain('Run strategy: Standard');
     expect(container.textContent).not.toContain('Do not show this again');
     expect(container.textContent).not.toContain('Risk areas: Backend core');
-    expect(container.textContent).toContain('Planned independent reviewer calls; token use is not estimated here.');
+    expect(container.textContent).toContain('Planned review agent runs; model requests and token use are not estimated here.');
     expect(container.textContent).not.toContain('1 extra specialist');
     expect(container.textContent).not.toContain('Review depth: Risk-expanded');
     expect(container.textContent).not.toContain('Frontend reviewer');
@@ -344,7 +344,7 @@ describeWithJsdom('DeepReviewConsentDialog', () => {
     expect(container.textContent).toContain('Provided context');
     expect(container.textContent).not.toContain('0 files');
     expect(container.textContent).not.toContain('Risk areas:');
-    expect(container.textContent).toContain('Planned independent reviewer calls; token use is not estimated here.');
+    expect(container.textContent).toContain('Planned review agent runs; model requests and token use are not estimated here.');
   });
 
   it('still opens when skip preference is set but reviewers are skipped', async () => {
@@ -426,7 +426,7 @@ describeWithJsdom('DeepReviewConsentDialog', () => {
     expect(container.querySelectorAll('.deep-review-consent__strategy-heading')).toHaveLength(0);
     expect(container.textContent).not.toContain('Quick is narrower');
     expect(container.textContent).not.toContain('Risk areas: Backend core');
-    expect(container.textContent).toContain('Planned independent reviewer calls; token use is not estimated here.');
+    expect(container.textContent).toContain('Planned review agent runs; model requests and token use are not estimated here.');
     expect(container.textContent).not.toContain('1 extra specialist');
     expect(container.textContent).not.toContain('Expected cost:');
     expect(container.querySelectorAll('.deep-review-consent__strategy-selected-summary')).toHaveLength(0);

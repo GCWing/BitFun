@@ -347,7 +347,7 @@ describe('reviewTeamService', () => {
 
     expect(promptBlock).toContain('"subagent_type": "ExtraEnabled"');
     expect(promptBlock).not.toContain('"subagent_type": "ExtraDisabled"');
-    expect(promptBlock).toContain('Launch only active_packets');
+    expect(promptBlock).toContain('Launch at most one specialist');
   });
 
   it('can resolve the team from a backend-provided reviewer definition', () => {
@@ -683,6 +683,85 @@ describe('reviewTeamService', () => {
     expect(manifest.strategyLevel).toBe('deep');
     expect(manifest.qualityDecision).toEqual({ level: 'l3' });
     expect(manifest.qualityGateReviewer?.subagentId).toBe('ReviewJudge');
+    expect(manifest.workPackets).toEqual([]);
+    expect(manifest.executionPolicy).toMatchObject({
+      reviewerFileSplitThreshold: 0,
+      maxSameRoleInstances: 1,
+      maxRetriesPerRole: 0,
+      maxReviewerCalls: 1,
+    });
+    expect(manifest.tokenBudget).toMatchObject({
+      estimatedReviewerCalls: 1,
+      maxReviewerCalls: 3,
+    });
+
+    const promptBlock = buildReviewTeamPromptBlock(team, manifest);
+    expect(promptBlock).toContain('Review the prepared target directly before considering delegation.');
+    expect(promptBlock).toContain('Launch at most one specialist');
+    expect(promptBlock).toContain('Run the quality inspector only');
+    expect(promptBlock).toContain('"max_review_agent_executions": 3');
+    expect(promptBlock).not.toContain('max_total_model_calls');
+    expect(promptBlock).not.toContain('Launch only active_packets');
+  });
+
+  it('keeps historical packet dispatch rules without applying the new strict ceiling', () => {
+    const team = resolveDefaultReviewTeam(coreSubagents(), storedConfigWithExtra());
+    const manifest = buildEffectiveReviewTeamManifest(team, {
+      strategyOverride: 'deep',
+      qualityDecision: { level: 'l3' },
+    });
+    const assignedScope = {
+      kind: 'review_target' as const,
+      targetSource: 'workspace_diff' as const,
+      targetResolution: 'resolved' as const,
+      targetTags: [],
+      fileCount: 1,
+      files: ['src/lib.rs'],
+      excludedFileCount: 0,
+    };
+    manifest.executionPolicy.maxRetriesPerRole = 1;
+    manifest.workPackets = [
+      {
+        packetId: 'legacy-logic',
+        phase: 'reviewer',
+        launchBatch: 0,
+        subagentId: 'ReviewBusinessLogic',
+        displayName: 'Logic reviewer',
+        roleName: 'Business Logic Reviewer',
+        assignedScope,
+        allowedTools: ['GetFileDiff'],
+        timeoutSeconds: 1200,
+        requiredOutputFields: ['issues'],
+        strategyLevel: 'deep',
+        strategyDirective: 'Review behavior.',
+        model: 'fast',
+      },
+      {
+        packetId: 'legacy-security',
+        phase: 'reviewer',
+        launchBatch: 0,
+        subagentId: 'ReviewSecurity',
+        displayName: 'Security reviewer',
+        roleName: 'Security Reviewer',
+        assignedScope,
+        allowedTools: ['GetFileDiff'],
+        timeoutSeconds: 1200,
+        requiredOutputFields: ['issues'],
+        strategyLevel: 'deep',
+        strategyDirective: 'Review trust boundaries.',
+        model: 'fast',
+      },
+    ];
+
+    const promptBlock = buildReviewTeamPromptBlock(team, manifest);
+
+    expect(promptBlock).toContain('Launch only active_packets');
+    expect(promptBlock).toContain('"max_parallel_instances": 4');
+    expect(promptBlock).toContain('"max_retries_per_role": 1');
+    expect(promptBlock).toContain('"packet_id": "legacy-logic"');
+    expect(promptBlock).toContain('"packet_id": "legacy-security"');
+    expect(promptBlock).not.toContain('Launch at most one specialist');
+    expect(promptBlock).not.toContain('Do not use a specialist to repeat');
   });
 
   it('keeps changed-file coverage metadata visible for focused-scope profiles', () => {
@@ -702,16 +781,8 @@ describe('reviewTeamService', () => {
 
     expect(manifest.scopeProfile.reviewDepth).toBe('high_risk_only');
     expect(manifest.target.files.map((file) => file.normalizedPath)).toEqual(files);
-    expect(
-      manifest.workPackets
-        ?.filter((packet) => packet.phase === 'reviewer')
-        .every((packet) => packet.assignedScope.files.every((file) => files.includes(file))),
-    ).toBe(true);
-    expect(
-      manifest.workPackets
-        ?.filter((packet) => packet.phase === 'reviewer')
-        .some((packet) => files.every((file) => packet.assignedScope.files.includes(file))),
-    ).toBe(true);
+    expect(manifest.evidencePack?.changedFiles).toEqual(files);
+    expect(manifest.workPackets).toEqual([]);
   });
 
   it('includes focused-scope profile guidance in the prompt block', () => {
@@ -728,75 +799,6 @@ describe('reviewTeamService', () => {
     expect(promptBlock).not.toContain('optional_reviewer_policy');
     expect(promptBlock).not.toContain('allow_broad_tool_exploration');
     expect(promptBlock).toContain('evidence must remain an explicit coverage limitation');
-  });
-
-  it('generates structured work packets for active reviewers and the judge', () => {
-    const team = resolveDefaultReviewTeam(
-      [
-        ...coreSubagents(),
-        subagent('ExtraEnabled', true, 'user', 'fast', true, true),
-      ],
-      storedConfigWithExtra(['ExtraEnabled']),
-    );
-    const target = classifyReviewTargetFromFiles(
-      ['src/web-ui/src/components/ReviewPanel.tsx'],
-      'session_files',
-    );
-
-    const manifest = buildEffectiveReviewTeamManifest(team, {
-      workspacePath: WORKSPACE_PATH,
-      target,
-    });
-
-    const logicPacket = manifest.workPackets?.find(
-      (packet) => packet.subagentId === 'ReviewBusinessLogic',
-    );
-    const judgePacket = manifest.workPackets?.find(
-      (packet) => packet.subagentId === 'ReviewJudge',
-    );
-
-    expect(logicPacket).toMatchObject({
-      packetId: 'reviewer:ReviewBusinessLogic',
-      phase: 'reviewer',
-      subagentId: 'ReviewBusinessLogic',
-      roleName: 'Business Logic Reviewer',
-      assignedScope: {
-        kind: 'review_target',
-        fileCount: 1,
-        files: ['src/web-ui/src/components/ReviewPanel.tsx'],
-      },
-      allowedTools: ['GetFileDiff', 'Read', 'Grep', 'Glob', 'LS'],
-      timeoutSeconds: manifest.executionPolicy.reviewerTimeoutSeconds,
-      requiredOutputFields: expect.arrayContaining([
-        'packet_id',
-        'status',
-        'findings',
-      ]),
-    });
-    expect(judgePacket).toMatchObject({
-      packetId: 'judge:ReviewJudge',
-      phase: 'judge',
-      subagentId: 'ReviewJudge',
-      timeoutSeconds: manifest.executionPolicy.judgeTimeoutSeconds,
-      requiredOutputFields: expect.arrayContaining([
-        'packet_id',
-        'status',
-        'validated_findings',
-      ]),
-    });
-    expect(manifest.workPackets?.map((packet) => packet.subagentId)).not.toContain(
-      'ExtraDisabled',
-    );
-    expect(manifest.executionPolicy.maxRetriesPerRole).toBe(1);
-
-    const promptBlock = buildReviewTeamPromptBlock(team, manifest);
-    expect(promptBlock).toContain('"active_packets"');
-    expect(promptBlock).toContain('"packet_id": "reviewer:ReviewBusinessLogic"');
-    expect(promptBlock).toContain('"allowed_tools"');
-    expect(promptBlock).toContain('"max_retries_per_role": 1');
-    expect(promptBlock).toContain('Retry a failed or timed-out role only when evidence is still missing');
-    expect(promptBlock).toContain('Build each reviewer prompt from its active packet plus the referenced scope_group');
-    expect(promptBlock).toContain('Infer missing packet_id only from the scheduled packet and mark it inferred.');
   });
 
   it('intersects extra reviewer tools with the read-only review tool set', () => {
@@ -984,10 +986,7 @@ describe('reviewTeamService', () => {
         lineCountSource: 'diff_stat',
       },
       riskFocusTags: manifest.scopeProfile?.riskFocusTags,
-      packetIds: expect.arrayContaining([
-        'reviewer:ReviewBusinessLogic',
-        'judge:ReviewJudge',
-      ]),
+      packetIds: [],
       privacy: {
         content: 'metadata_only',
       },
@@ -1082,260 +1081,6 @@ describe('reviewTeamService', () => {
     const promptBlock = buildReviewTeamPromptBlock(team, manifest);
     expect(promptBlock).not.toContain('Incremental review cache plan:');
     expect(promptBlock).not.toContain('incremental_review_cache');
-  });
-
-  it('splits reviewer work packets across file groups for large targets', () => {
-    const team = resolveDefaultReviewTeam(
-      coreSubagents(),
-      storedConfigWithExtra([], {
-        reviewer_file_split_threshold: 10,
-        max_same_role_instances: 3,
-      }),
-    );
-    const target = classifyReviewTargetFromFiles(
-      Array.from(
-        { length: 25 },
-        (_, index) => `src/web-ui/src/components/ReviewPanel${index}.tsx`,
-      ),
-      'session_files',
-    );
-
-    const manifest = buildEffectiveReviewTeamManifest(team, {
-      target,
-      strategyOverride: 'deep',
-      concurrencyPolicy: {
-        maxParallelInstances: 16,
-      },
-    });
-    const logicPackets = manifest.workPackets?.filter(
-      (packet) => packet.subagentId === 'ReviewBusinessLogic',
-    );
-    const judgePackets = manifest.workPackets?.filter(
-      (packet) => packet.subagentId === 'ReviewJudge',
-    );
-
-    expect(logicPackets).toHaveLength(3);
-    expect(logicPackets?.map((packet) => packet.packetId)).toEqual([
-      'reviewer:ReviewBusinessLogic:group-1-of-3',
-      'reviewer:ReviewBusinessLogic:group-2-of-3',
-      'reviewer:ReviewBusinessLogic:group-3-of-3',
-    ]);
-    expect(logicPackets?.map((packet) => packet.assignedScope.fileCount)).toEqual([
-      9,
-      8,
-      8,
-    ]);
-    expect(logicPackets?.[0].assignedScope).toMatchObject({
-      groupIndex: 1,
-      groupCount: 3,
-    });
-    expect(logicPackets?.[0].assignedScope.files.slice(0, 2)).toEqual([
-      'src/web-ui/src/components/ReviewPanel0.tsx',
-      'src/web-ui/src/components/ReviewPanel1.tsx',
-    ]);
-    expect(logicPackets?.[0].assignedScope.files.at(-1)).toBe(
-      'src/web-ui/src/components/ReviewPanel8.tsx',
-    );
-    expect(judgePackets).toHaveLength(1);
-    expect(judgePackets?.[0].assignedScope).toMatchObject({
-      fileCount: 25,
-    });
-    expect(judgePackets?.[0].assignedScope.groupCount).toBeUndefined();
-    expect(manifest.tokenBudget).toMatchObject({
-      estimatedReviewerCalls: 16,
-      maxFilesPerReviewer: 10,
-      largeDiffSummaryFirst: false,
-    });
-
-    const promptBlock = buildReviewTeamPromptBlock(team, manifest);
-    expect(promptBlock).toContain('"packet_id": "reviewer:ReviewBusinessLogic:group-1-of-3"');
-    expect(promptBlock).toContain('"group_index": 1');
-    expect(promptBlock).toContain('"group_count": 3');
-  });
-
-  it('keeps split reviewer work packets grouped by workspace area when possible', () => {
-    const team = resolveDefaultReviewTeam(
-      coreSubagents(),
-      storedConfigWithExtra([], {
-        reviewer_file_split_threshold: 4,
-        max_same_role_instances: 3,
-      }),
-    );
-    const target = classifyReviewTargetFromFiles(
-      [
-        'src/web-ui/src/components/ReviewPanel.tsx',
-        'src/crates/assembly/core/src/agentic/deep_review_policy.rs',
-        'src/apps/desktop/src/api/review.rs',
-        'src/web-ui/src/shared/services/reviewTeamService.ts',
-        'src/crates/assembly/core/src/agentic/tools/implementations/task_tool.rs',
-        'src/apps/desktop/src/api/agent.rs',
-        'src/web-ui/src/flow_chat/deep-review/action-bar/CapacityQueueNotice.tsx',
-        'src/crates/assembly/core/src/agentic/agents/deep_review_agent.rs',
-        'src/apps/desktop/src/api/config.rs',
-        'src/web-ui/src/locales/en-US/scenes/agents.json',
-        'src/crates/assembly/core/src/agentic/agents/prompts/deep_review_agent.md',
-        'src/apps/desktop/src/api/subagent.rs',
-      ],
-      'session_files',
-    );
-
-    const manifest = buildEffectiveReviewTeamManifest(team, {
-      target,
-      strategyOverride: 'deep',
-      concurrencyPolicy: {
-        maxParallelInstances: 16,
-      },
-    });
-    const logicPackets = manifest.workPackets?.filter(
-      (packet) => packet.subagentId === 'ReviewBusinessLogic',
-    );
-
-    expect(logicPackets).toHaveLength(3);
-    expect(logicPackets?.map((packet) => packet.assignedScope.files)).toEqual([
-      [
-        'src/web-ui/src/components/ReviewPanel.tsx',
-        'src/web-ui/src/shared/services/reviewTeamService.ts',
-        'src/web-ui/src/flow_chat/deep-review/action-bar/CapacityQueueNotice.tsx',
-        'src/web-ui/src/locales/en-US/scenes/agents.json',
-      ],
-      [
-        'src/crates/assembly/core/src/agentic/deep_review_policy.rs',
-        'src/crates/assembly/core/src/agentic/tools/implementations/task_tool.rs',
-        'src/crates/assembly/core/src/agentic/agents/deep_review_agent.rs',
-        'src/crates/assembly/core/src/agentic/agents/prompts/deep_review_agent.md',
-      ],
-      [
-        'src/apps/desktop/src/api/review.rs',
-        'src/apps/desktop/src/api/agent.rs',
-        'src/apps/desktop/src/api/config.rs',
-        'src/apps/desktop/src/api/subagent.rs',
-      ],
-    ]);
-
-    const promptBlock = buildReviewTeamPromptBlock(team, manifest);
-    expect(promptBlock).toContain('"scope_groups"');
-    expect(promptBlock).toContain('"scope_id": "scope-1"');
-    expect(promptBlock).not.toContain('assigned_scope');
-  });
-
-  it('caps file splitting and launch batches by concurrency policy', () => {
-    const team = resolveDefaultReviewTeam(
-      coreSubagents(),
-      storedConfigWithExtra([], {
-        reviewer_file_split_threshold: 10,
-        max_same_role_instances: 3,
-      }),
-    );
-    const target = classifyReviewTargetFromFiles(
-      Array.from(
-        { length: 25 },
-        (_, index) => `src/web-ui/src/components/ReviewPanel${index}.tsx`,
-      ),
-      'session_files',
-    );
-
-    const manifest = buildEffectiveReviewTeamManifest(team, { target });
-    const reviewerPackets = manifest.workPackets?.filter(
-      (packet) => packet.phase === 'reviewer',
-    ) ?? [];
-    const logicPackets = reviewerPackets.filter(
-      (packet) => packet.subagentId === 'ReviewBusinessLogic',
-    );
-
-    expect(manifest.concurrencyPolicy).toMatchObject({
-      maxParallelInstances: 4,
-      staggerSeconds: 0,
-      maxQueueWaitSeconds: 1200,
-      batchExtrasSeparately: true,
-    });
-    expect(logicPackets).toHaveLength(1);
-    expect(logicPackets[0].assignedScope.groupCount).toBeUndefined();
-    expect(reviewerPackets).toHaveLength(5);
-    expect(reviewerPackets.slice(0, 4).map((packet) => packet.launchBatch)).toEqual([1, 1, 1, 1]);
-    expect(reviewerPackets[4].launchBatch).toBe(2);
-    expect(manifest.qualityGateReviewer && manifest.workPackets?.find(
-      (packet) => packet.subagentId === manifest.qualityGateReviewer?.subagentId,
-    )?.launchBatch).toBe(3);
-
-    const promptBlock = buildReviewTeamPromptBlock(team, manifest);
-    expect(promptBlock).toContain('"max_parallel_instances": 4');
-    expect(promptBlock).not.toContain('max_queue_wait_seconds');
-    expect(promptBlock).toContain('in launch_batch order');
-    expect(promptBlock).toContain('"launch_batch": 2');
-  });
-
-  it('keeps extra reviewers in a separate launch batch when requested', () => {
-    const team = resolveDefaultReviewTeam(
-      [
-        ...coreSubagents(),
-        subagent('ReviewProductExtra'),
-      ],
-      storedConfigWithExtra(['ReviewProductExtra'], {
-        max_parallel_reviewers: 6,
-      }),
-    );
-    const target = classifyReviewTargetFromFiles([
-      'src/web-ui/src/components/ReviewPanel.tsx',
-      'src/web-ui/src/components/ReviewPanel.css',
-    ], 'session_files');
-
-    const manifest = buildEffectiveReviewTeamManifest(team, { target });
-    const reviewerPackets = manifest.workPackets?.filter(
-      (packet) => packet.phase === 'reviewer',
-    ) ?? [];
-    const corePackets = reviewerPackets.filter(
-      (packet) => packet.subagentId !== 'ReviewProductExtra',
-    );
-    const extraPackets = reviewerPackets.filter(
-      (packet) => packet.subagentId === 'ReviewProductExtra',
-    );
-
-    expect(corePackets).toHaveLength(5);
-    expect(extraPackets).toHaveLength(1);
-    expect(corePackets.map((packet) => packet.launchBatch)).toEqual([1, 1, 1, 1, 1]);
-    expect(extraPackets.map((packet) => packet.launchBatch)).toEqual([2]);
-    expect(manifest.qualityGateReviewer && manifest.workPackets?.find(
-      (packet) => packet.subagentId === manifest.qualityGateReviewer?.subagentId,
-    )?.launchBatch).toBe(3);
-  });
-
-  it('reduces reviewer concurrency when rate limit remaining is tight', () => {
-    const team = resolveDefaultReviewTeam(
-      coreSubagents(),
-      storedConfigWithExtra([], {
-        reviewer_file_split_threshold: 10,
-        max_same_role_instances: 3,
-      }),
-    );
-    const target = classifyReviewTargetFromFiles(
-      Array.from(
-        { length: 25 },
-        (_, index) => `src/web-ui/src/components/ReviewPanel${index}.tsx`,
-      ),
-      'session_files',
-    );
-
-    const manifest = buildEffectiveReviewTeamManifest(team, {
-      target,
-      rateLimitStatus: { remaining: 2 },
-    });
-    const reviewerPackets = manifest.workPackets?.filter(
-      (packet) => packet.phase === 'reviewer',
-    ) ?? [];
-
-    expect(manifest.concurrencyPolicy).toMatchObject({
-      maxParallelInstances: 2,
-      staggerSeconds: 10,
-      batchExtrasSeparately: true,
-    });
-    expect(reviewerPackets.map((packet) => packet.launchBatch)).toEqual([1, 1, 2, 2, 3]);
-    expect(manifest.qualityGateReviewer && manifest.workPackets?.find(
-      (packet) => packet.subagentId === manifest.qualityGateReviewer?.subagentId,
-    )?.launchBatch).toBe(4);
-
-    const promptBlock = buildReviewTeamPromptBlock(team, manifest);
-    expect(promptBlock).toContain('"max_parallel_instances": 2');
-    expect(promptBlock).not.toContain('stagger_seconds');
   });
 
   it('skips the frontend reviewer when the resolved target has no frontend tags', () => {
@@ -1445,7 +1190,8 @@ describe('reviewTeamService', () => {
 
     expect(manifest.tokenBudget).toMatchObject({
       mode: 'balanced',
-      estimatedReviewerCalls: 7,
+      estimatedReviewerCalls: 1,
+      maxReviewerCalls: 3,
       maxExtraReviewers: 1,
       skippedReviewerIds: [],
     });
@@ -1485,9 +1231,7 @@ describe('reviewTeamService', () => {
       maxExtraReviewers: 0,
       skippedReviewerIds: ['ExtraEnabled'],
     });
-    expect(manifest.tokenBudget.maxReviewerCalls).toBe(
-      manifest.tokenBudget.estimatedReviewerCalls,
-    );
+    expect(manifest.tokenBudget.maxReviewerCalls).toBe(3);
     expect(manifest.enabledExtraReviewers).toEqual([]);
     expect(manifest.executionPolicy).toMatchObject({
       reviewerTimeoutSeconds: 1200,
@@ -1557,16 +1301,10 @@ describe('reviewTeamService', () => {
       reviewerFileSplitThreshold: 0,
       maxSameRoleInstances: 1,
     });
-    expect(
-      manifest.workPackets.filter(
-        (packet) =>
-          packet.phase === 'reviewer' &&
-          packet.subagentId === 'ReviewBusinessLogic',
-      ),
-    ).toHaveLength(1);
+    expect(manifest.workPackets).toEqual([]);
   });
 
-  it('keeps deep strategy thorough with long budget and same-role splitting', () => {
+  it('keeps deep strategy thorough without automatic reviewer fan-out', () => {
     const team = resolveDefaultReviewTeam(
       coreSubagents(),
       storedConfigWithExtra(),
@@ -1600,16 +1338,12 @@ describe('reviewTeamService', () => {
     expect(manifest.executionPolicy).toMatchObject({
       reviewerTimeoutSeconds: 3600,
       judgeTimeoutSeconds: 2400,
-      reviewerFileSplitThreshold: 20,
-      maxSameRoleInstances: 3,
+      reviewerFileSplitThreshold: 0,
+      maxSameRoleInstances: 1,
+      maxRetriesPerRole: 0,
+      maxReviewerCalls: 1,
     });
-    expect(
-      manifest.workPackets.filter(
-        (packet) =>
-          packet.phase === 'reviewer' &&
-          packet.subagentId === 'ReviewBusinessLogic',
-      ),
-    ).toHaveLength(2);
+    expect(manifest.workPackets).toEqual([]);
   });
 
   it('does not invent prompt-byte pressure or hide assigned files', () => {
@@ -1644,65 +1378,12 @@ describe('reviewTeamService', () => {
         expect.objectContaining({ kind: 'summary_first_full_scope' }),
       ]),
     );
-    const reviewerPackets = manifest.workPackets.filter(
-      (packet) => packet.phase === 'reviewer',
-    );
-    expect(reviewerPackets).not.toHaveLength(0);
-    for (const packet of reviewerPackets) {
-      expect(packet.assignedScope.files).toEqual(files);
+    expect(manifest.workPackets).toEqual([]);
+
+    const promptBlock = buildReviewTeamPromptBlock(team, manifest);
+    for (const file of files) {
+      expect(promptBlock).toContain(file);
     }
-
-    const promptBlock = buildReviewTeamPromptBlock(team, manifest);
-    expect(promptBlock).not.toContain('token_budget_decisions');
-    expect(promptBlock).not.toContain('prompt_byte');
-  });
-
-  it('keeps summary-first disabled when split guardrails fit the prompt-byte budget', () => {
-    const team = resolveDefaultReviewTeam(
-      coreSubagents(),
-      storedConfigWithExtra([], {
-        reviewer_file_split_threshold: 4,
-        max_same_role_instances: 2,
-      }),
-    );
-    const files = Array.from(
-      { length: 5 },
-      (_, index) => `src/crates/assembly/core/src/agentic/small_${index}.rs`,
-    );
-    const target = classifyReviewTargetFromFiles(files, 'workspace_diff');
-
-    const manifest = buildEffectiveReviewTeamManifest(team, {
-      target,
-      strategyOverride: 'deep',
-      tokenBudgetMode: 'thorough',
-      concurrencyPolicy: {
-        maxParallelInstances: 8,
-      },
-      changeStats: {
-        fileCount: files.length,
-        totalLinesChanged: 25,
-        lineCountSource: 'diff_stat',
-      },
-    });
-
-    expect(manifest.tokenBudget).toMatchObject({
-      maxFilesPerReviewer: 4,
-      largeDiffSummaryFirst: false,
-    });
-    expect(manifest.tokenBudget.maxPromptBytesPerReviewer).toBeUndefined();
-    expect(manifest.tokenBudget.promptByteLimitExceeded).toBeUndefined();
-    expect(manifest.workPackets.filter((packet) => packet.phase === 'reviewer'))
-      .toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            assignedScope: expect.objectContaining({
-              groupCount: 2,
-            }),
-          }),
-        ]),
-      );
-
-    const promptBlock = buildReviewTeamPromptBlock(team, manifest);
     expect(promptBlock).not.toContain('token_budget_decisions');
     expect(promptBlock).not.toContain('prompt_byte');
   });
@@ -1734,8 +1415,8 @@ describe('reviewTeamService', () => {
     const promptBlock = buildReviewTeamPromptBlock(team, manifest);
     expect(promptBlock).toContain('"file_count": 25');
     expect(promptBlock).toContain('"changed_line_count": null');
-    expect(promptBlock).toContain('"timeout_seconds": 1800');
-    expect(promptBlock).toContain('"timeout_seconds": 1200');
+    expect(promptBlock).toContain('"specialist_timeout_seconds": 1800');
+    expect(promptBlock).toContain('"quality_inspector_timeout_seconds": 1200');
   });
 
   it('keeps normal manifest timeouts bounded even with diff line stats', () => {
@@ -1773,8 +1454,8 @@ describe('reviewTeamService', () => {
     const promptBlock = buildReviewTeamPromptBlock(team, manifest);
     expect(promptBlock).toContain('"changed_line_count": 800');
     expect(promptBlock).toContain('"changed_line_count_source": "diff_stat"');
-    expect(promptBlock).toContain('"timeout_seconds": 1800');
-    expect(promptBlock).toContain('"timeout_seconds": 1200');
+    expect(promptBlock).toContain('"specialist_timeout_seconds": 1800');
+    expect(promptBlock).toContain('"quality_inspector_timeout_seconds": 1200');
   });
 
   it('keeps advisory risk recommendations in the manifest but out of the launch prompt', () => {
@@ -2040,9 +1721,8 @@ describe('reviewTeamService', () => {
     expect(promptBlock).toContain('Prepared Review execution plan');
     expect(promptBlock).toContain('Execution rules:');
     expect(promptBlock).toContain('"subagent_type": "ReviewSecurity"');
-    expect(promptBlock).toContain('"strategy": "deep"');
     expect(promptBlock).toContain('"model_id": "primary"');
-    expect(promptBlock).toContain(`"prompt_directive": ${JSON.stringify(REVIEW_STRATEGY_DEFINITIONS.deep.roleDirectives.ReviewSecurity)}`);
+    expect(promptBlock).not.toContain('prompt_directive');
     expect(promptBlock).not.toContain('Token/time impact');
   });
 
@@ -2092,7 +1772,7 @@ describe('reviewTeamService', () => {
     const promptBlock = buildReviewTeamPromptBlock(team, manifest);
     expect(promptBlock).toContain('"selected_strategy": "deep"');
     expect(promptBlock).toContain('"subagent_type": "ReviewSecurity"');
-    expect(promptBlock).toContain('"strategy": "quick"');
+    expect(promptBlock).not.toContain('prompt_directive');
   });
 
   it('falls back removed concrete reviewer models to the strategy default model slot', () => {
@@ -2152,7 +1832,7 @@ describe('reviewTeamService', () => {
     expect(promptBlock).not.toContain(WORKSPACE_PATH);
     expect(promptBlock).toContain('"subagent_type": "ExtraEnabled"');
     expect(promptBlock).not.toContain('ExtraDisabled');
-    expect(promptBlock).toContain('Launch only active_packets');
+    expect(promptBlock).toContain('Launch at most one specialist');
     expect(promptBlock).not.toContain('Configured code review team:');
     expect(promptBlock).not.toContain('Team execution rules:');
     expect(promptBlock).not.toContain('run it in parallel with the locked reviewers whenever the change contains frontend files');
