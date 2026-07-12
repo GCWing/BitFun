@@ -358,11 +358,9 @@ class RemoteConnectAPIService {
   ): Promise<void> {
     try {
       await this.adapter.request<void>('account_send_session_to_device', {
-        request: {
-          target_device_id: targetDeviceId,
-          session_id: sessionId,
-          session_json: sessionJson,
-        },
+        targetDeviceId,
+        sessionId,
+        sessionJson,
       });
     } catch (e) {
       log.error('accountSendSessionToDevice failed', e);
@@ -375,7 +373,8 @@ class RemoteConnectAPIService {
   async accountSyncSession(sessionId: string, sessionJson: string): Promise<void> {
     try {
       await this.adapter.request<void>('account_sync_session', {
-        request: { session_id: sessionId, session_json: sessionJson },
+        sessionId,
+        sessionJson,
       });
     } catch (e) {
       log.error('accountSyncSession failed', e);
@@ -395,7 +394,7 @@ class RemoteConnectAPIService {
   async accountDeleteSyncedSession(sessionId: string): Promise<void> {
     try {
       await this.adapter.request<void>('account_delete_synced_session', {
-        request: { session_id: sessionId },
+        sessionId,
       });
     } catch (e) {
       log.error('accountDeleteSyncedSession failed', e);
@@ -406,7 +405,7 @@ class RemoteConnectAPIService {
   async accountSyncSettings(settingsJson: string): Promise<void> {
     try {
       await this.adapter.request<void>('account_sync_settings', {
-        request: { settings_json: settingsJson },
+        settingsJson,
       });
     } catch (e) {
       log.error('accountSyncSettings failed', e);
@@ -431,7 +430,8 @@ class RemoteConnectAPIService {
   ): Promise<void> {
     try {
       await this.adapter.request<void>('account_export_local_session', {
-        request: { session_id: sessionId, workspace_path: workspacePath },
+        sessionId,
+        workspacePath,
       });
     } catch (e) {
       log.error('accountExportLocalSession failed', e);
@@ -442,7 +442,7 @@ class RemoteConnectAPIService {
   async accountExportAllSessions(workspacePath: string): Promise<number> {
     try {
       return await this.adapter.request<number>('account_export_all_sessions', {
-        request: { workspace_path: workspacePath },
+        workspacePath,
       });
     } catch (e) {
       log.error('accountExportAllSessions failed', e);
@@ -453,7 +453,7 @@ class RemoteConnectAPIService {
   async accountImportRemoteSessions(workspacePath: string): Promise<string[]> {
     try {
       return await this.adapter.request<string[]>('account_import_remote_sessions', {
-        request: { workspace_path: workspacePath },
+        workspacePath,
       });
     } catch (e) {
       log.error('accountImportRemoteSessions failed', e);
@@ -465,7 +465,8 @@ class RemoteConnectAPIService {
   async accountFetchSessionTurns(sessionId: string, workspacePath: string): Promise<boolean> {
     try {
       return await this.adapter.request<boolean>('account_fetch_session_turns', {
-        request: { session_id: sessionId, workspace_path: workspacePath },
+        sessionId,
+        workspacePath,
       });
     } catch (e) {
       log.warn('accountFetchSessionTurns failed', e);
@@ -482,13 +483,11 @@ class RemoteConnectAPIService {
   ): Promise<void> {
     try {
       await this.adapter.request<void>('account_execute_on_device', {
-        request: {
-          target_device_id: targetDeviceId,
-          session_id: sessionId ?? null,
-          content,
-          agent_type: agentType ?? null,
-          workspace_path: workspacePath ?? null,
-        },
+        targetDeviceId,
+        sessionId: sessionId ?? null,
+        content,
+        agentType: agentType ?? null,
+        workspacePath: workspacePath ?? null,
       });
     } catch (e) {
       log.error('accountExecuteOnDevice failed', e);
@@ -503,11 +502,9 @@ class RemoteConnectAPIService {
   ): Promise<AutoSyncResult> {
     try {
       return await this.adapter.request<AutoSyncResult>('account_auto_sync', {
-        request: {
-          is_first_login: isFirstLogin,
-          workspace_path: workspacePath,
-          config_json: configJson,
-        },
+        isFirstLogin,
+        workspacePath,
+        configJson,
       });
     } catch (e) {
       log.error('accountAutoSync failed', e);
@@ -530,7 +527,8 @@ class RemoteConnectAPIService {
   ): Promise<string> {
     try {
       return await this.adapter.request<string>('account_device_rpc', {
-        request: { target_device_id: targetDeviceId, command_json: commandJson },
+        targetDeviceId,
+        commandJson,
       });
     } catch (e) {
       log.error('accountDeviceRpc failed', e);
@@ -541,7 +539,7 @@ class RemoteConnectAPIService {
   async accountDelegateToPaired(correlationId: string): Promise<string> {
     try {
       return await this.adapter.request<string>('account_delegate_to_paired', {
-        request: { correlation_id: correlationId },
+        correlationId,
       });
     } catch (e) {
       log.warn('accountDelegateToPaired failed', e);
