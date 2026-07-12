@@ -53,7 +53,7 @@ struct EnumState {
 /// window, sorted by name. `include_hidden` is accepted for parity with the
 /// macOS host; on Windows there is no per-app hidden flag, so every windowed
 /// process is returned regardless.
-pub fn list_running_apps(_include_hidden: bool) -> BitFunResult<Vec<AppInfo>> {
+pub(super) fn list_running_apps(_include_hidden: bool) -> BitFunResult<Vec<AppInfo>> {
     let windows = enumerate_windows();
 
     // Group by pid: keep the first non-empty title as a fallback display name.
@@ -78,15 +78,19 @@ pub fn list_running_apps(_include_hidden: bool) -> BitFunResult<Vec<AppInfo>> {
         });
     }
 
-    apps.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    sort_apps_by_name(&mut apps);
     Ok(apps)
+}
+
+fn sort_apps_by_name(apps: &mut [AppInfo]) {
+    apps.sort_by_cached_key(|app| app.name.to_lowercase());
 }
 
 /// Find a visible top-level window owned by `pid`, for callers (e.g.
 /// `get_app_shortcuts`) that need an `HWND` to hand to UI Automation but
 /// only have a pid. Returns the first visible, non-minimized window found
 /// by `EnumWindows` order; does not require the window to be foreground.
-pub fn find_top_window_for_pid(pid: u32) -> Option<HWND> {
+pub(super) fn find_top_window_for_pid(pid: u32) -> Option<HWND> {
     struct FindState {
         target_pid: u32,
         found: Option<isize>,
@@ -198,5 +202,33 @@ fn strip_exe_suffix(basename: &str) -> String {
         stripped.to_string()
     } else {
         basename.to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn app(name: &str, pid: i32) -> AppInfo {
+        AppInfo {
+            name: name.to_string(),
+            bundle_id: None,
+            pid: Some(pid),
+            running: true,
+            last_used_ms: None,
+            launch_count: 0,
+        }
+    }
+
+    #[test]
+    fn app_name_sort_is_case_insensitive_ascending_and_stable() {
+        let mut apps = vec![app("beta", 1), app("ALPHA", 2), app("Beta", 3)];
+
+        sort_apps_by_name(&mut apps);
+
+        assert_eq!(
+            apps.iter().map(|app| app.pid).collect::<Vec<_>>(),
+            [Some(2), Some(1), Some(3)]
+        );
     }
 }

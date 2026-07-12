@@ -423,7 +423,7 @@ Branch on `ok` and `error.code`, not on English messages.
                         break;
                     }
                 }
-                suggestions.sort_by(|a, b| b.1.cmp(&a.1));
+                suggestions.sort_by_key(|suggestion| std::cmp::Reverse(suggestion.1));
 
                 let ranked: Vec<Value> = suggestions
                     .iter()

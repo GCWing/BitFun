@@ -27,7 +27,7 @@ use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifier
 use ratatui::{
     backend::Backend,
     layout::{Alignment, Constraint, Direction, Layout, Rect},
-    style::{Modifier, Style},
+    style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Paragraph},
     Frame, Terminal,
@@ -51,7 +51,7 @@ use bitfun_core::service::config::GlobalConfigManager;
 
 /// Types of popups that can be shown on the startup page
 #[derive(Debug, Clone, PartialEq)]
-pub enum PopupType {
+enum PopupType {
     CommandPalette,
     ModelSelector,
     AgentSelector,
@@ -65,17 +65,17 @@ pub enum PopupType {
 
 /// Navigation stack for managing popup hierarchy
 #[derive(Debug, Default)]
-pub struct PopupStack {
+struct PopupStack {
     stack: Vec<PopupType>,
 }
 
 impl PopupStack {
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self { stack: Vec::new() }
     }
 
     /// Push a popup onto the stack
-    pub fn push(&mut self, popup: PopupType) {
+    fn push(&mut self, popup: PopupType) {
         // Avoid duplicates at the top
         if self.stack.last() != Some(&popup) {
             self.stack.push(popup);
@@ -83,31 +83,19 @@ impl PopupStack {
     }
 
     /// Pop the top popup from the stack
-    pub fn pop(&mut self) -> Option<PopupType> {
+    fn pop(&mut self) -> Option<PopupType> {
         self.stack.pop()
     }
 
-    /// Peek at the top popup without removing it
-    #[allow(dead_code)]
-    pub fn peek(&self) -> Option<&PopupType> {
-        self.stack.last()
-    }
-
-    /// Check if the stack is empty
-    #[allow(dead_code)]
-    pub fn is_empty(&self) -> bool {
-        self.stack.is_empty()
-    }
-
     /// Clear all popups from the stack
-    pub fn clear(&mut self) {
+    fn clear(&mut self) {
         self.stack.clear();
     }
 }
 
 /// Startup menu result
 #[derive(Debug, Clone)]
-pub enum StartupResult {
+pub(crate) enum StartupResult {
     /// Start a new session with an optional initial prompt
     NewSession { prompt: Option<String> },
     /// Continue last session (session ID)
@@ -142,8 +130,40 @@ const TIPS: &[&str] = &[
     "Use /new to start a fresh conversation session",
 ];
 
+const FANCY_LOGO: [&str; 6] = [
+    "  ██████╗ ██╗████████╗███████╗██╗   ██╗███╗   ██╗",
+    "  ██╔══██╗██║╚══██╔══╝██╔════╝██║   ██║████╗  ██║",
+    "  ██████╔╝██║   ██║   █████╗  ██║   ██║██╔██╗ ██║",
+    "  ██╔══██╗██║   ██║   ██╔══╝  ██║   ██║██║╚██╗██║",
+    "  ██████╔╝██║   ██║   ██║     ╚██████╔╝██║ ╚████║",
+    "  ╚═════╝ ╚═╝   ╚═╝   ╚═╝      ╚═════╝ ╚═╝  ╚═══╝",
+];
+
+const COMPACT_LOGO: [&str; 5] = [
+    "  ____  _ _   _____            ",
+    " | __ )(_) |_|  ___|   _ _ __  ",
+    " |  _ \\| | __| |_ | | | | '_ \\ ",
+    " | |_) | | |_|  _|| |_| | | | |",
+    " |____/|_|\\__|_|   \\__,_|_| |_|",
+];
+
+fn append_styled_logo_lines(
+    lines: &mut Vec<Line<'static>>,
+    logo: &'static [&'static str],
+    colors: &[Color],
+) {
+    for (index, line) in logo.iter().enumerate() {
+        lines.push(Line::from(Span::styled(
+            *line,
+            Style::default()
+                .fg(colors[index % colors.len()])
+                .add_modifier(Modifier::BOLD),
+        )));
+    }
+}
+
 /// Startup page
-pub struct StartupPage {
+pub(crate) struct StartupPage {
     /// Multiline text input component
     text_input: TextInput,
     /// Theme
@@ -190,7 +210,7 @@ pub struct StartupPage {
 }
 
 impl StartupPage {
-    pub fn new(
+    pub(crate) fn new(
         coordinator: Arc<ConversationCoordinator>,
         default_agent: String,
         workspace: Option<String>,
@@ -264,12 +284,12 @@ impl StartupPage {
     }
 
     /// Get the currently selected agent type
-    pub fn agent_type(&self) -> &str {
+    pub(crate) fn agent_type(&self) -> &str {
         &self.agent_type
     }
 
     /// Get the current workspace path for this CLI process.
-    pub fn workspace(&self) -> Option<String> {
+    pub(crate) fn workspace(&self) -> Option<String> {
         if self.workspace_display.is_empty() {
             None
         } else {
@@ -278,7 +298,7 @@ impl StartupPage {
     }
 
     /// Get the current CLI config after startup-page edits.
-    pub fn config(&self) -> &CliConfig {
+    pub(crate) fn config(&self) -> &CliConfig {
         &self.config
     }
 
@@ -302,7 +322,7 @@ impl StartupPage {
             || self.model_config_form.is_visible()
     }
 
-    pub fn run<B: Backend>(&mut self, terminal: &mut Terminal<B>) -> Result<StartupResult> {
+    pub(crate) fn run<B: Backend>(&mut self, terminal: &mut Terminal<B>) -> Result<StartupResult> {
         terminal.clear()?;
 
         loop {
@@ -660,15 +680,6 @@ impl StartupPage {
         lines.push(Line::from(""));
 
         if use_fancy_logo {
-            let logo = vec![
-                "  ██████╗ ██╗████████╗███████╗██╗   ██╗███╗   ██╗",
-                "  ██╔══██╗██║╚══██╔══╝██╔════╝██║   ██║████╗  ██║",
-                "  ██████╔╝██║   ██║   █████╗  ██║   ██║██╔██╗ ██║",
-                "  ██╔══██╗██║   ██║   ██╔══╝  ██║   ██║██║╚██╗██║",
-                "  ██████╔╝██║   ██║   ██║     ╚██████╔╝██║ ╚████║",
-                "  ╚═════╝ ╚═╝   ╚═╝   ╚═╝      ╚═════╝ ╚═╝  ╚═══╝",
-            ];
-
             let colors = [
                 self.theme.primary,
                 self.theme.info,
@@ -678,23 +689,8 @@ impl StartupPage {
                 self.theme.muted,
             ];
 
-            for (i, line) in logo.iter().enumerate() {
-                lines.push(Line::from(Span::styled(
-                    *line,
-                    Style::default()
-                        .fg(colors[i % colors.len()])
-                        .add_modifier(Modifier::BOLD),
-                )));
-            }
+            append_styled_logo_lines(&mut lines, &FANCY_LOGO, &colors);
         } else {
-            let logo = vec![
-                "  ____  _ _   _____            ",
-                " | __ )(_) |_|  ___|   _ _ __  ",
-                " |  _ \\| | __| |_ | | | | '_ \\ ",
-                " | |_) | | |_|  _|| |_| | | | |",
-                " |____/|_|\\__|_|   \\__,_|_| |_|",
-            ];
-
             let colors = [
                 self.theme.primary,
                 self.theme.info,
@@ -703,14 +699,7 @@ impl StartupPage {
                 self.theme.error,
             ];
 
-            for (i, line) in logo.iter().enumerate() {
-                lines.push(Line::from(Span::styled(
-                    *line,
-                    Style::default()
-                        .fg(colors[i % colors.len()])
-                        .add_modifier(Modifier::BOLD),
-                )));
-            }
+            append_styled_logo_lines(&mut lines, &COMPACT_LOGO, &colors);
         }
 
         lines.push(Line::from(""));
@@ -1651,7 +1640,7 @@ impl StartupPage {
             .map(|id| ThemeItem { id })
             .collect();
 
-        themes.sort_by(|a, b| a.id.to_ascii_lowercase().cmp(&b.id.to_ascii_lowercase()));
+        themes.sort_by_cached_key(|theme| theme.id.to_ascii_lowercase());
         themes.dedup_by(|a, b| a.id == b.id);
         themes
     }
@@ -2025,7 +2014,6 @@ impl StartupPage {
             description: info.description,
             source,
             enabled: info.effective_enabled,
-            default_enabled: info.default_enabled,
         }
     }
 
@@ -2188,5 +2176,75 @@ impl StartupPage {
             self.text_input.cursor,
             STARTUP_COMMAND_SPECS,
         );
+    }
+}
+
+#[cfg(test)]
+mod logo_contract_tests {
+    use super::*;
+    use ratatui::style::Color;
+
+    #[test]
+    fn fancy_logo_keeps_line_order_and_color_style_mapping() {
+        let expected = [
+            "  ██████╗ ██╗████████╗███████╗██╗   ██╗███╗   ██╗",
+            "  ██╔══██╗██║╚══██╔══╝██╔════╝██║   ██║████╗  ██║",
+            "  ██████╔╝██║   ██║   █████╗  ██║   ██║██╔██╗ ██║",
+            "  ██╔══██╗██║   ██║   ██╔══╝  ██║   ██║██║╚██╗██║",
+            "  ██████╔╝██║   ██║   ██║     ╚██████╔╝██║ ╚████║",
+            "  ╚═════╝ ╚═╝   ╚═╝   ╚═╝      ╚═════╝ ╚═╝  ╚═══╝",
+        ];
+        let colors = [
+            Color::Red,
+            Color::Green,
+            Color::Blue,
+            Color::Yellow,
+            Color::Magenta,
+            Color::Cyan,
+        ];
+        let mut rendered = Vec::new();
+
+        append_styled_logo_lines(&mut rendered, &FANCY_LOGO, &colors);
+
+        assert_logo_contract(&rendered, &expected, &colors);
+    }
+
+    #[test]
+    fn compact_logo_keeps_line_order_and_color_style_mapping() {
+        let expected = [
+            "  ____  _ _   _____            ",
+            " | __ )(_) |_|  ___|   _ _ __  ",
+            " |  _ \\| | __| |_ | | | | '_ \\ ",
+            " | |_) | | |_|  _|| |_| | | | |",
+            " |____/|_|\\__|_|   \\__,_|_| |_|",
+        ];
+        let colors = [
+            Color::Red,
+            Color::Green,
+            Color::Blue,
+            Color::Yellow,
+            Color::Magenta,
+        ];
+        let mut rendered = Vec::new();
+
+        append_styled_logo_lines(&mut rendered, &COMPACT_LOGO, &colors);
+
+        assert_logo_contract(&rendered, &expected, &colors);
+    }
+
+    fn assert_logo_contract(lines: &[Line<'_>], expected: &[&str], colors: &[Color]) {
+        assert_eq!(lines.len(), expected.len());
+        for (index, ((line, expected_text), expected_color)) in
+            lines.iter().zip(expected).zip(colors).enumerate()
+        {
+            assert_eq!(line.spans.len(), 1, "logo line {index} span count");
+            let span = &line.spans[0];
+            assert_eq!(span.content.as_ref(), *expected_text, "logo line {index}");
+            assert_eq!(span.style.fg, Some(*expected_color), "logo line {index}");
+            assert!(
+                span.style.add_modifier.contains(Modifier::BOLD),
+                "logo line {index} must stay bold"
+            );
+        }
     }
 }

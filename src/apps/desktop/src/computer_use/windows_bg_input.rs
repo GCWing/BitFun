@@ -4,7 +4,7 @@
 //! Two complementary paths, ported from cua-driver-rs v0.6.8
 //! (`platform-windows/src/input/{mouse,keyboard,inject,mod}.rs`):
 //!
-//! 1. **`PostMessageW` path** (`post_click` / `post_right_click` / `post_key` /
+//! 1. **`PostMessageW` path** (`post_click` / `post_key` /
 //!    `post_char`): posts `WM_*BUTTON` / `WM_KEYDOWN` / `WM_KEYUP` / `WM_CHAR`
 //!    to the **deepest child** HWND at the click point. Invisible and never
 //!    raises the target — no `SetForegroundWindow`, no cursor movement. Works
@@ -108,12 +108,12 @@ const PROCESS_QUERY_LIMITED_INFORMATION: u32 = 0x1000;
 /// Windows mandatory integrity-level RIDs (the last sub-authority of the
 /// integrity SID). Higher = more privileged.
 mod il {
-    pub const UNTRUSTED: u32 = 0x0000;
-    pub const LOW: u32 = 0x1000;
-    pub const MEDIUM: u32 = 0x2000;
-    pub const MEDIUM_PLUS: u32 = 0x2100;
-    pub const HIGH: u32 = 0x3000;
-    pub const SYSTEM: u32 = 0x4000;
+    pub(super) const UNTRUSTED: u32 = 0x0000;
+    pub(super) const LOW: u32 = 0x1000;
+    pub(super) const MEDIUM: u32 = 0x2000;
+    pub(super) const MEDIUM_PLUS: u32 = 0x2100;
+    pub(super) const HIGH: u32 = 0x3000;
+    pub(super) const SYSTEM: u32 = 0x4000;
 }
 
 fn il_name(rid: u32) -> &'static str {
@@ -301,7 +301,7 @@ const DEEPEST_CHILD_MAX_DEPTH: usize = 16;
 /// (focus-steal).
 ///
 /// Returns `root` itself if no deeper child is found (or if `root` is invalid).
-pub fn deepest_child(root: HWND, sx: i32, sy: i32) -> HWND {
+fn deepest_child(root: HWND, sx: i32, sy: i32) -> HWND {
     if root.is_invalid() {
         return root;
     }
@@ -346,13 +346,7 @@ pub fn deepest_child(root: HWND, sx: i32, sy: i32) -> HWND {
 /// between clicks. `button` is `"left"`, `"right"`, or `"middle"` (any other
 /// value defaults to left). Surfaces a `BitFunError::Service` on
 /// `PostMessageW` failure or a UIPI block.
-pub fn post_click(
-    root: HWND,
-    x: i32,
-    y: i32,
-    button: &str,
-    click_count: usize,
-) -> BitFunResult<()> {
+fn post_click(root: HWND, x: i32, y: i32, button: &str, click_count: usize) -> BitFunResult<()> {
     if root.is_invalid() {
         return Err(BitFunError::service("post_click: invalid HWND"));
     }
@@ -401,12 +395,6 @@ pub fn post_click(
     Ok(())
 }
 
-/// Post a single right-button click at **client-area** coordinates `(x, y)` of
-/// `root`. Thin wrapper over [`post_click`] for the common right-click case.
-pub fn post_right_click(root: HWND, x: i32, y: i32) -> BitFunResult<()> {
-    post_click(root, x, y, "right", 1)
-}
-
 /// Post a key event to `hwnd` via `PostMessageW`.
 ///
 /// When `down` is `true` a `WM_KEYDOWN` is posted; when `false` a `WM_KEYUP`.
@@ -414,7 +402,7 @@ pub fn post_right_click(root: HWND, x: i32, y: i32) -> BitFunResult<()> {
 /// `MapVirtualKeyW(vk, MAPVK_VK_TO_VSC)`). The LPARAM encodes the repeat count,
 /// scan code, previous key state, and transition state per the Win32
 /// `WM_KEYDOWN` / `WM_KEYUP` specification.
-pub fn post_key(hwnd: HWND, vk: u16, scan: u32, down: bool) -> BitFunResult<()> {
+fn post_key(hwnd: HWND, vk: u16, scan: u32, down: bool) -> BitFunResult<()> {
     if hwnd.is_invalid() {
         return Err(BitFunError::service("post_key: invalid HWND"));
     }
@@ -433,7 +421,7 @@ pub fn post_key(hwnd: HWND, vk: u16, scan: u32, down: bool) -> BitFunResult<()> 
 /// controls; richer XAML / WinUI3 / UWP targets may reject posted `WM_CHAR`
 /// (their CoreInput dispatcher only consumes system-queue events) — use
 /// [`inject_text_cloaked`] for those.
-pub fn post_char(hwnd: HWND, ch: char) -> BitFunResult<()> {
+fn post_char(hwnd: HWND, ch: char) -> BitFunResult<()> {
     if hwnd.is_invalid() {
         return Err(BitFunError::service("post_char: invalid HWND"));
     }
@@ -498,7 +486,7 @@ unsafe fn force_foreground_attached(target: HWND) -> bool {
 /// (best-effort; may miss GetKeyState-gated handlers, but never drops the
 /// action). The caller should focus the field first (a prior background click)
 /// so the keystrokes land in the right control.
-pub fn inject_text_cloaked(hwnd: HWND, text: &str) -> BitFunResult<()> {
+pub(super) fn inject_text_cloaked(hwnd: HWND, text: &str) -> BitFunResult<()> {
     if hwnd.is_invalid() {
         return Err(BitFunError::service("inject_text_cloaked: invalid HWND"));
     }
@@ -547,7 +535,7 @@ pub fn inject_text_cloaked(hwnd: HWND, text: &str) -> BitFunResult<()> {
 /// Modifiers are pressed before the key and released (in reverse order) after.
 /// Falls back to `PostMessage(WM_KEYDOWN/WM_KEYUP)` if foreground can't be
 /// obtained. See [`inject_text_cloaked`] for the cloaking rationale.
-pub fn inject_key_cloaked(hwnd: HWND, keycode: u16, modifiers: &[u16]) -> BitFunResult<()> {
+pub(super) fn inject_key_cloaked(hwnd: HWND, keycode: u16, modifiers: &[u16]) -> BitFunResult<()> {
     if hwnd.is_invalid() {
         return Err(BitFunError::service("inject_key_cloaked: invalid HWND"));
     }
@@ -650,7 +638,7 @@ unsafe fn process_integrity_rid(process: Handle) -> Option<u32> {
 ///
 /// Messages at or above `WM_USER` are app-defined and not UIPI-filtered, so the
 /// (relatively expensive) integrity comparison is skipped for them.
-pub fn post_message_blocked_by_uipi(hwnd: HWND, msg: u32) -> Option<String> {
+fn post_message_blocked_by_uipi(hwnd: HWND, msg: u32) -> Option<String> {
     // Only messages below WM_USER are subject to UIPI filtering.
     if msg >= WM_USER_CUTOFF {
         return None;
@@ -730,7 +718,7 @@ const XAML_HOST_EXES: &[&str] = &[
 /// pair: cross-session `GetClassNameW` can return nothing, and modern apps
 /// like Win 11 Notepad keep the legacy `"Notepad"` class even though they
 /// render XAML underneath.
-pub fn is_probably_uwp_or_directcomposition(hwnd: HWND) -> bool {
+fn is_probably_uwp_or_directcomposition(hwnd: HWND) -> bool {
     if hwnd.is_invalid() {
         return false;
     }
@@ -1003,7 +991,7 @@ fn message_name(msg: u32) -> &'static str {
 /// resolved targets (a node's `frame_global` center, an absolute `ScreenXy`,
 /// an image-pixel point mapped to global) are all **screen** coordinates, so
 /// this variant is the one the host wires up.
-pub fn post_click_screen(
+pub(super) fn post_click_screen(
     root: HWND,
     sx: i32,
     sy: i32,
@@ -1075,7 +1063,13 @@ fn delta_to_line_count(delta: i32) -> usize {
 /// `dy` scrolls the content **down** (further into the document), positive
 /// `dx` scrolls **right**. Mirrors cua-driver-rs `ScrollTool`'s
 /// `WM_VSCROLL`/`WM_HSCROLL` transport.
-pub fn post_scroll_screen(root: HWND, sx: i32, sy: i32, dx: i32, dy: i32) -> BitFunResult<()> {
+pub(super) fn post_scroll_screen(
+    root: HWND,
+    sx: i32,
+    sy: i32,
+    dx: i32,
+    dy: i32,
+) -> BitFunResult<()> {
     if root.is_invalid() {
         return Err(BitFunError::service("post_scroll_screen: invalid HWND"));
     }
@@ -1112,7 +1106,7 @@ const DRAG_ENDPOINT_DELAY_MS: u64 = 35;
 /// resolved target's client space so a drag stays within one control (a
 /// WinForms panel, a Win32 child canvas, …) rather than leaking to the frame.
 #[allow(clippy::too_many_arguments)]
-pub fn post_drag_screen(
+pub(super) fn post_drag_screen(
     root: HWND,
     sx_from: i32,
     sy_from: i32,
@@ -1180,7 +1174,7 @@ pub fn post_drag_screen(
 /// Map a modifier name (`ctrl`/`control`, `shift`, `alt`/`option`/`menu`,
 /// `win`/`meta`/`cmd`/`command`/`super`) to its virtual-key code. Mirrors
 /// cua-driver-rs `modifier_vk`. Returns `None` for non-modifier names.
-pub fn vk_for_modifier(name: &str) -> Option<u16> {
+fn vk_for_modifier(name: &str) -> Option<u16> {
     match name.to_lowercase().as_str() {
         "ctrl" | "control" => Some(0x11),        // VK_CONTROL
         "shift" => Some(0x10),                   // VK_SHIFT
@@ -1193,7 +1187,7 @@ pub fn vk_for_modifier(name: &str) -> Option<u16> {
 /// Map a key name (named keys like `enter`, `tab`, arrows, `f1..f12`, or a
 /// single printable character) to a virtual-key code. Mirrors cua-driver-rs
 /// `key_name_to_vk`; single characters go through `VkKeyScanW`.
-pub fn vk_for_key(key: &str) -> BitFunResult<u16> {
+fn vk_for_key(key: &str) -> BitFunResult<u16> {
     let vk: u16 = match key.to_lowercase().as_str() {
         "enter" | "return" => 0x0D,
         "tab" => 0x09,
@@ -1249,7 +1243,7 @@ pub fn vk_for_key(key: &str) -> BitFunResult<u16> {
 /// names are collected as modifiers; the first non-modifier (or, if every entry
 /// is a modifier, the last one) becomes the main key. Mirrors the macOS
 /// `parse_key_sequence` contract.
-pub fn parse_key_chord(keys: &[String]) -> BitFunResult<(Vec<u16>, u16)> {
+pub(super) fn parse_key_chord(keys: &[String]) -> BitFunResult<(Vec<u16>, u16)> {
     if keys.is_empty() {
         return Err(BitFunError::tool("empty key chord".to_string()));
     }

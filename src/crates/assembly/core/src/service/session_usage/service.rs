@@ -1044,7 +1044,7 @@ fn build_slowest_spans(
         }
     }
 
-    spans.sort_by(|a, b| b.duration_ms.cmp(&a.duration_ms));
+    spans.sort_by_key(|span| std::cmp::Reverse(span.duration_ms));
     spans.truncate(5);
     spans
 }
@@ -1627,6 +1627,31 @@ mod tests {
             assert_eq!(span.turn_id.as_deref(), Some("turn-7"));
             assert_eq!(span.turn_index, Some(7));
         }
+    }
+
+    #[test]
+    fn slowest_spans_are_descending_and_stable_for_equal_durations() {
+        let request = test_request(None);
+        let first = test_turn("turn-first", 1, DialogTurnKind::UserDialog);
+        let second = test_turn("turn-second", 2, DialogTurnKind::UserDialog);
+        let mut longest = test_turn("turn-longest", 3, DialogTurnKind::UserDialog);
+        longest.duration_ms = Some(900);
+        longest.end_time = Some(longest.start_time + 900);
+
+        let report = build_session_usage_report_from_turns(
+            request,
+            &[first, second, longest],
+            &[],
+            1_778_347_200_000,
+        );
+        let turn_ids = report
+            .slowest
+            .iter()
+            .filter(|span| span.kind == UsageSlowSpanKind::Turn)
+            .filter_map(|span| span.turn_id.as_deref())
+            .collect::<Vec<_>>();
+
+        assert_eq!(turn_ids, vec!["turn-longest", "turn-first", "turn-second"]);
     }
 
     #[test]

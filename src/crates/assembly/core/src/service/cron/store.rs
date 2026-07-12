@@ -13,13 +13,13 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::fs;
 
-pub struct CronJobStore {
+pub(super) struct CronJobStore {
     persistence: PersistenceService,
     path_manager: Arc<PathManager>,
 }
 
 impl CronJobStore {
-    pub async fn new(path_manager: Arc<PathManager>) -> BitFunResult<Self> {
+    pub(super) async fn new(path_manager: Arc<PathManager>) -> BitFunResult<Self> {
         let cron_dir = path_manager.user_cron_dir();
         path_manager.ensure_dir(&cron_dir).await?;
 
@@ -31,11 +31,11 @@ impl CronJobStore {
         })
     }
 
-    pub fn jobs_file_path(&self) -> PathBuf {
+    fn jobs_file_path(&self) -> PathBuf {
         self.path_manager.cron_jobs_file()
     }
 
-    pub async fn load(&self) -> BitFunResult<CronJobsFile> {
+    pub(super) async fn load(&self) -> BitFunResult<CronJobsFile> {
         let jobs_file_path = self.jobs_file_path();
         if !jobs_file_path.exists() {
             return Ok(CronJobsFile::default());
@@ -69,7 +69,7 @@ impl CronJobStore {
         }
     }
 
-    pub async fn save_jobs(&self, jobs: Vec<CronJob>) -> BitFunResult<()> {
+    pub(super) async fn save_jobs(&self, jobs: Vec<CronJob>) -> BitFunResult<()> {
         let mut jobs = jobs;
         jobs.sort_by(|left, right| {
             left.created_at_ms

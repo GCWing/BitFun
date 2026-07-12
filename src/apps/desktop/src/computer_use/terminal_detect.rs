@@ -29,7 +29,7 @@ use log::debug;
 
 /// Which delivery path a `type_text` call should take for a given target.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TerminalRoute {
+pub(super) enum TerminalRoute {
     /// Normal accessibility / UIAutomation text channel
     /// (`AXSetAttribute(kAXSelectedText)` on macOS, `ValuePattern.SetValue`
     /// on Windows). Use for standard text views that honour programmatic
@@ -113,7 +113,7 @@ const TERMINAL_WINDOW_CLASS_KEYWORDS: &[&str] = &[
 /// text channel to key-event synthesis. This mirrors the existing
 /// `macos_bg_input::is_terminal_emulator` contract but operates on strings
 /// instead of a pid, so it is usable from platform-agnostic dispatch code.
-pub fn is_terminal_emulator(app_name: &str, bundle_id: Option<&str>) -> bool {
+pub(super) fn is_terminal_emulator(app_name: &str, bundle_id: Option<&str>) -> bool {
     let name_lc = app_name.to_ascii_lowercase();
     let bundle_lc = bundle_id.map(|b| b.to_ascii_lowercase());
 
@@ -124,7 +124,7 @@ pub fn is_terminal_emulator(app_name: &str, bundle_id: Option<&str>) -> bool {
     let bundle_hit = bundle_lc
         .as_deref()
         .map(|b| {
-            MACOS_TERMINAL_BUNDLE_IDS.iter().any(|id| *id == b)
+            MACOS_TERMINAL_BUNDLE_IDS.contains(&b)
                 || MACOS_TERMINAL_NAME_KEYWORDS
                     .iter()
                     .any(|kw| !kw.is_empty() && b.contains(kw))
@@ -151,7 +151,7 @@ pub fn is_terminal_emulator(app_name: &str, bundle_id: Option<&str>) -> bool {
 /// against [`TERMINAL_WINDOW_CLASS_KEYWORDS`]. Substring matching lets
 /// `gnome-terminal-server` match `gnome-terminal` and `Alacritty` match
 /// `alacritty`.
-pub fn is_terminal_window_class(class_name: &str) -> bool {
+pub(super) fn is_terminal_window_class(class_name: &str) -> bool {
     let class_lc = class_name.to_ascii_lowercase();
     let hit = TERMINAL_WINDOW_CLASS_KEYWORDS
         .iter()
@@ -175,7 +175,7 @@ pub fn is_terminal_window_class(class_name: &str) -> bool {
 /// and `bundle_id` is ignored. Unknown platforms default to
 /// [`TerminalRoute::AxText`] so unaffected surfaces keep their normal text
 /// channel rather than silently degrading.
-pub fn route_for_type_text(
+pub(super) fn route_for_type_text(
     app_name: &str,
     bundle_id: Option<&str>,
     platform: &str,

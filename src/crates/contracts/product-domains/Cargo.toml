@@ -31,3 +31,6 @@ product-full = ["plugin-source", "miniapp", "function-agents"]
 
 [dev-dependencies]
 tokio = { workspace = true }
+
+[lints]
+workspace = true

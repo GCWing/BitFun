@@ -586,7 +586,7 @@ async fn dial(ws_url: &str) -> Result<WsStream> {
         )
         .await
         .map_err(|e| anyhow!("dial {ws_url}: {e}"))?;
-        return Ok(stream);
+        Ok(stream)
     }
 
     #[cfg(not(windows))]

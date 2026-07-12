@@ -3321,7 +3321,7 @@ export function runManifestParserSelfTest({
         'SubagentSelectorAction',
         'show_list',
         'show_config',
-        'default_enabled',
+        'enabled',
         'render_subagent_line',
       ],
     },
@@ -3638,7 +3638,6 @@ export function runManifestParserSelfTest({
     {
       path: 'src/crates/contracts/product-domains/src/miniapp/builtin.rs',
       contracts: [
-        'builtin-pr-review',
         'BUILTIN_APPS',
         'BuiltinMiniAppBundle',
         'BuiltinInstallMarker',

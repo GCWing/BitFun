@@ -17,7 +17,7 @@ use crate::util::errors::BitFunResult;
 use bitfun_agent_runtime::deep_review::diagnostics as runtime_diagnostics;
 use bitfun_agent_runtime::deep_review::report as runtime_report;
 pub(crate) use bitfun_agent_runtime::deep_review::report::{
-    apply_review_evidence_guardrail, apply_review_runtime_limitation,
+    apply_review_evidence_guardrail, apply_review_runtime_limitation, apply_review_runtime_stale,
     deep_review_cache_from_completed_reviewers, fill_deep_review_cache_update_signals,
     fill_deep_review_packet_metadata,
 };

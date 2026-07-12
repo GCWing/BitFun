@@ -10,24 +10,24 @@ use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 ///
 /// Manages input buffer, cursor, scroll offset, and provides rendering
 /// with automatic line wrapping for text that exceeds the available width.
-pub struct TextInput {
-    pub input: String,
-    pub cursor: usize,
-    pub scroll_offset: usize,
+pub(crate) struct TextInput {
+    pub(super) input: String,
+    pub(super) cursor: usize,
+    scroll_offset: usize,
 }
 
 /// Style configuration for rendering a TextInput.
-pub struct TextInputStyle {
-    pub first_line_prefix: &'static str,
-    pub continuation_prefix: &'static str,
-    pub placeholder: String,
-    pub text_style: ratatui::style::Style,
-    pub placeholder_style: ratatui::style::Style,
+pub(super) struct TextInputStyle {
+    pub(super) first_line_prefix: &'static str,
+    pub(super) continuation_prefix: &'static str,
+    pub(super) placeholder: String,
+    pub(super) text_style: ratatui::style::Style,
+    pub(super) placeholder_style: ratatui::style::Style,
 }
 
 impl TextInputStyle {
     /// The display width of the longest prefix (first_line or continuation).
-    pub fn prefix_display_width(&self) -> usize {
+    fn prefix_display_width(&self) -> usize {
         let a = self.first_line_prefix.width();
         let b = self.continuation_prefix.width();
         a.max(b)
@@ -47,7 +47,7 @@ impl Default for TextInputStyle {
 }
 
 impl TextInput {
-    pub fn new() -> Self {
+    pub(super) fn new() -> Self {
         Self {
             input: String::new(),
             cursor: 0,
@@ -55,15 +55,15 @@ impl TextInput {
         }
     }
 
-    pub fn text(&self) -> &str {
+    pub(super) fn text(&self) -> &str {
         &self.input
     }
 
-    pub fn is_empty(&self) -> bool {
+    pub(super) fn is_empty(&self) -> bool {
         self.input.is_empty()
     }
 
-    pub fn handle_char(&mut self, c: char) {
+    pub(super) fn handle_char(&mut self, c: char) {
         if c == '\n' {
             self.handle_newline();
             return;
@@ -76,13 +76,13 @@ impl TextInput {
         self.cursor += 1;
     }
 
-    pub fn handle_newline(&mut self) {
+    pub(super) fn handle_newline(&mut self) {
         let byte_pos = self.char_pos_to_byte_pos(self.cursor);
         self.input.insert(byte_pos, '\n');
         self.cursor += 1;
     }
 
-    pub fn handle_backspace(&mut self) {
+    pub(super) fn handle_backspace(&mut self) {
         if self.cursor > 0 && !self.input.is_empty() {
             let byte_pos = self.char_pos_to_byte_pos(self.cursor - 1);
             if byte_pos < self.input.len() {
@@ -92,7 +92,7 @@ impl TextInput {
         }
     }
 
-    pub fn handle_delete(&mut self) {
+    pub(super) fn handle_delete(&mut self) {
         let char_count = self.input.chars().count();
         if self.cursor < char_count {
             let byte_pos = self.char_pos_to_byte_pos(self.cursor);
@@ -102,13 +102,13 @@ impl TextInput {
         }
     }
 
-    pub fn move_cursor_left(&mut self) {
+    pub(super) fn move_cursor_left(&mut self) {
         if self.cursor > 0 {
             self.cursor -= 1;
         }
     }
 
-    pub fn move_cursor_right(&mut self) {
+    pub(super) fn move_cursor_right(&mut self) {
         let char_count = self.input.chars().count();
         if self.cursor < char_count {
             self.cursor += 1;
@@ -116,7 +116,7 @@ impl TextInput {
     }
 
     /// Returns (logical_line, col_in_line, char_offset_of_line_start)
-    pub fn cursor_line_col(&self) -> (usize, usize, usize) {
+    fn cursor_line_col(&self) -> (usize, usize, usize) {
         let mut line = 0;
         let mut line_start = 0usize;
         for (i, ch) in self.input.chars().enumerate() {
@@ -136,7 +136,7 @@ impl TextInput {
     }
 
     /// Move cursor up one logical line. Returns false if already on first line.
-    pub fn move_cursor_up(&mut self) -> bool {
+    pub(super) fn move_cursor_up(&mut self) -> bool {
         let (line, col, _) = self.cursor_line_col();
         if line == 0 {
             return false;
@@ -149,7 +149,7 @@ impl TextInput {
     }
 
     /// Move cursor down one logical line. Returns false if already on last line.
-    pub fn move_cursor_down(&mut self) -> bool {
+    pub(super) fn move_cursor_down(&mut self) -> bool {
         let (line, col, _) = self.cursor_line_col();
         let counts = self.input_line_char_counts();
         if line >= counts.len() - 1 {
@@ -161,41 +161,31 @@ impl TextInput {
         true
     }
 
-    pub fn set_cursor_home(&mut self) {
+    pub(super) fn set_cursor_home(&mut self) {
         let (_, _, line_start) = self.cursor_line_col();
         self.cursor = line_start;
     }
 
-    pub fn set_cursor_end(&mut self) {
+    pub(super) fn set_cursor_end(&mut self) {
         let (line, _, line_start) = self.cursor_line_col();
         let counts = self.input_line_char_counts();
         self.cursor = line_start + counts[line];
     }
 
-    #[allow(dead_code)]
-    pub fn set_cursor_buffer_start(&mut self) {
-        self.cursor = 0;
-    }
-
-    #[allow(dead_code)]
-    pub fn set_cursor_buffer_end(&mut self) {
-        self.cursor = self.input.chars().count();
-    }
-
-    pub fn clear(&mut self) {
+    pub(super) fn clear(&mut self) {
         self.input.clear();
         self.cursor = 0;
         self.scroll_offset = 0;
     }
 
-    pub fn set_text(&mut self, text: &str) {
+    pub(crate) fn set_text(&mut self, text: &str) {
         self.input = text.to_string();
         self.cursor = self.input.chars().count();
         self.scroll_offset = 0;
     }
 
     /// Take input text and reset state. Returns None if input is blank.
-    pub fn take_input(&mut self) -> Option<String> {
+    pub(super) fn take_input(&mut self) -> Option<String> {
         if self.input.trim().is_empty() {
             return None;
         }
@@ -204,7 +194,7 @@ impl TextInput {
         Some(text)
     }
 
-    pub fn insert_paste(&mut self, text: &str) {
+    pub(super) fn insert_paste(&mut self, text: &str) {
         let normalized = text.replace("\r\n", "\n").replace('\r', "\n");
         for c in normalized.chars() {
             self.handle_char(c);
@@ -219,7 +209,7 @@ impl TextInput {
 
     /// Compute the total visual line count, accounting for wrap.
     /// `prefix_w` is the display width of the line prefix (e.g. 2 for "> ").
-    pub fn visual_line_count_with_prefix(&self, inner_width: u16, prefix_w: usize) -> usize {
+    pub(super) fn visual_line_count_with_prefix(&self, inner_width: u16, prefix_w: usize) -> usize {
         if self.input.is_empty() {
             return 1;
         }
@@ -238,7 +228,7 @@ impl TextInput {
     }
 
     /// Convenience: compute visual line count using default prefix width of 2.
-    pub fn visual_line_count(&self, inner_width: u16) -> usize {
+    pub(super) fn visual_line_count(&self, inner_width: u16) -> usize {
         self.visual_line_count_with_prefix(inner_width, 2)
     }
 
@@ -298,7 +288,7 @@ impl TextInput {
         }
     }
 
-    pub fn char_pos_to_byte_pos(&self, char_pos: usize) -> usize {
+    fn char_pos_to_byte_pos(&self, char_pos: usize) -> usize {
         self.input
             .char_indices()
             .nth(char_pos)
@@ -356,7 +346,7 @@ impl TextInput {
 
     /// Render the text input content into the given inner area (no block/border).
     /// Sets cursor position on frame. Pass `show_cursor = false` to skip cursor.
-    pub fn render(
+    pub(super) fn render(
         &mut self,
         frame: &mut Frame,
         inner: Rect,

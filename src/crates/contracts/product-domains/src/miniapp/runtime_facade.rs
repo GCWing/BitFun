@@ -47,7 +47,7 @@ impl<'a> MiniAppRuntimeFacade<'a> {
                 metas.push(meta);
             }
         }
-        metas.sort_by(|a, b| b.updated_at.cmp(&a.updated_at));
+        metas.sort_by_key(|meta| std::cmp::Reverse(meta.updated_at));
         Ok(metas)
     }
 

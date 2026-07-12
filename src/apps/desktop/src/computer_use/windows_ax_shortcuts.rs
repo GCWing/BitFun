@@ -219,7 +219,7 @@ fn find_menu_bar(root: &IUIAutomationElement) -> Option<IUIAutomationElement> {
 /// Returns an empty result (not an error) when no `MenuBar` element is
 /// found — modern Fluent/Electron apps frequently have no classic menu
 /// bar, which is a legitimate "no shortcuts (via this mechanism)" answer.
-pub fn get_app_menu_shortcuts(hwnd: HWND) -> BitFunResult<(Vec<AppMenuShortcut>, u32)> {
+pub(super) fn get_app_menu_shortcuts(hwnd: HWND) -> BitFunResult<(Vec<AppMenuShortcut>, u32)> {
     unsafe {
         let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
 

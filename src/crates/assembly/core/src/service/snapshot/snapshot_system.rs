@@ -96,7 +96,7 @@ impl BaselineCache {
             return None;
         }
 
-        found_snapshots.sort_by(|a, b| b.0.cmp(&a.0));
+        found_snapshots.sort_by_key(|snapshot| std::cmp::Reverse(snapshot.0));
         let (timestamp, snapshot_id) = &found_snapshots[0];
 
         debug!(

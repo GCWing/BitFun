@@ -4,7 +4,7 @@ use crate::runtime::api;
 use crate::server::response::WebDriverErrorResponse;
 
 impl BridgeExecutor {
-    pub async fn click_element_by_id(
+    pub(crate) async fn click_element_by_id(
         &self,
         element_id: &str,
     ) -> Result<(), WebDriverErrorResponse> {
@@ -17,7 +17,7 @@ impl BridgeExecutor {
         .await
     }
 
-    pub async fn clear_element_by_id(
+    pub(crate) async fn clear_element_by_id(
         &self,
         element_id: &str,
     ) -> Result<(), WebDriverErrorResponse> {
@@ -30,7 +30,7 @@ impl BridgeExecutor {
         .await
     }
 
-    pub async fn send_keys_to_element(
+    pub(crate) async fn send_keys_to_element(
         &self,
         element_id: &str,
         text: &str,
@@ -44,7 +44,7 @@ impl BridgeExecutor {
         .await
     }
 
-    pub async fn take_element_screenshot(
+    pub(crate) async fn take_element_screenshot(
         &self,
         element_id: &str,
     ) -> Result<String, WebDriverErrorResponse> {

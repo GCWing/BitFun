@@ -792,25 +792,25 @@ fn tool_result_preview_prefers_line_boundary_when_possible() {
 }
 
 #[test]
-fn round_budget_candidate_selection_persists_largest_until_under_limit() {
+fn round_budget_candidate_selection_is_descending_and_stable_for_ties() {
     let candidates = vec![
         ToolResultPersistenceCandidate {
-            index: 0,
-            visible_chars: 170_000,
+            index: 9,
+            visible_chars: 50_000,
         },
         ToolResultPersistenceCandidate {
-            index: 1,
-            visible_chars: 60_000,
+            index: 7,
+            visible_chars: 100_000,
         },
         ToolResultPersistenceCandidate {
-            index: 2,
-            visible_chars: 30_000,
+            index: 3,
+            visible_chars: 100_000,
         },
     ];
 
-    let selected = select_tool_result_indices_for_persistence(&candidates, 260_000, 200_000);
+    let selected = select_tool_result_indices_for_persistence(&candidates, 250_000, 50_000);
 
-    assert_eq!(selected, vec![0]);
+    assert_eq!(selected, vec![7, 3]);
 }
 
 #[test]

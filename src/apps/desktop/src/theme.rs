@@ -583,7 +583,6 @@ pub fn create_main_window(
         .initialization_script(&init_script)
         .on_page_load({
             let startup_trace_id = startup_trace_id.to_string();
-            let total_started_at = total_started_at;
             move |_window, payload| {
                 let event = match payload.event() {
                     PageLoadEvent::Started => "started",
@@ -923,7 +922,6 @@ pub async fn show_agent_companion_desktop_pet(app: tauri::AppHandle) -> Result<(
         .accept_first_mouse(true)
         .background_color(tauri::window::Color(0, 0, 0, 0))
         .on_page_load({
-            let started_at = started_at;
             move |_window, payload| {
                 let event = match payload.event() {
                     PageLoadEvent::Started => "started",

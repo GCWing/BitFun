@@ -61,7 +61,6 @@ fn command_invokes_git(command: &str) -> bool {
     let first_token = command
         .trim_start()
         .trim_start_matches('&')
-        .trim_start()
         .split_whitespace()
         .next()
         .unwrap_or("")

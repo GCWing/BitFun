@@ -3,8 +3,8 @@
 use crate::api::app_state::AppState;
 use bitfun_core::service::review_platform::{
     ReviewPlatformCiLog, ReviewPlatformDetailSection, ReviewPlatformKind,
-    ReviewPlatformPullRequestDetail, ReviewPlatformPullRequestDetailPage, ReviewPlatformService,
-    ReviewPlatformWorkspaceSnapshot,
+    ReviewPlatformPullRequestDetail, ReviewPlatformPullRequestDetailPage,
+    ReviewPlatformPullRequestReviewTarget, ReviewPlatformService, ReviewPlatformWorkspaceSnapshot,
 };
 use log::error;
 use serde::Deserialize;
@@ -107,6 +107,29 @@ pub async fn review_platform_get_pull_request_detail(
             error
         );
         format!("Failed to get review platform pull request detail: {}", error)
+    })
+}
+
+#[tauri::command]
+pub async fn review_platform_get_pull_request_review_target(
+    _state: State<'_, AppState>,
+    request: ReviewPlatformPullRequestDetailRequest,
+) -> Result<ReviewPlatformPullRequestReviewTarget, String> {
+    ReviewPlatformService::pull_request_review_target(
+        &request.repository_path,
+        &request.remote_id,
+        &request.pull_request_id,
+    )
+    .await
+    .map_err(|error| {
+        error!(
+            "Failed to prepare review platform pull request target: path={}, remote_id={}, pull_request_id={}, error={}",
+            request.repository_path,
+            request.remote_id,
+            request.pull_request_id,
+            error
+        );
+        format!("Failed to prepare pull request Review target: {}", error)
     })
 }
 

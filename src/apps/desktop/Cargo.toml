@@ -129,3 +129,6 @@ devtools = ["tauri/devtools", "bitfun-webdriver/embedded"]
 [target.'cfg(target_os = "linux")'.dependencies]
 atspi = { workspace = true }
 leptess = { workspace = true }
+
+[lints]
+workspace = true

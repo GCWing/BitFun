@@ -36,3 +36,6 @@ cli-credentials = ["dep:base64", "dep:bitfun-services-core", "dep:dirs", "dep:uu
 [dev-dependencies]
 axum = { workspace = true }
 bitfun-events = { path = "../../contracts/events" }
+
+[lints]
+workspace = true

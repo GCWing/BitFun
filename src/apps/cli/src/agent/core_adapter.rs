@@ -17,7 +17,7 @@ use bitfun_core::agentic::events::EventQueue;
 
 /// Core-based Agent implementation.
 /// Stateless regarding agent_type — callers pass it per-call.
-pub struct CoreAgentAdapter {
+pub(crate) struct CoreAgentAdapter {
     coordinator: Arc<ConversationCoordinator>,
     event_queue: Arc<EventQueue>,
     workspace_path: Arc<Mutex<Option<PathBuf>>>,
@@ -28,7 +28,7 @@ pub struct CoreAgentAdapter {
 }
 
 impl CoreAgentAdapter {
-    pub fn new(
+    pub(crate) fn new(
         coordinator: Arc<ConversationCoordinator>,
         event_queue: Arc<EventQueue>,
         workspace_path: Option<PathBuf>,
@@ -43,17 +43,16 @@ impl CoreAgentAdapter {
     }
 
     /// Get the event queue (for external event consumption)
-    pub fn event_queue(&self) -> &Arc<EventQueue> {
+    pub(crate) fn event_queue(&self) -> &Arc<EventQueue> {
         &self.event_queue
     }
 
     /// Get the coordinator (for advanced operations like list_sessions, get_messages)
-    #[allow(dead_code)]
-    pub fn coordinator(&self) -> &Arc<ConversationCoordinator> {
+    pub(crate) fn coordinator(&self) -> &Arc<ConversationCoordinator> {
         &self.coordinator
     }
 
-    pub fn workspace_path_buf(&self) -> PathBuf {
+    pub(crate) fn workspace_path_buf(&self) -> PathBuf {
         self.workspace_path
             .try_lock()
             .ok()
@@ -62,11 +61,11 @@ impl CoreAgentAdapter {
             .unwrap_or_else(|| PathBuf::from("."))
     }
 
-    pub fn workspace_path_string(&self) -> String {
+    pub(crate) fn workspace_path_string(&self) -> String {
         self.workspace_path_buf().to_string_lossy().to_string()
     }
 
-    pub async fn set_workspace_path(&self, workspace_path: Option<PathBuf>) {
+    pub(crate) async fn set_workspace_path(&self, workspace_path: Option<PathBuf>) {
         let mut guard = self.workspace_path.lock().await;
         *guard = workspace_path;
     }
@@ -149,7 +148,7 @@ impl CoreAgentAdapter {
         }
     }
 
-    pub async fn create_session_with_id(
+    pub(crate) async fn create_session_with_id(
         &self,
         session_id: String,
         agent_type: &str,
@@ -345,13 +344,5 @@ impl Agent for CoreAgentAdapter {
         manager
             .send_answer(tool_id, answers)
             .map_err(|e| anyhow::anyhow!("Submit user answers failed: {}", e))
-    }
-
-    fn session_id(&self) -> Option<String> {
-        // Try to get session_id without blocking (best effort for sync context)
-        self.session_id
-            .try_lock()
-            .ok()
-            .and_then(|guard| guard.clone())
     }
 }

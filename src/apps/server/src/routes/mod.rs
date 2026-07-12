@@ -1,5 +1,5 @@
-pub mod api;
+pub(crate) mod api;
 /// Routes module
 ///
 /// Contains all HTTP and WebSocket routes
-pub mod websocket;
+pub(crate) mod websocket;

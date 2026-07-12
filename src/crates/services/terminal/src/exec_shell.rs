@@ -83,7 +83,7 @@ fn select_non_windows_local_exec_shell(
     system_default: &ResolvedLocalExecShell,
 ) -> ResolvedLocalExecShell {
     configured
-        .and_then(|preference| shell_type_for_supported_preference(preference))
+        .and_then(shell_type_for_supported_preference)
         .and_then(|shell_type| find_detected_shell(detected_shells, shell_type))
         .unwrap_or_else(|| system_default.clone())
 }

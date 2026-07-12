@@ -15,7 +15,7 @@ use crate::ui::theme::{StyleKind, Theme};
 
 /// A skill item for display in the selector.
 #[derive(Debug, Clone)]
-pub struct SkillItem {
+pub(crate) struct SkillItem {
     pub key: String,
     pub name: String,
     pub description: String,
@@ -27,7 +27,7 @@ pub struct SkillItem {
 }
 
 #[derive(Debug, Clone)]
-pub enum SkillSelectorAction {
+pub(crate) enum SkillSelectorAction {
     ListSkills,
     ConfigureSkills,
     Execute(SkillItem),
@@ -42,7 +42,7 @@ enum SkillSelectorScreen {
 }
 
 /// Skill selector popup state
-pub struct SkillSelectorState {
+pub(super) struct SkillSelectorState {
     items: Vec<SkillItem>,
     list_state: ListState,
     visible: bool,
@@ -51,7 +51,7 @@ pub struct SkillSelectorState {
 }
 
 impl SkillSelectorState {
-    pub fn new() -> Self {
+    pub(super) fn new() -> Self {
         Self {
             items: Vec::new(),
             list_state: ListState::default(),
@@ -61,7 +61,7 @@ impl SkillSelectorState {
         }
     }
 
-    pub fn show_menu(&mut self) {
+    pub(super) fn show_menu(&mut self) {
         self.items.clear();
         self.screen = SkillSelectorScreen::Menu;
         self.list_state.select(Some(0));
@@ -69,7 +69,7 @@ impl SkillSelectorState {
     }
 
     /// Show the current mode's runtime-visible skills.
-    pub fn show_list(&mut self, skills: Vec<SkillItem>) {
+    pub(super) fn show_list(&mut self, skills: Vec<SkillItem>) {
         if skills.is_empty() {
             return;
         }
@@ -81,7 +81,7 @@ impl SkillSelectorState {
     }
 
     /// Show all discovered skills with mode-specific enablement checkboxes.
-    pub fn show_config(&mut self, skills: Vec<SkillItem>) {
+    pub(super) fn show_config(&mut self, skills: Vec<SkillItem>) {
         if skills.is_empty() {
             return;
         }
@@ -105,24 +105,24 @@ impl SkillSelectorState {
         self.visible = true;
     }
 
-    pub fn hide(&mut self) {
+    pub(super) fn hide(&mut self) {
         self.visible = false;
         // Note: we don't clear items here to support back navigation
         self.last_area = None;
     }
 
     /// Reshow the skill selector (for back navigation)
-    pub fn reshow(&mut self) {
+    pub(super) fn reshow(&mut self) {
         if self.screen == SkillSelectorScreen::Menu || !self.items.is_empty() {
             self.visible = true;
         }
     }
 
-    pub fn is_visible(&self) -> bool {
+    pub(super) fn is_visible(&self) -> bool {
         self.visible
     }
 
-    pub fn move_up(&mut self) {
+    pub(super) fn move_up(&mut self) {
         if !self.visible || self.len() == 0 {
             return;
         }
@@ -132,7 +132,7 @@ impl SkillSelectorState {
         self.list_state.select(Some(next));
     }
 
-    pub fn move_down(&mut self) {
+    pub(super) fn move_down(&mut self) {
         if !self.visible || self.len() == 0 {
             return;
         }
@@ -142,7 +142,7 @@ impl SkillSelectorState {
     }
 
     /// Get the selected action.
-    pub fn confirm_selection(&self) -> Option<SkillSelectorAction> {
+    pub(super) fn confirm_selection(&self) -> Option<SkillSelectorAction> {
         if !self.visible {
             return None;
         }
@@ -174,7 +174,7 @@ impl SkillSelectorState {
     }
 
     /// Render the skill selector popup as an overlay
-    pub fn render(&mut self, frame: &mut Frame, area: Rect, theme: &Theme) {
+    pub(super) fn render(&mut self, frame: &mut Frame, area: Rect, theme: &Theme) {
         if !self.visible || self.len() == 0 {
             self.last_area = None;
             return;
@@ -226,7 +226,7 @@ impl SkillSelectorState {
     }
 
     /// Handle mouse events
-    pub fn handle_mouse_event(&mut self, mouse: &MouseEvent) -> Option<SkillSelectorAction> {
+    pub(super) fn handle_mouse_event(&mut self, mouse: &MouseEvent) -> Option<SkillSelectorAction> {
         if !self.visible {
             return None;
         }
@@ -271,7 +271,7 @@ impl SkillSelectorState {
         }
     }
 
-    pub fn captures_mouse(&self, _mouse: &MouseEvent) -> bool {
+    pub(super) fn captures_mouse(&self, _mouse: &MouseEvent) -> bool {
         self.visible
     }
 

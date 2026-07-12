@@ -22,7 +22,7 @@ pub mod tool_context;
 
 pub use budget::{
     DeepReviewActiveReviewerGuard, DeepReviewBudgetTracker, ReviewDiffBudgetAdmission,
-    REVIEW_DIFF_MAX_CHARS_PER_TURN,
+    REVIEW_DIFF_MAX_CHARS_PER_TURN, REVIEW_PROVIDER_DIFF_MAX_ACQUISITIONS_PER_TURN,
 };
 pub use concurrency_policy::{DeepReviewConcurrencyPolicy, DeepReviewEffectiveConcurrencySnapshot};
 pub use constants::{
@@ -50,7 +50,8 @@ pub use shared_context::{
 };
 pub use target_evidence::{
     ReviewTargetEvidence, ReviewTargetEvidenceCompleteness, ReviewTargetEvidenceFile,
-    ReviewTargetEvidenceSource, ReviewTargetEvidenceValidationError, ReviewTargetWorkspaceBinding,
+    ReviewTargetEvidenceSource, ReviewTargetEvidenceValidationError,
+    ReviewTargetPullRequestIdentity, ReviewTargetWorkspaceBinding,
 };
 pub use task_execution::{DeepReviewLaunchBatchInfo, DeepReviewQueueWaitSkipReason};
 pub use team_definition::{

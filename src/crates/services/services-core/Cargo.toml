@@ -50,3 +50,6 @@ required-features = ["markdown"]
 [[test]]
 name = "lsp_plugin_registry_contracts"
 required-features = ["lsp"]
+
+[lints]
+workspace = true

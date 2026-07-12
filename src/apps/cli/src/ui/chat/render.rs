@@ -1,6 +1,36 @@
+const CHAT_SHORTCUTS: [(&str, &str); 7] = [
+    ("Tab", "Switch Agent"),
+    ("Alt+\u{21b5}", "Newline"),
+    ("Ctrl+P", "Commands"),
+    ("\u{2191}\u{2193}", "History"),
+    ("Ctrl+E", "Browse"),
+    ("Esc", "Interrupt"),
+    ("Ctrl+C", "Quit"),
+];
+
+fn build_shortcut_display(
+    shortcuts: &[(&'static str, &'static str)],
+    style: Style,
+) -> (Vec<Span<'static>>, String) {
+    let mut spans = Vec::new();
+    let mut text = String::new();
+    for (index, (key, description)) in shortcuts.iter().enumerate() {
+        if index > 0 {
+            spans.push(Span::styled(" ", style));
+            text.push(' ');
+        }
+        let key_text = format!("[{key}]");
+        spans.push(Span::styled(key_text.clone(), style));
+        spans.push(Span::styled(*description, style));
+        text.push_str(&key_text);
+        text.push_str(description);
+    }
+    (spans, text)
+}
+
 impl ChatView {
     /// Render interface
-    pub fn render(&mut self, frame: &mut Frame, chat_state: &ChatState) {
+    pub(crate) fn render(&mut self, frame: &mut Frame, chat_state: &ChatState) {
         let size = frame.area();
         frame.render_widget(
             Block::default().style(Style::default().bg(self.theme.background)),
@@ -873,29 +903,7 @@ impl ChatView {
         ];
 
         // Build right side shortcuts with proper styling
-        let shortcuts = vec![
-            ("Tab", "Switch Agent"),
-            ("Alt+\u{21b5}", "Newline"),
-            ("Ctrl+P", "Commands"),
-            ("\u{2191}\u{2193}", "History"),
-            ("Ctrl+E", "Browse"),
-            ("Esc", "Interrupt"),
-            ("Ctrl+C", "Quit"),
-        ];
-
-        let mut right_spans = Vec::new();
-        let mut right_text = String::new();
-        for (i, (key, desc)) in shortcuts.iter().enumerate() {
-            if i > 0 {
-                right_spans.push(Span::styled(" ", muted));
-                right_text.push(' ');
-            }
-            let key_text = format!("[{}]", key);
-            right_spans.push(Span::styled(key_text.clone(), muted));
-            right_spans.push(Span::styled(*desc, muted));
-            right_text.push_str(&key_text);
-            right_text.push_str(desc);
-        }
+        let (right_spans, right_text) = build_shortcut_display(&CHAT_SHORTCUTS, muted);
 
         // Render lines based on available width
         let available_width = area.width as usize;
@@ -979,5 +987,52 @@ impl ChatView {
         }
 
         lines as u16
+    }
+}
+
+#[cfg(test)]
+mod shortcut_contract_tests {
+    use super::*;
+    use ratatui::style::Color;
+
+    #[test]
+    fn chat_shortcuts_keep_visible_order_and_muted_style() {
+        let muted = Style::default().fg(Color::DarkGray);
+
+        let (spans, text) = build_shortcut_display(&CHAT_SHORTCUTS, muted);
+
+        assert_eq!(
+            text,
+            "[Tab]Switch Agent [Alt+↵]Newline [Ctrl+P]Commands [↑↓]History [Ctrl+E]Browse [Esc]Interrupt [Ctrl+C]Quit"
+        );
+        assert_eq!(
+            spans
+                .iter()
+                .map(|span| span.content.as_ref())
+                .collect::<Vec<_>>(),
+            [
+                "[Tab]",
+                "Switch Agent",
+                " ",
+                "[Alt+↵]",
+                "Newline",
+                " ",
+                "[Ctrl+P]",
+                "Commands",
+                " ",
+                "[↑↓]",
+                "History",
+                " ",
+                "[Ctrl+E]",
+                "Browse",
+                " ",
+                "[Esc]",
+                "Interrupt",
+                " ",
+                "[Ctrl+C]",
+                "Quit",
+            ]
+        );
+        assert!(spans.iter().all(|span| span.style == muted));
     }
 }

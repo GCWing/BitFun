@@ -65,3 +65,6 @@ aes-gcm = "0.10"
 # CLI parsing for the admin tool
 clap = { version = "4", features = ["derive", "env"] }
 rpassword = "7"
+
+[lints]
+workspace = true

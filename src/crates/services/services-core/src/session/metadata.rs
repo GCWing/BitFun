@@ -247,7 +247,7 @@ pub fn build_session_index_snapshot(
         .into_iter()
         .filter(|metadata| !metadata.should_hide_from_user_lists())
         .collect::<Vec<_>>();
-    visible_sessions.sort_by(|a, b| b.last_active_at.cmp(&a.last_active_at));
+    visible_sessions.sort_by_key(|metadata| std::cmp::Reverse(metadata.last_active_at));
 
     let index = StoredSessionIndexFile::with_metadata_file_count(
         updated_at,
@@ -284,7 +284,7 @@ pub fn upsert_session_index_entry(
 
     index
         .sessions
-        .sort_by(|a, b| b.last_active_at.cmp(&a.last_active_at));
+        .sort_by_key(|metadata| std::cmp::Reverse(metadata.last_active_at));
     if had_index && metadata_file_created {
         index.metadata_file_count = index.metadata_file_count.saturating_add(1);
     }

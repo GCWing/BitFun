@@ -181,6 +181,7 @@ async fn acquire_install_lock(legacy_root: &Path) -> BitFunResult<BuiltinSkillsI
     let file = task::spawn_blocking(move || -> BitFunResult<std::fs::File> {
         let file = OpenOptions::new()
             .create(true)
+            .truncate(false)
             .read(true)
             .write(true)
             .open(&lock_path)?;

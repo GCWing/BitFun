@@ -48,7 +48,7 @@ pub fn select_tool_result_indices_for_persistence(
     limit: usize,
 ) -> Vec<usize> {
     let mut sorted = candidates.to_vec();
-    sorted.sort_by(|a, b| b.visible_chars.cmp(&a.visible_chars));
+    sorted.sort_by_key(|candidate| std::cmp::Reverse(candidate.visible_chars));
 
     let mut selected = Vec::new();
     let mut remaining = total_visible_chars;

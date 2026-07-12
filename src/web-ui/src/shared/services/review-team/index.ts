@@ -22,7 +22,6 @@ import {
   DEFAULT_REVIEW_TEAM_CORE_ROLES,
   DEFAULT_REVIEW_TEAM_EXECUTION_POLICY,
   DEFAULT_REVIEW_TEAM_MODEL,
-  DEFAULT_REVIEW_TEAM_PROJECT_STRATEGY_OVERRIDES_CONFIG_PATH,
   DEFAULT_REVIEW_TEAM_RATE_LIMIT_STATUS_CONFIG_PATH,
   DEFAULT_REVIEW_TEAM_STRATEGY_LEVEL,
   DISALLOWED_REVIEW_TEAM_MEMBER_IDS,
@@ -91,7 +90,6 @@ export {
   DEFAULT_REVIEW_TEAM_ID,
   DEFAULT_REVIEW_TEAM_CONFIG_PATH,
   DEFAULT_REVIEW_TEAM_RATE_LIMIT_STATUS_CONFIG_PATH,
-  DEFAULT_REVIEW_TEAM_PROJECT_STRATEGY_OVERRIDES_CONFIG_PATH,
   DEFAULT_REVIEW_TEAM_MODEL,
   DEFAULT_REVIEW_TEAM_STRATEGY_LEVEL,
   DEFAULT_REVIEW_MEMBER_STRATEGY_LEVEL,
@@ -124,8 +122,6 @@ function isReviewStrategyProfile(value: unknown): value is ReviewStrategyProfile
     isReviewStrategyLevel(profile.level) &&
     typeof profile.label === 'string' &&
     typeof profile.summary === 'string' &&
-    typeof profile.tokenImpact === 'string' &&
-    typeof profile.runtimeImpact === 'string' &&
     (profile.defaultModelSlot === 'fast' || profile.defaultModelSlot === 'primary') &&
     typeof profile.promptDirective === 'string' &&
     Boolean(profile.roleDirectives) &&
@@ -283,42 +279,6 @@ function normalizeMemberStrategyOverrides(
     } else {
       console.warn(
         `[ReviewTeamService] Ignoring invalid strategy override for '${normalizedId}': expected one of ${REVIEW_STRATEGY_LEVELS.join(', ')}, got '${value}'`,
-      );
-    }
-    return result;
-  }, {});
-}
-
-function normalizeProjectStrategyOverrideKey(workspacePath?: string): string | undefined {
-  const normalized = workspacePath?.trim().replace(/\\/g, '/');
-  if (!normalized) {
-    return undefined;
-  }
-  if (normalized === '/' || /^[a-zA-Z]:\/$/.test(normalized)) {
-    return normalized.toLowerCase();
-  }
-  return normalized.replace(/\/+$/, '').toLowerCase();
-}
-
-function normalizeProjectStrategyOverrideStore(
-  raw: unknown,
-): Record<string, ReviewStrategyLevel> {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-    return {};
-  }
-
-  return Object.entries(raw as Record<string, unknown>).reduce<
-    Record<string, ReviewStrategyLevel>
-  >((result, [workspacePath, value]) => {
-    const key = normalizeProjectStrategyOverrideKey(workspacePath);
-    if (!key) {
-      return result;
-    }
-    if (isReviewStrategyLevel(value)) {
-      result[key] = value;
-    } else {
-      console.warn(
-        `[ReviewTeamService] Ignoring invalid project strategy override for '${key}': expected one of ${REVIEW_STRATEGY_LEVELS.join(', ')}, got '${value}'`,
       );
     }
     return result;
@@ -618,53 +578,6 @@ export async function loadReviewTeamRateLimitStatus(): Promise<ReviewTeamRateLim
     console.warn('[ReviewTeamService] Failed to load review team rate limit status', error);
     return null;
   }
-}
-
-export async function loadReviewTeamProjectStrategyOverride(
-  workspacePath?: string,
-): Promise<ReviewStrategyLevel | undefined> {
-  const key = normalizeProjectStrategyOverrideKey(workspacePath);
-  if (!key) {
-    return undefined;
-  }
-
-  try {
-    const raw = await configAPI.getConfig(
-      DEFAULT_REVIEW_TEAM_PROJECT_STRATEGY_OVERRIDES_CONFIG_PATH,
-      { skipRetryOnNotFound: true },
-    );
-    return normalizeProjectStrategyOverrideStore(raw)[key];
-  } catch (error) {
-    console.warn('[ReviewTeamService] Failed to load project review strategy override', error);
-    return undefined;
-  }
-}
-
-export async function saveReviewTeamProjectStrategyOverride(
-  workspacePath: string | undefined,
-  strategyLevel?: ReviewStrategyLevel,
-): Promise<void> {
-  const key = normalizeProjectStrategyOverrideKey(workspacePath);
-  if (!key) {
-    return;
-  }
-
-  const raw = await configAPI.getConfig(
-    DEFAULT_REVIEW_TEAM_PROJECT_STRATEGY_OVERRIDES_CONFIG_PATH,
-    { skipRetryOnNotFound: true },
-  ).catch(() => undefined);
-  const nextOverrides = normalizeProjectStrategyOverrideStore(raw);
-
-  if (strategyLevel) {
-    nextOverrides[key] = normalizeTeamStrategyLevel(strategyLevel);
-  } else {
-    delete nextOverrides[key];
-  }
-
-  await configAPI.setConfig(
-    DEFAULT_REVIEW_TEAM_PROJECT_STRATEGY_OVERRIDES_CONFIG_PATH,
-    nextOverrides,
-  );
 }
 
 export async function addDefaultReviewTeamMember(subagentId: string): Promise<void> {

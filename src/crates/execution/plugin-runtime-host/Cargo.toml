@@ -13,3 +13,6 @@ crate-type = ["rlib"]
 async-trait = { workspace = true }
 bitfun-runtime-ports = { path = "../../contracts/runtime-ports" }
 tokio = { workspace = true }
+
+[lints]
+workspace = true

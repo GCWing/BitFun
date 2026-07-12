@@ -35,7 +35,7 @@ use super::flow_control::{HIGH_WATER_MARK, LOW_WATER_MARK};
 /// Shutdown constants
 mod shutdown {
     /// Time to wait for data flush after exit is queued
-    pub const DATA_FLUSH_TIMEOUT_MS: u64 = 250;
+    pub(super) const DATA_FLUSH_TIMEOUT_MS: u64 = 250;
 }
 
 /// Resize constants for Windows ConPTY
@@ -43,25 +43,25 @@ mod shutdown {
 mod resize_constants {
     /// Delay before executing resize on Windows ConPTY
     /// This helps avoid issues where early resize calls are not respected
-    pub const CONPTY_RESIZE_DELAY_MS: u64 = 50;
+    pub(super) const CONPTY_RESIZE_DELAY_MS: u64 = 50;
 
     /// Delay for Git Bash on ConPTY (longer delay needed)
     /// Git Bash requires more time to properly handle resize
-    pub const GIT_BASH_RESIZE_DELAY_MS: u64 = 100;
+    pub(super) const GIT_BASH_RESIZE_DELAY_MS: u64 = 100;
 
     /// Delay for initial resize when cols/rows are 0
     /// This is used for DelayedResizer mechanism
-    pub const DELAYED_RESIZE_TIMEOUT_MS: u64 = 1000;
+    pub(super) const DELAYED_RESIZE_TIMEOUT_MS: u64 = 1000;
 
     /// Minimum delay between consecutive resize calls to prevent flooding
-    pub const RESIZE_THROTTLE_MS: u64 = 16; // ~60fps
+    pub(super) const RESIZE_THROTTLE_MS: u64 = 16; // ~60fps
 }
 
 /// Non-Windows resize constants
 #[cfg(not(windows))]
 mod resize_constants {
     /// Minimum delay between consecutive resize calls
-    pub const RESIZE_THROTTLE_MS: u64 = 16;
+    pub(super) const RESIZE_THROTTLE_MS: u64 = 16;
 }
 
 /// Internal commands for controlling the PTY process

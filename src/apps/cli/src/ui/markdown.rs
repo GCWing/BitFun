@@ -13,7 +13,7 @@ use super::theme::{StyleKind, Theme};
 
 /// Markdown renderer with built-in cache for parsed results.
 /// Avoids re-parsing the same markdown content on every frame.
-pub struct MarkdownRenderer {
+pub(super) struct MarkdownRenderer {
     /// Theme
     theme: Theme,
     /// Cache: hash(content + width) -> rendered lines
@@ -21,7 +21,7 @@ pub struct MarkdownRenderer {
 }
 
 impl MarkdownRenderer {
-    pub fn new(theme: Theme) -> Self {
+    pub(super) fn new(theme: Theme) -> Self {
         Self {
             theme,
             cache: HashMap::new(),
@@ -37,7 +37,7 @@ impl MarkdownRenderer {
     }
 
     /// Render markdown with caching. Returns cached result if content+width match.
-    pub fn render_cached(&mut self, content: &str, width: usize) -> Vec<Line<'static>> {
+    pub(super) fn render_cached(&mut self, content: &str, width: usize) -> Vec<Line<'static>> {
         let key = Self::cache_key(content, width);
         if let Some(cached) = self.cache.get(&key) {
             return cached.clone();
@@ -48,11 +48,11 @@ impl MarkdownRenderer {
     }
 
     /// Clear the markdown render cache (e.g. on session switch)
-    pub fn clear_cache(&mut self) {
+    pub(super) fn clear_cache(&mut self) {
         self.cache.clear();
     }
 
-    pub fn render(&self, markdown: &str, width: usize) -> Vec<Line<'static>> {
+    pub(super) fn render(&self, markdown: &str, width: usize) -> Vec<Line<'static>> {
         let mut lines = Vec::new();
         let mut current_line_spans: Vec<Span<'static>> = Vec::new();
 
@@ -371,7 +371,7 @@ impl MarkdownRenderer {
         style
     }
 
-    pub fn has_markdown_syntax(text: &str) -> bool {
+    pub(super) fn has_markdown_syntax(text: &str) -> bool {
         text.contains("**")
             || text.contains("__")
             || text.contains("*")

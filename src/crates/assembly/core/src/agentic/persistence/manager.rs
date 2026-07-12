@@ -1969,7 +1969,7 @@ impl PersistenceManager {
             });
         }
 
-        summaries.sort_by(|a, b| b.last_activity_at.cmp(&a.last_activity_at));
+        summaries.sort_by_key(|summary| std::cmp::Reverse(summary.last_activity_at));
         Ok(summaries)
     }
 

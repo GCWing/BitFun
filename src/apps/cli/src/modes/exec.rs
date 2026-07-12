@@ -22,21 +22,21 @@ use crate::diagnostics::{emit_exit_diagnostic, ExitContext, ExitKind};
 const TOOL_START_INPUT_PREVIEW_CHARS: usize = 4_000;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
-pub enum ExecOutputFormat {
+pub(crate) enum ExecOutputFormat {
     Text,
     Json,
     StreamJson,
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct ExecSessionOptions {
+pub(crate) struct ExecSessionOptions {
     pub resume: Option<String>,
     pub continue_last: bool,
     pub session_id: Option<String>,
     pub fork_session: bool,
 }
 
-pub struct ExecMode {
+pub(crate) struct ExecMode {
     #[allow(dead_code)]
     config: CliConfig,
     message: String,
@@ -50,7 +50,7 @@ pub struct ExecMode {
 }
 
 impl ExecMode {
-    pub fn new(
+    pub(crate) fn new(
         config: CliConfig,
         message: String,
         agent_type: String,
@@ -172,7 +172,7 @@ impl ExecMode {
         }
     }
 
-    pub async fn run(&mut self) -> Result<()> {
+    pub(crate) async fn run(&mut self) -> Result<()> {
         tracing::info!(
             agent_type = %self.agent_type,
             message_len = self.message.len(),

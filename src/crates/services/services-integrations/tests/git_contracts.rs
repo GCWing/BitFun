@@ -221,18 +221,12 @@ async fn review_safe_workspace_diff_forces_rename_detection() {
 #[tokio::test]
 async fn git_service_preserves_repository_status_contract() {
     let repo_dir = TempRepoDir::new("git-service-status");
-    assert_eq!(
-        GitService::is_repository(repo_dir.path()).await.unwrap(),
-        false
-    );
+    assert!(!GitService::is_repository(repo_dir.path()).await.unwrap());
 
     run_git(repo_dir.path(), &["init"]);
     fs::write(repo_dir.path().join("new-file.txt"), "hello\n").unwrap();
 
-    assert_eq!(
-        GitService::is_repository(repo_dir.path()).await.unwrap(),
-        true
-    );
+    assert!(GitService::is_repository(repo_dir.path()).await.unwrap());
 
     let status = GitService::get_status(repo_dir.path()).await.unwrap();
     assert!(status

@@ -11,11 +11,12 @@
 
 权威边界：本文是候选产品调整提案，不替代 [product-requirements.md](product-requirements.md)、[implementation-plan.md](implementation-plan.md)、[governance/metrics-spec.md](governance/metrics-spec.md) 或 QDP 事件注册表。任何条目被采纳前，必须回填到对应权威文档；未回填前不得作为正式 PRD、阶段承诺、门禁规则或指标口径执行。
 
-2026-07-10 状态说明：
+2026-07-11 状态说明：
 
 - 已采纳并合入：统一 Review 主入口、DeepReview / ReviewTeam 内部化、低风险路径保护、L1-L3 自适应选择、只读 Reviewer 与 ReviewFixer 分离、同侧栏修复和 follow-up Review。
+- PR2 采纳：移除 PR Review MiniApp 独立路径，PR 面板以固定 provider identity/base/head 和按需 diff 启动统一 Review，并按精确 revision 投影进度、结果和过期状态。
 - 部分采纳：L2/L3 已有范围、计划独立检查数、耗时倾向和只读边界确认，但“保留核心检查”、可靠的实际成本反馈和增量问题状态仍需产品优化；不展示无法证明的 Token 估算。
-- 尚未采纳：既有 PR Review MiniApp 独立强度和 AI 草稿路径向统一 Review 收敛、通用动态 Workflow、CI / 测试失败队列、PR 自动复审策略、大规模任务控制台、独立 Verify 产品化和组织级 Review 分析。
+- 尚未采纳：通用动态 Workflow、CI / 测试失败队列、PR 自动复审策略、自动/inline 评论发布、大规模任务控制台、独立 Verify 产品化和组织级 Review 分析。
 
 ## 1. 核心结论
 

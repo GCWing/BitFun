@@ -16,7 +16,7 @@ use crate::ui::theme::{StyleKind, Theme};
 
 /// A session item for display in the selector
 #[derive(Debug, Clone)]
-pub struct SessionItem {
+pub(crate) struct SessionItem {
     pub session_id: String,
     pub session_name: String,
     pub last_activity: String,
@@ -25,7 +25,7 @@ pub struct SessionItem {
 
 /// Actions emitted by the session selector back to the caller
 #[derive(Debug, Clone)]
-pub enum SessionAction {
+pub(crate) enum SessionAction {
     /// No action, selector consumed the event
     None,
     /// User selected a session to switch to
@@ -37,7 +37,7 @@ pub enum SessionAction {
 }
 
 /// Session selector popup state
-pub struct SessionSelectorState {
+pub(super) struct SessionSelectorState {
     items: Vec<SessionItem>,
     list_state: ListState,
     visible: bool,
@@ -51,7 +51,7 @@ pub struct SessionSelectorState {
 }
 
 impl SessionSelectorState {
-    pub fn new() -> Self {
+    pub(super) fn new() -> Self {
         Self {
             items: Vec::new(),
             list_state: ListState::default(),
@@ -65,7 +65,7 @@ impl SessionSelectorState {
     }
 
     /// Show the session selector with given session list
-    pub fn show(&mut self, sessions: Vec<SessionItem>, current_session_id: Option<String>) {
+    pub(super) fn show(&mut self, sessions: Vec<SessionItem>, current_session_id: Option<String>) {
         if sessions.is_empty() {
             return;
         }
@@ -82,7 +82,7 @@ impl SessionSelectorState {
         self.rename_editing = false;
     }
 
-    pub fn hide(&mut self) {
+    pub(super) fn hide(&mut self) {
         self.visible = false;
         // Note: we don't clear items here to support back navigation
         self.last_area = None;
@@ -90,18 +90,18 @@ impl SessionSelectorState {
     }
 
     /// Reshow the session selector (for back navigation)
-    pub fn reshow(&mut self) {
+    pub(super) fn reshow(&mut self) {
         if !self.items.is_empty() {
             self.visible = true;
         }
     }
 
-    pub fn is_visible(&self) -> bool {
+    pub(super) fn is_visible(&self) -> bool {
         self.visible
     }
 
     /// Remove item by session_id (after external deletion succeeds)
-    pub fn remove_item(&mut self, session_id: &str) {
+    pub(super) fn remove_item(&mut self, session_id: &str) {
         self.items.retain(|s| s.session_id != session_id);
         if self.items.is_empty() {
             self.hide();
@@ -120,7 +120,7 @@ impl SessionSelectorState {
 
     /// Handle a key event while the selector is visible.
     /// Returns a SessionAction describing what happened.
-    pub fn handle_key_event(&mut self, key: KeyEvent) -> SessionAction {
+    pub(super) fn handle_key_event(&mut self, key: KeyEvent) -> SessionAction {
         if !self.visible {
             return SessionAction::None;
         }
@@ -231,7 +231,7 @@ impl SessionSelectorState {
     }
 
     /// Render the session selector popup as an overlay
-    pub fn render(&mut self, frame: &mut Frame, area: Rect, theme: &Theme) {
+    pub(super) fn render(&mut self, frame: &mut Frame, area: Rect, theme: &Theme) {
         if !self.visible || self.items.is_empty() {
             self.last_area = None;
             return;
@@ -359,7 +359,7 @@ impl SessionSelectorState {
     }
 
     /// Handle mouse events
-    pub fn handle_mouse_event(&mut self, mouse: &MouseEvent) -> SessionAction {
+    pub(super) fn handle_mouse_event(&mut self, mouse: &MouseEvent) -> SessionAction {
         if !self.visible || self.rename_editing {
             return SessionAction::None;
         }
@@ -407,7 +407,7 @@ impl SessionSelectorState {
         }
     }
 
-    pub fn captures_mouse(&self, _mouse: &MouseEvent) -> bool {
+    pub(super) fn captures_mouse(&self, _mouse: &MouseEvent) -> bool {
         self.visible
     }
 

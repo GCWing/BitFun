@@ -247,3 +247,6 @@ required-features = ["service-integrations"]
 
 [build-dependencies]
 sha2 = { workspace = true }
+
+[lints]
+workspace = true

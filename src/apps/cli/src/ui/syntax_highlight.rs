@@ -22,68 +22,21 @@ static THEME_SET: Lazy<ThemeSet> = Lazy::new(ThemeSet::load_defaults);
 
 /// Which syntect theme to use based on our app theme
 #[derive(Debug, Clone, Copy, PartialEq)]
-#[allow(dead_code)]
-pub enum HighlightTheme {
+pub(super) enum HighlightTheme {
     Dark,
-    Light,
 }
 
 impl HighlightTheme {
     fn syntect_theme_name(&self) -> &'static str {
         match self {
             HighlightTheme::Dark => "base16-ocean.dark",
-            HighlightTheme::Light => "InspiredGitHub",
         }
     }
-}
-
-/// Highlight a block of code and return ratatui Lines.
-///
-/// - `content`: the source code text
-/// - `file_ext`: file extension for language detection (e.g. "rs", "ts", "py")
-/// - `hl_theme`: dark or light theme
-///
-/// Falls back to plain text if the language is not recognized.
-#[allow(dead_code)]
-pub fn highlight_code<'a>(
-    content: &str,
-    file_ext: &str,
-    hl_theme: HighlightTheme,
-) -> Vec<Line<'a>> {
-    let syntax = SYNTAX_SET
-        .find_syntax_by_extension(file_ext)
-        .unwrap_or_else(|| SYNTAX_SET.find_syntax_plain_text());
-
-    let theme = &THEME_SET.themes[hl_theme.syntect_theme_name()];
-    let mut highlighter = HighlightLines::new(syntax, theme);
-    let mut lines = Vec::new();
-
-    for line_str in LinesWithEndings::from(content) {
-        match highlighter.highlight_line(line_str, &SYNTAX_SET) {
-            Ok(ranges) => {
-                let spans: Vec<Span<'a>> = ranges
-                    .into_iter()
-                    .map(|(style, text)| {
-                        Span::styled(text.to_string(), syntect_to_ratatui_style(&style))
-                    })
-                    .collect();
-                lines.push(Line::from(spans));
-            }
-            Err(_) => {
-                // Fallback: plain text
-                lines.push(Line::from(Span::raw(
-                    line_str.trim_end_matches('\n').to_string(),
-                )));
-            }
-        }
-    }
-
-    lines
 }
 
 /// Highlight a single bash command line (e.g. "ls -la --color").
 /// Returns a Line with syntax-highlighted spans.
-pub fn highlight_bash_command<'a>(command: &str, hl_theme: HighlightTheme) -> Line<'a> {
+pub(super) fn highlight_bash_command<'a>(command: &str, hl_theme: HighlightTheme) -> Line<'a> {
     let syntax = SYNTAX_SET
         .find_syntax_by_extension("sh")
         .unwrap_or_else(|| SYNTAX_SET.find_syntax_plain_text());
@@ -114,23 +67,10 @@ pub fn highlight_bash_command<'a>(command: &str, hl_theme: HighlightTheme) -> Li
     }
 }
 
-/// Highlight bash output text (uses plain text / console syntax).
-/// Returns lines with minimal styling.
-#[allow(dead_code)]
-pub fn highlight_bash_output<'a>(output: &str, hl_theme: HighlightTheme) -> Vec<Line<'a>> {
-    // For shell output, we use plain text syntax — syntect doesn't have a
-    // "console" syntax by default. We just return plain lines.
-    let _ = hl_theme;
-    output
-        .lines()
-        .map(|line| Line::from(Span::raw(line.to_string())))
-        .collect()
-}
-
 /// Highlight code with line numbers prepended.
 ///
 /// Returns lines in the format: `{line_number} | {highlighted_code}`
-pub fn highlight_code_with_line_numbers<'a>(
+pub(super) fn highlight_code_with_line_numbers<'a>(
     content: &str,
     file_ext: &str,
     hl_theme: HighlightTheme,
@@ -180,7 +120,7 @@ pub fn highlight_code_with_line_numbers<'a>(
 
 /// Extract file extension from a file path.
 /// Returns "txt" if no extension is found.
-pub fn ext_from_path(path: &str) -> &str {
+pub(super) fn ext_from_path(path: &str) -> &str {
     path.rsplit('.')
         .next()
         .filter(|ext| ext.len() <= 10 && !ext.contains('/') && !ext.contains('\\'))

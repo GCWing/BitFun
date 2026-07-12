@@ -10,7 +10,7 @@ use super::theme::{StyleKind, Theme};
 
 /// Diff view mode
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum DiffViewMode {
+pub(super) enum DiffViewMode {
     /// Traditional unified diff with +/- prefixes
     Unified,
     /// Side-by-side split view (old left, new right)
@@ -20,7 +20,7 @@ pub enum DiffViewMode {
 }
 
 /// Compute diff statistics: (additions, deletions)
-pub fn diff_stats(old_content: &str, new_content: &str) -> (usize, usize) {
+pub(super) fn diff_stats(old_content: &str, new_content: &str) -> (usize, usize) {
     let diff = TextDiff::from_lines(old_content, new_content);
     let mut additions = 0usize;
     let mut deletions = 0usize;
@@ -38,7 +38,7 @@ pub fn diff_stats(old_content: &str, new_content: &str) -> (usize, usize) {
 ///
 /// Supports Unified and Split view modes with line numbers,
 /// hunk headers, and full-line background colors.
-pub fn render_diff<'a>(
+pub(super) fn render_diff<'a>(
     old_content: &str,
     new_content: &str,
     theme: &Theme,
@@ -65,17 +65,6 @@ pub fn render_diff<'a>(
             render_split(old_content, new_content, theme, max_lines, available_width)
         }
     }
-}
-
-/// Backward-compatible wrapper (used by existing code paths)
-#[allow(dead_code)]
-pub fn render_unified_diff<'a>(
-    old_content: &str,
-    new_content: &str,
-    theme: &Theme,
-    max_lines: usize,
-) -> Vec<Line<'a>> {
-    render_unified(old_content, new_content, theme, max_lines, 120)
 }
 
 // ============ Unified Diff ============

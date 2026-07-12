@@ -20,10 +20,10 @@ const ROTATED_LOG_TIME_FORMAT: &str = "%Y-%m-%d_%H-%M-%S";
 const MAX_LOG_FILE_SIZE: u64 = 10 * 1024 * 1024;
 const ROTATED_LOG_KEEP_COUNT: usize = 2;
 
-pub const DEFAULT_LOG_LEVEL: tracing::Level = tracing::Level::DEBUG;
+pub(crate) const DEFAULT_LOG_LEVEL: tracing::Level = tracing::Level::DEBUG;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CliLogPaths {
+pub(crate) struct CliLogPaths {
     pub session_log_dir: PathBuf,
     pub app_log_path: PathBuf,
     pub ai_log_path: PathBuf,
@@ -206,7 +206,7 @@ impl Write for SharedRotatingWriter {
     }
 }
 
-pub fn default_log_level(verbose: bool) -> tracing::Level {
+pub(crate) fn default_log_level(verbose: bool) -> tracing::Level {
     if verbose {
         tracing::Level::TRACE
     } else {
@@ -214,7 +214,7 @@ pub fn default_log_level(verbose: bool) -> tracing::Level {
     }
 }
 
-pub fn resolve_logs_root() -> PathBuf {
+pub(crate) fn resolve_logs_root() -> PathBuf {
     CliConfig::config_dir()
         .ok()
         .map(|d| d.join(CLI_LOGS_DIR_NAME))
@@ -225,14 +225,14 @@ pub fn resolve_logs_root() -> PathBuf {
         })
 }
 
-pub fn create_session_log_dir(logs_root: &Path) -> PathBuf {
+pub(crate) fn create_session_log_dir(logs_root: &Path) -> PathBuf {
     let timestamp = Local::now().format(SESSION_DIR_FORMAT).to_string();
     let session_dir = logs_root.join(timestamp);
     fs::create_dir_all(&session_dir).ok();
     session_dir
 }
 
-pub fn build_log_paths(session_log_dir: &Path) -> CliLogPaths {
+pub(crate) fn build_log_paths(session_log_dir: &Path) -> CliLogPaths {
     CliLogPaths {
         session_log_dir: session_log_dir.to_path_buf(),
         app_log_path: session_log_dir.join("app.log"),
@@ -347,7 +347,10 @@ where
         }))
 }
 
-pub fn init_file_logging_at(session_log_dir: &Path, log_level: tracing::Level) -> CliLogPaths {
+pub(crate) fn init_file_logging_at(
+    session_log_dir: &Path,
+    log_level: tracing::Level,
+) -> CliLogPaths {
     fs::create_dir_all(session_log_dir).ok();
     let paths = build_log_paths(session_log_dir);
 
@@ -379,7 +382,7 @@ pub fn init_file_logging_at(session_log_dir: &Path, log_level: tracing::Level) -
     paths
 }
 
-pub fn init_file_logging(log_level: tracing::Level) -> CliLogPaths {
+pub(crate) fn init_file_logging(log_level: tracing::Level) -> CliLogPaths {
     let logs_root = resolve_logs_root();
     let session_log_dir = create_session_log_dir(&logs_root);
     init_file_logging_at(&session_log_dir, log_level)

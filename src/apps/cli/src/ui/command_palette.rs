@@ -18,7 +18,7 @@ use crate::ui::theme::{StyleKind, Theme};
 
 /// A single item in the command palette
 #[derive(Debug, Clone)]
-pub struct PaletteItem {
+struct PaletteItem {
     pub id: String,
     pub label: String,
     pub description: String,
@@ -26,7 +26,7 @@ pub struct PaletteItem {
 }
 
 /// Action returned after handling a key event
-pub enum PaletteAction {
+pub(crate) enum PaletteAction {
     /// User confirmed selection — carries the item id
     Execute(String),
     /// User dismissed the palette (Esc)
@@ -38,7 +38,7 @@ pub enum PaletteAction {
 // ── Default palette items ──
 
 /// Build the default set of palette items (all groups)
-pub fn default_palette_items() -> Vec<PaletteItem> {
+fn default_palette_items() -> Vec<PaletteItem> {
     vec![
         // Session group
         PaletteItem {
@@ -170,7 +170,7 @@ enum PaletteRow {
 
 // ── State ──
 
-pub struct CommandPaletteState {
+pub(super) struct CommandPaletteState {
     visible: bool,
     search_input: String,
     search_cursor: usize,
@@ -194,7 +194,7 @@ pub struct CommandPaletteState {
 }
 
 impl CommandPaletteState {
-    pub fn new() -> Self {
+    pub(super) fn new() -> Self {
         Self {
             visible: false,
             search_input: String::new(),
@@ -210,7 +210,7 @@ impl CommandPaletteState {
     }
 
     /// Show the command palette with the default items
-    pub fn show(&mut self) {
+    pub(super) fn show(&mut self) {
         let mut items = build_suggested_items();
         items.extend(default_palette_items());
         self.all_items = items;
@@ -223,18 +223,18 @@ impl CommandPaletteState {
     }
 
     /// Hide the command palette
-    pub fn hide(&mut self) {
+    pub(super) fn hide(&mut self) {
         self.visible = false;
         // Note: we don't clear data here to support back navigation
         self.last_area = None;
     }
 
     /// Reshow the command palette (for back navigation)
-    pub fn reshow(&mut self) {
+    pub(super) fn reshow(&mut self) {
         self.visible = true;
     }
 
-    pub fn is_visible(&self) -> bool {
+    pub(super) fn is_visible(&self) -> bool {
         self.visible
     }
 
@@ -365,7 +365,7 @@ impl CommandPaletteState {
 
     // ── Key handling ──
 
-    pub fn handle_key_event(&mut self, key: KeyEvent) -> PaletteAction {
+    pub(super) fn handle_key_event(&mut self, key: KeyEvent) -> PaletteAction {
         if !self.visible {
             return PaletteAction::None;
         }
@@ -471,7 +471,7 @@ impl CommandPaletteState {
         }
     }
 
-    pub fn handle_mouse_event(&mut self, mouse: &MouseEvent) -> PaletteAction {
+    pub(super) fn handle_mouse_event(&mut self, mouse: &MouseEvent) -> PaletteAction {
         if !self.visible {
             return PaletteAction::None;
         }
@@ -524,13 +524,13 @@ impl CommandPaletteState {
     }
 
     /// Whether the palette captures mouse events (prevents passthrough)
-    pub fn captures_mouse(&self, _mouse: &MouseEvent) -> bool {
+    pub(super) fn captures_mouse(&self, _mouse: &MouseEvent) -> bool {
         self.visible
     }
 
     // ── Rendering ──
 
-    pub fn render(&mut self, frame: &mut Frame, area: Rect, theme: &Theme) {
+    pub(super) fn render(&mut self, frame: &mut Frame, area: Rect, theme: &Theme) {
         if !self.visible {
             self.last_area = None;
             return;

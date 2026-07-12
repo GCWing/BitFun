@@ -1,4 +1,4 @@
-pub fn render_plugin_source_summary(
+pub(crate) fn render_plugin_source_summary(
     discovered_count: usize,
     approved_count: usize,
     warning_count: usize,
@@ -19,22 +19,22 @@ pub fn render_plugin_source_summary(
     }
 }
 
-pub const fn plugin_source_check_passes(error_count: usize) -> bool {
+pub(crate) const fn plugin_source_check_passes(error_count: usize) -> bool {
     error_count == 0
 }
 
-pub fn render_source_review_epoch(trust_epoch: Option<u64>) -> String {
+pub(crate) fn render_source_review_epoch(trust_epoch: Option<u64>) -> String {
     match trust_epoch {
         Some(epoch) => format!("Source review epoch: {epoch}"),
         None => "Source review epoch: unavailable".to_string(),
     }
 }
 
-pub fn render_mcp_configuration_count(configured_count: usize) -> String {
+pub(crate) fn render_mcp_configuration_count(configured_count: usize) -> String {
     format!("MCP configuration entries: {configured_count}")
 }
 
-pub fn escape_terminal_text(value: &str) -> String {
+pub(crate) fn escape_terminal_text(value: &str) -> String {
     value
         .chars()
         .flat_map(|ch| {

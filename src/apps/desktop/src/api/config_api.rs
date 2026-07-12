@@ -161,7 +161,7 @@ mod tests {
         ));
         assert!(!is_expected_config_path_not_found(
             &error,
-            Some("ai.review_team_project_strategy_overrides"),
+            Some("ai.review_teams.default"),
         ));
         assert!(!is_expected_config_path_not_found(&error, None));
         assert!(!is_expected_config_path_not_found(

@@ -21,7 +21,7 @@ use super::theme::{tool_icon, StyleKind, Theme};
 
 /// Permission prompt stage
 #[derive(Debug, Clone, PartialEq)]
-pub enum PermissionStage {
+enum PermissionStage {
     /// Main permission screen: Allow once / Allow always / Reject
     Permission,
     /// Confirm "Allow always" action
@@ -32,20 +32,20 @@ pub enum PermissionStage {
 
 /// Permission prompt state
 #[derive(Debug, Clone)]
-pub struct PermissionPrompt {
-    pub tool_id: String,
-    pub tool_name: String,
-    pub params: serde_json::Value,
-    pub stage: PermissionStage,
+pub(crate) struct PermissionPrompt {
+    pub(crate) tool_id: String,
+    tool_name: String,
+    params: serde_json::Value,
+    stage: PermissionStage,
     /// Selected option index: 0=Allow once, 1=Allow always, 2=Reject
-    pub selected_option: usize,
+    selected_option: usize,
     /// Reject reason input buffer
-    pub reject_reason: String,
+    reject_reason: String,
 }
 
 /// Result of handling a key event in the permission prompt
 #[derive(Debug, Clone)]
-pub enum PermissionAction {
+pub(crate) enum PermissionAction {
     /// No action, continue showing the prompt
     None,
     /// User confirmed: allow once (with optional updated input)
@@ -58,7 +58,7 @@ pub enum PermissionAction {
 
 impl PermissionPrompt {
     /// Create a new permission prompt from a ConfirmationNeeded event
-    pub fn new(tool_id: String, tool_name: String, params: serde_json::Value) -> Self {
+    pub(crate) fn new(tool_id: String, tool_name: String, params: serde_json::Value) -> Self {
         Self {
             tool_id,
             tool_name,
@@ -70,7 +70,7 @@ impl PermissionPrompt {
     }
 
     /// Handle a key event. Returns a PermissionAction if the user made a decision.
-    pub fn handle_key_event(&mut self, key: KeyEvent) -> PermissionAction {
+    pub(crate) fn handle_key_event(&mut self, key: KeyEvent) -> PermissionAction {
         if key.kind != KeyEventKind::Press && key.kind != KeyEventKind::Repeat {
             return PermissionAction::None;
         }
@@ -184,7 +184,7 @@ impl PermissionPrompt {
 /// Render the permission overlay on top of the message area.
 ///
 /// This renders at the bottom of the given area, taking up a fixed height.
-pub fn render_permission_overlay(
+pub(super) fn render_permission_overlay(
     frame: &mut Frame,
     prompt: &PermissionPrompt,
     theme: &Theme,
