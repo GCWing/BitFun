@@ -1701,6 +1701,18 @@ pub async fn account_list_devices() -> Result<Vec<AccountDeviceInfo>, String> {
         .collect())
 }
 
+/// Remove a device from the account.
+#[tauri::command]
+pub async fn account_delete_device(targetDeviceId: String) -> Result<(), String> {
+    let (session, relay_url) = read_account_context().await?;
+    AccountClient::new()
+        .delete_device(&relay_url, &session, &targetDeviceId)
+        .await
+        .map_err(|e| format!("{e}"))?;
+    log::info!("Device {targetDeviceId} removed from account");
+    Ok(())
+}
+
 /// Send any RemoteCommand to a target device via HTTP RPC.
 /// The command is encrypted with the master_key, sent to the relay,
 /// which routes it to the target device's WS. The target executes it

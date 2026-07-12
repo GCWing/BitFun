@@ -10,7 +10,7 @@
 
 use axum::extract::{Path, State};
 use axum::http::{header, HeaderMap, StatusCode};
-use axum::routing::{get, post};
+use axum::routing::{delete, get, post};
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
@@ -46,6 +46,7 @@ pub fn device_router() -> Router<AppState> {
     Router::new()
         .route("/api/devices", get(list_devices))
         .route("/api/devices/{target_device_id}/rpc", post(device_rpc))
+        .route("/api/devices/{target_device_id}", delete(delete_device))
 }
 
 // ── List devices ────────────────────────────────────────────────────────
@@ -174,4 +175,52 @@ async fn device_rpc(
             Err(StatusCode::GATEWAY_TIMEOUT)
         }
     }
+}
+
+// ── Delete device ───────────────────────────────────────────────────────
+
+/// `DELETE /api/devices/:target_device_id`
+///
+/// Removes a device from the account (DB row + any active WS session).
+/// The caller cannot delete itself.
+async fn delete_device(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(target_device_id): Path<String>,
+) -> Result<StatusCode, StatusCode> {
+    let user_id = validate_user(&state, &headers).await?;
+
+    // Get the caller's own device_id from the auth token.
+    let db = state.db.as_ref().ok_or(StatusCode::NOT_IMPLEMENTED)?;
+    let token = headers
+        .get(header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.strip_prefix("Bearer "))
+        .map(|t| t.trim().to_string())
+        .ok_or(StatusCode::UNAUTHORIZED)?;
+    let auth = AuthToken::find(db, &token)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::UNAUTHORIZED)?;
+
+    // Prevent self-deletion.
+    if auth.device_id == target_device_id {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+
+    // Remove from DB.
+    let _ = crate::db::DeviceRow::delete(db, &target_device_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Revoke any auth tokens belonging to the removed device.
+    let _ = crate::db::AuthToken::revoke_by_device(db, &target_device_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Disconnect active WS session if any.
+    state.device_manager.disconnect_device(&user_id, &target_device_id);
+
+    tracing::info!("Device {target_device_id} removed from account {user_id}");
+    Ok(StatusCode::NO_CONTENT)
 }

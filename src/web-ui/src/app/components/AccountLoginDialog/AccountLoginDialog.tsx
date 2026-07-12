@@ -11,7 +11,7 @@ import { Modal, Button, Input, Alert } from '@/component-library';
 import {
   User, Lock, Server, LogIn, Monitor, CloudDownload, Upload,
   ChevronRight, ArrowLeft, Send, Plus, MessageSquare, RefreshCw,
-  Eye, EyeOff,
+  Eye, EyeOff, X,
 } from 'lucide-react';
 import { remoteConnectAPI } from '@/infrastructure/api/service-api/RemoteConnectAPI';
 import type { AccountHint, AccountDeviceInfo } from '@/infrastructure/api/service-api/RemoteConnectAPI';
@@ -242,6 +242,17 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
       setError(e instanceof Error ? e.message : String(e));
     } finally { setLoading(false); }
   }, [resetState]);
+
+  const handleDeleteDevice = useCallback(async (deviceId: string, deviceName: string) => {
+    if (!window.confirm(t('accountLogin.confirmRemoveDevice', { name: deviceName }))) return;
+    try {
+      await remoteConnectAPI.accountDeleteDevice(deviceId);
+      success(t('accountLogin.deviceRemoved', { name: deviceName }));
+      refreshDevices();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }, [t, success, refreshDevices]);
 
   // ── Device control: browse remote workspace + sessions ──────────────
   const selectDevice = useCallback(async (device: AccountDeviceInfo) => {
@@ -486,6 +497,12 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
                     </span>
                   </div>
                   {d.online && <ChevronRight size={14} />}
+                  <button className="account-login-dialog__device-remove"
+                    onClick={(e) => { e.stopPropagation(); handleDeleteDevice(d.device_id, d.device_name); }}
+                    title={t('accountLogin.removeDevice')}
+                    tabIndex={-1}>
+                    <X size={14} />
+                  </button>
                 </div>
               ))}
             </div>

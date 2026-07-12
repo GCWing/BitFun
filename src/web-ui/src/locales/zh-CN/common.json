@@ -503,7 +503,10 @@
     "syncing": "正在与云端同步...",
     "syncDone": "云端同步完成：上传 {{exported}} 个会话，下载 {{imported}} 个会话",
     "syncDoneShort": "云端同步完成",
-    "syncFailed": "云端同步失败 — 将自动重试"
+    "syncFailed": "云端同步失败 — 将自动重试",
+    "removeDevice": "移除设备",
+    "confirmRemoveDevice": "确定从账号中移除「{{name}}」？该设备需要重新登录。",
+    "deviceRemoved": "设备「{{name}}」已移除"
   },
   "remoteConnect": {
     "tabNgrok": "内网穿透",

@@ -112,6 +112,20 @@ impl DeviceManager {
         removed.map(|(_, v)| v)
     }
 
+    /// Force-disconnect a specific device from the account by sending a
+    /// close on its WS sender.  The actual cleanup is done by the WS read
+    /// loop's `unregister` when it detects the broken pipe.
+    pub fn disconnect_device(&self, user_id: &str, device_id: &str) {
+        if let Some(user_devices) = self.users.get(user_id) {
+            if let Some(dev) = user_devices.get(device_id) {
+                let _ = dev.tx.try_send(OutboundMessage {
+                    text: r#"{"type":"force_disconnect"}"#.to_string(),
+                });
+                debug!("Force-disconnect sent to device {device_id}");
+            }
+        }
+    }
+
     /// Route a raw JSON text message to `target_device_id` within `user_id`.
     /// Returns false if the target is offline or its queue is full.
     pub fn route_message(&self, user_id: &str, target_device_id: &str, text: &str) -> bool {

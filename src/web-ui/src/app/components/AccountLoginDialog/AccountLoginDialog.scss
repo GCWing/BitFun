@@ -243,6 +243,25 @@
     }
   }
 
+  &__device-remove {
+    flex-shrink: 0;
+    background: none;
+    border: none;
+    padding: 4px;
+    border-radius: 4px;
+    cursor: pointer;
+    color: var(--color-text-muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.15s, background 0.15s;
+
+    &:hover {
+      color: var(--color-error);
+      background: var(--color-error-bg, rgba(255, 0, 0, 0.08));
+    }
+  }
+
   &__loading-overlay {
     position: absolute;
     top: 0; left: 0; right: 0; bottom: 0;

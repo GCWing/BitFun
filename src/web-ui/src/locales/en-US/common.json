@@ -503,7 +503,10 @@
     "syncing": "Syncing with cloud...",
     "syncDone": "Cloud sync complete: {{exported}} sessions uploaded, {{imported}} downloaded",
     "syncDoneShort": "Cloud sync complete",
-    "syncFailed": "Cloud sync failed — will retry automatically"
+    "syncFailed": "Cloud sync failed — will retry automatically",
+    "removeDevice": "Remove device",
+    "confirmRemoveDevice": "Remove \"{{name}}\" from this account? The device will need to re-login.",
+    "deviceRemoved": "Device \"{{name}}\" removed"
   },
   "remoteConnect": {
     "tabNgrok": "NAT Traversal",

@@ -360,6 +360,15 @@ impl DeviceRow {
         .map_err(|e| anyhow!("list devices: {e}"))?;
         Ok(rows)
     }
+
+    pub async fn delete(pool: &DbPool, device_id: &str) -> Result<()> {
+        sqlx::query("DELETE FROM devices WHERE device_id = ?")
+            .bind(device_id)
+            .execute(pool)
+            .await
+            .map_err(|e| anyhow!("delete device: {e}"))?;
+        Ok(())
+    }
 }
 
 // ── Auth tokens ─────────────────────────────────────────────────────────
@@ -425,6 +434,16 @@ impl AuthToken {
             return Ok(None);
         }
         Ok(Some(auth_token))
+    }
+
+    /// Revoke (delete) all tokens belonging to a specific device.
+    pub async fn revoke_by_device(pool: &DbPool, device_id: &str) -> Result<()> {
+        sqlx::query("DELETE FROM auth_tokens WHERE device_id = ?")
+            .bind(device_id)
+            .execute(pool)
+            .await
+            .map_err(|e| anyhow!("revoke tokens by device: {e}"))?;
+        Ok(())
     }
 }
 

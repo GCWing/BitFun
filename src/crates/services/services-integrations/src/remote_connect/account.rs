@@ -535,6 +535,28 @@ impl AccountClient {
             .collect())
     }
 
+    /// Remove a device from the account (DELETE /api/devices/:id).
+    pub async fn delete_device(
+        &self,
+        relay_url: &str,
+        session: &AccountSession,
+        target_device_id: &str,
+    ) -> Result<()> {
+        let resp = self
+            .http
+            .delete(Self::endpoint(
+                relay_url,
+                &format!("/api/devices/{target_device_id}"),
+            ))
+            .header("Authorization", Self::auth_header(session))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(Self::into_error(resp).await);
+        }
+        Ok(())
+    }
+
     /// Send an encrypted RemoteCommand to a target device via HTTP RPC.
     /// The relay routes the opaque ciphertext to the target device's WS,
     /// waits for the response, and returns the encrypted response.

@@ -503,7 +503,10 @@
     "syncing": "正在與雲端同步...",
     "syncDone": "雲端同步完成：上傳 {{exported}} 個工作階段，下載 {{imported}} 個工作階段",
     "syncDoneShort": "雲端同步完成",
-    "syncFailed": "雲端同步失敗 — 將自動重試"
+    "syncFailed": "雲端同步失敗 — 將自動重試",
+    "removeDevice": "移除裝置",
+    "confirmRemoveDevice": "確定從帳號中移除「{{name}}」？該裝置需要重新登入。",
+    "deviceRemoved": "裝置「{{name}}」已移除"
   },
   "remoteConnect": {
     "tabNgrok": "內網穿透",

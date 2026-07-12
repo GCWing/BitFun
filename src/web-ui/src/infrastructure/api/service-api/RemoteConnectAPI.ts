@@ -521,6 +521,15 @@ class RemoteConnectAPIService {
     }
   }
 
+  async accountDeleteDevice(targetDeviceId: string): Promise<void> {
+    try {
+      await this.adapter.request<void>('account_delete_device', { targetDeviceId });
+    } catch (e) {
+      log.error('accountDeleteDevice failed', e);
+      throw e;
+    }
+  }
+
   async accountDeviceRpc(
     targetDeviceId: string,
     commandJson: string,
