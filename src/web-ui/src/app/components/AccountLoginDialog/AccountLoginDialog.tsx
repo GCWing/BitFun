@@ -11,6 +11,7 @@ import { Modal, Button, Input, Alert } from '@/component-library';
 import {
   User, Lock, Server, LogIn, Monitor, CloudDownload, Upload,
   ChevronRight, ArrowLeft, Send, Plus, MessageSquare, RefreshCw,
+  Eye, EyeOff,
 } from 'lucide-react';
 import { remoteConnectAPI } from '@/infrastructure/api/service-api/RemoteConnectAPI';
 import type { AccountHint, AccountDeviceInfo } from '@/infrastructure/api/service-api/RemoteConnectAPI';
@@ -65,6 +66,7 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'done' | 'failed'>('idle');
+  const [showPassword, setShowPassword] = useState(false);
   const [view, setView] = useState<View>('login');
 
   // Device control panel state
@@ -386,9 +388,14 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
                   size="medium" disabled={loading} />
               </div>
               <div className="account-login-dialog__field">
-                <Input label={t('accountLogin.password')} type="password" value={password}
+                <Input label={t('accountLogin.password')} type={showPassword ? 'text' : 'password'} value={password}
                   onChange={(e) => setPassword(e.target.value)} prefix={<Lock size={16} />}
-                  size="medium" disabled={loading} />
+                  size="medium" disabled={loading}
+                  suffix={
+                    <button type="button" className="bitfun-input-toggle" onClick={() => setShowPassword(s => !s)} tabIndex={-1}>
+                      {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  } />
               </div>
               <div className="account-login-dialog__field">
                 <Input label={t('accountLogin.authServer')} type="url" value={authServer}
