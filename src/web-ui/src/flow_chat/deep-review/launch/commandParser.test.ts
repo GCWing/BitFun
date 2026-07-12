@@ -127,6 +127,13 @@ describe('Deep Review launch command parser', () => {
     expect(parseSlashCommandGitTarget('review --flag docs only')).toBeNull();
   });
 
+  it('preserves permissive legacy commit parsing independently of composition', () => {
+    expect(parseSlashCommandGitTarget('please inspect commit abc123')).toEqual({
+      source: 'abc123^',
+      target: 'abc123',
+    });
+  });
+
   it('collects each renamed change once using its current path', () => {
     expect(
       collectChangedFilePaths([

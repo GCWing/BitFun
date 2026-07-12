@@ -67,6 +67,18 @@ const EXPLICIT_REVIEW_EXTENSIONLESS_FILES = new Set([
   'justfile',
 ]);
 
+const PROSE_SLASH_COMPOUNDS = new Set(['ui/ux', 'read/write']);
+const RECOGNIZED_PROJECT_ROOTS = new Set([
+  'src',
+  'docs',
+  'tests',
+  'scripts',
+  'packages',
+  'apps',
+  'crates',
+  'bitfun-installer',
+]);
+
 export function isDeepReviewSlashCommand(commandText: string): boolean {
   return DEEP_REVIEW_COMMAND_RE.test(commandText.trim());
 }
@@ -92,13 +104,16 @@ function cleanPotentialFileToken(token: string): string {
   return token
     .trim()
     .replace(/^[`"']+/, '')
-    .replace(/[`"',;]+$/, '')
+    .replace(/[`"']+$/, '')
+    .replace(/[.,;!?]+$/, '')
     .replace(/:(?:\d+)(?::\d+)?$/, '');
 }
 
 interface ReviewFocusToken {
   value: string;
   quoted: boolean;
+  start: number;
+  end: number;
 }
 
 function tokenizeReviewFocus(commandFocus: string): ReviewFocusToken[] {
@@ -111,6 +126,8 @@ function tokenizeReviewFocus(commandFocus: string): ReviewFocusToken[] {
       tokens.push({
         value: token,
         quoted: match[4] === undefined,
+        start: match.index,
+        end: match.index + match[0].length,
       });
     }
   }
@@ -126,25 +143,44 @@ function getPathExtension(path: string): string {
   return path.slice(lastDot).toLowerCase();
 }
 
-function looksLikeExplicitReviewPath(token: string): boolean {
+function looksLikeExplicitReviewPath(
+  token: string,
+  quoted = false,
+  strict = false,
+): boolean {
   const cleaned = cleanPotentialFileToken(token);
   const normalizedPath = normalizeReviewPath(cleaned);
   const basename = normalizedPath.split('/').at(-1)?.toLowerCase() ?? '';
+  const lowerPath = normalizedPath.toLowerCase();
   if (
     cleaned.includes('://') ||
-    (cleaned.includes('..') && !cleaned.startsWith('../'))
+    (cleaned.includes('..') && !cleaned.startsWith('../')) ||
+    (PROSE_SLASH_COMPOUNDS.has(lowerPath) && !quoted)
   ) {
     return false;
   }
+  const hasRecognizedName =
+    EXPLICIT_REVIEW_FILE_EXTENSIONS.has(getPathExtension(normalizedPath)) ||
+    EXPLICIT_REVIEW_EXTENSIONLESS_FILES.has(basename) ||
+    (basename.startsWith('.') && basename.length > 1);
+  const isDotRelative = /^(?:\.\.?)[\\/]/.test(cleaned);
+  const isAbsolute = /^[A-Za-z]:[\\/]/.test(cleaned) || /^[\\/]/.test(cleaned);
+  const hasSeparator = /[\\/]/.test(cleaned);
+  const startsAtProjectRoot =
+    hasSeparator &&
+    RECOGNIZED_PROJECT_ROOTS.has(lowerPath.split('/')[0]);
+  const hasExplicitTrailingSlash = /[\\/]$/.test(cleaned);
+  const hasStrongEvidence =
+    hasRecognizedName ||
+    isDotRelative ||
+    isAbsolute ||
+    startsAtProjectRoot ||
+    hasExplicitTrailingSlash ||
+    (quoted && hasSeparator);
   return (
     (
-      EXPLICIT_REVIEW_FILE_EXTENSIONS.has(getPathExtension(normalizedPath)) ||
-      EXPLICIT_REVIEW_EXTENSIONLESS_FILES.has(basename) ||
-      (basename.startsWith('.') && basename.length > 1) ||
-      cleaned.startsWith('./') ||
-      cleaned.startsWith('../') ||
-      /[\\/]/.test(cleaned) ||
-      /[\\/]$/.test(cleaned)
+      hasStrongEvidence ||
+      (!strict && hasSeparator)
     ) &&
     !normalizedPath.startsWith('-') &&
     normalizedPath.length > 0
@@ -152,41 +188,183 @@ function looksLikeExplicitReviewPath(token: string): boolean {
 }
 
 export function hasUnresolvedPathLikeReviewFocus(commandFocus: string): boolean {
+  return extractUnresolvedPathLikeReviewFocusFragments(commandFocus).length > 0;
+}
+
+export function extractUnresolvedPathLikeReviewFocusFragments(
+  commandFocus: string,
+): string[] {
   const tokens = tokenizeReviewFocus(commandFocus).map((token) => ({
+    ...token,
     value: cleanPotentialFileToken(token.value),
-    quoted: token.quoted,
   }));
-  return tokens.some(({ value: token, quoted }, index) => {
-    if (!token || looksLikeExplicitReviewPath(token)) return false;
-    if (
-      token.toLowerCase() === 'commit' ||
-      tokens[index - 1]?.value.toLowerCase() === 'commit'
-    ) {
-      return false;
+  return tokens.flatMap(({ value: token, quoted }, index) => {
+    if (!token || looksLikeExplicitReviewPath(token, quoted, true)) return [];
+    if (token.includes('://')) return [];
+    if (isThreeDotRange(token)) return [token];
+    const previousKeyword = tokens[index - 1]?.value.toLowerCase() ?? '';
+    if (['commit', 'ref'].includes(token.toLowerCase())) {
+      return [];
     }
-    if (token.includes('://') || token.includes('..')) return false;
+    if (['commit', 'ref'].includes(previousKeyword)) {
+      return isValidExplicitRef(token) ? [] : [token];
+    }
+    if (PROSE_SLASH_COMPOUNDS.has(token.toLowerCase())) return [];
+    if (token.includes('..')) {
+      return parseTwoDotRange(token) ? [] : [token];
+    }
     const normalized = normalizeReviewPath(token);
     const basename = normalized.split('/').at(-1) ?? '';
-    return (
+    const unresolved = (
       quoted ||
       /[\\/]/.test(token) ||
       (basename.startsWith('.') && basename.length > 1) ||
       (basename.includes('.') && !/^v?\d+(?:\.\d+)+$/i.test(basename)) ||
       /^[A-Z][A-Z0-9]*(?:[_-][A-Z0-9]+)+$/.test(basename)
     );
+    return unresolved ? [token] : [];
   });
 }
 
-export function extractExplicitReviewFilePaths(commandFocus: string): string[] {
-  const tokens = tokenizeReviewFocus(commandFocus).map((token) => cleanPotentialFileToken(token.value));
-  const paths = tokens.filter((token, index) => {
-    if (!token) return false;
-    if (token.toLowerCase() === 'commit') return false;
-    if (tokens[index - 1]?.toLowerCase() === 'commit') return false;
-    return looksLikeExplicitReviewPath(token);
-  });
+export interface ExplicitReviewFilePathMatch {
+  path: string;
+  start: number;
+  end: number;
+}
 
-  return Array.from(new Set(paths));
+export interface ExplicitReviewFilePathOptions {
+  strict?: boolean;
+}
+
+export function extractExplicitReviewFilePathMatches(
+  commandFocus: string,
+  options: ExplicitReviewFilePathOptions = {},
+): ExplicitReviewFilePathMatch[] {
+  const tokens = tokenizeReviewFocus(commandFocus).map((token) => ({
+    ...token,
+    path: cleanPotentialFileToken(token.value),
+  }));
+
+  return tokens.flatMap(({ path, quoted, start, end }, index) => {
+    if (!path || path.toLowerCase() === 'commit') return [];
+    const previous = tokens[index - 1]?.path.toLowerCase();
+    if (previous === 'commit' || previous === 'ref') return [];
+    return looksLikeExplicitReviewPath(path, quoted, options.strict)
+      ? [{ path, start, end }]
+      : [];
+  });
+}
+
+export function extractExplicitReviewFilePaths(
+  commandFocus: string,
+  options: ExplicitReviewFilePathOptions = {},
+): string[] {
+  return Array.from(new Set(
+    extractExplicitReviewFilePathMatches(commandFocus, options).map(({ path }) => path),
+  ));
+}
+
+export interface ReviewGitTargetMatch {
+  source: string;
+  target: string;
+  start: number;
+  end: number;
+}
+
+function parseTwoDotRange(token: string): [string, string] | null {
+  if (token.startsWith('-') || token.includes('://')) return null;
+  const separator = token.indexOf('..');
+  if (
+    separator <= 0 ||
+    token.lastIndexOf('..') !== separator ||
+    token[separator - 1] === '.' ||
+    token[separator + 2] === '.'
+  ) {
+    return null;
+  }
+  const source = token.slice(0, separator);
+  const target = token.slice(separator + 2);
+  return isValidExplicitRef(source) && isValidExplicitRef(target)
+    ? [source, target]
+    : null;
+}
+
+function isThreeDotRange(token: string): boolean {
+  const separator = token.indexOf('...');
+  return separator > 0 && separator + 3 < token.length;
+}
+
+function isValidExplicitRef(ref: string): boolean {
+  if (
+    !ref ||
+    ref === '@' ||
+    ref.startsWith('-') ||
+    ref.startsWith('/') ||
+    ref.endsWith('/') ||
+    ref.endsWith('.') ||
+    ref.includes('://') ||
+    ref.includes('..') ||
+    ref.includes('@{') ||
+    ref.includes('//') ||
+    /[\u0000-\u0020\u007F~^:?*[\]\\]/.test(ref)
+  ) {
+    return false;
+  }
+  return ref
+    .split('/')
+    .every((component) => !component.startsWith('.') && !component.endsWith('.lock'));
+}
+
+function isExplicitRefKeywordPosition(commandFocus: string, start: number): boolean {
+  const prefix = commandFocus.slice(0, start).trimEnd();
+  return (
+    prefix.length === 0 ||
+    prefix.toLowerCase() === 'review' ||
+    /[,;:([{]$/.test(prefix) ||
+    /(?:^|\s)(?:and|\u4ee5\u53ca|\u548c|\u4e0e)$/iu.test(prefix)
+  );
+}
+
+export function extractReviewGitTargetMatches(
+  commandFocus: string,
+): ReviewGitTargetMatch[] {
+  const tokens = tokenizeReviewFocus(commandFocus).map((token) => ({
+    ...token,
+    cleaned: cleanPotentialFileToken(token.value),
+  }));
+  const matches: ReviewGitTargetMatch[] = [];
+
+  for (const token of tokens) {
+    const range = parseTwoDotRange(token.cleaned);
+    if (range) {
+      matches.push({
+        source: range[0],
+        target: range[1],
+        start: token.start,
+        end: token.end,
+      });
+    }
+  }
+
+  for (let index = 0; index < tokens.length - 1; index += 1) {
+    const keyword = tokens[index];
+    if (
+      !['commit', 'ref'].includes(keyword.cleaned.toLowerCase()) ||
+      !isExplicitRefKeywordPosition(commandFocus, keyword.start)
+    ) {
+      continue;
+    }
+    const refToken = tokens[index + 1];
+    if (!isValidExplicitRef(refToken.cleaned)) continue;
+    matches.push({
+      source: `${refToken.cleaned}^`,
+      target: refToken.cleaned,
+      start: keyword.start,
+      end: refToken.end,
+    });
+  }
+
+  return matches.sort((left, right) => left.start - right.start);
 }
 
 export function parseSlashCommandGitTarget(commandFocus: string): GitChangedFilesParams | null {
