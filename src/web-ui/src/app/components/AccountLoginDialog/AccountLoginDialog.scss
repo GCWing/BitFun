@@ -127,6 +127,60 @@
     font-size: 12px !important;
   }
 
+  &__sync-options {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 0 16px 12px;
+  }
+
+  &__sync-option {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--color-border-primary, var(--element-border-subtle, transparent));
+    background: var(--element-bg-secondary, transparent);
+    cursor: pointer;
+    text-align: left;
+    transition: border-color 0.15s, background 0.15s;
+    color: var(--color-text-primary);
+
+    &:hover:not(:disabled) {
+      border-color: var(--color-accent-primary, var(--color-primary));
+      background: var(--color-accent-bg-subtle, var(--element-bg-hover, transparent));
+    }
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    svg {
+      flex-shrink: 0;
+      margin-top: 2px;
+      color: var(--color-accent-primary, var(--color-primary));
+    }
+  }
+
+  &__sync-option-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  &__sync-option-title {
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  &__sync-option-desc {
+    font-size: 11px;
+    color: var(--color-text-secondary);
+    line-height: 1.4;
+  }
+
   .spinning {
     animation: spin 1s linear infinite;
   }

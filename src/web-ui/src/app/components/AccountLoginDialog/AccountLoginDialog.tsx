@@ -9,7 +9,7 @@ import { useI18n } from '@/infrastructure/i18n';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { Modal, Button, Input, Alert } from '@/component-library';
 import {
-  User, Lock, Server, LogIn, Monitor, CloudDownload,
+  User, Lock, Server, LogIn, Monitor, CloudDownload, Upload,
   ChevronRight, ArrowLeft, Send, Plus, MessageSquare, RefreshCw,
 } from 'lucide-react';
 import { remoteConnectAPI } from '@/infrastructure/api/service-api/RemoteConnectAPI';
@@ -177,6 +177,23 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
     setLoading(true); setError(null);
     try {
       doAutoSync(false);
+      remoteConnectAPI.accountConnectDevices().catch((err) => {
+        log.warn('accountConnectDevices failed', err);
+      });
+      success(t('accountLogin.loginSuccess', { user_id: username }));
+      setView('devices');
+      refreshDevices();
+      refreshTimer.current = setInterval(refreshDevices, 10000);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally { setLoading(false); }
+  }, [doAutoSync, success, t, username, refreshDevices]);
+
+  // Use local config to overwrite cloud — same as first-login sync (upload).
+  const handleUseLocalOverwrite = useCallback(async () => {
+    setLoading(true); setError(null);
+    try {
+      doAutoSync(true);
       remoteConnectAPI.accountConnectDevices().catch((err) => {
         log.warn('accountConnectDevices failed', err);
       });
@@ -381,16 +398,34 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
             <div className="account-login-dialog__overwrite-notice">
               <CloudDownload size={32} />
               <p>{t('accountLogin.cloudOverwriteWarning')}</p>
-              <p className="account-login-dialog__overwrite-detail">
-                {t('accountLogin.cloudOverwriteDetail')}
-              </p>
+            </div>
+            <div className="account-login-dialog__sync-options">
+              <button
+                className="account-login-dialog__sync-option"
+                onClick={handleUseLocalOverwrite}
+                disabled={loading}
+              >
+                <Upload size={20} />
+                <div className="account-login-dialog__sync-option-text">
+                  <span className="account-login-dialog__sync-option-title">{t('accountLogin.useLocalTitle')}</span>
+                  <span className="account-login-dialog__sync-option-desc">{t('accountLogin.useLocalDesc')}</span>
+                </div>
+              </button>
+              <button
+                className="account-login-dialog__sync-option"
+                onClick={handleConfirmOverwrite}
+                disabled={loading}
+              >
+                <CloudDownload size={20} />
+                <div className="account-login-dialog__sync-option-text">
+                  <span className="account-login-dialog__sync-option-title">{t('accountLogin.useCloudTitle')}</span>
+                  <span className="account-login-dialog__sync-option-desc">{t('accountLogin.useCloudDesc')}</span>
+                </div>
+              </button>
             </div>
             <div className="account-login-dialog__actions">
               <Button variant="secondary" size="small" onClick={handleCancelOverwrite} disabled={loading}>
                 {t('accountLogin.disagree')}
-              </Button>
-              <Button variant="primary" size="small" onClick={handleConfirmOverwrite} disabled={loading}>
-                {loading ? t('accountLogin.processing') : t('accountLogin.agree')}
               </Button>
             </div>
           </div>
