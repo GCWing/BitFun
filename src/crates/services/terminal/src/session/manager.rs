@@ -422,13 +422,63 @@ impl SessionManager {
         .await
     }
 
-    /// Create a new terminal session with optional shell integration
+    /// Create a session with shell integration using a stable discovered shell ID.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn create_session_with_shell_id(
+        &self,
+        session_id: Option<String>,
+        name: Option<String>,
+        shell_type: Option<ShellType>,
+        shell_id: Option<String>,
+        cwd: Option<String>,
+        env: Option<HashMap<String, String>>,
+        cols: Option<u16>,
+        rows: Option<u16>,
+        source: Option<SessionSource>,
+    ) -> TerminalResult<TerminalSession> {
+        self.create_session_with_options_and_shell_id(
+            session_id, name, shell_type, shell_id, cwd, env, cols, rows, true, source,
+        )
+        .await
+    }
+
+    /// Create a new terminal session with optional shell integration.
     #[allow(clippy::too_many_arguments)]
     pub async fn create_session_with_options(
         &self,
         session_id: Option<String>,
         name: Option<String>,
         shell_type: Option<ShellType>,
+        cwd: Option<String>,
+        env: Option<HashMap<String, String>>,
+        cols: Option<u16>,
+        rows: Option<u16>,
+        enable_integration: bool,
+        source: Option<SessionSource>,
+    ) -> TerminalResult<TerminalSession> {
+        self.create_session_with_options_and_shell_id(
+            session_id,
+            name,
+            shell_type,
+            None,
+            cwd,
+            env,
+            cols,
+            rows,
+            enable_integration,
+            source,
+        )
+        .await
+    }
+
+    /// Create a session using an exact discovered shell when `shell_id` is supplied.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn create_session_with_options_and_shell_id(
+        &self,
+        session_id: Option<String>,
+        name: Option<String>,
+        shell_type: Option<ShellType>,
+        shell_id: Option<String>,
         cwd: Option<String>,
         env: Option<HashMap<String, String>>,
         cols: Option<u16>,
@@ -450,10 +500,51 @@ impl SessionManager {
             }
         }
 
-        // Determine shell type
-        let shell_type = shell_type.unwrap_or_else(|| {
-            let detected = ShellDetector::get_default_shell();
-            detected.shell_type
+        // Resolve the executable before deriving the session shell type. This
+        // preserves user PATH ordering and lets callers select a specific
+        // discovered version by stable ID instead of falling back to a bare
+        // command name such as `pwsh`.
+        let requested_shell_type = shell_type.clone();
+        let shell_from_id = match shell_id.as_deref() {
+            Some(id) => Some(ShellDetector::find_shell_by_id(id).ok_or_else(|| {
+                TerminalError::InvalidConfig(format!("Configured shell ID '{id}' is unavailable"))
+            })?),
+            None => None,
+        };
+
+        if let (Some(requested), Some(selected)) = (&requested_shell_type, &shell_from_id) {
+            if requested != &selected.shell_type {
+                return Err(TerminalError::InvalidConfig(format!(
+                    "Configured shell ID '{}' does not match requested shell type '{}'",
+                    selected.id, requested
+                )));
+            }
+        }
+
+        let configured_default = if requested_shell_type.is_none() && shell_from_id.is_none() {
+            self.config
+                .default_shell
+                .as_deref()
+                .and_then(ShellDetector::resolve_configured_shell)
+        } else {
+            None
+        };
+        let detected_for_type = requested_shell_type
+            .as_ref()
+            .and_then(ShellDetector::find_shell);
+        let selected_shell = shell_from_id
+            .or(configured_default)
+            .or(detected_for_type)
+            .or_else(|| {
+                requested_shell_type
+                    .is_none()
+                    .then(ShellDetector::get_default_shell)
+            });
+        let shell_type = requested_shell_type.unwrap_or_else(|| {
+            selected_shell
+                .as_ref()
+                .map(|shell| shell.shell_type.clone())
+                .unwrap_or_else(|| ShellDetector::get_default_shell().shell_type)
         });
 
         // Determine working directory
@@ -471,42 +562,19 @@ impl SessionManager {
         // Generate nonce for shell integration
         let nonce = uuid::Uuid::new_v4().to_string();
 
-        // Create shell config
-        // On Windows, when shell_type is Bash, we need to use the detected Git Bash path
-        // instead of just "bash" which might resolve to WSL bash in System32
-        #[cfg(windows)]
-        let shell_config_base = if matches!(shell_type, ShellType::Bash) {
-            // Try to get Git Bash path from detection
-            if let Some(detected) = ShellDetector::detect_git_bash() {
-                detected.to_config()
-            } else {
-                // Fallback to default if Git Bash not found
-                ShellConfig {
-                    executable: shell_type.default_executable().to_string(),
-                    args: Vec::new(),
-                    env: HashMap::new(),
-                    cwd: None,
-                    login: false,
-                }
-            }
-        } else {
-            ShellConfig {
+        // Launch the verified discovery result whenever one is available. This
+        // avoids resolving a second, potentially different executable at PTY
+        // spawn time and also keeps Git Bash away from the WSL compatibility
+        // bash.exe.
+        let shell_config_base = selected_shell
+            .map(|shell| shell.to_config())
+            .unwrap_or_else(|| ShellConfig {
                 executable: shell_type.default_executable().to_string(),
                 args: Vec::new(),
                 env: HashMap::new(),
                 cwd: None,
                 login: false,
-            }
-        };
-
-        #[cfg(not(windows))]
-        let shell_config_base = ShellConfig {
-            executable: shell_type.default_executable().to_string(),
-            args: Vec::new(),
-            env: HashMap::new(),
-            cwd: None,
-            login: false,
-        };
+            });
 
         let mut shell_config = ShellConfig {
             executable: shell_config_base.executable,

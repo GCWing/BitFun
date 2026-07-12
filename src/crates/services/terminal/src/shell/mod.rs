@@ -8,7 +8,7 @@ pub mod integration;
 mod profiles;
 mod scripts_manager;
 
-pub use detection::ShellDetector;
+pub use detection::{DetectedShell, ShellDetector, ShellDiscoverySource};
 pub use integration::{
     get_injection_command, get_integration_script_content, get_integration_script_path,
     CommandState, OscSequence, ShellIntegration, ShellIntegrationEvent, ShellIntegrationManager,

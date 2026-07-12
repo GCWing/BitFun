@@ -69,8 +69,9 @@ pub use session::{
     TerminalReplayEvent, TerminalReplayHistory, TerminalSession, TerminalSessionBinding,
 };
 pub use shell::{
-    get_integration_script_content, CommandState, ScriptsManager, ShellDetector, ShellIntegration,
-    ShellIntegrationEvent, ShellIntegrationManager, ShellProfile, ShellType,
+    get_integration_script_content, CommandState, ScriptsManager, ShellDetector,
+    ShellDiscoverySource, ShellIntegration, ShellIntegrationEvent, ShellIntegrationManager,
+    ShellProfile, ShellType,
 };
 
 /// Result type for terminal operations
