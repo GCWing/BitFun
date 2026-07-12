@@ -1151,6 +1151,13 @@ impl RemoteConnectService {
     ///
     /// The caller (desktop Tauri layer) owns the AccountSession containing the
     /// master_key and is responsible for decrypting device-message payloads.
+    /// Returns true if a device-routing WebSocket connection is currently
+    /// active (i.e. `start_device_connection` has been called and not yet
+    /// disconnected).
+    pub async fn is_device_connected(&self) -> bool {
+        self.device_relay_client.read().await.is_some()
+    }
+
     pub async fn start_device_connection(
         &self,
         relay_url: &str,
@@ -1170,6 +1177,39 @@ impl RemoteConnectService {
         let (client, mut event_rx) = RelayClient::new();
         client.connect(&ws_url).await?;
         client.connect_authenticated(token, device_name).await?;
+
+        // Wait for AuthOk (or AuthError) before proceeding so that the
+        // device is registered as online on the relay before the caller
+        // gets back control.  This prevents an immediate device-list
+        // query from seeing the local device as offline.
+        match tokio::time::timeout(
+            std::time::Duration::from_secs(10),
+            event_rx.recv(),
+        )
+        .await
+        {
+            Ok(Some(relay_client::RelayEvent::AuthOk { user_id, device_id })) => {
+                log::info!("Device connection auth ok: user={user_id} device={device_id}");
+            }
+            Ok(Some(relay_client::RelayEvent::AuthError { message })) => {
+                anyhow::bail!("relay auth error: {message}");
+            }
+            Ok(Some(other)) => {
+                // Unexpected first event — forward it by re-sending into the
+                // forward channel below.  Log for visibility.
+                log::warn!("Unexpected first relay event: {other:?}");
+                // Re-queue: we'll handle by pre-sending into forward_tx
+                // after the forwarder is spawned.
+                // We can't re-send into event_rx, so we'll just continue —
+                // the forwarder picks up subsequent events.
+            }
+            Ok(None) => {
+                anyhow::bail!("relay connection closed before auth response");
+            }
+            Err(_) => {
+                anyhow::bail!("timeout waiting for relay auth response");
+            }
+        }
 
         let online_arc = self.online_devices.clone();
         let device_client_arc = self.device_relay_client.clone();

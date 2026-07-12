@@ -103,11 +103,17 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
       remoteConnectAPI.accountGetCredentialHint().then((hint: AccountHint | null) => {
         if (hint) { setUsername(hint.username); setAuthServer(hint.relay_url); }
       });
-      remoteConnectAPI.accountStatus().then((status) => {
+      remoteConnectAPI.accountStatus().then(async (status) => {
         if (status.logged_in && status.user_id) {
+          // Ensure device WS connection is up before listing devices
+          // so the local device appears as online.
+          try {
+            await remoteConnectAPI.accountConnectDevices();
+          } catch (err) {
+            log.warn('accountConnectDevices failed', err);
+          }
           setView('devices');
           refreshDevices();
-          // Auto-refresh device list every 10s while dialog is open
           refreshTimer.current = setInterval(refreshDevices, 10000);
         }
       });
@@ -161,9 +167,13 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
         return;
       }
       doAutoSync(true);
-      remoteConnectAPI.accountConnectDevices().catch((err) => {
+      // Await device connection so the relay registers us as online
+      // before we query the device list (otherwise we appear offline).
+      try {
+        await remoteConnectAPI.accountConnectDevices();
+      } catch (err) {
         log.warn('accountConnectDevices failed', err);
-      });
+      }
       success(t('accountLogin.loginSuccess', { user_id: result.user_id }));
       setView('devices');
       refreshDevices();
@@ -177,9 +187,11 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
     setLoading(true); setError(null);
     try {
       doAutoSync(false);
-      remoteConnectAPI.accountConnectDevices().catch((err) => {
+      try {
+        await remoteConnectAPI.accountConnectDevices();
+      } catch (err) {
         log.warn('accountConnectDevices failed', err);
-      });
+      }
       success(t('accountLogin.loginSuccess', { user_id: username }));
       setView('devices');
       refreshDevices();
@@ -194,9 +206,11 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
     setLoading(true); setError(null);
     try {
       doAutoSync(true);
-      remoteConnectAPI.accountConnectDevices().catch((err) => {
+      try {
+        await remoteConnectAPI.accountConnectDevices();
+      } catch (err) {
         log.warn('accountConnectDevices failed', err);
-      });
+      }
       success(t('accountLogin.loginSuccess', { user_id: username }));
       setView('devices');
       refreshDevices();

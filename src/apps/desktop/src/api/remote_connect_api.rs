@@ -1015,10 +1015,24 @@ pub async fn account_connect_devices() -> Result<Vec<OnlineDeviceInfo>, String> 
     let service = holder
         .as_ref()
         .ok_or_else(|| "remote connect service not initialized".to_string())?;
+
+    // Skip reconnecting if the device WS is already active.  Repeated calls
+    // (e.g. dialog re-open) should not tear down an existing connection.
+    if service.is_device_connected().await {
+        let devices = service.online_devices().await;
+        return Ok(devices
+            .into_iter()
+            .map(|d| OnlineDeviceInfo {
+                device_id: d.device_id,
+                device_name: d.device_name,
+            })
+            .collect());
+    }
+
     let mut event_rx = service
-        .start_device_connection(&relay_url, &session.token, &device_name)
-        .await
-        .map_err(|e| format!("{e}"))?;
+            .start_device_connection(&relay_url, &session.token, &device_name)
+            .await
+            .map_err(|e| format!("{e}"))?;
 
     // Background task: consume events (presence / device messages / auth errors)
     let session_arc = get_account_session().clone();
@@ -1187,8 +1201,6 @@ pub async fn account_connect_devices() -> Result<Vec<OnlineDeviceInfo>, String> 
         }
     });
 
-    // Give the relay a moment to send initial presence
-    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
     let devices = service.online_devices().await;
     Ok(devices
         .into_iter()
