@@ -6,6 +6,11 @@
 pub mod canvas;
 pub mod review;
 
+pub use review::{
+    fallback_review_plan, validate_review_plan, ReviewMode, ReviewPlan, ReviewPlanSubject,
+    ReviewPlanValidationError, ReviewSubjectCandidate, ReviewSubjectRole, MAX_REVIEW_SUBJECTS,
+};
+
 #[cfg(feature = "plugin-source")]
 pub mod plugin_source;
 
