@@ -332,7 +332,7 @@ impl ChatMode {
 
                     let state = ChatState::from_core_messages(
                         rid.clone(),
-                        format!("Restored Session"),
+                        "Restored Session".to_string(),
                         agent_type,
                         effective_workspace,
                         &messages,
@@ -356,7 +356,7 @@ impl ChatMode {
 
             let state = ChatState::new(
                 session_id.clone(),
-                format!("CLI Session"),
+                "CLI Session".to_string(),
                 self.agent_type.clone(),
                 self.workspace.clone(),
             );
@@ -1354,10 +1354,10 @@ impl ChatMode {
                 }
             }
 
-            (KeyCode::Char(c), KeyModifiers::NONE | KeyModifiers::SHIFT) => {
-                if !c.is_control() && c != '\u{0}' {
-                    chat_view.handle_char(c);
-                }
+            (KeyCode::Char(c), KeyModifiers::NONE | KeyModifiers::SHIFT)
+                if !c.is_control() && c != '\u{0}' =>
+            {
+                chat_view.handle_char(c);
             }
 
             _ => {}
@@ -1492,10 +1492,10 @@ impl ChatMode {
                                 MouseGestureOutcome::None => {}
                             }
                         }
-                        MouseEventKind::Moved => {
-                            if !chat_view.update_mouse_selection(mouse.column, mouse.row) {
-                                chat_view.handle_mouse_move(mouse.column, mouse.row);
-                            }
+                        MouseEventKind::Moved
+                            if !chat_view.update_mouse_selection(mouse.column, mouse.row) =>
+                        {
+                            chat_view.handle_mouse_move(mouse.column, mouse.row);
                         }
                         _ => {}
                     }
@@ -2410,9 +2410,7 @@ impl ChatMode {
             changed = true;
             match task {
                 PendingMcpTask::Toggle { server_id, handle } => {
-                    let join_result = tokio::task::block_in_place(|| {
-                        rt_handle.block_on(async move { handle.await })
-                    });
+                    let join_result = tokio::task::block_in_place(|| rt_handle.block_on(handle));
 
                     match join_result {
                         Ok(Ok(())) => {}
@@ -2437,9 +2435,7 @@ impl ChatMode {
                     chat_view.mcp_selector_update_items(updated_items);
                 }
                 PendingMcpTask::Add { name, handle } => {
-                    let join_result = tokio::task::block_in_place(|| {
-                        rt_handle.block_on(async move { handle.await })
-                    });
+                    let join_result = tokio::task::block_in_place(|| rt_handle.block_on(handle));
 
                     match join_result {
                         Ok(Ok(())) => {
@@ -2463,9 +2459,7 @@ impl ChatMode {
                     chat_view.set_status(None);
                 }
                 PendingMcpTask::Delete { server_id, handle } => {
-                    let join_result = tokio::task::block_in_place(|| {
-                        rt_handle.block_on(async move { handle.await })
-                    });
+                    let join_result = tokio::task::block_in_place(|| rt_handle.block_on(handle));
 
                     match join_result {
                         Ok(Ok(())) => {

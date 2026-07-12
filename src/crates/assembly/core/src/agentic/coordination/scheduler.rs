@@ -1388,7 +1388,7 @@ impl DialogScheduler {
                                 .coordinator
                                 .prepare_goal_continuation_after_turn(
                                     &session_id,
-                                    &outcome.turn_id(),
+                                    outcome.turn_id(),
                                     active_turn.user_input(),
                                     active_turn.user_message_metadata(),
                                     turn_completed,

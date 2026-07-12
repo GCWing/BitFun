@@ -45,7 +45,8 @@ impl ChatView {
         let input_height = content_lines + 2; // +2 for top/bottom borders
 
         // Calculate shortcuts area height based on content
-        let shortcuts_height = Self::calculate_shortcuts_height(size.width, chat_state, self.browse_mode);
+        let shortcuts_height =
+            Self::calculate_shortcuts_height(size.width, chat_state, self.browse_mode);
         // Status area can grow for long status messages to avoid horizontal truncation.
         let raw_status_height =
             Self::calculate_status_height(size.width, chat_state, self.status.as_deref());
@@ -60,10 +61,10 @@ impl ChatView {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(3),            // header
-                Constraint::Min(10),              // messages area
-                Constraint::Length(status_height), // status bar (dynamic)
-                Constraint::Length(input_height), // input area (dynamic)
+                Constraint::Length(3),                // header
+                Constraint::Min(10),                  // messages area
+                Constraint::Length(status_height),    // status bar (dynamic)
+                Constraint::Length(input_height),     // input area (dynamic)
                 Constraint::Length(shortcuts_height), // shortcuts hint (dynamic)
             ])
             .split(size);
@@ -145,7 +146,7 @@ impl ChatView {
 
     fn render_messages(&mut self, frame: &mut Frame, area: Rect, chat_state: &ChatState) {
         let title = if self.browse_mode {
-            format!(" Conversation [Browse Mode \u{2195}] ")
+            " Conversation [Browse Mode \u{2195}] ".to_string()
         } else {
             " Conversation ".to_string()
         };
@@ -281,7 +282,8 @@ impl ChatView {
                 total_lines.saturating_sub(visible_lines)
             };
 
-            let view_end_line = (view_start_line + visible_lines + visible_lines / 2).min(total_lines); // buffer: render half a screen extra
+            let view_end_line =
+                (view_start_line + visible_lines + visible_lines / 2).min(total_lines); // buffer: render half a screen extra
 
             // ── Step 4: Binary search for visible message range ──
             // Find first message that overlaps [view_start_line, view_end_line)
@@ -323,8 +325,8 @@ impl ChatView {
                             y_cursor.saturating_add(*y_end),
                         ));
                     }
-                    y_cursor = y_cursor
-                        .saturating_add(entry.items.len().min(u16::MAX as usize) as u16);
+                    y_cursor =
+                        y_cursor.saturating_add(entry.items.len().min(u16::MAX as usize) as u16);
                 }
             }
 
@@ -355,7 +357,8 @@ impl ChatView {
                     selected_in_subset.min(messages.len().saturating_sub(1)),
                 ));
             } else if self.auto_scroll {
-                self.list_state.select(Some(messages.len().saturating_sub(1)));
+                self.list_state
+                    .select(Some(messages.len().saturating_sub(1)));
                 self.scroll_offset = 0;
             }
 
@@ -394,7 +397,11 @@ impl ChatView {
 
     /// Render a single message into a list of owned ListItems.
     /// Returns owned items plus message-local clickable regions so results can be cached across frames.
-    fn render_message(&mut self, message: &ChatMessage, available_width: u16) -> MessageRenderResult {
+    fn render_message(
+        &mut self,
+        message: &ChatMessage,
+        available_width: u16,
+    ) -> MessageRenderResult {
         let mut items: Vec<ListItem<'static>> = Vec::new();
         let mut plain_lines: Vec<String> = Vec::new();
         let mut tool_regions: Vec<(String, u16, u16)> = Vec::new();
@@ -487,7 +494,10 @@ impl ChatView {
         if !message.flow_items.is_empty() {
             for flow_item in &message.flow_items {
                 match flow_item {
-                    FlowItem::Text { content, is_streaming } => {
+                    FlowItem::Text {
+                        content,
+                        is_streaming,
+                    } => {
                         if message.role == MessageRole::Assistant
                             && MarkdownRenderer::has_markdown_syntax(content)
                         {
@@ -529,8 +539,7 @@ impl ChatView {
                             }
                             for line in content.lines() {
                                 if message.role == MessageRole::User {
-                                    let max_text_width =
-                                        available_width.saturating_sub(3) as usize;
+                                    let max_text_width = available_width.saturating_sub(3) as usize;
                                     let wrapped = wrap_hard_display_width(line, max_text_width);
                                     if !user_bubble_open {
                                         items.push(user_padding_line(
@@ -557,8 +566,7 @@ impl ChatView {
                                         plain_lines.push(plain);
                                     }
                                 } else {
-                                    let max_text_width =
-                                        available_width.saturating_sub(2) as usize;
+                                    let max_text_width = available_width.saturating_sub(2) as usize;
                                     for wrapped_line in
                                         wrap_hard_display_width(line, max_text_width)
                                     {
@@ -576,20 +584,14 @@ impl ChatView {
                         if *is_streaming {
                             if message.role == MessageRole::User {
                                 if !user_bubble_open {
-                                    items.push(user_padding_line(
-                                        user_bg_style,
-                                        user_border_style,
-                                    ));
+                                    items.push(user_padding_line(user_bg_style, user_border_style));
                                     plain_lines.push(" | ".to_string());
                                     user_bubble_open = true;
                                 }
                                 items.push(
                                     ListItem::new(Line::from(vec![
                                         Span::raw(" ".to_string()),
-                                        Span::styled(
-                                            "\u{258f}".to_string(),
-                                            user_border_style,
-                                        ), // ▏
+                                        Span::styled("\u{258f}".to_string(), user_border_style), // ▏
                                         Span::raw(" ".to_string()),
                                         Span::styled(
                                             "\u{2588}".to_string(),
@@ -636,7 +638,8 @@ impl ChatView {
                             && !self.thinking_auto_collapsed.contains(&thinking_block_id)
                         {
                             self.collapsed_thinking.insert(thinking_block_id.clone());
-                            self.thinking_auto_collapsed.insert(thinking_block_id.clone());
+                            self.thinking_auto_collapsed
+                                .insert(thinking_block_id.clone());
                         }
 
                         let collapsed = self.collapsed_thinking.contains(&thinking_block_id);
@@ -693,19 +696,14 @@ impl ChatView {
                             ])));
                             plain_lines.push("    (empty)".to_string());
                         } else {
-                            let thinking_max_width =
-                                available_width.saturating_sub(4) as usize; // 4 = indent "    "
+                            let thinking_max_width = available_width.saturating_sub(4) as usize; // 4 = indent "    "
                             for line in content_lines {
-                                let wrapped =
-                                    wrap_hard_display_width(line, thinking_max_width);
+                                let wrapped = wrap_hard_display_width(line, thinking_max_width);
                                 for wl in wrapped {
                                     let plain = format!("    {}", wl);
                                     items.push(ListItem::new(Line::from(vec![
                                         Span::raw("    ".to_string()),
-                                        Span::styled(
-                                            wl,
-                                            self.theme.style(StyleKind::Muted),
-                                        ),
+                                        Span::styled(wl, self.theme.style(StyleKind::Muted)),
                                     ])));
                                     plain_lines.push(plain);
                                 }
@@ -738,10 +736,7 @@ impl ChatView {
                         let y_start = items.len().min(u16::MAX as usize) as u16;
                         items.extend(tool_render.items);
                         plain_lines.extend(tool_render.plain_lines);
-                        let y_end = items
-                            .len()
-                            .saturating_sub(1)
-                            .min(u16::MAX as usize) as u16;
+                        let y_end = items.len().saturating_sub(1).min(u16::MAX as usize) as u16;
                         tool_regions.push((tool_state.tool_id.clone(), y_start, y_end));
                     }
                 }
@@ -783,8 +778,8 @@ impl ChatView {
             let loading_text = format!(" {} Thinking...", self.spinner.current());
             let stats_text = format!("Tokens: {} ", chat_state.metadata.total_tokens);
 
-            let padding_len = (area.width as usize)
-                .saturating_sub(loading_text.len() + stats_text.len());
+            let padding_len =
+                (area.width as usize).saturating_sub(loading_text.len() + stats_text.len());
 
             let loading_span = Span::styled(loading_text, self.theme.style(StyleKind::Primary));
             let stats_span = Span::styled(stats_text, self.theme.style(StyleKind::Muted));
@@ -839,7 +834,8 @@ impl ChatView {
             placeholder_style: self.theme.style(StyleKind::Muted),
         };
 
-        self.text_input.render(frame, inner, &style, !chat_state.is_processing);
+        self.text_input
+            .render(frame, inner, &style, !chat_state.is_processing);
     }
 
     fn render_command_menu(&mut self, frame: &mut Frame, area: Rect) {
@@ -935,7 +931,11 @@ impl ChatView {
     }
 
     /// Calculate the required height for the shortcuts area
-    fn calculate_shortcuts_height(available_width: u16, chat_state: &ChatState, browse_mode: bool) -> u16 {
+    fn calculate_shortcuts_height(
+        available_width: u16,
+        chat_state: &ChatState,
+        browse_mode: bool,
+    ) -> u16 {
         let mode_text = if browse_mode { " Browse " } else { " Chat " };
         let left_text = format!("{} | Model: {}", mode_text, chat_state.current_model_name);
 

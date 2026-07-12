@@ -216,11 +216,10 @@ impl CommandMenuState {
         let Some(area) = self.last_area else {
             return false;
         };
-        let in_menu = mouse.column >= area.x
+        mouse.column >= area.x
             && mouse.column < area.x.saturating_add(area.width)
             && mouse.row >= area.y
-            && mouse.row < area.y.saturating_add(area.height);
-        in_menu
+            && mouse.row < area.y.saturating_add(area.height)
     }
 
     fn selected_item(&self) -> Option<&CommandSpec> {

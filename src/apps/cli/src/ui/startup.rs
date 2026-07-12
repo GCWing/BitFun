@@ -738,12 +738,9 @@ impl StartupPage {
 
         // ── Global popup navigation: Ctrl+W closes all popups ──
         if self.any_popup_visible() {
-            match (key.code, key.modifiers) {
-                (KeyCode::Char('w'), KeyModifiers::CONTROL) => {
-                    self.close_all_popups();
-                    return None;
-                }
-                _ => {}
+            if let (KeyCode::Char('w'), KeyModifiers::CONTROL) = (key.code, key.modifiers) {
+                self.close_all_popups();
+                return None;
             }
         }
 

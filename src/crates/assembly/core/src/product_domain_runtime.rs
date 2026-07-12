@@ -33,7 +33,7 @@ impl CoreProductDomainRuntime {
     }
 
     pub(crate) fn function_agent_git_adapter() -> CoreFunctionAgentGitAdapter {
-        CoreFunctionAgentGitAdapter::default()
+        CoreFunctionAgentGitAdapter
     }
 
     pub(crate) fn function_agent_ai_adapter(

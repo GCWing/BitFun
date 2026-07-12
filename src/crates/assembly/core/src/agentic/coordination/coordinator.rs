@@ -5050,7 +5050,7 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         // coordinator-enforced timeouts can stop the same dialog turn.
         let subagent_cancel_token = cancel_token
             .map(CancellationToken::child_token)
-            .unwrap_or_else(CancellationToken::new);
+            .unwrap_or_default();
         self.execution_engine
             .register_cancel_token(&dialog_turn_id, subagent_cancel_token.clone());
 

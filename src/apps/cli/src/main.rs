@@ -507,15 +507,12 @@ async fn run_interactive(
     );
     let startup_result = startup_page.run(&mut terminal)?;
 
-    match startup_result {
-        StartupResult::Exit => {
-            shutdown_mcp_servers().await;
-            restore_tool_confirmation(original_skip_confirmation).await;
-            ui::restore_terminal(terminal)?;
-            println!("Goodbye!");
-            return Ok(());
-        }
-        _ => {}
+    if let StartupResult::Exit = startup_result {
+        shutdown_mcp_servers().await;
+        restore_tool_confirmation(original_skip_confirmation).await;
+        ui::restore_terminal(terminal)?;
+        println!("Goodbye!");
+        return Ok(());
     }
 
     // 5. Parse startup result and enter chat

@@ -410,7 +410,7 @@ impl ContextCompressor {
     }
 
     pub(crate) fn build_compact_prompt(&self) -> String {
-        format!(
+        String::from(
             r#"Your current task is to create a detailed summary of the conversation so far, paying close attention to the user's explicit requests and your previous actions.
 This summary should be thorough in capturing technical details, code patterns, and architectural decisions that would be essential for continuing development work without losing context.
 
@@ -494,7 +494,7 @@ Here's an example of how your output should be structured:
 
 Please provide your summary based on the conversation so far, following this structure and ensuring precision and thoroughness in your response.
 REMINDER: Do NOT call any tools. Respond with plain text only inside a single <summary> block. Tool calls will be rejected and you will fail the task.
-"#
+"#,
         )
     }
 }

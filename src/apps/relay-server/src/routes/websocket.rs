@@ -217,30 +217,6 @@ async fn handle_text_message(
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::{send_json_best_effort, truncate_preview, OutboundProtocol};
-    use tokio::sync::mpsc;
-
-    #[test]
-    fn truncate_preview_respects_utf8_boundaries() {
-        let text = format!("{}{}", "a".repeat(199), "你");
-
-        assert_eq!(truncate_preview(&text, 200), "a".repeat(199));
-    }
-
-    #[test]
-    fn best_effort_control_response_does_not_block_on_full_queue() {
-        let (tx, _rx) = mpsc::channel(1);
-        assert!(send_json_best_effort(&tx, &OutboundProtocol::HeartbeatAck));
-
-        assert!(
-            send_json_best_effort(&tx, &OutboundProtocol::HeartbeatAck),
-            "full queue should drop best-effort control response without closing read loop"
-        );
-    }
-}
-
 async fn send_json<T: Serialize>(tx: &mpsc::Sender<OutboundMessage>, msg: &T) -> bool {
     match serde_json::to_string(msg) {
         Ok(json) => send_outbound_message(tx, OutboundMessage { text: json }).await,
@@ -271,4 +247,28 @@ fn send_json_best_effort<T: Serialize>(tx: &mpsc::Sender<OutboundMessage>, msg: 
 fn generate_room_id() -> String {
     let bytes: [u8; 6] = rand::random();
     bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{send_json_best_effort, truncate_preview, OutboundProtocol};
+    use tokio::sync::mpsc;
+
+    #[test]
+    fn truncate_preview_respects_utf8_boundaries() {
+        let text = format!("{}{}", "a".repeat(199), "你");
+
+        assert_eq!(truncate_preview(&text, 200), "a".repeat(199));
+    }
+
+    #[test]
+    fn best_effort_control_response_does_not_block_on_full_queue() {
+        let (tx, _rx) = mpsc::channel(1);
+        assert!(send_json_best_effort(&tx, &OutboundProtocol::HeartbeatAck));
+
+        assert!(
+            send_json_best_effort(&tx, &OutboundProtocol::HeartbeatAck),
+            "full queue should drop best-effort control response without closing read loop"
+        );
+    }
 }

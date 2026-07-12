@@ -756,17 +756,15 @@ impl ChatState {
                 }
                 _ => {}
             },
-            AgenticEvent::ModelRoundStarted { round_index, .. } => {
-                if *round_index > 0 {
-                    self.update_tool(parent_tool_id, |tool| {
-                        let progress = tool
-                            .subagent_progress
-                            .get_or_insert_with(SubagentProgress::default);
-                        progress.current_tool_name = None;
-                        progress.current_tool_title = Some(format!("Round {}", round_index + 1));
-                    });
-                    self.rebuild_streaming_message();
-                }
+            AgenticEvent::ModelRoundStarted { round_index, .. } if *round_index > 0 => {
+                self.update_tool(parent_tool_id, |tool| {
+                    let progress = tool
+                        .subagent_progress
+                        .get_or_insert_with(SubagentProgress::default);
+                    progress.current_tool_name = None;
+                    progress.current_tool_title = Some(format!("Round {}", round_index + 1));
+                });
+                self.rebuild_streaming_message();
             }
             _ => {}
         }

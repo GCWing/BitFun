@@ -561,9 +561,8 @@ impl AcpClientService {
                 .await
             }
         }
-        .map_err(|error| {
+        .inspect_err(|_| {
             self.clients.remove(connection_id);
-            error
         })?;
         *connection.child.lock().await = child;
         let service = self.clone();

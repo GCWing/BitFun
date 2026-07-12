@@ -180,13 +180,12 @@ impl ExecMode {
             "Executing command"
         );
 
-        let session_id = self.prepare_session().await.map_err(|error| {
+        let session_id = self.prepare_session().await.inspect_err(|error| {
             emit_exit_diagnostic(
                 ExitKind::SessionCreateFailed,
                 &error.to_string(),
                 &self.exit_context(None, None),
             );
-            error
         })?;
         tracing::info!(session_id = %session_id, "Session ready");
         let event_queue = self.agent.event_queue().clone();
@@ -207,13 +206,12 @@ impl ExecMode {
             .agent
             .send_message(self.message.clone(), &self.agent_type)
             .await
-            .map_err(|error| {
+            .inspect_err(|error| {
                 emit_exit_diagnostic(
                     ExitKind::SendMessageFailed,
                     &error.to_string(),
                     &self.exit_context(Some(&session_id), None),
                 );
-                error
             })?;
         tracing::info!(session_id = %session_id, turn_id = %turn_id, "Message sent");
 

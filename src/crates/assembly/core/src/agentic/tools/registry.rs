@@ -164,6 +164,62 @@ impl DynamicToolProvider for ToolRegistry {
     }
 }
 
+/// Get all tools from the snapshot-aware global registry.
+pub async fn get_all_tools() -> Vec<Arc<dyn Tool>> {
+    let registry = get_global_tool_registry();
+    let registry_lock = registry.read().await;
+    registry_lock.get_all_tools()
+}
+
+/// Get readonly tools
+pub async fn get_readonly_tools() -> BitFunResult<Vec<Arc<dyn Tool>>> {
+    Ok(resolve_product_readonly_enabled_tools().await)
+}
+
+/// Create default tool registry - factory function
+pub fn create_tool_registry() -> ToolRegistry {
+    ToolRegistry::new()
+}
+
+// Global tool registry instance
+use std::sync::OnceLock;
+use tokio::sync::RwLock as TokioRwLock;
+
+static GLOBAL_TOOL_REGISTRY: OnceLock<Arc<TokioRwLock<ToolRegistry>>> = OnceLock::new();
+
+/// Get global tool registry
+pub fn get_global_tool_registry() -> Arc<TokioRwLock<ToolRegistry>> {
+    GLOBAL_TOOL_REGISTRY
+        .get_or_init(|| {
+            info!("Initializing global tool registry");
+            Arc::new(TokioRwLock::new(ToolRegistry::new()))
+        })
+        .clone()
+}
+
+/// Backward-compatible alias for callers that expect MCP tools to be included.
+pub async fn get_all_registered_tools() -> Vec<Arc<dyn Tool>> {
+    get_all_tools().await
+}
+
+/// Get all registered tool names
+pub async fn get_all_registered_tool_names() -> Vec<String> {
+    let all_tools = get_all_registered_tools().await;
+    all_tools
+        .into_iter()
+        .map(|tool| tool.name().to_string())
+        .collect()
+}
+
+pub async fn get_readonly_registered_tool_names() -> Vec<String> {
+    get_readonly_tools()
+        .await
+        .unwrap_or_default()
+        .into_iter()
+        .map(|tool| tool.name().to_string())
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::create_tool_registry;
@@ -783,60 +839,4 @@ mod tests {
             "readonly tool should not be snapshot wrapped: {read_text}"
         );
     }
-}
-
-/// Get all tools from the snapshot-aware global registry.
-pub async fn get_all_tools() -> Vec<Arc<dyn Tool>> {
-    let registry = get_global_tool_registry();
-    let registry_lock = registry.read().await;
-    registry_lock.get_all_tools()
-}
-
-/// Get readonly tools
-pub async fn get_readonly_tools() -> BitFunResult<Vec<Arc<dyn Tool>>> {
-    Ok(resolve_product_readonly_enabled_tools().await)
-}
-
-/// Create default tool registry - factory function
-pub fn create_tool_registry() -> ToolRegistry {
-    ToolRegistry::new()
-}
-
-// Global tool registry instance
-use std::sync::OnceLock;
-use tokio::sync::RwLock as TokioRwLock;
-
-static GLOBAL_TOOL_REGISTRY: OnceLock<Arc<TokioRwLock<ToolRegistry>>> = OnceLock::new();
-
-/// Get global tool registry
-pub fn get_global_tool_registry() -> Arc<TokioRwLock<ToolRegistry>> {
-    GLOBAL_TOOL_REGISTRY
-        .get_or_init(|| {
-            info!("Initializing global tool registry");
-            Arc::new(TokioRwLock::new(ToolRegistry::new()))
-        })
-        .clone()
-}
-
-/// Backward-compatible alias for callers that expect MCP tools to be included.
-pub async fn get_all_registered_tools() -> Vec<Arc<dyn Tool>> {
-    get_all_tools().await
-}
-
-/// Get all registered tool names
-pub async fn get_all_registered_tool_names() -> Vec<String> {
-    let all_tools = get_all_registered_tools().await;
-    all_tools
-        .into_iter()
-        .map(|tool| tool.name().to_string())
-        .collect()
-}
-
-pub async fn get_readonly_registered_tool_names() -> Vec<String> {
-    get_readonly_tools()
-        .await
-        .unwrap_or_default()
-        .into_iter()
-        .map(|tool| tool.name().to_string())
-        .collect()
 }

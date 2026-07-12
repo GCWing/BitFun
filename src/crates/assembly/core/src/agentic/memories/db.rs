@@ -1456,7 +1456,7 @@ fn phase1_source_needs_update_in_conn(
             ))
         })?
         .flatten();
-    Ok(!last_success_watermark.is_some_and(|watermark| watermark >= session_finished_at_unix_secs))
+    Ok(last_success_watermark.is_none_or(|watermark| watermark < session_finished_at_unix_secs))
 }
 
 fn try_claim_phase1_job_in_tx(
@@ -1601,7 +1601,7 @@ fn phase1_source_needs_update_in_tx(
             ))
         })?
         .flatten();
-    Ok(!last_success_watermark.is_some_and(|watermark| watermark >= session_finished_at_unix_secs))
+    Ok(last_success_watermark.is_none_or(|watermark| watermark < session_finished_at_unix_secs))
 }
 
 fn phase1_owned_input_watermark(

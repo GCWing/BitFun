@@ -433,7 +433,7 @@ impl ProviderSelectorState {
                     let is_selected = self
                         .selectable_row_indices
                         .get(self.selected)
-                        .map_or(false, |&ri| ri == row_idx);
+                        .is_some_and(|&ri| ri == row_idx);
 
                     self.render_item_row(
                         frame,
@@ -448,7 +448,7 @@ impl ProviderSelectorState {
                     let is_selected = self
                         .selectable_row_indices
                         .get(self.selected)
-                        .map_or(false, |&ri| ri == row_idx);
+                        .is_some_and(|&ri| ri == row_idx);
 
                     self.render_item_row(
                         frame,

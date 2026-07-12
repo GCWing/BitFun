@@ -375,11 +375,14 @@ fn detect_interface_gateways() -> HashMap<String, String> {
                 // Column 3 = gateway, column 4 = interface IP
                 for line in stdout.lines() {
                     let parts: Vec<&str> = line.split_whitespace().collect();
-                    if parts.len() >= 4 && parts[0] == "0.0.0.0" && parts[1] == "0.0.0.0" {
-                        if is_ipv4(parts[2]) && is_ipv4(parts[3]) {
-                            // Key by interface IP so it can be matched later
-                            map.insert(parts[3].to_string(), parts[2].to_string());
-                        }
+                    if parts.len() >= 4
+                        && parts[0] == "0.0.0.0"
+                        && parts[1] == "0.0.0.0"
+                        && is_ipv4(parts[2])
+                        && is_ipv4(parts[3])
+                    {
+                        // Key by interface IP so it can be matched later
+                        map.insert(parts[3].to_string(), parts[2].to_string());
                     }
                 }
             }

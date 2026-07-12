@@ -793,7 +793,7 @@ fn owning_exe_basename(hwnd: HWND) -> Option<String> {
     }
     let path = String::from_utf16_lossy(&buf[..len as usize]);
     let name = path
-        .rsplit(|c: char| c == '\\' || c == '/')
+        .rsplit(['\\', '/'])
         .next()
         .unwrap_or(&path)
         .to_ascii_lowercase();

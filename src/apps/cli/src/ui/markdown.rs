@@ -332,7 +332,7 @@ impl MarkdownRenderer {
         }
 
         // Remove trailing empty lines
-        while lines.last().map_or(false, |line| {
+        while lines.last().is_some_and(|line| {
             line.spans.is_empty() || (line.spans.len() == 1 && line.spans[0].content.is_empty())
         }) {
             lines.pop();

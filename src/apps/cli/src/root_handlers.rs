@@ -50,7 +50,7 @@ pub(crate) async fn handle_exec_command(config: CliConfig, args: ExecCommandArgs
     let (agentic_system, original_skip_confirmation) =
         crate::initialize_core_services(skip_confirmation)
             .await
-            .map_err(|error| {
+            .inspect_err(|error| {
                 emit_exit_diagnostic(
                     ExitKind::ExecError,
                     &error.to_string(),
@@ -60,7 +60,6 @@ pub(crate) async fn handle_exec_command(config: CliConfig, args: ExecCommandArgs
                         ..Default::default()
                     },
                 );
-                error
             })?;
 
     let mut exec_mode = ExecMode::new(

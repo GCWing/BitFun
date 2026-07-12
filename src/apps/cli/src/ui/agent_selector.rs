@@ -135,7 +135,7 @@ impl AgentSelectorState {
                 let is_current = self
                     .current_agent_id
                     .as_ref()
-                    .map_or(false, |id| id == &agent.id);
+                    .is_some_and(|id| id == &agent.id);
 
                 let marker = if is_current { "● " } else { "  " };
                 let marker_style = if is_current {

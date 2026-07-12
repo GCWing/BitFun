@@ -1535,9 +1535,8 @@ impl<Tool: ToolRegistryItem + ?Sized> ToolRegistry<Tool> {
     pub fn get_collapsed_tool_names(&self) -> Vec<String> {
         self.tools
             .iter()
-            .filter_map(|(name, tool)| {
-                (tool.default_exposure() == ToolExposure::Collapsed).then(|| name.clone())
-            })
+            .filter(|(_, tool)| tool.default_exposure() == ToolExposure::Collapsed)
+            .map(|(name, _)| name.clone())
             .collect()
     }
 

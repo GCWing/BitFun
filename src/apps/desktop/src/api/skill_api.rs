@@ -1246,10 +1246,8 @@ async fn fill_market_descriptions(client: &Client, base_url: &str, items: &mut [
         });
 
         if join_set.len() >= MARKET_DESC_FETCH_CONCURRENCY {
-            if let Some(result) = join_set.join_next().await {
-                if let Ok((skill_id, Some(desc))) = result {
-                    fetched.insert(skill_id, desc);
-                }
+            if let Some(Ok((skill_id, Some(desc)))) = join_set.join_next().await {
+                fetched.insert(skill_id, desc);
             }
         }
     }

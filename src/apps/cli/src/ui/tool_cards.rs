@@ -1167,7 +1167,7 @@ fn render_edit_block(
         let total_changes = additions + deletions;
         if total_changes > max && !expanded {
             content_lines.push(Line::from(Span::styled(
-                format!("\u{2026} (more changes, Ctrl+O to expand)"),
+                "\u{2026} (more changes, Ctrl+O to expand)".to_string(),
                 theme.style(StyleKind::Muted),
             )));
         } else if expanded && total_changes > 8 {

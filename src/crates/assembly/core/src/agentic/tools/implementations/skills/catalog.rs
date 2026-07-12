@@ -31,7 +31,7 @@ mod tests {
     fn runtime_catalog_covers_all_embedded_builtin_skills() {
         for dir_name in builtin_skill_dir_names() {
             assert!(
-                builtin_skill_group_key(&dir_name).is_some(),
+                builtin_skill_group_key(dir_name).is_some(),
                 "Missing built-in skill catalog entry for '{}'",
                 dir_name
             );

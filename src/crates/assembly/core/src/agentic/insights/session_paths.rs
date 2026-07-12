@@ -18,7 +18,7 @@ pub async fn effective_session_storage_dir_for_workspace(ws: &WorkspaceInfo) -> 
         .filter(|s| !s.is_empty());
 
     if host.is_none() {
-        if let (Some(ref cid), Some(ws_service)) = (conn.as_ref(), get_global_workspace_service()) {
+        if let (Some(cid), Some(ws_service)) = (conn.as_ref(), get_global_workspace_service()) {
             host = ws_service
                 .remote_ssh_host_for_remote_workspace(cid.as_str(), &path_str)
                 .await;

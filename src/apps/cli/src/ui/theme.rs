@@ -78,7 +78,7 @@ pub(crate) fn resolve_effective_color_scheme(preference: &str) -> EffectiveColor
         "mono" | "monochrome" | "nocolor" | "no_color" => EffectiveColorScheme::Monochrome,
         "ansi" | "ansi16" => EffectiveColorScheme::Ansi16,
         "truecolor" | "24bit" => EffectiveColorScheme::Truecolor,
-        "" | "default" | "auto" | _ => {
+        _ => {
             if terminal_supports_truecolor() {
                 EffectiveColorScheme::Truecolor
             } else {

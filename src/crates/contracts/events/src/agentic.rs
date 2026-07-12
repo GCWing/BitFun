@@ -458,6 +458,124 @@ impl PartialEq for AgenticEventEnvelope {
     }
 }
 
+impl Eq for AgenticEventEnvelope {}
+
+impl PartialOrd for AgenticEventEnvelope {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for AgenticEventEnvelope {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        match self.priority.cmp(&other.priority) {
+            std::cmp::Ordering::Equal => self.timestamp.cmp(&other.timestamp),
+            other => other,
+        }
+    }
+}
+
+impl AgenticEventEnvelope {
+    pub fn new(event: AgenticEvent, priority: AgenticEventPriority) -> Self {
+        Self {
+            id: uuid::Uuid::new_v4().to_string(),
+            event,
+            priority,
+            timestamp: SystemTime::now(),
+        }
+    }
+}
+
+impl AgenticEvent {
+    /// Get the session ID of the event
+    pub fn session_id(&self) -> Option<&str> {
+        match self {
+            Self::SessionCreated { session_id, .. }
+            | Self::SessionStateChanged { session_id, .. }
+            | Self::SessionDeleted { session_id }
+            | Self::SessionTitleGenerated { session_id, .. }
+            | Self::ImageAnalysisStarted { session_id, .. }
+            | Self::ImageAnalysisCompleted { session_id, .. }
+            | Self::DialogTurnStarted { session_id, .. }
+            | Self::SubagentSessionLinked { session_id, .. }
+            | Self::DialogTurnCompleted { session_id, .. }
+            | Self::TokenUsageUpdated { session_id, .. }
+            | Self::ContextCompressionStarted { session_id, .. }
+            | Self::ContextCompressionCompleted { session_id, .. }
+            | Self::ContextCompressionFailed { session_id, .. }
+            | Self::ThreadGoalUpdated { session_id, .. }
+            | Self::DialogTurnCancelled { session_id, .. }
+            | Self::DialogTurnFailed { session_id, .. }
+            | Self::ModelRoundStarted { session_id, .. }
+            | Self::TextChunk { session_id, .. }
+            | Self::ThinkingChunk { session_id, .. }
+            | Self::ModelRoundCompleted { session_id, .. }
+            | Self::ToolEvent { session_id, .. }
+            | Self::UserSteeringInjected { session_id, .. }
+            | Self::DeepReviewQueueStateChanged { session_id, .. }
+            | Self::SessionModelAutoMigrated { session_id, .. } => Some(session_id),
+            Self::SystemError { session_id, .. } => session_id.as_deref(),
+        }
+    }
+
+    /// Get the default priority
+    pub fn default_priority(&self) -> AgenticEventPriority {
+        match self {
+            Self::SystemError { .. }
+            | Self::DialogTurnFailed { .. }
+            | Self::DialogTurnCancelled { .. } => AgenticEventPriority::Critical,
+
+            Self::SessionStateChanged { .. }
+            | Self::SessionTitleGenerated { .. }
+            | Self::SessionModelAutoMigrated { .. }
+            | Self::SubagentSessionLinked { .. }
+            | Self::DeepReviewQueueStateChanged { .. }
+            | Self::ContextCompressionFailed { .. } => AgenticEventPriority::High,
+
+            Self::ImageAnalysisStarted { .. }
+            | Self::ImageAnalysisCompleted { .. }
+            | Self::TextChunk { .. }
+            | Self::ThinkingChunk { .. }
+            | Self::ModelRoundStarted { .. }
+            | Self::ModelRoundCompleted { .. }
+            | Self::TokenUsageUpdated { .. }
+            | Self::DialogTurnCompleted { .. }
+            | Self::ContextCompressionStarted { .. }
+            | Self::ThreadGoalUpdated { .. }
+            | Self::UserSteeringInjected { .. }
+            | Self::ContextCompressionCompleted { .. } => AgenticEventPriority::Normal,
+
+            Self::ToolEvent { tool_event, .. } => tool_event.default_priority(),
+
+            _ => AgenticEventPriority::Low,
+        }
+    }
+}
+
+impl ToolEventData {
+    /// Get the default priority for a specific tool event variant.
+    pub fn default_priority(&self) -> AgenticEventPriority {
+        match self {
+            Self::Cancelled { .. } => AgenticEventPriority::Critical,
+
+            Self::Started { .. }
+            | Self::Completed { .. }
+            | Self::Failed { .. }
+            | Self::ConfirmationNeeded { .. } => AgenticEventPriority::High,
+
+            Self::EarlyDetected { .. }
+            | Self::ParamsPartial { .. }
+            | Self::Queued { .. }
+            | Self::Waiting { .. }
+            | Self::Progress { .. }
+            | Self::Streaming { .. }
+            | Self::StreamChunk { .. }
+            | Self::Confirmed { .. }
+            | Self::Rejected { .. } => AgenticEventPriority::Normal,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -652,123 +770,5 @@ mod tests {
         assert_eq!(serialized["parent_dialog_turn_id"], "turn-1");
         assert_eq!(serialized["parent_tool_call_id"], "tool-1");
         assert_eq!(serialized["agent_type"], "GeneralPurpose");
-    }
-}
-
-impl Eq for AgenticEventEnvelope {}
-
-impl PartialOrd for AgenticEventEnvelope {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for AgenticEventEnvelope {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        match self.priority.cmp(&other.priority) {
-            std::cmp::Ordering::Equal => self.timestamp.cmp(&other.timestamp),
-            other => other,
-        }
-    }
-}
-
-impl AgenticEventEnvelope {
-    pub fn new(event: AgenticEvent, priority: AgenticEventPriority) -> Self {
-        Self {
-            id: uuid::Uuid::new_v4().to_string(),
-            event,
-            priority,
-            timestamp: SystemTime::now(),
-        }
-    }
-}
-
-impl AgenticEvent {
-    /// Get the session ID of the event
-    pub fn session_id(&self) -> Option<&str> {
-        match self {
-            Self::SessionCreated { session_id, .. }
-            | Self::SessionStateChanged { session_id, .. }
-            | Self::SessionDeleted { session_id }
-            | Self::SessionTitleGenerated { session_id, .. }
-            | Self::ImageAnalysisStarted { session_id, .. }
-            | Self::ImageAnalysisCompleted { session_id, .. }
-            | Self::DialogTurnStarted { session_id, .. }
-            | Self::SubagentSessionLinked { session_id, .. }
-            | Self::DialogTurnCompleted { session_id, .. }
-            | Self::TokenUsageUpdated { session_id, .. }
-            | Self::ContextCompressionStarted { session_id, .. }
-            | Self::ContextCompressionCompleted { session_id, .. }
-            | Self::ContextCompressionFailed { session_id, .. }
-            | Self::ThreadGoalUpdated { session_id, .. }
-            | Self::DialogTurnCancelled { session_id, .. }
-            | Self::DialogTurnFailed { session_id, .. }
-            | Self::ModelRoundStarted { session_id, .. }
-            | Self::TextChunk { session_id, .. }
-            | Self::ThinkingChunk { session_id, .. }
-            | Self::ModelRoundCompleted { session_id, .. }
-            | Self::ToolEvent { session_id, .. }
-            | Self::UserSteeringInjected { session_id, .. }
-            | Self::DeepReviewQueueStateChanged { session_id, .. }
-            | Self::SessionModelAutoMigrated { session_id, .. } => Some(session_id),
-            Self::SystemError { session_id, .. } => session_id.as_deref(),
-        }
-    }
-
-    /// Get the default priority
-    pub fn default_priority(&self) -> AgenticEventPriority {
-        match self {
-            Self::SystemError { .. }
-            | Self::DialogTurnFailed { .. }
-            | Self::DialogTurnCancelled { .. } => AgenticEventPriority::Critical,
-
-            Self::SessionStateChanged { .. }
-            | Self::SessionTitleGenerated { .. }
-            | Self::SessionModelAutoMigrated { .. }
-            | Self::SubagentSessionLinked { .. }
-            | Self::DeepReviewQueueStateChanged { .. }
-            | Self::ContextCompressionFailed { .. } => AgenticEventPriority::High,
-
-            Self::ImageAnalysisStarted { .. }
-            | Self::ImageAnalysisCompleted { .. }
-            | Self::TextChunk { .. }
-            | Self::ThinkingChunk { .. }
-            | Self::ModelRoundStarted { .. }
-            | Self::ModelRoundCompleted { .. }
-            | Self::TokenUsageUpdated { .. }
-            | Self::DialogTurnCompleted { .. }
-            | Self::ContextCompressionStarted { .. }
-            | Self::ThreadGoalUpdated { .. }
-            | Self::UserSteeringInjected { .. }
-            | Self::ContextCompressionCompleted { .. } => AgenticEventPriority::Normal,
-
-            Self::ToolEvent { tool_event, .. } => tool_event.default_priority(),
-
-            _ => AgenticEventPriority::Low,
-        }
-    }
-}
-
-impl ToolEventData {
-    /// Get the default priority for a specific tool event variant.
-    pub fn default_priority(&self) -> AgenticEventPriority {
-        match self {
-            Self::Cancelled { .. } => AgenticEventPriority::Critical,
-
-            Self::Started { .. }
-            | Self::Completed { .. }
-            | Self::Failed { .. }
-            | Self::ConfirmationNeeded { .. } => AgenticEventPriority::High,
-
-            Self::EarlyDetected { .. }
-            | Self::ParamsPartial { .. }
-            | Self::Queued { .. }
-            | Self::Waiting { .. }
-            | Self::Progress { .. }
-            | Self::Streaming { .. }
-            | Self::StreamChunk { .. }
-            | Self::Confirmed { .. }
-            | Self::Rejected { .. } => AgenticEventPriority::Normal,
-        }
     }
 }

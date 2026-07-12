@@ -56,18 +56,6 @@ impl Default for InitMiniAppTool {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::InitMiniAppTool;
-    use crate::agentic::tools::framework::{Tool, ToolExposure};
-
-    #[test]
-    fn init_miniapp_stays_expanded_for_assistant_creation() {
-        let tool = InitMiniAppTool::new();
-        assert_eq!(tool.default_exposure(), ToolExposure::Expanded);
-    }
-}
-
 #[async_trait]
 impl Tool for InitMiniAppTool {
     fn name(&self) -> &str {
@@ -227,5 +215,17 @@ Returns app_id and the app root directory. Use the root directory and file names
             result_for_assistant: Some(result_text),
             image_attachments: None,
         }])
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::InitMiniAppTool;
+    use crate::agentic::tools::framework::{Tool, ToolExposure};
+
+    #[test]
+    fn init_miniapp_stays_expanded_for_assistant_creation() {
+        let tool = InitMiniAppTool::new();
+        assert_eq!(tool.default_exposure(), ToolExposure::Expanded);
     }
 }

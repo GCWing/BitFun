@@ -785,6 +785,56 @@ pub fn current_unix_secs() -> i64 {
         .unwrap_or_default()
 }
 
+async fn phase2_retry_delay_seconds() -> BitFunResult<i64> {
+    let config = get_phase2_runtime_config().await;
+    Ok(config
+        .memories
+        .phase2_retry_delay_seconds
+        .max(60)
+        .min(24 * 60 * 60))
+}
+
+async fn phase2_lease_seconds() -> BitFunResult<i64> {
+    let config = get_phase2_runtime_config().await;
+    Ok(config
+        .memories
+        .phase2_lease_seconds
+        .max(60)
+        .min(24 * 60 * 60))
+}
+
+fn select_phase2_model_id(
+    config: &crate::service::config::types::GlobalConfig,
+) -> BitFunResult<String> {
+    let ai = &config.ai;
+    let model_ref = config.memories.consolidation_model.as_deref().or(config
+        .ai
+        .default_models
+        .primary
+        .as_deref());
+
+    model_ref
+        .and_then(|model_ref| ai.resolve_model_selection(model_ref))
+        .or_else(|| ai.first_enabled_model_id())
+        .ok_or_else(|| {
+            BitFunError::service("No enabled model available for memory phase2".to_string())
+        })
+}
+
+fn build_phase2_user_prompt(memory_root: &std::path::Path) -> String {
+    format!(
+        "Consolidate the workspace at:\n{}\n\nFocus on the selected stage-1 memories in raw_memories.md and the rollout_summaries directory. Return a concise markdown result.",
+        memory_root.display()
+    )
+}
+
+async fn get_phase2_runtime_config() -> crate::service::config::types::GlobalConfig {
+    match get_global_config_service().await {
+        Ok(service) => service.get_config(None).await.unwrap_or_default(),
+        Err(_) => crate::service::config::types::GlobalConfig::default(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -964,7 +1014,7 @@ mod tests {
         ];
         for row in &rows {
             save_memory_row_metadata(&persistence, row, SessionMemoryMode::Enabled).await;
-            runner.db.upsert_memory(&row).await.unwrap();
+            runner.db.upsert_memory(row).await.unwrap();
         }
 
         let report = runner
@@ -1255,55 +1305,5 @@ mod tests {
         .await
         .unwrap();
         assert!(summary.starts_with("v1\n"));
-    }
-}
-
-async fn phase2_retry_delay_seconds() -> BitFunResult<i64> {
-    let config = get_phase2_runtime_config().await;
-    Ok(config
-        .memories
-        .phase2_retry_delay_seconds
-        .max(60)
-        .min(24 * 60 * 60))
-}
-
-async fn phase2_lease_seconds() -> BitFunResult<i64> {
-    let config = get_phase2_runtime_config().await;
-    Ok(config
-        .memories
-        .phase2_lease_seconds
-        .max(60)
-        .min(24 * 60 * 60))
-}
-
-fn select_phase2_model_id(
-    config: &crate::service::config::types::GlobalConfig,
-) -> BitFunResult<String> {
-    let ai = &config.ai;
-    let model_ref = config.memories.consolidation_model.as_deref().or(config
-        .ai
-        .default_models
-        .primary
-        .as_deref());
-
-    model_ref
-        .and_then(|model_ref| ai.resolve_model_selection(model_ref))
-        .or_else(|| ai.first_enabled_model_id())
-        .ok_or_else(|| {
-            BitFunError::service("No enabled model available for memory phase2".to_string())
-        })
-}
-
-fn build_phase2_user_prompt(memory_root: &std::path::Path) -> String {
-    format!(
-        "Consolidate the workspace at:\n{}\n\nFocus on the selected stage-1 memories in raw_memories.md and the rollout_summaries directory. Return a concise markdown result.",
-        memory_root.display()
-    )
-}
-
-async fn get_phase2_runtime_config() -> crate::service::config::types::GlobalConfig {
-    match get_global_config_service().await {
-        Ok(service) => service.get_config(None).await.unwrap_or_default(),
-        Err(_) => crate::service::config::types::GlobalConfig::default(),
     }
 }

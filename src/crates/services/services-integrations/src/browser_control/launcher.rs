@@ -462,14 +462,12 @@ impl BrowserLauncher {
             std::env::var("LOCALAPPDATA").ok(),
         ];
 
-        for root_opt in &env_roots {
-            if let Some(root) = root_opt {
-                for rel in &rel_paths {
-                    let candidate = format!(r"{}\{}", root.trim_end_matches('\\'), rel);
-                    if std::path::Path::new(&candidate).exists() {
-                        debug!("Found browser at {}", candidate);
-                        return candidate;
-                    }
+        for root in env_roots.iter().flatten() {
+            for rel in &rel_paths {
+                let candidate = format!(r"{}\{}", root.trim_end_matches('\\'), rel);
+                if std::path::Path::new(&candidate).exists() {
+                    debug!("Found browser at {}", candidate);
+                    return candidate;
                 }
             }
         }

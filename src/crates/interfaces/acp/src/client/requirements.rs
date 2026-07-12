@@ -194,7 +194,7 @@ pub(crate) async fn probe_remote_executable(
         .execute_command(connection_id, &resolve_command)
         .await
     {
-        Ok((stdout, _stderr, exit_code)) if exit_code == 0 => {
+        Ok((stdout, _stderr, 0)) => {
             let resolved_path = stdout
                 .lines()
                 .map(str::trim)
@@ -221,7 +221,7 @@ pub(crate) async fn probe_remote_executable(
             .execute_command(connection_id, &version_command)
             .await
         {
-            Ok((stdout, stderr, exit_code)) if exit_code == 0 => {
+            Ok((stdout, stderr, 0)) => {
                 item.version = parse_version_text(stdout.as_bytes())
                     .or_else(|| parse_version_text(stderr.as_bytes()));
             }
@@ -257,7 +257,7 @@ pub(crate) async fn probe_remote_npx_adapter(
         .execute_command(connection_id, &resolve_command)
         .await
     {
-        Ok((stdout, _stderr, exit_code)) if exit_code == 0 => {
+        Ok((stdout, _stderr, 0)) => {
             item.installed = true;
             item.path = stdout
                 .lines()

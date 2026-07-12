@@ -180,11 +180,7 @@ fn exe_basename_for_pid(pid: u32) -> Option<String> {
         return None;
     }
     let path = String::from_utf16_lossy(&buf[..len as usize]);
-    let name = path
-        .rsplit(|c: char| c == '\\' || c == '/')
-        .next()
-        .unwrap_or(&path)
-        .to_string();
+    let name = path.rsplit(['\\', '/']).next().unwrap_or(&path).to_string();
     if name.is_empty() {
         None
     } else {

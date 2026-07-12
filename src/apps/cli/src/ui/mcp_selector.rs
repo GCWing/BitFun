@@ -185,10 +185,8 @@ impl McpSelectorState {
             .items
             .iter()
             .map(|item| {
-                let is_loading = loading_id.as_ref().map_or(false, |id| id == &item.id);
-                let is_confirm_delete = confirm_delete_id
-                    .as_ref()
-                    .map_or(false, |id| id == &item.id);
+                let is_loading = loading_id.as_ref().is_some_and(|id| id == &item.id);
+                let is_confirm_delete = confirm_delete_id.as_ref().is_some_and(|id| id == &item.id);
 
                 // If this item is pending delete confirmation, show special style
                 if is_confirm_delete {

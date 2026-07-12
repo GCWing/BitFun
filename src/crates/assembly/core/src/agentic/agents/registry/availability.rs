@@ -8,8 +8,6 @@ use bitfun_agent_runtime::agents::{
     ResolvedSubagentAvailability, SubagentOverrideLayers as ResolvedOverrideLayers,
     SubagentOverrideState,
 };
-use std::collections::HashMap;
-
 fn to_runtime_override_state(state: AgentSubagentOverrideState) -> SubagentOverrideState {
     match state {
         AgentSubagentOverrideState::Enabled => SubagentOverrideState::Enabled,
@@ -120,7 +118,7 @@ pub(super) fn set_override_state(
     let profile_id = resolve_mode_config_profile_id(parent_agent_type).into_owned();
     overrides
         .entry(profile_id)
-        .or_insert_with(HashMap::new)
+        .or_default()
         .insert(subagent_key.to_string(), state);
 }
 
@@ -131,6 +129,7 @@ mod tests {
     use crate::agentic::agents::registry::types::{AgentCategory, AgentSource};
     use crate::agentic::agents::registry::visibility::SubagentVisibilityPolicy;
     use crate::service::config::types::AgentSubagentOverrideState;
+    use std::collections::HashMap;
     use std::sync::Arc;
 
     fn make_entry(source: SubAgentSource, id: &str) -> AgentEntry {

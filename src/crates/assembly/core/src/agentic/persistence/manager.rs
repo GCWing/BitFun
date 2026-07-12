@@ -494,14 +494,14 @@ impl PersistenceManager {
         &self,
         path: &Path,
     ) -> BitFunResult<Option<T>> {
-        JsonFileStore::default()
+        JsonFileStore
             .read_optional(path)
             .await
             .map_err(Self::json_store_error)
     }
 
     async fn write_json_atomic<T: Serialize>(&self, path: &Path, value: &T) -> BitFunResult<()> {
-        JsonFileStore::default()
+        JsonFileStore
             .write_atomic(path, value)
             .await
             .map_err(Self::json_store_error)

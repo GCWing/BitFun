@@ -1714,10 +1714,7 @@ mod tests {
             .state_manager
             .create_task(ToolTask::new(
                 test_tool_call(&task_id, "ExecCommand"),
-                {
-                    let context = test_tool_execution_context();
-                    context
-                },
+                test_tool_execution_context(),
                 {
                     let mut options = ToolExecutionOptions::default();
                     options.confirm_before_run = true;

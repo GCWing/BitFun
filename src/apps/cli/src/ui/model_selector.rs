@@ -141,7 +141,7 @@ impl ModelSelectorState {
                 let is_current = self
                     .current_model_id
                     .as_ref()
-                    .map_or(false, |id| id == &model.id);
+                    .is_some_and(|id| id == &model.id);
 
                 let marker = if is_current { "● " } else { "  " };
                 let marker_style = if is_current {

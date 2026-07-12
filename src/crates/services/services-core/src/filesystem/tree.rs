@@ -1317,13 +1317,11 @@ impl FileTreeService {
         }
 
         let mut end_index = text.len();
-        let mut char_count = 0;
-        for (byte_index, _) in text.char_indices() {
+        for (char_count, (byte_index, _)) in text.char_indices().enumerate() {
             if char_count == max_chars {
                 end_index = byte_index;
                 break;
             }
-            char_count += 1;
         }
 
         text[..end_index].to_string()

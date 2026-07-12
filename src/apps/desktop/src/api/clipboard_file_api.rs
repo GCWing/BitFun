@@ -97,7 +97,7 @@ fn parse_uri_list(content: &str) -> Vec<String> {
 #[cfg(any(target_os = "macos", test))]
 fn parse_clipboard_path_segments(content: &str) -> Vec<String> {
     content
-        .split(|c| c == '\n' || c == '\r')
+        .split(['\n', '\r'])
         .flat_map(|segment| segment.split(','))
         .map(str::trim)
         .filter(|segment| !segment.is_empty())

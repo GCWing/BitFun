@@ -268,12 +268,10 @@ impl InsightsCollector {
                 }
                 MessageContent::ToolResult {
                     tool_name,
-                    is_error,
+                    is_error: true,
                     ..
                 } => {
-                    if *is_error {
-                        *base_stats.tool_errors.entry(tool_name.clone()).or_insert(0) += 1;
-                    }
+                    *base_stats.tool_errors.entry(tool_name.clone()).or_insert(0) += 1;
                 }
                 _ => {}
             }

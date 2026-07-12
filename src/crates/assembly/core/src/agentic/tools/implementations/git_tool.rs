@@ -868,13 +868,8 @@ impl GitTool {
                 // We treat exit code 0 and exit code 1 with non-empty stdout as success,
                 // but exit code >1 or exit code 1 with empty stdout and non-empty stderr as failure.
                 let is_diff_like = operation == "diff";
-                let success = if raw.exit_code == 0 {
-                    true
-                } else if is_diff_like && raw.exit_code == 1 && !raw.stdout.is_empty() {
-                    true
-                } else {
-                    false
-                };
+                let success = raw.exit_code == 0
+                    || is_diff_like && raw.exit_code == 1 && !raw.stdout.is_empty();
 
                 Ok(json!({
                     "success": success,

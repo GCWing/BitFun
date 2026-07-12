@@ -39,56 +39,6 @@ fn mobile_web_upload_manifest(
         .collect()
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn manifest_preserves_forward_slash_paths_and_hashes() {
-        let base = std::env::temp_dir().join(format!(
-            "bitfun-remote-mobile-web-manifest-{}",
-            uuid::Uuid::new_v4()
-        ));
-        let assets = base.join("assets");
-        std::fs::create_dir_all(&assets).unwrap();
-        std::fs::write(base.join("index.html"), b"<html></html>").unwrap();
-        std::fs::write(assets.join("app.js"), b"console.log('ok');").unwrap();
-
-        let files = collect_mobile_web_files(&base).unwrap();
-        let mut manifest = mobile_web_upload_manifest(&files);
-        manifest.sort_by(|left, right| left.path.cmp(&right.path));
-
-        assert_eq!(manifest.len(), 2);
-        assert_eq!(manifest[0].path, "assets/app.js");
-        assert_eq!(manifest[0].size, b"console.log('ok');".len() as u64);
-        assert_eq!(
-            manifest[0].hash,
-            "16ba942cc0730b9c1416eb532c015b5d26bf8419618e315abe2544b87ae63a16"
-        );
-        assert_eq!(manifest[1].path, "index.html");
-        assert_eq!(manifest[1].size, b"<html></html>".len() as u64);
-
-        let _ = std::fs::remove_dir_all(base);
-    }
-
-    #[test]
-    fn manifest_rejects_missing_index_html() {
-        let base = std::env::temp_dir().join(format!(
-            "bitfun-remote-mobile-web-missing-index-{}",
-            uuid::Uuid::new_v4()
-        ));
-        std::fs::create_dir_all(&base).unwrap();
-
-        let error = match collect_mobile_web_files(&base) {
-            Ok(_) => panic!("missing index.html should be rejected"),
-            Err(error) => error,
-        };
-
-        assert!(error.to_string().contains("missing index.html"));
-        let _ = std::fs::remove_dir_all(base);
-    }
-}
-
 /// Upload mobile-web assets to a relay server.
 pub async fn upload_mobile_web_to_relay(
     relay_url: &str,
@@ -391,4 +341,54 @@ fn collect_files_with_hash(
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn manifest_preserves_forward_slash_paths_and_hashes() {
+        let base = std::env::temp_dir().join(format!(
+            "bitfun-remote-mobile-web-manifest-{}",
+            uuid::Uuid::new_v4()
+        ));
+        let assets = base.join("assets");
+        std::fs::create_dir_all(&assets).unwrap();
+        std::fs::write(base.join("index.html"), b"<html></html>").unwrap();
+        std::fs::write(assets.join("app.js"), b"console.log('ok');").unwrap();
+
+        let files = collect_mobile_web_files(&base).unwrap();
+        let mut manifest = mobile_web_upload_manifest(&files);
+        manifest.sort_by(|left, right| left.path.cmp(&right.path));
+
+        assert_eq!(manifest.len(), 2);
+        assert_eq!(manifest[0].path, "assets/app.js");
+        assert_eq!(manifest[0].size, b"console.log('ok');".len() as u64);
+        assert_eq!(
+            manifest[0].hash,
+            "16ba942cc0730b9c1416eb532c015b5d26bf8419618e315abe2544b87ae63a16"
+        );
+        assert_eq!(manifest[1].path, "index.html");
+        assert_eq!(manifest[1].size, b"<html></html>".len() as u64);
+
+        let _ = std::fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn manifest_rejects_missing_index_html() {
+        let base = std::env::temp_dir().join(format!(
+            "bitfun-remote-mobile-web-missing-index-{}",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&base).unwrap();
+
+        let error = match collect_mobile_web_files(&base) {
+            Ok(_) => panic!("missing index.html should be rejected"),
+            Err(error) => error,
+        };
+
+        assert!(error.to_string().contains("missing index.html"));
+        let _ = std::fs::remove_dir_all(base);
+    }
 }
