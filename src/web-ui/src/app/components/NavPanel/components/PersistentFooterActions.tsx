@@ -64,21 +64,9 @@ const PersistentFooterActions: React.FC = () => {
   const [showRemoteDisclaimer, setShowRemoteDisclaimer] = useState(false);
   const [hasAgreedRemoteDisclaimer, setHasAgreedRemoteDisclaimer] = useState<boolean>(() => getRemoteConnectDisclaimerAgreed());
 
-  // On mount: check if user was previously logged in (credential hint exists)
-  // or if token has expired. Auto-open the login dialog in either case.
-  // Also periodically check for token expiry (every 60s) while the app runs.
+  // Periodic token-expiry check. Only auto-open the login dialog if the
+  // token has actually expired while the app is running — not on startup.
   useEffect(() => {
-    remoteConnectAPI.accountGetCredentialHint().then((hint) => {
-      if (hint) {
-        setShowAccountLogin(true);
-      }
-    });
-    remoteConnectAPI.accountTokenExpired().then((expired) => {
-      if (expired) {
-        setShowAccountLogin(true);
-      }
-    });
-    // Periodic check: if token expires while the app is running, prompt re-login
     const expiryCheck = setInterval(() => {
       remoteConnectAPI.accountTokenExpired().then((expired) => {
         if (expired) {

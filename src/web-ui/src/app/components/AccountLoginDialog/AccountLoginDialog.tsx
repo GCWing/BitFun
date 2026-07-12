@@ -84,10 +84,17 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
 
   const refreshDevices = useCallback(async () => {
     try {
-      const list = await remoteConnectAPI.accountListDevices();
+      let list = await remoteConnectAPI.accountListDevices();
+      // If the local device appears offline, retry once after a short
+      // delay — the WS auth round-trip may not have completed yet.
+      const localOffline = list.some(d => d.device_id === localDeviceId && !d.online);
+      if (localOffline && localDeviceId) {
+        await new Promise(r => setTimeout(r, 1500));
+        list = await remoteConnectAPI.accountListDevices();
+      }
       setDevices(list);
     } catch (e) { log.warn('refreshDevices failed', e); }
-  }, []);
+  }, [localDeviceId]);
 
   const resetState = useCallback(() => {
     setDevices([]); setSelectedDevice(null); setRemoteWorkspace(null);
