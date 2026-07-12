@@ -56,7 +56,7 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
   onClose,
 }) => {
   const { t } = useI18n('common');
-  const { success } = useNotification();
+  const { success, info, error: notifyError } = useNotification();
   const { workspacePath } = useCurrentWorkspace();
 
   const [username, setUsername] = useState('');
@@ -126,18 +126,29 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
     return true;
   }, [username, password, authServer, t]);
 
-  const doAutoSync = useCallback(async (isFirstLogin: boolean) => {
-    let configJson = '{}';
-    if (isFirstLogin) {
-      try {
-        const exported = await configAPI.exportConfig();
-        configJson = JSON.stringify(exported);
-      } catch (e) { log.warn('export config failed', e); }
-    }
+  const doAutoSync = useCallback((isFirstLogin: boolean) => {
     const wp = workspacePath || '/';
-    const result = await remoteConnectAPI.accountAutoSync(isFirstLogin, wp, configJson);
-    log.info(`Auto-sync done: settings=${result.settings_synced} exported=${result.sessions_exported} imported=${result.sessions_imported}`);
-  }, [workspacePath]);
+    // Fire-and-forget: don't block the login flow. The result is reported
+    // via notification so the user sees when sync finishes.
+    (async () => {
+      let configJson = '{}';
+      if (isFirstLogin) {
+        try {
+          const exported = await configAPI.exportConfig();
+          configJson = JSON.stringify(exported);
+        } catch (e) { log.warn('export config failed', e); }
+      }
+      const result = await remoteConnectAPI.accountAutoSync(isFirstLogin, wp, configJson);
+      log.info(`Auto-sync done: settings=${result.settings_synced} exported=${result.sessions_exported} imported=${result.sessions_imported}`);
+      info(t('accountLogin.syncDone', {
+        exported: result.sessions_exported,
+        imported: result.sessions_imported,
+      }));
+    })().catch((e) => {
+      log.error('Auto-sync failed', e);
+      notifyError(t('accountLogin.syncFailed'));
+    });
+  }, [workspacePath, info, notifyError, t]);
 
   const handleLogin = useCallback(async () => {
     if (!validate()) return;
@@ -149,7 +160,7 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
         setLoading(false);
         return;
       }
-      await doAutoSync(true);
+      doAutoSync(true);
       remoteConnectAPI.accountConnectDevices().catch((err) => {
         log.warn('accountConnectDevices failed', err);
       });
@@ -165,7 +176,7 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
   const handleConfirmOverwrite = useCallback(async () => {
     setLoading(true); setError(null);
     try {
-      await doAutoSync(false);
+      doAutoSync(false);
       remoteConnectAPI.accountConnectDevices().catch((err) => {
         log.warn('accountConnectDevices failed', err);
       });

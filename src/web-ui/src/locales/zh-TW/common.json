@@ -494,7 +494,9 @@
     "newWorkspace": "新建",
     "newWorkspacePlaceholder": "/新/工作區/路徑",
     "online": "線上",
-    "offline": "離線"
+    "offline": "離線",
+    "syncDone": "雲端同步完成：上傳 {{exported}} 個工作階段，下載 {{imported}} 個工作階段",
+    "syncFailed": "雲端同步失敗 — 將自動重試"
   },
   "remoteConnect": {
     "tabNgrok": "內網穿透",

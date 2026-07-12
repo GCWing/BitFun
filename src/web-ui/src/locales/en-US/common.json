@@ -494,7 +494,9 @@
     "newWorkspace": "New",
     "newWorkspacePlaceholder": "/path/to/new/workspace",
     "online": "Online",
-    "offline": "Offline"
+    "offline": "Offline",
+    "syncDone": "Cloud sync complete: {{exported}} sessions uploaded, {{imported}} downloaded",
+    "syncFailed": "Cloud sync failed — will retry automatically"
   },
   "remoteConnect": {
     "tabNgrok": "NAT Traversal",
