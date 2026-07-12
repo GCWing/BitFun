@@ -674,9 +674,7 @@ impl SessionManager {
                     .map(str::trim)
                     .filter(|value| !value.is_empty())
                     .map(str::to_string);
-                if config.remote_connection_id.is_none() {
-                    return None;
-                }
+                config.remote_connection_id.as_ref()?;
             }
         } else if remote_hostname.is_some() {
             return None;
@@ -690,9 +688,7 @@ impl SessionManager {
         workspace_path: &str,
         ssh_host: Option<&str>,
     ) -> Option<WorkspaceInfo> {
-        let Some(ssh_host) = ssh_host.map(str::trim).filter(|value| !value.is_empty()) else {
-            return None;
-        };
+        let ssh_host = ssh_host.map(str::trim).filter(|value| !value.is_empty())?;
 
         let normalized_workspace_path =
             crate::service::remote_ssh::normalize_remote_workspace_path(workspace_path);
@@ -5456,8 +5452,10 @@ mod tests {
 
     #[test]
     fn sync_session_context_window_refreshes_stale_explicit_model_window() {
-        let mut ai_config = ServiceAIConfig::default();
-        ai_config.models = vec![test_model("deepseek-v4-pro", 1_000_000)];
+        let ai_config = ServiceAIConfig {
+            models: vec![test_model("deepseek-v4-pro", 1_000_000)],
+            ..Default::default()
+        };
 
         let mut session = Session::new_with_id(
             "session-804".to_string(),
@@ -5479,11 +5477,13 @@ mod tests {
 
     #[test]
     fn sync_session_context_window_resolves_auto_through_agent_model_then_primary() {
-        let mut ai_config = ServiceAIConfig::default();
-        ai_config.models = vec![
-            test_model("primary-model", 512_000),
-            test_model("agent-model", 1_000_000),
-        ];
+        let mut ai_config = ServiceAIConfig {
+            models: vec![
+                test_model("primary-model", 512_000),
+                test_model("agent-model", 1_000_000),
+            ],
+            ..Default::default()
+        };
         ai_config.default_models.primary = Some("primary-model".to_string());
         ai_config
             .agent_models

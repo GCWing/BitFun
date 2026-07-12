@@ -97,9 +97,7 @@ fn register_search(
     state: &State<'_, AppState>,
     search_id: Option<&str>,
 ) -> Option<Arc<AtomicBool>> {
-    let Some(search_id) = search_id.filter(|value| !value.is_empty()) else {
-        return None;
-    };
+    let search_id = search_id.filter(|value| !value.is_empty())?;
 
     let cancel_flag = Arc::new(AtomicBool::new(false));
     let mut active_searches = lock_active_searches(state);
@@ -700,7 +698,7 @@ fn remote_filename_search_result(entry: &RemoteDirEntry) -> FileSearchResult {
     }
 }
 
-async fn search_remote_file_names_with_progress(
+struct RemoteFilenameSearch {
     remote_fs: RemoteFileService,
     entry: RemoteWorkspaceEntry,
     root_path: String,
@@ -712,7 +710,24 @@ async fn search_remote_file_names_with_progress(
     limit: usize,
     cancel_flag: Option<Arc<AtomicBool>>,
     progress_sink: Option<Arc<dyn FileSearchProgressSink>>,
+}
+
+async fn search_remote_file_names_with_progress(
+    search: RemoteFilenameSearch,
 ) -> Result<FileSearchOutcome, String> {
+    let RemoteFilenameSearch {
+        remote_fs,
+        entry,
+        root_path,
+        pattern,
+        case_sensitive,
+        use_regex,
+        whole_word,
+        include_directories,
+        limit,
+        cancel_flag,
+        progress_sink,
+    } = search;
     let matcher = compile_filename_search_regex(&pattern, case_sensitive, use_regex, whole_word)?;
     let mut stack = vec![root_path];
     let mut results = Vec::new();
@@ -3442,9 +3457,7 @@ fn archive_stem(file_name: &str) -> String {
     // Double extensions (7 chars for .tar.gz / .tar.xz / etc., 6 for .tar.zst).
     if lower.ends_with(".tar.gz") || lower.ends_with(".tar.xz") {
         file_name[..file_name.len() - 7].to_string()
-    } else if lower.ends_with(".tar.bz2") {
-        file_name[..file_name.len() - 8].to_string()
-    } else if lower.ends_with(".tar.zst") {
+    } else if lower.ends_with(".tar.bz2") || lower.ends_with(".tar.zst") {
         file_name[..file_name.len() - 8].to_string()
     // Short aliases (5 chars for .tbz2 / .txz, 5 for .tzst).
     } else if lower.ends_with(".tgz") || lower.ends_with(".txz") {
@@ -3816,19 +3829,19 @@ pub async fn search_filenames(
             requested_path,
             entry,
         }) => match state.get_remote_file_service_async().await {
-            Ok(remote_fs) => search_remote_file_names_with_progress(
+            Ok(remote_fs) => search_remote_file_names_with_progress(RemoteFilenameSearch {
                 remote_fs,
                 entry,
-                requested_path,
-                request.pattern.clone(),
-                request.case_sensitive,
-                request.use_regex,
-                request.whole_word,
-                request.include_directories,
+                root_path: requested_path,
+                pattern: request.pattern.clone(),
+                case_sensitive: request.case_sensitive,
+                use_regex: request.use_regex,
+                whole_word: request.whole_word,
+                include_directories: request.include_directories,
                 limit,
                 cancel_flag,
-                None,
-            )
+                progress_sink: None,
+            })
             .await
             .map_err(bitfun_core::util::errors::BitFunError::service),
             Err(error) => Err(bitfun_core::util::errors::BitFunError::service(format!(
@@ -4004,19 +4017,19 @@ pub async fn start_search_filenames_stream(
 
     tokio::spawn(async move {
         let result = if let Some((remote_fs, entry, requested_path)) = remote_search_target {
-            search_remote_file_names_with_progress(
+            search_remote_file_names_with_progress(RemoteFilenameSearch {
                 remote_fs,
                 entry,
-                requested_path,
-                pattern.clone(),
+                root_path: requested_path,
+                pattern: pattern.clone(),
                 case_sensitive,
                 use_regex,
                 whole_word,
                 include_directories,
                 limit,
-                cancel_flag.clone(),
-                Some(progress_sink),
-            )
+                cancel_flag: cancel_flag.clone(),
+                progress_sink: Some(progress_sink),
+            })
             .await
             .map_err(bitfun_core::util::errors::BitFunError::service)
         } else {

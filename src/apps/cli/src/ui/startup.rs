@@ -497,7 +497,7 @@ impl StartupPage {
         let visual_lines =
             self.text_input
                 .visual_line_count_with_prefix(input_content_width, 0) as u16;
-        let content_lines = visual_lines.max(1).min(6);
+        let content_lines = visual_lines.clamp(1, 6);
         let input_box_height = content_lines + 3; // +1 top padding, +1 gap, +1 agent label
 
         let v_chunks = Layout::default()

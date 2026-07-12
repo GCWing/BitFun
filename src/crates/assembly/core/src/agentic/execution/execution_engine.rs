@@ -3842,8 +3842,10 @@ mod tests {
 
     #[test]
     fn resolve_configured_fast_model_falls_back_to_primary_when_fast_is_stale() {
-        let mut ai_config = AIConfig::default();
-        ai_config.models = vec![build_model("model-primary", "Primary", "claude-sonnet-4.5")];
+        let mut ai_config = AIConfig {
+            models: vec![build_model("model-primary", "Primary", "claude-sonnet-4.5")],
+            ..Default::default()
+        };
         ai_config.default_models.primary = Some("model-primary".to_string());
         ai_config.default_models.fast = Some("deleted-fast-model".to_string());
 

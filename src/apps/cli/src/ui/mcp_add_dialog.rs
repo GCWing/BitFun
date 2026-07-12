@@ -642,9 +642,7 @@ fn render_input_line<'a>(
     let total_chars = buffer.chars().count();
 
     // Calculate scroll offset to keep cursor visible
-    let scroll = if field_width == 0 {
-        0
-    } else if cursor < field_width / 3 {
+    let scroll = if field_width == 0 || cursor < field_width / 3 {
         0
     } else {
         cursor.saturating_sub(field_width / 3)

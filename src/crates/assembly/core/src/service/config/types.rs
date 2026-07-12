@@ -694,7 +694,7 @@ impl AIConfig {
 /// Shared agent-profile configuration.
 ///
 /// Model mapping has moved to `AIConfig.agent_models`, keyed by agent id.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(default)]
 pub struct AgentProfileConfig {
     /// Shared profile ID (e.g. agentic, coding_shared, requirement, ui-design).
@@ -722,7 +722,7 @@ pub struct AgentProfileConfig {
 }
 
 /// API view of a mode configuration.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(default)]
 pub struct AgentProfileView {
     pub profile_id: String,
@@ -822,31 +822,6 @@ pub const DEFAULT_MAX_ROUNDS: usize = 200;
 
 fn default_max_rounds() -> usize {
     DEFAULT_MAX_ROUNDS
-}
-
-impl Default for AgentProfileConfig {
-    fn default() -> Self {
-        Self {
-            profile_id: String::new(),
-            added_tools: Vec::new(),
-            removed_tools: Vec::new(),
-            disabled_user_skills: Vec::new(),
-            enabled_user_skills: Vec::new(),
-            subagent_overrides: HashMap::new(),
-        }
-    }
-}
-
-impl Default for AgentProfileView {
-    fn default() -> Self {
-        Self {
-            profile_id: String::new(),
-            enabled_tools: Vec::new(),
-            default_tools: Vec::new(),
-            disabled_user_skills: Vec::new(),
-            enabled_user_skills: Vec::new(),
-        }
-    }
 }
 
 /// Debug-mode configuration.
@@ -1778,10 +1753,28 @@ impl AIModelConfig {
 #[cfg(test)]
 mod tests {
     use super::{
-        AIConfig, AIExperienceConfig, AIModelConfig, AppLoggingConfig, GlobalConfig,
-        MemoryExternalContextPolicy, ModelExchangeTracingMode, ReasoningMode,
-        SubagentBatchExecutionPolicy,
+        AIConfig, AIExperienceConfig, AIModelConfig, AgentProfileConfig, AgentProfileView,
+        AppLoggingConfig, GlobalConfig, MemoryExternalContextPolicy, ModelExchangeTracingMode,
+        ReasoningMode, SubagentBatchExecutionPolicy,
     };
+
+    #[test]
+    fn agent_profile_defaults_keep_all_collections_empty() {
+        let config = AgentProfileConfig::default();
+        assert!(config.profile_id.is_empty());
+        assert!(config.added_tools.is_empty());
+        assert!(config.removed_tools.is_empty());
+        assert!(config.disabled_user_skills.is_empty());
+        assert!(config.enabled_user_skills.is_empty());
+        assert!(config.subagent_overrides.is_empty());
+
+        let view = AgentProfileView::default();
+        assert!(view.profile_id.is_empty());
+        assert!(view.enabled_tools.is_empty());
+        assert!(view.default_tools.is_empty());
+        assert!(view.disabled_user_skills.is_empty());
+        assert!(view.enabled_user_skills.is_empty());
+    }
 
     #[test]
     fn deserializes_compatibility_thinking_flag_into_reasoning_mode() {

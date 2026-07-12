@@ -94,52 +94,37 @@ pub struct ToastConfig {
 }
 
 /// Preferred modal size.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum ModalSize {
     Sm,
     Md,
+    #[default]
     Lg,
     Xl,
 }
 
-impl Default for ModalSize {
-    fn default() -> Self {
-        ModalSize::Lg
-    }
-}
-
 /// What happens when the user finishes or closes the modal.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum CompletionAction {
     /// Only dismiss for this session; may reappear next launch if conditions match.
+    #[default]
     Dismiss,
     /// Permanently suppress via `never_show_ids`.
     NeverShowAgain,
 }
 
-impl Default for CompletionAction {
-    fn default() -> Self {
-        CompletionAction::Dismiss
-    }
-}
-
 /// Layout template for a single modal page.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum PageLayout {
     TextOnly,
     MediaLeft,
     MediaRight,
+    #[default]
     MediaTop,
     FullscreenMedia,
-}
-
-impl Default for PageLayout {
-    fn default() -> Self {
-        PageLayout::MediaTop
-    }
 }
 
 /// Media asset type.

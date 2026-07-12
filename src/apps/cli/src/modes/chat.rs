@@ -118,6 +118,16 @@ struct NonKeyEventOutcome {
     resize_seen: bool,
 }
 
+struct ChatEventContext<'a> {
+    this: &'a mut ChatMode,
+    chat_view: &'a mut ChatView,
+    chat_state: &'a mut ChatState,
+    session_id: &'a mut String,
+    rt_handle: &'a tokio::runtime::Handle,
+    should_quit: &'a mut bool,
+    exit_reason: &'a mut ChatExitReason,
+}
+
 pub(crate) struct ChatMode {
     config: CliConfig,
     /// Current agent type (e.g. "agentic", "plan", "debug")
@@ -736,13 +746,15 @@ impl ChatMode {
                         for ev in non_key_events {
                             let outcome = Self::handle_non_key_event(
                                 ev,
-                                self,
-                                &mut chat_view,
-                                &mut chat_state,
-                                &mut session_id,
-                                &rt_handle,
-                                &mut should_quit,
-                                &mut exit_reason,
+                                ChatEventContext {
+                                    this: self,
+                                    chat_view: &mut chat_view,
+                                    chat_state: &mut chat_state,
+                                    session_id: &mut session_id,
+                                    rt_handle: &rt_handle,
+                                    should_quit: &mut should_quit,
+                                    exit_reason: &mut exit_reason,
+                                },
                             )?;
                             if outcome.request_redraw {
                                 needs_redraw = true;
@@ -764,13 +776,15 @@ impl ChatMode {
                                     )? {
                                         Self::apply_exit_reason(
                                             reason,
-                                            self,
-                                            &mut chat_view,
-                                            &mut chat_state,
-                                            &mut session_id,
-                                            &rt_handle,
-                                            &mut should_quit,
-                                            &mut exit_reason,
+                                            ChatEventContext {
+                                                this: self,
+                                                chat_view: &mut chat_view,
+                                                chat_state: &mut chat_state,
+                                                session_id: &mut session_id,
+                                                rt_handle: &rt_handle,
+                                                should_quit: &mut should_quit,
+                                                exit_reason: &mut exit_reason,
+                                            },
                                         );
                                     }
                                     if key.kind == KeyEventKind::Press
@@ -782,13 +796,15 @@ impl ChatMode {
                                 other => {
                                     let outcome = Self::handle_non_key_event(
                                         other,
-                                        self,
-                                        &mut chat_view,
-                                        &mut chat_state,
-                                        &mut session_id,
-                                        &rt_handle,
-                                        &mut should_quit,
-                                        &mut exit_reason,
+                                        ChatEventContext {
+                                            this: self,
+                                            chat_view: &mut chat_view,
+                                            chat_state: &mut chat_state,
+                                            session_id: &mut session_id,
+                                            rt_handle: &rt_handle,
+                                            should_quit: &mut should_quit,
+                                            exit_reason: &mut exit_reason,
+                                        },
                                     )?;
                                     if outcome.request_redraw {
                                         needs_redraw = true;
@@ -1367,16 +1383,16 @@ impl ChatMode {
     }
 
     /// Apply an exit reason from handle_key_event (shared by normal and batch paths).
-    fn apply_exit_reason(
-        reason: ChatExitReason,
-        this: &mut Self,
-        chat_view: &mut ChatView,
-        chat_state: &mut ChatState,
-        session_id: &mut String,
-        rt_handle: &tokio::runtime::Handle,
-        should_quit: &mut bool,
-        exit_reason: &mut ChatExitReason,
-    ) {
+    fn apply_exit_reason(reason: ChatExitReason, context: ChatEventContext<'_>) {
+        let ChatEventContext {
+            this,
+            chat_view,
+            chat_state,
+            session_id,
+            rt_handle,
+            should_quit,
+            exit_reason,
+        } = context;
         match reason {
             ChatExitReason::SwitchSession(new_session_id) => {
                 match this.switch_to_session(
@@ -1413,124 +1429,152 @@ impl ChatMode {
     /// Handle non-key events (Mouse, Paste, Resize, etc.).
     fn handle_non_key_event(
         event: Event,
-        this: &mut Self,
-        chat_view: &mut ChatView,
-        chat_state: &mut ChatState,
-        session_id: &mut String,
-        rt_handle: &tokio::runtime::Handle,
-        should_quit: &mut bool,
-        exit_reason: &mut ChatExitReason,
+        context: ChatEventContext<'_>,
     ) -> Result<NonKeyEventOutcome> {
         let mut outcome = NonKeyEventOutcome::default();
         match event {
             Event::Mouse(mouse) => {
-                if chat_view.command_palette_captures_mouse(&mouse) {
-                    let action = chat_view.command_palette_handle_mouse(&mouse);
+                if context.chat_view.command_palette_captures_mouse(&mouse) {
+                    let action = context.chat_view.command_palette_handle_mouse(&mouse);
                     match action {
                         PaletteAction::Execute(id) => {
-                            if let Some(reason) =
-                                this.handle_palette_action(&id, chat_view, chat_state, rt_handle)?
-                            {
+                            if let Some(reason) = context.this.handle_palette_action(
+                                &id,
+                                context.chat_view,
+                                context.chat_state,
+                                context.rt_handle,
+                            )? {
                                 Self::apply_exit_reason(
                                     reason,
-                                    this,
-                                    chat_view,
-                                    chat_state,
-                                    session_id,
-                                    rt_handle,
-                                    should_quit,
-                                    exit_reason,
+                                    ChatEventContext {
+                                        this: &mut *context.this,
+                                        chat_view: &mut *context.chat_view,
+                                        chat_state: &mut *context.chat_state,
+                                        session_id: &mut *context.session_id,
+                                        rt_handle: context.rt_handle,
+                                        should_quit: &mut *context.should_quit,
+                                        exit_reason: &mut *context.exit_reason,
+                                    },
                                 );
                             }
                         }
                         PaletteAction::Dismiss | PaletteAction::None => {}
                     }
-                } else if chat_view.provider_selector_captures_mouse(&mouse) {
-                    if let Some(selection) = chat_view.provider_selector_handle_mouse(&mouse) {
-                        this.handle_provider_selection(selection, chat_view);
+                } else if context.chat_view.provider_selector_captures_mouse(&mouse) {
+                    if let Some(selection) =
+                        context.chat_view.provider_selector_handle_mouse(&mouse)
+                    {
+                        context
+                            .this
+                            .handle_provider_selection(selection, context.chat_view);
                     }
-                } else if chat_view.handle_mouse_event(&mouse) {
-                    if let Some(action) = chat_view.take_pending_skill_action() {
-                        this.handle_skill_selector_action(action, chat_view, chat_state, rt_handle);
+                } else if context.chat_view.handle_mouse_event(&mouse) {
+                    if let Some(action) = context.chat_view.take_pending_skill_action() {
+                        context.this.handle_skill_selector_action(
+                            action,
+                            context.chat_view,
+                            context.chat_state,
+                            context.rt_handle,
+                        );
                     }
-                    if let Some(action) = chat_view.take_pending_subagent_action() {
-                        this.handle_subagent_selector_action(
-                            action, chat_view, chat_state, rt_handle,
+                    if let Some(action) = context.chat_view.take_pending_subagent_action() {
+                        context.this.handle_subagent_selector_action(
+                            action,
+                            context.chat_view,
+                            context.chat_state,
+                            context.rt_handle,
                         );
                     }
                 } else {
                     match mouse.kind {
                         MouseEventKind::ScrollUp => {
-                            let total = chat_view.count_message_lines(chat_state);
-                            chat_view.scroll_up(3, total);
+                            let total = context.chat_view.count_message_lines(context.chat_state);
+                            context.chat_view.scroll_up(3, total);
                         }
                         MouseEventKind::ScrollDown => {
-                            chat_view.scroll_down(3);
+                            context.chat_view.scroll_down(3);
                         }
                         MouseEventKind::Down(MouseButton::Left) => {
-                            let _ = chat_view.begin_mouse_selection(mouse.column, mouse.row);
+                            let _ = context
+                                .chat_view
+                                .begin_mouse_selection(mouse.column, mouse.row);
                         }
                         MouseEventKind::Drag(MouseButton::Left) => {
-                            let _ = chat_view.update_mouse_selection(mouse.column, mouse.row);
+                            let _ = context
+                                .chat_view
+                                .update_mouse_selection(mouse.column, mouse.row);
                         }
                         MouseEventKind::Up(MouseButton::Left) => {
-                            match chat_view
+                            match context
+                                .chat_view
                                 .complete_mouse_selection_or_click(mouse.column, mouse.row)
                             {
                                 MouseGestureOutcome::CopyText(text) => {
                                     match Clipboard::new().and_then(|mut cb| cb.set_text(text)) {
-                                        Ok(()) => chat_view
+                                        Ok(()) => context
+                                            .chat_view
                                             .set_status(Some("Copied to clipboard".to_string())),
-                                        Err(_) => chat_view.set_status(Some(
+                                        Err(_) => context.chat_view.set_status(Some(
                                             "Failed to copy selection".to_string(),
                                         )),
                                     }
                                 }
                                 MouseGestureOutcome::Click(col, row) => {
-                                    chat_view.handle_mouse_click(col, row);
+                                    context.chat_view.handle_mouse_click(col, row);
                                 }
                                 MouseGestureOutcome::None => {}
                             }
                         }
                         MouseEventKind::Moved
-                            if !chat_view.update_mouse_selection(mouse.column, mouse.row) =>
+                            if !context
+                                .chat_view
+                                .update_mouse_selection(mouse.column, mouse.row) =>
                         {
-                            chat_view.handle_mouse_move(mouse.column, mouse.row);
+                            context.chat_view.handle_mouse_move(mouse.column, mouse.row);
                         }
                         _ => {}
                     }
                 }
-                if let Some(cmd) = chat_view.take_pending_command() {
-                    if let Some(reason) =
-                        this.handle_command(&cmd, chat_view, chat_state, rt_handle)?
-                    {
+                if let Some(cmd) = context.chat_view.take_pending_command() {
+                    if let Some(reason) = context.this.handle_command(
+                        &cmd,
+                        context.chat_view,
+                        context.chat_state,
+                        context.rt_handle,
+                    )? {
                         Self::apply_exit_reason(
                             reason,
-                            this,
-                            chat_view,
-                            chat_state,
-                            session_id,
-                            rt_handle,
-                            should_quit,
-                            exit_reason,
+                            ChatEventContext {
+                                this: &mut *context.this,
+                                chat_view: &mut *context.chat_view,
+                                chat_state: &mut *context.chat_state,
+                                session_id: &mut *context.session_id,
+                                rt_handle: context.rt_handle,
+                                should_quit: &mut *context.should_quit,
+                                exit_reason: &mut *context.exit_reason,
+                            },
                         );
                     }
                 }
-                if let Some(theme) = chat_view.take_pending_theme_preview() {
-                    this.preview_theme_selection(&theme, chat_view);
+                if let Some(theme) = context.chat_view.take_pending_theme_preview() {
+                    context
+                        .this
+                        .preview_theme_selection(&theme, context.chat_view);
                 }
-                if let Some(server_id) = chat_view.take_pending_mcp_toggle() {
-                    this.toggle_mcp_server(&server_id, chat_view);
+                if let Some(server_id) = context.chat_view.take_pending_mcp_toggle() {
+                    context
+                        .this
+                        .toggle_mcp_server(&server_id, context.chat_view);
                 }
                 outcome.request_redraw = true;
             }
             Event::Paste(text) => {
-                if chat_view.mcp_add_dialog_visible() {
-                    chat_view.mcp_add_dialog_handle_paste(&text);
+                if context.chat_view.mcp_add_dialog_visible() {
+                    context.chat_view.mcp_add_dialog_handle_paste(&text);
                 } else {
                     let normalized = text.replace("\r\n", "\n").replace('\r', "\n");
                     for c in normalized.chars() {
-                        chat_view.handle_char(c);
+                        context.chat_view.handle_char(c);
                     }
                 }
                 outcome.request_redraw = true;

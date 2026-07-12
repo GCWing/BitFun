@@ -397,9 +397,7 @@ impl ToolPipeline {
         task_ids: Vec<String>,
         interrupt: Option<crate::agentic::round_preempt::DialogRoundInjectionInterrupt>,
     ) -> Option<tokio::task::JoinHandle<()>> {
-        if interrupt.is_none() {
-            return None;
-        }
+        interrupt.as_ref()?;
 
         let pipeline = self.clone();
         Some(tokio::spawn(async move {
@@ -1715,11 +1713,10 @@ mod tests {
             .create_task(ToolTask::new(
                 test_tool_call(&task_id, "ExecCommand"),
                 test_tool_execution_context(),
-                {
-                    let mut options = ToolExecutionOptions::default();
-                    options.confirm_before_run = true;
-                    options.confirmation_timeout_secs = Some(1);
-                    options
+                ToolExecutionOptions {
+                    confirm_before_run: true,
+                    confirmation_timeout_secs: Some(1),
+                    ..Default::default()
                 },
             ))
             .await;
@@ -1731,10 +1728,9 @@ mod tests {
             .execute_tools(
                 vec![test_tool_call("tool_1", "ExecCommand")],
                 test_tool_execution_context(),
-                {
-                    let mut options = ToolExecutionOptions::default();
-                    options.confirmation_timeout_secs = Some(0);
-                    options
+                ToolExecutionOptions {
+                    confirmation_timeout_secs: Some(0),
+                    ..Default::default()
                 },
             )
             .await
@@ -2015,8 +2011,10 @@ mod tests {
             "turn_1".to_string(),
             buffer,
         ));
-        let mut options = ToolExecutionOptions::default();
-        options.allow_parallel = false;
+        let options = ToolExecutionOptions {
+            allow_parallel: false,
+            ..Default::default()
+        };
 
         let results = pipeline
             .execute_tools(vec![test_tool_call("tool_1", "Read")], context, options)

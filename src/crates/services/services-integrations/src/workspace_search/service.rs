@@ -38,9 +38,11 @@ impl Default for WorkspaceSearchRepoConfig {
 
 impl From<WorkspaceSearchRepoConfig> for RepoConfig {
     fn from(value: WorkspaceSearchRepoConfig) -> Self {
-        let mut config = RepoConfig::default();
-        config.max_file_size = value.max_file_size;
-        config
+        let default = RepoConfig::default();
+        RepoConfig {
+            max_file_size: value.max_file_size,
+            ..default
+        }
     }
 }
 

@@ -76,13 +76,13 @@ impl MemoryPhase1RuntimeConfig {
         Self {
             generate_memories: memories.generate_memories,
             external_context_policy: memories.external_context_policy,
-            max_scan_sessions: memories.max_rollouts_scan_limit.max(1).min(50_000),
-            max_claimed_sessions: memories.max_rollouts_per_startup.max(1).min(128),
-            min_idle_hours: memories.min_rollout_idle_hours.max(1).min(48) as u64,
-            max_session_age_days: memories.max_rollout_age_days.max(0).min(90) as u64,
-            max_running_jobs: memories.phase1_max_concurrency.max(1).min(16),
-            retry_backoff_seconds: memories.phase1_retry_backoff_minutes.max(1).min(24 * 60) * 60,
-            lease_seconds: memories.phase1_lease_seconds.max(60).min(24 * 60 * 60),
+            max_scan_sessions: memories.max_rollouts_scan_limit.clamp(1, 50_000),
+            max_claimed_sessions: memories.max_rollouts_per_startup.clamp(1, 128),
+            min_idle_hours: memories.min_rollout_idle_hours.clamp(1, 48) as u64,
+            max_session_age_days: memories.max_rollout_age_days.clamp(0, 90) as u64,
+            max_running_jobs: memories.phase1_max_concurrency.clamp(1, 16),
+            retry_backoff_seconds: memories.phase1_retry_backoff_minutes.clamp(1, 24 * 60) * 60,
+            lease_seconds: memories.phase1_lease_seconds.clamp(60, 24 * 60 * 60),
             extract_model_selector: memories
                 .extract_model
                 .clone()

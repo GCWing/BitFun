@@ -69,25 +69,13 @@ const ALLOWED_OPERATIONS: &[&str] = &[
 const DANGEROUS_OPERATIONS: &[&str] = &["push --force", "reset --hard", "clean -fd", "rebase"];
 
 /// Parsed result of a `git diff` args string.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Default)]
 struct ParsedDiffArgs {
     staged: bool,
     stat: bool,
     source: Option<String>,
     target: Option<String>,
     files: Option<Vec<String>>,
-}
-
-impl Default for ParsedDiffArgs {
-    fn default() -> Self {
-        Self {
-            staged: false,
-            stat: false,
-            source: None,
-            target: None,
-            files: None,
-        }
-    }
 }
 
 /// Git tool
@@ -398,10 +386,11 @@ impl GitTool {
     /// - `--staged` → staged=true
     /// - `origin/main...HEAD` → source=origin/main, target=HEAD (three-dot)
     fn parse_diff_args(args_str: &str) -> ParsedDiffArgs {
-        let mut result = ParsedDiffArgs::default();
-
-        result.staged = args_str.contains("--staged") || args_str.contains("--cached");
-        result.stat = args_str.contains("--stat");
+        let mut result = ParsedDiffArgs {
+            staged: args_str.contains("--staged") || args_str.contains("--cached"),
+            stat: args_str.contains("--stat"),
+            ..Default::default()
+        };
 
         // Split on " -- " to separate options/refs from file paths
         let (refs_part, files_part) = if let Some(sep_pos) = args_str.find(GIT_DIFF_FILE_SEPARATOR)
@@ -1345,6 +1334,20 @@ mod tests {
 
     use super::{git_operation_needs_light_checkpoint, GitTool, ParsedDiffArgs};
     use serde_json::json;
+
+    #[test]
+    fn parsed_diff_args_default_is_empty_and_unset() {
+        assert_eq!(
+            ParsedDiffArgs::default(),
+            ParsedDiffArgs {
+                staged: false,
+                stat: false,
+                source: None,
+                target: None,
+                files: None,
+            }
+        );
+    }
 
     #[tokio::test]
     async fn git_schema_requires_explicit_operation_instead_of_args_only() {

@@ -9,7 +9,7 @@ use std::path::PathBuf;
 
 /// CLI configuration (contains only CLI-specific config)
 /// AI model configuration uses core's GlobalConfig
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(default)]
 pub(crate) struct CliConfig {
     /// UI configuration
@@ -114,17 +114,6 @@ impl Default for ShortcutsConfig {
     }
 }
 
-impl Default for CliConfig {
-    fn default() -> Self {
-        Self {
-            ui: UiConfig::default(),
-            behavior: BehaviorConfig::default(),
-            workspace: WorkspaceConfig::default(),
-            shortcuts: ShortcutsConfig::default(),
-        }
-    }
-}
-
 impl CliConfig {
     /// Get configuration file path
     pub(crate) fn config_path() -> Result<PathBuf> {
@@ -188,5 +177,32 @@ impl CliConfig {
 
         fs::create_dir_all(&config_dir)?;
         Ok(config_dir)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::CliConfig;
+
+    #[test]
+    fn cli_config_default_composes_owner_defaults() {
+        let config = CliConfig::default();
+
+        assert_eq!(config.ui.theme, "dark");
+        assert_eq!(config.ui.theme_id, "bitfun-dark");
+        assert!(config.ui.show_tips);
+        assert!(config.ui.animation);
+        assert_eq!(config.ui.color_scheme, "default");
+        assert!(config.behavior.auto_save);
+        assert!(config.behavior.confirm_dangerous);
+        assert_eq!(config.behavior.default_agent, "agentic");
+        assert_eq!(config.workspace.default_path, ".");
+        assert_eq!(
+            config.workspace.exclude_patterns,
+            ["node_modules", ".git", "target", "dist"]
+        );
+        assert_eq!(config.shortcuts.send_message, "Ctrl+D");
+        assert_eq!(config.shortcuts.interrupt, "Ctrl+C");
+        assert_eq!(config.shortcuts.menu, "Esc");
     }
 }

@@ -210,10 +210,7 @@ impl ModelSelectorState {
             return None;
         }
 
-        let area = match self.last_area {
-            Some(area) => area,
-            None => return None,
-        };
+        let area = self.last_area?;
 
         let in_popup = mouse.column >= area.x
             && mouse.column < area.x.saturating_add(area.width)

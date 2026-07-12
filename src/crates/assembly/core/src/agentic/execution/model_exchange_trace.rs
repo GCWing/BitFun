@@ -373,9 +373,7 @@ pub(super) async fn prepare_model_exchange_trace_for_workspace(
     operation: ModelExchangeTraceOperation<'_>,
     ai_client: &AIClient,
 ) -> Option<ModelExchangeTraceConfig> {
-    let Some(policy) = current_model_exchange_trace_policy().await else {
-        return None;
-    };
+    let policy = current_model_exchange_trace_policy().await?;
 
     let Some(workspace) = workspace else {
         debug!(

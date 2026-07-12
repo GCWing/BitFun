@@ -200,11 +200,11 @@ impl MemoryPhase2Runner {
         info!(
             "Memory phase2 run started: generate_memories={}, limit={}, max_unused_days={}, phase2_lease_seconds={}, phase2_success_cooldown_seconds={}, phase2_retry_delay_seconds={}, memory_root={}",
             config.memories.generate_memories,
-            config.memories.max_raw_memories_for_consolidation.max(1).min(4096),
-            config.memories.max_unused_days.max(0).min(365),
-            config.memories.phase2_lease_seconds.max(60).min(24 * 60 * 60),
-            config.memories.phase2_success_cooldown_seconds.max(0).min(7 * 24 * 60 * 60),
-            config.memories.phase2_retry_delay_seconds.max(60).min(24 * 60 * 60),
+            config.memories.max_raw_memories_for_consolidation.clamp(1, 4096),
+            config.memories.max_unused_days.clamp(0, 365),
+            config.memories.phase2_lease_seconds.clamp(60, 24 * 60 * 60),
+            config.memories.phase2_success_cooldown_seconds.clamp(0, 7 * 24 * 60 * 60),
+            config.memories.phase2_retry_delay_seconds.clamp(60, 24 * 60 * 60),
             self.memory_root.display()
         );
         if !config.memories.generate_memories {
@@ -218,8 +218,7 @@ impl MemoryPhase2Runner {
                 config
                     .memories
                     .phase2_success_cooldown_seconds
-                    .max(0)
-                    .min(7 * 24 * 60 * 60),
+                    .clamp(0, 7 * 24 * 60 * 60),
             );
             if cooldown_until.is_some_and(|until| until > now) {
                 info!(
@@ -272,10 +271,9 @@ impl MemoryPhase2Runner {
         let limit = config
             .memories
             .max_raw_memories_for_consolidation
-            .max(1)
-            .min(4096);
+            .clamp(1, 4096);
         let candidate_scan_limit = 4096;
-        let max_unused_days = config.memories.max_unused_days.max(0).min(365);
+        let max_unused_days = config.memories.max_unused_days.clamp(0, 365);
         let candidate_rows = self
             .db
             .list_phase2_input_candidates(candidate_scan_limit, max_unused_days)
@@ -790,17 +788,12 @@ async fn phase2_retry_delay_seconds() -> BitFunResult<i64> {
     Ok(config
         .memories
         .phase2_retry_delay_seconds
-        .max(60)
-        .min(24 * 60 * 60))
+        .clamp(60, 24 * 60 * 60))
 }
 
 async fn phase2_lease_seconds() -> BitFunResult<i64> {
     let config = get_phase2_runtime_config().await;
-    Ok(config
-        .memories
-        .phase2_lease_seconds
-        .max(60)
-        .min(24 * 60 * 60))
+    Ok(config.memories.phase2_lease_seconds.clamp(60, 24 * 60 * 60))
 }
 
 fn select_phase2_model_id(
