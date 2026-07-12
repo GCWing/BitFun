@@ -1,33 +1,35 @@
 use crate::agentic::core::strip_prompt_markup;
-use crate::service::session::{DialogTurnData, SessionTranscriptExportOptions, ToolItemData};
+use crate::service::session::{
+    DialogTurnData, ModelRoundData, SessionTranscriptExportOptions, SessionTranscriptIndexEntry,
+    ToolItemData, TranscriptLineRange,
+};
+use crate::util::errors::{BitFunError, BitFunResult};
+use serde::Serialize;
+use sha2::{Digest, Sha256};
+
+const SESSION_TRANSCRIPT_PREVIEW_CHAR_LIMIT: usize = 120;
 
 #[derive(Debug, Clone)]
-pub(crate) struct TranscriptTextBlock {
-    pub(crate) round_index: usize,
-    pub(crate) content: String,
+struct TranscriptToolBlock {
+    tool_name: String,
+    tool_input: Option<String>,
+    result: Option<String>,
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct TranscriptToolBlock {
-    pub(crate) tool_name: String,
-    pub(crate) tool_input: Option<String>,
-    pub(crate) result: Option<String>,
-}
-
-#[derive(Debug, Clone)]
-pub(crate) enum TranscriptRoundBlock {
+enum TranscriptRoundBlock {
     Thinking(String),
     Assistant(String),
     Tool(TranscriptToolBlock),
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct TranscriptRoundData {
-    pub(crate) round_index: usize,
-    pub(crate) blocks: Vec<TranscriptRoundBlock>,
+struct TranscriptRoundData {
+    round_index: usize,
+    blocks: Vec<TranscriptRoundBlock>,
 }
 
-pub(crate) fn transcript_text_lines(content: &str) -> Vec<String> {
+fn transcript_text_lines(content: &str) -> Vec<String> {
     if content.is_empty() {
         return vec!["(empty)".to_string()];
     }
@@ -50,7 +52,7 @@ pub(crate) fn transcript_value_string(value: &serde_json::Value) -> String {
     }
 }
 
-pub(crate) fn transcript_tool_input(item: &ToolItemData, tool_inputs: bool) -> Option<String> {
+fn transcript_tool_input(item: &ToolItemData, tool_inputs: bool) -> Option<String> {
     if !tool_inputs || item.tool_call.input.is_null() {
         return None;
     }
@@ -58,7 +60,7 @@ pub(crate) fn transcript_tool_input(item: &ToolItemData, tool_inputs: bool) -> O
     Some(transcript_value_string(&item.tool_call.input))
 }
 
-pub(crate) fn transcript_tool_result(item: &ToolItemData) -> Option<String> {
+fn transcript_tool_result(item: &ToolItemData) -> Option<String> {
     item.tool_result.as_ref().and_then(|result| {
         result
             .result_for_assistant
@@ -85,81 +87,47 @@ pub(crate) fn transcript_display_user_content(turn: &DialogTurnData) -> String {
         .unwrap_or_else(|| strip_prompt_markup(&turn.user_message.content))
 }
 
-pub(crate) fn transcript_assistant_blocks(turn: &DialogTurnData) -> Vec<TranscriptTextBlock> {
-    turn.model_rounds
+fn effective_attempt_index(round: &ModelRoundData) -> Option<u32> {
+    round
+        .text_items
         .iter()
-        .filter_map(|round| {
-            let content = round
-                .text_items
-                .iter()
-                .filter(|item| !item.is_subagent_item.unwrap_or(false))
-                .map(|item| item.content.trim())
-                .filter(|value| !value.is_empty())
-                .collect::<Vec<_>>()
-                .join("\n\n");
-            if content.is_empty() {
-                None
-            } else {
-                Some(TranscriptTextBlock {
-                    round_index: round.round_index,
-                    content,
-                })
-            }
-        })
-        .collect()
-}
-
-pub(crate) fn transcript_thinking_blocks(turn: &DialogTurnData) -> Vec<TranscriptTextBlock> {
-    turn.model_rounds
-        .iter()
-        .filter_map(|round| {
-            let content = round
+        .filter_map(|item| item.attempt_index)
+        .chain(
+            round
                 .thinking_items
                 .iter()
-                .filter(|item| !item.is_subagent_item.unwrap_or(false))
-                .map(|item| item.content.trim())
-                .filter(|value| !value.is_empty())
-                .collect::<Vec<_>>()
-                .join("\n\n");
-            if content.is_empty() {
-                None
-            } else {
-                Some(TranscriptTextBlock {
-                    round_index: round.round_index,
-                    content,
-                })
-            }
-        })
-        .collect()
+                .filter_map(|item| item.attempt_index),
+        )
+        .chain(
+            round
+                .tool_items
+                .iter()
+                .filter_map(|item| item.attempt_index),
+        )
+        .max()
 }
 
-pub(crate) fn transcript_tool_blocks(
-    turn: &DialogTurnData,
-    tool_inputs: bool,
-) -> Vec<TranscriptToolBlock> {
-    turn.model_rounds
-        .iter()
-        .flat_map(|round| round.tool_items.iter())
-        .filter(|item| !item.is_subagent_item.unwrap_or(false))
-        .map(|item| TranscriptToolBlock {
-            tool_name: item.tool_name.clone(),
-            tool_input: transcript_tool_input(item, tool_inputs),
-            result: transcript_tool_result(item),
-        })
-        .collect()
+fn is_effective_attempt(attempt_index: Option<u32>, effective_attempt_index: Option<u32>) -> bool {
+    effective_attempt_index
+        .map(|effective| attempt_index == Some(effective))
+        .unwrap_or(true)
 }
 
-pub(crate) fn transcript_round_blocks(
+fn transcript_round_blocks(
     turn: &DialogTurnData,
     options: &SessionTranscriptExportOptions,
 ) -> Vec<TranscriptRoundData> {
     turn.model_rounds
         .iter()
         .filter_map(|round| {
+            let effective_attempt_index = effective_attempt_index(round);
             let thinking_content = if options.thinking {
                 round
                     .thinking_items
                     .iter()
+                    .filter(|item| {
+                        is_effective_attempt(item.attempt_index, effective_attempt_index)
+                    })
                     .filter(|item| !item.is_subagent_item.unwrap_or(false))
                     .map(|item| item.content.trim())
                     .filter(|value| !value.is_empty())
@@ -172,6 +140,7 @@ pub(crate) fn transcript_round_blocks(
             let assistant_content = round
                 .text_items
                 .iter()
+                .filter(|item| is_effective_attempt(item.attempt_index, effective_attempt_index))
                 .filter(|item| !item.is_subagent_item.unwrap_or(false))
                 .map(|item| item.content.trim())
                 .filter(|value| !value.is_empty())
@@ -182,6 +151,9 @@ pub(crate) fn transcript_round_blocks(
                 round
                     .tool_items
                     .iter()
+                    .filter(|item| {
+                        is_effective_attempt(item.attempt_index, effective_attempt_index)
+                    })
                     .filter(|item| !item.is_subagent_item.unwrap_or(false))
                     .map(|item| TranscriptToolBlock {
                         tool_name: item.tool_name.clone(),
@@ -215,4 +187,329 @@ pub(crate) fn transcript_round_blocks(
             })
         })
         .collect()
+}
+
+#[derive(Debug)]
+pub(crate) struct RenderedTranscript {
+    pub(crate) lines: Vec<String>,
+    pub(crate) index_range: TranscriptLineRange,
+    pub(crate) index: Vec<SessionTranscriptIndexEntry>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct TranscriptFingerprintPayload {
+    session_id: String,
+    tools: bool,
+    tool_inputs: bool,
+    thinking: bool,
+    turn_selectors: Option<Vec<String>>,
+    turns: Vec<TranscriptFingerprintTurn>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct TranscriptFingerprintTurn {
+    turn_id: String,
+    turn_index: usize,
+    status: String,
+    user: String,
+    assistant: Vec<TranscriptFingerprintTextBlock>,
+    tools: Vec<TranscriptFingerprintTool>,
+    thinking: Vec<TranscriptFingerprintTextBlock>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct TranscriptFingerprintTextBlock {
+    round_index: usize,
+    content: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct TranscriptFingerprintTool {
+    tool_name: String,
+    tool_input: Option<String>,
+    result: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+struct TranscriptSectionData {
+    turn_index: usize,
+    preview: String,
+    lines: Vec<String>,
+    turn_range: TranscriptLineRange,
+    user_range: TranscriptLineRange,
+}
+
+fn turn_status_label(status: &crate::service::session::TurnStatus) -> &'static str {
+    match status {
+        crate::service::session::TurnStatus::InProgress => "inprogress",
+        crate::service::session::TurnStatus::Completed => "completed",
+        crate::service::session::TurnStatus::Error => "error",
+        crate::service::session::TurnStatus::Cancelled => "cancelled",
+    }
+}
+
+fn transcript_preview(content: &str) -> String {
+    let normalized = content.split_whitespace().collect::<Vec<_>>().join(" ");
+    if normalized.is_empty() {
+        return "(empty user message)".to_string();
+    }
+
+    let mut preview: String = normalized
+        .chars()
+        .take(SESSION_TRANSCRIPT_PREVIEW_CHAR_LIMIT)
+        .collect();
+    if normalized.chars().count() > SESSION_TRANSCRIPT_PREVIEW_CHAR_LIMIT {
+        preview.push_str("...");
+    }
+    preview
+}
+
+fn transcript_fingerprint_turn(
+    turn: &DialogTurnData,
+    options: &SessionTranscriptExportOptions,
+) -> TranscriptFingerprintTurn {
+    let mut assistant = Vec::new();
+    let mut tools = Vec::new();
+    let mut thinking = Vec::new();
+
+    for round in transcript_round_blocks(turn, options) {
+        let round_index = round.round_index;
+        for block in round.blocks {
+            match block {
+                TranscriptRoundBlock::Thinking(content) => {
+                    thinking.push(TranscriptFingerprintTextBlock {
+                        round_index,
+                        content,
+                    });
+                }
+                TranscriptRoundBlock::Assistant(content) => {
+                    assistant.push(TranscriptFingerprintTextBlock {
+                        round_index,
+                        content,
+                    });
+                }
+                TranscriptRoundBlock::Tool(tool) => {
+                    tools.push(TranscriptFingerprintTool {
+                        tool_name: tool.tool_name,
+                        tool_input: tool.tool_input,
+                        result: tool.result,
+                    });
+                }
+            }
+        }
+    }
+
+    TranscriptFingerprintTurn {
+        turn_id: turn.turn_id.clone(),
+        turn_index: turn.turn_index,
+        status: turn_status_label(&turn.status).to_string(),
+        user: transcript_display_user_content(turn),
+        assistant,
+        tools,
+        thinking,
+    }
+}
+
+pub(crate) fn transcript_fingerprint(
+    session_id: &str,
+    turns: &[DialogTurnData],
+    options: &SessionTranscriptExportOptions,
+) -> BitFunResult<String> {
+    let payload = TranscriptFingerprintPayload {
+        session_id: session_id.to_string(),
+        tools: options.tools,
+        tool_inputs: options.tool_inputs,
+        thinking: options.thinking,
+        turn_selectors: options.turns.clone(),
+        turns: turns
+            .iter()
+            .map(|turn| transcript_fingerprint_turn(turn, options))
+            .collect(),
+    };
+
+    let bytes = serde_json::to_vec(&payload).map_err(|e| {
+        BitFunError::serialization(format!("Failed to serialize transcript fingerprint: {}", e))
+    })?;
+    let mut hasher = Sha256::new();
+    hasher.update(bytes);
+    Ok(format!("{:x}", hasher.finalize()))
+}
+
+fn push_transcript_block(
+    lines: &mut Vec<String>,
+    label: &str,
+    body_lines: Vec<String>,
+) -> TranscriptLineRange {
+    let start_line = lines.len() + 1;
+    lines.push(format!("[{}]", label));
+    lines.extend(body_lines);
+    lines.push(format!("[/{}]", label));
+    TranscriptLineRange {
+        start_line,
+        end_line: lines.len(),
+    }
+}
+
+fn build_transcript_section(
+    turn: &DialogTurnData,
+    options: &SessionTranscriptExportOptions,
+) -> TranscriptSectionData {
+    let user_content = transcript_display_user_content(turn);
+    let round_blocks = transcript_round_blocks(turn, options);
+
+    let mut lines = Vec::new();
+    lines.push(format!("## Turn {}", turn.turn_index));
+
+    let user_range =
+        push_transcript_block(&mut lines, "user", transcript_text_lines(&user_content));
+
+    for round in &round_blocks {
+        lines.push(format!("[assistant step={}]", round.round_index));
+        for block in &round.blocks {
+            match block {
+                TranscriptRoundBlock::Thinking(content) => {
+                    lines.push("[thinking]".to_string());
+                    lines.extend(transcript_text_lines(content));
+                    lines.push("[/thinking]".to_string());
+                }
+                TranscriptRoundBlock::Assistant(content) => {
+                    lines.extend(transcript_text_lines(content));
+                }
+                TranscriptRoundBlock::Tool(tool) => {
+                    lines.push(format!("[tool name={}]", tool.tool_name));
+                    if let Some(tool_input) = tool.tool_input.as_ref() {
+                        lines.push("input:".to_string());
+                        lines.extend(transcript_text_lines(tool_input));
+                    }
+                    if let Some(result) = tool.result.as_ref() {
+                        lines.push("result:".to_string());
+                        lines.extend(transcript_text_lines(result));
+                    }
+                    lines.push("[/tool]".to_string());
+                }
+            }
+        }
+        lines.push("[/assistant]".to_string());
+    }
+
+    TranscriptSectionData {
+        turn_index: turn.turn_index,
+        preview: transcript_preview(&user_content),
+        turn_range: TranscriptLineRange {
+            start_line: 1,
+            end_line: lines.len(),
+        },
+        user_range,
+        lines,
+    }
+}
+
+fn offset_range(range: &TranscriptLineRange, offset: usize) -> TranscriptLineRange {
+    TranscriptLineRange {
+        start_line: range.start_line + offset,
+        end_line: range.end_line + offset,
+    }
+}
+
+fn format_range(range: &TranscriptLineRange) -> String {
+    format!("{}-{}", range.start_line, range.end_line)
+}
+
+pub(crate) fn render_transcript(
+    all_turns: &[DialogTurnData],
+    selected_indices: &[usize],
+    options: &SessionTranscriptExportOptions,
+) -> RenderedTranscript {
+    let sections = selected_indices
+        .iter()
+        .map(|&index| (index, build_transcript_section(&all_turns[index], options)))
+        .collect::<Vec<_>>();
+
+    let mut lines = vec!["## Index".to_string()];
+    let mut index = Vec::with_capacity(sections.len());
+    if sections.is_empty() {
+        lines.push(if all_turns.is_empty() {
+            "(no persisted turns)".to_string()
+        } else {
+            "(no matching turns)".to_string()
+        });
+    } else {
+        let index_offset = lines.len() + sections.len() + 1;
+        let mut body_lines = Vec::new();
+
+        for (position, (source_index, section)) in sections.iter().enumerate() {
+            let omitted_range = if position == 0 {
+                (*source_index > 0).then(|| (0, *source_index - 1))
+            } else {
+                let previous_index = sections[position - 1].0;
+                (*source_index > previous_index + 1)
+                    .then(|| (previous_index + 1, *source_index - 1))
+            };
+
+            if let Some((start, end)) = omitted_range {
+                if !body_lines.is_empty() {
+                    body_lines.push(String::new());
+                }
+                body_lines.push(transcript_omitted_turns_label(all_turns, start, end));
+                body_lines.push(String::new());
+            } else if !body_lines.is_empty() {
+                body_lines.push(String::new());
+            }
+
+            let section_offset = index_offset + body_lines.len();
+            let turn_range = offset_range(&section.turn_range, section_offset);
+            let user_range = offset_range(&section.user_range, section_offset);
+
+            lines.push(format!(
+                "- turn={} range={} preview=\"{}\"",
+                section.turn_index,
+                format_range(&turn_range),
+                section.preview.replace('"', "'")
+            ));
+            index.push(SessionTranscriptIndexEntry {
+                turn_index: section.turn_index,
+                preview: section.preview.clone(),
+                turn_range,
+                user_range,
+            });
+            body_lines.extend(section.lines.iter().cloned());
+        }
+
+        if let Some((last_index, _)) = sections.last() {
+            if *last_index + 1 < all_turns.len() {
+                body_lines.push(String::new());
+                body_lines.push(transcript_omitted_turns_label(
+                    all_turns,
+                    *last_index + 1,
+                    all_turns.len() - 1,
+                ));
+            }
+        }
+
+        lines.push(String::new());
+        lines.extend(body_lines);
+    }
+
+    let index_range = TranscriptLineRange {
+        start_line: 1,
+        end_line: lines
+            .iter()
+            .position(|line| line.is_empty())
+            .unwrap_or(lines.len()),
+    };
+    RenderedTranscript {
+        lines,
+        index_range,
+        index,
+    }
+}
+
+fn transcript_omitted_turns_label(turns: &[DialogTurnData], start: usize, end: usize) -> String {
+    let start_turn = turns[start].turn_index;
+    let end_turn = turns[end].turn_index;
+    if start_turn == end_turn {
+        format!("(omitted turn {})", start_turn)
+    } else {
+        format!("(omitted turns {}-{})", start_turn, end_turn)
+    }
 }

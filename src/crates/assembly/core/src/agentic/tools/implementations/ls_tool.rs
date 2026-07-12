@@ -5,7 +5,7 @@
 use crate::agentic::tools::framework::{
     Tool, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
-use crate::agentic::tools::workspace_paths::is_bitfun_runtime_uri;
+use crate::agentic::tools::workspace_paths::is_bitfun_tool_uri;
 use crate::service::filesystem::{format_directory_listing, list_directory_entries};
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
@@ -49,7 +49,7 @@ impl Tool for LSTool {
         Ok(r#"Recursively lists files and directories in a given path.
 
 Usage:
-- The path parameter must be relative to the current workspace, an absolute path inside the current workspace, or an exact `bitfun://runtime/...` URI returned by another tool
+- The path parameter must be relative to the current workspace, an absolute path inside the current workspace, or an exact `bitfun://...` URI returned by another tool
 - Do not list host roots such as `/`, `/Users`, `/home`, or placeholder paths such as `/workspace`
 - Hidden files (files starting with '.') are automatically excluded
 - Results are sorted by modification time (newest first)"#
@@ -66,7 +66,7 @@ Usage:
             "properties": {
                 "path": {
                     "type": "string",
-                    "description": "Directory to list. Use a workspace-relative path, an absolute path inside the current workspace, or an exact bitfun://runtime URI returned by another tool."
+                    "description": "Directory to list. Use a workspace-relative path, an absolute path inside the current workspace, or an exact bitfun:// URI returned by another tool."
                 },
                 "limit": {
                     "type": "number",
@@ -116,12 +116,11 @@ Usage:
                     };
                 }
                 None => {
-                    if is_bitfun_runtime_uri(path) {
+                    if is_bitfun_tool_uri(path) {
                         return ValidationResult {
                             result: false,
                             message: Some(
-                                "Tool context is required to resolve bitfun runtime URIs"
-                                    .to_string(),
+                                "Tool context is required to resolve BitFun URIs".to_string(),
                             ),
                             error_code: Some(400),
                             meta: None,

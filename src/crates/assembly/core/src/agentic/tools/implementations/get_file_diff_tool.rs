@@ -1,7 +1,7 @@
 use crate::agentic::tools::framework::{
     Tool, ToolExposure, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
-use crate::agentic::tools::workspace_paths::is_bitfun_runtime_uri;
+use crate::agentic::tools::workspace_paths::is_bitfun_tool_uri;
 use crate::service::git::git_service::GitService;
 use crate::service::git::git_types::GitDiffParams;
 use crate::service::git::git_utils::get_repository_root;
@@ -1224,7 +1224,7 @@ This tool compares the current file content against:
 3. Full file content (if neither baseline nor git is available)
 
 Usage:
-- The file_path parameter must be workspace-relative, an absolute path inside the current workspace, or an exact `bitfun://runtime/...` URI returned by another tool.
+- The file_path parameter must be workspace-relative, an absolute path inside the current workspace, or an exact `bitfun://...` URI returned by another tool.
 - The diff is returned in unified diff format, showing additions (+) and deletions (-).
 - The response includes diff_type indicating the source: "baseline", "git", or "full".
 - The response includes stats for additions and deletions.
@@ -1273,7 +1273,7 @@ Usage:
             "properties": {
                 "file_path": {
                     "type": "string",
-                    "description": "The file to get diff for. Use a workspace-relative path, an absolute path inside the current workspace, or an exact bitfun://runtime URI returned by another tool."
+                    "description": "The file to get diff for. Use a workspace-relative path, an absolute path inside the current workspace, or an exact bitfun:// URI returned by another tool."
                 }
             },
             "required": ["file_path"],
@@ -1333,12 +1333,11 @@ Usage:
                     };
                 }
                 None => {
-                    if is_bitfun_runtime_uri(file_path) {
+                    if is_bitfun_tool_uri(file_path) {
                         return ValidationResult {
                             result: false,
                             message: Some(
-                                "Tool context is required to resolve bitfun runtime URIs"
-                                    .to_string(),
+                                "Tool context is required to resolve BitFun URIs".to_string(),
                             ),
                             error_code: Some(400),
                             meta: None,

@@ -273,7 +273,7 @@ impl FileWriteTool {
             "properties": {
                 "payload": {
                     "type": "string",
-                    "description": "A path-first Write payload in the format `+++ {absolute_file_path}\n{file_content}`. Content lines do not need a leading `+`."
+                    "description": "A path-first Write payload in the format `+++ {absolute_file_path_or_bitfun_uri}\n{file_content}`. Content lines do not need a leading `+`."
                 }
             },
             "required": ["payload"],
@@ -287,7 +287,7 @@ impl FileWriteTool {
 Parameter: `payload` (a single string)
 - Format: `+++ {file_path}\n{file_content}`
 - This is a path-first Write payload format: the first line uses Git's `+++` marker to specify the target file, but content lines do NOT need a leading `+`. Do not include `---`, `@@`, or other Git diff headers.
-- `{file_path}` must be absolute. Everything after the first newline is the complete content to write to that file.
+- `{file_path}` must be an absolute path or an exact `bitfun://...` URI. Everything after the first newline is the complete content to write to that file.
 - The `+++ ` marker is required. If it is missing or has no file path, the tool saves the entire `payload` unchanged to `write_{random id}.tmp` in the workspace root.
 - Do NOT pass `path`, `file_path`, or `content`, etc. They are not valid parameters for this tool. Only `payload` is accepted.
 

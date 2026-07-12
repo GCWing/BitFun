@@ -101,7 +101,7 @@ impl Tool for GlobTool {
 - Supports glob patterns like "**/*.js" or "src/**/*.ts"
 - Returns matching file paths
 - Use this tool when you need to find files by name patterns
-- The path parameter may be workspace-relative, an absolute path inside the current workspace, or an exact `bitfun://runtime/...` URI returned by another tool
+- The path parameter may be workspace-relative, an absolute path inside the current workspace, or an exact `bitfun://...` URI returned by another tool
 - Omit path to search the current workspace. Do not use host roots or placeholder paths such as `/workspace`.
 - Returns up to 100 matching paths. Narrow the pattern or search a more specific path if the result is truncated.
 - You can call multiple tools in a single response. It is always better to speculatively perform multiple searches in parallel if they are potentially useful.
@@ -122,7 +122,7 @@ impl Tool for GlobTool {
                 },
                 "path": {
                     "type": "string",
-                    "description": "The directory to search in. Omit this field to search the current workspace. If provided, use a workspace-relative path, an absolute path inside the current workspace, or an exact bitfun://runtime URI. Do not enter \"undefined\", \"null\", host roots, or placeholder paths such as /workspace."
+                    "description": "The directory to search in. Omit this field to search the current workspace. If provided, use a workspace-relative path, an absolute path inside the current workspace, or an exact bitfun:// URI. Do not enter \"undefined\", \"null\", host roots, or placeholder paths such as /workspace."
                 }
             },
             "required": ["pattern"]

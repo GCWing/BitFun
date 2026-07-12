@@ -1986,7 +1986,34 @@ impl ExecutionEngine {
             compression_contract,
             model_summary,
         ) {
-            Ok(compression_result) => {
+            Ok(mut compression_result) => {
+                let boundary_turn_index = self
+                    .session_manager
+                    .get_turn_count(session_id)
+                    .saturating_sub(1);
+                match self
+                    .session_manager
+                    .create_compression_transcript_reference(
+                        session_id,
+                        boundary_turn_index,
+                        &compression_id,
+                        "auto",
+                    )
+                    .await
+                {
+                    Ok(Some(reference)) => {
+                        self.context_compressor.append_transcript_reference(
+                            &mut compression_result,
+                            &reference.uri,
+                            &reference.index_range,
+                        );
+                    }
+                    Ok(None) => {}
+                    Err(error) => warn!(
+                        "Failed to create automatic compression transcript; continuing without reference: session_id={}, turn_id={}, error={}",
+                        session_id, dialog_turn_id, error
+                    ),
+                }
                 self.session_manager
                     .replace_context_messages(session_id, compression_result.messages.clone())
                     .await;
@@ -2271,7 +2298,34 @@ impl ExecutionEngine {
             compression_contract,
             model_summary,
         ) {
-            Ok(compression_result) => {
+            Ok(mut compression_result) => {
+                let boundary_turn_index = self
+                    .session_manager
+                    .get_turn_count(&session_id)
+                    .saturating_sub(1);
+                match self
+                    .session_manager
+                    .create_compression_transcript_reference(
+                        &session_id,
+                        boundary_turn_index,
+                        &compression_id,
+                        trigger,
+                    )
+                    .await
+                {
+                    Ok(Some(reference)) => {
+                        self.context_compressor.append_transcript_reference(
+                            &mut compression_result,
+                            &reference.uri,
+                            &reference.index_range,
+                        );
+                    }
+                    Ok(None) => {}
+                    Err(error) => warn!(
+                        "Failed to create manual compression transcript; continuing without reference: session_id={}, turn_id={}, error={}",
+                        session_id, dialog_turn_id, error
+                    ),
+                }
                 let compressed_messages = compression_result.messages;
                 self.session_manager
                     .replace_context_messages(&session_id, compressed_messages.clone())
