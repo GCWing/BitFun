@@ -1,8 +1,10 @@
-use crate::agentic::agents::{Agent, UserContextPolicy};
+use crate::agentic::agents::{Agent, AgentToolPolicyOverrides, UserContextPolicy};
+use crate::agentic::tools::framework::ToolExposure;
 use async_trait::async_trait;
 
 pub struct DeepReviewAgent {
     default_tools: Vec<String>,
+    tool_exposure_overrides: AgentToolPolicyOverrides,
 }
 
 impl Default for DeepReviewAgent {
@@ -13,6 +15,9 @@ impl Default for DeepReviewAgent {
 
 impl DeepReviewAgent {
     pub fn new() -> Self {
+        let mut tool_exposure_overrides = AgentToolPolicyOverrides::default();
+        tool_exposure_overrides.insert("GetFileDiff".to_string(), ToolExposure::Expanded);
+
         Self {
             default_tools: vec![
                 "LaunchReviewAgent".to_string(),
@@ -23,6 +28,7 @@ impl DeepReviewAgent {
                 "GetFileDiff".to_string(),
                 "submit_code_review".to_string(),
             ],
+            tool_exposure_overrides,
         }
     }
 }
@@ -53,6 +59,10 @@ impl Agent for DeepReviewAgent {
         self.default_tools.clone()
     }
 
+    fn tool_exposure_overrides(&self) -> &AgentToolPolicyOverrides {
+        &self.tool_exposure_overrides
+    }
+
     fn user_context_policy(&self) -> UserContextPolicy {
         UserContextPolicy::empty()
             .with_workspace_context()
@@ -68,6 +78,7 @@ impl Agent for DeepReviewAgent {
 #[cfg(test)]
 mod tests {
     use super::{Agent, DeepReviewAgent};
+    use crate::agentic::tools::framework::ToolExposure;
 
     #[test]
     fn deep_review_agent_has_team_orchestration_tools() {
@@ -76,6 +87,10 @@ mod tests {
 
         assert!(tools.contains(&"LaunchReviewAgent".to_string()));
         assert!(!tools.contains(&"Task".to_string()));
+        assert_eq!(
+            agent.tool_exposure_overrides().get("GetFileDiff"),
+            Some(&ToolExposure::Expanded),
+        );
         assert!(tools.contains(&"submit_code_review".to_string()));
         assert!(!tools.contains(&"AskUserQuestion".to_string()));
         assert!(!tools.contains(&"Edit".to_string()));
