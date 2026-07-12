@@ -7,16 +7,20 @@
 use crate::review_platform_http::{
     send_json as send_review_json, send_json_response as send_review_json_response,
     send_json_response_bounded as send_review_json_response_bounded, send_text as send_review_text,
-    ReviewHttpClient, ReviewHttpError, ReviewHttpHeaders, ReviewHttpRequest, ReviewJsonResponse,
+    send_text_bounded as send_review_text_bounded, ReviewHttpClient, ReviewHttpError,
+    ReviewHttpHeaders, ReviewHttpRequest, ReviewJsonResponse, ReviewTextResponse,
 };
 use bitfun_services_core::process_manager;
 use futures::{stream, StreamExt};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex as StdMutex, OnceLock, Weak};
 use tokio::fs;
+use tokio::io::AsyncWriteExt;
+use tokio::sync::Mutex as AsyncMutex;
 
 pub const REVIEW_PLATFORM_TOKEN_FILE_NAME: &str = "review-platform-tokens.json";
 
@@ -29,9 +33,23 @@ const DEFAULT_PR_PAGE_SIZE: u32 = 10;
 const MAX_PR_PAGE_SIZE: u32 = 50;
 const PROVIDER_ENRICH_CONCURRENCY: usize = 4;
 const MAX_CI_LOG_CHARS: usize = 80_000;
+const MAX_GITLAB_CI_TRACE_BYTES: usize = 512 * 1024;
 const MAX_REVIEW_TARGET_FILES: usize = 500;
+const MAX_REVIEW_TARGET_PAGES: usize = 10;
 const MAX_REVIEW_TARGET_RESPONSE_BYTES: usize = 4 * 1024 * 1024;
 const MAX_REVIEW_FILE_DIFF_CHARS: usize = 80_000;
+const DEFAULT_ISSUE_PAGE: u32 = 1;
+const DEFAULT_ISSUE_PAGE_SIZE: u32 = 100;
+const MAX_ISSUE_PAGE_SIZE: u32 = 100;
+const MAX_ISSUE_RESPONSE_BYTES: usize = 2 * 1024 * 1024;
+const MAX_ISSUE_COMMENTS_RESPONSE_BYTES: usize = 8 * 1024 * 1024;
+const MAX_ISSUE_BODY_CHARS: usize = 128_000;
+const MAX_ISSUE_COMMENT_BODY_CHARS: usize = 32_000;
+const MAX_ISSUE_COMMENTS_AGGREGATE_CHARS: usize = 512_000;
+
+static TOKEN_STORE_LOCKS: OnceLock<StdMutex<HashMap<PathBuf, Weak<AsyncMutex<()>>>>> =
+    OnceLock::new();
+static TOKEN_STORE_TEMP_NONCE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 #[derive(Debug, thiserror::Error)]
 pub enum ReviewPlatformError {
@@ -51,6 +69,10 @@ pub enum ReviewPlatformError {
     Parse(String),
     #[error("Pull request target changed: {0}")]
     StaleTarget(String),
+    #[error("Provider evidence resource {resource} exceeded the {limit} limit")]
+    EvidenceTooLarge { resource: String, limit: usize },
+    #[error("Requested Issue {issue_id} is a pull request")]
+    TargetIsPullRequest { issue_id: String },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -253,6 +275,47 @@ pub struct ReviewPlatformPullRequestFileDiff {
     pub base_revision: String,
     pub head_revision: String,
     pub diff: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReviewEvidenceCompleteness {
+    Complete,
+    Partial,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReviewPlatformIssueComment {
+    pub id: String,
+    pub web_url: Option<String>,
+    pub author: Option<String>,
+    pub body: String,
+    pub created_at: Option<String>,
+    pub updated_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReviewPlatformIssueEvidence {
+    pub platform: ReviewPlatformKind,
+    pub host: String,
+    pub project_path: String,
+    pub issue_id: String,
+    pub web_url: String,
+    pub title: String,
+    pub body: String,
+    pub state: String,
+    pub author: Option<String>,
+    pub labels: Vec<String>,
+    pub created_at: Option<String>,
+    pub updated_at: Option<String>,
+    pub comments: Vec<ReviewPlatformIssueComment>,
+    pub fingerprint: String,
+    pub completeness: ReviewEvidenceCompleteness,
+    pub limitations: Vec<String>,
+    pub has_more_comments: bool,
+    pub next_cursor: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -469,6 +532,7 @@ pub trait ReviewPlatformWorkspaceClassifier: Send + Sync {
 #[derive(Clone)]
 pub struct ReviewPlatformService {
     token_store_path: PathBuf,
+    token_store_lock: Arc<AsyncMutex<()>>,
     workspace_classifier: Arc<dyn ReviewPlatformWorkspaceClassifier>,
 }
 
@@ -520,6 +584,62 @@ struct ProviderContext {
     token: Option<String>,
 }
 
+#[derive(Debug, Clone)]
+struct ProviderIssueIdentity {
+    platform: ReviewPlatformKind,
+    host: String,
+    project_path: String,
+    issue_id: String,
+}
+
+impl ProviderIssueIdentity {
+    fn new(
+        platform: ReviewPlatformKind,
+        host: &str,
+        project_path: &str,
+        issue_id: &str,
+    ) -> Result<Self, ReviewPlatformError> {
+        Ok(Self {
+            platform,
+            host: normalize_provider_host(host)?,
+            project_path: normalize_project_path(platform, project_path)?,
+            issue_id: normalize_provider_item_id(issue_id, "Issue")?,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct IssuePagination {
+    page: u32,
+    per_page: u32,
+}
+
+impl IssuePagination {
+    fn new(page: Option<u32>, per_page: Option<u32>) -> Self {
+        Self {
+            page: page.unwrap_or(DEFAULT_ISSUE_PAGE).max(1),
+            per_page: per_page
+                .unwrap_or(DEFAULT_ISSUE_PAGE_SIZE)
+                .clamp(1, MAX_ISSUE_PAGE_SIZE),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+struct IssueRequestPlan {
+    issue_url: String,
+    comments_url: String,
+    comments_query: Vec<(String, String)>,
+    pagination: IssuePagination,
+}
+
+#[derive(Debug, Clone)]
+#[cfg(test)]
+struct PullRequestIdentityPlan {
+    context: ProviderContext,
+    pull_request_id: String,
+}
+
 #[derive(Debug, Clone, Default)]
 struct ReviewPlatformAuthTokens {
     tokens: HashMap<String, String>,
@@ -529,16 +649,29 @@ impl ReviewPlatformAuthTokens {
     fn get(&self, platform: ReviewPlatformKind, host: &str) -> Option<&str> {
         token_key(platform, host).and_then(|key| self.tokens.get(&key).map(String::as_str))
     }
+
+    fn registered_platform_for_host(&self, host: &str) -> Option<ReviewPlatformKind> {
+        let host = normalize_provider_host(host).ok()?;
+        let mut platforms = [
+            ReviewPlatformKind::Github,
+            ReviewPlatformKind::Gitlab,
+            ReviewPlatformKind::Gitcode,
+        ]
+        .into_iter()
+        .filter(|platform| self.get(*platform, &host).is_some());
+        let platform = platforms.next()?;
+        platforms.next().is_none().then_some(platform)
+    }
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct StoredReviewPlatformTokens {
     #[serde(default)]
     tokens: HashMap<String, StoredReviewPlatformToken>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct StoredReviewPlatformToken {
     token: String,
@@ -552,8 +685,12 @@ impl ReviewPlatformService {
         token_store_path: PathBuf,
         workspace_classifier: Arc<dyn ReviewPlatformWorkspaceClassifier>,
     ) -> Self {
+        let token_store_path = absolute_token_store_path(&token_store_path);
+        let lock_key = normalize_token_store_lock_key(&token_store_path);
+        let token_store_lock = shared_token_store_lock(&lock_key);
         Self {
             token_store_path,
+            token_store_lock,
             workspace_classifier,
         }
     }
@@ -757,6 +894,90 @@ impl ReviewPlatformService {
             .await
     }
 
+    pub async fn issue(
+        &self,
+        platform: ReviewPlatformKind,
+        host: &str,
+        project_path: &str,
+        issue_id: &str,
+        page: Option<u32>,
+        per_page: Option<u32>,
+        repository_path: Option<&str>,
+    ) -> Result<ReviewPlatformIssueEvidence, ReviewPlatformError> {
+        let auth_tokens = self.load_stored_tokens().await?;
+        let identity = ProviderIssueIdentity::new(platform, host, project_path, issue_id)?;
+        let context = self
+            .provider_context_for_identity_request(
+                identity.platform,
+                &identity.host,
+                &identity.project_path,
+                repository_path,
+                &auth_tokens,
+            )
+            .await?;
+        acquire_issue_evidence(&context, &identity, IssuePagination::new(page, per_page)).await
+    }
+
+    pub async fn pull_request_review_target_by_identity(
+        &self,
+        platform: ReviewPlatformKind,
+        host: &str,
+        project_path: &str,
+        pull_request_id: &str,
+        repository_path: Option<&str>,
+    ) -> Result<ReviewPlatformPullRequestReviewTarget, ReviewPlatformError> {
+        let auth_tokens = self.load_stored_tokens().await?;
+        let pull_request_id = normalize_provider_item_id(pull_request_id, "Pull request")?;
+        let context = self
+            .provider_context_for_identity_request(
+                platform,
+                host,
+                project_path,
+                repository_path,
+                &auth_tokens,
+            )
+            .await?;
+        provider_for(context.remote.platform)
+            .pull_request_review_target(&context, &pull_request_id)
+            .await
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub async fn pull_request_file_diff_by_identity(
+        &self,
+        platform: ReviewPlatformKind,
+        host: &str,
+        project_path: &str,
+        pull_request_id: &str,
+        expected_base_revision: &str,
+        expected_head_revision: &str,
+        file_path: &str,
+        file_page_hint: Option<u32>,
+        repository_path: Option<&str>,
+    ) -> Result<ReviewPlatformPullRequestFileDiff, ReviewPlatformError> {
+        let pull_request_id = normalize_provider_item_id(pull_request_id, "Pull request")?;
+        let auth_tokens = self.load_stored_tokens().await?;
+        let context = self
+            .provider_context_for_identity_request(
+                platform,
+                host,
+                project_path,
+                repository_path,
+                &auth_tokens,
+            )
+            .await?;
+        provider_for(context.remote.platform)
+            .pull_request_file_diff(
+                &context,
+                &pull_request_id,
+                expected_base_revision,
+                expected_head_revision,
+                file_path,
+                file_page_hint,
+            )
+            .await
+    }
+
     pub async fn pull_request_file_diff(
         &self,
         repository_path: &str,
@@ -943,6 +1164,72 @@ impl ReviewPlatformService {
         provider_context(remote, &auth_tokens)
     }
 
+    async fn provider_context_for_identity_request(
+        &self,
+        platform: ReviewPlatformKind,
+        host: &str,
+        project_path: &str,
+        repository_path: Option<&str>,
+        auth_tokens: &ReviewPlatformAuthTokens,
+    ) -> Result<ProviderContext, ReviewPlatformError> {
+        let host = normalize_provider_host(host)?;
+        let project_path = normalize_project_path(platform, project_path)?;
+        let trusted_remote = if auth_tokens.get(platform, &host).is_none() {
+            match repository_path {
+                Some(repository_path) => {
+                    self.repository_trusts_provider_identity(
+                        repository_path,
+                        platform,
+                        &host,
+                        &project_path,
+                    )
+                    .await
+                }
+                None => false,
+            }
+        } else {
+            false
+        };
+        provider_context_for_identity_with_trust(
+            platform,
+            &host,
+            &project_path,
+            auth_tokens,
+            trusted_remote,
+        )
+    }
+
+    async fn repository_trusts_provider_identity(
+        &self,
+        repository_path: &str,
+        platform: ReviewPlatformKind,
+        host: &str,
+        project_path: &str,
+    ) -> bool {
+        if self.is_remote_workspace_path(repository_path).await {
+            return false;
+        }
+        if !matches!(
+            platform,
+            ReviewPlatformKind::Github | ReviewPlatformKind::Gitlab
+        ) {
+            return false;
+        }
+        let Ok(root) = get_repository_root(repository_path).await else {
+            return false;
+        };
+        let Ok(output) = execute_git_command(&root, &["remote", "-v"]).await else {
+            return false;
+        };
+        output.lines().any(|line| {
+            let parts = line.split_whitespace().collect::<Vec<_>>();
+            if parts.len() < 2 || parts.get(2).is_some_and(|kind| *kind != "(fetch)") {
+                return false;
+            }
+            remote_url_matches_provider_identity(parts[1], platform, host, project_path)
+        })
+    }
+
     pub async fn update_auth_token(
         &self,
         platform: ReviewPlatformKind,
@@ -957,7 +1244,12 @@ impl ReviewPlatformService {
         }
         let key = token_key(platform, host)
             .ok_or_else(|| ReviewPlatformError::UnsupportedPlatform(host.to_string()))?;
-        let mut stored = self.load_stored_token_file().await?;
+        let _transaction = self.token_store_lock.lock().await;
+        let (mut stored, _) =
+            canonicalize_stored_tokens(self.load_stored_token_file_unlocked().await?);
+        stored.tokens.retain(|stored_key, _| {
+            normalize_stored_token_key(stored_key).as_deref() != Some(key.as_str())
+        });
         stored.tokens.insert(
             key,
             StoredReviewPlatformToken {
@@ -965,7 +1257,7 @@ impl ReviewPlatformService {
                 updated_at: chrono::Utc::now().to_rfc3339(),
             },
         );
-        self.save_stored_token_file(&stored).await
+        self.save_stored_token_file_unlocked(&stored).await
     }
 
     pub async fn clear_auth_token(
@@ -975,9 +1267,13 @@ impl ReviewPlatformService {
     ) -> Result<(), ReviewPlatformError> {
         let key = token_key(platform, host)
             .ok_or_else(|| ReviewPlatformError::UnsupportedPlatform(host.to_string()))?;
-        let mut stored = self.load_stored_token_file().await?;
-        stored.tokens.remove(&key);
-        self.save_stored_token_file(&stored).await
+        let _transaction = self.token_store_lock.lock().await;
+        let (mut stored, _) =
+            canonicalize_stored_tokens(self.load_stored_token_file_unlocked().await?);
+        stored.tokens.retain(|stored_key, _| {
+            normalize_stored_token_key(stored_key).as_deref() != Some(key.as_str())
+        });
+        self.save_stored_token_file_unlocked(&stored).await
     }
 }
 
@@ -1251,6 +1547,8 @@ async fn github_review_file_parts(
         "{}/repos/{}/{}/pulls/{}",
         ctx.api_base_url, ctx.remote.owner, ctx.remote.repository_name, pull_request_id
     );
+    let initial_detail =
+        send_bounded_json(github_request(client.clone(), &base, ctx.token.as_deref())).await?;
     let token = ctx.token.clone();
     let files_url = format!("{}/files", base);
     let file = fetch_bounded_paginated_file(
@@ -1270,11 +1568,12 @@ async fn github_review_file_parts(
         github_file_from_value,
     )
     .await?;
-    let detail = send_bounded_json(github_request(client, &base, ctx.token.as_deref())).await?;
-    Ok((
-        github_pull_request_from_value(&detail),
-        file.into_iter().collect(),
-    ))
+    let confirmed_detail =
+        send_bounded_json(github_request(client, &base, ctx.token.as_deref())).await?;
+    let initial_pull_request = github_pull_request_from_value(&initial_detail);
+    let confirmed_pull_request = github_pull_request_from_value(&confirmed_detail);
+    ensure_pull_request_revisions_stable(&initial_pull_request, &confirmed_pull_request)?;
+    Ok((confirmed_pull_request, file.into_iter().collect()))
 }
 
 async fn gitlab_review_target_parts(
@@ -1325,6 +1624,8 @@ async fn gitlab_review_file_parts(
         "{}/projects/{}/merge_requests/{}",
         ctx.api_base_url, project, pull_request_id
     );
+    let initial_detail =
+        send_bounded_json(gitlab_request(client.clone(), &base, ctx.token.as_deref())).await?;
     let token = ctx.token.clone();
     let diffs_url = format!("{}/diffs", base);
     let file = fetch_bounded_paginated_file(
@@ -1344,11 +1645,12 @@ async fn gitlab_review_file_parts(
         gitlab_file_from_value,
     )
     .await?;
-    let detail = send_bounded_json(gitlab_request(client, &base, ctx.token.as_deref())).await?;
-    Ok((
-        gitlab_pull_request_from_value(&detail),
-        file.into_iter().collect(),
-    ))
+    let confirmed_detail =
+        send_bounded_json(gitlab_request(client, &base, ctx.token.as_deref())).await?;
+    let initial_pull_request = gitlab_pull_request_from_value(&initial_detail);
+    let confirmed_pull_request = gitlab_pull_request_from_value(&confirmed_detail);
+    ensure_pull_request_revisions_stable(&initial_pull_request, &confirmed_pull_request)?;
+    Ok((confirmed_pull_request, file.into_iter().collect()))
 }
 
 async fn gitcode_review_target_parts(
@@ -2896,8 +3198,17 @@ async fn send_bounded_json_response(
         .map_err(review_http_error)
 }
 
-async fn send_text(request: ReviewHttpRequest) -> Result<String, ReviewPlatformError> {
+async fn send_text(request: ReviewHttpRequest) -> Result<ReviewTextResponse, ReviewPlatformError> {
     send_review_text(request).await.map_err(review_http_error)
+}
+
+async fn send_bounded_text(
+    request: ReviewHttpRequest,
+    max_bytes: usize,
+) -> Result<ReviewTextResponse, ReviewPlatformError> {
+    send_review_text_bounded(request, max_bytes)
+        .await
+        .map_err(review_http_error)
 }
 
 async fn fetch_paginated_array<F>(
@@ -3319,15 +3630,406 @@ fn require_write_token<'a>(
     })
 }
 
+fn normalize_provider_host(host: &str) -> Result<String, ReviewPlatformError> {
+    let host = host.trim().trim_end_matches('.').to_ascii_lowercase();
+    if host.is_empty()
+        || host.contains("://")
+        || host.contains(['/', '\\', '@', '?', '#'])
+        || host.chars().any(char::is_whitespace)
+        || host.chars().any(char::is_control)
+        || host.len() > 253
+    {
+        return Err(ReviewPlatformError::Api(
+            "Provider host must be a plain DNS host name".to_string(),
+        ));
+    }
+    if host.split('.').any(|label| {
+        label.is_empty()
+            || label.len() > 63
+            || label.starts_with('-')
+            || label.ends_with('-')
+            || !label
+                .chars()
+                .all(|character| character.is_ascii_alphanumeric() || character == '-')
+    }) {
+        return Err(ReviewPlatformError::Api(
+            "Provider host contains an invalid DNS label".to_string(),
+        ));
+    }
+    Ok(host)
+}
+
+fn normalize_project_path(
+    platform: ReviewPlatformKind,
+    project_path: &str,
+) -> Result<String, ReviewPlatformError> {
+    let project_path = project_path.trim();
+    if project_path.is_empty()
+        || project_path.starts_with('/')
+        || project_path.ends_with('/')
+        || project_path.contains(['\\', '?', '#', '%'])
+        || project_path.chars().any(char::is_control)
+    {
+        return Err(ReviewPlatformError::Api(
+            "Provider project path is invalid".to_string(),
+        ));
+    }
+    let mut segments = project_path
+        .split('/')
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    if let Some(repository) = segments.last_mut() {
+        *repository = repository.trim_end_matches(".git").to_string();
+    }
+    let segment_is_invalid = |segment: &str| {
+        segment.is_empty()
+            || matches!(segment, "." | "..")
+            || !segment.chars().all(|character| {
+                character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '.')
+            })
+    };
+    if segments.len() < 2
+        || (platform == ReviewPlatformKind::Github && segments.len() != 2)
+        || segments.iter().any(|segment| segment_is_invalid(segment))
+    {
+        return Err(ReviewPlatformError::Api(
+            "Provider project path must identify an owner and repository".to_string(),
+        ));
+    }
+    if !matches!(
+        platform,
+        ReviewPlatformKind::Github | ReviewPlatformKind::Gitlab
+    ) {
+        return Err(ReviewPlatformError::UnsupportedPlatform(
+            platform_label(platform).to_string(),
+        ));
+    }
+    Ok(segments.join("/"))
+}
+
+fn normalize_provider_item_id(
+    item_id: &str,
+    item_label: &str,
+) -> Result<String, ReviewPlatformError> {
+    let bytes = item_id.as_bytes();
+    if !matches!(bytes.first(), Some(b'1'..=b'9'))
+        || !bytes
+            .iter()
+            .skip(1)
+            .all(|character| character.is_ascii_digit())
+    {
+        return Err(ReviewPlatformError::Api(format!(
+            "{item_label} id must be a positive integer"
+        )));
+    }
+    Ok(item_id.to_string())
+}
+
+#[cfg(test)]
+fn provider_context_for_identity(
+    platform: ReviewPlatformKind,
+    host: &str,
+    project_path: &str,
+    auth_tokens: &ReviewPlatformAuthTokens,
+) -> Result<ProviderContext, ReviewPlatformError> {
+    provider_context_for_identity_with_trust(platform, host, project_path, auth_tokens, false)
+}
+
+fn provider_context_for_identity_with_trust(
+    platform: ReviewPlatformKind,
+    host: &str,
+    project_path: &str,
+    auth_tokens: &ReviewPlatformAuthTokens,
+    trusted_remote: bool,
+) -> Result<ProviderContext, ReviewPlatformError> {
+    let host = normalize_provider_host(host)?;
+    let project_path = normalize_project_path(platform, project_path)?;
+    let stored_token = auth_tokens.get(platform, &host).map(str::to_string);
+    let public_anonymous_host = matches!(
+        (platform, host.as_str()),
+        (ReviewPlatformKind::Github, "github.com") | (ReviewPlatformKind::Gitlab, "gitlab.com")
+    );
+    if !public_anonymous_host && stored_token.is_none() && !trusted_remote {
+        return Err(ReviewPlatformError::Api(format!(
+            "A stored {} token is required for non-public provider host {}",
+            platform_label(platform),
+            host
+        )));
+    }
+    let token = stored_token.clone().or_else(|| {
+        public_anonymous_host
+            .then(|| env_token_for_platform(platform))
+            .flatten()
+    });
+    let auth_source = if stored_token.is_some() {
+        ReviewAuthSource::Stored
+    } else if token.is_some() {
+        ReviewAuthSource::Env
+    } else {
+        ReviewAuthSource::None
+    };
+    let auth_state = if token.is_some() {
+        ReviewAuthState::Connected
+    } else {
+        ReviewAuthState::NotRequired
+    };
+    let owner = project_path
+        .split('/')
+        .next()
+        .unwrap_or_default()
+        .to_string();
+    let repository_name = project_path
+        .rsplit('/')
+        .next()
+        .unwrap_or_default()
+        .to_string();
+    let web_url = format!("https://{host}/{project_path}");
+    let api_base_url = match (platform, host.as_str()) {
+        (ReviewPlatformKind::Github, "github.com") => "https://api.github.com".to_string(),
+        (ReviewPlatformKind::Github, _) => format!("https://{host}/api/v3"),
+        (ReviewPlatformKind::Gitlab, _) => format!("https://{host}/api/v4"),
+        _ => return Err(ReviewPlatformError::UnsupportedPlatform(host)),
+    };
+    Ok(ProviderContext {
+        remote: ReviewPlatformRemote {
+            id: format!(
+                "identity:{}:{}",
+                platform.as_str(),
+                project_path.replace('/', "__")
+            ),
+            name: "identity".to_string(),
+            url: web_url.clone(),
+            platform,
+            host,
+            owner,
+            repository_name,
+            project_path,
+            web_url,
+            supported: true,
+            auth_state,
+            auth_source,
+            message: None,
+        },
+        api_base_url,
+        token,
+    })
+}
+
+#[cfg(test)]
+fn pull_request_identity_plan(
+    platform: ReviewPlatformKind,
+    host: &str,
+    project_path: &str,
+    pull_request_id: &str,
+    auth_tokens: &ReviewPlatformAuthTokens,
+) -> Result<PullRequestIdentityPlan, ReviewPlatformError> {
+    Ok(PullRequestIdentityPlan {
+        context: provider_context_for_identity(platform, host, project_path, auth_tokens)?,
+        pull_request_id: normalize_provider_item_id(pull_request_id, "Pull request")?,
+    })
+}
+
+fn issue_request_plan(
+    context: &ProviderContext,
+    identity: &ProviderIssueIdentity,
+    pagination: IssuePagination,
+) -> Result<IssueRequestPlan, ReviewPlatformError> {
+    if context.remote.platform != identity.platform
+        || context.remote.host != identity.host
+        || context.remote.project_path != identity.project_path
+    {
+        return Err(ReviewPlatformError::Api(
+            "Provider Issue identity does not match its trusted provider context".to_string(),
+        ));
+    }
+    let (issue_url, comments_url, comments_query) = match identity.platform {
+        ReviewPlatformKind::Github => {
+            let issue_url = format!(
+                "{}/repos/{}/{}/issues/{}",
+                context.api_base_url,
+                context.remote.owner,
+                context.remote.repository_name,
+                identity.issue_id
+            );
+            let comments_url = format!("{issue_url}/comments");
+            (issue_url, comments_url, Vec::new())
+        }
+        ReviewPlatformKind::Gitlab => {
+            let project = urlencoding::encode(&identity.project_path);
+            let issue_url = format!(
+                "{}/projects/{}/issues/{}",
+                context.api_base_url, project, identity.issue_id
+            );
+            let comments_url = format!("{issue_url}/notes");
+            (
+                issue_url,
+                comments_url,
+                vec![
+                    ("order_by".to_string(), "created_at".to_string()),
+                    ("sort".to_string(), "asc".to_string()),
+                    ("activity_filter".to_string(), "only_comments".to_string()),
+                ],
+            )
+        }
+        _ => {
+            return Err(ReviewPlatformError::UnsupportedPlatform(
+                platform_label(identity.platform).to_string(),
+            ));
+        }
+    };
+    Ok(IssueRequestPlan {
+        issue_url,
+        comments_url,
+        comments_query,
+        pagination,
+    })
+}
+
+async fn acquire_issue_evidence(
+    context: &ProviderContext,
+    identity: &ProviderIssueIdentity,
+    pagination: IssuePagination,
+) -> Result<ReviewPlatformIssueEvidence, ReviewPlatformError> {
+    let plan = issue_request_plan(context, identity, pagination)?;
+    let client = http_client()?;
+    let page = plan.pagination.page.to_string();
+    let per_page = plan.pagination.per_page.to_string();
+    match identity.platform {
+        ReviewPlatformKind::Github => {
+            let issue = send_review_json_response_bounded(
+                github_request(client.clone(), &plan.issue_url, context.token.as_deref()),
+                MAX_ISSUE_RESPONSE_BYTES,
+            )
+            .await
+            .map_err(|error| review_evidence_http_error(error, "issue_response"))?
+            .value;
+            reject_pull_request_issue_target(identity, &issue)?;
+            let comments = send_review_json_response_bounded(
+                github_request(client, &plan.comments_url, context.token.as_deref())
+                    .query(&[("page", &page), ("per_page", &per_page)]),
+                MAX_ISSUE_COMMENTS_RESPONSE_BYTES,
+            )
+            .await
+            .map_err(|error| review_evidence_http_error(error, "issue_comments_response"));
+            map_issue_comments_response(identity, &issue, plan.pagination, comments)
+        }
+        ReviewPlatformKind::Gitlab => {
+            let issue = send_review_json_response_bounded(
+                gitlab_request(client.clone(), &plan.issue_url, context.token.as_deref()),
+                MAX_ISSUE_RESPONSE_BYTES,
+            )
+            .await
+            .map_err(|error| review_evidence_http_error(error, "issue_response"))?
+            .value;
+            let comments = send_review_json_response_bounded(
+                gitlab_request(client, &plan.comments_url, context.token.as_deref())
+                    .query(&plan.comments_query)
+                    .query(&[("page", &page), ("per_page", &per_page)]),
+                MAX_ISSUE_COMMENTS_RESPONSE_BYTES,
+            )
+            .await
+            .map_err(|error| review_evidence_http_error(error, "issue_comments_response"));
+            map_issue_comments_response(identity, &issue, plan.pagination, comments)
+        }
+        _ => Err(ReviewPlatformError::UnsupportedPlatform(
+            platform_label(identity.platform).to_string(),
+        )),
+    }
+}
+
+fn review_evidence_http_error(error: ReviewHttpError, resource: &str) -> ReviewPlatformError {
+    match error {
+        ReviewHttpError::ResponseTooLarge { limit_bytes } => {
+            ReviewPlatformError::EvidenceTooLarge {
+                resource: resource.to_string(),
+                limit: limit_bytes,
+            }
+        }
+        error => review_http_error(error),
+    }
+}
+
+fn map_issue_comments_response(
+    identity: &ProviderIssueIdentity,
+    issue: &Value,
+    pagination: IssuePagination,
+    comments: Result<JsonResponse, ReviewPlatformError>,
+) -> Result<ReviewPlatformIssueEvidence, ReviewPlatformError> {
+    let comments = match comments {
+        Ok(comments) => comments,
+        Err(ReviewPlatformError::EvidenceTooLarge { resource, limit: _ })
+            if resource == "issue_comments_response" =>
+        {
+            let mut evidence = match identity.platform {
+                ReviewPlatformKind::Github => map_github_issue(
+                    identity,
+                    issue,
+                    &Value::Array(Vec::new()),
+                    pagination,
+                    false,
+                    None,
+                )?,
+                ReviewPlatformKind::Gitlab => map_gitlab_issue(
+                    identity,
+                    issue,
+                    &Value::Array(Vec::new()),
+                    pagination,
+                    false,
+                    None,
+                )?,
+                _ => {
+                    return Err(ReviewPlatformError::UnsupportedPlatform(
+                        platform_label(identity.platform).to_string(),
+                    ));
+                }
+            };
+            evidence.completeness = ReviewEvidenceCompleteness::Partial;
+            evidence
+                .limitations
+                .push("issue_comments_response_too_large".to_string());
+            evidence.fingerprint = issue_fingerprint(&evidence, pagination);
+            return Ok(evidence);
+        }
+        Err(error) => return Err(error),
+    };
+    let next_page = match identity.platform {
+        ReviewPlatformKind::Github => github_next_page(&comments.headers, pagination.page),
+        ReviewPlatformKind::Gitlab => gitlab_next_page(&comments.headers, pagination.page),
+        _ => None,
+    };
+    match identity.platform {
+        ReviewPlatformKind::Github => map_github_issue(
+            identity,
+            issue,
+            &comments.value,
+            pagination,
+            next_page.is_some(),
+            next_page.map(|page| page.to_string()),
+        ),
+        ReviewPlatformKind::Gitlab => map_gitlab_issue(
+            identity,
+            issue,
+            &comments.value,
+            pagination,
+            next_page.is_some(),
+            next_page.map(|page| page.to_string()),
+        ),
+        _ => Err(ReviewPlatformError::UnsupportedPlatform(
+            platform_label(identity.platform).to_string(),
+        )),
+    }
+}
+
 fn provider_context(
     remote: ReviewPlatformRemote,
     auth_tokens: &ReviewPlatformAuthTokens,
 ) -> Result<ProviderContext, ReviewPlatformError> {
-    let api_base_url = match remote.platform {
-        ReviewPlatformKind::Github => "https://api.github.com".to_string(),
-        ReviewPlatformKind::Gitlab => format!("https://{}/api/v4", remote.host),
-        ReviewPlatformKind::Gitcode => "https://api.gitcode.com/api/v5".to_string(),
-        ReviewPlatformKind::Unknown => {
+    let api_base_url = match (remote.platform, remote.host.as_str()) {
+        (ReviewPlatformKind::Github, "github.com") => "https://api.github.com".to_string(),
+        (ReviewPlatformKind::Github, host) => format!("https://{host}/api/v3"),
+        (ReviewPlatformKind::Gitlab, host) => format!("https://{host}/api/v4"),
+        (ReviewPlatformKind::Gitcode, _) => "https://api.gitcode.com/api/v5".to_string(),
+        (ReviewPlatformKind::Unknown, _) => {
             return Err(ReviewPlatformError::UnsupportedPlatform(remote.host));
         }
     };
@@ -3389,11 +4091,113 @@ fn token_key(platform: ReviewPlatformKind, host: &str) -> Option<String> {
     if platform == ReviewPlatformKind::Unknown {
         return None;
     }
-    let host = host.trim().to_ascii_lowercase();
-    if host.is_empty() {
-        return None;
-    }
+    let host = normalize_provider_host(host).ok()?;
     Some(format!("{}:{}", platform.as_str(), host))
+}
+
+fn normalize_stored_token_key(key: &str) -> Option<String> {
+    let (platform, host) = key.split_once(':')?;
+    let platform = match platform.trim().to_ascii_lowercase().as_str() {
+        "github" => ReviewPlatformKind::Github,
+        "gitlab" => ReviewPlatformKind::Gitlab,
+        "gitcode" => ReviewPlatformKind::Gitcode,
+        _ => return None,
+    };
+    token_key(platform, host)
+}
+
+fn absolute_token_store_path(path: &Path) -> PathBuf {
+    let absolute = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        std::env::current_dir()
+            .unwrap_or_else(|_| PathBuf::from("."))
+            .join(path)
+    };
+    let mut normalized = PathBuf::new();
+    for component in absolute.components() {
+        match component {
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir => {
+                normalized.pop();
+            }
+            component => normalized.push(component.as_os_str()),
+        }
+    }
+    normalized
+}
+
+fn normalize_token_store_lock_key(path: &Path) -> PathBuf {
+    let path = absolute_token_store_path(path);
+    #[cfg(windows)]
+    {
+        PathBuf::from(path.to_string_lossy().to_ascii_lowercase())
+    }
+    #[cfg(not(windows))]
+    {
+        path
+    }
+}
+
+fn shared_token_store_lock(path: &Path) -> Arc<AsyncMutex<()>> {
+    let registry = TOKEN_STORE_LOCKS.get_or_init(|| StdMutex::new(HashMap::new()));
+    let mut registry = registry.lock().unwrap_or_else(|error| error.into_inner());
+    registry.retain(|_, lock| lock.strong_count() > 0);
+    if let Some(lock) = registry.get(path).and_then(Weak::upgrade) {
+        return lock;
+    }
+    let lock = Arc::new(AsyncMutex::new(()));
+    registry.insert(path.to_path_buf(), Arc::downgrade(&lock));
+    lock
+}
+
+#[cfg(test)]
+fn token_store_lock_registry_entries_for_test(marker: &str) -> usize {
+    TOKEN_STORE_LOCKS
+        .get_or_init(|| StdMutex::new(HashMap::new()))
+        .lock()
+        .unwrap_or_else(|error| error.into_inner())
+        .keys()
+        .filter(|path| path.to_string_lossy().contains(marker))
+        .count()
+}
+
+fn canonicalize_stored_tokens(
+    stored: StoredReviewPlatformTokens,
+) -> (StoredReviewPlatformTokens, bool) {
+    let original = stored.clone();
+    let mut entries = stored.tokens.into_iter().collect::<Vec<_>>();
+    entries.sort_by(|left, right| left.0.cmp(&right.0));
+    let mut passthrough = HashMap::new();
+    let mut normalized: HashMap<String, (bool, StoredReviewPlatformToken)> = HashMap::new();
+    for (raw_key, mut entry) in entries {
+        let Some(canonical_key) = normalize_stored_token_key(&raw_key) else {
+            passthrough.insert(raw_key, entry);
+            continue;
+        };
+        entry.token = entry.token.trim().to_string();
+        if entry.token.is_empty() {
+            continue;
+        }
+        let is_canonical = raw_key == canonical_key;
+        match normalized.entry(canonical_key) {
+            std::collections::hash_map::Entry::Vacant(slot) => {
+                slot.insert((is_canonical, entry));
+            }
+            std::collections::hash_map::Entry::Occupied(mut slot)
+                if is_canonical && !slot.get().0 =>
+            {
+                slot.insert((true, entry));
+            }
+            std::collections::hash_map::Entry::Occupied(_) => {}
+        }
+    }
+    passthrough.extend(normalized.into_iter().map(|(key, (_, entry))| (key, entry)));
+    let canonical = StoredReviewPlatformTokens {
+        tokens: passthrough,
+    };
+    let changed = canonical != original;
+    (canonical, changed)
 }
 
 async fn get_repository_root(repository_path: &str) -> Result<String, ReviewPlatformError> {
@@ -3461,7 +4265,12 @@ fn normalize_repository_root(root: &str) -> String {
 
 impl ReviewPlatformService {
     async fn load_stored_tokens(&self) -> Result<ReviewPlatformAuthTokens, ReviewPlatformError> {
-        let stored = self.load_stored_token_file().await?;
+        let _transaction = self.token_store_lock.lock().await;
+        let (stored, migrated) =
+            canonicalize_stored_tokens(self.load_stored_token_file_unlocked().await?);
+        if migrated {
+            self.save_stored_token_file_unlocked(&stored).await?;
+        }
         Ok(ReviewPlatformAuthTokens {
             tokens: stored
                 .tokens
@@ -3471,14 +4280,14 @@ impl ReviewPlatformService {
                     if token.is_empty() {
                         None
                     } else {
-                        Some((key, token))
+                        normalize_stored_token_key(&key).map(|key| (key, token))
                     }
                 })
                 .collect(),
         })
     }
 
-    async fn load_stored_token_file(
+    async fn load_stored_token_file_unlocked(
         &self,
     ) -> Result<StoredReviewPlatformTokens, ReviewPlatformError> {
         let path = self.token_store_path();
@@ -3495,7 +4304,7 @@ impl ReviewPlatformService {
         }
     }
 
-    async fn save_stored_token_file(
+    async fn save_stored_token_file_unlocked(
         &self,
         stored: &StoredReviewPlatformTokens,
     ) -> Result<(), ReviewPlatformError> {
@@ -3510,13 +4319,96 @@ impl ReviewPlatformService {
         }
         let content = serde_json::to_string_pretty(stored)
             .map_err(|error| ReviewPlatformError::Parse(error.to_string()))?;
-        fs::write(path, content).await.map_err(|error| {
-            ReviewPlatformError::Api(format!(
-                "Failed to write review platform token store: {}",
-                error
-            ))
-        })
+        let temp_path = token_store_temp_path(path);
+        let result = async {
+            let mut file = fs::OpenOptions::new()
+                .create_new(true)
+                .write(true)
+                .open(&temp_path)
+                .await?;
+            file.write_all(content.as_bytes()).await?;
+            file.sync_all().await?;
+            drop(file);
+            replace_token_store_file_atomically(&temp_path, path)?;
+            Ok::<(), std::io::Error>(())
+        }
+        .await;
+        if let Err(error) = result {
+            let _ = fs::remove_file(&temp_path).await;
+            return Err(ReviewPlatformError::Api(format!(
+                "Failed to replace review platform token store: {error}"
+            )));
+        }
+        Ok(())
     }
+}
+
+fn token_store_temp_path(path: &Path) -> PathBuf {
+    let nonce = TOKEN_STORE_TEMP_NONCE.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    let file_name = path
+        .file_name()
+        .map(|value| value.to_string_lossy().into_owned())
+        .unwrap_or_else(|| REVIEW_PLATFORM_TOKEN_FILE_NAME.to_string());
+    path.with_file_name(format!(
+        ".{file_name}.{}.{}.{}.tmp",
+        std::process::id(),
+        timestamp,
+        nonce
+    ))
+}
+
+#[cfg(windows)]
+fn replace_token_store_file_atomically(
+    temp_path: &Path,
+    target_path: &Path,
+) -> std::io::Result<()> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows::core::PCWSTR;
+    use windows::Win32::Storage::FileSystem::{
+        MoveFileExW, ReplaceFileW, MOVEFILE_WRITE_THROUGH, REPLACEFILE_WRITE_THROUGH,
+    };
+
+    let temp = temp_path
+        .as_os_str()
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect::<Vec<_>>();
+    let target = target_path
+        .as_os_str()
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect::<Vec<_>>();
+    let result = unsafe {
+        if target_path.exists() {
+            ReplaceFileW(
+                PCWSTR(target.as_ptr()),
+                PCWSTR(temp.as_ptr()),
+                PCWSTR::null(),
+                REPLACEFILE_WRITE_THROUGH,
+                None,
+                None,
+            )
+        } else {
+            MoveFileExW(
+                PCWSTR(temp.as_ptr()),
+                PCWSTR(target.as_ptr()),
+                MOVEFILE_WRITE_THROUGH,
+            )
+        }
+    };
+    result.map_err(|error| std::io::Error::other(error.to_string()))
+}
+
+#[cfg(not(windows))]
+fn replace_token_store_file_atomically(
+    temp_path: &Path,
+    target_path: &Path,
+) -> std::io::Result<()> {
+    std::fs::rename(temp_path, target_path)
 }
 
 fn select_remote<'a>(
@@ -3886,8 +4778,9 @@ fn ci_log_value(text: String) -> (Option<String>, bool) {
     )
 }
 
-fn empty_ci_log() -> (Option<String>, bool) {
-    (None, false)
+fn ci_log_value_from_response(response: ReviewTextResponse) -> (Option<String>, bool) {
+    let (log, excerpt_truncated) = ci_log_value(response.text);
+    (log, response.truncated || excerpt_truncated)
 }
 
 fn ci_error_excerpt(text: &str) -> Option<String> {
@@ -4155,17 +5048,20 @@ async fn github_actions_log_for_check_run_item(
         "{}/repos/{}/{}/actions/jobs/{}/logs",
         ctx.api_base_url, ctx.remote.owner, ctx.remote.repository_name, job_id
     );
-    let text = send_text(github_request(
+    let response = send_text(github_request(
         client.clone(),
         &logs_url,
         ctx.token.as_deref(),
     ))
     .await?;
-    let (log, truncated) = ci_log_value(text);
-    let message = log
-        .as_ref()
-        .is_none()
-        .then_some("No error lines were detected in the GitHub Actions job log.".to_string());
+    let (log, truncated) = ci_log_value_from_response(response);
+    let message = if truncated {
+        Some("GitHub Actions job log evidence was truncated to the Review budget.".to_string())
+    } else {
+        log.as_ref()
+            .is_none()
+            .then_some("No error lines were detected in the GitHub Actions job log.".to_string())
+    };
     Ok(ReviewPlatformCiLog {
         ci_item_id: format!("check-run-{}", check_run_id),
         log,
@@ -4248,18 +5144,22 @@ async fn gitlab_job_trace(
     client: ReviewHttpClient,
     project: &str,
     job_id: &str,
-) -> (Option<String>, bool) {
+) -> Result<(Option<String>, bool), ReviewPlatformError> {
     if job_id.trim().is_empty() {
-        return empty_ci_log();
+        return Err(ReviewPlatformError::Api(
+            "GitLab job id is required".to_string(),
+        ));
     }
     let trace_url = format!(
         "{}/projects/{}/jobs/{}/trace",
         ctx.api_base_url, project, job_id
     );
-    match send_text(gitlab_request(client, &trace_url, ctx.token.as_deref())).await {
-        Ok(text) => ci_log_value(text),
-        Err(_) => empty_ci_log(),
-    }
+    let response = send_bounded_text(
+        gitlab_request(client, &trace_url, ctx.token.as_deref()),
+        MAX_GITLAB_CI_TRACE_BYTES,
+    )
+    .await?;
+    Ok(ci_log_value_from_response(response))
 }
 
 async fn gitlab_pull_request_ci_log(
@@ -4279,11 +5179,14 @@ async fn gitlab_pull_request_ci_log(
 
     let client = http_client()?;
     let project = urlencoding::encode(&ctx.remote.project_path).to_string();
-    let (log, truncated) = gitlab_job_trace(ctx, client, &project, ci_item_id).await;
-    let message = log
-        .as_ref()
-        .is_none()
-        .then_some("No error lines were detected in the job trace.".to_string());
+    let (log, truncated) = gitlab_job_trace(ctx, client, &project, ci_item_id).await?;
+    let message = if truncated {
+        Some("GitLab job trace evidence was truncated to the Review budget.".to_string())
+    } else {
+        log.as_ref()
+            .is_none()
+            .then_some("No error lines were detected in the job trace.".to_string())
+    };
     Ok(ReviewPlatformCiLog {
         ci_item_id: ci_item_id.to_string(),
         log,
@@ -4348,15 +5251,14 @@ fn parse_remote(
     auth_tokens: &ReviewPlatformAuthTokens,
 ) -> Option<ReviewPlatformRemote> {
     let parsed = parse_remote_url(remote_url)?;
-    let host_lower = parsed.host.to_ascii_lowercase();
-    let platform = if host_lower.contains("github.com") {
-        ReviewPlatformKind::Github
-    } else if host_lower.contains("gitlab") {
-        ReviewPlatformKind::Gitlab
-    } else if host_lower.contains("gitcode") {
-        ReviewPlatformKind::Gitcode
-    } else {
-        ReviewPlatformKind::Unknown
+    let host = normalize_provider_host(&parsed.host).ok()?;
+    let platform = match host.as_str() {
+        "github.com" => ReviewPlatformKind::Github,
+        "gitlab.com" => ReviewPlatformKind::Gitlab,
+        "gitcode.com" => ReviewPlatformKind::Gitcode,
+        _ => auth_tokens
+            .registered_platform_for_host(&host)
+            .unwrap_or(ReviewPlatformKind::Unknown),
     };
 
     let segments: Vec<&str> = parsed
@@ -4377,8 +5279,8 @@ fn parse_remote(
         .join("/");
 
     let supported = platform != ReviewPlatformKind::Unknown;
-    let (auth_state, auth_source) = auth_for_platform_host(platform, &parsed.host, auth_tokens);
-    let web_url = format!("{}://{}/{}", parsed.scheme, parsed.host, project_path);
+    let (auth_state, auth_source) = auth_for_platform_host(platform, &host, auth_tokens);
+    let web_url = format!("{}://{}/{}", parsed.scheme, host, project_path);
 
     Some(ReviewPlatformRemote {
         id: format!(
@@ -4390,7 +5292,7 @@ fn parse_remote(
         name: remote_name.to_string(),
         url: sanitize_remote_url(remote_url),
         platform,
-        host: parsed.host,
+        host,
         owner,
         repository_name,
         project_path,
@@ -4447,6 +5349,22 @@ fn parse_remote_url(remote_url: &str) -> Option<ParsedRemoteUrl> {
     None
 }
 
+fn remote_url_matches_provider_identity(
+    remote_url: &str,
+    platform: ReviewPlatformKind,
+    host: &str,
+    project_path: &str,
+) -> bool {
+    let Some(remote) = parse_remote_url(remote_url) else {
+        return false;
+    };
+    normalize_provider_host(&remote.host).ok().as_deref() == Some(host)
+        && normalize_project_path(platform, &remote.path)
+            .ok()
+            .as_deref()
+            == Some(project_path)
+}
+
 fn sanitize_remote_url(remote_url: &str) -> String {
     if let Some(scheme_end) = remote_url.find("://") {
         let scheme = &remote_url[..scheme_end];
@@ -4460,6 +5378,352 @@ fn sanitize_remote_url(remote_url: &str) -> String {
         }
     }
     remote_url.to_string()
+}
+
+fn map_github_issue(
+    identity: &ProviderIssueIdentity,
+    issue: &Value,
+    comments: &Value,
+    pagination: IssuePagination,
+    provider_has_more: bool,
+    provider_next_cursor: Option<String>,
+) -> Result<ReviewPlatformIssueEvidence, ReviewPlatformError> {
+    if identity.platform != ReviewPlatformKind::Github {
+        return Err(ReviewPlatformError::UnsupportedPlatform(
+            platform_label(identity.platform).to_string(),
+        ));
+    }
+    reject_pull_request_issue_target(identity, issue)?;
+    ensure_provider_item_identity(identity, issue, "number")?;
+    let comment_values = comments.as_array().ok_or_else(|| {
+        ReviewPlatformError::Parse("GitHub Issue comments response was not an array".to_string())
+    })?;
+    let labels = array_items(issue.get("labels").unwrap_or(&Value::Null))
+        .iter()
+        .filter_map(|label| {
+            label
+                .as_str()
+                .map(str::to_string)
+                .or_else(|| optional_string(label, "name"))
+        })
+        .collect::<Vec<_>>();
+    let comments = comment_values
+        .iter()
+        .map(|comment| ReviewPlatformIssueComment {
+            id: value_string(comment, "id"),
+            web_url: optional_string(comment, "html_url"),
+            author: nested_optional_string(comment, &["user", "login"]),
+            body: value_string(comment, "body"),
+            created_at: optional_string(comment, "created_at"),
+            updated_at: optional_string(comment, "updated_at"),
+        })
+        .collect::<Vec<_>>();
+    finalize_issue_mapping(
+        identity,
+        first_non_empty(&[
+            value_string(issue, "html_url"),
+            format!(
+                "https://{}/{}/issues/{}",
+                identity.host, identity.project_path, identity.issue_id
+            ),
+        ]),
+        value_string(issue, "title"),
+        bounded_issue_body(issue, "body")?,
+        value_string(issue, "state"),
+        nested_optional_string(issue, &["user", "login"]),
+        labels,
+        optional_string(issue, "created_at"),
+        optional_string(issue, "updated_at"),
+        comments,
+        pagination,
+        provider_has_more,
+        provider_next_cursor,
+    )
+}
+
+fn reject_pull_request_issue_target(
+    identity: &ProviderIssueIdentity,
+    issue: &Value,
+) -> Result<(), ReviewPlatformError> {
+    if identity.platform == ReviewPlatformKind::Github && issue.get("pull_request").is_some() {
+        return Err(ReviewPlatformError::TargetIsPullRequest {
+            issue_id: identity.issue_id.clone(),
+        });
+    }
+    Ok(())
+}
+
+fn map_gitlab_issue(
+    identity: &ProviderIssueIdentity,
+    issue: &Value,
+    comments: &Value,
+    pagination: IssuePagination,
+    provider_has_more: bool,
+    provider_next_cursor: Option<String>,
+) -> Result<ReviewPlatformIssueEvidence, ReviewPlatformError> {
+    if identity.platform != ReviewPlatformKind::Gitlab {
+        return Err(ReviewPlatformError::UnsupportedPlatform(
+            platform_label(identity.platform).to_string(),
+        ));
+    }
+    ensure_provider_item_identity(identity, issue, "iid")?;
+    let comment_values = comments.as_array().ok_or_else(|| {
+        ReviewPlatformError::Parse("GitLab Issue notes response was not an array".to_string())
+    })?;
+    let labels = array_items(issue.get("labels").unwrap_or(&Value::Null))
+        .iter()
+        .filter_map(Value::as_str)
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    let comments = comment_values
+        .iter()
+        .filter(|comment| !value_bool(comment, "system"))
+        .map(|comment| ReviewPlatformIssueComment {
+            id: value_string(comment, "id"),
+            web_url: optional_string(comment, "web_url"),
+            author: nested_optional_string(comment, &["author", "username"]),
+            body: value_string(comment, "body"),
+            created_at: optional_string(comment, "created_at"),
+            updated_at: optional_string(comment, "updated_at"),
+        })
+        .collect::<Vec<_>>();
+    finalize_issue_mapping(
+        identity,
+        first_non_empty(&[
+            value_string(issue, "web_url"),
+            format!(
+                "https://{}/{}/-/issues/{}",
+                identity.host, identity.project_path, identity.issue_id
+            ),
+        ]),
+        value_string(issue, "title"),
+        bounded_issue_body(issue, "description")?,
+        value_string(issue, "state"),
+        nested_optional_string(issue, &["author", "username"]),
+        labels,
+        optional_string(issue, "created_at"),
+        optional_string(issue, "updated_at"),
+        comments,
+        pagination,
+        provider_has_more,
+        provider_next_cursor,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn finalize_issue_mapping(
+    identity: &ProviderIssueIdentity,
+    web_url: String,
+    title: String,
+    body: String,
+    state: String,
+    author: Option<String>,
+    mut labels: Vec<String>,
+    created_at: Option<String>,
+    updated_at: Option<String>,
+    mut comments: Vec<ReviewPlatformIssueComment>,
+    pagination: IssuePagination,
+    provider_has_more: bool,
+    provider_next_cursor: Option<String>,
+) -> Result<ReviewPlatformIssueEvidence, ReviewPlatformError> {
+    labels.sort_unstable();
+    labels.dedup();
+    comments.sort_by(|left, right| {
+        left.created_at
+            .as_deref()
+            .unwrap_or_default()
+            .cmp(right.created_at.as_deref().unwrap_or_default())
+            .then_with(|| left.id.cmp(&right.id))
+    });
+    let page_was_bounded = comments.len() > pagination.per_page as usize;
+    let mut comments = comments
+        .into_iter()
+        .take(pagination.per_page as usize)
+        .collect::<Vec<_>>();
+    let mut comment_body_truncated = false;
+    for comment in &mut comments {
+        if comment.body.chars().count() > MAX_ISSUE_COMMENT_BODY_CHARS {
+            comment.body = comment
+                .body
+                .chars()
+                .take(MAX_ISSUE_COMMENT_BODY_CHARS)
+                .collect();
+            comment_body_truncated = true;
+        }
+    }
+    let mut aggregate_chars = 0usize;
+    let mut aggregate_truncated = false;
+    let mut bounded_comments = Vec::with_capacity(comments.len());
+    for mut comment in comments {
+        let body_chars = comment.body.chars().count();
+        let remaining = MAX_ISSUE_COMMENTS_AGGREGATE_CHARS.saturating_sub(aggregate_chars);
+        if remaining == 0 {
+            aggregate_truncated = true;
+            break;
+        }
+        if body_chars > remaining {
+            comment.body = comment.body.chars().take(remaining).collect();
+            bounded_comments.push(comment);
+            aggregate_truncated = true;
+            break;
+        }
+        aggregate_chars = aggregate_chars.saturating_add(body_chars);
+        bounded_comments.push(comment);
+    }
+    let comments = bounded_comments;
+    let has_more_comments = provider_has_more || page_was_bounded;
+    let next_cursor = provider_next_cursor
+        .filter(|cursor| !cursor.trim().is_empty())
+        .or_else(|| has_more_comments.then(|| pagination.page.saturating_add(1).to_string()));
+    let mut limitations = Vec::new();
+    if provider_has_more {
+        limitations.push("issue_comments_paginated".to_string());
+    }
+    if page_was_bounded {
+        limitations.push("issue_comments_page_bounded".to_string());
+    }
+    if comment_body_truncated {
+        limitations.push("issue_comment_body_truncated".to_string());
+    }
+    if aggregate_truncated {
+        limitations.push("issue_comments_aggregate_truncated".to_string());
+    }
+    if pagination.page > 1 {
+        limitations.push("issue_comments_previous_pages_omitted".to_string());
+    }
+    let completeness = if has_more_comments
+        || pagination.page > 1
+        || comment_body_truncated
+        || aggregate_truncated
+    {
+        ReviewEvidenceCompleteness::Partial
+    } else {
+        ReviewEvidenceCompleteness::Complete
+    };
+    let mut evidence = ReviewPlatformIssueEvidence {
+        platform: identity.platform,
+        host: identity.host.clone(),
+        project_path: identity.project_path.clone(),
+        issue_id: identity.issue_id.clone(),
+        web_url,
+        title,
+        body,
+        state,
+        author,
+        labels,
+        created_at,
+        updated_at,
+        comments,
+        fingerprint: String::new(),
+        completeness,
+        limitations,
+        has_more_comments,
+        next_cursor,
+    };
+    evidence.fingerprint = issue_fingerprint(&evidence, pagination);
+    Ok(evidence)
+}
+
+fn bounded_issue_body(value: &Value, key: &str) -> Result<String, ReviewPlatformError> {
+    let body = value_string(value, key);
+    if body.chars().count() > MAX_ISSUE_BODY_CHARS {
+        return Err(ReviewPlatformError::EvidenceTooLarge {
+            resource: "issue_body".to_string(),
+            limit: MAX_ISSUE_BODY_CHARS,
+        });
+    }
+    Ok(body)
+}
+
+fn ensure_provider_item_identity(
+    identity: &ProviderIssueIdentity,
+    value: &Value,
+    provider_id_field: &str,
+) -> Result<(), ReviewPlatformError> {
+    let provider_id = value_string(value, provider_id_field);
+    if !provider_id.is_empty() && provider_id != identity.issue_id {
+        return Err(ReviewPlatformError::Parse(format!(
+            "Provider returned Issue {provider_id} for requested Issue {}",
+            identity.issue_id
+        )));
+    }
+    Ok(())
+}
+
+fn issue_fingerprint(
+    evidence: &ReviewPlatformIssueEvidence,
+    pagination: IssuePagination,
+) -> String {
+    fn hash_field(hasher: &mut Sha256, value: &str) {
+        hasher.update((value.len() as u64).to_le_bytes());
+        hasher.update(value.as_bytes());
+    }
+
+    let mut hasher = Sha256::new();
+    hash_field(&mut hasher, "review-platform-issue-v1");
+    for value in [
+        evidence.platform.as_str(),
+        &evidence.host,
+        &evidence.project_path,
+        &evidence.issue_id,
+        &evidence.web_url,
+        &evidence.title,
+        &evidence.body,
+        &evidence.state,
+        evidence.author.as_deref().unwrap_or_default(),
+        evidence.created_at.as_deref().unwrap_or_default(),
+        evidence.updated_at.as_deref().unwrap_or_default(),
+    ] {
+        hash_field(&mut hasher, value);
+    }
+    hash_field(&mut hasher, &evidence.labels.len().to_string());
+    for label in &evidence.labels {
+        hash_field(&mut hasher, label);
+    }
+    hash_field(&mut hasher, &evidence.comments.len().to_string());
+    for comment in &evidence.comments {
+        for value in [
+            comment.id.as_str(),
+            comment.web_url.as_deref().unwrap_or_default(),
+            comment.author.as_deref().unwrap_or_default(),
+            comment.body.as_str(),
+            comment.created_at.as_deref().unwrap_or_default(),
+            comment.updated_at.as_deref().unwrap_or_default(),
+        ] {
+            hash_field(&mut hasher, value);
+        }
+    }
+    hash_field(&mut hasher, &pagination.page.to_string());
+    hash_field(&mut hasher, &pagination.per_page.to_string());
+    hash_field(
+        &mut hasher,
+        match evidence.completeness {
+            ReviewEvidenceCompleteness::Complete => "complete",
+            ReviewEvidenceCompleteness::Partial => "partial",
+        },
+    );
+    hash_field(&mut hasher, &evidence.limitations.len().to_string());
+    for limitation in &evidence.limitations {
+        hash_field(&mut hasher, limitation);
+    }
+    hash_field(
+        &mut hasher,
+        if evidence.has_more_comments {
+            "has_more"
+        } else {
+            "no_more"
+        },
+    );
+    hash_field(
+        &mut hasher,
+        evidence.next_cursor.as_deref().unwrap_or_default(),
+    );
+    let digest = hasher.finalize();
+    let hex = digest
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>();
+    format!("sha256:{hex}")
 }
 
 fn github_pull_request_from_value(value: &Value) -> ReviewPlatformPullRequest {
@@ -5094,8 +6358,10 @@ where
 {
     let mut page = 1;
     let mut values = Vec::new();
+    let mut request_count = 0usize;
     while values.len() < max_items {
         let response = send_bounded_json_response(build_request(page)).await?;
+        request_count += 1;
         let items = response.value.as_array().ok_or_else(|| {
             ReviewPlatformError::Parse("Provider paginated response was not an array".to_string())
         })?;
@@ -5106,6 +6372,12 @@ where
         let Some(next) = next_page(&response.headers, page).filter(|next| *next > page) else {
             break;
         };
+        if request_count >= MAX_REVIEW_TARGET_PAGES {
+            return Err(ReviewPlatformError::EvidenceTooLarge {
+                resource: "provider pagination pages".to_string(),
+                limit: MAX_REVIEW_TARGET_PAGES,
+            });
+        }
         page = next;
     }
     Ok(Value::Array(values))
@@ -5125,8 +6397,10 @@ where
 {
     let mut page = start_page.max(1);
     let mut visited = 0usize;
+    let mut request_count = 0usize;
     while visited < max_items {
         let response = send_bounded_json_response(build_request(page)).await?;
+        request_count += 1;
         let items = response.value.as_array().ok_or_else(|| {
             ReviewPlatformError::Parse("Provider paginated response was not an array".to_string())
         })?;
@@ -5143,6 +6417,12 @@ where
         let Some(next) = next_page(&response.headers, page).filter(|next| *next > page) else {
             break;
         };
+        if request_count >= MAX_REVIEW_TARGET_PAGES {
+            return Err(ReviewPlatformError::EvidenceTooLarge {
+                resource: "provider pagination pages".to_string(),
+                limit: MAX_REVIEW_TARGET_PAGES,
+            });
+        }
         page = next;
     }
     Ok(None)
@@ -5362,8 +6642,12 @@ mod tests {
     use super::*;
     use serde_json::json;
     use std::{
+        io::{Read, Write},
+        net::TcpListener,
         path::PathBuf,
-        sync::Arc,
+        sync::{mpsc, Arc},
+        thread,
+        time::{Duration, Instant},
         time::{SystemTime, UNIX_EPOCH},
     };
     use tokio::fs;
@@ -5388,6 +6672,140 @@ mod tests {
         ))
     }
 
+    fn spawn_single_review_response(response: Vec<u8>) -> String {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("mock provider should bind");
+        let address = listener.local_addr().expect("mock provider address");
+        thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("mock provider should accept");
+            let mut request = [0u8; 4096];
+            let _ = stream.read(&mut request);
+            stream
+                .write_all(&response)
+                .expect("mock provider response should write");
+        });
+        format!("http://{address}")
+    }
+
+    fn spawn_review_request_probe() -> (String, mpsc::Receiver<bool>) {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("mock provider should bind");
+        listener
+            .set_nonblocking(true)
+            .expect("mock provider should allow non-blocking accept");
+        let address = listener.local_addr().expect("mock provider address");
+        let (sender, receiver) = mpsc::channel();
+        thread::spawn(move || {
+            let deadline = Instant::now() + Duration::from_millis(300);
+            loop {
+                match listener.accept() {
+                    Ok(_) => {
+                        let _ = sender.send(true);
+                        return;
+                    }
+                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                        if Instant::now() >= deadline {
+                            let _ = sender.send(false);
+                            return;
+                        }
+                        thread::sleep(Duration::from_millis(10));
+                    }
+                    Err(error) => panic!("mock provider probe should accept: {error}"),
+                }
+            }
+        });
+        (format!("http://{address}"), receiver)
+    }
+
+    fn spawn_empty_paginated_responses() -> (String, mpsc::Receiver<usize>) {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("mock provider should bind");
+        listener
+            .set_nonblocking(true)
+            .expect("mock provider should allow non-blocking accept");
+        let address = listener.local_addr().expect("mock provider address");
+        let (sender, receiver) = mpsc::channel();
+        thread::spawn(move || {
+            let mut request_count = 0usize;
+            let mut idle_deadline = Instant::now() + Duration::from_secs(2);
+            loop {
+                match listener.accept() {
+                    Ok((mut stream, _)) => {
+                        let mut request = [0u8; 4096];
+                        let _ = stream.read(&mut request);
+                        request_count += 1;
+                        let next_page = request_count + 1;
+                        let response = format!(
+                            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nX-Next-Page: {next_page}\r\nContent-Length: 2\r\nConnection: close\r\n\r\n[]"
+                        );
+                        stream
+                            .write_all(response.as_bytes())
+                            .expect("mock provider response should write");
+                        idle_deadline = Instant::now() + Duration::from_millis(300);
+                    }
+                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                        if Instant::now() >= idle_deadline {
+                            let _ = sender.send(request_count);
+                            return;
+                        }
+                        thread::sleep(Duration::from_millis(5));
+                    }
+                    Err(error) => panic!("mock provider pagination should accept: {error}"),
+                }
+            }
+        });
+        (format!("http://{address}"), receiver)
+    }
+
+    fn gitlab_trace_context(api_base_url: String) -> ProviderContext {
+        let mut tokens = ReviewPlatformAuthTokens::default();
+        tokens.tokens.insert(
+            token_key(ReviewPlatformKind::Gitlab, "gitlab.com")
+                .expect("GitLab token key should normalize"),
+            "never-expose-trace-token".to_string(),
+        );
+        let mut context = provider_context_for_identity(
+            ReviewPlatformKind::Gitlab,
+            "gitlab.com",
+            "example/repo",
+            &tokens,
+        )
+        .expect("GitLab trace context should be valid");
+        context.api_base_url = api_base_url;
+        context
+    }
+
+    #[tokio::test]
+    async fn bounded_pagination_stops_empty_pages_with_next_links() {
+        let (base_url, request_count) = spawn_empty_paginated_responses();
+        let client = http_client().expect("review client should build");
+        let result = tokio::time::timeout(
+            Duration::from_secs(2),
+            fetch_bounded_paginated_array(
+                |page| {
+                    let page = page.to_string();
+                    client
+                        .get(&format!("{base_url}/items"))
+                        .query(&[("page", &page)])
+                },
+                gitlab_next_page,
+                MAX_REVIEW_TARGET_FILES,
+            ),
+        )
+        .await
+        .expect("bounded pagination must terminate independently of item progress");
+
+        assert!(matches!(
+            result,
+            Err(ReviewPlatformError::EvidenceTooLarge { ref resource, .. })
+                if resource == "provider pagination pages"
+        ));
+        assert!(
+            request_count
+                .recv_timeout(Duration::from_secs(3))
+                .expect("mock provider should report request count")
+                <= 32,
+            "pagination request cap must remain small"
+        );
+    }
+
     #[tokio::test]
     async fn token_store_uses_injected_path() {
         let path = temp_token_store_path("token-store");
@@ -5409,6 +6827,279 @@ mod tests {
         assert!(path.exists());
 
         let _ = fs::remove_file(path).await;
+    }
+
+    #[tokio::test]
+    async fn token_store_preserves_io_path_case_and_only_normalizes_lock_identity() {
+        let base = temp_token_store_path("mixed-case-path");
+        let mixed_path = base.with_file_name("MiXeD-Review-Token-Store.JSON");
+        let service = ReviewPlatformService::new_local_only(mixed_path.clone());
+
+        assert_eq!(service.token_store_path(), mixed_path.as_path());
+        service
+            .update_auth_token(ReviewPlatformKind::Github, "github.com", "case-token")
+            .await
+            .expect("mixed-case token path should be writable");
+        let created_names = std::fs::read_dir(
+            mixed_path
+                .parent()
+                .expect("mixed-case token path should have a parent"),
+        )
+        .expect("mixed-case token directory should be readable")
+        .filter_map(Result::ok)
+        .map(|entry| entry.file_name())
+        .collect::<Vec<_>>();
+        assert!(created_names.iter().any(|name| {
+            name == mixed_path
+                .file_name()
+                .expect("mixed-case token path should have a file name")
+        }));
+
+        let case_variant = PathBuf::from(mixed_path.to_string_lossy().to_ascii_uppercase());
+        let variant_service = ReviewPlatformService::new_local_only(case_variant);
+        #[cfg(windows)]
+        assert!(Arc::ptr_eq(
+            &service.token_store_lock,
+            &variant_service.token_store_lock
+        ));
+        #[cfg(not(windows))]
+        assert!(!Arc::ptr_eq(
+            &service.token_store_lock,
+            &variant_service.token_store_lock
+        ));
+
+        let _ = fs::remove_file(mixed_path).await;
+    }
+
+    #[tokio::test]
+    async fn token_authority_normalization_is_shared_by_save_get_and_clear() {
+        let path = temp_token_store_path("token-authority-normalization");
+        let service = ReviewPlatformService::new_local_only(path.clone());
+
+        service
+            .update_auth_token(ReviewPlatformKind::Github, " GitHub.COM. ", "secret-token")
+            .await
+            .expect("normalized token should save");
+        let tokens = service
+            .load_stored_tokens()
+            .await
+            .expect("normalized token should load");
+        assert_eq!(
+            tokens.get(ReviewPlatformKind::Github, "github.com."),
+            Some("secret-token")
+        );
+
+        service
+            .clear_auth_token(ReviewPlatformKind::Github, "GITHUB.COM.")
+            .await
+            .expect("normalized token should clear");
+        let tokens = service
+            .load_stored_tokens()
+            .await
+            .expect("cleared token store should load");
+        assert_eq!(tokens.get(ReviewPlatformKind::Github, "github.com"), None);
+        let _ = fs::remove_file(path).await;
+    }
+
+    #[tokio::test]
+    async fn loaded_legacy_token_authorities_are_normalized() {
+        let path = temp_token_store_path("legacy-token-authority");
+        fs::write(
+            &path,
+            serde_json::to_vec(&json!({
+                "tokens": {
+                    "github:GitHub.COM.": {
+                        "token": "legacy-token",
+                        "updatedAt": "2026-07-11T00:00:00Z"
+                    }
+                }
+            }))
+            .expect("legacy token fixture should serialize"),
+        )
+        .await
+        .expect("legacy token fixture should be written");
+        let service = ReviewPlatformService::new_local_only(path.clone());
+
+        let tokens = service
+            .load_stored_tokens()
+            .await
+            .expect("legacy token store should load");
+
+        assert_eq!(
+            tokens.get(ReviewPlatformKind::Github, "github.com"),
+            Some("legacy-token")
+        );
+        let _ = fs::remove_file(path).await;
+    }
+
+    #[tokio::test]
+    async fn canonical_token_wins_legacy_conflict_and_migration_is_persisted() {
+        let path = temp_token_store_path("canonical-token-conflict");
+        fs::write(
+            &path,
+            serde_json::to_vec(&json!({
+                "tokens": {
+                    "github:GitHub.COM.": {
+                        "token": "legacy-token",
+                        "updatedAt": "2026-07-12T00:00:00Z"
+                    },
+                    "github:github.com": {
+                        "token": "canonical-token",
+                        "updatedAt": "2026-07-11T00:00:00Z"
+                    }
+                }
+            }))
+            .expect("conflicting token fixture should serialize"),
+        )
+        .await
+        .expect("conflicting token fixture should be written");
+        let service = ReviewPlatformService::new_local_only(path.clone());
+
+        let tokens = service
+            .load_stored_tokens()
+            .await
+            .expect("conflicting token store should migrate");
+        assert_eq!(
+            tokens.get(ReviewPlatformKind::Github, "github.com"),
+            Some("canonical-token")
+        );
+        let migrated: StoredReviewPlatformTokens = serde_json::from_slice(
+            &fs::read(&path)
+                .await
+                .expect("migrated token file should be readable"),
+        )
+        .expect("migrated token file should parse");
+        assert_eq!(migrated.tokens.len(), 1);
+        assert_eq!(
+            migrated
+                .tokens
+                .get("github:github.com")
+                .map(|entry| entry.token.as_str()),
+            Some("canonical-token")
+        );
+
+        service
+            .update_auth_token(ReviewPlatformKind::Github, "GITHUB.COM.", "new-token")
+            .await
+            .expect("canonical token update should succeed");
+        let updated: StoredReviewPlatformTokens = serde_json::from_slice(
+            &fs::read(&path)
+                .await
+                .expect("updated token file should be readable"),
+        )
+        .expect("updated token file should parse");
+        assert_eq!(updated.tokens.len(), 1);
+        assert_eq!(
+            updated
+                .tokens
+                .get("github:github.com")
+                .map(|entry| entry.token.as_str()),
+            Some("new-token")
+        );
+        let _ = fs::remove_file(path).await;
+    }
+
+    #[tokio::test]
+    async fn independent_owners_concurrently_update_without_losing_hosts() {
+        let path = temp_token_store_path("concurrent-token-updates");
+        let first = ReviewPlatformService::new_local_only(path.clone());
+        let second = ReviewPlatformService::new_local_only(path.clone());
+
+        let (github, gitlab) = tokio::join!(
+            first.update_auth_token(ReviewPlatformKind::Github, "github.com", "github-token"),
+            second.update_auth_token(ReviewPlatformKind::Gitlab, "gitlab.com", "gitlab-token")
+        );
+        github.expect("GitHub token update should succeed");
+        gitlab.expect("GitLab token update should succeed");
+
+        let stored = first
+            .load_stored_tokens()
+            .await
+            .expect("concurrent token store should load");
+        assert_eq!(
+            stored.get(ReviewPlatformKind::Github, "github.com"),
+            Some("github-token")
+        );
+        assert_eq!(
+            stored.get(ReviewPlatformKind::Gitlab, "gitlab.com"),
+            Some("gitlab-token")
+        );
+        let _ = fs::remove_file(path).await;
+    }
+
+    #[tokio::test]
+    async fn independent_owners_concurrently_update_and_clear_without_lost_mutations() {
+        let path = temp_token_store_path("concurrent-token-update-clear");
+        let first = ReviewPlatformService::new_local_only(path.clone());
+        let second = ReviewPlatformService::new_local_only(path.clone());
+        first
+            .update_auth_token(ReviewPlatformKind::Github, "github.com", "old-github")
+            .await
+            .expect("GitHub fixture token should save");
+        first
+            .update_auth_token(ReviewPlatformKind::Gitlab, "gitlab.com", "old-gitlab")
+            .await
+            .expect("GitLab fixture token should save");
+
+        let (update, clear) = tokio::join!(
+            first.update_auth_token(ReviewPlatformKind::Github, "github.com", "new-github"),
+            second.clear_auth_token(ReviewPlatformKind::Gitlab, "gitlab.com")
+        );
+        update.expect("GitHub token update should succeed");
+        clear.expect("GitLab token clear should succeed");
+
+        let stored = second
+            .load_stored_tokens()
+            .await
+            .expect("updated token store should load");
+        assert_eq!(
+            stored.get(ReviewPlatformKind::Github, "github.com"),
+            Some("new-github")
+        );
+        assert_eq!(stored.get(ReviewPlatformKind::Gitlab, "gitlab.com"), None);
+        let temp_prefix = format!(
+            ".{}.",
+            path.file_name()
+                .expect("token path should have a file name")
+                .to_string_lossy()
+        );
+        let mut entries = fs::read_dir(
+            path.parent()
+                .expect("temporary token path should have a parent"),
+        )
+        .await
+        .expect("temporary token directory should be readable");
+        while let Some(entry) = entries
+            .next_entry()
+            .await
+            .expect("temporary token entry should be readable")
+        {
+            assert!(!entry
+                .file_name()
+                .to_string_lossy()
+                .starts_with(&temp_prefix));
+        }
+        let _ = fs::remove_file(path).await;
+    }
+
+    #[test]
+    fn token_store_lock_registry_reclaims_dead_paths() {
+        let marker = format!(
+            "registry-reclaim-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("system clock should be after unix epoch")
+                .as_nanos()
+        );
+        for index in 0..64 {
+            let path = std::env::temp_dir().join(format!("{marker}-{index}.json"));
+            drop(ReviewPlatformService::new_local_only(path));
+        }
+        let survivor_path = std::env::temp_dir().join(format!("{marker}-survivor.json"));
+        let _survivor = ReviewPlatformService::new_local_only(survivor_path);
+
+        assert_eq!(token_store_lock_registry_entries_for_test(&marker), 1);
     }
 
     #[tokio::test]
@@ -5611,6 +7302,91 @@ mod tests {
         );
 
         assert!(matches!(result, Err(ReviewPlatformError::StaleTarget(_))));
+    }
+
+    #[test]
+    fn identity_file_diff_preserves_exact_expected_revisions() {
+        let pull_request = github_pull_request_from_value(&json!({
+            "number": 42,
+            "title": "Review target",
+            "state": "open",
+            "head": { "sha": "2222222222222222222222222222222222222222" },
+            "base": { "sha": "1111111111111111111111111111111111111111" }
+        }));
+        let diff = file_diff_from_parts(
+            pull_request,
+            vec![ReviewPlatformFile {
+                path: "src/lib.rs".to_string(),
+                old_path: None,
+                status: ReviewFileStatus::Modified,
+                additions: 1,
+                deletions: 1,
+                patch: Some("@@ -1 +1 @@\n-old\n+new".to_string()),
+            }],
+            "1111111111111111111111111111111111111111",
+            "2222222222222222222222222222222222222222",
+            "src/lib.rs",
+        )
+        .expect("identity diff should preserve exact revisions");
+
+        assert_eq!(
+            diff.base_revision,
+            "1111111111111111111111111111111111111111"
+        );
+        assert_eq!(
+            diff.head_revision,
+            "2222222222222222222222222222222222222222"
+        );
+        assert!(diff.diff.contains("-old\n+new"));
+    }
+
+    #[test]
+    fn identity_file_diff_rejects_missing_or_unavailable_patch() {
+        let pull_request = github_pull_request_from_value(&json!({
+            "number": 42,
+            "title": "Review target",
+            "state": "open",
+            "head": { "sha": "2222222222222222222222222222222222222222" },
+            "base": { "sha": "1111111111111111111111111111111111111111" }
+        }));
+        let result = file_diff_from_parts(
+            pull_request,
+            vec![ReviewPlatformFile {
+                path: "assets/image.png".to_string(),
+                old_path: None,
+                status: ReviewFileStatus::Modified,
+                additions: 0,
+                deletions: 0,
+                patch: None,
+            }],
+            "1111111111111111111111111111111111111111",
+            "2222222222222222222222222222222222222222",
+            "assets/image.png",
+        );
+
+        assert!(matches!(result, Err(ReviewPlatformError::Api(_))));
+    }
+
+    #[tokio::test]
+    async fn identity_file_diff_service_rejects_invalid_provider_id_before_network() {
+        let service =
+            ReviewPlatformService::new_local_only(temp_token_store_path("identity-file-diff"));
+
+        let result = service
+            .pull_request_file_diff_by_identity(
+                ReviewPlatformKind::Github,
+                "github.com",
+                "openai/example",
+                "01",
+                "1111111111111111111111111111111111111111",
+                "2222222222222222222222222222222222222222",
+                "src/lib.rs",
+                None,
+                None,
+            )
+            .await;
+
+        assert!(matches!(result, Err(ReviewPlatformError::Api(_))));
     }
 
     #[test]
@@ -5914,5 +7690,1068 @@ mod tests {
 
         assert!(!truncated);
         assert!(log.is_none());
+    }
+
+    #[test]
+    fn ci_trace_transport_truncation_is_preserved_as_partial_log_state() {
+        let (log, truncated) = ci_log_value_from_response(ReviewTextResponse {
+            text: "error: failed before provider trace budget".to_string(),
+            truncated: true,
+        });
+
+        assert_eq!(
+            log.as_deref(),
+            Some("error: failed before provider trace budget")
+        );
+        assert!(truncated);
+    }
+
+    #[tokio::test]
+    async fn gitlab_trace_http_failures_propagate_without_provider_body() {
+        for status in [401u16, 500u16] {
+            let body = "provider-secret-error-body";
+            let api_base_url = spawn_single_review_response(
+                format!(
+                    "HTTP/1.1 {status} Failure\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len()
+                )
+                .into_bytes(),
+            );
+            let context = gitlab_trace_context(api_base_url);
+
+            let result = gitlab_pull_request_ci_log(&context, "7", "123", "job").await;
+
+            assert!(matches!(
+                result,
+                Err(ReviewPlatformError::Http {
+                    status: actual,
+                    ref message,
+                }) if actual == status && message.is_empty()
+            ));
+        }
+    }
+
+    #[tokio::test]
+    async fn gitlab_trace_rejects_blank_job_id_without_provider_call() {
+        let (api_base_url, provider_called) = spawn_review_request_probe();
+        let context = gitlab_trace_context(api_base_url);
+
+        let result = gitlab_pull_request_ci_log(&context, "7", "   ", "job").await;
+
+        assert!(matches!(
+            result,
+            Err(ReviewPlatformError::Api(ref message))
+                if message == "GitLab job id is required"
+        ));
+        assert!(!provider_called
+            .recv_timeout(Duration::from_secs(1))
+            .expect("provider request probe should finish"));
+    }
+
+    #[tokio::test]
+    async fn gitlab_trace_successful_empty_body_remains_empty_evidence() {
+        let api_base_url = spawn_single_review_response(
+            b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_vec(),
+        );
+        let context = gitlab_trace_context(api_base_url);
+
+        let result = gitlab_pull_request_ci_log(&context, "7", "123", "job")
+            .await
+            .expect("successful empty trace should remain available");
+
+        assert!(result.log.is_none());
+        assert!(!result.truncated);
+        assert_eq!(
+            result.message.as_deref(),
+            Some("No error lines were detected in the job trace.")
+        );
+    }
+
+    #[tokio::test]
+    async fn gitlab_trace_interrupted_chunked_response_propagates_network_failure() {
+        let api_base_url = spawn_single_review_response(
+            b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n20\r\nerror"
+                .to_vec(),
+        );
+        let context = gitlab_trace_context(api_base_url);
+
+        let result = gitlab_pull_request_ci_log(&context, "7", "123", "job").await;
+
+        assert!(matches!(result, Err(ReviewPlatformError::Network(_))));
+    }
+
+    fn github_issue_fixture() -> Value {
+        json!({
+            "number": 42,
+            "html_url": "https://github.com/example/repo/issues/42",
+            "title": "Provider Issue evidence",
+            "body": "Keep the complete Issue body.",
+            "state": "open",
+            "user": { "login": "alice" },
+            "labels": [
+                { "name": "review" },
+                { "name": "bug" }
+            ],
+            "created_at": "2026-07-11T00:00:00Z",
+            "updated_at": "2026-07-11T01:00:00Z"
+        })
+    }
+
+    fn github_issue_comments_fixture() -> Value {
+        json!([{
+            "id": 7,
+            "html_url": "https://github.com/example/repo/issues/42#issuecomment-7",
+            "user": { "login": "bob" },
+            "body": "The first comment.",
+            "created_at": "2026-07-11T02:00:00Z",
+            "updated_at": "2026-07-11T02:30:00Z"
+        }])
+    }
+
+    fn github_issue_identity() -> ProviderIssueIdentity {
+        ProviderIssueIdentity::new(
+            ReviewPlatformKind::Github,
+            "github.com",
+            "example/repo",
+            "42",
+        )
+        .expect("GitHub identity fixture should be valid")
+    }
+
+    #[test]
+    fn github_issue_mapping_preserves_body_labels_and_comment_pagination() {
+        let evidence = map_github_issue(
+            &github_issue_identity(),
+            &github_issue_fixture(),
+            &github_issue_comments_fixture(),
+            IssuePagination::new(Some(1), Some(100)),
+            true,
+            Some("2".to_string()),
+        )
+        .expect("GitHub fixture should map");
+
+        assert_eq!(evidence.issue_id, "42");
+        assert_eq!(evidence.body, "Keep the complete Issue body.");
+        assert_eq!(evidence.labels, vec!["bug", "review"]);
+        assert_eq!(evidence.comments.len(), 1);
+        assert!(evidence.has_more_comments);
+        assert_eq!(evidence.next_cursor.as_deref(), Some("2"));
+        assert_eq!(evidence.completeness, ReviewEvidenceCompleteness::Partial);
+        assert_eq!(
+            evidence.limitations,
+            vec!["issue_comments_paginated".to_string()]
+        );
+    }
+
+    #[test]
+    fn gitlab_issue_mapping_preserves_description_labels_and_note_identity() {
+        let identity = ProviderIssueIdentity::new(
+            ReviewPlatformKind::Gitlab,
+            "gitlab.com",
+            "example/group/repo",
+            "42",
+        )
+        .expect("GitLab identity fixture should be valid");
+        let evidence = map_gitlab_issue(
+            &identity,
+            &json!({
+                "iid": 42,
+                "web_url": "https://gitlab.com/example/group/repo/-/issues/42",
+                "title": "GitLab Issue evidence",
+                "description": "Keep the complete GitLab description.",
+                "state": "opened",
+                "author": { "username": "alice" },
+                "labels": ["review", "bug"],
+                "created_at": "2026-07-11T00:00:00Z",
+                "updated_at": "2026-07-11T01:00:00Z"
+            }),
+            &json!([{
+                "id": 9,
+                "author": { "username": "bob" },
+                "body": "The first note.",
+                "created_at": "2026-07-11T02:00:00Z",
+                "updated_at": "2026-07-11T02:30:00Z",
+                "system": false
+            }]),
+            IssuePagination::new(Some(1), Some(100)),
+            false,
+            None,
+        )
+        .expect("GitLab fixture should map");
+
+        assert_eq!(evidence.issue_id, "42");
+        assert_eq!(evidence.body, "Keep the complete GitLab description.");
+        assert_eq!(evidence.labels, vec!["bug", "review"]);
+        assert_eq!(evidence.comments[0].id, "9");
+        assert_eq!(evidence.comments[0].author.as_deref(), Some("bob"));
+        assert_eq!(evidence.completeness, ReviewEvidenceCompleteness::Complete);
+        assert!(evidence.limitations.is_empty());
+        assert!(!evidence.has_more_comments);
+        assert!(evidence.next_cursor.is_none());
+    }
+
+    #[test]
+    fn issue_mapping_bounds_one_comment_page_to_one_hundred() {
+        let comments = Value::Array(
+            (0..101)
+                .map(|id| {
+                    json!({
+                        "id": id,
+                        "user": { "login": "reviewer" },
+                        "body": format!("comment {id}")
+                    })
+                })
+                .collect(),
+        );
+        let evidence = map_github_issue(
+            &github_issue_identity(),
+            &github_issue_fixture(),
+            &comments,
+            IssuePagination::new(Some(1), Some(250)),
+            false,
+            None,
+        )
+        .expect("oversized fixture should be bounded");
+
+        assert_eq!(evidence.comments.len(), 100);
+        assert!(evidence.has_more_comments);
+        assert_eq!(evidence.next_cursor.as_deref(), Some("2"));
+        assert_eq!(evidence.completeness, ReviewEvidenceCompleteness::Partial);
+        assert!(evidence
+            .limitations
+            .contains(&"issue_comments_page_bounded".to_string()));
+    }
+
+    #[test]
+    fn issue_mapping_later_page_reports_omitted_previous_comments() {
+        let evidence = map_github_issue(
+            &github_issue_identity(),
+            &github_issue_fixture(),
+            &github_issue_comments_fixture(),
+            IssuePagination::new(Some(2), Some(100)),
+            false,
+            None,
+        )
+        .expect("later page fixture should map");
+
+        assert_eq!(evidence.completeness, ReviewEvidenceCompleteness::Partial);
+        assert!(evidence
+            .limitations
+            .contains(&"issue_comments_previous_pages_omitted".to_string()));
+        assert!(!evidence.has_more_comments);
+        assert!(evidence.next_cursor.is_none());
+    }
+
+    #[test]
+    fn issue_mapping_rejects_github_pull_request_payloads_with_typed_error() {
+        let mut issue = github_issue_fixture();
+        issue["pull_request"] = json!({
+            "url": "https://api.github.com/repos/example/repo/pulls/42"
+        });
+
+        let result = map_github_issue(
+            &github_issue_identity(),
+            &issue,
+            &github_issue_comments_fixture(),
+            IssuePagination::new(None, None),
+            false,
+            None,
+        );
+
+        assert!(matches!(
+            result,
+            Err(ReviewPlatformError::TargetIsPullRequest { .. })
+        ));
+    }
+
+    #[test]
+    fn issue_mapping_rejects_issue_body_over_unicode_scalar_budget() {
+        let mut issue = github_issue_fixture();
+        issue["body"] = json!("界".repeat(MAX_ISSUE_BODY_CHARS + 1));
+
+        let result = map_github_issue(
+            &github_issue_identity(),
+            &issue,
+            &json!([]),
+            IssuePagination::new(None, None),
+            false,
+            None,
+        );
+
+        assert!(matches!(
+            result,
+            Err(ReviewPlatformError::EvidenceTooLarge { ref resource, .. })
+                if resource == "issue_body"
+        ));
+    }
+
+    #[test]
+    fn issue_mapping_truncates_oversized_comment_bodies_as_partial_evidence() {
+        let comments = json!([{
+            "id": 7,
+            "user": { "login": "bob" },
+            "body": "界".repeat(MAX_ISSUE_COMMENT_BODY_CHARS + 1),
+            "created_at": "2026-07-11T02:00:00Z"
+        }]);
+
+        let evidence = map_github_issue(
+            &github_issue_identity(),
+            &github_issue_fixture(),
+            &comments,
+            IssuePagination::new(None, None),
+            false,
+            None,
+        )
+        .expect("oversized comment should degrade structurally");
+
+        assert_eq!(
+            evidence.comments[0].body.chars().count(),
+            MAX_ISSUE_COMMENT_BODY_CHARS
+        );
+        assert_eq!(evidence.completeness, ReviewEvidenceCompleteness::Partial);
+        assert!(evidence
+            .limitations
+            .contains(&"issue_comment_body_truncated".to_string()));
+    }
+
+    #[test]
+    fn issue_mapping_bounds_aggregate_comment_unicode_scalars() {
+        let comments = Value::Array(
+            (1..=17)
+                .map(|id| {
+                    json!({
+                        "id": id,
+                        "user": { "login": "reviewer" },
+                        "body": "界".repeat(MAX_ISSUE_COMMENT_BODY_CHARS),
+                        "created_at": format!("2026-07-11T{id:02}:00:00Z")
+                    })
+                })
+                .collect(),
+        );
+
+        let evidence = map_github_issue(
+            &github_issue_identity(),
+            &github_issue_fixture(),
+            &comments,
+            IssuePagination::new(None, None),
+            false,
+            None,
+        )
+        .expect("aggregate overflow should degrade structurally");
+        let aggregate_chars = evidence
+            .comments
+            .iter()
+            .map(|comment| comment.body.chars().count())
+            .sum::<usize>();
+
+        assert!(aggregate_chars <= MAX_ISSUE_COMMENTS_AGGREGATE_CHARS);
+        assert_eq!(evidence.completeness, ReviewEvidenceCompleteness::Partial);
+        assert!(evidence
+            .limitations
+            .contains(&"issue_comments_aggregate_truncated".to_string()));
+    }
+
+    #[test]
+    fn gitlab_issue_mapping_filters_system_notes_and_orders_comments_ascending() {
+        let identity = ProviderIssueIdentity::new(
+            ReviewPlatformKind::Gitlab,
+            "gitlab.com",
+            "example/repo",
+            "42",
+        )
+        .expect("GitLab identity should be valid");
+        let issue = json!({
+            "iid": 42,
+            "title": "Issue",
+            "description": "Body",
+            "state": "opened"
+        });
+        let notes = json!([
+            { "id": 2, "body": "later", "created_at": "2026-07-11T03:00:00Z", "system": false },
+            { "id": 99, "body": "system", "created_at": "2026-07-11T02:30:00Z", "system": true },
+            { "id": 1, "body": "earlier", "created_at": "2026-07-11T02:00:00Z", "system": false }
+        ]);
+
+        let evidence = map_gitlab_issue(
+            &identity,
+            &issue,
+            &notes,
+            IssuePagination::new(None, None),
+            false,
+            None,
+        )
+        .expect("GitLab notes should map");
+
+        assert_eq!(
+            evidence
+                .comments
+                .iter()
+                .map(|comment| comment.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["1", "2"]
+        );
+    }
+
+    #[test]
+    fn issue_mapping_fingerprint_is_deterministic_and_content_sensitive() {
+        let first = map_github_issue(
+            &github_issue_identity(),
+            &github_issue_fixture(),
+            &github_issue_comments_fixture(),
+            IssuePagination::new(None, None),
+            false,
+            None,
+        )
+        .expect("first fixture should map");
+        let reordered = map_github_issue(
+            &github_issue_identity(),
+            &json!({
+                "updated_at": "2026-07-11T01:00:00Z",
+                "labels": [{ "name": "bug" }, { "name": "review" }],
+                "state": "open",
+                "title": "Provider Issue evidence",
+                "number": 42,
+                "body": "Keep the complete Issue body.",
+                "html_url": "https://github.com/example/repo/issues/42",
+                "created_at": "2026-07-11T00:00:00Z",
+                "user": { "login": "alice" }
+            }),
+            &github_issue_comments_fixture(),
+            IssuePagination::new(None, None),
+            false,
+            None,
+        )
+        .expect("reordered fixture should map");
+        let changed = map_github_issue(
+            &github_issue_identity(),
+            &github_issue_fixture(),
+            &json!([{
+                "id": 7,
+                "html_url": "https://github.com/example/repo/issues/42#issuecomment-7",
+                "user": { "login": "bob" },
+                "body": "Changed comment content.",
+                "created_at": "2026-07-11T02:00:00Z",
+                "updated_at": "2026-07-11T02:30:00Z"
+            }]),
+            IssuePagination::new(None, None),
+            false,
+            None,
+        )
+        .expect("changed fixture should map");
+
+        assert_eq!(first.fingerprint, reordered.fingerprint);
+        assert_ne!(first.fingerprint, changed.fingerprint);
+        assert!(first.fingerprint.starts_with("sha256:"));
+    }
+
+    #[test]
+    fn issue_mapping_fingerprint_canonicalizes_comment_order() {
+        let comments = json!([
+            {
+                "id": 8,
+                "user": { "login": "carol" },
+                "body": "Later comment.",
+                "created_at": "2026-07-11T03:00:00Z"
+            },
+            {
+                "id": 7,
+                "user": { "login": "bob" },
+                "body": "Earlier comment.",
+                "created_at": "2026-07-11T02:00:00Z"
+            }
+        ]);
+        let reversed = Value::Array(
+            comments
+                .as_array()
+                .expect("fixture should be an array")
+                .iter()
+                .rev()
+                .cloned()
+                .collect(),
+        );
+        let first = map_github_issue(
+            &github_issue_identity(),
+            &github_issue_fixture(),
+            &comments,
+            IssuePagination::new(None, None),
+            false,
+            None,
+        )
+        .expect("first order should map");
+        let second = map_github_issue(
+            &github_issue_identity(),
+            &github_issue_fixture(),
+            &reversed,
+            IssuePagination::new(None, None),
+            false,
+            None,
+        )
+        .expect("reversed order should map");
+
+        assert_eq!(first.fingerprint, second.fingerprint);
+        assert_eq!(first.comments[0].id, "7");
+        assert_eq!(second.comments[0].id, "7");
+    }
+
+    #[test]
+    fn issue_mapping_fingerprint_includes_page_and_evidence_state() {
+        let complete = map_github_issue(
+            &github_issue_identity(),
+            &github_issue_fixture(),
+            &github_issue_comments_fixture(),
+            IssuePagination::new(Some(1), Some(100)),
+            false,
+            None,
+        )
+        .expect("complete page should map");
+        let has_more = map_github_issue(
+            &github_issue_identity(),
+            &github_issue_fixture(),
+            &github_issue_comments_fixture(),
+            IssuePagination::new(Some(1), Some(100)),
+            true,
+            Some("2".to_string()),
+        )
+        .expect("partial page should map");
+        let later_page = map_github_issue(
+            &github_issue_identity(),
+            &github_issue_fixture(),
+            &github_issue_comments_fixture(),
+            IssuePagination::new(Some(2), Some(100)),
+            false,
+            None,
+        )
+        .expect("later page should map");
+
+        assert_ne!(complete.fingerprint, has_more.fingerprint);
+        assert_ne!(complete.fingerprint, later_page.fingerprint);
+        assert_ne!(has_more.fingerprint, later_page.fingerprint);
+    }
+
+    #[test]
+    fn issue_mapping_rejects_non_array_comment_payloads() {
+        let result = map_github_issue(
+            &github_issue_identity(),
+            &github_issue_fixture(),
+            &json!({ "message": "not an array" }),
+            IssuePagination::new(None, None),
+            false,
+            None,
+        );
+
+        assert!(matches!(result, Err(ReviewPlatformError::Parse(_))));
+    }
+
+    #[test]
+    fn issue_mapping_identity_plan_normalizes_public_hosts_and_rejects_unsafe_input() {
+        let tokens = ReviewPlatformAuthTokens::default();
+        let public = provider_context_for_identity(
+            ReviewPlatformKind::Github,
+            " GitHub.COM. ",
+            "example/repo.git",
+            &tokens,
+        )
+        .expect("official GitHub should allow anonymous evidence reads");
+
+        assert_eq!(public.remote.host, "github.com");
+        assert_eq!(public.remote.project_path, "example/repo");
+        assert_eq!(public.api_base_url, "https://api.github.com");
+        assert!(public.token.is_none());
+
+        assert!(provider_context_for_identity(
+            ReviewPlatformKind::Github,
+            "https://github.com",
+            "example/repo",
+            &tokens,
+        )
+        .is_err());
+        assert!(provider_context_for_identity(
+            ReviewPlatformKind::Github,
+            "github.com",
+            "example/../repo",
+            &tokens,
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn issue_mapping_identity_rejects_zero_and_leading_zero_ids() {
+        for invalid in ["0", "00", "042", "-1", "+1", " 1"] {
+            assert!(
+                ProviderIssueIdentity::new(
+                    ReviewPlatformKind::Github,
+                    "github.com",
+                    "example/repo",
+                    invalid,
+                )
+                .is_err(),
+                "{invalid:?} must be rejected"
+            );
+        }
+        assert!(ProviderIssueIdentity::new(
+            ReviewPlatformKind::Github,
+            "github.com",
+            "example/repo",
+            "42",
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn issue_mapping_identity_plan_requires_stored_token_for_non_public_hosts() {
+        let mut tokens = ReviewPlatformAuthTokens::default();
+        assert!(provider_context_for_identity(
+            ReviewPlatformKind::Gitlab,
+            "gitlab.example.internal",
+            "group/repo",
+            &tokens,
+        )
+        .is_err());
+
+        tokens.tokens.insert(
+            token_key(ReviewPlatformKind::Gitlab, "gitlab.example.internal")
+                .expect("token key should be valid"),
+            "stored-token".to_string(),
+        );
+        let trusted = provider_context_for_identity(
+            ReviewPlatformKind::Gitlab,
+            "gitlab.example.internal",
+            "group/repo",
+            &tokens,
+        )
+        .expect("stored token should authorize an existing self-hosted provider context");
+
+        assert_eq!(
+            trusted.api_base_url,
+            "https://gitlab.example.internal/api/v4"
+        );
+        assert_eq!(trusted.token.as_deref(), Some("stored-token"));
+    }
+
+    #[test]
+    fn existing_self_hosted_github_remote_keeps_token_on_same_authority() {
+        let host = "github.example.internal";
+        let mut tokens = ReviewPlatformAuthTokens::default();
+        tokens.tokens.insert(
+            token_key(ReviewPlatformKind::Github, host).expect("token key should be valid"),
+            "stored-token".to_string(),
+        );
+        let identity_context = provider_context_for_identity(
+            ReviewPlatformKind::Github,
+            host,
+            "example/repo",
+            &tokens,
+        )
+        .expect("stored token should authorize a self-hosted GitHub context");
+
+        let existing_remote_context = provider_context(identity_context.remote, &tokens)
+            .expect("existing remote context should remain valid");
+
+        assert_eq!(
+            existing_remote_context.api_base_url,
+            "https://github.example.internal/api/v3"
+        );
+        assert_eq!(
+            existing_remote_context.token.as_deref(),
+            Some("stored-token")
+        );
+    }
+
+    #[test]
+    fn remote_detection_rejects_brand_substring_attacker_hosts() {
+        let remote = parse_remote(
+            "origin",
+            "https://github.com.attacker/example/repo.git",
+            &ReviewPlatformAuthTokens::default(),
+        )
+        .expect("syntactically valid Git remote should be represented");
+
+        assert_eq!(remote.platform, ReviewPlatformKind::Unknown);
+        assert!(!remote.supported);
+    }
+
+    #[test]
+    fn workspace_remote_identity_matcher_requires_exact_host_and_project() {
+        assert!(remote_url_matches_provider_identity(
+            "https://code.company.internal/group/repo.git",
+            ReviewPlatformKind::Gitlab,
+            "code.company.internal",
+            "group/repo",
+        ));
+        assert!(!remote_url_matches_provider_identity(
+            "https://other.company.internal/group/repo.git",
+            ReviewPlatformKind::Gitlab,
+            "code.company.internal",
+            "group/repo",
+        ));
+        assert!(!remote_url_matches_provider_identity(
+            "https://code.company.internal/other/repo.git",
+            ReviewPlatformKind::Gitlab,
+            "code.company.internal",
+            "group/repo",
+        ));
+        assert!(!remote_url_matches_provider_identity(
+            "https://github.com.attacker/example/repo.git",
+            ReviewPlatformKind::Github,
+            "github.com",
+            "example/repo",
+        ));
+        assert!(remote_url_matches_provider_identity(
+            "https://github.com.attacker/example/repo.git",
+            ReviewPlatformKind::Github,
+            "github.com.attacker",
+            "example/repo",
+        ));
+    }
+
+    #[tokio::test]
+    async fn remote_detection_uses_exact_token_authority_for_internal_provider_kind() {
+        let repository = tempfile::tempdir().expect("temporary repository should be created");
+        let repository_path = repository
+            .path()
+            .to_str()
+            .expect("repository path should be UTF-8");
+        execute_git_command(repository_path, &["init"])
+            .await
+            .expect("temporary repository should initialize");
+        execute_git_command(
+            repository_path,
+            &[
+                "remote",
+                "add",
+                "origin",
+                "https://code.company.internal/group/repo.git",
+            ],
+        )
+        .await
+        .expect("internal remote should be added");
+        let token_path = temp_token_store_path("internal-provider-authority");
+        let service = ReviewPlatformService::new_local_only(token_path.clone());
+        service
+            .update_auth_token(
+                ReviewPlatformKind::Gitlab,
+                "code.company.internal",
+                "internal-token",
+            )
+            .await
+            .expect("exact GitLab authority should be stored");
+
+        let remotes = service
+            .discover_remotes(repository_path)
+            .await
+            .expect("registered internal remote should be discovered");
+
+        assert_eq!(remotes.len(), 1);
+        assert_eq!(remotes[0].platform, ReviewPlatformKind::Gitlab);
+        assert_eq!(remotes[0].host, "code.company.internal");
+        assert!(remotes[0].supported);
+        let _ = fs::remove_file(token_path).await;
+    }
+
+    #[tokio::test]
+    async fn identity_trust_accepts_exact_discovered_self_hosted_remote_without_token() {
+        let repository = tempfile::tempdir().expect("temporary repository should be created");
+        execute_git_command(
+            repository
+                .path()
+                .to_str()
+                .expect("repository path should be UTF-8"),
+            &["init"],
+        )
+        .await
+        .expect("temporary repository should initialize");
+        execute_git_command(
+            repository
+                .path()
+                .to_str()
+                .expect("repository path should be UTF-8"),
+            &[
+                "remote",
+                "add",
+                "origin",
+                "https://gitlab.example.internal/group/repo.git",
+            ],
+        )
+        .await
+        .expect("trusted remote should be added");
+        let service = ReviewPlatformService::new_local_only(temp_token_store_path("trust"));
+        let tokens = ReviewPlatformAuthTokens::default();
+
+        let context = service
+            .provider_context_for_identity_request(
+                ReviewPlatformKind::Gitlab,
+                "gitlab.example.internal",
+                "group/repo",
+                Some(
+                    repository
+                        .path()
+                        .to_str()
+                        .expect("repository path should be UTF-8"),
+                ),
+                &tokens,
+            )
+            .await
+            .expect("exact discovered remote should establish anonymous trust");
+
+        assert!(context.token.is_none());
+        assert_eq!(context.remote.project_path, "group/repo");
+    }
+
+    #[tokio::test]
+    async fn identity_trust_rejects_unrelated_workspace_remote_without_token() {
+        let repository = tempfile::tempdir().expect("temporary repository should be created");
+        execute_git_command(
+            repository
+                .path()
+                .to_str()
+                .expect("repository path should be UTF-8"),
+            &["init"],
+        )
+        .await
+        .expect("temporary repository should initialize");
+        execute_git_command(
+            repository
+                .path()
+                .to_str()
+                .expect("repository path should be UTF-8"),
+            &[
+                "remote",
+                "add",
+                "origin",
+                "https://gitlab.example.internal/other/repo.git",
+            ],
+        )
+        .await
+        .expect("unrelated remote should be added");
+        let service = ReviewPlatformService::new_local_only(temp_token_store_path("untrusted"));
+        let tokens = ReviewPlatformAuthTokens::default();
+
+        let result = service
+            .provider_context_for_identity_request(
+                ReviewPlatformKind::Gitlab,
+                "gitlab.example.internal",
+                "group/repo",
+                Some(
+                    repository
+                        .path()
+                        .to_str()
+                        .expect("repository path should be UTF-8"),
+                ),
+                &tokens,
+            )
+            .await;
+
+        assert!(matches!(result, Err(ReviewPlatformError::Api(_))));
+    }
+
+    #[tokio::test]
+    async fn identity_trust_accepts_stored_token_without_workspace_path() {
+        let service = ReviewPlatformService::new_local_only(temp_token_store_path("token-trust"));
+        let mut tokens = ReviewPlatformAuthTokens::default();
+        tokens.tokens.insert(
+            token_key(ReviewPlatformKind::Gitlab, "gitlab.example.internal")
+                .expect("token key should normalize"),
+            "stored-token".to_string(),
+        );
+
+        let context = service
+            .provider_context_for_identity_request(
+                ReviewPlatformKind::Gitlab,
+                "gitlab.example.internal",
+                "group/repo",
+                None,
+                &tokens,
+            )
+            .await
+            .expect("stored token should authorize without workspace trust");
+
+        assert_eq!(context.token.as_deref(), Some("stored-token"));
+    }
+
+    #[test]
+    fn issue_acquisition_request_plans_use_exact_github_and_gitlab_endpoints() {
+        assert_eq!(MAX_ISSUE_RESPONSE_BYTES, 2 * 1024 * 1024);
+        assert_eq!(MAX_ISSUE_COMMENTS_RESPONSE_BYTES, 8 * 1024 * 1024);
+        let tokens = ReviewPlatformAuthTokens::default();
+        let github_identity = github_issue_identity();
+        let github_context = provider_context_for_identity(
+            github_identity.platform,
+            &github_identity.host,
+            &github_identity.project_path,
+            &tokens,
+        )
+        .expect("GitHub context should be valid");
+        let github = issue_request_plan(
+            &github_context,
+            &github_identity,
+            IssuePagination::new(Some(2), Some(250)),
+        )
+        .expect("GitHub request plan should be valid");
+        assert_eq!(
+            github.issue_url,
+            "https://api.github.com/repos/example/repo/issues/42"
+        );
+        assert_eq!(
+            github.comments_url,
+            "https://api.github.com/repos/example/repo/issues/42/comments"
+        );
+        assert_eq!(github.pagination.page, 2);
+        assert_eq!(github.pagination.per_page, 100);
+
+        let gitlab_identity = ProviderIssueIdentity::new(
+            ReviewPlatformKind::Gitlab,
+            "gitlab.com",
+            "example/group/repo",
+            "42",
+        )
+        .expect("GitLab identity should be valid");
+        let gitlab_context = provider_context_for_identity(
+            gitlab_identity.platform,
+            &gitlab_identity.host,
+            &gitlab_identity.project_path,
+            &tokens,
+        )
+        .expect("GitLab context should be valid");
+        let gitlab = issue_request_plan(
+            &gitlab_context,
+            &gitlab_identity,
+            IssuePagination::new(None, None),
+        )
+        .expect("GitLab request plan should be valid");
+        assert_eq!(
+            gitlab.issue_url,
+            "https://gitlab.com/api/v4/projects/example%2Fgroup%2Frepo/issues/42"
+        );
+        assert_eq!(
+            gitlab.comments_url,
+            "https://gitlab.com/api/v4/projects/example%2Fgroup%2Frepo/issues/42/notes"
+        );
+        assert_eq!(
+            gitlab.comments_query,
+            vec![
+                ("order_by".to_string(), "created_at".to_string()),
+                ("sort".to_string(), "asc".to_string()),
+                ("activity_filter".to_string(), "only_comments".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn issue_acquisition_maps_oversized_detail_to_typed_unavailable_error() {
+        let error = review_evidence_http_error(
+            ReviewHttpError::ResponseTooLarge {
+                limit_bytes: MAX_ISSUE_RESPONSE_BYTES,
+            },
+            "issue_response",
+        );
+
+        assert!(matches!(
+            error,
+            ReviewPlatformError::EvidenceTooLarge { ref resource, limit }
+                if resource == "issue_response" && limit == MAX_ISSUE_RESPONSE_BYTES
+        ));
+    }
+
+    #[test]
+    fn issue_acquisition_maps_oversized_comments_to_structured_partial_evidence() {
+        let evidence = map_issue_comments_response(
+            &github_issue_identity(),
+            &github_issue_fixture(),
+            IssuePagination::new(None, None),
+            Err(ReviewPlatformError::EvidenceTooLarge {
+                resource: "issue_comments_response".to_string(),
+                limit: MAX_ISSUE_COMMENTS_RESPONSE_BYTES,
+            }),
+        )
+        .expect("oversized comments should degrade structurally");
+
+        assert!(evidence.comments.is_empty());
+        assert_eq!(evidence.completeness, ReviewEvidenceCompleteness::Partial);
+        assert!(evidence
+            .limitations
+            .contains(&"issue_comments_response_too_large".to_string()));
+        assert!(!evidence.has_more_comments);
+        assert!(evidence.next_cursor.is_none());
+    }
+
+    #[tokio::test]
+    async fn issue_acquisition_rejects_github_pull_request_before_comments_fetch() {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("mock provider should bind");
+        listener
+            .set_nonblocking(true)
+            .expect("mock provider should be nonblocking");
+        let address = listener.local_addr().expect("mock provider address");
+        let server = thread::spawn(move || {
+            let mut request_count = 0usize;
+            let deadline = Instant::now() + Duration::from_millis(500);
+            while Instant::now() < deadline {
+                match listener.accept() {
+                    Ok((mut stream, _)) => {
+                        request_count += 1;
+                        let mut request = [0u8; 4096];
+                        let _ = stream.read(&mut request);
+                        let body = if request_count == 1 {
+                            r#"{"number":42,"pull_request":{"url":"https://api.github.com/repos/example/repo/pulls/42"}}"#
+                        } else {
+                            "[]"
+                        };
+                        let response = format!(
+                            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                            body.len(),
+                            body
+                        );
+                        stream
+                            .write_all(response.as_bytes())
+                            .expect("mock response should write");
+                    }
+                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                        thread::sleep(Duration::from_millis(10));
+                    }
+                    Err(error) => panic!("mock provider accept failed: {error}"),
+                }
+            }
+            request_count
+        });
+        let identity = github_issue_identity();
+        let mut context = provider_context_for_identity(
+            identity.platform,
+            &identity.host,
+            &identity.project_path,
+            &ReviewPlatformAuthTokens::default(),
+        )
+        .expect("public GitHub context should be valid");
+        context.api_base_url = format!("http://{address}");
+
+        let result =
+            acquire_issue_evidence(&context, &identity, IssuePagination::new(None, None)).await;
+        let request_count = server.join().expect("mock provider should join");
+
+        assert!(matches!(
+            result,
+            Err(ReviewPlatformError::TargetIsPullRequest { .. })
+        ));
+        assert_eq!(request_count, 1, "comments must not be requested for a PR");
+    }
+
+    #[test]
+    fn identity_pr_target_plan_reuses_existing_provider_dispatch_without_workspace_git() {
+        let tokens = ReviewPlatformAuthTokens::default();
+        let identity = pull_request_identity_plan(
+            ReviewPlatformKind::Github,
+            "github.com",
+            "example/repo",
+            "42",
+            &tokens,
+        )
+        .expect("public GitHub identity should not require a workspace remote");
+        let existing_remote_context = provider_context(identity.context.remote.clone(), &tokens)
+            .expect("existing remote context should be valid");
+
+        assert_eq!(identity.pull_request_id, "42");
+        assert_eq!(identity.context.remote.project_path, "example/repo");
+        assert!(std::ptr::eq(
+            provider_for(identity.context.remote.platform),
+            provider_for(existing_remote_context.remote.platform),
+        ));
     }
 }

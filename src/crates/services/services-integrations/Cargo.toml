@@ -190,8 +190,10 @@ review-platform = [
     "chrono",
     "futures",
     "reqwest",
+    "sha2",
     "thiserror",
     "urlencoding",
+    "windows",
 ]
 workspace-search = [
     "async-trait",

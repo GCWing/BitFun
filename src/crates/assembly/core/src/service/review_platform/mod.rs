@@ -9,14 +9,15 @@ use crate::infrastructure::try_get_path_manager_arc;
 use std::sync::Arc;
 
 pub use bitfun_services_integrations::review_platform::{
-    ReviewAuthSource, ReviewAuthState, ReviewChecks, ReviewDecision, ReviewFileStatus,
-    ReviewItemState, ReviewPlatformAccount, ReviewPlatformActionResult,
+    ReviewAuthSource, ReviewAuthState, ReviewChecks, ReviewDecision, ReviewEvidenceCompleteness,
+    ReviewFileStatus, ReviewItemState, ReviewPlatformAccount, ReviewPlatformActionResult,
     ReviewPlatformApprovalRequest, ReviewPlatformAuthChallenge, ReviewPlatformAuthChallengeState,
     ReviewPlatformCapabilities, ReviewPlatformCiItem, ReviewPlatformCiLog, ReviewPlatformCommit,
     ReviewPlatformCreatePullRequestRequest, ReviewPlatformDetailSection, ReviewPlatformError,
-    ReviewPlatformFile, ReviewPlatformKind, ReviewPlatformPullRequest,
-    ReviewPlatformPullRequestDetail, ReviewPlatformPullRequestDetailPage,
-    ReviewPlatformPullRequestFileDiff, ReviewPlatformPullRequestReviewTarget, ReviewPlatformRemote,
+    ReviewPlatformFile, ReviewPlatformIssueComment, ReviewPlatformIssueEvidence,
+    ReviewPlatformKind, ReviewPlatformPullRequest, ReviewPlatformPullRequestDetail,
+    ReviewPlatformPullRequestDetailPage, ReviewPlatformPullRequestFileDiff,
+    ReviewPlatformPullRequestReviewTarget, ReviewPlatformRemote,
     ReviewPlatformReplyToThreadRequest, ReviewPlatformRepositoryRef,
     ReviewPlatformRequestChangesRequest, ReviewPlatformResolveThreadRequest,
     ReviewPlatformSubmitReviewRequest, ReviewPlatformThread, ReviewPlatformThreadKind,
@@ -85,6 +86,73 @@ impl ReviewPlatformService {
     ) -> Result<ReviewPlatformPullRequestReviewTarget, ReviewPlatformError> {
         owner_service()?
             .pull_request_review_target(repository_path, remote_id, pull_request_id)
+            .await
+    }
+
+    pub async fn issue(
+        platform: ReviewPlatformKind,
+        host: &str,
+        project_path: &str,
+        issue_id: &str,
+        page: Option<u32>,
+        per_page: Option<u32>,
+        repository_path: Option<&str>,
+    ) -> Result<ReviewPlatformIssueEvidence, ReviewPlatformError> {
+        owner_service()?
+            .issue(
+                platform,
+                host,
+                project_path,
+                issue_id,
+                page,
+                per_page,
+                repository_path,
+            )
+            .await
+    }
+
+    pub async fn pull_request_review_target_by_identity(
+        platform: ReviewPlatformKind,
+        host: &str,
+        project_path: &str,
+        pull_request_id: &str,
+        repository_path: Option<&str>,
+    ) -> Result<ReviewPlatformPullRequestReviewTarget, ReviewPlatformError> {
+        owner_service()?
+            .pull_request_review_target_by_identity(
+                platform,
+                host,
+                project_path,
+                pull_request_id,
+                repository_path,
+            )
+            .await
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub async fn pull_request_file_diff_by_identity(
+        platform: ReviewPlatformKind,
+        host: &str,
+        project_path: &str,
+        pull_request_id: &str,
+        expected_base_revision: &str,
+        expected_head_revision: &str,
+        file_path: &str,
+        file_page_hint: Option<u32>,
+        repository_path: Option<&str>,
+    ) -> Result<ReviewPlatformPullRequestFileDiff, ReviewPlatformError> {
+        owner_service()?
+            .pull_request_file_diff_by_identity(
+                platform,
+                host,
+                project_path,
+                pull_request_id,
+                expected_base_revision,
+                expected_head_revision,
+                file_path,
+                file_page_hint,
+                repository_path,
+            )
             .await
     }
 
