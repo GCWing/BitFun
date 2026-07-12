@@ -6,6 +6,7 @@ pub mod execution_engine;
 pub(crate) mod model_exchange_trace;
 pub mod round_executor;
 pub mod stream_processor;
+pub(crate) mod test_selection_gate;
 pub mod types;
 pub mod write_content_sanitizer;
 
