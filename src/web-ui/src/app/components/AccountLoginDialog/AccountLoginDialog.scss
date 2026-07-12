@@ -262,6 +262,18 @@
     }
   }
 
+  &__device-badge {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 1px 6px;
+    font-size: 10px;
+    font-weight: 500;
+    border-radius: 3px;
+    background: color-mix(in srgb, var(--color-accent) 15%, transparent);
+    color: var(--color-accent);
+    vertical-align: middle;
+  }
+
   &__loading-overlay {
     position: absolute;
     top: 0; left: 0; right: 0; bottom: 0;

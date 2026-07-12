@@ -103,6 +103,9 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
       setError(null); setLoading(false); setView('login');
       resetState();
     } else {
+      remoteConnectAPI.getDeviceInfo().then((info) => {
+        setLocalDeviceId(info.device_id);
+      }).catch((e) => { log.warn('getDeviceInfo failed', e); });
       remoteConnectAPI.accountGetCredentialHint().then((hint: AccountHint | null) => {
         if (hint) { setUsername(hint.username); setAuthServer(hint.relay_url); }
       });
@@ -485,26 +488,36 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
               {devices.length === 0 && (
                 <div className="account-login-dialog__empty">{t('accountLogin.noDevices')}</div>
               )}
-              {devices.map((d) => (
+              {devices.map((d) => {
+                const isLocal = localDeviceId === d.device_id;
+                return (
                 <div key={d.device_id}
-                  className={`account-login-dialog__device-card ${d.online ? '' : 'offline'} ${localDeviceId === d.device_id ? 'current' : ''}`}
-                  onClick={() => selectDevice(d)}>
+                  className={`account-login-dialog__device-card ${d.online ? '' : 'offline'} ${isLocal ? 'current' : ''}`}
+                  onClick={() => !isLocal && selectDevice(d)}>
                   <Monitor size={16} />
                   <div className="account-login-dialog__device-info">
-                    <span className="account-login-dialog__device-name">{d.device_name}</span>
+                    <span className="account-login-dialog__device-name">
+                      {d.device_name}
+                      {isLocal && <span className="account-login-dialog__device-badge">{t('accountLogin.thisDevice')}</span>}
+                    </span>
                     <span className="account-login-dialog__device-id">
                       {d.device_id.slice(0, 8)} · {d.online ? t('accountLogin.online') : t('accountLogin.offline')}
                     </span>
                   </div>
-                  {d.online && <ChevronRight size={14} />}
-                  <button className="account-login-dialog__device-remove"
-                    onClick={(e) => { e.stopPropagation(); handleDeleteDevice(d.device_id, d.device_name); }}
-                    title={t('accountLogin.removeDevice')}
-                    tabIndex={-1}>
-                    <X size={14} />
-                  </button>
+                  {isLocal
+                    ? null
+                    : <>
+                        {d.online && <ChevronRight size={14} />}
+                        <button className="account-login-dialog__device-remove"
+                          onClick={(e) => { e.stopPropagation(); handleDeleteDevice(d.device_id, d.device_name); }}
+                          title={t('accountLogin.removeDevice')}
+                          tabIndex={-1}>
+                          <X size={14} />
+                        </button>
+                      </>}
                 </div>
-              ))}
+                );
+              })}
             </div>
             <div className="account-login-dialog__actions">
               <Button variant="secondary" size="small" onClick={handleLogout} disabled={loading}>

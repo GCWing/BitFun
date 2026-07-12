@@ -499,6 +499,7 @@
     "newWorkspacePlaceholder": "/新/工作區/路徑",
     "online": "線上",
     "offline": "離線",
+    "thisDevice": "本裝置",
     "syncStarted": "雲端同步已開始...",
     "syncing": "正在與雲端同步...",
     "syncDone": "雲端同步完成：上傳 {{exported}} 個工作階段，下載 {{imported}} 個工作階段",

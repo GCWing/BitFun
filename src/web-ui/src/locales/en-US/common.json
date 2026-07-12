@@ -499,6 +499,7 @@
     "newWorkspacePlaceholder": "/path/to/new/workspace",
     "online": "Online",
     "offline": "Offline",
+    "thisDevice": "This device",
     "syncStarted": "Cloud sync started...",
     "syncing": "Syncing with cloud...",
     "syncDone": "Cloud sync complete: {{exported}} sessions uploaded, {{imported}} downloaded",
