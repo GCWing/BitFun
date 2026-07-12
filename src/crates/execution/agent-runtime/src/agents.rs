@@ -168,7 +168,14 @@ pub fn builtin_agent_definition_specs() -> Vec<BuiltinAgentDefinitionSpec> {
             "CodeReview",
             SubAgent,
             "primary",
-            SubagentVisibilityPolicy::hidden(["agentic", "Cowork", "debug", "Multitask", "Team"]),
+            SubagentVisibilityPolicy::hidden([
+                "agentic",
+                "Cowork",
+                "Plan",
+                "debug",
+                "Multitask",
+                "Team",
+            ]),
         ),
         builtin_agent_spec(
             "DeepReview",
