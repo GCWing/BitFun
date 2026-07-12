@@ -4,8 +4,8 @@ use crate::api::session_storage_path::desktop_effective_session_storage_path;
 use bitfun_core::agentic::persistence::PersistenceManager;
 use bitfun_core::service::remote_connect::{
     bot::{self, weixin, BotConfig},
-    lan, AccountClient, AccountSession, ConnectionMethod, ConnectionResult, DeviceIdentity,
-    PairingState, RemoteConnectConfig, RemoteConnectService,
+    lan, session_store, AccountClient, AccountSession, ConnectionMethod, ConnectionResult,
+    DeviceIdentity, PairingState, RemoteConnectConfig, RemoteConnectService,
 };
 use bitfun_core::service::session::{DialogTurnData, SessionMetadata};
 use regex::Regex;
@@ -138,10 +138,107 @@ pub fn set_mobile_web_resource_path(path: PathBuf) {
 /// Called from Tauri setup to eagerly initialize the remote connect service
 /// and restore any previously paired bot connections.  Without this, bots
 /// only start listening after the user first opens the Remote Connect dialog.
+/// Register delegated identity providers for mobile-web (room channel) and
+/// IM bots (global provider). Called after session is restored (startup) or
+/// after fresh login.
+async fn register_delegated_identity_providers() {
+    // Room-channel provider for mobile-web.
+    let session_clone = get_account_session().clone();
+    let relay_url_clone = get_account_relay_url().clone();
+    if let Some(service) = get_service_holder().read().await.as_ref() {
+        service
+            .set_delegated_identity_provider(move || {
+                let session_arc = session_clone.clone();
+                let relay_url_arc = relay_url_clone.clone();
+                Box::pin(async move {
+                    let session = session_arc.read().await.clone()?;
+                    let relay_url = relay_url_arc.read().await.clone()?;
+                    match AccountClient::new()
+                        .delegate_token(&relay_url, &session)
+                        .await
+                    {
+                        Ok(delegated) => Some((delegated.token, session.master_key, relay_url)),
+                        Err(e) => {
+                            log::warn!("Delegate token failed: {e}");
+                            None
+                        }
+                    }
+                })
+            })
+            .await;
+    }
+
+    // Global provider for IM bots.
+    let session_arc = get_account_session().clone();
+    let relay_url_arc = get_account_relay_url().clone();
+    bitfun_core::service::remote_connect::bot::set_delegated_identity_provider(move || {
+        let session_arc = session_arc.clone();
+        let relay_url_arc = relay_url_arc.clone();
+        Box::pin(async move {
+            let session = session_arc.read().await.clone()?;
+            let relay_url = relay_url_arc.read().await.clone()?;
+            match AccountClient::new()
+                .delegate_token(&relay_url, &session)
+                .await
+            {
+                Ok(delegated) => Some((relay_url, delegated.token, session.master_key.to_vec())),
+                Err(e) => {
+                    log::warn!("Bot delegate token failed: {e}");
+                    None
+                }
+            }
+        })
+    });
+}
+
 pub fn init_on_startup() {
     tokio::spawn(async {
-        if let Err(e) = ensure_service().await {
-            log::warn!("Remote connect startup init failed: {e}");
+        // Restore persisted account session (if any) before anything else
+        // so that auto-sync, device routing, and bot delegation work on restart.
+        match session_store::load_session() {
+            Ok(Some((token, user_id, master_key, relay_url))) => {
+                let session = AccountSession {
+                    token,
+                    user_id: user_id.clone(),
+                    master_key,
+                };
+                *get_account_session().write().await = Some(session);
+                *get_account_relay_url().write().await = Some(relay_url.clone());
+                log::info!("Restored account session for user {user_id}");
+
+                // Initialize the remote-connect service if not yet ready.
+                if let Err(e) = ensure_service().await {
+                    log::warn!("Remote connect startup init failed: {e}");
+                }
+
+                // Re-register delegated identity providers for mobile-web / bots.
+                register_delegated_identity_providers().await;
+
+                // Best-effort: restore bot connections now that delegated
+                // identity is available again.
+                restore_saved_bots().await;
+
+                // Re-establish device routing WebSocket in the background.
+                // Uses the same Tauri command logic — fire and forget.
+                tokio::spawn(async {
+                    if let Err(e) = account_connect_devices().await {
+                        log::warn!("Startup device connect failed: {e}");
+                    }
+                    log::info!("Device routing restored on startup");
+                });
+            }
+            Ok(None) => {
+                // No persisted session — normal for first-time users.
+                if let Err(e) = ensure_service().await {
+                    log::warn!("Remote connect startup init failed: {e}");
+                }
+            }
+            Err(e) => {
+                log::warn!("Failed to load persisted session: {e}");
+                if let Err(e) = ensure_service().await {
+                    log::warn!("Remote connect startup init failed: {e}");
+                }
+            }
         }
     });
 }
@@ -894,70 +991,25 @@ pub async fn account_login(request: AccountAuthRequest) -> Result<AccountLoginRe
         user_id: session.user_id.clone(),
         has_cloud_settings,
     };
+    let master_key = session.master_key; // Copy ([u8; 32])
     *get_account_session().write().await = Some(session);
     *get_account_relay_url().write().await = Some(request.relay_url.clone());
     // Persist non-secret credentials for next startup pre-fill
     save_credential_hint(&request.username, &request.relay_url);
+    // Persist the full session (token + master_key, encrypted) so the
+    // user stays logged in across app restarts.
+    if let Err(e) = session_store::save_session(
+        &result.token,
+        &result.user_id,
+        &master_key,
+        &request.relay_url,
+    ) {
+        log::warn!("Failed to persist session: {e}");
+    }
     // Reset the token-expired flag on fresh login
     TOKEN_EXPIRED.store(false, std::sync::atomic::Ordering::Relaxed);
 
-    // Set the delegated identity provider so that paired mobile/IM clients
-    // automatically receive the account identity after pairing.
-    let session_clone = get_account_session().clone();
-    let relay_url_clone = get_account_relay_url().clone();
-    if let Some(service) = get_service_holder().read().await.as_ref() {
-        service
-            .set_delegated_identity_provider(move || {
-                let session_arc = session_clone.clone();
-                let relay_url_arc = relay_url_clone.clone();
-                Box::pin(async move {
-                    let session = session_arc.read().await.clone()?;
-                    let relay_url = relay_url_arc.read().await.clone()?;
-                    // Delegate a new token via the relay
-                    match AccountClient::new()
-                        .delegate_token(&relay_url, &session)
-                        .await
-                    {
-                        Ok(delegated) => Some((delegated.token, session.master_key, relay_url)),
-                        Err(e) => {
-                            log::warn!("Delegate token failed: {e}");
-                            None
-                        }
-                    }
-                })
-            })
-            .await;
-    }
-
-    // Also set the global provider for the bot pairing path (IM bots don't
-    // go through the room channel, so they can't inherit the identity via
-    // the delegated_identity_fn callback above). Instead, when a bot
-    // completes pairing via `complete_im_bot_pairing`, it calls this
-    // provider to get relay_url + token + master_key.
-    {
-        let session_arc = get_account_session().clone();
-        let relay_url_arc = get_account_relay_url().clone();
-        bitfun_core::service::remote_connect::bot::set_delegated_identity_provider(move || {
-            let session_arc = session_arc.clone();
-            let relay_url_arc = relay_url_arc.clone();
-            Box::pin(async move {
-                let session = session_arc.read().await.clone()?;
-                let relay_url = relay_url_arc.read().await.clone()?;
-                match AccountClient::new()
-                    .delegate_token(&relay_url, &session)
-                    .await
-                {
-                    Ok(delegated) => {
-                        Some((relay_url, delegated.token, session.master_key.to_vec()))
-                    }
-                    Err(e) => {
-                        log::warn!("Bot delegate token failed: {e}");
-                        None
-                    }
-                }
-            })
-        });
-    }
+    register_delegated_identity_providers().await;
 
     log::info!(
         "Account logged in: {} (has_cloud_settings={})",
@@ -991,6 +1043,7 @@ pub async fn account_logout() -> Result<(), String> {
     *get_account_session().write().await = None;
     *get_account_relay_url().write().await = None;
     clear_credential_hint();
+    session_store::clear_session();
     TOKEN_EXPIRED.store(false, std::sync::atomic::Ordering::Relaxed);
     log::info!("Account logged out");
     Ok(())

@@ -693,6 +693,13 @@ fn delegated_session(
 }
 
 async fn list_devices(state: &mut BotChatState, s: &'static BotStrings) -> HandleResult {
+    // Lazy-inject delegated identity if not yet set (e.g. after restart restore).
+    if state.relay_url.is_none() {
+        if let Some((relay_url, token, master_key)) = try_get_delegated_identity().await {
+            state.relay_url = Some(relay_url);
+            state.set_delegated_identity(token, master_key);
+        }
+    }
     let Some(relay_url) = state.relay_url.clone() else {
         return result_from_menu(state, devices_unavailable_view(s));
     };

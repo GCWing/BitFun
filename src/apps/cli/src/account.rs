@@ -17,8 +17,8 @@ use anyhow::{anyhow, Result};
 use tokio::sync::RwLock;
 
 use bitfun_core::service::remote_connect::{
-    self, encryption, relay_client::RelayClient, relay_client::RelayEvent, AccountClient,
-    AccountSession, DeviceIdentity, RemoteServer,
+    self, encryption, relay_client::RelayClient, relay_client::RelayEvent, session_store,
+    AccountClient, AccountSession, DeviceIdentity, RemoteServer,
 };
 
 /// In-memory account session (token + master key). Lost on restart.
@@ -62,6 +62,29 @@ async fn read_account_context() -> Result<(AccountSession, String)> {
 /// Whether an account session is currently held.
 pub async fn is_logged_in() -> bool {
     account_session().read().await.is_some()
+}
+
+/// Attempt to restore a persisted session from disk.  Called at startup.
+/// Returns `Some(user_id)` if a session was restored.
+pub async fn try_restore_session() -> Option<String> {
+    match session_store::load_session() {
+        Ok(Some((token, user_id, master_key, relay_url))) => {
+            let session = AccountSession {
+                token,
+                user_id: user_id.clone(),
+                master_key,
+            };
+            *account_session().write().await = Some(session);
+            *account_relay_url().write().await = Some(relay_url);
+            tracing::info!("Restored account session for user {user_id}");
+            Some(user_id)
+        }
+        Ok(None) => None,
+        Err(e) => {
+            tracing::warn!("Failed to load persisted session: {e}");
+            None
+        }
+    }
 }
 
 /// Whether the relay has reported the account token as expired/invalid.
@@ -234,8 +257,16 @@ pub async fn login_interactive() -> Result<String> {
 
     let user_id = session.user_id.clone();
     let device_name = device.device_name.clone();
+    let token = session.token.clone();
+    let master_key = session.master_key;
     *account_session().write().await = Some(session);
     *account_relay_url().write().await = Some(relay_url.clone());
+
+    // Persist session for restart recovery.
+    if let Err(e) = session_store::save_session(&token, &user_id, &master_key, &relay_url) {
+        tracing::warn!("Failed to persist session: {e}");
+    }
+
     TOKEN_EXPIRED.store(false, Ordering::Relaxed);
 
     // Establish device routing so the CLI becomes RPC-controllable.
@@ -249,6 +280,16 @@ pub async fn login_interactive() -> Result<String> {
         "Logged in as user {} on {}.{}",
         user_id, relay_url, routing_msg
     ))
+}
+
+/// Public wrapper for restoring device routing after session restore at startup.
+pub async fn restore_device_routing(device_name: &str) -> Result<()> {
+    let relay_url = account_relay_url()
+        .read()
+        .await
+        .clone()
+        .ok_or_else(|| anyhow!("not logged in"))?;
+    spawn_device_routing(&relay_url, device_name).await
 }
 
 /// Connect to the account relay for device-to-device routing and spawn the
@@ -310,6 +351,7 @@ pub async fn logout() -> Result<()> {
     }
     *account_session().write().await = None;
     *account_relay_url().write().await = None;
+    session_store::clear_session();
     TOKEN_EXPIRED.store(false, Ordering::Relaxed);
     Ok(())
 }

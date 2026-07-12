@@ -38,6 +38,10 @@ pub mod account {
     pub use bitfun_services_integrations::remote_connect::account::*;
 }
 
+pub mod session_store {
+    pub use bitfun_services_integrations::remote_connect::session_store::*;
+}
+
 pub use account::{
     AccountClient, AccountSession, DelegateToken, DelegatedIdentity, KdfParams, SettingsBlob,
 };

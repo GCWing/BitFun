@@ -18,6 +18,7 @@ mod ngrok;
 pub mod pairing;
 pub mod qr_generator;
 pub mod relay_client;
+pub mod session_store;
 
 use bitfun_events::AgenticEvent;
 use bitfun_runtime_ports::{

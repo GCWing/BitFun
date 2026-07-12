@@ -20,7 +20,8 @@ mod prompts;
 mod root_handlers;
 mod ui;
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
+use bitfun_core::service::remote_connect::DeviceIdentity;
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU8, Ordering};
@@ -499,6 +500,17 @@ async fn run_interactive(
 
     // 3. Initialize core services
     let (agentic_system, original_skip_confirmation) = initialize_core_services(true).await?;
+
+    // 3.5 Restore persisted account session (if any)
+    if let Some(user_id) = account::try_restore_session().await {
+        tracing::info!("Restored account session for user {user_id}");
+        // Re-establish device routing so the CLI becomes RPC-controllable.
+        let device = DeviceIdentity::from_current_machine()
+            .map_err(|e| anyhow!("detect device: {e}"))?;
+        if let Err(e) = account::restore_device_routing(&device.device_name).await {
+            tracing::warn!("Failed to restore device routing: {e}");
+        }
+    }
 
     // 4. Show startup page (with full command support)
     let mut startup_page = StartupPage::new(
