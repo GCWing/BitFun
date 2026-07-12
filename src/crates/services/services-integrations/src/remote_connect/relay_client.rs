@@ -343,6 +343,25 @@ impl RelayClient {
                                 };
                                 let _ = new_cmd_tx.send(reauth);
                                 info!("Re-sent AuthConnect after reconnect");
+                                // #region agent log
+                                {
+                                    use std::io::Write;
+                                    let payload = serde_json::json!({
+                                        "sessionId": "9b541f",
+                                        "hypothesisId": "A",
+                                        "location": "relay_client.rs:reconnect",
+                                        "message": "Re-sent AuthConnect after reconnect",
+                                        "data": {
+                                            "ws_url": ctx.ws_url,
+                                            "device_name": ctx.device_name,
+                                        },
+                                        "timestamp": std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64,
+                                    });
+                                    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open("/Users/liwenbo/ide_dev/repo/BitFun/.cursor/debug-9b541f.log") {
+                                        let _ = writeln!(f, "{payload}");
+                                    }
+                                }
+                                // #endregion
                             }
 
                             let _ = event_tx.send(RelayEvent::Reconnected);

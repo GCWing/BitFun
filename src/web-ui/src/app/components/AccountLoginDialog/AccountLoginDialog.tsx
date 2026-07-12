@@ -88,9 +88,15 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
       // If the local device appears offline, retry once after a short
       // delay — the WS auth round-trip may not have completed yet.
       const localOffline = list.some(d => d.device_id === localDeviceId && !d.online);
+      // #region agent log
+      fetch('http://127.0.0.1:7750/ingest/189707fe-6e92-4591-87dd-797ca5b52e50',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'9b541f'},body:JSON.stringify({sessionId:'9b541f',hypothesisId:'D',location:'AccountLoginDialog.tsx:refreshDevices',message:'device list refresh',data:{localDeviceId,localOffline,deviceCount:list.length,devices:list.map(d=>({id:d.device_id,online:d.online,name:d.device_name}))},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       if (localOffline && localDeviceId) {
         await new Promise(r => setTimeout(r, 1500));
         list = await remoteConnectAPI.accountListDevices();
+        // #region agent log
+        fetch('http://127.0.0.1:7750/ingest/189707fe-6e92-4591-87dd-797ca5b52e50',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'9b541f'},body:JSON.stringify({sessionId:'9b541f',hypothesisId:'D',location:'AccountLoginDialog.tsx:refreshDevices:retry',message:'retry after local offline',data:{localDeviceId,devices:list.map(d=>({id:d.device_id,online:d.online}))},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
       }
       setDevices(list);
     } catch (e) { log.warn('refreshDevices failed', e); }

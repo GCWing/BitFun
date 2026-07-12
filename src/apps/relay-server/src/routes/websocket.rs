@@ -111,7 +111,7 @@ pub enum OutboundProtocol {
     },
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct DevicePresenceEntry {
     pub device_id: String,
     pub device_name: String,
@@ -252,7 +252,11 @@ async fn handle_text_message(
         }
 
         InboundMessage::Heartbeat => {
-            if state.room_manager.heartbeat(conn_id) {
+            // Account-authenticated device connections have no room; treat
+            // heartbeat as a keepalive ack when the conn is registered.
+            if state.room_manager.heartbeat(conn_id)
+                || state.device_manager.conn_mapping(conn_id).is_some()
+            {
                 send_json_best_effort(out_tx, &OutboundProtocol::HeartbeatAck)
             } else {
                 send_json_best_effort(
@@ -294,7 +298,7 @@ async fn handle_text_message(
             )
             .await;
             let _ = crate::db::DeviceRow::set_online(db, &auth.device_id, true).await;
-            let others = state.device_manager.register(
+            let _others = state.device_manager.register(
                 &auth.user_id,
                 &auth.device_id,
                 &device_name,
@@ -309,21 +313,20 @@ async fn handle_text_message(
                 },
             )
             .await;
-            // Push presence to this device (others already online) and notify
-            // those others that this device just joined.
-            let presence = build_presence(&others);
+            // Full presence (including self) so clients can treat the snapshot
+            // as authoritative rather than an incremental patch.
+            let all_online = state.device_manager.online_devices(&auth.user_id);
+            let presence = build_presence(&all_online);
             send_json_best_effort(
                 out_tx,
-                &OutboundProtocol::DevicePresence { devices: presence },
+                &OutboundProtocol::DevicePresence {
+                    devices: presence.clone(),
+                },
             );
-            let joined = vec![DevicePresenceEntry {
-                device_id: auth.device_id.clone(),
-                device_name,
-            }];
             state.device_manager.broadcast_except(
                 &auth.user_id,
                 &auth.device_id,
-                &serde_json::to_string(&OutboundProtocol::DevicePresence { devices: joined })
+                &serde_json::to_string(&OutboundProtocol::DevicePresence { devices: presence })
                     .unwrap_or_default(),
             );
             true

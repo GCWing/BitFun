@@ -72,15 +72,34 @@ impl DeviceManager {
         // Remove any stale conn mapping for this conn first.
         if let Some((_, (old_user, old_device))) = self.conn_to_device.remove(&conn_id) {
             if let Some(user_devices) = self.users.get(&old_user) {
-                user_devices.remove(&old_device);
+                // Only drop the device if this conn still owns it.
+                if user_devices
+                    .get(&old_device)
+                    .map(|d| d.conn_id == conn_id)
+                    .unwrap_or(false)
+                {
+                    user_devices.remove(&old_device);
+                }
             }
         }
 
         let entry = self.users.entry(user_id.to_string()).or_default();
+        // If this device already has a live conn, drop the stale conn→device
+        // mapping so a later disconnect of the old socket cannot unregister
+        // the replacement connection.
+        if let Some(prior) = entry.get(device_id) {
+            if prior.conn_id != conn_id {
+                self.conn_to_device.remove(&prior.conn_id);
+            }
+        }
         let others: Vec<(String, String)> = entry
             .iter()
+            .filter(|d| d.key() != device_id)
             .map(|d| (d.key().clone(), d.device_name.clone()))
             .collect();
+        // #region agent log
+        let prior_conn = entry.get(device_id).map(|d| d.conn_id);
+        // #endregion
         entry.insert(
             device_id.to_string(),
             DeviceConn {
@@ -96,6 +115,29 @@ impl DeviceManager {
             "Device {device_id} registered for user {user_id} ({} online)",
             entry.len()
         );
+        // #region agent log
+        {
+            use std::io::Write;
+            let payload = serde_json::json!({
+                "sessionId": "9b541f",
+                "hypothesisId": "A",
+                "location": "device_manager.rs:register",
+                "message": "device registered",
+                "data": {
+                    "user_id": user_id,
+                    "device_id": device_id,
+                    "conn_id": conn_id,
+                    "prior_conn_id": prior_conn,
+                    "online_count": entry.len(),
+                    "others_count": others.len(),
+                },
+                "timestamp": std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64,
+            });
+            if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open("/Users/liwenbo/ide_dev/repo/BitFun/.cursor/debug-9b541f.log") {
+                let _ = writeln!(f, "{payload}");
+            }
+        }
+        // #endregion
         others
     }
 
@@ -104,9 +146,49 @@ impl DeviceManager {
     pub fn unregister(&self, conn_id: ConnId) -> Option<(String, String)> {
         let removed = self.conn_to_device.remove(&conn_id);
         if let Some((_, (user_id, device_id))) = &removed {
+            // #region agent log
+            let active_conn = self
+                .users
+                .get(user_id)
+                .and_then(|ud| ud.get(device_id).map(|d| d.conn_id));
+            let would_kill_newer = active_conn.map(|c| c != conn_id).unwrap_or(false);
+            {
+                use std::io::Write;
+                let payload = serde_json::json!({
+                    "sessionId": "9b541f",
+                    "hypothesisId": "A",
+                    "location": "device_manager.rs:unregister",
+                    "message": "device unregister called",
+                    "data": {
+                        "user_id": user_id,
+                        "device_id": device_id,
+                        "closing_conn_id": conn_id,
+                        "active_conn_id": active_conn,
+                        "skipped_stale_unregister": would_kill_newer,
+                    },
+                    "timestamp": std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64,
+                });
+                if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open("/Users/liwenbo/ide_dev/repo/BitFun/.cursor/debug-9b541f.log") {
+                    let _ = writeln!(f, "{payload}");
+                }
+            }
+            // #endregion
             if let Some(user_devices) = self.users.get(user_id) {
-                user_devices.remove(device_id);
-                debug!("Device {device_id} disconnected from user {user_id}");
+                // Only remove if this closing conn is still the active owner.
+                // A newer reconnect may have already replaced the mapping.
+                let still_owner = user_devices
+                    .get(device_id)
+                    .map(|d| d.conn_id == conn_id)
+                    .unwrap_or(false);
+                if still_owner {
+                    user_devices.remove(device_id);
+                    debug!("Device {device_id} disconnected from user {user_id}");
+                    return Some((user_id.clone(), device_id.clone()));
+                }
+                debug!(
+                    "Ignoring stale unregister for device {device_id} (conn {conn_id} superseded)"
+                );
+                return None;
             }
         }
         removed.map(|(_, v)| v)
@@ -211,5 +293,42 @@ impl DeviceManager {
     /// Cancel a pending RPC (called on timeout/error).
     pub fn cancel_rpc(&self, correlation_id: &str) {
         self.pending_rpcs.remove(correlation_id);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn dummy_tx() -> mpsc::Sender<OutboundMessage> {
+        let (tx, _rx) = mpsc::channel(8);
+        tx
+    }
+
+    #[test]
+    fn stale_unregister_does_not_drop_replacement_connection() {
+        let mgr = DeviceManager::new();
+        let tx = dummy_tx();
+
+        mgr.register("user-1", "dev-1", "A", 1, tx.clone());
+        assert_eq!(mgr.online_devices("user-1").len(), 1);
+
+        // Reconnect with a new conn id.
+        mgr.register("user-1", "dev-1", "A", 2, tx);
+        assert_eq!(mgr.online_devices("user-1").len(), 1);
+        assert_eq!(mgr.conn_mapping(2), Some(("user-1".into(), "dev-1".into())));
+        assert_eq!(mgr.conn_mapping(1), None);
+
+        // Late disconnect of the old socket must not remove the new registration.
+        assert_eq!(mgr.unregister(1), None);
+        assert_eq!(mgr.online_devices("user-1").len(), 1);
+        assert_eq!(mgr.conn_mapping(2), Some(("user-1".into(), "dev-1".into())));
+
+        // Closing the active conn still cleans up.
+        assert_eq!(
+            mgr.unregister(2),
+            Some(("user-1".into(), "dev-1".into()))
+        );
+        assert!(mgr.online_devices("user-1").is_empty());
     }
 }

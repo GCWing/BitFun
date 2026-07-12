@@ -1159,7 +1159,15 @@ impl RemoteConnectService {
     /// active (i.e. `start_device_connection` has been called and not yet
     /// disconnected).
     pub async fn is_device_connected(&self) -> bool {
-        self.device_relay_client.read().await.is_some()
+        let guard = self.device_relay_client.read().await;
+        let Some(client) = guard.as_ref() else {
+            return false;
+        };
+        matches!(
+            client.connection_state().await,
+            relay_client::ConnectionState::Connected
+                | relay_client::ConnectionState::Reconnecting
+        )
     }
 
     pub async fn start_device_connection(
@@ -1196,9 +1204,41 @@ impl RemoteConnectService {
             match tokio::time::timeout_at(deadline, event_rx.recv()).await {
                 Ok(Some(relay_client::RelayEvent::AuthOk { user_id, device_id })) => {
                     log::info!("Device connection auth ok: user={user_id} device={device_id}");
+                    // #region agent log
+                    {
+                        use std::io::Write;
+                        let payload = serde_json::json!({
+                            "sessionId": "9b541f",
+                            "hypothesisId": "B",
+                            "location": "remote_connect/mod.rs:start_device_connection",
+                            "message": "AuthOk received",
+                            "data": { "user_id": user_id, "device_id": device_id },
+                            "timestamp": std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64,
+                        });
+                        if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open("/Users/liwenbo/ide_dev/repo/BitFun/.cursor/debug-9b541f.log") {
+                            let _ = writeln!(f, "{payload}");
+                        }
+                    }
+                    // #endregion
                     got_auth = true;
                 }
                 Ok(Some(relay_client::RelayEvent::AuthError { message })) => {
+                    // #region agent log
+                    {
+                        use std::io::Write;
+                        let payload = serde_json::json!({
+                            "sessionId": "9b541f",
+                            "hypothesisId": "B",
+                            "location": "remote_connect/mod.rs:start_device_connection",
+                            "message": "AuthError received",
+                            "data": { "message": message.clone() },
+                            "timestamp": std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64,
+                        });
+                        if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open("/Users/liwenbo/ide_dev/repo/BitFun/.cursor/debug-9b541f.log") {
+                            let _ = writeln!(f, "{payload}");
+                        }
+                    }
+                    // #endregion
                     auth_error = Some(message);
                 }
                 Ok(Some(other)) => {
@@ -1226,9 +1266,44 @@ impl RemoteConnectService {
             while let Some(event) = event_rx.recv().await {
                 match &event {
                     relay_client::RelayEvent::DevicePresence { devices } => {
+                        // #region agent log
+                        {
+                            use std::io::Write;
+                            let payload = serde_json::json!({
+                                "sessionId": "9b541f",
+                                "hypothesisId": "E",
+                                "location": "remote_connect/mod.rs:presence_forwarder",
+                                "message": "DevicePresence overwrite",
+                                "data": {
+                                    "count": devices.len(),
+                                    "ids": devices.iter().map(|d| d.device_id.clone()).collect::<Vec<_>>(),
+                                },
+                                "timestamp": std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64,
+                            });
+                            if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open("/Users/liwenbo/ide_dev/repo/BitFun/.cursor/debug-9b541f.log") {
+                                let _ = writeln!(f, "{payload}");
+                            }
+                        }
+                        // #endregion
                         *online_arc.write().await = devices.clone();
                     }
                     relay_client::RelayEvent::Disconnected => {
+                        // #region agent log
+                        {
+                            use std::io::Write;
+                            let payload = serde_json::json!({
+                                "sessionId": "9b541f",
+                                "hypothesisId": "A",
+                                "location": "remote_connect/mod.rs:presence_forwarder",
+                                "message": "WS Disconnected event",
+                                "data": {},
+                                "timestamp": std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64,
+                            });
+                            if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open("/Users/liwenbo/ide_dev/repo/BitFun/.cursor/debug-9b541f.log") {
+                                let _ = writeln!(f, "{payload}");
+                            }
+                        }
+                        // #endregion
                         *online_arc.write().await = Vec::new();
                     }
                     _ => {}
