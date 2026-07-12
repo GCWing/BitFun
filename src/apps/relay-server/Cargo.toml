@@ -66,5 +66,21 @@ aes-gcm = "0.10"
 clap = { version = "4", features = ["derive", "env"] }
 rpassword = "7"
 
-[lints]
-workspace = true
+# Lints are inlined (not workspace=true) so the crate still builds inside the
+# standalone Docker context under src/apps/relay-server/.
+[lints.rust]
+unsafe_op_in_unsafe_fn = "warn"
+unexpected_cfgs = "warn"
+unreachable_pub = "warn"
+unused_lifetimes = "warn"
+
+[lints.clippy]
+correctness = { level = "deny", priority = -1 }
+suspicious = { level = "deny", priority = -1 }
+perf = { level = "warn", priority = -1 }
+complexity = { level = "warn", priority = -1 }
+style = { level = "warn", priority = -1 }
+dbg_macro = "warn"
+todo = "warn"
+unimplemented = "warn"
+undocumented_unsafe_blocks = "warn"
