@@ -523,61 +523,16 @@ impl AccountClient {
         if !resp.status().is_success() {
             return Err(Self::into_error(resp).await);
         }
-        let raw = resp.text().await?;
-        // #region agent log
-        {
-            use std::io::Write;
-            let payload = serde_json::json!({
-                "sessionId": "9b541f",
-                "hypothesisId": "F",
-                "location": "account.rs:list_devices",
-                "message": "raw /api/devices body",
-                "data": {
-                    "body_prefix": raw.chars().take(800).collect::<String>(),
-                    "body_len": raw.len(),
-                },
-                "timestamp": std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64,
-            });
-            if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open("/Users/liwenbo/ide_dev/repo/BitFun/.cursor/debug-9b541f.log") {
-                let _ = writeln!(f, "{payload}");
-            }
-        }
-        // #endregion
-        let entries: Vec<DeviceListEntry> = serde_json::from_str(&raw)
-            .map_err(|e| anyhow!("decode device list: {e}; body={}", &raw[..raw.len().min(200)]))?;
+        let entries: Vec<DeviceListEntry> = resp.json().await?;
         Ok(entries
             .into_iter()
-            .map(|e| {
-                let online = e.online.unwrap_or(true);
-                // #region agent log
-                {
-                    use std::io::Write;
-                    let payload = serde_json::json!({
-                        "sessionId": "9b541f",
-                        "runId": "post-fix",
-                        "hypothesisId": "F",
-                        "location": "account.rs:list_devices:parsed",
-                        "message": "parsed device entry",
-                        "data": {
-                            "device_id": e.device_id.clone(),
-                            "online_field": e.online,
-                            "effective_online": online,
-                        },
-                        "timestamp": std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64,
-                    });
-                    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open("/Users/liwenbo/ide_dev/repo/BitFun/.cursor/debug-9b541f.log") {
-                        let _ = writeln!(f, "{payload}");
-                    }
-                }
-                // #endregion
-                DeviceInfo {
-                    device_id: e.device_id,
-                    device_name: e.device_name,
-                    // Legacy relays omit `online` and only return currently-online
-                    // devices; treat a missing field as online.
-                    online,
-                    last_seen_at: e.last_seen_at,
-                }
+            .map(|e| DeviceInfo {
+                device_id: e.device_id,
+                device_name: e.device_name,
+                // Legacy relays omit `online` and only return currently-online
+                // devices; treat a missing field as online.
+                online: e.online.unwrap_or(true),
+                last_seen_at: e.last_seen_at,
             })
             .collect())
     }

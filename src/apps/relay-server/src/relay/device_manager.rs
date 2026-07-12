@@ -97,9 +97,6 @@ impl DeviceManager {
             .filter(|d| d.key() != device_id)
             .map(|d| (d.key().clone(), d.device_name.clone()))
             .collect();
-        // #region agent log
-        let prior_conn = entry.get(device_id).map(|d| d.conn_id);
-        // #endregion
         entry.insert(
             device_id.to_string(),
             DeviceConn {
@@ -115,29 +112,6 @@ impl DeviceManager {
             "Device {device_id} registered for user {user_id} ({} online)",
             entry.len()
         );
-        // #region agent log
-        {
-            use std::io::Write;
-            let payload = serde_json::json!({
-                "sessionId": "9b541f",
-                "hypothesisId": "A",
-                "location": "device_manager.rs:register",
-                "message": "device registered",
-                "data": {
-                    "user_id": user_id,
-                    "device_id": device_id,
-                    "conn_id": conn_id,
-                    "prior_conn_id": prior_conn,
-                    "online_count": entry.len(),
-                    "others_count": others.len(),
-                },
-                "timestamp": std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64,
-            });
-            if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open("/Users/liwenbo/ide_dev/repo/BitFun/.cursor/debug-9b541f.log") {
-                let _ = writeln!(f, "{payload}");
-            }
-        }
-        // #endregion
         others
     }
 
@@ -146,33 +120,6 @@ impl DeviceManager {
     pub fn unregister(&self, conn_id: ConnId) -> Option<(String, String)> {
         let removed = self.conn_to_device.remove(&conn_id);
         if let Some((_, (user_id, device_id))) = &removed {
-            // #region agent log
-            let active_conn = self
-                .users
-                .get(user_id)
-                .and_then(|ud| ud.get(device_id).map(|d| d.conn_id));
-            let would_kill_newer = active_conn.map(|c| c != conn_id).unwrap_or(false);
-            {
-                use std::io::Write;
-                let payload = serde_json::json!({
-                    "sessionId": "9b541f",
-                    "hypothesisId": "A",
-                    "location": "device_manager.rs:unregister",
-                    "message": "device unregister called",
-                    "data": {
-                        "user_id": user_id,
-                        "device_id": device_id,
-                        "closing_conn_id": conn_id,
-                        "active_conn_id": active_conn,
-                        "skipped_stale_unregister": would_kill_newer,
-                    },
-                    "timestamp": std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64,
-                });
-                if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open("/Users/liwenbo/ide_dev/repo/BitFun/.cursor/debug-9b541f.log") {
-                    let _ = writeln!(f, "{payload}");
-                }
-            }
-            // #endregion
             if let Some(user_devices) = self.users.get(user_id) {
                 // Only remove if this closing conn is still the active owner.
                 // A newer reconnect may have already replaced the mapping.

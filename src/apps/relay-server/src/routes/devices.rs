@@ -85,30 +85,6 @@ async fn list_devices(
             }
         }
     }
-    // #region agent log
-    {
-        use std::io::Write;
-        let payload = serde_json::json!({
-            "sessionId": "9b541f",
-            "hypothesisId": "A",
-            "location": "devices.rs:list_devices",
-            "message": "list_devices computed",
-            "data": {
-                "user_id": user_id,
-                "memory_online_ids": online_ids.iter().cloned().collect::<Vec<_>>(),
-                "entries": devices.iter().map(|d| serde_json::json!({
-                    "id": d.device_id,
-                    "online": d.online,
-                    "last_seen_at": d.last_seen_at,
-                })).collect::<Vec<_>>(),
-            },
-            "timestamp": std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64,
-        });
-        if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open("/Users/liwenbo/ide_dev/repo/BitFun/.cursor/debug-9b541f.log") {
-            let _ = writeln!(f, "{payload}");
-        }
-    }
-    // #endregion
 
     // Also include any online-only devices not yet in the DB
     for (id, name) in &online {

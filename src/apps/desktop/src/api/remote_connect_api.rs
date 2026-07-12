@@ -1063,8 +1063,7 @@ pub struct OnlineDeviceInfo {
 #[tauri::command]
 pub async fn account_connect_devices() -> Result<Vec<OnlineDeviceInfo>, String> {
     let (session, relay_url) = read_account_context().await?;
-    let identity = current_device_identity()?;
-    let device_name = identity.device_name.clone();
+    let device_name = current_device_identity()?.device_name;
     let holder = get_service_holder().read().await;
     let service = holder
         .as_ref()
@@ -1074,27 +1073,6 @@ pub async fn account_connect_devices() -> Result<Vec<OnlineDeviceInfo>, String> 
     // (e.g. dialog re-open) should not tear down an existing connection.
     if service.is_device_connected().await {
         let devices = service.online_devices().await;
-        // #region agent log
-        {
-            use std::io::Write;
-            let payload = serde_json::json!({
-                "sessionId": "9b541f",
-                "hypothesisId": "C",
-                "location": "remote_connect_api.rs:account_connect_devices",
-                "message": "skip reconnect; already connected",
-                "data": {
-                    "local_device_id": identity.device_id,
-                    "relay_url": relay_url,
-                    "presence_count": devices.len(),
-                    "presence_ids": devices.iter().map(|d| d.device_id.clone()).collect::<Vec<_>>(),
-                },
-                "timestamp": std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64,
-            });
-            if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open("/Users/liwenbo/ide_dev/repo/BitFun/.cursor/debug-9b541f.log") {
-                let _ = writeln!(f, "{payload}");
-            }
-        }
-        // #endregion
         return Ok(devices
             .into_iter()
             .map(|d| OnlineDeviceInfo {
@@ -1104,50 +1082,10 @@ pub async fn account_connect_devices() -> Result<Vec<OnlineDeviceInfo>, String> 
             .collect());
     }
 
-    // #region agent log
-    {
-        use std::io::Write;
-        let payload = serde_json::json!({
-            "sessionId": "9b541f",
-            "hypothesisId": "B",
-            "location": "remote_connect_api.rs:account_connect_devices",
-            "message": "starting device WS AuthConnect",
-            "data": {
-                "local_device_id": identity.device_id,
-                "device_name": device_name,
-                "relay_url": relay_url,
-                "user_id": session.user_id,
-            },
-            "timestamp": std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64,
-        });
-        if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open("/Users/liwenbo/ide_dev/repo/BitFun/.cursor/debug-9b541f.log") {
-            let _ = writeln!(f, "{payload}");
-        }
-    }
-    // #endregion
-
     let mut event_rx = service
             .start_device_connection(&relay_url, &session.token, &device_name)
             .await
-            .map_err(|e| {
-                // #region agent log
-                {
-                    use std::io::Write;
-                    let payload = serde_json::json!({
-                        "sessionId": "9b541f",
-                        "hypothesisId": "B",
-                        "location": "remote_connect_api.rs:account_connect_devices",
-                        "message": "start_device_connection failed",
-                        "data": { "error": e.to_string() },
-                        "timestamp": std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64,
-                    });
-                    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open("/Users/liwenbo/ide_dev/repo/BitFun/.cursor/debug-9b541f.log") {
-                        let _ = writeln!(f, "{payload}");
-                    }
-                }
-                // #endregion
-                format!("{e}")
-            })?;
+            .map_err(|e| format!("{e}"))?;
 
     // Background task: consume events (presence / device messages / auth errors)
     let session_arc = get_account_session().clone();
@@ -1747,49 +1685,11 @@ pub struct AccountDeviceInfo {
 #[tauri::command]
 pub async fn account_list_devices() -> Result<Vec<AccountDeviceInfo>, String> {
     let (session, relay_url) = read_account_context().await?;
-    let local_id = current_device_identity()
-        .map(|d| d.device_id)
-        .unwrap_or_default();
-    let holder = get_service_holder().read().await;
-    let ws_connected = if let Some(service) = holder.as_ref() {
-        service.is_device_connected().await
-    } else {
-        false
-    };
-    drop(holder);
     let client = AccountClient::new();
     let devices = client
         .list_devices(&relay_url, &session)
         .await
         .map_err(|e| format!("{e}"))?;
-    // #region agent log
-    {
-        use std::io::Write;
-        let local_entry = devices.iter().find(|d| d.device_id == local_id);
-        let payload = serde_json::json!({
-            "sessionId": "9b541f",
-            "hypothesisId": "A",
-            "location": "remote_connect_api.rs:account_list_devices",
-            "message": "GET /api/devices result",
-            "data": {
-                "local_device_id": local_id,
-                "ws_connected": ws_connected,
-                "local_online": local_entry.map(|d| d.online),
-                "local_last_seen": local_entry.and_then(|d| d.last_seen_at),
-                "device_count": devices.len(),
-                "devices": devices.iter().map(|d| serde_json::json!({
-                    "id": d.device_id,
-                    "name": d.device_name,
-                    "online": d.online,
-                })).collect::<Vec<_>>(),
-            },
-            "timestamp": std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64,
-        });
-        if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open("/Users/liwenbo/ide_dev/repo/BitFun/.cursor/debug-9b541f.log") {
-            let _ = writeln!(f, "{payload}");
-        }
-    }
-    // #endregion
     Ok(devices
         .into_iter()
         .map(|d| AccountDeviceInfo {
