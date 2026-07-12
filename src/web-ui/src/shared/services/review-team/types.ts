@@ -317,13 +317,9 @@ export interface ReviewTeamStrategyDecision {
   rationale: string;
 }
 
+/** Runtime marker that enables strict L3 manifest invariant validation. */
 export interface ReviewQualityDecisionMetadata {
-  level: 'l2' | 'l3';
-  executionMode: 'strict';
-  strategyLevel: Exclude<ReviewStrategyLevel, 'quick'>;
-  reason: 'risk_score' | 'explicit_strict' | 'unresolved_target';
-  score: number;
-  requiresConsent: boolean;
+  level: 'l3';
 }
 
 export interface ReviewTeamPreReviewSummaryArea {
