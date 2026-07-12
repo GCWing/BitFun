@@ -4534,6 +4534,7 @@ mod tests {
             id: round_id.to_string(),
             turn_id: turn_id.to_string(),
             round_index: 0,
+            round_group_id: None,
             timestamp: 100,
             text_items: vec![TextItemData {
                 id: format!("{}-text", round_id),
@@ -4546,6 +4547,8 @@ mod tests {
                 parent_task_tool_id: None,
                 subagent_session_id: None,
                 status: Some("completed".to_string()),
+                attempt_id: None,
+                attempt_index: None,
             }],
             tool_items: vec![ToolItemData {
                 id: tool_id.to_string(),
@@ -4577,6 +4580,8 @@ mod tests {
                 subagent_model_alias: None,
                 status: Some("completed".to_string()),
                 interruption_reason: None,
+                attempt_id: None,
+                attempt_index: None,
             }],
             thinking_items: vec![],
             start_time: 100,
