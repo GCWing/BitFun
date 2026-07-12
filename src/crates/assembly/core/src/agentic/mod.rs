@@ -19,6 +19,7 @@ pub mod execution;
 pub mod tools;
 
 // Coordination module
+pub mod codex_integration;
 pub mod context_profile;
 pub mod coordination;
 pub mod deep_review;

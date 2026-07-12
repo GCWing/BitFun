@@ -88,6 +88,9 @@ bitfun-product-capabilities = { path = "../product-capabilities", default-featur
 # Agent tool contracts
 bitfun-agent-tools = { path = "../../execution/tool-contracts" }
 
+# Codex plugin adapter (OpenCode + Codex plugin support)
+bitfun-codex-adapter = { path = "../../adapters/codex-adapter" }
+
 # Tool pack provider plan
 bitfun-tool-packs = { path = "../../execution/tool-provider-groups", default-features = false, optional = true }
 

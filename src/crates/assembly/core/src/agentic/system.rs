@@ -105,6 +105,10 @@ pub async fn init_agentic_system() -> Result<AgenticSystem> {
 
     info!("Agentic system initialization complete");
 
+    // Initialize plugin support (OpenCode + Codex adapters).
+    // Discovers and registers plugin skills, MCP servers, and hooks.
+    crate::agentic::codex_integration::initialize_plugin_support(None).await;
+
     Ok(AgenticSystem {
         coordinator,
         event_queue,

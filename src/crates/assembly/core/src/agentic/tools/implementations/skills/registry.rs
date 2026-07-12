@@ -60,17 +60,27 @@ fn sort_remote_dir_entries(entries: &mut [crate::agentic::workspace::WorkspaceDi
 pub struct SkillRegistry {
     /// Cached raw user-level skills (no workspace-specific project skills).
     cache: RwLock<Vec<SkillInfo>>,
+    /// Plugin-contributed skill roots (for codex/openode adapters).
+    plugin_skill_roots: RwLock<Vec<(PathBuf, String)>>,
 }
 
 impl SkillRegistry {
     fn new() -> Self {
         Self {
             cache: RwLock::new(Vec::new()),
+            plugin_skill_roots: RwLock::new(Vec::new()),
         }
     }
 
     pub fn global() -> &'static Self {
         SKILL_REGISTRY.get_or_init(Self::new)
+    }
+
+    /// Registers a plugin-contributed skill root directory.
+    pub async fn add_plugin_skill_root(&self, path: PathBuf, plugin_id: &str) {
+        let mut roots = self.plugin_skill_roots.write().await;
+        roots.push((path, format!("plugin.{plugin_id}")));
+        self.cache.write().await.clear();
     }
 
     fn get_possible_paths_for_workspace(workspace_root: Option<&Path>) -> Vec<SkillRootEntry> {
@@ -250,6 +260,24 @@ impl SkillRegistry {
             let mut part = Self::scan_skills_in_dir(&entry).await;
             skills.append(&mut part);
         }
+
+        // Scan plugin-contributed skill roots
+        {
+            let plugin_roots = self.plugin_skill_roots.read().await;
+            let base_priority = 500usize;
+            for (idx, (path, _plugin_slot)) in plugin_roots.iter().enumerate() {
+                let entry = SkillRootEntry {
+                    path: path.clone(),
+                    level: SkillLocation::User,
+                    slot: "plugin",
+                    priority: base_priority + idx,
+                    is_builtin: false,
+                };
+                let mut part = Self::scan_skills_in_dir(&entry).await;
+                skills.append(&mut part);
+            }
+        }
+
         skills
     }
 
