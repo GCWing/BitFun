@@ -57,19 +57,19 @@
 |---|---|---|
 | `runtime-ports` plugin contract | 已有主机 ABI、只读视图、候选项、权限提示、诊断和隔离类型；公开符号较多但已受脚本预算约束 | 不继续新增泛描述符；公开符号必须声明接口切面、消费方和验证目标 |
 | `plugin-runtime-host` | 已有受控 host 边界、deadline、幂等、隔离和 restart 清理路径 | 继续保持窄方法集；P0-C.1 来源接口不得直接泄漏主机 ABI |
-| `product-domains/plugin_source` | 定义生态无关的版本 1 包清单、来源标识、工作区信任记录和 epoch 规则 | `adapter` 仅为不透明标识；不得加入生态入口规则、文件系统、安装或主机行为 |
-| `services-integrations/plugin_source` | 校验用户级和项目级 BitFun 目录中的全部声明文件，安全替换工作区信任记录，并为选定包生成固定内容输入 | 不解释 `.opencode` 布局，不扫描外部生态目录，不执行插件，不增加通用 registry/manager 接口 |
+| `product-domains/plugin_source` | 定义生态无关的包清单、来源审核记录、激活记录和独立代次 | `adapter` 仅为不透明标识；不得加入生态入口规则、文件系统、安装或主机行为 |
+| `services-integrations/plugin_source` | 校验受管目录、持久化来源审核与激活状态、生成固定输入，并复核实时激活授权 | 不解释 `.opencode` 布局，不扫描外部生态目录，不执行插件，不增加通用 registry/manager 接口 |
 | `bitfun-core/plugin_source` | 注入产品目录并向 CLI 保留来源与诊断兼容接口 | 不实现文件扫描、锁、持久化或生态解析 |
-| `bitfun-cli plugins` | 当前来源审核接口的产品消费方，支持 `list/approve-source/deny/revoke`；`doctor` 汇总严重来源错误 | `SourceApproved` 不得宣称能力已批准、包已启用或可执行，不承担安装复制和卸载 |
-| `opencode-adapter` | 消费固定内容的受管包输入，提供诊断只读视图和 custom tool 映射；未激活或暂不支持的能力返回诊断或 `unsupported` 状态 | 不拥有目录发现；生产组装和激活接入须独立评审 |
+| `bitfun-cli plugins` | 消费来源审核与激活接口，支持预览、精确哈希确认和停用；`doctor` 汇总严重来源错误 | 不承担安装复制、卸载、最终工具注册或执行 |
+| `opencode-adapter` | 普通输入只返回诊断；激活输入将受支持 custom tool 映射为权限候选 | 不拥有目录发现、激活持久化或最终工具执行 |
 | `events` | 已有产品事件清单 | 需要在真实插件事件消费前定义可订阅子集，不新增插件专用事件模型 |
 | `tool-contracts` | 已有动态工具提供方和工具快照 | custom tool 映射必须复用它，不新增插件专用工具 ABI |
 
 `opencode-adapter` 当前规则：
 
-- 唯一产品组装根调用公开工厂并把返回的适配器注入 Plugin Runtime Host；工厂只接收来源服务生成的受管包输入。
+- `bitfun-core/plugin_runtime` 是唯一生产组装点；它只把来源服务生成的固定输入和可选激活授权信息交给适配器，并把适配器注入 Plugin Runtime Host。
 - `SourceApproved` 仅表示包内容已经用户审核，适配器必须保持未激活状态，不得生成受信任候选。
-- GUI、TUI/CLI、Web 等产品入口只消费能力服务接口、插件只读视图、诊断和稳定状态词。
+- GUI、TUI/CLI、Web 等产品入口只消费产品级来源、激活、候选和诊断接口，不接触适配器或 Host ABI。
 - 适配器不执行 JS/TS、不安装 npm、不依赖用户本机 `opencode`。
 - 当前源码探测只识别测试覆盖的 `export const` 和同一行 `name: tool({` 声明形式，不提供完整 JS/TS 语法兼容；没有可识别入口的包和已识别但不支持的 hook 必须返回诊断，其他语法不属于本阶段兼容范围。
 
@@ -78,8 +78,8 @@
 - 包清单文件为 `bitfun.plugin.json`；版本 1 的 `adapter` 是小写不透明标识。只有清单声明并通过哈希校验的文件进入来源标识和后续适配器访问范围。
 - `.opencode/plugins/*.js|ts` 只在 OpenCode 适配层中解释；文件必须先进入受管包清单并通过来源服务校验，不得由公开适配入口直接扫描用户 OpenCode 配置目录。
 - 包内容变化后旧来源审核失效，新来源标识回到 `Unknown`；损坏的信任文件按失败处理且不自动覆盖。
-- P0-C.2 不得把 `SourceApproved` 直接映射为 Host 的 `Trusted`；首次激活需展示适配器、入口、能力和副作用并重新确认。
-- P0-C.1 没有生产 Host 绑定和 JS/TS 执行能力。
+- `SourceApproved` 不直接映射为 Host 的 `Trusted`；首次激活必须使用预览返回的精确内容哈希确认。无受支持 custom tool 的包不得进入激活状态。
+- 激活只允许产生需要权限的候选，不执行 JS/TS，不注册或执行最终工具。
 
 ## 5. PR 审查问题
 

@@ -170,7 +170,7 @@ function opencodeAdapterEntry(symbol, consumer) {
 export const opencodeAdapterPublicApiEntries = [
   opencodeAdapterEntry(
     'load_opencode_package_adapter',
-    'managed package source service to PluginRuntimeHost integration tests; production Product Assembly binding is out of scope for this PR',
+    'bitfun-core managed plugin composition root and PluginRuntimeHost integration tests',
   ),
 ];
 
@@ -199,6 +199,7 @@ export const pluginSourceContractPublicApiEntries = [
   'PluginTrustDecision',
   'PluginTrustStore',
   'PluginSourceContractError',
+  'PluginActivationAuthority',
 ].map((symbol) =>
   pluginSourceEntry(
     symbol,
@@ -224,6 +225,21 @@ export const managedPluginSourcePublicApiEntries = [
     'bitfun-core managed plugin source compatibility facade',
     'bitfun-cli plugins and doctor commands',
     'services-integrations plugin_source tests, core boundary checks, and bitfun-cli plugin command tests',
+    false,
+  ),
+);
+
+export const managedPluginActivationPublicApiEntries = [
+  'ManagedPluginCandidateView',
+  'ManagedPluginActivationView',
+  'preview_managed_plugin_activation',
+  'set_managed_plugin_activation',
+].map((symbol) =>
+  pluginSourceEntry(
+    symbol,
+    'bitfun-core managed plugin composition root',
+    'bitfun-cli plugin activation commands',
+    'bitfun-core plugin_runtime tests, bitfun-cli plugin source tests, and core boundary checks',
     false,
   ),
 );
@@ -288,5 +304,11 @@ export const publicApiAllowlistRules = [
     reason:
       'core managed plugin source compatibility API must stay limited to the current CLI consumer surface',
     allowedSymbolEntries: managedPluginSourcePublicApiEntries,
+  },
+  {
+    path: 'src/crates/assembly/core/src/plugin_runtime.rs',
+    reason:
+      'core managed plugin activation API must stay limited to product status projection and one state transition',
+    allowedSymbolEntries: managedPluginActivationPublicApiEntries,
   },
 ];

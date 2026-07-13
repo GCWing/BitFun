@@ -6,7 +6,7 @@
 
 use async_trait::async_trait;
 use bitfun_plugin_runtime_host::PluginHostAdapter;
-use bitfun_product_domains::plugin_source::PluginPackageInput;
+use bitfun_product_domains::plugin_source::{PluginActivationAuthority, PluginPackageInput};
 use bitfun_runtime_ports::{
     PermissionPromptDenyState, PermissionPromptDescriptor, PermissionPromptEffectKind,
     PluginArtifactRef, PluginCapabilityRef, PluginDataClassification, PluginEffectCandidatePayload,
@@ -35,6 +35,12 @@ const CUSTOM_TOOL_CAPABILITY_ID: &str = "opencode.custom_tool";
 const CUSTOM_TOOL_CAPABILITY_OWNER_ID: &str = "opencode.custom-tools";
 const CUSTOM_TOOL_EXTENSION_POINT: &str = "tool";
 const MAX_PLUGIN_ID_COMPONENT_LEN: usize = 40;
+const MAX_CUSTOM_TOOLS_PER_SOURCE: usize = 128;
+const MAX_CUSTOM_TOOLS_PER_PACKAGE: usize = 256;
+const MAX_CUSTOM_TOOL_ID_BYTES: usize = 64;
+const MAX_NPM_PLUGINS: usize = 128;
+const MAX_NPM_PLUGIN_NAME_BYTES: usize = 256;
+const MAX_NPM_PLUGIN_METADATA_BYTES: usize = 16 * 1024;
 
 const UNSUPPORTED_HOOK_EVENTS: &[&str] = &[
     "command.executed",
@@ -75,6 +81,13 @@ impl OpenCodeAdapterError {
 struct OpenCodePluginHostAdapter {
     projections: Vec<OpenCodeProjection>,
     observed_at_ms: u64,
+    activation: Option<OpenCodeActivationContext>,
+}
+
+struct OpenCodeActivationContext {
+    project_domain_id: String,
+    workspace_id: String,
+    activation_epoch: u64,
 }
 
 impl OpenCodePluginHostAdapter {
@@ -137,6 +150,7 @@ impl OpenCodePluginHostAdapter {
             None => OpenCodeConfig::empty(config_uri.clone()),
         };
 
+        let mut package_custom_tool_count = 0usize;
         for (relative_path, bytes) in files.iter().filter(|(path, _)| {
             path.starts_with(".opencode/plugins/")
                 && (path.ends_with(".js") || path.ends_with(".ts"))
@@ -177,7 +191,19 @@ impl OpenCodePluginHostAdapter {
                 projection.source.content_hash = source.content_hash.clone();
                 projection.without_config_package_diagnostics()
             }) {
-                Ok(projection) => projections.push(OpenCodeProjection::Local(projection)),
+                Ok(projection) => {
+                    package_custom_tool_count = package_custom_tool_count
+                        .checked_add(projection.local_plugin.custom_tools.len())
+                        .ok_or_else(|| {
+                            adapter_port_error("custom tool count overflow".to_string())
+                        })?;
+                    if package_custom_tool_count > MAX_CUSTOM_TOOLS_PER_PACKAGE {
+                        return Err(adapter_port_error(format!(
+                            "managed package declares more than {MAX_CUSTOM_TOOLS_PER_PACKAGE} custom tools"
+                        )));
+                    }
+                    projections.push(OpenCodeProjection::Local(projection));
+                }
                 Err(error) => projections.push(OpenCodeProjection::Invalid(
                     OpenCodeInvalidProjection::local_source(
                         Path::new(&plugin_path),
@@ -222,6 +248,83 @@ impl OpenCodePluginHostAdapter {
         Ok(Self {
             projections,
             observed_at_ms,
+            activation: None,
+        })
+    }
+
+    fn from_activated_package(
+        input: PluginPackageInput,
+        authority: PluginActivationAuthority,
+        observed_at_ms: u64,
+    ) -> PortResult<Self> {
+        let (project_domain_id, workspace_id, authority_source, activation_epoch) =
+            authority.into_parts();
+        let (manifest, source, files) = input.into_parts();
+        if source != authority_source {
+            return Err(PortError::new(
+                PortErrorKind::InvalidRequest,
+                "OpenCode package input does not match its activation authority",
+            ));
+        }
+        let input = PluginPackageInput::new(manifest, source, files)
+            .map_err(|error| PortError::new(PortErrorKind::InvalidRequest, error.to_string()))?;
+        let mut adapter = Self::from_package(input, observed_at_ms)?;
+        for projection in &mut adapter.projections {
+            projection.activate_supported_source();
+        }
+        adapter.activation = Some(OpenCodeActivationContext {
+            project_domain_id,
+            workspace_id,
+            activation_epoch,
+        });
+        Ok(adapter)
+    }
+
+    fn custom_tool_dispatch_targets(
+        &self,
+    ) -> Vec<(
+        PluginSourceRef,
+        String,
+        PluginCapabilityRef,
+        Vec<(PluginTargetRef, PluginRiskLevel)>,
+    )> {
+        self.projections
+            .iter()
+            .filter_map(OpenCodeProjection::custom_tool_dispatch_target)
+            .collect()
+    }
+
+    fn validate_activation_scope(
+        &self,
+        project_domain_id: &str,
+        workspace_id: &str,
+        epochs: &PluginRuntimeEpochs,
+    ) -> PortResult<()> {
+        let Some(activation) = &self.activation else {
+            return Ok(());
+        };
+        if activation.project_domain_id != project_domain_id
+            || activation.workspace_id != workspace_id
+            || activation.activation_epoch != epochs.trust_epoch
+        {
+            return Err(PortError::new(
+                PortErrorKind::NotAvailable,
+                "OpenCode package activation scope or epoch is stale",
+            ));
+        }
+        Ok(())
+    }
+
+    fn activation_matches(
+        &self,
+        project_domain_id: &str,
+        workspace_id: &str,
+        epochs: &PluginRuntimeEpochs,
+    ) -> bool {
+        self.activation.as_ref().is_none_or(|activation| {
+            activation.project_domain_id == project_domain_id
+                && activation.workspace_id == workspace_id
+                && activation.activation_epoch == epochs.trust_epoch
         })
     }
 
@@ -232,21 +335,48 @@ impl OpenCodePluginHostAdapter {
     }
 
     fn source_mismatch_response(&self, envelope: PluginDispatchEnvelope) -> PluginResponseEnvelope {
+        self.unavailable_response(
+            envelope,
+            "opencode.source_mismatch",
+            "OpenCode dispatch source does not match a loaded source snapshot",
+            false,
+        )
+    }
+
+    fn activation_stale_response(
+        &self,
+        envelope: PluginDispatchEnvelope,
+    ) -> PluginResponseEnvelope {
+        self.unavailable_response(
+            envelope,
+            "opencode.activation_stale",
+            "OpenCode package activation scope or epoch is stale",
+            true,
+        )
+    }
+
+    fn unavailable_response(
+        &self,
+        envelope: PluginDispatchEnvelope,
+        code: &str,
+        message: &str,
+        retryable: bool,
+    ) -> PluginResponseEnvelope {
         let diagnostic_id = format!(
-            "diag:{}:dispatch:{}:source_mismatch",
-            envelope.source.plugin_id, envelope.event_id
+            "diag:{}:dispatch:{}:{}",
+            envelope.source.plugin_id, envelope.event_id, code
         );
         let diagnostic = PluginDiagnostic {
             diagnostic_id: diagnostic_id.clone(),
             severity: PluginDiagnosticSeverity::Warning,
             source: envelope.source.clone(),
-            code: "opencode.source_mismatch".to_string(),
-            message: "OpenCode dispatch source does not match a loaded source snapshot".to_string(),
+            code: code.to_string(),
+            message: message.to_string(),
             detail: PluginDiagnosticDetail::Adapter {
                 adapter_id: OPENCODE_ADAPTER_ID.to_string(),
             },
             audit: audit_ref(&envelope),
-            retryable: false,
+            retryable,
         };
 
         PluginResponseEnvelope {
@@ -286,6 +416,11 @@ impl PluginHostAdapter for OpenCodePluginHostAdapter {
         &self,
         request: PluginRuntimeReadRequest,
     ) -> PortResult<PluginRuntimeReadResponse> {
+        self.validate_activation_scope(
+            &request.project_domain_id,
+            &request.workspace_id,
+            &request.epochs,
+        )?;
         let mut sources = Vec::new();
         let mut plugin_statuses = Vec::new();
         let mut diagnostics = Vec::new();
@@ -326,6 +461,13 @@ impl PluginHostAdapter for OpenCodePluginHostAdapter {
         &self,
         envelope: PluginDispatchEnvelope,
     ) -> PortResult<PluginResponseEnvelope> {
+        if !self.activation_matches(
+            &envelope.project_domain_id,
+            &envelope.workspace_id,
+            &envelope.epochs,
+        ) {
+            return Ok(self.activation_stale_response(envelope));
+        }
         match self.projection_for_source(&envelope.source) {
             Some(projection) => projection.project_dispatch_response(envelope),
             None => Ok(self.source_mismatch_response(envelope)),
@@ -335,12 +477,25 @@ impl PluginHostAdapter for OpenCodePluginHostAdapter {
 
 pub fn load_opencode_package_adapter(
     input: PluginPackageInput,
+    activation: Option<PluginActivationAuthority>,
     observed_at_ms: u64,
-) -> PortResult<Arc<dyn PluginHostAdapter>> {
-    Ok(Arc::new(OpenCodePluginHostAdapter::from_package(
-        input,
-        observed_at_ms,
-    )?))
+) -> PortResult<(
+    Arc<dyn PluginHostAdapter>,
+    Vec<(
+        PluginSourceRef,
+        String,
+        PluginCapabilityRef,
+        Vec<(PluginTargetRef, PluginRiskLevel)>,
+    )>,
+)> {
+    let adapter = match activation {
+        Some(authority) => {
+            OpenCodePluginHostAdapter::from_activated_package(input, authority, observed_at_ms)?
+        }
+        None => OpenCodePluginHostAdapter::from_package(input, observed_at_ms)?,
+    };
+    let targets = adapter.custom_tool_dispatch_targets();
+    Ok((Arc::new(adapter), targets))
 }
 
 fn source_identity_matches(left: &PluginSourceRef, right: &PluginSourceRef) -> bool {
@@ -367,12 +522,52 @@ enum OpenCodeProjection {
 }
 
 impl OpenCodeProjection {
+    fn activate_supported_source(&mut self) {
+        if let Self::Local(projection) = self {
+            projection.source.trust_level = PluginTrustLevel::Trusted;
+        }
+    }
+
     fn source_ref(&self) -> &PluginSourceRef {
         match self {
             Self::Local(projection) => projection.source_ref(),
             Self::Package(projection) => projection.source_ref(),
             Self::Invalid(projection) => projection.source_ref(),
         }
+    }
+
+    fn custom_tool_dispatch_target(
+        &self,
+    ) -> Option<(
+        PluginSourceRef,
+        String,
+        PluginCapabilityRef,
+        Vec<(PluginTargetRef, PluginRiskLevel)>,
+    )> {
+        let Self::Local(projection) = self else {
+            return None;
+        };
+        let capability = projection
+            .local_plugin
+            .custom_tools
+            .first()
+            .map(OpenCodeCustomTool::capability_ref)?;
+        Some((
+            projection.source_ref().clone(),
+            CUSTOM_TOOL_EXTENSION_POINT.to_string(),
+            capability,
+            projection
+                .local_plugin
+                .custom_tools
+                .iter()
+                .map(|tool| {
+                    (
+                        tool.target_ref(&projection.source.plugin_id),
+                        PluginRiskLevel::High,
+                    )
+                })
+                .collect(),
+        ))
     }
 
     fn source_ref_for_epochs(&self, epochs: &PluginRuntimeEpochs) -> PluginSourceRef {
@@ -1196,7 +1391,7 @@ impl OpenCodeSourceProjection {
             declared_capability: tool.capability_ref(),
             target_ref: target,
             data_classification: PluginDataClassification::Workspace,
-            risk_level: PluginRiskLevel::Medium,
+            risk_level: PluginRiskLevel::High,
             permission,
             source_ref: envelope.source.clone(),
             payload: PluginEffectCandidatePayload::ProviderCandidate {
@@ -1223,7 +1418,7 @@ impl OpenCodeSourceProjection {
             requested_capability: tool.capability_ref(),
             requested_effect: PermissionPromptEffectKind::ProviderCandidate,
             target,
-            risk_level: PluginRiskLevel::Medium,
+            risk_level: PluginRiskLevel::High,
             owner: tool.capability_ref().owner,
             rollback: PluginRollbackPolicy {
                 mode: PluginRollbackMode::DisablePlugin,
@@ -1383,14 +1578,44 @@ impl OpenCodeConfig {
             });
         }
 
+        if doc.plugin.len() > MAX_NPM_PLUGINS {
+            return Err(OpenCodeAdapterError::InvalidConfig {
+                field: "plugin",
+                message: format!("at most {MAX_NPM_PLUGINS} npm plugins may be declared"),
+            });
+        }
+
         let mut npm_plugins = Vec::new();
         let mut seen_packages = HashSet::new();
+        let mut metadata_bytes = 0usize;
         for package in doc.plugin {
             let package = package.trim().to_string();
             if package.is_empty() {
                 return Err(OpenCodeAdapterError::InvalidConfig {
                     field: "plugin",
                     message: "package names must not be empty".to_string(),
+                });
+            }
+            if package.len() > MAX_NPM_PLUGIN_NAME_BYTES {
+                return Err(OpenCodeAdapterError::InvalidConfig {
+                    field: "plugin",
+                    message: format!(
+                        "npm plugin names may contain at most {MAX_NPM_PLUGIN_NAME_BYTES} bytes"
+                    ),
+                });
+            }
+            metadata_bytes = metadata_bytes.checked_add(package.len()).ok_or_else(|| {
+                OpenCodeAdapterError::InvalidConfig {
+                    field: "plugin",
+                    message: "npm plugin metadata size overflow".to_string(),
+                }
+            })?;
+            if metadata_bytes > MAX_NPM_PLUGIN_METADATA_BYTES {
+                return Err(OpenCodeAdapterError::InvalidConfig {
+                    field: "plugin",
+                    message: format!(
+                        "npm plugin metadata may contain at most {MAX_NPM_PLUGIN_METADATA_BYTES} bytes"
+                    ),
                 });
             }
             if seen_packages.insert(package.clone()) {
@@ -1423,13 +1648,14 @@ struct OpenCodeLocalPlugin {
 
 impl OpenCodeLocalPlugin {
     fn from_source(path: &str, source: &str) -> Result<Self, OpenCodeAdapterError> {
+        let source = strip_js_comments(source)?;
         let export_name =
-            exported_plugin_name(source).ok_or(OpenCodeAdapterError::InvalidPluginSource {
+            exported_plugin_name(&source).ok_or(OpenCodeAdapterError::InvalidPluginSource {
                 field: "plugin.export",
                 message: "expected an exported OpenCode plugin function".to_string(),
             })?;
-        let custom_tools = discover_custom_tools(source);
-        let unsupported_hooks = discover_unsupported_hooks(source);
+        let custom_tools = discover_custom_tools(&source)?;
+        let unsupported_hooks = discover_unsupported_hooks(&source);
         if custom_tools.is_empty() && unsupported_hooks.is_empty() {
             return Err(OpenCodeAdapterError::InvalidPluginSource {
                 field: "plugin.contributions",
@@ -1493,8 +1719,9 @@ fn exported_plugin_name(source: &str) -> Option<String> {
     })
 }
 
-fn discover_custom_tools(source: &str) -> Vec<OpenCodeCustomTool> {
-    source
+fn discover_custom_tools(source: &str) -> Result<Vec<OpenCodeCustomTool>, OpenCodeAdapterError> {
+    let mut ids = HashSet::new();
+    let tools = source
         .lines()
         .filter_map(|line| {
             let (name, rest) = line.trim().split_once(':')?;
@@ -1502,12 +1729,103 @@ fn discover_custom_tools(source: &str) -> Vec<OpenCodeCustomTool> {
                 .starts_with("tool({")
                 .then(|| name.trim())
                 .filter(|candidate| is_identifier(candidate))
-                .map(|id| OpenCodeCustomTool {
-                    id: id.to_string(),
-                    tool_contract_id: CUSTOM_TOOL_CONTRACT_ID.to_string(),
-                })
         })
-        .collect()
+        .map(|id| {
+            if id.len() > MAX_CUSTOM_TOOL_ID_BYTES {
+                return Err(OpenCodeAdapterError::InvalidPluginSource {
+                    field: "plugin.custom_tools",
+                    message: format!(
+                        "custom tool identifiers may contain at most {MAX_CUSTOM_TOOL_ID_BYTES} bytes"
+                    ),
+                });
+            }
+            if !ids.insert(id) {
+                return Err(OpenCodeAdapterError::InvalidPluginSource {
+                    field: "plugin.custom_tools",
+                    message: format!("duplicate custom tool declaration: {id}"),
+                });
+            }
+            Ok(OpenCodeCustomTool {
+                id: id.to_string(),
+                tool_contract_id: CUSTOM_TOOL_CONTRACT_ID.to_string(),
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    if tools.len() > MAX_CUSTOM_TOOLS_PER_SOURCE {
+        return Err(OpenCodeAdapterError::InvalidPluginSource {
+            field: "plugin.custom_tools",
+            message: format!(
+                "a plugin source may declare at most {MAX_CUSTOM_TOOLS_PER_SOURCE} custom tools"
+            ),
+        });
+    }
+    Ok(tools)
+}
+
+fn strip_js_comments(source: &str) -> Result<String, OpenCodeAdapterError> {
+    let mut output = String::with_capacity(source.len());
+    let mut chars = source.chars().peekable();
+    let mut quote = None;
+    let mut escaped = false;
+    let mut line_comment = false;
+    let mut block_comment = false;
+
+    while let Some(ch) = chars.next() {
+        if line_comment {
+            if ch == '\n' {
+                line_comment = false;
+                output.push(ch);
+            } else {
+                output.push(' ');
+            }
+            continue;
+        }
+        if block_comment {
+            if ch == '*' && chars.peek() == Some(&'/') {
+                chars.next();
+                output.push_str("  ");
+                block_comment = false;
+            } else if ch == '\n' {
+                output.push(ch);
+            } else {
+                output.push(' ');
+            }
+            continue;
+        }
+        if let Some(delimiter) = quote {
+            output.push(ch);
+            if escaped {
+                escaped = false;
+            } else if ch == '\\' {
+                escaped = true;
+            } else if ch == delimiter {
+                quote = None;
+            }
+            continue;
+        }
+        if matches!(ch, '\'' | '"' | '`') {
+            quote = Some(ch);
+            output.push(ch);
+        } else if ch == '/' && chars.peek() == Some(&'/') {
+            chars.next();
+            output.push_str("  ");
+            line_comment = true;
+        } else if ch == '/' && chars.peek() == Some(&'*') {
+            chars.next();
+            output.push_str("  ");
+            block_comment = true;
+        } else {
+            output.push(ch);
+        }
+    }
+
+    if block_comment {
+        return Err(OpenCodeAdapterError::InvalidPluginSource {
+            field: "plugin.comments",
+            message: "unterminated block comment".to_string(),
+        });
+    }
+    Ok(output)
 }
 
 fn discover_unsupported_hooks(source: &str) -> Vec<String> {
@@ -1655,6 +1973,92 @@ mod opencode_projection_contracts {
     const LOCAL_PLUGIN_PATH: &str = ".opencode/plugins/workspace-tools.ts";
     const LOCAL_PLUGIN_SOURCE: &str =
         include_str!("../tests/fixtures/opencode-example/.opencode/plugins/workspace-tools.ts");
+
+    #[test]
+    fn commented_custom_tool_declarations_are_not_discovered() {
+        let source = r#"
+export const DemoPlugin = async () => ({
+  /*
+  ghost: tool({
+  */
+  // lineGhost: tool({
+})
+"#;
+
+        let error = OpenCodeLocalPlugin::from_source(LOCAL_PLUGIN_PATH, source)
+            .expect_err("comments must not create contributions");
+        assert!(error.to_string().contains("expected a custom tool or hook"));
+    }
+
+    #[test]
+    fn duplicate_custom_tool_declarations_are_rejected() {
+        let source = r#"
+export const DemoPlugin = async () => ({
+  tool: {
+    duplicate: tool({
+    duplicate: tool({
+  }
+})
+"#;
+
+        let error = OpenCodeLocalPlugin::from_source(LOCAL_PLUGIN_PATH, source)
+            .expect_err("duplicate declarations must be ambiguous");
+        assert!(error
+            .to_string()
+            .contains("duplicate custom tool declaration"));
+    }
+
+    #[test]
+    fn custom_tool_declaration_limit_accepts_boundary_and_rejects_overflow() {
+        let source = |count| {
+            let declarations = (0..count)
+                .map(|index| format!("  tool{index}: tool({{"))
+                .collect::<Vec<_>>()
+                .join("\n");
+            format!("export const DemoPlugin = async () => ({{\n{declarations}\n}})")
+        };
+
+        let boundary = source(MAX_CUSTOM_TOOLS_PER_SOURCE);
+        let plugin = OpenCodeLocalPlugin::from_source(LOCAL_PLUGIN_PATH, &boundary)
+            .expect("boundary declaration count");
+        assert_eq!(plugin.custom_tools.len(), MAX_CUSTOM_TOOLS_PER_SOURCE);
+
+        let overflow = source(MAX_CUSTOM_TOOLS_PER_SOURCE + 1);
+        let error = OpenCodeLocalPlugin::from_source(LOCAL_PLUGIN_PATH, &overflow)
+            .expect_err("overflow declaration count");
+        assert!(error.to_string().contains("may declare at most"));
+
+        let long_id = "a".repeat(MAX_CUSTOM_TOOL_ID_BYTES + 1);
+        let long_source =
+            format!("export const DemoPlugin = async () => ({{\n  {long_id}: tool({{\n}})");
+        let error = OpenCodeLocalPlugin::from_source(LOCAL_PLUGIN_PATH, &long_source)
+            .expect_err("long custom tool identifier");
+        assert!(error
+            .to_string()
+            .contains("identifiers may contain at most"));
+    }
+
+    #[test]
+    fn npm_plugin_declaration_limits_reject_count_and_metadata_amplification() {
+        let doc = |plugin| OpenCodeConfigDoc {
+            schema: Some(OPENCODE_CONFIG_SCHEMA.to_string()),
+            plugin,
+        };
+
+        let count_error = OpenCodeConfig::try_from_doc(doc((0..=MAX_NPM_PLUGINS)
+            .map(|index| format!("package-{index}"))
+            .collect()))
+        .expect_err("npm plugin count overflow");
+        assert!(count_error.to_string().contains("at most 128 npm plugins"));
+
+        let metadata_error = OpenCodeConfig::try_from_doc(doc((0..65)
+            .map(|index| format!("{index:03}{}", "a".repeat(253)))
+            .collect()))
+        .expect_err("npm plugin metadata overflow");
+        assert!(metadata_error
+            .to_string()
+            .contains("metadata may contain at most"));
+    }
 
     fn adapter(trust_level: PluginTrustLevel) -> OpenCodeSourceProjection {
         OpenCodeSourceProjection::from_opencode_sources(
@@ -1858,6 +2262,7 @@ mod opencode_projection_contracts {
         let host_adapter: Arc<dyn PluginHostAdapter> = Arc::new(OpenCodePluginHostAdapter {
             projections: vec![OpenCodeProjection::Local(adapter)],
             observed_at_ms: 1_720_000_001,
+            activation: None,
         });
         let host = PluginRuntimeHost::new(host_adapter);
 
@@ -1913,6 +2318,7 @@ mod opencode_projection_contracts {
         let host_adapter: Arc<dyn PluginHostAdapter> = Arc::new(OpenCodePluginHostAdapter {
             projections: vec![OpenCodeProjection::Local(adapter)],
             observed_at_ms: 1_720_000_001,
+            activation: None,
         });
         let host = PluginRuntimeHost::new(host_adapter);
 
@@ -1947,6 +2353,7 @@ mod opencode_projection_contracts {
         let host_adapter: Arc<dyn PluginHostAdapter> = Arc::new(OpenCodePluginHostAdapter {
             projections: vec![OpenCodeProjection::Local(adapter.clone())],
             observed_at_ms: 1_720_000_001,
+            activation: None,
         });
         let host = PluginRuntimeHost::new(host_adapter);
 
@@ -1982,6 +2389,7 @@ mod opencode_projection_contracts {
         let host_adapter: Arc<dyn PluginHostAdapter> = Arc::new(OpenCodePluginHostAdapter {
             projections: vec![OpenCodeProjection::Local(adapter.clone())],
             observed_at_ms: 1_720_000_001,
+            activation: None,
         });
         let host = PluginRuntimeHost::new(host_adapter);
 
@@ -2015,6 +2423,7 @@ mod opencode_projection_contracts {
         let host_adapter: Arc<dyn PluginHostAdapter> = Arc::new(OpenCodePluginHostAdapter {
             projections: vec![OpenCodeProjection::Local(adapter)],
             observed_at_ms: 1_720_000_001,
+            activation: None,
         });
         let host = PluginRuntimeHost::new(host_adapter);
 
@@ -2043,6 +2452,7 @@ mod opencode_projection_contracts {
         let host_adapter: Arc<dyn PluginHostAdapter> = Arc::new(OpenCodePluginHostAdapter {
             projections: vec![OpenCodeProjection::Local(adapter.clone())],
             observed_at_ms: 1_720_000_001,
+            activation: None,
         });
         let host = PluginRuntimeHost::new(host_adapter);
 
@@ -2074,6 +2484,7 @@ mod opencode_projection_contracts {
         let host_adapter: Arc<dyn PluginHostAdapter> = Arc::new(OpenCodePluginHostAdapter {
             projections: vec![OpenCodeProjection::Local(adapter.clone())],
             observed_at_ms: 1_720_000_001,
+            activation: None,
         });
         let host = PluginRuntimeHost::new(host_adapter);
 
@@ -2106,6 +2517,7 @@ mod opencode_projection_contracts {
         let host_adapter: Arc<dyn PluginHostAdapter> = Arc::new(OpenCodePluginHostAdapter {
             projections: vec![OpenCodeProjection::Local(adapter.clone())],
             observed_at_ms: 1_720_000_001,
+            activation: None,
         });
         let host = PluginRuntimeHost::new(host_adapter);
 

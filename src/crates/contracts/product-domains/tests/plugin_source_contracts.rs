@@ -7,6 +7,9 @@ use std::collections::BTreeMap;
 
 const HASH_A: &str = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const HASH_B: &str = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+const PROJECT: &str = "project-1";
+const WORKSPACE: &str = "workspace-1";
+const SOURCE_PATH: &str = "file:///workspace/.bitfun/plugins/acme.demo";
 
 fn source(content_hash: &str, source_path: &str) -> PluginPackageSourceIdentity {
     PluginPackageSourceIdentity {
@@ -16,6 +19,80 @@ fn source(content_hash: &str, source_path: &str) -> PluginPackageSourceIdentity 
         source_path: source_path.to_string(),
         content_hash: content_hash.to_string(),
     }
+}
+
+fn approve_source(store: &mut PluginTrustStore, package: &PluginPackageSourceIdentity) {
+    store
+        .apply_decision(
+            PROJECT,
+            WORKSPACE,
+            package.clone(),
+            PluginTrustDecision::ApproveSource,
+            100,
+        )
+        .expect("approve source");
+}
+
+fn activate_source(store: &mut PluginTrustStore, package: &PluginPackageSourceIdentity) {
+    store
+        .set_activation(PROJECT, WORKSPACE, package.clone(), true, 101)
+        .expect("activate source");
+}
+
+fn fixed_package_input(source_path: &str) -> (PluginPackageInput, PluginPackageSourceIdentity) {
+    let bytes = b"export const Demo = async () => ({})".to_vec();
+    let file_hash = format!("sha256:{}", hex::encode(Sha256::digest(&bytes)));
+    let manifest = PluginPackageManifest::parse_json(&format!(
+        r#"{{"schemaVersion":1,"id":"acme.demo","version":"1.0.0","adapter":"test_adapter","files":[{{"path":"plugin/main.ts","sha256":"{file_hash}"}}]}}"#
+    ))
+    .expect("valid manifest");
+    let package = source(
+        &manifest.content_hash().expect("manifest hash"),
+        source_path,
+    );
+    let input = PluginPackageInput::new(
+        manifest,
+        package.clone(),
+        BTreeMap::from([("plugin/main.ts".to_string(), bytes)]),
+    )
+    .expect("valid fixed package input");
+    (input, package)
+}
+
+fn trust_record(
+    package: &PluginPackageSourceIdentity,
+    trust_level: PluginPackageTrustLevel,
+) -> serde_json::Value {
+    serde_json::json!({
+        "projectDomainId": PROJECT,
+        "workspaceId": WORKSPACE,
+        "source": package,
+        "trustLevel": trust_level,
+        "updatedAtMs": 100
+    })
+}
+
+fn activation_record(package: &PluginPackageSourceIdentity) -> serde_json::Value {
+    serde_json::json!({
+        "projectDomainId": PROJECT,
+        "workspaceId": WORKSPACE,
+        "source": package,
+        "activationEpoch": 2,
+        "updatedAtMs": 101
+    })
+}
+
+fn schema_v2_store(
+    records: Vec<serde_json::Value>,
+    activation_records: Vec<serde_json::Value>,
+) -> serde_json::Value {
+    serde_json::json!({
+        "schemaVersion": 2,
+        "epoch": 2,
+        "records": records,
+        "activationEpoch": 2,
+        "activationRecords": activation_records
+    })
 }
 
 #[test]
@@ -240,9 +317,11 @@ fn revoke_requires_an_existing_source_approval() {
 #[test]
 fn trust_store_rejects_unknown_schema_and_duplicate_identity_records() {
     let unknown_schema = r#"{
-      "schemaVersion": 2,
+      "schemaVersion": 3,
       "epoch": 1,
-      "records": []
+      "records": [],
+      "activationEpoch": 1,
+      "activationRecords": []
     }"#;
     let unknown_schema: PluginTrustStore =
         serde_json::from_str(unknown_schema).expect("deserialize unknown schema");
@@ -283,4 +362,225 @@ fn trust_store_rejects_unknown_schema_and_duplicate_identity_records() {
     let duplicate_records: PluginTrustStore =
         serde_json::from_value(duplicate_records).expect("deserialize duplicate records");
     assert!(duplicate_records.validate().is_err());
+}
+
+#[test]
+fn activation_lifecycle_is_exact_independent_and_idempotent() {
+    let package = source(HASH_A, SOURCE_PATH);
+    let mut store = PluginTrustStore::new(7);
+    assert_eq!(store.activation_epoch(), 7);
+    assert_eq!(
+        store
+            .set_activation(PROJECT, WORKSPACE, package.clone(), true, 100)
+            .expect_err("unapproved source must not activate")
+            .to_string(),
+        "only a source-approved plugin package can be activated"
+    );
+
+    approve_source(&mut store, &package);
+    let trust_epoch = store.epoch();
+    activate_source(&mut store, &package);
+    assert_eq!((store.epoch(), store.activation_epoch()), (trust_epoch, 8));
+    assert!(store.is_activated(PROJECT, WORKSPACE, &package));
+    assert!(!store.is_activated(PROJECT, "workspace-2", &package));
+    assert!(!store.is_activated(PROJECT, WORKSPACE, &source(HASH_B, SOURCE_PATH)));
+    assert!(!store
+        .set_activation(PROJECT, WORKSPACE, package.clone(), true, 102)
+        .expect("repeat activation"));
+
+    assert!(store
+        .set_activation(PROJECT, WORKSPACE, package.clone(), false, 103)
+        .expect("deactivate source"));
+    assert_eq!((store.epoch(), store.activation_epoch()), (trust_epoch, 9));
+    assert!(!store
+        .set_activation(PROJECT, WORKSPACE, package, false, 104)
+        .expect("repeat deactivation"));
+    assert_eq!((store.epoch(), store.activation_epoch()), (trust_epoch, 9));
+}
+
+#[test]
+fn source_changes_deny_and_revoke_invalidate_activation_atomically() {
+    let original = source(HASH_A, SOURCE_PATH);
+    let changed = source(HASH_B, SOURCE_PATH);
+    let mut store = PluginTrustStore::new(1);
+    approve_source(&mut store, &original);
+    activate_source(&mut store, &original);
+    let epochs = (store.epoch(), store.activation_epoch());
+    assert!(store
+        .reconcile_sources(PROJECT, WORKSPACE, std::slice::from_ref(&changed))
+        .expect("reconcile changed source"));
+    assert_eq!(
+        (store.epoch(), store.activation_epoch()),
+        (epochs.0 + 1, epochs.1 + 1)
+    );
+    assert!(!store.is_activated(PROJECT, WORKSPACE, &original));
+    assert!(!store
+        .reconcile_sources(PROJECT, WORKSPACE, &[changed])
+        .expect("repeat reconciliation"));
+
+    for decision in [PluginTrustDecision::Denied, PluginTrustDecision::Revoked] {
+        let mut store = PluginTrustStore::new(1);
+        approve_source(&mut store, &original);
+        activate_source(&mut store, &original);
+        let epochs = (store.epoch(), store.activation_epoch());
+        store
+            .apply_decision(PROJECT, WORKSPACE, original.clone(), decision, 102)
+            .expect("replace source approval");
+        assert_eq!(
+            (store.epoch(), store.activation_epoch()),
+            (epochs.0 + 1, epochs.1 + 1)
+        );
+        assert!(!store.is_activated(PROJECT, WORKSPACE, &original));
+    }
+}
+
+#[test]
+fn schema_v1_migrates_inactive_and_recreated_stores_do_not_reuse_generation() {
+    let package = source(HASH_A, SOURCE_PATH);
+    let schema_v1 = serde_json::json!({
+        "schemaVersion": 1,
+        "epoch": 7,
+        "records": [trust_record(&package, PluginPackageTrustLevel::SourceApproved)]
+    });
+    let store: PluginTrustStore =
+        serde_json::from_value(schema_v1).expect("deserialize schema-v1 store");
+    store.validate().expect("validate migrated schema-v1 store");
+    assert_eq!(store.activation_epoch(), 7);
+    assert!(!store.is_activated(PROJECT, WORKSPACE, &package));
+    let migrated = serde_json::to_value(&store).expect("serialize migrated store");
+    assert_eq!(migrated["schemaVersion"], 2);
+    assert_eq!(migrated["activationRecords"], serde_json::json!([]));
+
+    let mut recreated = PluginTrustStore::new(store.activation_epoch());
+    approve_source(&mut recreated, &package);
+    activate_source(&mut recreated, &package);
+    assert!(recreated.activation_epoch() > store.activation_epoch());
+}
+
+#[test]
+fn invalid_persisted_activation_records_fail_closed() {
+    let package = source(HASH_A, SOURCE_PATH);
+    let activation = activation_record(&package);
+    let approved = trust_record(&package, PluginPackageTrustLevel::SourceApproved);
+
+    let duplicate: PluginTrustStore = serde_json::from_value(schema_v2_store(
+        vec![approved],
+        vec![activation.clone(), activation.clone()],
+    ))
+    .expect("deserialize duplicate activations");
+    assert_eq!(
+        duplicate
+            .validate()
+            .expect_err("reject duplicate")
+            .to_string(),
+        "duplicate plugin activation record"
+    );
+
+    let unknown: PluginTrustStore =
+        serde_json::from_value(schema_v2_store(vec![], vec![activation.clone()]))
+            .expect("deserialize unknown activation");
+    assert_eq!(
+        unknown.validate().expect_err("reject unknown").to_string(),
+        "persisted plugin activation record has no trust record"
+    );
+
+    let stale: PluginTrustStore = serde_json::from_value(schema_v2_store(
+        vec![trust_record(&package, PluginPackageTrustLevel::Denied)],
+        vec![activation.clone()],
+    ))
+    .expect("deserialize stale activation");
+    assert_eq!(
+        stale.validate().expect_err("reject stale").to_string(),
+        "persisted plugin activation record is not source-approved"
+    );
+
+    let excessive: PluginTrustStore =
+        serde_json::from_value(schema_v2_store(vec![], vec![activation; 1025]))
+            .expect("deserialize excessive activations");
+    assert_eq!(
+        excessive
+            .validate()
+            .expect_err("reject excessive")
+            .to_string(),
+        "too many plugin activation records"
+    );
+}
+
+#[test]
+fn activation_authority_requires_the_exact_activated_package() {
+    let (_, package) = fixed_package_input(SOURCE_PATH);
+    let mut store = PluginTrustStore::new(1);
+    assert_eq!(
+        store
+            .activation_authority(PROJECT, WORKSPACE, &package)
+            .expect_err("inactive package must not create authority")
+            .to_string(),
+        "plugin package input is not activated in this scope"
+    );
+
+    approve_source(&mut store, &package);
+    activate_source(&mut store, &package);
+    let (_, mismatched) = fixed_package_input("file:///workspace/other/acme.demo");
+    assert!(store
+        .activation_authority(PROJECT, WORKSPACE, &mismatched)
+        .is_err());
+
+    let authority = store
+        .activation_authority(PROJECT, WORKSPACE, &package)
+        .expect("create exact activation authority");
+    let issued_epoch = authority.activation_epoch();
+    assert_eq!(issued_epoch, store.activation_epoch());
+    assert!(store.is_activation_current(&authority));
+    let mut other = source(HASH_B, "file:///workspace/.bitfun/plugins/acme.other");
+    other.package_id = "acme.other".to_string();
+    approve_source(&mut store, &other);
+    activate_source(&mut store, &other);
+    assert!(store.activation_epoch() > issued_epoch);
+    assert!(store.is_activation_current(&authority));
+    let cross_scope = store
+        .activation_authority(PROJECT, "workspace-2", &package)
+        .expect_err("activation authority must stay in its exact scope");
+    assert_eq!(
+        cross_scope.to_string(),
+        "plugin package input is not activated in this scope"
+    );
+
+    let retained = authority.clone();
+    store
+        .set_activation(PROJECT, WORKSPACE, package.clone(), false, 102)
+        .expect("deactivate source");
+    assert!(!store.is_activation_current(&retained));
+
+    let (project, workspace, authority_source, activation_epoch) = authority.into_parts();
+    assert_eq!(activation_epoch, issued_epoch);
+    assert_ne!(activation_epoch, store.activation_epoch());
+    assert_eq!((project.as_str(), workspace.as_str()), (PROJECT, WORKSPACE));
+    assert_eq!(authority_source, package);
+}
+
+#[test]
+fn trust_store_schema_versions_reject_missing_null_and_cross_version_fields() {
+    let missing_v2 = r#"{
+      "schemaVersion": 2,
+      "epoch": 1,
+      "records": [],
+      "activationEpoch": 1
+    }"#;
+    assert!(serde_json::from_str::<PluginTrustStore>(missing_v2).is_err());
+
+    for invalid_v1 in [
+        r#"{"schemaVersion":1,"epoch":1,"records":[],"activationEpoch":null}"#,
+        r#"{"schemaVersion":1,"epoch":1,"records":[],"activationRecords":null}"#,
+    ] {
+        assert!(serde_json::from_str::<PluginTrustStore>(invalid_v1).is_err());
+    }
+
+    let null_v2 = r#"{
+      "schemaVersion": 2,
+      "epoch": 1,
+      "records": [],
+      "activationEpoch": 1,
+      "activationRecords": null
+    }"#;
+    assert!(serde_json::from_str::<PluginTrustStore>(null_v2).is_err());
 }

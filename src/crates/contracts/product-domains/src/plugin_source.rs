@@ -4,13 +4,14 @@
 //! adapter or Plugin Runtime Host is selected. Filesystem discovery and trust
 //! persistence are concrete service integration responsibilities.
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::fmt;
 
 const PLUGIN_PACKAGE_MANIFEST_SCHEMA_VERSION: u16 = 1;
-const PLUGIN_TRUST_STORE_SCHEMA_VERSION: u16 = 1;
+const PLUGIN_TRUST_STORE_SCHEMA_VERSION: u16 = 2;
+const LEGACY_PLUGIN_TRUST_STORE_SCHEMA_VERSION: u16 = 1;
 
 const MAX_PACKAGE_ID_LEN: usize = 128;
 const MAX_ADAPTER_ID_LEN: usize = 64;
@@ -22,6 +23,7 @@ const MAX_PACKAGE_FILES: usize = 64;
 const MAX_PACKAGE_FILE_BYTES: usize = 1024 * 1024;
 const MAX_PACKAGE_BYTES: usize = 16 * 1024 * 1024;
 const MAX_TRUST_RECORDS: usize = 1024;
+const MAX_ACTIVATION_RECORDS: usize = 1024;
 const SHA256_PREFIX: &str = "sha256:";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -234,10 +236,119 @@ struct PluginTrustRecord {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct PluginActivationRecord {
+    project_domain_id: String,
+    workspace_id: String,
+    source: PluginPackageSourceIdentity,
+    activation_epoch: u64,
+    updated_at_ms: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PluginTrustStore {
     schema_version: u16,
     epoch: u64,
     records: Vec<PluginTrustRecord>,
+    activation_epoch: u64,
+    activation_records: Vec<PluginActivationRecord>,
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum PersistedPluginTrustStore {
+    V2(PersistedPluginTrustStoreV2),
+    V1(PersistedPluginTrustStoreV1),
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct PersistedPluginTrustStoreV1 {
+    schema_version: u16,
+    epoch: u64,
+    records: Vec<PluginTrustRecord>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct PersistedPluginTrustStoreV2 {
+    schema_version: u16,
+    epoch: u64,
+    records: Vec<PluginTrustRecord>,
+    activation_epoch: u64,
+    activation_records: Vec<PluginActivationRecord>,
+}
+
+impl<'de> Deserialize<'de> for PluginTrustStore {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        match PersistedPluginTrustStore::deserialize(deserializer)? {
+            PersistedPluginTrustStore::V1(persisted)
+                if persisted.schema_version == LEGACY_PLUGIN_TRUST_STORE_SCHEMA_VERSION =>
+            {
+                Ok(Self {
+                    schema_version: PLUGIN_TRUST_STORE_SCHEMA_VERSION,
+                    epoch: persisted.epoch,
+                    records: persisted.records,
+                    activation_epoch: persisted.epoch,
+                    activation_records: Vec::new(),
+                })
+            }
+            PersistedPluginTrustStore::V1(persisted)
+                if persisted.schema_version == PLUGIN_TRUST_STORE_SCHEMA_VERSION =>
+            {
+                Err(serde::de::Error::custom(
+                    "schema-v2 plugin trust store requires activation fields",
+                ))
+            }
+            PersistedPluginTrustStore::V1(persisted) => Ok(Self {
+                schema_version: persisted.schema_version,
+                epoch: persisted.epoch,
+                records: persisted.records,
+                activation_epoch: 0,
+                activation_records: Vec::new(),
+            }),
+            PersistedPluginTrustStore::V2(persisted)
+                if persisted.schema_version == LEGACY_PLUGIN_TRUST_STORE_SCHEMA_VERSION =>
+            {
+                Err(serde::de::Error::custom(
+                    "schema-v1 plugin trust store cannot contain activation fields",
+                ))
+            }
+            PersistedPluginTrustStore::V2(persisted) => Ok(Self {
+                schema_version: persisted.schema_version,
+                epoch: persisted.epoch,
+                records: persisted.records,
+                activation_epoch: persisted.activation_epoch,
+                activation_records: persisted.activation_records,
+            }),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PluginActivationAuthority {
+    project_domain_id: String,
+    workspace_id: String,
+    source: PluginPackageSourceIdentity,
+    activation_epoch: u64,
+}
+
+impl PluginActivationAuthority {
+    pub const fn activation_epoch(&self) -> u64 {
+        self.activation_epoch
+    }
+
+    pub fn into_parts(self) -> (String, String, PluginPackageSourceIdentity, u64) {
+        (
+            self.project_domain_id,
+            self.workspace_id,
+            self.source,
+            self.activation_epoch,
+        )
+    }
 }
 
 impl PluginTrustStore {
@@ -246,11 +357,17 @@ impl PluginTrustStore {
             schema_version: PLUGIN_TRUST_STORE_SCHEMA_VERSION,
             epoch: initial_epoch,
             records: Vec::new(),
+            activation_epoch: initial_epoch,
+            activation_records: Vec::new(),
         }
     }
 
     pub const fn epoch(&self) -> u64 {
         self.epoch
+    }
+
+    pub const fn activation_epoch(&self) -> u64 {
+        self.activation_epoch
     }
 
     pub fn validate(&self) -> Result<(), PluginSourceContractError> {
@@ -262,8 +379,14 @@ impl PluginTrustStore {
         if self.epoch == 0 {
             return Err(PluginSourceContractError::InvalidTrustEpoch);
         }
+        if self.activation_epoch == 0 {
+            return Err(PluginSourceContractError::InvalidActivationEpoch);
+        }
         if self.records.len() > MAX_TRUST_RECORDS {
             return Err(PluginSourceContractError::TooManyTrustRecords);
+        }
+        if self.activation_records.len() > MAX_ACTIVATION_RECORDS {
+            return Err(PluginSourceContractError::TooManyActivationRecords);
         }
 
         let mut package_scopes = HashSet::new();
@@ -280,6 +403,35 @@ impl PluginTrustStore {
             );
             if !package_scopes.insert(key) {
                 return Err(PluginSourceContractError::DuplicateTrustRecord);
+            }
+        }
+
+        let mut activation_scopes = HashSet::new();
+        for record in &self.activation_records {
+            validate_scope(&record.project_domain_id, &record.workspace_id)?;
+            record.source.validate()?;
+            if record.activation_epoch == 0 || record.activation_epoch > self.activation_epoch {
+                return Err(PluginSourceContractError::InvalidActivationEpoch);
+            }
+            let key = (
+                record.project_domain_id.as_str(),
+                record.workspace_id.as_str(),
+                &record.source,
+            );
+            if !activation_scopes.insert(key) {
+                return Err(PluginSourceContractError::DuplicateActivationRecord);
+            }
+            let Some(trust_record) = self.records.iter().find(|trust_record| {
+                trust_record.project_domain_id == record.project_domain_id
+                    && trust_record.workspace_id == record.workspace_id
+                    && trust_record.source.package_id == record.source.package_id
+            }) else {
+                return Err(PluginSourceContractError::UnknownActivationRecord);
+            };
+            if trust_record.source != record.source
+                || trust_record.trust_level != PluginPackageTrustLevel::SourceApproved
+            {
+                return Err(PluginSourceContractError::StaleActivationRecord);
             }
         }
         Ok(())
@@ -300,6 +452,117 @@ impl PluginTrustStore {
             })
             .map(|record| record.trust_level)
             .unwrap_or(PluginPackageTrustLevel::Unknown)
+    }
+
+    pub fn is_activated(
+        &self,
+        project_domain_id: &str,
+        workspace_id: &str,
+        source: &PluginPackageSourceIdentity,
+    ) -> bool {
+        self.trust_level_for(project_domain_id, workspace_id, source)
+            == PluginPackageTrustLevel::SourceApproved
+            && self
+                .activation_record(project_domain_id, workspace_id, source)
+                .is_some()
+    }
+
+    pub fn activation_authority(
+        &self,
+        project_domain_id: &str,
+        workspace_id: &str,
+        source: &PluginPackageSourceIdentity,
+    ) -> Result<PluginActivationAuthority, PluginSourceContractError> {
+        validate_scope(project_domain_id, workspace_id)?;
+        if self.trust_level_for(project_domain_id, workspace_id, source)
+            != PluginPackageTrustLevel::SourceApproved
+        {
+            return Err(PluginSourceContractError::PluginPackageNotActivated);
+        }
+        let record = self
+            .activation_record(project_domain_id, workspace_id, source)
+            .ok_or(PluginSourceContractError::PluginPackageNotActivated)?;
+        Ok(PluginActivationAuthority {
+            project_domain_id: project_domain_id.to_string(),
+            workspace_id: workspace_id.to_string(),
+            source: source.clone(),
+            activation_epoch: record.activation_epoch,
+        })
+    }
+
+    pub fn is_activation_current(&self, authority: &PluginActivationAuthority) -> bool {
+        self.trust_level_for(
+            &authority.project_domain_id,
+            &authority.workspace_id,
+            &authority.source,
+        ) == PluginPackageTrustLevel::SourceApproved
+            && self
+                .activation_record(
+                    &authority.project_domain_id,
+                    &authority.workspace_id,
+                    &authority.source,
+                )
+                .is_some_and(|record| record.activation_epoch == authority.activation_epoch)
+    }
+
+    pub fn set_activation(
+        &mut self,
+        project_domain_id: &str,
+        workspace_id: &str,
+        source: PluginPackageSourceIdentity,
+        activated: bool,
+        updated_at_ms: u64,
+    ) -> Result<bool, PluginSourceContractError> {
+        validate_scope(project_domain_id, workspace_id)?;
+        source.validate()?;
+        if activated
+            && self.trust_level_for(project_domain_id, workspace_id, &source)
+                != PluginPackageTrustLevel::SourceApproved
+        {
+            return Err(PluginSourceContractError::ActivationRequiresSourceApproval);
+        }
+
+        let existing_index = self.activation_records.iter().position(|record| {
+            record.project_domain_id == project_domain_id
+                && record.workspace_id == workspace_id
+                && record.source == source
+        });
+        if activated == existing_index.is_some() {
+            return Ok(false);
+        }
+
+        let mut next = self.clone();
+        if activated {
+            if next.activation_records.len() >= MAX_ACTIVATION_RECORDS {
+                return Err(PluginSourceContractError::TooManyActivationRecords);
+            }
+            next.advance_activation_epoch()?;
+            next.activation_records.push(PluginActivationRecord {
+                project_domain_id: project_domain_id.to_string(),
+                workspace_id: workspace_id.to_string(),
+                source,
+                activation_epoch: next.activation_epoch,
+                updated_at_ms,
+            });
+        } else if let Some(index) = existing_index {
+            next.activation_records.remove(index);
+            next.advance_activation_epoch()?;
+        }
+        *self = next;
+        Ok(true)
+    }
+
+    fn activation_record(
+        &self,
+        project_domain_id: &str,
+        workspace_id: &str,
+        source: &PluginPackageSourceIdentity,
+    ) -> Option<&PluginActivationRecord> {
+        self.activation_records.iter().find(|record| {
+            record.project_domain_id == project_domain_id
+                && record.workspace_id == workspace_id
+                && record.source == *source
+        })
     }
 
     pub fn apply_decision(
@@ -336,7 +599,7 @@ impl PluginTrustStore {
                     *record = PluginTrustRecord {
                         project_domain_id: project_domain_id.to_string(),
                         workspace_id: workspace_id.to_string(),
-                        source,
+                        source: source.clone(),
                         trust_level,
                         updated_at_ms,
                     };
@@ -347,7 +610,7 @@ impl PluginTrustStore {
                 next.records.push(PluginTrustRecord {
                     project_domain_id: project_domain_id.to_string(),
                     workspace_id: workspace_id.to_string(),
-                    source,
+                    source: source.clone(),
                     trust_level,
                     updated_at_ms,
                 });
@@ -358,7 +621,19 @@ impl PluginTrustStore {
         if !changed {
             return Ok(false);
         }
+        let previous_activation_len = next.activation_records.len();
+        next.activation_records.retain(|record| {
+            record.project_domain_id != project_domain_id
+                || record.workspace_id != workspace_id
+                || record.source.package_id != source.package_id
+                || (record.source == source
+                    && trust_level == PluginPackageTrustLevel::SourceApproved)
+        });
+        let activation_changed = next.activation_records.len() != previous_activation_len;
         next.advance_epoch()?;
+        if activation_changed {
+            next.advance_activation_epoch()?;
+        }
         *self = next;
         Ok(true)
     }
@@ -386,7 +661,17 @@ impl PluginTrustStore {
         if !changed {
             return Ok(false);
         }
+        let previous_activation_len = next.activation_records.len();
+        next.activation_records.retain(|record| {
+            record.project_domain_id != project_domain_id
+                || record.workspace_id != workspace_id
+                || current.contains(&record.source)
+        });
+        let activation_changed = next.activation_records.len() != previous_activation_len;
         next.advance_epoch()?;
+        if activation_changed {
+            next.advance_activation_epoch()?;
+        }
         *self = next;
         Ok(true)
     }
@@ -396,6 +681,14 @@ impl PluginTrustStore {
             .epoch
             .checked_add(1)
             .ok_or(PluginSourceContractError::TrustEpochExhausted)?;
+        Ok(())
+    }
+
+    fn advance_activation_epoch(&mut self) -> Result<(), PluginSourceContractError> {
+        self.activation_epoch = self
+            .activation_epoch
+            .checked_add(1)
+            .ok_or(PluginSourceContractError::ActivationEpochExhausted)?;
         Ok(())
     }
 }
@@ -421,11 +714,19 @@ pub enum PluginSourceContractError {
     EmptyScope,
     InvalidScope,
     InvalidTrustEpoch,
+    InvalidActivationEpoch,
     TooManyTrustRecords,
+    TooManyActivationRecords,
     UnknownTrustRecord,
+    UnknownActivationRecord,
+    StaleActivationRecord,
     DuplicateTrustRecord,
+    DuplicateActivationRecord,
     InvalidTrustTransition,
+    ActivationRequiresSourceApproval,
+    PluginPackageNotActivated,
     TrustEpochExhausted,
+    ActivationEpochExhausted,
 }
 
 impl fmt::Display for PluginSourceContractError {
@@ -483,18 +784,54 @@ impl fmt::Display for PluginSourceContractError {
             Self::EmptyScope => write!(formatter, "plugin trust scope is empty"),
             Self::InvalidScope => write!(formatter, "invalid plugin trust scope"),
             Self::InvalidTrustEpoch => write!(formatter, "plugin trust epoch must be positive"),
+            Self::InvalidActivationEpoch => {
+                write!(formatter, "plugin activation epoch must be positive")
+            }
             Self::TooManyTrustRecords => write!(formatter, "too many plugin trust records"),
+            Self::TooManyActivationRecords => {
+                write!(formatter, "too many plugin activation records")
+            }
             Self::UnknownTrustRecord => {
                 write!(formatter, "persisted plugin trust record cannot be unknown")
             }
+            Self::UnknownActivationRecord => {
+                write!(
+                    formatter,
+                    "persisted plugin activation record has no trust record"
+                )
+            }
+            Self::StaleActivationRecord => {
+                write!(
+                    formatter,
+                    "persisted plugin activation record is not source-approved"
+                )
+            }
             Self::DuplicateTrustRecord => write!(formatter, "duplicate plugin trust record"),
+            Self::DuplicateActivationRecord => {
+                write!(formatter, "duplicate plugin activation record")
+            }
             Self::InvalidTrustTransition => {
                 write!(
                     formatter,
                     "only a source-approved plugin package can be revoked"
                 )
             }
+            Self::ActivationRequiresSourceApproval => {
+                write!(
+                    formatter,
+                    "only a source-approved plugin package can be activated"
+                )
+            }
+            Self::PluginPackageNotActivated => {
+                write!(
+                    formatter,
+                    "plugin package input is not activated in this scope"
+                )
+            }
             Self::TrustEpochExhausted => write!(formatter, "plugin trust epoch exhausted"),
+            Self::ActivationEpochExhausted => {
+                write!(formatter, "plugin activation epoch exhausted")
+            }
         }
     }
 }

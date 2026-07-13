@@ -4,8 +4,9 @@
 //! file interpretation remains in the corresponding adapter.
 
 use bitfun_product_domains::plugin_source::{
-    PluginPackageInput, PluginPackageManifest, PluginPackageSourceIdentity,
-    PluginPackageTrustLevel, PluginSourceContractError, PluginTrustStore,
+    PluginActivationAuthority, PluginPackageInput, PluginPackageManifest,
+    PluginPackageSourceIdentity, PluginPackageTrustLevel, PluginSourceContractError,
+    PluginTrustStore,
 };
 pub use bitfun_product_domains::plugin_source::{
     PluginPackageTrustLevel as ManagedPluginTrustLevel,
@@ -42,6 +43,7 @@ pub struct ManagedPluginPackageView {
     pub source_path: String,
     pub content_hash: String,
     pub trust_level: PluginPackageTrustLevel,
+    pub activated: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -57,6 +59,7 @@ pub struct ManagedPluginSourceSnapshot {
     pub packages: Vec<ManagedPluginPackageView>,
     pub issues: Vec<ManagedPluginSourceIssue>,
     pub trust_epoch: Option<u64>,
+    pub activation_epoch: Option<u64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -110,6 +113,32 @@ fn map_load_store_error(
         }
     } else {
         error.into()
+    }
+}
+
+fn map_activation_store_error(
+    package_id: &str,
+    error: PluginSourceStoreError,
+) -> ManagedPluginSourceError {
+    match error {
+        PluginSourceStoreError::Contract(
+            error @ (PluginSourceContractError::ActivationRequiresSourceApproval
+            | PluginSourceContractError::PluginPackageNotActivated),
+        ) => ManagedPluginSourceError::PackageInvalid {
+            package_id: package_id.to_string(),
+            diagnostic: error.to_string(),
+        },
+        PluginSourceStoreError::ActivationContentMismatch => {
+            ManagedPluginSourceError::PackageInvalid {
+                package_id: package_id.to_string(),
+                diagnostic: "activation confirmation does not match the current package content"
+                    .to_string(),
+            }
+        }
+        PluginSourceStoreError::Contract(error) => {
+            ManagedPluginSourceError::TrustStore(error.to_string())
+        }
+        error => error.into(),
     }
 }
 
@@ -187,12 +216,168 @@ impl ManagedPluginSourceService {
         Ok(build_snapshot(discovery, Some(trust_store), None, &scope))
     }
 
+    /// Activate or deactivate one exact managed package without changing source approval.
+    pub async fn set_activation(
+        &self,
+        workspace: &Path,
+        package_id: &str,
+        activated: bool,
+        expected_content_hash: Option<&str>,
+        expected_activation_epoch: Option<u64>,
+    ) -> Result<(ManagedPluginSourceSnapshot, bool), ManagedPluginSourceError> {
+        let scope = workspace_scope(workspace);
+        let result = self
+            .store
+            .apply_activation(
+                &scope.project_domain_id,
+                &scope.workspace_id,
+                package_id,
+                activated,
+                expected_content_hash,
+                expected_activation_epoch,
+                current_time_ms(),
+            )
+            .await;
+        match result {
+            Ok(outcome) => {
+                let mut snapshot =
+                    build_snapshot(outcome.discovery, Some(outcome.trust_store), None, &scope);
+                if let Some(error) = outcome.durability_warning {
+                    snapshot.issues.push(ManagedPluginSourceIssue {
+                        code: "activation_durability_uncertain".to_string(),
+                        source_path: self.store.trust_path.display().to_string(),
+                        message: error.to_string(),
+                        is_error: false,
+                    });
+                }
+                Ok((snapshot, outcome.changed))
+            }
+            Err(error) => Err(map_activation_store_error(package_id, error)),
+        }
+    }
+
     /// Load one selected package as fixed content for an ecosystem adapter.
     pub async fn load_package(
         &self,
         workspace: &Path,
         package_id: &str,
     ) -> Result<PluginPackageInput, ManagedPluginSourceError> {
+        Ok(self.load_approved_package(workspace, package_id).await?.0)
+    }
+
+    /// Load fixed package content with evidence for the current activation generation.
+    pub async fn load_activated_package(
+        &self,
+        workspace: &Path,
+        package_id: &str,
+    ) -> Result<(PluginPackageInput, PluginActivationAuthority), ManagedPluginSourceError> {
+        let (input, trust_store, budget) =
+            self.load_approved_package(workspace, package_id).await?;
+        let (manifest, source, files) = input.into_parts();
+        let scope = workspace_scope(workspace);
+        let authority = trust_store
+            .activation_authority(&scope.project_domain_id, &scope.workspace_id, &source)
+            .map_err(|error| ManagedPluginSourceError::PackageInvalid {
+                package_id: package_id.to_string(),
+                diagnostic: error.to_string(),
+            })?;
+        if !self
+            .store
+            .activation_authority_matches(&authority, &budget)
+            .await?
+        {
+            return Err(ManagedPluginSourceError::TemporarilyUnavailable {
+                package_id: package_id.to_string(),
+                diagnostic: "managed plugin activation changed while loading; retry the operation"
+                    .to_string(),
+            });
+        }
+        let input = PluginPackageInput::new(manifest, source, files).map_err(|error| {
+            ManagedPluginSourceError::PackageInvalid {
+                package_id: package_id.to_string(),
+                diagnostic: error.to_string(),
+            }
+        })?;
+        Ok((input, authority))
+    }
+
+    /// Check the selected package identity and its persisted activation generation.
+    pub async fn has_activation_authority(
+        &self,
+        workspace: &Path,
+        package_id: &str,
+        authority: &PluginActivationAuthority,
+    ) -> Result<bool, ManagedPluginSourceError> {
+        let (input, budget) = match self.read_selected_package(package_id).await {
+            Ok(loaded) => loaded,
+            Err(
+                ManagedPluginSourceError::PackageNotFound(_)
+                | ManagedPluginSourceError::PackageInvalid { .. },
+            ) => return Ok(false),
+            Err(error) => return Err(error),
+        };
+        let source = input.into_parts().1;
+        let (project_domain_id, workspace_id, authority_source, _) = authority.clone().into_parts();
+        let scope = workspace_scope(workspace);
+        if project_domain_id != scope.project_domain_id
+            || workspace_id != scope.workspace_id
+            || authority_source != source
+        {
+            return Ok(false);
+        }
+        self.store
+            .activation_authority_matches(authority, &budget)
+            .await
+            .map_err(|error| map_load_store_error(package_id, error))
+    }
+
+    async fn load_approved_package(
+        &self,
+        workspace: &Path,
+        package_id: &str,
+    ) -> Result<(PluginPackageInput, PluginTrustStore, OperationScanBudget), ManagedPluginSourceError>
+    {
+        let (input, budget) = self.read_selected_package(package_id).await?;
+        let input_source = input.clone().into_parts().1;
+        let scope = workspace_scope(workspace);
+        let trust_store = self
+            .store
+            .load_trust_store_with_budget(&budget)
+            .await
+            .map_err(|error| map_load_store_error(package_id, error))?;
+        if trust_store.trust_level_for(&scope.project_domain_id, &scope.workspace_id, &input_source)
+            != PluginPackageTrustLevel::SourceApproved
+        {
+            return Err(ManagedPluginSourceError::PackageInvalid {
+                package_id: package_id.to_string(),
+                diagnostic: "managed plugin package source is not approved".to_string(),
+            });
+        }
+        if !self
+            .store
+            .trust_approval_matches(
+                trust_store.epoch(),
+                &scope.project_domain_id,
+                &scope.workspace_id,
+                &input_source,
+                &budget,
+            )
+            .await
+            .map_err(|error| map_load_store_error(package_id, error))?
+        {
+            return Err(ManagedPluginSourceError::TemporarilyUnavailable {
+                package_id: package_id.to_string(),
+                diagnostic: "managed plugin trust changed while loading; retry the operation"
+                    .to_string(),
+            });
+        }
+        Ok((input, trust_store, budget))
+    }
+
+    async fn read_selected_package(
+        &self,
+        package_id: &str,
+    ) -> Result<(PluginPackageInput, OperationScanBudget), ManagedPluginSourceError> {
         let mut budget = OperationScanBudget::new();
         let _load_permit = tokio::time::timeout(budget.remaining_time(), self.load_gate.acquire())
             .await
@@ -204,7 +389,6 @@ impl ManagedPluginSourceService {
                 package_id: package_id.to_string(),
                 diagnostic: "load capacity is unavailable; retry the operation".to_string(),
             })?;
-        let scope = workspace_scope(workspace);
         let mut discovery = self
             .store
             .discover_with_budget_for(&mut budget, Some(package_id))
@@ -240,11 +424,6 @@ impl ManagedPluginSourceService {
                 },
             );
         }
-        let trust_store = self
-            .store
-            .load_trust_store_with_budget(&budget)
-            .await
-            .map_err(|error| map_load_store_error(package_id, error))?;
         let index = discovery
             .packages
             .iter()
@@ -265,18 +444,6 @@ impl ManagedPluginSourceService {
                     )
             })?;
         let package = discovery.packages.swap_remove(index);
-        let source_trust_level = trust_store.trust_level_for(
-            &scope.project_domain_id,
-            &scope.workspace_id,
-            &package.identity,
-        );
-        if source_trust_level != PluginPackageTrustLevel::SourceApproved {
-            return Err(ManagedPluginSourceError::PackageInvalid {
-                package_id: package_id.to_string(),
-                diagnostic: "managed plugin package source is not approved".to_string(),
-            });
-        }
-        let input_source = package.identity.clone();
         let input = PluginPackageInput::new(
             package.manifest,
             package.identity,
@@ -288,25 +455,7 @@ impl ManagedPluginSourceService {
             package_id: package_id.to_string(),
             diagnostic: error.to_string(),
         })?;
-        if !self
-            .store
-            .trust_approval_matches(
-                trust_store.epoch(),
-                &scope.project_domain_id,
-                &scope.workspace_id,
-                &input_source,
-                &budget,
-            )
-            .await
-            .map_err(|error| map_load_store_error(package_id, error))?
-        {
-            return Err(ManagedPluginSourceError::TemporarilyUnavailable {
-                package_id: package_id.to_string(),
-                diagnostic: "managed plugin trust changed while loading; retry the operation"
-                    .to_string(),
-            });
-        }
-        Ok(input)
+        Ok((input, budget))
     }
 }
 
@@ -348,6 +497,14 @@ fn build_snapshot(
             } else {
                 PluginPackageTrustLevel::Unknown
             },
+            activated: discovery_complete
+                && trust_store.as_ref().is_some_and(|trust_store| {
+                    trust_store.is_activated(
+                        &scope.project_domain_id,
+                        &scope.workspace_id,
+                        &package.identity,
+                    )
+                }),
         })
         .collect::<Vec<_>>();
     packages.sort_by(|left, right| left.package_id.cmp(&right.package_id));
@@ -361,6 +518,7 @@ fn build_snapshot(
         packages,
         issues,
         trust_epoch: trust_store.as_ref().map(PluginTrustStore::epoch),
+        activation_epoch: trust_store.as_ref().map(PluginTrustStore::activation_epoch),
     }
 }
 
@@ -916,11 +1074,19 @@ fn operation_scan_timeout(path: &Path) -> PluginSourceIssue {
 struct ProductPluginSourceStore {
     roots: Vec<PluginPackageRoot>,
     trust_path: PathBuf,
+    parent_sync: fn(&Path) -> io::Result<()>,
 }
 
 struct LoadedTrustStore {
     store: PluginTrustStore,
     identity: Option<TrustFileIdentity>,
+}
+
+struct ActivationStoreOutcome {
+    discovery: PluginSourceDiscovery,
+    trust_store: PluginTrustStore,
+    changed: bool,
+    durability_warning: Option<PluginSourceStoreError>,
 }
 
 #[derive(Debug)]
@@ -977,7 +1143,11 @@ struct TrustFileIdentity {
 
 impl ProductPluginSourceStore {
     fn new(roots: Vec<PluginPackageRoot>, trust_path: PathBuf) -> Self {
-        Self { roots, trust_path }
+        Self {
+            roots,
+            trust_path,
+            parent_sync: sync_parent_directory,
+        }
     }
 
     #[cfg(test)]
@@ -1329,13 +1499,42 @@ impl ProductPluginSourceStore {
                 });
             }
         };
-        let store = serde_json::from_slice::<PluginTrustStore>(&bytes).map_err(|source| {
+        let persisted = serde_json::from_slice::<serde_json::Value>(&bytes).map_err(|source| {
+            PluginSourceStoreError::TrustDeserialize {
+                path: self.trust_path.clone(),
+                source,
+            }
+        })?;
+        let migrated_from_v1 = persisted
+            .get("schemaVersion")
+            .and_then(serde_json::Value::as_u64)
+            == Some(1);
+        let store = serde_json::from_value::<PluginTrustStore>(persisted).map_err(|source| {
             PluginSourceStoreError::TrustDeserialize {
                 path: self.trust_path.clone(),
                 source,
             }
         })?;
         store.validate()?;
+        if migrated_from_v1 {
+            self.persist_trust_store_locked(
+                &store,
+                file_guard,
+                TrustFileExpectation::Identity(identity),
+            )
+            .await?;
+            let (_, migrated_identity) =
+                read_trust_file(&self.trust_path).await.map_err(|source| {
+                    PluginSourceStoreError::TrustRead {
+                        path: self.trust_path.clone(),
+                        source,
+                    }
+                })?;
+            return Ok(LoadedTrustStore {
+                store,
+                identity: Some(migrated_identity),
+            });
+        }
         Ok(LoadedTrustStore {
             store,
             identity: Some(identity),
@@ -1436,6 +1635,101 @@ impl ProductPluginSourceStore {
             .await?;
         }
         Ok((verified, store))
+    }
+
+    async fn apply_activation(
+        &self,
+        project_domain_id: &str,
+        workspace_id: &str,
+        package_id: &str,
+        activated: bool,
+        expected_content_hash: Option<&str>,
+        expected_activation_epoch: Option<u64>,
+        updated_at_ms: u64,
+    ) -> Result<ActivationStoreOutcome, PluginSourceStoreError> {
+        let mut scan_budget = OperationScanBudget::new();
+        let discovery = self.discover_with_budget(&mut scan_budget).await;
+        if !discovery.is_complete() {
+            return Err(PluginSourceStoreError::IncompleteDiscovery);
+        }
+        let source = discovery
+            .packages
+            .iter()
+            .find(|package| package.identity.package_id == package_id)
+            .map(|package| package.identity.clone())
+            .ok_or_else(|| PluginSourceStoreError::PackageNotFound(package_id.to_string()))?;
+        if activated && expected_content_hash.is_none_or(|expected| expected != source.content_hash)
+        {
+            return Err(PluginSourceStoreError::ActivationContentMismatch);
+        }
+        let mut file_guard = self.acquire_trust_file_lock(&scan_budget).await?;
+        let loaded = self
+            .load_trust_store_generation_locked(&mut file_guard, false)
+            .await?;
+        let mut store = loaded.store;
+        let before = store.clone();
+        if !activated {
+            if let Some(expected) = expected_activation_epoch {
+                let current = store
+                    .activation_authority(project_domain_id, workspace_id, &source)
+                    .ok()
+                    .map(|authority| authority.activation_epoch());
+                if current != Some(expected) {
+                    return Ok(ActivationStoreOutcome {
+                        discovery,
+                        trust_store: store,
+                        changed: false,
+                        durability_warning: None,
+                    });
+                }
+            }
+        }
+        store.reconcile_sources(project_domain_id, workspace_id, &discovery.identities())?;
+        let changed = store.set_activation(
+            project_domain_id,
+            workspace_id,
+            source,
+            activated,
+            updated_at_ms,
+        )?;
+        let verified = self.discover_with_budget(&mut scan_budget).await;
+        if !verified.is_complete()
+            || discovery.identities() != verified.identities()
+            || discovery.workspace_package_ids != verified.workspace_package_ids
+        {
+            return Err(PluginSourceStoreError::SourceChanged);
+        }
+        let durability_warning = if store != before {
+            match self
+                .persist_trust_store_locked(
+                    &store,
+                    &mut file_guard,
+                    loaded
+                        .identity
+                        .map(TrustFileExpectation::Identity)
+                        .unwrap_or(TrustFileExpectation::Missing),
+                )
+                .await
+            {
+                Ok(()) => None,
+                Err(error @ PluginSourceStoreError::TrustDurabilityUncertain { .. }) => {
+                    if activated {
+                        Some(error)
+                    } else {
+                        return Err(error);
+                    }
+                }
+                Err(error) => return Err(error),
+            }
+        } else {
+            None
+        };
+        Ok(ActivationStoreOutcome {
+            discovery: verified,
+            trust_store: store,
+            changed,
+            durability_warning,
+        })
     }
 
     async fn reconcile_trust(
@@ -1554,6 +1848,16 @@ impl ProductPluginSourceStore {
                 == PluginPackageTrustLevel::SourceApproved)
     }
 
+    async fn activation_authority_matches(
+        &self,
+        authority: &PluginActivationAuthority,
+        operation_budget: &OperationScanBudget,
+    ) -> Result<bool, PluginSourceStoreError> {
+        let mut file_guard = self.acquire_trust_file_lock(operation_budget).await?;
+        let current = self.load_trust_store_locked(&mut file_guard).await?;
+        Ok(current.is_activation_current(authority))
+    }
+
     async fn load_trust_store_with_budget(
         &self,
         operation_budget: &OperationScanBudget,
@@ -1635,12 +1939,13 @@ impl ProductPluginSourceStore {
             return Err(PluginSourceStoreError::TrustStoreTooLarge(bytes.len()));
         }
         let trust_path = self.trust_path.clone();
+        let parent_sync = self.parent_sync;
         file_guard
             .run_blocking(move || {
                 if !trust_file_expectation_matches(&trust_path, expected)? {
                     return Err(PluginSourceStoreError::TrustGenerationChanged);
                 }
-                persist_trust_bytes(&trust_path, &bytes)
+                persist_trust_bytes_with_parent_sync(&trust_path, &bytes, parent_sync)
             })
             .await
     }
@@ -1732,12 +2037,10 @@ enum PluginSourceStoreError {
     IncompleteDiscovery,
     #[error("managed plugin sources changed during trust validation; retry the operation")]
     SourceChanged,
+    #[error("managed plugin activation confirmation does not match the current content hash")]
+    ActivationContentMismatch,
     #[error("plugin trust store generation changed during the operation; retry the operation")]
     TrustGenerationChanged,
-}
-
-fn persist_trust_bytes(path: &Path, bytes: &[u8]) -> Result<(), PluginSourceStoreError> {
-    persist_trust_bytes_with_parent_sync(path, bytes, sync_parent_directory)
 }
 
 fn persist_trust_bytes_with_parent_sync(
@@ -2627,16 +2930,18 @@ fn declared_parent_metadata_issue_code(kind: ErrorKind) -> PluginSourceIssueCode
 mod tests {
     use super::{
         build_snapshot, charge_scanned_read, declared_parent_metadata_issue_code,
-        map_load_store_error, native_path_identity, persist_trust_bytes_with_parent_sync,
-        read_bounded_reader, read_scanned_file, replace_file_atomically, trust_file_identity,
-        trust_store_issue_code, workspace_scope, ManagedPluginSourceError,
-        ManagedPluginSourceService, OperationScanBudget, PluginPackageManifest, PluginPackageRoot,
-        PluginPackageScope, PluginSourceDiscovery, PluginSourceIssue, PluginSourceIssueCode,
-        PluginSourceStoreError, PluginTrustScope, ProductPluginSourceStore, ScannedFileReadError,
-        SecureManagedRoot, MAX_OPERATION_READ_BYTES, MAX_PACKAGE_FILE_BYTES, MAX_TRUST_STORE_BYTES,
+        map_activation_store_error, map_load_store_error, native_path_identity,
+        persist_trust_bytes_with_parent_sync, read_bounded_reader, read_scanned_file,
+        replace_file_atomically, trust_file_identity, trust_store_issue_code, workspace_scope,
+        ManagedPluginSourceError, ManagedPluginSourceService, OperationScanBudget,
+        PluginPackageManifest, PluginPackageRoot, PluginPackageScope, PluginSourceDiscovery,
+        PluginSourceIssue, PluginSourceIssueCode, PluginSourceStoreError, PluginTrustScope,
+        ProductPluginSourceStore, ScannedFileReadError, SecureManagedRoot,
+        MAX_OPERATION_READ_BYTES, MAX_PACKAGE_FILE_BYTES, MAX_TRUST_STORE_BYTES,
     };
-    use bitfun_product_domains::plugin_source::PluginPackageTrustLevel;
-    use bitfun_product_domains::plugin_source::PluginTrustDecision;
+    use bitfun_product_domains::plugin_source::{
+        PluginPackageTrustLevel, PluginSourceContractError, PluginTrustDecision,
+    };
     use sha2::{Digest, Sha256};
     use std::io::{self, ErrorKind, Read};
     use std::path::{Path, PathBuf};
@@ -2860,6 +3165,453 @@ mod tests {
         )
         .await
         .expect("write manifest");
+    }
+
+    struct ManagedPluginFixture {
+        _temp: tempfile::TempDir,
+        workspace: PathBuf,
+        workspace_root: PathBuf,
+        trust_path: PathBuf,
+    }
+
+    impl ManagedPluginFixture {
+        async fn new() -> Self {
+            let temp = tempfile::tempdir().expect("tempdir");
+            let workspace = temp.path().join("workspace");
+            let fixture = Self {
+                workspace_root: workspace.join(".bitfun/plugins"),
+                trust_path: temp.path().join("state/trust.json"),
+                workspace,
+                _temp: temp,
+            };
+            tokio::fs::create_dir_all(fixture._temp.path().join("user/plugins"))
+                .await
+                .expect("create user root");
+            fixture
+                .write("acme.demo", b"export const Version = 1;")
+                .await;
+            fixture
+        }
+
+        fn service(&self) -> ManagedPluginSourceService {
+            ManagedPluginSourceService::new(
+                self._temp.path().join("user/plugins"),
+                self._temp.path().join("user"),
+                self.workspace_root.clone(),
+                self.workspace.clone(),
+                self.trust_path.clone(),
+            )
+        }
+
+        async fn write(&self, id: &str, source: &[u8]) {
+            write_package(&self.workspace_root, id, source, &sha256(source)).await;
+        }
+
+        async fn activate(
+            &self,
+            service: &ManagedPluginSourceService,
+            id: &str,
+        ) -> super::PluginActivationAuthority {
+            service
+                .set_trust(&self.workspace, id, PluginTrustDecision::ApproveSource)
+                .await
+                .expect("approve source");
+            let content_hash = self.content_hash(service, id).await;
+            service
+                .set_activation(&self.workspace, id, true, Some(&content_hash), None)
+                .await
+                .expect("activate package");
+            service
+                .load_activated_package(&self.workspace, id)
+                .await
+                .expect("load activated package")
+                .1
+        }
+
+        async fn content_hash(&self, service: &ManagedPluginSourceService, id: &str) -> String {
+            service
+                .load_package(&self.workspace, id)
+                .await
+                .expect("load package")
+                .into_parts()
+                .1
+                .content_hash
+        }
+
+        async fn authority(
+            &self,
+            service: &ManagedPluginSourceService,
+            authority: &super::PluginActivationAuthority,
+        ) -> bool {
+            service
+                .has_activation_authority(&self.workspace, "acme.demo", authority)
+                .await
+                .expect("check activation authority")
+        }
+    }
+
+    #[tokio::test]
+    async fn activation_requires_source_approval_without_persisting_partial_state() {
+        let fixture = ManagedPluginFixture::new().await;
+        let service = fixture.service();
+
+        let content_hash = service.store.discover().await.packages[0]
+            .identity
+            .content_hash
+            .clone();
+        let error = service
+            .set_activation(
+                &fixture.workspace,
+                "acme.demo",
+                true,
+                Some(&content_hash),
+                None,
+            )
+            .await
+            .expect_err("unapproved source must not activate");
+
+        assert!(matches!(
+            error,
+            ManagedPluginSourceError::PackageInvalid { .. }
+        ));
+        assert!(!fixture.trust_path.exists());
+    }
+
+    #[tokio::test]
+    async fn activation_rejects_missing_or_stale_content_confirmation() {
+        let fixture = ManagedPluginFixture::new().await;
+        let service = fixture.service();
+        service
+            .set_trust(
+                &fixture.workspace,
+                "acme.demo",
+                PluginTrustDecision::ApproveSource,
+            )
+            .await
+            .expect("approve source");
+
+        for expected in [None, Some("sha256:stale")] {
+            let error = service
+                .set_activation(&fixture.workspace, "acme.demo", true, expected, None)
+                .await
+                .expect_err("confirmation must match the selected package");
+            assert!(matches!(
+                error,
+                ManagedPluginSourceError::PackageInvalid { .. }
+            ));
+        }
+        assert!(!service.refresh(&fixture.workspace).await.packages[0].activated);
+    }
+
+    #[test]
+    fn activation_contract_errors_distinguish_package_state_from_store_failures() {
+        let package_error = map_activation_store_error(
+            "acme.demo",
+            PluginSourceStoreError::Contract(
+                PluginSourceContractError::ActivationRequiresSourceApproval,
+            ),
+        );
+        let store_error = map_activation_store_error(
+            "acme.demo",
+            PluginSourceStoreError::Contract(PluginSourceContractError::ActivationEpochExhausted),
+        );
+
+        assert!(matches!(
+            package_error,
+            ManagedPluginSourceError::PackageInvalid { .. }
+        ));
+        assert!(matches!(
+            store_error,
+            ManagedPluginSourceError::TrustStore(_)
+        ));
+    }
+
+    #[tokio::test]
+    async fn schema_v1_store_is_persisted_as_v2_on_first_successful_read() {
+        let fixture = ManagedPluginFixture::new().await;
+        tokio::fs::create_dir_all(fixture.trust_path.parent().expect("trust state directory"))
+            .await
+            .expect("create trust state directory");
+        tokio::fs::write(
+            &fixture.trust_path,
+            br#"{"schemaVersion":1,"epoch":7,"records":[]}"#,
+        )
+        .await
+        .expect("write schema-v1 trust store");
+
+        let snapshot = fixture.service().refresh(&fixture.workspace).await;
+        let persisted: serde_json::Value = serde_json::from_slice(
+            &tokio::fs::read(&fixture.trust_path)
+                .await
+                .expect("read migrated trust store"),
+        )
+        .expect("parse migrated trust store");
+
+        assert!(snapshot.issues.is_empty());
+        assert_eq!(persisted["schemaVersion"], 2);
+        assert_eq!(persisted["activationEpoch"], 7);
+        assert_eq!(persisted["activationRecords"], serde_json::json!([]));
+    }
+
+    #[tokio::test]
+    async fn activation_and_deactivation_are_exact_persisted_idempotent_state() {
+        let fixture = ManagedPluginFixture::new().await;
+        let service = fixture.service();
+        service
+            .set_trust(
+                &fixture.workspace,
+                "acme.demo",
+                PluginTrustDecision::ApproveSource,
+            )
+            .await
+            .expect("approve source");
+
+        let content_hash = fixture.content_hash(&service, "acme.demo").await;
+        let (activated, activated_changed) = service
+            .set_activation(
+                &fixture.workspace,
+                "acme.demo",
+                true,
+                Some(&content_hash),
+                None,
+            )
+            .await
+            .expect("activate package");
+        let (activated_again, activated_again_changed) = service
+            .set_activation(
+                &fixture.workspace,
+                "acme.demo",
+                true,
+                Some(&content_hash),
+                None,
+            )
+            .await
+            .expect("repeat activation");
+        assert!(activated.packages[0].activated);
+        assert!(activated_changed);
+        assert!(!activated_again_changed);
+        assert_eq!(activated.activation_epoch, activated_again.activation_epoch);
+
+        let recreated = fixture.service().refresh(&fixture.workspace).await;
+        assert!(recreated.packages[0].activated);
+        assert_eq!(activated.activation_epoch, recreated.activation_epoch);
+
+        let (deactivated, deactivated_changed) = service
+            .set_activation(&fixture.workspace, "acme.demo", false, None, None)
+            .await
+            .expect("deactivate package");
+        let (deactivated_again, deactivated_again_changed) = service
+            .set_activation(&fixture.workspace, "acme.demo", false, None, None)
+            .await
+            .expect("repeat deactivation");
+        assert!(!deactivated.packages[0].activated);
+        assert!(deactivated_changed);
+        assert!(!deactivated_again_changed);
+        assert_eq!(
+            deactivated.activation_epoch,
+            deactivated_again.activation_epoch
+        );
+        assert!(!fixture.service().refresh(&fixture.workspace).await.packages[0].activated);
+    }
+
+    #[tokio::test]
+    async fn stale_rollback_cannot_clear_a_newer_activation() {
+        let fixture = ManagedPluginFixture::new().await;
+        let service = fixture.service();
+        service
+            .set_trust(
+                &fixture.workspace,
+                "acme.demo",
+                PluginTrustDecision::ApproveSource,
+            )
+            .await
+            .expect("approve source");
+        let content_hash = fixture.content_hash(&service, "acme.demo").await;
+        let (first, _) = service
+            .set_activation(
+                &fixture.workspace,
+                "acme.demo",
+                true,
+                Some(&content_hash),
+                None,
+            )
+            .await
+            .expect("activate package");
+        let first_epoch = first.activation_epoch.expect("first activation epoch");
+
+        service
+            .set_activation(&fixture.workspace, "acme.demo", false, None, None)
+            .await
+            .expect("deactivate package");
+        let (current, _) = service
+            .set_activation(
+                &fixture.workspace,
+                "acme.demo",
+                true,
+                Some(&content_hash),
+                None,
+            )
+            .await
+            .expect("reactivate package");
+        let current_epoch = current.activation_epoch.expect("current activation epoch");
+
+        let (rollback, rollback_changed) = service
+            .set_activation(
+                &fixture.workspace,
+                "acme.demo",
+                false,
+                None,
+                Some(first_epoch),
+            )
+            .await
+            .expect("stale rollback is a no-op");
+        assert!(rollback.packages[0].activated);
+        assert!(!rollback_changed);
+        assert_eq!(rollback.activation_epoch, Some(current_epoch));
+    }
+
+    #[tokio::test]
+    async fn committed_activation_with_uncertain_directory_sync_returns_warning() {
+        fn fail_parent_sync(_parent: &Path) -> io::Result<()> {
+            Err(io::Error::other("injected directory sync failure"))
+        }
+
+        let fixture = ManagedPluginFixture::new().await;
+        let mut service = fixture.service();
+        service
+            .set_trust(
+                &fixture.workspace,
+                "acme.demo",
+                PluginTrustDecision::ApproveSource,
+            )
+            .await
+            .expect("approve source");
+        let content_hash = fixture.content_hash(&service, "acme.demo").await;
+        service.store.parent_sync = fail_parent_sync;
+
+        let (snapshot, changed) = service
+            .set_activation(
+                &fixture.workspace,
+                "acme.demo",
+                true,
+                Some(&content_hash),
+                None,
+            )
+            .await
+            .expect("committed activation remains successful");
+
+        assert!(snapshot.packages[0].activated);
+        assert!(changed);
+        assert!(snapshot
+            .issues
+            .iter()
+            .any(|issue| { issue.code == "activation_durability_uncertain" && !issue.is_error }));
+    }
+
+    #[tokio::test]
+    async fn uncertain_deactivation_does_not_report_success() {
+        fn fail_parent_sync(_parent: &Path) -> io::Result<()> {
+            Err(io::Error::other("injected directory sync failure"))
+        }
+
+        let fixture = ManagedPluginFixture::new().await;
+        let mut service = fixture.service();
+        fixture.activate(&service, "acme.demo").await;
+        service.store.parent_sync = fail_parent_sync;
+
+        let error = service
+            .set_activation(&fixture.workspace, "acme.demo", false, None, None)
+            .await
+            .expect_err("uncertain deactivation must not report success");
+
+        assert!(matches!(error, ManagedPluginSourceError::TrustStore(_)));
+        assert!(error.to_string().contains("may not survive a system crash"));
+    }
+
+    #[tokio::test]
+    async fn activated_load_returns_authority_only_for_current_exact_identity() {
+        let fixture = ManagedPluginFixture::new().await;
+        let service = fixture.service();
+        let evidence = fixture.activate(&service, "acme.demo").await;
+        assert!(fixture.authority(&service, &evidence).await);
+
+        fixture
+            .write("acme.demo", b"export const Version = 2;")
+            .await;
+        assert!(service
+            .load_activated_package(&fixture.workspace, "acme.demo")
+            .await
+            .is_err());
+    }
+
+    #[tokio::test]
+    async fn source_change_deny_and_revoke_atomically_remove_activation_authority() {
+        let changed = ManagedPluginFixture::new().await;
+        let changed_service = changed.service();
+        let changed_evidence = changed.activate(&changed_service, "acme.demo").await;
+        changed
+            .write("acme.demo", b"export const Version = 2;")
+            .await;
+        assert!(!changed.authority(&changed_service, &changed_evidence).await);
+        let changed_snapshot = changed_service.refresh(&changed.workspace).await;
+        assert!(!changed_snapshot.packages[0].activated);
+
+        for decision in [PluginTrustDecision::Denied, PluginTrustDecision::Revoked] {
+            let fixture = ManagedPluginFixture::new().await;
+            let service = fixture.service();
+            let evidence = fixture.activate(&service, "acme.demo").await;
+
+            let snapshot = service
+                .set_trust(&fixture.workspace, "acme.demo", decision)
+                .await
+                .expect("invalidate source approval");
+            assert!(!snapshot.packages[0].activated);
+            assert!(!fixture.authority(&service, &evidence).await);
+        }
+    }
+
+    #[tokio::test]
+    async fn unrelated_activation_does_not_invalidate_existing_authority() {
+        let fixture = ManagedPluginFixture::new().await;
+        fixture
+            .write("acme.other", b"export const Other = 1;")
+            .await;
+        let service = fixture.service();
+        let retained = fixture.activate(&service, "acme.demo").await;
+        fixture.activate(&service, "acme.other").await;
+        assert!(fixture.authority(&service, &retained).await);
+    }
+
+    #[tokio::test]
+    async fn recreated_activation_uses_a_different_generation() {
+        let fixture = ManagedPluginFixture::new().await;
+        let service = fixture.service();
+        let first = fixture.activate(&service, "acme.demo").await;
+
+        service
+            .set_activation(&fixture.workspace, "acme.demo", false, None, None)
+            .await
+            .expect("deactivate package");
+        let content_hash = fixture.content_hash(&service, "acme.demo").await;
+        service
+            .set_activation(
+                &fixture.workspace,
+                "acme.demo",
+                true,
+                Some(&content_hash),
+                None,
+            )
+            .await
+            .expect("recreate activation");
+        let second = service
+            .load_activated_package(&fixture.workspace, "acme.demo")
+            .await
+            .expect("load recreated activation")
+            .1;
+
+        assert_ne!(first.activation_epoch(), second.activation_epoch());
+        assert!(!fixture.authority(&service, &first).await);
+        assert!(fixture.authority(&service, &second).await);
     }
 
     #[tokio::test]

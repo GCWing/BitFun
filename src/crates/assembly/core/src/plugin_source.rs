@@ -39,7 +39,7 @@ pub async fn set_managed_plugin_trust(
         .await
 }
 
-fn managed_plugin_source_service(
+pub(crate) fn managed_plugin_source_service(
     workspace: &Path,
 ) -> Result<ManagedPluginSourceService, ManagedPluginSourceError> {
     let path_manager = crate::infrastructure::try_get_path_manager_arc().map_err(|error| {

@@ -220,6 +220,15 @@ enum PluginAction {
     Deny { package_id: String },
     /// Revoke the current package approval for this workspace
     Revoke { package_id: String },
+    /// Preview or confirm activation of one source-approved package
+    Activate {
+        package_id: String,
+        /// Confirm the exact content hash displayed by the activation preview
+        #[arg(long, value_name = "CONTENT_HASH")]
+        confirm: Option<String>,
+    },
+    /// Deactivate one package for this workspace
+    Deactivate { package_id: String },
 }
 
 #[derive(Subcommand)]
@@ -667,6 +676,15 @@ async fn run_cli() -> Result<()> {
                 )
                 .await?;
             }
+            Some(PluginAction::Activate {
+                package_id,
+                confirm,
+            }) => {
+                management::activate_plugin(&package_id, confirm.as_deref()).await?;
+            }
+            Some(PluginAction::Deactivate { package_id }) => {
+                management::deactivate_plugin(&package_id).await?;
+            }
         },
 
         Some(Commands::Usage { session_id }) => {
@@ -847,6 +865,46 @@ mod plugin_command_tests {
             revoke.command,
             Some(Commands::Plugins {
                 action: Some(PluginAction::Revoke { package_id })
+            }) if package_id == "acme.demo"
+        ));
+
+        let preview = Cli::try_parse_from(["bitfun-cli", "plugins", "activate", "acme.demo"])
+            .expect("parse plugin activation preview");
+        assert!(matches!(
+            preview.command,
+            Some(Commands::Plugins {
+                action: Some(PluginAction::Activate {
+                    package_id,
+                    confirm: None,
+                })
+            }) if package_id == "acme.demo"
+        ));
+
+        let confirm = Cli::try_parse_from([
+            "bitfun-cli",
+            "plugins",
+            "activate",
+            "acme.demo",
+            "--confirm",
+            "sha256:previewed",
+        ])
+        .expect("parse confirmed plugin activation");
+        assert!(matches!(
+            confirm.command,
+            Some(Commands::Plugins {
+                action: Some(PluginAction::Activate {
+                    package_id,
+                    confirm: Some(content_hash),
+                })
+            }) if package_id == "acme.demo" && content_hash == "sha256:previewed"
+        ));
+
+        let deactivate = Cli::try_parse_from(["bitfun-cli", "plugins", "deactivate", "acme.demo"])
+            .expect("parse plugin deactivation");
+        assert!(matches!(
+            deactivate.command,
+            Some(Commands::Plugins {
+                action: Some(PluginAction::Deactivate { package_id })
             }) if package_id == "acme.demo"
         ));
     }
