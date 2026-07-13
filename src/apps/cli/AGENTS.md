@@ -3,8 +3,9 @@
 Scope: this guide applies to `src/apps/cli`.
 
 Read [`docs/architecture/cli-product-line-design.md`](../../../docs/architecture/cli-product-line-design.md),
-[`docs/architecture/product-architecture.md`](../../../docs/architecture/product-architecture.md), and the
-matching runtime or plugin design before architecture-sensitive CLI changes.
+[`docs/architecture/product-architecture.md`](../../../docs/architecture/product-architecture.md), and
+[`docs/architecture/product-customization-blueprint.md`](../../../docs/architecture/product-customization-blueprint.md)
+before Product Profile, TUI Blueprint, branding, packaging, runtime, or plugin architecture changes.
 
 ## Ownership
 
@@ -21,11 +22,12 @@ matching runtime or plugin design before architecture-sensitive CLI changes.
 - Assemble CLI behavior through `DeliveryProfile::Cli`, capability plans, typed
   services, and capability availability. Hiding a command is not a backend
   capability restriction.
-- Product names, logos, theme resources, data namespaces, bundled extensions,
-  and update channels come from a validated Product Profile, Resolved Product
-  Manifest, or generated resources. Do not add new hard-coded branding or
-  source-rewrite scripts. Runtime capability hiding does not prove code was
-  physically removed from an artifact.
+- CLI consumes product names, logos, theme resources, data namespaces, bundled
+  product extensions, and update channels only from the Resolved Product
+  Manifest projection. TUI Blueprint and generated resources must be digest-bound
+  by that manifest. Do not read authoring Product Profiles at runtime, add
+  hard-coded branding/source rewrites, or treat user plugins as product inputs.
+  Runtime capability hiding does not prove code was physically removed.
 - External OpenCode, Codex, or Claude configuration enters through a dry-run
   import adapter. Do not copy credentials, treat external config as live BitFun
   state, or silently ignore unsupported fields.
