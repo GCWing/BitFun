@@ -20,11 +20,12 @@ serde_json = { workspace = true }
 dirs = { workspace = true, optional = true }
 log = { workspace = true, optional = true }
 sha2 = { workspace = true, optional = true }
+hex = { workspace = true, optional = true }
 which = { workspace = true, optional = true }
 
 [features]
 default = []
-plugin-source = []
+plugin-source = ["hex", "sha2"]
 miniapp = ["dirs", "sha2", "which"]
 function-agents = ["log"]
 product-full = ["plugin-source", "miniapp", "function-agents"]

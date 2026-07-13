@@ -956,7 +956,7 @@ export function runManifestParserSelfTest({
   ).map((entry) => entry.symbol);
   if (
     opencodeAdapterPublicApiSymbols.join(',') !==
-    'load_opencode_workspace_adapter'
+    'load_opencode_package_adapter'
   ) {
     throw new Error('OpenCode adapter public API budget must stay limited to source adapter loading');
   }
