@@ -1479,6 +1479,36 @@ $_section-header-height: 24px;
   gap: $size-gap-1;
 }
 
+.bitfun-nav-panel__peer-badge {
+  display: flex;
+  align-items: center;
+  gap: $size-gap-1;
+  max-width: 160px;
+  padding: 2px 6px;
+  border-radius: $size-radius-sm;
+  background: color-mix(in srgb, var(--color-warning) 18%, transparent);
+  color: var(--color-text-primary);
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.bitfun-nav-panel__peer-badge-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bitfun-nav-panel__peer-badge-disconnect {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: var(--color-warning);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 0;
+  text-decoration: underline;
+}
+
 .bitfun-nav-panel__footer-btn {
   flex-shrink: 0;
 }

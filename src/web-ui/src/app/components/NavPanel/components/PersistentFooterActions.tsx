@@ -23,6 +23,7 @@ import { useToolbarModeContext } from '@/flow_chat/components/toolbar-mode/Toolb
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { useNotification } from '@/shared/notification-system';
 import { remoteConnectAPI } from '@/infrastructure/api/service-api/RemoteConnectAPI';
+import { usePeerDeviceModeOptional } from '@/infrastructure/peer-device/PeerDeviceContext';
 import NotificationButton from '../../TitleBar/NotificationButton';
 import {
   RemoteConnectDisclaimerContent,
@@ -54,7 +55,8 @@ const PersistentFooterActions: React.FC = () => {
   });
   const { enableToolbarMode } = useToolbarModeContext();
   const { hasWorkspace } = useCurrentWorkspace();
-  const { warning } = useNotification();
+  const { warning, success } = useNotification();
+  const peerDevice = usePeerDeviceModeOptional();
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuClosing, setMenuClosing] = useState(false);
@@ -311,6 +313,27 @@ const PersistentFooterActions: React.FC = () => {
         </div>
 
         <div className="bitfun-nav-panel__footer-right">
+          {peerDevice?.peerMode.active && (
+            <div className="bitfun-nav-panel__peer-badge" data-testid="peer-remote-badge">
+              <span className="bitfun-nav-panel__peer-badge-label">
+                {t('accountLogin.peerRemoteLabel', { name: peerDevice.peerMode.deviceName })}
+              </span>
+              <button
+                type="button"
+                className="bitfun-nav-panel__peer-badge-disconnect"
+                onClick={async () => {
+                  try {
+                    await peerDevice.exitPeerMode();
+                    success(t('accountLogin.disconnectPeer'));
+                  } catch (e) {
+                    warning(e instanceof Error ? e.message : String(e));
+                  }
+                }}
+              >
+                {t('accountLogin.disconnectPeer')}
+              </button>
+            </div>
+          )}
           <NotificationButton className="bitfun-nav-panel__footer-btn" navFooterHoverIconSwap />
         </div>
       </div>

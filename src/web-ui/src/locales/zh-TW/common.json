@@ -513,7 +513,10 @@
     "selectWorkspaceFirst": "請先選擇或新建工作區",
     "noCurrentWorkspace": "此裝置目前沒有開啟的工作區，請選擇最近工作區或新建",
     "noSessions": "目前工作區暫無工作階段",
-    "sessionExpired": "登入已失效，請重新登入"
+    "sessionExpired": "登入已失效，請重新登入",
+    "enteredPeerMode": "已連接到遠端裝置：{{name}}",
+    "peerRemoteLabel": "Remote: {{name}}",
+    "disconnectPeer": "中斷連線"
   },
   "remoteConnect": {
     "tabNgrok": "內網穿透",

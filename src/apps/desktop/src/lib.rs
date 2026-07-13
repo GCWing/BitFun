@@ -1276,6 +1276,10 @@ pub async fn run() {
             api::remote_connect_api::account_delete_device,
             api::remote_connect_api::account_device_rpc,
             api::remote_connect_api::account_delegate_to_paired,
+            api::peer_host_invoke::peer_host_invoke_complete,
+            api::peer_host_invoke::peer_control_attach,
+            api::peer_host_invoke::peer_control_detach,
+            api::peer_host_invoke::peer_mode_ping,
             // MiniApp API
             api::miniapp_api::list_miniapps,
             api::miniapp_api::get_miniapp,
@@ -1714,8 +1718,20 @@ fn start_event_loop_with_transport(
                         log::warn!("Internal event routing failed: {:?}", e);
                     }
 
+                    let event_for_fanout = envelope.event.clone();
                     if let Err(e) = transport.emit_event("", envelope.event).await {
                         log::error!("Failed to emit event: {:?}", e);
+                    }
+
+                    if !api::peer_host_invoke::attached_controllers().is_empty() {
+                        if let Some(projected) =
+                            bitfun_events::project_agentic_frontend_event(event_for_fanout)
+                        {
+                            api::remote_connect_api::fanout_peer_device_event(
+                                projected.event_name,
+                                projected.payload,
+                            );
+                        }
                     }
                 }
             }

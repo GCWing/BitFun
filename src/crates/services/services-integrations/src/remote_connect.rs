@@ -2147,6 +2147,19 @@ pub enum RemoteCommand {
     CreateWorkspace {
         path: String,
     },
+    /// Proxy a desktop product Tauri command onto the peer host.
+    /// Used by Peer Device Mode so the controller UI can reuse the same invoke surface.
+    HostInvoke {
+        command: String,
+        #[serde(default)]
+        args: serde_json::Value,
+    },
+    /// Push a UI event from peer to controller (same event name as local Tauri emit).
+    DeviceEvent {
+        event: String,
+        #[serde(default)]
+        payload: serde_json::Value,
+    },
 }
 
 /// Responses sent from desktop back to remote clients.
@@ -2294,6 +2307,16 @@ pub enum RemoteResponse {
         workspace_path: Option<String>,
         session_count: Option<usize>,
     },
+    /// Result of a HostInvoke proxy call (JSON-compatible with local invoke).
+    HostInvokeResult {
+        ok: bool,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        value: Option<serde_json::Value>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        error: Option<String>,
+    },
+    /// Event already delivered out-of-band; ack only.
+    DeviceEventAccepted,
     Error {
         message: String,
     },
@@ -2418,7 +2441,9 @@ where
         RemoteCommand::SendSessionToDevice { .. }
         | RemoteCommand::ExecuteOnDevice { .. }
         | RemoteCommand::DeviceQueryInfo
-        | RemoteCommand::CreateWorkspace { .. } => host.handle_device_command(command).await,
+        | RemoteCommand::CreateWorkspace { .. }
+        | RemoteCommand::HostInvoke { .. }
+        | RemoteCommand::DeviceEvent { .. } => host.handle_device_command(command).await,
     }
 }
 

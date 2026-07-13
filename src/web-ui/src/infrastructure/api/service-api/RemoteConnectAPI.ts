@@ -124,7 +124,9 @@ export interface SyncedSession {
 }
 
 class RemoteConnectAPIService {
-  private adapter = getTransportAdapter();
+  private get adapter() {
+    return getTransportAdapter();
+  }
 
   async getDeviceInfo(): Promise<DeviceInfo> {
     try {

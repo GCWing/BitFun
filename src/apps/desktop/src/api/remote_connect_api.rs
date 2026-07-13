@@ -47,6 +47,16 @@ pub fn set_account_app_handle(app: AppHandle) {
     let _ = ACCOUNT_APP_HANDLE.set(app);
 }
 
+/// Shared AppHandle for account / peer-host bridges.
+pub fn account_app_handle() -> Option<&'static AppHandle> {
+    ACCOUNT_APP_HANDLE.get()
+}
+
+/// Current device id for peer capability probes.
+pub fn current_device_id_for_peer() -> Result<String, String> {
+    Ok(current_device_identity()?.device_id)
+}
+
 fn emit_account_event(event: &str, payload: serde_json::Value) {
     if let Some(app) = ACCOUNT_APP_HANDLE.get() {
         if let Err(e) = app.emit(event, payload) {
@@ -73,6 +83,55 @@ fn emit_settings_applied() {
         "account://settings-applied",
         serde_json::json!({ "applied": true }),
     );
+}
+
+/// Push a UI event to all attached peer controllers (fire-and-forget).
+pub fn fanout_peer_device_event(event: String, payload: serde_json::Value) {
+    let targets = crate::api::peer_host_invoke::attached_controllers();
+    if targets.is_empty() {
+        return;
+    }
+    tokio::spawn(async move {
+        let (session, _) = match read_account_context().await {
+            Ok(ctx) => ctx,
+            Err(e) => {
+                log::debug!("peer event fanout skipped (no account): {e}");
+                return;
+            }
+        };
+        let holder = get_service_holder().read().await;
+        let Some(ref service) = *holder else {
+            return;
+        };
+        use bitfun_core::service::remote_connect::encryption::encrypt_to_base64;
+        use bitfun_core::service::remote_connect::remote_server::RemoteCommand;
+        let envelope = match serde_json::to_string(&RemoteCommand::DeviceEvent {
+            event: event.clone(),
+            payload,
+        }) {
+            Ok(s) => s,
+            Err(e) => {
+                log::warn!("peer event fanout serialize failed: {e}");
+                return;
+            }
+        };
+        let (encrypted_data, nonce) = match encrypt_to_base64(&session.master_key, &envelope) {
+            Ok(v) => v,
+            Err(e) => {
+                log::warn!("peer event fanout encrypt failed: {e}");
+                return;
+            }
+        };
+        for target in targets {
+            let correlation_id = uuid::Uuid::new_v4().to_string();
+            if let Err(e) = service
+                .send_device_message(&target, &correlation_id, &encrypted_data, &nonce)
+                .await
+            {
+                log::debug!("peer event fanout to {target} failed: {e}");
+            }
+        }
+    });
 }
 
 /// Encrypt and send an RPC response (or error) back to the HTTP caller via relay.
@@ -1251,6 +1310,12 @@ pub async fn account_connect_devices() -> Result<Vec<OnlineDeviceInfo>, String> 
                         Ok(plaintext) => {
                             use bitfun_core::service::remote_connect::remote_server::RemoteCommand;
                             match serde_json::from_str::<RemoteCommand>(&plaintext) {
+                                Ok(RemoteCommand::DeviceEvent { event, payload }) => {
+                                    // Controller receiving peer UI events — re-emit locally
+                                    // under the same event name so PeerDeviceTransport listen works.
+                                    log::debug!("DeviceEvent from {source_device_id}: {event}");
+                                    emit_account_event(&event, payload);
+                                }
                                 Ok(RemoteCommand::ExecuteOnDevice {
                                     session_id,
                                     content,
@@ -2357,13 +2422,76 @@ fn resolve_local_workspace_path() -> String {
 async fn execute_local_remote_command(
     cmd: &bitfun_core::service::remote_connect::remote_server::RemoteCommand,
 ) -> anyhow::Result<serde_json::Value> {
-    // RemoteServer uses the global dispatcher internally — no need for
-    // manual coordinator access. The dummy shared secret is irrelevant
-    // because we call dispatch() directly (encryption is handled at the
-    // RPC envelope level, not here).
-    let server = bitfun_core::service::remote_connect::RemoteServer::new([0u8; 32]);
-    let response = server.dispatch(cmd).await;
-    serde_json::to_value(&response).map_err(|e| anyhow::anyhow!("serialize response: {e}"))
+    use bitfun_core::service::remote_connect::remote_server::{RemoteCommand, RemoteResponse};
+
+    match cmd {
+        RemoteCommand::HostInvoke { command, args } => {
+            // Control-plane peer attach/detach/ping can run without webview bridge.
+            if command == "peer_control_attach" {
+                let controller_id = args
+                    .get("controllerDeviceId")
+                    .or_else(|| args.get("controller_device_id"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                crate::api::peer_host_invoke::attach_controller(controller_id);
+                return serde_json::to_value(RemoteResponse::HostInvokeResult {
+                    ok: true,
+                    value: Some(serde_json::json!({ "attached": true })),
+                    error: None,
+                })
+                .map_err(|e| anyhow::anyhow!("serialize response: {e}"));
+            }
+            if command == "peer_control_detach" {
+                let controller_id = args
+                    .get("controllerDeviceId")
+                    .or_else(|| args.get("controller_device_id"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+                crate::api::peer_host_invoke::detach_controller(controller_id);
+                return serde_json::to_value(RemoteResponse::HostInvokeResult {
+                    ok: true,
+                    value: Some(serde_json::json!({ "detached": true })),
+                    error: None,
+                })
+                .map_err(|e| anyhow::anyhow!("serialize response: {e}"));
+            }
+            if command == "peer_mode_ping" {
+                let value = crate::api::peer_host_invoke::peer_mode_ping()
+                    .await
+                    .map_err(|e| anyhow::anyhow!(e))?;
+                return serde_json::to_value(RemoteResponse::HostInvokeResult {
+                    ok: true,
+                    value: Some(value),
+                    error: None,
+                })
+                .map_err(|e| anyhow::anyhow!("serialize response: {e}"));
+            }
+
+            let result = crate::api::peer_host_invoke::dispatch(command, args.clone()).await;
+            serde_json::to_value(RemoteResponse::HostInvokeResult {
+                ok: result.ok,
+                value: result.value,
+                error: result.error,
+            })
+            .map_err(|e| anyhow::anyhow!("serialize response: {e}"))
+        }
+        RemoteCommand::DeviceEvent { event, payload } => {
+            // Peer→controller events are handled on the controller; on peer this is a no-op ack.
+            let _ = (event, payload);
+            serde_json::to_value(RemoteResponse::DeviceEventAccepted)
+                .map_err(|e| anyhow::anyhow!("serialize response: {e}"))
+        }
+        other => {
+            // RemoteServer uses the global dispatcher internally — no need for
+            // manual coordinator access. The dummy shared secret is irrelevant
+            // because we call dispatch() directly (encryption is handled at the
+            // RPC envelope level, not here).
+            let server = bitfun_core::service::remote_connect::RemoteServer::new([0u8; 32]);
+            let response = server.dispatch(other).await;
+            serde_json::to_value(&response).map_err(|e| anyhow::anyhow!("serialize response: {e}"))
+        }
+    }
 }
 
 /// Import a SessionBundle JSON into local storage. Tries all workspace session

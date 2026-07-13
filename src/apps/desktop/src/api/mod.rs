@@ -30,6 +30,7 @@ pub mod miniapp_agent_api;
 pub mod miniapp_api;
 pub mod miniapp_export_api;
 pub mod path_target;
+pub mod peer_host_invoke;
 pub mod remote_connect_api;
 pub mod review_platform_api;
 pub mod runtime_api;

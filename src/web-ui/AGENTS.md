@@ -16,11 +16,16 @@ This file applies to `src/web-ui`. Use the top-level `AGENTS.md` for repository-
 Most changes start in:
 
 - `src/infrastructure/`: adapters, i18n, theme, providers, config
+- `src/infrastructure/peer-device/`: Peer Device Mode transport switch + host-invoke bridge
 - `src/app/`: shell layout and top-level composition
 - `src/flow_chat/`: chat flow UI and state
 - `src/tools/`: editor, terminal, git, workspace, file explorer
 - `src/shared/`: shared services, stores, helpers, types
 - `src/locales/`: localized strings
+
+Peer Device Mode (same-account remote full client) is documented in
+`docs/architecture/peer-device-mode.md`. Do not reintroduce AccountLoginDialog
+nested sessions/chat shells; enter peer mode from the device list instead.
 
 ## Local rules
 
