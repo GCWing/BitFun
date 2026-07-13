@@ -119,6 +119,9 @@ jobs:
       - name: Check repository hygiene
         run: pnpm run check:repo-hygiene
 
+      - name: Check core boundaries
+        run: node --test scripts/check-core-boundaries.test.mjs
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 

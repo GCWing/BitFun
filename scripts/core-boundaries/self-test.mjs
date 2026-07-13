@@ -698,6 +698,14 @@ export function runManifestParserSelfTest({
       throw new Error(`services-integrations plugin-source must own optional dependency ${dep}`);
     }
   }
+  for (const dep of ['sha2', 'windows']) {
+    const owner = servicesOptionalOwnerRule?.dependencies.find(
+      (dependency) => dependency.depName === dep,
+    );
+    if (!owner?.ownerFeatures.includes('review-platform')) {
+      throw new Error(`services-integrations review-platform must own optional dependency ${dep}`);
+    }
+  }
   const productDomainsOptionalOwnerRule = optionalDependencyFeatureOwnerRules.find(
     (rule) => rule.crateName === 'product-domains',
   );
