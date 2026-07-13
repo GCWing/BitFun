@@ -512,7 +512,8 @@
     "selectWorkspace": "选择工作区",
     "selectWorkspaceFirst": "请先选择或新建工作区",
     "noCurrentWorkspace": "该设备当前没有打开的工作区，请选择最近工作区或新建",
-    "noSessions": "当前工作区暂无会话"
+    "noSessions": "当前工作区暂无会话",
+    "sessionExpired": "登录已失效，请重新登录"
   },
   "remoteConnect": {
     "tabNgrok": "内网穿透",

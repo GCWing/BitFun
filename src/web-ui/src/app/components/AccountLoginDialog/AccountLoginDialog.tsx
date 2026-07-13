@@ -26,6 +26,16 @@ const log = createLogger('AccountLoginDialog');
 
 const DEVICE_POLL_FALLBACK_MS = 30_000;
 
+function isAccountAuthFailure(error: unknown): boolean {
+  const msg = (error instanceof Error ? error.message : String(error)).toLowerCase();
+  return (
+    msg.includes('401')
+    || msg.includes('unauthorized')
+    || msg.includes('invalid or expired token')
+    || msg.includes('relay auth error')
+  );
+}
+
 interface AccountLoginDialogProps {
   isOpen: boolean;
   onClose: () => void;
@@ -118,6 +128,25 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
   const [localDeviceId, setLocalDeviceId] = useState<string | null>(null);
   const refreshTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  const resetState = useCallback(() => {
+    setDevices([]); setSelectedDevice(null); setRemoteWorkspace(null);
+    setRemoteWorkspaces([]); setRemoteSessions([]); setRemoteMessages([]);
+    setSelectedSession(null); setMessageInput(''); setNewWorkspacePath('');
+    setLocalDeviceId(null);
+    if (refreshTimer.current) { clearInterval(refreshTimer.current); refreshTimer.current = null; }
+  }, []);
+
+  const handleSessionExpired = useCallback(async (_error: unknown) => {
+    try {
+      await remoteConnectAPI.accountLogout();
+    } catch (e) {
+      log.warn('logout after session expiry failed', e);
+    }
+    resetState();
+    setView('login');
+    setError(t('accountLogin.sessionExpired'));
+  }, [resetState, t]);
+
   const refreshDevices = useCallback(async () => {
     try {
       let list = await remoteConnectAPI.accountListDevices();
@@ -129,8 +158,13 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
         list = await remoteConnectAPI.accountListDevices();
       }
       setDevices(list);
-    } catch (e) { log.warn('refreshDevices failed', e); }
-  }, [localDeviceId]);
+    } catch (e) {
+      log.warn('refreshDevices failed', e);
+      if (isAccountAuthFailure(e)) {
+        await handleSessionExpired(e);
+      }
+    }
+  }, [localDeviceId, handleSessionExpired]);
 
   /** Merge Presence WS online set into the current device list (keep offline DB rows). */
   const applyPresenceOnline = useCallback((onlineDevices: Array<{ device_id: string; device_name: string }>) => {
@@ -166,14 +200,6 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
     refreshTimer.current = setInterval(refreshDevices, DEVICE_POLL_FALLBACK_MS);
   }, [refreshDevices]);
 
-  const resetState = useCallback(() => {
-    setDevices([]); setSelectedDevice(null); setRemoteWorkspace(null);
-    setRemoteWorkspaces([]); setRemoteSessions([]); setRemoteMessages([]);
-    setSelectedSession(null); setMessageInput(''); setNewWorkspacePath('');
-    setLocalDeviceId(null);
-    if (refreshTimer.current) { clearInterval(refreshTimer.current); refreshTimer.current = null; }
-  }, []);
-
   useEffect(() => {
     if (!isOpen) {
       setUsername(''); setPassword(''); setAuthServer('');
@@ -194,6 +220,10 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
           await remoteConnectAPI.accountConnectDevices();
         } catch (err) {
           log.warn('accountConnectDevices failed', err);
+          if (isAccountAuthFailure(err)) {
+            await handleSessionExpired(err);
+            return;
+          }
         }
         setView('devices');
         refreshDevices();
@@ -223,7 +253,7 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
       unlistenPresence();
       unlistenSettings();
     };
-  }, [isOpen, refreshDevices, resetState, startDevicePolling, applyPresenceOnline]);
+  }, [isOpen, refreshDevices, resetState, startDevicePolling, applyPresenceOnline, handleSessionExpired]);
 
   const validate = useCallback(() => {
     if (!username.trim() || !password.trim() || !authServer.trim()) {

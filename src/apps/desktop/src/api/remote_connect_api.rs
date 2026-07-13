@@ -137,10 +137,31 @@ pub async fn account_token_expired() -> bool {
     TOKEN_EXPIRED.load(std::sync::atomic::Ordering::Relaxed)
 }
 
+/// Internal helper: check if an error message indicates an invalid/expired token.
+fn error_indicates_expired_token(msg: &str) -> bool {
+    let lower = msg.to_ascii_lowercase();
+    lower.contains("http 401")
+        || lower.contains("unauthorized")
+        || lower.contains("invalid or expired token")
+        || lower.contains("relay auth error")
+}
+
 /// Internal helper: check if an error message indicates HTTP 401.
 fn is_token_expired_error(e: &anyhow::Error) -> bool {
-    let msg = e.to_string();
-    msg.contains("HTTP 401") || msg.contains("HTTP 401 Unauthorized")
+    error_indicates_expired_token(&e.to_string())
+}
+
+/// Drop the local account session after the relay rejects the token.
+/// Keeps the username/relay hint so the login form can be prefilled.
+async fn invalidate_local_account_session(reason: &str) {
+    TOKEN_EXPIRED.store(true, std::sync::atomic::Ordering::Relaxed);
+    if let Some(service) = get_service_holder().read().await.as_ref() {
+        service.stop_device_connection().await;
+    }
+    *get_account_session().write().await = None;
+    *get_account_relay_url().write().await = None;
+    session_store::clear_session();
+    log::warn!("Invalidated local account session after relay auth failure: {reason}");
 }
 
 fn get_account_session() -> &'static Arc<RwLock<Option<AccountSession>>> {
@@ -1152,7 +1173,8 @@ pub struct OnlineDeviceInfo {
 #[tauri::command]
 pub async fn account_connect_devices() -> Result<Vec<OnlineDeviceInfo>, String> {
     let (session, relay_url) = read_account_context().await?;
-    let device_name = current_device_identity()?.device_name;
+    let identity = current_device_identity()?;
+    let device_name = identity.device_name.clone();
     let holder = get_service_holder().read().await;
     let service = holder
         .as_ref()
@@ -1171,10 +1193,20 @@ pub async fn account_connect_devices() -> Result<Vec<OnlineDeviceInfo>, String> 
             .collect());
     }
 
-    let mut event_rx = service
+    let mut event_rx = match service
         .start_device_connection(&relay_url, &session.token, &device_name)
         .await
-        .map_err(|e| format!("{e}"))?;
+    {
+        Ok(rx) => rx,
+        Err(e) => {
+            let msg = format!("{e}");
+            drop(holder);
+            if error_indicates_expired_token(&msg) {
+                invalidate_local_account_session(&msg).await;
+            }
+            return Err(msg);
+        }
+    };
 
     // Background task: consume events (presence / device messages / auth errors)
     let session_arc = get_account_session().clone();
@@ -1784,10 +1816,16 @@ pub struct AccountDeviceInfo {
 pub async fn account_list_devices() -> Result<Vec<AccountDeviceInfo>, String> {
     let (session, relay_url) = read_account_context().await?;
     let client = AccountClient::new();
-    let devices = client
-        .list_devices(&relay_url, &session)
-        .await
-        .map_err(|e| format!("{e}"))?;
+    let devices = match client.list_devices(&relay_url, &session).await {
+        Ok(devices) => devices,
+        Err(e) => {
+            let msg = format!("{e}");
+            if error_indicates_expired_token(&msg) {
+                invalidate_local_account_session(&msg).await;
+            }
+            return Err(msg);
+        }
+    };
     Ok(devices
         .into_iter()
         .map(|d| AccountDeviceInfo {
