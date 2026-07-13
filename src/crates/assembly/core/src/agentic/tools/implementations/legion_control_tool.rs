@@ -50,6 +50,7 @@ struct LegionEdge {
 #[derive(Debug, Deserialize)]
 struct LegionControlInput {
     action: String,
+    #[serde(default)]
     legion_id: String,
     #[serde(default)]
     workspace: Option<String>,
