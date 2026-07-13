@@ -43,7 +43,7 @@
         "role": "電腦操作智能體"
       },
       "acpExternal": {
-        "role": "外部 ACP 智能體 — {{name}}"
+        "role": "ACP智能體"
       }
     }
   },

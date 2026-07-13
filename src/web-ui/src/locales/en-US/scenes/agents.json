@@ -43,7 +43,7 @@
         "role": "Desktop automation agent"
       },
       "acpExternal": {
-        "role": "External ACP agent — {{name}}"
+        "role": "ACP Agent"
       }
     }
   },

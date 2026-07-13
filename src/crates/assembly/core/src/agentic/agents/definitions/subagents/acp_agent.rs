@@ -54,7 +54,7 @@ impl Agent for AcpAgent {
     }
 
     fn description(&self) -> &str {
-        "External ACP agent — delegates tasks to a connected ACP-compatible client."
+        "ACP agent"
     }
 
     fn prompt_template_name(&self, _model_name: Option<&str>) -> &str {
