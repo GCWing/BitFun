@@ -844,6 +844,9 @@ pub fn start_terminal_event_loop(terminal_state: TerminalState, app_handle: AppH
             if let Err(e) = app_handle.emit(event_name, &event) {
                 warn!("Failed to emit terminal event: {}", e);
             }
+            if let Ok(payload) = serde_json::to_value(&event) {
+                crate::api::remote_connect_api::maybe_fanout_peer_ui_event(event_name, payload);
+            }
         }
     });
 }

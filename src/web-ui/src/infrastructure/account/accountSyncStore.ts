@@ -15,8 +15,6 @@ export type AccountSyncPhase =
   | 'settings_done'
   | 'listing_sessions'
   | 'exporting_sessions'
-  | 'fetching_remote_sessions'
-  | 'importing_sessions'
   | 'done'
   | 'failed';
 
@@ -56,12 +54,14 @@ function normalizePhase(phase: string): AccountSyncPhase {
     case 'settings_done':
     case 'listing_sessions':
     case 'exporting_sessions':
-    case 'fetching_remote_sessions':
-    case 'importing_sessions':
     case 'done':
     case 'failed':
     case 'starting':
       return phase;
+    // Legacy phases from older builds that still imported cloud sessions.
+    case 'fetching_remote_sessions':
+    case 'importing_sessions':
+      return 'exporting_sessions';
     default:
       return 'starting';
   }
@@ -104,7 +104,7 @@ export const useAccountSyncStore = create<AccountSyncState>((set) => ({
         phase: 'done',
         percent: 100,
         current: result.sessions_exported,
-        total: result.sessions_imported,
+        total: result.sessions_exported,
         detail: null,
       },
     }),

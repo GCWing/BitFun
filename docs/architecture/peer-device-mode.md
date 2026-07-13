@@ -4,6 +4,29 @@ Peer Device Mode switches the desktop (and mobile control target) data plane
 onto another same-account online BitFun device. The React shell stays local;
 product invokes and agentic events come from the peer.
 
+## Product goal
+
+After login, clicking an online peer device **B** from controller **A** must make
+A's workspace list, sessions, assistants, chat, and tools behave like using
+BitFun on B's machine. The authority is **B's live local BitFun state** via
+HostInvoke / DeviceEvent fan-out — not a merged cloud session history.
+
+## Cloud account sync vs Peer Remote
+
+| Concern | Account cloud sync | Peer Device Mode |
+|---|---|---|
+| Purpose | Settings preference sync; optional session **backup upload** | Live full-client remote on another device |
+| Session list on A | Local disk only (cloud sessions are **not** imported) | Peer's live session store via HostInvoke |
+| Settings | May pull/apply cloud settings to this device | Reloaded from peer after enter (via peer transport) |
+| Offline peer | N/A | Must exit Peer Mode; UI must not keep a stale Remote label |
+
+Do **not** treat cloud session blobs as the Remote data plane. Do **not** merge
+cloud session metadata into local disk on login or periodic pull — that pollutes
+A and conflicts with Peer Mode.
+
+SSH `WorkspaceKind.Remote` remains a separate path (local session mirror + remote
+FS) and must not be mixed with Peer Device Mode.
+
 ## Boundaries
 
 - Not SSH `WorkspaceKind.Remote` (local session mirror + remote FS).
@@ -20,8 +43,9 @@ product invokes and agentic events come from the peer.
   `RemoteCommand::HostInvoke` over `account_device_rpc`.
 - Peer: decrypt → allow/deny → webview bridge `peer-host-invoke://request` →
   same Tauri handlers as local UI → `peer_host_invoke_complete`.
-- Events: peer agentic projection fan-out as `RemoteCommand::DeviceEvent` to
-  attached controllers; controller re-emits the same event names locally.
+- Events: peer agentic projection (and other product events such as terminal /
+  FS / MCP interaction) fan-out as `RemoteCommand::DeviceEvent` to attached
+  controllers; controller re-emits the same event names locally.
 
 ## Ownership
 

@@ -53,13 +53,6 @@ function syncPhaseLabel(
         current: current ?? 0,
         total: total ?? 0,
       });
-    case 'fetching_remote_sessions':
-      return t('accountLogin.syncPhaseFetchingRemote');
-    case 'importing_sessions':
-      return t('accountLogin.syncPhaseImportingSessions', {
-        current: current ?? 0,
-        total: total ?? 0,
-      });
     case 'done':
       return t('accountLogin.syncDoneShort');
     case 'failed':
@@ -288,7 +281,7 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
         const wp = workspacePath || '/';
         const result = await remoteConnectAPI.accountAutoSync(isFirstLogin, wp, configJson);
         log.info(
-          `Auto-sync done: settings=${result.settings_synced} exported=${result.sessions_exported} imported=${result.sessions_imported}`,
+          `Auto-sync done: settings=${result.settings_synced} exported=${result.sessions_exported}`,
         );
         if (result.settings_synced && !isFirstLogin) {
           try {
@@ -302,7 +295,6 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
         setSyncDone(result);
         success(t('accountLogin.syncDone', {
           exported: result.sessions_exported,
-          imported: result.sessions_imported,
         }));
       } catch (e) {
         log.error('Auto-sync failed', e);

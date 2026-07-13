@@ -1280,6 +1280,7 @@ pub async fn run() {
             api::peer_host_invoke::peer_control_attach,
             api::peer_host_invoke::peer_control_detach,
             api::peer_host_invoke::peer_mode_ping,
+            api::peer_host_invoke::peer_controller_set_active,
             // MiniApp API
             api::miniapp_api::list_miniapps,
             api::miniapp_api::get_miniapp,
@@ -1840,7 +1841,9 @@ fn create_event_emitter(
     transport: Arc<TauriTransportAdapter>,
 ) -> Arc<dyn bitfun_core::infrastructure::events::EventEmitter> {
     use bitfun_core::infrastructure::events::TransportEmitter;
-    Arc::new(TransportEmitter::new(transport))
+    let inner: Arc<dyn bitfun_core::infrastructure::events::EventEmitter> =
+        Arc::new(TransportEmitter::new(transport));
+    api::remote_connect_api::wrap_peer_aware_emitter(inner)
 }
 
 fn spawn_workspace_search_feature_listener(app_handle: tauri::AppHandle) {

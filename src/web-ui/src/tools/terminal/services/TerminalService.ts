@@ -2,8 +2,7 @@
  * Terminal service that wraps Tauri backend calls.
  */
 
-import { invoke } from '@tauri-apps/api/core';
-import { listen, UnlistenFn } from '@tauri-apps/api/event';
+import { api } from '@/infrastructure/api/service-api/ApiClient';
 import { createLogger } from '@/shared/utils/logger';
 import type {
   CreateSessionRequest,
@@ -35,7 +34,7 @@ export class TerminalService {
   
   private globalListeners: Set<TerminalEventCallback> = new Set();
   
-  private unlistenFn: UnlistenFn | null = null;
+  private unlistenFn: (() => void) | null = null;
 
   private connected: boolean = false;
 
@@ -57,8 +56,8 @@ export class TerminalService {
 
     this.connectingPromise = (async () => {
       try {
-        this.unlistenFn = await listen<TerminalEvent>('terminal_event', (event) => {
-          this.handleTerminalEvent(event.payload);
+        this.unlistenFn = api.listen<any>('terminal_event', (payload) => {
+          this.handleTerminalEvent(payload);
         });
         this.connected = true;
         log.debug('Connected to terminal event stream');
@@ -191,7 +190,7 @@ export class TerminalService {
 
   async getAvailableShells(): Promise<ShellInfo[]> {
     try {
-      const shells = await invoke<ShellInfo[]>('terminal_get_shells');
+      const shells = await api.invoke<ShellInfo[]>('terminal_get_shells');
       return shells;
     } catch (error) {
       log.error('Failed to get available shells', error);
@@ -201,7 +200,7 @@ export class TerminalService {
 
   async createSession(request: CreateSessionRequest): Promise<SessionResponse> {
     try {
-      const session = await invoke<SessionResponse>('terminal_create', { request });
+      const session = await api.invoke<SessionResponse>('terminal_create', { request });
       log.debug('Session created', { sessionId: session.id });
       return session;
     } catch (error) {
@@ -212,7 +211,7 @@ export class TerminalService {
 
   async getSession(sessionId: string): Promise<SessionResponse> {
     try {
-      const session = await invoke<SessionResponse>('terminal_get', { sessionId });
+      const session = await api.invoke<SessionResponse>('terminal_get', { sessionId });
       return session;
     } catch (error) {
       log.error('Failed to get session', { sessionId, error });
@@ -222,7 +221,7 @@ export class TerminalService {
 
   async listSessions(): Promise<SessionResponse[]> {
     try {
-      const sessions = await invoke<SessionResponse[]>('terminal_list');
+      const sessions = await api.invoke<SessionResponse[]>('terminal_list');
       return sessions;
     } catch (error) {
       log.error('Failed to list sessions', error);
@@ -233,7 +232,7 @@ export class TerminalService {
   async closeSession(sessionId: string, immediate: boolean = false): Promise<void> {
     try {
       const request: CloseSessionRequest = { sessionId, immediate };
-      await invoke('terminal_close', { request });
+      await api.invoke('terminal_close', { request });
       log.debug('Session closed', { sessionId });
       
       this.eventListeners.delete(sessionId);
@@ -245,7 +244,7 @@ export class TerminalService {
 
   async shutdownAll(): Promise<void> {
     try {
-      await invoke('terminal_shutdown_all');
+      await api.invoke('terminal_shutdown_all');
       log.debug('All sessions closed');
       this.eventListeners.clear();
     } catch (error) {
@@ -256,7 +255,7 @@ export class TerminalService {
 
   async getHistory(sessionId: string): Promise<GetHistoryResponse> {
     try {
-      const history = await invoke<GetHistoryResponse>('terminal_get_history', { sessionId });
+      const history = await api.invoke<GetHistoryResponse>('terminal_get_history', { sessionId });
       return history;
     } catch (error) {
       log.error('Failed to get history', error);
@@ -267,7 +266,7 @@ export class TerminalService {
   async write(sessionId: string, data: string): Promise<void> {
     try {
       const request: WriteRequest = { sessionId, data };
-      await invoke('terminal_write', { request });
+      await api.invoke('terminal_write', { request });
     } catch (error) {
       log.error('Failed to write to session', { sessionId, error });
       throw error;
@@ -277,7 +276,7 @@ export class TerminalService {
   async resize(sessionId: string, cols: number, rows: number): Promise<void> {
     try {
       const request: ResizeRequest = { sessionId, cols, rows };
-      await invoke('terminal_resize', { request });
+      await api.invoke('terminal_resize', { request });
     } catch (error) {
       log.error('Failed to resize session', { sessionId, cols, rows, error });
       throw error;
@@ -287,7 +286,7 @@ export class TerminalService {
   async signal(sessionId: string, signal: string): Promise<void> {
     try {
       const request: SignalRequest = { sessionId, signal };
-      await invoke('terminal_signal', { request });
+      await api.invoke('terminal_signal', { request });
     } catch (error) {
       log.error('Failed to send signal', { sessionId, signal, error });
       throw error;
@@ -297,7 +296,7 @@ export class TerminalService {
   async acknowledge(sessionId: string, charCount: number): Promise<void> {
     try {
       const request: AcknowledgeRequest = { sessionId, charCount };
-      await invoke('terminal_ack', { request });
+      await api.invoke('terminal_ack', { request });
     } catch (error) {
       log.error('Failed to acknowledge data', { sessionId, charCount, error });
       throw error;
@@ -316,7 +315,7 @@ export class TerminalService {
         timeoutMs: options?.timeoutMs,
         preventHistory: options?.preventHistory,
       };
-      const response = await invoke<ExecuteCommandResponse>('terminal_execute', { request });
+      const response = await api.invoke<ExecuteCommandResponse>('terminal_execute', { request });
       return response;
     } catch (error) {
       log.error('Failed to execute command', { sessionId, command, error });
@@ -333,7 +332,7 @@ export class TerminalService {
         sessionId,
         command,
       };
-      await invoke('terminal_send_command', { request });
+      await api.invoke('terminal_send_command', { request });
     } catch (error) {
       log.error('Failed to send command', { sessionId, command, error });
       throw error;
@@ -342,7 +341,7 @@ export class TerminalService {
 
   async hasShellIntegration(sessionId: string): Promise<boolean> {
     try {
-      const result = await invoke<boolean>('terminal_has_shell_integration', { sessionId });
+      const result = await api.invoke<boolean>('terminal_has_shell_integration', { sessionId });
       return result;
     } catch (error) {
       log.error('Failed to check shell integration', { sessionId, error });

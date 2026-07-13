@@ -502,7 +502,7 @@
     "thisDevice": "This device",
     "syncStarted": "Cloud sync started...",
     "syncing": "Syncing with cloud...",
-    "syncDone": "Cloud sync complete: {{exported}} sessions uploaded, {{imported}} downloaded",
+    "syncDone": "Cloud sync complete: settings synced, {{exported}} sessions backed up",
     "syncDoneShort": "Cloud sync complete",
     "syncFailed": "Cloud sync failed — will retry automatically",
     "removeDevice": "Remove device",
@@ -517,6 +517,8 @@
     "enteredPeerMode": "Connected to remote device: {{name}}",
     "peerRemoteLabel": "Remote: {{name}}",
     "disconnectPeer": "Disconnect",
+    "peerAutoExitOffline": "Remote device \"{{name}}\" went offline — disconnected",
+    "peerAutoExitRpc": "Lost connection to remote device \"{{name}}\" — disconnected",
     "syncInProgressHint": "Cloud sync is still running. Please wait before opening a remote device.",
     "syncProgressPercent": "{{percent}}%",
     "syncPhaseUploadingSettings": "Uploading local settings…",
@@ -524,9 +526,7 @@
     "syncPhaseApplyingSettings": "Applying cloud settings…",
     "syncPhaseSettingsDone": "Settings synced",
     "syncPhaseListingSessions": "Scanning local sessions…",
-    "syncPhaseExportingSessions": "Uploading sessions {{current}}/{{total}}",
-    "syncPhaseFetchingRemote": "Fetching cloud sessions…",
-    "syncPhaseImportingSessions": "Importing sessions {{current}}/{{total}}"
+    "syncPhaseExportingSessions": "Backing up sessions {{current}}/{{total}}"
   },
   "remoteConnect": {
     "tabNgrok": "NAT Traversal",

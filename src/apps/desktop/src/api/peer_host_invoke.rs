@@ -5,6 +5,7 @@
 //! Local-only / controller-only commands are denied before any bridge call.
 
 use std::collections::{HashMap, HashSet};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 
@@ -58,6 +59,24 @@ static LOCAL_ONLY_COMMANDS: &[&str] = &[
     "peer_control_attach",
     "peer_control_detach",
     "peer_mode_ping",
+    "peer_controller_set_active",
+    // Remote-connect control plane (must not run on peer for a controller)
+    "remote_connect_get_device_info",
+    "remote_connect_get_lan_ip",
+    "remote_connect_get_lan_network_info",
+    "remote_connect_get_methods",
+    "remote_connect_start",
+    "remote_connect_stop",
+    "remote_connect_stop_bot",
+    "remote_connect_status",
+    "remote_connect_get_form_state",
+    "remote_connect_set_form_state",
+    "remote_connect_configure_custom_server",
+    "remote_connect_configure_bot",
+    "remote_connect_weixin_qr_start",
+    "remote_connect_weixin_qr_poll",
+    "remote_connect_get_bot_verbose_mode",
+    "remote_connect_set_bot_verbose_mode",
     // This-machine computer-use / OS permission prompts
     "computer_use_request_permissions",
     "computer_use_open_system_settings",
@@ -69,12 +88,24 @@ static PENDING: OnceLock<Mutex<HashMap<String, oneshot::Sender<HostInvokeBridgeR
 /// Controllers currently attached for DeviceEvent fan-out (device ids).
 static CONTROL_SUBSCRIBERS: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
 
+/// True while this process is acting as a Peer Mode controller (Remote: B).
+/// Used to pause cloud settings pull that would rewrite local disk mid-remote.
+static PEER_CONTROLLER_ACTIVE: AtomicBool = AtomicBool::new(false);
+
 fn pending_map() -> &'static Mutex<HashMap<String, oneshot::Sender<HostInvokeBridgeResult>>> {
     PENDING.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
 fn control_subscribers() -> &'static Mutex<HashSet<String>> {
     CONTROL_SUBSCRIBERS.get_or_init(|| Mutex::new(HashSet::new()))
+}
+
+pub fn set_peer_controller_active(active: bool) {
+    PEER_CONTROLLER_ACTIVE.store(active, Ordering::SeqCst);
+}
+
+pub fn is_peer_controller_active() -> bool {
+    PEER_CONTROLLER_ACTIVE.load(Ordering::SeqCst)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -162,6 +193,13 @@ pub async fn peer_mode_ping() -> Result<Value, String> {
         "device_id": current_device_id_for_peer()
             .unwrap_or_else(|_| "unknown".to_string()),
     }))
+}
+
+/// Mark this process as a Peer Mode controller so cloud pull does not rewrite local settings.
+#[tauri::command]
+pub async fn peer_controller_set_active(active: bool) -> Result<(), String> {
+    set_peer_controller_active(active);
+    Ok(())
 }
 
 /// Dispatch an allowlisted (non-local-only) product command on this peer.

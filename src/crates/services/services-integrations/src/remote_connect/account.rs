@@ -329,19 +329,21 @@ impl AccountClient {
     }
 
     /// Upload (or replace) a single encrypted session blob for this device.
+    /// Returns the `version` written into the upsert body (client-generated LWW clock).
     pub async fn upload_session(
         &self,
         relay_url: &str,
         session: &AccountSession,
         session_id: &str,
         plaintext: &str,
-    ) -> Result<()> {
+    ) -> Result<i64> {
         let (data, nonce) = Self::seal(session, plaintext)?;
+        let version = chrono::Utc::now().timestamp_millis();
         let body = serde_json::json!({
             "session_id": session_id,
             "encrypted_data": data,
             "nonce": nonce,
-            "version": chrono::Utc::now().timestamp_millis(),
+            "version": version,
         });
         let resp = self
             .http
@@ -353,17 +355,17 @@ impl AccountClient {
         if !resp.status().is_success() {
             return Err(Self::into_error(resp).await);
         }
-        Ok(())
+        Ok(version)
     }
 
-    /// Fetch encrypted session blobs updated after `since` (relay `version`).
-    /// Pass `since = 0` for a full list. Each entry is decrypted locally.
-    pub async fn fetch_sessions(
+    /// List encrypted session blobs updated after `since` without decrypting.
+    /// `session_id` / `version` are plaintext metadata; payload stays sealed.
+    pub async fn list_session_entries(
         &self,
         relay_url: &str,
         session: &AccountSession,
         since: i64,
-    ) -> Result<Vec<FetchedSession>> {
+    ) -> Result<Vec<ListedSessionEntry>> {
         let url = format!(
             "{}?since={}",
             Self::endpoint(relay_url, "/api/sync/sessions"),
@@ -379,17 +381,43 @@ impl AccountClient {
             return Err(Self::into_error(resp).await);
         }
         let payload: SessionsListResponse = resp.json().await?;
-        payload
+        Ok(payload
             .sessions
             .into_iter()
-            .map(|entry| {
-                let plaintext = Self::open(session, &entry.encrypted_data, &entry.nonce)?;
-                Ok(FetchedSession {
-                    session_id: entry.session_id,
-                    plaintext,
-                    version: entry.version,
-                })
+            .map(|entry| ListedSessionEntry {
+                session_id: entry.session_id,
+                encrypted_data: entry.encrypted_data,
+                nonce: entry.nonce,
+                version: entry.version,
             })
+            .collect())
+    }
+
+    /// Decrypt one listed session entry locally.
+    pub fn decrypt_session_entry(
+        session: &AccountSession,
+        entry: &ListedSessionEntry,
+    ) -> Result<FetchedSession> {
+        let plaintext = Self::open(session, &entry.encrypted_data, &entry.nonce)?;
+        Ok(FetchedSession {
+            session_id: entry.session_id.clone(),
+            plaintext,
+            version: entry.version,
+        })
+    }
+
+    /// Fetch encrypted session blobs updated after `since` (relay `version`).
+    /// Pass `since = 0` for a full list. Each entry is decrypted locally.
+    pub async fn fetch_sessions(
+        &self,
+        relay_url: &str,
+        session: &AccountSession,
+        since: i64,
+    ) -> Result<Vec<FetchedSession>> {
+        let entries = self.list_session_entries(relay_url, session, since).await?;
+        entries
+            .into_iter()
+            .map(|entry| Self::decrypt_session_entry(session, &entry))
             .collect()
     }
 
@@ -693,6 +721,15 @@ struct SessionEntry {
 pub struct FetchedSession {
     pub session_id: String,
     pub plaintext: String,
+    pub version: i64,
+}
+
+/// Encrypted session list entry (`session_id`/`version` are not secret).
+#[derive(Debug, Clone)]
+pub struct ListedSessionEntry {
+    pub session_id: String,
+    pub encrypted_data: String,
+    pub nonce: String,
     pub version: i64,
 }
 

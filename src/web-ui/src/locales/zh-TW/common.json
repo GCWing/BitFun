@@ -502,7 +502,7 @@
     "thisDevice": "本裝置",
     "syncStarted": "雲端同步已開始...",
     "syncing": "正在與雲端同步...",
-    "syncDone": "雲端同步完成：上傳 {{exported}} 個工作階段，下載 {{imported}} 個工作階段",
+    "syncDone": "雲端同步完成：設定已同步，已備份 {{exported}} 個工作階段",
     "syncDoneShort": "雲端同步完成",
     "syncFailed": "雲端同步失敗 — 將自動重試",
     "removeDevice": "移除裝置",
@@ -517,6 +517,8 @@
     "enteredPeerMode": "已連接到遠端裝置：{{name}}",
     "peerRemoteLabel": "Remote: {{name}}",
     "disconnectPeer": "中斷連線",
+    "peerAutoExitOffline": "遠端裝置「{{name}}」已離線 — 已中斷連線",
+    "peerAutoExitRpc": "與遠端裝置「{{name}}」連線遺失 — 已中斷連線",
     "syncInProgressHint": "雲端同步仍在進行，請稍後再開啟遠端裝置。",
     "syncProgressPercent": "{{percent}}%",
     "syncPhaseUploadingSettings": "正在上傳本地設定…",
@@ -524,9 +526,7 @@
     "syncPhaseApplyingSettings": "正在套用雲端設定…",
     "syncPhaseSettingsDone": "設定已同步",
     "syncPhaseListingSessions": "正在掃描本地工作階段…",
-    "syncPhaseExportingSessions": "正在上傳工作階段 {{current}}/{{total}}",
-    "syncPhaseFetchingRemote": "正在拉取雲端工作階段…",
-    "syncPhaseImportingSessions": "正在匯入工作階段 {{current}}/{{total}}"
+    "syncPhaseExportingSessions": "正在備份工作階段 {{current}}/{{total}}"
   },
   "remoteConnect": {
     "tabNgrok": "內網穿透",

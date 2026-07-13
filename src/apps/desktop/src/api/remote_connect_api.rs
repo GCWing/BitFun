@@ -155,6 +155,62 @@ pub fn fanout_peer_device_event(event: String, payload: serde_json::Value) {
     });
 }
 
+fn should_fanout_peer_ui_event(event: &str) -> bool {
+    matches!(
+        event,
+        "terminal_event"
+            | "file-system-changed"
+            | "lsp-event"
+            | "backend-event-mcpinteractionrequest"
+            | "backend-event-acppermissionrequest"
+            | "backend-event-toolexecutionprogress"
+            | "backend-event-toolterminalready"
+            | "backend-event-backgroundcommandlifecycle"
+            | "backend-event-toolexecutionstarted"
+            | "backend-event-toolexecutioncompleted"
+            | "backend-event-toolexecutionerror"
+            | "backend-event-toolawaitinguserinput"
+            | "backend-event-toolcallconfirmation"
+    )
+}
+
+/// Fan-out non-agentic UI events to attached Peer Mode controllers when needed.
+pub fn maybe_fanout_peer_ui_event(event: &str, payload: serde_json::Value) {
+    if !should_fanout_peer_ui_event(event) {
+        return;
+    }
+    if crate::api::peer_host_invoke::attached_controllers().is_empty() {
+        return;
+    }
+    fanout_peer_device_event(event.to_string(), payload);
+}
+
+/// EventEmitter wrapper that mirrors selected UI events to Peer Mode controllers.
+pub struct PeerAwareEmitter {
+    inner: Arc<dyn bitfun_core::infrastructure::events::EventEmitter>,
+}
+
+impl PeerAwareEmitter {
+    pub fn new(inner: Arc<dyn bitfun_core::infrastructure::events::EventEmitter>) -> Self {
+        Self { inner }
+    }
+}
+
+#[async_trait::async_trait]
+impl bitfun_core::infrastructure::events::EventEmitter for PeerAwareEmitter {
+    async fn emit(&self, event_name: &str, payload: serde_json::Value) -> anyhow::Result<()> {
+        self.inner.emit(event_name, payload.clone()).await?;
+        maybe_fanout_peer_ui_event(event_name, payload);
+        Ok(())
+    }
+}
+
+pub fn wrap_peer_aware_emitter(
+    inner: Arc<dyn bitfun_core::infrastructure::events::EventEmitter>,
+) -> Arc<dyn bitfun_core::infrastructure::events::EventEmitter> {
+    Arc::new(PeerAwareEmitter::new(inner))
+}
+
 /// Encrypt and send an RPC response (or error) back to the HTTP caller via relay.
 async fn send_rpc_envelope(
     session: &AccountSession,
@@ -1541,6 +1597,7 @@ pub async fn account_sync_session(session_id: String, session_json: String) -> R
     AccountClient::new()
         .upload_session(&relay_url, &session, &session_id, &session_json)
         .await
+        .map(|_| ())
         .map_err(|e| format!("{e}"))
 }
 
@@ -1742,7 +1799,7 @@ pub async fn account_export_all_sessions(
                     .upload_session(&relay_url, &acct_session, &session_id, &bundle_json)
                     .await
                 {
-                    Ok(()) => Some((session_id, hash)),
+                    Ok(_version) => Some((session_id, hash)),
                     Err(e) => {
                         log::warn!("Export session {session_id} failed: {e}");
                         None
@@ -1844,6 +1901,11 @@ pub async fn account_fetch_session_turns(
     app_state: State<'_, crate::api::app_state::AppState>,
     path_manager: State<'_, Arc<bitfun_core::infrastructure::PathManager>>,
 ) -> Result<bool, String> {
+    if crate::api::peer_host_invoke::is_peer_controller_active() {
+        return Err(
+            "cloud session turn fetch is paused while Peer Device Mode is active".to_string(),
+        );
+    }
     let storage_path =
         desktop_effective_session_storage_path(&app_state, &workspace_path, None, None).await;
     let manager = PersistenceManager::new(path_manager.inner().clone())
@@ -2053,6 +2115,29 @@ pub async fn account_auto_sync(
     app_state: State<'_, crate::api::app_state::AppState>,
     path_manager: State<'_, Arc<bitfun_core::infrastructure::PathManager>>,
 ) -> Result<AutoSyncResult, String> {
+    AUTO_SYNC_IN_FLIGHT.store(true, std::sync::atomic::Ordering::SeqCst);
+    let sync_result = account_auto_sync_inner(
+        is_first_login,
+        workspace_path,
+        config_json,
+        app_state,
+        path_manager,
+    )
+    .await;
+    AUTO_SYNC_IN_FLIGHT.store(false, std::sync::atomic::Ordering::SeqCst);
+    sync_result
+}
+
+async fn account_auto_sync_inner(
+    is_first_login: bool,
+    workspace_path: String,
+    config_json: String,
+    app_state: State<'_, crate::api::app_state::AppState>,
+    path_manager: State<'_, Arc<bitfun_core::infrastructure::PathManager>>,
+) -> Result<AutoSyncResult, String> {
+    if crate::api::peer_host_invoke::is_peer_controller_active() {
+        return Err("account auto-sync is paused while Peer Device Mode is active".to_string());
+    }
     let (acct_session, relay_url) = read_account_context().await?;
     let client = AccountClient::new();
 
@@ -2114,7 +2199,8 @@ pub async fn account_auto_sync(
         }
     };
 
-    // 2. Session sync: export local + import remote
+    // 2. Session sync: upload local sessions only (backup). Do NOT import cloud
+    // sessions into local disk — Remote peer mode reads the peer's live disk.
     emit_sync_progress("listing_sessions", 18, None, None, None);
     let storage_path =
         desktop_effective_session_storage_path(&app_state, &workspace_path, None, None).await;
@@ -2168,7 +2254,7 @@ pub async fn account_auto_sync(
     emit_sync_progress("exporting_sessions", 20, Some(0), Some(upload_total), None);
 
     let completed = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
-    let uploaded: Vec<(String, String)> = stream::iter(pending_uploads)
+    let uploaded: Vec<(String, String, i64)> = stream::iter(pending_uploads)
         .map(|(session_id, bundle_json, hash)| {
             let client = AccountClient::new();
             let relay_url = relay_url.clone();
@@ -2180,19 +2266,19 @@ pub async fn account_auto_sync(
                     .await;
                 let done = completed.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
                 let percent = if upload_total == 0 {
-                    55u8
+                    95u8
                 } else {
-                    20 + ((35 * done) / upload_total) as u8
+                    20 + ((75 * done) / upload_total) as u8
                 };
                 emit_sync_progress(
                     "exporting_sessions",
-                    percent.min(55),
+                    percent.min(95),
                     Some(done),
                     Some(upload_total),
                     Some(session_id.as_str()),
                 );
                 match result {
-                    Ok(()) => Some((session_id, hash)),
+                    Ok(version) => Some((session_id, hash, version)),
                     Err(e) => {
                         log::warn!("Auto-sync upload {session_id} failed: {e}");
                         None
@@ -2206,72 +2292,24 @@ pub async fn account_auto_sync(
         .await;
 
     let exported = uploaded.len();
-    for (session_id, hash) in uploaded {
+    let mut max_uploaded_version = sync_state_local.last_session_since;
+    for (session_id, hash, version) in uploaded {
         sync_state_local.set_uploaded_hash(&session_id, hash);
-    }
-
-    emit_sync_progress("fetching_remote_sessions", 60, None, None, None);
-    let since = sync_state_local.last_session_since;
-    let remote_sessions = client
-        .fetch_sessions(&relay_url, &acct_session, since)
-        .await
-        .map_err(|e| format!("fetch sessions: {e}"))?;
-
-    let import_total = remote_sessions.len();
-    emit_sync_progress("importing_sessions", 65, Some(0), Some(import_total), None);
-
-    let mut imported = 0usize;
-    let mut max_versions: Vec<i64> = Vec::with_capacity(remote_sessions.len());
-    for (index, fetched) in remote_sessions.into_iter().enumerate() {
-        max_versions.push(fetched.version);
-        let session_id = fetched.session_id;
-        let bundle_json = fetched.plaintext;
-        let percent = if import_total == 0 {
-            95u8
-        } else {
-            65 + ((30 * (index + 1)) / import_total) as u8
-        };
-        emit_sync_progress(
-            "importing_sessions",
-            percent.min(95),
-            Some(index + 1),
-            Some(import_total),
-            Some(session_id.as_str()),
-        );
-        if manager
-            .load_session_metadata(&storage_path, &session_id)
-            .await
-            .ok()
-            .flatten()
-            .is_some()
-        {
-            continue;
+        if version > max_uploaded_version {
+            max_uploaded_version = version;
         }
-        let bundle: SessionBundle =
-            serde_json::from_str(&bundle_json).map_err(|e| format!("deserialize bundle: {e}"))?;
-        let metadata: SessionMetadata = serde_json::from_value(bundle.metadata)
-            .map_err(|e| format!("deserialize metadata: {e}"))?;
-        // Only write metadata — turns are lazy-loaded when the user opens
-        // the session (see `account_fetch_session_turns`).
-        if manager
-            .save_session_metadata(&storage_path, &metadata)
-            .await
-            .is_err()
-        {
-            continue;
-        }
-        imported += 1;
     }
-
-    sync_state_local.advance_session_since(max_versions);
+    if max_uploaded_version > sync_state_local.last_session_since {
+        sync_state_local.last_session_since = max_uploaded_version;
+    }
     let _ = sync_state::save(&acct_session.user_id, &sync_state_local);
 
-    log::info!("Auto-sync: settings={settings_synced} exported={exported} imported={imported}");
-    emit_sync_progress("done", 100, Some(exported), Some(imported), None);
+    log::info!("Auto-sync: settings={settings_synced} exported={exported} imported=0");
+    emit_sync_progress("done", 100, Some(exported), Some(0), None);
     Ok(AutoSyncResult {
         settings_synced,
         sessions_exported: exported,
-        sessions_imported: imported,
+        sessions_imported: 0,
     })
 }
 
@@ -2284,6 +2322,11 @@ use tokio::sync::mpsc;
 /// skip re-applying unchanged settings. Updated by both the push path
 /// (after upload) and the pull path (after fetch).
 static LAST_SETTINGS_VERSION: std::sync::atomic::AtomicI64 = std::sync::atomic::AtomicI64::new(0);
+
+/// True while `account_auto_sync` is running — periodic pull must not apply
+/// settings we just uploaded (causes mid-sync UI reload).
+static AUTO_SYNC_IN_FLIGHT: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
 
 /// What to sync. `Session` carries the session_id + workspace_path.
 /// What to sync. Each variant maps to a single relay operation.
@@ -2411,6 +2454,10 @@ async fn execute_debounced_sync(
     deletes: std::collections::HashSet<String>,
     sync_settings: bool,
 ) {
+    if crate::api::peer_host_invoke::is_peer_controller_active() {
+        log::debug!("Debounced sync skipped while peer controller mode is active");
+        return;
+    }
     // Need to be logged in
     let (acct_session, relay_url) = match read_account_context().await {
         Ok(ctx) => ctx,
@@ -2737,6 +2784,10 @@ async fn import_session_bundle(bundle_json: &str) -> anyhow::Result<()> {
 /// session IDs across ALL workspaces, then only import a remote session
 /// if it doesn't exist in ANY workspace.
 async fn pull_and_reconcile() {
+    if crate::api::peer_host_invoke::is_peer_controller_active() {
+        log::debug!("Pull: skip while peer controller mode is active");
+        return;
+    }
     let (acct_session, relay_url) = match read_account_context().await {
         Ok(ctx) => ctx,
         Err(_) => return,
@@ -2745,175 +2796,72 @@ async fn pull_and_reconcile() {
 
     // ── Settings pull ──
     // Fetch the cloud settings blob; if the version changed since our last
-    // known version, apply it locally.
-    match client
-        .fetch_settings_with_version(&relay_url, &acct_session)
-        .await
-    {
-        Ok(Some(blob)) => {
-            let known = LAST_SETTINGS_VERSION.load(std::sync::atomic::Ordering::Relaxed);
-            if blob.version != known {
-                if let Ok(config_value) = serde_json::from_str::<serde_json::Value>(&blob.plaintext)
-                {
-                    let inner_config = config_value.get("config").cloned().unwrap_or(config_value);
-                    if let Ok(config_service) =
-                        bitfun_core::service::config::get_global_config_service().await
+    // known version, apply it locally. Skip while login auto-sync is running —
+    // otherwise we re-apply the settings we just uploaded and flash the UI.
+    if AUTO_SYNC_IN_FLIGHT.load(std::sync::atomic::Ordering::SeqCst) {
+        log::debug!("Pull: skip settings apply while account_auto_sync in flight");
+    } else {
+        match client
+            .fetch_settings_with_version(&relay_url, &acct_session)
+            .await
+        {
+            Ok(Some(blob)) => {
+                let known = LAST_SETTINGS_VERSION.load(std::sync::atomic::Ordering::Relaxed);
+                if blob.version != known {
+                    if let Ok(config_value) =
+                        serde_json::from_str::<serde_json::Value>(&blob.plaintext)
                     {
-                        match config_service.import_config_data(inner_config).await {
-                            Ok(result) if result.success => {
-                                LAST_SETTINGS_VERSION
-                                    .store(blob.version, std::sync::atomic::Ordering::Relaxed);
-                                if let Ok(factory) =
+                        let inner_config =
+                            config_value.get("config").cloned().unwrap_or(config_value);
+                        if let Ok(config_service) =
+                            bitfun_core::service::config::get_global_config_service().await
+                        {
+                            match config_service.import_config_data(inner_config).await {
+                                Ok(result) if result.success => {
+                                    LAST_SETTINGS_VERSION
+                                        .store(blob.version, std::sync::atomic::Ordering::Relaxed);
+                                    if let Ok(factory) =
                                     bitfun_core::infrastructure::ai::AIClientFactory::get_global()
                                         .await
                                 {
                                     factory.invalidate_cache();
                                 }
-                                if let Err(e) = config_service.reload().await {
-                                    log::warn!("Pull: reload after config import failed: {e}");
+                                    if let Err(e) = config_service.reload().await {
+                                        log::warn!("Pull: reload after config import failed: {e}");
+                                    }
+                                    emit_settings_applied();
+                                    log::info!(
+                                        "Pull: applied cloud settings (version={})",
+                                        blob.version
+                                    );
                                 }
-                                emit_settings_applied();
-                                log::info!(
-                                    "Pull: applied cloud settings (version={})",
-                                    blob.version
-                                );
-                            }
-                            Ok(result) => {
-                                log::warn!(
-                                    "Pull: import config unsuccessful: {}",
-                                    result.errors.join("; ")
-                                );
-                            }
-                            Err(e) => {
-                                log::warn!("Pull: import config failed: {e}");
+                                Ok(result) => {
+                                    log::warn!(
+                                        "Pull: import config unsuccessful: {}",
+                                        result.errors.join("; ")
+                                    );
+                                }
+                                Err(e) => {
+                                    log::warn!("Pull: import config failed: {e}");
+                                }
                             }
                         }
                     }
                 }
             }
-        }
-        Ok(None) => {} // no cloud settings yet
-        Err(e) => {
-            if is_token_expired_error(&e) {
-                TOKEN_EXPIRED.store(true, std::sync::atomic::Ordering::Relaxed);
-            }
-            log::debug!("Pull: fetch_settings failed: {e}");
-        }
-    }
-
-    // ── Session pull (metadata-only; turns are lazy-loaded on open) ──
-    let mut sync_state_local = sync_state::load(&acct_session.user_id);
-    let since = sync_state_local.last_session_since;
-    let remote_sessions = match client
-        .fetch_sessions(&relay_url, &acct_session, since)
-        .await
-    {
-        Ok(s) => s,
-        Err(e) => {
-            if is_token_expired_error(&e) {
-                TOKEN_EXPIRED.store(true, std::sync::atomic::Ordering::Relaxed);
-            }
-            log::debug!("Pull: fetch_sessions failed: {e}");
-            return;
-        }
-    };
-
-    if remote_sessions.is_empty() {
-        return;
-    }
-
-    let path_manager = match bitfun_core::infrastructure::PathManager::new() {
-        Ok(pm) => std::sync::Arc::new(pm),
-        Err(e) => {
-            log::debug!("Pull: path manager init failed: {e}");
-            return;
-        }
-    };
-    let manager = match PersistenceManager::new(path_manager.clone()) {
-        Ok(m) => m,
-        Err(e) => {
-            log::debug!("Pull: persistence manager init failed: {e}");
-            return;
-        }
-    };
-
-    let projects_root = path_manager.projects_root();
-    let entries = match std::fs::read_dir(&projects_root) {
-        Ok(e) => e,
-        Err(_) => return,
-    };
-
-    // First pass: collect ALL local session IDs across ALL workspaces
-    // to prevent cross-workspace duplication.
-    let mut all_local_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
-    let mut workspace_session_dirs: Vec<std::path::PathBuf> = Vec::new();
-    for entry in entries.flatten() {
-        if !entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
-            continue;
-        }
-        let sessions_dir = entry.path().join("sessions");
-        if !sessions_dir.is_dir() {
-            continue;
-        }
-        if let Ok(local_sessions) = manager.list_session_metadata(&sessions_dir).await {
-            for meta in &local_sessions {
-                all_local_ids.insert(meta.session_id.clone());
-            }
-        }
-        workspace_session_dirs.push(sessions_dir);
-    }
-
-    // Second pass: import remote sessions that don't exist in ANY workspace.
-    // Only write metadata — turns are lazy-loaded when the user opens the
-    // session (see `account_fetch_session_turns` Tauri command). This keeps
-    // the pull lightweight even with hundreds of remote sessions.
-    if workspace_session_dirs.is_empty() {
-        // Still advance cursor so we do not re-download the same deltas forever
-        // when the device has no local workspace yet.
-        sync_state_local.advance_session_since(remote_sessions.iter().map(|s| s.version));
-        let _ = sync_state::save(&acct_session.user_id, &sync_state_local);
-        return;
-    }
-    let target_dir = &workspace_session_dirs[0];
-
-    let mut max_versions: Vec<i64> = Vec::with_capacity(remote_sessions.len());
-    for fetched in &remote_sessions {
-        max_versions.push(fetched.version);
-        let session_id = &fetched.session_id;
-        let bundle_json = &fetched.plaintext;
-        // Skip if this session already exists in any local workspace
-        if all_local_ids.contains(session_id) {
-            continue;
-        }
-
-        // Parse only the metadata; skip turns for now.
-        let bundle: SessionBundle = match serde_json::from_str(bundle_json) {
-            Ok(b) => b,
+            Ok(None) => {} // no cloud settings yet
             Err(e) => {
-                log::warn!("Pull: deserialize bundle {session_id}: {e}");
-                continue;
+                if is_token_expired_error(&e) {
+                    TOKEN_EXPIRED.store(true, std::sync::atomic::Ordering::Relaxed);
+                }
+                log::debug!("Pull: fetch_settings failed: {e}");
             }
-        };
-        let metadata: SessionMetadata = match serde_json::from_value(bundle.metadata.clone()) {
-            Ok(m) => m,
-            Err(e) => {
-                log::warn!("Pull: deserialize metadata {session_id}: {e}");
-                continue;
-            }
-        };
-        if manager
-            .save_session_metadata(target_dir, &metadata)
-            .await
-            .is_err()
-        {
-            continue;
         }
-        all_local_ids.insert(session_id.clone()); // prevent re-import in same cycle
-        log::info!("Pull: imported session metadata {session_id} (turns lazy-loaded)");
-    }
+    } // end AUTO_SYNC_IN_FLIGHT settings guard
 
-    sync_state_local.advance_session_since(max_versions);
-    let _ = sync_state::save(&acct_session.user_id, &sync_state_local);
+    // Session cloud import into local disk is intentionally disabled.
+    // Peer Remote Mode reads the peer device's live session store via HostInvoke;
+    // merging cloud session metadata into this machine pollutes local UX.
 }
 
 #[cfg(test)]

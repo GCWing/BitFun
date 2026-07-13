@@ -502,7 +502,7 @@
     "thisDevice": "本设备",
     "syncStarted": "云端同步已开始...",
     "syncing": "正在与云端同步...",
-    "syncDone": "云端同步完成：上传 {{exported}} 个会话，下载 {{imported}} 个会话",
+    "syncDone": "云端同步完成：配置已同步，已备份 {{exported}} 个会话",
     "syncDoneShort": "云端同步完成",
     "syncFailed": "云端同步失败 — 将自动重试",
     "removeDevice": "移除设备",
@@ -517,6 +517,8 @@
     "enteredPeerMode": "已连接到远程设备：{{name}}",
     "peerRemoteLabel": "Remote: {{name}}",
     "disconnectPeer": "断开",
+    "peerAutoExitOffline": "远程设备「{{name}}」已离线 — 已断开",
+    "peerAutoExitRpc": "与远程设备「{{name}}」连接丢失 — 已断开",
     "syncInProgressHint": "云端同步仍在进行，请稍后再打开远程设备。",
     "syncProgressPercent": "{{percent}}%",
     "syncPhaseUploadingSettings": "正在上传本地配置…",
@@ -524,9 +526,7 @@
     "syncPhaseApplyingSettings": "正在应用云端配置…",
     "syncPhaseSettingsDone": "配置已同步",
     "syncPhaseListingSessions": "正在扫描本地会话…",
-    "syncPhaseExportingSessions": "正在上传会话 {{current}}/{{total}}",
-    "syncPhaseFetchingRemote": "正在拉取云端会话…",
-    "syncPhaseImportingSessions": "正在导入会话 {{current}}/{{total}}"
+    "syncPhaseExportingSessions": "正在备份会话 {{current}}/{{total}}"
   },
   "remoteConnect": {
     "tabNgrok": "内网穿透",

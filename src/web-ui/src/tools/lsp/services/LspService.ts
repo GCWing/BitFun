@@ -2,7 +2,7 @@
  * Thin frontend wrapper around backend LSP APIs.
  */
 
-import { invoke } from '@tauri-apps/api/core';
+import { api } from '@/infrastructure/api/service-api/ApiClient';
 import { createLogger } from '@/shared/utils/logger';
 import { measureAsync } from '@/shared/utils/timing';
 import type { LspPlugin, CompletionItem, TextEdit } from '../types';
@@ -29,7 +29,7 @@ export class LspService {
     }
     
     try {
-      const result = await measureAsync(() => invoke('lsp_initialize'));
+      const result = await measureAsync(() => api.invoke('lsp_initialize'));
       this.initialized = true;
       log.info('LSP system initialized', { durationMs: result.durationMs });
     } catch (error) {
@@ -41,7 +41,7 @@ export class LspService {
   /** Open a workspace (supersedes the old setWorkspaceRoot flow). */
   async openWorkspace(workspacePath: string): Promise<void> {
     try {
-      await invoke('lsp_open_workspace', {
+      await api.invoke('lsp_open_workspace', {
         request: { workspace_path: workspacePath }
       });
       log.debug('Workspace opened', { workspacePath });
@@ -54,7 +54,7 @@ export class LspService {
   /** Start a language server for a given file path. */
   async startServerForFile(filePath: string): Promise<void> {
     try {
-      const result = await measureAsync(() => invoke('lsp_start_server_for_file', {
+      const result = await measureAsync(() => api.invoke('lsp_start_server_for_file', {
         request: { filePath }
       }));
       log.debug('LSP server started for file', { filePath, durationMs: result.durationMs });
@@ -67,7 +67,7 @@ export class LspService {
   /** Stop a language server. */
   async stopServer(language: string): Promise<void> {
     try {
-      await invoke('lsp_stop_server', {
+      await api.invoke('lsp_stop_server', {
         request: { language }
       });
       log.debug('LSP server stopped', { language });
@@ -80,7 +80,7 @@ export class LspService {
   /** Notify didOpen. */
   async didOpen(language: string, uri: string, text: string): Promise<void> {
     try {
-      await invoke('lsp_did_open', {
+      await api.invoke('lsp_did_open', {
         request: { language, uri, text }
       });
     } catch (error) {
@@ -92,7 +92,7 @@ export class LspService {
   /** Notify didChange. */
   async didChange(language: string, uri: string, version: number, text: string): Promise<void> {
     try {
-      await invoke('lsp_did_change', {
+      await api.invoke('lsp_did_change', {
         request: { language, uri, version, text }
       });
     } catch (error) {
@@ -104,7 +104,7 @@ export class LspService {
   /** Notify didSave. */
   async didSave(language: string, uri: string): Promise<void> {
     try {
-      await invoke('lsp_did_save', {
+      await api.invoke('lsp_did_save', {
         request: { language, uri }
       });
     } catch (error) {
@@ -116,7 +116,7 @@ export class LspService {
   /** Notify didClose. */
   async didClose(language: string, uri: string): Promise<void> {
     try {
-      await invoke('lsp_did_close', {
+      await api.invoke('lsp_did_close', {
         request: { language, uri }
       });
     } catch (error) {
@@ -133,7 +133,7 @@ export class LspService {
     character: number
   ): Promise<CompletionItem[]> {
     try {
-      const result = await measureAsync<CompletionItem[]>(() => invoke('lsp_get_completions', {
+      const result = await measureAsync<CompletionItem[]>(() => api.invoke('lsp_get_completions', {
         request: { language, uri, line, character }
       }) as Promise<CompletionItem[]>);
       log.debug('Got completions', { 
@@ -155,7 +155,7 @@ export class LspService {
     character: number
   ): Promise<any> {
     try {
-      const result = await invoke('lsp_get_hover', {
+      const result = await api.invoke('lsp_get_hover', {
         request: { language, uri, line, character }
       });
       return result;
@@ -173,7 +173,7 @@ export class LspService {
     character: number
   ): Promise<any> {
     try {
-      const result = await measureAsync(() => invoke('lsp_goto_definition', {
+      const result = await measureAsync(() => api.invoke('lsp_goto_definition', {
         request: { language, uri, line, character }
       }));
       log.debug('Found definition', { durationMs: result.durationMs });
@@ -192,7 +192,7 @@ export class LspService {
     character: number
   ): Promise<any> {
     try {
-      const result = await measureAsync(() => invoke('lsp_find_references', {
+      const result = await measureAsync(() => api.invoke('lsp_find_references', {
         request: { language, uri, line, character }
       }));
       const count = Array.isArray(result.value) ? result.value.length : 0;
@@ -212,7 +212,7 @@ export class LspService {
     insertSpaces?: boolean
   ): Promise<TextEdit[]> {
     try {
-      const result = await measureAsync<TextEdit[]>(() => invoke('lsp_format_document', {
+      const result = await measureAsync<TextEdit[]>(() => api.invoke('lsp_format_document', {
         request: { language, uri, tabSize, insertSpaces }
       }) as Promise<TextEdit[]>);
       const count = Array.isArray(result.value) ? result.value.length : 0;
@@ -227,7 +227,7 @@ export class LspService {
   /** Install an LSP plugin package. */
   async installPlugin(packagePath: string): Promise<string> {
     try {
-      const result = await measureAsync<string>(() => invoke('lsp_install_plugin', {
+      const result = await measureAsync<string>(() => api.invoke('lsp_install_plugin', {
         request: { packagePath }
       }) as Promise<string>);
       log.info('Plugin installed', { pluginId: result.value, durationMs: result.durationMs });
@@ -241,7 +241,7 @@ export class LspService {
   /** Uninstall an installed plugin by ID. */
   async uninstallPlugin(pluginId: string): Promise<void> {
     try {
-      await invoke('lsp_uninstall_plugin', {
+      await api.invoke('lsp_uninstall_plugin', {
         request: { pluginId }
       });
       log.info('Plugin uninstalled', { pluginId });
@@ -254,7 +254,7 @@ export class LspService {
   /** List installed plugins. */
   async listPlugins(): Promise<LspPlugin[]> {
     try {
-      const plugins = await invoke('lsp_list_plugins') as LspPlugin[];
+      const plugins = await api.invoke('lsp_list_plugins') as LspPlugin[];
       const count = Array.isArray(plugins) ? plugins.length : 0;
       log.debug('Listed plugins', { count });
       return plugins;
@@ -266,14 +266,14 @@ export class LspService {
 
   /** Get plugin info by ID. */
   async getPlugin(pluginId: string): Promise<LspPlugin | null> {
-    return await invoke('lsp_get_plugin', {
+    return await api.invoke('lsp_get_plugin', {
       request: { pluginId }
     });
   }
 
   /** Get server capabilities for a language. */
   async getServerCapabilities(language: string): Promise<any> {
-    return await invoke('lsp_get_server_capabilities', {
+    return await api.invoke('lsp_get_server_capabilities', {
       request: { language }
     });
   }

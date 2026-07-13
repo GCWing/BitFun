@@ -561,6 +561,8 @@ export class FlowChatStore {
   private silentMode = false;
   private metadataListRequests = new Map<string, MetadataListRequest>();
   private metadataPageRequests = new Map<string, MetadataPageRequest>();
+  /** Bumped on peer mode surface reset; stale metadata loads must not write. */
+  private surfaceGeneration = 0;
   private fullHistoryHydrationRequests = new Map<string, FullHistoryHydrationRequest>();
   private deferredFullHistoryProjections = new Map<string, DeferredFullHistoryProjection>();
   private fullHistoryProjectionApplyRequests = new Set<string>();
@@ -2166,6 +2168,31 @@ export class FlowChatStore {
     return removedSessionIds;
   }
 
+  /**
+   * Drop all in-memory sessions and metadata request caches before switching
+   * Peer Device Mode data plane. Prevents local sessionIds from blocking peer
+   * metadata import (existingSession skip).
+   */
+  public clearAllSessionsForPeerSwitch(): string[] {
+    this.surfaceGeneration += 1;
+    const removedSessionIds = Array.from(this.state.sessions.keys());
+    this.metadataListRequests.clear();
+    this.metadataPageRequests.clear();
+    if (removedSessionIds.length === 0) {
+      this.setState(prev => ({
+        ...prev,
+        sessions: new Map(),
+        activeSessionId: null,
+      }));
+      return [];
+    }
+    return this.removeSessionsByIds(removedSessionIds);
+  }
+
+  public getSurfaceGeneration(): number {
+    return this.surfaceGeneration;
+  }
+
   public getActiveSession(): Session | null {
     if (!this.state.activeSessionId) {
       return null;
@@ -3327,6 +3354,7 @@ export class FlowChatStore {
       defaultModels: Record<string, string>;
     }>,
   ): Promise<void> {
+    const surfaceGeneration = this.surfaceGeneration;
     const [
       { stateMachineManager },
       { models, defaultModels },
@@ -3334,9 +3362,15 @@ export class FlowChatStore {
       import('../state-machine'),
       modelConfigPromise ?? this.loadSessionMetadataModelConfig(),
     ]);
+    if (surfaceGeneration !== this.surfaceGeneration) {
+      return;
+    }
 
     const processSession = async (metadata: any) => {
       try {
+        if (surfaceGeneration !== this.surfaceGeneration) {
+          return;
+        }
         const existingSession = this.state.sessions.get(metadata.sessionId);
         if (existingSession) {
           return;
@@ -3376,6 +3410,9 @@ export class FlowChatStore {
         const hasDynamicDefaultTitle = titleState.titleSource === 'i18n';
 
         this.setState(prev => {
+          if (surfaceGeneration !== this.surfaceGeneration) {
+            return prev;
+          }
           if (prev.sessions.has(metadata.sessionId)) {
             return prev;
           }

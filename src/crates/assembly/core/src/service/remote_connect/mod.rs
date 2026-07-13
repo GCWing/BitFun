@@ -48,7 +48,7 @@ pub mod sync_state {
 
 pub use account::{
     AccountClient, AccountSession, DelegateToken, DelegatedIdentity, FetchedSession, KdfParams,
-    SettingsBlob,
+    ListedSessionEntry, SettingsBlob,
 };
 pub use device::DeviceIdentity;
 pub use encryption::{decrypt_from_base64, encrypt_to_base64, KeyPair};

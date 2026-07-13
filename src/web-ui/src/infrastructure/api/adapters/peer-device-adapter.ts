@@ -41,6 +41,10 @@ const LOCAL_ONLY_COMMANDS = new Set([
   'account_send_session_to_device',
   'account_execute_on_device',
   'peer_host_invoke_complete',
+  'peer_control_attach',
+  'peer_control_detach',
+  'peer_mode_ping',
+  'peer_controller_set_active',
   'computer_use_request_permissions',
   'computer_use_open_system_settings',
   'remote_connect_get_device_info',
@@ -67,6 +71,12 @@ export function isPeerLocalOnlyCommand(command: string): boolean {
 
 type DeviceRpcFn = (targetDeviceId: string, commandJson: string) => Promise<string>;
 
+export interface PeerDeviceTransportHooks {
+  /** Fired only for transport/RPC layer failures, not product command errors. */
+  onHostInvokeTransportFailure?: (error: unknown) => void;
+  onHostInvokeSuccess?: () => void;
+}
+
 interface HostInvokeResultEnvelope {
   resp?: string;
   ok?: boolean;
@@ -75,10 +85,21 @@ interface HostInvokeResultEnvelope {
   message?: string;
 }
 
+/** Product-level HostInvoke failure (peer executed the command and returned ok:false). */
+export class PeerProductCommandError extends Error {
+  readonly isPeerProductError = true;
+
+  constructor(message: string) {
+    super(message);
+    this.name = 'PeerProductCommandError';
+  }
+}
+
 /**
  * Routes product invokes to a peer device via account Device RPC HostInvoke,
  * while keeping account / window / remote-connect commands on the local host.
  * Event listen stays local — peer events are re-emitted onto this machine.
+ * Failures never fall back to the local product data plane.
  */
 export class PeerDeviceTransportAdapter implements ITransportAdapter {
   private readonly local = new TauriTransportAdapter();
@@ -87,6 +108,7 @@ export class PeerDeviceTransportAdapter implements ITransportAdapter {
   constructor(
     private readonly targetDeviceId: string,
     private readonly deviceRpc: DeviceRpcFn,
+    private readonly hooks: PeerDeviceTransportHooks = {},
   ) {}
 
   getTargetDeviceId(): string {
@@ -128,13 +150,24 @@ export class PeerDeviceTransportAdapter implements ITransportAdapter {
       }
       if (envelope.resp === 'host_invoke_result') {
         if (!envelope.ok) {
-          throw new Error(envelope.error || `Peer command '${action}' failed`);
+          // Product failure on the peer — do not count as transport loss.
+          throw new PeerProductCommandError(
+            envelope.error || `Peer command '${action}' failed`,
+          );
         }
+        this.hooks.onHostInvokeSuccess?.();
         return envelope.value as T;
       }
-      throw new Error(`Unexpected peer RPC response for '${action}': ${envelope.resp || 'unknown'}`);
+      throw new Error(
+        `Unexpected peer RPC response for '${action}': ${envelope.resp || 'unknown'}`,
+      );
     } catch (error) {
-      log.error('Peer HostInvoke failed', { action, error });
+      if (error instanceof PeerProductCommandError) {
+        log.warn('Peer product command failed', { action, error });
+        throw error;
+      }
+      log.error('Peer HostInvoke transport failed', { action, error });
+      this.hooks.onHostInvokeTransportFailure?.(error);
       throw error;
     }
   }

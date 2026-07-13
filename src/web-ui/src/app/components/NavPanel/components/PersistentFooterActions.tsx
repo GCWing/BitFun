@@ -58,6 +58,20 @@ const PersistentFooterActions: React.FC = () => {
   const { warning, success } = useNotification();
   const peerDevice = usePeerDeviceModeOptional();
 
+  useEffect(() => {
+    const onAutoExit = (event: Event) => {
+      const detail = (event as CustomEvent<{ deviceName?: string; reason?: string }>).detail;
+      const name = detail?.deviceName || 'peer';
+      if (detail?.reason === 'peer_offline') {
+        warning(t('accountLogin.peerAutoExitOffline', { name }));
+      } else if (detail?.reason === 'rpc_failures') {
+        warning(t('accountLogin.peerAutoExitRpc', { name }));
+      }
+    };
+    window.addEventListener('peer-mode:auto-exit', onAutoExit);
+    return () => window.removeEventListener('peer-mode:auto-exit', onAutoExit);
+  }, [t, warning]);
+
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuClosing, setMenuClosing] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
