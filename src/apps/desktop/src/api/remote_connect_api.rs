@@ -4,10 +4,11 @@ use crate::api::session_storage_path::desktop_effective_session_storage_path;
 use bitfun_core::agentic::persistence::PersistenceManager;
 use bitfun_core::service::remote_connect::{
     bot::{self, weixin, BotConfig},
-    lan, session_store, AccountClient, AccountSession, ConnectionMethod, ConnectionResult,
-    DeviceIdentity, PairingState, RemoteConnectConfig, RemoteConnectService,
+    lan, session_store, sync_state, AccountClient, AccountSession, ConnectionMethod,
+    ConnectionResult, DeviceIdentity, PairingState, RemoteConnectConfig, RemoteConnectService,
 };
 use bitfun_core::service::session::{DialogTurnData, SessionMetadata};
+use futures::stream::{self, StreamExt};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -82,6 +83,26 @@ fn emit_settings_applied() {
     emit_account_event(
         "account://settings-applied",
         serde_json::json!({ "applied": true }),
+    );
+}
+
+/// Emit granular auto-sync progress for the account login / devices UI.
+fn emit_sync_progress(
+    phase: &str,
+    percent: u8,
+    current: Option<usize>,
+    total: Option<usize>,
+    detail: Option<&str>,
+) {
+    emit_account_event(
+        "account://sync-progress",
+        serde_json::json!({
+            "phase": phase,
+            "percent": percent.min(100),
+            "current": current,
+            "total": total,
+            "detail": detail,
+        }),
     );
 }
 
@@ -1534,14 +1555,14 @@ pub struct SyncedSession {
 pub async fn account_fetch_synced_sessions() -> Result<Vec<SyncedSession>, String> {
     let (session, relay_url) = read_account_context().await?;
     let sessions = AccountClient::new()
-        .fetch_sessions(&relay_url, &session)
+        .fetch_sessions(&relay_url, &session, 0)
         .await
         .map_err(|e| format!("{e}"))?;
     Ok(sessions
         .into_iter()
-        .map(|(id, json)| SyncedSession {
-            session_id: id,
-            session_json: json,
+        .map(|s| SyncedSession {
+            session_id: s.session_id,
+            session_json: s.plaintext,
         })
         .collect())
 }
@@ -1553,7 +1574,11 @@ pub async fn account_delete_synced_session(session_id: String) -> Result<(), Str
     AccountClient::new()
         .delete_session(&relay_url, &session, &session_id)
         .await
-        .map_err(|e| format!("{e}"))
+        .map_err(|e| format!("{e}"))?;
+    let mut state = sync_state::load(&session.user_id);
+    state.clear_uploaded_hash(&session_id);
+    let _ = sync_state::save(&session.user_id, &state);
+    Ok(())
 }
 
 /// Upload settings blob (encrypted client-side with the master key).
@@ -1577,6 +1602,9 @@ pub async fn account_fetch_settings() -> Result<Option<String>, String> {
 }
 
 // ── High-level session sync (export / import / auto-sync) ─────────────────
+
+/// Max concurrent session blob POSTs during multi-session upload.
+const UPLOAD_CONCURRENCY: usize = 5;
 
 /// A serializable session bundle: metadata + all dialog turns.
 /// This is the unit of cross-device sync — encrypted with the master key
@@ -1640,10 +1668,15 @@ pub async fn account_export_local_session(
     let bundle_json =
         serde_json::to_string(&bundle).map_err(|e| format!("serialize bundle: {e}"))?;
 
+    let hash = sync_state::content_hash(&bundle_json);
     AccountClient::new()
         .upload_session(&relay_url, &acct_session, &session_id, &bundle_json)
         .await
-        .map_err(|e| format!("{e}"))
+        .map_err(|e| format!("{e}"))?;
+    let mut state = sync_state::load(&acct_session.user_id);
+    state.set_uploaded_hash(&session_id, hash);
+    let _ = sync_state::save(&acct_session.user_id, &state);
+    Ok(())
 }
 
 /// Export all local sessions for a workspace and upload them to the relay.
@@ -1667,8 +1700,8 @@ pub async fn account_export_all_sessions(
         .await
         .map_err(|e| format!("list sessions: {e}"))?;
 
-    let client = AccountClient::new();
-    let mut count = 0usize;
+    let mut state = sync_state::load(&acct_session.user_id);
+    let mut pending: Vec<(String, String, String)> = Vec::new();
     for meta in &sessions {
         let turns = manager
             .load_session_turns(&storage_path, &meta.session_id)
@@ -1692,15 +1725,41 @@ pub async fn account_export_all_sessions(
 
         let bundle_json =
             serde_json::to_string(&bundle).map_err(|e| format!("serialize bundle: {e}"))?;
-
-        if client
-            .upload_session(&relay_url, &acct_session, &meta.session_id, &bundle_json)
-            .await
-            .is_ok()
-        {
-            count += 1;
+        let hash = sync_state::content_hash(&bundle_json);
+        if state.uploaded_hash(&meta.session_id) == Some(hash.as_str()) {
+            continue;
         }
+        pending.push((meta.session_id.clone(), bundle_json, hash));
     }
+
+    let uploaded: Vec<(String, String)> = stream::iter(pending)
+        .map(|(session_id, bundle_json, hash)| {
+            let client = AccountClient::new();
+            let relay_url = relay_url.clone();
+            let acct_session = acct_session.clone();
+            async move {
+                match client
+                    .upload_session(&relay_url, &acct_session, &session_id, &bundle_json)
+                    .await
+                {
+                    Ok(()) => Some((session_id, hash)),
+                    Err(e) => {
+                        log::warn!("Export session {session_id} failed: {e}");
+                        None
+                    }
+                }
+            }
+        })
+        .buffer_unordered(UPLOAD_CONCURRENCY)
+        .filter_map(|r| async move { r })
+        .collect()
+        .await;
+
+    let count = uploaded.len();
+    for (session_id, hash) in uploaded {
+        state.set_uploaded_hash(&session_id, hash);
+    }
+    let _ = sync_state::save(&acct_session.user_id, &state);
     log::info!("Exported {count} sessions to relay");
     Ok(count)
 }
@@ -1723,12 +1782,14 @@ pub async fn account_import_remote_sessions(
         .map_err(|e| format!("create persistence manager: {e}"))?;
 
     let remote_sessions = AccountClient::new()
-        .fetch_sessions(&relay_url, &acct_session)
+        .fetch_sessions(&relay_url, &acct_session, 0)
         .await
         .map_err(|e| format!("{e}"))?;
 
     let mut imported = Vec::new();
-    for (session_id, bundle_json) in remote_sessions {
+    for fetched in remote_sessions {
+        let session_id = fetched.session_id;
+        let bundle_json = fetched.plaintext;
         // Skip if session already exists locally
         if manager
             .load_session_metadata(&storage_path, &session_id)
@@ -1797,19 +1858,14 @@ pub async fn account_fetch_session_turns(
 
     // Fetch the full bundle from the relay (which includes turns).
     let (acct_session, relay_url) = read_account_context().await?;
-    let remote_sessions = AccountClient::new()
-        .fetch_sessions(&relay_url, &acct_session)
+    let fetched = AccountClient::new()
+        .fetch_session(&relay_url, &acct_session, &session_id)
         .await
-        .map_err(|e| format!("{e}"))?;
-
-    let bundle_json = remote_sessions
-        .iter()
-        .find(|(sid, _)| sid == &session_id)
-        .map(|(_, json)| json.as_str())
+        .map_err(|e| format!("{e}"))?
         .ok_or_else(|| "session not found on relay".to_string())?;
 
     let bundle: SessionBundle =
-        serde_json::from_str(bundle_json).map_err(|e| format!("deserialize bundle: {e}"))?;
+        serde_json::from_str(&fetched.plaintext).map_err(|e| format!("deserialize bundle: {e}"))?;
 
     // Write turns first, then metadata (self-healing on crash).
     for turn_val in &bundle.turns {
@@ -2002,6 +2058,7 @@ pub async fn account_auto_sync(
 
     // 1. Settings sync
     let settings_synced = if is_first_login {
+        emit_sync_progress("uploading_settings", 5, None, None, None);
         client
             .upload_settings(&relay_url, &acct_session, &config_json)
             .await
@@ -2011,13 +2068,16 @@ pub async fn account_auto_sync(
             std::sync::atomic::Ordering::Relaxed,
         );
         log::info!("First login: uploaded local settings to cloud");
+        emit_sync_progress("settings_done", 15, None, None, None);
         true
     } else {
+        emit_sync_progress("downloading_settings", 5, None, None, None);
         let cloud = client
             .fetch_settings_with_version(&relay_url, &acct_session)
             .await
             .map_err(|e| format!("fetch settings: {e}"))?;
         if let Some(blob) = cloud {
+            emit_sync_progress("applying_settings", 10, None, None, None);
             let config_value: serde_json::Value = serde_json::from_str(&blob.plaintext)
                 .map_err(|e| format!("parse cloud config: {e}"))?;
             // Extract the .config field from the ConfigExport wrapper —
@@ -2046,13 +2106,16 @@ pub async fn account_auto_sync(
                 "Applied cloud settings to local device (version={})",
                 blob.version
             );
+            emit_sync_progress("settings_done", 15, None, None, None);
             true
         } else {
+            emit_sync_progress("settings_done", 15, None, None, None);
             false
         }
     };
 
     // 2. Session sync: export local + import remote
+    emit_sync_progress("listing_sessions", 18, None, None, None);
     let storage_path =
         desktop_effective_session_storage_path(&app_state, &workspace_path, None, None).await;
     let manager = PersistenceManager::new(path_manager.inner().clone())
@@ -2063,8 +2126,18 @@ pub async fn account_auto_sync(
         .await
         .map_err(|e| format!("list sessions: {e}"))?;
 
-    let mut exported = 0usize;
-    for meta in &local_sessions {
+    let export_candidates = local_sessions.len();
+    emit_sync_progress(
+        "exporting_sessions",
+        20,
+        Some(0),
+        Some(export_candidates),
+        None,
+    );
+
+    let mut sync_state_local = sync_state::load(&acct_session.user_id);
+    let mut pending_uploads: Vec<(String, String, String)> = Vec::new();
+    for meta in local_sessions.iter() {
         let turns = manager
             .load_session_turns(&storage_path, &meta.session_id)
             .await
@@ -2084,22 +2157,87 @@ pub async fn account_auto_sync(
         };
         let bundle_json =
             serde_json::to_string(&bundle).map_err(|e| format!("serialize bundle: {e}"))?;
-        if client
-            .upload_session(&relay_url, &acct_session, &meta.session_id, &bundle_json)
-            .await
-            .is_ok()
-        {
-            exported += 1;
+        let hash = sync_state::content_hash(&bundle_json);
+        if sync_state_local.uploaded_hash(&meta.session_id) == Some(hash.as_str()) {
+            continue;
         }
+        pending_uploads.push((meta.session_id.clone(), bundle_json, hash));
     }
 
+    let upload_total = pending_uploads.len();
+    emit_sync_progress("exporting_sessions", 20, Some(0), Some(upload_total), None);
+
+    let completed = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let uploaded: Vec<(String, String)> = stream::iter(pending_uploads)
+        .map(|(session_id, bundle_json, hash)| {
+            let client = AccountClient::new();
+            let relay_url = relay_url.clone();
+            let acct_session = acct_session.clone();
+            let completed = completed.clone();
+            async move {
+                let result = client
+                    .upload_session(&relay_url, &acct_session, &session_id, &bundle_json)
+                    .await;
+                let done = completed.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+                let percent = if upload_total == 0 {
+                    55u8
+                } else {
+                    20 + ((35 * done) / upload_total) as u8
+                };
+                emit_sync_progress(
+                    "exporting_sessions",
+                    percent.min(55),
+                    Some(done),
+                    Some(upload_total),
+                    Some(session_id.as_str()),
+                );
+                match result {
+                    Ok(()) => Some((session_id, hash)),
+                    Err(e) => {
+                        log::warn!("Auto-sync upload {session_id} failed: {e}");
+                        None
+                    }
+                }
+            }
+        })
+        .buffer_unordered(UPLOAD_CONCURRENCY)
+        .filter_map(|r| async move { r })
+        .collect()
+        .await;
+
+    let exported = uploaded.len();
+    for (session_id, hash) in uploaded {
+        sync_state_local.set_uploaded_hash(&session_id, hash);
+    }
+
+    emit_sync_progress("fetching_remote_sessions", 60, None, None, None);
+    let since = sync_state_local.last_session_since;
     let remote_sessions = client
-        .fetch_sessions(&relay_url, &acct_session)
+        .fetch_sessions(&relay_url, &acct_session, since)
         .await
         .map_err(|e| format!("fetch sessions: {e}"))?;
 
+    let import_total = remote_sessions.len();
+    emit_sync_progress("importing_sessions", 65, Some(0), Some(import_total), None);
+
     let mut imported = 0usize;
-    for (session_id, bundle_json) in remote_sessions {
+    let mut max_versions: Vec<i64> = Vec::with_capacity(remote_sessions.len());
+    for (index, fetched) in remote_sessions.into_iter().enumerate() {
+        max_versions.push(fetched.version);
+        let session_id = fetched.session_id;
+        let bundle_json = fetched.plaintext;
+        let percent = if import_total == 0 {
+            95u8
+        } else {
+            65 + ((30 * (index + 1)) / import_total) as u8
+        };
+        emit_sync_progress(
+            "importing_sessions",
+            percent.min(95),
+            Some(index + 1),
+            Some(import_total),
+            Some(session_id.as_str()),
+        );
         if manager
             .load_session_metadata(&storage_path, &session_id)
             .await
@@ -2125,7 +2263,11 @@ pub async fn account_auto_sync(
         imported += 1;
     }
 
+    sync_state_local.advance_session_since(max_versions);
+    let _ = sync_state::save(&acct_session.user_id, &sync_state_local);
+
     log::info!("Auto-sync: settings={settings_synced} exported={exported} imported={imported}");
+    emit_sync_progress("done", 100, Some(exported), Some(imported), None);
     Ok(AutoSyncResult {
         settings_synced,
         sessions_exported: exported,
@@ -2277,6 +2419,7 @@ async fn execute_debounced_sync(
     let client = AccountClient::new();
 
     // Tombstone deleted sessions on the relay
+    let mut sync_state_local = sync_state::load(&acct_session.user_id);
     for session_id in &deletes {
         if let Err(e) = client
             .delete_session(&relay_url, &acct_session, session_id)
@@ -2287,32 +2430,60 @@ async fn execute_debounced_sync(
             }
             log::warn!("Auto-sync delete {session_id} failed: {e}");
         } else {
+            sync_state_local.clear_uploaded_hash(session_id);
             log::debug!("Auto-synced tombstone for session {session_id}");
         }
     }
 
-    // Upload changed sessions
-    for (session_id, workspace_path) in &upserts {
-        match export_and_upload_session(
-            &client,
-            &acct_session,
-            &relay_url,
-            session_id,
-            workspace_path,
-        )
-        .await
-        {
-            Ok(()) => {
-                log::debug!("Auto-synced session {session_id}");
-            }
-            Err(e) => {
-                if is_token_expired_error(&e) {
-                    TOKEN_EXPIRED.store(true, std::sync::atomic::Ordering::Relaxed);
+    // Upload changed sessions (hash-skip + concurrency)
+    let upsert_list: Vec<(String, String)> = upserts.into_iter().collect();
+    let upload_results: Vec<(String, Option<String>)> = stream::iter(upsert_list)
+        .map(|(session_id, workspace_path)| {
+            let client = AccountClient::new();
+            let relay_url = relay_url.clone();
+            let acct_session = acct_session.clone();
+            let known_hash = sync_state_local
+                .uploaded_hash(&session_id)
+                .map(str::to_string);
+            async move {
+                match export_and_upload_session(
+                    &client,
+                    &acct_session,
+                    &relay_url,
+                    &session_id,
+                    &workspace_path,
+                    known_hash.as_deref(),
+                )
+                .await
+                {
+                    Ok(Some(hash)) => {
+                        log::debug!("Auto-synced session {session_id}");
+                        (session_id, Some(hash))
+                    }
+                    Ok(None) => {
+                        log::debug!("Auto-sync skip unchanged session {session_id}");
+                        (session_id, None)
+                    }
+                    Err(e) => {
+                        if is_token_expired_error(&e) {
+                            TOKEN_EXPIRED.store(true, std::sync::atomic::Ordering::Relaxed);
+                        }
+                        log::warn!("Auto-sync session {session_id} failed: {e}");
+                        (session_id, None)
+                    }
                 }
-                log::warn!("Auto-sync session {session_id} failed: {e}");
             }
+        })
+        .buffer_unordered(UPLOAD_CONCURRENCY)
+        .collect()
+        .await;
+
+    for (session_id, hash) in upload_results {
+        if let Some(hash) = hash {
+            sync_state_local.set_uploaded_hash(&session_id, hash);
         }
     }
+    let _ = sync_state::save(&acct_session.user_id, &sync_state_local);
 
     // Upload settings if changed
     if sync_settings {
@@ -2348,13 +2519,15 @@ async fn execute_debounced_sync(
 }
 
 /// Load a single session from disk, serialize to bundle, and upload.
+/// Returns `Some(hash)` when a POST succeeded, `None` when content was unchanged.
 async fn export_and_upload_session(
     client: &AccountClient,
     acct_session: &AccountSession,
     relay_url: &str,
     session_id: &str,
     workspace_path: &str,
-) -> anyhow::Result<()> {
+    known_hash: Option<&str>,
+) -> anyhow::Result<Option<String>> {
     // Resolve storage path — we need app_state for desktop_effective_session_storage_path
     // but in this background context we don't have it. Use the path_manager approach.
     let path_manager = std::sync::Arc::new(
@@ -2395,10 +2568,14 @@ async fn export_and_upload_session(
         source_device_name: None,
     };
     let bundle_json = serde_json::to_string(&bundle)?;
+    let hash = sync_state::content_hash(&bundle_json);
+    if known_hash == Some(hash.as_str()) {
+        return Ok(None);
+    }
     client
         .upload_session(relay_url, acct_session, session_id, &bundle_json)
         .await?;
-    Ok(())
+    Ok(Some(hash))
 }
 
 /// Resolve the local workspace path for task execution. Returns the first
@@ -2625,7 +2802,12 @@ async fn pull_and_reconcile() {
     }
 
     // ── Session pull (metadata-only; turns are lazy-loaded on open) ──
-    let remote_sessions = match client.fetch_sessions(&relay_url, &acct_session).await {
+    let mut sync_state_local = sync_state::load(&acct_session.user_id);
+    let since = sync_state_local.last_session_since;
+    let remote_sessions = match client
+        .fetch_sessions(&relay_url, &acct_session, since)
+        .await
+    {
         Ok(s) => s,
         Err(e) => {
             if is_token_expired_error(&e) {
@@ -2635,6 +2817,10 @@ async fn pull_and_reconcile() {
             return;
         }
     };
+
+    if remote_sessions.is_empty() {
+        return;
+    }
 
     let path_manager = match bitfun_core::infrastructure::PathManager::new() {
         Ok(pm) => std::sync::Arc::new(pm),
@@ -2682,11 +2868,19 @@ async fn pull_and_reconcile() {
     // session (see `account_fetch_session_turns` Tauri command). This keeps
     // the pull lightweight even with hundreds of remote sessions.
     if workspace_session_dirs.is_empty() {
+        // Still advance cursor so we do not re-download the same deltas forever
+        // when the device has no local workspace yet.
+        sync_state_local.advance_session_since(remote_sessions.iter().map(|s| s.version));
+        let _ = sync_state::save(&acct_session.user_id, &sync_state_local);
         return;
     }
     let target_dir = &workspace_session_dirs[0];
 
-    for (session_id, bundle_json) in &remote_sessions {
+    let mut max_versions: Vec<i64> = Vec::with_capacity(remote_sessions.len());
+    for fetched in &remote_sessions {
+        max_versions.push(fetched.version);
+        let session_id = &fetched.session_id;
+        let bundle_json = &fetched.plaintext;
         // Skip if this session already exists in any local workspace
         if all_local_ids.contains(session_id) {
             continue;
@@ -2716,5 +2910,34 @@ async fn pull_and_reconcile() {
         }
         all_local_ids.insert(session_id.clone()); // prevent re-import in same cycle
         log::info!("Pull: imported session metadata {session_id} (turns lazy-loaded)");
+    }
+
+    sync_state_local.advance_session_since(max_versions);
+    let _ = sync_state::save(&acct_session.user_id, &sync_state_local);
+}
+
+#[cfg(test)]
+mod sync_state_tests {
+    use super::*;
+
+    #[test]
+    fn content_hash_is_stable() {
+        let a = sync_state::content_hash(r#"{"session_id":"x"}"#);
+        let b = sync_state::content_hash(r#"{"session_id":"x"}"#);
+        let c = sync_state::content_hash(r#"{"session_id":"y"}"#);
+        assert_eq!(a, b);
+        assert_ne!(a, c);
+        assert_eq!(a.len(), 64);
+    }
+
+    #[test]
+    fn advance_session_since_takes_max() {
+        let mut state = sync_state::AccountSyncState::default();
+        state.advance_session_since([1, 5, 3]);
+        assert_eq!(state.last_session_since, 5);
+        state.advance_session_since([4]);
+        assert_eq!(state.last_session_since, 5);
+        state.advance_session_since([9]);
+        assert_eq!(state.last_session_since, 9);
     }
 }

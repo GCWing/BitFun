@@ -2,6 +2,8 @@
  * Account Login + Online Devices
  *
  * Views: login → overwrite (optional) → devices
+ * After login / overwrite choice the dialog closes immediately while cloud
+ * sync continues in the background; reopening Online Devices shows progress.
  * Clicking an online peer device enters Peer Device Mode and closes the dialog.
  */
 
@@ -19,6 +21,8 @@ import { configAPI } from '@/infrastructure/api/service-api/ConfigAPI';
 import { configManager } from '@/infrastructure/config/services/ConfigManager';
 import { api } from '@/infrastructure/api/service-api/ApiClient';
 import { usePeerDeviceMode } from '@/infrastructure/peer-device/PeerDeviceContext';
+import { useAccountSyncStore, ensureAccountSyncProgressListener } from '@/infrastructure/account/accountSyncStore';
+import type { AccountSyncPhase } from '@/infrastructure/account/accountSyncStore';
 import { useNotification } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
 import './AccountLoginDialog.scss';
@@ -26,6 +30,45 @@ import './AccountLoginDialog.scss';
 const log = createLogger('AccountLoginDialog');
 
 const DEVICE_POLL_FALLBACK_MS = 30_000;
+
+function syncPhaseLabel(
+  t: (key: string, options?: Record<string, string | number>) => string,
+  phase: AccountSyncPhase,
+  current: number | null,
+  total: number | null,
+): string {
+  switch (phase) {
+    case 'uploading_settings':
+      return t('accountLogin.syncPhaseUploadingSettings');
+    case 'downloading_settings':
+      return t('accountLogin.syncPhaseDownloadingSettings');
+    case 'applying_settings':
+      return t('accountLogin.syncPhaseApplyingSettings');
+    case 'settings_done':
+      return t('accountLogin.syncPhaseSettingsDone');
+    case 'listing_sessions':
+      return t('accountLogin.syncPhaseListingSessions');
+    case 'exporting_sessions':
+      return t('accountLogin.syncPhaseExportingSessions', {
+        current: current ?? 0,
+        total: total ?? 0,
+      });
+    case 'fetching_remote_sessions':
+      return t('accountLogin.syncPhaseFetchingRemote');
+    case 'importing_sessions':
+      return t('accountLogin.syncPhaseImportingSessions', {
+        current: current ?? 0,
+        total: total ?? 0,
+      });
+    case 'done':
+      return t('accountLogin.syncDoneShort');
+    case 'failed':
+      return t('accountLogin.syncFailed');
+    case 'starting':
+    default:
+      return t('accountLogin.syncing');
+  }
+}
 
 function isAccountAuthFailure(error: unknown): boolean {
   const msg = (error instanceof Error ? error.message : String(error)).toLowerCase();
@@ -52,19 +95,25 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
   const { success, info, warning } = useNotification();
   const { workspacePath } = useCurrentWorkspace();
   const { enterPeerMode } = usePeerDeviceMode();
+  const syncStatus = useAccountSyncStore((s) => s.status);
+  const syncProgress = useAccountSyncStore((s) => s.progress);
+  const setSyncing = useAccountSyncStore((s) => s.setSyncing);
+  const setSyncDone = useAccountSyncStore((s) => s.setDone);
+  const setSyncFailed = useAccountSyncStore((s) => s.setFailed);
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [authServer, setAuthServer] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'done' | 'failed'>('idle');
   const [showPassword, setShowPassword] = useState(false);
   const [view, setView] = useState<View>('login');
 
   const [devices, setDevices] = useState<AccountDeviceInfo[]>([]);
   const [localDeviceId, setLocalDeviceId] = useState<string | null>(null);
   const refreshTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  /** Prevent overlapping background syncs from rapid clicks. */
+  const syncInFlightRef = useRef(false);
 
   const resetState = useCallback(() => {
     setDevices([]);
@@ -134,6 +183,10 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
   }, [refreshDevices]);
 
   useEffect(() => {
+    ensureAccountSyncProgressListener();
+  }, []);
+
+  useEffect(() => {
     if (!isOpen) {
       setUsername(''); setPassword(''); setAuthServer('');
       setError(null); setLoading(false); setView('login');
@@ -197,41 +250,78 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
     return true;
   }, [username, password, authServer, t]);
 
-  const doAutoSync = useCallback(async (isFirstLogin: boolean) => {
-    const wp = workspacePath || '/';
-    setSyncStatus('syncing');
-    info(t('accountLogin.syncStarted'));
-    try {
-      let configJson = '{}';
-      if (isFirstLogin) {
-        try {
-          const exported = await configAPI.exportConfig();
-          configJson = JSON.stringify(exported);
-        } catch (e) { log.warn('export config failed', e); }
-      }
-      const result = await remoteConnectAPI.accountAutoSync(isFirstLogin, wp, configJson);
-      log.info(`Auto-sync done: settings=${result.settings_synced} exported=${result.sessions_exported} imported=${result.sessions_imported}`);
-      if (result.settings_synced && !isFirstLogin) {
-        try {
-          await configAPI.reloadConfig();
-          configManager.clearCache();
-          success(t('accountLogin.settingsApplied'));
-        } catch (e) {
-          log.warn('reloadConfig after sync failed', e);
-        }
-      }
-      setSyncStatus('done');
-      success(t('accountLogin.syncDone', {
-        exported: result.sessions_exported,
-        imported: result.sessions_imported,
-      }));
-    } catch (e) {
-      log.error('Auto-sync failed', e);
-      setSyncStatus('failed');
-      warning(t('accountLogin.syncFailed'));
-      throw e;
+  /**
+   * Run cloud sync + device connect in the background. Dialog can close
+   * immediately; progress is visible when Online Devices is reopened.
+   */
+  const startBackgroundSync = useCallback((isFirstLogin: boolean) => {
+    if (syncInFlightRef.current) {
+      log.warn('Account sync already in flight; skipping duplicate start');
+      return;
     }
-  }, [workspacePath, info, success, warning, t]);
+    syncInFlightRef.current = true;
+    ensureAccountSyncProgressListener();
+    setSyncing();
+    info(t('accountLogin.syncStarted'));
+
+    // Connect device presence immediately so Online Devices can populate
+    // while the heavier settings/session sync continues.
+    void remoteConnectAPI.accountConnectDevices().catch((err) => {
+      log.warn('accountConnectDevices failed at sync start', err);
+    });
+
+    void (async () => {
+      try {
+        let configJson = '{}';
+        if (isFirstLogin) {
+          useAccountSyncStore.getState().applyProgress({
+            phase: 'uploading_settings',
+            percent: 2,
+          });
+          try {
+            const exported = await configAPI.exportConfig();
+            configJson = JSON.stringify(exported);
+          } catch (e) {
+            log.warn('export config failed', e);
+          }
+        }
+        const wp = workspacePath || '/';
+        const result = await remoteConnectAPI.accountAutoSync(isFirstLogin, wp, configJson);
+        log.info(
+          `Auto-sync done: settings=${result.settings_synced} exported=${result.sessions_exported} imported=${result.sessions_imported}`,
+        );
+        if (result.settings_synced && !isFirstLogin) {
+          try {
+            await configAPI.reloadConfig();
+            configManager.clearCache();
+            success(t('accountLogin.settingsApplied'));
+          } catch (e) {
+            log.warn('reloadConfig after sync failed', e);
+          }
+        }
+        setSyncDone(result);
+        success(t('accountLogin.syncDone', {
+          exported: result.sessions_exported,
+          imported: result.sessions_imported,
+        }));
+      } catch (e) {
+        log.error('Auto-sync failed', e);
+        setSyncFailed(e instanceof Error ? e.message : String(e));
+        warning(t('accountLogin.syncFailed'));
+      } finally {
+        syncInFlightRef.current = false;
+      }
+    })();
+  }, [
+    info,
+    setSyncDone,
+    setSyncFailed,
+    setSyncing,
+    success,
+    t,
+    warning,
+    workspacePath,
+  ]);
 
   const handleLogin = useCallback(async () => {
     if (!validate()) return;
@@ -243,56 +333,27 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
         setLoading(false);
         return;
       }
-      await doAutoSync(true);
-      try {
-        await remoteConnectAPI.accountConnectDevices();
-      } catch (err) {
-        log.warn('accountConnectDevices failed', err);
-      }
       success(t('accountLogin.loginSuccess', { user_id: result.user_id }));
-      setView('devices');
-      refreshDevices();
-      startDevicePolling();
+      startBackgroundSync(true);
+      onClose();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
     } finally { setLoading(false); }
-  }, [validate, authServer, username, password, doAutoSync, success, t, refreshDevices, startDevicePolling]);
+  }, [validate, authServer, username, password, startBackgroundSync, success, t, onClose]);
 
-  const handleConfirmOverwrite = useCallback(async () => {
-    setLoading(true); setError(null);
-    try {
-      await doAutoSync(false);
-      try {
-        await remoteConnectAPI.accountConnectDevices();
-      } catch (err) {
-        log.warn('accountConnectDevices failed', err);
-      }
-      success(t('accountLogin.loginSuccess', { user_id: username }));
-      setView('devices');
-      refreshDevices();
-      startDevicePolling();
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally { setLoading(false); }
-  }, [doAutoSync, success, t, username, refreshDevices, startDevicePolling]);
+  const handleConfirmOverwrite = useCallback(() => {
+    setError(null);
+    success(t('accountLogin.loginSuccess', { user_id: username }));
+    startBackgroundSync(false);
+    onClose();
+  }, [onClose, startBackgroundSync, success, t, username]);
 
-  const handleUseLocalOverwrite = useCallback(async () => {
-    setLoading(true); setError(null);
-    try {
-      await doAutoSync(true);
-      try {
-        await remoteConnectAPI.accountConnectDevices();
-      } catch (err) {
-        log.warn('accountConnectDevices failed', err);
-      }
-      success(t('accountLogin.loginSuccess', { user_id: username }));
-      setView('devices');
-      refreshDevices();
-      startDevicePolling();
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally { setLoading(false); }
-  }, [doAutoSync, success, t, username, refreshDevices, startDevicePolling]);
+  const handleUseLocalOverwrite = useCallback(() => {
+    setError(null);
+    success(t('accountLogin.loginSuccess', { user_id: username }));
+    startBackgroundSync(true);
+    onClose();
+  }, [onClose, startBackgroundSync, success, t, username]);
 
   const handleCancelOverwrite = useCallback(async () => {
     try { await remoteConnectAPI.accountLogout(); } catch (e) { log.warn('logout failed', e); }
@@ -326,6 +387,10 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
   const selectDevice = useCallback(async (device: AccountDeviceInfo) => {
     if (!device.online) return;
     if (localDeviceId && device.device_id === localDeviceId) return;
+    if (syncStatus === 'syncing') {
+      info(t('accountLogin.syncInProgressHint'));
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -337,7 +402,7 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [enterPeerMode, localDeviceId, onClose, success, t]);
+  }, [enterPeerMode, info, localDeviceId, onClose, success, syncStatus, t]);
 
   const title = view === 'login' || view === 'overwrite'
     ? t('shared:features.accountLogin')
@@ -440,14 +505,40 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
           <div className="account-login-dialog__scroll">
             {syncStatus !== 'idle' && (
               <div className={`account-login-dialog__sync-indicator ${syncStatus}`}>
-                {syncStatus === 'syncing' && <RefreshCw size={14} className="spinning" />}
-                {syncStatus === 'done' && <span>✓</span>}
-                {syncStatus === 'failed' && <span>⚠</span>}
-                <span>
-                  {syncStatus === 'syncing' && t('accountLogin.syncing')}
-                  {syncStatus === 'done' && t('accountLogin.syncDoneShort')}
-                  {syncStatus === 'failed' && t('accountLogin.syncFailed')}
-                </span>
+                <div className="account-login-dialog__sync-indicator-row">
+                  {syncStatus === 'syncing' && <RefreshCw size={14} className="spinning" />}
+                  {syncStatus === 'done' && <span>✓</span>}
+                  {syncStatus === 'failed' && <span>⚠</span>}
+                  <span className="account-login-dialog__sync-indicator-text">
+                    {syncStatus === 'syncing' && syncPhaseLabel(
+                      t,
+                      syncProgress.phase,
+                      syncProgress.current,
+                      syncProgress.total,
+                    )}
+                    {syncStatus === 'done' && t('accountLogin.syncDoneShort')}
+                    {syncStatus === 'failed' && t('accountLogin.syncFailed')}
+                  </span>
+                  {syncStatus === 'syncing' && (
+                    <span className="account-login-dialog__sync-indicator-percent">
+                      {t('accountLogin.syncProgressPercent', { percent: syncProgress.percent })}
+                    </span>
+                  )}
+                </div>
+                {syncStatus === 'syncing' && (
+                  <div
+                    className="account-login-dialog__sync-progress-track"
+                    role="progressbar"
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={syncProgress.percent}
+                  >
+                    <div
+                      className="account-login-dialog__sync-progress-fill"
+                      style={{ width: `${Math.max(2, syncProgress.percent)}%` }}
+                    />
+                  </div>
+                )}
               </div>
             )}
             <div className="account-login-dialog__device-list">
@@ -458,7 +549,7 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
                 const isLocal = localDeviceId === d.device_id;
                 return (
                 <div key={d.device_id}
-                  className={`account-login-dialog__device-card ${d.online ? '' : 'offline'} ${isLocal ? 'current' : ''}`}
+                  className={`account-login-dialog__device-card ${d.online ? '' : 'offline'} ${isLocal ? 'current' : ''} ${syncStatus === 'syncing' && !isLocal ? 'syncing' : ''}`}
                   onClick={() => !isLocal && selectDevice(d)}>
                   <Monitor size={16} />
                   <div className="account-login-dialog__device-info">
@@ -473,7 +564,10 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
                   {isLocal
                     ? null
                     : <>
-                        {d.online && <ChevronRight size={14} />}
+                        {d.online && syncStatus !== 'syncing' && <ChevronRight size={14} />}
+                        {d.online && syncStatus === 'syncing' && (
+                          <RefreshCw size={14} className="spinning" aria-label={t('accountLogin.syncing')} />
+                        )}
                         <button className="account-login-dialog__device-remove"
                           onClick={(e) => { e.stopPropagation(); handleDeleteDevice(d.device_id, d.device_name); }}
                           title={t('accountLogin.removeDevice')}

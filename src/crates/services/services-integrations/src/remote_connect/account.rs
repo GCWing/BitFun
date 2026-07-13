@@ -346,16 +346,22 @@ impl AccountClient {
         Ok(())
     }
 
-    /// Fetch all encrypted session blobs for the account, returning decrypted
-    /// `(session_id, plaintext)` pairs.
+    /// Fetch encrypted session blobs updated after `since` (relay `version`).
+    /// Pass `since = 0` for a full list. Each entry is decrypted locally.
     pub async fn fetch_sessions(
         &self,
         relay_url: &str,
         session: &AccountSession,
-    ) -> Result<Vec<(String, String)>> {
+        since: i64,
+    ) -> Result<Vec<FetchedSession>> {
+        let url = format!(
+            "{}?since={}",
+            Self::endpoint(relay_url, "/api/sync/sessions"),
+            since.max(0)
+        );
         let resp = self
             .http
-            .get(Self::endpoint(relay_url, "/api/sync/sessions"))
+            .get(url)
             .header("Authorization", Self::auth_header(session))
             .send()
             .await?;
@@ -367,10 +373,45 @@ impl AccountClient {
             .sessions
             .into_iter()
             .map(|entry| {
-                let pt = Self::open(session, &entry.encrypted_data, &entry.nonce)?;
-                Ok((entry.session_id, pt))
+                let plaintext = Self::open(session, &entry.encrypted_data, &entry.nonce)?;
+                Ok(FetchedSession {
+                    session_id: entry.session_id,
+                    plaintext,
+                    version: entry.version,
+                })
             })
             .collect()
+    }
+
+    /// Fetch and decrypt a single session blob by id.
+    pub async fn fetch_session(
+        &self,
+        relay_url: &str,
+        session: &AccountSession,
+        session_id: &str,
+    ) -> Result<Option<FetchedSession>> {
+        let resp = self
+            .http
+            .get(Self::endpoint(
+                relay_url,
+                &format!("/api/sync/sessions/{session_id}"),
+            ))
+            .header("Authorization", Self::auth_header(session))
+            .send()
+            .await?;
+        if resp.status() == reqwest::StatusCode::NOT_FOUND {
+            return Ok(None);
+        }
+        if !resp.status().is_success() {
+            return Err(Self::into_error(resp).await);
+        }
+        let entry: SessionEntry = resp.json().await?;
+        let plaintext = Self::open(session, &entry.encrypted_data, &entry.nonce)?;
+        Ok(Some(FetchedSession {
+            session_id: entry.session_id,
+            plaintext,
+            version: entry.version,
+        }))
     }
 
     /// Delete a session blob (tombstone) — used when a session is removed.
@@ -633,6 +674,16 @@ struct SessionEntry {
     session_id: String,
     encrypted_data: String,
     nonce: String,
+    #[serde(default)]
+    version: i64,
+}
+
+/// Decrypted session sync blob with relay version metadata.
+#[derive(Debug, Clone)]
+pub struct FetchedSession {
+    pub session_id: String,
+    pub plaintext: String,
+    pub version: i64,
 }
 
 /// A settings blob with version metadata, returned by `fetch_settings_with_version`.

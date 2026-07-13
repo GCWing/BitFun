@@ -532,6 +532,25 @@ impl SyncSessionRow {
         .map_err(|e| anyhow!("delete sync session: {e}"))?;
         Ok(())
     }
+
+    /// Fetch one non-deleted session blob by id.
+    pub async fn get(
+        pool: &DbPool,
+        user_id: &str,
+        session_id: &str,
+    ) -> Result<Option<SyncSessionRow>> {
+        let row = sqlx::query_as::<_, SyncSessionRow>(
+            "SELECT session_id, encrypted_data, nonce, version, updated_at, deleted \
+             FROM sync_sessions \
+             WHERE user_id = ? AND session_id = ? AND deleted = 0",
+        )
+        .bind(user_id)
+        .bind(session_id)
+        .fetch_optional(pool)
+        .await
+        .map_err(|e| anyhow!("get sync session: {e}"))?;
+        Ok(row)
+    }
 }
 
 // ── Sync settings (single encrypted blob per user) ──────────────────────

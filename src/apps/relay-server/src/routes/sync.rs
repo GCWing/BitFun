@@ -6,7 +6,7 @@
 
 use axum::extract::{Path, Query, State};
 use axum::http::{header, HeaderMap, StatusCode};
-use axum::routing::{delete, post};
+use axum::routing::{get, post};
 use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 
@@ -46,7 +46,10 @@ pub fn sync_router() -> Router<AppState> {
             "/api/sync/sessions",
             post(sessions_upsert).get(sessions_list),
         )
-        .route("/api/sync/sessions/{session_id}", delete(sessions_delete))
+        .route(
+            "/api/sync/sessions/{session_id}",
+            get(sessions_get).delete(sessions_delete),
+        )
         .route(
             "/api/sync/settings",
             post(settings_upsert).get(settings_get),
@@ -118,6 +121,26 @@ async fn sessions_list(
         })
         .collect();
     Ok(Json(SessionListResponse { sessions }))
+}
+
+async fn sessions_get(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(session_id): Path<String>,
+) -> Result<Json<SessionBlob>, StatusCode> {
+    let auth = validate_auth(&state, &headers).await?;
+    let db = state.db.as_ref().ok_or(StatusCode::NOT_IMPLEMENTED)?;
+    let row = SyncSessionRow::get(db, &auth.user_id, &session_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
+    Ok(Json(SessionBlob {
+        session_id: row.session_id,
+        encrypted_data: row.encrypted_data,
+        nonce: row.nonce,
+        version: row.version,
+        updated_at: row.updated_at,
+    }))
 }
 
 async fn sessions_delete(

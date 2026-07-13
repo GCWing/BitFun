@@ -516,7 +516,17 @@
     "sessionExpired": "登入已失效，請重新登入",
     "enteredPeerMode": "已連接到遠端裝置：{{name}}",
     "peerRemoteLabel": "Remote: {{name}}",
-    "disconnectPeer": "中斷連線"
+    "disconnectPeer": "中斷連線",
+    "syncInProgressHint": "雲端同步仍在進行，請稍後再開啟遠端裝置。",
+    "syncProgressPercent": "{{percent}}%",
+    "syncPhaseUploadingSettings": "正在上傳本地設定…",
+    "syncPhaseDownloadingSettings": "正在下載雲端設定…",
+    "syncPhaseApplyingSettings": "正在套用雲端設定…",
+    "syncPhaseSettingsDone": "設定已同步",
+    "syncPhaseListingSessions": "正在掃描本地工作階段…",
+    "syncPhaseExportingSessions": "正在上傳工作階段 {{current}}/{{total}}",
+    "syncPhaseFetchingRemote": "正在拉取雲端工作階段…",
+    "syncPhaseImportingSessions": "正在匯入工作階段 {{current}}/{{total}}"
   },
   "remoteConnect": {
     "tabNgrok": "內網穿透",

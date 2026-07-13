@@ -516,7 +516,17 @@
     "sessionExpired": "Session expired. Please log in again.",
     "enteredPeerMode": "Connected to remote device: {{name}}",
     "peerRemoteLabel": "Remote: {{name}}",
-    "disconnectPeer": "Disconnect"
+    "disconnectPeer": "Disconnect",
+    "syncInProgressHint": "Cloud sync is still running. Please wait before opening a remote device.",
+    "syncProgressPercent": "{{percent}}%",
+    "syncPhaseUploadingSettings": "Uploading local settings…",
+    "syncPhaseDownloadingSettings": "Downloading cloud settings…",
+    "syncPhaseApplyingSettings": "Applying cloud settings…",
+    "syncPhaseSettingsDone": "Settings synced",
+    "syncPhaseListingSessions": "Scanning local sessions…",
+    "syncPhaseExportingSessions": "Uploading sessions {{current}}/{{total}}",
+    "syncPhaseFetchingRemote": "Fetching cloud sessions…",
+    "syncPhaseImportingSessions": "Importing sessions {{current}}/{{total}}"
   },
   "remoteConnect": {
     "tabNgrok": "NAT Traversal",

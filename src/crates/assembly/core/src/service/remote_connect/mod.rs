@@ -42,8 +42,13 @@ pub mod session_store {
     pub use bitfun_services_integrations::remote_connect::session_store::*;
 }
 
+pub mod sync_state {
+    pub use bitfun_services_integrations::remote_connect::sync_state::*;
+}
+
 pub use account::{
-    AccountClient, AccountSession, DelegateToken, DelegatedIdentity, KdfParams, SettingsBlob,
+    AccountClient, AccountSession, DelegateToken, DelegatedIdentity, FetchedSession, KdfParams,
+    SettingsBlob,
 };
 pub use device::DeviceIdentity;
 pub use encryption::{decrypt_from_base64, encrypt_to_base64, KeyPair};
@@ -1165,8 +1170,7 @@ impl RemoteConnectService {
         };
         matches!(
             client.connection_state().await,
-            relay_client::ConnectionState::Connected
-                | relay_client::ConnectionState::Reconnecting
+            relay_client::ConnectionState::Connected | relay_client::ConnectionState::Reconnecting
         )
     }
 
@@ -1211,7 +1215,9 @@ impl RemoteConnectService {
                 }
                 Ok(Some(other)) => {
                     // Non-auth event (e.g. Connected) — skip and keep waiting.
-                    log::debug!("Skipping non-auth relay event while waiting for AuthOk: {other:?}");
+                    log::debug!(
+                        "Skipping non-auth relay event while waiting for AuthOk: {other:?}"
+                    );
                 }
                 Ok(None) => {
                     anyhow::bail!("relay connection closed before auth response");
