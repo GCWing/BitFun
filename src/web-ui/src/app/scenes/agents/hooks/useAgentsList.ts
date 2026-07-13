@@ -9,10 +9,11 @@ import { useNotification } from '@/shared/notification-system';
 import type { DynamicToolInfo } from '@/shared/types/agent-api';
 import type { AgentWithCapabilities } from '../agentsStore';
 import { enrichCapabilities } from '../utils';
-import { HIDDEN_AGENT_IDS, isAgentInOverviewZone } from '../agentVisibility';
+import { HIDDEN_AGENT_IDS, isAgentInOverviewZone, ACP_CORE_AGENT_PREFIX } from '../agentVisibility';
 import { useCurrentWorkspace } from '@/infrastructure/contexts/WorkspaceContext';
 import { loadDefaultReviewTeamDefinition } from '@/shared/services/reviewTeamService';
 import { globalEventBus } from '@/infrastructure/event-bus';
+import { ACPClientAPI, type AcpClientInfo } from '@/infrastructure/api/service-api/ACPClientAPI';
 
 export type FilterLevel = 'all' | 'builtin' | 'user' | 'project';
 export type FilterType = 'all' | 'mode' | 'subagent';
@@ -133,6 +134,14 @@ export function useAgentsList({
         loadDefaultReviewTeamDefinition().catch(() => undefined),
       ]);
 
+      // Fetch enabled ACP external agents for the core zone.
+      let acpClients: AcpClientInfo[] = [];
+      try {
+        acpClients = (await ACPClientAPI.getClients()).filter((c) => c.enabled);
+      } catch {
+        // ACP not initialized — no external agents to show.
+      }
+
       const profileMap = buildProfileMap(modes);
       const profileEntries = Object.values(profileMap);
 
@@ -194,7 +203,29 @@ export function useAgentsList({
         }),
       );
 
-      setAllAgents([...modeAgents, ...subAgents]);
+      const acpAgents: AgentWithCapabilities[] = acpClients.map((client): AgentWithCapabilities => {
+        const agentId = `${ACP_CORE_AGENT_PREFIX}${client.id}`;
+        const displayName = client.name || client.id;
+        return enrichCapabilities({
+          key: `acp::${client.id}`,
+          id: agentId,
+          name: displayName,
+          description: client.command
+            ? `External ACP agent (${client.command}${client.args.length ? ' ' + client.args.join(' ') : ''})`
+            : `External ACP agent — ${client.status}`,
+          isReadonly: client.readonly,
+          isReview: false,
+          toolCount: 0,
+          defaultTools: [],
+          defaultEnabled: client.enabled,
+          effectiveEnabled: client.enabled,
+          source: 'builtin' as AgentSource,
+          capabilities: [],
+          agentKind: 'subagent' as const,
+        });
+      });
+
+      setAllAgents([...modeAgents, ...subAgents, ...acpAgents]);
       setAvailableTools(tools);
       setModeProfiles(profileMap);
       setModeSkills(Object.fromEntries(skillEntries));
