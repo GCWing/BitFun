@@ -21,7 +21,7 @@ use bitfun_agent_runtime::skills::{
     PROJECT_SKILL_ROOTS, USER_CONFIG_SKILL_ROOTS, USER_HOME_SKILL_ROOTS, USER_SKILL_KEY_PREFIX,
 };
 use log::{debug, error};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use tokio::fs;
@@ -62,6 +62,10 @@ pub struct SkillRegistry {
     cache: RwLock<Vec<SkillInfo>>,
     /// Plugin-contributed skill roots (for codex/openode adapters).
     plugin_skill_roots: RwLock<Vec<(PathBuf, String)>>,
+    /// Workspace-aware skill cache keyed by workspace root path.
+    /// Populated on first call to get_all_skills_for_workspace and
+    /// invalidated by refresh / add_plugin_skill_root.
+    workspace_cache: RwLock<HashMap<Option<PathBuf>, Vec<SkillInfo>>>,
 }
 
 impl SkillRegistry {
@@ -69,6 +73,7 @@ impl SkillRegistry {
         Self {
             cache: RwLock::new(Vec::new()),
             plugin_skill_roots: RwLock::new(Vec::new()),
+            workspace_cache: RwLock::new(HashMap::new()),
         }
     }
 
@@ -77,10 +82,25 @@ impl SkillRegistry {
     }
 
     /// Registers a plugin-contributed skill root directory.
+    /// Duplicate (path, plugin_id) pairs are silently ignored.
     pub async fn add_plugin_skill_root(&self, path: PathBuf, plugin_id: &str) {
-        let mut roots = self.plugin_skill_roots.write().await;
-        roots.push((path, format!("plugin.{plugin_id}")));
+        let slot = format!("plugin.{plugin_id}");
+        {
+            let roots = self.plugin_skill_roots.read().await;
+            if roots.iter().any(|(p, s)| p == &path && s == &slot) {
+                return; // Already registered — skip duplicate.
+            }
+        }
+        {
+            let mut roots = self.plugin_skill_roots.write().await;
+            // Double-check under write lock to avoid TOCTOU race.
+            if !roots.iter().any(|(p, s)| p == &path && s == &slot) {
+                roots.push((path, slot));
+            }
+        }
+        // Invalidate both caches so the next read picks up the new root.
         self.cache.write().await.clear();
+        self.workspace_cache.write().await.clear();
     }
 
     fn get_possible_paths_for_workspace(workspace_root: Option<&Path>) -> Vec<SkillRootEntry> {
@@ -500,10 +520,23 @@ impl SkillRegistry {
         ));
         let mut cache = self.cache.write().await;
         *cache = skills;
+        // Invalidate workspace cache so the next workspace-aware call rescans.
+        self.workspace_cache.write().await.clear();
     }
 
-    pub async fn refresh_for_workspace(&self, _workspace_root: Option<&Path>) {
-        self.refresh().await;
+    pub async fn refresh_for_workspace(&self, workspace_root: Option<&Path>) {
+        let key = workspace_root.map(|p| p.to_path_buf());
+        let skills = sort_skills(annotate_shadowed_skills(
+            self.scan_skill_candidates_for_workspace(workspace_root)
+                .await,
+        ));
+        let mut wcache = self.workspace_cache.write().await;
+        wcache.insert(key, skills);
+        // Also refresh the global cache when it matches the None key.
+        if workspace_root.is_none() {
+            let mut cache = self.cache.write().await;
+            *cache = wcache.get(&None).cloned().unwrap_or_default();
+        }
     }
 
     pub async fn get_all_skills(&self) -> Vec<SkillInfo> {
@@ -516,10 +549,22 @@ impl SkillRegistry {
         &self,
         workspace_root: Option<&Path>,
     ) -> Vec<SkillInfo> {
-        sort_skills(annotate_shadowed_skills(
+        let key = workspace_root.map(|p| p.to_path_buf());
+        // Check workspace-aware cache first.
+        {
+            let wcache = self.workspace_cache.read().await;
+            if let Some(cached) = wcache.get(&key) {
+                return cached.clone();
+            }
+        }
+        // Cache miss — scan, sort, and populate the workspace cache.
+        let skills = sort_skills(annotate_shadowed_skills(
             self.scan_skill_candidates_for_workspace(workspace_root)
                 .await,
-        ))
+        ));
+        let mut wcache = self.workspace_cache.write().await;
+        wcache.insert(key, skills.clone());
+        skills
     }
 
     pub async fn get_all_skills_for_remote_workspace(

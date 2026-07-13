@@ -7,10 +7,13 @@
 //! and wires it into the product runtime. Plugin execution (hooks commands)
 //! happens here, not in the adapter.
 
+// hooks_executor is gated behind cfg(test) until production lifecycle wiring
+// is complete. See deep-review finding: dead code without production callers.
+#[cfg(test)]
 mod hooks_executor;
 
 use crate::agentic::tools::implementations::skills::registry::SkillRegistry;
-use log::{info, warn};
+use log::info;
 use std::path::Path;
 
 /// Initializes plugin support (OpenCode + Codex).
@@ -20,7 +23,14 @@ use std::path::Path;
 pub async fn initialize_plugin_support(workspace_root: Option<&Path>) {
     info!("Initializing plugin support (OpenCode + Codex)...");
 
-    let codex_plugins = discover_codex_plugins(workspace_root);
+    // Delegate plugin discovery to the codex-adapter's sanctioned public API.
+    // Sync filesystem I/O is intentionally on the caller's async context here;
+    // callers should wrap this in spawn_blocking when on a latency-sensitive path.
+    let discoveries = bitfun_codex_adapter::discovery::discover_all(workspace_root);
+    let codex_plugins: Vec<_> = discoveries
+        .iter()
+        .filter_map(|d| bitfun_codex_adapter::discovery::load_plugin_manifest(d).ok())
+        .collect();
     let registry = SkillRegistry::global();
 
     for plugin in &codex_plugins {
@@ -61,22 +71,6 @@ pub async fn initialize_plugin_support(workspace_root: Option<&Path>) {
     );
 }
 
-/// Discover Codex plugins using the codex-adapter crate.
-fn discover_codex_plugins(
-    workspace_root: Option<&Path>,
-) -> Vec<bitfun_codex_adapter::discovery::LoadedCodexPlugin> {
-    // Re-export discovery types for use in this module
-    let discoveries = bitfun_codex_adapter::discovery::discover_all(workspace_root);
-    let mut plugins = Vec::new();
-    for d in &discoveries {
-        match bitfun_codex_adapter::discovery::load_plugin_manifest(d) {
-            Ok(plugin) => plugins.push(plugin),
-            Err(e) => warn!("Failed to load Codex plugin from {}: {e}", d.manifest_path.display()),
-        }
-    }
-    plugins
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -86,8 +80,12 @@ mod tests {
         // Full end-to-end: discover plugins from disk → register skills → verify in registry.
         let registry = SkillRegistry::global();
 
-        // Discover plugins
-        let plugins = discover_codex_plugins(None);
+        // Discover plugins via the adapter's public API
+        let discoveries = bitfun_codex_adapter::discovery::discover_all(None);
+        let plugins: Vec<_> = discoveries
+            .iter()
+            .filter_map(|d| bitfun_codex_adapter::discovery::load_plugin_manifest(d).ok())
+            .collect();
 
         eprintln!("=== E2E Test: Discovered {} plugin(s) ===", plugins.len());
         for p in &plugins {
@@ -142,7 +140,11 @@ mod tests {
     #[tokio::test]
     async fn test_e2e_superpowers_plugin_skills() {
         let registry = SkillRegistry::global();
-        let plugins = discover_codex_plugins(None);
+        let discoveries = bitfun_codex_adapter::discovery::discover_all(None);
+        let plugins: Vec<_> = discoveries
+            .iter()
+            .filter_map(|d| bitfun_codex_adapter::discovery::load_plugin_manifest(d).ok())
+            .collect();
 
         let superpowers = plugins.iter().find(|p| p.name == "superpowers");
         if superpowers.is_none() {

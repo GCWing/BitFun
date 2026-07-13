@@ -207,11 +207,21 @@ pub struct PluginManifest {
 
 pub const MANIFEST_PATHS: &[&str] = &[".codex-plugin/plugin.json", ".claude-plugin/plugin.json"];
 
+/// Maximum allowed size for a plugin.json manifest (64 KiB).
+const MAX_MANIFEST_SIZE_BYTES: u64 = 64 * 1024;
+
 pub fn parse_manifest(path: &Path) -> Result<PluginManifest, ManifestError> {
-    parse_manifest_str(&std::fs::read_to_string(path)?)
+    let content = std::fs::read_to_string(path)?;
+    parse_manifest_str(&content)
 }
 
 pub fn parse_manifest_str(content: &str) -> Result<PluginManifest, ManifestError> {
+    // Reject overly large manifests before deserialization (DoS hardening).
+    if content.len() > MAX_MANIFEST_SIZE_BYTES as usize {
+        return Err(ManifestError::Validation(format!(
+            "Manifest exceeds maximum size of {MAX_MANIFEST_SIZE_BYTES} bytes"
+        )));
+    }
     let raw: RawPluginManifest = serde_json::from_str(content)?;
     if raw.name.is_empty() {
         return Err(ManifestError::Validation("'name' is required".to_string()));

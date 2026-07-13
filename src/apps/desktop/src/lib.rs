@@ -1559,6 +1559,11 @@ async fn init_agentic_system() -> anyhow::Result<(
 
     log::info!("Cron service initialized and waiting for desktop host readiness");
     log::info!("Agentic system initialized");
+
+    // Initialize Codex+OpenCode plugin support — discovers plugins from
+    // ~/.agents/plugins/ and registers their skills with SkillRegistry.
+    bitfun_core::agentic::codex_integration::initialize_plugin_support(None).await;
+
     Ok((
         coordinator,
         scheduler,

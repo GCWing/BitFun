@@ -1,5 +1,6 @@
 //! Agentic system assembly shared by CLI, ACP, and other hosts.
 
+use std::path::Path;
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -26,6 +27,16 @@ pub struct AgenticSystem {
 
 /// Initialize the agentic runtime and register the global coordinator.
 pub async fn init_agentic_system() -> Result<AgenticSystem> {
+    init_agentic_system_with_workspace(None).await
+}
+
+/// Initialize the agentic runtime with an explicit workspace root.
+///
+/// When `workspace_root` is provided, plugin discovery scans the workspace's
+/// `.agents/plugins/` directory in addition to the user's `~/.agents/plugins/`.
+pub async fn init_agentic_system_with_workspace(
+    workspace_root: Option<&Path>,
+) -> Result<AgenticSystem> {
     info!("Initializing agentic system");
 
     let _ai_client_factory = AIClientFactory::get_global().await?;
@@ -107,7 +118,19 @@ pub async fn init_agentic_system() -> Result<AgenticSystem> {
 
     // Initialize plugin support (OpenCode + Codex adapters).
     // Discovers and registers plugin skills, MCP servers, and hooks.
-    crate::agentic::codex_integration::initialize_plugin_support(None).await;
+    // Wrap in spawn_blocking to avoid blocking the async runtime with
+    // synchronous filesystem I/O during plugin discovery.
+    let ws_root = workspace_root.map(|p| p.to_path_buf());
+    let _ = tokio::task::spawn_blocking(move || {
+        let rt = tokio::runtime::Handle::current();
+        rt.block_on(async {
+            crate::agentic::codex_integration::initialize_plugin_support(
+                ws_root.as_deref(),
+            )
+            .await;
+        })
+    })
+    .await;
 
     Ok(AgenticSystem {
         coordinator,

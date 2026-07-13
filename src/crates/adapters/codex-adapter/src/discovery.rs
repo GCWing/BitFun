@@ -16,6 +16,7 @@ pub struct PluginDiscovery {
 }
 
 /// Scans a directory for plugin subdirectories containing `.codex-plugin/plugin.json`.
+/// Skips symlinks to avoid following links to arbitrary filesystem locations.
 pub fn scan_directory(dir: &Path) -> Vec<PluginDiscovery> {
     let mut discoveries = Vec::new();
     let entries = match std::fs::read_dir(dir) {
@@ -23,9 +24,15 @@ pub fn scan_directory(dir: &Path) -> Vec<PluginDiscovery> {
         Err(_) => return discoveries,
     };
     let mut subdirs: Vec<PathBuf> = entries
-        .filter_map(|e| e.ok())
-        .map(|e| e.path())
-        .filter(|p| p.is_dir())
+        .filter_map(|e| {
+            let entry = e.ok()?;
+            // Skip symlinks to prevent redirecting discovery to arbitrary directories.
+            if entry.file_type().ok()?.is_symlink() {
+                return None;
+            }
+            let path = entry.path();
+            if path.is_dir() { Some(path) } else { None }
+        })
         .collect();
     subdirs.sort();
     for subdir in subdirs {
@@ -105,7 +112,42 @@ pub struct LoadedCodexPlugin {
 }
 
 fn resolve_plugin_path(plugin_root: &Path, relative: &str) -> PathBuf {
-    plugin_root.join(relative.trim_start_matches("./").trim_start_matches(".\\"))
+    // Reject paths that attempt directory traversal or are absolute.
+    let trimmed = relative.trim_start_matches("./").trim_start_matches(".\\");
+    if trimmed.contains("..") || Path::new(trimmed).is_absolute() {
+        // Return a path under plugin_root that will never exist, effectively
+        // skipping this skill root at load time (caller checks .exists()).
+        return plugin_root.join(".invalid-path-traversal-rejected");
+    }
+    plugin_root.join(trimmed)
+}
+
+#[cfg(test)]
+mod resolve_tests {
+    use super::*;
+
+    #[test]
+    fn test_normal_relative_path() {
+        let root = Path::new("/plugins/my-plugin");
+        let resolved = resolve_plugin_path(root, "./skills/");
+        assert_eq!(resolved, Path::new("/plugins/my-plugin/skills/"));
+    }
+
+    #[test]
+    fn test_parent_traversal_rejected() {
+        let root = Path::new("/plugins/my-plugin");
+        let resolved = resolve_plugin_path(root, "../../../etc/passwd");
+        assert!(resolved.to_string_lossy().contains(".invalid-path-traversal-rejected"));
+    }
+
+    #[test]
+    fn test_absolute_path_rejected() {
+        let root = Path::new("/plugins/my-plugin");
+        // Use a Windows-style absolute path on Windows, Unix-style on Unix.
+        let abs_path = if cfg!(windows) { "C:\\etc\\passwd" } else { "/etc/passwd" };
+        let resolved = resolve_plugin_path(root, abs_path);
+        assert!(resolved.to_string_lossy().contains(".invalid-path-traversal-rejected"));
+    }
 }
 
 #[cfg(test)]
