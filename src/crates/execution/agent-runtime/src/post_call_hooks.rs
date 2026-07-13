@@ -11,10 +11,14 @@ use std::path::Path;
 pub enum RuntimeHookKind {
     SuccessfulToolPostCall,
     DeepReviewSharedContextToolUse,
+    BehaviorGuard,
 }
 
-pub const fn successful_tool_post_call_hooks() -> [RuntimeHookKind; 1] {
-    [RuntimeHookKind::DeepReviewSharedContextToolUse]
+pub const fn successful_tool_post_call_hooks() -> [RuntimeHookKind; 2] {
+    [
+        RuntimeHookKind::DeepReviewSharedContextToolUse,
+        RuntimeHookKind::BehaviorGuard,
+    ]
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -24,6 +28,22 @@ pub enum RuntimeHookErrorPolicy {
     SkipHook,
     DenyTool,
     RecordWarning,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum HookResult {
+    Continue,
+    Abort {
+        reason: String,
+        fix_instruction: String,
+        max_retries: u32,
+    },
+}
+
+impl HookResult {
+    pub fn is_abort(&self) -> bool {
+        matches!(self, HookResult::Abort { .. })
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -151,6 +171,13 @@ pub trait SuccessfulToolPostCallHookExecutor<C> {
         input: &Value,
         context: &C,
     );
+
+    fn behavior_guard(
+        &mut self,
+        tool_name: &str,
+        input: &Value,
+        context: &C,
+    ) -> HookResult;
 }
 
 pub fn run_successful_tool_post_call_hooks<C, E>(
@@ -158,7 +185,8 @@ pub fn run_successful_tool_post_call_hooks<C, E>(
     input: &Value,
     context: &C,
     executor: &mut E,
-) where
+) -> HookResult
+where
     E: SuccessfulToolPostCallHookExecutor<C>,
 {
     for hook in successful_tool_post_call_hooks() {
@@ -166,9 +194,16 @@ pub fn run_successful_tool_post_call_hooks<C, E>(
             RuntimeHookKind::DeepReviewSharedContextToolUse => {
                 executor.record_deep_review_shared_context_tool_use(tool_name, input, context);
             }
+            RuntimeHookKind::BehaviorGuard => {
+                let result = executor.behavior_guard(tool_name, input, context);
+                if result.is_abort() {
+                    return result;
+                }
+            }
             RuntimeHookKind::SuccessfulToolPostCall => {}
         }
     }
+    HookResult::Continue
 }
 
 #[derive(Debug, Clone, Copy)]
