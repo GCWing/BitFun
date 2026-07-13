@@ -438,7 +438,7 @@ fn post_char(hwnd: HWND, ch: char) -> BitFunResult<()> {
 /// and is visually hidden (not rendered) while still receiving messages, so the
 /// brief foreground swap in the cloaked-injection path is invisible to the
 /// user. Best-effort; returns whether the attribute was set.
-unsafe fn set_cloak(h: HWND, on: bool) -> bool {
+unsafe fn set_cloak(h: HWND, on: bool) -> bool { unsafe {
     let v: BOOL = if on { TRUE } else { FALSE };
     DwmSetWindowAttribute(
         h,
@@ -447,13 +447,13 @@ unsafe fn set_cloak(h: HWND, on: bool) -> bool {
         std::mem::size_of::<BOOL>() as u32,
     )
     .is_ok()
-}
+}}
 
 /// Bring `target` to the foreground using the `AttachThreadInput` trick, which
 /// inherits the current foreground thread's FG-lock token so the swap is
 /// honored even on a foreground-locked session without UIAccess. Single attach,
 /// no retry loop — bounded. Returns whether `target` actually became foreground.
-unsafe fn force_foreground_attached(target: HWND) -> bool {
+unsafe fn force_foreground_attached(target: HWND) -> bool { unsafe {
     let cur = GetForegroundWindow();
     if cur == target {
         return true;
@@ -472,7 +472,7 @@ unsafe fn force_foreground_attached(target: HWND) -> bool {
         let _ = AttachThreadInput(my_tid, cur_tid, 0);
     }
     GetForegroundWindow() == target
-}
+}}
 
 /// Type `text` into a **background** target via real `SendInput` Unicode
 /// keystrokes, cloaked so the brief focus is hidden, then restore foreground.
@@ -574,7 +574,7 @@ pub(super) fn inject_key_cloaked(hwnd: HWND, keycode: u16, modifiers: &[u16]) ->
 /// # Safety
 /// `process` must be a valid `HANDLE` (or the `GetCurrentProcess()` pseudo-
 /// handle) with `TOKEN_QUERY` access for `OpenProcessToken` to succeed.
-unsafe fn process_integrity_rid(process: Handle) -> Option<u32> {
+unsafe fn process_integrity_rid(process: Handle) -> Option<u32> { unsafe {
     let mut token: Handle = std::ptr::null_mut();
     if OpenProcessToken(process, TOKEN_QUERY, &mut token) == 0 {
         return None;
@@ -621,7 +621,7 @@ unsafe fn process_integrity_rid(process: Handle) -> Option<u32> {
         return None;
     }
     Some(*rid_ptr)
-}
+}}
 
 /// If posting `msg` from the current process to `hwnd` would be silently
 /// blocked by UIPI (User Interface Privilege Isolation), return a diagnostic
@@ -888,7 +888,7 @@ fn vk_event(vk: u16, scan: u32, up: bool) -> Input {
 /// # Safety
 /// `SendInput` reads `ev.len()` `INPUT` records from `ev.as_ptr()`; every
 /// record is fully initialized above. `cbSize` is the true `size_of::<INPUT>`.
-unsafe fn send_unicode(text: &str) -> BitFunResult<()> {
+unsafe fn send_unicode(text: &str) -> BitFunResult<()> { unsafe {
     let mut ev: Vec<Input> = Vec::with_capacity(text.len() * 2);
     for u in text.encode_utf16() {
         ev.push(unicode_event(u, false));
@@ -909,14 +909,14 @@ unsafe fn send_unicode(text: &str) -> BitFunResult<()> {
         )));
     }
     Ok(())
-}
+}}
 
 /// Deliver a key + modifiers as a single `SendInput` burst: modifiers down,
 /// key down, key up, modifiers up (reverse).
 ///
 /// # Safety
 /// `SendInput` reads a fully-initialized `INPUT` array; `cbSize` is correct.
-unsafe fn send_key_combo(keycode: u16, modifiers: &[u16]) -> BitFunResult<()> {
+unsafe fn send_key_combo(keycode: u16, modifiers: &[u16]) -> BitFunResult<()> { unsafe {
     let mut ev: Vec<Input> = Vec::with_capacity(modifiers.len() * 2 + 2);
     for &m in modifiers {
         let m_scan = MapVirtualKeyW(m as u32, MAPVK_VK_TO_VSC);
@@ -944,7 +944,7 @@ unsafe fn send_key_combo(keycode: u16, modifiers: &[u16]) -> BitFunResult<()> {
         )));
     }
     Ok(())
-}
+}}
 
 /// Fallback for [`inject_key_cloaked`] when foreground can't be obtained: post
 /// `WM_KEYDOWN` / `WM_KEYUP` to the window's queue (best-effort; may miss

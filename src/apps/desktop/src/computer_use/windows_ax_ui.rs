@@ -139,7 +139,7 @@ fn localized_control_type_string(elem: &IUIAutomationElement) -> String {
 /// read, so the walk itself issues zero cross-process RPCs.
 unsafe fn build_cache_request(
     automation: &IUIAutomation,
-) -> BitFunResult<IUIAutomationCacheRequest> {
+) -> BitFunResult<IUIAutomationCacheRequest> { unsafe {
     let cache_req = automation
         .CreateCacheRequest()
         .map_err(|e| BitFunError::tool(format!("UI Automation CreateCacheRequest: {}.", e)))?;
@@ -181,7 +181,7 @@ unsafe fn build_cache_request(
     }
 
     Ok(cache_req)
-}
+}}
 
 /// `BuildUpdatedCache` with a short retry loop. A single transient provider
 /// error (commonly `E_FAIL` / `0x80004005` from a control rebuilding its
@@ -190,7 +190,7 @@ unsafe fn build_cache_request(
 pub(crate) unsafe fn build_updated_cache_with_retry(
     uncached: &IUIAutomationElement,
     cache_req: &IUIAutomationCacheRequest,
-) -> BitFunResult<IUIAutomationElement> {
+) -> BitFunResult<IUIAutomationElement> { unsafe {
     let mut attempt = 0u32;
     loop {
         match uncached.BuildUpdatedCache(cache_req) {
@@ -213,7 +213,7 @@ pub(crate) unsafe fn build_updated_cache_with_retry(
             }
         }
     }
-}
+}}
 
 // ── Cached property readers ─────────────────────────────────────────────────
 //
@@ -421,7 +421,7 @@ unsafe fn walk_tree_full(
     hwnd: windows::Win32::Foundation::HWND,
     max_elements: usize,
     max_depth: usize,
-) -> BitFunResult<(String, Vec<UiaNode>)> {
+) -> BitFunResult<(String, Vec<UiaNode>)> { unsafe {
     let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
 
     let automation: IUIAutomation = CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER)
@@ -458,7 +458,7 @@ unsafe fn walk_tree_full(
 
     let tree_text = render_lines(&lines);
     Ok((tree_text, nodes))
-}
+}}
 
 #[allow(clippy::too_many_arguments)]
 unsafe fn walk_cached_bounded(
@@ -471,7 +471,7 @@ unsafe fn walk_cached_bounded(
     total: &mut usize,
     max_elements: usize,
     max_depth: usize,
-) {
+) { unsafe {
     if depth > max_depth || *total >= max_elements {
         return;
     }
@@ -573,7 +573,7 @@ unsafe fn walk_cached_bounded(
             }
         }
     }
-}
+}}
 
 // ── Rendering ──────────────────────────────────────────────────────────────
 

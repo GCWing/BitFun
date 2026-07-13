@@ -44,7 +44,7 @@ const MENU_BAR_SEARCH_MAX_VISITED: usize = 4_000;
 
 unsafe fn build_shortcuts_cache_request(
     automation: &IUIAutomation,
-) -> BitFunResult<IUIAutomationCacheRequest> {
+) -> BitFunResult<IUIAutomationCacheRequest> { unsafe {
     let cache_req = automation
         .CreateCacheRequest()
         .map_err(|e| BitFunError::tool(format!("UI Automation CreateCacheRequest: {}.", e)))?;
@@ -59,7 +59,7 @@ unsafe fn build_shortcuts_cache_request(
     let _ = cache_req.AddPattern(UIA_TogglePatternId);
     let _ = cache_req.SetTreeScope(TreeScope_Subtree);
     Ok(cache_req)
-}
+}}
 
 fn read_cached_name(element: &IUIAutomationElement) -> Option<String> {
     unsafe {

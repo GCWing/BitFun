@@ -161,7 +161,7 @@ const PRODUCT_TOOL_PROVIDER_GROUP_PLAN: &[ToolProviderGroupPlan] = &[
     ToolProviderGroupPlan {
         provider_id: "core.session",
         feature_groups: CORE_SESSION_FEATURE_GROUPS,
-        tool_names: &["SessionControl", "SessionMessage", "SessionHistory", "Cron"],
+        tool_names: &["SessionControl", "SessionMessage", "SessionHistory", "Cron", "LegionControl"],
     },
     ToolProviderGroupPlan {
         provider_id: "core.integration",

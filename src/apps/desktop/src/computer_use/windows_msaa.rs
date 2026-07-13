@@ -113,7 +113,7 @@ unsafe fn walk_bounded(
     hwnd: isize,
     max_total: usize,
     max_depth: usize,
-) -> BitFunResult<Vec<UiaNode>> {
+) -> BitFunResult<Vec<UiaNode>> { unsafe {
     // BitFun is a Tauri GUI app; match the UIA path's apartment threading.
     let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
 
@@ -157,7 +157,7 @@ unsafe fn walk_bounded(
     );
 
     Ok(nodes)
-}
+}}
 
 /// Returns `true` when `hwnd` belongs to a LibreOffice / OpenOffice VCL window
 /// whose UIA provider is known to hang on `BuildUpdatedCache(Subtree)` or return
@@ -209,7 +209,7 @@ unsafe fn walk(
     total: &mut usize,
     max_depth: usize,
     max_total: usize,
-) {
+) { unsafe {
     if depth >= max_depth || *total >= max_total {
         return;
     }
@@ -363,7 +363,7 @@ unsafe fn walk(
             }
         }
     }
-}
+}}
 
 /// Construct a `VT_I4` VARIANT carrying `id` (used for `CHILDID_SELF` and child
 /// indices). The `windows` 0.61 crate exposes `VARIANT` as a `#[repr(C)]` struct
@@ -372,22 +372,22 @@ unsafe fn walk(
 /// `VARIANT_0.Anonymous` field is `ManuallyDrop<VARIANT_0_0>` inside a union;
 /// the borrow checker refuses to auto-`DerefMut` it for a write, so the
 /// `ManuallyDrop` is dereferenced explicitly.
-unsafe fn child_id_variant(id: i32) -> VARIANT {
+unsafe fn child_id_variant(id: i32) -> VARIANT { unsafe {
     let mut var = VARIANT::default();
     (*var.Anonymous.Anonymous).vt = VT_I4;
     (*var.Anonymous.Anonymous).Anonymous.lVal = id;
     var
-}
+}}
 
 /// Read a `VT_I4` out of a VARIANT. `get_accRole` returns `VT_I4` in practice
 /// (custom roles may arrive as `VT_BSTR`, which we map to `None` = unknown).
-unsafe fn variant_to_i32(v: &VARIANT) -> Option<i32> {
+unsafe fn variant_to_i32(v: &VARIANT) -> Option<i32> { unsafe {
     if (*v.Anonymous.Anonymous).vt == VT_I4 {
         Some((*v.Anonymous.Anonymous).Anonymous.lVal)
     } else {
         None
     }
-}
+}}
 
 /// Map an MSAA role id to a `control_type` string matching the UIA path. For
 /// roles not in this list we emit `Role_<hex>` so the agent still sees something
