@@ -5,7 +5,8 @@
 //! persistence are concrete service integration responsibilities.
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use sha2::{Digest, Sha256};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::fmt;
 
 const PLUGIN_PACKAGE_MANIFEST_SCHEMA_VERSION: u16 = 1;
@@ -18,6 +19,8 @@ const MAX_PACKAGE_PATH_LEN: usize = 1024;
 const MAX_SOURCE_PATH_LEN: usize = 256;
 const MAX_SCOPE_ID_LEN: usize = 256;
 const MAX_PACKAGE_FILES: usize = 64;
+const MAX_PACKAGE_FILE_BYTES: usize = 1024 * 1024;
+const MAX_PACKAGE_BYTES: usize = 16 * 1024 * 1024;
 const MAX_TRUST_RECORDS: usize = 1024;
 const SHA256_PREFIX: &str = "sha256:";
 
@@ -46,7 +49,7 @@ impl PluginPackageManifest {
         Ok(manifest)
     }
 
-    fn validate(&self) -> Result<(), PluginSourceContractError> {
+    pub fn validate(&self) -> Result<(), PluginSourceContractError> {
         if self.schema_version != PLUGIN_PACKAGE_MANIFEST_SCHEMA_VERSION {
             return Err(PluginSourceContractError::UnsupportedManifestSchema(
                 self.schema_version,
@@ -74,6 +77,27 @@ impl PluginPackageManifest {
 
         Ok(())
     }
+
+    pub fn content_hash(&self) -> Result<String, PluginSourceContractError> {
+        self.validate()?;
+        let mut files = self.files.iter().collect::<Vec<_>>();
+        files.sort_by(|left, right| left.path.cmp(&right.path));
+        let mut hasher = Sha256::new();
+        hasher.update(self.schema_version.to_le_bytes());
+        hasher.update([0]);
+        hasher.update(self.id.as_bytes());
+        hasher.update([0]);
+        hasher.update(self.version.as_bytes());
+        hasher.update([0]);
+        hasher.update(self.adapter.as_bytes());
+        for file in files {
+            hasher.update([0]);
+            hasher.update(file.path.as_bytes());
+            hasher.update([0]);
+            hasher.update(file.sha256.as_bytes());
+        }
+        Ok(format!("sha256:{}", hex::encode(hasher.finalize())))
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -84,6 +108,77 @@ pub struct PluginPackageSourceIdentity {
     pub adapter: String,
     pub source_path: String,
     pub content_hash: String,
+}
+
+/// Fixed package content passed from managed source IO to an ecosystem adapter.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PluginPackageInput {
+    manifest: PluginPackageManifest,
+    source: PluginPackageSourceIdentity,
+    files: BTreeMap<String, Vec<u8>>,
+}
+
+impl PluginPackageInput {
+    pub fn new(
+        manifest: PluginPackageManifest,
+        source: PluginPackageSourceIdentity,
+        files: BTreeMap<String, Vec<u8>>,
+    ) -> Result<Self, PluginSourceContractError> {
+        manifest.validate()?;
+        source.validate()?;
+        if source.package_id != manifest.id
+            || source.version != manifest.version
+            || source.adapter != manifest.adapter
+            || source.content_hash != manifest.content_hash()?
+        {
+            return Err(PluginSourceContractError::PackageIdentityMismatch);
+        }
+        let declared_paths = manifest
+            .files
+            .iter()
+            .map(|file| file.path.as_str())
+            .collect::<BTreeSet<_>>();
+        let provided_paths = files.keys().map(String::as_str).collect::<BTreeSet<_>>();
+        if declared_paths != provided_paths {
+            return Err(PluginSourceContractError::PackageFileSetMismatch);
+        }
+        let mut package_bytes = 0_usize;
+        for file in &manifest.files {
+            let bytes = &files[&file.path];
+            if bytes.len() > MAX_PACKAGE_FILE_BYTES {
+                return Err(PluginSourceContractError::PackageFileTooLarge(
+                    file.path.clone(),
+                ));
+            }
+            package_bytes = package_bytes
+                .checked_add(bytes.len())
+                .ok_or(PluginSourceContractError::PackageContentTooLarge)?;
+            if package_bytes > MAX_PACKAGE_BYTES {
+                return Err(PluginSourceContractError::PackageContentTooLarge);
+            }
+            let actual_hash = format!("sha256:{}", hex::encode(Sha256::digest(bytes)));
+            if actual_hash != file.sha256 {
+                return Err(PluginSourceContractError::PackageFileHashMismatch(
+                    file.path.clone(),
+                ));
+            }
+        }
+        Ok(Self {
+            manifest,
+            source,
+            files,
+        })
+    }
+
+    pub fn into_parts(
+        self,
+    ) -> (
+        PluginPackageManifest,
+        PluginPackageSourceIdentity,
+        BTreeMap<String, Vec<u8>>,
+    ) {
+        (self.manifest, self.source, self.files)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -317,6 +412,11 @@ pub enum PluginSourceContractError {
     InvalidPackagePath(String),
     InvalidSha256(String),
     DuplicatePackageFile(String),
+    PackageIdentityMismatch,
+    PackageFileSetMismatch,
+    PackageFileTooLarge(String),
+    PackageContentTooLarge,
+    PackageFileHashMismatch(String),
     InvalidSourcePath,
     EmptyScope,
     InvalidScope,
@@ -354,6 +454,30 @@ impl fmt::Display for PluginSourceContractError {
             Self::InvalidSha256(hash) => write!(formatter, "invalid plugin package sha256: {hash}"),
             Self::DuplicatePackageFile(path) => {
                 write!(formatter, "duplicate plugin package file: {path}")
+            }
+            Self::PackageIdentityMismatch => {
+                write!(
+                    formatter,
+                    "plugin package input identity does not match its manifest"
+                )
+            }
+            Self::PackageFileSetMismatch => {
+                write!(
+                    formatter,
+                    "plugin package input files do not match its manifest"
+                )
+            }
+            Self::PackageFileTooLarge(path) => {
+                write!(formatter, "plugin package input file is too large: {path}")
+            }
+            Self::PackageContentTooLarge => {
+                write!(formatter, "plugin package input content is too large")
+            }
+            Self::PackageFileHashMismatch(path) => {
+                write!(
+                    formatter,
+                    "plugin package input file hash does not match: {path}"
+                )
             }
             Self::InvalidSourcePath => write!(formatter, "invalid plugin package source path"),
             Self::EmptyScope => write!(formatter, "plugin trust scope is empty"),

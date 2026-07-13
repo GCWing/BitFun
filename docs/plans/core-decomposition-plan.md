@@ -22,9 +22,9 @@
 - Desktop、CLI、ACP 仍有路径通过 `bitfun-core/product-full` 获取完整产品能力；后续插件主线不能把该状态固化为新入口依赖。
 - 工具 ABI、事件清单、运行时服务、智能体运行时、产品能力和插件 `disabled` / `projection-only` 基础边界已存在。
 - `runtime-ports` 的插件主机 ABI 已有公开接口预算脚本；后续不能绕过预算新增插件、hook、event、UI 或生态兼容对象。
-- `opencode-adapter` 当前提供来源发现、诊断只读视图和受信任 custom tool 候选映射。
+- `opencode-adapter` 当前解释固定内容的受管包，提供诊断只读视图和 custom tool 候选映射；来源发现归 `services-integrations/plugin_source`。
 - `services-integrations/plugin_source` 已提供受管包发现、完整性校验和工作区信任持久化；`bitfun-core/plugin_source` 仅保留路径注入与 CLI 兼容接口。该接口尚未绑定生产 Plugin Runtime Host。
-- 下一阶段只完成受管包来源到 Plugin Runtime Host 和工具 ABI 的真实消费路径，不执行无约束 JS/TS，也不依赖外部 OpenCode CLI。
+- 当前阶段先完成受管包到 Plugin Runtime Host 的只读链路；后续再完成激活确认和工具 ABI 消费，不执行无约束 JS/TS，也不依赖外部 OpenCode CLI。
 
 ## 3. 当前差距
 
@@ -75,7 +75,7 @@
 
 ### 阶段 P0-C.1：OpenCode-compatible 最小来源与诊断
 
-状态：实现完成，验收待合入。
+状态：已合入。
 
 目标：只做 BitFun 主导的受管包来源、工作区信任和 CLI 诊断闭环，不执行插件。
 
@@ -101,6 +101,11 @@
 
 目标：证明一个 OpenCode-compatible custom tool 可以映射为 BitFun 工具候选；是否进入最终工具链路，仍由工具 ABI、权限门禁和归属模块决定。
 
+执行顺序：
+
+1. 先完成受管包到 OpenCode 适配器的固定输入链路。来源服务按包重新校验声明文件，适配器公开入口不再扫描工作区目录；`SourceApproved` 只返回未激活状态和诊断。
+2. 再由独立 PR 完成激活确认、Host 信任和产品组装。该步骤完成前不得生成 custom tool 候选或宣称插件可执行。
+
 范围：
 
 - custom tool 只映射为提供方候选（`ProviderCandidate`）。
@@ -114,7 +119,7 @@
 - 生成最终工具或执行任何工具前，必须继续经过工具快照、权限门禁和归属模块；OpenCode adapter 内不得执行工具。
 - 不新增插件专用工具 ABI。
 - Desktop / CLI 产品入口只消费能力服务接口、插件只读视图、诊断和稳定状态词，不直接依赖 OpenCode adapter。
-- 后续生产接入必须通过 `PluginRuntimeBinding` 注册插件运行时主机，并同步边界脚本、主机路径测试和启用/降级策略。
+- 后续生产接入由唯一产品组装根创建适配器和插件运行时主机，再将 Host client 封装为 `PluginRuntimeBinding`，并同步边界脚本、主机路径测试和启用/降级策略。
 
 ## 5. 后端复杂度整改清单
 

@@ -33,7 +33,8 @@ policies, and narrow ports; concrete runtime behavior belongs outside this crate
 - `function-agents` may own function-agent DTOs, prompt/domain policies,
   response parsing and repair rules, file-shape analysis, and Git/AI port traits.
 - `plugin-source` may own BitFun package manifest shapes, source identity,
-  workspace trust records, and pure trust epoch transitions.
+  fixed package input data, workspace trust records, and pure trust epoch
+  transitions.
 - Concrete filesystem writes, marker IO, host dispatch, worker side effects,
   compile orchestration, `PathManager` integration, concrete Git/AI services,
   provider acquisition, and transport error mapping must stay outside

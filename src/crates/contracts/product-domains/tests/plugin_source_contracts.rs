@@ -1,7 +1,9 @@
 use bitfun_product_domains::plugin_source::{
-    PluginPackageManifest, PluginPackageSourceIdentity, PluginPackageTrustLevel,
-    PluginTrustDecision, PluginTrustStore,
+    PluginPackageInput, PluginPackageManifest, PluginPackageSourceIdentity,
+    PluginPackageTrustLevel, PluginTrustDecision, PluginTrustStore,
 };
+use sha2::{Digest, Sha256};
+use std::collections::BTreeMap;
 
 const HASH_A: &str = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const HASH_B: &str = "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
@@ -51,6 +53,31 @@ fn manifest_v1_accepts_only_normalized_declared_package_files() {
             "invalid manifest must fail closed: {invalid}"
         );
     }
+}
+
+#[test]
+fn fixed_package_input_enforces_file_set_hash_and_size_limits() {
+    let bytes = b"export const Demo = async () => ({})".to_vec();
+    let file_hash = format!("sha256:{}", hex::encode(Sha256::digest(&bytes)));
+    let manifest = PluginPackageManifest::parse_json(&format!(
+        r#"{{"schemaVersion":1,"id":"acme.demo","version":"1.0.0","adapter":"test_adapter","files":[{{"path":"plugin/main.ts","sha256":"{file_hash}"}}]}}"#
+    ))
+    .expect("valid manifest");
+    let identity = source(
+        &manifest.content_hash().expect("manifest hash"),
+        "native:workspace-source",
+    );
+    let files = BTreeMap::from([("plugin/main.ts".to_string(), bytes)]);
+
+    PluginPackageInput::new(manifest.clone(), identity.clone(), files.clone())
+        .expect("valid fixed input");
+
+    let mut extra = files.clone();
+    extra.insert("plugin/extra.ts".to_string(), Vec::new());
+    assert!(PluginPackageInput::new(manifest.clone(), identity.clone(), extra).is_err());
+
+    let oversized = BTreeMap::from([("plugin/main.ts".to_string(), vec![0; 1024 * 1024 + 1])]);
+    assert!(PluginPackageInput::new(manifest, identity, oversized).is_err());
 }
 
 #[test]

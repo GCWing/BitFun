@@ -60,8 +60,9 @@ slices that are outside pure product logic but still platform-neutral.
   lifecycle. Manager workflow orchestration remains outside this crate until
   reviewed owner migration.
 - Managed plugin source integration may own bounded package discovery,
-  integrity checks, no-follow path handling, trust-file locking, and atomic
-  persistence. Product path selection stays in assembly; ecosystem parsing and
+  integrity checks, fixed package input reads, no-follow path handling,
+  trust-file locking, and atomic persistence. Product path selection stays in
+  assembly; ecosystem parsing and
   Plugin Runtime Host behavior stay in their adapter and execution owners.
 - Announcement remote fetch/cache lives here; product assembly supplies config
   values such as endpoint, locale, version, platform, and cache path.

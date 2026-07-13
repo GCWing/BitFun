@@ -4,8 +4,8 @@
 //! file interpretation remains in the corresponding adapter.
 
 use bitfun_product_domains::plugin_source::{
-    PluginPackageManifest, PluginPackageSourceIdentity, PluginPackageTrustLevel,
-    PluginSourceContractError, PluginTrustStore,
+    PluginPackageInput, PluginPackageManifest, PluginPackageSourceIdentity,
+    PluginPackageTrustLevel, PluginSourceContractError, PluginTrustStore,
 };
 pub use bitfun_product_domains::plugin_source::{
     PluginPackageTrustLevel as ManagedPluginTrustLevel,
@@ -13,7 +13,7 @@ pub use bitfun_product_domains::plugin_source::{
 };
 use fs2::FileExt;
 use sha2::{Digest, Sha256};
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use std::ffi::OsStr;
 use std::fs::OpenOptions;
 use std::io::{self, ErrorKind, Read, Write};
@@ -68,6 +68,11 @@ pub enum ManagedPluginSourceError {
         package_id: String,
         diagnostic: String,
     },
+    #[error("managed plugin package {package_id} is temporarily unavailable: {diagnostic}")]
+    TemporarilyUnavailable {
+        package_id: String,
+        diagnostic: String,
+    },
     #[error("managed plugin trust update failed: {0}")]
     TrustStore(String),
 }
@@ -90,8 +95,27 @@ impl From<PluginSourceStoreError> for ManagedPluginSourceError {
     }
 }
 
+fn map_load_store_error(
+    package_id: &str,
+    error: PluginSourceStoreError,
+) -> ManagedPluginSourceError {
+    if matches!(
+        error,
+        PluginSourceStoreError::TrustGenerationChanged | PluginSourceStoreError::SourceChanged
+    ) || trust_store_issue_code(&error) == "trust_store_unavailable"
+    {
+        ManagedPluginSourceError::TemporarilyUnavailable {
+            package_id: package_id.to_string(),
+            diagnostic: format!("{error}; retry the operation"),
+        }
+    } else {
+        error.into()
+    }
+}
+
 pub struct ManagedPluginSourceService {
     store: ProductPluginSourceStore,
+    load_gate: tokio::sync::Semaphore,
 }
 
 impl ManagedPluginSourceService {
@@ -112,6 +136,7 @@ impl ManagedPluginSourceService {
                 ],
                 trust_path,
             ),
+            load_gate: tokio::sync::Semaphore::new(1),
         }
     }
 
@@ -160,6 +185,128 @@ impl ManagedPluginSourceService {
             Err(error) => return Err(error.into()),
         };
         Ok(build_snapshot(discovery, Some(trust_store), None, &scope))
+    }
+
+    /// Load one selected package as fixed content for an ecosystem adapter.
+    pub async fn load_package(
+        &self,
+        workspace: &Path,
+        package_id: &str,
+    ) -> Result<PluginPackageInput, ManagedPluginSourceError> {
+        let mut budget = OperationScanBudget::new();
+        let _load_permit = tokio::time::timeout(budget.remaining_time(), self.load_gate.acquire())
+            .await
+            .map_err(|_| ManagedPluginSourceError::TemporarilyUnavailable {
+                package_id: package_id.to_string(),
+                diagnostic: "load capacity is busy; retry the operation".to_string(),
+            })?
+            .map_err(|_| ManagedPluginSourceError::TemporarilyUnavailable {
+                package_id: package_id.to_string(),
+                diagnostic: "load capacity is unavailable; retry the operation".to_string(),
+            })?;
+        let scope = workspace_scope(workspace);
+        let mut discovery = self
+            .store
+            .discover_with_budget_for(&mut budget, Some(package_id))
+            .await;
+        if !discovery.is_complete() {
+            let issue = discovery
+                .issues
+                .iter()
+                .find(|issue| issue.package_id.as_deref() == Some(package_id))
+                .or_else(|| discovery.issues.iter().find(|issue| issue.code.is_error()));
+            let diagnostic = issue.map_or_else(
+                || "managed plugin discovery is incomplete".to_string(),
+                |issue| format!("{}: {}", issue.code.as_str(), issue.message),
+            );
+            return Err(
+                if issue.is_some_and(|issue| {
+                    matches!(
+                        issue.code,
+                        PluginSourceIssueCode::RootReadFailed
+                            | PluginSourceIssueCode::ScanBudgetExceeded
+                            | PluginSourceIssueCode::FileReadFailed
+                    )
+                }) {
+                    ManagedPluginSourceError::TemporarilyUnavailable {
+                        package_id: package_id.to_string(),
+                        diagnostic,
+                    }
+                } else {
+                    ManagedPluginSourceError::PackageInvalid {
+                        package_id: package_id.to_string(),
+                        diagnostic,
+                    }
+                },
+            );
+        }
+        let trust_store = self
+            .store
+            .load_trust_store_with_budget(&budget)
+            .await
+            .map_err(|error| map_load_store_error(package_id, error))?;
+        let index = discovery
+            .packages
+            .iter()
+            .position(|package| package.identity.package_id == package_id)
+            .ok_or_else(|| {
+                discovery
+                    .issues
+                    .iter()
+                    .find(|issue| {
+                        issue.package_id.as_deref() == Some(package_id) && issue.code.is_error()
+                    })
+                    .map_or_else(
+                        || ManagedPluginSourceError::PackageNotFound(package_id.to_string()),
+                        |issue| ManagedPluginSourceError::PackageInvalid {
+                            package_id: package_id.to_string(),
+                            diagnostic: format!("{}: {}", issue.code.as_str(), issue.message),
+                        },
+                    )
+            })?;
+        let package = discovery.packages.swap_remove(index);
+        let source_trust_level = trust_store.trust_level_for(
+            &scope.project_domain_id,
+            &scope.workspace_id,
+            &package.identity,
+        );
+        if source_trust_level != PluginPackageTrustLevel::SourceApproved {
+            return Err(ManagedPluginSourceError::PackageInvalid {
+                package_id: package_id.to_string(),
+                diagnostic: "managed plugin package source is not approved".to_string(),
+            });
+        }
+        let input_source = package.identity.clone();
+        let input = PluginPackageInput::new(
+            package.manifest,
+            package.identity,
+            package
+                .declared_files
+                .expect("selected package discovery must retain declared files"),
+        )
+        .map_err(|error| ManagedPluginSourceError::PackageInvalid {
+            package_id: package_id.to_string(),
+            diagnostic: error.to_string(),
+        })?;
+        if !self
+            .store
+            .trust_approval_matches(
+                trust_store.epoch(),
+                &scope.project_domain_id,
+                &scope.workspace_id,
+                &input_source,
+                &budget,
+            )
+            .await
+            .map_err(|error| map_load_store_error(package_id, error))?
+        {
+            return Err(ManagedPluginSourceError::TemporarilyUnavailable {
+                package_id: package_id.to_string(),
+                diagnostic: "managed plugin trust changed while loading; retry the operation"
+                    .to_string(),
+            });
+        }
+        Ok(input)
     }
 }
 
@@ -551,6 +698,8 @@ impl PluginPackageScope {
 #[derive(Debug, Clone)]
 struct DiscoveredPluginPackage {
     identity: PluginPackageSourceIdentity,
+    manifest: PluginPackageManifest,
+    declared_files: Option<BTreeMap<String, Vec<u8>>>,
     source_scope: PluginPackageScope,
     display_path: PathBuf,
 }
@@ -841,6 +990,14 @@ impl ProductPluginSourceStore {
         &self,
         budget: &mut OperationScanBudget,
     ) -> PluginSourceDiscovery {
+        self.discover_with_budget_for(budget, None).await
+    }
+
+    async fn discover_with_budget_for(
+        &self,
+        budget: &mut OperationScanBudget,
+        retained_package_id: Option<&str>,
+    ) -> PluginSourceDiscovery {
         let mut discovery = PluginSourceDiscovery::default();
         for root in &self.roots {
             let remaining = budget.remaining_time();
@@ -848,9 +1005,12 @@ impl ProductPluginSourceStore {
                 discovery.issues.push(operation_scan_timeout(&root.path));
                 break;
             }
-            if tokio::time::timeout(remaining, self.discover_root(root, &mut discovery, budget))
-                .await
-                .is_err()
+            if tokio::time::timeout(
+                remaining,
+                self.discover_root(root, &mut discovery, budget, retained_package_id),
+            )
+            .await
+            .is_err()
             {
                 discovery.issues.push(operation_scan_timeout(&root.path));
                 break;
@@ -868,6 +1028,7 @@ impl ProductPluginSourceStore {
         root: &PluginPackageRoot,
         discovery: &mut PluginSourceDiscovery,
         scan_budget: &mut OperationScanBudget,
+        retained_package_id: Option<&str>,
     ) {
         let root_metadata = match fs::symlink_metadata(&root.path).await {
             Ok(metadata) => metadata,
@@ -1009,6 +1170,9 @@ impl ProductPluginSourceStore {
                         .insert(package_id.to_string());
                 }
             }
+            if retained_package_id.is_some_and(|target| package_id != Some(target)) {
+                continue;
+            }
             let metadata = match fs::symlink_metadata(&package_path).await {
                 Ok(metadata) => metadata,
                 Err(error) => {
@@ -1106,6 +1270,7 @@ impl ProductPluginSourceStore {
                 root.source_scope,
                 &secure_package,
                 scan_budget,
+                package_id == retained_package_id,
             )
             .await
             {
@@ -1282,8 +1447,21 @@ impl ProductPluginSourceStore {
         Result<PluginTrustStore, PluginSourceStoreError>,
     ) {
         let mut scan_budget = OperationScanBudget::new();
-        let discovery = self.discover_with_budget(&mut scan_budget).await;
-        let mut file_guard = match self.acquire_trust_file_lock(&scan_budget).await {
+        self.reconcile_trust_with_budget(project_domain_id, workspace_id, &mut scan_budget)
+            .await
+    }
+
+    async fn reconcile_trust_with_budget(
+        &self,
+        project_domain_id: &str,
+        workspace_id: &str,
+        scan_budget: &mut OperationScanBudget,
+    ) -> (
+        PluginSourceDiscovery,
+        Result<PluginTrustStore, PluginSourceStoreError>,
+    ) {
+        let discovery = self.discover_with_budget(scan_budget).await;
+        let mut file_guard = match self.acquire_trust_file_lock(scan_budget).await {
             Ok(guard) => guard,
             Err(error) => return (discovery, Err(error)),
         };
@@ -1331,7 +1509,7 @@ impl ProductPluginSourceStore {
             }
             return (discovery, Ok(store));
         }
-        let verified = self.discover_with_budget(&mut scan_budget).await;
+        let verified = self.discover_with_budget(scan_budget).await;
         if !verified.is_complete()
             || discovery.identities() != verified.identities()
             || discovery.workspace_package_ids != verified.workspace_package_ids
@@ -1359,6 +1537,29 @@ impl ProductPluginSourceStore {
             return (verified, Err(error));
         }
         (verified, Ok(next))
+    }
+
+    async fn trust_approval_matches(
+        &self,
+        expected_epoch: u64,
+        project_domain_id: &str,
+        workspace_id: &str,
+        source: &PluginPackageSourceIdentity,
+        operation_budget: &OperationScanBudget,
+    ) -> Result<bool, PluginSourceStoreError> {
+        let mut file_guard = self.acquire_trust_file_lock(operation_budget).await?;
+        let current = self.load_trust_store_locked(&mut file_guard).await?;
+        Ok(current.epoch() == expected_epoch
+            && current.trust_level_for(project_domain_id, workspace_id, source)
+                == PluginPackageTrustLevel::SourceApproved)
+    }
+
+    async fn load_trust_store_with_budget(
+        &self,
+        operation_budget: &OperationScanBudget,
+    ) -> Result<PluginTrustStore, PluginSourceStoreError> {
+        let mut file_guard = self.acquire_trust_file_lock(operation_budget).await?;
+        self.load_trust_store_locked(&mut file_guard).await
     }
 
     async fn acquire_trust_file_lock(
@@ -2124,6 +2325,7 @@ async fn discover_package(
     source_scope: PluginPackageScope,
     secure_package: &SecurePackageDirectory,
     scan_budget: &mut OperationScanBudget,
+    retain_declared_files: bool,
 ) -> Result<DiscoveredPluginPackage, PluginSourceIssue> {
     let manifest_path = package_path.join(PLUGIN_MANIFEST_FILE);
     let metadata = fs::symlink_metadata(&manifest_path)
@@ -2229,19 +2431,19 @@ async fn discover_package(
     }
 
     let mut package_bytes = 0_u64;
+    let mut declared_files = BTreeMap::new();
     for file in &manifest.files {
+        let bytes = validate_declared_file(
+            package_path,
+            &canonical_path,
+            secure_package,
+            &file.path,
+            &file.sha256,
+            scan_budget,
+        )
+        .await?;
         package_bytes = package_bytes
-            .checked_add(
-                validate_declared_file(
-                    package_path,
-                    &canonical_path,
-                    secure_package,
-                    &file.path,
-                    &file.sha256,
-                    scan_budget,
-                )
-                .await?,
-            )
+            .checked_add(bytes.len() as u64)
             .ok_or_else(|| {
                 PluginSourceIssue::new(
                     PluginSourceIssueCode::FileTooLarge,
@@ -2256,17 +2458,24 @@ async fn discover_package(
                 "plugin package declared files exceed the 16 MiB limit",
             ));
         }
+        if retain_declared_files {
+            declared_files.insert(file.path.clone(), bytes);
+        }
     }
     let identity = PluginPackageSourceIdentity {
         package_id: manifest.id.clone(),
         version: manifest.version.clone(),
         adapter: manifest.adapter.clone(),
         source_path: native_path_identity(&canonical_path),
-        content_hash: package_content_hash(&manifest),
+        content_hash: manifest
+            .content_hash()
+            .expect("parsed package manifest must remain valid"),
     };
 
     Ok(DiscoveredPluginPackage {
         identity,
+        manifest,
+        declared_files: retain_declared_files.then_some(declared_files),
         source_scope,
         display_path: canonical_path,
     })
@@ -2286,7 +2495,7 @@ async fn validate_declared_file(
     relative_path: &str,
     expected_hash: &str,
     scan_budget: &mut OperationScanBudget,
-) -> Result<u64, PluginSourceIssue> {
+) -> Result<Vec<u8>, PluginSourceIssue> {
     let relative_path = PathBuf::from(relative_path.replace('/', std::path::MAIN_SEPARATOR_STR));
     validate_parent_components(package_path, &relative_path).await?;
     let path = package_path.join(&relative_path);
@@ -2368,7 +2577,7 @@ async fn validate_declared_file(
             format!("declared hash {expected_hash} does not match {actual_hash}"),
         ));
     }
-    Ok(bytes.len() as u64)
+    Ok(bytes)
 }
 
 async fn validate_parent_components(
@@ -2414,43 +2623,23 @@ fn declared_parent_metadata_issue_code(kind: ErrorKind) -> PluginSourceIssueCode
     }
 }
 
-fn package_content_hash(manifest: &PluginPackageManifest) -> String {
-    let mut files = manifest.files.iter().collect::<Vec<_>>();
-    files.sort_by(|left, right| left.path.cmp(&right.path));
-    let mut hasher = Sha256::new();
-    hasher.update(manifest.schema_version.to_le_bytes());
-    hasher.update([0]);
-    hasher.update(manifest.id.as_bytes());
-    hasher.update([0]);
-    hasher.update(manifest.version.as_bytes());
-    hasher.update([0]);
-    hasher.update(manifest.adapter.as_bytes());
-    for file in files {
-        hasher.update([0]);
-        hasher.update(file.path.as_bytes());
-        hasher.update([0]);
-        hasher.update(file.sha256.as_bytes());
-    }
-    format!("sha256:{}", hex::encode(hasher.finalize()))
-}
-
 #[cfg(test)]
 mod tests {
     use super::{
         build_snapshot, charge_scanned_read, declared_parent_metadata_issue_code,
-        native_path_identity, package_content_hash, persist_trust_bytes_with_parent_sync,
+        map_load_store_error, native_path_identity, persist_trust_bytes_with_parent_sync,
         read_bounded_reader, read_scanned_file, replace_file_atomically, trust_file_identity,
-        trust_store_issue_code, workspace_scope, ManagedPluginSourceError, OperationScanBudget,
-        PluginPackageManifest, PluginPackageRoot, PluginPackageScope, PluginSourceDiscovery,
-        PluginSourceIssue, PluginSourceIssueCode, PluginSourceStoreError, PluginTrustScope,
-        ProductPluginSourceStore, ScannedFileReadError, SecureManagedRoot,
-        MAX_OPERATION_READ_BYTES, MAX_PACKAGE_FILE_BYTES, MAX_TRUST_STORE_BYTES,
+        trust_store_issue_code, workspace_scope, ManagedPluginSourceError,
+        ManagedPluginSourceService, OperationScanBudget, PluginPackageManifest, PluginPackageRoot,
+        PluginPackageScope, PluginSourceDiscovery, PluginSourceIssue, PluginSourceIssueCode,
+        PluginSourceStoreError, PluginTrustScope, ProductPluginSourceStore, ScannedFileReadError,
+        SecureManagedRoot, MAX_OPERATION_READ_BYTES, MAX_PACKAGE_FILE_BYTES, MAX_TRUST_STORE_BYTES,
     };
     use bitfun_product_domains::plugin_source::PluginPackageTrustLevel;
     use bitfun_product_domains::plugin_source::PluginTrustDecision;
     use sha2::{Digest, Sha256};
-    use std::io::{self, Read};
-    use std::path::Path;
+    use std::io::{self, ErrorKind, Read};
+    use std::path::{Path, PathBuf};
     use std::time::{Duration, Instant};
 
     fn sha256(bytes: &[u8]) -> String {
@@ -3157,17 +3346,215 @@ mod tests {
 
         assert_eq!(discovery.packages.len(), 1);
         assert!(discovery.issues.is_empty());
+        assert!(discovery.packages[0].declared_files.is_none());
         assert_eq!(
             discovery.packages[0].identity.content_hash,
-            package_content_hash(
-                &PluginPackageManifest::parse_json(
-                    &tokio::fs::read_to_string(root.join("acme.demo/bitfun.plugin.json"))
-                        .await
-                        .expect("read manifest")
-                )
-                .expect("parse manifest")
+            PluginPackageManifest::parse_json(
+                &tokio::fs::read_to_string(root.join("acme.demo/bitfun.plugin.json"))
+                    .await
+                    .expect("read manifest")
             )
+            .expect("parse manifest")
+            .content_hash()
+            .expect("hash manifest")
         );
+
+        let mut budget = OperationScanBudget::new();
+        let retained = store
+            .discover_with_budget_for(&mut budget, Some("acme.demo"))
+            .await;
+        assert_eq!(
+            retained.packages[0]
+                .declared_files
+                .as_ref()
+                .expect("selected package content")
+                .keys()
+                .map(String::as_str)
+                .collect::<Vec<_>>(),
+            ["plugin/demo.ts"]
+        );
+    }
+
+    #[tokio::test]
+    async fn fixed_package_reads_are_serialized_per_service_instance() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let workspace = temp.path().join("workspace");
+        let workspace_root = workspace.join(".bitfun/plugins");
+        let user_root = temp.path().join("user/plugins");
+        tokio::fs::create_dir_all(&user_root)
+            .await
+            .expect("create user root");
+        let source = b"export const Demo = async () => ({})";
+        write_package(&workspace_root, "acme.demo", source, &sha256(source)).await;
+        let service = std::sync::Arc::new(ManagedPluginSourceService::new(
+            user_root,
+            temp.path().join("user"),
+            workspace_root,
+            workspace.clone(),
+            temp.path().join("trust.json"),
+        ));
+        service
+            .set_trust(&workspace, "acme.demo", PluginTrustDecision::ApproveSource)
+            .await
+            .expect("approve source");
+        let permit = service
+            .load_gate
+            .acquire()
+            .await
+            .expect("acquire load gate");
+        let pending_service = service.clone();
+        let pending_workspace = workspace.clone();
+        let pending = tokio::spawn(async move {
+            pending_service
+                .load_package(&pending_workspace, "acme.demo")
+                .await
+        });
+
+        tokio::time::sleep(Duration::from_millis(20)).await;
+        assert!(!pending.is_finished());
+        drop(permit);
+        pending
+            .await
+            .expect("join fixed package read")
+            .expect("load after gate release");
+    }
+
+    #[tokio::test]
+    async fn unavailable_load_gate_is_reported_as_temporary() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let workspace = temp.path().join("workspace");
+        let service = ManagedPluginSourceService::new(
+            temp.path().join("user/plugins"),
+            temp.path().join("user"),
+            workspace.join(".bitfun/plugins"),
+            workspace.clone(),
+            temp.path().join("trust.json"),
+        );
+        service.load_gate.close();
+
+        let error = service
+            .load_package(&workspace, "acme.demo")
+            .await
+            .expect_err("closed load gate must fail");
+
+        assert!(matches!(
+            error,
+            ManagedPluginSourceError::TemporarilyUnavailable { .. }
+        ));
+    }
+
+    #[test]
+    fn retryable_store_failures_are_reported_as_temporary_load_errors() {
+        for error in [
+            PluginSourceStoreError::TrustLockTimeout,
+            PluginSourceStoreError::TrustGenerationChanged,
+            PluginSourceStoreError::SourceChanged,
+            PluginSourceStoreError::TrustReadTask("cancelled".to_string()),
+            PluginSourceStoreError::TrustLockTask("cancelled".to_string()),
+            PluginSourceStoreError::TrustLockIo(io::Error::other("unavailable")),
+            PluginSourceStoreError::TrustRead {
+                path: PathBuf::from("trust.json"),
+                source: io::Error::other("unavailable"),
+            },
+        ] {
+            assert!(matches!(
+                map_load_store_error("acme.demo", error),
+                ManagedPluginSourceError::TemporarilyUnavailable { .. }
+            ));
+        }
+
+        let invalid = PluginSourceStoreError::TrustRead {
+            path: PathBuf::from("trust.json"),
+            source: io::Error::new(ErrorKind::InvalidData, "invalid"),
+        };
+        assert!(matches!(
+            map_load_store_error("acme.demo", invalid),
+            ManagedPluginSourceError::TrustStore(_)
+        ));
+    }
+
+    #[tokio::test]
+    async fn selected_package_load_ignores_unrelated_invalid_package_content() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let workspace = temp.path().join("workspace");
+        let workspace_root = workspace.join(".bitfun/plugins");
+        let user_root = temp.path().join("user/plugins");
+        tokio::fs::create_dir_all(&user_root)
+            .await
+            .expect("create user root");
+        let source = b"export const Demo = async () => ({})";
+        write_package(&workspace_root, "acme.demo", source, &sha256(source)).await;
+        let service = ManagedPluginSourceService::new(
+            user_root,
+            temp.path().join("user"),
+            workspace_root.clone(),
+            workspace.clone(),
+            temp.path().join("trust.json"),
+        );
+        service
+            .set_trust(&workspace, "acme.demo", PluginTrustDecision::ApproveSource)
+            .await
+            .expect("approve source");
+        tokio::fs::create_dir_all(workspace_root.join("broken.unrelated"))
+            .await
+            .expect("create unrelated package");
+        tokio::fs::write(
+            workspace_root.join("broken.unrelated/bitfun.plugin.json"),
+            b"not json",
+        )
+        .await
+        .expect("write invalid unrelated manifest");
+
+        service
+            .load_package(&workspace, "acme.demo")
+            .await
+            .expect("unrelated package must not block selected load");
+    }
+
+    #[tokio::test]
+    async fn final_trust_check_rejects_same_epoch_revocation() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let root = temp.path().join("plugins");
+        let trust_path = temp.path().join("trust.json");
+        let source = b"export const Demo = async () => ({})";
+        write_package(&root, "acme.demo", source, &sha256(source)).await;
+        let store = ProductPluginSourceStore::new(
+            vec![PluginPackageRoot::new(root, PluginPackageScope::Workspace)],
+            trust_path.clone(),
+        );
+        let (discovery, approved) = store
+            .apply_trust_decision(
+                "project-1",
+                "workspace-1",
+                "acme.demo",
+                PluginTrustDecision::ApproveSource,
+                1,
+            )
+            .await
+            .expect("approve source");
+        let approved_source = discovery.packages[0].identity.clone();
+        let mut external: serde_json::Value =
+            serde_json::from_slice(&tokio::fs::read(&trust_path).await.expect("read trust file"))
+                .expect("parse trust file");
+        external["records"][0]["trustLevel"] = serde_json::json!("revoked");
+        tokio::fs::write(
+            &trust_path,
+            serde_json::to_vec_pretty(&external).expect("serialize external trust update"),
+        )
+        .await
+        .expect("replace trust file with same epoch");
+        let budget = OperationScanBudget::new();
+
+        assert!(!store
+            .trust_approval_matches(
+                approved.epoch(),
+                "project-1",
+                "workspace-1",
+                &approved_source,
+                &budget,
+            )
+            .await
+            .expect("check trust approval"));
     }
 
     #[tokio::test]
