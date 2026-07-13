@@ -4,14 +4,16 @@
 //! edges, creates each node via `SessionControl` path, and returns the
 //! created session list.
 
-use crate::agentic::coordination::get_global_coordinator;
+use crate::agentic::coordination::{get_global_coordinator, get_global_scheduler};
 use crate::agentic::tools::framework::{
     Tool, ToolExposure, ToolRenderOptions, ToolResult, ToolUseContext, ValidationResult,
 };
 use crate::service_agent_runtime::CoreServiceAgentRuntime;
 use crate::util::errors::{BitFunError, BitFunResult};
 use async_trait::async_trait;
-use bitfun_runtime_ports::AgentSessionCreateRequest;
+use bitfun_runtime_ports::{
+    AgentDialogTurnRequest, AgentSessionCreateRequest, DialogSubmissionPolicy, DialogTriggerSource,
+};
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -54,6 +56,9 @@ struct LegionControlInput {
     legion_id: String,
     #[serde(default)]
     workspace: Option<String>,
+    /// When true, send each first-layer node its prompt as the initial task message.
+    #[serde(default)]
+    send_initial_message: bool,
 }
 
 pub struct LegionControlTool;
@@ -359,6 +364,72 @@ impl LegionControlTool {
                     format!(" [condition: {}]", edge.condition)
                 };
                 session_lines.push(format!("- {} → {}{}", edge.from, edge.to, cond));
+            }
+        }
+
+        // Auto-send initial task messages to first-layer nodes
+        if params.send_initial_message && !layers.is_empty() {
+            let scheduler = get_global_scheduler()
+                .ok_or_else(|| BitFunError::tool("scheduler not initialized".to_string()))?;
+            let dialog_runtime = CoreServiceAgentRuntime::agent_runtime_with_dialog_turns(
+                coordinator.clone(),
+                scheduler,
+            )
+            .map_err(BitFunError::tool)?;
+
+            let first_layer = &layers[0];
+            session_lines.push(String::new());
+            session_lines.push(format!(
+                "Sent initial tasks to {} first-layer node(s)",
+                first_layer.len()
+            ));
+
+            for node_id in first_layer {
+                let node = match node_map.get(node_id.as_str()) {
+                    Some(n) => n,
+                    None => continue,
+                };
+                let entry = created_sessions
+                    .iter()
+                    .find(|e| e["node_id"].as_str() == Some(node.id.as_str()));
+                let session_id = match entry.and_then(|e| e["session_id"].as_str()) {
+                    Some(sid) => sid.to_string(),
+                    None => continue,
+                };
+
+                let task_message = if node.prompt.is_empty() {
+                    format!("Execute your role: {}", node.role)
+                } else {
+                    node.prompt.clone()
+                };
+
+                let _ = dialog_runtime
+                    .submit_dialog_turn(AgentDialogTurnRequest {
+                        session_id,
+                        message: task_message.clone(),
+                        original_message: None,
+                        turn_id: None,
+                        agent_type: node.agent.clone(),
+                        workspace_path: Some(workspace.clone()),
+                        remote_connection_id: None,
+                        remote_ssh_host: None,
+                        policy: DialogSubmissionPolicy::for_source(DialogTriggerSource::AgentSession),
+                        reply_route: None,
+                        prepended_reminders: vec![],
+                        attachments: vec![],
+                        metadata: None,
+                    })
+                    .await;
+
+                session_lines.push(format!(
+                    "- Sent to **{}**: {}",
+                    node.role,
+                    if node.prompt.len() > 80 {
+                        format!("{}...", &node.prompt[..77])
+                    } else {
+                        node.prompt.clone()
+                    }
+                ));
             }
         }
 

@@ -20,6 +20,8 @@ All implementation, file operations, commands, and code changes MUST be delegate
 | `SessionHistory(session_id)` | Export a legion member's transcript for review. Use before gate decisions. |
 | `Task(subagent_type, prompt, run_in_background)` | Dispatch a sub-agent for focused, scoped work inside a single session. |
 | `get_goal` / `create_goal` / `update_goal` | Track campaign progress. Status flows: pending → in-progress → complete. Use `update_goal` to mark blocking when stuck. |
+| `LegionControl(action:"load", legion_id:"<id>")` | One-click deployment. Reads a legion template, topologically sorts nodes, creates all sessions, and returns the session list. Use this before manual SessionControl when a matching template exists. |
+| `LegionControl(action:"list")` | List available legion templates.
 
 # The Three-Bee Atomic Unit
 
@@ -32,6 +34,23 @@ Every legion member is a full agent session capable of independently reading, wr
 These three bees communicate directly via SessionMessage. They form an internal loop — review bee inspects output, sends corrections back to execute bee or prompt bee, and the cycle repeats until the gate passes.
 
 # Deployment Protocol
+
+## 0. Quick Deploy with LegionControl
+
+If a legion template matches the task, deploy it with one call:
+
+```
+LegionControl(action:"load", legion_id:"<id>")
+```
+
+This creates all sessions in topological order and returns the session list with node IDs, roles, and agent types. You get back:
+- All session IDs organized by topological layer
+- Edge structure (who depends on whom)
+- Which nodes are gates
+
+Then proceed to Step 3 (Fan-Out) — skip Steps 1-2.
+
+If no template matches, use Steps 1-2 below to build the legion manually.
 
 ## 1. Task Decomposition
 
@@ -84,6 +103,42 @@ When all subtasks pass their gates, mark the campaign complete:
 ```
 update_goal(status:"complete")
 ```
+
+# Gate Loop Protocol
+
+Each legion layer follows a strict gate loop. The loop runs per-layer until every node in that layer passes its gate, then the next layer begins.
+
+**Loop mechanics per layer:**
+
+1. **Dispatch**: Send task via SessionMessage to each node in the current layer. Include acceptance criteria. All dispatches in a single message for parallelism.
+
+2. **Collect**: Wait for all nodes to reply. Each SessionMessage auto-returns when the agent completes.
+
+3. **Inspect**: Use SessionHistory to read each node's full transcript. Do NOT rely on the agent's summary alone.
+
+4. **Gate Decision** per node:
+   - PASS: Node met all acceptance criteria, output verified, no behavioral violations.
+   - FAIL: Node skipped verification, edited without reading, failed tests, or produced invalid output.
+
+5. **Correct or Proceed**:
+   - If any node FAILs: Send SessionMessage with `[CORRECTION] <specific fix instruction>`. Return to step 2 for that node.
+   - If all nodes PASS: Proceed to the next layer.
+
+6. **Loop Counter**: Track retry count per node. If a node fails 3 corrections without improvement, do NOT retry the same approach. Instead:
+   - Re-decompose the subtask differently
+   - Assign a different agent type
+   - Escalate to a sub-legion (Step 6)
+
+**Gate rules applied during inspection:**
+- Did the node read relevant files before editing? (SessionHistory check)
+- Did the node verify output? (test/check commands in transcript)
+- Did the node change strategy after repeated tool failures?
+- Are all acceptance criteria met with evidence?
+
+**Examples of FAIL decisions:**
+- Agent called Edit on `src/foo.rs` but never called Read on `src/foo.rs` → FAIL: "Read the file before editing"
+- Agent claimed "tests pass" but transcript shows no test command → FAIL: "Run tests and show output"
+- Agent called Grep 4 times with the same failing pattern → FAIL: "Strategy stale. Try a different search approach or read the directory listing first"
 
 # Fractal Nesting
 
