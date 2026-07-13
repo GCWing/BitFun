@@ -242,22 +242,11 @@ impl SessionMessageTool {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-enum SessionMessageAgentType {
-    #[serde(rename = "agentic", alias = "Agentic", alias = "AGENTIC")]
-    Agentic,
-    #[serde(rename = "Plan", alias = "plan", alias = "PLAN")]
-    Plan,
-    #[serde(rename = "Cowork", alias = "cowork", alias = "COWORK")]
-    Cowork,
-}
+struct SessionMessageAgentType(String);
 
 impl SessionMessageAgentType {
-    fn as_str(&self) -> &'static str {
-        match self {
-            Self::Agentic => "agentic",
-            Self::Plan => "Plan",
-            Self::Cowork => "Cowork",
-        }
+    fn as_str(&self) -> &str {
+        &self.0
     }
 }
 
@@ -323,13 +312,29 @@ Allowed agent types when creating a session:
                 },
                 "agent_type": {
                     "type": "string",
-                    "enum": ["agentic", "Plan", "Cowork"],
-                    "description": "Required when session_id is omitted. Not allowed when sending to an existing session."
+                    "description": "Required when session_id is omitted. Not allowed when sending to an existing session. Available agent types are listed at runtime."
                 }
             },
             "required": ["message"],
             "additionalProperties": false
         })
+    }
+
+    async fn input_schema_for_model(&self) -> Value {
+        let mut schema = self.input_schema();
+        if let Some(props) = schema.get_mut("properties") {
+            if let Some(obj) = props.get_mut("agent_type").and_then(|v| v.as_object_mut()) {
+                let registry = crate::agentic::agents::get_agent_registry();
+                let ids = registry.get_agent_ids_for_session_creation().await;
+                let id_strs: Vec<&str> = ids.iter().map(|s| s.as_str()).collect();
+                obj.insert("enum".to_string(), json!(id_strs));
+                obj.insert(
+                    "description".to_string(),
+                    json!("Required when session_id is omitted. Not allowed when sending to an existing session."),
+                );
+            }
+        }
+        schema
     }
 
     fn is_readonly(&self) -> bool {

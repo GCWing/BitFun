@@ -302,13 +302,29 @@ Arguments:
                 },
                 "agent_type": {
                     "type": "string",
-                    "enum": ["agentic", "Plan", "Cowork"],
-                    "description": "Optional agent type when creating a session. Defaults to agentic."
+                    "description": "Optional agent type when creating a session. Defaults to agentic. Available agent types are listed at runtime."
                 }
             },
             "required": ["action"],
             "additionalProperties": false
         })
+    }
+
+    async fn input_schema_for_model(&self) -> Value {
+        let mut schema = self.input_schema();
+        if let Some(props) = schema.get_mut("properties") {
+            if let Some(obj) = props.get_mut("agent_type").and_then(|v| v.as_object_mut()) {
+                let registry = crate::agentic::agents::get_agent_registry();
+                let ids = registry.get_agent_ids_for_session_creation().await;
+                let id_strs: Vec<&str> = ids.iter().map(|s| s.as_str()).collect();
+                obj.insert("enum".to_string(), json!(id_strs));
+                obj.insert(
+                    "description".to_string(),
+                    json!("Optional agent type when creating a session. Defaults to agentic."),
+                );
+            }
+        }
+        schema
     }
 
     fn is_readonly(&self) -> bool {

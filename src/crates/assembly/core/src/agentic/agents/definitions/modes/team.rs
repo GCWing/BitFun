@@ -40,6 +40,12 @@ impl TeamMode {
                 "Git".to_string(),
                 "ControlHub".to_string(),
                 "GetFileDiff".to_string(),
+                "SessionControl".to_string(),
+                "SessionMessage".to_string(),
+                "SessionHistory".to_string(),
+                "get_goal".to_string(),
+                "create_goal".to_string(),
+                "update_goal".to_string(),
             ],
         }
     }
