@@ -369,6 +369,8 @@ impl LegionControlTool {
 
         // Auto-send initial task messages to first-layer nodes
         if params.send_initial_message && !layers.is_empty() {
+            let coordinator = get_global_coordinator()
+                .ok_or_else(|| BitFunError::tool("coordinator not initialized".to_string()))?;
             let scheduler = get_global_scheduler()
                 .ok_or_else(|| BitFunError::tool("scheduler not initialized".to_string()))?;
             let dialog_runtime = CoreServiceAgentRuntime::agent_runtime_with_dialog_turns(
@@ -417,7 +419,7 @@ impl LegionControlTool {
                         reply_route: None,
                         prepended_reminders: vec![],
                         attachments: vec![],
-                        metadata: None,
+                        metadata: serde_json::Map::new(),
                     })
                     .await;
 
