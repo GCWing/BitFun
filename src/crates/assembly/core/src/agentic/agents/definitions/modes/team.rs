@@ -46,6 +46,7 @@ impl TeamMode {
                 "get_goal".to_string(),
                 "create_goal".to_string(),
                 "update_goal".to_string(),
+                "LegionControl".to_string(),
             ],
         }
     }

@@ -170,7 +170,7 @@ impl ICoreWebView2WebMessageReceivedEventHandler_Impl for WebMessageReceivedHand
     }
 }
 
-unsafe fn register_message_handler(webview: &ICoreWebView2) -> Result<(), WebDriverErrorResponse> {
+unsafe fn register_message_handler(webview: &ICoreWebView2) -> Result<(), WebDriverErrorResponse> { unsafe {
     let handler: ICoreWebView2WebMessageReceivedEventHandler = WebMessageReceivedHandler.into();
     // SAFETY: `EventRegistrationToken` is an FFI value initialized by WebView2,
     // and both COM interface references remain valid for the duration of the call.
@@ -183,7 +183,7 @@ unsafe fn register_message_handler(webview: &ICoreWebView2) -> Result<(), WebDri
 
     std::mem::forget(handler);
     Ok(())
-}
+}}
 
 fn parse_message_payload(message: &str) -> Option<Value> {
     if let Ok(inner) = serde_json::from_str::<String>(message) {

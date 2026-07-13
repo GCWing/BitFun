@@ -200,7 +200,7 @@ fn screenshot_window_via_wgc(hwnd: HWND) -> BitFunResult<(Vec<u8>, u32, u32)> {
 /// Works for UWP / DirectComposition surfaces that `PrintWindow` can't reach,
 /// as long as the window is on-screen and not occluded. Returns
 /// `(bgra_pixels, width, height)`.
-unsafe fn screenshot_via_screen_region(hwnd: HWND) -> BitFunResult<(Vec<u8>, i32, i32)> {
+unsafe fn screenshot_via_screen_region(hwnd: HWND) -> BitFunResult<(Vec<u8>, i32, i32)> { unsafe {
     let mut rect = RECT::default();
     // SAFETY: `rect` is a valid out-parameter and a stale/invalid HWND is
     // reported by the Win32 API.
@@ -280,7 +280,7 @@ unsafe fn screenshot_via_screen_region(hwnd: HWND) -> BitFunResult<(Vec<u8>, i32
         ));
     }
     Ok((pixels, w, h))
-}
+}}
 
 /// A captured window bitmap plus the screen-space geometry it maps to.
 ///
@@ -317,7 +317,7 @@ pub(super) fn screenshot_window_capture(hwnd: HWND) -> BitFunResult<WindowCaptur
     unsafe { screenshot_window_bytes_unsafe(hwnd) }
 }
 
-unsafe fn screenshot_window_bytes_unsafe(hwnd: HWND) -> BitFunResult<WindowCapture> {
+unsafe fn screenshot_window_bytes_unsafe(hwnd: HWND) -> BitFunResult<WindowCapture> { unsafe {
     if hwnd.is_invalid() {
         return Err(BitFunError::service(
             "screenshot_window_bytes: invalid HWND",
@@ -494,7 +494,7 @@ unsafe fn screenshot_window_bytes_unsafe(hwnd: HWND) -> BitFunResult<WindowCaptu
         width: w as u32,
         height: h as u32,
     })
-}
+}}
 
 /// Crop `pixels` (BGRA, top-down) to the DWM extended-frame bounds, removing the
 /// invisible drop-shadow margin PrintWindow doesn't paint. No-op when the DWM

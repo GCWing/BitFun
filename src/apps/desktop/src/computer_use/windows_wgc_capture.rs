@@ -98,7 +98,7 @@ pub(super) fn capture_window_bgra(hwnd: HWND) -> BitFunResult<(Vec<u8>, u32, u32
     }
 }
 
-unsafe fn create_d3d11_device() -> BitFunResult<(ID3D11Device, ID3D11DeviceContext)> {
+unsafe fn create_d3d11_device() -> BitFunResult<(ID3D11Device, ID3D11DeviceContext)> { unsafe {
     let mut device: Option<ID3D11Device> = None;
     let mut context: Option<ID3D11DeviceContext> = None;
     let flags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
@@ -143,9 +143,9 @@ unsafe fn create_d3d11_device() -> BitFunResult<(ID3D11Device, ID3D11DeviceConte
         BitFunError::service("D3D11CreateDevice returned null context".to_string())
     })?;
     Ok((device, context))
-}
+}}
 
-unsafe fn create_winrt_d3d_device(d3d_device: &ID3D11Device) -> BitFunResult<IDirect3DDevice> {
+unsafe fn create_winrt_d3d_device(d3d_device: &ID3D11Device) -> BitFunResult<IDirect3DDevice> { unsafe {
     let dxgi_device: IDXGIDevice = d3d_device
         .cast()
         .map_err(|e| BitFunError::service(format!("IDXGIDevice cast: {e}")))?;
@@ -156,13 +156,13 @@ unsafe fn create_winrt_d3d_device(d3d_device: &ID3D11Device) -> BitFunResult<IDi
     inspectable
         .cast()
         .map_err(|e| BitFunError::service(format!("IDirect3DDevice cast: {e}")))
-}
+}}
 
 unsafe fn copy_frame_to_bgra(
     frame: &windows::Graphics::Capture::Direct3D11CaptureFrame,
     d3d_device: &ID3D11Device,
     d3d_context: &ID3D11DeviceContext,
-) -> BitFunResult<(Vec<u8>, u32, u32)> {
+) -> BitFunResult<(Vec<u8>, u32, u32)> { unsafe {
     let surface = frame
         .Surface()
         .map_err(|e| BitFunError::service(format!("WGC frame Surface: {e}")))?;
@@ -227,6 +227,6 @@ unsafe fn copy_frame_to_bgra(
     unsafe { d3d_context.Unmap(&staging, 0) };
 
     Ok((pixels, width, height))
-}
+}}
 
 const D3D11_SDK_VERSION: u32 = 7;
