@@ -6,13 +6,11 @@
 
 use crate::agentic::agents::{Agent, UserContextPolicy};
 use async_trait::async_trait;
-use bitfun_agent_tools::build_acp_external_agent_tool_name;
 
 /// A thin Agent wrapper around a single ACP client config.
 #[allow(dead_code)]
 pub struct AcpAgent {
     agent_id: String,
-    tool_name: String,
     display_name: String,
     default_tools: Vec<String>,
 }
@@ -20,17 +18,17 @@ pub struct AcpAgent {
 impl AcpAgent {
     pub fn new(client_id: String, display_name: String) -> Self {
         let agent_id = Self::agent_id_for(&client_id);
-        let tool_name = build_acp_external_agent_tool_name(&client_id);
         Self {
+            // ACP prompt tool is registered in the global tool registry by
+            // register_configured_tools() — do NOT add it to default_tools
+            // here, or the tool name will appear twice in the model manifest.
             default_tools: vec![
-                tool_name.clone(),
                 "Read".to_string(),
                 "Grep".to_string(),
                 "Glob".to_string(),
                 "LS".to_string(),
             ],
             agent_id,
-            tool_name,
             display_name,
         }
     }
