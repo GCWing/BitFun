@@ -1,7 +1,8 @@
 # 插件运行时主机与 OpenCode 适配层设计
 
-本文件补充 [`product-architecture.md`](product-architecture.md)。产品入口、前后端 DTO 和产品形态状态词以主架构文档为准；本文件只定义插件运行时主机内部 ABI、主机职责、OpenCode 适配边界和验证要求。CLI 配置导入、插件管理入口和随产品携带包的产品流程见
-[`cli-product-line-design.md`](cli-product-line-design.md)。
+本文件补充 [`product-architecture.md`](product-architecture.md)。产品入口、前后端 DTO 和产品形态状态词以主架构文档为准；本文件只定义插件运行时主机内部 ABI、主机职责、OpenCode 适配边界和验证要求。CLI 配置导入和插件管理入口见
+[`cli-product-line-design.md`](cli-product-line-design.md)；产品内置扩展的组装、锁定和发行生命周期见
+[`product-customization-blueprint.md`](product-customization-blueprint.md)。
 
 ## 1. 职责定位
 
@@ -140,7 +141,15 @@ sequenceDiagram
 
 P0-C.1 只读取两个 BitFun 受管目录：用户数据目录的 `plugins` 和项目目录的 `.bitfun/plugins`。工作区同 ID 包覆盖用户包。包目录名必须与 `bitfun.plugin.json` 的 `id` 一致；清单声明文件及其哈希构成来源标识。信任记录按本地项目与工作区作用域存放在用户运行数据目录，不写回项目或插件包。
 
-`adapter` 是来源模块不解释的小写标识；`opencode_compatible` 包的入口和能力只由 OpenCode 适配层解释。当前来源模块不扫描用户的 `opencode.json`、全局 OpenCode 目录，也不要求 `opencode` CLI 存在。外部目录 intake、随产品携带包、安装复制和卸载属于独立插件包流程，不复用 Canonical Config apply；接入后仍必须转换为相同的 BitFun 包来源和信任输入。插件包流程不得复制凭据、继承配置批准或直接建立 Host trust。
+`adapter` 是来源模块不解释的小写标识；`opencode_compatible` 包的入口和能力只由 OpenCode 适配层解释。当前来源模块不扫描用户的 `opencode.json`、全局 OpenCode 目录，也不要求 `opencode` CLI 存在。外部目录 intake、用户/工作区安装复制和卸载属于独立 Runtime Plugin 流程，不复用 Canonical Config apply；接入后必须转换为用户或工作区范围的 BitFun 包来源和信任输入。插件包流程不得复制凭据、继承配置批准或直接建立 Host trust。
+
+产品内置扩展不是第三个用户扫描根。它从只读产品 bundle/source root 读取，由 Resolved Product Manifest 固定
+`id/version/hash/signer`，随产品安装、升级、回滚和撤销；不读取用户 `SourceApproved`，用户/工作区同 ID 包
+不能 shadow，也不能把产品来源信任推导为副作用授权。两类扩展只共享包清单/内容校验、Host ABI、隔离执行、
+权限、审计和 quarantine，不共享来源根、信任记录、安装状态、优先级、更新通道或卸载生命周期。
+
+当前 P0-C.1 只实现用户和项目两个受管目录；产品内置扩展 source root 在产品组装、安装器和更新链路存在
+真实消费方及签名/回滚验证前不得伪装成已交付能力。
 
 版本 1 包清单示例：
 

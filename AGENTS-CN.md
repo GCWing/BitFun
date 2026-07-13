@@ -166,6 +166,13 @@ await api.invoke('your_command', { request: { ... } });
 [`src/apps/cli/AGENTS.md`](src/apps/cli/AGENTS.md)。CLI/TUI 展示留在 app；可复用产品行为通过
 Product Assembly、Agent Runtime、Tool/Harness、Runtime Services 或既有扩展边界承接。
 
+### 产品定制护栏
+
+涉及 Product Profile、品牌发行、GUI/TUI Surface Blueprint、产品内置扩展或定制构建任务时，先阅读
+[`docs/architecture/product-customization-blueprint.md`](docs/architecture/product-customization-blueprint.md)。
+产品定制必须与用户运行时配置和插件分开；GUI/TUI 只共享稳定产品事实，不共享布局、组件、主题键、键位、
+renderer schema。Surface Blueprint 不得承载运行时插件的信任、安装、激活或更新状态。
+
 ### SDLC 质量护栏
 
 涉及生命周期证据、门禁、Artifact Graph、Project Profile、Deep Review 策略、
