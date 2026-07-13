@@ -29,11 +29,14 @@ export const forbiddenManifestDependencyRules = [
     dependencyNames: ['bitfun-opencode-adapter'],
     scanRoots: ['src/apps', 'src/crates', 'BitFun-Installer/src-tauri'],
     workspaceManifestPath: 'Cargo.toml',
-    allowManifestPaths: ['src/crates/adapters/opencode-adapter/Cargo.toml'],
+    allowManifestPaths: [
+      'src/crates/adapters/opencode-adapter/Cargo.toml',
+      'src/crates/assembly/core/Cargo.toml',
+    ],
     reason:
-      'OpenCode adapter must not become a production dependency before reviewed product source wiring',
+      'OpenCode adapter production dependencies are limited to the reviewed product composition root',
     message:
-      'production manifests must not depend on bitfun-opencode-adapter; integrate OpenCode through the Plugin Runtime Host boundary',
+      'only bitfun-core product-full assembly may inject bitfun-opencode-adapter through the Plugin Runtime Host boundary',
   },
 ];
 

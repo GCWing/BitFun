@@ -19,9 +19,10 @@ Product-source boundary:
   plugin source records, manifests, hashes, diagnostics, and trust state before
   those facts can enter the product-side enablement or execution path. The
   adapter itself must not enable or execute plugins.
-- `load_opencode_package_adapter` receives only fixed managed package content.
-  `SourceApproved` remains untrusted at the Host boundary and must not produce
-  candidates without a separately reviewed activation path.
+- `load_opencode_package_adapter` receives fixed managed package content and an
+  optional source-service activation authority. Without that authority,
+  `SourceApproved` remains untrusted at the Host boundary and produces no
+  candidates.
 - Trusted custom tool declarations may only be mapped as provider candidates;
   final tool creation, permission decisions, and audit facts must stay in the
   tool ABI, permission, and product owner path.
@@ -51,9 +52,8 @@ Product-source boundary:
   fixtures for adapter verification. The public entry remains limited to
   `load_opencode_package_adapter`, called by the reviewed product composition
   root before the returned adapter is injected into Plugin Runtime Host.
-- This PR keeps production Product Assembly wiring out of scope. A future
-  reviewed composition root may depend on this crate to create the adapter, but
-  must update boundary guards and focused host-path tests in the same change.
+- Production assembly is limited to `bitfun-core/plugin_runtime`; boundary
+  guards and focused host-path tests must change with any additional consumer.
 - Production crates must not depend on `bitfun_opencode_adapter` internals.
   Unsupported capabilities must return diagnostics or typed unsupported states
   instead of failing at runtime on external plugin content.

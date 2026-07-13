@@ -23,8 +23,8 @@
 - 工具 ABI、事件清单、运行时服务、智能体运行时、产品能力和插件 `disabled` / `projection-only` 基础边界已存在。
 - `runtime-ports` 的插件主机 ABI 已有公开接口预算脚本；后续不能绕过预算新增插件、hook、event、UI 或生态兼容对象。
 - `opencode-adapter` 当前解释固定内容的受管包，提供诊断只读视图和 custom tool 候选映射；来源发现归 `services-integrations/plugin_source`。
-- `services-integrations/plugin_source` 已提供受管包发现、完整性校验和工作区信任持久化；`bitfun-core/plugin_source` 仅保留路径注入与 CLI 兼容接口。该接口尚未绑定生产 Plugin Runtime Host。
-- 当前阶段先完成受管包到 Plugin Runtime Host 的只读链路；后续再完成激活确认和工具 ABI 消费，不执行无约束 JS/TS，也不依赖外部 OpenCode CLI。
+- `services-integrations/plugin_source` 提供受管包发现、完整性校验、来源审核、激活持久化和实时凭证复核；`bitfun-core/plugin_runtime` 是唯一 OpenCode 生产组装点。
+- CLI 已能预览、按精确内容哈希激活和停用包。激活路径只通过 Plugin Runtime Host 返回需要权限的 custom tool 候选，不执行 JS/TS，也不依赖外部 OpenCode CLI。
 
 ## 3. 当前差距
 
@@ -32,7 +32,8 @@
 |---|---|---|
 | 接口切面仍易混用 | 前后端线缆、插件扩展、host ABI 和生态适配容易互相穿透 | 以主架构文档的四个接口切面作为唯一口径，详细设计只补充归属和验证 |
 | 公开接口预算只覆盖部分源码 | 可以继续在文档或代码中声明无消费方对象 | 扩展公开接口预算元数据，要求每个插件公开符号声明接口切面、消费方和退场条件 |
-| 来源与主机仍未生产组装 | 受信任包仍不能形成可执行 custom tool | P0-C.2 只接入一个真实候选消费路径，并复用现有工具 ABI 和权限门禁 |
+| 候选尚未进入最终工具快照 | 已激活包只能检查候选，不能形成可调用工具 | 后续 PR 复用现有工具 ABI 和权限门禁接入一个最终工具提供方，不扩展插件专用 ABI |
+| 激活写入在跨进程锁内执行稳定性复核 | 操作受统一期限约束，超时后失败关闭；慢文件系统可能延长同一工作区的授权检查等待 | 后续 PR 采用锁外扫描、锁内代次与来源身份复核的两阶段事务，并以并发变更测试证明不引入 TOCTOU |
 | OpenCode 适配容易反向定义 BitFun | 可能形成 OpenCode 专用产品入口或内部模型 | OpenCode 只作为兼容适配输入，输出 BitFun 来源、诊断、候选项或 unsupported |
 | 部分 core / product-full 路径仍偏宽 | 新入口可能继续依赖旧大门面 | 只迁移与插件主线或关键产品路径直接相关的归属模块，并同步删除或显著简化旧路径 |
 
@@ -93,18 +94,17 @@
 - `cargo test -p bitfun-cli --test plugin_source_cli`
 - 不要求用户安装 OpenCode CLI。
 - 不扫描或回写用户 OpenCode 配置目录，不执行 JS/TS。
-- `SourceApproved` 不得直接映射为 Host 的 `Trusted`；P0-C.2 首次激活需展示适配器、入口、能力和副作用并重新确认。
+- `SourceApproved` 不得直接映射为 Host 的 `Trusted`；首次激活需展示入口、支持状态、权限要求和内容哈希，并使用该哈希确认。
 
 未包含在 P0-C.1 的工作：安装复制、更新、卸载、随产品携带包、组织或 registry 来源、签名、外部 OpenCode 目录导入、生产 Host 绑定。以上能力必须由对应产品流程提供真实消费方后分别接入。
 
 ### 阶段 P0-C.2：OpenCode custom tool 最小候选链路
 
+状态：本 PR 完成。
+
 目标：证明一个 OpenCode-compatible custom tool 可以映射为 BitFun 工具候选；是否进入最终工具链路，仍由工具 ABI、权限门禁和归属模块决定。
 
-执行顺序：
-
-1. 先完成受管包到 OpenCode 适配器的固定输入链路。来源服务按包重新校验声明文件，适配器公开入口不再扫描工作区目录；`SourceApproved` 只返回未激活状态和诊断。
-2. 再由独立 PR 完成激活确认、Host 信任和产品组装。该步骤完成前不得生成 custom tool 候选或宣称插件可执行。
+实现路径：来源服务重新校验固定输入；CLI 预览后以精确内容哈希确认；来源服务原子写入独立激活记录；唯一产品组装点创建适配器、Host 与 Binding，并在 read 前以及 dispatch 前后复核激活授权。
 
 范围：
 
@@ -119,7 +119,7 @@
 - 生成最终工具或执行任何工具前，必须继续经过工具快照、权限门禁和归属模块；OpenCode adapter 内不得执行工具。
 - 不新增插件专用工具 ABI。
 - Desktop / CLI 产品入口只消费能力服务接口、插件只读视图、诊断和稳定状态词，不直接依赖 OpenCode adapter。
-- 后续生产接入由唯一产品组装根创建适配器和插件运行时主机，再将 Host client 封装为 `PluginRuntimeBinding`，并同步边界脚本、主机路径测试和启用/降级策略。
+- 唯一产品组装根创建适配器和插件运行时主机，再将 Host client 封装为 `PluginRuntimeBinding`；边界脚本禁止其他生产模块直接依赖 OpenCode adapter。
 
 ## 5. 后端复杂度整改清单
 
@@ -150,7 +150,7 @@
 | 插件公开接口预算 | `node --test scripts/check-core-boundaries.test.mjs`，`node scripts/check-core-boundaries.mjs` |
 | 插件运行时主机 ABI | `cargo test -p bitfun-runtime-ports --test plugin_runtime_contracts`，`cargo test -p bitfun-runtime-ports --test plugin_runtime_host_contracts`，`cargo test -p bitfun-plugin-runtime-host` |
 | OpenCode P0-C.1 受管包来源与信任 | `cargo test -p bitfun-product-domains --test plugin_source_contracts --features plugin-source`，`cargo test -p bitfun-services-integrations --no-default-features --features plugin-source plugin_source --lib`，`cargo test -p bitfun-cli --test plugin_source_cli` |
-| OpenCode P0-C.2 custom tool 候选映射 | `cargo test -p bitfun-opencode-adapter p0_c2_fixture`，`cargo test -p bitfun-opencode-adapter host_path_projects_trusted_custom_tool_candidate_with_permission_prompt` |
+| OpenCode P0-C.2 激活与 custom tool 候选 | `cargo test -p bitfun-opencode-adapter --test opencode_source_adapter`，`cargo test -p bitfun-core plugin_runtime::tests --lib`，`cargo test -p bitfun-cli --test plugin_source_cli` |
 | 产品形态 / SDK 最小可用性 | `cargo test -p bitfun-product-capabilities --test plugin_product_shape`，`cargo test -p bitfun-product-capabilities --test product_sdk_assembly`，`cargo metadata --no-deps --format-version 1` |
 | 大范围归属迁移 | `cargo check --workspace`，必要时补 focused test |
 

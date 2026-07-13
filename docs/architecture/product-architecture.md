@@ -130,30 +130,30 @@ flowchart TB
 
 P0 的目标不是复制完整 OpenCode 运行时，也不是导入用户已有 OpenCode 安装。P0 只验证一条 BitFun 主导的 OpenCode-compatible 插件路径。
 
-P0-C.1 已建立包识别、完整性校验、工作区信任和 CLI 诊断，不执行插件：
+P0-C.1 已建立包识别、完整性校验、工作区来源审核和 CLI 诊断。P0-C.2 在此基础上增加工作区激活与 custom tool 候选读取：
 
 1. 用户级包和项目级包只从 BitFun 受管目录发现；工作区同 ID 来源优先且不得回退到用户级包。
 2. `bitfun.plugin.json` 只定义生态无关的包来源标识、适配器标识和文件哈希；具体生态入口由对应适配器解释。
-3. `bitfun-cli plugins` 提供来源审核和诊断；`SourceApproved` 只确认当前来源内容，不表示能力已批准、已启用或可执行，完整性错误由 `bitfun-cli doctor` 返回失败。
-4. 来源接口尚未绑定生产插件主机，不执行 JS/TS，不注册最终工具。目录、清单和持久化规则见 [`plugin-runtime-host-design.md`](plugin-runtime-host-design.md#6-目录与来源原则)。
+3. `SourceApproved` 只确认当前来源内容。`plugins activate` 先展示适配器、入口、静态候选名称、高风险标记、权限要求和内容哈希；激活命令必须提交该哈希，内容变化时拒绝激活。
+4. 产品组装根按工作区和包临时组合 OpenCode 适配器、插件运行时主机与 `PluginRuntimeBinding`，只读取受权限保护的 custom tool 候选。不执行 JS/TS，不注册或执行最终工具。
 
-归属边界：`product-domains/plugin_source` 定义纯数据和信任规则，`services-integrations/plugin_source` 负责文件系统校验、锁和持久化，`bitfun-core/plugin_source` 仅注入产品目录并保留 CLI 兼容接口。
+归属边界：`product-domains/plugin_source` 定义来源审核与激活规则，`services-integrations/plugin_source` 负责校验、锁、持久化和实时激活校验，`bitfun-core/plugin_runtime` 是唯一生态适配组装点。CLI 只消费核心提供的激活视图。
 
 ```mermaid
 flowchart LR
   UserRoot["用户级 BitFun 插件目录"] --> Discovery["包发现与完整性校验"]
   WorkspaceRoot["项目级 .bitfun/plugins"] --> Discovery
   Manifest["bitfun.plugin.json"] --> Discovery
-  Discovery --> SourceView["来源与诊断接口"]
-  Trust["工作区信任存储"] --> SourceView
-  CLI["CLI 插件管理与 doctor"] --> SourceView
-  CLI --> Trust
-  SourceView -->|按包重新校验| PackageInput["不可变包输入"]
-  PackageInput --> Adapter["OpenCode 适配器"]
-  Assembly["产品组装根"] -->|创建| Adapter
-  Adapter -->|注入| Host["插件运行时主机"]
-  Host -->|封装 client| RuntimeBinding["PluginRuntimeBinding"]
-  RuntimeBinding --> AgentRuntime["Agent Runtime"]
+  Discovery --> SourceService["来源与激活服务"]
+  State["工作区审核与激活存储"] --> SourceService
+  CLI["CLI 插件管理与 doctor"] --> ProductAPI["核心激活接口"]
+  ProductAPI --> SourceService
+  SourceService -->|固定内容与激活授权信息| Assembly["plugin_runtime 组装点"]
+  Assembly --> Adapter["OpenCode 适配器"]
+  Adapter --> Host["插件运行时主机"]
+  Host --> Binding["PluginRuntimeBinding"]
+  Binding --> CandidateView["候选与诊断视图"]
+  CandidateView --> ProductAPI
 ```
 
 当前实现与后续能力边界：
@@ -163,19 +163,21 @@ flowchart LR
 | 用户级、项目级包 | 从两个 BitFun 受管目录发现并校验 | 安装复制、更新、卸载和组织策略 |
 | 随产品携带包 | 未建立独立扫描根 | 由构建配置、安装器和产品组装提供来源后接入同一校验接口 |
 | OpenCode 兼容内容 | 包清单可声明 `opencode_compatible`；来源模块重新校验并固定声明文件，适配器只解释该输入 | 外部目录需经独立导入流程转换为受管包 |
-| 来源审核 | 工作区 `SourceApproved`、`Denied`、`Revoked`；内容变化使旧审核失效，新来源标识回到 `Unknown` | 首次激活能力审核、组织策略、签名和撤销列表 |
-| 插件运行 | 不执行 JS/TS，不注册最终工具 | 产品组装创建适配器和 Host，再通过 `PluginRuntimeBinding` 注入 Agent Runtime |
+| 来源审核 | 工作区 `SourceApproved`、`Denied`、`Revoked`；内容变化使旧审核与激活失效 | 组织策略、签名和撤销列表 |
+| 激活 | 预览后按精确内容哈希确认；激活代次与来源审核代次独立；停用或内容变化立即使既有 Binding 失效 | GUI/Web 管理入口、组织策略，以及包缺失或损坏后的显式记录清理体验 |
+| 插件运行 | 只通过 Host 读取 custom tool 候选；候选始终需要权限；不执行 JS/TS，不注册最终工具 | 接入工具快照、权限裁决和最终工具提供方 |
 
 OpenCode 适配接入规则：
 
 - OpenCode 适配器的公开入口只接收来源服务重新校验并固定的受管包输入，不直接扫描工作区或用户 OpenCode 目录。
-- 来源服务只为当前 `SourceApproved` 的包生成固定内容输入；输入只包含来源标识、清单和声明文件内容，不把来源审核状态或审核 epoch 传入 Host。
+- 来源服务只为当前 `SourceApproved` 的包生成固定内容输入。每条激活记录保存自己的签发代次；激活授权信息只包含项目、工作区、精确来源和该代次，包内容不在授权信息中重复保存，其他包的状态变化不会使当前授权失效。
 - 固定内容输入只保证结构、大小和哈希自洽，不作为审核凭据。生产组装必须从来源服务取得输入；即使其他进程内调用方构造了有效输入，适配器仍只能返回未激活状态。
 - Host 来源 URI 使用来源模块生成的路径摘要区分用户级包、项目级包和后续其他来源，不暴露原始本地路径。
-- OpenCode 适配器始终按未激活状态处理该输入，只能暴露来源只读视图和诊断；激活确认产生独立的 Host 信任后，才允许映射 custom tool 候选。
-- 当前源码探测只识别经过测试的单行声明形式，不是完整 JS/TS 解析器；空包或没有任何受支持入口的包必须返回诊断，其他 JS/TS 语法不属于本阶段兼容范围。
+- 普通包输入只能产生来源与诊断视图。只有产品组装点持有来源服务生成的当前激活授权信息时，适配器才将受支持 custom tool 映射为权限候选。
+- 当前源码探测只识别经过测试的单行声明形式，不是完整 JS/TS 解析器；注释中的声明不参与识别，重复工具 id 按歧义输入拒绝。空包或没有任何受支持入口的包必须返回诊断，其他 JS/TS 语法不属于本阶段兼容范围。
+- 声明读取不能推断工具的文件、网络、进程或凭据副作用，因此当前 custom tool 候选统一标记为高风险；精确风险只能由后续真实工具接口和权限策略确定。
 - 未支持或信任不足的能力必须返回诊断或 `unsupported` 状态，不得因外部插件内容导致运行时崩溃。
-- 后续生产接入由唯一的产品组装根调用具体适配器工厂，将适配器注入 Host，再把 Host client 封装为 `PluginRuntimeBinding`；同一变更必须同步边界脚本、主机路径测试和启用/降级策略。
+- `bitfun-core/plugin_runtime` 是唯一允许调用具体适配器工厂的生产组装点。它在 read 前以及 dispatch 前后重新校验激活授权，产品入口不得直接构造适配器或 Host。
 - GUI、TUI/CLI、Web 等产品入口只消费能力服务接口、插件只读视图、诊断和稳定状态词，不直接依赖 OpenCode 适配器内部类型或插件主机内部 ABI。
 
 信任 epoch 与生命周期：
@@ -183,7 +185,8 @@ OpenCode 适配接入规则：
 - 来源审核 epoch 由 BitFun 来源与信任模块维护。审核、拒绝、撤销、已有记录的来源标识或哈希变化都会推进 epoch；重复写入相同决定不推进 epoch。信任文件重建时使用新的随机初始值，避免旧 epoch 被重复使用。
 - 发现的新来源默认为 `Unknown`；CLI 只允许对当前工作区已发现且 id 唯一的包写入 `SourceApproved`、`Denied` 或 `Revoked`。
 - 损坏、版本未知或记录冲突的信任文件按失败处理；适配器和主机不得写信任状态。
-- `SourceApproved` 不得直接映射为 Host 的 `Trusted`。来源审核 epoch 只属于来源存储；P0-C.2 首次激活必须展示适配器、入口、能力和副作用，并由激活归属模块定义独立的 Host 信任及其 epoch。
+- `SourceApproved` 不直接映射为 Host 的 `Trusted`。来源审核代次只用于来源存储；每条激活记录的签发代次写入当前 Binding 的 `trust_epoch` 字段，只用于校验该包的激活有效性。该字段不承载来源审核代次。
+- 当前链路只读取声明并生成权限候选，不消费项目状态或产品策略快照，因此 `project_epoch`、`policy_epoch` 固定为 `0`，`tool_registry_epoch` 为空。后续只有在接入相应状态时，才由其归属模块提供实际代次。
 - `ProjectionOnly` 在候选路径中表示插件代码没有被执行、最终效果没有提交；它允许主机返回受权限门禁保护的候选项和诊断，不表示插件运行时已经可执行。
 
 OpenCode 能力映射：
@@ -245,8 +248,8 @@ Product Profile、Delivery Profile、Runtime Configuration 和 Capability Availa
 
 | 产品形态 | P0 插件策略 | 入口行为 |
 |---|---|---|
-| Desktop / product-full | 当前仅保留插件主机基础边界，尚未绑定受管包来源 | 生产绑定完成前不得把来源审核通过的包显示为已启用或可执行 |
-| CLI | 提供受管包来源审核和诊断入口，不启动插件主机 | `plugins list` 显示两个扫描根、适配器、来源、hash、审核状态和执行不可用；`doctor` 对完整性错误返回失败 |
+| Desktop / product-full | 提供受管包来源、激活和候选投影的组装能力 | 当前没有插件管理界面，也不把候选显示为已注册或可执行工具 |
+| CLI | 提供来源审核、激活预览、精确哈希确认和停用；按需组装仅用于候选投影的 Host/Binding | 不执行插件代码、不注册最终工具；`doctor` 对完整性错误返回失败 |
 | ACP | `status-only`、`projection-only`、`unsupported`、`policy-denied` 或 `quarantined` | 不把插件失败解释为 agent 失败，不接入 P0 副作用闭环 |
 | Server / Remote | `projection-only`、`temporarily-unavailable`、`unsupported` 或 `policy-denied` | 不自动启动本地 JS/TS 运行时；远端执行域需 P0+ 单独设计 |
 | Web / Mobile Web | 只消费后端能力服务接口和只读视图 | 不持有插件执行单元，不直接加载插件代码 |

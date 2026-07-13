@@ -15,8 +15,8 @@ CLI 产品入口、配置兼容、TUI Blueprint 消费和 CLI Agent 体验，不
 
 | CLI 阶段 | 可消费的插件里程碑 | 边界 |
 |---|---|---|
-| CLI-P0 / CLI-P1 | P0-C.1 | 仅受管来源、审核和只读诊断，不激活或执行插件。 |
-| CLI-P2 激活 | P0-C.2 | 建立独立 Host trust，并消费经过权限门禁的最小候选。 |
+| CLI-P0 / CLI-P1 | P0-C.1；插件管理命令可消费 P0-C.2 | 提供受管来源、审核、显式激活和候选预览；不把候选注册为可执行工具。 |
+| CLI-P2 候选消费 | P0-C.2 | 将已激活且经过权限门禁的候选接入 CLI Agent 工具快照。 |
 | CLI-P2 隔离执行/分发 | P0+ | worker、资源预算、可写 Hook、更新/撤销和组织策略分别完成设计与安全验收后接入。 |
 
 ## 1. 目标与边界
@@ -172,7 +172,7 @@ CLI-P1 应统一以下命令的文本和结构化只读视图：
 
 CLI-P2 在 CLI-P0/CLI-P1 契约稳定后进入：
 
-- OpenCode-compatible 受管包的显式激活、隔离执行、更新/卸载和组织策略。
+- OpenCode-compatible 受管包候选进入工具快照；隔离执行、更新/卸载和组织策略分别验收。
 - 受控命令、Skill、Tool、事件订阅、权限候选和只读 TUI contribution；可写 Hook 单独评审。
 - 扩展 OpenCode、Codex、Claude Code 的资产覆盖和批量预览/选择体验，不改变 CLI-P1 已冻结的资产分类与写入边界。
 - 消费完整 TUI Blueprint、产品内置扩展投影和多品牌 CLI 发布事实；通用 Bundle 构建、品牌资源、签名和
