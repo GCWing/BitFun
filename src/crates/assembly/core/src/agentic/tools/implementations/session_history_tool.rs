@@ -106,7 +106,7 @@ Examples:
     }
 
     fn default_exposure(&self) -> ToolExposure {
-        ToolExposure::Deferred
+        ToolExposure::Expanded
     }
 
     fn input_schema(&self) -> Value {
