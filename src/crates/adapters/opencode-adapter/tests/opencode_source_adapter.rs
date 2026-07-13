@@ -137,13 +137,7 @@ impl ManagedPackageFixture {
         let input = self.approved_input().await;
         let content_hash = input.clone().into_parts().1.content_hash;
         self.service
-            .set_activation(
-                &self.workspace,
-                "acme.demo",
-                true,
-                Some(&content_hash),
-                None,
-            )
+            .activate(&self.workspace, "acme.demo", Some(&content_hash))
             .await
             .expect("activate package");
         self.service

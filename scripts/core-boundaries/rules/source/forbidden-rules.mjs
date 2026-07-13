@@ -32,7 +32,7 @@ export const forbiddenContentRules = [
     patterns: [
       {
         regex:
-          /\bpub\s+(?:async\s+)?fn\s+(?!(?:new|refresh|set_trust|load_package|set_activation|load_activated_package|has_activation_authority)\b)[A-Za-z_][A-Za-z0-9_]*\b/,
+          /\bpub\s+(?:async\s+)?fn\s+(?!(?:new|refresh|set_trust|load_package|activate|deactivate|load_activated_package|has_activation_authority)\b)[A-Za-z_][A-Za-z0-9_]*\b/,
         message:
           'unexpected public ManagedPluginSourceService method; update the reviewed method budget before exposing more API',
       },
@@ -45,7 +45,7 @@ export const forbiddenContentRules = [
     patterns: [
       {
         regex:
-          /\bpub\s+(?:const\s+)?fn\s+(?!(?:parse_json|validate|content_hash|new|into_parts|epoch|activation_epoch|trust_level_for|apply_decision|reconcile_sources|is_activated|activation_authority|is_activation_current|set_activation)\b)[A-Za-z_][A-Za-z0-9_]*\b/,
+          /\bpub\s+(?:const\s+)?fn\s+(?!(?:parse_json|validate|content_hash|new|into_parts|epoch|activation_epoch|activation_sources|trust_level_for|apply_decision|reconcile_sources|is_activated|activation_authority|is_activation_current|activate|clear_activation_record)\b)[A-Za-z_][A-Za-z0-9_]*\b/,
         message:
           'unexpected public plugin source contract method; update the reviewed method budget before exposing more API',
       },

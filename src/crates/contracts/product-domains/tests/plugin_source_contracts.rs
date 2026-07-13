@@ -35,7 +35,7 @@ fn approve_source(store: &mut PluginTrustStore, package: &PluginPackageSourceIde
 
 fn activate_source(store: &mut PluginTrustStore, package: &PluginPackageSourceIdentity) {
     store
-        .set_activation(PROJECT, WORKSPACE, package.clone(), true, 101)
+        .activate(PROJECT, WORKSPACE, package.clone(), 101)
         .expect("activate source");
 }
 
@@ -252,6 +252,39 @@ fn trust_store_invalidates_changed_package_identity_and_advances_epoch_once() {
 }
 
 #[test]
+fn absent_sources_preserve_review_history_until_a_replacement_is_discovered() {
+    let original = source(HASH_A, SOURCE_PATH);
+    let replacement = source(HASH_B, SOURCE_PATH);
+    let mut store = PluginTrustStore::new(1);
+    approve_source(&mut store, &original);
+    activate_source(&mut store, &original);
+    let epochs = (store.epoch(), store.activation_epoch());
+
+    assert!(!store
+        .reconcile_sources(PROJECT, WORKSPACE, &[])
+        .expect("reconcile absent source"));
+    assert_eq!((store.epoch(), store.activation_epoch()), epochs);
+    assert_eq!(
+        store.trust_level_for(PROJECT, WORKSPACE, &original),
+        PluginPackageTrustLevel::SourceApproved
+    );
+    assert!(store.is_activated(PROJECT, WORKSPACE, &original));
+    assert_eq!(
+        store.activation_sources(PROJECT, WORKSPACE),
+        vec![original.clone()]
+    );
+
+    assert!(store
+        .reconcile_sources(PROJECT, WORKSPACE, &[replacement])
+        .expect("reconcile replacement source"));
+    assert_eq!(
+        store.trust_level_for(PROJECT, WORKSPACE, &original),
+        PluginPackageTrustLevel::Unknown
+    );
+    assert!(!store.is_activated(PROJECT, WORKSPACE, &original));
+}
+
+#[test]
 fn trust_decisions_are_scoped_to_project_and_workspace() {
     let mut store = PluginTrustStore::new(1);
     let package = source(HASH_A, "file:///workspace/.bitfun/plugins/acme.demo");
@@ -371,7 +404,7 @@ fn activation_lifecycle_is_exact_independent_and_idempotent() {
     assert_eq!(store.activation_epoch(), 7);
     assert_eq!(
         store
-            .set_activation(PROJECT, WORKSPACE, package.clone(), true, 100)
+            .activate(PROJECT, WORKSPACE, package.clone(), 100)
             .expect_err("unapproved source must not activate")
             .to_string(),
         "only a source-approved plugin package can be activated"
@@ -385,17 +418,89 @@ fn activation_lifecycle_is_exact_independent_and_idempotent() {
     assert!(!store.is_activated(PROJECT, "workspace-2", &package));
     assert!(!store.is_activated(PROJECT, WORKSPACE, &source(HASH_B, SOURCE_PATH)));
     assert!(!store
-        .set_activation(PROJECT, WORKSPACE, package.clone(), true, 102)
+        .activate(PROJECT, WORKSPACE, package.clone(), 102)
         .expect("repeat activation"));
 
     assert!(store
-        .set_activation(PROJECT, WORKSPACE, package.clone(), false, 103)
-        .expect("deactivate source"));
+        .clear_activation_record(PROJECT, WORKSPACE, &package.package_id, None)
+        .expect("deactivate source")
+        .is_some());
     assert_eq!((store.epoch(), store.activation_epoch()), (trust_epoch, 9));
     assert!(!store
-        .set_activation(PROJECT, WORKSPACE, package, false, 104)
-        .expect("repeat deactivation"));
+        .clear_activation_record(PROJECT, WORKSPACE, &package.package_id, None)
+        .expect("repeat deactivation")
+        .is_some());
     assert_eq!((store.epoch(), store.activation_epoch()), (trust_epoch, 9));
+}
+
+#[test]
+fn residual_activation_cleanup_preserves_source_approval_and_is_idempotent() {
+    let package = source(HASH_A, SOURCE_PATH);
+    let mut store = PluginTrustStore::new(7);
+    approve_source(&mut store, &package);
+    activate_source(&mut store, &package);
+    let trust_epoch = store.epoch();
+    let activated_epoch = store
+        .activation_authority(PROJECT, WORKSPACE, &package)
+        .expect("read activation authority")
+        .activation_epoch();
+
+    assert_eq!(
+        store
+            .clear_activation_record(
+                PROJECT,
+                WORKSPACE,
+                &package.package_id,
+                Some(activated_epoch),
+            )
+            .expect("clear residual activation"),
+        Some(package.clone())
+    );
+    assert_eq!(store.epoch(), trust_epoch);
+    assert_eq!(store.activation_epoch(), activated_epoch + 1);
+    assert_eq!(
+        store.trust_level_for(PROJECT, WORKSPACE, &package),
+        PluginPackageTrustLevel::SourceApproved
+    );
+    assert!(!store.is_activated(PROJECT, WORKSPACE, &package));
+
+    let cleanup_epoch = store.activation_epoch();
+    assert_eq!(
+        store
+            .clear_activation_record(PROJECT, WORKSPACE, &package.package_id, None)
+            .expect("repeat residual cleanup"),
+        None
+    );
+    assert_eq!(store.activation_epoch(), cleanup_epoch);
+}
+
+#[test]
+fn stale_residual_cleanup_cannot_clear_a_newer_activation() {
+    let package = source(HASH_A, SOURCE_PATH);
+    let mut store = PluginTrustStore::new(1);
+    approve_source(&mut store, &package);
+    activate_source(&mut store, &package);
+    let stale_epoch = store
+        .activation_authority(PROJECT, WORKSPACE, &package)
+        .expect("read first activation authority")
+        .activation_epoch();
+    store
+        .clear_activation_record(PROJECT, WORKSPACE, &package.package_id, None)
+        .expect("deactivate source");
+    store
+        .activate(PROJECT, WORKSPACE, package.clone(), 103)
+        .expect("reactivate source");
+    let current_epoch = store
+        .activation_authority(PROJECT, WORKSPACE, &package)
+        .expect("read current activation authority")
+        .activation_epoch();
+
+    assert!(!store
+        .clear_activation_record(PROJECT, WORKSPACE, &package.package_id, Some(stale_epoch),)
+        .expect("stale cleanup is a no-op")
+        .is_some());
+    assert!(store.is_activated(PROJECT, WORKSPACE, &package));
+    assert_eq!(store.activation_epoch(), current_epoch);
 }
 
 #[test]
@@ -547,7 +652,7 @@ fn activation_authority_requires_the_exact_activated_package() {
 
     let retained = authority.clone();
     store
-        .set_activation(PROJECT, WORKSPACE, package.clone(), false, 102)
+        .clear_activation_record(PROJECT, WORKSPACE, &package.package_id, None)
         .expect("deactivate source");
     assert!(!store.is_activation_current(&retained));
 

@@ -370,6 +370,31 @@ impl PluginTrustStore {
         self.activation_epoch
     }
 
+    pub fn activation_sources(
+        &self,
+        project_domain_id: &str,
+        workspace_id: &str,
+    ) -> Vec<PluginPackageSourceIdentity> {
+        let mut sources = self
+            .activation_records
+            .iter()
+            .filter(|record| {
+                record.project_domain_id == project_domain_id && record.workspace_id == workspace_id
+            })
+            .map(|record| record.source.clone())
+            .collect::<Vec<_>>();
+        sources.sort_by(|left, right| {
+            left.package_id
+                .cmp(&right.package_id)
+                .then_with(|| left.version.cmp(&right.version))
+                .then_with(|| left.adapter.cmp(&right.adapter))
+                .then_with(|| left.source_path.cmp(&right.source_path))
+                .then_with(|| left.content_hash.cmp(&right.content_hash))
+        });
+        sources.dedup();
+        sources
+    }
+
     pub fn validate(&self) -> Result<(), PluginSourceContractError> {
         if self.schema_version != PLUGIN_TRUST_STORE_SCHEMA_VERSION {
             return Err(PluginSourceContractError::UnsupportedTrustStoreSchema(
@@ -505,51 +530,73 @@ impl PluginTrustStore {
                 .is_some_and(|record| record.activation_epoch == authority.activation_epoch)
     }
 
-    pub fn set_activation(
+    pub fn activate(
         &mut self,
         project_domain_id: &str,
         workspace_id: &str,
         source: PluginPackageSourceIdentity,
-        activated: bool,
         updated_at_ms: u64,
     ) -> Result<bool, PluginSourceContractError> {
         validate_scope(project_domain_id, workspace_id)?;
         source.validate()?;
-        if activated
-            && self.trust_level_for(project_domain_id, workspace_id, &source)
-                != PluginPackageTrustLevel::SourceApproved
+        if self.trust_level_for(project_domain_id, workspace_id, &source)
+            != PluginPackageTrustLevel::SourceApproved
         {
             return Err(PluginSourceContractError::ActivationRequiresSourceApproval);
         }
 
-        let existing_index = self.activation_records.iter().position(|record| {
+        if self.activation_records.iter().any(|record| {
             record.project_domain_id == project_domain_id
                 && record.workspace_id == workspace_id
                 && record.source == source
-        });
-        if activated == existing_index.is_some() {
+        }) {
             return Ok(false);
         }
 
         let mut next = self.clone();
-        if activated {
-            if next.activation_records.len() >= MAX_ACTIVATION_RECORDS {
-                return Err(PluginSourceContractError::TooManyActivationRecords);
-            }
-            next.advance_activation_epoch()?;
-            next.activation_records.push(PluginActivationRecord {
-                project_domain_id: project_domain_id.to_string(),
-                workspace_id: workspace_id.to_string(),
-                source,
-                activation_epoch: next.activation_epoch,
-                updated_at_ms,
-            });
-        } else if let Some(index) = existing_index {
-            next.activation_records.remove(index);
-            next.advance_activation_epoch()?;
+        if next.activation_records.len() >= MAX_ACTIVATION_RECORDS {
+            return Err(PluginSourceContractError::TooManyActivationRecords);
         }
+        next.advance_activation_epoch()?;
+        next.activation_records.push(PluginActivationRecord {
+            project_domain_id: project_domain_id.to_string(),
+            workspace_id: workspace_id.to_string(),
+            source,
+            activation_epoch: next.activation_epoch,
+            updated_at_ms,
+        });
         *self = next;
         Ok(true)
+    }
+
+    pub fn clear_activation_record(
+        &mut self,
+        project_domain_id: &str,
+        workspace_id: &str,
+        package_id: &str,
+        expected_activation_epoch: Option<u64>,
+    ) -> Result<Option<PluginPackageSourceIdentity>, PluginSourceContractError> {
+        validate_scope(project_domain_id, workspace_id)?;
+        validate_package_id(package_id)?;
+        let Some(index) = self.activation_records.iter().position(|record| {
+            record.project_domain_id == project_domain_id
+                && record.workspace_id == workspace_id
+                && record.source.package_id == package_id
+        }) else {
+            return Ok(None);
+        };
+        if expected_activation_epoch
+            .is_some_and(|expected| self.activation_records[index].activation_epoch != expected)
+        {
+            return Ok(None);
+        }
+
+        let mut next = self.clone();
+        let removed_source = next.activation_records[index].source.clone();
+        next.activation_records.remove(index);
+        next.advance_activation_epoch()?;
+        *self = next;
+        Ok(Some(removed_source))
     }
 
     fn activation_record(
@@ -649,11 +696,16 @@ impl PluginTrustStore {
             source.validate()?;
         }
         let current = current_sources.iter().collect::<HashSet<_>>();
+        let current_package_ids = current_sources
+            .iter()
+            .map(|source| source.package_id.as_str())
+            .collect::<HashSet<_>>();
         let mut next = self.clone();
         let previous_len = next.records.len();
         next.records.retain(|record| {
             record.project_domain_id != project_domain_id
                 || record.workspace_id != workspace_id
+                || !current_package_ids.contains(record.source.package_id.as_str())
                 || current.contains(&record.source)
         });
         let changed = next.records.len() != previous_len;
@@ -665,6 +717,7 @@ impl PluginTrustStore {
         next.activation_records.retain(|record| {
             record.project_domain_id != project_domain_id
                 || record.workspace_id != workspace_id
+                || !current_package_ids.contains(record.source.package_id.as_str())
                 || current.contains(&record.source)
         });
         let activation_changed = next.activation_records.len() != previous_activation_len;

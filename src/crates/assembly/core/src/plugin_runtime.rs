@@ -18,7 +18,7 @@ use bitfun_runtime_ports::{
     PortResult,
 };
 use bitfun_services_integrations::plugin_source::{
-    ManagedPluginSourceError, ManagedPluginSourceService,
+    ManagedPluginSourceError, ManagedPluginSourceIssue, ManagedPluginSourceService,
 };
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -55,6 +55,24 @@ pub struct ManagedPluginActivationView {
     pub diagnostics: Vec<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ManagedPluginDeactivationResult {
+    Deactivated {
+        package_id: String,
+        diagnostics: Vec<ManagedPluginSourceIssue>,
+    },
+    ResidualActivationCleared {
+        package_id: String,
+        current_package_available: Option<bool>,
+        diagnostics: Vec<ManagedPluginSourceIssue>,
+    },
+    AlreadyInactive {
+        package_id: String,
+        current_package_available: Option<bool>,
+        diagnostics: Vec<ManagedPluginSourceIssue>,
+    },
+}
+
 pub async fn preview_managed_plugin_activation(
     workspace: &Path,
     package_id: &str,
@@ -65,23 +83,25 @@ pub async fn preview_managed_plugin_activation(
     preview_with_service(service, workspace, package_id).await
 }
 
-pub async fn set_managed_plugin_activation(
+pub async fn activate_managed_plugin(
     workspace: &Path,
     package_id: &str,
-    activated: bool,
     expected_content_hash: Option<&str>,
 ) -> Result<ManagedPluginActivationView, ManagedPluginSourceError> {
     let service = Arc::new(crate::plugin_source::managed_plugin_source_service(
         workspace,
     )?);
-    set_activation_with_service(
-        service,
+    activate_with_service(service, workspace, package_id, expected_content_hash).await
+}
+
+pub async fn deactivate_managed_plugin(
+    workspace: &Path,
+    package_id: &str,
+) -> Result<ManagedPluginDeactivationResult, ManagedPluginSourceError> {
+    let service = Arc::new(crate::plugin_source::managed_plugin_source_service(
         workspace,
-        package_id,
-        activated,
-        expected_content_hash,
-    )
-    .await
+    )?);
+    deactivate_with_service(service, workspace, package_id).await
 }
 
 async fn preview_with_service(
@@ -110,41 +130,12 @@ async fn preview_with_service(
     ))
 }
 
-async fn set_activation_with_service(
+async fn activate_with_service(
     service: Arc<ManagedPluginSourceService>,
     workspace: &Path,
     package_id: &str,
-    activated: bool,
     expected_content_hash: Option<&str>,
 ) -> Result<ManagedPluginActivationView, ManagedPluginSourceError> {
-    if !activated {
-        let (snapshot, _) = service
-            .set_activation(workspace, package_id, false, None, None)
-            .await?;
-        let package = snapshot
-            .packages
-            .into_iter()
-            .find(|package| package.package_id == package_id)
-            .ok_or_else(|| ManagedPluginSourceError::PackageNotFound(package_id.to_string()))?;
-        return Ok(ManagedPluginActivationView {
-            package_id: package.package_id,
-            version: package.version,
-            adapter: package.adapter,
-            content_hash: package.content_hash,
-            activated: false,
-            activation_epoch: None,
-            entry_ids: Vec::new(),
-            provider_candidates_supported: false,
-            permission_required: false,
-            candidates: Vec::new(),
-            diagnostics: snapshot
-                .issues
-                .into_iter()
-                .map(|issue| issue.message)
-                .collect(),
-        });
-    }
-
     let expected_content_hash = expected_content_hash.ok_or_else(|| {
         invalid_package(
             package_id,
@@ -166,13 +157,7 @@ async fn set_activation_with_service(
     }
 
     let (activation, activation_changed) = service
-        .set_activation(
-            workspace,
-            package_id,
-            true,
-            Some(expected_content_hash),
-            None,
-        )
+        .activate(workspace, package_id, Some(expected_content_hash))
         .await?;
     let activation_epoch = activation.activation_epoch.ok_or_else(|| {
         unavailable(
@@ -205,21 +190,10 @@ async fn set_activation_with_service(
         Ok(view) => Ok(view),
         Err(error) if activation_changed => {
             let rollback = service
-                .set_activation(workspace, package_id, false, None, Some(activation_epoch))
+                .deactivate(workspace, package_id, Some(activation_epoch))
                 .await;
             match rollback {
-                Ok((snapshot, _))
-                    if snapshot
-                        .packages
-                        .iter()
-                        .any(|package| package.package_id == package_id && !package.activated) =>
-                {
-                    Err(error)
-                }
-                Ok(_) => Err(unavailable(
-                    package_id,
-                    format!("{error}; activation changed concurrently and was not rolled back"),
-                )),
+                Ok(_) => Err(error),
                 Err(rollback_error) => Err(unavailable(
                     package_id,
                     format!("{error}; activation rollback failed: {rollback_error}"),
@@ -227,6 +201,40 @@ async fn set_activation_with_service(
             }
         }
         Err(error) => Err(error),
+    }
+}
+
+async fn deactivate_with_service(
+    service: Arc<ManagedPluginSourceService>,
+    workspace: &Path,
+    package_id: &str,
+) -> Result<ManagedPluginDeactivationResult, ManagedPluginSourceError> {
+    let (snapshot, changed, cleared_source_available) =
+        service.deactivate(workspace, package_id, None).await?;
+    let current_package_available = snapshot.discovery_complete.then(|| {
+        snapshot
+            .packages
+            .iter()
+            .any(|package| package.package_id == package_id)
+    });
+    let diagnostics = snapshot.issues;
+    if changed && cleared_source_available == Some(true) {
+        Ok(ManagedPluginDeactivationResult::Deactivated {
+            package_id: package_id.to_string(),
+            diagnostics,
+        })
+    } else if changed {
+        Ok(ManagedPluginDeactivationResult::ResidualActivationCleared {
+            package_id: package_id.to_string(),
+            current_package_available,
+            diagnostics,
+        })
+    } else {
+        Ok(ManagedPluginDeactivationResult::AlreadyInactive {
+            package_id: package_id.to_string(),
+            current_package_available,
+            diagnostics,
+        })
     }
 }
 
@@ -642,6 +650,21 @@ export const WorkspaceToolsPlugin: Plugin = async () => ({
                 service,
             }
         }
+
+        async fn activate(&self) {
+            let preview =
+                preview_with_service(Arc::clone(&self.service), &self.workspace, "acme.demo")
+                    .await
+                    .expect("preview package");
+            activate_with_service(
+                Arc::clone(&self.service),
+                &self.workspace,
+                "acme.demo",
+                Some(&preview.content_hash),
+            )
+            .await
+            .expect("activate package");
+        }
     }
 
     #[tokio::test]
@@ -663,11 +686,10 @@ export const WorkspaceToolsPlugin: Plugin = async () => ({
         assert!(preview.provider_candidates_supported);
         assert!(preview.permission_required);
 
-        let activated = set_activation_with_service(
+        let activated = activate_with_service(
             Arc::clone(&fixture.service),
             &fixture.workspace,
             "acme.demo",
-            true,
             Some(&preview.content_hash),
         )
         .await
@@ -677,17 +699,71 @@ export const WorkspaceToolsPlugin: Plugin = async () => ({
         assert!(!activated.candidates.is_empty());
         assert!(activated.permission_required);
 
-        let deactivated = set_activation_with_service(
+        let deactivated = deactivate_with_service(
             Arc::clone(&fixture.service),
             &fixture.workspace,
             "acme.demo",
-            false,
-            None,
         )
         .await
         .expect("deactivate package");
-        assert!(!deactivated.activated);
-        assert_eq!(deactivated.activation_epoch, None);
+        assert!(matches!(
+            deactivated,
+            ManagedPluginDeactivationResult::Deactivated { .. }
+        ));
+    }
+
+    #[tokio::test]
+    async fn deactivation_distinguishes_current_residual_and_inactive_states() {
+        let fixture = Fixture::new().await;
+        fixture.activate().await;
+
+        let result = deactivate_with_service(
+            Arc::clone(&fixture.service),
+            &fixture.workspace,
+            "acme.demo",
+        )
+        .await
+        .expect("deactivate package");
+
+        assert!(matches!(
+            result,
+            ManagedPluginDeactivationResult::Deactivated { package_id, .. }
+                if package_id == "acme.demo"
+        ));
+        fixture.activate().await;
+        fs::remove_dir_all(fixture.workspace.join(".bitfun/plugins")).expect("remove plugin root");
+        fs::write(fixture.workspace.join(".bitfun/plugins"), "not a directory")
+            .expect("make plugin root unreadable");
+
+        let cleared = deactivate_with_service(
+            Arc::clone(&fixture.service),
+            &fixture.workspace,
+            "acme.demo",
+        )
+        .await
+        .expect("clear residual activation");
+        assert!(matches!(
+            cleared,
+            ManagedPluginDeactivationResult::ResidualActivationCleared {
+                current_package_available: None,
+                ..
+            }
+        ));
+
+        let repeated = deactivate_with_service(
+            Arc::clone(&fixture.service),
+            &fixture.workspace,
+            "acme.demo",
+        )
+        .await
+        .expect("repeat deactivation");
+        assert!(matches!(
+            repeated,
+            ManagedPluginDeactivationResult::AlreadyInactive {
+                current_package_available: None,
+                ..
+            }
+        ));
     }
 
     #[tokio::test]
@@ -705,11 +781,10 @@ export const WorkspaceToolsPlugin: Plugin = async () => ({
         .expect("preview unsupported package");
         assert!(!preview.provider_candidates_supported);
 
-        let error = set_activation_with_service(
+        let error = activate_with_service(
             Arc::clone(&fixture.service),
             &fixture.workspace,
             "acme.demo",
-            true,
             Some(&preview.content_hash),
         )
         .await
@@ -721,16 +796,17 @@ export const WorkspaceToolsPlugin: Plugin = async () => ({
         let snapshot = fixture.service.refresh(&fixture.workspace).await;
         assert!(!snapshot.packages[0].activated);
 
-        let inactive = set_activation_with_service(
+        let inactive = deactivate_with_service(
             Arc::clone(&fixture.service),
             &fixture.workspace,
             "acme.demo",
-            false,
-            None,
         )
         .await
         .expect("keep package inactive");
-        assert_eq!(inactive.activation_epoch, None);
+        assert!(matches!(
+            inactive,
+            ManagedPluginDeactivationResult::AlreadyInactive { .. }
+        ));
     }
 
     #[tokio::test]
@@ -746,13 +822,7 @@ export const WorkspaceToolsPlugin: Plugin = async () => ({
         .content_hash;
         fixture
             .service
-            .set_activation(
-                &fixture.workspace,
-                "acme.demo",
-                true,
-                Some(&first_content_hash),
-                None,
-            )
+            .activate(&fixture.workspace, "acme.demo", Some(&first_content_hash))
             .await
             .expect("activate package");
         let (input, authority) = fixture
@@ -781,7 +851,7 @@ export const WorkspaceToolsPlugin: Plugin = async () => ({
 
         fixture
             .service
-            .set_activation(&fixture.workspace, "acme.demo", false, None, None)
+            .deactivate(&fixture.workspace, "acme.demo", None)
             .await
             .expect("deactivate package");
         assert!(binding
@@ -804,13 +874,7 @@ export const WorkspaceToolsPlugin: Plugin = async () => ({
         .content_hash;
         fixture
             .service
-            .set_activation(
-                &fixture.workspace,
-                "acme.demo",
-                true,
-                Some(&current_content_hash),
-                None,
-            )
+            .activate(&fixture.workspace, "acme.demo", Some(&current_content_hash))
             .await
             .expect("reactivate package");
         let (current_input, current_authority) = fixture
@@ -853,13 +917,7 @@ export const WorkspaceToolsPlugin: Plugin = async () => ({
         .expect("preview package");
         fixture
             .service
-            .set_activation(
-                &fixture.workspace,
-                "acme.demo",
-                true,
-                Some(&preview.content_hash),
-                None,
-            )
+            .activate(&fixture.workspace, "acme.demo", Some(&preview.content_hash))
             .await
             .expect("activate package");
         let (input, authority) = fixture
@@ -907,7 +965,7 @@ export const WorkspaceToolsPlugin: Plugin = async () => ({
         started.notified().await;
         fixture
             .service
-            .set_activation(&fixture.workspace, "acme.demo", false, None, None)
+            .deactivate(&fixture.workspace, "acme.demo", None)
             .await
             .expect("deactivate while dispatch is in flight");
         release.notify_one();

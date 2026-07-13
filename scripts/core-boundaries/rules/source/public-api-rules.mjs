@@ -232,8 +232,10 @@ export const managedPluginSourcePublicApiEntries = [
 export const managedPluginActivationPublicApiEntries = [
   'ManagedPluginCandidateView',
   'ManagedPluginActivationView',
+  'ManagedPluginDeactivationResult',
   'preview_managed_plugin_activation',
-  'set_managed_plugin_activation',
+  'activate_managed_plugin',
+  'deactivate_managed_plugin',
 ].map((symbol) =>
   pluginSourceEntry(
     symbol,
@@ -308,7 +310,7 @@ export const publicApiAllowlistRules = [
   {
     path: 'src/crates/assembly/core/src/plugin_runtime.rs',
     reason:
-      'core managed plugin activation API must stay limited to product status projection and one state transition',
+      'core managed plugin activation API must stay limited to product status projection and explicit activation or deactivation transitions',
     allowedSymbolEntries: managedPluginActivationPublicApiEntries,
   },
 ];

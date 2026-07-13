@@ -980,9 +980,9 @@ export function runManifestParserSelfTest({
     (managedPluginActivationPublicApiRule?.allowedSymbolEntries || [])
       .map((entry) => entry.symbol)
       .join(',') !==
-    'ManagedPluginCandidateView,ManagedPluginActivationView,preview_managed_plugin_activation,set_managed_plugin_activation'
+    'ManagedPluginCandidateView,ManagedPluginActivationView,ManagedPluginDeactivationResult,preview_managed_plugin_activation,activate_managed_plugin,deactivate_managed_plugin'
   ) {
-    throw new Error('managed plugin activation API budget must stay limited to four product-facing symbols');
+    throw new Error('managed plugin activation API budget must stay limited to six product-facing symbols');
   }
   const appHostAbiRule = forbiddenContentUnderRules.find((rule) => rule.path === 'src/apps');
   if (!appHostAbiRule) {
