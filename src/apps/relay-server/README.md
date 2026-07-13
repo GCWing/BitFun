@@ -168,11 +168,31 @@ Encrypted session and settings blobs, stored opaquely on the relay. All payloads
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/api/sync/sessions` | POST | Upload/replace an encrypted session blob |
-| `/api/sync/sessions` | GET | List all encrypted session blobs (`?since=<timestamp>`) |
+| `/api/sync/sessions` | POST | Upload/replace an encrypted session blob (**64 MiB** Axum body limit) |
+| `/api/sync/sessions` | GET | List encrypted session blobs (`?since=<version>`) |
+| `/api/sync/sessions/:session_id` | GET | Fetch one encrypted session blob by id |
 | `/api/sync/sessions/:session_id` | DELETE | Soft-delete a session blob (tombstone) |
-| `/api/sync/settings` | POST | Upload/replace the encrypted settings blob |
+| `/api/sync/settings` | POST | Upload/replace the encrypted settings blob (**64 MiB** Axum body limit) |
 | `/api/sync/settings` | GET | Fetch the encrypted settings blob |
+
+#### Request body size limits (Axum vs reverse proxy)
+
+Session sync posts a **full** encrypted session bundle (metadata + all dialog turns). Long conversations with large tool outputs routinely exceed Axum’s default ~2 MiB request body limit and fail with **HTTP 413 Payload Too Large**.
+
+This server raises the limit on `POST /api/sync/sessions` and `POST /api/sync/settings` to **64 MiB** (`SYNC_BODY_LIMIT` in `src/routes/sync.rs`).
+
+If you put nginx / Caddy / another reverse proxy in front of the relay (common for TLS on port 443 → container `9700`), you must also raise the proxy body limit, or the proxy will reject large uploads **before** Axum sees them:
+
+```nginx
+# nginx example — must be >= Axum SYNC_BODY_LIMIT (64M)
+client_max_body_size 100M;
+```
+
+```caddy
+# Caddy: request_body { max_size 100MB }
+```
+
+When diagnosing 413s, check **both** gates: reverse-proxy `client_max_body_size` (or equivalent) **and** Axum `DefaultBodyLimit`. The effective limit is the stricter of the two. Direct host-port access (e.g. `host:9701` without a proxy) only hits the Axum limit.
 
 ## WebSocket Protocol (Desktop Only)
 

@@ -192,8 +192,10 @@ impl Default for AccountClient {
 impl AccountClient {
     pub fn new() -> Self {
         Self {
+            // Sync uploads full encrypted session bundles; 30s is too short for
+            // large conversations over slower links.
             http: reqwest::Client::builder()
-                .timeout(std::time::Duration::from_secs(30))
+                .timeout(std::time::Duration::from_secs(120))
                 .build()
                 .unwrap_or_else(|_| reqwest::Client::new()),
         }
@@ -207,6 +209,14 @@ impl AccountClient {
     /// Map a non-2xx relay response into a human-readable error.
     async fn into_error(resp: reqwest::Response) -> anyhow::Error {
         let status = resp.status();
+        if status == reqwest::StatusCode::PAYLOAD_TOO_LARGE {
+            return anyhow!(
+                "relay returned HTTP 413 Payload Too Large \
+                 (encrypted session/settings blob exceeds relay body limit; \
+                  raise Axum DefaultBodyLimit on /api/sync/* and any reverse-proxy \
+                  client_max_body_size)"
+            );
+        }
         match resp.json::<ErrorBody>().await {
             Ok(body) => {
                 let msg = body.error;

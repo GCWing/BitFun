@@ -1,6 +1,13 @@
 # Caddyfile for BitFun Relay Server
 # Replace YOUR_DOMAIN with your actual domain, or use :443 with self-signed cert.
 #
+# Body size: account sync POSTs full encrypted session bundles. Axum allows
+# up to 64 MiB on /api/sync/* (see README). If you terminate TLS here, raise
+# the proxy body limit to at least that size, e.g.:
+#   request_body {
+#       max_size 100MB
+#   }
+#
 # Option A: With a domain (Let's Encrypt auto-HTTPS)
 #   relay.yourdomain.com {
 #       reverse_proxy relay-server:9700

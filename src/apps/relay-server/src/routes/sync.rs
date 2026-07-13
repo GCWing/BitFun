@@ -4,7 +4,7 @@
 //! shared helper (the relay stays zero-knowledge: it only stores/returns
 //! AES-GCM ciphertext encrypted client-side with the account master key).
 
-use axum::extract::{Path, Query, State};
+use axum::extract::{DefaultBodyLimit, Path, Query, State};
 use axum::http::{header, HeaderMap, StatusCode};
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -12,6 +12,14 @@ use serde::{Deserialize, Serialize};
 
 use crate::db::{AuthToken, SyncSessionRow, SyncSettingsRow};
 use crate::routes::api::AppState;
+
+/// Max request body for encrypted session/settings upserts.
+///
+/// Session sync uploads a full encrypted `SessionBundle` (metadata + all
+/// turns). Axum's default limit is ~2 MiB and will return HTTP 413 for long
+/// conversations. Keep an explicit ceiling so reverse proxies and operators
+/// can align `client_max_body_size` (nginx) / equivalent limits.
+pub const SYNC_BODY_LIMIT: usize = 64 * 1024 * 1024;
 
 /// Validated principal extracted from the bearer token.
 pub struct AuthUser {
@@ -44,7 +52,9 @@ pub fn sync_router() -> Router<AppState> {
     Router::new()
         .route(
             "/api/sync/sessions",
-            post(sessions_upsert).get(sessions_list),
+            post(sessions_upsert)
+                .get(sessions_list)
+                .layer(DefaultBodyLimit::max(SYNC_BODY_LIMIT)),
         )
         .route(
             "/api/sync/sessions/{session_id}",
@@ -52,7 +62,9 @@ pub fn sync_router() -> Router<AppState> {
         )
         .route(
             "/api/sync/settings",
-            post(settings_upsert).get(settings_get),
+            post(settings_upsert)
+                .get(settings_get)
+                .layer(DefaultBodyLimit::max(SYNC_BODY_LIMIT)),
         )
 }
 
