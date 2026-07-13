@@ -16,11 +16,15 @@ import {
 import { remoteConnectAPI } from '@/infrastructure/api/service-api/RemoteConnectAPI';
 import type { AccountHint, AccountDeviceInfo } from '@/infrastructure/api/service-api/RemoteConnectAPI';
 import { configAPI } from '@/infrastructure/api/service-api/ConfigAPI';
+import { configManager } from '@/infrastructure/config/services/ConfigManager';
+import { api } from '@/infrastructure/api/service-api/ApiClient';
 import { useNotification } from '@/shared/notification-system';
 import { createLogger } from '@/shared/utils/logger';
 import './AccountLoginDialog.scss';
 
 const log = createLogger('AccountLoginDialog');
+
+const DEVICE_POLL_FALLBACK_MS = 30_000;
 
 interface AccountLoginDialogProps {
   isOpen: boolean;
@@ -31,6 +35,8 @@ interface RemoteWorkspaceInfo {
   has_workspace: boolean;
   path: string | null;
   project_name: string | null;
+  remote_connection_id?: string | null;
+  remote_ssh_host?: string | null;
 }
 
 interface RemoteSessionInfo {
@@ -50,6 +56,36 @@ function parseRpcResponse(json: string): any {
     throw new Error(data.message || 'Remote error');
   }
   return data;
+}
+
+function buildListSessionsPayload(
+  workspacePath: string,
+  remoteConnectionId?: string | null,
+  remoteSshHost?: string | null,
+  limit = 50,
+) {
+  return {
+    cmd: 'list_sessions',
+    workspace_path: workspacePath,
+    remote_connection_id: remoteConnectionId ?? null,
+    remote_ssh_host: remoteSshHost ?? null,
+    limit,
+  };
+}
+
+function buildCreateSessionPayload(
+  workspacePath: string,
+  remoteConnectionId?: string | null,
+  remoteSshHost?: string | null,
+) {
+  return {
+    cmd: 'create_session',
+    agent_type: null,
+    session_name: null,
+    workspace_path: workspacePath,
+    remote_connection_id: remoteConnectionId ?? null,
+    remote_ssh_host: remoteSshHost ?? null,
+  };
 }
 
 export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
@@ -96,6 +132,40 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
     } catch (e) { log.warn('refreshDevices failed', e); }
   }, [localDeviceId]);
 
+  /** Merge Presence WS online set into the current device list (keep offline DB rows). */
+  const applyPresenceOnline = useCallback((onlineDevices: Array<{ device_id: string; device_name: string }>) => {
+    const onlineIds = new Set(onlineDevices.map(d => d.device_id));
+    setDevices(prev => {
+      const byId = new Map(prev.map(d => [d.device_id, d]));
+      for (const d of onlineDevices) {
+        const existing = byId.get(d.device_id);
+        if (existing) {
+          byId.set(d.device_id, { ...existing, online: true, device_name: d.device_name || existing.device_name });
+        } else {
+          byId.set(d.device_id, {
+            device_id: d.device_id,
+            device_name: d.device_name,
+            online: true,
+            last_seen_at: Date.now(),
+          });
+        }
+      }
+      for (const [id, device] of byId) {
+        if (!onlineIds.has(id) && device.online) {
+          byId.set(id, { ...device, online: false });
+        }
+      }
+      return Array.from(byId.values());
+    });
+  }, []);
+
+  const startDevicePolling = useCallback(() => {
+    if (refreshTimer.current) {
+      clearInterval(refreshTimer.current);
+    }
+    refreshTimer.current = setInterval(refreshDevices, DEVICE_POLL_FALLBACK_MS);
+  }, [refreshDevices]);
+
   const resetState = useCallback(() => {
     setDevices([]); setSelectedDevice(null); setRemoteWorkspace(null);
     setRemoteWorkspaces([]); setRemoteSessions([]); setRemoteMessages([]);
@@ -109,32 +179,51 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
       setUsername(''); setPassword(''); setAuthServer('');
       setError(null); setLoading(false); setView('login');
       resetState();
-    } else {
-      remoteConnectAPI.getDeviceInfo().then((info) => {
-        setLocalDeviceId(info.device_id);
-      }).catch((e) => { log.warn('getDeviceInfo failed', e); });
-      remoteConnectAPI.accountGetCredentialHint().then((hint: AccountHint | null) => {
-        if (hint) { setUsername(hint.username); setAuthServer(hint.relay_url); }
-      });
-      remoteConnectAPI.accountStatus().then(async (status) => {
-        if (status.logged_in && status.user_id) {
-          // Ensure device WS connection is up before listing devices
-          // so the local device appears as online.
-          try {
-            await remoteConnectAPI.accountConnectDevices();
-          } catch (err) {
-            log.warn('accountConnectDevices failed', err);
-          }
-          setView('devices');
-          refreshDevices();
-          refreshTimer.current = setInterval(refreshDevices, 10000);
-        }
-      });
+      return;
     }
+
+    remoteConnectAPI.getDeviceInfo().then((info) => {
+      setLocalDeviceId(info.device_id);
+    }).catch((e) => { log.warn('getDeviceInfo failed', e); });
+    remoteConnectAPI.accountGetCredentialHint().then((hint: AccountHint | null) => {
+      if (hint) { setUsername(hint.username); setAuthServer(hint.relay_url); }
+    });
+    remoteConnectAPI.accountStatus().then(async (status) => {
+      if (status.logged_in && status.user_id) {
+        try {
+          await remoteConnectAPI.accountConnectDevices();
+        } catch (err) {
+          log.warn('accountConnectDevices failed', err);
+        }
+        setView('devices');
+        refreshDevices();
+        startDevicePolling();
+      }
+    });
+
+    const unlistenPresence = api.listen<{ devices: Array<{ device_id: string; device_name: string }> }>(
+      'account://device-presence',
+      (payload) => {
+        if (payload?.devices) {
+          applyPresenceOnline(payload.devices);
+        }
+      },
+    );
+    const unlistenSettings = api.listen('account://settings-applied', async () => {
+      try {
+        await configAPI.reloadConfig();
+        configManager.clearCache();
+      } catch (e) {
+        log.warn('Failed to apply settings-applied event', e);
+      }
+    });
+
     return () => {
       if (refreshTimer.current) { clearInterval(refreshTimer.current); refreshTimer.current = null; }
+      unlistenPresence();
+      unlistenSettings();
     };
-  }, [isOpen, refreshDevices, resetState]);
+  }, [isOpen, refreshDevices, resetState, startDevicePolling, applyPresenceOnline]);
 
   const validate = useCallback(() => {
     if (!username.trim() || !password.trim() || !authServer.trim()) {
@@ -145,11 +234,11 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
     return true;
   }, [username, password, authServer, t]);
 
-  const doAutoSync = useCallback((isFirstLogin: boolean) => {
+  const doAutoSync = useCallback(async (isFirstLogin: boolean) => {
     const wp = workspacePath || '/';
     setSyncStatus('syncing');
     info(t('accountLogin.syncStarted'));
-    (async () => {
+    try {
       let configJson = '{}';
       if (isFirstLogin) {
         try {
@@ -159,16 +248,26 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
       }
       const result = await remoteConnectAPI.accountAutoSync(isFirstLogin, wp, configJson);
       log.info(`Auto-sync done: settings=${result.settings_synced} exported=${result.sessions_exported} imported=${result.sessions_imported}`);
+      if (result.settings_synced && !isFirstLogin) {
+        try {
+          await configAPI.reloadConfig();
+          configManager.clearCache();
+          success(t('accountLogin.settingsApplied'));
+        } catch (e) {
+          log.warn('reloadConfig after sync failed', e);
+        }
+      }
       setSyncStatus('done');
       success(t('accountLogin.syncDone', {
         exported: result.sessions_exported,
         imported: result.sessions_imported,
       }));
-    })().catch((e) => {
+    } catch (e) {
       log.error('Auto-sync failed', e);
       setSyncStatus('failed');
       warning(t('accountLogin.syncFailed'));
-    });
+      throw e;
+    }
   }, [workspacePath, info, success, warning, t]);
 
   const handleLogin = useCallback(async () => {
@@ -181,9 +280,7 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
         setLoading(false);
         return;
       }
-      doAutoSync(true);
-      // Await device connection so the relay registers us as online
-      // before we query the device list (otherwise we appear offline).
+      await doAutoSync(true);
       try {
         await remoteConnectAPI.accountConnectDevices();
       } catch (err) {
@@ -192,16 +289,16 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
       success(t('accountLogin.loginSuccess', { user_id: result.user_id }));
       setView('devices');
       refreshDevices();
-      refreshTimer.current = setInterval(refreshDevices, 10000);
+      startDevicePolling();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
     } finally { setLoading(false); }
-  }, [validate, authServer, username, password, doAutoSync, success, t, refreshDevices]);
+  }, [validate, authServer, username, password, doAutoSync, success, t, refreshDevices, startDevicePolling]);
 
   const handleConfirmOverwrite = useCallback(async () => {
     setLoading(true); setError(null);
     try {
-      doAutoSync(false);
+      await doAutoSync(false);
       try {
         await remoteConnectAPI.accountConnectDevices();
       } catch (err) {
@@ -210,17 +307,17 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
       success(t('accountLogin.loginSuccess', { user_id: username }));
       setView('devices');
       refreshDevices();
-      refreshTimer.current = setInterval(refreshDevices, 10000);
+      startDevicePolling();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
     } finally { setLoading(false); }
-  }, [doAutoSync, success, t, username, refreshDevices]);
+  }, [doAutoSync, success, t, username, refreshDevices, startDevicePolling]);
 
   // Use local config to overwrite cloud — same as first-login sync (upload).
   const handleUseLocalOverwrite = useCallback(async () => {
     setLoading(true); setError(null);
     try {
-      doAutoSync(true);
+      await doAutoSync(true);
       try {
         await remoteConnectAPI.accountConnectDevices();
       } catch (err) {
@@ -229,11 +326,11 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
       success(t('accountLogin.loginSuccess', { user_id: username }));
       setView('devices');
       refreshDevices();
-      refreshTimer.current = setInterval(refreshDevices, 10000);
+      startDevicePolling();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
     } finally { setLoading(false); }
-  }, [doAutoSync, success, t, username, refreshDevices]);
+  }, [doAutoSync, success, t, username, refreshDevices, startDevicePolling]);
 
   const handleCancelOverwrite = useCallback(async () => {
     try { await remoteConnectAPI.accountLogout(); } catch (e) { log.warn('logout failed', e); }
@@ -269,10 +366,11 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
     if (!device.online) return;
     setSelectedDevice(device);
     setLoading(true); setError(null);
+    setRemoteSessions([]);
     try {
       const wsInfo = parseRpcResponse(await remoteConnectAPI.accountDeviceRpc(
         device.device_id, JSON.stringify({ cmd: 'get_workspace_info' }),
-      ));
+      )) as RemoteWorkspaceInfo;
       setRemoteWorkspace(wsInfo);
 
       const wsListData = parseRpcResponse(await remoteConnectAPI.accountDeviceRpc(
@@ -280,11 +378,19 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
       ));
       setRemoteWorkspaces(wsListData.workspaces || []);
 
-      const sessData = parseRpcResponse(await remoteConnectAPI.accountDeviceRpc(
-        device.device_id,
-        JSON.stringify({ cmd: 'list_sessions', workspace_path: wsInfo.path || '/', limit: 50 }),
-      ));
-      setRemoteSessions(sessData.sessions || []);
+      if (wsInfo.has_workspace && wsInfo.path) {
+        const sessData = parseRpcResponse(await remoteConnectAPI.accountDeviceRpc(
+          device.device_id,
+          JSON.stringify(buildListSessionsPayload(
+            wsInfo.path,
+            wsInfo.remote_connection_id,
+            wsInfo.remote_ssh_host,
+          )),
+        ));
+        setRemoteSessions(sessData.sessions || []);
+      } else {
+        setRemoteSessions([]);
+      }
       setView('sessions');
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
@@ -324,11 +430,20 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
 
   const handleCreateRemoteSession = useCallback(async () => {
     if (!selectedDevice) return;
+    const workspacePath = remoteWorkspace?.path;
+    if (!workspacePath) {
+      setError(t('accountLogin.selectWorkspaceFirst'));
+      return;
+    }
     setLoading(true); setError(null);
     try {
       const data = parseRpcResponse(await remoteConnectAPI.accountDeviceRpc(
         selectedDevice.device_id,
-        JSON.stringify({ cmd: 'create_session', agent_type: null, session_name: null, workspace_path: remoteWorkspace?.path || '/' }),
+        JSON.stringify(buildCreateSessionPayload(
+          workspacePath,
+          remoteWorkspace?.remote_connection_id,
+          remoteWorkspace?.remote_ssh_host,
+        )),
       ));
       if (data.session_id) {
         await selectDevice(selectedDevice);
@@ -337,20 +452,29 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
     } finally { setLoading(false); }
-  }, [selectedDevice, remoteWorkspace, selectDevice, selectSession]);
+  }, [selectedDevice, remoteWorkspace, selectDevice, selectSession, t]);
 
   const switchWorkspace = useCallback(async (wsPath: string) => {
-    if (!selectedDevice) return;
+    if (!selectedDevice || !wsPath || wsPath === '/') return;
     setLoading(true); setError(null);
     try {
       await remoteConnectAPI.accountDeviceRpc(
         selectedDevice.device_id, JSON.stringify({ cmd: 'set_workspace', path: wsPath }),
       );
+      const wsInfo = parseRpcResponse(await remoteConnectAPI.accountDeviceRpc(
+        selectedDevice.device_id, JSON.stringify({ cmd: 'get_workspace_info' }),
+      )) as RemoteWorkspaceInfo;
+      setRemoteWorkspace(wsInfo);
+      const path = wsInfo.path || wsPath;
       const sessData = parseRpcResponse(await remoteConnectAPI.accountDeviceRpc(
-        selectedDevice.device_id, JSON.stringify({ cmd: 'list_sessions', workspace_path: wsPath, limit: 50 }),
+        selectedDevice.device_id,
+        JSON.stringify(buildListSessionsPayload(
+          path,
+          wsInfo.remote_connection_id,
+          wsInfo.remote_ssh_host,
+        )),
       ));
       setRemoteSessions(sessData.sessions || []);
-      setRemoteWorkspace({ has_workspace: true, path: wsPath, project_name: wsPath.split('/').pop() || wsPath });
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
     } finally { setLoading(false); }
@@ -554,7 +678,7 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
             {/* Workspace selector */}
             {remoteWorkspaces.length > 0 && (
               <div className="account-login-dialog__workspace-section">
-                <div className="account-login-dialog__workspace-label">{t('accountLogin.devices')}</div>
+                <div className="account-login-dialog__workspace-label">{t('accountLogin.selectWorkspace')}</div>
                 <div className="account-login-dialog__workspace-chips">
                   {remoteWorkspaces.map((ws: any, i: number) => (
                     <div key={i}
@@ -579,14 +703,16 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
               </Button>
             </div>
 
-            {remoteWorkspace && (
+            {remoteWorkspace?.has_workspace && remoteWorkspace.path ? (
               <div className="account-login-dialog__workspace-info">
-                {remoteWorkspace.project_name || remoteWorkspace.path || '/'} ({remoteSessions.length})
+                {remoteWorkspace.project_name || remoteWorkspace.path} ({remoteSessions.length})
               </div>
+            ) : (
+              <div className="account-login-dialog__empty">{t('accountLogin.noCurrentWorkspace')}</div>
             )}
             <div className="account-login-dialog__session-list">
-              {remoteSessions.length === 0 && (
-                <div className="account-login-dialog__empty">{t('accountLogin.noDevices')}</div>
+              {remoteWorkspace?.has_workspace && remoteWorkspace.path && remoteSessions.length === 0 && (
+                <div className="account-login-dialog__empty">{t('accountLogin.noSessions')}</div>
               )}
               {remoteSessions.map((s) => (
                 <div key={s.session_id} className="account-login-dialog__session-item"

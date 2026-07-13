@@ -761,6 +761,7 @@ pub async fn run() {
 
             let step_started = Instant::now();
             init_services(app_handle.clone(), startup_log_level);
+            api::remote_connect_api::set_account_app_handle(app_handle.clone());
             startup_trace.record_elapsed_step("native_setup", "init_services", step_started);
 
             let step_started = Instant::now();

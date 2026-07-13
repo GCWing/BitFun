@@ -1198,11 +1198,12 @@ where
 
             let Some(workspace_path) = workspace_path
                 .as_deref()
-                .filter(|path| !path.is_empty())
+                .map(str::trim)
+                .filter(|path| !path.is_empty() && *path != "/")
                 .map(PathBuf::from)
             else {
                 return RemoteResponse::Error {
-                    message: "workspace_path is required for ListSessions".to_string(),
+                    message: "No workspace is open on the remote device; select a recent workspace or create one first".to_string(),
                 };
             };
 
@@ -1271,7 +1272,8 @@ where
             } else {
                 workspace_path
                     .as_deref()
-                    .filter(|path| !path.is_empty())
+                    .map(str::trim)
+                    .filter(|path| !path.is_empty() && *path != "/")
                     .map(ToOwned::to_owned)
             };
 
@@ -1280,7 +1282,7 @@ where
                     message: if is_claw {
                         "Failed to get or create assistant workspace".to_string()
                     } else {
-                        "workspace_path is required for CreateSession".to_string()
+                        "No workspace is open on the remote device; select a recent workspace or create one first".to_string()
                     },
                 };
             };

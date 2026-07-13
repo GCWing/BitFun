@@ -4080,6 +4080,36 @@ export class FlowChatStore {
           remoteConnectionId,
           remoteSshHost
         );
+        // Cloud-imported sessions may only have metadata locally; lazy-fetch turns.
+        if (
+          !remote &&
+          (!Array.isArray(turns) || turns.length === 0) &&
+          workspacePath
+        ) {
+          try {
+            const { remoteConnectAPI } = await import(
+              '@/infrastructure/api/service-api/RemoteConnectAPI'
+            );
+            const fetched = await remoteConnectAPI.accountFetchSessionTurns(
+              sessionId,
+              workspacePath
+            );
+            if (fetched) {
+              turns = await sessionAPI.loadSessionTurns(
+                sessionId,
+                workspacePath,
+                limit,
+                remoteConnectionId,
+                remoteSshHost
+              );
+            }
+          } catch (fetchErr) {
+            log.warn('accountFetchSessionTurns failed during hydrate', {
+              sessionId,
+              error: fetchErr,
+            });
+          }
+        }
         startupTrace.markPhase('historical_session_turns_load_end', {
           remote,
           sessionId,

@@ -29,6 +29,19 @@ interface RemoteMessage {
   content: string;
 }
 
+interface RemoteWorkspaceInfo {
+  has_workspace: boolean;
+  path: string | null;
+  project_name: string | null;
+  remote_connection_id?: string | null;
+  remote_ssh_host?: string | null;
+}
+
+interface RecentWorkspace {
+  path: string;
+  name: string;
+}
+
 type View = 'devices' | 'sessions' | 'chat';
 
 interface Props {
@@ -50,6 +63,8 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
   const [sessions, setSessions] = useState<RemoteSession[]>([]);
   const [messages, setMessages] = useState<RemoteMessage[]>([]);
   const [selectedSession, setSelectedSession] = useState<string | null>(null);
+  const [remoteWorkspace, setRemoteWorkspace] = useState<RemoteWorkspaceInfo | null>(null);
+  const [recentWorkspaces, setRecentWorkspaces] = useState<RecentWorkspace[]>([]);
   const [messageInput, setMessageInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -71,6 +86,7 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
 
   useEffect(() => {
     refreshDevices();
+    // Mobile has no Tauri presence channel; keep HTTP poll at 10s for freshness.
     const interval = setInterval(refreshDevices, 10000);
     return () => clearInterval(interval);
   }, [refreshDevices]);
@@ -79,18 +95,60 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
     if (!d.online) return;
     setSelectedDevice(d);
     setLoading(true); setError(null);
+    setSessions([]);
     try {
-      const wsInfo = await client.sendDeviceRpc<any>(d.device_id, { cmd: 'get_workspace_info' });
-      const sessResp = await client.sendDeviceRpc<any>(d.device_id, {
-        cmd: 'list_sessions', workspace_path: wsInfo.path || '/', limit: 50,
-      });
-      setSessions(sessResp.sessions || []);
+      const wsInfo = await client.sendDeviceRpc<RemoteWorkspaceInfo>(d.device_id, { cmd: 'get_workspace_info' });
+      setRemoteWorkspace(wsInfo);
+      try {
+        const recent = await client.sendDeviceRpc<{ workspaces?: RecentWorkspace[] }>(d.device_id, {
+          cmd: 'list_recent_workspaces',
+        });
+        setRecentWorkspaces(recent.workspaces || []);
+      } catch {
+        setRecentWorkspaces([]);
+      }
+      if (wsInfo.has_workspace && wsInfo.path) {
+        const sessResp = await client.sendDeviceRpc<any>(d.device_id, {
+          cmd: 'list_sessions',
+          workspace_path: wsInfo.path,
+          remote_connection_id: wsInfo.remote_connection_id ?? null,
+          remote_ssh_host: wsInfo.remote_ssh_host ?? null,
+          limit: 50,
+        });
+        setSessions(sessResp.sessions || []);
+      } else {
+        setSessions([]);
+      }
       setView('sessions');
     } catch (e: any) {
       if (isTokenExpiredError(e)) setTokenExpired(true);
       setError(e.message || t('devices.loadDeviceFailed'));
     } finally { setLoading(false); }
   }, [client, t]);
+
+  const switchWorkspace = useCallback(async (wsPath: string) => {
+    if (!selectedDevice || !wsPath || wsPath === '/') return;
+    setLoading(true); setError(null);
+    try {
+      await client.sendDeviceRpc(selectedDevice.device_id, { cmd: 'set_workspace', path: wsPath });
+      const wsInfo = await client.sendDeviceRpc<RemoteWorkspaceInfo>(selectedDevice.device_id, {
+        cmd: 'get_workspace_info',
+      });
+      setRemoteWorkspace(wsInfo);
+      const path = wsInfo.path || wsPath;
+      const sessResp = await client.sendDeviceRpc<any>(selectedDevice.device_id, {
+        cmd: 'list_sessions',
+        workspace_path: path,
+        remote_connection_id: wsInfo.remote_connection_id ?? null,
+        remote_ssh_host: wsInfo.remote_ssh_host ?? null,
+        limit: 50,
+      });
+      setSessions(sessResp.sessions || []);
+    } catch (e: any) {
+      if (isTokenExpiredError(e)) setTokenExpired(true);
+      setError(e.message || t('devices.loadDeviceFailed'));
+    } finally { setLoading(false); }
+  }, [client, selectedDevice, t]);
 
   const selectSession = useCallback(async (sessionId: string) => {
     if (!selectedDevice) return;
@@ -129,10 +187,20 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
 
   const createSession = useCallback(async () => {
     if (!selectedDevice) return;
+    const workspacePath = remoteWorkspace?.path;
+    if (!workspacePath) {
+      setError(t('devices.selectWorkspaceFirst'));
+      return;
+    }
     setLoading(true); setError(null);
     try {
       const data = await client.sendDeviceRpc<any>(selectedDevice.device_id, {
-        cmd: 'create_session', agent_type: null, session_name: null, workspace_path: '/',
+        cmd: 'create_session',
+        agent_type: null,
+        session_name: null,
+        workspace_path: workspacePath,
+        remote_connection_id: remoteWorkspace?.remote_connection_id ?? null,
+        remote_ssh_host: remoteWorkspace?.remote_ssh_host ?? null,
       });
       if (data.session_id) {
         await selectDevice(selectedDevice);
@@ -142,7 +210,7 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
       if (isTokenExpiredError(e)) setTokenExpired(true);
       setError(e.message || t('devices.createSessionFailed'));
     } finally { setLoading(false); }
-  }, [client, selectedDevice, selectDevice, selectSession, t]);
+  }, [client, selectedDevice, remoteWorkspace, selectDevice, selectSession, t]);
 
   if (!client.hasDelegatedIdentity) {
     return (
@@ -199,10 +267,30 @@ const DevicesPage: React.FC<Props> = ({ client, onBack }) => {
       {/* Session list */}
       {view === 'sessions' && selectedDevice && !loading && (
         <div className="devices-page__list">
-          <button className="devices-page__new-btn" onClick={createSession}>
+          {recentWorkspaces.length > 0 && (
+            <div className="devices-page__workspace-chips">
+              <div className="devices-page__workspace-label">{t('devices.selectWorkspace')}</div>
+              {recentWorkspaces.map((ws) => (
+                <button
+                  key={ws.path}
+                  className={`devices-page__workspace-chip ${remoteWorkspace?.path === ws.path ? 'active' : ''}`}
+                  onClick={() => switchWorkspace(ws.path)}
+                >
+                  {ws.name || ws.path}
+                </button>
+              ))}
+            </div>
+          )}
+          {!(remoteWorkspace?.has_workspace && remoteWorkspace.path) && (
+            <div className="devices-page__empty">{t('devices.noCurrentWorkspace')}</div>
+          )}
+          <button className="devices-page__new-btn" onClick={createSession}
+            disabled={!(remoteWorkspace?.has_workspace && remoteWorkspace.path)}>
             {t('devices.newSession')}
           </button>
-          {sessions.length === 0 && <div className="devices-page__empty">{t('devices.noSessions')}</div>}
+          {remoteWorkspace?.has_workspace && remoteWorkspace.path && sessions.length === 0 && (
+            <div className="devices-page__empty">{t('devices.noSessions')}</div>
+          )}
           {sessions.map(s => (
             <div key={s.session_id} className="devices-page__session"
               onClick={() => selectSession(s.session_id)}>

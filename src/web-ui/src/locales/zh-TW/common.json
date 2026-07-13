@@ -507,7 +507,12 @@
     "syncFailed": "雲端同步失敗 — 將自動重試",
     "removeDevice": "移除裝置",
     "confirmRemoveDevice": "確定從帳號中移除「{{name}}」？該裝置需要重新登入。",
-    "deviceRemoved": "裝置「{{name}}」已移除"
+    "deviceRemoved": "裝置「{{name}}」已移除",
+    "settingsApplied": "設定已套用並生效",
+    "selectWorkspace": "選擇工作區",
+    "selectWorkspaceFirst": "請先選擇或新建工作區",
+    "noCurrentWorkspace": "此裝置目前沒有開啟的工作區，請選擇最近工作區或新建",
+    "noSessions": "目前工作區暫無工作階段"
   },
   "remoteConnect": {
     "tabNgrok": "內網穿透",

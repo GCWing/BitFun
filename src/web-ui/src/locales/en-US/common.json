@@ -507,7 +507,12 @@
     "syncFailed": "Cloud sync failed — will retry automatically",
     "removeDevice": "Remove device",
     "confirmRemoveDevice": "Remove \"{{name}}\" from this account? The device will need to re-login.",
-    "deviceRemoved": "Device \"{{name}}\" removed"
+    "deviceRemoved": "Device \"{{name}}\" removed",
+    "settingsApplied": "Settings applied and active",
+    "selectWorkspace": "Select workspace",
+    "selectWorkspaceFirst": "Please select or create a workspace first",
+    "noCurrentWorkspace": "This device has no open workspace. Select a recent one or create a new workspace.",
+    "noSessions": "No sessions in this workspace"
   },
   "remoteConnect": {
     "tabNgrok": "NAT Traversal",

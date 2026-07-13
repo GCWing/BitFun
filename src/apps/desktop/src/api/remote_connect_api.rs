@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
-use tauri::State;
+use tauri::{AppHandle, Emitter, State};
 use tokio::sync::RwLock;
 
 static REMOTE_CONNECT_SERVICE: OnceLock<Arc<RwLock<Option<RemoteConnectService>>>> =
@@ -36,6 +36,95 @@ static DIALOG_SCHEDULER: OnceLock<Arc<bitfun_core::agentic::coordination::Dialog
 /// Set the global scheduler handle. Called once during app startup.
 pub fn set_dialog_scheduler(scheduler: Arc<bitfun_core::agentic::coordination::DialogScheduler>) {
     let _ = DIALOG_SCHEDULER.set(scheduler);
+}
+
+/// AppHandle used by the device-routing background task to emit UI events
+/// (presence / settings-applied) without requiring a Tauri command context.
+static ACCOUNT_APP_HANDLE: OnceLock<AppHandle> = OnceLock::new();
+
+/// Store the app handle for account device-routing events. Called once during setup.
+pub fn set_account_app_handle(app: AppHandle) {
+    let _ = ACCOUNT_APP_HANDLE.set(app);
+}
+
+fn emit_account_event(event: &str, payload: serde_json::Value) {
+    if let Some(app) = ACCOUNT_APP_HANDLE.get() {
+        if let Err(e) = app.emit(event, payload) {
+            log::warn!("Failed to emit {event}: {e}");
+        }
+    }
+}
+
+fn emit_device_presence(devices: &[(String, String)]) {
+    let payload = serde_json::json!({
+        "devices": devices
+            .iter()
+            .map(|(id, name)| serde_json::json!({
+                "device_id": id,
+                "device_name": name,
+            }))
+            .collect::<Vec<_>>(),
+    });
+    emit_account_event("account://device-presence", payload);
+}
+
+fn emit_settings_applied() {
+    emit_account_event(
+        "account://settings-applied",
+        serde_json::json!({ "applied": true }),
+    );
+}
+
+/// Encrypt and send an RPC response (or error) back to the HTTP caller via relay.
+async fn send_rpc_envelope(
+    session: &AccountSession,
+    correlation_id: &str,
+    resp_value: serde_json::Value,
+) {
+    let resp_json = match serde_json::to_string(&resp_value) {
+        Ok(s) => s,
+        Err(e) => {
+            log::warn!("RPC: serialize response failed: {e}");
+            serde_json::json!({
+                "resp": "error",
+                "message": format!("failed to serialize RPC response: {e}"),
+            })
+            .to_string()
+        }
+    };
+    use bitfun_core::service::remote_connect::encryption::encrypt_to_base64;
+    match encrypt_to_base64(&session.master_key, &resp_json) {
+        Ok((enc_resp, resp_nonce)) => {
+            let holder = get_service_holder().read().await;
+            if let Some(ref svc) = *holder {
+                if let Err(e) = svc
+                    .send_device_message("rpc", correlation_id, &enc_resp, &resp_nonce)
+                    .await
+                {
+                    log::warn!("RPC: send response failed: {e}");
+                }
+            }
+        }
+        Err(e) => {
+            log::warn!("RPC: encrypt response failed: {e}");
+        }
+    }
+}
+
+async fn send_rpc_error(
+    session: &AccountSession,
+    correlation_id: &str,
+    message: impl Into<String>,
+) {
+    send_rpc_envelope(
+        session,
+        correlation_id,
+        serde_json::json!({
+            "resp": "error",
+            "message": message.into(),
+        }),
+    )
+    .await;
 }
 
 /// Global flag set when the relay returns HTTP 401 (token expired). The
@@ -1083,9 +1172,9 @@ pub async fn account_connect_devices() -> Result<Vec<OnlineDeviceInfo>, String> 
     }
 
     let mut event_rx = service
-            .start_device_connection(&relay_url, &session.token, &device_name)
-            .await
-            .map_err(|e| format!("{e}"))?;
+        .start_device_connection(&relay_url, &session.token, &device_name)
+        .await
+        .map_err(|e| format!("{e}"))?;
 
     // Background task: consume events (presence / device messages / auth errors)
     let session_arc = get_account_session().clone();
@@ -1103,9 +1192,16 @@ pub async fn account_connect_devices() -> Result<Vec<OnlineDeviceInfo>, String> 
                 }
                 RelayEvent::DevicePresence { devices } => {
                     log::info!("Device presence updated: {} online", devices.len());
-                    // If another device came online, trigger a session import
+                    let pairs: Vec<(String, String)> = devices
+                        .iter()
+                        .map(|d| (d.device_id.clone(), d.device_name.clone()))
+                        .collect();
+                    emit_device_presence(&pairs);
+                    // Another device came online — pull cloud settings/sessions.
                     if devices.len() > 1 {
-                        log::debug!("Multiple devices online, sync will pick up remote sessions");
+                        tokio::spawn(async {
+                            pull_and_reconcile().await;
+                        });
                     }
                 }
                 RelayEvent::DeviceMessageReceived {
@@ -1196,37 +1292,23 @@ pub async fn account_connect_devices() -> Result<Vec<OnlineDeviceInfo>, String> 
                                 Ok(cmd) if source_device_id == "rpc" => {
                                     // HTTP RPC request from another device via relay.
                                     // Execute the command locally and send back
-                                    // the encrypted response.
+                                    // the encrypted response (including errors).
                                     log::info!(
                                         "RPC request from relay: {cmd:?} corr={correlation_id}"
                                     );
                                     match execute_local_remote_command(&cmd).await {
                                         Ok(resp_value) => {
-                                            let resp_json = serde_json::to_string(&resp_value)
-                                                .unwrap_or_default();
-                                            use bitfun_core::service::remote_connect::encryption::encrypt_to_base64;
-                                            match encrypt_to_base64(&session.master_key, &resp_json)
-                                            {
-                                                Ok((enc_resp, resp_nonce)) => {
-                                                    let holder = get_service_holder().read().await;
-                                                    if let Some(ref svc) = *holder {
-                                                        let _ = svc
-                                                            .send_device_message(
-                                                                "rpc",
-                                                                &correlation_id,
-                                                                &enc_resp,
-                                                                &resp_nonce,
-                                                            )
-                                                            .await;
-                                                    }
-                                                }
-                                                Err(e) => {
-                                                    log::warn!("RPC: encrypt response failed: {e}");
-                                                }
-                                            }
+                                            send_rpc_envelope(session, &correlation_id, resp_value)
+                                                .await;
                                         }
                                         Err(e) => {
                                             log::warn!("RPC: execute command failed: {e}");
+                                            send_rpc_error(
+                                                session,
+                                                &correlation_id,
+                                                format!("RPC execute failed: {e}"),
+                                            )
+                                            .await;
                                         }
                                     }
                                 }
@@ -1235,11 +1317,27 @@ pub async fn account_connect_devices() -> Result<Vec<OnlineDeviceInfo>, String> 
                                 }
                                 Err(e) => {
                                     log::warn!("Could not parse device command: {e}");
+                                    if source_device_id == "rpc" {
+                                        send_rpc_error(
+                                            session,
+                                            &correlation_id,
+                                            format!("invalid RPC command: {e}"),
+                                        )
+                                        .await;
+                                    }
                                 }
                             }
                         }
                         Err(e) => {
                             log::warn!("Failed to decrypt device message: {e}");
+                            if source_device_id == "rpc" {
+                                send_rpc_error(
+                                    session,
+                                    &correlation_id,
+                                    format!("failed to decrypt RPC request: {e}"),
+                                )
+                                .await;
+                            }
                         }
                     }
                 }
@@ -1824,12 +1922,22 @@ pub async fn account_auto_sync(
             // { config: GlobalConfig, export_timestamp, version }, but
             // import_config_data expects the inner GlobalConfig directly.
             let inner_config = config_value.get("config").cloned().unwrap_or(config_value);
-            app_state
+            let import_result = app_state
                 .config_service
                 .import_config_data(inner_config)
                 .await
                 .map_err(|e| format!("import cloud config: {e}"))?;
+            if !import_result.success {
+                return Err(format!(
+                    "import cloud config failed: {}",
+                    import_result.errors.join("; ")
+                ));
+            }
             app_state.ai_client_factory.invalidate_cache();
+            if let Err(e) = app_state.config_service.reload().await {
+                log::warn!("reload after cloud config import failed: {e}");
+            }
+            emit_settings_applied();
             LAST_SETTINGS_VERSION.store(blob.version, std::sync::atomic::Ordering::Relaxed);
             log::info!(
                 "Applied cloud settings to local device (version={})",
@@ -2309,12 +2417,28 @@ async fn pull_and_reconcile() {
                         bitfun_core::service::config::get_global_config_service().await
                     {
                         match config_service.import_config_data(inner_config).await {
-                            Ok(_) => {
+                            Ok(result) if result.success => {
                                 LAST_SETTINGS_VERSION
                                     .store(blob.version, std::sync::atomic::Ordering::Relaxed);
+                                if let Ok(factory) =
+                                    bitfun_core::infrastructure::ai::AIClientFactory::get_global()
+                                        .await
+                                {
+                                    factory.invalidate_cache();
+                                }
+                                if let Err(e) = config_service.reload().await {
+                                    log::warn!("Pull: reload after config import failed: {e}");
+                                }
+                                emit_settings_applied();
                                 log::info!(
                                     "Pull: applied cloud settings (version={})",
                                     blob.version
+                                );
+                            }
+                            Ok(result) => {
+                                log::warn!(
+                                    "Pull: import config unsuccessful: {}",
+                                    result.errors.join("; ")
                                 );
                             }
                             Err(e) => {

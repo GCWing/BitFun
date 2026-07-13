@@ -170,6 +170,9 @@ export const messages: Record<MobileLanguage, MessageTree> = {
       chatTitle: 'Chat',
       online: '🟢',
       offline: '⚪',
+      selectWorkspace: 'Select workspace',
+      selectWorkspaceFirst: 'Please select a workspace first',
+      noCurrentWorkspace: 'No open workspace on this device. Select a recent workspace first.',
     },
     tools: {
       ls: 'LS',
@@ -343,6 +346,9 @@ export const messages: Record<MobileLanguage, MessageTree> = {
       chatTitle: '聊天',
       online: '🟢',
       offline: '⚪',
+      selectWorkspace: '选择工作区',
+      selectWorkspaceFirst: '请先选择工作区',
+      noCurrentWorkspace: '该设备当前没有打开的工作区，请先选择最近工作区。',
     },
     tools: {
       ls: '列表',
@@ -516,6 +522,9 @@ export const messages: Record<MobileLanguage, MessageTree> = {
       chatTitle: '聊天',
       online: '🟢',
       offline: '⚪',
+      selectWorkspace: '選擇工作區',
+      selectWorkspaceFirst: '請先選擇工作區',
+      noCurrentWorkspace: '此裝置目前沒有開啟的工作區，請先選擇最近工作區。',
     },
     tools: {
       ls: '列表',
