@@ -132,7 +132,7 @@ fn il_name(rid: u32) -> &'static str {
 
 #[repr(C)]
 #[derive(Clone, Copy)]
-struct KEYBDINPUT {
+struct KeybdInput {
     wVk: u16,
     wScan: u16,
     dwFlags: u32,
@@ -142,7 +142,7 @@ struct KEYBDINPUT {
 
 #[repr(C)]
 #[derive(Clone, Copy)]
-struct MOUSEINPUT {
+struct MouseInput {
     dx: i32,
     dy: i32,
     mouseData: u32,
@@ -153,7 +153,7 @@ struct MOUSEINPUT {
 
 #[repr(C)]
 #[derive(Clone, Copy)]
-struct HARDWAREINPUT {
+struct HardwareInput {
     uMsg: u32,
     wParamL: u16,
     wParamH: u16,
@@ -164,14 +164,14 @@ struct HARDWAREINPUT {
 #[repr(C)]
 #[derive(Clone, Copy)]
 union INPUT_0 {
-    ki: KEYBDINPUT,
-    mi: MOUSEINPUT,
-    hi: HARDWAREINPUT,
+    ki: KeybdInput,
+    mi: MouseInput,
+    hi: HardwareInput,
 }
 
 #[repr(C)]
 #[derive(Clone, Copy)]
-struct INPUT {
+struct Input {
     r#type: u32,
     Anonymous: INPUT_0,
 }
@@ -190,7 +190,7 @@ struct TOKEN_MANDATORY_LABEL {
 
 #[link(name = "user32")]
 extern "system" {
-    fn SendInput(c_inputs: u32, p_inputs: *const INPUT, cb_size: i32) -> u32;
+    fn SendInput(c_inputs: u32, p_inputs: *const Input, cb_size: i32) -> u32;
     fn AttachThreadInput(id_attach: u32, id_attach_to: u32, f_attach: i32) -> i32;
     fn MapVirtualKeyW(code: u32, map_type: u32) -> u32;
     /// `VkKeyScanW` — translate a Unicode char to a virtual-key code + shift
@@ -846,15 +846,15 @@ fn make_key_lparam(scan: u32, down: bool) -> LPARAM {
 
 /// One `SendInput` keyboard event carrying a Unicode code unit (`KEYEVENTF_
 /// UNICODE`). `up` adds `KEYEVENTF_KEYUP`.
-fn unicode_event(unit: u16, up: bool) -> INPUT {
+fn unicode_event(unit: u16, up: bool) -> Input {
     let mut flags = KEYEVENTF_UNICODE;
     if up {
         flags |= KEYEVENTF_KEYUP;
     }
-    INPUT {
+    Input {
         r#type: INPUT_KEYBOARD,
         Anonymous: INPUT_0 {
-            ki: KEYBDINPUT {
+            ki: KeybdInput {
                 wVk: 0,
                 wScan: unit,
                 dwFlags: flags,
@@ -867,12 +867,12 @@ fn unicode_event(unit: u16, up: bool) -> INPUT {
 
 /// One `SendInput` keyboard event for a virtual-key code. `up` adds
 /// `KEYEVENTF_KEYUP`.
-fn vk_event(vk: u16, scan: u32, up: bool) -> INPUT {
+fn vk_event(vk: u16, scan: u32, up: bool) -> Input {
     let flags = if up { KEYEVENTF_KEYUP } else { 0 };
-    INPUT {
+    Input {
         r#type: INPUT_KEYBOARD,
         Anonymous: INPUT_0 {
-            ki: KEYBDINPUT {
+            ki: KeybdInput {
                 wVk: vk,
                 wScan: scan as u16,
                 dwFlags: flags,
@@ -889,7 +889,7 @@ fn vk_event(vk: u16, scan: u32, up: bool) -> INPUT {
 /// `SendInput` reads `ev.len()` `INPUT` records from `ev.as_ptr()`; every
 /// record is fully initialized above. `cbSize` is the true `size_of::<INPUT>`.
 unsafe fn send_unicode(text: &str) -> BitFunResult<()> {
-    let mut ev: Vec<INPUT> = Vec::with_capacity(text.len() * 2);
+    let mut ev: Vec<Input> = Vec::with_capacity(text.len() * 2);
     for u in text.encode_utf16() {
         ev.push(unicode_event(u, false));
         ev.push(unicode_event(u, true));
@@ -900,7 +900,7 @@ unsafe fn send_unicode(text: &str) -> BitFunResult<()> {
     let sent = SendInput(
         ev.len() as u32,
         ev.as_ptr(),
-        std::mem::size_of::<INPUT>() as i32,
+        std::mem::size_of::<Input>() as i32,
     );
     if sent as usize != ev.len() {
         return Err(BitFunError::service(format!(
@@ -917,7 +917,7 @@ unsafe fn send_unicode(text: &str) -> BitFunResult<()> {
 /// # Safety
 /// `SendInput` reads a fully-initialized `INPUT` array; `cbSize` is correct.
 unsafe fn send_key_combo(keycode: u16, modifiers: &[u16]) -> BitFunResult<()> {
-    let mut ev: Vec<INPUT> = Vec::with_capacity(modifiers.len() * 2 + 2);
+    let mut ev: Vec<Input> = Vec::with_capacity(modifiers.len() * 2 + 2);
     for &m in modifiers {
         let m_scan = MapVirtualKeyW(m as u32, MAPVK_VK_TO_VSC);
         ev.push(vk_event(m, m_scan, false));
@@ -935,7 +935,7 @@ unsafe fn send_key_combo(keycode: u16, modifiers: &[u16]) -> BitFunResult<()> {
     let sent = SendInput(
         ev.len() as u32,
         ev.as_ptr(),
-        std::mem::size_of::<INPUT>() as i32,
+        std::mem::size_of::<Input>() as i32,
     );
     if sent as usize != ev.len() {
         return Err(BitFunError::service(format!(
@@ -1267,4 +1267,56 @@ pub(super) fn parse_key_chord(keys: &[String]) -> BitFunResult<(Vec<u16>, u16)> 
         }
     };
     Ok((modifiers, keycode))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{HardwareInput, Input, KeybdInput, MouseInput, INPUT_0};
+    use std::mem::{align_of, offset_of, size_of};
+
+    #[test]
+    fn send_input_ffi_layout_matches_winuser() {
+        assert_eq!(size_of::<HardwareInput>(), 8);
+        assert_eq!(align_of::<HardwareInput>(), 4);
+        assert_eq!(offset_of!(HardwareInput, uMsg), 0);
+        assert_eq!(offset_of!(HardwareInput, wParamL), 4);
+        assert_eq!(offset_of!(HardwareInput, wParamH), 6);
+
+        if cfg!(target_pointer_width = "64") {
+            assert_eq!(size_of::<KeybdInput>(), 24);
+            assert_eq!(align_of::<KeybdInput>(), 8);
+            assert_eq!(offset_of!(KeybdInput, dwExtraInfo), 16);
+            assert_eq!(size_of::<MouseInput>(), 32);
+            assert_eq!(align_of::<MouseInput>(), 8);
+            assert_eq!(offset_of!(MouseInput, dwExtraInfo), 24);
+            assert_eq!(size_of::<INPUT_0>(), 32);
+            assert_eq!(align_of::<INPUT_0>(), 8);
+            assert_eq!(size_of::<Input>(), 40);
+            assert_eq!(align_of::<Input>(), 8);
+            assert_eq!(offset_of!(Input, Anonymous), 8);
+        } else {
+            assert_eq!(size_of::<KeybdInput>(), 16);
+            assert_eq!(align_of::<KeybdInput>(), 4);
+            assert_eq!(offset_of!(KeybdInput, dwExtraInfo), 12);
+            assert_eq!(size_of::<MouseInput>(), 24);
+            assert_eq!(align_of::<MouseInput>(), 4);
+            assert_eq!(offset_of!(MouseInput, dwExtraInfo), 20);
+            assert_eq!(size_of::<INPUT_0>(), 24);
+            assert_eq!(align_of::<INPUT_0>(), 4);
+            assert_eq!(size_of::<Input>(), 28);
+            assert_eq!(align_of::<Input>(), 4);
+            assert_eq!(offset_of!(Input, Anonymous), 4);
+        }
+
+        assert_eq!(offset_of!(KeybdInput, wVk), 0);
+        assert_eq!(offset_of!(KeybdInput, wScan), 2);
+        assert_eq!(offset_of!(KeybdInput, dwFlags), 4);
+        assert_eq!(offset_of!(KeybdInput, time), 8);
+        assert_eq!(offset_of!(MouseInput, dx), 0);
+        assert_eq!(offset_of!(MouseInput, dy), 4);
+        assert_eq!(offset_of!(MouseInput, mouseData), 8);
+        assert_eq!(offset_of!(MouseInput, dwFlags), 12);
+        assert_eq!(offset_of!(MouseInput, time), 16);
+        assert_eq!(offset_of!(Input, r#type), 0);
+    }
 }

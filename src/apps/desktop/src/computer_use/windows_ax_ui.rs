@@ -305,9 +305,9 @@ fn read_cached_is_offscreen(element: &IUIAutomationElement) -> bool {
 
 /// Read bounding rect as `(center_x, center_y, Some((l, t, r, b)))`. Returns
 /// `rect=None` when the element has no meaningful `BoundingRectangle`.
-fn read_cached_bounding_rect_full(
-    element: &IUIAutomationElement,
-) -> (i32, i32, Option<(i32, i32, i32, i32)>) {
+type CachedBoundingRect = (i32, i32, Option<(i32, i32, i32, i32)>);
+
+fn read_cached_bounding_rect_full(element: &IUIAutomationElement) -> CachedBoundingRect {
     unsafe {
         match element.CachedBoundingRectangle() {
             Ok(r) if r.right > r.left && r.bottom > r.top => (

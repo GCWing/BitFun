@@ -338,6 +338,18 @@ impl Default for FileTreeService {
     }
 }
 
+struct SearchFileContentInput<'a> {
+    path: &'a Path,
+    file_name: &'a str,
+    matcher: &'a Regex,
+    results: &'a Arc<Mutex<Vec<FileSearchResult>>>,
+    max_results: usize,
+    should_stop: &'a Arc<AtomicBool>,
+    limit_reached: &'a Arc<AtomicBool>,
+    cancel_flag: Option<&'a Arc<AtomicBool>>,
+    progress_sink: Option<&'a Arc<dyn FileSearchProgressSink>>,
+}
+
 impl FileTreeService {
     pub fn new(options: FileTreeOptions) -> Self {
         Self { options }
@@ -1238,17 +1250,17 @@ impl FileTreeService {
                     }
                 }
 
-                if let Err(error) = Self::search_file_content_lines(
+                if let Err(error) = Self::search_file_content_lines(SearchFileContentInput {
                     path,
-                    &file_name,
-                    matcher.as_ref(),
-                    &results,
+                    file_name: &file_name,
+                    matcher: matcher.as_ref(),
+                    results: &results,
                     max_results,
-                    &should_stop,
-                    &limit_reached,
-                    cancel_flag.as_ref(),
-                    progress_sink.as_ref(),
-                ) {
+                    should_stop: &should_stop,
+                    limit_reached: &limit_reached,
+                    cancel_flag: cancel_flag.as_ref(),
+                    progress_sink: progress_sink.as_ref(),
+                }) {
                     warn!(
                         "Failed to search file content {}: {}",
                         path.display(),
@@ -1447,17 +1459,18 @@ impl FileTreeService {
         !should_stop.load(Ordering::Relaxed)
     }
 
-    fn search_file_content_lines(
-        path: &Path,
-        file_name: &str,
-        matcher: &Regex,
-        results: &Arc<Mutex<Vec<FileSearchResult>>>,
-        max_results: usize,
-        should_stop: &Arc<AtomicBool>,
-        limit_reached: &Arc<AtomicBool>,
-        cancel_flag: Option<&Arc<AtomicBool>>,
-        progress_sink: Option<&Arc<dyn FileSearchProgressSink>>,
-    ) -> FileSystemResult<()> {
+    fn search_file_content_lines(input: SearchFileContentInput<'_>) -> FileSystemResult<()> {
+        let SearchFileContentInput {
+            path,
+            file_name,
+            matcher,
+            results,
+            max_results,
+            should_stop,
+            limit_reached,
+            cancel_flag,
+            progress_sink,
+        } = input;
         if should_stop.load(Ordering::Relaxed) || cancellation_requested(cancel_flag) {
             should_stop.store(true, Ordering::Relaxed);
             return Ok(());
@@ -1577,4 +1590,49 @@ pub struct FileSearchResult {
 pub enum SearchMatchType {
     FileName,
     Content,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn content_search_preserves_matching_lines_and_preview_ranges() {
+        let root = tempfile::tempdir().expect("create temp search directory");
+        std::fs::write(
+            root.path().join("sample.txt"),
+            "first line\r\nbefore needle after\r\n",
+        )
+        .expect("write search fixture");
+
+        let outcome = FileTreeService::default()
+            .search_file_contents(
+                root.path().to_str().expect("utf-8 temp path"),
+                "needle",
+                FileContentSearchOptions {
+                    case_sensitive: true,
+                    use_regex: false,
+                    whole_word: false,
+                    max_results: 10,
+                    max_file_size_bytes: 1024,
+                    cancel_flag: None,
+                },
+            )
+            .await
+            .expect("content search");
+
+        assert!(!outcome.truncated);
+        assert_eq!(outcome.results.len(), 1);
+        assert_eq!(outcome.results[0].line_number, Some(2));
+        assert_eq!(
+            outcome.results[0].matched_content.as_deref(),
+            Some("before needle after")
+        );
+        assert_eq!(
+            outcome.results[0].preview_before.as_deref(),
+            Some("before ")
+        );
+        assert_eq!(outcome.results[0].preview_inside.as_deref(), Some("needle"));
+        assert_eq!(outcome.results[0].preview_after.as_deref(), Some(" after"));
+    }
 }

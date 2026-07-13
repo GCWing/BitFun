@@ -110,30 +110,34 @@ struct WorkspaceModelExchangeTraceSink {
     trace_paths: DashMap<String, PathBuf>,
 }
 
+// Reverse declaration order preserves the previous function-parameter drop
+// order; struct literals remain in the original evaluation order.
+struct WorkspaceModelExchangeTraceInput {
+    model_id: String,
+    api_format: String,
+    provider: String,
+    operation_trigger: Option<String>,
+    operation_id: String,
+    operation_kind: String,
+    turn_id: String,
+    session_id: String,
+    policy: ModelExchangeTracePolicy,
+    trace_session_dir: PathBuf,
+}
+
 impl WorkspaceModelExchangeTraceSink {
-    fn new(
-        trace_session_dir: PathBuf,
-        policy: ModelExchangeTracePolicy,
-        session_id: String,
-        turn_id: String,
-        operation_kind: String,
-        operation_id: String,
-        operation_trigger: Option<String>,
-        provider: String,
-        api_format: String,
-        model_id: String,
-    ) -> Self {
+    fn new(input: WorkspaceModelExchangeTraceInput) -> Self {
         Self {
-            trace_session_dir,
-            policy,
-            session_id,
-            turn_id,
-            operation_kind,
-            operation_id,
-            operation_trigger,
-            provider,
-            api_format,
-            model_id,
+            trace_session_dir: input.trace_session_dir,
+            policy: input.policy,
+            session_id: input.session_id,
+            turn_id: input.turn_id,
+            operation_kind: input.operation_kind,
+            operation_id: input.operation_id,
+            operation_trigger: input.operation_trigger,
+            provider: input.provider,
+            api_format: input.api_format,
+            model_id: input.model_id,
             trace_paths: DashMap::new(),
         }
     }
@@ -402,16 +406,18 @@ pub(super) async fn prepare_model_exchange_trace_for_workspace(
 
     Some(ModelExchangeTraceConfig {
         sink: Arc::new(WorkspaceModelExchangeTraceSink::new(
-            trace_session_dir,
-            policy,
-            session_id.to_string(),
-            turn_id.to_string(),
-            operation.kind.to_string(),
-            operation.id.to_string(),
-            operation.trigger.map(str::to_string),
-            ai_client.config.format.clone(),
-            ai_client.config.format.clone(),
-            ai_client.config.model.clone(),
+            WorkspaceModelExchangeTraceInput {
+                trace_session_dir,
+                policy,
+                session_id: session_id.to_string(),
+                turn_id: turn_id.to_string(),
+                operation_kind: operation.kind.to_string(),
+                operation_id: operation.id.to_string(),
+                operation_trigger: operation.trigger.map(str::to_string),
+                provider: ai_client.config.format.clone(),
+                api_format: ai_client.config.format.clone(),
+                model_id: ai_client.config.model.clone(),
+            },
         )),
         capture_request_body: policy.capture_request_body,
     })
@@ -476,4 +482,77 @@ fn parse_trace_sequence(file_name: &str) -> Option<u64> {
 fn sequence_allocators() -> &'static DashMap<String, Arc<Mutex<Option<u64>>>> {
     static ALLOCATORS: OnceLock<DashMap<String, Arc<Mutex<Option<u64>>>>> = OnceLock::new();
     ALLOCATORS.get_or_init(DashMap::new)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct SequenceAllocatorCleanup(String);
+
+    impl Drop for SequenceAllocatorCleanup {
+        fn drop(&mut self) {
+            sequence_allocators().remove(&self.0);
+        }
+    }
+
+    #[tokio::test]
+    async fn trace_request_preserves_operation_and_model_identity() {
+        let directory = tempfile::tempdir().expect("trace directory should be created");
+        let _allocator_cleanup =
+            SequenceAllocatorCleanup(directory.path().to_string_lossy().to_string());
+        let sink = WorkspaceModelExchangeTraceSink::new(WorkspaceModelExchangeTraceInput {
+            trace_session_dir: directory.path().to_path_buf(),
+            policy: ModelExchangeTracePolicy {
+                mode: ModelExchangeTracingMode::Full,
+                capture_request_body: true,
+                capture_response_text: true,
+                capture_reasoning: true,
+                capture_tool_calls: true,
+                capture_usage: true,
+                capture_provider_metadata: true,
+            },
+            session_id: "session-identity".to_string(),
+            turn_id: "turn-identity".to_string(),
+            operation_kind: "context_compression".to_string(),
+            operation_id: "compression-identity".to_string(),
+            operation_trigger: Some("manual".to_string()),
+            provider: "provider-format".to_string(),
+            api_format: "api-format".to_string(),
+            model_id: "model-identity".to_string(),
+        });
+
+        let handle = sink
+            .request_attempt_started(&ModelExchangeRequestAttempt {
+                request_url: "https://example.invalid/model".to_string(),
+                request_body: Some(serde_json::json!({"request": "body"})),
+                attempt_number: 2,
+            })
+            .await
+            .expect("trace request should be recorded");
+        let path = sink
+            .trace_paths
+            .get(&handle.trace_id)
+            .expect("trace path should be registered")
+            .value()
+            .clone();
+        let record = sink
+            .read_record(&path)
+            .await
+            .expect("trace record should be readable");
+
+        assert_eq!(record.session_id, "session-identity");
+        assert_eq!(record.turn_id, "turn-identity");
+        assert_eq!(record.operation_kind, "context_compression");
+        assert_eq!(record.operation_id, "compression-identity");
+        assert_eq!(record.operation_trigger.as_deref(), Some("manual"));
+        assert_eq!(record.request.provider, "provider-format");
+        assert_eq!(record.request.api_format, "api-format");
+        assert_eq!(record.request.model_id, "model-identity");
+        assert_eq!(record.request.attempt_number, 2);
+        assert_eq!(
+            record.request.body,
+            Some(serde_json::json!({"request": "body"}))
+        );
+    }
 }

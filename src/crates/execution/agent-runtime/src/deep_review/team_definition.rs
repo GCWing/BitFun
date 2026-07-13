@@ -63,16 +63,28 @@ pub struct ReviewTeamDefinition {
     pub hidden_agent_ids: Vec<String>,
 }
 
-fn review_role(
-    key: &str,
-    subagent_id: &str,
-    fun_name: &str,
-    role_name: &str,
-    description: &str,
-    responsibilities: &[&str],
-    accent_color: &str,
-    conditional: bool,
-) -> ReviewTeamRoleDefinition {
+struct ReviewRoleInput<'a>(
+    &'a str,
+    &'a str,
+    &'a str,
+    &'a str,
+    &'a str,
+    &'a [&'a str],
+    &'a str,
+    bool,
+);
+
+fn review_role(input: ReviewRoleInput<'_>) -> ReviewTeamRoleDefinition {
+    let ReviewRoleInput(
+        key,
+        subagent_id,
+        fun_name,
+        role_name,
+        description,
+        responsibilities,
+        accent_color,
+        conditional,
+    ) = input;
     ReviewTeamRoleDefinition {
         key: key.to_string(),
         subagent_id: subagent_id.to_string(),
@@ -95,16 +107,28 @@ fn role_directives(entries: &[(&str, &str)]) -> BTreeMap<String, String> {
         .collect()
 }
 
-fn strategy_profile(
-    level: &str,
-    label: &str,
-    summary: &str,
-    token_impact: &str,
-    runtime_impact: &str,
-    default_model_slot: &str,
-    prompt_directive: &str,
-    directives: &[(&str, &str)],
-) -> ReviewStrategyManifestProfile {
+struct StrategyProfileInput<'a>(
+    &'a str,
+    &'a str,
+    &'a str,
+    &'a str,
+    &'a str,
+    &'a str,
+    &'a str,
+    &'a [(&'a str, &'a str)],
+);
+
+fn strategy_profile(input: StrategyProfileInput<'_>) -> ReviewStrategyManifestProfile {
+    let StrategyProfileInput(
+        level,
+        label,
+        summary,
+        token_impact,
+        runtime_impact,
+        default_model_slot,
+        prompt_directive,
+        directives,
+    ) = input;
     ReviewStrategyManifestProfile {
         level: level.to_string(),
         label: label.to_string(),
@@ -119,7 +143,7 @@ fn strategy_profile(
 
 pub fn default_review_team_definition() -> ReviewTeamDefinition {
     let core_roles = vec![
-        review_role(
+        review_role(ReviewRoleInput(
             "businessLogic",
             REVIEWER_BUSINESS_LOGIC_AGENT_TYPE,
             "Logic Reviewer",
@@ -132,8 +156,8 @@ pub fn default_review_team_definition() -> ReviewTeamDefinition {
             ],
             "#2563eb",
             false,
-        ),
-        review_role(
+        )),
+        review_role(ReviewRoleInput(
             "performance",
             REVIEWER_PERFORMANCE_AGENT_TYPE,
             "Performance Reviewer",
@@ -146,8 +170,8 @@ pub fn default_review_team_definition() -> ReviewTeamDefinition {
             ],
             "#d97706",
             false,
-        ),
-        review_role(
+        )),
+        review_role(ReviewRoleInput(
             "security",
             REVIEWER_SECURITY_AGENT_TYPE,
             "Security Reviewer",
@@ -160,8 +184,8 @@ pub fn default_review_team_definition() -> ReviewTeamDefinition {
             ],
             "#dc2626",
             false,
-        ),
-        review_role(
+        )),
+        review_role(ReviewRoleInput(
             "architecture",
             REVIEWER_ARCHITECTURE_AGENT_TYPE,
             "Architecture Reviewer",
@@ -174,8 +198,8 @@ pub fn default_review_team_definition() -> ReviewTeamDefinition {
             ],
             "#0891b2",
             false,
-        ),
-        review_role(
+        )),
+        review_role(ReviewRoleInput(
             "frontend",
             REVIEWER_FRONTEND_AGENT_TYPE,
             "Frontend Reviewer",
@@ -188,8 +212,8 @@ pub fn default_review_team_definition() -> ReviewTeamDefinition {
             ],
             "#059669",
             true,
-        ),
-        review_role(
+        )),
+        review_role(ReviewRoleInput(
             "judge",
             REVIEW_JUDGE_AGENT_TYPE,
             "Review Arbiter",
@@ -203,13 +227,13 @@ pub fn default_review_team_definition() -> ReviewTeamDefinition {
             ],
             "#7c3aed",
             false,
-        ),
+        )),
     ];
 
     let strategy_profiles = BTreeMap::from([
         (
             "quick".to_string(),
-            strategy_profile(
+            strategy_profile(StrategyProfileInput(
                 "quick",
                 "Quick",
                 "Quick keeps built-in target-matched reviewers, skips user-added specialists, and reports reduced coverage.",
@@ -243,11 +267,11 @@ pub fn default_review_team_definition() -> ReviewTeamDefinition {
                         "This was a quick review. Focus on confirming or rejecting each finding efficiently. If a finding's evidence is thin, reject it rather than spending time verifying.",
                     ),
                 ],
-            ),
+            )),
         ),
         (
             "normal".to_string(),
-            strategy_profile(
+            strategy_profile(StrategyProfileInput(
                 "normal",
                 "Normal",
                 "Normal stays practical for slower models, limits optional expansion, and uses summary-first on large changes.",
@@ -281,11 +305,11 @@ pub fn default_review_team_definition() -> ReviewTeamDefinition {
                         "Validate each finding's logical consistency and evidence quality. Spot-check code only when a claim needs verification.",
                     ),
                 ],
-            ),
+            )),
         ),
         (
             "deep".to_string(),
-            strategy_profile(
+            strategy_profile(StrategyProfileInput(
                 "deep",
                 "Deep",
                 "Thorough multi-pass review with the longest budget for risky or release-sensitive changes.",
@@ -319,7 +343,7 @@ pub fn default_review_team_definition() -> ReviewTeamDefinition {
                         "This was a deep review with potentially complex findings. Cross-validate findings across reviewers for consistency. For each finding, verify the evidence supports the conclusion and the suggested fix is safe. Pay extra attention to overlapping findings across reviewers or same-role instances.",
                     ),
                 ],
-            ),
+            )),
         ),
     ]);
 
@@ -359,5 +383,67 @@ pub fn default_review_team_definition() -> ReviewTeamDefinition {
         strategy_profiles,
         disallowed_extra_subagent_ids,
         hidden_agent_ids,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_team_preserves_role_and_strategy_profile_values() {
+        let definition = default_review_team_definition();
+        assert_eq!(
+            definition
+                .core_roles
+                .iter()
+                .map(|role| role.key.as_str())
+                .collect::<Vec<_>>(),
+            [
+                "businessLogic",
+                "performance",
+                "security",
+                "architecture",
+                "frontend",
+                "judge",
+            ]
+        );
+        assert_eq!(
+            definition
+                .core_roles
+                .iter()
+                .map(|role| (
+                    role.subagent_id.as_str(),
+                    role.accent_color.as_str(),
+                    role.conditional
+                ))
+                .collect::<Vec<_>>(),
+            [
+                (REVIEWER_BUSINESS_LOGIC_AGENT_TYPE, "#2563eb", false),
+                (REVIEWER_PERFORMANCE_AGENT_TYPE, "#d97706", false),
+                (REVIEWER_SECURITY_AGENT_TYPE, "#dc2626", false),
+                (REVIEWER_ARCHITECTURE_AGENT_TYPE, "#0891b2", false),
+                (REVIEWER_FRONTEND_AGENT_TYPE, "#059669", true),
+                (REVIEW_JUDGE_AGENT_TYPE, "#7c3aed", false),
+            ]
+        );
+        assert_eq!(
+            definition
+                .strategy_profiles
+                .iter()
+                .map(|(key, profile)| {
+                    (
+                        key.as_str(),
+                        profile.default_model_slot.as_str(),
+                        profile.role_directives.len(),
+                    )
+                })
+                .collect::<Vec<_>>(),
+            [
+                ("deep", "primary", 6),
+                ("normal", "fast", 6),
+                ("quick", "fast", 6)
+            ]
+        );
     }
 }

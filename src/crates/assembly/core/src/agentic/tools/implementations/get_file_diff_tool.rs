@@ -33,6 +33,19 @@ use std::path::Path;
 /// 3. Return full file content
 pub struct GetFileDiffTool;
 
+type ExactReviewTarget = (String, String, Vec<String>, Option<String>);
+
+struct ExactReviewDiffRequest<'a> {
+    workspace_root: &'a Path,
+    logical_path: &'a str,
+    base_revision: &'a str,
+    head_revision: &'a str,
+    paths: &'a [String],
+    fingerprint: Option<&'a str>,
+    diff_offset: usize,
+    cursor_binding: &'a str,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum ProviderFileDiffRoute {
     Identity {
@@ -279,7 +292,7 @@ impl GetFileDiffTool {
     fn exact_review_target(
         relative_path: &str,
         context: &ToolUseContext,
-    ) -> BitFunResult<Option<(String, String, Vec<String>, Option<String>)>> {
+    ) -> BitFunResult<Option<ExactReviewTarget>> {
         let Some(evidence) = Self::target_evidence(context)? else {
             return Ok(None);
         };
@@ -308,17 +321,17 @@ impl GetFileDiffTool {
         )))
     }
 
-    async fn exact_review_diff(
-        &self,
-        workspace_root: &Path,
-        logical_path: &str,
-        base_revision: &str,
-        head_revision: &str,
-        paths: &[String],
-        fingerprint: Option<&str>,
-        diff_offset: usize,
-        cursor_binding: &str,
-    ) -> BitFunResult<Value> {
+    async fn exact_review_diff(&self, request: ExactReviewDiffRequest<'_>) -> BitFunResult<Value> {
+        let ExactReviewDiffRequest {
+            workspace_root,
+            logical_path,
+            base_revision,
+            head_revision,
+            paths,
+            fingerprint,
+            diff_offset,
+            cursor_binding,
+        } = request;
         let diff_content =
             GitService::get_review_diff(workspace_root, base_revision, head_revision, paths)
                 .await
@@ -1607,19 +1620,19 @@ Usage:
                 BitFunError::tool("Workspace root is required for Review target diff".to_string())
             })?;
             let data = self
-                .exact_review_diff(
+                .exact_review_diff(ExactReviewDiffRequest {
                     workspace_root,
                     logical_path,
-                    &base_revision,
-                    &head_revision,
-                    &paths,
-                    fingerprint.as_deref(),
+                    base_revision: &base_revision,
+                    head_revision: &head_revision,
+                    paths: &paths,
+                    fingerprint: fingerprint.as_deref(),
                     diff_offset,
-                    prepared_evidence
+                    cursor_binding: prepared_evidence
                         .as_ref()
                         .map(ReviewTargetEvidence::fingerprint)
                         .unwrap_or_default(),
-                )
+                })
                 .await?;
             let data = Self::apply_review_diff_budget(
                 data,

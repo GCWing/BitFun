@@ -29,6 +29,22 @@ fn build_deep_review_subagent_context(
     values
 }
 
+struct BackgroundTaskStartRequest<'a> {
+    coordinator: &'a std::sync::Arc<crate::agentic::coordination::ConversationCoordinator>,
+    context: &'a ToolUseContext,
+    context_mode: SubagentContextMode,
+    target_session_id: Option<String>,
+    subagent_type: Option<String>,
+    effective_workspace_path: Option<String>,
+    model_id: Option<String>,
+    subagent_context: Option<HashMap<String, String>>,
+    prepared_prompt: String,
+    timeout_seconds: Option<u64>,
+    tool_call_id: String,
+    session_id: String,
+    dialog_turn_id: String,
+}
+
 impl TaskTool {
     pub(super) async fn load_configured_tool_execution_timeout() -> Option<u64> {
         let service = GlobalConfigManager::get_service().await.ok()?;
@@ -501,8 +517,8 @@ impl TaskTool {
         });
         let prepared_prompt = prompt;
         if run_in_background {
-            return Self::start_background_task(
-                &coordinator,
+            return Self::start_background_task(BackgroundTaskStartRequest {
+                coordinator: &coordinator,
                 context,
                 context_mode,
                 target_session_id,
@@ -515,7 +531,7 @@ impl TaskTool {
                 tool_call_id,
                 session_id,
                 dialog_turn_id,
-            )
+            })
             .await;
         }
 
@@ -548,20 +564,23 @@ impl TaskTool {
     }
 
     async fn start_background_task(
-        coordinator: &std::sync::Arc<crate::agentic::coordination::ConversationCoordinator>,
-        context: &ToolUseContext,
-        context_mode: SubagentContextMode,
-        target_session_id: Option<String>,
-        subagent_type: Option<String>,
-        effective_workspace_path: Option<String>,
-        model_id: Option<String>,
-        subagent_context: Option<HashMap<String, String>>,
-        prepared_prompt: String,
-        timeout_seconds: Option<u64>,
-        tool_call_id: String,
-        session_id: String,
-        dialog_turn_id: String,
+        request: BackgroundTaskStartRequest<'_>,
     ) -> BitFunResult<Vec<ToolResult>> {
+        let BackgroundTaskStartRequest {
+            coordinator,
+            context,
+            context_mode,
+            target_session_id,
+            subagent_type,
+            effective_workspace_path,
+            model_id,
+            subagent_context,
+            prepared_prompt,
+            timeout_seconds,
+            tool_call_id,
+            session_id,
+            dialog_turn_id,
+        } = request;
         let parent_info = SubagentParentInfo {
             tool_call_id,
             session_id,

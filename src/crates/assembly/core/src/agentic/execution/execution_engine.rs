@@ -289,6 +289,45 @@ struct CompressionTriggerBudget {
     safety_reserve_tokens: usize,
 }
 
+// Fields are declared in reverse parameter order so dropping an unconsumed
+// input preserves the previous function-parameter drop order. Call sites keep
+// struct literal fields in the original evaluation order.
+struct TurnPromptScaffoldInput<'a> {
+    stage: &'a str,
+    runtime_context_needs: RuntimeContextNeeds,
+    tool_listing_sections: ToolListingSections,
+    supports_image_understanding: bool,
+    model_name: &'a str,
+    current_agent: &'a dyn crate::agentic::agents::Agent,
+    context: &'a ExecutionContext,
+}
+
+struct FinalizeRoundInput<'a> {
+    context_window: usize,
+    tool_definitions: Option<Vec<ToolDefinition>>,
+    reminder_text: &'a str,
+    messages: &'a [Message],
+    prepended_reminders: &'a [&'a str],
+    primary_model_facts: &'a PrimaryModelFacts,
+    execution_context_vars: &'a HashMap<String, String>,
+    round_group_id: Option<String>,
+    round_number: usize,
+    agent_type: String,
+    context: &'a ExecutionContext,
+    ai_client: Arc<crate::infrastructure::ai::AIClient>,
+}
+
+struct CompressionModelSummaryInput<'a> {
+    trace_config: Option<ModelExchangeTraceConfig>,
+    primary_supports_image_understanding: bool,
+    prepended_prompt_reminders: &'a PrependedPromptReminders,
+    tool_definitions: &'a Option<Vec<ToolDefinition>>,
+    workspace: Option<&'a WorkspaceBinding>,
+    dialog_turn_id: &'a str,
+    runtime_messages: &'a [Message],
+    ai_client: Arc<crate::infrastructure::ai::AIClient>,
+}
+
 /// Execution engine
 pub struct ExecutionEngine {
     round_executor: Arc<RoundExecutor>,
@@ -1079,51 +1118,45 @@ impl ExecutionEngine {
 
     async fn resolve_turn_prompt_scaffold(
         &self,
-        context: &ExecutionContext,
-        current_agent: &dyn crate::agentic::agents::Agent,
-        model_name: &str,
-        supports_image_understanding: bool,
-        tool_listing_sections: ToolListingSections,
-        runtime_context_needs: RuntimeContextNeeds,
-        stage: &str,
+        input: TurnPromptScaffoldInput<'_>,
     ) -> BitFunResult<TurnPromptScaffold> {
         debug!(
             "Resolving turn prompt scaffold: session_id={}, turn_id={}, stage={}, agent={}, model={}",
-            context.session_id,
-            context.dialog_turn_id,
-            stage,
-            current_agent.name(),
-            model_name
+            input.context.session_id,
+            input.context.dialog_turn_id,
+            input.stage,
+            input.current_agent.name(),
+            input.model_name
         );
 
         let prompt_context = Self::build_prompt_context(
-            context,
-            model_name,
-            supports_image_understanding,
-            tool_listing_sections,
-            runtime_context_needs,
+            input.context,
+            input.model_name,
+            input.supports_image_understanding,
+            input.tool_listing_sections,
+            input.runtime_context_needs,
         )
         .await;
         let prepended_prompt_reminders = self
             .build_cached_prepended_prompt_reminders(
-                &context.session_id,
-                current_agent,
+                &input.context.session_id,
+                input.current_agent,
                 prompt_context.as_ref(),
-                &context.context,
+                &input.context.context,
             )
             .await;
         let system_prompt = self
             .resolve_cached_system_prompt(
-                &context.session_id,
-                current_agent,
+                &input.context.session_id,
+                input.current_agent,
                 prompt_context.as_ref(),
             )
             .await?;
 
         Self::log_turn_prompt_scaffold(
-            &context.session_id,
-            &context.dialog_turn_id,
-            stage,
+            &input.context.session_id,
+            &input.context.dialog_turn_id,
+            input.stage,
             system_prompt.len(),
             &prepended_prompt_reminders,
         );
@@ -1297,81 +1330,68 @@ impl ExecutionEngine {
             .collect()
     }
 
-    async fn run_finalize_round(
-        &self,
-        ai_client: Arc<crate::infrastructure::ai::AIClient>,
-        context: &ExecutionContext,
-        agent_type: String,
-        round_number: usize,
-        round_group_id: Option<String>,
-        execution_context_vars: &HashMap<String, String>,
-        primary_model_facts: &PrimaryModelFacts,
-        prepended_reminders: &[&str],
-        messages: &[Message],
-        reminder_text: &str,
-        tool_definitions: Option<Vec<ToolDefinition>>,
-        context_window: usize,
-    ) -> BitFunResult<RoundResult> {
+    async fn run_finalize_round(&self, input: FinalizeRoundInput<'_>) -> BitFunResult<RoundResult> {
         // Keep the original tool definitions attached to the finalize request
         // even though finalize forbids tool execution at runtime. Dropping the
         // tools here would change the provider request shape, which breaks
         // prompt/prefix cache reuse and turns the finalize round into a cache
         // miss for providers that key caching on the full request schema.
-        let finalize_tool_names = Self::finalize_tool_names(tool_definitions.as_deref());
+        let finalize_tool_names = Self::finalize_tool_names(input.tool_definitions.as_deref());
         let finalize_runtime_tool_restrictions =
-            Self::finalize_runtime_tool_restrictions(context, &finalize_tool_names);
+            Self::finalize_runtime_tool_restrictions(input.context, &finalize_tool_names);
         let mut final_ai_messages = Self::build_ai_messages_for_send(
-            messages,
-            &ai_client.config.format,
-            context
+            input.messages,
+            &input.ai_client.config.format,
+            input
+                .context
                 .workspace
                 .as_ref()
                 .map(|workspace| workspace.root_path()),
-            &context.dialog_turn_id,
-            primary_model_facts.supports_image_inputs,
-            prepended_reminders,
+            &input.context.dialog_turn_id,
+            input.primary_model_facts.supports_image_inputs,
+            input.prepended_reminders,
         )
         .await?;
-        final_ai_messages.push(AIMessage::user(render_system_reminder(reminder_text)));
+        final_ai_messages.push(AIMessage::user(render_system_reminder(input.reminder_text)));
         final_ai_messages.push(AIMessage::user(Self::FINALIZE_USER_FOLLOWUP.to_string()));
 
         let model_exchange_trace_dir = self
             .session_manager
-            .persistent_model_exchange_trace_dir(&context.session_id)
+            .persistent_model_exchange_trace_dir(&input.context.session_id)
             .await;
         let round_context = RoundContext {
-            session_id: context.session_id.clone(),
-            subagent_parent_info: context.subagent_parent_info.clone(),
-            dialog_turn_id: context.dialog_turn_id.clone(),
-            turn_index: context.turn_index,
-            round_number,
-            round_group_id,
-            workspace: context.workspace.clone(),
+            session_id: input.context.session_id.clone(),
+            subagent_parent_info: input.context.subagent_parent_info.clone(),
+            dialog_turn_id: input.context.dialog_turn_id.clone(),
+            turn_index: input.context.turn_index,
+            round_number: input.round_number,
+            round_group_id: input.round_group_id,
+            workspace: input.context.workspace.clone(),
             model_exchange_trace_dir,
             available_tools: finalize_tool_names,
             collapsed_tools: Vec::new(),
             unlocked_collapsed_tools: Vec::new(),
-            model_name: ai_client.config.model.clone(),
-            primary_model_facts: primary_model_facts.clone(),
-            agent_type,
-            context_vars: execution_context_vars.clone(),
-            delegation_policy: context.delegation_policy,
+            model_name: input.ai_client.config.model.clone(),
+            primary_model_facts: input.primary_model_facts.clone(),
+            agent_type: input.agent_type,
+            context_vars: input.execution_context_vars.clone(),
+            delegation_policy: input.context.delegation_policy,
             runtime_tool_restrictions: finalize_runtime_tool_restrictions,
             steering_interrupt: None,
             cancellation_token: CancellationToken::new(),
-            workspace_services: context.workspace_services.clone(),
-            terminal_port: context.terminal_port.clone(),
-            remote_exec_port: context.remote_exec_port.clone(),
-            recover_partial_on_cancel: context.recover_partial_on_cancel,
+            workspace_services: input.context.workspace_services.clone(),
+            terminal_port: input.context.terminal_port.clone(),
+            remote_exec_port: input.context.remote_exec_port.clone(),
+            recover_partial_on_cancel: input.context.recover_partial_on_cancel,
         };
 
         self.round_executor
             .execute_round(
-                ai_client,
+                input.ai_client,
                 round_context,
                 final_ai_messages,
-                tool_definitions,
-                Some(context_window),
+                input.tool_definitions,
+                Some(input.context_window),
             )
             .await
     }
@@ -1679,32 +1699,25 @@ impl ExecutionEngine {
 
     async fn generate_compression_model_summary(
         &self,
-        ai_client: Arc<crate::infrastructure::ai::AIClient>,
-        runtime_messages: &[Message],
-        dialog_turn_id: &str,
-        workspace: Option<&WorkspaceBinding>,
-        tool_definitions: &Option<Vec<ToolDefinition>>,
-        prepended_prompt_reminders: &PrependedPromptReminders,
-        primary_supports_image_understanding: bool,
-        trace_config: Option<ModelExchangeTraceConfig>,
+        input: CompressionModelSummaryInput<'_>,
     ) -> BitFunResult<Option<String>> {
         let request_messages = self
             .build_compression_request_messages(
-                runtime_messages,
-                dialog_turn_id,
-                workspace,
-                &ai_client.config.format,
-                primary_supports_image_understanding,
-                prepended_prompt_reminders,
+                input.runtime_messages,
+                input.dialog_turn_id,
+                input.workspace,
+                &input.ai_client.config.format,
+                input.primary_supports_image_understanding,
+                input.prepended_prompt_reminders,
             )
             .await?;
 
         let raw_summary = self
             .request_compression_summary_with_retry(
-                ai_client,
+                input.ai_client,
                 request_messages,
-                tool_definitions.clone(),
-                trace_config,
+                input.tool_definitions.clone(),
+                input.trace_config,
                 2,
             )
             .await?;
@@ -1851,15 +1864,15 @@ impl ExecutionEngine {
         let tool_definitions = tool_manifest.map(|manifest| manifest.tool_definitions);
 
         let turn_prompt_scaffold = self
-            .resolve_turn_prompt_scaffold(
+            .resolve_turn_prompt_scaffold(TurnPromptScaffoldInput {
                 context,
-                current_agent.as_ref(),
-                &ai_client.config.model,
-                primary_supports_image_understanding,
+                current_agent: current_agent.as_ref(),
+                model_name: &ai_client.config.model,
+                supports_image_understanding: primary_supports_image_understanding,
                 tool_listing_sections,
                 runtime_context_needs,
-                "compression_scaffold",
-            )
+                stage: "compression_scaffold",
+            })
             .await?;
 
         Ok(CompressionRuntimeScaffold {
@@ -1944,16 +1957,16 @@ impl ExecutionEngine {
         )
         .await;
         let model_summary = match self
-            .generate_compression_model_summary(
+            .generate_compression_model_summary(CompressionModelSummaryInput {
                 ai_client,
-                &runtime_messages,
+                runtime_messages: &runtime_messages,
                 dialog_turn_id,
                 workspace,
                 tool_definitions,
                 prepended_prompt_reminders,
                 primary_supports_image_understanding,
                 trace_config,
-            )
+            })
             .await
         {
             Ok(summary) => summary,
@@ -2229,16 +2242,16 @@ impl ExecutionEngine {
         )
         .await;
         let model_summary = match self
-            .generate_compression_model_summary(
-                scaffold.ai_client.clone(),
-                &runtime_messages,
-                &dialog_turn_id,
-                context.workspace.as_ref(),
-                &scaffold.tool_definitions,
-                &scaffold.prepended_prompt_reminders,
-                scaffold.primary_supports_image_understanding,
+            .generate_compression_model_summary(CompressionModelSummaryInput {
+                ai_client: scaffold.ai_client.clone(),
+                runtime_messages: &runtime_messages,
+                dialog_turn_id: &dialog_turn_id,
+                workspace: context.workspace.as_ref(),
+                tool_definitions: &scaffold.tool_definitions,
+                prepended_prompt_reminders: &scaffold.prepended_prompt_reminders,
+                primary_supports_image_understanding: scaffold.primary_supports_image_understanding,
                 trace_config,
-            )
+            })
             .await
         {
             Ok(summary) => summary,
@@ -2648,15 +2661,15 @@ impl ExecutionEngine {
         // It is refreshed after successful context compression so the first
         // post-compaction request builds the new provider-side prefix cache.
         let mut turn_prompt_scaffold = self
-            .resolve_turn_prompt_scaffold(
-                &context,
-                current_agent.as_ref(),
-                &ai_client.config.model,
-                primary_supports_image_understanding,
-                tool_listing_sections.clone(),
+            .resolve_turn_prompt_scaffold(TurnPromptScaffoldInput {
+                context: &context,
+                current_agent: current_agent.as_ref(),
+                model_name: &ai_client.config.model,
+                supports_image_understanding: primary_supports_image_understanding,
+                tool_listing_sections: tool_listing_sections.clone(),
                 runtime_context_needs,
-                "turn_start",
-            )
+                stage: "turn_start",
+            })
             .await?;
 
         // Add System Prompt to the beginning of message list (only for this execution, not persisted)
@@ -2916,15 +2929,15 @@ impl ExecutionEngine {
 
                         messages = compressed_messages;
                         turn_prompt_scaffold = self
-                            .resolve_turn_prompt_scaffold(
-                                &context,
-                                current_agent.as_ref(),
-                                &ai_client.config.model,
-                                primary_supports_image_understanding,
-                                tool_listing_sections.clone(),
+                            .resolve_turn_prompt_scaffold(TurnPromptScaffoldInput {
+                                context: &context,
+                                current_agent: current_agent.as_ref(),
+                                model_name: &ai_client.config.model,
+                                supports_image_understanding: primary_supports_image_understanding,
+                                tool_listing_sections: tool_listing_sections.clone(),
                                 runtime_context_needs,
-                                "after_context_compression",
-                            )
+                                stage: "after_context_compression",
+                            })
                             .await?;
                         Self::apply_turn_prompt_scaffold_to_messages(
                             &mut messages,
@@ -3551,20 +3564,20 @@ impl ExecutionEngine {
                     .prepended_prompt_reminders
                     .ordered_reminders();
                 let final_round_result = self
-                    .run_finalize_round(
-                        ai_client.clone(),
-                        &context,
-                        agent_type.clone(),
-                        completed_rounds,
-                        finalize_round_group_id.clone(),
-                        &execution_context_vars,
-                        &primary_model_facts,
-                        &finalize_prepended_reminders,
-                        &messages,
-                        finalize_reminder,
-                        tool_definitions.clone(),
+                    .run_finalize_round(FinalizeRoundInput {
+                        ai_client: ai_client.clone(),
+                        context: &context,
+                        agent_type: agent_type.clone(),
+                        round_number: completed_rounds,
+                        round_group_id: finalize_round_group_id.clone(),
+                        execution_context_vars: &execution_context_vars,
+                        primary_model_facts: &primary_model_facts,
+                        prepended_reminders: &finalize_prepended_reminders,
+                        messages: &messages,
+                        reminder_text: finalize_reminder,
+                        tool_definitions: tool_definitions.clone(),
                         context_window,
-                    )
+                    })
                     .await?;
 
                 let mut accepted = final_round_result.had_assistant_text
@@ -3581,20 +3594,20 @@ impl ExecutionEngine {
                         context.session_id, context.dialog_turn_id
                     );
                     let retry_result = self
-                        .run_finalize_round(
-                            ai_client.clone(),
-                            &context,
-                            agent_type.clone(),
-                            completed_rounds,
-                            finalize_round_group_id.clone(),
-                            &execution_context_vars,
-                            &primary_model_facts,
-                            &finalize_prepended_reminders,
-                            &messages,
-                            finalize_reminder,
-                            tool_definitions.clone(),
+                        .run_finalize_round(FinalizeRoundInput {
+                            ai_client: ai_client.clone(),
+                            context: &context,
+                            agent_type: agent_type.clone(),
+                            round_number: completed_rounds,
+                            round_group_id: finalize_round_group_id.clone(),
+                            execution_context_vars: &execution_context_vars,
+                            primary_model_facts: &primary_model_facts,
+                            prepended_reminders: &finalize_prepended_reminders,
+                            messages: &messages,
+                            reminder_text: finalize_reminder,
+                            tool_definitions: tool_definitions.clone(),
                             context_window,
-                        )
+                        })
                         .await?;
                     if !retry_result.had_assistant_text
                         || Self::assistant_has_tool_calls(&retry_result.assistant_message)
