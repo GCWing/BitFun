@@ -2541,6 +2541,32 @@ export class FlowChatStore {
         return turn;
       }
 
+      // Content-based dedup: skip duplicate plan-display items that reference the same plan file.
+      // This guards against any code path that might inject a plan-display item more than once.
+      if (
+        item.type === 'tool' &&
+        (item as FlowToolItem).toolName === 'CreatePlan' &&
+        (item as FlowToolItem).toolResult?.result?.plan_file_path
+      ) {
+        const incomingPlanPath = (item as FlowToolItem).toolResult!.result!.plan_file_path;
+        const duplicatePlanItem = targetModelRound.items.find(existingItem => {
+          if (existingItem.type !== 'tool') return false;
+          const et = existingItem as FlowToolItem;
+          return (
+            et.toolName === 'CreatePlan' &&
+            et.toolResult?.result?.plan_file_path === incomingPlanPath
+          );
+        });
+        if (duplicatePlanItem) {
+          log.debug('Skipping duplicate plan-display item (same planFilePath)', {
+            sessionId,
+            dialogTurnId,
+            planFilePath: incomingPlanPath,
+          });
+          return turn;
+        }
+      }
+
       const updatedModelRounds = [...turn.modelRounds];
       const activeAttempts = targetModelRound.attempts ?? deriveRoundAttemptsFromItems(targetModelRound.items);
       const incomingAttemptId = typeof item.attemptId === 'string' && item.attemptId.length > 0

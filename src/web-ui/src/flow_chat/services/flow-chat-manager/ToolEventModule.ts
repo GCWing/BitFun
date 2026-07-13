@@ -595,6 +595,17 @@ function handleConfirmationNeeded(
   turnId: string,
   toolEvent: ConfirmationNeededToolEvent
 ): void {
+  const existingItem = store.findToolItem(sessionId, turnId, toolEvent.tool_id) as FlowToolItem | null;
+  if (existingItem?.status === 'pending_confirmation') {
+    log.debug('Skipping duplicate tool confirmation needed event', {
+      sessionId,
+      turnId,
+      toolId: toolEvent.tool_id,
+      toolName: toolEvent.tool_name,
+    });
+    return;
+  }
+
   store.updateModelRoundItem(sessionId, turnId, toolEvent.tool_id, {
     requiresConfirmation: true,
     status: 'pending_confirmation',

@@ -1160,18 +1160,20 @@ function finalizePendingTurnCompletion(
   finalizeTurnCompletionState(context, sessionId, turnId);
 }
 
-function finalizePendingTurnCompletionNow(context: FlowChatContext, sessionId: string): void {
+function finalizePendingTurnCompletionNow(context: FlowChatContext, sessionId: string): boolean {
   const pending = context.pendingTurnCompletions.get(sessionId);
   if (!pending) {
-    return;
+    return false;
   }
 
   if (pending.timer) {
     clearTimeout(pending.timer);
   }
 
+  context.pendingTurnCompletions.delete(sessionId);
   flushPendingBatchedEvents(context);
   finalizeTurnCompletionState(context, sessionId, pending.turnId);
+  return true;
 }
 
 function findFinishingTurnForBackendIdle(
@@ -1367,8 +1369,8 @@ export function handleSessionStateChanged(context: FlowChatContext, event: any):
   machineContext.backendSyncedAt = Date.now();
 
   if (isExpectedFinishingDrift) {
-    finalizePendingTurnCompletionNow(context, sessionId);
-    if (stateMachineManager.getCurrentState(sessionId) === SessionExecutionState.FINISHING) {
+    const didFinalize = finalizePendingTurnCompletionNow(context, sessionId);
+    if (!didFinalize && stateMachineManager.getCurrentState(sessionId) === SessionExecutionState.FINISHING) {
       const finishingTurnId = findFinishingTurnForBackendIdle(
         context,
         sessionId,
@@ -2679,6 +2681,13 @@ function appendPlanDisplayItemsIfNeeded(
   turnId: string,
   dialogTurn: DialogTurn
 ): void {
+  const planDisplayKey = `${sessionId}:${turnId}`;
+  if (context.handledPlanDisplayTurns.has(planDisplayKey)) {
+    log.debug('Skipping duplicate plan display injection', { sessionId, turnId });
+    return;
+  }
+  context.handledPlanDisplayTurns.add(planDisplayKey);
+
   const modifiedPlanFiles = detectModifiedPlanFiles(dialogTurn);
   if (modifiedPlanFiles.length === 0) return;
   
@@ -2687,7 +2696,7 @@ function appendPlanDisplayItemsIfNeeded(
   
   for (const planFilePath of modifiedPlanFiles) {
     const planToolItem: FlowToolItem = {
-      id: `plan-display-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      id: `plan-display-${planFilePath}`,
       type: 'tool',
       toolName: 'CreatePlan',
       toolCall: { input: {}, id: '' },

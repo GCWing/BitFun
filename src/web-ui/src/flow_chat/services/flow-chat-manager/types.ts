@@ -51,6 +51,13 @@ export interface FlowChatContext {
    * this set is used to make handlers idempotent. Key format: `sessionId:turnId`.
    */
   handledTerminalTurnEvents: Set<string>;
+  /**
+   * Turn IDs whose plan-display items have already been appended.
+   * Guards against duplicate plan display injection when finalizeTurnCompletionState
+   * is reached via multiple code paths for the same turn.
+   * Key format: `sessionId:turnId`.
+   */
+  handledPlanDisplayTurns: Set<string>;
   currentWorkspacePath: string | null;
 }
 

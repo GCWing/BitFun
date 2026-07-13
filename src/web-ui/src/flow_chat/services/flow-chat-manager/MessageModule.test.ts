@@ -81,6 +81,7 @@ describe('MessageModule cancellation', () => {
       pendingTurnCompletions: new Map(),
       runtimeStatusTimers: new Map(),
       handledTerminalTurnEvents: new Set<string>(),
+      handledPlanDisplayTurns: new Set<string>(),
       contentBuffers,
       activeTextItems,
     };

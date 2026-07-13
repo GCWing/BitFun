@@ -5,6 +5,9 @@
 import { FlowChatStore } from '../../store/FlowChatStore';
 import type { FlowToolItem } from '../../types/flow-chat';
 import type { AcpPermissionRequestEvent } from '@/infrastructure/api/service-api/ACPClientAPI';
+import { createLogger } from '@/shared/utils/logger';
+
+const log = createLogger('AcpPermissionToolCardModule');
 
 const pendingAcpPermissionRequests = new Map<string, AcpPermissionRequestEvent>();
 
@@ -18,7 +21,7 @@ function acpPermissionToolId(event: AcpPermissionRequestEvent): string | null {
 function findToolContextById(
   store: FlowChatStore,
   toolId: string
-): { sessionId: string; turnId: string; itemId: string } | null {
+): { sessionId: string; turnId: string; itemId: string; item: FlowToolItem } | null {
   const state = store.getState();
   for (const [sessionId, session] of state.sessions) {
     for (const turn of session.dialogTurns) {
@@ -29,7 +32,7 @@ function findToolContextById(
         )) as FlowToolItem | undefined;
 
         if (item) {
-          return { sessionId, turnId: turn.id, itemId: item.id };
+          return { sessionId, turnId: turn.id, itemId: item.id, item };
         }
       }
     }
@@ -45,6 +48,15 @@ function applyAcpPermissionRequest(
   const toolContext = findToolContextById(store, toolId);
   if (!toolContext) {
     return false;
+  }
+
+  // Idempotency: skip if the same permission was already applied to this tool
+  if (toolContext.item.acpPermission?.permissionId === event.permissionId) {
+    log.debug('Skipping duplicate ACP permission request', {
+      toolId,
+      permissionId: event.permissionId,
+    });
+    return true;
   }
 
   store.updateModelRoundItem(toolContext.sessionId, toolContext.turnId, toolContext.itemId, {

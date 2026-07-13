@@ -42,7 +42,7 @@ async function downloadToFile(url, filePath) {
 function extractZipWindows(zipPath, destDir) {
   const esc = (p) => p.replace(/'/g, "''");
   const ps = `Expand-Archive -LiteralPath '${esc(zipPath)}' -DestinationPath '${esc(destDir)}' -Force`;
-  const r = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps], {
+  const r = spawnSync('pwsh.exe', ['-NoProfile', '-NonInteractive', '-Command', ps], {
     stdio: 'inherit',
     cwd: ROOT,
   });

@@ -518,6 +518,7 @@ function createFlowChatContext(): FlowChatContext {
     runtimeStatusTimers: new Map(),
     userCancelledSessionIds: new Set(),
     handledTerminalTurnEvents: new Set(),
+    handledPlanDisplayTurns: new Set(),
     currentWorkspacePath: null,
   };
 }
