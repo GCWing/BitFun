@@ -26,11 +26,11 @@
 | 用户已有 `opencode.json` 或项目 `.opencode` 目录 | 当前未实现 | 未来独立导入流程 | 转换为受管包后再进入适配层，不直接扫描 |
 | 全局插件目录 | 后续可选导入来源 | 独立导入流程 | 转换为受管包；不继承 OpenCode 启用顺序 |
 | npm 插件列表 | P0 可诊断，执行属于后续 | OpenCode 适配层 | 只产出来源和 unsupported / projection-only 诊断 |
-| custom tool | 是，最小候选能力 | 扩展贡献接口 -> 工具 ABI | 映射为提供方候选（`ProviderCandidate`）；进入最终工具链路前必须走权限和工具快照 |
-| permission hook | 是，候选能力 | 权限/副作用子接口 | 只能产生候选确认或诊断；不能直接批准 |
+| custom tool | 是，最小候选能力 | 扩展贡献接口；执行就绪后复用工具 ABI | 当前只映射为提供方候选（`ProviderCandidate`）；受限执行单元和真实工具提供方就绪前不得进入最终工具快照 |
+| permission hook | 当前未实现 | 诊断；未来复用权限/副作用子接口 | 有真实权限消费方后才能产生权限候选；不能直接批准 |
 | `tool.execute.before` | 否，P0 只诊断 | 诊断 / status-only | 不改写输入、权限或工具结果 |
 | `tool.execute.after` | 否，P0 只诊断 | 诊断 / status-only | 不伪造工具结果或审计成功 |
-| event subscription / SSE | 受限进入 | 事件清单 | 只能订阅公开事件清单的子集 |
+| event subscription / SSE | 当前未实现 | 诊断；未来复用事件清单 | 有公开事件子集和真实订阅方后才能产生订阅声明 |
 | TUI/GUI 界面贡献 | 否，除非已有真实入口消费方和目标入口形态 | 声明式入口形态接口 | P0-B 返回 unsupported/status-only；不得暴露界面实现、渲染句柄或跨入口主题键 |
 | shell/env helper | 否 | 诊断 / 未来受控工具请求候选 | 默认 unsupported，不开放无约束 shell/env |
 | client/server facade | 否 | 不进入稳定面 | 不暴露 OpenCode client/server facade 给插件或产品入口 |
@@ -63,7 +63,7 @@
 | `bitfun-cli plugins` | 消费来源审核与激活接口，支持预览、精确哈希确认和停用；`doctor` 汇总严重来源错误 | 不承担安装复制、卸载、最终工具注册或执行 |
 | `opencode-adapter` | 普通输入只返回诊断；激活输入将受支持 custom tool 映射为权限候选 | 不拥有目录发现、激活持久化或最终工具执行 |
 | `events` | 已有产品事件清单 | 需要在真实插件事件消费前定义可订阅子集，不新增插件专用事件模型 |
-| `tool-contracts` | 已有动态工具提供方和工具快照 | custom tool 映射必须复用它，不新增插件专用工具 ABI |
+| `tool-contracts` | 已有动态工具提供方和工具快照 | 可执行 custom tool 必须复用它；只有候选时不得注册占位提供方，也不新增插件专用工具 ABI |
 
 `opencode-adapter` 当前规则：
 
@@ -80,6 +80,7 @@
 - 包内容变化后旧来源审核失效，新来源标识回到 `Unknown`；损坏的信任文件按失败处理且不自动覆盖。
 - `SourceApproved` 不直接映射为 Host 的 `Trusted`；首次激活必须使用预览返回的精确内容哈希确认。无受支持 custom tool 的包不得进入激活状态。
 - 激活只允许产生需要权限的候选，不执行 JS/TS，不注册或执行最终工具。
+- 激活、候选生成和工具注册是三个不同状态。只有执行单元已加载受支持制品、提供真实输入 schema 和调用实现后，工具注册才允许发生。
 
 ## 5. PR 审查问题
 
@@ -93,5 +94,6 @@
 6. 是否要求用户安装 OpenCode CLI？
 7. 是否让插件写入最终权限、审计、工具结果或内核状态？
 8. 涉及界面或主题时，是否声明目标入口形态、语义 token、宿主映射、冲突处理和 unsupported 行为？
+9. 若把 custom tool 加入工具快照，是否已经存在真实执行单元、调用实现、资源限制、失效清理和失败隔离，而不是占位提供方？
 
 无法明确回答的问题不应进入实现 PR。
