@@ -389,6 +389,11 @@ fn topological_sort(
     }
 
     for edge in edges {
+        // Skip conditional edges (fail/retry) — they are runtime routing,
+        // not compile-time dependencies for the DAG.
+        if !edge.condition.is_empty() {
+            continue;
+        }
         adjacency
             .entry(edge.from.as_str())
             .or_default()
@@ -443,7 +448,7 @@ fn build_topological_layers(
         // Nodes with no predecessors land on layer 0.
         let max_pred_layer = edges
             .iter()
-            .filter(|e| e.to == *id)
+            .filter(|e| e.to == *id && e.condition.is_empty())
             .filter_map(|e| assigned.get(e.from.as_str()))
             .max()
             .copied();
