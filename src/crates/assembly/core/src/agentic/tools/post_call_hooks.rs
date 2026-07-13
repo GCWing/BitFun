@@ -7,7 +7,7 @@
 use crate::agentic::deep_review::tool_measurement;
 use crate::agentic::tools::tool_context_runtime::ToolUseContext;
 use bitfun_agent_runtime::post_call_hooks::{
-    run_successful_tool_post_call_hooks, SuccessfulToolPostCallHookExecutor,
+    run_successful_tool_post_call_hooks, HookResult, SuccessfulToolPostCallHookExecutor,
 };
 use serde_json::Value;
 
@@ -22,13 +22,22 @@ impl SuccessfulToolPostCallHookExecutor<ToolUseContext> for CorePostCallHookExec
     ) {
         tool_measurement::maybe_record_shared_context_tool_use(tool_name, input, context);
     }
+
+    fn behavior_guard(
+        &mut self,
+        _tool_name: &str,
+        _input: &Value,
+        _context: &ToolUseContext,
+    ) -> HookResult {
+        HookResult::Continue
+    }
 }
 
 pub(crate) fn record_successful_tool_call(
     tool_name: &str,
     input: &Value,
     context: &ToolUseContext,
-) {
+) -> HookResult {
     let mut executor = CorePostCallHookExecutor;
-    run_successful_tool_post_call_hooks(tool_name, input, context, &mut executor);
+    run_successful_tool_post_call_hooks(tool_name, input, context, &mut executor)
 }
