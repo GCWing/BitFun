@@ -3,7 +3,8 @@
 本文件是 [`product-architecture.md`](product-architecture.md) 的开发设计，定义目标模块、接口、
 crate 内部结构和行为保护要求。本文件记录设计约束，不记录实现过程或验证记录。插件运行时主机、
 生态兼容适配层、进程间通信和候选效果接口见
-[`plugin-runtime-host-design.md`](plugin-runtime-host-design.md)。
+[`plugin-runtime-host-design.md`](plugin-runtime-host-design.md)；CLI 入口、配置兼容、产品定制和 CLI Agent
+体验边界见 [`cli-product-line-design.md`](cli-product-line-design.md)。
 
 阅读路径：第 1 节确认 SDK、内核、产品特性、扩展接口和 crate 边界；第 2-3 节说明稳定接口、
 运行时服务、内核、工具和工作流；第 4 节说明产品组装与扩展注册；第 5 节作为质量保护和
@@ -691,8 +692,8 @@ pub struct HarnessExecutionContext {
 - 建立产品特性矩阵。
 - 把接口命令映射到能力 / 工作流 / 运行时请求。
 - 把特性包映射为 Rust 运行时请求、入口命令、插件能力和安全策略。
-- 根据 `ProductProfile` 和 `SurfaceContract` 派生 `DeliveryProfile`、能力计划、能力可用性、
-  适配器清单集合和服务提供方集合。
+- 接收产品入口选择的唯一 `DeliveryProfile`，结合 `ProductProfile` 和 `SurfaceContract` 校验兼容性并派生
+  静态能力计划、适配器清单集合和服务提供方集合；不得在组装内部再次选择交付形态。
 - 对不支持能力返回类型化 unsupported / temporarily-unavailable 错误，而不是让下层运行时判断产品形态。
 - 通过类型化 `PluginRuntimeBinding` 向内核 / Agent Runtime 内部 builder 注入插件运行时客户端或 disabled stub，不使用全局注册表；该绑定不进入 Agent Runtime SDK 门面。
 
@@ -721,16 +722,10 @@ product-assembly
 [`product-architecture.md`](product-architecture.md) 的接口切面、当前消费方和公开接口预算规则。
 
 ```rust
-pub enum ProductProfile {
-    ProductFull,
-    DesktopFull,
-    CliFull,
-    Server,
-    Remote,
-    Acp,
-    Web,
-    MobileWeb,
-    SdkMinimal,
+pub struct ProductProfileRef {
+    pub id: String,
+    pub schema_version: u32,
+    pub content_digest: String,
 }
 
 pub enum DeliveryProfile {
@@ -745,8 +740,17 @@ pub enum DeliveryProfile {
     Sdk,
 }
 
-// 迁移期 ProductProfile 与 DeliveryProfile 可能一一映射；长期 ProductProfile 表示产品包、SKU 或白标策略，
-// DeliveryProfile 表示产品组装派生出的交付结果，二者允许分化。
+pub struct ProductProfileProjection {
+    pub profile_ref: ProductProfileRef,
+    pub capability_ids: Vec<CapabilityId>,
+    pub default_policy_refs: Vec<PolicyRef>,
+    pub bundled_extension_ids: Vec<String>,
+}
+
+// 完整 Product Profile 表示产品身份、资源、能力包、默认策略引用和发行事实；
+// 产品组装根校验 authoring Profile、生成带内容摘要的 Resolved Product Manifest，
+// 并只把运行时需要的投影交给 Product Assembly。
+// DeliveryProfile 作为独立输入表示交付形态，不进入 ProductProfileProjection。
 pub struct CapabilityPlan {
     pub agent_modes: Vec<AgentModeId>,
     pub tool_packs: Vec<ToolPackId>,
@@ -758,6 +762,7 @@ pub struct CapabilityPlan {
 }
 
 pub struct CapabilityAvailabilitySet {
+    pub version: u64,
     pub entries: Vec<CapabilityAvailability>,
 }
 
@@ -793,10 +798,9 @@ pub enum CapabilityAvailabilityReasonCode {
 }
 
 pub struct ProductAssemblyPlan {
-    pub product_profile: ProductProfile,
+    pub product_profile: ProductProfileRef,
     pub delivery_profile: DeliveryProfile,
     pub capability_plan: CapabilityPlan,
-    pub capability_availability: CapabilityAvailabilitySet,
     pub feature_groups: Vec<FeatureGroupId>,
     pub feature_bundles: Vec<FeatureBundleId>,
 }
@@ -825,7 +829,8 @@ pub enum PluginRuntimeBinding {
 }
 
 pub struct ProductAssemblyPlanInput {
-    pub product_profile: ProductProfile,
+    pub product_profile: ProductProfileProjection,
+    pub delivery_profile: DeliveryProfile,
     pub surface: SurfaceContractRef,
 }
 
@@ -835,7 +840,16 @@ pub trait ProductAssembler {
 }
 ```
 
-`CapabilityAvailabilityState` 只表达产品形态可见的可用性，不承载插件主机内部状态。插件状态、隔离和诊断必须先经过能力服务读模型后再进入入口。
+`ProductAssemblyPlan` 只保存静态 eligibility、依赖和服务要求，不保存动态 availability。产品组装创建并注入
+唯一的版本化 Capability Availability 读模型，由它把静态计划、provider health、运行时策略和已归一化的
+quarantine 事实合并为 `CapabilityAvailabilitySet`。TUI、Exec、管理命令和其他入口只消费这个读模型。
+`CapabilityAvailabilityState` 只表达产品形态可见的可用性，不暴露插件主机内部状态；插件状态、隔离和
+诊断必须先经过能力服务读模型后再进入入口。
+
+Product Profile 不承载用户 Runtime Configuration、凭据或任意构建脚本。`ProductProfileRef` 的内容摘要
+标识已解析输入，不用 schema 版本代替内容版本。CLI 白标字段、Resolved Product Manifest、配置层级和
+能力裁剪规则以 [`cli-product-line-design.md`](cli-product-line-design.md#5-product-profile-与白标定制)
+为准；这些字段在出现真实组装消费方和验证路径前仍不构成稳定 Rust API。
 
 `ExtensionCapabilitySet` 是产品扩展能力聚合；它不表示旧的扩展主机，也不暴露具体 adapter object。
 
@@ -943,7 +957,7 @@ pub fn build_desktop_runtime(input: DesktopAssemblyInput) -> Result<ProductRunti
 Product Capability 是产品特性的声明单元，由产品组装消费，并引用内核 / 执行层 / 扩展层
 的稳定贡献。它负责把较大粒度的产品能力拆成可组装的能力包；不拥有 UI，也不直接执行具体 IO。
 
-`ProductProfile`、`CapabilityPack`、`CapabilityPlan`、`CapabilityAvailabilitySet` 和 `OverridePoint` 在本文件中只作为目标态草图出现，不构成稳定接口定义。稳定边界以
+`ProductProfileRef`、`ProductProfileProjection`、`CapabilityPack`、`CapabilityPlan`、`CapabilityAvailabilitySet` 和 `OverridePoint` 在本文件中只作为目标态草图出现，不构成稳定接口定义。稳定边界以
 [`product-architecture.md`](product-architecture.md) 的接口切面、当前消费方和公开接口预算规则为准。运行时插件不得作为裁剪内置产品功能的主机制，Cargo feature 也不得直接当作用户可见能力事实。
 
 建议模块：

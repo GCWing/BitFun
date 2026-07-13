@@ -182,6 +182,15 @@ Repository-level decomposition rules:
   compatibility, behavior equivalence tests, and explicit confirmation when a
   behavior boundary could change.
 
+### CLI product-line guardrails
+
+For CLI/TUI parity work, non-interactive output contracts, external config
+imports, plugin management UX, CLI Agent behavior, or branded CLI distributions,
+read [`docs/architecture/cli-product-line-design.md`](docs/architecture/cli-product-line-design.md)
+and [`src/apps/cli/AGENTS.md`](src/apps/cli/AGENTS.md). Keep CLI/TUI presentation
+in the app; move reusable product behavior through Product Assembly, Agent
+Runtime, Tool/Harness, Runtime Services, or the existing extension boundaries.
+
 ### SDLC quality guardrails
 
 For lifecycle evidence, gates, Artifact Graph, Project Profile, Deep Review

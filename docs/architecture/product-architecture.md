@@ -3,7 +3,8 @@
 本文件定义 BitFun 产品运行时的稳定架构边界。详细执行计划见
 [`../plans/core-decomposition-plan.md`](../plans/core-decomposition-plan.md)；智能体内核、运行时服务和 crate
 约束见 [`agent-runtime-services-design.md`](agent-runtime-services-design.md)；插件运行时主机内部 ABI 和生态适配细节见
-[`plugin-runtime-host-design.md`](plugin-runtime-host-design.md)。详细设计与本文件冲突时，以本文件为准。
+[`plugin-runtime-host-design.md`](plugin-runtime-host-design.md)；CLI 产品入口、配置兼容和白标组装见
+[`cli-product-line-design.md`](cli-product-line-design.md)。详细设计与本文件冲突时，以本文件为准。
 
 本文件只约束稳定边界，不记录单次 PR 进度，也不把未来可能支持的生态能力提前声明为公开接口。
 
@@ -208,6 +209,23 @@ OpenCode 能力映射：
 - 对外稳定 SDK 发布。
 
 ## 5. 产品形态与降级
+
+Product Profile、Delivery Profile、Runtime Configuration 和 Capability Availability 必须分离：
+
+- Product Profile 只在构建/组装期选择产品身份、品牌资源、能力包、默认策略引用、随包扩展和发行事实；
+  不承载用户配置、凭据或任意脚本。
+- Delivery Profile 只表示 CLI、Desktop、ACP、SDK 等交付形态，不表示品牌或 SKU。
+- 产品入口向组装根提交唯一 Delivery Profile；组装根只校验并派生静态计划，不在内部再次选择交付形态。
+- Runtime Configuration 承载用户、项目、工作区和本次运行的可变配置；不能启用 Product Profile
+  未组装的能力，也不能放宽托管策略。
+- Capability Availability 是静态计划、服务健康和策略共同派生的版本化运行时读模型；所有入口消费同一
+  读模型，入口隐藏不等于能力已禁用。
+- 白标构建只能选择已验证 Profile 和静态资源，不得通过文本替换源码或让品牌分支进入内核。
+- authoring Profile 不能直接成为运行时真相；产品组装必须生成带 Profile/resource 摘要、能力闭包和
+  扩展锁定事实的 Resolved Product Manifest。运行时裁剪不自动等于代码已从产物物理移除。
+
+CLI Profile、配置导入和品牌资源的详细边界见
+[`cli-product-line-design.md`](cli-product-line-design.md#5-product-profile-与白标定制)。
 
 产品形态由产品组装决定，不由插件配置、单个 Cargo feature 或生态适配器临时决定。
 
