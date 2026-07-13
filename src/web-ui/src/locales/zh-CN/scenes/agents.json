@@ -41,6 +41,9 @@
       },
       "computerUse": {
         "role": "电脑操作智能体"
+      },
+      "acpExternal": {
+        "role": "外部 ACP 智能体 — {{name}}"
       }
     }
   },

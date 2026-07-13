@@ -38,7 +38,7 @@ import { getAgentBadge, getAgentDescription, getCapabilityLabel } from './utils'
 import './AgentsView.scss';
 import './AgentsScene.scss';
 import { useGallerySceneAutoRefresh } from '@/app/hooks/useGallerySceneAutoRefresh';
-import { CORE_AGENT_IDS, isAgentInOverviewZone } from './agentVisibility';
+import { isAgentInOverviewZone, buildCoreAgentIds, ACP_CORE_AGENT_PREFIX } from './agentVisibility';
 import { CustomAgentAPI } from '@/infrastructure/api/service-api/CustomAgentAPI';
 import { configManager } from '@/infrastructure/config/services/ConfigManager';
 import type { ModeSkillInfo, SubagentModelSelection } from '@/infrastructure/config/types';
@@ -279,26 +279,50 @@ const AgentsHomeView: React.FC = () => {
     };
   }, []);
 
-  const coreAgentMeta = useMemo((): Record<string, CoreAgentMeta> => ({
-    agentic: {
-      role: t('coreAgentsZone.modes.agentic.role'),
-      ...CORE_AGENT_ACCENTS.agentic,
-    },
-    Cowork: {
-      role: t('coreAgentsZone.modes.cowork.role'),
-      ...CORE_AGENT_ACCENTS.Cowork,
-    },
-    ComputerUse: {
-      role: t('coreAgentsZone.modes.computerUse.role'),
-      ...CORE_AGENT_ACCENTS.ComputerUse,
-    },
-  }), [t]);
+  const coreAgentMeta = useMemo((): Record<string, CoreAgentMeta> => {
+    const meta: Record<string, CoreAgentMeta> = {
+      agentic: {
+        role: t('coreAgentsZone.modes.agentic.role'),
+        ...CORE_AGENT_ACCENTS.agentic,
+      },
+      Cowork: {
+        role: t('coreAgentsZone.modes.cowork.role'),
+        ...CORE_AGENT_ACCENTS.Cowork,
+      },
+      ComputerUse: {
+        role: t('coreAgentsZone.modes.computerUse.role'),
+        ...CORE_AGENT_ACCENTS.ComputerUse,
+      },
+    };
+    // Append ACP external agent meta (use a neutral accent).
+    for (const agent of allAgents) {
+      if (agent.id.startsWith(ACP_CORE_AGENT_PREFIX) && !meta[agent.id]) {
+        meta[agent.id] = {
+          role: t('coreAgentsZone.modes.acpExternal.role', agent.name),
+          ...DEFAULT_CORE_AGENT_ACCENT,
+        };
+      }
+    }
+    return meta;
+  }, [t, allAgents]);
 
-  const coreAgents = useMemo(() => allAgents.filter((agent) => CORE_AGENT_IDS.has(agent.id)), [allAgents]);
+  const acpEnabledIds = useMemo(
+    () => allAgents
+      .filter((a) => a.id.startsWith(ACP_CORE_AGENT_PREFIX))
+      .map((a) => a.id.slice(ACP_CORE_AGENT_PREFIX.length)),
+    [allAgents],
+  );
+
+  const effectiveCoreAgentIds = useMemo(() => buildCoreAgentIds(acpEnabledIds), [acpEnabledIds]);
+
+  const coreAgents = useMemo(
+    () => allAgents.filter((agent) => effectiveCoreAgentIds.has(agent.id)),
+    [allAgents, effectiveCoreAgentIds],
+  );
 
   const visibleAgents = useMemo(
-    () => filteredAgents.filter((agent) => isAgentInOverviewZone(agent, hiddenAgentIds)),
-    [filteredAgents, hiddenAgentIds],
+    () => filteredAgents.filter((agent) => isAgentInOverviewZone(agent, hiddenAgentIds, effectiveCoreAgentIds)),
+    [filteredAgents, hiddenAgentIds, effectiveCoreAgentIds],
   );
 
   const scrollToZone = useCallback((targetId: string) => {
