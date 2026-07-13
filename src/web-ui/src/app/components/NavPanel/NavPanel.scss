@@ -1477,13 +1477,17 @@ $_section-header-height: 24px;
   display: flex;
   align-items: center;
   gap: $size-gap-1;
+  min-width: 0;
+  flex: 1 1 auto;
+  justify-content: flex-end;
 }
 
 .bitfun-nav-panel__peer-badge {
   display: flex;
   align-items: center;
   gap: $size-gap-1;
-  max-width: 160px;
+  min-width: 0;
+  max-width: min(112px, 42%);
   padding: 2px 6px;
   border-radius: $size-radius-sm;
   background: color-mix(in srgb, var(--color-warning) 18%, transparent);
@@ -1493,6 +1497,7 @@ $_section-header-height: 24px;
 }
 
 .bitfun-nav-panel__peer-badge-label {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

@@ -328,7 +328,11 @@ const PersistentFooterActions: React.FC = () => {
 
         <div className="bitfun-nav-panel__footer-right">
           {peerDevice?.peerMode.active && (
-            <div className="bitfun-nav-panel__peer-badge" data-testid="peer-remote-badge">
+            <div
+              className="bitfun-nav-panel__peer-badge"
+              data-testid="peer-remote-badge"
+              title={t('accountLogin.peerRemoteBadgeTitle', { name: peerDevice.peerMode.deviceName })}
+            >
               <span className="bitfun-nav-panel__peer-badge-label">
                 {t('accountLogin.peerRemoteLabel', { name: peerDevice.peerMode.deviceName })}
               </span>

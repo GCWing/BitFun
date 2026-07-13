@@ -279,7 +279,28 @@ export const AccountLoginDialog: React.FC<AccountLoginDialogProps> = ({
           }
         }
         const wp = workspacePath || '/';
-        const result = await remoteConnectAPI.accountAutoSync(isFirstLogin, wp, configJson);
+        const maxAttempts = 3;
+        let result: Awaited<ReturnType<typeof remoteConnectAPI.accountAutoSync>> | null = null;
+        let lastError: unknown = null;
+        for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+          try {
+            result = await remoteConnectAPI.accountAutoSync(isFirstLogin, wp, configJson);
+            lastError = null;
+            break;
+          } catch (e) {
+            lastError = e;
+            log.warn(`Auto-sync attempt ${attempt}/${maxAttempts} failed`, e);
+            if (attempt < maxAttempts) {
+              info(t('accountLogin.syncRetrying', { attempt, max: maxAttempts }));
+              await new Promise((resolve) => setTimeout(resolve, 2000 * attempt));
+            }
+          }
+        }
+        if (!result) {
+          throw lastError instanceof Error
+            ? lastError
+            : new Error(String(lastError ?? 'auto-sync failed'));
+        }
         log.info(
           `Auto-sync done: settings=${result.settings_synced} exported=${result.sessions_exported}`,
         );

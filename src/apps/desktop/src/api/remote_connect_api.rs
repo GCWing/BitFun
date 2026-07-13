@@ -106,53 +106,78 @@ fn emit_sync_progress(
     );
 }
 
-/// Push a UI event to all attached peer controllers (fire-and-forget).
+/// Push a UI event to all attached peer controllers.
+///
+/// Events are queued and sent **sequentially** so high-frequency streams
+/// (especially `agentic://text-chunk`) keep emission order. Concurrent
+/// `tokio::spawn` per chunk previously scrambled peer remote chat text.
 pub fn fanout_peer_device_event(event: String, payload: serde_json::Value) {
+    if crate::api::peer_host_invoke::attached_controllers().is_empty() {
+        return;
+    }
+    let tx = PEER_EVENT_FANOUT_TX.get_or_init(|| {
+        let (tx, mut rx) =
+            tokio::sync::mpsc::unbounded_channel::<(String, serde_json::Value)>();
+        tokio::spawn(async move {
+            while let Some((event, payload)) = rx.recv().await {
+                fanout_peer_device_event_once(event, payload).await;
+            }
+        });
+        tx
+    });
+    if let Err(e) = tx.send((event, payload)) {
+        log::debug!("peer event fanout queue closed: {e}");
+    }
+}
+
+static PEER_EVENT_FANOUT_TX: OnceLock<
+    tokio::sync::mpsc::UnboundedSender<(String, serde_json::Value)>,
+> = OnceLock::new();
+
+async fn fanout_peer_device_event_once(event: String, payload: serde_json::Value) {
     let targets = crate::api::peer_host_invoke::attached_controllers();
     if targets.is_empty() {
         return;
     }
-    tokio::spawn(async move {
-        let (session, _) = match read_account_context().await {
-            Ok(ctx) => ctx,
-            Err(e) => {
-                log::debug!("peer event fanout skipped (no account): {e}");
-                return;
-            }
-        };
-        let holder = get_service_holder().read().await;
-        let Some(ref service) = *holder else {
+    let (session, _) = match read_account_context().await {
+        Ok(ctx) => ctx,
+        Err(e) => {
+            log::debug!("peer event fanout skipped (no account): {e}");
             return;
-        };
-        use bitfun_core::service::remote_connect::encryption::encrypt_to_base64;
-        use bitfun_core::service::remote_connect::remote_server::RemoteCommand;
-        let envelope = match serde_json::to_string(&RemoteCommand::DeviceEvent {
-            event: event.clone(),
-            payload,
-        }) {
-            Ok(s) => s,
-            Err(e) => {
-                log::warn!("peer event fanout serialize failed: {e}");
-                return;
-            }
-        };
-        let (encrypted_data, nonce) = match encrypt_to_base64(&session.master_key, &envelope) {
-            Ok(v) => v,
-            Err(e) => {
-                log::warn!("peer event fanout encrypt failed: {e}");
-                return;
-            }
-        };
-        for target in targets {
-            let correlation_id = uuid::Uuid::new_v4().to_string();
-            if let Err(e) = service
-                .send_device_message(&target, &correlation_id, &encrypted_data, &nonce)
-                .await
-            {
-                log::debug!("peer event fanout to {target} failed: {e}");
-            }
         }
-    });
+    };
+    let holder = get_service_holder().read().await;
+    let Some(ref service) = *holder else {
+        return;
+    };
+    use bitfun_core::service::remote_connect::encryption::encrypt_to_base64;
+    use bitfun_core::service::remote_connect::remote_server::RemoteCommand;
+    let envelope = match serde_json::to_string(&RemoteCommand::DeviceEvent {
+        event: event.clone(),
+        payload,
+    }) {
+        Ok(s) => s,
+        Err(e) => {
+            log::warn!("peer event fanout serialize failed: {e}");
+            return;
+        }
+    };
+    let (encrypted_data, nonce) = match encrypt_to_base64(&session.master_key, &envelope) {
+        Ok(v) => v,
+        Err(e) => {
+            log::warn!("peer event fanout encrypt failed: {e}");
+            return;
+        }
+    };
+    for target in targets {
+        let correlation_id = uuid::Uuid::new_v4().to_string();
+        if let Err(e) = service
+            .send_device_message(&target, &correlation_id, &encrypted_data, &nonce)
+            .await
+        {
+            log::debug!("peer event fanout to {target} failed: {e}");
+        }
+    }
 }
 
 fn should_fanout_peer_ui_event(event: &str) -> bool {
@@ -1365,7 +1390,7 @@ pub async fn account_connect_devices() -> Result<Vec<OnlineDeviceInfo>, String> 
                         .map(|d| (d.device_id.clone(), d.device_name.clone()))
                         .collect();
                     emit_device_presence(&pairs);
-                    // Another device came online — pull cloud settings/sessions.
+                    // Another device came online — pull cloud settings if needed.
                     if devices.len() > 1 {
                         tokio::spawn(async {
                             pull_and_reconcile().await;

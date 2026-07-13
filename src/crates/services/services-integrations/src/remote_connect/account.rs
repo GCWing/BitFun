@@ -380,7 +380,13 @@ impl AccountClient {
         if !resp.status().is_success() {
             return Err(Self::into_error(resp).await);
         }
-        let payload: SessionsListResponse = resp.json().await?;
+        let bytes = resp.bytes().await?;
+        let payload: SessionsListResponse = serde_json::from_slice(&bytes).map_err(|e| {
+            anyhow!(
+                "decode sessions list failed ({} bytes): {e}",
+                bytes.len()
+            )
+        })?;
         Ok(payload
             .sessions
             .into_iter()
