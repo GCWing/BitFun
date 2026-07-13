@@ -204,7 +204,7 @@ export function useAgentsList({
         ]).catch((): Record<string, unknown> => ({})),
       ]);
 
-      // Fetch enabled ACP external agents for the core zone.
+      // Fetch enabled ACP external agents for core zone metadata enrichment.
       let acpClients: AcpClientInfo[] = [];
       try {
         acpClients = (await ACPClientAPI.getClients()).filter((c) => c.enabled);
@@ -284,9 +284,14 @@ export function useAgentsList({
         });
       });
 
-      const acpAgents: AgentWithCapabilities[] = acpClients.map((client): AgentWithCapabilities => {
+      const modeAgentIds = new Set(modeAgents.map((a) => a.id));
+      const acpAgents: AgentWithCapabilities[] = acpClients
+        .filter((client) => !modeAgentIds.has(`${ACP_CORE_AGENT_PREFIX}${client.id}`))
+        .map((client): AgentWithCapabilities => {
         const agentId = `${ACP_CORE_AGENT_PREFIX}${client.id}`;
         const displayName = client.name || client.id;
+        const acpToolName = `${ACP_CORE_AGENT_PREFIX}${client.id}__prompt`;
+        const defaultTools = [acpToolName, 'Read', 'Grep', 'Glob', 'LS'];
         return enrichCapabilities({
           key: `acp::${client.id}`,
           id: agentId,
@@ -296,8 +301,8 @@ export function useAgentsList({
             : `External ACP agent — ${client.status}`,
           isReadonly: client.readonly,
           isReview: false,
-          toolCount: 0,
-          defaultTools: [],
+          toolCount: defaultTools.length,
+          defaultTools,
           defaultEnabled: client.enabled,
           effectiveEnabled: client.enabled,
           source: 'builtin' as AgentSource,

@@ -1529,9 +1529,9 @@ impl AcpClientService {
             );
             agent_registry.register_agent(
                 agent,
-                bitfun_core::agentic::agents::AgentCategory::SubAgent,
+                bitfun_core::agentic::agents::AgentCategory::Mode,
                 bitfun_core::agentic::agents::AgentSource::Builtin,
-                Some(bitfun_core::agentic::agents::SubAgentSource::Builtin),
+                None,
                 None,
             );
         }
