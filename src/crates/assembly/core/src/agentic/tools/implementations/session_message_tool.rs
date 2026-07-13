@@ -298,7 +298,7 @@ Allowed agent types when creating a session:
     }
 
     fn default_exposure(&self) -> ToolExposure {
-        ToolExposure::Collapsed
+        ToolExposure::Expanded
     }
 
     fn input_schema(&self) -> Value {
