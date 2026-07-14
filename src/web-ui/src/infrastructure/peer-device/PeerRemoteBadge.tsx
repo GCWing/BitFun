@@ -1,6 +1,6 @@
 /**
- * Peer Remote status chip — shown while Peer Device Mode is active.
- * Mounted on SceneBar (global chrome) so the device name stays readable.
+ * Peer Remote status row — shown while Peer Device Mode is active.
+ * Mounted as a dedicated full-width row above the NavPanel footer.
  */
 
 import React, { useCallback } from 'react';

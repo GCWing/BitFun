@@ -31,7 +31,7 @@ FS) and must not be mixed with Peer Device Mode.
 
 - Not SSH `WorkspaceKind.Remote` (local session mirror + remote FS).
 - Enter via Account Login → Online Devices → click peer.
-- Exit via SceneBar remote status chip `Disconnect` (device name + disconnect).
+- Exit via sidebar Peer Remote status row `Disconnect` (device name + disconnect).
 - Local-only commands (window chrome, updater, account login/logout, peer
   control plane) never execute on the peer on behalf of a controller.
 - Unsupported or denied commands fail loudly; they must not fall back to the
