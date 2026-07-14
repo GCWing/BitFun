@@ -84,22 +84,23 @@ BitFun CLI 应成为可独立安装和发布的 Agent 产品，而不是 Desktop
 - `exec` 的 stdin、`text/json/stream-json`、会话恢复/分叉和 Patch 输出。
 - Agent、模型、MCP、会话、用量、诊断、ACP 外部 Agent 和插件来源管理命令。
 - BitFun 原生插件目录的发现、内容校验、来源确认，以及 OpenCode custom tool 静态名称预览。
-- `DeliveryProfile::Cli`、Product Capability、Runtime Services 与 Plugin Runtime Host 的底层契约和测试。
-- 独立 CLI 打包工作流；主 CI 的 workspace check 仍明确排除 `bitfun-cli`。
+- CLI 的 `doctor` 生产命令选择 `DeliveryProfile::Cli` 并投影 `ProductAssemblyPlan`；它展示静态 profile，
+  明确说明未评估运行时 readiness，不构造 Runtime Parts 或注册占位 provider。
+- 独立 CLI 测试与打包工作流；主 CI 的三平台 workspace check 同时覆盖 `bitfun-cli` 编译。
 
-这些基础不等于生产入口已经完成独立组装。当前 CLI crate 仍直接依赖 `bitfun-core` 的 `product-full`，
-生产代码尚未消费 `ProductAssembler` 或 `DeliveryProfile::Cli`；插件命令也仍以来源管理和静态预览为主。
+首个只读计划诊断切片不等于 CLI 已完成独立产品化。当前 CLI crate 仍直接依赖 `bitfun-core` 的
+`product-full`，生产代码尚未消费 `ProductAssembler` 或 Runtime Parts；插件命令也仍以来源管理和静态预览为主。
 
 目标态仍存在以下结构缺口：
 
 | 缺口 | 影响 | 本设计的处理 |
 |---|---|---|
-| CLI 生产入口仍直接依赖 `bitfun-core/product-full` 和部分具体管理器 | CLI 能力难以独立裁剪，入口继续承担组装和全局状态职责 | 逐步改为 `DeliveryProfile::Cli` 的显式产品组装和统一能力状态接口；迁移期间保留兼容门面。 |
+| CLI 只有 `doctor` 消费 `DeliveryProfile::Cli` 的静态计划；所有执行路径仍直接依赖 `bitfun-core/product-full` 和部分具体管理器 | CLI 能力仍难以独立裁剪，执行入口继续承担全局状态职责 | 接入 owner-owned Runtime Services、调用级权限和权威事件路径后，按行为等价测试逐条迁移到 Runtime Parts；迁移期间保留兼容门面。 |
 | TUI 编排、输入、命令、副作用和渲染仍有大文件聚集 | 交互回归难以隔离，终端状态与业务状态容易耦合 | 在现有模块上增量收敛为事件、状态归约、副作用和渲染四个边界，不重写全部 TUI。 |
 | CLI 配置只覆盖入口本地选项，缺少统一层级、来源解释和兼容导入 | 用户无法安全迁移其他 CLI 资产，也难以解释最终配置来源 | 建立 BitFun Canonical Config、来源视图和一次性导入报告。 |
 | OpenCode 来源发现与真实执行尚未形成完整闭环 | “来源可识别”容易被误解为“插件可执行” | 直接发现 OpenCode 来源，后台准备真实执行版本；状态明确区分预览、准备、可用和降级。 |
 | Product Capability 已有，但品牌、资源、默认策略和发行配置没有统一产品定义 | 白标需要修改多处常量和工作流，能力隐藏不等于后端禁用 | 产品定义只在组装/构建边界选择身份、资源、能力包、默认策略和发行事实。 |
-| 主 CI 仍排除 CLI，当前保护集中在局部测试和打包工作流 | CLI 常规改动缺少稳定的快速门禁 | 增加独立 CLI check/test/协议契约任务；不强制把终端依赖重新塞回通用 workspace job。 |
+| CLI 已有独立 Linux 测试，三平台编译由通用 workspace check 覆盖，但结构化协议和常规打包 smoke 尚未进入同一快速门禁 | 协议或产物回归仍可能晚于常规 PR 发现 | 在对应协议和产品构建切片中补 focused contract 与 smoke；避免为同一依赖图重复建立三平台编译矩阵。 |
 
 ## 3. 分阶段产品需求
 
@@ -107,8 +108,9 @@ BitFun CLI 应成为可独立安装和发布的 Agent 产品，而不是 Desktop
 
 CLI-P0 的目标是建立后续功能补齐所需的稳定边界，不改变现有用户主路径。
 
-CLI-P0 不是一个统一重构 PR。首个切片只让生产入口提交 `DeliveryProfile::Cli`，消费 Capability Plan、服务与
-扩展可用性，并为一条用户可见路径补行为等价和独立 CLI check/test。旧门面只在该切片等价成立后退出。
+CLI-P0 不是一个统一重构 PR。首个切片只让生产入口选择 `DeliveryProfile::Cli`，读取静态 profile，
+不把服务需求或扩展计划解释为运行时 availability，并为一条用户可见诊断路径补入口验证和独立 CLI 测试。旧门面仅在后续执行切片
+行为等价成立后退出。
 
 其余工作独立立项，不能与 profile 迁移互相充当完成条件：
 
@@ -504,8 +506,8 @@ CLI Agent 能力加强必须落在共享 Agent Runtime、Tool Runtime 或 Harnes
 | Product build | 当前产品组装结果/TUI 布局生成 CLI smoke artifact；通用 GUI/TUI、品牌、内置扩展和发行验证按产品定制文档执行 |
 | 平台 | Windows、macOS、Linux 的 build/smoke；Windows 单独覆盖 ConPTY、Ctrl+C、路径和进程树清理 |
 
-CLI 可以继续从通用 `cargo check --workspace` 中排除终端依赖，但必须有等价的独立 CI 任务运行
-`cargo check -p bitfun-cli`、`cargo test -p bitfun-cli`、结构化协议测试和打包 smoke test。
+通用 `cargo check --workspace` 负责三平台 CLI 编译保护；独立 CLI CI 运行
+`cargo test --locked -p bitfun-cli`。结构化协议测试和打包 smoke test 在对应切片落地后进入门禁。
 
 ### 10.2 阶段退出条件
 

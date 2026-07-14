@@ -71,6 +71,7 @@ tracing-subscriber = { workspace = true }
 tempfile = "3"
 sha2 = { workspace = true }
 hex = { workspace = true }
+bitfun-runtime-ports = { path = "../../crates/contracts/runtime-ports" }
 
 [features]
 default = []

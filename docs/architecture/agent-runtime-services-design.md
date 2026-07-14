@@ -691,9 +691,11 @@ pub struct HarnessExecutionContext {
 `src/crates/assembly/core` 仍承担 `bitfun-core` 兼容组装。现有 `ProductAssembler` 是具体结构体，
 通过 `assemble(ProductAssemblyInput)` 产生 `ProductRuntimeParts`，本文件不再为它定义第二套目标接口。
 
-当前边界仍未完成：CLI、Desktop 和 ACP 入口继续直接依赖 `bitfun-core` 的 `product-full`，Server
-仅提供健康检查、信息与 ping 路由，其他交付 profile 尚无生产消费方。因此 profile、枚举分支和单元测试
-只能证明契约存在，不能证明对应产品形态已接入。
+当前边界仍未完成：CLI 的 `doctor` 命令已选择 `DeliveryProfile::Cli`，并读取 `ProductAssemblyPlan` 的
+静态 profile；它明确说明未评估运行时 readiness，不把静态服务需求投影为实际 availability，
+也不构造 `ProductRuntimeParts` 或注册占位 provider。Chat、Exec、ACP 与其他管理路径仍依赖 `bitfun-core/product-full`。
+Desktop 和 ACP 尚未接入组装结果，Server 仅提供健康检查、信息与 ping 路由。除上述 CLI 诊断切片外，
+profile、枚举分支和单元测试仍不能证明对应产品形态已接入。
 
 职责：
 
@@ -707,13 +709,13 @@ pub struct HarnessExecutionContext {
 | 阶段 | 约束 |
 |---|---|
 | 当前 | 维持现有 `ProductAssembler` API 和 `product-full` 兼容门面，不扩张字段或再造描述符 |
-| 迁移 | 先消除 `assembly/core -> apps/relay-server` 反向依赖，再按 CLI、ACP、Desktop 接入真实入口 |
+| 迁移 | CLI 可先经现有兼容门面消费只读静态计划；迁移执行 owner 或继续接入 ACP、Desktop 前，必须消除 `assembly/core -> apps/relay-server` 反向依赖 |
 | 完成 | 每个声称支持的 profile 都由生产入口消费组装结果，并有最小入口验证；无消费方的 profile 不对外宣称可用 |
 
 产品定义、品牌资源和界面布局的长期边界以
 [`product-customization-blueprint.md`](product-customization-blueprint.md) 为准；CLI 配置层级和 TUI 消费方式以
-[`cli-product-line-design.md`](cli-product-line-design.md) 为准。在出现真实组装消费方和验证路径前，不向当前
-Rust API 增加这些字段。
+[`cli-product-line-design.md`](cli-product-line-design.md) 为准。产品身份、品牌资源和界面布局等字段只有在出现
+对应生产消费方和验证路径后才能进入当前 Rust API。
 
 当前组装路径：
 
@@ -988,11 +990,14 @@ Product 测试：
 - `bitfun-runtime-services` 提供类型化服务注入；工具 contracts、provider groups 与 execution 已分层。
 - `bitfun-harness` 已提供类型化工作流描述与注册能力。
 - `bitfun-core` 可继续作为 `product-full` 兼容门面，避免迁移期间一次性重写入口。
+- CLI 已有首个生产入口计划投影：`doctor` 选择 `DeliveryProfile::Cli`，显示静态 profile，
+  并明确说明未评估运行时 readiness；它尚未构造运行时组装结果。
 
 仍需完成：
 
 - 消除 `assembly/core -> apps/relay-server` 的反向依赖，并用通用边界检查固定依赖方向。
-- 让 CLI、ACP、Desktop 依次消费 `DeliveryProfile` 和 `ProductRuntimeParts`，证明组装结果真正进入生产路径。
+- 为 CLI 接入 owner-owned Runtime Services 与调用级权限、权威事件路径，再让执行路径消费
+  `ProductRuntimeParts`；之后让 ACP、Desktop 依次接入，并为每条路径证明行为等价。
 - 为 Agent Runtime SDK 增加至少一个非 `bitfun-core` 的真实嵌入方；预览 facade 和单元测试不等于外部可用 SDK。
 - 仅在真实端到端切片中接入插件主机；外部插件先转换为类型化工具、Hook、事件、权限请求或诊断，
   不把生态对象带入 Agent Runtime。

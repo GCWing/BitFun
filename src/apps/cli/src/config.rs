@@ -3,6 +3,7 @@
 /// CLI uses core's GlobalConfig system directly.
 /// Only CLI-specific configuration is kept here (UI, shortcuts, etc.)
 use anyhow::Result;
+use bitfun_core::infrastructure::try_get_path_manager_arc;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
@@ -115,20 +116,31 @@ impl Default for ShortcutsConfig {
 }
 
 impl CliConfig {
-    /// Get configuration file path
-    pub(crate) fn config_path() -> Result<PathBuf> {
-        let config_dir = if cfg!(target_os = "windows") {
+    fn resolve_config_dir() -> Result<PathBuf> {
+        let e2e_storage_guard = matches!(
+            std::env::var("BITFUN_E2E_STORAGE_GUARD").ok().as_deref(),
+            Some("1") | Some("true") | Some("TRUE")
+        );
+        if e2e_storage_guard {
+            let path_manager =
+                try_get_path_manager_arc().map_err(|error| anyhow::anyhow!(error.to_string()))?;
+            return Ok(path_manager.user_root_dir().to_path_buf());
+        }
+
+        if cfg!(target_os = "windows") {
             dirs::config_dir()
-                .ok_or_else(|| anyhow::anyhow!("Cannot find config directory"))?
-                .join("bitfun")
+                .ok_or_else(|| anyhow::anyhow!("Cannot find config directory"))
+                .map(|path| path.join("bitfun"))
         } else {
             dirs::home_dir()
-                .ok_or_else(|| anyhow::anyhow!("Cannot find home directory"))?
-                .join(".config")
-                .join("bitfun")
-        };
+                .ok_or_else(|| anyhow::anyhow!("Cannot find home directory"))
+                .map(|path| path.join(".config").join("bitfun"))
+        }
+    }
 
-        Ok(config_dir.join("config.toml"))
+    /// Get configuration file path
+    pub(crate) fn config_path() -> Result<PathBuf> {
+        Ok(Self::resolve_config_dir()?.join("config.toml"))
     }
 
     /// Load configuration
@@ -164,16 +176,7 @@ impl CliConfig {
 
     /// Get configuration directory
     pub(crate) fn config_dir() -> Result<PathBuf> {
-        let config_dir = if cfg!(target_os = "windows") {
-            dirs::config_dir()
-                .ok_or_else(|| anyhow::anyhow!("Cannot find config directory"))?
-                .join("bitfun")
-        } else {
-            dirs::home_dir()
-                .ok_or_else(|| anyhow::anyhow!("Cannot find home directory"))?
-                .join(".config")
-                .join("bitfun")
-        };
+        let config_dir = Self::resolve_config_dir()?;
 
         fs::create_dir_all(&config_dir)?;
         Ok(config_dir)

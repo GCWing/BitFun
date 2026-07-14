@@ -18,6 +18,7 @@ mod management;
 mod modes;
 mod peer_host;
 mod plugin_diagnostics;
+mod product_assembly;
 mod prompts;
 mod root_handlers;
 mod ui;
@@ -726,7 +727,8 @@ async fn run_cli() -> Result<()> {
         }
 
         Some(Commands::Doctor) => {
-            if !management::print_doctor().await? {
+            let product_plan = product_assembly::cli_product_assembly_plan();
+            if !management::print_doctor(&product_plan).await? {
                 std::process::exit(1);
             }
         }

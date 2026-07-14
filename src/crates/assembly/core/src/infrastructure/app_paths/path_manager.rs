@@ -210,6 +210,11 @@ impl PathManager {
         false
     }
 
+    /// Get the root directory for user-scoped BitFun storage.
+    pub fn user_root_dir(&self) -> &Path {
+        &self.user_root
+    }
+
     /// Get user config directory: ~/.config/bitfun/config/
     pub fn user_config_dir(&self) -> PathBuf {
         self.user_root.join("config")

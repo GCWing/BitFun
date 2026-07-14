@@ -14,6 +14,7 @@ use bitfun_core::plugin_source::{
     ManagedPluginSourceIssue, ManagedPluginSourceSnapshot, ManagedPluginTrustDecision,
     ManagedPluginTrustLevel,
 };
+use bitfun_core::product_assembly::ProductAssemblyPlan;
 use bitfun_core::service::config::initialize_global_config;
 use bitfun_core::service::session_usage::{
     generate_session_usage_report, render_usage_report_markdown, SessionUsageReportRequest,
@@ -609,7 +610,7 @@ pub(crate) async fn print_mcp_config_summary() -> Result<()> {
     Ok(())
 }
 
-pub(crate) async fn print_doctor() -> Result<bool> {
+pub(crate) async fn print_doctor(product_plan: &ProductAssemblyPlan) -> Result<bool> {
     let workspace = std::env::current_dir().context("Failed to resolve current directory")?;
     let config_dir = crate::config::CliConfig::config_dir()?;
     let config_service = ensure_global_config_service().await?;
@@ -650,6 +651,10 @@ pub(crate) async fn print_doctor() -> Result<bool> {
 
     println!("BitFun CLI doctor");
     println!();
+    println!(
+        "[info] Product profile: {} (static plan only; runtime readiness not evaluated)",
+        product_plan.profile().id()
+    );
     println!("[ok] Workspace: {}", workspace.display());
     println!("[ok] Config directory: {}", config_dir.display());
     println!("[ok] Agent modes: {}", modes.len());
