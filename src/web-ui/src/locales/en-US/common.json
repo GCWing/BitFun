@@ -463,6 +463,16 @@
     "errorEnterName": "Please enter a project name",
     "errorCreateFailed": "Failed to create project"
   },
+  "peerDirectoryPicker": {
+    "loading": "Loading remote directories…",
+    "empty": "No subfolders in this directory",
+    "parent": "Parent directory",
+    "home": "Start directory",
+    "refresh": "Refresh",
+    "selected": "Selected: {{path}}",
+    "cancel": "Cancel",
+    "select": "Select this folder"
+  },
   "accountLogin": {
     "username": "Username",
     "password": "Password",

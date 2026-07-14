@@ -463,6 +463,16 @@
     "errorEnterName": "請輸入工作區名稱",
     "errorCreateFailed": "建立工作區失敗"
   },
+  "peerDirectoryPicker": {
+    "loading": "正在載入遠端目錄…",
+    "empty": "此目錄下沒有子資料夾",
+    "parent": "上層目錄",
+    "home": "起始目錄",
+    "refresh": "重新整理",
+    "selected": "已選：{{path}}",
+    "cancel": "取消",
+    "select": "選擇此目錄"
+  },
   "accountLogin": {
     "username": "帳號",
     "password": "密碼",

@@ -463,6 +463,16 @@
     "errorEnterName": "请输入工作区名称",
     "errorCreateFailed": "创建工作区失败"
   },
+  "peerDirectoryPicker": {
+    "loading": "正在加载远程目录…",
+    "empty": "此目录下没有子文件夹",
+    "parent": "上级目录",
+    "home": "起始目录",
+    "refresh": "刷新",
+    "selected": "已选：{{path}}",
+    "cancel": "取消",
+    "select": "选择此目录"
+  },
   "accountLogin": {
     "username": "用户名",
     "password": "密码",

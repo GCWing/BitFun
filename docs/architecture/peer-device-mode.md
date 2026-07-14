@@ -60,9 +60,27 @@ FS) and must not be mixed with Peer Device Mode.
   reverse proxies in front of the relay must use a matching (or higher) read
   timeout or they will return 504 first.
 
+## Workspace directory picking
+
+Native `@tauri-apps/plugin-dialog` always opens on the **controller** machine.
+In Peer Device Mode that would pick a path on A and then send it to B via
+`open_workspace` / `create_directory` — wrong semantics.
+
+Peer Mode therefore uses an in-app directory browser on A that lists B's
+filesystem through HostInvoke (`get_directory_children`, etc.). Entry points
+call `pickWorkspaceDirectory()`:
+
+- Local mode → native plugin-dialog
+- Peer Mode → `PeerDirectoryBrowser` via `peerDirectoryPickerStore`
+
+Still use normal `openWorkspace` / create-workspace flows (not SSH
+`openRemoteWorkspace` / `WorkspaceKind.Remote`).
+
 ## Ownership
 
 - Desktop host invoke / fan-out: `src/apps/desktop/src/api/peer_host_invoke.rs`,
   `remote_connect_api.rs`
 - Frontend mode + transport: `src/web-ui/src/infrastructure/peer-device/`,
   `adapters/peer-device-adapter.ts`
+- Peer directory picker: `pickWorkspaceDirectory.ts`, `PeerDirectoryBrowser.tsx`,
+  `PeerDirectoryPickerHost.tsx`

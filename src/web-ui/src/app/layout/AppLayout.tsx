@@ -223,14 +223,14 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
   }>>([]);
   const handleOpenProject = useCallback(async () => {
     try {
-      const { open } = await import('@tauri-apps/plugin-dialog');
-      const selected = await open({
-        directory: true,
-        multiple: false,
+      const { pickWorkspaceDirectory } = await import(
+        '@/infrastructure/peer-device/pickWorkspaceDirectory'
+      );
+      const selected = await pickWorkspaceDirectory({
         title: t('header.selectProjectDirectory'),
       });
 
-      if (selected && typeof selected === 'string') {
+      if (selected) {
         await openWorkspace(selected);
       }
     } catch (error) {
@@ -271,10 +271,14 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
     void (async () => {
       try {
         const { listen } = await import('@tauri-apps/api/event');
-        const { open } = await import('@tauri-apps/plugin-dialog');
+        const { pickWorkspaceDirectory } = await import(
+          '@/infrastructure/peer-device/pickWorkspaceDirectory'
+        );
         unlistenFns.push(await listen('bitfun_menu_open_project', async () => {
           try {
-            const selected = await open({ directory: true, multiple: false }) as string;
+            const selected = await pickWorkspaceDirectory({
+              title: t('header.selectProjectDirectory'),
+            });
             if (selected) await openWorkspace(selected);
           } catch {}
         }));
@@ -283,7 +287,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ className = '' }) => {
       } catch {}
     })();
     return () => { unlistenFns.forEach(fn => fn()); unlistenFns = []; };
-  }, [isMacOS, openWorkspace, handleNewProject, handleShowAbout]);
+  }, [isMacOS, openWorkspace, handleNewProject, handleShowAbout, t]);
 
   // Initialize FlowChatManager
   React.useEffect(() => {

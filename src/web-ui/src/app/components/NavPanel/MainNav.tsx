@@ -251,9 +251,13 @@ const MainNav: React.FC<MainNavProps> = ({
 
   const handleOpenProject = useCallback(async () => {
     try {
-      const { open } = await import('@tauri-apps/plugin-dialog');
-      const selected = await open({ directory: true, multiple: false, title: t('header.selectProjectDirectory') });
-      if (selected && typeof selected === 'string') {
+      const { pickWorkspaceDirectory } = await import(
+        '@/infrastructure/peer-device/pickWorkspaceDirectory'
+      );
+      const selected = await pickWorkspaceDirectory({
+        title: t('header.selectProjectDirectory'),
+      });
+      if (selected) {
         await workspaceManager.openWorkspace(selected);
       }
     } catch (err) {

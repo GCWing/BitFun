@@ -94,6 +94,13 @@ const HIGH_PRIORITY_COMMANDS = new Set([
   'cancel_dialog_turn',
   'confirm_tool_execution',
   'reject_tool_execution',
+  // Interactive directory picking / browsing on the peer
+  'get_directory_children',
+  'get_directory_children_paginated',
+  'list_files',
+  'check_path_exists',
+  'create_directory',
+  'get_system_info',
 ]);
 
 export function isPeerLocalOnlyCommand(command: string): boolean {
@@ -109,14 +116,10 @@ const LOW_PRIORITY_EXACT = new Set([
   'get_config',
   'get_configs',
   'get_file_tree',
-  'list_files',
   'explorer_get_children',
-  'get_directory_children',
-  'get_directory_children_page',
   'start_file_watch',
   'stop_file_watch',
   'get_watched_paths',
-  'check_path_exists',
   'load_canvas_artifact',
   'load_canvas_state',
   'search_get_repo_status',

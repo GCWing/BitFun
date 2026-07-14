@@ -13,6 +13,15 @@ describe('peerInvokePriorityFor', () => {
     expect(peerInvokePriorityFor('reload_config')).toBe('high');
   });
 
+  it('ranks interactive peer directory browsing high', () => {
+    expect(peerInvokePriorityFor('get_directory_children')).toBe('high');
+    expect(peerInvokePriorityFor('get_directory_children_paginated')).toBe('high');
+    expect(peerInvokePriorityFor('list_files')).toBe('high');
+    expect(peerInvokePriorityFor('check_path_exists')).toBe('high');
+    expect(peerInvokePriorityFor('create_directory')).toBe('high');
+    expect(peerInvokePriorityFor('get_system_info')).toBe('high');
+  });
+
   it('ranks git/ssh/editor/fs/search noise low', () => {
     expect(peerInvokePriorityFor('git_is_repository')).toBe('low');
     expect(peerInvokePriorityFor('ssh_is_connected')).toBe('low');

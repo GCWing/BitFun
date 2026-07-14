@@ -6,6 +6,7 @@ import { STARTUP_OVERLAY_HIDDEN_EVENT } from "./app/startup/startupSignals";
 import { WorkspaceProvider } from "./infrastructure/contexts/WorkspaceProvider";
 import { PeerDeviceProvider } from "./infrastructure/peer-device/PeerDeviceContext";
 import { PeerHostInvokeBridge } from "./infrastructure/peer-device/PeerHostInvokeBridge";
+import { PeerDirectoryPickerHost } from "./infrastructure/peer-device/PeerDirectoryPickerHost";
 import { I18nProvider } from "./infrastructure/i18n/providers/I18nProvider";
 import "./app/styles/index.scss";
 
@@ -357,6 +358,7 @@ async function startApplication(): Promise<void> {
         <WorkspaceProvider>
           <PeerDeviceProvider>
             <PeerHostInvokeBridge />
+            <PeerDirectoryPickerHost />
             <App />
           </PeerDeviceProvider>
         </WorkspaceProvider>
