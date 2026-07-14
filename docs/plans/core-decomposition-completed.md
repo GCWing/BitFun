@@ -6,6 +6,11 @@
 [`agent-runtime-services-design.md`](../architecture/agent-runtime-services-design.md)
 为准。
 
+本文件保留完成当时的代码名和迁移术语，仅用于说明历史实现，不能作为当前扩展架构的需求或命名依据。历史的
+“受管包”“projection-only”“幂等代次”等路径只描述 BitFun 原生包的当时状态；OpenCode 的目标来源、执行、
+权限和更新语义统一以 [`opencode-extension-compatibility-plan.md`](opencode-extension-compatibility-plan.md) 及其
+`docs/architecture/extensions/` 详细设计为准。
+
 ## 1. 基础边界
 
 - 已建立 `product-full` 作为兼容入口的完整产品能力保护开关，产品入口显式启用当前兼容能力集合；它不是未来按产品形态拆分能力的唯一事实源。
