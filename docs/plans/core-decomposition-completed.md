@@ -8,8 +8,9 @@
 
 本文件保留完成当时的代码名和迁移术语，仅用于说明历史实现，不能作为当前扩展架构的需求或命名依据。历史的
 “受管包”“projection-only”“幂等代次”等路径只描述 BitFun 原生包的当时状态；OpenCode 的目标来源、执行、
-权限和更新语义统一以 [`opencode-extension-compatibility-plan.md`](opencode-extension-compatibility-plan.md) 及其
-`docs/architecture/extensions/` 详细设计为准。
+权限和更新语义以 [`opencode-extension-compatibility.md`](../architecture/extensions/opencode-extension-compatibility.md)
+及其细分架构设计为准，交付顺序与退出条件见
+[`opencode-extension-compatibility-plan.md`](opencode-extension-compatibility-plan.md)。
 
 ## 1. 基础边界
 

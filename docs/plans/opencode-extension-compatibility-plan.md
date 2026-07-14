@@ -88,11 +88,13 @@ Client/Server 兼容接口和外部集成兼容。
 - Command、MCP、LSP、Formatter、远程 Instruction/Reference 和可执行 Skill 分别通过现有归属模块启动；每类在首次启动前
   解析有效策略/安全启动、执行域、凭据与环境范围，并具备期限、取消、进程树回收和状态诊断。不能借 Bun worker
   的隔离替代这些独立进程的 owner 保护。
-- OpenCode Source Coordinator 在 Plugin/Tool import 前解析已保存的全局/来源/target 策略与安全启动参数；默认
-  兼容模式不增加二次审批，安全启动可以暂停全部外部 target。脚本直接能力没有真实 OS/容器边界时，受限模式
-  停用相应 target 并返回 `policy-limited`。
-- 插件 factory 实际运行后才生成工具、Hook、权限和依赖差异；候选激活前提供默认 5 秒非阻塞切换窗口，用户可
-  暂停、收紧或停用。更新失败只允许健康旧进程继续服务；旧进程丢失后只有精确物化目录仍可校验时才能重建。
+- OpenCode Source Coordinator 在 Plugin/Tool import 前，依据来源、target、实际执行域与用户、产品/组织策略上限、
+  凭据和环境范围重新计算当前有效策略与安全启动参数；不能直接复用发现时的结论。默认兼容模式不增加二次审批，
+  安全启动可以暂停全部外部 target。脚本直接能力没有真实 OS/容器边界时，受限模式停用相应 target 并返回
+  `policy-limited`。
+- 插件 factory 实际运行后才生成工具、Hook、权限和依赖差异；候选激活前提供可配置的非阻塞切换窗口，用户可
+  暂停、收紧或停用。更新失败只允许仍满足当前策略的健康旧进程继续服务；旧进程丢失后只有精确物化目录仍可
+  校验时才能重建。
 
 退出条件：
 
@@ -134,7 +136,7 @@ Client/Server 兼容接口和外部集成兼容。
 
 ### OC-R4-T：终端插件
 
-- TUI default export、入口/id/版本、options/meta、KV 覆盖、反向清理和 5 秒预算。
+- TUI default export、入口/id/版本、options/meta、KV 覆盖、反向清理和统一的有界清理预算。
 - 从现有 `chat.rs`、`ui/chat/*` 等真实路径抽取最小 Input/Command/State/Effect 消费接口，不建立通用界面扩展框架。
 - 逐项覆盖稳定 `TuiPluginApi`：版本、attention、旧 command、keys/keymap/mode、route、已知 dialog、toast、
   tuiConfig、KV、state、theme、client、event、plugins 和 lifecycle。

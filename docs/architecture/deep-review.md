@@ -11,11 +11,12 @@ Product-facing guardrails are summarized here:
 - `ReviewTeam` is an internal strict-review reviewer-set configuration, not a separate product concept users must learn.
 - PR Review consumes Review results and future readiness projections; it must not own another reviewer executor.
 
-The current implementation has three layers:
+The current implementation has four layers:
 
 - Frontend launch and UI orchestration in `src/web-ui`.
 - Platform adapter commands in `src/apps/desktop/src/api/agentic_api.rs`.
-- Platform-agnostic runtime policy, task admission, queue state, retry metadata, and report enrichment in `src/crates/assembly/core/src/agentic`.
+- Provider-neutral policy, admission, queue, retry, diagnostics, and report transforms in `src/crates/execution/agent-runtime/src/deep_review`.
+- Agent definitions, tool integration, event emission, diagnostics logging, and session-metadata IO in `src/crates/assembly/core/src/agentic`.
 
 The launch adapter is currently desktop-only. Browser/server surfaces hide every Review launch action, including fix follow-up retry, and reject typed Review commands with a clear unsupported-state message until the server owns the same session, Git-target, and policy command contracts; existing review attempts remain viewable. Adding only one RPC method to the current ping-only server would not make the workflow functional. The Review settings route remains visible for navigation compatibility on those surfaces, but renders a read-only desktop-only state and never loads or saves desktop capacity settings.
 
@@ -135,12 +136,14 @@ Compatibility code must not turn historical packet support back into a new-launc
 
 ## Task Execution and Queue State
 
-The generic `Task` tool is adapted for DeepReview in:
+The generic `Task` tool is adapted for DeepReview across:
 
-- `src/crates/assembly/core/src/agentic/tools/implementations/task_tool.rs`
+- `src/crates/assembly/core/src/agentic/tools/implementations/task/mod.rs`
+- `src/crates/assembly/core/src/agentic/tools/implementations/task/deep_review.rs`
 - `src/crates/assembly/core/src/agentic/deep_review/task_adapter.rs`
-- `src/crates/assembly/core/src/agentic/deep_review/queue.rs`
-- `src/crates/assembly/core/src/agentic/deep_review/budget.rs`
+- `src/crates/execution/agent-runtime/src/deep_review/task_execution.rs`
+- `src/crates/execution/agent-runtime/src/deep_review/queue.rs`
+- `src/crates/execution/agent-runtime/src/deep_review/budget.rs`
 
 DeepReview task execution uses the manifest and tool context to:
 
@@ -211,7 +214,7 @@ In DeepReview context, the tool requires the deep-review fields in addition to t
 - `reviewers`
 - `remediation_plan`
 
-DeepReview report enrichment lives in `src/crates/assembly/core/src/agentic/deep_review/report.rs`. It fills missing reviewer packet metadata when a unique packet can be inferred, adds runtime diagnostics, preserves read compatibility for historical incremental-cache data, and adds reliability signals for partial coverage, capacity skips, retry guidance, queue waits, reduced scope, and evidence status. Missing or invalid report summaries fail closed instead of defaulting to approval.
+Provider-neutral report transforms live in `src/crates/execution/agent-runtime/src/deep_review/report.rs`; `src/crates/assembly/core/src/agentic/deep_review/report.rs` bridges tool context, diagnostics logging, and session-metadata IO. Together they fill unambiguous historical packet metadata, add runtime diagnostics and reliability signals, and preserve read compatibility for historical incremental-cache data. Missing or invalid report summaries fail closed instead of defaulting to approval.
 
 Report enrichment is guarded by the tool context. Standard Code Review output should not receive DeepReview-only metadata unless the active tool context proves `agent_type == 'DeepReview'`.
 

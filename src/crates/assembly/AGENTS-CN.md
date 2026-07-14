@@ -17,10 +17,12 @@
 - 产品领域规则属于 `contracts/product-domains`；组装层可以选择这些事实，但不拥有它们。
 - 稳定 owner 逻辑下移到 `contracts`，可移植执行逻辑下移到 `execution`，协议适配下移到 `adapters`，可复用实现下移到 `services`。
 - 保持现有 public import path，除非迁移明确移除并补充兼容说明和测试。
+- 组装层新增内容必须小而可追溯；如果功能持续在此扩张，说明所有权还没有下移到合适 owner。
 
 ## 依赖边界
 
 - `assembly/core` 可以依赖下层 owner 来组装当前产品 runtime。
+- 组装 crate 不得依赖 `src/apps/*`。现有 embedded relay 反向依赖属于待迁移债务，不能作为新增 app 依赖的先例。
 - 组装层可以依赖 adapter 与 service crate，但不实现它们的协议序列化、认证、transport 或平台细节。
 - 避免在组装层直接使用宿主 API；Tauri 支持必须保持 feature-gated，并尽可能由 app 或 adapter 拥有。
 - interface crate 可以调用组装 API；adapter 和 service 不得依赖组装层。

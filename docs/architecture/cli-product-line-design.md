@@ -84,7 +84,11 @@ BitFun CLI 应成为可独立安装和发布的 Agent 产品，而不是 Desktop
 - `exec` 的 stdin、`text/json/stream-json`、会话恢复/分叉和 Patch 输出。
 - Agent、模型、MCP、会话、用量、诊断、ACP 外部 Agent 和插件来源管理命令。
 - BitFun 原生插件目录的发现、内容校验、来源确认，以及 OpenCode custom tool 静态名称预览。
-- `DeliveryProfile::Cli`、Product Capability、Runtime Services、Plugin Runtime Host 和独立 CLI 打包工作流。
+- `DeliveryProfile::Cli`、Product Capability、Runtime Services 与 Plugin Runtime Host 的底层契约和测试。
+- 独立 CLI 打包工作流；主 CI 的 workspace check 仍明确排除 `bitfun-cli`。
+
+这些基础不等于生产入口已经完成独立组装。当前 CLI crate 仍直接依赖 `bitfun-core` 的 `product-full`，
+生产代码尚未消费 `ProductAssembler` 或 `DeliveryProfile::Cli`；插件命令也仍以来源管理和静态预览为主。
 
 目标态仍存在以下结构缺口：
 
@@ -103,21 +107,18 @@ BitFun CLI 应成为可独立安装和发布的 Agent 产品，而不是 Desktop
 
 CLI-P0 的目标是建立后续功能补齐所需的稳定边界，不改变现有用户主路径。
 
-必须完成：
+CLI-P0 不是一个统一重构 PR。首个切片只让生产入口提交 `DeliveryProfile::Cli`，消费 Capability Plan、服务与
+扩展可用性，并为一条用户可见路径补行为等价和独立 CLI check/test。旧门面只在该切片等价成立后退出。
 
-- CLI 通过显式 `DeliveryProfile::Cli` 获取 Capability Plan、服务可用性和扩展可用性。
-- 保持现有 TUI、`exec`、会话、MCP、ACP 和插件诊断的功能覆盖；兼容门面退出必须有等价测试。
-  权限默认值和结构化输出属于本阶段的有意迁移，不得以“保持现状”为由继续使用全局可变开关或
-  未版本化协议。
-- TUI、`exec` 和 ACP 使用本次调用内的类型化 Approval Policy，不写回全局配置：TUI 默认 `ask`；
-  无交互的 `exec`/ACP 默认在需要确认时失败；只有显式参数或组织策略才能批准。
-- `text/json/stream-json` 输出拥有版本化 envelope、稳定退出码、单调事件序号和 stdout/stderr 边界；
-  现有输出先完成消费方盘点，再按兼容窗口迁移到 v1。
-- 建立 Canonical Config 层级、配置来源解释和兼容导入 Dry-run，不在 CLI-P0 自动写入。
-- 消费最小产品定义、产品组装结果和已注册 TUI 布局/`host-default`，并能从同一
-  源码生成两个不同身份/主题的最小 CLI smoke artifact。
-- 为 CLI 增加独立 CI check、focused test 和命令/协议 smoke test。
-- TUI 先提取终端恢复守卫、命令分发和副作用边界；不在 CLI-P0 改版视觉设计。
+其余工作独立立项，不能与 profile 迁移互相充当完成条件：
+
+| 切片 | 范围 | 退出条件 |
+|---|---|---|
+| 调用级审批 | TUI、`exec`、ACP 使用本次调用内的类型化 Approval Policy，不写回全局配置 | 交互/非交互默认值、显式批准和组织策略均有 focused test |
+| 输出协议 | 盘点 `text/json/stream-json` 消费方，再设计版本、序号、terminal event、stdout/stderr 和退出分类 | 真实消费者兼容测试与迁移窗口明确 |
+| 配置解释 | Canonical Config 层级、来源解释和兼容导入 dry-run | 不自动写入；冲突、未知字段和凭据引用可解释 |
+| 产品定制 | 消费最小产品定义、组装结果和已注册 TUI layout/theme ID | 第二个真实 CLI 产品复用后再提升公共字段 |
+| TUI 边界 | 增量提取终端恢复守卫、命令分发和副作用边界 | 不改版视觉设计，恢复/取消回归可单独验证 |
 
 CLI-P0 不包含插件 JS/TS 执行、完整 checkpoint/rewind 或大规模 TUI 重写。
 
@@ -154,17 +155,17 @@ CLI-P1 应保证：
 - 大型工具结果和二进制附件只在事件中传递存储引用，不把 data URL 或大块内容写入事件流。
 - 结构化模式下 Patch 只能进入版本化事件、结果文档、存储引用或显式文件，不能混入协议 stdout。
 
-v1 最小协议固定如下；字段只能兼容增加，删除或改义必须提升 schema 版本：
+候选 v1 协议只先约束语义形态；字段名、数值退出码和默认切换必须在真实消费方盘点与兼容测试后冻结：
 
 | 项目 | v1 约束 |
 |---|---|
 | `stream-json` | 每行一个 `{schema_version,type,session_id,turn_id,sequence,payload}` envelope；每 turn 恰有一个 terminal event。 |
 | `json` | 只输出一个 `{schema_version,outcome,session,turn,usage,artifacts,error}` 结果文档。 |
-| 退出码 | `0` 成功；`2` 输入/配置；`3` 认证；`4` 权限；`5` 运行时；`6` 取消；`7` 超时；`8` 工具/工作流；`9` 输出写入。 |
+| 退出码 | 至少区分成功、输入/配置、认证、权限、运行时、取消、超时、工具/工作流和输出写入；数值映射不得在无消费方证据时预先冻结。 |
 | 多错误 | terminal outcome 只设置一次，以首个因果终止错误为准；结果无法写出时由输出写入错误覆盖。 |
 
-迁移期新增显式 `--output-schema v1`；未指定时保留旧行为一个已公告的兼容窗口并在 stderr 提示弃用。
-兼容窗口结束后 v1 成为默认，旧协议是否继续保留由已盘点的真实消费方决定，不能无限期双轨。
+实施迁移时可新增显式 `--output-schema v1`；未指定时保留旧行为一个已公告的兼容窗口并在 stderr 提示弃用。
+兼容窗口、默认切换和旧协议退场由已盘点的真实消费方决定，不能无限期双轨。
 
 #### 管理与诊断
 
@@ -200,13 +201,14 @@ TUI renderer、实验性接口和完整外部 Server 协议按总矩阵明确降
 | 层/模块 | 负责 | 不负责 |
 |---|---|---|
 | `src/apps/cli` | Clap 入口、TUI 状态/渲染、终端事件、入口本地设置、命令展示与结构化输出 | 会话状态机、工具执行、权限裁决、插件 Host ABI、品牌能力真值 |
-| `assembly/product-capabilities` | Delivery Profile、Capability Pack、静态 eligibility、服务需求和组装计划 | 品牌资源读取、动态可用性、用户配置、UI 状态、具体服务创建 |
+| `assembly/product-capabilities` | Delivery Profile、Product Capability 计划、静态 eligibility、服务需求和组装计划 | 品牌资源读取、动态可用性、用户配置、UI 状态、具体服务创建 |
 | 产品构建期校验 | 校验产品定义、品牌资源、TUI 布局选择和内置扩展版本，输出产品组装结果 | 创建运行时服务、实现终端行为或保存用户配置 |
 | Runtime Product Assembly | 读取产品组装结果中本次 CLI 需要的字段，选择能力/服务/扩展，构建 Runtime Parts | 读取原始品牌资源、实现 Agent/Tool/插件适配器/终端行为或运行构建脚本 |
 | Runtime Configuration Service | 规范配置层级、来源解释、导入预览/应用、原子写入、回滚和来源记录 | 解析外部生态格式、决定权限或读取凭据值 |
 | `agent-runtime` | Session/Turn/Task、调度、取消、上下文、事件、checkpoint fact、Subagent 和用量事实 | CLI 命令、TUI 状态、品牌、外部配置格式 |
 | Tool/Harness/Runtime Services | 工具 ABI、工作流、类型化服务和平台端口 | 产品命令、入口默认策略、外部生态权威状态 |
-| Plugin Runtime Host | 类型化调用、期限、取消、有界队列、进程健康、响应校验和故障恢复 | 直接写权限/审计/工具结果、解释 TUI 或品牌资源 |
+| Plugin Runtime Host | 类型化调用、期限、取消、有界队列、逻辑 target 状态、响应校验和故障状态 | 持有 OS 进程树、直接写权限/审计/工具结果、解释 TUI 或品牌资源 |
+| 脚本执行服务 | 物理进程健康、资源预算、进程树与句柄、类型化脚本请求和回收 | 决定工具权限、业务结果、TUI 或品牌资源 |
 | 生态配置适配器 | 解析受支持外部格式并生成导入候选/诊断 | 直接写运行时配置、读取密钥、决定最终权限 |
 
 Runtime Configuration Service 当前由 `bitfun-core/service/config` 负责。在经评审的 port/provider

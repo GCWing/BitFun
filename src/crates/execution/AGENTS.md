@@ -2,7 +2,7 @@
 
 # Execution Primitives Layer
 
-This layer owns reusable agent, harness, stream, typed-service, and tool
+This layer owns reusable agent, harness, stream, Plugin Runtime Host, typed-service, and tool
 execution primitives. It is not the complete Agent Runtime SDK and not the
 assembled product runtime. Product assembly decides which primitives, tool
 provider groups, harness providers, adapters, and services are active for a

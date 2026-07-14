@@ -20,7 +20,9 @@ Main areas:
 Peer Device Mode ownership and boundaries:
 `docs/architecture/peer-device-mode.md`.
 
-If a change affects shared product behavior across runtimes, the implementation likely belongs in `src/crates/assembly/core`.
+If a change affects behavior shared by multiple runtimes, place stable contracts,
+execution policy, and services in their owning lower-layer crates. Keep only
+product wiring and compatibility bridges in `src/crates/assembly/core`.
 
 ## Local rules
 

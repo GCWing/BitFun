@@ -32,6 +32,8 @@ integration, or stable product-domain contracts.
 
 - `assembly/core` may depend on lower owner layers to assemble the current product
   runtime.
+- Assembly crates must not depend on `src/apps/*`. The existing embedded-relay
+  reverse edge is migration debt, not a precedent for new app dependencies.
 - Assembly may depend on adapter and service crates for selected delivery forms,
   but should not implement their protocol serialization, authentication,
   transport, or platform details.

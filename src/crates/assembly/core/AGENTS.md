@@ -93,8 +93,8 @@ Use these files for ownership details instead of expanding this guide:
 Narrower local guides already exist for some subtrees:
 
 - `src/crates/adapters/ai-adapters/AGENTS.md`
-- `src/agentic/execution/AGENTS.md`
-- `src/agentic/deep_review/AGENTS.md`
+- `src/crates/assembly/core/src/agentic/execution/AGENTS.md`
+- `src/crates/assembly/core/src/agentic/deep_review/AGENTS.md`
 
 ## Verification
 

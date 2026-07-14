@@ -68,8 +68,8 @@ SessionManager -> Session -> DialogTurn -> ModelRound
 部分子目录已有更细指南：
 
 - `src/crates/adapters/ai-adapters/AGENTS.md`
-- `src/agentic/execution/AGENTS.md`
-- `src/agentic/deep_review/AGENTS.md`
+- `src/crates/assembly/core/src/agentic/execution/AGENTS.md`
+- `src/crates/assembly/core/src/agentic/deep_review/AGENTS.md`
 
 ## 验证
 

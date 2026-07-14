@@ -21,12 +21,13 @@ Product-source boundary:
 - The OpenCode source coordinator owns source identity/order, source watches,
   candidate generations, and the decision to request preparation or switch a
   generation. Config owners provide normalized config snapshots; the script
-  execution service owns dependencies/workers; Plugin Runtime Host owns process
-  health and contribution registration.
-- Effective global/source/target policy and safe-start mode must be resolved
-  before third-party module import. The default local policy is compatibility
-  mode, not a trust prompt. Source policy changes must not be represented as
-  config import approval.
+  execution service owns dependencies, workers, process trees, and physical
+  health; Plugin Runtime Host owns logical target state and contribution registration.
+- Effective policy and safe-start mode must be recomputed before third-party
+  module import from the source, target, actual execution domain/user,
+  product/organization policy bounds, credential scope, and environment scope.
+  The default local policy is compatibility mode, not a trust prompt. Discovery
+  or config-import approval is not an execution decision.
 - Final tool creation, permission decisions, authoritative state, and audit facts
   stay in their tool, permission, product, and runtime owner paths.
 - The user's local `opencode` CLI installation is unrelated to loading

@@ -1,5 +1,11 @@
 # Cache-Friendly Message Structure In BitFun
 
+This document owns the model-visible request ordering and the rules for keeping
+that prefix stable. Session cache identity, persistence, cloning, invalidation,
+and observability are owned by
+[`model-request-cache-reuse.md`](model-request-cache-reuse.md); changes should
+update the owning document instead of duplicating the same contract in both.
+
 This note explains the cache-friendly request shape BitFun tries to preserve
 for long-running agent sessions, where each layer is stored, and which kinds
 of changes tend to preserve or break provider-side prefix cache reuse.

@@ -24,15 +24,15 @@ before product-definition, TUI layout, branding, packaging, runtime, or plugin a
   capability restriction.
 - The target CLI consumes product identity, theme resources, data namespaces,
   bundled product extensions, update channels, and TUI layout IDs from the
-  validated product assembly result. Existing Resolved Product Manifest and TUI
-  Blueprint projections may remain only as reviewed migration inputs. Do not read
-  authoring product definitions at runtime, add hard-coded branding/source
+  validated product assembly result. Resolved Product Manifest and TUI Blueprint
+  are retired design terms, not migration inputs. Do not read authoring product
+  definitions at runtime, add hard-coded branding/source
   rewrites, or treat user plugins as product assembly inputs. Runtime capability
   hiding does not prove code was physically removed.
 - Product assembly may expose only the immutable protection IDs allowed by the
   customization design. CLI must not turn them into user/source plugin policy or
   store plugin activation, update, permission, or health state in the assembly result.
-- Current OpenCode adapter code is dry-run/static preview only. After the matching
+- Current OpenCode adapter code is a managed-package/static-preview path only. After the matching
   OC-R phases are implemented, OpenCode standard config and plugin sources become
   read-only source files whose valid results can affect runtime behavior without
   a BitFun import or second activation. Codex and Claude remain import/reference

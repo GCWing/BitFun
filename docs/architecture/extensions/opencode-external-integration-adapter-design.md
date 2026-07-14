@@ -2,6 +2,7 @@
 
 本文定义 OpenCode 开发工具包、Server、ACP、IDE、Web、GitHub、GitLab 和 Slack 如何与 BitFun 对接。它们是
 OpenCode 的外部产品入口，不等同于服务插件或 TUI 插件。总体结论见[能力矩阵](opencode-extension-compatibility.md)。
+本文是目标设计，不表示这些外部入口已经交付；当前可用状态必须由真实生产入口和端到端验证证明。
 
 核对入口包括 [SDK](https://opencode.ai/docs/sdk/)、[Server](https://opencode.ai/docs/server/)、
 [ACP](https://opencode.ai/docs/acp/)、[IDE](https://opencode.ai/docs/ide/)、[Web](https://opencode.ai/docs/web/)、
