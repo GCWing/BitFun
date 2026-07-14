@@ -13,6 +13,10 @@ import { WIDGET_IFRAME_FALLBACK_COLOR } from '@/shared/theme/themeBoundaryFallba
 import { readWidgetThemePayload } from '@/tools/generative-widget/themePayload';
 import { exportCanvasHtml } from './canvasHtmlExportService';
 import { buildReactCanvasHtmlResult } from './reactRuntime';
+import {
+  isPeerDeviceModeActive,
+  PEER_MODE_CANVAS_POLL_MS,
+} from '@/infrastructure/peer-device/peerModeFlag';
 import './BitfunCanvasPanel.scss';
 
 const log = createLogger('BitfunCanvasPanel');
@@ -560,7 +564,7 @@ export const BitfunCanvasPanel: React.FC<BitfunCanvasPanelProps> = ({
 
     const interval = window.setInterval(() => {
       void refresh('poll');
-    }, 2000);
+    }, isPeerDeviceModeActive() ? PEER_MODE_CANVAS_POLL_MS : 2000);
     const handleFocus = () => {
       void refresh('focus');
     };

@@ -22,6 +22,7 @@ import { clearAgentCanvasForPeerSwitch } from '@/app/components/panels/content-c
 import { WorkspaceLspManager } from '@/tools/lsp/services/WorkspaceLspManager';
 import { lspAdapterManager } from '@/tools/lsp/services/LspAdapterManager';
 import { createLogger } from '@/shared/utils/logger';
+import { setPeerDeviceModeActiveFlag } from './peerModeFlag';
 
 const log = createLogger('PeerDeviceMode');
 
@@ -30,6 +31,7 @@ const PEER_RPC_FAILURE_LIMIT = 5;
 const PEER_PING_INTERVAL_MS = 20_000;
 
 function emitPeerModeChanged(detail: { active: boolean; deviceId?: string }): void {
+  setPeerDeviceModeActiveFlag(detail.active);
   window.dispatchEvent(new CustomEvent('peer-mode:changed', { detail }));
 }
 

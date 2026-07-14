@@ -83,14 +83,17 @@ const HIGH_PRIORITY_COMMANDS = new Set([
   'delete_session',
   'rename_session',
   'archive_session',
-  'get_workspace_list',
-  'get_workspaces',
-  'list_workspaces',
+  'initialize_workspace_startup_state',
+  'get_opened_workspaces',
+  'get_recent_workspaces',
+  'get_current_workspace',
   'open_workspace',
   'get_workspace_info',
-  'peer_mode_ping',
-  'peer_control_attach',
-  'peer_control_detach',
+  'reload_config',
+  'start_dialog_turn',
+  'cancel_dialog_turn',
+  'confirm_tool_execution',
+  'reject_tool_execution',
 ]);
 
 export function isPeerLocalOnlyCommand(command: string): boolean {
@@ -99,6 +102,36 @@ export function isPeerLocalOnlyCommand(command: string): boolean {
 
 export type PeerInvokePriority = 'high' | 'normal' | 'low';
 
+const LOW_PRIORITY_EXACT = new Set([
+  'get_file_metadata',
+  'read_file_content',
+  'get_file_editor_sync_hash',
+  'get_config',
+  'get_configs',
+  'get_file_tree',
+  'list_files',
+  'explorer_get_children',
+  'get_directory_children',
+  'get_directory_children_page',
+  'start_file_watch',
+  'stop_file_watch',
+  'get_watched_paths',
+  'check_path_exists',
+  'load_canvas_artifact',
+  'load_canvas_state',
+  'search_get_repo_status',
+  'search_build_index',
+  'search_rebuild_index',
+  'list_background_command_activities',
+  'read_background_command_output',
+  'get_health_status',
+  'notify_cron_host_ready',
+  'get_available_modes',
+  'get_agent_profile_config',
+  'list_miniapps',
+  'miniapp_worker_list_running',
+]);
+
 export function peerInvokePriorityFor(command: string): PeerInvokePriority {
   if (HIGH_PRIORITY_COMMANDS.has(command)) {
     return 'high';
@@ -106,10 +139,11 @@ export function peerInvokePriorityFor(command: string): PeerInvokePriority {
   if (
     command.startsWith('git_') ||
     command.startsWith('ssh_') ||
-    command === 'get_file_metadata' ||
-    command === 'read_file_content' ||
-    command === 'get_config' ||
-    command === 'get_configs'
+    command.startsWith('lsp_') ||
+    command.startsWith('search_') ||
+    command.startsWith('explorer_') ||
+    command.startsWith('miniapp_') ||
+    LOW_PRIORITY_EXACT.has(command)
   ) {
     return 'low';
   }

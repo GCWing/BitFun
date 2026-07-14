@@ -8,12 +8,19 @@ describe('peerInvokePriorityFor', () => {
   it('ranks session hydrate commands high', () => {
     expect(peerInvokePriorityFor('restore_session_view')).toBe('high');
     expect(peerInvokePriorityFor('list_persisted_sessions_page')).toBe('high');
+    expect(peerInvokePriorityFor('initialize_workspace_startup_state')).toBe('high');
+    expect(peerInvokePriorityFor('start_dialog_turn')).toBe('high');
+    expect(peerInvokePriorityFor('reload_config')).toBe('high');
   });
 
-  it('ranks git/ssh/editor noise low', () => {
+  it('ranks git/ssh/editor/fs/search noise low', () => {
     expect(peerInvokePriorityFor('git_is_repository')).toBe('low');
     expect(peerInvokePriorityFor('ssh_is_connected')).toBe('low');
     expect(peerInvokePriorityFor('get_file_metadata')).toBe('low');
+    expect(peerInvokePriorityFor('lsp_detect_project')).toBe('low');
+    expect(peerInvokePriorityFor('search_get_repo_status')).toBe('low');
+    expect(peerInvokePriorityFor('load_canvas_artifact')).toBe('low');
+    expect(peerInvokePriorityFor('get_file_tree')).toBe('low');
   });
 });
 

@@ -11,6 +11,7 @@ import { flowChatStore } from '@/flow_chat/store/FlowChatStore';
 import { ACPClientAPI } from '@/infrastructure/api/service-api/ACPClientAPI';
 import { normalizeRemoteWorkspacePath } from '@/shared/utils/pathUtils';
 import { notificationService } from '@/shared/notification-system';
+import { isPeerDeviceModeActive } from '@/infrastructure/peer-device/peerModeFlag';
 import {
   SSHContext,
   type ConnectionStatus,
@@ -375,7 +376,7 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
 
     // Peer Device Mode routes product invokes to the peer; controller-local SSH
     // heartbeats must not flood HostInvoke with unrelated connection checks.
-    if ((window as Window & { __bitfunPeerModeActive?: boolean }).__bitfunPeerModeActive) {
+    if (isPeerDeviceModeActive()) {
       heartbeatInterval.current = null;
       return;
     }
@@ -394,7 +395,7 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
   startHeartbeatRef.current = startHeartbeat;
 
   const checkRemoteWorkspace = useCallback(async () => {
-    if ((window as Window & { __bitfunPeerModeActive?: boolean }).__bitfunPeerModeActive) {
+    if (isPeerDeviceModeActive()) {
       log.info('checkRemoteWorkspace: skipped while peer device mode is active');
       return;
     }
@@ -629,9 +630,7 @@ export const SSHRemoteProvider: React.FC<SSHRemoteProviderProps> = ({ children }
   useEffect(() => {
     const onPeerModeChanged = (event: Event) => {
       const detail = (event as CustomEvent<{ active?: boolean }>).detail;
-      const active = detail?.active === true;
-      (window as Window & { __bitfunPeerModeActive?: boolean }).__bitfunPeerModeActive = active;
-      if (active && heartbeatInterval.current) {
+      if (detail?.active === true && heartbeatInterval.current) {
         clearInterval(heartbeatInterval.current);
         heartbeatInterval.current = null;
         log.info('Paused SSH heartbeat while peer device mode is active');

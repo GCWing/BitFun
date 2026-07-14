@@ -42,10 +42,15 @@ FS) and must not be mixed with Peer Device Mode.
 - Controller: `PeerDeviceTransportAdapter` wraps product `invoke` as
   `RemoteCommand::HostInvoke` over `account_device_rpc`.
 - HostInvoke on the controller is **priority-queued** (max 2 in flight). Session
-  restore / session-list commands outrank background `git_*` / `ssh_*` /
-  editor RPCs so hydrate is not starved into relay HTTP 504s.
-- While Peer Mode is active, controller-local SSH heartbeats and remote-workspace
-  auto-reconnect are paused so they cannot flood the peer HostInvoke path.
+  restore / session-list / dialog / workspace-startup commands outrank background
+  `git_*` / `ssh_*` / `lsp_*` / `search_*` / FS / canvas / editor RPCs so hydrate
+  is not starved into relay HTTP 504s.
+- While Peer Mode is active, background noise is reduced further:
+  - controller-local SSH heartbeats and remote-workspace auto-reconnect pause
+  - Git / FilesPanel window-focus refresh pauses
+  - editor disk sync poll slows to 15s (from 1s)
+  - canvas snapshot poll slows to 15s (from 2s)
+  - workspace search-index poll slows to 30s idle / 5s active
 - Peer: decrypt → allow/deny → webview bridge `peer-host-invoke://request` →
   same Tauri handlers as local UI → `peer_host_invoke_complete`.
 - Events: peer agentic projection (and other product events such as terminal /
