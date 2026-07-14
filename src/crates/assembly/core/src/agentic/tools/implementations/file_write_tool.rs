@@ -214,6 +214,11 @@ impl FileWriteTool {
                     "type": "string",
                     "enum": ["w", "a"],
                     "description": "Write mode: 'w' overwrites the file (default), 'a' appends to the file and creates it if missing"
+                },
+                "force": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Only set true after a prior call was rejected for touching a file the task said not to modify, AND you have a legitimate reason unrelated to making your own code compile or pass tests. State that reason in your response before retrying with this set."
                 }
             },
             "required": ["file_path", "content"],
@@ -540,6 +545,26 @@ impl Tool for FileWriteTool {
                         None
                     }
                 });
+
+        let force = input
+            .get("force")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        // Only enforce on files that already exist — legitimate new-file
+        // creation (e.g. a task that requires adding a brand new test file)
+        // must not be blocked by a "don't modify test files" constraint.
+        let target_already_exists = context
+            .and_then(|ctx| ctx.resolve_tool_path(file_path).ok())
+            .filter(|resolved| !resolved.uses_remote_workspace_backend())
+            .map(|resolved| std::path::Path::new(&resolved.resolved_path).exists())
+            .unwrap_or(true);
+        if target_already_exists {
+            if let Some(rejection) = crate::agentic::execution::edit_constraint_guard::check(
+                context, file_path, force,
+            ) {
+                return rejection;
+            }
+        }
 
         if let Some(ctx) = context {
             if let Some(message) = Self::preflight_write_error(ctx, file_path).await {

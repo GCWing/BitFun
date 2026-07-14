@@ -2079,6 +2079,25 @@ impl ExecutionEngine {
             .get("original_user_input")
             .cloned()
             .unwrap_or_default();
+
+        // Edit constraint guard: extract "don't modify X" constraints from the
+        // first turn's user message, once per session (best-effort, fail-open —
+        // see edit_constraint_guard::extract_constraints). Cached in
+        // SessionManager and consulted by Edit/Write/Delete's validate_input().
+        if context.turn_index == 0
+            && self
+                .session_manager
+                .edit_constraints(&context.session_id)
+                .is_none()
+        {
+            let constraints = crate::agentic::execution::edit_constraint_guard::extract_constraints(
+                &original_user_input,
+            )
+            .await;
+            self.session_manager
+                .remember_edit_constraints(&context.session_id, constraints);
+        }
+
         let model_id = self
             .resolve_model_id_for_turn(
                 &session,

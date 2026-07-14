@@ -4319,6 +4319,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
             self.session_manager
                 .seed_forked_skill_agent_listing_baselines(source_session_id, &session_id)
                 .await;
+            self.session_manager
+                .seed_forked_edit_constraints(source_session_id, &session_id);
         }
         self.session_manager
             .replace_context_messages(&session_id, initial_messages.clone())
@@ -5078,6 +5080,8 @@ Update the persona files and delete BOOTSTRAP.md as soon as bootstrap is complet
         self.session_manager
             .seed_forked_skill_agent_listing_baselines(parent_session_id, &child_session.session_id)
             .await;
+        self.session_manager
+            .seed_forked_edit_constraints(parent_session_id, &child_session.session_id);
 
         self.session_manager
             .replace_context_messages(&child_session.session_id, snapshot.messages)
