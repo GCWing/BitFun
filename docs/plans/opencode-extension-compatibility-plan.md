@@ -26,10 +26,10 @@ Client/Server 兼容接口和外部集成兼容。
 | 阶段 | 用户结果 | 核心交付 | 暂不并入 |
 |---|---|---|---|
 | OC-R0 基线与差异可见 | 能准确判断每项缺口和可实现性 | 冻结版本、差异类型矩阵、官方样例、来源与错误分类、版本变化报告 | 插件代码执行 |
-| OC-R1 配置与更新基础 | 本地已有项目可直接读取配置，也可选择导入；插件变化可解释并可回退 | 主/TUI 配置来源、声明式资产、导入预览、全局插件来源、候选版本、上个可用版本、能力变化提示；Remote 明确禁用 | 全部 Hook、TUI 原始组件 |
-| OC-R2 本地插件执行 | 常见工具、本地/软件包服务插件和全局插件可真实运行 | npm/Arborist 依赖、固定 Bun、每 target 进程、v1 server loader、standalone tool、最小 Client/`$`、顺序与覆盖；Remote 明确禁用 | 全部稳定 Hook、终端插件 |
+| OC-R1 配置与来源基础 | 本地已有项目可读取非执行配置，也可选择导入；可执行来源只发现和展示 | 主/TUI 配置来源、非执行字段生效、全部字段解析、导入预览、全局插件来源、spec/锁文件/依赖元数据变化；Remote 明确禁用 | 任何外部进程/module/主动联网、真实工具/Hook 差异、旧代次重建 |
+| OC-R2 本地执行与插件 | Command/MCP/LSP/Formatter/Reference/Skill 与常见本地/软件包插件可按各自边界真实运行 | 各归属模块启动保护、npm/Arborist、固定 Bun、每 target 进程、v1 loader、standalone tool、真实贡献差异、最小 Client/`$`、顺序与覆盖；Remote 明确禁用 | 全部稳定 Hook、终端插件 |
 | OC-R3 完整稳定服务面 | 稳定配置和服务 Hook 可按 OpenCode 行为工作 | 全部稳定配置、Hook、Zod/JSON Schema 双表示、auth/provider、版本化 Client/回环路由 | 原始 TUI renderer、完整外部 Server |
-| OC-R4 终端与外部入口 | TUI 非原始渲染能力和主要外部入口可用 | TUI target 顶层 API、IDE `/tui` 子集、ACP、入口级 SDK/Server、BitFun GitHub/GitLab/Slack 集成 | 原始组件树直连、原始 Web/attach 全协议 |
+| OC-R4 独立入口里程碑 | TUI、协议/IDE、外部连接器可分别发布和验收 | R4-T 终端插件；R4-P IDE/ACP/SDK/Server；R4-C GitHub/GitLab/Slack | 原始组件树直连、原始 Web/attach 全协议 |
 | OC-R5 Remote、策略与高难度决策 | 远程和组织场景可控，剩余缺口有明确结论 | 远端执行、可调策略、兼容版本升级、高难度渲染/Server/实验接口评估 | 无真实需求的通用界面协议或第二 Agent Runtime |
 
 ## 4. OC-R0：基线与差异可见
@@ -48,27 +48,33 @@ Client/Server 兼容接口和外部集成兼容。
 3. 未支持项能局部诊断，不触发 panic、无限重试或日志风暴。
 4. 产品状态不把设计目标显示成已实现。
 
-## 5. OC-R1：配置、导入与更新基础
+## 5. OC-R1：配置、导入与来源基础
 
 交付：
 
 - 主配置完整来源：well-known、global、`OPENCODE_CONFIG`、project、目录资产、inline、账户组织配置、系统管理员配置和 MDM，以及合并后的环境覆盖。
 - TUI 独立来源：global、`OPENCODE_TUI_CONFIG`、project、`.opencode`/`OPENCODE_CONFIG_DIR`。
 - Rules、Agents、Skills、References、Commands、MCP、LSP、Formatter、Theme、Keybind 和全部稳定配置字段的解析与归属映射。
-- 默认“兼容来源”直接生效；“显式导入”先显示可直接使用、需转换、会降级，再写入 BitFun 配置。已导入字段不重复应用原值。
-- 启动时显示完整来源图中的插件来源和准备状态；来源仍启用、旧版本仍合规时，代码或依赖更新失败继续使用上个可用版本。停用、撤销或策略收紧不回退。
-- 能力集合变化时显示新增/删除工具、Hook、权限和依赖。bare `latest` 软件包只在显式检查更新或配置策略允许时重新解析，不静默换包。
+- 默认兼容来源中，不启动外部进程、不 import 第三方 module、不读取凭据且不主动联网的字段直接生效；远程
+  Instruction/Reference、可执行 Skill/Command、MCP/LSP/Formatter、Plugin/Tool 只发现并显示“当前阶段未激活”。“显式导入”
+  先显示可直接使用、需转换、会降级，再写入 BitFun 配置；导入不能绕过执行阶段。
+- 启动时显示完整来源图中的插件来源和静态状态；只比较来源、spec、lockfile 和依赖元数据，不在禁止执行 factory
+  的阶段推测真实工具、Hook、权限或“可用执行版本”。
+- bare `latest` 软件包只在显式检查更新或配置策略允许时重新解析，不静默换包；R1 只显示候选 spec/版本元数据，
+  不声称候选可运行或可回退。
 
 退出条件：
 
 1. 常用 OpenCode 项目无需迁移即可得到可解释的配置结果。
-2. 导入、撤销、原来源再次变化和部分字段继续兼容来源均有确定行为。
+2. 导入、撤销、用户后续修改、原来源再次变化和部分字段继续兼容来源均有逐字段确定行为。
 3. 有效配置保持 OpenCode 解码结果；BitFun 对非安全独立字段的局部恢复有明确差异标记，安全/执行字段无效时不激活受影响结果。
-4. 全局插件变化的影响范围、来源和更新结果对所有受影响项目可见。
+4. 全局插件的来源、target、作用域和静态变化对所有受影响项目可见，且明确标为“尚未执行验证”。
 5. 配置准备与更新不阻塞主界面或 Agent 主循环。
 6. OC-R5 前，Remote workspace 的 OpenCode 配置/插件发现返回明确 `unsupported`，不扫描本机同名来源、不复制本机凭据、不回退本机执行。
+7. 端到端用例证明 R1 打开含 Command、MCP、LSP、Formatter、可执行 Skill、远程 Instruction/Reference 和 Plugin/Tool 的
+   项目不会启动进程、import module、读取凭据或主动联网；状态明确显示等待 OC-R2。
 
-## 6. OC-R2：本地插件执行
+## 6. OC-R2：本地执行与插件
 
 交付：
 
@@ -79,7 +85,14 @@ Client/Server 兼容接口和外部集成兼容。
 - standalone tool 的 default/named exports、Zod 校验、真实 execute、取消、元数据、权限请求和附件结果。
 - 完整来源图产生的 `plugin_origins` 顺序；npm 按 package name、file 按精确 URL 去重，后来源胜出，并验证同名工具覆盖。
 - 最小 `client`、`serverUrl`、`project/directory/worktree` 和 `$`。
-- 首期提供“兼容模式 / 受限模式”、来源或 target 停用，以及 Host 代理能力的策略检查；脚本直接能力没有真实 OS/容器边界时，受限模式停用相应 target 并返回 `policy-limited`。
+- Command、MCP、LSP、Formatter、远程 Instruction/Reference 和可执行 Skill 分别通过现有归属模块启动；每类在首次启动前
+  解析有效策略/安全启动、执行域、凭据与环境范围，并具备期限、取消、进程树回收和状态诊断。不能借 Bun worker
+  的隔离替代这些独立进程的 owner 保护。
+- OpenCode Source Coordinator 在 Plugin/Tool import 前解析已保存的全局/来源/target 策略与安全启动参数；默认
+  兼容模式不增加二次审批，安全启动可以暂停全部外部 target。脚本直接能力没有真实 OS/容器边界时，受限模式
+  停用相应 target 并返回 `policy-limited`。
+- 插件 factory 实际运行后才生成工具、Hook、权限和依赖差异；候选激活前提供默认 5 秒非阻塞切换窗口，用户可
+  暂停、收紧或停用。更新失败只允许健康旧进程继续服务；旧进程丢失后只有精确物化目录仍可校验时才能重建。
 
 退出条件：
 
@@ -87,8 +100,13 @@ Client/Server 兼容接口和外部集成兼容。
 2. 作者不需要 BitFun 专用清单或二次激活。
 3. 初始化失败、崩溃、死循环、超时和过载在进程树、期限与平台资源预算内被局部回收；没有硬资源限制的平台明确记录系统资源耗尽残余风险，不宣称完全隔离。
 4. pure、版本范围、入口缺失、原生依赖失败和旧包替代均有稳定结果。
-5. 更新、停用、回退和重启后，旧贡献和迟到响应不能继续生效。
+5. 更新、停用和重启后，旧贡献和迟到响应不能继续生效；本地原位源码变化且没有精确旧字节时明确“上一版本
+   不可恢复”，不得从当前来源冒充旧代次。
 6. Remote 端到端用例证明插件发现、依赖准备和执行均在 R5 前被 gate；不会启动本机 worker、读取本机全局插件或复制凭据。
+7. 安全启动和预先保存的来源/target 策略在第三方 module import 前生效；默认兼容模式无需二次批准即可继续，
+   状态页明确说明首次直接脚本副作用无法事后撤销。
+8. Command、MCP、LSP、Formatter、远程 Instruction/Reference 和可执行 Skill 各有首次启动、凭据/env 范围、超时、取消、
+   停用、进程树回收和 Remote 禁用的端到端样例；一种资产失败不阻塞其他无关配置和会话。
 
 ## 7. OC-R3：完整稳定服务面
 
@@ -109,24 +127,35 @@ Client/Server 兼容接口和外部集成兼容。
 3. Hook 失败只影响本次调用或相应贡献，不污染其他插件和业务状态。
 4. 未知 API、事件或字段不会导致卡顿、卡死、无限重试或错误风暴。
 
-## 8. OC-R4：终端插件与外部入口
+## 8. OC-R4：三个独立入口里程碑
 
-交付：
+三个里程碑独立排期、发布和验收；任一连接器未完成不阻塞另一个已闭环入口，也不能用“已有接口清单”把入口
+标为可用。
+
+### OC-R4-T：终端插件
 
 - TUI default export、入口/id/版本、options/meta、KV 覆盖、反向清理和 5 秒预算。
 - 从现有 `chat.rs`、`ui/chat/*` 等真实路径抽取最小 Input/Command/State/Effect 消费接口，不建立通用界面扩展框架。
 - 逐项覆盖稳定 `TuiPluginApi`：版本、attention、旧 command、keys/keymap/mode、route、已知 dialog、toast、
   tuiConfig、KV、state、theme、client、event、plugins 和 lifecycle。
 - Slot 名称、属性与模式可识别；原始 Route/Slot/Dialog/Prompt JSX 和 `CliRenderer` 明确降级且界面可退出。
+
+退出条件：不依赖原始组件的样例完成发现、加载、导航、命令、输入、通知、主题、状态、共享 KV、停用和终端恢复
+闭环；插件异常不能造成空白不可退出页面、输入锁死或终端无法恢复。
+
+### OC-R4-P：IDE 与协议入口
+
 - ACP 和真实消费所需的 SDK/Server 方法；IDE 启动/聚焦、上下文、文件引用和 `/tui` 子集。
+
+退出条件：每个计划支持的方法都有请求、响应、事件、认证和错误样例；至少一个支持的 IDE 从启动 BitFun 到注入
+上下文并恢复断线形成端到端闭环。范围清单只表示冻结范围，不表示入口可用。
+
+### OC-R4-C：外部连接器
+
 - BitFun GitHub、GitLab、Slack 入口分别验收；原 OpenCode Action/runner/package 直连单独标记。
 
-退出条件：
-
-1. 不依赖原始组件的 TUI 样例完成导航、命令、输入、通知、主题、状态、共享 KV 和生命周期闭环。
-2. 插件异常不能造成空白不可退出页面、输入锁死或终端无法恢复。
-3. 每个外部入口用方法、endpoint、事件和认证清单表达范围，不以“已有 SDK/ACP”代替测试。
-4. 原始客户端直连与 BitFun 原生替代在界面和文档中明确区分。
+退出条件：GitHub、GitLab、Slack 分别维护完成状态；只有完成安装/授权、触发、结果回传、撤销授权和错误恢复的
+连接器才标为可用。原始客户端直连与 BitFun 原生替代在界面和文档中明确区分。
 
 ## 9. OC-R5：Remote、策略与高难度决策
 

@@ -193,13 +193,25 @@ Runtime, Tool/Harness, Runtime Services, or the existing extension boundaries.
 
 ### Product customization guardrails
 
-For Product Profiles, branded distributions, GUI/TUI Surface Blueprints,
+For product definitions, branded distributions, GUI/TUI layout selection,
 bundled product extensions, or customization build tasks, read
 [`docs/architecture/product-customization-blueprint.md`](docs/architecture/product-customization-blueprint.md).
 Keep product customization separate from user runtime configuration and plugins.
 GUI and TUI may share stable product facts, but not layout, component, theme-key,
-keybinding, or renderer schemas. Surface Blueprints must not carry runtime plugin
-trust, installation, activation, or update state.
+keybinding, or renderer schemas. Product assembly results and layout selections
+may carry a small immutable list of product identity, data-isolation, recovery,
+upgrade-integrity, or legal protection IDs. They must not carry user/source-level
+plugin policy, installation, activation, update, permission, or dynamic health state.
+Existing Product Profile, Surface Blueprint, and Resolved Product Manifest code
+may remain during a reviewed migration, but new design and implementation work
+must use the target objects and migration rules in the customization design.
+
+For OpenCode live configuration or plugin execution, also read
+[`docs/architecture/extensions/opencode-extension-compatibility.md`](docs/architecture/extensions/opencode-extension-compatibility.md).
+The current P0 adapter remains static-preview/import-only code until the matching
+OC-R phase is implemented and verified. Do not extend the legacy managed-package
+path as the target OpenCode runtime model, and do not treat a design target as an
+already available capability.
 
 ### SDLC quality guardrails
 

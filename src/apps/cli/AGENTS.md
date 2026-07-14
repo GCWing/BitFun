@@ -5,7 +5,7 @@ Scope: this guide applies to `src/apps/cli`.
 Read [`docs/architecture/cli-product-line-design.md`](../../../docs/architecture/cli-product-line-design.md),
 [`docs/architecture/product-architecture.md`](../../../docs/architecture/product-architecture.md), and
 [`docs/architecture/product-customization-blueprint.md`](../../../docs/architecture/product-customization-blueprint.md)
-before Product Profile, TUI Blueprint, branding, packaging, runtime, or plugin architecture changes.
+before product-definition, TUI layout, branding, packaging, runtime, or plugin architecture changes.
 
 ## Ownership
 
@@ -22,18 +22,26 @@ before Product Profile, TUI Blueprint, branding, packaging, runtime, or plugin a
 - Assemble CLI behavior through `DeliveryProfile::Cli`, capability plans, typed
   services, and capability availability. Hiding a command is not a backend
   capability restriction.
-- CLI consumes product names, logos, theme resources, data namespaces, bundled
-  product extensions, and update channels only from the Resolved Product
-  Manifest projection. TUI Blueprint and generated resources must be digest-bound
-  by that manifest. Do not read authoring Product Profiles at runtime, add
-  hard-coded branding/source rewrites, or treat user plugins as product inputs.
-  Runtime capability hiding does not prove code was physically removed.
-- External OpenCode, Codex, or Claude configuration enters through a dry-run
-  import adapter. Do not copy credentials, treat external config as live BitFun
-  state, or silently ignore unsupported fields.
-- Keep native instruction references, config candidates, managed Skill/plugin
-  content, and credentials as separate asset classes. Config approval must not
-  activate executable content or establish plugin trust.
+- The target CLI consumes product identity, theme resources, data namespaces,
+  bundled product extensions, update channels, and TUI layout IDs from the
+  validated product assembly result. Existing Resolved Product Manifest and TUI
+  Blueprint projections may remain only as reviewed migration inputs. Do not read
+  authoring product definitions at runtime, add hard-coded branding/source
+  rewrites, or treat user plugins as product assembly inputs. Runtime capability
+  hiding does not prove code was physically removed.
+- Product assembly may expose only the immutable protection IDs allowed by the
+  customization design. CLI must not turn them into user/source plugin policy or
+  store plugin activation, update, permission, or health state in the assembly result.
+- Current OpenCode adapter code is dry-run/static preview only. After the matching
+  OC-R phases are implemented, OpenCode standard config and plugin sources become
+  read-only source files whose valid results can affect runtime behavior without
+  a BitFun import or second activation. Codex and Claude remain import/reference
+  sources unless their own design explicitly changes. Never copy credentials or
+  silently ignore unsupported fields.
+- Keep native instruction references, explicit import records, executable plugin
+  sources, and credentials as separate asset classes. Importing non-executable
+  config must not establish executable-source policy; live OpenCode execution is
+  governed by the source/target policy resolved before module import.
 - CLI plugin screens consume capability services, read-only status, and typed
   diagnostics. They must not depend on Plugin Runtime Host ABI or raw ecosystem
   payloads.
@@ -69,7 +77,7 @@ cargo test -p bitfun-cli
 ```
 
 Also run focused protocol/PTY tests when structured output, terminal lifecycle,
-input, session control, config import, plugin management, or Product Profile
+input, session control, config import, plugin management, or product assembly
 behavior changes. Theme/color changes require `pnpm run theme:color-audit:all`.
 Packaging or branding changes require the CLI package smoke path and a clean-tree
-two-profile build assertion.
+two-product build assertion.
