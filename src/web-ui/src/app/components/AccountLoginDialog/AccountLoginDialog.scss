@@ -105,7 +105,7 @@
     gap: 0;
     font-size: 10px;
     font-family: var(--font-family-sans);
-    color: var(--color-text-tertiary);
+    color: var(--color-text-muted);
     line-height: 1.4;
   }
 
@@ -152,16 +152,16 @@
     gap: 12px;
     padding: 12px 14px;
     border-radius: 8px;
-    border: 1px solid var(--color-border-primary, var(--element-border-subtle, transparent));
-    background: var(--element-bg-secondary, transparent);
+    border: 1px solid var(--border-subtle);
+    background: var(--color-bg-secondary);
     cursor: pointer;
     text-align: left;
     transition: border-color 0.15s, background 0.15s;
     color: var(--color-text-primary);
 
     &:hover:not(:disabled) {
-      border-color: var(--color-accent-primary, var(--color-primary));
-      background: var(--color-accent-bg-subtle, var(--element-bg-hover, transparent));
+      border-color: var(--color-accent-500);
+      background: var(--element-bg-hover);
     }
 
     &:disabled {
@@ -172,7 +172,7 @@
     svg {
       flex-shrink: 0;
       margin-top: 2px;
-      color: var(--color-accent-primary, var(--color-primary));
+      color: var(--color-accent-500);
     }
   }
 
@@ -243,14 +243,14 @@
     width: 100%;
     height: 4px;
     border-radius: 999px;
-    background: color-mix(in srgb, var(--color-border) 80%, transparent);
+    background: color-mix(in srgb, var(--border-base) 80%, transparent);
     overflow: hidden;
   }
 
   &__sync-progress-fill {
     height: 100%;
     border-radius: inherit;
-    background: var(--color-accent, var(--color-primary));
+    background: var(--color-accent-500);
     transition: width 180ms ease-out;
   }
 
@@ -272,7 +272,7 @@
     cursor: pointer;
     transition: border-color 0.15s;
 
-    &:hover { border-color: var(--color-accent); }
+    &:hover { border-color: var(--color-accent-500); }
 
     &.offline {
       opacity: 0.5;
@@ -281,8 +281,8 @@
     }
 
     &.current {
-      border-color: var(--color-accent);
-      background: color-mix(in srgb, var(--color-accent) 8%, var(--color-bg-primary));
+      border-color: var(--color-accent-500);
+      background: color-mix(in srgb, var(--color-accent-500) 8%, var(--color-bg-primary));
     }
 
     .account-login-dialog__device-info {
@@ -307,7 +307,7 @@
 
     &:hover {
       color: var(--color-error);
-      background: var(--color-error-bg, rgba(255, 0, 0, 0.08));
+      background: var(--color-error-bg);
     }
   }
 
@@ -318,27 +318,22 @@
     font-size: 10px;
     font-weight: 500;
     border-radius: 3px;
-    background: color-mix(in srgb, var(--color-accent) 15%, transparent);
-    color: var(--color-accent);
+    background: color-mix(in srgb, var(--color-accent-500) 15%, transparent);
+    color: var(--color-accent-500);
     vertical-align: middle;
   }
 
   &__loading-overlay {
     position: absolute;
     top: 0; left: 0; right: 0; bottom: 0;
-    background: rgba(0, 0, 0, 0.3);
+    background: var(--color-overlay-black-30);
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     gap: 8px;
     z-index: 10;
-    color: white;
-    font-size: 12px;
-    border-radius: inherit;
-  }
-
-  &__back-bar-right {
+    color: var(--color-static-white);
     display: flex;
     gap: 4px;
   }
@@ -350,7 +345,7 @@
   &__workspace-label {
     font-size: 10px;
     font-weight: 600;
-    color: var(--color-text-tertiary);
+    color: var(--color-text-muted);
     text-transform: uppercase;
     letter-spacing: 0.04em;
     margin-bottom: 4px;
@@ -375,8 +370,8 @@
     text-overflow: ellipsis;
     white-space: nowrap;
 
-    &:hover { border-color: var(--color-accent); }
-    &.active { background: var(--color-accent); color: white; border-color: var(--color-accent); }
+    &:hover { border-color: var(--color-accent-500); }
+    &.active { background: var(--color-accent-500); color: var(--color-static-white); border-color: var(--color-accent-500); }
   }
 
   &__new-workspace {
@@ -422,7 +417,7 @@
     cursor: pointer;
     transition: border-color 0.15s;
 
-    &:hover { border-color: var(--color-accent); }
+    &:hover { border-color: var(--color-accent-500); }
   }
 
   &__session-info {
@@ -440,7 +435,7 @@
 
   &__session-meta {
     font-size: 10px;
-    color: var(--color-text-tertiary);
+    color: var(--color-text-muted);
   }
 
   &__messages {
@@ -474,7 +469,7 @@
   &__message-role {
     font-size: 10px;
     font-weight: 600;
-    color: var(--color-text-tertiary);
+    color: var(--color-text-muted);
     text-transform: uppercase;
     margin-bottom: 2px;
   }

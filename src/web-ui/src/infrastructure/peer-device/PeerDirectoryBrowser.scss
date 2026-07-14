@@ -8,7 +8,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(var(--color-static-black-rgb), 0.6);
+  background: var(--color-overlay-black-50);
   backdrop-filter: blur(4px);
   z-index: 280;
 }
@@ -114,7 +114,7 @@
     font-size: 13px;
 
     &--error {
-      color: var(--color-danger);
+      color: var(--color-error);
       padding: 0 16px;
       text-align: center;
     }
