@@ -334,6 +334,11 @@
     gap: 8px;
     z-index: 10;
     color: var(--color-static-white);
+    font-size: 12px;
+    border-radius: inherit;
+  }
+
+  &__back-bar-right {
     display: flex;
     gap: 4px;
   }
