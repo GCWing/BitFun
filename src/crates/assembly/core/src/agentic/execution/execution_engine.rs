@@ -2357,11 +2357,6 @@ impl ExecutionEngine {
         let mut thinking_only_rescue_attempts: usize = 0;
         let mut partial_continuation_attempts: usize = 0;
 
-        // Edited-files-vs-tests-run tracking; may delay the natural completion
-        // by exactly one round (see test_selection_gate module docs).
-        let mut test_gate =
-            crate::agentic::execution::test_selection_gate::TestSelectionGate::new();
-
         // Add detailed logging showing the execution context messages.
         debug!(
             "Executing dialog turn: dialog_turn_id={}, mode={}, agent={}, initial_messages={}, messages_len={}",
@@ -2691,25 +2686,6 @@ impl ExecutionEngine {
                 round_result.tool_result_messages.len()
             );
 
-            // Feed the test-selection gate with this round's executed tools.
-            for tool_call in round_result.tool_calls.iter() {
-                let result_is_error = round_result
-                    .tool_result_messages
-                    .iter()
-                    .find_map(|m| match &m.content {
-                        MessageContent::ToolResult {
-                            tool_id, is_error, ..
-                        } if *tool_id == tool_call.tool_id => Some(*is_error),
-                        _ => None,
-                    })
-                    .unwrap_or(true);
-                test_gate.observe_tool_call(
-                    &tool_call.tool_name,
-                    &tool_call.arguments,
-                    result_is_error,
-                );
-            }
-
             total_tools += round_result.tool_calls.len();
 
             // Track partial recovery reason from the last round
@@ -2991,46 +2967,11 @@ impl ExecutionEngine {
                             break;
                         }
                     } else {
-                        // Natural completion. Before accepting it, give the
-                        // test-selection gate one chance to request a
-                        // verification round for edited-but-untested files.
-                        // The gate fires at most once per turn, so the second
-                        // completion attempt always passes through.
-                        let gate_reminder = test_gate.build_reminder(
-                            context
-                                .workspace
-                                .as_ref()
-                                .map(|workspace| workspace.root_path()),
+                        debug!(
+                            "Model round {} ended with final answer, reason: {:?}",
+                            round_index, round_result.finish_reason
                         );
-                        if let Some(reminder_text) = gate_reminder {
-                            let user_msg = Message::internal_reminder(
-                                InternalReminderKind::TestSelectionGate,
-                                reminder_text,
-                            )
-                            .with_turn_id(context.dialog_turn_id.clone());
-                            messages.push(user_msg.clone());
-                            if let Err(e) = self
-                                .session_manager
-                                .add_message(&context.session_id, user_msg)
-                                .await
-                            {
-                                warn!(
-                                    "Failed to persist test selection gate reminder: {}",
-                                    e
-                                );
-                            }
-                            warn!(
-                                "Test selection gate: edited files have unrun tests; requesting one verification round: turn={}, round={}",
-                                context.dialog_turn_id, round_index
-                            );
-                            // Continue into the next round instead of breaking.
-                        } else {
-                            debug!(
-                                "Model round {} ended with final answer, reason: {:?}",
-                                round_index, round_result.finish_reason
-                            );
-                            break;
-                        }
+                        break;
                     }
                 } else if round_result.had_thinking_content {
                     thinking_only_rescue_attempts += 1;

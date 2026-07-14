@@ -106,9 +106,6 @@ pub enum InternalReminderKind {
     InterruptedContinue,
     ThinkingOnlyRescue,
     FinalizeCacheAnchor,
-    /// Edited files' associated tests were never run this turn; the gate asks
-    /// for one verification round before accepting the final answer.
-    TestSelectionGate,
 }
 
 impl InternalReminderKind {
